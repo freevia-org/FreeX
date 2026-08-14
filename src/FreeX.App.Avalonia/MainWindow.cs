@@ -1266,11 +1266,20 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
                     ["Top and Bottom Border"] = () => ApplySelectedRangeBorderPreset(CellBorderPreset.TopAndBottom),
                     ["Top and Thick Bottom Border"] = () => ApplySelectedRangeBorderPreset(CellBorderPreset.TopAndThickBottom),
                     ["Top and Double Bottom Border"] = () => ApplySelectedRangeBorderPreset(CellBorderPreset.TopAndDoubleBottom),
-                    // Draw Border pen mode: activates interactive click/drag border drawing.
-                    // Draw Border Grid / Erase Border are selection-apply equivalents of All / No Border.
-                    ["Draw Border"] = () => BeginBorderDrawMode(),
-                    ["Draw Border Grid"] = () => ApplySelectedRangeBorderPreset(CellBorderPreset.All),
-                    ["Erase Border"] = () => ApplySelectedRangeBorderPreset(CellBorderPreset.NoBorder),
+                    // Interactive border drawing and picker choices share the same policy as WPF.
+                    ["Draw Border"] = () => BeginBorderDrawMode(BorderDrawMode.Draw),
+                    ["Draw Border Grid"] = () => BeginBorderDrawMode(BorderDrawMode.DrawGrid),
+                    ["Erase Border"] = () => BeginBorderDrawMode(BorderDrawMode.Erase),
+                    ["Black"] = () => SetBorderDrawColor(CellColor.Black),
+                    ["Gray"] = () => SetBorderDrawColor(new CellColor(128, 128, 128)),
+                    ["Accent 1"] = () => SetBorderDrawColor(_session.Workbook.Theme.GetColor(WorkbookThemeColorSlot.Accent1)),
+                    ["Accent 2"] = () => SetBorderDrawColor(_session.Workbook.Theme.GetColor(WorkbookThemeColorSlot.Accent2)),
+                    ["Thin"] = () => SetBorderDrawStyle(BorderStyle.Thin),
+                    ["Medium"] = () => SetBorderDrawStyle(BorderStyle.Medium),
+                    ["Thick"] = () => SetBorderDrawStyle(BorderStyle.Thick),
+                    ["Dashed"] = () => SetBorderDrawStyle(BorderStyle.Dashed),
+                    ["Dotted"] = () => SetBorderDrawStyle(BorderStyle.Dotted),
+                    ["Double"] = () => SetBorderDrawStyle(BorderStyle.Double),
 
                     // Home ▸ Number ▸ Accounting dropdown.
                     ["More Accounting Formats"] = () => _ = ShowFormatCellsDialogAsync(),
@@ -7185,7 +7194,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         RecordOptionalNeutralCellSelection();
 
         // In Draw Border mode the drag-release triggers the border apply (mirrors WPF MouseUp behaviour).
-        if (_borderDrawModeActive)
+        if (IsBorderDrawModeActive)
             ApplyBorderDrawMode();
 
         RestoreFormulaRangeEditorFocusAfterDrag(formulaRangeEditor);
@@ -8679,7 +8688,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             _activeCellBorder = border;
         }
 
-        if (_borderDrawModeActive)
+        if (IsBorderDrawModeActive)
             border.Cursor = new Cursor(StandardCursorType.Cross);
         border.PointerPressed += (_, args) =>
         {
@@ -8731,7 +8740,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
 
             // In Draw Border mode skip autofill / move-drag detection and go straight to
             // selection-drag so the drag extent becomes the range that gets bordered.
-            if (!_borderDrawModeActive &&
+            if (!IsBorderDrawModeActive &&
                 (TryBeginAutofillDrag(args, border, address) ||
                  TryBeginSelectionMoveDrag(args, border, address)))
             {
@@ -10164,7 +10173,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
 
     private void SheetGridHost_PointerMoved(object? sender, PointerEventArgs args)
     {
-        if (_borderDrawModeActive)
+        if (IsBorderDrawModeActive)
         {
             _sheetGridHost.Cursor = new Cursor(StandardCursorType.Cross);
             return;
@@ -25474,7 +25483,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
                 return;
             }
 
-            if (e.Key == Key.Escape && _borderDrawModeActive)
+            if (e.Key == Key.Escape && IsBorderDrawModeActive)
             {
                 e.Handled = true;
                 CancelBorderDrawMode();

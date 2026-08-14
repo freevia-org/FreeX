@@ -108,6 +108,29 @@ public sealed class FreeXPracticalResidualOwnershipTests
         pairedMergeRenderers.Should().NotContain("FreeXAutomationIdCatalog.MergeCellsContentWarningDialog");
     }
 
+    [Fact]
+    public void AvaloniaBorderDrawing_UsesSharedModesAndSessionMutation()
+    {
+        var avaloniaCommands = Read("src", "FreeX.App.Avalonia", "MainWindow.cs");
+        var avaloniaInteraction = Read("src", "FreeX.App.Avalonia", "MainWindow.DrawBorder.cs");
+        var session = Read("src", "FreeX.App.Services", "WorkbookSession.cs");
+
+        avaloniaCommands.Should().Contain("BeginBorderDrawMode(BorderDrawMode.Draw)");
+        avaloniaCommands.Should().Contain("BeginBorderDrawMode(BorderDrawMode.DrawGrid)");
+        avaloniaCommands.Should().Contain("BeginBorderDrawMode(BorderDrawMode.Erase)");
+        avaloniaCommands.Should().NotContain(
+            "[\"Draw Border Grid\"] = () => ApplySelectedRangeBorderPreset");
+        avaloniaCommands.Should().NotContain(
+            "[\"Erase Border\"] = () => ApplySelectedRangeBorderPreset");
+        avaloniaCommands.Should().Contain("SetBorderDrawColor(_session.Workbook.Theme.GetColor(WorkbookThemeColorSlot.Accent1))");
+        avaloniaCommands.Should().Contain("SetBorderDrawStyle(BorderStyle.Double)");
+
+        avaloniaInteraction.Should().Contain(
+            "_session.SetSelectedRangeDrawBorder(mode, _borderDrawStyle, _borderDrawColor)");
+        session.Should().Contain("BorderDrawPlanner.CreateCellDiff(mode, range, address, borderStyle, color)");
+        session.Should().Contain("BorderDrawPlanner.CommandTitle(mode)");
+    }
+
     private static string Read(params string[] parts)
     {
         var root = TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeX.slnx");

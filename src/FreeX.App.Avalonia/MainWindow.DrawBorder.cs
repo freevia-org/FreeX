@@ -1,74 +1,62 @@
 using Avalonia.Input;
+using FreeX.App.Services;
 using FreeX.Core.Model;
 
 namespace FreeX.App.Avalonia;
 
 /// <summary>
-/// Draw Border pen mode — interactive border-drawing by click/drag over cells.
+/// Interactive border drawing by click/drag over cells.
 ///
 /// Mirrors the WPF shell's border-draw mode (MainWindow.HomeFormatting.cs / MainWindow.Selection.cs):
-/// while active, pointer-down on any cell begins a drag-selection; pointer-up applies the outline
-/// border (only the boundary edges of the selected range receive a border line, matching WPF's
-/// <c>BorderDrawMode.Draw</c> / <c>BorderShortcutService.GetOutlineBorderDiff</c>).  Escape cancels.
-///
-/// Unlike Format Painter (which lives in WorkbookSession), this is pure shell-side toggle state:
-/// the mode flag is stored here; the actual apply call goes to
+/// while active, pointer-down begins a drag-selection and pointer-up applies the selected mode,
+/// line style, and color through
 /// <see cref="FreeX.App.Services.WorkbookSession.SetSelectedRangeDrawBorder"/>.
 /// </summary>
 public partial class MainWindow
 {
-    // ── Mode state ────────────────────────────────────────────────────────────
+    private BorderDrawMode _borderDrawMode = BorderDrawMode.None;
+    private BorderStyle _borderDrawStyle = BorderStyle.Thin;
+    private CellColor _borderDrawColor = CellColor.Black;
 
-    /// <summary>Whether the Draw Border pen mode is currently active.</summary>
-    private bool _borderDrawModeActive;
+    private bool IsBorderDrawModeActive => _borderDrawMode != BorderDrawMode.None;
 
-    // ── Activation / cancellation ─────────────────────────────────────────────
-
-    /// <summary>Activates Draw Border pen mode (toggling off if already active).</summary>
-    private void BeginBorderDrawMode()
+    private void BeginBorderDrawMode(BorderDrawMode mode)
     {
+        if (mode == BorderDrawMode.None)
+            throw new ArgumentException("Border draw mode must be active.", nameof(mode));
+
         if (_isOpening || _isSaving)
             return;
 
         if (!TryCommitPendingFormulaEdit())
             return;
 
-        // Toggle: a second click on the toolbar button exits the mode.
-        if (_borderDrawModeActive)
-        {
-            CancelBorderDrawMode();
-            return;
-        }
+        if (_session.IsFormatPainterActive)
+            CancelFormatPainter();
 
-        _borderDrawModeActive = true;
-        RefreshShell(UiText.Get("DrawBorder_ModeActiveStatus"));
+        _borderDrawMode = mode;
+        RefreshShell($"{BorderDrawPlanner.CommandTitle(mode)} — drag across cells; Esc cancels.");
     }
 
-    /// <summary>Cancels Draw Border mode without applying any border.</summary>
     internal void CancelBorderDrawMode()
     {
-        if (!_borderDrawModeActive)
+        if (!IsBorderDrawModeActive)
             return;
 
-        _borderDrawModeActive = false;
+        _borderDrawMode = BorderDrawMode.None;
         RefreshShell(UiText.Get("DrawBorder_ModeCancelledStatus"));
     }
 
-    // ── Apply ─────────────────────────────────────────────────────────────────
-
-    /// <summary>
-    /// Called when the drag-select ends while in Draw Border mode.
-    /// Applies the outline border to the current selected range and exits the mode.
-    /// </summary>
     internal void ApplyBorderDrawMode()
     {
-        if (!_borderDrawModeActive)
+        if (!IsBorderDrawModeActive)
             return;
 
-        _borderDrawModeActive = false;
+        var mode = _borderDrawMode;
+        _borderDrawMode = BorderDrawMode.None;
 
         var rangeReference = FormatRangeReference(_session.SelectedRange);
-        var result = _session.SetSelectedRangeDrawBorder();
+        var result = _session.SetSelectedRangeDrawBorder(mode, _borderDrawStyle, _borderDrawColor);
         if (!result.Success)
         {
             RefreshShell(_statusText.Text ?? UiText.Get("MainLoc_Ready"));
@@ -78,4 +66,10 @@ public partial class MainWindow
 
         RefreshShell(UiText.Format("DrawBorder_AppliedStatusFormat", rangeReference));
     }
+
+    private void SetBorderDrawStyle(BorderStyle style) =>
+        _borderDrawStyle = style;
+
+    private void SetBorderDrawColor(CellColor color) =>
+        _borderDrawColor = color;
 }

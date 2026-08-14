@@ -4843,15 +4843,26 @@ public sealed class WorkbookSession : IDisposable
     }
 
     /// <summary>
-    /// Applies "Draw Border" (outline edges only) to the currently selected range, using the same
-    /// per-cell outline diff that <c>BorderDrawPlanner</c> uses in the WPF shell: each cell in the
-    /// range gets only the edges that lie on the range boundary.
+    /// Applies "Draw Border" (outline edges only) to the currently selected range.
     /// </summary>
     public WorkbookCellEditResult SetSelectedRangeDrawBorder(
         BorderStyle borderStyle = BorderStyle.Thin,
+        CellColor? borderColor = null) =>
+        SetSelectedRangeDrawBorder(BorderDrawMode.Draw, borderStyle, borderColor);
+
+    /// <summary>
+    /// Applies the shared interactive border-draw policy to the currently selected range.
+    /// Renderers own pointer capture and transient picker state; range mutation stays here.
+    /// </summary>
+    public WorkbookCellEditResult SetSelectedRangeDrawBorder(
+        BorderDrawMode mode,
+        BorderStyle borderStyle = BorderStyle.Thin,
         CellColor? borderColor = null)
     {
-        const string label = "Draw Border";
+        if (mode == BorderDrawMode.None)
+            throw new ArgumentException("Border draw mode must be active.", nameof(mode));
+
+        var label = BorderDrawPlanner.CommandTitle(mode);
         var range = SelectedRange;
         var color = borderColor ?? CellColor.Black;
         var targetSheetIds = CurrentGroupedEditSheetIds();
@@ -4859,7 +4870,7 @@ public sealed class WorkbookSession : IDisposable
         var commands = new List<IWorkbookCommand>();
         foreach (var address in range.AllCells())
         {
-            var diff = BorderShortcutService.GetOutlineBorderDiff(range, address, borderStyle, color);
+            var diff = BorderDrawPlanner.CreateCellDiff(mode, range, address, borderStyle, color);
             if (!BorderShortcutService.HasBorderChanges(diff))
                 continue;
 
