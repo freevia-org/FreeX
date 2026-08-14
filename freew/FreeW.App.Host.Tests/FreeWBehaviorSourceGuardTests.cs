@@ -42,6 +42,11 @@ public sealed class FreeWBehaviorSourceGuardTests
     {
         var wpf = ReadSource("freew", "FreeW.App.Host", "FindReplaceDialog.cs");
         var avalonia = ReadSource("freew", "FreeW.App.Avalonia", "FindReplaceDialog.cs");
+        var avaloniaCommandHost = ReadSource(
+            "freew",
+            "FreeW.App.Avalonia",
+            "Editing",
+            "AvaloniaFindReplaceCommandHost.cs");
 
         foreach (var source in new[] { wpf, avalonia })
         {
@@ -64,12 +69,12 @@ public sealed class FreeWBehaviorSourceGuardTests
         wpf.Should().Contain("FindReplaceDialogPlanner.MatchesExactly(");
         wpf.Should().Contain("TextPointer from");
         wpf.Should().Contain("restrictToSelection");
-        avalonia.Should().Contain("class AvaloniaFindReplaceCommandHost");
-        avalonia.Should().Contain("editor.FindNext(request.Term, request.Options)");
-        avalonia.Should().Contain("editor.ReplaceNext(request.Term, request.Replacement, request.Options)");
-        avalonia.Should().Contain("editor.ReplaceAll(request.Term, request.Replacement, request.Options)");
+        avaloniaCommandHost.Should().Contain("class AvaloniaFindReplaceCommandHost");
+        avaloniaCommandHost.Should().Contain("editor.FindNext(request.Term, request.Options)");
+        avaloniaCommandHost.Should().Contain("editor.ReplaceNext(request.Term, request.Replacement, request.Options)");
+        avaloniaCommandHost.Should().Contain("editor.ReplaceAll(request.Term, request.Replacement, request.Options)");
         wpf.Should().NotContain("TextSearch.FindAll(");
-        avalonia.Should().NotContain("TextSearch.FindAll(");
+        avaloniaCommandHost.Should().NotContain("TextSearch.FindAll(");
 
         var session = ReadSource("freew", "FreeW.App.Presentation", "Dialogs", "FindReplaceDialogSession.cs");
         session.Should().Contain("IFindReplaceDialogCommandHost");

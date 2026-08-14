@@ -64,9 +64,17 @@ public sealed class PageLayoutDialogParityTests
     public void Mandatory_route_ids_are_registered(string expectedId, FreeWRibbonCommandAction action)
     {
         var commands = ReadHostSource(Path.Combine("Ribbon", "FreeWRibbonCommands.cs"));
+        var registrationSource = action switch
+        {
+            FreeWRibbonCommandAction.CustomParagraphSpacing =>
+                ReadPresentationSource("DesignRibbonWorkflow.cs"),
+            FreeWRibbonCommandAction.DropCapOptions =>
+                ReadPresentationSource("DropCapRibbonWorkflow.cs"),
+            _ => commands,
+        };
 
         FreeWRibbonCommandWorkflow.GetPrimaryCommandId(action).Value.Should().Be(expectedId);
-        commands.Should().Contain($"Bind(FreeWRibbonCommandAction.{action}");
+        registrationSource.Should().Contain($"Bind(FreeWRibbonCommandAction.{action}");
     }
 
     [Fact]
@@ -94,5 +102,16 @@ public sealed class PageLayoutDialogParityTests
     {
         var root = TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeW.slnx");
         return File.ReadAllText(Path.Combine(root, "freew", "FreeW.App.Host", relativePath));
+    }
+
+    private static string ReadPresentationSource(string fileName)
+    {
+        var root = TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeW.slnx");
+        return File.ReadAllText(Path.Combine(
+            root,
+            "freew",
+            "FreeW.App.Presentation",
+            "Ribbon",
+            fileName));
     }
 }

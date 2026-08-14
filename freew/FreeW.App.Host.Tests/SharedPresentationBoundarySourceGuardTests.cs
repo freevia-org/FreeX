@@ -124,8 +124,8 @@ public sealed class SharedPresentationBoundarySourceGuardTests
         var wpf = ReadSource("freew", "FreeW.App.Host", "InsertChartDialog.cs");
         var avalonia = ReadSource("freew", "FreeW.App.Avalonia", "MediaDialogParity.cs");
 
-        wpf.Should().Contain("InsertChartDialogPlanner.ActionButtons");
-        avalonia.Should().Contain("InsertChartDialogPlanner.ActionButtons");
+        wpf.Should().Contain("InsertChartDialogPlanner.BuildActionButtons(UiText.Get)");
+        avalonia.Should().Contain("InsertChartDialogPlanner.BuildActionButtons(UiText.Get)");
         wpf.Should().Contain("acceptContent: actionPlans[0].Label");
         wpf.Should().Contain("cancelContent: actionPlans[1].Label");
         avalonia.Should().Contain("isDefault: actionPlans[0].IsDefault");

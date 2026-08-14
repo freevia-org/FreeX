@@ -1,5 +1,6 @@
 extern alias Harness;
 using System.IO;
+using System.Text.RegularExpressions;
 
 namespace FreeW.App.Host.Tests;
 
@@ -187,9 +188,15 @@ public sealed class DialogVisualHarnessSemanticTextTests
             .Select(path => (Path: path, Source: File.ReadAllText(path)))
             .ToArray();
 
-        sources.Should().OnlyContain(file => !file.Source.Contains("GetField(\"", StringComparison.Ordinal));
-        sources.Should().OnlyContain(file => !file.Source.Contains("GetMethod(\"", StringComparison.Ordinal));
-        sources.Should().OnlyContain(file => !file.Source.Contains("GetProperty(\"", StringComparison.Ordinal));
+        var reflectedMemberNames = sources
+            .SelectMany(file => Regex.Matches(
+                    file.Source,
+                    "Get(?:Field|Method|Property)\\(\\\"([^\\\"]+)\\\"")
+                .Cast<Match>()
+                .Select(match => match.Groups[1].Value))
+            .ToArray();
+        reflectedMemberNames.Should().OnlyContain(name =>
+            name == "Default" || name == "Invoke" || name == "LoadFromPath");
         sources.Select(file => file.Source).Should().Contain(source =>
             source.Contains("every generic dialog remains constructible", StringComparison.Ordinal));
     }

@@ -45,10 +45,10 @@ public sealed class DesignDialogParitySourceTests
     {
         var avalonia = File.ReadAllText(RepositoryFile("freew", "FreeW.App.Avalonia", "DesignDialogParity.cs"));
         var sharedSpacing = File.ReadAllText(RepositoryFile("freew", "FreeW.App.Avalonia", "PageLayoutDialogs.cs"));
-        avalonia.Should().Contain("public sealed class CustomizeThemeColorsDialog");
-        avalonia.Should().Contain("public sealed class CustomizeThemeFontsDialog");
-        sharedSpacing.Should().Contain("public sealed class CustomParagraphSpacingDialog");
-        avalonia.Should().Contain("public sealed class PageColorDialog");
+        avalonia.Should().Contain("public sealed partial class CustomizeThemeColorsDialog");
+        avalonia.Should().Contain("public sealed partial class CustomizeThemeFontsDialog");
+        sharedSpacing.Should().Contain("public sealed partial class CustomParagraphSpacingDialog");
+        avalonia.Should().Contain("public sealed partial class PageColorDialog");
         avalonia.Should().Contain("public sealed class SetAsDefaultConfirmationDialog");
     }
 
