@@ -55,6 +55,60 @@ public sealed class DocumentTableEditingCoordinatorTests
     }
 
     [Fact]
+    public void AddressesInRangeNormalizesReversedEndpointsAndDeduplicatesGridSpans()
+    {
+        var table = Table.Create(2, 3);
+        table.Rows[0].Cells[0].GridSpan = 2;
+        table.Rows[0].Cells.RemoveAt(1);
+        var session = SessionWith(table);
+        var expected = new[]
+        {
+            new DocumentTableCellAddress(0, 0, 0),
+            new DocumentTableCellAddress(0, 0, 2),
+            new DocumentTableCellAddress(0, 1, 0),
+            new DocumentTableCellAddress(0, 1, 1),
+            new DocumentTableCellAddress(0, 1, 2),
+        };
+
+        session.Tables.AddressesInRange(
+                new DocumentTableCellAddress(0, 0, 0),
+                new DocumentTableCellAddress(0, 1, 2))
+            .Should().Equal(expected);
+        session.Tables.AddressesInRange(
+                new DocumentTableCellAddress(0, 1, 2),
+                new DocumentTableCellAddress(0, 0, 0))
+            .Should().Equal(expected);
+        session.Tables.AddressesInRange(
+                new DocumentTableCellAddress(0, 0, 1),
+                new DocumentTableCellAddress(0, 0, 2))
+            .Should().Equal(expected.Take(2));
+    }
+
+    [Fact]
+    public void AddressesInRangeRejectsCrossTableAndInvalidEndpoints()
+    {
+        var document = new TextDocument
+        {
+            Blocks =
+            {
+                Table.Create(2, 2),
+                Table.Create(2, 2),
+            },
+        };
+        var session = new DocumentEditingSession();
+        session.LoadDocument(document);
+
+        session.Tables.AddressesInRange(
+                new DocumentTableCellAddress(0, 0, 0),
+                new DocumentTableCellAddress(1, 0, 0))
+            .Should().BeEmpty();
+        session.Tables.AddressesInRange(
+                new DocumentTableCellAddress(0, 0, 0),
+                new DocumentTableCellAddress(0, 9, 0))
+            .Should().BeEmpty();
+    }
+
+    [Fact]
     public void RowAndColumnStructureEditsReportPortableCaretAndUndo()
     {
         var table = Table.Create(2, 2);
@@ -1274,6 +1328,7 @@ public sealed class DocumentPortableEditingOwnershipTests
         foreach (var source in new[] { wpf, avalonia })
         {
             source.Should().Contain("DocumentTableEditingCoordinator TableEdits");
+            source.Should().Contain("TableEdits.AddressesInRange(");
             source.Should().Contain("DocumentReferenceEditingCoordinator ReferenceEdits");
             source.Should().Contain("_editingSession.FormatParagraphs(");
             source.Should().Contain("_editingSession.SetParagraphStyles(");
@@ -1293,6 +1348,7 @@ public sealed class DocumentPortableEditingOwnershipTests
         }
 
         avalonia.Should().Contain("public void PlaceCaretInCell(");
+        avalonia.Should().NotContain("SetCellAlignmentCommand expects");
         avalonia.Should().NotContain("CellEditRequested");
         avalonia.Should().NotContain("CellEditRequest");
         avalonia.Should().NotContain("public string GetCellText(");

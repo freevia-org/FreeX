@@ -1467,6 +1467,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
                     // View ▸ Window ▸ Side by Side + Synchronous Scrolling toggle states.
                     ["View Side by Side"] = GetSideBySideRibbonState,
                     ["Synchronous Scrolling"] = GetSynchronousScrollingRibbonState,
+                    ["Reset Window Position"] = GetResetWindowPositionRibbonState,
                     // Table Design ▸ Style Options toggle checked-state (mirrors the WPF host's
                     // _ribbonState.SetChecked calls in RefreshTableContextualTab): each toggle reports
                     // whether the active cell's table currently has that flag on.

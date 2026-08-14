@@ -43,9 +43,10 @@ public sealed partial class MainWindow : Window
 
     // ── State queries ─────────────────────────────────────────────────────────
 
-    private static bool IsSideBySideActive => SideBySideCoordinator.IsActive;
+    private bool IsSideBySideActive => SideBySideCoordinator.IsActiveFor(this);
 
-    private static bool IsSynchronousScrollActive => SideBySideCoordinator.IsSynchronousScrollActive;
+    private bool IsSynchronousScrollActive =>
+        SideBySideCoordinator.IsSynchronousScrollActiveFor(this);
 
     private bool IsInSideBySidePair => SideBySideCoordinator.Contains(this);
 
@@ -57,7 +58,15 @@ public sealed partial class MainWindow : Window
         if (IsSideBySideActive)
         {
             // Toggle off: clear the pair (leave windows where they are, matching WPF).
-            DisableSideBySide();
+            var formerPartner = SideBySidePartnerOf(this);
+            SideBySideCoordinator.DisableFor(this);
+            formerPartner?._refreshRibbonToggleStates?.Invoke();
+        }
+        else if (SideBySideCoordinator.IsActive)
+        {
+            // A different pair owns the process-wide coordinator. Do not tear it down or replace it.
+            _refreshRibbonToggleStates?.Invoke();
+            return;
         }
         else
         {
@@ -95,14 +104,12 @@ public sealed partial class MainWindow : Window
         partner.TileThisWindowToWorkArea(tiles[1]);
     }
 
-    private static void DisableSideBySide() => SideBySideCoordinator.Disable();
-
     // ── Synchronous Scrolling toggle ──────────────────────────────────────────
 
     // Command handler for "Synchronous Scrolling"
     private void ToggleSynchronousScrolling()
     {
-        if (SideBySideCoordinator.ToggleSynchronousScroll())
+        if (SideBySideCoordinator.ToggleSynchronousScrollFor(this))
             RefreshSideBySideRibbonState();
     }
 
@@ -165,9 +172,13 @@ public sealed partial class MainWindow : Window
     private RibbonCommandState GetSideBySideRibbonState()
     {
         var active = IsSideBySideActive;
-        var canActivate = active || VisibleWorkbookWindowCount() > 1;
+        var canActivate = active
+            || (!SideBySideCoordinator.IsActive && VisibleWorkbookWindowCount() > 1);
         return new RibbonCommandState(IsEnabled: canActivate, IsChecked: active);
     }
+
+    private RibbonCommandState GetResetWindowPositionRibbonState() =>
+        new(IsEnabled: IsSideBySideActive);
 
     /// <summary>
     /// Returns the ribbon state for "Synchronous Scrolling".
@@ -188,7 +199,7 @@ public sealed partial class MainWindow : Window
         if (IsInSideBySidePair)
         {
             var wasPartner = SideBySidePartnerOf(this);
-            DisableSideBySide();
+            SideBySideCoordinator.DisableFor(this);
             // Notify the remaining window to refresh its ribbon state.
             wasPartner?._refreshRibbonToggleStates?.Invoke();
         }

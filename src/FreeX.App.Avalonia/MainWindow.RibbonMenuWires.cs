@@ -10,11 +10,10 @@ using Avalonia.Platform.Storage;
 
 using FreeX.App.Presentation.PageLayout;
 using FreeX.App.Services;
+using Free.Shared.Shell;
 using Free.Shared.Shell.Avalonia;
 using FreeX.Core.Commands;
 using FreeX.Core.Model;
-
-using FreeShellShell = Free.Shared.Shell;
 
 namespace FreeX.App.Avalonia;
 
@@ -107,22 +106,24 @@ public sealed partial class MainWindow
     }
 
     // ── View ▸ Window ▸ Reset Window Position ────────────────────────────────────
-    // Reuses the portable Free.Shared.Shell.WindowResetPositionPlanner to compute a centered rect.
     private void ResetWindowPosition()
     {
-        var (workArea, scaling) = GetPrimaryWorkAreaMetrics();
-        // The planner returns a rect relative to a (0,0) work-area origin; offset by the real origin.
-        var reset = FreeShellShell.WindowResetPositionPlanner.Compute(
-            AvaloniaWindowBoundsTranslator.PixelsToDips(workArea.Width, scaling),
-            AvaloniaWindowBoundsTranslator.PixelsToDips(workArea.Height, scaling),
-            windowIndex: 0);
-        var tile = AvaloniaWindowBoundsTranslator.Translate(workArea, scaling, reset);
+        if (!SideBySideCoordinator.TryGetPairFor(this, out var primary, out var partner))
+            return;
 
-        WindowState = WindowState.Normal;
-        Width = tile.Width;
-        Height = tile.Height;
-        Position = tile.Position;
+        var (workArea, scaling) = GetPrimaryWorkAreaMetrics();
+        var (primaryBounds, partnerBounds) = SideBySideLayoutPlanner.Tile(
+            AvaloniaWindowBoundsTranslator.PixelsToDips(workArea.Width, scaling),
+            AvaloniaWindowBoundsTranslator.PixelsToDips(workArea.Height, scaling));
+        var tiles = AvaloniaWindowBoundsTranslator.Translate(
+            workArea,
+            scaling,
+            [primaryBounds, partnerBounds]);
+
+        primary.TileThisWindowToWorkArea(tiles[0]);
+        partner.TileThisWindowToWorkArea(tiles[1]);
         RefreshShell(UiText.Get("RibbonWire_WindowPositionReset"));
+        RefreshSideBySideRibbonState();
     }
 
     // ── Formulas ▸ Calculation ▸ Calculate Sheet ─────────────────────────────────

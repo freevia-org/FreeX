@@ -19,6 +19,18 @@ public sealed class WorkbookSideBySideCoordinator<TWindow>
 
     public bool IsSynchronousScrollActive => IsActive && _synchronousScroll;
 
+    public bool IsActiveFor(TWindow requester)
+    {
+        ArgumentNullException.ThrowIfNull(requester);
+        return Contains(requester);
+    }
+
+    public bool IsSynchronousScrollActiveFor(TWindow requester)
+    {
+        ArgumentNullException.ThrowIfNull(requester);
+        return Contains(requester) && _synchronousScroll;
+    }
+
     public bool Enable(TWindow primary, TWindow partner)
     {
         ArgumentNullException.ThrowIfNull(primary);
@@ -77,6 +89,22 @@ public sealed class WorkbookSideBySideCoordinator<TWindow>
         return primary is not null && partner is not null;
     }
 
+    public bool TryGetPairFor(
+        TWindow requester,
+        [NotNullWhen(true)] out TWindow? primary,
+        [NotNullWhen(true)] out TWindow? partner)
+    {
+        ArgumentNullException.ThrowIfNull(requester);
+        if (!Contains(requester))
+        {
+            primary = null;
+            partner = null;
+            return false;
+        }
+
+        return TryGetPair(out primary, out partner);
+    }
+
     public bool SetSynchronousScroll(bool active)
     {
         if (active && !IsActive)
@@ -92,6 +120,26 @@ public sealed class WorkbookSideBySideCoordinator<TWindow>
             return false;
 
         _synchronousScroll = !_synchronousScroll;
+        return true;
+    }
+
+    public bool ToggleSynchronousScrollFor(TWindow requester)
+    {
+        ArgumentNullException.ThrowIfNull(requester);
+        if (!Contains(requester))
+            return false;
+
+        _synchronousScroll = !_synchronousScroll;
+        return true;
+    }
+
+    public bool SetSynchronousScrollFor(TWindow requester, bool active)
+    {
+        ArgumentNullException.ThrowIfNull(requester);
+        if (!Contains(requester))
+            return false;
+
+        _synchronousScroll = active;
         return true;
     }
 

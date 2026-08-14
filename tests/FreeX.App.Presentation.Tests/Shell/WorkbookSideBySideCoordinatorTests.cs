@@ -37,6 +37,45 @@ public sealed class WorkbookSideBySideCoordinatorTests
     }
 
     [Fact]
+    public void RequesterScopedStateAndPairRejectUnrelatedWindow()
+    {
+        var coordinator = new WorkbookSideBySideCoordinator<Window>();
+        var primary = new Window();
+        var partner = new Window();
+        var unrelated = new Window();
+        coordinator.Enable(primary, partner);
+        coordinator.SetSynchronousScroll(true);
+
+        coordinator.IsActiveFor(primary).Should().BeTrue();
+        coordinator.IsSynchronousScrollActiveFor(partner).Should().BeTrue();
+        coordinator.IsActiveFor(unrelated).Should().BeFalse();
+        coordinator.IsSynchronousScrollActiveFor(unrelated).Should().BeFalse();
+        coordinator.TryGetPairFor(primary, out var resolvedPrimary, out var resolvedPartner)
+            .Should().BeTrue();
+        resolvedPrimary.Should().BeSameAs(primary);
+        resolvedPartner.Should().BeSameAs(partner);
+        coordinator.TryGetPairFor(unrelated, out _, out _).Should().BeFalse();
+    }
+
+    [Fact]
+    public void RequesterScopedSynchronousToggleCannotChangeAnotherPair()
+    {
+        var coordinator = new WorkbookSideBySideCoordinator<Window>();
+        var primary = new Window();
+        var partner = new Window();
+        coordinator.Enable(primary, partner);
+
+        coordinator.ToggleSynchronousScrollFor(new Window()).Should().BeFalse();
+        coordinator.IsSynchronousScrollActive.Should().BeFalse();
+        coordinator.ToggleSynchronousScrollFor(primary).Should().BeTrue();
+        coordinator.IsSynchronousScrollActive.Should().BeTrue();
+        coordinator.SetSynchronousScrollFor(new Window(), false).Should().BeFalse();
+        coordinator.IsSynchronousScrollActive.Should().BeTrue();
+        coordinator.SetSynchronousScrollFor(partner, false).Should().BeTrue();
+        coordinator.IsSynchronousScrollActive.Should().BeFalse();
+    }
+
+    [Fact]
     public void Enable_NewPairStartsWithSynchronousScrollDisabled()
     {
         var coordinator = new WorkbookSideBySideCoordinator<Window>();
@@ -97,6 +136,43 @@ public sealed class WorkbookSideBySideCoordinatorTests
 
         coordinator.IsActive.Should().BeFalse();
         coordinator.IsSynchronousScrollActive.Should().BeFalse();
+    }
+
+    [Fact]
+    public void BothRenderersUseRequesterScopedSideBySidePolicy()
+    {
+        var root = TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeX.slnx");
+        var wpfMultiWindow = File.ReadAllText(Path.Combine(
+            root,
+            "src",
+            "FreeX.App.Host",
+            "MainWindow.MultiWindow.cs"));
+        var wpfViewCommands = File.ReadAllText(Path.Combine(
+            root,
+            "src",
+            "FreeX.App.Host",
+            "MainWindow.ViewCommands.cs"));
+        var avaloniaSideBySide = File.ReadAllText(Path.Combine(
+            root,
+            "src",
+            "FreeX.App.Avalonia",
+            "MainWindow.SideBySide.cs"));
+        var avaloniaReset = File.ReadAllText(Path.Combine(
+            root,
+            "src",
+            "FreeX.App.Avalonia",
+            "MainWindow.RibbonMenuWires.cs"));
+
+        wpfMultiWindow.Should().Contain("ResetSideBySidePair(this,");
+        wpfMultiWindow.Should().Contain("DisableSideBySideFor(this)");
+        wpfMultiWindow.Should().Contain("SetSynchronousScrollFor(");
+        wpfViewCommands.Should().Contain("IsSideBySideActiveFor(this)");
+        wpfViewCommands.Should().Contain("IsSynchronousScrollActiveFor(this)");
+        avaloniaSideBySide.Should().Contain("SideBySideCoordinator.DisableFor(this)");
+        avaloniaSideBySide.Should().Contain("ToggleSynchronousScrollFor(this)");
+        avaloniaReset.Should().Contain("SideBySideCoordinator.TryGetPairFor(this,");
+        avaloniaReset.Should().Contain("primary.TileThisWindowToWorkArea(tiles[0])");
+        avaloniaReset.Should().NotContain("WindowResetPositionPlanner.Compute(");
     }
 
     private sealed class Window
