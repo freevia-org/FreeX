@@ -3439,8 +3439,7 @@ public sealed partial class MainWindow : Window
 
     /// <summary>Pick a file and insert it as a Word-compatible generic OLE Package.</summary>
     private Task InsertEmbeddedObjectAsync() => ExecuteDocumentFragmentImportAsync(
-        FreeWDocumentFragmentImportPlanner.CreateEmbeddedObjectRequest(
-            FreeWDocumentFragmentHostProfile.Avalonia));
+        FreeWDocumentFragmentImportPlanner.CreateEmbeddedObjectRequest());
 
     private async Task OpenSymbolPickerAsync()
     {
@@ -3716,8 +3715,7 @@ public sealed partial class MainWindow : Window
     /// Wired to <c>freew.text-from-file</c> (Insert -> Text).
     /// </summary>
     private Task InsertTextFromFileAsync() => ExecuteDocumentFragmentImportAsync(
-        FreeWDocumentFragmentImportPlanner.CreateTextFromFileRequest(
-            FreeWDocumentFragmentHostProfile.Avalonia));
+        FreeWDocumentFragmentImportPlanner.CreateTextFromFileRequest());
 
     private async Task ExecuteDocumentFragmentImportAsync(FreeWDocumentFragmentImportRequest request)
     {
