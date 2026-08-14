@@ -124,7 +124,7 @@
         <Setter Property="FontFamily" Value="Segoe UI"/>
         <Setter Property="FontSize" Value="{x:Static shell:CompactDialogVisualTokens.FontSize}"/>
         <Setter Property="MinHeight" Value="{x:Static shell:CompactDialogVisualTokens.ControlHeight}"/>
-        <Setter Property="Padding" Value="5,3"/>
+        <Setter Property="Padding" Value="{x:Static local:WpfCompactDialogMetrics.TextBoxPadding}"/>
         <Setter Property="Foreground" Value="{DynamicResource ThemeNeutralTextBrush}"/>
         <Setter Property="Background" Value="{DynamicResource ThemeNeutralWhiteBrush}"/>
         <Setter Property="BorderBrush" Value="{StaticResource DialogFieldBorder}"/>

@@ -14,6 +14,12 @@ public static class WpfCompactDialogMetrics
         CompactDialogVisualTokens.ButtonPaddingHorizontal,
         CompactDialogVisualTokens.ButtonPaddingVertical);
 
+    public static Thickness TextBoxPadding { get; } = new(
+        CompactDialogVisualTokens.TextBoxPaddingHorizontal,
+        CompactDialogVisualTokens.TextBoxPaddingVertical,
+        CompactDialogVisualTokens.TextBoxPaddingHorizontal,
+        CompactDialogVisualTokens.TextBoxPaddingVertical);
+
     public static Thickness UniformBorderThickness { get; } = new(
         CompactDialogVisualTokens.BorderThickness);
 

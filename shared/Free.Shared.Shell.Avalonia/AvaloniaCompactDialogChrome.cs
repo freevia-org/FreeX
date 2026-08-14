@@ -27,7 +27,9 @@ public sealed record AvaloniaCompactDialogChromeStyle(FontFamily FontFamily)
     public Thickness ButtonPadding { get; init; } = new(
         CompactDialogVisualTokens.ButtonPaddingHorizontal,
         CompactDialogVisualTokens.ButtonPaddingVertical);
-    public Thickness TextBoxPadding { get; init; } = new(4, 1);
+    public Thickness TextBoxPadding { get; init; } = new(
+        CompactDialogVisualTokens.TextBoxPaddingHorizontal,
+        CompactDialogVisualTokens.TextBoxPaddingVertical);
     public Thickness ComboBoxPadding { get; init; } = new(5, 0, 4, 0);
     public Thickness ListBoxItemPadding { get; init; } = new(4, 1);
     public double ListBoxItemMinHeight { get; init; } = CompactDialogVisualTokens.ControlHeight;

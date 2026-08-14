@@ -12,6 +12,8 @@ public static class CompactDialogVisualTokens
     public const double FontSize = 12;
     public const double ButtonPaddingHorizontal = 12;
     public const double ButtonPaddingVertical = 3;
+    public const double TextBoxPaddingHorizontal = 5;
+    public const double TextBoxPaddingVertical = 3;
     public const double ButtonCornerRadius = 3;
     public const double BorderThickness = 1;
 

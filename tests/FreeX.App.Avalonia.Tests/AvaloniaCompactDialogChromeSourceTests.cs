@@ -124,7 +124,8 @@ public sealed class AvaloniaCompactDialogChromeSourceTests
         source.Should().Contain("public IBrush? DialogTabPaneBorderBrush { get; init; }");
         source.Should().Contain("public bool RemoveFocusAdorner { get; init; }");
         source.Should().Contain("public Thickness ButtonPadding { get; init; } = new(12, 3);");
-        source.Should().Contain("public Thickness TextBoxPadding { get; init; } = new(4, 1);");
+        source.Should().Contain("CompactDialogVisualTokens.TextBoxPaddingHorizontal");
+        source.Should().Contain("CompactDialogVisualTokens.TextBoxPaddingVertical");
         source.Should().Contain("public Thickness ComboBoxPadding { get; init; } = new(5, 0, 4, 0);");
         source.Should().Contain("public Thickness ListBoxItemPadding { get; init; } = new(4, 1);");
         source.Should().Contain("public double ListBoxItemMinHeight { get; init; } = 24;");
