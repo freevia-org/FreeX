@@ -118,6 +118,7 @@ public sealed class AvaloniaCompactDialogChromeSourceTests
         source.Should().Contain("public double? ComboBoxHeight { get; init; }");
         source.Should().Contain("public double? TabHeight { get; init; }");
         source.Should().Contain("public double ButtonHeight { get; init; } = CompactDialogVisualTokens.ButtonHeight;");
+        source.Should().Contain("public double ButtonMinWidth { get; init; } = CompactDialogVisualTokens.ButtonMinWidth;");
         source.Should().Contain("public double FontSize { get; init; } = CompactDialogVisualTokens.FontSize;");
         source.Should().Contain("public IBrush? FocusedInputBorderBrush { get; init; }");
         source.Should().Contain("public IBrush? ButtonBorderBrush { get; init; }");
@@ -144,6 +145,7 @@ public sealed class AvaloniaCompactDialogChromeSourceTests
         source.Should().Contain("Color.FromRgb(200, 200, 200)");
         source.Should().Contain("Color.FromRgb(183, 188, 194)");
         source.Should().Contain("button.Height = style.ButtonHeight;");
+        source.Should().Contain("button.IsSet(Layoutable.MinWidthProperty) ? button.MinWidth : style.ButtonMinWidth");
         source.Should().Contain("button.MinHeight = style.ButtonHeight;");
         source.Should().Contain("button.MaxHeight = style.ButtonHeight;");
         source.Should().Contain("button.CornerRadius = style.ButtonCornerRadius;");

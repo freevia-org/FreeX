@@ -35,7 +35,7 @@
 
     <!-- Standard dialog button: white resting fill + subtle border; hover/press wash with accent border. -->
     <Style TargetType="{x:Type Button}">
-        <Setter Property="MinWidth" Value="84"/>
+        <Setter Property="MinWidth" Value="{x:Static shell:CompactDialogVisualTokens.ButtonMinWidth}"/>
         <Setter Property="MinHeight" Value="{x:Static shell:CompactDialogVisualTokens.ButtonHeight}"/>
         <Setter Property="Padding" Value="{x:Static local:WpfCompactDialogMetrics.ButtonPadding}"/>
         <Setter Property="Margin" Value="6,0,0,0"/>

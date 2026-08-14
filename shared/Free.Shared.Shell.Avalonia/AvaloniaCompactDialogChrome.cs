@@ -23,6 +23,7 @@ public sealed record AvaloniaCompactDialogChromeStyle(FontFamily FontFamily)
     public double? TabHeight { get; init; }
     public double CompactRadioButtonHeight { get; init; } = 20;
     public double ButtonHeight { get; init; } = CompactDialogVisualTokens.ButtonHeight;
+    public double ButtonMinWidth { get; init; } = CompactDialogVisualTokens.ButtonMinWidth;
     public double FontSize { get; init; } = CompactDialogVisualTokens.FontSize;
     public Thickness ButtonPadding { get; init; } = new(
         CompactDialogVisualTokens.ButtonPaddingHorizontal,
@@ -217,7 +218,11 @@ public static class AvaloniaCompactDialogChrome
                     ApplyClassicTabChrome(tabControl, style);
                     break;
                 case Button button:
-                    ApplyButton(button, style, button.MinWidth, button.IsDefault);
+                    ApplyButton(
+                        button,
+                        style,
+                        button.IsSet(Layoutable.MinWidthProperty) ? button.MinWidth : style.ButtonMinWidth,
+                        button.IsDefault);
                     break;
             }
         }

@@ -10,6 +10,7 @@ public sealed class CompactDialogChromeContractTests
     {
         CompactDialogVisualTokens.ControlHeight.Should().Be(24);
         CompactDialogVisualTokens.ButtonHeight.Should().Be(26);
+        CompactDialogVisualTokens.ButtonMinWidth.Should().Be(84);
         CompactDialogVisualTokens.FontSize.Should().Be(12);
         CompactDialogVisualTokens.ButtonPaddingHorizontal.Should().Be(12);
         CompactDialogVisualTokens.ButtonPaddingVertical.Should().Be(3);
@@ -38,6 +39,8 @@ public sealed class CompactDialogChromeContractTests
 
         avalonia.Should().Contain("= CompactDialogVisualTokens.ControlHeight;");
         avalonia.Should().Contain("= CompactDialogVisualTokens.ButtonHeight;");
+        avalonia.Should().Contain("= CompactDialogVisualTokens.ButtonMinWidth;");
+        avalonia.Should().Contain("button.IsSet(Layoutable.MinWidthProperty) ? button.MinWidth : style.ButtonMinWidth");
         avalonia.Should().Contain("= CompactDialogVisualTokens.FontSize;");
         avalonia.Should().Contain("CompactDialogVisualTokens.ButtonPaddingHorizontal");
         avalonia.Should().Contain("CompactDialogVisualTokens.ButtonPaddingVertical");
@@ -68,6 +71,7 @@ public sealed class CompactDialogChromeContractTests
 
         wpf.Should().Contain("{x:Static shell:CompactDialogVisualTokens.ControlHeight}");
         wpf.Should().Contain("{x:Static shell:CompactDialogVisualTokens.ButtonHeight}");
+        wpf.Should().Contain("{x:Static shell:CompactDialogVisualTokens.ButtonMinWidth}");
         wpf.Should().Contain("{x:Static shell:CompactDialogVisualTokens.FontSize}");
         wpf.Should().Contain("{x:Static local:WpfCompactDialogMetrics.ButtonPadding}");
         wpf.Should().Contain("{x:Static local:WpfCompactDialogMetrics.TextBoxPadding}");
@@ -79,6 +83,7 @@ public sealed class CompactDialogChromeContractTests
         wpf.Should().Contain("{x:Static local:WpfCompactDialogMetrics.ButtonCornerRadius}");
         wpf.Should().Contain("{x:Static local:WpfCompactDialogMetrics.UniformBorderThickness}");
         wpf.Should().NotContain("<Setter Property=\"MinHeight\" Value=\"26\"/>");
+        wpf.Should().NotContain("<Setter Property=\"MinWidth\" Value=\"84\"/>");
         wpf.Should().NotContain("<Setter Property=\"FontSize\" Value=\"12\"/>");
         wpf.Should().NotContain("CornerRadius=\"3\"");
 

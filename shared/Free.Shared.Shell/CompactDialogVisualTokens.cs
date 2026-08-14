@@ -9,6 +9,7 @@ public static class CompactDialogVisualTokens
 {
     public const double ControlHeight = 24;
     public const double ButtonHeight = 26;
+    public const double ButtonMinWidth = 84;
     public const double FontSize = 12;
     public const double ButtonPaddingHorizontal = 12;
     public const double ButtonPaddingVertical = 3;
