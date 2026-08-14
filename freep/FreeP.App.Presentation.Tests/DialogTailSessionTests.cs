@@ -138,6 +138,43 @@ public sealed class DialogTailSessionTests
     }
 
     [Fact]
+    public void MotionPathFormSession_Owns_row_lifetime_validation_and_acceptance()
+    {
+        var session = new MotionPathEditorDialogSession(
+            MakeMotionPathEditor(),
+            0,
+            CultureInfo.InvariantCulture);
+        var rendered = new List<FakeMotionRow>();
+        var validation = new List<(string Message, bool Succeeded)>();
+        var closed = false;
+        var form = new MotionPathEditorDialogFormSession<FakeMotionRow>(
+            session,
+            segment => new FakeMotionRow(ToRowInput(segment)),
+            row => row.Input,
+            static (row, index, remove) =>
+            {
+                row.Index = index;
+                row.Remove = remove;
+            },
+            rendered.Clear,
+            rendered.Add,
+            (message, succeeded) => validation.Add((message, succeeded)),
+            () => closed = true);
+
+        form.RenderInitial();
+        rendered.Should().HaveCount(2);
+        rendered[1].Input = rendered[1].Input with { X = "invalid" };
+        form.AddLine();
+        validation[^1].Should().Be(("X must be a number.", false));
+
+        rendered[1].Input = rendered[1].Input with { X = "0.75" };
+        form.Submit();
+
+        closed.Should().BeTrue();
+        validation[^1].Should().Be((string.Empty, true));
+    }
+
+    [Fact]
     public void RotationSession_ProjectsSelectedRotationAndAppliesNormalizedInput()
     {
         var presentation = Presentation.CreateEmpty();
@@ -332,5 +369,12 @@ public sealed class DialogTailSessionTests
     private sealed class FakeSettingsControl
     {
         public PresentationDialogFieldValue Value { get; set; } = new();
+    }
+
+    private sealed class FakeMotionRow(MotionPathEditorRowInput input)
+    {
+        public MotionPathEditorRowInput Input { get; set; } = input;
+        public int Index { get; set; }
+        public Action? Remove { get; set; }
     }
 }

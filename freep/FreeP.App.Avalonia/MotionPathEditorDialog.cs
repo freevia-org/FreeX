@@ -15,8 +15,8 @@ internal sealed class MotionPathEditorDialog : FreePDialogWindow
     private static readonly AvaloniaCompactDialogChromeStyle DialogChromeStyle =
         AvaloniaCompactDialogChrome.WindowsStyle;
     private readonly MotionPathEditorDialogSession _session;
+    private readonly MotionPathEditorDialogFormSession<Row> _formSession;
     private readonly StackPanel _rowsPanel = new();
-    private readonly List<Row> _rows = new();
     private readonly TextBlock _validationText = new()
     {
         Foreground = new SolidColorBrush(Color.FromRgb(0xB7, 0x47, 0x2A)),
@@ -27,6 +27,15 @@ internal sealed class MotionPathEditorDialog : FreePDialogWindow
     public MotionPathEditorDialog(EditingSession editor, int animationIndex)
     {
         _session = new MotionPathEditorDialogSession(editor, animationIndex);
+        _formSession = new(
+            _session,
+            segment => new Row(segment, _session.Surface),
+            row => row.ReadInput(),
+            (row, index, remove) => row.Build(index, remove),
+            _rowsPanel.Children.Clear,
+            row => _rowsPanel.Children.Add(row.Control!),
+            (message, _) => _validationText.Text = message,
+            () => Close(true));
         var surface = _session.Surface;
         Title = surface.Title;
         Width = 760;
@@ -39,11 +48,8 @@ internal sealed class MotionPathEditorDialog : FreePDialogWindow
         PresentationDialogControlAdapter.ApplySemantic(
             _validationText,
             surface.Field(MotionPathEditorDialogField.Validation));
-        foreach (var segment in _session.InitialSegments)
-            _rows.Add(new Row(segment, surface));
-
         Content = BuildContent();
-        RenderRows();
+        _formSession.RenderInitial();
         KeyDown += (_, e) =>
         {
             if (e.Key != Key.Escape)
@@ -70,11 +76,11 @@ internal sealed class MotionPathEditorDialog : FreePDialogWindow
         var actions = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right };
         DockPanel.SetDock(actions, Dock.Bottom);
         var addLine = Button(surface.Action(MotionPathEditorDialogAction.AddLine), 82);
-        addLine.Click += (_, _) => ApplyTransition(_session.AddLine(ReadRowInputs()));
+        addLine.Click += (_, _) => _formSession.AddLine();
         var addCurve = Button(surface.Action(MotionPathEditorDialogAction.AddCurve), 82);
-        addCurve.Click += (_, _) => ApplyTransition(_session.AddCurve(ReadRowInputs()));
+        addCurve.Click += (_, _) => _formSession.AddCurve();
         var ok = Button(surface.Action(MotionPathEditorDialogAction.Accept), 80);
-        ok.Click += (_, _) => ApplyTransition(_session.Submit(ReadRowInputs()));
+        ok.Click += (_, _) => _formSession.Submit();
         var cancel = Button(surface.Action(MotionPathEditorDialogAction.Cancel), 80);
         cancel.Click += (_, _) => Close(false);
         actions.Children.Add(addLine);
@@ -92,37 +98,6 @@ internal sealed class MotionPathEditorDialog : FreePDialogWindow
             VerticalScrollBarVisibility = global::Avalonia.Controls.Primitives.ScrollBarVisibility.Auto,
         });
         return root;
-    }
-
-    private void RenderRows()
-    {
-        _rowsPanel.Children.Clear();
-        for (var index = 0; index < _rows.Count; index++)
-        {
-            var row = _rows[index];
-            var rowIndex = index;
-            row.Build(index, () =>
-                ApplyTransition(_session.Remove(ReadRowInputs(), rowIndex)));
-            _rowsPanel.Children.Add(row.Control!);
-        }
-    }
-
-    private IReadOnlyList<MotionPathEditorRowInput> ReadRowInputs() =>
-        _rows.Select(row => row.ReadInput()).ToArray();
-
-    private void ApplyTransition(MotionPathEditorDialogTransition transition)
-    {
-        if (transition.ShouldRenderRows)
-        {
-            _rows.Clear();
-            foreach (var segment in transition.Segments)
-                _rows.Add(new Row(segment, _session.Surface));
-            RenderRows();
-        }
-
-        _validationText.Text = transition.ValidationMessage;
-        if (transition.ShouldClose)
-            Close(true);
     }
 
     private static Button Button(

@@ -7,8 +7,7 @@ using FreeP.App.Compositor;
 
 namespace FreeP.App.Host;
 
-public sealed partial class CustomShowDialog : Free.Shared.Ribbon.Wpf.DialogWindow,
-    ISlideShowCustomShowDialogView
+public sealed partial class CustomShowDialog : Free.Shared.Ribbon.Wpf.DialogWindow
 {
     private readonly SlideShowCustomShowDialogController _controller;
     private readonly SlideShowCustomShowDialogFormSession<FrameworkElement> _formSession;
@@ -52,7 +51,13 @@ public sealed partial class CustomShowDialog : Free.Shared.Ribbon.Wpf.DialogWind
             static (control, isChecked) => ((CheckBox)control).IsChecked = isChecked,
             static control => ((CheckBox)control).IsChecked == true,
             static (control, isEnabled) => control.IsEnabled = isEnabled);
-        _controller = new(session, this);
+        _controller = new(
+            session,
+            new SlideShowCustomShowDialogViewAdapter<FrameworkElement>(
+                _formSession,
+                () => _nameBox.Text,
+                RebuildSlides,
+                Close));
 
         Title = Surface.Title;
         AutomationProperties.SetName(this, Surface.AccessibleName);
@@ -254,19 +259,6 @@ public sealed partial class CustomShowDialog : Free.Shared.Ribbon.Wpf.DialogWind
         return root;
     }
 
-    SlideShowCustomShowDialogViewState ISlideShowCustomShowDialogView.CaptureState() =>
-        new(
-            _nameBox.Text,
-            _formSession.SelectedSlideIds(),
-            _formSession.SelectedShowIndex,
-            _formSession.SelectedSlideIndex);
-
-    void ISlideShowCustomShowDialogView.RenderFullPlan(SlideShowCustomShowSessionPlan plan)
-    {
-        RebuildSlides(plan.AvailableSlides);
-        _formSession.ApplyFullPlan(plan);
-    }
-
     private void RebuildSlides(IReadOnlyList<SlideShowCustomShowSlideOption> slides)
     {
         _slidePanel.Children.Clear();
@@ -314,19 +306,6 @@ public sealed partial class CustomShowDialog : Free.Shared.Ribbon.Wpf.DialogWind
             _slidePanel.Children.Add(row);
         }
     }
-
-    void ISlideShowCustomShowDialogView.RenderSelectedShowPlan(
-        SlideShowCustomShowSessionPlan plan) =>
-        _formSession.ApplySelectedShowPlan(plan);
-
-    void ISlideShowCustomShowDialogView.ApplySlideSelection(
-        SlideShowCustomShowSessionPlan plan) =>
-        _formSession.ApplySlideSelection(plan);
-
-    void ISlideShowCustomShowDialogView.SetValidation(string? message) =>
-        _formSession.SetValidation(message);
-
-    void ISlideShowCustomShowDialogView.CloseDialog() => Close();
 
     private void OnCustomShowSlideListMouseLeftButtonDown(object sender, MouseButtonEventArgs e)
     {

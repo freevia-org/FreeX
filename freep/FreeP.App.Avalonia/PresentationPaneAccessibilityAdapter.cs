@@ -7,12 +7,11 @@ namespace FreeP.App.Avalonia;
 /// <summary>Avalonia-only writer for the shared presentation-pane accessibility contract.</summary>
 internal sealed class PresentationPaneAccessibilityAdapter
 {
-    private readonly PresentationPaneAccessibilitySession _session = new();
+    private readonly PresentationPaneAccessibilityNativeSession<Control> _nativeSession =
+        new(WritePane);
 
     public void ApplyPane(Control control, string paneId, bool isVisible, int itemCount = 0, int selectedIndex = -1)
-    {
-        ApplyPaneProjection(control, _session.UpdatePane(paneId, isVisible, itemCount, selectedIndex));
-    }
+        => _nativeSession.ApplyPane(control, paneId, isVisible, itemCount, selectedIndex);
 
     public static void ApplyPaneMetadata(
         Control control,
@@ -20,13 +19,15 @@ internal sealed class PresentationPaneAccessibilityAdapter
         bool isVisible,
         int itemCount = 0,
         int selectedIndex = -1)
-    {
-        ApplyPaneProjection(
+        => PresentationPaneAccessibilityNativeSession<Control>.ApplyPaneMetadata(
             control,
-            PresentationPaneAccessibilityPlanner.ProjectPane(paneId, isVisible, itemCount, selectedIndex));
-    }
+            paneId,
+            isVisible,
+            itemCount,
+            selectedIndex,
+            WritePane);
 
-    private static void ApplyPaneProjection(
+    private static void WritePane(
         Control control,
         PresentationPaneAccessibilityPaneProjection pane)
     {
@@ -45,8 +46,15 @@ internal sealed class PresentationPaneAccessibilityAdapter
     public static void ApplyItem(
         Control control,
         PresentationPaneAccessibilityItemPlan plan)
+        => PresentationPaneAccessibilityNativeSession<Control>.ApplyItem(
+            control,
+            plan,
+            WriteItem);
+
+    private static void WriteItem(
+        Control control,
+        PresentationPaneAccessibilityItemProjection item)
     {
-        var item = PresentationPaneAccessibilityPlanner.ProjectItem(plan);
         AutomationProperties.SetAutomationId(control, item.AutomationId);
         AutomationProperties.SetName(control, item.Name);
         AutomationProperties.SetHelpText(control, item.HelpText);
@@ -54,8 +62,8 @@ internal sealed class PresentationPaneAccessibilityAdapter
     }
 
     public IReadOnlyList<PresentationPaneAccessibilitySnapshotEntry> BuildSnapshot() =>
-        _session.BuildSnapshot();
+        _nativeSession.BuildSnapshot();
 
     public string SerializeSnapshot() =>
-        _session.SerializeSnapshot();
+        _nativeSession.SerializeSnapshot();
 }

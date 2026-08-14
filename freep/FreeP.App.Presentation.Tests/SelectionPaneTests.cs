@@ -298,7 +298,7 @@ public sealed class SelectionPaneTests
 
         foreach (var source in new[] { wpf, avalonia })
         {
-            source.Should().Contain("PresentationSelectionPaneSession");
+            source.Should().Contain("PresentationSelectionPaneFormSession<");
             source.Should().Contain("PresentationSelectionPaneVisualMetrics.PaneWidth");
             source.Should().Contain("PresentationSelectionPaneVisualMetrics.PaneBackgroundColor");
             source.Should().Contain("PresentationSelectionPaneVisualMetrics.PaneBorderColor");
@@ -307,10 +307,10 @@ public sealed class SelectionPaneTests
             source.Should().Contain("PresentationSelectionPaneVisualMetrics.RenameMinimumWidth");
             source.Should().Contain("PresentationSelectionPaneVisualMetrics.VisibilityMinimumWidth");
             source.Should().Contain("PresentationSelectionPaneVisualMetrics.MoveButtonWidth");
-            source.Should().Contain("_session.CreateItemSession(item.ShapeId)");
-            source.Should().Contain("ApplyTransition(itemSession.Select())");
+            source.Should().Contain("PresentationSelectionPaneItemSession itemSession");
+            source.Should().Contain("_formSession.ApplyTransition(itemSession.Select())");
             source.Should().Contain("itemSession.CommitRename(rename.Text)");
-            source.Should().Contain("ApplyTransition(itemSession.CancelRename())");
+            source.Should().Contain("_formSession.ApplyTransition(itemSession.CancelRename())");
             source.Should().Contain("itemSession.ToggleVisibility()");
             source.Should().Contain("itemSession.MoveTowardFront()");
             source.Should().Contain("itemSession.MoveTowardBack()");

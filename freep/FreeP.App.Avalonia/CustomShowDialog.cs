@@ -10,7 +10,7 @@ using FreeP.App.Compositor;
 
 namespace FreeP.App.Avalonia;
 
-internal sealed partial class CustomShowDialog : FreePDialogWindow, ISlideShowCustomShowDialogView
+internal sealed partial class CustomShowDialog : FreePDialogWindow
 {
     private const double DragStartThreshold = 4;
     private static readonly AvaloniaCompactDialogChromeStyle DialogChromeStyle =
@@ -59,7 +59,13 @@ internal sealed partial class CustomShowDialog : FreePDialogWindow, ISlideShowCu
             static (control, isChecked) => ((CheckBox)control).IsChecked = isChecked,
             static control => ((CheckBox)control).IsChecked == true,
             static (control, isEnabled) => control.IsEnabled = isEnabled);
-        _controller = new(session, this);
+        _controller = new(
+            session,
+            new SlideShowCustomShowDialogViewAdapter<Control>(
+                _formSession,
+                () => _nameBox.Text,
+                RebuildSlides,
+                Close));
 
         Title = Surface.Title;
         AutomationProperties.SetName(this, Surface.AccessibleName);
@@ -287,19 +293,6 @@ internal sealed partial class CustomShowDialog : FreePDialogWindow, ISlideShowCu
         return root;
     }
 
-    SlideShowCustomShowDialogViewState ISlideShowCustomShowDialogView.CaptureState() =>
-        new(
-            _nameBox.Text,
-            _formSession.SelectedSlideIds(),
-            _formSession.SelectedShowIndex,
-            _formSession.SelectedSlideIndex);
-
-    void ISlideShowCustomShowDialogView.RenderFullPlan(SlideShowCustomShowSessionPlan plan)
-    {
-        RebuildSlides(plan.AvailableSlides);
-        _formSession.ApplyFullPlan(plan);
-    }
-
     private void RebuildSlides(IReadOnlyList<SlideShowCustomShowSlideOption> slides)
     {
         _slidePanel.Children.Clear();
@@ -348,19 +341,6 @@ internal sealed partial class CustomShowDialog : FreePDialogWindow, ISlideShowCu
             _slidePanel.Children.Add(row);
         }
     }
-
-    void ISlideShowCustomShowDialogView.RenderSelectedShowPlan(
-        SlideShowCustomShowSessionPlan plan) =>
-        _formSession.ApplySelectedShowPlan(plan);
-
-    void ISlideShowCustomShowDialogView.ApplySlideSelection(
-        SlideShowCustomShowSessionPlan plan) =>
-        _formSession.ApplySlideSelection(plan);
-
-    void ISlideShowCustomShowDialogView.SetValidation(string? message) =>
-        _formSession.SetValidation(message);
-
-    void ISlideShowCustomShowDialogView.CloseDialog() => Close();
 
     private void OnCustomShowSlideListPointerPressed(object? sender, PointerPressedEventArgs e)
     {

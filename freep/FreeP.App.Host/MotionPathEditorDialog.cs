@@ -10,12 +10,25 @@ namespace FreeP.App.Host;
 public sealed class MotionPathEditorDialog : Free.Shared.Ribbon.Wpf.DialogWindow
 {
     private readonly MotionPathEditorDialogSession _session;
+    private readonly MotionPathEditorDialogFormSession<Row> _formSession;
     private readonly StackPanel _rowsPanel = new();
-    private readonly List<Row> _rows = new();
 
     public MotionPathEditorDialog(EditingSession editor, int animationIndex)
     {
         _session = new MotionPathEditorDialogSession(editor, animationIndex);
+        _formSession = new(
+            _session,
+            segment => new Row(segment, _session.Surface),
+            row => row.ReadInput(),
+            (row, index, remove) => row.Build(index, remove),
+            _rowsPanel.Children.Clear,
+            row => _rowsPanel.Children.Add(row.Control!),
+            (message, succeeded) =>
+            {
+                if (!succeeded)
+                    DialogMessageHelper.ShowWarning(this, message, Title);
+            },
+            () => DialogResult = true);
         var surface = _session.Surface;
         Title = surface.Title;
         Width = 720;
@@ -25,18 +38,15 @@ public sealed class MotionPathEditorDialog : Free.Shared.Ribbon.Wpf.DialogWindow
         AutomationProperties.SetName(this, surface.Schema.AccessibleName);
         AutomationProperties.SetAutomationId(this, surface.Schema.AutomationId);
 
-        foreach (var segment in _session.InitialSegments)
-            _rows.Add(new Row(segment, surface));
-
         var addLine = MakeActionButton(
             surface.Action(MotionPathEditorDialogAction.AddLine),
-            () => ApplyTransition(_session.AddLine(ReadRowInputs())));
+            _formSession.AddLine);
         var addCurve = MakeActionButton(
             surface.Action(MotionPathEditorDialogAction.AddCurve),
-            () => ApplyTransition(_session.AddCurve(ReadRowInputs())));
+            _formSession.AddCurve);
         var ok = MakeActionButton(
             surface.Action(MotionPathEditorDialogAction.Accept),
-            () => ApplyTransition(_session.Submit(ReadRowInputs())));
+            _formSession.Submit);
         var cancel = MakeActionButton(
             surface.Action(MotionPathEditorDialogAction.Cancel),
             Close);
@@ -61,43 +71,7 @@ public sealed class MotionPathEditorDialog : Free.Shared.Ribbon.Wpf.DialogWindow
         root.Children.Add(actions);
         root.Children.Add(new ScrollViewer { VerticalScrollBarVisibility = ScrollBarVisibility.Auto, Content = _rowsPanel });
         Content = root;
-        RenderRows();
-    }
-
-    private void RenderRows()
-    {
-        _rowsPanel.Children.Clear();
-        for (var index = 0; index < _rows.Count; index++)
-        {
-            var row = _rows[index];
-            var rowIndex = index;
-            row.Build(index, () =>
-                ApplyTransition(_session.Remove(ReadRowInputs(), rowIndex)));
-            _rowsPanel.Children.Add(row.Control!);
-        }
-    }
-
-    private IReadOnlyList<MotionPathEditorRowInput> ReadRowInputs() =>
-        _rows.Select(row => row.ReadInput()).ToArray();
-
-    private void ApplyTransition(MotionPathEditorDialogTransition transition)
-    {
-        if (transition.ShouldRenderRows)
-        {
-            _rows.Clear();
-            foreach (var segment in transition.Segments)
-                _rows.Add(new Row(segment, _session.Surface));
-            RenderRows();
-        }
-
-        if (!transition.Succeeded)
-        {
-            DialogMessageHelper.ShowWarning(this, transition.ValidationMessage, Title);
-            return;
-        }
-
-        if (transition.ShouldClose)
-            DialogResult = true;
+        _formSession.RenderInitial();
     }
 
     private static Button MakeActionButton(

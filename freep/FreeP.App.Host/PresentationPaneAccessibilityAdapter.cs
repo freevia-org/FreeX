@@ -7,12 +7,11 @@ namespace FreeP.App.Host;
 /// <summary>WPF-only writer for the shared presentation-pane accessibility contract.</summary>
 internal sealed class PresentationPaneAccessibilityAdapter
 {
-    private readonly PresentationPaneAccessibilitySession _session = new();
+    private readonly PresentationPaneAccessibilityNativeSession<FrameworkElement> _nativeSession =
+        new(WritePane);
 
     public void ApplyPane(FrameworkElement control, string paneId, bool isVisible, int itemCount = 0, int selectedIndex = -1)
-    {
-        ApplyPaneProjection(control, _session.UpdatePane(paneId, isVisible, itemCount, selectedIndex));
-    }
+        => _nativeSession.ApplyPane(control, paneId, isVisible, itemCount, selectedIndex);
 
     public static void ApplyPaneMetadata(
         FrameworkElement control,
@@ -20,30 +19,29 @@ internal sealed class PresentationPaneAccessibilityAdapter
         bool isVisible,
         int itemCount = 0,
         int selectedIndex = -1)
-    {
-        ApplyPaneProjection(
+        => PresentationPaneAccessibilityNativeSession<FrameworkElement>.ApplyPaneMetadata(
             control,
-            PresentationPaneAccessibilityPlanner.ProjectPane(paneId, isVisible, itemCount, selectedIndex));
-    }
+            paneId,
+            isVisible,
+            itemCount,
+            selectedIndex,
+            WritePane);
 
     public static void ApplyItem(
         FrameworkElement control,
         PresentationPaneAccessibilityItemPlan plan)
-    {
-        var item = PresentationPaneAccessibilityPlanner.ProjectItem(plan);
-        AutomationProperties.SetAutomationId(control, item.AutomationId);
-        AutomationProperties.SetName(control, item.Name);
-        AutomationProperties.SetHelpText(control, item.HelpText);
-        AutomationProperties.SetItemStatus(control, item.ItemStatus);
-    }
+        => PresentationPaneAccessibilityNativeSession<FrameworkElement>.ApplyItem(
+            control,
+            plan,
+            WriteItem);
 
     public IReadOnlyList<PresentationPaneAccessibilitySnapshotEntry> BuildSnapshot() =>
-        _session.BuildSnapshot();
+        _nativeSession.BuildSnapshot();
 
     public string SerializeSnapshot() =>
-        _session.SerializeSnapshot();
+        _nativeSession.SerializeSnapshot();
 
-    private static void ApplyPaneProjection(
+    private static void WritePane(
         FrameworkElement control,
         PresentationPaneAccessibilityPaneProjection pane)
     {
@@ -51,5 +49,15 @@ internal sealed class PresentationPaneAccessibilityAdapter
         AutomationProperties.SetName(control, pane.Name);
         AutomationProperties.SetHelpText(control, pane.HelpText);
         AutomationProperties.SetItemStatus(control, pane.ItemStatus);
+    }
+
+    private static void WriteItem(
+        FrameworkElement control,
+        PresentationPaneAccessibilityItemProjection item)
+    {
+        AutomationProperties.SetAutomationId(control, item.AutomationId);
+        AutomationProperties.SetName(control, item.Name);
+        AutomationProperties.SetHelpText(control, item.HelpText);
+        AutomationProperties.SetItemStatus(control, item.ItemStatus);
     }
 }

@@ -171,7 +171,7 @@ public sealed class ReviewCommentAndCustomShowSessionTests
         {
             source.Should().Contain("SlideShowCustomShowDialogSession");
             source.Should().Contain("SlideShowCustomShowDialogController");
-            source.Should().Contain("ISlideShowCustomShowDialogView");
+            source.Should().Contain("SlideShowCustomShowDialogViewAdapter<");
             source.Should().Contain("customShowSession.CreateDialogSession(");
             source.Should().Contain("_controller.Reorder(");
             source.Should().NotContain("SlideShowCustomShowDialogTransitionDispatcher.Dispatch(");

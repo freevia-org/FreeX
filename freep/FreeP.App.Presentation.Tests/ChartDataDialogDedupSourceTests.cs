@@ -61,10 +61,12 @@ public sealed class ChartDataDialogDedupSourceTests
         {
             source.Should().Contain("new MotionPathEditorDialogSession(editor, animationIndex)");
             source.Should().Contain("_session.Surface");
-            source.Should().Contain("_session.AddLine(ReadRowInputs())");
-            source.Should().Contain("_session.AddCurve(ReadRowInputs())");
-            source.Should().Contain("_session.Remove(ReadRowInputs(), rowIndex)");
-            source.Should().Contain("_session.Submit(ReadRowInputs())");
+            source.Should().Contain("MotionPathEditorDialogFormSession<Row>");
+            source.Should().Contain("_formSession.AddLine");
+            source.Should().Contain("_formSession.AddCurve");
+            source.Should().Contain("_formSession.Submit");
+            source.Should().NotContain("ReadRowInputs()");
+            source.Should().NotContain("private void ApplyTransition(");
             source.Should().Contain("MotionPathEditorRowProjection.BuildEnablement(");
             source.Should().Contain("MotionPathEditorRowProjection.BuildPlan(");
             source.Should().NotContain("MotionPathEditorRowProjection.Format(");

@@ -100,9 +100,9 @@ internal static class ChartOptionsDialogChrome
     }
 }
 
-internal sealed class ChartOptionsDialogForm
+internal sealed class ChartOptionsDialogForm :
+    ChartOptionsDialogFormAdapter<Control, FrameworkElement>
 {
-    private readonly ChartOptionsDialogFormSession<Control, FrameworkElement> _formSession;
     private readonly Action<ChartOptionsDialogFieldId>? _valueChanged;
 
     public ChartOptionsDialogForm(
@@ -110,18 +110,19 @@ internal sealed class ChartOptionsDialogForm
         Action accept,
         Action cancel,
         Action<ChartOptionsDialogFieldId>? valueChanged)
+        : base(
+            PresentationDialogControlAdapter.CaptureValue,
+            PresentationDialogControlAdapter.ApplyValue,
+            ApplyFieldPlan,
+            static (row, isVisible) =>
+                row.Visibility = isVisible ? Visibility.Visible : Visibility.Collapsed,
+            static control => control.Focus())
     {
         ArgumentNullException.ThrowIfNull(plan);
         ArgumentNullException.ThrowIfNull(accept);
         ArgumentNullException.ThrowIfNull(cancel);
 
         _valueChanged = valueChanged;
-        _formSession = new ChartOptionsDialogFormSession<Control, FrameworkElement>(
-            PresentationDialogControlAdapter.CaptureValue,
-            PresentationDialogControlAdapter.ApplyValue,
-            ApplyFieldPlan,
-            static (row, isVisible) =>
-                row.Visibility = isVisible ? Visibility.Visible : Visibility.Collapsed);
         var body = new StackPanel();
         foreach (var group in plan.Groups)
         {
@@ -171,36 +172,10 @@ internal sealed class ChartOptionsDialogForm
         Grid.SetRow(actions, 1);
         root.Children.Add(actions);
         Content = root;
-        _formSession.CompleteInitialRender();
+        FormSession.CompleteInitialRender();
     }
 
     public FrameworkElement Content { get; }
-
-    public ChartOptionsDialogValues CaptureValues() => _formSession.CaptureValues();
-
-    public string Text(ChartOptionsDialogFieldId fieldId) =>
-        _formSession.Text(fieldId);
-
-    public int SelectedIndex(ChartOptionsDialogFieldId fieldId) =>
-        _formSession.SelectedIndex(fieldId);
-
-    public bool IsChecked(ChartOptionsDialogFieldId fieldId) =>
-        _formSession.IsChecked(fieldId);
-
-    public bool? NullableChecked(ChartOptionsDialogFieldId fieldId) =>
-        _formSession.NullableChecked(fieldId);
-
-    public void ApplyValues(ChartOptionsDialogValues values)
-        => _formSession.ApplyValues(values);
-
-    public void ApplyPlan(ChartOptionsDialogPlan plan)
-        => _formSession.ApplyPlan(plan);
-
-    public void Focus(ChartOptionsDialogFieldId fieldId)
-    {
-        if (_formSession.TryGetControl(fieldId, out var control))
-            control.Focus();
-    }
 
     private FrameworkElement CreateField(ChartOptionsDialogFieldPlan field)
     {
@@ -229,7 +204,7 @@ internal sealed class ChartOptionsDialogForm
         row.Visibility = field.IsVisible ? Visibility.Visible : Visibility.Collapsed;
         if (field.IsStandalone)
             row.Margin = new Thickness(0, 0, 0, 8);
-        _formSession.Register(field.Id, control, row);
+        FormSession.Register(field.Id, control, row);
         return row;
     }
 
@@ -246,7 +221,7 @@ internal sealed class ChartOptionsDialogForm
 
     private void RaiseValueChanged(ChartOptionsDialogFieldId fieldId)
     {
-        if (!_formSession.IsApplyingPlan)
+        if (!FormSession.IsApplyingPlan)
             _valueChanged?.Invoke(fieldId);
     }
 

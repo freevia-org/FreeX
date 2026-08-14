@@ -8,6 +8,17 @@ namespace FreeP.App.Host;
 
 internal sealed class ZoomObjectPropertiesDialog : Free.Shared.Ribbon.Wpf.DialogWindow
 {
+    private static readonly ZoomObjectPropertiesDialogNativeBinding<Control, CheckBox, TextBox, ComboBox>
+        NativeBinding = new(
+            static (control, value) => control.IsEnabled = value,
+            static control => control.IsChecked,
+            static (control, value) => control.IsChecked = value,
+            static control => control.Text,
+            static (control, value) => control.Text = value,
+            static control => control.SelectedItem,
+            static (control, value) => control.SelectedItem = value,
+            static control => control.Focus(),
+            static control => control.SelectAll());
     private readonly ZoomObjectPropertiesDialogSession _session;
     private readonly ZoomObjectPropertiesDialogSurfacePlan _surface;
     private readonly ZoomObjectPropertiesDialogFormSession<Control> _formSession;
@@ -27,7 +38,7 @@ internal sealed class ZoomObjectPropertiesDialog : Free.Shared.Ribbon.Wpf.Dialog
     {
         _session = new ZoomObjectPropertiesDialogSession(current, summaryTargets, summaryTileProperties);
         _surface = _session.Surface;
-        _formSession = new(_session.Dispatch, ApplyFieldState, FocusControl);
+        _formSession = new(_session.Dispatch, NativeBinding.ApplyFieldState, NativeBinding.Focus);
         var layout = _surface.Layout;
         Title = _surface.Chrome.Title;
         Width = _surface.Chrome.Width;
@@ -37,14 +48,9 @@ internal sealed class ZoomObjectPropertiesDialog : Free.Shared.Ribbon.Wpf.Dialog
         AutomationProperties.SetName(this, _surface.Chrome.AccessibleName);
         AutomationProperties.SetAutomationId(this, _surface.Chrome.AutomationId);
 
-        foreach (var plan in _session.FieldCatalog)
-        {
-            var control = CreateControl(plan, layout.InputMinWidth);
-            _formSession.Register(
-                plan.Field,
-                control,
-                selectAllOnFocus: plan.Kind == ZoomObjectPropertiesDialogControlKind.Text);
-        }
+        _formSession.RegisterFields(
+            _session.FieldCatalog,
+            plan => CreateControl(plan, layout.InputMinWidth));
 
         var grid = new Grid { Margin = new Thickness(layout.ContentMargin) };
         for (var index = 0; index <= _session.FieldCatalog.Count; index++)
@@ -190,35 +196,6 @@ internal sealed class ZoomObjectPropertiesDialog : Free.Shared.Ribbon.Wpf.Dialog
         }
 
         DialogResult = true;
-    }
-
-    private static void ApplyFieldState(
-        Control control,
-        ZoomObjectPropertiesDialogFieldState fieldState)
-    {
-        control.IsEnabled = fieldState.IsEnabled;
-        switch (control)
-        {
-            case CheckBox checkBox when fieldState.Value is bool isChecked:
-                if (checkBox.IsChecked != isChecked)
-                    checkBox.IsChecked = isChecked;
-                break;
-            case TextBox textBox:
-                if (!string.Equals(textBox.Text, fieldState.TextValue, StringComparison.Ordinal))
-                    textBox.Text = fieldState.TextValue;
-                break;
-            case ComboBox comboBox:
-                if (!Equals(comboBox.SelectedItem, fieldState.Value))
-                    comboBox.SelectedItem = fieldState.Value;
-                break;
-        }
-    }
-
-    private static void FocusControl(Control control, bool selectAll)
-    {
-        control.Focus();
-        if (selectAll && control is TextBox textBox)
-            textBox.SelectAll();
     }
 
     private static void ApplyAction(

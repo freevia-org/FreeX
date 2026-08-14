@@ -113,7 +113,7 @@ public sealed class SlideShowCustomShowDialogControllerTests
 
         foreach (var source in new[] { wpf, avalonia })
         {
-            source.Should().Contain("ISlideShowCustomShowDialogView")
+            source.Should().Contain("SlideShowCustomShowDialogViewAdapter<")
                 .And.Contain("SlideShowCustomShowDialogController _controller")
                 .And.Contain("_controller.Initialize()")
                 .And.Contain("_controller.SelectShow()")
@@ -128,9 +128,10 @@ public sealed class SlideShowCustomShowDialogControllerTests
                 .And.Contain("_controller.StartShow")
                 .And.Contain("_controller.Reorder(")
                 .And.Contain("RebuildSlides(")
-                .And.Contain("_formSession.ApplyFullPlan(plan)")
-                .And.Contain("_formSession.ApplySelectedShowPlan(plan)")
-                .And.Contain("_formSession.ApplySlideSelection(plan)")
+                .And.NotContain("ISlideShowCustomShowDialogView.CaptureState()")
+                .And.NotContain("_formSession.ApplyFullPlan(plan)")
+                .And.NotContain("_formSession.ApplySelectedShowPlan(plan)")
+                .And.NotContain("_formSession.ApplySlideSelection(plan)")
                 .And.Contain("SlideShowCustomShowDialogVisualMetrics.MinimumWindowWidth")
                 .And.Contain("SlideShowCustomShowDialogVisualMetrics.RootInset")
                 .And.Contain("SlideShowCustomShowDialogVisualMetrics.ShowListColumnWidth")
