@@ -260,6 +260,9 @@ public sealed partial class MainWindow : Window,
     private Border         _animPaneHost = null!;  // collapsible right-side dock (~240px)
     private readonly PresentationPaneAccessibilityAdapter _paneAccessibility = new();
 
+    internal bool IsAnimationPaneVisible =>
+        _animPaneHost?.Visibility == Visibility.Visible;
+
     /// <summary>
     /// Test-seam: exposes the animation pane host border so tests can inspect visibility
     /// without launching the actual UI.  Internal; only visible to FreeP.App.Host.Tests.

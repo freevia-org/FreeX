@@ -2214,12 +2214,6 @@ public sealed partial class MainWindow : Window,
         QueryEndpoints = new FreePRibbonHostQueryEndpoints
         {
             BeginFormatPainter = () => _gestureHandler?.BeginFormatPainter() == true,
-            CanMergeTableCells = () =>
-                _domainContextMenuSession.CanExecuteCurrentTableAction(
-                    PresentationDomainContextActionKind.MergeTableCell),
-            CanSplitTableCell = () =>
-                _domainContextMenuSession.CanExecuteCurrentTableAction(
-                    PresentationDomainContextActionKind.SplitTableCell),
             EditPointsEnabled = () => _slideCanvas.EditPointsEnabled,
             AnimationPaneVisible = () => IsAnimationPaneVisible,
             ViewShowState = () => _viewShowState,

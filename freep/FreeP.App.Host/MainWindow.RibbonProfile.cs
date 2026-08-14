@@ -14,6 +14,7 @@ public sealed partial class MainWindow
             {
                 BeginFormatPainter = () => SlideCanvas?.BeginFormatPainter() == true,
                 EditPointsEnabled = () => SlideCanvas?.EditPointsEnabled,
+                AnimationPaneVisible = () => IsAnimationPaneVisible,
                 ViewShowState = () => _viewShowState,
                 ViewZoomState = () => _viewZoomState,
             },

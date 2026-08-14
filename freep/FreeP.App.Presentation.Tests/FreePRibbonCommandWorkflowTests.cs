@@ -144,6 +144,50 @@ public sealed class FreePRibbonCommandWorkflowTests
     }
 
     [Fact]
+    public void TableMergeAndSplitAvailabilityComesFromTheSharedCellPlanner()
+    {
+        var editor = MakeEditor();
+        var table = editor.InsertTable(1, 2);
+        editor.Select(table.Id);
+        editor.SetActiveTableCell(0, 0);
+        var registry = FreePRibbonCommandWorkflow.Build(editor, new RibbonStateStore()).Registry;
+
+        Stateful(registry, TableCellEditPlanner.MergeCellsCommandId)
+            .GetState().IsEnabled.Should().BeTrue();
+        Stateful(registry, TableCellEditPlanner.SplitCellCommandId)
+            .GetState().IsEnabled.Should().BeFalse();
+
+        Execute(registry, TableCellEditPlanner.MergeCellsCommandId);
+
+        Stateful(registry, TableCellEditPlanner.MergeCellsCommandId)
+            .GetState().IsEnabled.Should().BeFalse();
+        Stateful(registry, TableCellEditPlanner.SplitCellCommandId)
+            .GetState().IsEnabled.Should().BeTrue();
+    }
+
+    [Fact]
+    public void AnimationPaneCheckedStateTracksTheLiveRendererQuery()
+    {
+        var visible = false;
+        var result = FreePRibbonCommandWorkflow.Build(
+            MakeEditor(),
+            new RibbonStateStore(),
+            new FreePRibbonCommandHostAdapter
+            {
+                QueryState = query => query.Kind == FreePRibbonHostQueryKind.AnimationPaneVisible
+                    ? visible
+                    : null,
+            });
+        var command = Stateful(result.Registry, "freep.anim.pane");
+
+        command.GetState().IsChecked.Should().BeFalse();
+
+        visible = true;
+
+        command.GetState().IsChecked.Should().BeTrue();
+    }
+
+    [Fact]
     public void BindIntoRetargetsAnExistingRendererRegistryToTheReplacementEditor()
     {
         var original = MakeEditor();
@@ -179,7 +223,9 @@ public sealed class FreePRibbonCommandWorkflowTests
             .And.Contain("CreateRibbonHostProfile()");
         wpf.Should().Contain("FreePRibbonHostProfileFactory.Create(new FreePRibbonHostPorts")
             .And.Contain("new FreePRibbonOleCommandEndpoints")
+            .And.Contain("AnimationPaneVisible = () => IsAnimationPaneVisible")
             .And.Contain("FreePRibbonTextActionTargets");
+        wpfMain.Should().Contain("internal bool IsAnimationPaneVisible");
         wpf.Should().NotContain("registry.Register(")
             .And.NotContain("new FreePRibbonCommandHostAdapter")
             .And.NotContain("FreePRibbonHostActionDispatcher.Dispatch(")
@@ -196,7 +242,12 @@ public sealed class FreePRibbonCommandWorkflowTests
             .And.Contain("new FreePRibbonFileCommandEndpoints")
             .And.Contain("new FreePRibbonOleCommandEndpoints")
             .And.Contain("new FreePRibbonHostQueryEndpoints")
+            .And.Contain("AnimationPaneVisible = () => IsAnimationPaneVisible")
             .And.Contain("FreePRibbonTextActionTargets");
+        wpf.Should().NotContain("CanMergeTableCells =")
+            .And.NotContain("CanSplitTableCell =");
+        avaloniaRegistry.Should().NotContain("CanMergeTableCells =")
+            .And.NotContain("CanSplitTableCell =");
         avaloniaRegistry.Should().NotContain("freep.bold")
             .And.NotContain("SmartArtAuthoringPlanner.ThemeAccentsCommandId")
             .And.NotContain("PresentationTransitionCommandPlanner.BuiltInPlans")
@@ -231,6 +282,15 @@ public sealed class FreePRibbonCommandWorkflowTests
     {
         registry.TryGet(commandId, out var command).Should().BeTrue();
         command!.Execute(context);
+    }
+
+    private static IRibbonStatefulCommand Stateful(
+        RibbonCommandRegistry registry,
+        string commandId)
+    {
+        registry.TryGet(commandId, out var command).Should().BeTrue();
+        command.Should().BeAssignableTo<IRibbonStatefulCommand>();
+        return (IRibbonStatefulCommand)command!;
     }
 
     private static RibbonCommandContext SelectedValue(object? value) =>

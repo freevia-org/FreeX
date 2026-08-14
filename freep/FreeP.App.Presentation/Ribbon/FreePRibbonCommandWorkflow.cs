@@ -102,8 +102,6 @@ public enum FreePRibbonHostActionKind
 public enum FreePRibbonHostQueryKind
 {
     BeginFormatPainter,
-    CanMergeTableCells,
-    CanSplitTableCell,
     EditPointsEnabled,
     AnimationPaneVisible,
     ViewShowState,
@@ -426,18 +424,24 @@ public static class FreePRibbonCommandWorkflow
             TableCellEditPlanner.MergeCellsCommandId,
             new HostStatefulActionCommand(
                 () => host.Execute(FreePRibbonHostActionKind.MergeTableCells),
-                () => host.TryQuery<bool>(FreePRibbonHostQueryKind.CanMergeTableCells, out var canMerge)
-                    ? canMerge
-                    : editor.ActiveTableCell is not null,
+                () =>
+                {
+                    var state = TableCellEditPlanner.PlanSelectedCell(
+                        editor.CurrentSlide,
+                        editor.SelectedShapeIds,
+                        editor.ActiveTableCell);
+                    return state.CanMergeWithRight || state.CanMergeWithBelow;
+                },
                 fallbackExecute: editor.TryMergeActiveTableCell));
         commands.Register(
             FreePRibbonCommandGroup.Table,
             TableCellEditPlanner.SplitCellCommandId,
             new HostStatefulActionCommand(
                 () => host.Execute(FreePRibbonHostActionKind.SplitTableCell),
-                () => host.TryQuery<bool>(FreePRibbonHostQueryKind.CanSplitTableCell, out var canSplit)
-                    ? canSplit
-                    : editor.ActiveTableCell is not null,
+                () => TableCellEditPlanner.PlanSelectedCell(
+                    editor.CurrentSlide,
+                    editor.SelectedShapeIds,
+                    editor.ActiveTableCell).CanSplitCell,
                 fallbackExecute: editor.TrySplitActiveTableCell));
 
         RegisterTableEdit(commands, editor, TableCellEditPlanner.DistributeRowsCommandId, editor.TryDistributeActiveTableRows);

@@ -7,8 +7,6 @@ namespace FreeP.App.Compositor;
 public sealed class FreePRibbonHostQueryEndpoints
 {
     public Func<bool?>? BeginFormatPainter { get; init; }
-    public Func<bool?>? CanMergeTableCells { get; init; }
-    public Func<bool?>? CanSplitTableCell { get; init; }
     public Func<bool?>? EditPointsEnabled { get; init; }
     public Func<bool?>? AnimationPaneVisible { get; init; }
     public Func<PresentationViewShowState?>? ViewShowState { get; init; }
@@ -17,8 +15,6 @@ public sealed class FreePRibbonHostQueryEndpoints
     internal object? Query(FreePRibbonHostQuery query) => query.Kind switch
     {
         FreePRibbonHostQueryKind.BeginFormatPainter => BeginFormatPainter?.Invoke(),
-        FreePRibbonHostQueryKind.CanMergeTableCells => CanMergeTableCells?.Invoke(),
-        FreePRibbonHostQueryKind.CanSplitTableCell => CanSplitTableCell?.Invoke(),
         FreePRibbonHostQueryKind.EditPointsEnabled => EditPointsEnabled?.Invoke(),
         FreePRibbonHostQueryKind.AnimationPaneVisible => AnimationPaneVisible?.Invoke(),
         FreePRibbonHostQueryKind.ViewShowState => ViewShowState?.Invoke(),
