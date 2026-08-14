@@ -31,6 +31,7 @@ public sealed class OutputWorkflowArchitectureTests
     {
         var wpf = ReadSource("freew", "FreeW.App.Host", "MainWindow.cs");
         var avalonia = ReadSource("freew", "FreeW.App.Avalonia", "MainWindow.cs");
+        var parityPlan = ReadSource("docs", "planning", "freew-avalonia-parity-plan.md");
 
         wpf.Should().Contain("FreeWExportWorkflow.CreatePlan(");
         wpf.Should().Contain("FreeWExportWorkflow.ExecuteAsync(");
@@ -41,6 +42,12 @@ public sealed class OutputWorkflowArchitectureTests
         avalonia.Should().Contain("_portablePrintWorkflow.ExecuteAsync(");
         avalonia.Should().Contain("_portablePrintWorkflow.DiscoverAsync(");
         avalonia.Should().Contain("FreeWPrintMessagePlanner.PlanCapability(");
+        avalonia.Should().Contain("PlatformPrintServiceSelector.Select(");
+        avalonia.Should().Contain("windowsFactory: static () => new WindowsPrintService()");
+        avalonia.Should().Contain("cupsFactory: static () => new CupsPrintService()");
+        parityPlan.Should().Contain("Direct printer selection is also closed:");
+        parityPlan.Should().NotContain(
+            "The remaining Backstage print gap is direct native printer selection in Avalonia");
 
         foreach (var renderer in new[] { wpf, avalonia })
         {

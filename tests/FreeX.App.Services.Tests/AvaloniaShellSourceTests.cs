@@ -3956,6 +3956,8 @@ public sealed class AvaloniaShellSourceTests
         var plannerSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Services", "HyperlinkNavigationPlanner.cs"));
         var launcherSource = File.ReadAllText(RepositoryFileLocator.Find("shared", "Free.Shared.AppServices", "ExternalUriLauncher.cs"));
         var catalogSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Presentation", "Shell", "NativeMenuCatalog.cs"));
+        var platformInventory = File.ReadAllText(RepositoryFileLocator.Find(
+            "docs", "planning", "macos-platform-service-inventory.md"));
 
         plannerSource.Should().Contain("public enum HyperlinkNavigationKind");
         plannerSource.Should().Contain("HyperlinkTargetKind.PlaceInThisDocument");
@@ -4018,6 +4020,11 @@ public sealed class AvaloniaShellSourceTests
         localFileHyperlinkSource.Should().NotContain("OpenExternalUriAsync");
         localFileHyperlinkSource.Should().NotContain("LaunchFile");
         localFileHyperlinkSource.Should().NotContain("LaunchUriAsync");
+
+        platformInventory.Should().Contain(
+            "Remaining follow-up is localization and richer help chrome, not hyperlink execution.");
+        platformInventory.Should().NotContain(
+            "external workbook hyperlinks return an unsupported message");
     }
 
     [Fact]
