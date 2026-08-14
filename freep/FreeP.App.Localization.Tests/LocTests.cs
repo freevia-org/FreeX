@@ -163,7 +163,6 @@ public sealed class LocTests
             "Ribbon_Group_Slides_KeyTip",
             "Ribbon_Command_NewSlide_Label",
             "Ribbon_Command_NewSlide_KeyTip",
-            "Ribbon_Command_NewSlide_AvaloniaKeyTip",
             "Ribbon_Command_DuplicateSlide_Label",
             "Ribbon_Command_DuplicateSlide_KeyTip",
             "Ribbon_Command_DeleteSlide_Label",
