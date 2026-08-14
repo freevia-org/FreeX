@@ -10,6 +10,14 @@ namespace FreeW.Ribbon.Definitions.Tests;
 /// </summary>
 public sealed class FreeWRibbonKeyTipTabScopeTests
 {
+    private static readonly HashSet<string> PortableProfileTabIds =
+    [
+        "mailings",
+        "help",
+        "developer",
+        "header-footer-design",
+    ];
+
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
@@ -36,6 +44,67 @@ public sealed class FreeWRibbonKeyTipTabScopeTests
             duplicates.Should().BeEmpty(
                 $"control KeyTips in tab '{tab.Id}' must be unambiguous across every group " +
                 "(runtime resolution operates per-tab, not per-group)");
+        }
+    }
+
+    [Fact]
+    public void WpfAuthoredKeyTipsAreSharedWithAvaloniaForPortableProfileTabs()
+    {
+        var wpf = BuildKeyTipMap(FreeWRibbon.Build(FreeWRibbonCapabilities.Wpf));
+        var avalonia = BuildKeyTipMap(FreeWRibbon.Build(FreeWRibbonCapabilities.Avalonia));
+
+        foreach (var (path, wpfKeyTip) in wpf.Where(entry => !string.IsNullOrWhiteSpace(entry.Value)))
+        {
+            avalonia.Should().ContainKey(path, $"Avalonia must expose the WPF keyboard route at {path}");
+            avalonia[path].Should().Be(wpfKeyTip, $"{path} is a shared command surface");
+        }
+    }
+
+    private static Dictionary<string, string?> BuildKeyTipMap(RibbonDefinition definition)
+    {
+        var result = new Dictionary<string, string?>(StringComparer.Ordinal);
+        foreach (var tab in definition.Tabs.Where(tab => PortableProfileTabIds.Contains(tab.Id)))
+        {
+            foreach (var group in tab.Groups)
+            {
+                var groupPath = $"{tab.Id}/group/{group.Id}";
+                result.Add(groupPath, group.KeyTip);
+                foreach (var control in group.Controls)
+                {
+                    if (string.IsNullOrWhiteSpace(control.CommandId.Value))
+                        continue;
+
+                    var controlPath = $"{tab.Id}/{group.Id}/control/{control.CommandId.Value}";
+                    result.Add(controlPath, control.KeyTip);
+                    switch (control)
+                    {
+                        case RibbonDropdown dropdown:
+                            AddMenuKeyTips(result, controlPath, dropdown.Menu.Items);
+                            break;
+                        case RibbonSplitButton splitButton:
+                            AddMenuKeyTips(result, controlPath, splitButton.Menu.Items);
+                            break;
+                    }
+                }
+            }
+        }
+
+        return result;
+    }
+
+    private static void AddMenuKeyTips(
+        Dictionary<string, string?> result,
+        string parentPath,
+        IReadOnlyList<RibbonMenuItem> items)
+    {
+        foreach (var item in items)
+        {
+            if (item.CommandId is { } commandId)
+            {
+                var itemPath = $"{parentPath}/menu/{commandId.Value}";
+                result.Add(itemPath, item.KeyTip);
+                AddMenuKeyTips(result, itemPath, item.Children);
+            }
         }
     }
 }
