@@ -46,6 +46,7 @@ internal sealed partial class OptionsDialog : FreeWDialogWindow
     public FreeWOptions? Result { get; private set; }
 
     public OptionsDialog(FreeWOptions options)
+        : base(DialogChromeStyle)
     {
         _session = new OptionsDialogSession(options, CultureInfo.CurrentCulture);
         _surface = _session.Surface;
@@ -138,10 +139,6 @@ internal sealed partial class OptionsDialog : FreeWDialogWindow
 
         Opened += (_, _) =>
         {
-            // FreeWDialogWindow applies the shared default chrome during construction. Reapply
-            // this route's WPF action-row palette after the visual tree exists so the default
-            // button remains neutral gray until it is actually focused.
-            AvaloniaCompactDialogChrome.ApplyDescendantChrome(this, DialogChromeStyle);
             _recentFilesCap.HorizontalAlignment = HorizontalAlignment.Left;
             _defaultFormat.HorizontalAlignment = HorizontalAlignment.Left;
             _uiLanguage.HorizontalAlignment = HorizontalAlignment.Left;

@@ -73,6 +73,7 @@ public sealed class FontDialog : FreeWDialogWindow
     public FontDialog(
         FontDialogSelectionState selection,
         IUserMessageService? messageService = null)
+        : base(DialogChromeStyle)
     {
         _session = FontDialogPlanner.CreateSession(selection, CultureInfo.CurrentCulture);
         _messageService = messageService ?? new AvaloniaUserMessageService(this);
@@ -218,7 +219,6 @@ public sealed class FontDialog : FreeWDialogWindow
 
         Opened += (_, _) =>
         {
-            AvaloniaCompactDialogChrome.ApplyDescendantChrome(this, DialogChromeStyle);
             foreach (var combo in this.GetVisualDescendants().OfType<ComboBox>())
                 FontParagraphDialogChrome.ApplyComboBox(combo, DialogChromeStyle, combo.IsEditable);
             foreach (var box in fieldControls.Values.OfType<TextBox>())

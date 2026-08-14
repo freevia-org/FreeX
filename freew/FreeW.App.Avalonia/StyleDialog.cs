@@ -49,6 +49,7 @@ internal sealed partial class StyleDialog : FreeWDialogWindow
     private readonly StyleDialogSession _session;
 
     private StyleDialog(StyleDialogSession session)
+        : base(DialogChromeStyle)
     {
         _session = session;
         var state = _session.InitialState;
