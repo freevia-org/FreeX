@@ -249,12 +249,9 @@ internal static class FreeWAvaloniaRibbonCommands
         // ── Developer ────────────────────────────────────────────────────────
 
         // ── Table Design contextual tab ───────────────────────────────────────
-        // Table Style Options toggles — DocumentView guards no-op when outside a table.
-        TableEditingRibbonWorkflow.Register(tableCommands, CreateTableEditingPorts(editor));
+        // Shared Table Tools policy; this host contributes only Avalonia editor and dialog adapters.
+        TableEditingRibbonWorkflow.Register(tableCommands, CreateTableEditingPorts(editor, callbacks));
 
-        // Table shading: open the WPF-parity palette; the shell applies the chosen result only after
-        // the user accepts a swatch or No Color. Closing the picker is a no-op.
-        tableCommands.Register("freew.table-shading", OptionalHostCommand(callbacks.OpenCellShadingDialog));
         tableCommands.Register("freew.table-styles", new ActionRibbonCommand(() => { /* dropdown opener */ }));
         for (var index = 0; index < DocumentTableStyle.Catalog.Count; index++)
         {
@@ -264,20 +261,8 @@ internal static class FreeWAvaloniaRibbonCommands
         }
 
         // Borders dropdown — opener no-op; sub-commands apply specific edges.
-        tableCommands.Register("freew.table-borders", new ActionRibbonCommand(() => { /* flyout opener */ }));
         RegisterTableBorderCommands(tableCommands, editor);
         tableCommands.Bind(FreeWRibbonCommandAction.Eraser, new ActionRibbonCommand(editor.EraseTableBorderAtCaret));
-
-        // ── Table Layout contextual tab ───────────────────────────────────────
-        // Row / column mutations.
-        tableCommands.Register("freew.table-insert-below",     new ActionRibbonCommand(editor.InsertTableRowBelow));
-        tableCommands.Register("freew.table-insert-col-right", new ActionRibbonCommand(editor.InsertTableColumnRight));
-
-        // Merge / split.
-        tableCommands.Register("freew.table-merge-cells", new ActionRibbonCommand(editor.MergeSelectedCells));
-        tableCommands.Register(
-            "freew.table-split-cell",
-            OptionalHostCommand(callbacks.OpenSplitCellDialog));
 
         // Layout quick actions share their model policy; Avalonia contributes only the editor adapter.
         PageLayoutRibbonWorkflow.Register(
@@ -1306,7 +1291,9 @@ internal static class FreeWAvaloniaRibbonCommands
             ToggleParagraphBorder: () => editor.ToggleParagraphBorder(),
             Sort: new ActionRibbonCommand(() => ExecuteSortCommand(editor, callbacks)));
 
-    private static TableEditingRibbonPorts CreateTableEditingPorts(DocumentView editor) =>
+    private static TableEditingRibbonPorts CreateTableEditingPorts(
+        DocumentView editor,
+        FreeWRibbonHostExecutionPorts callbacks) =>
         new(
             PrepareExecution: () => editor.Focus(),
             ToggleHeaderRow: editor.ToggleTableHeaderRow,
@@ -1343,7 +1330,13 @@ internal static class FreeWAvaloniaRibbonCommands
                     editor.SetCellBlockSelection(cell.TableBlock, cell.Row, cell.Col, cell.Row, cell.Col);
             },
             InsertRowAbove: editor.InsertTableRowAbove,
+            InsertRowBelow: editor.InsertTableRowBelow,
             InsertColumnLeft: editor.InsertTableColumnLeft,
+            InsertColumnRight: editor.InsertTableColumnRight,
+            MergeCells: editor.MergeSelectedCells,
+            SplitCell: OptionalHostCommand(callbacks.OpenSplitCellDialog),
+            Shading: OptionalHostCommand(callbacks.OpenCellShadingDialog),
+            Borders: EmptyRibbonCommand.Instance,
             DeleteRow: editor.DeleteTableRow,
             DeleteColumn: editor.DeleteTableColumn,
             DeleteTable: () =>

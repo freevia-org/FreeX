@@ -14,7 +14,7 @@ public sealed class TableEditingRibbonWorkflowTests
         TableEditingRibbonWorkflow.Register(builder, CreatePorts(events));
 
         var commands = builder.Build().Commands;
-        TableEditingRibbonWorkflow.Actions.Should().OnlyHaveUniqueItems().And.HaveCount(35);
+        TableEditingRibbonWorkflow.Actions.Should().OnlyHaveUniqueItems().And.HaveCount(41);
         TableEditingRibbonWorkflow.Actions.Should().OnlyContain(
             action => FreeWRibbonEditorExecutionProfile.TableActions.Contains(action));
 
@@ -58,6 +58,30 @@ public sealed class TableEditingRibbonWorkflowTests
     }
 
     [Fact]
+    public void SharedWorkflowOwnsInsertMergeSplitShadingAndBordersCommands()
+    {
+        var events = new List<string>();
+        var builder = new FreeWRibbonEditorCommandFamilyBuilder();
+        TableEditingRibbonWorkflow.Register(builder, CreatePorts(events));
+        var commands = builder.Build().Commands;
+
+        Execute(commands, FreeWRibbonCommandAction.TableInsertBelow);
+        Execute(commands, FreeWRibbonCommandAction.TableInsertColRight);
+        Execute(commands, FreeWRibbonCommandAction.TableMergeCells);
+        Execute(commands, FreeWRibbonCommandAction.TableSplitCell);
+        Execute(commands, FreeWRibbonCommandAction.TableShading);
+        Execute(commands, FreeWRibbonCommandAction.TableBorders);
+
+        events.Should().Equal(
+            "prepare", "insert-row-below",
+            "prepare", "insert-column-right",
+            "prepare", "merge-cells",
+            "prepare", "split-cell",
+            "prepare", "shading",
+            "prepare", "borders");
+    }
+
+    [Fact]
     public void BothRenderersDelegateTableEditingPolicyToSharedPresentation()
     {
         var root = TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeW.slnx");
@@ -74,6 +98,19 @@ public sealed class TableEditingRibbonWorkflowTests
             source.Should().NotContain(".Bind(FreeWRibbonCommandAction.CellAlignTopLeft");
             source.Should().NotContain(".Bind(FreeWRibbonCommandAction.CellTextDirectionHorizontal");
         }
+
+        wpf.Should().NotContain("freew.table-insert-row")
+            .And.NotContain("freew.table-insert-col\"")
+            .And.NotContain("freew.merge-cells")
+            .And.NotContain("freew.split-cell")
+            .And.NotContain("freew.cell-shading")
+            .And.NotContain("freew.cell-borders");
+        avalonia.Should().NotContain("tableCommands.Register(\"freew.table-insert-below\"")
+            .And.NotContain("tableCommands.Register(\"freew.table-insert-col-right\"")
+            .And.NotContain("tableCommands.Register(\"freew.table-merge-cells\"")
+            .And.NotContain("tableCommands.Register(\"freew.table-split-cell\"")
+            .And.NotContain("tableCommands.Register(\"freew.table-shading\"")
+            .And.NotContain("tableCommands.Register(\"freew.table-borders\"");
     }
 
     private static void Execute(
@@ -96,7 +133,13 @@ public sealed class TableEditingRibbonWorkflowTests
             SelectColumn: () => events.Add("select-column"),
             SelectCell: () => events.Add("select-cell"),
             InsertRowAbove: () => events.Add("insert-row-above"),
+            InsertRowBelow: () => events.Add("insert-row-below"),
             InsertColumnLeft: () => events.Add("insert-column-left"),
+            InsertColumnRight: () => events.Add("insert-column-right"),
+            MergeCells: () => events.Add("merge-cells"),
+            SplitCell: new ActionRibbonCommand(() => events.Add("split-cell")),
+            Shading: new ActionRibbonCommand(() => events.Add("shading")),
+            Borders: new ActionRibbonCommand(() => events.Add("borders")),
             DeleteRow: () => events.Add("delete-row"),
             DeleteColumn: () => events.Add("delete-column"),
             DeleteTable: () => events.Add("delete-table"),

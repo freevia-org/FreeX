@@ -750,9 +750,9 @@ internal static partial class FreeWCanonicalRibbonTabs
                     "table.styles",
                     tab => tab.Group("table-style", "Table Style", "Y", 80, group =>
                         {
-                            group.Medium("freew.cell-shading", "Shading", RibbonCommandIconKind.Fill,
+                            group.Medium("freew.table-shading", "Shading", RibbonCommandIconKind.Fill,
                                 accent: RibbonCommandIconAccent.Fill);
-                            group.Medium("freew.cell-borders", "Borders", RibbonCommandIconKind.Grid);
+                            group.Medium("freew.table-borders", "Borders", RibbonCommandIconKind.Grid);
                         }),
                     tab => tab.Group("table-style", "Table Style", null, 90, group =>
                         {
@@ -824,12 +824,12 @@ internal static partial class FreeWCanonicalRibbonTabs
                         {
                             group.Medium("freew.table-insert-above", "Insert Above", RibbonCommandIconKind.Insert,
                                 accent: RibbonCommandIconAccent.Green);
-                            group.Medium("freew.table-insert-row", "Insert Below", RibbonCommandIconKind.Insert,
+                            group.Medium("freew.table-insert-below", "Insert Below", RibbonCommandIconKind.Insert,
                                 accent: RibbonCommandIconAccent.Green);
                             group.RowBreak();
                             group.Medium("freew.table-insert-col-left", "Insert Left", RibbonCommandIconKind.Insert,
                                 accent: RibbonCommandIconAccent.Green);
-                            group.Medium("freew.table-insert-col", "Insert Right", RibbonCommandIconKind.Insert,
+                            group.Medium("freew.table-insert-col-right", "Insert Right", RibbonCommandIconKind.Insert,
                                 accent: RibbonCommandIconAccent.Green);
                             group.RowBreak();
                             group.Medium("freew.table-delete-row", "Delete Rows", RibbonCommandIconKind.Delete);
@@ -852,8 +852,8 @@ internal static partial class FreeWCanonicalRibbonTabs
                     "table.merge",
                     tab => tab.Group("table-merge", "Merge", "M", 90, group =>
                         {
-                            group.Medium("freew.merge-cells", "Merge Cells", RibbonCommandIconKind.Merge);
-                            group.Medium("freew.split-cell", "Split Cell", RibbonCommandIconKind.Grid);
+                            group.Medium("freew.table-merge-cells", "Merge Cells", RibbonCommandIconKind.Merge);
+                            group.Medium("freew.table-split-cell", "Split Cell", RibbonCommandIconKind.Grid);
                             group.RowBreak();
                             group.Medium("freew.split-table", "Split Table", RibbonCommandIconKind.Grid);
                         }),

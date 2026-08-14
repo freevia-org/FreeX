@@ -186,6 +186,39 @@ public sealed class FreeWRibbonDefinitionProfileTests
     }
 
     [Fact]
+    public void Table_tools_structural_and_formatting_command_ids_are_shared()
+    {
+        string[] sharedIds =
+        [
+            "freew.table-insert-below",
+            "freew.table-insert-col-right",
+            "freew.table-merge-cells",
+            "freew.table-split-cell",
+            "freew.table-shading",
+            "freew.table-borders",
+        ];
+        string[] legacyRendererIds =
+        [
+            "freew.table-insert-row",
+            "freew.table-insert-col",
+            "freew.merge-cells",
+            "freew.split-cell",
+            "freew.cell-shading",
+            "freew.cell-borders",
+        ];
+
+        foreach (var capabilities in new[] { FreeWRibbonCapabilities.Wpf, FreeWRibbonCapabilities.Avalonia })
+        {
+            var ids = CommandEntries(FreeWRibbon.Build(capabilities))
+                .Select(entry => entry.CommandId)
+                .ToArray();
+
+            ids.Should().Contain(sharedIds);
+            ids.Should().NotContain(legacyRendererIds);
+        }
+    }
+
+    [Fact]
     public void QuickPartsDocumentPropertyCommandsUseOneCanonicalIdentityAcrossProfiles()
     {
         var canonicalIds = FreeW.App.Presentation.Ribbon.DocumentPropertyFieldPlanner.CommandPlans
