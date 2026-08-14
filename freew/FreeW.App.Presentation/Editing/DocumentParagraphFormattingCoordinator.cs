@@ -83,6 +83,38 @@ public sealed class DocumentParagraphFormattingCoordinator
                 WidowControlIsSet = true,
             });
 
+    /// <summary>
+    /// Toggles one list kind across the complete renderer-projected paragraph selection.
+    /// A mixed selection becomes uniformly listed; a selection already using the requested
+    /// kind becomes plain paragraphs. Removing list formatting also clears list-only state.
+    /// </summary>
+    public bool ToggleListKind(IReadOnlyList<int> blockIndices, ListKind kind)
+    {
+        if (kind is ListKind.None)
+            throw new ArgumentOutOfRangeException(nameof(kind), kind, "A concrete list kind is required.");
+
+        var targets = ResolveTargets(blockIndices);
+        if (targets.Count == 0)
+            return false;
+
+        var enable = targets.Any(index =>
+            ((Paragraph)_session.Document.Blocks[index]).Formatting.ListKind != kind);
+        return Format(targets, formatting => enable
+            ? formatting with
+            {
+                ListKind = kind,
+                ListStartOverride = formatting.ListKind == kind
+                    ? formatting.ListStartOverride
+                    : null,
+            }
+            : formatting with
+            {
+                ListKind = ListKind.None,
+                ListLevel = 0,
+                ListStartOverride = null,
+            });
+    }
+
     public bool SetLineSpacing(IReadOnlyList<int> blockIndices, double multiplier) =>
         SetLineSpacing(blockIndices, LineSpacingRule.Multiple, multiplier);
 
