@@ -101,6 +101,8 @@ public sealed class FreeWEditorInteractionSessionSourceOwnershipTests
             source.Should().Contain("_editorInteraction.ToggleReadMode(");
             source.Should().Contain("_viewSession.PlanDocumentViewChange(");
             source.Should().Contain("_viewSession.BuildDocumentViewChecks(");
+            source.Should().Contain("_viewSession.EnterOutline(");
+            source.Should().Contain("_viewSession.LeaveOutline(");
             source.Should().Contain("_editorInteraction.BuildStatus(");
             source.Should().Contain("new FreeWEditorStatusContext(");
             source.Should().NotContain("CurrentDocumentViewSnapshot");
@@ -108,7 +110,10 @@ public sealed class FreeWEditorInteractionSessionSourceOwnershipTests
             source.Should().NotContain("FreeWEditorStatusPlanner.Build(");
             source.Should().NotContain("new FreeWEditorStatusSnapshot(");
             source.Should().NotContain("private bool _readMode;");
+            source.Should().NotContain("_pagedEditModeBeforeOutline");
         }
+
+        wpfMainWindow.Should().NotContain("_outlineMode = !_outlineMode");
     }
 
     [Fact]

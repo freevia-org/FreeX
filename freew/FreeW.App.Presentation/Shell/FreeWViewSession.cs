@@ -20,6 +20,13 @@ public sealed record FreeWDocumentViewCheckPlan(
     bool Draft,
     bool PagedEdit);
 
+public sealed record FreeWOutlineViewTransition(
+    bool IsOutlineMode,
+    bool IsPagedEditMode,
+    bool ExitPageSurface,
+    bool ExitPagedEditSurface,
+    bool EnterPagedEditSurface);
+
 /// <summary>
 /// Owns the portable view-mode and view-depth state for a FreeW work area. Renderers apply the
 /// returned plans to native controls and continue to own measurement, focus, and surface creation.
@@ -27,6 +34,7 @@ public sealed record FreeWDocumentViewCheckPlan(
 public sealed class FreeWViewSession
 {
     private readonly FreeWViewDepthCapabilities _capabilities;
+    private bool _restorePagedEditAfterOutline;
 
     public FreeWViewSession(FreeWViewDepthCapabilities capabilities)
     {
@@ -112,7 +120,30 @@ public sealed class FreeWViewSession
             PrintLayout: !isOutlineMode && !isPagedEditMode && currentMode == DocumentViewMode.PrintLayout,
             WebLayout: !isOutlineMode && !isPagedEditMode && currentMode == DocumentViewMode.WebLayout,
             Draft: !isOutlineMode && !isPagedEditMode && currentMode == DocumentViewMode.Draft,
-            PagedEdit: isPagedEditMode);
+            PagedEdit: !isOutlineMode && isPagedEditMode);
+
+    public FreeWOutlineViewTransition EnterOutline(bool isPagedEditMode)
+    {
+        _restorePagedEditAfterOutline = isPagedEditMode;
+        return new FreeWOutlineViewTransition(
+            IsOutlineMode: true,
+            IsPagedEditMode: false,
+            ExitPageSurface: IsPageSurfaceActive,
+            ExitPagedEditSurface: isPagedEditMode,
+            EnterPagedEditSurface: false);
+    }
+
+    public FreeWOutlineViewTransition LeaveOutline(bool restorePriorView = true)
+    {
+        var restorePagedEdit = restorePriorView && _restorePagedEditAfterOutline;
+        _restorePagedEditAfterOutline = false;
+        return new FreeWOutlineViewTransition(
+            IsOutlineMode: false,
+            IsPagedEditMode: restorePagedEdit,
+            ExitPageSurface: false,
+            ExitPagedEditSurface: false,
+            EnterPagedEditSurface: restorePagedEdit);
+    }
 
     private FreeWViewDepthTransition TransitionTo(FreeWViewDepthPlan next)
     {
