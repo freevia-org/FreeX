@@ -15,7 +15,7 @@ public sealed class VisualEvidenceOrchestrationSourceTests
                 "freep", "TestSupport", "VisualEvidence.Avalonia", "AvaloniaWholeWindowVisualEvidenceCoordinator.cs"),
         };
 
-        portable.Should().Contain("public interface IWholeWindowVisualEvidenceProbe")
+        portable.Should().Contain("public interface IWholeWindowVisualEvidenceNativeInspector")
             .And.Contain("private void Activate(WholeWindowVisualEvidenceActivation activation)")
             .And.Contain("private bool PrepareViewState(")
             .And.Contain("new WholeWindowVisualEvidenceSemanticState(")
@@ -23,8 +23,9 @@ public sealed class VisualEvidenceOrchestrationSourceTests
             .And.NotContain("using Avalonia");
         hosts.Should().AllSatisfy(host =>
         {
-            host.Should().Contain(": IWholeWindowVisualEvidenceProbe")
-                .And.Contain("_coordinator = new(this);")
+            host.Should().Contain(": IWholeWindowVisualEvidenceNativeInspector")
+                .And.Contain(": IVisualEvidenceAppHost")
+                .And.Contain("_coordinator = new(new ")
                 .And.Contain("BoundsRelativeTo(")
                 .And.Contain("DescribeFocus(")
                 .And.NotContain("private void Activate(")
@@ -68,8 +69,9 @@ public sealed class VisualEvidenceOrchestrationSourceTests
         sources.Should().AllSatisfy(source =>
         {
             source.Should().Contain("FreePVisualEvidenceCaptureOrchestration.ParseRequest(");
-            source.Should().Contain("FreePVisualEvidenceCaptureOrchestration.CreateHostOutputPlan(");
-            source.Should().Contain("FreePVisualEvidenceCaptureOrchestration.CreateScenarioOutputPlan(");
+            source.Should().Contain("FreePVisualEvidenceCaptureOrchestration.CreateAppHostPolicy(");
+            source.Should().Contain("hostPolicy.CreateOutputPlan(");
+            source.Should().Contain("hostPolicy.CreateScenarioOutputPlan(");
             source.Should().Contain("VisualEvidenceCaptureOrchestrator.RunScenariosAsync(");
             source.Should().Contain("VisualEvidenceCaptureOrchestrator.FinalizeHostRun(");
             source.Should().NotContain("FreePVisualEvidenceCaptureOrchestration.WriteManifest(");
@@ -86,6 +88,7 @@ public sealed class VisualEvidenceOrchestrationSourceTests
             source.Should().NotContain("private static string NormalizeLabel(");
             source.Should().NotContain("private static string SemanticActionId(");
             source.Should().NotContain("private static string ToSafeFileName(");
+            source.Should().NotContain("DialogPaneVisualEvidenceRouteHost");
         });
     }
 

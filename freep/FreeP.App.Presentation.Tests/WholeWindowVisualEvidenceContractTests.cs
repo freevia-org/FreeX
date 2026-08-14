@@ -260,18 +260,19 @@ public sealed class WholeWindowVisualEvidenceContractTests
             File.ReadAllText(Path.Combine(root, "freep", "TestSupport", "VisualEvidence.Avalonia", "AvaloniaWholeWindowVisualEvidenceCoordinator.cs")),
         };
 
-        owner.Should().Contain("public interface IWholeWindowVisualEvidenceProbe")
+        owner.Should().Contain("public interface IWholeWindowVisualEvidenceNativeInspector")
             .And.Contain("public sealed class WholeWindowVisualEvidenceHostCoordinator")
             .And.Contain("WholeWindowVisualEvidencePreparationSession.Prepare(scenario, fixture)")
-            .And.Contain("plan.CreateBaselineAssertions(probe.CaptureBaselineState())")
-            .And.Contain("plan.CreateRichEditorAssertions(probe.PrepareRichEditor(richEditor))")
+            .And.Contain("plan.CreateBaselineAssertions(inspector.CaptureBaselineState())")
+            .And.Contain("plan.CreateRichEditorAssertions(inspector.PrepareRichEditor(richEditor))")
             .And.Contain("preparation.CreateActivationAssertions(new(")
             .And.NotContain("using System.Windows")
             .And.NotContain("using Avalonia");
         foreach (var host in hosts)
         {
-            host.Should().Contain(": IWholeWindowVisualEvidenceProbe")
-                .And.Contain("_coordinator = new(this);")
+            host.Should().Contain(": IWholeWindowVisualEvidenceNativeInspector")
+                .And.Contain(": IVisualEvidenceAppHost")
+                .And.Contain("_coordinator = new(new ")
                 .And.Contain("_coordinator.Prepare(scenario, fixture)")
                 .And.Contain("_coordinator.CaptureSemantic(scenario, preparationAssertions)")
                 .And.NotContain("WholeWindowVisualEvidencePreparationSession.Prepare(")
@@ -306,11 +307,10 @@ public sealed class WholeWindowVisualEvidenceContractTests
         };
 
         coordinator.Should().Contain("case WholeWindowVisualEvidenceActivationKind.MediaCaptionPane:")
-            .And.Contain("probe.ShowMediaCaptionPane();");
+            .And.Contain("host.ShowMediaCaptionPane();");
         foreach (var host in hosts)
         {
-            host.Capture.Should().Contain("IWholeWindowVisualEvidenceProbe.ShowMediaCaptionPane()")
-                .And.Contain("_access.ShowMediaCaptionPane();");
+            host.Capture.Should().Contain("public void ShowMediaCaptionPane() => access.ShowMediaCaptionPane();");
             host.Adapter.Should().Contain("if (owner.IsMediaCaptionPaneVisible) result.Add(\"accessibility.media-caption-pane\")");
             host.MainWindow.Should().Contain("internal PresentationMediaPaneHostCoordinator MediaPaneHost =>")
                 .And.Contain("_mediaPaneHostCoordinator;")

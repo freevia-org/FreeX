@@ -2,6 +2,7 @@ using System.Globalization;
 using System.IO;
 using System.Text.Json;
 using Free.Shared.AppServices;
+using FreeP.App.Compositor;
 using Free.ToolsShared;
 
 namespace FreeP.VisualEvidence;
@@ -56,6 +57,78 @@ internal sealed record VisualEvidenceScenarioOutputPlan(
     string? ClientImagePath,
     string? ClientImageRelativePath);
 
+internal sealed record FreePVisualEvidenceAppHostPolicy(
+    string Host,
+    VisualEvidenceCaptureRoute Route,
+    string CaptureDescription,
+    double TargetDpi,
+    int LogicalWidth,
+    int LogicalHeight)
+{
+    internal VisualEvidenceHostOutputPlan CreateOutputPlan(string outputRoot) =>
+        FreePVisualEvidenceCaptureOrchestration.CreateHostOutputPlan(outputRoot, Host, Route);
+
+    internal VisualEvidenceScenarioOutputPlan CreateScenarioOutputPlan(
+        string outputRoot,
+        string scenarioId) =>
+        FreePVisualEvidenceCaptureOrchestration.CreateScenarioOutputPlan(outputRoot, Host, scenarioId, Route);
+
+    internal DialogPaneVisualEvidenceCapture CreateBlockedDialogPaneCapture(
+        DialogPaneVisualEvidenceScenario scenario,
+        Exception exception) =>
+        new(
+            scenario.Id,
+            scenario.RouteId,
+            scenario.StateId,
+            Host,
+            "blocked",
+            string.Empty,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            string.Empty,
+            string.Empty,
+            [],
+            [],
+            [new("capture-completed", false, exception.Message)],
+            [$"Capture failed: {exception.GetType().Name}: {exception.Message}"]);
+
+    internal DialogPaneVisualEvidenceHostManifest CreateDialogPaneManifest(
+        IReadOnlyList<DialogPaneVisualEvidenceCapture> captures,
+        IReadOnlyList<string> limitations) =>
+        new(
+            1,
+            Host,
+            CaptureDescription,
+            TargetDpi,
+            LogicalWidth,
+            LogicalHeight,
+            FreePVisualEvidenceCaptureOrchestration.UtcTimestamp(),
+            captures,
+            limitations);
+
+    internal WholeWindowVisualEvidenceHostManifest CreateWholeWindowManifest(
+        IReadOnlyList<WholeWindowVisualEvidenceCapture> captures,
+        IReadOnlyList<string> limitations) =>
+        new(
+            1,
+            Host,
+            CaptureDescription,
+            TargetDpi,
+            LogicalWidth,
+            LogicalHeight,
+            FreePVisualEvidenceCaptureOrchestration.UtcTimestamp(),
+            captures,
+            limitations);
+
+    internal string DescribeFailure(string scenarioId, Exception exception) =>
+        $"{scenarioId}: {exception.GetType().Name}: {exception.Message}";
+}
+
 internal enum VisualEvidenceScenarioManifestStatus
 {
     Ready,
@@ -78,6 +151,27 @@ internal static class FreePVisualEvidenceCaptureOrchestration
     internal static readonly JsonSerializerOptions HostManifestJsonOptions = CreateManifestJsonOptions();
     internal static readonly JsonSerializerOptions ToolManifestJsonOptions = CreateManifestJsonOptions(
         propertyNameCaseInsensitive: true);
+
+    internal static FreePVisualEvidenceAppHostPolicy CreateAppHostPolicy(
+        string host,
+        VisualEvidenceCaptureRoute route) => route.Kind switch
+        {
+            VisualEvidenceCaptureKind.DialogPane => new(
+                host,
+                route,
+                "visible-app-owned-render-target",
+                DialogPaneVisualEvidenceCatalog.TargetDpi,
+                DialogPaneVisualEvidenceCatalog.LogicalShellWidth,
+                DialogPaneVisualEvidenceCatalog.LogicalShellHeight),
+            VisualEvidenceCaptureKind.WholeWindow => new(
+                host,
+                route,
+                "visible-app-owned-full-client-render-target; native-non-client-excluded; scenario-isolated-process",
+                WholeWindowVisualEvidenceCatalog.TargetDpi,
+                WholeWindowVisualEvidenceCatalog.LogicalClientWidth,
+                WholeWindowVisualEvidenceCatalog.LogicalClientHeight),
+            _ => throw new ArgumentOutOfRangeException(nameof(route)),
+        };
 
     internal static VisualEvidenceCaptureRequest ParseRequest(
         string[] args,

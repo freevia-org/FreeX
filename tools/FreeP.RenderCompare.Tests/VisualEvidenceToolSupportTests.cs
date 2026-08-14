@@ -137,6 +137,34 @@ public sealed class VisualEvidenceToolSupportTests
     }
 
     [Fact]
+    public void App_host_policy_owns_route_metadata_and_blocked_capture_diagnostics()
+    {
+        var dialogPolicy = FreePVisualEvidenceCaptureOrchestration.CreateAppHostPolicy(
+            FreePVisualEvidenceCaptureOrchestration.WpfHost,
+            FreePVisualEvidenceRoutes.DialogPane);
+        var wholeWindowPolicy = FreePVisualEvidenceCaptureOrchestration.CreateAppHostPolicy(
+            FreePVisualEvidenceCaptureOrchestration.AvaloniaHost,
+            FreePVisualEvidenceRoutes.WholeWindow);
+        var scenario = DialogPaneVisualEvidenceCatalog.All[0];
+
+        dialogPolicy.Host.Should().Be("wpf");
+        dialogPolicy.CaptureDescription.Should().Be("visible-app-owned-render-target");
+        dialogPolicy.LogicalWidth.Should().Be(DialogPaneVisualEvidenceCatalog.LogicalShellWidth);
+        dialogPolicy.LogicalHeight.Should().Be(DialogPaneVisualEvidenceCatalog.LogicalShellHeight);
+        dialogPolicy.CreateBlockedDialogPaneCapture(scenario, new InvalidOperationException("failed"))
+            .Should().Match<DialogPaneVisualEvidenceCapture>(capture =>
+                capture.Host == "wpf" &&
+                capture.CaptureStatus == "blocked" &&
+                capture.Assertions.Single().Id == "capture-completed" &&
+                capture.Limitations.Single().Contains("InvalidOperationException", StringComparison.Ordinal));
+
+        wholeWindowPolicy.Host.Should().Be("avalonia");
+        wholeWindowPolicy.CaptureDescription.Should().Contain("native-non-client-excluded");
+        wholeWindowPolicy.LogicalWidth.Should().Be(WholeWindowVisualEvidenceCatalog.LogicalClientWidth);
+        wholeWindowPolicy.LogicalHeight.Should().Be(WholeWindowVisualEvidenceCatalog.LogicalClientHeight);
+    }
+
+    [Fact]
     public void Capture_text_helpers_preserve_artifact_names_and_semantic_labels()
     {
         var currentScenarioIds = DialogPaneVisualEvidenceCatalog.All.Select(scenario => scenario.Id)

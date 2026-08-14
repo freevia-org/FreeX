@@ -92,13 +92,14 @@ public sealed class DialogPaneVisualEvidencePreparationSessionTests
             "Width must be greater than zero."));
     }
 
-    private sealed class RecordingRouteHost : IDialogPaneVisualEvidenceRouteHost
+    private sealed class RecordingRouteHost : IVisualEvidenceAppHost
     {
         private Presentation _presentation = Presentation.CreateEmpty();
         private readonly List<uint> _selection = [];
 
         public IReadOnlyList<uint> SelectedShapeIds => _selection;
         public int SlideCount => _presentation.Slides.Count;
+        public int CurrentSlideIndex { get; private set; }
         public int CurrentShapeCount => _presentation.Slides[0].Shapes.Count;
         public string? CurrentLayoutId => _presentation.Slides[0].LayoutId;
         public bool IsTablePickerVisible => TablePickerVisible;
@@ -115,6 +116,7 @@ public sealed class DialogPaneVisualEvidencePreparationSessionTests
             LayoutPickerVisible ? 1 : 0);
 
         public void LoadPresentation(Presentation presentation) => _presentation = presentation;
+        public void SelectSlide(int slideIndex) => CurrentSlideIndex = slideIndex;
 
         public void SelectShape(uint shapeId)
         {
@@ -122,10 +124,17 @@ public sealed class DialogPaneVisualEvidencePreparationSessionTests
             _selection.Add(shapeId);
         }
 
+        public void ClearSelection() => _selection.Clear();
         public void RefreshCanvas() { }
-        public void ShowReviewCommentsPane() => CommentsShown = true;
-        public void SelectFirstReviewComment() => FirstCommentSelected = true;
-        public void ShowAccessibilityCheckerPane() { }
+        public void RefreshWholeWindow() { }
+        public void NormalizeShell() { }
+        public void HideCommentsPane() => CommentsShown = false;
+        public bool SelectRibbonTab(string tabId) => true;
+        public void FocusNotes() { }
+        public void ShowBackstagePane(string paneId) { }
+        public void ShowCommentsPane() => CommentsShown = true;
+        public void SelectFirstComment() => FirstCommentSelected = true;
+        public void ShowAccessibilityPane() { }
         public void SelectFirstAccessibilityIssue() { }
         public void ShowAltTextPane() { }
         public void ShowReadingOrderPane() { }
@@ -139,6 +148,8 @@ public sealed class DialogPaneVisualEvidencePreparationSessionTests
         public void OpenLayoutPicker() => LayoutPickerVisible = true;
         public void HideTablePicker() => TablePickerVisible = false;
         public void HideLayoutPicker() => LayoutPickerVisible = false;
+        public bool SetViewShowState(bool showGridlines, bool showGuides) => true;
+        public void SetZoom(PresentationViewZoomState state) { }
     }
 
     private sealed class RecordingDialogAdapter : IDialogPaneVisualEvidenceDialogAdapter<object>

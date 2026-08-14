@@ -67,7 +67,9 @@ public sealed class TestSupportOwnershipTests
             .Should().BeTrue();
         ReferenceEquals(supportAssembly, typeof(WholeWindowVisualEvidencePreparationSession).Assembly)
             .Should().BeTrue();
-        ReferenceEquals(supportAssembly, typeof(IWholeWindowVisualEvidenceProbe).Assembly)
+        ReferenceEquals(supportAssembly, typeof(IVisualEvidenceAppHost).Assembly)
+            .Should().BeTrue();
+        ReferenceEquals(supportAssembly, typeof(IWholeWindowVisualEvidenceNativeInspector).Assembly)
             .Should().BeTrue();
         ReferenceEquals(supportAssembly, typeof(WholeWindowVisualEvidenceHostCoordinator).Assembly)
             .Should().BeTrue();
