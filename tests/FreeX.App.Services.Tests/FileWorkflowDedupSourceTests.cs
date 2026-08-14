@@ -77,10 +77,12 @@ public sealed class FileWorkflowDedupSourceTests
             "freew",
             "FreeW.App.Host",
             "FileCommands.cs"));
+        // FreeP's WPF file commands moved out of FileCommands.cs into the port adapter when the
+        // presentation file-command session was shared; this guard follows them there.
         var freepSource = File.ReadAllText(RepositoryFileLocator.Find(
             "freep",
             "FreeP.App.Host",
-            "FileCommands.cs"));
+            "WpfPresentationFileCommandPorts.cs"));
 
         serviceSource.Should().Contain("FileLifecyclePlanner.PlanRecentRegistration(");
         sessionSource.Should().Contain("RecentFileRegistrationService.RegisterIfNeeded(");
