@@ -25,6 +25,10 @@ public sealed class CompactDialogChromeContractTests
         CompactDialogVisualTokens.GroupBoxPaddingVertical.Should().Be(6);
         CompactDialogVisualTokens.ButtonCornerRadius.Should().Be(3);
         CompactDialogVisualTokens.BorderThickness.Should().Be(1);
+        DialogTabChromeMetrics.PaneBorderHex.Should().Be("#C0C0C0");
+        DialogTabChromeMetrics.InactiveTabBorderHex.Should().Be("#808080");
+        DialogTabChromeMetrics.InactiveTabBackgroundHex.Should().Be("#F5F5F5");
+        DialogTabChromeMetrics.SelectedTabBackgroundHex.Should().Be("#FFFFFF");
     }
 
     [Fact]
@@ -36,6 +40,8 @@ public sealed class CompactDialogChromeContractTests
             "shared", "Free.Shared.Shell.Wpf", "DialogResources.xaml");
         var wpfAdapter = Read(
             "shared", "Free.Shared.Shell.Wpf", "WpfCompactDialogMetrics.cs");
+        var wpfTabs = Read(
+            "shared", "Free.Shared.Shell.Wpf", "DialogTabChrome.cs");
 
         avalonia.Should().Contain("= CompactDialogVisualTokens.ControlHeight;");
         avalonia.Should().Contain("= CompactDialogVisualTokens.ButtonHeight;");
@@ -70,6 +76,12 @@ public sealed class CompactDialogChromeContractTests
         avalonia.Should().Contain("radioButton.VerticalContentAlignment = VerticalAlignment.Center;");
         avalonia.Should().Contain("CompactDialogVisualTokens.ButtonCornerRadius");
         avalonia.Should().Contain("new Thickness(CompactDialogVisualTokens.BorderThickness)");
+        avalonia.Should().Contain("DialogTabChromeMetrics.PaneBorderHex");
+        avalonia.Should().Contain("DialogTabChromeMetrics.InactiveTabBorderHex");
+        avalonia.Should().Contain("DialogTabChromeMetrics.InactiveTabBackgroundHex");
+        avalonia.Should().Contain("DialogTabChromeMetrics.SelectedTabBackgroundHex");
+        avalonia.Should().NotContain("Color.FromRgb(160, 160, 160)");
+        avalonia.Should().NotContain("Color.FromRgb(243, 243, 243)");
         avalonia.Should().NotContain("public double ControlHeight { get; init; } = 24;");
         avalonia.Should().NotContain("public double ButtonHeight { get; init; } = 26;");
         avalonia.Should().NotContain("public double FontSize { get; init; } = 12;");
@@ -106,6 +118,12 @@ public sealed class CompactDialogChromeContractTests
         wpfAdapter.Should().Contain("CompactDialogVisualTokens.GroupBoxPaddingVertical");
         wpfAdapter.Should().Contain("CompactDialogVisualTokens.ButtonCornerRadius");
         wpfAdapter.Should().Contain("CompactDialogVisualTokens.BorderThickness");
+        wpfTabs.Should().Contain("DialogTabChromeMetrics.PaneBorderHex");
+        wpfTabs.Should().Contain("DialogTabChromeMetrics.InactiveTabBorderHex");
+        wpfTabs.Should().Contain("DialogTabChromeMetrics.InactiveTabBackgroundHex");
+        wpfTabs.Should().Contain("DialogTabChromeMetrics.SelectedTabBackgroundHex");
+        wpfTabs.Should().NotContain("Brushes.Gray");
+        wpfTabs.Should().NotContain("Brushes.WhiteSmoke");
     }
 
     private static string Read(params string[] path) =>

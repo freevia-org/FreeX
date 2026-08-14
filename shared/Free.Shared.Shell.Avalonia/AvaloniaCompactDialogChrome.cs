@@ -108,9 +108,14 @@ public static class AvaloniaCompactDialogChrome
         Color.Parse(CompactDialogVisualTokens.DisabledForegroundHex));
     private static readonly IBrush DisabledButtonBorderBrush = new ImmutableSolidColorBrush(
         Color.Parse(CompactDialogVisualTokens.DisabledBorderHex));
-    private static readonly IBrush DialogTabPaneBorderBrush = new ImmutableSolidColorBrush(Color.FromRgb(192, 192, 192));
-    private static readonly IBrush DialogInactiveTabBorderBrush = new ImmutableSolidColorBrush(Color.FromRgb(160, 160, 160));
-    private static readonly IBrush DialogInactiveTabBackgroundBrush = new ImmutableSolidColorBrush(Color.FromRgb(243, 243, 243));
+    private static readonly IBrush DialogTabPaneBorderBrush = new ImmutableSolidColorBrush(
+        Color.Parse(DialogTabChromeMetrics.PaneBorderHex));
+    private static readonly IBrush DialogInactiveTabBorderBrush = new ImmutableSolidColorBrush(
+        Color.Parse(DialogTabChromeMetrics.InactiveTabBorderHex));
+    private static readonly IBrush DialogInactiveTabBackgroundBrush = new ImmutableSolidColorBrush(
+        Color.Parse(DialogTabChromeMetrics.InactiveTabBackgroundHex));
+    private static readonly IBrush DialogSelectedTabBackgroundBrush = new ImmutableSolidColorBrush(
+        Color.Parse(DialogTabChromeMetrics.SelectedTabBackgroundHex));
     private static readonly IBrush ReadOnlyDocumentFocusedBorderBrush = new ImmutableSolidColorBrush(Color.FromRgb(86, 157, 229));
 
     private static IBrush ThemeBrush(string resourceKey, IBrush fallback)
@@ -1201,7 +1206,7 @@ public static class AvaloniaCompactDialogChrome
             Layoutable.MarginProperty,
             contentPaneMargin ?? new Thickness(0)));
         contentPaneStyle.Setters.Add(new Setter(ContentPresenter.PaddingProperty, new Thickness(0)));
-        contentPaneStyle.Setters.Add(new Setter(ContentPresenter.BackgroundProperty, Brushes.White));
+        contentPaneStyle.Setters.Add(new Setter(ContentPresenter.BackgroundProperty, DialogSelectedTabBackgroundBrush));
         tabControl.Styles.Add(contentPaneStyle);
 
         var authorityPaneMargin = contentPaneMargin ?? new Thickness(0);
@@ -1260,7 +1265,7 @@ public static class AvaloniaCompactDialogChrome
         tabControl.Styles.Add(tabStyle);
 
         var selectedTabStyle = new Style(s => s.OfType<TabItem>().Class(":selected"));
-        selectedTabStyle.Setters.Add(new Setter(TabItem.BackgroundProperty, Brushes.White));
+        selectedTabStyle.Setters.Add(new Setter(TabItem.BackgroundProperty, DialogSelectedTabBackgroundBrush));
         selectedTabStyle.Setters.Add(new Setter(TabItem.BorderBrushProperty, tabPaneBorder));
         selectedTabStyle.Setters.Add(new Setter(
             TabItem.BorderThicknessProperty,
