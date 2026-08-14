@@ -11264,7 +11264,8 @@ public sealed partial class DocumentView : RichTextBox
 
     // Wraps a styled run in a WPF Hyperlink that targets an internal bookmark. The bookmark name is
     // stored on the link's Tag (not NavigateUri, which is reserved for external URLs) so it reads back
-    // on commit; navigating scrolls the bookmarked paragraph into view (best-effort).
+    // on commit; navigation resolves the exact shared model target and leaves only native caret placement
+    // in this renderer.
     private static Inline BuildInternalHyperlink(Inline content, string anchor, string? tooltip = null)
     {
         var link = new WpfHyperlink(content);
@@ -11281,17 +11282,14 @@ public sealed partial class DocumentView : RichTextBox
         link.Click += OnInternalLinkClick;
     }
 
-    // Scroll the paragraph carrying the linked bookmark into view (best-effort). Matches on the
-    // model bookmark names preserved via each WPF paragraph's ParagraphTag, searching the FlowDocument
-    // that hosts the clicked link.
+    // Follow the shared bookmark target through the owning editor. Resolving against the committed model
+    // handles body and table-cell bookmarks identically to the Avalonia renderer.
     private static void OnInternalLinkClick(object sender, RoutedEventArgs e)
     {
         if (sender is not WpfHyperlink { Tag: HyperlinkInfo { Anchor: { Length: > 0 } anchor } } link)
             return;
-        var flow = FindFlowDocument(link);
-        var target = flow?.Blocks.OfType<WpfParagraph>()
-            .FirstOrDefault(p => p.Tag is ParagraphTag { BookmarkNames: { } names } && names.Contains(anchor));
-        target?.BringIntoView();
+        e.Handled = true;
+        FindOwnerView(link)?.GoToBookmark(anchor);
     }
 
     // Walk a TextElement's logical parent chain up to the hosting FlowDocument, if any.
@@ -16245,10 +16243,27 @@ public sealed partial class DocumentView : RichTextBox
             .ToList();
     }
 
+    /// <summary>Resolves a bookmark name through the shared model and moves the native caret to it.</summary>
+    public bool GoToBookmark(string name)
+    {
+        if (string.IsNullOrWhiteSpace(name))
+            return false;
+
+        var target = name.TrimStart('#').Trim();
+        CommitToModel();
+        return Bookmarks.FindLocation(_model, target) is { } location
+            && GoToCommittedBookmark(location);
+    }
+
     /// <summary>Moves the native caret to the exact shared bookmark target.</summary>
     public bool GoToBookmark(BookmarkLocation location)
     {
         CommitToModel();
+        return GoToCommittedBookmark(location);
+    }
+
+    private bool GoToCommittedBookmark(BookmarkLocation location)
+    {
         if (location.BlockIndex < 0 || location.BlockIndex >= _model.Blocks.Count)
             return false;
 

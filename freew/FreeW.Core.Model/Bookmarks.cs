@@ -86,6 +86,27 @@ public static class Bookmarks
         return locations;
     }
 
+    /// <summary>
+    /// Resolves <paramref name="name"/> to the first exact bookmark target in document order. The returned
+    /// location is suitable for either renderer: body bookmarks carry a block index, while table-cell
+    /// bookmarks also carry their logical row, grid column, and paragraph. Matching is ordinal; a null or
+    /// empty name resolves to no target.
+    /// </summary>
+    public static BookmarkLocation? FindLocation(TextDocument doc, string? name)
+    {
+        ArgumentNullException.ThrowIfNull(doc);
+        if (string.IsNullOrEmpty(name))
+            return null;
+
+        foreach (var location in List(doc))
+        {
+            if (string.Equals(location.Name, name, StringComparison.Ordinal))
+                return location;
+        }
+
+        return null;
+    }
+
     private static void AddLocations(
         Paragraph paragraph,
         int blockIndex,

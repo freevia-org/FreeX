@@ -118,6 +118,38 @@ public class BookmarksTests
     }
 
     [Fact]
+    public void FindLocation_ResolvesBodyAndTableTargetsWithExactOrdinalMatching()
+    {
+        var doc = new TextDocument();
+        doc.Blocks.Add(new Paragraph("Body target") { BookmarkName = "BodyMark" });
+        var table = Table.Create(1, 2);
+        table.Rows[0].Cells[0].GridSpan = 2;
+        table.Rows[0].Cells[1].Paragraphs[0].BookmarkName = "CellMark";
+        doc.Blocks.Add(table);
+
+        Bookmarks.FindLocation(doc, "BodyMark").Should().Be(new BookmarkLocation("BodyMark", 0));
+        Bookmarks.FindLocation(doc, "CellMark").Should().Be(new BookmarkLocation(
+            "CellMark",
+            1,
+            TableRowIndex: 0,
+            TableGridColumnIndex: 2,
+            TableParagraphIndex: 0));
+        Bookmarks.FindLocation(doc, "cellmark").Should().BeNull();
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    [InlineData("missing")]
+    public void FindLocation_UnknownOrEmptyName_ReturnsNull(string? name)
+    {
+        var doc = new TextDocument();
+        doc.Blocks.Add(new Paragraph("Target") { BookmarkName = "known" });
+
+        Bookmarks.FindLocation(doc, name).Should().BeNull();
+    }
+
+    [Fact]
     public void FindParagraph_PrefersTopLevelBookmark_OverSameNameInsideACell()
     {
         // Sibling/no-regression: a top-level bookmark is still found via the normal (non-cell) path when

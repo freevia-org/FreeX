@@ -19898,7 +19898,7 @@ public sealed partial class DocumentView : Control
     /// returning true when the bookmark was found. The bookmark target is the body paragraph carrying that
     /// name in its <see cref="Paragraph.BookmarkNames"/> (matched ordinally, ignoring a leading <c>'#'</c>).
     /// Word's Go To / internal-link navigation.
-    /// <see cref="Bookmarks.List"/> supplies the exact logical row, grid column, and paragraph for a
+    /// <see cref="Bookmarks.FindLocation"/> supplies the exact logical row, grid column, and paragraph for a
     /// table-cell bookmark, so this host only translates the shared target into its native caret.
     /// </summary>
     public bool GoToBookmark(string name)
@@ -19907,13 +19907,8 @@ public sealed partial class DocumentView : Control
             return false;
         var target = name.TrimStart('#').Trim();
 
-        foreach (var location in Bookmarks.List(_doc))
-        {
-            if (!string.Equals(location.Name, target, StringComparison.Ordinal))
-                continue;
-            return GoToBookmark(location);
-        }
-        return false;
+        return Bookmarks.FindLocation(_doc, target) is { } location
+            && GoToBookmark(location);
     }
 
     public bool GoToBookmark(BookmarkLocation location)

@@ -225,6 +225,21 @@ public sealed class BookmarkManagerDialogSourceOwnershipTests
         source.Should().NotContain("DocumentView");
     }
 
+    [Fact]
+    public void InternalHyperlinksResolveTheSameExactSharedBookmarkLocationInBothRenderers()
+    {
+        var wpf = ReadSource("freew", "FreeW.App.Host", "Editing", "DocumentView.cs");
+        var avalonia = ReadSource("freew", "FreeW.App.Avalonia", "Editing", "DocumentView.cs");
+
+        wpf.Should().Contain("FindOwnerView(link)?.GoToBookmark(anchor)");
+        wpf.Should().Contain("Bookmarks.FindLocation(_model, target)");
+        wpf.Should().Contain("GoToCommittedBookmark(location)");
+        wpf.Should().NotContain("flow?.Blocks.OfType<WpfParagraph>()");
+
+        avalonia.Should().Contain("Bookmarks.FindLocation(_doc, target)");
+        avalonia.Should().Contain("GoToBookmark(location)");
+    }
+
     private static string ReadSource(params string[] parts)
     {
         var root = TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeW.slnx");
