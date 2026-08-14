@@ -233,7 +233,9 @@ public sealed class FindReplaceDialogXamlTests
         var source = ReadFindReplaceDialogSource();
         source.Should().Contain("private void FindReplaceTabs_SelectionChanged");
         source.Should().Contain("UpdateReplaceButtonVisibility();");
-        source.Should().Contain("FindReplaceTabs.SelectedItem == ReplaceTab ? Visibility.Visible : Visibility.Collapsed");
+        source.Should().Contain("var visibility = FindReplaceDialogPlanner.ShowsReplaceCommands(OpenMode)");
+        source.Should().Contain("? Visibility.Visible");
+        source.Should().Contain(": Visibility.Collapsed;");
     }
 
     [Fact]
@@ -525,7 +527,7 @@ public sealed class FindReplaceDialogXamlTests
 
         source.Should().Contain("Loaded += (_, _) => FocusInitialKeyboardTarget();");
         source.Should().Contain("private void FocusInitialKeyboardTarget()");
-        source.Should().Contain("private TextBox ResolveSearchBox() => FindReplaceTabs.SelectedItem == ReplaceTab ? ReplaceFindBox : FindBox;");
+        source.Should().Contain("FindReplaceDialogPlanner.ShowsReplaceCommands(OpenMode) ? ReplaceFindBox : FindBox;");
         source.Should().Contain("DialogFocus.FocusAndSelect(ResolveSearchBox());");
     }
 
@@ -577,7 +579,7 @@ public sealed class FindReplaceDialogXamlTests
         source.Should().Contain("DialogText(FindReplaceDialogText.FindWhatRequired)");
         source.Should().Contain("FocusSearchBox();");
         source.Should().Contain("private void FocusSearchBox()");
-        source.Should().Contain("private TextBox ResolveSearchBox() => FindReplaceTabs.SelectedItem == ReplaceTab ? ReplaceFindBox : FindBox;");
+        source.Should().Contain("FindReplaceDialogPlanner.ShowsReplaceCommands(OpenMode) ? ReplaceFindBox : FindBox;");
         source.Should().Contain("DialogFocus.FocusAndSelect(ResolveSearchBox());");
     }
 
