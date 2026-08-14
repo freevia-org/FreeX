@@ -642,11 +642,6 @@ internal static class FreeWRibbonCommands
                     editor.InsertWordArt(WordArt.Create("WordArt", WordArtStyle.GradientFill));
                 }),
                 EmbeddedObject: new InsertEmbeddedObjectCommand(editor)));
-        // SmartArt Design contextual tab — gallery placeholder commands (no-ops; galleries are injected
-        // as live-preview custom content via InjectGallery; these ids must be registered so the ribbon
-        // renderer does not log "unknown command" warnings for the stub buttons).
-        registry.Register("freew.smartart-change-layout", EmptyRibbonCommand.Instance);
-        registry.Register("freew.smartart-change-colors", EmptyRibbonCommand.Instance);
         // Insert tab — References: prompt for footnote text and insert a footnote reference at the caret.
         var insertFootnote = new InsertFootnoteCommand(editor);
         // Insert tab — References: prompt for endnote text and insert an endnote reference at the caret.

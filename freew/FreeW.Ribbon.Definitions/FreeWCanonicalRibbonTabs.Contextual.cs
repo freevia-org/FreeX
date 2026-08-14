@@ -647,18 +647,11 @@ internal static partial class FreeWCanonicalRibbonTabs
                 topology.Section(
                     "smartart.layouts",
                     tab => tab.Group("smartart-layouts", "Layouts", "L", 80, group =>
-                        group.Medium("freew.smartart-change-layout", "Change Layout", RibbonCommandIconKind.SmartArt)),
-                    tab => tab.Group("smartart-layouts", "Layouts", null, 100, group =>
                         group.Dropdown("freew.smartart-layout", "Layouts", BuildSmartArtLayoutMenu())));
 
                 topology.Section(
                     "smartart.styles",
-                    tab => tab.Group("smartart-colors", "SmartArt Styles", "C", 70, group =>
-                        {
-                            group.Medium("freew.smartart-change-colors", "Change Colors", RibbonCommandIconKind.Fill);
-                            group.Medium("freew.smartart-change-style", "Styles", RibbonCommandIconKind.Font);
-                        }),
-                    tab => tab.Group("smartart-styles", "SmartArt Styles", null, 90, group =>
+                    tab => tab.Group("smartart-styles", "SmartArt Styles", "C", 90, group =>
                         {
                             group.Dropdown("freew.smartart-colors", "Change Colors", BuildSmartArtColorsMenu());
                             group.ComboBox("freew.smartart-change-style", "Styles", combo => combo with
