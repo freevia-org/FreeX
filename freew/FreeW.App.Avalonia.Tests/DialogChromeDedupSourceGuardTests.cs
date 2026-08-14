@@ -96,7 +96,7 @@ public sealed class DialogChromeDedupSourceGuardTests
             ("ParagraphDialog.cs",
             [
                 "using Free.Shared.Shell.Avalonia;",
-                "PageLayoutDialogChrome.Configure(this, Surface, 380);",
+                "PageLayoutDialogChrome.Configure(this, Surface, Layout.WindowWidth);",
                 "PageLayoutDialogChrome.NumberBox(",
                 "PageLayoutDialogChrome.Combo(",
                 "PageLayoutDialogChrome.Actions(",
