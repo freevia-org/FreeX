@@ -978,8 +978,8 @@ internal static class FreeWAvaloniaRibbonCommands
         NoteReferenceRibbonWorkflow.Register(
             family,
             new NoteReferenceRibbonPorts(
-                callbacks.OpenFootnoteDialog ?? (() => editor.InsertFootnote()),
-                callbacks.OpenEndnoteDialog ?? (() => editor.InsertEndnote()),
+                callbacks.OpenFootnoteDialog,
+                callbacks.OpenEndnoteDialog,
                 () => editor.MoveToNextFootnote(),
                 () => editor.MoveToPreviousFootnote(),
                 () => editor.MoveToNextEndnote(),

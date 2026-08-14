@@ -4,8 +4,8 @@ namespace FreeW.App.Presentation.Ribbon;
 
 /// <summary>Renderer adapters consumed by the shared Footnotes command family.</summary>
 public sealed record NoteReferenceRibbonPorts(
-    Action InsertFootnote,
-    Action InsertEndnote,
+    Action? InsertFootnote,
+    Action? InsertEndnote,
     Action MoveToNextFootnote,
     Action MoveToPreviousFootnote,
     Action MoveToNextEndnote,
@@ -55,21 +55,19 @@ public static class NoteReferenceRibbonWorkflow
         Action<RibbonCommandId, IRibbonCommand> register)
     {
         ArgumentNullException.ThrowIfNull(ports);
-        ArgumentNullException.ThrowIfNull(ports.InsertFootnote);
-        ArgumentNullException.ThrowIfNull(ports.InsertEndnote);
         ArgumentNullException.ThrowIfNull(ports.MoveToNextFootnote);
         ArgumentNullException.ThrowIfNull(ports.MoveToPreviousFootnote);
         ArgumentNullException.ThrowIfNull(ports.MoveToNextEndnote);
         ArgumentNullException.ThrowIfNull(ports.MoveToPreviousEndnote);
 
-        var footnote = bindAction(
+        var footnote = bind(
             FreeWRibbonCommandAction.Footnote,
-            ports.InsertFootnote);
+            OptionalCommand(ports.InsertFootnote));
         register("freew.insert-footnote", footnote);
 
-        var endnote = bindAction(
+        var endnote = bind(
             FreeWRibbonCommandAction.Endnote,
-            ports.InsertEndnote);
+            OptionalCommand(ports.InsertEndnote));
         register("freew.insert-endnote", endnote);
 
         bindAction(
@@ -114,4 +112,9 @@ public static class NoteReferenceRibbonWorkflow
 
         return notesPane;
     }
+
+    private static IRibbonCommand OptionalCommand(Action? execute) =>
+        execute is null
+            ? FreeWRibbonExecutionProfile.UnavailableCommand
+            : new ActionRibbonCommand(execute);
 }

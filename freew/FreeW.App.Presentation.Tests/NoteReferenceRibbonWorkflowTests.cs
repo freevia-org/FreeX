@@ -94,6 +94,39 @@ public sealed class NoteReferenceRibbonWorkflowTests
     }
 
     [Fact]
+    public void MissingNoteDialogPortsDisableInsertionCommandsAndAliases()
+    {
+        var bindings = new FreeWRibbonCommandBindingPorts();
+        NoteReferenceRibbonWorkflow.Register(
+            bindings,
+            new NoteReferenceRibbonPorts(
+                InsertFootnote: null,
+                InsertEndnote: null,
+                MoveToNextFootnote: () => { },
+                MoveToPreviousFootnote: () => { },
+                MoveToNextEndnote: () => { },
+                MoveToPreviousEndnote: () => { },
+                OpenNotes: null,
+                ToggleNotesPane: null,
+                IsNotesPaneVisible: null,
+                OpenFootnoteEndnoteOptions: null));
+
+        var footnote = Command(bindings, FreeWRibbonCommandAction.Footnote);
+        var endnote = Command(bindings, FreeWRibbonCommandAction.Endnote);
+        foreach (var command in new[] { footnote, endnote })
+        {
+            command.Should().BeSameAs(FreeWRibbonExecutionProfile.UnavailableCommand);
+            command.Should().BeAssignableTo<IRibbonStatefulCommand>()
+                .Which.GetState().IsEnabled.Should().BeFalse();
+        }
+
+        bindings.TryGet("freew.insert-footnote", out var footnoteAlias).Should().BeTrue();
+        bindings.TryGet("freew.insert-endnote", out var endnoteAlias).Should().BeTrue();
+        footnoteAlias.Should().BeSameAs(footnote);
+        endnoteAlias.Should().BeSameAs(endnote);
+    }
+
+    [Fact]
     public void BothRenderersDelegateTheFootnotesFamilyToTheSharedWorkflow()
     {
         var root = TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeW.slnx");
@@ -105,6 +138,8 @@ public sealed class NoteReferenceRibbonWorkflowTests
         wpf.Should().NotContain("referenceCommands.Bind(FreeWRibbonCommandAction.Footnote,");
         avalonia.Should().NotContain("family.Bind(FreeWRibbonCommandAction.Footnote,");
         avalonia.Should().NotContain("family.BindToggle(FreeWRibbonCommandAction.ShowNotes,");
+        avalonia.Should().NotContain("callbacks.OpenFootnoteDialog ??");
+        avalonia.Should().NotContain("callbacks.OpenEndnoteDialog ??");
     }
 
     private static NoteReferenceRibbonPorts Ports(
