@@ -70,7 +70,6 @@ public sealed class ParagraphDialog : FreeWDialogWindow
         // must consume the same two client-area heights as WPF rather than growing from Avalonia's
         // default control templates.
         PageLayoutDialogChrome.Configure(this, Surface, Layout.WindowWidth);
-        TextOptions.SetTextRenderingMode(this, TextRenderingMode.Antialias);
         var state = ParagraphBreaksDialogPlanner.BuildInitialState(current, DialogCulture);
         _left = NumberBox(state.LeftText);
         _right = NumberBox(state.RightText);

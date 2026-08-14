@@ -83,7 +83,6 @@ public sealed class FontDialog : FreeWDialogWindow
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
         CanResize = false;
         ShowInTaskbar = false;
-        TextOptions.SetTextRenderingMode(this, TextRenderingMode.Antialias);
 
         var state = _session.InitialState;
 
