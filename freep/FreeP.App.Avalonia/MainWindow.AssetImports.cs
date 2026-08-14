@@ -23,7 +23,12 @@ public sealed partial class MainWindow
                     ApplyPictureBullet: ApplyImportedPictureBullet,
                     ApplySmartArtPicture: (bytes, contentType) =>
                         ApplySmartArtTextPanePicture(bytes, contentType)?.Applied == true,
-                    ApplyZoomCoverImage: applyZoomCoverImage)));
+                    ApplyZoomCoverImage: applyZoomCoverImage,
+                    EmbeddedObjectInserted: () =>
+                    {
+                        RefreshCanvas();
+                        UpdateStatus();
+                    })));
         return await workflow.ImportAsync(kind);
     }
 

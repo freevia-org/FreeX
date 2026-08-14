@@ -52,6 +52,21 @@ public sealed class PresentationAssetPickerProfileOwnershipTests
     }
 
     [Fact]
+    public void RendererExecutionPortsRefreshNativeSurfacesAfterEmbeddedObjectInsertion()
+    {
+        var root = TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeP.slnx");
+        var wpf = Read(root, "freep", "FreeP.App.Host", "MainWindow.AssetImports.cs");
+        var avalonia = Read(root, "freep", "FreeP.App.Avalonia", "MainWindow.AssetImports.cs");
+
+        wpf.Should().Contain("EmbeddedObjectInserted: () =>")
+            .And.Contain("RefreshCanvas();")
+            .And.Contain("UpdateSlideCount();");
+        avalonia.Should().Contain("EmbeddedObjectInserted: () =>")
+            .And.Contain("RefreshCanvas();")
+            .And.Contain("UpdateStatus();");
+    }
+
+    [Fact]
     public void PortableCatalogHasNoNativeFrameworkDependencies()
     {
         var root = TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeP.slnx");
