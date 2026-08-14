@@ -1020,14 +1020,13 @@ internal static class FreeWRibbonCommands
         registry.Bind(FreeWRibbonCommandAction.ClearFormatting, new ActionRibbonCommand(() => editor.ClearFormatting()));
         // Drop Cap top-level button: apply default (Dropped, 3 lines, 42 pt). Dropdown items:
         // Dropped / In Margin (apply with explicit position) / None (remove) / Options dialog.
-        registry.Bind(FreeWRibbonCommandAction.DropCap,          new ActionRibbonCommand(() => editor.ApplyDropCap()));
-        registry.Bind(FreeWRibbonCommandAction.DropCapDropped,  new ActionRibbonCommand(() => editor.ApplyDropCap(DropCapPosition.Dropped)));
-        registry.Bind(FreeWRibbonCommandAction.DropCapInMargin,new ActionRibbonCommand(() => editor.ApplyDropCap(DropCapPosition.InMargin)));
-        registry.Bind(FreeWRibbonCommandAction.DropCapNone,     new ActionRibbonCommand(() => editor.ClearDropCap()));
-        registry.Bind(FreeWRibbonCommandAction.DropCapOptions,  new DropCapOptionsCommand(editor));
-        registry.Bind(FreeWRibbonCommandAction.DropCap_Dropped,  new ActionRibbonCommand(() => editor.ApplyDropCap(DropCapPosition.Dropped)));
-        registry.Bind(FreeWRibbonCommandAction.DropCap_InMargin,new ActionRibbonCommand(() => editor.ApplyDropCap(DropCapPosition.InMargin)));
-        registry.Bind(FreeWRibbonCommandAction.DropCap_None,     new ActionRibbonCommand(() => editor.ClearDropCap()));
+        DropCapRibbonWorkflow.Register(
+            registry,
+            new DropCapRibbonPorts(
+                Dropped: new ActionRibbonCommand(() => editor.ApplyDropCap(DropCapPosition.Dropped)),
+                InMargin: new ActionRibbonCommand(() => editor.ApplyDropCap(DropCapPosition.InMargin)),
+                None: new ActionRibbonCommand(editor.ClearDropCap),
+                Options: new DropCapOptionsCommand(editor)));
 
         // Home > Font > Change Case: open a small menu to pick a target case (UPPERCASE / lowercase /
         // Sentence case / Capitalize Each Word / tOGGLE cASE) and recase the selection's text via the

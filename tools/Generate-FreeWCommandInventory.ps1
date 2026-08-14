@@ -226,6 +226,11 @@ internal static class FreeWCommandInventory
         ["freew.subscript"] = FontEffectEvidence("Both renderers route subscript formatting through the shared font-effect family."),
         ["freew.grow-font"] = FontEffectEvidence("Both renderers route font growth through the shared font-effect family."),
         ["freew.shrink-font"] = FontEffectEvidence("Both renderers route font shrinking through the shared font-effect family."),
+        ["freew.drop-cap"] = DropCapEvidence("The primary Drop Cap face and Dropped menu routes share one command identity in both renderers."),
+        ["freew.drop-cap-dropped"] = DropCapEvidence("Both visible renderer menus resolve Dropped through one shared semantic route."),
+        ["freew.drop-cap-in-margin"] = DropCapEvidence("Both visible renderer menus resolve In Margin through one shared semantic route."),
+        ["freew.drop-cap-none"] = DropCapEvidence("Both visible renderer menus resolve None through one shared semantic route."),
+        ["freew.drop-cap-options"] = DropCapEvidence("Both renderers preserve native options-dialog adapters behind one shared route."),
         ["freew.multilevel-list"] = MultilevelListWorkflowEvidence(
             "The shared workflow applies the canonical decimal multilevel definition in both renderers."),
         ["freew.multilevel-demote"] = MultilevelListWorkflowEvidence(
@@ -610,6 +615,18 @@ internal static class FreeWCommandInventory
             AvaloniaEvidence: new BehaviorEvidenceLink(
                 Path: "freew/FreeW.App.Presentation.Tests/FontEffectRibbonWorkflowTests.cs",
                 Test: "FontEffectRibbonWorkflowTests.BothRenderersDelegateFontEffectMappingToSharedPresentation"));
+
+    private static CommandBehaviorEvidence DropCapEvidence(string summary) =>
+        new(
+            EvidenceId: "freew.drop-cap.shared-workflow",
+            Slice: "Drop Cap command behavior",
+            Summary: summary,
+            WpfEvidence: new BehaviorEvidenceLink(
+                Path: "freew/FreeW.App.Presentation.Tests/DropCapRibbonWorkflowTests.cs",
+                Test: "DropCapRibbonWorkflowTests.SharedWorkflowOwnsPrimaryCanonicalAndLegacyCommandIdentity"),
+            AvaloniaEvidence: new BehaviorEvidenceLink(
+                Path: "freew/FreeW.App.Presentation.Tests/DropCapRibbonWorkflowTests.cs",
+                Test: "DropCapRibbonWorkflowTests.BothRenderersDelegateDropCapPolicyToSharedPresentation"));
 
     private static CommandBehaviorEvidence MultilevelListWorkflowEvidence(
         string summary,

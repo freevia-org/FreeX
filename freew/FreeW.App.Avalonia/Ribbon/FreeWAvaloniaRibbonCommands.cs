@@ -866,14 +866,13 @@ internal static class FreeWAvaloniaRibbonCommands
         // ── Drop Cap ─────────────────────────────────────────────────────────
         // Dropped / In Margin both enlarge the leading letter (the in-margin float geometry is an
         // approximation — render-deferred); None clears the paragraph's run formatting.
-        r.Bind(FreeWRibbonCommandAction.DropCap,           new ActionRibbonCommand(() => editor.ApplyDropCap(DropCapPosition.Dropped)));
-        r.Bind(FreeWRibbonCommandAction.DropCap_Dropped,   new ActionRibbonCommand(() => editor.ApplyDropCap(DropCapPosition.Dropped)));
-        r.Bind(FreeWRibbonCommandAction.DropCap_InMargin, new ActionRibbonCommand(() => editor.ApplyDropCap(DropCapPosition.InMargin)));
-        r.Bind(FreeWRibbonCommandAction.DropCap_None,      new ActionRibbonCommand(editor.ClearDropCap));
-        r.Bind(FreeWRibbonCommandAction.DropCapDropped,   new ActionRibbonCommand(() => editor.ApplyDropCap(DropCapPosition.Dropped)));
-        r.Bind(FreeWRibbonCommandAction.DropCapInMargin, new ActionRibbonCommand(() => editor.ApplyDropCap(DropCapPosition.InMargin)));
-        r.Bind(FreeWRibbonCommandAction.DropCapNone,      new ActionRibbonCommand(editor.ClearDropCap));
-        r.Bind(FreeWRibbonCommandAction.DropCapOptions, OptionalHostCommand(callbacks.OpenDropCapOptionsDialog));
+        DropCapRibbonWorkflow.Register(
+            r,
+            new DropCapRibbonPorts(
+                Dropped: new ActionRibbonCommand(() => editor.ApplyDropCap(DropCapPosition.Dropped)),
+                InMargin: new ActionRibbonCommand(() => editor.ApplyDropCap(DropCapPosition.InMargin)),
+                None: new ActionRibbonCommand(editor.ClearDropCap),
+                Options: OptionalHostCommand(callbacks.OpenDropCapOptionsDialog)));
 
         // ── Quick Parts ──────────────────────────────────────────────────────
         // Shared Presentation owns the saved-part, field, save, organizer, and compatibility routes.
