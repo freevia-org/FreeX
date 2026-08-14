@@ -15,6 +15,18 @@ namespace FreeX.App.Avalonia.Tests;
 [Collection("AvaloniaHeadless")]
 public sealed class AvaloniaSemanticLocalizationConvergenceTests
 {
+    [Fact]
+    public void GoalSeekStatusText_NormalizesResourceLineEndingsForAvaloniaLayout()
+    {
+        var method = typeof(MainWindow).GetMethod(
+            "NormalizeAvaloniaMultilineText",
+            BindingFlags.NonPublic | BindingFlags.Static);
+
+        method.Should().NotBeNull();
+        method!.Invoke(null, ["first\r\r\nsecond\r\nthird\rfourth"])
+            .Should().Be("first\nsecond\nthird\nfourth");
+    }
+
     private static readonly HeadlessUnitTestSession Session =
         HeadlessUnitTestSession.GetOrStartForAssembly(typeof(RibbonHeadlessApp).Assembly);
 

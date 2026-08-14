@@ -19955,7 +19955,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
 
         var summaryBlock = new TextBlock
         {
-            Text = FormatGoalSeekStatus(result),
+            Text = NormalizeAvaloniaMultilineText(FormatGoalSeekStatus(result)),
             TextWrapping = TextWrapping.Wrap,
             Margin = new Thickness(
                 0,
@@ -20076,6 +20076,10 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         await dialog.ShowDialog(this);
         return choice;
     }
+
+    private static string NormalizeAvaloniaMultilineText(string text) =>
+        text.Replace("\r\r\n", "\r\n", StringComparison.Ordinal)
+            .ReplaceLineEndings("\n");
 
     private static string FormatGoalSeekStatus(WorkbookGoalSeekResult result)
     {
