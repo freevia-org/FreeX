@@ -1,3 +1,5 @@
+using Free.Shared.PageSetup;
+
 namespace FreeX.Core.Model;
 
 public enum WorksheetPageOrientation
@@ -119,29 +121,22 @@ public readonly record struct WorksheetDisplayedComment(
 
 public static class WorksheetPageLayout
 {
+    /// <summary>
+    /// Physical page size in inches, landscape swap applied. The dimensions themselves come from the
+    /// cross-app <see cref="PaperSizeCatalog"/> (authored in millimetres, projected to inches at the
+    /// two-decimal precision this table has always used), so FreeX no longer carries its own table.
+    /// </summary>
     public static WorksheetPageSize GetPageSizeInches(
         WorksheetPaperSize paperSize,
         WorksheetPageOrientation orientation)
     {
-        var (width, height) = paperSize switch
-        {
-            WorksheetPaperSize.Letter    => (8.5,  11.0),
-            WorksheetPaperSize.Legal     => (8.5,  14.0),
-            WorksheetPaperSize.Tabloid   => (11.0, 17.0),
-            WorksheetPaperSize.Ledger    => (17.0, 11.0),
-            WorksheetPaperSize.Statement => (5.5,  8.5),
-            WorksheetPaperSize.Executive => (7.25, 10.5),
-            WorksheetPaperSize.A3        => (11.69, 16.54),
-            WorksheetPaperSize.A5        => (5.83,  8.27),
-            WorksheetPaperSize.B4        => (9.84,  13.90),
-            WorksheetPaperSize.B5        => (6.93,  9.84),
-            WorksheetPaperSize.Folio     => (8.5,  13.0),
-            _                            => (8.27, 11.69)   // A4 fallback
-        };
+        var (width, height) = PaperSizeCatalog.GetSizeInches(
+            WorksheetPaperSizes.ToShared(paperSize),
+            orientation == WorksheetPageOrientation.Landscape
+                ? SharedPageOrientation.Landscape
+                : SharedPageOrientation.Portrait);
 
-        return orientation == WorksheetPageOrientation.Landscape
-            ? new WorksheetPageSize(height, width)
-            : new WorksheetPageSize(width, height);
+        return new WorksheetPageSize(width, height);
     }
 
     public static WorksheetMarginGuideFractions GetMarginGuideFractions(
@@ -289,55 +284,69 @@ public static class WorksheetPageLayout
 public static class PaperSizeCodes
 {
     /// <summary>Default OOXML paper-size code (9 = A4).</summary>
-    public const int DefaultCode = 9;
-
-    // ECMA-376 §18.18.43 — selected codes
-    private static readonly IReadOnlyDictionary<int, WorksheetPaperSize> CodeToEnum =
-        new Dictionary<int, WorksheetPaperSize>
-        {
-            { 1,  WorksheetPaperSize.Letter    },
-            { 3,  WorksheetPaperSize.Tabloid   },
-            { 4,  WorksheetPaperSize.Ledger    },
-            { 5,  WorksheetPaperSize.Legal     },
-            { 6,  WorksheetPaperSize.Statement },
-            { 7,  WorksheetPaperSize.Executive },
-            { 8,  WorksheetPaperSize.A3        },
-            { 9,  WorksheetPaperSize.A4        },
-            { 11, WorksheetPaperSize.A5        },
-            { 12, WorksheetPaperSize.B4        },
-            { 13, WorksheetPaperSize.B5        },
-            { 14, WorksheetPaperSize.Folio     },
-        };
-
-    private static readonly IReadOnlyDictionary<WorksheetPaperSize, int> EnumToCode =
-        new Dictionary<WorksheetPaperSize, int>
-        {
-            { WorksheetPaperSize.Letter,    1  },
-            { WorksheetPaperSize.Tabloid,   3  },
-            { WorksheetPaperSize.Ledger,    4  },
-            { WorksheetPaperSize.Legal,     5  },
-            { WorksheetPaperSize.Statement, 6  },
-            { WorksheetPaperSize.Executive, 7  },
-            { WorksheetPaperSize.A3,        8  },
-            { WorksheetPaperSize.A4,        9  },
-            { WorksheetPaperSize.A5,        11 },
-            { WorksheetPaperSize.B4,        12 },
-            { WorksheetPaperSize.B5,        13 },
-            { WorksheetPaperSize.Folio,     14 },
-        };
+    public const int DefaultCode = PaperSizeCatalog.DefaultOoxmlCode;
 
     /// <summary>
     /// Tries to resolve an OOXML paper-size code to its <see cref="WorksheetPaperSize"/> enum value.
     /// Returns <see langword="false"/> for unknown codes; the caller should preserve the raw code and
     /// leave <see cref="Sheet.PaperSize"/> at its default.
     /// </summary>
-    public static bool TryGetEnum(int code, out WorksheetPaperSize size) =>
-        CodeToEnum.TryGetValue(code, out size);
+    public static bool TryGetEnum(int code, out WorksheetPaperSize size)
+    {
+        if (PaperSizeCatalog.TryGetSizeFromOoxmlCode(code, out var shared))
+        {
+            size = WorksheetPaperSizes.FromShared(shared);
+            return true;
+        }
+
+        size = WorksheetPaperSize.A4;
+        return false;
+    }
 
     /// <summary>
     /// Returns the OOXML paper-size code for a <see cref="WorksheetPaperSize"/> enum value.
     /// Returns <see cref="DefaultCode"/> for any value not in the map.
     /// </summary>
     public static int GetCode(WorksheetPaperSize size) =>
-        EnumToCode.TryGetValue(size, out var code) ? code : DefaultCode;
+        PaperSizeCatalog.GetOoxmlCode(WorksheetPaperSizes.ToShared(size));
+}
+
+/// <summary>
+/// Bridges FreeX's <see cref="WorksheetPaperSize"/> to the cross-app
+/// <see cref="SharedPaperSize"/> catalog. FreeX keeps its own enum so the model's public shape (and
+/// the XLSX IO layer built on it) is unchanged; only the dimensions and OOXML codes are shared.
+/// </summary>
+public static class WorksheetPaperSizes
+{
+    public static SharedPaperSize ToShared(WorksheetPaperSize size) => size switch
+    {
+        WorksheetPaperSize.Letter => SharedPaperSize.Letter,
+        WorksheetPaperSize.Legal => SharedPaperSize.Legal,
+        WorksheetPaperSize.Tabloid => SharedPaperSize.Tabloid,
+        WorksheetPaperSize.Ledger => SharedPaperSize.Ledger,
+        WorksheetPaperSize.Statement => SharedPaperSize.Statement,
+        WorksheetPaperSize.Executive => SharedPaperSize.Executive,
+        WorksheetPaperSize.A3 => SharedPaperSize.A3,
+        WorksheetPaperSize.A5 => SharedPaperSize.A5,
+        WorksheetPaperSize.B4 => SharedPaperSize.B4,
+        WorksheetPaperSize.B5 => SharedPaperSize.B5,
+        WorksheetPaperSize.Folio => SharedPaperSize.Folio,
+        _ => SharedPaperSize.A4,   // A4 and any undefined value
+    };
+
+    public static WorksheetPaperSize FromShared(SharedPaperSize size) => size switch
+    {
+        SharedPaperSize.Letter => WorksheetPaperSize.Letter,
+        SharedPaperSize.Legal => WorksheetPaperSize.Legal,
+        SharedPaperSize.Tabloid => WorksheetPaperSize.Tabloid,
+        SharedPaperSize.Ledger => WorksheetPaperSize.Ledger,
+        SharedPaperSize.Statement => WorksheetPaperSize.Statement,
+        SharedPaperSize.Executive => WorksheetPaperSize.Executive,
+        SharedPaperSize.A3 => WorksheetPaperSize.A3,
+        SharedPaperSize.A5 => WorksheetPaperSize.A5,
+        SharedPaperSize.B4 => WorksheetPaperSize.B4,
+        SharedPaperSize.B5 => WorksheetPaperSize.B5,
+        SharedPaperSize.Folio => WorksheetPaperSize.Folio,
+        _ => WorksheetPaperSize.A4,
+    };
 }

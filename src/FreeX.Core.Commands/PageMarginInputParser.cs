@@ -1,8 +1,14 @@
 using System.Globalization;
+using Free.Shared.PageSetup;
 using FreeX.Core.Model;
 
 namespace FreeX.Core.Commands;
 
+/// <summary>
+/// Parses FreeX's four-value "left, right, top, bottom" margin text (inches). The per-value numeric
+/// rules come from the cross-app <see cref="PageMarginTextPolicy"/>; the field layout and the
+/// FreeX-specific error wording stay here.
+/// </summary>
 public static class PageMarginInputParser
 {
     public static bool TryParse(string input, out WorksheetPageMargins margins, out string? error)
@@ -19,15 +25,17 @@ public static class PageMarginInputParser
         var values = new double[4];
         for (var i = 0; i < parts.Length; i++)
         {
-            if (!double.TryParse(parts[i], NumberStyles.Float, CultureInfo.InvariantCulture, out var value))
+            // The joined field is invariant by construction (see PageSetupDialogPlanner's margin-token
+            // normalization), so this list is always parsed with InvariantCulture.
+            if (!PageMarginTextPolicy.TryParseNonNegative(
+                    parts[i],
+                    CultureInfo.InvariantCulture,
+                    out var value,
+                    out var failure))
             {
-                error = "Margins must be numbers in inches.";
-                return false;
-            }
-
-            if (value < 0)
-            {
-                error = "Margins cannot be negative.";
+                error = failure == PageMeasureParseFailure.Negative
+                    ? "Margins cannot be negative."
+                    : "Margins must be numbers in inches.";
                 return false;
             }
 
