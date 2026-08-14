@@ -601,11 +601,19 @@ internal static partial class FreeWCanonicalRibbonTabs
                             m.Item(EquationPresetCatalog.Get(EquationPresetKind.Function).CommandId, "Function (sin)", "C");
                             m.Item(EquationPresetCatalog.Get(EquationPresetKind.GroupCharacter).CommandId, "Group (brace)", "G");
                         });
-                        g.Medium("freew.symbol", symbolCommand.Label, RibbonCommandIconKind.Symbol);
+                        g.SplitButton("freew.symbol", symbolCommand.Label, BuildSymbolMenu(), split => split with
+                        {
+                            PreferredLayout = RibbonCommandLayoutKind.Medium,
+                            Icon = new RibbonCommandIcon(RibbonCommandIconKind.Symbol),
+                        });
                     }),
                 tab => tab.Group("symbols", FreeWRibbonText.SymbolsGroup.Label, null, 92, g =>
                     {
-                        g.Button("freew.symbol", FreeWRibbonText.SymbolCommand.Label);
+                        g.SplitButton("freew.symbol", FreeWRibbonText.SymbolCommand.Label, BuildSymbolMenu(), split => split with
+                        {
+                            PreferredLayout = RibbonCommandLayoutKind.Medium,
+                            Icon = new RibbonCommandIcon(RibbonCommandIconKind.Symbol),
+                        });
                         // AV-INSERT2: Equation — default (E=mc²) opener + a few common OMML presets.
                         g.Dropdown("freew.equation", "Equation", BuildEquationMenu());
                     }));
@@ -1147,4 +1155,11 @@ internal static partial class FreeWCanonicalRibbonTabs
             new("Function",            new RibbonCommandId(EquationPresetCatalog.Get(EquationPresetKind.Function).CommandId)),
             new("Group Character",     new RibbonCommandId(EquationPresetCatalog.Get(EquationPresetKind.GroupCharacter).CommandId)),
         });
+
+    private static RibbonMenu BuildSymbolMenu() =>
+        new(SymbolRibbonWorkflow.Choices
+            .Select(choice => new RibbonMenuItem(
+                $"{choice.Glyph}   {choice.Label}",
+                new RibbonCommandId(choice.CommandId)))
+            .ToArray());
 }
