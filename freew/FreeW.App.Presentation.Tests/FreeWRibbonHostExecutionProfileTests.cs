@@ -7,6 +7,7 @@ public sealed class FreeWRibbonHostExecutionProfileTests
 {
     [Theory]
     [InlineData(FreeWRibbonCommandAction.PastePlain)]
+    [InlineData(FreeWRibbonCommandAction.ChangeCase)]
     [InlineData(FreeWRibbonCommandAction.Field)]
     [InlineData(FreeWRibbonCommandAction.LineNumbersOptions)]
     [InlineData(FreeWRibbonCommandAction.PreviousChange)]
@@ -60,6 +61,26 @@ public sealed class FreeWRibbonHostExecutionProfileTests
 
         var command = Command(bindings, FreeWRibbonCommandAction.CheckAccessibility);
         command.Execute(RibbonCommandContext.Empty);
+
+        calls.Should().Be(1);
+    }
+
+    [Fact]
+    public void SuppliedChangeCaseDialogEndpointIsOwnedByTheSharedHostProfile()
+    {
+        var calls = 0;
+        var bindings = new FreeWRibbonCommandBindingPorts();
+
+        FreeWRibbonHostExecutionProfile.Register(
+            bindings,
+            FreeWRibbonHostExecutionPorts.Empty with
+            {
+                OpenChangeCaseDialog = () => calls++,
+            },
+            registerFileAdapterCommands: false);
+
+        Command(bindings, FreeWRibbonCommandAction.ChangeCase)
+            .Execute(RibbonCommandContext.Empty);
 
         calls.Should().Be(1);
     }

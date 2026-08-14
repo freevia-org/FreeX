@@ -568,6 +568,22 @@ public sealed partial class MainWindow : Window
     private Task OpenFontDialogAsync() =>
         FontDialog.ShowAndApplyAsync(this, _editor);
 
+    private async Task OpenChangeCaseDialogAsync()
+    {
+        _editor.Focus();
+        if (_editor.SelectedText.Length == 0)
+        {
+            await FreeWInfoDialog.ShowAsync(this, UiText.Get("ChangeCase_SelectText_Message"));
+            return;
+        }
+
+        if (await ChangeCaseDialog.ShowAsync(this) is { } kind)
+        {
+            _editor.Focus();
+            _editor.ChangeSelectionCase(kind);
+        }
+    }
+
     /// <summary>
     /// Opens the Paragraph dialog (modal). Pre-populates from the current paragraph's formatting;
     /// on OK applies the changes via <see cref="DocumentView"/> paragraph methods.
@@ -1827,6 +1843,7 @@ public sealed partial class MainWindow : Window
             SetOutlineView: ToggleOutlineView,
             IsOutlineViewActive: () => _outlineMode,
             OpenFontDialog:      () => _ = OpenFontDialogAsync(),
+            OpenChangeCaseDialog: () => _ = OpenChangeCaseDialogAsync(),
             OpenParagraphDialog: () => _ = OpenParagraphDialogAsync(),
             OpenPageSetupDialog: () => _ = OpenPageSetupDialogAsync(),
             OpenCustomMarginsDialog: () => _ = OpenPageSetupDialogAsync(PageSetupDialogTab.Margins),

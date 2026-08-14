@@ -34,6 +34,7 @@ public static class FreeWRibbonHostExecutionProfile
         BindOrUnavailable(bindings, FreeWRibbonCommandAction.CharBorder, ports.OpenCharacterBorderDialog);
         BindOrUnavailable(bindings, FreeWRibbonCommandAction.CharShading, ports.OpenCharacterShadingDialog);
         bindings.BindAction(FreeWRibbonCommandAction.FontDialog, ports.OpenFontDialog);
+        BindOrUnavailable(bindings, FreeWRibbonCommandAction.ChangeCase, ports.OpenChangeCaseDialog);
         BindOrUnavailable(bindings, FreeWRibbonCommandAction.BordersShading, ports.OpenBordersAndShadingDialog);
         BindOrUnavailable(bindings, FreeWRibbonCommandAction.TabsDialog, ports.OpenTabsDialog);
         bindings.BindAction(FreeWRibbonCommandAction.ParagraphDialog, ports.OpenParagraphDialog);

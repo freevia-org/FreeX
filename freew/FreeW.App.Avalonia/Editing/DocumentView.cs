@@ -18852,10 +18852,16 @@ public sealed partial class DocumentView : Control
     }
 
     /// <summary>
-    /// Cycle the text case of the selection: lower → Title → UPPER → lower.
-    /// When there is no selection the whole current paragraph is cycled.
+    /// Apply one of Word's five Change Case operations to the selected body text.
+    /// A collapsed caret is deliberately a no-op, matching the WPF command.
     /// </summary>
-    public void ChangeCase() => ApplyRunFormattingToText(CycleCase);
+    public void ChangeSelectionCase(CaseKind kind)
+    {
+        if (NormalizedSelection() is null)
+            return;
+
+        ApplyRunFormattingToText(text => ChangeCase.Apply(text, kind));
+    }
 
     /// <summary>
     /// Increase the list indent level of the current paragraph by one (up to a reasonable cap).
@@ -22103,23 +22109,6 @@ public sealed partial class DocumentView : Control
 
     private static bool IsProofingWordChar(char ch) =>
         char.IsLetter(ch) || ch is '\'' or '-' or '\u2019';
-
-    private static string CycleCase(string text)
-    {
-        if (string.IsNullOrEmpty(text))
-            return text;
-
-        // Determine current state.
-        var isAllLower = text == text.ToLowerInvariant();
-        var isAllUpper = text == text.ToUpperInvariant();
-        var isTitle = !isAllUpper && text == System.Globalization.CultureInfo.CurrentCulture.TextInfo.ToTitleCase(text.ToLowerInvariant());
-
-        if (isAllLower)
-            return System.Globalization.CultureInfo.CurrentCulture.TextInfo.ToTitleCase(text);
-        if (isTitle)
-            return text.ToUpperInvariant();
-        return text.ToLowerInvariant();
-    }
 
     // Character border/shading has no native pending property and applies to every run in each
     // paragraph touched by the selection, matching the WPF authority behavior.

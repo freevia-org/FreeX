@@ -1126,16 +1126,16 @@ public sealed class CommandRegistryTests
 
         // SelectAll creates a cross-block selection: anchor=(0,0), caret=(1, end).
         view.SelectAll();
-        view.ChangeCase(); // was a no-op for multi-block; now should cycle case on both paragraphs
+        view.ChangeSelectionCase(CaseKind.Capitalize);
 
         var p0 = (Paragraph)view.Document.Blocks[0];
         var p1 = (Paragraph)view.Document.Blocks[1];
 
-        // CycleCase("hello") → all-lower → Title Case → "Hello"
-        p0.PlainText.Should().NotBe("hello",
-            "ChangeCase on a multi-block selection must transform the first paragraph");
-        p1.PlainText.Should().NotBe("world",
-            "ChangeCase on a multi-block selection must transform the last paragraph");
+        // The explicit shared choice is applied identically to every selected paragraph.
+        p0.PlainText.Should().Be("Hello",
+            "Change Case on a multi-block selection must transform the first paragraph");
+        p1.PlainText.Should().Be("World",
+            "Change Case on a multi-block selection must transform the last paragraph");
     }
 
     // ── Headless tests (need FormattedText backend) ───────────────────────────

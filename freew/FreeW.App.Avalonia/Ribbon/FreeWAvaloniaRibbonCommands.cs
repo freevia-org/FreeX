@@ -36,7 +36,7 @@ namespace FreeW.App.Avalonia.Ribbon;
 ///   <item><c>freew.clear-formatting</c> — reset run formatting to default</item>
 ///   <item><c>freew.font-color</c> — dropdown opener for the colour palette (no-op on click; colour is set by per-colour sub-commands)</item>
 ///   <item><c>freew.font-color.*</c> — per-colour sub-commands registered from <see cref="FreeWRibbonDefinitionData.FontColors"/></item>
-///   <item><c>freew.change-case</c> — cycle text case lower → Title → UPPER</item>
+///   <item><c>freew.change-case</c> — open the shared five-choice Change Case picker</item>
 ///   <item><c>freew.select-all</c> — select the whole document</item>
 ///   <item><c>freew.show-hide-para</c> — toggle paragraph mark display</item>
 ///   <item><c>freew.increase-indent</c> — increase list/indent level</item>
@@ -126,7 +126,6 @@ internal static class FreeWAvaloniaRibbonCommands
         r.Bind(FreeWRibbonCommandAction.FontColor, new ActionRibbonCommand(() => { /* flyout opener — no direct action */ }));
         RegisterFontColorPalette(r, editor);
 
-        r.Bind(FreeWRibbonCommandAction.ChangeCase,   new ActionRibbonCommand(editor.ChangeCase));
         // Dialog launchers — open modal dialogs via shell callbacks (no direct editor method).
 
         // ── Paragraph ────────────────────────────────────────────────────────

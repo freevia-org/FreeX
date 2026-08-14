@@ -1842,15 +1842,6 @@ internal static class FreeWRibbonCommands
     // selection — the user is told to select text first.
     private sealed class ChangeCaseCommand(DocumentView editor) : IRibbonCommand
     {
-        private static readonly (string Label, CaseKind Kind)[] Choices =
-        [
-            ("UPPERCASE", CaseKind.Upper),
-            ("lowercase", CaseKind.Lower),
-            ("Sentence case", CaseKind.Sentence),
-            ("Capitalize Each Word", CaseKind.Capitalize),
-            ("tOGGLE cASE", CaseKind.Toggle),
-        ];
-
         public void Execute(RibbonCommandContext context)
         {
             editor.Focus();
@@ -1873,7 +1864,7 @@ internal static class FreeWRibbonCommands
         private static CaseKind? ShowPicker(Window? owner)
         {
             CaseKind? result = null;
-            var window = new Window
+            var window = new ChangeCasePickerWindow
             {
                 Title = UiText.Get("Ribbon_Command_ChangeCase_Label"),
                 SizeToContent = SizeToContent.WidthAndHeight,
@@ -1886,22 +1877,26 @@ internal static class FreeWRibbonCommands
             };
 
             var panel = new StackPanel { Margin = new Thickness(8), Width = 200 };
-            foreach (var (label, kind) in Choices)
+            foreach (var choice in ChangeCaseDialogPlanner.Choices)
             {
                 var button = new Button
                 {
-                    Content = label,
+                    Content = choice.Label,
                     Margin = new Thickness(0, 2, 0, 2),
                     Padding = new Thickness(8, 4, 8, 4),
                     HorizontalContentAlignment = HorizontalAlignment.Left
                 };
-                button.Click += (_, _) => { result = kind; window.Close(); };
+                button.Click += (_, _) => { result = choice.Kind; window.Close(); };
                 panel.Children.Add(button);
             }
 
             window.Content = panel;
             window.ShowDialog();
             return result;
+        }
+
+        private sealed class ChangeCasePickerWindow : Free.Shared.Ribbon.Wpf.DialogWindow
+        {
         }
     }
 
