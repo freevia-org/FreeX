@@ -72,7 +72,6 @@ public sealed class AvaloniaSemanticLocalizationConvergenceTests
         new Dictionary<(string File, string Literal), int>
         {
             [("FreeX.App.Avalonia/MainWindow.FillSeries.cs", "1")] = 1,
-            [("FreeX.App.Avalonia/MainWindow.Print.cs", "1")] = 3,
             [("FreeX.App.Host/PrintPreviewDialog.Layout.cs", "1")] = 3,
         };
 
