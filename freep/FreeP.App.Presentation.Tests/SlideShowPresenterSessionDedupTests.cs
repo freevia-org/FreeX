@@ -506,6 +506,9 @@ public sealed class SlideShowPresenterSessionDedupTests
             source.Should().Contain("new SlideShowPresenterViewHostCoordinator(operations)");
             source.Should().NotContain("Func<SlideShowPresenterState> stateProvider");
             source.Should().Contain("_coordinator.Refresh(new SlideShowPresenterViewHostRefreshInput(");
+            source.Should().Contain("_notesText.IsKeyboardFocusWithin");
+            source.Should().Contain("_slideNumberBox.IsKeyboardFocusWithin");
+            source.Should().Contain("WindowStartupLocation = WindowStartupLocation.CenterOwner");
             source.Should().Contain("_coordinator.Surface");
             source.Should().Contain("_coordinator.ExecuteAction(");
             source.Should().Contain("_coordinator.Surface.FormatElapsed(");
@@ -557,6 +560,12 @@ public sealed class SlideShowPresenterSessionDedupTests
                 source.Should().NotContain(sharedLiteral);
             }
         }
+
+        presenterFiles[0].Should().Contain(
+            "VerticalScrollBarVisibility = ScrollBarVisibility.Auto");
+        presenterFiles[1].Should().Contain(
+            "ScrollViewer.VerticalScrollBarVisibilityProperty");
+        presenterFiles[1].Should().Contain("ScrollBarVisibility.Auto");
 
         foreach (var source in slideShowFiles)
         {

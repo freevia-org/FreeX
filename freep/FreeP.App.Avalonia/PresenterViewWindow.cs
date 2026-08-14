@@ -51,7 +51,7 @@ public sealed class PresenterViewWindow : Window
         Height = PresentationPresenterViewVisualMetrics.WindowHeight;
         MinWidth = PresentationPresenterViewVisualMetrics.WindowMinimumWidth;
         MinHeight = PresentationPresenterViewVisualMetrics.WindowMinimumHeight;
-        WindowStartupLocation = WindowStartupLocation.CenterScreen;
+        WindowStartupLocation = WindowStartupLocation.CenterOwner;
         Background = FreePBrushes.PresenterSurface;
 
         var root = new Grid
@@ -270,6 +270,9 @@ public sealed class PresenterViewWindow : Window
             BorderBrush = FreePBrushes.PresenterBorder,
             Padding = new Thickness(PresentationPresenterViewVisualMetrics.NotesPadding),
         };
+        _notesText.SetValue(
+            ScrollViewer.VerticalScrollBarVisibilityProperty,
+            global::Avalonia.Controls.Primitives.ScrollBarVisibility.Auto);
         ApplySemantic(_notesText, surface.Field(SlideShowPresenterViewField.SpeakerNotes));
         _notesText.TextChanged += (_, _) =>
         {
@@ -312,9 +315,9 @@ public sealed class PresenterViewWindow : Window
     public void RefreshFromState()
     {
         _coordinator.Refresh(new SlideShowPresenterViewHostRefreshInput(
-            _notesText.IsFocused,
+            _notesText.IsKeyboardFocusWithin,
             _notesText.Text,
-            _slideNumberBox.IsFocused), ApplyRefreshPlan);
+            _slideNumberBox.IsKeyboardFocusWithin), ApplyRefreshPlan);
     }
 
     private void ApplyRefreshPlan(SlideShowPresenterViewRefreshPlan refresh)
