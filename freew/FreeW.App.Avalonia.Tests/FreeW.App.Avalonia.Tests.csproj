@@ -40,4 +40,13 @@
              Link="TestSupport\AvaloniaActionLabelInspector.cs" />
   </ItemGroup>
 
+  <Target Name="BuildFreeWNormalShippingAssembly"
+          BeforeTargets="VSTest"
+          Condition="'$(DesignTimeBuild)' != 'true'">
+    <MSBuild Projects="..\FreeW.App.Avalonia\FreeW.App.Avalonia.csproj"
+             Targets="Build"
+             Properties="Configuration=$(Configuration);FreeWHostTestSupport=false;FreeWValidationHost=false;FreeWDialogHarnessSupport=false"
+             BuildInParallel="false" />
+  </Target>
+
 </Project>

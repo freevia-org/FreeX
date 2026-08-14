@@ -16,7 +16,7 @@ public sealed class EquationVisualPlannerSourceGuardTests
         source.Should().Contain("EquationElement: element");
         source.Should().Contain("MeasureEquationVisualElement");
         source.Should().Contain("DrawEquationVisualElement");
-        source.Should().Contain("EquationVisualElements");
+        source.Should().Contain("_equationVisualElements");
         source.Should().Contain("LowerLimit");
         source.Should().Contain("UpperLimit");
         source.Should().Contain("MatrixRows");

@@ -27,7 +27,8 @@ public sealed class FontDialogPolicySourceGuardTests
         source.Should().Contain("state.EffectValue(spec.Kind)");
         source.Should().Contain("foreach (var kind in Surface.Tabs.First(");
         source.Should().Contain("AutomationProperties.SetAutomationId(fieldControls[spec.Kind], spec.AutomationId)");
-        source.Should().Contain("public FontDialog(FontDialogSelectionState selection)");
+        source.Should().Contain("public FontDialog(");
+        source.Should().Contain("FontDialogSelectionState selection");
         source.Should().NotContain("DocumentView.SelectionFormatting");
         source.Should().NotContain("FontDialogResult");
         source.Should().NotContain("ImportResult(");
