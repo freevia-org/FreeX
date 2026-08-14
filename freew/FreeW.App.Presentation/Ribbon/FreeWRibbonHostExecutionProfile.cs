@@ -68,10 +68,13 @@ public static class FreeWRibbonHostExecutionProfile
         BindOrUnavailable(bindings, FreeWRibbonCommandAction.HyphenationManual, ports.OpenManualHyphenationDialog);
         BindOrUnavailable(bindings, FreeWRibbonCommandAction.HyphenationOptions, ports.OpenHyphenationOptionsDialog);
 
-        BindOrUnavailable(bindings, FreeWRibbonCommandAction.PreviousChange, ports.PreviousChange);
-        BindOrUnavailable(bindings, FreeWRibbonCommandAction.NextChange, ports.NextChange);
-        BindOrUnavailable(bindings, FreeWRibbonCommandAction.AcceptThis, ports.AcceptThisChange);
-        BindOrUnavailable(bindings, FreeWRibbonCommandAction.RejectThis, ports.RejectThisChange);
+        ReviewChangeRibbonWorkflow.Register(
+            bindings,
+            new ReviewChangeRibbonPorts(
+                ports.PreviousChange,
+                ports.NextChange,
+                ports.AcceptThisChange,
+                ports.RejectThisChange));
         var statistics = new ActionRibbonCommand(ports.OpenWordCountDialog);
         bindings.Bind(FreeWRibbonCommandAction.Statistics, statistics);
         bindings.Register("freew.word-count", statistics);

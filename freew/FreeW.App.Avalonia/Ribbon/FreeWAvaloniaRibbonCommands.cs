@@ -404,16 +404,6 @@ internal static class FreeWAvaloniaRibbonCommands
                 AcceptAllRevisions: () => editor.AcceptAllRevisions(),
                 RejectAllRevisions: () => editor.RejectAllRevisions()));
         r.Bind(FreeWRibbonCommandAction.ShowMarkupBalloons, new ShowMarkupBalloonsCommand(editor, callbacks));
-        // Accept / reject the revision selected in the Reviewing Pane, matching WPF's selected-row
-        // authority. Test-only or detached registries retain the caret-relative fallback.
-        var acceptCurrentRevisionCommand = new ActionRibbonCommand(
-            callbacks.AcceptThisChange ?? (() => editor.AcceptCurrentRevision()));
-        var rejectCurrentRevisionCommand = new ActionRibbonCommand(
-            callbacks.RejectThisChange ?? (() => editor.RejectCurrentRevision()));
-        r.Bind(FreeWRibbonCommandAction.AcceptThis, acceptCurrentRevisionCommand);
-        r.Register("freew.accept-change", acceptCurrentRevisionCommand);
-        r.Bind(FreeWRibbonCommandAction.RejectThis, rejectCurrentRevisionCommand);
-        r.Register("freew.reject-change", rejectCurrentRevisionCommand);
         // Comments — thread navigation/actions over the shared comment model.
         ReviewCommentRibbonWorkflow.Register(
             r,
