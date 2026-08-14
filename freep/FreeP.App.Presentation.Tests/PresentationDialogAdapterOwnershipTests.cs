@@ -42,6 +42,11 @@ public sealed class PresentationDialogAdapterOwnershipTests
         adapterSource.Should().Contain("CaptureValue(Control control)");
         adapterSource.Should().Contain("ApplyValue(Control control, PresentationDialogFieldValue value)");
         adapterSource.Should().Contain("ApplySemantic<TField>(");
+        adapterSource.Should().Contain("PresentationDialogNativeBinding<Control, TextBox, ComboBox, CheckBox>");
+        adapterSource.Should().Contain("NativeBinding.CaptureValue(control)");
+        adapterSource.Should().Contain("NativeBinding.ApplyValue(control, value)");
+        adapterSource.Should().NotContain("control switch");
+        adapterSource.Should().NotContain("switch (control)");
 
         foreach (var fileName in DialogFiles)
         {
