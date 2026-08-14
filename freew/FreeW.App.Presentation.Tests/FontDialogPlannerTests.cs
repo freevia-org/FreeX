@@ -565,11 +565,21 @@ public sealed class FontDialogPlannerTests
     public void BuildSelectionState_OwnsMixedFormattingPolicy()
     {
         var current = RunFormatting.Default with { FontFamily = "Aptos", FontSizePt = 11 };
-        var first = current with { Bold = true, Hidden = false };
+        var first = current with
+        {
+            Bold = true,
+            Hidden = false,
+            SmallCaps = true,
+            AllCaps = true,
+            VerticalAlign = VerticalAlign.Superscript,
+        };
         var second = first with
         {
             Bold = false,
             Hidden = true,
+            SmallCaps = false,
+            AllCaps = false,
+            VerticalAlign = VerticalAlign.Subscript,
             FontFamily = "Cambria",
             FontSizePt = 12,
         };
@@ -581,6 +591,10 @@ public sealed class FontDialogPlannerTests
         state.HiddenIndeterminate.Should().BeTrue();
         state.FamilyIndeterminate.Should().BeTrue();
         state.SizeIndeterminate.Should().BeTrue();
+        state.SmallCapsIndeterminate.Should().BeTrue();
+        state.AllCapsIndeterminate.Should().BeTrue();
+        state.SuperscriptIndeterminate.Should().BeTrue();
+        state.SubscriptIndeterminate.Should().BeTrue();
         state.ItalicIndeterminate.Should().BeFalse();
     }
 

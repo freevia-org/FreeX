@@ -191,7 +191,11 @@ public sealed record FontDialogSelectionState(
     bool FamilyIndeterminate = false,
     bool SizeIndeterminate = false,
     bool DoubleStrikethroughIndeterminate = false,
-    bool HiddenIndeterminate = false);
+    bool HiddenIndeterminate = false,
+    bool SmallCapsIndeterminate = false,
+    bool AllCapsIndeterminate = false,
+    bool SuperscriptIndeterminate = false,
+    bool SubscriptIndeterminate = false);
 
 public sealed record FontDialogControlState(
     string? FontFamilyText,
@@ -670,7 +674,15 @@ public static class FontDialogPlanner
             FamilyIndeterminate: selected.Skip(1).Any(formatting => formatting.FontFamily != first.FontFamily),
             SizeIndeterminate: selected.Skip(1).Any(formatting => formatting.FontSizePt != first.FontSizePt),
             DoubleStrikethroughIndeterminate: selected.Skip(1).Any(formatting => formatting.DoubleStrikethrough != first.DoubleStrikethrough),
-            HiddenIndeterminate: selected.Skip(1).Any(formatting => formatting.Hidden != first.Hidden));
+            HiddenIndeterminate: selected.Skip(1).Any(formatting => formatting.Hidden != first.Hidden),
+            SmallCapsIndeterminate: selected.Skip(1).Any(formatting => formatting.SmallCaps != first.SmallCaps),
+            AllCapsIndeterminate: selected.Skip(1).Any(formatting => formatting.AllCaps != first.AllCaps),
+            SuperscriptIndeterminate: selected.Skip(1).Any(formatting =>
+                (formatting.VerticalAlign == VerticalAlign.Superscript) !=
+                (first.VerticalAlign == VerticalAlign.Superscript)),
+            SubscriptIndeterminate: selected.Skip(1).Any(formatting =>
+                (formatting.VerticalAlign == VerticalAlign.Subscript) !=
+                (first.VerticalAlign == VerticalAlign.Subscript)));
     }
 
     public static FontDialogControlState CaptureControlState(

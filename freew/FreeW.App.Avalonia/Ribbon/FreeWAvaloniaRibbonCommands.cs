@@ -1262,18 +1262,28 @@ internal static class FreeWAvaloniaRibbonCommands
                 crop.Bottom),
             ResetImage: editor.ResetSelectedImage);
 
-    private static FontEffectRibbonPorts CreateFontEffectPorts(DocumentView editor) =>
-        new(
-            Bold: new ActionRibbonCommand(editor.ToggleBold),
-            Italic: new ActionRibbonCommand(editor.ToggleItalic),
-            Underline: new ActionRibbonCommand(editor.ToggleUnderline),
-            Strikethrough: new ActionRibbonCommand(editor.ToggleStrikethrough),
-            SmallCaps: new ActionRibbonCommand(editor.ToggleSmallCaps),
-            AllCaps: new ActionRibbonCommand(editor.ToggleAllCaps),
-            Superscript: new ActionRibbonCommand(editor.ToggleSuperscript),
-            Subscript: new ActionRibbonCommand(editor.ToggleSubscript),
+    private static FontEffectRibbonPorts CreateFontEffectPorts(DocumentView editor)
+    {
+        IRibbonStatefulCommand Toggle(FontEffectRibbonKind kind, Action execute) =>
+            FontEffectRibbonStatePlanner.CreateCommand(
+                kind,
+                execute,
+                editor.GetSelectionFormatting,
+                isEnabled: () => !editor.IsEditingLocked,
+                prepareExecution: () => editor.Focus());
+
+        return new FontEffectRibbonPorts(
+            Bold: Toggle(FontEffectRibbonKind.Bold, editor.ToggleBold),
+            Italic: Toggle(FontEffectRibbonKind.Italic, editor.ToggleItalic),
+            Underline: Toggle(FontEffectRibbonKind.Underline, editor.ToggleUnderline),
+            Strikethrough: Toggle(FontEffectRibbonKind.Strikethrough, editor.ToggleStrikethrough),
+            SmallCaps: Toggle(FontEffectRibbonKind.SmallCaps, editor.ToggleSmallCaps),
+            AllCaps: Toggle(FontEffectRibbonKind.AllCaps, editor.ToggleAllCaps),
+            Superscript: Toggle(FontEffectRibbonKind.Superscript, editor.ToggleSuperscript),
+            Subscript: Toggle(FontEffectRibbonKind.Subscript, editor.ToggleSubscript),
             GrowFont: new ActionRibbonCommand(editor.GrowFont),
             ShrinkFont: new ActionRibbonCommand(editor.ShrinkFont));
+    }
 
     private static ParagraphEditingRibbonPorts CreateParagraphEditingPorts(
         DocumentView editor,
