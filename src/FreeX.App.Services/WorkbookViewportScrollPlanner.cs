@@ -85,17 +85,54 @@ public static class WorkbookViewportScrollPlanner
         return notches != 0 ? notches : Math.Sign(delta);
     }
 
+    /// <summary>
+    /// Counts the genuinely on-screen scrollable rows in <paramref name="viewport"/>, floored at 1.
+    /// Single neutral owner for what both renderers previously kept as private
+    /// <c>CountScrollableRows</c> copies (WPF MainWindow.Viewport.cs, Avalonia MainWindow.cs).
+    ///
+    /// Takes an explicit frozen-row count -- THIS window's effective Freeze Panes state
+    /// (R89-freeze-split-per-window-1) -- rather than a Sheet, so callers pass
+    /// viewState.FrozenRows instead of ever falling back to the shared Sheet.FrozenRows.
+    ///
+    /// Delegates to the guarded FreeX.Core.Calc.ViewportService.CountScrollableRows (R110), which
+    /// excludes the zero-height RowMetric placeholders PrependScrolledPastMergeAnchorRows inserts
+    /// for a merge anchor that has scrolled above the window. A naive `row.Row > frozenRows` count
+    /// counted those placeholders too, inflating both the scrollbar's ViewportSize/LargeChange and
+    /// the Page Up/Down jump distance by one row per placeholder whenever the viewport had
+    /// scrolled into a tall merge -- real Excel's Page Up/Down always jumps by exactly one
+    /// screenful of genuinely on-screen rows.
+    /// </summary>
+    public static int CountVisibleScrollableRows(ViewportModel viewport, uint frozenRows)
+    {
+        ArgumentNullException.ThrowIfNull(viewport);
+        return Math.Max(1, ViewportService.CountScrollableRows(viewport.RowMetrics, frozenRows));
+    }
+
+    /// <summary>Column counterpart of <see cref="CountVisibleScrollableRows(ViewportModel, uint)"/>.</summary>
+    public static int CountVisibleScrollableColumns(ViewportModel viewport, uint frozenColumns)
+    {
+        ArgumentNullException.ThrowIfNull(viewport);
+        return Math.Max(1, ViewportService.CountScrollableColumns(viewport.ColMetrics, frozenColumns));
+    }
+
+    /// <summary>
+    /// Sheet-resolved convenience overload for callers whose Freeze Panes state is not per-window
+    /// (the Avalonia host). A null sheet resolves to zero frozen rows.
+    /// </summary>
+    public static int CountVisibleScrollableRows(ViewportModel viewport, Sheet? sheet) =>
+        CountVisibleScrollableRows(viewport, sheet?.FrozenRows ?? 0);
+
+    /// <summary>Column counterpart of <see cref="CountVisibleScrollableRows(ViewportModel, Sheet?)"/>.</summary>
+    public static int CountVisibleScrollableColumns(ViewportModel viewport, Sheet? sheet) =>
+        CountVisibleScrollableColumns(viewport, sheet?.FrozenCols ?? 0);
+
     public static WorkbookViewportScrollState Create(Sheet sheet, ViewportModel viewport)
     {
         ArgumentNullException.ThrowIfNull(sheet);
         ArgumentNullException.ThrowIfNull(viewport);
 
-        var visibleRows = (uint)Math.Max(
-            1,
-            ViewportService.CountScrollableRows(viewport.RowMetrics, sheet.FrozenRows));
-        var visibleColumns = (uint)Math.Max(
-            1,
-            ViewportService.CountScrollableColumns(viewport.ColMetrics, sheet.FrozenCols));
+        var visibleRows = (uint)CountVisibleScrollableRows(viewport, sheet.FrozenRows);
+        var visibleColumns = (uint)CountVisibleScrollableColumns(viewport, sheet.FrozenCols);
         var (usedMaxRow, usedMaxCol) = CalculateUsedRangeExtents(sheet);
         return new WorkbookViewportScrollState(
             CreateAxis(
@@ -548,6 +585,23 @@ public static class WorkbookViewportScrollPlanner
             SmallChange: 1,
             LargeChange: largeChange,
             IsEnabled: maximum > MinimumScrollValue);
+    }
+
+    /// <summary>
+    /// The sheet's current scrollable row origin: its persisted <see cref="Sheet.ViewTopRow"/>, or
+    /// the first row past the frozen pane when the sheet has never been scrolled.
+    /// </summary>
+    public static uint GetViewportRowOrigin(Sheet sheet)
+    {
+        ArgumentNullException.ThrowIfNull(sheet);
+        return sheet.ViewTopRow ?? GetScrollableRowStart(sheet);
+    }
+
+    /// <summary>Column counterpart of <see cref="GetViewportRowOrigin"/>.</summary>
+    public static uint GetViewportColumnOrigin(Sheet sheet)
+    {
+        ArgumentNullException.ThrowIfNull(sheet);
+        return sheet.ViewLeftCol ?? GetScrollableColumnStart(sheet);
     }
 
     private static uint GetScrollableRowStart(Sheet sheet) =>

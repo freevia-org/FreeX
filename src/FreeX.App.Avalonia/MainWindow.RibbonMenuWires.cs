@@ -206,7 +206,7 @@ public sealed partial class MainWindow
     private void ShiftScrollOriginForRowEdit(uint editRow, int rowDelta)
     {
         var sheet = _session.ActiveSheet;
-        var currentTopRow = sheet.ViewTopRow ?? Math.Max(1, sheet.FrozenRows + 1);
+        var currentTopRow = WorkbookViewportScrollPlanner.GetViewportRowOrigin(sheet);
         var newTopRow = WorkbookViewportScrollPlanner.PlanStructuralEditOriginShift(
             currentTopRow,
             editRow,
@@ -222,7 +222,7 @@ public sealed partial class MainWindow
     private void ShiftScrollOriginForColEdit(uint editCol, int colDelta)
     {
         var sheet = _session.ActiveSheet;
-        var currentLeftCol = sheet.ViewLeftCol ?? Math.Max(1, sheet.FrozenCols + 1);
+        var currentLeftCol = WorkbookViewportScrollPlanner.GetViewportColumnOrigin(sheet);
         var newLeftCol = WorkbookViewportScrollPlanner.PlanStructuralEditOriginShift(
             currentLeftCol,
             editCol,

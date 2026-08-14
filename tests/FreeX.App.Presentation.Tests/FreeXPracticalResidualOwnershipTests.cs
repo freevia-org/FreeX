@@ -12,10 +12,20 @@ public sealed class FreeXPracticalResidualOwnershipTests
         var findPlanner = Read("src", "FreeX.App.Services", "FindReplaceDialogPlanner.cs");
         var wpfFind = Read("src", "FreeX.App.Host", "FindReplaceDialog.xaml.cs");
 
-        avalonia.Should().Contain("ViewportService.CountScrollableRows(viewport.RowMetrics");
-        avalonia.Should().Contain("ViewportService.CountScrollableColumns(viewport.ColMetrics");
+        // The scrollable row/column count now has a single neutral owner
+        // (WorkbookViewportScrollPlanner.CountVisibleScrollableRows/Columns); neither renderer may
+        // keep its own private copy of the Math.Max(1, ViewportService...) wrapper.
         viewportPlanner.Should().Contain("ViewportService.CountScrollableRows(viewport.RowMetrics");
         viewportPlanner.Should().Contain("ViewportService.CountScrollableColumns(viewport.ColMetrics");
+        avalonia.Should().Contain("WorkbookViewportScrollPlanner.CountVisibleScrollableRows(");
+        avalonia.Should().Contain("WorkbookViewportScrollPlanner.CountVisibleScrollableColumns(");
+        avalonia.Should().NotContain("ViewportService.CountScrollableRows(");
+        avalonia.Should().NotContain("ViewportService.CountScrollableColumns(");
+        var wpfViewport = Read("src", "FreeX.App.Host", "MainWindow.Viewport.cs");
+        wpfViewport.Should().Contain("WorkbookViewportScrollPlanner.CountVisibleScrollableRows(");
+        wpfViewport.Should().Contain("WorkbookViewportScrollPlanner.CountVisibleScrollableColumns(");
+        wpfViewport.Should().NotContain("ViewportService.CountScrollableRows(");
+        wpfViewport.Should().NotContain("ViewportService.CountScrollableColumns(");
         findPlanner.Should().Contain("public static IReadOnlyList<GridRange>? ResolveSelectionScopeAtOpen");
         avalonia.Should().Contain("FindReplaceDialogPlanner.ResolveSelectionScopeAtOpen(");
         wpfFind.Should().Contain("FindReplaceDialogPlanner.ResolveSelectionScopeAtOpen(");
