@@ -19643,32 +19643,44 @@ public sealed partial class DocumentView : Control
 
     private bool MoveToAdjacentNote(bool footnote, bool previous)
     {
-        var positions = new List<DocPosition>();
-        for (var block = 0; block < _doc.Blocks.Count; block++)
-        {
-            if (_doc.Blocks[block] is not Paragraph paragraph)
-                continue;
-            var offset = 0;
-            foreach (var run in paragraph.Runs)
-            {
-                if (footnote ? run.FootnoteId.HasValue : run.EndnoteId.HasValue)
-                    positions.Add(new DocPosition(block, offset));
-                offset += run.Text.Length;
-            }
-        }
+        var positions = DocumentNoteNavigationPlanner.FindMarkers(_doc, footnote);
 
         if (positions.Count == 0)
             return false;
 
-        DocumentNoteNavigationPlanner.TryFindAdjacent(
+        var caret = _cellCaret is { } cellCaret
+            ? DocumentNoteMarkerPosition.TableCell(
+                cellCaret.TableBlock,
+                cellCaret.Row,
+                cellCaret.Col,
+                cellCaret.ParaIdx,
+                cellCaret.Offset)
+            : DocumentNoteMarkerPosition.Body(_caret.Block, _caret.Offset);
+        if (!DocumentNoteNavigationPlanner.TryFindAdjacent(
             positions,
-            position => Compare(position, _caret),
+            position => DocumentNoteNavigationPlanner.CompareDocumentOrder(position, caret),
             previous,
-            out var destination);
+            out var destination))
+        {
+            return false;
+        }
+
+        if (destination.IsTableCell)
+        {
+            PlaceCaretInCell(
+                destination.BlockIndex,
+                destination.TableRowIndex!.Value,
+                destination.TableGridColumnIndex!.Value,
+                destination.TableParagraphIndex,
+                destination.ParagraphOffset);
+            ScrollToCaretRequested?.Invoke();
+            Focus();
+            return true;
+        }
 
         _cellCaret = null;
         _hfCaret = null;
-        _caret = destination;
+        _caret = new DocPosition(destination.BlockIndex, destination.ParagraphOffset);
         _selectionAnchor = _caret;
         InvalidateVisual();
         CaretMoved?.Invoke();
