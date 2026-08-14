@@ -1,4 +1,5 @@
 using FluentAssertions;
+using Free.Shared.AppServices;
 using FreeX.Core.Commands;
 using FreeX.Core.Model;
 
@@ -6,6 +7,42 @@ namespace FreeX.App.Services.Tests;
 
 public sealed class FindReplaceDialogPlannerOptionsTests
 {
+    [Theory]
+    [InlineData(false, FindReplaceOpenMode.Find)]
+    [InlineData(true, FindReplaceOpenMode.Replace)]
+    public void OpenModeFor_RoutesTheHostReplaceFlagThroughTheSharedPolicy(
+        bool replaceMode,
+        FindReplaceOpenMode expected)
+    {
+        FindReplaceDialogPlanner.OpenModeFor(replaceMode).Should().Be(expected);
+        FindReplaceDialogPlanner.OpenModeFor(replaceMode)
+            .Should()
+            .Be(FindReplaceDialogPolicy.OpenModeFor(replaceMode));
+    }
+
+    [Theory]
+    [InlineData(FindReplaceOpenMode.Find, false)]
+    [InlineData(FindReplaceOpenMode.Replace, true)]
+    public void ShowsReplaceCommands_OffersReplaceButtonsOnlyOnTheReplaceTab(
+        FindReplaceOpenMode mode,
+        bool expected)
+    {
+        FindReplaceDialogPlanner.ShowsReplaceCommands(mode).Should().Be(expected);
+        FindReplaceDialogPlanner.ShowsReplaceCommands(mode)
+            .Should()
+            .Be(FindReplaceDialogPolicy.ShowsReplaceSurface(mode));
+    }
+
+    [Theory]
+    [InlineData(false, false)]
+    [InlineData(true, true)]
+    public void ShowsReplaceCommands_BooleanOverloadMatchesTheModeOverload(
+        bool replaceMode,
+        bool expected)
+    {
+        FindReplaceDialogPlanner.ShowsReplaceCommands(replaceMode).Should().Be(expected);
+    }
+
     [Fact]
     public void CreateFindOptions_MapsControlIndicesAndCarriesSearchConstraints()
     {
