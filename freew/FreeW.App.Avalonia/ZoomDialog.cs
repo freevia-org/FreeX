@@ -3,6 +3,7 @@ using Avalonia.Automation;
 using Avalonia.Controls;
 using Avalonia.Layout;
 using Avalonia.Media;
+using Free.Shared.AppServices;
 using Free.Shared.Shell.Avalonia;
 using FreeW.App.Presentation.Dialogs;
 
@@ -144,7 +145,7 @@ internal sealed class ZoomDialog : FreeWDialogWindow
         throw new InvalidOperationException(ZoomDialogPlanner.ValidationMessageFor(error));
     }
 
-    internal bool TryResolveScale(out double scale, out ZoomDialogValidationError? error) =>
+    internal bool TryResolveScale(out double scale, out ZoomPercentInputError? error) =>
         TryResolveScale(_session.PlanAcceptance(_fitFactors), out scale, out error);
 
     private void Accept()
@@ -167,7 +168,7 @@ internal sealed class ZoomDialog : FreeWDialogWindow
     private static bool TryResolveScale(
         ZoomDialogAcceptance acceptance,
         out double scale,
-        out ZoomDialogValidationError? error)
+        out ZoomPercentInputError? error)
     {
         scale = acceptance.Result ?? default;
         error = acceptance.Validation?.Error;

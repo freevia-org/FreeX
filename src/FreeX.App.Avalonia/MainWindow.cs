@@ -12616,7 +12616,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             var zoom = ZoomDialogPlanner.Presets[index];
             var button = new RadioButton
             {
-                Content = $"{zoom}%",
+                Content = ZoomDialogPlanner.FormatPresetLabel(zoom),
                 GroupName = "ZoomDialogOptions",
                 IsChecked = currentZoom == zoom,
                 Margin = new Thickness(0, 0, 0, index < ZoomDialogPlanner.Presets.Count - 1

@@ -26,6 +26,9 @@ public static class ZoomDialogPlanner
     public static bool IsPreset(int zoomPercent) =>
         ZoomLevelMapper.IsPresetZoomPercent(zoomPercent, PresetValues);
 
+    public static string FormatPresetLabel(int zoomPercent) =>
+        ZoomLevelMapper.FormatWholeZoomPercentLabel(zoomPercent);
+
     public static ZoomDialogSelection CreateFitSelectionResult(int currentZoomPercent) =>
         new(currentZoomPercent, FitSelection: true);
 
@@ -37,23 +40,26 @@ public static class ZoomDialogPlanner
         result = new ZoomDialogSelection((int)ZoomLevelMapper.DefaultZoomPercent);
         error = null;
 
-        if (!ZoomLevelMapper.TryParseZoomPercent(input, out var zoomPercent))
+        if (!ZoomLevelMapper.TryResolveWholeZoomPercent(input, out var roundedPercent, out var inputError))
         {
-            error = new ZoomDialogValidationError(
-                "Zoom_MustBeBetween10And400",
-                "Zoom must be between 10% and 400%.");
-            return false;
-        }
-
-        if (!ZoomLevelMapper.TryNormalizeWholeZoomPercent(zoomPercent, out var roundedPercent))
-        {
-            error = new ZoomDialogValidationError(
-                "Zoom_MustBeWholePercentBetween10And400",
-                "Zoom must be a whole percent between 10% and 400%.");
+            error = MessageFor(inputError);
             return false;
         }
 
         result = new ZoomDialogSelection(roundedPercent);
         return true;
     }
+
+    /// <summary>
+    /// Projects the shared <see cref="ZoomPercentInputError"/> taxonomy onto Excel's two Zoom-dialog
+    /// messages: everything that is not "in range but fractional" reads as the range message.
+    /// </summary>
+    private static ZoomDialogValidationError MessageFor(ZoomPercentInputError error) =>
+        error == ZoomPercentInputError.NotWholePercent
+            ? new ZoomDialogValidationError(
+                "Zoom_MustBeWholePercentBetween10And400",
+                "Zoom must be a whole percent between 10% and 400%.")
+            : new ZoomDialogValidationError(
+                "Zoom_MustBeBetween10And400",
+                "Zoom must be between 10% and 400%.");
 }

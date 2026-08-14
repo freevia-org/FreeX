@@ -14,7 +14,7 @@ public sealed record ZoomDialogControlState(
 }
 
 public sealed record ZoomDialogValidation(
-    ZoomDialogValidationError Error,
+    ZoomPercentInputError Error,
     string Message,
     ZoomDialogFocusTarget FocusTarget);
 
@@ -90,7 +90,7 @@ public sealed class ZoomDialogSession
             return new ZoomDialogAcceptance(result, Validation: null, ControlState);
 
         SelectCustom();
-        var validationError = error ?? ZoomDialogValidationError.WholePercentRequired;
+        var validationError = error ?? ZoomPercentInputError.NotWholePercent;
         return new ZoomDialogAcceptance(
             Result: null,
             new ZoomDialogValidation(
