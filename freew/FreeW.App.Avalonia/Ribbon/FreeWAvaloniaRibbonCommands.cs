@@ -246,12 +246,7 @@ internal static class FreeWAvaloniaRibbonCommands
 
         // ── Table Design contextual tab ───────────────────────────────────────
         // Table Style Options toggles — DocumentView guards no-op when outside a table.
-        tableCommands.Bind(FreeWRibbonCommandAction.TableHeaderRow,  new ActionRibbonCommand(editor.ToggleTableHeaderRow));
-        tableCommands.Bind(FreeWRibbonCommandAction.TableBandedRows, new ActionRibbonCommand(editor.ToggleBandedRows));
-        tableCommands.Bind(FreeWRibbonCommandAction.TableLastRow, new ActionRibbonCommand(editor.ToggleTableLastRow));
-        tableCommands.Bind(FreeWRibbonCommandAction.TableFirstColumn, new ActionRibbonCommand(editor.ToggleTableFirstColumn));
-        tableCommands.Bind(FreeWRibbonCommandAction.TableLastColumn, new ActionRibbonCommand(editor.ToggleTableLastColumn));
-        tableCommands.Bind(FreeWRibbonCommandAction.TableBandedCols, new ActionRibbonCommand(editor.ToggleTableBandedColumns));
+        TableEditingRibbonWorkflow.Register(tableCommands, CreateTableEditingPorts(editor));
 
         // Table shading: open the WPF-parity palette; the shell applies the chosen result only after
         // the user accepts a swatch or No Color. Closing the picker is a no-op.
@@ -270,78 +265,14 @@ internal static class FreeWAvaloniaRibbonCommands
         tableCommands.Bind(FreeWRibbonCommandAction.Eraser, new ActionRibbonCommand(editor.EraseTableBorderAtCaret));
 
         // ── Table Layout contextual tab ───────────────────────────────────────
-        // Selection helpers.
-        tableCommands.Bind(FreeWRibbonCommandAction.TableViewGridlines, new ActionRibbonCommand(() =>
-        {
-            editor.ViewTableGridlines = !editor.ViewTableGridlines;
-        }));
-        tableCommands.Bind(FreeWRibbonCommandAction.TableSelectTable, new ActionRibbonCommand(() =>
-        {
-            if (editor.CellCaretInfo is { } cc)
-            {
-                // BY1: clamp to actual table bounds — passing int.MaxValue triggers an overflow
-                // loop in ExpandForMergedCells (r++ overflows int.MaxValue → infinite loop).
-                var (lastRow, lastGridCol) = editor.GetTableBounds(cc.TableBlock);
-                editor.SetCellBlockSelection(cc.TableBlock, 0, 0, lastRow, lastGridCol);
-            }
-        }));
-        tableCommands.Bind(FreeWRibbonCommandAction.TableSelectRow, new ActionRibbonCommand(() =>
-        {
-            if (editor.CellCaretInfo is { } cc)
-            {
-                var (_, lastGridCol) = editor.GetTableBounds(cc.TableBlock);
-                editor.SetCellBlockSelection(cc.TableBlock, cc.Row, 0, cc.Row, lastGridCol);
-            }
-        }));
-        tableCommands.Bind(FreeWRibbonCommandAction.TableSelectCol, new ActionRibbonCommand(() =>
-        {
-            if (editor.CellCaretInfo is { } cc)
-            {
-                var (lastRow, _) = editor.GetTableBounds(cc.TableBlock);
-                editor.SetCellBlockSelection(cc.TableBlock, 0, cc.Col, lastRow, cc.Col);
-            }
-        }));
-        tableCommands.Bind(FreeWRibbonCommandAction.TableSelectCell, new ActionRibbonCommand(() =>
-        {
-            if (editor.CellCaretInfo is { } cc)
-                editor.SetCellBlockSelection(cc.TableBlock, cc.Row, cc.Col, cc.Row, cc.Col);
-        }));
-
         // Row / column mutations.
-        tableCommands.Bind(FreeWRibbonCommandAction.TableInsertAbove,     new ActionRibbonCommand(editor.InsertTableRowAbove));
         tableCommands.Register("freew.table-insert-below",     new ActionRibbonCommand(editor.InsertTableRowBelow));
-        tableCommands.Bind(FreeWRibbonCommandAction.TableInsertColLeft,  new ActionRibbonCommand(editor.InsertTableColumnLeft));
         tableCommands.Register("freew.table-insert-col-right", new ActionRibbonCommand(editor.InsertTableColumnRight));
-        tableCommands.Bind(FreeWRibbonCommandAction.TableDeleteRow,       new ActionRibbonCommand(editor.DeleteTableRow));
-        tableCommands.Bind(FreeWRibbonCommandAction.TableDeleteCol,       new ActionRibbonCommand(editor.DeleteTableColumn));
-        tableCommands.Bind(FreeWRibbonCommandAction.TableDelete,           new ActionRibbonCommand(() =>
-        {
-            if (editor.CellCaretInfo is { } cc)
-                editor.DeleteTableBlock(cc.TableBlock);
-        }));
 
         // Merge / split.
         tableCommands.Register("freew.table-merge-cells", new ActionRibbonCommand(editor.MergeSelectedCells));
         tableCommands.Register("freew.table-split-cell", new ActionRibbonCommand(
             callbacks.OpenSplitCellDialog ?? (() => editor.SplitCurrentCell())));
-        tableCommands.Bind(FreeWRibbonCommandAction.SplitTable, new ActionRibbonCommand(editor.SplitTable));
-
-        // Cell size.
-        tableCommands.Bind(FreeWRibbonCommandAction.TableDistributeRows, new ActionRibbonCommand(editor.DistributeTableRows));
-        tableCommands.Bind(FreeWRibbonCommandAction.TableDistributeCols, new ActionRibbonCommand(editor.DistributeTableColumns));
-        tableCommands.Bind(FreeWRibbonCommandAction.TableAutofitContents, new ActionRibbonCommand(() => editor.SetTableAutoFit(AutoFitMode.Contents)));
-        tableCommands.Bind(FreeWRibbonCommandAction.TableAutofitWindow, new ActionRibbonCommand(() => editor.SetTableAutoFit(AutoFitMode.Window)));
-        tableCommands.Bind(FreeWRibbonCommandAction.TableAutofitFixed, new ActionRibbonCommand(() => editor.SetTableAutoFit(AutoFitMode.Fixed)));
-
-        // Cell alignment — 9 = 3 vertical (Top/Center/Bottom) × 3 horizontal (Left/Center/Right).
-        // BY2: parity with WPF's table-layout Alignment group (FreeWRibbon.cs ~1201-1219).
-        RegisterCellAlignmentCommands(tableCommands, editor);
-        tableCommands.Bind(FreeWRibbonCommandAction.CellTextDirectionHorizontal, new ActionRibbonCommand(() => editor.SetCaretCellTextDirection(CellTextDirection.Horizontal)));
-        tableCommands.Bind(FreeWRibbonCommandAction.CellTextDirectionRotate90, new ActionRibbonCommand(() => editor.SetCaretCellTextDirection(CellTextDirection.Rotate90)));
-        tableCommands.Bind(FreeWRibbonCommandAction.CellTextDirectionRotate270, new ActionRibbonCommand(() => editor.SetCaretCellTextDirection(CellTextDirection.Rotate270)));
-
-        // Data.
-        tableCommands.Bind(FreeWRibbonCommandAction.TableRepeatHeader, new ActionRibbonCommand(editor.ToggleTableRepeatHeaderRow));
 
         // ── Layout / Page Setup (AV-PAGE) ────────────────────────────────────
         // Dialog launcher: opens the Page Setup modal (margins + paper + orientation).
@@ -1041,35 +972,6 @@ internal static class FreeWAvaloniaRibbonCommands
         Add(r, editor, "freew.table-borders.right",   CellBorderEdges.Right);
     }
 
-    /// <summary>
-    /// Registers the 9 cell-alignment commands (3 vertical × 3 horizontal) for the
-    /// table-layout Alignment group. Command ids are identical to the WPF host so
-    /// keyboard macros and tests are interchangeable.
-    /// </summary>
-    private static void RegisterCellAlignmentCommands(
-        FreeWRibbonEditorCommandFamilyBuilder r,
-        DocumentView editor)
-    {
-        static void Add(
-            FreeWRibbonEditorCommandFamilyBuilder reg,
-            DocumentView ed,
-            FreeWRibbonCommandAction action,
-            TableCellVerticalAlignment vAlign,
-            TextAlignment hAlign) =>
-            reg.Bind(action,
-                new ActionRibbonCommand(() => ed.SetCaretCellAlignment(vAlign, hAlign)));
-
-        Add(r, editor, FreeWRibbonCommandAction.CellAlignTopLeft,       TableCellVerticalAlignment.Top,    TextAlignment.Left);
-        Add(r, editor, FreeWRibbonCommandAction.CellAlignTopCenter,     TableCellVerticalAlignment.Top,    TextAlignment.Center);
-        Add(r, editor, FreeWRibbonCommandAction.CellAlignTopRight,      TableCellVerticalAlignment.Top,    TextAlignment.Right);
-        Add(r, editor, FreeWRibbonCommandAction.CellAlignMiddleLeft,    TableCellVerticalAlignment.Center, TextAlignment.Left);
-        Add(r, editor, FreeWRibbonCommandAction.CellAlignMiddleCenter,  TableCellVerticalAlignment.Center, TextAlignment.Center);
-        Add(r, editor, FreeWRibbonCommandAction.CellAlignMiddleRight,   TableCellVerticalAlignment.Center, TextAlignment.Right);
-        Add(r, editor, FreeWRibbonCommandAction.CellAlignBottomLeft,    TableCellVerticalAlignment.Bottom, TextAlignment.Left);
-        Add(r, editor, FreeWRibbonCommandAction.CellAlignBottomCenter,  TableCellVerticalAlignment.Bottom, TextAlignment.Center);
-        Add(r, editor, FreeWRibbonCommandAction.CellAlignBottomRight,   TableCellVerticalAlignment.Bottom, TextAlignment.Right);
-    }
-
     private sealed class ShowMarkupBalloonsCommand(DocumentView editor, FreeWRibbonHostExecutionPorts callbacks) : IRibbonStatefulCommand
     {
         public void Execute(RibbonCommandContext context)
@@ -1589,6 +1491,59 @@ internal static class FreeWAvaloniaRibbonCommands
                 crop.Top,
                 crop.Bottom),
             ResetImage: editor.ResetSelectedImage);
+
+    private static TableEditingRibbonPorts CreateTableEditingPorts(DocumentView editor) =>
+        new(
+            PrepareExecution: () => editor.Focus(),
+            ToggleHeaderRow: editor.ToggleTableHeaderRow,
+            ToggleBandedRows: editor.ToggleBandedRows,
+            ToggleLastRow: editor.ToggleTableLastRow,
+            ToggleFirstColumn: editor.ToggleTableFirstColumn,
+            ToggleLastColumn: editor.ToggleTableLastColumn,
+            ToggleBandedColumns: editor.ToggleTableBandedColumns,
+            ToggleGridlines: () => editor.ViewTableGridlines = !editor.ViewTableGridlines,
+            SelectTable: () =>
+            {
+                if (editor.CellCaretInfo is not { } cell)
+                    return;
+                var (lastRow, lastGridColumn) = editor.GetTableBounds(cell.TableBlock);
+                editor.SetCellBlockSelection(cell.TableBlock, 0, 0, lastRow, lastGridColumn);
+            },
+            SelectRow: () =>
+            {
+                if (editor.CellCaretInfo is not { } cell)
+                    return;
+                var (_, lastGridColumn) = editor.GetTableBounds(cell.TableBlock);
+                editor.SetCellBlockSelection(cell.TableBlock, cell.Row, 0, cell.Row, lastGridColumn);
+            },
+            SelectColumn: () =>
+            {
+                if (editor.CellCaretInfo is not { } cell)
+                    return;
+                var (lastRow, _) = editor.GetTableBounds(cell.TableBlock);
+                editor.SetCellBlockSelection(cell.TableBlock, 0, cell.Col, lastRow, cell.Col);
+            },
+            SelectCell: () =>
+            {
+                if (editor.CellCaretInfo is { } cell)
+                    editor.SetCellBlockSelection(cell.TableBlock, cell.Row, cell.Col, cell.Row, cell.Col);
+            },
+            InsertRowAbove: editor.InsertTableRowAbove,
+            InsertColumnLeft: editor.InsertTableColumnLeft,
+            DeleteRow: editor.DeleteTableRow,
+            DeleteColumn: editor.DeleteTableColumn,
+            DeleteTable: () =>
+            {
+                if (editor.CellCaretInfo is { } cell)
+                    editor.DeleteTableBlock(cell.TableBlock);
+            },
+            SplitTable: editor.SplitTable,
+            DistributeRows: editor.DistributeTableRows,
+            DistributeColumns: editor.DistributeTableColumns,
+            SetAutoFit: editor.SetTableAutoFit,
+            SetCellAlignment: editor.SetCaretCellAlignment,
+            SetCellTextDirection: editor.SetCaretCellTextDirection,
+            ToggleRepeatHeaderRow: editor.ToggleTableRepeatHeaderRow);
 
     private static FreeWRibbonTableExecutionPorts CreateTableExecutionPorts(
         DocumentView editor,

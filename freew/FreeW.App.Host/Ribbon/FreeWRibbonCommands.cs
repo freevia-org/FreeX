@@ -350,53 +350,14 @@ internal static class FreeWRibbonCommands
             }));
         // Insert tab — Table Tools: structural edits to the table containing the caret (all undoable).
         tableCommands.Register("freew.table-insert-row", new ActionRibbonCommand(() => { editor.Focus(); editor.InsertTableRow(); }));
-        tableCommands.Bind(FreeWRibbonCommandAction.TableDeleteRow, new ActionRibbonCommand(() => { editor.Focus(); editor.DeleteTableRow(); }));
         tableCommands.Register("freew.table-insert-col", new ActionRibbonCommand(() => { editor.Focus(); editor.InsertTableColumn(); }));
-        tableCommands.Bind(FreeWRibbonCommandAction.TableDeleteCol, new ActionRibbonCommand(() => { editor.Focus(); editor.DeleteTableColumn(); }));
         // Insert tab — Table Tools: merge the selected cells / split a merged cell (all undoable).
         tableCommands.Register("freew.merge-cells", new ActionRibbonCommand(() => { editor.Focus(); editor.MergeSelectedCells(); }));
         tableCommands.Register("freew.split-cell", new SplitCellRibbonCommand(editor));
         // Insert tab — Table Tools: pick/clear a fill colour for the caret's cell (sets model + re-renders).
         tableCommands.Register("freew.cell-shading", new CellShadingCommand(editor));
-        // Insert tab — Table Tools: table-style toggles applied to the caret's table (sets model + re-renders).
-        tableCommands.Bind(FreeWRibbonCommandAction.TableHeaderRow, new ActionRibbonCommand(() => { editor.Focus(); editor.ToggleTableHeaderRow(); }));
-        tableCommands.Bind(FreeWRibbonCommandAction.TableBandedRows, new ActionRibbonCommand(() => { editor.Focus(); editor.ToggleTableBandedRows(); }));
-        tableCommands.Bind(FreeWRibbonCommandAction.TableRepeatHeader, new ActionRibbonCommand(() => { editor.Focus(); editor.ToggleTableRepeatHeaderRow(); }));
+        TableEditingRibbonWorkflow.Register(tableCommands, CreateTableEditingPorts(editor));
 
-        // Table Tools — Directional insert/delete
-        tableCommands.Bind(FreeWRibbonCommandAction.TableInsertAbove, new ActionRibbonCommand(() => { editor.Focus(); editor.InsertTableRowAbove(); }));
-        tableCommands.Bind(FreeWRibbonCommandAction.TableInsertColLeft, new ActionRibbonCommand(() => { editor.Focus(); editor.InsertTableColumnLeft(); }));
-        tableCommands.Bind(FreeWRibbonCommandAction.TableDelete, new ActionRibbonCommand(() => { editor.Focus(); editor.DeleteTable(); }));
-        // Table Tools — Merge/Split enhancements
-        tableCommands.Bind(FreeWRibbonCommandAction.SplitTable, new ActionRibbonCommand(() => { editor.Focus(); editor.SplitTable(); }));
-        // Table Tools — Select
-        tableCommands.Bind(FreeWRibbonCommandAction.TableSelectTable, new ActionRibbonCommand(() => { editor.Focus(); editor.SelectTable(); }));
-        tableCommands.Bind(FreeWRibbonCommandAction.TableSelectRow, new ActionRibbonCommand(() => { editor.Focus(); editor.SelectTableRow(); }));
-        tableCommands.Bind(FreeWRibbonCommandAction.TableSelectCol, new ActionRibbonCommand(() => { editor.Focus(); editor.SelectTableColumn(); }));
-        tableCommands.Bind(FreeWRibbonCommandAction.TableSelectCell, new ActionRibbonCommand(() => { editor.Focus(); editor.SelectTableCell(); }));
-        // Table Tools — View Gridlines (toggle; display-only)
-        tableCommands.Bind(FreeWRibbonCommandAction.TableViewGridlines, new ActionRibbonCommand(() => { editor.ViewGridlines = !editor.ViewGridlines; editor.Focus(); }));
-        // Table Tools — Cell Size
-        tableCommands.Bind(FreeWRibbonCommandAction.TableDistributeRows, new ActionRibbonCommand(() => { editor.Focus(); editor.DistributeTableRows(); }));
-        tableCommands.Bind(FreeWRibbonCommandAction.TableDistributeCols, new ActionRibbonCommand(() => { editor.Focus(); editor.DistributeTableColumns(); }));
-        tableCommands.Bind(FreeWRibbonCommandAction.TableAutofitContents, new ActionRibbonCommand(() => { editor.Focus(); editor.SetTableAutoFit(AutoFitMode.Contents); }));
-        tableCommands.Bind(FreeWRibbonCommandAction.TableAutofitWindow, new ActionRibbonCommand(() => { editor.Focus(); editor.SetTableAutoFit(AutoFitMode.Window); }));
-        tableCommands.Bind(FreeWRibbonCommandAction.TableAutofitFixed, new ActionRibbonCommand(() => { editor.Focus(); editor.SetTableAutoFit(AutoFitMode.Fixed); }));
-        // Table Tools — Cell Alignment (9-way)
-        tableCommands.Bind(FreeWRibbonCommandAction.CellAlignTopLeft, new ActionRibbonCommand(() => { editor.Focus(); editor.SetCaretCellAlignment(TableCellVerticalAlignment.Top, FreeW.Core.Model.TextAlignment.Left); }));
-        tableCommands.Bind(FreeWRibbonCommandAction.CellAlignTopCenter, new ActionRibbonCommand(() => { editor.Focus(); editor.SetCaretCellAlignment(TableCellVerticalAlignment.Top, FreeW.Core.Model.TextAlignment.Center); }));
-        tableCommands.Bind(FreeWRibbonCommandAction.CellAlignTopRight, new ActionRibbonCommand(() => { editor.Focus(); editor.SetCaretCellAlignment(TableCellVerticalAlignment.Top, FreeW.Core.Model.TextAlignment.Right); }));
-        tableCommands.Bind(FreeWRibbonCommandAction.CellAlignMiddleLeft, new ActionRibbonCommand(() => { editor.Focus(); editor.SetCaretCellAlignment(TableCellVerticalAlignment.Center, FreeW.Core.Model.TextAlignment.Left); }));
-        tableCommands.Bind(FreeWRibbonCommandAction.CellAlignMiddleCenter, new ActionRibbonCommand(() => { editor.Focus(); editor.SetCaretCellAlignment(TableCellVerticalAlignment.Center, FreeW.Core.Model.TextAlignment.Center); }));
-        tableCommands.Bind(FreeWRibbonCommandAction.CellAlignMiddleRight, new ActionRibbonCommand(() => { editor.Focus(); editor.SetCaretCellAlignment(TableCellVerticalAlignment.Center, FreeW.Core.Model.TextAlignment.Right); }));
-        tableCommands.Bind(FreeWRibbonCommandAction.CellAlignBottomLeft, new ActionRibbonCommand(() => { editor.Focus(); editor.SetCaretCellAlignment(TableCellVerticalAlignment.Bottom, FreeW.Core.Model.TextAlignment.Left); }));
-        tableCommands.Bind(FreeWRibbonCommandAction.CellAlignBottomCenter, new ActionRibbonCommand(() => { editor.Focus(); editor.SetCaretCellAlignment(TableCellVerticalAlignment.Bottom, FreeW.Core.Model.TextAlignment.Center); }));
-        tableCommands.Bind(FreeWRibbonCommandAction.CellAlignBottomRight, new ActionRibbonCommand(() => { editor.Focus(); editor.SetCaretCellAlignment(TableCellVerticalAlignment.Bottom, FreeW.Core.Model.TextAlignment.Right); }));
-        // Table Design — Style Options toggles
-        tableCommands.Bind(FreeWRibbonCommandAction.TableLastRow, new ActionRibbonCommand(() => { editor.Focus(); editor.ToggleTableLastRow(); }));
-        tableCommands.Bind(FreeWRibbonCommandAction.TableFirstColumn, new ActionRibbonCommand(() => { editor.Focus(); editor.ToggleTableFirstColumn(); }));
-        tableCommands.Bind(FreeWRibbonCommandAction.TableLastColumn, new ActionRibbonCommand(() => { editor.Focus(); editor.ToggleTableLastColumn(); }));
-        tableCommands.Bind(FreeWRibbonCommandAction.TableBandedCols, new ActionRibbonCommand(() => { editor.Focus(); editor.ToggleTableBandedColumns(); }));
         // Table Design > Draw Borders: drag-to-insert table (prompted dimensions) and eraser-merges right.
         tableCommands.Bind(FreeWRibbonCommandAction.DrawTable, new DrawTableCommand(editor));
         tableCommands.Bind(FreeWRibbonCommandAction.Eraser, new EraserCommand(editor));
@@ -404,11 +365,6 @@ internal static class FreeWRibbonCommands
         tableCommands.Bind(FreeWRibbonCommandAction.TableToText, new ActionRibbonCommand(() => { editor.Focus(); editor.ConvertTableToText('\t'); }));
         // Table Design — Cell Borders picker (per-edge borders for the caret cell).
         tableCommands.Register("freew.cell-borders", new CellBordersCommand(editor));
-        // Table Layout > Alignment — Text Direction cycling (Horizontal → Rotate90 → Rotate270 → Horizontal).
-        tableCommands.Bind(FreeWRibbonCommandAction.CellTextDirectionHorizontal, new ActionRibbonCommand(() => { editor.Focus(); editor.SetCaretCellTextDirection(CellTextDirection.Horizontal); }));
-        tableCommands.Bind(FreeWRibbonCommandAction.CellTextDirectionRotate90, new ActionRibbonCommand(() => { editor.Focus(); editor.SetCaretCellTextDirection(CellTextDirection.Rotate90); }));
-        tableCommands.Bind(FreeWRibbonCommandAction.CellTextDirectionRotate270, new ActionRibbonCommand(() => { editor.Focus(); editor.SetCaretCellTextDirection(CellTextDirection.Rotate270); }));
-
         // Insert tab — Text: pick a .docx file and insert its body content at the caret (block merge).
         registry.Bind(FreeWRibbonCommandAction.InsertFile, new InsertFileCommand(editor));
         // Insert tab — Illustrations: pick an image file and insert it as an inline image run.
@@ -1600,6 +1556,33 @@ internal static class FreeWRibbonCommands
                 crop.Top,
                 crop.Bottom),
             ResetImage: editor.ResetSelectedImage);
+
+    private static TableEditingRibbonPorts CreateTableEditingPorts(DocumentView editor) =>
+        new(
+            PrepareExecution: () => editor.Focus(),
+            ToggleHeaderRow: editor.ToggleTableHeaderRow,
+            ToggleBandedRows: editor.ToggleTableBandedRows,
+            ToggleLastRow: editor.ToggleTableLastRow,
+            ToggleFirstColumn: editor.ToggleTableFirstColumn,
+            ToggleLastColumn: editor.ToggleTableLastColumn,
+            ToggleBandedColumns: editor.ToggleTableBandedColumns,
+            ToggleGridlines: () => editor.ViewGridlines = !editor.ViewGridlines,
+            SelectTable: editor.SelectTable,
+            SelectRow: editor.SelectTableRow,
+            SelectColumn: editor.SelectTableColumn,
+            SelectCell: editor.SelectTableCell,
+            InsertRowAbove: editor.InsertTableRowAbove,
+            InsertColumnLeft: editor.InsertTableColumnLeft,
+            DeleteRow: editor.DeleteTableRow,
+            DeleteColumn: editor.DeleteTableColumn,
+            DeleteTable: editor.DeleteTable,
+            SplitTable: editor.SplitTable,
+            DistributeRows: editor.DistributeTableRows,
+            DistributeColumns: editor.DistributeTableColumns,
+            SetAutoFit: editor.SetTableAutoFit,
+            SetCellAlignment: editor.SetCaretCellAlignment,
+            SetCellTextDirection: editor.SetCaretCellTextDirection,
+            ToggleRepeatHeaderRow: editor.ToggleTableRepeatHeaderRow);
 
     private static FreeWRibbonTableExecutionPorts CreateTableExecutionPorts(DocumentView editor) =>
         new(
