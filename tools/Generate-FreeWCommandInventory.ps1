@@ -54,6 +54,7 @@ internal static class FreeWCommandInventory
         new("avaloniaDefinitionSource", "Avalonia definition source", "freew/FreeW.Ribbon.Definitions/FreeWAvaloniaRibbonDefinition.cs"),
         new("wpfRegistrySource", "WPF registry source", "freew/FreeW.App.Host/Ribbon/FreeWRibbonCommands.cs"),
         new("avaloniaRegistrySource", "Avalonia registry source", "freew/FreeW.App.Avalonia/Ribbon/FreeWAvaloniaRibbonCommands.cs"),
+        new("quickPartWorkflowSource", "Shared Quick Parts registry source", "freew/FreeW.App.Presentation/Ribbon/QuickPartRibbonWorkflow.cs"),
     ];
 
     private static readonly ClassificationRule[] GapClassificationRules =
@@ -428,8 +429,10 @@ internal static class FreeWCommandInventory
                     ContainsCommandLiteral(sourceTexts["wpfDefinitionSource"], commandId),
                 AvaloniaDefinitionSource: ContainsCommandLiteral(canonicalDefinitionSource, commandId) ||
                     ContainsCommandLiteral(sourceTexts["avaloniaDefinitionSource"], commandId),
-                WpfRegistrySource: ContainsCommandLiteral(sourceTexts["wpfRegistrySource"], commandId),
-                AvaloniaRegistrySource: ContainsCommandLiteral(sourceTexts["avaloniaRegistrySource"], commandId));
+                WpfRegistrySource: ContainsCommandLiteral(sourceTexts["wpfRegistrySource"], commandId) ||
+                    ContainsCommandLiteral(sourceTexts["quickPartWorkflowSource"], commandId),
+                AvaloniaRegistrySource: ContainsCommandLiteral(sourceTexts["avaloniaRegistrySource"], commandId) ||
+                    ContainsCommandLiteral(sourceTexts["quickPartWorkflowSource"], commandId));
             var behaviorEvidence = BehaviorEvidenceCatalog.GetValueOrDefault(commandId);
             var profileClassification = ClassifyProfile(wpfPresent, avaloniaPresent);
             var gapClassification = ClassifyGap(

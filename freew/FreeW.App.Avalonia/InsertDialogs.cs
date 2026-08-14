@@ -5,13 +5,16 @@ using Avalonia.Interactivity;
 using Avalonia.Layout;
 using Avalonia.Media;
 using Free.Shared.Shell.Avalonia;
+using FreeW.App.Localization;
 using FreeW.App.Presentation.Dialogs;
+using FreeW.App.Presentation.QuickParts;
+using FreeW.App.Presentation.Ribbon;
 
 namespace FreeW.App.Avalonia;
 
 /// <summary>
 /// AV-INSERT2: Small modal input dialogs for the second tier of Insert-tab commands — Insert Hyperlink,
-/// Insert Bookmark (+ Go To), and Insert Quick Part. Each mirrors the existing Avalonia dialog pattern
+/// Insert Bookmark (+ Go To), and saved Quick Part selection. Each mirrors the existing Avalonia dialog pattern
 /// (a non-resizable, owner-centred <see cref="Window"/> that returns its result via a public property,
 /// awaited by the <c>MainWindow</c> launcher). The dialogs are deliberately thin: they collect input and
 /// hand it to the editor's model-backed, undoable insert methods — no model logic lives here.
@@ -269,61 +272,66 @@ public sealed class LinkBookmarkDialog : FreeWDialogWindow
 }
 
 /// <summary>
-/// AV-INSERT2: Insert Quick Part dialog. Collects a snippet body (multi-line) to insert at the caret; if a
-/// <see cref="QuickPartLibrary"/>-style name list is supplied the user can also pick a saved snippet. Returns
-/// the text to insert via <see cref="SnippetText"/>, or null on cancel.
+/// Projects the shared saved Quick Part selection session into Avalonia controls.
 /// </summary>
 public sealed class QuickPartDialog : FreeWDialogWindow
 {
-    private readonly TextBox _textBox = new()
+    private readonly QuickPartInsertSession _session;
+    private readonly ListBox _parts = new()
     {
         MinWidth = 320,
-        MinHeight = 90,
-        AcceptsReturn = true,
-        TextWrapping = TextWrapping.Wrap,
-        PlaceholderText = InsertDialogTextResources.QuickPart.SnippetPlaceholder,
-        Margin = new Thickness(0, 6, 0, 0),
+        MinHeight = 140,
+        Margin = new Thickness(0, 4, 0, 12),
     };
 
-    /// <summary>The snippet body to insert, or null when the dialog was cancelled / empty.</summary>
-    public string? SnippetText { get; private set; }
+    public QuickPartInsertAction? Action { get; private set; }
 
-    public QuickPartDialog(string? initialText = null)
+    public QuickPartDialog(QuickPartInsertSession session)
     {
-        Title = InsertDialogTextResources.QuickPart.Title;
+        ArgumentNullException.ThrowIfNull(session);
+        _session = session;
+        var text = QuickPartCommandPlanner.ResolveText(UiText.Get);
+        var state = session.Current;
+
+        Title = text.InsertTitle;
         Width = 420;
         SizeToContent = SizeToContent.Height;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
         CanResize = false;
         ShowInTaskbar = false;
 
-        _textBox.Text = initialText ?? string.Empty;
-        AvaloniaCompactDialogChrome.ApplyTextBox(_textBox, InsertDialogLayout.ChromeStyle, fixedHeight: false);
+        _parts.ItemsSource = state.Names;
+        _parts.SelectedIndex = state.SelectedIndex;
+        _parts.SelectionChanged += (_, _) => _session.SelectIndex(_parts.SelectedIndex);
 
         var label = new TextBlock
         {
-            Text = InsertDialogTextResources.QuickPart.TextLabel,
-            Margin = new Thickness(14, 12, 14, 0),
+            Text = text.ItemLabel,
         };
 
-        var box = new Border { Margin = new Thickness(14, 0, 14, 0), Child = _textBox };
-
-        var buttons = InsertDialogLayout.OkCancelRow(
-            ok: () =>
-            {
-                var text = _textBox.Text;
-                if (string.IsNullOrEmpty(text))
-                    return;
-                SnippetText = text;
+        void Accept()
+        {
+            _session.SelectIndex(_parts.SelectedIndex);
+            Action = _session.AcceptSelection();
+            if (Action is not null)
                 Close();
-            },
-            cancel: Close);
+        }
 
-        var outer = new StackPanel();
+        var insertButton = InsertDialogLayout.MakeButton(text.InsertButton, (_, _) => Accept());
+        insertButton.IsDefault = true;
+        var cancelButton = InsertDialogLayout.MakeButton(text.CancelButton, (_, _) => Close());
+        cancelButton.IsCancel = true;
+        var buttons = AvaloniaCompactDialogChrome.CreateActionRow(
+            [insertButton, cancelButton],
+            new Thickness(0));
+
+        _parts.DoubleTapped += (_, _) => Accept();
+        var outer = new StackPanel { Margin = new Thickness(16) };
         outer.Children.Add(label);
-        outer.Children.Add(box);
+        outer.Children.Add(_parts);
         outer.Children.Add(buttons);
         Content = outer;
+        Opened += (_, _) => _parts.Focus();
     }
 }
 

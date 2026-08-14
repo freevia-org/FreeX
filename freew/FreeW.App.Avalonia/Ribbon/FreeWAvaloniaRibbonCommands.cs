@@ -975,13 +975,14 @@ internal static class FreeWAvaloniaRibbonCommands
         r.Bind(FreeWRibbonCommandAction.DropCapOptions, OptionalHostCommand(callbacks.OpenDropCapOptionsDialog));
 
         // ── Quick Parts ──────────────────────────────────────────────────────
-        // Document-property / date fields insert directly; the snippet entry opens a dialog (shell callback).
-        var insertQuickPart = OptionalHostCommand(callbacks.OpenQuickPartDialog);
-        r.Register("freew.insert-quickpart", insertQuickPart);
-        r.Register("freew.quick-parts", insertQuickPart);
-        DocumentPropertyFieldPlanner.RegisterCommands(r, editor.InsertField);
-        r.Register("freew.quick-parts.date",    new ActionRibbonCommand(() => editor.InsertField(RunFieldKind.Date)));
-        r.Register("freew.quick-parts.snippet", insertQuickPart);
+        // Shared Presentation owns the saved-part, field, save, organizer, and compatibility routes.
+        QuickPartRibbonWorkflow.Register(
+            r,
+            new QuickPartRibbonPorts(
+                OptionalHostCommand(callbacks.OpenQuickPartDialog),
+                OptionalHostCommand(callbacks.SaveQuickPartSelection),
+                OptionalHostCommand(callbacks.OpenBuildingBlocksOrganizer),
+                editor.InsertField));
 
         // ── Equation ─────────────────────────────────────────────────────────
         // The split-button face inserts the WPF default; each preset inserts an inline OMML equation.

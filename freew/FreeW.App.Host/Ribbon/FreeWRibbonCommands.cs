@@ -784,10 +784,18 @@ internal static class FreeWRibbonCommands
         // folder. "Save Selection" captures the selection's text and stores it under a prompted name;
         // "Insert Quick Part" picks a saved snippet and drops its text at the caret (reversibly).
         var quickParts = QuickPartLibrary.Load();
-        registry.Bind(FreeWRibbonCommandAction.SaveQuickpart, new SaveQuickPartCommand(editor, quickParts));
-        registry.Register("freew.insert-quickpart", new InsertQuickPartCommand(editor, quickParts));
-        // "Building Blocks Organizer" opens a manager over that same library: list + preview, Insert, Delete.
-        registry.Bind(FreeWRibbonCommandAction.BuildingBlocksOrganizer, new BuildingBlocksOrganizerCommand(editor, quickParts));
+        QuickPartRibbonWorkflow.Register(
+            registry,
+            new QuickPartRibbonPorts(
+                new InsertQuickPartCommand(editor, quickParts),
+                new SaveQuickPartCommand(editor, quickParts),
+                new BuildingBlocksOrganizerCommand(editor, quickParts),
+                kind =>
+                {
+                    var target = resolveFieldTarget();
+                    target.Focus();
+                    target.InsertField(kind);
+                }));
 
         // Insert tab — Controls: insert a content control (w:sdt) around the selection. The plain-text
         // control wraps the selection (or a placeholder) as an editable region; the checkbox control
@@ -1055,15 +1063,6 @@ internal static class FreeWRibbonCommands
         registry.Bind(FreeWRibbonCommandAction.DropCap_Dropped,  new ActionRibbonCommand(() => editor.ApplyDropCap(DropCapPosition.Dropped)));
         registry.Bind(FreeWRibbonCommandAction.DropCap_InMargin,new ActionRibbonCommand(() => editor.ApplyDropCap(DropCapPosition.InMargin)));
         registry.Bind(FreeWRibbonCommandAction.DropCap_None,     new ActionRibbonCommand(() => editor.ClearDropCap()));
-
-        // Insert > Quick Parts > Document Property: insert a live field run that renders the matching
-        // document-property value. Uses RunFieldKind so it round-trips as w:fldSimple in docx.
-        DocumentPropertyFieldPlanner.RegisterCommands(registry, kind =>
-        {
-            var target = resolveFieldTarget();
-            target.Focus();
-            target.InsertField(kind);
-        });
 
         // Home > Font > Change Case: open a small menu to pick a target case (UPPERCASE / lowercase /
         // Sentence case / Capitalize Each Word / tOGGLE cASE) and recase the selection's text via the
@@ -4544,7 +4543,8 @@ internal static class FreeWRibbonCommands
         {
             editor.Focus();
             var quickPartText = QuickPartCommandPlanner.ResolveText(UiText.Get);
-            if (library.IsEmpty)
+            var session = new QuickPartInsertSession(library);
+            if (session.Current.IsEmpty)
             {
                 DialogMessageHelper.ShowInfo(
                     Window.GetWindow(editor),
@@ -4553,16 +4553,12 @@ internal static class FreeWRibbonCommands
                 return;
             }
 
-            var chosen = QuickPartPicker.Ask(Window.GetWindow(editor), library.Names);
-            if (chosen is null)
+            var action = QuickPartPicker.Ask(Window.GetWindow(editor), session);
+            if (action is null)
                 return; // cancelled
 
-            var part = library.Get(chosen);
-            if (part is null)
-                return; // removed between listing and picking — nothing to insert
-
             editor.Focus();
-            editor.InsertText(part.Text);
+            editor.InsertText(action.Text);
         }
     }
 
@@ -4578,24 +4574,25 @@ internal static class FreeWRibbonCommands
         }
     }
 
-    // A tiny modal dialog to pick one of the saved Quick Part names. Returns the chosen name, or null if
-    // cancelled. Mirrors BookmarkPicker.
+    // A tiny modal dialog projecting the shared saved Quick Part session. Returns its accepted action,
+    // or null if cancelled. Mirrors BookmarkPicker.
     private static class QuickPartPicker
     {
-        public static string? Ask(Window? owner, IReadOnlyList<string> names)
+        public static QuickPartInsertAction? Ask(Window? owner, QuickPartInsertSession session)
         {
             var text = QuickPartCommandPlanner.ResolveText(UiText.Get);
+            var state = session.Current;
             var list = new System.Windows.Controls.ListBox
             {
                 MinWidth = 280,
                 MinHeight = 120,
                 Margin = new Thickness(0, 0, 0, 12)
             };
-            foreach (var name in names)
+            foreach (var name in state.Names)
                 list.Items.Add(name);
-            list.SelectedIndex = 0;
+            list.SelectedIndex = state.SelectedIndex;
 
-            string? result = null;
+            QuickPartInsertAction? result = null;
             var dialog = new Window
             {
                 Title = text.InsertTitle,
@@ -4608,8 +4605,16 @@ internal static class FreeWRibbonCommands
 
             var ok = new System.Windows.Controls.Button { Content = text.InsertButton, IsDefault = true, MinWidth = 80, Margin = new Thickness(0, 0, 8, 0) };
             var cancel = new System.Windows.Controls.Button { Content = text.CancelButton, IsCancel = true, MinWidth = 72 };
-            ok.Click += (_, _) => { result = list.SelectedItem as string; dialog.DialogResult = true; };
-            list.MouseDoubleClick += (_, _) => { result = list.SelectedItem as string; dialog.DialogResult = true; };
+            void Accept()
+            {
+                session.SelectIndex(list.SelectedIndex);
+                result = session.AcceptSelection();
+                if (result is not null)
+                    dialog.DialogResult = true;
+            }
+
+            ok.Click += (_, _) => Accept();
+            list.MouseDoubleClick += (_, _) => Accept();
 
             var buttons = new System.Windows.Controls.StackPanel
             {

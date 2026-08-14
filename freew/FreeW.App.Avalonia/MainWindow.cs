@@ -3629,18 +3629,25 @@ public sealed partial class MainWindow : Window
     }
 
     /// <summary>
-    /// AV-INSERT2: Opens the Insert Quick Part dialog (a free-text snippet) and inserts the entered text at
-    /// the caret. Wired to <c>freew.quick-parts.snippet</c> (Insert → Text → Quick Parts).
+    /// Opens the shared saved Quick Part picker and inserts the selected library entry at the caret.
     /// </summary>
     private async Task OpenQuickPartDialogAsync()
     {
-        var dialog = new QuickPartDialog();
-        await dialog.ShowDialog(this);
-        if (dialog.SnippetText is { } text)
+        var session = new QuickPartInsertSession(_quickParts);
+        if (session.Current.IsEmpty)
         {
-            _editor.InsertQuickPartText(text);
+            await FreeWInfoDialog.ShowAsync(
+                this,
+                QuickPartCommandPlanner.ResolveText(UiText.Get).EmptyLibraryMessage);
             _editor.Focus();
+            return;
         }
+
+        var dialog = new QuickPartDialog(session);
+        await dialog.ShowDialog(this);
+        if (dialog.Action is { } action)
+            _editor.InsertQuickPartText(action.Text);
+        _editor.Focus();
     }
 
     private async Task SaveQuickPartSelectionAsync()

@@ -53,11 +53,6 @@ public static class FreeWRibbonHostExecutionProfile
         bindings.Bind(FreeWRibbonCommandAction.ScreenClipping, screenClip);
         bindings.Register("freew.screenshot", screenClip);
         BindOrUnavailable(bindings, FreeWRibbonCommandAction.Field, ports.OpenFieldDialog);
-        BindOrUnavailable(bindings, FreeWRibbonCommandAction.SaveQuickpart, ports.SaveQuickPartSelection);
-        BindOrUnavailable(
-            bindings,
-            FreeWRibbonCommandAction.BuildingBlocksOrganizer,
-            ports.OpenBuildingBlocksOrganizer);
         BindOrUnavailable(bindings, FreeWRibbonCommandAction.DrawTable, ports.OpenDrawTableDialog);
 
         var pageSetup = new ActionRibbonCommand(ports.OpenPageSetupDialog);
