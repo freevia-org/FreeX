@@ -12,12 +12,14 @@ namespace FreeP.App.Avalonia;
 internal sealed partial class SelectionPane : Border
 {
     private readonly PresentationSelectionPaneSession _session;
+    private readonly Action? _onAccessibilityChanged;
     private readonly StackPanel _items = new() { Orientation = Orientation.Vertical };
     private readonly TextBlock _message = new();
 
-    public SelectionPane(EditingSession editor)
+    public SelectionPane(EditingSession editor, Action? onAccessibilityChanged = null)
     {
         _session = new PresentationSelectionPaneSession(editor);
+        _onAccessibilityChanged = onAccessibilityChanged;
         Width = PresentationSelectionPaneVisualMetrics.PaneWidth;
         IsVisible = false;
         Background = ToBrush(PresentationSelectionPaneVisualMetrics.PaneBackgroundColor);
@@ -83,6 +85,7 @@ internal sealed partial class SelectionPane : Border
             IsVisible,
             plan.Items.Count,
             plan.SelectedItemIndex);
+        _onAccessibilityChanged?.Invoke();
         return plan;
     }
 

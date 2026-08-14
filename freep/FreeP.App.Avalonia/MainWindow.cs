@@ -929,7 +929,7 @@ public sealed partial class MainWindow : Window,
         _altTextPaneHost = BuildAltTextPaneHost();
         _accessibilityCheckerPaneHost = BuildAccessibilityCheckerPaneHost();
         _readingOrderPaneHost = BuildReadingOrderPaneHost();
-        _selectionPane = new SelectionPane(Editor);
+        _selectionPane = new SelectionPane(Editor, RefreshPaneAccessibilityMetadata);
         _selectionPane.Refresh();
         _proofingPaneHost = BuildProofingPaneHost();
         _mediaCaptionPaneHost = BuildMediaCaptionPaneHost();
@@ -1010,7 +1010,11 @@ public sealed partial class MainWindow : Window,
 
     private void RefreshPaneAccessibilityMetadata()
     {
-        if (_notesBox is null || _reviewCommentsPaneHost is null)
+        if (_slidePaneList is null || _notesBox is null || _reviewCommentsPaneHost is null
+            || _accessibilityCheckerPaneHost is null || _altTextPaneHost is null
+            || _readingOrderPaneHost is null || _proofingPaneHost is null
+            || _mediaCaptionPaneHost is null || _smartArtTextPaneHost is null
+            || _selectionPane is null || _animationPaneHost is null)
             return;
 
         var commentPlan = LastCommentPanePlan;
