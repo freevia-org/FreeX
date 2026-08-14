@@ -13,6 +13,8 @@
   <ItemGroup>
     <Compile Include="..\TestSupport\ShippingTestHookOwnershipAssertions.cs"
              Link="TestSupport\ShippingTestHookOwnershipAssertions.cs" />
+    <Compile Include="..\TestSupport\FreePRendererHostInfrastructureTestSupport.cs"
+             Link="TestSupport\FreePRendererHostInfrastructureTestSupport.cs" />
     <PackageReference Include="Avalonia.Headless" />
     <PackageReference Include="coverlet.collector" />
     <PackageReference Include="FluentAssertions" />

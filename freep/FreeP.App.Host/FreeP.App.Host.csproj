@@ -9,20 +9,7 @@
     <StartupObject>FreeP.App.Host.Program</StartupObject>
   </PropertyGroup>
 
-  <PropertyGroup Condition="'$(FreePVisualEvidenceHost)' == 'true'">
-    <OutputPath>bin\VisualEvidence\$(Configuration)\</OutputPath>
-    <IntermediateOutputPath>obj\VisualEvidence\$(Configuration)\$(TargetFramework)\</IntermediateOutputPath>
-  </PropertyGroup>
-
-  <PropertyGroup Condition="'$(FreePHostAccess)' == 'true' And '$(FreePSlideShowTestSupport)' == 'true' And '$(FreePVisualEvidenceHost)' != 'true'">
-    <OutputPath>bin\TestSupport\$(Configuration)\</OutputPath>
-    <IntermediateOutputPath>obj\TestSupport\$(Configuration)\$(TargetFramework)\</IntermediateOutputPath>
-  </PropertyGroup>
-
-  <PropertyGroup Condition="'$(FreePHostAccess)' == 'true' And '$(FreePSlideShowTestSupport)' != 'true' And '$(FreePVisualEvidenceHost)' != 'true'">
-    <OutputPath>bin\HostAccess\$(Configuration)\</OutputPath>
-    <IntermediateOutputPath>obj\HostAccess\$(Configuration)\$(TargetFramework)\</IntermediateOutputPath>
-  </PropertyGroup>
+  <Import Project="..\FreeP.RendererHostVariants.props" />
 
   <ItemGroup Condition="'$(FreePHostAccess)' == 'true' Or '$(FreePVisualEvidenceHost)' == 'true'">
     <Compile Include="..\TestSupport\HostAccess.Wpf\MainWindow.TestAccess.cs"
@@ -48,10 +35,6 @@
              Link="MainWindow.AccessibilityTestAccess.cs" />
   </ItemGroup>
 
-  <PropertyGroup Condition="'$(FreePSlideShowTestSupport)' == 'true' And '$(FreePHostAccess)' != 'true' And '$(FreePVisualEvidenceHost)' != 'true'">
-    <OutputPath>bin\SlideShowTestSupport\$(Configuration)\</OutputPath>
-    <IntermediateOutputPath>obj\SlideShowTestSupport\$(Configuration)\$(TargetFramework)\</IntermediateOutputPath>
-  </PropertyGroup>
   <ItemGroup Condition="'$(FreePVisualEvidenceHost)' == 'true'">
     <Compile Include="..\TestSupport\VisualEvidence.Wpf\MainWindow.VisualCaptureAdapter.cs"
              Link="MainWindow.VisualCaptureAdapter.cs" />
@@ -75,12 +58,6 @@
   <ItemGroup Condition="'$(FreePVisualEvidenceHost)' == 'true'">
     <InternalsVisibleTo Include="FreeP.VisualEvidence.Wpf" />
   </ItemGroup>
-
-  <ItemDefinitionGroup>
-    <ProjectReference>
-      <GlobalPropertiesToRemove>$(GlobalPropertiesToRemove);FreePHostAccess;FreePSlideShowTestSupport;FreePVisualEvidenceHost</GlobalPropertiesToRemove>
-    </ProjectReference>
-  </ItemDefinitionGroup>
 
   <ItemGroup>
     <FrameworkReference Include="Microsoft.Windows.SDK.NET.Ref" />
