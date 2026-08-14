@@ -1,4 +1,10 @@
 <Project Sdk="Microsoft.NET.Sdk">
+  <ItemDefinitionGroup Condition="'$(FreeXValidationHost)' == 'true'">
+    <ProjectReference>
+      <GlobalPropertiesToRemove>FreeXValidationHost</GlobalPropertiesToRemove>
+    </ProjectReference>
+  </ItemDefinitionGroup>
+
   <ItemGroup>
     <ProjectReference Include="..\FreeX.App.Localization\FreeX.App.Localization.csproj" />
     <ProjectReference Include="..\FreeX.App.Presentation\FreeX.App.Presentation.csproj" />
