@@ -129,22 +129,13 @@ internal static class FreeWAvaloniaRibbonCommands
         // Dialog launchers — open modal dialogs via shell callbacks (no direct editor method).
 
         // ── Paragraph ────────────────────────────────────────────────────────
-        r.Bind(FreeWRibbonCommandAction.Bullets,          new ActionRibbonCommand(() => editor.ToggleList(ListKind.Bullet)));
-        r.Bind(FreeWRibbonCommandAction.Numbering,        new ActionRibbonCommand(() => editor.ToggleList(ListKind.Number)));
-        r.Bind(FreeWRibbonCommandAction.AlignLeft,       new ActionRibbonCommand(() => editor.SetAlignment(TextAlignment.Left)));
-        r.Bind(FreeWRibbonCommandAction.AlignCenter,     new ActionRibbonCommand(() => editor.SetAlignment(TextAlignment.Center)));
-        r.Bind(FreeWRibbonCommandAction.AlignRight,      new ActionRibbonCommand(() => editor.SetAlignment(TextAlignment.Right)));
-        r.Bind(FreeWRibbonCommandAction.AlignJustify,    new ActionRibbonCommand(() => editor.SetAlignment(TextAlignment.Justify)));
+        ParagraphEditingRibbonWorkflow.Register(r, CreateParagraphEditingPorts(editor, callbacks));
         MultilevelListRibbonWorkflow.Register(
             r,
             new MultilevelListRibbonPorts(
                 editor.ApplyMultiLevelListDefinition,
                 delta => ChangeListLevel(editor, demote: delta > 0),
                 callbacks.OpenMultilevelListDialog));
-        r.Bind(FreeWRibbonCommandAction.IndentIncrease,  new ActionRibbonCommand(editor.IncreaseIndent));
-        r.Bind(FreeWRibbonCommandAction.IndentDecrease,  new ActionRibbonCommand(editor.DecreaseIndent));
-        r.Register("freew.increase-indent",  new ActionRibbonCommand(editor.IncreaseIndent));
-        r.Register("freew.decrease-indent",  new ActionRibbonCommand(editor.DecreaseIndent));
         r.Bind(FreeWRibbonCommandAction.IndentLeft, new ParagraphValueCommand(
             formatting, FreeWParagraphValueKind.IndentLeft));
         r.Bind(FreeWRibbonCommandAction.IndentRight, new ParagraphValueCommand(
@@ -158,15 +149,8 @@ internal static class FreeWAvaloniaRibbonCommands
             formatting, FreeWParagraphValueKind.SpaceBefore));
         r.Bind(FreeWRibbonCommandAction.SpaceAfter, new ParagraphValueCommand(
             formatting, FreeWParagraphValueKind.SpaceAfter));
-        r.Bind(FreeWRibbonCommandAction.SpaceBeforeToggle, new ActionRibbonCommand(() => ToggleSpaceBefore(editor)));
-        r.Bind(FreeWRibbonCommandAction.SpaceAfterToggle, new ActionRibbonCommand(() => ToggleSpaceAfter(editor)));
-        r.Bind(FreeWRibbonCommandAction.KeepWithNext, new ActionRibbonCommand(editor.ToggleKeepWithNext));
-        r.Bind(FreeWRibbonCommandAction.KeepLines, new ActionRibbonCommand(editor.ToggleKeepLinesTogether));
-        r.Bind(FreeWRibbonCommandAction.WidowControl, new ActionRibbonCommand(editor.ToggleWidowControl));
-        r.Bind(FreeWRibbonCommandAction.ParaBorder, new ActionRibbonCommand(() => editor.ToggleParagraphBorder()));
         r.Bind(FreeWRibbonCommandAction.ParaShading, new ActionRibbonCommand(() => { /* dropdown opener */ }));
         RegisterParagraphShadingPalette(r, editor);
-        r.Bind(FreeWRibbonCommandAction.Sort, new ActionRibbonCommand(() => ExecuteSortCommand(editor, callbacks)));
         // Line-spacing commands — value = multiplier for Multiple. The fixed ids are compatibility
         // aliases for older Avalonia controls and are no longer used by the Home ribbon profile.
         r.Bind(FreeWRibbonCommandAction.LineSpacing, new FreeWRibbonNumericValueCommand(
@@ -1491,6 +1475,27 @@ internal static class FreeWAvaloniaRibbonCommands
                 crop.Top,
                 crop.Bottom),
             ResetImage: editor.ResetSelectedImage);
+
+    private static ParagraphEditingRibbonPorts CreateParagraphEditingPorts(
+        DocumentView editor,
+        FreeWRibbonHostExecutionPorts callbacks) =>
+        new(
+            PrepareExecution: () => editor.Focus(),
+            ToggleBullets: new ActionRibbonCommand(() => editor.ToggleList(ListKind.Bullet)),
+            ToggleNumbering: new ActionRibbonCommand(() => editor.ToggleList(ListKind.Number)),
+            AlignLeft: new ActionRibbonCommand(() => editor.SetAlignment(TextAlignment.Left)),
+            AlignCenter: new ActionRibbonCommand(() => editor.SetAlignment(TextAlignment.Center)),
+            AlignRight: new ActionRibbonCommand(() => editor.SetAlignment(TextAlignment.Right)),
+            AlignJustify: new ActionRibbonCommand(() => editor.SetAlignment(TextAlignment.Justify)),
+            IncreaseIndent: editor.IncreaseIndent,
+            DecreaseIndent: editor.DecreaseIndent,
+            ToggleSpaceBefore: () => ToggleSpaceBefore(editor),
+            ToggleSpaceAfter: () => ToggleSpaceAfter(editor),
+            ToggleKeepWithNext: editor.ToggleKeepWithNext,
+            ToggleKeepLinesTogether: editor.ToggleKeepLinesTogether,
+            ToggleWidowControl: editor.ToggleWidowControl,
+            ToggleParagraphBorder: () => editor.ToggleParagraphBorder(),
+            Sort: new ActionRibbonCommand(() => ExecuteSortCommand(editor, callbacks)));
 
     private static TableEditingRibbonPorts CreateTableEditingPorts(DocumentView editor) =>
         new(

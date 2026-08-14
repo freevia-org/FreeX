@@ -56,6 +56,7 @@ internal static class FreeWCommandInventory
         new("avaloniaRegistrySource", "Avalonia registry source", "freew/FreeW.App.Avalonia/Ribbon/FreeWAvaloniaRibbonCommands.cs"),
         new("quickPartWorkflowSource", "Shared Quick Parts registry source", "freew/FreeW.App.Presentation/Ribbon/QuickPartRibbonWorkflow.cs"),
         new("tableInsertionWorkflowSource", "Shared Table insertion registry source", "freew/FreeW.App.Presentation/Ribbon/TableInsertionRibbonWorkflow.cs"),
+        new("paragraphEditingWorkflowSource", "Shared Paragraph editing registry source", "freew/FreeW.App.Presentation/Ribbon/ParagraphEditingRibbonWorkflow.cs"),
     ];
 
     private static readonly ClassificationRule[] GapClassificationRules =
@@ -200,6 +201,21 @@ internal static class FreeWCommandInventory
             "The shared insertion workflow inserts a 4 × 4 table through the same renderer port in both hosts."),
         ["freew.table-5x2"] = TableInsertionEvidence(
             "The shared insertion workflow inserts a 5 × 2 table through the same renderer port in both hosts."),
+        ["freew.bullets"] = ParagraphEditingEvidence("Both renderers route bullet-list toggling through the shared paragraph command family."),
+        ["freew.numbering"] = ParagraphEditingEvidence("Both renderers route numbered-list toggling through the shared paragraph command family."),
+        ["freew.align-left"] = ParagraphEditingEvidence("Both renderers map left paragraph alignment through the shared command family."),
+        ["freew.align-center"] = ParagraphEditingEvidence("Both renderers map centered paragraph alignment through the shared command family."),
+        ["freew.align-right"] = ParagraphEditingEvidence("Both renderers map right paragraph alignment through the shared command family."),
+        ["freew.align-justify"] = ParagraphEditingEvidence("Both renderers map justified paragraph alignment through the shared command family."),
+        ["freew.indent-increase"] = ParagraphEditingEvidence("Both renderers increase paragraph indentation through one prepared shared action."),
+        ["freew.indent-decrease"] = ParagraphEditingEvidence("Both renderers decrease paragraph indentation through one prepared shared action."),
+        ["freew.space-before-toggle"] = ParagraphEditingEvidence("Both renderers toggle paragraph space-before through one prepared shared action."),
+        ["freew.space-after-toggle"] = ParagraphEditingEvidence("Both renderers toggle paragraph space-after through one prepared shared action."),
+        ["freew.keep-with-next"] = ParagraphEditingEvidence("Both renderers toggle keep-with-next through one prepared shared action."),
+        ["freew.keep-lines"] = ParagraphEditingEvidence("Both renderers toggle keep-lines-together through one prepared shared action."),
+        ["freew.widow-control"] = ParagraphEditingEvidence("Both renderers toggle widow/orphan control through one prepared shared action."),
+        ["freew.para-border"] = ParagraphEditingEvidence("Both renderers toggle paragraph borders through one prepared shared action."),
+        ["freew.sort"] = ParagraphEditingEvidence("Both renderers preserve native sort adapters behind one shared semantic route."),
         ["freew.multilevel-list"] = MultilevelListWorkflowEvidence(
             "The shared workflow applies the canonical decimal multilevel definition in both renderers."),
         ["freew.multilevel-demote"] = MultilevelListWorkflowEvidence(
@@ -442,10 +458,12 @@ internal static class FreeWCommandInventory
                     ContainsCommandLiteral(sourceTexts["avaloniaDefinitionSource"], commandId),
                 WpfRegistrySource: ContainsCommandLiteral(sourceTexts["wpfRegistrySource"], commandId) ||
                     ContainsCommandLiteral(sourceTexts["quickPartWorkflowSource"], commandId) ||
-                    ContainsCommandLiteral(sourceTexts["tableInsertionWorkflowSource"], commandId),
+                    ContainsCommandLiteral(sourceTexts["tableInsertionWorkflowSource"], commandId) ||
+                    ContainsCommandLiteral(sourceTexts["paragraphEditingWorkflowSource"], commandId),
                 AvaloniaRegistrySource: ContainsCommandLiteral(sourceTexts["avaloniaRegistrySource"], commandId) ||
                     ContainsCommandLiteral(sourceTexts["quickPartWorkflowSource"], commandId) ||
-                    ContainsCommandLiteral(sourceTexts["tableInsertionWorkflowSource"], commandId));
+                    ContainsCommandLiteral(sourceTexts["tableInsertionWorkflowSource"], commandId) ||
+                    ContainsCommandLiteral(sourceTexts["paragraphEditingWorkflowSource"], commandId));
             var behaviorEvidence = BehaviorEvidenceCatalog.GetValueOrDefault(commandId);
             var profileClassification = ClassifyProfile(wpfPresent, avaloniaPresent);
             var gapClassification = ClassifyGap(
@@ -558,6 +576,18 @@ internal static class FreeWCommandInventory
             AvaloniaEvidence: new BehaviorEvidenceLink(
                 Path: "freew/FreeW.App.Presentation.Tests/TableInsertionRibbonWorkflowTests.cs",
                 Test: "TableInsertionRibbonWorkflowTests.BothRenderersDelegateTableInsertionPolicyToSharedPresentation"));
+
+    private static CommandBehaviorEvidence ParagraphEditingEvidence(string summary) =>
+        new(
+            EvidenceId: "freew.paragraph-editing.shared-workflow",
+            Slice: "Paragraph editing command behavior",
+            Summary: summary,
+            WpfEvidence: new BehaviorEvidenceLink(
+                Path: "freew/FreeW.App.Presentation.Tests/ParagraphEditingRibbonWorkflowTests.cs",
+                Test: "ParagraphEditingRibbonWorkflowTests.NativeCommandsPreserveStateAndAllExecutionsPrepareFirst"),
+            AvaloniaEvidence: new BehaviorEvidenceLink(
+                Path: "freew/FreeW.App.Presentation.Tests/ParagraphEditingRibbonWorkflowTests.cs",
+                Test: "ParagraphEditingRibbonWorkflowTests.BothRenderersDelegateParagraphPolicyToSharedPresentation"));
 
     private static CommandBehaviorEvidence MultilevelListWorkflowEvidence(
         string summary,

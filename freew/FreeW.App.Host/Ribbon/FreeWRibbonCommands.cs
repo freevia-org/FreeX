@@ -238,12 +238,9 @@ internal static class FreeWRibbonCommands
 
         Routed(FreeWRibbonCommandAction.GrowFont, EditingCommands.IncreaseFontSize);
         Routed(FreeWRibbonCommandAction.ShrinkFont, EditingCommands.DecreaseFontSize);
-        Routed(FreeWRibbonCommandAction.AlignLeft, EditingCommands.AlignLeft);
-        Routed(FreeWRibbonCommandAction.AlignCenter, EditingCommands.AlignCenter);
-        Routed(FreeWRibbonCommandAction.AlignRight, EditingCommands.AlignRight);
-        Routed(FreeWRibbonCommandAction.AlignJustify, EditingCommands.AlignJustify);
-        Routed(FreeWRibbonCommandAction.Bullets, EditingCommands.ToggleBullets);
-        Routed(FreeWRibbonCommandAction.Numbering, EditingCommands.ToggleNumbering);
+        // Home/Layout paragraph behavior is Presentation-owned; these ports preserve WPF routed
+        // editing commands and the native Sort dialog while sharing all semantic command mapping.
+        ParagraphEditingRibbonWorkflow.Register(registry, CreateParagraphEditingPorts(editor));
         Routed(FreeWRibbonCommandAction.Select, ApplicationCommands.SelectAll);
         // Home > Paragraph: apply multilevel/legal outline numbering (1, 1.1, 1.1.1) to the selected
         // paragraph(s); the outline definition persists to word/numbering.xml. Tab/Shift+Tab demote
@@ -1031,8 +1028,7 @@ internal static class FreeWRibbonCommands
         // pure ChangeCase helper. The replacement flows through the editor's normal edit/undo path.
         registry.Bind(FreeWRibbonCommandAction.ChangeCase, new ChangeCaseCommand(editor));
 
-        // Home > Paragraph: set line spacing (a multiplier on the default font size) over the selection,
-        // and toggle Add/Remove Space Before/After. All route through the view's undo/redo bus.
+        // Home > Paragraph: set line spacing (a multiplier on the default font size) over the selection.
         var lineSpacing = new FreeWRibbonNumericValueCommand(
             editor.SetLineSpacing,
             () => editor.CurrentParagraphFormatting.LineSpacing,
@@ -1043,8 +1039,6 @@ internal static class FreeWRibbonCommands
         registry.Bind(FreeWRibbonCommandAction.LineSpacing, lineSpacing);
         stateful.Add(("freew.line-spacing", lineSpacing));
         stateStore.SetState("freew.line-spacing", lineSpacing.GetState());
-        registry.Bind(FreeWRibbonCommandAction.SpaceBeforeToggle, new ActionRibbonCommand(() => editor.ToggleSpaceBefore()));
-        registry.Bind(FreeWRibbonCommandAction.SpaceAfterToggle, new ActionRibbonCommand(() => editor.ToggleSpaceAfter()));
 
         // Layout > Paragraph > numeric indent/spacing combos: exact-value controls that mirror Word's
         // Layout tab Paragraph group. Each is stateful so SelectionChanged can push the live value
@@ -1072,10 +1066,6 @@ internal static class FreeWRibbonCommands
         // which pushes both WPF property values and model-only fields through the undo/redo bus.
         registry.Bind(FreeWRibbonCommandAction.FontDialog, new FontDialogCommand(editor));
 
-        // Home > Paragraph: increase/decrease the left indent by one 0.5in step over the selection, and
-        // open the Paragraph dialog to set left/right/first-line (incl. hanging) indents. All reversible.
-        registry.Bind(FreeWRibbonCommandAction.IndentIncrease, new ActionRibbonCommand(() => { editor.Focus(); editor.IncreaseIndent(); }));
-        registry.Bind(FreeWRibbonCommandAction.IndentDecrease, new ActionRibbonCommand(() => { editor.Focus(); editor.DecreaseIndent(); }));
         // freew.paragraph-dialog now opens the full two-tab Paragraph dialog (Indents and Spacing +
         // Line and Page Breaks), replacing the previous single-tab ParagraphIndentCommand. All fields
         // that ParagraphIndentCommand previously handled are present on the Indents and Spacing tab.
@@ -1086,21 +1076,10 @@ internal static class FreeWRibbonCommands
         // merge-destination and text-only paths through the shared platform clipboard boundary.
         registry.Bind(FreeWRibbonCommandAction.PasteSpecial, new PasteSpecialCommand(editor));
 
-        // Home > Paragraph: toggle a box border on the selected paragraph(s), and pick/clear shading.
-        registry.Bind(FreeWRibbonCommandAction.ParaBorder, new ActionRibbonCommand(() => editor.ToggleParagraphBorder()));
+        // Home > Paragraph: pick or clear paragraph shading.
         registry.Bind(FreeWRibbonCommandAction.ParaShading, new ParagraphShadingCommand(editor));
         // Home / Design > Borders and Shading…: the full dialog (paragraph border, page border, shading).
         registry.Bind(FreeWRibbonCommandAction.BordersShading, new BordersAndShadingCommand(editor));
-
-        // Home > Paragraph (Line and Page Breaks): flow-control toggles over the selected paragraph(s).
-        // Each flips its pPr flag (keepNext/keepLines/widowControl) reversibly through the undo/redo bus.
-        registry.Bind(FreeWRibbonCommandAction.KeepWithNext, new ActionRibbonCommand(() => { editor.Focus(); editor.ToggleKeepWithNext(); }));
-        registry.Bind(FreeWRibbonCommandAction.KeepLines, new ActionRibbonCommand(() => { editor.Focus(); editor.ToggleKeepLinesTogether(); }));
-        registry.Bind(FreeWRibbonCommandAction.WidowControl, new ActionRibbonCommand(() => { editor.Focus(); editor.ToggleWidowControl(); }));
-
-        // Layout > Sort: open a small dialog (A→Z / Z→A + case-sensitive option) and sort the selected
-        // paragraphs in place through the view's undo/redo bus.
-        registry.Bind(FreeWRibbonCommandAction.Sort, new SortCommand(editor));
 
         // Layout > Table conversions: turn the selected paragraphs into a table (splitting on a chosen
         // delimiter) and turn the caret's table back into delimited paragraphs. Both route through the bus.
@@ -1556,6 +1535,25 @@ internal static class FreeWRibbonCommands
                 crop.Top,
                 crop.Bottom),
             ResetImage: editor.ResetSelectedImage);
+
+    private static ParagraphEditingRibbonPorts CreateParagraphEditingPorts(DocumentView editor) =>
+        new(
+            PrepareExecution: () => editor.Focus(),
+            ToggleBullets: new RoutedEditCommand(editor, EditingCommands.ToggleBullets),
+            ToggleNumbering: new RoutedEditCommand(editor, EditingCommands.ToggleNumbering),
+            AlignLeft: new RoutedEditCommand(editor, EditingCommands.AlignLeft),
+            AlignCenter: new RoutedEditCommand(editor, EditingCommands.AlignCenter),
+            AlignRight: new RoutedEditCommand(editor, EditingCommands.AlignRight),
+            AlignJustify: new RoutedEditCommand(editor, EditingCommands.AlignJustify),
+            IncreaseIndent: () => editor.IncreaseIndent(),
+            DecreaseIndent: () => editor.DecreaseIndent(),
+            ToggleSpaceBefore: () => editor.ToggleSpaceBefore(),
+            ToggleSpaceAfter: () => editor.ToggleSpaceAfter(),
+            ToggleKeepWithNext: editor.ToggleKeepWithNext,
+            ToggleKeepLinesTogether: editor.ToggleKeepLinesTogether,
+            ToggleWidowControl: editor.ToggleWidowControl,
+            ToggleParagraphBorder: () => editor.ToggleParagraphBorder(),
+            Sort: new SortCommand(editor));
 
     private static TableEditingRibbonPorts CreateTableEditingPorts(DocumentView editor) =>
         new(
