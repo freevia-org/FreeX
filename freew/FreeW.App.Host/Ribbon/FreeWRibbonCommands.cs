@@ -374,7 +374,6 @@ internal static class FreeWRibbonCommands
         registry.Bind(FreeWRibbonCommandAction.Picture, new InsertPictureCommand(editor));
         // Insert tab — Illustrations: open the searchable icon picker and insert the chosen SVG
         // icon as a rasterised InlineImage (same round-trip path as Insert Picture).
-        registry.Bind(FreeWRibbonCommandAction.InsertIcon, new InsertIconCommand(editor));
         // Insert tab — Illustrations > Screenshot: the top-level "freew.screenshot" id only opens the
         // dropdown (no direct insert). "Screen
         // Clipping" drag-selects a screen region and inserts the captured PNG as an inline image through
@@ -482,13 +481,6 @@ internal static class FreeWRibbonCommands
                 editor.Focus();
                 editor.InsertEquation(equation);
             }));
-        registry.Bind(FreeWRibbonCommandAction.Chart, new ActionRibbonCommand(() =>
-        {
-            editor.Focus();
-            var chart = InsertChartDialog.Prompt(Application.Current?.MainWindow);
-            if (chart is not null)
-                editor.InsertChart(chart);
-        }));
         // Shape Size: reuse ImageSizeDialog (same W/H in points).
         var shapeObjectCommands = CreateFloatingObjectCommandPorts(editor, ObjectFormatTarget.Shape);
         registry.Bind(
@@ -612,25 +604,36 @@ internal static class FreeWRibbonCommands
         }
         // ── End Drawing Format commands ───────────────────────────────────────────────────────────
 
-        registry.Bind(FreeWRibbonCommandAction.Wordart, new ActionRibbonCommand(() =>
-        {
-            editor.Focus();
-            editor.InsertWordArt(WordArt.Create("WordArt", WordArtStyle.GradientFill));
-        }));
-        registry.Bind(FreeWRibbonCommandAction.Smartart, new ActionRibbonCommand(() =>
-        {
-            var owner = Application.Current?.MainWindow;
-            var result = InsertSmartArtDialog.Prompt(owner);
-            if (result is null) return;
-            editor.Focus();
-            editor.InsertSmartArt(result);
-        }));
+        InsertMediaRibbonWorkflow.Register(
+            registry,
+            new InsertMediaRibbonPorts(
+                Chart: new ActionRibbonCommand(() =>
+                {
+                    editor.Focus();
+                    var chart = InsertChartDialog.Prompt(Application.Current?.MainWindow);
+                    if (chart is not null)
+                        editor.InsertChart(chart);
+                }),
+                SmartArt: new ActionRibbonCommand(() =>
+                {
+                    var owner = Application.Current?.MainWindow;
+                    var result = InsertSmartArtDialog.Prompt(owner);
+                    if (result is null) return;
+                    editor.Focus();
+                    editor.InsertSmartArt(result);
+                }),
+                Icon: new InsertIconCommand(editor),
+                WordArt: new ActionRibbonCommand(() =>
+                {
+                    editor.Focus();
+                    editor.InsertWordArt(WordArt.Create("WordArt", WordArtStyle.GradientFill));
+                }),
+                EmbeddedObject: new InsertEmbeddedObjectCommand(editor)));
         // SmartArt Design contextual tab — gallery placeholder commands (no-ops; galleries are injected
         // as live-preview custom content via InjectGallery; these ids must be registered so the ribbon
         // renderer does not log "unknown command" warnings for the stub buttons).
         registry.Register("freew.smartart-change-layout", EmptyRibbonCommand.Instance);
         registry.Register("freew.smartart-change-colors", EmptyRibbonCommand.Instance);
-        registry.Bind(FreeWRibbonCommandAction.Object, new InsertEmbeddedObjectCommand(editor));
         // Insert tab — Links: prompt for a URL and apply it as a hyperlink over the selection.
         registry.Bind(FreeWRibbonCommandAction.Hyperlink, new InsertHyperlinkCommand(editor));
         // Insert tab — Links: manage the hyperlink at the caret — change its URL, remove it, or set a ScreenTip.

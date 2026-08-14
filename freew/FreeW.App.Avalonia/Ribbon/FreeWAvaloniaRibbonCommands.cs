@@ -893,12 +893,15 @@ internal static class FreeWAvaloniaRibbonCommands
         var textFromFileCommand = OptionalHostCommand(callbacks.InsertTextFromFile);
         r.Bind(FreeWRibbonCommandAction.InsertFile, textFromFileCommand);
         r.Register("freew.text-from-file", textFromFileCommand);
-        r.Bind(FreeWRibbonCommandAction.Chart, new EditingActionCommand(editor, callbacks.OpenInsertChartDialog, () => editor.InsertChart()));
-        r.Bind(FreeWRibbonCommandAction.Smartart, new EditingActionCommand(editor, callbacks.OpenInsertSmartArtDialog, () => editor.InsertSmartArt()));
-        r.Bind(FreeWRibbonCommandAction.InsertIcon, new EditingActionCommand(editor, callbacks.OpenIconPickerDialog, editor.InsertIcon));
-        r.Bind(FreeWRibbonCommandAction.Wordart, new ActionRibbonCommand(() => editor.InsertWordArt()));
-        r.Bind(FreeWRibbonCommandAction.Object, new ActionRibbonCommand(
-            callbacks.InsertObject ?? (() => editor.InsertEmbeddedObject())));
+        InsertMediaRibbonWorkflow.Register(
+            r,
+            new InsertMediaRibbonPorts(
+                Chart: new EditingActionCommand(editor, callbacks.OpenInsertChartDialog, () => editor.InsertChart()),
+                SmartArt: new EditingActionCommand(editor, callbacks.OpenInsertSmartArtDialog, () => editor.InsertSmartArt()),
+                Icon: new EditingActionCommand(editor, callbacks.OpenIconPickerDialog, editor.InsertIcon),
+                WordArt: new ActionRibbonCommand(() => editor.InsertWordArt()),
+                EmbeddedObject: new ActionRibbonCommand(
+                    callbacks.InsertObject ?? (() => editor.InsertEmbeddedObject()))));
         r.Bind(FreeWRibbonCommandAction.UpdateFields, new ActionRibbonCommand(editor.UpdateFields));
         r.Bind(FreeWRibbonCommandAction.ToggleFieldCodes, new ActionRibbonCommand(editor.ToggleFieldCodes));
     }

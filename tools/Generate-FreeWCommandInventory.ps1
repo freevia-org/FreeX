@@ -246,6 +246,11 @@ internal static class FreeWCommandInventory
         ["freew.equation-matrix"] = EquationEvidence("Both renderers insert a fresh shared matrix equation preset."),
         ["freew.equation-func"] = EquationEvidence("Both renderers insert a fresh shared function equation preset."),
         ["freew.equation-groupchr"] = EquationEvidence("Both renderers insert a fresh shared group-character equation preset."),
+        ["freew.chart"] = InsertMediaEvidence("Both renderers preserve their native chart picker and insertion adapter behind one shared route."),
+        ["freew.smartart"] = InsertMediaEvidence("Both renderers preserve their native SmartArt picker and insertion adapter behind one shared route."),
+        ["freew.insert-icon"] = InsertMediaEvidence("Both renderers preserve their native icon picker and insertion adapter behind one shared route."),
+        ["freew.wordart"] = InsertMediaEvidence("Both renderers route WordArt insertion through the same shared action identity."),
+        ["freew.object"] = InsertMediaEvidence("Both renderers preserve their native embedded-object adapter behind one shared route."),
         ["freew.multilevel-list"] = MultilevelListWorkflowEvidence(
             "The shared workflow applies the canonical decimal multilevel definition in both renderers."),
         ["freew.multilevel-demote"] = MultilevelListWorkflowEvidence(
@@ -654,6 +659,18 @@ internal static class FreeWCommandInventory
             AvaloniaEvidence: new BehaviorEvidenceLink(
                 Path: "freew/FreeW.App.Presentation.Tests/EquationRibbonWorkflowTests.cs",
                 Test: "EquationRibbonWorkflowTests.BothRenderersDelegateEquationDispatchToSharedPresentation"));
+
+    private static CommandBehaviorEvidence InsertMediaEvidence(string summary) =>
+        new(
+            EvidenceId: "freew.insert-media.shared-workflow",
+            Slice: "Insert media command behavior",
+            Summary: summary,
+            WpfEvidence: new BehaviorEvidenceLink(
+                Path: "freew/FreeW.App.Presentation.Tests/InsertMediaRibbonWorkflowTests.cs",
+                Test: "InsertMediaRibbonWorkflowTests.SharedWorkflowRegistersEveryNativeAdapterWithoutWrappingIt"),
+            AvaloniaEvidence: new BehaviorEvidenceLink(
+                Path: "freew/FreeW.App.Presentation.Tests/InsertMediaRibbonWorkflowTests.cs",
+                Test: "InsertMediaRibbonWorkflowTests.BothRenderersDelegateInsertMediaPolicyToSharedPresentation"));
 
     private static CommandBehaviorEvidence MultilevelListWorkflowEvidence(
         string summary,
