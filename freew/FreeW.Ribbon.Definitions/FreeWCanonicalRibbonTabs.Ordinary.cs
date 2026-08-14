@@ -640,6 +640,7 @@ internal static partial class FreeWCanonicalRibbonTabs
                 tab => tab.Group("toc", "Table of Contents", null, 110, g =>
                     {
                         g.Button("freew.toc", "Table of Contents");
+                        g.Dropdown("freew.toc-add-text", "Add Text", BuildTableOfContentsAddTextMenu());
                         g.Button("freew.toc-refresh", "Update Table");
                     }));
 
@@ -1034,6 +1035,16 @@ internal static partial class FreeWCanonicalRibbonTabs
             new("Figure", new RibbonCommandId("freew.tof.figure")),
             new("Table", new RibbonCommandId("freew.tof.table")),
             new("Equation", new RibbonCommandId("freew.tof.equation")),
+        });
+
+    private static RibbonMenu BuildTableOfContentsAddTextMenu() =>
+        new(new RibbonMenuItem[]
+        {
+            new("Do Not Show in Table of Contents", new RibbonCommandId("freew.toc-addtext-none")),
+            RibbonMenuItem.Separator(),
+            new("Level 1", new RibbonCommandId("freew.toc-addtext-level1")),
+            new("Level 2", new RibbonCommandId("freew.toc-addtext-level2")),
+            new("Level 3", new RibbonCommandId("freew.toc-addtext-level3")),
         });
 
     private static RibbonMenu BuildMultilevelListMenu() =>

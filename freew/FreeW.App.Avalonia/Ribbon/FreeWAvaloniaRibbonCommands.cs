@@ -1124,13 +1124,12 @@ internal static class FreeWAvaloniaRibbonCommands
                 callbacks.OpenFootnoteEndnoteOptionsDialog));
 
         // Table of Contents — generate from the heading outline / regenerate in place.
-        var toc = new ActionRibbonCommand(editor.InsertTableOfContents);
-        family.Bind(FreeWRibbonCommandAction.Toc, toc);
-        family.Register("freew.insert-toc", toc);
-
-        var tocRefresh = new ActionRibbonCommand(editor.UpdateTableOfContents);
-        family.Bind(FreeWRibbonCommandAction.TocRefresh, tocRefresh);
-        family.Register("freew.update-toc", tocRefresh);
+        TableOfContentsRibbonWorkflow.Register(
+            family,
+            new TableOfContentsRibbonPorts(
+                editor.InsertTableOfContents,
+                editor.UpdateTableOfContents,
+                styleId => editor.ApplyNamedStyle(styleId)));
 
         // Captions — the primary action opens the label/text dialog; menu labels remain direct.
         var caption = OptionalHostCommand(callbacks.OpenCaptionDialog);
