@@ -272,6 +272,7 @@ public sealed class FreeWRibbonCommandWorkflowTests
         SmartArt? smartArt = null;
         ChartKind? appliedKind = null;
         ChartStyle? appliedChartStyle = null;
+        ChartColorScheme? appliedChartColor = null;
         SmartArtStructureOperation? structureOperation = null;
         SmartArtStyle? appliedSmartArtStyle = null;
         var prepared = 0;
@@ -285,7 +286,7 @@ public sealed class FreeWRibbonCommandWorkflowTests
                 SelectedChart: () => chart,
                 SetChartKind: kind => appliedKind = kind,
                 ApplyChartStyle: style => appliedChartStyle = style,
-                ApplyChartColorScheme: _ => { },
+                ApplyChartColorScheme: scheme => appliedChartColor = scheme,
                 ApplyChartQuickLayout: _ => { },
                 ToggleChartLegend: () => { },
                 ShowChartTitleDialogAsync: _ => ValueTask.FromResult<ChartTitleDialogResult?>(null),
@@ -322,6 +323,11 @@ public sealed class FreeWRibbonCommandWorkflowTests
         chartStyle!.Execute(RibbonCommandContext.Empty);
         appliedChartStyle.Should().BeSameAs(firstChartStyle);
 
+        var firstChartColor = ChartColorScheme.Catalog[0];
+        bindings.TryGet(ChartColorRibbonCommandCatalog.CommandId(firstChartColor), out var chartColor).Should().BeTrue();
+        chartColor!.Execute(RibbonCommandContext.Empty);
+        appliedChartColor.Should().BeSameAs(firstChartColor);
+
         smartArt = SmartArt.Create(SmartArtKind.Process, ["One", "Two"]);
         bindings.TryGet("freew.smartart-add-shape", out var addShape).Should().BeTrue();
         addShape!.Execute(RibbonCommandContext.Empty);
@@ -330,7 +336,7 @@ public sealed class FreeWRibbonCommandWorkflowTests
         bindings.TryGet("freew.smartart-change-style", out var smartArtStyle).Should().BeTrue();
         smartArtStyle!.Execute(RibbonCommandContext.ForSelectedValue(SmartArtStyle.Catalog[0].Name));
         appliedSmartArtStyle.Should().BeSameAs(SmartArtStyle.Catalog[0]);
-        prepared.Should().Be(4);
+        prepared.Should().Be(5);
     }
 
     [Fact]

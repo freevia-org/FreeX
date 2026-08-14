@@ -132,6 +132,15 @@ public sealed class FontEffectRibbonWorkflowTests
         }
 
         avalonia.Should().Contain("FontEffectRibbonStatePlanner.CreateCommand(");
+        wpf.Should().Contain("FontEffectRibbonStatePlanner.CreateCommand(");
+        wpf.Should().Contain("editor.GetSelectionFormatting");
+        wpf.Should().Contain("editor.CanFormatSelection");
+        wpf.Should().NotContain("class ToggleFormatCommand");
+        wpf.Should().NotContain("Strikethrough: new CharacterEffectCommand");
+        wpf.Should().NotContain("SmallCaps: new CharacterEffectCommand");
+        wpf.Should().NotContain("AllCaps: new CharacterEffectCommand");
+        wpf.Should().NotContain("Superscript: new CharacterEffectCommand");
+        wpf.Should().NotContain("Subscript: new CharacterEffectCommand");
         avalonia.Should().NotContain("Bold: new ActionRibbonCommand");
         avalonia.Should().NotContain("Italic: new ActionRibbonCommand");
         avalonia.Should().NotContain("Underline: new ActionRibbonCommand");

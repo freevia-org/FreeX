@@ -3445,6 +3445,35 @@ public sealed partial class DocumentView : RichTextBox
     public RunFormatting CurrentRunFormatting => CaptureSelectionRunFormatting();
 
     /// <summary>
+    /// Live selection formatting projected into the renderer-neutral state used by the Font dialog
+    /// and ribbon. WPF reports mixed dependency-property values as <see cref="DependencyProperty.UnsetValue"/>;
+    /// preserve that distinction so shared toggle-state policy does not present a mixed selection as off.
+    /// </summary>
+    public FontDialogSelectionState GetSelectionFormatting()
+    {
+        var selection = Selection;
+        var weight = selection.GetPropertyValue(TextElement.FontWeightProperty);
+        var style = selection.GetPropertyValue(TextElement.FontStyleProperty);
+        var decorations = selection.GetPropertyValue(Inline.TextDecorationsProperty);
+        var capitals = selection.GetPropertyValue(Typography.CapitalsProperty);
+        var baseline = selection.GetPropertyValue(Inline.BaselineAlignmentProperty);
+
+        return new FontDialogSelectionState(
+            CaptureSelectionRunFormatting(),
+            BoldIndeterminate: weight == DependencyProperty.UnsetValue,
+            ItalicIndeterminate: style == DependencyProperty.UnsetValue,
+            UnderlineIndeterminate: decorations == DependencyProperty.UnsetValue,
+            StrikethroughIndeterminate: decorations == DependencyProperty.UnsetValue,
+            SmallCapsIndeterminate: capitals == DependencyProperty.UnsetValue,
+            AllCapsIndeterminate: capitals == DependencyProperty.UnsetValue,
+            SuperscriptIndeterminate: baseline == DependencyProperty.UnsetValue,
+            SubscriptIndeterminate: baseline == DependencyProperty.UnsetValue);
+    }
+
+    public bool CanFormatSelection =>
+        AllowsRestrictEditingOperation(RestrictEditingOperationKind.BodyFormatting);
+
+    /// <summary>
     /// Replace the tab stops (pPr/w:tabs) on every paragraph spanned by the selection with
     /// <paramref name="tabStops"/> (positions/alignments/leaders), via the undo/redo bus. Pass an empty
     /// list to clear all custom stops. The stops round-trip to docx through the existing w:tabs writer;

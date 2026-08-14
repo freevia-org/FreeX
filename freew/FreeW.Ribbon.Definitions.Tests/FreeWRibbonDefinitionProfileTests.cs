@@ -56,7 +56,6 @@ public sealed class FreeWRibbonDefinitionProfileTests
             "chart-style" or
             "picture-adjust" or
             "picture-size" or
-            "smartart-colors" or
             "smartart-create-graphic" or
             "smartart-edit" or
             "smartart-layouts"),
@@ -253,6 +252,28 @@ public sealed class FreeWRibbonDefinitionProfileTests
     }
 
     [Fact]
+    public void Chart_color_catalog_uses_one_shared_command_family_across_profiles()
+    {
+        var expectedIds = FreeW.Core.Model.ChartColorScheme.Catalog
+            .Select(ChartColorRibbonCommandCatalog.CommandId)
+            .ToArray();
+
+        foreach (var capabilities in new[] { FreeWRibbonCapabilities.Wpf, FreeWRibbonCapabilities.Avalonia })
+        {
+            var ids = CommandEntries(FreeWRibbon.Build(capabilities))
+                .Where(entry => entry.TabId == "chart-design")
+                .Select(entry => entry.CommandId)
+                .ToArray();
+            ids.Should().Contain(expectedIds);
+        }
+
+        var wpfRegistry = ReadRepositoryFile(
+            "freew", "FreeW.App.Host", "Ribbon", "FreeWRibbonCommands.cs");
+        wpfRegistry.Should().NotContain("ChartColorCommandPrefix");
+        wpfRegistry.Should().NotContain("freew.chart-color");
+    }
+
+    [Fact]
     public void SmartArt_command_slice_uses_shared_ids_and_catalog_across_profiles()
     {
         var expected = new[]
@@ -272,11 +293,34 @@ public sealed class FreeWRibbonDefinitionProfileTests
             ids.Should().Contain(expected);
         }
 
-        var avalonia = FreeWRibbon.Build(FreeWRibbonCapabilities.Avalonia).FindTab("smartart-design")!;
-        var styles = avalonia.FindGroup("smartart-styles")!.Controls
-            .OfType<RibbonComboBox>()
-            .Single(control => control.CommandId.Value == "freew.smartart-change-style");
-        styles.Items.Should().Equal(FreeW.Core.Model.SmartArtStyle.Catalog.Select(style => style.Name));
+        foreach (var capabilities in new[] { FreeWRibbonCapabilities.Wpf, FreeWRibbonCapabilities.Avalonia })
+        {
+            var tab = FreeWRibbon.Build(capabilities).FindTab("smartart-design")!;
+            var layout = tab.FindGroup("smartart-layouts")!.Controls
+                .OfType<RibbonDropdown>()
+                .Single(control => control.CommandId.Value == "freew.smartart-layout");
+            layout.Menu.Items.Select(item => item.CommandId?.Value).Should().Contain(
+                FreeW.Core.Model.SmartArtLayoutPreset.Catalog.Select(preset => $"freew.smartart-layout-{preset.Id}"));
+
+            var styleGroup = tab.FindGroup("smartart-styles")!;
+            var colors = styleGroup.Controls
+                .OfType<RibbonDropdown>()
+                .Single(control => control.CommandId.Value == "freew.smartart-colors");
+            colors.Menu.Items.Select(item => item.CommandId?.Value).Should().Contain(
+                FreeW.Core.Model.SmartArtColorScheme.Catalog.Select(scheme => $"freew.smartart-colors-{scheme.Id}"));
+
+            var styles = styleGroup.Controls
+                .OfType<RibbonComboBox>()
+                .Single(control => control.CommandId.Value == "freew.smartart-change-style");
+            styles.Items.Should().Equal(FreeW.Core.Model.SmartArtStyle.Catalog.Select(style => style.Name));
+        }
+
+        var wpfRegistry = ReadRepositoryFile(
+            "freew", "FreeW.App.Host", "Ribbon", "FreeWRibbonCommands.cs");
+        wpfRegistry.Should().NotContain(
+            "registry.Register(\"freew.smartart-change-layout\", EmptyRibbonCommand.Instance)");
+        wpfRegistry.Should().NotContain(
+            "registry.Register(\"freew.smartart-change-colors\", EmptyRibbonCommand.Instance)");
     }
 
     [Fact]

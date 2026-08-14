@@ -138,8 +138,7 @@ public sealed record FreeWRibbonChartSmartArtExecutionPorts(
     Action<SmartArtColorScheme> ApplySmartArtColorScheme,
     Action<SmartArtStyle> ApplySmartArtStyle,
     Func<SmartArt, ValueTask<SmartArt?>>? ShowSmartArtEditDialogAsync,
-    Action<SmartArt> ApplySmartArtEditOutcome,
-    string ChartColorCommandPrefix = "freew.chart-colors");
+    Action<SmartArt> ApplySmartArtEditOutcome);
 
 public sealed record FreeWRibbonImageExecutionPorts(
     Action PrepareExecution,
@@ -516,11 +515,11 @@ public static class FreeWRibbonEditorExecutionProfile
                 ports.PrepareExecution));
         }
 
-        bindings.Register(ports.ChartColorCommandPrefix, EmptyRibbonCommand.Instance);
+        bindings.Register(ChartColorRibbonCommandCatalog.ParentCommandId, EmptyRibbonCommand.Instance);
         foreach (var scheme in ChartColorScheme.Catalog)
         {
             var captured = scheme;
-            bindings.Register($"{ports.ChartColorCommandPrefix}-{captured.Id}", Stateful(
+            bindings.Register(ChartColorRibbonCommandCatalog.CommandId(captured), Stateful(
                 () => ports.ApplyChartColorScheme(captured),
                 () => ports.SelectedChart() is not null,
                 ports.PrepareExecution));

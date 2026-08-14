@@ -1,4 +1,5 @@
 using FreeW.App.Presentation.ContextMenus;
+using FreeW.App.Presentation.Ribbon;
 using FreeW.Core.Model;
 
 namespace FreeW.Ribbon.Definitions;
@@ -514,7 +515,7 @@ internal static partial class FreeWCanonicalRibbonTabs
                         tab.Group("chart-colors", "Change Colors", "C", 75, group =>
                         {
                             foreach (var scheme in ChartColorScheme.Catalog)
-                                group.Medium($"freew.chart-color-{scheme.Id}", scheme.Name, RibbonCommandIconKind.Fill);
+                                group.Medium(ChartColorRibbonCommandCatalog.CommandId(scheme), scheme.Name, RibbonCommandIconKind.Fill);
                         });
                     },
                     tab => tab.Group("chart-styles", "Chart Styles", null, 90, group =>
@@ -647,18 +648,11 @@ internal static partial class FreeWCanonicalRibbonTabs
                 topology.Section(
                     "smartart.layouts",
                     tab => tab.Group("smartart-layouts", "Layouts", "L", 80, group =>
-                        group.Medium("freew.smartart-change-layout", "Change Layout", RibbonCommandIconKind.SmartArt)),
-                    tab => tab.Group("smartart-layouts", "Layouts", null, 100, group =>
                         group.Dropdown("freew.smartart-layout", "Layouts", BuildSmartArtLayoutMenu())));
 
                 topology.Section(
                     "smartart.styles",
-                    tab => tab.Group("smartart-colors", "SmartArt Styles", "C", 70, group =>
-                        {
-                            group.Medium("freew.smartart-change-colors", "Change Colors", RibbonCommandIconKind.Fill);
-                            group.Medium("freew.smartart-change-style", "Styles", RibbonCommandIconKind.Font);
-                        }),
-                    tab => tab.Group("smartart-styles", "SmartArt Styles", null, 90, group =>
+                    tab => tab.Group("smartart-styles", "SmartArt Styles", "C", 90, group =>
                         {
                             group.Dropdown("freew.smartart-colors", "Change Colors", BuildSmartArtColorsMenu());
                             group.ComboBox("freew.smartart-change-style", "Styles", combo => combo with
@@ -1083,7 +1077,7 @@ internal static partial class FreeWCanonicalRibbonTabs
         new(ChartColorScheme.Catalog
             .Select(scheme => new RibbonMenuItem(
                 scheme.Name,
-                new RibbonCommandId($"freew.chart-colors-{scheme.Id}")))
+                new RibbonCommandId(ChartColorRibbonCommandCatalog.CommandId(scheme))))
             .ToArray());
 
     private static RibbonMenu BuildSmartArtLayoutMenu() =>
