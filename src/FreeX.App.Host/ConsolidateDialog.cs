@@ -187,8 +187,7 @@ public sealed partial class ConsolidateDialog : Window
             var error = ConsolidateDialogPlanner
                 .DescribeIssue(
                     issue,
-                    ConsolidateDialogMessageContext.AddReference,
-                    ConsolidateDialogTextProfile.Wpf)
+                    ConsolidateDialogMessageContext.AddReference)
                 .Message
                 .Resolve(UiText.Get, UiText.Format);
             DialogMessageHelper.ShowWarning(this, error, Title);
@@ -228,7 +227,7 @@ public sealed partial class ConsolidateDialog : Window
                 _referenceBox.Text))
         {
             var pendingReference = ConsolidateDialogPlanner
-                .DescribePendingReference(ConsolidateDialogTextProfile.Wpf);
+                .DescribePendingReference();
             DialogMessageHelper.ShowWarning(
                 this,
                 pendingReference.Message.Resolve(UiText.Get, UiText.Format),
@@ -253,8 +252,7 @@ public sealed partial class ConsolidateDialog : Window
         {
             var validation = ConsolidateDialogPlanner.DescribeIssue(
                 issue,
-                ConsolidateDialogMessageContext.FinalValidation,
-                ConsolidateDialogTextProfile.Wpf);
+                ConsolidateDialogMessageContext.FinalValidation);
             DialogMessageHelper.ShowWarning(
                 this,
                 validation.Message.Resolve(UiText.Get, UiText.Format),

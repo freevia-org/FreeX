@@ -374,7 +374,8 @@ public sealed partial class DataToolDialogTests
         var source = DialogSourceTestSupport.ReadHostSources("ConsolidateDialog.cs");
 
         source.Should().Contain("ConsolidateDialogPlanner.HasPendingReferenceText(");
-        source.Should().Contain(".DescribePendingReference(ConsolidateDialogTextProfile.Wpf)");
+        source.Should().Contain(".DescribePendingReference()");
+        source.Should().NotContain("ConsolidateDialogTextProfile");
         source.Should().Contain("FocusPendingReferenceInput();");
         source.Should().Contain("private void FocusPendingReferenceInput()");
         source.Should().Contain("DialogFocus.FocusAndSelect(_referenceBox);");

@@ -185,8 +185,7 @@ public sealed partial class MainWindow
                 warningText.Text = ConsolidateDialogPlanner
                     .DescribeIssue(
                         issue,
-                        ConsolidateDialogMessageContext.AddReference,
-                        ConsolidateDialogTextProfile.Avalonia)
+                        ConsolidateDialogMessageContext.AddReference)
                     .Message
                     .Resolve(UiText.Get, UiText.Format);
                 warningText.IsVisible = true;
@@ -222,7 +221,7 @@ public sealed partial class MainWindow
             if (ConsolidateDialogPlanner.HasPendingReferenceText(references, referenceBox.Text))
             {
                 warningText.Text = ConsolidateDialogPlanner
-                    .DescribePendingReference(ConsolidateDialogTextProfile.Avalonia)
+                    .DescribePendingReference()
                     .Message
                     .Resolve(UiText.Get, UiText.Format);
                 warningText.IsVisible = true;
@@ -251,8 +250,7 @@ public sealed partial class MainWindow
                 warningText.Text = ConsolidateDialogPlanner
                     .DescribeIssue(
                         plan.Issue,
-                        ConsolidateDialogMessageContext.FinalValidation,
-                        ConsolidateDialogTextProfile.Avalonia)
+                        ConsolidateDialogMessageContext.FinalValidation)
                     .Message
                     .Resolve(UiText.Get, UiText.Format);
                 warningText.IsVisible = true;

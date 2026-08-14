@@ -7,6 +7,7 @@ using FreeX.App.Presentation.FillSeries;
 using FreeX.App.Presentation.Filtering;
 using FreeX.App.Presentation.PageLayout;
 using FreeX.App.Presentation.PivotUI;
+using FreeX.App.Presentation.Options;
 using FreeX.App.Presentation.TextToColumns;
 using FreeX.App.Services;
 
@@ -98,6 +99,18 @@ public sealed class ValidationPresentationPlannerTests
         comment.FocusTarget.Should().Be(ThreadedCommentDialogFocusTarget.Reply);
         fill.Message.ResourceKey.Should().Be("FillSeriesStep_InvalidStopMessage");
         fill.FocusTarget.Should().Be(FillSeriesInputFocusTarget.StopValue);
+    }
+
+    [Fact]
+    public void OptionsValidation_UsesSharedWpfAuthorityFontSizeMessage()
+    {
+        var fontSize = OptionsDialogPlanner.DescribeInputError(OptionsDialogPlanner.OptionsInputError.InvalidFontSize);
+        var sheetCount = OptionsDialogPlanner.DescribeInputError(OptionsDialogPlanner.OptionsInputError.InvalidSheetCount);
+
+        fontSize.Message.ResourceKey.Should().Be("Options_InvalidDefaultFontSizeMessage");
+        fontSize.FocusTarget.Should().Be(OptionsValidationFocusTarget.DefaultFontSize);
+        sheetCount.Message.ResourceKey.Should().Be("Options_InvalidSheetCountMessage");
+        sheetCount.FocusTarget.Should().Be(OptionsValidationFocusTarget.DefaultSheetCount);
     }
 
     [Fact]

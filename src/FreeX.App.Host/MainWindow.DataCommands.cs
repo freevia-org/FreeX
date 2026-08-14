@@ -508,8 +508,7 @@ public partial class MainWindow
 
         var presentation = ConsolidateDialogPlanner.DescribeIssue(
             plan.Issue,
-            ConsolidateDialogMessageContext.FinalValidation,
-            ConsolidateDialogTextProfile.Wpf);
+            ConsolidateDialogMessageContext.FinalValidation);
         ShowOwnedMessage(
             presentation.Message.Resolve(UiText.Get, UiText.Format),
             UiText.Get("Consolidate_Consolidate"),
