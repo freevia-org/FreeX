@@ -6,7 +6,6 @@ using System.Net;
 using System.Text;
 using FreeP.App.Compositor;
 using FreeP.VisualEvidence;
-using Free.ToolsShared;
 
 namespace FreeP.RenderCompare;
 
@@ -36,39 +35,22 @@ internal static class DialogPaneVisualEvidence
 
     internal static int Run(string outputDirectory, string wpfExecutable, string avaloniaExecutable, TimeSpan timeout)
     {
-        outputDirectory = Path.GetFullPath(outputDirectory);
-        wpfExecutable = Path.GetFullPath(wpfExecutable);
-        avaloniaExecutable = Path.GetFullPath(avaloniaExecutable);
-        if (!File.Exists(wpfExecutable))
-            throw new FileNotFoundException("WPF capture host was not found.", wpfExecutable);
-        if (!File.Exists(avaloniaExecutable))
-            throw new FileNotFoundException("Avalonia capture host was not found.", avaloniaExecutable);
-
-        Directory.CreateDirectory(outputDirectory);
-        using var runDirectory = new VisualEvidenceRunDirectory(
-            FreePVisualEvidenceRoutes.DialogPane.TemporaryDirectoryPrefix);
-        var runRoot = runDirectory.Path;
-        var limitations = new List<string>();
-        var wpf = CaptureHost(
-            FreePVisualEvidenceCaptureOrchestration.WpfHost,
+        var collection = PairedVisualEvidenceCollector.Collect(
+            outputDirectory,
             wpfExecutable,
-            outputDirectory,
-            runRoot,
-            timeout,
-            limitations);
-        var avalonia = CaptureHost(
-            FreePVisualEvidenceCaptureOrchestration.AvaloniaHost,
             avaloniaExecutable,
-            outputDirectory,
-            runRoot,
             timeout,
-            limitations);
-        var summary = BuildSummary(wpf, avalonia, limitations, outputDirectory);
-        WriteReports(outputDirectory, summary);
+            DialogPaneCollectorProfile);
+        var summary = BuildSummary(
+            collection.Wpf,
+            collection.Avalonia,
+            collection.Limitations,
+            collection.OutputDirectory);
+        WriteReports(collection.OutputDirectory, summary);
 
         Console.WriteLine($"Paired captures: {summary.PairedCaptureCount}/{summary.ScenarioCount}");
         Console.WriteLine($"Pass: {summary.PassCount}; mismatch: {summary.MismatchCount}; limitation: {summary.LimitationCount}");
-        Console.WriteLine($"Summary: {Path.Combine(outputDirectory, "summary.json")}");
+        Console.WriteLine($"Summary: {Path.Combine(collection.OutputDirectory, "summary.json")}");
         return 0;
     }
 
@@ -84,17 +66,12 @@ internal static class DialogPaneVisualEvidence
     }
 
     private static DialogPaneVisualEvidenceHostManifest ReadHostManifest(string outputDirectory, string host)
-    {
-        var path = FreePVisualEvidenceCaptureOrchestration.CreateHostOutputPlan(
+        => PairedVisualEvidenceCollector.ReadHostManifest<DialogPaneVisualEvidenceHostManifest>(
             outputDirectory,
             host,
-            FreePVisualEvidenceRoutes.DialogPane).ManifestPath;
-        return VisualEvidenceToolSupport.ReadManifest<DialogPaneVisualEvidenceHostManifest>(
-            path,
-            FreePVisualEvidenceCaptureOrchestration.ToolManifestJsonOptions,
+            FreePVisualEvidenceRoutes.DialogPane,
             $"{host} evidence manifest was not found.",
             $"{host} evidence manifest could not be read.");
-    }
 
     internal static DialogPaneVisualEvidenceSummary BuildSummary(
         DialogPaneVisualEvidenceHostManifest wpf,
@@ -382,103 +359,76 @@ internal static class DialogPaneVisualEvidence
                 .Select(line => line.TrimEnd()));
     }
 
-    private static DialogPaneVisualEvidenceHostManifest CaptureHost(
-        string host,
-        string executable,
-        string outputDirectory,
-        string runRoot,
-        TimeSpan timeout,
-        List<string> runnerLimitations)
+    private static readonly PairedVisualEvidenceProfile<
+        DialogPaneVisualEvidenceScenario,
+        DialogPaneVisualEvidenceHostManifest,
+        DialogPaneVisualEvidenceCapture> DialogPaneCollectorProfile = new(
+            FreePVisualEvidenceRoutes.DialogPane,
+            DialogPaneVisualEvidenceCatalog.All,
+            scenario => scenario.Id,
+            manifest => manifest.Captures,
+            capture => capture.ScenarioId,
+            manifest => manifest.Limitations,
+            "The host manifest contained no scenario capture.",
+            "exact process tree",
+            PrepareDialogPaneArtifacts,
+            CollectDialogPaneArtifacts,
+            CreateDialogPaneHostManifest);
+
+    private static void PrepareDialogPaneArtifacts(VisualEvidenceScenarioOutputPlan output)
     {
-        var captures = new List<DialogPaneVisualEvidenceCapture>();
-        var hostLimitations = new List<string>();
-        var outputPlan = FreePVisualEvidenceCaptureOrchestration.CreateHostOutputPlan(
-            outputDirectory,
-            host,
-            FreePVisualEvidenceRoutes.DialogPane);
-        outputPlan.EnsureDirectories();
-        foreach (var scenario in DialogPaneVisualEvidenceCatalog.All)
+        if (File.Exists(output.ImagePath))
+            File.Delete(output.ImagePath);
+    }
+
+    private static PairedVisualEvidenceArtifactResult<DialogPaneVisualEvidenceCapture> CollectDialogPaneArtifacts(
+        PairedVisualEvidenceArtifactContext<DialogPaneVisualEvidenceCapture> context)
+    {
+        var limitations = new List<string>();
+        if (!PairedVisualEvidenceCollector.TryCopyArtifacts(
+            context.ScenarioRoot,
+            new PairedVisualEvidenceArtifact(
+                context.Capture.ImagePath,
+                context.FinalOutput.ImagePath!)))
         {
-            var finalScenarioOutput = FreePVisualEvidenceCaptureOrchestration.CreateScenarioOutputPlan(
-                outputDirectory,
-                host,
-                scenario.Id,
-                FreePVisualEvidenceRoutes.DialogPane);
-            var finalImage = finalScenarioOutput.ImagePath!;
-            if (File.Exists(finalImage))
-                File.Delete(finalImage);
-            var scenarioRoot = FreePVisualEvidenceCaptureOrchestration.CreateScenarioRunRoot(
-                runRoot,
-                host,
-                scenario.Id);
-            Directory.CreateDirectory(scenarioRoot);
-            Console.WriteLine($"[{host}] {scenario.Id}");
-            var result = RunScenario(executable, scenarioRoot, scenario.Id, timeout);
-            var scenarioOutput = FreePVisualEvidenceCaptureOrchestration.CreateScenarioOutputPlan(
-                scenarioRoot,
-                host,
-                scenario.Id,
-                FreePVisualEvidenceRoutes.DialogPane);
-            var scenarioManifest = FreePVisualEvidenceCaptureOrchestration.ReadScenarioManifest<
-                DialogPaneVisualEvidenceHostManifest,
-                DialogPaneVisualEvidenceCapture>(
-                    scenarioOutput.HostManifestPath,
-                    FreePVisualEvidenceCaptureOrchestration.ToolManifestJsonOptions,
-                    scenario.Id,
-                    manifest => manifest.Captures,
-                    capture => capture.ScenarioId);
-            if (scenarioManifest.Status == VisualEvidenceScenarioManifestStatus.MissingManifest)
-            {
-                runnerLimitations.Add($"{host} {scenario.Id}: {result} No host manifest was produced.");
-                continue;
-            }
-
-            var manifest = scenarioManifest.Manifest;
-            var capture = scenarioManifest.Capture;
-            if (capture is null)
-            {
-                runnerLimitations.Add($"{host} {scenario.Id}: {result} The host manifest contained no scenario capture.");
-                continue;
-            }
-
-            var sourceImage = FreePVisualEvidenceCaptureOrchestration.ResolveDeclaredPath(
-                scenarioRoot,
-                capture.ImagePath);
-            if (!File.Exists(sourceImage))
-            {
-                runnerLimitations.Add($"{host} {scenario.Id}: {result} The declared PNG was missing.");
-                continue;
-            }
-
-            File.Copy(sourceImage, finalImage, overwrite: true);
-            var finalComparisonImagePath = finalScenarioOutput.ImageRelativePath!;
-            if (!string.IsNullOrWhiteSpace(capture.PixelComparisonImagePath) &&
-                !StringComparer.Ordinal.Equals(capture.PixelComparisonImagePath, capture.ImagePath))
-            {
-                var sourceComparisonImage = FreePVisualEvidenceCaptureOrchestration.ResolveDeclaredPath(
-                    scenarioRoot,
-                    capture.PixelComparisonImagePath);
-                var finalComparisonImage = finalScenarioOutput.ComparisonImagePath!;
-                if (!File.Exists(sourceComparisonImage))
-                {
-                    runnerLimitations.Add($"{host} {scenario.Id}: the declared target-subtree PNG was missing.");
-                }
-                else
-                {
-                    File.Copy(sourceComparisonImage, finalComparisonImage, overwrite: true);
-                    finalComparisonImagePath = finalScenarioOutput.ComparisonImageRelativePath!;
-                }
-            }
-            captures.Add(capture with
-            {
-                ImagePath = finalScenarioOutput.ImageRelativePath!,
-                PixelComparisonImagePath = finalComparisonImagePath,
-            });
-            if (manifest is not null)
-                hostLimitations.AddRange(manifest.Limitations);
+            limitations.Add(
+                $"{context.Host} {context.ScenarioId}: {context.ProcessResult} The declared PNG was missing.");
+            return new(null, limitations);
         }
 
-        var hostManifest = new DialogPaneVisualEvidenceHostManifest(
+        var finalComparisonImagePath = context.FinalOutput.ImageRelativePath!;
+        if (!string.IsNullOrWhiteSpace(context.Capture.PixelComparisonImagePath) &&
+            !StringComparer.Ordinal.Equals(context.Capture.PixelComparisonImagePath, context.Capture.ImagePath))
+        {
+            if (!PairedVisualEvidenceCollector.TryCopyArtifacts(
+                context.ScenarioRoot,
+                new PairedVisualEvidenceArtifact(
+                    context.Capture.PixelComparisonImagePath,
+                    context.FinalOutput.ComparisonImagePath!)))
+            {
+                limitations.Add(
+                    $"{context.Host} {context.ScenarioId}: the declared target-subtree PNG was missing.");
+            }
+            else
+            {
+                finalComparisonImagePath = context.FinalOutput.ComparisonImageRelativePath!;
+            }
+        }
+
+        return new(
+            context.Capture with
+            {
+                ImagePath = context.FinalOutput.ImageRelativePath!,
+                PixelComparisonImagePath = finalComparisonImagePath,
+            },
+            limitations);
+    }
+
+    private static DialogPaneVisualEvidenceHostManifest CreateDialogPaneHostManifest(
+        string host,
+        IReadOnlyList<DialogPaneVisualEvidenceCapture> captures,
+        IReadOnlyList<string> limitations) =>
+        new(
             1,
             host,
             "visible-app-owned-render-target; scenario-isolated-processes",
@@ -487,23 +437,7 @@ internal static class DialogPaneVisualEvidence
             DialogPaneVisualEvidenceCatalog.LogicalShellHeight,
             FreePVisualEvidenceCaptureOrchestration.UtcTimestamp(),
             captures,
-            hostLimitations.Distinct(StringComparer.Ordinal).ToArray());
-        FreePVisualEvidenceCaptureOrchestration.WriteManifest(
-            outputPlan.ManifestPath,
-            hostManifest,
-            FreePVisualEvidenceCaptureOrchestration.ToolManifestJsonOptions);
-        return hostManifest;
-    }
-
-    private static string RunScenario(string executable, string outputRoot, string scenarioId, TimeSpan timeout)
-        => VisualEvidenceToolSupport.RunScenario(
-            FreePVisualEvidenceCaptureOrchestration.CreateScenarioProcessPlan(
-                executable,
-                outputRoot,
-                FreePVisualEvidenceRoutes.DialogPane,
-                scenarioId,
-                timeout,
-                "exact process tree"));
+            limitations);
 
     private static string Dimensions(DialogPaneVisualEvidenceCapture? capture)
     {
