@@ -1024,17 +1024,12 @@ internal static class FreeWAvaloniaRibbonCommands
                 callbacks.OpenMarkIndexEntryDialog,
                 callbacks.OpenInsertIndexDialog,
                 callbacks.OpenUpdateIndexDialog));
-        family.Bind(FreeWRibbonCommandAction.MarkCitation, OptionalHostCommand(callbacks.OpenMarkCitationDialog));
-        family.Bind(FreeWRibbonCommandAction.TableOfAuthorities, new ActionRibbonCommand(
-            callbacks.ShowTableOfAuthoritiesDialog ?? (() =>
-            {
-                var commit = TableOfAuthoritiesDialogPlanner.PlanCommit(
-                    callbacks.OpenTableOfAuthoritiesDialog?.Invoke(),
-                    useDefaultsWhenUnavailable: callbacks.OpenTableOfAuthoritiesDialog is null);
-                if (commit.ShouldInsert)
-                    editor.InsertTableOfAuthorities(commit.Options!);
-            })));
-        family.Bind(FreeWRibbonCommandAction.TableOfAuthoritiesRefresh, new ActionRibbonCommand(editor.RefreshTableOfAuthorities));
+        TableOfAuthoritiesRibbonWorkflow.Register(
+            family,
+            new TableOfAuthoritiesRibbonPorts(
+                callbacks.OpenMarkCitationDialog,
+                callbacks.ShowTableOfAuthoritiesDialog,
+                editor.RefreshTableOfAuthorities));
     }
 
     /// <summary>

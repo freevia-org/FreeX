@@ -2189,11 +2189,11 @@ public sealed class ReferencesTabTests
         {
             OpenMarkCitationDialog = () => view.MarkCitation(
                 new Citation("Brown v. Board", CitationCategory.Cases, "Brown")),
-            OpenTableOfAuthoritiesDialog = () => new ToaOptions
+            ShowTableOfAuthoritiesDialog = () => view.InsertTableOfAuthorities(new ToaOptions
             {
                 CategoryFilter = CitationCategory.Cases,
                 TabLeader = ToaTabLeader.Underline
-            }
+            })
         });
 
         Execute(registry, "freew.mark-citation");

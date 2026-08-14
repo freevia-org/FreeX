@@ -739,9 +739,13 @@ internal static class FreeWRibbonCommands
                 () => editor.Focus()));
         // Insert tab — References: mark the selection as a legal citation (a hidden TA field), and insert /
         // rebuild a Table of Authorities built from those marks, grouped by category (reversibly via the bus).
-        referenceCommands.Bind(FreeWRibbonCommandAction.MarkCitation, new MarkCitationCommand(editor));
-        referenceCommands.Bind(FreeWRibbonCommandAction.TableOfAuthorities, new InsertTableOfAuthoritiesCommand(editor));
-        referenceCommands.Bind(FreeWRibbonCommandAction.TableOfAuthoritiesRefresh, new ActionRibbonCommand(() => { editor.Focus(); editor.RefreshTableOfAuthorities(); }));
+        TableOfAuthoritiesRibbonWorkflow.Register(
+            referenceCommands,
+            new TableOfAuthoritiesRibbonPorts(
+                () => new MarkCitationCommand(editor).Execute(RibbonCommandContext.Empty),
+                () => new InsertTableOfAuthoritiesCommand(editor).Execute(RibbonCommandContext.Empty),
+                editor.RefreshTableOfAuthorities,
+                () => editor.Focus()));
         // Insert tab — Links: name the caret's paragraph as a bookmark target (an invisible marker).
         registry.Bind(FreeWRibbonCommandAction.Bookmark, new InsertBookmarkCommand(editor));
         // Insert tab — Links: apply an internal link (to an existing bookmark) over the selection.

@@ -117,7 +117,6 @@ public sealed record FreeWRibbonHostExecutionPorts(
     Action? OpenInsertIndexDialog = null,
     Action? OpenUpdateIndexDialog = null,
     Action? OpenMarkCitationDialog = null,
-    Func<ToaOptions?>? OpenTableOfAuthoritiesDialog = null,
     Action? ToggleReviewBalloons = null,
     Func<bool>? IsReviewBalloonsActive = null,
     Func<MailMergeRuleDialogRequest, MailMergeRuleDialogResponse?>? AskMergeRule = null,
