@@ -144,7 +144,9 @@ public partial class MainWindow
     {
         if (SheetGrid.SelectedRange is not { } range) return;
 
-        var dlg = new CreateNamesFromSelectionDialog { Owner = this };
+        var sheet = _session.ActiveSheet;
+        var detected = CreateNamesFromSelectionPlanner.DetectOptions(range, sheet.GetValue);
+        var dlg = new CreateNamesFromSelectionDialog(detected) { Owner = this };
         if (dlg.ShowDialog() != true) return;
 
         var command = new CreateNamedRangesFromSelectionCommand(
