@@ -59,6 +59,7 @@ public static class AvaloniaCompactDialogChrome
 {
     public const string DialogWindowClass = "free-compact-dialog-window";
     public const string ClassicTabClass = "free-classic-dialog-tabs";
+    public const string CompactButtonClass = "free-compact-dialog-button";
     public const string CompactComboBoxClass = "free-compact-dialog-combo";
     private const string ReadOnlyDocumentClass = "free-read-only-document";
 
@@ -215,6 +216,18 @@ public static class AvaloniaCompactDialogChrome
         button.MaxHeight = style.ButtonHeight;
         button.Padding = style.ButtonPadding;
         button.CornerRadius = style.ButtonCornerRadius;
+        button.BorderThickness = new Thickness(CompactDialogVisualTokens.BorderThickness);
+        button.FontSize = style.FontSize;
+        button.FontFamily = style.FontFamily;
+        if (isDefault)
+            button.IsDefault = true;
+        button.HorizontalContentAlignment = HorizontalAlignment.Center;
+        button.VerticalContentAlignment = VerticalAlignment.Center;
+        if (button.Content is string content)
+            AvaloniaDialogButtonContent.Apply(button, content);
+        if (button.Classes.Contains(CompactButtonClass))
+            return;
+
         var restingBackground = style.ButtonBackgroundBrush ?? ThemeWhiteBrush();
         var accentBrush = ThemeAccentBrush(style);
         var restingBorder = isDefault
@@ -229,13 +242,11 @@ public static class AvaloniaCompactDialogChrome
                 new Setter(Button.BorderBrushProperty, restingBorder),
             },
         });
-        button.BorderThickness = new Thickness(CompactDialogVisualTokens.BorderThickness);
-        button.FontSize = style.FontSize;
-        button.FontFamily = style.FontFamily;
-        if (isDefault)
-            button.IsDefault = true;
-        button.HorizontalContentAlignment = HorizontalAlignment.Center;
-        button.VerticalContentAlignment = VerticalAlignment.Center;
+        button.Classes.Add(CompactButtonClass);
+        button.FocusAdorner = null;
+        // Own the same border/content structure as the WPF compact-dialog template. Leaving the
+        // Fluent template in place lets toolkit padding, focus, and corner chrome drift by release.
+        button.Template = CreateCompactButtonTemplate(style);
         button.Styles.Add(new Style(selector => selector.OfType<Button>().Class(":pointerover"))
         {
             Setters =
@@ -264,9 +275,48 @@ public static class AvaloniaCompactDialogChrome
                 new Setter(Button.BorderBrushProperty, DisabledButtonBorderBrush),
             },
         });
-        if (button.Content is string content)
-            AvaloniaDialogButtonContent.Apply(button, content);
     }
+
+    private static FuncControlTemplate<Button> CreateCompactButtonTemplate(
+        AvaloniaCompactDialogChromeStyle style) => new((button, _) =>
+    {
+        var presenter = new ContentPresenter
+        {
+            RecognizesAccessKey = true,
+        };
+        presenter.Bind(
+            ContentPresenter.ContentProperty,
+            new Binding(nameof(ContentControl.Content)) { Source = button });
+        presenter.Bind(
+            ContentPresenter.ContentTemplateProperty,
+            new Binding(nameof(ContentControl.ContentTemplate)) { Source = button });
+        presenter.Bind(
+            Layoutable.HorizontalAlignmentProperty,
+            new Binding(nameof(ContentControl.HorizontalContentAlignment)) { Source = button });
+        presenter.Bind(
+            Layoutable.VerticalAlignmentProperty,
+            new Binding(nameof(ContentControl.VerticalContentAlignment)) { Source = button });
+
+        var border = new Border
+        {
+            Name = "CompactButtonBorder",
+            CornerRadius = style.ButtonCornerRadius,
+            Child = presenter,
+        };
+        border.Bind(
+            Border.BackgroundProperty,
+            new Binding(nameof(TemplatedControl.Background)) { Source = button });
+        border.Bind(
+            Border.BorderBrushProperty,
+            new Binding(nameof(TemplatedControl.BorderBrush)) { Source = button });
+        border.Bind(
+            Border.BorderThicknessProperty,
+            new Binding(nameof(TemplatedControl.BorderThickness)) { Source = button });
+        border.Bind(
+            Border.PaddingProperty,
+            new Binding(nameof(TemplatedControl.Padding)) { Source = button });
+        return border;
+    });
 
     public static void ApplyTextBox(TextBox textBox, AvaloniaCompactDialogChromeStyle style, bool fixedHeight = true)
     {

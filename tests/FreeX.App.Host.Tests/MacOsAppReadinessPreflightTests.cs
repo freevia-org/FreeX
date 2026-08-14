@@ -867,14 +867,16 @@ public sealed class MacOsAppReadinessPreflightTests
         script.Should().Contain("public WorkbookCellEditResult SetZoomPercent(int zoomPercent)");
         script.Should().Contain("new SetWorksheetZoomCommand(ActiveSheet.Id, zoomPercent)");
         script.Should().Contain("public WorkbookCellEditResult SetActiveSheetTabColor(CellColor? color)");
-        script.Should().Contain("new SetSheetTabColorCommand(ActiveSheet.Id, color)");
+        script.Should().Contain("public WorkbookCellEditResult SetSelectedSheetTabColor(CellColor? color)");
+        script.Should().Contain("new SetSheetTabColorCommand(selectedSheetIds[0], color)");
         script.Should().Contain("public WorkbookCellEditResult AddSheet()");
         script.Should().Contain("public WorkbookCellEditResult RenameActiveSheet(string? name)");
         script.Should().Contain("new RenameSheetCommand(ActiveSheet.Id, newName)");
         script.Should().Contain("ApplySuccessfulWorkbookMetadataResult(ActiveSheet.Id)");
         script.Should().Contain("new DuplicateSheetCommand(sourceSheetId)");
         script.Should().Contain("public WorkbookCellEditResult DeleteActiveSheet()");
-        script.Should().Contain("new RemoveSheetCommand(sheetId)");
+        script.Should().Contain("public WorkbookCellEditResult DeleteSelectedSheets()");
+        script.Should().Contain("new RemoveSheetsCommand(selectedSheetIds)");
         script.Should().Contain("public GridRange SelectCurrentRegionOrAll()");
         script.Should().Contain("OpenExternalHelpLinkAsync(AppHelpInfo.HelpUrl");
         script.Should().Contain("FreeXAboutDialogPresentation.Create(typeof(AboutDialog).Assembly, `\"Avalonia`\")");
@@ -3294,8 +3296,8 @@ public sealed class MacOsAppReadinessPreflightTests
                     var result = _session.ApplySelectedRangeCompactFormat(
                         new StyleDiff(),
                         preset,
-                        _borderPickerStyle,
-                        _borderPickerColor);
+                        _borderPickerSession.Style,
+                        _borderPickerSession.Color);
                 }
                 private async Task MergeAndCenterSelectedRangeAsync()
                 {
@@ -4264,7 +4266,8 @@ public sealed class MacOsAppReadinessPreflightTests
                 public bool CanHideActiveSheet =>
                 public bool IsWorkbookGrouped =>
                 public WorkbookCellEditResult SetActiveSheetTabColor(CellColor? color)
-                new SetSheetTabColorCommand(ActiveSheet.Id, color)
+                public WorkbookCellEditResult SetSelectedSheetTabColor(CellColor? color)
+                new SetSheetTabColorCommand(selectedSheetIds[0], color)
                 public bool IsFormatPainterActive =>
                 public bool CaptureFormatPainterSource(bool persistent = false)
                 public void CancelFormatPainter()
@@ -4340,7 +4343,8 @@ public sealed class MacOsAppReadinessPreflightTests
                 SheetGroupSelectionService.SelectAll(GetSelectableSheetIds())
                 public bool UngroupSheets()
                 public WorkbookCellEditResult HideActiveSheet()
-                new SetSheetHiddenCommand(sheetId, hidden: true)
+                public WorkbookCellEditResult HideSelectedSheets()
+                new SetSheetHiddenCommand(selectedSheetIds[0], hidden: true)
                 public WorkbookCellEditResult UnhideSheet(SheetId sheetId)
                 new SetSheetHiddenCommand(sheetId, hidden: false)
                 public bool IsShowingFormulas => ActiveSheet.ShowFormulas;
@@ -4441,12 +4445,14 @@ public sealed class MacOsAppReadinessPreflightTests
                     return result;
                 }
 
-                public WorkbookCellEditResult DeleteActiveSheet()
+                public WorkbookCellEditResult DeleteActiveSheet() => DeleteSelectedSheets();
+
+                public WorkbookCellEditResult DeleteSelectedSheets()
                 {
-                    var sheetId = ActiveSheet.Id;
+                    var selectedSheetIds = CurrentGroupedStructureSheetIds();
                     var result = _cellEditService.ExecuteEditCommand(
                         Workbook,
-                        new RemoveSheetCommand(sheetId));
+                        new RemoveSheetsCommand(selectedSheetIds));
                     return result;
                 }
 
@@ -4755,8 +4761,8 @@ public sealed class MacOsAppReadinessPreflightTests
 
                 public static WorkbookViewportScrollState Create(Sheet sheet, ViewportModel viewport)
                 {
-                    CountScrollableRows(viewport.RowMetrics, sheet.FrozenRows);
-                    CountScrollableColumns(viewport.ColMetrics, sheet.FrozenCols);
+                    CountVisibleScrollableRows(viewport, sheet.FrozenRows);
+                    CountVisibleScrollableColumns(viewport, sheet.FrozenCols);
                     return default;
                 }
 
