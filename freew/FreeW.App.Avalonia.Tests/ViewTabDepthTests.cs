@@ -126,7 +126,10 @@ public sealed class ViewTabDepthTests
         ids.Should().NotContain("freew.navigationpane");
         ids.Should().Contain("freew.new-window");
         ids.Should().Contain("freew.arrange-all");
-        ids.Should().Contain("freew.split");
+        ids.Should().Contain("freew.split-window");
+        ids.Should().NotContain("freew.split");
+        ids.Should().NotContain("freew.zoom-in");
+        ids.Should().NotContain("freew.zoom-out");
         // Show group must surface the Reviewing Pane toggle on the View tab too.
         ids.Should().Contain("freew.reviewing-pane");
     }
