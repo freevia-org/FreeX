@@ -209,8 +209,9 @@ internal static class FreeWAvaloniaRibbonCommands
         headerFooterCommands.Bind(FreeWRibbonCommandAction.PageNumberCurrent, new ActionRibbonCommand(() => editor.InsertField(RunFieldKind.PageNumber)));
         headerFooterCommands.Bind(FreeWRibbonCommandAction.PageNumberFormat, new ContextRibbonCommand(
             context => ExecutePageNumberFormat(editor, callbacks, context)));
-        headerFooterCommands.Bind(FreeWRibbonCommandAction.Datetime, new ActionRibbonCommand(
-            callbacks.OpenDateTimeDialog ?? (() => editor.InsertField(RunFieldKind.Date))));
+        headerFooterCommands.Bind(
+            FreeWRibbonCommandAction.Datetime,
+            OptionalHostCommand(callbacks.OpenDateTimeDialog));
         ConfigureHeaderFooterCommandFamily(headerFooterCommands, editor);
 
         // ── Insert depth 2 (AV-INSERT2) ──────────────────────────────────────
@@ -246,8 +247,9 @@ internal static class FreeWAvaloniaRibbonCommands
 
         // Merge / split.
         tableCommands.Register("freew.table-merge-cells", new ActionRibbonCommand(editor.MergeSelectedCells));
-        tableCommands.Register("freew.table-split-cell", new ActionRibbonCommand(
-            callbacks.OpenSplitCellDialog ?? (() => editor.SplitCurrentCell())));
+        tableCommands.Register(
+            "freew.table-split-cell",
+            OptionalHostCommand(callbacks.OpenSplitCellDialog));
 
         // ── Layout / Page Setup (AV-PAGE) ────────────────────────────────────
         // Dialog launcher: opens the Page Setup modal (margins + paper + orientation).
@@ -900,8 +902,7 @@ internal static class FreeWAvaloniaRibbonCommands
                 SmartArt: new EditingActionCommand(editor, callbacks.OpenInsertSmartArtDialog, () => editor.InsertSmartArt()),
                 Icon: new EditingActionCommand(editor, callbacks.OpenIconPickerDialog, editor.InsertIcon),
                 WordArt: new ActionRibbonCommand(() => editor.InsertWordArt()),
-                EmbeddedObject: new ActionRibbonCommand(
-                    callbacks.InsertObject ?? (() => editor.InsertEmbeddedObject()))));
+                EmbeddedObject: OptionalHostCommand(callbacks.InsertObject)));
         r.Bind(FreeWRibbonCommandAction.UpdateFields, new ActionRibbonCommand(editor.UpdateFields));
         r.Bind(FreeWRibbonCommandAction.ToggleFieldCodes, new ActionRibbonCommand(editor.ToggleFieldCodes));
     }
