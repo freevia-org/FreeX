@@ -79,6 +79,48 @@ public sealed class DocumentTableEditingCoordinator
             ? new DocumentTableCellAddress(blockIndex, rowIndex, gridColumn)
             : null;
 
+    /// <summary>
+    /// Expands renderer-native selection endpoints into canonical row-major model cell addresses.
+    /// Grid-spanned cells are emitted once, reversed endpoints are normalized, and cross-table or
+    /// invalid endpoint ranges are rejected.
+    /// </summary>
+    public IReadOnlyList<DocumentTableCellAddress> AddressesInRange(
+        DocumentTableCellAddress anchor,
+        DocumentTableCellAddress active)
+    {
+        if (anchor.BlockIndex != active.BlockIndex
+            || !TryResolveCell(anchor, out var table, out _)
+            || !TryResolveCell(active, out _, out _))
+        {
+            return Array.Empty<DocumentTableCellAddress>();
+        }
+
+        var minRow = Math.Min(anchor.RowIndex, active.RowIndex);
+        var maxRow = Math.Max(anchor.RowIndex, active.RowIndex);
+        var minColumn = Math.Min(anchor.GridColumn, active.GridColumn);
+        var maxColumn = Math.Max(anchor.GridColumn, active.GridColumn);
+        var addresses = new List<DocumentTableCellAddress>();
+
+        for (var rowIndex = minRow; rowIndex <= maxRow; rowIndex++)
+        {
+            foreach (var projected in TableGridProjection.ProjectRow(table.Rows[rowIndex]))
+            {
+                if (projected.EndColumnExclusive <= minColumn
+                    || projected.StartColumn > maxColumn)
+                {
+                    continue;
+                }
+
+                addresses.Add(new DocumentTableCellAddress(
+                    anchor.BlockIndex,
+                    rowIndex,
+                    projected.StartColumn));
+            }
+        }
+
+        return addresses;
+    }
+
     public DocumentTableEditResult InsertRow(DocumentTableCellAddress address, bool after)
     {
         if (!TryResolveCell(address, out var table, out _))

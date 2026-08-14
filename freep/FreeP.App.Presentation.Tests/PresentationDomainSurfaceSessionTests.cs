@@ -125,6 +125,72 @@ public sealed class PresentationDomainSurfaceSessionTests
         shape.Table.Rows[0].Cells[0].GridSpan.Should().Be(1);
     }
 
+    [Theory]
+    [InlineData(PresentationDomainContextActionKind.InsertTableRowAbove)]
+    [InlineData(PresentationDomainContextActionKind.InsertTableRowBelow)]
+    [InlineData(PresentationDomainContextActionKind.InsertTableColumnLeft)]
+    [InlineData(PresentationDomainContextActionKind.InsertTableColumnRight)]
+    [InlineData(PresentationDomainContextActionKind.DeleteTableRow)]
+    [InlineData(PresentationDomainContextActionKind.DeleteTableColumn)]
+    [InlineData(PresentationDomainContextActionKind.MergeTableCell)]
+    [InlineData(PresentationDomainContextActionKind.SplitTableCell)]
+    public void TableStructureDispatcher_CommitsPendingTextBeforeEveryMutation(
+        PresentationDomainContextActionKind kind)
+    {
+        var presentation = Presentation.CreateEmpty();
+        var editor = new EditingSession(presentation, new PresentationCommandBus(presentation));
+        var shape = editor.InsertTable(2, 2);
+        editor.Select(shape.Id);
+        editor.SetActiveTableCell(0, 0);
+        if (kind == PresentationDomainContextActionKind.SplitTableCell)
+            editor.TryMergeActiveTableCell().Should().BeTrue();
+
+        var before = TableStructureSignature(shape);
+        var commitCount = 0;
+        var result = PresentationTableStructureActionDispatcher.TryExecute(
+            kind,
+            TableCellEditPlanner.PlanSelectedCell(
+                editor.CurrentSlide,
+                editor.SelectedShapeIds,
+                editor.ActiveTableCell),
+            shape.Id,
+            () =>
+            {
+                commitCount++;
+                TableStructureSignature(shape).Should().Be(before);
+            },
+            editor);
+
+        result.Should().BeTrue();
+        commitCount.Should().Be(1);
+        TableStructureSignature(shape).Should().NotBe(before);
+    }
+
+    [Fact]
+    public void TableStructureDispatcher_RejectsStaleNativeEditorOwnershipWithoutCommit()
+    {
+        var presentation = Presentation.CreateEmpty();
+        var editor = new EditingSession(presentation, new PresentationCommandBus(presentation));
+        var shape = editor.InsertTable(2, 2);
+        editor.Select(shape.Id);
+        editor.SetActiveTableCell(0, 0);
+        var commitCount = 0;
+
+        PresentationTableStructureActionDispatcher.TryExecute(
+                PresentationDomainContextActionKind.MergeTableCell,
+                TableCellEditPlanner.PlanSelectedCell(
+                    editor.CurrentSlide,
+                    editor.SelectedShapeIds,
+                    editor.ActiveTableCell),
+                shape.Id + 1u,
+                () => commitCount++,
+                editor)
+            .Should().BeFalse();
+
+        commitCount.Should().Be(0);
+        shape.Table!.Rows[0].Cells[0].GridSpan.Should().Be(1);
+    }
+
     [Fact]
     public void DomainContextSession_OwnsWaterfallStateAndChartDialogDispatch()
     {
@@ -204,6 +270,16 @@ public sealed class PresentationDomainSurfaceSessionTests
             "freep",
             "FreeP.App.Rendering.Wpf",
             "InCanvasTableCellEditor.cs"));
+        var avaloniaTableEditor = File.ReadAllText(Path.Combine(
+            root,
+            "freep",
+            "FreeP.App.Rendering.Avalonia",
+            "AvaloniaInCanvasTextEditor.cs"));
+        var wpfRibbonProfile = File.ReadAllText(Path.Combine(
+            root,
+            "freep",
+            "FreeP.App.Host",
+            "MainWindow.RibbonProfile.cs"));
 
         foreach (var source in new[] { wpf, avalonia })
         {
@@ -226,7 +302,17 @@ public sealed class PresentationDomainSurfaceSessionTests
         }
 
         wpf.Should().Contain("_domainContextMenuSession.BuildAtSlidePoint(");
-        wpf.Should().Contain("_domainContextMenuSession.Execute(action)");
+        foreach (var source in new[] { wpf, avalonia })
+        {
+            source.Should().Contain("_domainContextMenuSession.Execute(action, TryExecuteInlineTableAction)");
+            source.Should().Contain("TryExecuteActiveTableStructureAction(action.Kind)");
+        }
+        foreach (var source in new[] { wpfTableEditor, avaloniaTableEditor })
+            source.Should().Contain("PresentationTableStructureActionDispatcher.TryExecute(");
+        wpfRibbonProfile.Should().Contain("ExecuteCurrentTableAction(");
+        wpfRibbonProfile.Should().Contain("TryExecuteInlineTableAction");
+        wpfRibbonProfile.Should().NotContain("MergeTableCells = () => Editor.TryMergeActiveTableCell()");
+        wpfRibbonProfile.Should().NotContain("SplitTableCell = () => Editor.TrySplitActiveTableCell()");
         wpfTableEditor.Should().NotContain("BuildTableContextMenu(");
         wpfTableEditor.Should().NotContain("OnCanvasRightMouseDown");
         wpfTableEditor.Should().NotContain("\"Insert Row Above\"");
@@ -283,6 +369,12 @@ public sealed class PresentationDomainSurfaceSessionTests
         section.SlideIds.AddRange(slideIds);
         presentation.Sections.Add(section);
     }
+
+    private static string TableStructureSignature(SlideShape shape) =>
+        string.Join(
+            ";",
+            shape.Table!.Rows.Select((row, rowIndex) =>
+                $"{rowIndex}:{string.Join(",", row.Cells.Select(cell => cell.GridSpan))}"));
 
     private static string FindWorkspaceRoot() =>
         TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeP.slnx");

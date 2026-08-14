@@ -1823,9 +1823,19 @@ public sealed partial class DocumentView : RichTextBox
     public void SetCaretCellAlignment(TableCellVerticalAlignment verticalAlignment, ModelTextAlignment horizontalAlignment)
     {
         Focus();
+        var start = TableAddressOf(Selection.Start.Parent as TextElement);
+        var end = TableAddressOf(Selection.End.Parent as TextElement);
+        var caret = CaretTableAddress();
         CommitToModel();
-        if (CaretTableAddress() is { } address)
-            TableEdits.SetCellAlignment([address], verticalAlignment, horizontalAlignment);
+        start ??= caret;
+        end ??= start;
+        if (start is { } anchor && end is { } active)
+        {
+            TableEdits.SetCellAlignment(
+                TableEdits.AddressesInRange(anchor, active),
+                verticalAlignment,
+                horizontalAlignment);
+        }
     }
 
     /// <summary>

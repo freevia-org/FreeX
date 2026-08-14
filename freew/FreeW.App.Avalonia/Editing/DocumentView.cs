@@ -2119,38 +2119,16 @@ public sealed partial class DocumentView : Control
 
         if (SelectedCellRange is { } sel)
         {
-            if (sel.TableBlock < 0 || sel.TableBlock >= _doc.Blocks.Count
-                || _doc.Blocks[sel.TableBlock] is not Table selTbl)
-                return;
-            var addresses = new List<DocumentTableCellAddress>();
-            for (var r = sel.MinRow; r <= sel.MaxRow; r++)
-            {
-                if (r >= selTbl.Rows.Count) break;
-                var row = selTbl.Rows[r];
-                // BL1/BL3: SelectedCellRange uses GRID columns; SetCellAlignmentCommand expects
-                // CELL-LIST indices. Convert and dedupe merged cells (same pattern as SetCellShading).
-                var lastCellIdx = -1;
-                for (var gridCol = sel.MinCol; gridCol <= sel.MaxCol; gridCol++)
-                {
-                    var cellIdx = GridColumnToCellIndex(row, gridCol);
-                    if (cellIdx < 0) break;
-                    if (cellIdx == lastCellIdx) continue; // merged cell already processed
-                    lastCellIdx = cellIdx;
-                    addresses.Add(new DocumentTableCellAddress(sel.TableBlock, r, gridCol));
-                }
-            }
+            var addresses = TableEdits.AddressesInRange(
+                new DocumentTableCellAddress(sel.TableBlock, sel.MinRow, sel.MinCol),
+                new DocumentTableCellAddress(sel.TableBlock, sel.MaxRow, sel.MaxCol));
             TableEdits.SetCellAlignment(addresses, verticalAlignment, horizontalAlignment);
         }
         else if (_cellCaret is { } cc)
         {
-            if (cc.TableBlock < 0 || cc.TableBlock >= _doc.Blocks.Count
-                || _doc.Blocks[cc.TableBlock] is not Table ccTbl)
-                return;
-            // BL1: cc.Col is a GRID column; convert to cell-list index.
-            var caretCellIdx = GridColumnToCellIndex(ccTbl.Rows[cc.Row], cc.Col);
-            if (caretCellIdx < 0) return;
+            var address = new DocumentTableCellAddress(cc.TableBlock, cc.Row, cc.Col);
             TableEdits.SetCellAlignment(
-                [new DocumentTableCellAddress(cc.TableBlock, cc.Row, cc.Col)],
+                TableEdits.AddressesInRange(address, address),
                 verticalAlignment,
                 horizontalAlignment);
         }

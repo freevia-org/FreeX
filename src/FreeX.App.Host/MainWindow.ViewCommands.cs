@@ -269,15 +269,18 @@ public partial class MainWindow
                 ? "MainWindow_TooltipDescription_RestoreAHiddenWorkbookWindow"
                 : "MainWindow_TooltipDescription_UnavailableUnhideRequiresAHiddenWindow"));
 
-        // Reset Window Position is always available; it re-centers/cascades this window.
+        var anySideBySideActive = _windowRegistry?.IsSideBySideActive ?? false;
+        var sideBySideActive = _windowRegistry?.IsSideBySideActiveFor(this) ?? false;
+
+        // Reset Window Position belongs to the active pair and resets both members together.
         ApplyRibbonWindowCommandState(
             "Reset Window Position",
-            isEnabled: true,
+            sideBySideActive,
             UiText.Get("MainWindow_TooltipDescription_ResetThisWindowToAStandardSizeAndPosition"));
 
         // View Side by Side needs a second visible window to pair with.
-        var sideBySideActive = _windowRegistry?.IsSideBySideActive ?? false;
-        var canSideBySide = sideBySideActive || (_windowRegistry?.VisibleCount ?? 1) > 1;
+        var canSideBySide = sideBySideActive
+            || (!anySideBySideActive && (_windowRegistry?.VisibleCount ?? 1) > 1);
         ApplyRibbonWindowToggleState(
             "View Side by Side",
             canSideBySide,
@@ -287,7 +290,7 @@ public partial class MainWindow
                 : "MainWindow_TooltipDescription_UnavailableViewSideBySideRequiresSecondVisibleWindow"));
 
         // Synchronous Scrolling is only meaningful while side-by-side is active.
-        var syncActive = _windowRegistry?.IsSynchronousScrollActive ?? false;
+        var syncActive = _windowRegistry?.IsSynchronousScrollActiveFor(this) ?? false;
         ApplyRibbonWindowToggleState(
             "Synchronous Scrolling",
             sideBySideActive,

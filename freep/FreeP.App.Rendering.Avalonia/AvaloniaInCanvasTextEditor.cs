@@ -389,101 +389,63 @@ public sealed class AvaloniaInCanvasTextEditor : IDisposable
             editor.TryApplyActiveTableRowHeight(heightEmu));
 
     /// <summary>
-    /// Inserts a row above the active inline table cell after committing the child rich-text
-    /// transaction through the shared command bus.
+    /// Executes a structural table command after committing the child rich-text transaction.
+    /// Validation, ordering, and mutation are owned by the shared Presentation dispatcher.
     /// </summary>
+    public bool TryExecuteActiveTableStructureAction(PresentationDomainContextActionKind kind)
+    {
+        if (!_cellEditActive || _cellTextBox is null)
+            return false;
+
+        return PresentationTableStructureActionDispatcher.TryExecute(
+            kind,
+            AvaloniaTableCellEditAdapter.PlanSelectedCell(_editor),
+            _editingTableShapeId,
+            CommitCellEdit,
+            _editor);
+    }
+
     public bool TryInsertActiveTableRowAbove() =>
-        TryApplyActiveTableCommand(
-            state => state.CanInsertRow,
-            editor =>
-            {
-                editor.InsertRowAbove();
-                return true;
-            });
+        TryExecuteActiveTableStructureAction(
+            PresentationDomainContextActionKind.InsertTableRowAbove);
 
     /// <summary>Inserts a row below the active inline table cell.</summary>
     public bool TryInsertActiveTableRowBelow() =>
-        TryApplyActiveTableCommand(
-            state => state.CanInsertRow,
-            editor =>
-            {
-                editor.InsertRowBelow();
-                return true;
-            });
+        TryExecuteActiveTableStructureAction(
+            PresentationDomainContextActionKind.InsertTableRowBelow);
 
     /// <summary>Inserts a column to the left of the active inline table cell.</summary>
     public bool TryInsertActiveTableColumnLeft() =>
-        TryApplyActiveTableCommand(
-            state => state.CanInsertColumn,
-            editor =>
-            {
-                editor.InsertColumnLeft();
-                return true;
-            });
+        TryExecuteActiveTableStructureAction(
+            PresentationDomainContextActionKind.InsertTableColumnLeft);
 
     /// <summary>Inserts a column to the right of the active inline table cell.</summary>
     public bool TryInsertActiveTableColumnRight() =>
-        TryApplyActiveTableCommand(
-            state => state.CanInsertColumn,
-            editor =>
-            {
-                editor.InsertColumnRight();
-                return true;
-            });
+        TryExecuteActiveTableStructureAction(
+            PresentationDomainContextActionKind.InsertTableColumnRight);
 
     /// <summary>Deletes the active inline table cell's row.</summary>
     public bool TryDeleteActiveTableRow() =>
-        TryApplyActiveTableCommand(
-            state => state.CanDeleteRow,
-            editor =>
-            {
-                editor.DeleteRow();
-                return true;
-            });
+        TryExecuteActiveTableStructureAction(
+            PresentationDomainContextActionKind.DeleteTableRow);
 
     /// <summary>Deletes the active inline table cell's column.</summary>
     public bool TryDeleteActiveTableColumn() =>
-        TryApplyActiveTableCommand(
-            state => state.CanDeleteColumn,
-            editor =>
-            {
-                editor.DeleteColumn();
-                return true;
-            });
+        TryExecuteActiveTableStructureAction(
+            PresentationDomainContextActionKind.DeleteTableColumn);
 
     /// <summary>
     /// Merges the active inline table cell with its right neighbor, or the cell below at a row
     /// edge, using the shared merge transaction.
     /// </summary>
     public bool TryMergeActiveTableCell() =>
-        TryApplyActiveTableCommand(
-            state => state.CanMergeWithRight || state.CanMergeWithBelow,
-            editor => editor.TryMergeActiveTableCell());
+        TryExecuteActiveTableStructureAction(
+            PresentationDomainContextActionKind.MergeTableCell);
 
     /// <summary>Splits the active inline table cell when it is a merged anchor.</summary>
     public bool TrySplitActiveTableCell() =>
-        TryApplyActiveTableCommand(
-            state => state.CanSplitCell,
-            editor =>
-            {
-                editor.SplitSelectedCell();
-                return true;
-            });
-
-    private bool TryApplyActiveTableCommand(
-        Func<TableCellEditState, bool> canApply,
-        Func<EditingSession, bool> apply)
-    {
-        if (!_cellEditActive || _cellTextBox is null)
-            return false;
-
-        var state = AvaloniaTableCellEditAdapter.PlanSelectedCell(_editor);
-        if (!state.HasActiveCell || state.ShapeId != _editingTableShapeId || !canApply(state))
-            return false;
-
-        CommitCellEdit();
-        return apply(_editor);
-    }
+        TryExecuteActiveTableStructureAction(
+            PresentationDomainContextActionKind.SplitTableCell);
 
     private bool TryApplyActiveTableCellCommand(Func<EditingSession, bool> apply)
     {
