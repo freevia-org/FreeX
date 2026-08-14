@@ -1,3 +1,4 @@
+﻿using Free.Shared.AppServices;
 using FreeW.Core.Model;
 
 namespace FreeW.App.Presentation.Dialogs;
@@ -16,7 +17,7 @@ public readonly record struct FindReplaceAllExecutionResult(
     bool InSelection = false);
 
 public sealed record FindReplaceDialogState(
-    FindReplaceDialogOpenMode OpenMode,
+    FindReplaceOpenMode OpenMode,
     string Query,
     string Replacement,
     FindReplaceSearchOptions Options,
@@ -45,7 +46,7 @@ public sealed record FindReplaceGoToTargetsPlan(
 public sealed class FindReplaceDialogSession
 {
     private readonly IFindReplaceDialogCommandHost _commandHost;
-    private FindReplaceDialogOpenMode _openMode;
+    private FindReplaceOpenMode _openMode;
     private string _query = string.Empty;
     private string _replacement = string.Empty;
     private FindReplaceSearchOptions _options;
@@ -53,7 +54,7 @@ public sealed class FindReplaceDialogSession
 
     public FindReplaceDialogSession(
         IFindReplaceDialogCommandHost commandHost,
-        FindReplaceDialogOpenMode openMode = FindReplaceDialogOpenMode.Find)
+        FindReplaceOpenMode openMode = FindReplaceOpenMode.Find)
     {
         _commandHost = commandHost ?? throw new ArgumentNullException(nameof(commandHost));
         _openMode = openMode;
@@ -61,7 +62,7 @@ public sealed class FindReplaceDialogSession
 
     public FindReplaceDialogState State => BuildState();
 
-    public FindReplaceDialogState ActivateFor(FindReplaceDialogOpenMode openMode)
+    public FindReplaceDialogState ActivateFor(FindReplaceOpenMode openMode)
     {
         _openMode = openMode;
         return BuildState();

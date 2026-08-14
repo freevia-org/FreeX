@@ -437,8 +437,8 @@ public sealed partial class MainWindow : Window
             SaveDocument: () => _file.Save(),
             SaveDocumentAs: () => _file.SaveAs(),
             PrintDocument: Print,
-            Find: () => OpenFindReplace(FindReplaceDialogOpenMode.Find),
-            Replace: () => OpenFindReplace(FindReplaceDialogOpenMode.Replace),
+            Find: () => OpenFindReplace(FindReplaceOpenMode.Find),
+            Replace: () => OpenFindReplace(FindReplaceOpenMode.Replace),
             Cut: () => ExecuteEditingCommand(ApplicationCommands.Cut),
             Copy: () => ExecuteEditingCommand(ApplicationCommands.Copy),
             Paste: () => ExecuteEditingCommand(ApplicationCommands.Paste),
@@ -3278,9 +3278,9 @@ public sealed partial class MainWindow : Window
         }
     }
 
-    private void OpenFindReplace() => OpenFindReplace(FindReplaceDialogOpenMode.Find);
+    private void OpenFindReplace() => OpenFindReplace(FindReplaceOpenMode.Find);
 
-    private void OpenFindReplace(FindReplaceDialogOpenMode openMode)
+    private void OpenFindReplace(FindReplaceOpenMode openMode)
     {
         if (_findDialog is null)
         {

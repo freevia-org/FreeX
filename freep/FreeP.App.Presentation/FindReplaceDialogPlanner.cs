@@ -71,7 +71,10 @@ public sealed record FindReplaceDialogSurfacePlan(
         Actions.First(option => option.Action == action).DisplayText;
 
     public string TitleForMode(bool showReplace) =>
-        showReplace ? Schema.Title : FindOnlyTitle;
+        TitleForMode(FindReplaceDialogPolicy.OpenModeFor(showReplace));
+
+    public string TitleForMode(FindReplaceOpenMode mode) =>
+        FindReplaceDialogPolicy.ShowsReplaceSurface(mode) ? Schema.Title : FindOnlyTitle;
 }
 
 public static class FindReplaceDialogSurfaceCatalog
@@ -132,6 +135,20 @@ public sealed record FindReplaceDialogInitialState(
     bool MatchCase,
     bool WholeWord);
 
+/// <summary>
+/// Deliberately NOT shared with FreeX/FreeW (recorded here rather than forced into
+/// <c>Free.Shared.AppServices.FindReplaceDialogPolicy</c>):
+/// <list type="bullet">
+/// <item>The <c>MatchCase</c>/<c>WholeWord</c> pair. FreeX's option set is Within/SearchOrder/LookIn
+/// plus match-entire-CELL, and FreeW adds wildcards; only MatchCase is truly common, and each app
+/// lowers it into a different core search-options type.</item>
+/// <item>The Replace/ReplaceAll enablement composition. Only FreeP computes enablement -- FreeX
+/// collapses the buttons instead and FreeW validates on click -- so only its <c>showReplace</c>
+/// gate is shared (<see cref="FindReplaceDialogPolicy.ShowsReplaceSurface"/>).</item>
+/// <item>Session commit semantics. All three surfaces are modeless with no dirty/OK/Cancel state
+/// machine, so there is nothing to unify.</item>
+/// </list>
+/// </summary>
 public static class FindReplaceDialogPlanner
 {
     public const string FindTitle = "Find";
@@ -162,8 +179,19 @@ public static class FindReplaceDialogPlanner
         MatchCase: false,
         WholeWord: false);
 
+    /// <summary>
+    /// Projects the host's <c>showReplace</c> flag onto the cross-app open mode owned by
+    /// <see cref="FindReplaceDialogPolicy"/>. FreeP renders the mode as a title swap plus a hidden
+    /// replacement row; FreeX renders it as a selected TabItem.
+    /// </summary>
+    public static FindReplaceOpenMode OpenModeFor(bool showReplace) =>
+        FindReplaceDialogPolicy.OpenModeFor(showReplace);
+
+    public static bool ShowsReplaceSurface(FindReplaceOpenMode mode) =>
+        FindReplaceDialogPolicy.ShowsReplaceSurface(mode);
+
     public static string TitleForMode(bool showReplace) =>
-        FindReplaceDialogSurfaceCatalog.Surface.TitleForMode(showReplace);
+        FindReplaceDialogSurfaceCatalog.Surface.TitleForMode(OpenModeFor(showReplace));
 
     public static TextSearchOptions BuildOptions(bool matchCase, bool wholeWord) => new()
     {
@@ -201,12 +229,14 @@ public static class FindReplaceDialogPlanner
 
         var normalizedQuery = query ?? string.Empty;
         var normalizedReplacement = replacement ?? string.Empty;
+        var openMode = OpenModeFor(showReplace);
+        var showsReplaceSurface = ShowsReplaceSurface(openMode);
         var hasQuery = FindReplaceDialogPolicy.CanRunWithQuery(normalizedQuery);
         var matchCount = matches.Count;
         var targetIndex = ReplacementTargetIndex(currentMatchIndex, matchCount);
 
         return new FindReplaceWorkflowPlan(
-            TitleForMode(showReplace),
+            FindReplaceDialogSurfaceCatalog.Surface.TitleForMode(openMode),
             showReplace,
             normalizedQuery,
             normalizedReplacement,
@@ -218,8 +248,8 @@ public static class FindReplaceDialogPlanner
             statusKind,
             hasQuery,
             matchCount > 0,
-            showReplace && targetIndex >= 0,
-            showReplace && hasQuery);
+            showsReplaceSurface && targetIndex >= 0,
+            showsReplaceSurface && hasQuery);
     }
 }
 

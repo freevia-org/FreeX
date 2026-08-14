@@ -1,3 +1,4 @@
+﻿using Free.Shared.AppServices;
 using FreeW.App.Host.Editing;
 using FreeW.App.Presentation.Dialogs;
 
@@ -51,7 +52,7 @@ public sealed class FindReplaceDialogTrackChangesTests
         // the Replace path itself.
         view.SetSelectionRangeForTest(0, 6, 0, 9);
 
-        var dialog = new FindReplaceDialog(null!, view, FindReplaceDialogOpenMode.Replace);
+        var dialog = new FindReplaceDialog(null!, view, FindReplaceOpenMode.Replace);
         try
         {
             dialog.Show();
@@ -83,7 +84,7 @@ public sealed class FindReplaceDialogTrackChangesTests
         view.TrackChangesEnabled.Should().BeFalse();
         view.SetSelectionRangeForTest(0, 6, 0, 9);
 
-        var dialog = new FindReplaceDialog(null!, view, FindReplaceDialogOpenMode.Replace);
+        var dialog = new FindReplaceDialog(null!, view, FindReplaceOpenMode.Replace);
         try
         {
             dialog.Show();
@@ -109,7 +110,7 @@ public sealed class FindReplaceDialogTrackChangesTests
         view.RevisionAuthor = "Ada Reviewer";
         view.TrackChangesEnabled = true;
 
-        var dialog = new FindReplaceDialog(null!, view, FindReplaceDialogOpenMode.Replace);
+        var dialog = new FindReplaceDialog(null!, view, FindReplaceOpenMode.Replace);
         try
         {
             dialog.Show();
@@ -134,7 +135,7 @@ public sealed class FindReplaceDialogTrackChangesTests
     {
         var view = BuildView("cat cat cat");
 
-        var dialog = new FindReplaceDialog(null!, view, FindReplaceDialogOpenMode.Replace);
+        var dialog = new FindReplaceDialog(null!, view, FindReplaceOpenMode.Replace);
         try
         {
             dialog.Show();
@@ -171,7 +172,7 @@ public sealed class FindReplaceDialogTrackChangesTests
         view.IsReadOnly.Should().BeFalse("TrackChangesOnly permits body edits -- it only requires them to be tracked");
         view.TrackChangesEnabled.Should().BeTrue("the protection mode alone must force tracking on, with no explicit opt-in");
 
-        var dialog = new FindReplaceDialog(null!, view, FindReplaceDialogOpenMode.Replace);
+        var dialog = new FindReplaceDialog(null!, view, FindReplaceOpenMode.Replace);
         try
         {
             dialog.Show();
@@ -197,7 +198,7 @@ public sealed class FindReplaceDialogTrackChangesTests
         view.SetProtection(ProtectionMode.ReadOnly);
         view.IsReadOnly.Should().BeTrue();
 
-        var dialog = new FindReplaceDialog(null!, view, FindReplaceDialogOpenMode.Replace);
+        var dialog = new FindReplaceDialog(null!, view, FindReplaceOpenMode.Replace);
         try
         {
             dialog.Show();

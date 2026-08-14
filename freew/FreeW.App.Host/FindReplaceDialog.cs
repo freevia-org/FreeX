@@ -1,3 +1,4 @@
+﻿using Free.Shared.AppServices;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -37,7 +38,7 @@ internal sealed partial class FindReplaceDialog : Free.Shared.Ribbon.Wpf.DialogW
     public FindReplaceDialog(
         Window owner,
         DocumentView editor,
-        FindReplaceDialogOpenMode openMode = FindReplaceDialogOpenMode.Find)
+        FindReplaceOpenMode openMode = FindReplaceOpenMode.Find)
     {
         _editor = editor;
         _session = new FindReplaceDialogSession(new WpfFindReplaceCommandHost(editor), openMode);
@@ -85,7 +86,7 @@ internal sealed partial class FindReplaceDialog : Free.Shared.Ribbon.Wpf.DialogW
         _useWildcards.Unchecked += (_, _) => ApplyOptionPolicy();
         ApplyOptionPolicy();
 
-        // Special ▾ button — inserts a special character into whichever box last had focus.
+        // Special â–¾ button â€” inserts a special character into whichever box last had focus.
         var specialButton = BuildSpecialButton();
         Grid.SetRow(specialButton, 5);
         Grid.SetColumn(specialButton, 1);
@@ -110,10 +111,10 @@ internal sealed partial class FindReplaceDialog : Free.Shared.Ribbon.Wpf.DialogW
         Loaded += (_, _) => ActivateFor(_session.State.OpenMode);
     }
 
-    internal void ActivateFor(FindReplaceDialogOpenMode openMode)
+    internal void ActivateFor(FindReplaceOpenMode openMode)
     {
         var state = _session.ActivateFor(openMode);
-        DialogFocus.FocusAndSelect(state.OpenMode == FindReplaceDialogOpenMode.Replace ? _replaceBox : _findBox);
+        DialogFocus.FocusAndSelect(state.OpenMode == FindReplaceOpenMode.Replace ? _replaceBox : _findBox);
     }
 
     // Track which text field was focused last so Special inserts into the right box.

@@ -301,8 +301,8 @@ public sealed partial class MainWindow : Window
             SaveDocument: () => _ = SaveAsync(),
             SaveDocumentAs: () => _ = SaveAsAsync(),
             PrintDocument: () => _ = PrintAsync(),
-            Find: () => OpenFindReplaceDialog(FindReplaceDialogOpenMode.Find),
-            Replace: () => OpenFindReplaceDialog(FindReplaceDialogOpenMode.Replace),
+            Find: () => OpenFindReplaceDialog(FindReplaceOpenMode.Find),
+            Replace: () => OpenFindReplaceDialog(FindReplaceOpenMode.Replace),
             Cut: () => _ = CutAsync(),
             Copy: () => _ = CopyAsync(),
             Paste: () => _ = PasteAsync(),
@@ -542,7 +542,7 @@ public sealed partial class MainWindow : Window
     /// brought to the front. Wired to <c>freew.find-replace-dialog</c> ribbon command and Ctrl+H.
     /// </summary>
     internal void OpenFindReplaceDialog(
-        FindReplaceDialogOpenMode openMode = FindReplaceDialogOpenMode.Find)
+        FindReplaceOpenMode openMode = FindReplaceOpenMode.Find)
     {
         if (_findReplaceDialog is not null)
         {
