@@ -89,6 +89,23 @@ public sealed class SortDialogSession
     }
 }
 
+/// <summary>
+/// Word "Sort Text" dialog planning: a fixed primary key plus two optional keys, whose identity is
+/// the <em>data type</em> the key text is interpreted as (<see cref="SortKind"/> Text/Number/Date),
+/// with an ascending flag, a case-sensitive flag, and a "my list has a header row" flag, projected
+/// into a <see cref="SortDialogResult"/> the host feeds to <c>ParagraphSort</c> via
+/// <c>SortCaretTableRows</c>/<c>SortSelectedParagraphs</c>. The sorted-on column is implicit (the
+/// caret's column) rather than chosen in the dialog.
+/// <para>
+/// Cross-app note (assessed 2026-08-14): <c>FreeX.App.Services.SortDialogPlanner</c> shares only
+/// this type's <em>name</em>. The spreadsheet planner keys an unbounded level list by column/row
+/// offset within a grid range, adds a "Sort On" criterion with color/icon targets, a custom
+/// first-key list and a left-to-right axis, and turns "has headers" into range geometry rather than
+/// a pass-through flag. Neither planner defines any validation-error taxonomy. Ignoring braces and
+/// short lines, the two files share exactly one identical line — the <c>public static class</c>
+/// declaration. There is no stable neutral contract to extract; do not merge them.
+/// </para>
+/// </summary>
 public static class SortDialogPlanner
 {
     public const string Title = "Sort";
