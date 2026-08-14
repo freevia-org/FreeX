@@ -2133,31 +2133,7 @@ public sealed partial class MainWindow : Window,
     }
 
     private bool TryExecuteInlineTableAction(PresentationDomainContextAction action)
-    {
-        if (_textEditor?.IsCellEditActive != true)
-            return false;
-
-        return action.Kind switch
-        {
-            PresentationDomainContextActionKind.InsertTableRowAbove =>
-                _textEditor.TryInsertActiveTableRowAbove(),
-            PresentationDomainContextActionKind.InsertTableRowBelow =>
-                _textEditor.TryInsertActiveTableRowBelow(),
-            PresentationDomainContextActionKind.InsertTableColumnLeft =>
-                _textEditor.TryInsertActiveTableColumnLeft(),
-            PresentationDomainContextActionKind.InsertTableColumnRight =>
-                _textEditor.TryInsertActiveTableColumnRight(),
-            PresentationDomainContextActionKind.DeleteTableRow =>
-                _textEditor.TryDeleteActiveTableRow(),
-            PresentationDomainContextActionKind.DeleteTableColumn =>
-                _textEditor.TryDeleteActiveTableColumn(),
-            PresentationDomainContextActionKind.MergeTableCell =>
-                _textEditor.TryMergeActiveTableCell(),
-            PresentationDomainContextActionKind.SplitTableCell =>
-                _textEditor.TrySplitActiveTableCell(),
-            _ => false,
-        };
-    }
+        => _textEditor?.TryExecuteActiveTableStructureAction(action.Kind) == true;
 
 
 
