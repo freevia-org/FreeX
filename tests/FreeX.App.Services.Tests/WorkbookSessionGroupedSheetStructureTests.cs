@@ -7,6 +7,60 @@ namespace FreeX.App.Services.Tests;
 public sealed class WorkbookSessionGroupedSheetStructureTests
 {
     [Fact]
+    public void DuplicateSelectedSheets_CopiesWholeGroupAfterLastSourceAndUndoIsAtomic()
+    {
+        var (session, workbook, selectedIds, remainingIds) = CreateGroupedSession();
+        var originalOrder = workbook.Sheets.Select(sheet => sheet.Id).ToArray();
+
+        var result = session.DuplicateSelectedSheets();
+
+        result.Success.Should().BeTrue();
+        var copyIds = workbook.Sheets.Select(sheet => sheet.Id).Except(originalOrder).ToArray();
+        copyIds.Should().HaveCount(2);
+        workbook.Sheets.Select(sheet => sheet.Id)
+            .Should().Equal([.. selectedIds, .. copyIds, .. remainingIds]);
+        session.ActiveSheet.Id.Should().Be(copyIds[^1]);
+        session.IsWorkbookGrouped.Should().BeFalse();
+
+        session.UndoLastEdit().Success.Should().BeTrue();
+        workbook.Sheets.Select(sheet => sheet.Id).Should().Equal(originalOrder);
+
+        session.RedoLastEdit().Success.Should().BeTrue();
+        workbook.Sheets.Select(sheet => sheet.Id)
+            .Should().Equal([.. selectedIds, .. copyIds, .. remainingIds]);
+    }
+
+    [Fact]
+    public void DuplicateSelectedSheets_PreservesWorkbookOrderForNonContiguousGroup()
+    {
+        var workbook = CreateWorkbook();
+        var session = CreateSession(workbook);
+        var originalIds = workbook.Sheets.Select(sheet => sheet.Id).ToArray();
+        session.SelectSheetFromTab(originalIds[2], selectRange: false, toggle: true);
+
+        session.DuplicateSelectedSheets().Success.Should().BeTrue();
+
+        var copyIds = workbook.Sheets.Select(sheet => sheet.Id).Except(originalIds).ToArray();
+        copyIds.Should().HaveCount(2);
+        workbook.Sheets.Select(sheet => sheet.Id).Should().Equal(
+            originalIds[0], originalIds[1], originalIds[2], copyIds[0], copyIds[1], originalIds[3]);
+    }
+
+    [Fact]
+    public void DuplicateSelectedSheets_ContextOutsideGroupDuplicatesOnlyContextSheet()
+    {
+        var (session, workbook, _, remainingIds) = CreateGroupedSession();
+        var originalIds = workbook.Sheets.Select(sheet => sheet.Id).ToArray();
+
+        session.DuplicateSelectedSheets(remainingIds[^1]).Success.Should().BeTrue();
+
+        var copyIds = workbook.Sheets.Select(sheet => sheet.Id).Except(originalIds).ToArray();
+        copyIds.Should().ContainSingle();
+        workbook.Sheets.Select(sheet => sheet.Id).Should().Equal([.. originalIds, copyIds[0]]);
+        session.ActiveSheet.Id.Should().Be(copyIds[0]);
+    }
+
+    [Fact]
     public void MoveOrCopySelectedSheets_CopiesGroupInWorkbookOrderAndUndoIsAtomic()
     {
         var (session, workbook, selectedIds, remainingIds) = CreateGroupedSession();
@@ -125,6 +179,7 @@ public sealed class WorkbookSessionGroupedSheetStructureTests
 
         var results = new[]
         {
+            session.DuplicateSelectedSheets(),
             session.MoveOrCopySelectedSheets(workbook.Sheets.Count, createCopy: false),
             session.MoveOrCopySelectedSheets(workbook.Sheets.Count, createCopy: true),
             session.DeleteSelectedSheets(),

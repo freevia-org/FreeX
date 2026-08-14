@@ -1767,15 +1767,22 @@ public partial class MainWindow
     {
         var tab = GetContextMenuTab(sender);
         if (tab == null) return;
-        if (!TryExecuteCommand(new DuplicateSheetCommand(tab.Id), "Duplicate Sheet"))
-            return;
 
-        var sourceIndex = FindWorkbookSheetIndex(tab.Id);
-        _currentSheetId = _workbook.Sheets[Math.Min(sourceIndex + 1, _workbook.Sheets.Count - 1)].Id;
+        SynchronizeWorkbookSessionSelection();
+        var result = _session.DuplicateSelectedSheets(tab.Id);
+        if (!result.Success)
+        {
+            _messageService.ShowWarning(
+                result.ErrorMessage ?? "The selected sheets could not be duplicated.",
+                "Duplicate Sheet");
+            return;
+        }
+
+        _currentSheetId = _session.ActiveSheet.Id;
         _groupedSheetIds.Clear();
         _groupedSheetIds.Add(_currentSheetId);
         _sheetGroupAnchor = _currentSheetId;
-        RecalculateWorkbook();
+        ApplyWorkbookSessionSelectionToRenderer();
         UpdateViewport();
         RefreshSheetTabs();
     }

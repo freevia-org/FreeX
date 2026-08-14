@@ -818,7 +818,7 @@ public sealed class MacOsAppReadinessPreflightTests
         script.Should().Contain("var toggle = modifiers.HasFlag(KeyModifiers.Control) || modifiers.HasFlag(KeyModifiers.Meta);");
         script.Should().Contain("args.Handled = true;");
         script.Should().Contain("_session.SelectSheetFromTab(sheetId, selectRange, toggle)");
-        script.Should().Contain("var result = _session.DuplicateActiveSheet();");
+        script.Should().Contain("var result = _session.DuplicateSelectedSheets();");
         script.Should().Contain("var result = _session.SetActiveSheetTabColor(color);");
         script.Should().Contain("var result = _session.DeleteActiveSheet();");
         script.Should().Contain("NativeMenuItemId.ShowGridlines => _showGridlinesMenuItem,");
@@ -873,7 +873,8 @@ public sealed class MacOsAppReadinessPreflightTests
         script.Should().Contain("public WorkbookCellEditResult RenameActiveSheet(string? name)");
         script.Should().Contain("new RenameSheetCommand(ActiveSheet.Id, newName)");
         script.Should().Contain("ApplySuccessfulWorkbookMetadataResult(ActiveSheet.Id)");
-        script.Should().Contain("new DuplicateSheetCommand(sourceSheetId)");
+        script.Should().Contain("public WorkbookCellEditResult DuplicateSelectedSheets()");
+        script.Should().Contain("new DuplicateSheetsCommand(");
         script.Should().Contain("public WorkbookCellEditResult DeleteActiveSheet()");
         script.Should().Contain("public WorkbookCellEditResult DeleteSelectedSheets()");
         script.Should().Contain("new RemoveSheetsCommand(selectedSheetIds)");
@@ -3016,7 +3017,7 @@ public sealed class MacOsAppReadinessPreflightTests
                     var toggle = modifiers.HasFlag(KeyModifiers.Control) || modifiers.HasFlag(KeyModifiers.Meta);
                     args.Handled = true;
                     _session.SelectSheetFromTab(sheetId, selectRange, toggle);
-                    var result = _session.DuplicateActiveSheet();
+                    var result = _session.DuplicateSelectedSheets();
                     var result = _session.MoveActiveSheetLeft();
                     var result = _session.MoveActiveSheetRight();
                     var result = _session.HideActiveSheet();
@@ -4438,12 +4439,14 @@ public sealed class MacOsAppReadinessPreflightTests
                     return result;
                 }
 
-                public WorkbookCellEditResult DuplicateActiveSheet()
+                public WorkbookCellEditResult DuplicateActiveSheet() => DuplicateSelectedSheets();
+
+                public WorkbookCellEditResult DuplicateSelectedSheets()
                 {
-                    var sourceSheetId = ActiveSheet.Id;
+                    var selectedSheetIds = CurrentGroupedStructureSheetIds();
                     var result = _cellEditService.ExecuteEditCommand(
                         Workbook,
-                        new DuplicateSheetCommand(sourceSheetId));
+                        new DuplicateSheetsCommand(selectedSheetIds, Workbook.Sheets.Count));
                     return result;
                 }
 

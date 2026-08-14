@@ -11,18 +11,25 @@ public sealed class DuplicateSheetsCommand : IWorkbookCommand, IWholeWorkbookRec
 {
     private readonly IReadOnlyList<SheetId> _sourceSheetIds;
     private readonly int _insertBeforeIndex;
+    private readonly string _label;
     private readonly List<DuplicateSheetCommand> _duplicates = [];
     private MoveSheetsCommand? _moveCopies;
     private bool _applied;
 
-    public DuplicateSheetsCommand(IReadOnlyList<SheetId> sourceSheetIds, int insertBeforeIndex)
+    public DuplicateSheetsCommand(
+        IReadOnlyList<SheetId> sourceSheetIds,
+        int insertBeforeIndex,
+        string? label = null)
     {
         ArgumentNullException.ThrowIfNull(sourceSheetIds);
         _sourceSheetIds = sourceSheetIds.ToArray();
         _insertBeforeIndex = insertBeforeIndex;
+        _label = string.IsNullOrWhiteSpace(label)
+            ? (_sourceSheetIds.Count == 1 ? "Move or Copy Sheet" : "Move or Copy Sheets")
+            : label;
     }
 
-    public string Label => _sourceSheetIds.Count == 1 ? "Move or Copy Sheet" : "Move or Copy Sheets";
+    public string Label => _label;
 
     public IReadOnlyList<SheetId> CopySheetIds => _duplicates
         .Select(command => command.CopySheetId)

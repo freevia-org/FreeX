@@ -5038,7 +5038,7 @@ public sealed class AvaloniaShellSourceTests
         pointerSource.Should().Contain("SelectSheet(sheetId, selectRange, toggle);");
         pointerSource.Should().Contain("args.Pointer.Capture(_sheetTabsHost);");
         source.Should().Contain("private void DuplicateActiveSheet()");
-        source.Should().Contain("var result = _session.DuplicateActiveSheet();");
+        source.Should().Contain("var result = _session.DuplicateSelectedSheets();");
         source.Should().Contain("RefreshShell(UiText.Format(\"SheetTabs_DuplicatedStatusFormat\", sourceName));");
         source.Should().Contain("private void MoveActiveSheetLeft()");
         source.Should().Contain("var result = _session.MoveActiveSheetLeft();");

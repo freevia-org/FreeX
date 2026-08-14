@@ -2272,27 +2272,47 @@ public sealed class WorkbookSession : IDisposable
         return result;
     }
 
-    public WorkbookCellEditResult DuplicateActiveSheet()
+    public WorkbookCellEditResult DuplicateActiveSheet() => DuplicateSelectedSheets(ActiveSheet.Id);
+
+    /// <summary>
+    /// Duplicates the active grouped sheet-tab selection immediately after its last selected sheet.
+    /// The copies retain workbook order and are committed as one undoable structure operation.
+    /// </summary>
+    public WorkbookCellEditResult DuplicateSelectedSheets() => DuplicateSelectedSheets(ActiveSheet.Id);
+
+    public WorkbookCellEditResult DuplicateSelectedSheets(SheetId contextSheetId)
     {
-        var sourceSheetId = ActiveSheet.Id;
-        var sourceIndex = FindSheetIndex(sourceSheetId, notFoundIndex: -1);
-        if (sourceIndex < 0)
+        var selectedSheetIds = CurrentGroupedStructureSheetIds(contextSheetId);
+        var selectedSet = selectedSheetIds.ToHashSet();
+        var lastSourceIndex = Workbook.Sheets
+            .Select((sheet, index) => (sheet.Id, Index: index))
+            .Where(item => selectedSet.Contains(item.Id))
+            .Select(item => item.Index)
+            .DefaultIfEmpty(-1)
+            .Max();
+        if (lastSourceIndex < 0)
         {
             return new WorkbookCellEditResult(
                 false,
-                "Active sheet was not found.",
+                "Selected sheets were not found.",
                 [],
                 RecalcReport: null);
         }
 
+        var command = new DuplicateSheetsCommand(
+            selectedSheetIds,
+            insertBeforeIndex: lastSourceIndex + 1,
+            label: selectedSheetIds.Count == 1 ? "Duplicate Sheet" : "Duplicate Sheets");
         var result = _cellEditService.ExecuteEditCommand(
             Workbook,
-            new DuplicateSheetCommand(sourceSheetId));
+            command);
         if (!result.Success)
             return result;
 
-        var copyIndex = Math.Min(sourceIndex + 1, Workbook.Sheets.Count - 1);
-        ApplySuccessfulNewWorksheetResult(Workbook.Sheets[copyIndex].Id);
+        var preferredSheetId = command.CopySheetIds.LastOrDefault();
+        if (preferredSheetId == default || Workbook.GetSheet(preferredSheetId) is null)
+            preferredSheetId = ActiveSheet.Id;
+        ApplySuccessfulNewWorksheetResult(preferredSheetId);
         return result;
     }
 

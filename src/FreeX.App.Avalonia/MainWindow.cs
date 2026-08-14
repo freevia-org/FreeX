@@ -12468,7 +12468,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
 
         var sourceName = _session.ActiveSheet.Name;
         ClearSelectedDrawingObject();
-        var result = _session.DuplicateActiveSheet();
+        var result = _session.DuplicateSelectedSheets();
         if (!result.Success)
         {
             ShowEditIssue(result.ErrorMessage ?? UiText.Get("MainLoc_DuplicateSheetFailed"));

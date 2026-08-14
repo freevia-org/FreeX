@@ -391,19 +391,21 @@ public sealed partial class MainWindowSourceHygieneTests
     }
 
     [Fact]
-    public void MoveOrCopyCreateCopy_DelegatesGroupedTransactionToWorkbookSession()
+    public void GroupedDuplicateAndMoveOrCopy_DelegateToWorkbookSession()
     {
         var source = DialogSourceTestSupport.ReadHostSources("MainWindow.SheetTabs.cs");
-        var method = ExtractMethodSource(source, "private void SheetCtxMoveOrCopy_Click(");
+        var duplicate = ExtractMethodSource(source, "private void SheetCtxDuplicate_Click(");
+        var moveOrCopy = ExtractMethodSource(source, "private void SheetCtxMoveOrCopy_Click(");
 
-        method.Should().Contain("SynchronizeWorkbookSessionSelection();");
-        method.Should().Contain("_session.MoveOrCopySelectedSheets(");
-        method.Should().Contain("tab.Id,");
-        method.Should().Contain("\"Move or Copy Sheet\"");
-        method.Should().NotContain("new CompositeWorkbookCommand");
-        method.Should().NotContain("new DuplicateSheetCommand");
-        method.Should().NotContain("new MoveSheetsCommand");
-        method.Should().NotContain("_commandBus.Execute");
+        duplicate.Should().Contain("SynchronizeWorkbookSessionSelection()");
+        duplicate.Should().Contain("_session.DuplicateSelectedSheets(tab.Id)");
+        duplicate.Should().NotContain("new DuplicateSheetCommand(");
+        duplicate.Should().NotContain("RecalculateWorkbook()");
+        moveOrCopy.Should().Contain("SynchronizeWorkbookSessionSelection()");
+        moveOrCopy.Should().Contain("_session.MoveOrCopySelectedSheets(");
+        moveOrCopy.Should().Contain("tab.Id,");
+        moveOrCopy.Should().NotContain("new DuplicateSheetCommand(");
+        moveOrCopy.Should().NotContain("new MoveSheetsCommand(");
     }
 
     [Fact]
