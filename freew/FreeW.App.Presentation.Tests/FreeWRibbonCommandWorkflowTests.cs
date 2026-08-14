@@ -565,6 +565,8 @@ public sealed class FreeWRibbonCommandWorkflowTests
         ShapeFill? fill = null;
         ObjectFormatSizeDimension? sizeDimension = null;
         double? sizePoints = null;
+        var hasTransformSelection = true;
+        var transformed = false;
         var feedback = new List<FreeWRibbonFloatingFeedback>();
         var bindings = new FreeWRibbonCommandBindingPorts();
 
@@ -573,8 +575,9 @@ public sealed class FreeWRibbonCommandWorkflowTests
             new FreeWRibbonFloatingExecutionPorts(
                 PrepareExecution: () => { },
                 HasSelection: target => target == ObjectFormatTarget.Shape && shape is not null,
+                HasTransformSelection: () => hasTransformSelection,
                 ApplyWrap: (_, _) => { },
-                ApplyTransform: (_, _) => true,
+                ApplyTransform: (_, _) => transformed = true,
                 ApplyZOrder: (_, _) => true,
                 ApplySize: (_, dimension, points) =>
                 {
@@ -611,6 +614,15 @@ public sealed class FreeWRibbonCommandWorkflowTests
         bindings.TryGet("freew.shape-fill-gradient-blue", out var gradient).Should().BeTrue();
         gradient.Should().BeAssignableTo<IRibbonStatefulCommand>()
             .Which.GetState().IsEnabled.Should().BeFalse();
+
+        bindings.TryGet("freew.shape-rotate-right90", out var rotate).Should().BeTrue();
+        rotate.Should().BeAssignableTo<IRibbonStatefulCommand>()
+            .Which.GetState().IsEnabled.Should().BeTrue();
+        rotate!.Execute(RibbonCommandContext.Empty);
+        transformed.Should().BeTrue();
+
+        hasTransformSelection = false;
+        ((IRibbonStatefulCommand)rotate).GetState().IsEnabled.Should().BeFalse();
 
         shape = Shape.Preset(ShapeKind.Rectangle, 100, 50, "#FFFFFF");
         ((IRibbonStatefulCommand)gradient!).GetState().IsEnabled.Should().BeTrue();

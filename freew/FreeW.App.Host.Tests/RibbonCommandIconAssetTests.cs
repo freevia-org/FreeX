@@ -272,7 +272,9 @@ public sealed class RibbonCommandIconAssetTests
     {
         foreach (var item in items)
         {
-            if (item.CommandId is { } id && !string.IsNullOrWhiteSpace(id.Value))
+            if (item.Icon is not null &&
+                item.CommandId is { } id &&
+                !string.IsNullOrWhiteSpace(id.Value))
                 yield return id;
 
             foreach (var child in MenuCommandIds(item.Children))

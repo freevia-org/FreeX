@@ -90,6 +90,7 @@ public static class FreeWRibbonFloatingFeedbackCatalog
 public sealed record FreeWRibbonFloatingExecutionPorts(
     Action PrepareExecution,
     Func<ObjectFormatTarget, bool> HasSelection,
+    Func<bool> HasTransformSelection,
     Action<ObjectFormatTarget, ImageWrapping> ApplyWrap,
     Func<ObjectFormatTarget, ObjectFormatTransformCommand, bool> ApplyTransform,
     Func<ObjectFormatTarget, ZOrderOperation, bool> ApplyZOrder,
@@ -372,7 +373,7 @@ public static class FreeWRibbonEditorExecutionProfile
                 var captured = command;
                 bindings.Register(captured.CommandId, Stateful(
                     () => ports.ApplyTransform(target, captured),
-                    () => ports.HasSelection(target),
+                    ports.HasTransformSelection,
                     ports.PrepareExecution));
             }
 

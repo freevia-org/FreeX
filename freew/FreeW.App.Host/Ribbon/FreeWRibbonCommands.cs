@@ -1437,6 +1437,13 @@ internal static class FreeWRibbonCommands
             HasSelection: target => target == ObjectFormatTarget.Picture
                 ? editor.SelectedImage() is not null
                 : editor.SelectedShape() is not null,
+            HasTransformSelection: () =>
+                editor.SelectedImage() is not null ||
+                editor.SelectedShape() is not null ||
+                editor.SelectedChart() is not null ||
+                editor.SelectedSmartArt() is not null ||
+                editor.SelectedWordArt() is not null ||
+                editor.IsGroupSelected,
             ApplyWrap: (target, wrapping) =>
             {
                 if (target == ObjectFormatTarget.Picture)

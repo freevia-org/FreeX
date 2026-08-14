@@ -1242,6 +1242,7 @@ internal static class FreeWAvaloniaRibbonCommands
             HasSelection: target => target == ObjectFormatTarget.Picture
                 ? editor.SelectedFloatingImage() is not null
                 : editor.SelectedFloatingShape() is not null,
+            HasTransformSelection: () => editor.SelectedFloatingInfo is not null,
             ApplyWrap: (_, wrapping) => editor.SetFloatingWrap(wrapping),
             ApplyTransform: (_, command) =>
             {
