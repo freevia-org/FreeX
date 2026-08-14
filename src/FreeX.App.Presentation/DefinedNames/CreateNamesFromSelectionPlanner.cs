@@ -51,11 +51,103 @@ public enum CreateNamesLabelEdge
 /// </summary>
 public static class CreateNamesFromSelectionPlanner
 {
-    public static CreateNamesFromSelectionOptions DefaultOptions { get; } = new(
-        UseTopRow: true,
-        UseLeftColumn: true,
-        UseBottomRow: false,
-        UseRightColumn: false);
+    /// <summary>
+    /// Auto-detects which label edges a host's Create Names from Selection dialog should pre-check for
+    /// <paramref name="selection"/>, mirroring real Microsoft Excel 16.0 (en-US), whose behaviour was verified
+    /// empirically by driving its dialog and reading the checkboxes back.
+    /// <para>
+    /// The rule: <b>Top row</b> is pre-checked when the selection spans more than one row, the selection's top
+    /// row carries at least one text label (the top-left corner cell is ignored on a multi-column selection, so
+    /// the blank-corner layout Excel treats as "top row + left column" still detects), and the body underneath
+    /// it — the selection minus its top row and, when there is more than one column, minus its left column —
+    /// contains no text at all. <b>Left column</b> is the exact transpose: more than one column, at least one
+    /// text label down the left column (corner ignored on a multi-row selection), and the same body free of
+    /// text. <b>Bottom row and Right column are never auto-detected</b> — Excel does not pre-check them even
+    /// when only that edge carries labels. A wholly numeric selection and a wholly textual selection therefore
+    /// both detect nothing: Excel only claims an edge when it can tell a label edge apart from a non-text body.
+    /// </para>
+    /// <para>
+    /// Degenerate selections: the multi-row / multi-column guards above are deliberately the same guards
+    /// <see cref="Plan"/> applies, so detection can never pre-check an edge that would produce no names. A
+    /// single-row selection therefore never gets Top row (checking it would leave no data rows beneath) but may
+    /// get Left column when its first cell is a label and the rest of the row is not text; a single-column
+    /// selection is the transpose; a single cell and an empty range detect nothing.
+    /// </para>
+    /// </summary>
+    /// <param name="selection">The selected range. Must be on a single sheet.</param>
+    /// <param name="cellValue">
+    /// Reads the raw value of a cell in the selection. Only <see cref="TextValue"/> with non-whitespace content
+    /// counts as a label; numbers, dates, booleans, errors and blanks (including a null return) do not — a
+    /// formula counts as whatever it evaluated to, exactly as Excel judges it.
+    /// </param>
+    public static CreateNamesFromSelectionOptions DetectOptions(
+        GridRange selection,
+        Func<CellAddress, ScalarValue?> cellValue)
+    {
+        ArgumentNullException.ThrowIfNull(cellValue);
+
+        var sheet = selection.Start.Sheet;
+        var startRow = selection.Start.Row;
+        var endRow = selection.End.Row;
+        var startCol = selection.Start.Col;
+        var endCol = selection.End.Col;
+        if (endRow < startRow || endCol < startCol)
+            return default;
+
+        var hasMultipleRows = selection.RowCount > 1;
+        var hasMultipleCols = selection.ColCount > 1;
+
+        // The corner cell only belongs to an edge when the other axis is a single line; case A (blank corner,
+        // text top row, text left column) proves a blank corner must not veto detection.
+        var bodyRow = hasMultipleRows ? startRow + 1 : startRow;
+        var bodyCol = hasMultipleCols ? startCol + 1 : startCol;
+
+        bool IsLabel(uint row, uint col) =>
+            cellValue(new CellAddress(sheet, row, col)) is TextValue text
+            && !string.IsNullOrWhiteSpace(text.Value);
+
+        var bodyHasText = false;
+        for (var row = bodyRow; row <= endRow && !bodyHasText; row++)
+        {
+            for (var col = bodyCol; col <= endCol; col++)
+            {
+                if (!IsLabel(row, col))
+                    continue;
+                bodyHasText = true;
+                break;
+            }
+        }
+
+        var useTopRow = false;
+        if (hasMultipleRows && !bodyHasText)
+        {
+            for (var col = bodyCol; col <= endCol; col++)
+            {
+                if (!IsLabel(startRow, col))
+                    continue;
+                useTopRow = true;
+                break;
+            }
+        }
+
+        var useLeftColumn = false;
+        if (hasMultipleCols && !bodyHasText)
+        {
+            for (var row = bodyRow; row <= endRow; row++)
+            {
+                if (!IsLabel(row, startCol))
+                    continue;
+                useLeftColumn = true;
+                break;
+            }
+        }
+
+        return new CreateNamesFromSelectionOptions(
+            UseTopRow: useTopRow,
+            UseLeftColumn: useLeftColumn,
+            UseBottomRow: false,
+            UseRightColumn: false);
+    }
 
     public static bool TryCreateOptions(
         bool useTopRow,

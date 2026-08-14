@@ -24,17 +24,6 @@ public sealed class CreateNamesFromSelectionPlannerTests
         new(new CellAddress(Sheet, r1, c1), new CellAddress(Sheet, r2, c2));
 
     [Fact]
-    public void DefaultOptions_SelectTopRowAndLeftColumn()
-    {
-        CreateNamesFromSelectionPlanner.DefaultOptions.Should().Be(
-            new CreateNamesFromSelectionOptions(
-                UseTopRow: true,
-                UseLeftColumn: true,
-                UseBottomRow: false,
-                UseRightColumn: false));
-    }
-
-    [Fact]
     public void TryCreateOptions_RejectsNoSelectedEdges()
     {
         var ok = CreateNamesFromSelectionPlanner.TryCreateOptions(

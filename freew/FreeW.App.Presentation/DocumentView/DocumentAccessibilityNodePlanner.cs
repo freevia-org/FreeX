@@ -6,6 +6,10 @@ namespace FreeW.App.Presentation.DocumentView;
 public enum DocumentAccessibilityNodeKind
 {
     HeaderFooterStory,
+    Footnotes,
+    Endnotes,
+    Footnote,
+    Endnote,
     List,
     ListItem,
     Paragraph,
@@ -198,7 +202,77 @@ public static class DocumentAccessibilityNodePlanner
         for (var sectionIndex = 0; sectionIndex < sections.Count; sectionIndex++)
             AddHeaderFooterStories(children, sections[sectionIndex].HeadersFooters, sectionIndex);
 
+        AddNoteStories(children, document);
+
         return new DocumentAccessibilityTree(children);
+    }
+
+    private static void AddNoteStories(
+        ICollection<DocumentAccessibilityNode> children,
+        TextDocument document)
+    {
+        AddStory(
+            document.Footnotes,
+            document.FootnoteNumbering,
+            DocumentAccessibilityNodeKind.Footnotes,
+            DocumentAccessibilityNodeKind.Footnote,
+            "footnotes",
+            "Footnotes");
+        AddStory(
+            document.Endnotes,
+            document.EndnoteNumbering,
+            DocumentAccessibilityNodeKind.Endnotes,
+            DocumentAccessibilityNodeKind.Endnote,
+            "endnotes",
+            "Endnotes");
+
+        void AddStory<TNote>(
+            IReadOnlyDictionary<int, TNote> notes,
+            NoteNumberingOptions numbering,
+            DocumentAccessibilityNodeKind storyKind,
+            DocumentAccessibilityNodeKind noteKind,
+            string idPart,
+            string label)
+        {
+            if (notes.Count == 0)
+                return;
+
+            var noteNodes = notes
+                .OrderBy(entry => entry.Key)
+                .Select((entry, index) =>
+                {
+                    var text = entry.Value switch
+                    {
+                        Footnote footnote => DocumentNoteRegionPlanner.ResolveVisiblePlainText(document, footnote.Content),
+                        Endnote endnote => DocumentNoteRegionPlanner.ResolveVisiblePlainText(document, endnote.Content),
+                        _ => string.Empty
+                    };
+                    var displayNumber = DocumentNoteRegionPlanner.ComputeDisplayNumber(
+                        Math.Max(1, numbering.StartAt) + index,
+                        numbering);
+                    var value = PrefixMarker(displayNumber, text);
+                    var singular = noteKind == DocumentAccessibilityNodeKind.Footnote
+                        ? "Footnote"
+                        : "Endnote";
+                    return new DocumentAccessibilityNode(
+                        $"{idPart}:{entry.Key}",
+                        noteKind,
+                        NameWithPreview($"{singular} {displayNumber}", text),
+                        value,
+                        $"{singular} {displayNumber}",
+                        -1);
+                })
+                .ToArray();
+
+            children.Add(new DocumentAccessibilityNode(
+                $"story:{idPart}",
+                storyKind,
+                label,
+                null,
+                $"{noteNodes.Length} {label.ToLowerInvariant()}",
+                -1,
+                Children: noteNodes));
+        }
     }
 
     private static void AddHeaderFooterStories(

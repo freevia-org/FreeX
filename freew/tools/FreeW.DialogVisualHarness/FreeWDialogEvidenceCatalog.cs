@@ -418,7 +418,7 @@ public static class FreeWDialogEvidenceCatalog
             AvaloniaOnly("proofing-language", "ProofingLanguageDialog"),
             AvaloniaOnly("quick-part", "QuickPartDialog"),
             AvaloniaOnly("quick-part-name", "QuickPartNameDialog"),
-            AvaloniaOnly("save-compatibility-warning", "SaveCompatibilityWarningDialog"),
+            Pair("save-compatibility-warning", "SaveCompatibilityWarningDialog"),
             AvaloniaOnly("screen-tip", "ScreenTipDialog"),
             AvaloniaOnly("set-as-default-confirmation", "SetAsDefaultConfirmationDialog"),
             AvaloniaOnly("smart-art-edit", "SmartArtEditDialog"),

@@ -26,6 +26,76 @@ public sealed class DocumentParagraphFormattingCoordinatorTests
     }
 
     [Fact]
+    public void ListToggleAppliesOneKindAcrossSelectionAndUndoRestoresMixedState()
+    {
+        var document = Document("alpha", "bravo", "charlie");
+        var first = (Paragraph)document.Blocks[0];
+        var second = (Paragraph)document.Blocks[1];
+        second.Formatting = second.Formatting with
+        {
+            ListKind = ListKind.Bullet,
+            ListLevel = 2,
+        };
+        var session = Session(document);
+
+        session.Paragraphs.ToggleListKind([0, 1, 2], ListKind.Bullet).Should().BeTrue();
+
+        document.Blocks.Cast<Paragraph>()
+            .Should().OnlyContain(paragraph => paragraph.Formatting.ListKind == ListKind.Bullet);
+        second.Formatting.ListLevel.Should().Be(2);
+
+        session.Commands.Undo().Should().BeTrue();
+        first.Formatting.ListKind.Should().Be(ListKind.None);
+        second.Formatting.ListKind.Should().Be(ListKind.Bullet);
+        second.Formatting.ListLevel.Should().Be(2);
+        ((Paragraph)document.Blocks[2]).Formatting.ListKind.Should().Be(ListKind.None);
+        session.Commands.CanUndo.Should().BeFalse();
+    }
+
+    [Fact]
+    public void ListToggleClearsListOnlyStateWhenEveryTargetAlreadyUsesKind()
+    {
+        var document = Document("alpha", "bravo");
+        foreach (var paragraph in document.Blocks.Cast<Paragraph>())
+        {
+            paragraph.Formatting = paragraph.Formatting with
+            {
+                ListKind = ListKind.Number,
+                ListLevel = 3,
+                ListStartOverride = 7,
+            };
+        }
+        var session = Session(document);
+
+        session.Paragraphs.ToggleListKind([1, 0, 1, -1, 999], ListKind.Number).Should().BeTrue();
+
+        document.Blocks.Cast<Paragraph>().Should().OnlyContain(paragraph =>
+            paragraph.Formatting.ListKind == ListKind.None
+            && paragraph.Formatting.ListLevel == 0
+            && !paragraph.Formatting.ListStartOverride.HasValue);
+    }
+
+    [Fact]
+    public void ListToggleRejectsNoneAndClearsNumberRestartWhenSwitchingKind()
+    {
+        var document = Document("alpha");
+        var paragraph = (Paragraph)document.Blocks[0];
+        paragraph.Formatting = paragraph.Formatting with
+        {
+            ListKind = ListKind.Number,
+            ListStartOverride = 12,
+        };
+        var session = Session(document);
+
+        session.Paragraphs.ToggleListKind([0], ListKind.Bullet).Should().BeTrue();
+        paragraph.Formatting.ListKind.Should().Be(ListKind.Bullet);
+        paragraph.Formatting.ListStartOverride.Should().BeNull();
+
+        var act = () => session.Paragraphs.ToggleListKind([0], ListKind.None);
+        act.Should().Throw<ArgumentOutOfRangeException>();
+    }
+
+    [Fact]
     public void BordersAndShadingUseSharedTargetFilteringAndCaseInsensitiveTogglePolicy()
     {
         var document = Document("alpha", "bravo");
@@ -153,6 +223,7 @@ public sealed class DocumentParagraphFormattingOwnershipTests
             source.Should().Contain("ParagraphEdits.ToggleKeepWithNext");
             source.Should().Contain("ParagraphEdits.ToggleKeepLinesTogether");
             source.Should().Contain("ParagraphEdits.ToggleWidowControl");
+            source.Should().Contain("ParagraphEdits.ToggleListKind");
             source.Should().Contain("ParagraphEdits.ToggleBorder");
             source.Should().Contain("ParagraphEdits.ToggleShading");
             source.Should().Contain("ParagraphEdits.SetTabStops");
@@ -164,5 +235,32 @@ public sealed class DocumentParagraphFormattingOwnershipTests
             source.Should().NotContain(".Any(p => !p.Formatting.KeepLinesTogether)");
             source.Should().NotContain(".Any(p => !p.Formatting.WidowControl)");
         }
+    }
+
+    [Fact]
+    public void PairedRibbonAdaptersRouteBulletAndNumberCommandsThroughSharedListPolicy()
+    {
+        var root = TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeW.slnx");
+        var wpf = File.ReadAllText(Path.Combine(
+            root,
+            "freew",
+            "FreeW.App.Host",
+            "Ribbon",
+            "FreeWRibbonCommands.cs"));
+        var avalonia = File.ReadAllText(Path.Combine(
+            root,
+            "freew",
+            "FreeW.App.Avalonia",
+            "Ribbon",
+            "FreeWAvaloniaRibbonCommands.cs"));
+
+        foreach (var source in new[] { wpf, avalonia })
+        {
+            source.Should().Contain("editor.ToggleList(ListKind.Bullet)");
+            source.Should().Contain("editor.ToggleList(ListKind.Number)");
+        }
+
+        wpf.Should().NotContain("ToggleBullets: new RoutedEditCommand");
+        wpf.Should().NotContain("ToggleNumbering: new RoutedEditCommand");
     }
 }

@@ -118,13 +118,13 @@ $workflows = @(
         -Lifecycle "Insertion applies only after nonempty OK; the pane toggles, selects, loads rich content, and keeps Apply/Delete explicit; note navigation wraps; cancel/close do not mutate." `
         -Validation "Shared numbering planner validates all six footnote/endnote format, start, and restart values." `
         -ResultApplication "Insertion, pane edit/delete, and six-value options apply through document commands; Avalonia edit/delete/options are one-step undoable and invalidate layout." `
-        -SharedPolicy "NoteReferenceRibbonWorkflow; FootnoteEndnoteOptionsDialogPlanner; FreeWStatefulToggleCommand; note model and navigation contracts" `
+        -SharedPolicy "FootnoteEndnoteOptionsDialogPlanner; NoteReferenceRibbonWorkflow; note model and navigation contracts" `
         -WpfSources @("freew/FreeW.App.Host/MainWindow.cs", "freew/FreeW.App.Host/Ribbon/FreeWRibbonCommands.cs", "freew/FreeW.App.Host/Editing/DocumentView.cs") `
         -AvaloniaSources @("freew/FreeW.App.Avalonia/MainWindow.cs", "freew/FreeW.App.Avalonia/NotesPane.cs", "freew/FreeW.App.Avalonia/Editing/DocumentView.cs") `
         -Tests @("freew/FreeW.App.Host.Tests/EditableNotesPaneTests.cs", "freew/FreeW.App.Avalonia.Tests/EditingReferenceParityTests.cs") `
-        -RequiredWpfTokens @("NoteReferenceRibbonWorkflow.Register(", "FootnoteEndnoteOptionsDialog.Prompt", "MoveToNextFootnote") `
-        -RequiredAvaloniaTokens @("NoteReferenceRibbonWorkflow.Register(", "NoteTextDialog.ShowAsync", "_notesPane.Toggle", "ReplaceNoteContent", "MoveToPreviousEndnote", "ApplyFootnoteEndnoteOptions") `
-        -RequiredSharedTokens @("public static class NoteReferenceRibbonWorkflow", "public sealed class FreeWStatefulToggleCommand")
+        -RequiredWpfTokens @("NoteReferenceRibbonWorkflow.Register(", "new NoteReferenceRibbonPorts(", "FootnoteEndnoteOptionsDialog.Prompt", "MoveToNextFootnote") `
+        -RequiredAvaloniaTokens @("NoteReferenceRibbonWorkflow.Register(", "new NoteReferenceRibbonPorts(", "NoteTextDialog.ShowAsync", "_notesPane.Toggle", "ReplaceNoteContent", "MoveToPreviousEndnote", "ApplyFootnoteEndnoteOptions") `
+        -RequiredSharedTokens @("public static class NoteReferenceRibbonWorkflow")
 
     New-Workflow -Id "insert.date-time" `
         -Triggers @("freew.date-time") `

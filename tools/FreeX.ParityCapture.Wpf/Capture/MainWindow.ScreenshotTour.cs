@@ -7363,7 +7363,15 @@ public partial class MainWindow
             defineNameDialog.Close();
             defineNameDialog = null;
 
-            createFromSelectionDialog = new CreateNamesFromSelectionDialog
+            // The dialog now seeds its checkboxes from the caller's auto-detected options
+            // (CreateNamesFromSelectionPlanner.DetectOptions); the tour poses the classic
+            // header-row + header-column layout so the capture keeps its previous appearance.
+            createFromSelectionDialog = new CreateNamesFromSelectionDialog(
+                new FreeX.App.Presentation.DefinedNames.CreateNamesFromSelectionOptions(
+                    UseTopRow: true,
+                    UseLeftColumn: true,
+                    UseBottomRow: false,
+                    UseRightColumn: false))
             {
                 Owner = this
             };

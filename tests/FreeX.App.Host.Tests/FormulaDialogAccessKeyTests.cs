@@ -120,7 +120,7 @@ public sealed class FormulaDialogAccessKeyTests
         source.Should().Contain("this,");
         source.Should().Contain("FocusInitialKeyboardTarget();");
         source.Should().Contain("DialogResult = true;");
-        source.Should().Contain("CreateNamesFromSelectionPlanner.DefaultOptions");
+        source.Should().Contain("IsChecked = detectedOptions.UseTopRow");
         source.Should().NotContain("CreateNamesFromSelectionDialogResult");
         source.Should().NotContain("!useTopRow && !useLeftColumn && !useBottomRow && !useRightColumn");
         source.Should().NotContain("MessageBox.Show(");

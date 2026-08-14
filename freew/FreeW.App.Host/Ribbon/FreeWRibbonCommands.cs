@@ -1508,8 +1508,8 @@ internal static class FreeWRibbonCommands
     private static ParagraphEditingRibbonPorts CreateParagraphEditingPorts(DocumentView editor) =>
         new(
             PrepareExecution: () => editor.Focus(),
-            ToggleBullets: new RoutedEditCommand(editor, EditingCommands.ToggleBullets),
-            ToggleNumbering: new RoutedEditCommand(editor, EditingCommands.ToggleNumbering),
+            ToggleBullets: new ActionRibbonCommand(() => editor.ToggleList(ListKind.Bullet)),
+            ToggleNumbering: new ActionRibbonCommand(() => editor.ToggleList(ListKind.Number)),
             AlignLeft: new RoutedEditCommand(editor, EditingCommands.AlignLeft),
             AlignCenter: new RoutedEditCommand(editor, EditingCommands.AlignCenter),
             AlignRight: new RoutedEditCommand(editor, EditingCommands.AlignRight),

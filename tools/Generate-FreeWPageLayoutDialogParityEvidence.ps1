@@ -148,7 +148,7 @@ $contracts = @(
         validation = "LineNumberOptionsDialogPlanner validates positive Start At and Count By values."
         resultApplication = "Mode, start, and count apply through one undoable page-settings command and one layout refresh."
         sharedPolicy = "LineNumberOptionsDialogPlanner; PageLayoutCommandPlanner"
-        wpfTokens = @("LineNumberOptionsDialog.Prompt", "PageLayoutRibbonWorkflow.Register(", "new LineNumberOptionsCommand(editor)")
+        wpfTokens = @("LineNumberOptionsDialog.Prompt", "PageLayoutRibbonWorkflow.Register(", "FreeWRibbonCommandAction.LineNumbersOptions")
         avaloniaTokens = @("class LineNumberOptionsDialog", "OpenLineNumberOptionsDialog", "ApplyLineNumberOptions")
         tests = $pairedTests
     }

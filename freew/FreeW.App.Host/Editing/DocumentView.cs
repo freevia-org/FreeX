@@ -3293,6 +3293,10 @@ public sealed partial class DocumentView : RichTextBox
         });
     }
 
+    /// <summary>Toggle bullet/number formatting over every paragraph spanned by the selection.</summary>
+    public void ToggleList(ListKind kind) =>
+        ApplySelectedParagraphFormatting(indices => ParagraphEdits.ToggleListKind(indices, kind));
+
     public void ApplyMultiLevelNumberFormats(IReadOnlyList<ListNumberFormat> numberFormats)
         => _editingSession.SetMultiLevelNumberFormats(numberFormats);
 

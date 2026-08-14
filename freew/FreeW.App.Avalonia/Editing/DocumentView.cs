@@ -21428,16 +21428,9 @@ public sealed partial class DocumentView : Control
         _selectionAnchor = _caret;
     }
 
-    /// <summary>Toggle the current paragraph's list kind (bullet/number); re-applying the same kind clears it.</summary>
-    public void ToggleList(ListKind kind)
-    {
-        if (CurrentParagraph() is not { } paragraph || !IsEditable(paragraph))
-            return;
-        var newKind = paragraph.Formatting.ListKind == kind ? ListKind.None : kind;
-        _editingSession.FormatParagraphs(
-            [_caret.Block],
-            formatting => formatting with { ListKind = newKind });
-    }
+    /// <summary>Toggle bullet/number formatting over every paragraph spanned by the selection.</summary>
+    public void ToggleList(ListKind kind) =>
+        ApplySelectedParagraphFormatting(indices => ParagraphEdits.ToggleListKind(indices, kind));
 
     // AV-LIST: Tab at the start of a list item (caret offset == 0) demotes (Tab) or promotes
     // (Shift+Tab) the list level. Returns true when the key was consumed; false when the caller

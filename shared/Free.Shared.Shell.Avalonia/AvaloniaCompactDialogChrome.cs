@@ -23,12 +23,29 @@ public sealed record AvaloniaCompactDialogChromeStyle(FontFamily FontFamily)
     public double? TabHeight { get; init; }
     public double CompactRadioButtonHeight { get; init; } = 20;
     public double ButtonHeight { get; init; } = CompactDialogVisualTokens.ButtonHeight;
+    public double ButtonMinWidth { get; init; } = CompactDialogVisualTokens.ButtonMinWidth;
     public double FontSize { get; init; } = CompactDialogVisualTokens.FontSize;
     public Thickness ButtonPadding { get; init; } = new(
         CompactDialogVisualTokens.ButtonPaddingHorizontal,
         CompactDialogVisualTokens.ButtonPaddingVertical);
-    public Thickness TextBoxPadding { get; init; } = new(4, 1);
-    public Thickness ComboBoxPadding { get; init; } = new(5, 0, 4, 0);
+    public Thickness TextBoxPadding { get; init; } = new(
+        CompactDialogVisualTokens.TextBoxPaddingHorizontal,
+        CompactDialogVisualTokens.TextBoxPaddingVertical);
+    public Thickness ComboBoxPadding { get; init; } = new(
+        CompactDialogVisualTokens.ComboBoxPaddingHorizontal,
+        CompactDialogVisualTokens.ComboBoxPaddingVertical);
+    public Thickness TogglePadding { get; init; } = new(
+        CompactDialogVisualTokens.TogglePaddingLeft,
+        0,
+        0,
+        0);
+    public Thickness LabelPadding { get; init; } = new(CompactDialogVisualTokens.LabelPadding);
+    public Thickness GroupBoxMargin { get; init; } = new(
+        0,
+        CompactDialogVisualTokens.GroupBoxMarginVertical);
+    public Thickness GroupBoxPadding { get; init; } = new(
+        CompactDialogVisualTokens.GroupBoxPaddingHorizontal,
+        CompactDialogVisualTokens.GroupBoxPaddingVertical);
     public Thickness ListBoxItemPadding { get; init; } = new(4, 1);
     public double ListBoxItemMinHeight { get; init; } = CompactDialogVisualTokens.ControlHeight;
     public double ActionSpacing { get; init; } = 8;
@@ -169,17 +186,26 @@ public static class AvaloniaCompactDialogChrome
                 {
                     var explicitFamily = textBox.FontFamily;
                     var isEditableComboTextBox = textBox.Name == "PART_EditableTextBox";
+                    var hasExplicitHeight = !isEditableComboTextBox
+                        && (textBox.IsSet(Layoutable.HeightProperty)
+                            || textBox.IsSet(Layoutable.MinHeightProperty)
+                            || textBox.IsSet(Layoutable.MaxHeightProperty));
                     var isMultiline = !isEditableComboTextBox && (textBox.AcceptsReturn
                         || textBox.MinHeight > style.ControlHeight
                         || (!double.IsNaN(textBox.Height) && textBox.Height > style.ControlHeight));
-                    ApplyTextBox(textBox, style, fixedHeight: !isMultiline);
+                    ApplyTextBox(textBox, style, fixedHeight: !hasExplicitHeight && !isMultiline);
                     if (explicitFamily != FontFamily.Default && explicitFamily != window.FontFamily)
                         textBox.FontFamily = explicitFamily;
                     break;
                 }
                 case ComboBox comboBox:
-                    ApplyComboBox(comboBox, style);
+                {
+                    var hasExplicitHeight = comboBox.IsSet(Layoutable.HeightProperty)
+                        || comboBox.IsSet(Layoutable.MinHeightProperty)
+                        || comboBox.IsSet(Layoutable.MaxHeightProperty);
+                    ApplyComboBox(comboBox, style, fixedHeight: !hasExplicitHeight);
                     break;
+                }
                 case CheckBox checkBox:
                     ApplyCheckBox(checkBox, style);
                     break;
@@ -189,11 +215,21 @@ public static class AvaloniaCompactDialogChrome
                 case ListBox listBox:
                     ApplyListBox(listBox, style);
                     break;
+                case GroupBox groupBox:
+                    ApplyGroupBox(groupBox, style);
+                    break;
+                case Label label:
+                    ApplyLabel(label, style);
+                    break;
                 case TabControl tabControl:
                     ApplyClassicTabChrome(tabControl, style);
                     break;
                 case Button button:
-                    ApplyButton(button, style, button.MinWidth, button.IsDefault);
+                    ApplyButton(
+                        button,
+                        style,
+                        button.IsSet(Layoutable.MinWidthProperty) ? button.MinWidth : style.ButtonMinWidth,
+                        button.IsDefault);
                     break;
             }
         }
@@ -461,15 +497,21 @@ public static class AvaloniaCompactDialogChrome
         textBox.SelectionEnd = textBox.Text?.Length ?? 0;
     }
 
-    public static void ApplyComboBox(ComboBox comboBox, AvaloniaCompactDialogChromeStyle style)
+    public static void ApplyComboBox(
+        ComboBox comboBox,
+        AvaloniaCompactDialogChromeStyle style,
+        bool fixedHeight = true)
     {
         ArgumentNullException.ThrowIfNull(comboBox);
         ArgumentNullException.ThrowIfNull(style);
 
-        var height = style.ComboBoxHeight ?? style.ControlHeight;
-        comboBox.Height = height;
-        comboBox.MinHeight = height;
-        comboBox.MaxHeight = height;
+        if (fixedHeight)
+        {
+            var height = style.ComboBoxHeight ?? style.ControlHeight;
+            comboBox.Height = height;
+            comboBox.MinHeight = height;
+            comboBox.MaxHeight = height;
+        }
         comboBox.Padding = style.ComboBoxPadding;
         comboBox.CornerRadius = new CornerRadius(0);
         comboBox.FontSize = style.FontSize;
@@ -505,10 +547,9 @@ public static class AvaloniaCompactDialogChrome
                 new Setter(ContentPresenter.ForegroundProperty, foreground),
             },
         });
-        // Fluent's default DropDownGlyph is wider and sits inside a padded button slot. The WPF
-        // compact-dialog template uses a small, centered V at the trailing edge with no filled
-        // slot. Keep the platform popup/editing behavior and normalize only the glyph geometry.
-        comboBox.Styles.Add(new Style(selector => selector.OfType<global::Avalonia.Controls.PathIcon>().Name("DropDownGlyph"))
+        // Keep Avalonia's native popup and editing behavior. Only normalize the glyph geometry.
+        comboBox.Styles.Add(new Style(selector =>
+            selector.OfType<global::Avalonia.Controls.PathIcon>().Name("DropDownGlyph"))
         {
             Setters =
             {
@@ -594,6 +635,8 @@ public static class AvaloniaCompactDialogChrome
         checkBox.FontSize = style.FontSize;
         checkBox.FontFamily = style.FontFamily;
         checkBox.Foreground = ThemeTextBrush(style);
+        checkBox.Padding = style.TogglePadding;
+        checkBox.VerticalContentAlignment = VerticalAlignment.Center;
     }
 
     public static void ApplyCompactCheckBox(
@@ -839,6 +882,10 @@ public static class AvaloniaCompactDialogChrome
         groupBox.Foreground = accent;
         groupBox.BorderBrush = borderBrush ?? GroupBoxBorderBrush;
         groupBox.BorderThickness = new Thickness(CompactDialogVisualTokens.BorderThickness);
+        if (!groupBox.IsSet(Layoutable.MarginProperty))
+            groupBox.Margin = style.GroupBoxMargin;
+        if (!groupBox.IsSet(TemplatedControl.PaddingProperty))
+            groupBox.Padding = style.GroupBoxPadding;
         groupBox.HeaderTemplate = new FuncDataTemplate<object>((header, _) => new TextBlock
         {
             Text = header?.ToString() ?? string.Empty,
@@ -849,6 +896,21 @@ public static class AvaloniaCompactDialogChrome
         });
     }
 
+    public static void ApplyLabel(Label label, AvaloniaCompactDialogChromeStyle? style = null)
+    {
+        ArgumentNullException.ThrowIfNull(label);
+        style ??= WindowsStyle;
+
+        if (!label.IsSet(TemplatedControl.FontFamilyProperty))
+            label.FontFamily = style.FontFamily;
+        if (!label.IsSet(TemplatedControl.FontSizeProperty))
+            label.FontSize = style.FontSize;
+        if (!label.IsSet(TemplatedControl.ForegroundProperty))
+            label.Foreground = ThemeTextBrush(style);
+        if (!label.IsSet(TemplatedControl.PaddingProperty))
+            label.Padding = style.LabelPadding;
+    }
+
     public static void ApplyRadioButton(RadioButton radioButton, AvaloniaCompactDialogChromeStyle style)
     {
         ArgumentNullException.ThrowIfNull(radioButton);
@@ -857,6 +919,8 @@ public static class AvaloniaCompactDialogChrome
         radioButton.FontSize = style.FontSize;
         radioButton.FontFamily = style.FontFamily;
         radioButton.Foreground = ThemeTextBrush(style);
+        radioButton.Padding = style.TogglePadding;
+        radioButton.VerticalContentAlignment = VerticalAlignment.Center;
     }
 
     public static void ApplyValidationStatus(
