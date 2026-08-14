@@ -13,6 +13,7 @@ public sealed partial class MainWindow
                 BindEditor = BindWorkareaEditor,
                 HideTransientPickers = HideTransientPickers,
                 MarkDirty = () => _fileSession.MarkDirty(),
+                RefreshCommandStates = SyncRibbonCommandStates,
                 RefreshSlidePane = RefreshSlidePane,
                 RefreshCanvas = RefreshCanvas,
                 RefreshNotesPane = RefreshNotesPane,
@@ -54,10 +55,14 @@ public sealed partial class MainWindow
 
     private void BindWorkareaEditor(EditingSession editor)
     {
+        _ribbonBindingSession?.Rebind(editor);
         _selectionPane?.SetEditor(editor);
         if (SlideCanvas is not null)
             AttachCanvasEditing();
     }
+
+    private void SyncRibbonCommandStates() =>
+        _ribbonBindingSession?.SyncCommandStates();
 
     private void RefreshSlidePane() =>
         (SlidePaneHost?.Child as SlidePane)?.RefreshProjection();

@@ -163,6 +163,50 @@ public sealed class FreePRibbonHostProfileTests
     }
 
     [Fact]
+    public void BindingSessionRebindsExistingRendererRegistryToReplacementEditor()
+    {
+        var original = MakeEditor();
+        var replacement = MakeEditor();
+        var session = new FreePRibbonBindingSession(
+            original,
+            new RibbonStateStore(),
+            () => CreateProfile(new FreePRibbonHostPorts()));
+
+        session.Rebind(replacement);
+        Execute(session.Registry, "freep.new-slide");
+
+        original.Presentation.Slides.Should().ContainSingle();
+        replacement.Presentation.Slides.Should().HaveCount(2);
+    }
+
+    [Fact]
+    public void BindingSessionProjectsLiveStatefulCommandsIntoRendererStore()
+    {
+        var showState = new PresentationViewShowState(
+            ShowGridlines: false,
+            ShowGuides: false);
+        var stateStore = new RibbonStateStore();
+        var session = new FreePRibbonBindingSession(
+            MakeEditor(),
+            stateStore,
+            () => CreateProfile(new FreePRibbonHostPorts
+            {
+                QueryEndpoints = new FreePRibbonHostQueryEndpoints
+                {
+                    ViewShowState = () => showState,
+                },
+            }));
+
+        showState = showState with { ShowGridlines = true };
+        session.SyncCommandStates();
+
+        stateStore.GetState(PresentationViewShowPlanner.GridlinesCommandId)
+            .IsChecked.Should().BeTrue();
+        stateStore.GetState(PresentationViewShowPlanner.GuidesCommandId)
+            .IsChecked.Should().BeFalse();
+    }
+
+    [Fact]
     public void EndpointCatalogsRemainExhaustive()
     {
         typeof(FreePRibbonHostQueryEndpoints).GetProperties().Select(property => property.Name)

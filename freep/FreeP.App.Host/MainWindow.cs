@@ -88,6 +88,8 @@ public sealed partial class MainWindow : Window,
     private TabControl _ribbonTabs = null!;
     private TabItem _fileTab = null!;
     private RibbonFileTabRouter? _fileTabRouter;
+    private readonly RibbonStateStore _ribbonStateStore = new();
+    private FreePRibbonBindingSession? _ribbonBindingSession;
 
     // ── Body layout ───────────────────────────────────────────────────────────────
 
@@ -429,12 +431,14 @@ public sealed partial class MainWindow : Window,
 
         // Ribbon. Wave 4C passes the slideshow launch Actions into the command registry;
         // StartSlideShow (Wave 4B) opens the fullscreen SlideShowWindow.
-        var stateStore = new RibbonStateStore();
-        var commands = FreePRibbonHostRegistryComposer.Build(
+        _ribbonBindingSession = new FreePRibbonBindingSession(
             Editor,
-            stateStore,
-            CreateRibbonHostProfile()).Registry;
-        var ribbon = BuildRibbon(FreeP.Ribbon.Definitions.FreePRibbon.Build(FreeP.Ribbon.Definitions.FreePRibbonCapabilities.Wpf), commands, stateStore);
+            _ribbonStateStore,
+            CreateRibbonHostProfile);
+        var ribbon = BuildRibbon(
+            FreeP.Ribbon.Definitions.FreePRibbon.Build(FreeP.Ribbon.Definitions.FreePRibbonCapabilities.Wpf),
+            _ribbonBindingSession.Registry,
+            _ribbonBindingSession.StateStore);
 
         // Body: slide pane + stage.
         var body = BuildBody();
