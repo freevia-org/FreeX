@@ -26,6 +26,18 @@ public sealed record BackstagePaneComposerProfile
     public string PaneFontFamilyName { get; init; } = "Segoe UI";
     public double PaneFontSize { get; init; } = 12;
     public bool DisableScrollBarAutoHide { get; init; } = true;
-    public bool UseAntialiasTextRendering { get; init; } = true;
+    public BackstageTextRasterizationMode TextRasterizationMode { get; init; } =
+        BackstageTextRasterizationMode.Subpixel;
     public double ClassicScrollBarWidth { get; init; } = 17;
+}
+
+/// <summary>
+/// Host-neutral text rasterization intent for Backstage surfaces. Renderers map this policy to
+/// their toolkit's closest equivalent instead of choosing a route-local rendering mode.
+/// </summary>
+public enum BackstageTextRasterizationMode
+{
+    PlatformDefault,
+    Grayscale,
+    Subpixel,
 }

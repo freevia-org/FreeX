@@ -419,7 +419,7 @@ public class BackstageViewTests : IDisposable
             pane.VerticalContentAlignment.Should().Be(VerticalAlignment.Top);
             pane.FontFamily.Name.Should().Be("Segoe UI");
             pane.FontSize.Should().Be(12);
-            TextOptions.GetTextRenderingMode(pane).Should().Be(TextRenderingMode.Antialias);
+            TextOptions.GetTextRenderingMode(pane).Should().Be(TextRenderingMode.SubpixelAntialias);
         }, CancellationToken.None);
     }
 
@@ -858,7 +858,7 @@ public class BackstageViewTests : IDisposable
             pane.Margin.Should().Be(new Thickness(0, 0, 1, 0));
             pane.FontFamily.Name.Should().Be("Segoe UI");
             pane.FontSize.Should().Be(12);
-            TextOptions.GetTextRenderingMode(pane).Should().Be(TextRenderingMode.Antialias);
+            TextOptions.GetTextRenderingMode(pane).Should().Be(TextRenderingMode.SubpixelAntialias);
         }, CancellationToken.None);
     }
 
