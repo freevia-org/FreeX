@@ -144,6 +144,18 @@ public sealed partial class MainWindow
         Table = new FreePRibbonTextActionEndpoints
         {
             ToggleFormat = format => WithCanvas(canvas => ApplyTableTextFormat(canvas, format)),
+            SetParagraphAlignment = alignment => WithCanvas(canvas =>
+                canvas.TableCellEditor?.TryApplyActiveTableCellParagraphAlignment(alignment) == true),
+            ApplyListPreset = preset => WithCanvas(canvas =>
+                canvas.TableCellEditor?.TryApplyActiveTableCellParagraphListPreset(preset) == true),
+            ToggleBullets = () => WithCanvas(canvas =>
+                canvas.TableCellEditor?.TryApplyActiveTableCellParagraphBulletToggle() == true),
+            ToggleNumbering = () => WithCanvas(canvas =>
+                canvas.TableCellEditor?.TryApplyActiveTableCellParagraphNumberingToggle() == true),
+            Indent = () => WithCanvas(canvas =>
+                canvas.TableCellEditor?.TryApplyActiveTableCellParagraphIndent() == true),
+            Outdent = () => WithCanvas(canvas =>
+                canvas.TableCellEditor?.TryApplyActiveTableCellParagraphOutdent() == true),
             SetFontFamily = family => WithTableEditor(editor => editor.ApplyFont(family)),
             SetFontSize = sizePt => WithTableEditor(editor => editor.ApplyFontSize(sizePt)),
             SetColor = color => WithTableEditor(editor => editor.ApplyColor(color)),

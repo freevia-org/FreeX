@@ -89,8 +89,8 @@ public sealed class InCanvasTextEditor : IDisposable
         if (_richBox is null || start < 0 || end < start)
             return false;
 
-        var startPointer = TextPointerAtLogicalOffset(_richBox.Document, start);
-        var endPointer = TextPointerAtLogicalOffset(_richBox.Document, end);
+        var startPointer = TextBodyFlowDocumentConverter.TextPointerAtLogicalOffset(_richBox.Document, start);
+        var endPointer = TextBodyFlowDocumentConverter.TextPointerAtLogicalOffset(_richBox.Document, end);
         if (startPointer is null || endPointer is null)
             return false;
 
@@ -440,8 +440,8 @@ public sealed class InCanvasTextEditor : IDisposable
             InCanvasRichTextEditorDefaults.ShapeFallbackFontSizePt);
         _richBox.Document = TextBodyFlowDocumentConverter.ToFlowDocument(updated, fallbackPt);
 
-        var startPointer = TextPointerAtLogicalOffset(_richBox.Document, start);
-        var endPointer = TextPointerAtLogicalOffset(_richBox.Document, end);
+        var startPointer = TextBodyFlowDocumentConverter.TextPointerAtLogicalOffset(_richBox.Document, start);
+        var endPointer = TextBodyFlowDocumentConverter.TextPointerAtLogicalOffset(_richBox.Document, end);
         if (startPointer is not null && endPointer is not null)
             _richBox.Selection.Select(startPointer, endPointer);
         _richBox.Focus();
@@ -454,7 +454,7 @@ public sealed class InCanvasTextEditor : IDisposable
 
     private (int Start, int End)? CurrentSelection()
     {
-        if (_richBox is null || _richBox.Selection.IsEmpty)
+        if (_richBox is null)
             return null;
 
         return (
@@ -539,41 +539,6 @@ public sealed class InCanvasTextEditor : IDisposable
         }
 
         editor.RenderTransform = transform;
-    }
-
-    private static TextPointer? TextPointerAtLogicalOffset(FlowDocument document, int logicalOffset)
-    {
-        int remaining = logicalOffset;
-        bool firstParagraph = true;
-        foreach (var paragraph in document.Blocks.OfType<System.Windows.Documents.Paragraph>())
-        {
-            if (!firstParagraph)
-            {
-                if (remaining == 0)
-                    return paragraph.ContentStart;
-                remaining--;
-            }
-            firstParagraph = false;
-
-            foreach (var inline in TextBodyFlowDocumentConverter.EnumerateEditableLeafInlines(paragraph.Inlines))
-            {
-                if (inline is System.Windows.Documents.Run run)
-                {
-                    int length = run.Text?.Length ?? 0;
-                    if (remaining <= length)
-                        return run.ContentStart.GetPositionAtOffset(remaining) ?? run.ContentEnd;
-                    remaining -= length;
-                }
-                else if (inline is LineBreak)
-                {
-                    if (remaining == 0)
-                        return inline.ElementStart;
-                    remaining--;
-                }
-            }
-        }
-
-        return remaining == 0 ? document.ContentEnd : null;
     }
 
     private void OnRichBoxKeyDown(object sender, KeyEventArgs e)
