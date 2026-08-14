@@ -416,6 +416,44 @@ public sealed class AvaloniaShellSourceTests
     }
 
     [Fact]
+    public void MainWindow_PrintDialogUsesSharedSessionAndKeepsOnlyWorkbookScopeNative()
+    {
+        var printSource = File.ReadAllText(RepositoryFileLocator.Find(
+            "src", "FreeX.App.Avalonia", "MainWindow.Print.cs"));
+        var sharedDialog = File.ReadAllText(RepositoryFileLocator.Find(
+            "shared", "Free.Shared.Shell.Avalonia", "AvaloniaPrintDialogWorkflow.cs"));
+        var neutralResources = File.ReadAllText(RepositoryFileLocator.Find(
+            "src", "FreeX.App.Localization", "Resources", "Strings.resx"));
+
+        printSource.Should().Contain("AvaloniaPrintDialogWorkflow.ShowAsync(");
+        printSource.Should().Contain("PageRangeKinds = [PrintPageRangeKind.All, PrintPageRangeKind.Range]");
+        printSource.Should().Contain("CreateAdditionalContent = () => CreatePrintScopePanel(");
+        printSource.Should().Contain("AllowSubmissionWithoutPrinter = true");
+        printSource.Should().Contain("discovery with { Message = UiText.Get(\"Print_NoPrinterNote\") }");
+        printSource.Should().Contain("class FreeXPrintDialogWindow : AvaloniaDialogWindow");
+        printSource.Should().NotContain("var dialog = new Window");
+        printSource.Should().NotContain("ParsePositiveInt(");
+        printSource.Should().NotContain("ApplyPrintButtonChrome(");
+        printSource.Should().NotContain("PrintSettingsPlanner.InitialDialogFocusTarget");
+
+        sharedDialog.Should().Contain("PrintPageRangeChoiceMap");
+        sharedDialog.Should().Contain("options.CreateAdditionalContent?.Invoke()");
+        sharedDialog.Should().Contain("state.CanSubmit || options.AllowSubmissionWithoutPrinter");
+        sharedDialog.Should().Contain("if (options.ShowOrientation)");
+
+        foreach (var key in new[]
+                 {
+                     "Print_ReadyStatus",
+                     "Print_CopiesOutOfRange",
+                     "Print_FirstPageInvalid",
+                     "Print_LastPageBeforeFirstPage",
+                 })
+        {
+            neutralResources.Should().Contain($"name=\"{key}\"");
+        }
+    }
+
+    [Fact]
     public void MainWindow_FilePickersAreGuardedBeforeDialogsAndSaveAsConfirmsNormalizedOverwrite()
     {
         var source = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MainWindow.cs"));

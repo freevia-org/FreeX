@@ -15,7 +15,11 @@ public sealed record AvaloniaPrintDialogAutomationIds(
     string? PageRange = null,
     string? Orientation = null,
     string? Collation = null,
-    string? Submit = null);
+    string? Submit = null,
+    string? Dialog = null,
+    string? Cancel = null,
+    string? FirstPage = null,
+    string? LastPage = null);
 
 public sealed record AvaloniaPrintDialogCollation(bool IsSelectable, bool FixedValue)
 {
@@ -61,6 +65,9 @@ public sealed record AvaloniaPrintDialogText(
 
 public sealed record AvaloniaPrintDialogOptions
 {
+    private static readonly PrintPageRangeKind[] DefaultPageRangeKinds =
+        [PrintPageRangeKind.All, PrintPageRangeKind.Single, PrintPageRangeKind.Range];
+
     public double Width { get; init; } = 480;
 
     public double ChoiceMinWidth { get; init; } = 220;
@@ -70,6 +77,24 @@ public sealed record AvaloniaPrintDialogOptions
     public AvaloniaPrintDialogAutomationIds AutomationIds { get; init; } = new();
 
     public AvaloniaPrintDialogCollation Collation { get; init; } = AvaloniaPrintDialogCollation.Fixed(true);
+
+    /// <summary>
+    /// Maps each localized page-range choice to the renderer-neutral selection kind. This lets
+    /// products expose only the choices their print workflow supports without reimplementing
+    /// parsing, validation, or range visibility.
+    /// </summary>
+    public IReadOnlyList<PrintPageRangeKind> PageRangeKinds { get; init; } = DefaultPageRangeKinds;
+
+    /// <summary>Creates optional product-owned content, such as FreeX workbook scope selection.</summary>
+    public Func<Control?>? CreateAdditionalContent { get; init; }
+
+    /// <summary>
+    /// Keeps submission available when no native printer exists and the product has a fallback
+    /// destination, such as FreeX's print-ready PDF save path.
+    /// </summary>
+    public bool AllowSubmissionWithoutPrinter { get; init; }
+
+    public bool ShowOrientation { get; init; } = true;
 
     public bool ApplyCompactActionButtonChrome { get; init; } = true;
 
@@ -96,11 +121,13 @@ public static class AvaloniaPrintDialogWorkflow
         ArgumentNullException.ThrowIfNull(createWindow);
         ArgumentNullException.ThrowIfNull(options);
 
+        var pageRangeChoices = ValidatePageRangeChoices(options);
+
         var dialog = createWindow();
         ArgumentNullException.ThrowIfNull(dialog);
 
         var session = PrintDialogSession.Start(discovery, requested);
-        var controls = Configure(dialog, session, options);
+        var controls = Configure(dialog, session, options, pageRangeChoices);
         PrintSelection? result = null;
 
         controls.PageRange.SelectionChanged += (_, _) => UpdateRangeVisibility(controls);
@@ -109,7 +136,7 @@ public static class AvaloniaPrintDialogWorkflow
             var submission = session.Submit(
                 controls.Printer.SelectedItem as string,
                 controls.Copies.Text,
-                controls.PageRange.SelectedIndex,
+                controls.SelectedPageRangeKind,
                 controls.FirstPage.Text,
                 controls.LastPage.Text,
                 controls.Orientation.SelectedIndex,
@@ -146,7 +173,8 @@ public static class AvaloniaPrintDialogWorkflow
     private static PrintDialogControls Configure(
         Window dialog,
         PrintDialogSession session,
-        AvaloniaPrintDialogOptions options)
+        AvaloniaPrintDialogOptions options,
+        PrintPageRangeChoiceMap pageRangeChoices)
     {
         var state = session.State;
         var text = options.Text;
@@ -158,8 +186,11 @@ public static class AvaloniaPrintDialogWorkflow
         dialog.ShowInTaskbar = false;
 
         var printer = Choice(state.PrinterNames, state.SelectedPrinterIndex, options.ChoiceMinWidth);
+        printer.IsEnabled = state.PrinterNames.Count > 0;
         var copies = Text(state.CopiesText);
-        var pageRange = Choice(text.PageRangeChoices, state.PageRangeIndex, options.ChoiceMinWidth);
+        var selectedPageRangeIndex = pageRangeChoices.ChoiceIndexFor(
+            (PrintPageRangeKind)state.PageRangeIndex);
+        var pageRange = Choice(text.PageRangeChoices, selectedPageRangeIndex, options.ChoiceMinWidth);
         var firstPage = Text(state.FirstPageText);
         var lastPage = Text(state.LastPageText);
         var orientation = Choice(text.OrientationChoices, state.OrientationIndex, options.ChoiceMinWidth);
@@ -171,7 +202,12 @@ public static class AvaloniaPrintDialogWorkflow
             Text = state.StatusMessage(text.Status),
             TextWrapping = TextWrapping.Wrap,
         };
-        var submit = new Button { Content = text.SubmitLabel, IsDefault = true, IsEnabled = state.CanSubmit };
+        var submit = new Button
+        {
+            Content = text.SubmitLabel,
+            IsDefault = true,
+            IsEnabled = state.CanSubmit || options.AllowSubmissionWithoutPrinter,
+        };
         var cancel = new Button { Content = text.CancelLabel, IsCancel = true };
 
         if (options.ApplyCompactActionButtonChrome)
@@ -187,12 +223,22 @@ public static class AvaloniaPrintDialogWorkflow
                 minWidth: 72);
         }
 
+        ApplyAutomationId(dialog, options.AutomationIds.Dialog);
         ApplyAutomationId(printer, options.AutomationIds.Printer);
         ApplyAutomationId(copies, options.AutomationIds.Copies);
         ApplyAutomationId(pageRange, options.AutomationIds.PageRange);
+        ApplyAutomationId(firstPage, options.AutomationIds.FirstPage);
+        ApplyAutomationId(lastPage, options.AutomationIds.LastPage);
         ApplyAutomationId(orientation, options.AutomationIds.Orientation);
         ApplyAutomationId(collation, options.AutomationIds.Collation);
         ApplyAutomationId(submit, options.AutomationIds.Submit);
+        ApplyAutomationId(cancel, options.AutomationIds.Cancel);
+        ApplyAutomationName(printer, text.PrinterLabel);
+        ApplyAutomationName(copies, text.CopiesLabel);
+        ApplyAutomationName(pageRange, text.PagesLabel);
+        ApplyAutomationName(firstPage, text.FirstPageLabel);
+        ApplyAutomationName(lastPage, text.LastPageLabel);
+        ApplyAutomationName(orientation, text.OrientationLabel);
 
         var content = new StackPanel { Spacing = 8, Margin = new Thickness(16) };
         if (!string.IsNullOrWhiteSpace(options.LayoutSummary))
@@ -206,19 +252,34 @@ public static class AvaloniaPrintDialogWorkflow
         }
 
         AddRow(content, text.PrinterLabel, printer);
+        var additionalContent = options.CreateAdditionalContent?.Invoke();
+        if (additionalContent is not null)
+            content.Children.Add(additionalContent);
         AddRow(content, text.CopiesLabel, copies);
         AddRow(content, text.PagesLabel, pageRange);
-        content.Children.Add(new StackPanel
+        var firstPageLabel = new TextBlock
+        {
+            Text = text.FirstPageLabel,
+            VerticalAlignment = VerticalAlignment.Center,
+        };
+        var lastPageLabel = new TextBlock
+        {
+            Text = text.LastPageLabel,
+            VerticalAlignment = VerticalAlignment.Center,
+        };
+        var rangePanel = new StackPanel
         {
             Orientation = Orientation.Horizontal,
             Spacing = 8,
             Children =
             {
-                new TextBlock { Text = text.FirstPageLabel, VerticalAlignment = VerticalAlignment.Center }, firstPage,
-                new TextBlock { Text = text.LastPageLabel, VerticalAlignment = VerticalAlignment.Center }, lastPage,
+                firstPageLabel, firstPage,
+                lastPageLabel, lastPage,
             },
-        });
-        AddRow(content, text.OrientationLabel, orientation);
+        };
+        content.Children.Add(rangePanel);
+        if (options.ShowOrientation)
+            AddRow(content, text.OrientationLabel, orientation);
         if (collation is not null)
             content.Children.Add(collation);
         content.Children.Add(status);
@@ -235,7 +296,10 @@ public static class AvaloniaPrintDialogWorkflow
             collation,
             status,
             submit,
-            cancel);
+            cancel,
+            pageRangeChoices,
+            rangePanel,
+            lastPageLabel);
     }
 
     private static void FocusInvalidField(PrintDialogControls controls, PrintDialogValidationIssue issue)
@@ -256,9 +320,24 @@ public static class AvaloniaPrintDialogWorkflow
 
     private static void UpdateRangeVisibility(PrintDialogControls controls)
     {
-        var visibility = PrintDialogSession.RangeVisibility(controls.PageRange.SelectedIndex);
+        var visibility = PrintDialogSession.RangeVisibility(controls.SelectedPageRangeKind);
+        controls.RangePanel.IsVisible = visibility.ShowFirstPage;
         controls.FirstPage.IsVisible = visibility.ShowFirstPage;
+        controls.LastPageLabel.IsVisible = visibility.ShowLastPage;
         controls.LastPage.IsVisible = visibility.ShowLastPage;
+    }
+
+    private static PrintPageRangeChoiceMap ValidatePageRangeChoices(AvaloniaPrintDialogOptions options)
+    {
+        var map = new PrintPageRangeChoiceMap(options.PageRangeKinds);
+        if (map.Kinds.Count != options.Text.PageRangeChoices.Count)
+        {
+            throw new ArgumentException(
+                "Each page-range label must have exactly one page-range kind.",
+                nameof(options));
+        }
+
+        return map;
     }
 
     private static ComboBox Choice(IEnumerable<string> items, int selectedIndex, double minWidth)
@@ -299,6 +378,12 @@ public static class AvaloniaPrintDialogWorkflow
             AutomationProperties.SetAutomationId(control, automationId);
     }
 
+    private static void ApplyAutomationName(Control control, string? name)
+    {
+        if (!string.IsNullOrWhiteSpace(name))
+            AutomationProperties.SetName(control, name);
+    }
+
     private sealed record PrintDialogControls(
         ComboBox Printer,
         TextBox Copies,
@@ -309,5 +394,12 @@ public static class AvaloniaPrintDialogWorkflow
         CheckBox? Collation,
         TextBlock Status,
         Button Submit,
-        Button Cancel);
+        Button Cancel,
+        PrintPageRangeChoiceMap PageRangeChoices,
+        StackPanel RangePanel,
+        TextBlock LastPageLabel)
+    {
+        public int SelectedPageRangeKind =>
+            PageRangeChoices.KindIndexAt(PageRange.SelectedIndex);
+    }
 }
