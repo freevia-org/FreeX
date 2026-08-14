@@ -479,7 +479,9 @@ public sealed partial class MainWindow
     }
 
     /// <summary>
-    /// The Create Names from Selection dialog: Top row / Left column / Bottom row / Right column checkboxes.
+    /// The Create Names from Selection dialog: Top row / Left column / Bottom row / Right column checkboxes,
+    /// pre-checked by <see cref="CreateNamesFromSelectionPlanner.DetectOptions"/> for the current selection so
+    /// this shell and the WPF shell open identically and match real Excel's auto-detection.
     /// OK runs <see cref="CreateNamesFromSelectionPlanner.Plan"/> over the active selection (reading label
     /// text from the active sheet), then commits each planned name through a Core define-name command on the
     /// shared session command path.
