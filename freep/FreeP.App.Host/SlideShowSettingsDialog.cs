@@ -106,15 +106,10 @@ internal sealed partial class SlideShowSettingsDialog : Free.Shared.Ribbon.Wpf.D
         _formSession = new(
             PresentationDialogControlAdapter.CaptureValue,
             PresentationDialogControlAdapter.ApplyValue);
-        _formSession.Register(SlideShowSettingsDialogField.UseTimings, _useTimingsCheck);
-        _formSession.Register(SlideShowSettingsDialogField.ShowWithoutAnimation, _showAnimationCheck);
-        _formSession.Register(SlideShowSettingsDialogField.PlayNarration, _showNarrationCheck);
-        _formSession.Register(SlideShowSettingsDialogField.ShowMediaControls, _showMediaControlsCheck);
-        _formSession.Register(SlideShowSettingsDialogField.ShowMasterGraphics, _showMasterShapesCheck);
-        _formSession.Register(SlideShowSettingsDialogField.LoopUntilStopped, _loopCheck);
-        _formSession.Register(SlideShowSettingsDialogField.ShowType, _showTypeCombo);
-        _formSession.Register(SlideShowSettingsDialogField.ShowBrowseScrollbar, _showScrollbarCheck);
-        _formSession.Register(SlideShowSettingsDialogField.KioskRestartMilliseconds, _kioskRestartText);
+        _formSession.RegisterStandardControls(
+            _useTimingsCheck, _showAnimationCheck, _showNarrationCheck,
+            _showMediaControlsCheck, _showMasterShapesCheck, _loopCheck,
+            _showTypeCombo, _showScrollbarCheck, _kioskRestartText);
 
         var panel = new StackPanel { Margin = new Thickness(14) };
         panel.Children.Add(_useTimingsCheck);

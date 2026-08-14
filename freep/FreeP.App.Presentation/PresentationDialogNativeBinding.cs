@@ -70,6 +70,54 @@ public sealed class PresentationDialogNativeBinding<TControl, TText, TChoice, TT
         new($"Unsupported presentation dialog control: {control.GetType().Name}.");
 }
 
+/// <summary>Applies chart field plans through the three native input control categories.</summary>
+public sealed class ChartOptionsDialogNativeFieldBinding<TControl, TText, TChoice, TToggle>
+    where TControl : class
+    where TText : class
+    where TChoice : class
+    where TToggle : class
+{
+    private readonly Action<TControl, bool> _setEnabled;
+    private readonly Action<TText, string> _setText;
+    private readonly Action<TChoice, IReadOnlyList<string>> _setChoices;
+    private readonly Action<TChoice, int> _setSelectedIndex;
+    private readonly Action<TToggle, bool?> _setChecked;
+
+    public ChartOptionsDialogNativeFieldBinding(
+        Action<TControl, bool> setEnabled,
+        Action<TText, string> setText,
+        Action<TChoice, IReadOnlyList<string>> setChoices,
+        Action<TChoice, int> setSelectedIndex,
+        Action<TToggle, bool?> setChecked)
+    {
+        _setEnabled = setEnabled ?? throw new ArgumentNullException(nameof(setEnabled));
+        _setText = setText ?? throw new ArgumentNullException(nameof(setText));
+        _setChoices = setChoices ?? throw new ArgumentNullException(nameof(setChoices));
+        _setSelectedIndex = setSelectedIndex ?? throw new ArgumentNullException(nameof(setSelectedIndex));
+        _setChecked = setChecked ?? throw new ArgumentNullException(nameof(setChecked));
+    }
+
+    public void ApplyPlan(TControl control, ChartOptionsDialogFieldPlan field)
+    {
+        ArgumentNullException.ThrowIfNull(control);
+        ArgumentNullException.ThrowIfNull(field);
+        _setEnabled(control, field.IsEnabled);
+        switch (control)
+        {
+            case TText text:
+                _setText(text, field.Text);
+                break;
+            case TChoice choice:
+                _setChoices(choice, field.ChoiceLabels);
+                _setSelectedIndex(choice, field.SelectedIndex);
+                break;
+            case TToggle toggle:
+                _setChecked(toggle, field.IsChecked);
+                break;
+        }
+    }
+}
+
 public static class PresentationDialogNativeSemanticBinding
 {
     public static void Apply<TControl, TField>(

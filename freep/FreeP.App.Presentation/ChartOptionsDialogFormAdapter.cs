@@ -6,16 +6,19 @@ public abstract class ChartOptionsDialogFormAdapter<TControl, TRow>
     where TRow : class
 {
     private readonly Action<TControl> _focus;
+    private readonly Action<ChartOptionsDialogFieldId>? _valueChanged;
 
     protected ChartOptionsDialogFormAdapter(
         Func<TControl, PresentationDialogFieldValue> captureValue,
         Action<TControl, PresentationDialogFieldValue> applyValue,
         Action<TControl, ChartOptionsDialogFieldPlan> applyPlan,
         Action<TRow, bool> setVisible,
-        Action<TControl> focus)
+        Action<TControl> focus,
+        Action<ChartOptionsDialogFieldId>? valueChanged = null)
     {
         FormSession = new(captureValue, applyValue, applyPlan, setVisible);
         _focus = focus ?? throw new ArgumentNullException(nameof(focus));
+        _valueChanged = valueChanged;
     }
 
     protected ChartOptionsDialogFormSession<TControl, TRow> FormSession { get; }
@@ -40,5 +43,11 @@ public abstract class ChartOptionsDialogFormAdapter<TControl, TRow>
     {
         if (FormSession.TryGetControl(fieldId, out var control))
             _focus(control);
+    }
+
+    protected void NotifyValueChanged(ChartOptionsDialogFieldId fieldId)
+    {
+        if (!FormSession.IsApplyingPlan)
+            _valueChanged?.Invoke(fieldId);
     }
 }

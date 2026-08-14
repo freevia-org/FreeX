@@ -176,6 +176,37 @@ public sealed class HeaderFooterDialogFormSession<TControl>
         _controls.Add(field, control);
     }
 
+    public void RegisterStandardControls(
+        PresentationDialogSurfacePlan<HeaderFooterDialogField, HeaderFooterDialogAction> surface,
+        Action<TControl, PresentationDialogFieldPlan<HeaderFooterDialogField>> applySemantic,
+        TControl dateTime,
+        TControl dateFormat,
+        TControl fixedDateTime,
+        TControl fixedDateTimeText,
+        TControl footer,
+        TControl footerText,
+        TControl slideNumber,
+        TControl suppressOnTitleSlide)
+    {
+        ArgumentNullException.ThrowIfNull(surface);
+        ArgumentNullException.ThrowIfNull(applySemantic);
+        Add(HeaderFooterDialogField.DateTime, dateTime);
+        Add(HeaderFooterDialogField.DateFormat, dateFormat);
+        Add(HeaderFooterDialogField.FixedDateTime, fixedDateTime);
+        Add(HeaderFooterDialogField.FixedDateTimeText, fixedDateTimeText);
+        Add(HeaderFooterDialogField.Footer, footer);
+        Add(HeaderFooterDialogField.FooterText, footerText);
+        Add(HeaderFooterDialogField.SlideNumber, slideNumber);
+        Add(HeaderFooterDialogField.SuppressOnTitleSlide, suppressOnTitleSlide);
+        return;
+
+        void Add(HeaderFooterDialogField field, TControl control)
+        {
+            applySemantic(control, surface.Field(field));
+            Register(field, control);
+        }
+    }
+
     public HeaderFooterDialogInputState CaptureInput() =>
         new HeaderFooterDialogInputProjection(
             _controls.ToDictionary(pair => pair.Key, pair => _captureValue(pair.Value)))

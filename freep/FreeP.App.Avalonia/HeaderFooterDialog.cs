@@ -101,16 +101,11 @@ internal sealed partial class HeaderFooterDialog : FreePDialogWindow
             static (control, enabled) => control.IsEnabled = enabled,
             static control => control.Focus(),
             SelectAllText);
-        RegisterControl(_dateTimeCheck, surface.Field(HeaderFooterDialogField.DateTime));
-        RegisterControl(_dateFormatCombo, surface.Field(HeaderFooterDialogField.DateFormat));
-        RegisterControl(_fixedDateCheck, surface.Field(HeaderFooterDialogField.FixedDateTime));
-        RegisterControl(_fixedDateBox, surface.Field(HeaderFooterDialogField.FixedDateTimeText));
-        RegisterControl(_footerCheck, surface.Field(HeaderFooterDialogField.Footer));
-        RegisterControl(_footerBox, surface.Field(HeaderFooterDialogField.FooterText));
-        RegisterControl(_slideNumberCheck, surface.Field(HeaderFooterDialogField.SlideNumber));
-        RegisterControl(
-            _dontShowOnTitleSlideCheck,
-            surface.Field(HeaderFooterDialogField.SuppressOnTitleSlide));
+        _formSession.RegisterStandardControls(
+            surface,
+            (control, field) => PresentationDialogControlAdapter.ApplySemantic(control, field),
+            _dateTimeCheck, _dateFormatCombo, _fixedDateCheck, _fixedDateBox,
+            _footerCheck, _footerBox, _slideNumberCheck, _dontShowOnTitleSlideCheck);
 
         ApplyChrome();
         ApplyDisabledChrome();
@@ -241,14 +236,6 @@ internal sealed partial class HeaderFooterDialog : FreePDialogWindow
         if (IsVisible)
             Close(true);
         return true;
-    }
-
-    private void RegisterControl(
-        Control control,
-        PresentationDialogFieldPlan<HeaderFooterDialogField> field)
-    {
-        PresentationDialogControlAdapter.ApplySemantic(control, field);
-        _formSession.Register(field.Id, control);
     }
 
     private static void SelectAllText(Control control)

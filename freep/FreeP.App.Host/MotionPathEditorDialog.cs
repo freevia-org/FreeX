@@ -109,8 +109,8 @@ public sealed class MotionPathEditorDialog : Free.Shared.Ribbon.Wpf.DialogWindow
         private readonly TextBox _y1 = Box();
         private readonly TextBox _x2 = Box();
         private readonly TextBox _y2 = Box();
+        private readonly MotionPathEditorNativeRowSession<ComboBox, TextBox> _native;
         private MotionPathSegmentEdit _value;
-        private bool _isFirst;
         public UIElement? Control { get; private set; }
 
         public Row(
@@ -119,27 +119,26 @@ public sealed class MotionPathEditorDialog : Free.Shared.Ribbon.Wpf.DialogWindow
         {
             _value = value;
             _surface = surface;
+            _native = new(
+                _kind,
+                [_x, _y, _x1, _y1, _x2, _y2],
+                static control => control.SelectedItem as MotionPathSegmentKind?,
+                static (control, kinds) => control.ItemsSource = kinds,
+                static (control, kind) => control.SelectedItem = kind,
+                static control => control.Text,
+                static (control, text) => control.Text = text,
+                static (control, enabled) => ((Control)control).IsEnabled = enabled);
         }
 
         public void Build(int rowIndex, Action remove)
         {
-            var plan = MotionPathEditorRowProjection.BuildPlan(_surface, _value, rowIndex);
-            _isFirst = plan.RowIndex == 0;
-            _kind.ItemsSource = _surface.SegmentKinds;
-            _kind.SelectedItem = plan.Kind;
-            _kind.IsEnabled = plan.Enablement.KindEnabled;
+            var plan = _native.Initialize(_surface, _value, rowIndex);
             _kind.Width = 76;
             _kind.Margin = new Thickness(2);
-            _kind.SelectionChanged += (_, _) => UpdateControlState();
+            _kind.SelectionChanged += (_, _) => _native.RefreshEnablement();
             PresentationDialogControlAdapter.ApplySemantic(
                 _kind,
                 _surface.Field(MotionPathEditorDialogField.SegmentKind, plan.RowIndex));
-            Set(_x, plan.X);
-            Set(_y, plan.Y);
-            Set(_x1, plan.X1);
-            Set(_y1, plan.Y1);
-            Set(_x2, plan.X2);
-            Set(_y2, plan.Y2);
             PresentationDialogControlAdapter.ApplySemantic(_x, _surface.Field(MotionPathEditorDialogField.X, plan.RowIndex));
             PresentationDialogControlAdapter.ApplySemantic(_y, _surface.Field(MotionPathEditorDialogField.Y, plan.RowIndex));
             PresentationDialogControlAdapter.ApplySemantic(_x1, _surface.Field(MotionPathEditorDialogField.X1, plan.RowIndex));
@@ -166,35 +165,11 @@ public sealed class MotionPathEditorDialog : Free.Shared.Ribbon.Wpf.DialogWindow
             Grid.SetColumn(removeButton, 8);
             grid.Children.Add(removeButton);
             Control = new Border { BorderBrush = System.Windows.Media.Brushes.LightGray, BorderThickness = new Thickness(0, 0, 0, 1), Child = grid };
-            UpdateControlState();
         }
 
-        public MotionPathEditorRowInput ReadInput() => new(
-            _kind.SelectedItem is MotionPathSegmentKind selected ? selected : null,
-            _x.Text,
-            _y.Text,
-            _x1.Text,
-            _y1.Text,
-            _x2.Text,
-            _y2.Text);
-
-        private void UpdateControlState()
-        {
-            var kind = _kind.SelectedItem is MotionPathSegmentKind selected
-                ? selected
-                : MotionPathSegmentKind.Line;
-            var enablement = MotionPathEditorRowProjection.BuildEnablement(
-                kind,
-                _isFirst);
-            _kind.IsEnabled = enablement.KindEnabled;
-            foreach (var box in new[] { _x1, _y1, _x2, _y2 })
-                box.IsEnabled = enablement.ControlPointsEnabled;
-            _x.IsEnabled = enablement.EndpointEnabled;
-            _y.IsEnabled = enablement.EndpointEnabled;
-        }
+        public MotionPathEditorRowInput ReadInput() => _native.CaptureInput();
 
         private static TextBox Box() => new() { Width = 52, Margin = new Thickness(1), Padding = new Thickness(2, 1, 2, 1) };
-        private static void Set(TextBox box, string value) => box.Text = value;
 
         private static void Add(Grid grid, UIElement element, int column)
         {

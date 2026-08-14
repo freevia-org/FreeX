@@ -115,7 +115,13 @@ internal static class ChartOptionsDialogChrome
 internal sealed class ChartOptionsDialogForm :
     ChartOptionsDialogFormAdapter<Control, Control>
 {
-    private readonly Action<ChartOptionsDialogFieldId>? _valueChanged;
+    private static readonly ChartOptionsDialogNativeFieldBinding<Control, TextBox, ComboBox, CheckBox>
+        FieldBinding = new(
+            static (control, value) => control.IsEnabled = value,
+            static (control, value) => control.Text = value,
+            static (control, value) => control.ItemsSource = value,
+            static (control, value) => control.SelectedIndex = value,
+            static (control, value) => control.IsChecked = value);
 
     public ChartOptionsDialogForm(
         ChartOptionsDialogPlan plan,
@@ -125,15 +131,15 @@ internal sealed class ChartOptionsDialogForm :
         : base(
             PresentationDialogControlAdapter.CaptureValue,
             PresentationDialogControlAdapter.ApplyValue,
-            ApplyFieldPlan,
+            FieldBinding.ApplyPlan,
             static (row, isVisible) => row.IsVisible = isVisible,
-            static control => control.Focus())
+            static control => control.Focus(),
+            valueChanged)
     {
         ArgumentNullException.ThrowIfNull(plan);
         ArgumentNullException.ThrowIfNull(accept);
         ArgumentNullException.ThrowIfNull(cancel);
 
-        _valueChanged = valueChanged;
         var body = new StackPanel { Spacing = 8 };
         foreach (var group in plan.Groups)
         {
@@ -224,31 +230,7 @@ internal sealed class ChartOptionsDialogForm :
             ItemsSource = field.ChoiceLabels,
             SelectedIndex = field.SelectedIndex,
         };
-        combo.SelectionChanged += (_, _) => RaiseValueChanged(field.Id);
+        combo.SelectionChanged += (_, _) => NotifyValueChanged(field.Id);
         return combo;
-    }
-
-    private void RaiseValueChanged(ChartOptionsDialogFieldId fieldId)
-    {
-        if (!FormSession.IsApplyingPlan)
-            _valueChanged?.Invoke(fieldId);
-    }
-
-    private static void ApplyFieldPlan(Control control, ChartOptionsDialogFieldPlan field)
-    {
-        control.IsEnabled = field.IsEnabled;
-        switch (control)
-        {
-            case TextBox textBox:
-                textBox.Text = field.Text;
-                break;
-            case ComboBox comboBox:
-                comboBox.ItemsSource = field.ChoiceLabels;
-                comboBox.SelectedIndex = field.SelectedIndex;
-                break;
-            case CheckBox checkBox:
-                checkBox.IsChecked = field.IsChecked;
-                break;
-        }
     }
 }

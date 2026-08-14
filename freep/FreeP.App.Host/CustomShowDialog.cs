@@ -16,14 +16,9 @@ public sealed partial class CustomShowDialog : Free.Shared.Ribbon.Wpf.DialogWind
     private readonly ListBox _customShowSlideList = new();
     private readonly StackPanel _slidePanel = new();
     private readonly TextBlock _validationText = new();
-    private readonly Button _renameButton;
-    private readonly Button _updateButton;
-    private readonly Button _deleteButton;
-    private readonly Button _startButton;
-    private readonly Button _moveUpButton;
-    private readonly Button _moveDownButton;
-    private readonly Button _removeButton;
-    private readonly List<CheckBox> _slideCheckBoxes = new();
+    private readonly SlideShowCustomShowDialogActionDispatcher _actions;
+    private readonly SlideShowCustomShowDialogButtonSet<Button> _buttons;
+    private readonly SlideShowCustomShowAvailableSlideRendererSession<FrameworkElement, DockPanel> _availableSlides;
     private Point? _customShowSlideDragStartPoint;
     private int _customShowSlideDragSourceIndex = -1;
 
@@ -58,6 +53,13 @@ public sealed partial class CustomShowDialog : Free.Shared.Ribbon.Wpf.DialogWind
                 () => _nameBox.Text,
                 RebuildSlides,
                 Close));
+        _actions = new(_controller, Close);
+        _buttons = new((action, handler) => MakeButton(action, handler), _actions);
+        _availableSlides = new(
+            _formSession,
+            _slidePanel.Children.Clear,
+            CreateAvailableSlideRow,
+            row => _slidePanel.Children.Add(row));
 
         Title = Surface.Title;
         AutomationProperties.SetName(this, Surface.AccessibleName);
@@ -103,27 +105,13 @@ public sealed partial class CustomShowDialog : Free.Shared.Ribbon.Wpf.DialogWind
             SlideShowCustomShowDialogVisualMetrics.ValidationBottomMargin);
         PresentationDialogControlAdapter.ApplySemantic(_validationText, Surface.Field(SlideShowCustomShowDialogField.Validation));
 
-        _renameButton = MakeButton(SlideShowCustomShowDialogAction.Rename, _controller.Rename);
-        _updateButton = MakeButton(SlideShowCustomShowDialogAction.UpdateSlides, _controller.UpdateSlides);
-        _deleteButton = MakeButton(SlideShowCustomShowDialogAction.Delete, _controller.Delete);
-        _startButton = MakeButton(SlideShowCustomShowDialogAction.StartShow, _controller.StartShow);
-        _moveUpButton = MakeButton(
-            SlideShowCustomShowDialogAction.MoveUp,
-            () => _controller.MoveSelectedSlide(-1));
-        _moveDownButton = MakeButton(
-            SlideShowCustomShowDialogAction.MoveDown,
-            () => _controller.MoveSelectedSlide(1));
-        _removeButton = MakeButton(
-            SlideShowCustomShowDialogAction.Remove,
-            _controller.RemoveSelectedSlide);
-
         Content = BuildContent();
         _controller.Initialize();
     }
 
     public int RenderedCustomShowCount => _showList.Items.Count;
 
-    public int RenderedSlideOptionCount => _slideCheckBoxes.Count;
+    public int RenderedSlideOptionCount => _availableSlides.Controls.Count;
 
     public int RenderedCustomShowSlideCount => _customShowSlideList.Items.Count;
 
@@ -189,9 +177,9 @@ public sealed partial class CustomShowDialog : Free.Shared.Ribbon.Wpf.DialogWind
             Orientation = Orientation.Horizontal,
             HorizontalAlignment = HorizontalAlignment.Right,
         };
-        moveButtons.Children.Add(_moveUpButton);
-        moveButtons.Children.Add(_moveDownButton);
-        moveButtons.Children.Add(_removeButton);
+        moveButtons.Children.Add(_buttons.MoveUp);
+        moveButtons.Children.Add(_buttons.MoveDown);
+        moveButtons.Children.Add(_buttons.Remove);
         DockPanel.SetDock(moveButtons, Dock.Right);
         orderHeader.Children.Add(moveButtons);
         orderHeader.Children.Add(new TextBlock
@@ -247,10 +235,10 @@ public sealed partial class CustomShowDialog : Free.Shared.Ribbon.Wpf.DialogWind
                 0),
         };
         buttons.Children.Add(MakeButton(SlideShowCustomShowDialogAction.Create, _controller.Create));
-        buttons.Children.Add(_renameButton);
-        buttons.Children.Add(_updateButton);
-        buttons.Children.Add(_deleteButton);
-        buttons.Children.Add(_startButton);
+        buttons.Children.Add(_buttons.Rename);
+        buttons.Children.Add(_buttons.Update);
+        buttons.Children.Add(_buttons.Delete);
+        buttons.Children.Add(_buttons.Start);
         buttons.Children.Add(MakeButton(SlideShowCustomShowDialogAction.Close, Close));
         Grid.SetRow(buttons, 1);
         Grid.SetColumnSpan(buttons, 2);
@@ -259,52 +247,43 @@ public sealed partial class CustomShowDialog : Free.Shared.Ribbon.Wpf.DialogWind
         return root;
     }
 
-    private void RebuildSlides(IReadOnlyList<SlideShowCustomShowSlideOption> slides)
-    {
-        _slidePanel.Children.Clear();
-        _slideCheckBoxes.Clear();
-        _formSession.ClearAvailableSlides();
+    private void RebuildSlides(IReadOnlyList<SlideShowCustomShowSlideOption> slides) =>
+        _availableSlides.Render(slides);
 
-        foreach (var slide in slides)
+    private SlideShowCustomShowAvailableSlideNativeRow<FrameworkElement, DockPanel>
+        CreateAvailableSlideRow(SlideShowCustomShowSlideOption slide)
+    {
+        var checkBox = new CheckBox
         {
-            var checkBox = new CheckBox
-            {
-                Content = slide.DisplayText,
-                Tag = slide.SlideId,
-                Margin = new Thickness(
-                    0,
-                    SlideShowCustomShowDialogVisualMetrics.AvailableSlideVerticalMargin,
-                    0,
-                    SlideShowCustomShowDialogVisualMetrics.AvailableSlideVerticalMargin),
-                Height = SlideShowCustomShowDialogVisualMetrics.AvailableSlideControlHeight,
-                MinHeight = SlideShowCustomShowDialogVisualMetrics.AvailableSlideControlHeight,
-                MaxHeight = SlideShowCustomShowDialogVisualMetrics.AvailableSlideControlHeight,
-                Padding = new Thickness(0),
-            };
-            PresentationDialogControlAdapter.ApplySemantic(
-                checkBox,
-                Surface.Field(SlideShowCustomShowDialogField.AvailableSlides, slide.SlideId));
-            _slideCheckBoxes.Add(checkBox);
-            _formSession.RegisterAvailableSlide(slide.SlideId, checkBox);
-            var row = new DockPanel
-            {
-                Margin = new Thickness(
-                    0,
-                    SlideShowCustomShowDialogVisualMetrics.AvailableSlideVerticalMargin,
-                    0,
-                    SlideShowCustomShowDialogVisualMetrics.AvailableSlideVerticalMargin),
-                LastChildFill = true,
-            };
-            var addButton = MakeButton(
-                SlideShowCustomShowDialogAction.AddSlide,
-                () => _controller.AddSlideOccurrence(slide.SlideId),
-                slide.SlideId);
-            addButton.MinWidth = SlideShowCustomShowDialogVisualMetrics.AddSlideButtonMinimumWidth;
-            DockPanel.SetDock(addButton, Dock.Right);
-            row.Children.Add(addButton);
-            row.Children.Add(checkBox);
-            _slidePanel.Children.Add(row);
-        }
+            Content = slide.DisplayText,
+            Tag = slide.SlideId,
+            Margin = new Thickness(
+                0,
+                SlideShowCustomShowDialogVisualMetrics.AvailableSlideVerticalMargin,
+                0,
+                SlideShowCustomShowDialogVisualMetrics.AvailableSlideVerticalMargin),
+            Height = SlideShowCustomShowDialogVisualMetrics.AvailableSlideControlHeight,
+            MinHeight = SlideShowCustomShowDialogVisualMetrics.AvailableSlideControlHeight,
+            MaxHeight = SlideShowCustomShowDialogVisualMetrics.AvailableSlideControlHeight,
+            Padding = new Thickness(0),
+        };
+        PresentationDialogControlAdapter.ApplySemantic(
+            checkBox,
+            Surface.Field(SlideShowCustomShowDialogField.AvailableSlides, slide.SlideId));
+        var row = new DockPanel
+        {
+            Margin = checkBox.Margin,
+            LastChildFill = true,
+        };
+        var addButton = MakeButton(
+            SlideShowCustomShowDialogAction.AddSlide,
+            () => _actions.Execute(SlideShowCustomShowDialogAction.AddSlide, slide.SlideId),
+            slide.SlideId);
+        addButton.MinWidth = SlideShowCustomShowDialogVisualMetrics.AddSlideButtonMinimumWidth;
+        DockPanel.SetDock(addButton, Dock.Right);
+        row.Children.Add(addButton);
+        row.Children.Add(checkBox);
+        return new(slide.SlideId, checkBox, row);
     }
 
     private void OnCustomShowSlideListMouseLeftButtonDown(object sender, MouseButtonEventArgs e)

@@ -89,6 +89,11 @@ internal sealed partial class SelectionPane : Border
         int index,
         PresentationSelectionPaneItemSession itemSession)
     {
+        var itemForm = new PresentationSelectionPaneItemFormSession(
+            itemSession,
+            item,
+            index,
+            _formSession.ApplyTransition);
         var select = new Button
         {
             Content = item.SelectText,
@@ -106,7 +111,7 @@ internal sealed partial class SelectionPane : Border
                 PresentationSelectionPaneVisualMetrics.ItemVerticalMargin),
             ToolTip = item.SelectToolTipText,
         };
-        select.Click += (_, _) => _formSession.ApplyTransition(itemSession.Select());
+        select.Click += (_, _) => itemForm.Select();
 
         var rename = new TextBox
         {
@@ -126,9 +131,7 @@ internal sealed partial class SelectionPane : Border
         };
         void CommitName()
         {
-            _formSession.ApplyTransition(
-                itemSession.CommitRename(rename.Text),
-                restoreName => rename.Text = restoreName);
+            itemForm.CommitRename(rename.Text, restoreName => rename.Text = restoreName);
         }
         rename.LostFocus += (_, _) => CommitName();
         rename.KeyDown += (_, args) =>
@@ -140,7 +143,7 @@ internal sealed partial class SelectionPane : Border
             }
             else if (args.Key == Key.Escape)
             {
-                _formSession.ApplyTransition(itemSession.CancelRename());
+                itemForm.CancelRename();
                 args.Handled = true;
             }
         };
@@ -161,10 +164,7 @@ internal sealed partial class SelectionPane : Border
                 PresentationSelectionPaneVisualMetrics.ItemVerticalMargin),
             ToolTip = item.VisibilityToolTipText,
         };
-        visibility.Click += (_, _) =>
-        {
-            _formSession.ApplyTransition(itemSession.ToggleVisibility());
-        };
+        visibility.Click += (_, _) => itemForm.ToggleVisibility();
 
         var moveUp = new Button
         {
@@ -179,8 +179,7 @@ internal sealed partial class SelectionPane : Border
             IsEnabled = item.CanMoveUp,
             ToolTip = PresentationSelectionPaneItemPlan.MoveUpToolTipText,
         };
-        moveUp.Click += (_, _) =>
-            _formSession.ApplyTransition(itemSession.MoveTowardFront());
+        moveUp.Click += (_, _) => itemForm.MoveTowardFront();
 
         var moveDown = new Button
         {
@@ -195,8 +194,7 @@ internal sealed partial class SelectionPane : Border
             IsEnabled = item.CanMoveDown,
             ToolTip = PresentationSelectionPaneItemPlan.MoveDownToolTipText,
         };
-        moveDown.Click += (_, _) =>
-            _formSession.ApplyTransition(itemSession.MoveTowardBack());
+        moveDown.Click += (_, _) => itemForm.MoveTowardBack();
 
         var row = new DockPanel();
         DockPanel.SetDock(visibility, Dock.Right);
@@ -210,12 +208,7 @@ internal sealed partial class SelectionPane : Border
         row.Children.Add(select);
         PresentationPaneAccessibilityAdapter.ApplyItem(
             row,
-            PresentationPaneAccessibilityPlanner.PlanItem(
-                PresentationPaneAccessibilityPlanner.SelectionPaneId,
-                index,
-                item.ShapeName,
-                item.IsSelected,
-                PresentationPaneAccessibilityPlanner.BuildShapeKey(item.ShapeId)));
+            itemForm.AccessibilityPlan);
         return row;
     }
 

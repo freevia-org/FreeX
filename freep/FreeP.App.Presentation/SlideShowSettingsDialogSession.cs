@@ -163,6 +163,28 @@ public sealed class SlideShowSettingsDialogFormSession<TControl>
         _controls.Add(field, control);
     }
 
+    public void RegisterStandardControls(
+        TControl useTimings,
+        TControl showWithoutAnimation,
+        TControl playNarration,
+        TControl showMediaControls,
+        TControl showMasterGraphics,
+        TControl loopUntilStopped,
+        TControl showType,
+        TControl showBrowseScrollbar,
+        TControl kioskRestartMilliseconds)
+    {
+        Register(SlideShowSettingsDialogField.UseTimings, useTimings);
+        Register(SlideShowSettingsDialogField.ShowWithoutAnimation, showWithoutAnimation);
+        Register(SlideShowSettingsDialogField.PlayNarration, playNarration);
+        Register(SlideShowSettingsDialogField.ShowMediaControls, showMediaControls);
+        Register(SlideShowSettingsDialogField.ShowMasterGraphics, showMasterGraphics);
+        Register(SlideShowSettingsDialogField.LoopUntilStopped, loopUntilStopped);
+        Register(SlideShowSettingsDialogField.ShowType, showType);
+        Register(SlideShowSettingsDialogField.ShowBrowseScrollbar, showBrowseScrollbar);
+        Register(SlideShowSettingsDialogField.KioskRestartMilliseconds, kioskRestartMilliseconds);
+    }
+
     public SlideShowSettingsDialogInput CaptureInput() =>
         new SlideShowSettingsDialogInputProjection(
             _controls.ToDictionary(
