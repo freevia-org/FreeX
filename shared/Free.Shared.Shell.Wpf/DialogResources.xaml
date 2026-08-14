@@ -158,14 +158,14 @@
         <Setter Property="FontSize" Value="{x:Static shell:CompactDialogVisualTokens.FontSize}"/>
         <Setter Property="Foreground" Value="{DynamicResource ThemeNeutralTextBrush}"/>
         <Setter Property="VerticalContentAlignment" Value="Center"/>
-        <Setter Property="Padding" Value="4,0,0,0"/>
+        <Setter Property="Padding" Value="{x:Static local:WpfCompactDialogMetrics.TogglePadding}"/>
     </Style>
     <Style TargetType="{x:Type RadioButton}">
         <Setter Property="FontFamily" Value="Segoe UI"/>
         <Setter Property="FontSize" Value="{x:Static shell:CompactDialogVisualTokens.FontSize}"/>
         <Setter Property="Foreground" Value="{DynamicResource ThemeNeutralTextBrush}"/>
         <Setter Property="VerticalContentAlignment" Value="Center"/>
-        <Setter Property="Padding" Value="4,0,0,0"/>
+        <Setter Property="Padding" Value="{x:Static local:WpfCompactDialogMetrics.TogglePadding}"/>
     </Style>
 
     <!-- Labels / static text default to the dialog typography. -->

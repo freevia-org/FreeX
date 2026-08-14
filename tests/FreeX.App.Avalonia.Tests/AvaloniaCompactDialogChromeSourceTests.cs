@@ -129,6 +129,7 @@ public sealed class AvaloniaCompactDialogChromeSourceTests
         source.Should().Contain("CompactDialogVisualTokens.TextBoxPaddingVertical");
         source.Should().Contain("CompactDialogVisualTokens.ComboBoxPaddingHorizontal");
         source.Should().Contain("CompactDialogVisualTokens.ComboBoxPaddingVertical");
+        source.Should().Contain("CompactDialogVisualTokens.TogglePaddingLeft");
         source.Should().Contain("public Thickness ListBoxItemPadding { get; init; } = new(4, 1);");
         source.Should().Contain("public double ListBoxItemMinHeight { get; init; } = CompactDialogVisualTokens.ControlHeight;");
         source.Should().Contain("public CornerRadius ButtonCornerRadius { get; init; } = new(CompactDialogVisualTokens.ButtonCornerRadius);");
@@ -158,6 +159,10 @@ public sealed class AvaloniaCompactDialogChromeSourceTests
         source.Should().Contain("comboBox.Padding = style.ComboBoxPadding;");
         source.Should().Contain("public static void ApplyCheckBox(");
         source.Should().Contain("public static void ApplyRadioButton(");
+        source.Should().Contain("checkBox.Padding = style.TogglePadding;");
+        source.Should().Contain("radioButton.Padding = style.TogglePadding;");
+        source.Should().Contain("checkBox.VerticalContentAlignment = VerticalAlignment.Center;");
+        source.Should().Contain("radioButton.VerticalContentAlignment = VerticalAlignment.Center;");
         source.Should().Contain("public static void ApplyListBox(");
         source.Should().Contain("new Setter(Layoutable.MinHeightProperty, style.ListBoxItemMinHeight)");
         source.Should().Contain("public static StackPanel CreateActionRow(");

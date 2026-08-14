@@ -33,6 +33,11 @@ public sealed record AvaloniaCompactDialogChromeStyle(FontFamily FontFamily)
     public Thickness ComboBoxPadding { get; init; } = new(
         CompactDialogVisualTokens.ComboBoxPaddingHorizontal,
         CompactDialogVisualTokens.ComboBoxPaddingVertical);
+    public Thickness TogglePadding { get; init; } = new(
+        CompactDialogVisualTokens.TogglePaddingLeft,
+        0,
+        0,
+        0);
     public Thickness ListBoxItemPadding { get; init; } = new(4, 1);
     public double ListBoxItemMinHeight { get; init; } = CompactDialogVisualTokens.ControlHeight;
     public double ActionSpacing { get; init; } = 8;
@@ -771,6 +776,8 @@ public static class AvaloniaCompactDialogChrome
         checkBox.FontSize = style.FontSize;
         checkBox.FontFamily = style.FontFamily;
         checkBox.Foreground = ThemeTextBrush(style);
+        checkBox.Padding = style.TogglePadding;
+        checkBox.VerticalContentAlignment = VerticalAlignment.Center;
     }
 
     public static void ApplyCompactCheckBox(
@@ -1034,6 +1041,8 @@ public static class AvaloniaCompactDialogChrome
         radioButton.FontSize = style.FontSize;
         radioButton.FontFamily = style.FontFamily;
         radioButton.Foreground = ThemeTextBrush(style);
+        radioButton.Padding = style.TogglePadding;
+        radioButton.VerticalContentAlignment = VerticalAlignment.Center;
     }
 
     public static void ApplyValidationStatus(
