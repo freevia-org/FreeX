@@ -126,13 +126,16 @@ public sealed class PageLayoutRibbonWorkflowTests
         {
             source.Should().Contain("PageLayoutRibbonWorkflow.Register(");
             source.Should().Contain("new PageLayoutRibbonPorts(");
-            source.Should().NotContain(".Bind(FreeWRibbonCommandAction.Orientation");
             source.Should().NotContain(".Bind(FreeWRibbonCommandAction.ColumnsOne");
             source.Should().NotContain(".Bind(FreeWRibbonCommandAction.LineNumbersContinuous");
             source.Should().NotContain(".Bind(FreeWRibbonCommandAction.HyphenationAuto");
             source.Should().NotContain(".Bind(FreeWRibbonCommandAction.PageValign");
             source.Should().NotContain(".Bind(FreeWRibbonCommandAction.DifferentFirstPage");
         }
+
+        wpf.Should().NotContain(".Bind(FreeWRibbonCommandAction.Orientation");
+        avalonia.Should().Contain("var orientationCommand = new HostPageSettingCommand(");
+        avalonia.Should().Contain("r.Bind(FreeWRibbonCommandAction.Orientation, orientationCommand)");
     }
 
     private static PageLayoutRibbonPorts Ports(

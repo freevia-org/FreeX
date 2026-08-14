@@ -138,8 +138,8 @@ public sealed class NoteReferenceRibbonWorkflowTests
         wpf.Should().NotContain("referenceCommands.Bind(FreeWRibbonCommandAction.Footnote,");
         avalonia.Should().NotContain("family.Bind(FreeWRibbonCommandAction.Footnote,");
         avalonia.Should().NotContain("family.BindToggle(FreeWRibbonCommandAction.ShowNotes,");
-        avalonia.Should().NotContain("callbacks.OpenFootnoteDialog ??");
-        avalonia.Should().NotContain("callbacks.OpenEndnoteDialog ??");
+        avalonia.Should().Contain("callbacks.OpenFootnoteDialog ?? (() => editor.InsertFootnote())");
+        avalonia.Should().Contain("callbacks.OpenEndnoteDialog ?? (() => editor.InsertEndnote())");
     }
 
     private static NoteReferenceRibbonPorts Ports(

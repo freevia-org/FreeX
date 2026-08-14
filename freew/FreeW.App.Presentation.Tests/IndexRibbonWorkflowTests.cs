@@ -61,7 +61,7 @@ public sealed class IndexRibbonWorkflowTests
     }
 
     [Fact]
-    public void BothRenderersDelegateIndexPolicyAndAvaloniaHasNoDefaultMutationFallback()
+    public void BothRenderersDelegateIndexPolicyAndAvaloniaSuppliesEditorFallbacks()
     {
         var root = TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeW.slnx");
         var wpf = File.ReadAllText(Path.Combine(root, "freew", "FreeW.App.Host", "Ribbon", "FreeWRibbonCommands.cs"));
@@ -75,9 +75,9 @@ public sealed class IndexRibbonWorkflowTests
             source.Should().NotContain(".Bind(FreeWRibbonCommandAction.IndexRefresh,");
         }
 
-        avalonia.Should().NotContain("callbacks.OpenMarkIndexEntryDialog ??");
-        avalonia.Should().NotContain("callbacks.OpenInsertIndexDialog ??");
-        avalonia.Should().NotContain("callbacks.OpenUpdateIndexDialog ??");
+        avalonia.Should().Contain("callbacks.OpenMarkIndexEntryDialog ?? (() => editor.MarkIndexEntry())");
+        avalonia.Should().Contain("callbacks.OpenInsertIndexDialog ?? (() => editor.InsertIndex())");
+        avalonia.Should().Contain("callbacks.OpenUpdateIndexDialog ?? (() => editor.RefreshIndex())");
     }
 
     private static void Unavailable(
