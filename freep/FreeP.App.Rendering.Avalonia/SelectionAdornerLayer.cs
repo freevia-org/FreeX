@@ -19,7 +19,7 @@ namespace FreeP.App.Rendering.Avalonia;
 /// The adorner does NOT own interaction logic — that lives in <see cref="AvaloniaCanvasGestureHandler"/>.
 /// Call the <c>Update*</c> methods from the gesture handler to trigger redraws.
 /// </summary>
-public sealed partial class SelectionAdornerLayer : Control
+public sealed partial class SelectionAdornerLayer : Control, ISelectionAdornerSurface<Rect, Point>
 {
     // ── Handle appearance ───────────────────────────────────────────────────────
 
@@ -61,6 +61,7 @@ public sealed partial class SelectionAdornerLayer : Control
     // ── State owned / updated by AvaloniaCanvasGestureHandler ──────────────────
 
     private readonly SelectionAdornerController<Rect, Point> _controller;
+    SelectionAdornerController<Rect, Point> ISelectionAdornerSurface<Rect, Point>.Controller => _controller;
 
     private SelectionAdornerState State => _controller.State;
 
@@ -75,51 +76,6 @@ public sealed partial class SelectionAdornerLayer : Control
     }
 
     // ── Public update API ───────────────────────────────────────────────────────
-
-    /// <summary>Replaces the selection rectangles and triggers repaint.</summary>
-    public void UpdateSelection(IEnumerable<(uint id, Rect screenRect)> rects)
-    {
-        _controller.UpdateSelection(rects);
-    }
-
-    public void UpdateProjection(SelectionAdornerProjectionPlan projection) =>
-        _controller.UpdateProjection(projection);
-
-    /// <summary>Replaces the visible preset-shape edit points.</summary>
-    public void UpdateGeometryHandles(IEnumerable<(string Name, Point Position)> handles)
-    {
-        _controller.UpdateGeometryHandles(handles);
-    }
-
-    /// <summary>Shows the transient position of the handle being dragged.</summary>
-    public void UpdateGeometryPreview(string? name, Point? position)
-    {
-        _controller.UpdateGeometryPreview(name, position);
-    }
-
-    /// <summary>Updates the live preview rectangle during a move/resize gesture.</summary>
-    public void UpdatePreview(Rect? screenRect, double rotationDeg = 0)
-    {
-        _controller.UpdatePreview(screenRect, rotationDeg);
-    }
-
-    /// <summary>Shows each member's live geometry from one shared transform plan.</summary>
-    public void UpdateTransformPreview(CanvasMultiTransformPlan plan)
-    {
-        _controller.UpdateTransformPreview(plan);
-    }
-
-    /// <summary>Updates the marquee rectangle during a marquee-selection drag.</summary>
-    public void UpdateMarquee(Rect? screenRect)
-    {
-        _controller.UpdateMarquee(screenRect);
-    }
-
-    /// <summary>Updates the transient snap guide lines shown during a move/resize gesture.</summary>
-    public void UpdateSnapGuides(IReadOnlyList<SnapGuideLine>? guides, SlideTransformCore transform)
-    {
-        _controller.UpdateSnapGuides(guides, transform);
-    }
 
     // ── Rendering ───────────────────────────────────────────────────────────────
 

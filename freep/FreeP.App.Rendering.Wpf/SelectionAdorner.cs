@@ -19,7 +19,7 @@ namespace FreeP.App.Rendering.Wpf;
 /// The adorner does NOT own interaction logic — that lives in <see cref="CanvasGestureHandler"/>.
 /// The adorner is invalidated and redrawn whenever the handler raises a layout change.
 /// </summary>
-public sealed partial class SelectionAdorner : Adorner
+public sealed partial class SelectionAdorner : Adorner, ISelectionAdornerSurface<Rect, Point>
 {
     // Handle appearance
     private const double HandleSize = SelectionAdornerGeometry.HandleSize;
@@ -86,6 +86,7 @@ public sealed partial class SelectionAdorner : Adorner
     // ── State owned by CanvasGestureHandler ───────────────────────────────────────────────────
 
     private readonly SelectionAdornerController<Rect, Point> _controller;
+    SelectionAdornerController<Rect, Point> ISelectionAdornerSurface<Rect, Point>.Controller => _controller;
 
     private SelectionAdornerState State => _controller.State;
 
@@ -100,55 +101,6 @@ public sealed partial class SelectionAdorner : Adorner
     }
 
     // ── Public update API (called by handler) ─────────────────────────────────────────────────
-
-    /// <summary>Replaces the selection rectangles and repaints.</summary>
-    public void UpdateSelection(IEnumerable<(uint id, Rect screenRect)> rects)
-    {
-        _controller.UpdateSelection(rects);
-    }
-
-    public void UpdateProjection(SelectionAdornerProjectionPlan projection) =>
-        _controller.UpdateProjection(projection);
-
-    /// <summary>Replaces the visible preset-shape edit points.</summary>
-    public void UpdateGeometryHandles(IEnumerable<(string Name, Point Position)> handles)
-    {
-        _controller.UpdateGeometryHandles(handles);
-    }
-
-    /// <summary>Shows the transient position of the handle being dragged.</summary>
-    public void UpdateGeometryPreview(string? name, Point? position)
-    {
-        _controller.UpdateGeometryPreview(name, position);
-    }
-
-    /// <summary>Updates the live preview rectangle during a move/resize gesture.</summary>
-    public void UpdatePreview(Rect? screenRect, double rotationDeg = 0)
-    {
-        _controller.UpdatePreview(screenRect, rotationDeg);
-    }
-
-    /// <summary>Shows each member's live geometry from one shared transform plan.</summary>
-    public void UpdateTransformPreview(CanvasMultiTransformPlan plan)
-    {
-        _controller.UpdateTransformPreview(plan);
-    }
-
-    /// <summary>Updates the marquee rectangle during a marquee-selection drag.</summary>
-    public void UpdateMarquee(Rect? screenRect)
-    {
-        _controller.UpdateMarquee(screenRect);
-    }
-
-    /// <summary>
-    /// Wave 12B: Updates the transient snap guide lines shown during a move/resize gesture.
-    /// Pass null or an empty list to clear guides.  <paramref name="transform"/> is used
-    /// to convert slide-DIP guide positions to screen space.
-    /// </summary>
-    public void UpdateSnapGuides(IReadOnlyList<SnapGuideLine>? guides, SlideTransformCore transform)
-    {
-        _controller.UpdateSnapGuides(guides, transform);
-    }
 
     // ── Rendering ─────────────────────────────────────────────────────────────────────────────
 

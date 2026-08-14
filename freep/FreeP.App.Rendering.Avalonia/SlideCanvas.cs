@@ -1218,35 +1218,21 @@ public sealed partial class SlideCanvas : Control
         DrawingContext dc, ResolvedTextLayout text, LayoutRect bounds,
         TableCellAnchor anchor)
     {
-        if (text.VerticalType != TextVerticalType.Horizontal)
-        {
+        if (!TextParagraphNativeRenderDispatcher.TryRenderTableCell(
+                text,
+                bounds,
+                anchor,
+                (paragraph, width, wrap) =>
+                {
+                    var formatted = BuildFormattedText(paragraph, width, wrap, text.AutoFitKind);
+                    return new TextNativeMeasurement<FormattedText>(
+                        formatted,
+                        formatted.Height,
+                        formatted.Width);
+                },
+                (formatted, placement) =>
+                    dc.DrawText(formatted, new Point(placement.X, placement.Y))))
             RenderText(dc, text, bounds);
-            return;
-        }
-
-        var area = TextLayoutPlanner.GetTextArea(text, bounds);
-        var formatted = new Dictionary<int, FormattedText>();
-        var measures = new List<TextParagraphMeasure>();
-
-        for (int i = 0; i < text.Paragraphs.Count; i++)
-        {
-            var para = text.Paragraphs[i];
-            if (para.Runs.Count == 0) continue;
-            var ft = BuildFormattedText(para, area.Width, text.Wrap, text.AutoFitKind);
-            formatted[i] = ft;
-            measures.Add(TextLayoutPlanner.CreateParagraphMeasure(
-                i,
-                ft.Height,
-                para.SpaceBeforePt,
-                para.SpaceAfterPt));
-        }
-
-        var plan = TextLayoutPlanner.PlanTableCellText(text, bounds, anchor, measures);
-        foreach (var placement in plan.Paragraphs)
-        {
-            var ft = formatted[placement.ParagraphIndex];
-            dc.DrawText(ft, new Point(placement.X, placement.Y));
-        }
     }
 
     // ── Chart ────────────────────────────────────────────────────────────────
@@ -1332,16 +1318,10 @@ public sealed partial class SlideCanvas : Control
             MeasureStackedGlyphAvalonia,
             autoFitPlan);
 
-        foreach (var glyph in plan.Glyphs)
-        {
-            if ((uint)glyph.ParagraphIndex >= (uint)renderText.Paragraphs.Count)
-                continue;
-            var paragraph = renderText.Paragraphs[glyph.ParagraphIndex];
-            if ((uint)glyph.RunIndex >= (uint)paragraph.Runs.Count)
-                continue;
-
-            DrawStackedGlyphAvalonia(dc, renderText, bounds, paragraph.Runs[glyph.RunIndex], glyph);
-        }
+        TextParagraphNativeRenderDispatcher.RenderStacked(
+            renderText,
+            plan,
+            (layout, run, glyph) => DrawStackedGlyphAvalonia(dc, layout, bounds, run, glyph));
     }
 
     // Wave 22B: multi-column text layout helper for Avalonia.
@@ -1366,35 +1346,7 @@ public sealed partial class SlideCanvas : Control
                     formattedText.Height,
                     formattedText.Width);
             });
-        var renderText = plan.RenderText;
-        foreach (var placement in plan.Layout.Paragraphs)
-        {
-            var para = renderText.Paragraphs[placement.ParagraphIndex];
-            var ft = plan.Artifacts[placement.ParagraphIndex];
-            if (placement.Bullet is { } bullet)
-                DrawBulletPlacementAvalonia(dc, bullet);
-
-            switch (placement.RenderRoute)
-            {
-                case TextParagraphRenderRoute.Math:
-                    RenderParaWithMath(dc, para, placement.X, placement.Y);
-                    break;
-                case TextParagraphRenderRoute.Effects:
-                    RenderParaWithEffects(dc, para, placement.X, placement.Y, bounds, renderText);
-                    break;
-                case TextParagraphRenderRoute.Tabs:
-                    RenderParaWithTabs(dc, para, placement.X, placement.Y, para.TabStops);
-                    break;
-                case TextParagraphRenderRoute.Baseline:
-                    RenderParaWithBaseline(dc, para, placement.X, placement.Y, placement.MaxWidthDip);
-                    break;
-                default:
-                    if (para.IndentDip > 0 && ft.MaxTextWidth > 0)
-                        ft.MaxTextWidth = placement.MaxWidthDip;
-                    dc.DrawText(ft, new Point(placement.X, placement.Y));
-                    break;
-            }
-        }
+        RenderMeasuredParagraphsAvalonia(dc, plan, bounds);
     }
 
     private static bool TryRenderContinuousColumnFlow(
@@ -1455,36 +1407,46 @@ public sealed partial class SlideCanvas : Control
                     formattedText.Height,
                     formattedText.Width);
             });
+        RenderMeasuredParagraphsAvalonia(dc, plan, bounds);
+    }
+
+    private static void RenderMeasuredParagraphsAvalonia(
+        DrawingContext dc,
+        TextMeasuredBlockLayoutPlan<FormattedText> plan,
+        LayoutRect bounds)
+    {
         var renderText = plan.RenderText;
-        foreach (var placement in plan.Layout.Paragraphs)
-        {
-            var para = renderText.Paragraphs[placement.ParagraphIndex];
-            var ft = plan.Artifacts[placement.ParagraphIndex];
-
-            if (placement.Bullet is { } bullet)
-                DrawBulletPlacementAvalonia(dc, bullet);
-
-            switch (placement.RenderRoute)
-            {
-                case TextParagraphRenderRoute.Math:
-                    RenderParaWithMath(dc, para, placement.X, placement.Y);
-                    break;
-                case TextParagraphRenderRoute.Effects:
-                    RenderParaWithEffects(dc, para, placement.X, placement.Y, bounds, renderText);
-                    break;
-                case TextParagraphRenderRoute.Tabs:
-                    RenderParaWithTabs(dc, para, placement.X, placement.Y, para.TabStops);
-                    break;
-                case TextParagraphRenderRoute.Baseline:
-                    RenderParaWithBaseline(dc, para, placement.X, placement.Y, placement.MaxWidthDip);
-                    break;
-                default:
-                    if (para.IndentDip > 0 && ft.MaxTextWidth > 0)
-                        ft.MaxTextWidth = placement.MaxWidthDip;
-                    dc.DrawText(ft, new Point(placement.X, placement.Y));
-                    break;
-            }
-        }
+        TextParagraphNativeRenderDispatcher.Render(
+            plan,
+            new(
+                bullet => DrawBulletPlacementAvalonia(dc, bullet),
+                (paragraph, placement) =>
+                    RenderParaWithMath(dc, paragraph, placement.X, placement.Y),
+                (paragraph, placement) => RenderParaWithEffects(
+                    dc,
+                    paragraph,
+                    placement.X,
+                    placement.Y,
+                    bounds,
+                    renderText),
+                (paragraph, placement) => RenderParaWithTabs(
+                    dc,
+                    paragraph,
+                    placement.X,
+                    placement.Y,
+                    paragraph.TabStops),
+                (paragraph, placement) => RenderParaWithBaseline(
+                    dc,
+                    paragraph,
+                    placement.X,
+                    placement.Y,
+                    placement.MaxWidthDip),
+                (paragraph, formatted, placement) =>
+                {
+                    if (paragraph.IndentDip > 0 && formatted.MaxTextWidth > 0)
+                        formatted.MaxTextWidth = placement.MaxWidthDip;
+                    dc.DrawText(formatted, new Point(placement.X, placement.Y));
+                }));
     }
 
     /// <summary>

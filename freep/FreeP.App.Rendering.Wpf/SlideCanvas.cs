@@ -1125,35 +1125,21 @@ public sealed partial class SlideCanvas : FrameworkElement
         DrawingContext dc, ResolvedTextLayout text, LayoutRect bounds,
         FreeP.Core.Model.TableCellAnchor anchor)
     {
-        if (text.VerticalType != FreeP.Core.Model.TextVerticalType.Horizontal)
-        {
+        if (!TextParagraphNativeRenderDispatcher.TryRenderTableCell(
+                text,
+                bounds,
+                anchor,
+                (paragraph, width, wrap) =>
+                {
+                    var formatted = BuildFormattedText(paragraph, width, wrap);
+                    return new TextNativeMeasurement<FormattedText>(
+                        formatted,
+                        formatted.Height,
+                        formatted.WidthIncludingTrailingWhitespace);
+                },
+                (formatted, placement) =>
+                    dc.DrawText(formatted, new Point(placement.X, placement.Y))))
             RenderText(dc, text, bounds);
-            return;
-        }
-
-        var area = TextLayoutPlanner.GetTextArea(text, bounds);
-        var formatted = new Dictionary<int, FormattedText>();
-        var measures = new List<TextParagraphMeasure>();
-
-        for (int i = 0; i < text.Paragraphs.Count; i++)
-        {
-            var para = text.Paragraphs[i];
-            if (para.Runs.Count == 0) continue;
-            var ft = BuildFormattedText(para, area.Width, text.Wrap);
-            formatted[i] = ft;
-            measures.Add(TextLayoutPlanner.CreateParagraphMeasure(
-                i,
-                ft.Height,
-                para.SpaceBeforePt,
-                para.SpaceAfterPt));
-        }
-
-        var plan = TextLayoutPlanner.PlanTableCellText(text, bounds, anchor, measures);
-        foreach (var placement in plan.Paragraphs)
-        {
-            var ft = formatted[placement.ParagraphIndex];
-            dc.DrawText(ft, new Point(placement.X, placement.Y));
-        }
     }
 
     // ── Chart ──────────────────────────────────────────────────────────────────
@@ -1246,16 +1232,10 @@ public sealed partial class SlideCanvas : FrameworkElement
             MeasureStackedGlyphWpf,
             autoFitPlan);
 
-        foreach (var glyph in plan.Glyphs)
-        {
-            if ((uint)glyph.ParagraphIndex >= (uint)renderText.Paragraphs.Count)
-                continue;
-            var paragraph = renderText.Paragraphs[glyph.ParagraphIndex];
-            if ((uint)glyph.RunIndex >= (uint)paragraph.Runs.Count)
-                continue;
-
-            DrawStackedGlyphWpf(dc, renderText, bounds, paragraph.Runs[glyph.RunIndex], glyph);
-        }
+        TextParagraphNativeRenderDispatcher.RenderStacked(
+            renderText,
+            plan,
+            (layout, run, glyph) => DrawStackedGlyphWpf(dc, layout, bounds, run, glyph));
     }
 
     // Wave 22B: multi-column text layout helper.
@@ -1280,35 +1260,7 @@ public sealed partial class SlideCanvas : FrameworkElement
                     formattedText.Height,
                     formattedText.WidthIncludingTrailingWhitespace);
             });
-        var renderText = plan.RenderText;
-        foreach (var placement in plan.Layout.Paragraphs)
-        {
-            var para = renderText.Paragraphs[placement.ParagraphIndex];
-            var ft = plan.Artifacts[placement.ParagraphIndex];
-            if (placement.Bullet is { } bullet)
-                DrawBulletPlacementWpf(dc, bullet);
-
-            switch (placement.RenderRoute)
-            {
-                case TextParagraphRenderRoute.Math:
-                    RenderParaWithMath(dc, para, placement.X, placement.Y);
-                    break;
-                case TextParagraphRenderRoute.Effects:
-                    RenderParaWithEffects(dc, para, placement.X, placement.Y, placement.MaxWidthDip, renderText.Wrap, renderText, bounds);
-                    break;
-                case TextParagraphRenderRoute.Tabs:
-                    RenderParaWithTabs(dc, para, placement.X, placement.Y, para.TabStops);
-                    break;
-                case TextParagraphRenderRoute.Baseline:
-                    RenderParaWithBaseline(dc, para, placement.X, placement.Y, placement.MaxWidthDip);
-                    break;
-                default:
-                    if (para.IndentDip > 0 && ft.MaxTextWidth > 0)
-                        ft.MaxTextWidth = placement.MaxWidthDip;
-                    dc.DrawText(ft, new Point(placement.X, placement.Y));
-                    break;
-            }
-        }
+        RenderMeasuredParagraphsWpf(dc, plan, bounds, applyImportedAptosRasterPolicy: false);
     }
 
     private static bool TryRenderContinuousColumnFlow(
@@ -1383,67 +1335,91 @@ public sealed partial class SlideCanvas : FrameworkElement
                     formattedText.Height,
                     formattedText.WidthIncludingTrailingWhitespace);
             });
+        RenderMeasuredParagraphsWpf(dc, plan, bounds, applyImportedAptosRasterPolicy: true);
+    }
+
+    private static void RenderMeasuredParagraphsWpf(
+        DrawingContext dc,
+        TextMeasuredBlockLayoutPlan<FormattedText> plan,
+        LayoutRect bounds,
+        bool applyImportedAptosRasterPolicy)
+    {
         var renderText = plan.RenderText;
-        bool useImportedAptosRasterScale = UsesImportedAptosFont(renderText);
-        bool useImportedAptosBodyRasterScale = UsesImportedAptosBodyFont(renderText);
-        foreach (var placement in plan.Layout.Paragraphs)
+        bool useImportedAptosRasterScale =
+            applyImportedAptosRasterPolicy && UsesImportedAptosFont(renderText);
+        bool useImportedAptosBodyRasterScale =
+            applyImportedAptosRasterPolicy && UsesImportedAptosBodyFont(renderText);
+        TextParagraphNativeRenderDispatcher.Render(
+            plan,
+            new(
+                bullet => DrawBulletPlacementWpf(dc, bullet),
+                (paragraph, placement) =>
+                    RenderParaWithMath(dc, paragraph, placement.X, placement.Y),
+                (paragraph, placement) => RenderParaWithEffects(
+                    dc,
+                    paragraph,
+                    placement.X,
+                    placement.Y,
+                    placement.MaxWidthDip,
+                    renderText.Wrap,
+                    renderText,
+                    bounds),
+                (paragraph, placement) => RenderParaWithTabs(
+                    dc,
+                    paragraph,
+                    placement.X,
+                    placement.Y,
+                    paragraph.TabStops),
+                (paragraph, placement) => RenderParaWithBaseline(
+                    dc,
+                    paragraph,
+                    placement.X,
+                    placement.Y,
+                    placement.MaxWidthDip),
+                (paragraph, formatted, placement) => DrawPlainParagraphWpf(
+                    dc,
+                    paragraph,
+                    formatted,
+                    placement,
+                    bounds,
+                    useImportedAptosRasterScale,
+                    useImportedAptosBodyRasterScale)));
+    }
+
+    private static void DrawPlainParagraphWpf(
+        DrawingContext dc,
+        ResolvedParagraph paragraph,
+        FormattedText formatted,
+        TextParagraphPlacement placement,
+        LayoutRect bounds,
+        bool useImportedAptosRasterScale,
+        bool useImportedAptosBodyRasterScale)
+    {
+        if (paragraph.IndentDip > 0 && formatted.MaxTextWidth > 0)
+            formatted.MaxTextWidth = placement.MaxWidthDip;
+        bool useImportedAptosDisplayRasterScale = UsesImportedAptosDisplayFont(paragraph);
+        if (useImportedAptosBodyRasterScale)
+            formatted.SetFontWeight(FontWeights.Light, 0, formatted.Text.Length);
+        if (useImportedAptosRasterScale)
         {
-            var para = renderText.Paragraphs[placement.ParagraphIndex];
-            var ft = plan.Artifacts[placement.ParagraphIndex];
-
-            if (placement.Bullet is { } bullet)
-                DrawBulletPlacementWpf(dc, bullet);
-
-            switch (placement.RenderRoute)
-            {
-                case TextParagraphRenderRoute.Math:
-                    RenderParaWithMath(dc, para, placement.X, placement.Y);
-                    break;
-                case TextParagraphRenderRoute.Effects:
-                    RenderParaWithEffects(dc, para, placement.X, placement.Y, placement.MaxWidthDip, renderText.Wrap, renderText, bounds);
-                    break;
-                case TextParagraphRenderRoute.Tabs:
-                    RenderParaWithTabs(dc, para, placement.X, placement.Y, para.TabStops);
-                    break;
-                case TextParagraphRenderRoute.Baseline:
-                    RenderParaWithBaseline(dc, para, placement.X, placement.Y, placement.MaxWidthDip);
-                    break;
-                default:
-                    if (para.IndentDip > 0 && ft.MaxTextWidth > 0)
-                        ft.MaxTextWidth = placement.MaxWidthDip;
-                    bool useImportedAptosDisplayRasterScale = UsesImportedAptosDisplayFont(para);
-                    // The exact imported Aptos body signature falls back to a heavier WPF font;
-                    // keep its measured layout, but tune only the host fallback paint weight.
-                    if (useImportedAptosBodyRasterScale)
-                        ft.SetFontWeight(FontWeights.Light, 0, ft.Text.Length);
-                    if (useImportedAptosRasterScale)
-                    {
-                        double scaleX = useImportedAptosBodyRasterScale
-                            ? ImportedAptosBodyWpfLightRasterScale
-                            : ImportedAptosWpfRasterScale;
-                        double centerX = para.Align == TextAlign.Center
-                            ? bounds.X + bounds.Width * 0.5
-                            : placement.X;
-                        double scaleY = useImportedAptosDisplayRasterScale
-                            ? ImportedAptosDisplayWpfRasterScaleY
-                            : 1.0;
-                        double pivotY = useImportedAptosDisplayRasterScale
-                            ? placement.Y + ft.Height
-                            : placement.Y;
-                        dc.PushTransform(new ScaleTransform(
-                            scaleX,
-                            scaleY,
-                            centerX,
-                            pivotY));
-                    }
-                    dc.DrawText(ft, new Point(placement.X, placement.Y));
-                    if (useImportedAptosRasterScale)
-                    {
-                        dc.Pop();
-                    }
-                    break;
-            }
+            double scaleX = useImportedAptosBodyRasterScale
+                ? ImportedAptosBodyWpfLightRasterScale
+                : ImportedAptosWpfRasterScale;
+            double centerX = paragraph.Align == TextAlign.Center
+                ? bounds.X + bounds.Width * 0.5
+                : placement.X;
+            double scaleY = useImportedAptosDisplayRasterScale
+                ? ImportedAptosDisplayWpfRasterScaleY
+                : 1.0;
+            double pivotY = useImportedAptosDisplayRasterScale
+                ? placement.Y + formatted.Height
+                : placement.Y;
+            dc.PushTransform(new ScaleTransform(scaleX, scaleY, centerX, pivotY));
         }
+
+        dc.DrawText(formatted, new Point(placement.X, placement.Y));
+        if (useImportedAptosRasterScale)
+            dc.Pop();
     }
 
     private static bool UsesImportedAptosFont(ResolvedTextLayout text) =>
