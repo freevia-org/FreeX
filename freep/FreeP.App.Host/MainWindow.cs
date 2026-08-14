@@ -376,7 +376,6 @@ public sealed partial class MainWindow : Window,
                     UpdateHost: UpdateTitle)),
             _workareaSession.Panes,
             _wpfMediaPaneHostView);
-        BindMediaPaneEvents();
         _smartArtTextPaneSession = new(
             () => Editor,
             new PresentationSmartArtTextPaneSessionCallbacks(
@@ -439,6 +438,7 @@ public sealed partial class MainWindow : Window,
 
         // Body: slide pane + stage.
         var body = BuildBody();
+        BindMediaPaneEvents();
 
         // Status bar.
         var status = BuildStatusBar();

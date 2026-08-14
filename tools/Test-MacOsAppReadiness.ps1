@@ -11,6 +11,7 @@ param(
         "shared\Free.Shared.Ribbon.Avalonia",
         "shared\Free.Shared.AppServices",
         "shared\Free.Shared.Drawing",
+        "shared\Free.Shared.Drawing.Avalonia",
         "shared\Free.Shared.IO",
         "shared\Free.Shared.Pdf",
         "shared\Free.Shared.Pdf.Skia",
@@ -440,6 +441,7 @@ function Test-AvaloniaProject {
 
     $allowedProjectReferences = @(
         "Free.Shared.Drawing",
+        "Free.Shared.Drawing.Avalonia",
         "Free.Shared.Localization",
         "Free.Shared.Pdf",
         "Free.Shared.Pdf.Skia",
@@ -1554,8 +1556,8 @@ function Test-SourceWiring {
                 "private NativeMenuItem CreateNativeBorderPresetMenuItem(CellBorderPreset preset)",
                 "private void ApplySelectedRangeBorderPreset(CellBorderPreset preset)",
                 "_session.ApplySelectedRangeCompactFormat(",
-                "_borderPickerStyle,",
-                "_borderPickerColor);",
+                "_borderPickerSession.Style,",
+                "_borderPickerSession.Color);",
                 "HasBordersButton: _bordersButton.Content?.ToString() == `"Borders`"",
                 "HasNativeBordersMenuItem: HasNativeMenuItem(_bordersMenuItem, NativeMenuItemId.Borders)",
                 "NativeBordersPresetCount: nativeBordersPresetCount",

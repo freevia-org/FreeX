@@ -21,8 +21,8 @@
          All other dialog brushes are accent-derived or structural — left inline (see classification). -->
     <DynamicResource x:Key="DialogText" ResourceKey="ThemeNeutralTextBrush"/>
     <!-- Structural border shades: #C8C8C8 ≠ BorderStrong (#C8CCD0); #B7BCC2 has no exact role match. -->
-    <SolidColorBrush x:Key="DialogBorder"      Color="{x:Static shell:CompactDialogVisualTokens.BorderHex}"/>
-    <SolidColorBrush x:Key="DialogFieldBorder" Color="{x:Static shell:CompactDialogVisualTokens.FieldBorderHex}"/>
+    <SolidColorBrush x:Key="DialogBorder"      Color="{x:Static local:WpfCompactDialogMetrics.BorderColor}"/>
+    <SolidColorBrush x:Key="DialogFieldBorder" Color="{x:Static local:WpfCompactDialogMetrics.FieldBorderColor}"/>
     <!-- ACCENT-DERIVED — tokenized (WS-G round 9).  ThemeAccent*Brush keys are registered by
          WpfThemeApplier.BuildResources with per-app values: FreeX/FreeW teal, FreeP brick.
          The Dialog* aliases remain available for callers that bind dynamically by key. Styles in this
@@ -72,10 +72,10 @@
                         </Trigger>
                         <Trigger Property="IsEnabled" Value="False">
                             <!-- #9AA0A6 and #E0E0E0: structural disabled shades with no exact theme role. -->
-                            <Setter Property="Foreground" Value="{x:Static shell:CompactDialogVisualTokens.DisabledForegroundHex}"/>
+                            <Setter Property="Foreground" Value="{x:Static local:WpfCompactDialogMetrics.DisabledForegroundBrush}"/>
                             <!-- SheetSurface (#F3F3F3): neutral role, identical across all 3 brand themes. -->
                             <Setter TargetName="bd" Property="Background" Value="{DynamicResource ThemeNeutralSheetSurfaceBrush}"/>
-                            <Setter TargetName="bd" Property="BorderBrush" Value="{x:Static shell:CompactDialogVisualTokens.DisabledBorderHex}"/>
+                            <Setter TargetName="bd" Property="BorderBrush" Value="{x:Static local:WpfCompactDialogMetrics.DisabledBorderBrush}"/>
                         </Trigger>
                     </ControlTemplate.Triggers>
                 </ControlTemplate>
@@ -106,12 +106,12 @@
                             <Setter TargetName="bd" Property="BorderBrush" Value="{DynamicResource ThemeAccentDarkBrush}"/>
                         </Trigger>
                         <Trigger Property="IsPressed" Value="True">
-                            <Setter TargetName="bd" Property="Background" Value="{x:Static shell:CompactDialogVisualTokens.PrimaryPressedHex}"/>
-                            <Setter TargetName="bd" Property="BorderBrush" Value="{x:Static shell:CompactDialogVisualTokens.PrimaryPressedHex}"/>
+                            <Setter TargetName="bd" Property="Background" Value="{x:Static local:WpfCompactDialogMetrics.PrimaryPressedBrush}"/>
+                            <Setter TargetName="bd" Property="BorderBrush" Value="{x:Static local:WpfCompactDialogMetrics.PrimaryPressedBrush}"/>
                         </Trigger>
                         <Trigger Property="IsEnabled" Value="False">
-                            <Setter TargetName="bd" Property="Background" Value="{x:Static shell:CompactDialogVisualTokens.PrimaryDisabledHex}"/>
-                            <Setter TargetName="bd" Property="BorderBrush" Value="{x:Static shell:CompactDialogVisualTokens.PrimaryDisabledHex}"/>
+                            <Setter TargetName="bd" Property="Background" Value="{x:Static local:WpfCompactDialogMetrics.PrimaryDisabledBrush}"/>
+                            <Setter TargetName="bd" Property="BorderBrush" Value="{x:Static local:WpfCompactDialogMetrics.PrimaryDisabledBrush}"/>
                         </Trigger>
                     </ControlTemplate.Triggers>
                 </ControlTemplate>

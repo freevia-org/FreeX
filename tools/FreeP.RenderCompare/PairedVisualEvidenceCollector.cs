@@ -190,6 +190,9 @@ internal static class PairedVisualEvidenceCollector
         string scenarioRoot,
         params PairedVisualEvidenceArtifact[] artifacts)
     {
+        if (artifacts.Any(artifact => string.IsNullOrWhiteSpace(artifact.DeclaredPath)))
+            return false;
+
         var resolved = artifacts
             .Select(artifact => (
                 Artifact: artifact,

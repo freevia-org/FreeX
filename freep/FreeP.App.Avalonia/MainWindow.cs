@@ -605,7 +605,6 @@ public sealed partial class MainWindow : Window,
                     UpdateHost: UpdateStatus)),
             _workareaSession.Panes,
             _avaloniaMediaPaneHostView);
-        BindMediaPaneEvents();
         _smartArtTextPaneSession = new(
             () => Editor,
             new PresentationSmartArtTextPaneSessionCallbacks(
@@ -653,6 +652,7 @@ public sealed partial class MainWindow : Window,
             chrome: ribbon,
             workArea: BuildBody(),
             statusBar: statusBar));
+        BindMediaPaneEvents();
         _backstage = new BackstageView(BuildBackstageEndpoints());
         var clientRoot = new Grid();
         clientRoot.Children.Add(frame.Root);
