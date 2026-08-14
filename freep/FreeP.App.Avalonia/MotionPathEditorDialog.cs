@@ -10,9 +10,10 @@ using FreeP.Core.Model;
 
 namespace FreeP.App.Avalonia;
 
-internal sealed class MotionPathEditorDialog : Window
+internal sealed class MotionPathEditorDialog : FreePDialogWindow
 {
-    private static readonly AvaloniaCompactDialogChromeStyle DialogChromeStyle = new(FontFamily.Default);
+    private static readonly AvaloniaCompactDialogChromeStyle DialogChromeStyle =
+        AvaloniaCompactDialogChrome.WindowsStyle;
     private readonly MotionPathEditorDialogSession _session;
     private readonly StackPanel _rowsPanel = new();
     private readonly List<Row> _rows = new();

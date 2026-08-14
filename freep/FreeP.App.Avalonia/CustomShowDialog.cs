@@ -10,10 +10,11 @@ using FreeP.App.Compositor;
 
 namespace FreeP.App.Avalonia;
 
-internal sealed partial class CustomShowDialog : Window, ISlideShowCustomShowDialogView
+internal sealed partial class CustomShowDialog : FreePDialogWindow, ISlideShowCustomShowDialogView
 {
     private const double DragStartThreshold = 4;
-    private static readonly AvaloniaCompactDialogChromeStyle DialogChromeStyle = new(FontFamily.Default);
+    private static readonly AvaloniaCompactDialogChromeStyle DialogChromeStyle =
+        AvaloniaCompactDialogChrome.WindowsStyle;
 
     private readonly SlideShowCustomShowDialogController _controller;
     private readonly SlideShowCustomShowDialogFormSession<Control> _formSession;
@@ -68,7 +69,6 @@ internal sealed partial class CustomShowDialog : Window, ISlideShowCustomShowDia
         MinWidth = SlideShowCustomShowDialogVisualMetrics.MinimumWindowWidth;
         MinHeight = SlideShowCustomShowDialogVisualMetrics.MinimumWindowHeight;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
-        Background = FreePBrushes.SheetSurface;
 
         _showList.Margin = new Thickness(
             0,

@@ -10,9 +10,10 @@ using FreeP.App.Compositor;
 
 namespace FreeP.App.Avalonia;
 
-internal sealed partial class FindReplaceDialog : Window
+internal sealed partial class FindReplaceDialog : FreePDialogWindow
 {
-    private static readonly AvaloniaCompactDialogChromeStyle DialogChromeStyle = new(FontFamily.Default);
+    private static readonly AvaloniaCompactDialogChromeStyle DialogChromeStyle =
+        AvaloniaCompactDialogChrome.WindowsStyle;
 
     private readonly FindReplaceDialogSession _session;
     private readonly TextBox _findBox;
@@ -43,7 +44,6 @@ internal sealed partial class FindReplaceDialog : Window
         CanResize = false;
         ShowInTaskbar = false;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
-        Background = Brushes.White;
         AutomationProperties.SetName(this, surface.Schema.AccessibleName);
         AutomationProperties.SetAutomationId(this, surface.Schema.AutomationId);
 

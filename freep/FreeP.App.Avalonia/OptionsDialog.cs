@@ -3,7 +3,6 @@ using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.Layout;
-using Avalonia.Media;
 using Free.Shared.Shell.Avalonia;
 using FreeP.App.Compositor;
 
@@ -14,9 +13,10 @@ namespace FreeP.App.Avalonia;
 /// normalization stay in the portable <see cref="OptionsDialogPlanner"/> so WPF and Avalonia share one
 /// policy, the same way <see cref="SlideSizeDialog"/> shares <c>SlideSizeDialogPlanner</c>.
 /// </summary>
-internal sealed partial class OptionsDialog : Window
+internal sealed partial class OptionsDialog : FreePDialogWindow
 {
-    private static readonly AvaloniaCompactDialogChromeStyle DialogChromeStyle = new(FontFamily.Default);
+    private static readonly AvaloniaCompactDialogChromeStyle DialogChromeStyle =
+        AvaloniaCompactDialogChrome.WindowsStyle;
 
     private readonly OptionsDialogSession _session;
     private readonly OptionsDialogSurfaceSpec _surface;
@@ -38,7 +38,6 @@ internal sealed partial class OptionsDialog : Window
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
         CanResize = false;
         ShowInTaskbar = false;
-        Background = new SolidColorBrush(Color.FromRgb(0xF3, 0xF3, 0xF3));
 
         _recentFilesCap.Text = _session.InitialState.RecentFilesCapText;
         _defaultFormat.ItemsSource = _surface.FormatChoices;

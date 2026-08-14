@@ -9,9 +9,10 @@ using FreeP.Core.Model;
 
 namespace FreeP.App.Avalonia;
 
-internal sealed partial class RotationOptionsDialog : Window
+internal sealed partial class RotationOptionsDialog : FreePDialogWindow
 {
-    private static readonly AvaloniaCompactDialogChromeStyle DialogChromeStyle = new(FontFamily.Default);
+    private static readonly AvaloniaCompactDialogChromeStyle DialogChromeStyle =
+        AvaloniaCompactDialogChrome.WindowsStyle;
     private readonly RotationOptionsDialogSession _session;
     private readonly TextBox _rotationBox;
 
@@ -23,7 +24,6 @@ internal sealed partial class RotationOptionsDialog : Window
         Width = 360;
         Height = 190;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
-        Background = new SolidColorBrush(Color.FromRgb(0xF3, 0xF3, 0xF3));
         AutomationProperties.SetName(this, surface.Schema.AccessibleName);
         AutomationProperties.SetAutomationId(this, surface.Schema.AutomationId);
 

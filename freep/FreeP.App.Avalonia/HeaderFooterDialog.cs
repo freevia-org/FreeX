@@ -11,9 +11,10 @@ using FreeP.App.Compositor;
 
 namespace FreeP.App.Avalonia;
 
-internal sealed partial class HeaderFooterDialog : Window
+internal sealed partial class HeaderFooterDialog : FreePDialogWindow
 {
-    private static readonly AvaloniaCompactDialogChromeStyle DialogChromeStyle = new(FontFamily.Default);
+    private static readonly AvaloniaCompactDialogChromeStyle DialogChromeStyle =
+        AvaloniaCompactDialogChrome.WindowsStyle;
 
     private readonly HeaderFooterDialogSession _session;
     private readonly HeaderFooterDialogFormSession<Control> _formSession;
@@ -45,7 +46,6 @@ internal sealed partial class HeaderFooterDialog : Window
         CanResize = false;
         ShowInTaskbar = false;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
-        Background = Brushes.White;
 
         _dateTimeCheck = new CheckBox
         {

@@ -4,15 +4,15 @@ using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.Layout;
-using Avalonia.Media;
 using Free.Shared.Shell.Avalonia;
 using FreeP.App.Compositor;
 
 namespace FreeP.App.Avalonia;
 
-internal sealed partial class SlideSizeDialog : Window
+internal sealed partial class SlideSizeDialog : FreePDialogWindow
 {
-    private static readonly AvaloniaCompactDialogChromeStyle DialogChromeStyle = new(FontFamily.Default);
+    private static readonly AvaloniaCompactDialogChromeStyle DialogChromeStyle =
+        AvaloniaCompactDialogChrome.WindowsStyle;
 
     private readonly SlideSizeDialogSession _session;
     private readonly ComboBox _presetCombo;
@@ -45,7 +45,6 @@ internal sealed partial class SlideSizeDialog : Window
         CanResize = false;
         ShowInTaskbar = false;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
-        Background = new SolidColorBrush(Color.FromRgb(0xF3, 0xF3, 0xF3));
 
         _presetCombo = new ComboBox
         {

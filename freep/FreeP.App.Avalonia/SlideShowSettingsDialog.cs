@@ -3,16 +3,16 @@ using Avalonia.Automation;
 using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Layout;
-using Avalonia.Media;
 using Free.Shared.Shell.Avalonia;
 using FreeP.App.Compositor;
 using FreeP.Core.Model;
 
 namespace FreeP.App.Avalonia;
 
-internal sealed partial class SlideShowSettingsDialog : Window
+internal sealed partial class SlideShowSettingsDialog : FreePDialogWindow
 {
-    private static readonly AvaloniaCompactDialogChromeStyle DialogChromeStyle = new(FontFamily.Default);
+    private static readonly AvaloniaCompactDialogChromeStyle DialogChromeStyle =
+        AvaloniaCompactDialogChrome.WindowsStyle;
 
     private readonly SlideShowSettingsDialogSession _session;
     private readonly SlideShowSettingsDialogFormSession<Control> _formSession;
@@ -44,7 +44,6 @@ internal sealed partial class SlideShowSettingsDialog : Window
         CanResize = false;
         ShowInTaskbar = false;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
-        Background = Brushes.White;
 
         _useTimingsCheck = new CheckBox
         {

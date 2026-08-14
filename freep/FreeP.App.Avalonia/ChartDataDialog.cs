@@ -11,9 +11,10 @@ using FreeP.Core.Model;
 
 namespace FreeP.App.Avalonia;
 
-internal sealed partial class ChartDataDialog : Window
+internal sealed partial class ChartDataDialog : FreePDialogWindow
 {
-    private static readonly AvaloniaCompactDialogChromeStyle DialogChromeStyle = new(FontFamily.Default);
+    private static readonly AvaloniaCompactDialogChromeStyle DialogChromeStyle =
+        AvaloniaCompactDialogChrome.WindowsStyle;
     private readonly ChartDataDialogSession _session;
     private readonly ChartDataDialogPlan _plan;
     private readonly CultureInfo _culture;
@@ -51,7 +52,6 @@ internal sealed partial class ChartDataDialog : Window
         MinHeight = _plan.MinimumHeight;
         CanResize = _plan.IsResizable;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
-        Background = FreePBrushes.SheetSurface;
         _tableGrid.MinWidth = 616;
         _tableGrid.HorizontalAlignment = HorizontalAlignment.Stretch;
 

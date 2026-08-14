@@ -1,6 +1,5 @@
 using Avalonia.Automation;
 using Avalonia.Controls;
-using Avalonia.Media;
 using Free.Shared.Shell.Avalonia;
 using FreeP.App.Compositor;
 
@@ -8,7 +7,8 @@ namespace FreeP.App.Avalonia;
 
 internal static class ZoomDialogChrome
 {
-    private static readonly AvaloniaCompactDialogChromeStyle Style = new(FontFamily.Default);
+    private static readonly AvaloniaCompactDialogChromeStyle Style =
+        AvaloniaCompactDialogChrome.WindowsStyle;
 
     internal static void Apply(Window window) =>
         AvaloniaCompactDialogChrome.ApplyWindow(window, Style);
