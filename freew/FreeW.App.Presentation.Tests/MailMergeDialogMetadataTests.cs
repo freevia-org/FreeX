@@ -35,6 +35,30 @@ public sealed class MailMergeDialogMetadataTests
         avalonia.Should().Contain("MailMergeDialogMetadata.FinishAndMergeTitle");
     }
 
+    [Fact]
+    public void NativeMailMergeDialogsUseSharedRendererChromeAcrossHosts()
+    {
+        var root = FindRepositoryRoot();
+        var wpf = File.ReadAllText(Path.Combine(
+            root, "freew", "FreeW.App.Host", "Ribbon", "FreeWRibbonCommands.cs"));
+        var avalonia = File.ReadAllText(Path.Combine(
+            root, "freew", "FreeW.App.Avalonia", "MailMergeDialogs.cs"));
+
+        wpf.Should().Contain(
+            "class MailMergeDialogWindow : Free.Shared.Ribbon.Wpf.DialogWindow");
+        Count(wpf, "new MailMergeDialogWindow").Should().Be(13,
+            "every code-built WPF mail-merge form must receive shared dialog resources");
+
+        avalonia.Should().Contain("class MailMergeDialogWindow : FreeWDialogWindow");
+        avalonia.Should().Contain("new MailMergeDialogWindow()");
+        avalonia.Should().NotContain("new Window");
+        Count(avalonia, "CreateDialog(").Should().Be(15,
+            "fourteen shared-form routes plus the factory declaration must remain centralized");
+    }
+
+    private static int Count(string source, string value) =>
+        source.Split(value, StringSplitOptions.None).Length - 1;
+
     private static string FindRepositoryRoot() =>
         TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeX.slnx");
 }

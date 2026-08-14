@@ -5306,6 +5306,14 @@ internal static class FreeWRibbonCommands
         return session.Template ?? editor.Model;
     }
 
+    /// <summary>
+    /// Keeps the code-built WPF mail-merge family on the same shared dialog resources and
+    /// typography as its Avalonia counterpart. Mail-merge behavior remains Presentation-owned.
+    /// </summary>
+    private sealed class MailMergeDialogWindow : Free.Shared.Ribbon.Wpf.DialogWindow
+    {
+    }
+
     private static void Realize(
         DocumentView editor,
         MailMergeSessionTransition transition)
@@ -5547,7 +5555,7 @@ internal static class FreeWRibbonCommands
         {
             var session = new MailMergeRuleConditionDialogSession(request.FieldNames);
             MailMergeRuleIfDialogResult? result = null;
-            var dialog = new Window
+            var dialog = new MailMergeDialogWindow
             {
                 Title = request.Title,
                 SizeToContent = SizeToContent.WidthAndHeight,
@@ -5633,7 +5641,7 @@ internal static class FreeWRibbonCommands
         {
             var session = new MailMergeRuleConditionDialogSession(request.FieldNames);
             MailMergeRuleConditionDialogResult? result = null;
-            var dialog = new Window
+            var dialog = new MailMergeDialogWindow
             {
                 Title = request.Title,
                 SizeToContent = SizeToContent.WidthAndHeight,
@@ -5708,7 +5716,7 @@ internal static class FreeWRibbonCommands
         public static string? AskPrompt(Window? owner, string title, string label, string initialValue = "")
         {
             string? result = null;
-            var dialog = new Window
+            var dialog = new MailMergeDialogWindow
             {
                 Title = title,
                 SizeToContent = SizeToContent.WidthAndHeight,
@@ -5755,7 +5763,7 @@ internal static class FreeWRibbonCommands
         {
             var session = new MailMergeRuleNameValueDialogSession();
             MailMergeRuleNameValueDialogResult? result = null;
-            var dialog = new Window
+            var dialog = new MailMergeDialogWindow
             {
                 Title = request.Title,
                 SizeToContent = SizeToContent.WidthAndHeight,
@@ -5997,7 +6005,7 @@ internal static class FreeWRibbonCommands
                 combo.Items.Add(choice.Label);
 
             MailMergeCheckForErrorsMode? result = null;
-            var dialog = new Window
+            var dialog = new MailMergeDialogWindow
             {
                 Title = MailMergeDialogMetadata.CheckForErrorsTitle,
                 SizeToContent = SizeToContent.WidthAndHeight,
@@ -6163,7 +6171,7 @@ internal static class FreeWRibbonCommands
         {
             var dialogPlan = MailMergeFinishPlanner.CreateDialogPlan(recordCount, currentIndex);
             MailMergeFinishPlan? result = null;
-            var dialog = new Window
+            var dialog = new MailMergeDialogWindow
             {
                 Title = MailMergeDialogMetadata.FinishAndMergeTitle,
                 Owner = owner,
@@ -6364,7 +6372,7 @@ internal static class FreeWRibbonCommands
         {
             var dialogPlan = MailMergeEmailDeliveryPlanner.CreateDialogPlan(data, currentRecordIndex, selectedRecordIndexes);
             MailMergeEmailDeliveryIntent? result = null;
-            var dialog = new Window
+            var dialog = new MailMergeDialogWindow
             {
                 Title = MailMergeDialogMetadata.SendEmailTitle,
                 SizeToContent = SizeToContent.WidthAndHeight,
@@ -6625,7 +6633,7 @@ internal static class FreeWRibbonCommands
         {
             var plan = MailMergePreviewDialogPlanner.CreatePlan(index, count);
             var result = MailMergePreviewDialogAction.Cancel;
-            var dialog = new Window
+            var dialog = new MailMergeDialogWindow
             {
                 Title = MailMergeDialogMetadata.PreviewResultsTitle,
                 SizeToContent = SizeToContent.WidthAndHeight,
@@ -6693,7 +6701,7 @@ internal static class FreeWRibbonCommands
             };
 
             string? result = null;
-            var dialog = new Window
+            var dialog = new MailMergeDialogWindow
             {
                 Title = MailMergeDialogMetadata.MergeDataTitle,
                 SizeToContent = SizeToContent.WidthAndHeight,
@@ -6789,7 +6797,7 @@ internal static class FreeWRibbonCommands
             Grid.SetColumnSpan(buttonRow, 2);
             grid.Children.Add(buttonRow);
 
-            var dialog = new Window
+            var dialog = new MailMergeDialogWindow
             {
                 Title = MailMergeDialogMetadata.MatchFieldsTitle,
                 SizeToContent = SizeToContent.WidthAndHeight,
@@ -6828,7 +6836,7 @@ internal static class FreeWRibbonCommands
         {
             MergeData? result = null;
 
-            var dialog = new Window
+            var dialog = new MailMergeDialogWindow
             {
                 Title = MailMergeDialogMetadata.FilterSortRecipientsTitle,
                 SizeToContent = SizeToContent.WidthAndHeight,
@@ -6949,7 +6957,7 @@ internal static class FreeWRibbonCommands
                 combo.Items.Add(s.Name);
             combo.SelectedIndex = plan.SelectedIndex;
 
-            var dialog = new Window
+            var dialog = new MailMergeDialogWindow
             {
                 Title = MailMergeDialogMetadata.EnvelopesTitle,
                 SizeToContent = SizeToContent.WidthAndHeight,
@@ -7032,7 +7040,7 @@ internal static class FreeWRibbonCommands
                     ? Visibility.Visible
                     : Visibility.Collapsed;
 
-            var dialog = new Window
+            var dialog = new MailMergeDialogWindow
             {
                 Title = MailMergeDialogMetadata.LabelsTitle,
                 SizeToContent = SizeToContent.WidthAndHeight,
