@@ -173,7 +173,7 @@ internal static class FreeWRibbonCommands
             registry.Bind(action,
                 new RoutedEditCommand(editor, command));
 
-        void Toggle(
+        ToggleFormatCommand CreateToggle(
             FreeWRibbonCommandAction action,
             RoutedCommand command,
             DependencyProperty property,
@@ -181,8 +181,8 @@ internal static class FreeWRibbonCommands
             Func<bool>? tryModelToggle = null)
         {
             var cmd = new ToggleFormatCommand(editor, command, property, isOn, tryModelToggle);
-            registry.Bind(action, cmd);
             stateful.Add((FreeWRibbonCommandWorkflow.GetPrimaryCommandId(action), cmd));
+            return cmd;
         }
 
         void PageSetting(
@@ -197,13 +197,13 @@ internal static class FreeWRibbonCommands
             stateStore.SetState(commandId, command.GetState());
         }
 
-        Toggle(FreeWRibbonCommandAction.Bold, EditingCommands.ToggleBold, TextElement.FontWeightProperty,
+        var bold = CreateToggle(FreeWRibbonCommandAction.Bold, EditingCommands.ToggleBold, TextElement.FontWeightProperty,
             v => v is FontWeight w && w >= FontWeights.Bold,
             () => editor.TryToggleSelectedRunFormatting(f => f.Bold, (f, value) => f with { Bold = value }));
-        Toggle(FreeWRibbonCommandAction.Italic, EditingCommands.ToggleItalic, TextElement.FontStyleProperty,
+        var italic = CreateToggle(FreeWRibbonCommandAction.Italic, EditingCommands.ToggleItalic, TextElement.FontStyleProperty,
             v => v is FontStyle s && s == FontStyles.Italic,
             () => editor.TryToggleSelectedRunFormatting(f => f.Italic, (f, value) => f with { Italic = value }));
-        Toggle(FreeWRibbonCommandAction.Underline, EditingCommands.ToggleUnderline, Inline.TextDecorationsProperty,
+        var underline = CreateToggle(FreeWRibbonCommandAction.Underline, EditingCommands.ToggleUnderline, Inline.TextDecorationsProperty,
             v => v is TextDecorationCollection d && d.Count > 0,
             () => editor.TryToggleSelectedRunFormatting(f => f.Underline, (f, value) => f with { Underline = value }));
 
@@ -220,11 +220,19 @@ internal static class FreeWRibbonCommands
 
         // Home > Font: character effects. Superscript/subscript are mutually exclusive baseline
         // offsets; small caps / all caps map to WPF typography. Each is a toggle over the selection.
-        registry.Bind(FreeWRibbonCommandAction.Superscript, new CharacterEffectCommand(editor, CharacterEffect.Superscript));
-        registry.Bind(FreeWRibbonCommandAction.Subscript, new CharacterEffectCommand(editor, CharacterEffect.Subscript));
-        registry.Bind(FreeWRibbonCommandAction.Strikethrough, new CharacterEffectCommand(editor, CharacterEffect.Strikethrough));
-        registry.Bind(FreeWRibbonCommandAction.Smallcaps, new CharacterEffectCommand(editor, CharacterEffect.SmallCaps));
-        registry.Bind(FreeWRibbonCommandAction.Allcaps, new CharacterEffectCommand(editor, CharacterEffect.AllCaps));
+        FontEffectRibbonWorkflow.Register(
+            registry,
+            new FontEffectRibbonPorts(
+                Bold: bold,
+                Italic: italic,
+                Underline: underline,
+                Strikethrough: new CharacterEffectCommand(editor, CharacterEffect.Strikethrough),
+                SmallCaps: new CharacterEffectCommand(editor, CharacterEffect.SmallCaps),
+                AllCaps: new CharacterEffectCommand(editor, CharacterEffect.AllCaps),
+                Superscript: new CharacterEffectCommand(editor, CharacterEffect.Superscript),
+                Subscript: new CharacterEffectCommand(editor, CharacterEffect.Subscript),
+                GrowFont: new RoutedEditCommand(editor, EditingCommands.IncreaseFontSize),
+                ShrinkFont: new RoutedEditCommand(editor, EditingCommands.DecreaseFontSize)));
 
         // Home > Font: character border and character shading (new W20 commands). These are model-only
         // run properties with full DOCX round-trip (w:rBdr / w:shd). Character Border opens a border-
@@ -236,8 +244,6 @@ internal static class FreeWRibbonCommands
         // applies the chosen language to the selected runs (rPr/w:lang) for spell-check fidelity.
         registry.Bind(FreeWRibbonCommandAction.SetProofingLanguage, new SetProofingLanguageCommand(editor));
 
-        Routed(FreeWRibbonCommandAction.GrowFont, EditingCommands.IncreaseFontSize);
-        Routed(FreeWRibbonCommandAction.ShrinkFont, EditingCommands.DecreaseFontSize);
         // Home/Layout paragraph behavior is Presentation-owned; these ports preserve WPF routed
         // editing commands and the native Sort dialog while sharing all semantic command mapping.
         ParagraphEditingRibbonWorkflow.Register(registry, CreateParagraphEditingPorts(editor));

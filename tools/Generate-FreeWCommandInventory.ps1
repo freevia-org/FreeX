@@ -216,6 +216,16 @@ internal static class FreeWCommandInventory
         ["freew.widow-control"] = ParagraphEditingEvidence("Both renderers toggle widow/orphan control through one prepared shared action."),
         ["freew.para-border"] = ParagraphEditingEvidence("Both renderers toggle paragraph borders through one prepared shared action."),
         ["freew.sort"] = ParagraphEditingEvidence("Both renderers preserve native sort adapters behind one shared semantic route."),
+        ["freew.bold"] = FontEffectEvidence("Both renderers preserve native bold toggle state behind one shared semantic route."),
+        ["freew.italic"] = FontEffectEvidence("Both renderers preserve native italic toggle behavior behind one shared semantic route."),
+        ["freew.underline"] = FontEffectEvidence("Both renderers preserve native underline toggle behavior behind one shared semantic route."),
+        ["freew.strikethrough"] = FontEffectEvidence("Both renderers route strikethrough through the shared font-effect family."),
+        ["freew.smallcaps"] = FontEffectEvidence("Both renderers route small-caps formatting through the shared font-effect family."),
+        ["freew.allcaps"] = FontEffectEvidence("Both renderers route all-caps formatting through the shared font-effect family."),
+        ["freew.superscript"] = FontEffectEvidence("Both renderers route superscript formatting through the shared font-effect family."),
+        ["freew.subscript"] = FontEffectEvidence("Both renderers route subscript formatting through the shared font-effect family."),
+        ["freew.grow-font"] = FontEffectEvidence("Both renderers route font growth through the shared font-effect family."),
+        ["freew.shrink-font"] = FontEffectEvidence("Both renderers route font shrinking through the shared font-effect family."),
         ["freew.multilevel-list"] = MultilevelListWorkflowEvidence(
             "The shared workflow applies the canonical decimal multilevel definition in both renderers."),
         ["freew.multilevel-demote"] = MultilevelListWorkflowEvidence(
@@ -588,6 +598,18 @@ internal static class FreeWCommandInventory
             AvaloniaEvidence: new BehaviorEvidenceLink(
                 Path: "freew/FreeW.App.Presentation.Tests/ParagraphEditingRibbonWorkflowTests.cs",
                 Test: "ParagraphEditingRibbonWorkflowTests.BothRenderersDelegateParagraphPolicyToSharedPresentation"));
+
+    private static CommandBehaviorEvidence FontEffectEvidence(string summary) =>
+        new(
+            EvidenceId: "freew.font-effects.shared-workflow",
+            Slice: "Font effect command behavior",
+            Summary: summary,
+            WpfEvidence: new BehaviorEvidenceLink(
+                Path: "freew/FreeW.App.Presentation.Tests/FontEffectRibbonWorkflowTests.cs",
+                Test: "FontEffectRibbonWorkflowTests.StatefulNativeFontCommandsKeepTheirStateAndExecutionBehavior"),
+            AvaloniaEvidence: new BehaviorEvidenceLink(
+                Path: "freew/FreeW.App.Presentation.Tests/FontEffectRibbonWorkflowTests.cs",
+                Test: "FontEffectRibbonWorkflowTests.BothRenderersDelegateFontEffectMappingToSharedPresentation"));
 
     private static CommandBehaviorEvidence MultilevelListWorkflowEvidence(
         string summary,

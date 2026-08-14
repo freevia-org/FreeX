@@ -104,20 +104,11 @@ internal static class FreeWAvaloniaRibbonCommands
         // ── Font ─────────────────────────────────────────────────────────────
         r.Bind(FreeWRibbonCommandAction.FontFamily, new FontFamilyCommand(editor));
         r.Bind(FreeWRibbonCommandAction.FontSize, new FontSizeCommand(editor));
-        r.Bind(FreeWRibbonCommandAction.Bold,            new ActionRibbonCommand(editor.ToggleBold));
-        r.Bind(FreeWRibbonCommandAction.Italic,           new ActionRibbonCommand(editor.ToggleItalic));
-        r.Bind(FreeWRibbonCommandAction.Underline,        new ActionRibbonCommand(editor.ToggleUnderline));
-        r.Bind(FreeWRibbonCommandAction.Strikethrough,    new ActionRibbonCommand(editor.ToggleStrikethrough));
-        r.Bind(FreeWRibbonCommandAction.Smallcaps,        new ActionRibbonCommand(editor.ToggleSmallCaps));
-        r.Bind(FreeWRibbonCommandAction.Allcaps,          new ActionRibbonCommand(editor.ToggleAllCaps));
-        r.Bind(FreeWRibbonCommandAction.Superscript,      new ActionRibbonCommand(editor.ToggleSuperscript));
-        r.Bind(FreeWRibbonCommandAction.Subscript,        new ActionRibbonCommand(editor.ToggleSubscript));
+        FontEffectRibbonWorkflow.Register(r, CreateFontEffectPorts(editor));
         r.Bind(FreeWRibbonCommandAction.Highlight,        new ValueRibbonCommand(value => editor.SetHighlightColor(value)));
         RegisterHighlightPalette(r, editor);
         RegisterCharacterBorderPalette(r, editor);
         RegisterCharacterShadingPalette(r, editor);
-        r.Bind(FreeWRibbonCommandAction.GrowFont,        new ActionRibbonCommand(editor.GrowFont));
-        r.Bind(FreeWRibbonCommandAction.ShrinkFont,      new ActionRibbonCommand(editor.ShrinkFont));
         r.Bind(FreeWRibbonCommandAction.ClearFormatting, new ActionRibbonCommand(editor.ClearFormatting));
         // Font Color — the ribbon control is a Dropdown whose button click opens the colour flyout.
         // Each palette entry is its own command so the button never executes with a null value.
@@ -1475,6 +1466,19 @@ internal static class FreeWAvaloniaRibbonCommands
                 crop.Top,
                 crop.Bottom),
             ResetImage: editor.ResetSelectedImage);
+
+    private static FontEffectRibbonPorts CreateFontEffectPorts(DocumentView editor) =>
+        new(
+            Bold: new ActionRibbonCommand(editor.ToggleBold),
+            Italic: new ActionRibbonCommand(editor.ToggleItalic),
+            Underline: new ActionRibbonCommand(editor.ToggleUnderline),
+            Strikethrough: new ActionRibbonCommand(editor.ToggleStrikethrough),
+            SmallCaps: new ActionRibbonCommand(editor.ToggleSmallCaps),
+            AllCaps: new ActionRibbonCommand(editor.ToggleAllCaps),
+            Superscript: new ActionRibbonCommand(editor.ToggleSuperscript),
+            Subscript: new ActionRibbonCommand(editor.ToggleSubscript),
+            GrowFont: new ActionRibbonCommand(editor.GrowFont),
+            ShrinkFont: new ActionRibbonCommand(editor.ShrinkFont));
 
     private static ParagraphEditingRibbonPorts CreateParagraphEditingPorts(
         DocumentView editor,
