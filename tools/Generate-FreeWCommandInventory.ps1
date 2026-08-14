@@ -382,6 +382,12 @@ internal static class FreeWCommandInventory
             "Both renderers open their caption text dialog preselected to the Equation label instead of inserting an empty caption."),
         ["freew.cross-reference"] = CaptionWorkflowEvidence(
             "Both renderers route the cross-reference picker through the shared Captions command family."),
+        ["freew.index-mark"] = IndexWorkflowEvidence(
+            "Both renderers open their native Mark Index Entry flow through one shared, fail-closed route."),
+        ["freew.index-insert"] = IndexWorkflowEvidence(
+            "Both renderers open their native Insert Index flow through one shared, fail-closed route."),
+        ["freew.index-refresh"] = IndexWorkflowEvidence(
+            "Both renderers open their native Update Index flow through one shared, fail-closed route."),
         ["freew.tof"] = TableOfFiguresWorkflowEvidence(
             "The primary Table of Figures command shares the Figure-label insertion command in both renderers."),
         ["freew.tof.figure"] = TableOfFiguresWorkflowEvidence(
@@ -968,6 +974,18 @@ internal static class FreeWCommandInventory
             AvaloniaEvidence: new BehaviorEvidenceLink(
                 Path: "freew/FreeW.App.Presentation.Tests/CaptionRibbonWorkflowTests.cs",
                 Test: "CaptionRibbonWorkflowTests.BothRenderersDelegateCaptionPolicyAndAvaloniaUsesLabelSpecificDialogPort"));
+
+    private static CommandBehaviorEvidence IndexWorkflowEvidence(string summary) =>
+        new(
+            EvidenceId: "freew.index.shared-workflow",
+            Slice: "Index command behavior",
+            Summary: summary,
+            WpfEvidence: new BehaviorEvidenceLink(
+                Path: "freew/FreeW.App.Presentation.Tests/IndexRibbonWorkflowTests.cs",
+                Test: "IndexRibbonWorkflowTests.SharedWorkflowRoutesMarkInsertAndRefresh"),
+            AvaloniaEvidence: new BehaviorEvidenceLink(
+                Path: "freew/FreeW.App.Presentation.Tests/IndexRibbonWorkflowTests.cs",
+                Test: "IndexRibbonWorkflowTests.BothRenderersDelegateIndexPolicyAndAvaloniaHasNoDefaultMutationFallback"));
 
     private static CommandBehaviorEvidence SmartArtStructureEvidence(string behavior) =>
         SmartArtCommandEvidence(

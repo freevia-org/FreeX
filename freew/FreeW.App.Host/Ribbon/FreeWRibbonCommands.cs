@@ -723,9 +723,12 @@ internal static class FreeWRibbonCommands
                 new InsertCrossReferenceCommand(editor)));
         // Insert tab — References: mark the selection (or a prompted term) for the document index, and
         // insert an alphabetical index built from the marked terms at the caret (reversibly via the bus).
-        referenceCommands.Bind(FreeWRibbonCommandAction.IndexMark, new MarkIndexEntryCommand(editor));
-        referenceCommands.Bind(FreeWRibbonCommandAction.IndexInsert, new InsertIndexCommand(editor));
-        referenceCommands.Bind(FreeWRibbonCommandAction.IndexRefresh, new UpdateIndexCommand(editor));
+        IndexRibbonWorkflow.Register(
+            referenceCommands,
+            new IndexRibbonPorts(
+                () => new MarkIndexEntryCommand(editor).Execute(RibbonCommandContext.Empty),
+                () => new InsertIndexCommand(editor).Execute(RibbonCommandContext.Empty),
+                () => new UpdateIndexCommand(editor).Execute(RibbonCommandContext.Empty)));
         // Insert tab — References: generate a Table of Figures from the document's figure captions at the
         // caret, and rebuild it in place (remove the prior region + re-insert). Both route through the bus.
         TableOfFiguresRibbonWorkflow.Register(

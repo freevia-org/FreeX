@@ -1018,12 +1018,12 @@ internal static class FreeWAvaloniaRibbonCommands
             new TableOfFiguresRibbonPorts(
                 editor.InsertTableOfFigures,
                 editor.RefreshTableOfFigures));
-        family.Bind(FreeWRibbonCommandAction.IndexMark, new ActionRibbonCommand(
-            callbacks.OpenMarkIndexEntryDialog ?? (() => editor.MarkIndexEntry())));
-        family.Bind(FreeWRibbonCommandAction.IndexInsert, new ActionRibbonCommand(
-            callbacks.OpenInsertIndexDialog ?? (() => editor.InsertIndex())));
-        family.Bind(FreeWRibbonCommandAction.IndexRefresh, new ActionRibbonCommand(
-            callbacks.OpenUpdateIndexDialog ?? (() => editor.RefreshIndex())));
+        IndexRibbonWorkflow.Register(
+            family,
+            new IndexRibbonPorts(
+                callbacks.OpenMarkIndexEntryDialog,
+                callbacks.OpenInsertIndexDialog,
+                callbacks.OpenUpdateIndexDialog));
         family.Bind(FreeWRibbonCommandAction.MarkCitation, OptionalHostCommand(callbacks.OpenMarkCitationDialog));
         family.Bind(FreeWRibbonCommandAction.TableOfAuthorities, new ActionRibbonCommand(
             callbacks.ShowTableOfAuthoritiesDialog ?? (() =>
