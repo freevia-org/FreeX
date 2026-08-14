@@ -712,13 +712,15 @@ internal static class FreeWRibbonCommands
         // by the citation + bibliography commands. The combo box delivers its label as SelectedValue.
         stateful.Add(("freew.citation-style", citationRegistration.CitationStyleCommand));
         stateStore.SetState("freew.citation-style", citationRegistration.CitationStyleCommand.GetState());
-        // Insert tab — References: insert a numbered figure/table caption under the caret's block.
-        referenceCommands.Bind(FreeWRibbonCommandAction.Caption, new InsertCaptionCommand(editor));
-        referenceCommands.Bind(FreeWRibbonCommandAction.InsertCaption_Figure, new InsertCaptionLabelCommand(editor, CaptionLabel.Figure));
-        referenceCommands.Bind(FreeWRibbonCommandAction.InsertCaption_Table, new InsertCaptionLabelCommand(editor, CaptionLabel.Table));
-        referenceCommands.Bind(FreeWRibbonCommandAction.InsertCaption_Equation, new InsertCaptionLabelCommand(editor, CaptionLabel.Equation));
-        // Insert tab — References: insert a cross-reference (heading/bookmark/caption/footnote) at the caret.
-        referenceCommands.Bind(FreeWRibbonCommandAction.CrossReference, new InsertCrossReferenceCommand(editor));
+        // Insert tab — References: captions and cross-references share their command routing while the
+        // native shell retains ownership of the label/text and target-picker dialogs.
+        CaptionRibbonWorkflow.Register(
+            referenceCommands,
+            new CaptionRibbonPorts(
+                new InsertCaptionCommand(editor),
+                label => new InsertCaptionLabelCommand(editor, label)
+                    .Execute(RibbonCommandContext.Empty),
+                new InsertCrossReferenceCommand(editor)));
         // Insert tab — References: mark the selection (or a prompted term) for the document index, and
         // insert an alphabetical index built from the marked terms at the caret (reversibly via the bus).
         referenceCommands.Bind(FreeWRibbonCommandAction.IndexMark, new MarkIndexEntryCommand(editor));

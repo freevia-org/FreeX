@@ -997,16 +997,12 @@ internal static class FreeWAvaloniaRibbonCommands
                 editor.UpdateTableOfContents,
                 styleId => editor.ApplyNamedStyle(styleId)));
 
-        // Captions — the primary action opens the label/text dialog; menu labels remain direct.
-        var caption = OptionalHostCommand(callbacks.OpenCaptionDialog);
-        family.Bind(FreeWRibbonCommandAction.Caption, caption);
-        family.Register("freew.insert-caption", caption);
-        family.Bind(FreeWRibbonCommandAction.InsertCaption_Figure, new ActionRibbonCommand(() => editor.InsertCaption(CaptionLabel.Figure)));
-        family.Bind(FreeWRibbonCommandAction.InsertCaption_Table,  new ActionRibbonCommand(() => editor.InsertCaption(CaptionLabel.Table)));
-        family.Bind(FreeWRibbonCommandAction.InsertCaption_Equation, new ActionRibbonCommand(() => editor.InsertCaption(CaptionLabel.Equation)));
-
-        // Dialog-backed commands fail closed without a shell callback instead of silently choosing defaults.
-        family.Bind(FreeWRibbonCommandAction.CrossReference, OptionalHostCommand(callbacks.OpenCrossReferenceDialog));
+        CaptionRibbonWorkflow.Register(
+            family,
+            new CaptionRibbonPorts(
+                OptionalHostCommand(callbacks.OpenCaptionDialog),
+                callbacks.OpenCaptionDialogForLabel,
+                OptionalHostCommand(callbacks.OpenCrossReferenceDialog)));
 
         CitationRibbonWorkflow.Register(
             family,

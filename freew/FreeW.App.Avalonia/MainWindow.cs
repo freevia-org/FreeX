@@ -970,9 +970,10 @@ public sealed partial class MainWindow : Window
     private ValueTask<Chart?> ShowChartDataDialogAsync(Chart chart) =>
         new(InsertChartDialog.ShowAsync(this, chart));
 
-    private async Task OpenCaptionDialogAsync()
+    private async Task OpenCaptionDialogAsync(CaptionLabel? requestedLabel = null)
     {
-        var defaultLabel = _editor.IsCaretInTable() ? CaptionLabel.Table : CaptionLabel.Figure;
+        var defaultLabel = requestedLabel
+            ?? (_editor.IsCaretInTable() ? CaptionLabel.Table : CaptionLabel.Figure);
         var result = await CaptionDialog.ShowAsync(this, defaultLabel);
         if (result is not null)
             _editor.InsertCaption(result.Label, result.Text);
@@ -1889,6 +1890,7 @@ public sealed partial class MainWindow : Window
             ShowTableFormulaDialogAsync: ShowTableFormulaDialogAsync,
             OpenWordCountDialog: () => _ = OpenWordCountDialogAsync(),
             OpenCaptionDialog: () => _ = OpenCaptionDialogAsync(),
+            OpenCaptionDialogForLabel: label => _ = OpenCaptionDialogAsync(label),
             OpenCrossReferenceDialog: () => _ = OpenCrossReferenceDialogAsync(),
             OpenCitationDialog: () => _ = OpenCitationDialogAsync(),
             OpenManageSourcesDialog: () => _ = OpenManageSourcesDialogAsync(),

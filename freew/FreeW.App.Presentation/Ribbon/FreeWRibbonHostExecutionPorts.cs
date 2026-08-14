@@ -110,6 +110,7 @@ public sealed record FreeWRibbonHostExecutionPorts(
     Action? OpenManageStylesDialog = null,
     Action? OpenCrossReferenceDialog = null,
     Action? OpenCaptionDialog = null,
+    Action<CaptionLabel>? OpenCaptionDialogForLabel = null,
     Action? OpenCitationDialog = null,
     Action? OpenManageSourcesDialog = null,
     Action? OpenMarkIndexEntryDialog = null,

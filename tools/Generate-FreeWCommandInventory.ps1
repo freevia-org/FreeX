@@ -372,6 +372,16 @@ internal static class FreeWCommandInventory
             "CitationEditorTests.InsertBibliography_BuildsBlockFromSourcesAndUndoReverts",
             "freew/FreeW.App.Avalonia.Tests/ReferencesTabTests.cs",
             "ReferencesTabTests.InsertBibliography_builds_block_from_sources_and_undo_reverts"),
+        ["freew.caption"] = CaptionWorkflowEvidence(
+            "Both renderers route the primary caption command and its compatibility alias through one shared command identity."),
+        ["freew.insert-caption.figure"] = CaptionWorkflowEvidence(
+            "Both renderers open their caption text dialog preselected to the Figure label instead of inserting an empty caption."),
+        ["freew.insert-caption.table"] = CaptionWorkflowEvidence(
+            "Both renderers open their caption text dialog preselected to the Table label instead of inserting an empty caption."),
+        ["freew.insert-caption.equation"] = CaptionWorkflowEvidence(
+            "Both renderers open their caption text dialog preselected to the Equation label instead of inserting an empty caption."),
+        ["freew.cross-reference"] = CaptionWorkflowEvidence(
+            "Both renderers route the cross-reference picker through the shared Captions command family."),
         ["freew.tof"] = TableOfFiguresWorkflowEvidence(
             "The primary Table of Figures command shares the Figure-label insertion command in both renderers."),
         ["freew.tof.figure"] = TableOfFiguresWorkflowEvidence(
@@ -946,6 +956,18 @@ internal static class FreeWCommandInventory
             AvaloniaEvidence: new BehaviorEvidenceLink(
                 Path: "freew/FreeW.App.Presentation.Tests/TableOfFiguresRibbonWorkflowTests.cs",
                 Test: "TableOfFiguresRibbonWorkflowTests.BothRenderersDelegateTableOfFiguresPolicyToSharedPresentation"));
+
+    private static CommandBehaviorEvidence CaptionWorkflowEvidence(string summary) =>
+        new(
+            EvidenceId: "freew.caption.shared-workflow",
+            Slice: "Caption and cross-reference command behavior",
+            Summary: summary,
+            WpfEvidence: new BehaviorEvidenceLink(
+                Path: "freew/FreeW.App.Presentation.Tests/CaptionRibbonWorkflowTests.cs",
+                Test: "CaptionRibbonWorkflowTests.SharedWorkflowOwnsPrimaryAliasFixedLabelsAndCrossReference"),
+            AvaloniaEvidence: new BehaviorEvidenceLink(
+                Path: "freew/FreeW.App.Presentation.Tests/CaptionRibbonWorkflowTests.cs",
+                Test: "CaptionRibbonWorkflowTests.BothRenderersDelegateCaptionPolicyAndAvaloniaUsesLabelSpecificDialogPort"));
 
     private static CommandBehaviorEvidence SmartArtStructureEvidence(string behavior) =>
         SmartArtCommandEvidence(
