@@ -11,7 +11,8 @@ namespace FreeP.App.Avalonia;
 
 internal static class ChartOptionsDialogChrome
 {
-    private static readonly AvaloniaCompactDialogChromeStyle Style = new(FontFamily.Default);
+    private static readonly AvaloniaCompactDialogChromeStyle Style =
+        AvaloniaCompactDialogChrome.WindowsStyle;
 
     public static ChartOptionsDialogForm CreateForm(
         ChartOptionsDialogPlan plan,

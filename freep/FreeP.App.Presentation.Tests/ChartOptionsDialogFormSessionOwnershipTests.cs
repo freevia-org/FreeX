@@ -24,6 +24,30 @@ public sealed class ChartOptionsDialogFormSessionOwnershipTests
     }
 
     [Fact]
+    public void AvaloniaChartOptionDialogsUseTheSharedDialogWindowAndWindowsChrome()
+    {
+        var root = TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeP.slnx");
+        var baseSource = Read(root, "freep", "FreeP.App.Avalonia", "FreePDialogWindow.cs");
+        var chromeSource = Read(root, "freep", "FreeP.App.Avalonia", "ChartOptionsDialogChrome.cs");
+
+        baseSource.Should().Contain("class FreePDialogWindow : AvaloniaDialogWindow")
+            .And.NotContain("Background =")
+            .And.NotContain("FontFamily.Default");
+        chromeSource.Should().Contain("AvaloniaCompactDialogChrome.WindowsStyle")
+            .And.NotContain("new(FontFamily.Default)");
+
+        foreach (var fileName in ChartOptionDialogFiles)
+        {
+            var source = Read(root, "freep", "FreeP.App.Avalonia", fileName);
+            source.Should().Contain($"class {Path.GetFileNameWithoutExtension(fileName)} : FreePDialogWindow", fileName)
+                .And.NotContain(" : Window", fileName)
+                .And.NotContain("Background =", fileName)
+                .And.NotContain("Color.FromRgb(0xF3", fileName)
+                .And.NotContain("using Avalonia.Media;", fileName);
+        }
+    }
+
+    [Fact]
     public void PortableFormSessionOwnsRegistryProjectionAndPlanApplicationWithoutRendererDependencies()
     {
         var root = TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeP.slnx");
@@ -130,6 +154,24 @@ public sealed class ChartOptionsDialogFormSessionOwnershipTests
 
     private static string Read(string root, params string[] relativeParts) =>
         File.ReadAllText(Path.Combine(new[] { root }.Concat(relativeParts).ToArray()));
+
+    private static readonly string[] ChartOptionDialogFiles =
+    [
+        "Chart3DViewOptionsDialog.cs",
+        "ChartAreaOptionsDialog.cs",
+        "ChartAxisOptionsDialog.cs",
+        "ChartBubbleOptionsDialog.cs",
+        "ChartDataTableOptionsDialog.cs",
+        "ChartDisplayOptionsDialog.cs",
+        "ChartExSeriesLayoutDialog.cs",
+        "ChartLayoutOptionsDialog.cs",
+        "ChartPieOptionsDialog.cs",
+        "ChartPlotStyleOptionsDialog.cs",
+        "ChartPointOptionsDialog.cs",
+        "ChartProtectionOptionsDialog.cs",
+        "ChartSeriesOptionsDialog.cs",
+        "ChartTextOptionsDialog.cs",
+    ];
 
     private sealed class FakeControl
     {

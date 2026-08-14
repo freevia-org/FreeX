@@ -1,10 +1,9 @@
 using Avalonia.Controls;
-using Avalonia.Media;
 using FreeP.App.Compositor;
 
 namespace FreeP.App.Avalonia;
 
-internal sealed class ChartExSeriesLayoutDialog : Window
+internal sealed class ChartExSeriesLayoutDialog : FreePDialogWindow
 {
     private readonly ChartExSeriesLayoutDialogSession _session;
     private readonly ChartOptionsDialogForm _form;
@@ -22,7 +21,6 @@ internal sealed class ChartExSeriesLayoutDialog : Window
         MinHeight = plan.MinimumHeight;
         CanResize = plan.IsResizable;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
-        Background = new SolidColorBrush(Color.FromRgb(0xF3, 0xF3, 0xF3));
         Content = _form.Content;
     }
 

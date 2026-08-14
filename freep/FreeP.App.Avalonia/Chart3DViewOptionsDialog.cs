@@ -1,11 +1,10 @@
 using Avalonia.Controls;
-using Avalonia.Media;
 using FreeP.App.Compositor;
 using FreeP.Core.Model;
 
 namespace FreeP.App.Avalonia;
 
-internal sealed partial class Chart3DViewOptionsDialog : Window
+internal sealed partial class Chart3DViewOptionsDialog : FreePDialogWindow
 {
     private readonly Chart3DViewOptionsDialogSession _session;
     private readonly ChartOptionsDialogForm _form;
@@ -23,7 +22,6 @@ internal sealed partial class Chart3DViewOptionsDialog : Window
         MinHeight = plan.MinimumHeight;
         CanResize = plan.IsResizable;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
-        Background = new SolidColorBrush(Color.FromRgb(0xF3, 0xF3, 0xF3));
         Content = _form.Content;
     }
 
