@@ -341,7 +341,13 @@ internal static class FreeWRibbonCommands
         registry.Bind(FreeWRibbonCommandAction.SectionBreakOddPage, new ActionRibbonCommand(() => { editor.Focus(); editor.InsertSectionBreak(SectionBreakKind.OddPage); }));
 
         // Insert tab — insert a small 2x2 table at the caret (routes through the undo/redo bus).
-        tableCommands.Bind(FreeWRibbonCommandAction.Table, new InsertTableCommand(editor, rows: 2, columns: 2));
+        TableInsertionRibbonWorkflow.Register(
+            tableCommands,
+            new TableInsertionRibbonPorts((rows, columns) =>
+            {
+                editor.Focus();
+                editor.InsertTable(rows, columns);
+            }));
         // Insert tab — Table Tools: structural edits to the table containing the caret (all undoable).
         tableCommands.Register("freew.table-insert-row", new ActionRibbonCommand(() => { editor.Focus(); editor.InsertTableRow(); }));
         tableCommands.Bind(FreeWRibbonCommandAction.TableDeleteRow, new ActionRibbonCommand(() => { editor.Focus(); editor.DeleteTableRow(); }));
@@ -2801,16 +2807,6 @@ internal static class FreeWRibbonCommands
         public void Execute(RibbonCommandContext context) =>
             editor.ApplyPageSettings(page =>
                 page.VerticalAlignment = PageVerticalAlignmentPlanner.Next(page.VerticalAlignment));
-    }
-
-    // Inserts a table at the caret. Delegates to the view, which routes through the undo/redo bus.
-    private sealed class InsertTableCommand(DocumentView editor, int rows, int columns) : IRibbonCommand
-    {
-        public void Execute(RibbonCommandContext context)
-        {
-            editor.Focus();
-            editor.InsertTable(rows, columns);
-        }
     }
 
     // Table Design > Draw Borders > Draw Table: prompts for dimensions and inserts a table at the

@@ -55,6 +55,7 @@ internal static class FreeWCommandInventory
         new("wpfRegistrySource", "WPF registry source", "freew/FreeW.App.Host/Ribbon/FreeWRibbonCommands.cs"),
         new("avaloniaRegistrySource", "Avalonia registry source", "freew/FreeW.App.Avalonia/Ribbon/FreeWAvaloniaRibbonCommands.cs"),
         new("quickPartWorkflowSource", "Shared Quick Parts registry source", "freew/FreeW.App.Presentation/Ribbon/QuickPartRibbonWorkflow.cs"),
+        new("tableInsertionWorkflowSource", "Shared Table insertion registry source", "freew/FreeW.App.Presentation/Ribbon/TableInsertionRibbonWorkflow.cs"),
     ];
 
     private static readonly ClassificationRule[] GapClassificationRules =
@@ -189,6 +190,16 @@ internal static class FreeWCommandInventory
         ["freew.building-blocks-organizer"] = FinalFiveEvidence(
             "Both shells use the shared Quick Part library and insert the selected building block through their undoable text-edit path.",
             "InsertTextCommands_UseSharedQuickPartAndFieldBehavior"),
+        ["freew.insert-table"] = TableInsertionEvidence(
+            "The shared insertion workflow maps the legacy Table route to the canonical 3 × 3 insertion command for both renderers."),
+        ["freew.table-2x2"] = TableInsertionEvidence(
+            "The shared insertion workflow maps the 2 × 2 menu choice and primary Table face to one command for both renderers."),
+        ["freew.table-3x3"] = TableInsertionEvidence(
+            "The shared insertion workflow maps the 3 × 3 menu choice and legacy Table route to one command for both renderers."),
+        ["freew.table-4x4"] = TableInsertionEvidence(
+            "The shared insertion workflow inserts a 4 × 4 table through the same renderer port in both hosts."),
+        ["freew.table-5x2"] = TableInsertionEvidence(
+            "The shared insertion workflow inserts a 5 × 2 table through the same renderer port in both hosts."),
         ["freew.multilevel-list"] = MultilevelListWorkflowEvidence(
             "The shared workflow applies the canonical decimal multilevel definition in both renderers."),
         ["freew.multilevel-demote"] = MultilevelListWorkflowEvidence(
@@ -430,9 +441,11 @@ internal static class FreeWCommandInventory
                 AvaloniaDefinitionSource: ContainsCommandLiteral(canonicalDefinitionSource, commandId) ||
                     ContainsCommandLiteral(sourceTexts["avaloniaDefinitionSource"], commandId),
                 WpfRegistrySource: ContainsCommandLiteral(sourceTexts["wpfRegistrySource"], commandId) ||
-                    ContainsCommandLiteral(sourceTexts["quickPartWorkflowSource"], commandId),
+                    ContainsCommandLiteral(sourceTexts["quickPartWorkflowSource"], commandId) ||
+                    ContainsCommandLiteral(sourceTexts["tableInsertionWorkflowSource"], commandId),
                 AvaloniaRegistrySource: ContainsCommandLiteral(sourceTexts["avaloniaRegistrySource"], commandId) ||
-                    ContainsCommandLiteral(sourceTexts["quickPartWorkflowSource"], commandId));
+                    ContainsCommandLiteral(sourceTexts["quickPartWorkflowSource"], commandId) ||
+                    ContainsCommandLiteral(sourceTexts["tableInsertionWorkflowSource"], commandId));
             var behaviorEvidence = BehaviorEvidenceCatalog.GetValueOrDefault(commandId);
             var profileClassification = ClassifyProfile(wpfPresent, avaloniaPresent);
             var gapClassification = ClassifyGap(
@@ -533,6 +546,18 @@ internal static class FreeWCommandInventory
             AvaloniaEvidence: new BehaviorEvidenceLink(
                 Path: "freew/FreeW.App.Avalonia.Tests/FinalFiveCommandParityTests.cs",
                 Test: $"FinalFiveCommandParityTests.{test}"));
+
+    private static CommandBehaviorEvidence TableInsertionEvidence(string summary) =>
+        new(
+            EvidenceId: "freew.table-insertion.shared-workflow",
+            Slice: "Insert table command behavior",
+            Summary: summary,
+            WpfEvidence: new BehaviorEvidenceLink(
+                Path: "freew/FreeW.App.Presentation.Tests/TableInsertionRibbonWorkflowTests.cs",
+                Test: "TableInsertionRibbonWorkflowTests.EditorFamilyBuilderReceivesTheSameCanonicalAndAdapterCommands"),
+            AvaloniaEvidence: new BehaviorEvidenceLink(
+                Path: "freew/FreeW.App.Presentation.Tests/TableInsertionRibbonWorkflowTests.cs",
+                Test: "TableInsertionRibbonWorkflowTests.BothRenderersDelegateTableInsertionPolicyToSharedPresentation"));
 
     private static CommandBehaviorEvidence MultilevelListWorkflowEvidence(
         string summary,
