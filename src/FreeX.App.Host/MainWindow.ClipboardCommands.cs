@@ -23,7 +23,7 @@ public partial class MainWindow
         _workbookClipboardSession.Clear();
         _drawingObjectClipboard.Clear();
         CancelFormatPainter();
-        _borderDrawMode = BorderDrawMode.None;
+        _borderPickerSession.CancelDrawMode();
         SetSelectionMode(ExcelSelectionMode.Normal);
         SetEndMode(false);
     }

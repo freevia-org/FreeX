@@ -14,17 +14,12 @@ namespace FreeX.App.Avalonia;
 /// </summary>
 public partial class MainWindow
 {
-    private BorderDrawMode _borderDrawMode = BorderDrawMode.None;
-    private BorderStyle _borderDrawStyle = BorderStyle.Thin;
-    private CellColor _borderDrawColor = CellColor.Black;
+    private readonly BorderPickerSession _borderPickerSession = new();
 
-    private bool IsBorderDrawModeActive => _borderDrawMode != BorderDrawMode.None;
+    private bool IsBorderDrawModeActive => _borderPickerSession.IsDrawModeActive;
 
     private void BeginBorderDrawMode(BorderDrawMode mode)
     {
-        if (mode == BorderDrawMode.None)
-            throw new ArgumentException("Border draw mode must be active.", nameof(mode));
-
         if (_isOpening || _isSaving)
             return;
 
@@ -34,7 +29,7 @@ public partial class MainWindow
         if (_session.IsFormatPainterActive)
             CancelFormatPainter();
 
-        _borderDrawMode = mode;
+        _borderPickerSession.BeginDrawMode(mode);
         RefreshShell($"{BorderDrawPlanner.CommandTitle(mode)} — drag across cells; Esc cancels.");
     }
 
@@ -43,20 +38,17 @@ public partial class MainWindow
         if (!IsBorderDrawModeActive)
             return;
 
-        _borderDrawMode = BorderDrawMode.None;
+        _borderPickerSession.CancelDrawMode();
         RefreshShell(UiText.Get("DrawBorder_ModeCancelledStatus"));
     }
 
     internal void ApplyBorderDrawMode()
     {
-        if (!IsBorderDrawModeActive)
+        if (!_borderPickerSession.TryConsumeDrawPlan(out var plan))
             return;
 
-        var mode = _borderDrawMode;
-        _borderDrawMode = BorderDrawMode.None;
-
         var rangeReference = FormatRangeReference(_session.SelectedRange);
-        var result = _session.SetSelectedRangeDrawBorder(mode, _borderDrawStyle, _borderDrawColor);
+        var result = _session.SetSelectedRangeDrawBorder(plan.Mode, plan.Style, plan.Color);
         if (!result.Success)
         {
             RefreshShell(_statusText.Text ?? UiText.Get("MainLoc_Ready"));
@@ -66,10 +58,4 @@ public partial class MainWindow
 
         RefreshShell(UiText.Format("DrawBorder_AppliedStatusFormat", rangeReference));
     }
-
-    private void SetBorderDrawStyle(BorderStyle style) =>
-        _borderDrawStyle = style;
-
-    private void SetBorderDrawColor(CellColor color) =>
-        _borderDrawColor = color;
 }

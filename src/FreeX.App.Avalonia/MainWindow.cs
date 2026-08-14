@@ -1270,16 +1270,6 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
                     ["Draw Border"] = () => BeginBorderDrawMode(BorderDrawMode.Draw),
                     ["Draw Border Grid"] = () => BeginBorderDrawMode(BorderDrawMode.DrawGrid),
                     ["Erase Border"] = () => BeginBorderDrawMode(BorderDrawMode.Erase),
-                    ["Black"] = () => SetBorderDrawColor(CellColor.Black),
-                    ["Gray"] = () => SetBorderDrawColor(new CellColor(128, 128, 128)),
-                    ["Accent 1"] = () => SetBorderDrawColor(_session.Workbook.Theme.GetColor(WorkbookThemeColorSlot.Accent1)),
-                    ["Accent 2"] = () => SetBorderDrawColor(_session.Workbook.Theme.GetColor(WorkbookThemeColorSlot.Accent2)),
-                    ["Thin"] = () => SetBorderDrawStyle(BorderStyle.Thin),
-                    ["Medium"] = () => SetBorderDrawStyle(BorderStyle.Medium),
-                    ["Thick"] = () => SetBorderDrawStyle(BorderStyle.Thick),
-                    ["Dashed"] = () => SetBorderDrawStyle(BorderStyle.Dashed),
-                    ["Dotted"] = () => SetBorderDrawStyle(BorderStyle.Dotted),
-                    ["Double"] = () => SetBorderDrawStyle(BorderStyle.Double),
 
                     // Home ▸ Number ▸ Accounting dropdown.
                     ["More Accounting Formats"] = () => _ = ShowFormatCellsDialogAsync(),
@@ -24484,8 +24474,8 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         var result = _session.ApplySelectedRangeCompactFormat(
             new StyleDiff(),
             preset,
-            _borderPickerStyle,
-            _borderPickerColor);
+            _borderPickerSession.Style,
+            _borderPickerSession.Color);
         if (!result.Success)
         {
             RefreshShell(_statusText.Text ?? UiText.Get("MainLoc_Ready"));

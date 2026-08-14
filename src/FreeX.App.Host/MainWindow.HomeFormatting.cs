@@ -661,18 +661,18 @@ public partial class MainWindow
         switch (_selectedBorderPreset)
         {
             case RibbonBorderPreset.All:
-                ApplyStyleDiff(BorderShortcutService.GetAllBorderDiff(_borderPickerStyle, _borderPickerColor));
+                ApplyStyleDiff(BorderShortcutService.GetAllBorderDiff(_borderPickerSession.Style, _borderPickerSession.Color));
                 break;
 
             case RibbonBorderPreset.Outside:
                 ApplyRangeBorderPreset(
-                    (range, address) => BorderShortcutService.GetOutlineBorderDiff(range, address, _borderPickerStyle, _borderPickerColor),
+                    (range, address) => BorderShortcutService.GetOutlineBorderDiff(range, address, _borderPickerSession.Style, _borderPickerSession.Color),
                     "Outside Borders");
                 break;
 
             case RibbonBorderPreset.Inside:
                 ApplyRangeBorderPreset(
-                    (range, address) => BorderShortcutService.GetInsideBorderDiff(range, address, _borderPickerStyle, _borderPickerColor),
+                    (range, address) => BorderShortcutService.GetInsideBorderDiff(range, address, _borderPickerSession.Style, _borderPickerSession.Color),
                     "Inside Borders");
                 break;
 
@@ -681,50 +681,50 @@ public partial class MainWindow
                 break;
 
             case RibbonBorderPreset.Bottom:
-                ApplyStyleDiff(BorderShortcutService.GetSingleBorderDiff(BorderEdge.Bottom, _borderPickerStyle, _borderPickerColor));
+                ApplyStyleDiff(BorderShortcutService.GetSingleBorderDiff(BorderEdge.Bottom, _borderPickerSession.Style, _borderPickerSession.Color));
                 break;
 
             case RibbonBorderPreset.Top:
-                ApplyStyleDiff(BorderShortcutService.GetSingleBorderDiff(BorderEdge.Top, _borderPickerStyle, _borderPickerColor));
+                ApplyStyleDiff(BorderShortcutService.GetSingleBorderDiff(BorderEdge.Top, _borderPickerSession.Style, _borderPickerSession.Color));
                 break;
 
             case RibbonBorderPreset.Left:
-                ApplyStyleDiff(BorderShortcutService.GetSingleBorderDiff(BorderEdge.Left, _borderPickerStyle, _borderPickerColor));
+                ApplyStyleDiff(BorderShortcutService.GetSingleBorderDiff(BorderEdge.Left, _borderPickerSession.Style, _borderPickerSession.Color));
                 break;
 
             case RibbonBorderPreset.Right:
-                ApplyStyleDiff(BorderShortcutService.GetSingleBorderDiff(BorderEdge.Right, _borderPickerStyle, _borderPickerColor));
+                ApplyStyleDiff(BorderShortcutService.GetSingleBorderDiff(BorderEdge.Right, _borderPickerSession.Style, _borderPickerSession.Color));
                 break;
 
             case RibbonBorderPreset.ThickBottom:
-                ApplyStyleDiff(BorderShortcutService.GetSingleBorderDiff(BorderEdge.Bottom, BorderStyle.Thick, _borderPickerColor));
+                ApplyStyleDiff(BorderShortcutService.GetSingleBorderDiff(BorderEdge.Bottom, BorderStyle.Thick, _borderPickerSession.Color));
                 break;
 
             case RibbonBorderPreset.BottomDouble:
-                ApplyStyleDiff(BorderShortcutService.GetSingleBorderDiff(BorderEdge.Bottom, BorderStyle.Double, _borderPickerColor));
+                ApplyStyleDiff(BorderShortcutService.GetSingleBorderDiff(BorderEdge.Bottom, BorderStyle.Double, _borderPickerSession.Color));
                 break;
 
             case RibbonBorderPreset.ThickBox:
                 ApplyRangeBorderPreset(
-                    (range, address) => BorderShortcutService.GetOutlineBorderDiff(range, address, BorderStyle.Thick, _borderPickerColor),
+                    (range, address) => BorderShortcutService.GetOutlineBorderDiff(range, address, BorderStyle.Thick, _borderPickerSession.Color),
                     "Thick Outside Borders");
                 break;
 
             case RibbonBorderPreset.TopAndBottom:
                 ApplyRangeBorderPreset(
-                    (range, address) => BorderShortcutService.GetTopAndBottomBorderDiff(range, address, _borderPickerStyle, _borderPickerStyle, _borderPickerColor),
+                    (range, address) => BorderShortcutService.GetTopAndBottomBorderDiff(range, address, _borderPickerSession.Style, _borderPickerSession.Style, _borderPickerSession.Color),
                     "Top and Bottom Border");
                 break;
 
             case RibbonBorderPreset.TopAndThickBottom:
                 ApplyRangeBorderPreset(
-                    (range, address) => BorderShortcutService.GetTopAndBottomBorderDiff(range, address, _borderPickerStyle, BorderStyle.Thick, _borderPickerColor),
+                    (range, address) => BorderShortcutService.GetTopAndBottomBorderDiff(range, address, _borderPickerSession.Style, BorderStyle.Thick, _borderPickerSession.Color),
                     "Top and Thick Bottom Border");
                 break;
 
             case RibbonBorderPreset.TopAndDoubleBottom:
                 ApplyRangeBorderPreset(
-                    (range, address) => BorderShortcutService.GetTopAndBottomBorderDiff(range, address, _borderPickerStyle, BorderStyle.Double, _borderPickerColor),
+                    (range, address) => BorderShortcutService.GetTopAndBottomBorderDiff(range, address, _borderPickerSession.Style, BorderStyle.Double, _borderPickerSession.Color),
                     "Top and Double Bottom Border");
                 break;
         }
@@ -789,30 +789,26 @@ public partial class MainWindow
 
     private void BeginBorderDrawMode(BorderDrawMode mode)
     {
-        _borderDrawMode = mode;
+        _borderPickerSession.BeginDrawMode(mode);
         CancelFormatPainter();
         FocusSheetGridIfNeeded();
     }
 
     private void ApplyBorderDrawMode(GridRange range)
     {
-        if (_borderDrawMode == BorderDrawMode.None)
+        if (!_borderPickerSession.TryConsumeDrawPlan(out var plan))
             return;
 
-        var mode = _borderDrawMode;
-        var style = _borderPickerStyle;
-        var color = _borderPickerColor;
-        _borderDrawMode = BorderDrawMode.None;
         SheetGrid.SelectedRange = range;
 
         if (!TryExecuteRepeatableGroupedSheetCommand(
-                BorderDrawPlanner.CommandTitle(mode),
+                BorderDrawPlanner.CommandTitle(plan.Mode),
                 sheetId => BorderDrawPlanner.CreateCommand(
                     sheetId,
                     SheetGrid.SelectedRange ?? range,
-                    mode,
-                    style,
-                    color)))
+                    plan.Mode,
+                    plan.Style,
+                    plan.Color)))
             return;
 
         UpdateViewport();
@@ -821,34 +817,34 @@ public partial class MainWindow
     }
 
     private void BorderLineColorBlackMenuItem_Click(object sender, RoutedEventArgs e)
-        => _borderPickerColor = CellColor.Black;
+        => _borderPickerSession.SetColor(CellColor.Black);
 
     private void BorderLineColorGrayMenuItem_Click(object sender, RoutedEventArgs e)
-        => _borderPickerColor = new CellColor(128, 128, 128);
+        => _borderPickerSession.SetColor(new CellColor(128, 128, 128));
 
     private void BorderLineColorAccent1MenuItem_Click(object sender, RoutedEventArgs e)
-        => _borderPickerColor = _workbook.Theme.GetColor(WorkbookThemeColorSlot.Accent1);
+        => _borderPickerSession.SetColor(_workbook.Theme.GetColor(WorkbookThemeColorSlot.Accent1));
 
     private void BorderLineColorAccent2MenuItem_Click(object sender, RoutedEventArgs e)
-        => _borderPickerColor = _workbook.Theme.GetColor(WorkbookThemeColorSlot.Accent2);
+        => _borderPickerSession.SetColor(_workbook.Theme.GetColor(WorkbookThemeColorSlot.Accent2));
 
     private void BorderLineStyleThinMenuItem_Click(object sender, RoutedEventArgs e)
-        => _borderPickerStyle = BorderStyle.Thin;
+        => _borderPickerSession.SetStyle(BorderStyle.Thin);
 
     private void BorderLineStyleMediumMenuItem_Click(object sender, RoutedEventArgs e)
-        => _borderPickerStyle = BorderStyle.Medium;
+        => _borderPickerSession.SetStyle(BorderStyle.Medium);
 
     private void BorderLineStyleThickMenuItem_Click(object sender, RoutedEventArgs e)
-        => _borderPickerStyle = BorderStyle.Thick;
+        => _borderPickerSession.SetStyle(BorderStyle.Thick);
 
     private void BorderLineStyleDashedMenuItem_Click(object sender, RoutedEventArgs e)
-        => _borderPickerStyle = BorderStyle.Dashed;
+        => _borderPickerSession.SetStyle(BorderStyle.Dashed);
 
     private void BorderLineStyleDottedMenuItem_Click(object sender, RoutedEventArgs e)
-        => _borderPickerStyle = BorderStyle.Dotted;
+        => _borderPickerSession.SetStyle(BorderStyle.Dotted);
 
     private void BorderLineStyleDoubleMenuItem_Click(object sender, RoutedEventArgs e)
-        => _borderPickerStyle = BorderStyle.Double;
+        => _borderPickerSession.SetStyle(BorderStyle.Double);
 
     private void BorderMoreMenuItem_Click(object sender, RoutedEventArgs e)
         => OpenFormatCellsDialog(FormatCellsDialogTab.Border);

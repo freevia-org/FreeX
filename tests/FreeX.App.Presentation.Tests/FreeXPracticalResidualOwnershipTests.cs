@@ -113,7 +113,10 @@ public sealed class FreeXPracticalResidualOwnershipTests
     {
         var avaloniaCommands = Read("src", "FreeX.App.Avalonia", "MainWindow.cs");
         var avaloniaInteraction = Read("src", "FreeX.App.Avalonia", "MainWindow.DrawBorder.cs");
-        var session = Read("src", "FreeX.App.Services", "WorkbookSession.cs");
+        var avaloniaPicker = Read("src", "FreeX.App.Avalonia", "MainWindow.HomeBorders.cs");
+        var wpfInteraction = Read("src", "FreeX.App.Host", "MainWindow.HomeFormatting.cs");
+        var workbookSession = Read("src", "FreeX.App.Services", "WorkbookSession.cs");
+        var pickerSession = Read("src", "FreeX.App.Services", "BorderPickerSession.cs");
 
         avaloniaCommands.Should().Contain("BeginBorderDrawMode(BorderDrawMode.Draw)");
         avaloniaCommands.Should().Contain("BeginBorderDrawMode(BorderDrawMode.DrawGrid)");
@@ -122,13 +125,16 @@ public sealed class FreeXPracticalResidualOwnershipTests
             "[\"Draw Border Grid\"] = () => ApplySelectedRangeBorderPreset");
         avaloniaCommands.Should().NotContain(
             "[\"Erase Border\"] = () => ApplySelectedRangeBorderPreset");
-        avaloniaCommands.Should().Contain("SetBorderDrawColor(_session.Workbook.Theme.GetColor(WorkbookThemeColorSlot.Accent1))");
-        avaloniaCommands.Should().Contain("SetBorderDrawStyle(BorderStyle.Double)");
+        avaloniaPicker.Should().Contain("_borderPickerSession.SetColor(_session.Workbook.Theme.GetColor(WorkbookThemeColorSlot.Accent1))");
+        avaloniaPicker.Should().Contain("_borderPickerSession.SetStyle(BorderStyle.Double)");
 
+        avaloniaInteraction.Should().Contain("_borderPickerSession.TryConsumeDrawPlan(out var plan)");
         avaloniaInteraction.Should().Contain(
-            "_session.SetSelectedRangeDrawBorder(mode, _borderDrawStyle, _borderDrawColor)");
-        session.Should().Contain("BorderDrawPlanner.CreateCellDiff(mode, range, address, borderStyle, color)");
-        session.Should().Contain("BorderDrawPlanner.CommandTitle(mode)");
+            "_session.SetSelectedRangeDrawBorder(plan.Mode, plan.Style, plan.Color)");
+        wpfInteraction.Should().Contain("_borderPickerSession.TryConsumeDrawPlan(out var plan)");
+        workbookSession.Should().Contain("BorderDrawPlanner.CreateCellDiff(mode, range, address, borderStyle, color)");
+        pickerSession.Should().Contain("public sealed class BorderPickerSession");
+        pickerSession.Should().Contain("plan = new BorderDrawExecutionPlan(DrawMode, Style, Color)");
     }
 
     private static string Read(params string[] parts)

@@ -1382,8 +1382,8 @@ public sealed partial class MainWindowSourceHygieneTests
         plannerSource.Should().Contain("new CompositeWorkbookCommand(title, commands)");
         plannerSource.Should().Contain("MergeCompleteRectangularBands");
         source.Should().Contain("OpenFormatCellsDialog(FormatCellsDialogTab.Border)");
-        source.Should().Contain("_borderPickerColor");
-        source.Should().Contain("_borderPickerStyle");
+        source.Should().Contain("_borderPickerSession.Color");
+        source.Should().Contain("_borderPickerSession.Style");
         source.Should().Contain("BeginBorderDrawMode(BorderDrawMode.Draw)");
         source.Should().Contain("BeginBorderDrawMode(BorderDrawMode.DrawGrid)");
         source.Should().Contain("BeginBorderDrawMode(BorderDrawMode.Erase)");

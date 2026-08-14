@@ -470,7 +470,7 @@ public partial class MainWindow
                 return;
             }
 
-            if (_borderDrawMode != BorderDrawMode.None)
+            if (_borderPickerSession.IsDrawModeActive)
             {
                 SetActiveCell(newAddr);
                 _dragSelectionTransientOverlaysCleared = false;
@@ -1967,7 +1967,7 @@ public partial class MainWindow
             UpdateCommentPreview(hitAddr.Value);
         else
             ClearCommentPreview();
-        if (_borderDrawMode != BorderDrawMode.None && SheetGrid.SelectedRange is { } borderDrawRange)
+        if (_borderPickerSession.IsDrawModeActive && SheetGrid.SelectedRange is { } borderDrawRange)
         {
             ApplyBorderDrawMode(borderDrawRange);
             e.Handled = true;
