@@ -358,6 +358,8 @@ internal static class FreeWCommandInventory
             "CitationEditorTests.InsertCitation_TaggedSourceWithQuotedFieldArgument_RenumbersOnUpdateFields",
             "freew/FreeW.App.Avalonia.Tests/ReferencesTabTests.cs",
             "ReferencesTabTests.InsertCitation_tagged_source_with_quoted_field_argument_renumbers_on_update_fields"),
+        ["freew.citation-style"] = CitationWorkflowEvidence(
+            "Both renderers expose live citation-style state and parse selected style names through one shared choice command."),
         ["freew.manage-sources"] = ReferencesEvidence(
             "Replaces the current document source list through backed source-management flow and keeps replacement undoable in both shells.",
             "freew/FreeW.App.Host.Tests/FreeWRibbonParityTests.cs",
@@ -910,6 +912,18 @@ internal static class FreeWCommandInventory
             $"Applies {layoutName} from the shared nine-entry chart layout catalog in both shells, preserves chart data and style, follows selection enablement, and supports undo/redo.",
             "FreeWRibbonParityTests.ChartDesign_QuickLayoutCatalogCommandsMatchSelectionMutationAndUndoBehavior",
             "ChartSmartArtContextualTabTests.ChartQuickLayoutCatalog_commands_apply_preserve_selection_and_support_undo_redo");
+
+    private static CommandBehaviorEvidence CitationWorkflowEvidence(string summary) =>
+        new(
+            EvidenceId: "freew.citation.shared-workflow",
+            Slice: "Citation and bibliography workflow",
+            Summary: summary,
+            WpfEvidence: new BehaviorEvidenceLink(
+                Path: "freew/FreeW.App.Presentation.Tests/CitationRibbonWorkflowTests.cs",
+                Test: "CitationRibbonWorkflowTests.CitationStyleChoiceTracksLiveStateParsesValuesAndPublishesChanges"),
+            AvaloniaEvidence: new BehaviorEvidenceLink(
+                Path: "freew/FreeW.App.Presentation.Tests/CitationRibbonWorkflowTests.cs",
+                Test: "CitationRibbonWorkflowTests.BothRenderersDelegateCitationPolicyToSharedPresentation"));
 
     private static CommandBehaviorEvidence SmartArtStructureEvidence(string behavior) =>
         SmartArtCommandEvidence(

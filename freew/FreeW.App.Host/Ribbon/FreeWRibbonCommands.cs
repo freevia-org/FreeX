@@ -695,18 +695,23 @@ internal static class FreeWRibbonCommands
                 }));
         // Insert tab — References: insert an in-text citation (pick an existing source or add a new one),
         // and insert a bibliography built from the document's sources at the caret (reversible).
-        referenceCommands.Bind(FreeWRibbonCommandAction.Citation, new InsertCitationCommand(editor));
-        referenceCommands.Bind(FreeWRibbonCommandAction.ManageSources, new ManageSourcesCommand(editor));
-        referenceCommands.Bind(FreeWRibbonCommandAction.Bibliography, new ActionRibbonCommand(() => { editor.Focus(); editor.InsertBibliography(); }));
+        var citationRegistration = CitationRibbonWorkflow.Register(
+            referenceCommands,
+            new CitationRibbonPorts(
+                InsertCitation: new InsertCitationCommand(editor),
+                ManageSources: new ManageSourcesCommand(editor),
+                InsertBibliography: new ActionRibbonCommand(() =>
+                {
+                    editor.Focus();
+                    editor.InsertBibliography();
+                }),
+                ApplyStyle: editor.ApplyCitationStyle,
+                GetStyle: () => editor.ActiveCitationStyle,
+                StyleStateChanged: state => stateStore.SetState("freew.citation-style", state)));
         // Insert tab — References: select the active citation/bibliography style (APA / MLA / Chicago) used
         // by the citation + bibliography commands. The combo box delivers its label as SelectedValue.
-        var citationStyle = new FreeWRibbonChoiceCommand(
-            value => editor.ApplyCitationStyle(Citations.ParseStyle(value, editor.ActiveCitationStyle)),
-            () => Citations.StyleName(editor.ActiveCitationStyle),
-            state => stateStore.SetState("freew.citation-style", state));
-        referenceCommands.Bind(FreeWRibbonCommandAction.CitationStyle, citationStyle);
-        stateful.Add(("freew.citation-style", citationStyle));
-        stateStore.SetState("freew.citation-style", citationStyle.GetState());
+        stateful.Add(("freew.citation-style", citationRegistration.CitationStyleCommand));
+        stateStore.SetState("freew.citation-style", citationRegistration.CitationStyleCommand.GetState());
         // Insert tab — References: insert a numbered figure/table caption under the caret's block.
         referenceCommands.Bind(FreeWRibbonCommandAction.Caption, new InsertCaptionCommand(editor));
         referenceCommands.Bind(FreeWRibbonCommandAction.InsertCaption_Figure, new InsertCaptionLabelCommand(editor, CaptionLabel.Figure));

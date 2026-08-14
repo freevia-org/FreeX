@@ -1008,14 +1008,14 @@ internal static class FreeWAvaloniaRibbonCommands
         // Dialog-backed commands fail closed without a shell callback instead of silently choosing defaults.
         family.Bind(FreeWRibbonCommandAction.CrossReference, OptionalHostCommand(callbacks.OpenCrossReferenceDialog));
 
-        var citation = OptionalHostCommand(callbacks.OpenCitationDialog);
-        family.Bind(FreeWRibbonCommandAction.Citation, citation);
-        family.Register("freew.insert-citation", citation);
-        family.Bind(FreeWRibbonCommandAction.ManageSources, OptionalHostCommand(callbacks.OpenManageSourcesDialog));
-        family.Bind(FreeWRibbonCommandAction.CitationStyle, new FreeWRibbonChoiceCommand(
-            value => editor.ApplyCitationStyle(Citations.ParseStyle(value, editor.Document.BibliographyStyle)),
-            () => Citations.StyleName(editor.Document.BibliographyStyle)));
-        family.Bind(FreeWRibbonCommandAction.Bibliography, new ActionRibbonCommand(editor.InsertBibliography));
+        CitationRibbonWorkflow.Register(
+            family,
+            new CitationRibbonPorts(
+                InsertCitation: OptionalHostCommand(callbacks.OpenCitationDialog),
+                ManageSources: OptionalHostCommand(callbacks.OpenManageSourcesDialog),
+                InsertBibliography: new ActionRibbonCommand(editor.InsertBibliography),
+                ApplyStyle: editor.ApplyCitationStyle,
+                GetStyle: () => editor.Document.BibliographyStyle));
 
         family.Bind(FreeWRibbonCommandAction.Tof, new ActionRibbonCommand(() => editor.InsertTableOfFigures()));
         family.Bind(FreeWRibbonCommandAction.Tof_Figure, new ActionRibbonCommand(() => editor.InsertTableOfFigures(CaptionLabel.Figure)));
