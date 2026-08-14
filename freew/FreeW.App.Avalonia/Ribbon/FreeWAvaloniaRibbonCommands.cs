@@ -792,8 +792,8 @@ internal static class FreeWAvaloniaRibbonCommands
         NoteReferenceRibbonWorkflow.Register(
             family,
             new NoteReferenceRibbonPorts(
-                callbacks.OpenFootnoteDialog,
-                callbacks.OpenEndnoteDialog,
+                callbacks.OpenFootnoteDialog ?? (() => editor.InsertFootnote()),
+                callbacks.OpenEndnoteDialog ?? (() => editor.InsertEndnote()),
                 () => editor.MoveToNextFootnote(),
                 () => editor.MoveToPreviousFootnote(),
                 () => editor.MoveToNextEndnote(),
@@ -815,7 +815,7 @@ internal static class FreeWAvaloniaRibbonCommands
             family,
             new CaptionRibbonPorts(
                 OptionalHostCommand(callbacks.OpenCaptionDialog),
-                callbacks.OpenCaptionDialogForLabel,
+                callbacks.OpenCaptionDialogForLabel ?? (label => editor.InsertCaption(label)),
                 OptionalHostCommand(callbacks.OpenCrossReferenceDialog)));
 
         CitationRibbonWorkflow.Register(
@@ -835,14 +835,14 @@ internal static class FreeWAvaloniaRibbonCommands
         IndexRibbonWorkflow.Register(
             family,
             new IndexRibbonPorts(
-                callbacks.OpenMarkIndexEntryDialog,
-                callbacks.OpenInsertIndexDialog,
-                callbacks.OpenUpdateIndexDialog));
+                callbacks.OpenMarkIndexEntryDialog ?? (() => editor.MarkIndexEntry()),
+                callbacks.OpenInsertIndexDialog ?? (() => editor.InsertIndex()),
+                callbacks.OpenUpdateIndexDialog ?? (() => editor.RefreshIndex())));
         TableOfAuthoritiesRibbonWorkflow.Register(
             family,
             new TableOfAuthoritiesRibbonPorts(
                 callbacks.OpenMarkCitationDialog,
-                callbacks.ShowTableOfAuthoritiesDialog,
+                callbacks.ShowTableOfAuthoritiesDialog ?? (() => editor.InsertTableOfAuthorities()),
                 editor.RefreshTableOfAuthorities));
     }
 
