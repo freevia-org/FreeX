@@ -116,6 +116,7 @@ public sealed class VisualEvidenceFidelityRenderSourceTests
         var source = File.ReadAllText(RepositoryFile("freew", "tools", "FreeW.FidelityRender", "Program.cs"));
         var project = File.ReadAllText(RepositoryFile("freew", "tools", "FreeW.FidelityRender", "FreeW.FidelityRender.csproj"));
 
+        project.Should().Contain("AdditionalProperties=\"FreeWHostTestSupport=true\"");
         source.Should().Contain("FreeWVisualEvidencePlanner.WriteManifest(outDir, evidence)");
         source.Should().Contain("FreeWVisualEvidencePlanner.BuildEvidenceRow(");
         source.Should().Contain("FreeWVisualEvidencePlanner.EnsureTrusted(row)");

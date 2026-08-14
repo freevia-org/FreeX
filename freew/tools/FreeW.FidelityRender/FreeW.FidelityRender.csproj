@@ -16,7 +16,9 @@
     <ProjectReference Include="..\..\FreeW.Core.IO\FreeW.Core.IO.csproj" />
     <ProjectReference Include="..\..\FreeW.App.Presentation\FreeW.App.Presentation.csproj" />
     <ProjectReference Include="..\..\tests\FreeW.VisualEvidence.TestSupport\FreeW.VisualEvidence.TestSupport.csproj" />
-    <ProjectReference Include="..\..\FreeW.App.Host\FreeW.App.Host.csproj" />
+    <!-- The fidelity renderer uses the host's internal paginator and render helpers. -->
+    <ProjectReference Include="..\..\FreeW.App.Host\FreeW.App.Host.csproj"
+                      AdditionalProperties="FreeWHostTestSupport=true" />
   </ItemGroup>
 
 </Project>
