@@ -1246,58 +1246,49 @@ internal static class FreeWRibbonCommands
         // navigation commands move through real recipient rows; "Finish & Merge" combines every merged
         // record according to the selected output mode.
         var mergeSession = new MailMergeSession();
-        registry.Bind(FreeWRibbonCommandAction.StartMailMerge, new SetMergeModeCommand(editor, mergeSession, MailMergeOutputMode.Letters));
-        registry.Bind(FreeWRibbonCommandAction.StartMailMergeLetters, new SetMergeModeCommand(editor, mergeSession, MailMergeOutputMode.Letters));
-        registry.Bind(FreeWRibbonCommandAction.StartMailMergeDirectory, new SetMergeModeCommand(editor, mergeSession, MailMergeOutputMode.Directory));
-        registry.Bind(FreeWRibbonCommandAction.StartMailMergeNormal, new ClearMergeSessionCommand(editor, mergeSession));
-        registry.Bind(FreeWRibbonCommandAction.MergeData, new SetMergeDataCommand(editor, mergeSession));
-        registry.Bind(FreeWRibbonCommandAction.MergeEditRecipients, new SetMergeDataCommand(editor, mergeSession));
-        registry.Bind(FreeWRibbonCommandAction.MergeField, new InsertMergeFieldCommand(resolveFieldTarget));
         // Write & Insert Fields — Address Block, Greeting Line, Match Fields (Word parity).
-        registry.Bind(FreeWRibbonCommandAction.MergeAddressBlock, new InsertAddressBlockCommand(resolveFieldTarget, mergeSession));
-        registry.Bind(FreeWRibbonCommandAction.MergeGreetingLine, new InsertGreetingLineCommand(resolveFieldTarget, mergeSession));
-        registry.Bind(FreeWRibbonCommandAction.MergeMatchFields, new MatchFieldsCommand(editor, mergeSession));
         // Special merge fields use Word's native NEXT/MERGEREC/MERGESEQ instructions. Their cached
         // result remains the familiar guillemet label until a merge evaluates the field.
-        registry.Bind(FreeWRibbonCommandAction.MergeNextRecord, new InsertSpecialMergeFieldCommand(resolveFieldTarget, MailMerge.NextRecordField));
-        registry.Bind(FreeWRibbonCommandAction.MergeRecordNumber, new InsertSpecialMergeFieldCommand(resolveFieldTarget, MailMerge.MergeRecordNumberField));
-        registry.Bind(FreeWRibbonCommandAction.MergeSequenceNumber, new InsertSpecialMergeFieldCommand(resolveFieldTarget, MailMerge.MergeSequenceNumberField));
         // Rules dropdown — each sub-command inserts the appropriate rule instruction via a dialog.
-        registry.Bind(FreeWRibbonCommandAction.MergeRules, EmptyRibbonCommand.Instance); // dropdown host: no action of its own
-        registry.Bind(FreeWRibbonCommandAction.MergeRuleIf, RuleCommand(MailMergeRuleKind.IfThenElse));
-        registry.Bind(FreeWRibbonCommandAction.MergeRuleSkipRecordIf, RuleCommand(MailMergeRuleKind.SkipRecordIf));
-        registry.Bind(FreeWRibbonCommandAction.MergeRuleNextRecordIf, RuleCommand(MailMergeRuleKind.NextRecordIf));
-        registry.Bind(FreeWRibbonCommandAction.MergeRuleFillIn, RuleCommand(MailMergeRuleKind.FillIn));
-        registry.Bind(FreeWRibbonCommandAction.MergeRuleAsk, RuleCommand(MailMergeRuleKind.Ask));
-        registry.Bind(FreeWRibbonCommandAction.MergeRuleSet, RuleCommand(MailMergeRuleKind.Set));
-        registry.Bind(FreeWRibbonCommandAction.MergeRuleRef, RuleCommand(MailMergeRuleKind.Ref));
-
-        IRibbonCommand RuleCommand(MailMergeRuleKind kind) =>
-            new InsertMergeRuleCommand(resolveFieldTarget, mergeSession, kind);
-        registry.Bind(FreeWRibbonCommandAction.MergePreview, new PreviewMergeRecordCommand(editor, mergeSession));
-        registry.Bind(FreeWRibbonCommandAction.MergePreviewFirst, new NavigateMergePreviewCommand(editor, mergeSession, MailMergePreviewNavigationAction.First));
-        registry.Bind(FreeWRibbonCommandAction.MergePreviewPrevious, new NavigateMergePreviewCommand(editor, mergeSession, MailMergePreviewNavigationAction.Previous));
-        registry.Bind(FreeWRibbonCommandAction.MergePreviewNext, new NavigateMergePreviewCommand(editor, mergeSession, MailMergePreviewNavigationAction.Next));
-        registry.Bind(FreeWRibbonCommandAction.MergePreviewLast, new NavigateMergePreviewCommand(editor, mergeSession, MailMergePreviewNavigationAction.Last));
-        registry.Bind(FreeWRibbonCommandAction.MergeFindRecipient, new FindMergeRecipientCommand(editor, mergeSession));
-        registry.Bind(FreeWRibbonCommandAction.MergeCheckErrors, new CheckMergeErrorsCommand(
-            editor,
-            mergeSession,
-            openReportDocument: onOpenMailMergeErrorReport));
         var emailMergeCommand = new EmailMergeCommand(editor, mergeSession);
-        registry.Bind(FreeWRibbonCommandAction.MergeFinish, new FinishMergeCommand(
-            editor,
-            mergeSession,
-            printDocument: onPrintMailMergeDocument,
-            emailDocuments: indexes => emailMergeCommand.Execute(indexes)));
-        registry.Bind(FreeWRibbonCommandAction.MergeEmail, emailMergeCommand);
         // Filter & Sort: refines the active session's MergeData (include/exclude rows, sort column/direction)
         // without touching the merge template. No-ops gracefully when there is no active session or data.
-        registry.Bind(FreeWRibbonCommandAction.MergeFilterSort, new FilterSortRecipientsCommand(editor, mergeSession));
         // Envelopes / Labels: set up the page geometry (and optionally a table grid for labels) via the
         // backed ApplyPageSettings / InsertTable paths. No SMTP or print path — page-setup only.
-        registry.Bind(FreeWRibbonCommandAction.MergeEnvelopes, new EnvelopesCommand(editor));
-        registry.Bind(FreeWRibbonCommandAction.MergeLabels, new LabelsCommand(editor, mergeSession));
+        MailMergeRibbonWorkflow.Register(
+            registry,
+            new MailMergeRibbonBindings(
+                Envelopes: new EnvelopesCommand(editor),
+                Labels: new LabelsCommand(editor, mergeSession),
+                StartLetters: new SetMergeModeCommand(editor, mergeSession, MailMergeOutputMode.Letters),
+                StartDirectory: new SetMergeModeCommand(editor, mergeSession, MailMergeOutputMode.Directory),
+                StartNormalDocument: new ClearMergeSessionCommand(editor, mergeSession),
+                SelectRecipients: new SetMergeDataCommand(editor, mergeSession),
+                InsertMergeField: new InsertMergeFieldCommand(resolveFieldTarget),
+                InsertAddressBlock: new InsertAddressBlockCommand(resolveFieldTarget, mergeSession),
+                InsertGreetingLine: new InsertGreetingLineCommand(resolveFieldTarget, mergeSession),
+                MatchFields: new MatchFieldsCommand(editor, mergeSession),
+                FilterSortRecipients: new FilterSortRecipientsCommand(editor, mergeSession),
+                CreateRuleCommand: kind => new InsertMergeRuleCommand(resolveFieldTarget, mergeSession, kind),
+                InsertNextRecordField: new InsertSpecialMergeFieldCommand(resolveFieldTarget, MailMerge.NextRecordField),
+                InsertMergeRecordNumberField: new InsertSpecialMergeFieldCommand(resolveFieldTarget, MailMerge.MergeRecordNumberField),
+                InsertMergeSequenceNumberField: new InsertSpecialMergeFieldCommand(resolveFieldTarget, MailMerge.MergeSequenceNumberField),
+                TogglePreview: new PreviewMergeRecordCommand(editor, mergeSession),
+                FirstRecord: new NavigateMergePreviewCommand(editor, mergeSession, MailMergePreviewNavigationAction.First),
+                PreviousRecord: new NavigateMergePreviewCommand(editor, mergeSession, MailMergePreviewNavigationAction.Previous),
+                NextRecord: new NavigateMergePreviewCommand(editor, mergeSession, MailMergePreviewNavigationAction.Next),
+                LastRecord: new NavigateMergePreviewCommand(editor, mergeSession, MailMergePreviewNavigationAction.Last),
+                FinishMerge: new FinishMergeCommand(
+                    editor,
+                    mergeSession,
+                    printDocument: onPrintMailMergeDocument,
+                    emailDocuments: indexes => emailMergeCommand.Execute(indexes)),
+                SendEmail: emailMergeCommand,
+                FindRecipient: new FindMergeRecipientCommand(editor, mergeSession),
+                CheckErrors: new CheckMergeErrorsCommand(
+                    editor,
+                    mergeSession,
+                    openReportDocument: onOpenMailMergeErrorReport)));
 
         FreeWRibbonEditorExecutionProfile.RegisterFamilies(
             registry,

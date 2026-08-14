@@ -1543,61 +1543,31 @@ internal static class FreeWAvaloniaRibbonCommands
     /// </summary>
     private static void RegisterMailingsCommands(IRibbonCommandRegistry r, MailMergeEngine engine)
     {
-        r.Bind(FreeWRibbonCommandAction.MergeEnvelopes, new ActionRibbonCommand(engine.ApplyDefaultEnvelope));
-        r.Bind(FreeWRibbonCommandAction.MergeLabels, new ActionRibbonCommand(engine.ApplyDefaultLabels));
-        r.Bind(FreeWRibbonCommandAction.StartMailMerge, new ActionRibbonCommand(engine.StartMailMergeLetters));
-        r.Bind(FreeWRibbonCommandAction.StartMailMergeLetters, new ActionRibbonCommand(engine.StartMailMergeLetters));
-        r.Bind(FreeWRibbonCommandAction.StartMailMergeDirectory, new ActionRibbonCommand(engine.StartMailMergeDirectory));
-        r.Bind(FreeWRibbonCommandAction.StartMailMergeNormal, new ActionRibbonCommand(engine.ClearMergeSession));
-        RegisterMailingsAlias(r, FreeWRibbonCommandAction.MergeData, new ActionRibbonCommand(engine.SelectRecipients),
-            "freew.select-recipients");
-        r.Bind(FreeWRibbonCommandAction.MergeEditRecipients, new ActionRibbonCommand(engine.SelectRecipients));
-        r.Bind(FreeWRibbonCommandAction.MergeField, new ActionRibbonCommand(engine.InsertMergeField));
-        RegisterMailingsAlias(r, FreeWRibbonCommandAction.MergeAddressBlock, new ActionRibbonCommand(engine.InsertAddressBlock),
-            "freew.address-block");
-        RegisterMailingsAlias(r, FreeWRibbonCommandAction.MergeGreetingLine, new ActionRibbonCommand(engine.InsertGreetingLine),
-            "freew.greeting-line");
-        r.Bind(FreeWRibbonCommandAction.MergeMatchFields, new ActionRibbonCommand(engine.MatchFields));
-        r.Bind(FreeWRibbonCommandAction.MergeFilterSort, new ActionRibbonCommand(engine.FilterSortRecipients));
-        r.Bind(FreeWRibbonCommandAction.MergeRules, EmptyRibbonCommand.Instance);
-        r.Bind(FreeWRibbonCommandAction.MergeRuleIf, RuleCommand(MailMergeRuleKind.IfThenElse));
-        r.Bind(FreeWRibbonCommandAction.MergeRuleSkipRecordIf, RuleCommand(MailMergeRuleKind.SkipRecordIf));
-        r.Bind(FreeWRibbonCommandAction.MergeRuleNextRecordIf, RuleCommand(MailMergeRuleKind.NextRecordIf));
-        r.Bind(FreeWRibbonCommandAction.MergeNextRecord, new ActionRibbonCommand(engine.InsertNextRecordField));
-        r.Bind(FreeWRibbonCommandAction.MergeRecordNumber, new ActionRibbonCommand(engine.InsertMergeRecordNumberField));
-        r.Bind(FreeWRibbonCommandAction.MergeSequenceNumber, new ActionRibbonCommand(engine.InsertMergeSequenceNumberField));
-        r.Bind(FreeWRibbonCommandAction.MergeRuleFillIn, RuleCommand(MailMergeRuleKind.FillIn));
-        r.Bind(FreeWRibbonCommandAction.MergeRuleAsk, RuleCommand(MailMergeRuleKind.Ask));
-        r.Bind(FreeWRibbonCommandAction.MergeRuleSet, RuleCommand(MailMergeRuleKind.Set));
-        r.Bind(FreeWRibbonCommandAction.MergeRuleRef, RuleCommand(MailMergeRuleKind.Ref));
-
-        IRibbonCommand RuleCommand(MailMergeRuleKind kind) =>
-            new ActionRibbonCommand(() => engine.InsertRule(kind));
-        RegisterMailingsAlias(r, FreeWRibbonCommandAction.MergePreview, new ActionRibbonCommand(engine.TogglePreview),
-            "freew.preview-results");
-        r.Bind(FreeWRibbonCommandAction.MergePreviewFirst, new ActionRibbonCommand(engine.FirstRecord));
-        RegisterMailingsAlias(r, FreeWRibbonCommandAction.MergePreviewNext, new ActionRibbonCommand(engine.NextRecord),
-            "freew.next-record");
-        RegisterMailingsAlias(r, FreeWRibbonCommandAction.MergePreviewPrevious, new ActionRibbonCommand(engine.PreviousRecord),
-            "freew.prev-record");
-        r.Bind(FreeWRibbonCommandAction.MergePreviewLast, new ActionRibbonCommand(engine.LastRecord));
-        // MainWindow replaces these with owner-modal dialogs; keep definition parity for headless hosts.
-        r.Bind(FreeWRibbonCommandAction.MergeFindRecipient, FreeWRibbonExecutionProfile.UnavailableCommand);
-        r.Bind(FreeWRibbonCommandAction.MergeCheckErrors, FreeWRibbonExecutionProfile.UnavailableCommand);
-        RegisterMailingsAlias(r, FreeWRibbonCommandAction.MergeFinish, new ActionRibbonCommand(() => engine.FinishMerge()),
-            "freew.finish-merge");
-        r.Bind(FreeWRibbonCommandAction.MergeEmail, new ActionRibbonCommand(() => engine.PlanEmailMerge()));
-    }
-
-    private static void RegisterMailingsAlias(
-        IRibbonCommandRegistry r,
-        FreeWRibbonCommandAction canonicalAction,
-        IRibbonCommand command,
-        params string[] aliases)
-    {
-        r.Bind(canonicalAction, command);
-        foreach (var alias in aliases)
-            r.Register(alias, command);
+        MailMergeRibbonWorkflow.Register(
+            r,
+            new MailMergeRibbonBindings(
+                Envelopes: new ActionRibbonCommand(engine.ApplyDefaultEnvelope),
+                Labels: new ActionRibbonCommand(engine.ApplyDefaultLabels),
+                StartLetters: new ActionRibbonCommand(engine.StartMailMergeLetters),
+                StartDirectory: new ActionRibbonCommand(engine.StartMailMergeDirectory),
+                StartNormalDocument: new ActionRibbonCommand(engine.ClearMergeSession),
+                SelectRecipients: new ActionRibbonCommand(engine.SelectRecipients),
+                InsertMergeField: new ActionRibbonCommand(engine.InsertMergeField),
+                InsertAddressBlock: new ActionRibbonCommand(engine.InsertAddressBlock),
+                InsertGreetingLine: new ActionRibbonCommand(engine.InsertGreetingLine),
+                MatchFields: new ActionRibbonCommand(engine.MatchFields),
+                FilterSortRecipients: new ActionRibbonCommand(engine.FilterSortRecipients),
+                CreateRuleCommand: kind => new ActionRibbonCommand(() => engine.InsertRule(kind)),
+                InsertNextRecordField: new ActionRibbonCommand(engine.InsertNextRecordField),
+                InsertMergeRecordNumberField: new ActionRibbonCommand(engine.InsertMergeRecordNumberField),
+                InsertMergeSequenceNumberField: new ActionRibbonCommand(engine.InsertMergeSequenceNumberField),
+                TogglePreview: new ActionRibbonCommand(engine.TogglePreview),
+                FirstRecord: new ActionRibbonCommand(engine.FirstRecord),
+                PreviousRecord: new ActionRibbonCommand(engine.PreviousRecord),
+                NextRecord: new ActionRibbonCommand(engine.NextRecord),
+                LastRecord: new ActionRibbonCommand(engine.LastRecord),
+                FinishMerge: new ActionRibbonCommand(() => engine.FinishMerge()),
+                SendEmail: new ActionRibbonCommand(() => engine.PlanEmailMerge())));
     }
 
     /// <summary>

@@ -58,6 +58,7 @@ internal static class FreeWCommandInventory
         new("tableInsertionWorkflowSource", "Shared Table insertion registry source", "freew/FreeW.App.Presentation/Ribbon/TableInsertionRibbonWorkflow.cs"),
         new("paragraphEditingWorkflowSource", "Shared Paragraph editing registry source", "freew/FreeW.App.Presentation/Ribbon/ParagraphEditingRibbonWorkflow.cs"),
         new("pageLayoutWorkflowSource", "Shared Page Layout registry source", "freew/FreeW.App.Presentation/Ribbon/PageLayoutRibbonWorkflow.cs"),
+        new("mailMergeWorkflowSource", "Shared Mail Merge registry source", "freew/FreeW.App.Presentation/Ribbon/MailMergeRibbonWorkflow.cs"),
     ];
 
     private static readonly ClassificationRule[] GapClassificationRules =
@@ -240,6 +241,39 @@ internal static class FreeWCommandInventory
         ["freew.page-margins-wide"] = PageLayoutEvidence("The Wide margin menu route is backed by the shared renderer-neutral preset command."),
         ["freew.page-size-letter"] = PageLayoutEvidence("The Letter paper menu route is backed by the shared renderer-neutral preset command."),
         ["freew.page-size-a4"] = PageLayoutEvidence("The A4 paper menu route is backed by the shared renderer-neutral preset command."),
+        ["freew.merge-envelopes"] = MailMergeWorkflowEvidence("Both renderers route envelope setup through the shared Mailings command family."),
+        ["freew.merge-labels"] = MailMergeWorkflowEvidence("Both renderers route label setup through the shared Mailings command family."),
+        ["freew.start-mail-merge"] = MailMergeWorkflowEvidence("The primary Start Mail Merge route shares the Letters command in both renderers."),
+        ["freew.start-mail-merge-letters"] = MailMergeWorkflowEvidence("Both renderers start a letters merge through one shared command identity."),
+        ["freew.start-mail-merge-directory"] = MailMergeWorkflowEvidence("Both renderers start a directory merge through one shared command identity."),
+        ["freew.start-mail-merge-normal"] = MailMergeWorkflowEvidence("Both renderers return to a normal document through one shared command identity."),
+        ["freew.merge-data"] = MailMergeWorkflowEvidence("Select Recipients and its compatibility alias share one renderer-supplied command."),
+        ["freew.merge-edit-recipients"] = MailMergeWorkflowEvidence("Edit Recipients shares the same recipient-selection command in both renderers."),
+        ["freew.merge-field"] = MailMergeWorkflowEvidence("Both renderers route merge-field insertion through the shared Mailings family."),
+        ["freew.merge-address-block"] = MailMergeWorkflowEvidence("Address Block and its compatibility alias share one command in both renderers."),
+        ["freew.merge-greeting-line"] = MailMergeWorkflowEvidence("Greeting Line and its compatibility alias share one command in both renderers."),
+        ["freew.merge-match-fields"] = MailMergeWorkflowEvidence("Both renderers route field matching through the shared Mailings family."),
+        ["freew.merge-filter-sort"] = MailMergeWorkflowEvidence("Both renderers route recipient filtering and sorting through the shared Mailings family."),
+        ["freew.merge-rules"] = MailMergeWorkflowEvidence("Both renderers expose the Rules dropdown through one shared non-mutating opener command."),
+        ["freew.merge-rule-if"] = MailMergeWorkflowEvidence("Both renderers map If...Then...Else to the same shared rule kind."),
+        ["freew.merge-rule-skip-record-if"] = MailMergeWorkflowEvidence("Both renderers map Skip Record If to the same shared rule kind."),
+        ["freew.merge-rule-next-record-if"] = MailMergeWorkflowEvidence("Both renderers map Next Record If to the same shared rule kind."),
+        ["freew.merge-next-record"] = MailMergeWorkflowEvidence("Both renderers route NEXT field insertion through the shared Mailings family."),
+        ["freew.merge-record-number"] = MailMergeWorkflowEvidence("Both renderers route MERGEREC field insertion through the shared Mailings family."),
+        ["freew.merge-sequence-number"] = MailMergeWorkflowEvidence("Both renderers route MERGESEQ field insertion through the shared Mailings family."),
+        ["freew.merge-rule-fill-in"] = MailMergeWorkflowEvidence("Both renderers map Fill-in to the same shared rule kind."),
+        ["freew.merge-rule-ask"] = MailMergeWorkflowEvidence("Both renderers map Ask to the same shared rule kind."),
+        ["freew.merge-rule-set"] = MailMergeWorkflowEvidence("Both renderers map Set to the same shared rule kind."),
+        ["freew.merge-rule-ref"] = MailMergeWorkflowEvidence("Both renderers map Ref to the same shared rule kind."),
+        ["freew.merge-preview"] = MailMergeWorkflowEvidence("Preview Results and its compatibility alias share one command in both renderers."),
+        ["freew.merge-preview-first"] = MailMergeWorkflowEvidence("Both renderers route first-recipient navigation through the shared Mailings family."),
+        ["freew.merge-preview-previous"] = MailMergeWorkflowEvidence("Previous Recipient and its compatibility alias share one command in both renderers."),
+        ["freew.merge-preview-next"] = MailMergeWorkflowEvidence("Next Recipient and its compatibility alias share one command in both renderers."),
+        ["freew.merge-preview-last"] = MailMergeWorkflowEvidence("Both renderers route last-recipient navigation through the shared Mailings family."),
+        ["freew.merge-find-recipient"] = MailMergeWorkflowEvidence("Find Recipient is renderer-backed when available and otherwise fails closed."),
+        ["freew.merge-check-errors"] = MailMergeWorkflowEvidence("Check for Errors is renderer-backed when available and otherwise fails closed."),
+        ["freew.merge-finish"] = MailMergeWorkflowEvidence("Finish & Merge and its compatibility alias share one command in both renderers."),
+        ["freew.merge-email"] = MailMergeWorkflowEvidence("Both renderers route email-merge planning or delivery through the shared Mailings family."),
         ["freew.bold"] = FontEffectEvidence("Both renderers preserve native bold toggle state behind one shared semantic route."),
         ["freew.italic"] = FontEffectEvidence("Both renderers preserve native italic toggle behavior behind one shared semantic route."),
         ["freew.underline"] = FontEffectEvidence("Both renderers preserve native underline toggle behavior behind one shared semantic route."),
@@ -547,12 +581,14 @@ internal static class FreeWCommandInventory
                     ContainsCommandLiteral(sourceTexts["quickPartWorkflowSource"], commandId) ||
                     ContainsCommandLiteral(sourceTexts["tableInsertionWorkflowSource"], commandId) ||
                     ContainsCommandLiteral(sourceTexts["paragraphEditingWorkflowSource"], commandId) ||
-                    ContainsCommandLiteral(sourceTexts["pageLayoutWorkflowSource"], commandId),
+                    ContainsCommandLiteral(sourceTexts["pageLayoutWorkflowSource"], commandId) ||
+                    ContainsCommandLiteral(sourceTexts["mailMergeWorkflowSource"], commandId),
                 AvaloniaRegistrySource: ContainsCommandLiteral(sourceTexts["avaloniaRegistrySource"], commandId) ||
                     ContainsCommandLiteral(sourceTexts["quickPartWorkflowSource"], commandId) ||
                     ContainsCommandLiteral(sourceTexts["tableInsertionWorkflowSource"], commandId) ||
                     ContainsCommandLiteral(sourceTexts["paragraphEditingWorkflowSource"], commandId) ||
-                    ContainsCommandLiteral(sourceTexts["pageLayoutWorkflowSource"], commandId));
+                    ContainsCommandLiteral(sourceTexts["pageLayoutWorkflowSource"], commandId) ||
+                    ContainsCommandLiteral(sourceTexts["mailMergeWorkflowSource"], commandId));
             var behaviorEvidence = BehaviorEvidenceCatalog.GetValueOrDefault(commandId);
             var profileClassification = ClassifyProfile(wpfPresent, avaloniaPresent);
             var gapClassification = ClassifyGap(
@@ -689,6 +725,18 @@ internal static class FreeWCommandInventory
             AvaloniaEvidence: new BehaviorEvidenceLink(
                 Path: "freew/FreeW.App.Presentation.Tests/PageLayoutRibbonWorkflowTests.cs",
                 Test: "PageLayoutRibbonWorkflowTests.BothRenderersDelegatePageLayoutQuickActionsToSharedPresentation"));
+
+    private static CommandBehaviorEvidence MailMergeWorkflowEvidence(string summary) =>
+        new(
+            EvidenceId: "freew.mail-merge.shared-workflow",
+            Slice: "Mail Merge command behavior",
+            Summary: summary,
+            WpfEvidence: new BehaviorEvidenceLink(
+                Path: "freew/FreeW.App.Presentation.Tests/MailMergeRibbonWorkflowTests.cs",
+                Test: "MailMergeRibbonWorkflowTests.RegistersEveryOwnedActionAndCompatibilityAliasWithSharedIdentity"),
+            AvaloniaEvidence: new BehaviorEvidenceLink(
+                Path: "freew/FreeW.App.Presentation.Tests/MailMergeRibbonWorkflowTests.cs",
+                Test: "MailMergeRibbonWorkflowTests.BothRenderersDelegateMailingsIdentityToSharedPresentation"));
 
     private static CommandBehaviorEvidence FontEffectEvidence(string summary) =>
         new(
