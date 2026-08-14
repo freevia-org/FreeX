@@ -121,56 +121,24 @@ public sealed partial class MainWindow
             createCopyBox.IsChecked == true,
             _session.SheetTabs.Count);
 
-        ApplyMoveOrCopySheetPlan(plan, sourceIndex);
+        ApplyMoveOrCopySheetPlan(plan);
     }
 
-    private void ApplyMoveOrCopySheetPlan(MoveCopySheetPlan plan, int sourceIndex)
+    private void ApplyMoveOrCopySheetPlan(MoveCopySheetPlan plan)
     {
         var sourceName = _session.ActiveSheet.Name;
-
-        if (plan.CreateCopy)
-        {
-            var copyResult = _session.DuplicateActiveSheet();
-            if (!copyResult.Success)
-            {
-                ShowEditIssue(copyResult.ErrorMessage ?? UiText.Get("ShellLoc_CopySheetFailed"));
-                return;
-            }
-
-            // DuplicateActiveSheet drops the copy immediately after the source and makes it active;
-            // move that copy to the requested position when it differs from the landing slot.
-            var copyIndex = System.Math.Min(sourceIndex + 1, _session.SheetTabs.Count - 1);
-            var targetIndex = MoveCopySheetPlanner.ResolveCopyTargetIndex(
-                sourceIndex,
-                plan.InsertBeforeIndex,
-                _session.SheetTabs.Count - 1);
-            if (copyIndex != targetIndex && !TryMoveActiveSheetTo(targetIndex))
-                return;
-
-            RefreshShell(UiText.Format("MoveCopySheet_CopiedStatus", sourceName));
-            return;
-        }
-
-        var landingIndex = MoveCopySheetPlanner.ResolveMoveTargetIndex(
-            sourceIndex,
-            plan.InsertBeforeIndex,
-            _session.SheetTabs.Count);
-        if (landingIndex != sourceIndex && !TryMoveActiveSheetTo(landingIndex))
-            return;
-
-        RefreshShell(UiText.Format("MoveCopySheet_MovedStatus", sourceName));
-    }
-
-    private bool TryMoveActiveSheetTo(int targetIndex)
-    {
-        var result = _session.MoveActiveSheetTo(targetIndex);
+        var result = _session.MoveOrCopySelectedSheets(plan.InsertBeforeIndex, plan.CreateCopy);
         if (!result.Success)
         {
-            ShowEditIssue(result.ErrorMessage ?? UiText.Get("ShellLoc_MoveSheetFailed"));
-            return false;
+            ShowEditIssue(result.ErrorMessage ?? (plan.CreateCopy
+                ? UiText.Get("ShellLoc_CopySheetFailed")
+                : UiText.Get("ShellLoc_MoveSheetFailed")));
+            return;
         }
 
-        return true;
+        RefreshShell(UiText.Format(
+            plan.CreateCopy ? "MoveCopySheet_CopiedStatus" : "MoveCopySheet_MovedStatus",
+            sourceName));
     }
 
     // ── Visual chrome helpers (MoveCopySheet / SheetTabColor dialogs) ─────────

@@ -22,6 +22,9 @@ public sealed class DuplicateSheetCommand : IWorkbookCommand, IWholeWorkbookReca
 
     public string Label => "Duplicate Sheet";
 
+    /// <summary>The stable id minted for the copy after the command has applied.</summary>
+    public SheetId? CopySheetId => _copySheetId;
+
     /// <inheritdoc/>
     /// <remarks>
     /// Estimated from the cloned sheet's occupied-cell count captured once Apply has run (0

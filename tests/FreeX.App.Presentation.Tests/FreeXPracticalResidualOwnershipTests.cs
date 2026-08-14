@@ -147,6 +147,33 @@ public sealed class FreeXPracticalResidualOwnershipTests
         pickerSession.Should().Contain("plan = new BorderDrawExecutionPlan(DrawMode, Style, Color)");
     }
 
+    [Fact]
+    public void GroupedSheetStructurePolicy_IsOwnedByWorkbookSession()
+    {
+        var session = Read("src", "FreeX.App.Services", "WorkbookSession.cs");
+        var avalonia = Read("src", "FreeX.App.Avalonia", "MainWindow.cs");
+        var avaloniaMoveCopy = Read("src", "FreeX.App.Avalonia", "MainWindow.MoveCopySheet.cs");
+        var wpf = Read("src", "FreeX.App.Host", "MainWindow.SheetTabs.cs");
+
+        session.Should().Contain("public WorkbookCellEditResult MoveOrCopySelectedSheets(");
+        session.Should().Contain("public WorkbookCellEditResult DeleteSelectedSheets()");
+        session.Should().Contain("public WorkbookCellEditResult HideSelectedSheets()");
+        session.Should().Contain("public WorkbookCellEditResult SetSelectedSheetTabColor(");
+
+        avaloniaMoveCopy.Should().Contain("_session.MoveOrCopySelectedSheets(");
+        avalonia.Should().Contain("_session.DeleteActiveSheet()");
+        avalonia.Should().Contain("_session.HideActiveSheet()");
+        avalonia.Should().Contain("_session.SetActiveSheetTabColor(");
+        wpf.Should().Contain("_session.MoveOrCopySelectedSheets(");
+        wpf.Should().Contain("_session.DeleteSelectedSheets()");
+        wpf.Should().Contain("_session.HideSelectedSheets()");
+        wpf.Should().Contain("_session.SetSelectedSheetTabColor(");
+
+        wpf.Should().NotContain("new CompositeWorkbookCommand(\"Delete Sheet\"");
+        wpf.Should().NotContain("new CompositeWorkbookCommand(\"Hide Sheet\"");
+        wpf.Should().NotContain("new CompositeWorkbookCommand(\"Tab Color\"");
+    }
+
     private static string Read(params string[] parts)
     {
         var root = TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeX.slnx");

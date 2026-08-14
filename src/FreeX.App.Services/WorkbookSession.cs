@@ -561,6 +561,13 @@ public sealed class WorkbookSession : IDisposable
     /// </summary>
     public IReadOnlyList<SheetId> GetCurrentGroupedEditSheetIds() => CurrentGroupedEditSheetIds();
 
+    /// <summary>
+    /// Returns the active grouped sheet-tab selection in workbook order. Structural sheet commands
+    /// use workbook order rather than edit-order (which intentionally places the active sheet first).
+    /// </summary>
+    public IReadOnlyList<SheetId> GetCurrentGroupedStructureSheetIds() =>
+        CurrentGroupedStructureSheetIds();
+
     public bool IsShowingGridlines
     {
         get
@@ -2284,15 +2291,60 @@ public sealed class WorkbookSession : IDisposable
         if (!result.Success)
             return result;
 
-        // Duplicating a sheet can change which sheets fall inside a 3-D span reference
-        // (e.g. =SUM(Sheet1:Sheet3!A1)), so recalculate the whole workbook just like the
-        // WPF host does after Duplicate Sheet -- the command's own AffectedCells is empty
-        // and would otherwise leave those span refs stale.
-        RecalculateWorkbook();
-
         var copyIndex = Math.Min(sourceIndex + 1, Workbook.Sheets.Count - 1);
         ApplySuccessfulNewWorksheetResult(Workbook.Sheets[copyIndex].Id);
         return result;
+    }
+
+    /// <summary>
+    /// Moves or copies the active grouped sheet-tab selection as one contiguous block. Copy is a
+    /// single atomic command, so one Undo removes the positioned copies instead of first undoing
+    /// their move and only then undoing their creation.
+    /// </summary>
+    public WorkbookCellEditResult MoveOrCopySelectedSheets(int insertBeforeIndex, bool createCopy)
+    {
+        var selectedSheetIds = CurrentGroupedStructureSheetIds();
+        if (selectedSheetIds.Count == 0)
+        {
+            return new WorkbookCellEditResult(
+                false,
+                "Selected sheets were not found.",
+                [],
+                RecalcReport: null);
+        }
+
+        if (insertBeforeIndex < 0 || insertBeforeIndex > Workbook.Sheets.Count)
+        {
+            return new WorkbookCellEditResult(
+                false,
+                "Sheet index is out of range.",
+                [],
+                RecalcReport: null);
+        }
+
+        if (createCopy)
+        {
+            var command = new DuplicateSheetsCommand(selectedSheetIds, insertBeforeIndex);
+            var result = _cellEditService.ExecuteEditCommand(Workbook, command);
+            if (!result.Success)
+                return result;
+
+            var preferredSheetId = command.CopySheetIds.LastOrDefault();
+            if (preferredSheetId == default || Workbook.GetSheet(preferredSheetId) is null)
+                preferredSheetId = ActiveSheet.Id;
+            ApplySuccessfulNewWorksheetResult(preferredSheetId);
+            return result;
+        }
+
+        var activeSheetId = ActiveSheet.Id;
+        var moveResult = _cellEditService.ExecuteEditCommand(
+            Workbook,
+            new MoveSheetsCommand(selectedSheetIds, insertBeforeIndex));
+        if (!moveResult.Success)
+            return moveResult;
+
+        ApplySuccessfulWorkbookStructureResult(activeSheetId);
+        return moveResult;
     }
 
     public WorkbookCellEditResult MoveActiveSheetLeft() =>
@@ -2336,18 +2388,17 @@ public sealed class WorkbookSession : IDisposable
         if (!result.Success)
             return result;
 
-        // Moving a sheet can change which sheets fall inside a 3-D span reference
-        // (e.g. =SUM(Sheet1:Sheet3!A1)), so recalculate the whole workbook just like the
-        // WPF host does after a sheet-tab drag/Move-or-Copy move -- the command's own
-        // AffectedCells is empty and would otherwise leave those span refs stale.
-        RecalculateWorkbook();
         ApplySuccessfulWorkbookMetadataResult(sheetId);
         return result;
     }
 
-    public WorkbookCellEditResult SetActiveSheetTabColor(CellColor? color)
+    public WorkbookCellEditResult SetActiveSheetTabColor(CellColor? color) =>
+        SetSelectedSheetTabColor(color);
+
+    public WorkbookCellEditResult SetSelectedSheetTabColor(CellColor? color)
     {
-        if (ActiveSheet.TabColor == color)
+        var selectedSheetIds = CurrentGroupedStructureSheetIds();
+        if (selectedSheetIds.All(sheetId => Workbook.GetSheet(sheetId)?.TabColor == color))
         {
             return new WorkbookCellEditResult(
                 true,
@@ -2358,7 +2409,13 @@ public sealed class WorkbookSession : IDisposable
 
         var result = _cellEditService.ExecuteEditCommand(
             Workbook,
-            new SetSheetTabColorCommand(ActiveSheet.Id, color));
+            selectedSheetIds.Count == 1
+                ? new SetSheetTabColorCommand(selectedSheetIds[0], color)
+                : new CompositeWorkbookCommand(
+                    "Tab Color",
+                    selectedSheetIds
+                        .Select(sheetId => (IWorkbookCommand)new SetSheetTabColorCommand(sheetId, color))
+                        .ToArray()));
         if (!result.Success)
             return result;
 
@@ -2822,27 +2879,36 @@ public sealed class WorkbookSession : IDisposable
         return result;
     }
 
-    public WorkbookCellEditResult HideActiveSheet()
+    public WorkbookCellEditResult HideActiveSheet() => HideSelectedSheets();
+
+    public WorkbookCellEditResult HideSelectedSheets()
     {
-        var sheetId = ActiveSheet.Id;
-        var sheetIndex = FindSheetIndex(sheetId, notFoundIndex: -1);
-        if (sheetIndex < 0)
+        var selectedSheetIds = CurrentGroupedStructureSheetIds();
+        var selectedSet = selectedSheetIds.ToHashSet();
+        var activeSheetIndex = FindSheetIndex(ActiveSheet.Id, notFoundIndex: 0);
+        var preferredSurvivorId = FindPreferredVisibleSheetIdOutsideSelection(activeSheetIndex, selectedSet);
+        if (preferredSurvivorId is null && !Workbook.IsStructureProtected)
         {
             return new WorkbookCellEditResult(
                 false,
-                "Active sheet was not found.",
+                "Cannot hide the only visible sheet.",
                 [],
                 RecalcReport: null);
         }
 
-        var preferredSheetId = FindPreferredVisibleSheetIdAfterHidden(sheetIndex, sheetId);
         var result = _cellEditService.ExecuteEditCommand(
             Workbook,
-            new SetSheetHiddenCommand(sheetId, hidden: true));
+            selectedSheetIds.Count == 1
+                ? new SetSheetHiddenCommand(selectedSheetIds[0], hidden: true)
+                : new CompositeWorkbookCommand(
+                    "Hide Sheet",
+                    selectedSheetIds
+                        .Select(sheetId => (IWorkbookCommand)new SetSheetHiddenCommand(sheetId, hidden: true))
+                        .ToArray()));
         if (!result.Success)
             return result;
 
-        ApplySuccessfulWorkbookStructureResult(preferredSheetId ?? ActiveSheet.Id);
+        ApplySuccessfulWorkbookStructureResult(preferredSurvivorId ?? ActiveSheet.Id);
         return result;
     }
 
@@ -2886,23 +2952,28 @@ public sealed class WorkbookSession : IDisposable
         return result;
     }
 
-    public WorkbookCellEditResult DeleteActiveSheet()
+    public WorkbookCellEditResult DeleteActiveSheet() => DeleteSelectedSheets();
+
+    public WorkbookCellEditResult DeleteSelectedSheets()
     {
-        var sheetId = ActiveSheet.Id;
-        var sheetIndex = FindSheetIndex(sheetId, notFoundIndex: -1);
-        if (sheetIndex < 0)
+        var selectedSheetIds = CurrentGroupedStructureSheetIds();
+        var selectedSet = selectedSheetIds.ToHashSet();
+        var activeSheetIndex = FindSheetIndex(ActiveSheet.Id, notFoundIndex: 0);
+        var preferredSurvivorId = FindPreferredVisibleSheetIdOutsideSelection(activeSheetIndex, selectedSet);
+        if (preferredSurvivorId is null && !Workbook.IsStructureProtected)
         {
             return new WorkbookCellEditResult(
                 false,
-                "Active sheet was not found.",
+                Workbook.Sheets.Count == 1
+                    ? "Cannot delete the only sheet."
+                    : "Cannot delete the only visible sheets.",
                 [],
                 RecalcReport: null);
         }
 
-        var preferredSheetId = FindPreferredSheetIdAfterRemoval(sheetIndex, sheetId);
         var result = _cellEditService.ExecuteEditCommand(
             Workbook,
-            new RemoveSheetCommand(sheetId));
+            new RemoveSheetsCommand(selectedSheetIds));
         if (!result.Success)
             return result;
 
@@ -2916,17 +2987,15 @@ public sealed class WorkbookSession : IDisposable
         // by GetViewTopRow/GetViewLeftCol/SetViewViewportOrigin) is the same kind of per-view cache
         // but lives outside InvalidateAllPerViewOverridesForSheet's choke point, so r126 missed it --
         // purge it here too.
-        InvalidateAllPerViewOverridesForSheet(sheetId);
-        _splitPaneViewportOffsets.Remove(sheetId);
-        _viewViewportOrigins.Remove(sheetId);
+        foreach (var sheetId in selectedSheetIds)
+        {
+            InvalidateAllPerViewOverridesForSheet(sheetId);
+            _splitPaneViewportOffsets.Remove(sheetId);
+            _viewViewportOrigins.Remove(sheetId);
+            _worksheetSelections.Remove(sheetId);
+        }
 
-        // Deleting a sheet can change which sheets fall inside a 3-D span reference
-        // (e.g. =SUM(Sheet1:Sheet3!A1)), so recalculate the whole workbook just like the
-        // WPF host does after Move/Duplicate Sheet -- the command's own AffectedCells is
-        // empty and would otherwise leave those span refs stale.
-        RecalculateWorkbook();
-
-        ApplySuccessfulWorkbookStructureResult(preferredSheetId ?? Workbook.Sheets[0].Id);
+        ApplySuccessfulWorkbookStructureResult(preferredSurvivorId ?? ActiveSheet.Id);
         return result;
     }
 
@@ -2947,12 +3016,6 @@ public sealed class WorkbookSession : IDisposable
             new RenameSheetCommand(ActiveSheet.Id, newName));
         if (!result.Success)
             return result;
-
-        // Renaming a sheet can change which sheets fall inside a 3-D span reference
-        // (e.g. =SUM(Sheet1:Sheet3!A1)), so recalculate the whole workbook just like the
-        // WPF host does after Move/Duplicate Sheet -- the command's own AffectedCells is
-        // empty and would otherwise leave those span refs stale.
-        RecalculateWorkbook();
 
         ApplySuccessfulWorkbookMetadataResult(ActiveSheet.Id);
         return result;
@@ -5376,6 +5439,27 @@ public sealed class WorkbookSession : IDisposable
         return null;
     }
 
+    private SheetId? FindPreferredVisibleSheetIdOutsideSelection(
+        int activeSheetIndex,
+        IReadOnlySet<SheetId> selectedSheetIds)
+    {
+        for (var index = activeSheetIndex + 1; index < Workbook.Sheets.Count; index++)
+        {
+            var sheet = Workbook.Sheets[index];
+            if (!selectedSheetIds.Contains(sheet.Id) && !sheet.IsHidden && !sheet.IsVeryHidden)
+                return sheet.Id;
+        }
+
+        for (var index = activeSheetIndex - 1; index >= 0; index--)
+        {
+            var sheet = Workbook.Sheets[index];
+            if (!selectedSheetIds.Contains(sheet.Id) && !sheet.IsHidden && !sheet.IsVeryHidden)
+                return sheet.Id;
+        }
+
+        return null;
+    }
+
     private IReadOnlyList<SheetId> GetSelectableSheetIds()
     {
         var visible = Workbook.Sheets
@@ -5464,6 +5548,20 @@ public sealed class WorkbookSession : IDisposable
             return [ActiveSheet.Id];
 
         return [ActiveSheet.Id, .. groupedVisibleSheetIds.Where(sheetId => sheetId != ActiveSheet.Id)];
+    }
+
+    private IReadOnlyList<SheetId> CurrentGroupedStructureSheetIds()
+    {
+        if (!IsWorkbookGrouped)
+            return [ActiveSheet.Id];
+
+        var selectedSheetIds = Workbook.Sheets
+            .Where(sheet => !sheet.IsHidden && _groupedSheetIds.Contains(sheet.Id))
+            .Select(sheet => sheet.Id)
+            .ToArray();
+        return selectedSheetIds.Length > 1 && selectedSheetIds.Contains(ActiveSheet.Id)
+            ? selectedSheetIds
+            : [ActiveSheet.Id];
     }
 
     private IWorkbookCommand CreateEditCellsCommand(IReadOnlyList<(CellAddress Address, Cell NewCell)> edits)

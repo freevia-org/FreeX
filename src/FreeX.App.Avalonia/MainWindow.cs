@@ -12475,10 +12475,6 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             return;
         }
 
-        // Cross-sheet/3-D formulas (e.g. SUM(Sheet1:Sheet3!A1)) can pick up the duplicated sheet,
-        // so force a recalc here — sheet structure commands don't report affected cells to the
-        // shared edit pipeline's automatic recalc (WPF host parity: SheetCtxDuplicate_Click).
-        _session.RecalculateWorkbook();
         RefreshShell(UiText.Format("SheetTabs_DuplicatedStatusFormat", sourceName));
     }
 
@@ -12499,9 +12495,6 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             return;
         }
 
-        // Reordering sheets can change which sheets a 3-D reference spans, so force a recalc
-        // (sheet structure commands don't report affected cells to the automatic recalc path).
-        _session.RecalculateWorkbook();
         RefreshShell(UiText.Format("SheetTabs_MovedLeftStatusFormat", sheetName));
     }
 
@@ -12522,9 +12515,6 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             return;
         }
 
-        // Reordering sheets can change which sheets a 3-D reference spans, so force a recalc
-        // (sheet structure commands don't report affected cells to the automatic recalc path).
-        _session.RecalculateWorkbook();
         RefreshShell(UiText.Format("SheetTabs_MovedRightStatusFormat", sheetName));
     }
 
@@ -13032,10 +13022,6 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             return;
         }
 
-        // Cross-sheet/3-D formulas referencing the deleted sheet (or spanning past it) can go
-        // stale, so force a recalc here — sheet structure commands don't report affected cells to
-        // the shared edit pipeline's automatic recalc (WPF host parity: SheetCtxDelete_Click).
-        _session.RecalculateWorkbook();
         RefreshShell(UiText.Format("SheetTabs_DeletedStatusFormat", sheetName));
     }
 
