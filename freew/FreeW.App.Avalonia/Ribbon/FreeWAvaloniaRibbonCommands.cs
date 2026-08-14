@@ -1017,14 +1017,11 @@ internal static class FreeWAvaloniaRibbonCommands
                 ApplyStyle: editor.ApplyCitationStyle,
                 GetStyle: () => editor.Document.BibliographyStyle));
 
-        family.Bind(FreeWRibbonCommandAction.Tof, new ActionRibbonCommand(() => editor.InsertTableOfFigures()));
-        family.Bind(FreeWRibbonCommandAction.Tof_Figure, new ActionRibbonCommand(() => editor.InsertTableOfFigures(CaptionLabel.Figure)));
-        family.Bind(FreeWRibbonCommandAction.Tof_Table, new ActionRibbonCommand(() => editor.InsertTableOfFigures(CaptionLabel.Table)));
-        family.Bind(FreeWRibbonCommandAction.Tof_Equation, new ActionRibbonCommand(() => editor.InsertTableOfFigures(CaptionLabel.Equation)));
-        family.Bind(FreeWRibbonCommandAction.TofRefresh, new ActionRibbonCommand(() => editor.RefreshTableOfFigures()));
-        family.Bind(FreeWRibbonCommandAction.TofRefresh_Figure, new ActionRibbonCommand(() => editor.RefreshTableOfFigures(CaptionLabel.Figure)));
-        family.Bind(FreeWRibbonCommandAction.TofRefresh_Table, new ActionRibbonCommand(() => editor.RefreshTableOfFigures(CaptionLabel.Table)));
-        family.Bind(FreeWRibbonCommandAction.TofRefresh_Equation, new ActionRibbonCommand(() => editor.RefreshTableOfFigures(CaptionLabel.Equation)));
+        TableOfFiguresRibbonWorkflow.Register(
+            family,
+            new TableOfFiguresRibbonPorts(
+                editor.InsertTableOfFigures,
+                editor.RefreshTableOfFigures));
         family.Bind(FreeWRibbonCommandAction.IndexMark, new ActionRibbonCommand(
             callbacks.OpenMarkIndexEntryDialog ?? (() => editor.MarkIndexEntry())));
         family.Bind(FreeWRibbonCommandAction.IndexInsert, new ActionRibbonCommand(

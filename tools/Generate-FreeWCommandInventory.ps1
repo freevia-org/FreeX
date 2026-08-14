@@ -372,6 +372,16 @@ internal static class FreeWCommandInventory
             "CitationEditorTests.InsertBibliography_BuildsBlockFromSourcesAndUndoReverts",
             "freew/FreeW.App.Avalonia.Tests/ReferencesTabTests.cs",
             "ReferencesTabTests.InsertBibliography_builds_block_from_sources_and_undo_reverts"),
+        ["freew.tof"] = TableOfFiguresWorkflowEvidence(
+            "The primary Table of Figures command shares the Figure-label insertion command in both renderers."),
+        ["freew.tof.figure"] = TableOfFiguresWorkflowEvidence(
+            "Both renderers insert a Figure-labelled table through the shared label workflow."),
+        ["freew.tof.table"] = TableOfFiguresWorkflowEvidence(
+            "Both renderers insert a Table-labelled table through the shared label workflow."),
+        ["freew.tof.equation"] = TableOfFiguresWorkflowEvidence(
+            "Both renderers insert an Equation-labelled table through the shared label workflow."),
+        ["freew.tof-refresh"] = TableOfFiguresWorkflowEvidence(
+            "The primary update command shares the Figure-label refresh command in both renderers."),
         ["freew.mark-citation"] = ReferencesEvidence(
             "Creates durable hidden Word-style TA citation marks with category/short-citation data in both shells.",
             "freew/FreeW.App.Host.Tests/MarkCitationEditorTests.cs",
@@ -924,6 +934,18 @@ internal static class FreeWCommandInventory
             AvaloniaEvidence: new BehaviorEvidenceLink(
                 Path: "freew/FreeW.App.Presentation.Tests/CitationRibbonWorkflowTests.cs",
                 Test: "CitationRibbonWorkflowTests.BothRenderersDelegateCitationPolicyToSharedPresentation"));
+
+    private static CommandBehaviorEvidence TableOfFiguresWorkflowEvidence(string summary) =>
+        new(
+            EvidenceId: "freew.table-of-figures.shared-workflow",
+            Slice: "Table of Figures command behavior",
+            Summary: summary,
+            WpfEvidence: new BehaviorEvidenceLink(
+                Path: "freew/FreeW.App.Presentation.Tests/TableOfFiguresRibbonWorkflowTests.cs",
+                Test: "TableOfFiguresRibbonWorkflowTests.SharedWorkflowOwnsInsertRefreshLabelsAndPrimaryIdentity"),
+            AvaloniaEvidence: new BehaviorEvidenceLink(
+                Path: "freew/FreeW.App.Presentation.Tests/TableOfFiguresRibbonWorkflowTests.cs",
+                Test: "TableOfFiguresRibbonWorkflowTests.BothRenderersDelegateTableOfFiguresPolicyToSharedPresentation"));
 
     private static CommandBehaviorEvidence SmartArtStructureEvidence(string behavior) =>
         SmartArtCommandEvidence(

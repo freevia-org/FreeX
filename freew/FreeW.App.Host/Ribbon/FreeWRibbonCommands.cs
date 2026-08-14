@@ -726,14 +726,12 @@ internal static class FreeWRibbonCommands
         referenceCommands.Bind(FreeWRibbonCommandAction.IndexRefresh, new UpdateIndexCommand(editor));
         // Insert tab — References: generate a Table of Figures from the document's figure captions at the
         // caret, and rebuild it in place (remove the prior region + re-insert). Both route through the bus.
-        referenceCommands.Bind(FreeWRibbonCommandAction.Tof, new ActionRibbonCommand(() => { editor.Focus(); editor.InsertTableOfFigures(); }));
-        referenceCommands.Bind(FreeWRibbonCommandAction.Tof_Figure, new ActionRibbonCommand(() => { editor.Focus(); editor.InsertTableOfFigures(CaptionLabel.Figure); }));
-        referenceCommands.Bind(FreeWRibbonCommandAction.Tof_Table, new ActionRibbonCommand(() => { editor.Focus(); editor.InsertTableOfFigures(CaptionLabel.Table); }));
-        referenceCommands.Bind(FreeWRibbonCommandAction.Tof_Equation, new ActionRibbonCommand(() => { editor.Focus(); editor.InsertTableOfFigures(CaptionLabel.Equation); }));
-        referenceCommands.Bind(FreeWRibbonCommandAction.TofRefresh, new ActionRibbonCommand(() => { editor.Focus(); editor.RefreshTableOfFigures(); }));
-        referenceCommands.Bind(FreeWRibbonCommandAction.TofRefresh_Figure, new ActionRibbonCommand(() => { editor.Focus(); editor.RefreshTableOfFigures(CaptionLabel.Figure); }));
-        referenceCommands.Bind(FreeWRibbonCommandAction.TofRefresh_Table, new ActionRibbonCommand(() => { editor.Focus(); editor.RefreshTableOfFigures(CaptionLabel.Table); }));
-        referenceCommands.Bind(FreeWRibbonCommandAction.TofRefresh_Equation, new ActionRibbonCommand(() => { editor.Focus(); editor.RefreshTableOfFigures(CaptionLabel.Equation); }));
+        TableOfFiguresRibbonWorkflow.Register(
+            referenceCommands,
+            new TableOfFiguresRibbonPorts(
+                editor.InsertTableOfFigures,
+                editor.RefreshTableOfFigures,
+                () => editor.Focus()));
         // Insert tab — References: mark the selection as a legal citation (a hidden TA field), and insert /
         // rebuild a Table of Authorities built from those marks, grouped by category (reversibly via the bus).
         referenceCommands.Bind(FreeWRibbonCommandAction.MarkCitation, new MarkCitationCommand(editor));
