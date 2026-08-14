@@ -239,6 +239,7 @@ public sealed partial class MainWindow : Window,
     private Button _mediaCaptionReplaceButton = null!;
     private Button _mediaCaptionDeleteButton = null!;
     private Button _mediaCaptionCloseButton = null!;
+    private readonly PresentationMediaPaneHostViewAdapter _avaloniaMediaPaneHostView;
     private readonly PresentationMediaPaneHostCoordinator _mediaPaneHostCoordinator;
     private readonly PresentationSmartArtTextPaneSession _smartArtTextPaneSession;
     private readonly PresentationZoomAuthoringSession _zoomAuthoringSession;
@@ -551,6 +552,7 @@ public sealed partial class MainWindow : Window,
             _reviewWorkflowSession,
             _workareaSession.Panes,
             this);
+        _avaloniaMediaPaneHostView = BuildAvaloniaMediaPaneHostView();
         _mediaPaneHostCoordinator = new(
             new PresentationMediaPaneSession(
                 () => Editor,
@@ -5528,100 +5530,149 @@ public sealed partial class MainWindow : Window,
 
     private PresentationMediaCaptionHostSnapshot CaptureMediaCaptionHostSnapshot() =>
         PresentationMediaPaneHostSnapshotPlanner.CaptureCaption(
-            _mediaCaptionLabelBox?.Text,
-            _mediaCaptionLanguageBox?.Text,
-            _mediaCaptionSourceBox?.Text,
-            _mediaCaptionTranscriptBox?.Text);
+            ReadAvaloniaText(_mediaCaptionLabelBox),
+            ReadAvaloniaText(_mediaCaptionLanguageBox),
+            ReadAvaloniaText(_mediaCaptionSourceBox),
+            ReadAvaloniaText(_mediaCaptionTranscriptBox));
 
     private PresentationMediaVolumeHostSnapshot CaptureMediaVolumeHostSnapshot() =>
-        PresentationMediaPaneHostSnapshotPlanner.CaptureVolume(_mediaVolumeSlider?.Value);
+        PresentationMediaPaneHostSnapshotPlanner.CaptureVolume(ReadAvaloniaValue(_mediaVolumeSlider));
 
     private PresentationMediaPlaybackHostSnapshot CaptureMediaPlaybackHostSnapshot() =>
         PresentationMediaPaneHostSnapshotPlanner.CapturePlayback(
-            _mediaStartModeBox?.SelectedIndex,
-            _mediaLoopCheckBox?.IsChecked,
-            _mediaShowWhenStoppedCheckBox?.IsChecked,
-            _mediaRewindAfterPlayingCheckBox?.IsChecked,
-            _mediaPlayFullScreenCheckBox?.IsChecked,
-            _mediaStopAfterSlidesBox?.Text);
+            ReadAvaloniaIndex(_mediaStartModeBox),
+            ReadAvaloniaCheck(_mediaLoopCheckBox),
+            ReadAvaloniaCheck(_mediaShowWhenStoppedCheckBox),
+            ReadAvaloniaCheck(_mediaRewindAfterPlayingCheckBox),
+            ReadAvaloniaCheck(_mediaPlayFullScreenCheckBox),
+            ReadAvaloniaText(_mediaStopAfterSlidesBox));
 
     private PresentationMediaTimingHostSnapshot CaptureMediaTimingHostSnapshot() =>
         PresentationMediaPaneHostSnapshotPlanner.CaptureTiming(
-            _mediaTrimStartBox?.Text,
-            _mediaTrimEndBox?.Text,
-            _mediaFadeInBox?.Text,
-            _mediaFadeOutBox?.Text);
+            ReadAvaloniaText(_mediaTrimStartBox),
+            ReadAvaloniaText(_mediaTrimEndBox),
+            ReadAvaloniaText(_mediaFadeInBox),
+            ReadAvaloniaText(_mediaFadeOutBox));
 
     private PresentationMediaBookmarkHostSnapshot CaptureMediaBookmarkHostSnapshot() =>
         PresentationMediaPaneHostSnapshotPlanner.CaptureBookmark(
-            _mediaBookmarkNameBox?.Text,
-            _mediaBookmarkTimeBox?.Text);
+            ReadAvaloniaText(_mediaBookmarkNameBox),
+            ReadAvaloniaText(_mediaBookmarkTimeBox));
 
-    bool IPresentationMediaPaneHostView.IsPaneVisible => IsMediaCaptionPaneVisible;
-
+    bool IPresentationMediaPaneHostView.IsPaneVisible => _avaloniaMediaPaneHostView.IsPaneVisible;
     PresentationMediaCaptionHostSnapshot IPresentationMediaPaneHostView.CaptureCaption() =>
         CaptureMediaCaptionHostSnapshot();
-
     PresentationMediaVolumeHostSnapshot IPresentationMediaPaneHostView.CaptureVolume() =>
         CaptureMediaVolumeHostSnapshot();
-
     PresentationMediaPlaybackHostSnapshot IPresentationMediaPaneHostView.CapturePlayback() =>
         CaptureMediaPlaybackHostSnapshot();
-
     PresentationMediaTimingHostSnapshot IPresentationMediaPaneHostView.CaptureTiming() =>
         CaptureMediaTimingHostSnapshot();
-
     PresentationMediaBookmarkHostSnapshot IPresentationMediaPaneHostView.CaptureBookmark() =>
         CaptureMediaBookmarkHostSnapshot();
-
-    void IPresentationMediaPaneHostView.SetPaneVisible(bool visible)
-    {
-        if (_mediaCaptionPaneHost is not null)
-            _mediaCaptionPaneHost.IsVisible = visible;
-    }
-
-    void IPresentationMediaPaneHostView.SetCaptionInput(PresentationMediaCaptionHostSnapshot input)
-    {
-        _mediaCaptionLabelBox.Text = input.Label ?? string.Empty;
-        _mediaCaptionLanguageBox.Text = input.Language ?? string.Empty;
-        _mediaCaptionSourceBox.Text = input.Source ?? string.Empty;
-        _mediaCaptionTranscriptBox.Text = input.TranscriptText ?? string.Empty;
-    }
-
+    void IPresentationMediaPaneHostView.SetPaneVisible(bool visible) =>
+        _avaloniaMediaPaneHostView.SetPaneVisible(visible);
+    void IPresentationMediaPaneHostView.SetCaptionInput(PresentationMediaCaptionHostSnapshot input) =>
+        _avaloniaMediaPaneHostView.SetCaptionInput(input);
     void IPresentationMediaPaneHostView.SetVolumeInput(PresentationMediaVolumeInputPlan input) =>
-        _mediaVolumeSlider.Value = input.VolumePercent;
-
-    void IPresentationMediaPaneHostView.SetPlaybackInput(PresentationMediaPlaybackInputPlan input)
-    {
-        _mediaStartModeBox.SelectedIndex = input.StartModeIndex;
-        _mediaLoopCheckBox.IsChecked = input.Loop;
-        _mediaShowWhenStoppedCheckBox.IsChecked = input.ShowWhenStopped;
-        _mediaRewindAfterPlayingCheckBox.IsChecked = input.RewindAfterPlaying;
-        _mediaPlayFullScreenCheckBox.IsChecked = input.PlayFullScreen;
-        _mediaStopAfterSlidesBox.Text = input.StopAfterSlidesText;
-    }
-
-    void IPresentationMediaPaneHostView.SetTimingInput(PresentationMediaTimingInputPlan input)
-    {
-        _mediaTrimStartBox.Text = input.TrimStartText;
-        _mediaTrimEndBox.Text = input.TrimEndText;
-        _mediaFadeInBox.Text = input.FadeInText;
-        _mediaFadeOutBox.Text = input.FadeOutText;
-    }
-
-    void IPresentationMediaPaneHostView.SetBookmarkInput(PresentationMediaBookmarkInputPlan input)
-    {
-        _mediaBookmarkNameBox.Text = input.Name;
-        _mediaBookmarkTimeBox.Text = input.TimeText;
-    }
-
+        _avaloniaMediaPaneHostView.SetVolumeInput(input);
+    void IPresentationMediaPaneHostView.SetPlaybackInput(PresentationMediaPlaybackInputPlan input) =>
+        _avaloniaMediaPaneHostView.SetPlaybackInput(input);
+    void IPresentationMediaPaneHostView.SetTimingInput(PresentationMediaTimingInputPlan input) =>
+        _avaloniaMediaPaneHostView.SetTimingInput(input);
+    void IPresentationMediaPaneHostView.SetBookmarkInput(PresentationMediaBookmarkInputPlan input) =>
+        _avaloniaMediaPaneHostView.SetBookmarkInput(input);
     void IPresentationMediaPaneHostView.Render(PresentationMediaPaneHostRenderPlan plan) =>
         RenderMediaCaptionPane(plan);
-
     void IPresentationMediaPaneHostView.RefreshAccessibilityMetadata() =>
-        RefreshPaneAccessibilityMetadata();
+        _avaloniaMediaPaneHostView.RefreshAccessibilityMetadata();
 
-    private void RenderMediaBookmarkOptions(PresentationMediaPaneProjection plan)
+    private PresentationMediaPaneHostViewAdapter BuildAvaloniaMediaPaneHostView() => new(
+        new DelegatingPresentationMediaPaneControlSurface(new(
+            PaneVisible: new(() => IsMediaCaptionPaneVisible, value => SetAvaloniaVisible(_mediaCaptionPaneHost, value)),
+            CaptionLabel: new(() => ReadAvaloniaText(_mediaCaptionLabelBox), value => WriteAvaloniaText(_mediaCaptionLabelBox, value)),
+            CaptionLanguage: new(() => ReadAvaloniaText(_mediaCaptionLanguageBox), value => WriteAvaloniaText(_mediaCaptionLanguageBox, value)),
+            CaptionSource: new(() => ReadAvaloniaText(_mediaCaptionSourceBox), value => WriteAvaloniaText(_mediaCaptionSourceBox, value)),
+            CaptionTranscript: new(() => ReadAvaloniaText(_mediaCaptionTranscriptBox), value => WriteAvaloniaText(_mediaCaptionTranscriptBox, value)),
+            VolumePercent: new(() => ReadAvaloniaValue(_mediaVolumeSlider), value => WriteAvaloniaValue(_mediaVolumeSlider, value)),
+            PlaybackStartModeIndex: new(() => ReadAvaloniaIndex(_mediaStartModeBox), value => WriteAvaloniaIndex(_mediaStartModeBox, value)),
+            Loop: new(() => ReadAvaloniaCheck(_mediaLoopCheckBox), value => WriteAvaloniaCheck(_mediaLoopCheckBox, value)),
+            ShowWhenStopped: new(() => ReadAvaloniaCheck(_mediaShowWhenStoppedCheckBox),
+                value => WriteAvaloniaCheck(_mediaShowWhenStoppedCheckBox, value)),
+            RewindAfterPlaying: new(() => ReadAvaloniaCheck(_mediaRewindAfterPlayingCheckBox),
+                value => WriteAvaloniaCheck(_mediaRewindAfterPlayingCheckBox, value)),
+            PlayFullScreen: new(() => ReadAvaloniaCheck(_mediaPlayFullScreenCheckBox),
+                value => WriteAvaloniaCheck(_mediaPlayFullScreenCheckBox, value)),
+            StopAfterSlides: new(() => ReadAvaloniaText(_mediaStopAfterSlidesBox),
+                value => WriteAvaloniaText(_mediaStopAfterSlidesBox, value)),
+            TrimStart: new(() => ReadAvaloniaText(_mediaTrimStartBox), value => WriteAvaloniaText(_mediaTrimStartBox, value)),
+            TrimEnd: new(() => ReadAvaloniaText(_mediaTrimEndBox), value => WriteAvaloniaText(_mediaTrimEndBox, value)),
+            FadeIn: new(() => ReadAvaloniaText(_mediaFadeInBox), value => WriteAvaloniaText(_mediaFadeInBox, value)),
+            FadeOut: new(() => ReadAvaloniaText(_mediaFadeOutBox), value => WriteAvaloniaText(_mediaFadeOutBox, value)),
+            BookmarkName: new(() => ReadAvaloniaText(_mediaBookmarkNameBox), value => WriteAvaloniaText(_mediaBookmarkNameBox, value)),
+            BookmarkTime: new(() => ReadAvaloniaText(_mediaBookmarkTimeBox), value => WriteAvaloniaText(_mediaBookmarkTimeBox, value)),
+            SetHeading: value => WriteAvaloniaText(_mediaCaptionPaneHeading, value),
+            SetMessage: value => WriteAvaloniaText(_mediaCaptionPaneMessage, value),
+            SetPlaybackStartModeEnabled: value => SetAvaloniaEnabled(_mediaStartModeBox, value),
+            SetLoopEnabled: value => SetAvaloniaEnabled(_mediaLoopCheckBox, value),
+            SetShowWhenStoppedEnabled: value => SetAvaloniaEnabled(_mediaShowWhenStoppedCheckBox, value),
+            SetRewindAfterPlayingEnabled: value => SetAvaloniaEnabled(_mediaRewindAfterPlayingCheckBox, value),
+            SetPlayFullScreenEnabled: value => SetAvaloniaEnabled(_mediaPlayFullScreenCheckBox, value),
+            SetStopAfterSlidesEnabled: value => SetAvaloniaEnabled(_mediaStopAfterSlidesBox, value),
+            SetPlaybackApplyEnabled: value => SetAvaloniaEnabled(_mediaPlaybackApplyButton, value),
+            SetVolumeEnabled: value => SetAvaloniaEnabled(_mediaVolumeSlider, value),
+            SetVolumeApplyEnabled: value => SetAvaloniaEnabled(_mediaVolumeApplyButton, value),
+            SetTimingApplyEnabled: value => SetAvaloniaEnabled(_mediaTimingApplyButton, value),
+            RenderCaptionTracks: RenderMediaCaptionTrackOptions,
+            RenderCaptionField: RenderAvaloniaMediaCaptionField,
+            RenderCaptionAction: RenderAvaloniaMediaCaptionAction,
+            RenderBookmarks: RenderAvaloniaMediaBookmarkOptions,
+            RefreshAccessibilityMetadata: RefreshPaneAccessibilityMetadata)));
+
+    private static string? ReadAvaloniaText(TextBox? control) => control?.Text;
+    private static void WriteAvaloniaText(TextBox control, string? value) => control.Text = value ?? string.Empty;
+    private static void WriteAvaloniaText(TextBlock control, string value) => control.Text = value;
+    private static double? ReadAvaloniaValue(Slider? control) => control?.Value;
+    private static void WriteAvaloniaValue(Slider control, double? value) =>
+        control.Value = value ?? PresentationMediaPaneSession.DefaultVolumePercent;
+    private static int? ReadAvaloniaIndex(ComboBox? control) => control?.SelectedIndex;
+    private static void WriteAvaloniaIndex(ComboBox control, int? value) => control.SelectedIndex = value ?? -1;
+    private static bool? ReadAvaloniaCheck(CheckBox? control) => control?.IsChecked;
+    private static void WriteAvaloniaCheck(CheckBox control, bool? value) => control.IsChecked = value;
+    private static void SetAvaloniaEnabled(Control control, bool value) => control.IsEnabled = value;
+    private static void SetAvaloniaVisible(Control control, bool value) => control.IsVisible = value;
+
+    private void RenderAvaloniaMediaCaptionField(
+        PresentationMediaPaneCaptionField field,
+        PresentationMediaCaptionAuthoringFieldPlan plan)
+    {
+        var controls = field switch
+        {
+            PresentationMediaPaneCaptionField.Label => (_mediaCaptionLabelText, _mediaCaptionLabelBox),
+            PresentationMediaPaneCaptionField.Language => (_mediaCaptionLanguageText, _mediaCaptionLanguageBox),
+            PresentationMediaPaneCaptionField.Source => (_mediaCaptionSourceText, _mediaCaptionSourceBox),
+            PresentationMediaPaneCaptionField.Transcript => (_mediaCaptionTranscriptText, _mediaCaptionTranscriptBox),
+            _ => throw new ArgumentOutOfRangeException(nameof(field)),
+        };
+        RenderMediaCaptionField(controls.Item1, controls.Item2, plan);
+    }
+
+    private void RenderAvaloniaMediaCaptionAction(
+        PresentationMediaPaneCaptionAction action,
+        PresentationMediaCaptionAuthoringActionPlan plan)
+    {
+        var button = action switch
+        {
+            PresentationMediaPaneCaptionAction.Create => _mediaCaptionCreateButton,
+            PresentationMediaPaneCaptionAction.Replace => _mediaCaptionReplaceButton,
+            PresentationMediaPaneCaptionAction.Delete => _mediaCaptionDeleteButton,
+            PresentationMediaPaneCaptionAction.Close => _mediaCaptionCloseButton,
+            _ => throw new ArgumentOutOfRangeException(nameof(action)),
+        };
+        ApplyMediaCaptionButtonPlan(button, plan);
+    }
+
+    private void RenderAvaloniaMediaBookmarkOptions(PresentationMediaPaneProjection plan)
     {
         _mediaBookmarkBox.Items.Clear();
         foreach (var bookmark in plan.Bookmarks)
@@ -5638,55 +5689,18 @@ public sealed partial class MainWindow : Window,
         _mediaBookmarkDeleteButton.IsEnabled = plan.HasSelectedBookmark;
     }
 
-    private void RefreshVisibleMediaCaptionPaneFromFields() => _mediaPaneHostCoordinator.Refresh();
-
     private void RenderMediaCaptionPane(PresentationMediaPaneHostRenderPlan hostPlan)
     {
         var plan = hostPlan.Caption;
-        var mediaPlan = hostPlan.Media;
-        var playbackPlan = hostPlan.Playback;
-        _mediaCaptionPaneHeading.Text = plan.Heading;
-        _mediaCaptionPaneMessage.Text = plan.Message;
-        RenderMediaCaptionTrackOptions(plan);
-        RenderMediaCaptionField(_mediaCaptionLabelText, _mediaCaptionLabelBox, plan.Label);
-        RenderMediaCaptionField(_mediaCaptionLanguageText, _mediaCaptionLanguageBox, plan.Language);
-        RenderMediaCaptionField(_mediaCaptionSourceText, _mediaCaptionSourceBox, plan.Source);
-        RenderMediaCaptionField(_mediaCaptionTranscriptText, _mediaCaptionTranscriptBox, plan.TranscriptText);
-        _mediaStartModeBox.SelectedIndex = playbackPlan.StartModeIndex;
-        _mediaLoopCheckBox.IsChecked = playbackPlan.Loop;
-        _mediaShowWhenStoppedCheckBox.IsChecked = playbackPlan.ShowWhenStopped;
-        _mediaRewindAfterPlayingCheckBox.IsChecked = playbackPlan.RewindAfterPlaying;
-        _mediaPlayFullScreenCheckBox.IsChecked = playbackPlan.PlayFullScreen;
-        _mediaStopAfterSlidesBox.Text = playbackPlan.StopAfterSlidesText;
-        _mediaStartModeBox.IsEnabled = mediaPlan.HasMedia;
-        _mediaLoopCheckBox.IsEnabled = mediaPlan.HasMedia;
-        _mediaShowWhenStoppedCheckBox.IsEnabled = mediaPlan.HasMedia;
-        _mediaRewindAfterPlayingCheckBox.IsEnabled = mediaPlan.HasMedia;
-        _mediaPlayFullScreenCheckBox.IsEnabled = mediaPlan.CanPlayFullScreen;
-        _mediaStopAfterSlidesBox.IsEnabled = mediaPlan.CanStopAfterSlides;
-        _mediaPlaybackApplyButton.IsEnabled = mediaPlan.HasMedia;
-        _mediaVolumeSlider.Value = mediaPlan.VolumePercent;
-        _mediaVolumeSlider.IsEnabled = mediaPlan.HasMedia;
-        _mediaVolumeApplyButton.IsEnabled = mediaPlan.HasMedia;
-        _mediaTimingApplyButton.IsEnabled = mediaPlan.HasMedia;
-        _mediaTrimStartBox.Text = mediaPlan.Timing.TrimStartText;
-        _mediaTrimEndBox.Text = mediaPlan.Timing.TrimEndText;
-        _mediaFadeInBox.Text = mediaPlan.Timing.FadeInText;
-        _mediaFadeOutBox.Text = mediaPlan.Timing.FadeOutText;
-        RenderMediaBookmarkOptions(mediaPlan);
-        ApplyMediaCaptionButtonPlan(
-            _mediaCaptionCreateButton,
-            plan.GetRequiredAction(PresentationMediaTranscriptPlanner.CaptionAuthoringPaneCreateCommandId));
-        ApplyMediaCaptionButtonPlan(
-            _mediaCaptionReplaceButton,
-            plan.GetRequiredAction(PresentationMediaTranscriptPlanner.CaptionAuthoringPaneReplaceCommandId));
-        ApplyMediaCaptionButtonPlan(
-            _mediaCaptionDeleteButton,
-            plan.GetRequiredAction(PresentationMediaTranscriptPlanner.CaptionAuthoringPaneDeleteCommandId));
-        ApplyMediaCaptionButtonPlan(
-            _mediaCaptionCloseButton,
-            plan.GetRequiredAction(PresentationMediaTranscriptPlanner.CaptionAuthoringPaneCloseCommandId));
+        _ = plan.GetRequiredAction(
+            PresentationMediaTranscriptPlanner.CaptionAuthoringPaneCloseCommandId);
+        _avaloniaMediaPaneHostView.Render(hostPlan);
     }
+
+    private void RenderMediaBookmarkOptions(PresentationMediaPaneProjection plan) =>
+        RenderAvaloniaMediaBookmarkOptions(plan);
+
+    private void RefreshVisibleMediaCaptionPaneFromFields() => _mediaPaneHostCoordinator.Refresh();
 
     private void RenderMediaCaptionTrackOptions(PresentationMediaCaptionAuthoringPanePlan plan)
     {

@@ -203,6 +203,7 @@ public sealed partial class MainWindow : Window,
     private Button _mediaCaptionReplaceButton = null!;
     private Button _mediaCaptionDeleteButton = null!;
     private Button _mediaCaptionCloseButton = null!;
+    private readonly PresentationMediaPaneHostViewAdapter _wpfMediaPaneHostView;
     private readonly PresentationMediaPaneHostCoordinator _mediaPaneHostCoordinator;
     private readonly PresentationSmartArtTextPaneSession _smartArtTextPaneSession;
     private readonly PresentationZoomAuthoringSession _zoomAuthoringSession;
@@ -320,6 +321,7 @@ public sealed partial class MainWindow : Window,
             _reviewWorkflowSession,
             _workareaSession.Panes,
             this);
+        _wpfMediaPaneHostView = BuildWpfMediaPaneHostView();
         _mediaPaneHostCoordinator = new(
             new PresentationMediaPaneSession(
                 () => Editor,
@@ -2642,105 +2644,154 @@ public sealed partial class MainWindow : Window,
 
     private PresentationMediaCaptionHostSnapshot CaptureMediaCaptionHostSnapshot() =>
         PresentationMediaPaneHostSnapshotPlanner.CaptureCaption(
-            _mediaCaptionLabelBox?.Text,
-            _mediaCaptionLanguageBox?.Text,
-            _mediaCaptionSourceBox?.Text,
-            _mediaCaptionTranscriptBox?.Text);
+            ReadWpfText(_mediaCaptionLabelBox),
+            ReadWpfText(_mediaCaptionLanguageBox),
+            ReadWpfText(_mediaCaptionSourceBox),
+            ReadWpfText(_mediaCaptionTranscriptBox));
 
     private PresentationMediaVolumeHostSnapshot CaptureMediaVolumeHostSnapshot() =>
-        PresentationMediaPaneHostSnapshotPlanner.CaptureVolume(_mediaVolumeSlider?.Value);
+        PresentationMediaPaneHostSnapshotPlanner.CaptureVolume(ReadWpfValue(_mediaVolumeSlider));
 
     private PresentationMediaPlaybackHostSnapshot CaptureMediaPlaybackHostSnapshot() =>
         PresentationMediaPaneHostSnapshotPlanner.CapturePlayback(
-            _mediaStartModeBox?.SelectedIndex,
-            _mediaLoopCheckBox?.IsChecked,
-            _mediaShowWhenStoppedCheckBox?.IsChecked,
-            _mediaRewindAfterPlayingCheckBox?.IsChecked,
-            _mediaPlayFullScreenCheckBox?.IsChecked,
-            _mediaStopAfterSlidesBox?.Text);
+            ReadWpfIndex(_mediaStartModeBox),
+            ReadWpfCheck(_mediaLoopCheckBox),
+            ReadWpfCheck(_mediaShowWhenStoppedCheckBox),
+            ReadWpfCheck(_mediaRewindAfterPlayingCheckBox),
+            ReadWpfCheck(_mediaPlayFullScreenCheckBox),
+            ReadWpfText(_mediaStopAfterSlidesBox));
 
     private PresentationMediaTimingHostSnapshot CaptureMediaTimingHostSnapshot() =>
         PresentationMediaPaneHostSnapshotPlanner.CaptureTiming(
-            _mediaTrimStartBox?.Text,
-            _mediaTrimEndBox?.Text,
-            _mediaFadeInBox?.Text,
-            _mediaFadeOutBox?.Text);
+            ReadWpfText(_mediaTrimStartBox),
+            ReadWpfText(_mediaTrimEndBox),
+            ReadWpfText(_mediaFadeInBox),
+            ReadWpfText(_mediaFadeOutBox));
 
     private PresentationMediaBookmarkHostSnapshot CaptureMediaBookmarkHostSnapshot() =>
         PresentationMediaPaneHostSnapshotPlanner.CaptureBookmark(
-            _mediaBookmarkNameBox?.Text,
-            _mediaBookmarkTimeBox?.Text);
+            ReadWpfText(_mediaBookmarkNameBox),
+            ReadWpfText(_mediaBookmarkTimeBox));
 
-    bool IPresentationMediaPaneHostView.IsPaneVisible => IsMediaCaptionPaneVisible;
-
+    bool IPresentationMediaPaneHostView.IsPaneVisible => _wpfMediaPaneHostView.IsPaneVisible;
     PresentationMediaCaptionHostSnapshot IPresentationMediaPaneHostView.CaptureCaption() =>
         CaptureMediaCaptionHostSnapshot();
-
     PresentationMediaVolumeHostSnapshot IPresentationMediaPaneHostView.CaptureVolume() =>
         CaptureMediaVolumeHostSnapshot();
-
     PresentationMediaPlaybackHostSnapshot IPresentationMediaPaneHostView.CapturePlayback() =>
         CaptureMediaPlaybackHostSnapshot();
-
     PresentationMediaTimingHostSnapshot IPresentationMediaPaneHostView.CaptureTiming() =>
         CaptureMediaTimingHostSnapshot();
-
     PresentationMediaBookmarkHostSnapshot IPresentationMediaPaneHostView.CaptureBookmark() =>
         CaptureMediaBookmarkHostSnapshot();
-
-    void IPresentationMediaPaneHostView.SetPaneVisible(bool visible)
-    {
-        if (_mediaCaptionPaneHost is not null)
-            _mediaCaptionPaneHost.Visibility = visible ? Visibility.Visible : Visibility.Collapsed;
-    }
-
-    void IPresentationMediaPaneHostView.SetCaptionInput(PresentationMediaCaptionHostSnapshot input)
-    {
-        _mediaCaptionLabelBox.Text = input.Label ?? string.Empty;
-        _mediaCaptionLanguageBox.Text = input.Language ?? string.Empty;
-        _mediaCaptionSourceBox.Text = input.Source ?? string.Empty;
-        _mediaCaptionTranscriptBox.Text = input.TranscriptText ?? string.Empty;
-    }
-
+    void IPresentationMediaPaneHostView.SetPaneVisible(bool visible) =>
+        _wpfMediaPaneHostView.SetPaneVisible(visible);
+    void IPresentationMediaPaneHostView.SetCaptionInput(PresentationMediaCaptionHostSnapshot input) =>
+        _wpfMediaPaneHostView.SetCaptionInput(input);
     void IPresentationMediaPaneHostView.SetVolumeInput(PresentationMediaVolumeInputPlan input) =>
-        _mediaVolumeSlider.Value = input.VolumePercent;
-
-    void IPresentationMediaPaneHostView.SetPlaybackInput(PresentationMediaPlaybackInputPlan input)
-    {
-        _mediaStartModeBox.SelectedIndex = input.StartModeIndex;
-        _mediaLoopCheckBox.IsChecked = input.Loop;
-        _mediaShowWhenStoppedCheckBox.IsChecked = input.ShowWhenStopped;
-        _mediaRewindAfterPlayingCheckBox.IsChecked = input.RewindAfterPlaying;
-        _mediaPlayFullScreenCheckBox.IsChecked = input.PlayFullScreen;
-        _mediaStopAfterSlidesBox.Text = input.StopAfterSlidesText;
-    }
-
-    void IPresentationMediaPaneHostView.SetTimingInput(PresentationMediaTimingInputPlan input)
-    {
-        _mediaTrimStartBox.Text = input.TrimStartText;
-        _mediaTrimEndBox.Text = input.TrimEndText;
-        _mediaFadeInBox.Text = input.FadeInText;
-        _mediaFadeOutBox.Text = input.FadeOutText;
-    }
-
-    void IPresentationMediaPaneHostView.SetBookmarkInput(PresentationMediaBookmarkInputPlan input)
-    {
-        _mediaBookmarkNameBox.Text = input.Name;
-        _mediaBookmarkTimeBox.Text = input.TimeText;
-    }
-
+        _wpfMediaPaneHostView.SetVolumeInput(input);
+    void IPresentationMediaPaneHostView.SetPlaybackInput(PresentationMediaPlaybackInputPlan input) =>
+        _wpfMediaPaneHostView.SetPlaybackInput(input);
+    void IPresentationMediaPaneHostView.SetTimingInput(PresentationMediaTimingInputPlan input) =>
+        _wpfMediaPaneHostView.SetTimingInput(input);
+    void IPresentationMediaPaneHostView.SetBookmarkInput(PresentationMediaBookmarkInputPlan input) =>
+        _wpfMediaPaneHostView.SetBookmarkInput(input);
     void IPresentationMediaPaneHostView.Render(PresentationMediaPaneHostRenderPlan plan) =>
         RenderMediaCaptionPane(plan);
-
     void IPresentationMediaPaneHostView.RefreshAccessibilityMetadata() =>
-        RefreshPaneAccessibilityMetadata();
+        _wpfMediaPaneHostView.RefreshAccessibilityMetadata();
 
-    private void RenderMediaBookmarkOptions(PresentationMediaPaneProjection plan)
+    private PresentationMediaPaneHostViewAdapter BuildWpfMediaPaneHostView() => new(
+        new DelegatingPresentationMediaPaneControlSurface(new(
+            PaneVisible: new(() => IsMediaCaptionPaneVisible,
+                value => SetWpfVisibility(_mediaCaptionPaneHost, value)),
+            CaptionLabel: new(() => ReadWpfText(_mediaCaptionLabelBox), value => WriteWpfText(_mediaCaptionLabelBox, value)),
+            CaptionLanguage: new(() => ReadWpfText(_mediaCaptionLanguageBox), value => WriteWpfText(_mediaCaptionLanguageBox, value)),
+            CaptionSource: new(() => ReadWpfText(_mediaCaptionSourceBox), value => WriteWpfText(_mediaCaptionSourceBox, value)),
+            CaptionTranscript: new(() => ReadWpfText(_mediaCaptionTranscriptBox), value => WriteWpfText(_mediaCaptionTranscriptBox, value)),
+            VolumePercent: new(() => ReadWpfValue(_mediaVolumeSlider), value => WriteWpfValue(_mediaVolumeSlider, value)),
+            PlaybackStartModeIndex: new(() => ReadWpfIndex(_mediaStartModeBox), value => WriteWpfIndex(_mediaStartModeBox, value)),
+            Loop: new(() => ReadWpfCheck(_mediaLoopCheckBox), value => WriteWpfCheck(_mediaLoopCheckBox, value)),
+            ShowWhenStopped: new(() => ReadWpfCheck(_mediaShowWhenStoppedCheckBox),
+                value => WriteWpfCheck(_mediaShowWhenStoppedCheckBox, value)),
+            RewindAfterPlaying: new(() => ReadWpfCheck(_mediaRewindAfterPlayingCheckBox),
+                value => WriteWpfCheck(_mediaRewindAfterPlayingCheckBox, value)),
+            PlayFullScreen: new(() => ReadWpfCheck(_mediaPlayFullScreenCheckBox),
+                value => WriteWpfCheck(_mediaPlayFullScreenCheckBox, value)),
+            StopAfterSlides: new(() => ReadWpfText(_mediaStopAfterSlidesBox), value => WriteWpfText(_mediaStopAfterSlidesBox, value)),
+            TrimStart: new(() => ReadWpfText(_mediaTrimStartBox), value => WriteWpfText(_mediaTrimStartBox, value)),
+            TrimEnd: new(() => ReadWpfText(_mediaTrimEndBox), value => WriteWpfText(_mediaTrimEndBox, value)),
+            FadeIn: new(() => ReadWpfText(_mediaFadeInBox), value => WriteWpfText(_mediaFadeInBox, value)),
+            FadeOut: new(() => ReadWpfText(_mediaFadeOutBox), value => WriteWpfText(_mediaFadeOutBox, value)),
+            BookmarkName: new(() => ReadWpfText(_mediaBookmarkNameBox), value => WriteWpfText(_mediaBookmarkNameBox, value)),
+            BookmarkTime: new(() => ReadWpfText(_mediaBookmarkTimeBox), value => WriteWpfText(_mediaBookmarkTimeBox, value)),
+            SetHeading: value => WriteWpfText(_mediaCaptionPaneHeading, value),
+            SetMessage: value => WriteWpfText(_mediaCaptionPaneMessage, value),
+            SetPlaybackStartModeEnabled: value => SetWpfEnabled(_mediaStartModeBox, value),
+            SetLoopEnabled: value => SetWpfEnabled(_mediaLoopCheckBox, value),
+            SetShowWhenStoppedEnabled: value => SetWpfEnabled(_mediaShowWhenStoppedCheckBox, value),
+            SetRewindAfterPlayingEnabled: value => SetWpfEnabled(_mediaRewindAfterPlayingCheckBox, value),
+            SetPlayFullScreenEnabled: value => SetWpfEnabled(_mediaPlayFullScreenCheckBox, value),
+            SetStopAfterSlidesEnabled: value => SetWpfEnabled(_mediaStopAfterSlidesBox, value),
+            SetPlaybackApplyEnabled: value => SetWpfEnabled(_mediaPlaybackApplyButton, value),
+            SetVolumeEnabled: value => SetWpfEnabled(_mediaVolumeSlider, value),
+            SetVolumeApplyEnabled: value => SetWpfEnabled(_mediaVolumeApplyButton, value),
+            SetTimingApplyEnabled: value => SetWpfEnabled(_mediaTimingApplyButton, value),
+            RenderCaptionTracks: RenderMediaCaptionTrackOptions,
+            RenderCaptionField: RenderWpfMediaCaptionField,
+            RenderCaptionAction: RenderWpfMediaCaptionAction,
+            RenderBookmarks: RenderWpfMediaBookmarkOptions,
+            RefreshAccessibilityMetadata: RefreshPaneAccessibilityMetadata)));
+
+    private static string? ReadWpfText(TextBox? control) => control?.Text;
+    private static void WriteWpfText(TextBox control, string? value) => control.Text = value ?? string.Empty;
+    private static void WriteWpfText(TextBlock control, string value) => control.Text = value;
+    private static double? ReadWpfValue(Slider? control) => control?.Value;
+    private static void WriteWpfValue(Slider control, double? value) =>
+        control.Value = value ?? PresentationMediaPaneSession.DefaultVolumePercent;
+    private static int? ReadWpfIndex(ComboBox? control) => control?.SelectedIndex;
+    private static void WriteWpfIndex(ComboBox control, int? value) => control.SelectedIndex = value ?? -1;
+    private static bool? ReadWpfCheck(CheckBox? control) => control?.IsChecked;
+    private static void WriteWpfCheck(CheckBox control, bool? value) => control.IsChecked = value;
+    private static void SetWpfEnabled(UIElement control, bool value) => control.IsEnabled = value;
+    private static void SetWpfVisibility(UIElement control, bool value) =>
+        control.Visibility = value ? Visibility.Visible : Visibility.Collapsed;
+
+    private void RenderWpfMediaCaptionField(
+        PresentationMediaPaneCaptionField field,
+        PresentationMediaCaptionAuthoringFieldPlan plan)
+    {
+        var controls = field switch
+        {
+            PresentationMediaPaneCaptionField.Label => (_mediaCaptionLabelText, _mediaCaptionLabelBox),
+            PresentationMediaPaneCaptionField.Language => (_mediaCaptionLanguageText, _mediaCaptionLanguageBox),
+            PresentationMediaPaneCaptionField.Source => (_mediaCaptionSourceText, _mediaCaptionSourceBox),
+            PresentationMediaPaneCaptionField.Transcript => (_mediaCaptionTranscriptText, _mediaCaptionTranscriptBox),
+            _ => throw new ArgumentOutOfRangeException(nameof(field)),
+        };
+        RenderMediaCaptionField(controls.Item1, controls.Item2, plan);
+    }
+
+    private void RenderWpfMediaCaptionAction(
+        PresentationMediaPaneCaptionAction action,
+        PresentationMediaCaptionAuthoringActionPlan plan)
+    {
+        var button = action switch
+        {
+            PresentationMediaPaneCaptionAction.Create => _mediaCaptionCreateButton,
+            PresentationMediaPaneCaptionAction.Replace => _mediaCaptionReplaceButton,
+            PresentationMediaPaneCaptionAction.Delete => _mediaCaptionDeleteButton,
+            PresentationMediaPaneCaptionAction.Close => _mediaCaptionCloseButton,
+            _ => throw new ArgumentOutOfRangeException(nameof(action)),
+        };
+        ApplyMediaCaptionButtonPlan(button, plan);
+    }
+
+    private void RenderWpfMediaBookmarkOptions(PresentationMediaPaneProjection plan)
     {
         _mediaBookmarkBox.Items.Clear();
         foreach (var bookmark in plan.Bookmarks)
             _mediaBookmarkBox.Items.Add(new ComboBoxItem { Content = bookmark.DisplayText, Tag = bookmark.Index });
-
         _mediaBookmarkBox.SelectedIndex = plan.SelectedBookmarkIndex ?? -1;
         _mediaBookmarkNameBox.Text = plan.BookmarkName;
         _mediaBookmarkTimeBox.Text = plan.BookmarkTimeText;
@@ -2752,55 +2803,17 @@ public sealed partial class MainWindow : Window,
         _mediaBookmarkDeleteButton.IsEnabled = plan.HasSelectedBookmark;
     }
 
-    private void RefreshVisibleMediaCaptionPaneFromFields() => _mediaPaneHostCoordinator.Refresh();
-
     private void RenderMediaCaptionPane(PresentationMediaPaneHostRenderPlan hostPlan)
     {
         var plan = hostPlan.Caption;
-        var mediaPlan = hostPlan.Media;
-        var playbackPlan = hostPlan.Playback;
-        _mediaCaptionPaneHeading.Text = plan.Heading;
-        _mediaCaptionPaneMessage.Text = plan.Message;
-        RenderMediaCaptionTrackOptions(plan);
-        RenderMediaCaptionField(_mediaCaptionLabelText, _mediaCaptionLabelBox, plan.Label);
-        RenderMediaCaptionField(_mediaCaptionLanguageText, _mediaCaptionLanguageBox, plan.Language);
-        RenderMediaCaptionField(_mediaCaptionSourceText, _mediaCaptionSourceBox, plan.Source);
-        RenderMediaCaptionField(_mediaCaptionTranscriptText, _mediaCaptionTranscriptBox, plan.TranscriptText);
-        _mediaStartModeBox.SelectedIndex = playbackPlan.StartModeIndex;
-        _mediaLoopCheckBox.IsChecked = playbackPlan.Loop;
-        _mediaShowWhenStoppedCheckBox.IsChecked = playbackPlan.ShowWhenStopped;
-        _mediaRewindAfterPlayingCheckBox.IsChecked = playbackPlan.RewindAfterPlaying;
-        _mediaPlayFullScreenCheckBox.IsChecked = playbackPlan.PlayFullScreen;
-        _mediaStopAfterSlidesBox.Text = playbackPlan.StopAfterSlidesText;
-        _mediaStartModeBox.IsEnabled = mediaPlan.HasMedia;
-        _mediaLoopCheckBox.IsEnabled = mediaPlan.HasMedia;
-        _mediaShowWhenStoppedCheckBox.IsEnabled = mediaPlan.HasMedia;
-        _mediaRewindAfterPlayingCheckBox.IsEnabled = mediaPlan.HasMedia;
-        _mediaPlayFullScreenCheckBox.IsEnabled = mediaPlan.CanPlayFullScreen;
-        _mediaStopAfterSlidesBox.IsEnabled = mediaPlan.CanStopAfterSlides;
-        _mediaPlaybackApplyButton.IsEnabled = mediaPlan.HasMedia;
-        _mediaVolumeSlider.Value = mediaPlan.VolumePercent;
-        _mediaVolumeSlider.IsEnabled = mediaPlan.HasMedia;
-        _mediaVolumeApplyButton.IsEnabled = mediaPlan.HasMedia;
-        _mediaTimingApplyButton.IsEnabled = mediaPlan.HasMedia;
-        _mediaTrimStartBox.Text = mediaPlan.Timing.TrimStartText;
-        _mediaTrimEndBox.Text = mediaPlan.Timing.TrimEndText;
-        _mediaFadeInBox.Text = mediaPlan.Timing.FadeInText;
-        _mediaFadeOutBox.Text = mediaPlan.Timing.FadeOutText;
-        RenderMediaBookmarkOptions(mediaPlan);
-        ApplyMediaCaptionButtonPlan(
-            _mediaCaptionCreateButton,
-            plan.GetRequiredAction(PresentationMediaTranscriptPlanner.CaptionAuthoringPaneCreateCommandId));
-        ApplyMediaCaptionButtonPlan(
-            _mediaCaptionReplaceButton,
-            plan.GetRequiredAction(PresentationMediaTranscriptPlanner.CaptionAuthoringPaneReplaceCommandId));
-        ApplyMediaCaptionButtonPlan(
-            _mediaCaptionDeleteButton,
-            plan.GetRequiredAction(PresentationMediaTranscriptPlanner.CaptionAuthoringPaneDeleteCommandId));
-        ApplyMediaCaptionButtonPlan(
-            _mediaCaptionCloseButton,
-            plan.GetRequiredAction(PresentationMediaTranscriptPlanner.CaptionAuthoringPaneCloseCommandId));
+        _ = plan.GetRequiredAction(
+            PresentationMediaTranscriptPlanner.CaptionAuthoringPaneCloseCommandId);
+        _wpfMediaPaneHostView.Render(hostPlan);
     }
+
+    private void RenderMediaBookmarkOptions(PresentationMediaPaneProjection plan) =>
+        RenderWpfMediaBookmarkOptions(plan);
+    private void RefreshVisibleMediaCaptionPaneFromFields() => _mediaPaneHostCoordinator.Refresh();
 
     private void RenderMediaCaptionTrackOptions(PresentationMediaCaptionAuthoringPanePlan plan)
     {
