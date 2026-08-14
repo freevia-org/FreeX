@@ -109,6 +109,7 @@ public sealed partial class MainWindow : Window,
     private readonly FreePOptions _options;
     private readonly FreePOptionsRuntimeSession _optionsRuntime;
     private readonly IApplicationOptionsStore<FreePOptions> _optionsStore;
+    private readonly IUserMessageService? _messageService;
     private LinuxNativeOutputCapabilities _nativeOutputCapabilities;
     private readonly IPlatformPrintService _printService;
     private readonly Func<Window, PrinterDiscoveryResult, PrintSelection?, CancellationToken, Task<PrintSelection?>>
@@ -398,7 +399,8 @@ public sealed partial class MainWindow : Window,
         IPlatformPrintService? printService = null,
         Func<Window, PrinterDiscoveryResult, PrintSelection?, CancellationToken, Task<PrintSelection?>>?
             showPrintSelectionDialog = null,
-        IApplicationOptionsStore<FreePOptions>? optionsStore = null)
+        IApplicationOptionsStore<FreePOptions>? optionsStore = null,
+        IUserMessageService? messageService = null)
     {
         InitializeConditionalHost();
         Title = FreePApplicationFrameDescriptor.Title.ApplicationName;
@@ -411,6 +413,7 @@ public sealed partial class MainWindow : Window,
         _options = options ?? new FreePOptions();
         _optionsRuntime = new FreePOptionsRuntimeSession(_options);
         _optionsStore = optionsStore ?? new InMemoryApplicationOptionsStore<FreePOptions>(_options);
+        _messageService = messageService;
         _nativeOutputCapabilities = nativeOutputCapabilities ??
             LinuxNativeOutputCapabilities.Unavailable(PresentationShellTextCatalog.Resolve(
                 PresentationShellTextCatalog.NativeOutputDetectionPendingStatus));
@@ -2720,7 +2723,9 @@ public sealed partial class MainWindow : Window,
     private async Task InsertPictureFromFileAsync()
     {
         var result = await ImportPresentationAssetAsync(PresentationAssetImportKind.Picture);
-        MaterializePresentationAssetImportResult(result, showInsertedStatus: true);
+        await MaterializePresentationAssetImportResultAsync(
+            result,
+            new PresentationAssetImportOutcomePolicy(ShowInsertedStatus: true));
     }
 
     private async Task InsertMediaFromFileAsync(bool isVideo)
@@ -2729,19 +2734,25 @@ public sealed partial class MainWindow : Window,
             ? PresentationAssetImportKind.Video
             : PresentationAssetImportKind.Audio;
         var result = await ImportPresentationAssetAsync(kind);
-        MaterializePresentationAssetImportResult(result, showInsertedStatus: true);
+        await MaterializePresentationAssetImportResultAsync(
+            result,
+            new PresentationAssetImportOutcomePolicy(ShowInsertedStatus: true));
     }
 
     private async Task InsertEmbeddedObjectFromFileAsync()
     {
         var result = await ImportPresentationAssetAsync(PresentationAssetImportKind.EmbeddedObject);
-        MaterializePresentationAssetImportResult(result, showInsertedStatus: true);
+        await MaterializePresentationAssetImportResultAsync(
+            result,
+            new PresentationAssetImportOutcomePolicy(ShowInsertedStatus: true));
     }
 
     private async Task PickTransitionSoundAsync()
     {
         var result = await ImportPresentationAssetAsync(PresentationAssetImportKind.TransitionSound);
-        MaterializePresentationAssetImportResult(result, showInsertedStatus: true);
+        await MaterializePresentationAssetImportResultAsync(
+            result,
+            new PresentationAssetImportOutcomePolicy(ShowInsertedStatus: true));
     }
 
     // ── File lifecycle ─────────────────────────────────────────────────────────
@@ -2774,10 +2785,11 @@ public sealed partial class MainWindow : Window,
         }
 
         var result = await ImportPresentationAssetAsync(PresentationAssetImportKind.PictureBullet);
-        MaterializePresentationAssetImportResult(
+        await MaterializePresentationAssetImportResultAsync(
             result,
-            successStatus: PresentationShellTextCatalog.Resolve(
-                PresentationShellTextCatalog.PictureBulletAppliedStatus));
+            new PresentationAssetImportOutcomePolicy(
+                SuccessStatusText: PresentationShellTextCatalog.Resolve(
+                    PresentationShellTextCatalog.PictureBulletAppliedStatus)));
     }
 
     private void ShowDomainDialog(Window dialog)
@@ -3143,7 +3155,18 @@ public sealed partial class MainWindow : Window,
                 summarySectionId,
                 bytes,
                 contentType));
-        MaterializePresentationAssetImportResult(result);
+        if (result.Status == PresentationAssetImportStatus.Failed)
+        {
+            await MaterializePresentationAssetImportResultAsync(
+                result,
+                PresentationAssetImportOutcomePolicy.ModalError);
+        }
+        else if (result.Status == PresentationAssetImportStatus.Unavailable)
+        {
+            await MaterializePresentationAssetImportResultAsync(
+                result,
+                new PresentationAssetImportOutcomePolicy());
+        }
     }
 
     internal async Task RestoreZoomPreviewAsync()
@@ -5451,7 +5474,10 @@ public sealed partial class MainWindow : Window,
     private async Task ReplaceSmartArtTextPanePictureFromFileAsync()
     {
         var result = await ImportPresentationAssetAsync(PresentationAssetImportKind.SmartArtPicture);
-        MaterializePresentationAssetImportResult(result);
+        await MaterializePresentationAssetImportResultAsync(
+            result,
+            PresentationAssetImportOutcomePolicy.SmartArtPane,
+            statusText => _smartArtTextPaneMessage.Text = statusText);
     }
 
     private SmartArtNodeEditResult? ApplySmartArtTextPanePicture(

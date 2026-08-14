@@ -37,19 +37,28 @@ public sealed partial class MainWindow
         _textEditor?.TryApplyActiveTableCellParagraphPictureBullet(payload) == true ||
         Editor.TryApplyActiveTableCellParagraphPictureBullet(payload);
 
-    private void MaterializePresentationAssetImportResult(
+    private async ValueTask MaterializePresentationAssetImportResultAsync(
         PresentationAssetImportResult result,
-        bool showInsertedStatus = false,
-        string? successStatus = null)
+        PresentationAssetImportOutcomePolicy policy,
+        Action<string>? statusTarget = null)
     {
         var presentation = PresentationAssetImportOutcomePlanner.Plan(
             result,
             FileText,
-            new PresentationAssetImportOutcomePolicy(
-                showInsertedStatus,
-                successStatus));
+            policy);
         if (presentation.StatusText is { } statusText)
-            _statusText.Text = statusText;
+        {
+            if (statusTarget is null)
+                _statusText.Text = statusText;
+            else
+                statusTarget(statusText);
+        }
+
+        if (presentation.Message is { } message)
+        {
+            var messageService = _messageService ?? new AvaloniaUserMessageService(this);
+            await messageService.ShowMessageAsync(message);
+        }
     }
 
     private sealed class AvaloniaPresentationAssetPickerPort(MainWindow owner) : IPresentationAssetPickerPort

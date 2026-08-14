@@ -122,6 +122,7 @@ public sealed class PresentationAssetImportOutcomePlannerTests
         var wpfAdapter = Read(root, "freep", "FreeP.App.Host", "MainWindow.AssetImports.cs");
         var wpfWindow = Read(root, "freep", "FreeP.App.Host", "MainWindow.cs");
         var avaloniaAdapter = Read(root, "freep", "FreeP.App.Avalonia", "MainWindow.AssetImports.cs");
+        var avaloniaWindow = Read(root, "freep", "FreeP.App.Avalonia", "MainWindow.cs");
 
         wpfAdapter.Should().Contain("PresentationAssetImportOutcomePlanner.Plan(")
             .And.Contain("Action<string>? statusTarget = null")
@@ -134,9 +135,16 @@ public sealed class PresentationAssetImportOutcomePlannerTests
             .And.NotContain("Could not replace SmartArt picture:")
             .And.NotContain("MessageBox.Show(this, result.Message");
         avaloniaAdapter.Should().Contain("PresentationAssetImportOutcomePlanner.Plan(")
-            .And.Contain("_statusText.Text = statusText")
+            .And.Contain("Action<string>? statusTarget = null")
+            .And.Contain("_messageService ?? new AvaloniaUserMessageService(this)")
+            .And.Contain("messageService.ShowMessageAsync(message)")
             .And.NotContain("switch (result.Status)")
             .And.NotContain("SisterAppFileTextPlanner.FormatCommand");
+        avaloniaWindow.Should().Contain("PresentationAssetImportOutcomePolicy.ModalError")
+            .And.Contain("PresentationAssetImportOutcomePolicy.SmartArtPane")
+            .And.Contain("statusText => _smartArtTextPaneMessage.Text = statusText")
+            .And.Contain("IUserMessageService? messageService = null")
+            .And.NotContain("Could not replace SmartArt picture:");
     }
 
     private static PresentationAssetImportResult Result(
