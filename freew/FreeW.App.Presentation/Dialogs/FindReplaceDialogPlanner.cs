@@ -30,16 +30,6 @@ public enum FindReplaceValidationError
     SearchTermRequired
 }
 
-/// <summary>
-/// Identifies the field that receives initial focus when the modeless Find &amp; Replace surface opens.
-/// Both desktop hosts consume this shared intent so Ctrl+F and Ctrl+H remain distinguishable.
-/// </summary>
-public enum FindReplaceDialogOpenMode
-{
-    Find,
-    Replace
-}
-
 public readonly record struct FindReplaceOptionChoice(
     FindReplaceOptionKind Kind,
     string Label,
@@ -88,6 +78,15 @@ public readonly record struct FindReplaceOptionPlan(
     string Label,
     bool IsEnabled);
 
+/// <summary>
+/// FreeW's search-option triple stays app-local on purpose. Only <c>MatchCase</c> is common to all
+/// three sister apps: FreeX's option set is <c>Within</c>/<c>SearchOrder</c>/<c>LookIn</c> plus
+/// match-entire-CELL (a different rule from whole-WORD), and FreeP has no wildcard concept at all.
+/// The single portable decision here -- wildcards suppress whole-word matching -- has exactly one
+/// consumer, so <see cref="FindReplaceDialogPlanner.NormalizeOptions"/> and
+/// <see cref="FindReplaceDialogPlanner.IsOptionEnabled"/> are deliberately NOT extracted into
+/// <see cref="FindReplaceDialogPolicy"/>.
+/// </summary>
 public readonly record struct FindReplaceSearchOptions(
     bool MatchCase,
     bool WholeWord,

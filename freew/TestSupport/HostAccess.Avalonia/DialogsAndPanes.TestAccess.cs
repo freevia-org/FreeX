@@ -1,3 +1,4 @@
+﻿using Free.Shared.AppServices;
 using Avalonia.Controls;
 using FreeW.App.Avalonia.Editing;
 using FreeW.App.Presentation.Dialogs;
@@ -251,11 +252,11 @@ internal sealed partial class MultilevelListDialog
 
 public sealed partial class FindReplaceDialog
 {
-    internal FindReplaceDialogOpenMode OpenModeForTest => _session.State.OpenMode;
+    internal FindReplaceOpenMode OpenModeForTest => _session.State.OpenMode;
 
-    internal FindReplaceDialogOpenMode? FocusedFieldForTest =>
-        _findBox.IsFocused ? FindReplaceDialogOpenMode.Find :
-        _replaceBox.IsFocused ? FindReplaceDialogOpenMode.Replace : null;
+    internal FindReplaceOpenMode? FocusedFieldForTest =>
+        _findBox.IsFocused ? FindReplaceOpenMode.Find :
+        _replaceBox.IsFocused ? FindReplaceOpenMode.Replace : null;
 }
 
 internal sealed partial class MarkIndexEntryDialog

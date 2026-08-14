@@ -1,3 +1,4 @@
+﻿using Free.Shared.AppServices;
 using System.Threading;
 using System.Threading.Tasks;
 using Avalonia;
@@ -31,13 +32,13 @@ public sealed class RevealFormattingAndFindReplaceTests
         }
         catch (Exception)
         {
-            return false; // no headless drawing backend in this CI environment — test is skipped
+            return false; // no headless drawing backend in this CI environment â€” test is skipped
         }
     }
 
-    // ═══════════════════════════════════════════════════════════════════════
-    // A — GetCaretFormatting() DocumentView API
-    // ═══════════════════════════════════════════════════════════════════════
+    // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+    // A â€” GetCaretFormatting() DocumentView API
+    // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 
     [Fact]
     public async Task GetCaretFormatting_returns_run_formatting_of_first_run()
@@ -62,7 +63,7 @@ public sealed class RevealFormattingAndFindReplaceTests
             return;
 
         run.Should().NotBeNull();
-        // The caret starts at block 0, offset 0 — the run formatting at that position is the first run's.
+        // The caret starts at block 0, offset 0 â€” the run formatting at that position is the first run's.
         run!.Bold.Should().BeTrue();
     }
 
@@ -101,9 +102,9 @@ public sealed class RevealFormattingAndFindReplaceTests
         pf.SpaceBeforePt.Should().Be(12);
     }
 
-    // ═══════════════════════════════════════════════════════════════════════
-    // B — RevealFormatting model (pure, no Avalonia needed)
-    // ═══════════════════════════════════════════════════════════════════════
+    // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+    // B â€” RevealFormatting model (pure, no Avalonia needed)
+    // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 
     [Fact]
     public void RevealFormatting_Describe_produces_three_sections()
@@ -165,9 +166,9 @@ public sealed class RevealFormattingAndFindReplaceTests
         paper!.Value.Should().Contain("Portrait");
     }
 
-    // ═══════════════════════════════════════════════════════════════════════
-    // C — RevealFormattingPane toggle (Avalonia headless)
-    // ═══════════════════════════════════════════════════════════════════════
+    // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+    // C â€” RevealFormattingPane toggle (Avalonia headless)
+    // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 
     [Fact]
     public async Task RevealFormattingPane_is_hidden_by_default()
@@ -209,12 +210,12 @@ public sealed class RevealFormattingAndFindReplaceTests
     [Fact]
     public async Task FindReplaceDialog_reuse_updates_open_mode_for_both_shortcuts()
     {
-        FindReplaceDialogOpenMode? initialFocus = null;
-        FindReplaceDialogOpenMode? afterReplace = null;
-        FindReplaceDialogOpenMode? afterFind = null;
+        FindReplaceOpenMode? initialFocus = null;
+        FindReplaceOpenMode? afterReplace = null;
+        FindReplaceOpenMode? afterFind = null;
         var ran = await OnUiThread(() =>
         {
-            var dialog = new FindReplaceDialog(new DocumentView(), FindReplaceDialogOpenMode.Find);
+            var dialog = new FindReplaceDialog(new DocumentView(), FindReplaceOpenMode.Find);
             try
             {
                 dialog.Show();
@@ -222,11 +223,11 @@ public sealed class RevealFormattingAndFindReplaceTests
                 initialFocus = dialog.FocusedFieldForTest;
 
                 dialog.Activate();
-                dialog.ActivateFor(FindReplaceDialogOpenMode.Replace);
+                dialog.ActivateFor(FindReplaceOpenMode.Replace);
                 afterReplace = dialog.FocusedFieldForTest;
 
                 dialog.Activate();
-                dialog.ActivateFor(FindReplaceDialogOpenMode.Find);
+                dialog.ActivateFor(FindReplaceOpenMode.Find);
                 afterFind = dialog.FocusedFieldForTest;
             }
             finally
@@ -238,9 +239,9 @@ public sealed class RevealFormattingAndFindReplaceTests
         if (!ran)
             return;
 
-        initialFocus.Should().Be(FindReplaceDialogOpenMode.Find);
-        afterReplace.Should().Be(FindReplaceDialogOpenMode.Replace);
-        afterFind.Should().Be(FindReplaceDialogOpenMode.Find);
+        initialFocus.Should().Be(FindReplaceOpenMode.Find);
+        afterReplace.Should().Be(FindReplaceOpenMode.Replace);
+        afterFind.Should().Be(FindReplaceOpenMode.Find);
     }
 
 }

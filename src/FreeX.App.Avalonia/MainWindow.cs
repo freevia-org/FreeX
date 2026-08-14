@@ -13386,13 +13386,16 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         var replaceTabItem = new TabItem { Header = Fr(FindReplaceDialogText.Replace), Content = replaceTabPanel };
         AutomationProperties.SetAutomationId(replaceTabItem, "FindReplaceReplaceTab");
 
+        var openTabHeight = FindReplaceDialogPlanner.ShowsReplaceCommands(replaceMode)
+            ? FindReplaceDialogPlanner.ReplaceTabHeight
+            : FindReplaceDialogPlanner.FindTabHeight;
         var tabs = new TabControl
         {
             Items = { findTabItem, replaceTabItem },
-            SelectedIndex = replaceMode ? 1 : 0,
-            Height = replaceMode ? FindReplaceDialogPlanner.ReplaceTabHeight : FindReplaceDialogPlanner.FindTabHeight,
-            MinHeight = replaceMode ? FindReplaceDialogPlanner.ReplaceTabHeight : FindReplaceDialogPlanner.FindTabHeight,
-            MaxHeight = replaceMode ? FindReplaceDialogPlanner.ReplaceTabHeight : FindReplaceDialogPlanner.FindTabHeight,
+            SelectedIndex = FindReplaceDialogPlanner.ShowsReplaceCommands(replaceMode) ? 1 : 0,
+            Height = openTabHeight,
+            MinHeight = openTabHeight,
+            MaxHeight = openTabHeight,
         };
         AutomationProperties.SetAutomationId(tabs, "FindReplaceTabs");
         AvaloniaCompactDialogChrome.ApplyClassicTabChrome(tabs);
@@ -13581,7 +13584,11 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         foreach (var textBox in new[] { findBox, replaceFindBox, replaceWithBox })
             textBox.CornerRadius = new CornerRadius(0);
 
-        bool OnReplaceTab() => tabs.SelectedItem == replaceTabItem;
+        // The selected TabItem is this renderer's rendering of the cross-app FindReplaceOpenMode;
+        // every mode-dependent decision below is resolved through the shared planner projection.
+        FindReplaceOpenMode CurrentOpenMode() =>
+            FindReplaceDialogPlanner.OpenModeFor(tabs.SelectedItem == replaceTabItem);
+        bool OnReplaceTab() => FindReplaceDialogPlanner.ShowsReplaceCommands(CurrentOpenMode());
         string CurrentFindText() => (OnReplaceTab() ? replaceFindBox.Text : findBox.Text) ?? "";
 
         void FocusSearchBox()

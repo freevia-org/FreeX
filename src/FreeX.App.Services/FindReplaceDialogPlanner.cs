@@ -45,6 +45,37 @@ public static class FindReplaceDialogPlanner
     public const double ResultNameColumnWidth = 90;
     public const double ResultCellColumnWidth = 70;
 
+    /// <summary>
+    /// Projects the host's <c>replaceMode</c> flag onto the cross-app open mode owned by
+    /// <see cref="FindReplaceDialogPolicy"/>. FreeX renders the mode as a selected TabItem;
+    /// FreeW and FreeP render it differently, but the state itself is the same decision.
+    /// </summary>
+    public static FindReplaceOpenMode OpenModeFor(bool replaceMode) =>
+        FindReplaceDialogPolicy.OpenModeFor(replaceMode);
+
+    /// <summary>
+    /// Whether the Replace / Replace All commands (and the "Replace with" row in the Avalonia
+    /// renderer) are offered for the given mode. Shared with FreeP through
+    /// <see cref="FindReplaceDialogPolicy.ShowsReplaceSurface"/>.
+    /// </summary>
+    public static bool ShowsReplaceCommands(FindReplaceOpenMode mode) =>
+        FindReplaceDialogPolicy.ShowsReplaceSurface(mode);
+
+    /// <summary>
+    /// Convenience overload for renderers that only know "is the Replace tab selected".
+    /// </summary>
+    public static bool ShowsReplaceCommands(bool replaceMode) =>
+        ShowsReplaceCommands(OpenModeFor(replaceMode));
+
+    // Deliberately NOT shared with FreeW/FreeP (see FindReplaceDialogPolicy):
+    // * Status text. FreeX resolves every status through localized FindReplaceDialogText resource
+    //   keys, so it cannot consume the policy's English literals without regressing localization.
+    // * The blank-search allowance. Excel permits an empty "Find what" when a Format criterion is
+    //   set (R64-commands-find-replace-6-1); no sister app has a format criterion.
+    // * The result cursor. FindReplaceWorkflowSession anchors the next match to the active cell in
+    //   workbook (sheet, row, column) order with replaceable-match skipping -- not the modular
+    //   wrap cursor FindReplaceDialogPolicy.Navigate serves for FreeP.
+
     public static FindOptions CreateFindOptions(
         SheetId? currentSheetId,
         int withinSelectedIndex,

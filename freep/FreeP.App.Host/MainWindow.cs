@@ -3479,47 +3479,43 @@ public sealed partial class MainWindow : Window,
         if (_layoutPickerHost is null || _layoutPickerPanel is null)
             return;
 
-        _layoutPickerPanel.Children.Clear();
-        foreach (var group in plan.Groups)
-        {
-            _layoutPickerPanel.Children.Add(new TextBlock
-            {
-                Text = group.Heading,
-                Margin = new Thickness(10, 8, 10, 2),
-                FontSize = 11,
-                FontWeight = FontWeights.SemiBold,
-                Foreground = FreePBrushes.PaneText,
-            });
-
-            var groupPanel = new WrapPanel
-            {
-                Orientation = Orientation.Horizontal,
-                Margin = new Thickness(4, 0, 4, 4),
-            };
-
-            foreach (var choice in group.Choices)
-            {
-                var button = new Button
+        PresentationLayoutPickerNativeAdapter.Populate(
+            plan,
+            _layoutPickerPanel,
+            new PresentationLayoutPickerNativeBindings<StackPanel, TextBlock, WrapPanel, Button>(
+                Clear: root => root.Children.Clear(),
+                CreateHeading: group => new TextBlock
                 {
-                    Tag = choice.LayoutId,
-                    Content = BuildLayoutChoiceTile(choice),
-                    Margin = new Thickness(4),
-                    Padding = new Thickness(0),
-                    HorizontalContentAlignment = HorizontalAlignment.Stretch,
-                    IsEnabled = choice.Chrome.IsEnabled,
-                };
-                AutomationProperties.SetName(button, choice.DisplayLabel);
-                AutomationProperties.SetAutomationId(button, choice.AutomationId);
-                button.Click += (_, _) =>
+                    Text = group.Heading,
+                    Margin = new Thickness(10, 8, 10, 2),
+                    FontSize = 11,
+                    FontWeight = FontWeights.SemiBold,
+                    Foreground = FreePBrushes.PaneText,
+                },
+                CreateGroup: _ => new WrapPanel
                 {
-                    if (button.Tag is string layoutId)
-                        ApplyLayoutChoice(layoutId);
-                };
-                groupPanel.Children.Add(button);
-            }
-
-            _layoutPickerPanel.Children.Add(groupPanel);
-        }
+                    Orientation = Orientation.Horizontal,
+                    Margin = new Thickness(4, 0, 4, 4),
+                },
+                CreateChoice: choice =>
+                {
+                    var button = new Button
+                    {
+                        Content = BuildLayoutChoiceTile(choice),
+                        Margin = new Thickness(4),
+                        Padding = new Thickness(0),
+                        HorizontalContentAlignment = HorizontalAlignment.Stretch,
+                        IsEnabled = choice.Chrome.IsEnabled,
+                    };
+                    AutomationProperties.SetName(button, choice.DisplayLabel);
+                    AutomationProperties.SetAutomationId(button, choice.AutomationId);
+                    return button;
+                },
+                BindChoice: (choice, execute) => choice.Click += (_, _) => execute(),
+                AddChoice: (group, choice) => group.Children.Add(choice),
+                AddHeading: (root, heading) => root.Children.Add(heading),
+                AddGroup: (root, group) => root.Children.Add(group)),
+            layoutId => ApplyLayoutChoice(layoutId));
 
         HideTablePicker();
         _layoutPickerHost.Visibility = Visibility.Visible;
