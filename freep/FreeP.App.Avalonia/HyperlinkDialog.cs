@@ -1,11 +1,9 @@
 using Avalonia;
 using Avalonia.Automation;
 using Avalonia.Controls;
-using Avalonia.Controls.Presenters;
 using Avalonia.Layout;
 using Avalonia.Media;
 using Avalonia.Styling;
-using Avalonia.VisualTree;
 using Free.Shared.Shell.Avalonia;
 using FreeP.App.Compositor;
 using FreeP.Core.Model;
@@ -293,33 +291,7 @@ internal sealed partial class HyperlinkDialog : FreePDialogWindow
             buttons[1].BorderBrush = FreePBrushes.DisabledBorder;
         }
 
-        var disabledComboBackground = new SolidColorBrush(Color.FromRgb(0xF0, 0xF0, 0xF0));
-        _slideCombo.Styles.Add(new Style(selector => selector.OfType<Border>().Name("PART_LayoutRoot"))
-        {
-            Setters =
-            {
-                new Setter(Border.BackgroundProperty, disabledComboBackground),
-                new Setter(Border.OpacityProperty, 1d),
-            },
-        });
-        _slideCombo.Styles.Add(new Style(selector => selector.OfType<ContentPresenter>().Name("PART_ContentPresenter"))
-        {
-            Setters =
-            {
-                new Setter(ContentPresenter.BackgroundProperty, disabledComboBackground),
-                new Setter(ContentPresenter.OpacityProperty, 1d),
-            },
-        });
-        foreach (var border in _slideCombo.GetVisualDescendants().OfType<Border>())
-        {
-            border.Background = disabledComboBackground;
-            border.Opacity = 1;
-        }
-        foreach (var presenter in _slideCombo.GetVisualDescendants().OfType<ContentPresenter>())
-        {
-            presenter.Background = disabledComboBackground;
-            presenter.Opacity = 1;
-        }
+        AvaloniaCompactDialogChrome.ApplyWpfDisabledComboSurface(_slideCombo);
     }
 
     private void OnOk() => Apply();

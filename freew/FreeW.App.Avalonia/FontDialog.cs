@@ -220,7 +220,7 @@ public sealed class FontDialog : FreeWDialogWindow
         Opened += (_, _) =>
         {
             foreach (var combo in this.GetVisualDescendants().OfType<ComboBox>())
-                FontParagraphDialogChrome.ApplyComboBox(combo, DialogChromeStyle, combo.IsEditable);
+                FontParagraphDialogChrome.ApplyComboBox(combo, DialogChromeStyle);
             foreach (var box in fieldControls.Values.OfType<TextBox>())
                 FontParagraphDialogChrome.ApplyTextBox(box, DialogChromeStyle);
             ApplyCheckBoxChrome();

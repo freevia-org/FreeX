@@ -49,6 +49,27 @@ public sealed class SharedAvaloniaDialogChromeOwnershipTests
             .And.NotContain("selector.OfType<Border>().Name(\"PART_LayoutRoot\")");
     }
 
+    [Fact]
+    public void AppDialogsDoNotRepairSharedComboBoxTemplateParts()
+    {
+        var root = TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeX.slnx");
+        var consumers = new[]
+        {
+            Path.Combine(root, "freew", "FreeW.App.Avalonia", "FontParagraphDialogChrome.cs"),
+            Path.Combine(root, "freep", "FreeP.App.Avalonia", "HyperlinkDialog.cs"),
+        };
+
+        foreach (var path in consumers)
+        {
+            var source = File.ReadAllText(path);
+            source.Should().NotContain("PART_LayoutRoot", path)
+                .And.NotContain("GetVisualDescendants().OfType<ContentPresenter>()", path);
+        }
+
+        File.ReadAllText(consumers[1]).Should()
+            .Contain("AvaloniaCompactDialogChrome.ApplyWpfDisabledComboSurface(_slideCombo)");
+    }
+
     private static string Read(string root, string fileName) =>
         File.ReadAllText(Path.Combine(
             root,
