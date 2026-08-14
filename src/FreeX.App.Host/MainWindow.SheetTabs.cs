@@ -771,11 +771,8 @@ public partial class MainWindow
         return measuredWidth;
     }
 
-    private static double EstimateSheetTabWidth(SheetTabViewModel tab)
-    {
-        var protectedIndicatorWidth = tab.IsProtected ? 16.0 : 0.0;
-        return Math.Max(86, 54 + protectedIndicatorWidth + (tab.Name?.Length ?? 0) * 7.5);
-    }
+    private static double EstimateSheetTabWidth(SheetTabViewModel tab) =>
+        SheetTabWidthEstimator.Estimate(tab.Name, tab.IsProtected, SheetTabWidthEstimator.Wpf);
 
     private static double ResolveLayoutWidth(FrameworkElement element)
     {
