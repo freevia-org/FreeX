@@ -248,25 +248,16 @@ internal static class FreeWRibbonCommands
         // Home > Paragraph: apply multilevel/legal outline numbering (1, 1.1, 1.1.1) to the selected
         // paragraph(s); the outline definition persists to word/numbering.xml. Tab/Shift+Tab demote
         // and promote the outline depth (ListLevel) of the selected list paragraphs.
-        // The top-level "freew.multilevel-list" id applies the first (standard decimal) preset directly
-        // (clicking the button face vs. the dropdown arrow follows the same pattern as Word's gallery).
-        registry.Bind(FreeWRibbonCommandAction.MultilevelList, new ActionRibbonCommand(() =>
-            editor.ApplyMultiLevelListDefinition(MultilevelListDialogPlanner.DefaultDefinition)));
-        registry.Bind(FreeWRibbonCommandAction.MultilevelDemote, new ActionRibbonCommand(() => editor.ChangeListLevel(+1)));
-        registry.Bind(FreeWRibbonCommandAction.MultilevelPromote, new ActionRibbonCommand(() => editor.ChangeListLevel(-1)));
-        // Predefined multilevel list preset commands — three Word-parity presets shown in the gallery.
-        foreach (var preset in MultilevelListDialogPlanner.Presets)
-        {
-            var capturedPreset = preset;
-            registry.Register(capturedPreset.CommandId, new ActionRibbonCommand(() =>
-            {
-                editor.Focus();
-                editor.ApplyMultiLevelListDefinition(capturedPreset.Definition);
-            }));
-        }
-        // "Define New Multilevel List" dialog: captures backed options (number of levels, start-at, and
-        // the first three per-level number styles).
-        registry.Bind(FreeWRibbonCommandAction.MultilevelDefine, new DefineMultilevelListCommand(editor));
+        MultilevelListRibbonWorkflow.Register(
+            registry,
+            new MultilevelListRibbonPorts(
+                definition =>
+                {
+                    editor.Focus();
+                    editor.ApplyMultiLevelListDefinition(definition);
+                },
+                editor.ChangeListLevel,
+                () => OpenDefineMultilevelListDialog(editor)));
         Routed(FreeWRibbonCommandAction.Cut, ApplicationCommands.Cut);
         Routed(FreeWRibbonCommandAction.Copy, ApplicationCommands.Copy);
         Routed(FreeWRibbonCommandAction.Paste, ApplicationCommands.Paste);
@@ -2069,20 +2060,17 @@ internal static class FreeWRibbonCommands
 
     // Home > Paragraph > Multilevel List > Define New Multilevel List: opens the definition dialog and
     // applies the complete backed definition as one undoable edit.
-    private sealed class DefineMultilevelListCommand(DocumentView editor) : IRibbonCommand
+    private static void OpenDefineMultilevelListDialog(DocumentView editor)
     {
-        public void Execute(RibbonCommandContext context)
-        {
-            editor.Focus();
-            var commit = MultilevelListDialogPlanner.PlanCommit(
-                MultilevelListDialog.Prompt(
-                    Window.GetWindow(editor),
-                    editor.Model.MultiLevelList.NumberFormats));
-            if (!commit.ShouldApply)
-                return;
-            editor.Focus();
-            editor.ApplyMultiLevelListDefinition(commit.Definition!);
-        }
+        editor.Focus();
+        var commit = MultilevelListDialogPlanner.PlanCommit(
+            MultilevelListDialog.Prompt(
+                Window.GetWindow(editor),
+                editor.Model.MultiLevelList.NumberFormats));
+        if (!commit.ShouldApply)
+            return;
+        editor.Focus();
+        editor.ApplyMultiLevelListDefinition(commit.Definition!);
     }
 
     // Home > Paragraph > Tabs…: open the Tabs dialog seeded with the first selected paragraph's current

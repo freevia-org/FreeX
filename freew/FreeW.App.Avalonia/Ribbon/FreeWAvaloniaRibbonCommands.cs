@@ -135,22 +135,12 @@ internal static class FreeWAvaloniaRibbonCommands
         r.Bind(FreeWRibbonCommandAction.AlignCenter,     new ActionRibbonCommand(() => editor.SetAlignment(TextAlignment.Center)));
         r.Bind(FreeWRibbonCommandAction.AlignRight,      new ActionRibbonCommand(() => editor.SetAlignment(TextAlignment.Right)));
         r.Bind(FreeWRibbonCommandAction.AlignJustify,    new ActionRibbonCommand(() => editor.SetAlignment(TextAlignment.Justify)));
-        r.Bind(FreeWRibbonCommandAction.MultilevelList, new ActionRibbonCommand(() =>
-            editor.ApplyMultiLevelListDefinition(MultilevelListDialogPlanner.DefaultDefinition)));
-        r.Bind(FreeWRibbonCommandAction.MultilevelDemote, new ActionRibbonCommand(() => ChangeListLevel(editor, demote: true)));
-        r.Bind(FreeWRibbonCommandAction.MultilevelPromote, new ActionRibbonCommand(() => ChangeListLevel(editor, demote: false)));
-        foreach (var preset in MultilevelListDialogPlanner.Presets)
-        {
-            var capturedPreset = preset;
-            r.Register(capturedPreset.CommandId, new ActionRibbonCommand(() =>
-                editor.ApplyMultiLevelListDefinition(capturedPreset.Definition)));
-        }
-        r.Bind(FreeWRibbonCommandAction.MultilevelDefine, new ActionRibbonCommand(
-            callbacks.OpenMultilevelListDialog ?? (() =>
-            {
-                editor.ApplyMultiLevelListToSelection();
-                editor.ApplyMultiLevelListStartOverrides(level0StartAt: 1, level1StartAt: 1);
-            })));
+        MultilevelListRibbonWorkflow.Register(
+            r,
+            new MultilevelListRibbonPorts(
+                editor.ApplyMultiLevelListDefinition,
+                delta => ChangeListLevel(editor, demote: delta > 0),
+                callbacks.OpenMultilevelListDialog));
         r.Bind(FreeWRibbonCommandAction.IndentIncrease,  new ActionRibbonCommand(editor.IncreaseIndent));
         r.Bind(FreeWRibbonCommandAction.IndentDecrease,  new ActionRibbonCommand(editor.DecreaseIndent));
         r.Register("freew.increase-indent",  new ActionRibbonCommand(editor.IncreaseIndent));

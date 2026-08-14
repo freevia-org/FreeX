@@ -188,6 +188,21 @@ internal static class FreeWCommandInventory
         ["freew.building-blocks-organizer"] = FinalFiveEvidence(
             "Both shells use the shared Quick Part library and insert the selected building block through their undoable text-edit path.",
             "InsertTextCommands_UseSharedQuickPartAndFieldBehavior"),
+        ["freew.multilevel-list"] = MultilevelListWorkflowEvidence(
+            "The shared workflow applies the canonical decimal multilevel definition in both renderers."),
+        ["freew.multilevel-demote"] = MultilevelListWorkflowEvidence(
+            "The shared workflow routes Increase List Level as a +1 level delta in both renderers."),
+        ["freew.multilevel-promote"] = MultilevelListWorkflowEvidence(
+            "The shared workflow routes Decrease List Level as a -1 level delta in both renderers."),
+        ["freew.multilevel-preset-0"] = MultilevelListWorkflowEvidence(
+            "The shared workflow applies the canonical decimal outline preset in both renderers."),
+        ["freew.multilevel-preset-1"] = MultilevelListWorkflowEvidence(
+            "The shared workflow applies the decimal/letter/Roman outline preset in both renderers."),
+        ["freew.multilevel-preset-2"] = MultilevelListWorkflowEvidence(
+            "The shared workflow applies the heading-linked outline preset in both renderers."),
+        ["freew.multilevel-define"] = MultilevelListWorkflowEvidence(
+            "The shared workflow fails closed without a renderer definition-dialog endpoint instead of applying defaults.",
+            "MultilevelListRibbonWorkflowTests.MissingDefineDialogFailsClosedInsteadOfApplyingDefaults"),
         ["freew.draw-table"] = FinalFiveEvidence(
             "Both shells normalize the dimension dialog through one planner and insert the resulting table through the undoable block command path.",
             "TableDrawingCommands_MutateAndUndo"),
@@ -515,6 +530,20 @@ internal static class FreeWCommandInventory
             AvaloniaEvidence: new BehaviorEvidenceLink(
                 Path: "freew/FreeW.App.Avalonia.Tests/FinalFiveCommandParityTests.cs",
                 Test: $"FinalFiveCommandParityTests.{test}"));
+
+    private static CommandBehaviorEvidence MultilevelListWorkflowEvidence(
+        string summary,
+        string test = "MultilevelListRibbonWorkflowTests.SharedWorkflowOwnsDefaultPresetsLevelsAndDefineDialog") =>
+        new(
+            EvidenceId: "freew.multilevel-list.shared-workflow",
+            Slice: "Multilevel List shared workflow",
+            Summary: summary,
+            WpfEvidence: new BehaviorEvidenceLink(
+                Path: "freew/FreeW.App.Presentation.Tests/MultilevelListRibbonWorkflowTests.cs",
+                Test: test),
+            AvaloniaEvidence: new BehaviorEvidenceLink(
+                Path: "freew/FreeW.App.Presentation.Tests/MultilevelListRibbonWorkflowTests.cs",
+                Test: test));
 
     private static CommandBehaviorEvidence PictureStyleEvidence(string presetName) =>
         HostParityEvidence(

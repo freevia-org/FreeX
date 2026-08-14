@@ -605,8 +605,12 @@ public sealed class CommandRegistryTests
             ListNumberFormat.LowerRoman);
         paragraph.Formatting.ListKind.Should().Be(ListKind.MultiLevel);
 
-        Execute(registry, "freew.multilevel-define");
-        paragraph.Formatting.ListStartOverride.Should().BeNull("the backed define slice only sets level 0/1 start-at overrides");
+        registry.TryGet(new RibbonCommandId("freew.multilevel-define"), out var defineCommand)
+            .Should().BeTrue();
+        defineCommand.Should().BeAssignableTo<IRibbonStatefulCommand>();
+        ((IRibbonStatefulCommand)defineCommand!).GetState().IsEnabled.Should().BeFalse(
+            "a missing define-dialog endpoint must fail closed instead of silently applying defaults");
+        paragraph.Formatting.ListStartOverride.Should().BeNull("an unavailable dialog route must not mutate the list");
 
         Execute(registry, "freew.multilevel-preset-2");
         paragraph.StyleId.Should().Be("Heading3", "the heading preset mirrors WPF's linked heading style hint");
