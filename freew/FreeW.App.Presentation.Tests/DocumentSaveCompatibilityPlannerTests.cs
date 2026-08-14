@@ -240,6 +240,43 @@ public sealed class DocumentSaveCompatibilityPlannerTests
             warning.Kind == DocumentSaveCompatibilityWarningKind.UnsupportedTarget);
     }
 
+    [Fact]
+    public void BothRenderersUseSharedDialogChromeAndTheEvidenceCatalogPairsTheRoute()
+    {
+        var root = TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeW.slnx");
+        var fileCommands = File.ReadAllText(Path.Combine(
+            root,
+            "freew",
+            "FreeW.App.Host",
+            "FileCommands.cs"));
+        var wpf = File.ReadAllText(Path.Combine(
+            root,
+            "freew",
+            "FreeW.App.Host",
+            "SaveCompatibilityWarningDialog.cs"));
+        var avalonia = File.ReadAllText(Path.Combine(
+            root,
+            "freew",
+            "FreeW.App.Avalonia",
+            "SaveCompatibilityWarningDialog.cs"));
+        var catalog = File.ReadAllText(Path.Combine(
+            root,
+            "freew",
+            "tools",
+            "FreeW.DialogVisualHarness",
+            "FreeWDialogEvidenceCatalog.cs"));
+
+        fileCommands.Should().Contain("SaveCompatibilityWarningDialog.Show(_window, plan)");
+        fileCommands.Should().NotContain("private sealed class SaveCompatibilityWarningDialog");
+        wpf.Should().Contain(": Free.Shared.Ribbon.Wpf.DialogWindow");
+        wpf.Should().Contain("DialogButtonRowFactory.Create(");
+        wpf.Should().Contain("DocumentSaveCompatibilityPlan");
+        avalonia.Should().Contain(": FreeWDialogWindow");
+        avalonia.Should().Contain("DocumentSaveCompatibilityPlan");
+        catalog.Should().Contain("Pair(\"save-compatibility-warning\", \"SaveCompatibilityWarningDialog\")");
+        catalog.Should().NotContain("AvaloniaOnly(\"save-compatibility-warning\"");
+    }
+
     private static DocumentSaveTarget ResolveTarget(string path)
     {
         var workflow = new DocumentPersistenceWorkflow();
