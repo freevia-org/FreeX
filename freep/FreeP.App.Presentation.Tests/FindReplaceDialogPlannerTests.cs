@@ -184,4 +184,71 @@ public sealed class FindReplaceDialogPlannerTests
         plan.CanReplaceAll.Should().BeFalse();
         plan.WholeWord.Should().BeTrue();
     }
+
+    [Theory]
+    [InlineData(false, FindReplaceOpenMode.Find)]
+    [InlineData(true, FindReplaceOpenMode.Replace)]
+    public void OpenModeFor_RoutesTheHostShowReplaceFlagThroughTheSharedPolicy(
+        bool showReplace,
+        FindReplaceOpenMode expected)
+    {
+        FindReplaceDialogPlanner.OpenModeFor(showReplace).Should().Be(expected);
+        FindReplaceDialogPlanner.ShowsReplaceSurface(expected)
+            .Should()
+            .Be(FindReplaceDialogPolicy.ShowsReplaceSurface(expected));
+    }
+
+    [Theory]
+    [InlineData(FindReplaceOpenMode.Find, FindReplaceDialogPlanner.FindTitle)]
+    [InlineData(FindReplaceOpenMode.Replace, FindReplaceDialogPlanner.FindAndReplaceTitle)]
+    public void TitleForMode_IsDrivenByTheSharedOpenMode(
+        FindReplaceOpenMode mode,
+        string expectedTitle)
+    {
+        FindReplaceDialogSurfaceCatalog.Surface.TitleForMode(mode).Should().Be(expectedTitle);
+    }
+
+    /// <summary>
+    /// Every combination of the two inputs that gate Replace All -- the shared open mode and a
+    /// non-empty search term -- plus the match-cursor states that gate Replace.
+    /// </summary>
+    [Theory]
+    [InlineData(false, "needle", 2, 1, false, false)]
+    [InlineData(false, "", 2, 1, false, false)]
+    [InlineData(true, "", 2, 1, true, false)]
+    [InlineData(true, "needle", 2, 1, true, true)]
+    [InlineData(true, "needle", 0, -1, false, true)]
+    [InlineData(true, "needle", 2, -1, true, true)]
+    [InlineData(true, "needle", 2, 9, true, true)]
+    public void BuildWorkflowPlan_GatesReplaceCommandsOnOpenModeQueryAndCursor(
+        bool showReplace,
+        string query,
+        int matchCount,
+        int currentMatchIndex,
+        bool expectedCanReplace,
+        bool expectedCanReplaceAll)
+    {
+        var matches = Enumerable.Range(0, matchCount)
+            .Select(index => new TextSearchMatch
+            {
+                SlideIndex = index,
+                ShapeId = (uint)index,
+                MatchedText = "needle",
+            })
+            .ToArray();
+
+        var plan = FindReplaceDialogPlanner.BuildWorkflowPlan(
+            showReplace,
+            query,
+            replacement: "thread",
+            matchCase: false,
+            wholeWord: false,
+            matches,
+            currentMatchIndex);
+
+        plan.CanReplace.Should().Be(expectedCanReplace);
+        plan.CanReplaceAll.Should().Be(expectedCanReplaceAll);
+        plan.CanSearch.Should().Be(FindReplaceDialogPolicy.CanRunWithQuery(query));
+        plan.CanNavigate.Should().Be(matchCount > 0);
+    }
 }

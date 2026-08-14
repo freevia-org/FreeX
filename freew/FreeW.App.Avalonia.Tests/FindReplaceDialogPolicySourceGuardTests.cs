@@ -111,6 +111,42 @@ public sealed class FindReplaceDialogPolicySourceGuardTests
         source.Should().NotContain("DocumentSearch");
     }
 
+    /// <summary>
+    /// Guards the cross-app Find &amp; Replace open mode: FreeW must consume
+    /// <c>Free.Shared.AppServices.FindReplaceOpenMode</c> (shared with FreeX and FreeP) and must
+    /// not reintroduce the app-local <c>FindReplaceDialogOpenMode</c> enum that used to live in
+    /// FreeW.App.Presentation.
+    /// </summary>
+    [Fact]
+    public void FindReplaceOpenMode_IsOwnedByTheSharedPolicyNotFreeWPresentation()
+    {
+        var root = TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeW.slnx");
+        var planner = File.ReadAllText(Path.Combine(
+            root, "freew", "FreeW.App.Presentation", "Dialogs", "FindReplaceDialogPlanner.cs"));
+        var session = File.ReadAllText(Path.Combine(
+            root, "freew", "FreeW.App.Presentation", "Dialogs", "FindReplaceDialogSession.cs"));
+        var sharedPolicy = File.ReadAllText(Path.Combine(
+            root, "shared", "Free.Shared.AppServices", "FindReplaceDialogPolicy.cs"));
+
+        sharedPolicy.Should().Contain("public enum FindReplaceOpenMode");
+        planner.Should().NotContain("enum FindReplaceOpenMode");
+        planner.Should().NotContain("FindReplaceDialogOpenMode");
+        session.Should().NotContain("enum FindReplaceOpenMode");
+        session.Should().NotContain("FindReplaceDialogOpenMode");
+        session.Should().Contain("using Free.Shared.AppServices;");
+        session.Should().Contain("FindReplaceOpenMode openMode");
+
+        foreach (var renderer in new[]
+                 {
+                     File.ReadAllText(Path.Combine(root, "freew", "FreeW.App.Host", "FindReplaceDialog.cs")),
+                     File.ReadAllText(Path.Combine(root, "freew", "FreeW.App.Avalonia", "FindReplaceDialog.cs")),
+                 })
+        {
+            renderer.Should().Contain("FindReplaceOpenMode.Replace");
+            renderer.Should().NotContain("FindReplaceDialogOpenMode");
+        }
+    }
+
     private static string ReadAvaloniaSource(params string[] relativeParts)
     {
         var path = Path.Combine(

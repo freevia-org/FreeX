@@ -6,6 +6,88 @@ namespace FreeX.App.Services.Tests;
 public sealed class FindReplaceDialogPolicyTests
 {
     [Theory]
+    [InlineData(false, FindReplaceOpenMode.Find)]
+    [InlineData(true, FindReplaceOpenMode.Replace)]
+    public void OpenModeFor_ProjectsHostReplaceFlagOntoSharedMode(
+        bool showReplace,
+        FindReplaceOpenMode expected)
+    {
+        FindReplaceDialogPolicy.OpenModeFor(showReplace).Should().Be(expected);
+    }
+
+    [Theory]
+    [InlineData(FindReplaceOpenMode.Find, false)]
+    [InlineData(FindReplaceOpenMode.Replace, true)]
+    public void ShowsReplaceSurface_OffersReplaceCommandsOnlyInReplaceMode(
+        FindReplaceOpenMode mode,
+        bool expected)
+    {
+        FindReplaceDialogPolicy.ShowsReplaceSurface(mode).Should().Be(expected);
+    }
+
+    [Theory]
+    [InlineData(false, "", false)]
+    [InlineData(false, "needle", false)]
+    [InlineData(true, "", false)]
+    [InlineData(true, "needle", true)]
+    public void ReplaceAllEnablement_RequiresBothReplaceModeAndSearchTerm(
+        bool showReplace,
+        string query,
+        bool expected)
+    {
+        var mode = FindReplaceDialogPolicy.OpenModeFor(showReplace);
+        var canReplaceAll =
+            FindReplaceDialogPolicy.ShowsReplaceSurface(mode) &&
+            FindReplaceDialogPolicy.CanRunWithQuery(query);
+
+        canReplaceAll.Should().Be(expected);
+    }
+
+    [Theory]
+    [InlineData(false, 3, 1, false)]
+    [InlineData(true, 0, -1, false)]
+    [InlineData(true, 3, -1, true)]
+    [InlineData(true, 3, 1, true)]
+    public void ReplaceEnablement_RequiresReplaceModeAndAResolvableTargetMatch(
+        bool showReplace,
+        int matchCount,
+        int currentMatchIndex,
+        bool expected)
+    {
+        var mode = FindReplaceDialogPolicy.OpenModeFor(showReplace);
+        var canReplace =
+            FindReplaceDialogPolicy.ShowsReplaceSurface(mode) &&
+            FindReplaceDialogPolicy.ReplacementTargetIndex(currentMatchIndex, matchCount) >= 0;
+
+        canReplace.Should().Be(expected);
+    }
+
+    [Fact]
+    public void Navigate_AdvancesWrapsAndExhaustsTheMatchCursor()
+    {
+        var index = -1;
+        foreach (var expected in new[] { 0, 1, 2, 0 })
+        {
+            var step = FindReplaceDialogPolicy.Navigate(index, matchCount: 3, direction: 1);
+            step.HasMatch.Should().BeTrue();
+            step.MatchIndex.Should().Be(expected);
+            index = step.MatchIndex;
+        }
+
+        // Backwards from the first match wraps onto the last one.
+        FindReplaceDialogPolicy.Navigate(0, matchCount: 3, direction: -1).MatchIndex.Should().Be(2);
+
+        // An exhausted (emptied) match set reports no cursor at all, in either direction.
+        foreach (var direction in new[] { 1, -1 })
+        {
+            var exhausted = FindReplaceDialogPolicy.Navigate(index, matchCount: 0, direction);
+            exhausted.HasMatch.Should().BeFalse();
+            exhausted.MatchIndex.Should().Be(-1);
+            exhausted.StatusKind.Should().Be(FindReplacePolicyStatusKind.NoMatches);
+        }
+    }
+
+    [Theory]
     [InlineData(null, false)]
     [InlineData("", false)]
     [InlineData(" ", true)]
