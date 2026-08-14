@@ -195,13 +195,15 @@ public sealed class ReferenceDialogSessionOwnershipTests
 
         foreach (var source in new[] { wpf, avalonia })
         {
-            source.Should().Contain("MultilevelListDialogPlanner.Presets");
-            source.Should().Contain("capturedPreset.Definition");
-            source.Should().Contain("TableOfAuthoritiesDialogPlanner.PlanCommit(");
+            source.Should().Contain("MultilevelListRibbonWorkflow.Register(");
+            source.Should().Contain("TableOfAuthoritiesRibbonWorkflow.Register(");
+            source.Should().NotContain("MultilevelListDialogPlanner.Presets");
+            source.Should().NotContain("capturedPreset.Definition");
             source.Should().NotContain("MultilevelListDialog.Presets");
         }
         wpf.Should().Contain("FootnoteEndnoteOptionsDialogPlanner.PlanCommit(");
         wpf.Should().Contain("editor.ApplyFootnoteEndnoteOptions(commit.Result!)");
+        wpf.Should().Contain("TableOfAuthoritiesDialogPlanner.PlanCommit(");
         avaloniaWindow.Should().Contain("FootnoteEndnoteOptionsDialogPlanner.PlanCommit(");
         avaloniaWindow.Should().Contain("MultilevelListDialogPlanner.PlanCommit(");
         avaloniaWindow.Should().Contain("TableOfAuthoritiesDialogPlanner.PlanCommit(");

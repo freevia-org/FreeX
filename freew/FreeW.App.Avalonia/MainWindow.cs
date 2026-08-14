@@ -1253,9 +1253,17 @@ public sealed partial class MainWindow : Window
             return;
         }
 
-        var text = await CommentReplyDialog.AskAsync(this);
+        var text = await CommentReplyDialog.AskAsync(this, CommentTextEntryKind.Reply);
         if (!string.IsNullOrWhiteSpace(text) && !_editor.ReplyToCommentAtCaret(text))
             _status.Text = CommentDialogPresentationPlanner.Text.MissingReplyTargetMessage;
+        _editor.Focus();
+    }
+
+    private async Task NewCommentAsync()
+    {
+        var text = await CommentReplyDialog.AskAsync(this, CommentTextEntryKind.NewComment);
+        if (!string.IsNullOrWhiteSpace(text))
+            _editor.NewComment(text);
         _editor.Focus();
     }
 
@@ -1957,6 +1965,7 @@ public sealed partial class MainWindow : Window
             RestrictEditing: () => _ = OpenRestrictEditingAsync(),
             InspectDocument: () => _ = InspectDocumentAsync(),
             CheckAccessibility: () => _ = CheckAccessibilityAsync(),
+            NewComment: () => _ = NewCommentAsync(),
             ReplyComment: () => _ = ReplyToCommentAsync(),
             ShowComments: rows => _ = ShowCommentsAsync(rows),
             ToggleSpellcheck: ToggleSpellCheck,

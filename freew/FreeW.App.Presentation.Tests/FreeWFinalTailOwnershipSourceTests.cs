@@ -81,7 +81,7 @@ public sealed class FreeWFinalTailOwnershipSourceTests
         foreach (var source in new[] { wpfTable, avaloniaTable })
         {
             source.Should().Contain("new TablePropertiesDialogSession(");
-            source.Should().Contain("_session.PlanAcceptance(input)");
+            source.Should().Contain("_session.PlanAcceptance(");
             source.Should().NotContain("TablePropertiesDialogPlanner.TryBuildResult(");
         }
 

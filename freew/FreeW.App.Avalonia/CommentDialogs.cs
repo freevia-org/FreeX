@@ -12,6 +12,7 @@ namespace FreeW.App.Avalonia;
 
 internal sealed class CommentReplyDialog : FreeWDialogWindow
 {
+    private readonly CommentTextEntryKind _kind;
     private readonly TextBox _text = new()
     {
         AcceptsReturn = true,
@@ -24,12 +25,19 @@ internal sealed class CommentReplyDialog : FreeWDialogWindow
     {
         Foreground = Brushes.Red,
         IsVisible = false,
-        Text = CommentDialogPresentationPlanner.Text.ReplyRequiredMessage,
     };
 
     public CommentReplyDialog()
+        : this(CommentTextEntryKind.Reply)
     {
-        Title = CommentDialogPresentationPlanner.Text.ReplyTitle;
+    }
+
+    private CommentReplyDialog(CommentTextEntryKind kind)
+    {
+        _kind = kind;
+        var presentation = CommentDialogPresentationPlanner.BuildTextEntry(kind);
+        Title = presentation.Title;
+        _status.Text = presentation.RequiredMessage;
         Width = 390;
         SizeToContent = SizeToContent.Height;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
@@ -39,13 +47,13 @@ internal sealed class CommentReplyDialog : FreeWDialogWindow
         var body = new StackPanel { Margin = new Thickness(16), Spacing = 8 };
         body.Children.Add(new TextBlock
         {
-            Text = CommentDialogPresentationPlanner.Text.ReplyFieldLabel,
+            Text = presentation.FieldLabel,
             FontWeight = FontWeight.SemiBold,
         });
         body.Children.Add(_text);
         body.Children.Add(_status);
 
-        var ok = Button(CommentDialogPresentationPlanner.Text.ReplyActionLabel, Accept, isDefault: true);
+        var ok = Button(presentation.ActionLabel, Accept, isDefault: true);
         var cancel = Button(CommentDialogPresentationPlanner.Text.CancelActionLabel, () => Close(null), isCancel: true);
         body.Children.Add(AvaloniaCompactDialogChrome.CreateActionRow([ok, cancel], new Thickness(0, 6, 0, 0)));
 
@@ -61,12 +69,12 @@ internal sealed class CommentReplyDialog : FreeWDialogWindow
         };
     }
 
-    public static Task<string?> AskAsync(Window owner) =>
-        new CommentReplyDialog().ShowDialog<string?>(owner);
+    public static Task<string?> AskAsync(Window owner, CommentTextEntryKind kind) =>
+        new CommentReplyDialog(kind).ShowDialog<string?>(owner);
 
     private void Accept()
     {
-        var acceptance = CommentDialogPresentationPlanner.PlanReplyAcceptance(_text.Text);
+        var acceptance = CommentDialogPresentationPlanner.PlanTextAcceptance(_kind, _text.Text);
         if (!acceptance.IsAccepted)
         {
             _status.Text = acceptance.ValidationMessage;

@@ -781,15 +781,18 @@ internal static class FreeWRibbonCommands
         registry.Bind(FreeWRibbonCommandAction.CcCombo, new ActionRibbonCommand(() => { editor.Focus(); editor.InsertComboBoxControl(); }));
 
         // Review tab — Comments: prompt for comment text and attach it over the current selection.
-        registry.Bind(FreeWRibbonCommandAction.NewComment, new NewCommentCommand(editor));
+        ReviewCommentRibbonWorkflow.Register(
+            registry,
+            new ReviewCommentRibbonCommands(
+                new NewCommentCommand(editor),
+                new DeleteCommentCommand(editor),
+                new NavigateCommentCommand(editor, previous: true),
+                new NavigateCommentCommand(editor, previous: false),
+                new ReplyCommentCommand(editor),
+                new ResolveCommentCommand(editor),
+                new ShowCommentsCommand(editor)));
         // Review tab — Comments: reply to / resolve the comment thread covering the caret (modern threaded
         // comments). Reply prompts for text and appends a child comment; Resolve toggles the thread's done flag.
-        registry.Bind(FreeWRibbonCommandAction.ReplyComment, new ReplyCommentCommand(editor));
-        registry.Bind(FreeWRibbonCommandAction.ResolveComment, new ResolveCommentCommand(editor));
-        registry.Bind(FreeWRibbonCommandAction.DeleteComment, new DeleteCommentCommand(editor));
-        registry.Bind(FreeWRibbonCommandAction.PreviousComment, new NavigateCommentCommand(editor, previous: true));
-        registry.Bind(FreeWRibbonCommandAction.NextComment, new NavigateCommentCommand(editor, previous: false));
-        registry.Bind(FreeWRibbonCommandAction.ShowComments, new ShowCommentsCommand(editor));
 
         // Review tab — Proofing: open the read-only Word Count / Statistics dialog. Commits pending
         // edits first so the counts reflect the current text, then computes from the model.
@@ -3839,12 +3842,17 @@ internal static class FreeWRibbonCommands
         public void Execute(RibbonCommandContext context)
         {
             editor.Focus();
+            var presentation = CommentDialogPresentationPlanner.BuildTextEntry(
+                CommentTextEntryKind.NewComment);
             var text = TextPrompt.Ask(
                 Window.GetWindow(editor),
-                CommentDialogPresentationPlanner.Text.NewCommentTitle,
-                CommentDialogPresentationPlanner.Text.CommentFieldLabel,
+                presentation.Title,
+                presentation.FieldLabel,
                 string.Empty);
-            if (string.IsNullOrWhiteSpace(text))
+            var acceptance = CommentDialogPresentationPlanner.PlanTextAcceptance(
+                CommentTextEntryKind.NewComment,
+                text);
+            if (!acceptance.IsAccepted)
                 return; // cancelled or empty — nothing to attach
 
             var identity = ReviewAuthorIdentityPlanner.BuildCommentStamp(
@@ -3853,7 +3861,7 @@ internal static class FreeWRibbonCommands
                 Environment.UserName);
             editor.Focus();
             editor.InsertComment(
-                text.Trim(),
+                acceptance.Text,
                 identity.Author,
                 identity.Initials);
         }
@@ -3867,10 +3875,12 @@ internal static class FreeWRibbonCommands
         public void Execute(RibbonCommandContext context)
         {
             editor.Focus();
+            var presentation = CommentDialogPresentationPlanner.BuildTextEntry(
+                CommentTextEntryKind.Reply);
             var text = TextPrompt.Ask(
                 Window.GetWindow(editor),
-                CommentDialogPresentationPlanner.Text.ReplyTitle,
-                CommentDialogPresentationPlanner.Text.ReplyFieldLabel,
+                presentation.Title,
+                presentation.FieldLabel,
                 string.Empty);
             var acceptance = CommentDialogPresentationPlanner.PlanReplyAcceptance(text);
             if (!acceptance.IsAccepted)

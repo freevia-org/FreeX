@@ -176,7 +176,8 @@ public sealed record FreeWRibbonHostExecutionPorts(
     Action<TextDocument>? PrintMailMergeDocument = null,
     Func<bool, string, Task<string?>>? AskHeaderFooterText = null,
     Func<string, bool>? OpenMailDraft = null,
-    Action? OpenChangeCaseDialog = null)
+    Action? OpenChangeCaseDialog = null,
+    Action? NewComment = null)
 {
     public static FreeWRibbonHostExecutionPorts Empty { get; } = new(
         Open: Noop,

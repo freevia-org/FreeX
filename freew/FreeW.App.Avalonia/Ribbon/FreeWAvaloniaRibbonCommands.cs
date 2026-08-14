@@ -415,15 +415,18 @@ internal static class FreeWAvaloniaRibbonCommands
         r.Bind(FreeWRibbonCommandAction.RejectThis, rejectCurrentRevisionCommand);
         r.Register("freew.reject-change", rejectCurrentRevisionCommand);
         // Comments — thread navigation/actions over the shared comment model.
-        r.Bind(FreeWRibbonCommandAction.NewComment,    new ActionRibbonCommand(() => editor.NewComment()));
-        r.Bind(FreeWRibbonCommandAction.DeleteComment, new ActionRibbonCommand(() => editor.DeleteCommentAtCaret()));
-        r.Bind(FreeWRibbonCommandAction.PreviousComment, new ActionRibbonCommand(() => editor.PreviousComment()));
-        r.Bind(FreeWRibbonCommandAction.NextComment, new ActionRibbonCommand(() => editor.NextComment()));
-        r.Bind(FreeWRibbonCommandAction.ReplyComment, new ActionRibbonCommand(
-            callbacks.ReplyComment ?? (() => editor.ReplyToCommentAtCaret())));
-        r.Bind(FreeWRibbonCommandAction.ResolveComment, new ActionRibbonCommand(() => editor.ToggleResolveCommentAtCaret()));
-        r.Bind(FreeWRibbonCommandAction.ShowComments, new ActionRibbonCommand(() =>
-            callbacks.ShowComments?.Invoke(editor.PlannedCommentList())));
+        ReviewCommentRibbonWorkflow.Register(
+            r,
+            new ReviewCommentRibbonCommands(
+                OptionalHostCommand(callbacks.NewComment),
+                new ActionRibbonCommand(() => editor.DeleteCommentAtCaret()),
+                new ActionRibbonCommand(() => editor.PreviousComment()),
+                new ActionRibbonCommand(() => editor.NextComment()),
+                OptionalHostCommand(callbacks.ReplyComment),
+                new ActionRibbonCommand(() => editor.ToggleResolveCommentAtCaret()),
+                callbacks.ShowComments is { } showComments
+                    ? new ActionRibbonCommand(() => showComments(editor.PlannedCommentList()))
+                    : FreeWRibbonExecutionProfile.UnavailableCommand));
         // Word Count — opens the modal stats dialog (shell callback; reads DocumentStatistics).
         r.Bind(FreeWRibbonCommandAction.SpellcheckToggle, new ToggleActionCommand(
             callbacks.ToggleSpellcheck ?? (() => editor.ToggleSpellCheck()),

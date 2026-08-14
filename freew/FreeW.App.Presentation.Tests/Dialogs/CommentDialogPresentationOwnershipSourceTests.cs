@@ -15,12 +15,12 @@ public sealed class CommentDialogPresentationOwnershipSourceTests
             "freew", "FreeW.App.Avalonia", "MainWindow.cs");
 
         planner.Should().Contain("public static class CommentDialogPresentationPlanner");
-        planner.Should().Contain("PlanReplyAcceptance");
+        planner.Should().Contain("PlanTextAcceptance");
         planner.Should().Contain("BuildList");
 
         wpf.Should().Contain("CommentDialogPresentationPlanner.PlanReplyAcceptance(");
         wpf.Should().Contain("CommentDialogPresentationPlanner.BuildList(items)");
-        avaloniaDialog.Should().Contain("CommentDialogPresentationPlanner.PlanReplyAcceptance(");
+        avaloniaDialog.Should().Contain("CommentDialogPresentationPlanner.PlanTextAcceptance(");
         avaloniaDialog.Should().Contain("CommentDialogPresentationPlanner.BuildList(items)");
         avaloniaShell.Should().Contain(
             "CommentDialogPresentationPlanner.Text.MissingReplyTargetMessage");

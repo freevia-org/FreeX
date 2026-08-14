@@ -7,9 +7,11 @@ public sealed record CommentDialogTextSpec(
     string ReplyTitle,
     string ReplyFieldLabel,
     string ReplyActionLabel,
+    string NewCommentActionLabel,
     string CancelActionLabel,
     string CloseActionLabel,
     string ReplyRequiredMessage,
+    string NewCommentRequiredMessage,
     string MissingReplyTargetMessage,
     string NewCommentTitle,
     string CommentFieldLabel,
@@ -25,7 +27,19 @@ public sealed record CommentDialogTextSpec(
     string ResolvedStateLabel,
     string BlankCommentLabel);
 
-public sealed record CommentReplyAcceptance(
+public enum CommentTextEntryKind
+{
+    NewComment,
+    Reply
+}
+
+public sealed record CommentTextEntryPresentation(
+    string Title,
+    string FieldLabel,
+    string ActionLabel,
+    string RequiredMessage);
+
+public sealed record CommentTextAcceptance(
     bool IsAccepted,
     string Text,
     string? ValidationMessage = null);
@@ -58,9 +72,11 @@ public static class CommentDialogPresentationPlanner
         ReplyTitle: "Reply",
         ReplyFieldLabel: "Reply:",
         ReplyActionLabel: "Reply",
+        NewCommentActionLabel: "Comment",
         CancelActionLabel: "Cancel",
         CloseActionLabel: "Close",
         ReplyRequiredMessage: "Enter reply text.",
+        NewCommentRequiredMessage: "Enter comment text.",
         MissingReplyTargetMessage: "Place the cursor inside a comment, then choose Reply.",
         NewCommentTitle: "New Comment",
         CommentFieldLabel: "Comment:",
@@ -76,13 +92,34 @@ public static class CommentDialogPresentationPlanner
         ResolvedStateLabel: "Resolved",
         BlankCommentLabel: "(blank)");
 
-    public static CommentReplyAcceptance PlanReplyAcceptance(string? text)
+    public static CommentTextEntryPresentation BuildTextEntry(CommentTextEntryKind kind) => kind switch
+    {
+        CommentTextEntryKind.NewComment => new(
+            Text.NewCommentTitle,
+            Text.CommentFieldLabel,
+            Text.NewCommentActionLabel,
+            Text.NewCommentRequiredMessage),
+        CommentTextEntryKind.Reply => new(
+            Text.ReplyTitle,
+            Text.ReplyFieldLabel,
+            Text.ReplyActionLabel,
+            Text.ReplyRequiredMessage),
+        _ => throw new ArgumentOutOfRangeException(nameof(kind), kind, null),
+    };
+
+    public static CommentTextAcceptance PlanTextAcceptance(
+        CommentTextEntryKind kind,
+        string? text)
     {
         var normalized = text?.Trim() ?? string.Empty;
+        var presentation = BuildTextEntry(kind);
         return normalized.Length == 0
-            ? new CommentReplyAcceptance(false, string.Empty, Text.ReplyRequiredMessage)
-            : new CommentReplyAcceptance(true, normalized);
+            ? new CommentTextAcceptance(false, string.Empty, presentation.RequiredMessage)
+            : new CommentTextAcceptance(true, normalized);
     }
+
+    public static CommentTextAcceptance PlanReplyAcceptance(string? text) =>
+        PlanTextAcceptance(CommentTextEntryKind.Reply, text);
 
     public static CommentListPresentation BuildList(IReadOnlyList<CommentListItem> items)
     {

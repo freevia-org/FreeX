@@ -644,11 +644,17 @@ public sealed class FreeWRibbonCommandWorkflowTests
             "FreeW.App.Presentation",
             "Ribbon",
             "FreeWRibbonEditorExecutionProfile.cs");
-        var semanticCatalog = ReadSource(
+        var citationWorkflow = ReadSource(
             "freew",
             "FreeW.App.Presentation",
             "Ribbon",
-            "FreeWRibbonSemanticCatalog.cs");
+            "CitationRibbonWorkflow.cs");
+        var root = TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeW.slnx");
+        var portableRibbonSources = string.Concat(
+            Directory.GetFiles(
+                    Path.Combine(root, "freew", "FreeW.App.Presentation", "Ribbon"),
+                    "*.cs")
+                .Select(File.ReadAllText));
         var directRegistration = new Regex(
             @"(?:registry|r)\.Register\(\s*""(?<id>freew\.[^""]+)""",
             RegexOptions.CultureInvariant);
@@ -770,13 +776,16 @@ public sealed class FreeWRibbonCommandWorkflowTests
                  {
                      "FreeWRibbonFormatPainterCommand",
                      "FreeWRibbonNumericValueCommand",
-                     "FreeWRibbonChoiceCommand",
                      "FreeWRibbonStatefulPortCommand",
                  })
         {
             wpf.Should().Contain(portableCommand);
             avalonia.Should().Contain(portableCommand);
         }
+
+        wpf.Should().NotContain("FreeWRibbonChoiceCommand");
+        avalonia.Should().NotContain("FreeWRibbonChoiceCommand");
+        citationWorkflow.Should().Contain("FreeWRibbonChoiceCommand");
 
         foreach (var rendererCommand in new[]
                  {
@@ -805,10 +814,10 @@ public sealed class FreeWRibbonCommandWorkflowTests
             .ToArray();
 
         RibbonActions(wpf).Should().HaveCountLessThan(Enum.GetValues<FreeWRibbonCommandAction>().Length);
-        RibbonActions(wpf + hostProfile + editorProfile + semanticCatalog)
+        RibbonActions(wpf + portableRibbonSources).Except(catalogOwnedActions)
             .Should().BeEquivalentTo(explicitlyOwnedActions);
         RibbonActions(avalonia).Should().HaveCountLessThan(Enum.GetValues<FreeWRibbonCommandAction>().Length);
-        RibbonActions(avalonia + hostProfile + editorProfile + semanticCatalog)
+        RibbonActions(avalonia + portableRibbonSources).Except(catalogOwnedActions)
             .Should().BeEquivalentTo(explicitlyOwnedActions);
 
         foreach (var helperPrefix in new[]

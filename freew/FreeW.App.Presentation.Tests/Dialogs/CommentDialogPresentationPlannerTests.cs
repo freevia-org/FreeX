@@ -23,7 +23,26 @@ public sealed class CommentDialogPresentationPlannerTests
     public void ReplyAcceptanceTrimsTheCommittedText()
     {
         CommentDialogPresentationPlanner.PlanReplyAcceptance("  Agreed.  ")
-            .Should().Be(new CommentReplyAcceptance(true, "Agreed."));
+            .Should().Be(new CommentTextAcceptance(true, "Agreed."));
+    }
+
+    [Fact]
+    public void NewCommentEntryOwnsPromptTextAndSharedAcceptance()
+    {
+        CommentDialogPresentationPlanner.BuildTextEntry(CommentTextEntryKind.NewComment)
+            .Should().Be(new CommentTextEntryPresentation(
+                "New Comment",
+                "Comment:",
+                "Comment",
+                "Enter comment text."));
+        CommentDialogPresentationPlanner.PlanTextAcceptance(
+                CommentTextEntryKind.NewComment,
+                "  Review this.  ")
+            .Should().Be(new CommentTextAcceptance(true, "Review this."));
+        CommentDialogPresentationPlanner.PlanTextAcceptance(
+                CommentTextEntryKind.NewComment,
+                " ")
+            .ValidationMessage.Should().Be("Enter comment text.");
     }
 
     [Fact]
