@@ -885,17 +885,8 @@ internal static class FreeWAvaloniaRibbonCommands
                 editor.InsertField));
 
         // ── Equation ─────────────────────────────────────────────────────────
-        // The split-button face inserts the WPF default; each preset inserts an inline OMML equation.
-        var defaultEquationCommand = new ActionRibbonCommand(() => editor.InsertEquation());
-        r.Bind(FreeWRibbonCommandAction.Equation, defaultEquationCommand);
-        r.Register(EquationPresetCatalog.DefaultCommandId, defaultEquationCommand);
-        r.Register(EquationPresetCatalog.LegacyDefaultCommandId, defaultEquationCommand);
-        foreach (var preset in EquationPresetCatalog.Presets)
-        {
-            var command = new ActionRibbonCommand(() => editor.InsertEquation(preset.CreateEquation()));
-            r.Register(preset.CommandId, command);
-            r.Register(preset.LegacyCommandId, command);
-        }
+        // The split-button face and preset gallery share Presentation-owned identities and factories.
+        EquationRibbonWorkflow.Register(r, new EquationRibbonPorts(editor.InsertEquation));
 
         // ── Text from File ───────────────────────────────────────────────────
         // Opens a file picker (shell callback); DOCX content is inserted as model blocks and TXT as plain text.

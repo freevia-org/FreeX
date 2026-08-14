@@ -475,20 +475,13 @@ internal static class FreeWRibbonCommands
         // Each routes through the editor's undoable insert path (mirroring InsertShape) and round-trips
         // through docx (the model + IO already exist; this surfaces them in the ribbon). Sample content is a
         // starting point the user can replace.
-        registry.Bind(FreeWRibbonCommandAction.Equation, new ActionRibbonCommand(() =>
-        {
-            editor.Focus();
-            editor.InsertEquation(EquationPresetCatalog.CreateDefaultEquation());
-        }));
-        // Equation gallery presets (Insert > Media > Equation dropdown). Each inserts one OMML structure
-        // at the caret as an editable starting point; all round-trip through the model/IO layer.
-        foreach (var preset in EquationPresetCatalog.Presets)
-        {
-            var command = new ActionRibbonCommand(() =>
-                InsertEquationPreset(editor, preset.CreateEquation()));
-            registry.Register(preset.CommandId, command);
-            registry.Register(preset.LegacyCommandId, command);
-        }
+        EquationRibbonWorkflow.Register(
+            registry,
+            new EquationRibbonPorts(equation =>
+            {
+                editor.Focus();
+                editor.InsertEquation(equation);
+            }));
         registry.Bind(FreeWRibbonCommandAction.Chart, new ActionRibbonCommand(() =>
         {
             editor.Focus();
@@ -4020,14 +4013,6 @@ internal static class FreeWRibbonCommands
             var dialog = new AccessibilityReportDialog(Window.GetWindow(editor)!, report);
             dialog.ShowDialog();
         }
-    }
-
-    // Focuses the editor and drops an equation-gallery preset at the caret via the editor's undoable
-    // insert path (same path as the default Equation button). Used by the Insert > Equation dropdown.
-    private static void InsertEquationPreset(DocumentView editor, Equation equation)
-    {
-        editor.Focus();
-        editor.InsertEquation(equation);
     }
 
     // Review > Proofing > Add to Dictionary: take the misspelled word the caret currently sits on, add

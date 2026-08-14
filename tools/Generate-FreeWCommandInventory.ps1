@@ -231,6 +231,21 @@ internal static class FreeWCommandInventory
         ["freew.drop-cap-in-margin"] = DropCapEvidence("Both visible renderer menus resolve In Margin through one shared semantic route."),
         ["freew.drop-cap-none"] = DropCapEvidence("Both visible renderer menus resolve None through one shared semantic route."),
         ["freew.drop-cap-options"] = DropCapEvidence("Both renderers preserve native options-dialog adapters behind one shared route."),
+        ["freew.equation"] = EquationEvidence("The Equation split-button face inserts the shared default equation through the same renderer port."),
+        ["freew.equation-default"] = EquationEvidence("Both renderers expose the canonical Insert New Equation route and shared default factory."),
+        ["freew.equation-fraction"] = EquationEvidence("Both renderers insert a fresh shared fraction equation preset."),
+        ["freew.equation-script"] = EquationEvidence("Both renderers insert a fresh shared subscript/superscript equation preset."),
+        ["freew.equation-radical"] = EquationEvidence("Both renderers insert a fresh shared square-root equation preset."),
+        ["freew.equation-nthroot"] = EquationEvidence("Both renderers insert a fresh shared nth-root equation preset."),
+        ["freew.equation-integral"] = EquationEvidence("Both renderers insert a fresh shared integral equation preset."),
+        ["freew.equation-summation"] = EquationEvidence("Both renderers insert a fresh shared summation equation preset."),
+        ["freew.equation-product"] = EquationEvidence("Both renderers insert a fresh shared product equation preset."),
+        ["freew.equation-accent"] = EquationEvidence("Both renderers insert a fresh shared accent equation preset."),
+        ["freew.equation-bar"] = EquationEvidence("Both renderers insert a fresh shared overbar equation preset."),
+        ["freew.equation-bracket"] = EquationEvidence("Both renderers insert a fresh shared bracket equation preset."),
+        ["freew.equation-matrix"] = EquationEvidence("Both renderers insert a fresh shared matrix equation preset."),
+        ["freew.equation-func"] = EquationEvidence("Both renderers insert a fresh shared function equation preset."),
+        ["freew.equation-groupchr"] = EquationEvidence("Both renderers insert a fresh shared group-character equation preset."),
         ["freew.multilevel-list"] = MultilevelListWorkflowEvidence(
             "The shared workflow applies the canonical decimal multilevel definition in both renderers."),
         ["freew.multilevel-demote"] = MultilevelListWorkflowEvidence(
@@ -627,6 +642,18 @@ internal static class FreeWCommandInventory
             AvaloniaEvidence: new BehaviorEvidenceLink(
                 Path: "freew/FreeW.App.Presentation.Tests/DropCapRibbonWorkflowTests.cs",
                 Test: "DropCapRibbonWorkflowTests.BothRenderersDelegateDropCapPolicyToSharedPresentation"));
+
+    private static CommandBehaviorEvidence EquationEvidence(string summary) =>
+        new(
+            EvidenceId: "freew.equation.shared-workflow",
+            Slice: "Equation insertion behavior",
+            Summary: summary,
+            WpfEvidence: new BehaviorEvidenceLink(
+                Path: "freew/FreeW.App.Presentation.Tests/EquationRibbonWorkflowTests.cs",
+                Test: "EquationRibbonWorkflowTests.SharedWorkflowRegistersDefaultPresetsAndCompatibilityAliases"),
+            AvaloniaEvidence: new BehaviorEvidenceLink(
+                Path: "freew/FreeW.App.Presentation.Tests/EquationRibbonWorkflowTests.cs",
+                Test: "EquationRibbonWorkflowTests.BothRenderersDelegateEquationDispatchToSharedPresentation"));
 
     private static CommandBehaviorEvidence MultilevelListWorkflowEvidence(
         string summary,

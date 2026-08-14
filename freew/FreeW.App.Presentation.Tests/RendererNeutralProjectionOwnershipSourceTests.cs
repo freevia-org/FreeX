@@ -12,8 +12,8 @@ public sealed class RendererNeutralProjectionOwnershipSourceTests
             "freew", "FreeW.App.Avalonia", "Editing", "DocumentView.cs");
 
         catalog.Should().Contain("public static class EquationPresetCatalog");
-        wpf.Should().Contain("foreach (var preset in EquationPresetCatalog.Presets)");
-        avalonia.Should().Contain("foreach (var preset in EquationPresetCatalog.Presets)");
+        wpf.Should().Contain("EquationRibbonWorkflow.Register(");
+        avalonia.Should().Contain("EquationRibbonWorkflow.Register(");
         avaloniaDocumentView.Should().Contain("EquationPresetCatalog.CreateDefaultEquation()");
         wpf.Should().NotContain("MathRun.Fraction(\"a\", \"b\")");
         avalonia.Should().NotContain("MathRun.Fraction(\"a\", \"b\")");
