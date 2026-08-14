@@ -27,7 +27,7 @@ public static class ZoomDialogPlanner
         ZoomLevelMapper.IsPresetZoomPercent(zoomPercent, PresetValues);
 
     public static string FormatPresetLabel(int zoomPercent) =>
-        ZoomLevelMapper.FormatWholeZoomPercentLabel(zoomPercent);
+        ZoomLevelMapper.FormatZoomPercent(zoomPercent);
 
     public static ZoomDialogSelection CreateFitSelectionResult(int currentZoomPercent) =>
         new(currentZoomPercent, FitSelection: true);

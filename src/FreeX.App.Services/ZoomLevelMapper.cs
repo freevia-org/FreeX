@@ -37,9 +37,6 @@ public static class ZoomLevelMapper
         out ZoomPercentInputError error) =>
         Policy.TryResolveWholePercent(text, ZoomPercentRangeMode.Reject, out wholePercent, out error);
 
-    public static string FormatWholeZoomPercentLabel(int zoomPercent) =>
-        Policy.FormatPercentLabel(zoomPercent);
-
     public static string FormatZoomPercent(double zoomPercent) =>
         Policy.FormatPercentLabel(zoomPercent);
 
