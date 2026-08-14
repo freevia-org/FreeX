@@ -108,7 +108,7 @@ public sealed class FileLifecycleTests : IDisposable
         Assert.Single(messages.Messages);
         var prompt = messages.Messages[0];
         Assert.Equal(
-            "Do you want to save changes to Untitled before creating a new document?",
+            "Do you want to save changes to Untitled before replacing the current document?",
             prompt.Message);
         Assert.Equal("FreeW", prompt.Title);
         Assert.Equal(UserMessageButtons.YesNoCancel, prompt.Buttons);

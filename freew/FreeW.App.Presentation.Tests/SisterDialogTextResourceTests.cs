@@ -27,7 +27,7 @@ public sealed class SisterDialogTextResourceTests
         documentText.OpenPickerTitle.Should().Be("Open document");
         documentText.SavePickerTitle.Should().Be("Save document");
         documentText.FallbackDisplayName.Should().Be("Document");
-        documentText.NewAction.Should().Be("replace the current document");
+        documentText.NewAction.Should().Be("replacing the current document");
         documentText.OpenAction.Should().Be("opening another document");
         documentText.OpenCommand.Should().Be("Open");
         documentText.SaveCommand.Should().Be("Save");
