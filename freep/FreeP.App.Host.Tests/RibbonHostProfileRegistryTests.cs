@@ -18,7 +18,11 @@ public sealed class RibbonHostProfileRegistryTests
             new RibbonStateStore(),
             FreePRibbonHostProfileFactory.Create(new FreePRibbonHostPorts
             {
-                OleCommands = new FreePRibbonOleCommandEndpoints(),
+                OleCommands = new FreePRibbonOleCommandEndpoints
+                {
+                    InsertEmbeddedObject = () => { },
+                    TryOpenInlineEmbeddedObject = () => false,
+                },
             }));
 
         foreach (var commandId in expectedCommon)

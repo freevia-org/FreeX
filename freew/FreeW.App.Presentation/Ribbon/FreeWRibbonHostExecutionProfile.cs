@@ -21,24 +21,24 @@ public static class FreeWRibbonHostExecutionProfile
             bindings.Register("freew.backstage", new ActionRibbonCommand(ports.Backstage));
             bindings.Register("freew.new", new ActionRibbonCommand(ports.NewDocument));
             bindings.Register("freew.open", new ActionRibbonCommand(ports.Open));
-            bindings.Register("freew.import-pdf-text", ActionOrEmpty(ports.ImportPdfText));
+            bindings.Register("freew.import-pdf-text", CommandOrUnavailable(ports.ImportPdfText));
             bindings.Register("freew.save", new ActionRibbonCommand(ports.Save));
         }
 
         bindings.BindAction(FreeWRibbonCommandAction.Cut, ports.Cut);
         bindings.BindAction(FreeWRibbonCommandAction.Copy, ports.Copy);
         bindings.BindAction(FreeWRibbonCommandAction.Paste, ports.Paste);
-        BindOrEmpty(bindings, FreeWRibbonCommandAction.PastePlain, ports.PastePlainText);
-        BindOrEmpty(bindings, FreeWRibbonCommandAction.PasteMerge, ports.PasteMergeFormatting);
-        BindOrEmpty(bindings, FreeWRibbonCommandAction.PasteSpecial, ports.OpenPasteSpecial);
-        BindOrEmpty(bindings, FreeWRibbonCommandAction.CharBorder, ports.OpenCharacterBorderDialog);
-        BindOrEmpty(bindings, FreeWRibbonCommandAction.CharShading, ports.OpenCharacterShadingDialog);
+        BindOrUnavailable(bindings, FreeWRibbonCommandAction.PastePlain, ports.PastePlainText);
+        BindOrUnavailable(bindings, FreeWRibbonCommandAction.PasteMerge, ports.PasteMergeFormatting);
+        BindOrUnavailable(bindings, FreeWRibbonCommandAction.PasteSpecial, ports.OpenPasteSpecial);
+        BindOrUnavailable(bindings, FreeWRibbonCommandAction.CharBorder, ports.OpenCharacterBorderDialog);
+        BindOrUnavailable(bindings, FreeWRibbonCommandAction.CharShading, ports.OpenCharacterShadingDialog);
         bindings.BindAction(FreeWRibbonCommandAction.FontDialog, ports.OpenFontDialog);
-        BindOrEmpty(bindings, FreeWRibbonCommandAction.BordersShading, ports.OpenBordersAndShadingDialog);
-        BindOrEmpty(bindings, FreeWRibbonCommandAction.TabsDialog, ports.OpenTabsDialog);
+        BindOrUnavailable(bindings, FreeWRibbonCommandAction.BordersShading, ports.OpenBordersAndShadingDialog);
+        BindOrUnavailable(bindings, FreeWRibbonCommandAction.TabsDialog, ports.OpenTabsDialog);
         bindings.BindAction(FreeWRibbonCommandAction.ParagraphDialog, ports.OpenParagraphDialog);
-        BindOrEmpty(bindings, FreeWRibbonCommandAction.NewStyle, ports.OpenNewStyleDialog);
-        BindOrEmpty(bindings, FreeWRibbonCommandAction.ManageStyles, ports.OpenManageStylesDialog);
+        BindOrUnavailable(bindings, FreeWRibbonCommandAction.NewStyle, ports.OpenNewStyleDialog);
+        BindOrUnavailable(bindings, FreeWRibbonCommandAction.ManageStyles, ports.OpenManageStylesDialog);
 
         var find = bindings.BindAction(
             FreeWRibbonCommandAction.Find,
@@ -51,13 +51,13 @@ public static class FreeWRibbonHostExecutionProfile
         var screenClip = CommandOrUnavailable(ports.CaptureScreenClip);
         bindings.Bind(FreeWRibbonCommandAction.ScreenClipping, screenClip);
         bindings.Register("freew.screenshot", screenClip);
-        BindOrEmpty(bindings, FreeWRibbonCommandAction.Field, ports.OpenFieldDialog);
-        BindOrEmpty(bindings, FreeWRibbonCommandAction.SaveQuickpart, ports.SaveQuickPartSelection);
-        BindOrEmpty(
+        BindOrUnavailable(bindings, FreeWRibbonCommandAction.Field, ports.OpenFieldDialog);
+        BindOrUnavailable(bindings, FreeWRibbonCommandAction.SaveQuickpart, ports.SaveQuickPartSelection);
+        BindOrUnavailable(
             bindings,
             FreeWRibbonCommandAction.BuildingBlocksOrganizer,
             ports.OpenBuildingBlocksOrganizer);
-        BindOrEmpty(bindings, FreeWRibbonCommandAction.DrawTable, ports.OpenDrawTableDialog);
+        BindOrUnavailable(bindings, FreeWRibbonCommandAction.DrawTable, ports.OpenDrawTableDialog);
 
         var pageSetup = new ActionRibbonCommand(ports.OpenPageSetupDialog);
         bindings.Bind(FreeWRibbonCommandAction.PageSetup, pageSetup);
@@ -68,22 +68,22 @@ public static class FreeWRibbonHostExecutionProfile
         bindings.BindAction(
             FreeWRibbonCommandAction.MorePaperSizes,
             ports.OpenMorePaperSizesDialog ?? ports.OpenPageSetupDialog);
-        BindOrEmpty(bindings, FreeWRibbonCommandAction.LineNumbersOptions, ports.OpenLineNumberOptionsDialog);
-        BindOrEmpty(bindings, FreeWRibbonCommandAction.HyphenationManual, ports.OpenManualHyphenationDialog);
-        BindOrEmpty(bindings, FreeWRibbonCommandAction.HyphenationOptions, ports.OpenHyphenationOptionsDialog);
+        BindOrUnavailable(bindings, FreeWRibbonCommandAction.LineNumbersOptions, ports.OpenLineNumberOptionsDialog);
+        BindOrUnavailable(bindings, FreeWRibbonCommandAction.HyphenationManual, ports.OpenManualHyphenationDialog);
+        BindOrUnavailable(bindings, FreeWRibbonCommandAction.HyphenationOptions, ports.OpenHyphenationOptionsDialog);
 
-        BindOrEmpty(bindings, FreeWRibbonCommandAction.PreviousChange, ports.PreviousChange);
-        BindOrEmpty(bindings, FreeWRibbonCommandAction.NextChange, ports.NextChange);
-        BindOrEmpty(bindings, FreeWRibbonCommandAction.AcceptThis, ports.AcceptThisChange);
-        BindOrEmpty(bindings, FreeWRibbonCommandAction.RejectThis, ports.RejectThisChange);
+        BindOrUnavailable(bindings, FreeWRibbonCommandAction.PreviousChange, ports.PreviousChange);
+        BindOrUnavailable(bindings, FreeWRibbonCommandAction.NextChange, ports.NextChange);
+        BindOrUnavailable(bindings, FreeWRibbonCommandAction.AcceptThis, ports.AcceptThisChange);
+        BindOrUnavailable(bindings, FreeWRibbonCommandAction.RejectThis, ports.RejectThisChange);
         var statistics = new ActionRibbonCommand(ports.OpenWordCountDialog);
         bindings.Bind(FreeWRibbonCommandAction.Statistics, statistics);
         bindings.Register("freew.word-count", statistics);
-        BindOrEmpty(bindings, FreeWRibbonCommandAction.Thesaurus, ports.OpenThesaurus);
-        BindOrEmpty(bindings, FreeWRibbonCommandAction.CheckAccessibility, ports.CheckAccessibility);
-        BindOrEmpty(bindings, FreeWRibbonCommandAction.InspectDocument, ports.InspectDocument);
+        BindOrUnavailable(bindings, FreeWRibbonCommandAction.Thesaurus, ports.OpenThesaurus);
+        BindOrUnavailable(bindings, FreeWRibbonCommandAction.CheckAccessibility, ports.CheckAccessibility);
+        BindOrUnavailable(bindings, FreeWRibbonCommandAction.InspectDocument, ports.InspectDocument);
         BindOrUnavailable(bindings, FreeWRibbonCommandAction.Compare, ports.CompareDocuments);
-        BindOrEmpty(bindings, FreeWRibbonCommandAction.Combine, ports.CombineDocuments);
+        BindOrUnavailable(bindings, FreeWRibbonCommandAction.Combine, ports.CombineDocuments);
         bindings.BindToggle(
             FreeWRibbonCommandAction.ReviewingPane,
             ports.ToggleReviewingPane,
@@ -116,12 +116,6 @@ public static class FreeWRibbonHostExecutionProfile
         BindOrUnavailable(bindings, FreeWRibbonCommandAction.LegalNotices, ports.OpenLegalNotices);
     }
 
-    private static void BindOrEmpty(
-        FreeWRibbonCommandBindingPorts bindings,
-        FreeWRibbonCommandAction action,
-        Action? callback) =>
-        bindings.Bind(action, ActionOrEmpty(callback));
-
     private static void BindOrUnavailable(
         FreeWRibbonCommandBindingPorts bindings,
         FreeWRibbonCommandAction action,
@@ -137,9 +131,6 @@ public static class FreeWRibbonHostExecutionProfile
         if (toggle is not null && isChecked is not null)
             bindings.BindToggle(action, toggle, isChecked);
     }
-
-    private static IRibbonCommand ActionOrEmpty(Action? callback) =>
-        callback is null ? EmptyRibbonCommand.Instance : new ActionRibbonCommand(callback);
 
     private static IRibbonCommand CommandOrUnavailable(Action? callback) =>
         callback is null

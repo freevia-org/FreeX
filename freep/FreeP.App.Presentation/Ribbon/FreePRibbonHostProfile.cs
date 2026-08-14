@@ -208,13 +208,17 @@ public static class FreePRibbonHostRegistryComposer
         if (profile.OleCommands is { } ole)
         {
             Register(registry, registered, OleIds[0], ole.InsertEmbeddedObject);
-            Register(
-                registry,
-                registered,
-                OleIds[1],
-                () => OleActivationPlanner.TryOpenInlineFirst(
-                    ole.TryOpenInlineEmbeddedObject,
-                    () => TryOpenSelectedEmbeddedObject(editor, ole)));
+            if (ole.TryOpenInlineEmbeddedObject is not null
+                || ole.TryOpenSelectedEmbeddedObject is not null)
+            {
+                Register(
+                    registry,
+                    registered,
+                    OleIds[1],
+                    () => OleActivationPlanner.TryOpenInlineFirst(
+                        ole.TryOpenInlineEmbeddedObject,
+                        () => TryOpenSelectedEmbeddedObject(editor, ole)));
+            }
         }
 
         return registered.ToArray();
@@ -237,7 +241,10 @@ public static class FreePRibbonHostRegistryComposer
         RibbonCommandId commandId,
         Action? execute)
     {
-        registry.Register(commandId, new ActionRibbonCommand(() => execute?.Invoke()));
+        if (execute is null)
+            return;
+
+        registry.Register(commandId, new ActionRibbonCommand(execute));
         registered.Add(commandId);
     }
 }

@@ -22,14 +22,18 @@ public sealed class FreePRibbonHostProfileTests
     }
 
     [Fact]
-    public void WpfAndAvaloniaProfilesShareTheExactPortableRegistryInventory()
+    public void PortableInventoryIsSharedAndNativeInventoryContainsOnlyBackedEndpoints()
     {
         var wpf = FreePRibbonHostRegistryComposer.Build(
             MakeEditor(),
             new RibbonStateStore(),
             CreateProfile(new FreePRibbonHostPorts
             {
-                OleCommands = new FreePRibbonOleCommandEndpoints(),
+                OleCommands = new FreePRibbonOleCommandEndpoints
+                {
+                    InsertEmbeddedObject = () => { },
+                    TryOpenInlineEmbeddedObject = () => false,
+                },
             }));
         var avalonia = FreePRibbonHostRegistryComposer.Build(
             MakeEditor(),
@@ -40,6 +44,27 @@ public sealed class FreePRibbonHostProfileTests
         wpf.NativeCommandIds.Should().Equal(FreePRibbonHostRegistryComposer.OleCommandIds);
         avalonia.NativeCommandIds.Except(wpf.NativeCommandIds)
             .Should().Equal(FreePRibbonHostRegistryComposer.FileCommandIds);
+    }
+
+    [Fact]
+    public void NullNativeEndpointsStayUnregisteredAndOutOfExecutableInventory()
+    {
+        var result = FreePRibbonHostRegistryComposer.Build(
+            MakeEditor(),
+            new RibbonStateStore(),
+            CreateProfile(new FreePRibbonHostPorts
+            {
+                FileCommands = new FreePRibbonFileCommandEndpoints(),
+                OleCommands = new FreePRibbonOleCommandEndpoints(),
+            }));
+
+        result.NativeCommandIds.Should().BeEmpty();
+        foreach (var commandId in FreePRibbonHostRegistryComposer.FileCommandIds
+                     .Concat(FreePRibbonHostRegistryComposer.OleCommandIds))
+        {
+            result.Registry.TryGet(commandId, out _).Should().BeFalse(
+                $"{commandId} has no executable endpoint");
+        }
     }
 
     [Fact]
@@ -272,8 +297,23 @@ public sealed class FreePRibbonHostProfileTests
     private static FreePRibbonHostProfile CompleteNativeProfile() => CreateProfile(
         new FreePRibbonHostPorts
         {
-            FileCommands = new FreePRibbonFileCommandEndpoints(),
-            OleCommands = new FreePRibbonOleCommandEndpoints(),
+            FileCommands = new FreePRibbonFileCommandEndpoints
+            {
+                New = () => { },
+                Open = () => { },
+                Save = () => { },
+                SaveAs = () => { },
+                ExportPdf = () => { },
+                ExportNotesPagePdf = () => { },
+                ExportImages = () => { },
+                Print = () => { },
+                ExportVideo = () => { },
+            },
+            OleCommands = new FreePRibbonOleCommandEndpoints
+            {
+                InsertEmbeddedObject = () => { },
+                TryOpenInlineEmbeddedObject = () => false,
+            },
         });
 
     private static FreePRibbonHostProfile CreateProfile(FreePRibbonHostPorts ports) =>

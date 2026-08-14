@@ -270,7 +270,7 @@ internal static class FreeWAvaloniaRibbonCommands
 
         // Table shading: open the WPF-parity palette; the shell applies the chosen result only after
         // the user accepts a swatch or No Color. Closing the picker is a no-op.
-        tableCommands.Register("freew.table-shading", new ActionRibbonCommand(callbacks.OpenCellShadingDialog ?? (() => { })));
+        tableCommands.Register("freew.table-shading", OptionalHostCommand(callbacks.OpenCellShadingDialog));
         tableCommands.Register("freew.table-styles", new ActionRibbonCommand(() => { /* dropdown opener */ }));
         for (var index = 0; index < DocumentTableStyle.Catalog.Count; index++)
         {
@@ -374,7 +374,7 @@ internal static class FreeWAvaloniaRibbonCommands
         r.Register("freew.page-size-letter", new HostPageSettingCommand(editor, () => callbacks.ApplyPaperSize("letter")));
         r.Register("freew.page-size-a4", new HostPageSettingCommand(editor, () => callbacks.ApplyPaperSize("a4")));
 
-        var columnsDialogCommand = new ActionRibbonCommand(callbacks.OpenColumnsDialog ?? (() => { }));
+        var columnsDialogCommand = OptionalHostCommand(callbacks.OpenColumnsDialog);
         r.Bind(FreeWRibbonCommandAction.Columns, columnsDialogCommand);
         r.Bind(FreeWRibbonCommandAction.ColumnsMore, columnsDialogCommand);
         r.Bind(FreeWRibbonCommandAction.ColumnsOne, new PageSettingCommand(editor,
@@ -415,7 +415,9 @@ internal static class FreeWAvaloniaRibbonCommands
         ViewRibbonWorkflow.Register(
             r,
             new ViewRibbonCommandBindings(
-                PrintPreview: new ViewRibbonActionBinding(callbacks.OpenPrintPreview ?? (static () => { })),
+                PrintPreview: new ViewRibbonActionBinding(
+                    callbacks.OpenPrintPreview,
+                    ViewRibbonBindingAvailability.Disabled),
                 ReadMode: new ViewRibbonReadModeBindings(
                     Toggle: callbacks.ToggleReadMode is { } toggle && callbacks.IsReadModeActive is { } isActive
                         ? new ViewRibbonToggleBinding(toggle, isActive)
@@ -440,8 +442,9 @@ internal static class FreeWAvaloniaRibbonCommands
                         callbacks.IsDraftViewActive ??
                             (() => editor.ViewMode == DocumentViewMode.Draft)),
                     Outline: new ViewRibbonToggleBinding(
-                        callbacks.SetOutlineView ?? (static () => { }),
-                        callbacks.IsOutlineViewActive ?? (static () => false)),
+                        callbacks.SetOutlineView,
+                        callbacks.IsOutlineViewActive,
+                        ViewRibbonBindingAvailability.Disabled),
                     PagedEdit: new ViewRibbonToggleBinding(
                         callbacks.TogglePagedEditView ?? callbacks.SetPrintLayout,
                         callbacks.IsPagedEditViewActive ?? (static () => false))),
@@ -459,24 +462,27 @@ internal static class FreeWAvaloniaRibbonCommands
                         () => editor.ShowRuler = !editor.ShowRuler,
                         () => editor.ShowRuler)),
                 Zoom: new ViewRibbonZoomBindings(
-                    Dialog: new ViewRibbonActionBinding(callbacks.OpenZoomDialog ?? (static () => { })),
+                    Dialog: new ViewRibbonActionBinding(callbacks.OpenZoomDialog, ViewRibbonBindingAvailability.Disabled),
                     ZoomIn: new ViewRibbonActionBinding(() => callbacks.ApplyZoom(null, +0.1)),
                     ZoomOut: new ViewRibbonActionBinding(() => callbacks.ApplyZoom(null, -0.1)),
                     Reset100: new ViewRibbonActionBinding(() => callbacks.ApplyZoom(1.0, 0)),
-                    OnePage: new ViewRibbonActionBinding(callbacks.ZoomOnePage ?? (static () => { })),
-                    PageWidth: new ViewRibbonActionBinding(callbacks.ZoomPageWidth ?? (static () => { })),
+                    OnePage: new ViewRibbonActionBinding(callbacks.ZoomOnePage, ViewRibbonBindingAvailability.Disabled),
+                    PageWidth: new ViewRibbonActionBinding(callbacks.ZoomPageWidth, ViewRibbonBindingAvailability.Disabled),
                     MultiplePages: new ViewRibbonToggleBinding(
-                        callbacks.ToggleMultiplePages ?? (static () => { }),
-                        callbacks.IsMultiplePagesActive ?? (static () => false)),
+                        callbacks.ToggleMultiplePages,
+                        callbacks.IsMultiplePagesActive,
+                        ViewRibbonBindingAvailability.Disabled),
                     SideToSide: new ViewRibbonToggleBinding(
-                        callbacks.ToggleSideToSide ?? (static () => { }),
-                        callbacks.IsSideToSideActive ?? (static () => false))),
+                        callbacks.ToggleSideToSide,
+                        callbacks.IsSideToSideActive,
+                        ViewRibbonBindingAvailability.Disabled)),
                 Window: new ViewRibbonWindowBindings(
-                    NewWindow: new ViewRibbonActionBinding(callbacks.NewWindow ?? (static () => { })),
-                    ArrangeAll: new ViewRibbonActionBinding(callbacks.ArrangeAll ?? (static () => { })),
+                    NewWindow: new ViewRibbonActionBinding(callbacks.NewWindow, ViewRibbonBindingAvailability.Disabled),
+                    ArrangeAll: new ViewRibbonActionBinding(callbacks.ArrangeAll, ViewRibbonBindingAvailability.Disabled),
                     Split: new ViewRibbonToggleBinding(
-                        callbacks.ToggleSplit ?? (static () => { }),
-                        callbacks.IsSplitActive ?? (static () => false))),
+                        callbacks.ToggleSplit,
+                        callbacks.IsSplitActive,
+                        ViewRibbonBindingAvailability.Disabled)),
                 RegisterCompatibilityAliases: true));
 
         // ── Review ───────────────────────────────────────────────────────────
@@ -532,17 +538,21 @@ internal static class FreeWAvaloniaRibbonCommands
         r.Bind(FreeWRibbonCommandAction.AddToDictionary, new ActionRibbonCommand(
             callbacks.AddToDictionary ?? (() => editor.AddCurrentWordToDictionary())));
         r.Bind(FreeWRibbonCommandAction.SetProofingLanguage, new ProofingLanguageCommand(editor, callbacks));
-        r.Bind(FreeWRibbonCommandAction.ReadAloud, new ToggleActionCommand(
-            callbacks.ToggleReadAloud ?? (() => { }),
-            callbacks.IsReadAloudActive ?? (() => false)));
+        r.Bind(FreeWRibbonCommandAction.ReadAloud,
+            callbacks.ToggleReadAloud is { } toggleReadAloud
+                ? new ToggleActionCommand(toggleReadAloud, callbacks.IsReadAloudActive ?? (() => false))
+                : FreeWRibbonExecutionProfile.UnavailableCommand);
         r.Bind(FreeWRibbonCommandAction.MarkAsFinal, new ToggleActionCommand(
             callbacks.MarkAsFinal ?? (() => editor.SetMarkedAsFinal(!editor.IsMarkedAsFinal)),
             () => ReviewProtectionStatePlanner.Build(editor.Document.Protection, editor.IsMarkedAsFinal)
                 .MarkAsFinal.IsChecked));
-        r.Bind(FreeWRibbonCommandAction.RestrictEditing, new ToggleActionCommand(
-            callbacks.RestrictEditing ?? (() => { }),
-            () => ReviewProtectionStatePlanner.Build(editor.Document.Protection, editor.IsMarkedAsFinal)
-                .RestrictEditing.IsChecked));
+        r.Bind(FreeWRibbonCommandAction.RestrictEditing,
+            callbacks.RestrictEditing is { } restrictEditing
+                ? new ToggleActionCommand(
+                    restrictEditing,
+                    () => ReviewProtectionStatePlanner.Build(editor.Document.Protection, editor.IsMarkedAsFinal)
+                        .RestrictEditing.IsChecked)
+                : FreeWRibbonExecutionProfile.UnavailableCommand);
 
         // ── References (AV-REF) ──────────────────────────────────────────────
         ConfigureReferenceCommandFamily(referenceCommands, editor, callbacks);
@@ -936,24 +946,25 @@ internal static class FreeWAvaloniaRibbonCommands
     /// Drop Cap, Quick Parts (document-property fields + snippet), Equation, and Text from File. Each
     /// resolves to a model-backed, undoable <see cref="DocumentView"/> insert method; the dialog-driven
     /// commands (Hyperlink / Bookmark / Quick-Part snippet / Text-from-File) route through the optional
-    /// <see cref="FreeWRibbonHostExecutionPorts"/> launchers and safely no-op when the shell did not supply one (so
-    /// the registry stays complete and existing test call sites keep compiling).
+    /// <see cref="FreeWRibbonHostExecutionPorts"/> launchers and fail closed when the shell did not supply one.
     /// </summary>
     private static void RegisterInsertDepth2Commands(
         IRibbonCommandRegistry r, DocumentView editor, FreeWRibbonHostExecutionPorts callbacks)
     {
         // ── Links ────────────────────────────────────────────────────────────
         // Hyperlink / Bookmark open small dialogs (shell callbacks) that call the model-backed editor methods.
-        r.Bind(FreeWRibbonCommandAction.Hyperlink,        new ActionRibbonCommand(callbacks.OpenHyperlinkDialog ?? (() => { })));
-        r.Register("freew.insert-hyperlink", new ActionRibbonCommand(callbacks.OpenHyperlinkDialog ?? (() => { })));
-        r.Bind(FreeWRibbonCommandAction.EditHyperlink,   new ActionRibbonCommand(callbacks.OpenEditHyperlinkDialog ?? (() => { })));
+        var hyperlink = OptionalHostCommand(callbacks.OpenHyperlinkDialog);
+        r.Bind(FreeWRibbonCommandAction.Hyperlink, hyperlink);
+        r.Register("freew.insert-hyperlink", hyperlink);
+        r.Bind(FreeWRibbonCommandAction.EditHyperlink, OptionalHostCommand(callbacks.OpenEditHyperlinkDialog));
         r.Bind(FreeWRibbonCommandAction.RemoveHyperlink, new ActionRibbonCommand(editor.RemoveHyperlink));
-        r.Bind(FreeWRibbonCommandAction.HyperlinkTooltip, new ActionRibbonCommand(callbacks.OpenHyperlinkTooltipDialog ?? (() => { })));
-        r.Bind(FreeWRibbonCommandAction.Bookmark,         new ActionRibbonCommand(callbacks.OpenBookmarkDialog ?? (() => { })));
-        r.Register("freew.insert-bookmark",  new ActionRibbonCommand(callbacks.OpenBookmarkDialog ?? (() => { })));
+        r.Bind(FreeWRibbonCommandAction.HyperlinkTooltip, OptionalHostCommand(callbacks.OpenHyperlinkTooltipDialog));
+        var bookmark = OptionalHostCommand(callbacks.OpenBookmarkDialog);
+        r.Bind(FreeWRibbonCommandAction.Bookmark, bookmark);
+        r.Register("freew.insert-bookmark", bookmark);
         r.Bind(FreeWRibbonCommandAction.LinkBookmark,    new ActionRibbonCommand(callbacks.OpenLinkBookmarkDialog ?? (() => LinkToFirstBookmark(editor))));
-        r.Bind(FreeWRibbonCommandAction.BookmarkManager, new ActionRibbonCommand(
-            callbacks.OpenBookmarkManagerDialog ?? callbacks.OpenBookmarkDialog ?? (() => { })));
+        r.Bind(FreeWRibbonCommandAction.BookmarkManager, OptionalHostCommand(
+            callbacks.OpenBookmarkManagerDialog ?? callbacks.OpenBookmarkDialog));
 
         // ── Cover Page ───────────────────────────────────────────────────────
         // The split-button face inserts the WPF default; each preset prepends its cover-page block layout.
@@ -972,7 +983,7 @@ internal static class FreeWAvaloniaRibbonCommands
         r.Bind(FreeWRibbonCommandAction.DropCapDropped,   new ActionRibbonCommand(() => editor.ApplyDropCap(DropCapPosition.Dropped)));
         r.Bind(FreeWRibbonCommandAction.DropCapInMargin, new ActionRibbonCommand(() => editor.ApplyDropCap(DropCapPosition.InMargin)));
         r.Bind(FreeWRibbonCommandAction.DropCapNone,      new ActionRibbonCommand(editor.ClearDropCap));
-        r.Bind(FreeWRibbonCommandAction.DropCapOptions,   new ActionRibbonCommand(callbacks.OpenDropCapOptionsDialog ?? (() => { })));
+        r.Bind(FreeWRibbonCommandAction.DropCapOptions, OptionalHostCommand(callbacks.OpenDropCapOptionsDialog));
 
         // ── Quick Parts ──────────────────────────────────────────────────────
         // Document-property / date fields insert directly; the snippet entry opens a dialog (shell callback).
@@ -983,7 +994,7 @@ internal static class FreeWAvaloniaRibbonCommands
         r.Register("freew.quick-parts.keywords", new ActionRibbonCommand(() => editor.InsertField(RunFieldKind.Keywords)));
         r.Register("freew.quick-parts.comments", new ActionRibbonCommand(() => editor.InsertField(RunFieldKind.DocComments)));
         r.Register("freew.quick-parts.date",    new ActionRibbonCommand(() => editor.InsertField(RunFieldKind.Date)));
-        r.Register("freew.quick-parts.snippet", new ActionRibbonCommand(callbacks.OpenQuickPartDialog ?? (() => { })));
+        r.Register("freew.quick-parts.snippet", OptionalHostCommand(callbacks.OpenQuickPartDialog));
 
         // ── Equation ─────────────────────────────────────────────────────────
         // The split-button face inserts the WPF default; each preset inserts an inline OMML equation.
@@ -1000,7 +1011,7 @@ internal static class FreeWAvaloniaRibbonCommands
 
         // ── Text from File ───────────────────────────────────────────────────
         // Opens a file picker (shell callback); DOCX content is inserted as model blocks and TXT as plain text.
-        var textFromFileCommand = new ActionRibbonCommand(callbacks.InsertTextFromFile ?? (() => { }));
+        var textFromFileCommand = OptionalHostCommand(callbacks.InsertTextFromFile);
         r.Bind(FreeWRibbonCommandAction.InsertFile, textFromFileCommand);
         r.Register("freew.text-from-file", textFromFileCommand);
         r.Bind(FreeWRibbonCommandAction.Chart, new EditingActionCommand(editor, callbacks.OpenInsertChartDialog, () => editor.InsertChart()));
@@ -1012,6 +1023,11 @@ internal static class FreeWAvaloniaRibbonCommands
         r.Bind(FreeWRibbonCommandAction.UpdateFields, new ActionRibbonCommand(editor.UpdateFields));
         r.Bind(FreeWRibbonCommandAction.ToggleFieldCodes, new ActionRibbonCommand(editor.ToggleFieldCodes));
     }
+
+    private static IRibbonCommand OptionalHostCommand(Action? callback) =>
+        callback is null
+            ? FreeWRibbonExecutionProfile.UnavailableCommand
+            : new ActionRibbonCommand(callback);
 
     private static void LinkToFirstBookmark(DocumentView editor)
     {
@@ -1122,11 +1138,11 @@ internal static class FreeWAvaloniaRibbonCommands
         }
         else
         {
-            family.BindAction(FreeWRibbonCommandAction.ShowNotes,
-                callbacks.ToggleNotesPane ?? (() => { }));
+            family.Bind(FreeWRibbonCommandAction.ShowNotes,
+                FreeWRibbonExecutionProfile.UnavailableCommand);
         }
-        family.Bind(FreeWRibbonCommandAction.FootnoteEndnoteOptions, new ActionRibbonCommand(
-            callbacks.OpenFootnoteEndnoteOptionsDialog ?? (() => { })));
+        family.Bind(FreeWRibbonCommandAction.FootnoteEndnoteOptions,
+            OptionalHostCommand(callbacks.OpenFootnoteEndnoteOptionsDialog));
 
         var endnote = new ActionRibbonCommand(
             callbacks.OpenEndnoteDialog ?? (() => editor.InsertEndnote()));
@@ -1143,20 +1159,20 @@ internal static class FreeWAvaloniaRibbonCommands
         family.Register("freew.update-toc", tocRefresh);
 
         // Captions — the primary action opens the label/text dialog; menu labels remain direct.
-        var caption = new ActionRibbonCommand(callbacks.OpenCaptionDialog ?? (() => { }));
+        var caption = OptionalHostCommand(callbacks.OpenCaptionDialog);
         family.Bind(FreeWRibbonCommandAction.Caption, caption);
         family.Register("freew.insert-caption", caption);
         family.Bind(FreeWRibbonCommandAction.InsertCaption_Figure, new ActionRibbonCommand(() => editor.InsertCaption(CaptionLabel.Figure)));
         family.Bind(FreeWRibbonCommandAction.InsertCaption_Table,  new ActionRibbonCommand(() => editor.InsertCaption(CaptionLabel.Table)));
         family.Bind(FreeWRibbonCommandAction.InsertCaption_Equation, new ActionRibbonCommand(() => editor.InsertCaption(CaptionLabel.Equation)));
 
-        // Dialog-backed commands no-op without a shell callback instead of silently choosing defaults.
-        family.Bind(FreeWRibbonCommandAction.CrossReference, new ActionRibbonCommand(callbacks.OpenCrossReferenceDialog ?? (() => { })));
+        // Dialog-backed commands fail closed without a shell callback instead of silently choosing defaults.
+        family.Bind(FreeWRibbonCommandAction.CrossReference, OptionalHostCommand(callbacks.OpenCrossReferenceDialog));
 
-        var citation = new ActionRibbonCommand(callbacks.OpenCitationDialog ?? (() => { }));
+        var citation = OptionalHostCommand(callbacks.OpenCitationDialog);
         family.Bind(FreeWRibbonCommandAction.Citation, citation);
         family.Register("freew.insert-citation", citation);
-        family.Bind(FreeWRibbonCommandAction.ManageSources, new ActionRibbonCommand(callbacks.OpenManageSourcesDialog ?? (() => { })));
+        family.Bind(FreeWRibbonCommandAction.ManageSources, OptionalHostCommand(callbacks.OpenManageSourcesDialog));
         family.Bind(FreeWRibbonCommandAction.CitationStyle, new FreeWRibbonChoiceCommand(
             value => editor.ApplyCitationStyle(Citations.ParseStyle(value, editor.Document.BibliographyStyle)),
             () => Citations.StyleName(editor.Document.BibliographyStyle)));
@@ -1176,7 +1192,7 @@ internal static class FreeWAvaloniaRibbonCommands
             callbacks.OpenInsertIndexDialog ?? (() => editor.InsertIndex())));
         family.Bind(FreeWRibbonCommandAction.IndexRefresh, new ActionRibbonCommand(
             callbacks.OpenUpdateIndexDialog ?? (() => editor.RefreshIndex())));
-        family.Bind(FreeWRibbonCommandAction.MarkCitation, new ActionRibbonCommand(callbacks.OpenMarkCitationDialog ?? (() => { })));
+        family.Bind(FreeWRibbonCommandAction.MarkCitation, OptionalHostCommand(callbacks.OpenMarkCitationDialog));
         family.Bind(FreeWRibbonCommandAction.TableOfAuthorities, new ActionRibbonCommand(
             callbacks.ShowTableOfAuthoritiesDialog ?? (() =>
             {
@@ -1718,8 +1734,8 @@ internal static class FreeWAvaloniaRibbonCommands
             "freew.prev-record");
         r.Bind(FreeWRibbonCommandAction.MergePreviewLast, new ActionRibbonCommand(engine.LastRecord));
         // MainWindow replaces these with owner-modal dialogs; keep definition parity for headless hosts.
-        r.Bind(FreeWRibbonCommandAction.MergeFindRecipient, new ActionRibbonCommand(() => { }));
-        r.Bind(FreeWRibbonCommandAction.MergeCheckErrors, new ActionRibbonCommand(() => { }));
+        r.Bind(FreeWRibbonCommandAction.MergeFindRecipient, FreeWRibbonExecutionProfile.UnavailableCommand);
+        r.Bind(FreeWRibbonCommandAction.MergeCheckErrors, FreeWRibbonExecutionProfile.UnavailableCommand);
         RegisterMailingsAlias(r, FreeWRibbonCommandAction.MergeFinish, new ActionRibbonCommand(() => engine.FinishMerge()),
             "freew.finish-merge");
         r.Bind(FreeWRibbonCommandAction.MergeEmail, new ActionRibbonCommand(() => engine.PlanEmailMerge()));
@@ -1742,8 +1758,7 @@ internal static class FreeWAvaloniaRibbonCommands
     /// top-level dropdown ids either consume the selected combo value or act as menu openers; the
     /// per-item ids resolve to a model-backed, undoable
     /// <see cref="DocumentView"/> Design method. Page Borders + Custom Watermark route through the optional
-    /// <see cref="FreeWRibbonHostExecutionPorts"/> dialog launchers and safely no-op when the shell did not supply one
-    /// (so the registry-completeness guard passes and parallel waves / tests keep compiling).
+    /// <see cref="FreeWRibbonHostExecutionPorts"/> dialog launchers and fail closed when the shell did not supply one.
     /// </summary>
     private static void RegisterDesignCommands(
         IRibbonCommandRegistry r,
@@ -1761,7 +1776,7 @@ internal static class FreeWAvaloniaRibbonCommands
 
         // ── Colors (palette only — preserves fonts) ──────────────────────────
         r.Bind(FreeWRibbonCommandAction.ThemeColors, new ActionRibbonCommand(() => { /* dropdown opener */ }));
-        r.Bind(FreeWRibbonCommandAction.CustomizeColors, new ActionRibbonCommand(callbacks.OpenCustomizeThemeColorsDialog ?? (() => { })));
+        r.Bind(FreeWRibbonCommandAction.CustomizeColors, OptionalHostCommand(callbacks.OpenCustomizeThemeColorsDialog));
         foreach (var theme in DocumentTheme.Catalog)
         {
             var t = theme;
@@ -1770,7 +1785,7 @@ internal static class FreeWAvaloniaRibbonCommands
 
         // ── Fonts (heading/body pairing — preserves colours) ─────────────────
         r.Bind(FreeWRibbonCommandAction.ThemeFonts, new ActionRibbonCommand(() => { /* dropdown opener */ }));
-        r.Bind(FreeWRibbonCommandAction.CustomizeFonts, new ActionRibbonCommand(callbacks.OpenCustomizeThemeFontsDialog ?? (() => { })));
+        r.Bind(FreeWRibbonCommandAction.CustomizeFonts, OptionalHostCommand(callbacks.OpenCustomizeThemeFontsDialog));
         foreach (var fontSet in DocumentFontSet.Catalog)
         {
             var f = fontSet;
@@ -1786,7 +1801,7 @@ internal static class FreeWAvaloniaRibbonCommands
                 new ActionRibbonCommand(() => editor.ApplyParagraphSpacingSet(s)));
         }
         r.Bind(FreeWRibbonCommandAction.CustomParagraphSpacing,
-            new ActionRibbonCommand(callbacks.OpenCustomParagraphSpacingDialog ?? (() => { })));
+            OptionalHostCommand(callbacks.OpenCustomParagraphSpacingDialog));
 
         r.Bind(FreeWRibbonCommandAction.ThemeEffects, new ActionRibbonCommand(() => { /* dropdown opener */ }));
         for (var index = 0; index < DocumentEffectSet.Catalog.Count; index++)
@@ -1801,11 +1816,11 @@ internal static class FreeWAvaloniaRibbonCommands
         r.Bind(FreeWRibbonCommandAction.ResetStyleSet, new ActionRibbonCommand(() => editor.ApplyStyleSet(DocumentStyleSet.Default)));
 
         r.Bind(FreeWRibbonCommandAction.PageColor, new ActionRibbonCommand(() => { /* dropdown opener */ }));
-        r.Register("freew.page-color.more", new ActionRibbonCommand(callbacks.OpenPageColorDialog ?? (() => { })));
+        r.Register("freew.page-color.more", OptionalHostCommand(callbacks.OpenPageColorDialog));
         RegisterPageColorPalette(r, editor);
 
         // ── Page Borders — dialog launcher (optional callback) ───────────────
-        r.Register("freew.page-borders", new ActionRibbonCommand(callbacks.OpenPageBordersDialog ?? (() => { })));
+        r.Register("freew.page-borders", OptionalHostCommand(callbacks.OpenPageBordersDialog));
 
         // ── Watermark — built-in presets + Custom (dialog) + Remove ──────────
         r.Bind(FreeWRibbonCommandAction.Watermark, new ActionRibbonCommand(() => { /* dropdown opener */ }));
@@ -1813,7 +1828,7 @@ internal static class FreeWAvaloniaRibbonCommands
         r.Register("freew.watermark.do-not-copy",  new ActionRibbonCommand(() => editor.SetWatermarkText("DO NOT COPY")));
         r.Register("freew.watermark.draft",        new ActionRibbonCommand(() => editor.SetWatermarkText("DRAFT")));
         r.Register("freew.watermark.urgent",       new ActionRibbonCommand(() => editor.SetWatermarkText("URGENT")));
-        r.Register("freew.watermark.custom",       new ActionRibbonCommand(callbacks.OpenWatermarkDialog ?? (() => { })));
+        r.Register("freew.watermark.custom", OptionalHostCommand(callbacks.OpenWatermarkDialog));
         r.Register("freew.watermark.none",         new ActionRibbonCommand(() => editor.SetWatermark(null)));
     }
 
