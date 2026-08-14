@@ -72,7 +72,7 @@ public sealed partial class SlideShowWindow : Window, ISlideShowTransitionPlayba
     private readonly DispatcherTimer  _autoAdvanceTimer;
     private readonly DispatcherTimer  _kioskRestartTimer;
     private long _autoAdvanceDisplayVersion;
-    private PresenterViewWindow? _presenterViewWindow;
+    private readonly SlideShowNativePresenterWindowHost<PresenterViewWindow> _presenterViewHost;
     private bool _zoomShowBackgroundForTransition = true;
 
     // DA2 + DA3: all per-frame DispatcherTimers created by animation/transition helpers
@@ -176,6 +176,13 @@ public sealed partial class SlideShowWindow : Window, ISlideShowTransitionPlayba
                 preferredCaptionSlideIndex,
                 preferredCaptionShapeId,
                 preferredCaptionTrackIndex));
+        _presenterViewHost = new SlideShowNativePresenterWindowHost<PresenterViewWindow>(
+            operations => new PresenterViewWindow(_presentation, operations),
+            (window, onClosed) => window.Closed += (_, _) => onClosed(),
+            window => window.Show(this),
+            window => window.Close(),
+            window => window.RefreshFromState(),
+            _runtime.NotifyPresenterViewClosed);
 
         // Pre-compute slide DIP dimensions.
         var metrics = _runtime.InitialSlideMetrics;
@@ -438,26 +445,13 @@ public sealed partial class SlideShowWindow : Window, ISlideShowTransitionPlayba
         => _runtime.TogglePresenterView();
 
     void ISlideShowDisplayRenderer.OpenPresenterView()
-    {
-        var window = new PresenterViewWindow(
-            _presentation,
+        => _presenterViewHost.Open(
             _runtime.CreatePresenterViewOperations(_setSlideNotesText));
-        _presenterViewWindow = window;
-        window.Closed += (_, _) =>
-        {
-            if (ReferenceEquals(_presenterViewWindow, window))
-            {
-                _presenterViewWindow = null;
-                _runtime.NotifyPresenterViewClosed();
-            }
-        };
-        window.Show(this);
-    }
 
-    void ISlideShowDisplayRenderer.ClosePresenterView() => _presenterViewWindow?.Close();
+    void ISlideShowDisplayRenderer.ClosePresenterView() => _presenterViewHost.Close();
 
     void ISlideShowDisplayRenderer.RefreshPresenterView() =>
-        _presenterViewWindow?.RefreshFromState();
+        _presenterViewHost.Refresh();
 
     public SlideShowPresenterToolPlan ApplyPresenterToolIntent(
         SlideShowTimingIntent timingIntent = SlideShowTimingIntent.None,

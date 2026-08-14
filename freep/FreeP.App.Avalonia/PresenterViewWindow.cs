@@ -24,16 +24,9 @@ public sealed class PresenterViewWindow : Window
     private readonly TextBlock _currentLabel;
     private readonly TextBlock _nextLabel;
     private readonly TextBox _notesText;
-    private readonly Button _backButton;
-    private readonly Button _advanceButton;
-    private readonly Button _recordTimingsButton;
-    private readonly Button _rehearseTimingsButton;
-    private readonly Button _narrationButton;
-    private readonly Button _narrationAndMediaButton;
-    private readonly Button _applyRecordingButton;
+    private readonly Dictionary<SlideShowPresenterViewAction, Button> _actionButtons = [];
     private readonly TextBlock _recordingStatusText;
     private readonly TextBox _slideNumberBox;
-    private readonly Button _goToSlideButton;
     private readonly ComboBox _pointerModeCombo;
 
     public PresenterViewWindow(
@@ -95,12 +88,6 @@ public sealed class PresenterViewWindow : Window
                 PresentationPresenterViewVisualMetrics.HeaderControlsSideMargin,
                 0),
         };
-        _backButton = MakeActionButton(
-            surface.Action(SlideShowPresenterViewAction.Previous),
-            () => ExecuteAction(SlideShowPresenterViewAction.Previous));
-        _advanceButton = MakeActionButton(
-            surface.Action(SlideShowPresenterViewAction.Next),
-            () => ExecuteAction(SlideShowPresenterViewAction.Next));
         _slideNumberBox = new TextBox
         {
             Width = PresentationPresenterViewVisualMetrics.SlideNumberWidth,
@@ -125,22 +112,6 @@ public sealed class PresenterViewWindow : Window
                 e.Handled = true;
             }
         };
-        _goToSlideButton = MakeActionButton(
-            surface.Action(SlideShowPresenterViewAction.GoToSlide),
-            () => ExecuteAction(SlideShowPresenterViewAction.GoToSlide));
-        _goToSlideButton.IsEnabled = _coordinator.CanGoToSlide;
-        _recordTimingsButton = MakeActionButton(
-            surface.Action(SlideShowPresenterViewAction.RecordTimings),
-            () => ExecuteAction(SlideShowPresenterViewAction.RecordTimings));
-        _rehearseTimingsButton = MakeActionButton(
-            surface.Action(SlideShowPresenterViewAction.RehearseTimings),
-            () => ExecuteAction(SlideShowPresenterViewAction.RehearseTimings));
-        _narrationButton = MakeActionButton(
-            surface.Action(SlideShowPresenterViewAction.Narration),
-            () => ExecuteAction(SlideShowPresenterViewAction.Narration));
-        _narrationAndMediaButton = MakeActionButton(
-            surface.Action(SlideShowPresenterViewAction.NarrationAndMedia),
-            () => ExecuteAction(SlideShowPresenterViewAction.NarrationAndMedia));
         _recordingStatusText = MakeText(
             PresentationPresenterViewVisualMetrics.RecordingStatusFontSize,
             FontWeight.Normal);
@@ -153,34 +124,6 @@ public sealed class PresenterViewWindow : Window
         ApplySemantic(
             _recordingStatusText,
             surface.Field(SlideShowPresenterViewField.RecordingStatus));
-        _applyRecordingButton = MakeActionButton(
-            surface.Action(SlideShowPresenterViewAction.ApplyRecording),
-            () => ExecuteAction(SlideShowPresenterViewAction.ApplyRecording));
-        controls.Children.Add(_backButton);
-        controls.Children.Add(_advanceButton);
-        controls.Children.Add(_slideNumberBox);
-        controls.Children.Add(_goToSlideButton);
-        controls.Children.Add(_recordTimingsButton);
-        controls.Children.Add(_rehearseTimingsButton);
-        controls.Children.Add(_narrationButton);
-        controls.Children.Add(_narrationAndMediaButton);
-        controls.Children.Add(_applyRecordingButton);
-        var normalButton = MakeActionButton(
-            surface.Action(SlideShowPresenterViewAction.ShowScreen),
-            () => ExecuteAction(SlideShowPresenterViewAction.ShowScreen));
-        var blackButton = MakeActionButton(
-            surface.Action(SlideShowPresenterViewAction.BlackScreen),
-            () => ExecuteAction(SlideShowPresenterViewAction.BlackScreen));
-        var whiteButton = MakeActionButton(
-            surface.Action(SlideShowPresenterViewAction.WhiteScreen),
-            () => ExecuteAction(SlideShowPresenterViewAction.WhiteScreen));
-        var clearInkButton = MakeActionButton(
-            surface.Action(SlideShowPresenterViewAction.ClearInk),
-            () => ExecuteAction(SlideShowPresenterViewAction.ClearInk));
-        normalButton.IsEnabled = _coordinator.CanSetScreenMode;
-        blackButton.IsEnabled = _coordinator.CanSetScreenMode;
-        whiteButton.IsEnabled = _coordinator.CanSetScreenMode;
-        clearInkButton.IsEnabled = _coordinator.CanClearInk;
         _pointerModeCombo = MakePointerModePicker(mode =>
         {
             if (mode is not null)
@@ -190,11 +133,30 @@ public sealed class PresenterViewWindow : Window
         });
         _pointerModeCombo.IsEnabled = _coordinator.CanSelectPointerMode;
         ApplySemantic(_pointerModeCombo, surface.Field(SlideShowPresenterViewField.PointerMode));
-        controls.Children.Add(normalButton);
-        controls.Children.Add(blackButton);
-        controls.Children.Add(whiteButton);
-        controls.Children.Add(clearInkButton);
-        controls.Children.Add(_pointerModeCombo);
+        foreach (var item in SlideShowPresenterViewActionProjection.HeaderItems)
+        {
+            if (item.Kind == SlideShowPresenterViewHeaderItemKind.SlideNumber)
+            {
+                controls.Children.Add(_slideNumberBox);
+                continue;
+            }
+
+            if (item.Kind == SlideShowPresenterViewHeaderItemKind.PointerMode)
+            {
+                controls.Children.Add(_pointerModeCombo);
+                continue;
+            }
+
+            var action = item.Action!.Value;
+            var button = MakeActionButton(surface.Action(action), () => ExecuteAction(action));
+            button.IsEnabled = SlideShowPresenterViewActionProjection.IsInitiallyEnabled(
+                action,
+                _coordinator.CanGoToSlide,
+                _coordinator.CanSetScreenMode,
+                _coordinator.CanClearInk);
+            _actionButtons.Add(action, button);
+            controls.Children.Add(button);
+        }
         Grid.SetColumn(controls, 1);
         Grid.SetColumn(_elapsedText, 2);
         header.Children.Add(_statusText);
@@ -328,18 +290,19 @@ public sealed class PresenterViewWindow : Window
             _notesText.Text = plan.NotesText;
         if (refresh.ShouldUpdateSlideNumber && plan.CurrentSlideNumberText is not null)
             _slideNumberBox.Text = plan.CurrentSlideNumberText;
-        _backButton.IsEnabled = plan.CanGoBack;
-        _advanceButton.IsEnabled = plan.CanAdvance;
-        _recordTimingsButton.Content = plan.RecordTimingsButtonText;
-        _recordTimingsButton.IsEnabled = plan.CanSetTimingIntent;
-        _rehearseTimingsButton.Content = plan.RehearseTimingsButtonText;
-        _rehearseTimingsButton.IsEnabled = plan.CanSetTimingIntent;
-        _narrationButton.Content = plan.NarrationButtonText;
-        _narrationButton.IsEnabled = plan.CanSetMediaIntent;
-        _narrationAndMediaButton.Content = plan.NarrationAndMediaButtonText;
-        _narrationAndMediaButton.IsEnabled = plan.CanSetMediaIntent;
+        foreach (var actionState in SlideShowPresenterViewActionProjection.Build(
+                     plan,
+                     plan.CanGoBack,
+                     plan.CanAdvance,
+                     _coordinator.CanGoToSlide,
+                     _coordinator.CanSetScreenMode,
+                     _coordinator.CanClearInk))
+        {
+            var button = _actionButtons[actionState.Action];
+            button.Content = actionState.Label;
+            button.IsEnabled = actionState.IsEnabled;
+        }
         _recordingStatusText.Text = plan.RecordingStatusText;
-        _applyRecordingButton.IsEnabled = plan.CanApplyRecording;
         _pointerModeCombo.SelectedItem = plan.PointerMode;
         _currentPreview.Slide = plan.CurrentSlide;
         _nextPreview.Slide = plan.NextSlide;
