@@ -253,18 +253,10 @@ public sealed partial class AvaloniaCanvasGestureHandler : IDisposable, ICanvasG
     }
 
     private void ApplyPressAction(CanvasGesturePressPlan plan)
-    {
-        switch (plan.Action)
-        {
-            case CanvasGesturePressActionKind.NotifyChartPointDoubleClick
-                when plan.ChartPoint is { } chartPoint:
-                _onChartPointDoubleClick?.Invoke(chartPoint);
-                break;
-            case CanvasGesturePressActionKind.ActivateOle when plan.Shape is { } shape:
-                HandleOleDoubleClick(shape);
-                break;
-        }
-    }
+        => CanvasGesturePressActionDispatcher.Dispatch(
+            plan,
+            _onChartPointDoubleClick,
+            shape => HandleOleDoubleClick(shape));
 
     private bool HandleOleDoubleClick(SlideShape shape) =>
         OleActivationCoordinator.TryActivate(
@@ -442,10 +434,7 @@ public sealed partial class AvaloniaCanvasGestureHandler : IDisposable, ICanvasG
                 _canvas.CurrentTransform,
                 EditPointsEnabled);
 
-        _adorner.UpdateSelection(projection.Selections.Select(selection =>
-            (selection.ShapeId, ToAvaloniaRect(selection.ScreenRect))));
-        _adorner.UpdateGeometryHandles(projection.GeometryHandles.Select(handle =>
-            (handle.Name, new Point(handle.ScreenPosition.X, handle.ScreenPosition.Y))));
+        _adorner.UpdateProjection(projection);
     }
 
     // ── Helpers ────────────────────────────────────────────────────────────────

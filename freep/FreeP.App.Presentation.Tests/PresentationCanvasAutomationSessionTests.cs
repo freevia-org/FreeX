@@ -226,14 +226,18 @@ public sealed class PresentationCanvasAutomationSessionTests
                 automationSource.IndexOf("internal Rect GetShapeBoundingRectangle", StringComparison.Ordinal)..
                 automationSource.IndexOf("internal void NotifySelectionChanged", StringComparison.Ordinal)];
 
-            automationSource.Should().Contain("_canvasAutomation.ProjectCanvas(")
-                .And.Contain("_canvasAutomation.ProjectShapes(")
-                .And.Contain("_canvasAutomation.ProjectSelection(")
+            automationSource.Should().Contain("PresentationCanvasAutomationPeerCoordinator<SlideShapeAutomationPeer>")
+                .And.Contain("_coordinator.CanvasDescriptor")
+                .And.Contain("_coordinator.SynchronizeChildren()")
+                .And.Contain("_coordinator.GetSelection()")
                 .And.Contain("PresentationCanvasAutomationSelectionDelta delta")
-                .And.Contain("_canvasAutomation.CanSelectMultiple")
-                .And.Contain("_canvasAutomation.RequestSelectionMutation(")
-                .And.Contain("PresentationCanvasAutomationRole.Image => AutomationControlType.Image")
-                .And.Contain("PresentationAutomationPeerCache.Synchronize(")
+                .And.Contain("_coordinator.CanSelectMultiple")
+                .And.Contain("Coordinator.RequestSelectionMutation(")
+                .And.Contain("PresentationCanvasAutomationRoleMapper.Map(")
+                .And.NotContain("PresentationAutomationPeerCache.Synchronize(")
+                .And.NotContain("_canvasAutomation.ProjectCanvas(")
+                .And.NotContain("_canvasAutomation.ProjectShapes(")
+                .And.NotContain("_canvasAutomation.ProjectSelection(")
                 .And.NotContain("_lastNotifiedSelection")
                 .And.NotContain("var liveIds = new HashSet<uint>()")
                 .And.NotContain("_shapePeers.Keys.Where(")
@@ -243,7 +247,7 @@ public sealed class PresentationCanvasAutomationSessionTests
                 .And.NotContain("Shape selection is owned by the slide canvas's editing session.")
                 .And.NotContain("$\"Shape_{shapeId}\"");
 
-            boundsSource.Should().Contain("_canvasAutomation.TryProjectLocalBounds(")
+            boundsSource.Should().Contain("_coordinator.TryProjectLocalBounds(")
                 .And.NotContain("SlideTransformCore.EmuToDip(")
                 .And.NotContain("SlideTransform.EmuToDip(")
                 .And.NotContain(".SlideToScreen(");

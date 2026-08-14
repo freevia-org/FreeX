@@ -196,18 +196,10 @@ public sealed partial class CanvasGestureHandler : IDisposable, ICanvasGesturePr
     }
 
     private void ApplyPressAction(CanvasGesturePressPlan plan)
-    {
-        switch (plan.Action)
-        {
-            case CanvasGesturePressActionKind.NotifyChartPointDoubleClick
-                when plan.ChartPoint is { } chartPoint:
-                _onChartPointDoubleClick?.Invoke(chartPoint);
-                break;
-            case CanvasGesturePressActionKind.ActivateOle when plan.Shape is { } shape:
-                HandleOleDoubleClick(shape);
-                break;
-        }
-    }
+        => CanvasGesturePressActionDispatcher.Dispatch(
+            plan,
+            _onChartPointDoubleClick,
+            shape => HandleOleDoubleClick(shape));
 
     // ── Mouse move ────────────────────────────────────────────────────────────────────────────
 
@@ -435,10 +427,7 @@ public sealed partial class CanvasGestureHandler : IDisposable, ICanvasGesturePr
                 ToCoreTransform(_canvas.CurrentTransform),
                 EditPointsEnabled);
 
-        _adorner.UpdateSelection(projection.Selections.Select(selection =>
-            (selection.ShapeId, ToWpfRect(selection.ScreenRect))));
-        _adorner.UpdateGeometryHandles(projection.GeometryHandles.Select(handle =>
-            (handle.Name, new Point(handle.ScreenPosition.X, handle.ScreenPosition.Y))));
+        _adorner.UpdateProjection(projection);
     }
 
     // ── Helpers ───────────────────────────────────────────────────────────────────────────────

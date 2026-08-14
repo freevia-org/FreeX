@@ -345,7 +345,7 @@ public sealed class SelectionAdornerGeometryTests
         wpf.Should().Contain("SelectionAdornerGeometry.GetRotateHandleCenter");
         wpf.Should().Contain("SelectionAdornerGeometry.HitTestHandle");
         wpf.Should().Contain("SelectionAdornerGeometry.HitTestGeometryHandle");
-        wpf.Should().Contain("_state.SelectionBounds");
+        wpf.Should().Contain("State.SelectionBounds");
         wpf.Should().Contain("public CanvasGestureHandleKind HitTestHandle");
         wpf.Should().NotContain("public enum HandleKind");
         wpf.Should().NotContain("ToHandleKind");
@@ -358,7 +358,7 @@ public sealed class SelectionAdornerGeometryTests
         avalonia.Should().Contain("SelectionAdornerGeometry.GetRotateHandleCenter");
         avalonia.Should().Contain("SelectionAdornerGeometry.HitTestHandle");
         avalonia.Should().Contain("SelectionAdornerGeometry.HitTestGeometryHandle");
-        avalonia.Should().Contain("_state.SelectionBounds");
+        avalonia.Should().Contain("State.SelectionBounds");
         avalonia.Should().Contain("public CanvasGestureHandleKind HitTestHandle");
         avalonia.Should().NotContain("public enum HandleKind");
         avalonia.Should().NotContain("ToHandleKind");
@@ -369,14 +369,15 @@ public sealed class SelectionAdornerGeometryTests
 
         foreach (var source in new[] { wpf, avalonia })
         {
-            source.Should().Contain("private readonly SelectionAdornerState _state = new();")
-                .And.Contain("_state.UpdateSelection(")
-                .And.Contain("_state.UpdateGeometryHandles(")
-                .And.Contain("_state.UpdateGeometryPreview(")
-                .And.Contain("_state.UpdatePreview(")
-                .And.Contain("_state.UpdateTransformPreview(")
-                .And.Contain("_state.UpdateMarquee(")
-                .And.Contain("_state.UpdateSnapGuides(")
+            source.Should().Contain("SelectionAdornerController<Rect, Point> _controller")
+                .And.Contain("private SelectionAdornerState State => _controller.State;")
+                .And.Contain("_controller.UpdateSelection(")
+                .And.Contain("_controller.UpdateGeometryHandles(")
+                .And.Contain("_controller.UpdateGeometryPreview(")
+                .And.Contain("_controller.UpdatePreview(")
+                .And.Contain("_controller.UpdateTransformPreview(")
+                .And.Contain("_controller.UpdateMarquee(")
+                .And.Contain("_controller.UpdateSnapGuides(")
                 .And.NotContain("private readonly List<(uint id, Rect screenRect)> _selectionRects")
                 .And.NotContain("private Rect? _previewRect")
                 .And.NotContain("private Rect? _marqueeRect")
