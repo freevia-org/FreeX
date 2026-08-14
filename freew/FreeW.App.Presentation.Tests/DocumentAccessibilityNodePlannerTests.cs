@@ -1,9 +1,129 @@
+using System.Xml.Linq;
 using FreeW.App.Presentation.DocumentView;
 
 namespace FreeW.App.Presentation.Tests;
 
 public sealed class DocumentAccessibilityNodePlannerTests
 {
+    [Fact]
+    public void Build_groups_native_body_lists_and_exposes_marker_semantics()
+    {
+        var document = TextDocument.CreateEmpty();
+        document.Blocks.Clear();
+        document.Blocks.Add(ListParagraph("First bullet", ListKind.Bullet));
+        document.Blocks.Add(ListParagraph("Second bullet", ListKind.Bullet));
+        document.Blocks.Add(new Paragraph("Interruption"));
+        document.Blocks.Add(ListParagraph("Third item", ListKind.Number, startAt: 3));
+        document.Blocks.Add(new Paragraph("Another interruption"));
+        document.Blocks.Add(ListParagraph("Fourth item", ListKind.Number));
+
+        var tree = DocumentAccessibilityNodePlanner.Build(document);
+
+        tree.Children.Select(node => node.Kind).Should().Equal(
+            DocumentAccessibilityNodeKind.List,
+            DocumentAccessibilityNodeKind.Paragraph,
+            DocumentAccessibilityNodeKind.List,
+            DocumentAccessibilityNodeKind.Paragraph,
+            DocumentAccessibilityNodeKind.List);
+        var bullets = tree.Children[0];
+        bullets.Id.Should().Be("block:0:list:bullet");
+        bullets.Name.Should().Be("Bulleted list");
+        bullets.SemanticChildren.Select(node => node.Id).Should().Equal(
+            "block:0:list-item",
+            "block:1:list-item");
+        bullets.SemanticChildren.Select(node => node.Value).Should().Equal(
+            "• First bullet",
+            "• Second bullet");
+        bullets.SemanticChildren.Should().OnlyContain(node =>
+            node.Kind == DocumentAccessibilityNodeKind.ListItem
+            && node.ListKind == ListKind.Bullet
+            && node.ListLevel == 0
+            && node.ListMarker == "•");
+        bullets.SemanticChildren[0].SemanticChildren.Should().ContainSingle()
+            .Which.Id.Should().Be("block:0:paragraph");
+        tree.Children[2].SemanticChildren.Should().ContainSingle()
+            .Which.Value.Should().Be("3. Third item");
+        tree.Children[4].SemanticChildren.Should().ContainSingle()
+            .Which.Value.Should().Be("4. Fourth item",
+                "native numbering continues across intervening non-list body paragraphs like WPF");
+    }
+
+    [Fact]
+    public void Build_splits_numbered_restarts_and_keeps_lone_multilevel_heading_as_a_heading()
+    {
+        var document = TextDocument.CreateEmpty();
+        document.Blocks.Clear();
+        document.Blocks.Add(ListParagraph("One", ListKind.Number));
+        document.Blocks.Add(ListParagraph("Restart", ListKind.Number, startAt: 7));
+        document.Blocks.Add(new Paragraph("Outline")
+        {
+            StyleId = "Heading1",
+            Formatting = ParagraphFormatting.Default with
+            {
+                ListKind = ListKind.MultiLevel,
+                ListLevel = 0
+            }
+        });
+
+        var tree = DocumentAccessibilityNodePlanner.Build(document);
+
+        tree.Children.Select(node => node.Kind).Should().Equal(
+            DocumentAccessibilityNodeKind.List,
+            DocumentAccessibilityNodeKind.List,
+            DocumentAccessibilityNodeKind.Heading);
+        tree.Children[0].SemanticChildren.Single().Value.Should().Be("1. One");
+        tree.Children[1].SemanticChildren.Single().Value.Should().Be("7. Restart");
+        tree.Children[2].Id.Should().Be("block:2:paragraph");
+        tree.Children[2].HeadingLevel.Should().Be(1);
+        tree.Children[2].ListMarker.Should().Be("1.");
+        tree.Children[2].Value.Should().Be("1. Outline");
+    }
+
+    [Fact]
+    public void Build_prefixes_preserved_word_numbering_without_claiming_native_list_structure()
+    {
+        var document = TextDocument.CreateEmpty();
+        document.Blocks.Clear();
+        document.Preserved.OriginalNumbering = XElement.Parse(
+            """
+            <w:numbering xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+              <w:abstractNum w:abstractNumId="10">
+                <w:lvl w:ilvl="0"><w:start w:val="1"/><w:numFmt w:val="upperRoman"/><w:lvlText w:val="Section %1."/></w:lvl>
+              </w:abstractNum>
+              <w:num w:numId="2"><w:abstractNumId w:val="10"/></w:num>
+            </w:numbering>
+            """);
+        document.Blocks.Add(new Paragraph("Scope")
+        {
+            PreservedNumbering = new PreservedNumbering(2, 0)
+        });
+
+        var node = DocumentAccessibilityNodePlanner.Build(document).Children.Should().ContainSingle().Subject;
+
+        node.Kind.Should().Be(DocumentAccessibilityNodeKind.Paragraph);
+        node.Value.Should().Be("Section I. Scope");
+        node.ListMarker.Should().Be("Section I.");
+        node.HelpText.Should().Be("List marker Section I.");
+    }
+
+    [Fact]
+    public void Avalonia_peer_maps_shared_list_roles_and_list_item_values()
+    {
+        var root = TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeW.slnx");
+        var source = File.ReadAllText(Path.Combine(
+            root,
+            "freew",
+            "FreeW.App.Avalonia",
+            "Editing",
+            "DocumentViewAutomationPeer.cs"));
+
+        var normalized = source.ReplaceLineEndings("\n");
+        normalized.Should().Contain("DocumentAccessibilityNodeKind.List => AutomationControlType.List")
+            .And.Contain("DocumentAccessibilityNodeKind.ListItem => AutomationControlType.ListItem")
+            .And.Contain("DocumentAccessibilityNodeKind.ListItem =>\n                new DocumentValueAutomationPeer")
+            .And.Contain("or DocumentAccessibilityNodeKind.ListItem");
+    }
+
     [Fact]
     public void Build_creates_stable_paragraph_link_and_image_nodes()
     {
@@ -264,4 +384,19 @@ public sealed class DocumentAccessibilityNodePlannerTests
         finalHeaderParagraph.Id.Should().Be("section:1:story:default-header:paragraph:0");
         tree.ById.Should().ContainKey(finalHeaderParagraph.Id);
     }
+
+    private static Paragraph ListParagraph(
+        string text,
+        ListKind kind,
+        int level = 0,
+        int? startAt = null) =>
+        new(text)
+        {
+            Formatting = ParagraphFormatting.Default with
+            {
+                ListKind = kind,
+                ListLevel = level,
+                ListStartOverride = startAt
+            }
+        };
 }

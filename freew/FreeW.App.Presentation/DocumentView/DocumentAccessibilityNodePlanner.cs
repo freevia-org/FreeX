@@ -1,3 +1,4 @@
+using FreeW.App.Presentation.Editing;
 using FreeW.Core.Model;
 
 namespace FreeW.App.Presentation.DocumentView;
@@ -5,6 +6,8 @@ namespace FreeW.App.Presentation.DocumentView;
 public enum DocumentAccessibilityNodeKind
 {
     HeaderFooterStory,
+    List,
+    ListItem,
     Paragraph,
     Heading,
     Table,
@@ -51,6 +54,9 @@ public sealed record DocumentAccessibilityNode(
     string? HyperlinkTarget = null,
     bool IsInternalHyperlink = false,
     int HeadingLevel = -1,
+    ListKind ListKind = ListKind.None,
+    int ListLevel = -1,
+    string? ListMarker = null,
     int ColumnSpan = 1,
     int RowSpan = 1,
     bool IsHeader = false,
@@ -90,14 +96,95 @@ public static class DocumentAccessibilityNodePlanner
         ArgumentNullException.ThrowIfNull(document);
         var children = new List<DocumentAccessibilityNode>(document.Blocks.Count);
         var tableNumber = 0;
+        var listMarkerSequence = new DocumentListMarkerSequencePlanner(
+            document.MultiLevelList.NumberFormats);
+        var preservedNumberingMarkers = PreservedNumberingMarkerPlanner.Build(document);
 
         for (var blockIndex = 0; blockIndex < document.Blocks.Count; blockIndex++)
         {
             switch (document.Blocks[blockIndex])
             {
+                case Paragraph { Formatting.ListKind: not ListKind.None }:
+                {
+                    var startBlockIndex = blockIndex;
+                    var kind = ((Paragraph)document.Blocks[blockIndex]).Formatting.ListKind;
+                    var items = new List<(Paragraph Paragraph, int BlockIndex, DocumentListMarkerPlan Marker)>();
+                    while (blockIndex < document.Blocks.Count
+                        && document.Blocks[blockIndex] is Paragraph { Formatting.ListKind: var itemKind } paragraph
+                        && itemKind == kind
+                        && (items.Count == 0
+                            || kind != ListKind.Number
+                            || !paragraph.Formatting.ListStartOverride.HasValue))
+                    {
+                        items.Add((paragraph, blockIndex, listMarkerSequence.Advance(paragraph)));
+                        blockIndex++;
+                    }
+                    blockIndex--;
+
+                    if (kind == ListKind.MultiLevel
+                        && items.Count == 1
+                        && string.Equals(items[0].Paragraph.StyleId, "Heading1", StringComparison.OrdinalIgnoreCase))
+                    {
+                        var item = items[0];
+                        children.Add(BuildParagraph(
+                            item.Paragraph,
+                            item.BlockIndex,
+                            -1,
+                            -1,
+                            -1,
+                            $"block:{item.BlockIndex}:paragraph",
+                            $"Paragraph {item.BlockIndex + 1}",
+                            item.Marker.MarkerText));
+                        break;
+                    }
+
+                    var listItems = items.Select((item, itemIndex) =>
+                    {
+                        var paragraphNode = BuildParagraph(
+                            item.Paragraph,
+                            item.BlockIndex,
+                            -1,
+                            -1,
+                            -1,
+                            $"block:{item.BlockIndex}:paragraph",
+                            $"Paragraph {item.BlockIndex + 1}");
+                        var accessibleValue = PrefixMarker(item.Marker.MarkerText, item.Paragraph.PlainText);
+                        return new DocumentAccessibilityNode(
+                            $"block:{item.BlockIndex}:list-item",
+                            DocumentAccessibilityNodeKind.ListItem,
+                            NameWithPreview($"List item {itemIndex + 1}", accessibleValue),
+                            accessibleValue,
+                            item.Marker.MarkerText is null ? null : $"List marker {item.Marker.MarkerText}",
+                            item.BlockIndex,
+                            ListKind: kind,
+                            ListLevel: item.Marker.Level,
+                            ListMarker: item.Marker.MarkerText,
+                            Children: [paragraphNode]);
+                    }).ToArray();
+                    children.Add(new DocumentAccessibilityNode(
+                        $"block:{startBlockIndex}:list:{kind.ToString().ToLowerInvariant()}",
+                        DocumentAccessibilityNodeKind.List,
+                        $"{ListKindName(kind)} list",
+                        null,
+                        $"{listItems.Length} list item{(listItems.Length == 1 ? string.Empty : "s")}",
+                        startBlockIndex,
+                        ListKind: kind,
+                        Children: listItems));
+                    break;
+                }
+
                 case Paragraph paragraph:
-                    children.Add(BuildParagraph(paragraph, blockIndex, -1, -1, -1,
-                        $"block:{blockIndex}:paragraph", $"Paragraph {blockIndex + 1}"));
+                    children.Add(BuildParagraph(
+                        paragraph,
+                        blockIndex,
+                        -1,
+                        -1,
+                        -1,
+                        $"block:{blockIndex}:paragraph",
+                        $"Paragraph {blockIndex + 1}",
+                        preservedNumberingMarkers.TryGetValue(blockIndex, out var preservedMarker)
+                            ? preservedMarker.Text
+                            : null));
                     break;
 
                 case Table table:
@@ -270,7 +357,8 @@ public static class DocumentAccessibilityNodePlanner
         int columnIndex,
         int paragraphIndex,
         string id,
-        string label)
+        string label,
+        string? accessibleMarker = null)
     {
         var children = new List<DocumentAccessibilityNode>();
         var textOffset = 0;
@@ -332,18 +420,21 @@ public static class DocumentAccessibilityNodePlanner
         }
 
         var isHeading = DocumentOutline.TryGetLevel(paragraph.StyleId, out var headingLevel);
+        var accessibleValue = PrefixMarker(accessibleMarker, paragraph.PlainText);
 
         return new DocumentAccessibilityNode(
             id,
             isHeading ? DocumentAccessibilityNodeKind.Heading : DocumentAccessibilityNodeKind.Paragraph,
-            NameWithPreview(label, paragraph.PlainText),
-            paragraph.PlainText,
-            null,
+            NameWithPreview(label, accessibleValue),
+            accessibleValue,
+            accessibleMarker is null ? null : $"List marker {accessibleMarker}",
             blockIndex,
             rowIndex,
             columnIndex,
             paragraphIndex,
             HeadingLevel: isHeading ? headingLevel : -1,
+            ListLevel: accessibleMarker is null ? -1 : Math.Max(0, paragraph.Formatting.ListLevel),
+            ListMarker: accessibleMarker,
             Children: children);
     }
 
@@ -684,6 +775,21 @@ public static class DocumentAccessibilityNodePlanner
             preview = preview[..77] + "...";
         return preview.Length == 0 ? label : $"{label}: {preview}";
     }
+
+    private static string PrefixMarker(string? marker, string text) =>
+        string.IsNullOrWhiteSpace(marker)
+            ? text
+            : string.IsNullOrWhiteSpace(text)
+                ? marker.Trim()
+                : $"{marker.Trim()} {text}";
+
+    private static string ListKindName(ListKind kind) => kind switch
+    {
+        ListKind.Bullet => "Bulleted",
+        ListKind.Number => "Numbered",
+        ListKind.MultiLevel => "Multilevel",
+        _ => "Document"
+    };
 
     private static string? FirstNonBlank(params string?[] values) =>
         values.FirstOrDefault(value => !string.IsNullOrWhiteSpace(value))?.Trim();

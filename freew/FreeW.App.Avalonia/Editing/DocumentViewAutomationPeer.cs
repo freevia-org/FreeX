@@ -239,6 +239,8 @@ internal sealed class DocumentViewAutomationPeer : ControlAutomationPeer, IValue
         {
             DocumentAccessibilityNodeKind.HeaderFooterStory =>
                 new DocumentValueAutomationPeer(this, node.Id),
+            DocumentAccessibilityNodeKind.ListItem =>
+                new DocumentValueAutomationPeer(this, node.Id),
             DocumentAccessibilityNodeKind.Paragraph or DocumentAccessibilityNodeKind.Heading =>
                 new DocumentValueAutomationPeer(this, node.Id),
             DocumentAccessibilityNodeKind.TableCell => new DocumentValueAutomationPeer(this, node.Id),
@@ -303,6 +305,8 @@ internal abstract class DocumentVirtualAutomationPeer(
     protected override AutomationControlType GetAutomationControlTypeCore() => Node.Kind switch
     {
         DocumentAccessibilityNodeKind.HeaderFooterStory => AutomationControlType.Group,
+        DocumentAccessibilityNodeKind.List => AutomationControlType.List,
+        DocumentAccessibilityNodeKind.ListItem => AutomationControlType.ListItem,
         DocumentAccessibilityNodeKind.Paragraph or DocumentAccessibilityNodeKind.Heading => AutomationControlType.Text,
         DocumentAccessibilityNodeKind.Table => AutomationControlType.DataGrid,
         DocumentAccessibilityNodeKind.TableRow => AutomationControlType.Group,
@@ -342,11 +346,7 @@ internal abstract class DocumentVirtualAutomationPeer(
 
     protected override string GetHelpTextCore() => Node.HelpText ?? string.Empty;
 
-    protected override string GetItemStatusCore() => Node.Kind == DocumentAccessibilityNodeKind.Heading
-        ? $"Heading level {Node.HeadingLevel}"
-        : Node.Kind == DocumentAccessibilityNodeKind.TableCell
-            ? $"Row {Node.RowIndex + 1}, column {Node.ColumnIndex + 1}, row span {Node.RowSpan}, column span {Node.ColumnSpan}"
-            : string.Empty;
+    protected override string GetItemStatusCore() => ItemStatus(Node);
 
     protected override string GetItemTypeCore() => Node.Kind.ToString();
 
@@ -363,6 +363,7 @@ internal abstract class DocumentVirtualAutomationPeer(
     protected override bool IsKeyboardFocusableCore() =>
         Node.Kind is DocumentAccessibilityNodeKind.Paragraph
             or DocumentAccessibilityNodeKind.Heading
+            or DocumentAccessibilityNodeKind.ListItem
             or DocumentAccessibilityNodeKind.TableCell
             or DocumentAccessibilityNodeKind.Hyperlink
             or DocumentAccessibilityNodeKind.Image
@@ -397,6 +398,8 @@ internal abstract class DocumentVirtualAutomationPeer(
     private static string ItemStatus(DocumentAccessibilityNode node) => node.Kind switch
     {
         DocumentAccessibilityNodeKind.Heading => $"Heading level {node.HeadingLevel}",
+        DocumentAccessibilityNodeKind.ListItem =>
+            $"List item level {node.ListLevel + 1}{(string.IsNullOrWhiteSpace(node.ListMarker) ? string.Empty : $", marker {node.ListMarker}")}",
         DocumentAccessibilityNodeKind.TableCell =>
             $"Row {node.RowIndex + 1}, column {node.ColumnIndex + 1}, row span {node.RowSpan}, column span {node.ColumnSpan}",
         _ => string.Empty
