@@ -71,28 +71,4 @@ public static class FreeWRibbonDefinitionData
         Loc.Get("Ribbon_Palette_MultilevelList_OutlineHeadings_Label"),
     ];
 
-    public static IReadOnlyList<(string Id, string Glyph, string Label)> Symbols =>
-    [
-        ("freew.symbol.euro", "€", Loc.Get("Ribbon_Palette_Symbol_Euro_Label")),
-        ("freew.symbol.pound", "£", Loc.Get("Ribbon_Palette_Symbol_Pound_Label")),
-        ("freew.symbol.yen", "¥", Loc.Get("Ribbon_Palette_Symbol_Yen_Label")),
-        ("freew.symbol.cent", "¢", Loc.Get("Ribbon_Palette_Symbol_Cent_Label")),
-        ("freew.symbol.copyright", "©", Loc.Get("Ribbon_Palette_Symbol_Copyright_Label")),
-        ("freew.symbol.registered", "®", Loc.Get("Ribbon_Palette_Symbol_Registered_Label")),
-        ("freew.symbol.trademark", "™", Loc.Get("Ribbon_Palette_Symbol_Trademark_Label")),
-        ("freew.symbol.degree", "°", Loc.Get("Ribbon_Palette_Symbol_Degree_Label")),
-        ("freew.symbol.plusminus", "±", Loc.Get("Ribbon_Palette_Symbol_PlusMinus_Label")),
-        ("freew.symbol.multiply", "×", Loc.Get("Ribbon_Palette_Symbol_Multiplication_Label")),
-        ("freew.symbol.divide", "÷", Loc.Get("Ribbon_Palette_Symbol_Division_Label")),
-        ("freew.symbol.notequal", "≠", Loc.Get("Ribbon_Palette_Symbol_NotEqual_Label")),
-        ("freew.symbol.lessequal", "≤", Loc.Get("Ribbon_Palette_Symbol_LessOrEqual_Label")),
-        ("freew.symbol.greaterequal", "≥", Loc.Get("Ribbon_Palette_Symbol_GreaterOrEqual_Label")),
-        ("freew.symbol.bullet", "•", Loc.Get("Ribbon_Palette_Symbol_Bullet_Label")),
-        ("freew.symbol.ellipsis", "…", Loc.Get("Ribbon_Palette_Symbol_Ellipsis_Label")),
-        ("freew.symbol.emdash", "—", Loc.Get("Ribbon_Palette_Symbol_EmDash_Label")),
-        ("freew.symbol.endash", "–", Loc.Get("Ribbon_Palette_Symbol_EnDash_Label")),
-        ("freew.symbol.arrow-right", "→", Loc.Get("Ribbon_Palette_Symbol_RightArrow_Label")),
-        ("freew.symbol.arrow-left", "←", Loc.Get("Ribbon_Palette_Symbol_LeftArrow_Label")),
-    ];
-
 }

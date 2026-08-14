@@ -205,7 +205,11 @@ internal static class FreeWAvaloniaRibbonCommands
             r,
             new InsertDrawingGalleryPorts(editor.InsertShape));
 
-        RegisterSymbolPalette(r, editor);
+        SymbolRibbonWorkflow.Register(
+            r,
+            new SymbolRibbonPorts(
+                PrepareExecution: () => editor.Focus(),
+                InsertSymbol: editor.InsertSymbol));
 
         // Header / Footer — match WPF's text prompt when the shell supplies it. The fallback keeps
         // headless registry callers deterministic and retains the old region-creation behavior.
@@ -634,24 +638,6 @@ internal static class FreeWAvaloniaRibbonCommands
 
             callbacks.SetProofingLanguage?.Invoke();
         }
-    }
-
-    /// <summary>
-    /// AV-INSERT: common symbols / special characters for the Insert &gt; Symbol palette. Each entry maps a
-    /// stable command-id suffix to the literal character it inserts (via <see cref="DocumentView.InsertSymbol"/>).
-    /// The set mirrors Word's default "recently used symbols" grid (currency, typography, math, arrows).
-    /// </summary>
-    internal static readonly IReadOnlyList<(string Id, string Glyph, string Label)> Symbols =
-        FreeWRibbonDefinitionData.Symbols;
-
-    /// <summary>
-    /// Registers the per-glyph sub-commands for the Insert &gt; Symbol palette dropdown. Each command id
-    /// matches an entry in <see cref="Symbols"/> and inserts that character at the caret as ordinary text.
-    /// </summary>
-    private static void RegisterSymbolPalette(IRibbonCommandRegistry r, DocumentView editor)
-    {
-        foreach (var (id, glyph, _) in Symbols)
-            r.Register(id, new ActionRibbonCommand(() => editor.InsertSymbol(glyph)));
     }
 
     /// <summary>

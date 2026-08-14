@@ -978,6 +978,11 @@ internal static class FreeWRibbonCommands
         // Insert tab — Symbols: pick a glyph from a grid, or a formatted current date/time string, and
         // insert it at the caret as ordinary text (flows through the normal edit/undo path).
         registry.Bind(FreeWRibbonCommandAction.Symbol, new InsertSymbolCommand(editor));
+        SymbolRibbonWorkflow.Register(
+            registry,
+            new SymbolRibbonPorts(
+                PrepareExecution: () => editor.Focus(),
+                InsertSymbol: editor.InsertText));
 
         // Home > Font > Text Colour / Highlight: pick a colour from a small palette and apply it to
         // the selection (foreground reuses TextElement.Foreground; highlight uses TextElement.Background).
