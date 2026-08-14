@@ -97,7 +97,7 @@ public partial class MainWindow
             return;
 
         var text = PivotApplicationMessagePlanner
-            .DescribeIssue(message, PivotMessageTextProfile.Wpf)
+            .DescribeIssue(message)
             .Resolve(UiText.Get, UiText.Format);
 
         if (message.Severity == PivotMessageSeverity.Information)
