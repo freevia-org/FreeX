@@ -22,7 +22,6 @@ internal static class FreePRibbonText
     public static string SlidesGroupKeyTip => Get("Ribbon_Group_Slides_KeyTip");
     public static string NewSlideLabel => Get("Ribbon_Command_NewSlide_Label");
     public static string NewSlideKeyTip => Get("Ribbon_Command_NewSlide_KeyTip");
-    public static string NewSlideAvaloniaKeyTip => Get("Ribbon_Command_NewSlide_AvaloniaKeyTip");
     public static string DuplicateSlideLabel => Get("Ribbon_Command_DuplicateSlide_Label");
     public static string DuplicateSlideKeyTip => Get("Ribbon_Command_DuplicateSlide_KeyTip");
     public static string DeleteSlideLabel => Get("Ribbon_Command_DeleteSlide_Label");

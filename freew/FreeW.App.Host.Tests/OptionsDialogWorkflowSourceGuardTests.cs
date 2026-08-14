@@ -17,7 +17,7 @@ public sealed class OptionsDialogWorkflowSourceGuardTests
             source.Should().Contain("_session.PlanAcceptance(");
             source.Should().Contain("_session.PlanEnabledState(");
             source.Should().Contain("_session.InitialState");
-            source.Should().Contain("new OptionsDialogInput(");
+            source.Should().Contain("OptionsDialogInput.Capture(");
             source.Should().Contain("_surface.General.Fields");
             source.Should().Contain("_surface.AutoCorrect.ReplacementColumns");
             source.Should().Contain("_surface.AutoFormat.RuleToggles");

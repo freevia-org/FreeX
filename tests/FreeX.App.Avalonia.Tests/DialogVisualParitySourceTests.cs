@@ -13,6 +13,8 @@ public sealed class DialogVisualParitySourceTests
         source.Should().Contain("var findBox = new TextBox { Text = _session.LastFindText, MinWidth = FindReplaceDialogPlanner.FieldMinWidth };");
         source.Should().Contain("findFormatButton.Margin = new Thickness(FindReplaceDialogPlanner.FormatButtonMargin, 0, 0, 0);");
         source.Should().Contain("findChooseFormatButton.Margin = new Thickness(FindReplaceDialogPlanner.AdjacentFormatButtonMargin, 0, 0, 0);");
+        // The open tab height still comes from the WPF-authoritative planner metrics; the mode it
+        // is chosen by now routes through the shared FindReplaceOpenMode projection.
         source.Should().Contain("var openTabHeight = FindReplaceDialogPlanner.ShowsReplaceCommands(replaceMode)");
         source.Should().Contain("? FindReplaceDialogPlanner.ReplaceTabHeight");
         source.Should().Contain(": FindReplaceDialogPlanner.FindTabHeight;");

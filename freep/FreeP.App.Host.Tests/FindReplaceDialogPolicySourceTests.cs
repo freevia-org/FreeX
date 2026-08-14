@@ -116,6 +116,43 @@ public sealed class FindReplaceDialogPolicySourceTests
         plannerSource.Should().NotContain("FindReplaceStatusKind.");
     }
 
+    /// <summary>
+    /// Guards the cross-app Find &amp; Replace open mode: FreeP must project its
+    /// <c>showReplace</c> flag through <c>Free.Shared.AppServices.FindReplaceDialogPolicy</c>
+    /// (shared with FreeX and FreeW) rather than re-deciding the rule locally.
+    /// </summary>
+    [Fact]
+    public void FindReplaceDialogPlanner_RoutesOpenModeThroughTheSharedPolicy()
+    {
+        var repositoryRoot = TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeP.slnx");
+        var plannerSource = File.ReadAllText(Path.Combine(
+            repositoryRoot,
+            "freep",
+            "FreeP.App.Presentation",
+            "FindReplaceDialogPlanner.cs"));
+        var sharedPolicy = File.ReadAllText(Path.Combine(
+            repositoryRoot,
+            "shared",
+            "Free.Shared.AppServices",
+            "FindReplaceDialogPolicy.cs"));
+
+        sharedPolicy.Should().Contain("public enum FindReplaceOpenMode");
+        sharedPolicy.Should().Contain("public static FindReplaceOpenMode OpenModeFor(bool showReplace)");
+        sharedPolicy.Should().Contain("public static bool ShowsReplaceSurface(FindReplaceOpenMode mode)");
+
+        plannerSource.Should().Contain("FindReplaceDialogPolicy.OpenModeFor(");
+        plannerSource.Should().Contain("FindReplaceDialogPolicy.ShowsReplaceSurface(");
+        plannerSource.Should().Contain("public string TitleForMode(FindReplaceOpenMode mode)");
+        plannerSource.Should().Contain("var showsReplaceSurface = ShowsReplaceSurface(openMode);");
+
+        // The workflow plan must gate Replace/Replace All on the shared mode rule, never on the
+        // raw showReplace boolean, and the title swap must not re-implement the same branch.
+        plannerSource.Should().NotContain("showReplace && targetIndex >= 0");
+        plannerSource.Should().NotContain("showReplace && hasQuery");
+        plannerSource.Should().NotContain("showReplace ? Schema.Title : FindOnlyTitle");
+        plannerSource.Should().NotContain("public enum FindReplaceOpenMode");
+    }
+
     private static string ReadSource(string repositoryRoot, string projectName) =>
         File.ReadAllText(Path.Combine(
             repositoryRoot,

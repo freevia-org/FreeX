@@ -115,9 +115,6 @@
   <data name="Ribbon_Command_NewSlide_KeyTip" xml:space="preserve">
     <value>N</value>
   </data>
-  <data name="Ribbon_Command_NewSlide_AvaloniaKeyTip" xml:space="preserve">
-    <value>I</value>
-  </data>
   <data name="Ribbon_Command_DuplicateSlide_Label" xml:space="preserve">
     <value>Duplicate Slide</value>
   </data>

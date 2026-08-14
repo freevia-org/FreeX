@@ -30,6 +30,8 @@ public sealed class FreePShellLocalizationOwnershipTests
 
         options.Should().Contain("Loc.Get(\"Options_Title\")")
             .And.Contain("Loc.Get(\"Options_RecentFilesLabel\")")
+            // The hint's blank-vs-named-culture branch now lives in the shared
+            // BasicApplicationOptionsSurfacePlanner, so FreeP hands it the resource-resolved format string.
             .And.Contain("Loc.Get(\"Options_UiLanguageCurrentHint\")");
     }
 
