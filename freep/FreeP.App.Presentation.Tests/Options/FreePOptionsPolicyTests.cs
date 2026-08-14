@@ -151,14 +151,14 @@ public sealed class FreePOptionsPolicyTests
         session.InitialState.SelectedFormat.Should().Be(FreePOptions.FxpDefaultFormat);
         session.InitialState.UiLanguage.Should().Be("en-US");
 
-        var invalid = session.PlanAcceptance(new OptionsDialogInput("bad", null, null));
+        var invalid = session.PlanAcceptance(new BasicApplicationOptionsDialogInput("bad", null, null));
         invalid.ShouldApply.Should().BeFalse();
         invalid.ShouldPersist.Should().BeFalse();
         invalid.Validation.Should().Be(new BasicApplicationOptionsDialogValidation(
             BasicApplicationOptionsValidationTarget.RecentFilesCap,
             OptionsDialogSession.RecentFilesCapValidationMessage));
 
-        var accepted = session.PlanAcceptance(new OptionsDialogInput("6", " ", "  uk-ua  "));
+        var accepted = session.PlanAcceptance(new BasicApplicationOptionsDialogInput("6", " ", "  uk-ua  "));
         accepted.ShouldApply.Should().BeTrue();
         accepted.ShouldPersist.Should().BeTrue();
         accepted.Result.Should().BeEquivalentTo(new FreePOptions

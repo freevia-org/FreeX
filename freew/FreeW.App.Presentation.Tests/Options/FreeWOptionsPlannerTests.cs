@@ -97,9 +97,9 @@ public sealed class FreeWOptionsPlannerTests
             .Should().Equal("General", "AutoCorrect", "AutoFormat As You Type");
         surface.General.UiLanguageHint.Should().Contain("uk-UA");
         surface.General.Fields.Select(field => field.Kind).Should().Equal(
-            OptionsDialogGeneralFieldKind.RecentFilesCap,
-            OptionsDialogGeneralFieldKind.DefaultSaveFormat,
-            OptionsDialogGeneralFieldKind.UiLanguage);
+            BasicApplicationOptionsFieldKind.RecentFilesCap,
+            BasicApplicationOptionsFieldKind.DefaultSaveFormat,
+            BasicApplicationOptionsFieldKind.UiLanguage);
         surface.General.FormatChoices.Single().Extension.Should().Be(FreeWOptions.DocxDefaultFormat);
         surface.AutoCorrect.Toggles.Select(toggle => toggle.Kind)
             .Should().Contain([

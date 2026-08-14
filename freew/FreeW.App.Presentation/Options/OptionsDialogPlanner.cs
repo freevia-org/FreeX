@@ -39,6 +39,9 @@ public static class OptionsDialogPlanner
         "Enter one replacement per line as 'replace => with'. Blank lines are ignored.";
     public const string ReplacementsValidationMessage =
         "Enter replacements as 'replace => with', one per line.";
+    public const string UiLanguageSystemHint = "Empty = follow the system culture.";
+    public const string UiLanguageCurrentHintFormat = "Empty = follow the system culture (currently {0}).";
+    public const string DocxFormatLabel = "Word Document (*.docx)";
 
     /// <summary>
     /// Parses the recent-files-count text against <see cref="FreeWOptions"/>'s valid range. Returns false
@@ -51,21 +54,19 @@ public static class OptionsDialogPlanner
     public static OptionsDialogSurfaceSpec BuildSurface(FreeWOptions? options, string systemLanguageLabel)
     {
         var source = options ?? new FreeWOptions();
-        var seed = new FreeWOptions
-        {
-            RecentFilesCap = source.RecentFilesCap,
-            DefaultSaveFormat = source.DefaultSaveFormat,
-            UiLanguage = source.UiLanguage,
-            AutoCorrectEnabled = source.AutoCorrectEnabled,
-            AutoFormat = source.AutoFormat ?? AutoFormatOptions.Default,
-            AutoCorrect = CopyAutoCorrect(source.AutoCorrect),
-        };
+        // The shared basic-options seed (cap / format / language) is normalized by the shared session; the
+        // Word-only AutoCorrect + AutoFormat sub-objects are copied and normalized on top of it here.
+        var seed = BasicApplicationOptionsDialogSession<FreeWOptions>.BuildResult(
+            source.RecentFilesCap,
+            source.DefaultSaveFormat,
+            source.UiLanguage,
+            FreeWOptions.DocxDefaultFormat);
+        seed.AutoCorrectEnabled = source.AutoCorrectEnabled;
+        seed.AutoFormat = source.AutoFormat ?? AutoFormatOptions.Default;
+        seed.AutoCorrect = CopyAutoCorrect(source.AutoCorrect);
         seed.Normalize();
         var autoFormat = seed.AutoFormat ?? AutoFormatOptions.Default;
         var autoCorrect = seed.AutoCorrect ?? AutoCorrectOptions.Default;
-        var languageHint = string.IsNullOrWhiteSpace(systemLanguageLabel)
-            ? "Empty = follow the system culture."
-            : $"Empty = follow the system culture (currently {systemLanguageLabel}).";
 
         return new OptionsDialogSurfaceSpec(
             Title,
@@ -74,13 +75,15 @@ public static class OptionsDialogPlanner
                 new(AutoCorrectTabHeader, "OptionsAutoCorrectTab"),
                 new(AutoFormatTabHeader, "OptionsAutoFormatTab"),
             ],
-            new OptionsDialogGeneralSurfaceSpec(
+            BasicApplicationOptionsSurfacePlanner.BuildGeneral(
                 RecentFilesLabel,
                 DefaultSaveFormatLabel,
                 UiLanguageLabel,
-                languageHint,
+                systemLanguageLabel,
+                UiLanguageSystemHint,
+                UiLanguageCurrentHintFormat,
                 [
-                    new("Word Document (*.docx)", FreeWOptions.DocxDefaultFormat),
+                    new(DocxFormatLabel, FreeWOptions.DocxDefaultFormat),
                 ]),
             new OptionsDialogAutoCorrectSurfaceSpec(
                 AutoCorrectTabHeader,
@@ -213,46 +216,20 @@ public static class OptionsDialogPlanner
     }
 }
 
+/// <summary>
+/// FreeW's Options surface: the shared basic General section plus the two Word-only tabs. The General
+/// section's schema, field ordering, language-hint rule, and format-choice record live in
+/// <c>Free.Shared.AppServices</c> because FreeP makes the identical decisions; AutoCorrect and AutoFormat
+/// stay here because they are DOCX/Word semantics with no counterpart in the sister apps.
+/// </summary>
 public sealed record OptionsDialogSurfaceSpec(
     string Title,
     IReadOnlyList<OptionsDialogTabSpec> Tabs,
-    OptionsDialogGeneralSurfaceSpec General,
+    BasicApplicationOptionsGeneralSpec General,
     OptionsDialogAutoCorrectSurfaceSpec AutoCorrect,
     OptionsDialogAutoFormatSurfaceSpec AutoFormat);
 
 public sealed record OptionsDialogTabSpec(string Header, string AutomationId);
-
-public sealed record OptionsDialogGeneralSurfaceSpec(
-    string RecentFilesLabel,
-    string DefaultSaveFormatLabel,
-    string UiLanguageLabel,
-    string UiLanguageHint,
-    IReadOnlyList<OptionsDialogFormatChoice> FormatChoices)
-{
-    public IReadOnlyList<OptionsDialogGeneralFieldSpec> Fields { get; } =
-    [
-        new(OptionsDialogGeneralFieldKind.RecentFilesCap, RecentFilesLabel),
-        new(OptionsDialogGeneralFieldKind.DefaultSaveFormat, DefaultSaveFormatLabel),
-        new(OptionsDialogGeneralFieldKind.UiLanguage, UiLanguageLabel, UiLanguageHint),
-    ];
-}
-
-public enum OptionsDialogGeneralFieldKind
-{
-    RecentFilesCap,
-    DefaultSaveFormat,
-    UiLanguage,
-}
-
-public sealed record OptionsDialogGeneralFieldSpec(
-    OptionsDialogGeneralFieldKind Kind,
-    string Label,
-    string? Hint = null);
-
-public sealed record OptionsDialogFormatChoice(string Label, string Extension)
-{
-    public override string ToString() => Label;
-}
 
 public sealed record OptionsDialogAutoCorrectSurfaceSpec(
     string Header,

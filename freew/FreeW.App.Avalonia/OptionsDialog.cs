@@ -151,7 +151,7 @@ internal sealed partial class OptionsDialog : FreeWDialogWindow
         _status.IsVisible = false;
         var input = OptionsDialogInput.Capture(
             _recentFilesCap.Text,
-            (_defaultFormat.SelectedItem as OptionsDialogFormatChoice)?.Extension,
+            (_defaultFormat.SelectedItem as ApplicationOptionsFormatChoice)?.Extension,
             _uiLanguage.Text,
             kind => ToggleFor(kind).IsChecked == true,
             _replacementEditors
@@ -382,12 +382,12 @@ internal sealed partial class OptionsDialog : FreeWDialogWindow
 
     private CheckBox ToggleFor(OptionsDialogToggleKind kind) => _toggles[kind];
 
-    private Control GeneralControlFor(OptionsDialogGeneralFieldKind kind) =>
+    private Control GeneralControlFor(BasicApplicationOptionsFieldKind kind) =>
         kind switch
         {
-            OptionsDialogGeneralFieldKind.RecentFilesCap => _recentFilesCap,
-            OptionsDialogGeneralFieldKind.DefaultSaveFormat => _defaultFormat,
-            OptionsDialogGeneralFieldKind.UiLanguage => _uiLanguage,
+            BasicApplicationOptionsFieldKind.RecentFilesCap => _recentFilesCap,
+            BasicApplicationOptionsFieldKind.DefaultSaveFormat => _defaultFormat,
+            BasicApplicationOptionsFieldKind.UiLanguage => _uiLanguage,
             _ => throw new ArgumentOutOfRangeException(nameof(kind), kind, null),
         };
 
