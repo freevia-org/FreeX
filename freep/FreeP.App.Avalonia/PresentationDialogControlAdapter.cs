@@ -6,35 +6,21 @@ namespace FreeP.App.Avalonia;
 
 internal static class PresentationDialogControlAdapter
 {
-    public static PresentationDialogFieldValue CaptureValue(Control control) => control switch
-    {
-        TextBox textBox => new(Text: textBox.Text ?? string.Empty),
-        ComboBox comboBox => new(SelectedIndex: comboBox.SelectedIndex),
-        CheckBox checkBox => new(IsChecked: checkBox.IsChecked),
-        _ => throw new InvalidOperationException(
-            $"Unsupported presentation dialog control: {control.GetType().Name}."),
-    };
+    private static readonly PresentationDialogControlValueBridge<Control, TextBox, ComboBox, CheckBox>
+        ValueBridge = new(
+            textBox => textBox.Text,
+            (textBox, value) => textBox.Text = value,
+            comboBox => comboBox.SelectedIndex,
+            (comboBox, value) => comboBox.SelectedIndex = value,
+            checkBox => checkBox.IsChecked,
+            (checkBox, value) => checkBox.IsChecked = value);
+
+    public static PresentationDialogFieldValue CaptureValue(Control control) =>
+        ValueBridge.Capture(control);
 
     public static void ApplyValue(Control control, PresentationDialogFieldValue value)
     {
-        ArgumentNullException.ThrowIfNull(control);
-        ArgumentNullException.ThrowIfNull(value);
-
-        switch (control)
-        {
-            case TextBox textBox:
-                textBox.Text = value.Text ?? string.Empty;
-                break;
-            case ComboBox comboBox:
-                comboBox.SelectedIndex = value.SelectedIndex;
-                break;
-            case CheckBox checkBox:
-                checkBox.IsChecked = value.IsChecked;
-                break;
-            default:
-                throw new InvalidOperationException(
-                    $"Unsupported presentation dialog control: {control.GetType().Name}.");
-        }
+        ValueBridge.Apply(control, value);
     }
 
     public static void ApplySemantic<TField>(
