@@ -440,7 +440,7 @@ internal static partial class FreeWCanonicalRibbonTabs
                 tab => tab.Group("illustrations", "Illustrations", null, 96, g =>
                     {
                         g.Button("freew.picture", "Picture");
-                        g.Button("freew.shape", "Shape");
+                        g.Dropdown("freew.shapes", "Shapes", BuildInsertShapesMenu());
                         g.Button("freew.smartart", "SmartArt");
                         g.Button("freew.chart", "Chart");
                         g.Dropdown("freew.screenshot", "Screenshot", new RibbonMenu(new[]
@@ -448,7 +448,6 @@ internal static partial class FreeWCanonicalRibbonTabs
                             new RibbonMenuItem("Screen Clipping", new RibbonCommandId("freew.screen-clipping")),
                         }));
                         g.Button("freew.insert-icon", "Icons");
-                        g.Button("freew.text-box", "Text Box");
                     }));
 
             topology.Section(
@@ -554,6 +553,7 @@ internal static partial class FreeWCanonicalRibbonTabs
                     }),
                 tab => tab.Group("text", "Text", null, 93, g =>
                     {
+                        g.Dropdown("freew.shape-textbox", "Text Box", BuildTextBoxMenu());
                         g.Dropdown("freew.insert-quickpart", "Quick Parts", BuildQuickPartsMenu());
                         g.Dropdown("freew.drop-cap", "Drop Cap", BuildDropCapMenu());
                         g.Button("freew.insert-file", "Text from File");
@@ -1076,6 +1076,23 @@ internal static partial class FreeWCanonicalRibbonTabs
             new("Default", new RibbonCommandId("freew.cover-page-default")),
             new("Banded",  new RibbonCommandId("freew.cover-page-banded")),
             new("Motion",  new RibbonCommandId("freew.cover-page-motion")),
+        });
+
+    private static RibbonMenu BuildInsertShapesMenu() =>
+        new(new RibbonMenuItem[]
+        {
+            new("Rectangle", new RibbonCommandId("freew.shape-rectangle")),
+            new("Rounded Rectangle", new RibbonCommandId("freew.shape-rounded")),
+            new("Ellipse", new RibbonCommandId("freew.shape-ellipse")),
+            new("Text Box", new RibbonCommandId("freew.shape-textbox")),
+        });
+
+    private static RibbonMenu BuildTextBoxMenu() =>
+        new(new RibbonMenuItem[]
+        {
+            new("Simple Text Box", new RibbonCommandId("freew.textbox-simple")),
+            new("Sidebar (Banded)", new RibbonCommandId("freew.textbox-sidebar")),
+            new("Quote", new RibbonCommandId("freew.textbox-quote")),
         });
 
     /// <summary>AV-INSERT2: Insert &gt; Drop Cap menu matching the WPF host routes.</summary>

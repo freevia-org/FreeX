@@ -411,7 +411,7 @@ internal static class FreeWRibbonCommands
         // icon as a rasterised InlineImage (same round-trip path as Insert Picture).
         registry.Bind(FreeWRibbonCommandAction.InsertIcon, new InsertIconCommand(editor));
         // Insert tab — Illustrations > Screenshot: the top-level "freew.screenshot" id only opens the
-        // dropdown (no direct insert, so it isn't registered — mirroring "freew.shapes" above). "Screen
+        // dropdown (no direct insert). "Screen
         // Clipping" drag-selects a screen region and inserts the captured PNG as an inline image through
         // the exact same InsertImage path as Insert Picture.
         registry.Bind(FreeWRibbonCommandAction.ScreenClipping, new ScreenClippingCommand(editor));
@@ -499,26 +499,13 @@ internal static class FreeWRibbonCommands
         // inserts the matching Shape (preset geometry, or a text box carrying placeholder text) at the caret
         // via DocumentView.InsertShape. Round-trips through docx as an inline w:drawing/wps:wsp (see
         // DocxWriter/Reader). The top-level "freew.shapes" id only opens the menu (no direct insert).
-        registry.Register("freew.shape-rectangle", new ActionRibbonCommand(() =>
-        {
-            editor.Focus();
-            editor.InsertShape(FreeW.Core.Model.Shape.Preset(FreeW.Core.Model.ShapeKind.Rectangle, widthPt: 120, heightPt: 80, fillColorHex: "#DCE6F1"));
-        }));
-        registry.Register("freew.shape-rounded", new ActionRibbonCommand(() =>
-        {
-            editor.Focus();
-            editor.InsertShape(FreeW.Core.Model.Shape.Preset(FreeW.Core.Model.ShapeKind.RoundedRectangle, widthPt: 120, heightPt: 80, fillColorHex: "#DCE6F1"));
-        }));
-        registry.Register("freew.shape-ellipse", new ActionRibbonCommand(() =>
-        {
-            editor.Focus();
-            editor.InsertShape(FreeW.Core.Model.Shape.Preset(FreeW.Core.Model.ShapeKind.Ellipse, widthPt: 100, heightPt: 100, fillColorHex: "#DCE6F1"));
-        }));
-        registry.Register("freew.shape-textbox", new ActionRibbonCommand(() =>
-        {
-            editor.Focus();
-            editor.InsertShape(FreeW.Core.Model.Shape.TextBoxWith("Text Box", widthPt: 180, heightPt: 90, fillColorHex: "#DCE6F1"));
-        }));
+        InsertDrawingGalleryWorkflow.Register(
+            registry,
+            new InsertDrawingGalleryPorts(shape =>
+            {
+                editor.Focus();
+                editor.InsertShape(shape);
+            }));
         // Insert tab — Media: drop a sample equation / chart / WordArt / SmartArt / OLE object at the caret.
         // Each routes through the editor's undoable insert path (mirroring InsertShape) and round-trips
         // through docx (the model + IO already exist; this surfaces them in the ribbon). Sample content is a
@@ -1068,37 +1055,6 @@ internal static class FreeWRibbonCommands
         registry.Bind(FreeWRibbonCommandAction.DropCap_Dropped,  new ActionRibbonCommand(() => editor.ApplyDropCap(DropCapPosition.Dropped)));
         registry.Bind(FreeWRibbonCommandAction.DropCap_InMargin,new ActionRibbonCommand(() => editor.ApplyDropCap(DropCapPosition.InMargin)));
         registry.Bind(FreeWRibbonCommandAction.DropCap_None,     new ActionRibbonCommand(() => editor.ClearDropCap()));
-
-        // Insert > Text Box gallery: preset-styled text boxes.  Simple is the plain box (matches the
-        // existing freew.shape-textbox behaviour); Sidebar/Banded adds a dark accent fill; Quote
-        // indents the text and italicises it. All insert via the existing InsertShape path and round-trip
-        // as an inline w:drawing/wps:wsp in docx.
-        registry.Register("freew.textbox-simple",  new ActionRibbonCommand(() =>
-        {
-            editor.Focus();
-            editor.InsertShape(FreeW.Core.Model.Shape.TextBoxWith("Text Box", widthPt: 180, heightPt: 90, fillColorHex: "#DCE6F1"));
-        }));
-        registry.Register("freew.textbox-sidebar", new ActionRibbonCommand(() =>
-        {
-            editor.Focus();
-            // Banded sidebar: dark blue fill with white text paragraph.
-            var shape = new FreeW.Core.Model.Shape(FreeW.Core.Model.ShapeKind.TextBox, widthPt: 140, heightPt: 200, fillColorHex: "#243F60");
-            var p = new FreeW.Core.Model.Paragraph();
-            p.Runs.Add(new FreeW.Core.Model.Run("Sidebar", new FreeW.Core.Model.RunFormatting { Bold = true, ColorHex = "#FFFFFF" }));
-            shape.TextParagraphs.Add(p);
-            editor.InsertShape(shape);
-        }));
-        registry.Register("freew.textbox-quote",   new ActionRibbonCommand(() =>
-        {
-            editor.Focus();
-            // Quote: light grey fill, indented italic text.
-            var shape = new FreeW.Core.Model.Shape(FreeW.Core.Model.ShapeKind.TextBox, widthPt: 200, heightPt: 90, fillColorHex: "#F2F2F2");
-            var p = new FreeW.Core.Model.Paragraph();
-            p.Runs.Add(new FreeW.Core.Model.Run("“Quote text here”",
-                new FreeW.Core.Model.RunFormatting { Italic = true }));
-            shape.TextParagraphs.Add(p);
-            editor.InsertShape(shape);
-        }));
 
         // Insert > Quick Parts > Document Property: insert a live field run that renders the matching
         // document-property value. Uses RunFieldKind so it round-trips as w:fldSimple in docx.

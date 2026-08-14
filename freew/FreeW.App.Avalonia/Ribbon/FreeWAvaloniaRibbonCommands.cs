@@ -223,8 +223,9 @@ internal static class FreeWAvaloniaRibbonCommands
         // Picture — open a file picker, load the bytes, insert as an inline image (host callback).
 
         // Shape / Text Box — floating drawing objects at the caret.
-        r.Register("freew.shape",    new ActionRibbonCommand(editor.InsertShape));
-        r.Register("freew.text-box", new ActionRibbonCommand(editor.InsertTextBox));
+        InsertDrawingGalleryWorkflow.Register(
+            r,
+            new InsertDrawingGalleryPorts(editor.InsertShape));
 
         RegisterSymbolPalette(r, editor);
 

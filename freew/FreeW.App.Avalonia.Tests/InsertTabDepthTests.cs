@@ -228,7 +228,9 @@ public sealed class InsertTabDepthTests
             "freew.insert-table", "freew.table", "freew.table-2x2", "freew.table-3x3",
             "freew.table-4x4", "freew.table-5x2",
             "freew.blank-page", "freew.page-break", "freew.horizontal-rule",
-            "freew.picture", "freew.shape", "freew.text-box",
+            "freew.picture", "freew.shapes", "freew.shape-rectangle", "freew.shape-rounded",
+            "freew.shape-ellipse", "freew.shape-textbox", "freew.textbox-simple",
+            "freew.textbox-sidebar", "freew.textbox-quote", "freew.shape", "freew.text-box",
             "freew.symbol", "freew.header", "freew.footer", "freew.datetime",
             "freew.symbol.euro", "freew.symbol.emdash", "freew.symbol.arrow-right",
         };
