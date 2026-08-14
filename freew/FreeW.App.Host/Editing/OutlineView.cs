@@ -40,7 +40,8 @@ internal sealed partial class OutlineView : Border
             demote: _editor.DemoteHeading,
             expand: _editor.ExpandHeading,
             collapse: _editor.CollapseHeading,
-            isHeadingCollapsed: _editor.IsHeadingCollapsed));
+            isHeadingCollapsed: _editor.IsHeadingCollapsed,
+            navigateToBlock: _editor.BringBlockIntoView));
 
         Background = new SolidColorBrush(Color.FromRgb(0xFF, 0xFF, 0xFF));
 
