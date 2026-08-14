@@ -1538,70 +1538,19 @@ public sealed partial class SlideCanvas : Control
     /// Default tab interval is 96 DIP (1 inch at 96 DPI) when tab stops are exhausted.
     /// </summary>
     private static void RenderParaWithTabs(
-        DrawingContext dc,
-        ResolvedParagraph para,
-        double startX,
-        double startY,
-        IReadOnlyList<ResolvedTabStop> tabStops)
-    {
-        var plan = TextLayoutPlanner.PlanTabStops(
+        DrawingContext dc, ResolvedParagraph para,
+        double startX, double startY,
+        IReadOnlyList<ResolvedTabStop> tabStops) =>
+        // Owns TextLayoutPlanner.PlanTabStops, TextLayoutPlanner.PlanTabLeaderFill(...),
+        // and the former DrawTabLeaderAvalonia flow.
+        TextNativeRenderSequence.RenderTabs(
             para,
             startX,
+            startY,
             tabStops,
-            (run, text) => BuildSingleRunFormattedTextAt(
-                run,
-                text,
-                flowDirection: para.RightToLeft ? FlowDirection.RightToLeft : FlowDirection.LeftToRight).Width);
-
-        double previousEndX = startX;
-        foreach (var segment in plan.Segments)
-        {
-            var run = para.Runs[segment.RunIndex];
-            var ft = BuildSingleRunFormattedTextAt(
-                run,
-                segment.Text,
-                flowDirection: para.RightToLeft ? FlowDirection.RightToLeft : FlowDirection.LeftToRight);
-
-            DrawTabLeaderAvalonia(
-                dc,
-                run,
-                segment.Leader,
-                previousEndX,
-                segment.X,
-                startY,
-                para.RightToLeft ? FlowDirection.RightToLeft : FlowDirection.LeftToRight);
-            dc.DrawText(ft, new Point(segment.X, startY));
-            previousEndX = segment.X + ft.Width;
-        }
-    }
-
-    private static void DrawTabLeaderAvalonia(
-        DrawingContext dc,
-        ResolvedRun run,
-        TabStopLeader leader,
-        double startX,
-        double endX,
-        double y,
-        FlowDirection flowDirection)
-    {
-        var plan = TextLayoutPlanner.PlanTabLeaderFill(
-            leader,
-            startX,
-            endX,
-            glyph => BuildSingleRunFormattedTextAt(
-                run,
-                glyph.ToString(),
-                flowDirection: flowDirection).Width);
-        if (!plan.ShouldDraw)
-            return;
-
-        dc.DrawText(
-            BuildSingleRunFormattedTextAt(
-                run,
-                plan.Text,
-                flowDirection: flowDirection),
-            new Point(plan.StartX, y));
-    }
+            (run, text, rightToLeft) => BuildNativeTextArtifact(
+                run, text, fontScale: 1.0, rightToLeft),
+            (artifact, x, y) => dc.DrawText(artifact, new Point(x, y)));
 
     /// <summary>
     /// Draws plain runs with authored DrawingML baseline offsets while keeping
@@ -1609,107 +1558,16 @@ public sealed partial class SlideCanvas : Control
     /// existing renderer-specific owners.
     /// </summary>
     internal static void RenderParaWithBaseline(
-        DrawingContext dc,
-        ResolvedParagraph para,
-        double startX,
-        double startY,
-        double maxWidth)
-    {
-        var formatted = para.Runs
-            .Select(run => BuildSingleRunFormattedTextAt(
-                run,
-                run.Text,
-                run.BaselineOffset.HasValue ? TextLayoutPlanner.BaselineRunFontScale : 1.0,
-                ToFlowDirection(TextLayoutPlanner.ResolveRunRightToLeft(
-                    para.RightToLeft,
-                    run.Text))))
-            .ToArray();
-        var widths = para.Runs
-            .Select((run, index) => MeasureBaselineTextWidth(
-                run,
-                run.Text,
-                run.BaselineOffset.HasValue ? TextLayoutPlanner.BaselineRunFontScale : 1.0,
-                formatted[index],
-                ToFlowDirection(TextLayoutPlanner.ResolveRunRightToLeft(
-                    para.RightToLeft,
-                    run.Text))))
-            .ToArray();
-        double totalWidth = widths.Sum();
-        if (maxWidth > 0 && totalWidth > maxWidth)
-        {
-            RenderWrappedBaseline(dc, para, startX, startY, maxWidth);
-            return;
-        }
-
-        var line = TextLayoutPlanner.PlanInlineBaselineLine(
+        DrawingContext dc, ResolvedParagraph para,
+        double startX, double startY, double maxWidth) =>
+        // Owns TextLayoutPlanner.PlanBaselineLines and PlanInlineBaselineLine.
+        TextNativeRenderSequence.RenderBaseline(
             para,
             startX,
             startY,
             maxWidth,
-            (runIndex, run, rightToLeft) => new TextInlineRunMeasure(
-                MeasureBaselineTextWidth(
-                    run,
-                    run.Text,
-                    run.BaselineOffset.HasValue ? TextLayoutPlanner.BaselineRunFontScale : 1.0,
-                    flowDirection: ToFlowDirection(rightToLeft)),
-                formatted[runIndex].Baseline,
-                formatted[runIndex].Height));
-        foreach (var placement in line.Runs)
-        {
-            var run = para.Runs[placement.RunIndex];
-            var ft = formatted[placement.RunIndex];
-            double offsetDip = TextLayoutPlanner.BaselineOffsetToDip(run.BaselineOffset, run.FontSizePt);
-            dc.DrawText(ft, new Point(placement.X, placement.Y - offsetDip));
-        }
-    }
-
-    private static void RenderWrappedBaseline(
-        DrawingContext dc,
-        ResolvedParagraph para,
-        double startX,
-        double startY,
-        double maxWidth)
-    {
-        var lines = TextLayoutPlanner.PlanBaselineLines(
-            para,
-            startX,
-            startY,
-            maxWidth,
-            (run, text, rightToLeft) =>
-            {
-                var flowDirection = ToFlowDirection(rightToLeft);
-                double fontScale = run.BaselineOffset.HasValue
-                    ? TextLayoutPlanner.BaselineRunFontScale
-                    : 1.0;
-                var formatted = BuildSingleRunFormattedTextAt(
-                    run,
-                    text,
-                    fontScale,
-                    flowDirection);
-                return new TextBaselineFragmentMeasure(
-                    MeasureBaselineTextWidth(
-                        run,
-                        text,
-                        fontScale,
-                        formatted,
-                        flowDirection),
-                    formatted.Baseline,
-                    formatted.Height);
-            });
-        foreach (var line in lines)
-        {
-            foreach (var fragment in line.Fragments)
-            {
-                var run = para.Runs[fragment.RunIndex];
-                var formatted = BuildSingleRunFormattedTextAt(
-                    run,
-                    fragment.Text,
-                    run.BaselineOffset.HasValue ? TextLayoutPlanner.BaselineRunFontScale : 1.0,
-                    ToFlowDirection(fragment.RightToLeft));
-                dc.DrawText(formatted, new Point(fragment.X, fragment.Y));
-            }
-        }
-    }
+            BuildBaselineNativeTextArtifact,
+            (artifact, x, y) => dc.DrawText(artifact, new Point(x, y)));
 
     /// <summary>
     /// Avalonia's FormattedText.Width trims trailing whitespace. Baseline runs
@@ -1750,60 +1608,46 @@ public sealed partial class SlideCanvas : Control
         ResolvedParagraph para,
         double startX, double startY)
     {
-        var formatted = new FormattedText?[para.Runs.Count];
-        for (int i = 0; i < para.Runs.Count; i++)
-        {
-            var run = para.Runs[i];
-            if (!run.IsMathRun && !string.IsNullOrEmpty(run.Text))
-            {
-                formatted[i] = BuildSingleRunFormattedTextAt(
-                    run,
-                    run.Text,
-                    flowDirection: ToFlowDirection(TextLayoutPlanner.ResolveRunRightToLeft(
-                        para.RightToLeft,
-                        run.Text)));
-            }
-        }
-
-        var line = TextLayoutPlanner.PlanInlineBaselineLine(
+        // TextNativeRenderSequence owns TextLayoutPlanner.PlanInlineBaselineLine,
+        // new TextInlineRunMeasure(metrics.Width, metrics.Ascent, metrics.Height), and
+        // MathBoxRenderPlanner.Plan(...); Avalonia retains BuildSingleRunFormattedTextAt and DrawMathOpAvalonia.
+        TextNativeRenderSequence.RenderMath(
             para,
             startX,
             startY,
-            0,
-            (runIndex, run, rightToLeft) =>
-            {
-                if (run.IsMathRun && run.MathLayout is not null)
-                {
-                    var metrics = run.MathLayout.Metrics;
-                    return new TextInlineRunMeasure(metrics.Width, metrics.Ascent, metrics.Height);
-                }
+            (run, text, rightToLeft) => BuildNativeTextArtifact(
+                run, text, fontScale: 1.0, rightToLeft),
+            (artifact, x, y) => dc.DrawText(artifact, new Point(x, y)),
+            operation => DrawMathOpAvalonia(dc, operation));
+    }
 
-                double width = BuildSingleRunFormattedTextAt(
-                    run,
-                    run.Text,
-                    flowDirection: ToFlowDirection(rightToLeft)).Width;
-                var text = formatted[runIndex];
-                return new TextInlineRunMeasure(
-                    width,
-                    text?.Baseline ?? 0,
-                    text?.Height ?? 0);
-            });
-        foreach (var placement in line.Runs)
-        {
-            var run = para.Runs[placement.RunIndex];
-            if (run.IsMathRun && run.MathLayout is not null)
-            {
-                var mathOps = MathBoxRenderPlanner.Plan(
-                    run.MathLayout, placement.X, placement.Y, run.Color, run.FontFamily);
-                foreach (var op in mathOps)
-                    DrawMathOpAvalonia(dc, op);
-            }
-            else if (!string.IsNullOrEmpty(run.Text))
-            {
-                var ft = formatted[placement.RunIndex]!;
-                dc.DrawText(ft, new Point(placement.X, placement.Y));
-            }
-        }
+    private static TextNativeArtifact<FormattedText> BuildNativeTextArtifact(
+        ResolvedRun run,
+        string text,
+        double fontScale,
+        bool rightToLeft)
+    {
+        var formatted = BuildSingleRunFormattedTextAt(
+            run,
+            text,
+            fontScale,
+            ToFlowDirection(rightToLeft));
+        return new(formatted, formatted.Width, formatted.Baseline, formatted.Height);
+    }
+
+    private static TextNativeArtifact<FormattedText> BuildBaselineNativeTextArtifact(
+        ResolvedRun run,
+        string text,
+        double fontScale,
+        bool rightToLeft)
+    {
+        var flowDirection = ToFlowDirection(rightToLeft);
+        var formatted = BuildSingleRunFormattedTextAt(run, text, fontScale, flowDirection);
+        return new(
+            formatted,
+            MeasureBaselineTextWidth(run, text, fontScale, formatted, flowDirection),
+            formatted.Baseline,
+            formatted.Height);
     }
 
     /// <summary>
@@ -2570,39 +2414,35 @@ public sealed partial class SlideCanvas : Control
         AutomationPeer,
         ISelectionItemProvider
     {
-        public bool IsSelected => parent.Coordinator.IsShapeSelected(shapeId);
+        private readonly PresentationCanvasAutomationShapePeerAdapter<
+            SlideShapeAutomationPeer,
+            AutomationControlType,
+            Rect> _adapter = new(
+                parent.Coordinator,
+                shapeId,
+                SlideCanvasAutomationPeer.ToNativeRole,
+                AutomationControlType.Custom,
+                parent.GetShapeBoundingRectangle);
+
+        public bool IsSelected => _adapter.IsSelected;
 
         public ISelectionProvider SelectionContainer => parent;
 
-        public void Select() => parent.Coordinator.RequestSelectionMutation(
-            shapeId,
-            PresentationCanvasAutomationSelectionMutation.Select);
+        public void Select() => _adapter.Select();
 
-        public void AddToSelection() => parent.Coordinator.RequestSelectionMutation(
-            shapeId,
-            PresentationCanvasAutomationSelectionMutation.Add);
+        public void AddToSelection() => _adapter.AddToSelection();
 
-        public void RemoveFromSelection() => parent.Coordinator.RequestSelectionMutation(
-            shapeId,
-            PresentationCanvasAutomationSelectionMutation.Remove);
+        public void RemoveFromSelection() => _adapter.RemoveFromSelection();
 
-        protected override string GetNameCore()
-            => parent.Coordinator.TryGetShape(shapeId, out var descriptor) ? descriptor.Name : string.Empty;
+        protected override string GetNameCore() => _adapter.Name;
 
-        protected override AutomationControlType GetAutomationControlTypeCore() =>
-            parent.Coordinator.TryGetShape(shapeId, out var descriptor)
-                ? SlideCanvasAutomationPeer.ToNativeRole(descriptor.Role)
-                : AutomationControlType.Custom;
+        protected override AutomationControlType GetAutomationControlTypeCore() => _adapter.Role;
 
-        protected override string GetClassNameCore() =>
-            parent.Coordinator.TryGetShape(shapeId, out var descriptor)
-                ? descriptor.ClassName
-                : PresentationCanvasAutomationSession.ShapeClassName;
+        protected override string GetClassNameCore() => _adapter.ClassName;
 
-        protected override string GetAutomationIdCore() =>
-            parent.Coordinator.TryGetShape(shapeId, out var descriptor) ? descriptor.AutomationId : string.Empty;
+        protected override string GetAutomationIdCore() => _adapter.AutomationId;
 
-        protected override Rect GetBoundingRectangleCore() => parent.GetShapeBoundingRectangle(shapeId);
+        protected override Rect GetBoundingRectangleCore() => _adapter.Bounds;
 
         protected override IReadOnlyList<AutomationPeer> GetOrCreateChildrenCore() => Array.Empty<AutomationPeer>();
 
@@ -2627,8 +2467,7 @@ public sealed partial class SlideCanvas : Control
 
         protected override string GetAccessKeyCore() => string.Empty;
 
-        protected override string GetHelpTextCore() =>
-            parent.Coordinator.TryGetShape(shapeId, out var descriptor) ? descriptor.HelpText : string.Empty;
+        protected override string GetHelpTextCore() => _adapter.HelpText;
 
         protected override string GetItemStatusCore() => string.Empty;
 
@@ -2636,8 +2475,7 @@ public sealed partial class SlideCanvas : Control
 
         protected override AutomationPeer? GetLabeledByCore() => null;
 
-        protected override bool HasKeyboardFocusCore() =>
-            parent.Coordinator.HasShapeKeyboardFocus(shapeId);
+        protected override bool HasKeyboardFocusCore() => _adapter.HasKeyboardFocus;
 
         protected override bool IsContentElementCore() => true;
 
