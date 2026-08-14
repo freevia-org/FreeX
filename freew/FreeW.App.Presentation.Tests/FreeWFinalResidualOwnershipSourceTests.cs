@@ -93,11 +93,15 @@ public sealed class FreeWFinalResidualOwnershipSourceTests
     public void Page_layout_ribbon_routes_keep_single_page_setting_ownership()
     {
         var wpfCommands = Read("freew", "FreeW.App.Host", "Ribbon", "FreeWRibbonCommands.cs");
+        var avaloniaCommands = Read("freew", "FreeW.App.Avalonia", "Ribbon", "FreeWAvaloniaRibbonCommands.cs");
+        var sharedWorkflow = Read("freew", "FreeW.App.Presentation", "Ribbon", "PageLayoutRibbonWorkflow.cs");
 
-        wpfCommands.Should().Contain("PageSetting(FreeWRibbonCommandAction.ColumnsOne");
-        wpfCommands.Should().Contain("PageSetting(FreeWRibbonCommandAction.LineNumbersNone");
-        wpfCommands.Should().Contain("PageSetting(FreeWRibbonCommandAction.HyphenationNone");
-        wpfCommands.Should().Contain("PageSetting(FreeWRibbonCommandAction.DifferentFirstPage");
+        wpfCommands.Should().Contain("PageLayoutRibbonWorkflow.Register(");
+        avaloniaCommands.Should().Contain("PageLayoutRibbonWorkflow.Register(");
+        sharedWorkflow.Should().Contain("BindColumnPreset(FreeWRibbonCommandAction.ColumnsOne");
+        sharedWorkflow.Should().Contain("BindLineNumberMode(FreeWRibbonCommandAction.LineNumbersNone");
+        sharedWorkflow.Should().Contain("FreeWRibbonCommandAction.HyphenationNone");
+        sharedWorkflow.Should().Contain("FreeWRibbonCommandAction.DifferentFirstPage");
         wpfCommands.Should().NotContain("class ColumnsPresetCommand");
         wpfCommands.Should().NotContain("class LineNumberModeCommand");
         wpfCommands.Should().NotContain("class HyphenationCommand");

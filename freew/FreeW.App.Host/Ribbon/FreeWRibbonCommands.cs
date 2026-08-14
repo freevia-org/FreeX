@@ -184,18 +184,6 @@ internal static class FreeWRibbonCommands
             return cmd;
         }
 
-        void PageSetting(
-            FreeWRibbonCommandAction action,
-            Action<PageSettings> apply,
-            Func<PageSettings, bool>? isChecked = null)
-        {
-            var command = new PageCommand(editor, apply, isChecked);
-            var commandId = FreeWRibbonCommandWorkflow.GetPrimaryCommandId(action);
-            registry.Bind(action, command);
-            stateful.Add((commandId, command));
-            stateStore.SetState(commandId, command.GetState());
-        }
-
         var bold = CreateToggle(FreeWRibbonCommandAction.Bold, EditingCommands.ToggleBold, TextElement.FontWeightProperty,
             v => v is FontWeight w && w >= FontWeights.Bold,
             () => editor.TryToggleSelectedRunFormatting(f => f.Bold, (f, value) => f with { Bold = value }));
@@ -1136,28 +1124,21 @@ internal static class FreeWRibbonCommands
         registry.Bind(FreeWRibbonCommandAction.Undo, new ActionRibbonCommand(() => { if (editor.CanUndo) editor.Undo(); }));
         registry.Bind(FreeWRibbonCommandAction.Redo, new ActionRibbonCommand(() => { if (editor.CanRedo) editor.Redo(); }));
 
-        // Layout tab — page settings (applied to the model; honoured by docx save + print).
-        PageSetting(FreeWRibbonCommandAction.Orientation, PageLayoutCommandPlanner.ToggleOrientation);
-        PageSetting(FreeWRibbonCommandAction.Margins, PageLayoutCommandPlanner.ToggleNormalNarrowMargins);
-        PageSetting(FreeWRibbonCommandAction.Size, PageLayoutCommandPlanner.ToggleLetterA4Paper);
+        // Layout quick actions share their model policy; WPF contributes only the editor adapter.
+        var pageLayoutCommands = PageLayoutRibbonWorkflow.Register(
+            registry,
+            new PageLayoutRibbonPorts(
+                GetPageSettings: () => editor.Model.Page,
+                ApplyPageSettings: editor.ApplyPageSettings,
+                IsEnabled: () => !editor.IsReadOnly));
+        foreach (var entry in pageLayoutCommands.StatefulCommands)
+        {
+            stateful.Add((entry.Id, entry.Command));
+            stateStore.SetState(entry.Id, entry.Command.GetState());
+        }
         // Columns: open the Columns dialog or apply Word's backed preset menu choices directly, mutating
         // PageSettings and re-rendering so the live document flow changes immediately.
         registry.Bind(FreeWRibbonCommandAction.Columns, new ColumnsCommand(editor));
-        PageSetting(FreeWRibbonCommandAction.ColumnsOne,
-            page => PageLayoutCommandPlanner.ApplyColumnPreset(page, PageColumnPreset.One),
-            page => PageLayoutCommandPlanner.IsColumnPresetChecked(page, PageColumnPreset.One));
-        PageSetting(FreeWRibbonCommandAction.ColumnsTwo,
-            page => PageLayoutCommandPlanner.ApplyColumnPreset(page, PageColumnPreset.Two),
-            page => PageLayoutCommandPlanner.IsColumnPresetChecked(page, PageColumnPreset.Two));
-        PageSetting(FreeWRibbonCommandAction.ColumnsThree,
-            page => PageLayoutCommandPlanner.ApplyColumnPreset(page, PageColumnPreset.Three),
-            page => PageLayoutCommandPlanner.IsColumnPresetChecked(page, PageColumnPreset.Three));
-        PageSetting(FreeWRibbonCommandAction.ColumnsLeft,
-            page => PageLayoutCommandPlanner.ApplyColumnPreset(page, PageColumnPreset.Left),
-            page => PageLayoutCommandPlanner.IsColumnPresetChecked(page, PageColumnPreset.Left));
-        PageSetting(FreeWRibbonCommandAction.ColumnsRight,
-            page => PageLayoutCommandPlanner.ApplyColumnPreset(page, PageColumnPreset.Right),
-            page => PageLayoutCommandPlanner.IsColumnPresetChecked(page, PageColumnPreset.Right));
         registry.Bind(FreeWRibbonCommandAction.ColumnsMore, new ColumnsCommand(editor));
         // Page Setup: the unified Margins / Paper / Layout dialog (Word's Layout > Page Setup launcher). The
         // "Custom Margins…" / "More Paper Sizes…" entry points open the same dialog on the Margins / Paper tab.
@@ -1166,15 +1147,6 @@ internal static class FreeWRibbonCommands
         registry.Bind(FreeWRibbonCommandAction.MorePaperSizes, new PageSetupCommand(editor, PageSetupDialogTabKind.Paper));
         // Line Numbers: Word-style menu items set the backed mode explicitly, while the top-level command keeps
         // the existing cycle behavior for quick access (shown in print preview and the live page adorner).
-        PageSetting(FreeWRibbonCommandAction.LineNumbers, PageLayoutCommandPlanner.CycleLineNumberMode);
-        PageSetting(FreeWRibbonCommandAction.LineNumbersNone, page => page.LineNumberMode = LineNumberMode.None,
-            page => PageLayoutCommandPlanner.IsLineNumberModeChecked(page, LineNumberMode.None));
-        PageSetting(FreeWRibbonCommandAction.LineNumbersContinuous, page => page.LineNumberMode = LineNumberMode.Continuous,
-            page => PageLayoutCommandPlanner.IsLineNumberModeChecked(page, LineNumberMode.Continuous));
-        PageSetting(FreeWRibbonCommandAction.LineNumbersRestartPage, page => page.LineNumberMode = LineNumberMode.RestartEachPage,
-            page => PageLayoutCommandPlanner.IsLineNumberModeChecked(page, LineNumberMode.RestartEachPage));
-        PageSetting(FreeWRibbonCommandAction.LineNumbersRestartSection, page => page.LineNumberMode = LineNumberMode.RestartEachSection,
-            page => PageLayoutCommandPlanner.IsLineNumberModeChecked(page, LineNumberMode.RestartEachSection));
         // Line Numbering Options…: dedicated dialog (Start At / Count By / Restart mode), not Page Setup.
         registry.Bind(FreeWRibbonCommandAction.LineNumbersOptions, new LineNumberOptionsCommand(editor));
 
@@ -1186,15 +1158,8 @@ internal static class FreeWRibbonCommands
         //    the live document (settings.xml w:autoHyphenation + zone/limit/caps sub-options).
         //  - Page Vertical Alignment: cycle Top -> Center -> Justified (-> Bottom) (sectPr w:vAlign).
         //  - Different First Page: toggle a distinct first-page header/footer (sectPr w:titlePg).
-        PageSetting(FreeWRibbonCommandAction.Hyphenation, PageLayoutCommandPlanner.ToggleHyphenation, page => page.AutoHyphenation);
-        PageSetting(FreeWRibbonCommandAction.HyphenationNone, page => page.AutoHyphenation = false, page => !page.AutoHyphenation);
-        PageSetting(FreeWRibbonCommandAction.HyphenationAuto, page => page.AutoHyphenation = true, page => page.AutoHyphenation);
         registry.Bind(FreeWRibbonCommandAction.HyphenationManual, new HyphenationManualCommand(editor));
         registry.Bind(FreeWRibbonCommandAction.HyphenationOptions, new HyphenationOptionsCommand(editor));
-        registry.Bind(FreeWRibbonCommandAction.PageValign, new PageVerticalAlignmentCommand(editor));
-        PageSetting(FreeWRibbonCommandAction.DifferentFirstPage,
-            page => page.DifferentFirstPage = !page.DifferentFirstPage,
-            page => page.DifferentFirstPage);
 
         // Design tab — Page Background: "Page Borders" opens the full Borders and Shading dialog,
         // and Watermark sets/clears the page watermark. Both ultimately mutate PageSettings via
@@ -2654,18 +2619,6 @@ internal static class FreeWRibbonCommands
         }
     }
 
-    private sealed class PageCommand(
-        DocumentView editor,
-        Action<PageSettings> apply,
-        Func<PageSettings, bool>? isChecked = null) : IRibbonStatefulCommand
-    {
-        public void Execute(RibbonCommandContext context) => editor.ApplyPageSettings(apply);
-
-        public RibbonCommandState GetState() => new(
-            IsEnabled: !editor.IsReadOnly,
-            IsChecked: isChecked?.Invoke(editor.Model.Page) == true);
-    }
-
     // Home / Design > Borders and Shading…: opens the full dialog (paragraph border, page border, shading)
     // seeded with the current paragraph's border/shading and the page border. Applies the chosen paragraph
     // border/shading through DocumentView (the undo/redo bus) and the page border through ApplyPageSettings;
@@ -2791,15 +2744,6 @@ internal static class FreeWRibbonCommands
 
             editor.ApplyPageSettings(page => PageLayoutCommandPlanner.ApplyHyphenationOptions(page, result));
         }
-    }
-
-    // Cycles every Word page vertical alignment value (sectPr w:vAlign). Routes through
-    // ApplyPageSettings so the editor commits pending edits, mutates PageSettings, and re-renders.
-    private sealed class PageVerticalAlignmentCommand(DocumentView editor) : IRibbonCommand
-    {
-        public void Execute(RibbonCommandContext context) =>
-            editor.ApplyPageSettings(page =>
-                page.VerticalAlignment = PageVerticalAlignmentPlanner.Next(page.VerticalAlignment));
     }
 
     // Table Design > Draw Borders > Draw Table: prompts for dimensions and inserts a table at the

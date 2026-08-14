@@ -251,40 +251,17 @@ internal static class FreeWAvaloniaRibbonCommands
             "freew.table-split-cell",
             OptionalHostCommand(callbacks.OpenSplitCellDialog));
 
-        // ── Layout / Page Setup (AV-PAGE) ────────────────────────────────────
-        // Dialog launcher: opens the Page Setup modal (margins + paper + orientation).
-        // Toggle orientation (portrait ↔ landscape).
-        var orientationCommand = new HostPageSettingCommand(editor, callbacks.ToggleOrientation);
-        r.Bind(FreeWRibbonCommandAction.Orientation, orientationCommand);
-        r.Register("freew.page-orientation", orientationCommand);
-        // Margin presets.
-        r.Bind(FreeWRibbonCommandAction.Margins, new HostPageSettingCommand(editor, () => ToggleNormalNarrowMargins(editor, callbacks)));
-        r.Register("freew.page-margins-normal", new HostPageSettingCommand(editor, () => callbacks.ApplyMarginPreset("normal")));
-        r.Register("freew.page-margins-narrow", new HostPageSettingCommand(editor, () => callbacks.ApplyMarginPreset("narrow")));
-        r.Register("freew.page-margins-wide", new HostPageSettingCommand(editor, () => callbacks.ApplyMarginPreset("wide")));
-        // Quick paper-size selectors.
-        r.Bind(FreeWRibbonCommandAction.Size, new HostPageSettingCommand(editor, () => ToggleLetterA4Paper(editor, callbacks)));
-        r.Register("freew.page-size-letter", new HostPageSettingCommand(editor, () => callbacks.ApplyPaperSize("letter")));
-        r.Register("freew.page-size-a4", new HostPageSettingCommand(editor, () => callbacks.ApplyPaperSize("a4")));
+        // Layout quick actions share their model policy; Avalonia contributes only the editor adapter.
+        PageLayoutRibbonWorkflow.Register(
+            r,
+            new PageLayoutRibbonPorts(
+                GetPageSettings: () => editor.Document.Page,
+                ApplyPageSettings: editor.ApplyPageSettings,
+                IsEnabled: () => !editor.IsEditingLocked));
 
         var columnsDialogCommand = OptionalHostCommand(callbacks.OpenColumnsDialog);
         r.Bind(FreeWRibbonCommandAction.Columns, columnsDialogCommand);
         r.Bind(FreeWRibbonCommandAction.ColumnsMore, columnsDialogCommand);
-        r.Bind(FreeWRibbonCommandAction.ColumnsOne, new PageSettingCommand(editor,
-            page => PageLayoutCommandPlanner.ApplyColumnPreset(page, PageColumnPreset.One),
-            page => PageLayoutCommandPlanner.IsColumnPresetChecked(page, PageColumnPreset.One)));
-        r.Bind(FreeWRibbonCommandAction.ColumnsTwo, new PageSettingCommand(editor,
-            page => PageLayoutCommandPlanner.ApplyColumnPreset(page, PageColumnPreset.Two),
-            page => PageLayoutCommandPlanner.IsColumnPresetChecked(page, PageColumnPreset.Two)));
-        r.Bind(FreeWRibbonCommandAction.ColumnsThree, new PageSettingCommand(editor,
-            page => PageLayoutCommandPlanner.ApplyColumnPreset(page, PageColumnPreset.Three),
-            page => PageLayoutCommandPlanner.IsColumnPresetChecked(page, PageColumnPreset.Three)));
-        r.Bind(FreeWRibbonCommandAction.ColumnsLeft, new PageSettingCommand(editor,
-            page => PageLayoutCommandPlanner.ApplyColumnPreset(page, PageColumnPreset.Left),
-            page => PageLayoutCommandPlanner.IsColumnPresetChecked(page, PageColumnPreset.Left)));
-        r.Bind(FreeWRibbonCommandAction.ColumnsRight, new PageSettingCommand(editor,
-            page => PageLayoutCommandPlanner.ApplyColumnPreset(page, PageColumnPreset.Right),
-            page => PageLayoutCommandPlanner.IsColumnPresetChecked(page, PageColumnPreset.Right)));
 
         r.Register("freew.breaks", EmptyRibbonCommand.Instance);
         r.Bind(FreeWRibbonCommandAction.ColumnBreak, new ActionRibbonCommand(editor.InsertColumnBreak));
@@ -292,16 +269,6 @@ internal static class FreeWAvaloniaRibbonCommands
         r.Bind(FreeWRibbonCommandAction.SectionBreakContinuous, new ActionRibbonCommand(() => editor.InsertSectionBreak(SectionBreakKind.Continuous)));
         r.Bind(FreeWRibbonCommandAction.SectionBreakEvenPage, new ActionRibbonCommand(() => editor.InsertSectionBreak(SectionBreakKind.EvenPage)));
         r.Bind(FreeWRibbonCommandAction.SectionBreakOddPage, new ActionRibbonCommand(() => editor.InsertSectionBreak(SectionBreakKind.OddPage)));
-        r.Bind(FreeWRibbonCommandAction.LineNumbers, new PageSettingCommand(editor, PageLayoutCommandPlanner.CycleLineNumberMode));
-        r.Bind(FreeWRibbonCommandAction.LineNumbersNone, new PageSettingCommand(editor, page => page.LineNumberMode = LineNumberMode.None, page => page.LineNumberMode == LineNumberMode.None));
-        r.Bind(FreeWRibbonCommandAction.LineNumbersContinuous, new PageSettingCommand(editor, page => page.LineNumberMode = LineNumberMode.Continuous, page => page.LineNumberMode == LineNumberMode.Continuous));
-        r.Bind(FreeWRibbonCommandAction.LineNumbersRestartPage, new PageSettingCommand(editor, page => page.LineNumberMode = LineNumberMode.RestartEachPage, page => page.LineNumberMode == LineNumberMode.RestartEachPage));
-        r.Bind(FreeWRibbonCommandAction.LineNumbersRestartSection, new PageSettingCommand(editor, page => page.LineNumberMode = LineNumberMode.RestartEachSection, page => page.LineNumberMode == LineNumberMode.RestartEachSection));
-        r.Bind(FreeWRibbonCommandAction.Hyphenation, new PageSettingCommand(editor, PageLayoutCommandPlanner.ToggleHyphenation, page => page.AutoHyphenation));
-        r.Bind(FreeWRibbonCommandAction.HyphenationNone, new PageSettingCommand(editor, page => page.AutoHyphenation = false, page => !page.AutoHyphenation));
-        r.Bind(FreeWRibbonCommandAction.HyphenationAuto, new PageSettingCommand(editor, page => page.AutoHyphenation = true, page => page.AutoHyphenation));
-        r.Bind(FreeWRibbonCommandAction.DifferentFirstPage, new PageSettingCommand(editor, page => page.DifferentFirstPage = !page.DifferentFirstPage, page => page.DifferentFirstPage));
-        r.Bind(FreeWRibbonCommandAction.PageValign, new ActionRibbonCommand(editor.CyclePageVerticalAlignment));
         r.Bind(FreeWRibbonCommandAction.TextToTable, new ActionRibbonCommand(
             callbacks.OpenTextToTableDialog ?? editor.ConvertCurrentParagraphToTable));
 
@@ -494,18 +461,6 @@ internal static class FreeWAvaloniaRibbonCommands
         editor.SetSpaceAfter(paragraph.SpaceAfterPt > 0 ? 0 : ParagraphSpacingTogglePoints);
     }
 
-    private static void ToggleNormalNarrowMargins(DocumentView editor, FreeWRibbonHostExecutionPorts callbacks)
-    {
-        var page = editor.Document.Page;
-        callbacks.ApplyMarginPreset(PageLayoutCommandPlanner.HasNormalMargins(page) ? "narrow" : "normal");
-    }
-
-    private static void ToggleLetterA4Paper(DocumentView editor, FreeWRibbonHostExecutionPorts callbacks)
-    {
-        var page = editor.Document.Page;
-        callbacks.ApplyPaperSize(PageLayoutCommandPlanner.HasLetterPaperSize(page) ? "a4" : "letter");
-    }
-
     private static void ConfigureHeaderFooterCommandFamily(
         FreeWRibbonEditorCommandFamilyBuilder family,
         DocumentView editor)
@@ -624,17 +579,6 @@ internal static class FreeWAvaloniaRibbonCommands
         public RibbonCommandState GetState() => new(
             IsEnabled: !editor.IsEditingLocked,
             IsChecked: isChecked?.Invoke(editor.Document.Page) == true);
-    }
-
-    private sealed class HostPageSettingCommand(DocumentView editor, Action execute) : IRibbonStatefulCommand
-    {
-        public void Execute(RibbonCommandContext context)
-        {
-            if (GetState().IsEnabled)
-                execute();
-        }
-
-        public RibbonCommandState GetState() => new(IsEnabled: !editor.IsEditingLocked);
     }
 
     private sealed class FontFamilyCommand(DocumentView editor) : IRibbonStatefulCommand

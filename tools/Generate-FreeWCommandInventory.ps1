@@ -57,6 +57,7 @@ internal static class FreeWCommandInventory
         new("quickPartWorkflowSource", "Shared Quick Parts registry source", "freew/FreeW.App.Presentation/Ribbon/QuickPartRibbonWorkflow.cs"),
         new("tableInsertionWorkflowSource", "Shared Table insertion registry source", "freew/FreeW.App.Presentation/Ribbon/TableInsertionRibbonWorkflow.cs"),
         new("paragraphEditingWorkflowSource", "Shared Paragraph editing registry source", "freew/FreeW.App.Presentation/Ribbon/ParagraphEditingRibbonWorkflow.cs"),
+        new("pageLayoutWorkflowSource", "Shared Page Layout registry source", "freew/FreeW.App.Presentation/Ribbon/PageLayoutRibbonWorkflow.cs"),
     ];
 
     private static readonly ClassificationRule[] GapClassificationRules =
@@ -216,6 +217,29 @@ internal static class FreeWCommandInventory
         ["freew.widow-control"] = ParagraphEditingEvidence("Both renderers toggle widow/orphan control through one prepared shared action."),
         ["freew.para-border"] = ParagraphEditingEvidence("Both renderers toggle paragraph borders through one prepared shared action."),
         ["freew.sort"] = ParagraphEditingEvidence("Both renderers preserve native sort adapters behind one shared semantic route."),
+        ["freew.orientation"] = PageLayoutEvidence("Both renderers toggle page orientation through the same undoable shared page mutation."),
+        ["freew.margins"] = PageLayoutEvidence("Both renderers toggle Normal and Narrow margins through the same shared policy."),
+        ["freew.size"] = PageLayoutEvidence("Both renderers toggle Letter and A4 paper through the same orientation-preserving shared policy."),
+        ["freew.columns-one"] = PageLayoutEvidence("Both renderers apply and report the One-column preset through the same shared policy."),
+        ["freew.columns-two"] = PageLayoutEvidence("Both renderers apply and report the Two-column preset through the same shared policy."),
+        ["freew.columns-three"] = PageLayoutEvidence("Both renderers apply and report the Three-column preset through the same shared policy."),
+        ["freew.columns-left"] = PageLayoutEvidence("Both renderers apply and report the Left-column preset through the same shared policy."),
+        ["freew.columns-right"] = PageLayoutEvidence("Both renderers apply and report the Right-column preset through the same shared policy."),
+        ["freew.line-numbers"] = PageLayoutEvidence("Both renderers cycle backed line-number modes through the same shared policy."),
+        ["freew.line-numbers-none"] = PageLayoutEvidence("Both renderers apply and report the disabled line-number mode through the same shared policy."),
+        ["freew.line-numbers-continuous"] = PageLayoutEvidence("Both renderers apply and report continuous line numbering through the same shared policy."),
+        ["freew.line-numbers-restart-page"] = PageLayoutEvidence("Both renderers apply and report per-page line-number restarts through the same shared policy."),
+        ["freew.line-numbers-restart-section"] = PageLayoutEvidence("Both renderers apply and report per-section line-number restarts through the same shared policy."),
+        ["freew.hyphenation"] = PageLayoutEvidence("Both renderers toggle automatic hyphenation through the same shared policy."),
+        ["freew.hyphenation-none"] = PageLayoutEvidence("Both renderers disable and report automatic hyphenation through the same shared policy."),
+        ["freew.hyphenation-auto"] = PageLayoutEvidence("Both renderers enable and report automatic hyphenation through the same shared policy."),
+        ["freew.page-valign"] = PageLayoutEvidence("Both renderers cycle page vertical alignment through the same shared policy."),
+        ["freew.different-first-page"] = PageLayoutEvidence("Both renderers toggle and report different-first-page layout through the same shared policy."),
+        ["freew.page-margins-normal"] = PageLayoutEvidence("The Normal margin menu route is backed by the shared renderer-neutral preset command."),
+        ["freew.page-margins-narrow"] = PageLayoutEvidence("The Narrow margin menu route is backed by the shared renderer-neutral preset command."),
+        ["freew.page-margins-wide"] = PageLayoutEvidence("The Wide margin menu route is backed by the shared renderer-neutral preset command."),
+        ["freew.page-size-letter"] = PageLayoutEvidence("The Letter paper menu route is backed by the shared renderer-neutral preset command."),
+        ["freew.page-size-a4"] = PageLayoutEvidence("The A4 paper menu route is backed by the shared renderer-neutral preset command."),
         ["freew.bold"] = FontEffectEvidence("Both renderers preserve native bold toggle state behind one shared semantic route."),
         ["freew.italic"] = FontEffectEvidence("Both renderers preserve native italic toggle behavior behind one shared semantic route."),
         ["freew.underline"] = FontEffectEvidence("Both renderers preserve native underline toggle behavior behind one shared semantic route."),
@@ -522,11 +546,13 @@ internal static class FreeWCommandInventory
                 WpfRegistrySource: ContainsCommandLiteral(sourceTexts["wpfRegistrySource"], commandId) ||
                     ContainsCommandLiteral(sourceTexts["quickPartWorkflowSource"], commandId) ||
                     ContainsCommandLiteral(sourceTexts["tableInsertionWorkflowSource"], commandId) ||
-                    ContainsCommandLiteral(sourceTexts["paragraphEditingWorkflowSource"], commandId),
+                    ContainsCommandLiteral(sourceTexts["paragraphEditingWorkflowSource"], commandId) ||
+                    ContainsCommandLiteral(sourceTexts["pageLayoutWorkflowSource"], commandId),
                 AvaloniaRegistrySource: ContainsCommandLiteral(sourceTexts["avaloniaRegistrySource"], commandId) ||
                     ContainsCommandLiteral(sourceTexts["quickPartWorkflowSource"], commandId) ||
                     ContainsCommandLiteral(sourceTexts["tableInsertionWorkflowSource"], commandId) ||
-                    ContainsCommandLiteral(sourceTexts["paragraphEditingWorkflowSource"], commandId));
+                    ContainsCommandLiteral(sourceTexts["paragraphEditingWorkflowSource"], commandId) ||
+                    ContainsCommandLiteral(sourceTexts["pageLayoutWorkflowSource"], commandId));
             var behaviorEvidence = BehaviorEvidenceCatalog.GetValueOrDefault(commandId);
             var profileClassification = ClassifyProfile(wpfPresent, avaloniaPresent);
             var gapClassification = ClassifyGap(
@@ -651,6 +677,18 @@ internal static class FreeWCommandInventory
             AvaloniaEvidence: new BehaviorEvidenceLink(
                 Path: "freew/FreeW.App.Presentation.Tests/ParagraphEditingRibbonWorkflowTests.cs",
                 Test: "ParagraphEditingRibbonWorkflowTests.BothRenderersDelegateParagraphPolicyToSharedPresentation"));
+
+    private static CommandBehaviorEvidence PageLayoutEvidence(string summary) =>
+        new(
+            EvidenceId: "freew.page-layout.shared-workflow",
+            Slice: "Page Layout command behavior",
+            Summary: summary,
+            WpfEvidence: new BehaviorEvidenceLink(
+                Path: "freew/FreeW.App.Presentation.Tests/PageLayoutRibbonWorkflowTests.cs",
+                Test: "PageLayoutRibbonWorkflowTests.SharedCommandsOwnMutationAndCheckedStatePolicy"),
+            AvaloniaEvidence: new BehaviorEvidenceLink(
+                Path: "freew/FreeW.App.Presentation.Tests/PageLayoutRibbonWorkflowTests.cs",
+                Test: "PageLayoutRibbonWorkflowTests.BothRenderersDelegatePageLayoutQuickActionsToSharedPresentation"));
 
     private static CommandBehaviorEvidence FontEffectEvidence(string summary) =>
         new(
