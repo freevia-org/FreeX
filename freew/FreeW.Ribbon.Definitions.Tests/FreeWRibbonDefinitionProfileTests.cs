@@ -252,6 +252,28 @@ public sealed class FreeWRibbonDefinitionProfileTests
     }
 
     [Fact]
+    public void Chart_color_catalog_uses_one_shared_command_family_across_profiles()
+    {
+        var expectedIds = FreeW.Core.Model.ChartColorScheme.Catalog
+            .Select(ChartColorRibbonCommandCatalog.CommandId)
+            .ToArray();
+
+        foreach (var capabilities in new[] { FreeWRibbonCapabilities.Wpf, FreeWRibbonCapabilities.Avalonia })
+        {
+            var ids = CommandEntries(FreeWRibbon.Build(capabilities))
+                .Where(entry => entry.TabId == "chart-design")
+                .Select(entry => entry.CommandId)
+                .ToArray();
+            ids.Should().Contain(expectedIds);
+        }
+
+        var wpfRegistry = ReadRepositoryFile(
+            "freew", "FreeW.App.Host", "Ribbon", "FreeWRibbonCommands.cs");
+        wpfRegistry.Should().NotContain("ChartColorCommandPrefix");
+        wpfRegistry.Should().NotContain("freew.chart-color");
+    }
+
+    [Fact]
     public void SmartArt_command_slice_uses_shared_ids_and_catalog_across_profiles()
     {
         var expected = new[]
