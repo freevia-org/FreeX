@@ -4,11 +4,6 @@ using FreeP.App.Localization;
 
 namespace FreeP.App.Compositor;
 
-public sealed record OptionsDialogInput(
-    string? RecentFilesCapText,
-    string? Format,
-    string? UiLanguage);
-
 /// <summary>
 /// Renderer-neutral lifetime and acceptance policy for the paired FreeP options dialogs.
 /// </summary>
@@ -40,13 +35,15 @@ public sealed class OptionsDialogSession
 
     public BasicApplicationOptionsDialogInitialState InitialState => _basicSession.InitialState;
 
-    public BasicApplicationOptionsDialogCommitPlan<FreePOptions> PlanAcceptance(OptionsDialogInput input)
+    /// <summary>
+    /// FreeP's Options dialog edits exactly the shared basic fields, so it captures the shared
+    /// <see cref="BasicApplicationOptionsDialogInput"/> directly instead of repeating it as a FreeP record.
+    /// </summary>
+    public BasicApplicationOptionsDialogCommitPlan<FreePOptions> PlanAcceptance(
+        BasicApplicationOptionsDialogInput input)
     {
         ArgumentNullException.ThrowIfNull(input);
 
-        return _basicSession.PlanAcceptance(new BasicApplicationOptionsDialogInput(
-            input.RecentFilesCapText,
-            input.Format,
-            input.UiLanguage));
+        return _basicSession.PlanAcceptance(input);
     }
 }

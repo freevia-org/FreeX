@@ -3,6 +3,7 @@ using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.Layout;
+using Free.Shared.AppServices;
 using Free.Shared.Shell.Avalonia;
 using FreeP.App.Compositor;
 
@@ -108,8 +109,8 @@ internal sealed partial class OptionsDialog : FreePDialogWindow
     private void Accept()
     {
         _status.IsVisible = false;
-        var format = (_defaultFormat.SelectedItem as OptionsDialogFormatChoice)?.Extension;
-        var commit = _session.PlanAcceptance(new OptionsDialogInput(
+        var format = (_defaultFormat.SelectedItem as ApplicationOptionsFormatChoice)?.Extension;
+        var commit = _session.PlanAcceptance(new BasicApplicationOptionsDialogInput(
             _recentFilesCap.Text,
             format,
             _uiLanguage.Text));
