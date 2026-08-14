@@ -241,6 +241,26 @@ public sealed class InCanvasTableCellEditor
     /// <summary>True when a cell's RichTextBox is open and focused.</summary>
     public bool IsCellRichEditActive => _cellEditActive && _cellTextBox is not null;
 
+    /// <summary>
+    /// Executes a structural table command after committing the native rich-text transaction.
+    /// Validation, ordering, and mutation are owned by the shared Presentation dispatcher.
+    /// </summary>
+    public bool TryExecuteActiveTableStructureAction(PresentationDomainContextActionKind kind)
+    {
+        if (!IsCellRichEditActive)
+            return false;
+
+        return PresentationTableStructureActionDispatcher.TryExecute(
+            kind,
+            TableCellEditPlanner.PlanSelectedCell(
+                _editor.CurrentSlide,
+                _editor.SelectedShapeIds,
+                _editor.ActiveTableCell),
+            _editShapeId,
+            CommitCellEdit,
+            _editor);
+    }
+
     public bool TryNavigateActiveTableCell(TableCellNavigationDirection direction)
     {
         if (!_cellEditActive || _cellTextBox is null)
