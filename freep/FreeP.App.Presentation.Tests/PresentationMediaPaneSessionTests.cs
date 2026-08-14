@@ -36,6 +36,7 @@ public sealed class PresentationMediaPaneSessionTests
         PresentationMediaPaneSession.MinimumVolumePercent.Should().Be(0);
         PresentationMediaPaneSession.MaximumVolumePercent.Should().Be(100);
         PresentationMediaPaneSession.VolumeTickFrequency.Should().Be(10);
+        PresentationMediaPaneSession.SnapVolumeToTicks.Should().BeTrue();
         PresentationMediaPaneSession.DefaultVolumePercent.Should().Be(80);
         PresentationMediaPaneSession.DefaultStopAfterSlides.Should().Be(1);
         PresentationMediaPaneHostSnapshotPlanner.DefaultVolumePercent
@@ -417,6 +418,7 @@ public sealed class PresentationMediaPaneSessionTests
             source.Should().Contain("PresentationMediaPaneSession.MinimumVolumePercent");
             source.Should().Contain("PresentationMediaPaneSession.MaximumVolumePercent");
             source.Should().Contain("PresentationMediaPaneSession.VolumeTickFrequency");
+            source.Should().Contain("IsSnapToTickEnabled = PresentationMediaPaneSession.SnapVolumeToTicks");
             source.Should().NotContain("PresentationMediaPaneSession.DefaultStopAfterSlides");
             source.Should().NotContain("PresentationMediaPaneHostSnapshotPlanner.CaptureCaption(");
             source.Should().NotContain("PresentationMediaPaneHostSnapshotPlanner.CaptureVolume(");
@@ -495,6 +497,7 @@ public sealed class PresentationMediaPaneSessionTests
         mediaSession.Should().Contain("public const int MinimumVolumePercent = 0;")
             .And.Contain("public const int MaximumVolumePercent = 100;")
             .And.Contain("public const int VolumeTickFrequency = 10;")
+            .And.Contain("public const bool SnapVolumeToTicks = true;")
             .And.Contain("public const int DefaultStopAfterSlides = 1;");
     }
 
