@@ -28,7 +28,7 @@ public sealed class R90_ResetSideBySidePairTests
         windows[0].TileToWorkArea(new System.Windows.Rect(100, 100, 200, 200));
         windows[0].TiledBounds.Should().HaveCount(2);
 
-        registry.ResetSideBySidePair(1920, 1080).Should().BeTrue();
+        registry.ResetSideBySidePair(windows[0], 1920, 1080).Should().BeTrue();
 
         // BOTH windows of the pair received a fresh tile call restoring the ORIGINAL side-by-side
         // halves -- not the manually-dragged rectangle, and not an unrelated cascade formula.
@@ -45,9 +45,24 @@ public sealed class R90_ResetSideBySidePairTests
         registry.EnableSideBySide(windows[0], 1920, 1080).Should().BeTrue();
         windows[2].TiledBounds.Should().BeEmpty("window C never joined the side-by-side pair");
 
-        registry.ResetSideBySidePair(1920, 1080).Should().BeTrue();
+        registry.ResetSideBySidePair(windows[1], 1920, 1080).Should().BeTrue();
 
         windows[2].TiledBounds.Should().BeEmpty("Reset Window Position must not reposition an unrelated window");
+    }
+
+    [Fact]
+    public void ResetSideBySidePair_UnrelatedRequesterCannotRetileAnotherPair()
+    {
+        var (registry, windows) = RegisterWindows(3);
+        registry.EnableSideBySide(windows[0], 1920, 1080).Should().BeTrue();
+        var primaryTileCount = windows[0].TiledBounds.Count;
+        var partnerTileCount = windows[1].TiledBounds.Count;
+
+        registry.ResetSideBySidePair(windows[2], 1920, 1080).Should().BeFalse();
+
+        windows[0].TiledBounds.Should().HaveCount(primaryTileCount);
+        windows[1].TiledBounds.Should().HaveCount(partnerTileCount);
+        windows[2].TiledBounds.Should().BeEmpty();
     }
 
     /// <summary>No-regression sibling: with no active side-by-side pair, Reset Window Position is a no-op.</summary>
@@ -57,7 +72,7 @@ public sealed class R90_ResetSideBySidePairTests
         var (registry, windows) = RegisterWindows(2);
 
         registry.IsSideBySideActive.Should().BeFalse();
-        registry.ResetSideBySidePair(1920, 1080).Should().BeFalse();
+        registry.ResetSideBySidePair(windows[0], 1920, 1080).Should().BeFalse();
 
         windows[0].TiledBounds.Should().BeEmpty();
         windows[1].TiledBounds.Should().BeEmpty();

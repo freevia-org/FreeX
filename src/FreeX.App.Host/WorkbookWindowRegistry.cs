@@ -133,6 +133,15 @@ public sealed class WorkbookWindowRegistry
     /// <summary>True when scrolling one side-by-side window mirrors into its partner.</summary>
     public bool IsSynchronousScrollActive => _sideBySide.IsSynchronousScrollActive;
 
+    public bool IsSideBySideActiveFor(IWorkbookWindow requester) =>
+        _sideBySide.IsActiveFor(requester);
+
+    public bool IsSynchronousScrollActiveFor(IWorkbookWindow requester) =>
+        _sideBySide.IsSynchronousScrollActiveFor(requester);
+
+    public IWorkbookWindow? SideBySidePartnerOf(IWorkbookWindow requester) =>
+        _sideBySide.PartnerOf(requester);
+
     /// <summary>True when the window is registered and not hidden.</summary>
     public bool IsVisible(IWorkbookWindow window) =>
         window is not null && _core.IndexOf(window) >= 0 && !_hidden.Contains(window);
@@ -414,9 +423,13 @@ public sealed class WorkbookWindowRegistry
     /// active pair, and does nothing (returning false) when side-by-side is not currently active,
     /// matching Excel disabling the command outside of View Side by Side.
     /// </summary>
-    public bool ResetSideBySidePair(double workAreaWidth, double workAreaHeight)
+    public bool ResetSideBySidePair(
+        IWorkbookWindow requester,
+        double workAreaWidth,
+        double workAreaHeight)
     {
-        if (!_sideBySide.TryGetPair(out var primary, out var partner))
+        ArgumentNullException.ThrowIfNull(requester);
+        if (!_sideBySide.TryGetPairFor(requester, out var primary, out var partner))
             return false;
 
         var (primaryBounds, partnerBounds) = SideBySideLayoutPlanner.Tile(workAreaWidth, workAreaHeight);
@@ -451,6 +464,12 @@ public sealed class WorkbookWindowRegistry
     public bool SetSynchronousScroll(bool active)
     {
         return _sideBySide.SetSynchronousScroll(active);
+    }
+
+    public bool SetSynchronousScrollFor(IWorkbookWindow requester, bool active)
+    {
+        ArgumentNullException.ThrowIfNull(requester);
+        return _sideBySide.SetSynchronousScrollFor(requester, active);
     }
 
     /// <summary>

@@ -19,8 +19,9 @@ public sealed class AvaloniaWindowBoundsTranslationSourceGuardTests
         sideBySide.Should().Contain("Math.Max(MinWidth, tile.Width)");
         sideBySide.Should().Contain("Math.Max(MinHeight, tile.Height)");
 
-        ribbon.Should().Contain("var tile = AvaloniaWindowBoundsTranslator.Translate(");
-        ribbon.Should().Contain("WindowState = WindowState.Normal;");
+        ribbon.Should().Contain("var tiles = AvaloniaWindowBoundsTranslator.Translate(");
+        ribbon.Should().Contain("primary.TileThisWindowToWorkArea(tiles[0])");
+        ribbon.Should().Contain("partner.TileThisWindowToWorkArea(tiles[1])");
     }
 
     [Fact]
