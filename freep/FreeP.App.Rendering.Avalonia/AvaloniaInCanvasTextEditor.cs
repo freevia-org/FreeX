@@ -452,12 +452,11 @@ public sealed class AvaloniaInCanvasTextEditor : IDisposable
         if (!_cellEditActive || _cellTextBox is null)
             return false;
 
-        var state = AvaloniaTableCellEditAdapter.PlanSelectedCell(_editor);
-        if (!state.HasActiveCell || state.ShapeId != _editingTableShapeId)
-            return false;
-
-        CommitCellEdit();
-        return apply(_editor);
+        return PresentationTableCellOwnedActionDispatcher.TryExecute(
+            AvaloniaTableCellEditAdapter.PlanSelectedCell(_editor),
+            _editingTableShapeId,
+            CommitCellEdit,
+            () => apply(_editor));
     }
 
     public AvaloniaInCanvasTextEditor(

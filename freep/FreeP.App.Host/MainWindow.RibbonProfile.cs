@@ -159,6 +159,18 @@ public sealed partial class MainWindow
             SetFontFamily = family => WithTableEditor(editor => editor.ApplyFont(family)),
             SetFontSize = sizePt => WithTableEditor(editor => editor.ApplyFontSize(sizePt)),
             SetColor = color => WithTableEditor(editor => editor.ApplyColor(color)),
+            SetTextVerticalType = verticalType => WithCanvas(canvas =>
+                canvas.TableCellEditor?.TryApplyActiveTableCellTextVerticalType(verticalType) == true),
+            SetTableCellFill = color => WithCanvas(canvas =>
+                canvas.TableCellEditor?.TryApplyActiveTableCellFill(color) == true),
+            SetTableCellAnchor = anchor => WithCanvas(canvas =>
+                canvas.TableCellEditor?.TryApplyActiveTableCellAnchor(anchor) == true),
+            SetTableCellBorder = (side, outline) => WithCanvas(canvas =>
+                canvas.TableCellEditor?.TryApplyActiveTableCellBorder(side, outline) == true),
+            SetTableCellInset = (side, value) => WithCanvas(canvas =>
+                canvas.TableCellEditor?.TryApplyActiveTableCellInset(side, value) == true),
+            SetTableRowHeight = height => WithCanvas(canvas =>
+                canvas.TableCellEditor?.TryApplyActiveTableRowHeight(height) == true),
         },
     };
 

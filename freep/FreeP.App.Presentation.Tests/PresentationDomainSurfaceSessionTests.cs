@@ -192,6 +192,60 @@ public sealed class PresentationDomainSurfaceSessionTests
     }
 
     [Fact]
+    public void TableCellOwnedDispatcher_CommitsPendingTextBeforeMutation()
+    {
+        var presentation = Presentation.CreateEmpty();
+        var editor = new EditingSession(presentation, new PresentationCommandBus(presentation));
+        var shape = editor.InsertTable(2, 2);
+        editor.Select(shape.Id);
+        editor.SetActiveTableCell(0, 0);
+        var events = new List<string>();
+
+        PresentationTableCellOwnedActionDispatcher.TryExecute(
+                TableCellEditPlanner.PlanSelectedCell(
+                    editor.CurrentSlide,
+                    editor.SelectedShapeIds,
+                    editor.ActiveTableCell),
+                shape.Id,
+                () => events.Add("commit"),
+                () =>
+                {
+                    events.Add("mutate");
+                    return true;
+                })
+            .Should().BeTrue();
+
+        events.Should().Equal("commit", "mutate");
+    }
+
+    [Fact]
+    public void TableCellOwnedDispatcher_RejectsStaleNativeEditorOwnershipWithoutCommit()
+    {
+        var presentation = Presentation.CreateEmpty();
+        var editor = new EditingSession(presentation, new PresentationCommandBus(presentation));
+        var shape = editor.InsertTable(2, 2);
+        editor.Select(shape.Id);
+        editor.SetActiveTableCell(0, 0);
+        var events = new List<string>();
+
+        PresentationTableCellOwnedActionDispatcher.TryExecute(
+                TableCellEditPlanner.PlanSelectedCell(
+                    editor.CurrentSlide,
+                    editor.SelectedShapeIds,
+                    editor.ActiveTableCell),
+                shape.Id + 1u,
+                () => events.Add("commit"),
+                () =>
+                {
+                    events.Add("mutate");
+                    return true;
+                })
+            .Should().BeFalse();
+
+        events.Should().BeEmpty();
+    }
+
+    [Fact]
     public void DomainContextSession_OwnsWaterfallStateAndChartDialogDispatch()
     {
         var presentation = Presentation.CreateEmpty();
@@ -308,7 +362,22 @@ public sealed class PresentationDomainSurfaceSessionTests
             source.Should().Contain("TryExecuteActiveTableStructureAction(action.Kind)");
         }
         foreach (var source in new[] { wpfTableEditor, avaloniaTableEditor })
+        {
             source.Should().Contain("PresentationTableStructureActionDispatcher.TryExecute(");
+            source.Should().Contain("PresentationTableCellOwnedActionDispatcher.TryExecute(");
+        }
+        foreach (var endpoint in new[]
+                 {
+                     "SetTextVerticalType",
+                     "SetTableCellFill",
+                     "SetTableCellAnchor",
+                     "SetTableCellBorder",
+                     "SetTableCellInset",
+                     "SetTableRowHeight",
+                 })
+        {
+            wpfRibbonProfile.Should().Contain($"{endpoint} =");
+        }
         wpfRibbonProfile.Should().Contain("ExecuteCurrentTableAction(");
         wpfRibbonProfile.Should().Contain("TryExecuteInlineTableAction");
         wpfRibbonProfile.Should().NotContain("MergeTableCells = () => Editor.TryMergeActiveTableCell()");

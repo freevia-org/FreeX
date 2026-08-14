@@ -384,6 +384,47 @@ public sealed class InCanvasTableCellEditor
         ApplyCellParagraphMutation((body, selection) =>
             InCanvasTextEditPlanner.ApplyParagraphIndent(body, increase: false, selection));
 
+    public bool TryApplyActiveTableCellTextVerticalType(TextVerticalType verticalType) =>
+        TryApplyActiveTableCellCommand(editor =>
+            editor.TryApplyActiveTableCellTextVerticalType(verticalType));
+
+    public bool TryApplyActiveTableCellFill(ThemeAwareColor? color) =>
+        TryApplyActiveTableCellCommand(editor =>
+            editor.TryApplyActiveTableCellFill(color));
+
+    public bool TryApplyActiveTableCellAnchor(TableCellAnchor? anchor) =>
+        TryApplyActiveTableCellCommand(editor =>
+            editor.TryApplyActiveTableCellAnchor(anchor));
+
+    public bool TryApplyActiveTableCellBorder(
+        TableCellBorderSide side,
+        ShapeOutline? outline) =>
+        TryApplyActiveTableCellCommand(editor =>
+            editor.TryApplyActiveTableCellBorder(side, outline));
+
+    public bool TryApplyActiveTableCellInset(TableCellInsetSide side, double? insetPt) =>
+        TryApplyActiveTableCellCommand(editor =>
+            editor.TryApplyActiveTableCellInset(side, insetPt));
+
+    public bool TryApplyActiveTableRowHeight(long heightEmu) =>
+        TryApplyActiveTableCellCommand(editor =>
+            editor.TryApplyActiveTableRowHeight(heightEmu));
+
+    private bool TryApplyActiveTableCellCommand(Func<EditingSession, bool> apply)
+    {
+        if (!IsCellRichEditActive)
+            return false;
+
+        return PresentationTableCellOwnedActionDispatcher.TryExecute(
+            TableCellEditPlanner.PlanSelectedCell(
+                _editor.CurrentSlide,
+                _editor.SelectedShapeIds,
+                _editor.ActiveTableCell),
+            _editShapeId,
+            CommitCellEdit,
+            () => apply(_editor));
+    }
+
     /// <summary>
     /// Adapts the live WPF selection to the renderer-neutral paragraph mutation planner. The
     /// native document is rehydrated only after the shared model operation has run, preserving

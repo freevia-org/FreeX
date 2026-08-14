@@ -1,6 +1,31 @@
 namespace FreeP.App.Compositor;
 
 /// <summary>
+/// Owns the renderer-neutral transaction boundary for cell-owned commands issued while a native
+/// rich cell editor is active. Pending child text must be committed before fill, geometry, border,
+/// anchor, or text-direction mutations can safely read and replace the cell model.
+/// </summary>
+public static class PresentationTableCellOwnedActionDispatcher
+{
+    public static bool TryExecute(
+        TableCellEditState state,
+        uint editingShapeId,
+        Action commitPendingCellEdit,
+        Func<bool> applyCellMutation)
+    {
+        ArgumentNullException.ThrowIfNull(state);
+        ArgumentNullException.ThrowIfNull(commitPendingCellEdit);
+        ArgumentNullException.ThrowIfNull(applyCellMutation);
+
+        if (!state.HasActiveCell || state.ShapeId != editingShapeId)
+            return false;
+
+        commitPendingCellEdit();
+        return applyCellMutation();
+    }
+}
+
+/// <summary>
 /// Owns the renderer-neutral transaction boundary for table structure commands issued while
 /// a native rich cell editor is active. The native editor supplies the pending-text commit;
 /// structural validation and mutation remain in Presentation.
