@@ -235,7 +235,6 @@ internal static class FreeWAvaloniaRibbonCommands
         RegisterInsertDepth2Commands(r, editor, callbacks);
 
         // ── Developer ────────────────────────────────────────────────────────
-        RegisterDeveloperControls(r, editor);
 
         // ── Table Design contextual tab ───────────────────────────────────────
         // Table Style Options toggles — DocumentView guards no-op when outside a table.
@@ -507,16 +506,6 @@ internal static class FreeWAvaloniaRibbonCommands
         editor.ApplyHeaderFooterText(footer, result);
     }
 
-    private static void RegisterDeveloperControls(IRibbonCommandRegistry r, DocumentView editor)
-    {
-        r.Bind(FreeWRibbonCommandAction.CcText, new ActionRibbonCommand(() => editor.InsertPlainTextControl()));
-        r.Bind(FreeWRibbonCommandAction.CcRichtext, new ActionRibbonCommand(() => editor.InsertRichTextControl()));
-        r.Bind(FreeWRibbonCommandAction.CcCheckbox, new ActionRibbonCommand(() => editor.InsertCheckBoxControl()));
-        r.Bind(FreeWRibbonCommandAction.CcDate, new ActionRibbonCommand(() => editor.InsertDatePickerControl()));
-        r.Bind(FreeWRibbonCommandAction.CcDropdown, new ActionRibbonCommand(() => editor.InsertDropDownListControl()));
-        r.Bind(FreeWRibbonCommandAction.CcCombo, new ActionRibbonCommand(() => editor.InsertComboBoxControl()));
-    }
-
     private sealed class HeaderFooterDistanceCommand(DocumentView editor, bool footer) : IRibbonStatefulCommand
     {
         public void Execute(RibbonCommandContext context)
@@ -752,18 +741,27 @@ internal static class FreeWAvaloniaRibbonCommands
     {
         // ── Links ────────────────────────────────────────────────────────────
         // Hyperlink / Bookmark open small dialogs (shell callbacks) that call the model-backed editor methods.
-        var hyperlink = OptionalHostCommand(callbacks.OpenHyperlinkDialog);
-        r.Bind(FreeWRibbonCommandAction.Hyperlink, hyperlink);
-        r.Register("freew.insert-hyperlink", hyperlink);
-        r.Bind(FreeWRibbonCommandAction.EditHyperlink, OptionalHostCommand(callbacks.OpenEditHyperlinkDialog));
-        r.Bind(FreeWRibbonCommandAction.RemoveHyperlink, new ActionRibbonCommand(editor.RemoveHyperlink));
-        r.Bind(FreeWRibbonCommandAction.HyperlinkTooltip, OptionalHostCommand(callbacks.OpenHyperlinkTooltipDialog));
-        var bookmark = OptionalHostCommand(callbacks.OpenBookmarkDialog);
-        r.Bind(FreeWRibbonCommandAction.Bookmark, bookmark);
-        r.Register("freew.insert-bookmark", bookmark);
-        r.Bind(FreeWRibbonCommandAction.LinkBookmark,    new ActionRibbonCommand(callbacks.OpenLinkBookmarkDialog ?? (() => LinkToFirstBookmark(editor))));
-        r.Bind(FreeWRibbonCommandAction.BookmarkManager, OptionalHostCommand(
-            callbacks.OpenBookmarkManagerDialog ?? callbacks.OpenBookmarkDialog));
+        InsertEditingRibbonWorkflow.Register(
+            r,
+            new InsertEditingRibbonPorts(
+                Hyperlink: OptionalHostCommand(callbacks.OpenHyperlinkDialog),
+                EditHyperlink: OptionalHostCommand(callbacks.OpenEditHyperlinkDialog),
+                RemoveHyperlink: new ActionRibbonCommand(editor.RemoveHyperlink),
+                HyperlinkTooltip: OptionalHostCommand(callbacks.OpenHyperlinkTooltipDialog),
+                Bookmark: OptionalHostCommand(callbacks.OpenBookmarkDialog),
+                LinkBookmark: new ActionRibbonCommand(
+                    callbacks.OpenLinkBookmarkDialog ?? (() => LinkToFirstBookmark(editor))),
+                BookmarkManager: OptionalHostCommand(
+                    callbacks.OpenBookmarkManagerDialog ?? callbacks.OpenBookmarkDialog),
+                PrepareContentControlInsertion: () => editor.Focus(),
+                InsertPlainTextControl: () => editor.InsertPlainTextControl(),
+                InsertRichTextControl: () => editor.InsertRichTextControl(),
+                InsertCheckBoxControl: () => editor.InsertCheckBoxControl(),
+                InsertDatePickerControl: () => editor.InsertDatePickerControl(),
+                InsertDropDownListControl: () => editor.InsertDropDownListControl(),
+                InsertComboBoxControl: () => editor.InsertComboBoxControl(),
+                UpdateFields: editor.UpdateFields,
+                ToggleFieldCodes: editor.ToggleFieldCodes));
 
         // ── Cover Page ───────────────────────────────────────────────────────
         // The split-button face inserts the WPF default; each preset prepends its cover-page block layout.
@@ -809,8 +807,6 @@ internal static class FreeWAvaloniaRibbonCommands
                 Icon: new EditingActionCommand(editor, callbacks.OpenIconPickerDialog, editor.InsertIcon),
                 WordArt: new ActionRibbonCommand(() => editor.InsertWordArt()),
                 EmbeddedObject: OptionalHostCommand(callbacks.InsertObject)));
-        r.Bind(FreeWRibbonCommandAction.UpdateFields, new ActionRibbonCommand(editor.UpdateFields));
-        r.Bind(FreeWRibbonCommandAction.ToggleFieldCodes, new ActionRibbonCommand(editor.ToggleFieldCodes));
     }
 
     private static IRibbonCommand OptionalHostCommand(Action? callback) =>

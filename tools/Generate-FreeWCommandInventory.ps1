@@ -61,6 +61,7 @@ internal static class FreeWCommandInventory
         new("mailMergeWorkflowSource", "Shared Mail Merge registry source", "freew/FreeW.App.Presentation/Ribbon/MailMergeRibbonWorkflow.cs"),
         new("headerFooterWorkflowSource", "Shared Header Footer registry source", "freew/FreeW.App.Presentation/Ribbon/HeaderFooterRibbonWorkflow.cs"),
         new("designWorkflowSource", "Shared Design registry source", "freew/FreeW.App.Presentation/Ribbon/DesignRibbonWorkflow.cs"),
+        new("insertEditingWorkflowSource", "Shared Insert editing registry source", "freew/FreeW.App.Presentation/Ribbon/InsertEditingRibbonWorkflow.cs"),
     ];
 
     private static readonly ClassificationRule[] GapClassificationRules =
@@ -294,6 +295,22 @@ internal static class FreeWCommandInventory
         ["freew.watermark.urgent"] = DesignWorkflowEvidence("The URGENT watermark preset is registered by the shared Design workflow."),
         ["freew.watermark.custom"] = DesignWorkflowEvidence("Both renderers preserve their native Custom Watermark dialog behind the shared route."),
         ["freew.watermark.none"] = DesignWorkflowEvidence("Both renderers remove the watermark through the same shared mutation route."),
+        ["freew.hyperlink"] = InsertEditingWorkflowEvidence("Both renderers route hyperlink insertion through one shared command identity."),
+        ["freew.insert-hyperlink"] = InsertEditingWorkflowEvidence("The compatibility hyperlink alias resolves to the same shared native command."),
+        ["freew.edit-hyperlink"] = InsertEditingWorkflowEvidence("Both renderers preserve native hyperlink editing behind one shared route."),
+        ["freew.remove-hyperlink"] = InsertEditingWorkflowEvidence("Both renderers remove hyperlinks through one shared route."),
+        ["freew.hyperlink-tooltip"] = InsertEditingWorkflowEvidence("Both renderers preserve native hyperlink ScreenTip editing behind one shared route."),
+        ["freew.bookmark"] = InsertEditingWorkflowEvidence("Both renderers route bookmark insertion through one shared command identity."),
+        ["freew.insert-bookmark"] = InsertEditingWorkflowEvidence("The compatibility bookmark alias resolves to the same shared native command."),
+        ["freew.link-bookmark"] = InsertEditingWorkflowEvidence("Both renderers link selections to bookmarks through one shared route."),
+        ["freew.bookmark-manager"] = InsertEditingWorkflowEvidence("Both renderers preserve their native bookmark manager behind one shared route."),
+        ["freew.cc-text"] = InsertEditingWorkflowEvidence("Plain-text content-control insertion uses shared preparation and mutation ordering."),
+        ["freew.cc-richtext"] = InsertEditingWorkflowEvidence("Rich-text content-control insertion uses shared preparation and mutation ordering."),
+        ["freew.cc-checkbox"] = InsertEditingWorkflowEvidence("Check-box content-control insertion uses shared preparation and mutation ordering."),
+        ["freew.cc-date"] = InsertEditingWorkflowEvidence("Date-picker content-control insertion uses shared preparation and mutation ordering."),
+        ["freew.cc-dropdown"] = InsertEditingWorkflowEvidence("Drop-down content-control insertion uses shared preparation and mutation ordering."),
+        ["freew.cc-combo"] = InsertEditingWorkflowEvidence("Combo-box content-control insertion uses shared preparation and mutation ordering."),
+        ["freew.toggle-field-codes"] = InsertEditingWorkflowEvidence("Both renderers toggle field-code display through one shared route."),
         ["freew.header"] = HeaderFooterWorkflowEvidence("Both renderers route header insertion through the shared Header/Footer command family."),
         ["freew.footer"] = HeaderFooterWorkflowEvidence("Both renderers route footer insertion through the shared Header/Footer command family."),
         ["freew.page-number"] = HeaderFooterWorkflowEvidence("Both renderers route the primary page-number action through one shared command identity."),
@@ -662,7 +679,8 @@ internal static class FreeWCommandInventory
                     ContainsCommandLiteral(sourceTexts["pageLayoutWorkflowSource"], commandId) ||
                     ContainsCommandLiteral(sourceTexts["mailMergeWorkflowSource"], commandId) ||
                     ContainsCommandLiteral(sourceTexts["headerFooterWorkflowSource"], commandId) ||
-                    ContainsCommandLiteral(sourceTexts["designWorkflowSource"], commandId),
+                    ContainsCommandLiteral(sourceTexts["designWorkflowSource"], commandId) ||
+                    ContainsCommandLiteral(sourceTexts["insertEditingWorkflowSource"], commandId),
                 AvaloniaRegistrySource: ContainsCommandLiteral(sourceTexts["avaloniaRegistrySource"], commandId) ||
                     ContainsCommandLiteral(sourceTexts["quickPartWorkflowSource"], commandId) ||
                     ContainsCommandLiteral(sourceTexts["tableInsertionWorkflowSource"], commandId) ||
@@ -670,7 +688,8 @@ internal static class FreeWCommandInventory
                     ContainsCommandLiteral(sourceTexts["pageLayoutWorkflowSource"], commandId) ||
                     ContainsCommandLiteral(sourceTexts["mailMergeWorkflowSource"], commandId) ||
                     ContainsCommandLiteral(sourceTexts["headerFooterWorkflowSource"], commandId) ||
-                    ContainsCommandLiteral(sourceTexts["designWorkflowSource"], commandId));
+                    ContainsCommandLiteral(sourceTexts["designWorkflowSource"], commandId) ||
+                    ContainsCommandLiteral(sourceTexts["insertEditingWorkflowSource"], commandId));
             var behaviorEvidence = BehaviorEvidenceCatalog.GetValueOrDefault(commandId);
             var profileClassification = ClassifyProfile(wpfPresent, avaloniaPresent);
             var gapClassification = ClassifyGap(
@@ -843,6 +862,18 @@ internal static class FreeWCommandInventory
             AvaloniaEvidence: new BehaviorEvidenceLink(
                 Path: "freew/FreeW.App.Presentation.Tests/DesignRibbonWorkflowTests.cs",
                 Test: "DesignRibbonWorkflowTests.BothRenderersDelegateDesignIdentityToSharedPresentation"));
+
+    private static CommandBehaviorEvidence InsertEditingWorkflowEvidence(string summary) =>
+        new(
+            EvidenceId: "freew.insert-editing.shared-workflow",
+            Slice: "Insert editing command behavior",
+            Summary: summary,
+            WpfEvidence: new BehaviorEvidenceLink(
+                Path: "freew/FreeW.App.Presentation.Tests/InsertEditingRibbonWorkflowTests.cs",
+                Test: "InsertEditingRibbonWorkflowTests.ContentControlsPrepareBeforeMutationWhileFieldActionsPreserveDirectExecution"),
+            AvaloniaEvidence: new BehaviorEvidenceLink(
+                Path: "freew/FreeW.App.Presentation.Tests/InsertEditingRibbonWorkflowTests.cs",
+                Test: "InsertEditingRibbonWorkflowTests.BothRenderersDelegateInsertEditingIdentityToSharedPresentation"));
 
     private static CommandBehaviorEvidence FontEffectEvidence(string summary) =>
         new(

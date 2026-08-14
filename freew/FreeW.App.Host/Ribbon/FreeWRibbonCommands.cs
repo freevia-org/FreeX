@@ -621,12 +621,6 @@ internal static class FreeWRibbonCommands
         // renderer does not log "unknown command" warnings for the stub buttons).
         registry.Register("freew.smartart-change-layout", EmptyRibbonCommand.Instance);
         registry.Register("freew.smartart-change-colors", EmptyRibbonCommand.Instance);
-        // Insert tab — Links: prompt for a URL and apply it as a hyperlink over the selection.
-        registry.Bind(FreeWRibbonCommandAction.Hyperlink, new InsertHyperlinkCommand(editor));
-        // Insert tab — Links: manage the hyperlink at the caret — change its URL, remove it, or set a ScreenTip.
-        registry.Bind(FreeWRibbonCommandAction.EditHyperlink, new EditHyperlinkCommand(editor));
-        registry.Bind(FreeWRibbonCommandAction.RemoveHyperlink, new RemoveHyperlinkCommand(editor));
-        registry.Bind(FreeWRibbonCommandAction.HyperlinkTooltip, new HyperlinkTooltipCommand(editor));
         // Insert tab — References: prompt for footnote text and insert a footnote reference at the caret.
         var insertFootnote = new InsertFootnoteCommand(editor);
         // Insert tab — References: prompt for endnote text and insert an endnote reference at the caret.
@@ -733,12 +727,27 @@ internal static class FreeWRibbonCommands
                 () => new InsertTableOfAuthoritiesCommand(editor).Execute(RibbonCommandContext.Empty),
                 editor.RefreshTableOfAuthorities,
                 () => editor.Focus()));
-        // Insert tab — Links: name the caret's paragraph as a bookmark target (an invisible marker).
-        registry.Bind(FreeWRibbonCommandAction.Bookmark, new InsertBookmarkCommand(editor));
-        // Insert tab — Links: apply an internal link (to an existing bookmark) over the selection.
-        registry.Bind(FreeWRibbonCommandAction.LinkBookmark, new LinkToBookmarkCommand(editor));
-        // Insert tab — Links: open the Bookmark Manager (list bookmarks with Go To + Delete).
-        registry.Bind(FreeWRibbonCommandAction.BookmarkManager, new BookmarkManagerCommand(editor));
+        // Insert links/bookmarks, Developer controls, and field actions share command identity and
+        // content-control mutation ordering; WPF contributes only native dialog/editor adapters.
+        InsertEditingRibbonWorkflow.Register(
+            registry,
+            new InsertEditingRibbonPorts(
+                Hyperlink: new InsertHyperlinkCommand(editor),
+                EditHyperlink: new EditHyperlinkCommand(editor),
+                RemoveHyperlink: new RemoveHyperlinkCommand(editor),
+                HyperlinkTooltip: new HyperlinkTooltipCommand(editor),
+                Bookmark: new InsertBookmarkCommand(editor),
+                LinkBookmark: new LinkToBookmarkCommand(editor),
+                BookmarkManager: new BookmarkManagerCommand(editor),
+                PrepareContentControlInsertion: () => editor.Focus(),
+                InsertPlainTextControl: () => editor.InsertPlainTextControl(),
+                InsertRichTextControl: () => editor.InsertRichTextControl(),
+                InsertCheckBoxControl: () => editor.InsertCheckBoxControl(),
+                InsertDatePickerControl: () => editor.InsertDatePickerControl(),
+                InsertDropDownListControl: () => editor.InsertDropDownListControl(),
+                InsertComboBoxControl: () => editor.InsertComboBoxControl(),
+                UpdateFields: editor.UpdateFields,
+                ToggleFieldCodes: editor.ToggleFieldCodes));
 
         // Insert tab — Quick Parts (AutoText): a shared snippet library persisted under FreeW's data
         // folder. "Save Selection" captures the selection's text and stores it under a prompted name;
@@ -756,16 +765,6 @@ internal static class FreeWRibbonCommands
                     target.Focus();
                     target.InsertField(kind);
                 }));
-
-        // Insert tab — Controls: insert a content control (w:sdt) around the selection. The plain-text
-        // control wraps the selection (or a placeholder) as an editable region; the checkbox control
-        // drops a toggleable ☐/☒ checkbox. Both round-trip through docx as a w:sdt.
-        registry.Bind(FreeWRibbonCommandAction.CcText, new ActionRibbonCommand(() => { editor.Focus(); editor.InsertPlainTextControl(); }));
-        registry.Bind(FreeWRibbonCommandAction.CcRichtext, new ActionRibbonCommand(() => { editor.Focus(); editor.InsertRichTextControl(); }));
-        registry.Bind(FreeWRibbonCommandAction.CcCheckbox, new ActionRibbonCommand(() => { editor.Focus(); editor.InsertCheckBoxControl(); }));
-        registry.Bind(FreeWRibbonCommandAction.CcDate, new ActionRibbonCommand(() => { editor.Focus(); editor.InsertDatePickerControl(); }));
-        registry.Bind(FreeWRibbonCommandAction.CcDropdown, new ActionRibbonCommand(() => { editor.Focus(); editor.InsertDropDownListControl(); }));
-        registry.Bind(FreeWRibbonCommandAction.CcCombo, new ActionRibbonCommand(() => { editor.Focus(); editor.InsertComboBoxControl(); }));
 
         // Review tab — Comments: prompt for comment text and attach it over the current selection.
         ReviewCommentRibbonWorkflow.Register(
@@ -975,8 +974,6 @@ internal static class FreeWRibbonCommands
         foreach (var entry in headerFooterRibbon.StatefulCommands)
             stateful.Add((entry.Id, entry.Command));
         registry.Bind(FreeWRibbonCommandAction.Field, new InsertFieldCommand(resolveFieldTarget, askField));
-        registry.Bind(FreeWRibbonCommandAction.ToggleFieldCodes, new ToggleFieldCodesCommand(editor));
-        registry.Bind(FreeWRibbonCommandAction.UpdateFields, new UpdateFieldsCommand(editor));
 
         // Insert tab — Symbols: pick a glyph from a grid, or a formatted current date/time string, and
         // insert it at the caret as ordinary text (flows through the normal edit/undo path).
@@ -7766,18 +7763,6 @@ internal static class FreeWRibbonCommands
                 return; // cancelled
             editor.InsertComplexField(chosen);
         }
-    }
-
-    // Alt+F9: toggle whether the document's fields show their field codes or their results.
-    private sealed class ToggleFieldCodesCommand(DocumentView editor) : IRibbonCommand
-    {
-        public void Execute(RibbonCommandContext context) => editor.ToggleFieldCodes();
-    }
-
-    // F9: update (recompute) every field's result in the document.
-    private sealed class UpdateFieldsCommand(DocumentView editor) : IRibbonCommand
-    {
-        public void Execute(RibbonCommandContext context) => editor.UpdateFields();
     }
 
     // A modal dialog listing the insertable document field codes, grouped by category (Date and Time /
