@@ -106,7 +106,7 @@ public class AvaloniaLegalNoticesDialog : AvaloniaDialogWindow
         close.IsCancel = presentation.CloseIsCancel;
         AvaloniaCompactDialogChrome.ApplyButton(
             close,
-            new AvaloniaCompactDialogChromeStyle(FontFamily.Default),
+            AvaloniaCompactDialogChrome.WindowsStyle,
             minWidth: 84,
             isDefault: presentation.CloseIsDefault);
         close.Width = 84;

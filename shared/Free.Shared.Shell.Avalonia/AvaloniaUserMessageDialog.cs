@@ -10,7 +10,7 @@ using Free.Shared.Shell;
 namespace Free.Shared.Shell.Avalonia;
 
 /// <summary>Shared owned modal message surface for Avalonia sister applications.</summary>
-public sealed class AvaloniaUserMessageDialog : Window
+public sealed class AvaloniaUserMessageDialog : AvaloniaDialogWindow
 {
     private readonly Button _defaultButton;
 
@@ -26,8 +26,6 @@ public sealed class AvaloniaUserMessageDialog : Window
         MinHeight = 150;
         CanResize = false;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
-        AvaloniaCompactDialogChrome.ApplyWindow(this);
-
         var actionButtons = CreateActionButtons(request.Buttons);
         _defaultButton = actionButtons.Single(button => button.IsDefault);
 

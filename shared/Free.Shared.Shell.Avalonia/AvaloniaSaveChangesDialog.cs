@@ -28,7 +28,7 @@ public sealed record AvaloniaSaveChangesPromptText(
 /// <summary>
 /// Shared Avalonia dirty-gate dialog for sister document apps using <see cref="FileCommandWorkflow"/>.
 /// </summary>
-public sealed class AvaloniaSaveChangesDialog : Window
+public sealed class AvaloniaSaveChangesDialog : AvaloniaDialogWindow
 {
     private readonly Button _saveButton;
 

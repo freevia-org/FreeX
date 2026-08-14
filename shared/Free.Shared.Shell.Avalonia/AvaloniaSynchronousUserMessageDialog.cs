@@ -12,7 +12,7 @@ namespace Free.Shared.Shell.Avalonia;
 /// Avalonia has no blocking owned-dialog API, so this helper owns the single nested dispatcher pump
 /// used by sister applications that cannot change a synchronous resolver to an asynchronous one.
 /// </summary>
-public sealed class AvaloniaSynchronousUserMessageDialog : Window
+public sealed class AvaloniaSynchronousUserMessageDialog : AvaloniaDialogWindow
 {
     private readonly Button _defaultButton;
     private bool _completed;
