@@ -1842,12 +1842,7 @@ public sealed partial class MainWindow : Window
             SetPrintLayout: () => SetViewMode(DocumentViewMode.PrintLayout),
             SetWebLayout:   () => SetViewMode(DocumentViewMode.WebLayout),
             SetDraftView:   () => SetViewMode(DocumentViewMode.Draft),
-            IsPrintLayoutActive: () => !_outlineMode && !_pagedEditMode &&
-                _editor.ViewMode == DocumentViewMode.PrintLayout,
-            IsWebLayoutActive: () => !_outlineMode && !_pagedEditMode &&
-                _editor.ViewMode == DocumentViewMode.WebLayout,
-            IsDraftViewActive: () => !_outlineMode && !_pagedEditMode &&
-                _editor.ViewMode == DocumentViewMode.Draft,
+            GetDocumentViewChecks: CurrentDocumentViewChecks,
             IsNavigationPaneVisible: () => _navPane.IsVisible,
             IsRevealFormattingVisible: () => _revealPane.IsVisible,
             IsReviewingPaneVisible: () => _reviewingPane.IsVisible,
@@ -1938,7 +1933,6 @@ public sealed partial class MainWindow : Window
             ToggleSideToSide: ToggleSideToSide,
             IsSideToSideActive: () => _viewSession.CurrentDepth.IsSideToSideActive,
             TogglePagedEditView: TogglePagedEditView,
-            IsPagedEditViewActive: () => _pagedEditMode,
             // AV-INSERT2: Insert depth 2 dialog launchers (optional callbacks).
             OpenHyperlinkDialog: () => _ = OpenHyperlinkDialogAsync(),
             OpenEditHyperlinkDialog: () => _ = OpenEditHyperlinkDialogAsync(),
@@ -2744,15 +2738,18 @@ public sealed partial class MainWindow : Window
 
     private void UpdateViewModeButtons()
     {
-        var plan = _viewSession.BuildDocumentViewChecks(
-            _editor.ViewMode,
-            _outlineMode,
-            _pagedEditMode);
+        var plan = CurrentDocumentViewChecks();
         ApplyStatusToggleState(_printLayoutSwitch, plan.PrintLayout);
         ApplyStatusToggleState(_webLayoutSwitch, plan.WebLayout);
         ApplyStatusToggleState(_draftSwitch, plan.Draft);
         ApplyStatusToggleState(_pagedEditSwitch, plan.PagedEdit);
     }
+
+    private FreeWDocumentViewCheckPlan CurrentDocumentViewChecks() =>
+        _viewSession.BuildDocumentViewChecks(
+            _editor.ViewMode,
+            _outlineMode,
+            _pagedEditMode);
 
     private static void ApplyStatusToggleState(ToggleButton toggle, bool isChecked)
     {
