@@ -30,7 +30,7 @@ public sealed class FreePShellLocalizationOwnershipTests
 
         options.Should().Contain("Loc.Get(\"Options_Title\")")
             .And.Contain("Loc.Get(\"Options_RecentFilesLabel\")")
-            .And.Contain("Loc.Format(\"Options_UiLanguageCurrentHint\"");
+            .And.Contain("Loc.Get(\"Options_UiLanguageCurrentHint\")");
     }
 
     private static string Read(params string[] pathParts) =>
