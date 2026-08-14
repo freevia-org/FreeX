@@ -930,79 +930,57 @@ internal static class FreeWRibbonCommands
 
         // Insert tab — Header & Footer: prompt for header/footer text, or drop a page-number field
         // into the footer. These edit the model's Header/Footer directly (saved into docx + printed).
-        headerFooterCommands.Bind(FreeWRibbonCommandAction.Header, new HeaderFooterCommand(editor, isFooter: false, askHeaderFooterText: askHeaderFooterText));
-        headerFooterCommands.Bind(FreeWRibbonCommandAction.Footer, new HeaderFooterCommand(editor, isFooter: true, askHeaderFooterText: askHeaderFooterText));
-        // Insert > Header & Footer > Page Number gallery: top/bottom/current position + format dialog.
-        // The top-level id inserts into the footer (Word's default button-face action).
-        headerFooterCommands.Bind(FreeWRibbonCommandAction.PageNumber, new InsertPageNumberCommand(() => editor, PageNumberPosition.Bottom));
-        headerFooterCommands.Bind(FreeWRibbonCommandAction.PageNumberTop, new InsertPageNumberCommand(() => editor, PageNumberPosition.Top));
-        headerFooterCommands.Bind(FreeWRibbonCommandAction.PageNumberBottom, new InsertPageNumberCommand(() => editor, PageNumberPosition.Bottom));
-        headerFooterCommands.Bind(FreeWRibbonCommandAction.PageNumberCurrent, new InsertPageNumberCommand(resolveFieldTarget, PageNumberPosition.Current));
-        headerFooterCommands.Bind(FreeWRibbonCommandAction.PageNumberFormat, new PageNumberFormatCommand(editor));
+        IRibbonCommand EditHeaderFooterSlot(HeaderFooterSlotKind slot)
+        {
+            var slotName = HeaderFooterDialogPlanner.SlotNameFor(slot);
+            return onOpenHeaderFooterPane is not null
+                ? new OpenHeaderFooterPaneCommand(editor, slotName, onOpenHeaderFooterPane)
+                : new EditHeaderSlotCommand(editor, slotName);
+        }
+
+        IRibbonCommand NavigateHeaderFooterSlot(HeaderFooterSlotKind slot)
+        {
+            var slotName = HeaderFooterDialogPlanner.SlotNameFor(slot);
+            if (onOpenHeaderFooterPane is not null)
+                return new OpenHeaderFooterPaneCommand(editor, slotName, onOpenHeaderFooterPane);
+            return slot == HeaderFooterSlotKind.Header
+                ? new GoToHeaderCommand(editor)
+                : new GoToFooterCommand(editor);
+        }
+
+        var headerFooterRibbon = HeaderFooterRibbonWorkflow.Register(
+            headerFooterCommands,
+            new HeaderFooterRibbonBindings(
+                Header: new HeaderFooterCommand(editor, isFooter: false, askHeaderFooterText: askHeaderFooterText),
+                Footer: new HeaderFooterCommand(editor, isFooter: true, askHeaderFooterText: askHeaderFooterText),
+                PageNumber: new InsertPageNumberCommand(() => editor, PageNumberPosition.Bottom),
+                PageNumberTop: new InsertPageNumberCommand(() => editor, PageNumberPosition.Top),
+                PageNumberBottom: new InsertPageNumberCommand(() => editor, PageNumberPosition.Bottom),
+                PageNumberCurrent: new InsertPageNumberCommand(resolveFieldTarget, PageNumberPosition.Current),
+                PageNumberFormat: new PageNumberFormatCommand(editor),
+                DateTime: new InsertDateTimeCommand(resolveFieldTarget),
+                CreateEditSlotCommand: EditHeaderFooterSlot,
+                DifferentFirstPage: new DifferentFirstPageToggleCommand(editor),
+                DifferentOddEvenPages: new DifferentOddEvenPagesCommand(editor),
+                HeaderFromTop: new HeaderFromTopCommand(editor),
+                FooterFromBottom: new FooterFromBottomCommand(editor),
+                CreateNavigationCommand: NavigateHeaderFooterSlot,
+                Close: onCloseHeaderFooterPane is not null
+                    ? new ActionRibbonCommand(onCloseHeaderFooterPane)
+                    : new CloseHeaderFooterCommand(editor),
+                InsertHeaderPageNumber: new InsertIntoHeaderSlotCommand(editor, isFooter: false, InsertSlotKind.PageNumber),
+                InsertFooterPageNumber: new InsertIntoHeaderSlotCommand(editor, isFooter: true, InsertSlotKind.PageNumber),
+                InsertDateTime: new InsertIntoHeaderSlotCommand(editor, isFooter: false, InsertSlotKind.DateTime),
+                InsertDocumentInfo: new InsertIntoHeaderSlotCommand(editor, isFooter: false, InsertSlotKind.DocumentInfo)));
+        foreach (var entry in headerFooterRibbon.StatefulCommands)
+            stateful.Add((entry.Id, entry.Command));
         registry.Bind(FreeWRibbonCommandAction.Field, new InsertFieldCommand(resolveFieldTarget, askField));
         registry.Bind(FreeWRibbonCommandAction.ToggleFieldCodes, new ToggleFieldCodesCommand(editor));
         registry.Bind(FreeWRibbonCommandAction.UpdateFields, new UpdateFieldsCommand(editor));
 
-        // Header & Footer Design contextual tab — per-slot editors.
-        // Slot naming: "header"/"footer" = default; "even-header"/"even-footer" = even pages;
-        // "first-header"/"first-footer" = first page. Each writes FinalSectionHeadersFooters directly.
-        // When the host supplies onOpenHeaderFooterPane, the commands open the docked pane (which
-        // preserves run formatting). Otherwise they fall back to the plain-text dialog.
-        IRibbonCommand HfEditCmd(string slot) =>
-            onOpenHeaderFooterPane is not null
-                ? new OpenHeaderFooterPaneCommand(editor, slot, onOpenHeaderFooterPane)
-                : new EditHeaderSlotCommand(editor, slot);
-        foreach (var binding in FreeWRibbonSemanticCatalog.HeaderFooterEditSlots)
-            headerFooterCommands.Bind(binding.Action, HfEditCmd(HeaderFooterDialogPlanner.SlotNameFor(binding.Slot)));
-
-        // Header & Footer Design contextual tab — options toggles (stateful so IsChecked reflects model).
-        var diffFirstPage = new DifferentFirstPageToggleCommand(editor);
-        headerFooterCommands.Bind(FreeWRibbonCommandAction.HfDifferentFirstPage, diffFirstPage);
-        stateful.Add(("freew.hf-different-first-page", diffFirstPage));
-
-        var diffOddEven = new DifferentOddEvenPagesCommand(editor);
-        headerFooterCommands.Bind(FreeWRibbonCommandAction.HfDifferentOddEven, diffOddEven);
-        stateful.Add(("freew.hf-different-odd-even", diffOddEven));
-
-        // Header & Footer Design contextual tab — position numerics (stateful so the value tracks model).
-        var headerFromTop = new HeaderFromTopCommand(editor);
-        headerFooterCommands.Bind(FreeWRibbonCommandAction.HfHeaderFromTop, headerFromTop);
-        stateful.Add(("freew.hf-header-from-top", headerFromTop));
-
-        var footerFromBottom = new FooterFromBottomCommand(editor);
-        headerFooterCommands.Bind(FreeWRibbonCommandAction.HfFooterFromBottom, footerFromBottom);
-        stateful.Add(("freew.hf-footer-from-bottom", footerFromBottom));
-
-        // Header & Footer Design contextual tab — navigation + close.
-        // Go-to-header / go-to-footer open the pane (when available) for the default slots.
-        foreach (var binding in FreeWRibbonSemanticCatalog.HeaderFooterNavigationSlots)
-        {
-            var slotName = HeaderFooterDialogPlanner.SlotNameFor(binding.Slot);
-            var fallback = binding.Slot == HeaderFooterSlotKind.Header
-                ? (IRibbonCommand)new GoToHeaderCommand(editor)
-                : new GoToFooterCommand(editor);
-            headerFooterCommands.Bind(
-                binding.Action,
-                onOpenHeaderFooterPane is not null
-                    ? new OpenHeaderFooterPaneCommand(editor, slotName, onOpenHeaderFooterPane)
-                    : fallback);
-        }
-        // Close Header and Footer: hides the pane (when available) and returns focus to the body.
-        headerFooterCommands.Bind(FreeWRibbonCommandAction.HfClose,
-            onCloseHeaderFooterPane is not null
-                ? new ActionRibbonCommand(onCloseHeaderFooterPane)
-                : new CloseHeaderFooterCommand(editor));
-
-        // Header & Footer Design contextual tab — insert into default header/footer slot.
-        headerFooterCommands.Bind(FreeWRibbonCommandAction.HfInsertPageNumber,  new InsertIntoHeaderSlotCommand(editor, isFooter: false, InsertSlotKind.PageNumber));
-        headerFooterCommands.Bind(FreeWRibbonCommandAction.HfInsertPageNumberFooter, new InsertIntoHeaderSlotCommand(editor, isFooter: true,  InsertSlotKind.PageNumber));
-        headerFooterCommands.Bind(FreeWRibbonCommandAction.HfInsertDatetime,     new InsertIntoHeaderSlotCommand(editor, isFooter: false, InsertSlotKind.DateTime));
-        headerFooterCommands.Bind(FreeWRibbonCommandAction.HfInsertField,        new InsertIntoHeaderSlotCommand(editor, isFooter: false, InsertSlotKind.DocumentInfo));
-
         // Insert tab — Symbols: pick a glyph from a grid, or a formatted current date/time string, and
         // insert it at the caret as ordinary text (flows through the normal edit/undo path).
         registry.Bind(FreeWRibbonCommandAction.Symbol, new InsertSymbolCommand(editor));
-        headerFooterCommands.Bind(FreeWRibbonCommandAction.Datetime, new InsertDateTimeCommand(resolveFieldTarget));
 
         // Home > Font > Text Colour / Highlight: pick a colour from a small palette and apply it to
         // the selection (foreground reuses TextElement.Foreground; highlight uses TextElement.Background).

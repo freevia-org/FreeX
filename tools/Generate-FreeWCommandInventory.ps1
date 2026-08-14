@@ -59,6 +59,7 @@ internal static class FreeWCommandInventory
         new("paragraphEditingWorkflowSource", "Shared Paragraph editing registry source", "freew/FreeW.App.Presentation/Ribbon/ParagraphEditingRibbonWorkflow.cs"),
         new("pageLayoutWorkflowSource", "Shared Page Layout registry source", "freew/FreeW.App.Presentation/Ribbon/PageLayoutRibbonWorkflow.cs"),
         new("mailMergeWorkflowSource", "Shared Mail Merge registry source", "freew/FreeW.App.Presentation/Ribbon/MailMergeRibbonWorkflow.cs"),
+        new("headerFooterWorkflowSource", "Shared Header Footer registry source", "freew/FreeW.App.Presentation/Ribbon/HeaderFooterRibbonWorkflow.cs"),
     ];
 
     private static readonly ClassificationRule[] GapClassificationRules =
@@ -241,6 +242,31 @@ internal static class FreeWCommandInventory
         ["freew.page-margins-wide"] = PageLayoutEvidence("The Wide margin menu route is backed by the shared renderer-neutral preset command."),
         ["freew.page-size-letter"] = PageLayoutEvidence("The Letter paper menu route is backed by the shared renderer-neutral preset command."),
         ["freew.page-size-a4"] = PageLayoutEvidence("The A4 paper menu route is backed by the shared renderer-neutral preset command."),
+        ["freew.header"] = HeaderFooterWorkflowEvidence("Both renderers route header insertion through the shared Header/Footer command family."),
+        ["freew.footer"] = HeaderFooterWorkflowEvidence("Both renderers route footer insertion through the shared Header/Footer command family."),
+        ["freew.page-number"] = HeaderFooterWorkflowEvidence("Both renderers route the primary page-number action through one shared command identity."),
+        ["freew.page-number-top"] = HeaderFooterWorkflowEvidence("Both renderers route top-of-page numbering through the shared Header/Footer command family."),
+        ["freew.page-number-bottom"] = HeaderFooterWorkflowEvidence("Both renderers route bottom-of-page numbering through the shared Header/Footer command family."),
+        ["freew.page-number-current"] = HeaderFooterWorkflowEvidence("Both renderers route current-position numbering through the shared Header/Footer command family."),
+        ["freew.page-number-format"] = HeaderFooterWorkflowEvidence("Both renderers route page-number formatting through the shared Header/Footer command family."),
+        ["freew.datetime"] = HeaderFooterWorkflowEvidence("Both renderers route date and time insertion through the shared Header/Footer command family."),
+        ["freew.hf-edit-header"] = HeaderFooterWorkflowEvidence("The shared workflow owns the canonical default-header edit-slot mapping."),
+        ["freew.hf-edit-footer"] = HeaderFooterWorkflowEvidence("The shared workflow owns the canonical default-footer edit-slot mapping."),
+        ["freew.hf-edit-even-header"] = HeaderFooterWorkflowEvidence("The shared workflow owns the canonical even-header edit-slot mapping."),
+        ["freew.hf-edit-even-footer"] = HeaderFooterWorkflowEvidence("The shared workflow owns the canonical even-footer edit-slot mapping."),
+        ["freew.hf-edit-first-header"] = HeaderFooterWorkflowEvidence("The shared workflow owns the canonical first-page-header edit-slot mapping."),
+        ["freew.hf-edit-first-footer"] = HeaderFooterWorkflowEvidence("The shared workflow owns the canonical first-page-footer edit-slot mapping."),
+        ["freew.hf-different-first-page"] = HeaderFooterWorkflowEvidence("Both renderers preserve native Different First Page checked state behind one shared route."),
+        ["freew.hf-different-odd-even"] = HeaderFooterWorkflowEvidence("Both renderers preserve native Different Odd and Even Pages checked state behind one shared route."),
+        ["freew.hf-header-from-top"] = HeaderFooterWorkflowEvidence("Both renderers preserve native header-distance state behind one shared route."),
+        ["freew.hf-footer-from-bottom"] = HeaderFooterWorkflowEvidence("Both renderers preserve native footer-distance state behind one shared route."),
+        ["freew.hf-go-to-header"] = HeaderFooterWorkflowEvidence("The shared workflow owns the canonical header navigation-slot mapping."),
+        ["freew.hf-go-to-footer"] = HeaderFooterWorkflowEvidence("The shared workflow owns the canonical footer navigation-slot mapping."),
+        ["freew.hf-close"] = HeaderFooterWorkflowEvidence("Both renderers close Header/Footer editing through the shared command family."),
+        ["freew.hf-insert-page-number"] = HeaderFooterWorkflowEvidence("Both renderers insert a header page number through the shared command family."),
+        ["freew.hf-insert-page-number-footer"] = HeaderFooterWorkflowEvidence("Both renderers insert a footer page number through the shared command family."),
+        ["freew.hf-insert-datetime"] = HeaderFooterWorkflowEvidence("Both renderers insert Header/Footer date and time content through the shared command family."),
+        ["freew.hf-insert-field"] = HeaderFooterWorkflowEvidence("Both renderers insert Header/Footer document information through the shared command family."),
         ["freew.merge-envelopes"] = MailMergeWorkflowEvidence("Both renderers route envelope setup through the shared Mailings command family."),
         ["freew.merge-labels"] = MailMergeWorkflowEvidence("Both renderers route label setup through the shared Mailings command family."),
         ["freew.start-mail-merge"] = MailMergeWorkflowEvidence("The primary Start Mail Merge route shares the Letters command in both renderers."),
@@ -582,13 +608,15 @@ internal static class FreeWCommandInventory
                     ContainsCommandLiteral(sourceTexts["tableInsertionWorkflowSource"], commandId) ||
                     ContainsCommandLiteral(sourceTexts["paragraphEditingWorkflowSource"], commandId) ||
                     ContainsCommandLiteral(sourceTexts["pageLayoutWorkflowSource"], commandId) ||
-                    ContainsCommandLiteral(sourceTexts["mailMergeWorkflowSource"], commandId),
+                    ContainsCommandLiteral(sourceTexts["mailMergeWorkflowSource"], commandId) ||
+                    ContainsCommandLiteral(sourceTexts["headerFooterWorkflowSource"], commandId),
                 AvaloniaRegistrySource: ContainsCommandLiteral(sourceTexts["avaloniaRegistrySource"], commandId) ||
                     ContainsCommandLiteral(sourceTexts["quickPartWorkflowSource"], commandId) ||
                     ContainsCommandLiteral(sourceTexts["tableInsertionWorkflowSource"], commandId) ||
                     ContainsCommandLiteral(sourceTexts["paragraphEditingWorkflowSource"], commandId) ||
                     ContainsCommandLiteral(sourceTexts["pageLayoutWorkflowSource"], commandId) ||
-                    ContainsCommandLiteral(sourceTexts["mailMergeWorkflowSource"], commandId));
+                    ContainsCommandLiteral(sourceTexts["mailMergeWorkflowSource"], commandId) ||
+                    ContainsCommandLiteral(sourceTexts["headerFooterWorkflowSource"], commandId));
             var behaviorEvidence = BehaviorEvidenceCatalog.GetValueOrDefault(commandId);
             var profileClassification = ClassifyProfile(wpfPresent, avaloniaPresent);
             var gapClassification = ClassifyGap(
@@ -737,6 +765,18 @@ internal static class FreeWCommandInventory
             AvaloniaEvidence: new BehaviorEvidenceLink(
                 Path: "freew/FreeW.App.Presentation.Tests/MailMergeRibbonWorkflowTests.cs",
                 Test: "MailMergeRibbonWorkflowTests.BothRenderersDelegateMailingsIdentityToSharedPresentation"));
+
+    private static CommandBehaviorEvidence HeaderFooterWorkflowEvidence(string summary) =>
+        new(
+            EvidenceId: "freew.header-footer.shared-workflow",
+            Slice: "Header and Footer command behavior",
+            Summary: summary,
+            WpfEvidence: new BehaviorEvidenceLink(
+                Path: "freew/FreeW.App.Presentation.Tests/HeaderFooterRibbonWorkflowTests.cs",
+                Test: "HeaderFooterRibbonWorkflowTests.RegistersEveryPrimaryAndContextualActionWithFourStatefulHandles"),
+            AvaloniaEvidence: new BehaviorEvidenceLink(
+                Path: "freew/FreeW.App.Presentation.Tests/HeaderFooterRibbonWorkflowTests.cs",
+                Test: "HeaderFooterRibbonWorkflowTests.BothRenderersDelegateHeaderFooterMappingToSharedPresentation"));
 
     private static CommandBehaviorEvidence FontEffectEvidence(string summary) =>
         new(

@@ -201,18 +201,35 @@ internal static class FreeWAvaloniaRibbonCommands
 
         // Header / Footer — match WPF's text prompt when the shell supplies it. The fallback keeps
         // headless registry callers deterministic and retains the old region-creation behavior.
-        headerFooterCommands.Bind(FreeWRibbonCommandAction.Header, HeaderFooterTextCommand(editor, callbacks, footer: false));
-        headerFooterCommands.Bind(FreeWRibbonCommandAction.Footer, HeaderFooterTextCommand(editor, callbacks, footer: true));
-        headerFooterCommands.Bind(FreeWRibbonCommandAction.PageNumber, new ActionRibbonCommand(() => editor.InsertHeaderFooterPageNumber(footer: true)));
-        headerFooterCommands.Bind(FreeWRibbonCommandAction.PageNumberTop, new ActionRibbonCommand(() => editor.InsertHeaderFooterPageNumber(footer: false)));
-        headerFooterCommands.Bind(FreeWRibbonCommandAction.PageNumberBottom, new ActionRibbonCommand(() => editor.InsertHeaderFooterPageNumber(footer: true)));
-        headerFooterCommands.Bind(FreeWRibbonCommandAction.PageNumberCurrent, new ActionRibbonCommand(() => editor.InsertField(RunFieldKind.PageNumber)));
-        headerFooterCommands.Bind(FreeWRibbonCommandAction.PageNumberFormat, new ContextRibbonCommand(
-            context => ExecutePageNumberFormat(editor, callbacks, context)));
-        headerFooterCommands.Bind(
-            FreeWRibbonCommandAction.Datetime,
-            OptionalHostCommand(callbacks.OpenDateTimeDialog));
-        ConfigureHeaderFooterCommandFamily(headerFooterCommands, editor);
+        HeaderFooterRibbonWorkflow.Register(
+            headerFooterCommands,
+            new HeaderFooterRibbonBindings(
+                Header: HeaderFooterTextCommand(editor, callbacks, footer: false),
+                Footer: HeaderFooterTextCommand(editor, callbacks, footer: true),
+                PageNumber: new ActionRibbonCommand(() => editor.InsertHeaderFooterPageNumber(footer: true)),
+                PageNumberTop: new ActionRibbonCommand(() => editor.InsertHeaderFooterPageNumber(footer: false)),
+                PageNumberBottom: new ActionRibbonCommand(() => editor.InsertHeaderFooterPageNumber(footer: true)),
+                PageNumberCurrent: new ActionRibbonCommand(() => editor.InsertField(RunFieldKind.PageNumber)),
+                PageNumberFormat: new ContextRibbonCommand(
+                    context => ExecutePageNumberFormat(editor, callbacks, context)),
+                DateTime: OptionalHostCommand(callbacks.OpenDateTimeDialog),
+                CreateEditSlotCommand: slot => HeaderFooterSlotCommand(editor, slot),
+                DifferentFirstPage: new PageSettingCommand(
+                    editor,
+                    page => page.DifferentFirstPage = !page.DifferentFirstPage,
+                    page => page.DifferentFirstPage),
+                DifferentOddEvenPages: new PageSettingCommand(
+                    editor,
+                    page => page.DifferentOddEvenPages = !page.DifferentOddEvenPages,
+                    page => page.DifferentOddEvenPages),
+                HeaderFromTop: new HeaderFooterDistanceCommand(editor, footer: false),
+                FooterFromBottom: new HeaderFooterDistanceCommand(editor, footer: true),
+                CreateNavigationCommand: slot => HeaderFooterSlotCommand(editor, slot),
+                Close: new ActionRibbonCommand(editor.CloseHeaderFooterEditing),
+                InsertHeaderPageNumber: new ActionRibbonCommand(() => editor.InsertHeaderFooterPageNumber(footer: false)),
+                InsertFooterPageNumber: new ActionRibbonCommand(() => editor.InsertHeaderFooterPageNumber(footer: true)),
+                InsertDateTime: new ActionRibbonCommand(editor.InsertHeaderFooterDateTime),
+                InsertDocumentInfo: new ActionRibbonCommand(editor.InsertHeaderFooterDocumentInfo)));
 
         // ── Insert depth 2 (AV-INSERT2) ──────────────────────────────────────
         RegisterInsertDepth2Commands(r, editor, callbacks);
@@ -461,41 +478,12 @@ internal static class FreeWAvaloniaRibbonCommands
         editor.SetSpaceAfter(paragraph.SpaceAfterPt > 0 ? 0 : ParagraphSpacingTogglePoints);
     }
 
-    private static void ConfigureHeaderFooterCommandFamily(
-        FreeWRibbonEditorCommandFamilyBuilder family,
-        DocumentView editor)
-    {
-        foreach (var binding in FreeWRibbonSemanticCatalog.HeaderFooterEditSlots)
-            BindHeaderFooterSlot(family, editor, binding);
-        foreach (var binding in FreeWRibbonSemanticCatalog.HeaderFooterNavigationSlots)
-            BindHeaderFooterSlot(family, editor, binding);
-        family.Bind(FreeWRibbonCommandAction.HfClose, new ActionRibbonCommand(editor.CloseHeaderFooterEditing));
-
-        family.Bind(FreeWRibbonCommandAction.HfDifferentFirstPage, new PageSettingCommand(
-            editor,
-            page => page.DifferentFirstPage = !page.DifferentFirstPage,
-            page => page.DifferentFirstPage));
-        family.Bind(FreeWRibbonCommandAction.HfDifferentOddEven, new PageSettingCommand(
-            editor,
-            page => page.DifferentOddEvenPages = !page.DifferentOddEvenPages,
-            page => page.DifferentOddEvenPages));
-
-        family.Bind(FreeWRibbonCommandAction.HfHeaderFromTop, new HeaderFooterDistanceCommand(editor, footer: false));
-        family.Bind(FreeWRibbonCommandAction.HfFooterFromBottom, new HeaderFooterDistanceCommand(editor, footer: true));
-
-        family.Bind(FreeWRibbonCommandAction.HfInsertPageNumber, new ActionRibbonCommand(() => editor.InsertHeaderFooterPageNumber(footer: false)));
-        family.Bind(FreeWRibbonCommandAction.HfInsertPageNumberFooter, new ActionRibbonCommand(() => editor.InsertHeaderFooterPageNumber(footer: true)));
-        family.Bind(FreeWRibbonCommandAction.HfInsertDatetime, new ActionRibbonCommand(editor.InsertHeaderFooterDateTime));
-        family.Bind(FreeWRibbonCommandAction.HfInsertField, new ActionRibbonCommand(editor.InsertHeaderFooterDocumentInfo));
-    }
-
-    private static void BindHeaderFooterSlot(
-        FreeWRibbonEditorCommandFamilyBuilder family,
+    private static IRibbonCommand HeaderFooterSlotCommand(
         DocumentView editor,
-        FreeWRibbonHeaderFooterSlotBinding binding)
+        HeaderFooterSlotKind slot)
     {
-        var slotName = HeaderFooterDialogPlanner.SlotNameFor(binding.Slot);
-        family.Bind(binding.Action, new ActionRibbonCommand(() => editor.EditHeaderFooterSlot(slotName)));
+        var slotName = HeaderFooterDialogPlanner.SlotNameFor(slot);
+        return new ActionRibbonCommand(() => editor.EditHeaderFooterSlot(slotName));
     }
 
     private static IRibbonCommand HeaderFooterTextCommand(
