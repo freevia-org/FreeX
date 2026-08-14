@@ -2318,7 +2318,7 @@ public sealed partial class MainWindow : Window
             mode);
 
         if (plan.ExitOutlineMode)
-            ToggleOutlineView();
+            LeaveOutlineView(restorePriorView: false);
 
         if (plan.ExitPaginatedView)
             ApplyViewDepthTransition(_viewSession.RestoreLiveEditor());
@@ -2364,23 +2364,49 @@ public sealed partial class MainWindow : Window
     // sync, exactly like the Print Layout / Read Mode toggles.
     private void ToggleOutlineView()
     {
-        _outlineMode = !_outlineMode;
         if (_outlineMode)
-        {
-            _workspace.Visibility = Visibility.Collapsed;
-            _hRuler.Visibility = Visibility.Collapsed;
-            _vRuler.Visibility = Visibility.Collapsed;
-
-            _outlineView.Visibility = Visibility.Visible;
-            _outlineView.Refresh();
-        }
+            LeaveOutlineView();
         else
-        {
-            _outlineView.Visibility = Visibility.Collapsed;
-            _workspace.Visibility = Visibility.Visible;
-            ApplyRulerVisibility();
-        }
+            EnterOutlineView();
+    }
 
+    private void EnterOutlineView()
+    {
+        var plan = _viewSession.EnterOutline(_pagedEditMode);
+        if (plan.ExitPageSurface)
+            ApplyViewDepthTransition(_viewSession.RestoreLiveEditor());
+        if (plan.ExitPagedEditSurface)
+            ExitPagedEdit();
+
+        _outlineMode = plan.IsOutlineMode;
+        _workspace.Visibility = Visibility.Collapsed;
+        _hRuler.Visibility = Visibility.Collapsed;
+        _vRuler.Visibility = Visibility.Collapsed;
+        _outlineView.Visibility = Visibility.Visible;
+        _outlineView.Refresh();
+
+        RefreshOutlineViewState();
+    }
+
+    private void LeaveOutlineView(bool restorePriorView = true)
+    {
+        if (!_outlineMode)
+            return;
+
+        var plan = _viewSession.LeaveOutline(restorePriorView);
+        _outlineMode = plan.IsOutlineMode;
+        _outlineView.Visibility = Visibility.Collapsed;
+        _workspace.Visibility = Visibility.Visible;
+        ApplyRulerVisibility();
+
+        if (plan.EnterPagedEditSurface)
+            EnterPagedEdit();
+
+        RefreshOutlineViewState();
+    }
+
+    private void RefreshOutlineViewState()
+    {
         _stateStore.SetChecked("freew.outline-view", _outlineMode);
 
         // Outline and the print-family views are mutually exclusive: entering Outline clears the Print
@@ -2666,7 +2692,7 @@ public sealed partial class MainWindow : Window
         if (_viewSession.CurrentDepth.Mode != FreeWViewDepthMode.LiveEditor)
             ApplyViewDepthTransition(_viewSession.RestoreLiveEditor());
         if (_outlineMode)
-            ToggleOutlineView();
+            LeaveOutlineView(restorePriorView: false);
 
         // Commit so the panel reflects the latest edits.
         _editor.CommitToModel();

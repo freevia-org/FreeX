@@ -142,7 +142,6 @@ public sealed partial class MainWindow : Window
     // Keep the prior continuous view so entering the alias does not change the user's view when it
     // is exited again (WPF restores the live editor that was underneath its page panel).
     private DocumentViewMode _viewModeBeforePagedEdit = DocumentViewMode.PrintLayout;
-    private bool _pagedEditModeBeforeOutline;
     private bool _outlineMode;
     private double _editorMaxWidthBeforeReadMode = double.PositiveInfinity;
     private HorizontalAlignment _editorAlignmentBeforeReadMode = HorizontalAlignment.Stretch;
@@ -2684,12 +2683,12 @@ public sealed partial class MainWindow : Window
             return;
         }
 
-        if (_viewSession.CurrentDepth.Mode != FreeWViewDepthMode.LiveEditor)
+        var plan = _viewSession.EnterOutline(_pagedEditMode);
+        if (plan.ExitPageSurface)
             ApplyViewDepthTransition(_viewSession.RestoreLiveEditor(), updateStatus: false);
 
-        _pagedEditModeBeforeOutline = _pagedEditMode;
-        _pagedEditMode = false;
-        _outlineMode = true;
+        _pagedEditMode = plan.IsPagedEditMode;
+        _outlineMode = plan.IsOutlineMode;
         _workspace.Child = _outlineView;
         _outlineView.Refresh();
         UpdateViewModeButtons();
@@ -2702,8 +2701,9 @@ public sealed partial class MainWindow : Window
         if (!_outlineMode)
             return;
 
-        _outlineMode = false;
-        _pagedEditMode = restorePriorView && _pagedEditModeBeforeOutline;
+        var plan = _viewSession.LeaveOutline(restorePriorView);
+        _outlineMode = plan.IsOutlineMode;
+        _pagedEditMode = plan.IsPagedEditMode;
         if (_liveWorkspaceContent is not null)
             _workspace.Child = _liveWorkspaceContent;
         UpdateViewModeButtons();

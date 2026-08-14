@@ -113,5 +113,46 @@ public sealed class FreeWViewSessionTests
             .Should().Be(new FreeWDocumentViewCheckPlan(false, false, false, false));
         session.BuildDocumentViewChecks(mode, isOutlineMode: false, isPagedEditMode: true)
             .Should().Be(new FreeWDocumentViewCheckPlan(false, false, false, true));
+        session.BuildDocumentViewChecks(mode, isOutlineMode: true, isPagedEditMode: true)
+            .Should().Be(new FreeWDocumentViewCheckPlan(false, false, false, false));
+    }
+
+    [Fact]
+    public void OutlineTransitionsExitPageDepthAndSuspendThenRestorePagedEdit()
+    {
+        var session = new FreeWViewSession(FreeWViewDepthCapabilities.FullDesktop);
+        session.Execute(FreeWViewDepthCommand.ToggleMultiplePages);
+
+        var enter = session.EnterOutline(isPagedEditMode: true);
+        enter.Should().Be(new FreeWOutlineViewTransition(
+            IsOutlineMode: true,
+            IsPagedEditMode: false,
+            ExitPageSurface: true,
+            ExitPagedEditSurface: true,
+            EnterPagedEditSurface: false));
+
+        var leave = session.LeaveOutline();
+        leave.Should().Be(new FreeWOutlineViewTransition(
+            IsOutlineMode: false,
+            IsPagedEditMode: true,
+            ExitPageSurface: false,
+            ExitPagedEditSurface: false,
+            EnterPagedEditSurface: true));
+    }
+
+    [Fact]
+    public void OutlineTransitionCanDiscardSuspendedPagedEditForAnExplicitViewChange()
+    {
+        var session = new FreeWViewSession(FreeWViewDepthCapabilities.FullDesktop);
+
+        session.EnterOutline(isPagedEditMode: true);
+
+        session.LeaveOutline(restorePriorView: false)
+            .Should().Be(new FreeWOutlineViewTransition(
+                IsOutlineMode: false,
+                IsPagedEditMode: false,
+                ExitPageSurface: false,
+                ExitPagedEditSurface: false,
+                EnterPagedEditSurface: false));
     }
 }
