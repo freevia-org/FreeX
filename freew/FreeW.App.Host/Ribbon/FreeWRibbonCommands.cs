@@ -144,7 +144,6 @@ internal static class FreeWRibbonCommands
         var onReadModePageColor = hostPorts?.ApplyReadModePageColor;
         var onNewWindow = hostPorts?.NewWindow;
         var onArrangeAll = hostPorts?.ArrangeAll;
-        var onToggleBalloons = hostPorts?.ToggleReviewBalloons;
         var askHeaderFooterText = nativePorts.AskHeaderFooterText;
         var onOpenMailMergeErrorReport = hostPorts?.OpenMailMergeErrorReport;
         var onPrintMailMergeDocument = hostPorts?.PrintMailMergeDocument;
@@ -800,12 +799,20 @@ internal static class FreeWRibbonCommands
 
         // Review tab — Show Markup > Show Revisions in Balloons: toggle the right-margin balloon overlay.
         // Comments and tracked-change revisions render as rounded rectangle callouts connected to their
-        // anchored text by dashed leader lines, in a 200px strip to the right of the editor. The callback
-        // is supplied by the host (BalloonOverlay.Toggle()); a no-op is registered in unit-test contexts.
-        if (onToggleBalloons is not null)
-            registry.Bind(FreeWRibbonCommandAction.ShowMarkupBalloons, new ActionRibbonCommand(onToggleBalloons));
+        // anchored text by dashed leader lines. Preserve the shared host-profile toggle so WPF projects
+        // the live checked state exactly like Avalonia; editor-only contexts fail closed.
+        if (hostCommands?.ShowMarkupBalloons is { } showMarkupBalloons)
+        {
+            stateful.Add((
+                FreeWRibbonCommandWorkflow.GetPrimaryCommandId(FreeWRibbonCommandAction.ShowMarkupBalloons),
+                showMarkupBalloons));
+        }
         else
-            registry.Bind(FreeWRibbonCommandAction.ShowMarkupBalloons, EmptyRibbonCommand.Instance);
+        {
+            registry.Bind(
+                FreeWRibbonCommandAction.ShowMarkupBalloons,
+                FreeWRibbonExecutionProfile.UnavailableCommand);
+        }
 
         // Review tab — Proofing: custom dictionary + spelling options. The custom dictionary is a
         // word-per-line .lex file persisted under FreeW's data folder; its Uri is registered with the

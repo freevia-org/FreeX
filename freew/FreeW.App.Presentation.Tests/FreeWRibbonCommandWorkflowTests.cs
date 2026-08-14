@@ -183,7 +183,7 @@ public sealed class FreeWRibbonCommandWorkflowTests
         };
         var bindings = new FreeWRibbonCommandBindingPorts();
 
-        FreeWRibbonHostExecutionProfile.Register(
+        var hostCommands = FreeWRibbonHostExecutionProfile.Register(
             bindings,
             ports,
             registerFileAdapterCommands: true);
@@ -198,6 +198,7 @@ public sealed class FreeWRibbonCommandWorkflowTests
         registry.TryGet("freew.reviewing-pane", out var reviewingPane).Should().BeTrue();
         registry.TryGet("freew.show-notes", out var notesPane).Should().BeTrue();
         registry.TryGet("freew.show-markup-balloons", out var balloons).Should().BeTrue();
+        hostCommands.ShowMarkupBalloons.Should().BeSameAs(balloons);
 
         cut!.Execute(RibbonCommandContext.Empty);
         find!.Execute(RibbonCommandContext.Empty);
@@ -670,6 +671,9 @@ public sealed class FreeWRibbonCommandWorkflowTests
         copiedIds.Should().BeEmpty();
         wpf.Should().Contain("new FreeWRibbonCommandBindingPorts()");
         avalonia.Should().Contain("new FreeWRibbonCommandBindingPorts()");
+        wpf.Should().Contain("hostCommands?.ShowMarkupBalloons is { } showMarkupBalloons");
+        wpf.Should().NotContain("new ActionRibbonCommand(onToggleBalloons)");
+        wpf.Should().NotContain("var onToggleBalloons");
         wpf.Should().Contain("return FreeWRibbonExecutionProfile.Build(registry).Registry;");
         avalonia.Should().Contain("return FreeWRibbonExecutionProfile.Build(r).Registry;");
         wpf.Should().NotContain(".Build().Registry");
