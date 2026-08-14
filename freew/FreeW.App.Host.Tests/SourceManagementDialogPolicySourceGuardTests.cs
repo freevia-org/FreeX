@@ -85,10 +85,11 @@ public sealed class SourceManagementDialogPolicySourceGuardTests
         var source = ReadHostRibbonSource();
 
         source.Should().Contain("SizeToContent = SizeToContent.WidthAndHeight,");
-        source.Should().Contain("Content = text.CopyToCurrentButtonLabel, MinWidth = 72");
-        source.Should().Contain("Content = text.CopyToMasterButtonLabel, MinWidth = 72");
-        source.Should().Contain("MinWidth = 220,");
-        source.Should().Contain("MinHeight = 180,");
+        source.Should().Contain("Content = text.CopyToCurrentButtonLabel,");
+        source.Should().Contain("Content = text.CopyToMasterButtonLabel,");
+        source.Should().Contain("MinWidth = ManageSourcesDialogVisualMetrics.ButtonMinimumWidth");
+        source.Should().Contain("MinWidth = ManageSourcesDialogVisualMetrics.ListMinimumWidth");
+        source.Should().Contain("MinHeight = ManageSourcesDialogVisualMetrics.ListMinimumHeight");
     }
 
     private static string ReadHostRibbonSource()

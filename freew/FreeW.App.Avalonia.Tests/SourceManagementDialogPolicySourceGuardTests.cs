@@ -86,7 +86,7 @@ public sealed class SourceManagementDialogPolicySourceGuardTests
         source.Should().NotContain("Width = 620;");
         source.Should().Contain("Button(text.CopyToCurrentButtonLabel, () => _ = CopyMasterToCurrentAsync())");
         source.Should().Contain("Button(text.CopyToMasterButtonLabel, () => _ = CopyCurrentToMasterAsync())");
-        source.Should().Contain("ApplyButton(button, DialogChromeStyle, minWidth: 72");
+        source.Should().Contain("minWidth: ManageSourcesDialogVisualMetrics.ButtonMinimumWidth");
     }
 
     private static string ReadReferencesDialogsSource()

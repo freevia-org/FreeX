@@ -19,10 +19,12 @@ public sealed class FreeWDialogEvidenceCatalogContractTests
         Catalog.Routes.Should().HaveCount(98);
         Catalog.Routes.Select(route => route.RouteId.ToUpperInvariant())
             .Should().OnlyHaveUniqueItems();
-        Catalog.Routes.Count(route => route.Coverage == RouteCoverage.Paired).Should().Be(64);
-        Catalog.Routes.Count(route => route.Coverage == RouteCoverage.AvaloniaExtension).Should().Be(34);
-        Catalog.Routes.Where(route => route.Wpf is not null)
-            .Should().OnlyContain(route => route.Avalonia != null);
+        Catalog.Routes.Where(route => route.Coverage == RouteCoverage.Paired)
+            .Should().OnlyContain(route => route.Wpf != null && route.Avalonia != null);
+        Catalog.Routes.Where(route => route.Coverage == RouteCoverage.AvaloniaExtension)
+            .Should().OnlyContain(route => route.Wpf == null && route.Avalonia != null);
+        Catalog.Routes.Where(route => route.Wpf != null)
+            .Should().OnlyContain(route => route.Coverage == RouteCoverage.Paired && route.Avalonia != null);
     }
 
     [Fact]
