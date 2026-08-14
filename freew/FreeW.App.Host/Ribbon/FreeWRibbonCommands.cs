@@ -690,30 +690,38 @@ internal static class FreeWRibbonCommands
         registry.Bind(FreeWRibbonCommandAction.RemoveHyperlink, new RemoveHyperlinkCommand(editor));
         registry.Bind(FreeWRibbonCommandAction.HyperlinkTooltip, new HyperlinkTooltipCommand(editor));
         // Insert tab — References: prompt for footnote text and insert a footnote reference at the caret.
-        referenceCommands.Bind(FreeWRibbonCommandAction.Footnote, new InsertFootnoteCommand(editor));
+        var insertFootnote = new InsertFootnoteCommand(editor);
         // Insert tab — References: prompt for endnote text and insert an endnote reference at the caret.
-        referenceCommands.Bind(FreeWRibbonCommandAction.Endnote, new InsertEndnoteCommand(editor));
-        referenceCommands.Bind(FreeWRibbonCommandAction.NextFootnote, new NavigateNoteCommand(editor, footnote: true, previous: false));
-        referenceCommands.Bind(FreeWRibbonCommandAction.PreviousFootnote, new NavigateNoteCommand(editor, footnote: true, previous: true));
-        referenceCommands.Bind(FreeWRibbonCommandAction.NextEndnote, new NavigateNoteCommand(editor, footnote: false, previous: false));
-        referenceCommands.Bind(FreeWRibbonCommandAction.PreviousEndnote, new NavigateNoteCommand(editor, footnote: false, previous: true));
-        if (onToggleNotesPane is not null && isNotesPaneVisible is not null)
-        {
-            var notesPaneCmd = referenceCommands.BindToggle(FreeWRibbonCommandAction.ShowNotes,
-                onToggleNotesPane,
+        var insertEndnote = new InsertEndnoteCommand(editor);
+        var nextFootnote = new NavigateNoteCommand(editor, footnote: true, previous: false);
+        var previousFootnote = new NavigateNoteCommand(editor, footnote: true, previous: true);
+        var nextEndnote = new NavigateNoteCommand(editor, footnote: false, previous: false);
+        var previousEndnote = new NavigateNoteCommand(editor, footnote: false, previous: true);
+        var showNotes = new ShowNotesCommand(editor);
+        var footnoteEndnoteOptions = new FootnoteEndnoteOptionsCommand(editor);
+        var notesPaneCmd = NoteReferenceRibbonWorkflow.Register(
+            referenceCommands,
+            new NoteReferenceRibbonPorts(
+                () => insertFootnote.Execute(RibbonCommandContext.Empty),
+                () => insertEndnote.Execute(RibbonCommandContext.Empty),
+                () => nextFootnote.Execute(RibbonCommandContext.Empty),
+                () => previousFootnote.Execute(RibbonCommandContext.Empty),
+                () => nextEndnote.Execute(RibbonCommandContext.Empty),
+                () => previousEndnote.Execute(RibbonCommandContext.Empty),
+                () => showNotes.Execute(RibbonCommandContext.Empty),
+                onToggleNotesPane is null ? null : () =>
+                {
+                    editor.CommitToModel();
+                    onToggleNotesPane();
+                },
                 isNotesPaneVisible,
-                prepareExecution: editor.CommitToModel);
+                () => footnoteEndnoteOptions.Execute(RibbonCommandContext.Empty)));
+        if (notesPaneCmd is not null)
+        {
             stateful.Add((
                 FreeWRibbonCommandWorkflow.GetPrimaryCommandId(FreeWRibbonCommandAction.ShowNotes),
                 notesPaneCmd));
         }
-        else
-        {
-            referenceCommands.Bind(FreeWRibbonCommandAction.ShowNotes, new ShowNotesCommand(editor));
-        }
-        // Insert tab — References: open the Footnote and Endnote numbering options dialog (number format,
-        // start-at, restart mode). Applies to w:footnotePr / w:endnotePr in settings.xml.
-        referenceCommands.Bind(FreeWRibbonCommandAction.FootnoteEndnoteOptions, new FootnoteEndnoteOptionsCommand(editor));
         // Insert tab — References: generate a Table of Contents from the heading outline at the caret,
         // and rebuild it in place (remove the prior TOC region + re-insert). Both route through the bus.
         referenceCommands.Bind(FreeWRibbonCommandAction.Toc, new ActionRibbonCommand(() => { editor.Focus(); editor.InsertTableOfContents(); }));

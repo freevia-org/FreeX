@@ -1109,32 +1109,19 @@ internal static class FreeWAvaloniaRibbonCommands
         FreeWRibbonHostExecutionPorts callbacks)
     {
         // Footnotes & Endnotes — insert an empty note + reference marker at the caret.
-        var footnote = new ActionRibbonCommand(
-            callbacks.OpenFootnoteDialog ?? (() => editor.InsertFootnote()));
-        family.Bind(FreeWRibbonCommandAction.Footnote, footnote);
-        family.Register("freew.insert-footnote", footnote);
-        family.Bind(FreeWRibbonCommandAction.NextFootnote, new ActionRibbonCommand(() => editor.MoveToNextFootnote()));
-        family.Bind(FreeWRibbonCommandAction.PreviousFootnote, new ActionRibbonCommand(() => editor.MoveToPreviousFootnote()));
-        family.Bind(FreeWRibbonCommandAction.NextEndnote, new ActionRibbonCommand(() => editor.MoveToNextEndnote()));
-        family.Bind(FreeWRibbonCommandAction.PreviousEndnote, new ActionRibbonCommand(() => editor.MoveToPreviousEndnote()));
-        if (callbacks.ToggleNotesPane is { } toggle && callbacks.IsNotesPaneVisible is { } isVisible)
-        {
-            family.BindToggle(FreeWRibbonCommandAction.ShowNotes,
-                toggle,
-                isVisible);
-        }
-        else
-        {
-            family.Bind(FreeWRibbonCommandAction.ShowNotes,
-                FreeWRibbonExecutionProfile.UnavailableCommand);
-        }
-        family.Bind(FreeWRibbonCommandAction.FootnoteEndnoteOptions,
-            OptionalHostCommand(callbacks.OpenFootnoteEndnoteOptionsDialog));
-
-        var endnote = new ActionRibbonCommand(
-            callbacks.OpenEndnoteDialog ?? (() => editor.InsertEndnote()));
-        family.Bind(FreeWRibbonCommandAction.Endnote, endnote);
-        family.Register("freew.insert-endnote", endnote);
+        NoteReferenceRibbonWorkflow.Register(
+            family,
+            new NoteReferenceRibbonPorts(
+                callbacks.OpenFootnoteDialog ?? (() => editor.InsertFootnote()),
+                callbacks.OpenEndnoteDialog ?? (() => editor.InsertEndnote()),
+                () => editor.MoveToNextFootnote(),
+                () => editor.MoveToPreviousFootnote(),
+                () => editor.MoveToNextEndnote(),
+                () => editor.MoveToPreviousEndnote(),
+                OpenNotes: null,
+                callbacks.ToggleNotesPane,
+                callbacks.IsNotesPaneVisible,
+                callbacks.OpenFootnoteEndnoteOptionsDialog));
 
         // Table of Contents — generate from the heading outline / regenerate in place.
         var toc = new ActionRibbonCommand(editor.InsertTableOfContents);
