@@ -14,6 +14,8 @@ public static class CompactDialogVisualTokens
     public const double ButtonPaddingVertical = 3;
     public const double TextBoxPaddingHorizontal = 5;
     public const double TextBoxPaddingVertical = 3;
+    public const double ComboBoxPaddingHorizontal = 5;
+    public const double ComboBoxPaddingVertical = 2;
     public const double ButtonCornerRadius = 3;
     public const double BorderThickness = 1;
 

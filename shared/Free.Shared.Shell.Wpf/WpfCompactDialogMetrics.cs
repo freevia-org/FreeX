@@ -20,6 +20,12 @@ public static class WpfCompactDialogMetrics
         CompactDialogVisualTokens.TextBoxPaddingHorizontal,
         CompactDialogVisualTokens.TextBoxPaddingVertical);
 
+    public static Thickness ComboBoxPadding { get; } = new(
+        CompactDialogVisualTokens.ComboBoxPaddingHorizontal,
+        CompactDialogVisualTokens.ComboBoxPaddingVertical,
+        CompactDialogVisualTokens.ComboBoxPaddingHorizontal,
+        CompactDialogVisualTokens.ComboBoxPaddingVertical);
+
     public static Thickness UniformBorderThickness { get; } = new(
         CompactDialogVisualTokens.BorderThickness);
 
