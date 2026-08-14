@@ -130,32 +130,26 @@ internal sealed class ChartOptionsDialogForm :
         ArgumentNullException.ThrowIfNull(cancel);
 
         var body = new StackPanel();
-        foreach (var group in plan.Groups)
-        {
-            if (!string.IsNullOrWhiteSpace(group.Header))
+        var renderer = new ChartOptionsDialogNativeRenderer<Control, FrameworkElement>(
+            CreateText,
+            CreateChoice,
+            CreateToggle,
+            CreateFieldRow,
+            (header, hasContent) => body.Children.Add(new TextBlock
             {
-                body.Children.Add(new TextBlock
-                {
-                    Text = group.Header,
-                    FontWeight = FontWeights.SemiBold,
-                    Margin = new Thickness(0, body.Children.Count == 0 ? 0 : 8, 0, 8),
-                });
-            }
-
-            foreach (var field in group.Fields)
-                body.Children.Add(CreateField(field));
-        }
-
-        if (!string.IsNullOrWhiteSpace(plan.Hint))
-        {
-            body.Children.Add(new TextBlock
+                Text = header,
+                FontWeight = FontWeights.SemiBold,
+                Margin = new Thickness(0, hasContent ? 8 : 0, 0, 8),
+            }),
+            row => body.Children.Add(row),
+            hint => body.Children.Add(new TextBlock
             {
-                Text = plan.Hint,
+                Text = hint,
                 TextWrapping = TextWrapping.Wrap,
                 Margin = new Thickness(0, 2, 0, 0),
                 Opacity = 0.7,
-            });
-        }
+            }));
+        renderer.Render(plan);
 
         var root = new Grid { Margin = new Thickness(14) };
         root.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
@@ -183,20 +177,30 @@ internal sealed class ChartOptionsDialogForm :
 
     public FrameworkElement Content { get; }
 
-    private FrameworkElement CreateField(ChartOptionsDialogFieldPlan field)
+    private static Control CreateText(ChartOptionsDialogFieldPlan field) =>
+        new TextBox { Text = field.Text };
+
+    private ComboBox CreateChoice(ChartOptionsDialogFieldPlan field)
     {
-        Control control = field.ControlKind switch
+        var combo = new ComboBox
         {
-            ChartOptionsDialogControlKind.Text => new TextBox { Text = field.Text },
-            ChartOptionsDialogControlKind.Choice => CreateChoice(field),
-            ChartOptionsDialogControlKind.Toggle => new CheckBox
-            {
-                Content = field.Label,
-                IsChecked = field.IsChecked,
-                IsThreeState = field.IsThreeState,
-            },
-            _ => throw new ArgumentOutOfRangeException(nameof(field.ControlKind)),
+            ItemsSource = field.ChoiceLabels,
+            SelectedIndex = field.SelectedIndex,
         };
+        combo.SelectionChanged += (_, _) => NotifyValueChanged(field.Id);
+        return combo;
+    }
+
+    private static Control CreateToggle(ChartOptionsDialogFieldPlan field) =>
+        new CheckBox
+        {
+            Content = field.Label,
+            IsChecked = field.IsChecked,
+            IsThreeState = field.IsThreeState,
+        };
+
+    private FrameworkElement CreateFieldRow(ChartOptionsDialogFieldPlan field, Control control)
+    {
         control.MinWidth = field.MinimumControlWidth;
         control.IsEnabled = field.IsEnabled;
         PresentationDialogControlAdapter.ApplySemantic(
@@ -212,16 +216,5 @@ internal sealed class ChartOptionsDialogForm :
             row.Margin = new Thickness(0, 0, 0, 8);
         FormSession.Register(field.Id, control, row);
         return row;
-    }
-
-    private ComboBox CreateChoice(ChartOptionsDialogFieldPlan field)
-    {
-        var combo = new ComboBox
-        {
-            ItemsSource = field.ChoiceLabels,
-            SelectedIndex = field.SelectedIndex,
-        };
-        combo.SelectionChanged += (_, _) => NotifyValueChanged(field.Id);
-        return combo;
     }
 }

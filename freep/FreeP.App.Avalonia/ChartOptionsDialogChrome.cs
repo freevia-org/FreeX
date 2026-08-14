@@ -141,31 +141,25 @@ internal sealed class ChartOptionsDialogForm :
         ArgumentNullException.ThrowIfNull(cancel);
 
         var body = new StackPanel { Spacing = 8 };
-        foreach (var group in plan.Groups)
-        {
-            if (!string.IsNullOrWhiteSpace(group.Header))
+        var renderer = new ChartOptionsDialogNativeRenderer<Control, Control>(
+            CreateText,
+            CreateChoice,
+            CreateToggle,
+            CreateFieldRow,
+            (header, hasContent) => body.Children.Add(new TextBlock
             {
-                body.Children.Add(new TextBlock
-                {
-                    Text = group.Header,
-                    FontWeight = FontWeight.SemiBold,
-                    Margin = new Thickness(0, body.Children.Count == 0 ? 0 : 8, 0, 0),
-                });
-            }
-
-            foreach (var field in group.Fields)
-                body.Children.Add(CreateField(field));
-        }
-
-        if (!string.IsNullOrWhiteSpace(plan.Hint))
-        {
-            body.Children.Add(new TextBlock
+                Text = header,
+                FontWeight = FontWeight.SemiBold,
+                Margin = new Thickness(0, hasContent ? 8 : 0, 0, 0),
+            }),
+            row => body.Children.Add(row),
+            hint => body.Children.Add(new TextBlock
             {
-                Text = plan.Hint,
+                Text = hint,
                 Opacity = 0.7,
                 TextWrapping = global::Avalonia.Media.TextWrapping.Wrap,
-            });
-        }
+            }));
+        renderer.Render(plan);
 
         var root = new Grid
         {
@@ -194,20 +188,30 @@ internal sealed class ChartOptionsDialogForm :
 
     public Control Content { get; }
 
-    private Control CreateField(ChartOptionsDialogFieldPlan field)
+    private static Control CreateText(ChartOptionsDialogFieldPlan field) =>
+        new TextBox { Text = field.Text };
+
+    private ComboBox CreateChoice(ChartOptionsDialogFieldPlan field)
     {
-        Control control = field.ControlKind switch
+        var combo = new ComboBox
         {
-            ChartOptionsDialogControlKind.Text => new TextBox { Text = field.Text },
-            ChartOptionsDialogControlKind.Choice => CreateChoice(field),
-            ChartOptionsDialogControlKind.Toggle => new CheckBox
-            {
-                Content = field.Label,
-                IsChecked = field.IsChecked,
-                IsThreeState = field.IsThreeState,
-            },
-            _ => throw new ArgumentOutOfRangeException(nameof(field.ControlKind)),
+            ItemsSource = field.ChoiceLabels,
+            SelectedIndex = field.SelectedIndex,
         };
+        combo.SelectionChanged += (_, _) => NotifyValueChanged(field.Id);
+        return combo;
+    }
+
+    private static Control CreateToggle(ChartOptionsDialogFieldPlan field) =>
+        new CheckBox
+        {
+            Content = field.Label,
+            IsChecked = field.IsChecked,
+            IsThreeState = field.IsThreeState,
+        };
+
+    private Control CreateFieldRow(ChartOptionsDialogFieldPlan field, Control control)
+    {
         control.MinWidth = field.MinimumControlWidth;
         control.IsEnabled = field.IsEnabled;
         PresentationDialogControlAdapter.ApplySemantic(
@@ -221,16 +225,5 @@ internal sealed class ChartOptionsDialogForm :
         row.IsVisible = field.IsVisible;
         FormSession.Register(field.Id, control, row);
         return row;
-    }
-
-    private ComboBox CreateChoice(ChartOptionsDialogFieldPlan field)
-    {
-        var combo = new ComboBox
-        {
-            ItemsSource = field.ChoiceLabels,
-            SelectedIndex = field.SelectedIndex,
-        };
-        combo.SelectionChanged += (_, _) => NotifyValueChanged(field.Id);
-        return combo;
     }
 }

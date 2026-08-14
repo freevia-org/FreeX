@@ -6,19 +6,28 @@ namespace FreeP.App.Host;
 
 internal sealed class SectionZoomDialog : Free.Shared.Ribbon.Wpf.DialogWindow
 {
-    private readonly ZoomSingleTargetDialogSession _session;
-    private readonly ComboBox _targetCombo;
+    private readonly ZoomSingleTargetDialogNativeBinding<ComboBox> _binding;
+    private ZoomSingleTargetDialogSession _session => _binding.Session;
 
-    internal string? SelectedTargetSectionId => _session.SelectedTargetId;
+    internal string? SelectedTargetSectionId => _binding.SelectedTargetId;
 
     internal SectionZoomDialog(
         IReadOnlyList<(string Id, string DisplayName)> options,
         string? title = null,
         string? selectedTargetId = null)
     {
-        _session = new ZoomSingleTargetDialogSession(
+        _binding = new(
             ZoomTargetDialogKind.Section,
             options,
+            session => new ComboBox
+            {
+                ItemsSource = session.Options,
+                DisplayMemberPath = nameof(ZoomTargetOption.DisplayName),
+                SelectedIndex = session.InitialSelectedIndex,
+                MinWidth = 260,
+            },
+            static control => control.SelectedIndex,
+            () => DialogResult = true,
             selectedTargetId,
             title);
         var surface = _session.Surface;
@@ -29,14 +38,8 @@ internal sealed class SectionZoomDialog : Free.Shared.Ribbon.Wpf.DialogWindow
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
         ZoomDialogChrome.Apply(this, surface);
 
-        _targetCombo = new ComboBox
-        {
-            ItemsSource = _session.Options,
-            DisplayMemberPath = nameof(ZoomTargetOption.DisplayName),
-            SelectedIndex = _session.InitialSelectedIndex,
-            MinWidth = 260,
-        };
-        ZoomDialogChrome.ApplyField(_targetCombo, surface.Field(ZoomTargetDialogField.Target));
+        var targetCombo = _binding.Control;
+        ZoomDialogChrome.ApplyField(targetCombo, surface.Field(ZoomTargetDialogField.Target));
 
         var grid = new Grid { Margin = new Thickness(14) };
         grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
@@ -51,9 +54,9 @@ internal sealed class SectionZoomDialog : Free.Shared.Ribbon.Wpf.DialogWindow
         };
         Grid.SetRow(label, 0);
         grid.Children.Add(label);
-        Grid.SetRow(_targetCombo, 0);
-        Grid.SetColumn(_targetCombo, 1);
-        grid.Children.Add(_targetCombo);
+        Grid.SetRow(targetCombo, 0);
+        Grid.SetColumn(targetCombo, 1);
+        grid.Children.Add(targetCombo);
 
         var buttons = new StackPanel
         {
@@ -64,7 +67,7 @@ internal sealed class SectionZoomDialog : Free.Shared.Ribbon.Wpf.DialogWindow
         var ok = ZoomDialogChrome.MakeButton(
             surface.Action(ZoomTargetDialogAction.Accept),
             Apply,
-            _session.CanAccept);
+            _binding.Session.CanAccept);
         ok.Margin = new Thickness(0, 0, 8, 0);
         buttons.Children.Add(ok);
         buttons.Children.Add(ZoomDialogChrome.MakeButton(
@@ -78,7 +81,6 @@ internal sealed class SectionZoomDialog : Free.Shared.Ribbon.Wpf.DialogWindow
 
     private void Apply()
     {
-        if (_session.TryAccept(_targetCombo.SelectedIndex))
-            DialogResult = true;
+        _binding.TryAccept();
     }
 }

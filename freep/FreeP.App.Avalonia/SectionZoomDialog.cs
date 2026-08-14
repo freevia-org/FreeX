@@ -7,19 +7,27 @@ namespace FreeP.App.Avalonia;
 
 internal sealed class SectionZoomDialog : FreePDialogWindow
 {
-    private readonly ZoomSingleTargetDialogSession _session;
-    private readonly ComboBox _targetCombo;
+    private readonly ZoomSingleTargetDialogNativeBinding<ComboBox> _binding;
+    private ZoomSingleTargetDialogSession _session => _binding.Session;
 
-    internal string? SelectedTargetSectionId => _session.SelectedTargetId;
+    internal string? SelectedTargetSectionId => _binding.SelectedTargetId;
 
     internal SectionZoomDialog(
         IReadOnlyList<(string Id, string DisplayName)> options,
         string? title = null,
         string? selectedTargetId = null)
     {
-        _session = new ZoomSingleTargetDialogSession(
+        _binding = new(
             ZoomTargetDialogKind.Section,
             options,
+            session => new ComboBox
+            {
+                ItemsSource = session.Options,
+                SelectedIndex = session.InitialSelectedIndex,
+                MinWidth = 260,
+            },
+            static control => control.SelectedIndex,
+            () => Close(true),
             selectedTargetId,
             title);
         var surface = _session.Surface;
@@ -30,18 +38,13 @@ internal sealed class SectionZoomDialog : FreePDialogWindow
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
         ZoomDialogChrome.Apply(this, surface);
 
-        _targetCombo = new ComboBox
-        {
-            ItemsSource = _session.Options,
-            SelectedIndex = _session.InitialSelectedIndex,
-            MinWidth = 260,
-        };
-        ZoomDialogChrome.ApplyField(_targetCombo, surface.Field(ZoomTargetDialogField.Target));
+        var targetCombo = _binding.Control;
+        ZoomDialogChrome.ApplyField(targetCombo, surface.Field(ZoomTargetDialogField.Target));
 
         var ok = ZoomDialogChrome.MakeButton(
             surface.Action(ZoomTargetDialogAction.Accept),
             Apply,
-            _session.CanAccept);
+            _binding.Session.CanAccept);
         Content = new StackPanel
         {
             Margin = new Thickness(14),
@@ -58,7 +61,7 @@ internal sealed class SectionZoomDialog : FreePDialogWindow
                             Text = surface.Field(ZoomTargetDialogField.Target).Label,
                             VerticalAlignment = VerticalAlignment.Center,
                         },
-                        _targetCombo,
+                        targetCombo,
                     },
                 },
                 new StackPanel
@@ -76,12 +79,11 @@ internal sealed class SectionZoomDialog : FreePDialogWindow
                 },
             },
         };
-        Grid.SetColumn(_targetCombo, 1);
+        Grid.SetColumn(targetCombo, 1);
     }
 
     private void Apply()
     {
-        if (_session.TryAccept(_targetCombo.SelectedIndex))
-            Close(true);
+        _binding.TryAccept();
     }
 }

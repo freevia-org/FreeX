@@ -9,22 +9,18 @@ namespace FreeP.App.Host;
 
 public sealed partial class CustomShowDialog : Free.Shared.Ribbon.Wpf.DialogWindow
 {
-    private readonly SlideShowCustomShowDialogController _controller;
-    private readonly SlideShowCustomShowDialogFormSession<FrameworkElement> _formSession;
+    private readonly SlideShowCustomShowDialogNativeComposition<FrameworkElement, DockPanel> _renderer;
     private readonly ListBox _showList = new();
     private readonly TextBox _nameBox = new();
     private readonly ListBox _customShowSlideList = new();
     private readonly StackPanel _slidePanel = new();
     private readonly TextBlock _validationText = new();
-    private readonly SlideShowCustomShowDialogActionDispatcher _actions;
-    private readonly SlideShowCustomShowDialogButtonSet<Button> _buttons;
-    private readonly SlideShowCustomShowAvailableSlideRendererSession<FrameworkElement, DockPanel> _availableSlides;
     private Point? _customShowSlideDragStartPoint;
     private int _customShowSlideDragSourceIndex = -1;
 
     private PresentationDialogSurfacePlan<
         SlideShowCustomShowDialogField,
-        SlideShowCustomShowDialogAction> Surface => _controller.Surface;
+        SlideShowCustomShowDialogAction> Surface => _renderer.Surface;
 
     public CustomShowDialog(
         SlideShowCustomShowSession customShowSession,
@@ -33,7 +29,8 @@ public sealed partial class CustomShowDialog : Free.Shared.Ribbon.Wpf.DialogWind
         ArgumentNullException.ThrowIfNull(customShowSession);
         SlideShowCustomShowDialogSession session =
             customShowSession.CreateDialogSession(tryStartShow ?? (_ => false));
-        _formSession = new(
+        _renderer = new(
+            session,
             _showList,
             _customShowSlideList,
             _nameBox,
@@ -45,21 +42,13 @@ public sealed partial class CustomShowDialog : Free.Shared.Ribbon.Wpf.DialogWind
             SetText,
             static (control, isChecked) => ((CheckBox)control).IsChecked = isChecked,
             static control => ((CheckBox)control).IsChecked == true,
-            static (control, isEnabled) => control.IsEnabled = isEnabled);
-        _controller = new(
-            session,
-            new SlideShowCustomShowDialogViewAdapter<FrameworkElement>(
-                _formSession,
-                () => _nameBox.Text,
-                RebuildSlides,
-                Close));
-        _actions = new(_controller, Close);
-        _buttons = new((action, handler) => MakeButton(action, handler), _actions);
-        _availableSlides = new(
-            _formSession,
+            static (control, isEnabled) => control.IsEnabled = isEnabled,
+            () => _nameBox.Text,
+            Close,
             _slidePanel.Children.Clear,
             CreateAvailableSlideRow,
-            row => _slidePanel.Children.Add(row));
+            row => _slidePanel.Children.Add(row),
+            CreateNativeButton);
 
         Title = Surface.Title;
         AutomationProperties.SetName(this, Surface.AccessibleName);
@@ -77,7 +66,7 @@ public sealed partial class CustomShowDialog : Free.Shared.Ribbon.Wpf.DialogWind
             SlideShowCustomShowDialogVisualMetrics.ShowListRightGap,
             0);
         PresentationDialogControlAdapter.ApplySemantic(_showList, Surface.Field(SlideShowCustomShowDialogField.CustomShows));
-        _showList.SelectionChanged += (_, _) => _controller.SelectShow();
+        _showList.SelectionChanged += (_, _) => _renderer.Controller.SelectShow();
 
         _nameBox.MinWidth = SlideShowCustomShowDialogVisualMetrics.NameMinimumWidth;
         _nameBox.Margin = new Thickness(
@@ -89,7 +78,7 @@ public sealed partial class CustomShowDialog : Free.Shared.Ribbon.Wpf.DialogWind
 
         _customShowSlideList.MinHeight = SlideShowCustomShowDialogVisualMetrics.OrderedSlidesMinimumHeight;
         PresentationDialogControlAdapter.ApplySemantic(_customShowSlideList, Surface.Field(SlideShowCustomShowDialogField.OrderedSlides));
-        _customShowSlideList.SelectionChanged += (_, _) => _controller.SelectSlide();
+        _customShowSlideList.SelectionChanged += (_, _) => _renderer.Controller.SelectSlide();
         _customShowSlideList.AllowDrop = true;
         _customShowSlideList.PreviewMouseLeftButtonDown += OnCustomShowSlideListMouseLeftButtonDown;
         _customShowSlideList.PreviewMouseMove += OnCustomShowSlideListMouseMove;
@@ -106,16 +95,16 @@ public sealed partial class CustomShowDialog : Free.Shared.Ribbon.Wpf.DialogWind
         PresentationDialogControlAdapter.ApplySemantic(_validationText, Surface.Field(SlideShowCustomShowDialogField.Validation));
 
         Content = BuildContent();
-        _controller.Initialize();
+        _renderer.Controller.Initialize();
     }
 
     public int RenderedCustomShowCount => _showList.Items.Count;
 
-    public int RenderedSlideOptionCount => _availableSlides.Controls.Count;
+    public int RenderedSlideOptionCount => _renderer.AvailableSlides.Controls.Count;
 
     public int RenderedCustomShowSlideCount => _customShowSlideList.Items.Count;
 
-    public int SelectedCustomShowSlideIndex => _formSession.SelectedSlideIndex;
+    public int SelectedCustomShowSlideIndex => _renderer.Form.SelectedSlideIndex;
 
     public string ValidationMessage => _validationText.Text;
 
@@ -177,9 +166,9 @@ public sealed partial class CustomShowDialog : Free.Shared.Ribbon.Wpf.DialogWind
             Orientation = Orientation.Horizontal,
             HorizontalAlignment = HorizontalAlignment.Right,
         };
-        moveButtons.Children.Add(_buttons.MoveUp);
-        moveButtons.Children.Add(_buttons.MoveDown);
-        moveButtons.Children.Add(_buttons.Remove);
+        moveButtons.Children.Add(_renderer.Buttons.MoveUp);
+        moveButtons.Children.Add(_renderer.Buttons.MoveDown);
+        moveButtons.Children.Add(_renderer.Buttons.Remove);
         DockPanel.SetDock(moveButtons, Dock.Right);
         orderHeader.Children.Add(moveButtons);
         orderHeader.Children.Add(new TextBlock
@@ -234,21 +223,18 @@ public sealed partial class CustomShowDialog : Free.Shared.Ribbon.Wpf.DialogWind
                 0,
                 0),
         };
-        buttons.Children.Add(MakeButton(SlideShowCustomShowDialogAction.Create, _controller.Create));
-        buttons.Children.Add(_buttons.Rename);
-        buttons.Children.Add(_buttons.Update);
-        buttons.Children.Add(_buttons.Delete);
-        buttons.Children.Add(_buttons.Start);
-        buttons.Children.Add(MakeButton(SlideShowCustomShowDialogAction.Close, Close));
+        buttons.Children.Add(_renderer.CreateButton(SlideShowCustomShowDialogAction.Create, _renderer.Controller.Create));
+        buttons.Children.Add(_renderer.Buttons.Rename);
+        buttons.Children.Add(_renderer.Buttons.Update);
+        buttons.Children.Add(_renderer.Buttons.Delete);
+        buttons.Children.Add(_renderer.Buttons.Start);
+        buttons.Children.Add(_renderer.CreateButton(SlideShowCustomShowDialogAction.Close, Close));
         Grid.SetRow(buttons, 1);
         Grid.SetColumnSpan(buttons, 2);
         root.Children.Add(buttons);
 
         return root;
     }
-
-    private void RebuildSlides(IReadOnlyList<SlideShowCustomShowSlideOption> slides) =>
-        _availableSlides.Render(slides);
 
     private SlideShowCustomShowAvailableSlideNativeRow<FrameworkElement, DockPanel>
         CreateAvailableSlideRow(SlideShowCustomShowSlideOption slide)
@@ -275,9 +261,9 @@ public sealed partial class CustomShowDialog : Free.Shared.Ribbon.Wpf.DialogWind
             Margin = checkBox.Margin,
             LastChildFill = true,
         };
-        var addButton = MakeButton(
+        var addButton = (Button)_renderer.CreateButton(
             SlideShowCustomShowDialogAction.AddSlide,
-            () => _actions.Execute(SlideShowCustomShowDialogAction.AddSlide, slide.SlideId),
+            () => _renderer.Actions.Execute(SlideShowCustomShowDialogAction.AddSlide, slide.SlideId),
             slide.SlideId);
         addButton.MinWidth = SlideShowCustomShowDialogVisualMetrics.AddSlideButtonMinimumWidth;
         DockPanel.SetDock(addButton, Dock.Right);
@@ -360,14 +346,12 @@ public sealed partial class CustomShowDialog : Free.Shared.Ribbon.Wpf.DialogWind
     private SlideShowCustomShowDragReorderPlan ApplyCustomShowSlideDragReorder(
         int sourceSlideIndex,
         int targetDropIndex) =>
-        _controller.Reorder(sourceSlideIndex, targetDropIndex);
+        _renderer.Controller.Reorder(sourceSlideIndex, targetDropIndex);
 
-    private Button MakeButton(
-        SlideShowCustomShowDialogAction actionId,
-        Action onClick,
-        string? automationSuffix = null)
+    private static Button CreateNativeButton(
+        PresentationDialogActionPlan<SlideShowCustomShowDialogAction> action,
+        Action onClick)
     {
-        var action = Surface.Action(actionId, automationSuffix);
         var button = new Button
         {
             Content = action.Label,
@@ -388,8 +372,6 @@ public sealed partial class CustomShowDialog : Free.Shared.Ribbon.Wpf.DialogWind
         AutomationProperties.SetName(button, action.AccessibleName);
         AutomationProperties.SetAutomationId(button, action.AutomationId);
         button.Click += (_, _) => onClick();
-        if (automationSuffix is null)
-            _formSession.RegisterAction(actionId, button);
         return button;
     }
 
