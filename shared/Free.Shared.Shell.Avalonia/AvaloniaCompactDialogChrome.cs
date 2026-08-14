@@ -152,9 +152,10 @@ public static class AvaloniaCompactDialogChrome
         window.Foreground = ThemeTextBrush(style);
         window.FontFamily = style.FontFamily;
         window.FontSize = style.FontSize;
-        // WPF dialog captures use grayscale-compatible text edges. Avalonia's default subpixel
-        // mode leaves colored fringes in every label and document field, inflating pixel deltas.
-        TextOptions.SetTextRenderingMode(window, TextRenderingMode.Antialias);
+        // WPF's shared DialogWindow explicitly requests ClearType. Avalonia's closest rendering
+        // contract is subpixel antialiasing; forcing grayscale here collapses the glyph palette
+        // and inflates text-edge deltas across every paired dialog.
+        TextOptions.SetTextRenderingMode(window, TextRenderingMode.SubpixelAntialias);
         window.WindowStartupLocation = WindowStartupLocation.CenterOwner;
         window.ShowInTaskbar = false;
         window.Opened += (_, _) => ApplyDescendantChrome(window, style);
