@@ -13,7 +13,7 @@ public sealed class DialogComboBoxChromeTests
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
-    public async Task Compact_combo_template_registers_required_parts_and_lays_out(bool isEditable)
+    public async Task Compact_combo_keeps_native_template_behavior_and_lays_out(bool isEditable)
     {
         await Session.Dispatch(() =>
         {
@@ -26,12 +26,15 @@ public sealed class DialogComboBoxChromeTests
             AvaloniaCompactDialogChrome.ApplyComboBox(
                 comboBox,
                 AvaloniaCompactDialogChrome.WindowsStyle);
+            comboBox.Template.Should().BeNull(
+                "the compact chrome must not replace Avalonia's native ComboBox template");
 
             var window = new Window { Content = comboBox };
             try
             {
                 window.Show();
                 comboBox.ApplyTemplate();
+                comboBox.Template.Should().NotBeNull();
                 comboBox.IsDropDownOpen = true;
                 comboBox.UpdateLayout();
                 Dispatcher.UIThread.RunJobs(DispatcherPriority.Render);
