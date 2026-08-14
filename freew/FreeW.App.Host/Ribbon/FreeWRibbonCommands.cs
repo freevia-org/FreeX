@@ -171,27 +171,54 @@ internal static class FreeWRibbonCommands
             registry.Bind(action,
                 new RoutedEditCommand(editor, command));
 
-        ToggleFormatCommand CreateToggle(
+        IRibbonStatefulCommand CreateToggle(
             FreeWRibbonCommandAction action,
-            RoutedCommand command,
-            DependencyProperty property,
-            Func<object?, bool> isOn,
-            Func<bool>? tryModelToggle = null)
+            FontEffectRibbonKind kind,
+            Action execute)
         {
-            var cmd = new ToggleFormatCommand(editor, command, property, isOn, tryModelToggle);
+            var cmd = FontEffectRibbonStatePlanner.CreateCommand(
+                kind,
+                execute,
+                editor.GetSelectionFormatting,
+                () => editor.CanFormatSelection,
+                () => editor.Focus());
             stateful.Add((FreeWRibbonCommandWorkflow.GetPrimaryCommandId(action), cmd));
             return cmd;
         }
 
-        var bold = CreateToggle(FreeWRibbonCommandAction.Bold, EditingCommands.ToggleBold, TextElement.FontWeightProperty,
-            v => v is FontWeight w && w >= FontWeights.Bold,
-            () => editor.TryToggleSelectedRunFormatting(f => f.Bold, (f, value) => f with { Bold = value }));
-        var italic = CreateToggle(FreeWRibbonCommandAction.Italic, EditingCommands.ToggleItalic, TextElement.FontStyleProperty,
-            v => v is FontStyle s && s == FontStyles.Italic,
-            () => editor.TryToggleSelectedRunFormatting(f => f.Italic, (f, value) => f with { Italic = value }));
-        var underline = CreateToggle(FreeWRibbonCommandAction.Underline, EditingCommands.ToggleUnderline, Inline.TextDecorationsProperty,
-            v => v is TextDecorationCollection d && d.Count > 0,
-            () => editor.TryToggleSelectedRunFormatting(f => f.Underline, (f, value) => f with { Underline = value }));
+        void ToggleRouted(RoutedCommand command, Func<bool> tryModelToggle)
+        {
+            if (tryModelToggle())
+                return;
+            if (command.CanExecute(null, editor))
+                command.Execute(null, editor);
+        }
+
+        Action CreateCharacterEffectExecution(CharacterEffect effect)
+        {
+            var command = new CharacterEffectCommand(editor, effect);
+            return () => command.Execute(RibbonCommandContext.Empty);
+        }
+
+        var bold = CreateToggle(FreeWRibbonCommandAction.Bold, FontEffectRibbonKind.Bold,
+            () => ToggleRouted(EditingCommands.ToggleBold,
+                () => editor.TryToggleSelectedRunFormatting(f => f.Bold, (f, value) => f with { Bold = value })));
+        var italic = CreateToggle(FreeWRibbonCommandAction.Italic, FontEffectRibbonKind.Italic,
+            () => ToggleRouted(EditingCommands.ToggleItalic,
+                () => editor.TryToggleSelectedRunFormatting(f => f.Italic, (f, value) => f with { Italic = value })));
+        var underline = CreateToggle(FreeWRibbonCommandAction.Underline, FontEffectRibbonKind.Underline,
+            () => ToggleRouted(EditingCommands.ToggleUnderline,
+                () => editor.TryToggleSelectedRunFormatting(f => f.Underline, (f, value) => f with { Underline = value })));
+        var strikethrough = CreateToggle(FreeWRibbonCommandAction.Strikethrough, FontEffectRibbonKind.Strikethrough,
+            CreateCharacterEffectExecution(CharacterEffect.Strikethrough));
+        var smallCaps = CreateToggle(FreeWRibbonCommandAction.Smallcaps, FontEffectRibbonKind.SmallCaps,
+            CreateCharacterEffectExecution(CharacterEffect.SmallCaps));
+        var allCaps = CreateToggle(FreeWRibbonCommandAction.Allcaps, FontEffectRibbonKind.AllCaps,
+            CreateCharacterEffectExecution(CharacterEffect.AllCaps));
+        var superscript = CreateToggle(FreeWRibbonCommandAction.Superscript, FontEffectRibbonKind.Superscript,
+            CreateCharacterEffectExecution(CharacterEffect.Superscript));
+        var subscript = CreateToggle(FreeWRibbonCommandAction.Subscript, FontEffectRibbonKind.Subscript,
+            CreateCharacterEffectExecution(CharacterEffect.Subscript));
 
         // Live ribbon state: when the caret/selection moves or a document render replaces the model,
         // recompute state and push it into the shared store. The store deduplicates unchanged values.
@@ -212,11 +239,11 @@ internal static class FreeWRibbonCommands
                 Bold: bold,
                 Italic: italic,
                 Underline: underline,
-                Strikethrough: new CharacterEffectCommand(editor, CharacterEffect.Strikethrough),
-                SmallCaps: new CharacterEffectCommand(editor, CharacterEffect.SmallCaps),
-                AllCaps: new CharacterEffectCommand(editor, CharacterEffect.AllCaps),
-                Superscript: new CharacterEffectCommand(editor, CharacterEffect.Superscript),
-                Subscript: new CharacterEffectCommand(editor, CharacterEffect.Subscript),
+                Strikethrough: strikethrough,
+                SmallCaps: smallCaps,
+                AllCaps: allCaps,
+                Superscript: superscript,
+                Subscript: subscript,
                 GrowFont: new RoutedEditCommand(editor, EditingCommands.IncreaseFontSize),
                 ShrinkFont: new RoutedEditCommand(editor, EditingCommands.DecreaseFontSize)));
 
@@ -8118,29 +8145,6 @@ internal static class FreeWRibbonCommands
             editor.Focus();
             if (command.CanExecute(null, editor))
                 command.Execute(null, editor);
-        }
-    }
-
-    private sealed class ToggleFormatCommand(
-        DocumentView editor,
-        RoutedCommand command,
-        DependencyProperty property,
-        Func<object?, bool> isOn,
-        Func<bool>? tryModelToggle) : IRibbonStatefulCommand
-    {
-        public void Execute(RibbonCommandContext context)
-        {
-            editor.Focus();
-            if (tryModelToggle?.Invoke() == true)
-                return;
-            if (command.CanExecute(null, editor))
-                command.Execute(null, editor);
-        }
-
-        public RibbonCommandState GetState()
-        {
-            var value = editor.Selection.GetPropertyValue(property);
-            return new RibbonCommandState(IsEnabled: true, IsChecked: value != DependencyProperty.UnsetValue && isOn(value));
         }
     }
 
