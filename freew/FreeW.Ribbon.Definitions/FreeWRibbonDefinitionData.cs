@@ -97,6 +97,4 @@ public static class FreeWRibbonDefinitionData
 
     public static string StyleCommandId(string styleId) => $"freew.style.{styleId}";
 
-    public static string ParaSpacingId(string name) =>
-        name.ToLowerInvariant().Replace(' ', '-');
 }

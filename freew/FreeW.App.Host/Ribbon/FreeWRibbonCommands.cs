@@ -1083,22 +1083,32 @@ internal static class FreeWRibbonCommands
         // Design > Document Formatting: Themes apply a full preset, Colors preserve fonts while applying
         // a palette, Style Sets rewrite built-in styles, and Fonts preserve colours while applying a
         // heading/body font pair. All are backed document-wide style changes.
-        var theme = new ApplyThemeCommand(formatting);
-        registry.Bind(FreeWRibbonCommandAction.Theme, theme);
-        stateful.Add(("freew.theme", theme));
-        stateStore.SetState("freew.theme", theme.GetState());
-        var styleSet = new ApplyStyleSetCommand(formatting);
-        registry.Bind(FreeWRibbonCommandAction.StyleSet, styleSet);
-        stateful.Add(("freew.style-set", styleSet));
-        stateStore.SetState("freew.style-set", styleSet.GetState());
-        registry.Bind(FreeWRibbonCommandAction.ResetStyleSet, new ResetStyleSetCommand(editor));
-        registry.Bind(FreeWRibbonCommandAction.ThemeColors, new ApplyThemeColorsCommand(editor));
-        registry.Bind(FreeWRibbonCommandAction.CustomizeColors, new CustomizeColorsCommand(editor));
-        registry.Bind(FreeWRibbonCommandAction.ThemeFonts, new ApplyFontSetCommand(editor));
-        registry.Bind(FreeWRibbonCommandAction.CustomizeFonts, new CustomizeFontsCommand(editor));
-        registry.Register("freew.paragraph-spacing", new ApplyParagraphSpacingSetCommand(editor));
-        registry.Bind(FreeWRibbonCommandAction.CustomParagraphSpacing, new CustomParagraphSpacingCommand(editor));
-        registry.Bind(FreeWRibbonCommandAction.ThemeEffects, new ApplyEffectSetCommand(editor));
+        var designRibbon = DesignRibbonWorkflow.Register(
+            registry,
+            new DesignRibbonBindings(
+                Formatting: formatting,
+                PrepareExecution: () => editor.Focus(),
+                ResolveChoice: DesignValue,
+                ApplyThemeColors: editor.ApplyThemeColors,
+                ApplyFontSet: editor.ApplyFontSet,
+                ApplyParagraphSpacingSet: editor.ApplyParagraphSpacingSet,
+                ApplyEffectSet: editor.ApplyEffectSet,
+                ApplyDefaultStyleSet: () => editor.ApplyStyleSet(DocumentStyleSet.Default),
+                ApplyPageColor: editor.SetPageColor,
+                ApplyWatermarkText: editor.SetWatermark,
+                CustomizeColors: new CustomizeColorsCommand(editor),
+                CustomizeFonts: new CustomizeFontsCommand(editor),
+                CustomParagraphSpacing: new CustomParagraphSpacingCommand(editor),
+                PageColor: new PageColorCommand(editor),
+                MorePageColors: new PageColorCommand(editor),
+                PageBorders: new BordersAndShadingCommand(editor),
+                Watermark: new WatermarkCommand(editor),
+                CustomWatermark: new WatermarkCommand(editor)));
+        foreach (var entry in designRibbon.StatefulCommands)
+        {
+            stateful.Add((entry.Id, entry.Command));
+            stateStore.SetState(entry.Id, entry.Command.GetState());
+        }
         registry.Bind(FreeWRibbonCommandAction.Undo, new ActionRibbonCommand(() => { if (editor.CanUndo) editor.Undo(); }));
         registry.Bind(FreeWRibbonCommandAction.Redo, new ActionRibbonCommand(() => { if (editor.CanRedo) editor.Redo(); }));
 
@@ -1142,13 +1152,10 @@ internal static class FreeWRibbonCommands
         // Design tab — Page Background: "Page Borders" opens the full Borders and Shading dialog,
         // and Watermark sets/clears the page watermark. Both ultimately mutate PageSettings via
         // ApplyPageSettings (commit + re-render) and round-trip through docx save.
-        registry.Register("freew.page-border", new BordersAndShadingCommand(editor));
-        registry.Bind(FreeWRibbonCommandAction.Watermark, new WatermarkCommand(editor));
 
         // Design tab — Page Background: pick the whole-page background colour (Word's Page Color). Opens a
         // swatch palette + No Color + More Colors... and sets the model's page BackgroundColorHex (which
         // already round-trips as w:background in docx); the editor recolours the page sheet immediately.
-        registry.Bind(FreeWRibbonCommandAction.PageColor, new PageColorCommand(editor));
 
         var viewRibbon = ViewRibbonWorkflow.Register(
             registry,
@@ -2088,130 +2095,7 @@ internal static class FreeWRibbonCommands
 
     // Design > Document Formatting: apply a built-in document theme. The selected name may arrive from
     // a combo value, older host context, or a WPF menu item header; all resolve to the same catalog entry.
-    private sealed class ApplyThemeCommand(FreeWRibbonFormattingSession session) : IRibbonStatefulCommand
-    {
-        public void Execute(RibbonCommandContext context) =>
-            session.ApplyTheme(DesignValue(context));
-
-        public RibbonCommandState GetState() =>
-            new(IsEnabled: true, Value: session.CurrentThemeName());
-    }
-
-    private sealed class ApplyStyleSetCommand(FreeWRibbonFormattingSession session) : IRibbonStatefulCommand
-    {
-        public void Execute(RibbonCommandContext context) =>
-            session.ApplyStyleSet(DesignValue(context));
-
-        public RibbonCommandState GetState() =>
-            new(Value: session.CurrentStyleSetName());
-    }
-
-    private sealed class ApplyThemeColorsCommand(DocumentView editor) : IRibbonCommand
-    {
-        public void Execute(RibbonCommandContext context)
-        {
-            var value = context.SelectedValue ?? LegacyValue(context) ?? MenuHeaderValue(context);
-            if (string.IsNullOrWhiteSpace(value))
-                return;
-            if (DocumentTheme.FindByName(value) is not { } theme)
-                return;
-
-            editor.Focus();
-            editor.ApplyThemeColors(theme);
-        }
-
-        private static string? LegacyValue(RibbonCommandContext context) =>
-            context.Parameters.TryGetValue("value", out var raw) ? raw as string : null;
-
-        private static string? MenuHeaderValue(RibbonCommandContext context) =>
-            context.Parameters.TryGetValue(Free.Shared.Ribbon.Wpf.RibbonWpfRenderer.SenderKey, out var sender)
-            && sender is System.Windows.Controls.MenuItem { Tag: string header }
-                ? header
-                : null;
-    }
-
-    private sealed class ApplyFontSetCommand(DocumentView editor) : IRibbonCommand
-    {
-        public void Execute(RibbonCommandContext context)
-        {
-            var value = context.SelectedValue ?? LegacyValue(context) ?? MenuHeaderValue(context);
-            if (string.IsNullOrWhiteSpace(value))
-                return;
-            if (DocumentFontSet.FindByName(value) is not { } fontSet)
-                return;
-
-            editor.Focus();
-            editor.ApplyFontSet(fontSet);
-        }
-
-        private static string? LegacyValue(RibbonCommandContext context) =>
-            context.Parameters.TryGetValue("value", out var raw) ? raw as string : null;
-
-        private static string? MenuHeaderValue(RibbonCommandContext context) =>
-            context.Parameters.TryGetValue(Free.Shared.Ribbon.Wpf.RibbonWpfRenderer.SenderKey, out var sender)
-            && sender is System.Windows.Controls.MenuItem { Tag: string header }
-                ? header
-                : null;
-    }
-
-    private sealed class ApplyParagraphSpacingSetCommand(DocumentView editor) : IRibbonCommand
-    {
-        public void Execute(RibbonCommandContext context)
-        {
-            var value = context.SelectedValue ?? LegacyValue(context) ?? MenuHeaderValue(context);
-            if (string.IsNullOrWhiteSpace(value))
-                return;
-            if (DocumentParagraphSpacingSet.FindByName(value) is not { } spacingSet)
-                return;
-
-            editor.Focus();
-            editor.ApplyParagraphSpacingSet(spacingSet);
-        }
-
-        private static string? LegacyValue(RibbonCommandContext context) =>
-            context.Parameters.TryGetValue("value", out var raw) ? raw as string : null;
-
-        private static string? MenuHeaderValue(RibbonCommandContext context) =>
-            context.Parameters.TryGetValue(Free.Shared.Ribbon.Wpf.RibbonWpfRenderer.SenderKey, out var sender)
-            && sender is System.Windows.Controls.MenuItem { Tag: string header }
-                ? header
-                : null;
-    }
-
-    private sealed class ApplyEffectSetCommand(DocumentView editor) : IRibbonCommand
-    {
-        public void Execute(RibbonCommandContext context)
-        {
-            var value = context.SelectedValue ?? LegacyValue(context) ?? MenuHeaderValue(context);
-            if (string.IsNullOrWhiteSpace(value))
-                return;
-            if (DocumentEffectSet.FindByName(value) is not { } effectSet)
-                return;
-
-            editor.Focus();
-            editor.ApplyEffectSet(effectSet);
-        }
-
-        private static string? LegacyValue(RibbonCommandContext context) =>
-            context.Parameters.TryGetValue("value", out var raw) ? raw as string : null;
-
-        private static string? MenuHeaderValue(RibbonCommandContext context) =>
-            context.Parameters.TryGetValue(Free.Shared.Ribbon.Wpf.RibbonWpfRenderer.SenderKey, out var sender)
-            && sender is System.Windows.Controls.MenuItem { Tag: string header }
-                ? header
-                : null;
-    }
-
     // Design > Reset to Default Style Set: applies the catalog default (Office) to the document.
-    private sealed class ResetStyleSetCommand(DocumentView editor) : IRibbonCommand
-    {
-        public void Execute(RibbonCommandContext context)
-        {
-            editor.Focus();
-            editor.ApplyStyleSet(DocumentStyleSet.Default);
-        }
-    }
-
     // Design > Colors > Customize Colors…: author a 12-slot custom theme color scheme.
     private sealed class CustomizeColorsCommand(DocumentView editor) : IRibbonCommand
     {

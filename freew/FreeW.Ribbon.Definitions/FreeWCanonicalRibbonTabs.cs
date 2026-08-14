@@ -1,5 +1,6 @@
 using Free.Shared.Ribbon;
 using FreeW.App.Presentation.ContextMenus;
+using FreeW.App.Presentation.Ribbon;
 using FreeW.Core.Model;
 
 namespace FreeW.Ribbon.Definitions;
@@ -681,7 +682,7 @@ internal static partial class FreeWCanonicalRibbonTabs
     private static RibbonMenu BuildAvaloniaParagraphSpacingMenu() => new(
         DocumentParagraphSpacingSet.Catalog
             .Select(spacingSet => new RibbonMenuItem(spacingSet.Name,
-                new RibbonCommandId($"freew.para-spacing.{FreeWRibbonDefinitionData.ParaSpacingId(spacingSet.Name)}")))
+                new RibbonCommandId(DesignRibbonWorkflow.ParagraphSpacingCommandId(spacingSet.Name))))
             .Concat([
                 RibbonMenuItem.Separator(),
                 new RibbonMenuItem("Custom Paragraph Spacing...",

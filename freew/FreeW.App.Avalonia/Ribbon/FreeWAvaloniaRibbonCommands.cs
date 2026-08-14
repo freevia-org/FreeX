@@ -427,7 +427,7 @@ internal static class FreeWAvaloniaRibbonCommands
         RegisterMailingsCommands(r, mailMerge);
 
         // ── Design (AV-DESIGN) ───────────────────────────────────────────────
-        RegisterDesignCommands(r, editor, callbacks, formatting);
+        DesignRibbonWorkflow.Register(r, CreateDesignRibbonBindings(editor, callbacks, formatting));
 
         // ── AV-PICTAB: Picture Format + Drawing Format contextual tabs ────────
         FreeWRibbonEditorExecutionProfile.RegisterFamilies(
@@ -622,21 +622,6 @@ internal static class FreeWAvaloniaRibbonCommands
         public void Execute(RibbonCommandContext context) => toggle();
 
         public RibbonCommandState GetState() => new(IsChecked: isChecked());
-    }
-
-    private sealed class ThemeCommand(FreeWRibbonFormattingSession session) : IRibbonStatefulCommand
-    {
-        public void Execute(RibbonCommandContext context) => session.ApplyTheme(context.SelectedValue);
-
-        public RibbonCommandState GetState() => new(Value: session.CurrentThemeName());
-    }
-
-    private sealed class StyleSetCommand(FreeWRibbonFormattingSession session) : IRibbonStatefulCommand
-    {
-        public void Execute(RibbonCommandContext context) => session.ApplyStyleSet(context.SelectedValue);
-
-        public RibbonCommandState GetState() =>
-            new(Value: session.CurrentStyleSetName());
     }
 
     private sealed class ProofingLanguageCommand(DocumentView editor, FreeWRibbonHostExecutionPorts callbacks) : IRibbonCommand
@@ -1566,87 +1551,30 @@ internal static class FreeWAvaloniaRibbonCommands
     /// <see cref="DocumentView"/> Design method. Page Borders + Custom Watermark route through the optional
     /// <see cref="FreeWRibbonHostExecutionPorts"/> dialog launchers and fail closed when the shell did not supply one.
     /// </summary>
-    private static void RegisterDesignCommands(
-        IRibbonCommandRegistry r,
+    private static DesignRibbonBindings CreateDesignRibbonBindings(
         DocumentView editor,
         FreeWRibbonHostExecutionPorts callbacks,
-        FreeWRibbonFormattingSession formatting)
-    {
-        // ── Themes ───────────────────────────────────────────────────────────
-        r.Bind(FreeWRibbonCommandAction.Theme, new ThemeCommand(formatting));
-        foreach (var theme in DocumentTheme.Catalog)
-        {
-            var t = theme;
-            r.Register($"freew.theme.{t.Name.ToLowerInvariant()}", new ActionRibbonCommand(() => editor.ApplyTheme(t)));
-        }
-
-        // ── Colors (palette only — preserves fonts) ──────────────────────────
-        r.Bind(FreeWRibbonCommandAction.ThemeColors, new ActionRibbonCommand(() => { /* dropdown opener */ }));
-        r.Bind(FreeWRibbonCommandAction.CustomizeColors, OptionalHostCommand(callbacks.OpenCustomizeThemeColorsDialog));
-        foreach (var theme in DocumentTheme.Catalog)
-        {
-            var t = theme;
-            r.Register($"freew.theme-colors.{t.Name.ToLowerInvariant()}", new ActionRibbonCommand(() => editor.ApplyThemeColors(t)));
-        }
-
-        // ── Fonts (heading/body pairing — preserves colours) ─────────────────
-        r.Bind(FreeWRibbonCommandAction.ThemeFonts, new ActionRibbonCommand(() => { /* dropdown opener */ }));
-        r.Bind(FreeWRibbonCommandAction.CustomizeFonts, OptionalHostCommand(callbacks.OpenCustomizeThemeFontsDialog));
-        foreach (var fontSet in DocumentFontSet.Catalog)
-        {
-            var f = fontSet;
-            r.Register($"freew.theme-fonts.{f.Name.ToLowerInvariant()}", new ActionRibbonCommand(() => editor.ApplyDocumentFontSet(f)));
-        }
-
-        // ── Paragraph Spacing presets ────────────────────────────────────────
-        r.Register("freew.para-spacing", new ActionRibbonCommand(() => { /* dropdown opener */ }));
-        foreach (var spacingSet in DocumentParagraphSpacingSet.Catalog)
-        {
-            var s = spacingSet;
-            r.Register($"freew.para-spacing.{FreeWRibbonDefinitionData.ParaSpacingId(s.Name)}",
-                new ActionRibbonCommand(() => editor.ApplyParagraphSpacingSet(s)));
-        }
-        r.Bind(FreeWRibbonCommandAction.CustomParagraphSpacing,
-            OptionalHostCommand(callbacks.OpenCustomParagraphSpacingDialog));
-
-        r.Bind(FreeWRibbonCommandAction.ThemeEffects, new ActionRibbonCommand(() => { /* dropdown opener */ }));
-        for (var index = 0; index < DocumentEffectSet.Catalog.Count; index++)
-        {
-            var effectSet = DocumentEffectSet.Catalog[index];
-            r.Register(FreeWContextMenuPlanner.EffectsPrefix + index,
-                new ActionRibbonCommand(() => editor.ApplyEffectSet(effectSet)));
-        }
-
-        // ── Page Color swatches (+ No Color) ─────────────────────────────────
-        r.Bind(FreeWRibbonCommandAction.StyleSet, new StyleSetCommand(formatting));
-        r.Bind(FreeWRibbonCommandAction.ResetStyleSet, new ActionRibbonCommand(() => editor.ApplyStyleSet(DocumentStyleSet.Default)));
-
-        r.Bind(FreeWRibbonCommandAction.PageColor, new ActionRibbonCommand(() => { /* dropdown opener */ }));
-        r.Register("freew.page-color.more", OptionalHostCommand(callbacks.OpenPageColorDialog));
-        RegisterPageColorPalette(r, editor);
-
-        // ── Page Borders — dialog launcher (optional callback) ───────────────
-        r.Register("freew.page-borders", OptionalHostCommand(callbacks.OpenPageBordersDialog));
-
-        // ── Watermark — built-in presets + Custom (dialog) + Remove ──────────
-        r.Bind(FreeWRibbonCommandAction.Watermark, new ActionRibbonCommand(() => { /* dropdown opener */ }));
-        r.Register("freew.watermark.confidential", new ActionRibbonCommand(() => editor.SetWatermarkText("CONFIDENTIAL")));
-        r.Register("freew.watermark.do-not-copy",  new ActionRibbonCommand(() => editor.SetWatermarkText("DO NOT COPY")));
-        r.Register("freew.watermark.draft",        new ActionRibbonCommand(() => editor.SetWatermarkText("DRAFT")));
-        r.Register("freew.watermark.urgent",       new ActionRibbonCommand(() => editor.SetWatermarkText("URGENT")));
-        r.Register("freew.watermark.custom", OptionalHostCommand(callbacks.OpenWatermarkDialog));
-        r.Register("freew.watermark.none",         new ActionRibbonCommand(() => editor.SetWatermark(null)));
-    }
-
-    /// <summary>
-    /// AV-DESIGN: Registers the per-swatch sub-commands for the Page Color palette. Each id matches an entry
-    /// in <see cref="FreeWRibbonDefinitionData.PageColors"/> and calls <see cref="DocumentView.SetPageColor"/> with the
-    /// swatch hex (or null for "No Color", which clears the background back to white).
-    /// </summary>
-    private static void RegisterPageColorPalette(IRibbonCommandRegistry r, DocumentView editor)
-    {
-        RegisterColorPalette(r, FreeWRibbonPaletteCatalog.PageColors, editor.SetPageColor);
-    }
+        FreeWRibbonFormattingSession formatting) =>
+        new(
+            Formatting: formatting,
+            PrepareExecution: () => editor.Focus(),
+            ResolveChoice: context => context.SelectedValue
+                ?? (context.Parameters.TryGetValue("value", out var raw) ? raw as string : null),
+            ApplyThemeColors: editor.ApplyThemeColors,
+            ApplyFontSet: editor.ApplyDocumentFontSet,
+            ApplyParagraphSpacingSet: editor.ApplyParagraphSpacingSet,
+            ApplyEffectSet: editor.ApplyEffectSet,
+            ApplyDefaultStyleSet: () => editor.ApplyStyleSet(DocumentStyleSet.Default),
+            ApplyPageColor: editor.SetPageColor,
+            ApplyWatermarkText: editor.SetWatermarkText,
+            CustomizeColors: OptionalHostCommand(callbacks.OpenCustomizeThemeColorsDialog),
+            CustomizeFonts: OptionalHostCommand(callbacks.OpenCustomizeThemeFontsDialog),
+            CustomParagraphSpacing: OptionalHostCommand(callbacks.OpenCustomParagraphSpacingDialog),
+            PageColor: DesignRibbonWorkflow.DropdownOpenerCommand,
+            MorePageColors: OptionalHostCommand(callbacks.OpenPageColorDialog),
+            PageBorders: OptionalHostCommand(callbacks.OpenPageBordersDialog),
+            Watermark: DesignRibbonWorkflow.DropdownOpenerCommand,
+            CustomWatermark: OptionalHostCommand(callbacks.OpenWatermarkDialog));
 
     private static void RegisterColorPalette(
         IRibbonCommandRegistry registry,

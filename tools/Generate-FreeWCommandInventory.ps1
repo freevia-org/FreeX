@@ -60,6 +60,7 @@ internal static class FreeWCommandInventory
         new("pageLayoutWorkflowSource", "Shared Page Layout registry source", "freew/FreeW.App.Presentation/Ribbon/PageLayoutRibbonWorkflow.cs"),
         new("mailMergeWorkflowSource", "Shared Mail Merge registry source", "freew/FreeW.App.Presentation/Ribbon/MailMergeRibbonWorkflow.cs"),
         new("headerFooterWorkflowSource", "Shared Header Footer registry source", "freew/FreeW.App.Presentation/Ribbon/HeaderFooterRibbonWorkflow.cs"),
+        new("designWorkflowSource", "Shared Design registry source", "freew/FreeW.App.Presentation/Ribbon/DesignRibbonWorkflow.cs"),
     ];
 
     private static readonly ClassificationRule[] GapClassificationRules =
@@ -242,6 +243,57 @@ internal static class FreeWCommandInventory
         ["freew.page-margins-wide"] = PageLayoutEvidence("The Wide margin menu route is backed by the shared renderer-neutral preset command."),
         ["freew.page-size-letter"] = PageLayoutEvidence("The Letter paper menu route is backed by the shared renderer-neutral preset command."),
         ["freew.page-size-a4"] = PageLayoutEvidence("The A4 paper menu route is backed by the shared renderer-neutral preset command."),
+        ["freew.theme"] = DesignWorkflowEvidence("Both renderers resolve and apply full document themes through one stateful shared command."),
+        ["freew.theme.office"] = DesignWorkflowEvidence("The Office theme preset is registered by the shared Design workflow."),
+        ["freew.theme.ion"] = DesignWorkflowEvidence("The Ion theme preset is registered by the shared Design workflow."),
+        ["freew.theme.berlin"] = DesignWorkflowEvidence("The Berlin theme preset is registered by the shared Design workflow."),
+        ["freew.theme.slate"] = DesignWorkflowEvidence("The Slate theme preset is registered by the shared Design workflow."),
+        ["freew.theme-colors"] = DesignWorkflowEvidence("Both renderers resolve theme-color choices through the shared Design workflow."),
+        ["freew.theme-colors.office"] = DesignWorkflowEvidence("The Office color preset is registered by the shared Design workflow."),
+        ["freew.theme-colors.ion"] = DesignWorkflowEvidence("The Ion color preset is registered by the shared Design workflow."),
+        ["freew.theme-colors.berlin"] = DesignWorkflowEvidence("The Berlin color preset is registered by the shared Design workflow."),
+        ["freew.theme-colors.slate"] = DesignWorkflowEvidence("The Slate color preset is registered by the shared Design workflow."),
+        ["freew.customize-colors"] = DesignWorkflowEvidence("Both renderers preserve their native Customize Colors dialog behind one shared route."),
+        ["freew.theme-fonts"] = DesignWorkflowEvidence("Both renderers resolve document font-set choices through the shared Design workflow."),
+        ["freew.theme-fonts.office"] = DesignWorkflowEvidence("The Office font preset is registered by the shared Design workflow."),
+        ["freew.theme-fonts.cambria"] = DesignWorkflowEvidence("The Cambria font preset is registered by the shared Design workflow."),
+        ["freew.theme-fonts.georgia"] = DesignWorkflowEvidence("The Georgia font preset is registered by the shared Design workflow."),
+        ["freew.theme-fonts.trebuchet"] = DesignWorkflowEvidence("The Trebuchet font preset is registered by the shared Design workflow."),
+        ["freew.customize-fonts"] = DesignWorkflowEvidence("Both renderers preserve their native Customize Fonts dialog behind one shared route."),
+        ["freew.paragraph-spacing"] = DesignWorkflowEvidence("The WPF paragraph-spacing gallery root and Avalonia dropdown alias share one command."),
+        ["freew.para-spacing"] = DesignWorkflowEvidence("The Avalonia paragraph-spacing dropdown and WPF gallery alias share one command."),
+        ["freew.para-spacing.no-paragraph-space"] = DesignWorkflowEvidence("The No Paragraph Space preset is registered by the shared Design workflow."),
+        ["freew.para-spacing.compact"] = DesignWorkflowEvidence("The Compact paragraph-spacing preset is registered by the shared Design workflow."),
+        ["freew.para-spacing.tight"] = DesignWorkflowEvidence("The Tight paragraph-spacing preset is registered by the shared Design workflow."),
+        ["freew.para-spacing.open"] = DesignWorkflowEvidence("The Open paragraph-spacing preset is registered by the shared Design workflow."),
+        ["freew.para-spacing.relaxed"] = DesignWorkflowEvidence("The Relaxed paragraph-spacing preset is registered by the shared Design workflow."),
+        ["freew.para-spacing.double"] = DesignWorkflowEvidence("The Double paragraph-spacing preset is registered by the shared Design workflow."),
+        ["freew.custom-paragraph-spacing"] = DesignWorkflowEvidence("Both renderers preserve their native custom-spacing dialog behind one shared route."),
+        ["freew.theme-effects"] = DesignWorkflowEvidence("Both renderers resolve document effect-set choices through the shared Design workflow."),
+        ["freew.context.effects.0"] = DesignWorkflowEvidence("The Office effect preset is registered by the shared Design workflow."),
+        ["freew.context.effects.1"] = DesignWorkflowEvidence("The Subtle effect preset is registered by the shared Design workflow."),
+        ["freew.context.effects.2"] = DesignWorkflowEvidence("The Moderate effect preset is registered by the shared Design workflow."),
+        ["freew.context.effects.3"] = DesignWorkflowEvidence("The Intense effect preset is registered by the shared Design workflow."),
+        ["freew.style-set"] = DesignWorkflowEvidence("Both renderers resolve and report style-set choices through one stateful shared command."),
+        ["freew.reset-style-set"] = DesignWorkflowEvidence("Both renderers reset to the same catalog default style set through the shared workflow."),
+        ["freew.page-color"] = DesignWorkflowEvidence("Both renderers preserve native page-color picker behavior behind the shared Design route."),
+        ["freew.page-color.none"] = DesignWorkflowEvidence("The shared Design workflow clears the page background for No Color."),
+        ["freew.page-color.white"] = DesignWorkflowEvidence("The White page-color preset is registered by the shared Design workflow."),
+        ["freew.page-color.light-gray"] = DesignWorkflowEvidence("The Light Gray page-color preset is registered by the shared Design workflow."),
+        ["freew.page-color.tan"] = DesignWorkflowEvidence("The Tan page-color preset is registered by the shared Design workflow."),
+        ["freew.page-color.light-blue"] = DesignWorkflowEvidence("The Light Blue page-color preset is registered by the shared Design workflow."),
+        ["freew.page-color.light-green"] = DesignWorkflowEvidence("The Light Green page-color preset is registered by the shared Design workflow."),
+        ["freew.page-color.light-yellow"] = DesignWorkflowEvidence("The Light Yellow page-color preset is registered by the shared Design workflow."),
+        ["freew.page-color.rose"] = DesignWorkflowEvidence("The Rose page-color preset is registered by the shared Design workflow."),
+        ["freew.page-border"] = DesignWorkflowEvidence("The WPF Page Borders route shares its native dialog adapter with the Avalonia alias."),
+        ["freew.page-borders"] = DesignWorkflowEvidence("The Avalonia Page Borders route shares its native dialog adapter with the WPF alias."),
+        ["freew.watermark"] = DesignWorkflowEvidence("Both renderers preserve native Watermark dropdown/dialog behavior behind one shared route."),
+        ["freew.watermark.confidential"] = DesignWorkflowEvidence("The CONFIDENTIAL watermark preset is registered by the shared Design workflow."),
+        ["freew.watermark.do-not-copy"] = DesignWorkflowEvidence("The DO NOT COPY watermark preset is registered by the shared Design workflow."),
+        ["freew.watermark.draft"] = DesignWorkflowEvidence("The DRAFT watermark preset is registered by the shared Design workflow."),
+        ["freew.watermark.urgent"] = DesignWorkflowEvidence("The URGENT watermark preset is registered by the shared Design workflow."),
+        ["freew.watermark.custom"] = DesignWorkflowEvidence("Both renderers preserve their native Custom Watermark dialog behind the shared route."),
+        ["freew.watermark.none"] = DesignWorkflowEvidence("Both renderers remove the watermark through the same shared mutation route."),
         ["freew.header"] = HeaderFooterWorkflowEvidence("Both renderers route header insertion through the shared Header/Footer command family."),
         ["freew.footer"] = HeaderFooterWorkflowEvidence("Both renderers route footer insertion through the shared Header/Footer command family."),
         ["freew.page-number"] = HeaderFooterWorkflowEvidence("Both renderers route the primary page-number action through one shared command identity."),
@@ -609,14 +661,16 @@ internal static class FreeWCommandInventory
                     ContainsCommandLiteral(sourceTexts["paragraphEditingWorkflowSource"], commandId) ||
                     ContainsCommandLiteral(sourceTexts["pageLayoutWorkflowSource"], commandId) ||
                     ContainsCommandLiteral(sourceTexts["mailMergeWorkflowSource"], commandId) ||
-                    ContainsCommandLiteral(sourceTexts["headerFooterWorkflowSource"], commandId),
+                    ContainsCommandLiteral(sourceTexts["headerFooterWorkflowSource"], commandId) ||
+                    ContainsCommandLiteral(sourceTexts["designWorkflowSource"], commandId),
                 AvaloniaRegistrySource: ContainsCommandLiteral(sourceTexts["avaloniaRegistrySource"], commandId) ||
                     ContainsCommandLiteral(sourceTexts["quickPartWorkflowSource"], commandId) ||
                     ContainsCommandLiteral(sourceTexts["tableInsertionWorkflowSource"], commandId) ||
                     ContainsCommandLiteral(sourceTexts["paragraphEditingWorkflowSource"], commandId) ||
                     ContainsCommandLiteral(sourceTexts["pageLayoutWorkflowSource"], commandId) ||
                     ContainsCommandLiteral(sourceTexts["mailMergeWorkflowSource"], commandId) ||
-                    ContainsCommandLiteral(sourceTexts["headerFooterWorkflowSource"], commandId));
+                    ContainsCommandLiteral(sourceTexts["headerFooterWorkflowSource"], commandId) ||
+                    ContainsCommandLiteral(sourceTexts["designWorkflowSource"], commandId));
             var behaviorEvidence = BehaviorEvidenceCatalog.GetValueOrDefault(commandId);
             var profileClassification = ClassifyProfile(wpfPresent, avaloniaPresent);
             var gapClassification = ClassifyGap(
@@ -777,6 +831,18 @@ internal static class FreeWCommandInventory
             AvaloniaEvidence: new BehaviorEvidenceLink(
                 Path: "freew/FreeW.App.Presentation.Tests/HeaderFooterRibbonWorkflowTests.cs",
                 Test: "HeaderFooterRibbonWorkflowTests.BothRenderersDelegateHeaderFooterMappingToSharedPresentation"));
+
+    private static CommandBehaviorEvidence DesignWorkflowEvidence(string summary) =>
+        new(
+            EvidenceId: "freew.design.shared-workflow",
+            Slice: "Design command behavior",
+            Summary: summary,
+            WpfEvidence: new BehaviorEvidenceLink(
+                Path: "freew/FreeW.App.Presentation.Tests/DesignRibbonWorkflowTests.cs",
+                Test: "DesignRibbonWorkflowTests.SharedWorkflowOwnsChoiceResolutionPresetMappingAndPreparationOrder"),
+            AvaloniaEvidence: new BehaviorEvidenceLink(
+                Path: "freew/FreeW.App.Presentation.Tests/DesignRibbonWorkflowTests.cs",
+                Test: "DesignRibbonWorkflowTests.BothRenderersDelegateDesignIdentityToSharedPresentation"));
 
     private static CommandBehaviorEvidence FontEffectEvidence(string summary) =>
         new(

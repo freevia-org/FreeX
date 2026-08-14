@@ -9,15 +9,18 @@ public sealed class FreeWFinalTailOwnershipSourceTests
     {
         var wpf = Read("freew", "FreeW.App.Host", "Ribbon", "FreeWRibbonCommands.cs");
         var avalonia = Read("freew", "FreeW.App.Avalonia", "Ribbon", "FreeWAvaloniaRibbonCommands.cs");
+        var design = Read("freew", "FreeW.App.Presentation", "Ribbon", "DesignRibbonWorkflow.cs");
 
         foreach (var source in new[] { wpf, avalonia })
         {
             source.Should().Contain("CreateFormattingSession(editor)");
             source.Should().Contain("session.ApplyParagraphValue(");
             source.Should().Contain("session.ApplyParagraphStyle(");
-            source.Should().Contain("session.ApplyTheme(");
-            source.Should().Contain("session.ApplyStyleSet(");
+            source.Should().Contain("DesignRibbonWorkflow.Register(");
         }
+
+        design.Should().Contain("bindings.Formatting.ApplyTheme")
+            .And.Contain("bindings.Formatting.ApplyStyleSet");
 
         wpf.Should().NotContain("private sealed class IndentLeftCommand");
         wpf.Should().NotContain("private sealed class IndentRightCommand");
