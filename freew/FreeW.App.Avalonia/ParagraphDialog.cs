@@ -23,7 +23,7 @@ public sealed class ParagraphDialog : FreeWDialogWindow
         ParagraphBreaksDialogPlanner.Surface;
     private static readonly ParagraphDialogVisualMetrics Layout =
         ParagraphBreaksDialogPlanner.VisualMetrics;
-    private static readonly AvaloniaCompactDialogChromeStyle DialogChromeStyle =
+    private static AvaloniaCompactDialogChromeStyle DialogChromeStyle =>
         AvaloniaCompactDialogChrome.WindowsStyle with
         {
             FontFamily = new FontFamily("Segoe UI"),

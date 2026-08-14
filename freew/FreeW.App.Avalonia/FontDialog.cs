@@ -22,7 +22,7 @@ public sealed class FontDialog : FreeWDialogWindow
 {
     private static readonly FontDialogSurfaceSpec Surface = FontDialogPlanner.Surface;
     private static readonly FontDialogVisualMetrics Layout = FontDialogPlanner.VisualMetrics;
-    private static readonly AvaloniaCompactDialogChromeStyle DialogChromeStyle =
+    private static AvaloniaCompactDialogChromeStyle DialogChromeStyle =>
         AvaloniaCompactDialogChrome.WindowsStyle with
         {
             FontFamily = new FontFamily("Segoe UI"),
