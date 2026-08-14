@@ -34,6 +34,21 @@ public sealed class SharedAvaloniaDialogChromeOwnershipTests
             .And.NotContain("new AvaloniaCompactDialogChromeStyle(FontFamily.Default)");
     }
 
+    [Fact]
+    public void CompactComboBoxOwnsStableRequiredPartsInsteadOfPatchingFluentInternals()
+    {
+        var root = TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeX.slnx");
+        var source = Read(root, "AvaloniaCompactDialogChrome.cs");
+
+        source.Should().Contain("comboBox.Template = CreateCompactComboBoxTemplate(")
+            .And.Contain("Name = \"PART_EditableTextBox\"")
+            .And.Contain("Name = \"PART_Popup\"")
+            .And.Contain("Name = \"PART_ItemsPresenter\"")
+            .And.Contain("Mode = BindingMode.TwoWay")
+            .And.NotContain("void ApplyWpfComboGlyph()")
+            .And.NotContain("selector.OfType<Border>().Name(\"PART_LayoutRoot\")");
+    }
+
     private static string Read(string root, string fileName) =>
         File.ReadAllText(Path.Combine(
             root,
