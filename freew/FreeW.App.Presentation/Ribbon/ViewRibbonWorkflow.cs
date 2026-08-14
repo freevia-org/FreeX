@@ -7,7 +7,6 @@ public enum ViewRibbonBindingAvailability
 {
     Omitted,
     Disabled,
-    EnabledNoOp,
 }
 
 public sealed record ViewRibbonActionBinding(
@@ -210,7 +209,6 @@ public static class ViewRibbonWorkflow
         availability switch
         {
             ViewRibbonBindingAvailability.Disabled => FreeWRibbonExecutionProfile.UnavailableCommand,
-            ViewRibbonBindingAvailability.EnabledNoOp => EmptyRibbonCommand.Instance,
             _ => null,
         };
 }

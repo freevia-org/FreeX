@@ -128,7 +128,7 @@ public sealed class ViewRibbonWorkflowTests
     }
 
     [Fact]
-    public void Register_preserves_optional_absence_and_typed_unbound_availability()
+    public void Register_preserves_optional_absence_and_fails_closed_for_unbound_commands()
     {
         var registry = new RibbonCommandRegistry();
 
@@ -146,12 +146,12 @@ public sealed class ViewRibbonWorkflowTests
                     PrintLayout: new ViewRibbonToggleBinding(static () => { }, IsChecked: null)),
                 Window: new ViewRibbonWindowBindings(
                     NewWindow: new ViewRibbonActionBinding(
-                        AvailabilityWhenUnbound: ViewRibbonBindingAvailability.EnabledNoOp))));
+                        AvailabilityWhenUnbound: ViewRibbonBindingAvailability.Disabled))));
 
         Stateful(registry, "freew.read-mode").GetState().IsEnabled.Should().BeFalse();
         Stateful(registry, "freew.read-mode-column-default").GetState().IsEnabled.Should().BeFalse();
         Stateful(registry, "freew.read-mode-color-inverse").GetState().IsEnabled.Should().BeFalse();
-        Command(registry, "freew.new-window").Should().BeSameAs(EmptyRibbonCommand.Instance);
+        Stateful(registry, "freew.new-window").GetState().IsEnabled.Should().BeFalse();
 
         registry.TryGet("freew.print-preview", out _).Should().BeFalse();
         registry.TryGet("freew.print-layout", out _).Should().BeFalse(
@@ -165,6 +165,7 @@ public sealed class ViewRibbonWorkflowTests
     {
         var wpf = ReadSource("freew", "FreeW.App.Host", "Ribbon", "FreeWRibbonCommands.cs");
         var avalonia = ReadSource("freew", "FreeW.App.Avalonia", "Ribbon", "FreeWAvaloniaRibbonCommands.cs");
+        var workflow = ReadSource("freew", "FreeW.App.Presentation", "Ribbon", "ViewRibbonWorkflow.cs");
 
         foreach (var source in new[] { wpf, avalonia })
         {
@@ -175,9 +176,12 @@ public sealed class ViewRibbonWorkflowTests
             source.Should().NotContain(".Register(\"freew.gridlines\"");
             source.Should().NotContain(".Register(\"freew.new-window\"");
             source.Should().NotContain(".Register(\"freew.split-window\"");
+            source.Should().NotContain("EnabledNoOp");
         }
 
         avalonia.Should().NotContain("RegisterReadModeChoice(");
+        workflow.Should().NotContain("EnabledNoOp",
+            "the shared View contract must not permit an enabled command without an execution endpoint");
     }
 
     private static void Execute(IRibbonCommandRegistry registry, string commandId) =>

@@ -1188,10 +1188,10 @@ internal static class FreeWRibbonCommands
                     Toggle: new ViewRibbonToggleBinding(onToggleReadMode, isReadModeActive),
                     ColumnWidth: new ViewRibbonChoiceBinding(
                         onReadModeColumnWidth,
-                        ViewRibbonBindingAvailability.EnabledNoOp),
+                        ViewRibbonBindingAvailability.Disabled),
                     PageColor: new ViewRibbonChoiceBinding(
                         onReadModePageColor,
-                        ViewRibbonBindingAvailability.EnabledNoOp)),
+                        ViewRibbonBindingAvailability.Disabled)),
                 Modes: new ViewRibbonModeBindings(
                     PrintLayout: new ViewRibbonToggleBinding(onTogglePrintLayout, isPrintLayoutActive),
                     WebLayout: new ViewRibbonToggleBinding(onWebLayout, isWebLayoutActive),
@@ -1221,10 +1221,10 @@ internal static class FreeWRibbonCommands
                 Window: new ViewRibbonWindowBindings(
                     NewWindow: new ViewRibbonActionBinding(
                         onNewWindow,
-                        ViewRibbonBindingAvailability.EnabledNoOp),
+                        ViewRibbonBindingAvailability.Disabled),
                     ArrangeAll: new ViewRibbonActionBinding(
                         onArrangeAll,
-                        ViewRibbonBindingAvailability.EnabledNoOp),
+                        ViewRibbonBindingAvailability.Disabled),
                     Split: new ViewRibbonToggleBinding(onToggleSplitWindow, isSplitWindowActive))));
 
         // Home > Paragraph — Show Formatting Marks: a stateful toggle over the editor's display-only pilcrow /
