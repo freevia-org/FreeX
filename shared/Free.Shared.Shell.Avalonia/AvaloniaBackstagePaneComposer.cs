@@ -348,21 +348,8 @@ public sealed class AvaloniaBackstagePaneComposer
         if (!_profile.WrapPanesInScrollViewer)
             return content;
 
-        var scroll = new ScrollViewer
-        {
-            Content = content,
-            Padding = new Thickness(0),
-            Margin = useClassicScrollChrome ? new Thickness(0, 0, 1, 0) : new Thickness(0),
-            FontFamily = new FontFamily(_profile.PaneFontFamilyName),
-            FontSize = _profile.PaneFontSize,
-            HorizontalContentAlignment = HorizontalAlignment.Left,
-            VerticalContentAlignment = VerticalAlignment.Top,
-            VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
-            HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled,
-        };
-        scroll.SetValue(ScrollViewer.AllowAutoHideProperty, !_profile.DisableScrollBarAutoHide);
-        if (_profile.UseAntialiasTextRendering)
-            TextOptions.SetTextRenderingMode(scroll, TextRenderingMode.Antialias);
+        var scroll = new ScrollViewer { Content = content };
+        AvaloniaBackstageScrollChrome.Apply(scroll, _profile, useClassicScrollChrome);
 
         if (useClassicScrollChrome &&
             _style.ScrollTrackBrush is { } track &&
