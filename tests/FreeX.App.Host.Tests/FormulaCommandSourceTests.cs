@@ -96,7 +96,8 @@ public sealed class FormulaCommandSourceTests
         source.Should().Contain("DefinedNameUiPolicy.BuildScopeOptions(definedNames.ScopeChoices)");
         source.Should().NotContain("new NamedRangeDialog(",
             "Define Name should open a creation flow instead of duplicating Name Manager");
-        source.Should().Contain("new CreateNamesFromSelectionDialog { Owner = this }");
+        source.Should().Contain("CreateNamesFromSelectionPlanner.DetectOptions(range, sheet.GetValue)");
+        source.Should().Contain("new CreateNamesFromSelectionDialog(detected) { Owner = this }");
         source.Should().Contain("new CreateNamedRangesFromSelectionCommand(");
         source.Should().Contain("PasteNamesPlanner.BuildItems(_workbook, FormatWorkbookRange)");
         source.Should().Contain("new PasteNamesDialog(items)");
