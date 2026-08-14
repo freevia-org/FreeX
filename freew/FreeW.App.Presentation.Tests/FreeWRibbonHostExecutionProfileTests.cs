@@ -86,6 +86,61 @@ public sealed class FreeWRibbonHostExecutionProfileTests
     }
 
     [Fact]
+    public void ReviewingPaneCommandAndAliasShareTheReturnedStatefulInstance()
+    {
+        var visible = false;
+        var bindings = new FreeWRibbonCommandBindingPorts();
+        var commands = FreeWRibbonHostExecutionProfile.Register(
+            bindings,
+            FreeWRibbonHostExecutionPorts.Empty with
+            {
+                ToggleReviewingPane = () => visible = !visible,
+                IsReviewingPaneVisible = () => visible,
+            },
+            registerFileAdapterCommands: false);
+
+        Command(bindings, FreeWRibbonCommandAction.ReviewingPane)
+            .Should().BeSameAs(commands.ReviewingPane);
+        bindings.TryGet("freew.reviewingpane", out var alias).Should().BeTrue();
+        alias.Should().BeSameAs(commands.ReviewingPane);
+        commands.ReviewingPane.GetState().IsChecked.Should().BeFalse();
+        commands.ReviewingPane.Execute(RibbonCommandContext.Empty);
+        commands.ReviewingPane.GetState().IsChecked.Should().BeTrue();
+    }
+
+    [Fact]
+    public void RenderersDoNotRebindSharedReviewingPanePolicy()
+    {
+        var root = TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeW.slnx");
+        var wpf = File.ReadAllText(Path.Combine(
+            root,
+            "freew",
+            "FreeW.App.Host",
+            "Ribbon",
+            "FreeWRibbonCommands.cs"));
+        var avalonia = File.ReadAllText(Path.Combine(
+            root,
+            "freew",
+            "FreeW.App.Avalonia",
+            "Ribbon",
+            "FreeWAvaloniaRibbonCommands.cs"));
+        var profile = File.ReadAllText(Path.Combine(
+            root,
+            "freew",
+            "FreeW.App.Presentation",
+            "Ribbon",
+            "FreeWRibbonHostExecutionProfile.cs"));
+
+        profile.Should().Contain("bindings.Register(\"freew.reviewingpane\", reviewingPane)");
+        foreach (var renderer in new[] { wpf, avalonia })
+        {
+            renderer.Should().NotContain("BindToggle(FreeWRibbonCommandAction.ReviewingPane");
+            renderer.Should().NotContain("Register(\"freew.reviewingpane\"");
+        }
+        wpf.Should().Contain("hostCommands.ReviewingPane");
+    }
+
+    [Fact]
     public void AvaloniaOptionalDialogAdaptersUseTheSharedUnavailableCommand()
     {
         var root = TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeW.slnx");

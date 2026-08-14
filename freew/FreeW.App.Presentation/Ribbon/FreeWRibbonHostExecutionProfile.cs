@@ -2,13 +2,16 @@ using Free.Shared.Ribbon;
 
 namespace FreeW.App.Presentation.Ribbon;
 
+public sealed record FreeWRibbonHostExecutionCommands(
+    IRibbonStatefulCommand ReviewingPane);
+
 /// <summary>
 /// Maps shell-owned operations to canonical FreeW actions. Editor-context and native control
 /// commands remain renderer adapters and can replace these bindings before the final build.
 /// </summary>
 public static class FreeWRibbonHostExecutionProfile
 {
-    public static void Register(
+    public static FreeWRibbonHostExecutionCommands Register(
         FreeWRibbonCommandBindingPorts bindings,
         FreeWRibbonHostExecutionPorts ports,
         bool registerFileAdapterCommands)
@@ -83,10 +86,11 @@ public static class FreeWRibbonHostExecutionProfile
         BindOrUnavailable(bindings, FreeWRibbonCommandAction.InspectDocument, ports.InspectDocument);
         BindOrUnavailable(bindings, FreeWRibbonCommandAction.Compare, ports.CompareDocuments);
         BindOrUnavailable(bindings, FreeWRibbonCommandAction.Combine, ports.CombineDocuments);
-        bindings.BindToggle(
+        var reviewingPane = bindings.BindToggle(
             FreeWRibbonCommandAction.ReviewingPane,
             ports.ToggleReviewingPane,
             ports.IsReviewingPaneVisible ?? (static () => false));
+        bindings.Register("freew.reviewingpane", reviewingPane);
         BindOptionalToggle(
             bindings,
             FreeWRibbonCommandAction.ShowNotes,
@@ -98,6 +102,7 @@ public static class FreeWRibbonHostExecutionProfile
             ports.ToggleReviewBalloons,
             ports.IsReviewBalloonsActive);
         RegisterSupportCommands(bindings, ports);
+        return new FreeWRibbonHostExecutionCommands(reviewingPane);
     }
 
     public static void RegisterSupportCommands(

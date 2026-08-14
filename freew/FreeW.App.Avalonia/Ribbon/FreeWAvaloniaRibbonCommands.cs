@@ -379,10 +379,6 @@ internal static class FreeWAvaloniaRibbonCommands
                 RegisterCompatibilityAliases: true));
 
         // ── Review ───────────────────────────────────────────────────────────
-        var reviewingPaneCommand = r.BindToggle(FreeWRibbonCommandAction.ReviewingPane,
-            callbacks.ToggleReviewingPane,
-            callbacks.IsReviewingPaneVisible ?? (() => false));
-        r.Register("freew.reviewingpane", reviewingPaneCommand);
         ReviewTrackingRibbonWorkflow.Register(
             r,
             new ReviewTrackingCommandBindings(

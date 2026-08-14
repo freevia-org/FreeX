@@ -126,8 +126,6 @@ internal static class FreeWRibbonCommands
         var isDraftViewActive = hostPorts?.IsDraftViewActive;
         var onToggleRevealFormatting = hostPorts?.ToggleRevealFormatting;
         var isRevealFormattingVisible = hostPorts?.IsRevealFormattingVisible;
-        var onToggleReviewingPane = hostPorts?.ToggleReviewingPane;
-        var isReviewingPaneVisible = hostPorts?.IsReviewingPaneVisible;
         var onToggleRuler = hostPorts?.ToggleRuler;
         var isRulerVisible = hostPorts?.IsRulerVisible;
         var onToggleMultiplePages = hostPorts?.ToggleMultiplePages;
@@ -154,9 +152,10 @@ internal static class FreeWRibbonCommands
         var askFieldInstruction = nativePorts.AskFieldInstruction;
 
         var registry = new FreeWRibbonCommandBindingPorts();
+        FreeWRibbonHostExecutionCommands? hostCommands = null;
         if (hostPorts is not null)
         {
-            FreeWRibbonHostExecutionProfile.Register(
+            hostCommands = FreeWRibbonHostExecutionProfile.Register(
                 registry,
                 hostPorts,
                 registerFileAdapterCommands: true);
@@ -900,14 +899,11 @@ internal static class FreeWRibbonCommands
         // Review tab — single-revision reviewing surface (the Reviewing Pane). The toggle shows/hides the
         // dockable revisions list; Accept/Reject act on the SELECTED single change and Previous/Next step
         // through them. All four delegate to the host, which owns the pane and drives the pure RevisionList.
-        if (onToggleReviewingPane is not null && isReviewingPaneVisible is not null)
+        if (hostCommands is not null)
         {
-            var reviewingPane = registry.BindToggle(FreeWRibbonCommandAction.ReviewingPane,
-                onToggleReviewingPane,
-                isReviewingPaneVisible);
             stateful.Add((
                 FreeWRibbonCommandWorkflow.GetPrimaryCommandId(FreeWRibbonCommandAction.ReviewingPane),
-                reviewingPane));
+                hostCommands.ReviewingPane));
         }
 
         // Review tab — Protect: Mark as Final. A stateful toggle over Word's advisory read-only flag:
