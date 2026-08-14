@@ -112,10 +112,7 @@ public sealed partial class SlideShowWindow : Window, ISlideShowTransitionPlayba
     /// <param name="presentation">The presentation to play.</param>
     /// <param name="startIndex">Zero-based slide index to start from.</param>
     public SlideShowWindow(Presentation presentation, int startIndex = 0)
-        : this(
-            presentation,
-            SlideShowCustomShowPlanner.BuildFullPresentationRoute(presentation, startIndex),
-            captureBackend: null)
+        : this(SlideShowWindowLaunchPlan.FullPresentation(presentation, startIndex))
     {
     }
 
@@ -123,17 +120,14 @@ public sealed partial class SlideShowWindow : Window, ISlideShowTransitionPlayba
         Presentation presentation,
         int startIndex,
         ISlideShowRecordingCaptureBackend? captureBackend)
-        : this(
-            presentation,
-            SlideShowCustomShowPlanner.BuildFullPresentationRoute(presentation, startIndex),
-            captureBackend)
+        : this(SlideShowWindowLaunchPlan.FullPresentation(presentation, startIndex, captureBackend))
     {
     }
 
     /// <param name="presentation">The presentation that owns slide size, theme, and timing state.</param>
     /// <param name="playbackRoute">The ordered slide route to play.</param>
     public SlideShowWindow(Presentation presentation, SlideShowPlaybackRoute playbackRoute)
-        : this(presentation, playbackRoute, captureBackend: null, setSlideNotesText: null)
+        : this(new(presentation, playbackRoute))
     {
     }
 
@@ -144,14 +138,13 @@ public sealed partial class SlideShowWindow : Window, ISlideShowTransitionPlayba
         int? preferredCaptionSlideIndex = null,
         uint? preferredCaptionShapeId = null,
         int? preferredCaptionTrackIndex = null)
-        : this(
+        : this(new(
             presentation,
             playbackRoute,
-            captureBackend: null,
-            setSlideNotesText,
-            preferredCaptionSlideIndex,
-            preferredCaptionShapeId,
-            preferredCaptionTrackIndex)
+            SetSlideNotesText: setSlideNotesText,
+            PreferredCaptionSlideIndex: preferredCaptionSlideIndex,
+            PreferredCaptionShapeId: preferredCaptionShapeId,
+            PreferredCaptionTrackIndex: preferredCaptionTrackIndex))
     {
     }
 
@@ -163,19 +156,23 @@ public sealed partial class SlideShowWindow : Window, ISlideShowTransitionPlayba
         int? preferredCaptionSlideIndex = null,
         uint? preferredCaptionShapeId = null,
         int? preferredCaptionTrackIndex = null)
-    {
-        _presentation = presentation ?? throw new ArgumentNullException(nameof(presentation));
-        ArgumentNullException.ThrowIfNull(playbackRoute);
-        _setSlideNotesText = setSlideNotesText;
-        _runtime = new SlideShowRuntimeApplication(
-            _presentation,
+        : this(new(
+            presentation,
             playbackRoute,
-            DateTimeOffset.UtcNow,
-            captureBackend ?? CreateDefaultRecordingCaptureBackend(),
-            new SlideShowRuntimeCaptionPreference(
-                preferredCaptionSlideIndex,
-                preferredCaptionShapeId,
-                preferredCaptionTrackIndex));
+            captureBackend,
+            setSlideNotesText,
+            preferredCaptionSlideIndex,
+            preferredCaptionShapeId,
+            preferredCaptionTrackIndex))
+    {
+    }
+
+    private SlideShowWindow(SlideShowWindowLaunchPlan launchPlan)
+    {
+        ArgumentNullException.ThrowIfNull(launchPlan);
+        _presentation = launchPlan.Presentation;
+        _setSlideNotesText = launchPlan.SetSlideNotesText;
+        _runtime = launchPlan.CreateRuntime(CreateDefaultRecordingCaptureBackend);
         _presenterViewHost = new SlideShowNativePresenterWindowHost<PresenterViewWindow>(
             operations => new PresenterViewWindow(_presentation, operations),
             (window, onClosed) => window.Closed += (_, _) => onClosed(),
@@ -640,29 +637,21 @@ public sealed partial class SlideShowWindow : Window, ISlideShowTransitionPlayba
 
     private void RefreshInkOverlay()
     {
-        _inkOverlay.Children.Clear();
-
         var canvasWidth = _slideCanvas.Bounds.Width > 0 ? _slideCanvas.Bounds.Width : _slideDipW;
         var canvasHeight = _slideCanvas.Bounds.Height > 0 ? _slideCanvas.Bounds.Height : _slideDipH;
-        var plan = SlideShowInkExecutionPlanner.BuildOverlayRenderPlan(
+        SlideShowInkNativeProjectionSession.Apply(
             _runtime.InkExecutionState,
             canvasWidth,
             canvasHeight,
-            CurrentSlideMetrics());
-        _inkOverlay.Width = canvasWidth;
-        _inkOverlay.Height = canvasHeight;
-
-        foreach (var primitive in plan.Primitives)
-        {
-            if (primitive.Kind == SlideShowInkOverlayPrimitiveKind.StrokePath)
+            CurrentSlideMetrics(),
+            _inkOverlay.Children.Clear,
+            (width, height) =>
             {
-                AddInkStroke(primitive);
-            }
-            else if (primitive.Kind == SlideShowInkOverlayPrimitiveKind.LaserDot)
-            {
-                AddLaserOverlay(primitive);
-            }
-        }
+                _inkOverlay.Width = width;
+                _inkOverlay.Height = height;
+            },
+            AddInkStroke,
+            AddLaserOverlay);
     }
 
     private void AddInkStroke(SlideShowInkOverlayPrimitive primitive)
@@ -779,19 +768,11 @@ public sealed partial class SlideShowWindow : Window, ISlideShowTransitionPlayba
     void ISlideShowDisplayRenderer.EnterMediaSlide(SlideShowRuntimeDisplayPlan plan)
     {
         _mediaController.EnterSlide(
-            plan.Slide!,
-            _slideDipW,
-            _slideDipH,
-            _slideCanvas.Bounds.Width > 0 ? _slideCanvas.Bounds.Width : _slideDipW,
-            _slideCanvas.Bounds.Height > 0 ? _slideCanvas.Bounds.Height : _slideDipH,
-            plan.CaptionTracks,
-            preferredCaptionShapeId: plan.PreferredCaptionShapeId,
-            preferredCaptionTrackIndex: plan.PreferredCaptionTrackIndex,
-            captionSlideIndex: plan.CaptionSlideIndex,
-            preferredCaptionSlideIndex: plan.PreferredCaptionSlideIndex,
-            showMediaControls: plan.ShowMediaControls,
-            showNarration: plan.ShowNarration,
-            presentationSlideIndex: plan.CaptionSlideIndex);
+            SlideShowMediaNativeEntryRequest.FromDisplayPlan(
+                plan,
+                _slideCanvas.Bounds.Width > 0 ? _slideCanvas.Bounds.Width : _slideDipW,
+                _slideCanvas.Bounds.Height > 0 ? _slideCanvas.Bounds.Height : _slideDipH),
+            plan.CaptionSlideIndex);
     }
 
     void ISlideShowDisplayRenderer.StopAutoAdvanceTimer() => _autoAdvanceTimer.Stop();

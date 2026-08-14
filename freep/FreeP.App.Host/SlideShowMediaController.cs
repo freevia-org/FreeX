@@ -139,13 +139,7 @@ public sealed partial class SlideShowMediaController
     private readonly ITempMediaFileWriter _fileWriter;
 
     // Slide DIP dimensions — used to compute on-screen rect.
-    private double _slideDipW;
-    private double _slideDipH;
-    private double _canvasW;
-    private double _canvasH;
-    private Slide? _activeSlide;
-    private bool _showMediaControls = true;
-    private bool _showNarration = true;
+    private readonly SlideShowMediaNativeInteractionSession _interaction = new();
     private readonly SlideShowMediaPlaybackCommandCoordinator _playback;
     private SlideShowMediaPlaybackSession PlaybackSession => _playback.Session;
 
@@ -225,29 +219,20 @@ public sealed partial class SlideShowMediaController
                            bool showMediaControls = true,
                            bool showNarration = true,
                            int? presentationSlideIndex = null)
+        => EnterSlide(
+            new(slide, slideDipW, slideDipH, canvasW, canvasH, captionTracks,
+                preferredCaptionShapeId, preferredCaptionTrackIndex, captionSlideIndex,
+                preferredCaptionSlideIndex, showMediaControls, showNarration),
+            presentationSlideIndex);
+
+    public void EnterSlide(
+        SlideShowMediaNativeEntryRequest request,
+        int? presentationSlideIndex = null)
     {
+        ArgumentNullException.ThrowIfNull(request);
         ApplyEnterResult(PlaybackSession.EnterSlide(presentationSlideIndex));
 
-        _slideDipW = slideDipW;
-        _slideDipH = slideDipH;
-        _canvasW = canvasW;
-        _canvasH = canvasH;
-        _activeSlide = slide;
-        _showMediaControls = showMediaControls;
-        _showNarration = showNarration;
-        var entryPlan = SlideShowMediaInteractionPlanner.PlanSlideEntry(
-            slide,
-            slideDipW,
-            slideDipH,
-            canvasW,
-            canvasH,
-            captionTracks,
-            preferredCaptionShapeId,
-            preferredCaptionTrackIndex,
-            captionSlideIndex,
-            preferredCaptionSlideIndex,
-            showMediaControls,
-            showNarration);
+        var entryPlan = _interaction.Enter(request);
 
         foreach (var entry in entryPlan.Items)
         {
@@ -280,14 +265,11 @@ public sealed partial class SlideShowMediaController
     /// </summary>
     public void UpdateLayout(Slide slide, double canvasW, double canvasH)
     {
-        if (_activeSlide is not null && !ReferenceEquals(_activeSlide, slide))
+        if (!_interaction.UpdateLayout(slide, canvasW, canvasH))
         {
             Teardown();
             return;
         }
-
-        _canvasW = canvasW;
-        _canvasH = canvasH;
 
         foreach (var slot in _slots)
         {
@@ -297,8 +279,8 @@ public sealed partial class SlideShowMediaController
 
             var authoredBounds = SlideShowMediaInteractionPlanner.ComputeMediaBounds(
                 shape,
-                _slideDipW,
-                _slideDipH,
+                _interaction.SlideWidthDip,
+                _interaction.SlideHeightDip,
                 canvasW,
                 canvasH);
             var useFullScreen = slot.Playback is { } playback
@@ -337,7 +319,7 @@ public sealed partial class SlideShowMediaController
         foreach (var slot in _slots)
             DisposeSlot(slot);
         _slots.Clear();
-        _activeSlide = null;
+        _interaction.Clear();
         _captionTimer.Stop();
     }
 
@@ -389,16 +371,14 @@ public sealed partial class SlideShowMediaController
     public bool TryHandleClick(double canvasX, double canvasY, Slide slide,
                                double canvasW, double canvasH)
     {
-        var click = SlideShowMediaInteractionPlanner.PlanClick(
+        var click = _interaction.PlanClick(
             slide,
-            _slideDipW,
-            _slideDipH,
+            _interaction.SlideWidthDip,
+            _interaction.SlideHeightDip,
             canvasW,
             canvasH,
             canvasX,
-            canvasY,
-            _showMediaControls,
-            _showNarration);
+            canvasY);
         ObserveMediaClick(click);
         if (!click.IsHandled)
             return false;
@@ -435,8 +415,8 @@ public sealed partial class SlideShowMediaController
             PresentationMediaTranscriptPlanner.PlanOverlayPlacement(
                 new PresentationMediaOverlayPlacementRequest(
                     bounds,
-                    _canvasW,
-                    _canvasH,
+                    _interaction.CanvasWidth,
+                    _interaction.CanvasHeight,
                     UseFullScreen: false)));
         Panel.SetZIndex(host, 10);
         _overlay.Children.Add(host);
@@ -479,15 +459,15 @@ public sealed partial class SlideShowMediaController
                 testPlaybackPosition ?? slot.Playback!.Port.Position);
             ApplyCaptionText(slot.CaptionText, cue);
             if (cue is not null
-                && _activeSlide is { } activeSlide
+                && _interaction.ActiveSlide is { } activeSlide
                 && SlideShapeTraversal.FindById(activeSlide, slot.ShapeId) is { Media: not null } shape)
             {
                 var bounds = SlideShowMediaInteractionPlanner.ComputeMediaBounds(
                     shape,
-                    _slideDipW,
-                    _slideDipH,
-                    _canvasW,
-                    _canvasH);
+                    _interaction.SlideWidthDip,
+                    _interaction.SlideHeightDip,
+                    _interaction.CanvasWidth,
+                    _interaction.CanvasHeight);
                 var useFullScreen = slot.Playback is { } playback
                     && PlaybackSession.Snapshot(playback).UseFullScreen;
                 ApplyCaptionPlacement(
@@ -496,8 +476,8 @@ public sealed partial class SlideShowMediaController
                     PresentationMediaTranscriptPlanner.PlanOverlayPlacement(
                         new PresentationMediaOverlayPlacementRequest(
                             bounds,
-                            _canvasW,
-                            _canvasH,
+                            _interaction.CanvasWidth,
+                            _interaction.CanvasHeight,
                             useFullScreen,
                             cue,
                             slot.CaptionTrack?.Regions)));
@@ -678,8 +658,8 @@ public sealed partial class SlideShowMediaController
         var placement = PresentationMediaTranscriptPlanner.PlanOverlayPlacement(
             new PresentationMediaOverlayPlacementRequest(
                 slot.AuthoredBounds,
-                _canvasW,
-                _canvasH,
+                _interaction.CanvasWidth,
+                _interaction.CanvasHeight,
                 snapshot.UseFullScreen,
                 PresentationMediaTranscriptPlanner.FindActiveCue(
                     slot.CaptionTrack,
