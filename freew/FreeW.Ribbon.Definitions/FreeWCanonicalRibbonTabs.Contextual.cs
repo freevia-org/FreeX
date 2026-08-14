@@ -451,7 +451,7 @@ internal static partial class FreeWCanonicalRibbonTabs
         this RibbonDefinitionBuilder builder,
         FreeWRibbonCapabilities capabilities) =>
         builder.ContextualTab("chart-design", "Chart Design",
-            new RibbonTabContext(capabilities.ChartContextKey, "Chart Tools", (capabilities.UsesPortableControls ? RibbonContextColor.Green : RibbonContextColor.Orange)), tab =>
+            new RibbonTabContext(capabilities.ChartContextKey, "Chart Tools", RibbonContextColor.Orange), tab =>
             {
                 var topology = new FreeWRibbonTabTopology(tab, capabilities);
 
@@ -549,7 +549,7 @@ internal static partial class FreeWCanonicalRibbonTabs
             new RibbonTabContext(
                 capabilities.ChartContextKey,
                 "Chart Tools",
-                capabilities.UsesPortableControls ? RibbonContextColor.Green : RibbonContextColor.Orange), tab =>
+                RibbonContextColor.Orange), tab =>
             {
                 var topology = new FreeWRibbonTabTopology(tab, capabilities);
 
@@ -609,7 +609,7 @@ internal static partial class FreeWCanonicalRibbonTabs
         this RibbonDefinitionBuilder builder,
         FreeWRibbonCapabilities capabilities) =>
         builder.ContextualTab("smartart-design", "SmartArt Design",
-            new RibbonTabContext(capabilities.SmartArtContextKey, "SmartArt Tools", (capabilities.UsesPortableControls ? RibbonContextColor.Blue : RibbonContextColor.Orange)), tab =>
+            new RibbonTabContext(capabilities.SmartArtContextKey, "SmartArt Tools", RibbonContextColor.Orange), tab =>
             {
                 var topology = new FreeWRibbonTabTopology(tab, capabilities);
 

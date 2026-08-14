@@ -53,9 +53,7 @@ public partial class GoalSeekDialog : Window
                 out var input,
                 out var parseResult))
         {
-            var validation = GoalSeekStatusDialogPlanner.DescribeValidationError(
-                parseResult,
-                GoalSeekPresentationProfile.Wpf);
+            var validation = GoalSeekStatusDialogPlanner.DescribeValidationError(parseResult);
             DialogMessageHelper.ShowWarning(
                 this,
                 validation.Message.Resolve(UiText.Get, UiText.Format),

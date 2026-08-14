@@ -10,6 +10,14 @@ namespace FreeW.Ribbon.Definitions.Tests;
 /// </summary>
 public sealed class FreeWRibbonKeyTipTabScopeTests
 {
+    private static readonly IReadOnlyDictionary<string, string> WpfAuthorityTabKeyTips =
+        new Dictionary<string, string>(StringComparer.Ordinal)
+        {
+            ["insert"] = "N",
+            ["references"] = "R",
+            ["view"] = "W",
+        };
+
     private static readonly HashSet<string> PortableProfileTabIds =
     [
         "mailings",
@@ -57,6 +65,22 @@ public sealed class FreeWRibbonKeyTipTabScopeTests
         {
             avalonia.Should().ContainKey(path, $"Avalonia must expose the WPF keyboard route at {path}");
             avalonia[path].Should().Be(wpfKeyTip, $"{path} is a shared command surface");
+        }
+    }
+
+    [Fact]
+    public void SharedTopLevelTabsUseWpfAuthorityKeyTipsInBothProfiles()
+    {
+        var wpf = FreeWRibbon.Build(FreeWRibbonCapabilities.Wpf).Tabs
+            .ToDictionary(tab => tab.Id, tab => tab.KeyTip, StringComparer.Ordinal);
+        var avalonia = FreeWRibbon.Build(FreeWRibbonCapabilities.Avalonia).Tabs
+            .ToDictionary(tab => tab.Id, tab => tab.KeyTip, StringComparer.Ordinal);
+
+        foreach (var (tabId, expectedKeyTip) in WpfAuthorityTabKeyTips)
+        {
+            wpf[tabId].Should().Be(expectedKeyTip);
+            avalonia[tabId].Should().Be(expectedKeyTip,
+                $"{tabId} is the same keyboard route in both renderers");
         }
     }
 

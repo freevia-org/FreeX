@@ -52,7 +52,7 @@ public sealed class GoalSeekRequestParserTests
             .Should().BeFalse();
 
         GoalSeekStatusDialogPlanner
-            .DescribeValidationError(result, GoalSeekPresentationProfile.Wpf)
+            .DescribeValidationError(result)
             .Message.Resolve(UiText.Get, UiText.Format)
             .Should().Be(expectedError);
     }

@@ -371,7 +371,7 @@ internal static partial class FreeWCanonicalRibbonTabs
     {
         var symbolsGroup = FreeWRibbonText.SymbolsGroup;
         var symbolCommand = FreeWRibbonText.SymbolCommand;
-        return builder.Tab("insert", "Insert", (capabilities.UsesPortableControls ? "I" : "N"), tab =>
+        return builder.Tab("insert", "Insert", "N", tab =>
         {
             var topology = new FreeWRibbonTabTopology(tab, capabilities);
 
@@ -623,7 +623,7 @@ internal static partial class FreeWCanonicalRibbonTabs
         this RibbonDefinitionBuilder builder,
         FreeWRibbonCapabilities capabilities)
     {
-        return builder.Tab("references", "References", (capabilities.UsesPortableControls ? "S" : "R"), tab =>
+        return builder.Tab("references", "References", "R", tab =>
         {
             var topology = new FreeWRibbonTabTopology(tab, capabilities);
 

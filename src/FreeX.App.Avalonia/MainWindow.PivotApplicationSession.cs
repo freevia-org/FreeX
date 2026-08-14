@@ -84,7 +84,7 @@ public sealed partial class MainWindow
 
     private static string PivotApplicationIssueText(PivotMessageModel message) =>
         PivotApplicationMessagePlanner
-            .DescribeIssue(message, PivotMessageTextProfile.Avalonia)
+            .DescribeIssue(message)
             .Resolve(UiText.Get, UiText.Format);
 
     private static string PivotSuccessStatus(PivotApplicationOutcome outcome) =>

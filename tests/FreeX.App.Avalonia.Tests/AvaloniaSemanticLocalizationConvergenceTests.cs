@@ -219,13 +219,11 @@ public sealed class AvaloniaSemanticLocalizationConvergenceTests
                     converged: true,
                     targetValue: 10,
                     actualResult: 10,
-                    foundValue: 5,
-                    GoalSeekPresentationProfile.Avalonia)
+                    foundValue: 5)
                 .Resolve(UiText.Get, UiText.Format));
 
             AssertPseudoLocalized(GoalSeekStatusDialogPlanner.DescribeValidationError(
-                    GoalSeekRequestParseResult.Invalid(GoalSeekRequestParseError.SetCellRequired),
-                    GoalSeekPresentationProfile.Avalonia)
+                    GoalSeekRequestParseResult.Invalid(GoalSeekRequestParseError.SetCellRequired))
                 .Message
                 .Resolve(UiText.Get, UiText.Format));
         });

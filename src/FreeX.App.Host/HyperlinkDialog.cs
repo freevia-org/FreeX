@@ -196,7 +196,7 @@ public sealed class HyperlinkDialog : Window
 
     private static string GetValidationErrorText(HyperlinkDialogValidationError error) =>
         HyperlinkDialogPlanner
-            .DescribeValidationError(error, HyperlinkDialogTextProfile.Wpf)
+            .DescribeValidationError(error)
             .Message.Resolve(UiText.Get, UiText.Format);
 
     private static Grid DialogGrid(int inputRows)

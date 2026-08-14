@@ -15332,7 +15332,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
 
     private static string GetHyperlinkValidationErrorText(HyperlinkDialogValidationError error) =>
         HyperlinkDialogPlanner
-            .DescribeValidationError(error, HyperlinkDialogTextProfile.Avalonia)
+            .DescribeValidationError(error)
             .Message.Resolve(UiText.Get, UiText.Format);
 
     private async Task ShowWorkbookStatisticsDialogAsync()
@@ -19865,9 +19865,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
                 changingCellBox.Text);
             if (!parseResult.Success)
             {
-                var validation = GoalSeekStatusDialogPlanner.DescribeValidationError(
-                    parseResult,
-                    GoalSeekPresentationProfile.Avalonia);
+                var validation = GoalSeekStatusDialogPlanner.DescribeValidationError(parseResult);
                 errorText.Text = validation.Message.Resolve(UiText.Get, UiText.Format);
                 errorText.IsVisible = true;
                 FocusGoalSeekErrorField(validation.FocusTarget, setCellBox, targetValueBox, changingCellBox);
@@ -20099,15 +20097,13 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
                     true,
                     result.Request.TargetValue,
                     seekResult.ActualResult,
-                    seekResult.FoundValue,
-                    GoalSeekPresentationProfile.Avalonia).Resolve(UiText.Get, UiText.Format),
+                    seekResult.FoundValue).Resolve(UiText.Get, UiText.Format),
             WorkbookGoalSeekStatus.NotConverged when result.SeekResult is { } seekResult =>
                 GoalSeekStatusDialogPlanner.DescribeStatus(
                     false,
                     result.Request.TargetValue,
                     seekResult.ActualResult,
-                    seekResult.FoundValue,
-                    GoalSeekPresentationProfile.Avalonia).Resolve(UiText.Get, UiText.Format),
+                    seekResult.FoundValue).Resolve(UiText.Get, UiText.Format),
             _ => GoalSeekStatusDialogPlanner.DescribeExecutionFailure(
                 result.Status,
                 result.ErrorMessage,

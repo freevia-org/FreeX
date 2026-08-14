@@ -136,7 +136,8 @@ public sealed partial class RemainingDialogTests
     {
         var source = ReadClassSource("FillSeriesStepDialog.cs", "public sealed class FillSeriesStepDialog", "public sealed record __NoNextFillSeriesStepDialog");
 
-        source.Should().Contain("FillSeriesValidationTextProfile.Wpf");
+        source.Should().Contain("FillSeriesPlanner.DescribeInputError(inputError)");
+        source.Should().NotContain("FillSeriesValidationTextProfile");
         source.Should().Contain("presentation.FocusTarget == FillSeriesInputFocusTarget.StopValue");
         source.Should().NotContain("string.Equals(error, UiText.Get(\"FillSeriesStep_InvalidStopMessage\")");
     }
