@@ -24,7 +24,7 @@ public sealed class AvaloniaInCanvasTextEditor : IDisposable
 
     private AvaloniaRichTextEditor? _textBox;
     private Control? _activeInlineOleHost;
-    private InCanvasTextEditPlanner? _editPlan;
+    private InCanvasRichTextEditSession? _editSession;
     private uint _editingShapeId;
     private bool _active;
     private bool _committing;
@@ -32,7 +32,7 @@ public sealed class AvaloniaInCanvasTextEditor : IDisposable
 
     private AvaloniaRichTextEditor? _cellTextBox;
     private Border? _cellHighlight;
-    private InCanvasTableCellTextEditPlanner? _cellEditPlan;
+    private InCanvasRichTextEditSession? _cellEditSession;
     private uint _editingTableShapeId;
     private int _editingCellRow;
     private int _editingCellCol;
@@ -623,7 +623,7 @@ public sealed class AvaloniaInCanvasTextEditor : IDisposable
 
         _editingShapeId = shapeId;
         _active = true;
-        _editPlan = startPlan.EditPlanner;
+        _editSession = InCanvasRichTextEditSession.BeginShape(startPlan);
 
         var placement = startPlan.Placement.Value;
 
@@ -685,7 +685,7 @@ public sealed class AvaloniaInCanvasTextEditor : IDisposable
         _editingTableShapeId = shapeId;
         _editingCellRow = startPlan.Row;
         _editingCellCol = startPlan.Col;
-        _cellEditPlan = startPlan.EditPlanner;
+        _cellEditSession = AvaloniaTableCellEditAdapter.BeginSession(startPlan);
         _cellEditActive = true;
 
         _editor.Select(shapeId);
@@ -736,17 +736,17 @@ public sealed class AvaloniaInCanvasTextEditor : IDisposable
         try
         {
             var newBody = _textBox.EditedBody;
-            var editPlan = _editPlan;
+            var editSession = _editSession;
 
             CloseInlineOleHost();
             _overlay.Children.Remove(_textBox);
             _textBox = null;
             _active = false;
             _canvas.ActiveTextEditShapeId = null;
-            _editPlan = null;
+            _editSession = null;
             UpdateOverlayState();
 
-            var decision = editPlan?.CommitRichText(newBody)
+            var decision = editSession?.Commit(newBody)
                 ?? new InCanvasTextEditDecision(InCanvasTextEditOutcome.Unchanged, null);
             if (decision.Command is not null)
                 _editor.Bus.Execute(decision.Command);
@@ -767,7 +767,7 @@ public sealed class AvaloniaInCanvasTextEditor : IDisposable
         try
         {
             var newBody = _cellTextBox.EditedBody;
-            var editPlan = _cellEditPlan;
+            var editSession = _cellEditSession;
             var shapeId = _editingTableShapeId;
             var row = _editingCellRow;
             var col = _editingCellCol;
@@ -775,7 +775,7 @@ public sealed class AvaloniaInCanvasTextEditor : IDisposable
             _overlay.Children.Remove(_cellTextBox);
             _cellTextBox = null;
             _cellEditActive = false;
-            _cellEditPlan = null;
+            _cellEditSession = null;
             UpdateOverlayState();
 
             var slide = _editor.CurrentSlide;
@@ -784,7 +784,8 @@ public sealed class AvaloniaInCanvasTextEditor : IDisposable
             if (cell is null)
                 return;
 
-            var decision = AvaloniaTableCellEditAdapter.CommitRichText(editPlan, newBody);
+            var decision = editSession?.Commit(newBody)
+                ?? AvaloniaTableCellEditAdapter.CommitRichText(editPlanner: null, newBody);
             if (decision.Command is not null)
                 _editor.Bus.Execute(decision.Command);
         }
@@ -800,7 +801,10 @@ public sealed class AvaloniaInCanvasTextEditor : IDisposable
         if (!_cellEditActive || _cellTextBox is null)
             return false;
 
-        var plan = AvaloniaTableCellEditAdapter.PlanNavigation(_editor, direction);
+        var plan = AvaloniaTableCellEditAdapter.PlanNavigation(
+            _cellEditSession,
+            _editor,
+            direction);
         if (!plan.IsReady || plan.ShapeId is null || plan.Row is null || plan.Col is null)
             return false;
 
@@ -826,8 +830,8 @@ public sealed class AvaloniaInCanvasTextEditor : IDisposable
             _textBox = null;
             _active = false;
             _canvas.ActiveTextEditShapeId = null;
-            _ = _editPlan?.Cancel();
-            _editPlan = null;
+            _ = _editSession?.Cancel();
+            _editSession = null;
             UpdateOverlayState();
         }
         finally
@@ -848,8 +852,9 @@ public sealed class AvaloniaInCanvasTextEditor : IDisposable
             _overlay.Children.Remove(_cellTextBox);
             _cellTextBox = null;
             _cellEditActive = false;
-            _ = AvaloniaTableCellEditAdapter.Cancel(_cellEditPlan);
-            _cellEditPlan = null;
+            _ = _cellEditSession?.Cancel()
+                ?? AvaloniaTableCellEditAdapter.Cancel(editPlanner: null);
+            _cellEditSession = null;
             UpdateOverlayState();
         }
         finally

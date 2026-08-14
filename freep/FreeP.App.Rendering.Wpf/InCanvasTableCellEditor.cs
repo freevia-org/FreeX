@@ -34,7 +34,9 @@ public sealed class InCanvasTableCellEditor
     // ── Cell-edit state ───────────────────────────────────────────────────────
 
     private RichTextBox? _cellTextBox;
-    private InCanvasTableCellTextEditPlanner? _cellEditPlan;
+    // The session replaces `_cellEditPlan = editStart.EditPlanner` plus renderer-owned
+    // TableCellEditPlanner.CommitRichText and TableCellEditPlanner.PlanNavigation calls.
+    private InCanvasRichTextEditSession? _cellEditSession;
     private bool         _cellEditActive;
     private int          _editRow;
     private int          _editCol;
@@ -106,7 +108,7 @@ public sealed class InCanvasTableCellEditor
         _cellEditActive = true;
 
         // Use the shared start plan for placement and commit routing.
-        _cellEditPlan = editStart.EditPlanner;
+        _cellEditSession = InCanvasRichTextEditSession.BeginTableCell(editStart);
         var placement = editStart.Placement.Value;
 
         // Determine a fallback font size from the cell's first run.
@@ -160,8 +162,8 @@ public sealed class InCanvasTableCellEditor
         _overlay.Children.Remove(_cellTextBox);
         _cellTextBox    = null;
         _cellEditActive = false;
-        var editPlan = _cellEditPlan;
-        _cellEditPlan = null;
+        var editSession = _cellEditSession;
+        _cellEditSession = null;
 
         var slide = _editor.CurrentSlide;
         if (slide is null) return;
@@ -176,7 +178,8 @@ public sealed class InCanvasTableCellEditor
 
         // Rebuild the full rich TextBody from the FlowDocument.
         var newBody = TextBodyFlowDocumentConverter.FromFlowDocument(doc, cell.TextBody);
-        var decision = TableCellEditPlanner.CommitRichText(editPlan, newBody);
+        var decision = editSession?.Commit(newBody)
+            ?? new InCanvasTextEditDecision(InCanvasTextEditOutcome.Unchanged, null);
 
         if (decision.Command is not null)
             _editor.Bus.Execute(decision.Command);
@@ -189,8 +192,8 @@ public sealed class InCanvasTableCellEditor
         _overlay.Children.Remove(_cellTextBox);
         _cellTextBox = null;
         _cellEditActive = false;
-        _ = TableCellEditPlanner.Cancel(_cellEditPlan);
-        _cellEditPlan = null;
+        _ = _cellEditSession?.Cancel();
+        _cellEditSession = null;
     }
 
     // ── Mouse handling ────────────────────────────────────────────────────────
@@ -246,11 +249,13 @@ public sealed class InCanvasTableCellEditor
         if (!_cellEditActive || _cellTextBox is null)
             return false;
 
-        var plan = TableCellEditPlanner.PlanNavigation(
+        var plan = _cellEditSession?.PlanTableCellNavigation(
             _editor.CurrentSlide,
             _editor.SelectedShapeIds,
             _editor.ActiveTableCell,
             direction);
+        if (plan is null)
+            return false;
         if (!plan.IsReady || plan.ShapeId is null || plan.Row is null || plan.Col is null)
             return false;
 

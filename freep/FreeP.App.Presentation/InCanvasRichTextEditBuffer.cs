@@ -7,7 +7,7 @@ namespace FreeP.App.Compositor;
 /// selection, IME, and clipboard behavior; this buffer preserves the presentation text model
 /// while the edit remains local and produces one rich body for commit.
 /// </summary>
-public sealed class InCanvasRichTextEditBuffer
+public class InCanvasRichTextEditBuffer
 {
     private TextBody _body;
     private Run? _typingRun;
@@ -16,6 +16,13 @@ public sealed class InCanvasRichTextEditBuffer
     public InCanvasRichTextEditBuffer(TextBody? body)
     {
         _body = TextBodyModelCloner.CloneTextBody(body) ?? CreateEmptyBody();
+    }
+
+    protected void ResetBody(TextBody? body)
+    {
+        _body = TextBodyModelCloner.CloneTextBody(body) ?? CreateEmptyBody();
+        _typingRun = null;
+        _typingCaret = null;
     }
 
     public TextBody Body => TextBodyModelCloner.CloneTextBody(_body)!;

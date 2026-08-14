@@ -38,21 +38,34 @@ public static class AvaloniaTableCellEditAdapter
             minimumHeight);
     }
 
+    public static InCanvasRichTextEditSession BeginSession(TableCellEditStartPlan plan) =>
+        InCanvasRichTextEditSession.BeginTableCell(plan);
+
     public static InCanvasTextEditDecision CommitRichText(
         InCanvasTableCellTextEditPlanner? editPlanner,
-        FreeP.Core.Model.TextBody editedBody) =>
+        TextBody editedBody) =>
         TableCellEditPlanner.CommitRichText(editPlanner, editedBody);
 
     public static InCanvasTextEditDecision Cancel(InCanvasTableCellTextEditPlanner? editPlanner) =>
         TableCellEditPlanner.Cancel(editPlanner);
 
     public static TableCellNavigationPlan PlanNavigation(
+        InCanvasRichTextEditSession? session,
         EditingSession editor,
         TableCellNavigationDirection direction)
     {
         ArgumentNullException.ThrowIfNull(editor);
 
-        return TableCellEditPlanner.PlanNavigation(
+        if (session is null)
+        {
+            return TableCellEditPlanner.PlanNavigation(
+                editor.CurrentSlide,
+                editor.SelectedShapeIds,
+                editor.ActiveTableCell,
+                direction);
+        }
+
+        return session.PlanTableCellNavigation(
             editor.CurrentSlide,
             editor.SelectedShapeIds,
             editor.ActiveTableCell,
