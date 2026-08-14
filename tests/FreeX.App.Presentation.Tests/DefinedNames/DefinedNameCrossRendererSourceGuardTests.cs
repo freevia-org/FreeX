@@ -63,6 +63,41 @@ public sealed class DefinedNameCrossRendererSourceGuardTests
         avaloniaMain.Should().NotContain("StructuredTableSelectionPlanner.ContainsTableName(");
     }
 
+    /// <summary>
+    /// Both renderers must seed the Create Names from Selection checkboxes from the shared
+    /// <c>CreateNamesFromSelectionPlanner.DetectOptions</c> auto-detection (which mirrors real Excel 16.0), and
+    /// neither may hardcode a checkbox default of its own — that divergence is exactly the bug this guards.
+    /// </summary>
+    [Fact]
+    public void Renderers_SeedCreateNamesFromSelectionCheckBoxesFromDetectOptions()
+    {
+        var repoRoot = TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeX.slnx");
+        var planner = Read(repoRoot, "src", "FreeX.App.Presentation", "DefinedNames", "CreateNamesFromSelectionPlanner.cs");
+        var wpfDialog = Read(repoRoot, "src", "FreeX.App.Host", "CreateNamesFromSelectionDialog.cs");
+        var wpfFormula = Read(repoRoot, "src", "FreeX.App.Host", "MainWindow.FormulaCommands.cs");
+        var avaloniaNames = Read(repoRoot, "src", "FreeX.App.Avalonia", "MainWindow.DefinedNames.cs");
+
+        planner.Should().Contain("public static CreateNamesFromSelectionOptions DetectOptions(");
+        planner.Should().NotContain("DefaultOptions");
+
+        wpfFormula.Should().Contain("CreateNamesFromSelectionPlanner.DetectOptions(");
+        wpfFormula.Should().Contain("new CreateNamesFromSelectionDialog(detected)");
+        wpfDialog.Should().Contain("CreateNamesFromSelectionDialog(CreateNamesFromSelectionOptions detectedOptions)");
+        wpfDialog.Should().Contain("IsChecked = detectedOptions.UseTopRow");
+        wpfDialog.Should().Contain("IsChecked = detectedOptions.UseLeftColumn");
+        wpfDialog.Should().Contain("IsChecked = detectedOptions.UseBottomRow");
+        wpfDialog.Should().Contain("IsChecked = detectedOptions.UseRightColumn");
+        wpfDialog.Should().NotContain("IsChecked = true");
+        wpfDialog.Should().NotContain("DefaultOptions");
+
+        avaloniaNames.Should().Contain("CreateNamesFromSelectionPlanner.DetectOptions(");
+        avaloniaNames.Should().Contain("IsChecked = detected.UseTopRow");
+        avaloniaNames.Should().Contain("IsChecked = detected.UseLeftColumn");
+        avaloniaNames.Should().Contain("IsChecked = detected.UseBottomRow");
+        avaloniaNames.Should().Contain("IsChecked = detected.UseRightColumn");
+        avaloniaNames.Should().NotContain("CreateNamesTopRow\"), IsChecked = true");
+    }
+
     private static string Read(string root, params string[] parts) =>
         File.ReadAllText(Path.Combine(parts.Prepend(root).ToArray()));
 }

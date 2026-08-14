@@ -8,21 +8,31 @@ namespace FreeX.App.Host;
 
 public sealed class CreateNamesFromSelectionDialog : Window
 {
-    private readonly CheckBox _topRow = new() { Content = UiText.Get("CreateNamesFromSelection_TopRow"), IsChecked = CreateNamesFromSelectionPlanner.DefaultOptions.UseTopRow, Margin = new Thickness(0, 4, 0, 0) };
-    private readonly CheckBox _leftColumn = new() { Content = UiText.Get("CreateNamesFromSelection_LeftColumn"), IsChecked = CreateNamesFromSelectionPlanner.DefaultOptions.UseLeftColumn, Margin = new Thickness(0, 4, 0, 0) };
-    private readonly CheckBox _bottomRow = new() { Content = UiText.Get("CreateNamesFromSelection_BottomRow"), IsChecked = CreateNamesFromSelectionPlanner.DefaultOptions.UseBottomRow, Margin = new Thickness(0, 4, 0, 0) };
-    private readonly CheckBox _rightColumn = new() { Content = UiText.Get("CreateNamesFromSelection_RightColumn"), IsChecked = CreateNamesFromSelectionPlanner.DefaultOptions.UseRightColumn, Margin = new Thickness(0, 4, 0, 0) };
+    private readonly CheckBox _topRow;
+    private readonly CheckBox _leftColumn;
+    private readonly CheckBox _bottomRow;
+    private readonly CheckBox _rightColumn;
 
-    public CreateNamesFromSelectionOptions Result { get; private set; } =
-        CreateNamesFromSelectionPlanner.DefaultOptions;
+    public CreateNamesFromSelectionOptions Result { get; private set; }
 
     public bool UseTopRow => Result.UseTopRow;
     public bool UseLeftColumn => Result.UseLeftColumn;
     public bool UseBottomRow => Result.UseBottomRow;
     public bool UseRightColumn => Result.UseRightColumn;
 
-    public CreateNamesFromSelectionDialog()
+    /// <summary>
+    /// Seeds the four checkboxes from <paramref name="detectedOptions"/>, which the caller obtains from
+    /// <see cref="CreateNamesFromSelectionPlanner.DetectOptions"/> for the current selection, so the dialog
+    /// opens with the same edges Excel pre-checks (and identically to the Avalonia renderer).
+    /// </summary>
+    public CreateNamesFromSelectionDialog(CreateNamesFromSelectionOptions detectedOptions)
     {
+        Result = detectedOptions;
+        _topRow = new CheckBox { Content = UiText.Get("CreateNamesFromSelection_TopRow"), IsChecked = detectedOptions.UseTopRow, Margin = new Thickness(0, 4, 0, 0) };
+        _leftColumn = new CheckBox { Content = UiText.Get("CreateNamesFromSelection_LeftColumn"), IsChecked = detectedOptions.UseLeftColumn, Margin = new Thickness(0, 4, 0, 0) };
+        _bottomRow = new CheckBox { Content = UiText.Get("CreateNamesFromSelection_BottomRow"), IsChecked = detectedOptions.UseBottomRow, Margin = new Thickness(0, 4, 0, 0) };
+        _rightColumn = new CheckBox { Content = UiText.Get("CreateNamesFromSelection_RightColumn"), IsChecked = detectedOptions.UseRightColumn, Margin = new Thickness(0, 4, 0, 0) };
+
         Title = UiText.Get("CreateNamesFromSelection_Title");
         Width = 280;
         Height = 230;
