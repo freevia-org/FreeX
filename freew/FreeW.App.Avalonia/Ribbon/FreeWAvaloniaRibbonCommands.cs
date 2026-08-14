@@ -319,23 +319,23 @@ internal static class FreeWAvaloniaRibbonCommands
                 Modes: new ViewRibbonModeBindings(
                     PrintLayout: new ViewRibbonToggleBinding(
                         callbacks.SetPrintLayout,
-                        callbacks.IsPrintLayoutActive ??
-                            (() => editor.ViewMode == DocumentViewMode.PrintLayout)),
+                        callbacks.ResolvePrintLayoutActive(
+                            () => editor.ViewMode == DocumentViewMode.PrintLayout)),
                     WebLayout: new ViewRibbonToggleBinding(
                         callbacks.SetWebLayout,
-                        callbacks.IsWebLayoutActive ??
-                            (() => editor.ViewMode == DocumentViewMode.WebLayout)),
+                        callbacks.ResolveWebLayoutActive(
+                            () => editor.ViewMode == DocumentViewMode.WebLayout)),
                     Draft: new ViewRibbonToggleBinding(
                         callbacks.SetDraftView,
-                        callbacks.IsDraftViewActive ??
-                            (() => editor.ViewMode == DocumentViewMode.Draft)),
+                        callbacks.ResolveDraftViewActive(
+                            () => editor.ViewMode == DocumentViewMode.Draft)),
                     Outline: new ViewRibbonToggleBinding(
                         callbacks.SetOutlineView,
                         callbacks.IsOutlineViewActive,
                         ViewRibbonBindingAvailability.Disabled),
                     PagedEdit: new ViewRibbonToggleBinding(
                         callbacks.TogglePagedEditView ?? callbacks.SetPrintLayout,
-                        callbacks.IsPagedEditViewActive ?? (static () => false))),
+                        callbacks.ResolvePagedEditViewActive(static () => false))),
                 Show: new ViewRibbonShowBindings(
                     NavigationPane: new ViewRibbonToggleBinding(
                         callbacks.ToggleNavigationPane,

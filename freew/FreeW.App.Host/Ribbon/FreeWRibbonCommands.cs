@@ -113,7 +113,7 @@ internal static class FreeWRibbonCommands
         var onToggleReadMode = hostPorts?.ToggleReadMode;
         var isReadModeActive = hostPorts?.IsReadModeActive;
         var onTogglePrintLayout = hostPorts?.SetPrintLayout;
-        var isPrintLayoutActive = hostPorts?.IsPrintLayoutActive;
+        var isPrintLayoutActive = hostPorts?.ResolvePrintLayoutActive();
         var onToggleOutlineView = hostPorts?.SetOutlineView;
         var isOutlineViewActive = hostPorts?.IsOutlineViewActive;
         var onZoomDialog = hostPorts?.OpenZoomDialog;
@@ -121,9 +121,9 @@ internal static class FreeWRibbonCommands
         var onZoomOnePage = hostPorts?.ZoomOnePage;
         var onZoomPageWidth = hostPorts?.ZoomPageWidth;
         var onWebLayout = hostPorts?.SetWebLayout;
-        var isWebLayoutActive = hostPorts?.IsWebLayoutActive;
+        var isWebLayoutActive = hostPorts?.ResolveWebLayoutActive();
         var onDraftView = hostPorts?.SetDraftView;
-        var isDraftViewActive = hostPorts?.IsDraftViewActive;
+        var isDraftViewActive = hostPorts?.ResolveDraftViewActive();
         var onToggleRevealFormatting = hostPorts?.ToggleRevealFormatting;
         var isRevealFormattingVisible = hostPorts?.IsRevealFormattingVisible;
         var onToggleRuler = hostPorts?.ToggleRuler;
@@ -139,7 +139,7 @@ internal static class FreeWRibbonCommands
         var onOpenHeaderFooterPane = hostPorts?.OpenHeaderFooterPane;
         var onCloseHeaderFooterPane = hostPorts?.CloseHeaderFooterPane;
         var onTogglePagedEditView = hostPorts?.TogglePagedEditView;
-        var isPagedEditViewActive = hostPorts?.IsPagedEditViewActive;
+        var isPagedEditViewActive = hostPorts?.ResolvePagedEditViewActive();
         var onReadModeColumnWidth = hostPorts?.ApplyReadModeColumnWidth;
         var onReadModePageColor = hostPorts?.ApplyReadModePageColor;
         var onNewWindow = hostPorts?.NewWindow;

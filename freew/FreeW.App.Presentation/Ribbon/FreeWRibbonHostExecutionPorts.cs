@@ -1,4 +1,5 @@
 using FreeW.App.Presentation.Dialogs;
+using FreeW.App.Presentation.Shell;
 using FreeW.Core.Model;
 
 namespace FreeW.App.Presentation.Ribbon;
@@ -32,6 +33,7 @@ public sealed record FreeWRibbonHostExecutionPorts(
     Action OpenWordCountDialog,
     Action<double?, double> ApplyZoom,
     Action? InsertObject = null,
+    Func<FreeWDocumentViewCheckPlan>? GetDocumentViewChecks = null,
     Func<bool>? IsPrintLayoutActive = null,
     Func<bool>? IsWebLayoutActive = null,
     Func<bool>? IsDraftViewActive = null,
@@ -179,6 +181,30 @@ public sealed record FreeWRibbonHostExecutionPorts(
     Action? OpenChangeCaseDialog = null,
     Action? NewComment = null)
 {
+    public Func<bool>? ResolvePrintLayoutActive(Func<bool>? fallback = null) =>
+        ResolveDocumentViewCheck(IsPrintLayoutActive, static plan => plan.PrintLayout, fallback);
+
+    public Func<bool>? ResolveWebLayoutActive(Func<bool>? fallback = null) =>
+        ResolveDocumentViewCheck(IsWebLayoutActive, static plan => plan.WebLayout, fallback);
+
+    public Func<bool>? ResolveDraftViewActive(Func<bool>? fallback = null) =>
+        ResolveDocumentViewCheck(IsDraftViewActive, static plan => plan.Draft, fallback);
+
+    public Func<bool>? ResolvePagedEditViewActive(Func<bool>? fallback = null) =>
+        ResolveDocumentViewCheck(IsPagedEditViewActive, static plan => plan.PagedEdit, fallback);
+
+    private Func<bool>? ResolveDocumentViewCheck(
+        Func<bool>? explicitCheck,
+        Func<FreeWDocumentViewCheckPlan, bool> select,
+        Func<bool>? fallback)
+    {
+        if (explicitCheck is not null)
+            return explicitCheck;
+        if (GetDocumentViewChecks is not null)
+            return () => select(GetDocumentViewChecks());
+        return fallback;
+    }
+
     public static FreeWRibbonHostExecutionPorts Empty { get; } = new(
         Open: Noop,
         Save: Noop,

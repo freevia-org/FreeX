@@ -257,11 +257,9 @@ public sealed partial class MainWindow : Window
             IsRevealFormattingVisible = () => _revealPaneVisible,
             OpenFindReplaceDialog = () => OpenFindReplace(),
             SetPrintLayout = () => SetViewMode(DocumentViewMode.PrintLayout),
-            IsPrintLayoutActive = () => _editor.ViewMode == DocumentViewMode.PrintLayout,
             SetWebLayout = () => SetViewMode(DocumentViewMode.WebLayout),
-            IsWebLayoutActive = () => !_outlineMode && _editor.ViewMode == DocumentViewMode.WebLayout,
             SetDraftView = () => SetViewMode(DocumentViewMode.Draft),
-            IsDraftViewActive = () => !_outlineMode && _editor.ViewMode == DocumentViewMode.Draft,
+            GetDocumentViewChecks = CurrentDocumentViewChecks,
             SetOutlineView = ToggleOutlineView,
             IsOutlineViewActive = () => _outlineMode,
             OpenZoomDialog = OpenZoomDialog,
@@ -283,7 +281,6 @@ public sealed partial class MainWindow : Window
             ToggleSplit = ToggleSplitWindow,
             IsSplitActive = () => _viewSession.CurrentDepth.IsSplitActive,
             TogglePagedEditView = TogglePagedEditView,
-            IsPagedEditViewActive = () => _pagedEditMode,
             ToggleNotesPane = ToggleNotesPane,
             IsNotesPaneVisible = () => _notesPaneVisible,
             OpenHeaderFooterPane = OpenHeaderFooterPane,
@@ -2340,10 +2337,7 @@ public sealed partial class MainWindow : Window
     // read-mode / nav-pane toggles keep their buttons in sync.
     private void RefreshViewModeChecks()
     {
-        var plan = _viewSession.BuildDocumentViewChecks(
-            _editor.ViewMode,
-            _outlineMode,
-            _pagedEditMode);
+        var plan = CurrentDocumentViewChecks();
 
         _stateStore.SetChecked("freew.print-layout", plan.PrintLayout);
         _stateStore.SetChecked("freew.web-layout", plan.WebLayout);
@@ -2355,6 +2349,12 @@ public sealed partial class MainWindow : Window
         if (_draftSwitch is not null) _draftSwitch.IsChecked = plan.Draft;
         if (_pagedEditSwitch is not null) _pagedEditSwitch.IsChecked = plan.PagedEdit;
     }
+
+    private FreeWDocumentViewCheckPlan CurrentDocumentViewChecks() =>
+        _viewSession.BuildDocumentViewChecks(
+            _editor.ViewMode,
+            _outlineMode,
+            _pagedEditMode);
 
     // View > Outline: swap the normal editing surface for the heading-structured outline view (and its
     // Outlining mini-toolbar), or back again. Entering hides the workspace + rulers and shows the outline,
