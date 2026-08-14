@@ -101,6 +101,8 @@
 
   <ItemGroup Condition="'$(FreeWHostTestSupport)' == 'true'">
     <InternalsVisibleTo Include="FreeW.App.Avalonia.Tests" />
+    <!-- Validation smoke tests execute against this host-test variant in the shared test process. -->
+    <InternalsVisibleTo Include="FreeW.Validation.Avalonia" />
   </ItemGroup>
 
   <ItemGroup Condition="'$(FreeWDialogHarnessSupport)' == 'true'">

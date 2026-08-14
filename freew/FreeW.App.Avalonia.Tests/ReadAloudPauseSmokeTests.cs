@@ -20,5 +20,13 @@ public sealed class ReadAloudPauseSmokeTests
         exitCode.Should().Be(0);
         output.ToString().Should().BeEmpty();
         error.ToString().Should().BeEmpty();
+
+        var smokeSource = File.ReadAllText(TestWorkspaceFileLocator.Find(
+            "freew",
+            "TestSupport",
+            "Validation.Avalonia",
+            "ReadAloudPauseSmoke.cs"));
+        smokeSource.Should().NotContain("OwnedProcessIdForSmoke",
+            "the smoke coordinator must run against both validation and host-test renderer variants");
     }
 }

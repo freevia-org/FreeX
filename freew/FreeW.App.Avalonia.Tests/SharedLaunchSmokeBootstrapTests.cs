@@ -44,7 +44,8 @@ public sealed class SharedLaunchSmokeBootstrapTests
         app.Should().NotContain("LaunchSmokeOptions");
         program.Should().NotContain("--launch-smoke");
         program.Should().Contain("SisterAvaloniaStandardDesktopFactory.Run(args, App.DesktopProfile)");
-        validationProgram.Should().Contain("SisterAppLaunchSmokeOptions.TryParse(");
+        validationProgram.Should().Contain("ValidationHostCommandRouteExecutor.Parsed<SisterAppLaunchSmokeOptions>(");
+        validationProgram.Should().Contain("SisterAppLaunchSmokeOptions.TryParse,");
         validationProgram.Should().Contain("FreeW.App.Avalonia.Program.RunToolHost(");
         smoke.Should().Contain("access.StartLaunchSmoke(");
         smoke.Should().Contain("new SisterAppLaunchSmokeReport(snapshot.IsPassed, snapshot.ToReport())");

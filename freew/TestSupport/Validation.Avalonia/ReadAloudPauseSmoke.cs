@@ -43,6 +43,7 @@ internal static class ReadAloudPauseSmoke
         var text = string.Join(' ', Enumerable.Repeat(
             "FreeW pause and resume validation keeps the owned speech process suspended until resumed.",
             4000));
+        var processRunner = new TrackingSpeechProcessRunner(new AvaloniaSpeechEngine.ProcessSpeechRunner());
         AvaloniaSpeechEngine? engine = null;
 
         try
@@ -53,11 +54,12 @@ internal static class ReadAloudPauseSmoke
                     ["--stdin", "-w", wavPath],
                     WriteTextToStandardInput: true,
                     SupportsPause: true),
-                action => action());
+                action => action(),
+                processRunner);
 
             var completion = 0;
             engine.SpeakAsync(text, () => Interlocked.Exchange(ref completion, 1));
-            var processId = WaitForProcessId(engine, 2000);
+            var processId = WaitForProcessId(processRunner, 2000);
             if (processId is null)
                 throw new InvalidOperationException("The speech child did not expose an owned PID.");
 
@@ -88,7 +90,7 @@ internal static class ReadAloudPauseSmoke
                 out outputAfterResume,
                 out naturallyCompleted);
             engine.Stop();
-            var processReleased = engine.OwnedProcessIdForSmoke is null
+            var processReleased = processRunner.OwnedProcessId is null
                 && WaitFor(() => ReadLinuxProcessState(processId.Value) is null, 2000);
 
             output.WriteLine("backend=" + Path.GetFileName(executable));
@@ -137,11 +139,29 @@ internal static class ReadAloudPauseSmoke
         }
     }
 
-    private static int? WaitForProcessId(AvaloniaSpeechEngine engine, int timeoutMs)
+    private static int? WaitForProcessId(TrackingSpeechProcessRunner processRunner, int timeoutMs)
     {
         int? processId = null;
-        WaitFor(() => (processId = engine.OwnedProcessIdForSmoke) is not null, timeoutMs);
+        WaitFor(() => (processId = processRunner.OwnedProcessId) is not null, timeoutMs);
         return processId;
+    }
+
+    private sealed class TrackingSpeechProcessRunner(AvaloniaSpeechEngine.ISpeechProcessRunner inner)
+        : AvaloniaSpeechEngine.ISpeechProcessRunner
+    {
+        private AvaloniaSpeechEngine.ISpeechProcess? _process;
+
+        public int? OwnedProcessId => Volatile.Read(ref _process)?.ProcessId;
+
+        public AvaloniaSpeechEngine.ISpeechProcess Start(
+            AvaloniaSpeechEngine.SpeechBackend backend,
+            string text,
+            Action onExited)
+        {
+            var process = inner.Start(backend, text, onExited);
+            Volatile.Write(ref _process, process);
+            return process;
+        }
     }
 
     private static bool WaitForOutputToStart(string path, int timeoutMs, out long length)
