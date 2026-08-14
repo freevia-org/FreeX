@@ -405,7 +405,6 @@ internal static partial class FreeWCanonicalRibbonTabs
                 tab => tab.Group("tables", "Tables", "T", 90, g => g.Large("freew.table", "Table", RibbonCommandIconKind.Table, dropdown: true)),
                 tab => tab.Group("tables", "Tables", null, 98, g =>
                     {
-                        g.Button("freew.insert-table", "Table");
                         g.Dropdown("freew.table", "Table…", BuildTableSizeMenu());
                     }));
 
@@ -467,12 +466,10 @@ internal static partial class FreeWCanonicalRibbonTabs
                 tab => tab.Group("links", "Links", null, 95, g =>
                     {
                         g.Button("freew.hyperlink", "Hyperlink");
-                        g.Button("freew.insert-hyperlink", "Hyperlink");
                         g.Button("freew.edit-hyperlink", "Edit Hyperlink");
                         g.Button("freew.remove-hyperlink", "Remove Hyperlink");
                         g.Button("freew.hyperlink-tooltip", "ScreenTip");
                         g.Button("freew.bookmark", "Bookmark");
-                        g.Button("freew.insert-bookmark", "Bookmark");
                         g.Button("freew.link-bookmark", "Link to Bookmark");
                         g.Button("freew.bookmark-manager", "Bookmark Manager");
                     }));

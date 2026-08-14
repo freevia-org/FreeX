@@ -2122,34 +2122,22 @@ public sealed partial class MainWindow : Window,
             // Avalonia opens domain context menus at the right-click location.
             Placement = PlacementMode.Pointer,
         };
-        foreach (var entry in plan.Entries)
-        {
-            if (entry.Kind == PresentationDomainContextMenuEntryKind.Separator)
-                menu.Items.Add(new Separator());
-            else
-                menu.Items.Add(BuildDomainContextMenuItem(entry));
-        }
+        PresentationDomainContextMenuNativeAdapter.Populate(
+            plan,
+            menu,
+            new PresentationDomainContextMenuNativeBindings<ContextMenu, MenuItem>(
+                CreateItem: entry => new MenuItem
+                {
+                    Header = entry.Text,
+                    IsEnabled = entry.IsEnabled,
+                },
+                AddRootSeparator: target => target.Items.Add(new Separator()),
+                AddRootItem: (target, item) => target.Items.Add(item),
+                AddChildSeparator: parent => parent.Items.Add(new Separator()),
+                AddChildItem: (parent, item) => parent.Items.Add(item),
+                BindExecute: (item, execute) => item.Click += (_, _) => execute()),
+            action => _domainContextMenuSession.Execute(action, TryExecuteInlineTableAction));
         return menu;
-    }
-
-    private MenuItem BuildDomainContextMenuItem(PresentationDomainContextMenuEntryPlan entry)
-    {
-        var item = new MenuItem
-        {
-            Header = entry.Text,
-            IsEnabled = entry.IsEnabled,
-        };
-        if (entry.Children is { Count: > 0 })
-        {
-            foreach (var child in entry.Children)
-                item.Items.Add(BuildDomainContextMenuItem(child));
-        }
-        else if (entry.Action is { } action)
-        {
-            item.Click += (_, _) =>
-                _domainContextMenuSession.Execute(action, TryExecuteInlineTableAction);
-        }
-        return item;
     }
 
     private bool TryExecuteInlineTableAction(PresentationDomainContextAction action)

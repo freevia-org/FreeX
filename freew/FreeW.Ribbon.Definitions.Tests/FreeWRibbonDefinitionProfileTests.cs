@@ -88,9 +88,6 @@ public sealed class FreeWRibbonDefinitionProfileTests
         new("Avalonia-only File tab shell commands", entry => entry.TabId == "file"),
         new("Avalonia portable command registry aliases", entry => entry.CommandId is
             "freew.find-replace-dialog" or
-            "freew.insert-bookmark" or
-            "freew.insert-hyperlink" or
-            "freew.insert-table" or
             "freew.shape" or
             "freew.show-hide-para" or
             "freew.text-box"),
@@ -183,6 +180,72 @@ public sealed class FreeWRibbonDefinitionProfileTests
 
         unexpectedWpfOnly.Should().BeEmpty("every WPF-only ribbon id must have an explicit capability rule");
         unexpectedAvaloniaOnly.Should().BeEmpty("every Avalonia-only ribbon id must have an explicit capability rule");
+    }
+
+    [Fact]
+    public void Table_tools_structural_and_formatting_command_ids_are_shared()
+    {
+        string[] sharedIds =
+        [
+            "freew.table-insert-below",
+            "freew.table-insert-col-right",
+            "freew.table-merge-cells",
+            "freew.table-split-cell",
+            "freew.table-shading",
+            "freew.table-borders",
+        ];
+        string[] legacyRendererIds =
+        [
+            "freew.table-insert-row",
+            "freew.table-insert-col",
+            "freew.merge-cells",
+            "freew.split-cell",
+            "freew.cell-shading",
+            "freew.cell-borders",
+        ];
+
+        foreach (var capabilities in new[] { FreeWRibbonCapabilities.Wpf, FreeWRibbonCapabilities.Avalonia })
+        {
+            var ids = CommandEntries(FreeWRibbon.Build(capabilities))
+                .Select(entry => entry.CommandId)
+                .ToArray();
+
+            ids.Should().Contain(sharedIds);
+            ids.Should().NotContain(legacyRendererIds);
+        }
+    }
+
+    [Fact]
+    public void Visible_profiles_use_one_identity_for_insert_page_border_and_split_controls()
+    {
+        string[] sharedIds =
+        [
+            "freew.table",
+            "freew.hyperlink",
+            "freew.bookmark",
+            "freew.page-border",
+            "freew.split-window",
+        ];
+        string[] nonCanonicalSurfaceIds =
+        [
+            "freew.insert-table",
+            "freew.insert-hyperlink",
+            "freew.insert-bookmark",
+            "freew.page-borders",
+            "freew.split",
+            "freew.zoom-in",
+            "freew.zoom-out",
+        ];
+
+        foreach (var capabilities in new[] { FreeWRibbonCapabilities.Wpf, FreeWRibbonCapabilities.Avalonia })
+        {
+            var ids = CommandEntries(FreeWRibbon.Build(capabilities))
+                .Select(entry => entry.CommandId)
+                .ToArray();
+
+            ids.Should().Contain(sharedIds);
+            ids.Should().NotContain(nonCanonicalSurfaceIds);
+        }
     }
 
     [Fact]
@@ -588,6 +651,8 @@ public sealed class FreeWRibbonDefinitionProfileTests
             command.GetProperty("gapClassification").GetString() == "actionable-gap"));
         summary.GetProperty("actionableGaps").GetInt32().Should().Be(0,
             "the checked-in FreeW command profiles must not retain cross-platform command debt");
+        summary.GetProperty("commandIdAliases").GetInt32().Should().Be(0,
+            "visible WPF and Avalonia surfaces must use the same command identity");
         summary.GetProperty("actionableMissingWpf").GetInt32().Should().Be(0);
         summary.GetProperty("actionableMissingAvalonia").GetInt32().Should().Be(0);
 
@@ -624,7 +689,6 @@ public sealed class FreeWRibbonDefinitionProfileTests
         AssertGapClassification(commands, "freew.draw-table", "shared-profile");
         AssertGapClassification(commands, "freew.eraser", "shared-profile");
         AssertGapClassification(commands, "freew.bookmark", "shared-profile");
-        AssertGapClassification(commands, "freew.insert-bookmark", "command-id-alias");
         AssertGapClassification(commands, "freew.check-updates", "shared-profile");
         AssertGapClassification(commands, "freew.copy-diagnostics", "shared-profile");
         AssertGapClassification(commands, "freew.feedback", "shared-profile");
@@ -641,7 +705,6 @@ public sealed class FreeWRibbonDefinitionProfileTests
         AssertGapClassification(commands, "freew.add-to-dictionary", "shared-profile");
         AssertGapClassification(commands, "freew.thesaurus", "shared-profile");
         AssertGapClassification(commands, "freew.set-proofing-language", "shared-profile");
-        AssertGapClassification(commands, "freew.split", "command-id-alias");
         AssertBehaviorEvidence(
             commands,
             "freew.chart-size-dialog",
@@ -1578,8 +1641,7 @@ public sealed class FreeWRibbonDefinitionProfileTests
         var pageBackground = RequiredGroup(FreeWRibbon.Build(capabilities), "design", "page-background");
         var watermark = RequiredControl(pageBackground, "freew.watermark");
         var pageColor = RequiredControl(pageBackground, "freew.page-color");
-        var pageBorders = RequiredControl(pageBackground,
-            capabilities.UsesPortableControlPresentation ? "freew.page-borders" : "freew.page-border");
+        var pageBorders = RequiredControl(pageBackground, "freew.page-border");
 
         return new PageBackgroundRibbonSurface(
             pageBackground.Header,

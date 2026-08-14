@@ -1,3 +1,4 @@
+using Free.Shared.Ribbon;
 using FreeW.Core.Model;
 
 namespace FreeW.App.Presentation.Ribbon;
@@ -16,7 +17,13 @@ public sealed record TableEditingRibbonPorts(
     Action SelectColumn,
     Action SelectCell,
     Action InsertRowAbove,
+    Action InsertRowBelow,
     Action InsertColumnLeft,
+    Action InsertColumnRight,
+    Action MergeCells,
+    IRibbonCommand SplitCell,
+    IRibbonCommand Shading,
+    IRibbonCommand Borders,
     Action DeleteRow,
     Action DeleteColumn,
     Action DeleteTable,
@@ -49,7 +56,13 @@ public static class TableEditingRibbonWorkflow
         FreeWRibbonCommandAction.TableSelectCol,
         FreeWRibbonCommandAction.TableSelectCell,
         FreeWRibbonCommandAction.TableInsertAbove,
+        FreeWRibbonCommandAction.TableInsertBelow,
         FreeWRibbonCommandAction.TableInsertColLeft,
+        FreeWRibbonCommandAction.TableInsertColRight,
+        FreeWRibbonCommandAction.TableMergeCells,
+        FreeWRibbonCommandAction.TableSplitCell,
+        FreeWRibbonCommandAction.TableShading,
+        FreeWRibbonCommandAction.TableBorders,
         FreeWRibbonCommandAction.TableDeleteRow,
         FreeWRibbonCommandAction.TableDeleteCol,
         FreeWRibbonCommandAction.TableDelete,
@@ -94,7 +107,13 @@ public static class TableEditingRibbonWorkflow
         Bind(bindings, ports, FreeWRibbonCommandAction.TableSelectCol, ports.SelectColumn);
         Bind(bindings, ports, FreeWRibbonCommandAction.TableSelectCell, ports.SelectCell);
         Bind(bindings, ports, FreeWRibbonCommandAction.TableInsertAbove, ports.InsertRowAbove);
+        Bind(bindings, ports, FreeWRibbonCommandAction.TableInsertBelow, ports.InsertRowBelow);
         Bind(bindings, ports, FreeWRibbonCommandAction.TableInsertColLeft, ports.InsertColumnLeft);
+        Bind(bindings, ports, FreeWRibbonCommandAction.TableInsertColRight, ports.InsertColumnRight);
+        Bind(bindings, ports, FreeWRibbonCommandAction.TableMergeCells, ports.MergeCells);
+        BindCommand(bindings, ports, FreeWRibbonCommandAction.TableSplitCell, ports.SplitCell);
+        BindCommand(bindings, ports, FreeWRibbonCommandAction.TableShading, ports.Shading);
+        BindCommand(bindings, ports, FreeWRibbonCommandAction.TableBorders, ports.Borders);
         Bind(bindings, ports, FreeWRibbonCommandAction.TableDeleteRow, ports.DeleteRow);
         Bind(bindings, ports, FreeWRibbonCommandAction.TableDeleteCol, ports.DeleteColumn);
         Bind(bindings, ports, FreeWRibbonCommandAction.TableDelete, ports.DeleteTable);
@@ -138,4 +157,25 @@ public static class TableEditingRibbonWorkflow
         TableCellVerticalAlignment vertical,
         TextAlignment horizontal) =>
         Bind(bindings, ports, action, () => ports.SetCellAlignment(vertical, horizontal));
+
+    private static void BindCommand(
+        FreeWRibbonEditorCommandFamilyBuilder bindings,
+        TableEditingRibbonPorts ports,
+        FreeWRibbonCommandAction action,
+        IRibbonCommand command) =>
+        bindings.Bind(action, new PreparedCommand(ports.PrepareExecution, command));
+
+    private sealed class PreparedCommand(Action prepareExecution, IRibbonCommand inner) : IRibbonStatefulCommand
+    {
+        public void Execute(RibbonCommandContext context)
+        {
+            prepareExecution();
+            inner.Execute(context);
+        }
+
+        public RibbonCommandState GetState() =>
+            inner is IRibbonStatefulCommand stateful
+                ? stateful.GetState()
+                : RibbonCommandState.Default;
+    }
 }

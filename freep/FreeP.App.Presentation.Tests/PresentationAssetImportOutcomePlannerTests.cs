@@ -119,25 +119,38 @@ public sealed class PresentationAssetImportOutcomePlannerTests
     public void RenderersOnlyRealizePortableAssetImportPresentation()
     {
         var root = TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeP.slnx");
+        var sharedSession = Read(
+            root,
+            "freep",
+            "FreeP.App.Presentation",
+            "PresentationAssetImportHostSession.cs");
         var wpfAdapter = Read(root, "freep", "FreeP.App.Host", "MainWindow.AssetImports.cs");
         var wpfWindow = Read(root, "freep", "FreeP.App.Host", "MainWindow.cs");
         var avaloniaAdapter = Read(root, "freep", "FreeP.App.Avalonia", "MainWindow.AssetImports.cs");
         var avaloniaWindow = Read(root, "freep", "FreeP.App.Avalonia", "MainWindow.cs");
 
-        wpfAdapter.Should().Contain("PresentationAssetImportOutcomePlanner.Plan(")
+        sharedSession.Should().Contain("PresentationAssetImportOutcomePlanner.Plan(")
+            .And.Contain("messageService.ShowMessageAsync(message, cancellationToken)")
+            .And.Contain("new PresentationAssetImportWorkflow(")
+            .And.Contain("new PresentationAssetImportExecutionPort(_editor, callbacks)");
+        wpfAdapter.Should().Contain("PresentationAssetImportHostSession")
             .And.Contain("Action<string>? statusTarget = null")
             .And.Contain("_messageService ?? new WpfUserMessageService(this)")
-            .And.Contain("messageService.ShowMessageAsync(message)")
+            .And.Contain("AssetImportSession.MaterializeOutcomeAsync(")
+            .And.NotContain("new PresentationAssetImportWorkflow(")
+            .And.NotContain("PresentationAssetImportOutcomePlanner.Plan(")
             .And.NotContain("MessageBox.Show(");
         wpfWindow.Should().Contain("PresentationAssetImportOutcomePolicy.ModalError")
             .And.Contain("PresentationAssetImportOutcomePolicy.SmartArtPane")
             .And.Contain("statusText => _smartArtTextPaneMessage.Text = statusText")
             .And.NotContain("Could not replace SmartArt picture:")
             .And.NotContain("MessageBox.Show(this, result.Message");
-        avaloniaAdapter.Should().Contain("PresentationAssetImportOutcomePlanner.Plan(")
+        avaloniaAdapter.Should().Contain("PresentationAssetImportHostSession")
             .And.Contain("Action<string>? statusTarget = null")
             .And.Contain("_messageService ?? new AvaloniaUserMessageService(this)")
-            .And.Contain("messageService.ShowMessageAsync(message)")
+            .And.Contain("AssetImportSession.MaterializeOutcomeAsync(")
+            .And.NotContain("new PresentationAssetImportWorkflow(")
+            .And.NotContain("PresentationAssetImportOutcomePlanner.Plan(")
             .And.NotContain("switch (result.Status)")
             .And.NotContain("SisterAppFileTextPlanner.FormatCommand");
         avaloniaWindow.Should().Contain("PresentationAssetImportOutcomePolicy.ModalError")

@@ -364,14 +364,7 @@ internal static class FreeWRibbonCommands
                 editor.Focus();
                 editor.InsertTable(rows, columns);
             }));
-        // Insert tab — Table Tools: structural edits to the table containing the caret (all undoable).
-        tableCommands.Register("freew.table-insert-row", new ActionRibbonCommand(() => { editor.Focus(); editor.InsertTableRow(); }));
-        tableCommands.Register("freew.table-insert-col", new ActionRibbonCommand(() => { editor.Focus(); editor.InsertTableColumn(); }));
-        // Insert tab — Table Tools: merge the selected cells / split a merged cell (all undoable).
-        tableCommands.Register("freew.merge-cells", new ActionRibbonCommand(() => { editor.Focus(); editor.MergeSelectedCells(); }));
-        tableCommands.Register("freew.split-cell", new SplitCellRibbonCommand(editor));
-        // Insert tab — Table Tools: pick/clear a fill colour for the caret's cell (sets model + re-renders).
-        tableCommands.Register("freew.cell-shading", new CellShadingCommand(editor));
+        // Shared Table Tools policy; this host contributes only WPF editor and dialog adapters.
         TableEditingRibbonWorkflow.Register(tableCommands, CreateTableEditingPorts(editor));
 
         // Table Design > Draw Borders: drag-to-insert table (prompted dimensions) and eraser-merges right.
@@ -379,8 +372,6 @@ internal static class FreeWRibbonCommands
         tableCommands.Bind(FreeWRibbonCommandAction.Eraser, new EraserCommand(editor));
         // Table Layout Data group — Convert to Text
         tableCommands.Bind(FreeWRibbonCommandAction.TableToText, new ActionRibbonCommand(() => { editor.Focus(); editor.ConvertTableToText('\t'); }));
-        // Table Design — Cell Borders picker (per-edge borders for the caret cell).
-        tableCommands.Register("freew.cell-borders", new CellBordersCommand(editor));
         // Insert tab — Text: pick a .docx file and insert its body content at the caret (block merge).
         registry.Bind(FreeWRibbonCommandAction.InsertFile, new InsertFileCommand(editor));
         // Insert tab — Illustrations: pick an image file and insert it as an inline image run.
@@ -1553,8 +1544,12 @@ internal static class FreeWRibbonCommands
             ToggleParagraphBorder: () => editor.ToggleParagraphBorder(),
             Sort: new SortCommand(editor));
 
-    private static TableEditingRibbonPorts CreateTableEditingPorts(DocumentView editor) =>
-        new(
+    private static TableEditingRibbonPorts CreateTableEditingPorts(DocumentView editor)
+    {
+        var splitCell = new SplitCellRibbonCommand(editor);
+        var shading = new CellShadingCommand(editor);
+        var borders = new CellBordersCommand(editor);
+        return new(
             PrepareExecution: () => editor.Focus(),
             ToggleHeaderRow: editor.ToggleTableHeaderRow,
             ToggleBandedRows: editor.ToggleTableBandedRows,
@@ -1568,7 +1563,13 @@ internal static class FreeWRibbonCommands
             SelectColumn: editor.SelectTableColumn,
             SelectCell: editor.SelectTableCell,
             InsertRowAbove: editor.InsertTableRowAbove,
+            InsertRowBelow: editor.InsertTableRow,
             InsertColumnLeft: editor.InsertTableColumnLeft,
+            InsertColumnRight: editor.InsertTableColumn,
+            MergeCells: editor.MergeSelectedCells,
+            SplitCell: splitCell,
+            Shading: shading,
+            Borders: borders,
             DeleteRow: editor.DeleteTableRow,
             DeleteColumn: editor.DeleteTableColumn,
             DeleteTable: editor.DeleteTable,
@@ -1579,6 +1580,7 @@ internal static class FreeWRibbonCommands
             SetCellAlignment: editor.SetCaretCellAlignment,
             SetCellTextDirection: editor.SetCaretCellTextDirection,
             ToggleRepeatHeaderRow: editor.ToggleTableRepeatHeaderRow);
+    }
 
     private static FreeWRibbonTableExecutionPorts CreateTableExecutionPorts(DocumentView editor) =>
         new(

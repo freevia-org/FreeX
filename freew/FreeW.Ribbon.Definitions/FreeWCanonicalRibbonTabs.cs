@@ -268,7 +268,7 @@ internal static partial class FreeWCanonicalRibbonTabs
                             BuildAvaloniaWatermarkMenu());
                         group.Dropdown("freew.page-color", FreeWRibbonText.PageColorCommand.Label,
                             BuildAvaloniaPageColorMenu());
-                        group.Button("freew.page-borders", FreeWRibbonText.PageBordersCommand.Label);
+                        group.Button("freew.page-border", FreeWRibbonText.PageBordersCommand.Label);
                     }));
 
             topology.Build();
@@ -345,8 +345,6 @@ internal static partial class FreeWCanonicalRibbonTabs
                 tab => tab.Group("zoom", "Zoom", null, 90, group =>
                     {
                         group.Button("freew.zoom-dialog", "Zoom");
-                        group.Button("freew.zoom-in", "Zoom In");
-                        group.Button("freew.zoom-out", "Zoom Out");
                         group.Button("freew.zoom-100", "100%");
                         group.Button("freew.zoom-one-page", "One Page");
                         group.Button("freew.zoom-page-width", "Page Width");
@@ -366,7 +364,7 @@ internal static partial class FreeWCanonicalRibbonTabs
                     {
                         group.Button("freew.new-window", "New Window");
                         group.Button("freew.arrange-all", "Arrange All");
-                        group.Toggle("freew.split", "Split");
+                        group.Toggle("freew.split-window", "Split");
                     }));
 
             topology.Build();
