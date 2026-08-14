@@ -73,14 +73,7 @@ public sealed partial class MainWindow
 
     private void BindWorkareaEditor(EditingSession editor)
     {
-        if (_ribbonCommandRegistry is not null)
-        {
-            FreePRibbonHostRegistryComposer.BindInto(
-                _ribbonCommandRegistry,
-                editor,
-                _ribbonStateStore,
-                CreateRibbonHostProfile());
-        }
+        _ribbonBindingSession?.Rebind(editor);
         _selectionPane?.SetEditor(editor);
         if (_adorner is not null)
             RewireInteractionToEditor();

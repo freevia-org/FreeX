@@ -305,6 +305,7 @@ public sealed partial class MainWindow : Window,
     private RibbonCommandRegistry? _ribbonCommandRegistry;
     private FreePRibbonHostActionEndpoints? _ribbonHostActionEndpoints;
     private readonly RibbonStateStore _ribbonStateStore = new();
+    private FreePRibbonBindingSession? _ribbonBindingSession;
     private bool _ribbonKeyTipsVisible;
     private string? _ribbonKeyTipTabId;
     private string? _ribbonKeyTipGroupId;
@@ -2203,10 +2204,11 @@ public sealed partial class MainWindow : Window,
 
     internal RibbonCommandRegistry BuildCommandRegistry()
     {
-        return FreePRibbonHostRegistryComposer.Build(
+        _ribbonBindingSession = new FreePRibbonBindingSession(
             Editor,
             _ribbonStateStore,
-            CreateRibbonHostProfile()).Registry;
+            CreateRibbonHostProfile);
+        return _ribbonBindingSession.Registry;
     }
 
     private FreePRibbonHostProfile CreateRibbonHostProfile() =>
@@ -6713,14 +6715,7 @@ public sealed partial class MainWindow : Window,
 
     private void SyncRibbonCommandStates()
     {
-        if (_ribbonControl is not null)
-        {
-            AvaloniaRibbonRenderer.SyncToggleStates(
-                _ribbonControl,
-                _ribbonCommandRegistry,
-                RibbonVisualPalette.FromTheme(App.ActiveTheme),
-                _ribbonStateStore);
-        }
+        _ribbonBindingSession?.SyncCommandStates();
     }
 
     private void OnFileWorkflowChanged()
