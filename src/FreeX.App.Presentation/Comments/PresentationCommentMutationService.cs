@@ -3,10 +3,44 @@ using FreeX.Core.Model;
 
 namespace FreeX.App.Presentation.Comments;
 
+/// <summary>
+/// An undo label plus a deferred factory that turns the caller's <see cref="GridRange"/> into the
+/// <see cref="IWorkbookCommand"/> to push onto the workbook command bus. Nothing is applied here.
+/// <para>
+/// Cross-app note (assessed 2026-08-15): <c>FreeP.App.Compositor.PresentationCommentMutationPlan</c>
+/// shares only this type's <em>name</em>, and the collision is purely lexical — "Presentation" here
+/// names the <c>FreeX.App.Presentation</c> layer, whereas in FreeP it names the PowerPoint
+/// presentation being edited. That record is a materialized before/after slide-comment state
+/// (intent, should-apply flag, slide index, comment index, <c>SlideComment</c>, validation message);
+/// this one is a label and an unapplied command factory. Do not merge them.
+/// </para>
+/// </summary>
 public sealed record PresentationCommentMutationPlan(
     string Label,
     Func<GridRange, IWorkbookCommand> CreateCommand);
 
+/// <summary>
+/// Projects spreadsheet note/threaded-comment intents into undoable
+/// <see cref="PresentationCommentMutationPlan"/> command factories keyed by <see cref="SheetId"/>
+/// and cell address.
+/// <para>
+/// Cross-app note (assessed 2026-08-15):
+/// <c>FreeP.App.Compositor.PresentationCommentMutationService</c> shares only this type's
+/// <em>name</em>; "Presentation" means the <c>FreeX.App.Presentation</c> layer here and the
+/// PowerPoint presentation there. The domains do not overlap: this service addresses a cell within
+/// a sheet, models Excel-only concepts (legacy notes vs. threaded comments, per-note and
+/// show-all-notes visibility toggles, convert-notes-to-comments, resolve/unresolve, reply
+/// edit/delete by index), returns <em>unapplied</em> command factories so the host's undo stack
+/// owns execution, and carries per-intent undo labels. The FreeP service addresses a comment within
+/// a slide, models PowerPoint-only concepts (EMU x/y anchor position, author initials, timestamps,
+/// resolved-at/resolved-by), is a <c>static</c> class that <em>applies</em> the mutation to a live
+/// <c>IReadOnlyList&lt;Slide&gt;</c> and then renormalizes the selected comment index, and delegates
+/// to <c>PresentationReviewWorkflowPlanner</c> rather than to any command type. Ignoring braces and
+/// short lines, the two files share <em>zero</em> identical lines — not even the type declaration,
+/// which is <c>sealed class</c> here and <c>static class</c> there. There is no neutral contract to
+/// extract; do not merge them.
+/// </para>
+/// </summary>
 public sealed class PresentationCommentMutationService
 {
     public PresentationCommentMutationPlan PlanSetNote(
