@@ -12,18 +12,6 @@ public enum FreeWDocumentFragmentImportKind
     EmbeddedObject,
 }
 
-public enum FreeWDocumentFragmentHostProfile
-{
-    Wpf,
-    Avalonia,
-}
-
-public enum FreeWTextImportPolicy
-{
-    TreatEverySelectionAsDocx,
-    PlainTextOrResolvedDocument,
-}
-
 public sealed record FreeWDocumentFragmentPickerPlan(
     string Title,
     IReadOnlyList<FileDialogPickerTypeDescriptor> FileTypes,
@@ -38,60 +26,32 @@ public sealed record FreeWDocumentFragmentPickerPlan(
 public sealed record FreeWDocumentFragmentImportRequest(
     FreeWDocumentFragmentImportKind Kind,
     string CommandName,
-    FreeWDocumentFragmentPickerPlan PickerPlan,
-    FreeWTextImportPolicy? TextPolicy = null);
+    FreeWDocumentFragmentPickerPlan PickerPlan);
 
 public static class FreeWDocumentFragmentImportPlanner
 {
     private const string DocxMimeType =
         "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
 
-    public static FreeWDocumentFragmentImportRequest CreateTextFromFileRequest(
-        FreeWDocumentFragmentHostProfile profile) => profile switch
-        {
-            FreeWDocumentFragmentHostProfile.Wpf => new(
-                FreeWDocumentFragmentImportKind.TextFromFile,
-                FreeWFileTextResources.InsertTextCommand,
-                new FreeWDocumentFragmentPickerPlan(
-                    InsertDialogTextResources.TextFromFilePickerTitle,
-                    [
-                        new FileDialogPickerTypeDescriptor("Word Documents (*.docx)", ["*.docx"]),
-                        new FileDialogPickerTypeDescriptor("All files (*.*)", ["*.*"]),
-                    ],
-                    DefaultExtensionWithDot: ".docx"),
-                FreeWTextImportPolicy.TreatEverySelectionAsDocx),
-            FreeWDocumentFragmentHostProfile.Avalonia => new(
-                FreeWDocumentFragmentImportKind.TextFromFile,
-                FreeWFileTextResources.InsertTextCommand,
-                new FreeWDocumentFragmentPickerPlan(
-                    InsertDialogTextResources.TextFromFilePickerTitle,
-                    [
-                        new FileDialogPickerTypeDescriptor(
-                            FreeWFileTextResources.TextFromFileTypeName,
-                            ["*.docx", "*.txt"],
-                            [DocxMimeType, "text/plain"]),
-                    ]),
-                FreeWTextImportPolicy.PlainTextOrResolvedDocument),
-            _ => throw new ArgumentOutOfRangeException(nameof(profile), profile, null),
-        };
+    public static FreeWDocumentFragmentImportRequest CreateTextFromFileRequest() => new(
+        FreeWDocumentFragmentImportKind.TextFromFile,
+        FreeWFileTextResources.InsertTextCommand,
+        new FreeWDocumentFragmentPickerPlan(
+            InsertDialogTextResources.TextFromFilePickerTitle,
+            [
+                new FileDialogPickerTypeDescriptor(
+                    FreeWFileTextResources.TextFromFileTypeName,
+                    ["*.docx", "*.txt"],
+                    [DocxMimeType, "text/plain"]),
+            ],
+            DefaultExtensionWithDot: ".docx"));
 
-    public static FreeWDocumentFragmentImportRequest CreateEmbeddedObjectRequest(
-        FreeWDocumentFragmentHostProfile profile) => profile switch
-        {
-            FreeWDocumentFragmentHostProfile.Wpf => new(
-                FreeWDocumentFragmentImportKind.EmbeddedObject,
-                "Insert object",
-                new FreeWDocumentFragmentPickerPlan(
-                    "Insert Object",
-                    [new FileDialogPickerTypeDescriptor("All files (*.*)", ["*.*"])])),
-            FreeWDocumentFragmentHostProfile.Avalonia => new(
-                FreeWDocumentFragmentImportKind.EmbeddedObject,
-                "Insert object",
-                new FreeWDocumentFragmentPickerPlan(
-                    "Insert Object",
-                    [new FileDialogPickerTypeDescriptor("All files", ["*.*"])])),
-            _ => throw new ArgumentOutOfRangeException(nameof(profile), profile, null),
-        };
+    public static FreeWDocumentFragmentImportRequest CreateEmbeddedObjectRequest() => new(
+        FreeWDocumentFragmentImportKind.EmbeddedObject,
+        "Insert object",
+        new FreeWDocumentFragmentPickerPlan(
+            "Insert Object",
+            [new FileDialogPickerTypeDescriptor("All files (*.*)", ["*.*"])]));
 }
 
 public sealed record FreeWDocumentFragmentImportSelection(
@@ -324,7 +284,7 @@ public sealed class FreeWDocumentFragmentImportWorkflow
             var insertionRequest = request.Kind switch
             {
                 FreeWDocumentFragmentImportKind.TextFromFile =>
-                    await BuildTextInsertionAsync(request, selection, extension, cancellationToken),
+                    await BuildTextInsertionAsync(selection, extension, cancellationToken),
                 FreeWDocumentFragmentImportKind.EmbeddedObject =>
                     await BuildObjectInsertionAsync(selection, cancellationToken),
                 _ => throw new ArgumentOutOfRangeException(nameof(request), request.Kind, null),
@@ -368,37 +328,27 @@ public sealed class FreeWDocumentFragmentImportWorkflow
     }
 
     private async Task<FreeWDocumentFragmentInsertionRequest?> BuildTextInsertionAsync(
-        FreeWDocumentFragmentImportRequest request,
         FreeWDocumentFragmentImportSelection selection,
         string extension,
         CancellationToken cancellationToken)
     {
-        if (request.TextPolicy == FreeWTextImportPolicy.PlainTextOrResolvedDocument
-            && string.Equals(extension, ".txt", StringComparison.OrdinalIgnoreCase))
+        if (string.Equals(extension, ".txt", StringComparison.OrdinalIgnoreCase))
         {
             var text = await _reader.ReadTextAsync(selection, cancellationToken);
             return FreeWDocumentFragmentInsertionRequest.ForPlainText(text);
         }
 
-        var adapterExtension = request.TextPolicy == FreeWTextImportPolicy.TreatEverySelectionAsDocx
-            ? ".docx"
-            : extension;
         var adapter = DocumentFileFormatResolver.FindOpenAdapter(
             _documentAdapters,
-            adapterExtension,
+            extension,
             out _);
         if (adapter is null)
-        {
-            if (request.TextPolicy == FreeWTextImportPolicy.TreatEverySelectionAsDocx)
-                throw new InvalidOperationException("The DOCX import adapter is unavailable.");
             return null;
-        }
 
         var bytes = await _reader.ReadBytesAsync(selection, cancellationToken);
         using var stream = new MemoryStream(bytes, writable: false);
         var document = adapter.Load(stream);
-        if (request.TextPolicy == FreeWTextImportPolicy.TreatEverySelectionAsDocx)
-            _reader.ResolveLinkedImagePreviews(selection, document);
+        _reader.ResolveLinkedImagePreviews(selection, document);
         return FreeWDocumentFragmentInsertionRequest.ForDocument(document);
     }
 

@@ -2759,8 +2759,7 @@ internal static class FreeWRibbonCommands
                 new WpfDocumentFragmentPickerPort(owner),
                 new WpfDocumentFragmentSourceReaderPort(),
                 new WpfDocumentFragmentInsertionPort(editor));
-            var request = FreeWDocumentFragmentImportPlanner.CreateTextFromFileRequest(
-                FreeWDocumentFragmentHostProfile.Wpf);
+            var request = FreeWDocumentFragmentImportPlanner.CreateTextFromFileRequest();
             var result = workflow.ImportAsync(request).GetAwaiter().GetResult();
             ShowDocumentFragmentImportOutcome(owner, result);
         }
@@ -2777,8 +2776,7 @@ internal static class FreeWRibbonCommands
                 new WpfDocumentFragmentPickerPort(owner),
                 new WpfDocumentFragmentSourceReaderPort(),
                 new WpfDocumentFragmentInsertionPort(editor));
-            var request = FreeWDocumentFragmentImportPlanner.CreateEmbeddedObjectRequest(
-                FreeWDocumentFragmentHostProfile.Wpf);
+            var request = FreeWDocumentFragmentImportPlanner.CreateEmbeddedObjectRequest();
             var result = workflow.ImportAsync(request).GetAwaiter().GetResult();
             ShowDocumentFragmentImportOutcome(owner, result);
         }

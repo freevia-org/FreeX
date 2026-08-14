@@ -8,50 +8,40 @@ namespace FreeW.App.Presentation.Tests.DocumentFragments;
 public sealed class FreeWDocumentFragmentImportWorkflowTests
 {
     [Fact]
-    public void PickerProfiles_PreserveRendererSpecificLabelsAndFormats()
+    public void PickerPlans_AreSharedAcrossRenderersAndSupportDocxAndPlainText()
     {
-        var wpfText = FreeWDocumentFragmentImportPlanner.CreateTextFromFileRequest(
-            FreeWDocumentFragmentHostProfile.Wpf);
-        var avaloniaText = FreeWDocumentFragmentImportPlanner.CreateTextFromFileRequest(
-            FreeWDocumentFragmentHostProfile.Avalonia);
-        var wpfObject = FreeWDocumentFragmentImportPlanner.CreateEmbeddedObjectRequest(
-            FreeWDocumentFragmentHostProfile.Wpf);
-        var avaloniaObject = FreeWDocumentFragmentImportPlanner.CreateEmbeddedObjectRequest(
-            FreeWDocumentFragmentHostProfile.Avalonia);
+        var text = FreeWDocumentFragmentImportPlanner.CreateTextFromFileRequest();
+        var embeddedObject = FreeWDocumentFragmentImportPlanner.CreateEmbeddedObjectRequest();
 
-        wpfText.PickerPlan.Title.Should().Be("Insert Text from File");
-        wpfText.PickerPlan.DefaultExtensionWithDot.Should().Be(".docx");
-        wpfText.PickerPlan.BuildWpfFilter().Should().Be(
-            "Word Documents (*.docx)|*.docx|All files (*.*)|*.*");
-        wpfText.TextPolicy.Should().Be(FreeWTextImportPolicy.TreatEverySelectionAsDocx);
-
-        avaloniaText.PickerPlan.FileTypes.Should().ContainSingle();
-        avaloniaText.PickerPlan.FileTypes[0].DisplayName.Should().Be(
+        text.PickerPlan.Title.Should().Be("Insert Text from File");
+        text.PickerPlan.DefaultExtensionWithDot.Should().Be(".docx");
+        text.PickerPlan.FileTypes.Should().ContainSingle();
+        text.PickerPlan.FileTypes[0].DisplayName.Should().Be(
             FreeWFileTextResources.TextFromFileTypeName);
-        avaloniaText.PickerPlan.FileTypes[0].Patterns.Should().Equal("*.docx", "*.txt");
-        avaloniaText.PickerPlan.FileTypes[0].MimeTypes.Should().Equal(
+        text.PickerPlan.FileTypes[0].Patterns.Should().Equal("*.docx", "*.txt");
+        text.PickerPlan.FileTypes[0].MimeTypes.Should().Equal(
             "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
             "text/plain");
-        avaloniaText.TextPolicy.Should().Be(FreeWTextImportPolicy.PlainTextOrResolvedDocument);
+        text.PickerPlan.BuildWpfFilter().Should().Be(
+            $"{FreeWFileTextResources.TextFromFileTypeName}|*.docx;*.txt");
 
-        wpfObject.PickerPlan.BuildWpfFilter().Should().Be("All files (*.*)|*.*");
-        avaloniaObject.PickerPlan.FileTypes.Should().ContainSingle()
-            .Which.DisplayName.Should().Be("All files");
+        embeddedObject.PickerPlan.BuildWpfFilter().Should().Be("All files (*.*)|*.*");
+        embeddedObject.PickerPlan.FileTypes.Should().ContainSingle()
+            .Which.DisplayName.Should().Be("All files (*.*)");
     }
 
     [Fact]
-    public async Task WpfTextProfile_TreatsAllFilesSelectionAsDocx()
+    public async Task DocumentImport_ResolvesAdapterAndLinkedImagePreviews()
     {
-        var ports = new FakePorts("notes.bin", [1, 2, 3]);
+        var ports = new FakePorts("fragment.docx", [1, 2, 3]);
         var adapter = new FakeDocumentAdapter(".docx");
         var workflow = ports.CreateWorkflow([adapter]);
 
         var result = await workflow.ImportAsync(
-            FreeWDocumentFragmentImportPlanner.CreateTextFromFileRequest(
-                FreeWDocumentFragmentHostProfile.Wpf));
+            FreeWDocumentFragmentImportPlanner.CreateTextFromFileRequest());
 
         result.Status.Should().Be(FreeWDocumentFragmentImportStatus.Succeeded);
-        result.SourceExtension.Should().Be(".bin");
+        result.SourceExtension.Should().Be(".docx");
         result.Insertion!.Kind.Should().Be(FreeWDocumentFragmentInsertionKind.Document);
         adapter.LoadedBytes.Should().Equal(1, 2, 3);
         ports.ReadTextCalls.Should().Be(0);
@@ -59,14 +49,13 @@ public sealed class FreeWDocumentFragmentImportWorkflowTests
     }
 
     [Fact]
-    public async Task AvaloniaTextProfile_PreservesPlainTextInsertionPath()
+    public async Task PlainTextImport_PreservesPlainTextInsertionPath()
     {
         var ports = new FakePorts("notes.TXT", [1, 2, 3]) { Text = "plain text" };
         var adapter = new FakeDocumentAdapter(".docx");
 
         var result = await ports.CreateWorkflow([adapter]).ImportAsync(
-            FreeWDocumentFragmentImportPlanner.CreateTextFromFileRequest(
-                FreeWDocumentFragmentHostProfile.Avalonia));
+            FreeWDocumentFragmentImportPlanner.CreateTextFromFileRequest());
 
         result.Status.Should().Be(FreeWDocumentFragmentImportStatus.Succeeded);
         result.Insertion.Should().BeEquivalentTo(
@@ -77,29 +66,27 @@ public sealed class FreeWDocumentFragmentImportWorkflowTests
     }
 
     [Fact]
-    public async Task AvaloniaTextProfile_ResolvesDocumentAdapterByExtension()
+    public async Task DocumentImport_ResolvesDocumentAdapterByExtension()
     {
         var ports = new FakePorts("fragment.docx", [4, 5, 6]);
         var adapter = new FakeDocumentAdapter(".docx");
 
         var result = await ports.CreateWorkflow([adapter]).ImportAsync(
-            FreeWDocumentFragmentImportPlanner.CreateTextFromFileRequest(
-                FreeWDocumentFragmentHostProfile.Avalonia));
+            FreeWDocumentFragmentImportPlanner.CreateTextFromFileRequest());
 
         result.Status.Should().Be(FreeWDocumentFragmentImportStatus.Succeeded);
         result.Insertion!.Kind.Should().Be(FreeWDocumentFragmentInsertionKind.Document);
         adapter.LoadedBytes.Should().Equal(4, 5, 6);
-        ports.ResolveLinkedImagePreviewsCalls.Should().Be(0);
+        ports.ResolveLinkedImagePreviewsCalls.Should().Be(1);
     }
 
     [Fact]
-    public async Task AvaloniaTextProfile_ReportsUnsupportedFormatWithoutReadingOrInsertion()
+    public async Task TextImport_ReportsUnsupportedFormatWithoutReadingOrInsertion()
     {
         var ports = new FakePorts("fragment.rtf", [4, 5, 6]);
 
         var result = await ports.CreateWorkflow([new FakeDocumentAdapter(".docx")]).ImportAsync(
-            FreeWDocumentFragmentImportPlanner.CreateTextFromFileRequest(
-                FreeWDocumentFragmentHostProfile.Avalonia));
+            FreeWDocumentFragmentImportPlanner.CreateTextFromFileRequest());
 
         result.Status.Should().Be(FreeWDocumentFragmentImportStatus.UnsupportedFormat);
         result.SourceExtension.Should().Be(".rtf");
@@ -113,8 +100,7 @@ public sealed class FreeWDocumentFragmentImportWorkflowTests
         var ports = new FakePorts("budget.xlsx", [7, 8, 9]);
 
         var result = await ports.CreateWorkflow([]).ImportAsync(
-            FreeWDocumentFragmentImportPlanner.CreateEmbeddedObjectRequest(
-                FreeWDocumentFragmentHostProfile.Avalonia));
+            FreeWDocumentFragmentImportPlanner.CreateEmbeddedObjectRequest());
 
         result.Status.Should().Be(FreeWDocumentFragmentImportStatus.Succeeded);
         result.Insertion!.Kind.Should().Be(FreeWDocumentFragmentInsertionKind.EmbeddedObject);
@@ -134,8 +120,7 @@ public sealed class FreeWDocumentFragmentImportWorkflowTests
         {
             InsertionResult = FreeWDocumentFragmentInsertionResult.NotApplied("no caret"),
         };
-        var request = FreeWDocumentFragmentImportPlanner.CreateTextFromFileRequest(
-            FreeWDocumentFragmentHostProfile.Wpf);
+        var request = FreeWDocumentFragmentImportPlanner.CreateTextFromFileRequest();
 
         var cancelled = await cancelledPorts.CreateWorkflow([new FakeDocumentAdapter(".docx")])
             .ImportAsync(request);
@@ -155,18 +140,15 @@ public sealed class FreeWDocumentFragmentImportWorkflowTests
         {
             ReadException = new IOException("broken file"),
         };
-        var request = FreeWDocumentFragmentImportPlanner.CreateTextFromFileRequest(
-            FreeWDocumentFragmentHostProfile.Wpf);
+        var request = FreeWDocumentFragmentImportPlanner.CreateTextFromFileRequest();
         var failed = await ports.CreateWorkflow([new FakeDocumentAdapter(".docx")])
             .ImportAsync(request);
         var unsupported = new FreeWDocumentFragmentImportResult(
-            FreeWDocumentFragmentImportPlanner.CreateTextFromFileRequest(
-                FreeWDocumentFragmentHostProfile.Avalonia),
+            FreeWDocumentFragmentImportPlanner.CreateTextFromFileRequest(),
             FreeWDocumentFragmentImportStatus.UnsupportedFormat,
             SourceExtension: ".rtf");
         var objectFailed = new FreeWDocumentFragmentImportResult(
-            FreeWDocumentFragmentImportPlanner.CreateEmbeddedObjectRequest(
-                FreeWDocumentFragmentHostProfile.Avalonia),
+            FreeWDocumentFragmentImportPlanner.CreateEmbeddedObjectRequest(),
             FreeWDocumentFragmentImportStatus.Failed,
             Message: "denied");
 
@@ -212,11 +194,15 @@ public sealed class FreeWDocumentFragmentImportWorkflowTests
 
         workflow.Should().Contain("DocumentFileFormatResolver.FindOpenAdapter(");
         workflow.Should().Contain("OlePackagePayloadBuilder.Create(");
+        workflow.Should().NotContain("FreeWDocumentFragmentHostProfile");
+        workflow.Should().NotContain("FreeWTextImportPolicy");
         workflow.Should().NotContain("using System.Windows");
         workflow.Should().NotContain("using Avalonia");
         workflow.Should().NotContain("File.ReadAll");
 
         wpfCommands.Should().Contain("new FreeWDocumentFragmentImportWorkflow(");
+        wpfCommands.Should().Contain("CreateTextFromFileRequest()");
+        wpfCommands.Should().Contain("CreateEmbeddedObjectRequest()");
         wpfCommands.Should().NotContain("Word Documents (*.docx)|*.docx");
         wpfCommands.Should().NotContain("OlePackagePayloadBuilder.Create(");
         wpfCommands.Should().NotContain("DocxReader.Read(result.FileName");
@@ -226,6 +212,8 @@ public sealed class FreeWDocumentFragmentImportWorkflowTests
         wpfPorts.Should().Contain("editor.InsertDocument(");
 
         avaloniaWindow.Should().Contain("new FreeWDocumentFragmentImportWorkflow(");
+        avaloniaWindow.Should().Contain("CreateTextFromFileRequest()");
+        avaloniaWindow.Should().Contain("CreateEmbeddedObjectRequest()");
         avaloniaWindow.Should().NotContain("TextFromFileType");
         avaloniaWindow.Should().NotContain("EmbeddedObjectFileType");
         avaloniaWindow.Should().NotContain("OlePackagePayloadBuilder.Create(");
