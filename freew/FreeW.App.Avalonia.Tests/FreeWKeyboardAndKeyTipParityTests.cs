@@ -111,7 +111,7 @@ public sealed class FreeWKeyboardAndKeyTipParityTests
             try
             {
                 Press(window, Key.LeftAlt);
-                var activation = Press(window, Key.I);
+                var activation = Press(window, Key.N);
 
                 activation.Handled.Should().BeTrue();
                 window.RibbonKeyTipsVisibleForTest.Should().BeFalse();

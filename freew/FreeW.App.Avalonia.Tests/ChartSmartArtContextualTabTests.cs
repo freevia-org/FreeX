@@ -96,7 +96,7 @@ public sealed class ChartSmartArtContextualTabTests
 
         var cd = def.FindTab("chart-design")!;
         cd.Context!.ActivationKey.Should().Be(FloatingRibbonContextSource.ChartContextKey);
-        cd.Context.Color.Should().Be(RibbonContextColor.Green);
+        cd.Context.Color.Should().Be(RibbonContextColor.Orange);
         cd.Groups.Select(g => g.Id).Should().ContainInOrder(
             "chart-type", "chart-data", "chart-quick-layout", "chart-styles", "chart-elements");
         var quickLayouts = cd.Groups.Single(g => g.Id == "chart-quick-layout").Controls
@@ -121,7 +121,7 @@ public sealed class ChartSmartArtContextualTabTests
 
         var sd = def.FindTab("smartart-design")!;
         sd.Context!.ActivationKey.Should().Be(FloatingRibbonContextSource.SmartArtContextKey);
-        sd.Context.Color.Should().Be(RibbonContextColor.Blue);
+        sd.Context.Color.Should().Be(RibbonContextColor.Orange);
         AssertUsesSharedZOrderCommands(sd, "smartart-arrange");
     }
 
