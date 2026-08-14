@@ -938,7 +938,7 @@ public sealed partial class MainWindow : Window,
             Minimum = PresentationMediaPaneSession.MinimumVolumePercent,
             Maximum = PresentationMediaPaneSession.MaximumVolumePercent,
             TickFrequency = PresentationMediaPaneSession.VolumeTickFrequency,
-            IsSnapToTickEnabled = true,
+            IsSnapToTickEnabled = PresentationMediaPaneSession.SnapVolumeToTicks,
             Margin = MediaPaneMargin(0, PresentationMediaPaneVisualMetrics.FieldBottomMargin),
         };
         _mediaVolumeApplyButton = BuildMediaCaptionPaneButton();
