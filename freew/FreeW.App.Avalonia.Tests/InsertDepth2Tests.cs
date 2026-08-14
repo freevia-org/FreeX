@@ -97,7 +97,8 @@ public sealed class InsertDepth2Tests
             "freew.hyperlink", "freew.bookmark", "freew.bookmark-manager",
             "freew.insert-hyperlink", "freew.insert-bookmark",
             "freew.edit-hyperlink", "freew.remove-hyperlink", "freew.hyperlink-tooltip", "freew.link-bookmark",
-            "freew.cover-page", "freew.cover-page.default", "freew.cover-page.banded", "freew.cover-page.motion",
+            "freew.cover-page", "freew.cover-page-default", "freew.cover-page-banded", "freew.cover-page-motion",
+            "freew.cover-page.default", "freew.cover-page.banded", "freew.cover-page.motion",
             "freew.drop-cap", "freew.drop-cap.dropped", "freew.drop-cap.in-margin", "freew.drop-cap.none",
             "freew.drop-cap-dropped", "freew.drop-cap-in-margin", "freew.drop-cap-none",
             "freew.insert-quickpart", "freew.docprop-title", "freew.docprop-author",
@@ -331,7 +332,7 @@ public sealed class InsertDepth2Tests
 
         var before = view.Document.Blocks.Count;
         var registry = FreeWAvaloniaRibbonCommands.Build(view, Callbacks());
-        Exec(registry, "freew.cover-page.default");
+        Exec(registry, "freew.cover-page-default");
 
         view.Document.Blocks.Count.Should().BeGreaterThan(before, "cover-page inserts blocks at the start");
         ((Paragraph)view.Document.Blocks[0]).PlainText.Should().Be("My Title",

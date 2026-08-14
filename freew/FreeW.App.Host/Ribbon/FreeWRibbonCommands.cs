@@ -320,10 +320,13 @@ internal static class FreeWRibbonCommands
         // Insert > Pages > Cover Page gallery: Default (existing centred layout), Banded (dark-blue title
         // band), and Motion (right-aligned title with date). The top-level id inserts the default preset
         // so clicking the button face (not the dropdown arrow) always works as before.
-        registry.Bind(FreeWRibbonCommandAction.CoverPage, new ActionRibbonCommand(() => { editor.Focus(); editor.InsertCoverPage(CoverPagePreset.Default); }));
-        registry.Register("freew.cover-page-default", new ActionRibbonCommand(() => { editor.Focus(); editor.InsertCoverPage(CoverPagePreset.Default); }));
-        registry.Register("freew.cover-page-banded", new ActionRibbonCommand(() => { editor.Focus(); editor.InsertCoverPage(CoverPagePreset.Banded); }));
-        registry.Register("freew.cover-page-motion", new ActionRibbonCommand(() => { editor.Focus(); editor.InsertCoverPage(CoverPagePreset.Motion); }));
+        CoverPageRibbonWorkflow.Register(
+            registry,
+            new CoverPageRibbonPorts(preset =>
+            {
+                editor.Focus();
+                editor.InsertCoverPage(preset);
+            }));
         registry.Bind(FreeWRibbonCommandAction.BlankPage, new ActionRibbonCommand(() => { editor.Focus(); editor.InsertBlankPage(); }));
         registry.Bind(FreeWRibbonCommandAction.HorizontalRule, new ActionRibbonCommand(() => { editor.Focus(); editor.InsertHorizontalRule(); }));
         registry.Bind(FreeWRibbonCommandAction.PageBreak, new ActionRibbonCommand(() => { editor.Focus(); editor.InsertPageBreak(); }));

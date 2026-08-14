@@ -1073,9 +1073,9 @@ internal static partial class FreeWCanonicalRibbonTabs
     private static RibbonMenu BuildCoverPageMenu() =>
         new(new RibbonMenuItem[]
         {
-            new("Default", new RibbonCommandId("freew.cover-page.default")),
-            new("Banded",  new RibbonCommandId("freew.cover-page.banded")),
-            new("Motion",  new RibbonCommandId("freew.cover-page.motion")),
+            new("Default", new RibbonCommandId("freew.cover-page-default")),
+            new("Banded",  new RibbonCommandId("freew.cover-page-banded")),
+            new("Motion",  new RibbonCommandId("freew.cover-page-motion")),
         });
 
     /// <summary>AV-INSERT2: Insert &gt; Drop Cap menu matching the WPF host routes.</summary>
