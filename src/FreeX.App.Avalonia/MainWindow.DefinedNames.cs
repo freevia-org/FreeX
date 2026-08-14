@@ -501,16 +501,20 @@ public sealed partial class MainWindow
         };
         AutomationProperties.SetAutomationId(dialog, "CreateNamesFromSelectionDialog");
 
-        var topRowBox = new CheckBox { Content = UiText.Get("InsertLoc_CreateNamesTopRow"), IsChecked = true };
+        var detected = CreateNamesFromSelectionPlanner.DetectOptions(
+            _session.SelectedRange,
+            _session.ActiveSheet.GetValue);
+
+        var topRowBox = new CheckBox { Content = UiText.Get("InsertLoc_CreateNamesTopRow"), IsChecked = detected.UseTopRow };
         ApplyNamesCheckBoxChrome(topRowBox);
         AutomationProperties.SetAutomationId(topRowBox, "CreateNamesTopRowBox");
-        var leftColumnBox = new CheckBox { Content = UiText.Get("InsertLoc_CreateNamesLeftColumn") };
+        var leftColumnBox = new CheckBox { Content = UiText.Get("InsertLoc_CreateNamesLeftColumn"), IsChecked = detected.UseLeftColumn };
         ApplyNamesCheckBoxChrome(leftColumnBox);
         AutomationProperties.SetAutomationId(leftColumnBox, "CreateNamesLeftColumnBox");
-        var bottomRowBox = new CheckBox { Content = UiText.Get("InsertLoc_CreateNamesBottomRow") };
+        var bottomRowBox = new CheckBox { Content = UiText.Get("InsertLoc_CreateNamesBottomRow"), IsChecked = detected.UseBottomRow };
         ApplyNamesCheckBoxChrome(bottomRowBox);
         AutomationProperties.SetAutomationId(bottomRowBox, "CreateNamesBottomRowBox");
-        var rightColumnBox = new CheckBox { Content = UiText.Get("InsertLoc_CreateNamesRightColumn") };
+        var rightColumnBox = new CheckBox { Content = UiText.Get("InsertLoc_CreateNamesRightColumn"), IsChecked = detected.UseRightColumn };
         ApplyNamesCheckBoxChrome(rightColumnBox);
         AutomationProperties.SetAutomationId(rightColumnBox, "CreateNamesRightColumnBox");
 
