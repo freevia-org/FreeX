@@ -1,3 +1,4 @@
+using Free.Shared.AppServices;
 using FreeW.App.Presentation.Dialogs;
 
 namespace FreeW.App.Presentation.Tests;
@@ -356,5 +357,59 @@ public sealed class FindReplaceDialogPlannerTests
         doc.Blocks.Add(new Paragraph("the quick brown fox"));
         doc.Blocks.Add(new Paragraph("jumps over the lazy dog"));
         return doc;
+    }
+
+    /// <summary>
+    /// Every combination of FreeW's three option flags, asserting which of them affect
+    /// option enablement. Only wildcards do -- and only for whole-word. This rule stays
+    /// FreeW-local (FreeP has no wildcards, FreeX has no whole-WORD option at all).
+    /// </summary>
+    [Theory]
+    [InlineData(false, false, false, true)]
+    [InlineData(true, false, false, true)]
+    [InlineData(false, true, false, true)]
+    [InlineData(true, true, false, true)]
+    [InlineData(false, false, true, false)]
+    [InlineData(true, false, true, false)]
+    [InlineData(false, true, true, false)]
+    [InlineData(true, true, true, false)]
+    public void IsOptionEnabled_DisablesWholeWordExactlyWhenWildcardsAreOn(
+        bool matchCase,
+        bool wholeWord,
+        bool useWildcards,
+        bool expectedWholeWordEnabled)
+    {
+        var options = new FindReplaceSearchOptions(matchCase, wholeWord, useWildcards);
+
+        FindReplaceDialogPlanner
+            .IsOptionEnabled(FindReplaceOptionKind.WholeWord, options)
+            .Should()
+            .Be(expectedWholeWordEnabled);
+        FindReplaceDialogPlanner
+            .IsOptionEnabled(FindReplaceOptionKind.MatchCase, options)
+            .Should()
+            .BeTrue();
+        FindReplaceDialogPlanner
+            .IsOptionEnabled(FindReplaceOptionKind.UseWildcards, options)
+            .Should()
+            .BeTrue();
+        FindReplaceDialogPlanner.NormalizeOptions(options).WholeWord
+            .Should()
+            .Be(wholeWord && expectedWholeWordEnabled);
+    }
+
+    [Theory]
+    [InlineData(false, FindReplaceOpenMode.Find)]
+    [InlineData(true, FindReplaceOpenMode.Replace)]
+    public void OpenMode_IsTheSharedCrossAppFindReplaceMode(
+        bool showReplace,
+        FindReplaceOpenMode expected)
+    {
+        // FreeW consumes the same FindReplaceOpenMode as FreeX and FreeP; it renders the
+        // mode as an initial-focus target rather than by hiding the replacement field.
+        FindReplaceDialogPolicy.OpenModeFor(showReplace).Should().Be(expected);
+        typeof(FindReplaceOpenMode).Assembly.GetName().Name
+            .Should()
+            .Be("Free.Shared.AppServices");
     }
 }
