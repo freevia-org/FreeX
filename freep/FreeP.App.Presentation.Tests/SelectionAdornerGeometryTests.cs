@@ -335,6 +335,10 @@ public sealed class SelectionAdornerGeometryTests
     [Fact]
     public void WpfAndAvaloniaAdorners_DelegateGeometryPolicyToSharedPlanner()
     {
+        var sharedSurface = ReadWorkspaceFile(
+            "freep",
+            "FreeP.App.Presentation",
+            "SelectionAdornerSurface.cs");
         var wpf = ReadWorkspaceFile("freep", "FreeP.App.Rendering.Wpf", "SelectionAdorner.cs");
         var avalonia = ReadWorkspaceFile(
             "freep",
@@ -369,21 +373,35 @@ public sealed class SelectionAdornerGeometryTests
 
         foreach (var source in new[] { wpf, avalonia })
         {
-            source.Should().Contain("SelectionAdornerController<Rect, Point> _controller")
+            source.Should().Contain("ISelectionAdornerSurface<Rect, Point>")
+                .And.Contain("SelectionAdornerController<Rect, Point> _controller")
+                .And.Contain("ISelectionAdornerSurface<Rect, Point>.Controller => _controller;")
                 .And.Contain("private SelectionAdornerState State => _controller.State;")
-                .And.Contain("_controller.UpdateSelection(")
-                .And.Contain("_controller.UpdateGeometryHandles(")
-                .And.Contain("_controller.UpdateGeometryPreview(")
-                .And.Contain("_controller.UpdatePreview(")
-                .And.Contain("_controller.UpdateTransformPreview(")
-                .And.Contain("_controller.UpdateMarquee(")
-                .And.Contain("_controller.UpdateSnapGuides(")
+                .And.NotContain("public void UpdateSelection(")
+                .And.NotContain("public void UpdateGeometryHandles(")
+                .And.NotContain("public void UpdateGeometryPreview(")
+                .And.NotContain("public void UpdatePreview(")
+                .And.NotContain("public void UpdateTransformPreview(")
+                .And.NotContain("public void UpdateMarquee(")
+                .And.NotContain("public void UpdateSnapGuides(")
                 .And.NotContain("private readonly List<(uint id, Rect screenRect)> _selectionRects")
                 .And.NotContain("private Rect? _previewRect")
                 .And.NotContain("private Rect? _marqueeRect")
                 .And.NotContain("private IReadOnlyList<SnapGuideLine>? _snapGuides")
                 .And.NotContain("private readonly List<(string Name, Point Position)> _geometryHandles");
         }
+
+        sharedSurface.Should().Contain("public static class SelectionAdornerSurfaceExtensions")
+            .And.Contain("surface.Controller.UpdateSelection(selections)")
+            .And.Contain("surface.Controller.UpdateProjection(projection)")
+            .And.Contain("surface.Controller.UpdateGeometryHandles(handles)")
+            .And.Contain("surface.Controller.UpdateGeometryPreview(name, position)")
+            .And.Contain("surface.Controller.UpdatePreview(screenRect, rotationDeg)")
+            .And.Contain("surface.Controller.UpdateTransformPreview(plan)")
+            .And.Contain("surface.Controller.UpdateMarquee(screenRect)")
+            .And.Contain("surface.Controller.UpdateSnapGuides(guides, transform)")
+            .And.NotContain("System.Windows")
+            .And.NotContain("Avalonia");
     }
 
     [Fact]

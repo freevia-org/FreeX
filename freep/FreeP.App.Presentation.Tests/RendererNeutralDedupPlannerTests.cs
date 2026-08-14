@@ -967,28 +967,37 @@ public sealed class RendererNeutralDedupPlannerTests
             "freep",
             "FreeP.App.Avalonia",
             "AvaloniaSlideShowMediaController.cs");
-        var session = ReadWorkspaceFile(
+        var interaction = ReadWorkspaceFile(
+            "freep",
+            "FreeP.App.Presentation",
+            "SlideShowMediaNativeInteractionSession.cs");
+        var playback = ReadWorkspaceFile(
             "freep",
             "FreeP.App.Presentation",
             "SlideShowMediaPlaybackSession.cs");
 
         wpf.Should().Contain("SlideShowMediaInteractionPlanner.ComputeMediaBounds");
-        avalonia.Should().Contain("SlideShowMediaInteractionPlanner.PlanClick");
         foreach (var adapter in new[] { wpf, avalonia })
         {
-            adapter.Should().Contain("SlideShowMediaInteractionPlanner.PlanSlideEntry");
+            adapter.Should().Contain("SlideShowMediaNativeInteractionSession");
+            adapter.Should().Contain("_interaction.Enter(request)");
+            adapter.Should().Contain("_interaction.PlanClick(");
             adapter.Should().Contain("SlideShowMediaInteractionPlanner.ShouldRunPeriodicUpdates");
             adapter.Should().Contain("SlideShowMediaPlaybackSession");
             adapter.Should().Contain("IMediaPlaybackPort");
+            adapter.Should().NotContain("SlideShowMediaInteractionPlanner.PlanSlideEntry(");
+            adapter.Should().NotContain("SlideShowMediaInteractionPlanner.PlanClick(");
             adapter.Should().NotContain("PresentationMediaTranscriptPlanner.SelectPlaybackTrack");
             adapter.Should().NotContain("SlideShowMediaInteractionPlanner.ResolveEndAction");
             adapter.Should().NotContain("SlideShowMediaInteractionPlanner.ResolveTrimWindow");
             adapter.Should().NotContain("SlideShowMediaInteractionPlanner.ComputeEffectiveVolumePercent");
             adapter.Should().NotContain("SlideShowMediaInteractionPlanner.NormalizeVolumePercent");
         }
-        session.Should().Contain("SlideShowMediaInteractionPlanner.ResolveEndAction");
-        session.Should().Contain("SlideShowMediaInteractionPlanner.ResolveTrimWindow");
-        session.Should().Contain("SlideShowMediaInteractionPlanner.ComputeEffectiveVolumePercent");
+        interaction.Should().Contain("SlideShowMediaInteractionPlanner.PlanSlideEntry(");
+        interaction.Should().Contain("SlideShowMediaInteractionPlanner.PlanClick(");
+        playback.Should().Contain("SlideShowMediaInteractionPlanner.ResolveEndAction");
+        playback.Should().Contain("SlideShowMediaInteractionPlanner.ResolveTrimWindow");
+        playback.Should().Contain("SlideShowMediaInteractionPlanner.ComputeEffectiveVolumePercent");
         wpf.Should().Contain("MediaPlaybackSourceFactory.TryCreate")
             .And.Contain("IMediaPlaybackSession")
             .And.NotContain("ResolveSource(");
@@ -1027,17 +1036,26 @@ public sealed class RendererNeutralDedupPlannerTests
     [Fact]
     public void WpfAndAvaloniaSlideCanvases_UseSharedTextParagraphRoutePlanner()
     {
+        var planner = ReadWorkspaceFile(
+            "freep", "FreeP.App.Presentation", "TextLayoutPlanner.cs");
+        var dispatcher = ReadWorkspaceFile(
+            "freep", "FreeP.App.Presentation", "TextParagraphNativeRenderDispatcher.cs");
         var wpf = ReadWorkspaceFile("freep", "FreeP.App.Rendering.Wpf", "SlideCanvas.cs");
         var avalonia = ReadWorkspaceFile(
             "freep",
             "FreeP.App.Rendering.Avalonia",
             "SlideCanvas.cs");
 
+        planner.Should().Contain("RenderRoute = PlanParagraphRenderRoute(");
+        planner.Should().Contain("if (HasTabCharacters(paragraph))");
+        dispatcher.Should().Contain("switch (placement.RenderRoute)");
+        dispatcher.Should().Contain("case TextParagraphRenderRoute.Effects:");
+        dispatcher.Should().Contain("case TextParagraphRenderRoute.Tabs:");
         foreach (var source in new[] { wpf, avalonia })
         {
-            source.Should().Contain("TextLayoutPlanner.PlanParagraphRenderRoute");
-            source.Should().Contain("TextParagraphRenderRoute.Effects");
-            source.Should().Contain("TextParagraphRenderRoute.Tabs");
+            source.Should().Contain("TextParagraphNativeRenderDispatcher.Render(");
+            source.Should().NotContain("switch (placement.RenderRoute)");
+            source.Should().NotContain("case TextParagraphRenderRoute.Tabs:");
             source.Should().NotContain("ParaHasTextEffects(para) || text.WarpPreset");
             source.Should().NotContain("bool hasTabs");
             source.Should().NotContain("para.Runs.Any(r => r.Text.Contains('\\t'))");
@@ -1049,6 +1067,8 @@ public sealed class RendererNeutralDedupPlannerTests
     {
         var planner = ReadWorkspaceFile(
             "freep", "FreeP.App.Presentation", "Core", "ChartRenderCommandPlanner.cs");
+        var dispatcher = ReadWorkspaceFile(
+            "freep", "FreeP.App.Presentation", "Core", "ChartRenderCommandDispatcher.cs");
         var wpf = ReadWorkspaceFile(
             "freep", "FreeP.App.Rendering.Wpf", "SlideCanvas.ChartExecution.cs");
         var avalonia = ReadWorkspaceFile(
@@ -1057,11 +1077,16 @@ public sealed class RendererNeutralDedupPlannerTests
         foreach (var source in new[] { wpf, avalonia })
         {
             source.Should().Contain("ChartRenderCommandPlanner.Build(");
-            source.Should().Contain("foreach (var command in plan.Commands)");
+            source.Should().Contain("ChartRenderCommandDispatcher.Dispatch(plan.Commands");
+            source.Should().Contain("IChartRenderCommandSink");
+            source.Should().NotContain("foreach (var command in plan.Commands)");
+            source.Should().NotContain("switch (command)");
             source.Should().NotContain("ChartRenderPlanner.BuildScenePlan(");
             source.Should().NotContain("scene.GeometryKind");
         }
 
+        dispatcher.Should().Contain("foreach (var command in commands)");
+        dispatcher.Should().Contain("switch (command)");
         planner.Should().Contain("ChartRenderPlanner.BuildScenePlan(");
         planner.Should().Contain("switch (scene.GeometryKind)");
         planner.Should().Contain("scene.Rectangles");

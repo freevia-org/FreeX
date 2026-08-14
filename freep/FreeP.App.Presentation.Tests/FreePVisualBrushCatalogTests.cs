@@ -1,6 +1,6 @@
 using Free.Shared.Theme;
 
-namespace FreeP.App.Presentation.Tests;
+namespace FreeP.App.Compositor.Tests;
 
 public sealed class FreePVisualBrushCatalogTests
 {

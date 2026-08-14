@@ -47,10 +47,26 @@ public sealed class PresentationDialogAdapterOwnershipTests
         {
             var source = File.ReadAllText(Path.Combine(projectDirectory, fileName));
             source.Should().Contain("PresentationDialogControlAdapter.", fileName);
-            source.Should().NotContain("private static void ApplySemantic(", fileName);
             source.Should().NotContain("private static PresentationDialogFieldValue CaptureValue(", fileName);
             source.Should().NotContain("private static void ApplyValue(", fileName);
+
+            AssertSemanticHelperOnlyForwardsToAdapter(source, fileName);
         }
+    }
+
+    private static void AssertSemanticHelperOnlyForwardsToAdapter(string source, string fileName)
+    {
+        const string declaration = "private static void ApplySemantic(";
+        var declarationIndex = source.IndexOf(declaration, StringComparison.Ordinal);
+        if (declarationIndex < 0)
+            return;
+
+        var helperEnd = source.IndexOf(';', declarationIndex);
+        helperEnd.Should().BeGreaterThan(declarationIndex, fileName);
+        var helper = source[declarationIndex..(helperEnd + 1)];
+        helper.Should().Contain("=>", fileName);
+        helper.Should().Contain("PresentationDialogControlAdapter.ApplySemantic(", fileName);
+        helper.Should().NotContain("AutomationProperties.", fileName);
     }
 
     private static string ReadProductionSources(string root) => string.Join(

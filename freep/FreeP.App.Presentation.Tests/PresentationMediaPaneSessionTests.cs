@@ -377,21 +377,39 @@ public sealed class PresentationMediaPaneSessionTests
         var root = FindWorkspaceRoot();
         var wpf = File.ReadAllText(Path.Combine(root, "freep", "FreeP.App.Host", "MainWindow.cs"));
         var avalonia = File.ReadAllText(Path.Combine(root, "freep", "FreeP.App.Avalonia", "MainWindow.cs"));
+        var hostViewAdapter = File.ReadAllText(Path.Combine(
+            root,
+            "freep",
+            "FreeP.App.Presentation",
+            "PresentationMediaPaneControlSurface.cs"));
+        var eventRouter = File.ReadAllText(Path.Combine(
+            root,
+            "freep",
+            "FreeP.App.Presentation",
+            "PresentationMainWindowMediaNativeAdapter.cs"));
+        var coordinator = File.ReadAllText(Path.Combine(
+            root,
+            "freep",
+            "FreeP.App.Presentation",
+            "PresentationMediaPaneHostCoordinator.cs"));
+        var mediaSession = File.ReadAllText(Path.Combine(
+            root,
+            "freep",
+            "FreeP.App.Presentation",
+            "PresentationMediaPaneSession.cs"));
 
         foreach (var source in new[] { wpf, avalonia })
         {
             source.Should().Contain("private readonly PresentationMediaPaneHostCoordinator _mediaPaneHostCoordinator;");
-            source.Should().Contain("IPresentationMediaPaneHostView");
+            source.Should().Contain("private readonly PresentationMediaPaneHostViewAdapter ");
+            source.Should().Contain("DelegatingPresentationMediaPaneControlSurface");
+            source.Should().Contain("PresentationMediaPaneFormEventBinder.Bind(");
+            source.Should().Contain("new PresentationMediaPaneFormEventRouter(_mediaPaneHostCoordinator)");
             source.Should().Contain("CaptureMediaCaptionHostSnapshot()");
             source.Should().Contain("CaptureMediaVolumeHostSnapshot()");
             source.Should().Contain("CaptureMediaPlaybackHostSnapshot()");
             source.Should().Contain("CaptureMediaTimingHostSnapshot()");
             source.Should().Contain("CaptureMediaBookmarkHostSnapshot()");
-            source.Should().Contain("PresentationMediaPaneHostSnapshotPlanner.CaptureCaption(");
-            source.Should().Contain("PresentationMediaPaneHostSnapshotPlanner.CaptureVolume(");
-            source.Should().Contain("PresentationMediaPaneHostSnapshotPlanner.CapturePlayback(");
-            source.Should().Contain("PresentationMediaPaneHostSnapshotPlanner.CaptureTiming(");
-            source.Should().Contain("PresentationMediaPaneHostSnapshotPlanner.CaptureBookmark(");
             source.Should().Contain("PresentationMediaPaneVisualMetrics.PaneWidth");
             source.Should().Contain("PresentationMediaPaneVisualMetrics.ContentSideMargin");
             source.Should().Contain("PresentationMediaPaneVisualMetrics.CompactControlHeight");
@@ -399,13 +417,18 @@ public sealed class PresentationMediaPaneSessionTests
             source.Should().Contain("PresentationMediaPaneSession.MinimumVolumePercent");
             source.Should().Contain("PresentationMediaPaneSession.MaximumVolumePercent");
             source.Should().Contain("PresentationMediaPaneSession.VolumeTickFrequency");
-            source.Should().Contain("PresentationMediaPaneSession.DefaultStopAfterSlides");
-            source.Should().Contain("_mediaPaneHostCoordinator.ApplyCaption(");
-            source.Should().Contain("_mediaPaneHostCoordinator.ApplyVolume(");
-            source.Should().Contain("_mediaPaneHostCoordinator.ApplyPlayback(");
-            source.Should().Contain("_mediaPaneHostCoordinator.ApplyTiming(");
-            source.Should().Contain("_mediaPaneHostCoordinator.ApplyBookmark(");
-            source.Should().Contain("plan.GetRequiredAction(");
+            source.Should().NotContain("PresentationMediaPaneSession.DefaultStopAfterSlides");
+            source.Should().NotContain("PresentationMediaPaneHostSnapshotPlanner.CaptureCaption(");
+            source.Should().NotContain("PresentationMediaPaneHostSnapshotPlanner.CaptureVolume(");
+            source.Should().NotContain("PresentationMediaPaneHostSnapshotPlanner.CapturePlayback(");
+            source.Should().NotContain("PresentationMediaPaneHostSnapshotPlanner.CaptureTiming(");
+            source.Should().NotContain("PresentationMediaPaneHostSnapshotPlanner.CaptureBookmark(");
+            source.Should().NotContain("_mediaPaneHostCoordinator.ApplyCaption(");
+            source.Should().NotContain("_mediaPaneHostCoordinator.ApplyVolume(");
+            source.Should().NotContain("_mediaPaneHostCoordinator.ApplyPlayback(");
+            source.Should().NotContain("_mediaPaneHostCoordinator.ApplyTiming(");
+            source.Should().NotContain("_mediaPaneHostCoordinator.ApplyBookmark(");
+            source.Should().NotContain("plan.GetRequiredAction(");
             source.Should().NotContain("GetMediaCaptionPaneAction(");
             source.Should().NotContain("ShowMediaCaptionPane(");
             source.Should().NotContain("HideMediaCaptionPane(");
@@ -428,8 +451,8 @@ public sealed class PresentationMediaPaneSessionTests
             source.Should().NotContain("_workareaSession.Panes.Hide(PresentationWorkareaPane.MediaCaption)");
             source.Should().NotContain("PresentationMediaPaneSession.BuildPlaybackInputPlan(");
             source.Should().NotContain("PresentationMediaPaneSession.ParseStopAfterSlides(");
-            source.Should().Contain("RenderMediaCaptionPane(");
-            source.Should().Contain("RenderMediaBookmarkOptions(");
+            source.Should().NotContain("RenderMediaCaptionPane(");
+            source.Should().NotContain("RenderMediaBookmarkOptions(");
             source.Should().NotContain("private static double ParseMediaTiming(");
             source.Should().NotContain("private static string FormatMediaTiming(");
             source.Should().NotContain("CloneMediaBookmarksForPane(");
@@ -440,6 +463,39 @@ public sealed class PresentationMediaPaneSessionTests
             source.Should().NotContain("Editor.SetSelectedMediaBookmarks(");
             source.Should().NotContain("Editor.ApplyMediaCaptionAuthoring(");
         }
+
+        hostViewAdapter.Should().Contain("PresentationMediaPaneHostViewAdapter : IPresentationMediaPaneHostView")
+            .And.Contain("PresentationMediaPaneHostSnapshotPlanner.CaptureCaption(")
+            .And.Contain("PresentationMediaPaneHostSnapshotPlanner.CaptureVolume(")
+            .And.Contain("PresentationMediaPaneHostSnapshotPlanner.CapturePlayback(")
+            .And.Contain("PresentationMediaPaneHostSnapshotPlanner.CaptureTiming(")
+            .And.Contain("PresentationMediaPaneHostSnapshotPlanner.CaptureBookmark(")
+            .And.Contain("_surface.RenderCaptionTracks(caption)")
+            .And.Contain("_surface.RenderCaptionField(")
+            .And.Contain("_surface.RenderBookmarks(media)")
+            .And.Contain("caption.GetRequiredAction(");
+
+        eventRouter.Should().Contain("PresentationMediaPaneFormEventRouter : IPresentationMediaPaneFormEventRouter")
+            .And.Contain("_coordinator.ApplyCaption(")
+            .And.Contain("_coordinator.ApplyVolume()")
+            .And.Contain("_coordinator.ApplyPlayback()")
+            .And.Contain("_coordinator.ApplyTiming()")
+            .And.Contain("_coordinator.ApplyBookmark(");
+
+        coordinator.Should().Contain("private readonly IPresentationMediaPaneHostView _view;")
+            .And.Contain("public PresentationMediaPaneHostRenderPlan BuildRenderPlan(")
+            .And.Contain("public PresentationMediaCaptionTrackMutationResult ApplyCaption(")
+            .And.Contain("public bool ApplyVolume()")
+            .And.Contain("public bool ApplyPlayback()")
+            .And.Contain("public bool ApplyTiming()")
+            .And.Contain("public bool ApplyBookmark(")
+            .And.NotContain("using System.Windows")
+            .And.NotContain("using Avalonia");
+
+        mediaSession.Should().Contain("public const int MinimumVolumePercent = 0;")
+            .And.Contain("public const int MaximumVolumePercent = 100;")
+            .And.Contain("public const int VolumeTickFrequency = 10;")
+            .And.Contain("public const int DefaultStopAfterSlides = 1;");
     }
 
     private static PresentationMediaPaneSession CreateSession(

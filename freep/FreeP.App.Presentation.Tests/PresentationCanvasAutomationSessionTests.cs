@@ -218,6 +218,11 @@ public sealed class PresentationCanvasAutomationSessionTests
             Read(root, "freep", "FreeP.App.Rendering.Wpf", "SlideCanvas.cs"),
             Read(root, "freep", "FreeP.App.Rendering.Avalonia", "SlideCanvas.cs"),
         };
+        var shapePeerAdapter = Read(
+            root,
+            "freep",
+            "FreeP.App.Presentation",
+            "PresentationCanvasAutomationShapePeerAdapter.cs");
 
         foreach (var source in sources)
         {
@@ -232,12 +237,16 @@ public sealed class PresentationCanvasAutomationSessionTests
                 .And.Contain("_coordinator.GetSelection()")
                 .And.Contain("PresentationCanvasAutomationSelectionDelta delta")
                 .And.Contain("_coordinator.CanSelectMultiple")
-                .And.Contain("Coordinator.RequestSelectionMutation(")
                 .And.Contain("PresentationCanvasAutomationRoleMapper.Map(")
+                .And.Contain("PresentationCanvasAutomationShapePeerAdapter<")
+                .And.Contain("_adapter.Select()")
+                .And.Contain("_adapter.AddToSelection()")
+                .And.Contain("_adapter.RemoveFromSelection()")
                 .And.NotContain("PresentationAutomationPeerCache.Synchronize(")
                 .And.NotContain("_canvasAutomation.ProjectCanvas(")
                 .And.NotContain("_canvasAutomation.ProjectShapes(")
                 .And.NotContain("_canvasAutomation.ProjectSelection(")
+                .And.NotContain("RequestSelectionMutation(")
                 .And.NotContain("_lastNotifiedSelection")
                 .And.NotContain("var liveIds = new HashSet<uint>()")
                 .And.NotContain("_shapePeers.Keys.Where(")
@@ -252,6 +261,14 @@ public sealed class PresentationCanvasAutomationSessionTests
                 .And.NotContain("SlideTransform.EmuToDip(")
                 .And.NotContain(".SlideToScreen(");
         }
+
+        shapePeerAdapter.Should().Contain("public sealed class PresentationCanvasAutomationShapePeerAdapter")
+            .And.Contain("public void Select() => Request(PresentationCanvasAutomationSelectionMutation.Select);")
+            .And.Contain("public void AddToSelection() => Request(PresentationCanvasAutomationSelectionMutation.Add);")
+            .And.Contain("public void RemoveFromSelection() => Request(PresentationCanvasAutomationSelectionMutation.Remove);")
+            .And.Contain("_coordinator.RequestSelectionMutation(_shapeId, mutation);")
+            .And.NotContain("System.Windows")
+            .And.NotContain("Avalonia");
     }
 
     private static SlideShape Shape(

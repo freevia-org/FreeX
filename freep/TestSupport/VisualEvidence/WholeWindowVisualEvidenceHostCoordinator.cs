@@ -71,12 +71,12 @@ public sealed class WholeWindowVisualEvidenceHostCoordinator(
 
         host.HideCommentsPane();
         host.SelectRibbonTab(plan.ActiveRibbonTabId);
+        var assertions = plan.CreateBaselineAssertions(inspector.CaptureBaselineState()).ToList();
         _viewStateActivated = !plan.Activation.IsViewState;
         Activate(plan.Activation);
         host.RefreshWholeWindow();
         Normalize(scenario);
 
-        var assertions = plan.CreateBaselineAssertions(inspector.CaptureBaselineState()).ToList();
         if (plan.RichEditor is { } richEditor)
             assertions.AddRange(plan.CreateRichEditorAssertions(inspector.PrepareRichEditor(richEditor)));
         return assertions;
@@ -84,6 +84,14 @@ public sealed class WholeWindowVisualEvidenceHostCoordinator(
 
     public void Normalize(WholeWindowVisualEvidenceScenario scenario)
     {
+        if (_preparation is { } preparation && host.CurrentSlideIndex != preparation.SlideIndex)
+        {
+            host.SelectSlide(preparation.SlideIndex);
+            if (preparation.SelectionShapeId != 0)
+                host.SelectShape(preparation.SelectionShapeId);
+            host.RefreshWholeWindow();
+        }
+
         var activation = WholeWindowVisualEvidencePreparationSession.ResolveActivation(scenario);
         if (activation.IsViewState)
             _viewStateActivated = PrepareViewState(activation.Kind);

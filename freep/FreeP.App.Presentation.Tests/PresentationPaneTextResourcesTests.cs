@@ -264,6 +264,11 @@ public sealed class PresentationPaneTextResourcesTests
     public void MainWindowSourceGuards_KeepPaneTextOutOfNativeRenderers()
     {
         var root = FindWorkspaceRoot();
+        var mediaControlSurface = File.ReadAllText(Path.Combine(
+            root,
+            "freep",
+            "FreeP.App.Presentation",
+            "PresentationMediaPaneControlSurface.cs"));
         var sources = new[]
         {
             File.ReadAllText(Path.Combine(root, "freep", "FreeP.App.Host", "MainWindow.cs")),
@@ -300,7 +305,11 @@ public sealed class PresentationPaneTextResourcesTests
         foreach (var source in sources)
         {
             source.Should().Contain("PresentationPaneTextResources");
-            source.Should().Contain("_mediaCaptionPaneHeading.Text = plan.Heading");
+            source.Should().Contain("PresentationMediaPaneHostViewAdapter");
+            source.Should().Contain("SetHeading: value =>");
+            source.Should().Contain("SetMessage: value =>");
+            source.Should().NotContain("_mediaCaptionPaneHeading.Text = plan.Heading");
+            source.Should().NotContain("_mediaCaptionPaneMessage.Text = plan.Message");
             source.Should().Contain("_readingOrderPaneMessage.Text = plan.Message");
             source.Should().Contain("Text = item.DisplayTitle");
             source.Should().Contain("Text = item.Metadata");
@@ -310,6 +319,9 @@ public sealed class PresentationPaneTextResourcesTests
             foreach (var literal in rendererOwnedLiterals)
                 source.Should().NotContain(literal);
         }
+
+        mediaControlSurface.Should().Contain("Heading { set => _bindings.SetHeading(value); }")
+            .And.Contain("Message { set => _bindings.SetMessage(value); }");
     }
 
     private static string FindWorkspaceRoot() =>

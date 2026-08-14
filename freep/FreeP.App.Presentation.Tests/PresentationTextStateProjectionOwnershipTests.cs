@@ -8,6 +8,11 @@ public sealed class PresentationTextStateProjectionOwnershipTests
         var root = FindWorkspaceRoot();
         var wpf = File.ReadAllText(Path.Combine(root, "freep", "FreeP.App.Host", "MainWindow.cs"));
         var avalonia = File.ReadAllText(Path.Combine(root, "freep", "FreeP.App.Avalonia", "MainWindow.cs"));
+        var mediaAdapter = File.ReadAllText(Path.Combine(
+            root,
+            "freep",
+            "FreeP.App.Presentation",
+            "PresentationMainWindowMediaNativeAdapter.cs"));
 
         foreach (var source in new[] { wpf, avalonia })
         {
@@ -15,9 +20,11 @@ public sealed class PresentationTextStateProjectionOwnershipTests
             source.Should().Contain("choice.DisplayLabel");
             source.Should().Contain("track.DisplayText");
             source.Should().Contain("PresentationPaneAccessibilityPlanner.PlanItem(");
-            source.Should().Contain("track.AccessibilityKey");
-            source.Should().Contain("plan.SelectedTrackListIndex");
+            source.Should().Contain("PresentationMediaCaptionTrackNativeAdapter.Render(");
+            source.Should().Contain("PresentationMediaCaptionTrackNativeBindings<ComboBoxItem>");
             source.Should().Contain("PresentationExportPlanner.BuildCurrentSlideRangeRequest(Editor.CurrentSlideIndex)");
+            source.Should().NotContain("track.AccessibilityKey");
+            source.Should().NotContain("plan.SelectedTrackListIndex");
             source.Should().NotContain("BuildReadingOrderAltTextLine");
             source.Should().NotContain("BuildLayoutChoiceLabel");
             source.Should().NotContain("BuildCurrentSlideImageExportRange");
@@ -26,6 +33,10 @@ public sealed class PresentationTextStateProjectionOwnershipTests
             source.Should().NotContain("track.TrackIndex == plan.SelectedTrackIndex");
             source.Should().NotContain("track.IsSelected ? \"Selected\" : \"Not selected\"");
         }
+
+        mediaAdapter.Should().Contain("track.AccessibilityKey");
+        mediaAdapter.Should().Contain("native.SetSelectedIndex(plan.SelectedTrackListIndex)");
+        mediaAdapter.Should().Contain("PresentationPaneAccessibilityPlanner.PlanItem(");
     }
 
     private static string FindWorkspaceRoot() =>

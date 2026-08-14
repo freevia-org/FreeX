@@ -21,11 +21,11 @@ public sealed class WholeWindowVisualEvidenceHostCoordinatorTests
             $"SelectShape:{fixture.TextShapeId}",
             "HideCommentsPane",
             "SelectRibbonTab:home",
+            "CaptureBaselineState",
             "ShowCommentsPane",
             "SelectFirstComment",
             "RefreshWholeWindow",
-            "NormalizeShell",
-            "CaptureBaselineState");
+            "NormalizeShell");
         assertions.Should().OnlyContain(assertion => assertion.Passed);
     }
 
@@ -44,10 +44,27 @@ public sealed class WholeWindowVisualEvidenceHostCoordinatorTests
             $"SelectShape:{fixture.ChartShapeId}",
             "HideCommentsPane",
             "SelectRibbonTab:view",
+            "CaptureBaselineState",
             "RefreshWholeWindow",
             "SetZoom:FitToWindow:100",
-            "NormalizeShell",
-            "CaptureBaselineState");
+            "NormalizeShell");
+    }
+
+    [Fact]
+    public void Normalize_restores_planned_slide_after_native_selection_drift()
+    {
+        var fixture = DialogPaneVisualEvidenceFixtureFactory.Create();
+        var scenario = WholeWindowVisualEvidenceCatalog.Get("status.slide-2");
+        var probe = new FakeProbe();
+        var coordinator = new WholeWindowVisualEvidenceHostCoordinator(probe, probe);
+        coordinator.Prepare(scenario, fixture);
+        probe.DriftToSlide(0);
+        probe.Calls.Clear();
+
+        coordinator.Normalize(scenario);
+
+        probe.CurrentSlideIndex.Should().Be(1);
+        probe.Calls.Should().Equal("SelectSlide:1", "RefreshWholeWindow", "NormalizeShell");
     }
 
     [Fact]
@@ -97,6 +114,8 @@ public sealed class WholeWindowVisualEvidenceHostCoordinatorTests
         public DialogPaneVisualEvidenceChoiceState ChoiceState => new(0, 0, 0, 0);
         public bool IsTablePickerVisible => false;
         public bool IsLayoutPickerVisible => false;
+
+        internal void DriftToSlide(int slideIndex) => _currentSlideIndex = slideIndex;
 
         public void LoadPresentation(Presentation presentation)
         {
