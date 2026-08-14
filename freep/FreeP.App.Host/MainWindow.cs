@@ -817,53 +817,45 @@ public sealed partial class MainWindow : Window,
             || _selectionPane is null || _animPaneHost is null)
             return;
 
-        var commentPlan = LastCommentPanePlan;
-        var accessibilityPlan = LastAccessibilityCheckerPanePlan;
-        var readingOrderPlan = LastReadingOrderPlan;
-        var proofingPlan = LastProofingPanePlan;
-        var captionPlan = LastMediaCaptionAuthoringPanePlan;
         var smartArtItemCount = _smartArtTextPaneRowsPanel?.Children.Count ?? 0;
         var selectionPlan = _selectionPane.CurrentPlan;
         var animationPlan = _animPane?.CurrentTimelinePlan;
+        var selectedSmartArtIndex = _smartArtTextPaneRowsPanel?.Children.IndexOf(
+            _smartArtTextPaneRowsPanel.Children.OfType<TextBox>().FirstOrDefault(box =>
+                box.Tag is SmartArtNodeOutlineItem item &&
+                StringComparer.Ordinal.Equals(item.ModelId, _smartArtTextPaneSession.SelectedModelId))) ?? -1;
+        var states = PresentationMainWindowPaneAccessibilityPlan.Build(
+            _reviewWorkflowSession,
+            _mediaPaneHostCoordinator,
+            _workareaSession.Panes,
+            _presentation.Slides.Count,
+            Editor.CurrentSlideIndex,
+            new(
+                _accessibilityCheckerRowsPanel?.Children.Count ?? 0,
+                _readingOrderPaneItemsPanel?.Children.Count ?? 0,
+                _proofingPaneRowsPanel?.Children.Count ?? 0,
+                _mediaCaptionTrackBox?.Items.Count ?? 0,
+                _mediaCaptionTrackBox?.SelectedIndex ?? -1,
+                smartArtItemCount,
+                selectedSmartArtIndex,
+                selectionPlan.Items.Count,
+                selectionPlan.SelectedItemIndex,
+                _animPaneHost.Visibility == Visibility.Visible,
+                animationPlan?.Items.Count ?? 0,
+                animationPlan?.SelectedIndex ?? -1));
+        FrameworkElement[] controls =
+        [
+            SlidePaneHost, _notesBox, _commentListHost, _accessibilityCheckerPaneHost,
+            _altTextPaneHost, _readingOrderPaneHost, _proofingPaneHost, _mediaCaptionPaneHost,
+            _smartArtTextPaneHost, _selectionPane, _animPaneHost,
+        ];
 
-        _paneAccessibility.ApplyPane(SlidePaneHost, PresentationPaneAccessibilityPlanner.SlidePaneId, true,
-            _presentation.Slides.Count, Editor.CurrentSlideIndex);
-        _paneAccessibility.ApplyPane(_notesBox, PresentationPaneAccessibilityPlanner.NotesPaneId, true, 1);
-        _paneAccessibility.ApplyPane(_commentListHost, PresentationPaneAccessibilityPlanner.CommentsPaneId,
-            _workareaSession.Panes.IsVisible(PresentationWorkareaPane.ReviewComments),
-            commentPlan?.Comments.Count ?? 0, commentPlan?.SelectedCommentIndex ?? -1);
-        _paneAccessibility.ApplyPane(_accessibilityCheckerPaneHost, PresentationPaneAccessibilityPlanner.AccessibilityPaneId,
-            _workareaSession.Panes.IsVisible(PresentationWorkareaPane.AccessibilityChecker),
-            accessibilityPlan?.Rows.Count ?? _accessibilityCheckerRowsPanel?.Children.Count ?? 0,
-            accessibilityPlan?.SelectedRowIndex ?? -1);
-        _paneAccessibility.ApplyPane(_altTextPaneHost, PresentationPaneAccessibilityPlanner.AltTextPaneId,
-            _workareaSession.Panes.IsVisible(PresentationWorkareaPane.AltText), 3);
-        _paneAccessibility.ApplyPane(_readingOrderPaneHost, PresentationPaneAccessibilityPlanner.ReadingOrderPaneId,
-            _workareaSession.Panes.IsVisible(PresentationWorkareaPane.ReadingOrder),
-            readingOrderPlan?.Items.Count ?? _readingOrderPaneItemsPanel?.Children.Count ?? 0,
-            readingOrderPlan?.SelectedItemIndex ?? -1);
-        _paneAccessibility.ApplyPane(_proofingPaneHost, PresentationPaneAccessibilityPlanner.ProofingPaneId,
-            _workareaSession.Panes.IsVisible(PresentationWorkareaPane.Proofing),
-            proofingPlan?.Rows.Count ?? _proofingPaneRowsPanel?.Children.Count ?? 0,
-            proofingPlan?.SelectedRowIndex ?? -1);
-        _paneAccessibility.ApplyPane(_mediaCaptionPaneHost, PresentationPaneAccessibilityPlanner.MediaCaptionPaneId,
-            _workareaSession.Panes.IsVisible(PresentationWorkareaPane.MediaCaption),
-            captionPlan?.Tracks.Count ?? _mediaCaptionTrackBox?.Items.Count ?? 0,
-            captionPlan?.SelectedTrackIndex ?? _mediaCaptionTrackBox?.SelectedIndex ?? -1);
-        _paneAccessibility.ApplyPane(_smartArtTextPaneHost, PresentationPaneAccessibilityPlanner.SmartArtTextPaneId,
-            _workareaSession.Panes.IsVisible(PresentationWorkareaPane.SmartArtText), smartArtItemCount,
-            _smartArtTextPaneRowsPanel?.Children.IndexOf(
-                _smartArtTextPaneRowsPanel.Children.OfType<TextBox>().FirstOrDefault(box =>
-                    box.Tag is SmartArtNodeOutlineItem item &&
-                    StringComparer.Ordinal.Equals(
-                        item.ModelId,
-                        _smartArtTextPaneSession.SelectedModelId))) ?? -1);
-        _paneAccessibility.ApplyPane(_selectionPane, PresentationPaneAccessibilityPlanner.SelectionPaneId,
-            _workareaSession.Panes.IsVisible(PresentationWorkareaPane.Selection), selectionPlan.Items.Count,
-            selectionPlan.SelectedItemIndex);
-        _paneAccessibility.ApplyPane(_animPaneHost, PresentationPaneAccessibilityPlanner.AnimationPaneId,
-            _animPaneHost.Visibility == Visibility.Visible,
-            animationPlan?.Items.Count ?? 0, animationPlan?.SelectedIndex ?? -1);
+        for (var index = 0; index < states.Count; index++)
+        {
+            var state = states[index];
+            _paneAccessibility.ApplyPane(
+                controls[index], state.PaneId, state.IsVisible, state.ItemCount, state.SelectedIndex);
+        }
     }
 
     private Border BuildMediaCaptionPaneHost()
