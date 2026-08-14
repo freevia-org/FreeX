@@ -98,6 +98,32 @@ public sealed class SharedCupsPrintServiceTests
         visibility.ShowLastPage.Should().Be(showLastPage);
     }
 
+    [Fact]
+    public void PageRangeChoiceMap_ProjectsReducedProductChoicesToCanonicalKinds()
+    {
+        var map = new PrintPageRangeChoiceMap(
+            [PrintPageRangeKind.All, PrintPageRangeKind.Range]);
+
+        map.ChoiceIndexFor(PrintPageRangeKind.All).Should().Be(0);
+        map.ChoiceIndexFor(PrintPageRangeKind.Range).Should().Be(1);
+        map.ChoiceIndexFor(PrintPageRangeKind.Single).Should().Be(1,
+            "a single page remains representable by the product's range choice");
+        map.KindIndexAt(0).Should().Be((int)PrintPageRangeKind.All);
+        map.KindIndexAt(1).Should().Be((int)PrintPageRangeKind.Range);
+        map.KindIndexAt(-1).Should().Be((int)PrintPageRangeKind.All);
+    }
+
+    [Fact]
+    public void PageRangeChoiceMap_RejectsMissingOrAmbiguousMappings()
+    {
+        var empty = () => new PrintPageRangeChoiceMap([]);
+        var duplicate = () => new PrintPageRangeChoiceMap(
+            [PrintPageRangeKind.All, PrintPageRangeKind.All]);
+
+        empty.Should().Throw<ArgumentException>();
+        duplicate.Should().Throw<ArgumentException>();
+    }
+
     [Theory]
     [InlineData("0", 0, "1", "1", PrintDialogValidationIssue.CopiesOutOfRange)]
     [InlineData("1000", 0, "1", "1", PrintDialogValidationIssue.CopiesOutOfRange)]

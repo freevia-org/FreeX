@@ -52,6 +52,50 @@ public sealed record PrintDialogState(
 
 public readonly record struct PrintDialogRangeVisibility(bool ShowFirstPage, bool ShowLastPage);
 
+/// <summary>
+/// Maps a product's ordered print-dialog choices to the canonical page-range kinds. Products may
+/// intentionally omit choices (for example, FreeX exposes All and Range), while parsing and
+/// validation continue to use the shared canonical enum.
+/// </summary>
+public sealed class PrintPageRangeChoiceMap
+{
+    private readonly PrintPageRangeKind[] _kinds;
+
+    public PrintPageRangeChoiceMap(IEnumerable<PrintPageRangeKind> kinds)
+    {
+        ArgumentNullException.ThrowIfNull(kinds);
+        _kinds = kinds.ToArray();
+        if (_kinds.Length == 0)
+            throw new ArgumentException("At least one page-range kind is required.", nameof(kinds));
+        if (_kinds.Distinct().Count() != _kinds.Length)
+            throw new ArgumentException("Page-range kinds must be unique.", nameof(kinds));
+    }
+
+    public IReadOnlyList<PrintPageRangeKind> Kinds => _kinds;
+
+    public int ChoiceIndexFor(PrintPageRangeKind requestedKind)
+    {
+        var index = Array.IndexOf(_kinds, requestedKind);
+        if (index >= 0)
+            return index;
+
+        // A single page is a valid range when a product intentionally omits the dedicated choice.
+        if (requestedKind == PrintPageRangeKind.Single)
+        {
+            index = Array.IndexOf(_kinds, PrintPageRangeKind.Range);
+            if (index >= 0)
+                return index;
+        }
+
+        return 0;
+    }
+
+    public int KindIndexAt(int choiceIndex) =>
+        choiceIndex >= 0 && choiceIndex < _kinds.Length
+            ? (int)_kinds[choiceIndex]
+            : (int)PrintPageRangeKind.All;
+}
+
 public sealed record PrintDialogSubmission(
     PrintSelection? Selection,
     PrintDialogValidationIssue ValidationIssue = PrintDialogValidationIssue.None)
