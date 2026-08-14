@@ -12,7 +12,7 @@ using FreeP.Core.Model;
 
 namespace FreeP.App.Avalonia;
 
-internal sealed partial class HyperlinkDialog : Window
+internal sealed partial class HyperlinkDialog : FreePDialogWindow
 {
     private static readonly AvaloniaCompactDialogChromeStyle DialogChromeStyle =
         AvaloniaCompactDialogChrome.WindowsStyle with { ControlHeight = 26 };
@@ -36,6 +36,7 @@ internal sealed partial class HyperlinkDialog : Window
     }
 
     internal HyperlinkDialog(HyperlinkDialogRequest request)
+        : base(DialogChromeStyle)
     {
         ArgumentNullException.ThrowIfNull(request);
         _session = new HyperlinkDialogSession(request);
@@ -46,7 +47,6 @@ internal sealed partial class HyperlinkDialog : Window
         Height = 216;
         CanResize = false;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
-        AvaloniaCompactDialogChrome.ApplyWindow(this, DialogChromeStyle);
         AutomationProperties.SetName(this, _surface.Schema.AccessibleName);
         AutomationProperties.SetAutomationId(this, _surface.Schema.AutomationId);
 

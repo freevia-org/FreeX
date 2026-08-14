@@ -5,7 +5,7 @@ using FreeP.App.Compositor;
 
 namespace FreeP.App.Avalonia;
 
-internal sealed class SectionZoomDialog : Window
+internal sealed class SectionZoomDialog : FreePDialogWindow
 {
     private readonly ZoomSingleTargetDialogSession _session;
     private readonly ComboBox _targetCombo;

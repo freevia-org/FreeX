@@ -5,7 +5,7 @@ using FreeP.App.Compositor;
 
 namespace FreeP.App.Avalonia;
 
-internal sealed class SummaryZoomCoverImageTargetDialog : Window
+internal sealed class SummaryZoomCoverImageTargetDialog : FreePDialogWindow
 {
     private readonly ZoomSingleTargetDialogSession _session;
     private readonly ComboBox _target;

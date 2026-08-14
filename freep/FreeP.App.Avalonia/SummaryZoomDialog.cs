@@ -6,7 +6,7 @@ using FreeP.App.Compositor;
 
 namespace FreeP.App.Avalonia;
 
-internal sealed class SummaryZoomDialog : Window
+internal sealed class SummaryZoomDialog : FreePDialogWindow
 {
     private readonly SummaryZoomDialogSession _session;
     private readonly ListBox _targetList;

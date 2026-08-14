@@ -6,7 +6,12 @@ namespace Free.Shared.Shell.Avalonia;
 public abstract class AvaloniaDialogWindow : Window
 {
     protected AvaloniaDialogWindow()
+        : this(style: null)
     {
-        AvaloniaCompactDialogChrome.ApplyWindow(this);
+    }
+
+    protected AvaloniaDialogWindow(AvaloniaCompactDialogChromeStyle? style)
+    {
+        AvaloniaCompactDialogChrome.ApplyWindow(this, style);
     }
 }

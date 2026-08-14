@@ -8,7 +8,7 @@ using FreeP.Core.Model;
 
 namespace FreeP.App.Avalonia;
 
-internal sealed class ZoomObjectPropertiesDialog : Window
+internal sealed class ZoomObjectPropertiesDialog : FreePDialogWindow
 {
     private readonly ZoomObjectPropertiesDialogSession _session;
     private readonly ZoomObjectPropertiesDialogSurfacePlan _surface;
