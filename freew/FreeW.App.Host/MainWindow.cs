@@ -293,7 +293,7 @@ public sealed partial class MainWindow : Window
             ArrangeAll = ArrangeAllWindows,
             OpenThesaurus = ToggleThesaurusPane,
             ToggleReviewBalloons = ToggleBalloons,
-            IsReviewBalloonsActive = () => _balloonOverlay.BalloonsEnabled,
+            IsReviewBalloonsActive = () => _balloonOverlay?.BalloonsEnabled ?? false,
             OpenHelpOnline = () => OpenExternalHelpLink(
                 FreeWProductInfo.HelpUrl,
                 FreeWApplicationFrameTextCatalog.HelpOnlineCommandName),

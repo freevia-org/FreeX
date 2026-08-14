@@ -341,7 +341,7 @@
     <value>Document</value>
   </data>
   <data name="File_NewDocumentAction" xml:space="preserve">
-    <value>replace the current document</value>
+    <value>creating a new document</value>
   </data>
   <data name="File_OpenDocumentAction" xml:space="preserve">
     <value>opening another document</value>
