@@ -507,6 +507,8 @@ public sealed class SlideShowPresenterSessionDedupTests
             source.Should().Contain("SlideShowPresenterViewOperations operations");
             source.Should().Contain("new SlideShowPresenterViewHostCoordinator(operations)");
             source.Should().NotContain("Func<SlideShowPresenterState> stateProvider");
+            source.Should().Contain("control => control.IsKeyboardFocusWithin");
+            source.Should().Contain("WindowStartupLocation = WindowStartupLocation.CenterOwner");
             source.Should().Contain("_coordinator.Surface");
             source.Should().Contain("_nativeBinding.Refresh()");
             source.Should().Contain("_nativeBinding.ExecuteAction(action)");
@@ -556,6 +558,12 @@ public sealed class SlideShowPresenterSessionDedupTests
                 source.Should().NotContain(sharedLiteral);
             }
         }
+
+        presenterFiles[0].Should().Contain(
+            "VerticalScrollBarVisibility = ScrollBarVisibility.Auto");
+        presenterFiles[1].Should().Contain(
+            "ScrollViewer.VerticalScrollBarVisibilityProperty");
+        presenterFiles[1].Should().Contain("ScrollBarVisibility.Auto");
 
         foreach (var source in slideShowFiles)
         {

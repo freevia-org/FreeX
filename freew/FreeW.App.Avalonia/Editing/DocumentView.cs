@@ -19643,32 +19643,44 @@ public sealed partial class DocumentView : Control
 
     private bool MoveToAdjacentNote(bool footnote, bool previous)
     {
-        var positions = new List<DocPosition>();
-        for (var block = 0; block < _doc.Blocks.Count; block++)
-        {
-            if (_doc.Blocks[block] is not Paragraph paragraph)
-                continue;
-            var offset = 0;
-            foreach (var run in paragraph.Runs)
-            {
-                if (footnote ? run.FootnoteId.HasValue : run.EndnoteId.HasValue)
-                    positions.Add(new DocPosition(block, offset));
-                offset += run.Text.Length;
-            }
-        }
+        var positions = DocumentNoteNavigationPlanner.FindMarkers(_doc, footnote);
 
         if (positions.Count == 0)
             return false;
 
-        DocumentNoteNavigationPlanner.TryFindAdjacent(
+        var caret = _cellCaret is { } cellCaret
+            ? DocumentNoteMarkerPosition.TableCell(
+                cellCaret.TableBlock,
+                cellCaret.Row,
+                cellCaret.Col,
+                cellCaret.ParaIdx,
+                cellCaret.Offset)
+            : DocumentNoteMarkerPosition.Body(_caret.Block, _caret.Offset);
+        if (!DocumentNoteNavigationPlanner.TryFindAdjacent(
             positions,
-            position => Compare(position, _caret),
+            position => DocumentNoteNavigationPlanner.CompareDocumentOrder(position, caret),
             previous,
-            out var destination);
+            out var destination))
+        {
+            return false;
+        }
+
+        if (destination.IsTableCell)
+        {
+            PlaceCaretInCell(
+                destination.BlockIndex,
+                destination.TableRowIndex!.Value,
+                destination.TableGridColumnIndex!.Value,
+                destination.TableParagraphIndex,
+                destination.ParagraphOffset);
+            ScrollToCaretRequested?.Invoke();
+            Focus();
+            return true;
+        }
 
         _cellCaret = null;
         _hfCaret = null;
-        _caret = destination;
+        _caret = new DocPosition(destination.BlockIndex, destination.ParagraphOffset);
         _selectionAnchor = _caret;
         InvalidateVisual();
         CaretMoved?.Invoke();
@@ -19886,11 +19898,8 @@ public sealed partial class DocumentView : Control
     /// returning true when the bookmark was found. The bookmark target is the body paragraph carrying that
     /// name in its <see cref="Paragraph.BookmarkNames"/> (matched ordinally, ignoring a leading <c>'#'</c>).
     /// Word's Go To / internal-link navigation.
-    /// <see cref="Bookmarks.List"/> reports a bookmark nested in a table cell with
-    /// <see cref="BookmarkLocation.BlockIndex"/> pointing at the containing <see cref="Table"/> block (a
-    /// cell-nested paragraph has no standalone <see cref="TextDocument.Blocks"/> index) — for that case this
-    /// locates the specific cell carrying the bookmark and lands the caret there via <c>_cellCaret</c>,
-    /// falling back to the table's first cell if no cell match is found (should not happen).
+    /// <see cref="Bookmarks.FindLocation"/> supplies the exact logical row, grid column, and paragraph for a
+    /// table-cell bookmark, so this host only translates the shared target into its native caret.
     /// </summary>
     public bool GoToBookmark(string name)
     {
@@ -19898,67 +19907,51 @@ public sealed partial class DocumentView : Control
             return false;
         var target = name.TrimStart('#').Trim();
 
-        foreach (var location in Bookmarks.List(_doc))
-        {
-            if (!string.Equals(location.Name, target, StringComparison.Ordinal))
-                continue;
-            var block = location.BlockIndex;
-            if (block < 0 || block >= _doc.Blocks.Count)
-                return false;
-            _hfCaret = null;
-            if (_doc.Blocks[block] is Table table)
-            {
-                var (row, col) = FindBookmarkCell(table, target) ?? (0, 0);
-                _cellCaret = (block, row, col, 0, 0);
-
-                // _cellAnchor MUST move with _cellCaret. Every other site that assigns a non-null
-                // _cellCaret assigns the anchor in lockstep (PlaceCaretInCell, DeleteCellSelection,
-                // DeleteForward's track-changes branch, InsertParagraphBreak's split) or clears both
-                // together (MoveCaretToBlock, ClampCaret). Leaving a stale anchor here makes
-                // HasCellTextSelection() report a phantom cross-cell selection, and the next Delete /
-                // typed character / Enter routes through DeleteCellSelection and silently erases
-                // everything between the user's previous cell and the bookmark's cell. Before this
-                // branch existed the table case set _cellCaret = null, so no cell-editing path could
-                // engage after a bookmark jump -- handing it a live caret is what arms the hazard.
-                _cellAnchor = _cellCaret;
-            }
-            else
-            {
-                // Same lockstep rule on the clearing side (cf. document-load reset, MoveCaretToBlock,
-                // ClampCaret): a stale anchor left behind a cleared caret is latent state waiting for
-                // the next caret assignment to make it live again.
-                _cellCaret = null;
-                _cellAnchor = null;
-            }
-            _caret = new DocPosition(block, 0);
-            _selectionAnchor = _caret;
-            Focus();
-            InvalidateVisual();
-            CaretMoved?.Invoke();
-            ScrollToCaretRequested?.Invoke();
-            return true;
-        }
-        return false;
+        return Bookmarks.FindLocation(_doc, target) is { } location
+            && GoToBookmark(location);
     }
 
-    // AV-LINK: Locate the (grid row, grid col) of the cell whose paragraph carries bookmark `name`,
-    // for GoToBookmark's table case. Col is a GRID column (accounts for GridSpan), matching the
-    // convention GetCellParagraph/_cellCaret use elsewhere so the caret lands in the right cell even
-    // when earlier cells in the row are horizontally merged.
-    private static (int Row, int Col)? FindBookmarkCell(Table table, string name)
+    public bool GoToBookmark(BookmarkLocation location)
     {
-        for (var r = 0; r < table.Rows.Count; r++)
+        var block = location.BlockIndex;
+        if (block < 0 || block >= _doc.Blocks.Count)
+            return false;
+
+        _hfCaret = null;
+        if (location.IsTableLocation)
         {
-            foreach (var projected in TableGridProjection.ProjectRow(table.Rows[r]))
+            if (GetCellParagraph(
+                    block,
+                    location.TableRowIndex!.Value,
+                    location.TableGridColumnIndex!.Value,
+                    location.TableParagraphIndex!.Value) is null)
             {
-                foreach (var paragraph in projected.Cell.Paragraphs)
-                {
-                    if (paragraph.BookmarkNames.Contains(name, StringComparer.Ordinal))
-                        return (r, projected.StartColumn);
-                }
+                return false;
             }
+
+            PlaceCaretInCell(
+                block,
+                location.TableRowIndex.Value,
+                location.TableGridColumnIndex.Value,
+                location.TableParagraphIndex.Value,
+                location.Offset);
+            ScrollToCaretRequested?.Invoke();
+            Focus();
+            return true;
         }
-        return null;
+
+        if (_doc.Blocks[block] is not Paragraph)
+            return false;
+
+        _cellCaret = null;
+        _cellAnchor = null;
+        _caret = new DocPosition(block, Math.Clamp(location.Offset, 0, BlockLength(block)));
+        _selectionAnchor = _caret;
+        Focus();
+        InvalidateVisual();
+        CaretMoved?.Invoke();
+        ScrollToCaretRequested?.Invoke();
+        return true;
     }
 
     public void DeleteBookmark(string name)

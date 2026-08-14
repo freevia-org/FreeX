@@ -87,6 +87,7 @@ public sealed class AboutLegalSharedBoundaryTests
 
         var wpfLegalDialog = Read(root, "shared", "Free.Shared.Shell.Wpf", "SharedLegalNoticesDialog.cs");
         var avaloniaLegalDialog = Read(root, "shared", "Free.Shared.Shell.Avalonia", "AvaloniaLegalNoticesDialog.cs");
+        var freewAvaloniaLegalDialog = Read(root, "freew", "FreeW.App.Avalonia", "LegalNoticesDialog.cs");
         foreach (var legalDialog in new[] { wpfLegalDialog, avaloniaLegalDialog })
         {
             legalDialog.Should().Contain("LegalNoticesDialogPresentation presentation");
@@ -98,6 +99,12 @@ public sealed class AboutLegalSharedBoundaryTests
             legalDialog.Should().NotContain("Choose a legal notice section to read and copy.");
             legalDialog.Should().NotContain("Read-only legal notice text. Use Ctrl+C to copy selected text.");
         }
+
+        avaloniaLegalDialog.Should().Contain("ApplyWpfAuthorityDocumentInset(textBox)");
+        avaloniaLegalDialog.Should().Contain("LegalNoticesDialogMetrics.TextPadding + 1");
+        freewAvaloniaLegalDialog.Should().NotContain("GetLogicalDescendants");
+        freewAvaloniaLegalDialog.Should().NotContain("ApplyLegalNoticesAuthorityDocumentInset");
+        freewAvaloniaLegalDialog.Should().NotContain("Avalonia.Controls");
 
         Read(root, "freew", "FreeW.App.Host", "Backstage", "BackstageView.cs")
             .Should().Contain("EntryAssemblyVersion.Resolve()");

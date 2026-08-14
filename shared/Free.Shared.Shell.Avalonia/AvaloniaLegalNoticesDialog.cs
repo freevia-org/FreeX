@@ -61,6 +61,7 @@ public class AvaloniaLegalNoticesDialog : AvaloniaDialogWindow
             foreach (var textBox in _noticeTextBoxes)
             {
                 ApplyReadOnlyDocumentLayout(textBox);
+                ApplyWpfAuthorityDocumentInset(textBox);
                 ScheduleShortDocumentInset(textBox, LegalNoticesDialogMetrics.TextPadding);
             }
             AvaloniaCompactDialogChrome.ApplyLegalNoticesDefaultButtonChrome(_closeButton);
@@ -169,6 +170,7 @@ public class AvaloniaLegalNoticesDialog : AvaloniaDialogWindow
             Foreground = Brushes.Black,
         };
         ApplyReadOnlyDocumentLayout(textBox);
+        ApplyWpfAuthorityDocumentInset(textBox);
         AutomationProperties.SetName(textBox, section.Heading);
         AutomationProperties.SetAutomationId(
             textBox,
@@ -287,6 +289,18 @@ public class AvaloniaLegalNoticesDialog : AvaloniaDialogWindow
         // Avalonia's Consolas metrics are fractionally narrower than WPF's at the shared
         // 12px size. Compensate the glyph width without imposing a line box absent in WPF.
         textBox.FontSize = TextFontSizeCompensation;
+    }
+
+    private static void ApplyWpfAuthorityDocumentInset(TextBox textBox)
+    {
+        // WPF applies the shared eight-pixel content padding directly. Avalonia's
+        // realized template contributes one additional leading pixel, so keep the
+        // authority compensation in the shared Avalonia renderer for every product.
+        textBox.Padding = new Thickness(
+            LegalNoticesDialogMetrics.TextPadding + 1,
+            textBox.Padding.Top,
+            LegalNoticesDialogMetrics.TextPadding,
+            LegalNoticesDialogMetrics.TextPadding);
     }
 
     private static void ScheduleShortDocumentInset(TextBox textBox, double basePadding)

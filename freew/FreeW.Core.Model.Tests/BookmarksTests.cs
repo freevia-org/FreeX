@@ -79,11 +79,12 @@ public class BookmarksTests
     // --- Bookmarks placed inside table cells ---
 
     [Fact]
-    public void List_FindsBookmarkInsideTableCell_ReportingTheTablesBlockIndex()
+    public void List_FindsBookmarkInsideTableCell_WithExactLogicalAddress()
     {
         var doc = new TextDocument();
         doc.Blocks.Add(new Paragraph("Intro"));                 // 0: no bookmark
         var table = Table.Create(1, 2);
+        table.Rows[0].Cells[0].GridSpan = 2;
         table.Rows[0].Cells[1].Paragraphs[0].BookmarkName = "cellMark";
         doc.Blocks.Add(table);                                  // 1: table, bookmark in second cell
 
@@ -92,7 +93,12 @@ public class BookmarksTests
         // A cell-nested paragraph has no standalone index into TextDocument.Blocks, so List reports the
         // containing table's own block index (1) — the same convention ComplexFieldEngine's body-paragraph
         // walk uses for SEQ.
-        bookmarks.Should().Equal(new BookmarkLocation("cellMark", 1));
+        bookmarks.Should().Equal(new BookmarkLocation(
+            "cellMark",
+            1,
+            TableRowIndex: 0,
+            TableGridColumnIndex: 2,
+            TableParagraphIndex: 0));
     }
 
     [Fact]
@@ -109,6 +115,38 @@ public class BookmarksTests
         var found = Bookmarks.FindParagraph(doc, "cellMark");
 
         found.Should().BeSameAs(targetCellParagraph);
+    }
+
+    [Fact]
+    public void FindLocation_ResolvesBodyAndTableTargetsWithExactOrdinalMatching()
+    {
+        var doc = new TextDocument();
+        doc.Blocks.Add(new Paragraph("Body target") { BookmarkName = "BodyMark" });
+        var table = Table.Create(1, 2);
+        table.Rows[0].Cells[0].GridSpan = 2;
+        table.Rows[0].Cells[1].Paragraphs[0].BookmarkName = "CellMark";
+        doc.Blocks.Add(table);
+
+        Bookmarks.FindLocation(doc, "BodyMark").Should().Be(new BookmarkLocation("BodyMark", 0));
+        Bookmarks.FindLocation(doc, "CellMark").Should().Be(new BookmarkLocation(
+            "CellMark",
+            1,
+            TableRowIndex: 0,
+            TableGridColumnIndex: 2,
+            TableParagraphIndex: 0));
+        Bookmarks.FindLocation(doc, "cellmark").Should().BeNull();
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    [InlineData("missing")]
+    public void FindLocation_UnknownOrEmptyName_ReturnsNull(string? name)
+    {
+        var doc = new TextDocument();
+        doc.Blocks.Add(new Paragraph("Target") { BookmarkName = "known" });
+
+        Bookmarks.FindLocation(doc, name).Should().BeNull();
     }
 
     [Fact]
