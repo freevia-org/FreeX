@@ -2,6 +2,7 @@ using System.Reflection;
 using Avalonia.Controls;
 using Avalonia.Headless;
 using Avalonia.LogicalTree;
+using Free.Shared.Shell.Avalonia;
 using FreeW.App.Avalonia;
 
 namespace FreeW.App.Avalonia.Tests;
@@ -24,9 +25,12 @@ public sealed class InsertChartDialogVisualParityTests
                 .OfType<Button>()
                 .Where(button => button is not global::Avalonia.Controls.Primitives.ToggleButton)
                 .ToArray();
-            buttons.Select(button => button.Content?.ToString()).Should().Equal("OK", "Cancel");
-            buttons.Single(button => button.IsDefault).Content.Should().Be("OK");
-            buttons.Single(button => button.IsCancel).Content.Should().Be("Cancel");
+            buttons.Select(button => AvaloniaActionLabelInspector.Inspect(button).DisplayText)
+                .Should().Equal("OK", "Cancel");
+            AvaloniaActionLabelInspector.Inspect(buttons.Single(button => button.IsDefault)).DisplayText
+                .Should().Be("OK");
+            AvaloniaActionLabelInspector.Inspect(buttons.Single(button => button.IsCancel)).DisplayText
+                .Should().Be("Cancel");
 
             dialog.GetLogicalDescendants().OfType<ComboBox>().Should().ContainSingle();
             Field<TextBox>(dialog, "_title").Text.Should().Be("Quarterly Sales");

@@ -28,7 +28,7 @@ public sealed class IconPickerDialogVisualParityTests
 
             dialog.Width.Should().Be(surface.DialogWidth);
             dialog.Height.Should().Be(surface.DialogHeight);
-            category.Width.Should().Be(surface.Field(IconPickerFieldKind.Category).Width);
+            category.MinWidth.Should().Be(surface.Field(IconPickerFieldKind.Category).Width);
             search.Width.Should().Be(surface.Field(IconPickerFieldKind.Search).Width);
             tiles.Children.Should().HaveCount(61);
             Field<TextBlock>(dialog, "_status").Text.Should().Be(IconPickerDialogPlanner.StatusText(61));
@@ -43,7 +43,8 @@ public sealed class IconPickerDialogVisualParityTests
                 image.Width.Should().Be(surface.IconSize);
                 image.Height.Should().Be(surface.IconSize);
                 image.Source.Should().BeOfType<DrawingImage>();
-                image.Stretch.Should().Be(Stretch.Fill);
+                image.Stretch.Should().Be(
+                    surface.PreserveThumbnailAspectRatio ? Stretch.Uniform : Stretch.Fill);
                 image.RenderTransform.Should().BeNull();
             }
             var firstDrawing = (DrawingImage)((Image)((Border)tiles.Children[0]).Child!).Source!;

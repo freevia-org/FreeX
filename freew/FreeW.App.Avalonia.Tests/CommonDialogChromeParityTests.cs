@@ -50,7 +50,7 @@ public sealed class CommonDialogChromeParityTests
             dialog.Classes.Should().Contain(AvaloniaCompactDialogChrome.DialogWindowClass);
             dialog.FontFamily.Should().Be(AvaloniaCompactDialogChrome.WindowsUiFontFamily);
             dialog.FontSize.Should().Be(12);
-            TextOptions.GetTextRenderingMode(dialog).Should().Be(TextRenderingMode.Antialias);
+            TextOptions.GetTextRenderingMode(dialog).Should().Be(TextRenderingMode.SubpixelAntialias);
             dialog.Background.Should().Be(Brushes.White);
             ((ISolidColorBrush)dialog.Foreground!).Color.Should().Be(Color.FromRgb(0x1f, 0x1f, 0x1f));
             dialog.WindowStartupLocation.Should().Be(WindowStartupLocation.CenterOwner);

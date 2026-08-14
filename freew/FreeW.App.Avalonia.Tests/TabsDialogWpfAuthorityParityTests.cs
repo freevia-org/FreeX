@@ -111,9 +111,11 @@ public sealed class TabsDialogWpfAuthorityParityTests
             "freew",
             "FreeW.App.Avalonia",
             "ParagraphCommandDialogs.cs"));
-        var start = source.IndexOf("public sealed class TabsDialog", StringComparison.Ordinal);
-        var end = source.IndexOf("public sealed class BordersAndShadingDialog", start, StringComparison.Ordinal);
-        var dialogSource = source[start..end];
+        var start = source.IndexOf("class TabsDialog", StringComparison.Ordinal);
+        start.Should().BeGreaterThanOrEqualTo(0);
+        var declarationStart = source.LastIndexOf("public sealed ", start, StringComparison.Ordinal);
+        var end = source.IndexOf("public sealed ", start + "class TabsDialog".Length, StringComparison.Ordinal);
+        var dialogSource = end < 0 ? source[declarationStart..] : source[declarationStart..end];
 
         dialogSource.Should().Contain("AvaloniaDialogButtonRowFactory.CreateOkCancel(");
         dialogSource.Should().Contain("AvaloniaDialogButtonRowFactory.CreateRow(");
