@@ -7,6 +7,8 @@ public sealed class PaletteGeometryOwnershipSourceTests
     {
         var catalog = ReadSource(
             "freew", "FreeW.App.Presentation", "Ribbon", "FreeWRibbonPaletteCatalog.cs");
+        var workflow = ReadSource(
+            "freew", "FreeW.App.Presentation", "Ribbon", "FormattingGalleryRibbonWorkflow.cs");
         var definitions = ReadSource(
             "freew", "FreeW.Ribbon.Definitions", "FreeWCanonicalRibbonTabs.Ordinary.cs");
         var wpf = ReadSource("freew", "FreeW.App.Host", "Ribbon", "FreeWRibbonCommands.cs");
@@ -18,7 +20,10 @@ public sealed class PaletteGeometryOwnershipSourceTests
         definitions.Should().NotContain("new(\"Yellow\", new RibbonCommandId(\"freew.para-shading.yellow\"))");
         wpf.Should().Contain("FreeWRibbonPaletteCatalog.TextAndHighlightPickerSwatches");
         wpf.Should().Contain("FreeWRibbonPaletteCatalog.PageColorPickerSwatches");
-        avalonia.Should().Contain("RegisterColorPalette(r, FreeWRibbonPaletteCatalog.FontColors");
+        workflow.Should().Contain("RegisterPalette(FreeWRibbonPaletteCatalog.FontColors");
+        wpf.Should().Contain("FormattingGalleryRibbonWorkflow.Register(");
+        avalonia.Should().Contain("FormattingGalleryRibbonWorkflow.Register(");
+        avalonia.Should().NotContain("RegisterColorPalette(");
         avalonia.Should().NotContain("Add(r, editor, \"freew.highlight.black\", \"#000000\")");
         avalonia.Should().NotContain("Add(r, editor, \"freew.page-color.white\",        \"#FFFFFF\")");
     }

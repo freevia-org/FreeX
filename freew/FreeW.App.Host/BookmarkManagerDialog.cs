@@ -138,7 +138,7 @@ internal sealed partial class BookmarkManagerDialog : Free.Shared.Ribbon.Wpf.Dia
         var intent = _session.PlanGoTo();
         if (intent is null)
             return;
-        _editor.BringBlockIntoView(intent.BlockIndex);
+        _editor.GoToBookmark(intent.Location);
         Close();
     }
 

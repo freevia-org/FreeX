@@ -11,15 +11,26 @@ namespace FreeP.App.Avalonia;
 /// <summary>Small host adapter for the shared Selection Pane projection.</summary>
 internal sealed partial class SelectionPane : Border
 {
-    private readonly PresentationSelectionPaneSession _session;
-    private readonly Action? _onAccessibilityChanged;
+    private readonly PresentationSelectionPaneFormSession<Control> _formSession;
     private readonly StackPanel _items = new() { Orientation = Orientation.Vertical };
     private readonly TextBlock _message = new();
 
     public SelectionPane(EditingSession editor, Action? onAccessibilityChanged = null)
     {
-        _session = new PresentationSelectionPaneSession(editor);
-        _onAccessibilityChanged = onAccessibilityChanged;
+        var session = new PresentationSelectionPaneSession(editor);
+        _formSession = new(
+            session,
+            value => _message.Text = value,
+            _items.Children.Clear,
+            BuildItem,
+            row => _items.Children.Add(row),
+            plan => PresentationPaneAccessibilityAdapter.ApplyPaneMetadata(
+                this,
+                PresentationPaneAccessibilityPlanner.SelectionPaneId,
+                IsVisible,
+                plan.Items.Count,
+                plan.SelectedItemIndex),
+            onAccessibilityChanged);
         Width = PresentationSelectionPaneVisualMetrics.PaneWidth;
         IsVisible = false;
         Background = ToBrush(PresentationSelectionPaneVisualMetrics.PaneBackgroundColor);
@@ -36,7 +47,7 @@ internal sealed partial class SelectionPane : Border
 
         var heading = new TextBlock
         {
-            Text = _session.CurrentPlan.TitleText,
+            Text = _formSession.CurrentPlan.TitleText,
             FontSize = PresentationSelectionPaneVisualMetrics.HeadingFontSize,
             FontWeight = FontWeight.SemiBold,
             Margin = new Thickness(
@@ -66,32 +77,23 @@ internal sealed partial class SelectionPane : Border
 
     public void SetEditor(EditingSession editor)
     {
-        Render(_session.SetEditor(editor));
+        _formSession.SetEditor(editor);
     }
 
-    public PresentationSelectionPanePlan CurrentPlan => _session.CurrentPlan;
+    public PresentationSelectionPanePlan CurrentPlan => _formSession.CurrentPlan;
 
-    public PresentationSelectionPanePlan Refresh() => Render(_session.Refresh());
+    public PresentationSelectionPanePlan Refresh() => _formSession.Refresh();
 
-    private PresentationSelectionPanePlan Render(PresentationSelectionPanePlan plan)
+    private Control BuildItem(
+        PresentationSelectionPaneItemPlan item,
+        int index,
+        PresentationSelectionPaneItemSession itemSession)
     {
-        _message.Text = plan.StatusText;
-        _items.Children.Clear();
-        for (var index = 0; index < plan.Items.Count; index++)
-            _items.Children.Add(BuildItem(plan.Items[index], index));
-        PresentationPaneAccessibilityAdapter.ApplyPaneMetadata(
-            this,
-            PresentationPaneAccessibilityPlanner.SelectionPaneId,
-            IsVisible,
-            plan.Items.Count,
-            plan.SelectedItemIndex);
-        _onAccessibilityChanged?.Invoke();
-        return plan;
-    }
-
-    private Control BuildItem(PresentationSelectionPaneItemPlan item, int index)
-    {
-        var itemSession = _session.CreateItemSession(item.ShapeId);
+        var itemForm = new PresentationSelectionPaneItemFormSession(
+            itemSession,
+            item,
+            index,
+            _formSession.ApplyTransition);
         var select = new Button
         {
             Content = item.SelectText,
@@ -107,7 +109,7 @@ internal sealed partial class SelectionPane : Border
                 PresentationSelectionPaneVisualMetrics.ItemVerticalMargin),
         };
         ToolTip.SetTip(select, item.SelectToolTipText);
-        select.Click += (_, _) => ApplyTransition(itemSession.Select());
+        select.Click += (_, _) => itemForm.Select();
 
         var rename = new TextBox
         {
@@ -125,9 +127,7 @@ internal sealed partial class SelectionPane : Border
         ToolTip.SetTip(rename, PresentationSelectionPaneItemPlan.RenameToolTipText);
         void CommitName()
         {
-            ApplyTransition(
-                itemSession.CommitRename(rename.Text),
-                restoreName => rename.Text = restoreName);
+            itemForm.CommitRename(rename.Text, restoreName => rename.Text = restoreName);
         }
         rename.LostFocus += (_, _) => CommitName();
         rename.KeyDown += (_, args) =>
@@ -139,7 +139,7 @@ internal sealed partial class SelectionPane : Border
             }
             else if (args.Key == Key.Escape)
             {
-                ApplyTransition(itemSession.CancelRename());
+                itemForm.CancelRename();
                 args.Handled = true;
             }
         };
@@ -158,10 +158,7 @@ internal sealed partial class SelectionPane : Border
                 PresentationSelectionPaneVisualMetrics.ItemVerticalMargin),
         };
         ToolTip.SetTip(visibility, item.VisibilityToolTipText);
-        visibility.Click += (_, _) =>
-        {
-            ApplyTransition(itemSession.ToggleVisibility());
-        };
+        visibility.Click += (_, _) => itemForm.ToggleVisibility();
 
         var moveUp = new Button
         {
@@ -176,8 +173,7 @@ internal sealed partial class SelectionPane : Border
             IsEnabled = item.CanMoveUp,
         };
         ToolTip.SetTip(moveUp, PresentationSelectionPaneItemPlan.MoveUpToolTipText);
-        moveUp.Click += (_, _) =>
-            ApplyTransition(itemSession.MoveTowardFront());
+        moveUp.Click += (_, _) => itemForm.MoveTowardFront();
 
         var moveDown = new Button
         {
@@ -192,8 +188,7 @@ internal sealed partial class SelectionPane : Border
             IsEnabled = item.CanMoveDown,
         };
         ToolTip.SetTip(moveDown, PresentationSelectionPaneItemPlan.MoveDownToolTipText);
-        moveDown.Click += (_, _) =>
-            ApplyTransition(itemSession.MoveTowardBack());
+        moveDown.Click += (_, _) => itemForm.MoveTowardBack();
 
         var row = new DockPanel();
         DockPanel.SetDock(visibility, Dock.Right);
@@ -207,23 +202,8 @@ internal sealed partial class SelectionPane : Border
         row.Children.Add(select);
         PresentationPaneAccessibilityAdapter.ApplyItem(
             row,
-            PresentationPaneAccessibilityPlanner.PlanItem(
-                PresentationPaneAccessibilityPlanner.SelectionPaneId,
-                index,
-                item.ShapeName,
-                item.IsSelected,
-                PresentationPaneAccessibilityPlanner.BuildShapeKey(item.ShapeId)));
+            itemForm.AccessibilityPlan);
         return row;
-    }
-
-    private void ApplyTransition(
-        PresentationSelectionPaneTransitionPlan transition,
-        Action<string>? restoreName = null)
-    {
-        if (transition.RestoreNameText is { } name)
-            restoreName?.Invoke(name);
-        if (transition.ShouldRefreshPane)
-            Render(transition.PanePlan);
     }
 
     private static SolidColorBrush ToBrush(FreeP.Core.Model.SrgbColor color) =>

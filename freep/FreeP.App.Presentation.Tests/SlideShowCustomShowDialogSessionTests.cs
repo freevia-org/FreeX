@@ -280,6 +280,49 @@ public sealed class SlideShowCustomShowDialogSessionTests
         validation.Text.Should().BeEmpty();
     }
 
+    [Fact]
+    public void ViewAdapter_Owns_renderer_neutral_capture_and_render_forwarding()
+    {
+        var presentation = MakePresentation();
+        AddShow(presentation, "Review", "appendix", "intro");
+        var session = CreateSession(presentation, out _);
+        var showList = new FakeControl();
+        var orderedSlides = new FakeControl();
+        var name = new FakeControl { Text = "Renamed" };
+        var validation = new FakeControl();
+        var form = new SlideShowCustomShowDialogFormSession<FakeControl>(
+            showList,
+            orderedSlides,
+            name,
+            validation,
+            static (control, items) => control.ItemsSource = items,
+            SetSelectedIndex,
+            static control => control.SelectedIndex,
+            static control => control.SelectedItem,
+            static (control, text) => control.Text = text,
+            static (control, isChecked) => control.IsChecked = isChecked,
+            static control => control.IsChecked,
+            static (control, isEnabled) => control.IsEnabled = isEnabled);
+        var rebuilt = new List<string>();
+        var closed = false;
+        var adapter = new SlideShowCustomShowDialogViewAdapter<FakeControl>(
+            form,
+            () => name.Text,
+            slides => rebuilt.AddRange(slides.Select(slide => slide.SlideId)),
+            () => closed = true);
+
+        adapter.RenderFullPlan(session.Plan);
+        var state = adapter.CaptureState();
+        adapter.SetValidation("Ready");
+        adapter.CloseDialog();
+
+        rebuilt.Should().Equal("intro", "deep", "appendix");
+        state.Name.Should().Be("Review");
+        showList.ItemsSource.Should().BeSameAs(session.Plan.CustomShows);
+        validation.Text.Should().Be("Ready");
+        closed.Should().BeTrue();
+    }
+
     private static SlideShowCustomShowDialogSession CreateSession(
         Presentation presentation,
         out List<SlideShowCustomShowDialogMutationRequest> requests,

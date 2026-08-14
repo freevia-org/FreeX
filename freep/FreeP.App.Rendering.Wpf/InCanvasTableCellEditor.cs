@@ -34,7 +34,9 @@ public sealed class InCanvasTableCellEditor
     // ── Cell-edit state ───────────────────────────────────────────────────────
 
     private RichTextBox? _cellTextBox;
-    private InCanvasTableCellTextEditPlanner? _cellEditPlan;
+    // The session replaces `_cellEditPlan = editStart.EditPlanner` plus renderer-owned
+    // TableCellEditPlanner.CommitRichText and TableCellEditPlanner.PlanNavigation calls.
+    private InCanvasRichTextEditSession? _cellEditSession;
     private bool         _cellEditActive;
     private int          _editRow;
     private int          _editCol;
@@ -106,7 +108,7 @@ public sealed class InCanvasTableCellEditor
         _cellEditActive = true;
 
         // Use the shared start plan for placement and commit routing.
-        _cellEditPlan = editStart.EditPlanner;
+        _cellEditSession = InCanvasRichTextEditSession.BeginTableCell(editStart);
         var placement = editStart.Placement.Value;
 
         // Determine a fallback font size from the cell's first run.
@@ -160,8 +162,8 @@ public sealed class InCanvasTableCellEditor
         _overlay.Children.Remove(_cellTextBox);
         _cellTextBox    = null;
         _cellEditActive = false;
-        var editPlan = _cellEditPlan;
-        _cellEditPlan = null;
+        var editSession = _cellEditSession;
+        _cellEditSession = null;
 
         var slide = _editor.CurrentSlide;
         if (slide is null) return;
@@ -176,7 +178,8 @@ public sealed class InCanvasTableCellEditor
 
         // Rebuild the full rich TextBody from the FlowDocument.
         var newBody = TextBodyFlowDocumentConverter.FromFlowDocument(doc, cell.TextBody);
-        var decision = TableCellEditPlanner.CommitRichText(editPlan, newBody);
+        var decision = editSession?.Commit(newBody)
+            ?? new InCanvasTextEditDecision(InCanvasTextEditOutcome.Unchanged, null);
 
         if (decision.Command is not null)
             _editor.Bus.Execute(decision.Command);
@@ -189,8 +192,8 @@ public sealed class InCanvasTableCellEditor
         _overlay.Children.Remove(_cellTextBox);
         _cellTextBox = null;
         _cellEditActive = false;
-        _ = TableCellEditPlanner.Cancel(_cellEditPlan);
-        _cellEditPlan = null;
+        _ = _cellEditSession?.Cancel();
+        _cellEditSession = null;
     }
 
     // ── Mouse handling ────────────────────────────────────────────────────────
@@ -241,16 +244,38 @@ public sealed class InCanvasTableCellEditor
     /// <summary>True when a cell's RichTextBox is open and focused.</summary>
     public bool IsCellRichEditActive => _cellEditActive && _cellTextBox is not null;
 
+    /// <summary>
+    /// Executes a structural table command after committing the native rich-text transaction.
+    /// Validation, ordering, and mutation are owned by the shared Presentation dispatcher.
+    /// </summary>
+    public bool TryExecuteActiveTableStructureAction(PresentationDomainContextActionKind kind)
+    {
+        if (!IsCellRichEditActive)
+            return false;
+
+        return PresentationTableStructureActionDispatcher.TryExecute(
+            kind,
+            TableCellEditPlanner.PlanSelectedCell(
+                _editor.CurrentSlide,
+                _editor.SelectedShapeIds,
+                _editor.ActiveTableCell),
+            _editShapeId,
+            CommitCellEdit,
+            _editor);
+    }
+
     public bool TryNavigateActiveTableCell(TableCellNavigationDirection direction)
     {
         if (!_cellEditActive || _cellTextBox is null)
             return false;
 
-        var plan = TableCellEditPlanner.PlanNavigation(
+        var plan = _cellEditSession?.PlanTableCellNavigation(
             _editor.CurrentSlide,
             _editor.SelectedShapeIds,
             _editor.ActiveTableCell,
             direction);
+        if (plan is null)
+            return false;
         if (!plan.IsReady || plan.ShapeId is null || plan.Row is null || plan.Col is null)
             return false;
 
@@ -322,6 +347,131 @@ public sealed class InCanvasTableCellEditor
         if (wpfColor is null) return;
         ApplyWithPreservedSelection(() =>
             _cellTextBox.Selection.ApplyPropertyValue(TextElement.ForegroundProperty, new SolidColorBrush(wpfColor.Value)));
+    }
+
+    public bool TryApplyActiveTableCellParagraphAlignment(TextAlign alignment) =>
+        ApplyCellParagraphMutation((body, selection) =>
+            InCanvasTextEditPlanner.ApplyParagraphAlignment(body, alignment, selection));
+
+    public bool TryApplyActiveTableCellParagraphBulletToggle() =>
+        ApplyCellParagraphMutation((body, selection) =>
+            InCanvasTextEditPlanner.ApplyParagraphBulletToggle(body, selection));
+
+    public bool TryApplyActiveTableCellParagraphNumberingToggle() =>
+        ApplyCellParagraphMutation((body, selection) =>
+            InCanvasTextEditPlanner.ApplyParagraphNumberingToggle(body, selection));
+
+    public bool TryApplyActiveTableCellParagraphListPreset(TableCellListPresetDescriptor preset)
+    {
+        ArgumentNullException.ThrowIfNull(preset);
+        return ApplyCellParagraphMutation((body, selection) =>
+            InCanvasTextEditPlanner.ApplyParagraphListPreset(body, selection, preset));
+    }
+
+    public bool TryApplyActiveTableCellParagraphPictureBullet(PresentationPictureBulletPayload payload)
+    {
+        ArgumentNullException.ThrowIfNull(payload);
+        if (!payload.IsValid)
+            return false;
+
+        return ApplyCellParagraphMutation((body, selection) =>
+            InCanvasTextEditPlanner.ApplyParagraphPictureBullet(
+                body,
+                selection,
+                PresentationPictureBulletAuthoringPlanner.CreateImagePart(payload)));
+    }
+
+    public bool TryApplyActiveTableCellParagraphIndent() =>
+        ApplyCellParagraphMutation((body, selection) =>
+            InCanvasTextEditPlanner.ApplyParagraphIndent(body, increase: true, selection));
+
+    public bool TryApplyActiveTableCellParagraphOutdent() =>
+        ApplyCellParagraphMutation((body, selection) =>
+            InCanvasTextEditPlanner.ApplyParagraphIndent(body, increase: false, selection));
+
+    public bool TryApplyActiveTableCellTextVerticalType(TextVerticalType verticalType) =>
+        TryApplyActiveTableCellCommand(editor =>
+            editor.TryApplyActiveTableCellTextVerticalType(verticalType));
+
+    public bool TryApplyActiveTableCellFill(ThemeAwareColor? color) =>
+        TryApplyActiveTableCellCommand(editor =>
+            editor.TryApplyActiveTableCellFill(color));
+
+    public bool TryApplyActiveTableCellAnchor(TableCellAnchor? anchor) =>
+        TryApplyActiveTableCellCommand(editor =>
+            editor.TryApplyActiveTableCellAnchor(anchor));
+
+    public bool TryApplyActiveTableCellBorder(
+        TableCellBorderSide side,
+        ShapeOutline? outline) =>
+        TryApplyActiveTableCellCommand(editor =>
+            editor.TryApplyActiveTableCellBorder(side, outline));
+
+    public bool TryApplyActiveTableCellInset(TableCellInsetSide side, double? insetPt) =>
+        TryApplyActiveTableCellCommand(editor =>
+            editor.TryApplyActiveTableCellInset(side, insetPt));
+
+    public bool TryApplyActiveTableRowHeight(long heightEmu) =>
+        TryApplyActiveTableCellCommand(editor =>
+            editor.TryApplyActiveTableRowHeight(heightEmu));
+
+    private bool TryApplyActiveTableCellCommand(Func<EditingSession, bool> apply)
+    {
+        if (!IsCellRichEditActive)
+            return false;
+
+        return PresentationTableCellOwnedActionDispatcher.TryExecute(
+            TableCellEditPlanner.PlanSelectedCell(
+                _editor.CurrentSlide,
+                _editor.SelectedShapeIds,
+                _editor.ActiveTableCell),
+            _editShapeId,
+            CommitCellEdit,
+            () => apply(_editor));
+    }
+
+    /// <summary>
+    /// Adapts the live WPF selection to the renderer-neutral paragraph mutation planner. The
+    /// native document is rehydrated only after the shared model operation has run, preserving
+    /// the user's selected subrange and keeping paragraph/list semantics identical to Avalonia.
+    /// </summary>
+    private bool ApplyCellParagraphMutation(
+        Func<TextBody, (int Start, int End)?, TextBody> mutate)
+    {
+        if (!IsCellRichEditActive || _cellTextBox is null || TryGetCurrentCellTextBody() is not { } baseBody)
+            return false;
+
+        var current = TextBodyFlowDocumentConverter.FromFlowDocument(_cellTextBox.Document, baseBody);
+        (int Start, int End)? selection = CurrentLogicalSelection();
+        var updated = mutate(current, selection);
+        int start = selection?.Start ?? 0;
+        int end = selection?.End ?? InCanvasTextEditPlanner.ExtractPlainText(updated).Length;
+
+        double fallbackPt = InCanvasRichTextEditorDefaults.ResolveFallbackFontSize(
+            updated,
+            InCanvasRichTextEditorDefaults.TableCellFallbackFontSizePt);
+        _cellTextBox.Document = TextBodyFlowDocumentConverter.ToFlowDocument(updated, fallbackPt);
+
+        var startPointer = TextBodyFlowDocumentConverter.TextPointerAtLogicalOffset(_cellTextBox.Document, start);
+        var endPointer = TextBodyFlowDocumentConverter.TextPointerAtLogicalOffset(_cellTextBox.Document, end);
+        if (startPointer is not null && endPointer is not null)
+            _cellTextBox.Selection.Select(startPointer, endPointer);
+        _cellTextBox.Focus();
+        return true;
+    }
+
+    private (int Start, int End)? CurrentLogicalSelection()
+    {
+        if (_cellTextBox is null)
+            return null;
+
+        return (
+            TextBodyFlowDocumentConverter.LogicalOffsetAt(
+                _cellTextBox.Document,
+                _cellTextBox.Selection.Start),
+            TextBodyFlowDocumentConverter.LogicalOffsetAt(
+                _cellTextBox.Document,
+                _cellTextBox.Selection.End));
     }
 
     // ── Keyboard ──────────────────────────────────────────────────────────────

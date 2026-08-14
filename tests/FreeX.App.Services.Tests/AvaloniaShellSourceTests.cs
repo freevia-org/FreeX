@@ -3923,7 +3923,7 @@ public sealed class AvaloniaShellSourceTests
     {
         var source = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MainWindow.cs"));
         var sessionSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Services", "WorkbookSession.cs"));
-        var plannerSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Services", "HyperlinkDialogPlanner.cs"));
+        var plannerSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Presentation", "Hyperlinks", "HyperlinkDialogPlanner.cs"));
         var catalogSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Presentation", "Shell", "NativeMenuCatalog.cs"));
 
         plannerSource.Should().Contain("public sealed record HyperlinkDialogPrefill(");
@@ -3956,6 +3956,8 @@ public sealed class AvaloniaShellSourceTests
         var plannerSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Services", "HyperlinkNavigationPlanner.cs"));
         var launcherSource = File.ReadAllText(RepositoryFileLocator.Find("shared", "Free.Shared.AppServices", "ExternalUriLauncher.cs"));
         var catalogSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Presentation", "Shell", "NativeMenuCatalog.cs"));
+        var platformInventory = File.ReadAllText(RepositoryFileLocator.Find(
+            "docs", "planning", "macos-platform-service-inventory.md"));
 
         plannerSource.Should().Contain("public enum HyperlinkNavigationKind");
         plannerSource.Should().Contain("HyperlinkTargetKind.PlaceInThisDocument");
@@ -4018,6 +4020,11 @@ public sealed class AvaloniaShellSourceTests
         localFileHyperlinkSource.Should().NotContain("OpenExternalUriAsync");
         localFileHyperlinkSource.Should().NotContain("LaunchFile");
         localFileHyperlinkSource.Should().NotContain("LaunchUriAsync");
+
+        platformInventory.Should().Contain(
+            "Remaining follow-up is localization and richer help chrome, not hyperlink execution.");
+        platformInventory.Should().NotContain(
+            "external workbook hyperlinks return an unsupported message");
     }
 
     [Fact]
@@ -5038,7 +5045,7 @@ public sealed class AvaloniaShellSourceTests
         pointerSource.Should().Contain("SelectSheet(sheetId, selectRange, toggle);");
         pointerSource.Should().Contain("args.Pointer.Capture(_sheetTabsHost);");
         source.Should().Contain("private void DuplicateActiveSheet()");
-        source.Should().Contain("var result = _session.DuplicateActiveSheet();");
+        source.Should().Contain("var result = _session.DuplicateSelectedSheets();");
         source.Should().Contain("RefreshShell(UiText.Format(\"SheetTabs_DuplicatedStatusFormat\", sourceName));");
         source.Should().Contain("private void MoveActiveSheetLeft()");
         source.Should().Contain("var result = _session.MoveActiveSheetLeft();");

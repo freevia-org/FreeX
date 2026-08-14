@@ -2,6 +2,7 @@ using System.Globalization;
 using System.Text.Json;
 using Free.Shared.Ribbon;
 using FreeW.App.Localization;
+using FreeW.App.Presentation.Ribbon;
 
 namespace FreeW.Ribbon.Definitions.Tests;
 
@@ -1229,8 +1230,8 @@ public sealed class FreeWRibbonDefinitionProfileTests
     {
         WithUiCulture("en-US", () =>
         {
-            AssertSymbolSurfaceUsesResources(SymbolSurface(FreeWRibbonCapabilities.Wpf), includesMenu: false);
-            AssertSymbolSurfaceUsesResources(SymbolSurface(FreeWRibbonCapabilities.Avalonia), includesMenu: false);
+            AssertSymbolSurfaceUsesResources(SymbolSurface(FreeWRibbonCapabilities.Wpf), includesMenu: true);
+            AssertSymbolSurfaceUsesResources(SymbolSurface(FreeWRibbonCapabilities.Avalonia), includesMenu: true);
             AssertPageBackgroundSurfaceUsesResources(PageBackgroundSurface(FreeWRibbonCapabilities.Wpf), includesPalette: false);
             AssertPageBackgroundSurfaceUsesResources(PageBackgroundSurface(FreeWRibbonCapabilities.Avalonia), includesPalette: true);
 
@@ -1242,9 +1243,10 @@ public sealed class FreeWRibbonDefinitionProfileTests
             var symbols = SymbolSurface(FreeWRibbonCapabilities.Avalonia);
             var pageBackground = PageBackgroundSurface(FreeWRibbonCapabilities.Avalonia);
 
-            AssertSymbolSurfaceUsesResources(symbols, includesMenu: false);
+            AssertSymbolSurfaceUsesResources(symbols, includesMenu: true);
             AssertPageBackgroundSurfaceUsesResources(pageBackground, includesPalette: true);
-            symbols.SymbolMenuHeaders.Should().BeNull();
+            symbols.SymbolMenuHeaders![0].Should().Be(
+                $"€   {Loc.Get("Ribbon_Palette_Symbol_Euro_Label")}");
             pageBackground.PageColorMenuHeaders![0].Should().Be(Loc.Get("Ribbon_Palette_PageColor_NoColor_Label"));
 
             return true;
@@ -1261,6 +1263,8 @@ public sealed class FreeWRibbonDefinitionProfileTests
         var dataSource = ReadRepositoryFile("freew", "FreeW.Ribbon.Definitions", "FreeWRibbonDefinitionData.cs");
         var paletteSource = ReadRepositoryFile(
             "freew", "FreeW.App.Presentation", "Ribbon", "FreeWRibbonPaletteCatalog.cs");
+        var symbolSource = ReadRepositoryFile(
+            "freew", "FreeW.App.Presentation", "Ribbon", "SymbolRibbonWorkflow.cs");
         var hostCommands = ReadRepositoryFile("freew", "FreeW.App.Host", "Ribbon", "FreeWRibbonCommands.cs");
 
         wpfSource.Should().NotContain("g.Icon(\"freew.bullets\", \"Bullets\"");
@@ -1293,7 +1297,8 @@ public sealed class FreeWRibbonDefinitionProfileTests
         dataSource.Should().Contain("FreeWRibbonPaletteCatalog.PageColors");
         paletteSource.Should().Contain("Loc.Get(\"Ribbon_Palette_PageColor_NoColor_Label\")");
         dataSource.Should().Contain("Loc.Get(\"Ribbon_Palette_MultilevelList_OutlineDecimal_Label\")");
-        dataSource.Should().Contain("Loc.Get(\"Ribbon_Palette_Symbol_Euro_Label\")");
+        dataSource.Should().NotContain("Loc.Get(\"Ribbon_Palette_Symbol_Euro_Label\")");
+        symbolSource.Should().Contain("Loc.Get(\"Ribbon_Palette_Symbol_Euro_Label\")");
 
         hostCommands.Should().NotContain("Title = \"Page Color\"");
         hostCommands.Should().NotContain("Content = \"More Colors");
@@ -1516,9 +1521,12 @@ public sealed class FreeWRibbonDefinitionProfileTests
             symbols.Header,
             symbols.KeyTip,
             symbol.Label,
-            symbol is RibbonDropdown dropdown
-                ? dropdown.Menu.Items.Select(item => item.Header).ToArray()
-                : null);
+            symbol switch
+            {
+                RibbonDropdown dropdown => dropdown.Menu.Items.Select(item => item.Header).ToArray(),
+                RibbonSplitButton split => split.Menu.Items.Select(item => item.Header).ToArray(),
+                _ => null,
+            });
     }
 
     private static PageBackgroundRibbonSurface PageBackgroundSurface(FreeWRibbonCapabilities capabilities)
@@ -1599,7 +1607,7 @@ public sealed class FreeWRibbonDefinitionProfileTests
             return;
         }
 
-        surface.SymbolMenuHeaders.Should().Equal(FreeWRibbonDefinitionData.Symbols
+        surface.SymbolMenuHeaders.Should().Equal(SymbolRibbonWorkflow.Choices
             .Select(symbol => $"{symbol.Glyph}   {symbol.Label}"));
     }
 

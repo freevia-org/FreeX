@@ -1467,6 +1467,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
                     // View ▸ Window ▸ Side by Side + Synchronous Scrolling toggle states.
                     ["View Side by Side"] = GetSideBySideRibbonState,
                     ["Synchronous Scrolling"] = GetSynchronousScrollingRibbonState,
+                    ["Reset Window Position"] = GetResetWindowPositionRibbonState,
                     // Table Design ▸ Style Options toggle checked-state (mirrors the WPF host's
                     // _ribbonState.SetChecked calls in RefreshTableContextualTab): each toggle reports
                     // whether the active cell's table currently has that flag on.
@@ -1959,7 +1960,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
     }
 
     private static double EstimateSheetTabWidth(string tabName) =>
-        Math.Clamp(20 + Math.Max(1, tabName.Length) * 6.6, 60, 168);
+        SheetTabWidthEstimator.Estimate(tabName, SheetTabWidthEstimator.Avalonia);
 
     private void AddSheetTabContourPath(string data, double strokeThickness)
     {
@@ -9072,7 +9073,8 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             FormulaEditorKey.None,
             FormulaBarAvaloniaInputAdapter.ToFormulaEditorModifiers(args.KeyModifiers),
             address,
-            Math.Max(1, CountScrollableRows(_session.Viewport, _session.Workbook.GetSheet(address.Sheet)) - 1),
+            Math.Max(1, WorkbookViewportScrollPlanner.CountVisibleScrollableRows(
+                _session.Viewport, _session.Workbook.GetSheet(address.Sheet)) - 1),
             editor.Text,
             _session.FormulaEditAddress is not null,
             FormulaEditorSurfaceKind.Inline,
@@ -9361,8 +9363,10 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             FormulaEditorKey.None,
             FormulaBarAvaloniaInputAdapter.ToFormulaEditorModifiers(args.KeyModifiers),
             _session.Workbook.GetSheet(current.Sheet),
-            Math.Max(1, CountScrollableRows(_session.Viewport, _session.Workbook.GetSheet(current.Sheet)) - 1),
-            Math.Max(1, CountScrollableColumns(_session.Viewport, _session.Workbook.GetSheet(current.Sheet)) - 1));
+            Math.Max(1, WorkbookViewportScrollPlanner.CountVisibleScrollableRows(
+                _session.Viewport, _session.Workbook.GetSheet(current.Sheet)) - 1),
+            Math.Max(1, WorkbookViewportScrollPlanner.CountVisibleScrollableColumns(
+                _session.Viewport, _session.Workbook.GetSheet(current.Sheet)) - 1));
         if (navigation is null)
             return false;
 
@@ -12464,17 +12468,13 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
 
         var sourceName = _session.ActiveSheet.Name;
         ClearSelectedDrawingObject();
-        var result = _session.DuplicateActiveSheet();
+        var result = _session.DuplicateSelectedSheets();
         if (!result.Success)
         {
             ShowEditIssue(result.ErrorMessage ?? UiText.Get("MainLoc_DuplicateSheetFailed"));
             return;
         }
 
-        // Cross-sheet/3-D formulas (e.g. SUM(Sheet1:Sheet3!A1)) can pick up the duplicated sheet,
-        // so force a recalc here — sheet structure commands don't report affected cells to the
-        // shared edit pipeline's automatic recalc (WPF host parity: SheetCtxDuplicate_Click).
-        _session.RecalculateWorkbook();
         RefreshShell(UiText.Format("SheetTabs_DuplicatedStatusFormat", sourceName));
     }
 
@@ -12495,9 +12495,6 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             return;
         }
 
-        // Reordering sheets can change which sheets a 3-D reference spans, so force a recalc
-        // (sheet structure commands don't report affected cells to the automatic recalc path).
-        _session.RecalculateWorkbook();
         RefreshShell(UiText.Format("SheetTabs_MovedLeftStatusFormat", sheetName));
     }
 
@@ -12518,9 +12515,6 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             return;
         }
 
-        // Reordering sheets can change which sheets a 3-D reference spans, so force a recalc
-        // (sheet structure commands don't report affected cells to the automatic recalc path).
-        _session.RecalculateWorkbook();
         RefreshShell(UiText.Format("SheetTabs_MovedRightStatusFormat", sheetName));
     }
 
@@ -13028,10 +13022,6 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             return;
         }
 
-        // Cross-sheet/3-D formulas referencing the deleted sheet (or spanning past it) can go
-        // stale, so force a recalc here — sheet structure commands don't report affected cells to
-        // the shared edit pipeline's automatic recalc (WPF host parity: SheetCtxDelete_Click).
-        _session.RecalculateWorkbook();
         RefreshShell(UiText.Format("SheetTabs_DeletedStatusFormat", sheetName));
     }
 
@@ -18073,7 +18063,8 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             FormulaEditorKey.None,
             FormulaBarAvaloniaInputAdapter.ToFormulaEditorModifiers(e.KeyModifiers),
             current,
-            Math.Max(1, CountScrollableRows(_session.Viewport, _session.Workbook.GetSheet(current.Sheet)) - 1),
+            Math.Max(1, WorkbookViewportScrollPlanner.CountVisibleScrollableRows(
+                _session.Viewport, _session.Workbook.GetSheet(current.Sheet)) - 1),
             _formulaBox.Text,
             _session.FormulaEditAddress is not null,
             FormulaEditorSurfaceKind.FormulaBar,
@@ -25926,12 +25917,6 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         Close();
     }
 
-    private static int CountScrollableRows(ViewportModel viewport, Sheet? sheet) =>
-        Math.Max(1, ViewportService.CountScrollableRows(viewport.RowMetrics, sheet?.FrozenRows ?? 0));
-
-    private static int CountScrollableColumns(ViewportModel viewport, Sheet? sheet) =>
-        Math.Max(1, ViewportService.CountScrollableColumns(viewport.ColMetrics, sheet?.FrozenCols ?? 0));
-
     private void NavigateActiveCell(KeyEventArgs e)
     {
         if (e.Key == Key.F2)
@@ -25967,8 +25952,10 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         if (!ExcelWorksheetNavigationPlanner.ShouldHandleWorksheetNavigationKey(navigationKey, navigationKey, navigationModifiers, _endMode))
             return;
 
-        var pageRows = Math.Max(1, CountScrollableRows(_session.Viewport, _session.ActiveSheet) - 1);
-        var pageCols = Math.Max(1, CountScrollableColumns(_session.Viewport, _session.ActiveSheet) - 1);
+        var pageRows = Math.Max(1, WorkbookViewportScrollPlanner.CountVisibleScrollableRows(
+            _session.Viewport, _session.ActiveSheet) - 1);
+        var pageCols = Math.Max(1, WorkbookViewportScrollPlanner.CountVisibleScrollableColumns(
+            _session.Viewport, _session.ActiveSheet) - 1);
         var extendSelection = e.KeyModifiers.HasFlag(KeyModifiers.Shift);
         var moveOnly = navigationKey is ExcelWorksheetNavigationKey.Enter or ExcelWorksheetNavigationKey.Tab;
         var useDataBoundary = ExcelWorksheetNavigationPlanner.ShouldUseDataBoundary(navigationKey, navigationModifiers, _endMode);

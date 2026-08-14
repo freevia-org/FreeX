@@ -131,4 +131,16 @@ public sealed class WorksheetPrintPageContentPlannerTests
         WorksheetPrintPageContentPlanner.ComputeTotalPageCount(sheet, renderPlan)
             .Should().Be(renderPlan.GridPageCount + commentPages.Count);
     }
+
+    [Fact]
+    public void ResolveScaleRatio_PreservesAuthoredEnlargementPastPrintableBounds()
+    {
+        WorksheetPrintPageContentPlanner.ResolveScaleRatio(
+                effectiveScalePercent: 200,
+                printedWidth: 500,
+                printedHeight: 100,
+                printableWidth: 500,
+                printableHeight: 500)
+            .Should().Be(2.0);
+    }
 }

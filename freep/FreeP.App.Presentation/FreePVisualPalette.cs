@@ -67,3 +67,56 @@ public static class FreePVisualPalettes
         PresenterBorder: ThemeColor.FromHex("#505766"),
         PresenterMutedText: ThemeColor.FromHex("#AAB2C2"));
 }
+
+public interface IFreePVisualBrushAdapter<TBrush>
+{
+    static abstract TBrush ResolveTheme(ThemeResourceDescriptor resource, ThemeColor fallback);
+
+    static abstract TBrush Create(ThemeColor color);
+}
+
+/// <summary>
+/// Projects the portable FreeP palette into a renderer-native brush type.
+/// </summary>
+public abstract class FreePVisualBrushCatalog<TBrush, TAdapter>
+    where TAdapter : IFreePVisualBrushAdapter<TBrush>
+{
+    private static readonly ProductThemeResourceProfile ThemeResources = ProductThemeResourceProfiles.FreeP;
+    private static readonly FreePVisualPalette Palette = FreePVisualPalettes.Default;
+
+    public static TBrush Accent => ResolveTheme("Accent", BrandThemes.FreeP.Colors.Accent);
+    public static TBrush AccentDark => ResolveTheme("AccentDark", BrandThemes.FreeP.Colors.AccentDark);
+    public static TBrush SheetSurface => ResolveTheme("SheetSurface", BrandThemes.FreeP.Colors.SheetSurface);
+    public static TBrush White => ResolveTheme("White", BrandThemes.FreeP.Colors.White);
+
+    public static TBrush PaneHeadingText => TAdapter.Create(Palette.PaneHeadingText);
+    public static TBrush PaneText => TAdapter.Create(Palette.PaneText);
+    public static TBrush PaneSecondaryText => TAdapter.Create(Palette.PaneSecondaryText);
+    public static TBrush PaneMutedText => TAdapter.Create(Palette.PaneMutedText);
+    public static TBrush PaneSurface => TAdapter.Create(Palette.PaneSurface);
+    public static TBrush PaneBorder => TAdapter.Create(Palette.PaneBorder);
+    public static TBrush CardBorder => TAdapter.Create(Palette.CardBorder);
+    public static TBrush DisabledBorder => TAdapter.Create(Palette.DisabledBorder);
+    public static TBrush DisabledSurface => TAdapter.Create(Palette.DisabledSurface);
+    public static TBrush PlaceholderSurface => TAdapter.Create(Palette.PlaceholderSurface);
+    public static TBrush NotesHintSurface => TAdapter.Create(Palette.NotesHintSurface);
+    public static TBrush NotesSurface => TAdapter.Create(Palette.NotesSurface);
+    public static TBrush GridBorder => TAdapter.Create(Palette.GridBorder);
+    public static TBrush AnimationText => TAdapter.Create(Palette.AnimationText);
+    public static TBrush AnimationSelectedSurface => TAdapter.Create(Palette.AnimationSelectedSurface);
+    public static TBrush AnimationDanger => TAdapter.Create(Palette.AnimationDanger);
+    public static TBrush SelectedCommentSurface => TAdapter.Create(Palette.SelectedCommentSurface);
+    public static TBrush SelectedCardSurface => TAdapter.Create(Palette.SelectedCardSurface);
+    public static TBrush SelectedSwatchSurface => TAdapter.Create(Palette.SelectedSwatchSurface);
+    public static TBrush SelectedRowSurface => TAdapter.Create(Palette.SelectedRowSurface);
+    public static TBrush SubtlePaneSurface => TAdapter.Create(Palette.SubtlePaneSurface);
+    public static TBrush SubtlePaneBorder => TAdapter.Create(Palette.SubtlePaneBorder);
+    public static TBrush PresenterSurface => TAdapter.Create(Palette.PresenterSurface);
+    public static TBrush PresenterPanelSurface => TAdapter.Create(Palette.PresenterPanelSurface);
+    public static TBrush PresenterSecondarySurface => TAdapter.Create(Palette.PresenterSecondarySurface);
+    public static TBrush PresenterBorder => TAdapter.Create(Palette.PresenterBorder);
+    public static TBrush PresenterMutedText => TAdapter.Create(Palette.PresenterMutedText);
+
+    private static TBrush ResolveTheme(string role, ThemeColor fallback) =>
+        TAdapter.ResolveTheme(ThemeResources.Brush(role), fallback);
+}

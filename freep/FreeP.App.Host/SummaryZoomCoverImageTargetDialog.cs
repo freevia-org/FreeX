@@ -7,16 +7,25 @@ namespace FreeP.App.Host;
 
 internal sealed class SummaryZoomCoverImageTargetDialog : DialogWindow
 {
-    private readonly ZoomSingleTargetDialogSession _session;
-    private readonly ComboBox _target;
+    private readonly ZoomSingleTargetDialogNativeBinding<ComboBox> _binding;
+    private ZoomSingleTargetDialogSession _session => _binding.Session;
 
-    internal string? SelectedTargetSectionId => _session.SelectedTargetId;
+    internal string? SelectedTargetSectionId => _binding.SelectedTargetId;
 
     internal SummaryZoomCoverImageTargetDialog(IReadOnlyList<(string Id, string DisplayName)> options)
     {
-        _session = new ZoomSingleTargetDialogSession(
+        _binding = new(
             ZoomTargetDialogKind.SummaryCoverImage,
-            options);
+            options,
+            session => new ComboBox
+            {
+                ItemsSource = session.Options,
+                DisplayMemberPath = nameof(ZoomTargetOption.DisplayName),
+                SelectedIndex = session.InitialSelectedIndex,
+                MinWidth = 230,
+            },
+            static control => control.SelectedIndex,
+            () => DialogResult = true);
         var surface = _session.Surface;
         Title = surface.Title;
         Width = 420;
@@ -25,14 +34,8 @@ internal sealed class SummaryZoomCoverImageTargetDialog : DialogWindow
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
         ZoomDialogChrome.Apply(this, surface);
 
-        _target = new ComboBox
-        {
-            ItemsSource = _session.Options,
-            DisplayMemberPath = nameof(ZoomTargetOption.DisplayName),
-            SelectedIndex = _session.InitialSelectedIndex,
-            MinWidth = 230,
-        };
-        ZoomDialogChrome.ApplyField(_target, surface.Field(ZoomTargetDialogField.Target));
+        var target = _binding.Control;
+        ZoomDialogChrome.ApplyField(target, surface.Field(ZoomTargetDialogField.Target));
 
         var grid = new Grid { Margin = new Thickness(14) };
         grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
@@ -41,8 +44,8 @@ internal sealed class SummaryZoomCoverImageTargetDialog : DialogWindow
         var label = new Label { Content = surface.Field(ZoomTargetDialogField.Target).Label };
         Grid.SetRow(label, 0);
         grid.Children.Add(label);
-        Grid.SetRow(_target, 1);
-        grid.Children.Add(_target);
+        Grid.SetRow(target, 1);
+        grid.Children.Add(target);
 
         var buttons = new StackPanel
         {
@@ -53,7 +56,7 @@ internal sealed class SummaryZoomCoverImageTargetDialog : DialogWindow
         var ok = ZoomDialogChrome.MakeButton(
             surface.Action(ZoomTargetDialogAction.Accept),
             Apply,
-            _session.CanAccept);
+            _binding.Session.CanAccept);
         ok.Margin = new Thickness(0, 0, 8, 0);
         buttons.Children.Add(ok);
         buttons.Children.Add(ZoomDialogChrome.MakeButton(
@@ -66,9 +69,6 @@ internal sealed class SummaryZoomCoverImageTargetDialog : DialogWindow
 
     private void Apply()
     {
-        if (_session.TryAccept(_target.SelectedIndex))
-        {
-            DialogResult = true;
-        }
+        _binding.TryAccept();
     }
 }

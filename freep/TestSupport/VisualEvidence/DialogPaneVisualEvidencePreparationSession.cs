@@ -21,23 +21,32 @@ public sealed record DialogPaneVisualEvidenceValidationResult(
     bool Outcome,
     string? ValidationText = null);
 
-public interface IDialogPaneVisualEvidenceRouteHost
+public interface IVisualEvidenceAppHost
 {
     void LoadPresentation(Presentation presentation);
+    void SelectSlide(int slideIndex);
     void SelectShape(uint shapeId);
+    void ClearSelection();
     void RefreshCanvas();
+    void RefreshWholeWindow();
+    void NormalizeShell();
+    void HideCommentsPane();
+    bool SelectRibbonTab(string tabId);
+    void FocusNotes();
+    void ShowBackstagePane(string paneId);
 
     IReadOnlyList<uint> SelectedShapeIds { get; }
     int SlideCount { get; }
+    int CurrentSlideIndex { get; }
     int CurrentShapeCount { get; }
     string? CurrentLayoutId { get; }
     DialogPaneVisualEvidenceChoiceState ChoiceState { get; }
     bool IsTablePickerVisible { get; }
     bool IsLayoutPickerVisible { get; }
 
-    void ShowReviewCommentsPane();
-    void SelectFirstReviewComment();
-    void ShowAccessibilityCheckerPane();
+    void ShowCommentsPane();
+    void SelectFirstComment();
+    void ShowAccessibilityPane();
     void SelectFirstAccessibilityIssue();
     void ShowAltTextPane();
     void ShowReadingOrderPane();
@@ -51,6 +60,8 @@ public interface IDialogPaneVisualEvidenceRouteHost
     void OpenLayoutPicker();
     void HideTablePicker();
     void HideLayoutPicker();
+    bool SetViewShowState(bool showGridlines, bool showGuides);
+    void SetZoom(PresentationViewZoomState state);
 }
 
 public interface IDialogPaneVisualEvidenceDialogAdapter<TDialog>
@@ -99,7 +110,7 @@ public sealed class DialogPaneVisualEvidencePreparationSession
     }
 
     public IReadOnlyList<DialogPaneVisualEvidenceAssertion> PrepareRoute(
-        IDialogPaneVisualEvidenceRouteHost host)
+        IVisualEvidenceAppHost host)
     {
         ArgumentNullException.ThrowIfNull(host);
         RequireStage(DialogPaneVisualEvidencePreparationStage.Created);
@@ -221,7 +232,7 @@ public sealed class DialogPaneVisualEvidencePreparationSession
     }
 
     public IReadOnlyList<DialogPaneVisualEvidenceAssertion> CompleteRoute(
-        IDialogPaneVisualEvidenceRouteHost host)
+        IVisualEvidenceAppHost host)
     {
         ArgumentNullException.ThrowIfNull(host);
         RequireStage(DialogPaneVisualEvidencePreparationStage.LoadedStatePrepared);
@@ -243,16 +254,16 @@ public sealed class DialogPaneVisualEvidencePreparationSession
             : [];
     }
 
-    private void ActivateRoute(IDialogPaneVisualEvidenceRouteHost host)
+    private void ActivateRoute(IVisualEvidenceAppHost host)
     {
         switch (Scenario.RouteId)
         {
             case "review.comments-pane":
-                host.ShowReviewCommentsPane();
-                host.SelectFirstReviewComment();
+                host.ShowCommentsPane();
+                host.SelectFirstComment();
                 break;
             case "review.accessibility-pane":
-                host.ShowAccessibilityCheckerPane();
+                host.ShowAccessibilityPane();
                 host.SelectFirstAccessibilityIssue();
                 break;
             case "review.alt-text-pane":

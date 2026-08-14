@@ -91,7 +91,7 @@ public sealed class ViewCommandSourceTests
         // side-by-side pair's tiled halves via the registry, instead of cascading/recentering
         // just the clicked window through the unrelated WindowResetPositionPlanner formula.
         source.Should().Contain("private void ViewResetWindowPositionBtn_Click(object sender, RoutedEventArgs e)");
-        source.Should().Contain("_windowRegistry?.ResetSideBySidePair(workArea.Width, workArea.Height)");
+        source.Should().Contain("_windowRegistry?.ResetSideBySidePair(this, workArea.Width, workArea.Height)");
         source.Should().Contain("SystemParameters.WorkArea");
 
         // Arrange All stores the workbook choice, then applies the live visible-window layout.
@@ -103,11 +103,11 @@ public sealed class ViewCommandSourceTests
         source.Should().Contain("private void ViewSideBySideBtn_Click(object sender, RoutedEventArgs e)");
         source.Should().Contain("_windowRegistry.IsSideBySideActive");
         source.Should().Contain("_windowRegistry.EnableSideBySide(this, workArea.Width, workArea.Height)");
-        source.Should().Contain("_windowRegistry.DisableSideBySide()");
+        source.Should().Contain("_windowRegistry.DisableSideBySideFor(this)");
 
         // Synchronous Scrolling toggles registry sync state and broadcasts offsets through the registry.
         source.Should().Contain("private void ViewSynchronousScrollingBtn_Click(object sender, RoutedEventArgs e)");
-        source.Should().Contain("_windowRegistry.SetSynchronousScroll(");
+        source.Should().Contain("_windowRegistry.SetSynchronousScrollFor(");
         source.Should().Contain("_windowRegistry?.BroadcastScrollOffset(this, GetScrollOffset())");
     }
 

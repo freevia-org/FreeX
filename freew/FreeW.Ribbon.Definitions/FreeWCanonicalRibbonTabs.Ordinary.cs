@@ -601,11 +601,19 @@ internal static partial class FreeWCanonicalRibbonTabs
                             m.Item(EquationPresetCatalog.Get(EquationPresetKind.Function).CommandId, "Function (sin)", "C");
                             m.Item(EquationPresetCatalog.Get(EquationPresetKind.GroupCharacter).CommandId, "Group (brace)", "G");
                         });
-                        g.Medium("freew.symbol", symbolCommand.Label, RibbonCommandIconKind.Symbol);
+                        g.SplitButton("freew.symbol", symbolCommand.Label, BuildSymbolMenu(), split => split with
+                        {
+                            PreferredLayout = RibbonCommandLayoutKind.Medium,
+                            Icon = new RibbonCommandIcon(RibbonCommandIconKind.Symbol),
+                        });
                     }),
                 tab => tab.Group("symbols", FreeWRibbonText.SymbolsGroup.Label, null, 92, g =>
                     {
-                        g.Button("freew.symbol", FreeWRibbonText.SymbolCommand.Label);
+                        g.SplitButton("freew.symbol", FreeWRibbonText.SymbolCommand.Label, BuildSymbolMenu(), split => split with
+                        {
+                            PreferredLayout = RibbonCommandLayoutKind.Medium,
+                            Icon = new RibbonCommandIcon(RibbonCommandIconKind.Symbol),
+                        });
                         // AV-INSERT2: Equation — default (E=mc²) opener + a few common OMML presets.
                         g.Dropdown("freew.equation", "Equation", BuildEquationMenu());
                     }));
@@ -1061,13 +1069,13 @@ internal static partial class FreeWCanonicalRibbonTabs
     /// <summary>
     /// AV-STYLES: Home &gt; Styles gallery dropdown — the full built-in style set (paragraph and character
     /// styles), one item per <see cref="BuiltInStyles.Gallery"/> entry. Each item's command id is
-    /// <c>freew.style.&lt;id&gt;</c> (matching <see cref="FreeWRibbonDefinitionData.StyleCommandId"/>).
+    /// <c>freew.style.&lt;id&gt;</c> (matching <see cref="FormattingGalleryRibbonWorkflow.StyleCommandId"/>).
     /// </summary>
     private static RibbonMenu BuildStylesMenu() =>
         new(BuiltInStyles.Gallery
             .Select(d => new RibbonMenuItem(
                 d.Type == StyleType.Character ? $"{d.Name}  (a)" : d.Name,
-                new RibbonCommandId(FreeWRibbonDefinitionData.StyleCommandId(d.Id))))
+                new RibbonCommandId(FormattingGalleryRibbonWorkflow.StyleCommandId(d.Id))))
             .ToArray());
     /// <summary>AV-INSERT2: Insert &gt; Cover Page gallery — the three built-in cover-page presets.</summary>
     private static RibbonMenu BuildCoverPageMenu() =>
@@ -1147,4 +1155,11 @@ internal static partial class FreeWCanonicalRibbonTabs
             new("Function",            new RibbonCommandId(EquationPresetCatalog.Get(EquationPresetKind.Function).CommandId)),
             new("Group Character",     new RibbonCommandId(EquationPresetCatalog.Get(EquationPresetKind.GroupCharacter).CommandId)),
         });
+
+    private static RibbonMenu BuildSymbolMenu() =>
+        new(SymbolRibbonWorkflow.Choices
+            .Select(choice => new RibbonMenuItem(
+                $"{choice.Glyph}   {choice.Label}",
+                new RibbonCommandId(choice.CommandId)))
+            .ToArray());
 }

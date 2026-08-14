@@ -12,10 +12,10 @@ public sealed class PresentationSelectionPaneHostParityTests
         var paneSource = File.ReadAllText(Path.Combine(projectDirectory, "SelectionPane.cs"));
         var mainWindowSource = File.ReadAllText(Path.Combine(projectDirectory, "MainWindow.cs"));
 
-        paneSource.Should().Contain("private readonly Action? _onAccessibilityChanged;");
+        paneSource.Should().Contain("PresentationSelectionPaneFormSession<");
         paneSource.Should().Contain("Action? onAccessibilityChanged = null");
-        paneSource.Should().Contain("_onAccessibilityChanged = onAccessibilityChanged;");
-        paneSource.Should().Contain("_onAccessibilityChanged?.Invoke();");
+        paneSource.Should().Contain("onAccessibilityChanged);");
+        paneSource.Should().NotContain("private PresentationSelectionPanePlan Render(");
         mainWindowSource.Should().Contain(
             "new SelectionPane(Editor, RefreshPaneAccessibilityMetadata)");
         mainWindowSource.Should().Contain("_proofingPaneHost is null");

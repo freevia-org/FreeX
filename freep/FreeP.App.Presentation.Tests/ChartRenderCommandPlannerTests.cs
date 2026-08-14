@@ -354,6 +354,7 @@ public sealed class ChartRenderCommandPlannerTests
     public void RendererSources_KeepTraversalAndDecisionPolicyInPresentationCore()
     {
         var planner = ReadWorkspaceFile("freep", "FreeP.App.Presentation", "Core", "ChartRenderCommandPlanner.cs");
+        var dispatcher = ReadWorkspaceFile("freep", "FreeP.App.Presentation", "Core", "ChartRenderCommandDispatcher.cs");
         var wpf = ReadWorkspaceFile("freep", "FreeP.App.Rendering.Wpf", "SlideCanvas.ChartExecution.cs");
         var avalonia = ReadWorkspaceFile("freep", "FreeP.App.Rendering.Avalonia", "SlideCanvas.ChartExecution.cs");
         var wpfCanvas = ReadWorkspaceFile("freep", "FreeP.App.Rendering.Wpf", "SlideCanvas.cs");
@@ -366,20 +367,26 @@ public sealed class ChartRenderCommandPlannerTests
         foreach (var source in new[] { wpf, avalonia })
         {
             source.Should().Contain("ChartRenderCommandPlanner.Build(");
-            source.Should().Contain("foreach (var command in plan.Commands)");
-            source.Should().Contain("switch (command)");
+            source.Should().Contain("ChartRenderCommandDispatcher.Dispatch(plan.Commands");
+            source.Should().Contain("IChartRenderCommandSink");
+            source.Should().NotContain("foreach (var command in plan.Commands)");
+            source.Should().NotContain("switch (command)");
             source.Should().NotContain("ChartRenderPlanner.BuildScenePlan(");
             source.Should().NotContain("switch (scene.GeometryKind)");
             source.Should().NotContain("foreach (var primitive in scene.");
             source.Should().NotContain("RenderColumnChart");
             source.Should().NotContain("RenderChartDataTable");
         }
+        dispatcher.Should().Contain("foreach (var command in commands)");
+        dispatcher.Should().Contain("switch (command)");
+        dispatcher.Should().Contain("case ChartRenderCommand.Text value: sink.Render(value); break;");
 
         planner.Should().Contain("PlanMarker(marker)");
         planner.Should().Contain("ChartMarkerRenderPrimitive");
         foreach (var source in new[] { wpfCanvas, avaloniaCanvas })
         {
-            source.Should().Contain("switch (primitive)");
+            source.Should().Contain("ChartMarkerRenderPrimitiveDispatcher.Dispatch(");
+            source.Should().Contain("IChartMarkerRenderPrimitiveSink");
             source.Should().Contain("ChartMarkerRenderPrimitive.Ellipse");
             source.Should().Contain("ToMarkerGeometry(path.Geometry)");
             source.Should().Contain("private static StreamGeometry ToMarkerGeometry(");
@@ -388,6 +395,9 @@ public sealed class ChartRenderCommandPlannerTests
             source.Should().NotContain("MarkerPolygonGeometry");
             source.Should().NotContain("private static ChartPathPrimitive OffsetPath(");
         }
+        dispatcher.Should().Contain("foreach (var primitive in primitives)");
+        dispatcher.Should().Contain("switch (primitive)");
+        dispatcher.Should().Contain("case ChartMarkerRenderPrimitive.Ellipse value: sink.Render(value); break;");
         wpfCanvas.Should().Contain("ctx.LineTo(point, isStroked: true, isSmoothJoin: false);");
         planner.Split("private static ChartPathPrimitive OffsetPath(").Should().HaveCount(2);
     }

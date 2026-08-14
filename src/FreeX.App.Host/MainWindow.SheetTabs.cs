@@ -771,11 +771,8 @@ public partial class MainWindow
         return measuredWidth;
     }
 
-    private static double EstimateSheetTabWidth(SheetTabViewModel tab)
-    {
-        var protectedIndicatorWidth = tab.IsProtected ? 16.0 : 0.0;
-        return Math.Max(86, 54 + protectedIndicatorWidth + (tab.Name?.Length ?? 0) * 7.5);
-    }
+    private static double EstimateSheetTabWidth(SheetTabViewModel tab) =>
+        SheetTabWidthEstimator.Estimate(tab.Name, tab.IsProtected, SheetTabWidthEstimator.Wpf);
 
     private static double ResolveLayoutWidth(FrameworkElement element)
     {
@@ -1683,9 +1680,8 @@ public partial class MainWindow
         var tab = GetContextMenuTab(sender);
         if (tab == null) return;
 
-        var selectedSheetIds = _groupedSheetIds.Contains(tab.Id)
-            ? _workbook.Sheets.Select(sheet => sheet.Id).Where(_groupedSheetIds.Contains).ToList()
-            : [tab.Id];
+        SynchronizeWorkbookSessionSelection();
+        var selectedSheetIds = _session.GetCurrentGroupedStructureSheetIds();
 
         var visibleSheetCount = _workbook.Sheets.Count(s => !s.IsHidden);
         var visibleSelectedCount = _workbook.Sheets.Count(s => !s.IsHidden && selectedSheetIds.Contains(s.Id));
@@ -1702,14 +1698,14 @@ public partial class MainWindow
             : UiText.Format("MainWindowMessage_DeleteSheetPrompt", tab.Name);
         if (!_messageService.AskYesNo(prompt, UiText.Get("MainWindowMessage_DeleteSheetTitle"))) return;
 
-        var deleteCommands = selectedSheetIds
-            .Select(sheetId => (IWorkbookCommand)new RemoveSheetCommand(sheetId))
-            .ToList();
-        var command = deleteCommands.Count == 1
-            ? deleteCommands[0]
-            : new CompositeWorkbookCommand("Delete Sheet", deleteCommands);
-        if (!TryExecuteCommand(command, "Delete Sheet"))
+        var result = _session.DeleteSelectedSheets();
+        if (!result.Success)
+        {
+            _messageService.ShowWarning(
+                result.ErrorMessage ?? UiText.Get("MainWindowMessage_DeleteOnlyVisibleSheet"),
+                UiText.Get("MainWindowMessage_DeleteSheetTitle"));
             return;
+        }
 
         foreach (var sheetId in selectedSheetIds)
         {
@@ -1722,24 +1718,11 @@ public partial class MainWindow
             _splitPaneViewportOffsets.Remove(sheetId);
         }
 
-        // Workbook.RemoveSheet (invoked above via TryExecuteCommand) already reprojects
-        // ActiveSheetIndex onto the Excel-correct adjacent surviving sheet -- the sheet that was
-        // immediately to the right of the one just deleted, falling back to the sheet now at the
-        // end of the tab strip if the deletion was at the end -- for each sheet removed, in order.
-        // Use it instead of unconditionally jumping to the workbook's first sheet.
-        var visibleSheetIds = GetVisibleSheetIds();
-        var adjacentSheetId = _workbook.ActiveSheetIndex is { } activeIndex &&
-            activeIndex >= 0 &&
-            activeIndex < _workbook.Sheets.Count
-                ? _workbook.Sheets[activeIndex].Id
-                : (SheetId?)null;
-        _currentSheetId = adjacentSheetId is { } candidate && visibleSheetIds.Contains(candidate)
-            ? candidate
-            : visibleSheetIds.Count > 0 ? visibleSheetIds[0] : _workbook.Sheets[0].Id;
+        _currentSheetId = _session.ActiveSheet.Id;
         _groupedSheetIds.Clear();
         _groupedSheetIds.Add(_currentSheetId);
         _sheetGroupAnchor = _currentSheetId;
-        RecalculateWorkbook();
+        ApplyWorkbookSessionSelectionToRenderer();
         UpdateViewport();
         RefreshSheetTabs();
     }
@@ -1784,15 +1767,22 @@ public partial class MainWindow
     {
         var tab = GetContextMenuTab(sender);
         if (tab == null) return;
-        if (!TryExecuteCommand(new DuplicateSheetCommand(tab.Id), "Duplicate Sheet"))
-            return;
 
-        var sourceIndex = FindWorkbookSheetIndex(tab.Id);
-        _currentSheetId = _workbook.Sheets[Math.Min(sourceIndex + 1, _workbook.Sheets.Count - 1)].Id;
+        SynchronizeWorkbookSessionSelection();
+        var result = _session.DuplicateSelectedSheets(tab.Id);
+        if (!result.Success)
+        {
+            _messageService.ShowWarning(
+                result.ErrorMessage ?? "The selected sheets could not be duplicated.",
+                "Duplicate Sheet");
+            return;
+        }
+
+        _currentSheetId = _session.ActiveSheet.Id;
         _groupedSheetIds.Clear();
         _groupedSheetIds.Add(_currentSheetId);
         _sheetGroupAnchor = _currentSheetId;
-        RecalculateWorkbook();
+        ApplyWorkbookSessionSelectionToRenderer();
         UpdateViewport();
         RefreshSheetTabs();
     }
@@ -1806,72 +1796,24 @@ public partial class MainWindow
         if (dialog.ShowDialog() != true)
             return;
 
-        if (dialog.Result.CreateCopy)
+        SynchronizeWorkbookSessionSelection();
+        var result = _session.MoveOrCopySelectedSheets(
+            tab.Id,
+            dialog.Result.InsertBeforeIndex,
+            dialog.Result.CreateCopy);
+        if (!result.Success)
         {
-            var selectedSheetIds = _groupedSheetIds.Contains(tab.Id)
-                ? _workbook.Sheets.Select(sheet => sheet.Id).Where(_groupedSheetIds.Contains).ToList()
-                : [tab.Id];
-
-            // Resolve the dialog's InsertBeforeIndex (an index into the pre-duplication sheet
-            // order) to a stable target sheet id now, before duplication shifts every position
-            // after the source sheets. "InsertBeforeIndex == sheet count" means "move to end".
-            var targetSheetId = dialog.Result.InsertBeforeIndex < _workbook.Sheets.Count
-                ? _workbook.Sheets[dialog.Result.InsertBeforeIndex].Id
-                : (SheetId?)null;
-
-            var duplicateCommands = selectedSheetIds
-                .Select(sheetId => (IWorkbookCommand)new DuplicateSheetCommand(sheetId))
-                .ToList();
-            var command = duplicateCommands.Count == 1
-                ? duplicateCommands[0]
-                : new CompositeWorkbookCommand("Move or Copy Sheet", duplicateCommands);
-
-            var preExistingIds = _workbook.Sheets.Select(sheet => sheet.Id).ToHashSet();
-            if (!TryExecuteCommand(command, "Move or Copy Sheet"))
-                return;
-
-            var copySheetIds = _workbook.Sheets
-                .Select(sheet => sheet.Id)
-                .Where(id => !preExistingIds.Contains(id))
-                .ToList();
-
-            var targetIndex = targetSheetId is { } id
-                ? FindWorkbookSheetIndex(id)
-                : _workbook.Sheets.Count;
-            if (targetIndex < 0)
-                targetIndex = _workbook.Sheets.Count;
-
-            if (copySheetIds.Count > 0 &&
-                !TryExecuteCommand(new MoveSheetsCommand(copySheetIds, targetIndex), "Move or Copy Sheet"))
-                return;
-
-            _currentSheetId = copySheetIds.Count > 0
-                ? copySheetIds[^1]
-                : _workbook.Sheets[Math.Clamp(targetIndex, 0, _workbook.Sheets.Count - 1)].Id;
-
-            // Copying (and repositioning) sheets can change which sheets fall inside a 3-D
-            // span reference (e.g. =SUM(Sheet1:Sheet3!A1)), so recalculate just like the other
-            // structural sheet operations (rename/delete/duplicate/plain-move) do.
-            RecalculateWorkbook();
-        }
-        else
-        {
-            var selectedSheetIds = _groupedSheetIds.Contains(tab.Id)
-                ? _groupedSheetIds.ToList()
-                : [tab.Id];
-            if (!TryExecuteCommand(new MoveSheetsCommand(selectedSheetIds, dialog.Result.InsertBeforeIndex), "Move Sheet"))
-                return;
-
-            _currentSheetId = tab.Id;
-            // Moving sheets can change which sheets fall inside a 3-D span reference
-            // (e.g. =SUM(Sheet1:Sheet3!A1)), so recalculate just like the other structural
-            // sheet operations (rename/delete/duplicate) do.
-            RecalculateWorkbook();
+            _messageService.ShowWarning(
+                result.ErrorMessage ?? "The selected sheets could not be moved or copied.",
+                "Move or Copy Sheet");
+            return;
         }
 
+        _currentSheetId = _session.ActiveSheet.Id;
         _groupedSheetIds.Clear();
         _groupedSheetIds.Add(_currentSheetId);
         _sheetGroupAnchor = _currentSheetId;
+        ApplyWorkbookSessionSelectionToRenderer();
         UpdateViewport();
         RefreshSheetTabs();
     }
@@ -1902,24 +1844,21 @@ public partial class MainWindow
 
     private void HideSheets(IReadOnlyCollection<SheetId> sheetIds)
     {
-        var hideCommands = sheetIds
-            .Select(sheetId => (IWorkbookCommand)new SetSheetHiddenCommand(sheetId, hidden: true))
-            .ToList();
-        if (hideCommands.Count == 0)
+        SynchronizeWorkbookSessionSelection();
+        var result = _session.HideSelectedSheets();
+        if (!result.Success)
+        {
+            _messageService.ShowWarning(
+                result.ErrorMessage ?? UiText.Get("MainWindowMessage_DeleteOnlyVisibleSheet"),
+                "Hide Sheet");
             return;
-        var command = hideCommands.Count == 1
-            ? hideCommands[0]
-            : new CompositeWorkbookCommand("Hide Sheet", hideCommands);
-        if (!TryExecuteCommand(command, "Hide Sheet"))
-            return;
+        }
 
-        if (sheetIds.Contains(_currentSheetId))
-            _currentSheetId = _workbook.Sheets.First(s => !s.IsHidden).Id;
-        foreach (var sheetId in sheetIds)
-            _groupedSheetIds.Remove(sheetId);
-        if (_groupedSheetIds.Count == 0)
-            _groupedSheetIds.Add(_currentSheetId);
+        _currentSheetId = _session.ActiveSheet.Id;
+        _groupedSheetIds.Clear();
+        _groupedSheetIds.Add(_currentSheetId);
         _sheetGroupAnchor = _currentSheetId;
+        ApplyWorkbookSessionSelectionToRenderer();
         UpdateViewport();
         RefreshSheetTabs();
     }
@@ -1990,16 +1929,13 @@ public partial class MainWindow
         if (!TryShowColorPicker("Tab Color", sheet?.TabColor ?? new CellColor(15, 109, 140), allowNoColor: true, out var tabColor))
             return;
 
-        var colorCommands = sheetIds
-            .Select(id => (IWorkbookCommand)new SetSheetTabColorCommand(id, tabColor))
-            .ToList();
-        if (colorCommands.Count == 0)
+        SynchronizeWorkbookSessionSelection();
+        var result = _session.SetSelectedSheetTabColor(tabColor);
+        if (!result.Success)
+        {
+            _messageService.ShowWarning(result.ErrorMessage ?? "Tab color could not be changed.", "Tab Color");
             return;
-        var command = colorCommands.Count == 1
-            ? colorCommands[0]
-            : new CompositeWorkbookCommand("Tab Color", colorCommands);
-        if (!TryExecuteCommand(command, "Tab Color"))
-            return;
+        }
         RefreshSheetTabs();
     }
 

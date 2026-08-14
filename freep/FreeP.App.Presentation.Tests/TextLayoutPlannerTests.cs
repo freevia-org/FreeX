@@ -1281,65 +1281,57 @@ public sealed class TextLayoutPlannerTests
     [Fact]
     public void WpfAndAvaloniaSlideCanvases_DelegateTextLayoutMathToSharedPlanner()
     {
+        var paragraphDispatcher = ReadWorkspaceFile(
+            "freep", "FreeP.App.Presentation", "TextParagraphNativeRenderDispatcher.cs");
+        var nativeSequence = ReadWorkspaceFile(
+            "freep", "FreeP.App.Presentation", "TextNativeRenderSequence.cs");
         var wpf = ReadWorkspaceFile("freep", "FreeP.App.Rendering.Wpf", "SlideCanvas.cs");
         var avalonia = ReadWorkspaceFile(
             "freep",
             "FreeP.App.Rendering.Avalonia",
             "SlideCanvas.cs");
 
-        wpf.Should().Contain("TextLayoutPlanner.GetTextArea");
-        wpf.Should().Contain("TextLayoutPlanner.PlanTableCellText");
-        wpf.Should().Contain("TextLayoutPlanner.PlanMeasuredBodyText<FormattedText>");
-        wpf.Should().Contain("TextLayoutPlanner.PlanMeasuredColumns<FormattedText>");
-        wpf.Should().Contain("TextLayoutPlanner.PlanMeasuredContinuousColumnFlow<FormattedText>");
-        wpf.Should().Contain("TextLayoutPlanner.PlanNormalAutoFitOverflow");
-        wpf.Should().Contain("TextLayoutPlanner.ApplyAutoFitPlan");
-        wpf.Should().Contain("TextLayoutPlanner.PlanTabStops");
-        wpf.Should().Contain("TextLayoutPlanner.PlanTabLeaderFill(");
-        wpf.Should().Contain("TextLayoutPlanner.PlanTextOrientation");
-        wpf.Should().Contain("TextLayoutPlanner.PlanStackedVerticalText");
-        wpf.Should().Contain("placement.Bullet");
-        wpf.Should().Contain("DrawBulletPlacementWpf");
-        wpf.Should().Contain("bullet.Image");
-        wpf.Should().NotContain("bool isVertical = text.VerticalType");
-        wpf.Should().NotContain("bool isVert270");
-        wpf.Should().NotContain("FontScalePPT");
-        wpf.Should().NotContain("placement.X - para.HangingDip");
-        wpf.Should().NotContain("const double DefaultSpacingDip");
-        wpf.Should().NotContain("const double DefaultTabDip");
-        wpf.Should().NotContain("Math.Floor(relX /");
-        wpf.Should().NotContain("Math.Floor(width / glyphWidth)");
-        wpf.Should().NotContain("new string(glyph, count)");
-        wpf.Should().NotContain("TableCellAnchor.Middle => bounds.Y");
-        wpf.Should().NotContain("VerticalAnchor.Middle => bounds.Y");
+        paragraphDispatcher.Should().Contain("var area = TextLayoutPlanner.GetTextArea(text, bounds)");
+        paragraphDispatcher.Should().Contain("var plan = TextLayoutPlanner.PlanTableCellText(");
+        paragraphDispatcher.Should().Contain("switch (placement.RenderRoute)");
+        nativeSequence.Should().Contain("var plan = TextLayoutPlanner.PlanTabStops(");
+        nativeSequence.Should().Contain("var leader = TextLayoutPlanner.PlanTabLeaderFill(");
 
-        avalonia.Should().Contain("TextLayoutPlanner.GetTextArea");
-        avalonia.Should().Contain("TextLayoutPlanner.PlanTableCellText");
-        avalonia.Should().Contain("TextLayoutPlanner.PlanMeasuredBodyText<FormattedText>");
-        avalonia.Should().Contain("TextLayoutPlanner.PlanMeasuredColumns<FormattedText>");
-        avalonia.Should().Contain("TextLayoutPlanner.PlanMeasuredContinuousColumnFlow<FormattedText>");
-        avalonia.Should().Contain("TextLayoutPlanner.PlanNormalAutoFitOverflow");
-        avalonia.Should().Contain("TextLayoutPlanner.ApplyAutoFitPlan");
-        wpf.Should().Contain("DrawTabLeaderWpf");
-        avalonia.Should().Contain("DrawTabLeaderAvalonia");
-        avalonia.Should().Contain("TextLayoutPlanner.PlanTabStops");
-        avalonia.Should().Contain("TextLayoutPlanner.PlanTabLeaderFill(");
-        avalonia.Should().Contain("TextLayoutPlanner.PlanTextOrientation");
-        avalonia.Should().Contain("TextLayoutPlanner.PlanStackedVerticalText");
-        avalonia.Should().Contain("placement.Bullet");
-        avalonia.Should().Contain("DrawBulletPlacementAvalonia");
-        avalonia.Should().Contain("bullet.Image");
-        avalonia.Should().NotContain("bool isVertical = text.VerticalType");
-        avalonia.Should().NotContain("bool isVert270");
-        avalonia.Should().NotContain("FontScalePPT");
-        avalonia.Should().NotContain("placement.X - para.HangingDip");
-        avalonia.Should().NotContain("const double DefaultSpacingDip");
-        avalonia.Should().NotContain("const double DefaultTabDip");
-        avalonia.Should().NotContain("Math.Floor(relX /");
-        avalonia.Should().NotContain("Math.Floor(width / glyphWidth)");
-        avalonia.Should().NotContain("new string(glyph, count)");
-        avalonia.Should().NotContain("TableCellAnchor.Middle => bounds.Y");
-        avalonia.Should().NotContain("VerticalAnchor.Middle => bounds.Y");
+        foreach (var (source, drawBullet) in new[]
+        {
+            (wpf, "DrawBulletPlacementWpf"),
+            (avalonia, "DrawBulletPlacementAvalonia"),
+        })
+        {
+            source.Should().Contain("TextParagraphNativeRenderDispatcher.TryRenderTableCell(");
+            source.Should().Contain("TextParagraphNativeRenderDispatcher.RenderStacked(");
+            source.Should().Contain("TextParagraphNativeRenderDispatcher.Render(");
+            source.Should().Contain("TextNativeRenderSequence.RenderTabs(");
+            source.Should().Contain("TextLayoutPlanner.PlanMeasuredBodyText<FormattedText>");
+            source.Should().Contain("TextLayoutPlanner.PlanMeasuredColumns<FormattedText>");
+            source.Should().Contain("TextLayoutPlanner.PlanMeasuredContinuousColumnFlow<FormattedText>");
+            source.Should().Contain("TextLayoutPlanner.PlanNormalAutoFitOverflow");
+            source.Should().Contain("TextLayoutPlanner.ApplyAutoFitPlan");
+            source.Should().Contain("TextLayoutPlanner.PlanTextOrientation");
+            source.Should().Contain("TextLayoutPlanner.PlanStackedVerticalText");
+            source.Should().Contain(drawBullet);
+            source.Should().Contain("bullet.Image");
+            source.Should().NotContain("var area = TextLayoutPlanner.GetTextArea(text, bounds)");
+            source.Should().NotContain("var plan = TextLayoutPlanner.PlanTableCellText(");
+            source.Should().NotContain("var plan = TextLayoutPlanner.PlanTabStops(");
+            source.Should().NotContain("var leader = TextLayoutPlanner.PlanTabLeaderFill(");
+            source.Should().NotContain("bool isVertical = text.VerticalType");
+            source.Should().NotContain("bool isVert270");
+            source.Should().NotContain("FontScalePPT");
+            source.Should().NotContain("placement.X - para.HangingDip");
+            source.Should().NotContain("const double DefaultSpacingDip");
+            source.Should().NotContain("const double DefaultTabDip");
+            source.Should().NotContain("Math.Floor(relX /");
+            source.Should().NotContain("Math.Floor(width / glyphWidth)");
+            source.Should().NotContain("new string(glyph, count)");
+            source.Should().NotContain("TableCellAnchor.Middle => bounds.Y");
+            source.Should().NotContain("VerticalAnchor.Middle => bounds.Y");
+        }
     }
 
     [Fact]
@@ -1470,6 +1462,10 @@ public sealed class TextLayoutPlannerTests
     [Fact]
     public void WpfAndAvaloniaSlideCanvases_DelegateMeasuredTextOrchestrationAndKeepNativeDrawing()
     {
+        var paragraphDispatcher = ReadWorkspaceFile(
+            "freep", "FreeP.App.Presentation", "TextParagraphNativeRenderDispatcher.cs");
+        var nativeSequence = ReadWorkspaceFile(
+            "freep", "FreeP.App.Presentation", "TextNativeRenderSequence.cs");
         var sources = new[]
         {
             ReadWorkspaceFile("freep", "FreeP.App.Rendering.Wpf", "SlideCanvas.cs"),
@@ -1481,8 +1477,10 @@ public sealed class TextLayoutPlannerTests
             source.Should().Contain("TextLayoutPlanner.PlanMeasuredBodyText<FormattedText>");
             source.Should().Contain("TextLayoutPlanner.PlanMeasuredColumns<FormattedText>");
             source.Should().Contain("TextLayoutPlanner.PlanMeasuredContinuousColumnFlow<FormattedText>");
-            source.Should().Contain("switch (placement.RenderRoute)");
-            source.Should().Contain("TextLayoutPlanner.PlanBaselineLines");
+            source.Should().Contain("TextParagraphNativeRenderDispatcher.Render(");
+            source.Should().Contain("TextNativeRenderSequence.RenderBaseline(");
+            source.Should().NotContain("switch (placement.RenderRoute)");
+            source.Should().NotContain("var lines = TextLayoutPlanner.PlanBaselineLines(");
             source.Should().NotContain("TextLayoutPlanner.SplitColumnText(");
             source.Should().NotContain("TextLayoutPlanner.CloneParagraphWithText(");
             source.Should().NotContain("private static IReadOnlyList<string> SplitColumnText");
@@ -1490,11 +1488,15 @@ public sealed class TextLayoutPlannerTests
             source.Should().NotContain("private static List<BaselineLine> BuildBaselineLines");
             source.Should().NotContain("private sealed class BaselineLine");
         }
+        paragraphDispatcher.Should().Contain("switch (placement.RenderRoute)");
+        nativeSequence.Should().Contain("var lines = TextLayoutPlanner.PlanBaselineLines(");
     }
 
     [Fact]
     public void WpfAndAvaloniaSlideCanvases_DelegateInlineBaselinePlacementAndKeepNativeRendering()
     {
+        var nativeSequence = ReadWorkspaceFile(
+            "freep", "FreeP.App.Presentation", "TextNativeRenderSequence.cs");
         var renderers = new[]
         {
             (
@@ -1507,16 +1509,18 @@ public sealed class TextLayoutPlannerTests
 
         foreach (var renderer in renderers)
         {
-            renderer.Source.Should().Contain("TextLayoutPlanner.PlanInlineBaselineLine");
-            renderer.Source.Should().Contain(
-                "new TextInlineRunMeasure(metrics.Width, metrics.Ascent, metrics.Height)");
+            renderer.Source.Should().Contain("TextNativeRenderSequence.RenderMath(");
             renderer.Source.Should().Contain("BuildSingleRunFormattedTextAt(");
-            renderer.Source.Should().Contain("MathBoxRenderPlanner.Plan(");
             renderer.Source.Should().Contain(renderer.DrawMathOp);
+            renderer.Source.Should().NotContain("var line = TextLayoutPlanner.PlanInlineBaselineLine(");
+            renderer.Source.Should().NotContain("foreach (var operation in MathBoxRenderPlanner.Plan(");
             renderer.Source.Should().NotContain("internal static double ComputeBaselineY");
             renderer.Source.Should().NotContain("internal static double ComputeRunTopY");
             renderer.Source.Should().NotContain("lineAscent = Math.Max(lineAscent");
         }
+        nativeSequence.Should().Contain("var line = TextLayoutPlanner.PlanInlineBaselineLine(");
+        nativeSequence.Should().Contain("new TextInlineRunMeasure(metrics.Width, metrics.Ascent, metrics.Height)");
+        nativeSequence.Should().Contain("foreach (var operation in MathBoxRenderPlanner.Plan(");
     }
 
     [Fact]
@@ -1587,25 +1591,26 @@ public sealed class TextLayoutPlannerTests
     [Fact]
     public void WpfAndAvaloniaSlideCanvases_DoNotResolvePlaceholderTextInsetsLocally()
     {
+        var paragraphDispatcher = ReadWorkspaceFile(
+            "freep", "FreeP.App.Presentation", "TextParagraphNativeRenderDispatcher.cs");
         var wpf = ReadWorkspaceFile("freep", "FreeP.App.Rendering.Wpf", "SlideCanvas.cs");
         var avalonia = ReadWorkspaceFile(
             "freep",
             "FreeP.App.Rendering.Avalonia",
             "SlideCanvas.cs");
 
-        wpf.Should().Contain("TextLayoutPlanner.GetTextArea");
-        wpf.Should().Contain("TextLayoutPlanner.PlanMeasuredBodyText<FormattedText>");
-        wpf.Should().NotContain("InsetLeftPt");
-        wpf.Should().NotContain("InsetTopPt");
-        wpf.Should().NotContain("InsetRightPt");
-        wpf.Should().NotContain("InsetBottomPt");
-
-        avalonia.Should().Contain("TextLayoutPlanner.GetTextArea");
-        avalonia.Should().Contain("TextLayoutPlanner.PlanMeasuredBodyText<FormattedText>");
-        avalonia.Should().NotContain("InsetLeftPt");
-        avalonia.Should().NotContain("InsetTopPt");
-        avalonia.Should().NotContain("InsetRightPt");
-        avalonia.Should().NotContain("InsetBottomPt");
+        paragraphDispatcher.Should().Contain("var area = TextLayoutPlanner.GetTextArea(text, bounds)");
+        paragraphDispatcher.Should().Contain("var plan = TextLayoutPlanner.PlanTableCellText(");
+        foreach (var source in new[] { wpf, avalonia })
+        {
+            source.Should().Contain("TextParagraphNativeRenderDispatcher.TryRenderTableCell(");
+            source.Should().Contain("TextLayoutPlanner.PlanMeasuredBodyText<FormattedText>");
+            source.Should().NotContain("var area = TextLayoutPlanner.GetTextArea(text, bounds)");
+            source.Should().NotContain("InsetLeftPt");
+            source.Should().NotContain("InsetTopPt");
+            source.Should().NotContain("InsetRightPt");
+            source.Should().NotContain("InsetBottomPt");
+        }
     }
 
     private static ResolvedParagraph Paragraph(double indent = 0) =>

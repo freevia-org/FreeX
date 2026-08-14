@@ -113,6 +113,26 @@ public sealed class BackstagePaneSurfacePlannerTests
     }
 
     [Fact]
+    public void Avalonia_Backstage_scroll_hosts_consume_shared_subpixel_rasterization_policy()
+    {
+        BackstagePaneSurfacePlanner.ComposerProfile.TextRasterizationMode
+            .Should().Be(BackstageTextRasterizationMode.Subpixel);
+
+        var root = TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeW.slnx");
+        var app = File.ReadAllText(Path.Combine(
+            root, "freew", "FreeW.App.Avalonia", "Backstage", "BackstageView.cs"));
+        var composer = File.ReadAllText(Path.Combine(
+            root, "shared", "Free.Shared.Shell.Avalonia", "AvaloniaBackstagePaneComposer.cs"));
+
+        foreach (var source in new[] { app, composer })
+        {
+            source.Should().Contain("AvaloniaBackstageScrollChrome.Apply(");
+            source.Should().NotContain(
+                "TextOptions.SetTextRenderingMode(scroll, TextRenderingMode.Antialias)");
+        }
+    }
+
+    [Fact]
     public void BuildPrintPane_ReturnsPageFieldsAndWiredActions()
     {
         var printed = false;

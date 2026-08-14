@@ -1125,35 +1125,21 @@ public sealed partial class SlideCanvas : FrameworkElement
         DrawingContext dc, ResolvedTextLayout text, LayoutRect bounds,
         FreeP.Core.Model.TableCellAnchor anchor)
     {
-        if (text.VerticalType != FreeP.Core.Model.TextVerticalType.Horizontal)
-        {
+        if (!TextParagraphNativeRenderDispatcher.TryRenderTableCell(
+                text,
+                bounds,
+                anchor,
+                (paragraph, width, wrap) =>
+                {
+                    var formatted = BuildFormattedText(paragraph, width, wrap);
+                    return new TextNativeMeasurement<FormattedText>(
+                        formatted,
+                        formatted.Height,
+                        formatted.WidthIncludingTrailingWhitespace);
+                },
+                (formatted, placement) =>
+                    dc.DrawText(formatted, new Point(placement.X, placement.Y))))
             RenderText(dc, text, bounds);
-            return;
-        }
-
-        var area = TextLayoutPlanner.GetTextArea(text, bounds);
-        var formatted = new Dictionary<int, FormattedText>();
-        var measures = new List<TextParagraphMeasure>();
-
-        for (int i = 0; i < text.Paragraphs.Count; i++)
-        {
-            var para = text.Paragraphs[i];
-            if (para.Runs.Count == 0) continue;
-            var ft = BuildFormattedText(para, area.Width, text.Wrap);
-            formatted[i] = ft;
-            measures.Add(TextLayoutPlanner.CreateParagraphMeasure(
-                i,
-                ft.Height,
-                para.SpaceBeforePt,
-                para.SpaceAfterPt));
-        }
-
-        var plan = TextLayoutPlanner.PlanTableCellText(text, bounds, anchor, measures);
-        foreach (var placement in plan.Paragraphs)
-        {
-            var ft = formatted[placement.ParagraphIndex];
-            dc.DrawText(ft, new Point(placement.X, placement.Y));
-        }
     }
 
     // ── Chart ──────────────────────────────────────────────────────────────────
@@ -1246,16 +1232,10 @@ public sealed partial class SlideCanvas : FrameworkElement
             MeasureStackedGlyphWpf,
             autoFitPlan);
 
-        foreach (var glyph in plan.Glyphs)
-        {
-            if ((uint)glyph.ParagraphIndex >= (uint)renderText.Paragraphs.Count)
-                continue;
-            var paragraph = renderText.Paragraphs[glyph.ParagraphIndex];
-            if ((uint)glyph.RunIndex >= (uint)paragraph.Runs.Count)
-                continue;
-
-            DrawStackedGlyphWpf(dc, renderText, bounds, paragraph.Runs[glyph.RunIndex], glyph);
-        }
+        TextParagraphNativeRenderDispatcher.RenderStacked(
+            renderText,
+            plan,
+            (layout, run, glyph) => DrawStackedGlyphWpf(dc, layout, bounds, run, glyph));
     }
 
     // Wave 22B: multi-column text layout helper.
@@ -1280,35 +1260,7 @@ public sealed partial class SlideCanvas : FrameworkElement
                     formattedText.Height,
                     formattedText.WidthIncludingTrailingWhitespace);
             });
-        var renderText = plan.RenderText;
-        foreach (var placement in plan.Layout.Paragraphs)
-        {
-            var para = renderText.Paragraphs[placement.ParagraphIndex];
-            var ft = plan.Artifacts[placement.ParagraphIndex];
-            if (placement.Bullet is { } bullet)
-                DrawBulletPlacementWpf(dc, bullet);
-
-            switch (placement.RenderRoute)
-            {
-                case TextParagraphRenderRoute.Math:
-                    RenderParaWithMath(dc, para, placement.X, placement.Y);
-                    break;
-                case TextParagraphRenderRoute.Effects:
-                    RenderParaWithEffects(dc, para, placement.X, placement.Y, placement.MaxWidthDip, renderText.Wrap, renderText, bounds);
-                    break;
-                case TextParagraphRenderRoute.Tabs:
-                    RenderParaWithTabs(dc, para, placement.X, placement.Y, para.TabStops);
-                    break;
-                case TextParagraphRenderRoute.Baseline:
-                    RenderParaWithBaseline(dc, para, placement.X, placement.Y, placement.MaxWidthDip);
-                    break;
-                default:
-                    if (para.IndentDip > 0 && ft.MaxTextWidth > 0)
-                        ft.MaxTextWidth = placement.MaxWidthDip;
-                    dc.DrawText(ft, new Point(placement.X, placement.Y));
-                    break;
-            }
-        }
+        RenderMeasuredParagraphsWpf(dc, plan, bounds, applyImportedAptosRasterPolicy: false);
     }
 
     private static bool TryRenderContinuousColumnFlow(
@@ -1383,67 +1335,91 @@ public sealed partial class SlideCanvas : FrameworkElement
                     formattedText.Height,
                     formattedText.WidthIncludingTrailingWhitespace);
             });
+        RenderMeasuredParagraphsWpf(dc, plan, bounds, applyImportedAptosRasterPolicy: true);
+    }
+
+    private static void RenderMeasuredParagraphsWpf(
+        DrawingContext dc,
+        TextMeasuredBlockLayoutPlan<FormattedText> plan,
+        LayoutRect bounds,
+        bool applyImportedAptosRasterPolicy)
+    {
         var renderText = plan.RenderText;
-        bool useImportedAptosRasterScale = UsesImportedAptosFont(renderText);
-        bool useImportedAptosBodyRasterScale = UsesImportedAptosBodyFont(renderText);
-        foreach (var placement in plan.Layout.Paragraphs)
+        bool useImportedAptosRasterScale =
+            applyImportedAptosRasterPolicy && UsesImportedAptosFont(renderText);
+        bool useImportedAptosBodyRasterScale =
+            applyImportedAptosRasterPolicy && UsesImportedAptosBodyFont(renderText);
+        TextParagraphNativeRenderDispatcher.Render(
+            plan,
+            new(
+                bullet => DrawBulletPlacementWpf(dc, bullet),
+                (paragraph, placement) =>
+                    RenderParaWithMath(dc, paragraph, placement.X, placement.Y),
+                (paragraph, placement) => RenderParaWithEffects(
+                    dc,
+                    paragraph,
+                    placement.X,
+                    placement.Y,
+                    placement.MaxWidthDip,
+                    renderText.Wrap,
+                    renderText,
+                    bounds),
+                (paragraph, placement) => RenderParaWithTabs(
+                    dc,
+                    paragraph,
+                    placement.X,
+                    placement.Y,
+                    paragraph.TabStops),
+                (paragraph, placement) => RenderParaWithBaseline(
+                    dc,
+                    paragraph,
+                    placement.X,
+                    placement.Y,
+                    placement.MaxWidthDip),
+                (paragraph, formatted, placement) => DrawPlainParagraphWpf(
+                    dc,
+                    paragraph,
+                    formatted,
+                    placement,
+                    bounds,
+                    useImportedAptosRasterScale,
+                    useImportedAptosBodyRasterScale)));
+    }
+
+    private static void DrawPlainParagraphWpf(
+        DrawingContext dc,
+        ResolvedParagraph paragraph,
+        FormattedText formatted,
+        TextParagraphPlacement placement,
+        LayoutRect bounds,
+        bool useImportedAptosRasterScale,
+        bool useImportedAptosBodyRasterScale)
+    {
+        if (paragraph.IndentDip > 0 && formatted.MaxTextWidth > 0)
+            formatted.MaxTextWidth = placement.MaxWidthDip;
+        bool useImportedAptosDisplayRasterScale = UsesImportedAptosDisplayFont(paragraph);
+        if (useImportedAptosBodyRasterScale)
+            formatted.SetFontWeight(FontWeights.Light, 0, formatted.Text.Length);
+        if (useImportedAptosRasterScale)
         {
-            var para = renderText.Paragraphs[placement.ParagraphIndex];
-            var ft = plan.Artifacts[placement.ParagraphIndex];
-
-            if (placement.Bullet is { } bullet)
-                DrawBulletPlacementWpf(dc, bullet);
-
-            switch (placement.RenderRoute)
-            {
-                case TextParagraphRenderRoute.Math:
-                    RenderParaWithMath(dc, para, placement.X, placement.Y);
-                    break;
-                case TextParagraphRenderRoute.Effects:
-                    RenderParaWithEffects(dc, para, placement.X, placement.Y, placement.MaxWidthDip, renderText.Wrap, renderText, bounds);
-                    break;
-                case TextParagraphRenderRoute.Tabs:
-                    RenderParaWithTabs(dc, para, placement.X, placement.Y, para.TabStops);
-                    break;
-                case TextParagraphRenderRoute.Baseline:
-                    RenderParaWithBaseline(dc, para, placement.X, placement.Y, placement.MaxWidthDip);
-                    break;
-                default:
-                    if (para.IndentDip > 0 && ft.MaxTextWidth > 0)
-                        ft.MaxTextWidth = placement.MaxWidthDip;
-                    bool useImportedAptosDisplayRasterScale = UsesImportedAptosDisplayFont(para);
-                    // The exact imported Aptos body signature falls back to a heavier WPF font;
-                    // keep its measured layout, but tune only the host fallback paint weight.
-                    if (useImportedAptosBodyRasterScale)
-                        ft.SetFontWeight(FontWeights.Light, 0, ft.Text.Length);
-                    if (useImportedAptosRasterScale)
-                    {
-                        double scaleX = useImportedAptosBodyRasterScale
-                            ? ImportedAptosBodyWpfLightRasterScale
-                            : ImportedAptosWpfRasterScale;
-                        double centerX = para.Align == TextAlign.Center
-                            ? bounds.X + bounds.Width * 0.5
-                            : placement.X;
-                        double scaleY = useImportedAptosDisplayRasterScale
-                            ? ImportedAptosDisplayWpfRasterScaleY
-                            : 1.0;
-                        double pivotY = useImportedAptosDisplayRasterScale
-                            ? placement.Y + ft.Height
-                            : placement.Y;
-                        dc.PushTransform(new ScaleTransform(
-                            scaleX,
-                            scaleY,
-                            centerX,
-                            pivotY));
-                    }
-                    dc.DrawText(ft, new Point(placement.X, placement.Y));
-                    if (useImportedAptosRasterScale)
-                    {
-                        dc.Pop();
-                    }
-                    break;
-            }
+            double scaleX = useImportedAptosBodyRasterScale
+                ? ImportedAptosBodyWpfLightRasterScale
+                : ImportedAptosWpfRasterScale;
+            double centerX = paragraph.Align == TextAlign.Center
+                ? bounds.X + bounds.Width * 0.5
+                : placement.X;
+            double scaleY = useImportedAptosDisplayRasterScale
+                ? ImportedAptosDisplayWpfRasterScaleY
+                : 1.0;
+            double pivotY = useImportedAptosDisplayRasterScale
+                ? placement.Y + formatted.Height
+                : placement.Y;
+            dc.PushTransform(new ScaleTransform(scaleX, scaleY, centerX, pivotY));
         }
+
+        dc.DrawText(formatted, new Point(placement.X, placement.Y));
+        if (useImportedAptosRasterScale)
+            dc.Pop();
     }
 
     private static bool UsesImportedAptosFont(ResolvedTextLayout text) =>
@@ -1532,70 +1508,19 @@ public sealed partial class SlideCanvas : FrameworkElement
     /// Default tab interval is 96 DIP (1 inch at 96 DPI) when tab stops are exhausted.
     /// </summary>
     private static void RenderParaWithTabs(
-        DrawingContext dc,
-        ResolvedParagraph para,
-        double startX,
-        double startY,
-        IReadOnlyList<ResolvedTabStop> tabStops)
-    {
-        var plan = TextLayoutPlanner.PlanTabStops(
+        DrawingContext dc, ResolvedParagraph para,
+        double startX, double startY,
+        IReadOnlyList<ResolvedTabStop> tabStops) =>
+        // Owns TextLayoutPlanner.PlanTabStops, TextLayoutPlanner.PlanTabLeaderFill(...),
+        // and the former DrawTabLeaderWpf flow.
+        TextNativeRenderSequence.RenderTabs(
             para,
             startX,
+            startY,
             tabStops,
-            (run, text) => BuildSingleRunFormattedTextAt(
-                run,
-                text,
-                flowDirection: para.RightToLeft ? FlowDirection.RightToLeft : FlowDirection.LeftToRight).Width);
-
-        double previousEndX = startX;
-        foreach (var segment in plan.Segments)
-        {
-            var run = para.Runs[segment.RunIndex];
-            var ft = BuildSingleRunFormattedTextAt(
-                run,
-                segment.Text,
-                flowDirection: para.RightToLeft ? FlowDirection.RightToLeft : FlowDirection.LeftToRight);
-
-            DrawTabLeaderWpf(
-                dc,
-                run,
-                segment.Leader,
-                previousEndX,
-                segment.X,
-                startY,
-                para.RightToLeft ? FlowDirection.RightToLeft : FlowDirection.LeftToRight);
-            dc.DrawText(ft, new Point(segment.X, startY));
-            previousEndX = segment.X + ft.WidthIncludingTrailingWhitespace;
-        }
-    }
-
-    private static void DrawTabLeaderWpf(
-        DrawingContext dc,
-        ResolvedRun run,
-        TabStopLeader leader,
-        double startX,
-        double endX,
-        double y,
-        FlowDirection flowDirection)
-    {
-        var plan = TextLayoutPlanner.PlanTabLeaderFill(
-            leader,
-            startX,
-            endX,
-            glyph => BuildSingleRunFormattedTextAt(
-                run,
-                glyph.ToString(),
-                flowDirection: flowDirection).WidthIncludingTrailingWhitespace);
-        if (!plan.ShouldDraw)
-            return;
-
-        dc.DrawText(
-            BuildSingleRunFormattedTextAt(
-                run,
-                plan.Text,
-                flowDirection: flowDirection),
-            new Point(plan.StartX, y));
-    }
+            (run, text, rightToLeft) => BuildNativeTextArtifact(
+                run, text, fontScale: 1.0, rightToLeft),
+            (artifact, x, y) => dc.DrawText(artifact, new Point(x, y)));
 
     /// <summary>
     /// Draws plain runs with authored DrawingML baseline offsets while keeping
@@ -1603,92 +1528,16 @@ public sealed partial class SlideCanvas : FrameworkElement
     /// existing renderer-specific owners.
     /// </summary>
     internal static void RenderParaWithBaseline(
-        DrawingContext dc,
-        ResolvedParagraph para,
-        double startX,
-        double startY,
-        double maxWidth)
-    {
-        var formatted = para.Runs
-            .Select(run => BuildSingleRunFormattedTextAt(
-                run,
-                run.Text,
-                run.BaselineOffset.HasValue ? TextLayoutPlanner.BaselineRunFontScale : 1.0,
-                ToFlowDirection(TextLayoutPlanner.ResolveRunRightToLeft(
-                    para.RightToLeft,
-                    run.Text))))
-            .ToArray();
-        double totalWidth = formatted.Sum(ft => ft.WidthIncludingTrailingWhitespace);
-        if (maxWidth > 0 && totalWidth > maxWidth)
-        {
-            RenderWrappedBaseline(dc, para, startX, startY, maxWidth);
-            return;
-        }
-
-        var line = TextLayoutPlanner.PlanInlineBaselineLine(
+        DrawingContext dc, ResolvedParagraph para,
+        double startX, double startY, double maxWidth) =>
+        // Owns TextLayoutPlanner.PlanBaselineLines and PlanInlineBaselineLine.
+        TextNativeRenderSequence.RenderBaseline(
             para,
             startX,
             startY,
             maxWidth,
-            (runIndex, run, rightToLeft) =>
-            {
-                var measured = BuildSingleRunFormattedTextAt(
-                    run,
-                    run.Text,
-                    run.BaselineOffset.HasValue ? TextLayoutPlanner.BaselineRunFontScale : 1.0,
-                    ToFlowDirection(rightToLeft));
-                return new TextInlineRunMeasure(
-                    measured.WidthIncludingTrailingWhitespace,
-                    formatted[runIndex].Baseline,
-                    formatted[runIndex].Height);
-            });
-        foreach (var placement in line.Runs)
-        {
-            var run = para.Runs[placement.RunIndex];
-            var ft = formatted[placement.RunIndex];
-            double offsetDip = TextLayoutPlanner.BaselineOffsetToDip(run.BaselineOffset, run.FontSizePt);
-            dc.DrawText(ft, new Point(placement.X, placement.Y - offsetDip));
-        }
-    }
-
-    private static void RenderWrappedBaseline(
-        DrawingContext dc,
-        ResolvedParagraph para,
-        double startX,
-        double startY,
-        double maxWidth)
-    {
-        var lines = TextLayoutPlanner.PlanBaselineLines(
-            para,
-            startX,
-            startY,
-            maxWidth,
-            (run, text, rightToLeft) =>
-            {
-                var formatted = BuildSingleRunFormattedTextAt(
-                    run,
-                    text,
-                    run.BaselineOffset.HasValue ? TextLayoutPlanner.BaselineRunFontScale : 1.0,
-                    ToFlowDirection(rightToLeft));
-                return new TextBaselineFragmentMeasure(
-                    formatted.WidthIncludingTrailingWhitespace,
-                    formatted.Baseline,
-                    formatted.Height);
-            });
-        foreach (var line in lines)
-        {
-            foreach (var fragment in line.Fragments)
-            {
-                var run = para.Runs[fragment.RunIndex];
-                var formatted = BuildSingleRunFormattedTextAt(
-                    run,
-                    fragment.Text,
-                    run.BaselineOffset.HasValue ? TextLayoutPlanner.BaselineRunFontScale : 1.0,
-                    ToFlowDirection(fragment.RightToLeft));
-                dc.DrawText(formatted, new Point(fragment.X, fragment.Y));
-            }
-        }
-    }
+            BuildNativeTextArtifact,
+            (artifact, x, y) => dc.DrawText(artifact, new Point(x, y)));
 
     // ── Theme 27: math rendering ────────────────────────────────────────────────
 
@@ -1707,64 +1556,49 @@ public sealed partial class SlideCanvas : FrameworkElement
         ResolvedParagraph para,
         double startX, double startY)
     {
-        var formatted = new FormattedText?[para.Runs.Count];
-        for (int i = 0; i < para.Runs.Count; i++)
-        {
-            var run = para.Runs[i];
-            if (!run.IsMathRun && !string.IsNullOrEmpty(run.Text))
-            {
-                formatted[i] = BuildSingleRunFormattedTextAt(
-                    run,
-                    run.Text,
-                    flowDirection: ToFlowDirection(TextLayoutPlanner.ResolveRunRightToLeft(
-                        para.RightToLeft,
-                        run.Text)));
-            }
-        }
-
-        var line = TextLayoutPlanner.PlanInlineBaselineLine(
+        // TextNativeRenderSequence owns TextLayoutPlanner.PlanInlineBaselineLine,
+        // new TextInlineRunMeasure(metrics.Width, metrics.Ascent, metrics.Height), and
+        // MathBoxRenderPlanner.Plan(...); WPF retains BuildSingleRunFormattedTextAt and DrawMathOpWpf.
+        TextNativeRenderSequence.RenderMath(
             para,
             startX,
             startY,
-            0,
-            (runIndex, run, rightToLeft) =>
-            {
-                if (run.IsMathRun && run.MathLayout is not null)
-                {
-                    var metrics = run.MathLayout.Metrics;
-                    return new TextInlineRunMeasure(metrics.Width, metrics.Ascent, metrics.Height);
-                }
+            (run, text, rightToLeft) => BuildInlineNativeTextArtifact(
+                run, text, fontScale: 1.0, rightToLeft),
+            (artifact, x, y) => dc.DrawText(artifact, new Point(x, y)),
+            operation => DrawMathOpWpf(dc, operation));
+    }
 
-                double width = BuildSingleRunFormattedTextAt(
-                    run,
-                    run.Text,
-                    flowDirection: ToFlowDirection(rightToLeft)).Width;
-                var text = formatted[runIndex];
-                return new TextInlineRunMeasure(
-                    width,
-                    text?.Baseline ?? 0,
-                    text?.Height ?? 0);
-            });
-        foreach (var placement in line.Runs)
-        {
-            var run = para.Runs[placement.RunIndex];
-            if (run.IsMathRun && run.MathLayout is not null)
-            {
-                // Plan the math draw ops using the shared engine (renderer-neutral).
-                var mathOps = MathBoxRenderPlanner.Plan(
-                    run.MathLayout, placement.X, placement.Y, run.Color, run.FontFamily);
+    private static TextNativeArtifact<FormattedText> BuildNativeTextArtifact(
+        ResolvedRun run,
+        string text,
+        double fontScale,
+        bool rightToLeft)
+    {
+        var formatted = BuildSingleRunFormattedTextAt(
+            run,
+            text,
+            fontScale,
+            ToFlowDirection(rightToLeft));
+        return new(
+            formatted,
+            formatted.WidthIncludingTrailingWhitespace,
+            formatted.Baseline,
+            formatted.Height);
+    }
 
-                foreach (var op in mathOps)
-                    DrawMathOpWpf(dc, op);
-
-            }
-            else if (!string.IsNullOrEmpty(run.Text))
-            {
-                // Plain text run inline with math, baseline-aligned with it.
-                var ft = formatted[placement.RunIndex]!;
-                dc.DrawText(ft, new Point(placement.X, placement.Y));
-            }
-        }
+    private static TextNativeArtifact<FormattedText> BuildInlineNativeTextArtifact(
+        ResolvedRun run,
+        string text,
+        double fontScale,
+        bool rightToLeft)
+    {
+        var formatted = BuildSingleRunFormattedTextAt(
+            run,
+            text,
+            fontScale,
+            ToFlowDirection(rightToLeft));
+        return new(formatted, formatted.Width, formatted.Baseline, formatted.Height);
     }
 
     /// <summary>
@@ -2635,37 +2469,36 @@ public sealed partial class SlideCanvas : FrameworkElement
         return pen;
     }
 
-    private static void DrawChartMarker(DrawingContext dc, ChartMarkerRenderPlan marker)
+    private static void DrawChartMarker(DrawingContext dc, ChartMarkerRenderPlan marker) =>
+        ChartMarkerRenderPrimitiveDispatcher.Dispatch(
+            marker.Primitives,
+            new ChartMarkerRenderPrimitiveSink(dc));
+
+    private sealed class ChartMarkerRenderPrimitiveSink(DrawingContext dc) :
+        IChartMarkerRenderPrimitiveSink
     {
-        foreach (var primitive in marker.Primitives)
-        {
-            switch (primitive)
-            {
-                case ChartMarkerRenderPrimitive.Ellipse ellipse:
-                    dc.DrawEllipse(
-                        ellipse.Fill is { } ellipseFill ? ToBrush(ellipseFill) : null,
-                        ellipse.Stroke is { } ellipseStroke ? ToPen(ellipseStroke) : null,
-                        ToPoint(ellipse.Center),
-                        ellipse.RadiusX,
-                        ellipse.RadiusY);
-                    break;
-                case ChartMarkerRenderPrimitive.Rectangle rectangle:
-                    dc.DrawRectangle(
-                        rectangle.Fill is { } rectangleFill ? ToBrush(rectangleFill) : null,
-                        rectangle.Stroke is { } rectangleStroke ? ToPen(rectangleStroke) : null,
-                        ToRect(rectangle.Bounds));
-                    break;
-                case ChartMarkerRenderPrimitive.Path path:
-                    dc.DrawGeometry(
-                        path.Geometry.Fill is { } pathFill ? ToBrush(pathFill) : null,
-                        path.Stroke is { } pathStroke ? ToPen(pathStroke) : null,
-                        ToMarkerGeometry(path.Geometry));
-                    break;
-                case ChartMarkerRenderPrimitive.Line line:
-                    dc.DrawLine(ToPen(line.Stroke), ToPoint(line.Start), ToPoint(line.End));
-                    break;
-            }
-        }
+        public void Render(ChartMarkerRenderPrimitive.Ellipse ellipse) =>
+            dc.DrawEllipse(
+                ellipse.Fill is { } fill ? ToBrush(fill) : null,
+                ellipse.Stroke is { } stroke ? ToPen(stroke) : null,
+                ToPoint(ellipse.Center),
+                ellipse.RadiusX,
+                ellipse.RadiusY);
+
+        public void Render(ChartMarkerRenderPrimitive.Rectangle rectangle) =>
+            dc.DrawRectangle(
+                rectangle.Fill is { } fill ? ToBrush(fill) : null,
+                rectangle.Stroke is { } stroke ? ToPen(stroke) : null,
+                ToRect(rectangle.Bounds));
+
+        public void Render(ChartMarkerRenderPrimitive.Path path) =>
+            dc.DrawGeometry(
+                path.Geometry.Fill is { } fill ? ToBrush(fill) : null,
+                path.Stroke is { } stroke ? ToPen(stroke) : null,
+                ToMarkerGeometry(path.Geometry));
+
+        public void Render(ChartMarkerRenderPrimitive.Line line) =>
+            dc.DrawLine(ToPen(line.Stroke), ToPoint(line.Start), ToPoint(line.End));
     }
 
     private static StreamGeometry ToMarkerGeometry(ChartPathPrimitive path)
@@ -2822,27 +2655,37 @@ public sealed partial class SlideCanvas : FrameworkElement
     // PresentationCanvasAutomationSession owns the virtual tree, identity, roles, selection
     // snapshots, deltas, and focus intent. This peer only translates that contract to WPF UIA
     // providers/events and maps presentation coordinates to screen coordinates.
-    private sealed class SlideCanvasAutomationPeer(SlideCanvas owner) :
-        FrameworkElementAutomationPeer(owner),
+    private sealed class SlideCanvasAutomationPeer :
+        FrameworkElementAutomationPeer,
         ISelectionProvider
     {
-        private readonly Dictionary<uint, SlideShapeAutomationPeer> _shapePeers = [];
+        private readonly PresentationCanvasAutomationPeerCoordinator<SlideShapeAutomationPeer>
+            _coordinator;
+
+        public SlideCanvasAutomationPeer(SlideCanvas owner) : base(owner)
+        {
+            _coordinator = new(
+                owner._canvasAutomation,
+                () => owner.Presentation,
+                () => owner.Slide,
+                () => owner._editingSession?.SelectedShapeIds,
+                shapeId => new SlideShapeAutomationPeer(this, shapeId));
+        }
 
         private SlideCanvas OwnerCanvas => (SlideCanvas)Owner;
 
-        public bool CanSelectMultiple => OwnerCanvas._canvasAutomation.CanSelectMultiple;
+        internal PresentationCanvasAutomationPeerCoordinator<SlideShapeAutomationPeer>
+            Coordinator => _coordinator;
 
-        public bool IsSelectionRequired => OwnerCanvas._canvasAutomation.IsSelectionRequired;
+        public bool CanSelectMultiple => _coordinator.CanSelectMultiple;
+
+        public bool IsSelectionRequired => _coordinator.IsSelectionRequired;
 
         public IRawElementProviderSimple[] GetSelection()
         {
-            var descriptors = OwnerCanvas._canvasAutomation.ProjectSelection(
-                OwnerCanvas.Slide,
-                OwnerCanvas._editingSession?.SelectedShapeIds);
             return
             [
-                .. descriptors.Select(descriptor =>
-                    ProviderFromPeer(GetOrCreateShapePeer(descriptor.ShapeId!.Value)))
+                .. _coordinator.GetSelection().Select(ProviderFromPeer)
             ];
         }
 
@@ -2853,72 +2696,29 @@ public sealed partial class SlideCanvas : FrameworkElement
                 _ => base.GetPattern(patternInterface)
             };
 
-        protected override List<AutomationPeer> GetChildrenCore()
-        {
-            var descriptors = OwnerCanvas._canvasAutomation.ProjectShapes(
-                OwnerCanvas.Slide,
-                OwnerCanvas._editingSession?.SelectedShapeIds);
-            return PresentationAutomationPeerCache.Synchronize(
-                    descriptors,
-                    _shapePeers,
-                    shapeId => new SlideShapeAutomationPeer(this, shapeId))
-                .Cast<AutomationPeer>()
-                .ToList();
-        }
+        protected override List<AutomationPeer> GetChildrenCore() =>
+            _coordinator.SynchronizeChildren().Cast<AutomationPeer>().ToList();
 
         protected override AutomationControlType GetAutomationControlTypeCore() =>
-            ToNativeRole(OwnerCanvas._canvasAutomation.ProjectCanvas(
-                OwnerCanvas.Presentation,
-                OwnerCanvas.Slide).Role);
+            ToNativeRole(_coordinator.CanvasDescriptor.Role);
 
         protected override string GetClassNameCore() =>
-            OwnerCanvas._canvasAutomation.ProjectCanvas(
-                OwnerCanvas.Presentation,
-                OwnerCanvas.Slide).ClassName;
+            _coordinator.CanvasDescriptor.ClassName;
 
         protected override string GetNameCore() =>
-            OwnerCanvas._canvasAutomation.ProjectCanvas(
-                OwnerCanvas.Presentation,
-                OwnerCanvas.Slide).Name;
+            _coordinator.CanvasDescriptor.Name;
 
         protected override bool IsControlElementCore() => true;
 
         protected override bool IsContentElementCore() => true;
 
         internal static AutomationControlType ToNativeRole(PresentationCanvasAutomationRole role) =>
-            role switch
-            {
-                PresentationCanvasAutomationRole.Canvas => AutomationControlType.Pane,
-                PresentationCanvasAutomationRole.Image => AutomationControlType.Image,
-                PresentationCanvasAutomationRole.DataGrid => AutomationControlType.DataGrid,
-                _ => AutomationControlType.Custom,
-            };
-
-        private SlideShapeAutomationPeer GetOrCreateShapePeer(uint shapeId)
-            => PresentationAutomationPeerCache.GetOrCreate(
-                _shapePeers,
-                shapeId,
-                id => new SlideShapeAutomationPeer(this, id));
-
-        internal bool TryGetShape(
-            uint shapeId,
-            out PresentationCanvasAutomationDescriptor descriptor) =>
-            OwnerCanvas._canvasAutomation.TryProjectShape(
-                OwnerCanvas.Slide,
-                shapeId,
-                OwnerCanvas._editingSession?.SelectedShapeIds,
-                out descriptor);
-
-        internal bool IsShapeSelected(uint shapeId) =>
-            TryGetShape(shapeId, out var descriptor) && descriptor.IsSelected;
-
-        internal bool HasShapeKeyboardFocus(uint shapeId) =>
-            TryGetShape(shapeId, out var descriptor) && descriptor.HasKeyboardFocus;
-
-        internal void RequestSelectionMutation(
-            uint shapeId,
-            PresentationCanvasAutomationSelectionMutation mutation) =>
-            OwnerCanvas._canvasAutomation.RequestSelectionMutation(shapeId, mutation);
+            PresentationCanvasAutomationRoleMapper.Map(
+                role,
+                AutomationControlType.Pane,
+                AutomationControlType.Image,
+                AutomationControlType.DataGrid,
+                AutomationControlType.Custom);
 
         /// <summary>
         /// Projects a shape's EMU bounds through the canvas's live slide→screen
@@ -2930,9 +2730,8 @@ public sealed partial class SlideCanvas : FrameworkElement
         /// </summary>
         internal Rect GetShapeBoundingRectangle(uint shapeId)
         {
-            if (!TryGetShape(shapeId, out var descriptor) ||
-                !OwnerCanvas._canvasAutomation.TryProjectLocalBounds(
-                    descriptor,
+            if (!_coordinator.TryProjectLocalBounds(
+                    shapeId,
                     OwnerCanvas.CurrentTransform.Core,
                     out var localBounds))
                 return Rect.Empty;
@@ -2963,36 +2762,22 @@ public sealed partial class SlideCanvas : FrameworkElement
         /// </summary>
         internal void NotifySelectionChanged(PresentationCanvasAutomationSelectionDelta delta)
         {
-            if (!delta.HasChanges && delta.FocusIntent == PresentationCanvasAutomationFocusIntent.None)
-                return;
-
-            foreach (var removedId in delta.RemovedShapeIds)
+            foreach (var change in _coordinator.GetSelectionChanges(delta))
             {
-                if (_shapePeers.TryGetValue(removedId, out var removedPeer))
-                    removedPeer.RaisePropertyChangedEvent(SelectionItemPatternIdentifiers.IsSelectedProperty, true, false);
-            }
-
-            foreach (var addedId in delta.AddedShapeIds)
-            {
-                var addedPeer = GetOrCreateShapePeer(addedId);
-                addedPeer.RaisePropertyChangedEvent(SelectionItemPatternIdentifiers.IsSelectedProperty, false, true);
-                addedPeer.RaiseAutomationEvent(AutomationEvents.SelectionItemPatternOnElementSelected);
+                change.Peer.RaisePropertyChangedEvent(
+                    SelectionItemPatternIdentifiers.IsSelectedProperty,
+                    change.WasSelected,
+                    change.IsSelected);
+                if (change.IsSelected)
+                    change.Peer.RaiseAutomationEvent(AutomationEvents.SelectionItemPatternOnElementSelected);
             }
 
             if (delta.FocusIntent == PresentationCanvasAutomationFocusIntent.None)
                 return;
 
-            if (delta.Previous.FocusedShapeId is { } previousFocusId &&
-                _shapePeers.TryGetValue(previousFocusId, out var previousFocusPeer))
-            {
-                previousFocusPeer.RaiseAutomationEvent(AutomationEvents.AutomationFocusChanged);
-            }
-
-            if (delta.Current.FocusedShapeId is { } currentFocusId)
-            {
-                GetOrCreateShapePeer(currentFocusId)
-                    .RaiseAutomationEvent(AutomationEvents.AutomationFocusChanged);
-            }
+            var focusChange = _coordinator.GetFocusChange(delta);
+            focusChange.PreviousPeer?.RaiseAutomationEvent(AutomationEvents.AutomationFocusChanged);
+            focusChange.CurrentPeer?.RaiseAutomationEvent(AutomationEvents.AutomationFocusChanged);
         }
     }
 
@@ -3000,21 +2785,25 @@ public sealed partial class SlideCanvas : FrameworkElement
         AutomationPeer,
         ISelectionItemProvider
     {
-        public bool IsSelected => parent.IsShapeSelected(shapeId);
+        private readonly PresentationCanvasAutomationShapePeerAdapter<
+            SlideShapeAutomationPeer,
+            AutomationControlType,
+            Rect> _adapter = new(
+                parent.Coordinator,
+                shapeId,
+                SlideCanvasAutomationPeer.ToNativeRole,
+                AutomationControlType.Custom,
+                parent.GetShapeBoundingRectangle);
+
+        public bool IsSelected => _adapter.IsSelected;
 
         public IRawElementProviderSimple SelectionContainer => ProviderFromPeer(parent);
 
-        public void Select() => parent.RequestSelectionMutation(
-            shapeId,
-            PresentationCanvasAutomationSelectionMutation.Select);
+        public void Select() => _adapter.Select();
 
-        public void AddToSelection() => parent.RequestSelectionMutation(
-            shapeId,
-            PresentationCanvasAutomationSelectionMutation.Add);
+        public void AddToSelection() => _adapter.AddToSelection();
 
-        public void RemoveFromSelection() => parent.RequestSelectionMutation(
-            shapeId,
-            PresentationCanvasAutomationSelectionMutation.Remove);
+        public void RemoveFromSelection() => _adapter.RemoveFromSelection();
 
         public override object? GetPattern(PatternInterface patternInterface) =>
             patternInterface switch
@@ -3023,23 +2812,15 @@ public sealed partial class SlideCanvas : FrameworkElement
                 _ => null
             };
 
-        protected override string GetNameCore()
-            => parent.TryGetShape(shapeId, out var descriptor) ? descriptor.Name : string.Empty;
+        protected override string GetNameCore() => _adapter.Name;
 
-        protected override AutomationControlType GetAutomationControlTypeCore() =>
-            parent.TryGetShape(shapeId, out var descriptor)
-                ? SlideCanvasAutomationPeer.ToNativeRole(descriptor.Role)
-                : AutomationControlType.Custom;
+        protected override AutomationControlType GetAutomationControlTypeCore() => _adapter.Role;
 
-        protected override string GetClassNameCore() =>
-            parent.TryGetShape(shapeId, out var descriptor)
-                ? descriptor.ClassName
-                : PresentationCanvasAutomationSession.ShapeClassName;
+        protected override string GetClassNameCore() => _adapter.ClassName;
 
-        protected override string GetAutomationIdCore() =>
-            parent.TryGetShape(shapeId, out var descriptor) ? descriptor.AutomationId : string.Empty;
+        protected override string GetAutomationIdCore() => _adapter.AutomationId;
 
-        protected override Rect GetBoundingRectangleCore() => parent.GetShapeBoundingRectangle(shapeId);
+        protected override Rect GetBoundingRectangleCore() => _adapter.Bounds;
 
         protected override List<AutomationPeer> GetChildrenCore() => [];
 
@@ -3055,8 +2836,7 @@ public sealed partial class SlideCanvas : FrameworkElement
 
         protected override string GetAccessKeyCore() => string.Empty;
 
-        protected override string GetHelpTextCore() =>
-            parent.TryGetShape(shapeId, out var descriptor) ? descriptor.HelpText : string.Empty;
+        protected override string GetHelpTextCore() => _adapter.HelpText;
 
         protected override string GetItemStatusCore() => string.Empty;
 
@@ -3064,14 +2844,11 @@ public sealed partial class SlideCanvas : FrameworkElement
 
         protected override AutomationPeer? GetLabeledByCore() => null;
 
-        protected override string GetLocalizedControlTypeCore() =>
-            parent.TryGetShape(shapeId, out var descriptor)
-                ? descriptor.LocalizedControlType
-                : PresentationCanvasAutomationSession.ShapeLocalizedControlType;
+        protected override string GetLocalizedControlTypeCore() => _adapter.LocalizedControlType;
 
         protected override AutomationOrientation GetOrientationCore() => AutomationOrientation.None;
 
-        protected override bool HasKeyboardFocusCore() => parent.HasShapeKeyboardFocus(shapeId);
+        protected override bool HasKeyboardFocusCore() => _adapter.HasKeyboardFocus;
 
         protected override bool IsEnabledCore() => true;
 

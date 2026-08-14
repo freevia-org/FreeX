@@ -48,10 +48,10 @@ internal static class AvaloniaWholeWindowVisualEvidenceCapture
 
     private static async Task<int> CaptureAll(MainWindow anchor, string outputRoot, string? scenarioId)
     {
-        var outputPlan = FreePVisualEvidenceCaptureOrchestration.CreateHostOutputPlan(
-            outputRoot,
+        var hostPolicy = FreePVisualEvidenceCaptureOrchestration.CreateAppHostPolicy(
             FreePVisualEvidenceCaptureOrchestration.AvaloniaHost,
             FreePVisualEvidenceRoutes.WholeWindow);
+        var outputPlan = hostPolicy.CreateOutputPlan(outputRoot);
 
         anchor.Width = WholeWindowVisualEvidenceCatalog.LogicalClientWidth;
         anchor.Height = WholeWindowVisualEvidenceCatalog.LogicalClientHeight;
@@ -74,11 +74,7 @@ internal static class AvaloniaWholeWindowVisualEvidenceCapture
                 await PumpLayout();
                 coordinator.Normalize(scenario);
 
-                var scenarioOutput = FreePVisualEvidenceCaptureOrchestration.CreateScenarioOutputPlan(
-                    outputRoot,
-                    FreePVisualEvidenceCaptureOrchestration.AvaloniaHost,
-                    scenario.Id,
-                    FreePVisualEvidenceRoutes.WholeWindow);
+                var scenarioOutput = hostPolicy.CreateScenarioOutputPlan(outputRoot, scenario.Id);
                 var fullPath = scenarioOutput.FullImagePath!;
                 var clientPath = scenarioOutput.ClientImagePath!;
                 var fullRaster = Capture(anchor, fullPath);
@@ -90,7 +86,7 @@ internal static class AvaloniaWholeWindowVisualEvidenceCapture
                 var semantic = coordinator.CaptureSemantic(scenario, assertions);
                 return new WholeWindowVisualEvidenceCapture(
                     scenario.Id,
-                    "avalonia",
+                    hostPolicy.Host,
                     fullRaster.NonBackgroundPixelCount > 0 && clientRaster.NonBackgroundPixelCount > 0
                         ? "complete"
                         : "blocked",
@@ -112,7 +108,7 @@ internal static class AvaloniaWholeWindowVisualEvidenceCapture
             },
             createBlockedCapture: (_, _) => null,
             createLimitation: (scenario, exception) =>
-                $"{scenario.Id}: {exception.GetType().Name}: {exception.Message}",
+                hostPolicy.DescribeFailure(scenario.Id, exception),
             reportFailure: (scenario, exception) =>
                 Console.Error.WriteLine($"Avalonia whole-window capture failed for {scenario.Id}: {exception}"));
 
@@ -120,16 +116,7 @@ internal static class AvaloniaWholeWindowVisualEvidenceCapture
         return VisualEvidenceCaptureOrchestrator.FinalizeHostRun(
             outputPlan,
             run,
-            (captures, limitations) => new WholeWindowVisualEvidenceHostManifest(
-                1,
-                "avalonia",
-                "visible-app-owned-full-client-render-target; native-non-client-excluded; scenario-isolated-process",
-                WholeWindowVisualEvidenceCatalog.TargetDpi,
-                WholeWindowVisualEvidenceCatalog.LogicalClientWidth,
-                WholeWindowVisualEvidenceCatalog.LogicalClientHeight,
-                FreePVisualEvidenceCaptureOrchestration.UtcTimestamp(),
-                captures,
-                limitations),
+            hostPolicy.CreateWholeWindowManifest,
             FreePVisualEvidenceCaptureOrchestration.HostManifestJsonOptions);
     }
 

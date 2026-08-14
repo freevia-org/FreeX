@@ -295,10 +295,16 @@ public sealed class SelectionPaneTests
         var avalonia = File.ReadAllText(Path.Combine(root, "freep", "FreeP.App.Avalonia", "SelectionPane.cs"));
         var wpfWindow = File.ReadAllText(Path.Combine(root, "freep", "FreeP.App.Host", "MainWindow.cs"));
         var avaloniaWindow = File.ReadAllText(Path.Combine(root, "freep", "FreeP.App.Avalonia", "MainWindow.cs"));
+        var itemForm = File.ReadAllText(Path.Combine(
+            root,
+            "freep",
+            "FreeP.App.Presentation",
+            "PresentationSelectionPaneItemFormSession.cs"));
 
         foreach (var source in new[] { wpf, avalonia })
         {
-            source.Should().Contain("PresentationSelectionPaneSession");
+            source.Should().Contain("PresentationSelectionPaneFormSession<");
+            source.Should().Contain("PresentationSelectionPaneItemFormSession(");
             source.Should().Contain("PresentationSelectionPaneVisualMetrics.PaneWidth");
             source.Should().Contain("PresentationSelectionPaneVisualMetrics.PaneBackgroundColor");
             source.Should().Contain("PresentationSelectionPaneVisualMetrics.PaneBorderColor");
@@ -307,16 +313,15 @@ public sealed class SelectionPaneTests
             source.Should().Contain("PresentationSelectionPaneVisualMetrics.RenameMinimumWidth");
             source.Should().Contain("PresentationSelectionPaneVisualMetrics.VisibilityMinimumWidth");
             source.Should().Contain("PresentationSelectionPaneVisualMetrics.MoveButtonWidth");
-            source.Should().Contain("_session.CreateItemSession(item.ShapeId)");
-            source.Should().Contain("ApplyTransition(itemSession.Select())");
-            source.Should().Contain("itemSession.CommitRename(rename.Text)");
-            source.Should().Contain("ApplyTransition(itemSession.CancelRename())");
-            source.Should().Contain("itemSession.ToggleVisibility()");
-            source.Should().Contain("itemSession.MoveTowardFront()");
-            source.Should().Contain("itemSession.MoveTowardBack()");
+            source.Should().Contain("PresentationSelectionPaneItemSession itemSession");
+            source.Should().Contain("itemForm.Select()");
+            source.Should().Contain("itemForm.CommitRename(rename.Text,");
+            source.Should().Contain("itemForm.CancelRename()");
+            source.Should().Contain("itemForm.ToggleVisibility()");
+            source.Should().Contain("itemForm.MoveTowardFront()");
+            source.Should().Contain("itemForm.MoveTowardBack()");
             source.Should().Contain("item.VisibilityActionText");
-            source.Should().Contain("PresentationPaneAccessibilityPlanner.PlanItem(");
-            source.Should().Contain("PresentationPaneAccessibilityPlanner.BuildShapeKey(item.ShapeId)");
+            source.Should().Contain("itemForm.AccessibilityPlan");
             source.Should().Contain("BuildItem(");
             source.Should().Contain("rename.LostFocus");
             source.Should().Contain("Key.Enter");
@@ -327,6 +332,14 @@ public sealed class SelectionPaneTests
             source.Should().NotContain("_session.RenameShape(");
             source.Should().NotContain("_session.ToggleShapeVisibility(");
             source.Should().NotContain("_session.MoveShapeInReadingOrder(");
+            source.Should().NotContain("itemSession.Select()");
+            source.Should().NotContain("itemSession.CommitRename(");
+            source.Should().NotContain("itemSession.CancelRename()");
+            source.Should().NotContain("itemSession.ToggleVisibility()");
+            source.Should().NotContain("itemSession.MoveTowardFront()");
+            source.Should().NotContain("itemSession.MoveTowardBack()");
+            source.Should().NotContain("PresentationPaneAccessibilityPlanner.PlanItem(");
+            source.Should().NotContain("PresentationPaneAccessibilityPlanner.BuildShapeKey(");
             source.Should().NotContain("PresentationSelectionPaneMoveDirection");
             source.Should().NotContain("offset:");
             source.Should().NotContain("item.IsHidden ?");
@@ -342,6 +355,15 @@ public sealed class SelectionPaneTests
             source.Should().NotContain(".ToggleShapeHidden(");
             source.Should().NotContain(".MoveSelectedShapeInReadingOrder(");
         }
+
+        itemForm.Should().Contain("_item.Select()");
+        itemForm.Should().Contain("_item.CommitRename(name)");
+        itemForm.Should().Contain("_item.CancelRename()");
+        itemForm.Should().Contain("_item.ToggleVisibility()");
+        itemForm.Should().Contain("_item.MoveTowardFront()");
+        itemForm.Should().Contain("_item.MoveTowardBack()");
+        itemForm.Should().Contain("PresentationPaneAccessibilityPlanner.PlanItem(");
+        itemForm.Should().Contain("PresentationPaneAccessibilityPlanner.BuildShapeKey(plan.ShapeId)");
 
         wpf.Should().Contain("System.Windows.Controls");
         avalonia.Should().Contain("Avalonia.Controls");

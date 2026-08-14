@@ -32,7 +32,8 @@ internal sealed class AvaloniaRichTextEditor : Grid
     internal static readonly DataFormat<byte[]> ExternalXamlPackageLinuxFormat =
         DataFormat.CreateBytesPlatformFormat(PresentationClipboardFormats.LinuxXamlPackage);
 
-    private readonly InCanvasRichTextEditBuffer _buffer;
+    // The portable session owns the InCanvasRichTextEditBuffer and all model mutations.
+    private readonly InCanvasRichTextEditSession _session;
     private readonly IPlatformClipboard _clipboard;
     private readonly AvaloniaRichTextEditingSurface _richTextView;
     private readonly string _fallbackFontFamily;
@@ -68,7 +69,7 @@ internal sealed class AvaloniaRichTextEditor : Grid
         ArgumentException.ThrowIfNullOrWhiteSpace(fallbackFontFamily);
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(fallbackFontSizePt);
 
-        _buffer = new InCanvasRichTextEditBuffer(body);
+        _session = InCanvasRichTextEditSession.Create(body);
         _fallbackFontFamily = fallbackFontFamily;
         _fallbackFontSizePt = fallbackFontSizePt;
         _navigateInlineTableCell = navigateInlineTableCell;
@@ -90,7 +91,7 @@ internal sealed class AvaloniaRichTextEditor : Grid
         {
             AcceptsReturn = true,
             TextWrapping = textWrapping,
-            Text = _buffer.PlainText,
+            Text = _session.PlainText,
             Padding = new Thickness(2),
             Background = Brushes.Transparent,
             BorderBrush = new SolidColorBrush(Color.FromRgb(0x21, 0x96, 0xF3)),
@@ -193,7 +194,7 @@ internal sealed class AvaloniaRichTextEditor : Grid
         {
             CommitInlineTableCellEdit(focusParent: false);
             SynchronizeText();
-            var body = _buffer.Body;
+            var body = _session.Body;
             ApplyPendingInlineTableRows(body);
             return body;
         }
@@ -248,7 +249,7 @@ internal sealed class AvaloniaRichTextEditor : Grid
         if (!ReferenceEquals(target, this))
             return target.CreateClipboardPayload();
         SynchronizeText();
-        return _buffer.CreateClipboardPayload(Selection);
+        return _session.CreateClipboardPayload(Selection);
     }
 
     internal async Task<bool> CopySelectionAsync(CancellationToken cancellationToken = default) =>
@@ -272,7 +273,7 @@ internal sealed class AvaloniaRichTextEditor : Grid
         if (!await WriteRichClipboardAsync(CreateClipboardPayload(), cancellationToken))
             return false;
         int caret;
-        _buffer.ReplaceSelectionWithPlainText(Selection, string.Empty, out caret);
+        _session.ReplaceSelectionWithPlainText(Selection, string.Empty, out caret);
         ApplyBufferText(caret);
         return true;
     }
@@ -315,9 +316,9 @@ internal sealed class AvaloniaRichTextEditor : Grid
 
         int caret;
         if (resolution.Source == PresentationClipboardPasteSource.Text)
-            _buffer.ReplaceSelectionWithPlainText(Selection, content.Text!, out caret);
+            _session.ReplaceSelectionWithPlainText(Selection, content.Text!, out caret);
         else
-            _buffer.ApplyClipboardPayload(resolution.Payload, Selection, out caret);
+            _session.ApplyClipboardPayload(resolution.Payload, Selection, out caret);
         ApplyBufferText(caret);
         return true;
     }
@@ -328,7 +329,7 @@ internal sealed class AvaloniaRichTextEditor : Grid
             return EditingTarget.CurrentPlan();
 
         SynchronizeText();
-        return _buffer.Plan(Selection);
+        return _session.Plan(Selection);
     }
 
     internal Hyperlink? SelectedRunHyperlink()
@@ -337,7 +338,7 @@ internal sealed class AvaloniaRichTextEditor : Grid
             return EditingTarget.SelectedRunHyperlink();
 
         SynchronizeText();
-        return _buffer.GetSelectedRunHyperlink(Selection);
+        return _session.GetSelectedRunHyperlink(Selection);
     }
 
     internal bool TryActivateInlineOleObject(Func<int, bool> tryActivateAt)
@@ -374,22 +375,22 @@ internal sealed class AvaloniaRichTextEditor : Grid
         IReadOnlyList<byte> embeddedBytes) =>
         !ReferenceEquals(EditingTarget, this)
             ? EditingTarget.UpdateInlineOleObjectAt(logicalPosition, embeddedBytes)
-            : _buffer.UpdateInlineOleObjectAt(logicalPosition, embeddedBytes);
+            : _session.UpdateInlineOleObjectAt(logicalPosition, embeddedBytes);
 
     internal bool ApplyHyperlink(Hyperlink? hyperlink) =>
         !ReferenceEquals(EditingTarget, this)
             ? EditingTarget.ApplyHyperlink(hyperlink)
-            : ApplyMutation(() => _buffer.ApplyHyperlink(hyperlink, Selection));
+            : ApplyMutation(() => _session.ApplyHyperlink(hyperlink, Selection));
 
     internal bool ToggleTextFormat(TableCellTextFormatKind kind) =>
         !ReferenceEquals(EditingTarget, this)
             ? EditingTarget.ToggleTextFormat(kind)
-            : ApplyMutation(() => _buffer.ToggleTextFormat(kind, Selection));
+            : ApplyMutation(() => _session.ToggleTextFormat(kind, Selection));
 
     internal bool ApplyFontFamily(string? fontFamily) =>
         !ReferenceEquals(EditingTarget, this)
             ? EditingTarget.ApplyFontFamily(fontFamily)
-            : ApplyMutation(() => _buffer.ApplyValueFormat(
+            : ApplyMutation(() => _session.ApplyValueFormat(
             TableCellTextValueFormatKind.FontFamily,
             fontFamily,
             Selection));
@@ -397,7 +398,7 @@ internal sealed class AvaloniaRichTextEditor : Grid
     internal bool ApplyFontSize(double? sizePt) =>
         !ReferenceEquals(EditingTarget, this)
             ? EditingTarget.ApplyFontSize(sizePt)
-            : ApplyMutation(() => _buffer.ApplyValueFormat(
+            : ApplyMutation(() => _session.ApplyValueFormat(
             TableCellTextValueFormatKind.FontSize,
             sizePt,
             Selection));
@@ -405,7 +406,7 @@ internal sealed class AvaloniaRichTextEditor : Grid
     internal bool ApplyColor(ThemeAwareColor? color) =>
         !ReferenceEquals(EditingTarget, this)
             ? EditingTarget.ApplyColor(color)
-            : ApplyMutation(() => _buffer.ApplyValueFormat(
+            : ApplyMutation(() => _session.ApplyValueFormat(
             TableCellTextValueFormatKind.Color,
             color,
             Selection));
@@ -413,32 +414,32 @@ internal sealed class AvaloniaRichTextEditor : Grid
     internal bool ApplyParagraphAlignment(TextAlign alignment) =>
         !ReferenceEquals(EditingTarget, this)
             ? EditingTarget.ApplyParagraphAlignment(alignment)
-            : ApplyMutation(() => _buffer.ApplyParagraphAlignment(alignment, Selection));
+            : ApplyMutation(() => _session.ApplyParagraphAlignment(alignment, Selection));
 
     internal bool ToggleParagraphBullets() =>
         !ReferenceEquals(EditingTarget, this)
             ? EditingTarget.ToggleParagraphBullets()
-            : ApplyMutation(() => _buffer.ToggleParagraphBullets(Selection));
+            : ApplyMutation(() => _session.ToggleParagraphBullets(Selection));
 
     internal bool ToggleParagraphNumbering() =>
         !ReferenceEquals(EditingTarget, this)
             ? EditingTarget.ToggleParagraphNumbering()
-            : ApplyMutation(() => _buffer.ToggleParagraphNumbering(Selection));
+            : ApplyMutation(() => _session.ToggleParagraphNumbering(Selection));
 
     internal bool ApplyParagraphListPreset(TableCellListPresetDescriptor preset) =>
         !ReferenceEquals(EditingTarget, this)
             ? EditingTarget.ApplyParagraphListPreset(preset)
-            : ApplyMutation(() => _buffer.ApplyParagraphListPreset(preset, Selection));
+            : ApplyMutation(() => _session.ApplyParagraphListPreset(preset, Selection));
 
     internal bool ApplyParagraphPictureBullet(PresentationPictureBulletPayload payload) =>
         !ReferenceEquals(EditingTarget, this)
             ? EditingTarget.ApplyParagraphPictureBullet(payload)
-            : ApplyMutation(() => _buffer.ApplyParagraphPictureBullet(payload, Selection));
+            : ApplyMutation(() => _session.ApplyParagraphPictureBullet(payload, Selection));
 
     internal bool ApplyParagraphIndent(bool increase) =>
         !ReferenceEquals(EditingTarget, this)
             ? EditingTarget.ApplyParagraphIndent(increase)
-            : ApplyMutation(() => _buffer.ApplyParagraphIndent(increase, Selection));
+            : ApplyMutation(() => _session.ApplyParagraphIndent(increase, Selection));
 
     internal bool InsertSoftBreak()
     {
@@ -449,7 +450,7 @@ internal sealed class AvaloniaRichTextEditor : Grid
         SynchronizeText();
         int start = Math.Min(SelectionStart, SelectionEnd);
         int end = Math.Max(SelectionStart, SelectionEnd);
-        if (!_buffer.InsertSoftBreak(Selection))
+        if (!_session.InsertSoftBreak(Selection))
             return false;
 
         string current = Text;
@@ -521,7 +522,7 @@ internal sealed class AvaloniaRichTextEditor : Grid
         ResetVerticalNavigation();
         _keyboardSelectionAnchor = null;
         _keyboardSelectionCaret = null;
-        _buffer.ReplacePlainText(InputBox.Text);
+        _session.ReplacePlainText(InputBox.Text);
         UpdateClipboardContextMenuState();
         RenderBody();
     }
@@ -536,14 +537,14 @@ internal sealed class AvaloniaRichTextEditor : Grid
     }
 
     private void SynchronizeText() =>
-        _buffer.ReplacePlainText(InputBox.Text);
+        _session.ReplacePlainText(InputBox.Text);
 
     private void RenderBody()
     {
         _synchronizing = true;
         try
         {
-            var body = _buffer.Body;
+            var body = _session.Body;
             ApplyPendingInlineTableRows(body);
             _richTextView.UpdateBody(
                 body,
@@ -687,7 +688,7 @@ internal sealed class AvaloniaRichTextEditor : Grid
         }
         else
         {
-            _buffer.UpdateInlineTableCellAt(
+            _session.UpdateInlineTableCellAt(
                 hit.Value.LogicalPosition,
                 hit.Value.RowIndex,
                 hit.Value.SourceCellIndex,
@@ -815,9 +816,9 @@ internal sealed class AvaloniaRichTextEditor : Grid
     private bool TryActivateInlineOleAt(int logicalPosition)
     {
         SynchronizeText();
-        if (!_buffer.TryGetInlineOleObjectAt(logicalPosition, out var inlineObject)
+        if (!_session.TryGetInlineOleObjectAt(logicalPosition, out var inlineObject)
             && (logicalPosition <= 0
-                || !_buffer.TryGetInlineOleObjectAt(logicalPosition - 1, out inlineObject)))
+                || !_session.TryGetInlineOleObjectAt(logicalPosition - 1, out inlineObject)))
         {
             return false;
         }
@@ -1060,7 +1061,7 @@ internal sealed class AvaloniaRichTextEditor : Grid
         _synchronizing = true;
         try
         {
-            InputBox.Text = _buffer.PlainText;
+            InputBox.Text = _session.PlainText;
         }
         finally
         {

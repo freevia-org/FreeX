@@ -14,9 +14,9 @@ public sealed class PresentationPaneAccessibilityDedupSourceTests
 
         foreach (var source in adapters)
         {
-            source.Should().Contain("PresentationPaneAccessibilitySession")
-                .And.Contain("PresentationPaneAccessibilityPlanner.ProjectPane(")
-                .And.Contain("PresentationPaneAccessibilityPlanner.ProjectItem(")
+            source.Should().Contain("PresentationPaneAccessibilityNativeSession<")
+                .And.Contain(".ApplyPaneMetadata(")
+                .And.Contain(".ApplyItem(")
                 .And.NotContain("Dictionary<")
                 .And.NotContain("FormatStatus(")
                 .And.NotContain("FormatItemStatus(")

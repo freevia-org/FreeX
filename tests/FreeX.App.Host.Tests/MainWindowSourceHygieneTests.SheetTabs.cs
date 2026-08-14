@@ -379,11 +379,9 @@ public sealed partial class MainWindowSourceHygieneTests
 
         insert.Should().Contain("TryExecuteRepeatableCommand(");
         rename.Should().Contain("TryExecuteCommand(new RenameSheetCommand");
-        // "Fix 42 verified review-5 FreeX findings" (1551700d33) taught Delete Sheet to act on every
-        // grouped/selected sheet tab at once, wrapping >1 RemoveSheetCommand in a CompositeWorkbookCommand,
-        // so the RemoveSheetCommand construction is no longer inline in the TryExecuteCommand call.
-        delete.Should().Contain("new RemoveSheetCommand(sheetId)");
-        delete.Should().Contain("TryExecuteCommand(command, \"Delete Sheet\")");
+        delete.Should().Contain("SynchronizeWorkbookSessionSelection();");
+        delete.Should().Contain("_session.DeleteSelectedSheets()");
+        delete.Should().NotContain("new RemoveSheetCommand");
         move.Should().Contain("TryExecuteCommand(new MoveSheetCommand");
 
         insert.Should().NotContain("_commandBus.Execute");
@@ -393,23 +391,21 @@ public sealed partial class MainWindowSourceHygieneTests
     }
 
     [Fact]
-    public void MoveOrCopyCreateCopy_UsesSingleCompositeCommandWhenCopyMustMove()
+    public void GroupedDuplicateAndMoveOrCopy_DelegateToWorkbookSession()
     {
         var source = DialogSourceTestSupport.ReadHostSources("MainWindow.SheetTabs.cs");
-        var method = ExtractMethodSource(source, "private void SheetCtxMoveOrCopy_Click(");
+        var duplicate = ExtractMethodSource(source, "private void SheetCtxDuplicate_Click(");
+        var moveOrCopy = ExtractMethodSource(source, "private void SheetCtxMoveOrCopy_Click(");
 
-        // "Fix 42 verified review-5 FreeX findings" (1551700d33) extended Move-or-Copy (like Delete)
-        // to act on every grouped/selected sheet tab at once: >1 DuplicateSheetCommand are wrapped in
-        // a CompositeWorkbookCommand, and the actual repositioning uses the plural MoveSheetsCommand
-        // over every newly-copied sheet id rather than a single-sheet MoveSheetCommand(copyIndex, targetIndex).
-        method.Should().Contain("new CompositeWorkbookCommand(");
-        method.Should().Contain("\"Move or Copy Sheet\"");
-        method.Should().Contain("new DuplicateSheetCommand(sheetId)");
-        method.Should().Contain("TryExecuteCommand(command, \"Move or Copy Sheet\")");
-        method.Should().Contain("new MoveSheetsCommand(copySheetIds, targetIndex)");
-        method.Should().Contain("new MoveSheetsCommand(selectedSheetIds, dialog.Result.InsertBeforeIndex)");
-        method.Should().NotContain("TryExecuteCommand(new DuplicateSheetCommand(tab.Id), \"Duplicate Sheet\")");
-        method.Should().NotContain("_commandBus.Execute");
+        duplicate.Should().Contain("SynchronizeWorkbookSessionSelection()");
+        duplicate.Should().Contain("_session.DuplicateSelectedSheets(tab.Id)");
+        duplicate.Should().NotContain("new DuplicateSheetCommand(");
+        duplicate.Should().NotContain("RecalculateWorkbook()");
+        moveOrCopy.Should().Contain("SynchronizeWorkbookSessionSelection()");
+        moveOrCopy.Should().Contain("_session.MoveOrCopySelectedSheets(");
+        moveOrCopy.Should().Contain("tab.Id,");
+        moveOrCopy.Should().NotContain("new DuplicateSheetCommand(");
+        moveOrCopy.Should().NotContain("new MoveSheetsCommand(");
     }
 
     [Fact]

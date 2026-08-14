@@ -468,7 +468,8 @@ public sealed partial class MainWindow
             $"{_formulaBarHost.IsVisible}|{_formulaBarExpanded}|{_session.IsShowingGridlines}|" +
             $"{_session.IsShowingHeadings}|{_selectedDrawingObjectKind}|{_selectedDrawingObjectId}|" +
             $"{IsVisible}|{WindowState}";
-        var borderPickerState = $"{_borderPickerStyle}|{_borderPickerColor.R},{_borderPickerColor.G},{_borderPickerColor.B}";
+        var borderPickerColor = _borderPickerSession.Color;
+        var borderPickerState = $"{_borderPickerSession.Style}|{borderPickerColor.R},{borderPickerColor.G},{borderPickerColor.B}";
         return new RibbonLifecycleSnapshot(
             _session.DirtyGeneration,
             _statusText.Text ?? string.Empty,
@@ -537,9 +538,9 @@ public sealed partial class MainWindow
             case "Gray":
             case "Accent 1":
             case "Accent 2":
-                _borderPickerColor = commandId.Value == "Black"
+                _borderPickerSession.SetColor(commandId.Value == "Black"
                     ? new CellColor(0, 112, 192)
-                    : CellColor.Black;
+                    : CellColor.Black);
                 break;
             case "Thin":
             case "Medium":
@@ -547,9 +548,9 @@ public sealed partial class MainWindow
             case "Dashed":
             case "Dotted":
             case "Double":
-                _borderPickerStyle = commandId.Value == "Thin"
+                _borderPickerSession.SetStyle(commandId.Value == "Thin"
                     ? BorderStyle.Medium
-                    : BorderStyle.Thin;
+                    : BorderStyle.Thin);
                 break;
         }
     }

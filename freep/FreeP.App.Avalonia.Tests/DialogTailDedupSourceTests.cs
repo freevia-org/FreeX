@@ -7,8 +7,11 @@ public sealed class DialogTailDedupSourceTests
     {
         var motion = ReadSource("MotionPathEditorDialog.cs");
         motion.Should().Contain("MotionPathEditorDialogSession");
-        motion.Should().Contain("MotionPathEditorRowProjection");
-        motion.Should().Contain("MotionPathEditorRowProjection.BuildPlan(");
+        motion.Should().Contain("MotionPathEditorDialogFormSession<Row>");
+        motion.Should().Contain("MotionPathEditorNativeRowSession<");
+        motion.Should().Contain("_native.Initialize(");
+        motion.Should().Contain("_native.RefreshEnablement()");
+        motion.Should().Contain("_native.CaptureInput()");
         motion.Should().Contain("_session.Surface");
         motion.Should().Contain("AutomationProperties.SetName(");
         motion.Should().Contain("AutomationProperties.SetAutomationId(");
@@ -16,6 +19,8 @@ public sealed class DialogTailDedupSourceTests
         motion.Should().NotContain("double.TryParse");
         motion.Should().NotContain("AutomationIdToken.AppendSegment(");
         motion.Should().NotContain("rowIndex.ToString()");
+        motion.Should().NotContain("MotionPathEditorRowProjection.BuildPlan(");
+        motion.Should().NotContain("MotionPathEditorRowProjection.BuildEnablement(");
 
         var rotation = ReadSource("RotationOptionsDialog.cs");
         rotation.Should().Contain("RotationOptionsDialogSession");
@@ -40,10 +45,15 @@ public sealed class DialogTailDedupSourceTests
 
         var customShow = ReadSource("CustomShowDialog.cs");
         customShow.Should().Contain("SlideShowCustomShowDialogSession");
-        customShow.Should().Contain("SlideShowCustomShowDialogFormSession<Control>");
-        customShow.Should().Contain("_formSession.ApplyFullPlan(plan)");
-        customShow.Should().Contain("_formSession.ApplySelectedShowPlan(plan)");
-        customShow.Should().Contain("_formSession.ApplySlideSelection(plan)");
+        customShow.Should().Contain("SlideShowCustomShowDialogNativeComposition<Control, DockPanel>");
+        customShow.Should().Contain("_renderer.Controller.Initialize()");
+        customShow.Should().Contain("_renderer.Controller.SelectShow()");
+        customShow.Should().Contain("_renderer.Controller.SelectSlide()");
+        customShow.Should().Contain("_renderer.Actions.Execute(");
+        customShow.Should().Contain("_renderer.Controller.Reorder(");
+        customShow.Should().NotContain("_formSession.ApplyFullPlan(plan)");
+        customShow.Should().NotContain("_formSession.ApplySelectedShowPlan(plan)");
+        customShow.Should().NotContain("_formSession.ApplySlideSelection(plan)");
         customShow.Should().NotContain("SlideShowCustomShowPlanner.");
         customShow.Should().NotContain("record CustomShowListItem");
         customShow.Should().NotContain("record CustomShowSlideListItem");

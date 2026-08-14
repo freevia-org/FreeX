@@ -12,15 +12,15 @@ public sealed class ZoomAuthoringParityTests
             "FreeP.App.Avalonia",
             "ZoomObjectPropertiesDialog.cs"));
 
-        source.Should().Contain("ZoomObjectPropertiesDialogSession");
-        source.Should().Contain("_surface = _session.Surface");
-        source.Should().Contain("ZoomObjectPropertiesDialogFormSession<Control>");
-        source.Should().Contain("foreach (var plan in _session.FieldCatalog)");
+        source.Should().Contain("ZoomObjectPropertiesDialogNativeRendererSession<Control>");
+        source.Should().Contain("_avaloniaRenderer.Surface");
+        source.Should().Contain("_avaloniaRenderer.Form.RegisterFields(");
+        source.Should().Contain("foreach (var plan in _avaloniaRenderer.Session.FieldCatalog)");
         source.Should().Contain("ZoomObjectPropertiesDialogControlKind.Toggle");
-        source.Should().Contain("_formSession.Dispatch(field, value)");
-        source.Should().Contain("_session.TryAccept(out var validation)");
-        source.Should().Contain("_formSession.ApplyState(_session.State)");
-        source.Should().Contain("_formSession.Focus(validation.Field)");
+        source.Should().Contain("_avaloniaRenderer.Form.Dispatch(field, value)");
+        source.Should().Contain("_avaloniaRenderer.Session.TryAccept(out var validation)");
+        source.Should().Contain("_avaloniaRenderer.Form.ApplyState(_avaloniaRenderer.Session.State)");
+        source.Should().Contain("_avaloniaRenderer.Form.Focus(validation.Field)");
         source.Should().Contain("AvaloniaUserMessageDialog.ShowWarningAsync(");
         source.Should().Contain("AutomationProperties.SetName(");
         source.Should().Contain("AutomationProperties.SetAutomationId(");
@@ -38,6 +38,8 @@ public sealed class ZoomAuthoringParityTests
         source.Should().NotContain("Dictionary<ZoomObjectPropertiesDialogField");
         source.Should().NotContain("foreach (var fieldState in state.Fields)");
         source.Should().NotContain("_applyingState");
+        source.Should().NotContain("private readonly ZoomObjectPropertiesDialogSession");
+        source.Should().NotContain("private readonly ZoomObjectPropertiesDialogFormSession");
     }
 
     [Fact]
@@ -89,7 +91,7 @@ public sealed class ZoomAuthoringParityTests
 
         source.Should().Contain("validation!.Message");
         source.Should().Contain("AvaloniaUserMessageDialog.ShowWarningAsync(");
-        source.Should().Contain("_formSession.Focus(validation.Field)");
+        source.Should().Contain("_avaloniaRenderer.Form.Focus(validation.Field)");
         source.Should().NotContain("InvalidTransitionDurationMessage");
         source.Should().NotContain("InvalidFrameBorderShadowMessage");
         source.Should().NotContain("InvalidFrameBorderGlowMessage");

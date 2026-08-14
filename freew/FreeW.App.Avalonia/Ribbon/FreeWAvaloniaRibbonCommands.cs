@@ -23,8 +23,9 @@ namespace FreeW.App.Avalonia.Ribbon;
 /// </para>
 ///
 /// <para>
-/// <b>Design rule:</b> This file owns all Avalonia command wiring. Shell-level callbacks are routed
-/// through the typed <see cref="FreeWRibbonHostExecutionPorts"/> record so that <c>MainWindow</c> stays thin.
+/// <b>Design rule:</b> This file composes Avalonia-native adapters into Presentation-owned command
+/// workflows. Shell-level callbacks use <see cref="FreeWRibbonHostExecutionPorts"/> so both the registry
+/// and <c>MainWindow</c> remain thin.
 /// </para>
 ///
 /// <para>
@@ -35,7 +36,7 @@ namespace FreeW.App.Avalonia.Ribbon;
 ///   <item><c>freew.shrink-font</c> — bump font size down one ladder step</item>
 ///   <item><c>freew.clear-formatting</c> — reset run formatting to default</item>
 ///   <item><c>freew.font-color</c> — dropdown opener for the colour palette (no-op on click; colour is set by per-colour sub-commands)</item>
-///   <item><c>freew.font-color.*</c> — per-colour sub-commands registered from <see cref="FreeWRibbonDefinitionData.FontColors"/></item>
+///   <item><c>freew.font-color.*</c> — per-colour sub-commands registered by <see cref="FormattingGalleryRibbonWorkflow"/></item>
 ///   <item><c>freew.change-case</c> — open the shared five-choice Change Case picker</item>
 ///   <item><c>freew.select-all</c> — select the whole document</item>
 ///   <item><c>freew.show-hide-para</c> — toggle paragraph mark display</item>
@@ -106,16 +107,12 @@ internal static class FreeWAvaloniaRibbonCommands
         r.Bind(FreeWRibbonCommandAction.FontSize, new FontSizeCommand(editor));
         FontEffectRibbonWorkflow.Register(r, CreateFontEffectPorts(editor));
         r.Bind(FreeWRibbonCommandAction.Highlight,        new ValueRibbonCommand(value => editor.SetHighlightColor(value)));
-        RegisterHighlightPalette(r, editor);
-        RegisterCharacterBorderPalette(r, editor);
-        RegisterCharacterShadingPalette(r, editor);
         r.Bind(FreeWRibbonCommandAction.ClearFormatting, new ActionRibbonCommand(editor.ClearFormatting));
         // Font Color — the ribbon control is a Dropdown whose button click opens the colour flyout.
         // Each palette entry is its own command so the button never executes with a null value.
         // "freew.font-color" itself is registered as a no-op so the registry completeness check
         // (which checks every ribbon control's CommandId) continues to pass.
         r.Bind(FreeWRibbonCommandAction.FontColor, new ActionRibbonCommand(() => { /* flyout opener — no direct action */ }));
-        RegisterFontColorPalette(r, editor);
 
         // Dialog launchers — open modal dialogs via shell callbacks (no direct editor method).
 
@@ -141,7 +138,6 @@ internal static class FreeWAvaloniaRibbonCommands
         r.Bind(FreeWRibbonCommandAction.SpaceAfter, new ParagraphValueCommand(
             formatting, FreeWParagraphValueKind.SpaceAfter));
         r.Bind(FreeWRibbonCommandAction.ParaShading, new ActionRibbonCommand(() => { /* dropdown opener */ }));
-        RegisterParagraphShadingPalette(r, editor);
         // Line-spacing commands — value = multiplier for Multiple. The fixed ids are compatibility
         // aliases for older Avalonia controls and are no longer used by the Home ribbon profile.
         r.Bind(FreeWRibbonCommandAction.LineSpacing, new FreeWRibbonNumericValueCommand(
@@ -167,7 +163,19 @@ internal static class FreeWAvaloniaRibbonCommands
         // Styles gallery dropdown — opener no-op; one freew.style.<id> command per built-in style applies
         // that named style (paragraph styles set StyleId; character styles overlay run formatting).
         r.Register("freew.styles-gallery", new ActionRibbonCommand(() => { /* dropdown opener */ }));
-        RegisterStyleGalleryCommands(r, editor);
+        FormattingGalleryRibbonWorkflow.Register(
+            r,
+            new FormattingGalleryRibbonPorts(
+                PrepareExecution: () => editor.Focus(),
+                ApplyFontColor: hex => editor.SetFontColor(hex),
+                ApplyParagraphShading: hex => editor.SetParagraphShading(hex),
+                ApplyCharacterShading: hex => editor.SetCharacterShading(hex),
+                ApplyCharacterBorderColor: hex => editor.SetCharacterBorder(
+                    hex is null
+                        ? null
+                        : new ParagraphBorder(hex, 0.5) { LineStyle = BorderLineStyle.Single }),
+                ApplyHighlightColor: hex => editor.SetHighlightColor(hex),
+                ApplyNamedStyle: styleId => editor.ApplyNamedStyle(styleId)));
 
         // Clear style — revert the paragraph to the document default (Word's paragraph-level reset).
         r.Bind(FreeWRibbonCommandAction.StyleClear, new ActionRibbonCommand(editor.ClearParagraphStyle));
@@ -197,7 +205,11 @@ internal static class FreeWAvaloniaRibbonCommands
             r,
             new InsertDrawingGalleryPorts(editor.InsertShape));
 
-        RegisterSymbolPalette(r, editor);
+        SymbolRibbonWorkflow.Register(
+            r,
+            new SymbolRibbonPorts(
+                PrepareExecution: () => editor.Focus(),
+                InsertSymbol: editor.InsertSymbol));
 
         // Header / Footer — match WPF's text prompt when the shell supplies it. The fallback keeps
         // headless registry callers deterministic and retains the old region-creation behavior.
@@ -626,107 +638,6 @@ internal static class FreeWAvaloniaRibbonCommands
 
             callbacks.SetProofingLanguage?.Invoke();
         }
-    }
-
-    /// <summary>
-    /// Registers the per-colour sub-commands for the Font Color palette dropdown.
-    /// Each command id matches an entry in <see cref="FreeWRibbonDefinitionData.FontColors"/> and calls
-    /// <see cref="DocumentView.SetFontColor"/> with the appropriate RRGGBB hex string
-    /// (or <c>null</c> for the "Automatic" entry, which restores the default run colour).
-    /// </summary>
-    private static void RegisterFontColorPalette(IRibbonCommandRegistry r, DocumentView editor)
-    {
-        // Maps command-id suffix → CSS hex colour (null = automatic/default).
-        // Colours chosen to match Word's standard palette.
-        RegisterColorPalette(r, FreeWRibbonPaletteCatalog.FontColors, editor.SetFontColor);
-    }
-
-    /// <summary>
-    /// Registers the WPF-authority paragraph shading palette. The top-level command only opens
-    /// the ribbon menu; formatting changes happen only after an explicit swatch or No Color choice.
-    /// </summary>
-    private static void RegisterParagraphShadingPalette(IRibbonCommandRegistry r, DocumentView editor)
-    {
-        RegisterColorPalette(
-            r,
-            FreeWRibbonPaletteCatalog.ParagraphShading,
-            hex => editor.SetParagraphShading(hex));
-    }
-
-    /// <summary>
-    /// Registers the WPF-authority character shading palette. The top-level command only opens
-    /// the ribbon menu; formatting changes happen only after an explicit swatch or No Color choice.
-    /// </summary>
-    private static void RegisterCharacterShadingPalette(IRibbonCommandRegistry r, DocumentView editor)
-    {
-        RegisterColorPalette(
-            r,
-            FreeWRibbonPaletteCatalog.CharacterShading,
-            hex => editor.SetCharacterShading(hex));
-    }
-
-    /// <summary>
-    /// Registers the WPF-authority character border palette. The top-level command only opens
-    /// the ribbon menu; formatting changes happen only after an explicit color or No Border choice.
-    /// </summary>
-    private static void RegisterCharacterBorderPalette(IRibbonCommandRegistry r, DocumentView editor)
-    {
-        RegisterColorPalette(
-            r,
-            FreeWRibbonPaletteCatalog.CharacterBorders,
-            hex => editor.SetCharacterBorder(
-                hex is null
-                    ? null
-                    : new ParagraphBorder(hex, 0.5) { LineStyle = BorderLineStyle.Single }));
-    }
-
-    /// <summary>
-    /// Registers the WPF-authority text-highlight palette. The top-level command only opens
-    /// the ribbon menu; formatting changes happen only after an explicit swatch or No Color choice.
-    /// </summary>
-    private static void RegisterHighlightPalette(IRibbonCommandRegistry r, DocumentView editor)
-    {
-        RegisterColorPalette(r, FreeWRibbonPaletteCatalog.Highlights, editor.SetHighlightColor);
-    }
-
-    /// <summary>
-    /// AV-STYLES: the command-id prefix for a built-in gallery style. The Styles gallery dropdown item and
-    /// its registry command both use <c>freew.style.&lt;id&gt;</c> (e.g. <c>freew.style.Heading1</c>), so the
-    /// ribbon definition and the registry agree on the id.
-    /// </summary>
-    internal static string StyleCommandId(string styleId) => FreeWRibbonDefinitionData.StyleCommandId(styleId);
-
-    /// <summary>
-    /// Registers one <c>freew.style.&lt;id&gt;</c> command per built-in gallery style (see
-    /// <see cref="BuiltInStyles.Gallery"/>). Each applies that named style to the current selection /
-    /// paragraph via <see cref="DocumentView.ApplyNamedStyle"/> — paragraph styles set the paragraph
-    /// StyleId, character styles overlay run formatting — model-backed and undoable.
-    /// </summary>
-    private static void RegisterStyleGalleryCommands(IRibbonCommandRegistry r, DocumentView editor)
-    {
-        foreach (var descriptor in BuiltInStyles.Gallery)
-        {
-            var id = descriptor.Id;
-            r.Register(StyleCommandId(id), new ActionRibbonCommand(() => editor.ApplyNamedStyle(id)));
-        }
-    }
-
-    /// <summary>
-    /// AV-INSERT: common symbols / special characters for the Insert &gt; Symbol palette. Each entry maps a
-    /// stable command-id suffix to the literal character it inserts (via <see cref="DocumentView.InsertSymbol"/>).
-    /// The set mirrors Word's default "recently used symbols" grid (currency, typography, math, arrows).
-    /// </summary>
-    internal static readonly IReadOnlyList<(string Id, string Glyph, string Label)> Symbols =
-        FreeWRibbonDefinitionData.Symbols;
-
-    /// <summary>
-    /// Registers the per-glyph sub-commands for the Insert &gt; Symbol palette dropdown. Each command id
-    /// matches an entry in <see cref="Symbols"/> and inserts that character at the caret as ordinary text.
-    /// </summary>
-    private static void RegisterSymbolPalette(IRibbonCommandRegistry r, DocumentView editor)
-    {
-        foreach (var (id, glyph, _) in Symbols)
-            r.Register(id, new ActionRibbonCommand(() => editor.InsertSymbol(glyph)));
     }
 
     /// <summary>
@@ -1351,18 +1262,28 @@ internal static class FreeWAvaloniaRibbonCommands
                 crop.Bottom),
             ResetImage: editor.ResetSelectedImage);
 
-    private static FontEffectRibbonPorts CreateFontEffectPorts(DocumentView editor) =>
-        new(
-            Bold: new ActionRibbonCommand(editor.ToggleBold),
-            Italic: new ActionRibbonCommand(editor.ToggleItalic),
-            Underline: new ActionRibbonCommand(editor.ToggleUnderline),
-            Strikethrough: new ActionRibbonCommand(editor.ToggleStrikethrough),
-            SmallCaps: new ActionRibbonCommand(editor.ToggleSmallCaps),
-            AllCaps: new ActionRibbonCommand(editor.ToggleAllCaps),
-            Superscript: new ActionRibbonCommand(editor.ToggleSuperscript),
-            Subscript: new ActionRibbonCommand(editor.ToggleSubscript),
+    private static FontEffectRibbonPorts CreateFontEffectPorts(DocumentView editor)
+    {
+        IRibbonStatefulCommand Toggle(FontEffectRibbonKind kind, Action execute) =>
+            FontEffectRibbonStatePlanner.CreateCommand(
+                kind,
+                execute,
+                editor.GetSelectionFormatting,
+                isEnabled: () => !editor.IsEditingLocked,
+                prepareExecution: () => editor.Focus());
+
+        return new FontEffectRibbonPorts(
+            Bold: Toggle(FontEffectRibbonKind.Bold, editor.ToggleBold),
+            Italic: Toggle(FontEffectRibbonKind.Italic, editor.ToggleItalic),
+            Underline: Toggle(FontEffectRibbonKind.Underline, editor.ToggleUnderline),
+            Strikethrough: Toggle(FontEffectRibbonKind.Strikethrough, editor.ToggleStrikethrough),
+            SmallCaps: Toggle(FontEffectRibbonKind.SmallCaps, editor.ToggleSmallCaps),
+            AllCaps: Toggle(FontEffectRibbonKind.AllCaps, editor.ToggleAllCaps),
+            Superscript: Toggle(FontEffectRibbonKind.Superscript, editor.ToggleSuperscript),
+            Subscript: Toggle(FontEffectRibbonKind.Subscript, editor.ToggleSubscript),
             GrowFont: new ActionRibbonCommand(editor.GrowFont),
             ShrinkFont: new ActionRibbonCommand(editor.ShrinkFont));
+    }
 
     private static ParagraphEditingRibbonPorts CreateParagraphEditingPorts(
         DocumentView editor,
@@ -1571,18 +1492,6 @@ internal static class FreeWAvaloniaRibbonCommands
             PageBorders: OptionalHostCommand(callbacks.OpenPageBordersDialog),
             Watermark: DesignRibbonWorkflow.DropdownOpenerCommand,
             CustomWatermark: OptionalHostCommand(callbacks.OpenWatermarkDialog));
-
-    private static void RegisterColorPalette(
-        IRibbonCommandRegistry registry,
-        IReadOnlyList<FreeWRibbonPaletteChoice> choices,
-        Action<string?> apply)
-    {
-        foreach (var choice in choices)
-        {
-            var hex = choice.Hex;
-            registry.Register(choice.CommandId, new ActionRibbonCommand(() => apply(hex)));
-        }
-    }
 
     private static void ExecuteSortCommand(DocumentView editor, FreeWRibbonHostExecutionPorts callbacks)
     {

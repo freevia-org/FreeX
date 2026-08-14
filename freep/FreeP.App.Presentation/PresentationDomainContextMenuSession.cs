@@ -325,6 +325,16 @@ public sealed class PresentationDomainContextMenuSession
             var state = CurrentTableState();
             if (!CanExecuteTableAction(action.Kind, state))
                 return false;
+
+            if (PresentationTableStructureActionDispatcher.IsSupported(action.Kind))
+            {
+                return PresentationTableStructureActionDispatcher.TryExecute(
+                    action.Kind,
+                    state,
+                    action.ShapeId,
+                    static () => { },
+                    editor);
+            }
         }
 
         switch (action.Kind)
@@ -350,30 +360,8 @@ public sealed class PresentationDomainContextMenuSession
             case PresentationDomainContextActionKind.OpenChartOptions:
                 _callbacks.OpenChartOptions();
                 return true;
-            case PresentationDomainContextActionKind.InsertTableRowAbove:
-                editor.InsertRowAbove();
-                return true;
-            case PresentationDomainContextActionKind.InsertTableRowBelow:
-                editor.InsertRowBelow();
-                return true;
-            case PresentationDomainContextActionKind.InsertTableColumnLeft:
-                editor.InsertColumnLeft();
-                return true;
-            case PresentationDomainContextActionKind.InsertTableColumnRight:
-                editor.InsertColumnRight();
-                return true;
-            case PresentationDomainContextActionKind.DeleteTableRow:
-                editor.DeleteRow();
-                return true;
-            case PresentationDomainContextActionKind.DeleteTableColumn:
-                editor.DeleteColumn();
-                return true;
             case PresentationDomainContextActionKind.SetTableColumnWidth:
                 return editor.TryApplyActiveTableColumnWidth(action.LongValue);
-            case PresentationDomainContextActionKind.MergeTableCell:
-                return editor.TryMergeActiveTableCell();
-            case PresentationDomainContextActionKind.SplitTableCell:
-                return editor.TrySplitActiveTableCell();
             default:
                 return false;
         }
@@ -381,19 +369,10 @@ public sealed class PresentationDomainContextMenuSession
 
     private static bool CanExecuteTableAction(
         PresentationDomainContextActionKind kind,
-        TableCellEditState state) => kind switch
-    {
-        PresentationDomainContextActionKind.InsertTableRowAbove
-            or PresentationDomainContextActionKind.InsertTableRowBelow => state.CanInsertRow,
-        PresentationDomainContextActionKind.InsertTableColumnLeft
-            or PresentationDomainContextActionKind.InsertTableColumnRight => state.CanInsertColumn,
-        PresentationDomainContextActionKind.DeleteTableRow => state.CanDeleteRow,
-        PresentationDomainContextActionKind.DeleteTableColumn => state.CanDeleteColumn,
-        PresentationDomainContextActionKind.SetTableColumnWidth => state.HasActiveCell,
-        PresentationDomainContextActionKind.MergeTableCell => state.CanMergeWithRight || state.CanMergeWithBelow,
-        PresentationDomainContextActionKind.SplitTableCell => state.CanSplitCell,
-        _ => false,
-    };
+        TableCellEditState state) =>
+        kind == PresentationDomainContextActionKind.SetTableColumnWidth
+            ? state.HasActiveCell
+            : PresentationTableStructureActionDispatcher.CanExecute(kind, state);
 
     private static bool IsTableAction(PresentationDomainContextActionKind kind) =>
         kind >= PresentationDomainContextActionKind.InsertTableRowAbove;

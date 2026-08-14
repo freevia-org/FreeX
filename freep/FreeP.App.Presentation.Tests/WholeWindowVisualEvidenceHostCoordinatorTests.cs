@@ -9,7 +9,7 @@ public sealed class WholeWindowVisualEvidenceHostCoordinatorTests
     {
         var fixture = DialogPaneVisualEvidenceFixtureFactory.Create();
         var probe = new FakeProbe();
-        var coordinator = new WholeWindowVisualEvidenceHostCoordinator(probe);
+        var coordinator = new WholeWindowVisualEvidenceHostCoordinator(probe, probe);
 
         var assertions = coordinator.Prepare(
             WholeWindowVisualEvidenceCatalog.Get("review.comments-pane"),
@@ -21,11 +21,11 @@ public sealed class WholeWindowVisualEvidenceHostCoordinatorTests
             $"SelectShape:{fixture.TextShapeId}",
             "HideCommentsPane",
             "SelectRibbonTab:home",
+            "CaptureBaselineState",
             "ShowCommentsPane",
             "SelectFirstComment",
             "RefreshWholeWindow",
-            "NormalizeShell",
-            "CaptureBaselineState");
+            "NormalizeShell");
         assertions.Should().OnlyContain(assertion => assertion.Passed);
     }
 
@@ -34,7 +34,7 @@ public sealed class WholeWindowVisualEvidenceHostCoordinatorTests
     {
         var fixture = DialogPaneVisualEvidenceFixtureFactory.Create();
         var probe = new FakeProbe();
-        var coordinator = new WholeWindowVisualEvidenceHostCoordinator(probe);
+        var coordinator = new WholeWindowVisualEvidenceHostCoordinator(probe, probe);
 
         coordinator.Prepare(WholeWindowVisualEvidenceCatalog.Get("view.zoom-fit"), fixture);
 
@@ -44,10 +44,27 @@ public sealed class WholeWindowVisualEvidenceHostCoordinatorTests
             $"SelectShape:{fixture.ChartShapeId}",
             "HideCommentsPane",
             "SelectRibbonTab:view",
+            "CaptureBaselineState",
             "RefreshWholeWindow",
             "SetZoom:FitToWindow:100",
-            "NormalizeShell",
-            "CaptureBaselineState");
+            "NormalizeShell");
+    }
+
+    [Fact]
+    public void Normalize_restores_planned_slide_after_native_selection_drift()
+    {
+        var fixture = DialogPaneVisualEvidenceFixtureFactory.Create();
+        var scenario = WholeWindowVisualEvidenceCatalog.Get("status.slide-2");
+        var probe = new FakeProbe();
+        var coordinator = new WholeWindowVisualEvidenceHostCoordinator(probe, probe);
+        coordinator.Prepare(scenario, fixture);
+        probe.DriftToSlide(0);
+        probe.Calls.Clear();
+
+        coordinator.Normalize(scenario);
+
+        probe.CurrentSlideIndex.Should().Be(1);
+        probe.Calls.Should().Equal("SelectSlide:1", "RefreshWholeWindow", "NormalizeShell");
     }
 
     [Fact]
@@ -65,7 +82,7 @@ public sealed class WholeWindowVisualEvidenceHostCoordinatorTests
                 FocusedLabel = "Print",
             },
         };
-        var coordinator = new WholeWindowVisualEvidenceHostCoordinator(probe);
+        var coordinator = new WholeWindowVisualEvidenceHostCoordinator(probe, probe);
         var preparationAssertions = coordinator.Prepare(scenario, fixture);
 
         var semantic = coordinator.CaptureSemantic(scenario, preparationAssertions);
@@ -81,7 +98,7 @@ public sealed class WholeWindowVisualEvidenceHostCoordinatorTests
         probe.Calls.Should().Contain("CaptureSemanticState:backstage.print");
     }
 
-    private sealed class FakeProbe : IWholeWindowVisualEvidenceProbe
+    private sealed class FakeProbe : IVisualEvidenceAppHost, IWholeWindowVisualEvidenceNativeInspector
     {
         private int _slideCount = 1;
         private int _currentSlideIndex;
@@ -89,6 +106,16 @@ public sealed class WholeWindowVisualEvidenceHostCoordinatorTests
 
         internal List<string> Calls { get; } = [];
         internal WholeWindowVisualEvidenceProbeState SemanticState { get; init; } = CreateSemanticState();
+        public IReadOnlyList<uint> SelectedShapeIds => _selectedShapeIds;
+        public int SlideCount => _slideCount;
+        public int CurrentSlideIndex => _currentSlideIndex;
+        public int CurrentShapeCount => 0;
+        public string? CurrentLayoutId => null;
+        public DialogPaneVisualEvidenceChoiceState ChoiceState => new(0, 0, 0, 0);
+        public bool IsTablePickerVisible => false;
+        public bool IsLayoutPickerVisible => false;
+
+        internal void DriftToSlide(int slideIndex) => _currentSlideIndex = slideIndex;
 
         public void LoadPresentation(Presentation presentation)
         {
@@ -116,7 +143,11 @@ public sealed class WholeWindowVisualEvidenceHostCoordinatorTests
         }
 
         public void HideCommentsPane() => Calls.Add("HideCommentsPane");
-        public void SelectRibbonTab(string tabId) => Calls.Add($"SelectRibbonTab:{tabId}");
+        public bool SelectRibbonTab(string tabId)
+        {
+            Calls.Add($"SelectRibbonTab:{tabId}");
+            return true;
+        }
         public void FocusNotes() => Calls.Add("FocusNotes");
         public void ShowBackstagePane(string paneId) => Calls.Add($"ShowBackstagePane:{paneId}");
         public void ShowCommentsPane() => Calls.Add("ShowCommentsPane");
@@ -130,6 +161,12 @@ public sealed class WholeWindowVisualEvidenceHostCoordinatorTests
         public void ShowMediaCaptionPane() => Calls.Add("ShowMediaCaptionPane");
         public void ShowSmartArtTextPane() => Calls.Add("ShowSmartArtTextPane");
         public void EnsureAnimationPaneVisible() => Calls.Add("EnsureAnimationPaneVisible");
+        public void ShowPrintOptionsPane() => Calls.Add("ShowPrintOptionsPane");
+        public void OpenTablePicker() => Calls.Add("OpenTablePicker");
+        public void OpenLayoutPicker() => Calls.Add("OpenLayoutPicker");
+        public void HideTablePicker() => Calls.Add("HideTablePicker");
+        public void HideLayoutPicker() => Calls.Add("HideLayoutPicker");
+        public void RefreshCanvas() => Calls.Add("RefreshCanvas");
 
         public bool SetViewShowState(bool showGridlines, bool showGuides)
         {

@@ -49,6 +49,9 @@ public sealed class FreePHostWorkflowSemanticOwnershipTests
     [Fact]
     public void DynamicDialogAutomationIdsComeFromSharedSurfacePlans()
     {
+        var customShowComposition = ReadWorkspaceFile(
+            "freep", "FreeP.App.Presentation", "SlideShowCustomShowDialogNativeComposition.cs");
+
         SlideShowCustomShowDialogSurfaceCatalog.Surface
             .Field(SlideShowCustomShowDialogField.AvailableSlides, "slide-2")
             .AutomationId.Should().Be("FreeP.CustomShows.AvailableSlides.slide-2");
@@ -63,9 +66,12 @@ public sealed class FreePHostWorkflowSemanticOwnershipTests
         })
         {
             source.Should().Contain("Surface.Field(SlideShowCustomShowDialogField.AvailableSlides, slide.SlideId)");
-            source.Should().Contain("Surface.Action(actionId, automationSuffix)");
+            source.Should().Contain("_renderer.CreateButton(");
             source.Should().NotContain("AutomationIdToken.AppendSegment(");
         }
+
+        customShowComposition.Should().Contain("Surface.Action(action, automationSuffix)")
+            .And.NotContain("AutomationIdToken.AppendSegment(");
 
         foreach (var source in new[]
         {

@@ -3,6 +3,7 @@ using System.Reflection;
 using System.Windows;
 using System.Windows.Input;
 using FluentAssertions;
+using FreeX.App.Services;
 using FreeX.App.UI;
 using FreeX.Core.Calc;
 using FreeX.Core.Commands;
@@ -190,9 +191,19 @@ public sealed class R110_ScrollableRowColumnMergeAnchorPlaceholderTests
             _selectionAnchorField = typeof(MainWindow)
                 .GetField("_selectionAnchorField", BindingFlags.Instance | BindingFlags.NonPublic)
                 ?? throw new MissingFieldException(nameof(MainWindow), "_selectionAnchorField");
-            _countScrollableColumns = typeof(MainWindow)
-                .GetMethod("CountScrollableColumns", BindingFlags.NonPublic | BindingFlags.Static)
-                ?? throw new MissingMethodException(nameof(MainWindow), "CountScrollableColumns");
+            // The count now has a single neutral owner (FreeX.App.Services.
+            // WorkbookViewportScrollPlanner.CountVisibleScrollableColumns) that both renderers
+            // call; MainWindow no longer keeps a private copy.
+            _countScrollableColumns = typeof(WorkbookViewportScrollPlanner)
+                .GetMethod(
+                    "CountVisibleScrollableColumns",
+                    BindingFlags.Public | BindingFlags.Static,
+                    binder: null,
+                    types: [typeof(ViewportModel), typeof(uint)],
+                    modifiers: null)
+                ?? throw new MissingMethodException(
+                    nameof(WorkbookViewportScrollPlanner),
+                    "CountVisibleScrollableColumns");
         }
 
         // MainWindow_Loaded unconditionally calls CreateNewWorkbook() (unless adopting a shared

@@ -53,10 +53,10 @@ internal static class AvaloniaDialogPaneVisualEvidenceCapture
 
     private static async Task<int> CaptureAll(MainWindow anchor, string outputRoot, string? scenarioId)
     {
-        var outputPlan = FreePVisualEvidenceCaptureOrchestration.CreateHostOutputPlan(
-            outputRoot,
+        var hostPolicy = FreePVisualEvidenceCaptureOrchestration.CreateAppHostPolicy(
             FreePVisualEvidenceCaptureOrchestration.AvaloniaHost,
             FreePVisualEvidenceRoutes.DialogPane);
+        var outputPlan = hostPolicy.CreateOutputPlan(outputRoot);
 
         anchor.Width = DialogPaneVisualEvidenceCatalog.LogicalShellWidth;
         anchor.Height = DialogPaneVisualEvidenceCatalog.LogicalShellHeight;
@@ -76,7 +76,7 @@ internal static class AvaloniaDialogPaneVisualEvidenceCapture
                 {
                     var preparation = DialogPaneVisualEvidencePreparationSession.Create(scenario);
                     var access = anchor.CreateVisualCaptureAdapter();
-                    var routeHost = new AvaloniaDialogPaneVisualEvidenceRouteHost(access);
+                    var routeHost = new AvaloniaVisualEvidenceAppHost(access);
                     var dialogAdapter = new AvaloniaDialogPaneVisualEvidenceAdapter(anchor);
                     var assertions = preparation.PrepareRoute(routeHost).ToList();
                     Window target = anchor;
@@ -105,11 +105,7 @@ internal static class AvaloniaDialogPaneVisualEvidenceCapture
                         await PumpLayout();
                     }
 
-                    var scenarioOutput = FreePVisualEvidenceCaptureOrchestration.CreateScenarioOutputPlan(
-                        outputRoot,
-                        FreePVisualEvidenceCaptureOrchestration.AvaloniaHost,
-                        scenario.Id,
-                        FreePVisualEvidenceRoutes.DialogPane);
+                    var scenarioOutput = hostPolicy.CreateScenarioOutputPlan(outputRoot, scenario.Id);
                     var imagePath = scenarioOutput.ImagePath!;
                     var raster = Capture(target, imagePath);
                     var focus = DescribeFocus(target.FocusManager?.GetFocusedElement());
@@ -128,7 +124,7 @@ internal static class AvaloniaDialogPaneVisualEvidenceCapture
                         scenario.Id,
                         scenario.RouteId,
                         scenario.StateId,
-                        "avalonia",
+                        hostPolicy.Host,
                         raster.NonBackgroundPixelCount > 0 ? "complete" : "blocked",
                         scenarioOutput.ImageRelativePath!,
                         target.ClientSize.Width,
@@ -159,23 +155,14 @@ internal static class AvaloniaDialogPaneVisualEvidenceCapture
                     await PumpLayout();
                 }
             },
-            createBlockedCapture: BlockedCapture,
+            createBlockedCapture: hostPolicy.CreateBlockedDialogPaneCapture,
             createLimitation: (_, _) => null);
 
         anchor.Close();
         return VisualEvidenceCaptureOrchestrator.FinalizeHostRun(
             outputPlan,
             run,
-            (captures, limitations) => new DialogPaneVisualEvidenceHostManifest(
-                1,
-                "avalonia",
-                "visible-app-owned-render-target",
-                DialogPaneVisualEvidenceCatalog.TargetDpi,
-                DialogPaneVisualEvidenceCatalog.LogicalShellWidth,
-                DialogPaneVisualEvidenceCatalog.LogicalShellHeight,
-                FreePVisualEvidenceCaptureOrchestration.UtcTimestamp(),
-                captures,
-                limitations),
+            hostPolicy.CreateDialogPaneManifest,
             FreePVisualEvidenceCaptureOrchestration.HostManifestJsonOptions);
     }
 
@@ -253,42 +240,6 @@ internal static class AvaloniaDialogPaneVisualEvidenceCapture
             where TDialog : Window =>
             dialog as TDialog ?? throw new InvalidOperationException(
                 $"Expected {typeof(TDialog).Name}, but received {dialog.GetType().Name}.");
-    }
-
-    private sealed class AvaloniaDialogPaneVisualEvidenceRouteHost(MainWindow.AvaloniaVisualCaptureAdapter access)
-        : IDialogPaneVisualEvidenceRouteHost
-    {
-        public IReadOnlyList<uint> SelectedShapeIds => access.SelectedShapeIds;
-        public int SlideCount => access.SlideCount;
-        public int CurrentShapeCount => access.CurrentShapeCount;
-        public string? CurrentLayoutId => access.CurrentLayoutId;
-        public bool IsTablePickerVisible => access.IsTablePickerVisible;
-        public bool IsLayoutPickerVisible => access.IsLayoutPickerVisible;
-        public DialogPaneVisualEvidenceChoiceState ChoiceState => new(
-            access.TableChoiceCount,
-            access.DefaultTableChoiceCount,
-            access.CurrentLayoutChoiceCount,
-            access.DisabledLayoutChoiceCount);
-
-        public void LoadPresentation(FreeP.Core.Model.Presentation presentation) => access.LoadPresentation(presentation);
-        public void SelectShape(uint shapeId) => access.SelectShape(shapeId);
-        public void RefreshCanvas() => access.RefreshCanvas();
-        public void ShowReviewCommentsPane() => access.ShowCommentsPane();
-        public void SelectFirstReviewComment() => access.SelectFirstComment();
-        public void ShowAccessibilityCheckerPane() => access.ShowAccessibilityPane();
-        public void SelectFirstAccessibilityIssue() => access.SelectFirstAccessibilityIssue();
-        public void ShowAltTextPane() => access.ShowAltTextPane();
-        public void ShowReadingOrderPane() => access.ShowReadingOrderPane();
-        public void ShowProofingPane() => access.ShowProofingPane();
-        public void SelectFirstProofingIssue() => access.SelectFirstProofingIssue();
-        public void ShowMediaCaptionPane() => access.ShowMediaCaptionPane();
-        public void ShowSmartArtTextPane() => access.ShowSmartArtTextPane();
-        public void EnsureAnimationPaneVisible() => access.EnsureAnimationPaneVisible();
-        public void ShowPrintOptionsPane() => access.ShowPrintOptionsPane();
-        public void OpenTablePicker() => access.OpenTablePicker();
-        public void OpenLayoutPicker() => access.OpenLayoutPicker();
-        public void HideTablePicker() => access.HideTablePicker();
-        public void HideLayoutPicker() => access.HideLayoutPicker();
     }
 
     private static void FocusFirstInputIfNeeded(
@@ -404,30 +355,6 @@ internal static class AvaloniaDialogPaneVisualEvidenceCapture
         await Dispatcher.UIThread.InvokeAsync(() => { }, DispatcherPriority.Render);
         await Dispatcher.UIThread.InvokeAsync(() => { }, DispatcherPriority.Background);
     }
-
-    private static DialogPaneVisualEvidenceCapture BlockedCapture(
-        DialogPaneVisualEvidenceScenario scenario,
-        Exception exception) =>
-        new(
-            scenario.Id,
-            scenario.RouteId,
-            scenario.StateId,
-            "avalonia",
-            "blocked",
-            string.Empty,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            string.Empty,
-            string.Empty,
-            [],
-            [],
-            [new("capture-completed", false, exception.Message)],
-            [$"Capture failed: {exception.GetType().Name}: {exception.Message}"]);
 
     private sealed record CaptureRaster(
         double LogicalWidth,

@@ -3,7 +3,8 @@ using Free.Shared.Ribbon;
 namespace FreeW.App.Presentation.Ribbon;
 
 public sealed record FreeWRibbonHostExecutionCommands(
-    IRibbonStatefulCommand ReviewingPane);
+    IRibbonStatefulCommand ReviewingPane,
+    IRibbonStatefulCommand? ShowMarkupBalloons);
 
 /// <summary>
 /// Maps shell-owned operations to canonical FreeW actions. Editor-context and native control
@@ -96,13 +97,13 @@ public static class FreeWRibbonHostExecutionProfile
             FreeWRibbonCommandAction.ShowNotes,
             ports.ToggleNotesPane,
             ports.IsNotesPaneVisible);
-        BindOptionalToggle(
+        var showMarkupBalloons = BindOptionalToggle(
             bindings,
             FreeWRibbonCommandAction.ShowMarkupBalloons,
             ports.ToggleReviewBalloons,
             ports.IsReviewBalloonsActive);
         RegisterSupportCommands(bindings, ports);
-        return new FreeWRibbonHostExecutionCommands(reviewingPane);
+        return new FreeWRibbonHostExecutionCommands(reviewingPane, showMarkupBalloons);
     }
 
     public static void RegisterSupportCommands(
@@ -126,14 +127,16 @@ public static class FreeWRibbonHostExecutionProfile
         Action? callback) =>
         bindings.Bind(action, CommandOrUnavailable(callback));
 
-    private static void BindOptionalToggle(
+    private static IRibbonStatefulCommand? BindOptionalToggle(
         FreeWRibbonCommandBindingPorts bindings,
         FreeWRibbonCommandAction action,
         Action? toggle,
         Func<bool>? isChecked)
     {
         if (toggle is not null && isChecked is not null)
-            bindings.BindToggle(action, toggle, isChecked);
+            return bindings.BindToggle(action, toggle, isChecked);
+
+        return null;
     }
 
     private static IRibbonCommand CommandOrUnavailable(Action? callback) =>

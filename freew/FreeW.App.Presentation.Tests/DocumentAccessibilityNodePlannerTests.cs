@@ -125,6 +125,63 @@ public sealed class DocumentAccessibilityNodePlannerTests
     }
 
     [Fact]
+    public void Build_exposes_numbered_footnote_and_endnote_bodies_as_semantic_stories()
+    {
+        var document = TextDocument.CreateEmpty();
+        document.FootnoteNumbering.StartAt = 3;
+        document.FootnoteNumbering.NumberFormat = NoteNumberFormat.LowerRoman;
+        document.Footnotes[9] = new Footnote(9, "First visible footnote");
+        document.Footnotes[12] = new Footnote(12, "Second visible footnote");
+        document.EndnoteNumbering.NumberFormat = NoteNumberFormat.UpperLetter;
+        document.Endnotes[4] = new Endnote(4, "Document endnote");
+
+        var tree = DocumentAccessibilityNodePlanner.Build(document);
+
+        var footnotes = tree.Children.Single(node => node.Kind == DocumentAccessibilityNodeKind.Footnotes);
+        footnotes.Id.Should().Be("story:footnotes");
+        footnotes.Name.Should().Be("Footnotes");
+        footnotes.SemanticChildren.Select(node => node.Id).Should().Equal("footnotes:9", "footnotes:12");
+        footnotes.SemanticChildren.Select(node => node.Name).Should().Equal(
+            "Footnote iii: First visible footnote",
+            "Footnote iv: Second visible footnote");
+        footnotes.SemanticChildren.Select(node => node.Value).Should().Equal(
+            "iii First visible footnote",
+            "iv Second visible footnote");
+        footnotes.SemanticChildren.Should().OnlyContain(node =>
+            node.Kind == DocumentAccessibilityNodeKind.Footnote && node.BlockIndex == -1);
+
+        var endnotes = tree.Children.Single(node => node.Kind == DocumentAccessibilityNodeKind.Endnotes);
+        endnotes.Id.Should().Be("story:endnotes");
+        endnotes.SemanticChildren.Should().ContainSingle()
+            .Which.Should().Match<DocumentAccessibilityNode>(node =>
+                node.Id == "endnotes:4"
+                && node.Kind == DocumentAccessibilityNodeKind.Endnote
+                && node.Name == "Endnote A: Document endnote"
+                && node.Value == "A Document endnote");
+        tree.ById.Should().ContainKeys("story:footnotes", "footnotes:9", "story:endnotes", "endnotes:4");
+    }
+
+    [Fact]
+    public void Avalonia_peer_maps_note_stories_to_groups_and_note_bodies_to_read_only_values()
+    {
+        var root = TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeW.slnx");
+        var source = File.ReadAllText(Path.Combine(
+            root,
+            "freew",
+            "FreeW.App.Avalonia",
+            "Editing",
+            "DocumentViewAutomationPeer.cs"));
+
+        var normalized = source.ReplaceLineEndings("\n");
+        normalized.Should().Contain(
+                "DocumentAccessibilityNodeKind.Footnotes or DocumentAccessibilityNodeKind.Endnotes => AutomationControlType.Group")
+            .And.Contain(
+                "DocumentAccessibilityNodeKind.Footnote or DocumentAccessibilityNodeKind.Endnote => AutomationControlType.Text")
+            .And.Contain(
+                "DocumentAccessibilityNodeKind.Footnote or DocumentAccessibilityNodeKind.Endnote =>\n                new DocumentValueAutomationPeer");
+    }
+
+    [Fact]
     public void Build_creates_stable_paragraph_link_and_image_nodes()
     {
         var paragraph = new Paragraph();

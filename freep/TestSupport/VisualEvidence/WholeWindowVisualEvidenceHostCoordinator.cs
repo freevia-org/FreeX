@@ -3,31 +3,8 @@ using FreeP.Core.Model;
 
 namespace FreeP.VisualEvidence;
 
-public interface IWholeWindowVisualEvidenceProbe
+public interface IWholeWindowVisualEvidenceNativeInspector
 {
-    void LoadPresentation(Presentation presentation);
-    void SelectSlide(int slideIndex);
-    void SelectShape(uint shapeId);
-    void ClearSelection();
-    void HideCommentsPane();
-    void SelectRibbonTab(string tabId);
-    void FocusNotes();
-    void ShowBackstagePane(string paneId);
-    void ShowCommentsPane();
-    void SelectFirstComment();
-    void ShowAccessibilityPane();
-    void SelectFirstAccessibilityIssue();
-    void ShowAltTextPane();
-    void ShowReadingOrderPane();
-    void ShowProofingPane();
-    void SelectFirstProofingIssue();
-    void ShowMediaCaptionPane();
-    void ShowSmartArtTextPane();
-    void EnsureAnimationPaneVisible();
-    bool SetViewShowState(bool showGridlines, bool showGuides);
-    void SetZoom(PresentationViewZoomState state);
-    void RefreshWholeWindow();
-    void NormalizeShell();
     WholeWindowVisualEvidenceBaselineState CaptureBaselineState();
     WholeWindowVisualEvidenceRichEditorPreparationState PrepareRichEditor(
         WholeWindowVisualEvidenceRichEditorPlan plan);
@@ -71,7 +48,9 @@ public sealed record WholeWindowVisualEvidenceRichEditorProbeState(
     string SelectedText,
     WholeWindowVisualEvidenceBounds Bounds);
 
-public sealed class WholeWindowVisualEvidenceHostCoordinator(IWholeWindowVisualEvidenceProbe probe)
+public sealed class WholeWindowVisualEvidenceHostCoordinator(
+    IVisualEvidenceAppHost host,
+    IWholeWindowVisualEvidenceNativeInspector inspector)
 {
     private bool _viewStateActivated;
     private WholeWindowVisualEvidencePreparationPlan? _preparation;
@@ -83,32 +62,40 @@ public sealed class WholeWindowVisualEvidenceHostCoordinator(IWholeWindowVisualE
         var plan = WholeWindowVisualEvidencePreparationSession.Prepare(scenario, fixture);
         _preparation = plan;
         if (plan.LoadFixturePresentation)
-            probe.LoadPresentation(fixture.Presentation);
-        probe.SelectSlide(plan.SlideIndex);
+            host.LoadPresentation(fixture.Presentation);
+        host.SelectSlide(plan.SlideIndex);
         if (plan.SelectionShapeId == 0)
-            probe.ClearSelection();
+            host.ClearSelection();
         else
-            probe.SelectShape(plan.SelectionShapeId);
+            host.SelectShape(plan.SelectionShapeId);
 
-        probe.HideCommentsPane();
-        probe.SelectRibbonTab(plan.ActiveRibbonTabId);
+        host.HideCommentsPane();
+        host.SelectRibbonTab(plan.ActiveRibbonTabId);
+        var assertions = plan.CreateBaselineAssertions(inspector.CaptureBaselineState()).ToList();
         _viewStateActivated = !plan.Activation.IsViewState;
         Activate(plan.Activation);
-        probe.RefreshWholeWindow();
+        host.RefreshWholeWindow();
         Normalize(scenario);
 
-        var assertions = plan.CreateBaselineAssertions(probe.CaptureBaselineState()).ToList();
         if (plan.RichEditor is { } richEditor)
-            assertions.AddRange(plan.CreateRichEditorAssertions(probe.PrepareRichEditor(richEditor)));
+            assertions.AddRange(plan.CreateRichEditorAssertions(inspector.PrepareRichEditor(richEditor)));
         return assertions;
     }
 
     public void Normalize(WholeWindowVisualEvidenceScenario scenario)
     {
+        if (_preparation is { } preparation && host.CurrentSlideIndex != preparation.SlideIndex)
+        {
+            host.SelectSlide(preparation.SlideIndex);
+            if (preparation.SelectionShapeId != 0)
+                host.SelectShape(preparation.SelectionShapeId);
+            host.RefreshWholeWindow();
+        }
+
         var activation = WholeWindowVisualEvidencePreparationSession.ResolveActivation(scenario);
         if (activation.IsViewState)
             _viewStateActivated = PrepareViewState(activation.Kind);
-        probe.NormalizeShell();
+        host.NormalizeShell();
     }
 
     public WholeWindowVisualEvidenceSemanticState CaptureSemantic(
@@ -117,7 +104,7 @@ public sealed class WholeWindowVisualEvidenceHostCoordinator(IWholeWindowVisualE
     {
         var preparation = _preparation ??
             throw new InvalidOperationException("Whole-window evidence must be prepared before semantic capture.");
-        var state = probe.CaptureSemanticState(scenario);
+        var state = inspector.CaptureSemanticState(scenario);
         var assertions = preparationAssertions.ToList();
         assertions.AddRange(preparation.CreateActivationAssertions(new(
             _viewStateActivated,
@@ -166,7 +153,7 @@ public sealed class WholeWindowVisualEvidenceHostCoordinator(IWholeWindowVisualE
             !StringComparer.Ordinal.Equals(scenario.ActivationId, "selection"))
             return semantic;
 
-        var richEditor = probe.CaptureRichEditorState();
+        var richEditor = inspector.CaptureRichEditorState();
         return semantic with
         {
             RichEditor = new WholeWindowVisualEvidenceRichEditorState(
@@ -185,45 +172,45 @@ public sealed class WholeWindowVisualEvidenceHostCoordinator(IWholeWindowVisualE
             case WholeWindowVisualEvidenceActivationKind.None:
                 break;
             case WholeWindowVisualEvidenceActivationKind.FocusNotesPane:
-                probe.FocusNotes();
+                host.FocusNotes();
                 break;
             case WholeWindowVisualEvidenceActivationKind.BackstagePane:
-                probe.ShowBackstagePane(activation.Id);
+                host.ShowBackstagePane(activation.Id);
                 break;
             case WholeWindowVisualEvidenceActivationKind.ReviewCommentsPane:
-                probe.ShowCommentsPane();
-                probe.SelectFirstComment();
+                host.ShowCommentsPane();
+                host.SelectFirstComment();
                 break;
             case WholeWindowVisualEvidenceActivationKind.AccessibilityCheckerPane:
-                probe.ShowAccessibilityPane();
-                probe.SelectFirstAccessibilityIssue();
+                host.ShowAccessibilityPane();
+                host.SelectFirstAccessibilityIssue();
                 break;
             case WholeWindowVisualEvidenceActivationKind.AltTextPane:
-                probe.ShowAltTextPane();
+                host.ShowAltTextPane();
                 break;
             case WholeWindowVisualEvidenceActivationKind.ReadingOrderPane:
-                probe.ShowReadingOrderPane();
+                host.ShowReadingOrderPane();
                 break;
             case WholeWindowVisualEvidenceActivationKind.ProofingPane:
-                probe.ShowProofingPane();
-                probe.SelectFirstProofingIssue();
+                host.ShowProofingPane();
+                host.SelectFirstProofingIssue();
                 break;
             case WholeWindowVisualEvidenceActivationKind.MediaCaptionPane:
-                probe.ShowMediaCaptionPane();
+                host.ShowMediaCaptionPane();
                 break;
             case WholeWindowVisualEvidenceActivationKind.SmartArtTextPane:
-                probe.ShowSmartArtTextPane();
+                host.ShowSmartArtTextPane();
                 break;
             case WholeWindowVisualEvidenceActivationKind.AnimationPane:
-                probe.EnsureAnimationPaneVisible();
+                host.EnsureAnimationPaneVisible();
                 break;
         }
     }
 
     private bool PrepareViewState(WholeWindowVisualEvidenceActivationKind activation) => activation switch
     {
-        WholeWindowVisualEvidenceActivationKind.ViewGridlinesAndGuides => probe.SetViewShowState(true, true),
-        WholeWindowVisualEvidenceActivationKind.ViewCleanCanvas => probe.SetViewShowState(false, false),
+        WholeWindowVisualEvidenceActivationKind.ViewGridlinesAndGuides => host.SetViewShowState(true, true),
+        WholeWindowVisualEvidenceActivationKind.ViewCleanCanvas => host.SetViewShowState(false, false),
         WholeWindowVisualEvidenceActivationKind.ViewZoomFit => SetZoom(PresentationViewZoomState.FitToWindow),
         WholeWindowVisualEvidenceActivationKind.ViewZoom200 =>
             SetZoom(new PresentationViewZoomState(PresentationViewZoomMode.Percent, 200)),
@@ -232,7 +219,7 @@ public sealed class WholeWindowVisualEvidenceHostCoordinator(IWholeWindowVisualE
 
     private bool SetZoom(PresentationViewZoomState state)
     {
-        probe.SetZoom(state);
+        host.SetZoom(state);
         return true;
     }
 }

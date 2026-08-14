@@ -68,7 +68,6 @@ namespace FreeP.App.Avalonia;
 /// </summary>
 public sealed partial class MainWindow : Window,
     IPresentationAltTextPaneHostView,
-    IPresentationMediaPaneHostView,
     IPresentationReadingOrderPaneHostView
 {
     partial void InitializeConditionalHost();
@@ -164,6 +163,8 @@ public sealed partial class MainWindow : Window,
     private ScrollViewer _reviewCommentsPaneScrollViewer = null!;
     private StackPanel _reviewCommentsPanePanel = null!;
     private readonly PresentationReviewWorkflowSession _reviewWorkflowSession;
+    private readonly PresentationMainWindowReviewPaneCoordinator _reviewPaneHostCoordinator = null!;
+    private readonly PresentationProofingPaneNativeViewAdapter<Control> _proofingPaneNativeView;
     private Border _altTextPaneHost = null!;
     private TextBlock _altTextPaneHeading = null!;
     private TextBlock _altTextPaneMessage = null!;
@@ -239,8 +240,12 @@ public sealed partial class MainWindow : Window,
     private Button _mediaCaptionReplaceButton = null!;
     private Button _mediaCaptionDeleteButton = null!;
     private Button _mediaCaptionCloseButton = null!;
+    private PresentationMediaPaneCaptionNativeControls<TextBlock, TextBox> _mediaCaptionControls = null!;
+    private PresentationMediaPaneNativeButtons<Button> _mediaPaneButtons = null!;
+    private readonly PresentationMediaPaneHostViewAdapter _avaloniaMediaPaneHostView;
     private readonly PresentationMediaPaneHostCoordinator _mediaPaneHostCoordinator;
     private readonly PresentationSmartArtTextPaneSession _smartArtTextPaneSession;
+    private readonly PresentationSmartArtTextPaneNativeViewAdapter<TextBox> _smartArtTextPaneNativeView;
     private readonly PresentationZoomAuthoringSession _zoomAuthoringSession;
     private readonly PresentationDomainContextMenuSession _domainContextMenuSession;
     private readonly PresentationNotesPaneSession _notesPaneSession;
@@ -527,14 +532,40 @@ public sealed partial class MainWindow : Window,
             restoreOwnerFocus: RestoreOwnerFocus);
 
         _readingOrderPaneHostCoordinator = new(_workareaSession.Panes, this);
+        _proofingPaneNativeView = new(
+            new PresentationProofingPaneNativeViewBindings<Control>(
+                SetHeading: value => _proofingPaneHeading.Text = value,
+                SetMessage: value => _proofingPaneMessage.Text = value,
+                ClearRows: () => _proofingPaneRowsPanel.Children.Clear(),
+                AddEmptyState: message => _proofingPaneRowsPanel.Children.Add(BuildProofingEmptyState(message)),
+                BuildRow: BuildProofingIssueRowCard,
+                AddRow: row => _proofingPaneRowsPanel.Children.Add(row)));
+        _smartArtTextPaneNativeView = new(
+            new PresentationSmartArtTextPaneNativeViewBindings<TextBox>(
+                SetUpdating: value => _smartArtTextPaneRefreshing = value,
+                ClearRows: () => _smartArtTextPaneRowsPanel.Children.Clear(),
+                SetHeading: value => _smartArtTextPaneHeading.Text = value,
+                SetMessage: value => _smartArtTextPaneMessage.Text = value,
+                SetApplyEnabled: value => _smartArtTextPaneApplyButton.IsEnabled = value,
+                SetAssistantEnabled: value => _smartArtTextPaneAssistantButton.IsEnabled = value,
+                SetEditActionsEnabled: value =>
+                {
+                    foreach (var button in _smartArtTextPaneActionButtons)
+                        button.IsEnabled = value;
+                },
+                BuildRow: BuildSmartArtTextPaneRow,
+                ApplyAccessibility: PresentationPaneAccessibilityAdapter.ApplyItem,
+                AddRow: row => _smartArtTextPaneRowsPanel.Children.Add(row)));
         _reviewWorkflowSession = new(
             () => Editor,
             new PresentationReviewWorkflowSessionCallbacks(
                 MarkDirty: () => _fileWorkflow.MarkDirty(),
                 RefreshCanvas: RefreshCanvas,
                 RefreshNotesPane: RefreshNotesPane,
-                RenderAccessibilityCheckerPaneIfVisible: RenderAccessibilityCheckerPaneIfVisible,
-                PresentAccessibilityCheckerPane: PresentAccessibilityCheckerPane,
+                RenderAccessibilityCheckerPaneIfVisible: plan =>
+                    _reviewPaneHostCoordinator.RenderAccessibilityPaneIfVisible(plan),
+                PresentAccessibilityCheckerPane: plan =>
+                    _reviewPaneHostCoordinator.PresentAccessibilityPane(plan),
                 OpenAltTextPane: () => ShowAltTextPane(),
                 OpenHyperlinkDialog: () => OpenHyperlinkDialog(),
                 OpenMediaCaptionPane: () => MediaPaneHost.Show(),
@@ -542,15 +573,29 @@ public sealed partial class MainWindow : Window,
                 RenderAltTextPaneIfVisible: RenderAltTextPaneIfVisible,
                 RenderReadingOrderPaneIfVisible: plan => _readingOrderPaneHostCoordinator.RenderIfVisible(plan),
                 PresentReadingOrderPane: plan => _readingOrderPaneHostCoordinator.Present(plan),
-                RenderProofingPaneIfVisible: RenderProofingPaneIfVisible,
-                PresentProofingPane: PresentProofingPane,
+                RenderProofingPaneIfVisible: plan =>
+                    _reviewPaneHostCoordinator.RenderProofingPaneIfVisible(plan),
+                PresentProofingPane: plan => _reviewPaneHostCoordinator.PresentProofingPane(plan),
                 UpdateAfterCommentMutation: UpdateStatus,
                 UpdateAfterCommentNavigation: UpdateStatus,
                 UpdateAfterProofingCorrection: UpdateStatus));
+        _reviewPaneHostCoordinator = new(
+            _reviewWorkflowSession,
+            _workareaSession.Panes,
+            new DelegatingPresentationMainWindowReviewPaneView(
+                new PresentationMainWindowReviewPaneViewBindings(
+                    IsAccessibilityPaneVisible: () => IsAccessibilityCheckerPaneVisible,
+                    IsProofingPaneVisible: () => IsProofingPaneVisible,
+                    SetAccessibilityPaneVisible: visible => _accessibilityCheckerPaneHost.IsVisible = visible,
+                    SetProofingPaneVisible: visible => _proofingPaneHost.IsVisible = visible,
+                    RenderAccessibilityPane: RenderAccessibilityCheckerPane,
+                    RenderProofingPane: RenderProofingPane,
+                    RefreshPaneAccessibilityMetadata: RefreshPaneAccessibilityMetadata)));
         _altTextPaneHostCoordinator = new(
             _reviewWorkflowSession,
             _workareaSession.Panes,
             this);
+        _avaloniaMediaPaneHostView = BuildAvaloniaMediaPaneHostView();
         _mediaPaneHostCoordinator = new(
             new PresentationMediaPaneSession(
                 () => Editor,
@@ -559,7 +604,7 @@ public sealed partial class MainWindow : Window,
                     RefreshReviewWorkflowPlans: RefreshReviewWorkflowPlans,
                     UpdateHost: UpdateStatus)),
             _workareaSession.Panes,
-            this);
+            _avaloniaMediaPaneHostView);
         _smartArtTextPaneSession = new(
             () => Editor,
             new PresentationSmartArtTextPaneSessionCallbacks(
@@ -607,6 +652,7 @@ public sealed partial class MainWindow : Window,
             chrome: ribbon,
             workArea: BuildBody(),
             statusBar: statusBar));
+        BindMediaPaneEvents();
         _backstage = new BackstageView(BuildBackstageEndpoints());
         var clientRoot = new Grid();
         clientRoot.Children.Add(frame.Root);
@@ -1020,11 +1066,6 @@ public sealed partial class MainWindow : Window,
             || _selectionPane is null || _animationPaneHost is null)
             return;
 
-        var commentPlan = LastCommentPanePlan;
-        var accessibilityPlan = LastAccessibilityCheckerPanePlan;
-        var readingOrderPlan = LastReadingOrderPlan;
-        var proofingPlan = LastProofingPanePlan;
-        var captionPlan = LastMediaCaptionAuthoringPanePlan;
         var smartArtItemCount = _smartArtTextPaneRowsPanel?.Children.Count ?? 0;
         var selectionPlan = _selectionPane.CurrentPlan;
         var animationPlan = _animationPaneSession.Refresh();
@@ -1033,45 +1074,41 @@ public sealed partial class MainWindow : Window,
             .FirstOrDefault(box =>
                 box.Tag is SmartArtNodeOutlineItem item &&
                 StringComparer.Ordinal.Equals(item.ModelId, _smartArtTextPaneSession.SelectedModelId));
+        var selectedSmartArtIndex = selectedSmartArtRow is null || _smartArtTextPaneRowsPanel is null
+            ? -1
+            : _smartArtTextPaneRowsPanel.Children.IndexOf(selectedSmartArtRow);
+        var states = PresentationMainWindowPaneAccessibilityPlan.Build(
+            _reviewWorkflowSession,
+            _mediaPaneHostCoordinator,
+            _workareaSession.Panes,
+            _presentation.Slides.Count,
+            Editor.CurrentSlideIndex,
+            new(
+                _accessibilityCheckerRowsPanel?.Children.Count ?? 0,
+                _readingOrderPaneItemsPanel?.Children.Count ?? 0,
+                _proofingPaneRowsPanel?.Children.Count ?? 0,
+                _mediaCaptionTrackBox?.Items.Count ?? 0,
+                _mediaCaptionTrackBox?.SelectedIndex ?? -1,
+                smartArtItemCount,
+                selectedSmartArtIndex,
+                selectionPlan.Items.Count,
+                selectionPlan.SelectedItemIndex,
+                _animationPaneHost.IsVisible,
+                animationPlan?.Items.Count ?? _animationPaneItemsPanel?.Children.Count ?? 0,
+                animationPlan?.SelectedIndex ?? -1));
+        Control[] controls =
+        [
+            _slidePaneList, _notesBox, _reviewCommentsPaneHost, _accessibilityCheckerPaneHost,
+            _altTextPaneHost, _readingOrderPaneHost, _proofingPaneHost, _mediaCaptionPaneHost,
+            _smartArtTextPaneHost, _selectionPane, _animationPaneHost,
+        ];
 
-        _paneAccessibility.ApplyPane(_slidePaneList, PresentationPaneAccessibilityPlanner.SlidePaneId, true,
-            _presentation.Slides.Count, Editor.CurrentSlideIndex);
-        _paneAccessibility.ApplyPane(_notesBox, PresentationPaneAccessibilityPlanner.NotesPaneId, true, 1);
-        _paneAccessibility.ApplyPane(_reviewCommentsPaneHost, PresentationPaneAccessibilityPlanner.CommentsPaneId,
-            _workareaSession.Panes.IsVisible(PresentationWorkareaPane.ReviewComments),
-            commentPlan?.Comments.Count ?? 0, commentPlan?.SelectedCommentIndex ?? -1);
-        _paneAccessibility.ApplyPane(_accessibilityCheckerPaneHost, PresentationPaneAccessibilityPlanner.AccessibilityPaneId,
-            _workareaSession.Panes.IsVisible(PresentationWorkareaPane.AccessibilityChecker),
-            accessibilityPlan?.Rows.Count ?? _accessibilityCheckerRowsPanel?.Children.Count ?? 0,
-            accessibilityPlan?.SelectedRowIndex ?? -1);
-        _paneAccessibility.ApplyPane(_altTextPaneHost, PresentationPaneAccessibilityPlanner.AltTextPaneId,
-            _workareaSession.Panes.IsVisible(PresentationWorkareaPane.AltText), 3);
-        _paneAccessibility.ApplyPane(_readingOrderPaneHost, PresentationPaneAccessibilityPlanner.ReadingOrderPaneId,
-            _workareaSession.Panes.IsVisible(PresentationWorkareaPane.ReadingOrder),
-            readingOrderPlan?.Items.Count ?? _readingOrderPaneItemsPanel?.Children.Count ?? 0,
-            readingOrderPlan?.SelectedItemIndex ?? -1);
-        _paneAccessibility.ApplyPane(_proofingPaneHost, PresentationPaneAccessibilityPlanner.ProofingPaneId,
-            _workareaSession.Panes.IsVisible(PresentationWorkareaPane.Proofing),
-            proofingPlan?.Rows.Count ?? _proofingPaneRowsPanel?.Children.Count ?? 0,
-            proofingPlan?.SelectedRowIndex ?? -1);
-        _paneAccessibility.ApplyPane(_mediaCaptionPaneHost, PresentationPaneAccessibilityPlanner.MediaCaptionPaneId,
-            _workareaSession.Panes.IsVisible(PresentationWorkareaPane.MediaCaption),
-            captionPlan?.Tracks.Count ?? _mediaCaptionTrackBox?.Items.Count ?? 0,
-            captionPlan?.SelectedTrackIndex ?? _mediaCaptionTrackBox?.SelectedIndex ?? -1);
-        _paneAccessibility.ApplyPane(_smartArtTextPaneHost, PresentationPaneAccessibilityPlanner.SmartArtTextPaneId,
-            _workareaSession.Panes.IsVisible(PresentationWorkareaPane.SmartArtText),
-            smartArtItemCount,
-            selectedSmartArtRow is null || _smartArtTextPaneRowsPanel is null
-                ? -1
-                : _smartArtTextPaneRowsPanel.Children.IndexOf(selectedSmartArtRow));
-        _paneAccessibility.ApplyPane(_selectionPane, PresentationPaneAccessibilityPlanner.SelectionPaneId,
-            _workareaSession.Panes.IsVisible(PresentationWorkareaPane.Selection),
-            selectionPlan.Items.Count,
-            selectionPlan.SelectedItemIndex);
-        _paneAccessibility.ApplyPane(_animationPaneHost, PresentationPaneAccessibilityPlanner.AnimationPaneId,
-            _animationPaneHost.IsVisible,
-            animationPlan?.Items.Count ?? _animationPaneItemsPanel?.Children.Count ?? 0,
-            animationPlan?.SelectedIndex ?? -1);
+        for (var index = 0; index < states.Count; index++)
+        {
+            var state = states[index];
+            _paneAccessibility.ApplyPane(
+                controls[index], state.PaneId, state.IsVisible, state.ItemCount, state.SelectedIndex);
+        }
     }
 
     private Border BuildPrintOptionsPaneHost()
@@ -1260,16 +1297,6 @@ public sealed partial class MainWindow : Window,
             Margin = MediaPaneMargin(0, PresentationMediaPaneVisualMetrics.TrackBottomMargin),
             MinHeight = PresentationMediaPaneVisualMetrics.CompactControlHeight,
         };
-        _mediaCaptionTrackBox.SelectionChanged += (_, _) =>
-        {
-            if (_mediaPaneHostCoordinator.IsUpdating || LastMediaCaptionAuthoringPanePlan is null)
-                return;
-            var selectedIndex = _mediaCaptionTrackBox.SelectedIndex;
-            _mediaPaneHostCoordinator.SelectCaptionTrack(selectedIndex >= 0
-                && selectedIndex < LastMediaCaptionAuthoringPanePlan.Tracks.Count
-                    ? LastMediaCaptionAuthoringPanePlan.Tracks[selectedIndex].TrackIndex
-                    : null);
-        };
 
         _mediaCaptionLabelText = BuildMediaCaptionPaneLabel();
         _mediaCaptionLabelBox = BuildMediaCaptionPaneTextBox(singleLine: true);
@@ -1290,7 +1317,6 @@ public sealed partial class MainWindow : Window,
         };
         _mediaVolumeApplyButton = BuildMediaCaptionPaneButton();
         _mediaVolumeApplyButton.Content = PresentationPaneTextResources.ApplyVolume;
-        _mediaVolumeApplyButton.Click += (_, _) => _mediaPaneHostCoordinator.ApplyVolume();
         _mediaStartModeText = BuildMediaCaptionPaneLabel();
         _mediaStartModeText.Text = PresentationPaneTextResources.PlaybackStart;
         _mediaStartModeBox = new ComboBox
@@ -1301,57 +1327,24 @@ public sealed partial class MainWindow : Window,
                 .Select(option => option.Label)
                 .ToArray(),
         };
-        _mediaLoopCheckBox = new CheckBox
-        {
-            Content = PresentationPaneTextResources.LoopUntilStopped,
-            Margin = MediaPaneMargin(
-                PresentationMediaPaneVisualMetrics.CheckBoxTopMargin,
-                PresentationMediaPaneVisualMetrics.FieldBottomMargin),
-        };
-        _mediaShowWhenStoppedCheckBox = new CheckBox
-        {
-            Content = PresentationPaneTextResources.ShowWhenStopped,
-            Margin = MediaPaneMargin(
-                PresentationMediaPaneVisualMetrics.CheckBoxTopMargin,
-                PresentationMediaPaneVisualMetrics.FieldBottomMargin),
-            IsChecked = true,
-        };
-        _mediaRewindAfterPlayingCheckBox = new CheckBox
-        {
-            Content = PresentationPaneTextResources.RewindAfterPlaying,
-            Margin = MediaPaneMargin(
-                PresentationMediaPaneVisualMetrics.CheckBoxTopMargin,
-                PresentationMediaPaneVisualMetrics.FieldBottomMargin),
-        };
-        _mediaPlayFullScreenCheckBox = new CheckBox
-        {
-            Content = PresentationPaneTextResources.PlayFullScreen,
-            Margin = MediaPaneMargin(
-                PresentationMediaPaneVisualMetrics.CheckBoxTopMargin,
-                PresentationMediaPaneVisualMetrics.FieldBottomMargin),
-        };
-        _mediaStopAfterSlidesText = BuildMediaCaptionPaneLabel();
-        _mediaStopAfterSlidesText.Text = PresentationPaneTextResources.StopAfterSlides;
-        _mediaStopAfterSlidesBox = BuildMediaCaptionPaneTextBox(singleLine: true);
-        _mediaStopAfterSlidesBox.Text = PresentationMediaPaneSession.DefaultStopAfterSlides.ToString();
+        _mediaLoopCheckBox = BuildMediaPaneToggle(PresentationMediaPaneControlCatalog.Loop);
+        _mediaShowWhenStoppedCheckBox = BuildMediaPaneToggle(PresentationMediaPaneControlCatalog.ShowWhenStopped);
+        _mediaRewindAfterPlayingCheckBox = BuildMediaPaneToggle(PresentationMediaPaneControlCatalog.RewindAfterPlaying);
+        _mediaPlayFullScreenCheckBox = BuildMediaPaneToggle(PresentationMediaPaneControlCatalog.PlayFullScreen);
+        (_mediaStopAfterSlidesText, _mediaStopAfterSlidesBox) =
+            BuildMediaPaneTextControl(PresentationMediaPaneControlCatalog.StopAfterSlides);
         _mediaPlaybackApplyButton = BuildMediaCaptionPaneButton();
         _mediaPlaybackApplyButton.Content = PresentationPaneTextResources.ApplyPlayback;
-        _mediaPlaybackApplyButton.Click += (_, _) => _mediaPaneHostCoordinator.ApplyPlayback();
-        _mediaTrimStartText = BuildMediaCaptionPaneLabel();
-        _mediaTrimStartText.Text = PresentationPaneTextResources.TrimStartMilliseconds;
-        _mediaTrimStartBox = BuildMediaCaptionPaneTextBox(singleLine: true);
-        _mediaTrimEndText = BuildMediaCaptionPaneLabel();
-        _mediaTrimEndText.Text = PresentationPaneTextResources.TrimEndMilliseconds;
-        _mediaTrimEndBox = BuildMediaCaptionPaneTextBox(singleLine: true);
-        _mediaFadeInText = BuildMediaCaptionPaneLabel();
-        _mediaFadeInText.Text = PresentationPaneTextResources.FadeInMilliseconds;
-        _mediaFadeInBox = BuildMediaCaptionPaneTextBox(singleLine: true);
-        _mediaFadeOutText = BuildMediaCaptionPaneLabel();
-        _mediaFadeOutText.Text = PresentationPaneTextResources.FadeOutMilliseconds;
-        _mediaFadeOutBox = BuildMediaCaptionPaneTextBox(singleLine: true);
+        (_mediaTrimStartText, _mediaTrimStartBox) =
+            BuildMediaPaneTextControl(PresentationMediaPaneControlCatalog.TrimStart);
+        (_mediaTrimEndText, _mediaTrimEndBox) =
+            BuildMediaPaneTextControl(PresentationMediaPaneControlCatalog.TrimEnd);
+        (_mediaFadeInText, _mediaFadeInBox) =
+            BuildMediaPaneTextControl(PresentationMediaPaneControlCatalog.FadeIn);
+        (_mediaFadeOutText, _mediaFadeOutBox) =
+            BuildMediaPaneTextControl(PresentationMediaPaneControlCatalog.FadeOut);
         _mediaTimingApplyButton = BuildMediaCaptionPaneButton();
         _mediaTimingApplyButton.Content = PresentationPaneTextResources.ApplyTiming;
-        _mediaTimingApplyButton.Click += (_, _) => _mediaPaneHostCoordinator.ApplyTiming();
         _mediaBookmarkText = BuildMediaCaptionPaneLabel();
         _mediaBookmarkText.Text = PresentationPaneTextResources.MediaBookmarks;
         _mediaBookmarkBox = new ComboBox
@@ -1359,45 +1352,30 @@ public sealed partial class MainWindow : Window,
             Margin = MediaPaneMargin(0, PresentationMediaPaneVisualMetrics.FieldBottomMargin),
             MinHeight = PresentationMediaPaneVisualMetrics.CompactControlHeight,
         };
-        _mediaBookmarkBox.SelectionChanged += (_, _) =>
-        {
-            if (_mediaPaneHostCoordinator.IsUpdating)
-                return;
-            _mediaPaneHostCoordinator.SelectBookmark(_mediaBookmarkBox.SelectedItem is ComboBoxItem { Tag: int index }
-                ? index
-                : null);
-        };
-        _mediaBookmarkNameText = BuildMediaCaptionPaneLabel();
-        _mediaBookmarkNameText.Text = PresentationPaneTextResources.BookmarkName;
-        _mediaBookmarkNameBox = BuildMediaCaptionPaneTextBox(singleLine: true);
-        _mediaBookmarkTimeText = BuildMediaCaptionPaneLabel();
-        _mediaBookmarkTimeText.Text = PresentationPaneTextResources.BookmarkTimeMilliseconds;
-        _mediaBookmarkTimeBox = BuildMediaCaptionPaneTextBox(singleLine: true);
+        (_mediaBookmarkNameText, _mediaBookmarkNameBox) =
+            BuildMediaPaneTextControl(PresentationMediaPaneControlCatalog.BookmarkName);
+        (_mediaBookmarkTimeText, _mediaBookmarkTimeBox) =
+            BuildMediaPaneTextControl(PresentationMediaPaneControlCatalog.BookmarkTime);
         _mediaBookmarkCreateButton = BuildMediaCaptionPaneButton();
         _mediaBookmarkCreateButton.Content = PresentationPaneTextResources.AddBookmark;
-        _mediaBookmarkCreateButton.Click += (_, _) => _mediaPaneHostCoordinator.ApplyBookmark(
-            PresentationMediaBookmarkMutationIntentKind.Create);
         _mediaBookmarkReplaceButton = BuildMediaCaptionPaneButton();
         _mediaBookmarkReplaceButton.Content = PresentationPaneTextResources.ReplaceBookmark;
-        _mediaBookmarkReplaceButton.Click += (_, _) => _mediaPaneHostCoordinator.ApplyBookmark(
-            PresentationMediaBookmarkMutationIntentKind.Replace);
         _mediaBookmarkDeleteButton = BuildMediaCaptionPaneButton();
         _mediaBookmarkDeleteButton.Content = PresentationPaneTextResources.DeleteBookmark;
-        _mediaBookmarkDeleteButton.Click += (_, _) => _mediaPaneHostCoordinator.ApplyBookmark(
-            PresentationMediaBookmarkMutationIntentKind.Delete);
         _mediaCaptionCreateButton = BuildMediaCaptionPaneButton();
         _mediaCaptionReplaceButton = BuildMediaCaptionPaneButton();
         _mediaCaptionDeleteButton = BuildMediaCaptionPaneButton();
         _mediaCaptionCloseButton = BuildMediaCaptionPaneButton();
-
-        _mediaCaptionLabelBox.TextChanged += (_, _) => RefreshVisibleMediaCaptionPaneFromFields();
-        _mediaCaptionLanguageBox.TextChanged += (_, _) => RefreshVisibleMediaCaptionPaneFromFields();
-        _mediaCaptionSourceBox.TextChanged += (_, _) => RefreshVisibleMediaCaptionPaneFromFields();
-        _mediaCaptionTranscriptBox.TextChanged += (_, _) => RefreshVisibleMediaCaptionPaneFromFields();
-        _mediaCaptionCreateButton.Click += (_, _) => _mediaPaneHostCoordinator.ApplyCaption(PresentationMediaCaptionAuthoringIntentKind.Create);
-        _mediaCaptionReplaceButton.Click += (_, _) => _mediaPaneHostCoordinator.ApplyCaption(PresentationMediaCaptionAuthoringIntentKind.Replace);
-        _mediaCaptionDeleteButton.Click += (_, _) => _mediaPaneHostCoordinator.ApplyCaption(PresentationMediaCaptionAuthoringIntentKind.Delete);
-        _mediaCaptionCloseButton.Click += (_, _) => _mediaPaneHostCoordinator.Hide();
+        _mediaCaptionControls = new(
+            _mediaCaptionLabelText, _mediaCaptionLabelBox,
+            _mediaCaptionLanguageText, _mediaCaptionLanguageBox,
+            _mediaCaptionSourceText, _mediaCaptionSourceBox,
+            _mediaCaptionTranscriptText, _mediaCaptionTranscriptBox);
+        _mediaPaneButtons = new(
+            _mediaVolumeApplyButton, _mediaPlaybackApplyButton, _mediaTimingApplyButton,
+            _mediaBookmarkCreateButton, _mediaBookmarkReplaceButton, _mediaBookmarkDeleteButton,
+            _mediaCaptionCreateButton, _mediaCaptionReplaceButton, _mediaCaptionDeleteButton,
+            _mediaCaptionCloseButton);
 
         return new Border
         {
@@ -1454,16 +1432,16 @@ public sealed partial class MainWindow : Window,
                             PresentationMediaPaneVisualMetrics.ActionRowBottomMargin),
                         Children =
                         {
-                            _mediaCaptionCreateButton,
-                            _mediaCaptionReplaceButton,
-                            _mediaCaptionDeleteButton,
-                            _mediaVolumeApplyButton,
-                            _mediaPlaybackApplyButton,
-                            _mediaTimingApplyButton,
-                            _mediaBookmarkCreateButton,
-                            _mediaBookmarkReplaceButton,
-                            _mediaBookmarkDeleteButton,
-                            _mediaCaptionCloseButton,
+                            _mediaPaneButtons.InVisualOrder[0],
+                            _mediaPaneButtons.InVisualOrder[1],
+                            _mediaPaneButtons.InVisualOrder[2],
+                            _mediaPaneButtons.InVisualOrder[3],
+                            _mediaPaneButtons.InVisualOrder[4],
+                            _mediaPaneButtons.InVisualOrder[5],
+                            _mediaPaneButtons.InVisualOrder[6],
+                            _mediaPaneButtons.InVisualOrder[7],
+                            _mediaPaneButtons.InVisualOrder[8],
+                            _mediaPaneButtons.InVisualOrder[9],
                         },
                     },
                 },
@@ -1498,6 +1476,26 @@ public sealed partial class MainWindow : Window,
                 PresentationMediaPaneVisualMetrics.FieldVerticalPadding),
         };
 
+    private static CheckBox BuildMediaPaneToggle(PresentationMediaPaneToggleControlPlan plan) =>
+        new()
+        {
+            Content = plan.Label,
+            IsChecked = plan.IsCheckedByDefault,
+            Margin = MediaPaneMargin(
+                PresentationMediaPaneVisualMetrics.CheckBoxTopMargin,
+                PresentationMediaPaneVisualMetrics.FieldBottomMargin),
+        };
+
+    private static (TextBlock Label, TextBox Input) BuildMediaPaneTextControl(
+        PresentationMediaPaneTextControlPlan plan)
+    {
+        var label = BuildMediaCaptionPaneLabel();
+        label.Text = plan.Label;
+        var input = BuildMediaCaptionPaneTextBox(singleLine: true);
+        input.Text = plan.InitialValue;
+        return (label, input);
+    }
+
     private static Button BuildMediaCaptionPaneButton()
         => new()
         {
@@ -1518,6 +1516,27 @@ public sealed partial class MainWindow : Window,
             top,
             PresentationMediaPaneVisualMetrics.ContentSideMargin,
             bottom);
+
+    private void BindMediaPaneEvents() => PresentationMediaPaneFormEventBinder.Bind(
+        _mediaCaptionTrackBox,
+        _mediaBookmarkBox,
+        _mediaCaptionControls,
+        _mediaPaneButtons,
+        (input, action) => input.TextChanged += (_, _) => action(),
+        (button, action) => button.Click += (_, _) => action(),
+        (comboBox, action) => comboBox.SelectionChanged += (_, _) => action(),
+        ReadSelectedMediaCaptionTrack,
+        comboBox => comboBox.SelectedItem is ComboBoxItem { Tag: int bookmarkIndex } ? bookmarkIndex : null,
+        new PresentationMediaPaneFormEventRouter(_mediaPaneHostCoordinator));
+
+    private int? ReadSelectedMediaCaptionTrack(ComboBox comboBox)
+    {
+        var plan = LastMediaCaptionAuthoringPanePlan;
+        var index = comboBox.SelectedIndex;
+        return plan is not null && index >= 0 && index < plan.Tracks.Count
+            ? plan.Tracks[index].TrackIndex
+            : null;
+    }
 
     private Border BuildSmartArtTextPaneHost()
     {
@@ -2133,31 +2152,7 @@ public sealed partial class MainWindow : Window,
     }
 
     private bool TryExecuteInlineTableAction(PresentationDomainContextAction action)
-    {
-        if (_textEditor?.IsCellEditActive != true)
-            return false;
-
-        return action.Kind switch
-        {
-            PresentationDomainContextActionKind.InsertTableRowAbove =>
-                _textEditor.TryInsertActiveTableRowAbove(),
-            PresentationDomainContextActionKind.InsertTableRowBelow =>
-                _textEditor.TryInsertActiveTableRowBelow(),
-            PresentationDomainContextActionKind.InsertTableColumnLeft =>
-                _textEditor.TryInsertActiveTableColumnLeft(),
-            PresentationDomainContextActionKind.InsertTableColumnRight =>
-                _textEditor.TryInsertActiveTableColumnRight(),
-            PresentationDomainContextActionKind.DeleteTableRow =>
-                _textEditor.TryDeleteActiveTableRow(),
-            PresentationDomainContextActionKind.DeleteTableColumn =>
-                _textEditor.TryDeleteActiveTableColumn(),
-            PresentationDomainContextActionKind.MergeTableCell =>
-                _textEditor.TryMergeActiveTableCell(),
-            PresentationDomainContextActionKind.SplitTableCell =>
-                _textEditor.TrySplitActiveTableCell(),
-            _ => false,
-        };
-    }
+        => _textEditor?.TryExecuteActiveTableStructureAction(action.Kind) == true;
 
 
 
@@ -4406,33 +4401,14 @@ public sealed partial class MainWindow : Window,
         return button;
     }
 
-    private ContextMenu BuildCommentMentionMenu(
-        string tag,
-        Func<string?> getText,
-        Func<int> getCaretIndex,
-        PresentationReviewWorkflowIntentKind intent,
-        PresentationCommentMentionPickerPlan picker)
-    {
-        var menu = new ContextMenu();
-        foreach (var candidate in picker.Candidates)
-        {
-            var item = new MenuItem
-            {
-                Header = candidate.Label,
-                Tag = PresentationSemanticIdentityCatalog.BuildCommentMentionCandidateTag(
-                    tag,
-                    candidate.InsertToken),
-            };
-            item.Click += (_, _) => _reviewWorkflowSession.ApplyCommentMention(
-                intent,
-                getText(),
-                getCaretIndex(),
-                candidate);
-            menu.Items.Add(item);
-        }
-
-        return menu;
-    }
+    private ContextMenu BuildCommentMentionMenu(string tag, Func<string?> getText, Func<int> getCaretIndex, PresentationReviewWorkflowIntentKind intent, PresentationCommentMentionPickerPlan picker) =>
+        _reviewPaneHostCoordinator.BuildCommentMentionMenu(
+            tag, getText, getCaretIndex, intent, picker,
+            new PresentationCommentMentionMenuNativeBindings<ContextMenu, MenuItem>(
+                CreateMenu: static () => new ContextMenu(),
+                CreateItem: plan => new MenuItem { Header = plan.Label, Tag = plan.SemanticTag },
+                BindClick: (item, execute) => item.Click += (_, _) => execute(),
+                AddItem: (menu, item) => menu.Items.Add(item)));
 
     private void ExecuteReviewCommentAction(string commandId)
     {
@@ -4467,45 +4443,14 @@ public sealed partial class MainWindow : Window,
     }
 
 
-    private void SelectReviewComment(int commentIndex)
-        => _reviewWorkflowSession.SelectReviewComment(commentIndex);
-
-    internal PresentationCommentNavigationPlan NavigateReviewComment(
-        PresentationReviewWorkflowIntentKind intent)
-        => _reviewWorkflowSession.NavigateReviewComment(intent);
-
-    internal PresentationCommentMutationPlan DeleteSelectedComment()
-        => _reviewWorkflowSession.DeleteSelectedComment();
-
-    internal PresentationCommentMutationPlan AddComment(
-        string? text,
-        DateTime? timestamp = null,
-        string? author = null,
-        string? initials = null,
-        long xemu = 0,
-        long yemu = 0)
-        => _reviewWorkflowSession.AddComment(text, timestamp, author, initials, xemu, yemu);
-
-    internal PresentationCommentMutationPlan EditSelectedComment(
-        string? text,
-        string? author = null,
-        string? initials = null)
-        => _reviewWorkflowSession.EditSelectedComment(text, author, initials);
-
-    internal PresentationCommentMutationPlan ResolveSelectedComment(
-        DateTime? resolvedAt = null,
-        string? resolvedBy = null)
-        => _reviewWorkflowSession.ResolveSelectedComment(resolvedAt, resolvedBy);
-
-    internal PresentationCommentMutationPlan ReopenSelectedComment()
-        => _reviewWorkflowSession.ReopenSelectedComment();
-
-    internal PresentationCommentMutationPlan ReplyToSelectedComment(
-        string? text,
-        DateTime? timestamp = null,
-        string? author = null,
-        string? initials = null)
-        => _reviewWorkflowSession.ReplyToSelectedComment(text, timestamp, author, initials);
+    private void SelectReviewComment(int commentIndex) => _reviewWorkflowSession.SelectReviewComment(commentIndex);
+    internal PresentationCommentNavigationPlan NavigateReviewComment(PresentationReviewWorkflowIntentKind intent) => _reviewWorkflowSession.NavigateReviewComment(intent);
+    internal PresentationCommentMutationPlan DeleteSelectedComment() => _reviewWorkflowSession.DeleteSelectedComment();
+    internal PresentationCommentMutationPlan AddComment(string? text, DateTime? timestamp = null, string? author = null, string? initials = null, long xemu = 0, long yemu = 0) => _reviewWorkflowSession.AddComment(text, timestamp, author, initials, xemu, yemu);
+    internal PresentationCommentMutationPlan EditSelectedComment(string? text, string? author = null, string? initials = null) => _reviewWorkflowSession.EditSelectedComment(text, author, initials);
+    internal PresentationCommentMutationPlan ResolveSelectedComment(DateTime? resolvedAt = null, string? resolvedBy = null) => _reviewWorkflowSession.ResolveSelectedComment(resolvedAt, resolvedBy);
+    internal PresentationCommentMutationPlan ReopenSelectedComment() => _reviewWorkflowSession.ReopenSelectedComment();
+    internal PresentationCommentMutationPlan ReplyToSelectedComment(string? text, DateTime? timestamp = null, string? author = null, string? initials = null) => _reviewWorkflowSession.ReplyToSelectedComment(text, timestamp, author, initials);
 
 
 
@@ -5113,32 +5058,13 @@ public sealed partial class MainWindow : Window,
         return plan;
     }
 
-    internal PresentationAccessibilityCheckerPanePlan ShowAccessibilityCheckerPane()
-    {
-        var plan = _reviewWorkflowSession.ShowAccessibilityCheckerPane();
-        RefreshPaneAccessibilityMetadata();
-        return plan;
-    }
+    internal PresentationAccessibilityCheckerPanePlan ShowAccessibilityCheckerPane() { var plan = _reviewWorkflowSession.ShowAccessibilityCheckerPane(); RefreshPaneAccessibilityMetadata(); return plan; }
 
     internal PresentationAccessibilityCheckerPanePlan SelectAccessibilityCheckerRow(int rowIndex)
         => _reviewWorkflowSession.SelectAccessibilityCheckerRow(rowIndex);
 
     internal PresentationAccessibilityCheckerPanePlan ApplyAccessibilityCheckerRowAction(int rowIndex)
         => _reviewWorkflowSession.ApplyAccessibilityCheckerRowAction(rowIndex);
-
-    private void RenderAccessibilityCheckerPaneIfVisible(
-        PresentationAccessibilityCheckerPanePlan plan)
-    {
-        if (IsAccessibilityCheckerPaneVisible)
-            RenderAccessibilityCheckerPane(plan);
-    }
-
-    private void PresentAccessibilityCheckerPane(PresentationAccessibilityCheckerPanePlan plan)
-    {
-        _workareaSession.Panes.Show(PresentationWorkareaPane.AccessibilityChecker);
-        RenderAccessibilityCheckerPane(plan);
-        _accessibilityCheckerPaneHost.IsVisible = true;
-    }
 
     private void RenderAccessibilityCheckerPane(PresentationAccessibilityCheckerPanePlan plan)
     {
@@ -5374,61 +5300,19 @@ public sealed partial class MainWindow : Window,
 
 
 
-    private SmartArtNodeEditResult? ApplySmartArtTextPaneAction(SmartArtNodeEditKind kind)
-        => _smartArtTextPaneSession.ApplyAction(kind);
-
-    private SmartArtNodeEditResult? ToggleSmartArtTextPaneAssistant()
-        => _smartArtTextPaneSession.ToggleAssistant();
+    private SmartArtNodeEditResult? ApplySmartArtTextPaneAction(SmartArtNodeEditKind kind) => _smartArtTextPaneSession.ApplyAction(kind);
+    private SmartArtNodeEditResult? ToggleSmartArtTextPaneAssistant() => _smartArtTextPaneSession.ToggleAssistant();
 
 
 
 
-    private SmartArtLayoutApplyResult ApplySmartArtLayoutPreset(SmartArtLayoutPreset preset)
-        => _smartArtTextPaneSession.ApplyLayoutPreset(preset);
-
-    private SmartArtQuickStyleApplyResult ApplySmartArtQuickStylePreset(SmartArtQuickStylePreset preset)
-        => _smartArtTextPaneSession.ApplyQuickStylePreset(preset);
-
-    private SmartArtColorApplyResult ApplySmartArtColorPreset(SmartArtColorPreset preset)
-        => _smartArtTextPaneSession.ApplyColorPreset(preset);
+    private SmartArtLayoutApplyResult ApplySmartArtLayoutPreset(SmartArtLayoutPreset preset) => _smartArtTextPaneSession.ApplyLayoutPreset(preset);
+    private SmartArtQuickStyleApplyResult ApplySmartArtQuickStylePreset(SmartArtQuickStylePreset preset) => _smartArtTextPaneSession.ApplyQuickStylePreset(preset);
+    private SmartArtColorApplyResult ApplySmartArtColorPreset(SmartArtColorPreset preset) => _smartArtTextPaneSession.ApplyColorPreset(preset);
 
 
-    private IReadOnlyList<SmartArtNodeOutlineItem> RefreshSmartArtTextPane()
-        => _smartArtTextPaneSession.Refresh().Rows;
-
-    private void RenderSmartArtTextPane(PresentationSmartArtTextPanePlan plan)
-    {
-        _smartArtTextPaneRefreshing = true;
-        try
-        {
-            _smartArtTextPaneRowsPanel.Children.Clear();
-            _smartArtTextPaneHeading.Text = plan.Heading;
-            _smartArtTextPaneMessage.Text = plan.Message;
-            _smartArtTextPaneApplyButton.IsEnabled = plan.CanApply;
-            _smartArtTextPaneAssistantButton.IsEnabled = plan.CanToggleAssistant;
-            foreach (var button in _smartArtTextPaneActionButtons)
-                button.IsEnabled = plan.CanEditSelectedRow;
-
-            for (var index = 0; index < plan.Rows.Count; index++)
-            {
-                var item = plan.Rows[index];
-                var row = BuildSmartArtTextPaneRow(item);
-                PresentationPaneAccessibilityAdapter.ApplyItem(
-                    row,
-                    PresentationPaneAccessibilityPlanner.PlanItem(
-                        PresentationPaneAccessibilityPlanner.SmartArtTextPaneId,
-                        index,
-                        item.Text,
-                        StringComparer.Ordinal.Equals(item.ModelId, plan.SelectedModelId),
-                        item.ModelId));
-                _smartArtTextPaneRowsPanel.Children.Add(row);
-            }
-        }
-        finally
-        {
-            _smartArtTextPaneRefreshing = false;
-        }
-    }
+    private IReadOnlyList<SmartArtNodeOutlineItem> RefreshSmartArtTextPane() => _smartArtTextPaneSession.Refresh().Rows;
+    private void RenderSmartArtTextPane(PresentationSmartArtTextPanePlan plan) => _smartArtTextPaneNativeView.Render(plan);
 
     private TextBox BuildSmartArtTextPaneRow(SmartArtNodeOutlineItem item)
     {
@@ -5527,191 +5411,123 @@ public sealed partial class MainWindow : Window,
     internal void HideAltTextPane() => _altTextPaneHostCoordinator.Hide();
 
     private PresentationMediaCaptionHostSnapshot CaptureMediaCaptionHostSnapshot() =>
-        PresentationMediaPaneHostSnapshotPlanner.CaptureCaption(
-            _mediaCaptionLabelBox?.Text,
-            _mediaCaptionLanguageBox?.Text,
-            _mediaCaptionSourceBox?.Text,
-            _mediaCaptionTranscriptBox?.Text);
-
+        _avaloniaMediaPaneHostView.CaptureCaption();
     private PresentationMediaVolumeHostSnapshot CaptureMediaVolumeHostSnapshot() =>
-        PresentationMediaPaneHostSnapshotPlanner.CaptureVolume(_mediaVolumeSlider?.Value);
-
+        _avaloniaMediaPaneHostView.CaptureVolume();
     private PresentationMediaPlaybackHostSnapshot CaptureMediaPlaybackHostSnapshot() =>
-        PresentationMediaPaneHostSnapshotPlanner.CapturePlayback(
-            _mediaStartModeBox?.SelectedIndex,
-            _mediaLoopCheckBox?.IsChecked,
-            _mediaShowWhenStoppedCheckBox?.IsChecked,
-            _mediaRewindAfterPlayingCheckBox?.IsChecked,
-            _mediaPlayFullScreenCheckBox?.IsChecked,
-            _mediaStopAfterSlidesBox?.Text);
-
+        _avaloniaMediaPaneHostView.CapturePlayback();
     private PresentationMediaTimingHostSnapshot CaptureMediaTimingHostSnapshot() =>
-        PresentationMediaPaneHostSnapshotPlanner.CaptureTiming(
-            _mediaTrimStartBox?.Text,
-            _mediaTrimEndBox?.Text,
-            _mediaFadeInBox?.Text,
-            _mediaFadeOutBox?.Text);
-
+        _avaloniaMediaPaneHostView.CaptureTiming();
     private PresentationMediaBookmarkHostSnapshot CaptureMediaBookmarkHostSnapshot() =>
-        PresentationMediaPaneHostSnapshotPlanner.CaptureBookmark(
-            _mediaBookmarkNameBox?.Text,
-            _mediaBookmarkTimeBox?.Text);
+        _avaloniaMediaPaneHostView.CaptureBookmark();
 
-    bool IPresentationMediaPaneHostView.IsPaneVisible => IsMediaCaptionPaneVisible;
+    private PresentationMediaPaneHostViewAdapter BuildAvaloniaMediaPaneHostView() => new(
+        new DelegatingPresentationMediaPaneControlSurface(new(
+            PaneVisible: new(() => IsMediaCaptionPaneVisible, value => SetAvaloniaVisible(_mediaCaptionPaneHost, value)),
+            CaptionLabel: new(() => ReadAvaloniaText(_mediaCaptionLabelBox), value => WriteAvaloniaText(_mediaCaptionLabelBox, value)),
+            CaptionLanguage: new(() => ReadAvaloniaText(_mediaCaptionLanguageBox), value => WriteAvaloniaText(_mediaCaptionLanguageBox, value)),
+            CaptionSource: new(() => ReadAvaloniaText(_mediaCaptionSourceBox), value => WriteAvaloniaText(_mediaCaptionSourceBox, value)),
+            CaptionTranscript: new(() => ReadAvaloniaText(_mediaCaptionTranscriptBox), value => WriteAvaloniaText(_mediaCaptionTranscriptBox, value)),
+            VolumePercent: new(() => ReadAvaloniaValue(_mediaVolumeSlider), value => WriteAvaloniaValue(_mediaVolumeSlider, value)),
+            PlaybackStartModeIndex: new(() => ReadAvaloniaIndex(_mediaStartModeBox), value => WriteAvaloniaIndex(_mediaStartModeBox, value)),
+            Loop: new(() => ReadAvaloniaCheck(_mediaLoopCheckBox), value => WriteAvaloniaCheck(_mediaLoopCheckBox, value)),
+            ShowWhenStopped: new(() => ReadAvaloniaCheck(_mediaShowWhenStoppedCheckBox),
+                value => WriteAvaloniaCheck(_mediaShowWhenStoppedCheckBox, value)),
+            RewindAfterPlaying: new(() => ReadAvaloniaCheck(_mediaRewindAfterPlayingCheckBox),
+                value => WriteAvaloniaCheck(_mediaRewindAfterPlayingCheckBox, value)),
+            PlayFullScreen: new(() => ReadAvaloniaCheck(_mediaPlayFullScreenCheckBox),
+                value => WriteAvaloniaCheck(_mediaPlayFullScreenCheckBox, value)),
+            StopAfterSlides: new(() => ReadAvaloniaText(_mediaStopAfterSlidesBox),
+                value => WriteAvaloniaText(_mediaStopAfterSlidesBox, value)),
+            TrimStart: new(() => ReadAvaloniaText(_mediaTrimStartBox), value => WriteAvaloniaText(_mediaTrimStartBox, value)),
+            TrimEnd: new(() => ReadAvaloniaText(_mediaTrimEndBox), value => WriteAvaloniaText(_mediaTrimEndBox, value)),
+            FadeIn: new(() => ReadAvaloniaText(_mediaFadeInBox), value => WriteAvaloniaText(_mediaFadeInBox, value)),
+            FadeOut: new(() => ReadAvaloniaText(_mediaFadeOutBox), value => WriteAvaloniaText(_mediaFadeOutBox, value)),
+            BookmarkName: new(() => ReadAvaloniaText(_mediaBookmarkNameBox), value => WriteAvaloniaText(_mediaBookmarkNameBox, value)),
+            BookmarkTime: new(() => ReadAvaloniaText(_mediaBookmarkTimeBox), value => WriteAvaloniaText(_mediaBookmarkTimeBox, value)),
+            SetHeading: value => WriteAvaloniaText(_mediaCaptionPaneHeading, value),
+            SetMessage: value => WriteAvaloniaText(_mediaCaptionPaneMessage, value),
+            SetPlaybackStartModeEnabled: value => SetAvaloniaEnabled(_mediaStartModeBox, value),
+            SetLoopEnabled: value => SetAvaloniaEnabled(_mediaLoopCheckBox, value),
+            SetShowWhenStoppedEnabled: value => SetAvaloniaEnabled(_mediaShowWhenStoppedCheckBox, value),
+            SetRewindAfterPlayingEnabled: value => SetAvaloniaEnabled(_mediaRewindAfterPlayingCheckBox, value),
+            SetPlayFullScreenEnabled: value => SetAvaloniaEnabled(_mediaPlayFullScreenCheckBox, value),
+            SetStopAfterSlidesEnabled: value => SetAvaloniaEnabled(_mediaStopAfterSlidesBox, value),
+            SetPlaybackApplyEnabled: value => SetAvaloniaEnabled(_mediaPlaybackApplyButton, value),
+            SetVolumeEnabled: value => SetAvaloniaEnabled(_mediaVolumeSlider, value),
+            SetVolumeApplyEnabled: value => SetAvaloniaEnabled(_mediaVolumeApplyButton, value),
+            SetTimingApplyEnabled: value => SetAvaloniaEnabled(_mediaTimingApplyButton, value),
+            RenderCaptionTracks: RenderMediaCaptionTrackOptions,
+            RenderCaptionField: RenderAvaloniaMediaCaptionField,
+            RenderCaptionAction: RenderAvaloniaMediaCaptionAction,
+            RenderBookmarks: RenderAvaloniaMediaBookmarkOptions,
+            RefreshAccessibilityMetadata: RefreshPaneAccessibilityMetadata)));
 
-    PresentationMediaCaptionHostSnapshot IPresentationMediaPaneHostView.CaptureCaption() =>
-        CaptureMediaCaptionHostSnapshot();
+    private static string? ReadAvaloniaText(TextBox? control) => control?.Text;
+    private static void WriteAvaloniaText(TextBox control, string? value) => control.Text = value ?? string.Empty;
+    private static void WriteAvaloniaText(TextBlock control, string value) => control.Text = value;
+    private static double? ReadAvaloniaValue(Slider? control) => control?.Value;
+    private static void WriteAvaloniaValue(Slider control, double? value) =>
+        control.Value = value ?? PresentationMediaPaneSession.DefaultVolumePercent;
+    private static int? ReadAvaloniaIndex(ComboBox? control) => control?.SelectedIndex;
+    private static void WriteAvaloniaIndex(ComboBox control, int? value) => control.SelectedIndex = value ?? -1;
+    private static bool? ReadAvaloniaCheck(CheckBox? control) => control?.IsChecked;
+    private static void WriteAvaloniaCheck(CheckBox control, bool? value) => control.IsChecked = value;
+    private static void SetAvaloniaEnabled(Control control, bool value) => control.IsEnabled = value;
+    private static void SetAvaloniaVisible(Control control, bool value) => control.IsVisible = value;
 
-    PresentationMediaVolumeHostSnapshot IPresentationMediaPaneHostView.CaptureVolume() =>
-        CaptureMediaVolumeHostSnapshot();
-
-    PresentationMediaPlaybackHostSnapshot IPresentationMediaPaneHostView.CapturePlayback() =>
-        CaptureMediaPlaybackHostSnapshot();
-
-    PresentationMediaTimingHostSnapshot IPresentationMediaPaneHostView.CaptureTiming() =>
-        CaptureMediaTimingHostSnapshot();
-
-    PresentationMediaBookmarkHostSnapshot IPresentationMediaPaneHostView.CaptureBookmark() =>
-        CaptureMediaBookmarkHostSnapshot();
-
-    void IPresentationMediaPaneHostView.SetPaneVisible(bool visible)
+    private void RenderAvaloniaMediaCaptionField(
+        PresentationMediaPaneCaptionField field,
+        PresentationMediaCaptionAuthoringFieldPlan plan)
     {
-        if (_mediaCaptionPaneHost is not null)
-            _mediaCaptionPaneHost.IsVisible = visible;
+        var controls = _mediaCaptionControls.Get(field);
+        RenderMediaCaptionField(controls.Label, controls.Input, plan);
     }
 
-    void IPresentationMediaPaneHostView.SetCaptionInput(PresentationMediaCaptionHostSnapshot input)
+    private void RenderAvaloniaMediaCaptionAction(
+        PresentationMediaPaneCaptionAction action,
+        PresentationMediaCaptionAuthoringActionPlan plan)
     {
-        _mediaCaptionLabelBox.Text = input.Label ?? string.Empty;
-        _mediaCaptionLanguageBox.Text = input.Language ?? string.Empty;
-        _mediaCaptionSourceBox.Text = input.Source ?? string.Empty;
-        _mediaCaptionTranscriptBox.Text = input.TranscriptText ?? string.Empty;
+        ApplyMediaCaptionButtonPlan(_mediaPaneButtons.Get(action), plan);
     }
 
-    void IPresentationMediaPaneHostView.SetVolumeInput(PresentationMediaVolumeInputPlan input) =>
-        _mediaVolumeSlider.Value = input.VolumePercent;
-
-    void IPresentationMediaPaneHostView.SetPlaybackInput(PresentationMediaPlaybackInputPlan input)
+    private void RenderAvaloniaMediaBookmarkOptions(PresentationMediaPaneProjection plan)
     {
-        _mediaStartModeBox.SelectedIndex = input.StartModeIndex;
-        _mediaLoopCheckBox.IsChecked = input.Loop;
-        _mediaShowWhenStoppedCheckBox.IsChecked = input.ShowWhenStopped;
-        _mediaRewindAfterPlayingCheckBox.IsChecked = input.RewindAfterPlaying;
-        _mediaPlayFullScreenCheckBox.IsChecked = input.PlayFullScreen;
-        _mediaStopAfterSlidesBox.Text = input.StopAfterSlidesText;
-    }
-
-    void IPresentationMediaPaneHostView.SetTimingInput(PresentationMediaTimingInputPlan input)
-    {
-        _mediaTrimStartBox.Text = input.TrimStartText;
-        _mediaTrimEndBox.Text = input.TrimEndText;
-        _mediaFadeInBox.Text = input.FadeInText;
-        _mediaFadeOutBox.Text = input.FadeOutText;
-    }
-
-    void IPresentationMediaPaneHostView.SetBookmarkInput(PresentationMediaBookmarkInputPlan input)
-    {
-        _mediaBookmarkNameBox.Text = input.Name;
-        _mediaBookmarkTimeBox.Text = input.TimeText;
-    }
-
-    void IPresentationMediaPaneHostView.Render(PresentationMediaPaneHostRenderPlan plan) =>
-        RenderMediaCaptionPane(plan);
-
-    void IPresentationMediaPaneHostView.RefreshAccessibilityMetadata() =>
-        RefreshPaneAccessibilityMetadata();
-
-    private void RenderMediaBookmarkOptions(PresentationMediaPaneProjection plan)
-    {
-        _mediaBookmarkBox.Items.Clear();
-        foreach (var bookmark in plan.Bookmarks)
-            _mediaBookmarkBox.Items.Add(new ComboBoxItem { Content = bookmark.DisplayText, Tag = bookmark.Index });
-
-        _mediaBookmarkBox.SelectedIndex = plan.SelectedBookmarkIndex ?? -1;
-        _mediaBookmarkNameBox.Text = plan.BookmarkName;
-        _mediaBookmarkTimeBox.Text = plan.BookmarkTimeText;
-        _mediaBookmarkBox.IsEnabled = plan.HasMedia;
-        _mediaBookmarkNameBox.IsEnabled = plan.HasMedia;
-        _mediaBookmarkTimeBox.IsEnabled = plan.HasMedia;
-        _mediaBookmarkCreateButton.IsEnabled = plan.HasMedia;
-        _mediaBookmarkReplaceButton.IsEnabled = plan.HasSelectedBookmark;
-        _mediaBookmarkDeleteButton.IsEnabled = plan.HasSelectedBookmark;
-    }
-
-    private void RefreshVisibleMediaCaptionPaneFromFields() => _mediaPaneHostCoordinator.Refresh();
-
-    private void RenderMediaCaptionPane(PresentationMediaPaneHostRenderPlan hostPlan)
-    {
-        var plan = hostPlan.Caption;
-        var mediaPlan = hostPlan.Media;
-        var playbackPlan = hostPlan.Playback;
-        _mediaCaptionPaneHeading.Text = plan.Heading;
-        _mediaCaptionPaneMessage.Text = plan.Message;
-        RenderMediaCaptionTrackOptions(plan);
-        RenderMediaCaptionField(_mediaCaptionLabelText, _mediaCaptionLabelBox, plan.Label);
-        RenderMediaCaptionField(_mediaCaptionLanguageText, _mediaCaptionLanguageBox, plan.Language);
-        RenderMediaCaptionField(_mediaCaptionSourceText, _mediaCaptionSourceBox, plan.Source);
-        RenderMediaCaptionField(_mediaCaptionTranscriptText, _mediaCaptionTranscriptBox, plan.TranscriptText);
-        _mediaStartModeBox.SelectedIndex = playbackPlan.StartModeIndex;
-        _mediaLoopCheckBox.IsChecked = playbackPlan.Loop;
-        _mediaShowWhenStoppedCheckBox.IsChecked = playbackPlan.ShowWhenStopped;
-        _mediaRewindAfterPlayingCheckBox.IsChecked = playbackPlan.RewindAfterPlaying;
-        _mediaPlayFullScreenCheckBox.IsChecked = playbackPlan.PlayFullScreen;
-        _mediaStopAfterSlidesBox.Text = playbackPlan.StopAfterSlidesText;
-        _mediaStartModeBox.IsEnabled = mediaPlan.HasMedia;
-        _mediaLoopCheckBox.IsEnabled = mediaPlan.HasMedia;
-        _mediaShowWhenStoppedCheckBox.IsEnabled = mediaPlan.HasMedia;
-        _mediaRewindAfterPlayingCheckBox.IsEnabled = mediaPlan.HasMedia;
-        _mediaPlayFullScreenCheckBox.IsEnabled = mediaPlan.CanPlayFullScreen;
-        _mediaStopAfterSlidesBox.IsEnabled = mediaPlan.CanStopAfterSlides;
-        _mediaPlaybackApplyButton.IsEnabled = mediaPlan.HasMedia;
-        _mediaVolumeSlider.Value = mediaPlan.VolumePercent;
-        _mediaVolumeSlider.IsEnabled = mediaPlan.HasMedia;
-        _mediaVolumeApplyButton.IsEnabled = mediaPlan.HasMedia;
-        _mediaTimingApplyButton.IsEnabled = mediaPlan.HasMedia;
-        _mediaTrimStartBox.Text = mediaPlan.Timing.TrimStartText;
-        _mediaTrimEndBox.Text = mediaPlan.Timing.TrimEndText;
-        _mediaFadeInBox.Text = mediaPlan.Timing.FadeInText;
-        _mediaFadeOutBox.Text = mediaPlan.Timing.FadeOutText;
-        RenderMediaBookmarkOptions(mediaPlan);
-        ApplyMediaCaptionButtonPlan(
-            _mediaCaptionCreateButton,
-            plan.GetRequiredAction(PresentationMediaTranscriptPlanner.CaptionAuthoringPaneCreateCommandId));
-        ApplyMediaCaptionButtonPlan(
-            _mediaCaptionReplaceButton,
-            plan.GetRequiredAction(PresentationMediaTranscriptPlanner.CaptionAuthoringPaneReplaceCommandId));
-        ApplyMediaCaptionButtonPlan(
-            _mediaCaptionDeleteButton,
-            plan.GetRequiredAction(PresentationMediaTranscriptPlanner.CaptionAuthoringPaneDeleteCommandId));
-        ApplyMediaCaptionButtonPlan(
-            _mediaCaptionCloseButton,
-            plan.GetRequiredAction(PresentationMediaTranscriptPlanner.CaptionAuthoringPaneCloseCommandId));
+        PresentationMediaBookmarkNativeAdapter.Render(
+            plan,
+            new PresentationMediaBookmarkNativeBindings<ComboBoxItem>(
+                Clear: () => _mediaBookmarkBox.Items.Clear(),
+                CreateItem: bookmark => new() { Content = bookmark.DisplayText, Tag = bookmark.Index },
+                AddItem: item => _mediaBookmarkBox.Items.Add(item),
+                SetSelectedIndex: value => _mediaBookmarkBox.SelectedIndex = value,
+                SetName: value => _mediaBookmarkNameBox.Text = value,
+                SetTime: value => _mediaBookmarkTimeBox.Text = value,
+                SetListEnabled: value => _mediaBookmarkBox.IsEnabled = value,
+                SetNameEnabled: value => _mediaBookmarkNameBox.IsEnabled = value,
+                SetTimeEnabled: value => _mediaBookmarkTimeBox.IsEnabled = value,
+                SetCreateEnabled: value => _mediaBookmarkCreateButton.IsEnabled = value,
+                SetReplaceEnabled: value => _mediaBookmarkReplaceButton.IsEnabled = value,
+                SetDeleteEnabled: value => _mediaBookmarkDeleteButton.IsEnabled = value));
     }
 
     private void RenderMediaCaptionTrackOptions(PresentationMediaCaptionAuthoringPanePlan plan)
     {
-        _mediaCaptionTrackBox.ItemsSource = null;
-        _mediaCaptionTrackBox.Items.Clear();
-        foreach (var (track, itemIndex) in plan.Tracks.Select((track, index) => (track, index)))
-        {
-            var item = new ComboBoxItem
-            {
-                Content = track.DisplayText,
-                Tag = track.TrackIndex,
-            };
-            PresentationPaneAccessibilityAdapter.ApplyItem(
-                item,
-                PresentationPaneAccessibilityPlanner.PlanItem(
-                    PresentationPaneAccessibilityPlanner.MediaCaptionPaneId,
-                    itemIndex,
-                    track.Label,
-                    track.IsSelected,
-                    track.AccessibilityKey));
-            _mediaCaptionTrackBox.Items.Add(item);
-        }
-        _mediaCaptionTrackBox.IsEnabled = plan.Tracks.Count > 0;
-        _mediaCaptionTrackBox.SelectedIndex = plan.SelectedTrackListIndex;
+        PresentationMediaCaptionTrackNativeAdapter.Render(
+            plan,
+            new PresentationMediaCaptionTrackNativeBindings<ComboBoxItem>(
+                Clear: () =>
+                {
+                    _mediaCaptionTrackBox.ItemsSource = null;
+                    _mediaCaptionTrackBox.Items.Clear();
+                },
+                CreateItem: track => new() { Content = track.DisplayText, Tag = track.TrackIndex },
+                ApplyAccessibility: PresentationPaneAccessibilityAdapter.ApplyItem,
+                AddItem: item => _mediaCaptionTrackBox.Items.Add(item),
+                SetEnabled: value => _mediaCaptionTrackBox.IsEnabled = value,
+                SetSelectedIndex: value => _mediaCaptionTrackBox.SelectedIndex = value));
     }
+
+    private void RefreshVisibleMediaCaptionPaneFromFields() => _mediaPaneHostCoordinator.Refresh();
 
     private static void RenderMediaCaptionField(
         TextBlock label,
@@ -5953,157 +5769,50 @@ public sealed partial class MainWindow : Window,
             textBox.Text = value;
     }
 
-    internal PresentationAltTextMutationPlan ApplySelectedShapeAlternativeText(
-        string? description,
-        string? title = null,
-        bool isDecorative = false)
-        => _reviewWorkflowSession.ApplySelectedShapeAlternativeText(description, title, isDecorative);
-
-    internal PresentationProofingCorrectionMutationPlan ApplyProofingCorrection(
-        PresentationProofingScopeDescriptor scope,
-        int start,
-        int length,
-        string? replacement)
-        => _reviewWorkflowSession.ApplyProofingCorrection(scope, start, length, replacement);
-
-    private void RefreshProofingRequestPlan()
-        => _reviewWorkflowSession.RefreshProofingRequestPlan();
-
-    internal PresentationProofingPanePlan ShowProofingPane()
-        => _reviewWorkflowSession.ShowProofingPane();
-
-    internal PresentationProofingPanePlan SelectProofingIssueRow(int rowIndex)
-        => _reviewWorkflowSession.SelectProofingIssueRow(rowIndex);
-
-    internal PresentationProofingCorrectionMutationPlan ApplySelectedProofingCorrection()
-        => _reviewWorkflowSession.ApplySelectedProofingCorrection();
-
-    internal PresentationProofingPanePlan IgnoreSelectedProofingIssue()
-        => _reviewWorkflowSession.IgnoreSelectedProofingIssue();
-
-    internal PresentationProofingPanePlan IgnoreAllSelectedProofingIssues()
-        => _reviewWorkflowSession.IgnoreAllSelectedProofingIssues();
-
-    internal PresentationProofingPanePlan AddSelectedProofingWordToDictionary()
-        => _reviewWorkflowSession.AddSelectedProofingWordToDictionary();
-
-    private void RenderProofingPaneIfVisible(PresentationProofingPanePlan plan)
-    {
-        if (IsProofingPaneVisible)
-            RenderProofingPane(plan);
-    }
-
-    private void PresentProofingPane(PresentationProofingPanePlan plan)
-    {
-        _workareaSession.Panes.Show(PresentationWorkareaPane.Proofing);
-        RenderProofingPane(plan);
-        _proofingPaneHost.IsVisible = true;
-        RefreshPaneAccessibilityMetadata();
-    }
+    internal PresentationAltTextMutationPlan ApplySelectedShapeAlternativeText(string? description, string? title = null, bool isDecorative = false) => _reviewWorkflowSession.ApplySelectedShapeAlternativeText(description, title, isDecorative);
+    internal PresentationProofingCorrectionMutationPlan ApplyProofingCorrection(PresentationProofingScopeDescriptor scope, int start, int length, string? replacement) => _reviewWorkflowSession.ApplyProofingCorrection(scope, start, length, replacement);
+    private void RefreshProofingRequestPlan() => _reviewWorkflowSession.RefreshProofingRequestPlan();
+    internal PresentationProofingPanePlan ShowProofingPane() => _reviewPaneHostCoordinator.ShowProofingPane();
+    internal PresentationProofingPanePlan SelectProofingIssueRow(int rowIndex) => _reviewWorkflowSession.SelectProofingIssueRow(rowIndex);
+    internal PresentationProofingCorrectionMutationPlan ApplySelectedProofingCorrection() => _reviewWorkflowSession.ApplySelectedProofingCorrection();
+    internal PresentationProofingPanePlan IgnoreSelectedProofingIssue() => _reviewWorkflowSession.IgnoreSelectedProofingIssue();
+    internal PresentationProofingPanePlan IgnoreAllSelectedProofingIssues() => _reviewWorkflowSession.IgnoreAllSelectedProofingIssues();
+    internal PresentationProofingPanePlan AddSelectedProofingWordToDictionary() => _reviewWorkflowSession.AddSelectedProofingWordToDictionary();
 
     private void RenderProofingPane(PresentationProofingPanePlan plan)
-    {
-        _proofingPaneHeading.Text = plan.Heading;
-        _proofingPaneMessage.Text = plan.DisplayMessage;
+        => _proofingPaneNativeView.Render(plan);
 
-        _proofingPaneRowsPanel.Children.Clear();
-        if (plan.ShouldShowEmptyState)
+    private static Control BuildProofingEmptyState(string message) =>
+        new TextBlock
         {
-            _proofingPaneRowsPanel.Children.Add(new TextBlock
-            {
-                Text = plan.Message,
-                Foreground = FreePBrushes.PaneMutedText,
-                Margin = new Thickness(12, 0, 12, 10),
-                TextWrapping = TextWrapping.Wrap,
-            });
-            return;
-        }
-
-        foreach (var row in plan.Rows)
-            _proofingPaneRowsPanel.Children.Add(BuildProofingIssueRowCard(row));
-    }
+            Text = message,
+            Foreground = FreePBrushes.PaneMutedText,
+            Margin = new Thickness(12, 0, 12, 10),
+            TextWrapping = TextWrapping.Wrap,
+        };
 
     private Control BuildProofingIssueRowCard(PresentationProofingIssueRowPlan row)
     {
-        var action = new Button
-        {
-            Content = row.CorrectionAction.Label,
-            Tag = row.RowIndex,
-            MinWidth = 72,
-            HorizontalAlignment = HorizontalAlignment.Left,
-            Margin = new Thickness(0, 8, 0, 0),
-            IsEnabled = row.CorrectionAction.IsEnabled,
-        };
-        ToolTip.SetTip(action, row.CorrectionAction.DisabledReason);
-        action.Click += (_, _) =>
-        {
-            SelectProofingIssueRow(row.RowIndex);
-            ApplySelectedProofingCorrection();
-        };
-
-        var ignore = new Button
-        {
-            Content = row.IgnoreAction.Label,
-            Tag = row.RowIndex,
-            MinWidth = 72,
-            HorizontalAlignment = HorizontalAlignment.Left,
-            Margin = new Thickness(8, 8, 0, 0),
-            IsEnabled = row.IgnoreAction.IsEnabled,
-        };
-        ToolTip.SetTip(ignore, row.IgnoreAction.DisabledReason);
-        ignore.Click += (_, _) =>
-        {
-            SelectProofingIssueRow(row.RowIndex);
-            IgnoreSelectedProofingIssue();
-        };
-
-        var ignoreAll = new Button
-        {
-            Content = row.IgnoreAllAction.Label,
-            Tag = row.RowIndex,
-            MinWidth = 72,
-            HorizontalAlignment = HorizontalAlignment.Left,
-            Margin = new Thickness(8, 8, 0, 0),
-            IsEnabled = row.IgnoreAllAction.IsEnabled,
-        };
-        ToolTip.SetTip(ignoreAll, row.IgnoreAllAction.DisabledReason);
-        ignoreAll.Click += (_, _) =>
-        {
-            SelectProofingIssueRow(row.RowIndex);
-            IgnoreAllSelectedProofingIssues();
-        };
-
-        var addToDictionary = new Button
-        {
-            Content = row.AddToDictionaryAction.Label,
-            Tag = row.RowIndex,
-            MinWidth = 120,
-            Margin = new Thickness(8, 8, 0, 0),
-            IsEnabled = row.AddToDictionaryAction.IsEnabled,
-        };
-        ToolTip.SetTip(addToDictionary, row.AddToDictionaryAction.DisabledReason);
-        addToDictionary.Click += (_, _) =>
-        {
-            SelectProofingIssueRow(row.RowIndex);
-            AddSelectedProofingWordToDictionary();
-        };
-
-        var select = new Button
-        {
-            Content = row.SelectionAction.Label,
-            IsEnabled = row.SelectionAction.IsEnabled,
-            Tag = row.RowIndex,
-            MinWidth = 72,
-            HorizontalAlignment = HorizontalAlignment.Left,
-            Margin = new Thickness(8, 8, 0, 0),
-        };
-        select.Click += (_, _) => SelectProofingIssueRow(row.RowIndex);
-
         var buttons = new StackPanel
         {
             Orientation = Orientation.Horizontal,
-            Children = { action, ignore, ignoreAll, addToDictionary, select },
         };
+        foreach (var action in PresentationMainWindowReviewPaneCoordinator.BuildProofingRowActions(row))
+        {
+            var button = new Button
+            {
+                Content = action.Label,
+                Tag = row.RowIndex,
+                MinWidth = action.MinimumWidth,
+                HorizontalAlignment = HorizontalAlignment.Left,
+                Margin = new Thickness(action.HasLeadingSpacing ? 8 : 0, 8, 0, 0),
+                IsEnabled = action.IsEnabled,
+            };
+            ToolTip.SetTip(button, action.DisabledReason);
+            button.Click += (_, _) =>
+                _reviewPaneHostCoordinator.ExecuteProofingRowAction(row.RowIndex, action.Kind);
+            buttons.Children.Add(button);
+        }
 
         var panel = new StackPanel
         {

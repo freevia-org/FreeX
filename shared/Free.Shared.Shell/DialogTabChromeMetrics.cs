@@ -5,6 +5,18 @@ namespace Free.Shared.Shell;
 /// </summary>
 public static class DialogTabChromeMetrics
 {
+    /// <summary>The classic Windows border around the selected tab pane.</summary>
+    public const string PaneBorderHex = "#C0C0C0";
+
+    /// <summary>The classic Windows border around an inactive tab header.</summary>
+    public const string InactiveTabBorderHex = "#808080";
+
+    /// <summary>The classic Windows fill behind an inactive tab header.</summary>
+    public const string InactiveTabBackgroundHex = "#F5F5F5";
+
+    /// <summary>The shared selected-tab and content-pane surface.</summary>
+    public const string SelectedTabBackgroundHex = "#FFFFFF";
+
     /// <summary>The shared one-pixel frame around the selected tab body.</summary>
     public const double PaneBorderThickness = 1;
 

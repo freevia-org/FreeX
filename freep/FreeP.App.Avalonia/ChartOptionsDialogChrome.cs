@@ -112,53 +112,54 @@ internal static class ChartOptionsDialogChrome
     }
 }
 
-internal sealed class ChartOptionsDialogForm
+internal sealed class ChartOptionsDialogForm :
+    ChartOptionsDialogFormAdapter<Control, Control>
 {
-    private readonly ChartOptionsDialogFormSession<Control, Control> _formSession;
-    private readonly Action<ChartOptionsDialogFieldId>? _valueChanged;
+    private static readonly ChartOptionsDialogNativeFieldBinding<Control, TextBox, ComboBox, CheckBox>
+        FieldBinding = new(
+            static (control, value) => control.IsEnabled = value,
+            static (control, value) => control.Text = value,
+            static (control, value) => control.ItemsSource = value,
+            static (control, value) => control.SelectedIndex = value,
+            static (control, value) => control.IsChecked = value);
 
     public ChartOptionsDialogForm(
         ChartOptionsDialogPlan plan,
         Action accept,
         Action cancel,
         Action<ChartOptionsDialogFieldId>? valueChanged)
+        : base(
+            PresentationDialogControlAdapter.CaptureValue,
+            PresentationDialogControlAdapter.ApplyValue,
+            FieldBinding.ApplyPlan,
+            static (row, isVisible) => row.IsVisible = isVisible,
+            static control => control.Focus(),
+            valueChanged)
     {
         ArgumentNullException.ThrowIfNull(plan);
         ArgumentNullException.ThrowIfNull(accept);
         ArgumentNullException.ThrowIfNull(cancel);
 
-        _valueChanged = valueChanged;
-        _formSession = new ChartOptionsDialogFormSession<Control, Control>(
-            PresentationDialogControlAdapter.CaptureValue,
-            PresentationDialogControlAdapter.ApplyValue,
-            ApplyFieldPlan,
-            static (row, isVisible) => row.IsVisible = isVisible);
         var body = new StackPanel { Spacing = 8 };
-        foreach (var group in plan.Groups)
-        {
-            if (!string.IsNullOrWhiteSpace(group.Header))
+        var renderer = new ChartOptionsDialogNativeRenderer<Control, Control>(
+            CreateText,
+            CreateChoice,
+            CreateToggle,
+            CreateFieldRow,
+            (header, hasContent) => body.Children.Add(new TextBlock
             {
-                body.Children.Add(new TextBlock
-                {
-                    Text = group.Header,
-                    FontWeight = FontWeight.SemiBold,
-                    Margin = new Thickness(0, body.Children.Count == 0 ? 0 : 8, 0, 0),
-                });
-            }
-
-            foreach (var field in group.Fields)
-                body.Children.Add(CreateField(field));
-        }
-
-        if (!string.IsNullOrWhiteSpace(plan.Hint))
-        {
-            body.Children.Add(new TextBlock
+                Text = header,
+                FontWeight = FontWeight.SemiBold,
+                Margin = new Thickness(0, hasContent ? 8 : 0, 0, 0),
+            }),
+            row => body.Children.Add(row),
+            hint => body.Children.Add(new TextBlock
             {
-                Text = plan.Hint,
+                Text = hint,
                 Opacity = 0.7,
                 TextWrapping = global::Avalonia.Media.TextWrapping.Wrap,
-            });
-        }
+            }));
+        renderer.Render(plan);
 
         var root = new Grid
         {
@@ -182,51 +183,35 @@ internal sealed class ChartOptionsDialogForm
         Grid.SetRow(actions, 1);
         root.Children.Add(actions);
         Content = root;
-        _formSession.CompleteInitialRender();
+        FormSession.CompleteInitialRender();
     }
 
     public Control Content { get; }
 
-    public ChartOptionsDialogValues CaptureValues() => _formSession.CaptureValues();
+    private static Control CreateText(ChartOptionsDialogFieldPlan field) =>
+        new TextBox { Text = field.Text };
 
-    public string Text(ChartOptionsDialogFieldId fieldId) =>
-        _formSession.Text(fieldId);
-
-    public int SelectedIndex(ChartOptionsDialogFieldId fieldId) =>
-        _formSession.SelectedIndex(fieldId);
-
-    public bool IsChecked(ChartOptionsDialogFieldId fieldId) =>
-        _formSession.IsChecked(fieldId);
-
-    public bool? NullableChecked(ChartOptionsDialogFieldId fieldId) =>
-        _formSession.NullableChecked(fieldId);
-
-    public void ApplyValues(ChartOptionsDialogValues values)
-        => _formSession.ApplyValues(values);
-
-    public void ApplyPlan(ChartOptionsDialogPlan plan)
-        => _formSession.ApplyPlan(plan);
-
-    public void Focus(ChartOptionsDialogFieldId fieldId)
+    private ComboBox CreateChoice(ChartOptionsDialogFieldPlan field)
     {
-        if (_formSession.TryGetControl(fieldId, out var control))
-            control.Focus();
+        var combo = new ComboBox
+        {
+            ItemsSource = field.ChoiceLabels,
+            SelectedIndex = field.SelectedIndex,
+        };
+        combo.SelectionChanged += (_, _) => NotifyValueChanged(field.Id);
+        return combo;
     }
 
-    private Control CreateField(ChartOptionsDialogFieldPlan field)
-    {
-        Control control = field.ControlKind switch
+    private static Control CreateToggle(ChartOptionsDialogFieldPlan field) =>
+        new CheckBox
         {
-            ChartOptionsDialogControlKind.Text => new TextBox { Text = field.Text },
-            ChartOptionsDialogControlKind.Choice => CreateChoice(field),
-            ChartOptionsDialogControlKind.Toggle => new CheckBox
-            {
-                Content = field.Label,
-                IsChecked = field.IsChecked,
-                IsThreeState = field.IsThreeState,
-            },
-            _ => throw new ArgumentOutOfRangeException(nameof(field.ControlKind)),
+            Content = field.Label,
+            IsChecked = field.IsChecked,
+            IsThreeState = field.IsThreeState,
         };
+
+    private Control CreateFieldRow(ChartOptionsDialogFieldPlan field, Control control)
+    {
         control.MinWidth = field.MinimumControlWidth;
         control.IsEnabled = field.IsEnabled;
         PresentationDialogControlAdapter.ApplySemantic(
@@ -238,42 +223,7 @@ internal sealed class ChartOptionsDialogForm
             ? control
             : ChartOptionsDialogChrome.CreateRow(field.Label, control, field.LabelWidth);
         row.IsVisible = field.IsVisible;
-        _formSession.Register(field.Id, control, row);
+        FormSession.Register(field.Id, control, row);
         return row;
-    }
-
-    private ComboBox CreateChoice(ChartOptionsDialogFieldPlan field)
-    {
-        var combo = new ComboBox
-        {
-            ItemsSource = field.ChoiceLabels,
-            SelectedIndex = field.SelectedIndex,
-        };
-        combo.SelectionChanged += (_, _) => RaiseValueChanged(field.Id);
-        return combo;
-    }
-
-    private void RaiseValueChanged(ChartOptionsDialogFieldId fieldId)
-    {
-        if (!_formSession.IsApplyingPlan)
-            _valueChanged?.Invoke(fieldId);
-    }
-
-    private static void ApplyFieldPlan(Control control, ChartOptionsDialogFieldPlan field)
-    {
-        control.IsEnabled = field.IsEnabled;
-        switch (control)
-        {
-            case TextBox textBox:
-                textBox.Text = field.Text;
-                break;
-            case ComboBox comboBox:
-                comboBox.ItemsSource = field.ChoiceLabels;
-                comboBox.SelectedIndex = field.SelectedIndex;
-                break;
-            case CheckBox checkBox:
-                checkBox.IsChecked = field.IsChecked;
-                break;
-        }
     }
 }

@@ -1221,6 +1221,20 @@ public static class TableCellEditPlanner
         return end > start ? (start, end) : null;
     }
 
+    internal static (int Start, int End)? NormalizeParagraphSelection(
+        (int Start, int End)? selection,
+        int textLength)
+    {
+        var range = NormalizeSelection(selection, textLength);
+        if (range is not null || selection is null || textLength == 0)
+            return range;
+
+        int caret = Math.Clamp(selection.Value.Start, 0, textLength);
+        return caret < textLength
+            ? (caret, caret + 1)
+            : (textLength - 1, textLength);
+    }
+
     private static TableCellEditStartPlan NotReady(
         TableCellEditStartStatus status,
         uint shapeId,
@@ -1670,7 +1684,7 @@ public static class TableCellEditPlanner
     {
         var editedBody = TextBodyModelCloner.CloneTextBody(source)!;
         int textLength = InCanvasTextEditPlanner.ExtractPlainText(source).Length;
-        var range = NormalizeSelection(selection, textLength);
+        var range = NormalizeParagraphSelection(selection, textLength);
 
         foreach (int paragraphIndex in ResolveParagraphIndexes(editedBody, range))
             editedBody.Paragraphs[paragraphIndex].Align = alignment;
@@ -1685,7 +1699,7 @@ public static class TableCellEditPlanner
     {
         var editedBody = TextBodyModelCloner.CloneTextBody(source)!;
         int textLength = InCanvasTextEditPlanner.ExtractPlainText(source).Length;
-        var range = NormalizeSelection(selection, textLength);
+        var range = NormalizeParagraphSelection(selection, textLength);
         var paragraphIndexes = ResolveParagraphIndexes(editedBody, range);
         enabled = paragraphIndexes.Count > 0 &&
             !paragraphIndexes.All(index => IsBulletEnabled(editedBody.Paragraphs[index]));
@@ -1721,7 +1735,7 @@ public static class TableCellEditPlanner
     {
         var editedBody = TextBodyModelCloner.CloneTextBody(source)!;
         int textLength = InCanvasTextEditPlanner.ExtractPlainText(source).Length;
-        var range = NormalizeSelection(selection, textLength);
+        var range = NormalizeParagraphSelection(selection, textLength);
         var paragraphIndexes = ResolveParagraphIndexes(editedBody, range);
         enabled = paragraphIndexes.Count > 0 &&
             !paragraphIndexes.All(index => IsAutoNumberingEnabled(editedBody.Paragraphs[index]));
@@ -1758,7 +1772,7 @@ public static class TableCellEditPlanner
     {
         var editedBody = TextBodyModelCloner.CloneTextBody(source)!;
         int textLength = InCanvasTextEditPlanner.ExtractPlainText(source).Length;
-        var range = NormalizeSelection(selection, textLength);
+        var range = NormalizeParagraphSelection(selection, textLength);
 
         var paragraphIndexes = ResolveParagraphIndexes(editedBody, range);
         for (int index = 0; index < paragraphIndexes.Count; index++)
@@ -1813,7 +1827,7 @@ public static class TableCellEditPlanner
     {
         var editedBody = TextBodyModelCloner.CloneTextBody(source)!;
         int textLength = InCanvasTextEditPlanner.ExtractPlainText(source).Length;
-        var range = NormalizeSelection(selection, textLength);
+        var range = NormalizeParagraphSelection(selection, textLength);
 
         foreach (int paragraphIndex in ResolveParagraphIndexes(editedBody, range))
             PresentationPictureBulletAuthoringPlanner.ApplyToParagraph(editedBody.Paragraphs[paragraphIndex], image);
@@ -1828,7 +1842,7 @@ public static class TableCellEditPlanner
     {
         var editedBody = TextBodyModelCloner.CloneTextBody(source)!;
         int textLength = InCanvasTextEditPlanner.ExtractPlainText(source).Length;
-        var range = NormalizeSelection(selection, textLength);
+        var range = NormalizeParagraphSelection(selection, textLength);
 
         foreach (int paragraphIndex in ResolveParagraphIndexes(editedBody, range))
         {

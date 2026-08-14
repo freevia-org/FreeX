@@ -21,7 +21,7 @@ namespace FreeP.App.Rendering.Avalonia;
 ///   <item>All coordinate work uses the framework-free gesture router and preview projector.</item>
 /// </list>
 /// </summary>
-public sealed partial class AvaloniaCanvasGestureHandler : IDisposable, ICanvasGesturePreviewSurface
+public sealed partial class AvaloniaCanvasGestureHandler : IDisposable
 {
     // ── Wiring ─────────────────────────────────────────────────────────────────
 
@@ -37,6 +37,7 @@ public sealed partial class AvaloniaCanvasGestureHandler : IDisposable, ICanvasG
     // ── Drag state ─────────────────────────────────────────────────────────────
 
     private readonly CanvasGestureRouter _gestureRouter;
+    private readonly CanvasGesturePreviewSurfaceAdapter _previewSurface;
 
     // ── Move ───────────────────────────────────────────────────────────────────
 
@@ -99,6 +100,20 @@ public sealed partial class AvaloniaCanvasGestureHandler : IDisposable, ICanvasG
         _editor  = editor  ?? throw new ArgumentNullException(nameof(editor));
         _adorner = adorner ?? throw new ArgumentNullException(nameof(adorner));
         _gestureRouter = new CanvasGestureRouter(_editor);
+        _previewSurface = new(
+            (bounds, rotation) => _adorner.UpdatePreview(
+                bounds is { } value ? ToAvaloniaRect(value) : null,
+                rotation),
+            _adorner.UpdateSnapGuides,
+            plan =>
+            {
+                _adorner.UpdateTransformPreview(plan);
+                _canvas.UpdateTransformPreview(plan);
+            },
+            (name, point) => _adorner.UpdateGeometryPreview(
+                name,
+                new Point(point.X, point.Y)),
+            bounds => _adorner.UpdateMarquee(ToAvaloniaRect(bounds)));
         _onChartPointDoubleClick = onChartPointDoubleClick;
         _tryOpenOleInPlace = tryOpenOleInPlace;
         _tryActivateOleExternally = tryActivateOleExternally;
@@ -253,18 +268,10 @@ public sealed partial class AvaloniaCanvasGestureHandler : IDisposable, ICanvasG
     }
 
     private void ApplyPressAction(CanvasGesturePressPlan plan)
-    {
-        switch (plan.Action)
-        {
-            case CanvasGesturePressActionKind.NotifyChartPointDoubleClick
-                when plan.ChartPoint is { } chartPoint:
-                _onChartPointDoubleClick?.Invoke(chartPoint);
-                break;
-            case CanvasGesturePressActionKind.ActivateOle when plan.Shape is { } shape:
-                HandleOleDoubleClick(shape);
-                break;
-        }
-    }
+        => CanvasGesturePressActionDispatcher.Dispatch(
+            plan,
+            _onChartPointDoubleClick,
+            shape => HandleOleDoubleClick(shape));
 
     private bool HandleOleDoubleClick(SlideShape shape) =>
         OleActivationCoordinator.TryActivate(
@@ -325,36 +332,8 @@ public sealed partial class AvaloniaCanvasGestureHandler : IDisposable, ICanvasG
             _editor.CurrentSlide,
             _editor.Presentation,
             transform);
-        CanvasGesturePreviewDispatcher.Apply(visual, transform, this);
+        CanvasGesturePreviewDispatcher.Apply(visual, transform, _previewSurface);
     }
-
-    void ICanvasGesturePreviewSurface.UpdatePreview(
-        SlideScreenRect? bounds,
-        double rotationDegrees) =>
-        _adorner.UpdatePreview(
-            bounds is { } value ? ToAvaloniaRect(value) : null,
-            rotationDegrees);
-
-    void ICanvasGesturePreviewSurface.UpdateSnapGuides(
-        IReadOnlyList<SnapGuideLine>? guides,
-        SlideTransformCore transform) =>
-        _adorner.UpdateSnapGuides(guides, transform);
-
-    void ICanvasGesturePreviewSurface.UpdateTransformPreview(CanvasMultiTransformPlan plan)
-    {
-        _adorner.UpdateTransformPreview(plan);
-        _canvas.UpdateTransformPreview(plan);
-    }
-
-    void ICanvasGesturePreviewSurface.UpdateGeometryPreview(
-        string handleName,
-        CanvasGesturePoint screenPoint) =>
-        _adorner.UpdateGeometryPreview(
-            handleName,
-            new Point(screenPoint.X, screenPoint.Y));
-
-    void ICanvasGesturePreviewSurface.UpdateMarquee(SlideScreenRect bounds) =>
-        _adorner.UpdateMarquee(ToAvaloniaRect(bounds));
 
     // ── Resize gesture ─────────────────────────────────────────────────────────
 
@@ -442,10 +421,7 @@ public sealed partial class AvaloniaCanvasGestureHandler : IDisposable, ICanvasG
                 _canvas.CurrentTransform,
                 EditPointsEnabled);
 
-        _adorner.UpdateSelection(projection.Selections.Select(selection =>
-            (selection.ShapeId, ToAvaloniaRect(selection.ScreenRect))));
-        _adorner.UpdateGeometryHandles(projection.GeometryHandles.Select(handle =>
-            (handle.Name, new Point(handle.ScreenPosition.X, handle.ScreenPosition.Y))));
+        _adorner.UpdateProjection(projection);
     }
 
     // ── Helpers ────────────────────────────────────────────────────────────────
@@ -453,32 +429,15 @@ public sealed partial class AvaloniaCanvasGestureHandler : IDisposable, ICanvasG
     private static CanvasGesturePoint ToGesturePoint(Point point)
         => new(point.X, point.Y);
 
-    private static CanvasGestureKey ToGestureKey(Key key) => key switch
-    {
-        Key.Escape => CanvasGestureKey.Escape,
-        Key.Left => CanvasGestureKey.Left,
-        Key.Right => CanvasGestureKey.Right,
-        Key.Up => CanvasGestureKey.Up,
-        Key.Down => CanvasGestureKey.Down,
-        Key.Delete => CanvasGestureKey.Delete,
-        Key.Back => CanvasGestureKey.Backspace,
-        Key.Insert => CanvasGestureKey.Insert,
-        _ => CanvasGestureKey.None,
-    };
+    private static CanvasGestureKey ToGestureKey(Key key) =>
+        CanvasGestureNativeInputMapper.MapKeyName(key.ToString());
 
-    private static CanvasGestureModifiers ToGestureModifiers(KeyModifiers modifiers)
-    {
-        var result = CanvasGestureModifiers.None;
-        if ((modifiers & KeyModifiers.Shift) != 0)
-            result |= CanvasGestureModifiers.Shift;
-        if ((modifiers & KeyModifiers.Control) != 0)
-            result |= CanvasGestureModifiers.Control;
-        if ((modifiers & KeyModifiers.Alt) != 0)
-            result |= CanvasGestureModifiers.Alt;
-        if ((modifiers & KeyModifiers.Meta) != 0)
-            result |= CanvasGestureModifiers.Meta;
-        return result;
-    }
+    private static CanvasGestureModifiers ToGestureModifiers(KeyModifiers modifiers) =>
+        CanvasGestureNativeInputMapper.MapModifiers(
+            modifiers.HasFlag(KeyModifiers.Shift),
+            modifiers.HasFlag(KeyModifiers.Control),
+            modifiers.HasFlag(KeyModifiers.Alt),
+            modifiers.HasFlag(KeyModifiers.Meta));
 
     private static Rect ToAvaloniaRect(SlideScreenRect rect)
         => new(rect.Left, rect.Top, rect.Width, rect.Height);

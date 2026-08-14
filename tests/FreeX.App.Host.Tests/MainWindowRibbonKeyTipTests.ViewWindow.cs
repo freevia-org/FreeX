@@ -137,7 +137,7 @@ public sealed partial class MainWindowRibbonKeyTipTests
     }
 
     [Fact]
-    public void ViewWindowSingleHostState_DisablesMultiWindowCommandsButKeepsResetLive()
+    public void ViewWindowSingleHostState_DisablesPairCommandsIncludingReset()
     {
         RunSta(() =>
         {
@@ -146,11 +146,11 @@ public sealed partial class MainWindowRibbonKeyTipTests
             harness.EnterKeyTipScope("TopLevel");
             harness.HandleKeyTip(Key.W);
 
-            // New Window is always live; Reset Window Position is always available (re-centers this window).
+            // New Window is always live. Reset Window Position belongs to an active side-by-side pair.
             harness.CommandButtonIsEnabled("ViewNewWindowBtn").Should().BeTrue();
             harness.VisibleCommandKeyTips("NW").Should().ContainSingle("New Window");
-            harness.CommandButtonIsEnabled("ViewResetWindowPositionBtn").Should().BeTrue();
-            harness.VisibleCommandKeyTips("RP").Should().ContainSingle("Reset Window Position");
+            harness.CommandButtonIsEnabled("ViewResetWindowPositionBtn").Should().BeFalse();
+            harness.VisibleCommandKeyTips("RP").Should().BeEmpty();
 
             // The remaining multi-window commands exist but are disabled in a lone-window host, with
             // owned help text explaining why, so they expose no command key tip while disabled.

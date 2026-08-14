@@ -39,6 +39,7 @@ internal sealed partial class MultilevelListDialog : FreeWDialogWindow
     private readonly ComboBox _level2Format;
 
     internal MultilevelListDialog(IReadOnlyList<ListNumberFormat> currentFormats)
+        : base(Chrome)
     {
         _session = MultilevelListDialogPlanner.CreateSession(currentFormats, CultureInfo.CurrentCulture);
         var state = _session.InitialState;
@@ -92,10 +93,6 @@ internal sealed partial class MultilevelListDialog : FreeWDialogWindow
         Content = panel;
         Opened += (_, _) =>
         {
-            // FreeWDialogWindow installs the shared default chrome before this route can
-            // provide its WPF-sized control metrics. Reapply the route style after that
-            // inherited hook so the rendered templates keep the authority dimensions.
-            AvaloniaCompactDialogChrome.ApplyDescendantChrome(this, Chrome);
             // TextBox templates can be attached after the inherited visual walk. Keep the
             // route-owned controls at the authority height once their templates exist.
             ApplyComboBoxAuthorityChrome(_levels);

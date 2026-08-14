@@ -14,97 +14,81 @@ public sealed partial class SlideCanvas
         if (!plan.Transform.IsIdentity)
             dc.PushTransform(ToWpfTransform(plan.Transform));
 
-        foreach (var command in plan.Commands)
-            RenderChartCommand(dc, command);
+        ChartRenderCommandDispatcher.Dispatch(plan.Commands, new ChartRenderCommandSink(dc));
 
         if (!plan.Transform.IsIdentity)
             dc.Pop();
     }
 
-    private static void RenderChartCommand(DrawingContext dc, ChartRenderCommand command)
+    private sealed class ChartRenderCommandSink(DrawingContext dc) : IChartRenderCommandSink
     {
-        switch (command)
+        public void Render(ChartRenderCommand.Frame frame)
         {
-            case ChartRenderCommand.Frame frame:
+            var bounds = ToRect(frame.Bounds);
+            var fill = ToBrush(frame.Fill);
+            var stroke = frame.Stroke is { } frameStroke ? ToPen(frameStroke) : null;
+            if (frame.RoundedCorners)
             {
-                var bounds = ToRect(frame.Bounds);
-                var fill = ToBrush(frame.Fill);
-                var stroke = frame.Stroke is { } frameStroke ? ToPen(frameStroke) : null;
-                if (frame.RoundedCorners)
-                {
-                    double radius = Math.Min(
-                        ChartRenderPlanner.RoundedChartCornerRadius,
-                        Math.Min(bounds.Width, bounds.Height) / 2.0);
-                    dc.DrawRoundedRectangle(fill, stroke, bounds, radius, radius);
-                }
-                else
-                {
-                    dc.DrawRectangle(fill, stroke, bounds);
-                }
-                break;
+                double radius = Math.Min(
+                    ChartRenderPlanner.RoundedChartCornerRadius,
+                    Math.Min(bounds.Width, bounds.Height) / 2.0);
+                dc.DrawRoundedRectangle(fill, stroke, bounds, radius, radius);
             }
-            case ChartRenderCommand.Rectangle rectangle:
-                DrawChartRectangle(dc, rectangle);
-                break;
-            case ChartRenderCommand.Line line:
+            else
             {
-                var pen = ToPen(line.Primitive.Stroke);
-                if (line.PixelSnapHorizontal)
-                {
-                    double left = Math.Min(line.Primitive.Start.X, line.Primitive.End.X);
-                    double right = Math.Max(line.Primitive.Start.X, line.Primitive.End.X);
-                    double top = Math.Round(
-                        line.Primitive.Start.Y - 0.5,
-                        MidpointRounding.AwayFromZero);
-                    dc.DrawRectangle(pen.Brush, null, new Rect(left, top, right - left, 1.0));
-                }
-                else
-                {
-                    dc.DrawLine(pen, ToPoint(line.Primitive.Start), ToPoint(line.Primitive.End));
-                }
-                break;
+                dc.DrawRectangle(fill, stroke, bounds);
             }
-            case ChartRenderCommand.Path path:
-                dc.DrawGeometry(
-                    path.Primitive.Fill is { } pathFill ? ToBrush(pathFill) : null,
-                    path.Stroke is { } pathStroke ? ToPen(pathStroke) : null,
-                    path.UseAreaGeometry
-                        ? ToAreaGeometry(path.Primitive)
-                        : ToGeometry(path.Primitive));
-                break;
-            case ChartRenderCommand.LinePath path:
-                dc.DrawGeometry(
-                    null,
-                    ToPen(path.Primitive.Stroke),
-                    ToGeometry(path.Primitive));
-                break;
-            case ChartRenderCommand.Marker marker:
-                DrawChartMarker(dc, marker.Primitive);
-                break;
-            case ChartRenderCommand.PieSlice pieSlice:
-                DrawChartPieSlice(dc, pieSlice);
-                break;
-            case ChartRenderCommand.DoughnutSlice doughnutSlice:
-                DrawChartDoughnutSlice(dc, doughnutSlice);
-                break;
-            case ChartRenderCommand.SurfaceFacet facet:
-                dc.DrawGeometry(
-                    ToBrush(facet.Primitive.Fill),
-                    ToPen(facet.Primitive.Stroke),
-                    ToSurfaceFacetGeometry(facet.Primitive));
-                break;
-            case ChartRenderCommand.Bubble bubble:
-                dc.DrawEllipse(
-                    ToBrush(bubble.Primitive.Fill),
-                    ToPen(bubble.Primitive.Stroke),
-                    ToPoint(bubble.Primitive.Center),
-                    bubble.Primitive.Radius,
-                    bubble.Primitive.Radius);
-                break;
-            case ChartRenderCommand.Text text:
-                DrawChartText(dc, text.Plan);
-                break;
         }
+
+        public void Render(ChartRenderCommand.Rectangle command) => DrawChartRectangle(dc, command);
+
+        public void Render(ChartRenderCommand.Line line)
+        {
+            var pen = ToPen(line.Primitive.Stroke);
+            if (line.PixelSnapHorizontal)
+            {
+                double left = Math.Min(line.Primitive.Start.X, line.Primitive.End.X);
+                double right = Math.Max(line.Primitive.Start.X, line.Primitive.End.X);
+                double top = Math.Round(
+                    line.Primitive.Start.Y - 0.5,
+                    MidpointRounding.AwayFromZero);
+                dc.DrawRectangle(pen.Brush, null, new Rect(left, top, right - left, 1.0));
+                return;
+            }
+
+            dc.DrawLine(pen, ToPoint(line.Primitive.Start), ToPoint(line.Primitive.End));
+        }
+
+        public void Render(ChartRenderCommand.Path path) =>
+            dc.DrawGeometry(
+                path.Primitive.Fill is { } fill ? ToBrush(fill) : null,
+                path.Stroke is { } stroke ? ToPen(stroke) : null,
+                path.UseAreaGeometry ? ToAreaGeometry(path.Primitive) : ToGeometry(path.Primitive));
+
+        public void Render(ChartRenderCommand.LinePath path) =>
+            dc.DrawGeometry(null, ToPen(path.Primitive.Stroke), ToGeometry(path.Primitive));
+
+        public void Render(ChartRenderCommand.Marker command) => DrawChartMarker(dc, command.Primitive);
+
+        public void Render(ChartRenderCommand.PieSlice command) => DrawChartPieSlice(dc, command);
+
+        public void Render(ChartRenderCommand.DoughnutSlice command) => DrawChartDoughnutSlice(dc, command);
+
+        public void Render(ChartRenderCommand.SurfaceFacet facet) =>
+            dc.DrawGeometry(
+                ToBrush(facet.Primitive.Fill),
+                ToPen(facet.Primitive.Stroke),
+                ToSurfaceFacetGeometry(facet.Primitive));
+
+        public void Render(ChartRenderCommand.Bubble bubble) =>
+            dc.DrawEllipse(
+                ToBrush(bubble.Primitive.Fill),
+                ToPen(bubble.Primitive.Stroke),
+                ToPoint(bubble.Primitive.Center),
+                bubble.Primitive.Radius,
+                bubble.Primitive.Radius);
+
+        public void Render(ChartRenderCommand.Text command) => DrawChartText(dc, command.Plan);
     }
 
     private static void DrawChartRectangle(

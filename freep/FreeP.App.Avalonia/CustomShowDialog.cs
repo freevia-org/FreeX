@@ -10,34 +10,25 @@ using FreeP.App.Compositor;
 
 namespace FreeP.App.Avalonia;
 
-internal sealed partial class CustomShowDialog : FreePDialogWindow, ISlideShowCustomShowDialogView
+internal sealed partial class CustomShowDialog : FreePDialogWindow
 {
     private const double DragStartThreshold = 4;
     private static readonly AvaloniaCompactDialogChromeStyle DialogChromeStyle =
         AvaloniaCompactDialogChrome.WindowsStyle;
 
-    private readonly SlideShowCustomShowDialogController _controller;
-    private readonly SlideShowCustomShowDialogFormSession<Control> _formSession;
+    private readonly SlideShowCustomShowDialogNativeComposition<Control, DockPanel> _renderer;
     private readonly ListBox _showList = new();
     private readonly TextBox _nameBox = new();
     private readonly ListBox _customShowSlideList = new();
     private readonly StackPanel _slidePanel = new();
     private readonly TextBlock _validationText = new();
-    private readonly Button _renameButton;
-    private readonly Button _updateButton;
-    private readonly Button _deleteButton;
-    private readonly Button _startButton;
-    private readonly Button _moveUpButton;
-    private readonly Button _moveDownButton;
-    private readonly Button _removeButton;
-    private readonly List<CheckBox> _slideCheckBoxes = new();
     private Point? _customShowSlideDragStartPoint;
     private int _customShowSlideDragSourceIndex = -1;
     private bool _customShowSlideDragActive;
 
     private PresentationDialogSurfacePlan<
         SlideShowCustomShowDialogField,
-        SlideShowCustomShowDialogAction> Surface => _controller.Surface;
+        SlideShowCustomShowDialogAction> Surface => _renderer.Surface;
 
     public CustomShowDialog(
         SlideShowCustomShowSession customShowSession,
@@ -46,7 +37,8 @@ internal sealed partial class CustomShowDialog : FreePDialogWindow, ISlideShowCu
         ArgumentNullException.ThrowIfNull(customShowSession);
         SlideShowCustomShowDialogSession session =
             customShowSession.CreateDialogSession(tryStartShow ?? (_ => false));
-        _formSession = new(
+        _renderer = new(
+            session,
             _showList,
             _customShowSlideList,
             _nameBox,
@@ -58,8 +50,13 @@ internal sealed partial class CustomShowDialog : FreePDialogWindow, ISlideShowCu
             SetText,
             static (control, isChecked) => ((CheckBox)control).IsChecked = isChecked,
             static control => ((CheckBox)control).IsChecked == true,
-            static (control, isEnabled) => control.IsEnabled = isEnabled);
-        _controller = new(session, this);
+            static (control, isEnabled) => control.IsEnabled = isEnabled,
+            () => _nameBox.Text,
+            Close,
+            _slidePanel.Children.Clear,
+            CreateAvailableSlideRow,
+            row => _slidePanel.Children.Add(row),
+            CreateNativeButton);
 
         Title = Surface.Title;
         AutomationProperties.SetName(this, Surface.AccessibleName);
@@ -77,7 +74,7 @@ internal sealed partial class CustomShowDialog : FreePDialogWindow, ISlideShowCu
             0);
         ApplyListChrome(_showList);
         PresentationDialogControlAdapter.ApplySemantic(_showList, Surface.Field(SlideShowCustomShowDialogField.CustomShows));
-        _showList.SelectionChanged += (_, _) => _controller.SelectShow();
+        _showList.SelectionChanged += (_, _) => _renderer.Controller.SelectShow();
 
         _nameBox.MinWidth = SlideShowCustomShowDialogVisualMetrics.NameMinimumWidth;
         _nameBox.Margin = new Thickness(
@@ -91,7 +88,7 @@ internal sealed partial class CustomShowDialog : FreePDialogWindow, ISlideShowCu
         _customShowSlideList.MinHeight = SlideShowCustomShowDialogVisualMetrics.OrderedSlidesMinimumHeight;
         ApplyListChrome(_customShowSlideList);
         PresentationDialogControlAdapter.ApplySemantic(_customShowSlideList, Surface.Field(SlideShowCustomShowDialogField.OrderedSlides));
-        _customShowSlideList.SelectionChanged += (_, _) => _controller.SelectSlide();
+        _customShowSlideList.SelectionChanged += (_, _) => _renderer.Controller.SelectSlide();
         DragDrop.SetAllowDrop(_customShowSlideList, true);
         _customShowSlideList.PointerPressed += OnCustomShowSlideListPointerPressed;
         _customShowSlideList.PointerMoved += OnCustomShowSlideListPointerMoved;
@@ -109,31 +106,17 @@ internal sealed partial class CustomShowDialog : FreePDialogWindow, ISlideShowCu
             SlideShowCustomShowDialogVisualMetrics.ValidationBottomMargin);
         PresentationDialogControlAdapter.ApplySemantic(_validationText, Surface.Field(SlideShowCustomShowDialogField.Validation));
 
-        _renameButton = MakeButton(SlideShowCustomShowDialogAction.Rename, _controller.Rename);
-        _updateButton = MakeButton(SlideShowCustomShowDialogAction.UpdateSlides, _controller.UpdateSlides);
-        _deleteButton = MakeButton(SlideShowCustomShowDialogAction.Delete, _controller.Delete);
-        _startButton = MakeButton(SlideShowCustomShowDialogAction.StartShow, _controller.StartShow);
-        _moveUpButton = MakeButton(
-            SlideShowCustomShowDialogAction.MoveUp,
-            () => _controller.MoveSelectedSlide(-1));
-        _moveDownButton = MakeButton(
-            SlideShowCustomShowDialogAction.MoveDown,
-            () => _controller.MoveSelectedSlide(1));
-        _removeButton = MakeButton(
-            SlideShowCustomShowDialogAction.Remove,
-            _controller.RemoveSelectedSlide);
-
         Content = BuildContent();
-        _controller.Initialize();
+        _renderer.Controller.Initialize();
     }
 
     internal int RenderedCustomShowCount => _showList.Items.Count;
 
-    internal int RenderedSlideOptionCount => _slideCheckBoxes.Count;
+    internal int RenderedSlideOptionCount => _renderer.AvailableSlides.Controls.Count;
 
     internal int RenderedCustomShowSlideCount => _customShowSlideList.Items.Count;
 
-    internal int SelectedCustomShowSlideIndex => _formSession.SelectedSlideIndex;
+    internal int SelectedCustomShowSlideIndex => _renderer.Form.SelectedSlideIndex;
 
     internal string ValidationMessage => _validationText.Text ?? string.Empty;
 
@@ -208,9 +191,9 @@ internal sealed partial class CustomShowDialog : FreePDialogWindow, ISlideShowCu
             Spacing = SlideShowCustomShowDialogVisualMetrics.ActionSpacing,
             Children =
             {
-                _moveUpButton,
-                _moveDownButton,
-                _removeButton,
+                _renderer.Buttons.MoveUp,
+                _renderer.Buttons.MoveDown,
+                _renderer.Buttons.Remove,
             },
         };
         DockPanel.SetDock(moveButtons, Dock.Right);
@@ -272,12 +255,12 @@ internal sealed partial class CustomShowDialog : FreePDialogWindow, ISlideShowCu
             Spacing = SlideShowCustomShowDialogVisualMetrics.ActionSpacing,
             Children =
             {
-                MakeButton(SlideShowCustomShowDialogAction.Create, _controller.Create),
-                _renameButton,
-                _updateButton,
-                _deleteButton,
-                _startButton,
-                MakeButton(SlideShowCustomShowDialogAction.Close, Close),
+                _renderer.CreateButton(SlideShowCustomShowDialogAction.Create, _renderer.Controller.Create),
+                _renderer.Buttons.Rename,
+                _renderer.Buttons.Update,
+                _renderer.Buttons.Delete,
+                _renderer.Buttons.Start,
+                _renderer.CreateButton(SlideShowCustomShowDialogAction.Close, Close),
             },
         };
         Grid.SetRow(buttons, 1);
@@ -287,80 +270,42 @@ internal sealed partial class CustomShowDialog : FreePDialogWindow, ISlideShowCu
         return root;
     }
 
-    SlideShowCustomShowDialogViewState ISlideShowCustomShowDialogView.CaptureState() =>
-        new(
-            _nameBox.Text,
-            _formSession.SelectedSlideIds(),
-            _formSession.SelectedShowIndex,
-            _formSession.SelectedSlideIndex);
-
-    void ISlideShowCustomShowDialogView.RenderFullPlan(SlideShowCustomShowSessionPlan plan)
+    private SlideShowCustomShowAvailableSlideNativeRow<Control, DockPanel>
+        CreateAvailableSlideRow(SlideShowCustomShowSlideOption slide)
     {
-        RebuildSlides(plan.AvailableSlides);
-        _formSession.ApplyFullPlan(plan);
-    }
-
-    private void RebuildSlides(IReadOnlyList<SlideShowCustomShowSlideOption> slides)
-    {
-        _slidePanel.Children.Clear();
-        _slideCheckBoxes.Clear();
-        _formSession.ClearAvailableSlides();
-
-        foreach (var slide in slides)
+        var checkBox = new CheckBox
         {
-            var checkBox = new CheckBox
-            {
-                Content = slide.DisplayText,
-                Tag = slide.SlideId,
-                Margin = new Thickness(
-                    0,
-                    SlideShowCustomShowDialogVisualMetrics.AvailableSlideVerticalMargin,
-                    0,
-                    SlideShowCustomShowDialogVisualMetrics.AvailableSlideVerticalMargin),
-            };
-            AvaloniaCompactDialogChrome.ApplyCheckBox(checkBox, DialogChromeStyle);
-            checkBox.Height = SlideShowCustomShowDialogVisualMetrics.AvailableSlideControlHeight;
-            checkBox.MinHeight = SlideShowCustomShowDialogVisualMetrics.AvailableSlideControlHeight;
-            checkBox.MaxHeight = SlideShowCustomShowDialogVisualMetrics.AvailableSlideControlHeight;
-            checkBox.Padding = new Thickness(0);
-            PresentationDialogControlAdapter.ApplySemantic(
-                checkBox,
-                Surface.Field(SlideShowCustomShowDialogField.AvailableSlides, slide.SlideId));
-            _slideCheckBoxes.Add(checkBox);
-            _formSession.RegisterAvailableSlide(slide.SlideId, checkBox);
-            var row = new DockPanel
-            {
-                Margin = new Thickness(
-                    0,
-                    SlideShowCustomShowDialogVisualMetrics.AvailableSlideVerticalMargin,
-                    0,
-                    SlideShowCustomShowDialogVisualMetrics.AvailableSlideVerticalMargin),
-                LastChildFill = true,
-            };
-            var addButton = MakeButton(
-                SlideShowCustomShowDialogAction.AddSlide,
-                () => _controller.AddSlideOccurrence(slide.SlideId),
-                slide.SlideId);
-            addButton.MinWidth = SlideShowCustomShowDialogVisualMetrics.AddSlideButtonMinimumWidth;
-            DockPanel.SetDock(addButton, Dock.Right);
-            row.Children.Add(addButton);
-            row.Children.Add(checkBox);
-            _slidePanel.Children.Add(row);
-        }
+            Content = slide.DisplayText,
+            Tag = slide.SlideId,
+            Margin = new Thickness(
+                0,
+                SlideShowCustomShowDialogVisualMetrics.AvailableSlideVerticalMargin,
+                0,
+                SlideShowCustomShowDialogVisualMetrics.AvailableSlideVerticalMargin),
+        };
+        AvaloniaCompactDialogChrome.ApplyCheckBox(checkBox, DialogChromeStyle);
+        checkBox.Height = SlideShowCustomShowDialogVisualMetrics.AvailableSlideControlHeight;
+        checkBox.MinHeight = SlideShowCustomShowDialogVisualMetrics.AvailableSlideControlHeight;
+        checkBox.MaxHeight = SlideShowCustomShowDialogVisualMetrics.AvailableSlideControlHeight;
+        checkBox.Padding = new Thickness(0);
+        PresentationDialogControlAdapter.ApplySemantic(
+            checkBox,
+            Surface.Field(SlideShowCustomShowDialogField.AvailableSlides, slide.SlideId));
+        var row = new DockPanel
+        {
+            Margin = checkBox.Margin,
+            LastChildFill = true,
+        };
+        var addButton = (Button)_renderer.CreateButton(
+            SlideShowCustomShowDialogAction.AddSlide,
+            () => _renderer.Actions.Execute(SlideShowCustomShowDialogAction.AddSlide, slide.SlideId),
+            slide.SlideId);
+        addButton.MinWidth = SlideShowCustomShowDialogVisualMetrics.AddSlideButtonMinimumWidth;
+        DockPanel.SetDock(addButton, Dock.Right);
+        row.Children.Add(addButton);
+        row.Children.Add(checkBox);
+        return new(slide.SlideId, checkBox, row);
     }
-
-    void ISlideShowCustomShowDialogView.RenderSelectedShowPlan(
-        SlideShowCustomShowSessionPlan plan) =>
-        _formSession.ApplySelectedShowPlan(plan);
-
-    void ISlideShowCustomShowDialogView.ApplySlideSelection(
-        SlideShowCustomShowSessionPlan plan) =>
-        _formSession.ApplySlideSelection(plan);
-
-    void ISlideShowCustomShowDialogView.SetValidation(string? message) =>
-        _formSession.SetValidation(message);
-
-    void ISlideShowCustomShowDialogView.CloseDialog() => Close();
 
     private void OnCustomShowSlideListPointerPressed(object? sender, PointerPressedEventArgs e)
     {
@@ -500,7 +445,7 @@ internal sealed partial class CustomShowDialog : FreePDialogWindow, ISlideShowCu
     private SlideShowCustomShowDragReorderPlan ApplyCustomShowSlideDragReorder(
         int sourceSlideIndex,
         int targetDropIndex) =>
-        _controller.Reorder(sourceSlideIndex, targetDropIndex);
+        _renderer.Controller.Reorder(sourceSlideIndex, targetDropIndex);
 
     private static void ApplyListChrome(ListBox listBox)
     {
@@ -510,12 +455,10 @@ internal sealed partial class CustomShowDialog : FreePDialogWindow, ISlideShowCu
         listBox.BorderThickness = new Thickness(1);
     }
 
-    private Button MakeButton(
-        SlideShowCustomShowDialogAction actionId,
-        Action onClick,
-        string? automationSuffix = null)
+    private static Button CreateNativeButton(
+        PresentationDialogActionPlan<SlideShowCustomShowDialogAction> action,
+        Action onClick)
     {
-        var action = Surface.Action(actionId, automationSuffix);
         var button = new Button
         {
             Content = action.Label,
@@ -533,8 +476,6 @@ internal sealed partial class CustomShowDialog : FreePDialogWindow, ISlideShowCu
             SlideShowCustomShowDialogVisualMetrics.ActionButtonHorizontalPadding,
             SlideShowCustomShowDialogVisualMetrics.ActionButtonVerticalPadding);
         button.Click += (_, _) => onClick();
-        if (automationSuffix is null)
-            _formSession.RegisterAction(actionId, button);
         return button;
     }
 

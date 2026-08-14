@@ -501,7 +501,7 @@ public partial class MainWindow
         // unrelated 75%-of-work-area rectangle via WindowResetPositionPlanner, ignoring any
         // side-by-side pairing entirely.
         var workArea = SystemParameters.WorkArea;
-        _windowRegistry?.ResetSideBySidePair(workArea.Width, workArea.Height);
+        _windowRegistry?.ResetSideBySidePair(this, workArea.Width, workArea.Height);
         RefreshViewWindowCommandState();
     }
 
@@ -516,9 +516,18 @@ public partial class MainWindow
             return;
         }
 
-        if (_windowRegistry.IsSideBySideActive)
+        var affectedPartner = _windowRegistry.SideBySidePartnerOf(this) as MainWindow;
+        if (_windowRegistry.IsSideBySideActiveFor(this))
         {
-            _windowRegistry.DisableSideBySide();
+            _windowRegistry.DisableSideBySideFor(this);
+        }
+        else if (_windowRegistry.IsSideBySideActive)
+        {
+            // Another pair owns the process-wide coordinator. This window must not tear it down
+            // or silently replace it.
+            RefreshViewWindowCommandState();
+            FocusSheetGridIfNeeded();
+            return;
         }
         else
         {
@@ -527,18 +536,26 @@ public partial class MainWindow
                 _messageService.ShowWarning(
                     UiText.Get("MainWindowMessage_SideBySideNeedsSecondWindow"),
                     UiText.Get("MainWindowMessage_SideBySideTitle"));
+            affectedPartner = _windowRegistry.SideBySidePartnerOf(this) as MainWindow;
         }
 
         RefreshViewWindowCommandState();
+        affectedPartner?.RefreshViewWindowCommandState();
     }
 
     // ── Ribbon: View ▸ Window ▸ Synchronous Scrolling ─────────────────────────
 
     private void ViewSynchronousScrollingBtn_Click(object sender, RoutedEventArgs e)
     {
+        var affectedPartner = _windowRegistry?.SideBySidePartnerOf(this) as MainWindow;
         if (_windowRegistry is not null)
-            _windowRegistry.SetSynchronousScroll(!_windowRegistry.IsSynchronousScrollActive);
+        {
+            _windowRegistry.SetSynchronousScrollFor(
+                this,
+                !_windowRegistry.IsSynchronousScrollActiveFor(this));
+        }
 
         RefreshViewWindowCommandState();
+        affectedPartner?.RefreshViewWindowCommandState();
     }
 }

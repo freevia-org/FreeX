@@ -6,7 +6,6 @@ using System.Windows.Interop;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using FreeP.App.Rendering.Wpf;
-using FreeP.Core.IO;
 using FreeP.Core.Model;
 
 namespace FreeP.RenderCompare;
@@ -22,58 +21,19 @@ internal static class FreePRenderer
     /// Renders all slides in <paramref name="pptxPath"/> to PNG files in <paramref name="outDir"/>.
     /// </summary>
     /// <returns>0 on full success, 1 on fatal error, 2 on partial failure.</returns>
-    internal static int Render(string pptxPath, string outDir, int width, int height)
-    {
-        Presentation presentation;
-        try
-        {
-            presentation = PptxPackageReader.Read(pptxPath);
-        }
-        catch (Exception ex)
-        {
-            Console.Error.WriteLine($"Failed to load {pptxPath}: {ex.Message}");
-            return 1;
-        }
-
-        Directory.CreateDirectory(outDir);
-
-        Console.WriteLine($"FreeP render");
-        Console.WriteLine($"  input    : {pptxPath}");
-        Console.WriteLine($"  outDir   : {outDir}");
-        Console.WriteLine($"  size     : {width}x{height}");
-        Console.WriteLine($"  slides   : {presentation.Slides.Count}");
-
-        int failCount = 0;
-        for (int i = 0; i < presentation.Slides.Count; i++)
-        {
-            var slide = presentation.Slides[i];
-            string outPath = Path.Combine(outDir, $"slide-{i + 1:D2}.png");
-
-            try
-            {
-                RenderSlide(presentation, slide, width, height, outPath);
-                Console.WriteLine($"  slide-{i + 1:D2} -> {outPath}");
-                var diversity = PixelDiversity.Analyze(outPath);
-                Console.WriteLine($"    {diversity}");
-                if (!diversity.IsTrustworthy)
-                {
-                    Console.Error.WriteLine($"    UNTRUSTWORTHY: {diversity.FailureReason}");
-                    failCount++;
-                }
-            }
-            catch (Exception ex)
-            {
-                Console.Error.WriteLine($"  slide-{i + 1:D2} FAILED: {ex.Message}");
-                failCount++;
-            }
-        }
-
-        if (failCount == 0)
-            return 0;
-        if (failCount == presentation.Slides.Count)
-            return 1;
-        return 2;
-    }
+    internal static int Render(string pptxPath, string outDir, int width, int height) =>
+        PresentationRenderBatchRunner.Render(
+            "FreeP render",
+            pptxPath,
+            outDir,
+            width,
+            height,
+            (presentation, slideIndex, renderWidth, renderHeight, outputPath) => RenderSlide(
+                presentation,
+                presentation.Slides[slideIndex],
+                renderWidth,
+                renderHeight,
+                outputPath));
 
     /// <summary>
     /// Renders a single slide off-screen on an STA thread and saves to <paramref name="pngPath"/>.

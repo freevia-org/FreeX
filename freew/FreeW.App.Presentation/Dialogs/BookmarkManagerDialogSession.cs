@@ -2,8 +2,16 @@ using FreeW.Core.Model;
 
 namespace FreeW.App.Presentation.Dialogs;
 
-public sealed record BookmarkManagerItem(string Name, int BlockIndex)
+public sealed record BookmarkManagerItem(BookmarkLocation Location)
 {
+    public BookmarkManagerItem(string name, int blockIndex)
+        : this(new BookmarkLocation(name, blockIndex))
+    {
+    }
+
+    public string Name => Location.Name;
+    public int BlockIndex => Location.BlockIndex;
+
     public override string ToString() => Name;
 }
 
@@ -95,7 +103,16 @@ public sealed record BookmarkManagerDialogState(
 
 public sealed record BookmarkManagerDeleteRefreshPlan(string Name);
 
-public sealed record BookmarkManagerGoToIntent(string Name, int BlockIndex);
+public sealed record BookmarkManagerGoToIntent(BookmarkLocation Location)
+{
+    public BookmarkManagerGoToIntent(string name, int blockIndex)
+        : this(new BookmarkLocation(name, blockIndex))
+    {
+    }
+
+    public string Name => Location.Name;
+    public int BlockIndex => Location.BlockIndex;
+}
 
 /// <summary>
 /// Owns the renderer-neutral state and action planning for the paired bookmark manager dialogs.
@@ -136,7 +153,7 @@ public sealed class BookmarkManagerDialogSession
             return null;
 
         var item = State.Items[State.SelectedIndex];
-        return new BookmarkManagerGoToIntent(item.Name, item.BlockIndex);
+        return new BookmarkManagerGoToIntent(item.Location);
     }
 
     public BookmarkManagerDeleteRefreshPlan? PlanDelete()
@@ -163,7 +180,7 @@ public sealed class BookmarkManagerDialogSession
         ArgumentNullException.ThrowIfNull(locations);
 
         var items = locations
-            .Select(location => new BookmarkManagerItem(location.Name, location.BlockIndex))
+            .Select(location => new BookmarkManagerItem(location))
             .ToArray();
         var selectedIndex = FindSelectedIndex(items, preferredName);
         var hasSelection = selectedIndex >= 0;

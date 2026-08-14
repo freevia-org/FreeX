@@ -33,18 +33,13 @@ internal sealed partial class AvaloniaSlideShowMediaController
     private readonly Panel _overlay;
     private readonly IMediaPlaybackBackendFactory _backendFactory;
     private readonly List<MediaSlot> _slots = new();
-    private readonly SlideShowMediaPlaybackSession _playbackSession = new();
+    private readonly SlideShowMediaPlaybackCommandCoordinator _playback;
+    private SlideShowMediaPlaybackSession PlaybackSession => _playback.Session;
     private readonly DispatcherTimer _captionTimer;
     private IMediaPlaybackBackend? _backend;
     private IMediaPlaybackSession? _transitionSoundSession;
     private IReadOnlyList<SlideShowMediaShapePlan> _active = Array.Empty<SlideShowMediaShapePlan>();
-    private Slide? _activeSlide;
-    private bool _showMediaControls = true;
-    private bool _showNarration = true;
-    private double _slideDipW;
-    private double _slideDipH;
-    private double _canvasW;
-    private double _canvasH;
+    private readonly SlideShowMediaNativeInteractionSession _interaction = new();
 
     public AvaloniaSlideShowMediaController(
         Panel overlay,
@@ -52,6 +47,7 @@ internal sealed partial class AvaloniaSlideShowMediaController
     {
         _overlay = overlay ?? throw new ArgumentNullException(nameof(overlay));
         _backendFactory = backendFactory ?? new LibVlcMediaPlaybackBackendFactory();
+        _playback = new SlideShowMediaPlaybackCommandCoordinator(ApplyPlaybackSnapshot);
         _captionTimer = new DispatcherTimer
         {
             Interval = TimeSpan.FromMilliseconds(100),
@@ -70,8 +66,7 @@ internal sealed partial class AvaloniaSlideShowMediaController
 
     public void SetCanvasBounds(double canvasW, double canvasH)
     {
-        _canvasW = canvasW;
-        _canvasH = canvasH;
+        _interaction.SetCanvasBounds(canvasW, canvasH);
         _overlay.Width = Math.Max(1, canvasW);
         _overlay.Height = Math.Max(1, canvasH);
     }
@@ -88,7 +83,7 @@ internal sealed partial class AvaloniaSlideShowMediaController
         double canvasH)
     {
         ArgumentNullException.ThrowIfNull(slide);
-        if (_activeSlide is not null && !ReferenceEquals(_activeSlide, slide))
+        if (_interaction.ActiveSlide is not null && !ReferenceEquals(_interaction.ActiveSlide, slide))
         {
             Teardown();
             SetCanvasBounds(canvasW, canvasH);
@@ -96,8 +91,7 @@ internal sealed partial class AvaloniaSlideShowMediaController
         }
 
         SetCanvasBounds(canvasW, canvasH);
-        _slideDipW = slideDipW;
-        _slideDipH = slideDipH;
+        _interaction.UpdateLayout(slide, slideDipW, slideDipH, canvasW, canvasH);
 
         foreach (var slot in _slots)
         {
@@ -111,7 +105,7 @@ internal sealed partial class AvaloniaSlideShowMediaController
                 slideDipH,
                 canvasW,
                 canvasH);
-            var useFullScreen = _playbackSession.Snapshot(slot.Playback).UseFullScreen;
+            var useFullScreen = PlaybackSession.Snapshot(slot.Playback).UseFullScreen;
             var cue = PresentationMediaTranscriptPlanner.FindActiveCue(
                 slot.CaptionTrack,
                 slot.Session.Position);
@@ -145,31 +139,23 @@ internal sealed partial class AvaloniaSlideShowMediaController
         bool showMediaControls = true,
         bool showNarration = true,
         int? presentationSlideIndex = null)
+        => EnterSlide(
+            new(slide, slideDipW, slideDipH, canvasW, canvasH, captionTracks,
+                preferredCaptionShapeId, preferredCaptionTrackIndex, captionSlideIndex,
+                preferredCaptionSlideIndex, showMediaControls, showNarration),
+            presentationSlideIndex);
+
+    public void EnterSlide(
+        SlideShowMediaNativeEntryRequest request,
+        int? presentationSlideIndex = null)
     {
-        ArgumentNullException.ThrowIfNull(slide);
-        SetCanvasBounds(canvasW, canvasH);
-        _slideDipW = slideDipW;
-        _slideDipH = slideDipH;
-        var enterResult = _playbackSession.EnterSlide(presentationSlideIndex);
+        ArgumentNullException.ThrowIfNull(request);
+        SetCanvasBounds(request.CanvasWidth, request.CanvasHeight);
+        var enterResult = PlaybackSession.EnterSlide(presentationSlideIndex);
         ApplyEnterResult(enterResult);
         if (!enterResult.IsContiguous)
             ReleaseBackend();
-        _activeSlide = slide;
-        _showMediaControls = showMediaControls;
-        _showNarration = showNarration;
-        var entryPlan = SlideShowMediaInteractionPlanner.PlanSlideEntry(
-            slide,
-            slideDipW,
-            slideDipH,
-            canvasW,
-            canvasH,
-            captionTracks,
-            preferredCaptionShapeId,
-            preferredCaptionTrackIndex,
-            captionSlideIndex,
-            preferredCaptionSlideIndex,
-            showMediaControls,
-            showNarration);
+        var entryPlan = _interaction.Enter(request);
         _active = entryPlan.Active;
 
         if (!entryPlan.HasPlayableSource || !EnsureBackend())
@@ -213,7 +199,7 @@ internal sealed partial class AvaloniaSlideShowMediaController
                 session.Ended += (_, _) => Dispatcher.UIThread.Post(() =>
                 {
                     if (playback is not null)
-                        ApplyPlaybackSnapshot(_playbackSession.HandleEnded(playback));
+                        ApplyPlaybackSnapshot(PlaybackSession.HandleEnded(playback));
                 });
 
                 Border? captionHost = null;
@@ -223,7 +209,7 @@ internal sealed partial class AvaloniaSlideShowMediaController
                     (captionHost, captionText) = CreateCaptionView(plan.Bounds);
                 }
 
-                playback = _playbackSession.Register(shape.Id, entry.Media, port);
+                playback = PlaybackSession.Register(shape.Id, entry.Media, port);
                 var slot = new MediaSlot
                 {
                     ShapeId = shape.Id,
@@ -236,7 +222,7 @@ internal sealed partial class AvaloniaSlideShowMediaController
                     CaptionText = captionText,
                 };
                 _slots.Add(slot);
-                ApplyPlaybackSnapshot(slot, _playbackSession.Snapshot(playback));
+                ApplyPlaybackSnapshot(slot, PlaybackSession.Snapshot(playback));
             }
             catch (Exception ex)
             {
@@ -259,49 +245,32 @@ internal sealed partial class AvaloniaSlideShowMediaController
         double canvasX,
         double canvasY)
     {
-        LastClick = SlideShowMediaInteractionPlanner.PlanClick(
+        LastClick = _interaction.PlanClick(
             slide,
             slideDipW,
             slideDipH,
             canvasW,
             canvasH,
             canvasX,
-            canvasY,
-            _showMediaControls,
-            _showNarration);
+            canvasY);
         if (!LastClick.IsHandled)
             return false;
 
-        if (_playbackSession.TryHandleClick(LastClick.Media!.ShapeId, out var snapshot) &&
+        if (PlaybackSession.TryHandleClick(LastClick.Media!.ShapeId, out var snapshot) &&
             snapshot is not null)
             ApplyPlaybackSnapshot(snapshot);
         return true;
     }
 
-    public bool TrySeek(uint shapeId, TimeSpan position)
-    {
-        var didSeek = _playbackSession.TrySeek(shapeId, position, out var snapshot);
-        if (snapshot is not null)
-            ApplyPlaybackSnapshot(snapshot);
-        return didSeek;
-    }
+    public bool TrySeek(uint shapeId, TimeSpan position) =>
+        _playback.TrySeek(shapeId, position);
 
     /// <summary>Seeks an active media session to a named authored bookmark.</summary>
-    public bool TrySeekToBookmark(uint shapeId, string bookmarkName)
-    {
-        var didSeek = _playbackSession.TrySeekToBookmark(shapeId, bookmarkName, out var snapshot);
-        if (snapshot is not null)
-            ApplyPlaybackSnapshot(snapshot);
-        return didSeek;
-    }
+    public bool TrySeekToBookmark(uint shapeId, string bookmarkName) =>
+        _playback.TrySeekToBookmark(shapeId, bookmarkName);
 
-    public bool TrySetVolume(uint shapeId, int volume)
-    {
-        var didSet = _playbackSession.TrySetVolume(shapeId, volume, out var snapshot);
-        if (snapshot is not null)
-            ApplyPlaybackSnapshot(snapshot);
-        return didSet;
-    }
+    public bool TrySetVolume(uint shapeId, int volume) =>
+        _playback.TrySetVolume(shapeId, volume);
 
     public bool PlayTransitionSound(TransitionSound sound)
     {
@@ -397,8 +366,8 @@ internal sealed partial class AvaloniaSlideShowMediaController
             PresentationMediaTranscriptPlanner.PlanOverlayPlacement(
                 new PresentationMediaOverlayPlacementRequest(
                     bounds,
-                    _canvasW,
-                    _canvasH,
+                    _interaction.CanvasWidth,
+                    _interaction.CanvasHeight,
                     UseFullScreen: false)));
         _overlay.Children.Add(host);
         return (host, text);
@@ -433,24 +402,24 @@ internal sealed partial class AvaloniaSlideShowMediaController
                 slot.Playback.Port.Position);
             ApplyCaptionText(slot.CaptionText, cue);
             if (cue is not null
-                && _activeSlide is { } activeSlide
+                && _interaction.ActiveSlide is { } activeSlide
                 && SlideShapeTraversal.FindById(activeSlide, slot.ShapeId) is { Media: not null } shape)
             {
                 var bounds = SlideShowMediaInteractionPlanner.ComputeMediaBounds(
                     shape,
-                    _slideDipW,
-                    _slideDipH,
-                    _canvasW,
-                    _canvasH);
+                    _interaction.SlideWidthDip,
+                    _interaction.SlideHeightDip,
+                    _interaction.CanvasWidth,
+                    _interaction.CanvasHeight);
                 ApplyCaptionPlacement(
                     slot.CaptionHost,
                     slot.CaptionText,
                     PresentationMediaTranscriptPlanner.PlanOverlayPlacement(
                         new PresentationMediaOverlayPlacementRequest(
                             bounds,
-                            _canvasW,
-                            _canvasH,
-                            _playbackSession.Snapshot(slot.Playback).UseFullScreen,
+                            _interaction.CanvasWidth,
+                            _interaction.CanvasHeight,
+                            PlaybackSession.Snapshot(slot.Playback).UseFullScreen,
                             cue,
                             slot.CaptionTrack?.Regions)));
             }
@@ -512,11 +481,11 @@ internal sealed partial class AvaloniaSlideShowMediaController
 
     private void TeardownPlayback()
     {
-        _playbackSession.Teardown();
+        PlaybackSession.Teardown();
         foreach (var slot in _slots)
             DisposeSlot(slot);
         _slots.Clear();
-        _activeSlide = null;
+        _interaction.Clear();
         _captionTimer.Stop();
 
         ReleaseBackend();
@@ -568,15 +537,11 @@ internal sealed partial class AvaloniaSlideShowMediaController
             _slots.Select(slot => new SlideShowMediaActiveSlotMonitorPlan(
                 slot.CaptionTrack,
                 slot.Playback)),
-            _playbackSession);
+            PlaybackSession);
         UpdateCaptions();
     }
 
-    private void EnforcePlaybackState()
-    {
-        foreach (var snapshot in _playbackSession.EnforcePlaybackState())
-            ApplyPlaybackSnapshot(snapshot);
-    }
+    private void EnforcePlaybackState() => _playback.EnforcePlaybackState();
 
     private void ApplyPlaybackSnapshot(SlideShowMediaPlaybackSnapshot snapshot)
     {
@@ -593,8 +558,8 @@ internal sealed partial class AvaloniaSlideShowMediaController
         var placement = PresentationMediaTranscriptPlanner.PlanOverlayPlacement(
             new PresentationMediaOverlayPlacementRequest(
                 slot.AuthoredBounds,
-                _canvasW,
-                _canvasH,
+                _interaction.CanvasWidth,
+                _interaction.CanvasHeight,
                 snapshot.UseFullScreen,
                 PresentationMediaTranscriptPlanner.FindActiveCue(
                     slot.CaptionTrack,

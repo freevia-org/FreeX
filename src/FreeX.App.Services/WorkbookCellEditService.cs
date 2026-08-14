@@ -376,9 +376,7 @@ public sealed class WorkbookCellEditService
         // fall inside a 3-D span reference (e.g. =SUM(Sheet1:Sheet3!A1)). RecalculateIfAutomatic
         // would short-circuit to an empty recalc for an empty cell list, leaving those span
         // aggregates stale until the next F9 -- force a full recalculation instead, mirroring the
-        // explicit RecalculateWorkbook() compensation on the forward Execute path (WorkbookSession's
-        // DeleteActiveSheet/MoveActiveSheetTo/DuplicateActiveSheet) that Undo/Redo, which calls
-        // straight into the command bus, never reaches.
+        // same command marker on the forward Execute path and on Undo/Redo.
         var recalcReport = outcome.RequiresFullRecalc
             ? RecalculateAll(workbook)
             : RecalculateAfterChanges(workbook, affectedCells);

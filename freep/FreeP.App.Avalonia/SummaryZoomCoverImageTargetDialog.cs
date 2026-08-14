@@ -7,16 +7,24 @@ namespace FreeP.App.Avalonia;
 
 internal sealed class SummaryZoomCoverImageTargetDialog : FreePDialogWindow
 {
-    private readonly ZoomSingleTargetDialogSession _session;
-    private readonly ComboBox _target;
+    private readonly ZoomSingleTargetDialogNativeBinding<ComboBox> _binding;
+    private ZoomSingleTargetDialogSession _session => _binding.Session;
 
-    internal string? SelectedTargetSectionId => _session.SelectedTargetId;
+    internal string? SelectedTargetSectionId => _binding.SelectedTargetId;
 
     internal SummaryZoomCoverImageTargetDialog(IReadOnlyList<(string Id, string DisplayName)> options)
     {
-        _session = new ZoomSingleTargetDialogSession(
+        _binding = new(
             ZoomTargetDialogKind.SummaryCoverImage,
-            options);
+            options,
+            session => new ComboBox
+            {
+                ItemsSource = session.Options,
+                SelectedIndex = session.InitialSelectedIndex,
+                MinWidth = 230,
+            },
+            static control => control.SelectedIndex,
+            () => Close(true));
         var surface = _session.Surface;
         Title = surface.Title;
         Width = 420;
@@ -24,17 +32,12 @@ internal sealed class SummaryZoomCoverImageTargetDialog : FreePDialogWindow
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
         ZoomDialogChrome.Apply(this, surface);
 
-        _target = new ComboBox
-        {
-            ItemsSource = _session.Options,
-            SelectedIndex = _session.InitialSelectedIndex,
-            MinWidth = 230,
-        };
-        ZoomDialogChrome.ApplyField(_target, surface.Field(ZoomTargetDialogField.Target));
+        var target = _binding.Control;
+        ZoomDialogChrome.ApplyField(target, surface.Field(ZoomTargetDialogField.Target));
         var ok = ZoomDialogChrome.MakeButton(
             surface.Action(ZoomTargetDialogAction.Accept),
             Apply,
-            _session.CanAccept);
+            _binding.Session.CanAccept);
         Content = new StackPanel
         {
             Margin = new Thickness(14),
@@ -42,7 +45,7 @@ internal sealed class SummaryZoomCoverImageTargetDialog : FreePDialogWindow
             Children =
             {
                 new TextBlock { Text = surface.Field(ZoomTargetDialogField.Target).Label },
-                _target,
+                target,
                 new StackPanel
                 {
                     Orientation = Orientation.Horizontal,
@@ -62,7 +65,6 @@ internal sealed class SummaryZoomCoverImageTargetDialog : FreePDialogWindow
 
     private void Apply()
     {
-        if (_session.TryAccept(_target.SelectedIndex))
-            Close(true);
+        _binding.TryAccept();
     }
 }

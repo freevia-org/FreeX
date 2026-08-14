@@ -115,6 +115,13 @@ $resolvedProjectRootPath = [System.IO.Path]::GetFullPath($resolvedProjectRoot)
 if (-not $resolvedProjectRootPath.EndsWith([System.IO.Path]::DirectorySeparatorChar)) {
     $resolvedProjectRootPath += [System.IO.Path]::DirectorySeparatorChar
 }
+$resolvedRepoRootPath = [System.IO.Path]::GetFullPath($repoRoot)
+if (-not $resolvedRepoRootPath.EndsWith([System.IO.Path]::DirectorySeparatorChar)) {
+    $resolvedRepoRootPath += [System.IO.Path]::DirectorySeparatorChar
+}
+$validateRendererExceptionInventory = $resolvedProjectRootPath.Equals(
+    $resolvedRepoRootPath,
+    [System.StringComparison]::OrdinalIgnoreCase)
 
 $projectFiles = @(
     Get-ToolProjectFiles -Directory (Get-Item -LiteralPath $resolvedProjectRoot) |
@@ -148,7 +155,9 @@ foreach ($exception in $rendererSharedProjectExceptions.GetEnumerator()) {
         continue
     }
     if (-not $projectsByResolvedPath.ContainsKey($exceptionKey)) {
-        $architectureBoundaryViolations.Add("Renderer exception does not name a scanned project: $($exception.Key)")
+        if ($validateRendererExceptionInventory) {
+            $architectureBoundaryViolations.Add("Renderer exception does not name a scanned project: $($exception.Key)")
+        }
         continue
     }
 

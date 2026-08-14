@@ -145,6 +145,8 @@ public sealed class ReviewCommentAndCustomShowSessionTests
         var avaloniaMainWindow = ReadWorkspaceFile("freep", "FreeP.App.Avalonia", "MainWindow.cs");
         var wpfDialog = ReadWorkspaceFile("freep", "FreeP.App.Host", "CustomShowDialog.cs");
         var avaloniaDialog = ReadWorkspaceFile("freep", "FreeP.App.Avalonia", "CustomShowDialog.cs");
+        var nativeComposition = ReadWorkspaceFile(
+            "freep", "FreeP.App.Presentation", "SlideShowCustomShowDialogNativeComposition.cs");
 
         foreach (var source in new[] { wpfMainWindow, avaloniaMainWindow })
         {
@@ -170,10 +172,9 @@ public sealed class ReviewCommentAndCustomShowSessionTests
         foreach (var source in new[] { wpfDialog, avaloniaDialog })
         {
             source.Should().Contain("SlideShowCustomShowDialogSession");
-            source.Should().Contain("SlideShowCustomShowDialogController");
-            source.Should().Contain("ISlideShowCustomShowDialogView");
+            source.Should().Contain("SlideShowCustomShowDialogNativeComposition<");
             source.Should().Contain("customShowSession.CreateDialogSession(");
-            source.Should().Contain("_controller.Reorder(");
+            source.Should().Contain("_renderer.Controller.Reorder(");
             source.Should().NotContain("SlideShowCustomShowDialogTransitionDispatcher.Dispatch(");
             source.Should().NotContain("private readonly SlideShowCustomShowDialogSession _session");
             source.Should().NotContain("MainWindow _host");
@@ -189,6 +190,10 @@ public sealed class ReviewCommentAndCustomShowSessionTests
             source.Should().NotContain("_host.DeleteCustomShow(");
             source.Should().NotContain("_host.MoveCustomShowSlide(");
         }
+
+        nativeComposition.Should().Contain("SlideShowCustomShowDialogController Controller")
+            .And.Contain("new SlideShowCustomShowDialogViewAdapter<TControl>(")
+            .And.Contain("Surface.Action(action, automationSuffix)");
     }
 
     private static string ReadWorkspaceFile(params string[] relativeParts) =>

@@ -1,5 +1,7 @@
 using Free.Shared.Ribbon;
+using FreeW.App.Presentation.Dialogs;
 using FreeW.App.Presentation.Ribbon;
+using FreeW.Core.Model;
 
 namespace FreeW.App.Presentation.Tests;
 
@@ -42,11 +44,83 @@ public sealed class FontEffectRibbonWorkflowTests
     }
 
     [Fact]
+    public void SharedStatePlannerMapsEveryFontEffect()
+    {
+        var formatting = RunFormatting.Default with
+        {
+            Bold = true,
+            Italic = true,
+            Underline = true,
+            Strikethrough = true,
+            SmallCaps = true,
+            AllCaps = true,
+            VerticalAlign = VerticalAlign.Superscript,
+        };
+        var selection = new FontDialogSelectionState(formatting);
+
+        foreach (var kind in new[]
+                 {
+                     FontEffectRibbonKind.Bold,
+                     FontEffectRibbonKind.Italic,
+                     FontEffectRibbonKind.Underline,
+                     FontEffectRibbonKind.Strikethrough,
+                     FontEffectRibbonKind.SmallCaps,
+                     FontEffectRibbonKind.AllCaps,
+                     FontEffectRibbonKind.Superscript,
+                 })
+        {
+            FontEffectRibbonStatePlanner.GetState(kind, selection).IsChecked.Should().BeTrue(kind.ToString());
+        }
+
+        FontEffectRibbonStatePlanner.GetState(FontEffectRibbonKind.Subscript, selection).IsChecked.Should().BeFalse();
+        FontEffectRibbonStatePlanner.GetState(
+                FontEffectRibbonKind.Subscript,
+                new FontDialogSelectionState(formatting with { VerticalAlign = VerticalAlign.Subscript }))
+            .IsChecked.Should().BeTrue();
+    }
+
+    [Fact]
+    public void SharedStatePlannerTreatsMixedSelectionAsUncheckedAndHonorsAvailability()
+    {
+        var selection = new FontDialogSelectionState(
+            RunFormatting.Default with { Bold = true, SmallCaps = true },
+            BoldIndeterminate: true,
+            SmallCapsIndeterminate: true);
+
+        FontEffectRibbonStatePlanner.GetState(FontEffectRibbonKind.Bold, selection, isEnabled: false)
+            .Should().Be(new RibbonCommandState(IsEnabled: false, IsChecked: false));
+        FontEffectRibbonStatePlanner.GetState(FontEffectRibbonKind.SmallCaps, selection)
+            .Should().Be(new RibbonCommandState(IsEnabled: true, IsChecked: false));
+    }
+
+    [Fact]
+    public void SharedStatefulCommandPreparesAndExecutesOnlyWhileEnabled()
+    {
+        var events = new List<string>();
+        var isEnabled = true;
+        var command = FontEffectRibbonStatePlanner.CreateCommand(
+            FontEffectRibbonKind.Bold,
+            () => events.Add("execute"),
+            () => new FontDialogSelectionState(RunFormatting.Default with { Bold = true }),
+            () => isEnabled,
+            () => events.Add("prepare"));
+
+        command.GetState().Should().Be(new RibbonCommandState(IsEnabled: true, IsChecked: true));
+        command.Execute(RibbonCommandContext.Empty);
+        events.Should().Equal("prepare", "execute");
+
+        isEnabled = false;
+        command.Execute(RibbonCommandContext.Empty);
+        events.Should().Equal("prepare", "execute");
+    }
+
+    [Fact]
     public void BothRenderersDelegateFontEffectMappingToSharedPresentation()
     {
         var root = TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeW.slnx");
         var wpf = File.ReadAllText(Path.Combine(root, "freew", "FreeW.App.Host", "Ribbon", "FreeWRibbonCommands.cs"));
         var avalonia = File.ReadAllText(Path.Combine(root, "freew", "FreeW.App.Avalonia", "Ribbon", "FreeWAvaloniaRibbonCommands.cs"));
+        var avaloniaMain = File.ReadAllText(Path.Combine(root, "freew", "FreeW.App.Avalonia", "MainWindow.cs"));
 
         foreach (var source in new[] { wpf, avalonia })
         {
@@ -56,6 +130,13 @@ public sealed class FontEffectRibbonWorkflowTests
             source.Should().NotContain(".Bind(FreeWRibbonCommandAction.Superscript");
             source.Should().NotContain(".Bind(FreeWRibbonCommandAction.GrowFont");
         }
+
+        avalonia.Should().Contain("FontEffectRibbonStatePlanner.CreateCommand(");
+        avalonia.Should().NotContain("Bold: new ActionRibbonCommand");
+        avalonia.Should().NotContain("Italic: new ActionRibbonCommand");
+        avalonia.Should().NotContain("Underline: new ActionRibbonCommand");
+        avaloniaMain.Should().Contain("_editor.CaretMoved += RefreshRibbonCommandStates;");
+        avaloniaMain.Should().Contain("_editor.DocumentChanged += RefreshRibbonCommandStates;");
     }
 
     private static IRibbonCommand CommandFor(

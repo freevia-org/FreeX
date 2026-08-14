@@ -388,6 +388,21 @@ public sealed class ZoomObjectPropertiesDialogFormSession<TControl>
         _selectAllOnFocus.Add(field, selectAllOnFocus);
     }
 
+    public void RegisterFields(
+        IEnumerable<ZoomObjectPropertiesDialogControlPlan> fields,
+        Func<ZoomObjectPropertiesDialogControlPlan, TControl> createControl)
+    {
+        ArgumentNullException.ThrowIfNull(fields);
+        ArgumentNullException.ThrowIfNull(createControl);
+        foreach (var field in fields)
+        {
+            Register(
+                field.Field,
+                createControl(field),
+                selectAllOnFocus: field.Kind == ZoomObjectPropertiesDialogControlKind.Text);
+        }
+    }
+
     public TControl Control(ZoomObjectPropertiesDialogField field) =>
         _controls.TryGetValue(field, out var control)
             ? control
@@ -424,6 +439,78 @@ public sealed class ZoomObjectPropertiesDialogFormSession<TControl>
 
         _focus(control, _selectAllOnFocus[field]);
         return true;
+    }
+}
+
+/// <summary>Shared native value and focus mapping for Zoom Object Properties controls.</summary>
+public sealed class ZoomObjectPropertiesDialogNativeBinding<TControl, TToggle, TText, TChoice>
+    where TControl : class
+    where TToggle : class
+    where TText : class
+    where TChoice : class
+{
+    private readonly Action<TControl, bool> _setEnabled;
+    private readonly Func<TToggle, bool?> _readChecked;
+    private readonly Action<TToggle, bool?> _writeChecked;
+    private readonly Func<TText, string?> _readText;
+    private readonly Action<TText, string> _writeText;
+    private readonly Func<TChoice, object?> _readSelectedItem;
+    private readonly Action<TChoice, object?> _writeSelectedItem;
+    private readonly Action<TControl> _focus;
+    private readonly Action<TText> _selectAll;
+
+    public ZoomObjectPropertiesDialogNativeBinding(
+        Action<TControl, bool> setEnabled,
+        Func<TToggle, bool?> readChecked,
+        Action<TToggle, bool?> writeChecked,
+        Func<TText, string?> readText,
+        Action<TText, string> writeText,
+        Func<TChoice, object?> readSelectedItem,
+        Action<TChoice, object?> writeSelectedItem,
+        Action<TControl> focus,
+        Action<TText> selectAll)
+    {
+        _setEnabled = setEnabled ?? throw new ArgumentNullException(nameof(setEnabled));
+        _readChecked = readChecked ?? throw new ArgumentNullException(nameof(readChecked));
+        _writeChecked = writeChecked ?? throw new ArgumentNullException(nameof(writeChecked));
+        _readText = readText ?? throw new ArgumentNullException(nameof(readText));
+        _writeText = writeText ?? throw new ArgumentNullException(nameof(writeText));
+        _readSelectedItem = readSelectedItem ?? throw new ArgumentNullException(nameof(readSelectedItem));
+        _writeSelectedItem = writeSelectedItem ?? throw new ArgumentNullException(nameof(writeSelectedItem));
+        _focus = focus ?? throw new ArgumentNullException(nameof(focus));
+        _selectAll = selectAll ?? throw new ArgumentNullException(nameof(selectAll));
+    }
+
+    public void ApplyFieldState(
+        TControl control,
+        ZoomObjectPropertiesDialogFieldState fieldState)
+    {
+        ArgumentNullException.ThrowIfNull(control);
+        ArgumentNullException.ThrowIfNull(fieldState);
+        _setEnabled(control, fieldState.IsEnabled);
+        switch (control)
+        {
+            case TToggle toggle when fieldState.Value is bool isChecked:
+                if (_readChecked(toggle) != isChecked)
+                    _writeChecked(toggle, isChecked);
+                break;
+            case TText text:
+                if (!string.Equals(_readText(text), fieldState.TextValue, StringComparison.Ordinal))
+                    _writeText(text, fieldState.TextValue);
+                break;
+            case TChoice choice:
+                if (!Equals(_readSelectedItem(choice), fieldState.Value))
+                    _writeSelectedItem(choice, fieldState.Value);
+                break;
+        }
+    }
+
+    public void Focus(TControl control, bool selectAll)
+    {
+        ArgumentNullException.ThrowIfNull(control);
+        _focus(control);
+        if (selectAll && control is TText text)
+            _selectAll(text);
     }
 }
 

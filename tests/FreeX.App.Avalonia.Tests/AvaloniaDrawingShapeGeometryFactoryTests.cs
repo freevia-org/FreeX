@@ -1,4 +1,5 @@
 using Avalonia.Headless;
+using Free.Shared.Drawing.Avalonia;
 using FreeX.App.Avalonia;
 
 namespace FreeX.App.Avalonia.Tests;
@@ -28,5 +29,17 @@ public sealed class AvaloniaDrawingShapeGeometryFactoryTests
     public Task CreateGeometry_KeepsDedicatedPrimitivePath(DrawingShapeKind kind) => RunOnUiThread(() =>
     {
         AvaloniaDrawingShapeGeometryFactory.CreateGeometry(kind, 120, 80).Should().BeNull();
+    });
+
+    [Fact]
+    public Task SharedAdapter_ProjectsPortableContours() => RunOnUiThread(() =>
+    {
+        var shape = ShapeGeometryBuilder.Build(DrawingShapeKind.RightArrow, new LayoutRect(0, 0, 120, 80));
+
+        var geometry = AvaloniaShapeGeometryAdapter.ToGeometry(shape);
+
+        geometry.Should().NotBeNull();
+        geometry!.Bounds.Width.Should().BeGreaterThan(0);
+        geometry.Bounds.Height.Should().BeGreaterThan(0);
     });
 }

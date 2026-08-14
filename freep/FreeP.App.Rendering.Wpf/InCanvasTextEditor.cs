@@ -21,7 +21,7 @@ public sealed class InCanvasTextEditor : IDisposable
     private readonly Action<string, string>? _onClipboardWriteFailed;
 
     private RichTextBox? _richBox;
-    private InCanvasTextEditPlanner? _editPlan;
+    private InCanvasRichTextEditSession? _editSession;
     private TextBody? _shapeParagraphBody;
     private uint _editingShapeId;
     private bool _active;
@@ -65,12 +65,16 @@ public sealed class InCanvasTextEditor : IDisposable
         if (!_active || _richBox is null || _richBox.Selection.IsEmpty)
             return false;
 
+        var selection = CurrentSelection();
+        if (_editSession is null || selection is null)
+            return false;
+
         var body = TextBodyFlowDocumentConverter.FromFlowDocument(
             _richBox.Document,
             _shapeParagraphBody);
-        hyperlink = InCanvasTextEditPlanner.GetSelectedRunHyperlink(
-            body,
-            CurrentSelection());
+        _editSession.SynchronizeBody(body);
+        hyperlink = _editSession.GetSelectedRunHyperlink(
+            new InCanvasEditorTextSelection(selection.Value.Start, selection.Value.End));
         return true;
     }
 
@@ -79,8 +83,14 @@ public sealed class InCanvasTextEditor : IDisposable
         if (!_active || _richBox is null || _richBox.Selection.IsEmpty)
             return false;
 
-        return ApplyShapeParagraphMutation((body, selection) =>
-            InCanvasTextEditPlanner.ApplySelectedRunHyperlink(body, hyperlink, selection));
+        return ApplyShapeParagraphMutation((session, selection) =>
+        {
+            if (selection is null)
+                return false;
+            return session.ApplyHyperlink(
+                hyperlink,
+                new InCanvasEditorTextSelection(selection.Value.Start, selection.Value.End));
+        });
     }
 
     /// <summary>Selects a logical model-text range in the active editor.</summary>
@@ -89,8 +99,8 @@ public sealed class InCanvasTextEditor : IDisposable
         if (_richBox is null || start < 0 || end < start)
             return false;
 
-        var startPointer = TextPointerAtLogicalOffset(_richBox.Document, start);
-        var endPointer = TextPointerAtLogicalOffset(_richBox.Document, end);
+        var startPointer = TextBodyFlowDocumentConverter.TextPointerAtLogicalOffset(_richBox.Document, start);
+        var endPointer = TextBodyFlowDocumentConverter.TextPointerAtLogicalOffset(_richBox.Document, end);
         if (startPointer is null || endPointer is null)
             return false;
 
@@ -159,7 +169,7 @@ public sealed class InCanvasTextEditor : IDisposable
 
         _editingShapeId = shapeId;
         _active = true;
-        _editPlan = startPlan.EditPlanner;
+        _editSession = InCanvasRichTextEditSession.BeginShape(startPlan);
         _shapeParagraphBody = startPlan.OriginalBody;
 
         var placement = startPlan.Placement.Value;
@@ -235,13 +245,13 @@ public sealed class InCanvasTextEditor : IDisposable
         _active = false;
         _canvas.ActiveTextEditShapeId = null;
 
-        var editPlan = _editPlan;
-        _editPlan = null;
+        var editSession = _editSession;
+        _editSession = null;
 
         var newBody = TextBodyFlowDocumentConverter.FromFlowDocument(
             doc,
             _shapeParagraphBody);
-        var decision = editPlan?.CommitRichText(newBody)
+        var decision = editSession?.Commit(newBody)
             ?? new InCanvasTextEditDecision(InCanvasTextEditOutcome.Unchanged, null);
 
         if (decision.Command is not null)
@@ -267,8 +277,8 @@ public sealed class InCanvasTextEditor : IDisposable
             _richBox = null;
             _active = false;
             _canvas.ActiveTextEditShapeId = null;
-            _ = _editPlan?.Cancel();
-            _editPlan = null;
+            _ = _editSession?.Cancel();
+            _editSession = null;
             _shapeParagraphBody = null;
         }
         finally
@@ -290,29 +300,29 @@ public sealed class InCanvasTextEditor : IDisposable
     /// <summary>Toggles bold on the current RichTextBox selection. No-op if not active.</summary>
     public void ApplyBold()
     {
-        ApplyShapeRunMutation((body, selection) =>
-            InCanvasTextEditPlanner.ApplyTextFormat(body, TableCellTextFormatKind.Bold, selection));
+        ApplyShapeRunMutation((session, selection) =>
+            session.ToggleTextFormat(TableCellTextFormatKind.Bold, selection));
     }
 
     /// <summary>Toggles italic on the current RichTextBox selection. No-op if not active.</summary>
     public void ApplyItalic()
     {
-        ApplyShapeRunMutation((body, selection) =>
-            InCanvasTextEditPlanner.ApplyTextFormat(body, TableCellTextFormatKind.Italic, selection));
+        ApplyShapeRunMutation((session, selection) =>
+            session.ToggleTextFormat(TableCellTextFormatKind.Italic, selection));
     }
 
     /// <summary>Toggles underline on the current RichTextBox selection. No-op if not active.</summary>
     public void ApplyUnderline()
     {
-        ApplyShapeRunMutation((body, selection) =>
-            InCanvasTextEditPlanner.ApplyTextFormat(body, TableCellTextFormatKind.Underline, selection));
+        ApplyShapeRunMutation((session, selection) =>
+            session.ToggleTextFormat(TableCellTextFormatKind.Underline, selection));
     }
 
     /// <summary>Toggles strikethrough on the current RichTextBox selection. No-op if not active.</summary>
     public void ApplyStrikethrough()
     {
-        ApplyShapeRunMutation((body, selection) =>
-            InCanvasTextEditPlanner.ApplyTextFormat(body, TableCellTextFormatKind.Strikethrough, selection));
+        ApplyShapeRunMutation((session, selection) =>
+            session.ToggleTextFormat(TableCellTextFormatKind.Strikethrough, selection));
     }
 
     /// <summary>Applies superscript to the current RichTextBox selection.</summary>
@@ -329,9 +339,8 @@ public sealed class InCanvasTextEditor : IDisposable
 
     private void ApplyBaseline(BaselineAlignment alignment)
     {
-        ApplyShapeRunMutation((body, selection) =>
-            InCanvasTextEditPlanner.ApplyTextFormat(
-                body,
+        ApplyShapeRunMutation((session, selection) =>
+            session.ToggleTextFormat(
                 alignment == BaselineAlignment.Superscript
                     ? TableCellTextFormatKind.Superscript
                     : TableCellTextFormatKind.Subscript,
@@ -344,9 +353,8 @@ public sealed class InCanvasTextEditor : IDisposable
         if (string.IsNullOrWhiteSpace(fontFamily))
             return;
 
-        ApplyShapeRunMutation((body, selection) =>
-            InCanvasTextEditPlanner.ApplyTextValueFormat(
-                body,
+        ApplyShapeRunMutation((session, selection) =>
+            session.ApplyValueFormat(
                 TableCellTextValueFormatKind.FontFamily,
                 fontFamily,
                 selection));
@@ -358,9 +366,8 @@ public sealed class InCanvasTextEditor : IDisposable
         if (sizePt is null)
             return;
 
-        ApplyShapeRunMutation((body, selection) =>
-            InCanvasTextEditPlanner.ApplyTextValueFormat(
-                body,
+        ApplyShapeRunMutation((session, selection) =>
+            session.ApplyValueFormat(
                 TableCellTextValueFormatKind.FontSize,
                 sizePt,
                 selection));
@@ -372,31 +379,30 @@ public sealed class InCanvasTextEditor : IDisposable
         if (color is null)
             return;
 
-        ApplyShapeRunMutation((body, selection) =>
-            InCanvasTextEditPlanner.ApplyTextValueFormat(
-                body,
+        ApplyShapeRunMutation((session, selection) =>
+            session.ApplyValueFormat(
                 TableCellTextValueFormatKind.Color,
                 color,
                 selection));
     }
 
     public bool TryApplyActiveShapeParagraphAlignment(TextAlign alignment) =>
-        ApplyShapeParagraphMutation((body, selection) =>
-            InCanvasTextEditPlanner.ApplyParagraphAlignment(body, alignment, selection));
+        ApplyShapeParagraphMutation((session, selection) =>
+            session.ApplyParagraphAlignment(alignment, selection));
 
     public bool TryApplyActiveShapeParagraphBulletToggle() =>
-        ApplyShapeParagraphMutation((body, selection) =>
-            InCanvasTextEditPlanner.ApplyParagraphBulletToggle(body, selection));
+        ApplyShapeParagraphMutation((session, selection) =>
+            session.ToggleParagraphBullets(selection));
 
     public bool TryApplyActiveShapeParagraphNumberingToggle() =>
-        ApplyShapeParagraphMutation((body, selection) =>
-            InCanvasTextEditPlanner.ApplyParagraphNumberingToggle(body, selection));
+        ApplyShapeParagraphMutation((session, selection) =>
+            session.ToggleParagraphNumbering(selection));
 
     public bool TryApplyActiveShapeParagraphListPreset(TableCellListPresetDescriptor preset)
     {
         ArgumentNullException.ThrowIfNull(preset);
-        return ApplyShapeParagraphMutation((body, selection) =>
-            InCanvasTextEditPlanner.ApplyParagraphListPreset(body, selection, preset));
+        return ApplyShapeParagraphMutation((session, selection) =>
+            session.ApplyParagraphListPreset(preset, selection));
     }
 
     public bool TryApplyActiveShapeParagraphPictureBullet(PresentationPictureBulletPayload payload)
@@ -405,32 +411,32 @@ public sealed class InCanvasTextEditor : IDisposable
         if (!payload.IsValid)
             return false;
 
-        return ApplyShapeParagraphMutation((body, selection) =>
-            InCanvasTextEditPlanner.ApplyParagraphPictureBullet(
-                body,
-                selection,
-                PresentationPictureBulletAuthoringPlanner.CreateImagePart(payload)));
+        return ApplyShapeParagraphMutation((session, selection) =>
+            session.ApplyParagraphPictureBullet(payload, selection));
     }
 
     public bool TryApplyActiveShapeParagraphIndent() =>
-        ApplyShapeParagraphMutation((body, selection) =>
-            InCanvasTextEditPlanner.ApplyParagraphIndent(body, increase: true, selection: selection));
+        ApplyShapeParagraphMutation((session, selection) =>
+            session.ApplyParagraphIndent(increase: true, selection));
 
     public bool TryApplyActiveShapeParagraphOutdent() =>
-        ApplyShapeParagraphMutation((body, selection) =>
-            InCanvasTextEditPlanner.ApplyParagraphIndent(body, increase: false, selection: selection));
+        ApplyShapeParagraphMutation((session, selection) =>
+            session.ApplyParagraphIndent(increase: false, selection));
 
     private bool ApplyShapeParagraphMutation(
-        Func<TextBody, (int Start, int End)?, TextBody> mutate)
+        Func<InCanvasRichTextEditSession, (int Start, int End)?, bool> mutate)
     {
-        if (!_active || _richBox is null)
+        if (!_active || _richBox is null || _editSession is null)
             return false;
 
         var current = TextBodyFlowDocumentConverter.FromFlowDocument(
             _richBox.Document,
             _shapeParagraphBody);
         (int Start, int End)? selection = CurrentSelection();
-        var updated = mutate(current, selection);
+        _editSession.SynchronizeBody(current);
+        if (!mutate(_editSession, selection))
+            return false;
+        var updated = _editSession.Body;
         int start = selection?.Start ?? 0;
         int end = selection?.End ?? InCanvasTextEditPlanner.ExtractPlainText(updated).Length;
         _shapeParagraphBody = updated;
@@ -440,8 +446,8 @@ public sealed class InCanvasTextEditor : IDisposable
             InCanvasRichTextEditorDefaults.ShapeFallbackFontSizePt);
         _richBox.Document = TextBodyFlowDocumentConverter.ToFlowDocument(updated, fallbackPt);
 
-        var startPointer = TextPointerAtLogicalOffset(_richBox.Document, start);
-        var endPointer = TextPointerAtLogicalOffset(_richBox.Document, end);
+        var startPointer = TextBodyFlowDocumentConverter.TextPointerAtLogicalOffset(_richBox.Document, start);
+        var endPointer = TextBodyFlowDocumentConverter.TextPointerAtLogicalOffset(_richBox.Document, end);
         if (startPointer is not null && endPointer is not null)
             _richBox.Selection.Select(startPointer, endPointer);
         _richBox.Focus();
@@ -449,12 +455,12 @@ public sealed class InCanvasTextEditor : IDisposable
     }
 
     private bool ApplyShapeRunMutation(
-        Func<TextBody, (int Start, int End)?, TextBody> mutate) =>
+        Func<InCanvasRichTextEditSession, (int Start, int End)?, bool> mutate) =>
         ApplyShapeParagraphMutation(mutate);
 
     private (int Start, int End)? CurrentSelection()
     {
-        if (_richBox is null || _richBox.Selection.IsEmpty)
+        if (_richBox is null)
             return null;
 
         return (
@@ -539,41 +545,6 @@ public sealed class InCanvasTextEditor : IDisposable
         }
 
         editor.RenderTransform = transform;
-    }
-
-    private static TextPointer? TextPointerAtLogicalOffset(FlowDocument document, int logicalOffset)
-    {
-        int remaining = logicalOffset;
-        bool firstParagraph = true;
-        foreach (var paragraph in document.Blocks.OfType<System.Windows.Documents.Paragraph>())
-        {
-            if (!firstParagraph)
-            {
-                if (remaining == 0)
-                    return paragraph.ContentStart;
-                remaining--;
-            }
-            firstParagraph = false;
-
-            foreach (var inline in TextBodyFlowDocumentConverter.EnumerateEditableLeafInlines(paragraph.Inlines))
-            {
-                if (inline is System.Windows.Documents.Run run)
-                {
-                    int length = run.Text?.Length ?? 0;
-                    if (remaining <= length)
-                        return run.ContentStart.GetPositionAtOffset(remaining) ?? run.ContentEnd;
-                    remaining -= length;
-                }
-                else if (inline is LineBreak)
-                {
-                    if (remaining == 0)
-                        return inline.ElementStart;
-                    remaining--;
-                }
-            }
-        }
-
-        return remaining == 0 ? document.ContentEnd : null;
     }
 
     private void OnRichBoxKeyDown(object sender, KeyEventArgs e)

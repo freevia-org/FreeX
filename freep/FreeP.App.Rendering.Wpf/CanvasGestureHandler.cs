@@ -22,7 +22,7 @@ namespace FreeP.App.Rendering.Wpf;
 ///         projector so the logic is fully unit-testable.</item>
 /// </list>
 /// </summary>
-public sealed partial class CanvasGestureHandler : IDisposable, ICanvasGesturePreviewSurface
+public sealed partial class CanvasGestureHandler : IDisposable
 {
     // ── Wiring ────────────────────────────────────────────────────────────────────────────────
 
@@ -38,6 +38,7 @@ public sealed partial class CanvasGestureHandler : IDisposable, ICanvasGesturePr
     // ── Drag state ────────────────────────────────────────────────────────────────────────────
 
     private readonly CanvasGestureRouter _gestureRouter;
+    private readonly CanvasGesturePreviewSurfaceAdapter _previewSurface;
 
     // ── Move ──────────────────────────────────────────────────────────────────────────────────
 
@@ -100,6 +101,20 @@ public sealed partial class CanvasGestureHandler : IDisposable, ICanvasGesturePr
         _adornerLayer = AdornerLayer.GetAdornerLayer(_canvas);
         _adorner      = new SelectionAdorner(_canvas);
         _adornerLayer?.Add(_adorner);
+        _previewSurface = new(
+            (bounds, rotation) => _adorner.UpdatePreview(
+                bounds is { } value ? ToWpfRect(value) : null,
+                rotation),
+            _adorner.UpdateSnapGuides,
+            plan =>
+            {
+                _adorner.UpdateTransformPreview(plan);
+                _canvas.UpdateTransformPreview(plan);
+            },
+            (name, point) => _adorner.UpdateGeometryPreview(
+                name,
+                new Point(point.X, point.Y)),
+            bounds => _adorner.UpdateMarquee(ToWpfRect(bounds)));
 
         // Hook canvas events
         _canvas.MouseLeftButtonDown += OnMouseDown;
@@ -196,18 +211,10 @@ public sealed partial class CanvasGestureHandler : IDisposable, ICanvasGesturePr
     }
 
     private void ApplyPressAction(CanvasGesturePressPlan plan)
-    {
-        switch (plan.Action)
-        {
-            case CanvasGesturePressActionKind.NotifyChartPointDoubleClick
-                when plan.ChartPoint is { } chartPoint:
-                _onChartPointDoubleClick?.Invoke(chartPoint);
-                break;
-            case CanvasGesturePressActionKind.ActivateOle when plan.Shape is { } shape:
-                HandleOleDoubleClick(shape);
-                break;
-        }
-    }
+        => CanvasGesturePressActionDispatcher.Dispatch(
+            plan,
+            _onChartPointDoubleClick,
+            shape => HandleOleDoubleClick(shape));
 
     // ── Mouse move ────────────────────────────────────────────────────────────────────────────
 
@@ -295,36 +302,8 @@ public sealed partial class CanvasGestureHandler : IDisposable, ICanvasGesturePr
             _editor.CurrentSlide,
             _editor.Presentation,
             coreTransform);
-        CanvasGesturePreviewDispatcher.Apply(visual, coreTransform, this);
+        CanvasGesturePreviewDispatcher.Apply(visual, coreTransform, _previewSurface);
     }
-
-    void ICanvasGesturePreviewSurface.UpdatePreview(
-        SlideScreenRect? bounds,
-        double rotationDegrees) =>
-        _adorner.UpdatePreview(
-            bounds is { } value ? ToWpfRect(value) : null,
-            rotationDegrees);
-
-    void ICanvasGesturePreviewSurface.UpdateSnapGuides(
-        IReadOnlyList<SnapGuideLine>? guides,
-        SlideTransformCore transform) =>
-        _adorner.UpdateSnapGuides(guides, transform);
-
-    void ICanvasGesturePreviewSurface.UpdateTransformPreview(CanvasMultiTransformPlan plan)
-    {
-        _adorner.UpdateTransformPreview(plan);
-        _canvas.UpdateTransformPreview(plan);
-    }
-
-    void ICanvasGesturePreviewSurface.UpdateGeometryPreview(
-        string handleName,
-        CanvasGesturePoint screenPoint) =>
-        _adorner.UpdateGeometryPreview(
-            handleName,
-            new Point(screenPoint.X, screenPoint.Y));
-
-    void ICanvasGesturePreviewSurface.UpdateMarquee(SlideScreenRect bounds) =>
-        _adorner.UpdateMarquee(ToWpfRect(bounds));
 
     // ── Resize gesture ────────────────────────────────────────────────────────────────────────
 
@@ -435,10 +414,7 @@ public sealed partial class CanvasGestureHandler : IDisposable, ICanvasGesturePr
                 ToCoreTransform(_canvas.CurrentTransform),
                 EditPointsEnabled);
 
-        _adorner.UpdateSelection(projection.Selections.Select(selection =>
-            (selection.ShapeId, ToWpfRect(selection.ScreenRect))));
-        _adorner.UpdateGeometryHandles(projection.GeometryHandles.Select(handle =>
-            (handle.Name, new Point(handle.ScreenPosition.X, handle.ScreenPosition.Y))));
+        _adorner.UpdateProjection(projection);
     }
 
     // ── Helpers ───────────────────────────────────────────────────────────────────────────────
@@ -446,32 +422,15 @@ public sealed partial class CanvasGestureHandler : IDisposable, ICanvasGesturePr
     private static CanvasGesturePoint ToGesturePoint(Point point)
         => new(point.X, point.Y);
 
-    private static CanvasGestureKey ToGestureKey(Key key) => key switch
-    {
-        Key.Escape => CanvasGestureKey.Escape,
-        Key.Left => CanvasGestureKey.Left,
-        Key.Right => CanvasGestureKey.Right,
-        Key.Up => CanvasGestureKey.Up,
-        Key.Down => CanvasGestureKey.Down,
-        Key.Delete => CanvasGestureKey.Delete,
-        Key.Back => CanvasGestureKey.Backspace,
-        Key.Insert => CanvasGestureKey.Insert,
-        _ => CanvasGestureKey.None,
-    };
+    private static CanvasGestureKey ToGestureKey(Key key) =>
+        CanvasGestureNativeInputMapper.MapKeyName(key.ToString());
 
-    private static CanvasGestureModifiers ToGestureModifiers(ModifierKeys modifiers)
-    {
-        var result = CanvasGestureModifiers.None;
-        if ((modifiers & ModifierKeys.Shift) != 0)
-            result |= CanvasGestureModifiers.Shift;
-        if ((modifiers & ModifierKeys.Control) != 0)
-            result |= CanvasGestureModifiers.Control;
-        if ((modifiers & ModifierKeys.Alt) != 0)
-            result |= CanvasGestureModifiers.Alt;
-        if ((modifiers & ModifierKeys.Windows) != 0)
-            result |= CanvasGestureModifiers.Meta;
-        return result;
-    }
+    private static CanvasGestureModifiers ToGestureModifiers(ModifierKeys modifiers) =>
+        CanvasGestureNativeInputMapper.MapModifiers(
+            modifiers.HasFlag(ModifierKeys.Shift),
+            modifiers.HasFlag(ModifierKeys.Control),
+            modifiers.HasFlag(ModifierKeys.Alt),
+            modifiers.HasFlag(ModifierKeys.Windows));
 
     private static SlideTransformCore ToCoreTransform(SlideTransform xf)
         => xf.Core;

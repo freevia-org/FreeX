@@ -39,8 +39,8 @@ internal static class AvaloniaRibbonKeyTipRoutes
 /// The shell registers endpoint delegates against canonical ids obtained from the shared definition, so the
 /// renderer and host cannot drift into separate command inventories. Bold /
 /// Italic / Underline bind to the shared, platform-neutral <see cref="WorkbookFormatRibbonCommands"/> — the
-/// same command logic the WPF host uses — so clicking them formats the live selection. Every canonical id in
-/// the shared definition resolves in the registry to either a real handler or the honest NoOp stub.
+/// same command logic the WPF host uses — so clicking them formats the live selection. Canonical ids without
+/// a live endpoint remain unregistered, which the shared renderer exposes as visibly disabled commands.
 /// </summary>
 internal static class AvaloniaRibbonHost
 {
@@ -81,7 +81,8 @@ internal static class AvaloniaRibbonHost
     /// <summary>
     /// Builds the ribbon control, additionally wiring the Data-tab <c>Text to Columns</c> and
     /// <c>Consolidate</c> buttons to host callbacks that open the corresponding dialogs. A null callback
-    /// leaves its button on the no-op registration (so the smoke harness can still build the ribbon).
+    /// leaves its command unregistered, so the smoke harness can still build the ribbon while the control is
+    /// honestly disabled.
     /// </summary>
     public static Control Build(
         Func<WorkbookSession?> session,
@@ -96,8 +97,8 @@ internal static class AvaloniaRibbonHost
 
     /// <summary>
     /// Builds the ribbon control, wiring every host dialog/action the shell exposes through
-    /// <paramref name="callbacks"/>. Each non-null callback overrides its control's no-op registration with
-    /// an <see cref="ActionRibbonCommand"/>; null callbacks (e.g. in the smoke harness) leave the no-op.
+    /// <paramref name="callbacks"/>. Each non-null callback registers an <see cref="ActionRibbonCommand"/>;
+    /// null callbacks (for example in the smoke harness) remain unregistered and therefore disabled.
     /// </summary>
     public static Control Build(
         Func<WorkbookSession?> session,
@@ -363,8 +364,8 @@ internal static class AvaloniaRibbonComposition
         Register(registry, "Italic", WorkbookFormatRibbonCommands.Italic(session, ApplyStatus(setStatus, "Italic")));
         Register(registry, "Underline", WorkbookFormatRibbonCommands.Underline(session, ApplyStatus(setStatus, "Underline")));
 
-        // Override the Insert ▸ Charts controls with a real insert action: each canonical id the factory maps
-        // to a ChartType gets an InsertChartRibbonCommand; unmapped ids keep their NoOp registration.
+        // Register the Insert ▸ Charts controls with a real insert action: each canonical id the factory maps
+        // to a ChartType gets an InsertChartRibbonCommand; unmapped ids remain unregistered and disabled.
         RegisterChartCommands(registry, session, setStatus);
 
         // Override the controls whose behavior lives in the Avalonia shell (dialogs / selection commands)
@@ -490,8 +491,8 @@ internal static class AvaloniaRibbonComposition
     /// <summary>
     /// Wires the Insert chart-type buttons and their chart-type menu items to
     /// <see cref="ChartCommandWorkflowPlanner"/>. Any canonical command id the workflow maps to a
-    /// <see cref="ChartType"/> gets an <see cref="InsertChartRibbonCommand"/>; unmapped ids keep their
-    /// no-op registration. The factory recognizes the shared definition's descriptive chart labels
+    /// <see cref="ChartType"/> gets an <see cref="InsertChartRibbonCommand"/>; unmapped ids remain
+    /// unregistered and disabled. The factory recognizes the shared definition's descriptive chart labels
     /// (e.g. <c>Column Chart</c>, <c>Line Chart</c>) directly.
     /// </summary>
     private static void RegisterChartCommands(

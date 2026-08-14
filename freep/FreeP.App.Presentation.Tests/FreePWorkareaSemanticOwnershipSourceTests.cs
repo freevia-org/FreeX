@@ -51,7 +51,8 @@ public sealed class FreePWorkareaSemanticOwnershipSourceTests
         foreach (var source in adapters)
         {
             source.Should().Contain("PresentationPaneAccessibilityItemPlan plan")
-                .And.Contain("PresentationPaneAccessibilityPlanner.ProjectItem(plan)")
+                .And.Contain("PresentationPaneAccessibilityNativeSession<")
+                .And.Contain(".ApplyItem(")
                 .And.NotContain("string? state")
                 .And.NotContain("string? stableKey");
         }

@@ -41,8 +41,18 @@ public sealed partial class MainWindow
         InsertVideo = () => QueueAssetImport(PresentationAssetImportKind.Video),
         InsertAudio = () => QueueAssetImport(PresentationAssetImportKind.Audio),
         OpenTablePicker = OpenTablePicker,
-        MergeTableCells = () => Editor.TryMergeActiveTableCell(),
-        SplitTableCell = () => Editor.TrySplitActiveTableCell(),
+        MergeTableCells = () =>
+        {
+            _domainContextMenuSession.ExecuteCurrentTableAction(
+                PresentationDomainContextActionKind.MergeTableCell,
+                TryExecuteInlineTableAction);
+        },
+        SplitTableCell = () =>
+        {
+            _domainContextMenuSession.ExecuteCurrentTableAction(
+                PresentationDomainContextActionKind.SplitTableCell,
+                TryExecuteInlineTableAction);
+        },
         PickPictureBullet = () => QueueAssetImport(PresentationAssetImportKind.PictureBullet),
         InsertSlideZoom = OpenSlideZoomDialog,
         InsertSectionZoom = OpenSectionZoomDialog,
@@ -134,9 +144,33 @@ public sealed partial class MainWindow
         Table = new FreePRibbonTextActionEndpoints
         {
             ToggleFormat = format => WithCanvas(canvas => ApplyTableTextFormat(canvas, format)),
+            SetParagraphAlignment = alignment => WithCanvas(canvas =>
+                canvas.TableCellEditor?.TryApplyActiveTableCellParagraphAlignment(alignment) == true),
+            ApplyListPreset = preset => WithCanvas(canvas =>
+                canvas.TableCellEditor?.TryApplyActiveTableCellParagraphListPreset(preset) == true),
+            ToggleBullets = () => WithCanvas(canvas =>
+                canvas.TableCellEditor?.TryApplyActiveTableCellParagraphBulletToggle() == true),
+            ToggleNumbering = () => WithCanvas(canvas =>
+                canvas.TableCellEditor?.TryApplyActiveTableCellParagraphNumberingToggle() == true),
+            Indent = () => WithCanvas(canvas =>
+                canvas.TableCellEditor?.TryApplyActiveTableCellParagraphIndent() == true),
+            Outdent = () => WithCanvas(canvas =>
+                canvas.TableCellEditor?.TryApplyActiveTableCellParagraphOutdent() == true),
             SetFontFamily = family => WithTableEditor(editor => editor.ApplyFont(family)),
             SetFontSize = sizePt => WithTableEditor(editor => editor.ApplyFontSize(sizePt)),
             SetColor = color => WithTableEditor(editor => editor.ApplyColor(color)),
+            SetTextVerticalType = verticalType => WithCanvas(canvas =>
+                canvas.TableCellEditor?.TryApplyActiveTableCellTextVerticalType(verticalType) == true),
+            SetTableCellFill = color => WithCanvas(canvas =>
+                canvas.TableCellEditor?.TryApplyActiveTableCellFill(color) == true),
+            SetTableCellAnchor = anchor => WithCanvas(canvas =>
+                canvas.TableCellEditor?.TryApplyActiveTableCellAnchor(anchor) == true),
+            SetTableCellBorder = (side, outline) => WithCanvas(canvas =>
+                canvas.TableCellEditor?.TryApplyActiveTableCellBorder(side, outline) == true),
+            SetTableCellInset = (side, value) => WithCanvas(canvas =>
+                canvas.TableCellEditor?.TryApplyActiveTableCellInset(side, value) == true),
+            SetTableRowHeight = height => WithCanvas(canvas =>
+                canvas.TableCellEditor?.TryApplyActiveTableRowHeight(height) == true),
         },
     };
 

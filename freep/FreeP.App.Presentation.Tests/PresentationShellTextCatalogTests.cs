@@ -127,6 +127,8 @@ public sealed class PresentationShellTextCatalogTests
             "freep", "FreeP.App.Presentation", "PresentationFileCommandSession.cs");
         var avaloniaRichEditor = Read(
             "freep", "FreeP.App.Rendering.Avalonia", "AvaloniaRichTextEditor.cs");
+        var reviewPaneCoordinator = Read(
+            "freep", "FreeP.App.Presentation", "PresentationMainWindowReviewPaneCoordinator.cs");
 
         avalonia.Should().NotContain("\"Slide Size\"")
             .And.NotContain("\"Header and Footer\"")
@@ -145,7 +147,8 @@ public sealed class PresentationShellTextCatalogTests
             .And.NotContain("Content = \"Select\"")
             .And.Contain("Content  = plan.CloseAction.Label")
             .And.Contain("Content = editAction.Label")
-            .And.Contain("Content = row.SelectionAction.Label")
+            .And.Contain("PresentationMainWindowReviewPaneCoordinator.BuildProofingRowActions(row)")
+            .And.Contain("Content = action.Label")
             .And.Contain("PresentationShellTextCatalog.LayoutPickerStatus(")
             .And.Contain("PresentationShellTextCatalog.TablePickerStatus(")
             .And.Contain("surface.PrinterPickerAutomationId")
@@ -155,7 +158,8 @@ public sealed class PresentationShellTextCatalogTests
             .And.NotContain("Could not replace SmartArt picture:")
             .And.Contain("Content = plan.CloseAction.Label")
             .And.Contain("Content = editAction.Label")
-            .And.Contain("Content = row.SelectionAction.Label");
+            .And.Contain("PresentationMainWindowReviewPaneCoordinator.BuildProofingRowActions(row)")
+            .And.Contain("Content = action.Label");
         avaloniaOptions.Should().NotContain("Content = \"OK\"")
             .And.NotContain("Content = \"Cancel\"")
             .And.Contain("_surface.AcceptLabel")
@@ -189,6 +193,8 @@ public sealed class PresentationShellTextCatalogTests
             .And.NotContain("Header = \"Select All\"");
         nativePrint.Should().Contain("PrinterPickerAutomationId: \"FreePWindowsPrinterPicker\"")
             .And.Contain("NativeDialogAutomationId: \"FreePWindowsPrinterDialog\"");
+        reviewPaneCoordinator.Should().Contain("row.SelectionAction")
+            .And.NotContain("Content = row.SelectionAction.Label");
     }
 
     private static string Read(params string[] pathParts) =>

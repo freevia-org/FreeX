@@ -391,6 +391,8 @@ public sealed partial class MainWindow : Window
         _editor.DocumentChanged += () => { if (_outlineMode) _outlineView.Refresh(); };
         _editor.ScrollToCaretRequested += ScrollCaretIntoView;
         _editor.CaretMoved += UpdateStatus;
+        _editor.CaretMoved += RefreshRibbonCommandStates;
+        _editor.DocumentChanged += RefreshRibbonCommandStates;
         _editor.CaretMoved += () => { if (_thesaurusPane.IsVisible) _thesaurusPane.Refresh(); };
         _editor.ViewModeChanged += UpdateStatus;
         _editor.ViewModeChanged += UpdateViewModeButtons;

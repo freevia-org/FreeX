@@ -1,0 +1,19 @@
+<Project>
+
+  <PropertyGroup>
+    <FreePRendererHostVariant Condition="'$(FreePVisualEvidenceHost)' == 'true'">VisualEvidence</FreePRendererHostVariant>
+    <FreePRendererHostVariant Condition="'$(FreePRendererHostVariant)' == '' And '$(FreePValidationHost)' == 'true'">Validation</FreePRendererHostVariant>
+    <FreePRendererHostVariant Condition="'$(FreePRendererHostVariant)' == '' And '$(FreePHostAccess)' == 'true' And '$(FreePSlideShowTestSupport)' == 'true'">TestSupport</FreePRendererHostVariant>
+    <FreePRendererHostVariant Condition="'$(FreePRendererHostVariant)' == '' And '$(FreePHostAccess)' == 'true'">HostAccess</FreePRendererHostVariant>
+    <FreePRendererHostVariant Condition="'$(FreePRendererHostVariant)' == '' And '$(FreePSlideShowTestSupport)' == 'true'">SlideShowTestSupport</FreePRendererHostVariant>
+    <OutputPath Condition="'$(FreePRendererHostVariant)' != ''">bin\$(FreePRendererHostVariant)\$(Configuration)\</OutputPath>
+    <IntermediateOutputPath Condition="'$(FreePRendererHostVariant)' != ''">obj\$(FreePRendererHostVariant)\$(Configuration)\$(TargetFramework)\</IntermediateOutputPath>
+  </PropertyGroup>
+
+  <ItemDefinitionGroup>
+    <ProjectReference>
+      <GlobalPropertiesToRemove>$(GlobalPropertiesToRemove);FreePHostAccess;FreePSlideShowTestSupport;FreePValidationHost;FreePVisualEvidenceHost</GlobalPropertiesToRemove>
+    </ProjectReference>
+  </ItemDefinitionGroup>
+
+</Project>

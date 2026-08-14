@@ -1,6 +1,6 @@
-using Avalonia;
 using Avalonia.Media;
 using Free.Shared.Drawing;
+using Free.Shared.Drawing.Avalonia;
 using FreeP.App.Compositor;
 
 namespace FreeP.App.Rendering.Avalonia;
@@ -9,8 +9,7 @@ namespace FreeP.App.Rendering.Avalonia;
 /// Converts a <see cref="ShapeGeometry"/> (portable contours of Line/CubicBezier/Arc)
 /// to an Avalonia <see cref="StreamGeometry"/>.
 ///
-/// This mirrors <c>AvaloniaDrawingShapeGeometryFactory</c> in FreeX.App.Avalonia:
-/// contour Start → BeginFigure, segments → LineTo/CubicBezierTo/ArcTo, EndFigure.
+/// Native contour translation is owned by the shared Avalonia drawing adapter.
 /// </summary>
 internal static class AvaloniaSlideGeometryFactory
 {
@@ -21,50 +20,6 @@ internal static class AvaloniaSlideGeometryFactory
     /// </summary>
     internal static StreamGeometry? ToGeometry(ShapeGeometry shape)
     {
-        if (shape.Contours.Count == 0)
-            return null;
-
-        var geometry = new StreamGeometry();
-        using (var ctx = geometry.Open())
-        {
-            foreach (var contour in shape.Contours)
-            {
-                ctx.BeginFigure(ToPoint(contour.Start), isFilled: contour.Filled);
-
-                foreach (var seg in contour.Segments)
-                {
-                    switch (seg.Kind)
-                    {
-                        case ShapeSegmentKind.Line:
-                            ctx.LineTo(ToPoint(seg.End));
-                            break;
-
-                        case ShapeSegmentKind.CubicBezier:
-                            ctx.CubicBezierTo(
-                                ToPoint(seg.Control1),
-                                ToPoint(seg.Control2),
-                                ToPoint(seg.End));
-                            break;
-
-                        case ShapeSegmentKind.Arc:
-                            ctx.ArcTo(
-                                ToPoint(seg.End),
-                                new Size(seg.RadiusX, seg.RadiusY),
-                                rotationAngle: 0,
-                                seg.LargeArc,
-                                seg.SweepClockwise
-                                    ? SweepDirection.Clockwise
-                                    : SweepDirection.CounterClockwise);
-                            break;
-                    }
-                }
-
-                ctx.EndFigure(isClosed: contour.Closed);
-            }
-        }
-
-        return geometry;
+        return AvaloniaShapeGeometryAdapter.ToGeometry(shape);
     }
-
-    private static Point ToPoint(LayoutPoint p) => new(p.X, p.Y);
 }

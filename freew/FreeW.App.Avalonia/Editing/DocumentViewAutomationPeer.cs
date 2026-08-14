@@ -239,6 +239,8 @@ internal sealed class DocumentViewAutomationPeer : ControlAutomationPeer, IValue
         {
             DocumentAccessibilityNodeKind.HeaderFooterStory =>
                 new DocumentValueAutomationPeer(this, node.Id),
+            DocumentAccessibilityNodeKind.Footnote or DocumentAccessibilityNodeKind.Endnote =>
+                new DocumentValueAutomationPeer(this, node.Id),
             DocumentAccessibilityNodeKind.ListItem =>
                 new DocumentValueAutomationPeer(this, node.Id),
             DocumentAccessibilityNodeKind.Paragraph or DocumentAccessibilityNodeKind.Heading =>
@@ -305,6 +307,8 @@ internal abstract class DocumentVirtualAutomationPeer(
     protected override AutomationControlType GetAutomationControlTypeCore() => Node.Kind switch
     {
         DocumentAccessibilityNodeKind.HeaderFooterStory => AutomationControlType.Group,
+        DocumentAccessibilityNodeKind.Footnotes or DocumentAccessibilityNodeKind.Endnotes => AutomationControlType.Group,
+        DocumentAccessibilityNodeKind.Footnote or DocumentAccessibilityNodeKind.Endnote => AutomationControlType.Text,
         DocumentAccessibilityNodeKind.List => AutomationControlType.List,
         DocumentAccessibilityNodeKind.ListItem => AutomationControlType.ListItem,
         DocumentAccessibilityNodeKind.Paragraph or DocumentAccessibilityNodeKind.Heading => AutomationControlType.Text,
@@ -400,6 +404,8 @@ internal abstract class DocumentVirtualAutomationPeer(
         DocumentAccessibilityNodeKind.Heading => $"Heading level {node.HeadingLevel}",
         DocumentAccessibilityNodeKind.ListItem =>
             $"List item level {node.ListLevel + 1}{(string.IsNullOrWhiteSpace(node.ListMarker) ? string.Empty : $", marker {node.ListMarker}")}",
+        DocumentAccessibilityNodeKind.Footnote => node.HelpText ?? "Footnote",
+        DocumentAccessibilityNodeKind.Endnote => node.HelpText ?? "Endnote",
         DocumentAccessibilityNodeKind.TableCell =>
             $"Row {node.RowIndex + 1}, column {node.ColumnIndex + 1}, row span {node.RowSpan}, column span {node.ColumnSpan}",
         _ => string.Empty

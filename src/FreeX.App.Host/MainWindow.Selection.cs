@@ -852,8 +852,12 @@ public partial class MainWindow
         // Page Up/Down pages by THIS window's own scrollable-row/column count.
         var pagingViewState = GetEffectiveViewState(sheet);
         var pagingViewport = SheetGrid.Viewport;
-        int pageSize = Math.Max(1, (pagingViewport is null ? 25 : CountScrollableRows(pagingViewport, pagingViewState.FrozenRows)) - 1);
-        int colPageSize = Math.Max(1, (pagingViewport is null ? 12 : CountScrollableColumns(pagingViewport, pagingViewState.FrozenCols)) - 1);
+        int pageSize = Math.Max(1, (pagingViewport is null
+            ? 25
+            : WorkbookViewportScrollPlanner.CountVisibleScrollableRows(pagingViewport, pagingViewState.FrozenRows)) - 1);
+        int colPageSize = Math.Max(1, (pagingViewport is null
+            ? 12
+            : WorkbookViewportScrollPlanner.CountVisibleScrollableColumns(pagingViewport, pagingViewState.FrozenCols)) - 1);
 
         CellAddress? target = ExcelWorksheetNavigationPlanner.GetHorizontalPageTarget(
             e.Key,

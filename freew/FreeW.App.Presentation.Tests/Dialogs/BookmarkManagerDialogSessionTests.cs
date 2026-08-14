@@ -141,6 +141,21 @@ public sealed class BookmarkManagerDialogSessionTests
 
         session.PlanGoTo().Should().Be(new BookmarkManagerGoToIntent("Target", 12));
     }
+
+    [Fact]
+    public void GoToIntentPreservesExactTableCellAddress()
+    {
+        var location = new BookmarkLocation(
+            "CellTarget",
+            3,
+            TableRowIndex: 2,
+            TableGridColumnIndex: 4,
+            TableParagraphIndex: 1);
+        var session = new BookmarkManagerDialogSession();
+        session.Refresh([location]);
+
+        session.PlanGoTo()!.Location.Should().Be(location);
+    }
 }
 
 public sealed class BookmarkManagerDialogSourceOwnershipTests
@@ -170,9 +185,16 @@ public sealed class BookmarkManagerDialogSourceOwnershipTests
         }
 
         wpf.Should().Contain("_editor.RemoveBookmark(plan.Name)");
-        wpf.Should().Contain("_editor.BringBlockIntoView(intent.BlockIndex)");
+        wpf.Should().Contain("_editor.GoToBookmark(intent.Location)");
         avalonia.Should().Contain("_editor.DeleteBookmark(plan.Name)");
-        avalonia.Should().Contain("_editor.GoToBookmark(intent.Name)");
+        avalonia.Should().Contain("_editor.GoToBookmark(intent.Location)");
+
+        var wpfEditor = ReadSource("freew", "FreeW.App.Host", "Editing", "DocumentView.cs");
+        var avaloniaEditor = ReadSource("freew", "FreeW.App.Avalonia", "Editing", "DocumentView.cs");
+        wpfEditor.Should().Contain("TableGridProjection.At(");
+        wpfEditor.Should().Contain("PlaceCaretAtTableCellTextOffset(");
+        avaloniaEditor.Should().Contain("location.TableGridColumnIndex.Value");
+        avaloniaEditor.Should().NotContain("FindBookmarkCell(");
     }
 
     [Fact]
@@ -201,6 +223,21 @@ public sealed class BookmarkManagerDialogSourceOwnershipTests
         source.Should().NotContain("using Avalonia");
         source.Should().NotContain("using System.Windows");
         source.Should().NotContain("DocumentView");
+    }
+
+    [Fact]
+    public void InternalHyperlinksResolveTheSameExactSharedBookmarkLocationInBothRenderers()
+    {
+        var wpf = ReadSource("freew", "FreeW.App.Host", "Editing", "DocumentView.cs");
+        var avalonia = ReadSource("freew", "FreeW.App.Avalonia", "Editing", "DocumentView.cs");
+
+        wpf.Should().Contain("FindOwnerView(link)?.GoToBookmark(anchor)");
+        wpf.Should().Contain("Bookmarks.FindLocation(_model, target)");
+        wpf.Should().Contain("GoToCommittedBookmark(location)");
+        wpf.Should().NotContain("flow?.Blocks.OfType<WpfParagraph>()");
+
+        avalonia.Should().Contain("Bookmarks.FindLocation(_doc, target)");
+        avalonia.Should().Contain("GoToBookmark(location)");
     }
 
     private static string ReadSource(params string[] parts)

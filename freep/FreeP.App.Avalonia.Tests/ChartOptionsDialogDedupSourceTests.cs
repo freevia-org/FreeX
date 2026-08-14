@@ -59,6 +59,10 @@ public sealed class ChartOptionsDialogDedupSourceTests
     public void AvaloniaChartOptionChromeRetainsEstablishedMetrics()
     {
         var source = File.ReadAllText(RepoFile("freep", "FreeP.App.Avalonia", "ChartOptionsDialogChrome.cs"));
+        var adapter = File.ReadAllText(RepoFile(
+            "freep",
+            "FreeP.App.Presentation",
+            "ChartOptionsDialogFormAdapter.cs"));
 
         source.Should().Contain("Spacing = 8");
         source.Should().Contain("Margin = new Thickness(0, 12, 0, 0)");
@@ -68,14 +72,23 @@ public sealed class ChartOptionsDialogDedupSourceTests
         source.Should().Contain("IsCancel = plan.IsCancel");
         source.Should().Contain("AutomationProperties.SetName(button, plan.AccessibleName)");
         source.Should().Contain("AutomationProperties.SetAutomationId(button, plan.AutomationId)");
-        source.Should().Contain("public void ApplyValues(ChartOptionsDialogValues values)");
-        source.Should().Contain("_formSession.Text(fieldId)");
-        source.Should().Contain("_formSession.SelectedIndex(fieldId)");
-        source.Should().Contain("_formSession.NullableChecked(fieldId)");
+        source.Should().Contain("ChartOptionsDialogFormAdapter<Control, Control>");
+        source.Should().Contain("ChartOptionsDialogNativeRenderer<Control, Control>");
+        source.Should().Contain("ChartOptionsDialogNativeFieldBinding<Control, TextBox, ComboBox, CheckBox>");
+        source.Should().Contain("FieldBinding.ApplyPlan");
+        source.Should().Contain("FormSession.Register(field.Id, control, row)");
+        source.Should().Contain("FormSession.CompleteInitialRender()");
+        source.Should().NotContain("public void ApplyValues(ChartOptionsDialogValues values)");
         source.Should().NotContain("private TControl Control<TControl>");
-        source.Should().Contain("case TextBox textBox:");
-        source.Should().Contain("case ComboBox comboBox:");
-        source.Should().Contain("case CheckBox checkBox:");
+        source.Should().NotContain("case TextBox textBox:");
+        source.Should().NotContain("case ComboBox comboBox:");
+        source.Should().NotContain("case CheckBox checkBox:");
+
+        adapter.Should().Contain("public void ApplyValues(ChartOptionsDialogValues values)");
+        adapter.Should().Contain("public string Text(ChartOptionsDialogFieldId fieldId)");
+        adapter.Should().Contain("public int SelectedIndex(ChartOptionsDialogFieldId fieldId)");
+        adapter.Should().Contain("public bool? NullableChecked(ChartOptionsDialogFieldId fieldId)");
+        adapter.Should().Contain("FormSession.ApplyValues(values)");
     }
 
     private static readonly string[] ChartOptionDialogFiles =

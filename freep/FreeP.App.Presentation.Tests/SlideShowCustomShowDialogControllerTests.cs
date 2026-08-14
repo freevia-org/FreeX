@@ -110,27 +110,34 @@ public sealed class SlideShowCustomShowDialogControllerTests
         var root = TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeP.slnx");
         var wpf = Read(root, "FreeP.App.Host");
         var avalonia = Read(root, "FreeP.App.Avalonia");
+        var composition = File.ReadAllText(Path.Combine(
+            root,
+            "freep",
+            "FreeP.App.Presentation",
+            "SlideShowCustomShowDialogNativeComposition.cs"));
 
         foreach (var source in new[] { wpf, avalonia })
         {
-            source.Should().Contain("ISlideShowCustomShowDialogView")
-                .And.Contain("SlideShowCustomShowDialogController _controller")
-                .And.Contain("_controller.Initialize()")
-                .And.Contain("_controller.SelectShow()")
-                .And.Contain("_controller.SelectSlide()")
-                .And.Contain("_controller.Create")
-                .And.Contain("_controller.Rename")
-                .And.Contain("_controller.UpdateSlides")
-                .And.Contain("_controller.AddSlideOccurrence(")
-                .And.Contain("_controller.RemoveSelectedSlide")
-                .And.Contain("_controller.MoveSelectedSlide(")
-                .And.Contain("_controller.Delete")
-                .And.Contain("_controller.StartShow")
-                .And.Contain("_controller.Reorder(")
-                .And.Contain("RebuildSlides(")
-                .And.Contain("_formSession.ApplyFullPlan(plan)")
-                .And.Contain("_formSession.ApplySelectedShowPlan(plan)")
-                .And.Contain("_formSession.ApplySlideSelection(plan)")
+            source.Should().Contain("SlideShowCustomShowDialogNativeComposition<")
+                .And.Contain("_renderer.Controller.Initialize()")
+                .And.Contain("_renderer.Controller.SelectShow()")
+                .And.Contain("_renderer.Controller.SelectSlide()")
+                .And.Contain("_renderer.Controller.Create")
+                .And.Contain("_renderer.Buttons.Rename")
+                .And.Contain("_renderer.Buttons.Update")
+                .And.Contain("_renderer.Buttons.MoveUp")
+                .And.Contain("_renderer.Buttons.MoveDown")
+                .And.Contain("_renderer.Buttons.Remove")
+                .And.Contain("_renderer.Buttons.Delete")
+                .And.Contain("_renderer.Buttons.Start")
+                .And.Contain("_renderer.Actions.Execute(")
+                .And.Contain("_renderer.Controller.Reorder(")
+                .And.Contain("CreateAvailableSlideRow(")
+                .And.Contain("_renderer.AvailableSlides.Controls")
+                .And.NotContain("ISlideShowCustomShowDialogView.CaptureState()")
+                .And.NotContain("_formSession.ApplyFullPlan(plan)")
+                .And.NotContain("_formSession.ApplySelectedShowPlan(plan)")
+                .And.NotContain("_formSession.ApplySlideSelection(plan)")
                 .And.Contain("SlideShowCustomShowDialogVisualMetrics.MinimumWindowWidth")
                 .And.Contain("SlideShowCustomShowDialogVisualMetrics.RootInset")
                 .And.Contain("SlideShowCustomShowDialogVisualMetrics.ShowListColumnWidth")
@@ -138,6 +145,8 @@ public sealed class SlideShowCustomShowDialogControllerTests
                 .And.Contain("SlideShowCustomShowDialogVisualMetrics.AvailableSlideControlHeight")
                 .And.Contain("SlideShowCustomShowDialogVisualMetrics.ActionButtonHorizontalPadding")
                 .And.NotContain("private readonly SlideShowCustomShowDialogSession _session")
+                .And.NotContain("private readonly SlideShowCustomShowDialogController _controller")
+                .And.NotContain("SlideShowCustomShowDialogViewAdapter<")
                 .And.NotContain("private void ApplyTransition(")
                 .And.NotContain("SlideShowCustomShowDialogTransitionDispatcher.Dispatch(")
                 .And.NotContain("_session.SelectShow(")
@@ -155,6 +164,13 @@ public sealed class SlideShowCustomShowDialogControllerTests
                 .And.NotContain("MinWidth = 82")
                 .And.NotContain("new Thickness(8, 3");
         }
+
+        composition.Should().Contain("new SlideShowCustomShowDialogViewAdapter<TControl>(");
+        composition.Should().Contain("Controller = new(");
+        composition.Should().Contain("Actions = new(Controller, close)");
+        composition.Should().Contain("Buttons = new(");
+        composition.Should().Contain("AvailableSlides = new(");
+        composition.Should().Contain("AvailableSlides.Render(slides)");
 
         wpf.Should().Contain("SlideShowCustomShowDialogVisualMetrics.WpfWindowWidth");
         avalonia.Should().Contain("SlideShowCustomShowDialogVisualMetrics.AvaloniaWindowWidth");

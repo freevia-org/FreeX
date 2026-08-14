@@ -142,6 +142,31 @@ public sealed class OutlineViewControllerTests
     }
 
     [Fact]
+    public void Both_renderer_adapters_supply_outline_navigation_to_the_shared_controller()
+    {
+        var root = TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeW.slnx");
+        var wpf = File.ReadAllText(Path.Combine(
+            root,
+            "freew",
+            "FreeW.App.Host",
+            "Editing",
+            "OutlineView.cs"));
+        var avalonia = File.ReadAllText(Path.Combine(
+            root,
+            "freew",
+            "FreeW.App.Avalonia",
+            "Editing",
+            "OutlineView.cs"));
+
+        wpf.Should().Contain("navigateToBlock: _editor.BringBlockIntoView",
+            "selecting an Outline row must move WPF's native caret through the shared controller");
+        avalonia.Should().Contain("navigateToBlock: blockIndex => _editor.MoveCaretToBlock(blockIndex, 0)",
+            "selecting an Outline row must move Avalonia's native caret through the shared controller");
+        wpf.Should().Contain("_controller.SelectBlock(selected.Row.BlockIndex, navigate: true)");
+        avalonia.Should().Contain("_controller.SelectBlock(selected.Row.BlockIndex, navigate: true)");
+    }
+
+    [Fact]
     public void Refresh_and_collapse_commands_project_native_collapse_state_once()
     {
         var document = Sample();

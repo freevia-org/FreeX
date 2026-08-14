@@ -53,6 +53,7 @@ public sealed class SharedPortableProjectPortabilityGuardTests
         new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
         {
             ["Free.Shared.AppServices.Windows"] = "Windows file-association adapter",
+            ["Free.Shared.Drawing.Avalonia"] = "Avalonia drawing geometry adapter",
             ["Free.Shared.Pdf.Skia"] = "Skia PDF renderer",
             ["Free.Shared.Pdf.Wpf"] = "WPF PDF renderer",
             ["Free.Shared.Ribbon.Avalonia"] = "Avalonia ribbon renderer",

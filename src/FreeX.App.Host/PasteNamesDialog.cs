@@ -49,10 +49,13 @@ internal sealed class PasteNamesDialog : Window
         IsCancel = true
     };
 
+    private readonly IReadOnlyList<PasteNamesItem> _items;
+
     public PasteNamesDialogResult Result { get; private set; } = PasteNamesDialogResult.None;
 
     public PasteNamesDialog(IReadOnlyList<PasteNamesItem> items)
     {
+        _items = items;
         Title = UiText.Get("PasteNames_Title");
         Width = 380;
         Height = 300;
@@ -154,8 +157,11 @@ internal sealed class PasteNamesDialog : Window
 
     private void AcceptSelectedName()
     {
-        if (_namesList.SelectedItem is not PasteNamesItem item)
+        if (DefinedNameUiPolicy.PlanPasteNamesSelection(_items, _namesList.SelectedIndex).SelectedItem
+            is not { } item)
+        {
             return;
+        }
 
         Result = new PasteNamesDialogResult(PasteNamesDialogAction.InsertName, item.Name);
         DialogResult = true;
@@ -169,8 +175,9 @@ internal sealed class PasteNamesDialog : Window
 
     private void SyncButtonState()
     {
-        _okButton.IsEnabled = _namesList.SelectedItem is PasteNamesItem;
-        _pasteListButton.IsEnabled = _namesList.Items.Count > 0;
+        var plan = DefinedNameUiPolicy.PlanPasteNamesSelection(_items, _namesList.SelectedIndex);
+        _okButton.IsEnabled = plan.CanInsertName;
+        _pasteListButton.IsEnabled = plan.CanPasteList;
     }
 
     private void FocusInitialTarget()

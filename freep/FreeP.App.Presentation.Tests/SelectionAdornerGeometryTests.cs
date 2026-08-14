@@ -335,6 +335,10 @@ public sealed class SelectionAdornerGeometryTests
     [Fact]
     public void WpfAndAvaloniaAdorners_DelegateGeometryPolicyToSharedPlanner()
     {
+        var sharedSurface = ReadWorkspaceFile(
+            "freep",
+            "FreeP.App.Presentation",
+            "SelectionAdornerSurface.cs");
         var wpf = ReadWorkspaceFile("freep", "FreeP.App.Rendering.Wpf", "SelectionAdorner.cs");
         var avalonia = ReadWorkspaceFile(
             "freep",
@@ -345,7 +349,7 @@ public sealed class SelectionAdornerGeometryTests
         wpf.Should().Contain("SelectionAdornerGeometry.GetRotateHandleCenter");
         wpf.Should().Contain("SelectionAdornerGeometry.HitTestHandle");
         wpf.Should().Contain("SelectionAdornerGeometry.HitTestGeometryHandle");
-        wpf.Should().Contain("_state.SelectionBounds");
+        wpf.Should().Contain("State.SelectionBounds");
         wpf.Should().Contain("public CanvasGestureHandleKind HitTestHandle");
         wpf.Should().NotContain("public enum HandleKind");
         wpf.Should().NotContain("ToHandleKind");
@@ -358,7 +362,7 @@ public sealed class SelectionAdornerGeometryTests
         avalonia.Should().Contain("SelectionAdornerGeometry.GetRotateHandleCenter");
         avalonia.Should().Contain("SelectionAdornerGeometry.HitTestHandle");
         avalonia.Should().Contain("SelectionAdornerGeometry.HitTestGeometryHandle");
-        avalonia.Should().Contain("_state.SelectionBounds");
+        avalonia.Should().Contain("State.SelectionBounds");
         avalonia.Should().Contain("public CanvasGestureHandleKind HitTestHandle");
         avalonia.Should().NotContain("public enum HandleKind");
         avalonia.Should().NotContain("ToHandleKind");
@@ -369,20 +373,35 @@ public sealed class SelectionAdornerGeometryTests
 
         foreach (var source in new[] { wpf, avalonia })
         {
-            source.Should().Contain("private readonly SelectionAdornerState _state = new();")
-                .And.Contain("_state.UpdateSelection(")
-                .And.Contain("_state.UpdateGeometryHandles(")
-                .And.Contain("_state.UpdateGeometryPreview(")
-                .And.Contain("_state.UpdatePreview(")
-                .And.Contain("_state.UpdateTransformPreview(")
-                .And.Contain("_state.UpdateMarquee(")
-                .And.Contain("_state.UpdateSnapGuides(")
+            source.Should().Contain("ISelectionAdornerSurface<Rect, Point>")
+                .And.Contain("SelectionAdornerController<Rect, Point> _controller")
+                .And.Contain("ISelectionAdornerSurface<Rect, Point>.Controller => _controller;")
+                .And.Contain("private SelectionAdornerState State => _controller.State;")
+                .And.NotContain("public void UpdateSelection(")
+                .And.NotContain("public void UpdateGeometryHandles(")
+                .And.NotContain("public void UpdateGeometryPreview(")
+                .And.NotContain("public void UpdatePreview(")
+                .And.NotContain("public void UpdateTransformPreview(")
+                .And.NotContain("public void UpdateMarquee(")
+                .And.NotContain("public void UpdateSnapGuides(")
                 .And.NotContain("private readonly List<(uint id, Rect screenRect)> _selectionRects")
                 .And.NotContain("private Rect? _previewRect")
                 .And.NotContain("private Rect? _marqueeRect")
                 .And.NotContain("private IReadOnlyList<SnapGuideLine>? _snapGuides")
                 .And.NotContain("private readonly List<(string Name, Point Position)> _geometryHandles");
         }
+
+        sharedSurface.Should().Contain("public static class SelectionAdornerSurfaceExtensions")
+            .And.Contain("surface.Controller.UpdateSelection(selections)")
+            .And.Contain("surface.Controller.UpdateProjection(projection)")
+            .And.Contain("surface.Controller.UpdateGeometryHandles(handles)")
+            .And.Contain("surface.Controller.UpdateGeometryPreview(name, position)")
+            .And.Contain("surface.Controller.UpdatePreview(screenRect, rotationDeg)")
+            .And.Contain("surface.Controller.UpdateTransformPreview(plan)")
+            .And.Contain("surface.Controller.UpdateMarquee(screenRect)")
+            .And.Contain("surface.Controller.UpdateSnapGuides(guides, transform)")
+            .And.NotContain("System.Windows")
+            .And.NotContain("Avalonia");
     }
 
     [Fact]

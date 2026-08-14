@@ -788,20 +788,11 @@ internal sealed partial class BackstageView : Window
 
     private static ScrollViewer CreateScroll(Control child, bool matchWpfScrollBar = false)
     {
-        var scroll = new ScrollViewer
-        {
-            Content = child,
-            Padding = new Thickness(0),
-            Margin = matchWpfScrollBar ? new Thickness(0, 0, 1, 0) : new Thickness(0),
-            FontFamily = BackstageFontFamily,
-            FontSize = 12,
-            HorizontalContentAlignment = HorizontalAlignment.Left,
-            VerticalContentAlignment = VerticalAlignment.Top,
-            VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
-            HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled,
-        };
-        scroll.SetValue(ScrollViewer.AllowAutoHideProperty, false);
-        TextOptions.SetTextRenderingMode(scroll, TextRenderingMode.Antialias);
+        var scroll = new ScrollViewer { Content = child };
+        AvaloniaBackstageScrollChrome.Apply(
+            scroll,
+            BackstagePaneSurfacePlanner.ComposerProfile,
+            matchWpfScrollBar);
         if (matchWpfScrollBar)
         {
             // The WPF Backstage pane reserves a 17-DIP scrollbar lane one pixel

@@ -61,12 +61,18 @@ public sealed class ChartDataDialogDedupSourceTests
         {
             source.Should().Contain("new MotionPathEditorDialogSession(editor, animationIndex)");
             source.Should().Contain("_session.Surface");
-            source.Should().Contain("_session.AddLine(ReadRowInputs())");
-            source.Should().Contain("_session.AddCurve(ReadRowInputs())");
-            source.Should().Contain("_session.Remove(ReadRowInputs(), rowIndex)");
-            source.Should().Contain("_session.Submit(ReadRowInputs())");
-            source.Should().Contain("MotionPathEditorRowProjection.BuildEnablement(");
-            source.Should().Contain("MotionPathEditorRowProjection.BuildPlan(");
+            source.Should().Contain("MotionPathEditorDialogFormSession<Row>");
+            source.Should().Contain("_formSession.AddLine");
+            source.Should().Contain("_formSession.AddCurve");
+            source.Should().Contain("_formSession.Submit");
+            source.Should().Contain("MotionPathEditorNativeRowSession<");
+            source.Should().Contain("_native.Initialize(");
+            source.Should().Contain("_native.RefreshEnablement()");
+            source.Should().Contain("_native.CaptureInput()");
+            source.Should().NotContain("ReadRowInputs()");
+            source.Should().NotContain("private void ApplyTransition(");
+            source.Should().NotContain("MotionPathEditorRowProjection.BuildEnablement(");
+            source.Should().NotContain("MotionPathEditorRowProjection.BuildPlan(");
             source.Should().NotContain("MotionPathEditorRowProjection.Format(");
             source.Should().NotContain("MotionPathEditorRowProjection.TryParse(");
             source.Should().NotContain("MotionPathEditingPlanner.");
@@ -79,6 +85,19 @@ public sealed class ChartDataDialogDedupSourceTests
             source.Should().NotContain("\"Add curve\"");
             source.Should().NotContain("\"Delete\"");
         }
+
+        var formSession = ReadWorkspaceFile(
+            "freep", "FreeP.App.Presentation", "MotionPathEditorDialogFormSession.cs");
+        formSession.Should().Contain("_session.AddLine(ReadRowInputs())");
+        formSession.Should().Contain("_session.AddCurve(ReadRowInputs())");
+        formSession.Should().Contain("_session.Submit(ReadRowInputs())");
+        formSession.Should().Contain("private void ApplyTransition(");
+
+        var nativeRowSession = ReadWorkspaceFile(
+            "freep", "FreeP.App.Presentation", "MotionPathEditorNativeRowSession.cs");
+        nativeRowSession.Should().Contain("MotionPathEditorRowProjection.BuildPlan(");
+        nativeRowSession.Should().Contain("MotionPathEditorRowProjection.BuildEnablement(");
+        nativeRowSession.Should().Contain("public MotionPathEditorRowInput CaptureInput()");
     }
 
     private static IEnumerable<string> RendererSources()

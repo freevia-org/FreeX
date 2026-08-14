@@ -9,7 +9,7 @@ using FreeP.Core.Model;
 
 namespace FreeP.VisualEvidence.Avalonia;
 
-internal sealed class AvaloniaWholeWindowVisualEvidenceCoordinator : IWholeWindowVisualEvidenceProbe
+internal sealed class AvaloniaWholeWindowVisualEvidenceCoordinator : IWholeWindowVisualEvidenceNativeInspector
 {
     private readonly MainWindow.AvaloniaVisualCaptureAdapter _access;
     private readonly WholeWindowVisualEvidenceHostCoordinator _coordinator;
@@ -17,7 +17,7 @@ internal sealed class AvaloniaWholeWindowVisualEvidenceCoordinator : IWholeWindo
     internal AvaloniaWholeWindowVisualEvidenceCoordinator(MainWindow.AvaloniaVisualCaptureAdapter access)
     {
         _access = access;
-        _coordinator = new(this);
+        _coordinator = new(new AvaloniaVisualEvidenceAppHost(access), this);
     }
 
     internal IReadOnlyList<DialogPaneVisualEvidenceAssertion> Prepare(
@@ -33,60 +33,12 @@ internal sealed class AvaloniaWholeWindowVisualEvidenceCoordinator : IWholeWindo
         IReadOnlyList<DialogPaneVisualEvidenceAssertion> preparationAssertions) =>
         _coordinator.CaptureSemantic(scenario, preparationAssertions);
 
-    void IWholeWindowVisualEvidenceProbe.LoadPresentation(Presentation presentation) =>
-        _access.LoadPresentation(presentation);
-
-    void IWholeWindowVisualEvidenceProbe.SelectSlide(int slideIndex) => _access.SelectSlide(slideIndex);
-
-    void IWholeWindowVisualEvidenceProbe.SelectShape(uint shapeId) => _access.SelectShape(shapeId);
-
-    void IWholeWindowVisualEvidenceProbe.ClearSelection() => _access.ClearSelection();
-
-    void IWholeWindowVisualEvidenceProbe.HideCommentsPane() => _access.HideCommentsPane();
-
-    void IWholeWindowVisualEvidenceProbe.SelectRibbonTab(string tabId) => _access.SelectRibbonTab(tabId);
-
-    void IWholeWindowVisualEvidenceProbe.FocusNotes() => _access.FocusNotes();
-
-    void IWholeWindowVisualEvidenceProbe.ShowBackstagePane(string paneId) => _access.ShowBackstagePane(paneId);
-
-    void IWholeWindowVisualEvidenceProbe.ShowCommentsPane() => _access.ShowCommentsPane();
-
-    void IWholeWindowVisualEvidenceProbe.SelectFirstComment() => _access.SelectFirstComment();
-
-    void IWholeWindowVisualEvidenceProbe.ShowAccessibilityPane() => _access.ShowAccessibilityPane();
-
-    void IWholeWindowVisualEvidenceProbe.SelectFirstAccessibilityIssue() => _access.SelectFirstAccessibilityIssue();
-
-    void IWholeWindowVisualEvidenceProbe.ShowAltTextPane() => _access.ShowAltTextPane();
-
-    void IWholeWindowVisualEvidenceProbe.ShowReadingOrderPane() => _access.ShowReadingOrderPane();
-
-    void IWholeWindowVisualEvidenceProbe.ShowProofingPane() => _access.ShowProofingPane();
-
-    void IWholeWindowVisualEvidenceProbe.SelectFirstProofingIssue() => _access.SelectFirstProofingIssue();
-
-    void IWholeWindowVisualEvidenceProbe.ShowMediaCaptionPane() => _access.ShowMediaCaptionPane();
-
-    void IWholeWindowVisualEvidenceProbe.ShowSmartArtTextPane() => _access.ShowSmartArtTextPane();
-
-    void IWholeWindowVisualEvidenceProbe.EnsureAnimationPaneVisible() => _access.EnsureAnimationPaneVisible();
-
-    bool IWholeWindowVisualEvidenceProbe.SetViewShowState(bool showGridlines, bool showGuides) =>
-        _access.SetViewShowState(showGridlines, showGuides);
-
-    void IWholeWindowVisualEvidenceProbe.SetZoom(PresentationViewZoomState state) => _access.SetZoom(state);
-
-    void IWholeWindowVisualEvidenceProbe.RefreshWholeWindow() => _access.RefreshWholeWindow();
-
-    void IWholeWindowVisualEvidenceProbe.NormalizeShell() => _access.NormalizeShell();
-
-    WholeWindowVisualEvidenceBaselineState IWholeWindowVisualEvidenceProbe.CaptureBaselineState() => new(
+    WholeWindowVisualEvidenceBaselineState IWholeWindowVisualEvidenceNativeInspector.CaptureBaselineState() => new(
         _access.SlideCount,
         _access.CurrentSlideIndex,
         _access.SelectedShapeIds);
 
-    WholeWindowVisualEvidenceRichEditorPreparationState IWholeWindowVisualEvidenceProbe.PrepareRichEditor(
+    WholeWindowVisualEvidenceRichEditorPreparationState IWholeWindowVisualEvidenceNativeInspector.PrepareRichEditor(
         WholeWindowVisualEvidenceRichEditorPlan plan)
     {
         var state = _access.PrepareRichEditor(plan.ShapeId, plan.SelectionStart, plan.SelectionEnd);
@@ -100,7 +52,7 @@ internal sealed class AvaloniaWholeWindowVisualEvidenceCoordinator : IWholeWindo
             "The production Avalonia rich-text input owns keyboard focus.");
     }
 
-    WholeWindowVisualEvidenceProbeState IWholeWindowVisualEvidenceProbe.CaptureSemanticState(
+    WholeWindowVisualEvidenceProbeState IWholeWindowVisualEvidenceNativeInspector.CaptureSemanticState(
         WholeWindowVisualEvidenceScenario scenario)
     {
         var definition = FreeP.Ribbon.Definitions.FreePRibbon.Build(FreeP.Ribbon.Definitions.FreePRibbonCapabilities.Avalonia);
@@ -146,7 +98,7 @@ internal sealed class AvaloniaWholeWindowVisualEvidenceCoordinator : IWholeWindo
             _access.VisibleAuxiliaryPanes());
     }
 
-    WholeWindowVisualEvidenceRichEditorProbeState IWholeWindowVisualEvidenceProbe.CaptureRichEditorState()
+    WholeWindowVisualEvidenceRichEditorProbeState IWholeWindowVisualEvidenceNativeInspector.CaptureRichEditorState()
     {
         var state = _access.CaptureRichEditor();
         return new(
@@ -172,4 +124,52 @@ internal sealed class AvaloniaWholeWindowVisualEvidenceCoordinator : IWholeWindo
         TabItem tab => ("tab", tab.Header?.ToString() ?? string.Empty),
         _ => (string.Empty, string.Empty),
     };
+}
+
+internal sealed class AvaloniaVisualEvidenceAppHost(MainWindow.AvaloniaVisualCaptureAdapter access)
+    : IVisualEvidenceAppHost
+{
+    public IReadOnlyList<uint> SelectedShapeIds => access.SelectedShapeIds;
+    public int SlideCount => access.SlideCount;
+    public int CurrentSlideIndex => access.CurrentSlideIndex;
+    public int CurrentShapeCount => access.CurrentShapeCount;
+    public string? CurrentLayoutId => access.CurrentLayoutId;
+    public bool IsTablePickerVisible => access.IsTablePickerVisible;
+    public bool IsLayoutPickerVisible => access.IsLayoutPickerVisible;
+    public DialogPaneVisualEvidenceChoiceState ChoiceState => new(
+        access.TableChoiceCount,
+        access.DefaultTableChoiceCount,
+        access.CurrentLayoutChoiceCount,
+        access.DisabledLayoutChoiceCount);
+
+    public void LoadPresentation(Presentation presentation) => access.LoadPresentation(presentation);
+    public void SelectSlide(int slideIndex) => access.SelectSlide(slideIndex);
+    public void SelectShape(uint shapeId) => access.SelectShape(shapeId);
+    public void ClearSelection() => access.ClearSelection();
+    public void RefreshCanvas() => access.RefreshCanvas();
+    public void RefreshWholeWindow() => access.RefreshWholeWindow();
+    public void NormalizeShell() => access.NormalizeShell();
+    public void HideCommentsPane() => access.HideCommentsPane();
+    public bool SelectRibbonTab(string tabId) => access.SelectRibbonTab(tabId);
+    public void FocusNotes() => access.FocusNotes();
+    public void ShowBackstagePane(string paneId) => access.ShowBackstagePane(paneId);
+    public void ShowCommentsPane() => access.ShowCommentsPane();
+    public void SelectFirstComment() => access.SelectFirstComment();
+    public void ShowAccessibilityPane() => access.ShowAccessibilityPane();
+    public void SelectFirstAccessibilityIssue() => access.SelectFirstAccessibilityIssue();
+    public void ShowAltTextPane() => access.ShowAltTextPane();
+    public void ShowReadingOrderPane() => access.ShowReadingOrderPane();
+    public void ShowProofingPane() => access.ShowProofingPane();
+    public void SelectFirstProofingIssue() => access.SelectFirstProofingIssue();
+    public void ShowMediaCaptionPane() => access.ShowMediaCaptionPane();
+    public void ShowSmartArtTextPane() => access.ShowSmartArtTextPane();
+    public void EnsureAnimationPaneVisible() => access.EnsureAnimationPaneVisible();
+    public void ShowPrintOptionsPane() => access.ShowPrintOptionsPane();
+    public void OpenTablePicker() => access.OpenTablePicker();
+    public void OpenLayoutPicker() => access.OpenLayoutPicker();
+    public void HideTablePicker() => access.HideTablePicker();
+    public void HideLayoutPicker() => access.HideLayoutPicker();
+    public bool SetViewShowState(bool showGridlines, bool showGuides) =>
+        access.SetViewShowState(showGridlines, showGuides);
+    public void SetZoom(PresentationViewZoomState state) => access.SetZoom(state);
 }

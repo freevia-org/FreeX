@@ -144,7 +144,6 @@ internal static class FreeWRibbonCommands
         var onReadModePageColor = hostPorts?.ApplyReadModePageColor;
         var onNewWindow = hostPorts?.NewWindow;
         var onArrangeAll = hostPorts?.ArrangeAll;
-        var onToggleBalloons = hostPorts?.ToggleReviewBalloons;
         var askHeaderFooterText = nativePorts.AskHeaderFooterText;
         var onOpenMailMergeErrorReport = hostPorts?.OpenMailMergeErrorReport;
         var onPrintMailMergeDocument = hostPorts?.PrintMailMergeDocument;
@@ -800,12 +799,20 @@ internal static class FreeWRibbonCommands
 
         // Review tab — Show Markup > Show Revisions in Balloons: toggle the right-margin balloon overlay.
         // Comments and tracked-change revisions render as rounded rectangle callouts connected to their
-        // anchored text by dashed leader lines, in a 200px strip to the right of the editor. The callback
-        // is supplied by the host (BalloonOverlay.Toggle()); a no-op is registered in unit-test contexts.
-        if (onToggleBalloons is not null)
-            registry.Bind(FreeWRibbonCommandAction.ShowMarkupBalloons, new ActionRibbonCommand(onToggleBalloons));
+        // anchored text by dashed leader lines. Preserve the shared host-profile toggle so WPF projects
+        // the live checked state exactly like Avalonia; editor-only contexts fail closed.
+        if (hostCommands?.ShowMarkupBalloons is { } showMarkupBalloons)
+        {
+            stateful.Add((
+                FreeWRibbonCommandWorkflow.GetPrimaryCommandId(FreeWRibbonCommandAction.ShowMarkupBalloons),
+                showMarkupBalloons));
+        }
         else
-            registry.Bind(FreeWRibbonCommandAction.ShowMarkupBalloons, EmptyRibbonCommand.Instance);
+        {
+            registry.Bind(
+                FreeWRibbonCommandAction.ShowMarkupBalloons,
+                FreeWRibbonExecutionProfile.UnavailableCommand);
+        }
 
         // Review tab — Proofing: custom dictionary + spelling options. The custom dictionary is a
         // word-per-line .lex file persisted under FreeW's data folder; its Uri is registered with the
@@ -978,6 +985,11 @@ internal static class FreeWRibbonCommands
         // Insert tab — Symbols: pick a glyph from a grid, or a formatted current date/time string, and
         // insert it at the caret as ordinary text (flows through the normal edit/undo path).
         registry.Bind(FreeWRibbonCommandAction.Symbol, new InsertSymbolCommand(editor));
+        SymbolRibbonWorkflow.Register(
+            registry,
+            new SymbolRibbonPorts(
+                PrepareExecution: () => editor.Focus(),
+                InsertSymbol: editor.InsertText));
 
         // Home > Font > Text Colour / Highlight: pick a colour from a small palette and apply it to
         // the selection (foreground reuses TextElement.Foreground; highlight uses TextElement.Background).
@@ -1071,6 +1083,20 @@ internal static class FreeWRibbonCommands
         stateful.Add(("freew.style", paragraphStyle));
         stateStore.SetState("freew.style", paragraphStyle.GetState());
 
+        FormattingGalleryRibbonWorkflow.Register(
+            registry,
+            new FormattingGalleryRibbonPorts(
+                PrepareExecution: () => editor.Focus(),
+                ApplyFontColor: hex => editor.SetTextColor(hex),
+                ApplyParagraphShading: hex => editor.SetParagraphShading(hex, ShadingPattern.Clear),
+                ApplyCharacterShading: hex => editor.SetCharacterShading(hex),
+                ApplyCharacterBorderColor: hex => editor.SetCharacterBorder(
+                    hex is null
+                        ? null
+                        : new ParagraphBorder(hex, 0.5) { LineStyle = BorderLineStyle.Single }),
+                ApplyHighlightColor: hex => editor.SetHighlightColor(hex),
+                ApplyNamedStyle: styleId => editor.ApplyNamedStyle(styleId)));
+
         // Home > Styles: New Style opens a dialog capturing name + formatting + based-on, creates a custom
         // DocumentStyle via the pure StyleManager and applies it to the selection. Manage Styles lets the
         // user modify or delete the catalog's styles (built-ins are guarded against deletion).
@@ -1162,10 +1188,10 @@ internal static class FreeWRibbonCommands
                     Toggle: new ViewRibbonToggleBinding(onToggleReadMode, isReadModeActive),
                     ColumnWidth: new ViewRibbonChoiceBinding(
                         onReadModeColumnWidth,
-                        ViewRibbonBindingAvailability.EnabledNoOp),
+                        ViewRibbonBindingAvailability.Disabled),
                     PageColor: new ViewRibbonChoiceBinding(
                         onReadModePageColor,
-                        ViewRibbonBindingAvailability.EnabledNoOp)),
+                        ViewRibbonBindingAvailability.Disabled)),
                 Modes: new ViewRibbonModeBindings(
                     PrintLayout: new ViewRibbonToggleBinding(onTogglePrintLayout, isPrintLayoutActive),
                     WebLayout: new ViewRibbonToggleBinding(onWebLayout, isWebLayoutActive),
@@ -1195,10 +1221,10 @@ internal static class FreeWRibbonCommands
                 Window: new ViewRibbonWindowBindings(
                     NewWindow: new ViewRibbonActionBinding(
                         onNewWindow,
-                        ViewRibbonBindingAvailability.EnabledNoOp),
+                        ViewRibbonBindingAvailability.Disabled),
                     ArrangeAll: new ViewRibbonActionBinding(
                         onArrangeAll,
-                        ViewRibbonBindingAvailability.EnabledNoOp),
+                        ViewRibbonBindingAvailability.Disabled),
                     Split: new ViewRibbonToggleBinding(onToggleSplitWindow, isSplitWindowActive))));
 
         // Home > Paragraph — Show Formatting Marks: a stateful toggle over the editor's display-only pilcrow /
@@ -1489,8 +1515,8 @@ internal static class FreeWRibbonCommands
     private static ParagraphEditingRibbonPorts CreateParagraphEditingPorts(DocumentView editor) =>
         new(
             PrepareExecution: () => editor.Focus(),
-            ToggleBullets: new RoutedEditCommand(editor, EditingCommands.ToggleBullets),
-            ToggleNumbering: new RoutedEditCommand(editor, EditingCommands.ToggleNumbering),
+            ToggleBullets: new ActionRibbonCommand(() => editor.ToggleList(ListKind.Bullet)),
+            ToggleNumbering: new ActionRibbonCommand(() => editor.ToggleList(ListKind.Number)),
             AlignLeft: new RoutedEditCommand(editor, EditingCommands.AlignLeft),
             AlignCenter: new RoutedEditCommand(editor, EditingCommands.AlignCenter),
             AlignRight: new RoutedEditCommand(editor, EditingCommands.AlignRight),

@@ -14,7 +14,11 @@ public sealed class AvaloniaRibbonRegistryArchitectureTests
 
         composition.Should().NotContain("registry.Register(id, EmptyRibbonCommand.Instance)");
         composition.Should().NotContain("DisabledNoOpRibbonCommand");
+        composition.Should().NotContain("honest NoOp stub");
+        composition.Should().NotContain("no-op registration");
+        composition.Should().NotContain("keep their NoOp registration");
         composition.Should().Contain("Null callbacks leave the command unregistered");
+        composition.Should().Contain("unmapped ids remain unregistered and disabled");
         composition.Should().Contain("InsertChartRibbonCommand : IRibbonStatefulCommand");
         composition.Should().Contain("RibbonCommandState GetState() => new(IsEnabled: _session() is not null)");
 

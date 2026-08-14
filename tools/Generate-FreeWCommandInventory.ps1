@@ -21,6 +21,8 @@ using System.Text.Json;
 using System.Text.Json.Serialization;
 using System.Text.RegularExpressions;
 using Free.Shared.Ribbon;
+using FreeW.App.Presentation.Ribbon;
+using FreeW.Core.Model;
 using FreeW.Ribbon.Definitions;
 
 if (args.Length != 3)
@@ -62,6 +64,9 @@ internal static class FreeWCommandInventory
         new("headerFooterWorkflowSource", "Shared Header Footer registry source", "freew/FreeW.App.Presentation/Ribbon/HeaderFooterRibbonWorkflow.cs"),
         new("designWorkflowSource", "Shared Design registry source", "freew/FreeW.App.Presentation/Ribbon/DesignRibbonWorkflow.cs"),
         new("insertEditingWorkflowSource", "Shared Insert editing registry source", "freew/FreeW.App.Presentation/Ribbon/InsertEditingRibbonWorkflow.cs"),
+        new("formattingGalleryWorkflowSource", "Shared formatting gallery registry source", "freew/FreeW.App.Presentation/Ribbon/FormattingGalleryRibbonWorkflow.cs"),
+        new("symbolWorkflowSource", "Shared symbol registry source", "freew/FreeW.App.Presentation/Ribbon/SymbolRibbonWorkflow.cs"),
+        new("tableEditingWorkflowSource", "Shared table editing registry source", "freew/FreeW.App.Presentation/Ribbon/TableEditingRibbonWorkflow.cs"),
     ];
 
     private static readonly ClassificationRule[] GapClassificationRules =
@@ -680,7 +685,10 @@ internal static class FreeWCommandInventory
                     ContainsCommandLiteral(sourceTexts["mailMergeWorkflowSource"], commandId) ||
                     ContainsCommandLiteral(sourceTexts["headerFooterWorkflowSource"], commandId) ||
                     ContainsCommandLiteral(sourceTexts["designWorkflowSource"], commandId) ||
-                    ContainsCommandLiteral(sourceTexts["insertEditingWorkflowSource"], commandId),
+                    ContainsCommandLiteral(sourceTexts["insertEditingWorkflowSource"], commandId) ||
+                    ContainsCommandLiteral(sourceTexts["formattingGalleryWorkflowSource"], commandId) ||
+                    ContainsCommandLiteral(sourceTexts["symbolWorkflowSource"], commandId) ||
+                    ContainsCommandLiteral(sourceTexts["tableEditingWorkflowSource"], commandId),
                 AvaloniaRegistrySource: ContainsCommandLiteral(sourceTexts["avaloniaRegistrySource"], commandId) ||
                     ContainsCommandLiteral(sourceTexts["quickPartWorkflowSource"], commandId) ||
                     ContainsCommandLiteral(sourceTexts["tableInsertionWorkflowSource"], commandId) ||
@@ -689,8 +697,14 @@ internal static class FreeWCommandInventory
                     ContainsCommandLiteral(sourceTexts["mailMergeWorkflowSource"], commandId) ||
                     ContainsCommandLiteral(sourceTexts["headerFooterWorkflowSource"], commandId) ||
                     ContainsCommandLiteral(sourceTexts["designWorkflowSource"], commandId) ||
-                    ContainsCommandLiteral(sourceTexts["insertEditingWorkflowSource"], commandId));
-            var behaviorEvidence = BehaviorEvidenceCatalog.GetValueOrDefault(commandId);
+                    ContainsCommandLiteral(sourceTexts["insertEditingWorkflowSource"], commandId) ||
+                    ContainsCommandLiteral(sourceTexts["formattingGalleryWorkflowSource"], commandId) ||
+                    ContainsCommandLiteral(sourceTexts["symbolWorkflowSource"], commandId) ||
+                    ContainsCommandLiteral(sourceTexts["tableEditingWorkflowSource"], commandId));
+            var behaviorEvidence = BehaviorEvidenceCatalog.GetValueOrDefault(commandId)
+                ?? FormattingGalleryEvidenceFor(commandId)
+                ?? SymbolWorkflowEvidenceFor(commandId)
+                ?? TableEditingWorkflowEvidenceFor(commandId);
             var profileClassification = ClassifyProfile(wpfPresent, avaloniaPresent);
             var gapClassification = ClassifyGap(
                 commandId,
@@ -874,6 +888,71 @@ internal static class FreeWCommandInventory
             AvaloniaEvidence: new BehaviorEvidenceLink(
                 Path: "freew/FreeW.App.Presentation.Tests/InsertEditingRibbonWorkflowTests.cs",
                 Test: "InsertEditingRibbonWorkflowTests.BothRenderersDelegateInsertEditingIdentityToSharedPresentation"));
+
+    private static CommandBehaviorEvidence? FormattingGalleryEvidenceFor(string commandId)
+    {
+        var isPaletteChoice = FreeWRibbonPaletteCatalog.FontColors
+            .Concat(FreeWRibbonPaletteCatalog.ParagraphShading)
+            .Concat(FreeWRibbonPaletteCatalog.CharacterShading)
+            .Concat(FreeWRibbonPaletteCatalog.CharacterBorders)
+            .Concat(FreeWRibbonPaletteCatalog.Highlights)
+            .Any(choice => string.Equals(choice.CommandId, commandId, StringComparison.Ordinal));
+        if (isPaletteChoice)
+            return FormattingGalleryEvidence("Both renderers apply the same catalog-backed formatting payload through the shared gallery workflow.");
+
+        return BuiltInStyles.Gallery.Any(descriptor => string.Equals(
+                FormattingGalleryRibbonWorkflow.StyleCommandId(descriptor.Id),
+                commandId,
+                StringComparison.Ordinal))
+            ? FormattingGalleryEvidence("Both renderers apply the same built-in style through the shared gallery workflow.")
+            : null;
+    }
+
+    private static CommandBehaviorEvidence FormattingGalleryEvidence(string summary) =>
+        new(
+            EvidenceId: "freew.formatting-gallery.shared-workflow",
+            Slice: "Formatting gallery command behavior",
+            Summary: summary,
+            WpfEvidence: new BehaviorEvidenceLink(
+                Path: "freew/FreeW.App.Presentation.Tests/FormattingGalleryRibbonWorkflowTests.cs",
+                Test: "FormattingGalleryRibbonWorkflowTests.SharedMappingsPrepareThenApplyExactCatalogPayloads"),
+            AvaloniaEvidence: new BehaviorEvidenceLink(
+                Path: "freew/FreeW.App.Presentation.Tests/FormattingGalleryRibbonWorkflowTests.cs",
+                Test: "FormattingGalleryRibbonWorkflowTests.BothRenderersAndDefinitionsDelegateFormattingGalleryIdentityToPresentation"));
+
+    private static CommandBehaviorEvidence? SymbolWorkflowEvidenceFor(string commandId) =>
+        SymbolRibbonWorkflow.Choices.Any(choice => string.Equals(
+            choice.CommandId,
+            commandId,
+            StringComparison.Ordinal))
+            ? new CommandBehaviorEvidence(
+                EvidenceId: "freew.symbol.shared-workflow",
+                Slice: "Symbol palette command behavior",
+                Summary: "Both renderers insert the same catalog-backed glyph through the shared symbol workflow.",
+                WpfEvidence: new BehaviorEvidenceLink(
+                    Path: "freew/FreeW.App.Presentation.Tests/SymbolRibbonWorkflowTests.cs",
+                    Test: "SymbolRibbonWorkflowTests.SharedMappingsPrepareThenInsertExactCatalogPayloads"),
+                AvaloniaEvidence: new BehaviorEvidenceLink(
+                    Path: "freew/FreeW.App.Presentation.Tests/SymbolRibbonWorkflowTests.cs",
+                    Test: "SymbolRibbonWorkflowTests.BothRenderersAndDefinitionsDelegateSymbolIdentityToPresentation"))
+            : null;
+
+    private static CommandBehaviorEvidence? TableEditingWorkflowEvidenceFor(string commandId) =>
+        TableEditingRibbonWorkflow.Actions.Any(action => string.Equals(
+            FreeWRibbonCommandWorkflow.GetPrimaryCommandId(action).Value,
+            commandId,
+            StringComparison.Ordinal))
+            ? new CommandBehaviorEvidence(
+                EvidenceId: "freew.table-editing.shared-workflow",
+                Slice: "Table editing command behavior",
+                Summary: "Both renderers prepare and execute the same table option, selection, structure, sizing, alignment, and text-direction mappings through the shared workflow.",
+                WpfEvidence: new BehaviorEvidenceLink(
+                    Path: "freew/FreeW.App.Presentation.Tests/TableEditingRibbonWorkflowTests.cs",
+                    Test: "TableEditingRibbonWorkflowTests.SharedWorkflowOwnsAutoFitAlignmentAndTextDirectionMappings"),
+                AvaloniaEvidence: new BehaviorEvidenceLink(
+                    Path: "freew/FreeW.App.Presentation.Tests/TableEditingRibbonWorkflowTests.cs",
+                    Test: "TableEditingRibbonWorkflowTests.BothRenderersDelegateTableEditingPolicyToSharedPresentation"))
+            : null;
 
     private static CommandBehaviorEvidence FontEffectEvidence(string summary) =>
         new(

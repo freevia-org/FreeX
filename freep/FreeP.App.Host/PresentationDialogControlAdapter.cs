@@ -7,36 +7,20 @@ namespace FreeP.App.Host;
 
 internal static class PresentationDialogControlAdapter
 {
-    public static PresentationDialogFieldValue CaptureValue(Control control) => control switch
-    {
-        TextBox textBox => new(Text: textBox.Text ?? string.Empty),
-        ComboBox comboBox => new(SelectedIndex: comboBox.SelectedIndex),
-        CheckBox checkBox => new(IsChecked: checkBox.IsChecked),
-        _ => throw new InvalidOperationException(
-            $"Unsupported presentation dialog control: {control.GetType().Name}."),
-    };
+    private static readonly PresentationDialogNativeBinding<Control, TextBox, ComboBox, CheckBox>
+        NativeBinding = new(
+            static control => control.Text,
+            static (control, value) => control.Text = value,
+            static control => control.SelectedIndex,
+            static (control, value) => control.SelectedIndex = value,
+            static control => control.IsChecked,
+            static (control, value) => control.IsChecked = value);
 
-    public static void ApplyValue(Control control, PresentationDialogFieldValue value)
-    {
-        ArgumentNullException.ThrowIfNull(control);
-        ArgumentNullException.ThrowIfNull(value);
+    public static PresentationDialogFieldValue CaptureValue(Control control) =>
+        NativeBinding.CaptureValue(control);
 
-        switch (control)
-        {
-            case TextBox textBox:
-                textBox.Text = value.Text ?? string.Empty;
-                break;
-            case ComboBox comboBox:
-                comboBox.SelectedIndex = value.SelectedIndex;
-                break;
-            case CheckBox checkBox:
-                checkBox.IsChecked = value.IsChecked;
-                break;
-            default:
-                throw new InvalidOperationException(
-                    $"Unsupported presentation dialog control: {control.GetType().Name}.");
-        }
-    }
+    public static void ApplyValue(Control control, PresentationDialogFieldValue value) =>
+        NativeBinding.ApplyValue(control, value);
 
     public static void ApplySemantic<TField>(
         DependencyObject control,
@@ -44,12 +28,11 @@ internal static class PresentationDialogControlAdapter
         string automationSuffix = "")
         where TField : notnull
     {
-        ArgumentNullException.ThrowIfNull(field);
-        ApplySemantic(
+        PresentationDialogNativeSemanticBinding.Apply(
             control,
-            field.AccessibleName,
-            field.AutomationId + automationSuffix,
-            field.HelpText);
+            field,
+            WriteSemantic,
+            automationSuffix);
     }
 
     public static void ApplySemantic(
@@ -58,8 +41,21 @@ internal static class PresentationDialogControlAdapter
         string automationId,
         string? helpText = null)
     {
-        ArgumentNullException.ThrowIfNull(control);
-        AutomationProperties.SetName(control, accessibleName ?? string.Empty);
+        PresentationDialogNativeSemanticBinding.Apply(
+            control,
+            accessibleName,
+            automationId,
+            helpText,
+            WriteSemantic);
+    }
+
+    private static void WriteSemantic(
+        DependencyObject control,
+        string accessibleName,
+        string automationId,
+        string? helpText)
+    {
+        AutomationProperties.SetName(control, accessibleName);
         AutomationProperties.SetAutomationId(control, automationId);
         if (!string.IsNullOrWhiteSpace(helpText))
             AutomationProperties.SetHelpText(control, helpText);

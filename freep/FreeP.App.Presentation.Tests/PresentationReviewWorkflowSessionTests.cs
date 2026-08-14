@@ -245,11 +245,12 @@ public sealed class PresentationReviewWorkflowSessionTests
         foreach (var source in new[] { wpf, avalonia })
         {
             source.Should().Contain("_reviewWorkflowSession.DispatchCommentMentionPicker(");
-            source.Should().Contain("_reviewWorkflowSession.ApplyCommentMention(");
+            source.Should().Contain("_reviewPaneHostCoordinator.BuildCommentMentionMenu(");
             source.Should().Contain("PresentReadingOrderPane:");
             source.Should().Contain("PresentProofingPane:");
             source.Should().Contain("=> _reviewWorkflowSession.ShowReadingOrderPane();");
-            source.Should().Contain("=> _reviewWorkflowSession.ShowProofingPane();");
+            source.Should().Contain("=> _reviewPaneHostCoordinator.ShowProofingPane();");
+            source.Should().NotContain("_reviewWorkflowSession.ApplyCommentMention(");
             source.Should().NotContain("ResolveCommentInputCaret(");
             source.Should().NotContain("currentPlan.Candidates.Count == 1");
             source.Should().NotContain("BuildCommentMentionPickerPlanForInsertionContext(");

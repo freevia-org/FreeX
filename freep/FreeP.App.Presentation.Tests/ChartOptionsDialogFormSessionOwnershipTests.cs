@@ -12,10 +12,10 @@ public sealed class ChartOptionsDialogFormSessionOwnershipTests
                      Read(root, "freep", "FreeP.App.Avalonia", "ChartOptionsDialogChrome.cs"),
                  })
         {
-            source.Should().Contain("ChartOptionsDialogFormSession<Control,")
-                .And.Contain("_formSession.CaptureValues()")
-                .And.Contain("_formSession.ApplyValues(values)")
-                .And.Contain("_formSession.ApplyPlan(plan)")
+            source.Should().Contain("ChartOptionsDialogFormAdapter<Control,")
+                .And.Contain("FormSession.Register(")
+                .And.Contain("FormSession.CompleteInitialRender()")
+                .And.NotContain("public ChartOptionsDialogValues CaptureValues()")
                 .And.NotContain("Dictionary<ChartOptionsDialogFieldId")
                 .And.NotContain("foreach (var (fieldId, value) in values.Fields)")
                 .And.NotContain("foreach (var field in plan.Fields.Values)")
