@@ -19,18 +19,22 @@ public sealed class SelectionPaneOwnershipTests
     private static void AssertSharedItemSessionRouting(string source)
     {
         source.Should().Contain("new PresentationSelectionPaneSession(editor)");
-        source.Should().Contain("_session.CreateItemSession(item.ShapeId)");
-        source.Should().Contain("itemSession.CommitRename(rename.Text)");
-        source.Should().Contain("ApplyTransition(itemSession.Select())");
-        source.Should().Contain("ApplyTransition(itemSession.CancelRename())");
-        source.Should().Contain("itemSession.ToggleVisibility()");
-        source.Should().Contain("itemSession.MoveTowardFront()");
-        source.Should().Contain("itemSession.MoveTowardBack()");
+        source.Should().Contain("PresentationSelectionPaneFormSession<UIElement>");
+        source.Should().Contain("new PresentationSelectionPaneItemFormSession(");
+        source.Should().Contain("_formSession.ApplyTransition");
+        source.Should().Contain("itemForm.CommitRename(rename.Text, restoreName => rename.Text = restoreName)");
+        source.Should().Contain("itemForm.Select()");
+        source.Should().Contain("itemForm.CancelRename()");
+        source.Should().Contain("itemForm.ToggleVisibility()");
+        source.Should().Contain("itemForm.MoveTowardFront()");
+        source.Should().Contain("itemForm.MoveTowardBack()");
         source.Should().Contain("item.VisibilityActionText");
-        source.Should().Contain("PresentationPaneAccessibilityPlanner.PlanItem(");
-        source.Should().Contain("PresentationPaneAccessibilityPlanner.BuildShapeKey(item.ShapeId)");
-        source.Should().Contain("item.IsSelected");
+        source.Should().Contain("PresentationPaneAccessibilityAdapter.ApplyItem(");
+        source.Should().Contain("itemForm.AccessibilityPlan");
         source.Should().NotContain("var committed");
+        source.Should().NotContain("item.IsSelected");
+        source.Should().NotContain("PresentationPaneAccessibilityPlanner.PlanItem(");
+        source.Should().NotContain("PresentationPaneAccessibilityPlanner.BuildShapeKey(item.ShapeId)");
         source.Should().NotContain("_session.SelectShape(");
         source.Should().NotContain("_session.RenameShape(");
         source.Should().NotContain("_session.ToggleShapeVisibility(");

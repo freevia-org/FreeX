@@ -391,6 +391,12 @@ public static class WorksheetPrintPageContentPlanner
         var scaleRatio = double.IsFinite(effectiveScalePercent) && effectiveScalePercent > 0
             ? Math.Max(0.001, effectiveScalePercent / 100.0)
             : 1.0;
+        // An explicit scale above 100% is authored enlargement. Pagination already uses that
+        // percentage to reduce the page capacity; shrinking it back to the printable bounds here
+        // would silently turn Adjust-to-200% into 100% for a default-width single-column page.
+        if (scaleRatio > 1.0)
+            return scaleRatio;
+
         var scaledWidth = printedWidth * scaleRatio;
         var scaledHeight = printedHeight * scaleRatio;
         var widthFitScale = scaledWidth > printableWidth && scaledWidth > 0

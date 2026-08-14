@@ -86,7 +86,9 @@ public sealed class HomeCellsCommandSourceTests
         source.Should().Contain("UnhideSheet();");
         source.Should().Contain("private void HideCurrentSheet()");
         source.Should().Contain("private void HideSheets(IReadOnlyCollection<SheetId> sheetIds)");
-        source.Should().Contain("new SetSheetHiddenCommand(sheetId, hidden: true)");
+        source.Should().Contain("SynchronizeWorkbookSessionSelection();");
+        source.Should().Contain("_session.HideSelectedSheets()");
+        source.Should().NotContain("new SetSheetHiddenCommand(sheetId, hidden: true)");
         source.Should().Contain("private void UnhideSheet()");
         source.Should().Contain("new UnhideSheetDialog(hiddenSheets.Select(sheet => sheet.Name))");
         source.Should().Contain("new SetSheetHiddenCommand(sheet.Id, hidden: false)");
@@ -103,7 +105,8 @@ public sealed class HomeCellsCommandSourceTests
         source.Should().Contain("ColorSheetTabs(_currentSheetId, selectedSheetIds);");
         source.Should().Contain("private void ColorSheetTabs(SheetId sheetId, IReadOnlyCollection<SheetId> sheetIds)");
         source.Should().Contain("TryShowColorPicker(\"Tab Color\"");
-        source.Should().Contain("new SetSheetTabColorCommand(id, tabColor)");
+        source.Should().Contain("_session.SetSelectedSheetTabColor(tabColor)");
+        source.Should().NotContain("new SetSheetTabColorCommand(id, tabColor)");
     }
 
 }

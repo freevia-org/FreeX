@@ -2155,7 +2155,11 @@ public sealed class SlideCanvasAvaloniaTests
         source.Should().Contain("TryDeleteActiveTableColumn");
         source.Should().Contain("TryMergeActiveTableCell");
         source.Should().Contain("TrySplitActiveTableCell");
-        source.Should().Contain("TryApplyActiveTableCommand");
+        source.Should().Contain("TryExecuteActiveTableStructureAction");
+        source.Should().Contain("PresentationTableStructureActionDispatcher.TryExecute(");
+        source.Should().Contain("PresentationTableCellOwnedActionDispatcher.TryExecute(");
+        source.Should().Contain("AvaloniaTableCellEditAdapter.PlanSelectedCell(_editor)");
+        source.Should().Contain("CommitCellEdit,");
     }
 
     // ── 1. Geometry factory round-trip ────────────────────────────────────────

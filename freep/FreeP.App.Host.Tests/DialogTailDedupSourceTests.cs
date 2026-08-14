@@ -9,12 +9,16 @@ public sealed class DialogTailDedupSourceTests
     {
         var motion = ReadHostSource("MotionPathEditorDialog.cs");
         motion.Should().Contain("MotionPathEditorDialogSession");
-        motion.Should().Contain("MotionPathEditorRowProjection");
-        motion.Should().Contain("MotionPathEditorRowProjection.BuildPlan(");
+        motion.Should().Contain("MotionPathEditorDialogFormSession<Row>");
+        motion.Should().Contain("MotionPathEditorNativeRowSession<ComboBox, TextBox>");
+        motion.Should().Contain("_native.Initialize(_surface, _value, rowIndex)");
+        motion.Should().Contain("_native.RefreshEnablement()");
+        motion.Should().Contain("_native.CaptureInput()");
         motion.Should().Contain("_session.Surface");
         motion.Should().Contain("AutomationProperties.SetName(");
         motion.Should().Contain("AutomationProperties.SetAutomationId(");
         motion.Should().NotContain("MotionPathEditingPlanner.");
+        motion.Should().NotContain("MotionPathEditorRowProjection.BuildPlan(");
         motion.Should().NotContain("double.TryParse");
         motion.Should().NotContain("AutomationIdToken.AppendSegment(");
         motion.Should().NotContain("rowIndex.ToString()");
@@ -42,10 +46,12 @@ public sealed class DialogTailDedupSourceTests
 
         var customShow = ReadHostSource("CustomShowDialog.cs");
         customShow.Should().Contain("SlideShowCustomShowDialogSession");
-        customShow.Should().Contain("SlideShowCustomShowDialogFormSession<FrameworkElement>");
-        customShow.Should().Contain("_formSession.ApplyFullPlan(plan)");
-        customShow.Should().Contain("_formSession.ApplySelectedShowPlan(plan)");
-        customShow.Should().Contain("_formSession.ApplySlideSelection(plan)");
+        customShow.Should().Contain("SlideShowCustomShowDialogNativeComposition<FrameworkElement, DockPanel>");
+        customShow.Should().Contain("_renderer.Controller.Initialize()");
+        customShow.Should().Contain("_renderer.Controller.SelectShow()");
+        customShow.Should().Contain("_renderer.Controller.SelectSlide()");
+        customShow.Should().Contain("_renderer.Actions.Execute(SlideShowCustomShowDialogAction.AddSlide, slide.SlideId)");
+        customShow.Should().NotContain("_formSession.");
         customShow.Should().NotContain("SlideShowCustomShowPlanner.");
         customShow.Should().NotContain("record CustomShowListItem");
         customShow.Should().NotContain("record CustomShowSlideListItem");

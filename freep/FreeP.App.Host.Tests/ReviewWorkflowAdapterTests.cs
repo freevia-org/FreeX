@@ -2534,6 +2534,11 @@ public sealed class ReviewWorkflowAdapterTests
             "freep",
             "FreeP.App.Host",
             "MainWindow.RibbonProfile.cs"));
+        var mediaAdapterSource = File.ReadAllText(Path.Combine(
+            TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeP.slnx"),
+            "freep",
+            "FreeP.App.Presentation",
+            "PresentationMainWindowMediaNativeAdapter.cs"));
 
         source.Should().Contain("PresentationReviewWorkflowSession");
         source.Should().Contain("_reviewWorkflowSession.RefreshReviewWorkflowPlans();");
@@ -2552,9 +2557,19 @@ public sealed class ReviewWorkflowAdapterTests
             "RefreshReadingOrder = () => _ = _reviewWorkflowSession.RefreshReadingOrderPlan()");
         source.Should().Contain("_reviewWorkflowSession.RefreshProofingRequestPlan();");
         source.Should().Contain("OpenMediaCaptionPane: () => MediaPaneHost.Show()");
-        source.Should().Contain("IPresentationMediaPaneHostView.SetCaptionInput(");
+        source.Should().Contain("PresentationMediaPaneHostViewAdapter _wpfMediaPaneHostView");
+        source.Should().Contain("BuildWpfMediaPaneHostView()");
+        source.Should().Contain("DelegatingPresentationMediaPaneControlSurface");
+        source.Should().Contain("RenderCaptionField: RenderWpfMediaCaptionField");
+        source.Should().Contain("RenderCaptionAction: RenderWpfMediaCaptionAction");
+        source.Should().Contain("PresentationMediaPaneFormEventBinder.Bind(");
+        source.Should().Contain("new PresentationMediaPaneFormEventRouter(_mediaPaneHostCoordinator)");
         source.Should().Contain("_mediaPaneHostCoordinator.Refresh();");
-        source.Should().Contain("_mediaPaneHostCoordinator.ApplyCaption(");
+        source.Should().NotContain("_mediaPaneHostCoordinator.ApplyCaption(");
+        mediaAdapterSource.Should().Contain("_coordinator.ApplyCaption(PresentationMediaCaptionAuthoringIntentKind.Create)");
+        mediaAdapterSource.Should().Contain("_coordinator.ApplyCaption(PresentationMediaCaptionAuthoringIntentKind.Replace)");
+        mediaAdapterSource.Should().Contain("_coordinator.ApplyCaption(PresentationMediaCaptionAuthoringIntentKind.Delete)");
+        source.Should().NotContain("IPresentationMediaPaneHostView.SetCaptionInput(");
         source.Should().NotContain("_mediaCaptionPaneRefreshing");
         source.Should().NotContain("_mediaPaneHostCoordinator.BuildRenderPlan(");
         source.Should().NotContain("PresentationMediaTranscriptPlanner.BuildCaptionAuthoringPanePlan(");
@@ -2576,12 +2591,14 @@ public sealed class ReviewWorkflowAdapterTests
             "FreeP.App.Host",
             "SelectionPane.cs"));
         selectionPaneSource.Should().Contain("PresentationSelectionPaneSession");
-        selectionPaneSource.Should().Contain("_session.CreateItemSession(item.ShapeId)");
-        selectionPaneSource.Should().Contain("itemSession.CommitRename(rename.Text)");
-        selectionPaneSource.Should().Contain("itemSession.ToggleVisibility()");
-        selectionPaneSource.Should().Contain("itemSession.MoveTowardFront()");
-        selectionPaneSource.Should().Contain("itemSession.MoveTowardBack()");
+        selectionPaneSource.Should().Contain("PresentationSelectionPaneFormSession<UIElement>");
+        selectionPaneSource.Should().Contain("PresentationSelectionPaneItemFormSession");
+        selectionPaneSource.Should().Contain("itemForm.CommitRename(rename.Text, restoreName => rename.Text = restoreName)");
+        selectionPaneSource.Should().Contain("itemForm.ToggleVisibility()");
+        selectionPaneSource.Should().Contain("itemForm.MoveTowardFront()");
+        selectionPaneSource.Should().Contain("itemForm.MoveTowardBack()");
         selectionPaneSource.Should().NotContain("var committed");
+        selectionPaneSource.Should().NotContain("_session.CreateItemSession(item.ShapeId)");
         selectionPaneSource.Should().NotContain("_session.RenameShape(");
         selectionPaneSource.Should().NotContain("_session.ToggleShapeVisibility(");
         selectionPaneSource.Should().NotContain("_session.MoveShapeInReadingOrder(");

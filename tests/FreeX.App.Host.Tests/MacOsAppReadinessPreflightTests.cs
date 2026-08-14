@@ -867,14 +867,14 @@ public sealed class MacOsAppReadinessPreflightTests
         script.Should().Contain("public WorkbookCellEditResult SetZoomPercent(int zoomPercent)");
         script.Should().Contain("new SetWorksheetZoomCommand(ActiveSheet.Id, zoomPercent)");
         script.Should().Contain("public WorkbookCellEditResult SetActiveSheetTabColor(CellColor? color)");
-        script.Should().Contain("new SetSheetTabColorCommand(ActiveSheet.Id, color)");
+        script.Should().Contain("new SetSheetTabColorCommand(selectedSheetIds[0], color)");
         script.Should().Contain("public WorkbookCellEditResult AddSheet()");
         script.Should().Contain("public WorkbookCellEditResult RenameActiveSheet(string? name)");
         script.Should().Contain("new RenameSheetCommand(ActiveSheet.Id, newName)");
         script.Should().Contain("ApplySuccessfulWorkbookMetadataResult(ActiveSheet.Id)");
         script.Should().Contain("new DuplicateSheetCommand(sourceSheetId)");
         script.Should().Contain("public WorkbookCellEditResult DeleteActiveSheet()");
-        script.Should().Contain("new RemoveSheetCommand(sheetId)");
+        script.Should().Contain("new RemoveSheetsCommand(selectedSheetIds)");
         script.Should().Contain("public GridRange SelectCurrentRegionOrAll()");
         script.Should().Contain("OpenExternalHelpLinkAsync(AppHelpInfo.HelpUrl");
         script.Should().Contain("FreeXAboutDialogPresentation.Create(typeof(AboutDialog).Assembly, `\"Avalonia`\")");
@@ -2253,6 +2253,8 @@ public sealed class MacOsAppReadinessPreflightTests
                 NativeMenuItemId.ClearComments => _clearCommentsMenuItem,
                 NativeMenuItemId.ClearHyperlinks => _clearHyperlinksMenuItem,
                 NativeMenuItemId.Borders => _bordersMenuItem,
+                _borderPickerSession.Style,
+                _borderPickerSession.Color);
                 NativeMenuItemId.MergeAndCenter => _mergeAndCenterMenuItem,
                 NativeMenuItemId.UnmergeCells => _unmergeCellsMenuItem,
                 NativeMenuItemId.SelectAll => _selectAllMenuItem,
@@ -4264,7 +4266,7 @@ public sealed class MacOsAppReadinessPreflightTests
                 public bool CanHideActiveSheet =>
                 public bool IsWorkbookGrouped =>
                 public WorkbookCellEditResult SetActiveSheetTabColor(CellColor? color)
-                new SetSheetTabColorCommand(ActiveSheet.Id, color)
+                new SetSheetTabColorCommand(selectedSheetIds[0], color)
                 public bool IsFormatPainterActive =>
                 public bool CaptureFormatPainterSource(bool persistent = false)
                 public void CancelFormatPainter()
@@ -4443,10 +4445,10 @@ public sealed class MacOsAppReadinessPreflightTests
 
                 public WorkbookCellEditResult DeleteActiveSheet()
                 {
-                    var sheetId = ActiveSheet.Id;
+                    var selectedSheetIds = CurrentGroupedStructureSheetIds();
                     var result = _cellEditService.ExecuteEditCommand(
                         Workbook,
-                        new RemoveSheetCommand(sheetId));
+                        new RemoveSheetsCommand(selectedSheetIds));
                     return result;
                 }
 
@@ -4755,8 +4757,10 @@ public sealed class MacOsAppReadinessPreflightTests
 
                 public static WorkbookViewportScrollState Create(Sheet sheet, ViewportModel viewport)
                 {
-                    CountScrollableRows(viewport.RowMetrics, sheet.FrozenRows);
-                    CountScrollableColumns(viewport.ColMetrics, sheet.FrozenCols);
+                    var frozenRows = sheet.FrozenRows;
+                    var frozenColumns = sheet.FrozenCols;
+                    ViewportService.CountScrollableRows(viewport.RowMetrics, frozenRows);
+                    ViewportService.CountScrollableColumns(viewport.ColMetrics, frozenColumns);
                     return default;
                 }
 
@@ -4776,8 +4780,6 @@ public sealed class MacOsAppReadinessPreflightTests
                 private static WorkbookViewportScrollAxis CreateAxis(uint visibleSpan, double maximum) =>
                     new(1, maximum, 1, visibleSpan, SmallChange: 1, LargeChange: 1, IsEnabled: maximum > MinimumScrollValue);
 
-                private static uint CountScrollableRows(IReadOnlyList<RowMetric> rows, uint frozenRows) => 1;
-                private static uint CountScrollableColumns(IReadOnlyList<ColMetric> columns, uint frozenColumns) => 1;
             }
             """);
 
@@ -5031,6 +5033,7 @@ public sealed class MacOsAppReadinessPreflightTests
             "shared/Free.Shared.Ribbon.Avalonia",
             "shared/Free.Shared.AppServices",
             "shared/Free.Shared.Drawing",
+            "shared/Free.Shared.Drawing.Avalonia",
             "shared/Free.Shared.IO",
             "shared/Free.Shared.Pdf",
             "shared/Free.Shared.Pdf.Skia",

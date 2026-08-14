@@ -61,11 +61,12 @@ internal static class TestProcessRunner
         };
 
         process.Start().Should().BeTrue();
-        var output = process.StandardOutput.ReadToEnd();
-        var error = process.StandardError.ReadToEnd();
+        var outputTask = process.StandardOutput.ReadToEndAsync();
+        var errorTask = process.StandardError.ReadToEndAsync();
         process.WaitForExit();
+        Task.WaitAll(outputTask, errorTask);
 
-        return new PowerShellResult(process.ExitCode, output, error);
+        return new PowerShellResult(process.ExitCode, outputTask.Result, errorTask.Result);
     }
 }
 

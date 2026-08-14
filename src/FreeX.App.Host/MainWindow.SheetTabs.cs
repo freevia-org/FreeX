@@ -1791,6 +1791,7 @@ public partial class MainWindow
 
         SynchronizeWorkbookSessionSelection();
         var result = _session.MoveOrCopySelectedSheets(
+            tab.Id,
             dialog.Result.InsertBeforeIndex,
             dialog.Result.CreateCopy);
         if (!result.Success)

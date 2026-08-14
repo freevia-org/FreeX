@@ -63,7 +63,11 @@ public sealed class SlideShowHostPolicySourceTests
         source.Should().Contain("_runtime.DisplayCurrentSlide(");
         source.Should().Contain("_runtime.CreatePresenterState(");
         source.Should().Contain("_runtime.PresenterSummary");
-        source.Should().Contain("SlideShowInkExecutionPlanner.BuildOverlayRenderPlan(");
+        source.Should().Contain("SlideShowInkNativeProjectionSession.Apply(");
+        source.Should().Contain("_inkOverlay.Children.Clear");
+        source.Should().Contain("AddInkStroke,");
+        source.Should().Contain("AddLaserOverlay");
+        source.Should().NotContain("SlideShowInkExecutionPlanner.BuildOverlayRenderPlan(");
         source.Should().Contain("SlideShowRuntimeApplication");
         source.Should().NotContain("SlideShowDisplayCoordinator _displayCoordinator");
         source.Should().Contain("ISlideShowDisplayRenderer");

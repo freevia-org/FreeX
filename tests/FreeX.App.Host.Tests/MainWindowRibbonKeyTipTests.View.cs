@@ -33,20 +33,14 @@ public sealed partial class MainWindowRibbonKeyTipTests
             harness.ActiveSheetViewOptions.Should().Be((false, false, true));
             harness.KeyTipScope.Should().Be("None");
 
-            // Outside Page Layout, Ruler (RU) is disabled, but Reset Window Position (RP) is always
-            // live and shares the "R" prefix, so pressing R now enters the pending command scope.
+            // Outside Page Layout, Ruler (RU) is disabled and a lone window has no active pair for
+            // Reset Window Position (RP), so the shared prefix has no executable command.
             harness.EnterKeyTipScope("TopLevel");
             harness.HandleKeyTip(Key.W);
             harness.HandleKeyTip(Key.R);
 
-            harness.KeyTipScope.Should().Be("Commands", "R is now a live prefix for the Reset Window Position keytip RP");
-            harness.ActiveSheetViewOptions.Should().Be((false, false, true));
-
-            // Completing RP resets this window's geometry; it never touches the worksheet view options.
-            harness.HandleKeyTip(Key.P);
-
             harness.KeyTipScope.Should().Be("None");
-            harness.ActiveSheetViewOptions.Should().Be((false, false, true), "Excel leaves Ruler unavailable outside Page Layout view");
+            harness.ActiveSheetViewOptions.Should().Be((false, false, true));
 
             harness.EnterKeyTipScope("TopLevel");
             harness.HandleKeyTip(Key.W);

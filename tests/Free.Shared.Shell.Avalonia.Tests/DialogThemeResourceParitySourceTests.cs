@@ -53,23 +53,33 @@ public sealed class DialogThemeResourceParitySourceTests
             "shared", "Free.Shared.Shell.Avalonia", "AvaloniaCompactDialogChrome.cs");
         var wpf = TestWorkspaceFileLocator.ReadAllText(
             "shared", "Free.Shared.Shell.Wpf", "DialogResources.xaml");
+        var wpfAdapter = TestWorkspaceFileLocator.ReadAllText(
+            "shared", "Free.Shared.Shell.Wpf", "WpfCompactDialogMetrics.cs");
 
-        string[] tokenNames =
+        (string Token, string WpfProperty)[] structuralTokens =
         [
-            "BorderHex",
-            "FieldBorderHex",
-            "DisabledForegroundHex",
-            "DisabledBorderHex",
+            ("BorderHex", "BorderColor"),
+            ("FieldBorderHex", "FieldBorderColor"),
+            ("DisabledForegroundHex", "DisabledForegroundBrush"),
+            ("DisabledBorderHex", "DisabledBorderBrush"),
         ];
 
-        foreach (var tokenName in tokenNames)
+        foreach (var (token, wpfProperty) in structuralTokens)
         {
-            portable.Should().Contain($"public const string {tokenName}");
-            avalonia.Should().Contain($"CompactDialogVisualTokens.{tokenName}");
-            wpf.Should().Contain($"CompactDialogVisualTokens.{tokenName}");
+            portable.Should().Contain($"public const string {token}");
+            avalonia.Should().Contain($"CompactDialogVisualTokens.{token}");
+            wpfAdapter.Should().Contain($"CompactDialogVisualTokens.{token}");
+            wpf.Should().Contain($"WpfCompactDialogMetrics.{wpfProperty}");
         }
 
-        wpf.Should().Contain("CompactDialogVisualTokens.PrimaryPressedHex");
-        wpf.Should().Contain("CompactDialogVisualTokens.PrimaryDisabledHex");
+        wpfAdapter.Should().Contain("CompactDialogVisualTokens.PrimaryPressedHex");
+        wpfAdapter.Should().Contain("CompactDialogVisualTokens.PrimaryDisabledHex");
+        wpf.Should().Contain("WpfCompactDialogMetrics.PrimaryPressedBrush");
+        wpf.Should().Contain("WpfCompactDialogMetrics.PrimaryDisabledBrush");
+
+        wpfAdapter.Should().NotContain("#C8C8C8");
+        wpfAdapter.Should().NotContain("#B7BCC2");
+        wpf.Should().NotContain("Color=\"#C8C8C8\"");
+        wpf.Should().NotContain("Color=\"#B7BCC2\"");
     }
 }

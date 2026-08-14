@@ -967,6 +967,9 @@ public class ProtectionGuardCoverageTests
             ["RemoveSheetCommand"] = (wb, sheet) =>
                 new RemoveSheetCommand(sheet.Id),
 
+            ["RemoveSheetsCommand"] = (wb, sheet) =>
+                new RemoveSheetsCommand([sheet.Id]),
+
             ["RenameSheetCommand"] = (wb, sheet) =>
                 new RenameSheetCommand(sheet.Id, "Renamed"),
 
@@ -989,6 +992,9 @@ public class ProtectionGuardCoverageTests
 
             ["DuplicateSheetCommand"] = (wb, sheet) =>
                 new DuplicateSheetCommand(sheet.Id, "Copy"),
+
+            ["DuplicateSheetsCommand"] = (wb, sheet) =>
+                new DuplicateSheetsCommand([sheet.Id], insertBeforeIndex: 1),
 
             ["SetSheetHiddenCommand"] = (wb, sheet) =>
             {

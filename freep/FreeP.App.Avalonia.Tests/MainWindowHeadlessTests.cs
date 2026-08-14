@@ -832,15 +832,20 @@ public sealed class MainWindowHeadlessTests : IDisposable
         var source = File.ReadAllText(FindRepoFile("freep", "FreeP.App.Avalonia", "SelectionPane.cs"));
 
         source.Should().Contain("PresentationSelectionPaneSession");
-        source.Should().Contain("_session.CreateItemSession(item.ShapeId)");
-        source.Should().Contain("itemSession.CommitRename(rename.Text)");
-        source.Should().Contain("itemSession.ToggleVisibility()");
-        source.Should().Contain("itemSession.MoveTowardFront()");
-        source.Should().Contain("itemSession.MoveTowardBack()");
+        source.Should().Contain("PresentationSelectionPaneFormSession<Control>");
+        source.Should().Contain("PresentationSelectionPaneItemFormSession(");
+        source.Should().Contain("itemForm.CommitRename(rename.Text,");
+        source.Should().Contain("itemForm.ToggleVisibility()");
+        source.Should().Contain("itemForm.MoveTowardFront()");
+        source.Should().Contain("itemForm.MoveTowardBack()");
         source.Should().NotContain("var committed");
         source.Should().NotContain("_session.RenameShape(");
         source.Should().NotContain("_session.ToggleShapeVisibility(");
         source.Should().NotContain("_session.MoveShapeInReadingOrder(");
+        source.Should().NotContain("itemSession.CommitRename(");
+        source.Should().NotContain("itemSession.ToggleVisibility()");
+        source.Should().NotContain("itemSession.MoveTowardFront()");
+        source.Should().NotContain("itemSession.MoveTowardBack()");
         source.Should().NotContain("PresentationSelectionPaneMoveDirection");
         source.Should().Contain("Key.Enter");
         source.Should().Contain("rename.LostFocus");

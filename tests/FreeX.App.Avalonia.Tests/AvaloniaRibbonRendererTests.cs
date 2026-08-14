@@ -828,7 +828,22 @@ public sealed class AvaloniaRibbonRendererTests
     public Task StaticDrawTab_RendersAllBackedFormatCommandsEnabled() => RunOnUiThread(() =>
     {
         var definition = AvaloniaRibbonComposition.BuildDefinition();
-        var registry = AvaloniaRibbonComposition.BuildRegistry(() => null, _ => { });
+        string[] drawingCommandIds =
+        [
+            "Bring Forward", "Send Backward", FreeXRibbonCommandIds.DrawingSelectionPane,
+            "Rotate Object", "Object Size", "Shape Fill", "Object Outline",
+            "Crop Picture", "Shape Gradient", "Shape Effects",
+        ];
+        var registry = AvaloniaRibbonComposition.BuildRegistry(
+            () => null,
+            _ => { },
+            new AvaloniaRibbonHostCallbacks
+            {
+                ExtraCommands = drawingCommandIds.ToDictionary(
+                    static id => id,
+                    static _ => (Action)(() => { }),
+                    StringComparer.Ordinal),
+            });
 
         var content = AvaloniaRibbonRenderer.BuildTabContent(definition.FindTab("DrawTab")!, registry);
 

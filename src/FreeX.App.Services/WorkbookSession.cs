@@ -2301,9 +2301,15 @@ public sealed class WorkbookSession : IDisposable
     /// single atomic command, so one Undo removes the positioned copies instead of first undoing
     /// their move and only then undoing their creation.
     /// </summary>
-    public WorkbookCellEditResult MoveOrCopySelectedSheets(int insertBeforeIndex, bool createCopy)
+    public WorkbookCellEditResult MoveOrCopySelectedSheets(int insertBeforeIndex, bool createCopy) =>
+        MoveOrCopySelectedSheets(ActiveSheet.Id, insertBeforeIndex, createCopy);
+
+    public WorkbookCellEditResult MoveOrCopySelectedSheets(
+        SheetId contextSheetId,
+        int insertBeforeIndex,
+        bool createCopy)
     {
-        var selectedSheetIds = CurrentGroupedStructureSheetIds();
+        var selectedSheetIds = CurrentGroupedStructureSheetIds(contextSheetId);
         if (selectedSheetIds.Count == 0)
         {
             return new WorkbookCellEditResult(
@@ -2336,14 +2342,13 @@ public sealed class WorkbookSession : IDisposable
             return result;
         }
 
-        var activeSheetId = ActiveSheet.Id;
         var moveResult = _cellEditService.ExecuteEditCommand(
             Workbook,
             new MoveSheetsCommand(selectedSheetIds, insertBeforeIndex));
         if (!moveResult.Success)
             return moveResult;
 
-        ApplySuccessfulWorkbookStructureResult(activeSheetId);
+        ApplySuccessfulWorkbookStructureResult(contextSheetId);
         return moveResult;
     }
 
@@ -5550,18 +5555,21 @@ public sealed class WorkbookSession : IDisposable
         return [ActiveSheet.Id, .. groupedVisibleSheetIds.Where(sheetId => sheetId != ActiveSheet.Id)];
     }
 
-    private IReadOnlyList<SheetId> CurrentGroupedStructureSheetIds()
+    private IReadOnlyList<SheetId> CurrentGroupedStructureSheetIds() =>
+        CurrentGroupedStructureSheetIds(ActiveSheet.Id);
+
+    private IReadOnlyList<SheetId> CurrentGroupedStructureSheetIds(SheetId contextSheetId)
     {
-        if (!IsWorkbookGrouped)
-            return [ActiveSheet.Id];
+        if (!IsWorkbookGrouped || !_groupedSheetIds.Contains(contextSheetId))
+            return Workbook.GetSheet(contextSheetId) is null ? [] : [contextSheetId];
 
         var selectedSheetIds = Workbook.Sheets
             .Where(sheet => !sheet.IsHidden && _groupedSheetIds.Contains(sheet.Id))
             .Select(sheet => sheet.Id)
             .ToArray();
-        return selectedSheetIds.Length > 1 && selectedSheetIds.Contains(ActiveSheet.Id)
+        return selectedSheetIds.Length > 1
             ? selectedSheetIds
-            : [ActiveSheet.Id];
+            : [contextSheetId];
     }
 
     private IWorkbookCommand CreateEditCellsCommand(IReadOnlyList<(CellAddress Address, Cell NewCell)> edits)
