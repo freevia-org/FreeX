@@ -524,11 +524,8 @@ internal static partial class FreeWCanonicalRibbonTabs
                         // Quick Parts: a dropdown with Document Property sub-items + the existing AutoText entry.
                         g.Icon("freew.insert-quickpart", "Quick Parts", RibbonCommandIconKind.QuickParts, menu: m =>
                         {
-                            m.Item("freew.docprop-title", "Document Property: Title", "T");
-                            m.Item("freew.docprop-subject", "Document Property: Subject", "S");
-                            m.Item("freew.docprop-author", "Document Property: Author", "A");
-                            m.Item("freew.docprop-keywords", "Document Property: Keywords", "K");
-                            m.Item("freew.docprop-comments", "Document Property: Comments", "C");
+                            foreach (var plan in DocumentPropertyFieldPlanner.CommandPlans)
+                                m.Item(plan.CommandId, plan.Label, plan.KeyTip);
                             m.Separator();
                             m.Item("freew.field", "Field…", "F");
                             m.Separator();
@@ -557,7 +554,7 @@ internal static partial class FreeWCanonicalRibbonTabs
                     }),
                 tab => tab.Group("text", "Text", null, 93, g =>
                     {
-                        g.Dropdown("freew.quick-parts", "Quick Parts", BuildQuickPartsMenu());
+                        g.Dropdown("freew.insert-quickpart", "Quick Parts", BuildQuickPartsMenu());
                         g.Dropdown("freew.drop-cap", "Drop Cap", BuildDropCapMenu());
                         g.Button("freew.insert-file", "Text from File");
                         g.Button("freew.wordart", "WordArt");
@@ -1082,25 +1079,21 @@ internal static partial class FreeWCanonicalRibbonTabs
         });
 
     /// <summary>
-    /// AV-INSERT2: Insert &gt; Quick Parts menu — Word document-property fields, a Date field, and a
-    /// free-text snippet (opens a dialog). Command ids match the registry wiring.
+    /// Insert &gt; Quick Parts menu shared with the WPF projection. Legacy Avalonia ids remain registry
+    /// aliases, but the visible command identity is canonical across both renderers.
     /// </summary>
     private static RibbonMenu BuildQuickPartsMenu() =>
-        new(new RibbonMenuItem[]
-        {
-            new("Document Property — Title",   new RibbonCommandId("freew.quick-parts.title")),
-            new("Document Property — Author",  new RibbonCommandId("freew.quick-parts.author")),
-            new("Document Property — Subject", new RibbonCommandId("freew.quick-parts.subject")),
-            new("Document Property — Keywords", new RibbonCommandId("freew.quick-parts.keywords")),
-            new("Document Property — Comments", new RibbonCommandId("freew.quick-parts.comments")),
-            new("Field — Date",                new RibbonCommandId("freew.quick-parts.date")),
-            RibbonMenuItem.Separator(),
-            new("Insert Snippet…",             new RibbonCommandId("freew.quick-parts.snippet")),
-            new("Field…",                      new RibbonCommandId("freew.field")),
-            RibbonMenuItem.Separator(),
-            new("Save Selection to Quick Part Gallery…", new RibbonCommandId("freew.save-quickpart")),
-            new("Building Blocks Organizer…",  new RibbonCommandId("freew.building-blocks-organizer")),
-        });
+        new(DocumentPropertyFieldPlanner.CommandPlans
+            .Select(plan => new RibbonMenuItem(plan.Label, new RibbonCommandId(plan.CommandId)))
+            .Concat(new RibbonMenuItem[]
+            {
+                RibbonMenuItem.Separator(),
+                new("Field…", new RibbonCommandId("freew.field")),
+                RibbonMenuItem.Separator(),
+                new("Save Selection to Quick Part Gallery…", new RibbonCommandId("freew.save-quickpart")),
+                new("Building Blocks Organizer…", new RibbonCommandId("freew.building-blocks-organizer")),
+            })
+            .ToArray());
 
     /// <summary>
     /// AV-INSERT2: Insert &gt; Equation menu — a default sample (E=mc²) plus a few common OMML structures.

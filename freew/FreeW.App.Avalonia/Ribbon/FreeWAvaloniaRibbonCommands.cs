@@ -987,14 +987,12 @@ internal static class FreeWAvaloniaRibbonCommands
 
         // ── Quick Parts ──────────────────────────────────────────────────────
         // Document-property / date fields insert directly; the snippet entry opens a dialog (shell callback).
-        r.Register("freew.quick-parts",         new ActionRibbonCommand(() => { /* dropdown opener */ }));
-        r.Register("freew.quick-parts.title",   new ActionRibbonCommand(() => editor.InsertField(RunFieldKind.Title)));
-        r.Register("freew.quick-parts.author",  new ActionRibbonCommand(() => editor.InsertField(RunFieldKind.Author)));
-        r.Register("freew.quick-parts.subject", new ActionRibbonCommand(() => editor.InsertField(RunFieldKind.Subject)));
-        r.Register("freew.quick-parts.keywords", new ActionRibbonCommand(() => editor.InsertField(RunFieldKind.Keywords)));
-        r.Register("freew.quick-parts.comments", new ActionRibbonCommand(() => editor.InsertField(RunFieldKind.DocComments)));
+        var insertQuickPart = OptionalHostCommand(callbacks.OpenQuickPartDialog);
+        r.Register("freew.insert-quickpart", insertQuickPart);
+        r.Register("freew.quick-parts", insertQuickPart);
+        DocumentPropertyFieldPlanner.RegisterCommands(r, editor.InsertField);
         r.Register("freew.quick-parts.date",    new ActionRibbonCommand(() => editor.InsertField(RunFieldKind.Date)));
-        r.Register("freew.quick-parts.snippet", OptionalHostCommand(callbacks.OpenQuickPartDialog));
+        r.Register("freew.quick-parts.snippet", insertQuickPart);
 
         // ── Equation ─────────────────────────────────────────────────────────
         // The split-button face inserts the WPF default; each preset inserts an inline OMML equation.

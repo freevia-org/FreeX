@@ -1089,8 +1089,12 @@ internal static class FreeWRibbonCommands
 
         // Insert > Quick Parts > Document Property: insert a live field run that renders the matching
         // document-property value. Uses RunFieldKind so it round-trips as w:fldSimple in docx.
-        foreach (var plan in DocumentPropertyFieldPlanner.CommandPlans)
-            registry.Register(plan.CommandId, new InsertDocPropFieldCommand(resolveFieldTarget, plan.Kind));
+        DocumentPropertyFieldPlanner.RegisterCommands(registry, kind =>
+        {
+            var target = resolveFieldTarget();
+            target.Focus();
+            target.InsertField(kind);
+        });
 
         // Home > Font > Change Case: open a small menu to pick a target case (UPPERCASE / lowercase /
         // Sentence case / Capitalize Each Word / tOGGLE cASE) and recase the selection's text via the
@@ -3497,21 +3501,6 @@ internal static class FreeWRibbonCommands
                 editor.InsertComplexField(instruction);
             else if (!string.IsNullOrEmpty(result.Text))
                 editor.InsertText(result.Text);
-        }
-    }
-
-    // Insert > Quick Parts > Document Property: insert a live field run bound to a document-property
-    // value (Title, Subject, Author, Keywords, Comments). Uses RunFieldKind so the run renders the
-    // current property value immediately and serialises as w:fldSimple for lossless round-trip.
-    private sealed class InsertDocPropFieldCommand(
-        Func<DocumentView> resolveEditor,
-        RunFieldKind kind) : IRibbonCommand
-    {
-        public void Execute(RibbonCommandContext context)
-        {
-            var editor = resolveEditor();
-            editor.Focus();
-            editor.InsertField(kind);
         }
     }
 

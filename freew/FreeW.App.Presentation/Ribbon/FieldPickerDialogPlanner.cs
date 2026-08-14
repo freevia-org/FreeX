@@ -1,10 +1,16 @@
+using Free.Shared.Ribbon;
 using FreeW.Core.Model;
 
 namespace FreeW.App.Presentation.Ribbon;
 
 public sealed record FieldPickerChoice(string Category, string Label, string Instruction);
 
-public sealed record DocumentPropertyFieldCommandPlan(string CommandId, RunFieldKind Kind);
+public sealed record DocumentPropertyFieldCommandPlan(
+    string CommandId,
+    string LegacyCommandId,
+    string Label,
+    string KeyTip,
+    RunFieldKind Kind);
 
 public static class FieldPickerDialogPlanner
 {
@@ -60,10 +66,25 @@ public static class DocumentPropertyFieldPlanner
 {
     public static readonly IReadOnlyList<DocumentPropertyFieldCommandPlan> CommandPlans =
     [
-        new("freew.docprop-title", RunFieldKind.Title),
-        new("freew.docprop-subject", RunFieldKind.Subject),
-        new("freew.docprop-author", RunFieldKind.Author),
-        new("freew.docprop-keywords", RunFieldKind.Keywords),
-        new("freew.docprop-comments", RunFieldKind.DocComments),
+        new("freew.docprop-title", "freew.quick-parts.title", "Document Property: Title", "T", RunFieldKind.Title),
+        new("freew.docprop-subject", "freew.quick-parts.subject", "Document Property: Subject", "S", RunFieldKind.Subject),
+        new("freew.docprop-author", "freew.quick-parts.author", "Document Property: Author", "A", RunFieldKind.Author),
+        new("freew.docprop-keywords", "freew.quick-parts.keywords", "Document Property: Keywords", "K", RunFieldKind.Keywords),
+        new("freew.docprop-comments", "freew.quick-parts.comments", "Document Property: Comments", "C", RunFieldKind.DocComments),
     ];
+
+    public static void RegisterCommands(
+        IRibbonCommandRegistry registry,
+        Action<RunFieldKind> insertField)
+    {
+        ArgumentNullException.ThrowIfNull(registry);
+        ArgumentNullException.ThrowIfNull(insertField);
+
+        foreach (var plan in CommandPlans)
+        {
+            var command = new ActionRibbonCommand(() => insertField(plan.Kind));
+            registry.Register(plan.CommandId, command);
+            registry.Register(plan.LegacyCommandId, command);
+        }
+    }
 }

@@ -1,3 +1,4 @@
+using Free.Shared.Ribbon;
 using FreeW.App.Presentation.Ribbon;
 
 namespace FreeW.App.Presentation.Tests;
@@ -109,10 +110,33 @@ public sealed class FieldPickerDialogPlannerTests
     {
         DocumentPropertyFieldPlanner.CommandPlans
             .Should().Equal(
-                new DocumentPropertyFieldCommandPlan("freew.docprop-title", RunFieldKind.Title),
-                new DocumentPropertyFieldCommandPlan("freew.docprop-subject", RunFieldKind.Subject),
-                new DocumentPropertyFieldCommandPlan("freew.docprop-author", RunFieldKind.Author),
-                new DocumentPropertyFieldCommandPlan("freew.docprop-keywords", RunFieldKind.Keywords),
-                new DocumentPropertyFieldCommandPlan("freew.docprop-comments", RunFieldKind.DocComments));
+                new DocumentPropertyFieldCommandPlan(
+                    "freew.docprop-title", "freew.quick-parts.title", "Document Property: Title", "T", RunFieldKind.Title),
+                new DocumentPropertyFieldCommandPlan(
+                    "freew.docprop-subject", "freew.quick-parts.subject", "Document Property: Subject", "S", RunFieldKind.Subject),
+                new DocumentPropertyFieldCommandPlan(
+                    "freew.docprop-author", "freew.quick-parts.author", "Document Property: Author", "A", RunFieldKind.Author),
+                new DocumentPropertyFieldCommandPlan(
+                    "freew.docprop-keywords", "freew.quick-parts.keywords", "Document Property: Keywords", "K", RunFieldKind.Keywords),
+                new DocumentPropertyFieldCommandPlan(
+                    "freew.docprop-comments", "freew.quick-parts.comments", "Document Property: Comments", "C", RunFieldKind.DocComments));
+    }
+
+    [Fact]
+    public void DocumentPropertyFieldCommands_RegisterCanonicalAndLegacyIdsToOneSharedAction()
+    {
+        var registry = new RibbonCommandRegistry();
+        RunFieldKind? inserted = null;
+
+        DocumentPropertyFieldPlanner.RegisterCommands(registry, kind => inserted = kind);
+
+        foreach (var plan in DocumentPropertyFieldPlanner.CommandPlans)
+        {
+            registry.TryGet(plan.CommandId, out var canonical).Should().BeTrue();
+            registry.TryGet(plan.LegacyCommandId, out var legacy).Should().BeTrue();
+            legacy.Should().BeSameAs(canonical);
+            canonical!.Execute(RibbonCommandContext.Empty);
+            inserted.Should().Be(plan.Kind);
+        }
     }
 }

@@ -100,6 +100,8 @@ public sealed class InsertDepth2Tests
             "freew.cover-page", "freew.cover-page.default", "freew.cover-page.banded", "freew.cover-page.motion",
             "freew.drop-cap", "freew.drop-cap.dropped", "freew.drop-cap.in-margin", "freew.drop-cap.none",
             "freew.drop-cap-dropped", "freew.drop-cap-in-margin", "freew.drop-cap-none",
+            "freew.insert-quickpart", "freew.docprop-title", "freew.docprop-author",
+            "freew.docprop-subject", "freew.docprop-keywords", "freew.docprop-comments",
             "freew.quick-parts", "freew.quick-parts.title", "freew.quick-parts.author",
             "freew.quick-parts.subject", "freew.quick-parts.keywords", "freew.quick-parts.comments",
             "freew.quick-parts.date", "freew.quick-parts.snippet",
@@ -457,7 +459,7 @@ public sealed class InsertDepth2Tests
         view.LoadDocument(doc);
         var registry = FreeWAvaloniaRibbonCommands.Build(view, Callbacks());
 
-        Exec(registry, "freew.quick-parts.title");
+        Exec(registry, "freew.docprop-title");
 
         var hasTitleField = view.Document.Blocks
             .OfType<Paragraph>()
@@ -467,8 +469,8 @@ public sealed class InsertDepth2Tests
     }
 
     [Theory]
-    [InlineData("freew.quick-parts.keywords", RunFieldKind.Keywords)]
-    [InlineData("freew.quick-parts.comments", RunFieldKind.DocComments)]
+    [InlineData("freew.docprop-keywords", RunFieldKind.Keywords)]
+    [InlineData("freew.docprop-comments", RunFieldKind.DocComments)]
     public void Quick_part_extended_document_property_inserts_live_field(string commandId, RunFieldKind expectedKind)
     {
         var view = MakeView("");

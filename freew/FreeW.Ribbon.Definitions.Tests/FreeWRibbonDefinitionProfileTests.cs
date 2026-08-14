@@ -186,6 +186,30 @@ public sealed class FreeWRibbonDefinitionProfileTests
     }
 
     [Fact]
+    public void QuickPartsDocumentPropertyCommandsUseOneCanonicalIdentityAcrossProfiles()
+    {
+        var canonicalIds = FreeW.App.Presentation.Ribbon.DocumentPropertyFieldPlanner.CommandPlans
+            .Select(plan => plan.CommandId)
+            .ToArray();
+        var legacyIds = FreeW.App.Presentation.Ribbon.DocumentPropertyFieldPlanner.CommandPlans
+            .Select(plan => plan.LegacyCommandId)
+            .ToArray();
+
+        foreach (var capabilities in new[] { FreeWRibbonCapabilities.Wpf, FreeWRibbonCapabilities.Avalonia })
+        {
+            var ids = CommandEntries(FreeWRibbon.Build(capabilities))
+                .Where(entry => entry.TabId == "insert")
+                .Select(entry => entry.CommandId)
+                .ToArray();
+
+            ids.Should().Contain("freew.insert-quickpart");
+            ids.Should().Contain(canonicalIds);
+            ids.Intersect(legacyIds, StringComparer.Ordinal).Should().BeEmpty(
+                "legacy Avalonia ids remain executable aliases rather than renderer-specific surfaces");
+        }
+    }
+
+    [Fact]
     public void Picture_style_catalog_has_identical_profile_placement_and_labels()
     {
         var expectedIds = FreeW.Core.Model.PictureStyleCatalog.Catalog
