@@ -428,18 +428,9 @@ public class InCanvasRichTextEditBuffer
     }
 
     private (int Start, int End)? NormalizeParagraphSelection(InCanvasEditorTextSelection selection)
-    {
-        var range = NormalizeSelection(selection);
-        if (range is not null)
-            return range;
-
-        int textLength = PlainText.Length;
-        if (textLength == 0)
-            return null;
-
-        int caret = Math.Clamp(selection.Start, 0, textLength);
-        return caret < textLength ? (caret, caret + 1) : (textLength - 1, textLength);
-    }
+        => TableCellEditPlanner.NormalizeParagraphSelection(
+            (selection.Start, selection.End),
+            PlainText.Length);
 
     private static int CommonPrefixLength(string left, string right)
     {

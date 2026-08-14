@@ -263,6 +263,41 @@ public sealed class FreePRibbonCommandWorkflowTests
             .And.NotContain("RegisterReviewWorkflowCommands");
     }
 
+    [Fact]
+    public void BothRenderersRouteActiveTableParagraphActionsThroughTheNativeSelectionAdapter()
+    {
+        var root = TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeP.slnx");
+        var wpfProfile = Read(root, "freep", "FreeP.App.Host", "MainWindow.RibbonProfile.cs");
+        var wpfEditor = Read(root, "freep", "FreeP.App.Rendering.Wpf", "InCanvasTableCellEditor.cs");
+        var wpfImports = Read(root, "freep", "FreeP.App.Host", "MainWindow.AssetImports.cs");
+        var avalonia = Read(root, "freep", "FreeP.App.Avalonia", "MainWindow.cs");
+
+        string[] endpointMethods =
+        [
+            "TryApplyActiveTableCellParagraphAlignment",
+            "TryApplyActiveTableCellParagraphListPreset",
+            "TryApplyActiveTableCellParagraphBulletToggle",
+            "TryApplyActiveTableCellParagraphNumberingToggle",
+            "TryApplyActiveTableCellParagraphIndent",
+            "TryApplyActiveTableCellParagraphOutdent",
+        ];
+
+        foreach (var method in endpointMethods)
+        {
+            wpfProfile.Should().Contain($"canvas.TableCellEditor?.{method}");
+            avalonia.Should().Contain($"_textEditor?.{method}");
+        }
+
+        wpfEditor.Should().Contain("TextBodyFlowDocumentConverter.LogicalOffsetAt(")
+            .And.Contain("InCanvasTextEditPlanner.ApplyParagraphAlignment(")
+            .And.Contain("InCanvasTextEditPlanner.ApplyParagraphListPreset(")
+            .And.Contain("InCanvasTextEditPlanner.ApplyParagraphBulletToggle(")
+            .And.Contain("InCanvasTextEditPlanner.ApplyParagraphNumberingToggle(")
+            .And.Contain("InCanvasTextEditPlanner.ApplyParagraphIndent(");
+        wpfImports.Should().Contain(
+            "SlideCanvas.TableCellEditor?.TryApplyActiveTableCellParagraphPictureBullet(payload)");
+    }
+
     private static EditingSession MakeEditor()
     {
         var presentation = new Presentation();

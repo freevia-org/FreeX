@@ -187,9 +187,15 @@ internal sealed class NameDefinitionDialog : Window
         DialogResult = true;
     }
 
+    /// <summary>
+    /// The blank-name rule is the portable <see cref="DefinedNameError.Blank"/> rule from
+    /// <see cref="DefinedNameValidator"/>; only the message this dialog shows for it stays renderer-owned
+    /// (it uses the Define Name dialog's own wording rather than the Name Manager's). Every other rule is
+    /// delegated to <paramref name="validateName"/>, which the host wires to the defined-names session.
+    /// </summary>
     internal static string? ValidateNameInput(string name, Func<string, string?> validateName)
     {
-        if (string.IsNullOrWhiteSpace(name))
+        if (DefinedNameValidator.Validate(name).Error == DefinedNameError.Blank)
             return UiText.Get("NameDefinition_PleaseEnterNameMessage");
 
         return validateName(name.Trim());

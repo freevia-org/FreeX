@@ -349,6 +349,90 @@ public sealed class InCanvasTableCellEditor
             _cellTextBox.Selection.ApplyPropertyValue(TextElement.ForegroundProperty, new SolidColorBrush(wpfColor.Value)));
     }
 
+    public bool TryApplyActiveTableCellParagraphAlignment(TextAlign alignment) =>
+        ApplyCellParagraphMutation((body, selection) =>
+            InCanvasTextEditPlanner.ApplyParagraphAlignment(body, alignment, selection));
+
+    public bool TryApplyActiveTableCellParagraphBulletToggle() =>
+        ApplyCellParagraphMutation((body, selection) =>
+            InCanvasTextEditPlanner.ApplyParagraphBulletToggle(body, selection));
+
+    public bool TryApplyActiveTableCellParagraphNumberingToggle() =>
+        ApplyCellParagraphMutation((body, selection) =>
+            InCanvasTextEditPlanner.ApplyParagraphNumberingToggle(body, selection));
+
+    public bool TryApplyActiveTableCellParagraphListPreset(TableCellListPresetDescriptor preset)
+    {
+        ArgumentNullException.ThrowIfNull(preset);
+        return ApplyCellParagraphMutation((body, selection) =>
+            InCanvasTextEditPlanner.ApplyParagraphListPreset(body, selection, preset));
+    }
+
+    public bool TryApplyActiveTableCellParagraphPictureBullet(PresentationPictureBulletPayload payload)
+    {
+        ArgumentNullException.ThrowIfNull(payload);
+        if (!payload.IsValid)
+            return false;
+
+        return ApplyCellParagraphMutation((body, selection) =>
+            InCanvasTextEditPlanner.ApplyParagraphPictureBullet(
+                body,
+                selection,
+                PresentationPictureBulletAuthoringPlanner.CreateImagePart(payload)));
+    }
+
+    public bool TryApplyActiveTableCellParagraphIndent() =>
+        ApplyCellParagraphMutation((body, selection) =>
+            InCanvasTextEditPlanner.ApplyParagraphIndent(body, increase: true, selection));
+
+    public bool TryApplyActiveTableCellParagraphOutdent() =>
+        ApplyCellParagraphMutation((body, selection) =>
+            InCanvasTextEditPlanner.ApplyParagraphIndent(body, increase: false, selection));
+
+    /// <summary>
+    /// Adapts the live WPF selection to the renderer-neutral paragraph mutation planner. The
+    /// native document is rehydrated only after the shared model operation has run, preserving
+    /// the user's selected subrange and keeping paragraph/list semantics identical to Avalonia.
+    /// </summary>
+    private bool ApplyCellParagraphMutation(
+        Func<TextBody, (int Start, int End)?, TextBody> mutate)
+    {
+        if (!IsCellRichEditActive || _cellTextBox is null || TryGetCurrentCellTextBody() is not { } baseBody)
+            return false;
+
+        var current = TextBodyFlowDocumentConverter.FromFlowDocument(_cellTextBox.Document, baseBody);
+        (int Start, int End)? selection = CurrentLogicalSelection();
+        var updated = mutate(current, selection);
+        int start = selection?.Start ?? 0;
+        int end = selection?.End ?? InCanvasTextEditPlanner.ExtractPlainText(updated).Length;
+
+        double fallbackPt = InCanvasRichTextEditorDefaults.ResolveFallbackFontSize(
+            updated,
+            InCanvasRichTextEditorDefaults.TableCellFallbackFontSizePt);
+        _cellTextBox.Document = TextBodyFlowDocumentConverter.ToFlowDocument(updated, fallbackPt);
+
+        var startPointer = TextBodyFlowDocumentConverter.TextPointerAtLogicalOffset(_cellTextBox.Document, start);
+        var endPointer = TextBodyFlowDocumentConverter.TextPointerAtLogicalOffset(_cellTextBox.Document, end);
+        if (startPointer is not null && endPointer is not null)
+            _cellTextBox.Selection.Select(startPointer, endPointer);
+        _cellTextBox.Focus();
+        return true;
+    }
+
+    private (int Start, int End)? CurrentLogicalSelection()
+    {
+        if (_cellTextBox is null)
+            return null;
+
+        return (
+            TextBodyFlowDocumentConverter.LogicalOffsetAt(
+                _cellTextBox.Document,
+                _cellTextBox.Selection.Start),
+            TextBodyFlowDocumentConverter.LogicalOffsetAt(
+                _cellTextBox.Document,
+                _cellTextBox.Selection.End));
+    }
+
     // ── Keyboard ──────────────────────────────────────────────────────────────
 
     private void ExecuteCellFormattingCommand(RoutedCommand command)

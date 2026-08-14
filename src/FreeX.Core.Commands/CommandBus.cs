@@ -64,7 +64,14 @@ public sealed class CommandBus : ICommandBus, ICommandStackChangeNotifier, IComm
             NotifyStackChanged(workbookId);
         }
 
-        return outcome;
+        return outcome with
+        {
+            // Execute must expose the same structural-recalculation contract as Undo/Redo.
+            // Without this, WorkbookCellEditService can honor IWholeWorkbookRecalcCommand only
+            // after history traversal, forcing forward callers to add renderer/session-local
+            // RecalculateWorkbook compensations and making newly shared composite operations stale.
+            RequiresFullRecalc = command is IWholeWorkbookRecalcCommand,
+        };
     }
 
     public CommandOutcome ExecuteRepeatable(WorkbookId workbookId, Func<IWorkbookCommand> commandFactory)

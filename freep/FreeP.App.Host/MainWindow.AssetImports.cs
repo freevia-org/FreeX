@@ -38,6 +38,9 @@ public sealed partial class MainWindow
         if (SlideCanvas.TextEditor?.TryApplyActiveShapeParagraphPictureBullet(payload) == true)
             return true;
 
+        if (SlideCanvas.TableCellEditor?.TryApplyActiveTableCellParagraphPictureBullet(payload) == true)
+            return true;
+
         return Editor.TryApplyActiveTableCellParagraphPictureBullet(payload);
     }
 

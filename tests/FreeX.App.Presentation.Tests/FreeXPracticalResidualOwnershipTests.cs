@@ -12,10 +12,20 @@ public sealed class FreeXPracticalResidualOwnershipTests
         var findPlanner = Read("src", "FreeX.App.Services", "FindReplaceDialogPlanner.cs");
         var wpfFind = Read("src", "FreeX.App.Host", "FindReplaceDialog.xaml.cs");
 
-        avalonia.Should().Contain("ViewportService.CountScrollableRows(viewport.RowMetrics");
-        avalonia.Should().Contain("ViewportService.CountScrollableColumns(viewport.ColMetrics");
+        // The scrollable row/column count now has a single neutral owner
+        // (WorkbookViewportScrollPlanner.CountVisibleScrollableRows/Columns); neither renderer may
+        // keep its own private copy of the Math.Max(1, ViewportService...) wrapper.
         viewportPlanner.Should().Contain("ViewportService.CountScrollableRows(viewport.RowMetrics");
         viewportPlanner.Should().Contain("ViewportService.CountScrollableColumns(viewport.ColMetrics");
+        avalonia.Should().Contain("WorkbookViewportScrollPlanner.CountVisibleScrollableRows(");
+        avalonia.Should().Contain("WorkbookViewportScrollPlanner.CountVisibleScrollableColumns(");
+        avalonia.Should().NotContain("ViewportService.CountScrollableRows(");
+        avalonia.Should().NotContain("ViewportService.CountScrollableColumns(");
+        var wpfViewport = Read("src", "FreeX.App.Host", "MainWindow.Viewport.cs");
+        wpfViewport.Should().Contain("WorkbookViewportScrollPlanner.CountVisibleScrollableRows(");
+        wpfViewport.Should().Contain("WorkbookViewportScrollPlanner.CountVisibleScrollableColumns(");
+        wpfViewport.Should().NotContain("ViewportService.CountScrollableRows(");
+        wpfViewport.Should().NotContain("ViewportService.CountScrollableColumns(");
         findPlanner.Should().Contain("public static IReadOnlyList<GridRange>? ResolveSelectionScopeAtOpen");
         avalonia.Should().Contain("FindReplaceDialogPlanner.ResolveSelectionScopeAtOpen(");
         wpfFind.Should().Contain("FindReplaceDialogPlanner.ResolveSelectionScopeAtOpen(");
@@ -135,6 +145,33 @@ public sealed class FreeXPracticalResidualOwnershipTests
         workbookSession.Should().Contain("BorderDrawPlanner.CreateCellDiff(mode, range, address, borderStyle, color)");
         pickerSession.Should().Contain("public sealed class BorderPickerSession");
         pickerSession.Should().Contain("plan = new BorderDrawExecutionPlan(DrawMode, Style, Color)");
+    }
+
+    [Fact]
+    public void GroupedSheetStructurePolicy_IsOwnedByWorkbookSession()
+    {
+        var session = Read("src", "FreeX.App.Services", "WorkbookSession.cs");
+        var avalonia = Read("src", "FreeX.App.Avalonia", "MainWindow.cs");
+        var avaloniaMoveCopy = Read("src", "FreeX.App.Avalonia", "MainWindow.MoveCopySheet.cs");
+        var wpf = Read("src", "FreeX.App.Host", "MainWindow.SheetTabs.cs");
+
+        session.Should().Contain("public WorkbookCellEditResult MoveOrCopySelectedSheets(");
+        session.Should().Contain("public WorkbookCellEditResult DeleteSelectedSheets()");
+        session.Should().Contain("public WorkbookCellEditResult HideSelectedSheets()");
+        session.Should().Contain("public WorkbookCellEditResult SetSelectedSheetTabColor(");
+
+        avaloniaMoveCopy.Should().Contain("_session.MoveOrCopySelectedSheets(");
+        avalonia.Should().Contain("_session.DeleteActiveSheet()");
+        avalonia.Should().Contain("_session.HideActiveSheet()");
+        avalonia.Should().Contain("_session.SetActiveSheetTabColor(");
+        wpf.Should().Contain("_session.MoveOrCopySelectedSheets(");
+        wpf.Should().Contain("_session.DeleteSelectedSheets()");
+        wpf.Should().Contain("_session.HideSelectedSheets()");
+        wpf.Should().Contain("_session.SetSelectedSheetTabColor(");
+
+        wpf.Should().NotContain("new CompositeWorkbookCommand(\"Delete Sheet\"");
+        wpf.Should().NotContain("new CompositeWorkbookCommand(\"Hide Sheet\"");
+        wpf.Should().NotContain("new CompositeWorkbookCommand(\"Tab Color\"");
     }
 
     private static string Read(params string[] parts)

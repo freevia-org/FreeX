@@ -1051,6 +1051,35 @@ public sealed class TableCellEditPlannerTests
         paragraphs[2].Align.Should().Be(TextAlign.Left);
     }
 
+    [Fact]
+    public void PlanParagraphAlignment_CollapsedCaret_AlignsOnlyTheCaretParagraph()
+    {
+        var shape = MakeMergedTableShape();
+        var body = shape.Table!.Rows[0].Cells[0].TextBody!;
+        body.Paragraphs[0].Align = TextAlign.Left;
+        var second = new Paragraph { Align = TextAlign.Left };
+        second.Runs.Add(new Run { Text = "Beta" });
+        body.Paragraphs.Add(second);
+        var slide = new Slide { Shapes = { shape } };
+
+        var plan = TableCellEditPlanner.PlanParagraphAlignment(
+            0,
+            slide,
+            [shape.Id],
+            (0, 0),
+            TextAlign.Right,
+            selection: (8, 8));
+
+        var presentation = Presentation.CreateEmpty();
+        presentation.Slides[0].Shapes.Clear();
+        presentation.Slides[0].Shapes.Add(shape);
+        new PresentationCommandBus(presentation).Execute(plan.Command!);
+
+        var paragraphs = shape.Table.Rows[0].Cells[0].TextBody!.Paragraphs;
+        paragraphs[0].Align.Should().Be(TextAlign.Left);
+        paragraphs[1].Align.Should().Be(TextAlign.Right);
+    }
+
     [Theory]
     [InlineData(TableCellParagraphFormatKind.BulletToggle)]
     [InlineData(TableCellParagraphFormatKind.NumberingToggle)]

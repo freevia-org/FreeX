@@ -534,13 +534,13 @@ public sealed partial class MainWindow
         {
             warningText.IsVisible = false;
 
-            var options = new CreateNamesFromSelectionOptions(
-                UseTopRow: topRowBox.IsChecked == true,
-                UseLeftColumn: leftColumnBox.IsChecked == true,
-                UseBottomRow: bottomRowBox.IsChecked == true,
-                UseRightColumn: rightColumnBox.IsChecked == true);
-
-            if (!options.HasAnyEdge)
+            if (!CreateNamesFromSelectionPlanner.TryCreateOptions(
+                    topRowBox.IsChecked == true,
+                    leftColumnBox.IsChecked == true,
+                    bottomRowBox.IsChecked == true,
+                    rightColumnBox.IsChecked == true,
+                    out var options,
+                    out _))
             {
                 warningText.Text = UiText.Get("InsertLoc_SelectAtLeastOneLabel");
                 warningText.IsVisible = true;

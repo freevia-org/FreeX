@@ -13,6 +13,7 @@ public sealed class DefinedNameCrossRendererSourceGuardTests
         var wpfDefinition = Read(repoRoot, "src", "FreeX.App.Host", "NameDefinitionDialog.cs");
         var wpfFormula = Read(repoRoot, "src", "FreeX.App.Host", "MainWindow.FormulaCommands.cs");
         var wpfNameBox = Read(repoRoot, "src", "FreeX.App.Host", "MainWindow.Editing.cs");
+        var wpfPasteNames = Read(repoRoot, "src", "FreeX.App.Host", "PasteNamesDialog.cs");
         var avaloniaNames = Read(repoRoot, "src", "FreeX.App.Avalonia", "MainWindow.DefinedNames.cs");
         var avaloniaPasteNames = Read(repoRoot, "src", "FreeX.App.Avalonia", "MainWindow.PasteNames.cs");
         var avaloniaMain = Read(repoRoot, "src", "FreeX.App.Avalonia", "MainWindow.cs");
@@ -33,6 +34,11 @@ public sealed class DefinedNameCrossRendererSourceGuardTests
         wpfManager.Should().NotContain("1 => DefinedNameFilter.Workbook");
         wpfDefinition.Should().Contain("DefinedNameUiPolicy.CreateDraft(");
         wpfDefinition.Should().NotContain("record struct NamedRangeScopeOption");
+        wpfDefinition.Should().Contain("DefinedNameValidator.Validate(name).Error == DefinedNameError.Blank");
+        wpfDefinition.Should().NotContain("if (string.IsNullOrWhiteSpace(name))");
+        wpfPasteNames.Should().Contain("DefinedNameUiPolicy.PlanPasteNamesSelection(_items, _namesList.SelectedIndex)");
+        wpfPasteNames.Should().NotContain("_namesList.SelectedItem is not PasteNamesItem");
+        wpfPasteNames.Should().NotContain("_okButton.IsEnabled = _namesList.SelectedItem");
         wpfFormula.Should().Contain("DefinedNameUiProfile.Wpf");
         wpfFormula.Should().Contain("definedNames.PlanSave(draft)");
         wpfFormula.Should().NotContain("NameConflictsWithExistingDefinition");
@@ -48,6 +54,8 @@ public sealed class DefinedNameCrossRendererSourceGuardTests
         avaloniaNames.Should().Contain("DefinedNameUiProfile.Avalonia");
         avaloniaNames.Should().NotContain("NameManagerFilterChoices");
         avaloniaNames.Should().NotContain("new(\"All names\", DefinedNameFilter.All)");
+        avaloniaNames.Should().Contain("CreateNamesFromSelectionPlanner.TryCreateOptions(");
+        avaloniaNames.Should().NotContain("if (!options.HasAnyEdge)");
         avaloniaPasteNames.Should().Contain("DefinedNameUiProfile.Avalonia");
         avaloniaPasteNames.Should().Contain("DefinedNameUiPolicy.PlanPasteNamesSelection");
         avaloniaMain.Should().Contain("DefinedNameUiPolicy.PlanNameBoxDefinition(");
