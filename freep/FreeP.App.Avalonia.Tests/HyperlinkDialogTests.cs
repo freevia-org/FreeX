@@ -134,14 +134,22 @@ public sealed class HyperlinkDialogTests
             "freep",
             "FreeP.App.Avalonia",
             "MainWindow.cs"));
+        var bindingSource = File.ReadAllText(FindRepoFile(
+            "freep",
+            "FreeP.App.Presentation",
+            "Ribbon",
+            "FreePRibbonBindingSession.cs"));
 
         source.Should().Contain("PresentationHyperlinkWorkflowSession _hyperlinkWorkflowSession");
         source.Should().Contain("_hyperlinkWorkflowSession.BuildRequest(");
         source.Should().Contain("_hyperlinkWorkflowSession.Apply(");
-        source.Should().Contain("FreePRibbonHostRegistryComposer.Build(");
+        source.Should().Contain("_ribbonBindingSession = new FreePRibbonBindingSession(");
         source.Should().Contain("OpenHyperlink = OpenHyperlinkDialog");
         source.Should().NotContain("Editor.SetShapeHyperlink(");
         source.Should().NotContain("r.Register(\"freep.insert-link\"");
+        source.Should().NotContain("FreePRibbonHostRegistryComposer.Build(");
+        bindingSource.Should().Contain("FreePRibbonHostRegistryComposer.Build(");
+        bindingSource.Should().Contain("FreePRibbonHostRegistryComposer.BindInto(");
     }
 
     [Fact]
