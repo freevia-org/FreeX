@@ -149,8 +149,7 @@ public sealed record PageSetupDialogPresentationMetrics
 }
 
 public sealed record PageSetupPaperOption(
-    string HostLabel,
-    string AvaloniaLabel,
+    string Label,
     double WidthPt,
     double HeightPt)
 {
@@ -517,39 +516,28 @@ public static class PageSetupDialogPlanner
         ]);
 
     /// <summary>The "Custom" row is a dialog affordance, not a named paper size, so it stays app-side.</summary>
-    private static readonly PageSetupPaperOption CustomPaperOption = new("Custom", "Custom", 0, 0);
+    private static readonly PageSetupPaperOption CustomPaperOption = new("Custom", 0, 0);
 
     /// <summary>
     /// Builds a paper row from the cross-app <see cref="PaperSizeCatalog"/>. FreeW keeps its own label
     /// wording (and its own per-surface size list); only the point dimensions are shared.
     /// </summary>
-    private static PageSetupPaperOption Paper(SharedPaperSize size, string hostLabel, string avaloniaLabel)
+    private static PageSetupPaperOption Paper(SharedPaperSize size, string label)
     {
         var (widthPt, heightPt) = PaperSizeCatalog.GetSizePoints(size);
-        return new PageSetupPaperOption(hostLabel, avaloniaLabel, widthPt, heightPt);
+        return new PageSetupPaperOption(label, widthPt, heightPt);
     }
 
-    public static readonly IReadOnlyList<PageSetupPaperOption> HostPaperOptions =
+    public static readonly IReadOnlyList<PageSetupPaperOption> PaperOptions =
     [
-        Paper(SharedPaperSize.Letter, "Letter (8.5\" x 11\")", "Letter (8.5 \u00d7 11 in)"),
-        Paper(SharedPaperSize.Legal, "Legal (8.5\" x 14\")", "Legal (8.5 \u00d7 14 in)"),
-        Paper(SharedPaperSize.Tabloid, "Tabloid (11\" x 17\")", "Tabloid (11 \u00d7 17 in)"),
-        Paper(SharedPaperSize.A3, "A3 (29.7cm x 42cm)", "A3 (297 \u00d7 420 mm)"),
-        Paper(SharedPaperSize.A4, "A4 (21cm x 29.7cm)", "A4 (210 \u00d7 297 mm)"),
-        Paper(SharedPaperSize.A5, "A5 (14.8cm x 21cm)", "A5 (148 \u00d7 210 mm)"),
-        Paper(SharedPaperSize.B4, "B4 (25cm x 35.3cm)", "B4 (250 \u00d7 353 mm)"),
-        Paper(SharedPaperSize.B5, "B5 (17.6cm x 25cm)", "B5 (176 \u00d7 250 mm)"),
-        CustomPaperOption,
-    ];
-
-    public static readonly IReadOnlyList<PageSetupPaperOption> AvaloniaPaperOptions =
-    [
-        Paper(SharedPaperSize.Letter, "Letter (8.5\" x 11\")", "Letter (8.5 \u00d7 11 in)"),
-        Paper(SharedPaperSize.Legal, "Legal (8.5\" x 14\")", "Legal (8.5 \u00d7 14 in)"),
-        Paper(SharedPaperSize.A4, "A4 (21cm x 29.7cm)", "A4 (210 \u00d7 297 mm)"),
-        Paper(SharedPaperSize.A3, "A3 (29.7cm x 42cm)", "A3 (297 \u00d7 420 mm)"),
-        Paper(SharedPaperSize.A5, "A5 (14.8cm x 21cm)", "A5 (148 \u00d7 210 mm)"),
-        Paper(SharedPaperSize.Executive, "Executive (7.25\" x 10.5\")", "Executive (7.25 \u00d7 10.5 in)"),
+        Paper(SharedPaperSize.Letter, "Letter (8.5\" x 11\")"),
+        Paper(SharedPaperSize.Legal, "Legal (8.5\" x 14\")"),
+        Paper(SharedPaperSize.Tabloid, "Tabloid (11\" x 17\")"),
+        Paper(SharedPaperSize.A3, "A3 (29.7cm x 42cm)"),
+        Paper(SharedPaperSize.A4, "A4 (21cm x 29.7cm)"),
+        Paper(SharedPaperSize.A5, "A5 (14.8cm x 21cm)"),
+        Paper(SharedPaperSize.B4, "B4 (25cm x 35.3cm)"),
+        Paper(SharedPaperSize.B5, "B5 (17.6cm x 25cm)"),
         CustomPaperOption,
     ];
 
@@ -567,7 +555,7 @@ public static class PageSetupDialogPlanner
         PageSettings page,
         SectionBreakKind sectionStart,
         CultureInfo culture) =>
-        new(page, sectionStart, HostPaperOptions, PresentationMetrics.Validation, culture);
+        new(page, sectionStart, PaperOptions, PresentationMetrics.Validation, culture);
 
     public static PageSetupInitialState BuildInitialState(
         PageSettings page,

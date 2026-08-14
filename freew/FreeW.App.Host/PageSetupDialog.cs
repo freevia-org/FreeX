@@ -103,7 +103,7 @@ internal sealed partial class PageSetupDialog : Free.Shared.Ribbon.Wpf.DialogWin
 
         _width = NumberBox(state.WidthText);
         _height = NumberBox(state.HeightText);
-        _paperSize = Combo(_session.PaperOptions.Select(p => p.HostLabel).ToArray(), state.PaperSizeIndex);
+        _paperSize = Combo(_session.PaperOptions.Select(p => p.Label).ToArray(), state.PaperSizeIndex);
         ApplyEnabledState(_session.EnabledState);
         _paperSize.SelectionChanged += (_, _) => ApplyPaperPreset();
         _width.TextChanged += (_, _) => SyncPaperToCustom();
