@@ -224,7 +224,8 @@ internal static class FreeWAvaloniaRibbonCommands
                 PageNumberCurrent: new ActionRibbonCommand(() => editor.InsertField(RunFieldKind.PageNumber)),
                 PageNumberFormat: new ContextRibbonCommand(
                     context => ExecutePageNumberFormat(editor, callbacks, context)),
-                DateTime: OptionalHostCommand(callbacks.OpenDateTimeDialog),
+                DateTime: new ActionRibbonCommand(
+                    callbacks.OpenDateTimeDialog ?? (() => editor.InsertField(RunFieldKind.Date))),
                 CreateEditSlotCommand: slot => HeaderFooterSlotCommand(editor, slot),
                 DifferentFirstPage: new PageSettingCommand(
                     editor,
@@ -286,6 +287,33 @@ internal static class FreeWAvaloniaRibbonCommands
                 GetPageSettings: () => editor.Document.Page,
                 ApplyPageSettings: editor.ApplyPageSettings,
                 IsEnabled: () => !editor.IsEditingLocked));
+
+        // These controls are realized by shell callbacks in Avalonia. The shared workflow still owns
+        // all model-only layout actions; this adapter preserves the native routes and their aliases.
+        var orientationCommand = new HostPageSettingCommand(editor, callbacks.ToggleOrientation);
+        r.Bind(FreeWRibbonCommandAction.Orientation, orientationCommand);
+        r.Register("freew.page-orientation", orientationCommand);
+        r.Bind(FreeWRibbonCommandAction.Margins, new HostPageSettingCommand(
+            editor,
+            () => ToggleNormalNarrowMargins(editor, callbacks)));
+        r.Register("freew.page-margins-normal", new HostPageSettingCommand(
+            editor,
+            () => callbacks.ApplyMarginPreset("normal")));
+        r.Register("freew.page-margins-narrow", new HostPageSettingCommand(
+            editor,
+            () => callbacks.ApplyMarginPreset("narrow")));
+        r.Register("freew.page-margins-wide", new HostPageSettingCommand(
+            editor,
+            () => callbacks.ApplyMarginPreset("wide")));
+        r.Bind(FreeWRibbonCommandAction.Size, new HostPageSettingCommand(
+            editor,
+            () => ToggleLetterA4Paper(editor, callbacks)));
+        r.Register("freew.page-size-letter", new HostPageSettingCommand(
+            editor,
+            () => callbacks.ApplyPaperSize("letter")));
+        r.Register("freew.page-size-a4", new HostPageSettingCommand(
+            editor,
+            () => callbacks.ApplyPaperSize("a4")));
 
         var columnsDialogCommand = OptionalHostCommand(callbacks.OpenColumnsDialog);
         r.Bind(FreeWRibbonCommandAction.Columns, columnsDialogCommand);
@@ -558,6 +586,26 @@ internal static class FreeWAvaloniaRibbonCommands
         callbacks.OpenPageNumberFormatDialog?.Invoke();
     }
 
+    private static void ToggleNormalNarrowMargins(
+        DocumentView editor,
+        FreeWRibbonHostExecutionPorts callbacks)
+    {
+        var preset = PageLayoutCommandPlanner.HasNormalMargins(editor.Document.Page)
+            ? "narrow"
+            : "normal";
+        callbacks.ApplyMarginPreset(preset);
+    }
+
+    private static void ToggleLetterA4Paper(
+        DocumentView editor,
+        FreeWRibbonHostExecutionPorts callbacks)
+    {
+        var size = PageLayoutCommandPlanner.HasLetterPaperSize(editor.Document.Page)
+            ? "a4"
+            : "letter";
+        callbacks.ApplyPaperSize(size);
+    }
+
     private sealed class PageSettingCommand(
         DocumentView editor,
         Action<PageSettings> apply,
@@ -568,6 +616,17 @@ internal static class FreeWAvaloniaRibbonCommands
         public RibbonCommandState GetState() => new(
             IsEnabled: !editor.IsEditingLocked,
             IsChecked: isChecked?.Invoke(editor.Document.Page) == true);
+    }
+
+    private sealed class HostPageSettingCommand(DocumentView editor, Action execute) : IRibbonStatefulCommand
+    {
+        public void Execute(RibbonCommandContext context)
+        {
+            if (GetState().IsEnabled)
+                execute();
+        }
+
+        public RibbonCommandState GetState() => new(IsEnabled: !editor.IsEditingLocked);
     }
 
     private sealed class FontFamilyCommand(DocumentView editor) : IRibbonStatefulCommand
@@ -717,7 +776,8 @@ internal static class FreeWAvaloniaRibbonCommands
                 SmartArt: new EditingActionCommand(editor, callbacks.OpenInsertSmartArtDialog, () => editor.InsertSmartArt()),
                 Icon: new EditingActionCommand(editor, callbacks.OpenIconPickerDialog, editor.InsertIcon),
                 WordArt: new ActionRibbonCommand(() => editor.InsertWordArt()),
-                EmbeddedObject: OptionalHostCommand(callbacks.InsertObject)));
+                EmbeddedObject: new ActionRibbonCommand(
+                    callbacks.InsertObject ?? (() => editor.InsertEmbeddedObject()))));
     }
 
     private static IRibbonCommand OptionalHostCommand(Action? callback) =>

@@ -61,7 +61,8 @@ public sealed class InsertDepth2Tests
         Action? bookmark = null,
         Action? linkBookmark = null,
         Action? quickPart = null,
-        Action? textFromFile = null) =>
+        Action? textFromFile = null,
+        Action? insertObject = null) =>
         new(
             Open: () => { }, Save: () => { }, Cut: () => { }, Copy: () => { }, Paste: () => { },
             Backstage: () => { }, NewDocument: () => { }, ToggleNavigationPane: () => { },
@@ -76,7 +77,8 @@ public sealed class InsertDepth2Tests
             OpenBookmarkDialog: bookmark,
             OpenLinkBookmarkDialog: linkBookmark,
             OpenQuickPartDialog: quickPart,
-            InsertTextFromFile: textFromFile);
+            InsertTextFromFile: textFromFile,
+            InsertObject: insertObject);
 
     private static void Exec(RibbonCommandRegistry r, string id)
     {
@@ -609,6 +611,23 @@ public sealed class InsertDepth2Tests
         embedded.Should().NotBeNull();
         embedded!.ProgId.Should().Be("Package");
         embedded.Payload.Should().NotBeEmpty();
+    }
+
+    [Fact]
+    public void Object_command_prefers_the_host_workflow_when_available()
+    {
+        var view = MakeView("");
+        var invoked = 0;
+        var registry = FreeWAvaloniaRibbonCommands.Build(
+            view,
+            Callbacks(insertObject: () => invoked++));
+
+        Exec(registry, "freew.object");
+
+        invoked.Should().Be(1);
+        view.Document.Blocks.OfType<Paragraph>()
+            .SelectMany(paragraph => paragraph.Runs)
+            .Should().NotContain(run => run.EmbeddedObject != null);
     }
 
     [Fact]
