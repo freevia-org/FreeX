@@ -41,8 +41,18 @@ public sealed partial class MainWindow
         InsertVideo = () => QueueAssetImport(PresentationAssetImportKind.Video),
         InsertAudio = () => QueueAssetImport(PresentationAssetImportKind.Audio),
         OpenTablePicker = OpenTablePicker,
-        MergeTableCells = () => Editor.TryMergeActiveTableCell(),
-        SplitTableCell = () => Editor.TrySplitActiveTableCell(),
+        MergeTableCells = () =>
+        {
+            _domainContextMenuSession.ExecuteCurrentTableAction(
+                PresentationDomainContextActionKind.MergeTableCell,
+                TryExecuteInlineTableAction);
+        },
+        SplitTableCell = () =>
+        {
+            _domainContextMenuSession.ExecuteCurrentTableAction(
+                PresentationDomainContextActionKind.SplitTableCell,
+                TryExecuteInlineTableAction);
+        },
         PickPictureBullet = () => QueueAssetImport(PresentationAssetImportKind.PictureBullet),
         InsertSlideZoom = OpenSlideZoomDialog,
         InsertSectionZoom = OpenSectionZoomDialog,

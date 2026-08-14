@@ -16,16 +16,12 @@ public sealed class FreePRendererLocalizationExhaustionTests
                 "Backstage route identifier",
             [Literal("FreeP.App.Avalonia/Backstage/BackstageView.cs", "Options")] =
                 "Backstage route identifier",
-            [Literal("FreeP.App.Avalonia/MainWindow.cs", "1")] =
-                "numeric media-pane input default",
             [Literal("FreeP.App.Avalonia/Printing/CupsPrintDialog.cs", "Cancel")] =
                 "resource-key suffix passed to PrintDialogText",
             [Literal("FreeP.App.Host/Backstage/BackstageView.cs", "Options")] =
                 "Backstage route identifier",
             [Literal("FreeP.App.Host/MainWindow.cs", "P")] =
                 "FreeP application badge",
-            [Literal("FreeP.App.Host/MainWindow.cs", "1")] =
-                "numeric media-pane input default",
             [Literal("FreeP.App.Host/MainWindow.cs", "Print")] =
                 "Backstage route identifier",
             [Literal("FreeP.App.Host/OsClipboardService.cs", "N")] =

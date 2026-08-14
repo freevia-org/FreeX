@@ -547,10 +547,14 @@ public sealed partial class MainWindow : Window,
         }
         else if (entry.Action is { } action)
         {
-            item.Click += (_, _) => _domainContextMenuSession.Execute(action);
+            item.Click += (_, _) =>
+                _domainContextMenuSession.Execute(action, TryExecuteInlineTableAction);
         }
         return item;
     }
+
+    private bool TryExecuteInlineTableAction(PresentationDomainContextAction action) =>
+        SlideCanvas?.TableCellEditor?.TryExecuteActiveTableStructureAction(action.Kind) == true;
 
 
 
