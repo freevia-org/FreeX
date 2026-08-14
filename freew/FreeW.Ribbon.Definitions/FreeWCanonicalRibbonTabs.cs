@@ -277,7 +277,7 @@ internal static partial class FreeWCanonicalRibbonTabs
     internal static RibbonDefinitionBuilder AddViewTab(
         this RibbonDefinitionBuilder builder,
         FreeWRibbonCapabilities capabilities) =>
-        builder.Tab("view", "View", (capabilities.UsesPortableControls ? "V" : "W"), tab =>
+        builder.Tab("view", "View", "W", tab =>
         {
             var topology = new FreeWRibbonTabTopology(tab, capabilities);
 

@@ -160,6 +160,21 @@ public sealed class FreeWRibbonDefinitionProfileTests
     }
 
     [Fact]
+    public void ChartAndSmartArtContextualTabsUseWpfAuthorityColorInBothProfiles()
+    {
+        var tabIds = new[] { "chart-design", "chart-format", "smartart-design" };
+
+        foreach (var capabilities in new[] { FreeWRibbonCapabilities.Wpf, FreeWRibbonCapabilities.Avalonia })
+        {
+            var tabs = FreeWRibbon.Build(capabilities).ContextualTabs
+                .ToDictionary(tab => tab.Id, StringComparer.Ordinal);
+
+            foreach (var tabId in tabIds)
+                tabs[tabId].Context!.Color.Should().Be(RibbonContextColor.Orange);
+        }
+    }
+
+    [Fact]
     public void Profile_command_id_differences_are_named_capability_deltas()
     {
         var wpf = CommandEntries(FreeWRibbon.Build(FreeWRibbonCapabilities.Wpf)).ToArray();
