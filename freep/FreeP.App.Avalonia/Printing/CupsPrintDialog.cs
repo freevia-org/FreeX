@@ -1,6 +1,7 @@
 using Avalonia.Controls;
 using Free.Shared.AppServices.Printing;
 using Free.Shared.Shell.Avalonia;
+using FreeP.App.Avalonia;
 using FreeP.App.Compositor;
 
 namespace FreeP.App.Avalonia.Printing;
@@ -9,7 +10,7 @@ namespace FreeP.App.Avalonia.Printing;
 /// FreeP adapter for the shared portable print surface. Presentation-specific layout context and
 /// automation identifiers stay here; document planning and queue submission remain upstream.
 /// </summary>
-internal sealed class CupsPrintDialog : Window
+internal sealed class CupsPrintDialog : FreePDialogWindow
 {
     private static readonly AvaloniaPrintDialogAutomationIds AutomationIds = new(
         Printer: "FreePPortablePrinterPicker",
@@ -40,7 +41,7 @@ internal sealed class CupsPrintDialog : Window
                 LayoutSummary = layoutSummary,
                 AutomationIds = AutomationIds,
                 Collation = AvaloniaPrintDialogCollation.Selectable,
-                ApplyCompactActionButtonChrome = false,
+                ApplyCompactActionButtonChrome = true,
                 Text = BuildText(),
             },
             requested,

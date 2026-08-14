@@ -61,6 +61,10 @@ public sealed class PresentationPrintLocalizationOwnershipTests
         avalonia.Should().NotContain("PlaceholderText = \"Click to add notes\"");
         avalonia.Should().NotContain("ShowBackstage(\"Print\")");
         cups.Should().Contain("Text = BuildText()");
+        cups.Should().Contain("class CupsPrintDialog : FreePDialogWindow")
+            .And.NotContain("class CupsPrintDialog : Window")
+            .And.Contain("ApplyCompactActionButtonChrome = true")
+            .And.NotContain("ApplyCompactActionButtonChrome = false");
         sharedDialog.Should().Contain("var text = options.Text;");
         sharedDialog.Should().NotContain("AddRow(content, \"Printer:\"");
         wpf.Should().Contain("_backstage.Show(surface.PrintHeading)");
