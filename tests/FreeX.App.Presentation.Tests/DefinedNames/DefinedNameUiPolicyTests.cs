@@ -79,6 +79,10 @@ public sealed class DefinedNameUiPolicyTests
             new PasteNamesSelectionPlan(item, true, true));
         DefinedNameUiPolicy.PlanPasteNamesSelection([item], -1).Should().Be(
             new PasteNamesSelectionPlan(null, false, true));
+        DefinedNameUiPolicy.PlanPasteNamesSelection([item], 1).Should().Be(
+            new PasteNamesSelectionPlan(null, false, true));
+        DefinedNameUiPolicy.PlanPasteNamesSelection([], 0).Should().Be(
+            new PasteNamesSelectionPlan(null, false, false));
     }
 
     [Fact]
