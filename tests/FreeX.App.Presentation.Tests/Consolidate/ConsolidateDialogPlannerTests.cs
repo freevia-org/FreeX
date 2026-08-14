@@ -163,4 +163,28 @@ public sealed class ConsolidateDialogPlannerTests
         planned.Should().BeFalse();
         issue.Kind.Should().Be(ConsolidateDialogIssueKind.InvalidDestinationCell);
     }
+
+    [Fact]
+    public void ValidationMessages_UseOneWpfAuthorityContract()
+    {
+        var source = ConsolidateDialogPlanner.DescribeIssue(
+            new ConsolidateDialogIssue(ConsolidateDialogIssueKind.InvalidSourceRange, "bad"),
+            ConsolidateDialogMessageContext.FinalValidation);
+        var destination = ConsolidateDialogPlanner.DescribeIssue(
+            new ConsolidateDialogIssue(ConsolidateDialogIssueKind.InvalidDestinationCell),
+            ConsolidateDialogMessageContext.FinalValidation);
+        var duplicate = ConsolidateDialogPlanner.DescribeIssue(
+            new ConsolidateDialogIssue(ConsolidateDialogIssueKind.DuplicateSourceReference, "A1:B2"),
+            ConsolidateDialogMessageContext.AddReference);
+        var pending = ConsolidateDialogPlanner.DescribePendingReference();
+
+        source.Message.ResourceKey.Should().Be("Consolidate_EnterValidSourceRangeWithPart");
+        source.Message.Arguments.Should().Equal("bad");
+        source.FocusTarget.Should().Be(ConsolidateDialogFocusTarget.Reference);
+        destination.Message.ResourceKey.Should().Be("Consolidate_EnterValidDestinationCell");
+        destination.FocusTarget.Should().Be(ConsolidateDialogFocusTarget.Destination);
+        duplicate.Message.ResourceKey.Should().Be("Consolidate_EnterValidSourceRange");
+        pending.Message.ResourceKey.Should().Be("Consolidate_AddTheReferenceBeforeClickingOk");
+        pending.FocusTarget.Should().Be(ConsolidateDialogFocusTarget.Reference);
+    }
 }

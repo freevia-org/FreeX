@@ -42,11 +42,9 @@ namespace FreeX.App.Services;
 public static class OptionsDialogPlanner
 {
     public static ValidationPresentationDescriptor<OptionsValidationFocusTarget> DescribeInputError(
-        OptionsInputError error,
-        OptionsValidationTextProfile profile) =>
+        OptionsInputError error) =>
         OptionsValidationPresentationPlanner.DescribeGeneralInput(
-            error == OptionsInputError.InvalidFontSize,
-            profile);
+            error == OptionsInputError.InvalidFontSize);
 
     /// <summary>The fixed outer window width used by the WPF Options dialog.</summary>
     public const double WindowWidth = 760;

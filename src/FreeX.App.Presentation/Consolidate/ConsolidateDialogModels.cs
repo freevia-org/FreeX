@@ -53,12 +53,6 @@ public enum ConsolidateDialogMessageContext
     FinalValidation
 }
 
-public enum ConsolidateDialogTextProfile
-{
-    Wpf,
-    Avalonia
-}
-
 public enum ConsolidateDialogFocusTarget
 {
     Reference,

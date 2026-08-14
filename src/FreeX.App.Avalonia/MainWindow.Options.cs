@@ -1168,7 +1168,7 @@ public sealed partial class MainWindow
                     crashAnalyticsEnabled: crashAnalyticsBox.IsChecked == true))
             {
                 warningText.Text = OptionsDialogPlanner
-                    .DescribeInputError(inputError, OptionsValidationTextProfile.Avalonia)
+                    .DescribeInputError(inputError)
                     .Message.Resolve(UiText.Get, UiText.Format);
                 warningText.IsVisible = true;
                 return false;
