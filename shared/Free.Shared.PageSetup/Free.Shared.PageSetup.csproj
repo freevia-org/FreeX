@@ -1,0 +1,12 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+
+  <!-- Deliberately dependency-free: FreeX.Core.Model (the XLSX IO model layer) consumes the paper
+       catalog, so this project must stay free of app models, UI toolkits, and package references. -->
+
+</Project>

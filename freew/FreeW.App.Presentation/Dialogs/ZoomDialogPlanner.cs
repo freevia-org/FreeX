@@ -16,11 +16,6 @@ public enum ZoomDialogFitOption
     WholePage
 }
 
-public enum ZoomDialogValidationError
-{
-    WholePercentRequired
-}
-
 public sealed record ZoomDialogPresetPlan(int Percent, bool IsSelected);
 
 public sealed record ZoomDialogPlan(
@@ -69,7 +64,7 @@ public static class ZoomDialogPlanner
 
     public static IReadOnlyList<int> Presets => PresetValues;
 
-    public static string FormatPresetLabel(int percent) => $"{percent}%";
+    public static string FormatPresetLabel(int percent) => PercentPolicy.FormatPercentLabel(percent);
 
     public static ZoomDialogPlan Build(double currentFactor)
     {
@@ -108,7 +103,7 @@ public static class ZoomDialogPlanner
         ZoomDialogSelectionRequest request,
         ZoomDialogFitFactors fitFactors,
         out double result,
-        out ZoomDialogValidationError? error)
+        out ZoomPercentInputError? error)
     {
         ArgumentNullException.ThrowIfNull(request);
 
@@ -133,27 +128,34 @@ public static class ZoomDialogPlanner
     public static bool TryCreateCustomPercentResult(
         string? input,
         out double result,
-        out ZoomDialogValidationError? error)
+        out ZoomPercentInputError? error)
     {
         result = ZoomLevels.Default;
         error = null;
 
-        if (!PercentPolicy.TryParseWholePercent(input, out var percent))
+        // Word's Zoom box silently clamps an in-bounds-but-extreme percentage into 50..200% rather
+        // than reporting a range error, so the shared route runs in clamp mode; only unparseable or
+        // fractional text is rejected.
+        if (!PercentPolicy.TryResolveWholePercent(
+                input,
+                ZoomPercentRangeMode.Clamp,
+                out var percent,
+                out var inputError))
         {
-            error = ZoomDialogValidationError.WholePercentRequired;
+            error = inputError;
             return false;
         }
 
-        result = ZoomLevels.FromPercent(PercentPolicy.ClampPercent(percent));
+        result = ZoomLevels.FromPercent(percent);
         return true;
     }
 
-    public static string ValidationMessageFor(ZoomDialogValidationError? error) =>
-        error switch
-        {
-            ZoomDialogValidationError.WholePercentRequired => "Enter a whole zoom percentage.",
-            _ => "Enter a whole zoom percentage."
-        };
+    /// <summary>
+    /// Word states a single message for every custom-percent rejection, so the shared
+    /// <see cref="ZoomPercentInputError"/> taxonomy collapses onto one string here.
+    /// </summary>
+    public static string ValidationMessageFor(ZoomPercentInputError? error) =>
+        "Enter a whole zoom percentage.";
 
     private static double ResolveFit(ZoomDialogFitOption fitOption, ZoomDialogFitFactors fitFactors) =>
         fitOption switch

@@ -26,6 +26,17 @@ public static class ZoomLevelMapper
     public static bool TryNormalizeWholeZoomPercent(double zoomPercent, out int wholePercent) =>
         Policy.TryNormalizeWholePercent(zoomPercent, out wholePercent);
 
+    /// <summary>
+    /// Excel's Zoom-dialog custom-percent route: parse, reject anything outside 10..400%, and require
+    /// a whole percent. The parse/classify decision itself lives in the shared
+    /// <see cref="ZoomPercentPolicy"/> so FreeW's Zoom dialog runs the same code.
+    /// </summary>
+    public static bool TryResolveWholeZoomPercent(
+        string? text,
+        out int wholePercent,
+        out ZoomPercentInputError error) =>
+        Policy.TryResolveWholePercent(text, ZoomPercentRangeMode.Reject, out wholePercent, out error);
+
     public static string FormatZoomPercent(double zoomPercent) =>
         Policy.FormatPercentLabel(zoomPercent);
 

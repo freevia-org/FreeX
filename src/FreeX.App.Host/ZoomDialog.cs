@@ -143,7 +143,7 @@ public sealed class ZoomDialog : Window
         {
             var button = new RadioButton
             {
-                Content = $"{preset}%",
+                Content = ZoomDialogPlanner.FormatPresetLabel(preset),
                 GroupName = "Zoom",
                 Tag = preset,
                 IsChecked = preset == currentZoomPercent,

@@ -123,6 +123,53 @@ public sealed class ZoomPercentPolicy
         return true;
     }
 
+    /// <summary>
+    /// The single shared route from a Zoom dialog's custom-percent text to a whole zoom percent.
+    /// Normalizes the text (trimming whitespace and a trailing '%'), parses it in the current then
+    /// the invariant culture, applies <paramref name="rangeMode"/> to out-of-range values, and finally
+    /// requires the result to land on a whole percent. Every rejection is classified with a
+    /// <see cref="ZoomPercentInputError"/> so each app can choose its own message for it.
+    /// </summary>
+    public bool TryResolveWholePercent(
+        string? text,
+        ZoomPercentRangeMode rangeMode,
+        out int percent,
+        out ZoomPercentInputError error)
+    {
+        percent = NormalizeWholePercent(DefaultPercent);
+
+        var normalized = NormalizePercentInput(text);
+        if (normalized is null)
+        {
+            error = ZoomPercentInputError.Missing;
+            return false;
+        }
+
+        if (!double.TryParse(normalized, NumberStyles.Number, CultureInfo.CurrentCulture, out var parsed) &&
+            !double.TryParse(normalized, NumberStyles.Number, CultureInfo.InvariantCulture, out parsed))
+        {
+            error = ZoomPercentInputError.NotNumeric;
+            return false;
+        }
+
+        if (rangeMode == ZoomPercentRangeMode.Reject && !ContainsPercent(parsed))
+        {
+            error = ZoomPercentInputError.OutOfRange;
+            return false;
+        }
+
+        var effective = rangeMode == ZoomPercentRangeMode.Clamp ? ClampPercent(parsed) : parsed;
+        if (!TryNormalizeWholePercent(effective, out var whole))
+        {
+            error = ZoomPercentInputError.NotWholePercent;
+            return false;
+        }
+
+        percent = whole;
+        error = ZoomPercentInputError.None;
+        return true;
+    }
+
     public double SliderToPercent(double sliderValue)
     {
         sliderValue = Math.Clamp(

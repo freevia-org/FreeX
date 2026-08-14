@@ -1,4 +1,5 @@
 using System.Globalization;
+using Free.Shared.AppServices;
 using FreeW.App.Presentation.Dialogs;
 
 namespace FreeW.App.Presentation.Tests;
@@ -155,9 +156,11 @@ public sealed class ZoomDialogPlannerTests
     }
 
     [Theory]
-    [InlineData("125.5")]
-    [InlineData("abc")]
-    public void TryCreateResult_RejectsNonIntegerCustomPercent(string input)
+    [InlineData("125.5", ZoomPercentInputError.NotWholePercent)]
+    [InlineData("abc", ZoomPercentInputError.NotNumeric)]
+    [InlineData("", ZoomPercentInputError.Missing)]
+    [InlineData("   ", ZoomPercentInputError.Missing)]
+    public void TryCreateResult_RejectsNonIntegerCustomPercent(string input, ZoomPercentInputError expected)
     {
         var request = new ZoomDialogSelectionRequest(FitOption: null, PresetPercent: null, CustomPercentText: input);
 
@@ -166,13 +169,16 @@ public sealed class ZoomDialogPlannerTests
             .Should()
             .BeFalse();
 
-        error.Should().Be(ZoomDialogValidationError.WholePercentRequired);
+        error.Should().Be(expected);
     }
 
-    [Fact]
-    public void ValidationMessageFor_ReturnsWordZoomCustomPercentMessage()
+    [Theory]
+    [InlineData(ZoomPercentInputError.NotWholePercent)]
+    [InlineData(ZoomPercentInputError.NotNumeric)]
+    [InlineData(ZoomPercentInputError.Missing)]
+    public void ValidationMessageFor_ReturnsWordZoomCustomPercentMessage(ZoomPercentInputError error)
     {
-        ZoomDialogPlanner.ValidationMessageFor(ZoomDialogValidationError.WholePercentRequired)
+        ZoomDialogPlanner.ValidationMessageFor(error)
             .Should()
             .Be("Enter a whole zoom percentage.");
     }
@@ -239,7 +245,7 @@ public sealed class ZoomDialogPlannerTests
         acceptance.Result.Should().BeNull();
         acceptance.ControlState.IsCustomSelected.Should().BeTrue();
         acceptance.Validation.Should().Be(new ZoomDialogValidation(
-            ZoomDialogValidationError.WholePercentRequired,
+            ZoomPercentInputError.NotNumeric,
             "Enter a whole zoom percentage.",
             ZoomDialogFocusTarget.CustomPercent));
     }
