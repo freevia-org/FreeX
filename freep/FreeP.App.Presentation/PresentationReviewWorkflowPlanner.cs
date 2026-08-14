@@ -318,6 +318,17 @@ public sealed record PresentationCommentPaneFilterPlan(
     public string Summary => $"{Label}: {PresentationCommentMetadataPolicy.BuildCountSummary(Count, "thread")}";
 }
 
+/// <summary>
+/// Materialized before/after state for a single slide-comment mutation.
+/// <para>
+/// Cross-app note (assessed 2026-08-15):
+/// <c>FreeX.App.Presentation.Comments.PresentationCommentMutationPlan</c> shares only this type's
+/// <em>name</em> — "Presentation" is the PowerPoint presentation here and the
+/// <c>FreeX.App.Presentation</c> layer there. That record is an undo label plus an unapplied
+/// <c>Func&lt;GridRange, IWorkbookCommand&gt;</c> factory; this one is resolved slide/comment state
+/// with a validation message. Do not merge them.
+/// </para>
+/// </summary>
 public sealed record PresentationCommentMutationPlan(
     PresentationReviewWorkflowIntentKind Intent,
     bool ShouldApply,

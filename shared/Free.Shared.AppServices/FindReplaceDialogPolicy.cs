@@ -16,6 +16,19 @@ public enum FindReplacePolicyStatusKind
     Replacements
 }
 
+/// <summary>
+/// The two-state open mode that every sister app's modeless Find &amp; Replace surface carries.
+/// FreeX selects a Find/Replace <c>TabItem</c>, FreeW picks the field that receives initial focus,
+/// and FreeP swaps the title plus the replacement row -- but the state itself, and the rule that a
+/// live modeless surface can be re-activated into the other mode instead of opening a second
+/// window, is the same framework-independent decision in all three.
+/// </summary>
+public enum FindReplaceOpenMode
+{
+    Find,
+    Replace
+}
+
 public sealed record FindReplaceNavigationPolicyPlan(
     bool HasMatch,
     int MatchIndex,
@@ -31,6 +44,22 @@ public static class FindReplaceDialogPolicy
     public const string SearchTermRequiredMessage = "Enter a search term.";
     public const string NoMatchesStatus = "No matches found.";
     public const string NoReplacementsStatus = "No replacements made.";
+
+    /// <summary>
+    /// Projects a host's "open in replace mode" boolean onto the shared two-state open mode.
+    /// FreeX passes its <c>replaceMode</c> constructor flag, FreeP its <c>showReplace</c> flag.
+    /// </summary>
+    public static FindReplaceOpenMode OpenModeFor(bool showReplace) =>
+        showReplace ? FindReplaceOpenMode.Replace : FindReplaceOpenMode.Find;
+
+    /// <summary>
+    /// Whether the replacement field and the Replace / Replace All commands are offered at all.
+    /// FreeX collapses both buttons off the Find tab; FreeP hides the replacement row and gates
+    /// <c>CanReplace</c>/<c>CanReplaceAll</c> on the same answer.
+    /// FreeW deliberately shows both fields in both modes, so it consumes the mode but not this rule.
+    /// </summary>
+    public static bool ShowsReplaceSurface(FindReplaceOpenMode mode) =>
+        mode == FindReplaceOpenMode.Replace;
 
     public static bool CanRunWithQuery([NotNullWhen(true)] string? query) =>
         !IsSearchTermMissing(query);

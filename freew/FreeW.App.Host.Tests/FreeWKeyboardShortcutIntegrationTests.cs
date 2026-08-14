@@ -1,3 +1,4 @@
+﻿using Free.Shared.AppServices;
 using System.IO;
 using System.Windows.Input;
 using System.Windows;
@@ -95,24 +96,24 @@ public sealed class FreeWKeyboardShortcutIntegrationTests
     [StaFact]
     public void FindReplaceDialog_reuse_updates_open_mode_for_both_shortcuts()
     {
-        var dialog = new FindReplaceDialog(null!, new FreeW.App.Host.Editing.DocumentView(), FindReplaceDialogOpenMode.Find);
+        var dialog = new FindReplaceDialog(null!, new FreeW.App.Host.Editing.DocumentView(), FindReplaceOpenMode.Find);
         try
         {
             dialog.Show();
             dialog.Activate();
-            dialog.ActivateFor(FindReplaceDialogOpenMode.Find);
-            dialog.FocusedFieldForTest.Should().Be(FindReplaceDialogOpenMode.Find);
+            dialog.ActivateFor(FindReplaceOpenMode.Find);
+            dialog.FocusedFieldForTest.Should().Be(FindReplaceOpenMode.Find);
 
             dialog.Show();
             dialog.Activate();
-            dialog.ActivateFor(FindReplaceDialogOpenMode.Replace);
-            dialog.FocusedFieldForTest.Should().Be(FindReplaceDialogOpenMode.Replace);
+            dialog.ActivateFor(FindReplaceOpenMode.Replace);
+            dialog.FocusedFieldForTest.Should().Be(FindReplaceOpenMode.Replace);
 
             dialog.Show();
             dialog.Activate();
-            dialog.ActivateFor(FindReplaceDialogOpenMode.Find);
-            dialog.FocusedFieldForTest.Should().Be(FindReplaceDialogOpenMode.Find);
-            dialog.OpenModeForTest.Should().Be(FindReplaceDialogOpenMode.Find);
+            dialog.ActivateFor(FindReplaceOpenMode.Find);
+            dialog.FocusedFieldForTest.Should().Be(FindReplaceOpenMode.Find);
+            dialog.OpenModeForTest.Should().Be(FindReplaceOpenMode.Find);
         }
         finally
         {

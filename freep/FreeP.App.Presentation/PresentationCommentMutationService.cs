@@ -20,6 +20,28 @@ public sealed record PresentationCommentMutationResult(
     bool Applied,
     int? SelectedCommentIndex);
 
+/// <summary>
+/// Builds and applies slide-comment mutations (add/edit/reply/delete/resolve/reopen) against a live
+/// slide list, then renormalizes the selected comment index.
+/// <para>
+/// Cross-app note (assessed 2026-08-15):
+/// <c>FreeX.App.Presentation.Comments.PresentationCommentMutationService</c> shares only this type's
+/// <em>name</em>, and the collision is purely lexical — "Presentation" names the PowerPoint
+/// presentation here, but the <c>FreeX.App.Presentation</c> layer there. The domains do not overlap:
+/// this service addresses a comment within a slide, models PowerPoint-only concepts (EMU x/y anchor
+/// position, author initials, timestamps, resolved-at/resolved-by), and <em>applies</em> the
+/// mutation immediately via <see cref="PresentationReviewWorkflowPlanner"/>. The spreadsheet service
+/// addresses a cell within a sheet, models Excel-only concepts (legacy notes vs. threaded comments,
+/// per-note and show-all-notes visibility toggles, convert-notes-to-comments, reply edit/delete by
+/// index), and is an instance class returning <em>unapplied</em> <c>Func&lt;GridRange,
+/// IWorkbookCommand&gt;</c> factories with undo labels so the host command bus owns execution — it
+/// has no slide, no author/initials, no position and no timestamp. The two
+/// <c>PresentationCommentMutationPlan</c> records collide the same way: a materialized before/after
+/// comment state here, a label plus command factory there. Ignoring braces and short lines, the two
+/// files share <em>zero</em> identical lines. There is no neutral contract to extract; do not merge
+/// them.
+/// </para>
+/// </summary>
 public static class PresentationCommentMutationService
 {
     private const string DefaultAuthor = "FreeP User";

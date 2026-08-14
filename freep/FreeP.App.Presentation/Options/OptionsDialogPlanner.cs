@@ -36,31 +36,28 @@ public static class OptionsDialogPlanner
     public static OptionsDialogSurfaceSpec BuildSurface(FreePOptions? options, string systemLanguageLabel)
     {
         var source = options ?? new FreePOptions();
-        var seed = new FreePOptions
-        {
-            RecentFilesCap = source.RecentFilesCap,
-            DefaultSaveFormat = source.DefaultSaveFormat,
-            UiLanguage = source.UiLanguage,
-        };
-        seed.Normalize();
-
-        var languageHint = string.IsNullOrWhiteSpace(systemLanguageLabel)
-            ? Loc.Get("Options_UiLanguageSystemHint")
-            : Loc.Format("Options_UiLanguageCurrentHint", systemLanguageLabel);
+        var seed = BasicApplicationOptionsDialogSession<FreePOptions>.BuildResult(
+            source.RecentFilesCap,
+            source.DefaultSaveFormat,
+            source.UiLanguage,
+            FreePOptions.FxpDefaultFormat);
 
         return new OptionsDialogSurfaceSpec(
             Title,
             ShellStrings.Current.Ok,
             ShellStrings.Current.Cancel,
-            RecentFilesLabel,
-            DefaultSaveFormatLabel,
-            UiLanguageLabel,
-            languageHint,
+            BasicApplicationOptionsSurfacePlanner.BuildGeneral(
+                RecentFilesLabel,
+                DefaultSaveFormatLabel,
+                UiLanguageLabel,
+                systemLanguageLabel,
+                Loc.Get("Options_UiLanguageSystemHint"),
+                Loc.Get("Options_UiLanguageCurrentHint"),
+                [
+                    new(Loc.Get("Options_PresentationFormat"), FreePOptions.FxpDefaultFormat),
+                ]),
             seed.RecentFilesCap,
-            seed.UiLanguage,
-            [
-                new(Loc.Get("Options_PresentationFormat"), FreePOptions.FxpDefaultFormat),
-            ]);
+            seed.UiLanguage);
     }
 
     /// <summary>
@@ -76,19 +73,28 @@ public static class OptionsDialogPlanner
             FreePOptions.FxpDefaultFormat);
 }
 
+/// <summary>
+/// FreeP's Options surface. The labelled field schema, the language-hint rule, and the format-choice
+/// record are the shared basic-options core (<see cref="BasicApplicationOptionsGeneralSpec"/>) because
+/// FreeW makes the identical decisions; the dialog chrome (title and button labels) and the seeded values
+/// stay here. The per-field members forward to <see cref="General"/> so the renderers keep reading one
+/// flat surface.
+/// </summary>
 public sealed record OptionsDialogSurfaceSpec(
     string Title,
     string AcceptLabel,
     string CancelLabel,
-    string RecentFilesLabel,
-    string DefaultSaveFormatLabel,
-    string UiLanguageLabel,
-    string UiLanguageHint,
+    BasicApplicationOptionsGeneralSpec General,
     int RecentFilesCap,
-    string UiLanguage,
-    IReadOnlyList<OptionsDialogFormatChoice> FormatChoices);
-
-public sealed record OptionsDialogFormatChoice(string Label, string Extension)
+    string UiLanguage)
 {
-    public override string ToString() => Label;
+    public string RecentFilesLabel => General.RecentFilesLabel;
+
+    public string DefaultSaveFormatLabel => General.DefaultSaveFormatLabel;
+
+    public string UiLanguageLabel => General.UiLanguageLabel;
+
+    public string UiLanguageHint => General.UiLanguageHint;
+
+    public IReadOnlyList<ApplicationOptionsFormatChoice> FormatChoices => General.FormatChoices;
 }

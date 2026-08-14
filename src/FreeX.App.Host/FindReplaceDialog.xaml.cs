@@ -65,7 +65,7 @@ public sealed partial class FindReplaceDialog : Window
             });
         InitializeComponent();
         ApplySharedDialogSchema();
-        if (replaceMode)
+        if (FindReplaceDialogPlanner.ShowsReplaceCommands(replaceMode))
         {
             FindReplaceTabs.SelectedItem = ReplaceTab;
         }
@@ -102,7 +102,7 @@ public sealed partial class FindReplaceDialog : Window
     /// </summary>
     public void SwitchMode(bool replaceMode)
     {
-        var target = replaceMode ? ReplaceTab : FindTab;
+        var target = FindReplaceDialogPlanner.ShowsReplaceCommands(replaceMode) ? ReplaceTab : FindTab;
         if (!ReferenceEquals(FindReplaceTabs.SelectedItem, target))
             FindReplaceTabs.SelectedItem = target;
         FocusSearchBox();
@@ -118,6 +118,14 @@ public sealed partial class FindReplaceDialog : Window
         DialogFocus.FocusAndSelect(ResolveSearchBox());
     }
 
+    /// <summary>
+    /// The dialog's current Find/Replace open mode, expressed with the cross-app
+    /// <see cref="FindReplaceOpenMode"/> owned by <c>Free.Shared.AppServices</c>. The selected
+    /// TabItem is the WPF rendering of that mode; every mode-dependent decision reads this.
+    /// </summary>
+    internal FindReplaceOpenMode OpenMode =>
+        FindReplaceDialogPlanner.OpenModeFor(FindReplaceTabs.SelectedItem == ReplaceTab);
+
     private void FindNext_Click(object sender, RoutedEventArgs e) => FindNext();
     private void FindAll_Click(object sender, RoutedEventArgs e) => FindAll();
     private void Replace_Click(object sender, RoutedEventArgs e) => ReplaceOne();
@@ -131,7 +139,9 @@ public sealed partial class FindReplaceDialog : Window
 
     private void UpdateReplaceButtonVisibility()
     {
-        var visibility = FindReplaceTabs.SelectedItem == ReplaceTab ? Visibility.Visible : Visibility.Collapsed;
+        var visibility = FindReplaceDialogPlanner.ShowsReplaceCommands(OpenMode)
+            ? Visibility.Visible
+            : Visibility.Collapsed;
         ReplaceBtn.Visibility = visibility;
         ReplaceAllBtn.Visibility = visibility;
     }
@@ -305,7 +315,7 @@ public sealed partial class FindReplaceDialog : Window
         return true;
     }
 
-    private string SearchText => FindReplaceTabs.SelectedItem == ReplaceTab ? ReplaceFindBox.Text : FindBox.Text;
+    private string SearchText => ResolveSearchBox().Text;
 
     private bool ShowBlankSearchWarning()
     {
@@ -317,7 +327,11 @@ public sealed partial class FindReplaceDialog : Window
         return true;
     }
 
-    private TextBox ResolveSearchBox() => FindReplaceTabs.SelectedItem == ReplaceTab ? ReplaceFindBox : FindBox;
+    // FreeX focuses the ACTIVE TAB's "Find what" box in both modes; FreeW instead focuses its
+    // replacement field in Replace mode. The focus target is therefore app-specific and stays here
+    // even though the FindReplaceOpenMode it is resolved from is shared.
+    private TextBox ResolveSearchBox() =>
+        FindReplaceDialogPlanner.ShowsReplaceCommands(OpenMode) ? ReplaceFindBox : FindBox;
 
     private FindOptions CreateFindOptions() =>
         FindReplaceDialogPlanner.CreateFindOptions(

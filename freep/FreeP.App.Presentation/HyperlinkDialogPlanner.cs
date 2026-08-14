@@ -269,6 +269,30 @@ public sealed class HyperlinkDialogSession
         };
 }
 
+/// <summary>
+/// Builds the renderer-neutral surface schema, slide-option list, initial state and acceptance
+/// result for the slide Insert Hyperlink dialog. Hosts retain native controls, event/focus wiring
+/// and window lifetime.
+/// <para>
+/// Cross-app note (assessed 2026-08-15): <c>FreeX.App.Services.HyperlinkDialogPlanner</c> shares
+/// only this type's <em>name</em>. This planner solves dialog surface/label schema and slide-target
+/// resolution: field ids, control kinds, accessible names and automation ids over
+/// <see cref="PresentationDialogSurfacePlan{TField, TAction}"/>, a mutable
+/// <see cref="HyperlinkDialogSession"/> view-state machine with per-target input enablement, and
+/// slide lookup by id/index producing a <c>Hyperlink</c>. The spreadsheet planner solves target-text
+/// validation instead: four Excel link types (existing file/web page, place in this document, email
+/// address, create new document) against this one's two (Url, Slide), an <c>@</c>/dot/whitespace
+/// email-address rule, <c>mailto:</c> prefix add/strip, derived default display text, a five-member
+/// validation-error enum and a Wpf/Avalonia text profile that emits localized resource keys — none
+/// of which exist here. It also has no surface schema, no session state machine and no slide
+/// concept. The one primitive both apps genuinely share — URL scheme allowlisting — is
+/// <em>already</em> extracted as
+/// <see cref="Free.Shared.AppServices.ExternalUriLauncher.TryCreateAllowedUri"/>, called from
+/// <see cref="IsSupportedExternalUrl"/> here. Ignoring braces and short lines, the two files share
+/// exactly one identical line — the <c>public static class</c> declaration. There is no further
+/// stable neutral contract to extract; do not merge them.
+/// </para>
+/// </summary>
 public static class HyperlinkDialogPlanner
 {
     public const string Caption = "Insert Hyperlink";

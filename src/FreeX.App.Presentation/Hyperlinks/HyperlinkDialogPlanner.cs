@@ -73,6 +73,33 @@ public sealed record HyperlinkDialogPrefill(
         SpreadsheetDisplayFormatter.FormatCellValue(value);
 }
 
+/// <summary>
+/// Normalizes and validates the <em>target text</em> a user types into the spreadsheet Insert
+/// Hyperlink dialog, across the four Excel link types in <see cref="HyperlinkTargetKind"/>, and
+/// projects the outcome into a <see cref="HyperlinkDialogPlan"/> plus a
+/// <see cref="HyperlinkDialogValidationError"/> taxonomy that hosts render through
+/// <see cref="ValidationPresentationDescriptor{T}"/>.
+/// <para>
+/// Cross-app note (assessed 2026-08-15): <c>FreeP.App.Compositor.HyperlinkDialogPlanner</c> shares
+/// only this type's <em>name</em>. This planner solves target-text validation: it decides missing
+/// address vs. missing document location vs. missing new-document name from the link type, applies
+/// an <c>@</c>/dot/whitespace email-address rule, adds and strips the <c>mailto:</c> prefix, and
+/// derives default display text — and it owns a five-member error enum plus a Wpf/Avalonia text
+/// profile so each shell can phrase the same failure natively. The FreeP planner solves a different
+/// problem: it publishes a dialog <em>surface schema</em> (field ids, control kinds, labels,
+/// accessible names, automation ids) over FreeP's <c>PresentationDialogSurfacePlan</c>
+/// infrastructure, drives a mutable <c>HyperlinkDialogSession</c> view-state machine, and resolves
+/// PowerPoint slide targets by id/index. Its taxonomy is two target kinds (Url, Slide) against this
+/// one's four, it has no email-address rule, no <c>mailto:</c> normalization, no display-text
+/// derivation, no error enum and no text profile, and it emits literal strings rather than
+/// <see cref="LocalizedTextDescriptor"/> resources. The one primitive both apps genuinely share —
+/// URL scheme allowlisting — is <em>already</em> extracted as
+/// <see cref="Free.Shared.AppServices.ExternalUriLauncher.TryCreateAllowedUri"/>, which FreeP calls
+/// directly and which FreeX routes every launch through. Ignoring braces and short lines, the two
+/// files share exactly one identical line — the <c>public static class</c> declaration. There is no
+/// further stable neutral contract to extract; do not merge them.
+/// </para>
+/// </summary>
 public static class HyperlinkDialogPlanner
 {
     public const double Width = 560;

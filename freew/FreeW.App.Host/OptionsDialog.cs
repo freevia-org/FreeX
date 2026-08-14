@@ -332,12 +332,12 @@ internal sealed class OptionsDialog : Free.Shared.Ribbon.Wpf.DialogWindow
 
     private CheckBox ToggleFor(OptionsDialogToggleKind kind) => _toggles[kind];
 
-    private FrameworkElement GeneralControlFor(OptionsDialogGeneralFieldKind kind) =>
+    private FrameworkElement GeneralControlFor(BasicApplicationOptionsFieldKind kind) =>
         kind switch
         {
-            OptionsDialogGeneralFieldKind.RecentFilesCap => _recentFilesCap,
-            OptionsDialogGeneralFieldKind.DefaultSaveFormat => _defaultFormat,
-            OptionsDialogGeneralFieldKind.UiLanguage => _uiLanguage,
+            BasicApplicationOptionsFieldKind.RecentFilesCap => _recentFilesCap,
+            BasicApplicationOptionsFieldKind.DefaultSaveFormat => _defaultFormat,
+            BasicApplicationOptionsFieldKind.UiLanguage => _uiLanguage,
             _ => throw new ArgumentOutOfRangeException(nameof(kind), kind, null)
         };
 

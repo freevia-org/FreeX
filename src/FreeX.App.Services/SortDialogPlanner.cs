@@ -207,6 +207,22 @@ public sealed class SortDialogLevel : IEquatable<SortDialogLevel>, INotifyProper
     private void OnPropertyChanged(string? propertyName) => PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
 }
 
+/// <summary>
+/// Spreadsheet Sort dialog planning: an unbounded, ordered list of <see cref="SortDialogLevel"/>
+/// keyed by <em>column (or row) offset within a <see cref="GridRange"/></em>, each with its own
+/// "Sort On" criterion (cell values / cell color / font color / cell icon) and color/icon target,
+/// projected into a <see cref="SortCommand"/> over a <see cref="SheetId"/> and range.
+/// <para>
+/// Cross-app note (assessed 2026-08-14): <c>FreeW.App.Presentation.Dialogs.SortDialogPlanner</c>
+/// shares only this type's <em>name</em>. Word's dialog plans a fixed three optional keys whose
+/// identity is a <em>data type</em> (Text/Number/Date) rather than a column, has no sort-on
+/// criterion, no color/icon targets, no custom first-key list, no left-to-right axis, and treats
+/// "header row" as a pass-through flag rather than the range geometry <see cref="ExcludeHeaderRow"/>
+/// computes here. Neither planner defines any validation-error taxonomy. Ignoring braces and short
+/// lines, the two files share exactly one identical line — the <c>public static class</c>
+/// declaration. There is no stable neutral contract to extract; do not merge them.
+/// </para>
+/// </summary>
 public static class SortDialogPlanner
 {
     public static SortDialogCommandPlan CreateCommandPlan(
