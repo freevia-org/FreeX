@@ -130,6 +130,10 @@ public sealed class AvaloniaCompactDialogChromeSourceTests
         source.Should().Contain("CompactDialogVisualTokens.ComboBoxPaddingHorizontal");
         source.Should().Contain("CompactDialogVisualTokens.ComboBoxPaddingVertical");
         source.Should().Contain("CompactDialogVisualTokens.TogglePaddingLeft");
+        source.Should().Contain("CompactDialogVisualTokens.LabelPadding");
+        source.Should().Contain("CompactDialogVisualTokens.GroupBoxMarginVertical");
+        source.Should().Contain("CompactDialogVisualTokens.GroupBoxPaddingHorizontal");
+        source.Should().Contain("CompactDialogVisualTokens.GroupBoxPaddingVertical");
         source.Should().Contain("public Thickness ListBoxItemPadding { get; init; } = new(4, 1);");
         source.Should().Contain("public double ListBoxItemMinHeight { get; init; } = CompactDialogVisualTokens.ControlHeight;");
         source.Should().Contain("public CornerRadius ButtonCornerRadius { get; init; } = new(CompactDialogVisualTokens.ButtonCornerRadius);");
@@ -164,6 +168,11 @@ public sealed class AvaloniaCompactDialogChromeSourceTests
         source.Should().Contain("checkBox.VerticalContentAlignment = VerticalAlignment.Center;");
         source.Should().Contain("radioButton.VerticalContentAlignment = VerticalAlignment.Center;");
         source.Should().Contain("public static void ApplyListBox(");
+        source.Should().Contain("case GroupBox groupBox:");
+        source.Should().Contain("case Label label:");
+        source.Should().Contain("groupBox.Margin = style.GroupBoxMargin;");
+        source.Should().Contain("groupBox.Padding = style.GroupBoxPadding;");
+        source.Should().Contain("label.Padding = style.LabelPadding;");
         source.Should().Contain("new Setter(Layoutable.MinHeightProperty, style.ListBoxItemMinHeight)");
         source.Should().Contain("public static StackPanel CreateActionRow(");
         source.Should().Contain("public static void ApplyClassicTabChrome(");

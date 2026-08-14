@@ -38,6 +38,13 @@ public sealed record AvaloniaCompactDialogChromeStyle(FontFamily FontFamily)
         0,
         0,
         0);
+    public Thickness LabelPadding { get; init; } = new(CompactDialogVisualTokens.LabelPadding);
+    public Thickness GroupBoxMargin { get; init; } = new(
+        0,
+        CompactDialogVisualTokens.GroupBoxMarginVertical);
+    public Thickness GroupBoxPadding { get; init; } = new(
+        CompactDialogVisualTokens.GroupBoxPaddingHorizontal,
+        CompactDialogVisualTokens.GroupBoxPaddingVertical);
     public Thickness ListBoxItemPadding { get; init; } = new(4, 1);
     public double ListBoxItemMinHeight { get; init; } = CompactDialogVisualTokens.ControlHeight;
     public double ActionSpacing { get; init; } = 8;
@@ -199,6 +206,12 @@ public static class AvaloniaCompactDialogChrome
                     break;
                 case ListBox listBox:
                     ApplyListBox(listBox, style);
+                    break;
+                case GroupBox groupBox:
+                    ApplyGroupBox(groupBox, style);
+                    break;
+                case Label label:
+                    ApplyLabel(label, style);
                     break;
                 case TabControl tabControl:
                     ApplyClassicTabChrome(tabControl, style);
@@ -1023,6 +1036,10 @@ public static class AvaloniaCompactDialogChrome
         groupBox.Foreground = accent;
         groupBox.BorderBrush = borderBrush ?? GroupBoxBorderBrush;
         groupBox.BorderThickness = new Thickness(CompactDialogVisualTokens.BorderThickness);
+        if (!groupBox.IsSet(Layoutable.MarginProperty))
+            groupBox.Margin = style.GroupBoxMargin;
+        if (!groupBox.IsSet(TemplatedControl.PaddingProperty))
+            groupBox.Padding = style.GroupBoxPadding;
         groupBox.HeaderTemplate = new FuncDataTemplate<object>((header, _) => new TextBlock
         {
             Text = header?.ToString() ?? string.Empty,
@@ -1031,6 +1048,21 @@ public static class AvaloniaCompactDialogChrome
             Foreground = accent,
             TextWrapping = TextWrapping.NoWrap,
         });
+    }
+
+    public static void ApplyLabel(Label label, AvaloniaCompactDialogChromeStyle? style = null)
+    {
+        ArgumentNullException.ThrowIfNull(label);
+        style ??= WindowsStyle;
+
+        if (!label.IsSet(TemplatedControl.FontFamilyProperty))
+            label.FontFamily = style.FontFamily;
+        if (!label.IsSet(TemplatedControl.FontSizeProperty))
+            label.FontSize = style.FontSize;
+        if (!label.IsSet(TemplatedControl.ForegroundProperty))
+            label.Foreground = ThemeTextBrush(style);
+        if (!label.IsSet(TemplatedControl.PaddingProperty))
+            label.Padding = style.LabelPadding;
     }
 
     public static void ApplyRadioButton(RadioButton radioButton, AvaloniaCompactDialogChromeStyle style)

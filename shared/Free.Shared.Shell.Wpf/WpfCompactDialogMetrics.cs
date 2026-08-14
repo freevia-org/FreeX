@@ -32,6 +32,21 @@ public static class WpfCompactDialogMetrics
         0,
         0);
 
+    public static Thickness LabelPadding { get; } = new(
+        CompactDialogVisualTokens.LabelPadding);
+
+    public static Thickness GroupBoxMargin { get; } = new(
+        0,
+        CompactDialogVisualTokens.GroupBoxMarginVertical,
+        0,
+        CompactDialogVisualTokens.GroupBoxMarginVertical);
+
+    public static Thickness GroupBoxPadding { get; } = new(
+        CompactDialogVisualTokens.GroupBoxPaddingHorizontal,
+        CompactDialogVisualTokens.GroupBoxPaddingVertical,
+        CompactDialogVisualTokens.GroupBoxPaddingHorizontal,
+        CompactDialogVisualTokens.GroupBoxPaddingVertical);
+
     public static Thickness UniformBorderThickness { get; } = new(
         CompactDialogVisualTokens.BorderThickness);
 

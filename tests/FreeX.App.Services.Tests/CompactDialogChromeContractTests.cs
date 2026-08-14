@@ -18,6 +18,10 @@ public sealed class CompactDialogChromeContractTests
         CompactDialogVisualTokens.ComboBoxPaddingHorizontal.Should().Be(5);
         CompactDialogVisualTokens.ComboBoxPaddingVertical.Should().Be(2);
         CompactDialogVisualTokens.TogglePaddingLeft.Should().Be(4);
+        CompactDialogVisualTokens.LabelPadding.Should().Be(0);
+        CompactDialogVisualTokens.GroupBoxMarginVertical.Should().Be(4);
+        CompactDialogVisualTokens.GroupBoxPaddingHorizontal.Should().Be(8);
+        CompactDialogVisualTokens.GroupBoxPaddingVertical.Should().Be(6);
         CompactDialogVisualTokens.ButtonCornerRadius.Should().Be(3);
         CompactDialogVisualTokens.BorderThickness.Should().Be(1);
     }
@@ -42,6 +46,15 @@ public sealed class CompactDialogChromeContractTests
         avalonia.Should().Contain("CompactDialogVisualTokens.ComboBoxPaddingHorizontal");
         avalonia.Should().Contain("CompactDialogVisualTokens.ComboBoxPaddingVertical");
         avalonia.Should().Contain("CompactDialogVisualTokens.TogglePaddingLeft");
+        avalonia.Should().Contain("CompactDialogVisualTokens.LabelPadding");
+        avalonia.Should().Contain("CompactDialogVisualTokens.GroupBoxMarginVertical");
+        avalonia.Should().Contain("CompactDialogVisualTokens.GroupBoxPaddingHorizontal");
+        avalonia.Should().Contain("CompactDialogVisualTokens.GroupBoxPaddingVertical");
+        avalonia.Should().Contain("case GroupBox groupBox:");
+        avalonia.Should().Contain("case Label label:");
+        avalonia.Should().Contain("groupBox.Margin = style.GroupBoxMargin;");
+        avalonia.Should().Contain("groupBox.Padding = style.GroupBoxPadding;");
+        avalonia.Should().Contain("label.Padding = style.LabelPadding;");
         avalonia.Should().Contain("checkBox.Padding = style.TogglePadding;");
         avalonia.Should().Contain("radioButton.Padding = style.TogglePadding;");
         avalonia.Should().Contain("checkBox.VerticalContentAlignment = VerticalAlignment.Center;");
@@ -60,6 +73,9 @@ public sealed class CompactDialogChromeContractTests
         wpf.Should().Contain("{x:Static local:WpfCompactDialogMetrics.TextBoxPadding}");
         wpf.Should().Contain("{x:Static local:WpfCompactDialogMetrics.ComboBoxPadding}");
         wpf.Should().Contain("{x:Static local:WpfCompactDialogMetrics.TogglePadding}");
+        wpf.Should().Contain("{x:Static local:WpfCompactDialogMetrics.LabelPadding}");
+        wpf.Should().Contain("{x:Static local:WpfCompactDialogMetrics.GroupBoxMargin}");
+        wpf.Should().Contain("{x:Static local:WpfCompactDialogMetrics.GroupBoxPadding}");
         wpf.Should().Contain("{x:Static local:WpfCompactDialogMetrics.ButtonCornerRadius}");
         wpf.Should().Contain("{x:Static local:WpfCompactDialogMetrics.UniformBorderThickness}");
         wpf.Should().NotContain("<Setter Property=\"MinHeight\" Value=\"26\"/>");
@@ -73,6 +89,10 @@ public sealed class CompactDialogChromeContractTests
         wpfAdapter.Should().Contain("CompactDialogVisualTokens.ComboBoxPaddingHorizontal");
         wpfAdapter.Should().Contain("CompactDialogVisualTokens.ComboBoxPaddingVertical");
         wpfAdapter.Should().Contain("CompactDialogVisualTokens.TogglePaddingLeft");
+        wpfAdapter.Should().Contain("CompactDialogVisualTokens.LabelPadding");
+        wpfAdapter.Should().Contain("CompactDialogVisualTokens.GroupBoxMarginVertical");
+        wpfAdapter.Should().Contain("CompactDialogVisualTokens.GroupBoxPaddingHorizontal");
+        wpfAdapter.Should().Contain("CompactDialogVisualTokens.GroupBoxPaddingVertical");
         wpfAdapter.Should().Contain("CompactDialogVisualTokens.ButtonCornerRadius");
         wpfAdapter.Should().Contain("CompactDialogVisualTokens.BorderThickness");
     }
