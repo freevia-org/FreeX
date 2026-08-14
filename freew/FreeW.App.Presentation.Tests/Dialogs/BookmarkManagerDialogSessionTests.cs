@@ -141,6 +141,21 @@ public sealed class BookmarkManagerDialogSessionTests
 
         session.PlanGoTo().Should().Be(new BookmarkManagerGoToIntent("Target", 12));
     }
+
+    [Fact]
+    public void GoToIntentPreservesExactTableCellAddress()
+    {
+        var location = new BookmarkLocation(
+            "CellTarget",
+            3,
+            TableRowIndex: 2,
+            TableGridColumnIndex: 4,
+            TableParagraphIndex: 1);
+        var session = new BookmarkManagerDialogSession();
+        session.Refresh([location]);
+
+        session.PlanGoTo()!.Location.Should().Be(location);
+    }
 }
 
 public sealed class BookmarkManagerDialogSourceOwnershipTests
@@ -170,9 +185,16 @@ public sealed class BookmarkManagerDialogSourceOwnershipTests
         }
 
         wpf.Should().Contain("_editor.RemoveBookmark(plan.Name)");
-        wpf.Should().Contain("_editor.BringBlockIntoView(intent.BlockIndex)");
+        wpf.Should().Contain("_editor.GoToBookmark(intent.Location)");
         avalonia.Should().Contain("_editor.DeleteBookmark(plan.Name)");
-        avalonia.Should().Contain("_editor.GoToBookmark(intent.Name)");
+        avalonia.Should().Contain("_editor.GoToBookmark(intent.Location)");
+
+        var wpfEditor = ReadSource("freew", "FreeW.App.Host", "Editing", "DocumentView.cs");
+        var avaloniaEditor = ReadSource("freew", "FreeW.App.Avalonia", "Editing", "DocumentView.cs");
+        wpfEditor.Should().Contain("TableGridProjection.At(");
+        wpfEditor.Should().Contain("PlaceCaretAtTableCellTextOffset(");
+        avaloniaEditor.Should().Contain("location.TableGridColumnIndex.Value");
+        avaloniaEditor.Should().NotContain("FindBookmarkCell(");
     }
 
     [Fact]

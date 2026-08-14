@@ -144,7 +144,7 @@ internal sealed partial class BookmarkManagerDialog : FreeWDialogWindow
         var intent = _session.PlanGoTo();
         if (intent is null)
             return;
-        _editor.GoToBookmark(intent.Name);
+        _editor.GoToBookmark(intent.Location);
         Close();
     }
 

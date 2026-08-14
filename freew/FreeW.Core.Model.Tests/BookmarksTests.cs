@@ -79,11 +79,12 @@ public class BookmarksTests
     // --- Bookmarks placed inside table cells ---
 
     [Fact]
-    public void List_FindsBookmarkInsideTableCell_ReportingTheTablesBlockIndex()
+    public void List_FindsBookmarkInsideTableCell_WithExactLogicalAddress()
     {
         var doc = new TextDocument();
         doc.Blocks.Add(new Paragraph("Intro"));                 // 0: no bookmark
         var table = Table.Create(1, 2);
+        table.Rows[0].Cells[0].GridSpan = 2;
         table.Rows[0].Cells[1].Paragraphs[0].BookmarkName = "cellMark";
         doc.Blocks.Add(table);                                  // 1: table, bookmark in second cell
 
@@ -92,7 +93,12 @@ public class BookmarksTests
         // A cell-nested paragraph has no standalone index into TextDocument.Blocks, so List reports the
         // containing table's own block index (1) — the same convention ComplexFieldEngine's body-paragraph
         // walk uses for SEQ.
-        bookmarks.Should().Equal(new BookmarkLocation("cellMark", 1));
+        bookmarks.Should().Equal(new BookmarkLocation(
+            "cellMark",
+            1,
+            TableRowIndex: 0,
+            TableGridColumnIndex: 2,
+            TableParagraphIndex: 0));
     }
 
     [Fact]

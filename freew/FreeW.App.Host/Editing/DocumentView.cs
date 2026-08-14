@@ -14446,7 +14446,7 @@ public sealed partial class DocumentView : RichTextBox
         return true;
     }
 
-    private void PlaceCaretAtTableCellTextOffset(
+    private bool PlaceCaretAtTableCellTextOffset(
         int tableBlockIndex,
         int rowIndex,
         int cellIndex,
@@ -14461,14 +14461,16 @@ public sealed partial class DocumentView : RichTextBox
             .FirstOrDefault(candidate => candidate.Tag is WpfTableRowTag { SourceRowIndex: var source }
                 && source == rowIndex);
         if (row is null || cellIndex < 0 || cellIndex >= row.Cells.Count)
-            return;
+            return false;
 
         var paragraphs = row.Cells[cellIndex].Blocks.OfType<WpfParagraph>().ToList();
         if (paragraphIndex < 0 || paragraphIndex >= paragraphs.Count)
-            return;
+            return false;
 
         CaretPosition = TextPointerAtParagraphOffset(paragraphs[paragraphIndex], textOffset);
+        paragraphs[paragraphIndex].BringIntoView();
         Focus();
+        return true;
     }
 
     private static IEnumerable<WpfTable> EnumerateRenderedTables(BlockCollection blocks)
@@ -16241,6 +16243,40 @@ public sealed partial class DocumentView : RichTextBox
             .Select(location => location.Name)
             .Distinct(StringComparer.Ordinal)
             .ToList();
+    }
+
+    /// <summary>Moves the native caret to the exact shared bookmark target.</summary>
+    public bool GoToBookmark(BookmarkLocation location)
+    {
+        CommitToModel();
+        if (location.BlockIndex < 0 || location.BlockIndex >= _model.Blocks.Count)
+            return false;
+
+        if (location.IsTableLocation)
+        {
+            if (_model.Blocks[location.BlockIndex] is not ModelTable table
+                || location.TableRowIndex!.Value < 0
+                || location.TableRowIndex.Value >= table.Rows.Count
+                || TableGridProjection.At(
+                    table.Rows[location.TableRowIndex.Value],
+                    location.TableGridColumnIndex!.Value) is not { } projectedCell)
+            {
+                return false;
+            }
+
+            return PlaceCaretAtTableCellTextOffset(
+                location.BlockIndex,
+                location.TableRowIndex.Value,
+                projectedCell.CellIndex,
+                location.TableParagraphIndex!.Value,
+                location.Offset);
+        }
+
+        if (_model.Blocks[location.BlockIndex] is not ModelParagraph)
+            return false;
+
+        BringBlockIntoView(location.BlockIndex);
+        return true;
     }
 
     /// <summary>

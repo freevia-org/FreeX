@@ -1,14 +1,30 @@
 namespace FreeW.Core.Model;
 
 /// <summary>
-/// One bookmark target in a document: the bookmark <see cref="Name"/> and the body block index of the
-/// paragraph it marks (its position in <see cref="TextDocument.Blocks"/>, in document order). Pure
-/// data, produced by <see cref="Bookmarks"/>; a consumer can map an entry back to the matching block
-/// (e.g. to scroll/caret to it) via the index.
+/// One bookmark target in a document. Body bookmarks use their position in
+/// <see cref="TextDocument.Blocks"/>; table-cell bookmarks additionally carry an exact logical cell and
+/// paragraph address. Pure data, produced by <see cref="Bookmarks"/>, so native hosts do not need to
+/// rescan the model to resolve a target.
 /// </summary>
 /// <param name="Name">The bookmark name (the paragraph's <see cref="Paragraph.BookmarkName"/>).</param>
-/// <param name="BlockIndex">Index of the marked paragraph in <see cref="TextDocument.Blocks"/>.</param>
-public readonly record struct BookmarkLocation(string Name, int BlockIndex);
+/// <param name="BlockIndex">Index of the marked paragraph or containing table in <see cref="TextDocument.Blocks"/>.</param>
+/// <param name="TableRowIndex">Logical table row for a cell bookmark, or null for a body paragraph.</param>
+/// <param name="TableGridColumnIndex">Logical grid column for a cell bookmark, or null for a body paragraph.</param>
+/// <param name="TableParagraphIndex">Paragraph index within the cell, or null for a body paragraph.</param>
+/// <param name="Offset">Text offset within the target paragraph. Paragraph bookmarks currently start at zero.</param>
+public readonly record struct BookmarkLocation(
+    string Name,
+    int BlockIndex,
+    int? TableRowIndex = null,
+    int? TableGridColumnIndex = null,
+    int? TableParagraphIndex = null,
+    int Offset = 0)
+{
+    public bool IsTableLocation =>
+        TableRowIndex.HasValue &&
+        TableGridColumnIndex.HasValue &&
+        TableParagraphIndex.HasValue;
+}
 
 /// <summary>
 /// Pure, WPF-free helpers over a document's bookmark targets (paragraphs carrying a
@@ -27,11 +43,9 @@ public static class Bookmarks
     /// <see cref="Paragraph.BookmarkName"/> is a non-empty name, paired with its block index in
     /// <see cref="TextDocument.Blocks"/>. Descends into table cells (and their rows), so a bookmark placed
     /// inside a table is found too; its <see cref="BookmarkLocation.BlockIndex"/> is then the index of the
-    /// containing top-level <see cref="Table"/> block (the same convention <c>ComplexFieldEngine</c> uses
-    /// for body-paragraph walks), since a cell-nested paragraph has no standalone index into
-    /// <see cref="TextDocument.Blocks"/> — callers that need the exact paragraph should use
-    /// <see cref="FindParagraph"/> instead. Returns an empty list for a document with no bookmarks (or an
-    /// empty document). Deterministic (preserves block order; does not deduplicate).
+    /// containing top-level <see cref="Table"/> block, while logical row/grid-column/cell-paragraph
+    /// coordinates provide the exact native-caret target. Returns an empty list for a document with no
+    /// bookmarks (or an empty document). Deterministic (preserves block order; does not deduplicate).
     /// </summary>
     public static IReadOnlyList<BookmarkLocation> List(TextDocument doc)
     {
@@ -47,22 +61,50 @@ public static class Bookmarks
                     AddLocations(paragraph, i, locations);
                     break;
                 case Table table:
-                    foreach (var row in table.Rows)
-                        foreach (var cell in row.Cells)
-                            foreach (var cellParagraph in cell.Paragraphs)
-                                AddLocations(cellParagraph, i, locations);
+                    for (var rowIndex = 0; rowIndex < table.Rows.Count; rowIndex++)
+                    {
+                        foreach (var projectedCell in TableGridProjection.ProjectRow(table.Rows[rowIndex]))
+                        {
+                            for (var paragraphIndex = 0;
+                                 paragraphIndex < projectedCell.Cell.Paragraphs.Count;
+                                 paragraphIndex++)
+                            {
+                                AddLocations(
+                                    projectedCell.Cell.Paragraphs[paragraphIndex],
+                                    i,
+                                    locations,
+                                    rowIndex,
+                                    projectedCell.StartColumn,
+                                    paragraphIndex);
+                            }
+                        }
+                    }
+
                     break;
             }
         }
         return locations;
     }
 
-    private static void AddLocations(Paragraph paragraph, int blockIndex, List<BookmarkLocation> locations)
+    private static void AddLocations(
+        Paragraph paragraph,
+        int blockIndex,
+        List<BookmarkLocation> locations,
+        int? tableRowIndex = null,
+        int? tableGridColumnIndex = null,
+        int? tableParagraphIndex = null)
     {
         foreach (var name in paragraph.BookmarkNames)
         {
             if (!string.IsNullOrEmpty(name))
-                locations.Add(new BookmarkLocation(name, blockIndex));
+            {
+                locations.Add(new BookmarkLocation(
+                    name,
+                    blockIndex,
+                    tableRowIndex,
+                    tableGridColumnIndex,
+                    tableParagraphIndex));
+            }
         }
     }
 
