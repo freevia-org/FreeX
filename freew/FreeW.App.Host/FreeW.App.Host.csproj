@@ -65,7 +65,11 @@
   <ItemGroup Condition="'$(FreeWHostTestSupport)' == 'true'">
     <!-- Tests reach the internal print paginator (HeaderFooterPaginator) directly. -->
     <InternalsVisibleTo Include="FreeW.App.Host.Tests" />
-    <!-- FidelityRender composite path uses internal overlay/chrome/column helpers. -->
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- FidelityRender's normal Release build composes internal pagination, overlay, and column-rule
+         primitives into visual-parity artifacts. Its access must not depend on the host-test variant. -->
     <InternalsVisibleTo Include="FreeW.FidelityRender" />
   </ItemGroup>
 
