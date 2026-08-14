@@ -41,6 +41,12 @@ public sealed class CompactDialogChromeContractTests
         avalonia.Should().Contain("= CompactDialogVisualTokens.ButtonHeight;");
         avalonia.Should().Contain("= CompactDialogVisualTokens.ButtonMinWidth;");
         avalonia.Should().Contain("button.IsSet(Layoutable.MinWidthProperty) ? button.MinWidth : style.ButtonMinWidth");
+        avalonia.Should().Contain("textBox.IsSet(Layoutable.HeightProperty)");
+        avalonia.Should().Contain("comboBox.IsSet(Layoutable.HeightProperty)");
+        avalonia.Should().Contain("fixedHeight: !hasExplicitHeight && !isMultiline");
+        avalonia.Should().Contain("ApplyComboBox(comboBox, style, fixedHeight: !hasExplicitHeight)");
+        avalonia.Should().Contain("bool fixedHeight = true");
+        avalonia.Should().Contain("if (fixedHeight)");
         avalonia.Should().Contain("= CompactDialogVisualTokens.FontSize;");
         avalonia.Should().Contain("CompactDialogVisualTokens.ButtonPaddingHorizontal");
         avalonia.Should().Contain("CompactDialogVisualTokens.ButtonPaddingVertical");

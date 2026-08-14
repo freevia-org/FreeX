@@ -188,17 +188,25 @@ public static class AvaloniaCompactDialogChrome
                 {
                     var explicitFamily = textBox.FontFamily;
                     var isEditableComboTextBox = textBox.Name == "PART_EditableTextBox";
+                    var hasExplicitHeight = textBox.IsSet(Layoutable.HeightProperty)
+                        || textBox.IsSet(Layoutable.MinHeightProperty)
+                        || textBox.IsSet(Layoutable.MaxHeightProperty);
                     var isMultiline = !isEditableComboTextBox && (textBox.AcceptsReturn
                         || textBox.MinHeight > style.ControlHeight
                         || (!double.IsNaN(textBox.Height) && textBox.Height > style.ControlHeight));
-                    ApplyTextBox(textBox, style, fixedHeight: !isMultiline);
+                    ApplyTextBox(textBox, style, fixedHeight: !hasExplicitHeight && !isMultiline);
                     if (explicitFamily != FontFamily.Default && explicitFamily != window.FontFamily)
                         textBox.FontFamily = explicitFamily;
                     break;
                 }
                 case ComboBox comboBox:
-                    ApplyComboBox(comboBox, style);
+                {
+                    var hasExplicitHeight = comboBox.IsSet(Layoutable.HeightProperty)
+                        || comboBox.IsSet(Layoutable.MinHeightProperty)
+                        || comboBox.IsSet(Layoutable.MaxHeightProperty);
+                    ApplyComboBox(comboBox, style, fixedHeight: !hasExplicitHeight);
                     break;
+                }
                 case CheckBox checkBox:
                     ApplyCheckBox(checkBox, style);
                     break;
@@ -539,15 +547,21 @@ public static class AvaloniaCompactDialogChrome
         textBox.SelectionEnd = textBox.Text?.Length ?? 0;
     }
 
-    public static void ApplyComboBox(ComboBox comboBox, AvaloniaCompactDialogChromeStyle style)
+    public static void ApplyComboBox(
+        ComboBox comboBox,
+        AvaloniaCompactDialogChromeStyle style,
+        bool fixedHeight = true)
     {
         ArgumentNullException.ThrowIfNull(comboBox);
         ArgumentNullException.ThrowIfNull(style);
 
-        var height = style.ComboBoxHeight ?? style.ControlHeight;
-        comboBox.Height = height;
-        comboBox.MinHeight = height;
-        comboBox.MaxHeight = height;
+        if (fixedHeight)
+        {
+            var height = style.ComboBoxHeight ?? style.ControlHeight;
+            comboBox.Height = height;
+            comboBox.MinHeight = height;
+            comboBox.MaxHeight = height;
+        }
         comboBox.Padding = style.ComboBoxPadding;
         comboBox.CornerRadius = new CornerRadius(0);
         comboBox.FontSize = style.FontSize;

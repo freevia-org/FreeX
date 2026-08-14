@@ -162,6 +162,11 @@ public sealed class AvaloniaCompactDialogChromeSourceTests
         source.Should().Contain("textBox.FocusAdorner = null;");
         source.Should().Contain("style.FocusedInputBorderBrush ?? ThemeAccentBrush(style)");
         source.Should().Contain("var height = style.ComboBoxHeight ?? style.ControlHeight;");
+        source.Should().Contain("textBox.IsSet(Layoutable.HeightProperty)");
+        source.Should().Contain("comboBox.IsSet(Layoutable.HeightProperty)");
+        source.Should().Contain("fixedHeight: !hasExplicitHeight && !isMultiline");
+        source.Should().Contain("ApplyComboBox(comboBox, style, fixedHeight: !hasExplicitHeight)");
+        source.Should().Contain("bool fixedHeight = true");
         source.Should().Contain("comboBox.Padding = style.ComboBoxPadding;");
         source.Should().Contain("public static void ApplyCheckBox(");
         source.Should().Contain("public static void ApplyRadioButton(");
