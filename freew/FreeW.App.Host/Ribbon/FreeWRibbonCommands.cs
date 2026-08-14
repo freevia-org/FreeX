@@ -1071,6 +1071,20 @@ internal static class FreeWRibbonCommands
         stateful.Add(("freew.style", paragraphStyle));
         stateStore.SetState("freew.style", paragraphStyle.GetState());
 
+        FormattingGalleryRibbonWorkflow.Register(
+            registry,
+            new FormattingGalleryRibbonPorts(
+                PrepareExecution: () => editor.Focus(),
+                ApplyFontColor: hex => editor.SetTextColor(hex),
+                ApplyParagraphShading: hex => editor.SetParagraphShading(hex, ShadingPattern.Clear),
+                ApplyCharacterShading: hex => editor.SetCharacterShading(hex),
+                ApplyCharacterBorderColor: hex => editor.SetCharacterBorder(
+                    hex is null
+                        ? null
+                        : new ParagraphBorder(hex, 0.5) { LineStyle = BorderLineStyle.Single }),
+                ApplyHighlightColor: hex => editor.SetHighlightColor(hex),
+                ApplyNamedStyle: styleId => editor.ApplyNamedStyle(styleId)));
+
         // Home > Styles: New Style opens a dialog capturing name + formatting + based-on, creates a custom
         // DocumentStyle via the pure StyleManager and applies it to the selection. Manage Styles lets the
         // user modify or delete the catalog's styles (built-ins are guarded against deletion).

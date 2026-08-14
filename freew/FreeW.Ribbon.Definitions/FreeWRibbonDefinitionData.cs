@@ -95,6 +95,4 @@ public static class FreeWRibbonDefinitionData
         ("freew.symbol.arrow-left", "←", Loc.Get("Ribbon_Palette_Symbol_LeftArrow_Label")),
     ];
 
-    public static string StyleCommandId(string styleId) => $"freew.style.{styleId}";
-
 }

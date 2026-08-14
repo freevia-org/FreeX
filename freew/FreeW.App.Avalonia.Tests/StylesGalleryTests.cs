@@ -6,6 +6,7 @@ using Avalonia.Headless;
 using FreeW.App.Avalonia.Editing;
 using FreeW.App.Avalonia.Ribbon;
 using FreeW.App.Presentation.Dialogs;
+using FreeW.App.Presentation.Ribbon;
 using FreeW.Core.Model;
 using Free.Shared.Ribbon;
 
@@ -134,7 +135,7 @@ public sealed class StylesGalleryTests
         var registry = FreeWAvaloniaRibbonCommands.Build(new DocumentView(), NoopCallbacks());
         foreach (var descriptor in BuiltInStyles.Gallery)
         {
-            var id = FreeWAvaloniaRibbonCommands.StyleCommandId(descriptor.Id);
+            var id = FormattingGalleryRibbonWorkflow.StyleCommandId(descriptor.Id);
             registry.TryGet(new RibbonCommandId(id), out _)
                 .Should().BeTrue($"gallery style command '{id}' must be registered");
         }

@@ -1061,13 +1061,13 @@ internal static partial class FreeWCanonicalRibbonTabs
     /// <summary>
     /// AV-STYLES: Home &gt; Styles gallery dropdown — the full built-in style set (paragraph and character
     /// styles), one item per <see cref="BuiltInStyles.Gallery"/> entry. Each item's command id is
-    /// <c>freew.style.&lt;id&gt;</c> (matching <see cref="FreeWRibbonDefinitionData.StyleCommandId"/>).
+    /// <c>freew.style.&lt;id&gt;</c> (matching <see cref="FormattingGalleryRibbonWorkflow.StyleCommandId"/>).
     /// </summary>
     private static RibbonMenu BuildStylesMenu() =>
         new(BuiltInStyles.Gallery
             .Select(d => new RibbonMenuItem(
                 d.Type == StyleType.Character ? $"{d.Name}  (a)" : d.Name,
-                new RibbonCommandId(FreeWRibbonDefinitionData.StyleCommandId(d.Id))))
+                new RibbonCommandId(FormattingGalleryRibbonWorkflow.StyleCommandId(d.Id))))
             .ToArray());
     /// <summary>AV-INSERT2: Insert &gt; Cover Page gallery — the three built-in cover-page presets.</summary>
     private static RibbonMenu BuildCoverPageMenu() =>
