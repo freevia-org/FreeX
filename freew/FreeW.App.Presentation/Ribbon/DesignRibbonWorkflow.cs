@@ -14,6 +14,7 @@ public sealed record DesignRibbonBindings(
     Action<DocumentEffectSet> ApplyEffectSet,
     Action<DocumentTheme> PreviewTheme,
     Action<DocumentTheme> PreviewThemeColors,
+    Action<DocumentStyleSet> PreviewStyleSet,
     Action<DocumentFontSet> PreviewFontSet,
     Action<DocumentParagraphSpacingSet> PreviewParagraphSpacingSet,
     Action<DocumentEffectSet> PreviewEffectSet,
@@ -49,6 +50,12 @@ public static class DesignRibbonWorkflow
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(name);
         return $"freew.para-spacing.{name.ToLowerInvariant().Replace(' ', '-')}";
+    }
+
+    public static string StyleSetCommandId(string name)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(name);
+        return $"freew.style-set.{name.ToLowerInvariant().Replace(' ', '-')}";
     }
 
     public static DesignRibbonCommands Register(
@@ -148,6 +155,17 @@ public static class DesignRibbonWorkflow
             bindings.PrepareExecution,
             bindings.Formatting.CurrentStyleSetName);
         registry.Bind(FreeWRibbonCommandAction.StyleSet, styleSet);
+        foreach (var preset in DocumentStyleSet.Catalog)
+        {
+            var captured = preset;
+            registry.Register(
+                StyleSetCommandId(captured.Name),
+                Previewable(
+                    bindings,
+                    captured,
+                    bindings.PreviewStyleSet,
+                    value => bindings.Formatting.ApplyStyleSet(value.Name)));
+        }
         registry.Bind(
             FreeWRibbonCommandAction.ResetStyleSet,
             Prepared(bindings, bindings.ApplyDefaultStyleSet));

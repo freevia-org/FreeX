@@ -234,11 +234,7 @@ internal static partial class FreeWCanonicalRibbonTabs
                     tab.Group("document-formatting", "Document Formatting", null, 100, group =>
                     {
                         group.Dropdown("freew.theme-colors", "Colors", BuildAvaloniaThemeColorsMenu());
-                        group.ComboBox("freew.style-set", "Style Sets", control => control with
-                        {
-                            Items = DocumentStyleSet.Catalog.Select(style => style.Name).ToArray(),
-                            Width = 128,
-                        });
+                        group.Dropdown("freew.style-set", "Style Sets", BuildAvaloniaStyleSetsMenu());
                         group.Button("freew.reset-style-set", "Reset to Default Style Set", button => button with
                         {
                             PreferredLayout = RibbonCommandLayoutKind.Small,
@@ -666,6 +662,13 @@ internal static partial class FreeWCanonicalRibbonTabs
                 new RibbonCommandId($"freew.theme-colors.{theme.Name.ToLowerInvariant()}")))
             .Concat([RibbonMenuItem.Separator(),
                 new RibbonMenuItem("Customize Colors...", new RibbonCommandId("freew.customize-colors"))])
+            .ToArray());
+
+    private static RibbonMenu BuildAvaloniaStyleSetsMenu() => new(
+        DocumentStyleSet.Catalog
+            .Select(styleSet => new RibbonMenuItem(
+                styleSet.Name,
+                new RibbonCommandId(DesignRibbonWorkflow.StyleSetCommandId(styleSet.Name))))
             .ToArray());
 
     private static RibbonMenu BuildAvaloniaThemeFontsMenu() => new(
