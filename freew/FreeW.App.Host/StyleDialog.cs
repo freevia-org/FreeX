@@ -55,7 +55,7 @@ internal static class StyleDialog
         var state = session.InitialState;
         var surface = StyleDialogPlanner.Surface;
 
-        var dialog = new Window
+        var dialog = new FreeWDialogWindow
         {
             Title = state.Title,
             SizeToContent = SizeToContent.WidthAndHeight,
@@ -196,7 +196,7 @@ internal static class ManageStylesDialog
         var session = StyleDialogPlanner.CreateManageStylesSession(model, preselectStyleId);
         var surface = StyleDialogPlanner.Surface.Manage;
 
-        var dialog = new Window
+        var dialog = new FreeWDialogWindow
         {
             Title = surface.Title,
             SizeToContent = SizeToContent.WidthAndHeight,

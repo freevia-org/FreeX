@@ -30,6 +30,29 @@ public sealed class CustomDialogChromeOwnershipTests
         }
     }
 
+    [Fact]
+    public void CommonWpfDialogsFlowThroughTheSharedWindowBase()
+    {
+        var baseWindow = ReadSource("FreeW.App.Host", "FreeWDialogWindow.cs");
+        baseWindow.Should().Contain("class FreeWDialogWindow : DialogWindow");
+
+        var routes = new[]
+        {
+            "FontDialog.cs",
+            "ParagraphBreaksDialog.cs",
+            "PasteSpecialDialog.cs",
+            "MultilevelListDialog.cs",
+            "StyleDialog.cs",
+        };
+
+        foreach (var fileName in routes)
+        {
+            var source = ReadSource("FreeW.App.Host", fileName);
+            source.Should().Contain("new FreeWDialogWindow", $"{fileName} must consume shared WPF dialog chrome")
+                .And.NotContain("new Window", $"{fileName} must not bypass the shared WPF dialog base");
+        }
+    }
+
     private static string ReadSource(string project, string fileName)
     {
         var root = TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeX.slnx");
