@@ -227,52 +227,57 @@ public sealed class BookmarkDialog : FreeWDialogWindow
 /// </summary>
 public sealed class LinkBookmarkDialog : FreeWDialogWindow
 {
-    private readonly ComboBox _existing = new()
+    private readonly LinkBookmarkDialogPresentation _presentation;
+    private readonly ListBox _existing = new()
     {
-        MinWidth = 260,
-        Margin = new Thickness(0, 6, 0, 0),
+        MinWidth = 280,
+        MinHeight = 120,
     };
 
     /// <summary>The chosen bookmark name, or null when cancelled.</summary>
     public string? BookmarkName { get; private set; }
 
-    public LinkBookmarkDialog(IReadOnlyList<string> existingNames)
+    public LinkBookmarkDialog()
+        : this(LinkBookmarkDialogPlanner.Build([]))
     {
-        ArgumentNullException.ThrowIfNull(existingNames);
+    }
 
-        Title = InsertDialogTextResources.LinkBookmark.Title;
+    public LinkBookmarkDialog(LinkBookmarkDialogPresentation presentation)
+    {
+        ArgumentNullException.ThrowIfNull(presentation);
+        _presentation = presentation;
+
+        Title = presentation.Title;
         Width = 380;
         SizeToContent = SizeToContent.Height;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
         CanResize = false;
         ShowInTaskbar = false;
 
-        _existing.ItemsSource = existingNames;
-        if (existingNames.Count > 0)
-            _existing.SelectedIndex = 0;
-        _existing.IsEnabled = existingNames.Count > 0;
-        AvaloniaCompactDialogChrome.ApplyComboBox(_existing, InsertDialogLayout.ChromeStyle);
+        _existing.ItemsSource = presentation.BookmarkNames;
+        _existing.SelectedIndex = presentation.SelectedIndex;
+        _existing.IsEnabled = !presentation.IsEmpty;
+        _existing.DoubleTapped += (_, _) => Accept();
+        AvaloniaCompactDialogChrome.ApplyListBox(_existing, InsertDialogLayout.ChromeStyle);
 
-        var grid = new Grid { Margin = new Thickness(14, 12, 14, 0) };
-        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-        InsertDialogLayout.AddLabeledRow(grid, 0, InsertDialogTextResources.LinkBookmark.BookmarkLabel, _existing);
-
-        var linkButton = InsertDialogLayout.MakeButton(InsertDialogTextResources.LinkBookmark.LinkButton, (_, _) =>
+        var body = new StackPanel { Margin = new Thickness(14, 12, 14, 12) };
+        body.Children.Add(new TextBlock
         {
-            if (_existing.SelectedItem is string s && !string.IsNullOrWhiteSpace(s))
-            {
-                BookmarkName = s;
-                Close();
-            }
+            Text = presentation.BookmarkLabel,
+            Margin = new Thickness(0, 0, 0, 6),
         });
-        var closeButton = InsertDialogLayout.MakeButton(InsertDialogTextResources.LinkBookmark.CloseButton, (_, _) => Close());
-        var btnRow = AvaloniaCompactDialogChrome.CreateActionRow([linkButton, closeButton], new Thickness(14, 12, 14, 12));
+        body.Children.Add(_existing);
+        body.Children.Add(InsertDialogLayout.OkCancelRow(Accept, Close));
+        Content = body;
+    }
 
-        var outer = new StackPanel();
-        outer.Children.Add(grid);
-        outer.Children.Add(btnRow);
-        Content = outer;
+    private void Accept()
+    {
+        if (LinkBookmarkDialogPlanner.PlanAcceptance(_presentation, _existing.SelectedIndex) is not { } bookmark)
+            return;
+
+        BookmarkName = bookmark;
+        Close();
     }
 }
 

@@ -3898,17 +3898,17 @@ internal static class FreeWRibbonCommands
         public void Execute(RibbonCommandContext context)
         {
             editor.Focus();
-            var bookmarks = editor.BookmarkNames();
-            if (bookmarks.Count == 0)
+            var presentation = LinkBookmarkDialogPlanner.Build(editor.BookmarkNames());
+            if (presentation.IsEmpty)
             {
                 DialogMessageHelper.ShowInfo(
                     Window.GetWindow(editor),
-                    UiText.Get("Bookmark_NoneForLink_Message"),
-                    UiText.Get("FreeW_ProductName"));
+                    presentation.EmptyMessage,
+                    presentation.EmptyTitle);
                 return;
             }
 
-            var chosen = BookmarkPicker.Ask(Window.GetWindow(editor), bookmarks);
+            var chosen = LinkBookmarkDialog.Ask(Window.GetWindow(editor), presentation);
             if (!string.IsNullOrWhiteSpace(chosen))
                 editor.ApplyInternalLink(chosen!);
         }
@@ -3922,56 +3922,6 @@ internal static class FreeWRibbonCommands
         {
             editor.Focus();
             BookmarkManagerDialog.Show(Window.GetWindow(editor), editor);
-        }
-    }
-
-    // A tiny modal dialog to pick one of the document's bookmark names. Returns the chosen name, or
-    // null if cancelled.
-    private static class BookmarkPicker
-    {
-        public static string? Ask(Window? owner, IReadOnlyList<string> bookmarks)
-        {
-            var list = new System.Windows.Controls.ListBox
-            {
-                MinWidth = 280,
-                MinHeight = 120,
-                Margin = new Thickness(0, 0, 0, 12)
-            };
-            foreach (var name in bookmarks)
-                list.Items.Add(name);
-            list.SelectedIndex = 0;
-
-            string? result = null;
-            var dialog = new Window
-            {
-                Title = UiText.Get("LinkBookmark_Title"),
-                SizeToContent = SizeToContent.WidthAndHeight,
-                ResizeMode = ResizeMode.NoResize,
-                WindowStartupLocation = WindowStartupLocation.CenterOwner,
-                Owner = owner,
-                ShowInTaskbar = false
-            };
-
-            var ok = new System.Windows.Controls.Button { Content = UiText.Get("Common_OkText"), IsDefault = true, MinWidth = 72, Margin = new Thickness(0, 0, 8, 0) };
-            var cancel = new System.Windows.Controls.Button { Content = UiText.Get("Common_CancelText"), IsCancel = true, MinWidth = 72 };
-            ok.Click += (_, _) => { result = list.SelectedItem as string; dialog.DialogResult = true; };
-            list.MouseDoubleClick += (_, _) => { result = list.SelectedItem as string; dialog.DialogResult = true; };
-
-            var buttons = new System.Windows.Controls.StackPanel
-            {
-                Orientation = System.Windows.Controls.Orientation.Horizontal,
-                HorizontalAlignment = HorizontalAlignment.Right
-            };
-            buttons.Children.Add(ok);
-            buttons.Children.Add(cancel);
-
-            var panel = new System.Windows.Controls.StackPanel { Margin = new Thickness(16) };
-            panel.Children.Add(new System.Windows.Controls.TextBlock { Text = UiText.Get("LinkBookmark_Bookmark_Label"), Margin = new Thickness(0, 0, 0, 4) });
-            panel.Children.Add(list);
-            panel.Children.Add(buttons);
-            dialog.Content = panel;
-
-            return dialog.ShowDialog() == true ? result : null;
         }
     }
 

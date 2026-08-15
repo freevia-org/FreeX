@@ -28,7 +28,9 @@ public sealed record LinkBookmarkDialogText(
     string Title,
     string BookmarkLabel,
     string LinkButton,
-    string CloseButton);
+    string CloseButton,
+    string EmptyMessage,
+    string EmptyTitle);
 
 public sealed record QuickPartDialogText(
     string Title,
@@ -46,6 +48,7 @@ public static class InsertDialogTextResources
         "Bookmark_Title", "Bookmark_Name_Placeholder", "Bookmark_Name_Label", "Bookmark_GoTo_Label",
         "Bookmark_Add_Button", "Bookmark_GoTo_Button", "Bookmark_Close_Button",
         "LinkBookmark_Title", "LinkBookmark_Bookmark_Label", "LinkBookmark_Link_Button",
+        "Bookmark_NoneForLink_Message", "FreeW_ProductName",
         "QuickParts_Insert_Title", "QuickParts_Snippet_Placeholder", "QuickParts_Text_Label",
     ];
 
@@ -79,7 +82,9 @@ public static class InsertDialogTextResources
         Title: Text("LinkBookmark_Title"),
         BookmarkLabel: Text("LinkBookmark_Bookmark_Label"),
         LinkButton: Text("LinkBookmark_Link_Button"),
-        CloseButton: Text("Bookmark_Close_Button"));
+        CloseButton: Text("Bookmark_Close_Button"),
+        EmptyMessage: Text("Bookmark_NoneForLink_Message"),
+        EmptyTitle: Text("FreeW_ProductName"));
 
     public static QuickPartDialogText QuickPart => new(
         Title: Text("QuickParts_Insert_Title"),

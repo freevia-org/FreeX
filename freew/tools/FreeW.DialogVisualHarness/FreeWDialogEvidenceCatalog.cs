@@ -409,7 +409,7 @@ public static class FreeWDialogEvidenceCatalog
             AvaloniaOnly("header-footer-text", "HeaderFooterTextDialog"),
             Pair("hyperlink", "HyperlinkDialog"),
             AvaloniaOnly("image-alt-text", "ImageAltTextDialog"),
-            AvaloniaOnly("link-bookmark", "LinkBookmarkDialog"),
+            Pair("link-bookmark", "LinkBookmarkDialog"),
             Pair("manage-sources", "ManageSourcesDialogWindow", "ManageSourcesDialog",
                 fixture: FreeWDialogFixtureKind.EmptySourceLists,
                 wpfAction: FreeWDialogOpenAction.StaticPrompt,

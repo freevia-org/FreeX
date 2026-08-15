@@ -3626,11 +3626,15 @@ public sealed partial class MainWindow : Window
     /// </summary>
     private async Task OpenLinkBookmarkDialogAsync()
     {
-        var names = _editor.BookmarkNames();
-        if (names.Count == 0)
+        var presentation = LinkBookmarkDialogPlanner.Build(_editor.BookmarkNames());
+        if (presentation.IsEmpty)
+        {
+            await FreeWInfoDialog.ShowAsync(this, presentation.EmptyMessage, presentation.EmptyTitle);
+            _editor.Focus();
             return;
+        }
 
-        var dialog = new LinkBookmarkDialog(names);
+        var dialog = new LinkBookmarkDialog(presentation);
         await dialog.ShowDialog(this);
         if (dialog.BookmarkName is { } bookmark)
             _editor.ApplyInternalLink(bookmark);
