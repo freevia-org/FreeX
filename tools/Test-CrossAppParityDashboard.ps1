@@ -27,11 +27,14 @@ Assert-DashboardCondition ($dashboard.scopeBoundary -match "visual parity") "Cro
 $requiredSources = @(
     "docs/parity/freew-dialog-harness/freew_dialog_route_inventory.json",
     "docs/parity/freew-dialog-harness/freew_dialog_visual_comparison.json",
+    "docs/parity/freew-word-baseline-2026-08-14/manifest.json",
+    "docs/parity/freex-excel-com-baseline-2026-08-14/manifest.json",
     "docs/parity/freep-dialog-pane-visual-evidence/summary.json",
     "docs/parity/freep-dialog-pane-visual-evidence/artifact-manifest.json",
     "docs/parity/freep-whole-window-visual-evidence/summary.json",
     "docs/parity/freep-whole-window-visual-evidence/artifact-manifest.json",
-    "docs/parity/freep-render-slideshow-media-parity-20260720.json"
+    "docs/parity/freep-render-slideshow-media-parity-20260720.json",
+    "docs/parity/freep-powerpoint-baseline-2026-08-14.json"
 )
 foreach ($source in $requiredSources) {
     Assert-DashboardCondition (@($dashboard.sources) -contains $source) "Cross-app dashboard is missing authoritative source '$source'."
@@ -63,12 +66,18 @@ Assert-DashboardCondition ([string]$freeW.renderedEvidence.canonicalComparison.r
 Assert-DashboardCondition (($freeWArtifacts.pairedComparisonRowCount + $freeWArtifacts.avaloniaOnlyArtifactRowCount + $freeWArtifacts.stateNotApplicableRowCount) -eq $freeWArtifacts.evidenceRowCount) "FreeW comparison rows must partition into paired, Avalonia-only, and not-applicable rows."
 Assert-DashboardCondition ($freeWPaired.pairedScenarioCount -eq $freeWArtifacts.pairedComparisonRowCount) "FreeW paired evidence must use the paired comparison-row count."
 Assert-DashboardCondition ($freeWPaired.mismatchCount -gt 0 -or $freeWPaired.passCount -gt 0) "FreeW paired evidence must retain comparison classifications."
+Assert-DashboardCondition ($freeW.renderedEvidence.authoritativeMicrosoftOfficeBaseline.available -eq $true) "FreeW must report its committed Word reference baseline as available."
+Assert-DashboardCondition ($freeW.renderedEvidence.authoritativeMicrosoftOfficeBaseline.artifactCount -eq 61) "FreeW Word baseline artifact count must remain explicit."
+
+Assert-DashboardCondition ($freeX.renderedEvidence.authoritativeMicrosoftOfficeBaseline.available -eq $true) "FreeX must report its committed Excel reference baseline as available."
+Assert-DashboardCondition ($freeX.renderedEvidence.authoritativeMicrosoftOfficeBaseline.artifactCount -eq 30) "FreeX Excel baseline artifact count must remain explicit."
 
 $freeP = $apps["FreeP"]
 $freePLanes = @($freeP.renderedEvidence.routeCoverage.laneEntries)
 Assert-DashboardCondition ($freePLanes.Count -eq 2) "FreeP rendered evidence must retain dialog-pane and whole-window lanes."
 Assert-DashboardCondition ($freeP.renderedEvidence.routeCoverage.pairedScenarioCount -eq ($freePLanes | Measure-Object -Property pairedScenarioCount -Sum).Sum) "FreeP paired scenario total must equal the lane sum."
 Assert-DashboardCondition ($freeP.renderedEvidence.artifactCoverage.wpfPngCount -gt 0 -and $freeP.renderedEvidence.artifactCoverage.avaloniaPngCount -gt 0) "FreeP artifact coverage must retain both WPF and Avalonia PNG counts."
-Assert-DashboardCondition ($freeP.renderedEvidence.authoritativeMicrosoftOfficeBaseline.available -eq $false) "FreeP must not claim an authoritative PowerPoint baseline from local rendered evidence."
+Assert-DashboardCondition ($freeP.renderedEvidence.authoritativeMicrosoftOfficeBaseline.available -eq $true) "FreeP must report its committed PowerPoint reference baseline as available."
+Assert-DashboardCondition ($freeP.renderedEvidence.authoritativeMicrosoftOfficeBaseline.artifactCount -eq 53) "FreeP PowerPoint baseline artifact count must remain explicit."
 
 Write-Host "Cross-app parity dashboard schema and evidence aggregation guards passed."
