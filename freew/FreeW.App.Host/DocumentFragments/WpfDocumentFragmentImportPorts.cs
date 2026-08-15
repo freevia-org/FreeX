@@ -30,21 +30,10 @@ internal sealed class WpfDocumentFragmentPickerPort(Window? owner) : IFreeWDocum
     }
 }
 
-internal sealed class WpfDocumentFragmentSourceReaderPort : IFreeWDocumentFragmentSourceReaderPort
+internal sealed class WpfDocumentFragmentSourceReaderPort :
+    FreeWDocumentFragmentFileSourceReaderPort
 {
-    public Task<byte[]> ReadBytesAsync(
-        FreeWDocumentFragmentImportSelection selection,
-        CancellationToken cancellationToken) =>
-        FileByteReadWorkflow.ReadLocalPathBytesAsync(
-            (string)selection.Source,
-            cancellationToken);
-
-    public Task<string> ReadTextAsync(
-        FreeWDocumentFragmentImportSelection selection,
-        CancellationToken cancellationToken) =>
-        File.ReadAllTextAsync((string)selection.Source, cancellationToken);
-
-    public void ResolveLinkedImagePreviews(
+    public override void ResolveLinkedImagePreviews(
         FreeWDocumentFragmentImportSelection selection,
         TextDocument document) =>
         LinkedImagePreviewResolver.ResolveLocalPreviews(document, selection.LocalPath);

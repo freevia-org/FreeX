@@ -51,6 +51,8 @@ public sealed class ScreenClipImageFactoryOwnershipTests
         wpfCommands.Should().Contain("editor.InsertImage(image)");
         avaloniaService.Should().Contain("ScreenClipOverlay(bounds, scale)");
         avaloniaService.Should().Contain("CaptureRegionPngAsync(selected, cancellationToken)");
+        avaloniaService.Should().Contain("FileByteReadWorkflow.ReadLocalPathBytesAsync(");
+        avaloniaService.Should().NotContain("File.ReadAllBytesAsync(");
         avaloniaService.Should().Contain("owner.WindowState = WindowState.Minimized");
         avaloniaService.Should().Contain("owner.Activate()");
         avaloniaWindow.Should().Contain("_screenClipService.CaptureAsync(this, cancellationToken)");
