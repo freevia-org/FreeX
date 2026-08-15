@@ -61,6 +61,11 @@ public sealed class SlideShowHostPolicySourceTests
             "freep",
             "RendererShared",
             "SlideShowWindow.RuntimeSession.cs"));
+        var portableSurfaceSource = File.ReadAllText(Path.Combine(
+            root,
+            "freep",
+            "RendererShared",
+            "SlideShowWindow.PortableSurface.cs"));
 
         source.Should().Contain("_runtime.HandleKeyboardInput(");
         runtimeSessionSource.Should().Contain("_runtime.ExecuteSlideNumberJump(");
@@ -70,7 +75,7 @@ public sealed class SlideShowHostPolicySourceTests
         runtimeSessionSource.Should().Contain("_runtime.ExecuteBack(");
         source.Should().Contain("_runtime.HandlePointerInput(");
         source.Should().Contain("_runtime.ActivateHyperlink(");
-        source.Should().Contain("_runtime.DisplayCurrentSlide(");
+        portableSurfaceSource.Should().Contain("_runtime.DisplayCurrentSlide(");
         runtimeSessionSource.Should().Contain("_runtime.CreatePresenterState(");
         runtimeSessionSource.Should().Contain("_runtime.PresenterSummary");
         source.Should().Contain("SlideShowInkNativeProjectionSession.Apply(");
@@ -243,11 +248,17 @@ public sealed class SlideShowHostPolicySourceTests
     [Fact]
     public void WpfSlideShowWindow_ExecutesAnimationStepsThroughSharedPlaybackPlans()
     {
+        var root = TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeP.slnx");
         var source = File.ReadAllText(Path.Combine(
-            TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeP.slnx"),
+            root,
             "freep",
             "FreeP.App.Host",
             "SlideShowWindow.cs"));
+        var portableSurfaceSource = File.ReadAllText(Path.Combine(
+            root,
+            "freep",
+            "RendererShared",
+            "SlideShowWindow.PortableSurface.cs"));
 
         source.Should().Contain("new SlideShowRuntimeRendererCallbacks(");
         source.Should().Contain("PlayAnimationStep,");
@@ -255,7 +266,7 @@ public sealed class SlideShowHostPolicySourceTests
         source.Should().Contain("_runtime.AnimationRendererSession.PlanStep(");
         source.Should().Contain("BuildAnimationTargetAvailability()");
         source.Should().Contain("SlideShowAnimationTargetRegistry<FrameworkElement>");
-        source.Should().Contain("_animationTargets.BuildAvailability()");
+        portableSurfaceSource.Should().Contain("_animationTargets.BuildAvailability()");
         source.Should().Contain("_animationTargets.Resolve(operation)");
         source.Should().NotContain("Dictionary<uint, FrameworkElement> _anim");
         source.Should().Contain("_runtime.AnimationRendererSession.ExecuteStep(");
@@ -398,25 +409,24 @@ public sealed class SlideShowHostPolicySourceTests
     [Fact]
     public void WpfSlideShowWindow_DelegatesDisplaySequencingToPortableCoordinator()
     {
+        var root = TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeP.slnx");
         var source = File.ReadAllText(Path.Combine(
-            TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeP.slnx"),
+            root,
             "freep",
             "FreeP.App.Host",
             "SlideShowWindow.cs"));
+        var portableSurface = File.ReadAllText(Path.Combine(
+            root,
+            "freep",
+            "RendererShared",
+            "SlideShowWindow.PortableSurface.cs"));
 
-        var displayStart = source.IndexOf("private void DisplayCurrentSlide(", StringComparison.Ordinal);
-        var adapterStart = source.IndexOf(
-            "void ISlideShowDisplayRenderer.ApplyDisplayState(",
-            displayStart,
-            StringComparison.Ordinal);
-        displayStart.Should().BeGreaterThanOrEqualTo(0);
-        adapterStart.Should().BeGreaterThan(displayStart);
-        var displayMethod = source[displayStart..adapterStart];
-
-        displayMethod.Should().Contain("_runtime.DisplayCurrentSlide(");
-        displayMethod.Should().NotContain("PrepareAnimationOverlay(");
-        displayMethod.Should().NotContain("_mediaController.EnterSlide(");
-        displayMethod.Should().NotContain("_autoAdvanceTimer");
+        portableSurface.Should().Contain("private void DisplayCurrentSlide(");
+        portableSurface.Should().Contain("_runtime.DisplayCurrentSlide(");
+        portableSurface.Should().NotContain("PrepareAnimationOverlay(");
+        portableSurface.Should().NotContain("_mediaController.EnterSlide(");
+        portableSurface.Should().NotContain("_autoAdvanceTimer");
+        source.Should().NotContain("private void DisplayCurrentSlide(");
         source.Should().Contain("_runtime.HandleAutoAdvanceElapsed(");
         source.Should().Contain("TogglePresenterView,");
         source.Should().NotContain("_runtime.TogglePresenterView();");

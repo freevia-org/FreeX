@@ -97,64 +97,6 @@ public sealed partial class SlideShowWindow : Window, ISlideShowTransitionPlayba
 
     // ── Construction ─────────────────────────────────────────────────────────────
 
-    /// <param name="presentation">The presentation to play.</param>
-    /// <param name="startIndex">Zero-based slide index to start from.</param>
-    public SlideShowWindow(Presentation presentation, int startIndex = 0)
-        : this(SlideShowWindowLaunchPlan.FullPresentation(presentation, startIndex))
-    {
-    }
-
-    internal SlideShowWindow(
-        Presentation presentation,
-        int startIndex,
-        ISlideShowRecordingCaptureBackend? captureBackend)
-        : this(SlideShowWindowLaunchPlan.FullPresentation(presentation, startIndex, captureBackend))
-    {
-    }
-
-    /// <param name="presentation">The presentation that owns slide size, theme, and timing state.</param>
-    /// <param name="playbackRoute">The ordered slide route to play.</param>
-    public SlideShowWindow(Presentation presentation, SlideShowPlaybackRoute playbackRoute)
-        : this(new(presentation, playbackRoute))
-    {
-    }
-
-    public SlideShowWindow(
-        Presentation presentation,
-        SlideShowPlaybackRoute playbackRoute,
-        Action<int, string?>? setSlideNotesText,
-        int? preferredCaptionSlideIndex = null,
-        uint? preferredCaptionShapeId = null,
-        int? preferredCaptionTrackIndex = null)
-        : this(new(
-            presentation,
-            playbackRoute,
-            SetSlideNotesText: setSlideNotesText,
-            PreferredCaptionSlideIndex: preferredCaptionSlideIndex,
-            PreferredCaptionShapeId: preferredCaptionShapeId,
-            PreferredCaptionTrackIndex: preferredCaptionTrackIndex))
-    {
-    }
-
-    internal SlideShowWindow(
-        Presentation presentation,
-        SlideShowPlaybackRoute playbackRoute,
-        ISlideShowRecordingCaptureBackend? captureBackend,
-        Action<int, string?>? setSlideNotesText = null,
-        int? preferredCaptionSlideIndex = null,
-        uint? preferredCaptionShapeId = null,
-        int? preferredCaptionTrackIndex = null)
-        : this(new(
-            presentation,
-            playbackRoute,
-            captureBackend,
-            setSlideNotesText,
-            preferredCaptionSlideIndex,
-            preferredCaptionShapeId,
-            preferredCaptionTrackIndex))
-    {
-    }
-
     internal SlideShowWindow(SlideShowWindowLaunchPlan launchPlan)
     {
         ArgumentNullException.ThrowIfNull(launchPlan);
@@ -579,26 +521,7 @@ public sealed partial class SlideShowWindow : Window, ISlideShowTransitionPlayba
             _ => Cursors.Arrow
         };
 
-    private void CloseSlideShow(DateTimeOffset nowUtc)
-    {
-        Teardown(nowUtc);
-        Close();
-    }
-
     // ── Slide display + transitions ───────────────────────────────────────────────
-
-    /// <summary>
-    /// Renders the controller's current slide with the optional entry transition.
-    /// When <paramref name="animated"/> is false (first display, Home/End, Back), skip the transition.
-    /// </summary>
-    private void DisplayCurrentSlide(
-        bool animated,
-        int? zoomTransitionDurationMs = null,
-        bool zoomShowBackground = true)
-        => _runtime.DisplayCurrentSlide(
-            animated,
-            zoomTransitionDurationMs,
-            zoomShowBackground);
 
     void ISlideShowDisplayRenderer.ApplyDisplayState(SlideShowRuntimeDisplayPlan plan)
     {
@@ -2543,9 +2466,6 @@ public sealed partial class SlideShowWindow : Window, ISlideShowTransitionPlayba
             },
             PlayShapeAnimation);
     }
-
-    private SlideShowAnimationPlaybackTargetAvailability BuildAnimationTargetAvailability() =>
-        _animationTargets.BuildAvailability();
 
     private FrameworkElement? ResolveAnimationTarget(SlideShowAnimationPlaybackOperation operation) =>
         _animationTargets.Resolve(operation);
