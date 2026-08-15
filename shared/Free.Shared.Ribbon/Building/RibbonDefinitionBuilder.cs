@@ -182,9 +182,17 @@ public sealed class RibbonMenuBuilder
 {
     private readonly List<RibbonMenuItem> _items = new();
 
-    public RibbonMenuBuilder Item(string commandId, string header, string? keyTip = null, string? gesture = null)
+    public RibbonMenuBuilder Item(
+        string commandId,
+        string header,
+        string? keyTip = null,
+        string? gesture = null,
+        bool? isChecked = null)
     {
-        _items.Add(new RibbonMenuItem(header, new RibbonCommandId(commandId), keyTip, gesture));
+        _items.Add(new RibbonMenuItem(header, new RibbonCommandId(commandId), keyTip, gesture)
+        {
+            IsChecked = isChecked,
+        });
         return this;
     }
 
@@ -194,14 +202,18 @@ public sealed class RibbonMenuBuilder
         RibbonCommandIconKind icon,
         string? keyTip = null,
         string? gesture = null,
-        RibbonCommandIconAccent accent = RibbonCommandIconAccent.None)
+        RibbonCommandIconAccent accent = RibbonCommandIconAccent.None,
+        bool? isChecked = null)
     {
         _items.Add(new RibbonMenuItem(
             header,
             new RibbonCommandId(commandId),
             keyTip,
             gesture,
-            Icon: new RibbonCommandIcon(icon, accent)));
+            Icon: new RibbonCommandIcon(icon, accent))
+        {
+            IsChecked = isChecked,
+        });
         return this;
     }
 

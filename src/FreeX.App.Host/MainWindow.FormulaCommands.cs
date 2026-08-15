@@ -580,10 +580,16 @@ public partial class MainWindow
             item.IsChecked = item.Name switch
             {
                 _ when string.Equals(item.Header?.ToString(), UiText.Get("MainWindow_Header_Manual"), StringComparison.Ordinal) =>
-                    CalculationCommandPolicy.IsSelected(_workbook.CalculationMode, WorkbookCalculationMode.Manual),
+                    CalculationCommandPolicy.ModeCommandState(
+                        _workbook.CalculationMode,
+                        WorkbookCalculationMode.Manual).IsChecked,
                 _ when string.Equals(item.Header?.ToString(), UiText.Get("MainWindow_Header_AutomaticExceptDataTables"), StringComparison.Ordinal) =>
-                    CalculationCommandPolicy.IsSelected(_workbook.CalculationMode, WorkbookCalculationMode.AutomaticExceptDataTables),
-                _ => CalculationCommandPolicy.IsSelected(_workbook.CalculationMode, WorkbookCalculationMode.Automatic)
+                    CalculationCommandPolicy.ModeCommandState(
+                        _workbook.CalculationMode,
+                        WorkbookCalculationMode.AutomaticExceptDataTables).IsChecked,
+                _ => CalculationCommandPolicy.ModeCommandState(
+                    _workbook.CalculationMode,
+                    WorkbookCalculationMode.Automatic).IsChecked
             };
         }
     }
