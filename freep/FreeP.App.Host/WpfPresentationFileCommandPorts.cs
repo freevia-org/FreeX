@@ -213,16 +213,25 @@ internal sealed class WpfPresentationPrintPort : IPresentationPrintPort
                 PresentationNativeCommandOutcomePlanner.PrintHandoffPlanNotBuiltFailure));
         }
 
-        var printed = WpfPresentationPrintService.ShowPrintDialogAndPrint(
+        var printResult = WpfPresentationPrintService.ShowPrintDialogAndPrint(
             presentation,
             request,
             handoffPlan.SuggestedPrintJobName,
             _owner);
-        return Task.FromResult(printed
-            ? PresentationNativePrintPortResult.Success(
-                PresentationNativePrintStatusProfile.PresentationDialog)
-            : PresentationNativePrintPortResult.Cancel(
-                PresentationNativePrintStatusProfile.PresentationDialog));
+        return Task.FromResult(printResult.Outcome switch
+        {
+            WpfPaginatorPrintOutcome.Printed => PresentationNativePrintPortResult.Success(
+                PresentationNativePrintStatusProfile.PresentationDialog),
+            WpfPaginatorPrintOutcome.Cancelled => PresentationNativePrintPortResult.Cancel(
+                PresentationNativePrintStatusProfile.PresentationDialog),
+            WpfPaginatorPrintOutcome.Failed => PresentationNativePrintPortResult.Failure(
+                PresentationNativePrintStatusProfile.PresentationDialog,
+                printResult.Error?.Message),
+            _ => throw new ArgumentOutOfRangeException(
+                nameof(printResult),
+                printResult.Outcome,
+                "Unsupported WPF print outcome."),
+        });
     }
 }
 

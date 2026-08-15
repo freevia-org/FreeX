@@ -38,6 +38,8 @@ public sealed class OutputWorkflowArchitectureTests
         wpf.Should().Contain("FreeWExportWorkflow.ExecuteAsync(");
         wpf.Should().Contain("FreeWPrintRequestPlanner.Create(");
         wpf.Should().Contain("FreeWPrintRequestPlanner.ResolvePageRange(");
+        wpf.Should().Contain("WpfPaginatorPrintWorkflow.Execute(");
+        wpf.Should().NotContain("new PrintDialog()");
         avalonia.Should().Contain("FreeWExportWorkflow.CreatePlan(");
         avalonia.Should().Contain("FreeWExportWorkflow.ExecuteAsync(");
         avalonia.Should().Contain("_portablePrintWorkflow.ExecuteAsync(");

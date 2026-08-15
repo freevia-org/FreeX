@@ -35,7 +35,7 @@ internal static class WpfPresentationPrintService
                     PresentationShellTextCatalog.NoWindowsPrinterQueuesStatus));
     }
 
-    public static bool ShowPrintDialogAndPrint(
+    public static WpfPaginatorPrintResult ShowPrintDialogAndPrint(
         Presentation presentation,
         PresentationPrintRequest request,
         string suggestedPrintJobName,
@@ -47,41 +47,24 @@ internal static class WpfPresentationPrintService
 
         var source = BuildPageSource(presentation, request);
         if (source.Pages.Count == 0)
-            return false;
+            return new WpfPaginatorPrintResult(WpfPaginatorPrintOutcome.Cancelled);
 
-        var dialog = new PrintDialog();
-        dialog.PrintTicket = ApplyPrintTicketOptions(new PrintTicket(), request);
-        if (dialog.ShowDialog() != true)
-            return false;
-
-        var pageWidth = Math.Max(1, dialog.PrintableAreaWidth);
-        var pageHeight = Math.Max(1, dialog.PrintableAreaHeight);
-        var paginator = new WpfRasterPagePaginator(source.Pages, new Size(pageWidth, pageHeight));
-        dialog.PrintDocument(
-            paginator,
-            PresentationFileTextResources.NormalizePrintJobName(suggestedPrintJobName));
-        return true;
-    }
-
-    internal static PrintTicket ApplyPrintTicketOptions(
-        PrintTicket ticket,
-        PresentationPrintRequest request)
-    {
-        ArgumentNullException.ThrowIfNull(ticket);
-        ArgumentNullException.ThrowIfNull(request);
-
-        ticket.CopyCount = Math.Clamp(request.Copies, 1, 999);
-        ticket.Collation = request.Collate
-            ? Collation.Collated
-            : Collation.Uncollated;
-        ticket.OutputColor = request.ColorMode switch
-        {
-            PresentationPrintColorMode.Color => OutputColor.Color,
-            PresentationPrintColorMode.Grayscale => OutputColor.Grayscale,
-            PresentationPrintColorMode.PureBlackAndWhite => OutputColor.Monochrome,
-            _ => OutputColor.Color,
-        };
-        return ticket;
+        return WpfPaginatorPrintWorkflow.Execute(new WpfPaginatorPrintRequest(
+            PresentationFileTextResources.NormalizePrintJobName(suggestedPrintJobName),
+            context => new WpfRasterPagePaginator(
+                source.Pages,
+                new Size(context.PrintableAreaWidth, context.PrintableAreaHeight)),
+            new WpfPaginatorPrintTicketOptions(
+                Copies: request.Copies,
+                Collate: request.Collate,
+                Color: request.ColorMode switch
+                {
+                    PresentationPrintColorMode.Color => OutputColor.Color,
+                    PresentationPrintColorMode.Grayscale => OutputColor.Grayscale,
+                    PresentationPrintColorMode.PureBlackAndWhite => OutputColor.Monochrome,
+                    _ => OutputColor.Color,
+                }),
+            Owner: owner));
     }
 
     internal static WpfPrintPageSource BuildPageSource(
