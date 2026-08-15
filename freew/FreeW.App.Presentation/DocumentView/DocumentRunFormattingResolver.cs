@@ -113,10 +113,38 @@ public static class DocumentRunAccessibilityFormatter
         Add(formatting.NoProof, "proofing disabled");
         if (formatting.VerticalAlign != VerticalAlign.Baseline)
             parts.Add(formatting.VerticalAlign == VerticalAlign.Superscript ? "superscript" : "subscript");
+        if (formatting.PositionPt != 0)
+            parts.Add(formatting.PositionPt > 0
+                ? $"raised {Points(formatting.PositionPt)}"
+                : $"lowered {Points(-formatting.PositionPt)}");
         if (!string.IsNullOrWhiteSpace(formatting.ColorHex))
             parts.Add($"text color {formatting.ColorHex}");
-        if (!string.IsNullOrWhiteSpace(formatting.HighlightColorHex))
+        if (formatting.ThemeColor is { } themeColor)
+            parts.Add(DescribeThemeColor(themeColor));
+        if (!string.IsNullOrWhiteSpace(formatting.CharacterShadingHex))
+            parts.Add(DescribeShading(formatting.CharacterShadingHex, formatting.CharacterShadingPattern));
+        else if (!string.IsNullOrWhiteSpace(formatting.HighlightColorHex))
             parts.Add($"highlight {formatting.HighlightColorHex}");
+        if (formatting.CharacterBorder is { } border)
+            parts.Add(DescribeBorder(border));
+        if (formatting.CharacterSpacingPt != 0)
+            parts.Add(formatting.CharacterSpacingPt > 0
+                ? $"expanded by {Points(formatting.CharacterSpacingPt)}"
+                : $"condensed by {Points(-formatting.CharacterSpacingPt)}");
+        if (formatting.KerningMinSizePt is { } kerning)
+            parts.Add(kerning <= 0
+                ? "kerning disabled"
+                : $"kerning at {Points(kerning)} and above");
+        if (formatting.Ligatures != LigatureMode.None)
+            parts.Add(DescribeLigatures(formatting.Ligatures));
+        if (formatting.NumberForm != NumberForm.Default)
+            parts.Add(formatting.NumberForm == NumberForm.OldStyle ? "old-style numerals" : "lining numerals");
+        if (formatting.NumberSpacing != NumberSpacing.Default)
+            parts.Add(formatting.NumberSpacing == NumberSpacing.Tabular
+                ? "tabular numeral spacing"
+                : "proportional numeral spacing");
+        if (formatting.StylisticSet is { } stylisticSet)
+            parts.Add($"stylistic set {stylisticSet.ToString(CultureInfo.InvariantCulture)}");
         if (!string.IsNullOrWhiteSpace(formatting.LanguageTag))
             parts.Add($"language {formatting.LanguageTag}");
         if (run.Revision != RevisionKind.None)
@@ -132,4 +160,72 @@ public static class DocumentRunAccessibilityFormatter
                 parts.Add(description);
         }
     }
+
+    private static string Points(double value) =>
+        $"{value.ToString("0.##", CultureInfo.InvariantCulture)} point";
+
+    private static string DescribeThemeColor(WordThemeColor themeColor)
+    {
+        var description = $"theme color {themeColor.ThemeToken}";
+        if (!string.IsNullOrWhiteSpace(themeColor.TintHex))
+            description += $" tint {themeColor.TintHex}";
+        if (!string.IsNullOrWhiteSpace(themeColor.ShadeHex))
+            description += $" shade {themeColor.ShadeHex}";
+        return description;
+    }
+
+    private static string DescribeShading(string colorHex, ShadingPattern pattern) => pattern switch
+    {
+        ShadingPattern.Pct10 => $"character shading {colorHex}, 10 percent pattern",
+        ShadingPattern.Pct25 => $"character shading {colorHex}, 25 percent pattern",
+        ShadingPattern.Pct50 => $"character shading {colorHex}, 50 percent pattern",
+        ShadingPattern.Solid => $"character shading {colorHex}, solid pattern",
+        _ => $"character shading {colorHex}",
+    };
+
+    private static string DescribeBorder(ParagraphBorder border)
+    {
+        var edges = border.BottomOnly || (!border.Top && !border.Left && border.Bottom && !border.Right)
+            ? "bottom edge"
+            : border.Top && border.Left && border.Bottom && border.Right
+                ? "box"
+                : DescribeBorderEdges(border);
+        return $"character border {BorderLineStyles.ToToken(border.LineStyle)}, " +
+               $"{Points(border.WidthPt)}, {border.ColorHex}, {edges}";
+    }
+
+    private static string DescribeBorderEdges(ParagraphBorder border)
+    {
+        var edges = new List<string>(4);
+        if (border.Top)
+            edges.Add("top");
+        if (border.Left)
+            edges.Add("left");
+        if (border.Bottom)
+            edges.Add("bottom");
+        if (border.Right)
+            edges.Add("right");
+        return edges.Count == 0 ? "no edges" : $"{string.Join(" and ", edges)} edges";
+    }
+
+    private static string DescribeLigatures(LigatureMode mode) => mode switch
+    {
+        LigatureMode.NoneExplicit => "ligatures disabled",
+        LigatureMode.Standard => "standard ligatures",
+        LigatureMode.Contextual => "contextual ligatures",
+        LigatureMode.StandardContextual => "standard and contextual ligatures",
+        LigatureMode.Historical => "historical ligatures",
+        LigatureMode.Discretional => "discretionary ligatures",
+        LigatureMode.StandardHistorical => "standard and historical ligatures",
+        LigatureMode.ContextualHistorical => "contextual and historical ligatures",
+        LigatureMode.StandardContextualHistorical => "standard, contextual, and historical ligatures",
+        LigatureMode.ContextualDiscretional => "contextual and discretionary ligatures",
+        LigatureMode.StandardDiscretional => "standard and discretionary ligatures",
+        LigatureMode.StandardContextualDiscretional => "standard, contextual, and discretionary ligatures",
+        LigatureMode.HistoricalDiscretional => "historical and discretionary ligatures",
+        LigatureMode.StandardHistoricalDiscretional => "standard, historical, and discretionary ligatures",
+        LigatureMode.ContextualHistoricalDiscretional => "contextual, historical, and discretionary ligatures",
+        LigatureMode.All => "all ligatures",
+        _ => "ligatures inherited",
+    };
 }

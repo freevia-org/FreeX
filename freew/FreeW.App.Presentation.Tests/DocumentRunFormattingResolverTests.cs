@@ -23,7 +23,9 @@ public sealed class DocumentRunFormattingResolverTests
                 Bold = true,
                 FontSizePt = 14,
                 ColorHex = "#112233",
-                NoProof = true
+                NoProof = true,
+                CharacterSpacingPt = 0.5,
+                CharacterBorder = new ParagraphBorder("#778899", 1),
             }
         };
         document.Styles["Derived"] = new DocumentStyle
@@ -34,7 +36,8 @@ public sealed class DocumentRunFormattingResolverTests
             Run = new RunFormatting
             {
                 Italic = true,
-                HighlightColorHex = "#FFFF00"
+                HighlightColorHex = "#FFFF00",
+                Ligatures = LigatureMode.Contextual,
             }
         };
         var paragraph = new Paragraph { StyleId = "Derived" };
@@ -42,7 +45,12 @@ public sealed class DocumentRunFormattingResolverTests
         var resolved = DocumentRunFormattingResolver.Resolve(
             document,
             paragraph,
-            new RunFormatting { Underline = true, FontFamily = "Aptos" });
+            new RunFormatting
+            {
+                Underline = true,
+                FontFamily = "Aptos",
+                NumberSpacing = NumberSpacing.Tabular,
+            });
 
         resolved.FontFamily.Should().Be("Aptos");
         resolved.FontSizePt.Should().Be(14);
@@ -53,6 +61,10 @@ public sealed class DocumentRunFormattingResolverTests
         resolved.Italic.Should().BeTrue();
         resolved.Underline.Should().BeTrue();
         resolved.NoProof.Should().BeTrue();
+        resolved.CharacterSpacingPt.Should().Be(0.5);
+        resolved.CharacterBorder.Should().Be(new ParagraphBorder("#778899", 1));
+        resolved.Ligatures.Should().Be(LigatureMode.Contextual);
+        resolved.NumberSpacing.Should().Be(NumberSpacing.Tabular);
     }
 
     [Fact]
@@ -114,6 +126,63 @@ public sealed class DocumentRunFormattingResolverTests
         node.TextLength.Should().Be(9);
         node.HelpText.Should().Be(
             "Calibri, 11 point, bold, italic, underlined, text color #4472C4, language fr-FR, tracked insertion");
+    }
+
+    [Fact]
+    public void Accessibility_formatter_exposes_advanced_effective_character_formatting()
+    {
+        var formatting = new RunFormatting
+        {
+            ColorHex = "#4472C4",
+            ThemeColor = new WordThemeColor("accent1", "4472C4", TintHex: "33", ShadeHex: "80"),
+            HighlightColorHex = "#FFFF00",
+            CharacterShadingHex = "#D9EAF7",
+            CharacterShadingPattern = ShadingPattern.Pct25,
+            CharacterBorder = new ParagraphBorder("#112233", 1.5)
+            {
+                LineStyle = BorderLineStyle.Double,
+                Top = false,
+                Left = false,
+                Bottom = true,
+                Right = false,
+            },
+            CharacterSpacingPt = -0.75,
+            KerningMinSizePt = 9,
+            PositionPt = 2.5,
+            Ligatures = LigatureMode.StandardContextual,
+            NumberForm = NumberForm.OldStyle,
+            NumberSpacing = NumberSpacing.Tabular,
+            StylisticSet = 7,
+        };
+
+        var description = DocumentRunAccessibilityFormatter.Describe(formatting, new Run("Advanced"));
+
+        description.Should().Be(
+            "raised 2.5 point, text color #4472C4, theme color accent1 tint 33 shade 80, " +
+            "character shading #D9EAF7, 25 percent pattern, character border double, 1.5 point, #112233, bottom edge, " +
+            "condensed by 0.75 point, kerning at 9 point and above, standard and contextual ligatures, " +
+            "old-style numerals, tabular numeral spacing, stylistic set 7");
+        description.Should().NotContain("highlight #FFFF00",
+            "character shading is the effective background when both authored values are present");
+    }
+
+    [Fact]
+    public void Accessibility_formatter_distinguishes_disabled_and_expanded_typography_controls()
+    {
+        var formatting = new RunFormatting
+        {
+            CharacterSpacingPt = 1.25,
+            KerningMinSizePt = 0,
+            PositionPt = -1,
+            Ligatures = LigatureMode.NoneExplicit,
+            NumberForm = NumberForm.Lining,
+            NumberSpacing = NumberSpacing.Proportional,
+        };
+
+        DocumentRunAccessibilityFormatter.Describe(formatting, new Run("Typography"))
+            .Should().Be(
+                "lowered 1 point, expanded by 1.25 point, kerning disabled, ligatures disabled, " +
+                "lining numerals, proportional numeral spacing");
     }
 
     [Fact]
