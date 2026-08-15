@@ -413,7 +413,7 @@ public static class FreeWDialogEvidenceCatalog
             AvaloniaOnly("note-text", "NoteTextDialog"),
             AvaloniaOnly("page-borders", "PageBordersDialog"),
             AvaloniaOnly("page-color", "PageColorDialog"),
-            AvaloniaOnly("page-number-format", "PageNumberFormatDialog"),
+            Pair("page-number-format", "PageNumberFormatDialog"),
             AvaloniaOnly("print-preview", "PrintPreviewDialog"),
             AvaloniaOnly("proofing-language", "ProofingLanguageDialog"),
             AvaloniaOnly("quick-part", "QuickPartDialog"),

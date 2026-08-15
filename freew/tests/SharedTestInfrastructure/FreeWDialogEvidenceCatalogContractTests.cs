@@ -49,6 +49,29 @@ public sealed class FreeWDialogEvidenceCatalogContractTests
     }
 
     [Fact]
+    public void Page_number_format_is_a_real_shared_chrome_dialog_in_both_hosts()
+    {
+        var route = Catalog.GetRequired("page-number-format");
+        route.Coverage.Should().Be(RouteCoverage.Paired);
+        route.Wpf.Should().NotBeNull();
+        route.Wpf!.DialogTypeName.Should().Be("PageNumberFormatDialog");
+        route.Wpf.OpenAction.Should().Be(OpenAction.ReflectedDialog);
+        route.Avalonia.DialogTypeName.Should().Be("PageNumberFormatDialog");
+
+        var wpf = Read("freew", "FreeW.App.Host", "PageNumberFormatDialog.cs");
+        var commandRegistry = Read("freew", "FreeW.App.Host", "Ribbon", "FreeWRibbonCommands.cs");
+        var catalog = Read("freew", "tools", "FreeW.DialogVisualHarness", "FreeWDialogEvidenceCatalog.cs");
+
+        wpf.Should().Contain(": Free.Shared.Ribbon.Wpf.DialogWindow");
+        wpf.Should().Contain("DialogButtonRowFactory.Create(");
+        wpf.Should().Contain("PageNumberFormatDialogPlanner.TryBuildResult(");
+        commandRegistry.Should().Contain("PageNumberFormatDialog.Prompt(Window.GetWindow(editor), editor.Model.Page)");
+        commandRegistry.Should().NotContain("private static class PageNumberFormatDialog");
+        catalog.Should().Contain("Pair(\"page-number-format\", \"PageNumberFormatDialog\")");
+        catalog.Should().NotContain("AvaloniaOnly(\"page-number-format\"");
+    }
+
+    [Fact]
     public void Capture_plan_preserves_evidence_names_manifest_metadata_and_route_sizing()
     {
         var wpf = Catalog.CreateCapturePlan(
