@@ -2175,17 +2175,38 @@ public sealed partial class DocumentView : Control
 
     public void SetCaretCellTextDirection(CellTextDirection direction)
     {
-        if (IsEditingLocked || _cellCaret is not { } cc)
-            return;
-        if (cc.TableBlock < 0 || cc.TableBlock >= _doc.Blocks.Count
-            || _doc.Blocks[cc.TableBlock] is not Table table)
+        if (IsEditingLocked)
             return;
 
-        var cellIndex = GridColumnToCellIndex(table.Rows[cc.Row], cc.Col);
-        if (cellIndex >= 0)
-            TableEdits.SetCellTextDirection(
-                new DocumentTableCellAddress(cc.TableBlock, cc.Row, cc.Col),
-                direction);
+        DocumentTableCellAddress anchor;
+        DocumentTableCellAddress active;
+        if (SelectedCellRange is { } selection)
+        {
+            anchor = new DocumentTableCellAddress(
+                selection.TableBlock,
+                selection.MinRow,
+                selection.MinCol);
+            active = new DocumentTableCellAddress(
+                selection.TableBlock,
+                selection.MaxRow,
+                selection.MaxCol);
+        }
+        else if (_cellCaret is { } caret)
+        {
+            anchor = active = new DocumentTableCellAddress(
+                caret.TableBlock,
+                caret.Row,
+                caret.Col);
+        }
+        else
+        {
+            return;
+        }
+
+        TableEdits.SetCellTextDirection(
+            TableEdits.AddressesInRange(anchor, active),
+            direction);
+        InvalidateLayoutAndVisual();
     }
 
     public (Table Table, int RowIndex, int ColumnIndex)? CaretTableCell()

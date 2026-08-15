@@ -1986,14 +1986,24 @@ public sealed partial class DocumentView : RichTextBox
     }
 
     /// <summary>
-    /// Set the text direction on the table cell containing the caret as one undoable edit. No-op outside a
-    /// table.
+    /// Set the text direction on every table cell spanned by the native selection, falling back to
+    /// the caret cell, as one undoable edit. Range expansion stays Presentation-owned.
     /// </summary>
     public void SetCaretCellTextDirection(CellTextDirection direction)
     {
+        Focus();
+        var start = TableAddressOf(Selection.Start.Parent as TextElement);
+        var end = TableAddressOf(Selection.End.Parent as TextElement);
+        var caret = CaretTableAddress();
         CommitToModel();
-        if (CaretTableAddress() is { } address)
-            TableEdits.SetCellTextDirection(address, direction);
+        start ??= caret;
+        end ??= start;
+        if (start is { } anchor && end is { } active)
+        {
+            TableEdits.SetCellTextDirection(
+                TableEdits.AddressesInRange(anchor, active),
+                direction);
+        }
     }
 
     /// <summary>

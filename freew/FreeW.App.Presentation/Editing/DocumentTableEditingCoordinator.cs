@@ -462,17 +462,20 @@ public sealed class DocumentTableEditingCoordinator
 
     public DocumentTableEditResult SetCellTextDirection(
         DocumentTableCellAddress address,
-        CellTextDirection direction)
-    {
-        if (!TryResolveCell(address, out _, out var cellIndex))
-            return DocumentTableEditResult.NoChange(address);
-        _session.Commands.Execute(new SetCellTextDirectionCommand(
-            address.BlockIndex,
-            address.RowIndex,
-            cellIndex,
-            direction));
-        return DocumentTableEditResult.Changed(address);
-    }
+        CellTextDirection direction) =>
+        SetCellTextDirection([address], direction);
+
+    public DocumentTableEditResult SetCellTextDirection(
+        IReadOnlyList<DocumentTableCellAddress> addresses,
+        CellTextDirection direction) =>
+        ExecuteForCells(
+            addresses,
+            "Cell Text Direction",
+            (address, cellIndex) => new SetCellTextDirectionCommand(
+                address.BlockIndex,
+                address.RowIndex,
+                cellIndex,
+                direction));
 
     public DocumentTableEditResult ApplyStyle(
         DocumentTableCellAddress address,

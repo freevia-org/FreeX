@@ -247,6 +247,29 @@ public sealed class DocumentTableEditingCoordinatorTests
     }
 
     [Fact]
+    public void SelectedRangeTextDirectionUsesCanonicalGridExpansionAndOneUndoStep()
+    {
+        var table = Table.Create(2, 3);
+        table.Rows[0].Cells[0].GridSpan = 2;
+        table.Rows[0].Cells.RemoveAt(1);
+        var session = SessionWith(table);
+        var addresses = session.Tables.AddressesInRange(
+            new DocumentTableCellAddress(0, 1, 2),
+            new DocumentTableCellAddress(0, 0, 0));
+
+        session.Tables.SetCellTextDirection(addresses, CellTextDirection.Rotate270)
+            .Applied.Should().BeTrue();
+
+        addresses.Should().HaveCount(5);
+        table.Rows.SelectMany(row => row.Cells)
+            .Should().OnlyContain(cell => cell.TextDirection == CellTextDirection.Rotate270);
+        session.Commands.Undo().Should().BeTrue();
+        table.Rows.SelectMany(row => row.Cells)
+            .Should().OnlyContain(cell => cell.TextDirection == CellTextDirection.Horizontal);
+        session.Commands.CanUndo.Should().BeFalse();
+    }
+
+    [Fact]
     public void MergedCellGridAddressesAreDeduplicatedAndBorderEditsAreGrouped()
     {
         var table = Table.Create(1, 3);
@@ -1430,7 +1453,7 @@ public sealed class DocumentPortableEditingOwnershipTests
     }
 
     [Fact]
-    public void BothRenderersExpandCellShadingSelectionThroughPresentationCoordinator()
+    public void BothRenderersExpandSelectedCellFormattingThroughPresentationCoordinator()
     {
         var wpf = ReadSource("freew", "FreeW.App.Host", "Editing", "DocumentView.cs");
         var avalonia = ReadSource("freew", "FreeW.App.Avalonia", "Editing", "DocumentView.cs");
@@ -1463,6 +1486,26 @@ public sealed class DocumentPortableEditingOwnershipTests
         wpfShading.Should().Contain("TableAddressOf(Selection.End.Parent as TextElement)");
         avaloniaShading.Should().NotContain("for (var gridCol");
         avaloniaShading.Should().NotContain("new List<DocumentTableCellAddress>");
+
+        var wpfDirection = Slice(
+            wpf,
+            "public void SetCaretCellTextDirection(CellTextDirection direction)",
+            "public void ToggleTableHeaderRow(");
+        var avaloniaDirection = Slice(
+            avalonia,
+            "public void SetCaretCellTextDirection(CellTextDirection direction)",
+            "public (Table Table, int RowIndex, int ColumnIndex)? CaretTableCell(");
+
+        foreach (var method in new[] { wpfDirection, avaloniaDirection })
+        {
+            method.Should().Contain("TableEdits.AddressesInRange(");
+            method.Should().Contain("TableEdits.SetCellTextDirection(");
+        }
+
+        wpfDirection.Should().Contain("TableAddressOf(Selection.Start.Parent as TextElement)");
+        wpfDirection.Should().Contain("TableAddressOf(Selection.End.Parent as TextElement)");
+        avaloniaDirection.Should().Contain("SelectedCellRange is { } selection");
+        avaloniaDirection.Should().NotContain("_cellCaret is not");
     }
 
     [Fact]
