@@ -98,7 +98,6 @@ public sealed class ScreenTipDialog : FreeWDialogWindow
     private readonly TextBox _tipBox = new()
     {
         MinWidth = 280,
-        PlaceholderText = InsertDialogTextResources.ScreenTip.Placeholder,
         Margin = new Thickness(0, 6, 0, 0),
     };
 
@@ -107,25 +106,27 @@ public sealed class ScreenTipDialog : FreeWDialogWindow
 
     public ScreenTipDialog(string? initialTip = null)
     {
-        Title = InsertDialogTextResources.ScreenTip.Title;
+        var presentation = ScreenTipDialogPlanner.Build(initialTip);
+        Title = presentation.Title;
         Width = 380;
         SizeToContent = SizeToContent.Height;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
         CanResize = false;
         ShowInTaskbar = false;
 
-        _tipBox.Text = initialTip ?? string.Empty;
+        _tipBox.Text = presentation.InitialScreenTip;
+        _tipBox.PlaceholderText = presentation.Placeholder;
         AvaloniaCompactDialogChrome.ApplyTextBox(_tipBox, InsertDialogLayout.ChromeStyle);
 
         var grid = new Grid { Margin = new Thickness(14, 12, 14, 0) };
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-        InsertDialogLayout.AddLabeledRow(grid, 0, InsertDialogTextResources.ScreenTip.Label, _tipBox);
+        InsertDialogLayout.AddLabeledRow(grid, 0, presentation.Label, _tipBox);
 
         var buttons = InsertDialogLayout.OkCancelRow(
             ok: () =>
             {
-                ScreenTip = _tipBox.Text?.Trim() ?? string.Empty;
+                ScreenTip = ScreenTipDialogPlanner.PlanAcceptance(_tipBox.Text);
                 Close();
             },
             cancel: Close);

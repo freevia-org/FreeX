@@ -3068,8 +3068,7 @@ internal static class FreeWRibbonCommands
             if (!editor.IsCaretOnHyperlink())
                 return;
             var seed = editor.HyperlinkTooltipAtCaret() ?? string.Empty;
-            var dialogText = InsertDialogTextResources.ScreenTip;
-            var tip = HyperlinkPrompt.Ask(Window.GetWindow(editor), seed, dialogText.Title, dialogText.Label);
+            var tip = ScreenTipDialog.Ask(Window.GetWindow(editor), seed);
             // A null result is a cancel (leave unchanged); an empty/blank string clears the ScreenTip.
             if (tip is not null)
                 editor.SetHyperlinkTooltip(tip);
@@ -7496,54 +7495,6 @@ internal static class FreeWRibbonCommands
     private static class TextPrompt
     {
         public static string? Ask(Window? owner, string title, string label, string seed)
-        {
-            var box = new System.Windows.Controls.TextBox
-            {
-                Text = seed,
-                MinWidth = 360,
-                Margin = new Thickness(0, 0, 0, 12)
-            };
-            box.SelectAll();
-
-            string? result = null;
-            var dialog = new Window
-            {
-                Title = title,
-                SizeToContent = SizeToContent.WidthAndHeight,
-                ResizeMode = ResizeMode.NoResize,
-                WindowStartupLocation = WindowStartupLocation.CenterOwner,
-                Owner = owner,
-                ShowInTaskbar = false
-            };
-
-            var ok = new System.Windows.Controls.Button { Content = UiText.Get("Common_OkText"), IsDefault = true, MinWidth = 72, Margin = new Thickness(0, 0, 8, 0) };
-            var cancel = new System.Windows.Controls.Button { Content = UiText.Get("Common_CancelText"), IsCancel = true, MinWidth = 72 };
-            ok.Click += (_, _) => { result = box.Text; dialog.DialogResult = true; };
-
-            var buttons = new System.Windows.Controls.StackPanel
-            {
-                Orientation = System.Windows.Controls.Orientation.Horizontal,
-                HorizontalAlignment = HorizontalAlignment.Right
-            };
-            buttons.Children.Add(ok);
-            buttons.Children.Add(cancel);
-
-            var panel = new System.Windows.Controls.StackPanel { Margin = new Thickness(16) };
-            panel.Children.Add(new System.Windows.Controls.TextBlock { Text = label, Margin = new Thickness(0, 0, 0, 4) });
-            panel.Children.Add(box);
-            panel.Children.Add(buttons);
-            dialog.Content = panel;
-
-            box.Focus();
-            return dialog.ShowDialog() == true ? result : null;
-        }
-    }
-
-    // A tiny modal dialog asking for a single line of text (a URL, a ScreenTip, …). Returns the entered
-    // text, or null if cancelled. Title/label default to the insert-link wording for existing callers.
-    private static class HyperlinkPrompt
-    {
-        public static string? Ask(Window? owner, string seed, string title, string label)
         {
             var box = new System.Windows.Controls.TextBox
             {
