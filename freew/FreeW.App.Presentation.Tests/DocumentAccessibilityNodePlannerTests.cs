@@ -203,15 +203,23 @@ public sealed class DocumentAccessibilityNodePlannerTests
         paragraphNode.Id.Should().Be("block:0:paragraph");
         paragraphNode.Value.Should().Be("Read documentation");
         paragraphNode.SemanticChildren.Select(node => node.Kind).Should().Equal(
+            DocumentAccessibilityNodeKind.TextRun,
             DocumentAccessibilityNodeKind.Hyperlink,
             DocumentAccessibilityNodeKind.Image);
-        var link = paragraphNode.SemanticChildren[0];
+        var textRun = paragraphNode.SemanticChildren[0];
+        textRun.Id.Should().Be("block:0:paragraph:run:0:text");
+        textRun.Value.Should().Be("Read ");
+        textRun.TextStart.Should().Be(0);
+        textRun.TextLength.Should().Be(5);
+        var link = paragraphNode.SemanticChildren[1];
         link.Id.Should().Be("block:0:paragraph:run:1:hyperlink");
         link.TextStart.Should().Be(5);
         link.TextLength.Should().Be(13);
         link.HyperlinkTarget.Should().Be("https://example.test/docs");
         link.IsInternalHyperlink.Should().BeFalse();
-        paragraphNode.SemanticChildren[1].Name.Should().Be("Architecture diagram");
+        link.SemanticChildren.Should().ContainSingle()
+            .Which.Kind.Should().Be(DocumentAccessibilityNodeKind.TextRun);
+        paragraphNode.SemanticChildren[2].Name.Should().Be("Architecture diagram");
     }
 
     [Fact]
@@ -255,6 +263,10 @@ public sealed class DocumentAccessibilityNodePlannerTests
         link.Id.Should().Be("block:0:paragraph:run:0:hyperlink");
         link.Value.Should().Be("Open site");
         link.TextLength.Should().Be(9);
+        link.SemanticChildren.Select(node => node.Kind).Should().Equal(
+            DocumentAccessibilityNodeKind.TextRun,
+            DocumentAccessibilityNodeKind.TextRun);
+        link.SemanticChildren[1].HelpText.Should().Contain("bold");
     }
 
     [Fact]

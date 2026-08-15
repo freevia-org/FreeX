@@ -243,6 +243,8 @@ internal sealed class DocumentViewAutomationPeer : ControlAutomationPeer, IValue
                 new DocumentValueAutomationPeer(this, node.Id),
             DocumentAccessibilityNodeKind.ListItem =>
                 new DocumentValueAutomationPeer(this, node.Id),
+            DocumentAccessibilityNodeKind.TextRun =>
+                new DocumentValueAutomationPeer(this, node.Id),
             DocumentAccessibilityNodeKind.Paragraph or DocumentAccessibilityNodeKind.Heading =>
                 new DocumentValueAutomationPeer(this, node.Id),
             DocumentAccessibilityNodeKind.TableCell => new DocumentValueAutomationPeer(this, node.Id),
@@ -311,6 +313,7 @@ internal abstract class DocumentVirtualAutomationPeer(
         DocumentAccessibilityNodeKind.Footnote or DocumentAccessibilityNodeKind.Endnote => AutomationControlType.Text,
         DocumentAccessibilityNodeKind.List => AutomationControlType.List,
         DocumentAccessibilityNodeKind.ListItem => AutomationControlType.ListItem,
+        DocumentAccessibilityNodeKind.TextRun => AutomationControlType.Text,
         DocumentAccessibilityNodeKind.Paragraph or DocumentAccessibilityNodeKind.Heading => AutomationControlType.Text,
         DocumentAccessibilityNodeKind.Table => AutomationControlType.DataGrid,
         DocumentAccessibilityNodeKind.TableRow => AutomationControlType.Group,
@@ -368,6 +371,7 @@ internal abstract class DocumentVirtualAutomationPeer(
         Node.Kind is DocumentAccessibilityNodeKind.Paragraph
             or DocumentAccessibilityNodeKind.Heading
             or DocumentAccessibilityNodeKind.ListItem
+            or DocumentAccessibilityNodeKind.TextRun
             or DocumentAccessibilityNodeKind.TableCell
             or DocumentAccessibilityNodeKind.Hyperlink
             or DocumentAccessibilityNodeKind.Image
@@ -404,6 +408,7 @@ internal abstract class DocumentVirtualAutomationPeer(
         DocumentAccessibilityNodeKind.Heading => $"Heading level {node.HeadingLevel}",
         DocumentAccessibilityNodeKind.ListItem =>
             $"List item level {node.ListLevel + 1}{(string.IsNullOrWhiteSpace(node.ListMarker) ? string.Empty : $", marker {node.ListMarker}")}",
+        DocumentAccessibilityNodeKind.TextRun => node.HelpText ?? "Character formatting",
         DocumentAccessibilityNodeKind.Footnote => node.HelpText ?? "Footnote",
         DocumentAccessibilityNodeKind.Endnote => node.HelpText ?? "Endnote",
         DocumentAccessibilityNodeKind.TableCell =>

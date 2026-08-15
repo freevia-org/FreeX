@@ -3345,6 +3345,8 @@ public sealed partial class DocumentView : RichTextBox
         var decorations = selection.GetPropertyValue(Inline.TextDecorationsProperty);
         var capitals = selection.GetPropertyValue(Typography.CapitalsProperty);
         var baseline = selection.GetPropertyValue(Inline.BaselineAlignmentProperty);
+        var family = selection.GetPropertyValue(TextElement.FontFamilyProperty);
+        var size = selection.GetPropertyValue(TextElement.FontSizeProperty);
 
         return new FontDialogSelectionState(
             CaptureSelectionRunFormatting(),
@@ -3352,6 +3354,8 @@ public sealed partial class DocumentView : RichTextBox
             ItalicIndeterminate: style == DependencyProperty.UnsetValue,
             UnderlineIndeterminate: decorations == DependencyProperty.UnsetValue,
             StrikethroughIndeterminate: decorations == DependencyProperty.UnsetValue,
+            FamilyIndeterminate: family == DependencyProperty.UnsetValue,
+            SizeIndeterminate: size == DependencyProperty.UnsetValue,
             SmallCapsIndeterminate: capitals == DependencyProperty.UnsetValue,
             AllCapsIndeterminate: capitals == DependencyProperty.UnsetValue,
             SuperscriptIndeterminate: baseline == DependencyProperty.UnsetValue,
@@ -16678,131 +16682,10 @@ public sealed partial class DocumentView : RichTextBox
     // --- formatting resolution (run/paragraph -> style -> document default) ---
 
     private static RunFormatting Resolve(ModelRun run, ModelParagraph paragraph, TextDocument document)
-    {
-        var style = StyleRun(paragraph, document);
-        var d = document.DefaultRun;
-        var r = run.Formatting;
-        return new RunFormatting
-        {
-            Bold = r.Bold || style.Bold || d.Bold,
-            Italic = r.Italic || style.Italic || d.Italic,
-            Underline = r.Underline || style.Underline || d.Underline,
-            Strikethrough = r.Strikethrough || style.Strikethrough || d.Strikethrough,
-            DoubleStrikethrough = r.DoubleStrikethrough || StyleRunDoubleStrikethrough(paragraph, document) || d.DoubleStrikethrough,
-            Hidden = r.Hidden || style.Hidden || d.Hidden,
-            WebHidden = r.WebHidden || style.WebHidden || d.WebHidden,
-            NoProof = r.NoProof || StyleRunNoProof(paragraph, document) || d.NoProof,
-            SmallCaps = r.SmallCaps || style.SmallCaps || d.SmallCaps,
-            AllCaps = r.AllCaps || style.AllCaps || d.AllCaps,
-            Rtl = r.Rtl || style.Rtl || d.Rtl,
-            VerticalAlign = r.VerticalAlign != VerticalAlign.Baseline ? r.VerticalAlign
-                : style.VerticalAlign != VerticalAlign.Baseline ? style.VerticalAlign
-                : d.VerticalAlign,
-            FontFamily = r.FontFamily ?? style.FontFamily ?? d.FontFamily,
-            FontSizePt = r.FontSizePt ?? style.FontSizePt ?? d.FontSizePt,
-            ColorHex = r.ColorHex ?? style.ColorHex ?? d.ColorHex,
-            HighlightColorHex = r.HighlightColorHex ?? style.HighlightColorHex ?? d.HighlightColorHex,
-            CharacterBorder = r.CharacterBorder ?? style.CharacterBorder ?? d.CharacterBorder,
-            CharacterShadingHex = r.CharacterShadingHex ?? style.CharacterShadingHex ?? d.CharacterShadingHex,
-            CharacterShadingPattern = r.CharacterShadingHex is not null ? r.CharacterShadingPattern
-                : style.CharacterShadingHex is not null ? style.CharacterShadingPattern
-                : d.CharacterShadingPattern,
-            CharacterSpacingPt = r.CharacterSpacingPt != 0 ? r.CharacterSpacingPt
-                : style.CharacterSpacingPt != 0 ? style.CharacterSpacingPt
-                : d.CharacterSpacingPt,
-            KerningMinSizePt = r.KerningMinSizePt ?? style.KerningMinSizePt ?? d.KerningMinSizePt,
-            PositionPt = r.PositionPt != 0 ? r.PositionPt
-                : style.PositionPt != 0 ? style.PositionPt
-                : d.PositionPt,
-            Ligatures = r.Ligatures != LigatureMode.None ? r.Ligatures
-                : style.Ligatures != LigatureMode.None ? style.Ligatures
-                : d.Ligatures,
-            StylisticSet = r.StylisticSet ?? style.StylisticSet ?? d.StylisticSet,
-            NumberForm = r.NumberForm != NumberForm.Default ? r.NumberForm
-                : style.NumberForm != NumberForm.Default ? style.NumberForm
-                : d.NumberForm,
-            NumberSpacing = r.NumberSpacing != NumberSpacing.Default ? r.NumberSpacing
-                : style.NumberSpacing != NumberSpacing.Default ? style.NumberSpacing
-                : d.NumberSpacing,
-            // Language is direct-only until FreeW gains explicit style/default language inheritance tracking.
-            LanguageTag = r.LanguageTag,
-        };
-    }
+        => DocumentRunFormattingResolver.Resolve(document, paragraph, run.Formatting);
 
-    private static ParagraphFormatting Resolve(ModelParagraph paragraph, TextDocument document)
-    {
-        var p = paragraph.Formatting;
-        // Per-property cascade: direct paragraph formatting wins; for any presentation property the
-        // paragraph leaves at the model default, inherit the paragraph style's value (Word's cascade).
-        // The previous all-or-nothing rule fell back to FreeW's hardcoded defaults for a paragraph that set
-        // ANY property (e.g. a list kind), ignoring the style's spacing/indents. List membership, breaks
-        // and toggles stay paragraph-intrinsic. (Most value-typed formatting can't distinguish "explicitly the
-        // default" from "unset", so a property explicitly set to the default value inherits the style; the
-        // fully-correct fix is nullable formatting recording only explicit props — a larger refactor. Line
-        // spacing is the exception: it carries an explicit LineSpacingIsSet flag, so it cascades precisely.)
-        if (paragraph.StyleId is { } id && document.Styles.TryGetValue(id, out var style))
-        {
-            var sp = style.Paragraph;
-            if (p == ParagraphFormatting.Default)
-                return sp;
-            var d = ParagraphFormatting.Default;
-            // Line spacing resolves as one unit (direct w:line ?? style w:line ?? the paragraph's own
-            // inherited docDefault/built-in value, which the reader already baked into p). The IsSet flag
-            // distinguishes an explicit setting from an inherited one, so a paragraph with no direct line
-            // spacing correctly takes its style's — not the docDefault that masked it before.
-            var lineFrom = p.LineSpacingIsSet
-                ? p
-                : sp.LineSpacingIsSet
-                    ? sp
-                    : document.DefaultParagraph.LineSpacingIsSet
-                        ? document.DefaultParagraph
-                        : p;
-            return p with
-            {
-                ContextualSpacing = p.ContextualSpacing ?? sp.ContextualSpacing ?? document.DefaultParagraph.ContextualSpacing,
-                SuppressAutoHyphens = (p.SuppressAutoHyphensIsSet || p.SuppressAutoHyphens)
-                    ? p.SuppressAutoHyphens
-                    : sp.SuppressAutoHyphens,
-                SuppressAutoHyphensIsSet = p.SuppressAutoHyphensIsSet || p.SuppressAutoHyphens
-                    || sp.SuppressAutoHyphensIsSet || sp.SuppressAutoHyphens,
-                SuppressLineNumbers = p.SuppressLineNumbersIsSet
-                    ? p.SuppressLineNumbers
-                    : sp.SuppressLineNumbersIsSet && sp.SuppressLineNumbers,
-                SuppressLineNumbersIsSet = p.SuppressLineNumbersIsSet || sp.SuppressLineNumbersIsSet,
-                Alignment = p.Alignment != d.Alignment ? p.Alignment : sp.Alignment,
-                // Space before/after cascade on the explicit flag, not value-vs-default: a read paragraph
-                // carries 0pt-after when it sets none, and 0 != the model's 8pt default would otherwise keep
-                // the 0 and never inherit the style's spacing (packing styled list items tighter than Word).
-                SpaceBeforePt = p.SpaceBeforeIsSet ? p.SpaceBeforePt : sp.SpaceBeforeIsSet ? sp.SpaceBeforePt : p.SpaceBeforePt,
-                SpaceAfterPt = p.SpaceAfterIsSet ? p.SpaceAfterPt : sp.SpaceAfterIsSet ? sp.SpaceAfterPt : p.SpaceAfterPt,
-                SpaceBeforeIsSet = p.SpaceBeforeIsSet || sp.SpaceBeforeIsSet,
-                SpaceAfterIsSet = p.SpaceAfterIsSet || sp.SpaceAfterIsSet,
-                LineSpacing = lineFrom.LineSpacing,
-                LineRule = lineFrom.LineRule,
-                LineHeightPt = lineFrom.LineHeightPt,
-                LineSpacingIsSet = p.LineSpacingIsSet || sp.LineSpacingIsSet || document.DefaultParagraph.LineSpacingIsSet,
-                IndentLeftPt = p.IndentLeftPt != d.IndentLeftPt ? p.IndentLeftPt : sp.IndentLeftPt,
-                IndentRightPt = p.IndentRightPt != d.IndentRightPt ? p.IndentRightPt : sp.IndentRightPt,
-                FirstLineIndentPt = p.FirstLineIndentPt != d.FirstLineIndentPt ? p.FirstLineIndentPt : sp.FirstLineIndentPt,
-                Border = p.Border ?? sp.Border,
-                ShadingColorHex = p.ShadingColorHex ?? sp.ShadingColorHex,
-            };
-        }
-        return p with
-        {
-            ContextualSpacing = p.ContextualSpacing ?? document.DefaultParagraph.ContextualSpacing,
-            LineSpacing = !p.LineSpacingIsSet && document.DefaultParagraph.LineSpacingIsSet
-                ? document.DefaultParagraph.LineSpacing
-                : p.LineSpacing,
-            LineRule = !p.LineSpacingIsSet && document.DefaultParagraph.LineSpacingIsSet
-                ? document.DefaultParagraph.LineRule
-                : p.LineRule,
-            LineHeightPt = !p.LineSpacingIsSet && document.DefaultParagraph.LineSpacingIsSet
-                ? document.DefaultParagraph.LineHeightPt
-                : p.LineHeightPt,
-            LineSpacingIsSet = p.LineSpacingIsSet || document.DefaultParagraph.LineSpacingIsSet,
-        };
-    }
+    private static ParagraphFormatting Resolve(ModelParagraph paragraph, TextDocument document) =>
+        DocumentParagraphFormattingResolver.Resolve(document, paragraph);
 
     private static bool SuppressesContextualSpacing(
         ModelParagraph previous,
@@ -16810,11 +16693,6 @@ public sealed partial class DocumentView : RichTextBox
         TextDocument document) =>
         string.Equals(previous.StyleId, current.StyleId, StringComparison.OrdinalIgnoreCase)
         && Resolve(current, document).ContextualSpacing is true;
-
-    private static RunFormatting StyleRun(ModelParagraph paragraph, TextDocument document) =>
-        paragraph.StyleId is { } id && document.Styles.TryGetValue(id, out var style)
-            ? style.Run
-            : RunFormatting.Default;
 
     private static void AddStrikethroughDecorations(TextDecorationCollection decorations, RunFormatting formatting)
     {
@@ -16835,38 +16713,6 @@ public sealed partial class DocumentView : RichTextBox
         PenOffset = offset,
         PenOffsetUnit = TextDecorationUnit.FontRenderingEmSize,
     };
-
-    private static bool StyleRunNoProof(ModelParagraph paragraph, TextDocument document)
-    {
-        var seen = new HashSet<string>(StringComparer.Ordinal);
-        var styleId = paragraph.StyleId;
-        while (!string.IsNullOrEmpty(styleId)
-            && seen.Add(styleId)
-            && document.Styles.TryGetValue(styleId, out var style))
-        {
-            if (style.Run.NoProof)
-                return true;
-            styleId = style.BasedOnStyleId;
-        }
-
-        return false;
-    }
-
-    private static bool StyleRunDoubleStrikethrough(ModelParagraph paragraph, TextDocument document)
-    {
-        var seen = new HashSet<string>(StringComparer.Ordinal);
-        var styleId = paragraph.StyleId;
-        while (!string.IsNullOrEmpty(styleId)
-            && seen.Add(styleId)
-            && document.Styles.TryGetValue(styleId, out var style))
-        {
-            if (style.Run.DoubleStrikethrough)
-                return true;
-            styleId = style.BasedOnStyleId;
-        }
-
-        return false;
-    }
 
     private static WpfTextAlignment ToWpfAlignment(ModelTextAlignment alignment) => alignment switch
     {
