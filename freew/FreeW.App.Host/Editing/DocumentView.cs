@@ -1134,10 +1134,10 @@ public sealed partial class DocumentView : RichTextBox
     //
     // The Styles / Themes galleries preview a choice while the pointer hovers a swatch and revert it
     // when the pointer leaves (unless the user clicks, which commits through the normal reversible
-    // path). Preview deliberately bypasses the undo/redo bus: it mutates the model in place and
-    // re-renders, snapshotting exactly what it changed so EndPreview can restore the document to its
-    // pre-hover state without touching undo history. Commit (the real apply) is a separate, reversible
-    // operation the gallery triggers on click — preview only ever shows, never persists.
+    // path). Preview deliberately bypasses the undo/redo bus: the shared DesignEdits coordinator owns
+    // the exact model baseline and restoration, while this renderer only commits pending native edits and
+    // redraws. Commit (the real apply) is a separate, reversible operation the gallery triggers on click —
+    // preview only ever shows, never persists.
 
     // Snapshot of the paragraph StyleIds a style preview overwrote (model index -> prior style id).
     private Dictionary<int, string?>? _styleStyleIdSnapshot;
@@ -1151,21 +1151,6 @@ public sealed partial class DocumentView : RichTextBox
     // restores this range so linked paragraph styles can apply their character side to the original text.
     private (int StartBlock, int StartOffset, int EndBlock, int EndOffset, bool HasTextSelection)?
         _stylePreviewSelection;
-
-    // Snapshot of the document's pre-theme look (Theme + DefaultRun + each affected style's Run) for theme preview.
-    private (DocumentTheme Theme, RunFormatting DefaultRun, Dictionary<string, RunFormatting> Runs)? _themeSnapshot;
-
-    // Snapshot of each affected style's run/paragraph formatting for style-set preview.
-    private (RunFormatting DefaultRun, Dictionary<string, (RunFormatting Run, ParagraphFormatting Paragraph)> Styles)? _styleSetSnapshot;
-
-    // Snapshot of the document's pre-font-set look for font-set preview.
-    private (DocumentTheme Theme, RunFormatting DefaultRun, Dictionary<string, RunFormatting> Runs)? _fontSetSnapshot;
-
-    // Snapshot of the document's pre-paragraph-spacing look for spacing-set preview.
-    private (ParagraphFormatting DefaultParagraph, Dictionary<string, ParagraphFormatting> Paragraphs)? _paragraphSpacingSetSnapshot;
-
-    // Snapshot of the document's pre-effect-set theme for effect-set preview.
-    private DocumentTheme? _effectSetSnapshot;
 
     /// <summary>
     /// Preview a paragraph style on the current selection without committing: snapshot the selected
@@ -1242,22 +1227,7 @@ public sealed partial class DocumentView : RichTextBox
     public void PreviewTheme(DocumentTheme theme)
     {
         ArgumentNullException.ThrowIfNull(theme);
-
-        if (_themeSnapshot is null)
-            CommitToModel();
-        else
-            RestoreThemePreview();
-
-        var runs = new Dictionary<string, RunFormatting>();
-        foreach (var id in new[] { "Normal", "Title", "Heading1", "Heading2", "Heading3" })
-        {
-            if (_model.Styles.TryGetValue(id, out var style))
-                runs[id] = style.Run;
-        }
-
-        _themeSnapshot = (_model.Theme, _model.DefaultRun, runs);
-        DocumentTheme.Apply(_model, theme);
-        Render();
+        PreviewDesign(() => DesignEdits.PreviewTheme(theme));
     }
 
     /// <summary>
@@ -1266,52 +1236,12 @@ public sealed partial class DocumentView : RichTextBox
     public void PreviewThemeColors(DocumentTheme theme)
     {
         ArgumentNullException.ThrowIfNull(theme);
-
-        if (_themeSnapshot is null)
-            CommitToModel();
-        else
-            RestoreThemePreview();
-
-        _themeSnapshot = CaptureRunPreview();
-        DocumentTheme.ApplyColors(_model, theme);
-        Render();
+        PreviewDesign(() => DesignEdits.PreviewThemeColors(theme));
     }
 
     /// <summary>Revert a theme preview started by <see cref="PreviewTheme"/> and re-render. No-op if none is active.</summary>
     public void EndThemePreview()
-    {
-        if (_themeSnapshot is null)
-            return;
-        RestoreThemePreview();
-        Render();
-    }
-
-    // Restore the pre-preview document default + style runs from the theme snapshot (without re-rendering).
-    private void RestoreThemePreview()
-    {
-        if (_themeSnapshot is not { } snapshot)
-            return;
-        _model.Theme = snapshot.Theme;
-        _model.DefaultRun = snapshot.DefaultRun;
-        foreach (var (id, run) in snapshot.Runs)
-        {
-            if (_model.Styles.TryGetValue(id, out var style))
-                style.Run = run;
-        }
-        _themeSnapshot = null;
-    }
-
-    private (DocumentTheme Theme, RunFormatting DefaultRun, Dictionary<string, RunFormatting> Runs) CaptureRunPreview()
-    {
-        var runs = new Dictionary<string, RunFormatting>();
-        foreach (var id in new[] { "Normal", "Title", "Subtitle", "Heading1", "Heading2", "Heading3", "Quote" })
-        {
-            if (_model.Styles.TryGetValue(id, out var style))
-                runs[id] = style.Run;
-        }
-
-        return (_model.Theme, _model.DefaultRun, runs);
-    }
+        => EndDesignPreview();
 
     /// <summary>
     /// Preview a document style set without committing: snapshot the default run and the style catalog
@@ -1320,48 +1250,12 @@ public sealed partial class DocumentView : RichTextBox
     public void PreviewStyleSet(DocumentStyleSet styleSet)
     {
         ArgumentNullException.ThrowIfNull(styleSet);
-
-        if (_styleSetSnapshot is null)
-            CommitToModel();
-        else
-            RestoreStyleSetPreview();
-
-        var styles = new Dictionary<string, (RunFormatting Run, ParagraphFormatting Paragraph)>();
-        foreach (var id in new[] { "Normal", "Title", "Subtitle", "Heading1", "Heading2", "Heading3", "Quote" })
-        {
-            if (_model.Styles.TryGetValue(id, out var style))
-                styles[id] = (style.Run, style.Paragraph);
-        }
-
-        _styleSetSnapshot = (_model.DefaultRun, styles);
-        DocumentStyleSet.Apply(_model, styleSet);
-        Render();
+        PreviewDesign(() => DesignEdits.PreviewStyleSet(styleSet));
     }
 
     /// <summary>Revert a style-set preview started by <see cref="PreviewStyleSet"/> and re-render.</summary>
     public void EndStyleSetPreview()
-    {
-        if (_styleSetSnapshot is null)
-            return;
-        RestoreStyleSetPreview();
-        Render();
-    }
-
-    private void RestoreStyleSetPreview()
-    {
-        if (_styleSetSnapshot is not { } snapshot)
-            return;
-        _model.DefaultRun = snapshot.DefaultRun;
-        foreach (var (id, formatting) in snapshot.Styles)
-        {
-            if (_model.Styles.TryGetValue(id, out var style))
-            {
-                style.Run = formatting.Run;
-                style.Paragraph = formatting.Paragraph;
-            }
-        }
-        _styleSetSnapshot = null;
-    }
+        => EndDesignPreview();
 
     /// <summary>
     /// Preview a document font set without committing. Used by the Design Fonts gallery.
@@ -1369,39 +1263,12 @@ public sealed partial class DocumentView : RichTextBox
     public void PreviewFontSet(DocumentFontSet fontSet)
     {
         ArgumentNullException.ThrowIfNull(fontSet);
-
-        if (_fontSetSnapshot is null)
-            CommitToModel();
-        else
-            RestoreFontSetPreview();
-
-        _fontSetSnapshot = CaptureRunPreview();
-        DocumentFontSet.Apply(_model, fontSet);
-        Render();
+        PreviewDesign(() => DesignEdits.PreviewFontSet(fontSet));
     }
 
     /// <summary>Revert a font-set preview started by <see cref="PreviewFontSet"/> and re-render.</summary>
     public void EndFontSetPreview()
-    {
-        if (_fontSetSnapshot is null)
-            return;
-        RestoreFontSetPreview();
-        Render();
-    }
-
-    private void RestoreFontSetPreview()
-    {
-        if (_fontSetSnapshot is not { } snapshot)
-            return;
-        _model.Theme = snapshot.Theme;
-        _model.DefaultRun = snapshot.DefaultRun;
-        foreach (var (id, run) in snapshot.Runs)
-        {
-            if (_model.Styles.TryGetValue(id, out var style))
-                style.Run = run;
-        }
-        _fontSetSnapshot = null;
-    }
+        => EndDesignPreview();
 
     /// <summary>
     /// Preview a document paragraph-spacing preset without committing. Used by the Design Paragraph
@@ -1410,45 +1277,12 @@ public sealed partial class DocumentView : RichTextBox
     public void PreviewParagraphSpacingSet(DocumentParagraphSpacingSet spacingSet)
     {
         ArgumentNullException.ThrowIfNull(spacingSet);
-
-        if (_paragraphSpacingSetSnapshot is null)
-            CommitToModel();
-        else
-            RestoreParagraphSpacingSetPreview();
-
-        var paragraphs = new Dictionary<string, ParagraphFormatting>();
-        foreach (var id in new[] { "Normal", "Title", "Subtitle", "Heading1", "Heading2", "Heading3", "Quote" })
-        {
-            if (_model.Styles.TryGetValue(id, out var style))
-                paragraphs[id] = style.Paragraph;
-        }
-
-        _paragraphSpacingSetSnapshot = (_model.DefaultParagraph, paragraphs);
-        DocumentParagraphSpacingSet.Apply(_model, spacingSet);
-        Render();
+        PreviewDesign(() => DesignEdits.PreviewParagraphSpacingSet(spacingSet));
     }
 
     /// <summary>Revert a paragraph-spacing preview started by <see cref="PreviewParagraphSpacingSet"/>.</summary>
     public void EndParagraphSpacingSetPreview()
-    {
-        if (_paragraphSpacingSetSnapshot is null)
-            return;
-        RestoreParagraphSpacingSetPreview();
-        Render();
-    }
-
-    private void RestoreParagraphSpacingSetPreview()
-    {
-        if (_paragraphSpacingSetSnapshot is not { } snapshot)
-            return;
-        _model.DefaultParagraph = snapshot.DefaultParagraph;
-        foreach (var (id, paragraph) in snapshot.Paragraphs)
-        {
-            if (_model.Styles.TryGetValue(id, out var style))
-                style.Paragraph = paragraph;
-        }
-        _paragraphSpacingSetSnapshot = null;
-    }
+        => EndDesignPreview();
 
     /// <summary>
     /// Preview a document effect set without committing. Used by the Design Effects gallery/menu.
@@ -1456,32 +1290,25 @@ public sealed partial class DocumentView : RichTextBox
     public void PreviewEffectSet(DocumentEffectSet effectSet)
     {
         ArgumentNullException.ThrowIfNull(effectSet);
-
-        if (_effectSetSnapshot is null)
-            CommitToModel();
-        else
-            RestoreEffectSetPreview();
-
-        _effectSetSnapshot = _model.Theme;
-        DocumentEffectSet.Apply(_model, effectSet);
-        Render();
+        PreviewDesign(() => DesignEdits.PreviewEffectSet(effectSet));
     }
 
     /// <summary>Revert an effect-set preview started by <see cref="PreviewEffectSet"/>.</summary>
     public void EndEffectSetPreview()
+        => EndDesignPreview();
+
+    private void PreviewDesign(Action preview)
     {
-        if (_effectSetSnapshot is null)
-            return;
-        RestoreEffectSetPreview();
+        if (!DesignEdits.HasActivePreview)
+            CommitToModel();
+        preview();
         Render();
     }
 
-    private void RestoreEffectSetPreview()
+    private void EndDesignPreview()
     {
-        if (_effectSetSnapshot is null)
-            return;
-        _model.Theme = _effectSetSnapshot;
-        _effectSetSnapshot = null;
+        if (DesignEdits.CancelPreview())
+            Render();
     }
 
     /// <summary>

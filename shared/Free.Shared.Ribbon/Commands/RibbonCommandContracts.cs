@@ -33,6 +33,18 @@ public interface IRibbonCommand
     void Execute(RibbonCommandContext context);
 }
 
+/// <summary>
+/// Optional live-preview contract for gallery and menu commands. Renderers begin preview from
+/// native hover or keyboard focus, cancel it when the item/flyout is left, and call
+/// <see cref="IRibbonCommand.Execute"/> to commit the selected value.
+/// </summary>
+public interface IRibbonPreviewCommand : IRibbonCommand
+{
+    void BeginPreview(RibbonCommandContext context);
+
+    void CancelPreview();
+}
+
 public interface IRibbonStatefulCommand : IRibbonCommand
 {
     RibbonCommandState GetState();

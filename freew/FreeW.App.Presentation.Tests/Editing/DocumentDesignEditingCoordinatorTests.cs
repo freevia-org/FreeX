@@ -89,6 +89,82 @@ public sealed class DocumentDesignEditingCoordinatorTests
         document.Page.WidthPt.Should().Be(700);
     }
 
+    [Fact]
+    public void DesignPreviewSwitchingAndCancellationRestoreTheCompleteBaselineWithoutUndo()
+    {
+        var document = TextDocument.CreateEmpty();
+        var session = SessionWith(document);
+        var originalTheme = document.Theme;
+        var originalDefaultRun = document.DefaultRun;
+        var originalDefaultParagraph = document.DefaultParagraph;
+        var originalStyles = document.Styles.ToDictionary(
+            pair => pair.Key,
+            pair => (pair.Value, pair.Value.Run, pair.Value.Paragraph));
+
+        session.Design.PreviewTheme(DocumentTheme.Catalog[^1]);
+        session.Design.HasActivePreview.Should().BeTrue();
+        document.Theme.Should().Be(DocumentTheme.Catalog[^1]);
+
+        session.Design.PreviewThemeColors(DocumentTheme.Catalog[1]);
+        session.Design.PreviewStyleSet(DocumentStyleSet.Catalog[^1]);
+        session.Design.PreviewFontSet(DocumentFontSet.Catalog[^1]);
+        session.Design.PreviewParagraphSpacingSet(DocumentParagraphSpacingSet.Catalog[^1]);
+        session.Design.PreviewEffectSet(DocumentEffectSet.Catalog[^1]);
+
+        session.Commands.CanUndo.Should().BeFalse();
+        session.Design.CancelPreview().Should().BeTrue();
+        session.Design.CancelPreview().Should().BeFalse();
+        session.Design.HasActivePreview.Should().BeFalse();
+        document.Theme.Should().Be(originalTheme);
+        document.DefaultRun.Should().Be(originalDefaultRun);
+        document.DefaultParagraph.Should().Be(originalDefaultParagraph);
+        document.Styles.Keys.Should().BeEquivalentTo(originalStyles.Keys);
+        foreach (var (styleId, snapshot) in originalStyles)
+        {
+            document.Styles[styleId].Should().BeSameAs(snapshot.Value);
+            document.Styles[styleId].Run.Should().Be(snapshot.Run);
+            document.Styles[styleId].Paragraph.Should().Be(snapshot.Paragraph);
+        }
+    }
+
+    [Fact]
+    public void CommittingDuringPreviewRevertsFirstSoUndoReturnsToTheTrueBaseline()
+    {
+        var document = TextDocument.CreateEmpty();
+        var originalTheme = document.Theme;
+        var session = SessionWith(document);
+        var preview = DocumentTheme.Catalog[^1];
+        var committed = DocumentTheme.Catalog[1];
+
+        session.Design.PreviewTheme(preview);
+        document.Theme.Should().Be(preview);
+
+        session.Design.ApplyTheme(committed);
+
+        session.Design.HasActivePreview.Should().BeFalse();
+        document.Theme.Should().Be(committed);
+        session.Commands.Undo().Should().BeTrue();
+        document.Theme.Should().Be(originalTheme);
+    }
+
+    [Fact]
+    public void LoadingAnotherDocumentCancelsTheOldDocumentPreviewBeforeReplacement()
+    {
+        var original = TextDocument.CreateEmpty();
+        var originalTheme = original.Theme;
+        var replacement = TextDocument.CreateEmpty();
+        var replacementTheme = replacement.Theme;
+        var session = SessionWith(original);
+
+        session.Design.PreviewTheme(DocumentTheme.Catalog[^1]);
+        session.LoadDocument(replacement);
+
+        original.Theme.Should().Be(originalTheme);
+        replacement.Theme.Should().Be(replacementTheme);
+        session.Design.HasActivePreview.Should().BeFalse();
+        session.Document.Should().BeSameAs(replacement);
+    }
+
     private static DocumentEditingSession SessionWith(TextDocument document)
     {
         var session = new DocumentEditingSession();

@@ -119,6 +119,7 @@ public sealed class DocumentEditingSession
     {
         ArgumentNullException.ThrowIfNull(document);
 
+        Design.CancelPreview();
         _commands.Changed -= OnCommandsChanged;
         Document = document;
         _commands = CreateCommandBus(document);

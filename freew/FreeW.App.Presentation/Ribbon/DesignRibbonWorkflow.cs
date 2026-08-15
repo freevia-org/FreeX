@@ -12,6 +12,12 @@ public sealed record DesignRibbonBindings(
     Action<DocumentFontSet> ApplyFontSet,
     Action<DocumentParagraphSpacingSet> ApplyParagraphSpacingSet,
     Action<DocumentEffectSet> ApplyEffectSet,
+    Action<DocumentTheme> PreviewTheme,
+    Action<DocumentTheme> PreviewThemeColors,
+    Action<DocumentFontSet> PreviewFontSet,
+    Action<DocumentParagraphSpacingSet> PreviewParagraphSpacingSet,
+    Action<DocumentEffectSet> PreviewEffectSet,
+    Action CancelPreview,
     Action ApplyDefaultStyleSet,
     Action<string?> ApplyPageColor,
     Action<string?> ApplyWatermarkText,
@@ -64,7 +70,11 @@ public static class DesignRibbonWorkflow
             var captured = preset;
             registry.Register(
                 $"freew.theme.{captured.Name.ToLowerInvariant()}",
-                Prepared(bindings, () => bindings.Formatting.ApplyTheme(captured.Name)));
+                Previewable(
+                    bindings,
+                    captured,
+                    bindings.PreviewTheme,
+                    value => bindings.Formatting.ApplyTheme(value.Name)));
         }
 
         var colors = new ResolvedChoiceCommand<DocumentTheme>(
@@ -79,7 +89,7 @@ public static class DesignRibbonWorkflow
             var captured = preset;
             registry.Register(
                 $"freew.theme-colors.{captured.Name.ToLowerInvariant()}",
-                Prepared(bindings, () => bindings.ApplyThemeColors(captured)));
+                Previewable(bindings, captured, bindings.PreviewThemeColors, bindings.ApplyThemeColors));
         }
 
         var fonts = new ResolvedChoiceCommand<DocumentFontSet>(
@@ -94,7 +104,7 @@ public static class DesignRibbonWorkflow
             var captured = preset;
             registry.Register(
                 $"freew.theme-fonts.{captured.Name.ToLowerInvariant()}",
-                Prepared(bindings, () => bindings.ApplyFontSet(captured)));
+                Previewable(bindings, captured, bindings.PreviewFontSet, bindings.ApplyFontSet));
         }
 
         var spacing = new ResolvedChoiceCommand<DocumentParagraphSpacingSet>(
@@ -110,7 +120,11 @@ public static class DesignRibbonWorkflow
             var captured = preset;
             registry.Register(
                 ParagraphSpacingCommandId(captured.Name),
-                Prepared(bindings, () => bindings.ApplyParagraphSpacingSet(captured)));
+                Previewable(
+                    bindings,
+                    captured,
+                    bindings.PreviewParagraphSpacingSet,
+                    bindings.ApplyParagraphSpacingSet));
         }
 
         var effects = new ResolvedChoiceCommand<DocumentEffectSet>(
@@ -124,7 +138,7 @@ public static class DesignRibbonWorkflow
             var captured = DocumentEffectSet.Catalog[index];
             registry.Register(
                 FreeWContextMenuPlanner.EffectsPrefix + index,
-                Prepared(bindings, () => bindings.ApplyEffectSet(captured)));
+                Previewable(bindings, captured, bindings.PreviewEffectSet, bindings.ApplyEffectSet));
         }
 
         var styleSet = new ResolvedChoiceCommand<DocumentStyleSet>(
@@ -176,12 +190,45 @@ public static class DesignRibbonWorkflow
     private static IRibbonCommand Prepared(DesignRibbonBindings bindings, Action execute) =>
         new PreparedActionCommand(bindings.PrepareExecution, execute);
 
+    private static IRibbonCommand Previewable<T>(
+        DesignRibbonBindings bindings,
+        T value,
+        Action<T> preview,
+        Action<T> apply)
+        where T : class =>
+        new PreviewablePreparedActionCommand<T>(
+            value,
+            preview,
+            bindings.CancelPreview,
+            bindings.PrepareExecution,
+            apply);
+
     private sealed class PreparedActionCommand(Action prepare, Action execute) : IRibbonCommand
     {
         public void Execute(RibbonCommandContext context)
         {
             prepare();
             execute();
+        }
+    }
+
+    private sealed class PreviewablePreparedActionCommand<T>(
+        T value,
+        Action<T> preview,
+        Action cancelPreview,
+        Action prepare,
+        Action<T> apply) : IRibbonPreviewCommand
+        where T : class
+    {
+        public void BeginPreview(RibbonCommandContext context) => preview(value);
+
+        public void CancelPreview() => cancelPreview();
+
+        public void Execute(RibbonCommandContext context)
+        {
+            cancelPreview();
+            prepare();
+            apply(value);
         }
     }
 

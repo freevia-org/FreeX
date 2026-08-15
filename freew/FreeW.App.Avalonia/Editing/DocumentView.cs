@@ -21445,6 +21445,37 @@ public sealed partial class DocumentView : Control
         DesignEdits.ApplyStyleSet(styleSet);
     }
 
+    public void PreviewTheme(DocumentTheme theme) =>
+        PreviewDesign(() => DesignEdits.PreviewTheme(theme));
+
+    public void PreviewThemeColors(DocumentTheme theme) =>
+        PreviewDesign(() => DesignEdits.PreviewThemeColors(theme));
+
+    public void PreviewFontSet(DocumentFontSet fontSet) =>
+        PreviewDesign(() => DesignEdits.PreviewFontSet(fontSet));
+
+    public void PreviewParagraphSpacingSet(DocumentParagraphSpacingSet spacingSet) =>
+        PreviewDesign(() => DesignEdits.PreviewParagraphSpacingSet(spacingSet));
+
+    public void PreviewEffectSet(DocumentEffectSet effectSet) =>
+        PreviewDesign(() => DesignEdits.PreviewEffectSet(effectSet));
+
+    public void CancelDesignPreview()
+    {
+        if (!DesignEdits.CancelPreview())
+            return;
+
+        ClearBitmapCache();
+        InvalidateLayoutAndVisual();
+    }
+
+    private void PreviewDesign(Action preview)
+    {
+        preview();
+        ClearBitmapCache();
+        InvalidateLayoutAndVisual();
+    }
+
     /// <summary>
     /// Home &gt; Styles &gt; New Style: create a custom paragraph style through the shared
     /// <see cref="StyleManager"/>, then immediately apply it through the normal paragraph-style path.

@@ -2348,6 +2348,7 @@ public static class AvaloniaRibbonRenderer
         var flyout = new MenuFlyout();
         foreach (var item in menu.Items)
             flyout.Items.Add(BuildMenuItem(item, registry, afterExecute));
+        flyout.Closed += (_, _) => CancelMenuPreviews(flyout, registry);
         return flyout;
     }
 
@@ -2391,9 +2392,69 @@ public static class AvaloniaRibbonRenderer
             menuItem.Click += (_, _) => Execute(commandId, registry, afterExecute);
             if (item.IsEnabled)
                 ApplyEnablement(menuItem, commandId, registry);
+            WirePreview(menuItem, commandId, registry);
         }
 
         return menuItem;
+    }
+
+    private static void WirePreview(
+        MenuItem item,
+        RibbonCommandId commandId,
+        IRibbonCommandRegistry? registry)
+    {
+        if (registry is null
+            || !registry.TryGet(commandId, out var command)
+            || command is not IRibbonPreviewCommand preview)
+        {
+            return;
+        }
+
+        item.PointerEntered += (_, _) => InvokePreview(commandId, preview.BeginPreview);
+        item.PointerExited += (_, _) => InvokePreview(commandId, _ => preview.CancelPreview());
+        item.GotFocus += (_, _) => InvokePreview(commandId, preview.BeginPreview);
+        item.LostFocus += (_, _) => InvokePreview(commandId, _ => preview.CancelPreview());
+    }
+
+    private static void InvokePreview(
+        RibbonCommandId commandId,
+        Action<RibbonCommandContext> action)
+    {
+        try
+        {
+            action(RibbonCommandContext.Empty);
+        }
+        catch (Exception ex)
+        {
+            RibbonCommandFaultReporter.Report(ex, commandId.Value);
+        }
+    }
+
+    private static void CancelMenuPreviews(
+        MenuFlyout flyout,
+        IRibbonCommandRegistry? registry)
+    {
+        if (registry is null)
+            return;
+
+        var pending = new Stack<MenuItem>(flyout.Items.OfType<MenuItem>().Reverse());
+        var cancelled = new HashSet<IRibbonPreviewCommand>();
+        while (pending.Count > 0)
+        {
+            var item = pending.Pop();
+            foreach (var child in item.Items.OfType<MenuItem>().Reverse())
+                pending.Push(child);
+
+            if (item.Tag is not string commandId
+                || !registry.TryGet(new RibbonCommandId(commandId), out var command)
+                || command is not IRibbonPreviewCommand preview
+                || !cancelled.Add(preview))
+            {
+                continue;
+            }
+
+            InvokePreview(new RibbonCommandId(commandId), _ => preview.CancelPreview());
+        }
     }
 
     private static global::Avalonia.Input.KeyGesture? TryParseGesture(string gesture)
@@ -2487,6 +2548,8 @@ public static class AvaloniaRibbonRenderer
                     break;
             }
         }
+
+        flyout.Closed += (_, _) => CancelMenuPreviews(flyout, registry);
 
         return flyout;
     }

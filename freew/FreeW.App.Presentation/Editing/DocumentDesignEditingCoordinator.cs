@@ -13,8 +13,11 @@ public readonly record struct DocumentDesignEditResult(bool Applied, string Labe
 public sealed class DocumentDesignEditingCoordinator
 {
     private readonly DocumentEditingSession _session;
+    private DocumentDesignPreviewSnapshot? _previewSnapshot;
 
     internal DocumentDesignEditingCoordinator(DocumentEditingSession session) => _session = session;
+
+    public bool HasActivePreview => _previewSnapshot is not null;
 
     public DocumentDesignEditResult ApplyDocumentProperties(DocumentPropertiesDialogValues values)
     {
@@ -65,6 +68,35 @@ public sealed class DocumentDesignEditingCoordinator
 
     public DocumentDesignEditResult ApplyEffectSet(DocumentEffectSet effectSet) =>
         ApplyCatalog("Theme Effects", effectSet, static (document, value) => DocumentEffectSet.Apply(document, value));
+
+    public void PreviewTheme(DocumentTheme theme) =>
+        PreviewCatalog(theme, static (document, value) => DocumentTheme.Apply(document, value));
+
+    public void PreviewThemeColors(DocumentTheme theme) =>
+        PreviewCatalog(theme, static (document, value) => DocumentTheme.ApplyColors(document, value));
+
+    public void PreviewStyleSet(DocumentStyleSet styleSet) =>
+        PreviewCatalog(styleSet, static (document, value) => DocumentStyleSet.Apply(document, value));
+
+    public void PreviewFontSet(DocumentFontSet fontSet) =>
+        PreviewCatalog(fontSet, static (document, value) => DocumentFontSet.Apply(document, value));
+
+    public void PreviewParagraphSpacingSet(DocumentParagraphSpacingSet spacingSet) =>
+        PreviewCatalog(spacingSet, static (document, value) => DocumentParagraphSpacingSet.Apply(document, value));
+
+    public void PreviewEffectSet(DocumentEffectSet effectSet) =>
+        PreviewCatalog(effectSet, static (document, value) => DocumentEffectSet.Apply(document, value));
+
+    /// <summary>Restores the exact pre-hover design catalog without adding an undo entry.</summary>
+    public bool CancelPreview()
+    {
+        if (_previewSnapshot is not { } snapshot)
+            return false;
+
+        RestorePreviewSnapshot(_session.Document, snapshot);
+        _previewSnapshot = null;
+        return true;
+    }
 
     public DocumentDesignEditResult SetPageColor(string? colorHex, int sectionIndex = -1) =>
         UpdatePage(
@@ -120,9 +152,66 @@ public sealed class DocumentDesignEditingCoordinator
         return Execute(new DesignCatalogCommand(label, document => apply(document, value)));
     }
 
+    private void PreviewCatalog<T>(T value, Action<TextDocument, T> apply)
+        where T : class
+    {
+        ArgumentNullException.ThrowIfNull(value);
+
+        var document = _session.Document;
+        if (_previewSnapshot is null)
+            _previewSnapshot = CapturePreviewSnapshot(document);
+        else
+            RestorePreviewSnapshot(document, _previewSnapshot);
+
+        apply(document, value);
+    }
+
     private DocumentDesignEditResult Execute(IDocumentCommand command)
     {
+        CancelPreview();
         _session.Commands.Execute(command);
         return new DocumentDesignEditResult(Applied: true, command.Label);
     }
+
+    private static DocumentDesignPreviewSnapshot CapturePreviewSnapshot(TextDocument document) =>
+        new(
+            document.Theme,
+            document.DefaultRun,
+            document.DefaultParagraph,
+            document.Styles.ToDictionary(
+                pair => pair.Key,
+                pair => new DocumentDesignStylePreviewSnapshot(
+                    pair.Value,
+                    pair.Value.Run,
+                    pair.Value.Paragraph)));
+
+    private static void RestorePreviewSnapshot(
+        TextDocument document,
+        DocumentDesignPreviewSnapshot snapshot)
+    {
+        document.Theme = snapshot.Theme;
+        document.DefaultRun = snapshot.DefaultRun;
+        document.DefaultParagraph = snapshot.DefaultParagraph;
+
+        foreach (var styleId in document.Styles.Keys.Except(snapshot.Styles.Keys).ToArray())
+            document.Styles.Remove(styleId);
+
+        foreach (var (styleId, styleSnapshot) in snapshot.Styles)
+        {
+            styleSnapshot.Style.Run = styleSnapshot.Run;
+            styleSnapshot.Style.Paragraph = styleSnapshot.Paragraph;
+            document.Styles[styleId] = styleSnapshot.Style;
+        }
+    }
+
+    private sealed record DocumentDesignPreviewSnapshot(
+        DocumentTheme Theme,
+        RunFormatting DefaultRun,
+        ParagraphFormatting DefaultParagraph,
+        IReadOnlyDictionary<string, DocumentDesignStylePreviewSnapshot> Styles);
+
+    private sealed record DocumentDesignStylePreviewSnapshot(
+        DocumentStyle Style,
+        RunFormatting Run,
+        ParagraphFormatting Paragraph);
 }

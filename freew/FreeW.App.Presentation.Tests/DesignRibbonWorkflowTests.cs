@@ -22,15 +22,20 @@ public sealed class DesignRibbonWorkflowTests
 
         foreach (var theme in DocumentTheme.Catalog)
         {
-            Command(registry, $"freew.theme.{theme.Name.ToLowerInvariant()}");
-            Command(registry, $"freew.theme-colors.{theme.Name.ToLowerInvariant()}");
+            Command(registry, $"freew.theme.{theme.Name.ToLowerInvariant()}")
+                .Should().BeAssignableTo<IRibbonPreviewCommand>();
+            Command(registry, $"freew.theme-colors.{theme.Name.ToLowerInvariant()}")
+                .Should().BeAssignableTo<IRibbonPreviewCommand>();
         }
         foreach (var fontSet in DocumentFontSet.Catalog)
-            Command(registry, $"freew.theme-fonts.{fontSet.Name.ToLowerInvariant()}");
+            Command(registry, $"freew.theme-fonts.{fontSet.Name.ToLowerInvariant()}")
+                .Should().BeAssignableTo<IRibbonPreviewCommand>();
         foreach (var spacing in DocumentParagraphSpacingSet.Catalog)
-            Command(registry, DesignRibbonWorkflow.ParagraphSpacingCommandId(spacing.Name));
+            Command(registry, DesignRibbonWorkflow.ParagraphSpacingCommandId(spacing.Name))
+                .Should().BeAssignableTo<IRibbonPreviewCommand>();
         for (var index = 0; index < DocumentEffectSet.Catalog.Count; index++)
-            Command(registry, $"freew.context.effects.{index}");
+            Command(registry, $"freew.context.effects.{index}")
+                .Should().BeAssignableTo<IRibbonPreviewCommand>();
         foreach (var color in FreeWRibbonPaletteCatalog.PageColors)
             Command(registry, color.CommandId);
 
@@ -78,13 +83,37 @@ public sealed class DesignRibbonWorkflowTests
 
         events.Should().Equal(
             "prepare", $"theme:{theme.Name}",
-            "prepare", $"colors:{theme.Name}",
+            "cancel-preview", "prepare", $"colors:{theme.Name}",
             "prepare", $"fonts:{fontSet.Name}",
-            "prepare", $"spacing:{spacing.Name}",
+            "cancel-preview", "prepare", $"spacing:{spacing.Name}",
             "prepare", $"effects:{effect.Name}",
             "prepare", $"page-color:{pageColor.Hex}",
             "prepare", "watermark:DRAFT",
             "prepare", "watermark:");
+    }
+
+    [Fact]
+    public void PresetCommandsPreviewCancelAndCommitInSharedOrder()
+    {
+        var registry = new RibbonCommandRegistry();
+        var events = new List<string>();
+        DesignRibbonWorkflow.Register(registry, CreateBindings(events));
+        var theme = DocumentTheme.Catalog[^1];
+        var command = Command(registry, $"freew.theme.{theme.Name.ToLowerInvariant()}")
+            .Should().BeAssignableTo<IRibbonPreviewCommand>().Subject;
+
+        command.BeginPreview(RibbonCommandContext.Empty);
+        command.CancelPreview();
+        command.BeginPreview(RibbonCommandContext.Empty);
+        command.Execute(RibbonCommandContext.Empty);
+
+        events.Should().Equal(
+            $"preview-theme:{theme.Name}",
+            "cancel-preview",
+            $"preview-theme:{theme.Name}",
+            "cancel-preview",
+            "prepare",
+            $"theme:{theme.Name}");
     }
 
     [Fact]
@@ -93,6 +122,19 @@ public sealed class DesignRibbonWorkflowTests
         var root = TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeW.slnx");
         var wpf = Read(root, "freew", "FreeW.App.Host", "Ribbon", "FreeWRibbonCommands.cs");
         var avalonia = Read(root, "freew", "FreeW.App.Avalonia", "Ribbon", "FreeWAvaloniaRibbonCommands.cs");
+        var avaloniaRenderer = Read(
+            root,
+            "shared",
+            "Free.Shared.Ribbon.Avalonia",
+            "AvaloniaRibbonRenderer.cs");
+        var wpfEditor = Read(root, "freew", "FreeW.App.Host", "Editing", "DocumentView.cs");
+        var avaloniaEditor = Read(root, "freew", "FreeW.App.Avalonia", "Editing", "DocumentView.cs");
+        var coordinator = Read(
+            root,
+            "freew",
+            "FreeW.App.Presentation",
+            "Editing",
+            "DocumentDesignEditingCoordinator.cs");
 
         foreach (var source in new[] { wpf, avalonia })
         {
@@ -113,7 +155,29 @@ public sealed class DesignRibbonWorkflowTests
             .And.NotContain("class ApplyEffectSetCommand");
         avalonia.Should().NotContain("new ThemeCommand(formatting)")
             .And.NotContain("new StyleSetCommand(formatting)")
-            .And.NotContain("RegisterPageColorPalette(");
+            .And.NotContain("RegisterPageColorPalette(")
+            .And.Contain("PreviewTheme: editor.PreviewTheme")
+            .And.Contain("CancelPreview: editor.CancelDesignPreview");
+        wpf.Should().Contain("PreviewTheme: editor.PreviewTheme")
+            .And.Contain("CancelPreview: editor.EndThemePreview");
+        avaloniaRenderer.Should().Contain("IRibbonPreviewCommand")
+            .And.Contain("PointerEntered +=")
+            .And.Contain("GotFocus +=")
+            .And.Contain("CancelMenuPreviews(");
+        coordinator.Should().Contain("private DocumentDesignPreviewSnapshot? _previewSnapshot;")
+            .And.Contain("public bool CancelPreview()")
+            .And.Contain("RestorePreviewSnapshot(");
+        foreach (var editor in new[] { wpfEditor, avaloniaEditor })
+        {
+            editor.Should().Contain("DesignEdits.PreviewTheme(")
+                .And.Contain("DesignEdits.PreviewThemeColors(")
+                .And.Contain("DesignEdits.PreviewFontSet(")
+                .And.Contain("DesignEdits.PreviewParagraphSpacingSet(")
+                .And.Contain("DesignEdits.PreviewEffectSet(")
+                .And.NotContain("_themeSnapshot")
+                .And.NotContain("_fontSetSnapshot")
+                .And.NotContain("_effectSetSnapshot");
+        }
     }
 
     private static DesignRibbonBindings CreateBindings(ICollection<string> events)
@@ -140,6 +204,12 @@ public sealed class DesignRibbonWorkflowTests
             ApplyFontSet: value => events.Add($"fonts:{value.Name}"),
             ApplyParagraphSpacingSet: value => events.Add($"spacing:{value.Name}"),
             ApplyEffectSet: value => events.Add($"effects:{value.Name}"),
+            PreviewTheme: value => events.Add($"preview-theme:{value.Name}"),
+            PreviewThemeColors: value => events.Add($"preview-colors:{value.Name}"),
+            PreviewFontSet: value => events.Add($"preview-fonts:{value.Name}"),
+            PreviewParagraphSpacingSet: value => events.Add($"preview-spacing:{value.Name}"),
+            PreviewEffectSet: value => events.Add($"preview-effects:{value.Name}"),
+            CancelPreview: () => events.Add("cancel-preview"),
             ApplyDefaultStyleSet: () => events.Add("style-set:default"),
             ApplyPageColor: value => events.Add($"page-color:{value}"),
             ApplyWatermarkText: value => events.Add($"watermark:{value}"),
