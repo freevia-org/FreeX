@@ -131,7 +131,7 @@ public sealed partial class MainWindow
             }
         };
 
-        var dialog = new Window
+        var dialog = new FreeXDialogWindow(DrawingDialogChromeStyle)
         {
             Title = target.Kind == DrawingObjectTargetKind.Picture
                 ? UiText.Get("FormatPicture_PictureTitle")
@@ -262,7 +262,7 @@ public sealed partial class MainWindow
         var rightBox = CropBox("PictureCropRightBox", PictureCropDialogPlanner.FormatPercent(values.Right));
         var bottomBox = CropBox("PictureCropBottomBox", PictureCropDialogPlanner.FormatPercent(values.Bottom));
 
-        var dialog = new Window
+        var dialog = new FreeXDialogWindow(DrawingDialogChromeStyle)
         {
             Title = UiText.Get("PictureCrop_Title"),
             Width = 320,
@@ -396,7 +396,7 @@ public sealed partial class MainWindow
 
         effectBox.SelectionChanged += (_, _) => UpdateDescription();
 
-        var dialog = new Window
+        var dialog = new FreeXDialogWindow(DrawingDialogChromeStyle)
         {
             Title = UiText.Get("ShapeEffects_Title"),
             Width = 380,
@@ -553,7 +553,7 @@ public sealed partial class MainWindow
         // collapse there, leaving a large dead band below the OK/Cancel buttons. The height is sized to the
         // gradient-stops group (two stop rows + direction + preview) plus the Start/End summary and button
         // row, matching the compact Windows "Gradient Fill" dialog.
-        var dialog = new Window
+        var dialog = new FreeXDialogWindow(DrawingDialogChromeStyle)
         {
             Title = UiText.Get("ShapeGradient_Title"),
             Width = ShapeGradientPlanner.DialogWidth,
