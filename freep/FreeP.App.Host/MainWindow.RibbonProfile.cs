@@ -41,6 +41,8 @@ public sealed partial class MainWindow
         InsertVideo = () => QueueAssetImport(PresentationAssetImportKind.Video),
         InsertAudio = () => QueueAssetImport(PresentationAssetImportKind.Audio),
         OpenTablePicker = OpenTablePicker,
+        ExecuteTableStructureAction = kind =>
+            _domainContextMenuSession.ExecuteCurrentTableAction(kind, TryExecuteInlineTableAction),
         MergeTableCells = () =>
         {
             _domainContextMenuSession.ExecuteCurrentTableAction(

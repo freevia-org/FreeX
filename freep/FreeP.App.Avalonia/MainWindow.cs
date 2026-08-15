@@ -2267,6 +2267,8 @@ public sealed partial class MainWindow : Window,
             InsertVideo = () => _ = InsertMediaFromFileAsync(isVideo: true),
             InsertAudio = () => _ = InsertMediaFromFileAsync(isVideo: false),
             OpenTablePicker = OpenTablePicker,
+            ExecuteTableStructureAction = kind =>
+                _domainContextMenuSession.ExecuteCurrentTableAction(kind, TryExecuteInlineTableAction),
             MergeTableCells = () =>
             {
                 _domainContextMenuSession.ExecuteCurrentTableAction(

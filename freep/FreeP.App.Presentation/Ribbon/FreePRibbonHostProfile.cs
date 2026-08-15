@@ -81,7 +81,7 @@ public sealed class FreePRibbonHostProfile
 
     internal FreePRibbonCommandHostAdapter CreateCommandHostAdapter(EditingSession editor) => new()
     {
-        ExecuteAction = action => FreePRibbonHostActionRouter.Dispatch(
+        TryExecuteAction = action => FreePRibbonHostActionRouter.Dispatch(
             editor,
             action,
             ActionEndpoints,

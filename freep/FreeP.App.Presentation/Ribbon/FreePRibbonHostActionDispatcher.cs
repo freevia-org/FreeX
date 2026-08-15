@@ -11,6 +11,7 @@ public sealed class FreePRibbonHostActionEndpoints
     public Action? InsertVideo { get; init; }
     public Action? InsertAudio { get; init; }
     public Action? OpenTablePicker { get; init; }
+    public Func<PresentationDomainContextActionKind, bool>? ExecuteTableStructureAction { get; init; }
     public Action? MergeTableCells { get; init; }
     public Action? SplitTableCell { get; init; }
     public Action? PickPictureBullet { get; init; }
@@ -188,6 +189,8 @@ public static class FreePRibbonHostActionDispatcher
             FreePRibbonHostActionKind.InsertVideo => Invoke(endpoints.InsertVideo),
             FreePRibbonHostActionKind.InsertAudio => Invoke(endpoints.InsertAudio),
             FreePRibbonHostActionKind.OpenTablePicker => Invoke(endpoints.OpenTablePicker),
+            FreePRibbonHostActionKind.ExecuteTableStructureAction =>
+                Invoke(action.Argument, endpoints.ExecuteTableStructureAction),
             FreePRibbonHostActionKind.MergeTableCells => Invoke(endpoints.MergeTableCells),
             FreePRibbonHostActionKind.SplitTableCell => Invoke(endpoints.SplitTableCell),
             FreePRibbonHostActionKind.PickPictureBullet => Invoke(endpoints.PickPictureBullet),
@@ -268,4 +271,7 @@ public static class FreePRibbonHostActionDispatcher
         endpoint(typedArgument);
         return true;
     }
+
+    private static bool Invoke<T>(object? argument, Func<T, bool>? endpoint) =>
+        endpoint is not null && argument is T typedArgument && endpoint(typedArgument);
 }

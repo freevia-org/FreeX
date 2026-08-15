@@ -35,6 +35,7 @@ public enum FreePRibbonHostActionKind
     InsertVideo,
     InsertAudio,
     OpenTablePicker,
+    ExecuteTableStructureAction,
     MergeTableCells,
     SplitTableCell,
     PickPictureBullet,
@@ -150,16 +151,21 @@ public sealed class FreePRibbonCommandHostAdapter
 {
     public Action<FreePRibbonHostAction>? ExecuteAction { get; init; }
 
+    public Func<FreePRibbonHostAction, bool>? TryExecuteAction { get; init; }
+
     public Func<FreePRibbonHostQuery, object?>? QueryState { get; init; }
 
     public Func<FreePRibbonTextAction, bool>? TryHandleTextAction { get; init; }
 
     internal bool Execute(FreePRibbonHostActionKind kind, object? argument = null)
     {
+        var action = new FreePRibbonHostAction(kind, argument);
+        if (TryExecuteAction is not null)
+            return TryExecuteAction(action);
         if (ExecuteAction is null)
             return false;
 
-        ExecuteAction(new FreePRibbonHostAction(kind, argument));
+        ExecuteAction(action);
         return true;
     }
 
@@ -444,14 +450,22 @@ public static class FreePRibbonCommandWorkflow
                     editor.ActiveTableCell).CanSplitCell,
                 fallbackExecute: editor.TrySplitActiveTableCell));
 
-        RegisterTableEdit(commands, editor, TableCellEditPlanner.DistributeRowsCommandId, editor.TryDistributeActiveTableRows);
-        RegisterTableEdit(commands, editor, TableCellEditPlanner.DistributeColumnsCommandId, editor.TryDistributeActiveTableColumns);
-        RegisterTableEdit(commands, editor, TableCellEditPlanner.InsertRowAboveCommandId, editor.TryInsertActiveTableRowAbove);
-        RegisterTableEdit(commands, editor, TableCellEditPlanner.InsertRowBelowCommandId, editor.TryInsertActiveTableRowBelow);
-        RegisterTableEdit(commands, editor, TableCellEditPlanner.InsertColumnLeftCommandId, editor.TryInsertActiveTableColumnLeft);
-        RegisterTableEdit(commands, editor, TableCellEditPlanner.InsertColumnRightCommandId, editor.TryInsertActiveTableColumnRight);
-        RegisterTableEdit(commands, editor, TableCellEditPlanner.DeleteRowCommandId, editor.TryDeleteActiveTableRow);
-        RegisterTableEdit(commands, editor, TableCellEditPlanner.DeleteColumnCommandId, editor.TryDeleteActiveTableColumn);
+        RegisterTableEdit(commands, editor, host, TableCellEditPlanner.DistributeRowsCommandId,
+            PresentationDomainContextActionKind.DistributeTableRows, editor.TryDistributeActiveTableRows);
+        RegisterTableEdit(commands, editor, host, TableCellEditPlanner.DistributeColumnsCommandId,
+            PresentationDomainContextActionKind.DistributeTableColumns, editor.TryDistributeActiveTableColumns);
+        RegisterTableEdit(commands, editor, host, TableCellEditPlanner.InsertRowAboveCommandId,
+            PresentationDomainContextActionKind.InsertTableRowAbove, editor.TryInsertActiveTableRowAbove);
+        RegisterTableEdit(commands, editor, host, TableCellEditPlanner.InsertRowBelowCommandId,
+            PresentationDomainContextActionKind.InsertTableRowBelow, editor.TryInsertActiveTableRowBelow);
+        RegisterTableEdit(commands, editor, host, TableCellEditPlanner.InsertColumnLeftCommandId,
+            PresentationDomainContextActionKind.InsertTableColumnLeft, editor.TryInsertActiveTableColumnLeft);
+        RegisterTableEdit(commands, editor, host, TableCellEditPlanner.InsertColumnRightCommandId,
+            PresentationDomainContextActionKind.InsertTableColumnRight, editor.TryInsertActiveTableColumnRight);
+        RegisterTableEdit(commands, editor, host, TableCellEditPlanner.DeleteRowCommandId,
+            PresentationDomainContextActionKind.DeleteTableRow, editor.TryDeleteActiveTableRow);
+        RegisterTableEdit(commands, editor, host, TableCellEditPlanner.DeleteColumnCommandId,
+            PresentationDomainContextActionKind.DeleteTableColumn, editor.TryDeleteActiveTableColumn);
 
         RegisterTableStyleFlag(commands, editor, TableCellEditPlanner.TableFirstRowCommandId, TableStyleFlagKind.FirstRow);
         RegisterTableStyleFlag(commands, editor, TableCellEditPlanner.TableLastRowCommandId, TableStyleFlagKind.LastRow);
@@ -876,13 +890,15 @@ public static class FreePRibbonCommandWorkflow
     private static void RegisterTableEdit(
         Registrar commands,
         EditingSession editor,
+        FreePRibbonCommandHostAdapter host,
         string commandId,
+        PresentationDomainContextActionKind actionKind,
         Func<bool> execute) =>
         commands.Register(
             FreePRibbonCommandGroup.Table,
             commandId,
             new HostStatefulActionCommand(
-                static () => false,
+                () => host.Execute(FreePRibbonHostActionKind.ExecuteTableStructureAction, actionKind),
                 () => editor.ActiveTableCell is not null,
                 execute));
 

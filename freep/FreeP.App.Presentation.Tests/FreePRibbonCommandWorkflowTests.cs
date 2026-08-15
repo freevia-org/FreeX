@@ -165,6 +165,56 @@ public sealed class FreePRibbonCommandWorkflowTests
             .GetState().IsEnabled.Should().BeTrue();
     }
 
+    [Theory]
+    [InlineData(TableCellEditPlanner.DistributeRowsCommandId, PresentationDomainContextActionKind.DistributeTableRows)]
+    [InlineData(TableCellEditPlanner.DistributeColumnsCommandId, PresentationDomainContextActionKind.DistributeTableColumns)]
+    [InlineData(TableCellEditPlanner.InsertRowAboveCommandId, PresentationDomainContextActionKind.InsertTableRowAbove)]
+    [InlineData(TableCellEditPlanner.InsertRowBelowCommandId, PresentationDomainContextActionKind.InsertTableRowBelow)]
+    [InlineData(TableCellEditPlanner.InsertColumnLeftCommandId, PresentationDomainContextActionKind.InsertTableColumnLeft)]
+    [InlineData(TableCellEditPlanner.InsertColumnRightCommandId, PresentationDomainContextActionKind.InsertTableColumnRight)]
+    [InlineData(TableCellEditPlanner.DeleteRowCommandId, PresentationDomainContextActionKind.DeleteTableRow)]
+    [InlineData(TableCellEditPlanner.DeleteColumnCommandId, PresentationDomainContextActionKind.DeleteTableColumn)]
+    public void TableStructureCommandsPreferTheTypedCommitFirstHostRoute(
+        string commandId,
+        PresentationDomainContextActionKind expectedKind)
+    {
+        var editor = MakeEditorWithActiveTable();
+        FreePRibbonHostAction? routed = null;
+        var registry = FreePRibbonCommandWorkflow.Build(
+            editor,
+            new RibbonStateStore(),
+            new FreePRibbonCommandHostAdapter
+            {
+                TryExecuteAction = action =>
+                {
+                    routed = action;
+                    return true;
+                },
+            }).Registry;
+        var before = TableSignature(editor);
+
+        Execute(registry, commandId);
+
+        routed.Should().Be(new FreePRibbonHostAction(
+            FreePRibbonHostActionKind.ExecuteTableStructureAction,
+            expectedKind));
+        TableSignature(editor).Should().Be(before, "the native editor accepted the command");
+    }
+
+    [Fact]
+    public void TableStructureCommandFallsBackToTheModelWhenTheNativeEditorDeclines()
+    {
+        var editor = MakeEditorWithActiveTable();
+        var registry = FreePRibbonCommandWorkflow.Build(
+            editor,
+            new RibbonStateStore(),
+            new FreePRibbonCommandHostAdapter { TryExecuteAction = _ => false }).Registry;
+
+        Execute(registry, TableCellEditPlanner.InsertRowBelowCommandId);
+
+        editor.CurrentSlide!.Shapes.Single().Table!.Rows.Should().HaveCount(3);
+    }
+
     [Fact]
     public void AnimationPaneCheckedStateTracksTheLiveRendererQuery()
     {
@@ -230,6 +280,8 @@ public sealed class FreePRibbonCommandWorkflowTests
             .And.Contain("new FreePRibbonOleCommandEndpoints")
             .And.Contain("AnimationPaneVisible = () => IsAnimationPaneVisible")
             .And.Contain("FreePRibbonTextActionTargets");
+        wpf.Should().Contain("ExecuteTableStructureAction = kind =>")
+            .And.Contain("ExecuteCurrentTableAction(kind, TryExecuteInlineTableAction)");
         wpfMain.Should().Contain("internal bool IsAnimationPaneVisible");
         wpf.Should().NotContain("registry.Register(")
             .And.NotContain("new FreePRibbonCommandHostAdapter")
@@ -249,6 +301,17 @@ public sealed class FreePRibbonCommandWorkflowTests
             .And.Contain("new FreePRibbonHostQueryEndpoints")
             .And.Contain("AnimationPaneVisible = () => IsAnimationPaneVisible")
             .And.Contain("FreePRibbonTextActionTargets");
+        avaloniaRegistry.Should().Contain("ExecuteTableStructureAction = kind =>")
+            .And.Contain("ExecuteCurrentTableAction(kind, TryExecuteInlineTableAction)");
+        var workflow = Read(
+            root,
+            "freep",
+            "FreeP.App.Presentation",
+            "Ribbon",
+            "FreePRibbonCommandWorkflow.cs");
+        workflow.Should().Contain("TryExecuteAction")
+            .And.Contain("ExecuteTableStructureAction, actionKind")
+            .And.NotContain("static () => false, execute");
         wpf.Should().NotContain("CanMergeTableCells =")
             .And.NotContain("CanSplitTableCell =");
         avaloniaRegistry.Should().NotContain("CanMergeTableCells =")
@@ -313,6 +376,22 @@ public sealed class FreePRibbonCommandWorkflowTests
         var presentation = new Presentation();
         presentation.Slides.Add(new Slide());
         return new EditingSession(presentation, new PresentationCommandBus(presentation));
+    }
+
+    private static EditingSession MakeEditorWithActiveTable()
+    {
+        var editor = MakeEditor();
+        var table = editor.InsertTable(2, 2);
+        editor.Select(table.Id);
+        editor.SetActiveTableCell(0, 0);
+        return editor;
+    }
+
+    private static string TableSignature(EditingSession editor)
+    {
+        var table = editor.CurrentSlide!.Shapes.Single().Table!;
+        return $"{table.Rows.Count}:{table.ColumnWidthsEmu.Count}:"
+            + string.Join(";", table.Rows.Select(row => row.Cells.Count));
     }
 
     private static void Execute(RibbonCommandRegistry registry, string commandId)
