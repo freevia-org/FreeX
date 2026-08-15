@@ -124,18 +124,18 @@ internal static class FreeWAvaloniaRibbonCommands
                 editor.ApplyMultiLevelListDefinition,
                 delta => ChangeListLevel(editor, demote: delta > 0),
                 callbacks.OpenMultilevelListDialog));
-        r.Bind(FreeWRibbonCommandAction.IndentLeft, new ParagraphValueCommand(
+        r.Bind(FreeWRibbonCommandAction.IndentLeft, new FreeWRibbonParagraphValueCommand(
             formatting, FreeWParagraphValueKind.IndentLeft));
-        r.Bind(FreeWRibbonCommandAction.IndentRight, new ParagraphValueCommand(
+        r.Bind(FreeWRibbonCommandAction.IndentRight, new FreeWRibbonParagraphValueCommand(
             formatting, FreeWParagraphValueKind.IndentRight));
         var formattingMarks = r.BindToggle(FreeWRibbonCommandAction.FormattingMarks,
             () => editor.ShowParagraphMarks = !editor.ShowParagraphMarks,
             () => editor.ShowParagraphMarks);
         r.Register("freew.show-hide-para", formattingMarks);
         // Paragraph spacing commands (value = points as an invariant-culture decimal string).
-        r.Bind(FreeWRibbonCommandAction.SpaceBefore, new ParagraphValueCommand(
+        r.Bind(FreeWRibbonCommandAction.SpaceBefore, new FreeWRibbonParagraphValueCommand(
             formatting, FreeWParagraphValueKind.SpaceBefore));
-        r.Bind(FreeWRibbonCommandAction.SpaceAfter, new ParagraphValueCommand(
+        r.Bind(FreeWRibbonCommandAction.SpaceAfter, new FreeWRibbonParagraphValueCommand(
             formatting, FreeWParagraphValueKind.SpaceAfter));
         r.Bind(FreeWRibbonCommandAction.ParaShading, new ActionRibbonCommand(() => { /* dropdown opener */ }));
         // Line-spacing commands — value = multiplier for Multiple. The fixed ids are compatibility
@@ -153,7 +153,7 @@ internal static class FreeWAvaloniaRibbonCommands
         // ── Styles (AV-STYLES) ────────────────────────────────────────────────
         // Existing quick-style buttons — now routed through the model-backed, undoable ApplyNamedStyle
         // so the paragraph picks up the real built-in style (seeded if absent) instead of just a font tweak.
-        r.Bind(FreeWRibbonCommandAction.Style, new ParagraphStyleCommand(formatting));
+        r.Bind(FreeWRibbonCommandAction.Style, new FreeWRibbonParagraphStyleCommand(formatting));
         foreach (var binding in FreeWRibbonSemanticCatalog.QuickStyles)
         {
             var captured = binding;
@@ -605,23 +605,6 @@ internal static class FreeWAvaloniaRibbonCommands
         public RibbonCommandState GetState() =>
             new(Value: FreeWRibbonNumericValueParser.FormatInvariant(
                 editor.GetCaretFormatting().Run.FontSizePt ?? 11));
-    }
-
-    private sealed class ParagraphValueCommand(
-        FreeWRibbonFormattingSession session,
-        FreeWParagraphValueKind kind) : IRibbonStatefulCommand
-    {
-        public void Execute(RibbonCommandContext context) =>
-            session.ApplyParagraphValue(kind, context.SelectedValue);
-
-        public RibbonCommandState GetState() => new(Value: session.CurrentParagraphValue(kind));
-    }
-
-    private sealed class ParagraphStyleCommand(FreeWRibbonFormattingSession session) : IRibbonStatefulCommand
-    {
-        public void Execute(RibbonCommandContext context) => session.ApplyParagraphStyle(context.SelectedValue);
-
-        public RibbonCommandState GetState() => new(Value: session.CurrentParagraphStyleName());
     }
 
     private sealed class ToggleActionCommand(Action toggle, Func<bool> isChecked) : IRibbonStatefulCommand

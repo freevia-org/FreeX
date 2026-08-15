@@ -14,9 +14,12 @@ public sealed class FreeWFinalTailOwnershipSourceTests
         foreach (var source in new[] { wpf, avalonia })
         {
             source.Should().Contain("CreateFormattingSession(editor)");
-            source.Should().Contain("session.ApplyParagraphValue(");
-            source.Should().Contain("session.ApplyParagraphStyle(");
+            source.Should().Contain("new FreeWRibbonParagraphValueCommand(");
+            source.Should().Contain("new FreeWRibbonParagraphStyleCommand(");
             source.Should().Contain("DesignRibbonWorkflow.Register(");
+            source.Should().NotContain("class ParagraphValueCommand");
+            source.Should().NotContain("class ApplyParagraphStyleCommand");
+            source.Should().NotContain("class ParagraphStyleCommand");
         }
 
         design.Should().Contain("bindings.Formatting.ApplyTheme")

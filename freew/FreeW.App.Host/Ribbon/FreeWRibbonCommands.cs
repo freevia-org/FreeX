@@ -1049,19 +1049,19 @@ internal static class FreeWRibbonCommands
         // Layout > Paragraph > numeric indent/spacing combos: exact-value controls that mirror Word's
         // Layout tab Paragraph group. Each is stateful so SelectionChanged can push the live value
         // back into the ribbon combo and the displayed number tracks the current paragraph.
-        var indentLeft = new ParagraphValueCommand(formatting, FreeWParagraphValueKind.IndentLeft);
+        var indentLeft = new FreeWRibbonParagraphValueCommand(formatting, FreeWParagraphValueKind.IndentLeft);
         registry.Bind(FreeWRibbonCommandAction.IndentLeft, indentLeft);
         stateful.Add(("freew.indent-left", indentLeft));
 
-        var indentRight = new ParagraphValueCommand(formatting, FreeWParagraphValueKind.IndentRight);
+        var indentRight = new FreeWRibbonParagraphValueCommand(formatting, FreeWParagraphValueKind.IndentRight);
         registry.Bind(FreeWRibbonCommandAction.IndentRight, indentRight);
         stateful.Add(("freew.indent-right", indentRight));
 
-        var spaceBefore = new ParagraphValueCommand(formatting, FreeWParagraphValueKind.SpaceBefore);
+        var spaceBefore = new FreeWRibbonParagraphValueCommand(formatting, FreeWParagraphValueKind.SpaceBefore);
         registry.Bind(FreeWRibbonCommandAction.SpaceBefore, spaceBefore);
         stateful.Add(("freew.space-before", spaceBefore));
 
-        var spaceAfter = new ParagraphValueCommand(formatting, FreeWParagraphValueKind.SpaceAfter);
+        var spaceAfter = new FreeWRibbonParagraphValueCommand(formatting, FreeWParagraphValueKind.SpaceAfter);
         registry.Bind(FreeWRibbonCommandAction.SpaceAfter, spaceAfter);
         stateful.Add(("freew.space-after", spaceAfter));
 
@@ -1097,7 +1097,7 @@ internal static class FreeWRibbonCommands
 
         // Home > Styles: the styles dropdown. Picking an entry sets the selected paragraph(s)' StyleId
         // (reversible via the bus), then re-renders so the style's run/paragraph formatting resolves.
-        var paragraphStyle = new ApplyParagraphStyleCommand(formatting);
+        var paragraphStyle = new FreeWRibbonParagraphStyleCommand(formatting);
         registry.Bind(FreeWRibbonCommandAction.Style, paragraphStyle);
         stateful.Add(("freew.style", paragraphStyle));
         stateStore.SetState("freew.style", paragraphStyle.GetState());
@@ -1950,20 +1950,6 @@ internal static class FreeWRibbonCommands
                 editor.ApplyStyleSet(styleSet);
             }));
 
-    // Layout > Paragraph > Indent Left / Indent Right: numeric combo boxes (points) that display the
-    // first selected paragraph's left/right indent and apply an exact value while preserving the
-    // existing first-line indent. Both implement IRibbonStatefulCommand so SelectionChanged can push
-    // the live value into the ribbon store and the combo reflects the current paragraph state.
-    private sealed class ParagraphValueCommand(
-        FreeWRibbonFormattingSession session,
-        FreeWParagraphValueKind kind) : IRibbonStatefulCommand
-    {
-        public void Execute(RibbonCommandContext context) =>
-            session.ApplyParagraphValue(kind, ComboValue(context));
-
-        public RibbonCommandState GetState() => new(Value: session.CurrentParagraphValue(kind));
-    }
-
     // Home > Paragraph > Paragraph…: open the indent dialog seeded with the first selected paragraph's
     // current left/right/first-line indents, and apply the chosen values to every selected paragraph
     // through the view (reversible via the bus). A negative first-line value is a hanging indent.
@@ -2098,18 +2084,6 @@ internal static class FreeWRibbonCommands
             editor.Focus();
             editor.ApplyNamedStyle(styleId);
         }
-    }
-
-    // Home > Styles: apply a real paragraph style. The styles dropdown's value is a display name
-    // (e.g. "Heading 1"); this maps it to the matching style id in the model's catalog and sets the
-    // selected paragraph(s)' StyleId through the view's undo/redo bus (re-rendered to resolve formatting).
-    private sealed class ApplyParagraphStyleCommand(FreeWRibbonFormattingSession session) : IRibbonStatefulCommand
-    {
-        public void Execute(RibbonCommandContext context) =>
-            session.ApplyParagraphStyle(ComboValue(context));
-
-        public RibbonCommandState GetState() =>
-            new(Value: session.CurrentParagraphStyleName());
     }
 
     // Home > Styles: New Style. Opens a dialog capturing a name + a few formatting options + a based-on
