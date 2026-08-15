@@ -121,6 +121,31 @@ public sealed class SmartArtLayoutTests
     }
 
     [Fact]
+    public void SimpleHierarchyUsesOfficeRootAndChildStyleRoles()
+    {
+        var baseColor = SrgbColor.FromRgb(0x156082);
+        var plan = SmartArtStylePlanner.Build(
+            SmartArtFamily.Hierarchy,
+            new SmartArtQuickStyleMetadata { UniqueId = "simple1", Title = "Simple Fill" },
+            new SmartArtColorMetadata { Palette = { new ThemeAwareColor(baseColor) } },
+            DefaultTheme());
+
+        var root = plan.GetNodeStyle(0, 0, SmartArtFamily.Hierarchy);
+        var child = plan.GetNodeStyle(0, 1, SmartArtFamily.Hierarchy);
+
+        root.Fill.Resolved.Should().Be(baseColor);
+        root.Outline.Resolved.Should().Be(baseColor);
+        root.Text.Resolved.Should().Be(SrgbColor.White);
+        root.OutlineWidthPt.Should().Be(0.0);
+
+        child.Fill.Resolved.Should().Be(SrgbColor.White);
+        child.Outline.Resolved.Should().Be(baseColor);
+        child.Text.Resolved.Should().Be(SrgbColor.Black);
+        child.OutlineWidthPt.Should().Be(1.0);
+        plan.Connector.Outline.Resolved.Should().Be(SrgbColor.FromRgb(0x0E4B66));
+    }
+
+    [Fact]
     public void NativeSceneQuickStylesUseDistinctLiveProfiles()
     {
         var baseColor = SrgbColor.FromRgb(0x4472C4);

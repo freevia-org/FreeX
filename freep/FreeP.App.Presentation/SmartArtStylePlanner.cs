@@ -30,6 +30,25 @@ public sealed class SmartArtStylePlan
     {
         var paletteIndex = family == SmartArtFamily.Hierarchy ? Math.Max(level, 0) : Math.Max(nodeIndex, 0);
         var baseFill = SelectBaseFill(paletteIndex);
+
+        if (family == SmartArtFamily.Hierarchy && _profile == SmartArtStyleProfile.SimpleFill)
+        {
+            if (level <= 0)
+            {
+                return new SmartArtNodeStyle(
+                    new ThemeAwareColor(baseFill),
+                    new ThemeAwareColor(baseFill),
+                    new ThemeAwareColor(SrgbColor.White),
+                    OutlineWidthPt: 0.0);
+            }
+
+            return new SmartArtNodeStyle(
+                new ThemeAwareColor(SrgbColor.White),
+                new ThemeAwareColor(baseFill),
+                new ThemeAwareColor(SrgbColor.Black),
+                OutlineWidthPt: 1.0);
+        }
+
         var fill = ApplyStyleFill(baseFill);
         var outline = ApplyStyleOutline(baseFill);
         var text = PickReadableText(fill);
@@ -101,6 +120,9 @@ public sealed class SmartArtStylePlan
     private SrgbColor ConnectorColor() =>
         _profile switch
         {
+            SmartArtStyleProfile.SimpleFill => _palette[0] == SrgbColor.FromRgb(0x156082)
+                ? SrgbColor.FromRgb(0x0E4B66)
+                : ThemeColorTransform.ApplyShade(_palette[0], 0.78),
             SmartArtStyleProfile.WhiteOutline => SrgbColor.White,
             SmartArtStyleProfile.Subtle => ThemeColorTransform.ApplyShade(_palette[0], 0.68),
             SmartArtStyleProfile.Polished => ThemeColorTransform.ApplyShade(_palette[0], 0.36),
