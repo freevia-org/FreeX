@@ -17,8 +17,8 @@ public sealed class SlideObjectInsertionRoutingSourceTests
         var host = File.ReadAllText(Path.Combine(
             root,
             "freep",
-            "FreeP.App.Host",
-            "MainWindow.RibbonProfile.cs"));
+            "RendererShared",
+            "MainWindow.RibbonActionProfile.cs"));
         var adapter = File.ReadAllText(Path.Combine(
             root,
             "freep",

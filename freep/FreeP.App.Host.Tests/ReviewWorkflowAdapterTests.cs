@@ -2539,6 +2539,11 @@ public sealed class ReviewWorkflowAdapterTests
             "freep",
             "FreeP.App.Presentation",
             "PresentationMainWindowMediaNativeAdapter.cs"));
+        var mediaCompositionSource = File.ReadAllText(Path.Combine(
+            TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeP.slnx"),
+            "freep",
+            "FreeP.App.Presentation",
+            "PresentationMediaPaneControlSurface.cs"));
 
         source.Should().Contain("PresentationReviewWorkflowSession");
         source.Should().Contain("_reviewWorkflowSession.RefreshReviewWorkflowPlans();");
@@ -2559,9 +2564,12 @@ public sealed class ReviewWorkflowAdapterTests
         source.Should().Contain("OpenMediaCaptionPane: () => MediaPaneHost.Show()");
         source.Should().Contain("PresentationMediaPaneHostViewAdapter _wpfMediaPaneHostView");
         source.Should().Contain("BuildWpfMediaPaneHostView()");
-        source.Should().Contain("DelegatingPresentationMediaPaneControlSurface");
-        source.Should().Contain("RenderCaptionField: RenderWpfMediaCaptionField");
-        source.Should().Contain("RenderCaptionAction: RenderWpfMediaCaptionAction");
+        source.Should().Contain("PresentationMediaPaneNativeComposition.Compose(");
+        source.Should().Contain("RenderWpfMediaCaptionField,");
+        source.Should().Contain("RenderWpfMediaCaptionAction,");
+        mediaCompositionSource.Should().Contain("DelegatingPresentationMediaPaneControlSurface");
+        mediaCompositionSource.Should().Contain("RenderCaptionField: renderCaptionField");
+        mediaCompositionSource.Should().Contain("RenderCaptionAction: renderCaptionAction");
         source.Should().Contain("PresentationMediaPaneFormEventBinder.Bind(");
         source.Should().Contain("new PresentationMediaPaneFormEventRouter(_mediaPaneHostCoordinator)");
         source.Should().Contain("_mediaPaneHostCoordinator.Refresh();");

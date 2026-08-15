@@ -13,8 +13,16 @@ public sealed class SlideShowHostPolicySourceTests
             "FreeP.App.Host",
             "SlideShowMediaController.cs"));
 
-        source.Should().Contain("slot.CaptionTrack?.Regions");
-        source.Should().Contain("PresentationMediaTranscriptPlanner.PlanOverlayPlacement(");
+        var planner = File.ReadAllText(Path.Combine(
+            TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeP.slnx"),
+            "freep",
+            "FreeP.App.Presentation",
+            "SlideShowMediaInteractionPlanner.cs"));
+
+        source.Should().Contain("SlideShowMediaInteractionPlanner.PlanCaptionProjection(")
+            .And.NotContain("slot.CaptionTrack?.Regions");
+        planner.Should().Contain("captionTrack?.Regions")
+            .And.Contain("PresentationMediaTranscriptPlanner.PlanOverlayPlacement(");
     }
 
     [Fact]

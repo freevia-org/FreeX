@@ -10,19 +10,29 @@ public sealed class PresenterViewControlSourceTests
     {
         var root = TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeP.slnx");
         var slideshow = File.ReadAllText(Path.Combine(root, "freep", "FreeP.App.Host", "SlideShowWindow.cs"));
+        var portableSurface = File.ReadAllText(Path.Combine(
+            root,
+            "freep",
+            "RendererShared",
+            "SlideShowWindow.RuntimeSession.cs"));
         var mainWindow = File.ReadAllText(Path.Combine(root, "freep", "FreeP.App.Host", "MainWindow.cs"));
         var presenter = File.ReadAllText(Path.Combine(root, "freep", "FreeP.App.Host", "PresenterViewWindow.cs"));
 
         slideshow.Should().Contain("_runtime.CreatePresenterViewOperations(_setSlideNotesText)");
         slideshow.Should().Contain("private readonly SlideShowRuntimeApplication _runtime;");
         mainWindow.Should().Contain("Editor.SetSlideNotesText");
-        slideshow.Should().Contain("_runtime.SetScreenMode(mode)");
-        slideshow.Should().Contain("_runtime.SetPointerMode(pointerMode, nowUtc)");
-        slideshow.Should().Contain("_runtime.ClearInkStrokes()");
-        slideshow.Should().Contain("_runtime.SetTimingIntent(timingIntent, nowUtc)");
-        slideshow.Should().Contain("public SlideShowPresenterToolPlan SetPresenterTimingIntent");
-        slideshow.Should().Contain("_runtime.SetMediaIntent(mediaIntent, nowUtc)");
-        slideshow.Should().Contain("public SlideShowPresenterToolPlan SetPresenterMediaIntent");
+        portableSurface.Should().Contain("public void SetScreenMode(SlideShowScreenMode mode)")
+            .And.Contain("RuntimeSession.SetScreenMode(mode)")
+            .And.Contain("public SlideShowPresenterToolPlan SetPresenterPointerMode")
+            .And.Contain("RuntimeSession.SetPresenterPointerMode(pointerMode, nowUtc)")
+            .And.Contain("public SlideShowInkExecutionResult ClearPresenterInkStrokes()")
+            .And.Contain("RuntimeSession.ClearPresenterInkStrokes()")
+            .And.Contain("public SlideShowPresenterToolPlan SetPresenterTimingIntent")
+            .And.Contain("RuntimeSession.SetPresenterTimingIntent(timingIntent, nowUtc)")
+            .And.Contain("public SlideShowPresenterToolPlan SetPresenterMediaIntent")
+            .And.Contain("RuntimeSession.SetPresenterMediaIntent(mediaIntent, nowUtc)");
+        slideshow.Should().NotContain("public SlideShowPresenterToolPlan SetPresenterTimingIntent")
+            .And.NotContain("public SlideShowPresenterToolPlan SetPresenterMediaIntent");
         presenter.Should().Contain("SlideShowPresenterViewHostCoordinator");
         presenter.Should().Contain("new SlideShowPresenterViewHostCoordinator(operations)");
         presenter.Should().Contain("SlideShowPresenterViewNativeBinding<TextBlock, TextBox, ComboBox, Button, SlideCanvas>");
