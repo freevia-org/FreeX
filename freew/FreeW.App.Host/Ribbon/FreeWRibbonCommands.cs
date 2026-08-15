@@ -259,7 +259,9 @@ internal static class FreeWRibbonCommands
 
         // Home/Layout paragraph behavior is Presentation-owned; these ports preserve WPF routed
         // editing commands and the native Sort dialog while sharing all semantic command mapping.
-        ParagraphEditingRibbonWorkflow.Register(registry, CreateParagraphEditingPorts(editor));
+        var paragraphCommands =
+            ParagraphEditingRibbonWorkflow.Register(registry, CreateParagraphEditingPorts(editor));
+        stateful.AddRange(paragraphCommands.StatefulCommands.Select(command => (command.Id, command.Command)));
         Routed(FreeWRibbonCommandAction.Select, ApplicationCommands.SelectAll);
         // Home > Paragraph: apply multilevel/legal outline numbering (1, 1.1, 1.1.1) to the selected
         // paragraph(s); the outline definition persists to word/numbering.xml. Tab/Shift+Tab demote
@@ -1463,8 +1465,9 @@ internal static class FreeWRibbonCommands
     private static ParagraphEditingRibbonPorts CreateParagraphEditingPorts(DocumentView editor) =>
         new(
             PrepareExecution: () => editor.Focus(),
-            ToggleBullets: new ActionRibbonCommand(() => editor.ToggleList(ListKind.Bullet)),
-            ToggleNumbering: new ActionRibbonCommand(() => editor.ToggleList(ListKind.Number)),
+            CurrentListKind: () => editor.CurrentParagraphFormatting.ListKind,
+            ToggleBullets: () => editor.ToggleList(ListKind.Bullet),
+            ToggleNumbering: () => editor.ToggleList(ListKind.Number),
             AlignLeft: new RoutedEditCommand(editor, EditingCommands.AlignLeft),
             AlignCenter: new RoutedEditCommand(editor, EditingCommands.AlignCenter),
             AlignRight: new RoutedEditCommand(editor, EditingCommands.AlignRight),

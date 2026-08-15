@@ -1,5 +1,6 @@
 using Free.Shared.Ribbon;
 using FreeW.App.Presentation.Ribbon;
+using FreeW.Core.Model;
 
 namespace FreeW.App.Presentation.Tests;
 
@@ -29,16 +30,31 @@ public sealed class ParagraphEditingRibbonWorkflowTests
     }
 
     [Fact]
-    public void NativeCommandsPreserveStateAndAllExecutionsPrepareFirst()
+    public void ListTogglesPublishLiveStateAndAllExecutionsPrepareFirst()
     {
         var events = new List<string>();
+        var currentListKind = ListKind.Bullet;
         var bindings = new FreeWRibbonCommandBindingPorts();
-        ParagraphEditingRibbonWorkflow.Register(bindings, CreatePorts(events));
+        var commands = ParagraphEditingRibbonWorkflow.Register(
+            bindings,
+            CreatePorts(events, () => currentListKind));
 
         bindings.TryGet("freew.bullets", out var bullets).Should().BeTrue();
         bullets.Should().BeAssignableTo<IRibbonStatefulCommand>();
         ((IRibbonStatefulCommand)bullets!).GetState().Should().Be(
-            new RibbonCommandState(IsEnabled: false, IsChecked: true, Value: "native"));
+            new RibbonCommandState(IsChecked: true));
+
+        bindings.TryGet("freew.numbering", out var numbering).Should().BeTrue();
+        numbering.Should().BeAssignableTo<IRibbonStatefulCommand>();
+        ((IRibbonStatefulCommand)numbering!).GetState().Should().Be(
+            new RibbonCommandState(IsChecked: false));
+
+        currentListKind = ListKind.Number;
+        ((IRibbonStatefulCommand)bullets).GetState().IsChecked.Should().BeFalse();
+        ((IRibbonStatefulCommand)numbering).GetState().IsChecked.Should().BeTrue();
+        commands.StatefulCommands.Select(command => command.Id.Value).Should().Equal(
+            "freew.bullets",
+            "freew.numbering");
 
         bullets.Execute(RibbonCommandContext.Empty);
         Execute(bindings, "freew.indent-increase");
@@ -63,6 +79,9 @@ public sealed class ParagraphEditingRibbonWorkflowTests
         {
             source.Should().Contain("ParagraphEditingRibbonWorkflow.Register(");
             source.Should().Contain("CreateParagraphEditingPorts(");
+            source.Should().Contain("CurrentListKind: () => editor.");
+            source.Should().Contain("ToggleBullets: () => editor.ToggleList(ListKind.Bullet)");
+            source.Should().Contain("ToggleNumbering: () => editor.ToggleList(ListKind.Number)");
             source.Should().NotContain(".Bind(FreeWRibbonCommandAction.Bullets");
             source.Should().NotContain(".Bind(FreeWRibbonCommandAction.AlignLeft");
             source.Should().NotContain(".Bind(FreeWRibbonCommandAction.IndentIncrease");
@@ -71,6 +90,8 @@ public sealed class ParagraphEditingRibbonWorkflowTests
             source.Should().NotContain(".Bind(FreeWRibbonCommandAction.ParaBorder");
             source.Should().NotContain(".Bind(FreeWRibbonCommandAction.Sort");
         }
+
+        wpf.Should().Contain("paragraphCommands.StatefulCommands");
     }
 
     private static void Execute(FreeWRibbonCommandBindingPorts bindings, string commandId)
@@ -79,11 +100,14 @@ public sealed class ParagraphEditingRibbonWorkflowTests
         command!.Execute(RibbonCommandContext.Empty);
     }
 
-    private static ParagraphEditingRibbonPorts CreatePorts(ICollection<string> events) =>
+    private static ParagraphEditingRibbonPorts CreatePorts(
+        ICollection<string> events,
+        Func<ListKind>? currentListKind = null) =>
         new(
             PrepareExecution: () => events.Add("prepare"),
-            ToggleBullets: new RecordingStatefulCommand(events, "bullets"),
-            ToggleNumbering: new RecordingCommand(events, "numbering"),
+            CurrentListKind: currentListKind ?? (() => ListKind.None),
+            ToggleBullets: () => events.Add("bullets"),
+            ToggleNumbering: () => events.Add("numbering"),
             AlignLeft: new RecordingCommand(events, "align-left"),
             AlignCenter: new RecordingCommand(events, "align-center"),
             AlignRight: new RecordingCommand(events, "align-right"),
@@ -103,10 +127,4 @@ public sealed class ParagraphEditingRibbonWorkflowTests
         public void Execute(RibbonCommandContext context) => events.Add(name);
     }
 
-    private sealed class RecordingStatefulCommand(ICollection<string> events, string name)
-        : RecordingCommand(events, name), IRibbonStatefulCommand
-    {
-        public RibbonCommandState GetState() =>
-            new(IsEnabled: false, IsChecked: true, Value: "native");
-    }
 }
