@@ -376,25 +376,6 @@ internal sealed class LinuxMediaCaptureLifecycle : IDisposable
         bool ExitedBeforeCompletion);
 }
 
-internal static class LinuxMediaCapturePathPolicy
-{
-    public static string NormalizePackagePath(
-        LinuxRecordingHostMetadata metadata,
-        string suggestedFileName,
-        string defaultFileName,
-        string extension)
-    {
-        var fileName = string.IsNullOrWhiteSpace(suggestedFileName)
-            ? defaultFileName
-            : suggestedFileName.Trim().Replace('\\', '/').Split('/').Last();
-        fileName = Path.ChangeExtension(fileName, extension);
-        var packageRoot = string.IsNullOrWhiteSpace(metadata.PackageRoot)
-            ? "ppt/media/freep-recordings/avalonia"
-            : metadata.PackageRoot.Trim().Replace('\\', '/').Trim('/');
-        return $"{packageRoot}/{fileName}";
-    }
-}
-
 internal static class LinuxMediaCaptureMessagePolicy
 {
     public static string ExitDetail(ILinuxRecordingChildProcess process) =>

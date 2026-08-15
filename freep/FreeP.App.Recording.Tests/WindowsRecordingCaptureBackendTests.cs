@@ -13,6 +13,50 @@ public sealed class WindowsRecordingCaptureBackendTests
         "WPF Windows recording capture adapter",
         "ppt/media/freep-recordings/wpf");
 
+    [Theory]
+    [InlineData(
+        SlideShowRecordingMediaArtifactKind.NarrationAudio,
+        SlideShowRecordingCaptureDeviceKind.Microphone,
+        ".wav",
+        "audio/wav",
+        "slide-narration.wav")]
+    [InlineData(
+        SlideShowRecordingMediaArtifactKind.CameraVideo,
+        SlideShowRecordingCaptureDeviceKind.Camera,
+        ".mp4",
+        "video/mp4",
+        "slide-camera.mp4")]
+    public void MediaArtifactPolicy_ProjectsPortableDeviceAndFileMetadata(
+        SlideShowRecordingMediaArtifactKind kind,
+        SlideShowRecordingCaptureDeviceKind deviceKind,
+        string extension,
+        string contentType,
+        string defaultFileName)
+    {
+        var descriptor = SlideShowRecordingMediaArtifactPolicy.Describe(kind);
+
+        descriptor.DeviceKind.Should().Be(deviceKind);
+        descriptor.Extension.Should().Be(extension);
+        descriptor.ContentType.Should().Be(contentType);
+        SlideShowRecordingMediaArtifactPolicy.NormalizePackagePath(
+                kind,
+                "ppt\\media\\recordings/",
+                null,
+                "fallback")
+            .Should().Be($"ppt/media/recordings/{defaultFileName}");
+    }
+
+    [Fact]
+    public void MediaArtifactPolicy_StripsSuggestedDirectoriesAndNormalizesExtension()
+    {
+        SlideShowRecordingMediaArtifactPolicy.NormalizePackagePath(
+                SlideShowRecordingMediaArtifactKind.CameraVideo,
+                null,
+                "incoming\\camera.avi",
+                "ppt/media/freep-recordings/avalonia")
+            .Should().Be("ppt/media/freep-recordings/avalonia/camera.mp4");
+    }
+
     [Fact]
     public void DeviceAvailability_ProjectsAvailableMicrophoneAndCameraOnce()
     {
