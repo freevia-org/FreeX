@@ -33,6 +33,7 @@ public sealed record TableEditingRibbonPorts(
     Action<AutoFitMode> SetAutoFit,
     Action<TableCellVerticalAlignment, TextAlignment> SetCellAlignment,
     Action<CellTextDirection> SetCellTextDirection,
+    Action<CellBorderEdges, bool> SetCellBorders,
     Action ToggleRepeatHeaderRow);
 
 /// <summary>
@@ -114,6 +115,14 @@ public static class TableEditingRibbonWorkflow
         BindCommand(bindings, ports, FreeWRibbonCommandAction.TableSplitCell, ports.SplitCell);
         BindCommand(bindings, ports, FreeWRibbonCommandAction.TableShading, ports.Shading);
         BindCommand(bindings, ports, FreeWRibbonCommandAction.TableBorders, ports.Borders);
+        RegisterBorderPreset(bindings, ports, "freew.table-borders.all", CellBorderEdges.All);
+        RegisterBorderPreset(bindings, ports, "freew.table-borders.outside", CellBorderEdges.Outside);
+        RegisterBorderPreset(bindings, ports, "freew.table-borders.inside", CellBorderEdges.Inside);
+        RegisterBorderPreset(bindings, ports, "freew.table-borders.none", CellBorderEdges.All, clearEdges: true);
+        RegisterBorderPreset(bindings, ports, "freew.table-borders.top", CellBorderEdges.Top);
+        RegisterBorderPreset(bindings, ports, "freew.table-borders.bottom", CellBorderEdges.Bottom);
+        RegisterBorderPreset(bindings, ports, "freew.table-borders.left", CellBorderEdges.Left);
+        RegisterBorderPreset(bindings, ports, "freew.table-borders.right", CellBorderEdges.Right);
         Bind(bindings, ports, FreeWRibbonCommandAction.TableDeleteRow, ports.DeleteRow);
         Bind(bindings, ports, FreeWRibbonCommandAction.TableDeleteCol, ports.DeleteColumn);
         Bind(bindings, ports, FreeWRibbonCommandAction.TableDelete, ports.DeleteTable);
@@ -164,6 +173,18 @@ public static class TableEditingRibbonWorkflow
         FreeWRibbonCommandAction action,
         IRibbonCommand command) =>
         bindings.Bind(action, new PreparedCommand(ports.PrepareExecution, command));
+
+    private static void RegisterBorderPreset(
+        FreeWRibbonEditorCommandFamilyBuilder bindings,
+        TableEditingRibbonPorts ports,
+        string commandId,
+        CellBorderEdges edges,
+        bool clearEdges = false) =>
+        bindings.Register(
+            new RibbonCommandId(commandId),
+            new PreparedCommand(
+                ports.PrepareExecution,
+                new ActionRibbonCommand(() => ports.SetCellBorders(edges, clearEdges))));
 
     private sealed class PreparedCommand(Action prepareExecution, IRibbonCommand inner) : IRibbonStatefulCommand
     {

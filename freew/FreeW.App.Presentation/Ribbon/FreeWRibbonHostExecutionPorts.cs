@@ -47,6 +47,7 @@ public sealed record FreeWRibbonHostExecutionPorts(
     Action? OpenCharacterBorderDialog = null,
     Action? OpenCharacterShadingDialog = null,
     Action? OpenCellShadingDialog = null,
+    Action? OpenCellBordersDialog = null,
     Action? OpenSortDialog = null,
     Action? OpenZoomDialog = null,
     Action? OpenPrintPreview = null,

@@ -109,6 +109,53 @@ public sealed class DocumentTableEditingCoordinatorTests
     }
 
     [Fact]
+    public void BorderEditsInRangeDistinguishesAllOutsideAndInsidePresets()
+    {
+        var session = SessionWith(Table.Create(2, 2));
+        var anchor = new DocumentTableCellAddress(0, 0, 0);
+        var active = new DocumentTableCellAddress(0, 1, 1);
+
+        CellBorderEdges.Outside.Should().NotBe(CellBorderEdges.All);
+        session.Tables.BorderEditsInRange(anchor, active, CellBorderEdges.All)
+            .Should().OnlyContain(edit => edit.Edges == CellBorderEdges.All);
+        session.Tables.BorderEditsInRange(anchor, active, CellBorderEdges.Outside)
+            .Should().Equal(
+                new DocumentTableCellBorderEdit(anchor, CellBorderEdges.Top | CellBorderEdges.Left),
+                new DocumentTableCellBorderEdit(anchor with { GridColumn = 1 }, CellBorderEdges.Top | CellBorderEdges.Right),
+                new DocumentTableCellBorderEdit(anchor with { RowIndex = 1 }, CellBorderEdges.Bottom | CellBorderEdges.Left),
+                new DocumentTableCellBorderEdit(active, CellBorderEdges.Bottom | CellBorderEdges.Right));
+        session.Tables.BorderEditsInRange(anchor, active, CellBorderEdges.Inside)
+            .Should().Equal(
+                new DocumentTableCellBorderEdit(anchor, CellBorderEdges.Bottom | CellBorderEdges.Right),
+                new DocumentTableCellBorderEdit(anchor with { GridColumn = 1 }, CellBorderEdges.Bottom),
+                new DocumentTableCellBorderEdit(anchor with { RowIndex = 1 }, CellBorderEdges.Right));
+    }
+
+    [Fact]
+    public void BorderEditsInRangeNormalizesReversedMergedCellEndpoints()
+    {
+        var table = Table.Create(2, 3);
+        table.Rows[0].Cells[0].GridSpan = 2;
+        table.Rows[0].Cells.RemoveAt(1);
+        var session = SessionWith(table);
+
+        var edits = session.Tables.BorderEditsInRange(
+            new DocumentTableCellAddress(0, 1, 2),
+            new DocumentTableCellAddress(0, 0, 1),
+            CellBorderEdges.Outside);
+
+        edits.Select(edit => edit.Address).Should().Equal(
+            new DocumentTableCellAddress(0, 0, 0),
+            new DocumentTableCellAddress(0, 0, 2),
+            new DocumentTableCellAddress(0, 1, 0),
+            new DocumentTableCellAddress(0, 1, 1),
+            new DocumentTableCellAddress(0, 1, 2));
+        edits[0].Edges.Should().Be(CellBorderEdges.Top | CellBorderEdges.Left);
+        edits[1].Edges.Should().Be(CellBorderEdges.Top | CellBorderEdges.Right);
+        edits[^1].Edges.Should().Be(CellBorderEdges.Bottom | CellBorderEdges.Right);
+    }
+
+    [Fact]
     public void RowAndColumnStructureEditsReportPortableCaretAndUndo()
     {
         var table = Table.Create(2, 2);

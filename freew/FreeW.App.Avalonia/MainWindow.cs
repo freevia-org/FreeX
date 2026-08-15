@@ -614,6 +614,9 @@ public sealed partial class MainWindow : Window
     private Task OpenCellShadingDialogAsync() =>
         CellShadingDialog.ShowAndApplyAsync(this, _editor);
 
+    private Task OpenCellBordersDialogAsync() =>
+        CellBordersDialog.ShowAndApplyAsync(this, _editor);
+
     private Task OpenSortDialogAsync() =>
         SortDialog.ShowAndApplyAsync(this, _editor);
 
@@ -1918,6 +1921,7 @@ public sealed partial class MainWindow : Window
             OpenCharacterBorderDialog: () => _ = OpenCharacterBorderDialogAsync(),
             OpenCharacterShadingDialog: () => _ = OpenCharacterShadingDialogAsync(),
             OpenCellShadingDialog: () => _ = OpenCellShadingDialogAsync(),
+            OpenCellBordersDialog: () => _ = OpenCellBordersDialogAsync(),
             OpenSortDialog: () => _ = OpenSortDialogAsync(),
             OpenZoomDialog: () => _ = OpenZoomDialogAsync(),
             OpenPrintPreview: () => _ = OpenPrintPreviewAsync(),

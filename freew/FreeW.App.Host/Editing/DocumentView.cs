@@ -1946,6 +1946,35 @@ public sealed partial class DocumentView : RichTextBox
     }
 
     /// <summary>
+    /// Applies a semantic border preset to every cell spanned by the native selection, falling back
+    /// to the caret cell. Logical-grid expansion and merged-cell edge policy stay Presentation-owned.
+    /// </summary>
+    public void SetCellBorders(
+        CellBorderEdges edges,
+        string colorHex,
+        double widthPt,
+        BorderLineStyle style,
+        bool clearEdges)
+    {
+        Focus();
+        var start = TableAddressOf(Selection.Start.Parent as TextElement);
+        var end = TableAddressOf(Selection.End.Parent as TextElement);
+        var caret = CaretTableAddress();
+        CommitToModel();
+        start ??= caret;
+        end ??= start;
+        if (start is not { } anchor || end is not { } active)
+            return;
+
+        TableEdits.SetCellBorderEdges(
+            TableEdits.BorderEditsInRange(anchor, active, edges),
+            style,
+            colorHex,
+            widthPt,
+            clearEdges);
+    }
+
+    /// <summary>
     /// Set the text direction on the table cell containing the caret as one undoable edit. No-op outside a
     /// table.
     /// </summary>

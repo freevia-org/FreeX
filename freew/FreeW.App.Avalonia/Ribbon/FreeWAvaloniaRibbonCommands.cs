@@ -261,8 +261,6 @@ internal static class FreeWAvaloniaRibbonCommands
                 new ActionRibbonCommand(() => editor.ApplyTableStyle(style)));
         }
 
-        // Borders dropdown — opener no-op; sub-commands apply specific edges.
-        RegisterTableBorderCommands(tableCommands, editor);
         tableCommands.Bind(FreeWRibbonCommandAction.Eraser, new ActionRibbonCommand(editor.EraseTableBorderAtCaret));
 
         // Layout quick actions share their model policy; Avalonia contributes only the editor adapter.
@@ -775,28 +773,6 @@ internal static class FreeWAvaloniaRibbonCommands
         var bookmarks = editor.BookmarkNames();
         if (bookmarks.Count > 0)
             editor.ApplyInternalLink(bookmarks[0]);
-    }
-
-    /// <summary>
-    /// Registers the per-edge sub-commands for the Table Borders dropdown.
-    /// Each command calls <see cref="DocumentView.SetCellBorders"/> with the appropriate
-    /// <see cref="CellBorderEdges"/> flag. The "No Border" entry clears all edges.
-    /// </summary>
-    private static void RegisterTableBorderCommands(
-        FreeWRibbonEditorCommandFamilyBuilder r,
-        DocumentView editor)
-    {
-        static void Add(FreeWRibbonEditorCommandFamilyBuilder reg, DocumentView ed, string id, CellBorderEdges edges, bool clear = false) =>
-            reg.Register(id, new ActionRibbonCommand(() => ed.SetCellBorders(edges, clearEdges: clear)));
-
-        Add(r, editor, "freew.table-borders.all",     CellBorderEdges.All);
-        Add(r, editor, "freew.table-borders.outside", CellBorderEdges.Outside);
-        Add(r, editor, "freew.table-borders.inside",  CellBorderEdges.Inside);
-        Add(r, editor, "freew.table-borders.none",    CellBorderEdges.All, clear: true);
-        Add(r, editor, "freew.table-borders.top",     CellBorderEdges.Top);
-        Add(r, editor, "freew.table-borders.bottom",  CellBorderEdges.Bottom);
-        Add(r, editor, "freew.table-borders.left",    CellBorderEdges.Left);
-        Add(r, editor, "freew.table-borders.right",   CellBorderEdges.Right);
     }
 
     private sealed class ShowMarkupBalloonsCommand(DocumentView editor, FreeWRibbonHostExecutionPorts callbacks) : IRibbonStatefulCommand
@@ -1396,7 +1372,7 @@ internal static class FreeWAvaloniaRibbonCommands
             MergeCells: editor.MergeSelectedCells,
             SplitCell: OptionalHostCommand(callbacks.OpenSplitCellDialog),
             Shading: OptionalHostCommand(callbacks.OpenCellShadingDialog),
-            Borders: EmptyRibbonCommand.Instance,
+            Borders: OptionalHostCommand(callbacks.OpenCellBordersDialog),
             DeleteRow: editor.DeleteTableRow,
             DeleteColumn: editor.DeleteTableColumn,
             DeleteTable: () =>
@@ -1410,6 +1386,7 @@ internal static class FreeWAvaloniaRibbonCommands
             SetAutoFit: editor.SetTableAutoFit,
             SetCellAlignment: editor.SetCaretCellAlignment,
             SetCellTextDirection: editor.SetCaretCellTextDirection,
+            SetCellBorders: (edges, clearEdges) => editor.SetCellBorders(edges, clearEdges: clearEdges),
             ToggleRepeatHeaderRow: editor.ToggleTableRepeatHeaderRow);
 
     private static FreeWRibbonTableExecutionPorts CreateTableExecutionPorts(

@@ -82,6 +82,40 @@ public sealed class TableEditingRibbonWorkflowTests
     }
 
     [Fact]
+    public void SharedWorkflowOwnsEveryFixedBorderPresetAndClearSemantics()
+    {
+        var events = new List<string>();
+        var builder = new FreeWRibbonEditorCommandFamilyBuilder();
+        TableEditingRibbonWorkflow.Register(builder, CreatePorts(events));
+        var commands = builder.Build().AdapterCommands!;
+
+        foreach (var commandId in new[]
+                 {
+                     "freew.table-borders.all",
+                     "freew.table-borders.outside",
+                     "freew.table-borders.inside",
+                     "freew.table-borders.none",
+                     "freew.table-borders.top",
+                     "freew.table-borders.bottom",
+                     "freew.table-borders.left",
+                     "freew.table-borders.right",
+                 })
+        {
+            commands[new RibbonCommandId(commandId)].Execute(RibbonCommandContext.Empty);
+        }
+
+        events.Should().Equal(
+            "prepare", "border:All:False",
+            "prepare", "border:Outside:False",
+            "prepare", "border:Inside:False",
+            "prepare", "border:All:True",
+            "prepare", "border:Top:False",
+            "prepare", "border:Bottom:False",
+            "prepare", "border:Left:False",
+            "prepare", "border:Right:False");
+    }
+
+    [Fact]
     public void BothRenderersDelegateTableEditingPolicyToSharedPresentation()
     {
         var root = TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeW.slnx");
@@ -97,6 +131,8 @@ public sealed class TableEditingRibbonWorkflowTests
             source.Should().NotContain(".Bind(FreeWRibbonCommandAction.TableAutofitContents");
             source.Should().NotContain(".Bind(FreeWRibbonCommandAction.CellAlignTopLeft");
             source.Should().NotContain(".Bind(FreeWRibbonCommandAction.CellTextDirectionHorizontal");
+            source.Should().NotContain("RegisterTableBorderCommands");
+            source.Should().NotContain("freew.table-borders.all");
         }
 
         wpf.Should().NotContain("freew.table-insert-row")
@@ -149,5 +185,6 @@ public sealed class TableEditingRibbonWorkflowTests
             SetAutoFit: mode => events.Add($"autofit:{mode}"),
             SetCellAlignment: (vertical, horizontal) => events.Add($"align:{vertical}:{horizontal}"),
             SetCellTextDirection: direction => events.Add($"direction:{direction}"),
+            SetCellBorders: (edges, clearEdges) => events.Add($"border:{edges}:{clearEdges}"),
             ToggleRepeatHeaderRow: () => events.Add("toggle-repeat-header"));
 }
