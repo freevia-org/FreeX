@@ -8305,7 +8305,7 @@ public sealed partial class DocumentView : Control
         // fails; reverting this single line makes it pass). The empty-page emission is a separate
         // defect that has to be closed first -- tracked separately. The WPF host's fix for the same
         // finding is implemented differently and is unaffected by this line.
-        var keepParagraphTogether = pf.KeepLinesTogether || !pf.WidowControlIsSet || pf.WidowControl;
+        var keepParagraphTogether = DocumentParagraphPaginationPlanner.ShouldKeepParagraphTogether(pf);
         var supportsCompleteParagraphPlanning = indentFirst == 0
             && dropCapPlan is null
             && _wrapExclusions.Count == 0
