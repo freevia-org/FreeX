@@ -177,8 +177,15 @@ public sealed partial class MainWindow
     private sealed class AvaloniaPresentationVideoPort : IPresentationVideoPort
     {
         private readonly MainWindow _owner;
+        private readonly PresentationVideoExportSession _session;
 
-        public AvaloniaPresentationVideoPort(MainWindow owner) => _owner = owner;
+        public AvaloniaPresentationVideoPort(
+            MainWindow owner,
+            PresentationVideoExportSession session)
+        {
+            _owner = owner;
+            _session = session;
+        }
 
         public PresentationVideoExportHandoffHostCapabilities Capabilities =>
             _owner._videoExportHostCapabilities;
@@ -189,30 +196,13 @@ public sealed partial class MainWindow
             IReadOnlyList<PresentationRecordingMediaArtifact> recordingMediaArtifacts,
             CancellationToken cancellationToken)
         {
-            using var linkedCancellation = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-            _owner._nativeOutputCancellation = linkedCancellation;
-            try
-            {
-                _owner.LastVideoExportResult = await _owner._videoExportAdapter.ExportAsync(
-                    package,
-                    outputPath,
-                    linkedCancellation.Token,
-                    recordingMediaArtifacts).ConfigureAwait(true);
-            }
-            finally
-            {
-                if (ReferenceEquals(_owner._nativeOutputCancellation, linkedCancellation))
-                    _owner._nativeOutputCancellation = null;
-            }
-
-            var result = _owner.LastVideoExportResult;
-            return PresentationNativeCommandOutcomePlanner.BuildVideoExportCommandResult(
-                result.Succeeded,
-                result.Canceled,
-                result.FailureReason,
-                result.MuxedNarrationTrackCount,
-                result.MuxedCameraTrackCount,
-                result.MuxedCaptionTrackCount);
+            var commandResult = await _session.ExportAsync(
+                package,
+                outputPath,
+                recordingMediaArtifacts,
+                cancellationToken).ConfigureAwait(true);
+            _owner.LastVideoExportResult = _session.LastResult!;
+            return commandResult;
         }
     }
 

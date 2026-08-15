@@ -85,7 +85,7 @@ public sealed partial class MainWindow
 
     internal void CancelNativeOutputForTests()
     {
-        _nativeOutputCancellation?.Cancel();
+        _videoExportSession.CancelActiveExport();
         _printCancellation?.Cancel();
     }
 

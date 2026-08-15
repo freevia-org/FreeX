@@ -123,7 +123,7 @@ public sealed partial class MainWindow : Window,
     private readonly Func<PresentationVideoExportRequest?, PresentationVideoFramePackageArtifact>?
         _videoFramePackageArtifactFactory;
     private bool _nativeOutputDetectionStarted;
-    private CancellationTokenSource? _nativeOutputCancellation;
+    private readonly PresentationVideoExportSession _videoExportSession;
 
     // ── Editing session ────────────────────────────────────────────────────────
 
@@ -428,6 +428,7 @@ public sealed partial class MainWindow : Window,
         _showPrintSelectionDialog = showPrintSelectionDialog ??
             ShowPlatformPrintSelectionDialogAsync;
         _videoExportAdapter = videoExportAdapter ?? CreateVideoExportAdapter(_nativeOutputCapabilities.Video);
+        _videoExportSession = new PresentationVideoExportSession(() => _videoExportAdapter);
         _nativePrintHostCapabilities = BuildNativePrintHostCapabilities(_printService);
         _videoExportHostCapabilities = BuildVideoExportHostCapabilities(_nativeOutputCapabilities.Video);
         _nativeOutputCapabilityDetector = nativeOutputCapabilityDetector ??
@@ -521,7 +522,7 @@ public sealed partial class MainWindow : Window,
             new AvaloniaPresentationFilePickerPort(this),
             new AvaloniaPresentationFileRenderPort(),
             new AvaloniaPresentationPrintPort(this),
-            new AvaloniaPresentationVideoPort(this),
+            new AvaloniaPresentationVideoPort(this, _videoExportSession),
             new AvaloniaPresentationFileFeedbackPort(this),
             getImageExportRange: () => PresentationExportPlanner.BuildCurrentSlideRangeRequest(Editor.CurrentSlideIndex),
             getPrintCurrentSlideNumber: () => Editor.CurrentSlideIndex + 1,
