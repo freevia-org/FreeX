@@ -11,7 +11,7 @@ public sealed class AutosaveRecoveryPlannerTests
         var older = Candidate("Older", "2026-06-22T08:00:00Z");
         var newer = Candidate("Newer", "2026-06-22T09:00:00Z");
 
-        AutosaveRecoveryPlanner.SelectLatest([older, newer]).Should().BeSameAs(newer);
+        AutosaveRecoveryPolicy.SelectLatest([older, newer]).Should().BeSameAs(newer);
     }
 
     [Fact]
@@ -20,13 +20,15 @@ public sealed class AutosaveRecoveryPlannerTests
         var missing = Candidate("Missing", timestampUtc: null);
         var dated = Candidate("Dated", "2026-06-22T08:00:00Z");
 
-        AutosaveRecoveryPlanner.SelectLatest([missing, dated]).Should().BeSameAs(dated);
+        AutosaveRecoveryPolicy.SelectLatest([missing, dated]).Should().BeSameAs(dated);
     }
 
     [Fact]
     public void DisplayName_FallsBackWhenSidecarNameIsBlank()
     {
-        AutosaveRecoveryPlanner.DisplayName(Candidate(" ", "2026-06-22T08:00:00Z"))
+        AutosaveRecoveryPolicy.ResolveDisplayName(
+                Candidate(" ", "2026-06-22T08:00:00Z"),
+                "a document")
             .Should().Be("a document");
     }
 
@@ -40,7 +42,7 @@ public sealed class AutosaveRecoveryPlannerTests
         bool recovered,
         AutosaveRecoveryDisposition expected)
     {
-        AutosaveRecoveryPlanner.ResolveDisposition(accepted, recovered).Should().Be(expected);
+        AutosaveRecoveryPolicy.ResolveDisposition(accepted, recovered).Should().Be(expected);
     }
 
     private static AutosaveRecoveryCandidate Candidate(string displayName, string? timestampUtc) =>

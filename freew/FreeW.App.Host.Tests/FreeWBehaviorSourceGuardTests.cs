@@ -121,7 +121,8 @@ public sealed class FreeWBehaviorSourceGuardTests
         session.Should().Contain("new AutosaveSnapshotCoordinator(");
         session.Should().Contain("AutosaveRecoveryPlanner.PlanAll(_store)");
         session.Should().Contain("AutosaveRecoveryPlanner.Complete(");
-        planner.Should().Contain("SelectAllOrdered(store.ExcludeLiveOwned(store.EnumerateCandidates()))");
+        planner.Should().Contain("AutosaveRecoveryPolicy");
+        planner.Should().NotContain("OrderByDescending");
         workflow.Should().Contain("for (var index = 0; index < recoveries.Count; index++)");
         workflow.Should().Contain("var useCurrentWindow = !anyAccepted;");
         workflow.Should().Contain("FreeWRecoveryPromptMode.Manual");
