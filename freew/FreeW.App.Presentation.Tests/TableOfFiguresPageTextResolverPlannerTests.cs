@@ -41,4 +41,38 @@ public sealed class TableOfFiguresPageTextResolverPlannerTests
         resolver.Should().NotBeNull();
         resolver!(tableIndex, new TableParagraphAddress(secondPageRow, 0, 0)).Should().Be("5");
     }
+
+    [Fact]
+    public void Build_never_places_an_observed_block_before_its_authored_page_boundary()
+    {
+        var first = new Paragraph("First");
+        first.Runs.Add(Run.PageBreak());
+        var caption = new Paragraph("Figure 1: Diagram");
+        var document = new TextDocument { Blocks = { first, caption } };
+        var resolver = TableOfFiguresPageTextResolverPlanner.Build(
+            document,
+            physicalPageOfBlock: _ => 1,
+            minimumPageCount: 2);
+
+        resolver.Should().NotBeNull();
+        resolver!(1, null).Should().Be("2");
+    }
+
+    [Fact]
+    public void Both_renderers_delegate_figure_page_policy_and_known_page_count_to_the_shared_planner()
+    {
+        var root = TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeW.slnx");
+        var wpf = Read(root, "freew", "FreeW.App.Host", "Editing", "DocumentView.cs");
+        var avalonia = Read(root, "freew", "FreeW.App.Avalonia", "Editing", "DocumentView.cs");
+
+        foreach (var renderer in new[] { wpf, avalonia })
+        {
+            renderer.Should().Contain("TableOfFiguresPageTextResolverPlanner.Build(")
+                .And.Contain("minimumPageCount: pages.PageCount ?? 1")
+                .And.NotContain("GeneratedReferencePaginationContext.Create(");
+        }
+    }
+
+    private static string Read(string root, params string[] parts) =>
+        File.ReadAllText(Path.Combine([root, .. parts])).ReplaceLineEndings("\n");
 }

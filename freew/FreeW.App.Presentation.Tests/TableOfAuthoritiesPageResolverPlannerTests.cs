@@ -49,6 +49,24 @@ public sealed class TableOfAuthoritiesPageResolverPlannerTests
     }
 
     [Fact]
+    public void Build_never_places_an_observed_block_before_its_authored_page_boundary()
+    {
+        var first = new Paragraph("First");
+        first.Runs.Add(Run.PageBreak());
+        var citation = new Citation("Case", CitationCategory.Cases);
+        var marked = new Paragraph { Runs = { Run.CitationMark(citation) } };
+        var document = DocumentWith(first, marked);
+        var resolver = TableOfAuthoritiesPageResolverPlanner.Build(
+            document,
+            observedPhysicalPageOfBlock: _ => 1,
+            observedPhysicalPageOfBlockOffset: (_, _) => null,
+            minimumPageCount: 2);
+
+        resolver(document, 1, null, 0, citation)
+            .Should().Be(new ToaCitationPageReference(2, "2"));
+    }
+
+    [Fact]
     public void Build_OffsetsTableCitationToPlannedSpilloverPage()
     {
         var document = FreeWVisualEvidenceDocumentFactory.BuildTablePaginationRepeatHeaderDocument();
@@ -90,17 +108,22 @@ public sealed class TableOfAuthoritiesPageResolverPlannerTests
     }
 
     [Fact]
-    public void HasExplicitPageBoundary_DetectsParagraphAndSectionBreaks()
+    public void Both_renderers_delegate_generated_authority_page_policy_to_the_shared_planner()
     {
-        var document = DocumentWith(new Paragraph("Body"));
-        TableOfAuthoritiesPageResolverPlanner.HasExplicitPageBoundary(document).Should().BeFalse();
+        var root = TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeW.slnx");
+        var wpf = Read(root, "freew", "FreeW.App.Host", "Editing", "DocumentView.cs");
+        var avalonia = Read(root, "freew", "FreeW.App.Avalonia", "Editing", "DocumentView.cs");
 
-        ((Paragraph)document.Blocks[0]).Formatting = ParagraphFormatting.Default with
+        foreach (var renderer in new[] { wpf, avalonia })
         {
-            PageBreakBefore = true
-        };
+            renderer.Should().Contain("TableOfAuthoritiesPageResolverPlanner.Build(")
+                .And.NotContain("private bool IsModelCitationRun(")
+                .And.NotContain("private ToaCitationPageReference? ResolveTableOfAuthoritiesCitationPage(");
+        }
 
-        TableOfAuthoritiesPageResolverPlanner.HasExplicitPageBoundary(document).Should().BeTrue();
+        avalonia.Should().Contain("DocumentReferenceBlockPageResolverPlanner.Build(")
+            .And.NotContain("TableOfAuthoritiesPageResolverPlanner.HasExplicitPageBoundary(_doc)")
+            .And.NotContain("private static bool HasExplicitPageBoundary(TextDocument document)");
     }
 
     private static TextDocument DocumentWith(params Block[] blocks)
@@ -110,4 +133,7 @@ public sealed class TableOfAuthoritiesPageResolverPlannerTests
         document.Blocks.AddRange(blocks);
         return document;
     }
+
+    private static string Read(string root, params string[] parts) =>
+        File.ReadAllText(Path.Combine([root, .. parts])).ReplaceLineEndings("\n");
 }

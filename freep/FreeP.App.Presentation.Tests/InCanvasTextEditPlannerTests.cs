@@ -399,6 +399,31 @@ public sealed class InCanvasTextEditPlannerTests
     }
 
     [Fact]
+    public void ApplyTextValueFormat_AutomaticColor_ClearsOnlySelectedRunColor()
+    {
+        var explicitColor = new ThemeAwareColor(new SrgbColor(0x22, 0x66, 0xAA));
+        var source = MakeBody("one two", explicitColor);
+
+        var edited = InCanvasTextEditPlanner.ApplyTextValueFormat(
+            source,
+            TableCellTextValueFormatKind.Color,
+            value: null,
+            selection: (4, 7));
+
+        edited.Paragraphs[0].Runs.Should().HaveCount(2);
+        edited.Paragraphs[0].Runs[0].Text.Should().Be("one ");
+        edited.Paragraphs[0].Runs[0].Color.Should().NotBeNull();
+        edited.Paragraphs[0].Runs[0].Color!.Resolved.Should().Be(explicitColor.Resolved);
+        edited.Paragraphs[0].Runs[1].Text.Should().Be("two");
+        edited.Paragraphs[0].Runs[1].Color.Should().BeNull(
+            "Automatic means inherit the theme color rather than retain an explicit run color");
+
+        source.Paragraphs[0].Runs.Should().ContainSingle();
+        source.Paragraphs[0].Runs[0].Color.Should().BeSameAs(explicitColor,
+            "shared text mutations must not alter the source snapshot");
+    }
+
+    [Fact]
     public void CommitTableCellRichText_ChangedText_BuildsUndoableCellTextCommand()
     {
         var presentation = Presentation.CreateEmpty();

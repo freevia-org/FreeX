@@ -373,18 +373,16 @@ public sealed class InCanvasTextEditor : IDisposable
                 selection));
     }
 
-    /// <summary>Sets text color on the current RichTextBox selection. No-op if not active.</summary>
-    public void ApplyColor(ThemeAwareColor? color)
-    {
-        if (color is null)
-            return;
-
+    /// <summary>
+    /// Sets text color on the current RichTextBox selection. A null color is the shared
+    /// ribbon's Automatic choice and clears the explicit run color so theme inheritance resumes.
+    /// </summary>
+    public bool ApplyColor(ThemeAwareColor? color) =>
         ApplyShapeRunMutation((session, selection) =>
             session.ApplyValueFormat(
                 TableCellTextValueFormatKind.Color,
                 color,
                 selection));
-    }
 
     public bool TryApplyActiveShapeParagraphAlignment(TextAlign alignment) =>
         ApplyShapeParagraphMutation((session, selection) =>

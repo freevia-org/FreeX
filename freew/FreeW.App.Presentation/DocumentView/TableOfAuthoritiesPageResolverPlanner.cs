@@ -22,9 +22,12 @@ public static class TableOfAuthoritiesPageResolverPlanner
         int? KnownPhysicalPageOfBlock(int blockIndex)
         {
             var observed = observedPhysicalPageOfBlock?.Invoke(blockIndex);
+            var explicitPage = CrossReferences.ExplicitPageNumberAtBlock(document, blockIndex);
             if (observed is > 0)
-                return observed;
-            return CrossReferences.ExplicitPageNumberAtBlock(document, blockIndex)
+                return explicitPage is { } authoredPage
+                    ? Math.Max(observed.Value, authoredPage)
+                    : observed;
+            return explicitPage
                 ?? (blockIndex == 0 ? 1 : null);
         }
 
@@ -81,16 +84,6 @@ public static class TableOfAuthoritiesPageResolverPlanner
                 ? CreatePageReference(1, displayTextOfPhysicalPage)
                 : null;
         };
-    }
-
-    public static bool HasExplicitPageBoundary(TextDocument document)
-    {
-        ArgumentNullException.ThrowIfNull(document);
-        return document.Blocks.OfType<Paragraph>().Any(paragraph =>
-            paragraph.Formatting.PageBreakBefore
-            || paragraph.Runs.Any(run => run.IsPageBreak)
-            || paragraph.SectionBreak is
-                { BreakKind: SectionBreakKind.NextPage or SectionBreakKind.EvenPage or SectionBreakKind.OddPage });
     }
 
     private static bool TryGetCitationRunOffset(
