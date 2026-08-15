@@ -102,7 +102,10 @@ public sealed class MultiWindowAutosaveOwnershipTests
         {
             registry.Count.Should().Be(2);
 
-            documentState.MarkDirty();
+            // Loaded replaces the primary window's constructor-time session with the initial
+            // workbook session. Dirty the live session so both sibling views observe the shared
+            // application-frame document state that autosave actually owns.
+            primary.Session.MarkDirtyForRecovery();
 
             // Both windows' autosave services must be independently wired (non-null) and able
             // to produce their own snapshot on tick — this is the part that was missing for the
@@ -163,7 +166,7 @@ public sealed class MultiWindowAutosaveOwnershipTests
 
         // The shared workbook (shared WorkbookDocumentState, per DI's AddSingleton<WorkbookDocumentState>)
         // is dirtied, and both windows produce their own recovery snapshot.
-        documentState.MarkDirty();
+        primary.Session.MarkDirtyForRecovery();
         primary.AutosaveServiceForCrashHandler!.OnTimerTick();
         secondary.AutosaveServiceForCrashHandler!.OnTimerTick();
         SnapshotFileCount(temp.Path).Should().Be(2);
@@ -180,7 +183,7 @@ public sealed class MultiWindowAutosaveOwnershipTests
 
         // The still-open secondary window keeps producing snapshots for the still-dirty shared
         // workbook on subsequent ticks — autosave coverage was not silently lost.
-        documentState.MarkDirty();
+        secondary.Session.MarkDirtyForRecovery();
         secondary.AutosaveServiceForCrashHandler!.OnTimerTick();
         SnapshotFileCount(temp.Path).Should().Be(1);
 
