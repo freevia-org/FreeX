@@ -6119,7 +6119,8 @@ internal static class FreeWRibbonCommands
             int currentRecordIndex,
             IReadOnlyList<int> selectedRecordIndexes)
         {
-            var dialogPlan = MailMergeEmailDeliveryPlanner.CreateDialogPlan(data, currentRecordIndex, selectedRecordIndexes);
+            var session = new MailMergeEmailDeliveryDialogSession(data, currentRecordIndex, selectedRecordIndexes);
+            var dialogPlan = session.InitialPlan;
             MailMergeEmailDeliveryIntent? result = null;
             var dialog = new MailMergeDialogWindow
             {
@@ -6164,24 +6165,19 @@ internal static class FreeWRibbonCommands
                 MinWidth = 72
             };
 
-            MailMergeEmailDeliveryIntent CurrentIntent() =>
-                MailMergeEmailDeliveryPlanner.CreateIntent(
+            MailMergeEmailDeliveryDialogState CurrentState() =>
+                session.Evaluate(
                     toCombo.SelectedItem?.ToString() ?? dialogPlan.RecipientAddressField,
                     subjectBox.Text,
                     outputCombo.SelectedIndex,
                     bodyCombo.SelectedIndex,
-                    scopeCombo.SelectedIndex,
-                    currentRecordIndex,
-                    selectedRecordIndexes);
+                    scopeCombo.SelectedIndex);
 
             void RefreshValidation()
             {
-                var plan = MailMerge.CreateEmailDeliveryPlan(data, CurrentIntent());
-                var messages = MailMergeEmailDeliveryPlanner.GetValidationMessages(plan);
-                validation.Text = messages.Count == 0
-                    ? MailMergeDialogMetadata.ReadyEmailMessage
-                    : string.Join(Environment.NewLine, messages);
-                ok.IsEnabled = plan.Errors.Count == 0;
+                var state = CurrentState();
+                validation.Text = state.ValidationText;
+                ok.IsEnabled = state.CanSubmit;
             }
 
             toCombo.SelectionChanged += (_, _) => RefreshValidation();
@@ -6192,7 +6188,7 @@ internal static class FreeWRibbonCommands
 
             ok.Click += (_, _) =>
             {
-                result = CurrentIntent();
+                result = CurrentState().Intent;
                 dialog.DialogResult = true;
             };
 

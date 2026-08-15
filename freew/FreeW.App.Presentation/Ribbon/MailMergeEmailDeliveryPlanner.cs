@@ -20,6 +20,61 @@ public sealed record MailMergeEmailDeliveryDialogPlan(
     int RecordScopeIndex,
     IReadOnlyList<string> ValidationMessages);
 
+public sealed record MailMergeEmailDeliveryDialogState(
+    MailMergeEmailDeliveryIntent Intent,
+    string ValidationText,
+    bool CanSubmit);
+
+public sealed class MailMergeEmailDeliveryDialogSession
+{
+    private readonly MergeData _data;
+    private readonly int _currentRecordIndex;
+    private readonly IReadOnlyList<int> _selectedRecordIndexes;
+
+    public MailMergeEmailDeliveryDialogSession(
+        MergeData data,
+        int currentRecordIndex,
+        IReadOnlyList<int>? selectedRecordIndexes = null)
+    {
+        ArgumentNullException.ThrowIfNull(data);
+
+        _data = data;
+        _currentRecordIndex = currentRecordIndex;
+        _selectedRecordIndexes = selectedRecordIndexes?.ToArray() ?? [];
+        InitialPlan = MailMergeEmailDeliveryPlanner.CreateDialogPlan(
+            data,
+            currentRecordIndex,
+            _selectedRecordIndexes);
+    }
+
+    public MailMergeEmailDeliveryDialogPlan InitialPlan { get; }
+
+    public MailMergeEmailDeliveryDialogState Evaluate(
+        string? recipientAddressField,
+        string? subject,
+        int outputFormatIndex,
+        int bodyFormatIndex,
+        int recordScopeIndex)
+    {
+        var intent = MailMergeEmailDeliveryPlanner.CreateIntent(
+            recipientAddressField,
+            subject,
+            outputFormatIndex,
+            bodyFormatIndex,
+            recordScopeIndex,
+            _currentRecordIndex,
+            _selectedRecordIndexes);
+        var deliveryPlan = MailMerge.CreateEmailDeliveryPlan(_data, intent);
+        var messages = MailMergeEmailDeliveryPlanner.GetValidationMessages(deliveryPlan);
+        return new MailMergeEmailDeliveryDialogState(
+            intent,
+            messages.Count == 0
+                ? MailMergeDialogMetadata.ReadyEmailMessage
+                : string.Join(Environment.NewLine, messages),
+            deliveryPlan.Errors.Count == 0);
+    }
+}
+
 public sealed record MailMergeEmailClientDraft(
     int RecordIndex,
     string RecipientAddress,

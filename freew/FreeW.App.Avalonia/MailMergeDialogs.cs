@@ -448,7 +448,8 @@ internal static class MailMergeDialogs
         int currentRecordIndex,
         IReadOnlyList<int> selectedRecordIndexes)
     {
-        var dialogPlan = MailMergeEmailDeliveryPlanner.CreateDialogPlan(data, currentRecordIndex, selectedRecordIndexes);
+        var session = new MailMergeEmailDeliveryDialogSession(data, currentRecordIndex, selectedRecordIndexes);
+        var dialogPlan = session.InitialPlan;
         var dialog = CreateDialog(MailMergeDialogMetadata.SendEmailTitle, 430, 315);
 
         var fieldCombo = new ComboBox
@@ -473,25 +474,20 @@ internal static class MailMergeDialogs
         MailMergeEmailDeliveryIntent? result = null;
         Button? okButton = null;
 
-        MailMergeEmailDeliveryIntent CurrentIntent() =>
-            MailMergeEmailDeliveryPlanner.CreateIntent(
+        MailMergeEmailDeliveryDialogState CurrentState() =>
+            session.Evaluate(
                 fieldCombo.SelectedItem as string ?? dialogPlan.RecipientAddressField,
                 subjectBox.Text,
                 outputCombo.SelectedIndex,
                 bodyCombo.SelectedIndex,
-                scopeCombo.SelectedIndex,
-                currentRecordIndex,
-                selectedRecordIndexes);
+                scopeCombo.SelectedIndex);
 
         void RefreshValidation()
         {
-            var plan = MailMerge.CreateEmailDeliveryPlan(data, CurrentIntent());
-            var messages = MailMergeEmailDeliveryPlanner.GetValidationMessages(plan);
-            validation.Text = messages.Count == 0
-                ? MailMergeDialogMetadata.ReadyEmailMessage
-                : string.Join(Environment.NewLine, messages);
+            var state = CurrentState();
+            validation.Text = state.ValidationText;
             if (okButton is not null)
-                okButton.IsEnabled = plan.Errors.Count == 0;
+                okButton.IsEnabled = state.CanSubmit;
         }
 
         fieldCombo.SelectionChanged += (_, _) => RefreshValidation();
@@ -510,7 +506,7 @@ internal static class MailMergeDialogs
 
         AddActions(dialog, content, () =>
         {
-            result = CurrentIntent();
+            result = CurrentState().Intent;
         }, ok => okButton = ok);
         RefreshValidation();
 
