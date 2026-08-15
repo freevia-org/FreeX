@@ -2546,7 +2546,7 @@ public sealed partial class MainWindow : Window,
                 _mediaVolumeApplyButton,
                 _mediaTimingApplyButton),
             new PresentationMediaPaneNativeAccessors<FrameworkElement>(
-                control => control.Visibility == Visibility.Visible,
+                control => control?.Visibility == Visibility.Visible,
                 (control, value) => control.Visibility = value ? Visibility.Visible : Visibility.Collapsed,
                 control => (control as TextBox)?.Text,
                 WriteWpfMediaText,
