@@ -1381,14 +1381,24 @@ public sealed partial class DocumentView : RichTextBox
             .AsTask()
             .GetAwaiter()
             .GetResult();
+        if (transfer.IsSuccess && transfer.Payload is { } payload)
+            ApplyClipboardPastePlan(FreeWClipboardApplicationWorkflow.PlanPaste(
+                payload,
+                PasteSpecialOption.KeepSourceFormatting));
+    }
 
-        if (transfer.Payload?.RichDocument is { } source
-            && PasteKeepSourceFormatting(source))
-        {
-            return;
-        }
+    internal bool ApplyClipboardPastePlan(FreeWClipboardPastePlan plan)
+    {
+        ArgumentNullException.ThrowIfNull(plan);
+        if (plan.RichDocument is { } source && PasteKeepSourceFormatting(source))
+            return true;
 
-        PasteFromClipboard(DocumentPasteTextKind.MergeFormatting);
+        var textPlan = _editingSession.Interaction.PlanPasteText(plan.Text, plan.TextKind);
+        if (!textPlan.HasText)
+            return false;
+
+        InsertText(textPlan.Text);
+        return true;
     }
 
     /// <summary>
@@ -14173,11 +14183,7 @@ public sealed partial class DocumentView : RichTextBox
         if (!transfer.IsSuccess || transfer.Payload is not { } payload)
             return;
 
-        var plan = _editingSession.Interaction.PlanPasteText(payload.Text, kind);
-        if (!plan.HasText)
-            return;
-
-        InsertText(plan.Text);
+        ApplyClipboardPastePlan(new FreeWClipboardPastePlan(kind, payload.Text, RichDocument: null));
     }
 
     /// <summary>

@@ -2020,23 +2020,31 @@ internal static class FreeWRibbonCommands
         public void Execute(RibbonCommandContext context)
         {
             editor.Focus();
-            var option = PasteSpecialDialog.Prompt(
-                Window.GetWindow(editor),
-                editor.PlatformClipboard);
+            var owner = Window.GetWindow(editor);
+            var transfer = FreeWClipboardApplicationWorkflow
+                .ReadPasteSpecialAsync(editor.PlatformClipboard)
+                .AsTask()
+                .GetAwaiter()
+                .GetResult();
+            if (!transfer.IsSuccess || transfer.Payload is null)
+            {
+                DialogMessageHelper.ShowWarning(
+                    owner,
+                    transfer.FeedbackMessage ?? FreeWClipboardApplicationWorkflow.EmptyClipboardMessage);
+                return;
+            }
+
+            var option = PasteSpecialDialog.Prompt(owner);
             if (option is null)
                 return;
+
             editor.Focus();
-            switch (option.Value)
+            var plan = FreeWClipboardApplicationWorkflow.PlanPaste(transfer.Payload, option.Value);
+            if (!editor.ApplyClipboardPastePlan(plan))
             {
-                case PasteSpecialOption.KeepSourceFormatting:
-                    editor.PasteKeepSourceFormatting();
-                    break;
-                case PasteSpecialOption.KeepTextOnly:
-                    editor.PastePlainText();
-                    break;
-                default:
-                    editor.PasteMergeFormatting();
-                    break;
+                DialogMessageHelper.ShowWarning(
+                    owner,
+                    FreeWClipboardApplicationWorkflow.EmptyClipboardMessage);
             }
         }
     }

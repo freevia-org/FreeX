@@ -39,6 +39,17 @@ public sealed class RichClipboardDocumentPlannerTests
             Path.Combine(workspace, "freew", "FreeW.App.Avalonia", "Editing", "DocumentView.cs"),
             Path.Combine(workspace, "freew", "FreeW.App.Avalonia", "MainWindow.cs"),
         }.Select(File.ReadAllText).ToArray();
+        var wpfDialog = File.ReadAllText(Path.Combine(
+            workspace,
+            "freew",
+            "FreeW.App.Host",
+            "PasteSpecialDialog.cs"));
+        var wpfCommands = File.ReadAllText(Path.Combine(
+            workspace,
+            "freew",
+            "FreeW.App.Host",
+            "Ribbon",
+            "FreeWRibbonCommands.cs"));
         var workflow = File.ReadAllText(Path.Combine(
             workspace,
             "freew",
@@ -60,6 +71,11 @@ public sealed class RichClipboardDocumentPlannerTests
 
         rendererSources[0].Should().Contain("FreeWClipboardApplicationWorkflow.ReadPasteSpecialAsync(");
         rendererSources[2].Should().Contain("FreeWClipboardApplicationWorkflow.ReadPasteSpecialAsync(");
+        wpfDialog.Should().NotContain("ReadTextAsync(");
+        wpfDialog.Should().NotContain("IPlatformClipboard");
+        wpfCommands.Should().Contain("ReadPasteSpecialAsync(editor.PlatformClipboard)");
+        wpfCommands.Should().Contain("FreeWClipboardApplicationWorkflow.PlanPaste(");
+        wpfCommands.Should().Contain("editor.ApplyClipboardPastePlan(plan)");
         workflow.Should().Contain("RtfClipboardDocumentParser.TryParse(");
         workflow.Should().NotContain("RtfReader.Read(");
         parser.Should().Contain("RtfReader.Read(");

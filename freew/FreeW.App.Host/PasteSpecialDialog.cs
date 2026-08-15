@@ -1,7 +1,5 @@
 using System.Windows;
 using System.Windows.Controls;
-using Free.Shared.AppServices;
-using Free.Shared.Shell.Wpf;
 using FreeW.App.Presentation.Dialogs;
 
 namespace FreeW.App.Host;
@@ -15,27 +13,12 @@ namespace FreeW.App.Host;
 /// </list>
 /// Keep Source Formatting imports clipboard RTF at an empty body paragraph; other positions retain the
 /// merge-formatting text path. The dialog returns the chosen <see cref="PasteSpecialOption"/>, or null if
-/// cancelled or the clipboard has no usable content.
+/// cancelled. Clipboard transfer and paste planning happen before this renderer-only prompt is shown.
 /// </summary>
 internal static class PasteSpecialDialog
 {
-    public static PasteSpecialOption? Prompt(
-        Window? owner,
-        IPlatformClipboard? platformClipboard = null)
+    public static PasteSpecialOption? Prompt(Window? owner)
     {
-        // Check the clipboard before showing any UI; no text format → nothing to offer.
-        var clipboard = platformClipboard ?? new WpfPlatformClipboard(owner?.Dispatcher);
-        var read = clipboard.ReadTextAsync().AsTask().GetAwaiter().GetResult();
-        var hasText = read.Status == PlatformClipboardReadStatus.Success;
-
-        if (!hasText)
-        {
-            DialogMessageHelper.ShowWarning(
-                owner as Window,
-                PasteSpecialDialogSession.EmptyClipboardMessage);
-            return null;
-        }
-
         var session = new PasteSpecialDialogSession();
 
         PasteSpecialOption? result = null;
