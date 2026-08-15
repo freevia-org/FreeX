@@ -16674,80 +16674,8 @@ public sealed partial class DocumentView : RichTextBox
     private static RunFormatting Resolve(ModelRun run, ModelParagraph paragraph, TextDocument document)
         => DocumentRunFormattingResolver.Resolve(document, paragraph, run.Formatting);
 
-    private static ParagraphFormatting Resolve(ModelParagraph paragraph, TextDocument document)
-    {
-        var p = paragraph.Formatting;
-        // Per-property cascade: direct paragraph formatting wins; for any presentation property the
-        // paragraph leaves at the model default, inherit the paragraph style's value (Word's cascade).
-        // The previous all-or-nothing rule fell back to FreeW's hardcoded defaults for a paragraph that set
-        // ANY property (e.g. a list kind), ignoring the style's spacing/indents. List membership, breaks
-        // and toggles stay paragraph-intrinsic. (Most value-typed formatting can't distinguish "explicitly the
-        // default" from "unset", so a property explicitly set to the default value inherits the style; the
-        // fully-correct fix is nullable formatting recording only explicit props — a larger refactor. Line
-        // spacing is the exception: it carries an explicit LineSpacingIsSet flag, so it cascades precisely.)
-        if (paragraph.StyleId is { } id && document.Styles.TryGetValue(id, out var style))
-        {
-            var sp = style.Paragraph;
-            if (p == ParagraphFormatting.Default)
-                return sp;
-            var d = ParagraphFormatting.Default;
-            // Line spacing resolves as one unit (direct w:line ?? style w:line ?? the paragraph's own
-            // inherited docDefault/built-in value, which the reader already baked into p). The IsSet flag
-            // distinguishes an explicit setting from an inherited one, so a paragraph with no direct line
-            // spacing correctly takes its style's — not the docDefault that masked it before.
-            var lineFrom = p.LineSpacingIsSet
-                ? p
-                : sp.LineSpacingIsSet
-                    ? sp
-                    : document.DefaultParagraph.LineSpacingIsSet
-                        ? document.DefaultParagraph
-                        : p;
-            return p with
-            {
-                ContextualSpacing = p.ContextualSpacing ?? sp.ContextualSpacing ?? document.DefaultParagraph.ContextualSpacing,
-                SuppressAutoHyphens = (p.SuppressAutoHyphensIsSet || p.SuppressAutoHyphens)
-                    ? p.SuppressAutoHyphens
-                    : sp.SuppressAutoHyphens,
-                SuppressAutoHyphensIsSet = p.SuppressAutoHyphensIsSet || p.SuppressAutoHyphens
-                    || sp.SuppressAutoHyphensIsSet || sp.SuppressAutoHyphens,
-                SuppressLineNumbers = p.SuppressLineNumbersIsSet
-                    ? p.SuppressLineNumbers
-                    : sp.SuppressLineNumbersIsSet && sp.SuppressLineNumbers,
-                SuppressLineNumbersIsSet = p.SuppressLineNumbersIsSet || sp.SuppressLineNumbersIsSet,
-                Alignment = p.Alignment != d.Alignment ? p.Alignment : sp.Alignment,
-                // Space before/after cascade on the explicit flag, not value-vs-default: a read paragraph
-                // carries 0pt-after when it sets none, and 0 != the model's 8pt default would otherwise keep
-                // the 0 and never inherit the style's spacing (packing styled list items tighter than Word).
-                SpaceBeforePt = p.SpaceBeforeIsSet ? p.SpaceBeforePt : sp.SpaceBeforeIsSet ? sp.SpaceBeforePt : p.SpaceBeforePt,
-                SpaceAfterPt = p.SpaceAfterIsSet ? p.SpaceAfterPt : sp.SpaceAfterIsSet ? sp.SpaceAfterPt : p.SpaceAfterPt,
-                SpaceBeforeIsSet = p.SpaceBeforeIsSet || sp.SpaceBeforeIsSet,
-                SpaceAfterIsSet = p.SpaceAfterIsSet || sp.SpaceAfterIsSet,
-                LineSpacing = lineFrom.LineSpacing,
-                LineRule = lineFrom.LineRule,
-                LineHeightPt = lineFrom.LineHeightPt,
-                LineSpacingIsSet = p.LineSpacingIsSet || sp.LineSpacingIsSet || document.DefaultParagraph.LineSpacingIsSet,
-                IndentLeftPt = p.IndentLeftPt != d.IndentLeftPt ? p.IndentLeftPt : sp.IndentLeftPt,
-                IndentRightPt = p.IndentRightPt != d.IndentRightPt ? p.IndentRightPt : sp.IndentRightPt,
-                FirstLineIndentPt = p.FirstLineIndentPt != d.FirstLineIndentPt ? p.FirstLineIndentPt : sp.FirstLineIndentPt,
-                Border = p.Border ?? sp.Border,
-                ShadingColorHex = p.ShadingColorHex ?? sp.ShadingColorHex,
-            };
-        }
-        return p with
-        {
-            ContextualSpacing = p.ContextualSpacing ?? document.DefaultParagraph.ContextualSpacing,
-            LineSpacing = !p.LineSpacingIsSet && document.DefaultParagraph.LineSpacingIsSet
-                ? document.DefaultParagraph.LineSpacing
-                : p.LineSpacing,
-            LineRule = !p.LineSpacingIsSet && document.DefaultParagraph.LineSpacingIsSet
-                ? document.DefaultParagraph.LineRule
-                : p.LineRule,
-            LineHeightPt = !p.LineSpacingIsSet && document.DefaultParagraph.LineSpacingIsSet
-                ? document.DefaultParagraph.LineHeightPt
-                : p.LineHeightPt,
-            LineSpacingIsSet = p.LineSpacingIsSet || document.DefaultParagraph.LineSpacingIsSet,
-        };
-    }
+    private static ParagraphFormatting Resolve(ModelParagraph paragraph, TextDocument document) =>
+        DocumentParagraphFormattingResolver.Resolve(document, paragraph);
 
     private static bool SuppressesContextualSpacing(
         ModelParagraph previous,

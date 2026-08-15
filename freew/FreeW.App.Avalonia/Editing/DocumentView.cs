@@ -504,7 +504,7 @@ public sealed partial class DocumentView : Control
 
     public TextDocument Document => _doc;
     public string? CurrentFileName { get; set; }
-    public string? CurrentParagraphStyleId => CurrentParagraph()?.StyleId;
+    public string? CurrentParagraphStyleId => PrimaryFormattingProbeTarget()?.Paragraph.StyleId;
 
     /// <summary>Whether WPF-compatible AutoCorrect and AutoFormat-As-You-Type rules run during text input.</summary>
     public bool AutoCorrectEnabled { get; set; } = true;
@@ -20521,7 +20521,7 @@ public sealed partial class DocumentView : Control
         int lineSpan = DropCap.DefaultLineSpan,
         double distanceFromTextPt = DropCap.DefaultDistanceFromTextPt)
     {
-        var index = _caret.Block;
+        var index = SelectedParagraphIndices().FirstOrDefault(-1);
         if (index < 0 || index >= _doc.Blocks.Count || _doc.Blocks[index] is not Paragraph p || !IsEditable(p))
             return;
         _editingSession.ApplyDropCap(index, position, sizePt, lineSpan, distanceFromTextPt);
@@ -20535,7 +20535,7 @@ public sealed partial class DocumentView : Control
     /// </summary>
     public void ClearDropCap()
     {
-        var index = _caret.Block;
+        var index = SelectedParagraphIndices().FirstOrDefault(-1);
         if (index < 0 || index >= _doc.Blocks.Count || _doc.Blocks[index] is not Paragraph p || !IsEditable(p))
             return;
         _editingSession.ClearDropCap(index);
@@ -21593,18 +21593,72 @@ public sealed partial class DocumentView : Control
     /// </summary>
     public (RunFormatting Run, ParagraphFormatting Paragraph) GetCaretFormatting()
     {
-        var paragraph = CurrentParagraph();
-        if (paragraph is null)
+        if (PrimaryFormattingProbeTarget() is not { } target)
             return (RunFormatting.Default, ParagraphFormatting.Default);
 
-        var cells = ParaCells(paragraph);
-        var rawRun = cells.Count == 0
-            ? (paragraph.Runs.Count > 0 ? paragraph.Runs[^1].Formatting : RunFormatting.Default)
-            : cells[Math.Clamp(_caret.Offset - 1, 0, cells.Count - 1)].Fmt;
+        var formatting = DocumentFormattingProbePlanner.Resolve(
+            _doc,
+            target.Paragraph,
+            target.Offset);
+        return (formatting.Run, formatting.Paragraph);
+    }
 
-        var resolvedRun = ResolveRunFmt(rawRun, paragraph);
-        var resolvedParagraph = ResolveParagraphFmt(paragraph);
-        return (resolvedRun, resolvedParagraph);
+    private (Paragraph Paragraph, int Offset)? PrimaryFormattingProbeTarget()
+    {
+        if (_hfCaret is { } headerFooterCaret)
+        {
+            var paragraphIndex = headerFooterCaret.Target.ParaIdx;
+            var offset = headerFooterCaret.Offset;
+            if (NormalizedHfSelection() is { } selection)
+            {
+                paragraphIndex = selection.Start.ParagraphIndex;
+                offset = selection.Start.Offset;
+            }
+
+            var target = headerFooterCaret.Target with { ParaIdx = paragraphIndex };
+            return GetHfParagraph(target) is { } paragraph
+                ? (paragraph, offset)
+                : null;
+        }
+
+        if (_cellCaret is { } cellCaret)
+        {
+            var paragraphIndex = cellCaret.ParaIdx;
+            var offset = cellCaret.Offset;
+            if (_cellAnchor is { } anchor
+                && anchor.TableBlock == cellCaret.TableBlock
+                && anchor.Row == cellCaret.Row
+                && anchor.Col == cellCaret.Col
+                && (anchor.ParaIdx < paragraphIndex
+                    || (anchor.ParaIdx == paragraphIndex && anchor.Offset < offset)))
+            {
+                paragraphIndex = anchor.ParaIdx;
+                offset = anchor.Offset;
+            }
+
+            var cell = GetCellModel(cellCaret.TableBlock, cellCaret.Row, cellCaret.Col);
+            return cell is not null
+                && paragraphIndex >= 0
+                && paragraphIndex < cell.Paragraphs.Count
+                    ? (cell.Paragraphs[paragraphIndex], offset)
+                    : null;
+        }
+
+        if (SelectedCellRange is { } cellRange
+            && cellRange.TableBlock >= 0
+            && cellRange.TableBlock < _doc.Blocks.Count
+            && _doc.Blocks[cellRange.TableBlock] is Table table
+            && GetCellModelGridCol(table, cellRange.MinRow, cellRange.MinCol) is { Paragraphs.Count: > 0 } firstCell)
+        {
+            return (firstCell.Paragraphs[0], 0);
+        }
+
+        var bodyPosition = NormalizedSelection()?.Start ?? _caret;
+        return bodyPosition.Block >= 0
+            && bodyPosition.Block < _doc.Blocks.Count
+            && _doc.Blocks[bodyPosition.Block] is Paragraph bodyParagraph
+                ? (bodyParagraph, bodyPosition.Offset)
+                : null;
     }
 
     /// <summary>
@@ -22874,101 +22928,8 @@ public sealed partial class DocumentView : Control
 
     /// <summary>Cascade the paragraph's named-style paragraph formatting (alignment + spacing)
     /// under the paragraph's own values; the paragraph's explicit values win.</summary>
-    private ParagraphFormatting ResolveParagraphFmt(Paragraph paragraph)
-    {
-        var styleParagraph = ParagraphFormatting.Default;
-        var hasStyle = false;
-        foreach (var style in StyleChain(paragraph.StyleId))
-        {
-            styleParagraph = OverlayParagraph(styleParagraph, style.Paragraph);
-            hasStyle = true;
-        }
-
-        if (!hasStyle)
-            return paragraph.Formatting;
-
-        return paragraph.Formatting with
-        {
-            Alignment = paragraph.Formatting.Alignment == TextAlignment.Left
-                ? styleParagraph.Alignment
-                : paragraph.Formatting.Alignment,
-            SpaceBeforePt = paragraph.Formatting.SpaceBeforeIsSet
-                ? paragraph.Formatting.SpaceBeforePt
-                : styleParagraph.SpaceBeforePt,
-            SpaceBeforeIsSet = paragraph.Formatting.SpaceBeforeIsSet || styleParagraph.SpaceBeforeIsSet,
-            SpaceAfterPt = paragraph.Formatting.SpaceAfterIsSet
-                ? paragraph.Formatting.SpaceAfterPt
-                : styleParagraph.SpaceAfterPt,
-            SpaceAfterIsSet = paragraph.Formatting.SpaceAfterIsSet || styleParagraph.SpaceAfterIsSet,
-            SuppressAutoHyphens = (paragraph.Formatting.SuppressAutoHyphensIsSet
-                    || paragraph.Formatting.SuppressAutoHyphens)
-                ? paragraph.Formatting.SuppressAutoHyphens
-                : styleParagraph.SuppressAutoHyphens,
-            SuppressAutoHyphensIsSet = paragraph.Formatting.SuppressAutoHyphensIsSet
-                || paragraph.Formatting.SuppressAutoHyphens
-                || styleParagraph.SuppressAutoHyphensIsSet
-                || styleParagraph.SuppressAutoHyphens,
-            SuppressLineNumbers = paragraph.Formatting.SuppressLineNumbersIsSet
-                ? paragraph.Formatting.SuppressLineNumbers
-                : styleParagraph.SuppressLineNumbers,
-            SuppressLineNumbersIsSet = paragraph.Formatting.SuppressLineNumbersIsSet
-                || styleParagraph.SuppressLineNumbersIsSet,
-            TabStops = MergeTabStops(styleParagraph.TabStops, paragraph.Formatting.TabStops),
-        };
-    }
-
-    private IEnumerable<DocumentStyle> StyleChain(string? styleId)
-    {
-        if (string.IsNullOrEmpty(styleId))
-            yield break;
-
-        var seen = new HashSet<string>(StringComparer.Ordinal);
-        var chain = new List<DocumentStyle>();
-        var id = styleId;
-        while (!string.IsNullOrEmpty(id) && seen.Add(id) && _doc.Styles.TryGetValue(id, out var style))
-        {
-            chain.Add(style);
-            id = style.BasedOnStyleId;
-        }
-
-        for (var i = chain.Count - 1; i >= 0; i--)
-            yield return chain[i];
-    }
-
-    private static ParagraphFormatting OverlayParagraph(ParagraphFormatting baseParagraph, ParagraphFormatting over) => baseParagraph with
-    {
-        Alignment = over.Alignment == TextAlignment.Left ? baseParagraph.Alignment : over.Alignment,
-        SpaceBeforePt = over.SpaceBeforeIsSet ? over.SpaceBeforePt : baseParagraph.SpaceBeforePt,
-        SpaceBeforeIsSet = baseParagraph.SpaceBeforeIsSet || over.SpaceBeforeIsSet,
-        SpaceAfterPt = over.SpaceAfterIsSet ? over.SpaceAfterPt : baseParagraph.SpaceAfterPt,
-        SpaceAfterIsSet = baseParagraph.SpaceAfterIsSet || over.SpaceAfterIsSet,
-        SuppressAutoHyphens = (over.SuppressAutoHyphensIsSet || over.SuppressAutoHyphens)
-            ? over.SuppressAutoHyphens
-            : baseParagraph.SuppressAutoHyphens,
-        SuppressAutoHyphensIsSet = baseParagraph.SuppressAutoHyphensIsSet || baseParagraph.SuppressAutoHyphens
-            || over.SuppressAutoHyphensIsSet || over.SuppressAutoHyphens,
-        SuppressLineNumbers = over.SuppressLineNumbersIsSet
-            ? over.SuppressLineNumbers
-            : baseParagraph.SuppressLineNumbers,
-        SuppressLineNumbersIsSet = baseParagraph.SuppressLineNumbersIsSet || over.SuppressLineNumbersIsSet,
-        TabStops = MergeTabStops(baseParagraph.TabStops, over.TabStops),
-    };
-
-    private static IReadOnlyList<TabStop> MergeTabStops(
-        IReadOnlyList<TabStop> inherited,
-        IReadOnlyList<TabStop> operations)
-    {
-        var effective = inherited.Where(stop => !stop.IsClear).ToList();
-        foreach (var operation in operations)
-        {
-            effective.RemoveAll(stop => Math.Abs(stop.PositionPt - operation.PositionPt) <= 0.01);
-            if (!operation.IsClear)
-                effective.Add(operation);
-        }
-
-        effective.Sort((left, right) => left.PositionPt.CompareTo(right.PositionPt));
-        return effective;
-    }
+    private ParagraphFormatting ResolveParagraphFmt(Paragraph paragraph) =>
+        DocumentParagraphFormattingResolver.Resolve(_doc, paragraph);
 
     private static RunFormatting ActiveFormatting(Paragraph paragraph, int offset)
     {
