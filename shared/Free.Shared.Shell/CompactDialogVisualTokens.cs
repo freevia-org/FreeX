@@ -38,6 +38,7 @@ public static class CompactDialogVisualTokens
 
     public const string BorderHex = "#C8C8C8";
     public const string FieldBorderHex = "#B7BCC2";
+    public const string DisabledFieldBorderHex = "#D0D1D4";
     public const string DisabledForegroundHex = "#9AA0A6";
     public const string DisabledBorderHex = "#E0E0E0";
     public const string ToggleBorderHex = "#707070";

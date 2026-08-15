@@ -81,7 +81,7 @@ public sealed class ParagraphDialog : FreeWDialogWindow
         _special.HorizontalAlignment = HorizontalAlignment.Stretch;
         _specialAmount = NumberBox(state.SpecialAmountText);
         _specialAmount.IsEnabled = state.SpecialAmountEnabled;
-        FontParagraphDialogChrome.ApplyTextBox(_specialAmount, DialogChromeStyle);
+        AvaloniaCompactDialogChrome.ApplyTextBox(_specialAmount, DialogChromeStyle);
         _special.SelectionChanged += (_, _) =>
             _specialAmount.IsEnabled = ParagraphBreaksDialogPlanner.IsSpecialAmountEnabled(_special.SelectedIndex);
         _before = NumberBox(state.SpaceBeforeText);
@@ -277,8 +277,8 @@ public sealed class ParagraphDialog : FreeWDialogWindow
     private void ApplyParagraphChrome()
     {
         foreach (var box in new[] { _left, _right, _specialAmount, _before, _after, _lineSpacing })
-            FontParagraphDialogChrome.ApplyTextBox(box, DialogChromeStyle);
-        FontParagraphDialogChrome.ApplyComboBox(_special, DialogChromeStyle);
+            AvaloniaCompactDialogChrome.ApplyTextBox(box, DialogChromeStyle);
+        AvaloniaCompactDialogChrome.ApplyComboBox(_special, DialogChromeStyle);
         foreach (var checkBox in new[] { _keepWithNext, _keepLinesTogether, _widowControl, _pageBreakBefore, _suppressHyphens, _suppressLineNumbers, _contextualSpacing })
             FontParagraphDialogChrome.ApplyCheckBox(checkBox, DialogChromeStyle);
         foreach (var button in this.GetVisualDescendants().OfType<Button>())

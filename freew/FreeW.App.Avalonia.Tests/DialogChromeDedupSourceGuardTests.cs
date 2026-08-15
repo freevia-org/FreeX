@@ -52,9 +52,7 @@ public sealed class DialogChromeDedupSourceGuardTests
             ("FontParagraphDialogChrome.cs",
             [
                 "using Free.Shared.Shell.Avalonia;",
-                "AvaloniaCompactDialogChrome.ApplyTextBox(textBox, style);",
-                "AvaloniaCompactDialogChrome.ApplyCompactCheckBox(checkBox, style);",
-                "AvaloniaCompactDialogChrome.ApplyComboBox(comboBox, style);",
+                "AvaloniaCompactDialogChrome.ApplyCompactCheckBox(checkBox, style, contentSpacing: 5);",
             ]),
             ("InsertDialogs.cs",
             [
