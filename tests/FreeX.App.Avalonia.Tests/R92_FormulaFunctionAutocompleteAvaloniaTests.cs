@@ -49,6 +49,7 @@ public sealed class R92_FormulaFunctionAutocompleteAvaloniaTests
                 "AutoComplete dropdown the WPF host already shows");
             window.FunctionAutocompleteCandidatesForTest.Should().ContainSingle().Which.Should().Be("XNPV");
 
+            window.AllowCloseWithoutDirtyPromptForParityCapture();
             window.Close();
         }, CancellationToken.None);
     }
@@ -78,6 +79,7 @@ public sealed class R92_FormulaFunctionAutocompleteAvaloniaTests
                 "the normal commit-and-move handling that would have moved the active cell");
             sheet.GetCell(start).Should().BeNull("the half-typed formula must not have been committed into the cell");
 
+            window.AllowCloseWithoutDirtyPromptForParityCapture();
             window.Close();
         }, CancellationToken.None);
     }
@@ -109,6 +111,7 @@ public sealed class R92_FormulaFunctionAutocompleteAvaloniaTests
             window.FunctionAutocompleteOpenForTest.Should().BeFalse();
 
             window.RaiseInlineCellEditorKeyDownForTest(new KeyEventArgs { Key = Key.Escape, KeyModifiers = KeyModifiers.None });
+            window.AllowCloseWithoutDirtyPromptForParityCapture();
             window.Close();
         }, CancellationToken.None);
     }
@@ -136,6 +139,7 @@ public sealed class R92_FormulaFunctionAutocompleteAvaloniaTests
             window.Session.ActiveCell.Should().Be(new CellAddress(sheet.Id, 3, 2),
                 "Enter must still commit-and-move down when the AutoComplete popup was never open");
 
+            window.AllowCloseWithoutDirtyPromptForParityCapture();
             window.Close();
         }, CancellationToken.None);
     }
@@ -158,6 +162,7 @@ public sealed class R92_FormulaFunctionAutocompleteAvaloniaTests
                 "plain text that never starts with '=' must never open the function AutoComplete popup");
 
             window.RaiseInlineCellEditorKeyDownForTest(new KeyEventArgs { Key = Key.Escape, KeyModifiers = KeyModifiers.None });
+            window.AllowCloseWithoutDirtyPromptForParityCapture();
             window.Close();
         }, CancellationToken.None);
     }

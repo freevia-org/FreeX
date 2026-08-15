@@ -24,6 +24,7 @@ public sealed class AutoFilterRecalculationTests
             fixture.Window.RunAutoFilterForTest(fixture.Range, 0, ["North"]);
 
             fixture.Sheet.GetValue(fixture.TotalAddress).Should().Be(new NumberValue(10));
+            fixture.Window.AllowCloseWithoutDirtyPromptForParityCapture();
             fixture.Window.Close();
         }, CancellationToken.None);
 
@@ -38,6 +39,7 @@ public sealed class AutoFilterRecalculationTests
             fixture.Window.RunAutoFilterForTest(fixture.Range, 0, ["South"]);
 
             fixture.Sheet.GetValue(fixture.TotalAddress).Should().Be(new NumberValue(20));
+            fixture.Window.AllowCloseWithoutDirtyPromptForParityCapture();
             fixture.Window.Close();
         }, CancellationToken.None);
 
@@ -52,6 +54,7 @@ public sealed class AutoFilterRecalculationTests
             fixture.Window.RunAutoFilterForTest(fixture.Range, 0, []);
 
             fixture.Sheet.GetValue(fixture.TotalAddress).Should().Be(new NumberValue(30));
+            fixture.Window.AllowCloseWithoutDirtyPromptForParityCapture();
             fixture.Window.Close();
         }, CancellationToken.None);
 
