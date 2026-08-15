@@ -3123,8 +3123,9 @@ public static class PptxPackageReader
         }
 
         // Build parent→children map from cxnLst parOf connections
-        var childrenOf = new Dictionary<string, List<string>>(StringComparer.OrdinalIgnoreCase);
+        var childrenOf = new Dictionary<string, List<(string Id, int Order, int Sequence)>>(StringComparer.OrdinalIgnoreCase);
         var hasParent  = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var connectionSequence = 0;
 
         if (cxnLst is not null)
         {
@@ -3146,8 +3147,11 @@ public static class PptxPackageReader
                     continue;
 
                 if (!childrenOf.TryGetValue(srcId, out var kids))
-                    childrenOf[srcId] = kids = new List<string>();
-                kids.Add(destId);
+                    childrenOf[srcId] = kids = new List<(string Id, int Order, int Sequence)>();
+                var srcOrd = int.TryParse(cxn.Attribute("srcOrd")?.Value, out var parsedSrcOrd)
+                    ? parsedSrcOrd
+                    : int.MaxValue;
+                kids.Add((destId, srcOrd, connectionSequence++));
                 hasParent.Add(destId);
             }
         }
@@ -3185,10 +3189,10 @@ public static class PptxPackageReader
             {
                 if (childrenOf.TryGetValue(id, out var kids))
                 {
-                    foreach (var kid in kids)
+                    foreach (var kid in kids.OrderBy(edge => edge.Order).ThenBy(edge => edge.Sequence))
                     {
-                        if (points.ContainsKey(kid))
-                            node.Children.Add(BuildNode(kid, level + 1));
+                        if (points.ContainsKey(kid.Id))
+                            node.Children.Add(BuildNode(kid.Id, level + 1));
                     }
                 }
             }

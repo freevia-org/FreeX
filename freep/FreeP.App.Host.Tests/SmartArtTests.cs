@@ -865,7 +865,40 @@ public sealed class SmartArtTests : IDisposable
             smartArt.Colors);
         live.Should().NotBeNull();
         live!.Count.Should().Be(6,
-            "the shared hierarchy3 plan emits four editable boxes and one straight connector per modeled parent edge");
+            "the shared hierarchy3 plan emits four editable boxes and one elbow connector per modeled parent edge");
+
+        var liveBoxes = live
+            .Where(shape => shape.TextBody?.Paragraphs.SelectMany(paragraph => paragraph.Runs)
+                .Any(run => !string.IsNullOrWhiteSpace(run.Text)) == true)
+            .ToDictionary(
+                shape => shape.TextBody!.Paragraphs.SelectMany(paragraph => paragraph.Runs)
+                    .First(run => !string.IsNullOrWhiteSpace(run.Text)).Text,
+                StringComparer.Ordinal);
+        var cachedBoxes = smartArt.FallbackShapes
+            .Where(shape => !string.IsNullOrWhiteSpace(shape.PlainText))
+            .ToDictionary(shape => shape.PlainText, StringComparer.Ordinal);
+        foreach (var text in cachedBoxes.Keys)
+        {
+            var liveBox = liveBoxes[text];
+            var cachedBox = cachedBoxes[text];
+            (liveBox.OffsetXEmu - smartArtShape.OffsetXEmu)
+                .Should().BeInRange(cachedBox.OffsetXEmu - 2000, cachedBox.OffsetXEmu + 2000, text);
+            (liveBox.OffsetYEmu - smartArtShape.OffsetYEmu)
+                .Should().BeInRange(cachedBox.OffsetYEmu - 2000, cachedBox.OffsetYEmu + 2000, text);
+            liveBox.ExtentCxEmu.Should().BeInRange(cachedBox.ExtentCxEmu - 2000, cachedBox.ExtentCxEmu + 2000, text);
+            liveBox.ExtentCyEmu.Should().BeInRange(cachedBox.ExtentCyEmu - 2000, cachedBox.ExtentCyEmu + 2000, text);
+
+            var run = liveBox.TextBody!.Paragraphs.SelectMany(paragraph => paragraph.Runs)
+                .Single(run => !string.IsNullOrWhiteSpace(run.Text));
+            run.Bold.Should().BeFalse(text);
+            run.FontSizePt.Should().Be(text is "CEO" or "VP Marketing" ? 42.0 : 31.0, text);
+        }
+
+        live.Count(shape => shape.CustomGeometry.Count == 1)
+            .Should().Be(2, "each visible hierarchy3 parent edge uses one authored elbow path");
+        live.Where(shape => shape.CustomGeometry.Count == 1)
+            .Should().OnlyContain(shape => shape.CustomGeometry[0].Segments.Select(segment => segment.Kind)
+                .SequenceEqual(new[] { CustomSegmentKind.MoveTo, CustomSegmentKind.LineTo, CustomSegmentKind.LineTo }));
 
         var composed = SlideCompositor.Compose(presentation, presentation.Slides[1])
             .Skip(1)
@@ -1497,7 +1530,8 @@ public sealed class SmartArtTests : IDisposable
         var slide = presentation.Slides.Single(candidate => candidate.Shapes.Any(shape =>
             shape.Kind == SlideShapeKind.SmartArt
             && shape.SmartArt?.Data?.LayoutUniqueId.EndsWith("/cycle2", StringComparison.OrdinalIgnoreCase) == true));
-        var smartArt = slide.Shapes.First(shape => shape.Kind == SlideShapeKind.SmartArt).SmartArt!;
+        var smartShape = slide.Shapes.First(shape => shape.Kind == SlideShapeKind.SmartArt);
+        var smartArt = smartShape.SmartArt!;
 
         smartArt.Data.Should().NotBeNull();
         smartArt.Data!.Family.Should().Be(SmartArtFamily.Cycle);
@@ -1515,6 +1549,42 @@ public sealed class SmartArtTests : IDisposable
             "cycle2 is admitted only for the repository-proven ellipse-plus-arrow cache contract");
         smartArt.Data.Nodes.Select(node => node.Text)
             .Should().Equal("Idea", "Plan", "Execute", "Review", "Improve");
+
+        var live = SmartArtLayoutEngine.Layout(
+            smartArt.Data,
+            smartShape.OffsetXEmu,
+            smartShape.OffsetYEmu,
+            smartShape.ExtentCxEmu,
+            smartShape.ExtentCyEmu,
+            presentation.Theme,
+            slide.ColorMapOverride,
+            smartArt.QuickStyle,
+            smartArt.Colors);
+        live.Should().NotBeNull();
+        var liveEllipses = live!.Where(shape => shape.AutoShapeKind == DrawingShapeKind.Ellipse)
+            .ToDictionary(
+                shape => shape.TextBody!.Paragraphs.SelectMany(paragraph => paragraph.Runs)
+                    .Single(run => !string.IsNullOrWhiteSpace(run.Text)).Text,
+                StringComparer.Ordinal);
+        var cachedEllipses = smartArt.FallbackShapes
+            .Where(shape => shape.AutoShapeKind == DrawingShapeKind.Ellipse)
+            .ToDictionary(shape => shape.PlainText, StringComparer.Ordinal);
+        foreach (var text in cachedEllipses.Keys)
+        {
+            var liveEllipse = liveEllipses[text];
+            var cachedEllipse = cachedEllipses[text];
+            (liveEllipse.OffsetXEmu - smartShape.OffsetXEmu)
+                .Should().BeInRange(cachedEllipse.OffsetXEmu - 2000, cachedEllipse.OffsetXEmu + 2000, text);
+            (liveEllipse.OffsetYEmu - smartShape.OffsetYEmu)
+                .Should().BeInRange(cachedEllipse.OffsetYEmu - 2000, cachedEllipse.OffsetYEmu + 2000, text);
+            liveEllipse.ExtentCxEmu.Should().BeInRange(cachedEllipse.ExtentCxEmu - 2000, cachedEllipse.ExtentCxEmu + 2000, text);
+            liveEllipse.ExtentCyEmu.Should().BeInRange(cachedEllipse.ExtentCyEmu - 2000, cachedEllipse.ExtentCyEmu + 2000, text);
+            var run = liveEllipse.TextBody!.Paragraphs.SelectMany(paragraph => paragraph.Runs).Single();
+            run.FontSizePt.Should().Be(21.0, text);
+            run.Bold.Should().BeFalse(text);
+            liveEllipse.TextBody.InsetTopPt.Should().Be(2.1, text);
+            liveEllipse.TextBody.Anchor.Should().Be(VerticalAnchor.Middle, text);
+        }
 
         var liveShapes = SlideCompositor.Compose(presentation, slide)
             .OfType<DrawOp.Shape>()

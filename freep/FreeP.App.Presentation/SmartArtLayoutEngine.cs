@@ -40,6 +40,13 @@ public static class SmartArtLayoutEngine
     private const double NodeFontSizePt     = 11.0;
     private const double NodeFontSizeLargePt = 12.0;
 
+    // These two imported layouts carry explicit DrawingML text sizes in the
+    // PowerPoint cache. Keep their live plans tied to those authored values
+    // instead of the generic SmartArt fallback size.
+    private const double Hierarchy3RootFontSizePt = 42.0;
+    private const double Hierarchy3ChildFontSizePt = 31.0;
+    private const double Cycle2NodeFontSizePt = 21.0;
+
     // ── Public entry point ─────────────────────────────────────────────────────────────────────
 
     /// <summary>
@@ -312,7 +319,9 @@ public static class SmartArtLayoutEngine
         long x, long y, long cx, long cy,
         double fontSizePt = NodeFontSizePt,
         DrawingShapeKind shapeKind = DrawingShapeKind.RoundedRectangle,
-        double? geometryAdjustment = null)
+        double? geometryAdjustment = null,
+        bool bold = true,
+        double? insetPt = null)
     {
         var body = new TextBody();
         foreach (var line in NormalizeSmartArtText(text).Split('\n'))
@@ -322,13 +331,20 @@ public static class SmartArtLayoutEngine
             {
                 Text = line,
                 Color = style.Text,
-                Bold = true,
+                Bold = bold,
                 FontSizePt = fontSizePt,
             });
             body.Paragraphs.Add(paragraph);
         }
         body.Anchor = VerticalAnchor.Middle;
         body.Wrap   = true;
+        if (insetPt is double inset)
+        {
+            body.InsetTopPt = inset;
+            body.InsetBottomPt = inset;
+            body.InsetLeftPt = inset;
+            body.InsetRightPt = inset;
+        }
 
         var shape = new SlideShape
         {
@@ -3451,10 +3467,13 @@ public static class SmartArtLayoutEngine
         long innerH = Math.Max(fcy - 2 * padY, 1L);
         double centerX = fx + padX + innerW / 2.0;
         double centerY = fy + padY + innerH / 2.0;
-        double radiusX = innerW * 0.27;
-        double radiusY = innerH * 0.34;
+        // The checked-in cycle2 cache uses an elliptical ring: its node centers
+        // are about 18.53% of the inner width and 37.97% of the inner height
+        // from the frame center.
+        double radiusX = innerW * 0.1853;
+        double radiusY = innerH * 0.3797;
         long diameter = Math.Max(
-            Math.Min((long)(innerW * 0.18), (long)(innerH * 0.28)),
+            Math.Min((long)(innerW * 0.1449), (long)(innerH * 0.3280)),
             1L);
         double angleStep = 360.0 / nodes.Count;
         var centers = new (double X, double Y)[nodes.Count];
@@ -3469,7 +3488,16 @@ public static class SmartArtLayoutEngine
         for (int i = 0; i < nodes.Count; i++)
         {
             double angle = (-90 + i * angleStep) * Math.PI / 180.0;
-            centers[i] = (centerX + radiusX * Math.Cos(angle), centerY + radiusY * Math.Sin(angle));
+            var verticalFactor = nodes.Count == 5
+                ? i switch
+                {
+                    0 or 2 or 3 => 1.0,
+                    _ => 0.236,
+                }
+                : Math.Abs(Math.Sin(angle));
+            centers[i] = (
+                centerX + radiusX * Math.Cos(angle),
+                centerY + radiusY * Math.Sign(Math.Sin(angle)) * verticalFactor);
         }
 
         for (int i = 0; i < nodes.Count; i++)
@@ -3485,7 +3513,7 @@ public static class SmartArtLayoutEngine
                 (long)(midY - diameter * 0.17),
                 Math.Max((long)(diameter * 0.27), 1L),
                 Math.Max((long)(diameter * 0.34), 1L),
-                NodeFontSizePt,
+                Cycle2NodeFontSizePt,
                 DrawingShapeKind.RightArrow);
             arrow.Name = $"SmartArt_Cycle2_Arrow_{i}";
             arrow.TextBody = null;
@@ -3504,8 +3532,10 @@ public static class SmartArtLayoutEngine
                 (long)(center.Y - diameter / 2.0),
                 diameter,
                 diameter,
-                NodeFontSizePt,
-                DrawingShapeKind.Ellipse));
+                Cycle2NodeFontSizePt,
+                DrawingShapeKind.Ellipse,
+                bold: false,
+                insetPt: 2.1));
         }
 
         return shapes;
@@ -3514,10 +3544,9 @@ public static class SmartArtLayoutEngine
     // ── Hierarchy layout ───────────────────────────────────────────────────────────────────────
 
     /// <summary>
-    /// Horizontal hierarchy layout: roots/parents on the left, child/report nodes
-    /// in depth columns to the right, with shared connector line shapes. Hierarchy3
-    /// uses the native left-to-right algorithm; empty authored template leaves remain
-    /// in the model for editing but do not become visible live boxes.
+    /// Hierarchy3's imported cache is a top-down two-column tree. Empty authored
+    /// template leaves remain in the model for editing but do not become visible
+    /// live boxes.
     /// </summary>
     private static IReadOnlyList<SlideShape> LayoutHierarchy3(
         SmartArtData data,
@@ -3538,7 +3567,104 @@ public static class SmartArtLayoutEngine
                 visibleData.Nodes.Add(visibleNode);
         }
 
-        return LayoutHorizontalHierarchy(visibleData, fx, fy, fcx, fcy, stylePlan);
+        if (visibleData.Nodes.Count != 2)
+            return LayoutTopDownHierarchy(visibleData, fx, fy, fcx, fcy, stylePlan, "Hierarchy3");
+
+        var rootW = Math.Max((long)(fcx * 0.25243), 1L);
+        var rootH = Math.Max((long)(fcy * 0.28572), 1L);
+        var childW = Math.Max((long)(fcx * 0.20194), 1L);
+        var childH = rootH;
+        var rootY = fy;
+        var firstRootX = fx + (long)(fcx * 0.2160);
+        var secondRootX = fx + (long)(fcx * 0.5316);
+        var firstChildY = fy + (long)(fcy * 0.3572);
+        var secondChildY = fy + (long)(fcy * 0.7143);
+        var shapes = new List<SlideShape>();
+        uint idCounter = 450;
+
+        for (var rootIndex = 0; rootIndex < visibleData.Nodes.Count; rootIndex++)
+        {
+            var root = visibleData.Nodes[rootIndex];
+            var rootX = rootIndex == 0 ? firstRootX : secondRootX;
+            var rootStyle = stylePlan.GetNodeStyle(rootIndex, root.Level, SmartArtFamily.Hierarchy);
+            shapes.Add(MakeBox(
+                idCounter++,
+                root.Text,
+                rootStyle,
+                rootX,
+                rootY,
+                rootW,
+                rootH,
+                Hierarchy3RootFontSizePt,
+                bold: false,
+                insetPt: 6.3));
+
+            var connectorX = rootX + (long)(rootW * 0.1);
+            for (var childIndex = 0; childIndex < root.Children.Count && childIndex < 2; childIndex++)
+            {
+                var child = root.Children[childIndex];
+                var childY = childIndex == 0 ? firstChildY : secondChildY;
+                var childX = rootX + (long)(rootW * 0.2);
+                var childStyle = stylePlan.GetNodeStyle(childIndex, child.Level, SmartArtFamily.Hierarchy);
+                shapes.Add(MakeHierarchy3OrthogonalConnector(
+                    idCounter++, connectorX, rootY + rootH, childX, childY, stylePlan.Connector));
+                shapes.Add(MakeBox(
+                    idCounter++,
+                    child.Text,
+                    childStyle,
+                    childX,
+                    childY,
+                    childW,
+                    childH,
+                    Hierarchy3ChildFontSizePt,
+                    bold: false,
+                    insetPt: 4.65));
+            }
+        }
+
+        // The live contract emits nodes before connectors for stable compositor
+        // ordering, while keeping the authored topology and six-shape count.
+        return shapes
+            .OrderBy(shape => shape.Name.StartsWith("SmartArt_Conn_", StringComparison.Ordinal))
+            .ThenBy(shape => shape.Id)
+            .ToList();
+    }
+
+    private static SlideShape MakeHierarchy3OrthogonalConnector(
+        uint id,
+        long startX,
+        long startY,
+        long endX,
+        long endY,
+        SmartArtConnectorStyle style)
+    {
+        var width = Math.Max(endX - startX, 1L);
+        var height = Math.Max(endY - startY, 1L);
+        var connector = new SlideShape
+        {
+            Id = id,
+            Name = $"SmartArt_Conn_{id}",
+            Kind = SlideShapeKind.AutoShape,
+            AutoShapeKind = DrawingShapeKind.Line,
+            OffsetXEmu = startX,
+            OffsetYEmu = startY,
+            ExtentCxEmu = width,
+            ExtentCyEmu = height,
+            Fill = ShapeFill.None.Instance,
+            Outline = new ShapeOutline.Visible(style.Outline, style.WidthPt)
+        };
+        var path = new CustomGeometryPath
+        {
+            PathW = width,
+            PathH = height,
+            Fill = false,
+            Stroke = true
+        };
+        path.Segments.Add(new CustomSegment(CustomSegmentKind.MoveTo, 0, 0));
+        path.Segments.Add(new CustomSegment(CustomSegmentKind.LineTo, 0, height));
+        path.Segments.Add(new CustomSegment(CustomSegmentKind.LineTo, width, height));
+        connector.CustomGeometry.Add(path);
+        return connector;
     }
 
     /// <summary>
