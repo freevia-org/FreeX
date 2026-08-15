@@ -30,6 +30,36 @@ public sealed class SystemProcessRunnerTests
         cancellation.IsCancellationRequested.Should().BeTrue();
     }
 
+    [Fact]
+    public async Task RunAsync_TimeoutReturnsTimedOutResultWithoutCancelingCaller()
+    {
+        var invocation = CreateShellInvocation(
+            "ping -n 30 127.0.0.1 > nul",
+            "sleep 30") with
+        {
+            Timeout = TimeSpan.FromMilliseconds(200),
+        };
+
+        var result = await new SystemProcessRunner().RunAsync(invocation);
+
+        result.Succeeded.Should().BeFalse();
+        result.TimedOut.Should().BeTrue();
+        result.ExitCode.Should().Be(-1);
+    }
+
+    [Fact]
+    public async Task RunAsync_RejectsNonPositiveTimeout()
+    {
+        var invocation = CreateShellInvocation("exit /b 0", "exit 0") with
+        {
+            Timeout = TimeSpan.Zero,
+        };
+
+        Func<Task> run = () => new SystemProcessRunner().RunAsync(invocation);
+
+        await run.Should().ThrowAsync<ArgumentOutOfRangeException>();
+    }
+
     private static ProcessInvocation CreateShellInvocation(string windowsCommand, string unixCommand) =>
         OperatingSystem.IsWindows()
             ? new ProcessInvocation(
