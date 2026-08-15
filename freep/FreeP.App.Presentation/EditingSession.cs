@@ -3889,6 +3889,23 @@ public sealed class EditingSession
         return true;
     }
 
+    /// <summary>
+    /// Reads one PowerPoint table-design emphasis flag from the selected table. The false return
+    /// distinguishes an unavailable command (no selected table) from an available unchecked flag.
+    /// </summary>
+    public bool TryGetSelectedTableStyleFlag(TableStyleFlagKind kind, out bool isChecked)
+    {
+        var table = GetSelectedTable();
+        if (table is null)
+        {
+            isChecked = false;
+            return false;
+        }
+
+        isChecked = GetTableStyleFlagValue(table.Flags, kind);
+        return true;
+    }
+
     private static bool GetTableStyleFlagValue(TableStyleFlags flags, TableStyleFlagKind kind) => kind switch
     {
         TableStyleFlagKind.FirstRow => flags.FirstRow,

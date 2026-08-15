@@ -207,6 +207,34 @@ public sealed class FreePRibbonHostProfileTests
     }
 
     [Fact]
+    public void BindingSessionProjectsSelectedTableDesignFlagsIntoRendererStore()
+    {
+        var editor = MakeEditor();
+        var table = editor.InsertTable(2, 2);
+        editor.Select(table.Id);
+        var stateStore = new RibbonStateStore();
+        var session = new FreePRibbonBindingSession(
+            editor,
+            stateStore,
+            () => CreateProfile(new FreePRibbonHostPorts()));
+
+        session.SyncCommandStates();
+
+        stateStore.GetState(TableCellEditPlanner.TableFirstRowCommandId)
+            .Should().Be(new RibbonCommandState(IsEnabled: true, IsChecked: true));
+        stateStore.GetState(TableCellEditPlanner.TableLastRowCommandId)
+            .Should().Be(new RibbonCommandState(IsEnabled: true, IsChecked: false));
+        stateStore.GetState(TableCellEditPlanner.TableBandRowCommandId)
+            .Should().Be(new RibbonCommandState(IsEnabled: true, IsChecked: true));
+
+        editor.ClearSelection();
+        session.SyncCommandStates();
+
+        stateStore.GetState(TableCellEditPlanner.TableFirstRowCommandId)
+            .Should().Be(new RibbonCommandState(IsEnabled: false, IsChecked: false));
+    }
+
+    [Fact]
     public void EndpointCatalogsRemainExhaustive()
     {
         typeof(FreePRibbonHostQueryEndpoints).GetProperties().Select(property => property.Name)

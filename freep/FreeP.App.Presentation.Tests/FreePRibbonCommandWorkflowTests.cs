@@ -215,6 +215,47 @@ public sealed class FreePRibbonCommandWorkflowTests
         editor.CurrentSlide!.Shapes.Single().Table!.Rows.Should().HaveCount(3);
     }
 
+    [Theory]
+    [InlineData(TableCellEditPlanner.TableFirstRowCommandId, TableStyleFlagKind.FirstRow, true)]
+    [InlineData(TableCellEditPlanner.TableLastRowCommandId, TableStyleFlagKind.LastRow, false)]
+    [InlineData(TableCellEditPlanner.TableFirstColCommandId, TableStyleFlagKind.FirstCol, false)]
+    [InlineData(TableCellEditPlanner.TableLastColCommandId, TableStyleFlagKind.LastCol, false)]
+    [InlineData(TableCellEditPlanner.TableBandRowCommandId, TableStyleFlagKind.BandRow, true)]
+    [InlineData(TableCellEditPlanner.TableBandColCommandId, TableStyleFlagKind.BandCol, false)]
+    public void TableStyleFlagsExposeLiveCheckedAvailabilityAndUndoState(
+        string commandId,
+        TableStyleFlagKind kind,
+        bool initialValue)
+    {
+        var editor = MakeEditor();
+        var result = FreePRibbonCommandWorkflow.Build(editor, new RibbonStateStore());
+        var command = Stateful(result.Registry, commandId);
+
+        command.GetState().Should().Be(
+            new RibbonCommandState(IsEnabled: false, IsChecked: false));
+
+        var table = editor.InsertTable(2, 2);
+        editor.Select(table.Id);
+        editor.TryGetSelectedTableStyleFlag(kind, out var selectedValue).Should().BeTrue();
+        selectedValue.Should().Be(initialValue);
+        command.GetState().Should().Be(
+            new RibbonCommandState(IsEnabled: true, IsChecked: initialValue));
+
+        command.Execute(RibbonCommandContext.Empty);
+
+        command.GetState().Should().Be(
+            new RibbonCommandState(IsEnabled: true, IsChecked: !initialValue));
+
+        editor.Undo();
+
+        command.GetState().Should().Be(
+            new RibbonCommandState(IsEnabled: true, IsChecked: initialValue));
+
+        editor.ClearSelection();
+        command.GetState().Should().Be(
+            new RibbonCommandState(IsEnabled: false, IsChecked: false));
+    }
+
     [Fact]
     public void AnimationPaneCheckedStateTracksTheLiveRendererQuery()
     {

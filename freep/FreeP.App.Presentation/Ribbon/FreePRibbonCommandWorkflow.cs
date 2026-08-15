@@ -885,7 +885,10 @@ public static class FreePRibbonCommandWorkflow
         EditingSession editor,
         string commandId,
         TableStyleFlagKind kind) =>
-        commands.Action(FreePRibbonCommandGroup.Table, commandId, () => editor.ToggleSelectedTableStyleFlag(kind));
+        commands.Register(
+            FreePRibbonCommandGroup.Table,
+            commandId,
+            new TableStyleFlagToggleCommand(editor, kind));
 
     private static void RegisterTableEdit(
         Registrar commands,
@@ -1185,6 +1188,22 @@ public static class FreePRibbonCommandWorkflow
         }
 
         public RibbonCommandState GetState() => new(IsEnabled: canExecute());
+    }
+
+    private sealed class TableStyleFlagToggleCommand(
+        EditingSession editor,
+        TableStyleFlagKind kind) : IRibbonStatefulCommand
+    {
+        public void Execute(RibbonCommandContext context) =>
+            editor.ToggleSelectedTableStyleFlag(kind);
+
+        public RibbonCommandState GetState()
+        {
+            var isAvailable = editor.TryGetSelectedTableStyleFlag(kind, out var isChecked);
+            return new RibbonCommandState(
+                IsEnabled: isAvailable,
+                IsChecked: isAvailable && isChecked);
+        }
     }
 
     private sealed class EditPointsToggleCommand : IRibbonStatefulCommand
