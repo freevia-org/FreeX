@@ -129,6 +129,29 @@ public static class FindReplaceDialogPlanner
 {
     public const string SearchTermRequiredMessage = FindReplaceDialogPolicy.SearchTermRequiredMessage;
 
+    public static FindReplacePolicyTextDescriptor PolicyTextDescriptor { get; } = new(
+        Text("FreeW_FindReplace_SearchTermRequired", FindReplacePolicyTextSpec.NeutralEnglish.SearchTermRequired),
+        Text("FreeW_FindReplace_NoMatches", FindReplacePolicyTextSpec.NeutralEnglish.NoMatches),
+        Text("FreeW_FindReplace_NoReplacements", FindReplacePolicyTextSpec.NeutralEnglish.NoReplacements),
+        Text("FreeW_FindReplace_NotFound_Format", FindReplacePolicyTextSpec.NeutralEnglish.NotFoundFormat),
+        Text("FreeW_FindReplace_Match_Format", FindReplacePolicyTextSpec.NeutralEnglish.MatchFormat),
+        Text("FreeW_FindReplace_ReplacedOccurrences_Format", FindReplacePolicyTextSpec.NeutralEnglish.ReplacedOccurrencesFormat),
+        Text("FreeW_FindReplace_ReplacementsMade_Format", FindReplacePolicyTextSpec.NeutralEnglish.ReplacementsMadeFormat));
+
+    public static IReadOnlyList<string> RequiredResourceKeys { get; } =
+    [
+        PolicyTextDescriptor.SearchTermRequired.ResourceKey,
+        PolicyTextDescriptor.NoMatches.ResourceKey,
+        PolicyTextDescriptor.NoReplacements.ResourceKey,
+        PolicyTextDescriptor.NotFoundFormat.ResourceKey,
+        PolicyTextDescriptor.MatchFormat.ResourceKey,
+        PolicyTextDescriptor.ReplacedOccurrencesFormat.ResourceKey,
+        PolicyTextDescriptor.ReplacementsMadeFormat.ResourceKey,
+    ];
+
+    public static FindReplacePolicyTextSpec ResolvePolicyText(Func<string, string?>? getText = null) =>
+        FindReplacePolicyTextSpec.FromDescriptor(PolicyTextDescriptor, getText);
+
     private static readonly FindReplaceOptionChoice[] OptionChoiceValues =
     [
         new(FindReplaceOptionKind.MatchCase, "Match case", "FindReplaceMatchCaseCheckBox"),
@@ -279,32 +302,44 @@ public static class FindReplaceDialogPlanner
         return true;
     }
 
-    public static string ValidationMessageFor(FindReplaceValidationError? error) =>
-        FindReplaceDialogPolicy.ValidationMessageFor(ToSharedValidationError(error));
+    public static string ValidationMessageFor(
+        FindReplaceValidationError? error,
+        FindReplacePolicyTextSpec? text = null) =>
+        FindReplaceDialogPolicy.ValidationMessageFor(ToSharedValidationError(error), text);
 
-    public static string BuildFindStatus(FindReplaceSearchRequest request, bool found)
+    public static string BuildFindStatus(
+        FindReplaceSearchRequest request,
+        bool found,
+        FindReplacePolicyTextSpec? text = null)
     {
         ArgumentNullException.ThrowIfNull(request);
-        return FindReplaceDialogPolicy.BuildFindStatus(request.Term, found);
+        return FindReplaceDialogPolicy.BuildFindStatus(request.Term, found, text);
     }
 
-    public static string BuildReplaceStatus(FindReplaceReplaceRequest request, bool replaced)
+    public static string BuildReplaceStatus(
+        FindReplaceReplaceRequest request,
+        bool replaced,
+        FindReplacePolicyTextSpec? text = null)
     {
         ArgumentNullException.ThrowIfNull(request);
-        return FindReplaceDialogPolicy.BuildReplaceStatus(request.Term, replaced);
+        return FindReplaceDialogPolicy.BuildReplaceStatus(request.Term, replaced, text);
     }
 
     public static string BuildReplaceAllStatus(
         FindReplaceReplaceRequest request,
         int replacementCount,
-        bool inSelection = false)
+        bool inSelection = false,
+        FindReplacePolicyTextSpec? text = null)
     {
         ArgumentNullException.ThrowIfNull(request);
-        var status = FindReplaceDialogPolicy.BuildReplaceAllOccurrenceStatus(request.Term, replacementCount);
+        var status = FindReplaceDialogPolicy.BuildReplaceAllOccurrenceStatus(request.Term, replacementCount, text);
         return inSelection && replacementCount > 0
             ? status[..^1] + " in selection."
             : status;
     }
+
+    private static ResourceTextDescriptor Text(string resourceKey, string fallbackText) =>
+        new(resourceKey, fallbackText);
 
     public static bool DocumentContains(TextDocument document, FindReplaceSearchRequest request)
     {

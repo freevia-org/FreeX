@@ -294,7 +294,8 @@ public sealed partial class MainWindow : Window
                 PresentFeedback: feedback => ApplyFileFeedback(feedback)),
             FileText);
         _inlineFindReplaceSession = new FindReplaceDialogSession(
-            new AvaloniaFindReplaceCommandHost(_editor));
+            new AvaloniaFindReplaceCommandHost(_editor),
+            policyText: FindReplaceDialogPlanner.ResolvePolicyText(UiText.Get));
         _applicationCommands = new FreeWApplicationCommandRouter(new FreeWApplicationCommandActions(
             NewDocument: NewDocument,
             OpenDocument: () => _ = OpenAsync(),

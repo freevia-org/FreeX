@@ -46,6 +46,7 @@ public sealed record FindReplaceGoToTargetsPlan(
 public sealed class FindReplaceDialogSession
 {
     private readonly IFindReplaceDialogCommandHost _commandHost;
+    private readonly FindReplacePolicyTextSpec _policyText;
     private FindReplaceOpenMode _openMode;
     private string _query = string.Empty;
     private string _replacement = string.Empty;
@@ -54,10 +55,12 @@ public sealed class FindReplaceDialogSession
 
     public FindReplaceDialogSession(
         IFindReplaceDialogCommandHost commandHost,
-        FindReplaceOpenMode openMode = FindReplaceOpenMode.Find)
+        FindReplaceOpenMode openMode = FindReplaceOpenMode.Find,
+        FindReplacePolicyTextSpec? policyText = null)
     {
         _commandHost = commandHost ?? throw new ArgumentNullException(nameof(commandHost));
         _openMode = openMode;
+        _policyText = policyText ?? FindReplacePolicyTextSpec.NeutralEnglish;
     }
 
     public FindReplaceDialogState State => BuildState();
@@ -114,32 +117,33 @@ public sealed class FindReplaceDialogSession
                 out var request,
                 out var error))
         {
-            return SetStatus(FindReplaceDialogPlanner.ValidationMessageFor(error));
+            return SetStatus(FindReplaceDialogPlanner.ValidationMessageFor(error, _policyText));
         }
 
         var found = _commandHost.FindNext(request!);
-        return SetStatus(FindReplaceDialogPlanner.BuildFindStatus(request!, found));
+        return SetStatus(FindReplaceDialogPlanner.BuildFindStatus(request!, found, _policyText));
     }
 
     public FindReplaceDialogState ReplaceNext()
     {
         if (!TryCreateReplaceRequest(out var request, out var error))
-            return SetStatus(FindReplaceDialogPlanner.ValidationMessageFor(error));
+            return SetStatus(FindReplaceDialogPlanner.ValidationMessageFor(error, _policyText));
 
         var found = _commandHost.ReplaceNext(request!);
-        return SetStatus(FindReplaceDialogPlanner.BuildReplaceStatus(request!, found));
+        return SetStatus(FindReplaceDialogPlanner.BuildReplaceStatus(request!, found, _policyText));
     }
 
     public FindReplaceDialogState ReplaceAll()
     {
         if (!TryCreateReplaceRequest(out var request, out var error))
-            return SetStatus(FindReplaceDialogPlanner.ValidationMessageFor(error));
+            return SetStatus(FindReplaceDialogPlanner.ValidationMessageFor(error, _policyText));
 
         var result = _commandHost.ReplaceAll(request!);
         return SetStatus(FindReplaceDialogPlanner.BuildReplaceAllStatus(
             request!,
             result.ReplacementCount,
-            result.InSelection));
+            result.InSelection,
+            _policyText));
     }
 
     public FindReplaceDialogState SetStatus(string? statusText)
