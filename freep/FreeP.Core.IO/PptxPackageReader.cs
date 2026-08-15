@@ -4898,9 +4898,18 @@ public static class PptxPackageReader
                     if (!string.IsNullOrEmpty(mediaRel.Target))
                     {
                         if (mediaRel.Type == HyperlinkRelType ||
+                            mediaRel.IsExternal ||
                             mediaRel.Target.StartsWith("http", StringComparison.OrdinalIgnoreCase))
                         {
-                            // External / link-only
+                            // External / link-only. TargetMode="External" (mediaRel.IsExternal) is the
+                            // authoritative OOXML signal — a linked video/audio can target a UNC path,
+                            // a bare filesystem path, or any non-http scheme, not just http(s) URLs.
+                            // Relying on a "http" prefix alone silently dropped those: the target was
+                            // neither an in-package path (ResolveRelativeZipPath+ReadEntryBytes below
+                            // would just miss) nor captured as a link, so both Bytes and LinkUrl stayed
+                            // empty and the media info vanished — yet the writer still emitted a
+                            // p:videoFile/audioFile r:link pointing at a relationship it never wrote
+                            // (dangling relationship on save).
                             mediaInfo.LinkUrl = mediaRel.Target;
                         }
                         else

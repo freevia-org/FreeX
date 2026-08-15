@@ -3297,7 +3297,8 @@ public sealed partial class MainWindow : Window,
 
         _optionsRuntime.ApplyAndPersist(
             edited,
-            _ => _optionsStore.Save(_options));
+            options => _optionsStore.Save(options),
+            () => _optionsStore.Load());
     }
 
     private async Task<bool> FileSaveAsync()

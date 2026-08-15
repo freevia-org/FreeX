@@ -3345,9 +3345,13 @@ public sealed partial class MainWindow : Window
             return;
 
         var edited = dialog.Result;
-        ApplyEditorTypingOptions(_optionsRuntime.Apply(edited));
+        var outcome = _optionsRuntime.ApplyAndPersist(
+            edited,
+            options => _optionsStore.Save(options),
+            () => _optionsStore.Load());
+        ApplyEditorTypingOptions(outcome.EditorTypingOptions);
 
-        if (!_optionsStore.Save(_options))
+        if (!outcome.Persisted)
             DialogMessageHelper.ShowError(
                 this,
                 _optionsStore.LastError,

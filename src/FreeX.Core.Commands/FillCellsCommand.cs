@@ -363,6 +363,7 @@ public sealed class FillCellsCommand : IWorkbookCommand, IEstimatesMemory
                 sheet.Hyperlinks.Remove(target);
                 sheet.HyperlinkMetadata.Remove(target);
                 sheet.RichTextRuns.Remove(target);
+                sheet.CellPhoneticGuides.Remove(target);
                 writtenCells.Add(target);
                 continue;
             }

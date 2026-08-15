@@ -141,6 +141,94 @@ public sealed class FreePOptionsPolicyTests
     }
 
     [Fact]
+    public void ApplyAndPersistReloadsFreshFromDiskAndPreservesFieldsThisSessionNeverTouched()
+    {
+        // Simulates another FreeP window/process that persisted a RecentFilesCap change to disk while
+        // this session was still holding its own stale open-time snapshot (RecentFilesCap = 15).
+        var diskState = new FreePOptions
+        {
+            RecentFilesCap = 20,
+            DefaultSaveFormat = FreePOptions.FxpDefaultFormat,
+            UiLanguage = "",
+        };
+        var live = new FreePOptions
+        {
+            RecentFilesCap = 15,
+            DefaultSaveFormat = FreePOptions.FxpDefaultFormat,
+            UiLanguage = "",
+        };
+        var session = new FreePOptionsRuntimeSession(live);
+
+        // This dialog session only changes UiLanguage; RecentFilesCap in the edited result is whatever
+        // this stale session opened with (15), not the other window's fresher 20.
+        var edited = new FreePOptions
+        {
+            RecentFilesCap = 15,
+            DefaultSaveFormat = FreePOptions.FxpDefaultFormat,
+            UiLanguage = "fr-FR",
+        };
+
+        FreePOptions? persistedOptions = null;
+        var outcome = session.ApplyAndPersist(
+            edited,
+            options =>
+            {
+                persistedOptions = options;
+                return true;
+            },
+            () => diskState);
+
+        outcome.Persisted.Should().BeTrue();
+        persistedOptions.Should().NotBeNull();
+        persistedOptions!.RecentFilesCap.Should().Be(
+            20,
+            "the other window's fresher on-disk value for a field this session never touched must not be reverted");
+        persistedOptions.UiLanguage.Should().Be("fr-FR", "this session's own edit must still be applied");
+        session.LiveOptions.RecentFilesCap.Should().Be(
+            20,
+            "the live in-memory snapshot should pick up the merged/persisted value, not stay stuck on the stale open-time cap");
+    }
+
+    [Fact]
+    public void ApplyAndPersistAppliesThisSessionsOwnEditEvenWhenDiskDivergedOnTheSameField()
+    {
+        // Regression guard for the opposite failure mode: a merge that always preferred the freshest
+        // on-disk value would silently drop the user's own in-dialog edit whenever another window had
+        // touched the same field.
+        var diskState = new FreePOptions
+        {
+            RecentFilesCap = 20,
+            DefaultSaveFormat = FreePOptions.FxpDefaultFormat,
+            UiLanguage = "",
+        };
+        var live = new FreePOptions
+        {
+            RecentFilesCap = 15,
+            DefaultSaveFormat = FreePOptions.FxpDefaultFormat,
+            UiLanguage = "",
+        };
+        var session = new FreePOptionsRuntimeSession(live);
+        var edited = new FreePOptions
+        {
+            RecentFilesCap = 8,
+            DefaultSaveFormat = FreePOptions.FxpDefaultFormat,
+            UiLanguage = "",
+        };
+
+        FreePOptions? persistedOptions = null;
+        session.ApplyAndPersist(
+            edited,
+            options =>
+            {
+                persistedOptions = options;
+                return true;
+            },
+            () => diskState);
+
+        persistedOptions!.RecentFilesCap.Should().Be(8, "this session's explicit edit must win over a stale-conflicting disk value");
+    }
+
+    [Fact]
     public void DialogSessionOwnsInitialStateValidationAndNormalizedAcceptance()
     {
         var session = new OptionsDialogSession(

@@ -67,6 +67,8 @@ public sealed partial class XlsxFileAdapter
         HashSet<uint> CollapsedAnchorCols,
         Dictionary<uint, double> RowHeights,
         Dictionary<uint, double> ColumnWidths,
+        HashSet<uint> StyledRows,
+        HashSet<uint> StyledColumns,
         IReadOnlyList<(uint Row, uint Col, string Text, string Author)> Comments,
         IReadOnlyList<(uint Row, uint Col)> ShownCommentAddresses,
         IReadOnlyList<(uint Row, uint Col, ThreadedComment Comment)> ThreadedComments,
@@ -424,6 +426,8 @@ public sealed partial class XlsxFileAdapter
             rowColumnLayout.CollapsedAnchorCols ?? [],
             rowColumnLayout.RowHeights,
             rowColumnLayout.ColumnWidths,
+            rowColumnLayout.StyledRows ?? [],
+            rowColumnLayout.StyledColumns ?? [],
             comments,
             shownCommentAddresses,
             threadedComments,
@@ -614,7 +618,8 @@ public sealed partial class XlsxFileAdapter
                 ColOutlineLevels = columnLayout.ColOutlineLevels,
                 GroupHiddenCols = columnLayout.GroupHiddenCols,
                 CollapsedAnchorCols = columnLayout.CollapsedAnchorCols,
-                ColumnWidths = columnLayout.ColumnWidths
+                ColumnWidths = columnLayout.ColumnWidths,
+                StyledColumns = columnLayout.StyledColumns
             }
         };
     }

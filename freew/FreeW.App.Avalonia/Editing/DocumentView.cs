@@ -590,6 +590,9 @@ public sealed partial class DocumentView : Control
         _floatingDrag.Reset();
         _shapeEditPointsTarget = null;
         _shapeEditPointDragState = null;
+        // AV-PROOFING: Ignore All is session-scoped to the OPEN DOCUMENT, not the editor instance —
+        // without this, words ignored in one document stayed silently ignored after loading another.
+        _ignoredProofingWords.Clear();
         _trackChangesEnabled = _doc.TrackRevisions || RestrictEditingPolicy.ShouldForceTrackChanges;
         RaiseFloatingSelectionChangedIfIdentityChanged();
         InvalidateLayoutAndVisual();
@@ -16773,40 +16776,61 @@ public sealed partial class DocumentView : Control
         }
 
         // Structurally special paragraphs stay on the renderer-owned path.
-        if (NormalizedSelection() is not null)
-            DeleteSelection();
-        if (CurrentParagraph() is not { } fallbackParagraph || !IsEditable(fallbackParagraph))
-            return;
-        block = _caret.Block;
-        bodyOffset = _caret.Offset;
-        bodyFmt = pendingFmt ?? ActiveFormatting(fallbackParagraph, bodyOffset);
-        insLink = ActiveLink(fallbackParagraph, bodyOffset);
-        _bus.Execute(new ReplaceParagraphRunsCommand(block, p =>
+        // AV-UNDOGROUP: DeleteSelection() and the ReplaceParagraphRunsCommand below are two separate
+        // bus commands. Without an explicit group, one Ctrl+Z only undoes the insert and leaves the
+        // selection permanently deleted. Group them so a single undo restores the pre-gesture state.
+        var ownsFallbackUndoGroup = !_bus.IsUndoGroupOpen;
+        if (ownsFallbackUndoGroup)
+            _bus.BeginUndoGroup();
+        try
         {
-            // BE4 (body parity): insert at an incrementing position so multi-char text (paste / IME /
-            // model inserts like a citation string) keeps its order — a fixed insert index would reverse it.
-            RevisionEditPlanner.InsertText(
-                p,
-                bodyOffset,
-                text,
-                bodyFmt,
-                TrackChangesEnabled
-                    ? new RevisionEditPlanner.InsertOptions(
-                        RevisionKind.Inserted,
-                        RevisionAuthor,
-                        _editingSession.RevisionDateXmlForEdit(),
-                        insLink?.Url,
-                        insLink?.Anchor,
-                        insLink?.Tooltip)
-                    : new RevisionEditPlanner.InsertOptions(
-                        HyperlinkUrl: insLink?.Url,
-                        HyperlinkAnchor: insLink?.Anchor,
-                        HyperlinkTooltip: insLink?.Tooltip));
-            CoalesceAdjacentPlainTextRuns(p);
-            CoalesceAdjacentHyperlinkRuns(p);
-        }));
-        _caret = new DocPosition(block, bodyOffset + text.Length);
-        _selectionAnchor = _caret;
+            if (NormalizedSelection() is not null)
+                DeleteSelection();
+            if (CurrentParagraph() is not { } fallbackParagraph || !IsEditable(fallbackParagraph))
+            {
+                if (ownsFallbackUndoGroup)
+                    _bus.AbortUndoGroup();
+                return;
+            }
+            block = _caret.Block;
+            bodyOffset = _caret.Offset;
+            bodyFmt = pendingFmt ?? ActiveFormatting(fallbackParagraph, bodyOffset);
+            insLink = ActiveLink(fallbackParagraph, bodyOffset);
+            _bus.Execute(new ReplaceParagraphRunsCommand(block, p =>
+            {
+                // BE4 (body parity): insert at an incrementing position so multi-char text (paste / IME /
+                // model inserts like a citation string) keeps its order — a fixed insert index would reverse it.
+                RevisionEditPlanner.InsertText(
+                    p,
+                    bodyOffset,
+                    text,
+                    bodyFmt,
+                    TrackChangesEnabled
+                        ? new RevisionEditPlanner.InsertOptions(
+                            RevisionKind.Inserted,
+                            RevisionAuthor,
+                            _editingSession.RevisionDateXmlForEdit(),
+                            insLink?.Url,
+                            insLink?.Anchor,
+                            insLink?.Tooltip)
+                        : new RevisionEditPlanner.InsertOptions(
+                            HyperlinkUrl: insLink?.Url,
+                            HyperlinkAnchor: insLink?.Anchor,
+                            HyperlinkTooltip: insLink?.Tooltip));
+                CoalesceAdjacentPlainTextRuns(p);
+                CoalesceAdjacentHyperlinkRuns(p);
+            }));
+            _caret = new DocPosition(block, bodyOffset + text.Length);
+            _selectionAnchor = _caret;
+            if (ownsFallbackUndoGroup)
+                _bus.CommitUndoGroup("Insert text");
+        }
+        catch
+        {
+            if (ownsFallbackUndoGroup)
+                _bus.AbortUndoGroup();
+            throw;
+        }
     }
 
     private void InsertShapeText(
@@ -17129,16 +17153,37 @@ public sealed partial class DocumentView : Control
         if (IsEditingLocked || _hfCaret is not null || _cellCaret is not null)
             return;
 
-        if (NormalizedSelection() is not null)
-            DeleteSelection();
-        if (CurrentParagraph() is not { } paragraph || !IsEditable(paragraph))
-            return;
+        // AV-UNDOGROUP: DeleteSelection() and the ReplaceParagraphRunsCommand below are two separate
+        // bus commands. Without an explicit group, one Ctrl+Z only undoes the insert and leaves the
+        // selection permanently deleted.
+        var ownsUndoGroup = !_bus.IsUndoGroupOpen;
+        if (ownsUndoGroup)
+            _bus.BeginUndoGroup();
+        try
+        {
+            if (NormalizedSelection() is not null)
+                DeleteSelection();
+            if (CurrentParagraph() is not { } paragraph || !IsEditable(paragraph))
+            {
+                if (ownsUndoGroup)
+                    _bus.AbortUndoGroup();
+                return;
+            }
 
-        var block = _caret.Block;
-        var offset = _caret.Offset;
-        _bus.Execute(new ReplaceParagraphRunsCommand(block, p => InsertRunAtOffset(p, offset, run)));
-        _caret = new DocPosition(block, offset + run.Text.Length);
-        _selectionAnchor = _caret;
+            var block = _caret.Block;
+            var offset = _caret.Offset;
+            _bus.Execute(new ReplaceParagraphRunsCommand(block, p => InsertRunAtOffset(p, offset, run)));
+            _caret = new DocPosition(block, offset + run.Text.Length);
+            _selectionAnchor = _caret;
+            if (ownsUndoGroup)
+                _bus.CommitUndoGroup("Insert content control");
+        }
+        catch
+        {
+            if (ownsUndoGroup)
+                _bus.AbortUndoGroup();
+            throw;
+        }
     }
 
     private void Backspace()
@@ -17442,25 +17487,46 @@ public sealed partial class DocumentView : Control
         }
 
         // AV-TBL: route into table cell.
+        // AV-UNDOGROUP: DeleteCellSelection() and the SpliceCellParagraphsCommand below are two
+        // separate bus commands. Without an explicit group, one Ctrl+Z only undoes the paragraph-break
+        // insert and leaves the selection permanently deleted.
         if (_cellCaret is { } cc)
         {
-            if (DeleteCellSelection(cc))
-                cc = _cellCaret!.Value;
-            var para = GetCellParagraph(cc.TableBlock, cc.Row, cc.Col, cc.ParaIdx);
-            if (para == null || !IsEditable(para))
-                return;
-            var offset = cc.Offset;
-            var chars = ParaCells(para);
-            var first = new Paragraph { Formatting = para.Formatting, StyleId = para.StyleId };
-            SetRuns(first, chars.Take(offset).ToList());
-            var second = new Paragraph { Formatting = para.Formatting };
-            SetRuns(second, chars.Skip(offset).ToList());
-            _bus.Execute(new SpliceCellParagraphsCommand(cc.TableBlock, cc.Row, cc.Col, cc.ParaIdx, 1, [first, second]));
-            // Move caret to start of the new second paragraph.
-            _cellCaret = cc with { ParaIdx = cc.ParaIdx + 1, Offset = 0 };
-            _cellAnchor = _cellCaret;
-            _caret = new DocPosition(cc.TableBlock, FindCellGlyphOffset(cc.TableBlock, cc.Row, cc.Col, cc.ParaIdx + 1, 0));
-            _selectionAnchor = _caret;
+            var ownsCellUndoGroup = !_bus.IsUndoGroupOpen;
+            if (ownsCellUndoGroup)
+                _bus.BeginUndoGroup();
+            try
+            {
+                if (DeleteCellSelection(cc, beginUndoGroup: false))
+                    cc = _cellCaret!.Value;
+                var para = GetCellParagraph(cc.TableBlock, cc.Row, cc.Col, cc.ParaIdx);
+                if (para == null || !IsEditable(para))
+                {
+                    if (ownsCellUndoGroup)
+                        _bus.AbortUndoGroup();
+                    return;
+                }
+                var offset = cc.Offset;
+                var chars = ParaCells(para);
+                var first = new Paragraph { Formatting = para.Formatting, StyleId = para.StyleId };
+                SetRuns(first, chars.Take(offset).ToList());
+                var second = new Paragraph { Formatting = para.Formatting };
+                SetRuns(second, chars.Skip(offset).ToList());
+                _bus.Execute(new SpliceCellParagraphsCommand(cc.TableBlock, cc.Row, cc.Col, cc.ParaIdx, 1, [first, second]));
+                // Move caret to start of the new second paragraph.
+                _cellCaret = cc with { ParaIdx = cc.ParaIdx + 1, Offset = 0 };
+                _cellAnchor = _cellCaret;
+                _caret = new DocPosition(cc.TableBlock, FindCellGlyphOffset(cc.TableBlock, cc.Row, cc.Col, cc.ParaIdx + 1, 0));
+                _selectionAnchor = _caret;
+                if (ownsCellUndoGroup)
+                    _bus.CommitUndoGroup("Insert paragraph break");
+            }
+            catch
+            {
+                if (ownsCellUndoGroup)
+                    _bus.AbortUndoGroup();
+                throw;
+            }
             return;
         }
 
@@ -17472,47 +17538,72 @@ public sealed partial class DocumentView : Control
             return;
         }
 
-        if (NormalizedSelection() is not null)
-            DeleteSelection();
-        if (CurrentParagraph() is not { } paragraph || !IsEditable(paragraph))
-            return;
-
-        var block = _caret.Block;
-        var bodyOffset = _caret.Offset;
-        var bodyCells = ParaCells(paragraph);
-
-        // AV-LIST: list continuation / exit-list logic.
-        var listFmt = paragraph.Formatting;
-        if (listFmt.ListKind != ListKind.None)
+        // AV-UNDOGROUP: DeleteSelection() and the ReplaceBlocksCommand (or FormatParagraphs) below are
+        // separate bus commands. Without an explicit group, one Ctrl+Z only undoes the paragraph-break
+        // insert and leaves the selection permanently deleted.
+        var ownsBodyUndoGroup = !_bus.IsUndoGroupOpen;
+        if (ownsBodyUndoGroup)
+            _bus.BeginUndoGroup();
+        try
         {
-            if (bodyCells.Count == 0)
+            if (NormalizedSelection() is not null)
+                DeleteSelection();
+            if (CurrentParagraph() is not { } paragraph || !IsEditable(paragraph))
             {
-                // Enter on an EMPTY list item → exit the list: turn the paragraph into a normal one.
-                var exitFmt = listFmt with { ListKind = ListKind.None, ListLevel = 0 };
-                _editingSession.FormatParagraphs([block], _ => exitFmt);
-                // Caret stays at block 0 (now a normal paragraph). No split.
+                if (ownsBodyUndoGroup)
+                    _bus.AbortUndoGroup();
                 return;
             }
-            // Enter on a NON-EMPTY list item → split and continue the list on the new paragraph.
-            // The new paragraph inherits ListKind + ListLevel (not StyleId, same as Word).
-            var firstPara = new Paragraph { Formatting = listFmt, StyleId = paragraph.StyleId };
-            SetRuns(firstPara, bodyCells.Take(bodyOffset).ToList());
-            var contFmt = listFmt with { };   // same list kind + level; renumbering is render-time
-            var secondPara = new Paragraph { Formatting = contFmt };
-            SetRuns(secondPara, bodyCells.Skip(bodyOffset).ToList());
-            _bus.Execute(new ReplaceBlocksCommand(block, 1, new Block[] { firstPara, secondPara }));
+
+            var block = _caret.Block;
+            var bodyOffset = _caret.Offset;
+            var bodyCells = ParaCells(paragraph);
+
+            // AV-LIST: list continuation / exit-list logic.
+            var listFmt = paragraph.Formatting;
+            if (listFmt.ListKind != ListKind.None)
+            {
+                if (bodyCells.Count == 0)
+                {
+                    // Enter on an EMPTY list item → exit the list: turn the paragraph into a normal one.
+                    var exitFmt = listFmt with { ListKind = ListKind.None, ListLevel = 0 };
+                    _editingSession.FormatParagraphs([block], _ => exitFmt);
+                    // Caret stays at block 0 (now a normal paragraph). No split.
+                    if (ownsBodyUndoGroup)
+                        _bus.CommitUndoGroup("Insert paragraph break");
+                    return;
+                }
+                // Enter on a NON-EMPTY list item → split and continue the list on the new paragraph.
+                // The new paragraph inherits ListKind + ListLevel (not StyleId, same as Word).
+                var firstPara = new Paragraph { Formatting = listFmt, StyleId = paragraph.StyleId };
+                SetRuns(firstPara, bodyCells.Take(bodyOffset).ToList());
+                var contFmt = listFmt with { };   // same list kind + level; renumbering is render-time
+                var secondPara = new Paragraph { Formatting = contFmt };
+                SetRuns(secondPara, bodyCells.Skip(bodyOffset).ToList());
+                _bus.Execute(new ReplaceBlocksCommand(block, 1, new Block[] { firstPara, secondPara }));
+                _caret = new DocPosition(block + 1, 0);
+                _selectionAnchor = _caret;
+                if (ownsBodyUndoGroup)
+                    _bus.CommitUndoGroup("Insert paragraph break");
+                return;
+            }
+
+            var firstParaNL = new Paragraph { Formatting = paragraph.Formatting, StyleId = paragraph.StyleId };
+            SetRuns(firstParaNL, bodyCells.Take(bodyOffset).ToList());
+            var secondParaNL = new Paragraph { Formatting = paragraph.Formatting };
+            SetRuns(secondParaNL, bodyCells.Skip(bodyOffset).ToList());
+            _bus.Execute(new ReplaceBlocksCommand(block, 1, new Block[] { firstParaNL, secondParaNL }));
             _caret = new DocPosition(block + 1, 0);
             _selectionAnchor = _caret;
-            return;
+            if (ownsBodyUndoGroup)
+                _bus.CommitUndoGroup("Insert paragraph break");
         }
-
-        var firstParaNL = new Paragraph { Formatting = paragraph.Formatting, StyleId = paragraph.StyleId };
-        SetRuns(firstParaNL, bodyCells.Take(bodyOffset).ToList());
-        var secondParaNL = new Paragraph { Formatting = paragraph.Formatting };
-        SetRuns(secondParaNL, bodyCells.Skip(bodyOffset).ToList());
-        _bus.Execute(new ReplaceBlocksCommand(block, 1, new Block[] { firstParaNL, secondParaNL }));
-        _caret = new DocPosition(block + 1, 0);
-        _selectionAnchor = _caret;
+        catch
+        {
+            if (ownsBodyUndoGroup)
+                _bus.AbortUndoGroup();
+            throw;
+        }
     }
 
     // AV-TBL: merge the current cell paragraph with the previous one (Backspace at start of para).
@@ -20255,25 +20346,41 @@ public sealed partial class DocumentView : Control
             return;
         }
 
-        if (NormalizedSelection() is not null)
-            DeleteSelection();
-        if (CurrentParagraph() is not { } paragraph || !IsEditable(paragraph))
-            return;
-
-        var block = _caret.Block;
-        var bodyOffset = _caret.Offset;
-        var bodyFmt = _pendingRunFmt ?? ActiveFormatting(paragraph, bodyOffset);
-        _pendingRunFmt = null;
-
-        var formattedRun = new Run(citationRun.Text, bodyFmt)
+        // AV-UNDOGROUP: DeleteSelection() and the ReplaceParagraphRunsCommand below are two separate
+        // bus commands. Without an explicit group, one Ctrl+Z only undoes the citation insert and
+        // leaves the selection permanently deleted.
+        _bus.BeginUndoGroup();
+        try
         {
-            ComplexField = citationRun.ComplexField
-        };
+            if (NormalizedSelection() is not null)
+                DeleteSelection();
+            if (CurrentParagraph() is not { } paragraph || !IsEditable(paragraph))
+            {
+                _bus.AbortUndoGroup();
+                return;
+            }
 
-        _bus.Execute(new ReplaceParagraphRunsCommand(block, p =>
-            InsertRunAtOffset(p, bodyOffset, formattedRun)));
-        _caret = new DocPosition(block, bodyOffset + formattedRun.Text.Length);
-        _selectionAnchor = _caret;
+            var block = _caret.Block;
+            var bodyOffset = _caret.Offset;
+            var bodyFmt = _pendingRunFmt ?? ActiveFormatting(paragraph, bodyOffset);
+            _pendingRunFmt = null;
+
+            var formattedRun = new Run(citationRun.Text, bodyFmt)
+            {
+                ComplexField = citationRun.ComplexField
+            };
+
+            _bus.Execute(new ReplaceParagraphRunsCommand(block, p =>
+                InsertRunAtOffset(p, bodyOffset, formattedRun)));
+            _caret = new DocPosition(block, bodyOffset + formattedRun.Text.Length);
+            _selectionAnchor = _caret;
+            _bus.CommitUndoGroup("Insert Citation");
+        }
+        catch
+        {
+            _bus.AbortUndoGroup();
+            throw;
+        }
     }
 
     /// <summary>

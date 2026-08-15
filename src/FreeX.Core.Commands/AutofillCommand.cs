@@ -896,7 +896,10 @@ public sealed class AutofillCommand : IWorkbookCommand, IEstimatesMemory
             var digits = next.ToString(System.Globalization.CultureInfo.InvariantCulture);
             if (next >= 0 && digits.Length < width)
                 digits = digits.PadLeft(width, '0');
-            return new TextValue(prefix + digits);
+            // Mirrors PasteCommandFactory.TruncateToExcelCellTextLimit's cap on literal cell text:
+            // a fill-handle drag off a seed whose prefix is already near Excel's 32,767-character
+            // cell limit must not push the generated series text past it.
+            return new TextValue(PasteCommandFactory.TruncateToExcelCellTextLimit(prefix + digits));
         };
     }
 
@@ -967,7 +970,7 @@ public sealed class AutofillCommand : IWorkbookCommand, IEstimatesMemory
             return offset =>
             {
                 var index = Mod(lastIndex + directedStep * (int)offset, list.Count);
-                return new TextValue(ApplyCaseStyle(list[index], caseStyle));
+                return new TextValue(PasteCommandFactory.TruncateToExcelCellTextLimit(ApplyCaseStyle(list[index], caseStyle)));
             };
         }
 

@@ -255,6 +255,104 @@ public sealed class PresentationFileCommandSessionTests : IDisposable
         print.Request.Should().Be(request);
         session.LastPrintOutputPackage.Should().NotBeNull();
         session.LastPrintExecutionDescriptor.Should().NotBeNull();
+        result.ImageDiagnostics.Should().BeEmpty(
+            "sibling no-regression: a deck with no undecodable pictures must not report an image warning");
+    }
+
+    // R136: PDF/Image/Video export all surface the "an embedded picture could not be decoded" warning
+    // (see SlideImageRenderDiagnostics), but Print built its output package with the plain
+    // (non-diagnostics) render/writer delegates, so the exact same undecodable picture silently
+    // produced pages with a picture missing and no indication anything was wrong when printed.
+    [Fact]
+    public async Task PrintAsync_SurfacesImageDiagnostics_WhenSlideRenderReportsUndecodablePicture()
+    {
+        var print = new FakePrintPort();
+        var render = new FakeRenderPort(reportUndecodableImage: true);
+        var session = CreateSession(
+            Presentation.CreateEmpty,
+            _ => { },
+            new FakeLifecyclePort(),
+            new FakePickerPort(),
+            render,
+            print: print);
+        var request = new PresentationPrintRequest(PresentationPrintLayoutKind.FullPageSlides);
+
+        var result = await session.PrintAsync(request);
+
+        result.Succeeded.Should().BeTrue();
+        result.ImageDiagnostics.Should().NotBeEmpty(
+            "Print must surface the same undecodable-image warning that PDF/Image/Video export show, " +
+            "not silently omit the picture");
+    }
+
+    // R136: both FreeP shells fire Export Video as fire-and-forget ("() => _ = _fileSession.ExportVideoAsync()"),
+    // so a second invocation while the first is still writing the output file previously started a
+    // second, concurrent export racing on the same output. This drives the guard through the lowest
+    // shared entry point both ExportVideoAsync (after its picker) and the direct-path callers land on.
+    [Fact]
+    public async Task ExportVideoToPathAsync_SecondCallWhileRunning_ReportsAlreadyRunningWithoutStartingASecondExport()
+    {
+        var video = new BlockingVideoPort();
+        var session = CreateSession(
+            Presentation.CreateEmpty,
+            _ => { },
+            new FakeLifecyclePort(),
+            new FakePickerPort(),
+            video: video);
+        var firstPath = Path.Combine(TempDirectory, "first.mp4");
+        var secondPath = Path.Combine(TempDirectory, "second.mp4");
+
+        try
+        {
+            var firstTask = session.ExportVideoToPathAsync(firstPath);
+            await video.EnteredExportAsync.Task;
+
+            // Without the guard, a second call would itself enter the (still-blocked) video port and
+            // wait behind the first export forever, so bound the wait instead of awaiting it directly
+            // -- an unguarded second call must fail this assertion within the timeout, not hang the run.
+            var secondTask = session.ExportVideoToPathAsync(secondPath);
+            var winner = await Task.WhenAny(secondTask, Task.Delay(TimeSpan.FromSeconds(2)));
+            winner.Should().BeSameAs(secondTask,
+                "the guard must turn the second call away immediately instead of letting it block " +
+                "behind the first, still-running export");
+
+            var second = await secondTask;
+            second.Status.Should().Be(PresentationFileCommandStatus.Unavailable);
+            second.Message.Should().Contain("already running");
+            video.ExportCount.Should().Be(1,
+                "the second invocation must be turned away by the guard instead of starting a second export");
+
+            video.Release();
+            var first = await firstTask;
+            first.Succeeded.Should().BeTrue();
+        }
+        finally
+        {
+            video.Release();
+        }
+    }
+
+    // Sibling no-regression: the guard must release once an export finishes, so a legitimate later
+    // export is not permanently blocked by an earlier, already-completed one.
+    [Fact]
+    public async Task ExportVideoToPathAsync_SequentialCalls_BothSucceedOnceTheGuardReleases()
+    {
+        var video = new FakeVideoPort();
+        var session = CreateSession(
+            Presentation.CreateEmpty,
+            _ => { },
+            new FakeLifecyclePort(),
+            new FakePickerPort(),
+            video: video);
+        var firstPath = Path.Combine(TempDirectory, "first.mp4");
+        var secondPath = Path.Combine(TempDirectory, "second.mp4");
+
+        var first = await session.ExportVideoToPathAsync(firstPath);
+        var second = await session.ExportVideoToPathAsync(secondPath);
+
+        first.Succeeded.Should().BeTrue();
+        second.Succeeded.Should().BeTrue();
+        video.ExportCount.Should().Be(2);
     }
 
     [Fact]
@@ -298,7 +396,7 @@ public sealed class PresentationFileCommandSessionTests : IDisposable
         FakePickerPort picker,
         FakeRenderPort? render = null,
         FakePrintPort? print = null,
-        FakeVideoPort? video = null,
+        IPresentationVideoPort? video = null,
         FakeFeedbackPort? feedback = null,
         Func<PresentationVideoExportRequest?, PresentationVideoFramePackageArtifact>?
             videoPackageArtifactFactory = null) =>
@@ -408,6 +506,11 @@ public sealed class PresentationFileCommandSessionTests : IDisposable
     {
         public static readonly byte[] PdfBytes = "%PDF-session-test"u8.ToArray();
 
+        private readonly bool _reportUndecodableImage;
+
+        public FakeRenderPort(bool reportUndecodableImage = false) =>
+            _reportUndecodableImage = reportUndecodableImage;
+
         public int RenderCount { get; private set; }
         public PresentationSlideImageRenderer RenderSlideToPng => Render;
         public PresentationSlideImageRendererWithPrintMarkup RenderSlideToPngWithPrintMarkup =>
@@ -418,6 +521,11 @@ public sealed class PresentationFileCommandSessionTests : IDisposable
         private byte[] Render(Presentation presentation, int slideIndex, int widthPx, int heightPx)
         {
             RenderCount++;
+            // Mirrors what WpfPresentationSlideImageRenderer / SlideCanvas.RenderPicture report when an
+            // embedded picture on the slide could not be decoded while compositing an otherwise
+            // well-formed slide PNG (see SlideImageRenderDiagnostics).
+            if (_reportUndecodableImage)
+                SlideImageRenderDiagnostics.ReportUndecodableImage(1, "forced by test");
             return [0x89, 0x50, 0x4E, 0x47];
         }
     }
@@ -464,6 +572,43 @@ public sealed class PresentationFileCommandSessionTests : IDisposable
             OutputPath = outputPath;
             return Task.FromResult(PresentationNativeCommandResult.Success("Exported video"));
         }
+    }
+
+    /// <summary>
+    /// Video port whose <see cref="ExportAsync"/> blocks until <see cref="Release"/> is called, so a
+    /// test can deterministically observe a second Export Video call arriving while the first is still
+    /// in flight instead of relying on timing.
+    /// </summary>
+    private sealed class BlockingVideoPort : IPresentationVideoPort
+    {
+        private readonly TaskCompletionSource _releaseSignal =
+            new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        public PresentationVideoExportHandoffHostCapabilities Capabilities { get; } = new(
+            "test blocking video host",
+            CanEncodeMp4: true,
+            CanCaptureNarration: false,
+            CanCaptureCameraAndMedia: false,
+            UnavailableReason: string.Empty);
+
+        public TaskCompletionSource EnteredExportAsync { get; } =
+            new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        public int ExportCount { get; private set; }
+
+        public async Task<PresentationNativeCommandResult> ExportAsync(
+            PresentationVideoFramePackage package,
+            string outputPath,
+            IReadOnlyList<PresentationRecordingMediaArtifact> recordingMediaArtifacts,
+            CancellationToken cancellationToken)
+        {
+            ExportCount++;
+            EnteredExportAsync.TrySetResult();
+            await _releaseSignal.Task;
+            return PresentationNativeCommandResult.Success("Exported video");
+        }
+
+        public void Release() => _releaseSignal.TrySetResult();
     }
 
     private sealed class FakeFeedbackPort : IPresentationFileCommandFeedbackPort

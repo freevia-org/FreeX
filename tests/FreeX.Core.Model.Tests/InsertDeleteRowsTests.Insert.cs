@@ -92,6 +92,71 @@ public partial class InsertDeleteRowsTests
         sheet.RowHeights.Should().NotContainKey(7);
     }
 
+    // R136-io-worksheet-props-col-row-default-style-shift: sheet.RowStyles is the same
+    // absolute-row key space as RowHeights and must re-key the same way on insert, or a
+    // whole-row default style lands on the wrong (stale-indexed) row after the shift.
+    [Fact]
+    public void InsertRow_ShiftsRowStylesAndUndoRestores()
+    {
+        var (_, sheet, ctx) = Setup();
+        var bannerStyle = new StyleId(1);
+        var totalsStyle = new StyleId(2);
+        sheet.RowStyles[3] = bannerStyle;
+        sheet.RowStyles[5] = totalsStyle;
+
+        var cmd = new InsertRowsCommand(sheet.Id, beforeRow: 3, count: 2);
+        cmd.Apply(ctx);
+
+        sheet.RowStyles.Should().NotContainKey(3);
+        sheet.RowStyles.Should().NotContainKey(4);
+        sheet.RowStyles[5].Should().Be(bannerStyle);
+        sheet.RowStyles[7].Should().Be(totalsStyle);
+
+        cmd.Revert(ctx);
+
+        sheet.RowStyles[3].Should().Be(bannerStyle);
+        sheet.RowStyles[5].Should().Be(totalsStyle);
+        sheet.RowStyles.Should().NotContainKey(7);
+    }
+
+    // Insert BEFORE the styled row (styled row ends up further down, at a higher key).
+    [Fact]
+    public void InsertRow_BeforeStyledRow_ShiftsRowStyleDownAndUndoRestores()
+    {
+        var (_, sheet, ctx) = Setup();
+        var bannerStyle = new StyleId(1);
+        sheet.RowStyles[4] = bannerStyle;
+
+        var cmd = new InsertRowsCommand(sheet.Id, beforeRow: 2, count: 1);
+        cmd.Apply(ctx);
+
+        sheet.RowStyles.Should().NotContainKey(4);
+        sheet.RowStyles[5].Should().Be(bannerStyle);
+
+        cmd.Revert(ctx);
+
+        sheet.RowStyles[4].Should().Be(bannerStyle);
+        sheet.RowStyles.Should().NotContainKey(5);
+    }
+
+    // Insert AFTER the styled row (styled row is untouched by the shift).
+    [Fact]
+    public void InsertRow_AfterStyledRow_LeavesRowStyleInPlaceAndUndoRestores()
+    {
+        var (_, sheet, ctx) = Setup();
+        var bannerStyle = new StyleId(1);
+        sheet.RowStyles[2] = bannerStyle;
+
+        var cmd = new InsertRowsCommand(sheet.Id, beforeRow: 4, count: 1);
+        cmd.Apply(ctx);
+
+        sheet.RowStyles[2].Should().Be(bannerStyle);
+
+        cmd.Revert(ctx);
+
+        sheet.RowStyles[2].Should().Be(bannerStyle);
+    }
+
     [Fact]
     public void InsertRow_ShiftsCommentsAndUndoRestores()
     {

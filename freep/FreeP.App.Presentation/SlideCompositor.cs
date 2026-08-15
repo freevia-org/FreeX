@@ -2124,16 +2124,32 @@ public static class SlideCompositor
 
     /// <summary>
     /// Resolves the effective <see cref="TextStyleLevel"/> for a paragraph at a given indent
-    /// level by walking: layout placeholder's lstStyle → master txStyles (by category) → null.
+    /// level by walking PowerPoint's inheritance chain: the shape's OWN txBody-level
+    /// a:lstStyle → layout placeholder's lstStyle → master txStyles (by category) → null.
     /// The caller applies the hard-coded fallback when this returns null.
     /// </summary>
     private static TextStyleLevel? ResolveTextStyleInheritance(
         int paraLevel,
         TextStyleCategory category,
+        TextStyleLevels? shapeLstStyle,
         TextBody? layoutBody,
         MasterTextStyles? masterTextStyles)
     {
-        // 1. Layout placeholder's a:lstStyle for this paragraph level.
+        // 1. The shape's own a:lstStyle (sits between direct paragraph properties and the
+        //    layout in PowerPoint's inheritance chain — must win over the layout/master).
+        if (shapeLstStyle is not null)
+        {
+            var lvl = shapeLstStyle[paraLevel];
+            if (lvl is not null) return lvl;
+            // Walk upward toward level 0 only if the shape's lstStyle has any entry defined.
+            for (int l = paraLevel - 1; l >= 0; l--)
+            {
+                lvl = shapeLstStyle[l];
+                if (lvl is not null) return lvl;
+            }
+        }
+
+        // 2. Layout placeholder's a:lstStyle for this paragraph level.
         if (layoutBody?.LstStyle is { } layoutLst)
         {
             var lvl = layoutLst[paraLevel];
@@ -2146,7 +2162,7 @@ public static class SlideCompositor
             }
         }
 
-        // 2. Master p:txStyles category at this paragraph level.
+        // 3. Master p:txStyles category at this paragraph level.
         if (masterTextStyles is not null)
         {
             var masterStyle = category switch
@@ -2245,7 +2261,7 @@ public static class SlideCompositor
             // MM3: Resolve the inherited text-style level for this paragraph's indent level.
             // This is done once per paragraph since all runs in a paragraph share the same level.
             var inheritedStyle = ResolveTextStyleInheritance(
-                para.Level, category, layoutBody, masterTextStyles);
+                para.Level, category, body.LstStyle, layoutBody, masterTextStyles);
 
             // Resolve inherited color from the style chain (if any).
             SrgbColor? inheritedColor = null;

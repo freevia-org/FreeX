@@ -57,6 +57,76 @@ public partial class InsertDeleteColumnsTests
         sheet.ColumnWidths[6].Should().Be(36);
     }
 
+    // R136-io-worksheet-props-col-row-default-style-shift: sheet.ColumnStyles is the same
+    // absolute-column key space as ColumnWidths and must shift/drop entries the same way on
+    // delete, or a whole-column default style lands on the wrong (stale-indexed) column.
+    [Fact]
+    public void DeleteColumn_ShiftsColumnStylesAndUndoRestores()
+    {
+        var (_, sheet, ctx) = Setup();
+        var leftStyle = new StyleId(1);
+        var deletedStyle = new StyleId(2);
+        var rightStyle = new StyleId(3);
+        sheet.ColumnStyles[2] = leftStyle;
+        sheet.ColumnStyles[4] = deletedStyle;
+        sheet.ColumnStyles[6] = rightStyle;
+
+        var cmd = new DeleteColumnsCommand(sheet.Id, startCol: 3, count: 2);
+        cmd.Apply(ctx);
+
+        sheet.ColumnStyles[2].Should().Be(leftStyle);
+        sheet.ColumnStyles[4].Should().Be(rightStyle);
+        sheet.ColumnStyles.Should().NotContainKey(3);
+        sheet.ColumnStyles.Should().NotContainKey(6);
+
+        cmd.Revert(ctx);
+
+        sheet.ColumnStyles[2].Should().Be(leftStyle);
+        sheet.ColumnStyles[4].Should().Be(deletedStyle);
+        sheet.ColumnStyles[6].Should().Be(rightStyle);
+    }
+
+    // Deleting the styled column itself must remove its default style entirely (not leave it
+    // painting whatever column slides into that slot), and undo must bring it back.
+    [Fact]
+    public void DeleteColumn_DeletesStyledColumnItself_UndoRestoresStyle()
+    {
+        var (_, sheet, ctx) = Setup();
+        var currencyStyle = new StyleId(1);
+        sheet.ColumnStyles[4] = currencyStyle;
+
+        var cmd = new DeleteColumnsCommand(sheet.Id, startCol: 4, count: 1);
+        cmd.Apply(ctx);
+
+        sheet.ColumnStyles.Should().NotContainKey(3);
+        sheet.ColumnStyles.Should().NotContainKey(4);
+
+        cmd.Revert(ctx);
+
+        sheet.ColumnStyles[4].Should().Be(currencyStyle);
+    }
+
+    // Deleting a column strictly to the left of the styled column must shift the style left with
+    // its column, not leave it stranded at the old (now-wrong) index.
+    [Fact]
+    public void DeleteColumn_ToLeftOfStyledColumn_ShiftsColumnStyleLeftAndUndoRestores()
+    {
+        var (_, sheet, ctx) = Setup();
+        var currencyStyle = new StyleId(1);
+        sheet.ColumnStyles[5] = currencyStyle;
+
+        var cmd = new DeleteColumnsCommand(sheet.Id, startCol: 2, count: 1);
+        cmd.Apply(ctx);
+
+        sheet.ColumnStyles.Should().NotContainKey(5);
+        sheet.ColumnStyles[4].Should().Be(currencyStyle);
+
+        cmd.Revert(ctx);
+
+        sheet.ColumnStyles.Should().NotContainKey(4);
+        sheet.ColumnStyles[5].Should().Be(currencyStyle);
+    }
+
     [Fact]
     public void DeleteColumn_ShiftsHiddenColumnsAndUndoRestores()
     {

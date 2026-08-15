@@ -55,9 +55,214 @@ public static class CustomXmlDataBindingResolver
         return TryResolve(BuildDataStores(document.Preserved.Parts), binding, out value);
     }
 
+    /// <summary>
+    /// Propagates every data-bound plain-text content control's CURRENT displayed text back into its bound
+    /// customXml data-store item whenever the two have diverged (i.e. the run text was edited since the
+    /// binding was last resolved). Word re-reads w:dataBinding when the package is reopened, so without this
+    /// the edited display text is silently discarded and the stale store value reappears. Also clears a
+    /// stale w:showingPlcHdr on the edited control (mutating the document's runs in place, mirroring
+    /// <see cref="RefreshBoundTextControls"/>'s load-time mutation) so genuine user content stops round-tripping
+    /// tagged as placeholder text. Returns <paramref name="preservedParts"/> with the affected customXml
+    /// item part(s) replaced by their updated bytes; unaffected parts (including every part when nothing
+    /// diverged) are returned unchanged. List/combo/checkbox/date-bound controls and controls whose binding
+    /// does not resolve are left untouched — this only writes back plain-text bindings, the shape a typed
+    /// edit actually takes.
+    /// </summary>
+    public static IReadOnlyList<PreservedPart> WriteBoundTextEdits(
+        TextDocument document,
+        IReadOnlyList<PreservedPart> preservedParts)
+    {
+        ArgumentNullException.ThrowIfNull(document);
+        ArgumentNullException.ThrowIfNull(preservedParts);
+
+        var stores = BuildDataStores(preservedParts);
+        if (stores.Count == 0)
+            return preservedParts;
+
+        var paragraphs = EnumerateStoryParagraphs(document).ToList();
+
+        // Pass 1: snapshot the pre-edit stored value of every distinct binding (store item + XPath +
+        // prefix mappings) referenced by an inline control, BEFORE any write-back below mutates the
+        // shared per-store-item XDocument. Two or more controls can legitimately bind to the same
+        // XPath -- "linked" controls, e.g. the same field repeated in a header and in the body -- and
+        // resolving each one against this snapshot (rather than the live document, which the walk in
+        // pass 2 progressively mutates) is what lets every such control be compared against the value
+        // it actually started the edit session with, instead of a sibling control's already-written
+        // value.
+        var snapshot = new Dictionary<BindingKey, string>();
+        foreach (var paragraph in paragraphs)
+        {
+            foreach (var (_, _, _, binding) in EnumerateInlineBoundGroups(paragraph))
+            {
+                if (BindingKey.From(binding) is not { } key || snapshot.ContainsKey(key))
+                    continue;
+                if (TryResolve(stores, binding, out var storedValue))
+                    snapshot[key] = storedValue;
+            }
+        }
+
+        // Pass 2: apply edits using the snapshot above. A control is only treated as edited when its
+        // displayed text differs from the value the snapshot recorded for its binding key -- a linked
+        // control that was never touched still shows that same snapshot value, so it is correctly left
+        // alone even after a sibling control bound to the same key has already written a new value to
+        // the store.
+        //
+        // Conflict rule: if two or more linked controls were BOTH edited to DIFFERENT values before this
+        // save, the first one encountered in document order (body, then headers/footers, footnotes/
+        // endnotes, then comments -- see EnumerateStoryParagraphs) wins and its value is written to the
+        // shared store item once; every later control bound to the same key is discarded from the store
+        // (its own displayed text is left as-is in memory for this session, but the next time the
+        // document is opened, RefreshBoundTextControls will resolve it back to the single value that won
+        // and got persisted). This is a "first writer wins" policy, chosen because document order is the
+        // only deterministic signal available here -- there is no edit-timestamp to arbitrate by -- and a
+        // single deterministic winner keeps the store in one consistent state rather than depending on
+        // enumeration order to decide which write clobbers which mid-walk.
+        var dirtyPartNames = new HashSet<string>(StringComparer.Ordinal);
+        var resolvedKeys = new HashSet<BindingKey>();
+        foreach (var paragraph in paragraphs)
+            WriteInlineBoundEdits(paragraph, stores, snapshot, resolvedKeys, dirtyPartNames);
+
+        if (dirtyPartNames.Count == 0)
+            return preservedParts;
+
+        var updatedByPartName = stores.Values
+            .Where(entry => dirtyPartNames.Contains(entry.Part.PartName))
+            .ToDictionary(
+                entry => entry.Part.PartName,
+                entry => entry.Part with { Bytes = SerializeXml(entry.Document) },
+                StringComparer.Ordinal);
+
+        return preservedParts
+            .Select(part => updatedByPartName.TryGetValue(part.PartName, out var updated) ? updated : part)
+            .ToList();
+    }
+
+    private static void WriteInlineBoundEdits(
+        Paragraph paragraph,
+        IReadOnlyDictionary<string, (XDocument Document, PreservedPart Part)> stores,
+        IReadOnlyDictionary<BindingKey, string> snapshot,
+        HashSet<BindingKey> resolvedKeys,
+        HashSet<string> dirtyPartNames)
+    {
+        foreach (var (start, end, control, binding) in EnumerateInlineBoundGroups(paragraph))
+        {
+            if (BindingKey.From(binding) is not { } key
+                || !snapshot.TryGetValue(key, out var storedValue)
+                || !stores.TryGetValue(key.StoreItemId, out var entry))
+            {
+                continue;
+            }
+
+            var displayedText = string.Concat(
+                paragraph.Runs.Skip(start).Take(end - start).Select(run => run.Text));
+            if (string.Equals(storedValue, displayedText, StringComparison.Ordinal))
+                continue; // unchanged from the value this control's edit session started with
+
+            if (!resolvedKeys.Contains(key) && TryWriteBack(entry.Document, binding, displayedText))
+            {
+                // First (in document order) control bound to this key whose displayed text actually
+                // diverged: it wins the write. See the "first writer wins" note in WriteBoundTextEdits.
+                resolvedKeys.Add(key);
+                dirtyPartNames.Add(entry.Part.PartName);
+            }
+
+            if (control.WordMetadata!.ShowingPlaceholder)
+            {
+                var cleared = control with
+                {
+                    WordMetadata = control.WordMetadata with { ShowingPlaceholder = false }
+                };
+                for (var index = start; index < end; index++)
+                    paragraph.Runs[index].Control = cleared;
+            }
+        }
+    }
+
+    private static IEnumerable<(int Start, int End, ContentControl Control, ContentControlDataBinding Binding)>
+        EnumerateInlineBoundGroups(Paragraph paragraph)
+    {
+        for (var start = 0; start < paragraph.Runs.Count;)
+        {
+            var control = paragraph.Runs[start].Control;
+            var end = start + 1;
+            while (end < paragraph.Runs.Count && ReferenceEquals(paragraph.Runs[end].Control, control))
+                end++;
+
+            if (control is { Kind: ContentControlKind.PlainText, WordMetadata.DataBinding: { } binding })
+                yield return (start, end, control, binding);
+
+            start = end;
+        }
+    }
+
+    /// <summary>
+    /// Identifies one bindable location inside a customXml data store: the store item plus the XPath
+    /// (and namespace prefix mappings the XPath relies on) used to reach into it. Two content controls
+    /// that share a <see cref="BindingKey"/> are "linked" -- Word shows and edits them as one field.
+    /// </summary>
+    private readonly record struct BindingKey(string StoreItemId, string XPath, string? PrefixMappings)
+    {
+        public static BindingKey? From(ContentControlDataBinding binding)
+        {
+            if (NormalizeStoreItemId(binding.StoreItemId) is not { } storeItemId
+                || binding.XPath is not { Length: > 0 } xpath)
+            {
+                return null;
+            }
+
+            return new BindingKey(storeItemId, xpath, binding.PrefixMappings);
+        }
+    }
+
+    private static bool TryWriteBack(XDocument itemDocument, ContentControlDataBinding binding, string newValue)
+    {
+        if (binding.XPath is not { Length: > 0 } xpath)
+            return false;
+
+        try
+        {
+            var namespaces = BuildNamespaceManager(binding.PrefixMappings);
+            var result = itemDocument.XPathEvaluate(xpath, namespaces);
+            return TrySetValue(result, newValue);
+        }
+        catch (Exception exception) when (exception is ArgumentException or InvalidOperationException or XmlException or XPathException)
+        {
+            return false;
+        }
+    }
+
+    private static bool TrySetValue(object? result, string newValue)
+    {
+        if (result is IEnumerable sequence and not string)
+        {
+            foreach (var item in sequence)
+                return TrySetValue(item, newValue);
+
+            return false;
+        }
+
+        switch (result)
+        {
+            case XElement element:
+                element.Value = newValue;
+                return true;
+            case XAttribute attribute:
+                attribute.Value = newValue;
+                return true;
+            case XText text:
+                text.Value = newValue;
+                return true;
+            default:
+                return false;
+        }
+    }
+
+    private static byte[] SerializeXml(XDocument document) =>
+        Encoding.UTF8.GetBytes(document.ToString(SaveOptions.DisableFormatting));
+
     private static int RefreshInlineControls(
         Paragraph paragraph,
-        IReadOnlyDictionary<string, XDocument> stores)
+        IReadOnlyDictionary<string, (XDocument Document, PreservedPart Part)> stores)
     {
         var refreshed = 0;
         for (var start = 0; start < paragraph.Runs.Count;)
@@ -252,7 +457,7 @@ public static class CustomXmlDataBindingResolver
 
     private static int RefreshBodyBlockControls(
         IReadOnlyList<Block> blocks,
-        IReadOnlyDictionary<string, XDocument> stores)
+        IReadOnlyDictionary<string, (XDocument Document, PreservedPart Part)> stores)
     {
         var refreshed = 0;
         for (var start = 0; start < blocks.Count;)
@@ -287,14 +492,14 @@ public static class CustomXmlDataBindingResolver
     }
 
     private static bool TryResolve(
-        IReadOnlyDictionary<string, XDocument> stores,
+        IReadOnlyDictionary<string, (XDocument Document, PreservedPart Part)> stores,
         ContentControlDataBinding binding,
         out string value)
     {
         value = string.Empty;
         if (NormalizeStoreItemId(binding.StoreItemId) is not { } storeItemId
             || binding.XPath is not { Length: > 0 } xpath
-            || !stores.TryGetValue(storeItemId, out var item))
+            || !stores.TryGetValue(storeItemId, out var entry))
         {
             return false;
         }
@@ -302,7 +507,7 @@ public static class CustomXmlDataBindingResolver
         try
         {
             var namespaces = BuildNamespaceManager(binding.PrefixMappings);
-            var result = item.XPathEvaluate(xpath, namespaces);
+            var result = entry.Document.XPathEvaluate(xpath, namespaces);
             return TryGetValue(result, out value);
         }
         catch (Exception exception) when (exception is ArgumentException or InvalidOperationException or XmlException or XPathException)
@@ -311,12 +516,13 @@ public static class CustomXmlDataBindingResolver
         }
     }
 
-    private static Dictionary<string, XDocument> BuildDataStores(IReadOnlyList<PreservedPart> parts)
+    private static Dictionary<string, (XDocument Document, PreservedPart Part)> BuildDataStores(
+        IReadOnlyList<PreservedPart> parts)
     {
         var partsByName = parts
             .GroupBy(part => part.PartName, StringComparer.OrdinalIgnoreCase)
             .ToDictionary(group => group.Key, group => group.First(), StringComparer.OrdinalIgnoreCase);
-        var result = new Dictionary<string, XDocument>(StringComparer.OrdinalIgnoreCase);
+        var result = new Dictionary<string, (XDocument Document, PreservedPart Part)>(StringComparer.OrdinalIgnoreCase);
 
         foreach (var itemPart in parts.Where(part =>
                      string.Equals(part.RelationshipType, Ooxml.CustomXmlRelType, StringComparison.Ordinal)))
@@ -348,7 +554,7 @@ public static class CustomXmlDataBindingResolver
                 continue;
             }
 
-            result.TryAdd(itemId, item);
+            result.TryAdd(itemId, (item, itemPart));
         }
 
         return result;

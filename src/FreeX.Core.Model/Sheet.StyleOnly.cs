@@ -20,7 +20,14 @@ public sealed partial class Sheet
             _styleOnly.EnsureCapacity(capacity);
     }
 
-    /// <summary>Returns the style-only override for an empty cell, or null if none exists.</summary>
+    /// <summary>
+    /// Returns the style-only override for an empty cell, or null if none exists. Falls back to the
+    /// whole-row default style, then the whole-column default style, when the cell carries no
+    /// per-cell style-only entry of its own -- matching Excel's cell &gt; row &gt; column resolution
+    /// order (R136-io-worksheet-props-col-row-default-style). A tombstoned entry (a per-cell
+    /// style-only run explicitly cleared for this address) does NOT fall through: an explicit clear
+    /// is itself a cell-level override that beats the row/column default, same as Excel.
+    /// </summary>
     public StyleId? GetStyleOnly(uint row, uint col)
     {
         var key = (row, col);
@@ -30,7 +37,16 @@ public sealed partial class Sheet
         if (_styleOnlyRunTombstones?.Contains(key) == true)
             return null;
 
-        return TryGetStyleOnlyRun(row, col);
+        if (TryGetStyleOnlyRun(row, col) is { } runStyleId)
+            return runStyleId;
+
+        if (RowStyles.Count != 0 && RowStyles.TryGetValue(row, out var rowStyleId))
+            return rowStyleId;
+
+        if (ColumnStyles.Count != 0 && ColumnStyles.TryGetValue(col, out var colStyleId))
+            return colStyleId;
+
+        return null;
     }
 
     /// <summary>Sets a style-only override for an empty cell.</summary>

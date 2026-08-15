@@ -23,7 +23,7 @@ public static class CellEntryParser
     {
         if (workbook is not null && IsTargetTextFormatted(workbook, address))
         {
-            return Cell.FromValue(new TextValue(text));
+            return Cell.FromValue(new TextValue(TruncateToExcelCellTextLimit(text)));
         }
 
         if (text.StartsWith("=", StringComparison.Ordinal))
@@ -129,7 +129,7 @@ public static class CellEntryParser
         // numeric/boolean/date coercion below.
         if (text.StartsWith('\''))
         {
-            return new TextValue(text[1..]);
+            return new TextValue(TruncateToExcelCellTextLimit(text[1..]));
         }
 
         if (TryParseFiniteNumber(text, out var number))
@@ -194,8 +194,20 @@ public static class CellEntryParser
             return DateTimeValue.FromDateTime(dateTime);
         }
 
-        return new TextValue(text);
+        return new TextValue(TruncateToExcelCellTextLimit(text));
     }
+
+    // Real Excel's hard cap on how much literal text a single cell can hold (see
+    // PasteCommandFactory.TruncateToExcelCellTextLimit's identical rule for the external-clipboard
+    // paste path, which this mirrors). A typed entry that exceeds this was previously accepted
+    // uncapped -- the cell would carry text longer than a real XLSX cell can validly hold, so the
+    // workbook saves fine here but real Excel then truncates it on open, silently losing data the
+    // user believed was saved intact. Real Excel truncates the typed text to this limit rather than
+    // rejecting the entry outright, so mirror that here rather than erroring the cell out.
+    private const int ExcelCellTextLimit = 32767;
+
+    private static string TruncateToExcelCellTextLimit(string text) =>
+        text.Length > ExcelCellTextLimit ? text[..ExcelCellTextLimit] : text;
 
     // Float + AllowThousands so a comma-decimal locale's grouped integer (e.g. de-DE "1.234"
     // meaning 1234, '.' as thousands separator) is honored, not silently misread as a decimal.

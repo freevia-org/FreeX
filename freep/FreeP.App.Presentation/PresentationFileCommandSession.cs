@@ -1,4 +1,5 @@
 using System.IO;
+using System.Threading;
 using Free.Shared.AppServices;
 using Free.Shared.IO;
 using Free.Shared.Pdf;
@@ -460,7 +461,10 @@ public sealed class PresentationFileCommandSession
     public PresentationVideoFramePackageExecutionDescriptor? LastVideoExecutionDescriptor { get; private set; }
     public PresentationImageExportResult? LastImageExportResult { get; private set; }
     public IReadOnlyList<string> LastVideoFrameImageDiagnostics { get; private set; } = [];
+    public IReadOnlyList<string> LastPrintImageDiagnostics { get; private set; } = [];
     public PresentationNotesPagePdfRenderPlan? LastNotesPagePdfRenderPlan { get; private set; }
+
+    private int _videoExportInProgress;
 
     public void MarkDirty() => _lifecycle.MarkDirty();
 
@@ -774,14 +778,22 @@ public sealed class PresentationFileCommandSession
 
     public PresentationPrintOutputPackage BuildPrintOutputPackage(PresentationPrintRequest? request = null)
     {
-        LastPrintOutputPackage = _printPackageFactory?.Invoke(request) ??
-            PresentationPrintOutputPackageExecutor.BuildPackage(
+        if (_printPackageFactory is not null)
+        {
+            LastPrintOutputPackage = _printPackageFactory(request);
+            LastPrintImageDiagnostics = [];
+        }
+        else
+        {
+            var imageDiagnostics = new List<string>();
+            LastPrintOutputPackage = PresentationPrintOutputPackageExecutor.BuildPackageWithDiagnostics(
                 _getPresentation(),
                 request,
-                _render.RenderSlideToPng,
-                _render.WriteRasterPdf,
-                _render.WriteVectorPdf,
-                _render.RenderSlideToPngWithPrintMarkup);
+                _render,
+                imageDiagnostics);
+            LastPrintImageDiagnostics = imageDiagnostics;
+        }
+
         LastPrintExecutionDescriptor = PresentationPrintOutputPackageExecutor.BuildExecutionDescriptor(
             LastPrintOutputPackage,
             _print.Capabilities,
@@ -845,7 +857,8 @@ public sealed class PresentationFileCommandSession
                 PresentationFileCommand.Print,
                 PresentationNativeCommandOutcomePlanner.BuildPrintCommandResult(native),
                 path: null,
-                cancellationToken);
+                cancellationToken,
+                LastPrintImageDiagnostics);
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
@@ -892,38 +905,52 @@ public sealed class PresentationFileCommandSession
         PresentationVideoExportRequest? request = null,
         CancellationToken cancellationToken = default)
     {
-        if (!CanExportVideo)
+        if (!TryBeginVideoExport())
         {
-            return await CompleteAsync(
-                PresentationFileCommandResult.Unavailable(
-                    PresentationFileCommand.ExportVideo,
-                    _video.Capabilities.UnavailableReason ?? "No MP4 encoder is available."),
-                cancellationToken);
+            return await CompleteAsync(VideoExportAlreadyRunningResult(), cancellationToken);
         }
 
-        var plan = BuildVideoExportPlan(request);
-        if (!plan.CanExecute)
+        try
         {
-            return await CompleteAsync(
-                PresentationFileCommandResult.Invalid(
+            if (!CanExportVideo)
+            {
+                return await CompleteAsync(
+                    PresentationFileCommandResult.Unavailable(
+                        PresentationFileCommand.ExportVideo,
+                        _video.Capabilities.UnavailableReason ?? "No MP4 encoder is available."),
+                    cancellationToken);
+            }
+
+            var plan = BuildVideoExportPlan(request);
+            if (!plan.CanExecute)
+            {
+                return await CompleteAsync(
+                    PresentationFileCommandResult.Invalid(
+                        PresentationFileCommand.ExportVideo,
+                        PresentationFileTextResources.ErrorSummary(PresentationFileCommand.ExportVideo),
+                        plan.DisabledReason ?? "Video export requires at least one slide."),
+                    cancellationToken);
+            }
+
+            var selection = await _picker.PickSaveFileAsync(
+                new PresentationFileSavePickerRequest(
                     PresentationFileCommand.ExportVideo,
-                    PresentationFileTextResources.ErrorSummary(PresentationFileCommand.ExportVideo),
-                    plan.DisabledReason ?? "Video export requires at least one slide."),
+                    PresentationExportPlanner.BuildVideoExportDialogPlan(CurrentFileName),
+                    PresentationExportPlanner.BuildVideoExportPickerPlan(CurrentFileName),
+                    PresentationExportPlanner.VideoExportPickerTitle),
                 cancellationToken);
+            var pickerResult = PickerResult(PresentationFileCommand.ExportVideo, selection);
+            if (pickerResult is not null)
+                return await CompleteAsync(pickerResult, cancellationToken);
+
+            // Already holding the re-entrancy guard for this call -- go straight to the core
+            // export so the public ExportVideoToPathAsync's own guard check doesn't see it as busy.
+            return await ExportVideoToPathCoreAsync(selection.Path!, request, cancellationToken);
         }
-
-        var selection = await _picker.PickSaveFileAsync(
-            new PresentationFileSavePickerRequest(
-                PresentationFileCommand.ExportVideo,
-                PresentationExportPlanner.BuildVideoExportDialogPlan(CurrentFileName),
-                PresentationExportPlanner.BuildVideoExportPickerPlan(CurrentFileName),
-                PresentationExportPlanner.VideoExportPickerTitle),
-            cancellationToken);
-        var pickerResult = PickerResult(PresentationFileCommand.ExportVideo, selection);
-        if (pickerResult is not null)
-            return await CompleteAsync(pickerResult, cancellationToken);
-
-        return await ExportVideoToPathAsync(selection.Path!, request, cancellationToken);
+        finally
+        {
+            EndVideoExport();
+        }
     }
 
     public async Task<PresentationFileCommandResult> ExportVideoToPathAsync(
@@ -932,6 +959,26 @@ public sealed class PresentationFileCommandSession
         CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(outputPath);
+        if (!TryBeginVideoExport())
+        {
+            return await CompleteAsync(VideoExportAlreadyRunningResult(), cancellationToken);
+        }
+
+        try
+        {
+            return await ExportVideoToPathCoreAsync(outputPath, request, cancellationToken);
+        }
+        finally
+        {
+            EndVideoExport();
+        }
+    }
+
+    private async Task<PresentationFileCommandResult> ExportVideoToPathCoreAsync(
+        string outputPath,
+        PresentationVideoExportRequest? request,
+        CancellationToken cancellationToken)
+    {
         try
         {
             var package = BuildVideoFramePackage(request);
@@ -958,6 +1005,21 @@ public sealed class PresentationFileCommandSession
                 cancellationToken);
         }
     }
+
+    /// <summary>
+    /// Guards against a second Export Video invocation starting while one is already writing the
+    /// output file (both FreeP shells fire Export Video as fire-and-forget from a menu/backstage
+    /// click, so a double click previously started two concurrent exports racing on the same path).
+    /// </summary>
+    private bool TryBeginVideoExport() =>
+        Interlocked.CompareExchange(ref _videoExportInProgress, 1, 0) == 0;
+
+    private void EndVideoExport() => Interlocked.Exchange(ref _videoExportInProgress, 0);
+
+    private static PresentationFileCommandResult VideoExportAlreadyRunningResult() =>
+        PresentationFileCommandResult.Unavailable(
+            PresentationFileCommand.ExportVideo,
+            "A video export is already running.");
 
     private async Task<PresentationFileCommandResult> OpenPathCoreAsync(
         string path,

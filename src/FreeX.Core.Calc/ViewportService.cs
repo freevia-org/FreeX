@@ -46,7 +46,14 @@ public sealed partial class ViewportService : IViewportService
         var rowMetrics = BuildFrozenAwareRowMetrics(sheet, request.TopRow, request.AvailableHeight, effectiveFrozenRows);
         var colMetrics = BuildFrozenAwareColMetrics(sheet, request.LeftCol, request.AvailableWidth, effectiveFrozenCols);
         var hasAnyCellComments = HasAnyCellComments(sheet);
-        var hasAnyStyleOnlyCells = sheet.HasStyleOnlyCells;
+        // R136-io-worksheet-props-col-row-default-style: a sheet can have NO legacy per-cell
+        // style-only entries at all (HasStyleOnlyCells false) yet still need GetStyleOnly consulted
+        // for empty cells, because GetStyleOnly now also falls back to a whole-row/-column default
+        // style (Sheet.RowStyles/ColumnStyles) -- without this, the viewport's fast-path guard below
+        // would skip calling GetStyleOnly entirely for such a sheet, so a Currency-formatted empty
+        // column would render as unformatted in the live grid despite resolving correctly everywhere
+        // else (display formatters, cell-entry seeding, print/PDF layout).
+        var hasAnyStyleOnlyCells = sheet.HasStyleOnlyCells || sheet.ColumnStyles.Count != 0 || sheet.RowStyles.Count != 0;
 
         // Pre-compute CF rule order and aggregates once per frame rather than per cell.
         var cfContext = BuildConditionalFormatContext(sheet, workbook);
@@ -981,7 +988,14 @@ public sealed partial class ViewportService : IViewportService
     {
         var dedupeCells = SplitPaneRegionsCanOverlap(topRows, leftColumns, bottomLeftRows, topRightColumns);
         HashSet<(uint Row, uint Col)>? seen = null;
-        var hasAnyStyleOnlyCells = sheet.HasStyleOnlyCells;
+        // R136-io-worksheet-props-col-row-default-style: a sheet can have NO legacy per-cell
+        // style-only entries at all (HasStyleOnlyCells false) yet still need GetStyleOnly consulted
+        // for empty cells, because GetStyleOnly now also falls back to a whole-row/-column default
+        // style (Sheet.RowStyles/ColumnStyles) -- without this, the viewport's fast-path guard below
+        // would skip calling GetStyleOnly entirely for such a sheet, so a Currency-formatted empty
+        // column would render as unformatted in the live grid despite resolving correctly everywhere
+        // else (display formatters, cell-entry seeding, print/PDF layout).
+        var hasAnyStyleOnlyCells = sheet.HasStyleOnlyCells || sheet.ColumnStyles.Count != 0 || sheet.RowStyles.Count != 0;
         var hasConditionalStyles = HasConditionalStyleRules(cfContext);
         var hasConditionalIcons = cfContext.IconRulesByPriority.Count != 0;
         var cells = new List<DisplayCell>(EstimateSplitPaneCellCapacity(

@@ -2576,6 +2576,126 @@ public sealed class SlideCompositorTests
     }
 
     /// <summary>
+    /// A shape's OWN txBody-level a:lstStyle sits between direct paragraph properties and the
+    /// layout in PowerPoint's inheritance chain, so it must override both the layout
+    /// placeholder's lstStyle and the master's p:txStyles when all three define the same level.
+    /// Regression guard for the "shape lstStyle never consulted" bug: before the fix,
+    /// ResolveTextStyleInheritance skipped the shape's own lstStyle entirely and fell through
+    /// straight to the layout, so this run rendered at the layout's 32pt instead of the shape's
+    /// own 40pt.
+    /// </summary>
+    [Fact]
+    public void Compose_BodyRun_ShapeLstStyleOverridesLayoutAndMasterStyle()
+    {
+        var p = new PresentationModel();
+        p.Theme = PresentationTheme.CreateDefault();
+
+        var master = new SlideMaster { Id = "m1" };
+        master.TextStyles = new MasterTextStyles();
+        // Master defines 24pt for body lvl1.
+        master.TextStyles.BodyStyle[0] = new TextStyleLevel { FontSizePt = 24.0 };
+        p.Masters.Add(master);
+
+        var layout = new SlideLayout { Id = "l1", MasterId = "m1" };
+        // Layout placeholder's own lstStyle overrides the master to 32pt.
+        var layoutLstStyle = new TextStyleLevels();
+        layoutLstStyle[0] = new TextStyleLevel { FontSizePt = 32.0 };
+        var layoutBodyPh = new SlideShape
+        {
+            Placeholder = new Placeholder { Type = PlaceholderType.Body, Idx = 1 },
+            OffsetXEmu = 457200, OffsetYEmu = 1371600,
+            ExtentCxEmu = 8229600, ExtentCyEmu = 4525963,
+            TextBody = new TextBody { LstStyle = layoutLstStyle }
+        };
+        layout.Placeholders.Add(layoutBodyPh);
+        p.Layouts.Add(layout);
+
+        var slide = new Slide { LayoutId = "l1" };
+        var shape = new SlideShape
+        {
+            Id = 1,
+            Placeholder = new Placeholder { Type = PlaceholderType.Body, Idx = 1 },
+            OffsetXEmu = 457200, OffsetYEmu = 1371600,
+            ExtentCxEmu = 8229600, ExtentCyEmu = 4525963
+        };
+        // The shape's own txBody carries its own lstStyle overriding to 40pt.
+        var shapeLstStyle = new TextStyleLevels();
+        shapeLstStyle[0] = new TextStyleLevel { FontSizePt = 40.0 };
+        var body = new TextBody { LstStyle = shapeLstStyle };
+        var para = new Paragraph { Level = 0 };
+        // Run with no explicit size — shape lstStyle (40pt) must beat layout (32pt) and master (24pt).
+        para.Runs.Add(new Run { Text = "Body run" });
+        body.Paragraphs.Add(para);
+        shape.TextBody = body;
+        slide.Shapes.Add(shape);
+        p.Slides.Add(slide);
+
+        var ops = SlideCompositor.Compose(p, slide);
+        var run = ops.OfType<DrawOp.Shape>().Single().Text!.Paragraphs[0].Runs[0];
+
+        run.FontSizePt.Should().Be(40.0,
+            "the shape's own lstStyle (40pt) must win over both the layout lstStyle (32pt) " +
+            "and the master bodyStyle (24pt) per PowerPoint's inheritance order");
+    }
+
+    /// <summary>
+    /// Sibling no-regression guard: when the shape's own lstStyle has no entry at all for the
+    /// paragraph's level (or is entirely absent), resolution must still fall back correctly
+    /// through the layout's lstStyle. This pins down that adding the shape-lstStyle lookup did
+    /// not break the pre-existing layout/master fallback chain.
+    /// </summary>
+    [Fact]
+    public void Compose_BodyRun_ShapeLstStyleMissingLevel_StillFallsBackToLayoutLstStyle()
+    {
+        var p = new PresentationModel();
+        p.Theme = PresentationTheme.CreateDefault();
+
+        var master = new SlideMaster { Id = "m1" };
+        master.TextStyles = new MasterTextStyles();
+        master.TextStyles.BodyStyle[0] = new TextStyleLevel { FontSizePt = 24.0 };
+        p.Masters.Add(master);
+
+        var layout = new SlideLayout { Id = "l1", MasterId = "m1" };
+        var layoutLstStyle = new TextStyleLevels();
+        layoutLstStyle[0] = new TextStyleLevel { FontSizePt = 32.0 };
+        var layoutBodyPh = new SlideShape
+        {
+            Placeholder = new Placeholder { Type = PlaceholderType.Body, Idx = 1 },
+            OffsetXEmu = 457200, OffsetYEmu = 1371600,
+            ExtentCxEmu = 8229600, ExtentCyEmu = 4525963,
+            TextBody = new TextBody { LstStyle = layoutLstStyle }
+        };
+        layout.Placeholders.Add(layoutBodyPh);
+        p.Layouts.Add(layout);
+
+        var slide = new Slide { LayoutId = "l1" };
+        var shape = new SlideShape
+        {
+            Id = 1,
+            Placeholder = new Placeholder { Type = PlaceholderType.Body, Idx = 1 },
+            OffsetXEmu = 457200, OffsetYEmu = 1371600,
+            ExtentCxEmu = 8229600, ExtentCyEmu = 4525963
+        };
+        // Shape carries a lstStyle object, but it defines NO levels at all (HasAny == false in
+        // spirit — every slot is null), so resolution must skip past it to the layout's 32pt.
+        var shapeLstStyle = new TextStyleLevels();
+        var body = new TextBody { LstStyle = shapeLstStyle };
+        var para = new Paragraph { Level = 0 };
+        para.Runs.Add(new Run { Text = "Body run" });
+        body.Paragraphs.Add(para);
+        shape.TextBody = body;
+        slide.Shapes.Add(shape);
+        p.Slides.Add(slide);
+
+        var ops = SlideCompositor.Compose(p, slide);
+        var run = ops.OfType<DrawOp.Shape>().Single().Text!.Paragraphs[0].Runs[0];
+
+        run.FontSizePt.Should().Be(32.0,
+            "when the shape's lstStyle has no entry at this level, resolution must still fall " +
+            "back to the layout's lstStyle (32pt) rather than the master (24pt)");
+    }
+
+    /// <summary>
     /// An explicit run font size always wins over the master's inherited style.
     /// Regression guard: explicit formatting must not be overridden by the inheritance chain.
     /// </summary>
