@@ -1456,6 +1456,65 @@ public sealed class WorkbookSession : IDisposable
         return result;
     }
 
+    /// <summary>
+    /// Executes an AutoFilter mutation through the shared repeat/selection pipeline. The planned
+    /// range is authoritative for the first execution; Repeat Last rebuilds the command against the
+    /// then-current primary selection, matching the established WPF command contract.
+    /// </summary>
+    public WorkbookCellEditResult ExecuteWorksheetFilterMutationPlan(WorksheetFilterMutationPlan plan)
+    {
+        ArgumentNullException.ThrowIfNull(plan);
+        if (!plan.Success)
+            throw new ArgumentException("A failed worksheet filter plan cannot be executed.", nameof(plan));
+
+        return ExecuteWorksheetFilterCommand(plan.Range, plan.CreateCommand);
+    }
+
+    /// <summary>
+    /// Reapplies the durable filter definition as a repeatable command and applies the same header
+    /// selection aftermath as WPF.
+    /// </summary>
+    public WorkbookCellEditResult ExecuteWorksheetFilterReapplyPlan(
+        WorksheetFilterReapplyPlan plan,
+        string historyLabel)
+    {
+        ArgumentNullException.ThrowIfNull(plan);
+        ArgumentException.ThrowIfNullOrWhiteSpace(historyLabel);
+        return ExecuteWorksheetFilterCommand(plan.Range, _ => plan.CreateCommand(historyLabel));
+    }
+
+    /// <summary>
+    /// Executes a filter command whose command must be rebuilt from the current primary selection
+    /// when Repeat Last Action is invoked. This is used for clear-all as well as renderer-neutral
+    /// filter plans.
+    /// </summary>
+    public WorkbookCellEditResult ExecuteWorksheetFilterCommand(
+        GridRange initialRange,
+        Func<GridRange, IWorkbookCommand> commandFactory)
+    {
+        ArgumentNullException.ThrowIfNull(commandFactory);
+        ValidateSelectionRange(initialRange, nameof(initialRange));
+
+        var selectedRangeBefore = SelectedRange;
+        var activeCellBefore = ActiveCell;
+        var isInitialExecution = true;
+        var result = ExecuteRepeatableCommandPreservingSelection(
+            () =>
+            {
+                var range = isInitialExecution ? initialRange : SelectedRange;
+                isInitialExecution = false;
+                return commandFactory(range);
+            });
+
+        if (result.Success &&
+            WorksheetFilterSelectionPlanner.ShouldExpandHeaderCell(selectedRangeBefore, initialRange))
+        {
+            SelectRanges(initialRange, [initialRange], activeCellBefore);
+        }
+
+        return result;
+    }
+
     // Worksheet structure edits
 
     public WorkbookWorksheetStructureResult InsertSelectedCells(InsertCellsShiftDirection direction) =>
@@ -4449,10 +4508,14 @@ public sealed class WorkbookSession : IDisposable
     /// Toggles the active sheet's AutoFilter over the effective range: the existing AutoFilter range when one
     /// is set (to disable it), the current region around a single-cell selection, or the selected range.
     /// </summary>
-    public WorkbookCellEditResult ToggleSelectedRangeAutoFilter() =>
-        ExecuteReviewCommand(new ToggleWorksheetAutoFilterCommand(
-            ActiveSheet.Id,
-            AutoFilterToggleRangePlanner.Create(ActiveSheet, SelectedRange)));
+    public WorkbookCellEditResult ToggleSelectedRangeAutoFilter()
+    {
+        var range = AutoFilterToggleRangePlanner.Create(ActiveSheet, SelectedRange);
+        // Toggling the filter buttons preserves the exact selection in WPF; unlike apply/clear/
+        // reapply it does not expand a lone header cell to the full filter range.
+        return ExecuteRepeatableCommandPreservingSelection(
+            () => new ToggleWorksheetAutoFilterCommand(ActiveSheet.Id, range));
+    }
 
     /// <summary>
     /// R127-services-sort-multiarea-1: real Excel refuses Sort outright on a Ctrl+click multi-area

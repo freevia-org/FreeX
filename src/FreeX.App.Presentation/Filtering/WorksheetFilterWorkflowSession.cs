@@ -90,6 +90,22 @@ public sealed record WorksheetFilterReapplyPlan(
 }
 
 /// <summary>
+/// Owns the selection aftermath shared by worksheet AutoFilter commands. WPF expands a single
+/// selected header cell back to the filter range after applying, clearing, or reapplying a filter,
+/// while preserving every other selection (including multi-area selections). Keeping the predicate
+/// portable prevents either renderer from approximating that policy independently.
+/// </summary>
+public static class WorksheetFilterSelectionPlanner
+{
+    public static bool ShouldExpandHeaderCell(GridRange selectedRange, GridRange filterRange) =>
+        selectedRange != filterRange &&
+        selectedRange.RowCount == 1 &&
+        selectedRange.ColCount == 1 &&
+        selectedRange.Start.Row == filterRange.Start.Row &&
+        filterRange.Contains(selectedRange.Start);
+}
+
+/// <summary>
 /// Owns portable AutoFilter and Advanced Filter workflow decisions shared by the WPF and Avalonia
 /// shells. Renderers provide dialog results and execute the returned Core commands; this session
 /// retains live criteria needed for Reapply when a structured-table criterion is only persisted as

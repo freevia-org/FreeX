@@ -148,6 +148,32 @@ public sealed class WorksheetFilterWorkflowSessionTests
         sheet.FilterHiddenRows.Should().Contain([3u, 4u]);
     }
 
+    [Fact]
+    public void SelectionPlanner_ExpandsOnlySingleHeaderCellsInsideFilterRange()
+    {
+        var sheet = new Workbook("Book").AddSheet("Sheet1");
+        var filterRange = Range(sheet, 2, 3, 8, 6);
+
+        WorksheetFilterSelectionPlanner.ShouldExpandHeaderCell(
+                Range(sheet, 2, 5, 2, 5),
+                filterRange)
+            .Should().BeTrue();
+        WorksheetFilterSelectionPlanner.ShouldExpandHeaderCell(filterRange, filterRange)
+            .Should().BeFalse();
+        WorksheetFilterSelectionPlanner.ShouldExpandHeaderCell(
+                Range(sheet, 3, 5, 3, 5),
+                filterRange)
+            .Should().BeFalse();
+        WorksheetFilterSelectionPlanner.ShouldExpandHeaderCell(
+                Range(sheet, 2, 7, 2, 7),
+                filterRange)
+            .Should().BeFalse();
+        WorksheetFilterSelectionPlanner.ShouldExpandHeaderCell(
+                Range(sheet, 2, 4, 2, 5),
+                filterRange)
+            .Should().BeFalse();
+    }
+
     private static GridRange Range(Sheet sheet, uint startRow, uint startCol, uint endRow, uint endCol) =>
         new(new CellAddress(sheet.Id, startRow, startCol), new CellAddress(sheet.Id, endRow, endCol));
 
@@ -200,6 +226,9 @@ public sealed class WorksheetFilterWorkflowSessionSourceGuardTests
         hostFilter.Should().Contain("_filterWorkflowSession.PlanDialogResult(");
         hostFilter.Should().Contain("_filterWorkflowSession.CreateReapplyPlan(sheet)");
         hostFilter.Should().Contain("_filterWorkflowSession.CreateClearAllPlan(sheet, range)");
+        hostFilter.Should().Contain("_session.ExecuteWorksheetFilterMutationPlan(plan)");
+        hostFilter.Should().Contain("_session.ExecuteWorksheetFilterReapplyPlan(plan, \"Reapply Filter\")");
+        hostFilter.Should().NotContain("RestoreAutoFilterRangeSelection");
         hostFilter.Should().NotContain("_activeAutoFilterColumnFactories");
         hostFilter.Should().NotContain("_lastAutoFilterRange");
         hostFilter.Should().NotContain("BuildClearAllValueFiltersCommand");
@@ -207,10 +236,15 @@ public sealed class WorksheetFilterWorkflowSessionSourceGuardTests
 
         avaloniaFilter.Should().Contain("_filterWorkflowSession.PlanDialogResult(");
         avaloniaFilter.Should().Contain("_filterWorkflowSession.CreateClearAllPlan(sheet, range)");
+        avaloniaFilter.Should().Contain("_session.ExecuteWorksheetFilterMutationPlan(plan)");
+        avaloniaFilter.Should().Contain("_session.ExecuteWorksheetFilterCommand(");
+        avaloniaFilter.Should().NotContain("ExecuteReviewCommand(plan.CreateCommand())");
         avaloniaFilter.Should().NotContain("new FilterCommand(");
         avaloniaFilter.Should().NotContain("new SortCommand(");
         avaloniaFilter.Should().NotContain("new CellFillColorFilterCommand(");
         avaloniaData.Should().Contain("_filterWorkflowSession.CreateReapplyPlan(sheet)");
+        avaloniaData.Should().Contain("_session.ExecuteWorksheetFilterReapplyPlan(plan, \"Reapply Filters\")");
+        avaloniaData.Should().NotContain("_session.SelectRanges(");
         avaloniaData.Should().NotContain("TryBuildAutoFilterColumnReapplyCommand");
         avaloniaData.Should().NotContain("new CompositeWorkbookCommand(");
         avaloniaMain.Should().Contain("_filterWorkflowSession.RememberAdvancedFilter(");

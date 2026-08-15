@@ -52,6 +52,15 @@ public partial class MainWindow
     private static string CreateMultiRangeSortError() =>
         "Sort does not support multiple selected ranges yet.";
 
+    private bool TryExecuteWorksheetFilterCommand(
+        Func<WorkbookCellEditResult> execute,
+        string title)
+    {
+        SynchronizeWorkbookSessionSelection();
+        var result = execute();
+        return CompleteWorksheetSessionCommand(result, title);
+    }
+
     private void SortAscButton_Click(object sender, RoutedEventArgs e)
     {
         if (SheetGrid.SelectedRange is not { } range) return;
@@ -150,11 +159,9 @@ public partial class MainWindow
             return;
         }
 
-        var range = AutoFilterToggleRangePlanner.Create(sheet, selectedRange);
-        if (!TryExecuteRepeatableCurrentRangeCommand(
-                "Filter",
-                range,
-                _ => new ToggleWorksheetAutoFilterCommand(_currentSheetId, range)))
+        if (!TryExecuteWorksheetFilterCommand(
+                _session.ToggleSelectedRangeAutoFilter,
+                "Filter"))
         {
             return;
         }
@@ -166,10 +173,9 @@ public partial class MainWindow
 
     private bool TryExecuteAutoFilterMutation(WorksheetFilterMutationPlan plan)
     {
-        if (!TryExecuteRepeatablePlannedRangeCommand(
-                plan.HistoryLabel,
-                plan.Range,
-                plan.CreateCommand))
+        if (!TryExecuteWorksheetFilterCommand(
+                () => _session.ExecuteWorksheetFilterMutationPlan(plan),
+                plan.HistoryLabel))
             return false;
 
         _filterWorkflowSession.RecordSuccessfulMutation(plan);
@@ -188,14 +194,12 @@ public partial class MainWindow
             return;
         }
 
-        if (!TryExecuteRepeatableCurrentRangeCommand(
-                "Reapply Filter",
-                plan.Range,
-                _ => plan.CreateCommand("Reapply Filter")))
+        if (!TryExecuteWorksheetFilterCommand(
+                () => _session.ExecuteWorksheetFilterReapplyPlan(plan, "Reapply Filter"),
+                "Reapply Filter"))
             return;
 
         RecalculateAfterFilterOrSort();
-        RestoreAutoFilterRangeSelection(plan.Range);
         UpdateFilterViewportAndStatusBar();
     }
 
@@ -222,7 +226,6 @@ public partial class MainWindow
 
         if (!TryExecuteAutoFilterMutation(plan))
             return false;
-        RestoreAutoFilterRangeSelection(range);
         return true;
     }
 
@@ -391,32 +394,15 @@ public partial class MainWindow
         }
 
         var clearPlan = _filterWorkflowSession.CreateClearAllPlan(sheet, range);
-        if (!TryExecuteRepeatablePlannedRangeCommand(
-                "Clear Filter",
-                range,
-                currentRange => _filterWorkflowSession.CreateClearAllPlan(sheet, currentRange).Command))
+        if (!TryExecuteWorksheetFilterCommand(
+                () => _session.ExecuteWorksheetFilterCommand(
+                    range,
+                    currentRange => _filterWorkflowSession.CreateClearAllPlan(sheet, currentRange).Command),
+                "Clear Filter"))
             return;
         _filterWorkflowSession.RecordSuccessfulClearAll(clearPlan);
         RecalculateAfterFilterOrSort();
-        RestoreAutoFilterRangeSelection(range);
         UpdateFilterViewportAndStatusBar();
-    }
-
-    private void RestoreAutoFilterRangeSelection(GridRange range)
-    {
-        if (SheetGrid.SelectedRange == range)
-            return;
-
-        if (SheetGrid.SelectedRange is not { } selectedRange ||
-            selectedRange.RowCount != 1 ||
-            selectedRange.ColCount != 1 ||
-            selectedRange.Start.Row != range.Start.Row ||
-            !range.Contains(selectedRange.Start))
-        {
-            return;
-        }
-
-        SetSelectionRange(range, selectedRange.Start);
     }
 
     private void NamedRangesButton_Click(object sender, RoutedEventArgs e)

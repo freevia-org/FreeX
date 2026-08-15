@@ -32,9 +32,6 @@ public sealed partial class MainWindow
             return;
 
         var sheet = _session.ActiveSheet;
-        var selectedRange = _session.SelectedRange;
-        var selectedRanges = _session.SelectedRanges;
-        var activeCell = _session.ActiveCell;
         var plan = _filterWorkflowSession.CreateReapplyPlan(sheet);
         if (plan is null)
         {
@@ -42,9 +39,7 @@ public sealed partial class MainWindow
             return;
         }
 
-        var result = _session.ExecuteReviewCommand(
-            plan.CreateCommand("Reapply Filters"),
-            activeCell);
+        var result = _session.ExecuteWorksheetFilterReapplyPlan(plan, "Reapply Filters");
         if (!result.Success)
         {
             ShowEditIssue(result.ErrorMessage ?? UiText.Get("TableLoc_ReapplyFilterFailed"));
@@ -55,10 +50,6 @@ public sealed partial class MainWindow
         // must nevertheless see the new hidden-row set immediately, matching WPF's filter routes.
         RecalculateAfterAutoFilterMutation();
 
-        // ExecuteReviewCommand intentionally collapses ordinary command selections. Reapply is
-        // view-preserving in WPF, so restore the exact selection (including multi-area selections)
-        // after the atomic command succeeds.
-        _session.SelectRanges(selectedRange, selectedRanges, activeCell);
         RefreshShell(UiText.Format(
             plan.DefinitionCount == 1 ? "TableLoc_ReapplyedDefinitionsOne" : "TableLoc_ReapplyedDefinitionsMany",
             plan.DefinitionCount));
