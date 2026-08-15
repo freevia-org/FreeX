@@ -1514,6 +1514,7 @@ internal static class FreeWAvaloniaRibbonCommands
             ApplyEffectSet: editor.ApplyEffectSet,
             PreviewTheme: editor.PreviewTheme,
             PreviewThemeColors: editor.PreviewThemeColors,
+            PreviewStyleSet: editor.PreviewStyleSet,
             PreviewFontSet: editor.PreviewFontSet,
             PreviewParagraphSpacingSet: editor.PreviewParagraphSpacingSet,
             PreviewEffectSet: editor.PreviewEffectSet,

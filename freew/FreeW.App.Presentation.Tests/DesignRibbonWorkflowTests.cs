@@ -30,6 +30,9 @@ public sealed class DesignRibbonWorkflowTests
         foreach (var fontSet in DocumentFontSet.Catalog)
             Command(registry, $"freew.theme-fonts.{fontSet.Name.ToLowerInvariant()}")
                 .Should().BeAssignableTo<IRibbonPreviewCommand>();
+        foreach (var styleSet in DocumentStyleSet.Catalog)
+            Command(registry, DesignRibbonWorkflow.StyleSetCommandId(styleSet.Name))
+                .Should().BeAssignableTo<IRibbonPreviewCommand>();
         foreach (var spacing in DocumentParagraphSpacingSet.Catalog)
             Command(registry, DesignRibbonWorkflow.ParagraphSpacingCommandId(spacing.Name))
                 .Should().BeAssignableTo<IRibbonPreviewCommand>();
@@ -70,6 +73,9 @@ public sealed class DesignRibbonWorkflowTests
             .Execute(RibbonCommandContext.Empty);
         var fontSet = DocumentFontSet.Catalog[^1];
         Command(registry, "freew.theme-fonts").Execute(RibbonCommandContext.ForSelectedValue(fontSet.Name));
+        var styleSet = DocumentStyleSet.Catalog[^1];
+        Command(registry, DesignRibbonWorkflow.StyleSetCommandId(styleSet.Name))
+            .Execute(RibbonCommandContext.Empty);
         var spacing = DocumentParagraphSpacingSet.Catalog[^1];
         Command(registry, DesignRibbonWorkflow.ParagraphSpacingCommandId(spacing.Name))
             .Execute(RibbonCommandContext.Empty);
@@ -85,6 +91,7 @@ public sealed class DesignRibbonWorkflowTests
             "prepare", $"theme:{theme.Name}",
             "cancel-preview", "prepare", $"colors:{theme.Name}",
             "prepare", $"fonts:{fontSet.Name}",
+            "cancel-preview", "prepare", $"style-set:{styleSet.Name}",
             "cancel-preview", "prepare", $"spacing:{spacing.Name}",
             "prepare", $"effects:{effect.Name}",
             "prepare", $"page-color:{pageColor.Hex}",
@@ -117,6 +124,30 @@ public sealed class DesignRibbonWorkflowTests
     }
 
     [Fact]
+    public void StyleSetPresetPreviewsFromSharedBaselineAndCommitsThroughFormattingSession()
+    {
+        var registry = new RibbonCommandRegistry();
+        var events = new List<string>();
+        DesignRibbonWorkflow.Register(registry, CreateBindings(events));
+        var styleSet = DocumentStyleSet.Catalog[^1];
+        var command = Command(registry, DesignRibbonWorkflow.StyleSetCommandId(styleSet.Name))
+            .Should().BeAssignableTo<IRibbonPreviewCommand>().Subject;
+
+        command.BeginPreview(RibbonCommandContext.Empty);
+        command.CancelPreview();
+        command.BeginPreview(RibbonCommandContext.Empty);
+        command.Execute(RibbonCommandContext.Empty);
+
+        events.Should().Equal(
+            $"preview-style-set:{styleSet.Name}",
+            "cancel-preview",
+            $"preview-style-set:{styleSet.Name}",
+            "cancel-preview",
+            "prepare",
+            $"style-set:{styleSet.Name}");
+    }
+
+    [Fact]
     public void BothRenderersDelegateDesignIdentityToSharedPresentation()
     {
         var root = TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeW.slnx");
@@ -129,6 +160,7 @@ public sealed class DesignRibbonWorkflowTests
             "AvaloniaRibbonRenderer.cs");
         var wpfEditor = Read(root, "freew", "FreeW.App.Host", "Editing", "DocumentView.cs");
         var avaloniaEditor = Read(root, "freew", "FreeW.App.Avalonia", "Editing", "DocumentView.cs");
+        var canonicalTabs = Read(root, "freew", "FreeW.Ribbon.Definitions", "FreeWCanonicalRibbonTabs.cs");
         var coordinator = Read(
             root,
             "freew",
@@ -157,9 +189,17 @@ public sealed class DesignRibbonWorkflowTests
             .And.NotContain("new StyleSetCommand(formatting)")
             .And.NotContain("RegisterPageColorPalette(")
             .And.Contain("PreviewTheme: editor.PreviewTheme")
+            .And.Contain("PreviewStyleSet: editor.PreviewStyleSet")
             .And.Contain("CancelPreview: editor.CancelDesignPreview");
         wpf.Should().Contain("PreviewTheme: editor.PreviewTheme")
+            .And.Contain("PreviewStyleSet: editor.PreviewStyleSet")
             .And.Contain("CancelPreview: editor.EndThemePreview");
+        canonicalTabs.Should().Contain("BuildAvaloniaStyleSetsMenu()")
+            .And.Contain("DesignRibbonWorkflow.StyleSetCommandId(styleSet.Name)");
+        System.Text.RegularExpressions.Regex.Matches(
+                canonicalTabs,
+                "group\\.ComboBox\\(\"freew\\.style-set\"")
+            .Should().ContainSingle("only the WPF authority keeps its native Style Set gallery combo");
         avaloniaRenderer.Should().Contain("IRibbonPreviewCommand")
             .And.Contain("PointerEntered +=")
             .And.Contain("GotFocus +=")
@@ -171,6 +211,7 @@ public sealed class DesignRibbonWorkflowTests
         {
             editor.Should().Contain("DesignEdits.PreviewTheme(")
                 .And.Contain("DesignEdits.PreviewThemeColors(")
+                .And.Contain("DesignEdits.PreviewStyleSet(")
                 .And.Contain("DesignEdits.PreviewFontSet(")
                 .And.Contain("DesignEdits.PreviewParagraphSpacingSet(")
                 .And.Contain("DesignEdits.PreviewEffectSet(")
@@ -206,6 +247,7 @@ public sealed class DesignRibbonWorkflowTests
             ApplyEffectSet: value => events.Add($"effects:{value.Name}"),
             PreviewTheme: value => events.Add($"preview-theme:{value.Name}"),
             PreviewThemeColors: value => events.Add($"preview-colors:{value.Name}"),
+            PreviewStyleSet: value => events.Add($"preview-style-set:{value.Name}"),
             PreviewFontSet: value => events.Add($"preview-fonts:{value.Name}"),
             PreviewParagraphSpacingSet: value => events.Add($"preview-spacing:{value.Name}"),
             PreviewEffectSet: value => events.Add($"preview-effects:{value.Name}"),

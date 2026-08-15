@@ -21451,6 +21451,9 @@ public sealed partial class DocumentView : Control
     public void PreviewThemeColors(DocumentTheme theme) =>
         PreviewDesign(() => DesignEdits.PreviewThemeColors(theme));
 
+    public void PreviewStyleSet(DocumentStyleSet styleSet) =>
+        PreviewDesign(() => DesignEdits.PreviewStyleSet(styleSet));
+
     public void PreviewFontSet(DocumentFontSet fontSet) =>
         PreviewDesign(() => DesignEdits.PreviewFontSet(fontSet));
 
