@@ -5278,6 +5278,13 @@ public sealed class AvaloniaShellSourceTests
             "AutomationProperties.SetAutomationId(textBlock, readout.AutomationId);");
         statusBarSource.Should().Contain(
             "AutomationProperties.SetAutomationId(textBlock, readout.AutomationId);");
+        statusBarSource.Should().Contain("StatusBarAutomationChangePlanner.PlanChanges(")
+            .And.Contain("ControlAutomationPeer.CreatePeerForElement(control)")
+            .And.Contain("RaisePropertyChangedEvent(")
+            .And.Contain("AutomationElementIdentifiers.NameProperty");
+        wpfStatusBarSource.Should().Contain("StatusBarAutomationChangePlanner.PlanChanges(")
+            .And.Contain("NotifyStatusStatisticAutomationChanged(")
+            .And.Contain("NotifyStatusStatsPanelAutomationChanged(");
         source.Should().Contain("_statusText,");
         source.Should().Contain("Child = _selectionStatsPanel,");
         source.Should().Contain("_statusText.Text = status;");

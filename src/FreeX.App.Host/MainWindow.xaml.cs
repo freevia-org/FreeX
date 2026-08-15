@@ -71,9 +71,7 @@ public partial class MainWindow : Window, IWorkbookWindow, IFormulaPointModeWork
     private readonly StatusBarViewModelCache _statusBarDisplayStateCache =
         new(new ResourceKeyStatusBarTextProvider(UiText.Get));
     private Free.Shared.AppServices.StatusBarViewModel? _lastStatusBarDisplayState;
-    // Cache for UpdateStatusStatsPanelAutomation: avoid the string[]/LINQ allocation when the inputs are unchanged.
-    private Free.Shared.AppServices.StatusBarViewModel? _lastStatusBarAutomationState;
-    private string? _lastStatusBarAutomationName;
+    private Free.Shared.AppServices.StatusBarAutomationSnapshot? _lastStatusBarAutomationSnapshot;
     private readonly SparklineValueCache _sparklineValueCache = new();
     private ulong _navigationCacheRevision;
     private bool _suppressViewOptionSync;

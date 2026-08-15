@@ -173,11 +173,83 @@ public sealed class StatusBarPresentationPlannerTests
         renderer.IsElementVisible(StatusBarPresentationElement.StatsPanel).Should().BeFalse();
     }
 
-    private static StatusBarViewModel StatsModel() =>
+    [Fact]
+    public void AutomationChangePlanner_EmitsDeterministicVisibleFieldAndPanelChanges()
+    {
+        var options = StatusBarOptionVisibility.ExcelDefaults with
+        {
+            Average = true,
+            Count = true,
+            NumericalCount = false,
+            Sum = false,
+            Minimum = false,
+            Maximum = false,
+        };
+        var previous = AutomationSnapshot(StatsModel(average: 20), options);
+        var current = AutomationSnapshot(StatsModel(average: 25), options);
+
+        var changes = StatusBarAutomationChangePlanner.PlanChanges(previous, current);
+
+        changes.Where(change => change.ShouldNotify)
+            .Select(change => change.Current.Element)
+            .Should().Equal(
+                StatusBarPresentationElement.Average,
+                StatusBarPresentationElement.StatsPanel);
+        changes.Should().OnlyContain(change => change.Current.IsVisible);
+    }
+
+    [Fact]
+    public void AutomationChangePlanner_SuppressesInitialUnchangedAndHiddenAnnouncements()
+    {
+        var hiddenAverageOptions = StatusBarOptionVisibility.ExcelDefaults with
+        {
+            Average = false,
+            Count = true,
+            NumericalCount = false,
+            Sum = false,
+            Minimum = false,
+            Maximum = false,
+        };
+        var previous = AutomationSnapshot(StatsModel(average: 20), hiddenAverageOptions);
+        var current = AutomationSnapshot(StatsModel(average: 25), hiddenAverageOptions);
+
+        StatusBarAutomationChangePlanner.PlanChanges(null, previous)
+            .Should().OnlyContain(change => !change.ShouldNotify);
+        StatusBarAutomationChangePlanner.PlanChanges(previous, previous).Should().BeEmpty();
+        StatusBarAutomationChangePlanner.PlanChanges(previous, current).Should().BeEmpty();
+    }
+
+    [Fact]
+    public void AutomationSnapshot_UsesStableSixFieldOrderThenSinglePanelAggregate()
+    {
+        var snapshot = AutomationSnapshot(StatsModel(), StatusBarOptionVisibility.ExcelDefaults);
+
+        snapshot.Elements.Select(element => element.Element).Should().Equal(
+            StatusBarPresentationElement.Average,
+            StatusBarPresentationElement.Count,
+            StatusBarPresentationElement.NumericalCount,
+            StatusBarPresentationElement.Sum,
+            StatusBarPresentationElement.Minimum,
+            StatusBarPresentationElement.Maximum,
+            StatusBarPresentationElement.StatsPanel);
+        snapshot.Elements.Last().AutomationId.Should().Be(
+            StatusBarAutomationChangePlanner.StatsPanelAutomationId);
+    }
+
+    private static StatusBarAutomationSnapshot AutomationSnapshot(
+        StatusBarViewModel model,
+        StatusBarOptionVisibility options) =>
+        StatusBarAutomationChangePlanner.BuildSnapshot(
+            StatusBarPresentationPlanner.BuildRendererPlan(
+                StatusBarPresentationPlanner.Build(model, options, fallbackAutomationText: "Statistics")),
+            GetText,
+            "Statistics");
+
+    private static StatusBarViewModel StatsModel(double average = 20) =>
         StatusBarDisplayModelBuilder.Stats(
             StatusBarViewMode.Normal,
             zoomPercent: 100,
-            new WorkbookSelectionStats(Sum: 60, Count: 4, NumericalCount: 3, Average: 20, Min: 10, Max: 30),
+            new WorkbookSelectionStats(Sum: 60, Count: 4, NumericalCount: 3, Average: average, Min: 10, Max: 30),
             new ResourceKeyStatusBarTextProvider(GetText));
 
     private static string GetText(string resourceKey) =>

@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using Avalonia.Automation;
+using Avalonia.Automation.Peers;
 using Avalonia.Controls;
 using Avalonia.Interactivity;
 using Free.Shared.AppServices;
@@ -32,6 +33,7 @@ public sealed partial class MainWindow
     // Selection statistic controls receive their polite live-region metadata at construction.
     // Only the status text still needs lazy initialization because it is renderer-global state.
     private bool _statusTextLiveSettingApplied;
+    private StatusBarAutomationSnapshot? _lastStatusBarAutomationSnapshot;
 
     private bool GetStatusBarOption(string optionTag) =>
         StatusBarVisibilityPlanner.IsOptionVisible(_statusBarOptionVisibility, optionTag);
@@ -189,17 +191,6 @@ public sealed partial class MainWindow
     private void ApplySelectionStatisticReadouts(StatusBarRendererPlan rendererPlan)
     {
         _selectionStatsPanel.IsVisible = rendererPlan.VisibleReadoutTextVisible;
-        var panelAutomationText = string.IsNullOrWhiteSpace(rendererPlan.StatsPanelAutomationText)
-            ? UiText.Get("Toolbar_SelectionStatisticsAutomationName")
-            : rendererPlan.StatsPanelAutomationText;
-        if (!string.Equals(
-                AutomationProperties.GetName(_selectionStatsPanel),
-                panelAutomationText,
-                StringComparison.Ordinal))
-        {
-            AutomationProperties.SetName(_selectionStatsPanel, panelAutomationText);
-        }
-        AutomationProperties.SetHelpText(_selectionStatsPanel, panelAutomationText);
 
         foreach (var readout in rendererPlan.ReadoutElements)
         {
@@ -218,23 +209,59 @@ public sealed partial class MainWindow
                 AutomationProperties.SetAutomationId(textBlock, readout.AutomationId);
             }
 
-            var automationText = isVisible
-                ? readout.Text
-                : UiText.Get(readout.AutomationFallbackResourceKey);
-            if (!string.Equals(
-                    AutomationProperties.GetName(textBlock),
-                    automationText,
-                    StringComparison.Ordinal))
-            {
-                AutomationProperties.SetName(textBlock, automationText);
-            }
-            if (!string.Equals(
-                    AutomationProperties.GetHelpText(textBlock),
-                    automationText,
-                    StringComparison.Ordinal))
-            {
-                AutomationProperties.SetHelpText(textBlock, automationText);
-            }
+        }
+
+        var automationSnapshot = StatusBarAutomationChangePlanner.BuildSnapshot(
+            rendererPlan,
+            UiText.Get,
+            UiText.Get("Toolbar_SelectionStatisticsAutomationName"));
+        foreach (var change in StatusBarAutomationChangePlanner.PlanChanges(
+                     _lastStatusBarAutomationSnapshot,
+                     automationSnapshot))
+        {
+            var control = change.Current.Element == StatusBarPresentationElement.StatsPanel
+                ? (Control)_selectionStatsPanel
+                : SelectionStatisticText(ReadoutKind(change.Current.Element));
+            AutomationProperties.SetAutomationId(control, change.Current.AutomationId);
+            AutomationProperties.SetName(control, change.Current.Name);
+            AutomationProperties.SetHelpText(control, change.Current.HelpText);
+            if (change.ShouldNotify)
+                NotifyStatusBarAutomationChanged(control, change.PreviousName, change.Current.Name);
+        }
+
+        _lastStatusBarAutomationSnapshot = automationSnapshot;
+    }
+
+    private static StatusBarReadoutKind ReadoutKind(StatusBarPresentationElement element) => element switch
+    {
+        StatusBarPresentationElement.Average => StatusBarReadoutKind.Average,
+        StatusBarPresentationElement.Count => StatusBarReadoutKind.Count,
+        StatusBarPresentationElement.NumericalCount => StatusBarReadoutKind.NumericalCount,
+        StatusBarPresentationElement.Sum => StatusBarReadoutKind.Sum,
+        StatusBarPresentationElement.Minimum => StatusBarReadoutKind.Minimum,
+        StatusBarPresentationElement.Maximum => StatusBarReadoutKind.Maximum,
+        _ => throw new ArgumentOutOfRangeException(nameof(element), element, null),
+    };
+
+    private static void NotifyStatusBarAutomationChanged(
+        Control control,
+        string previousName,
+        string currentName)
+    {
+        if (TopLevel.GetTopLevel(control) is null)
+            return;
+
+        try
+        {
+            var peer = ControlAutomationPeer.FromElement(control)
+                ?? ControlAutomationPeer.CreatePeerForElement(control);
+            peer?.RaisePropertyChangedEvent(
+                AutomationElementIdentifiers.NameProperty,
+                previousName,
+                currentName);
+        }
+        catch (InvalidOperationException)
+        {
         }
     }
 
