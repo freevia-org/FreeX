@@ -130,10 +130,16 @@ public sealed class HyperlinkDialogTests
     [Fact]
     public void MainWindow_RoutesAvaloniaHyperlinkThroughSharedWorkflow()
     {
+        var root = TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeP.slnx");
         var source = File.ReadAllText(FindRepoFile(
             "freep",
             "FreeP.App.Avalonia",
             "MainWindow.cs"));
+        var actionProfileSource = File.ReadAllText(Path.Combine(
+            root,
+            "freep",
+            "RendererShared",
+            "MainWindow.RibbonActionProfile.cs"));
         var bindingSource = File.ReadAllText(FindRepoFile(
             "freep",
             "FreeP.App.Presentation",
@@ -144,8 +150,9 @@ public sealed class HyperlinkDialogTests
         source.Should().Contain("_hyperlinkWorkflowSession.BuildRequest(");
         source.Should().Contain("_hyperlinkWorkflowSession.Apply(");
         source.Should().Contain("_ribbonBindingSession = new FreePRibbonBindingSession(");
-        source.Should().Contain("OpenHyperlink = OpenHyperlinkDialog");
+        actionProfileSource.Should().Contain("OpenHyperlink = OpenHyperlinkDialog");
         source.Should().NotContain("Editor.SetShapeHyperlink(");
+        source.Should().NotContain("OpenHyperlink = OpenHyperlinkDialog");
         source.Should().NotContain("r.Register(\"freep.insert-link\"");
         source.Should().NotContain("FreePRibbonHostRegistryComposer.Build(");
         bindingSource.Should().Contain("FreePRibbonHostRegistryComposer.Build(");

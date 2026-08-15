@@ -7,14 +7,23 @@ public sealed class SlideShowHostPolicySourceTests
     [Fact]
     public void AvaloniaMediaPlaybackPassesWebVttRegionsToSharedCaptionPlacement()
     {
+        var root = TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeP.slnx");
         var source = File.ReadAllText(Path.Combine(
-            TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeP.slnx"),
+            root,
             "freep",
             "FreeP.App.Avalonia",
             "AvaloniaSlideShowMediaController.cs"));
+        var plannerSource = File.ReadAllText(Path.Combine(
+            root,
+            "freep",
+            "FreeP.App.Presentation",
+            "SlideShowMediaInteractionPlanner.cs"));
 
-        source.Should().Contain("slot.CaptionTrack?.Regions");
-        source.Should().Contain("PresentationMediaTranscriptPlanner.PlanOverlayPlacement(");
+        source.Should().Contain("SlideShowMediaInteractionPlanner.PlanPlaybackProjection(");
+        source.Should().Contain("slot.CaptionTrack,");
+        source.Should().NotContain("slot.CaptionTrack?.Regions");
+        plannerSource.Should().Contain("PresentationMediaTranscriptPlanner.PlanOverlayPlacement(");
+        plannerSource.Should().Contain("captionTrack?.Regions");
     }
 
     [Fact]
