@@ -2,10 +2,7 @@ using System.Linq;
 using System.Windows;
 using FreeX.App.Presentation.ScenarioManager;
 using FreeX.App.Services;
-using FreeX.Core.IO;
 using FreeX.Core.Model;
-using FileDialogFilterBuilder = Free.Shared.IO.FileDialogFilterBuilder;
-using FileFormatDialogDescriptorAdapter = Free.Shared.IO.FileFormatDialogDescriptorAdapter;
 
 namespace FreeX.App.Host;
 
@@ -220,50 +217,26 @@ public partial class MainWindow
     private async Task MergeScenariosFromFileAsync()
     {
         var scenarioManagerTitle = ScenarioManagerDialogPlanner.Title.Resolve(UiText.Get, UiText.Format);
-        var openDialog = new Microsoft.Win32.OpenFileDialog
-        {
-            Filter = FileDialogFilterBuilder.BuildOpenFilter(
-                FileFormatDialogDescriptorAdapter.ToOpenDialogDescriptors(
-                    _fileAdapters.SelectMany(adapter => adapter.Formats))),
-            Title = ScenarioManagerDialogPlanner.MergeDialogTitle.Resolve(UiText.Get, UiText.Format),
-            CheckFileExists = true
-        };
-        if (openDialog.ShowDialog(this) != true)
-            return;
-
-        if (!WorkbookOpenTargetPlanner.TryCreateOpenTarget(_fileAdapters, openDialog.FileName, out var target, out _))
-        {
-            _messageService.ShowInfo(
-                ScenarioManagerDialogPlanner.MergeOpenFailedMessage.Resolve(UiText.Get, UiText.Format),
-                scenarioManagerTitle);
-            return;
-        }
-
-        Workbook sourceWorkbook;
-        try
-        {
-            var loader = new WorkbookOpenService(recalculateAllFormulas: _ => { });
-            var result = await loader.LoadAsync(
-                target!.Path,
-                target.Adapter,
-                FileFormatResolver.NormalizeExtension(target.Extension),
-                target.Format,
-                new Progress<WorkbookOpenProgressUpdate>(_ => { }));
-            sourceWorkbook = result.Workbook;
-        }
-        catch (Exception)
-        {
-            _messageService.ShowInfo(
-                ScenarioManagerDialogPlanner.MergeOpenFailedMessage.Resolve(UiText.Get, UiText.Format),
-                scenarioManagerTitle);
-            return;
-        }
-
-        var mergeCandidates = ScenarioManagerPlanner.RemapScenariosBySheetName(sourceWorkbook, _workbook);
-        if (!TryExecuteWorksheetLayout(() => _session.MergeScenarios(mergeCandidates), scenarioManagerTitle))
-            return;
-
-        UpdateViewport();
-        RefreshStatusBar();
+        var workflow = new ScenarioMergeWorkflow(_fileAdapters);
+        await workflow.RunAsync(
+            _workbook,
+            new ScenarioMergeWorkflowHost(
+                (plan, _) => ValueTask.FromResult(
+                    WpfFileDialogService.ShowOpenDialog(
+                        this,
+                        plan,
+                        title: ScenarioManagerDialogPlanner.MergeDialogTitle.Resolve(UiText.Get, UiText.Format))
+                    .FileName),
+                scenarios => TryExecuteWorksheetLayout(
+                    () => _session.MergeScenarios(scenarios),
+                    scenarioManagerTitle),
+                () => _messageService.ShowInfo(
+                    ScenarioManagerDialogPlanner.MergeOpenFailedMessage.Resolve(UiText.Get, UiText.Format),
+                    scenarioManagerTitle),
+                () =>
+                {
+                    UpdateViewport();
+                    RefreshStatusBar();
+                }));
     }
 }

@@ -89,6 +89,32 @@ public sealed class RecentColorsStoreTests
         store.Capacity.Should().Be(CellColorPalettePlanner.DefaultRecentColorCapacity);
     }
 
+    [Fact]
+    public void Persistence_DelegatesJsonAndAtomicWriteCeremonyToSharedStore()
+    {
+        var source = File.ReadAllText(RepositoryFileLocator.Find(
+            "src", "FreeX.App.Services", "RecentColorsStore.cs"));
+
+        source.Should().Contain("JsonSettingsStore<List<string>>")
+            .And.NotContain("JsonSerializer")
+            .And.NotContain("File.ReadAllText")
+            .And.NotContain("AtomicFileWriter");
+    }
+
+    [Fact]
+    public void Remember_WhenPersistenceFails_RemainsBestEffortAndKeepsInMemoryColor()
+    {
+        using var temp = new TestTemporaryDirectory();
+        var blockedPath = Path.Combine(temp.Path, "blocked");
+        Directory.CreateDirectory(blockedPath);
+        var store = new RecentColorsStore(blockedPath);
+
+        var remember = () => store.Remember(new CellColor(0x12, 0x34, 0x56));
+
+        remember.Should().NotThrow();
+        store.Colors.Should().Equal(new CellColor(0x12, 0x34, 0x56));
+    }
+
     private static string StorePath(TestTemporaryDirectory temp) =>
         Path.Combine(temp.Path, "recent-colors.json");
 }

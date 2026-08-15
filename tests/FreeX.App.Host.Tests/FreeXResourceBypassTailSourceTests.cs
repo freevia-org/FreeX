@@ -10,6 +10,10 @@ public sealed class FreeXResourceBypassTailSourceTests
         var scenario = Read("src", "FreeX.App.Host", "MainWindow.ScenarioCommands.cs");
         scenario.Should().Contain("ScenarioManagerDialogPlanner.MergeDialogTitle.Resolve");
         scenario.Should().Contain("ScenarioManagerDialogPlanner.MergeOpenFailedMessage.Resolve");
+        scenario.Should().Contain("new ScenarioMergeWorkflow(_fileAdapters)");
+        scenario.Should().Contain("WpfFileDialogService.ShowOpenDialog(");
+        scenario.Should().NotContain("new Microsoft.Win32.OpenFileDialog");
+        scenario.Should().NotContain("new WorkbookOpenService(");
         scenario.Should().NotContain("Title = \"Merge Scenarios\"");
         scenario.Should().NotContain("ShowInfo(\"The selected file could not be opened for merging scenarios.");
 
