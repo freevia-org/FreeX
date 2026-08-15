@@ -72,6 +72,7 @@ public sealed class NativeWorkflowPolicyBoundaryGuardTests
         var avaloniaMainSource = Read(repoRoot, "src", "FreeX.App.Avalonia", "MainWindow.cs");
         var avaloniaExportOptionsSource = Read(repoRoot, "src", "FreeX.App.Avalonia", "MainWindow.ExportOptions.cs");
         var avaloniaPrintSource = Read(repoRoot, "src", "FreeX.App.Avalonia", "MainWindow.Print.cs");
+        var workbookPrintWorkflowSource = Read(repoRoot, "src", "FreeX.App.Services", "WorkbookPrintWorkflow.cs");
         var avaloniaImportSource = Read(repoRoot, "src", "FreeX.App.Avalonia", "MainWindow.GetData.cs");
         var avaloniaParitySource = Read(repoRoot, "tools", "FreeX.ParityCapture.Avalonia", "Capture", "MainWindow.ParityCapture.cs");
 
@@ -112,7 +113,8 @@ public sealed class NativeWorkflowPolicyBoundaryGuardTests
         avaloniaExportOptionsSource.Should().NotContain("ApplyPageRangeToPortablePdfExportPlan(");
         avaloniaPrintSource.Should().Contain("WorkbookPrintWorkflow.CreatePlan(");
         avaloniaPrintSource.Should().Contain("WorkbookPrintWorkflow.ExecutePortableAsync(");
-        avaloniaPrintSource.Should().Contain("_printService.SubmitAsync(pdfPath, selection, cancellationToken)");
+        avaloniaPrintSource.Should().NotContain("_printService.SubmitAsync(");
+        workbookPrintWorkflowSource.Should().Contain("new PortablePrintSubmissionWorkflow(printService)");
         avaloniaPrintSource.Should().NotContain("IPlatformPrinter");
         avaloniaImportSource.Should().Contain("WorkbookImportWorkflow.ApplyImportedWorkbookEdit(");
         avaloniaPrintSource.Should().Contain("ExportFilePickerPlanner.BuildPortablePdfSaveTargetPlan(");

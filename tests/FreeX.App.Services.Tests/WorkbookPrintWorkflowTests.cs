@@ -10,7 +10,7 @@ public sealed class WorkbookPrintWorkflowTests
     public async Task ExecutePortableAsync_PrinterRouteRendersThenSubmitsValidatedJob()
     {
         var events = new List<string>();
-        string? submittedPath = null;
+        var printService = new RecordingPrintService(events);
         var workbook = PrintableWorkbook();
         var plan = WorkbookPrintWorkflow.CreatePlan(
             workbook,
@@ -32,29 +32,15 @@ public sealed class WorkbookPrintWorkflowTests
                     [1, 2, 3],
                     ["picture warning"]));
             },
-            (pdfPath, selection, _) =>
-            {
-                events.Add("submit");
-                submittedPath = pdfPath;
-                File.Exists(pdfPath).Should().BeTrue();
-                File.ReadAllBytes(pdfPath).Should().Equal(1, 2, 3);
-                selection.PrinterName.Should().Be("office");
-                selection.Copies.Should().Be(2);
-                selection.Collate.Should().BeFalse();
-                selection.EffectivePageRange.FirstPage.Should().Be(1);
-                selection.EffectivePageRange.LastPage.Should().Be(1);
-                selection.JobTitle.Should().Be("Budget");
-                return Task.FromResult(new PrintSubmissionResult(
-                    PrintSubmissionStatus.Submitted,
-                    "office"));
-            },
+            printService,
             (_, _) => throw new InvalidOperationException("Printer route must not save fallback."));
 
         result.Succeeded.Should().BeTrue();
         result.StatusText.Should().Be("Sent to office.");
         result.RenderedDocument!.ImageDiagnostics.Should().Equal("picture warning");
         events.Should().Equal("render", "submit");
-        File.Exists(submittedPath).Should().BeFalse();
+        printService.SubmittedPath.Should().NotBeNull();
+        File.Exists(printService.SubmittedPath!).Should().BeFalse();
     }
 
     [Fact]
@@ -72,7 +58,7 @@ public sealed class WorkbookPrintWorkflowTests
             printerId: null,
             jobTitle: "Budget",
             (_, _) => Task.FromResult(new WorkbookPrintRenderResult([4, 5], [])),
-            (_, _, _) => throw new InvalidOperationException("Fallback route must not submit."),
+            new UnexpectedPrintService(),
             (bytes, _) =>
             {
                 bytes.Should().Equal(4, 5);
@@ -98,7 +84,7 @@ public sealed class WorkbookPrintWorkflowTests
             printerId: null,
             jobTitle: "Budget",
             (_, _) => throw new InvalidOperationException("Invalid print must not render."),
-            (_, _, _) => throw new InvalidOperationException("Invalid print must not submit."),
+            new UnexpectedPrintService(),
             (_, _) => throw new InvalidOperationException("Invalid print must not save."));
 
         result.Outcome.Should().Be(WorkbookPrintExecutionOutcome.NotReady);
@@ -111,5 +97,54 @@ public sealed class WorkbookPrintWorkflowTests
         var sheet = workbook.AddSheet("Sheet1");
         sheet.PrintArea = GridRange.Parse("A1:C4", sheet.Id);
         return workbook;
+    }
+
+    private sealed class RecordingPrintService(List<string> events) : IPlatformPrintService
+    {
+        public bool IsSupported => true;
+
+        public string? SubmittedPath { get; private set; }
+
+        public Task<PrinterDiscoveryResult> DiscoverAsync(
+            CancellationToken cancellationToken = default) =>
+            Task.FromResult(new PrinterDiscoveryResult(
+                PrinterDiscoveryStatus.Available,
+                [new PrinterInfo("office", IsDefault: true)],
+                "office"));
+
+        public Task<PrintSubmissionResult> SubmitAsync(
+            string pdfPath,
+            PrintSelection selection,
+            CancellationToken cancellationToken = default)
+        {
+            events.Add("submit");
+            SubmittedPath = pdfPath;
+            File.Exists(pdfPath).Should().BeTrue();
+            File.ReadAllBytes(pdfPath).Should().Equal(1, 2, 3);
+            selection.PrinterName.Should().Be("office");
+            selection.Copies.Should().Be(2);
+            selection.Collate.Should().BeFalse();
+            selection.EffectivePageRange.FirstPage.Should().Be(1);
+            selection.EffectivePageRange.LastPage.Should().Be(1);
+            selection.JobTitle.Should().Be("Budget");
+            return Task.FromResult(new PrintSubmissionResult(
+                PrintSubmissionStatus.Submitted,
+                "office"));
+        }
+    }
+
+    private sealed class UnexpectedPrintService : IPlatformPrintService
+    {
+        public bool IsSupported => true;
+
+        public Task<PrinterDiscoveryResult> DiscoverAsync(
+            CancellationToken cancellationToken = default) =>
+            throw new InvalidOperationException("Fallback route must not discover printers.");
+
+        public Task<PrintSubmissionResult> SubmitAsync(
+            string pdfPath,
+            PrintSelection selection,
+            CancellationToken cancellationToken = default) =>
+            throw new InvalidOperationException("Fallback route must not submit.");
     }
 }

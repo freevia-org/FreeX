@@ -235,13 +235,35 @@ public sealed partial class MainWindow
             PrintExportHostCapabilities.AvaloniaPortable(
                 canSubmitToPlatformPrinter: canSpool,
                 hasPrinterDestination: !string.IsNullOrWhiteSpace(printerId)));
-        var result = await WorkbookPrintWorkflow.ExecutePortableAsync(
-            workflowPlan,
-            printerId,
-            BuildPrintJobTitle(),
-            RenderPrintReadyPdfAsync,
-            SpoolPrintJobAsync,
-            SavePrintReadyPdfAsync);
+        var platformPrinterRoute = workflowPlan.Readiness.NativePrintPlan.RouteKind ==
+            PrintExportNativePrintRouteKind.PlatformPrinter;
+        if (platformPrinterRoute)
+        {
+            _isSaving = true;
+            UpdateSaveButton();
+            _statusText.Text = UiText.Get("Print_Spooling");
+            _statusText.Foreground = Brush(67, 113, 83);
+        }
+
+        WorkbookPrintExecutionResult result;
+        try
+        {
+            result = await WorkbookPrintWorkflow.ExecutePortableAsync(
+                workflowPlan,
+                printerId,
+                BuildPrintJobTitle(),
+                RenderPrintReadyPdfAsync,
+                _printService,
+                SavePrintReadyPdfAsync);
+        }
+        finally
+        {
+            if (platformPrinterRoute)
+            {
+                _isSaving = false;
+                UpdateSaveButton();
+            }
+        }
 
         if (result.Succeeded)
         {
@@ -289,27 +311,6 @@ public sealed partial class MainWindow
         imageDiagnostics.Count == 0
             ? statusText
             : $"{statusText} ({imageDiagnostics.Count} image warning{(imageDiagnostics.Count == 1 ? "" : "s")})";
-
-    private async Task<PrintSubmissionResult> SpoolPrintJobAsync(
-        string pdfPath,
-        PrintSelection selection,
-        CancellationToken cancellationToken)
-    {
-        _isSaving = true;
-        UpdateSaveButton();
-        try
-        {
-            _statusText.Text = UiText.Get("Print_Spooling");
-            _statusText.Foreground = Brush(67, 113, 83);
-
-            return await _printService.SubmitAsync(pdfPath, selection, cancellationToken);
-        }
-        finally
-        {
-            _isSaving = false;
-            UpdateSaveButton();
-        }
-    }
 
     /// <summary>
     /// No-spooler fallback: write the print-ready PDF where the user chooses. This keeps Print useful on
