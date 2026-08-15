@@ -25341,7 +25341,9 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             RefreshKeyLockIndicators();
         }
 
-        if (e.KeyModifiers == KeyModifiers.None && TryRouteFormulaPointModeKey(e.Key))
+        if (e.KeyModifiers == KeyModifiers.None &&
+            !ShouldHandleEscapeLocallyBeforeFormulaPointMode(e.Key) &&
+            TryRouteFormulaPointModeKey(e.Key))
         {
             e.Handled = true;
             return;

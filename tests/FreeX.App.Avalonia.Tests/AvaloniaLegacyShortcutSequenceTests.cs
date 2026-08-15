@@ -110,20 +110,35 @@ public sealed class AvaloniaLegacyShortcutSequenceTests
     {
         await Run(async (window, sheet) =>
         {
-            window.Session.SelectRange(SeedFilterRange(sheet));
+            var formulaOwner = new MainWindow([]);
+            var formulaAddress = new CellAddress(formulaOwner.Session.ActiveSheet.Id, 1, 1);
+            formulaOwner.Session.SelectCell(formulaAddress);
+            formulaOwner.BeginFormulaPointModeEditForTest(formulaAddress, "=SUM(");
 
-            await PressHandled(window, Key.D, KeyModifiers.Alt);
-            await PressHandled(window, Key.F);
-            await PressHandled(window, Key.Escape);
-            window.LegacyKeyTipSequenceForTest.Should().Be(
-                FreeXRibbonLegacyKeyTipSequence.None);
-            sheet.AutoFilter.Should().BeNull();
+            try
+            {
+                window.Session.SelectRange(SeedFilterRange(sheet));
 
-            await PressHandled(window, Key.D, KeyModifiers.Alt);
-            await PressHandled(window, Key.X);
-            window.LegacyKeyTipSequenceForTest.Should().Be(
-                FreeXRibbonLegacyKeyTipSequence.None);
-            sheet.AutoFilter.Should().BeNull();
+                await PressHandled(window, Key.D, KeyModifiers.Alt);
+                await PressHandled(window, Key.F);
+                await PressHandled(window, Key.Escape);
+                window.LegacyKeyTipSequenceForTest.Should().Be(
+                    FreeXRibbonLegacyKeyTipSequence.None);
+                sheet.AutoFilter.Should().BeNull();
+
+                await PressHandled(window, Key.D, KeyModifiers.Alt);
+                await PressHandled(window, Key.X);
+                window.LegacyKeyTipSequenceForTest.Should().Be(
+                    FreeXRibbonLegacyKeyTipSequence.None);
+                sheet.AutoFilter.Should().BeNull();
+                formulaOwner.HasActiveFormulaPointMode.Should().BeTrue(
+                    "Escape belongs to the local key-tip sequence before another workbook's formula edit");
+            }
+            finally
+            {
+                formulaOwner.AllowCloseWithoutDirtyPromptForParityCapture();
+                formulaOwner.Close();
+            }
         });
     }
 

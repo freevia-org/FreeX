@@ -43,6 +43,13 @@ public sealed partial class MainWindow
 
     private ExcelSelectionMode _keyboardSelectionMode;
 
+    private bool ShouldHandleEscapeLocallyBeforeFormulaPointMode(Key key) =>
+        key == Key.Escape &&
+        (_keyboardSelectionMode != ExcelSelectionMode.Normal ||
+         _ribbonKeyTipSession.IsActive ||
+         _ribbonKeyTipsVisible ||
+         _backstageOverlay.IsVisible);
+
     private static bool TryResolveApplicationShortcut(
         Key key,
         KeyModifiers modifiers,
