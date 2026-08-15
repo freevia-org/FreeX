@@ -125,6 +125,8 @@ public sealed class PresentationShellTextCatalogTests
             "freep", "FreeP.App.Presentation", "PresentationPrintOutputPackageExecutor.cs");
         var fileSession = Read(
             "freep", "FreeP.App.Presentation", "PresentationFileCommandSession.cs");
+        var videoExportSession = Read(
+            "freep", "FreeP.App.Recording", "Recording", "PresentationVideoExportSession.cs");
         var avaloniaRichEditor = Read(
             "freep", "FreeP.App.Rendering.Avalonia", "AvaloniaRichTextEditor.cs");
         var reviewPaneCoordinator = Read(
@@ -174,10 +176,12 @@ public sealed class PresentationShellTextCatalogTests
             .And.NotContain("BuildWpfStatusText")
             .And.NotContain("WPF Windows video export host")
             .And.Contain("BuildVideoExportHostCapabilities(")
-            .And.Contain("BuildVideoExportCommandResult(");
+            .And.NotContain("BuildVideoExportCommandResult(");
         avaloniaPorts.Should().NotContain("\"Export completed\"")
             .And.Contain("PresentationNativeCommandOutcomePlanner.ExportCompletedStatus")
-            .And.Contain("BuildVideoExportCommandResult(");
+            .And.NotContain("BuildVideoExportCommandResult(");
+        videoExportSession.Should().Contain(
+            "PresentationNativeCommandOutcomePlanner.BuildVideoExportCommandResult(");
         fileSession.Should().Contain("PresentationFileTextResources.ErrorSummary(")
             .And.NotContain("\"Could not open the presentation\"")
             .And.NotContain("\"Could not save the presentation\"")

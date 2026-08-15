@@ -66,6 +66,7 @@ public sealed class SlideShapeTraversalTests
         var presentationDirectory = Path.Combine(root, "freep", "FreeP.App.Presentation");
         var hostDirectory = Path.Combine(root, "freep", "FreeP.App.Host");
         var avaloniaDirectory = Path.Combine(root, "freep", "FreeP.App.Avalonia");
+        var rendererSharedDirectory = Path.Combine(root, "freep", "RendererShared");
         var canonicalPath = Path.Combine(modelDirectory, "SlideShapeTraversal.cs");
         var productionDirectories = new[]
         {
@@ -73,6 +74,7 @@ public sealed class SlideShapeTraversalTests
             presentationDirectory,
             hostDirectory,
             avaloniaDirectory,
+            rendererSharedDirectory,
         };
 
         var productionSources = productionDirectories
@@ -101,8 +103,15 @@ public sealed class SlideShapeTraversalTests
                 .Select(file => file.Source));
 
         platformSource.Should().NotContain("ShapeTreeLookup");
-        platformSource.Should().Contain("SlideShapeTraversal.FindById");
-        platformSource.Should().Contain("SlideShapeTraversal.EnumerateDepthFirst");
+
+        var consumerSource = string.Join(
+            Environment.NewLine,
+            productionSources
+                .Where(file => !file.Path.Equals(canonicalPath, StringComparison.OrdinalIgnoreCase))
+                .Select(file => file.Source));
+
+        consumerSource.Should().Contain("SlideShapeTraversal.FindById");
+        consumerSource.Should().Contain("SlideShapeTraversal.EnumerateDepthFirst");
     }
 
     private static SlideShape Shape(uint id, SlideShapeKind kind = SlideShapeKind.AutoShape) =>
