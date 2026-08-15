@@ -41,7 +41,8 @@ public sealed class CommonDialogChromeParityTests
                 .And.Contain("AvaloniaCompactDialogChrome.WindowsStyle", fileName)
                 .And.NotContain("new(FontFamily.Default)", fileName)
                 .And.NotContain("Background = new SolidColorBrush(Color.FromRgb(0xF3", fileName);
-            wpf.Should().Contain("DialogWindow", fileName);
+            wpf.Should().Contain("DialogWindow", fileName)
+                .And.NotContain("Background = new SolidColorBrush(Color.FromRgb(0xF3", fileName);
         }
     }
 
