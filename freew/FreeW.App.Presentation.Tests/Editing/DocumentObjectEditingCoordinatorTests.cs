@@ -193,6 +193,110 @@ public sealed class DocumentObjectEditingCoordinatorTests
     }
 
     [Fact]
+    public void SmartArtDesignPreviewSwitchAndCancelRestoreTheCompleteBaselineWithoutUndo()
+    {
+        var smartArt = SmartArt.Create(SmartArtKind.Hierarchy, ["One", "Two"]);
+        smartArt.LayoutId = "orgchart1";
+        smartArt.ColorSchemeId = "accent3";
+        smartArt.StyleId = "moderate1";
+        var paragraph = new Paragraph();
+        paragraph.Runs.Add(Run.FromSmartArt(smartArt));
+        var session = SessionWith(paragraph);
+        var target = new DocumentObjectTarget(0, 0);
+        var changed = 0;
+        session.Changed += () => changed++;
+
+        var layout = SmartArtLayoutPreset.Catalog.First(item => item.Id == "process1");
+        session.SmartArtDesignPreview.PreviewLayout(target, layout).Should().BeTrue();
+        (smartArt.Kind, smartArt.LayoutId).Should().Be((SmartArtKind.Process, "process1"));
+
+        var color = SmartArtColorScheme.Catalog[1];
+        session.SmartArtDesignPreview.PreviewColorScheme(target, color).Should().BeTrue();
+        (smartArt.Kind, smartArt.LayoutId).Should().Be(
+            (SmartArtKind.Hierarchy, "orgchart1"),
+            "each preview starts from the complete captured baseline");
+        smartArt.ColorSchemeId.Should().Be(color.Id);
+
+        var style = SmartArtStyle.Catalog[1];
+        session.SmartArtDesignPreview.PreviewStyle(target, style).Should().BeTrue();
+        smartArt.ColorSchemeId.Should().Be("accent3");
+        smartArt.StyleId.Should().Be(style.Id);
+
+        session.SmartArtDesignPreview.Cancel().Should().Be(target);
+        (smartArt.Kind, smartArt.LayoutId, smartArt.ColorSchemeId, smartArt.StyleId).Should().Be(
+            (SmartArtKind.Hierarchy, "orgchart1", "accent3", "moderate1"));
+        changed.Should().Be(0);
+        session.Commands.CanUndo.Should().BeFalse();
+    }
+
+    [Fact]
+    public void SmartArtDesignPreviewFreezesFirstTargetAndCommitsExactlyOneUndoEntry()
+    {
+        var first = SmartArt.Create(SmartArtKind.List, ["First"]);
+        first.LayoutId = "list1";
+        first.ColorSchemeId = "colorful1";
+        first.StyleId = "flat1";
+        var second = SmartArt.Create(SmartArtKind.Process, ["Second"]);
+        second.LayoutId = "process1";
+        second.ColorSchemeId = "colorful2";
+        second.StyleId = "subtle1";
+        var paragraph = new Paragraph();
+        paragraph.Runs.Add(Run.FromSmartArt(first));
+        paragraph.Runs.Add(Run.FromSmartArt(second));
+        var session = SessionWith(paragraph);
+        var firstTarget = new DocumentObjectTarget(0, 0);
+        var secondTarget = new DocumentObjectTarget(0, 1);
+        var committedStyle = SmartArtStyle.Catalog[5];
+        var changed = 0;
+        session.Changed += () => changed++;
+
+        session.SmartArtDesignPreview.PreviewColorScheme(
+            firstTarget,
+            SmartArtColorScheme.Catalog[2]).Should().BeTrue();
+        session.SmartArtDesignPreview.PreviewLayout(
+            secondTarget,
+            SmartArtLayoutPreset.Catalog[3]).Should().BeTrue();
+        session.SmartArtDesignPreview.ActiveTarget.Should().Be(firstTarget);
+        first.LayoutId.Should().Be(SmartArtLayoutPreset.Catalog[3].Id);
+        second.LayoutId.Should().Be("process1");
+
+        session.SmartArtDesignPreview.CommitStyle(secondTarget, committedStyle).Applied.Should().BeTrue();
+        (first.Kind, first.LayoutId, first.ColorSchemeId, first.StyleId).Should().Be(
+            (SmartArtKind.List, "list1", "colorful1", committedStyle.Id));
+        (second.Kind, second.LayoutId, second.ColorSchemeId, second.StyleId).Should().Be(
+            (SmartArtKind.Process, "process1", "colorful2", "subtle1"));
+        changed.Should().Be(1);
+        session.Commands.CanUndo.Should().BeTrue();
+
+        session.Commands.Undo().Should().BeTrue();
+        (first.Kind, first.LayoutId, first.ColorSchemeId, first.StyleId).Should().Be(
+            (SmartArtKind.List, "list1", "colorful1", "flat1"));
+        session.Commands.CanUndo.Should().BeFalse();
+    }
+
+    [Fact]
+    public void LoadingAnotherDocumentCancelsAnActiveSmartArtDesignPreview()
+    {
+        var smartArt = SmartArt.Create(SmartArtKind.List, ["One"]);
+        smartArt.LayoutId = "list1";
+        smartArt.ColorSchemeId = "colorful1";
+        smartArt.StyleId = "flat1";
+        var paragraph = new Paragraph();
+        paragraph.Runs.Add(Run.FromSmartArt(smartArt));
+        var session = SessionWith(paragraph);
+
+        session.SmartArtDesignPreview.PreviewStyle(
+            new DocumentObjectTarget(0, 0),
+            SmartArtStyle.Catalog[4]).Should().BeTrue();
+
+        session.LoadDocument(TextDocument.CreateEmpty());
+
+        (smartArt.Kind, smartArt.LayoutId, smartArt.ColorSchemeId, smartArt.StyleId).Should().Be(
+            (SmartArtKind.List, "list1", "colorful1", "flat1"));
+        session.SmartArtDesignPreview.HasActivePreview.Should().BeFalse();
+    }
+
+    [Fact]
     public void NestedShapeMutation_PreservesFullChildPathAndUndo()
     {
         var nestedShape = new Shape(ShapeKind.Rectangle, 30, 20);

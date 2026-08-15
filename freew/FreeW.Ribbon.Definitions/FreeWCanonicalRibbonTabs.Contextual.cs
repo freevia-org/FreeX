@@ -655,11 +655,7 @@ internal static partial class FreeWCanonicalRibbonTabs
                     tab => tab.Group("smartart-styles", "SmartArt Styles", "C", 90, group =>
                         {
                             group.Dropdown("freew.smartart-colors", "Change Colors", BuildSmartArtColorsMenu());
-                            group.ComboBox("freew.smartart-change-style", "Styles", combo => combo with
-                            {
-                                Items = SmartArtStyle.Catalog.Select(style => style.Name).ToArray(),
-                                Width = 116,
-                            });
+                            group.Dropdown("freew.smartart-change-style", "Styles", BuildSmartArtStylesMenu());
                         }));
 
                 topology.Section(
@@ -1092,6 +1088,13 @@ internal static partial class FreeWCanonicalRibbonTabs
             .Select(scheme => new RibbonMenuItem(
                 scheme.Name,
                 new RibbonCommandId($"freew.smartart-colors-{scheme.Id}")))
+            .ToArray());
+
+    private static RibbonMenu BuildSmartArtStylesMenu() =>
+        new(SmartArtStyle.Catalog
+            .Select(style => new RibbonMenuItem(
+                style.Name,
+                SmartArtCommandPlanner.StyleCommandId(style)))
             .ToArray());
 
     private static RibbonMenu BuildTableBordersMenu() =>

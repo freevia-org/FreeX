@@ -1446,7 +1446,14 @@ internal static class FreeWAvaloniaRibbonCommands
             CancelChartDesignPreview: editor.CancelChartDesignPreview,
             CommitChartStyle: editor.CommitChartStylePreview,
             CommitChartColorScheme: editor.CommitChartColorSchemePreview,
-            CommitChartQuickLayout: editor.CommitChartQuickLayoutPreview);
+            CommitChartQuickLayout: editor.CommitChartQuickLayoutPreview,
+            PreviewSmartArtLayout: editor.PreviewSmartArtLayout,
+            PreviewSmartArtColorScheme: editor.PreviewSmartArtColorScheme,
+            PreviewSmartArtStyle: editor.PreviewSmartArtStyle,
+            CancelSmartArtDesignPreview: editor.CancelSmartArtDesignPreview,
+            CommitSmartArtLayout: editor.CommitSmartArtLayoutPreview,
+            CommitSmartArtColorScheme: editor.CommitSmartArtColorSchemePreview,
+            CommitSmartArtStyle: editor.CommitSmartArtStylePreview);
 
     /// <summary>
     /// AV-MAIL: Registers the Mailings-tab commands over the portable <see cref="MailMerge"/> engine. The

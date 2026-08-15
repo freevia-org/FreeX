@@ -3441,8 +3441,8 @@ public sealed partial class MainWindow : Window
             if (tab.Id == "smartart-design")
             {
                 // Inject the three SmartArt gallery strips: Layouts, Change Colors, Styles.
-                InjectGallery(content, "smartart-layouts", SmartArtGallery.BuildLayouts(_editor), removeKind: RemoveKind.All);
-                InjectGallery(content, "smartart-colors", SmartArtGallery.BuildColors(_editor), removeKind: RemoveKind.All, extra: SmartArtGallery.BuildStyles(_editor));
+                InjectGallery(content, "smartart-layouts", SmartArtGallery.BuildLayouts(registry), removeKind: RemoveKind.All);
+                InjectGallery(content, "smartart-colors", SmartArtGallery.BuildColors(registry), removeKind: RemoveKind.All, extra: SmartArtGallery.BuildStyles(registry));
             }
 
             }

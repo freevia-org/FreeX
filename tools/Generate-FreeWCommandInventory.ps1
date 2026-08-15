@@ -706,6 +706,7 @@ internal static class FreeWCommandInventory
                     ContainsCommandLiteral(sourceTexts["symbolWorkflowSource"], commandId) ||
                     ContainsCommandLiteral(sourceTexts["tableEditingWorkflowSource"], commandId));
             var behaviorEvidence = BehaviorEvidenceCatalog.GetValueOrDefault(commandId)
+                ?? DesignGalleryPreviewEvidenceFor(commandId)
                 ?? FormattingGalleryEvidenceFor(commandId)
                 ?? SymbolWorkflowEvidenceFor(commandId)
                 ?? TableEditingWorkflowEvidenceFor(commandId);
@@ -910,6 +911,44 @@ internal static class FreeWCommandInventory
                 StringComparison.Ordinal))
             ? FormattingGalleryEvidence("Both renderers apply the same built-in style through the shared gallery workflow.")
             : null;
+    }
+
+    private static CommandBehaviorEvidence? DesignGalleryPreviewEvidenceFor(string commandId)
+    {
+        if (commandId.StartsWith("freew.chart-style-", StringComparison.Ordinal)
+            || commandId.StartsWith("freew.chart-color-", StringComparison.Ordinal)
+            || commandId.StartsWith("freew.chart-colors-", StringComparison.Ordinal)
+            || commandId.StartsWith("freew.chart-quick-layout-", StringComparison.Ordinal))
+        {
+            return new CommandBehaviorEvidence(
+                EvidenceId: "freew.chart-design-preview.shared-workflow",
+                Slice: "Chart Design gallery preview",
+                Summary: "The shared command owns preview, cancellation, preparation, and single-commit behavior while both renderers only adapt native gallery interaction.",
+                WpfEvidence: new BehaviorEvidenceLink(
+                    Path: "freew/FreeW.App.Presentation.Tests/FreeWRibbonCommandWorkflowTests.cs",
+                    Test: "FreeWRibbonCommandWorkflowTests.Chart_gallery_commands_share_preview_cancel_and_single_commit_lifecycle"),
+                AvaloniaEvidence: new BehaviorEvidenceLink(
+                    Path: "freew/FreeW.App.Presentation.Tests/FreeWRibbonCommandWorkflowTests.cs",
+                    Test: "FreeWRibbonCommandWorkflowTests.Both_renderers_adapt_chart_galleries_to_the_shared_preview_transaction"));
+        }
+
+        if (commandId.StartsWith("freew.smartart-layout-", StringComparison.Ordinal)
+            || commandId.StartsWith("freew.smartart-colors-", StringComparison.Ordinal)
+            || commandId.StartsWith("freew.smartart-style-", StringComparison.Ordinal))
+        {
+            return new CommandBehaviorEvidence(
+                EvidenceId: "freew.smartart-design-preview.shared-workflow",
+                Slice: "SmartArt Design gallery preview",
+                Summary: "The shared command owns preview, cancellation, preparation, and single-commit behavior while both renderers only adapt native gallery interaction.",
+                WpfEvidence: new BehaviorEvidenceLink(
+                    Path: "freew/FreeW.App.Presentation.Tests/FreeWRibbonCommandWorkflowTests.cs",
+                    Test: "FreeWRibbonCommandWorkflowTests.SmartArt_gallery_commands_share_preview_cancel_and_single_commit_lifecycle"),
+                AvaloniaEvidence: new BehaviorEvidenceLink(
+                    Path: "freew/FreeW.App.Presentation.Tests/FreeWRibbonCommandWorkflowTests.cs",
+                    Test: "FreeWRibbonCommandWorkflowTests.Both_renderers_adapt_SmartArt_galleries_to_the_shared_preview_transaction"));
+        }
+
+        return null;
     }
 
     private static CommandBehaviorEvidence FormattingGalleryEvidence(string summary) =>

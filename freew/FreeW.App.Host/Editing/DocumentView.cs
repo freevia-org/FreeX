@@ -162,6 +162,7 @@ public sealed partial class DocumentView : RichTextBox
     private DocumentParagraphStylePreviewSession ParagraphStylePreviews => _editingSession.ParagraphStylePreview;
     private DocumentTableStylePreviewSession TableStylePreviews => _editingSession.TableStylePreview;
     private DocumentChartDesignPreviewSession ChartDesignPreviews => _editingSession.ChartDesignPreview;
+    private DocumentSmartArtDesignPreviewSession SmartArtDesignPreviews => _editingSession.SmartArtDesignPreview;
     private DocumentParagraphFormattingCoordinator ParagraphEdits => _editingSession.Paragraphs;
     private DocumentObjectEditingCoordinator ObjectEdits => _editingSession.Objects;
     private DocumentTableEditingCoordinator TableEdits => _editingSession.Tables;
@@ -2593,13 +2594,6 @@ public sealed partial class DocumentView : RichTextBox
     }
 
     /// <summary>
-    /// Trigger a full re-render of the document surface from the current model state.  Use this after
-    /// directly mutating model objects (e.g. batch floating-object position changes) that bypass the undo
-    /// bus's built-in render call.
-    /// </summary>
-    public void Rerender() => Render();
-
-    /// <summary>
     /// Apply a <see cref="ChartStyle"/> to the selected chart and re-render.
     /// No-op without a chart selection.
     /// </summary>
@@ -2843,14 +2837,17 @@ public sealed partial class DocumentView : RichTextBox
     /// No-op without a SmartArt selection.
     /// </summary>
     public void ApplySmartArtLayout(SmartArtLayoutPreset preset)
+        => CommitSmartArtLayoutPreview(preset);
+
+    public void PreviewSelectedSmartArtLayout(SmartArtLayoutPreset preset)
     {
-        CommitToModel();
-        var location = SelectedSmartArtLocation();
-        if (location.SmartArt is null) return;
-        RenderObjectEdit(ObjectEdits.SetSmartArtLayout(
-            ObjectTarget(location.BlockIndex, location.RunIndex),
-            preset.Kind,
-            preset.Id));
+        ArgumentNullException.ThrowIfNull(preset);
+        if (!SmartArtDesignPreviews.HasActivePreview)
+            CommitToModel();
+        var target = SmartArtDesignPreviews.ActiveTarget ?? SelectedSmartArtTarget();
+        if (target is not { } address || !SmartArtDesignPreviews.PreviewLayout(address, preset))
+            return;
+        Render();
     }
 
     /// <summary>
@@ -2859,13 +2856,17 @@ public sealed partial class DocumentView : RichTextBox
     /// No-op without a SmartArt selection.
     /// </summary>
     public void ApplySmartArtColorScheme(SmartArtColorScheme scheme)
+        => CommitSmartArtColorSchemePreview(scheme);
+
+    public void PreviewSelectedSmartArtColorScheme(SmartArtColorScheme scheme)
     {
-        CommitToModel();
-        var location = SelectedSmartArtLocation();
-        if (location.SmartArt is null) return;
-        RenderObjectEdit(ObjectEdits.SetSmartArtColor(
-            ObjectTarget(location.BlockIndex, location.RunIndex),
-            scheme.Id));
+        ArgumentNullException.ThrowIfNull(scheme);
+        if (!SmartArtDesignPreviews.HasActivePreview)
+            CommitToModel();
+        var target = SmartArtDesignPreviews.ActiveTarget ?? SelectedSmartArtTarget();
+        if (target is not { } address || !SmartArtDesignPreviews.PreviewColorScheme(address, scheme))
+            return;
+        Render();
     }
 
     /// <summary>
@@ -2874,13 +2875,61 @@ public sealed partial class DocumentView : RichTextBox
     /// No-op without a SmartArt selection.
     /// </summary>
     public void ApplySmartArtStyle(SmartArtStyle style)
+        => CommitSmartArtStylePreview(style);
+
+    public void PreviewSelectedSmartArtStyle(SmartArtStyle style)
     {
-        CommitToModel();
+        ArgumentNullException.ThrowIfNull(style);
+        if (!SmartArtDesignPreviews.HasActivePreview)
+            CommitToModel();
+        var target = SmartArtDesignPreviews.ActiveTarget ?? SelectedSmartArtTarget();
+        if (target is not { } address || !SmartArtDesignPreviews.PreviewStyle(address, style))
+            return;
+        Render();
+    }
+
+    public void CancelSmartArtDesignPreview()
+    {
+        if (SmartArtDesignPreviews.Cancel() is not null)
+            Render();
+    }
+
+    public void CommitSmartArtLayoutPreview(SmartArtLayoutPreset preset)
+    {
+        ArgumentNullException.ThrowIfNull(preset);
+        if (!SmartArtDesignPreviews.HasActivePreview)
+            CommitToModel();
+        var target = SmartArtDesignPreviews.ActiveTarget ?? SelectedSmartArtTarget();
+        if (target is { } address)
+            RenderObjectEdit(SmartArtDesignPreviews.CommitLayout(address, preset));
+    }
+
+    public void CommitSmartArtColorSchemePreview(SmartArtColorScheme scheme)
+    {
+        ArgumentNullException.ThrowIfNull(scheme);
+        if (!SmartArtDesignPreviews.HasActivePreview)
+            CommitToModel();
+        var target = SmartArtDesignPreviews.ActiveTarget ?? SelectedSmartArtTarget();
+        if (target is { } address)
+            RenderObjectEdit(SmartArtDesignPreviews.CommitColorScheme(address, scheme));
+    }
+
+    public void CommitSmartArtStylePreview(SmartArtStyle style)
+    {
+        ArgumentNullException.ThrowIfNull(style);
+        if (!SmartArtDesignPreviews.HasActivePreview)
+            CommitToModel();
+        var target = SmartArtDesignPreviews.ActiveTarget ?? SelectedSmartArtTarget();
+        if (target is { } address)
+            RenderObjectEdit(SmartArtDesignPreviews.CommitStyle(address, style));
+    }
+
+    private DocumentObjectTarget? SelectedSmartArtTarget()
+    {
         var location = SelectedSmartArtLocation();
-        if (location.SmartArt is null) return;
-        RenderObjectEdit(ObjectEdits.SetSmartArtStyle(
-            ObjectTarget(location.BlockIndex, location.RunIndex),
-            style.Id));
+        return location.SmartArt is null
+            ? null
+            : ObjectTarget(location.BlockIndex, location.RunIndex);
     }
 
     private void ExecuteSmartArtStructureCommand(SmartArtStructureOperation operation)

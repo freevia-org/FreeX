@@ -1705,7 +1705,14 @@ internal static class FreeWRibbonCommands
             CancelChartDesignPreview: editor.CancelChartDesignPreview,
             CommitChartStyle: editor.CommitChartStylePreview,
             CommitChartColorScheme: editor.CommitChartColorSchemePreview,
-            CommitChartQuickLayout: editor.CommitChartQuickLayoutPreview);
+            CommitChartQuickLayout: editor.CommitChartQuickLayoutPreview,
+            PreviewSmartArtLayout: editor.PreviewSelectedSmartArtLayout,
+            PreviewSmartArtColorScheme: editor.PreviewSelectedSmartArtColorScheme,
+            PreviewSmartArtStyle: editor.PreviewSelectedSmartArtStyle,
+            CancelSmartArtDesignPreview: editor.CancelSmartArtDesignPreview,
+            CommitSmartArtLayout: editor.CommitSmartArtLayoutPreview,
+            CommitSmartArtColorScheme: editor.CommitSmartArtColorSchemePreview,
+            CommitSmartArtStyle: editor.CommitSmartArtStylePreview);
 
     // Home > Font character effects wired by CharacterEffectCommand.
     private enum CharacterEffect { Superscript, Subscript, Strikethrough, SmallCaps, AllCaps }

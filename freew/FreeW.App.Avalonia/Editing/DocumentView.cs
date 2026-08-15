@@ -282,6 +282,7 @@ public sealed partial class DocumentView : Control
     private DocumentParagraphStylePreviewSession ParagraphStylePreviews => _editingSession.ParagraphStylePreview;
     private DocumentTableStylePreviewSession TableStylePreviews => _editingSession.TableStylePreview;
     private DocumentChartDesignPreviewSession ChartDesignPreviews => _editingSession.ChartDesignPreview;
+    private DocumentSmartArtDesignPreviewSession SmartArtDesignPreviews => _editingSession.SmartArtDesignPreview;
     private DocumentParagraphFormattingCoordinator ParagraphEdits => _editingSession.Paragraphs;
     private DocumentObjectEditingCoordinator ObjectEdits => _editingSession.Objects;
     private DocumentTableEditingCoordinator TableEdits => _editingSession.Tables;
@@ -15047,15 +15048,7 @@ public sealed partial class DocumentView : Control
     /// Undoable + re-renders. No-op when the float is not SmartArt.
     /// </summary>
     public void SetSmartArtLayout(SmartArtLayoutPreset preset)
-    {
-        if (_selectedFloating is not { Kind: "SmartArt" } sel) return;
-        InvalidateObjectEdit(
-            ObjectEdits.SetSmartArtLayout(
-                ObjectTarget(sel.BlockIndex, sel.RunIndex),
-                preset.Kind,
-                preset.Id),
-            sel.Kind);
-    }
+        => CommitSmartArtLayoutPreview(preset);
 
     /// <summary>
     /// AV-CHARTTAB: Apply a SmartArt colour scheme (catalog id) to the selected floating SmartArt.
@@ -15063,12 +15056,14 @@ public sealed partial class DocumentView : Control
     /// </summary>
     public void SetSmartArtColor(string? colorSchemeId)
     {
-        if (_selectedFloating is not { Kind: "SmartArt" } sel) return;
-        InvalidateObjectEdit(
-            ObjectEdits.SetSmartArtColor(
-                ObjectTarget(sel.BlockIndex, sel.RunIndex),
-                colorSchemeId),
-            sel.Kind);
+        if (colorSchemeId is not null && SmartArtColorScheme.FindById(colorSchemeId) is { } scheme)
+        {
+            CommitSmartArtColorSchemePreview(scheme);
+            return;
+        }
+
+        if (CurrentSmartArtTarget() is { } target)
+            InvalidateSmartArtEdit(ObjectEdits.SetSmartArtColor(target, colorSchemeId), target);
     }
 
     /// <summary>Return the currently selected floating SmartArt model, or null for another selection kind.</summary>
@@ -15103,12 +15098,74 @@ public sealed partial class DocumentView : Control
 
     /// <summary>Apply a shared SmartArt style catalog entry and retain the floating selection.</summary>
     public void SetSmartArtStyle(SmartArtStyle style)
+        => CommitSmartArtStylePreview(style);
+
+    public void PreviewSmartArtLayout(SmartArtLayoutPreset preset)
     {
-        if (_selectedFloating is not { Kind: "SmartArt" } sel) return;
-        if (ObjectEdits.SetSmartArtStyle(
-                ObjectTarget(sel.BlockIndex, sel.RunIndex),
-                style.Id).Applied)
-            RefreshSelectedSmartArt(sel);
+        var target = SmartArtDesignPreviews.ActiveTarget ?? CurrentSmartArtTarget();
+        if (target is not { } address || !SmartArtDesignPreviews.PreviewLayout(address, preset))
+            return;
+        RefreshSmartArtPreview(address);
+    }
+
+    public void PreviewSmartArtColorScheme(SmartArtColorScheme scheme)
+    {
+        var target = SmartArtDesignPreviews.ActiveTarget ?? CurrentSmartArtTarget();
+        if (target is not { } address || !SmartArtDesignPreviews.PreviewColorScheme(address, scheme))
+            return;
+        RefreshSmartArtPreview(address);
+    }
+
+    public void PreviewSmartArtStyle(SmartArtStyle style)
+    {
+        var target = SmartArtDesignPreviews.ActiveTarget ?? CurrentSmartArtTarget();
+        if (target is not { } address || !SmartArtDesignPreviews.PreviewStyle(address, style))
+            return;
+        RefreshSmartArtPreview(address);
+    }
+
+    public void CancelSmartArtDesignPreview()
+    {
+        if (SmartArtDesignPreviews.Cancel() is { } target)
+            RefreshSmartArtPreview(target);
+    }
+
+    public void CommitSmartArtLayoutPreview(SmartArtLayoutPreset preset)
+    {
+        var target = SmartArtDesignPreviews.ActiveTarget ?? CurrentSmartArtTarget();
+        if (target is { } address)
+            InvalidateSmartArtEdit(SmartArtDesignPreviews.CommitLayout(address, preset), address);
+    }
+
+    public void CommitSmartArtColorSchemePreview(SmartArtColorScheme scheme)
+    {
+        var target = SmartArtDesignPreviews.ActiveTarget ?? CurrentSmartArtTarget();
+        if (target is { } address)
+            InvalidateSmartArtEdit(SmartArtDesignPreviews.CommitColorScheme(address, scheme), address);
+    }
+
+    public void CommitSmartArtStylePreview(SmartArtStyle style)
+    {
+        var target = SmartArtDesignPreviews.ActiveTarget ?? CurrentSmartArtTarget();
+        if (target is { } address)
+            InvalidateSmartArtEdit(SmartArtDesignPreviews.CommitStyle(address, style), address);
+    }
+
+    private DocumentObjectTarget? CurrentSmartArtTarget() =>
+        _selectedFloating is { Kind: "SmartArt" } selected
+            ? ObjectTarget(selected.BlockIndex, selected.RunIndex)
+            : null;
+
+    private void InvalidateSmartArtEdit(DocumentObjectEditResult result, DocumentObjectTarget target)
+    {
+        if (result.Applied)
+            RefreshSmartArtPreview(target);
+    }
+
+    private void RefreshSmartArtPreview(DocumentObjectTarget target)
+    {
+        InvalidateLayoutAndVisual();
+        RefreshSelectedFloatingRect(target.BlockIndex, target.RunIndex, "SmartArt");
     }
 
     private void RefreshSelectedSmartArt((int BlockIndex, int RunIndex, string Kind, Rect Rect) sel)
