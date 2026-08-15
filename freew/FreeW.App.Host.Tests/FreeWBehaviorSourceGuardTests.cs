@@ -158,6 +158,17 @@ public sealed class FreeWBehaviorSourceGuardTests
             .Should().Contain("customDictionary.EnsurePersisted()");
         ReadSource("freew", "FreeW.App.Host", "Editing", "DocumentView.cs")
             .Should().Contain("RegisterCustomDictionary");
+
+        var dictionaryStore = ReadSource(
+            "freew", "FreeW.App.Presentation", "Proofing", "CustomDictionaryStore.cs");
+        dictionaryStore.Should().Contain("WriteAllLinesAtomically(");
+        dictionaryStore.Should().Contain("AtomicFileWriter.WriteAllText(");
+
+        var quickParts = ReadSource(
+            "freew", "FreeW.App.Presentation", "QuickParts", "QuickPartLibrary.cs");
+        quickParts.Should().Contain("JsonSettingsStore<List<PersistedQuickPart>>");
+        quickParts.Should().NotContain("JsonSerializer.");
+        quickParts.Should().NotContain("File.WriteAllText(");
     }
 
     [Fact]

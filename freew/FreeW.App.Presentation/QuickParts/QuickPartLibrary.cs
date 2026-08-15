@@ -1,4 +1,3 @@
-using System.Text.Json;
 using Free.Shared.AppServices;
 using FreeW.Core.Model;
 
@@ -11,12 +10,11 @@ namespace FreeW.App.Presentation.QuickParts;
 public sealed class QuickPartLibrary
 {
     private const string FileName = "quickparts.json";
-    private static readonly JsonSerializerOptions JsonOptions = new() { WriteIndented = true };
-
     private readonly QuickPartStore _store = new();
-    private readonly string? _storePath;
+    private readonly JsonSettingsStore<List<PersistedQuickPart>>? _settingsStore;
 
-    private QuickPartLibrary(string? storePath) => _storePath = storePath;
+    private QuickPartLibrary(JsonSettingsStore<List<PersistedQuickPart>>? settingsStore) =>
+        _settingsStore = settingsStore;
 
     public IReadOnlyList<string> Names => _store.Names;
     public IReadOnlyList<QuickPart> Snippets => _store.Snippets;
@@ -24,27 +22,31 @@ public sealed class QuickPartLibrary
 
     public static QuickPartLibrary Load(IApplicationDataPathProvider? pathProvider = null)
     {
-        string? path = null;
         try
         {
-            path = Path.Combine(
-                (pathProvider ?? PlatformApplicationDataPathProvider.LocalInstance)
-                    .GetApplicationDataDirectory(),
-                AppStoragePathPlanner.ProductDirectoryName,
-                FileName);
+            return LoadFromStore(JsonSettingsStore<List<PersistedQuickPart>>.ForProductFile(
+                FileName,
+                pathProvider ?? PlatformApplicationDataPathProvider.LocalInstance));
         }
         catch
         {
-            // Fall back to a session-only library when the platform path is unavailable.
+            return LoadFromStore(null);
         }
-
-        return LoadFromPath(path);
     }
 
     /// <summary>Creates a library over an explicit path; a null path creates an in-memory library.</summary>
     public static QuickPartLibrary LoadFromPath(string? path)
     {
-        var library = new QuickPartLibrary(path);
+        var settingsStore = string.IsNullOrEmpty(path)
+            ? null
+            : JsonSettingsStore<List<PersistedQuickPart>>.ForPath(path);
+        return LoadFromStore(settingsStore);
+    }
+
+    private static QuickPartLibrary LoadFromStore(
+        JsonSettingsStore<List<PersistedQuickPart>>? settingsStore)
+    {
+        var library = new QuickPartLibrary(settingsStore);
         library.TryLoad();
         return library;
     }
@@ -65,64 +67,44 @@ public sealed class QuickPartLibrary
 
     private void TryLoad()
     {
-        if (string.IsNullOrEmpty(_storePath) || !File.Exists(_storePath))
+        if (_settingsStore is null)
             return;
 
-        try
+        foreach (var entry in _settingsStore.Load())
         {
-            var entries = JsonSerializer.Deserialize<List<PersistedQuickPart>>(
-                File.ReadAllText(_storePath));
-            if (entries is null)
-                return;
+            if (string.IsNullOrWhiteSpace(entry.Name))
+                continue;
 
-            foreach (var entry in entries)
-            {
-                if (string.IsNullOrWhiteSpace(entry.Name))
-                    continue;
-
-                _store.Add(new QuickPart(
-                    entry.Name,
-                    entry.Lines ?? [],
-                    entry.Gallery,
-                    entry.Category,
-                    entry.Description));
-            }
-        }
-        catch
-        {
-            // Treat unreadable content as an empty library.
+            _store.Add(new QuickPart(
+                entry.Name,
+                entry.Lines ?? [],
+                entry.Gallery,
+                entry.Category,
+                entry.Description));
         }
     }
 
     private void TrySave()
     {
-        if (string.IsNullOrEmpty(_storePath))
+        if (_settingsStore is null)
             return;
 
-        try
+        _settingsStore.Save(_store.Snippets.Select(part => new PersistedQuickPart
         {
-            var directory = Path.GetDirectoryName(_storePath);
-            if (!string.IsNullOrEmpty(directory))
-                Directory.CreateDirectory(directory);
-
-            var entries = _store.Snippets.Select(part => new PersistedQuickPart
-            {
-                Name = part.Name,
-                Lines = [.. part.Lines],
-                Gallery = part.Gallery,
-                Category = part.Category,
-                Description = part.Description,
-            });
-            File.WriteAllText(_storePath, JsonSerializer.Serialize(entries, JsonOptions));
-        }
-        catch
-        {
-            // Persistence remains best-effort.
-        }
+            Name = part.Name,
+            Lines = [.. part.Lines],
+            Gallery = part.Gallery,
+            Category = part.Category,
+            Description = part.Description,
+        }).ToList());
     }
 
     private sealed class PersistedQuickPart
     {
+        public PersistedQuickPart()
+        {
+        }
+
         public string Name { get; set; } = string.Empty;
         public List<string>? Lines { get; set; }
         public string? Gallery { get; set; }
