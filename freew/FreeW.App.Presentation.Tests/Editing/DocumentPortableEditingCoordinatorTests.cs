@@ -225,6 +225,28 @@ public sealed class DocumentTableEditingCoordinatorTests
     }
 
     [Fact]
+    public void SelectedRangeShadingUsesCanonicalGridExpansionAndOneUndoStep()
+    {
+        var table = Table.Create(2, 3);
+        table.Rows[0].Cells[0].GridSpan = 2;
+        table.Rows[0].Cells.RemoveAt(1);
+        var session = SessionWith(table);
+        var addresses = session.Tables.AddressesInRange(
+            new DocumentTableCellAddress(0, 1, 2),
+            new DocumentTableCellAddress(0, 0, 0));
+
+        session.Tables.SetCellShading(addresses, "#123456").Applied.Should().BeTrue();
+
+        addresses.Should().HaveCount(5);
+        table.Rows.SelectMany(row => row.Cells)
+            .Should().OnlyContain(cell => cell.ShadingColorHex == "#123456");
+        session.Commands.Undo().Should().BeTrue();
+        table.Rows.SelectMany(row => row.Cells)
+            .Should().OnlyContain(cell => cell.ShadingColorHex == null);
+        session.Commands.CanUndo.Should().BeFalse();
+    }
+
+    [Fact]
     public void MergedCellGridAddressesAreDeduplicatedAndBorderEditsAreGrouped()
     {
         var table = Table.Create(1, 3);
@@ -1405,6 +1427,42 @@ public sealed class DocumentPortableEditingOwnershipTests
                 TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeW.slnx"),
                 "freew", "FreeW.App.Avalonia", "Editing", "ReferenceCommands.cs"))
             .Should().BeFalse("renderer-neutral reference commands belong in Core or Presentation");
+    }
+
+    [Fact]
+    public void BothRenderersExpandCellShadingSelectionThroughPresentationCoordinator()
+    {
+        var wpf = ReadSource("freew", "FreeW.App.Host", "Editing", "DocumentView.cs");
+        var avalonia = ReadSource("freew", "FreeW.App.Avalonia", "Editing", "DocumentView.cs");
+
+        static string Slice(string source, string signature, string nextSignature)
+        {
+            var start = source.IndexOf(signature, StringComparison.Ordinal);
+            var end = source.IndexOf(nextSignature, start, StringComparison.Ordinal);
+            start.Should().BeGreaterThanOrEqualTo(0);
+            end.Should().BeGreaterThan(start);
+            return source[start..end];
+        }
+
+        var wpfShading = Slice(
+            wpf,
+            "public void SetCaretCellShading(string? colorHex)",
+            "public void SetCaretCellBorders(");
+        var avaloniaShading = Slice(
+            avalonia,
+            "public void SetCellShading(string? hexColor)",
+            "public void SetCellBorders(");
+
+        foreach (var method in new[] { wpfShading, avaloniaShading })
+        {
+            method.Should().Contain("TableEdits.AddressesInRange(");
+            method.Should().Contain("TableEdits.SetCellShading(");
+        }
+
+        wpfShading.Should().Contain("TableAddressOf(Selection.Start.Parent as TextElement)");
+        wpfShading.Should().Contain("TableAddressOf(Selection.End.Parent as TextElement)");
+        avaloniaShading.Should().NotContain("for (var gridCol");
+        avaloniaShading.Should().NotContain("new List<DocumentTableCellAddress>");
     }
 
     [Fact]

@@ -1939,29 +1939,9 @@ public sealed partial class DocumentView : Control
 
         if (SelectedCellRange is { } sel)
         {
-            // Block selection: apply to every cell in the rectangle.
-            if (sel.TableBlock < 0 || sel.TableBlock >= _doc.Blocks.Count
-                || _doc.Blocks[sel.TableBlock] is not Table selTbl)
-                return;
-            var addresses = new List<DocumentTableCellAddress>();
-            for (var r = sel.MinRow; r <= sel.MaxRow; r++)
-            {
-                if (r >= selTbl.Rows.Count) break;
-                var row = selTbl.Rows[r];
-                // BL1/BL3: _cellCaret/SelectedCellRange use GRID columns; SetCellShadingCommand
-                // expects CELL-LIST indices. Convert each grid column and dedupe so a merged cell
-                // spanning multiple grid columns is only shaded once.
-                var lastCellIdx = -1;
-                for (var gridCol = sel.MinCol; gridCol <= sel.MaxCol; gridCol++)
-                {
-                    var cellIdx = GridColumnToCellIndex(row, gridCol);
-                    if (cellIdx < 0) break; // beyond row's grid width
-                    if (cellIdx == lastCellIdx) continue; // merged cell already processed
-                    lastCellIdx = cellIdx;
-                    addresses.Add(new DocumentTableCellAddress(sel.TableBlock, r, gridCol));
-                }
-            }
-            TableEdits.SetCellShading(addresses, hexColor);
+            var anchor = new DocumentTableCellAddress(sel.TableBlock, sel.MinRow, sel.MinCol);
+            var active = new DocumentTableCellAddress(sel.TableBlock, sel.MaxRow, sel.MaxCol);
+            TableEdits.SetCellShading(TableEdits.AddressesInRange(anchor, active), hexColor);
         }
         else if (_cellCaret is { } cc)
         {
@@ -1969,11 +1949,12 @@ public sealed partial class DocumentView : Control
             if (cc.TableBlock < 0 || cc.TableBlock >= _doc.Blocks.Count
                 || _doc.Blocks[cc.TableBlock] is not Table ccTbl)
                 return;
-            // BL1: cc.Col is a GRID column; convert to cell-list index before issuing the command.
-            var caretCellIdx = GridColumnToCellIndex(ccTbl.Rows[cc.Row], cc.Col);
-            if (caretCellIdx < 0) return;
+            if (GridColumnToCellIndex(ccTbl.Rows[cc.Row], cc.Col) < 0)
+                return;
             TableEdits.SetCellShading(
-                [new DocumentTableCellAddress(cc.TableBlock, cc.Row, cc.Col)],
+                TableEdits.AddressesInRange(
+                    new DocumentTableCellAddress(cc.TableBlock, cc.Row, cc.Col),
+                    new DocumentTableCellAddress(cc.TableBlock, cc.Row, cc.Col)),
                 hexColor);
         }
         else

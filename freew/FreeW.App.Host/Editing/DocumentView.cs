@@ -1924,14 +1924,25 @@ public sealed partial class DocumentView : RichTextBox
         TableEdits.SplitCell(address, rows, columns));
 
     /// <summary>
-    /// Set (or clear, when <paramref name="colorHex"/> is null/empty) the background shading of the
-    /// table cell containing the caret as one undoable edit. No-op outside a table.
+    /// Set (or clear, when <paramref name="colorHex"/> is null/empty) the background shading of every
+    /// table cell spanned by the native selection, falling back to the caret cell, as one undoable edit.
+    /// Logical-grid expansion and merged-cell deduplication stay Presentation-owned.
     /// </summary>
     public void SetCaretCellShading(string? colorHex)
     {
+        Focus();
+        var start = TableAddressOf(Selection.Start.Parent as TextElement);
+        var end = TableAddressOf(Selection.End.Parent as TextElement);
+        var caret = CaretTableAddress();
         CommitToModel();
-        if (CaretTableAddress() is { } address)
-            TableEdits.SetCellShading([address], colorHex);
+        start ??= caret;
+        end ??= start;
+        if (start is { } anchor && end is { } active)
+        {
+            TableEdits.SetCellShading(
+                TableEdits.AddressesInRange(anchor, active),
+                colorHex);
+        }
     }
 
     /// <summary>
