@@ -77,7 +77,7 @@ public sealed class AnimationPaneTests
     {
         var editor = MakeSessionWithAnimations();
 
-        var pane = new AnimationPane(editor);
+        var pane = new AnimationPane(new AnimationPaneSession(() => editor));
 
         pane.Should().NotBeNull();
         // The list is in a StackPanel inside a ScrollViewer inside a Grid inside a Border.
@@ -95,7 +95,7 @@ public sealed class AnimationPaneTests
     {
         var editor = MakeSessionWithAnimations();
 
-        var pane = new AnimationPane(editor);
+        var pane = new AnimationPane(new AnimationPaneSession(() => editor));
 
         var names = CollectRowShapeNames(pane);
         names.Should().HaveCount(2);
@@ -143,7 +143,7 @@ public sealed class AnimationPaneTests
         anims[0].ShapeId.Should().Be(20u, "the remaining animation targets shape 20");
 
         // The pane rebuilds on Changed; create a fresh pane to verify.
-        var pane = new AnimationPane(editor);
+        var pane = new AnimationPane(new AnimationPaneSession(() => editor));
         int rowCount = CountAnimationRows(pane);
         rowCount.Should().Be(1);
     }
@@ -215,7 +215,7 @@ public sealed class AnimationPaneTests
         var bus = new PresentationCommandBus(pres);
         var editor = new EditingSession(pres, bus);
 
-        var pane = new AnimationPane(editor);
+        var pane = new AnimationPane(new AnimationPaneSession(() => editor));
 
         int rowCount = CountAnimationRows(pane);
         rowCount.Should().Be(0, "an empty slide has no animation rows");
@@ -298,14 +298,19 @@ public sealed class AnimationPaneTests
         var bus    = new PresentationCommandBus(pres);
         var editor = new EditingSession(pres, bus);
 
-        var pane = new AnimationPane(editor);
+        var pane = new AnimationPane(new AnimationPaneSession(() => editor));
 
         // Initially on slide 0 → 2 rows.
         CountAnimationRows(pane).Should().Be(2);
 
-        // Navigate to slide 1 → 0 rows.
+        // Navigate to slide 1 → 0 rows. The HOST drives the refresh now: "Share FreeP animation pane
+        // lifecycle" moved refresh ownership out of the pane's own event subscription and onto
+        // MainWindow, which calls Rebuild() through RefreshAnimationPaneAfterNavigation (and after
+        // editor change, selection and presentation change -- see MainWindow.WorkareaEndpoint.cs).
+        // Driving it the same way here is what keeps this test measuring the production path.
         editor.SelectSlide(1);
-        CountAnimationRows(pane).Should().Be(0, "pane should refresh when slide changes");
+        pane.Rebuild();
+        CountAnimationRows(pane).Should().Be(0, "pane should refresh when the host rebuilds it after a slide change");
     }
 
     [StaFact]
@@ -314,7 +319,7 @@ public sealed class AnimationPaneTests
         var editor = MakeSessionWithAnimations();
         editor.Select(20u);
 
-        var pane = new AnimationPane(editor);
+        var pane = new AnimationPane(new AnimationPaneSession(() => editor));
 
         var plan = pane.CurrentTimelinePlanForTest;
         plan.Items.Should().HaveCount(2);
@@ -354,7 +359,7 @@ public sealed class AnimationPaneTests
     public void AnimationPane_EasingControlsApplyAndUndoSharedMutation()
     {
         var editor = MakeSessionWithAnimations();
-        var pane = new AnimationPane(editor);
+        var pane = new AnimationPane(new AnimationPaneSession(() => editor));
 
         var plan = pane.ApplyAnimationPaneEasingEditForTest(0, "35.5%", "12%");
 
@@ -382,7 +387,7 @@ public sealed class AnimationPaneTests
             Direction = AnimationDirection.FromLeft,
         });
         var editor = new EditingSession(presentation, new PresentationCommandBus(presentation));
-        var pane = new AnimationPane(editor);
+        var pane = new AnimationPane(new AnimationPaneSession(() => editor));
 
         var options = pane.CurrentTimelinePlanForTest.Items[0].EffectOptions;
         options.Options.Select(option => option.Id).Should().Equal(
@@ -410,7 +415,7 @@ public sealed class AnimationPaneTests
         var editor = MakeSessionWithAnimations();
         editor.CurrentSlideAnimations[0].Preset = AnimationPreset.Split;
         editor.CurrentSlideAnimations[0].Direction = AnimationDirection.HorizontalIn;
-        var pane = new AnimationPane(editor);
+        var pane = new AnimationPane(new AnimationPaneSession(() => editor));
 
         pane.CurrentTimelinePlanForTest.Items[0].EffectOptions.Options
             .Select(option => option.DisplayText)
@@ -435,7 +440,7 @@ public sealed class AnimationPaneTests
             ScaleBehavior = AnimationScaleBehavior.FromTo(1.5),
         });
         var editor = new EditingSession(presentation, new PresentationCommandBus(presentation));
-        var pane = new AnimationPane(editor);
+        var pane = new AnimationPane(new AnimationPaneSession(() => editor));
 
         var options = pane.CurrentTimelinePlanForTest.Items[0].EffectOptions;
         options.Options.Select(option => option.DisplayText)
@@ -453,7 +458,7 @@ public sealed class AnimationPaneTests
     {
         var editor = MakeSessionWithAnimations();
         editor.Select(20u);
-        var pane = new AnimationPane(editor);
+        var pane = new AnimationPane(new AnimationPaneSession(() => editor));
 
         var playSession = pane.ExecutePlaybackControlForTest(AnimationPanePlaybackControlKind.PlayFromSelected);
         var workflowEvidence = pane.CurrentPlaybackWorkflowEvidencePlanForTest;
@@ -493,7 +498,7 @@ public sealed class AnimationPaneTests
     public void AnimationPane_ReordersThroughSharedMutationPlan()
     {
         var editor = MakeSessionWithAnimations();
-        var pane = new AnimationPane(editor);
+        var pane = new AnimationPane(new AnimationPaneSession(() => editor));
 
         var plan = pane.MoveAnimationForTest(1, -1);
 
@@ -507,6 +512,10 @@ public sealed class AnimationPaneTests
         editor.CurrentSlideAnimations.Select(animation => animation.ShapeId)
             .Should()
             .Equal(20u, 10u);
+        // The model mutation above is the assertion that matters; the native row projection is
+        // refreshed by the host (Rebuild), not by the pane observing the bus -- see the comment in
+        // AnimationPane_RefreshesOn_CurrentSlideChanged.
+        pane.Rebuild();
         CollectRowShapeNames(pane).Should().Equal(
             "Content Box",
             "Title Box");
@@ -570,7 +579,7 @@ public sealed class AnimationPaneTests
     public void AnimationPane_RemovesThroughSharedUndoableMutationPlan()
     {
         var editor = MakeSessionWithAnimations();
-        var pane = new AnimationPane(editor);
+        var pane = new AnimationPane(new AnimationPaneSession(() => editor));
 
         var plan = pane.RemoveAnimationForTest(0);
 
