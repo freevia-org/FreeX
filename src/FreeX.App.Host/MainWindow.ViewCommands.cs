@@ -93,9 +93,9 @@ public partial class MainWindow
         if (sheet is null) return;
 
         var next = !(sheet.ShowOutlineSymbols ?? true);
-        if (!TryExecuteGroupedSheetCommand(
-                "Show Outline Symbols",
-                sheetId => new SetWorksheetOutlineSymbolsCommand(sheetId, next)))
+        if (!TryExecuteWorksheetLayout(
+                () => _session.SetShowOutlineSymbols(next),
+                "Show Outline Symbols"))
             return;
 
         UpdateViewport();

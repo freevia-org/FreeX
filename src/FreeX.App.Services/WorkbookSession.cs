@@ -2774,6 +2774,36 @@ public sealed class WorkbookSession : IDisposable
             ? createCommand(sheet)
             : new CompositeWorkbookCommand("Worksheet Outline", []);
 
+    /// <summary>
+    /// Shows or hides worksheet outline symbols on every sheet in the current edit group. The
+    /// grouped mutation is one undoable operation, matching Excel's grouped-sheet behavior and
+    /// keeping renderer shortcuts free of command construction policy.
+    /// </summary>
+    public WorkbookCellEditResult SetShowOutlineSymbols(bool showOutlineSymbols)
+    {
+        var targetSheetIds = CurrentGroupedEditSheetIds();
+        if (targetSheetIds.All(sheetId =>
+                (Workbook.GetSheet(sheetId)?.ShowOutlineSymbols ?? true) == showOutlineSymbols))
+        {
+            return SuccessfulNoOpEditResult();
+        }
+
+        var result = _cellEditService.ExecuteEditCommand(
+            Workbook,
+            ToCommand(
+                "Show Outline Symbols",
+                targetSheetIds
+                    .Select(sheetId => (IWorkbookCommand)new SetWorksheetOutlineSymbolsCommand(
+                        sheetId,
+                        showOutlineSymbols))
+                    .ToArray()));
+        if (!result.Success)
+            return result;
+
+        ApplySuccessfulWorkbookMetadataResult(ActiveSheet.Id);
+        return result;
+    }
+
     public WorkbookCellEditResult SetShowFormulas(bool showFormulas)
     {
         var targetSheetIds = CurrentGroupedEditSheetIds();
