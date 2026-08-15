@@ -39,6 +39,15 @@ public sealed class PageLayoutRibbonActionPlannerTests
     }
 
     [Fact]
+    public void RibbonActionDescriptors_TreatSheetOptionsAsFourIndependentCheckboxes()
+    {
+        Descriptor("View Gridlines").Kind.Should().Be(PageLayoutRibbonActionKind.ToggleViewGridlines);
+        Descriptor("Print Gridlines").Kind.Should().Be(PageLayoutRibbonActionKind.TogglePrintGridlines);
+        Descriptor("View Headings").Kind.Should().Be(PageLayoutRibbonActionKind.ToggleViewHeadings);
+        Descriptor("Print Headings").Kind.Should().Be(PageLayoutRibbonActionKind.TogglePrintHeadings);
+    }
+
+    [Fact]
     public void RibbonActionDescriptors_OwnPresetAndPageBreakCommandPayloads()
     {
         Descriptor(FreeXRibbonCommandIds.PageLayoutMarginsNormal).MarginPreset.Should().Be(PageLayoutMarginPreset.Normal);

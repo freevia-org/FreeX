@@ -1461,9 +1461,11 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
                     ["Hide"] = () => new RibbonCommandState(IsEnabled: WindowRegistry.CanHide(this)),
                     ["Unhide"] = () => new RibbonCommandState(IsEnabled: WindowRegistry.HiddenWindows.Count > 0),
                     ["Gridlines"] = () => GetWorkbookViewRibbonState().GetCommandState("Gridlines"),
-                    ["View Gridlines"] = () => GetWorkbookViewRibbonState().GetCommandState("View Gridlines"),
+                    ["View Gridlines"] = () => GetPageLayoutSheetOptionsRibbonState().GetCommandState("View Gridlines"),
+                    ["Print Gridlines"] = () => GetPageLayoutSheetOptionsRibbonState().GetCommandState("Print Gridlines"),
                     ["Headings"] = () => GetWorkbookViewRibbonState().GetCommandState("Headings"),
-                    ["View Headings"] = () => GetWorkbookViewRibbonState().GetCommandState("View Headings"),
+                    ["View Headings"] = () => GetPageLayoutSheetOptionsRibbonState().GetCommandState("View Headings"),
+                    ["Print Headings"] = () => GetPageLayoutSheetOptionsRibbonState().GetCommandState("Print Headings"),
                     ["Ruler"] = () => GetWorkbookViewRibbonState().GetCommandState("Ruler"),
                     ["Show Formulas"] = () => GetWorkbookViewRibbonState().GetCommandState("Show Formulas"),
                     ["Split"] = () => GetWorkbookViewRibbonState().GetCommandState("Split"),
@@ -2405,9 +2407,9 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         _chooseSheetBackgroundMenuItem.Click += (_, _) => ChooseSheetBackground();
         _deleteSheetBackgroundMenuItem.Click += (_, _) => DeleteSheetBackground();
 
-        _printGridlinesMenuItem.Click += async (_, _) => await ShowGridlinesSheetOptionsAsync();
+        _printGridlinesMenuItem.Click += (_, _) => TogglePrintGridlines();
 
-        _printHeadingsMenuItem.Click += async (_, _) => await ShowHeadingsSheetOptionsAsync();
+        _printHeadingsMenuItem.Click += (_, _) => TogglePrintHeadings();
 
         _showGridlinesMenuItem.ToggleType = MenuItemToggleType.CheckBox;
         _showGridlinesMenuItem.Click += (_, _) => ToggleShowGridlines();
@@ -13040,6 +13042,13 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             _session.IsShowingRulers,
             _session.IsShowingFormulas,
             _session.GetEffectiveSplitRow() is not null || _session.GetEffectiveSplitCol() is not null);
+
+    private WorkbookPageLayoutSheetOptionsRibbonStatePlan GetPageLayoutSheetOptionsRibbonState() =>
+        WorkbookPageLayoutSheetOptionsRibbonStatePlanner.Build(
+            _session.IsShowingGridlines,
+            _session.ActiveSheet.PrintGridlines,
+            _session.IsShowingHeadings,
+            _session.ActiveSheet.PrintHeadings);
 
     private WorkbookPageLayoutScaleRibbonStatePlan GetPageLayoutScaleRibbonState() =>
         WorkbookPageLayoutScaleRibbonStatePlanner.Build(_session.ActiveSheet.ScaleToFit);

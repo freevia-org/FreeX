@@ -657,21 +657,19 @@ public partial class MainWindow
 
     private void PrintGridlinesChk_Click(object sender, RoutedEventArgs e)
     {
-        var sheet = _workbook.GetSheet(_currentSheetId);
         var isChecked = (sender as System.Windows.Controls.CheckBox)?.IsChecked == true;
         TryExecutePageLayoutCommand(
-            new PageLayoutCommandSession([_currentSheetId]).PlanPrintGridlines(
+            CreatePageLayoutCommandSession().PlanPrintGridlines(
                 isChecked,
-                sheet?.PrintHeadings ?? false));
+                sheetId => _workbook.GetSheet(sheetId)?.PrintHeadings ?? false));
     }
 
     private void PrintHeadingsChk_Click(object sender, RoutedEventArgs e)
     {
-        var sheet = _workbook.GetSheet(_currentSheetId);
         var isChecked = (sender as System.Windows.Controls.CheckBox)?.IsChecked == true;
         TryExecutePageLayoutCommand(
-            new PageLayoutCommandSession([_currentSheetId]).PlanPrintHeadings(
-                sheet?.PrintGridlines ?? false,
+            CreatePageLayoutCommandSession().PlanPrintHeadings(
+                sheetId => _workbook.GetSheet(sheetId)?.PrintGridlines ?? false,
                 isChecked));
     }
 
