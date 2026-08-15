@@ -1,6 +1,5 @@
 using Avalonia;
 using Avalonia.Controls;
-using Avalonia.Controls.ApplicationLifetimes;
 using Free.Shared.Ribbon;
 using Free.Shared.Shell;
 using Free.Shared.Shell.Avalonia;
@@ -11,10 +10,9 @@ namespace FreeX.App.Avalonia;
 
 // Avalonia (Linux/macOS) implementation of View ▸ Window ▸ View Side by Side + Synchronous Scrolling.
 //
-// Design mirrors the WPF host's WorkbookWindowRegistry approach, but without that registry (which is a
-// WPF-only DI singleton that depends on IWorkbookWindow/Rect/SystemParameters).  Instead we keep a
-// portable WorkbookSideBySideCoordinator for pair and synchronous-scroll policy, while keeping the
-// native window tiling and scroll application in this shell. _suppressScrollBroadcast is a local
+// Registered workbook-window discovery comes from AvaloniaWorkbookWindowRegistry, while the portable
+// WorkbookSideBySideCoordinator owns pair and synchronous-scroll policy. Native window tiling and
+// scroll application remain in this shell. _suppressScrollBroadcast is a local
 // re-entrancy guard that prevents the receiving window from echoing a native scroll event back.
 //
 // Scroll sync is hooked into the two places that change the viewport origin in the Avalonia shell:
@@ -32,9 +30,8 @@ namespace FreeX.App.Avalonia;
 public sealed partial class MainWindow : Window
 {
     // ── Static side-by-side pair state ────────────────────────────────────────
-    // Static so that both windows in a pair can observe each other's state.
-    // (The Avalonia shell does not have a shared DI registry like the WPF host; the pairing is
-    // stored as object references directly into the two MainWindow instances.)
+    // Static so that both registered workbook windows in a pair observe the same state. The
+    // window registry owns discovery/visibility; this coordinator owns only pair membership.
     private static readonly WorkbookSideBySideCoordinator<MainWindow> SideBySideCoordinator = new();
 
     // Per-instance guard: this window is currently applying an incoming scroll offset and must
@@ -171,21 +168,36 @@ public sealed partial class MainWindow : Window
     /// </summary>
     private RibbonCommandState GetSideBySideRibbonState()
     {
-        var active = IsSideBySideActive;
-        var canActivate = active
-            || (!SideBySideCoordinator.IsActive && VisibleWorkbookWindowCount() > 1);
-        return new RibbonCommandState(IsEnabled: canActivate, IsChecked: active);
+        var plan = GetSideBySideCommandStatePlan();
+        return new RibbonCommandState(
+            IsEnabled: plan.ViewSideBySideEnabled,
+            IsChecked: plan.ViewSideBySideChecked);
     }
 
-    private RibbonCommandState GetResetWindowPositionRibbonState() =>
-        new(IsEnabled: IsSideBySideActive);
+    private RibbonCommandState GetResetWindowPositionRibbonState()
+    {
+        var plan = GetSideBySideCommandStatePlan();
+        return new RibbonCommandState(IsEnabled: plan.ResetWindowPositionEnabled);
+    }
 
     /// <summary>
     /// Returns the ribbon state for "Synchronous Scrolling".
     /// Enabled only when Side by Side is active. Checked when sync scrolling is on.
     /// </summary>
-    private RibbonCommandState GetSynchronousScrollingRibbonState() =>
-        new(IsEnabled: IsSideBySideActive, IsChecked: IsSynchronousScrollActive);
+    private RibbonCommandState GetSynchronousScrollingRibbonState()
+    {
+        var plan = GetSideBySideCommandStatePlan();
+        return new RibbonCommandState(
+            IsEnabled: plan.SynchronousScrollingEnabled,
+            IsChecked: plan.SynchronousScrollingChecked);
+    }
+
+    private WorkbookSideBySideCommandStatePlan GetSideBySideCommandStatePlan() =>
+        WorkbookSideBySideCommandStatePlanner.Build(
+            WindowRegistry.VisibleCount,
+            SideBySideCoordinator.IsActive,
+            IsSideBySideActive,
+            IsSynchronousScrollActive);
 
     // ── Window cleanup ────────────────────────────────────────────────────────
 
@@ -213,7 +225,7 @@ public sealed partial class MainWindow : Window
     /// </summary>
     private MainWindow? FindSideBySidePartner()
     {
-        foreach (var w in VisibleMainWindows())
+        foreach (var w in WindowRegistry.VisibleWindows)
         {
             if (!ReferenceEquals(w, this))
                 return w;
@@ -233,14 +245,17 @@ public sealed partial class MainWindow : Window
         Height = Math.Max(MinHeight, tile.Height);
     }
 
-    private IReadOnlyList<MainWindow> VisibleMainWindows() =>
-        (DesktopLifetime?.Windows ?? Array.Empty<Window>())
-            .OfType<MainWindow>()
-            .Where(static w => w.IsVisible)
-            .ToList();
+    private static void ReconcileSideBySideAfterWindowArrangement(IEnumerable<MainWindow> arrangedWindows)
+    {
+        if (!SideBySideCoordinator.TryGetPair(out var primary, out var partner)
+            || !SideBySideCoordinator.DisableIfAny(arrangedWindows))
+        {
+            return;
+        }
 
-    private int VisibleWorkbookWindowCount() =>
-        (int)(DesktopLifetime?.Windows.Count(static w => w.IsVisible) ?? 1);
+        primary._refreshRibbonToggleStates?.Invoke();
+        partner._refreshRibbonToggleStates?.Invoke();
+    }
 
     private void RefreshSideBySideRibbonState()
     {

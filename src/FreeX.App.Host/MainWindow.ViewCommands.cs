@@ -258,31 +258,33 @@ public partial class MainWindow
 
         var anySideBySideActive = _windowRegistry?.IsSideBySideActive ?? false;
         var sideBySideActive = _windowRegistry?.IsSideBySideActiveFor(this) ?? false;
+        var sideBySideState = WorkbookSideBySideCommandStatePlanner.Build(
+            _windowRegistry?.VisibleCount ?? 1,
+            anySideBySideActive,
+            sideBySideActive,
+            _windowRegistry?.IsSynchronousScrollActiveFor(this) ?? false);
 
         // Reset Window Position belongs to the active pair and resets both members together.
         ApplyRibbonWindowCommandState(
             "Reset Window Position",
-            sideBySideActive,
+            sideBySideState.ResetWindowPositionEnabled,
             UiText.Get("MainWindow_TooltipDescription_ResetThisWindowToAStandardSizeAndPosition"));
 
         // View Side by Side needs a second visible window to pair with.
-        var canSideBySide = sideBySideActive
-            || (!anySideBySideActive && (_windowRegistry?.VisibleCount ?? 1) > 1);
         ApplyRibbonWindowToggleState(
             "View Side by Side",
-            canSideBySide,
-            sideBySideActive,
-            UiText.Get(canSideBySide
+            sideBySideState.ViewSideBySideEnabled,
+            sideBySideState.ViewSideBySideChecked,
+            UiText.Get(sideBySideState.ViewSideBySideEnabled
                 ? "MainWindow_TooltipDescription_TileThisWindowAndAnotherSideBySideToCompareThem"
                 : "MainWindow_TooltipDescription_UnavailableViewSideBySideRequiresSecondVisibleWindow"));
 
         // Synchronous Scrolling is only meaningful while side-by-side is active.
-        var syncActive = _windowRegistry?.IsSynchronousScrollActiveFor(this) ?? false;
         ApplyRibbonWindowToggleState(
             "Synchronous Scrolling",
-            sideBySideActive,
-            syncActive,
-            UiText.Get(sideBySideActive
+            sideBySideState.SynchronousScrollingEnabled,
+            sideBySideState.SynchronousScrollingChecked,
+            UiText.Get(sideBySideState.SynchronousScrollingEnabled
                 ? "MainWindow_TooltipDescription_ScrollBothSideBySideWindowsTogether"
                 : "MainWindow_TooltipDescription_UnavailableSynchronousScrollingRequiresViewSideBySide"));
     }

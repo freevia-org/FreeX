@@ -172,6 +172,8 @@ public sealed partial class MainWindow : Window
             return;
         }
 
+        ReconcileSideBySideAfterWindowArrangement(targets.Select(target => target.Window));
+
         var tiles = AvaloniaWindowBoundsTranslator.Translate(
             workArea,
             scaling,
