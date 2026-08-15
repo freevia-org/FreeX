@@ -847,7 +847,8 @@ public sealed class MacOsAppReadinessPreflightTests
         script.Should().Contain("new SetFreezePanesCommand(ActiveSheet.Id, frozenRows, frozenCols)");
         script.Should().Contain("public WorkbookCellEditResult SetShowGridlines(bool showGridlines)");
         script.Should().Contain("public WorkbookCellEditResult SetShowHeadings(bool showHeadings)");
-        script.Should().Contain("new SetWorksheetViewOptionsCommand(ActiveSheet.Id, showGridlines, showHeadings, showRulers)");
+        script.Should().Contain("return new SetWorksheetViewOptionsCommand(");
+        script.Should().Contain("ExecuteGroupedWorksheetViewCommand(");
         script.Should().Contain("public WorkbookCellEditResult SetSelectedRangeBorderPreset(CellBorderPreset preset)");
         script.Should().Contain("public bool CanFillSelectedRange(FillCellsDirection direction)");
         script.Should().Contain("public WorkbookCellEditResult FillSelectedRange(FillCellsDirection direction)");
@@ -865,7 +866,7 @@ public sealed class MacOsAppReadinessPreflightTests
         script.Should().Contain("public static StyleDiff Plan(");
         script.Should().Contain("public static bool RequiresPerCellPlanning(CellBorderPreset preset)");
         script.Should().Contain("public WorkbookCellEditResult SetZoomPercent(int zoomPercent)");
-        script.Should().Contain("new SetWorksheetZoomCommand(ActiveSheet.Id, zoomPercent)");
+        script.Should().Contain("sheetId => new SetWorksheetZoomCommand(sheetId, zoomPercent)");
         script.Should().Contain("public WorkbookCellEditResult SetActiveSheetTabColor(CellColor? color)");
         script.Should().Contain("public WorkbookCellEditResult SetSelectedSheetTabColor(CellColor? color)");
         script.Should().Contain("new SetSheetTabColorCommand(selectedSheetIds[0], color)");
@@ -4352,15 +4353,16 @@ public sealed class MacOsAppReadinessPreflightTests
                 new SetSheetHiddenCommand(sheetId, hidden: false)
                 public bool IsShowingFormulas => ActiveSheet.ShowFormulas;
                 public WorkbookCellEditResult SetShowFormulas(bool showFormulas)
-                new SetWorksheetShowFormulasCommand(ActiveSheet.Id, showFormulas)
+                sheetId => new SetWorksheetShowFormulasCommand(sheetId, showFormulas)
                 public bool IsShowingGridlines => ActiveSheet.ShowGridlines;
                 public bool IsShowingHeadings => ActiveSheet.ShowHeadings;
                 public WorkbookCellEditResult SetShowGridlines(bool showGridlines)
                 public WorkbookCellEditResult SetShowHeadings(bool showHeadings)
-                new SetWorksheetViewOptionsCommand(ActiveSheet.Id, showGridlines, showHeadings, showRulers)
+                return new SetWorksheetViewOptionsCommand(
+                ExecuteGroupedWorksheetViewCommand(
                 public int ZoomPercent => ActiveSheet.ZoomPercent;
                 public WorkbookCellEditResult SetZoomPercent(int zoomPercent)
-                new SetWorksheetZoomCommand(ActiveSheet.Id, zoomPercent)
+                sheetId => new SetWorksheetZoomCommand(sheetId, zoomPercent)
                 public WorkbookCellEditResult FreezePanesAtActiveCell()
                 public WorkbookCellEditResult FreezeTopRow()
                 public WorkbookCellEditResult FreezeFirstColumn()

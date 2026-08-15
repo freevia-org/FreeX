@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using FreeX.App.Services;
+using FreeX.Core.Model;
 
 namespace FreeX.App.Host;
 
@@ -15,7 +16,10 @@ public partial class MainWindow
         return CompleteWorksheetSessionCommand(result, title);
     }
 
-    private bool CompleteWorksheetSessionCommand(WorkbookCellEditResult result, string title)
+    private bool CompleteWorksheetSessionCommand(
+        WorkbookCellEditResult result,
+        string title,
+        IReadOnlyList<SheetId>? viewStateSheetIds = null)
     {
         var outcome = ToCommandOutcome(result);
         RecordDiagnosticEvent("command_invoked", new Dictionary<string, string?>
@@ -31,7 +35,7 @@ public partial class MainWindow
             _repeatPostAction = null;
             InvalidateNavigationCaches();
             ApplyWorkbookSessionSelectionToRenderer();
-            SyncWindowViewState([_currentSheetId]);
+            SyncWindowViewState(viewStateSheetIds ?? [_currentSheetId]);
             NotifyOtherWindowsOfWorkbookChange();
             return true;
         }

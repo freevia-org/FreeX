@@ -383,12 +383,12 @@ public partial class MainWindow
         // window's own last-known one (mirrors the Freeze Panes/Split per-window pattern).
         var showFormulas = !GetEffectiveViewState(sheet).ShowFormulas;
         var targetSheetIds = CurrentGroupedEditSheetIds();
-        if (!TryExecuteGroupedSheetCommand(
-                "Show Formulas",
-                sheetId => new SetWorksheetShowFormulasCommand(sheetId, showFormulas)))
+        if (!TryExecuteGroupedWorksheetViewState(
+                targetSheetIds,
+                () => _session.SetShowFormulas(showFormulas),
+                "Show Formulas"))
             return;
 
-        SyncWindowViewState(targetSheetIds);
         UpdateViewport();
     }
 

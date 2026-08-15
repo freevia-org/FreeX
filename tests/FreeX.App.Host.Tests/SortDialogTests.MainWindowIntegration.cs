@@ -14,7 +14,7 @@ public sealed partial class SortDialogTests
         source.Should().Contain("SortDialogPlanner.BuildRowChoices(range, SortDialog.PlannerText)");
         source.Should().Contain("SortDialogPlanner.BuildColorChoices(_workbook, sheet, range)");
         source.Should().Contain("SortDialogPlanner.CreateCommandPlan(");
-        source.Should().Contain("sortPlan.CreateCommand(_currentSheetId, currentRange)");
+        source.Should().Contain("_session.SortSelectedRange(sortPlan)");
     }
 
     [Fact]

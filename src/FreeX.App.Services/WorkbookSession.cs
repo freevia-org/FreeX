@@ -216,6 +216,7 @@ public sealed class WorkbookSession : IDisposable
     /// </summary>
     private readonly Dictionary<SheetId, bool> _viewShowGridlinesOverrides = [];
     private readonly Dictionary<SheetId, bool> _viewShowHeadingsOverrides = [];
+    private readonly Dictionary<SheetId, bool> _viewShowRulersOverrides = [];
     private readonly Dictionary<SheetId, bool> _viewShowFormulasOverrides = [];
     private readonly Dictionary<SheetId, uint> _viewFrozenRowsOverrides = [];
     private readonly Dictionary<SheetId, uint> _viewFrozenColsOverrides = [];
@@ -437,6 +438,12 @@ public sealed class WorkbookSession : IDisposable
     /// </summary>
     private void SeedViewSplitAndFrozenOverrides()
     {
+        _viewModeOverrides[ActiveSheet.Id] = ActiveSheet.ViewMode;
+        _viewZoomOverrides[ActiveSheet.Id] = ActiveSheet.ZoomPercent;
+        _viewShowGridlinesOverrides[ActiveSheet.Id] = ActiveSheet.ShowGridlines;
+        _viewShowHeadingsOverrides[ActiveSheet.Id] = ActiveSheet.ShowHeadings;
+        _viewShowRulersOverrides[ActiveSheet.Id] = ActiveSheet.ShowRulers;
+        _viewShowFormulasOverrides[ActiveSheet.Id] = ActiveSheet.ShowFormulas;
         _viewSplitRowOverrides[ActiveSheet.Id] = ActiveSheet.SplitRow;
         _viewSplitColOverrides[ActiveSheet.Id] = ActiveSheet.SplitColumn;
         _viewFrozenRowsOverrides[ActiveSheet.Id] = ActiveSheet.FrozenRows;
@@ -459,9 +466,7 @@ public sealed class WorkbookSession : IDisposable
     /// sibling view last touched them instead of this view's own -- the same bug
     /// <see cref="WorksheetViewStateStore"/>'s WPF-host counterpart exists to fix. Only sheets
     /// present in one of the override caches are touched; a sheet this view never diverged on keeps
-    /// its already-correct shared value untouched. (<see cref="Sheet.ShowRulers"/> is intentionally
-    /// excluded -- unlike the WPF host, this shell has no per-view Show Rulers override to begin
-    /// with; see <see cref="SetShowRulers"/>'s remarks.)
+    /// its already-correct shared value untouched.
     /// </summary>
     public void ReconcileViewStateForSave()
     {
@@ -470,6 +475,7 @@ public sealed class WorkbookSession : IDisposable
         sheetIds.UnionWith(_viewModeOverrides.Keys);
         sheetIds.UnionWith(_viewShowGridlinesOverrides.Keys);
         sheetIds.UnionWith(_viewShowHeadingsOverrides.Keys);
+        sheetIds.UnionWith(_viewShowRulersOverrides.Keys);
         sheetIds.UnionWith(_viewShowFormulasOverrides.Keys);
         sheetIds.UnionWith(_viewFrozenRowsOverrides.Keys);
         sheetIds.UnionWith(_viewFrozenColsOverrides.Keys);
@@ -489,6 +495,8 @@ public sealed class WorkbookSession : IDisposable
                 sheet.ShowGridlines = showGridlines;
             if (_viewShowHeadingsOverrides.TryGetValue(sheetId, out var showHeadings))
                 sheet.ShowHeadings = showHeadings;
+            if (_viewShowRulersOverrides.TryGetValue(sheetId, out var showRulers))
+                sheet.ShowRulers = showRulers;
             if (_viewShowFormulasOverrides.TryGetValue(sheetId, out var showFormulas))
                 sheet.ShowFormulas = showFormulas;
             if (_viewFrozenRowsOverrides.TryGetValue(sheetId, out var frozenRows))
@@ -570,54 +578,22 @@ public sealed class WorkbookSession : IDisposable
 
     public bool IsShowingGridlines
     {
-        get
-        {
-            if (_viewShowGridlinesOverrides.TryGetValue(ActiveSheet.Id, out var showGridlines))
-                return showGridlines;
-
-            showGridlines = ActiveSheet.ShowGridlines;
-            _viewShowGridlinesOverrides[ActiveSheet.Id] = showGridlines;
-            return showGridlines;
-        }
+        get => GetEffectiveShowGridlines(ActiveSheet.Id);
     }
 
     public bool IsShowingHeadings
     {
-        get
-        {
-            if (_viewShowHeadingsOverrides.TryGetValue(ActiveSheet.Id, out var showHeadings))
-                return showHeadings;
-
-            showHeadings = ActiveSheet.ShowHeadings;
-            _viewShowHeadingsOverrides[ActiveSheet.Id] = showHeadings;
-            return showHeadings;
-        }
+        get => GetEffectiveShowHeadings(ActiveSheet.Id);
     }
 
     public bool IsShowingFormulas
     {
-        get
-        {
-            if (_viewShowFormulasOverrides.TryGetValue(ActiveSheet.Id, out var showFormulas))
-                return showFormulas;
-
-            showFormulas = ActiveSheet.ShowFormulas;
-            _viewShowFormulasOverrides[ActiveSheet.Id] = showFormulas;
-            return showFormulas;
-        }
+        get => GetEffectiveShowFormulas(ActiveSheet.Id);
     }
 
     public int ZoomPercent
     {
-        get
-        {
-            if (_viewZoomOverrides.TryGetValue(ActiveSheet.Id, out var zoom))
-                return zoom;
-
-            zoom = ActiveSheet.ZoomPercent;
-            _viewZoomOverrides[ActiveSheet.Id] = zoom;
-            return zoom;
-        }
+        get => GetEffectiveZoomPercent(ActiveSheet.Id);
     }
 
     /// <summary>
@@ -628,15 +604,7 @@ public sealed class WorkbookSession : IDisposable
     /// </summary>
     public WorksheetViewMode ViewMode
     {
-        get
-        {
-            if (_viewModeOverrides.TryGetValue(ActiveSheet.Id, out var viewMode))
-                return viewMode;
-
-            viewMode = ActiveSheet.ViewMode;
-            _viewModeOverrides[ActiveSheet.Id] = viewMode;
-            return viewMode;
-        }
+        get => GetEffectiveViewMode(ActiveSheet.Id);
     }
 
     public bool IsFormatPainterActive =>
@@ -969,6 +937,33 @@ public sealed class WorkbookSession : IDisposable
         ActiveSheet.ActiveRow = activeCell.Row;
         ActiveSheet.ActiveCol = activeCell.Col;
         FormulaEditAddress = formulaEditAddress;
+    }
+
+    /// <summary>
+    /// Adopts renderer-owned per-window worksheet view snapshots while a host is migrated onto the
+    /// shared session. This mirrors <see cref="SynchronizeSelectionState"/>: it updates only this
+    /// view's projection caches and never mutates the workbook model or command history.
+    /// </summary>
+    public void SynchronizeWorksheetViewState(
+        IReadOnlyDictionary<SheetId, WorksheetViewStateSnapshot> snapshots)
+    {
+        ArgumentNullException.ThrowIfNull(snapshots);
+        foreach (var (sheetId, snapshot) in snapshots)
+        {
+            if (Workbook.GetSheet(sheetId) is null)
+                continue;
+
+            _viewModeOverrides[sheetId] = snapshot.ViewMode;
+            _viewZoomOverrides[sheetId] = snapshot.ZoomPercent;
+            _viewShowGridlinesOverrides[sheetId] = snapshot.ShowGridlines;
+            _viewShowHeadingsOverrides[sheetId] = snapshot.ShowHeadings;
+            _viewShowRulersOverrides[sheetId] = snapshot.ShowRulers;
+            _viewShowFormulasOverrides[sheetId] = snapshot.ShowFormulas;
+            _viewFrozenRowsOverrides[sheetId] = snapshot.FrozenRows;
+            _viewFrozenColsOverrides[sheetId] = snapshot.FrozenCols;
+            _viewSplitRowOverrides[sheetId] = snapshot.SplitRow;
+            _viewSplitColOverrides[sheetId] = snapshot.SplitColumn;
+        }
     }
 
     /// <summary>
@@ -2781,103 +2776,72 @@ public sealed class WorkbookSession : IDisposable
 
     public WorkbookCellEditResult SetShowFormulas(bool showFormulas)
     {
-        if (IsShowingFormulas == showFormulas)
-        {
-            return new WorkbookCellEditResult(
-                true,
-                null,
-                [],
-                RecalcReport: null);
-        }
+        var targetSheetIds = CurrentGroupedEditSheetIds();
+        if (targetSheetIds.All(sheetId => GetEffectiveShowFormulas(sheetId) == showFormulas))
+            return SuccessfulNoOpEditResult();
 
-        var result = _cellEditService.ExecuteEditCommand(
-            Workbook,
-            new SetWorksheetShowFormulasCommand(ActiveSheet.Id, showFormulas));
-        if (!result.Success)
-            return result;
-
-        ApplySuccessfulWorkbookMetadataResult(ActiveSheet.Id);
-        // Reseed this view's own cache with the value it just applied -- see _viewShowFormulasOverrides
-        // remarks (mirrors SetZoomPercent's reseed of _viewZoomOverrides).
-        _viewShowFormulasOverrides[ActiveSheet.Id] = showFormulas;
-        return result;
+        return ExecuteGroupedWorksheetViewCommand(
+            "Show Formulas",
+            targetSheetIds,
+            sheetId => new SetWorksheetShowFormulasCommand(sheetId, showFormulas),
+            sheetId => _viewShowFormulasOverrides[sheetId] = showFormulas);
     }
 
     public WorkbookCellEditResult SetShowGridlines(bool showGridlines)
     {
-        if (IsShowingGridlines == showGridlines)
-        {
-            return new WorkbookCellEditResult(
-                true,
-                null,
-                [],
-                RecalcReport: null);
-        }
+        var targetSheetIds = CurrentGroupedEditSheetIds();
+        if (targetSheetIds.All(sheetId => GetEffectiveShowGridlines(sheetId) == showGridlines))
+            return SuccessfulNoOpEditResult();
 
         return SetWorksheetViewOptions(
-            showGridlines,
-            IsShowingHeadings,
-            ActiveSheet.ShowRulers);
+            "Gridlines",
+            targetSheetIds,
+            _ => showGridlines,
+            GetEffectiveShowHeadings,
+            GetEffectiveShowRulers);
     }
 
     public WorkbookCellEditResult SetShowHeadings(bool showHeadings)
     {
-        if (IsShowingHeadings == showHeadings)
-        {
-            return new WorkbookCellEditResult(
-                true,
-                null,
-                [],
-                RecalcReport: null);
-        }
+        var targetSheetIds = CurrentGroupedEditSheetIds();
+        if (targetSheetIds.All(sheetId => GetEffectiveShowHeadings(sheetId) == showHeadings))
+            return SuccessfulNoOpEditResult();
 
         return SetWorksheetViewOptions(
-            IsShowingGridlines,
-            showHeadings,
-            ActiveSheet.ShowRulers);
+            "Headings",
+            targetSheetIds,
+            GetEffectiveShowGridlines,
+            _ => showHeadings,
+            GetEffectiveShowRulers);
     }
 
-    public bool IsShowingRulers => ActiveSheet.ShowRulers;
+    public bool IsShowingRulers => GetEffectiveShowRulers(ActiveSheet.Id);
 
     public WorkbookCellEditResult SetShowRulers(bool showRulers)
     {
-        if (ActiveSheet.ShowRulers == showRulers)
-        {
-            return new WorkbookCellEditResult(
-                true,
-                null,
-                [],
-                RecalcReport: null);
-        }
+        var targetSheetIds = CurrentGroupedEditSheetIds();
+        if (targetSheetIds.All(sheetId => GetEffectiveShowRulers(sheetId) == showRulers))
+            return SuccessfulNoOpEditResult();
 
         return SetWorksheetViewOptions(
-            IsShowingGridlines,
-            IsShowingHeadings,
-            showRulers);
+            "Ruler",
+            targetSheetIds,
+            GetEffectiveShowGridlines,
+            GetEffectiveShowHeadings,
+            _ => showRulers);
     }
 
     public WorkbookCellEditResult SetWorksheetViewMode(WorksheetViewMode viewMode)
     {
-        if (ViewMode == viewMode)
-        {
-            return new WorkbookCellEditResult(
-                true,
-                null,
-                [],
-                RecalcReport: null);
-        }
+        var targetSheetIds = CurrentGroupedEditSheetIds();
+        if (targetSheetIds.All(sheetId => GetEffectiveViewMode(sheetId) == viewMode))
+            return SuccessfulNoOpEditResult();
 
-        var result = _cellEditService.ExecuteEditCommand(
-            Workbook,
-            new SetWorksheetViewModeCommand(ActiveSheet.Id, viewMode));
-        if (!result.Success)
-            return result;
-
-        ApplySuccessfulWorkbookMetadataResult(ActiveSheet.Id);
-        // Reseed this view's own cache with the value it just applied -- see _viewModeOverrides
-        // remarks (mirrors SetZoomPercent's reseed of _viewZoomOverrides).
-        _viewModeOverrides[ActiveSheet.Id] = viewMode;
-        return result;
+        return ExecuteGroupedWorksheetViewCommand(
+            "Workbook View",
+            targetSheetIds,
+            sheetId => new SetWorksheetViewModeCommand(sheetId, viewMode),
+            sheetId => _viewModeOverrides[sheetId] = viewMode);
     }
 
     public WorkbookCellEditResult SetZoomPercent(int zoomPercent)
@@ -2886,28 +2850,15 @@ public sealed class WorkbookSession : IDisposable
             zoomPercent,
             SetWorksheetZoomCommand.MinZoomPercent,
             SetWorksheetZoomCommand.MaxZoomPercent);
-        if (ZoomPercent == zoomPercent)
-        {
-            return new WorkbookCellEditResult(
-                true,
-                null,
-                [],
-                RecalcReport: null);
-        }
+        var targetSheetIds = CurrentGroupedEditSheetIds();
+        if (targetSheetIds.All(sheetId => GetEffectiveZoomPercent(sheetId) == zoomPercent))
+            return SuccessfulNoOpEditResult();
 
-        var result = _cellEditService.ExecuteEditCommand(
-            Workbook,
-            new SetWorksheetZoomCommand(ActiveSheet.Id, zoomPercent));
-        if (!result.Success)
-            return result;
-
-        ApplySuccessfulWorkbookMetadataResult(ActiveSheet.Id);
-        // Reseed this view's own cache with the value it just applied -- ApplySuccessfulWorkbookMetadataResult
-        // already invalidated any stale entry, but without this a sibling view that changes zoom on
-        // the same sheet before this view's next read would otherwise be able to overwrite it (see
-        // _viewZoomOverrides remarks).
-        _viewZoomOverrides[ActiveSheet.Id] = zoomPercent;
-        return result;
+        return ExecuteGroupedWorksheetViewCommand(
+            "Zoom",
+            targetSheetIds,
+            sheetId => new SetWorksheetZoomCommand(sheetId, zoomPercent),
+            sheetId => _viewZoomOverrides[sheetId] = zoomPercent);
     }
 
     public WorkbookCellEditResult FreezePanesAtActiveCell()
@@ -5449,6 +5400,13 @@ public sealed class WorkbookSession : IDisposable
             return;
         }
 
+        // Metadata commands can target every grouped sheet while reporting no affected cells.
+        // Undo/Redo does not expose the command's sheet-id set, so clear this view's cached
+        // worksheet-state projection for every surviving sheet before re-reading the live model.
+        // Other sibling WorkbookSession instances keep their independent caches untouched.
+        foreach (var sheet in Workbook.Sheets)
+            InvalidateAllPerViewOverridesForSheet(sheet.Id);
+
         if (Workbook.GetSheet(ActiveSheet.Id) is not null)
         {
             ApplySuccessfulWorkbookMetadataResult(ActiveSheet.Id);
@@ -6368,6 +6326,7 @@ public sealed class WorkbookSession : IDisposable
         _viewModeOverrides.Remove(sheetId);
         _viewShowGridlinesOverrides.Remove(sheetId);
         _viewShowHeadingsOverrides.Remove(sheetId);
+        _viewShowRulersOverrides.Remove(sheetId);
         _viewShowFormulasOverrides.Remove(sheetId);
         _viewFrozenRowsOverrides.Remove(sheetId);
         _viewFrozenColsOverrides.Remove(sheetId);
@@ -6759,22 +6718,96 @@ public sealed class WorkbookSession : IDisposable
         return result;
     }
 
-    private WorkbookCellEditResult SetWorksheetViewOptions(bool showGridlines, bool showHeadings, bool showRulers)
+    private WorkbookCellEditResult SetWorksheetViewOptions(
+        string title,
+        IReadOnlyList<SheetId> targetSheetIds,
+        Func<SheetId, bool> showGridlines,
+        Func<SheetId, bool> showHeadings,
+        Func<SheetId, bool> showRulers)
+    {
+        var values = targetSheetIds.ToDictionary(
+            sheetId => sheetId,
+            sheetId => new WorksheetViewOptionValues(
+                showGridlines(sheetId),
+                showHeadings(sheetId),
+                showRulers(sheetId)));
+        return ExecuteGroupedWorksheetViewCommand(
+            title,
+            targetSheetIds,
+            sheetId =>
+            {
+                var value = values[sheetId];
+                return new SetWorksheetViewOptionsCommand(
+                    sheetId,
+                    value.ShowGridlines,
+                    value.ShowHeadings,
+                    value.ShowRulers);
+            },
+            sheetId =>
+            {
+                var value = values[sheetId];
+                _viewShowGridlinesOverrides[sheetId] = value.ShowGridlines;
+                _viewShowHeadingsOverrides[sheetId] = value.ShowHeadings;
+            });
+    }
+
+    private WorkbookCellEditResult ExecuteGroupedWorksheetViewCommand(
+        string title,
+        IReadOnlyList<SheetId> targetSheetIds,
+        Func<SheetId, IWorkbookCommand> createCommand,
+        Action<SheetId> seedViewOverride)
     {
         var result = _cellEditService.ExecuteEditCommand(
             Workbook,
-            new SetWorksheetViewOptionsCommand(ActiveSheet.Id, showGridlines, showHeadings, showRulers));
+            ToCommand(title, targetSheetIds.Select(createCommand).ToArray()));
         if (!result.Success)
             return result;
 
         ApplySuccessfulWorkbookMetadataResult(ActiveSheet.Id);
-        // Reseed this view's own caches with the values just applied -- see _viewShowGridlinesOverrides
-        // remarks (mirrors SetZoomPercent's reseed of _viewZoomOverrides). ShowRulers has no per-view
-        // override (not part of this sweep), so it keeps reading the shared Sheet field directly.
-        _viewShowGridlinesOverrides[ActiveSheet.Id] = showGridlines;
-        _viewShowHeadingsOverrides[ActiveSheet.Id] = showHeadings;
+        foreach (var sheetId in targetSheetIds)
+            seedViewOverride(sheetId);
         return result;
     }
+
+    private static WorkbookCellEditResult SuccessfulNoOpEditResult() =>
+        new(true, null, [], RecalcReport: null, IsNoOp: true);
+
+    private bool GetEffectiveShowGridlines(SheetId sheetId) =>
+        GetOrSeedViewOverride(_viewShowGridlinesOverrides, sheetId, static sheet => sheet.ShowGridlines);
+
+    private bool GetEffectiveShowHeadings(SheetId sheetId) =>
+        GetOrSeedViewOverride(_viewShowHeadingsOverrides, sheetId, static sheet => sheet.ShowHeadings);
+
+    private bool GetEffectiveShowFormulas(SheetId sheetId) =>
+        GetOrSeedViewOverride(_viewShowFormulasOverrides, sheetId, static sheet => sheet.ShowFormulas);
+
+    private bool GetEffectiveShowRulers(SheetId sheetId) =>
+        GetOrSeedViewOverride(_viewShowRulersOverrides, sheetId, static sheet => sheet.ShowRulers);
+
+    private int GetEffectiveZoomPercent(SheetId sheetId) =>
+        GetOrSeedViewOverride(_viewZoomOverrides, sheetId, static sheet => sheet.ZoomPercent);
+
+    private WorksheetViewMode GetEffectiveViewMode(SheetId sheetId) =>
+        GetOrSeedViewOverride(_viewModeOverrides, sheetId, static sheet => sheet.ViewMode);
+
+    private TValue GetOrSeedViewOverride<TValue>(
+        IDictionary<SheetId, TValue> overrides,
+        SheetId sheetId,
+        Func<Sheet, TValue> readSheet)
+    {
+        if (overrides.TryGetValue(sheetId, out var value))
+            return value;
+
+        var sheet = Workbook.GetSheet(sheetId) ?? ActiveSheet;
+        value = readSheet(sheet);
+        overrides[sheetId] = value;
+        return value;
+    }
+
+    private readonly record struct WorksheetViewOptionValues(
+        bool ShowGridlines,
+        bool ShowHeadings,
+        bool ShowRulers);
 
     private CellStyle GetCellStyle(CellAddress address)
     {

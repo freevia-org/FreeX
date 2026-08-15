@@ -159,7 +159,7 @@ public sealed class SortOptionsPolicyOwnershipTests
         session.Should().Contain("public WorkbookCellEditResult SortSelectedRange(SortDialogCommandPlan sortPlan)")
             .And.Contain("sortPlan.CreateCommand");
         wpf.Should().Contain("SortDialogPlanner.CreateCommandPlan(")
-            .And.Contain("sortPlan.CreateCommand(_currentSheetId, currentRange)");
+            .And.Contain("_session.SortSelectedRange(sortPlan)");
         avalonia.Should().Contain("SortDialogPlanner.CreateCommandPlan(")
             .And.Contain("_session.SortSelectedRange(sortPlan)");
         renderers.Should().NotContain("CustomSortOrder.TryParse(")
