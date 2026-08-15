@@ -29,21 +29,20 @@ public partial class MainWindow
             title: UiText.Get("MainWindowDialog_InsertPictureTitle"));
         if (!result.Chosen) return;
 
-        byte[] bytes;
-        try
-        {
-            bytes = await System.IO.File.ReadAllBytesAsync(result.FileName!);
-        }
-        catch (Exception ex)
+        var readResult = await FileByteReadWorkflow.ReadLocalPathAsync(result.FileName!);
+        if (readResult.Outcome == FileByteReadOutcome.Canceled)
+            return;
+        if (!readResult.IsReadable)
         {
             ShowOwnedMessage(
-                UiText.Format("MainWindowMessage_InsertPictureReadFailed", ex.Message),
+                UiText.Format("MainWindowMessage_InsertPictureReadFailed", readResult.FailureMessage),
                 UiText.Get("MainWindowMessage_InsertPictureTitle"),
                 MessageBoxButton.OK,
                 MessageBoxImage.Warning);
             return;
         }
 
+        var bytes = readResult.Bytes;
         var contentType = DrawingInputParser.GetImageContentType(result.FileName!);
         InsertPictureCommand? currentSheetCommand = null;
         if (!TryExecuteGroupedSheetCommand(

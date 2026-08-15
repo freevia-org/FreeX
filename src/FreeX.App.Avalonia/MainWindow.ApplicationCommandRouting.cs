@@ -78,7 +78,8 @@ public partial class MainWindow
             AutoSum = Handled(() => InsertAutoSumFormula("SUM")),
             CalculateNow = Handled<WorkbookApplicationCommandInvocation>(invocation => CalculateNow()),
             CalculateActiveSheet = Handled<WorkbookApplicationCommandInvocation>(invocation => CalculateActiveSheet()),
-            RefreshAll = Handled<WorkbookApplicationCommandInvocation>(invocation => RefreshImportedData()),
+            RefreshAll = Handled<WorkbookApplicationCommandInvocation>(async invocation =>
+                await RefreshImportedDataAsync()),
             SortAscending = Handled<WorkbookApplicationCommandInvocation>(invocation =>
                 SortSelectedRange(ascending: true)),
             SortDescending = Handled<WorkbookApplicationCommandInvocation>(invocation =>

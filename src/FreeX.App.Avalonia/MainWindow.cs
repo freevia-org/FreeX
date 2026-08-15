@@ -337,7 +337,8 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         Brush(0, 153, 153),
     ];
 
-    private readonly WorkbookSessionFactory _sessionFactory = new();
+    private readonly WorkbookSessionFactory _sessionFactory =
+        new(FindReplaceDialogSchema.ResolvePolicyText(UiText.Get));
     private readonly WorkbookOpenService _openService = new();
     private readonly WorkbookSaveService _saveService = new();
     private readonly WorkbookFileWorkflow _fileWorkflow;
@@ -1049,7 +1050,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
                     ["Get Data"] = GetDataFromText,
                     // Data ▸ Connections ▸ Refresh All: re-import the remembered file source in place; with
                     // no remembered source there is nothing to refresh (no external DB/web connection engine).
-                    ["Refresh All"] = RefreshImportedData,
+                    ["Refresh All"] = () => _ = RefreshImportedDataAsync(),
                     // Review ▸ Show Notes toggles all legacy note boxes, matching the WPF host.
                     // Insert ▸ PivotChart (charts the active pivot's result range).
                     // View ▸ Window group (multi-window).
@@ -26752,13 +26753,13 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         await ExecuteWorkbookShareActionPlanAsync(CreateWorkbookShareActionPlan());
     }
 
-    private WorkbookShareActionPlan CreateWorkbookShareActionPlan() =>
-        WorkbookShareActionPlanner.CreatePlan(
+    private DocumentShareActionPlan CreateWorkbookShareActionPlan() =>
+        DocumentShareActionPlanner.CreatePlan(
             _session.CurrentFilePath,
             CreateWorkbookShareActionSurface(),
             File.Exists);
 
-    private WorkbookShareActionSurface CreateWorkbookShareActionSurface()
+    private DocumentShareActionSurface CreateWorkbookShareActionSurface()
     {
         var capability = _workbookShareSheetService.Capability;
         return new(
@@ -26773,30 +26774,33 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             ? "Reveal in Finder"
             : "Open Containing Folder";
 
-    private async Task ExecuteWorkbookShareActionPlanAsync(WorkbookShareActionPlan plan)
+    private static string FormatWorkbookShareStatus(DocumentShareActionPlan plan) =>
+        DocumentShareActionPlanner.FormatStatus(plan, DocumentShareActionTextSpec.WorkbookEnglish);
+
+    private async Task ExecuteWorkbookShareActionPlanAsync(DocumentShareActionPlan plan)
     {
         switch (plan.Kind)
         {
-            case WorkbookShareActionPlanKind.SaveAsBeforeShare:
-                ShowShareStatus(WorkbookShareActionPlanner.FormatStatus(plan), isWarning: true);
+            case DocumentShareActionPlanKind.SaveAsBeforeShare:
+                ShowShareStatus(FormatWorkbookShareStatus(plan), isWarning: true);
                 if (!await SaveWorkbookAsAsync())
                     return;
                 var nextPlan = CreateWorkbookShareActionPlan();
-                if (nextPlan.Kind == WorkbookShareActionPlanKind.SaveAsBeforeShare)
+                if (nextPlan.Kind == DocumentShareActionPlanKind.SaveAsBeforeShare)
                 {
-                    ShowShareStatus(WorkbookShareActionPlanner.FormatStatus(nextPlan), isWarning: true);
+                    ShowShareStatus(FormatWorkbookShareStatus(nextPlan), isWarning: true);
                     return;
                 }
 
                 await ExecuteWorkbookShareActionPlanAsync(nextPlan);
                 break;
 
-            case WorkbookShareActionPlanKind.OpenContainingFolder:
+            case DocumentShareActionPlanKind.OpenContainingFolder:
                 if (!await TrySaveDirtyWorkbookForShareAsync())
                     return;
 
                 var refreshedPlan = CreateWorkbookShareActionPlan();
-                if (refreshedPlan.Kind != WorkbookShareActionPlanKind.OpenContainingFolder)
+                if (refreshedPlan.Kind != DocumentShareActionPlanKind.OpenContainingFolder)
                 {
                     await ExecuteWorkbookShareActionPlanAsync(refreshedPlan);
                     return;
@@ -26805,13 +26809,13 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
                 await OpenWorkbookContainingFolderAsync(refreshedPlan);
                 break;
 
-            case WorkbookShareActionPlanKind.ShareSheet:
+            case DocumentShareActionPlanKind.ShareSheet:
                 await ShowWorkbookShareSheetAsync(plan);
                 break;
 
-            case WorkbookShareActionPlanKind.Deferred:
+            case DocumentShareActionPlanKind.Deferred:
             default:
-                ShowShareStatus(WorkbookShareActionPlanner.FormatStatus(plan), isWarning: true);
+                ShowShareStatus(FormatWorkbookShareStatus(plan), isWarning: true);
                 break;
         }
     }
@@ -26824,13 +26828,13 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         return await SaveCurrentWorkbookAsync() && !_session.IsDirty;
     }
 
-    private async Task ShowWorkbookShareSheetAsync(WorkbookShareActionPlan plan)
+    private async Task ShowWorkbookShareSheetAsync(DocumentShareActionPlan plan)
     {
         if (!await TrySaveDirtyWorkbookForShareAsync())
             return;
 
         var refreshedPlan = CreateWorkbookShareActionPlan();
-        if (refreshedPlan.Kind != WorkbookShareActionPlanKind.ShareSheet)
+        if (refreshedPlan.Kind != DocumentShareActionPlanKind.ShareSheet)
         {
             await ExecuteWorkbookShareActionPlanAsync(refreshedPlan);
             return;
@@ -26843,7 +26847,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             return;
         }
 
-        ShowShareStatus(WorkbookShareActionPlanner.FormatStatus(refreshedPlan), isWarning: false);
+        ShowShareStatus(FormatWorkbookShareStatus(refreshedPlan), isWarning: false);
         try
         {
             var result = await _workbookShareSheetService.ShowShareSheetAsync(this, filePath);
@@ -26867,34 +26871,34 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         }
     }
 
-    private async Task FallbackToOpenContainingFolderAfterShareSheetFailureAsync(WorkbookShareActionPlan shareSheetPlan)
+    private async Task FallbackToOpenContainingFolderAfterShareSheetFailureAsync(DocumentShareActionPlan shareSheetPlan)
     {
         var fallbackSurface = CreateWorkbookShareActionSurface() with { CanShowShareSheet = false };
-        var fallbackPlan = WorkbookShareActionPlanner.CreatePlan(shareSheetPlan.Path, fallbackSurface, File.Exists);
-        if (fallbackPlan.Kind == WorkbookShareActionPlanKind.OpenContainingFolder)
+        var fallbackPlan = DocumentShareActionPlanner.CreatePlan(shareSheetPlan.Path, fallbackSurface, File.Exists);
+        if (fallbackPlan.Kind == DocumentShareActionPlanKind.OpenContainingFolder)
         {
             await OpenWorkbookContainingFolderAsync(fallbackPlan);
             return;
         }
 
-        ShowShareStatus(WorkbookShareActionPlanner.FormatStatus(fallbackPlan), isWarning: true);
+        ShowShareStatus(FormatWorkbookShareStatus(fallbackPlan), isWarning: true);
     }
 
-    private async Task OpenWorkbookContainingFolderAsync(WorkbookShareActionPlan plan)
+    private async Task OpenWorkbookContainingFolderAsync(DocumentShareActionPlan plan)
     {
         if (string.IsNullOrWhiteSpace(plan.Path))
         {
             var unavailablePlan = plan with
             {
-                Kind = WorkbookShareActionPlanKind.Deferred,
-                UnavailableReason = WorkbookShareActionUnavailableReason.ContainingFolderUnavailable,
+                Kind = DocumentShareActionPlanKind.Deferred,
+                UnavailableReason = DocumentShareActionUnavailableReason.ContainingFolderUnavailable,
             };
-            ShowShareStatus(WorkbookShareActionPlanner.FormatStatus(unavailablePlan), isWarning: true);
+            ShowShareStatus(FormatWorkbookShareStatus(unavailablePlan), isWarning: true);
             return;
         }
 
         var launcher = TopLevel.GetTopLevel(this)?.Launcher;
-        ShowShareStatus(WorkbookShareActionPlanner.FormatStatus(plan), isWarning: true);
+        ShowShareStatus(FormatWorkbookShareStatus(plan), isWarning: true);
         var result = await DesktopPathLauncher.RevealFileAsync(
             plan.Path,
             launcher is null
@@ -26903,18 +26907,18 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
 
         if (result.Outcome == DesktopPathLaunchOutcome.Missing)
         {
-            var unavailablePlan = new WorkbookShareActionPlan(
-                WorkbookShareActionPlanKind.Deferred,
+            var unavailablePlan = new DocumentShareActionPlan(
+                DocumentShareActionPlanKind.Deferred,
                 plan.Path,
-                UnavailableReason: WorkbookShareActionUnavailableReason.ContainingFolderUnavailable,
+                UnavailableReason: DocumentShareActionUnavailableReason.ContainingFolderUnavailable,
                 Surface: plan.EffectiveSurface);
-            ShowShareStatus(WorkbookShareActionPlanner.FormatStatus(unavailablePlan), isWarning: true);
+            ShowShareStatus(FormatWorkbookShareStatus(unavailablePlan), isWarning: true);
             return;
         }
 
         if (result.Outcome == DesktopPathLaunchOutcome.LauncherUnavailable)
         {
-            ShowShareStatus(WorkbookShareActionPlanner.FormatStatus(CreateWorkbookShareActionPlan()), isWarning: true);
+            ShowShareStatus(FormatWorkbookShareStatus(CreateWorkbookShareActionPlan()), isWarning: true);
             return;
         }
 
@@ -27264,7 +27268,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
                                 pdfBuffer,
                                 options: null,
                                 workbookDirectory: ResolveWorkbookDirectoryForHeaderFooter());
-                            await File.WriteAllBytesAsync(
+                            await AtomicFileWriter.WriteAllBytesAsync(
                                 effectiveRequest.Path,
                                 pdfBuffer.ToArray(),
                                 cancellationToken);
@@ -27329,13 +27333,8 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
 
     private int ResolveActiveSheetIndex()
     {
-        for (var index = 0; index < _session.Workbook.Sheets.Count; index++)
-        {
-            if (_session.Workbook.Sheets[index].Id == _session.ActiveSheet.Id)
-                return index;
-        }
-
-        return _session.Workbook.ActiveSheetIndex ?? 0;
+        var index = _session.Workbook.IndexOfSheet(_session.ActiveSheet.Id);
+        return index >= 0 ? index : _session.Workbook.ActiveSheetIndex ?? 0;
     }
 
     private Task<AvaloniaPickedStorageFile?> ShowPortablePdfSavePickerAsync(string title)

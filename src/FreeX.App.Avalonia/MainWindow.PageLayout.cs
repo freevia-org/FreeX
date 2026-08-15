@@ -1553,15 +1553,22 @@ public sealed partial class MainWindow
             if (file is null)
                 return;
 
-            byte[] bytes;
-            await using (var stream = await file.OpenReadAsync())
+            var readResult = await FileByteReadWorkflow.ReadStreamAsync(file.OpenReadAsync);
+            if (readResult.Outcome == FileByteReadOutcome.Canceled)
+                return;
+            if (!readResult.IsReadable)
             {
-                using var memory = new MemoryStream();
-                await stream.CopyToAsync(memory);
-                bytes = memory.ToArray();
+                ShowEditIssue(UiText.Format("InsertLoc_CouldNotReadImage", readResult.FailureMessage));
+                return;
             }
+            if (readResult.Outcome == FileByteReadOutcome.Empty)
+            {
+                ShowEditIssue(UiText.Get("InsertLoc_SelectedImageEmpty"));
+                return;
+            }
+
             var contentType = InsertPictureCommandFactory.ContentTypeForPath(file.Name) ?? "image/png";
-            var picture = new WorksheetHeaderFooterPicture(bytes, contentType, file.Name, 160, 80);
+            var picture = new WorksheetHeaderFooterPicture(readResult.Bytes, contentType, file.Name, 160, 80);
             if (!HeaderFooterEditorPlanner.ContainsPictureToken(editor.Text))
             {
                 var value = HeaderFooterEditorPlanner.InsertToken(editor.Text, caret, HeaderFooterEditorPlanner.PictureToken);

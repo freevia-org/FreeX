@@ -100,26 +100,22 @@ public sealed partial class MainWindow
             return;
         }
 
-        byte[] imageBytes;
-        try
+        var readResult = await FileByteReadWorkflow.ReadStreamAsync(file.OpenReadAsync);
+        if (readResult.Outcome == FileByteReadOutcome.Canceled)
+            return;
+        if (readResult.Outcome == FileByteReadOutcome.Failed)
         {
-            await using var stream = await file.OpenReadAsync();
-            using var memory = new MemoryStream();
-            await stream.CopyToAsync(memory);
-            imageBytes = memory.ToArray();
-        }
-        catch (IOException ex)
-        {
-            ShowEditIssue(UiText.Format("InsertLoc_CouldNotReadImage", ex.Message));
+            ShowEditIssue(UiText.Format("InsertLoc_CouldNotReadImage", readResult.FailureMessage));
             return;
         }
 
-        if (imageBytes.Length == 0)
+        if (readResult.Outcome == FileByteReadOutcome.Empty)
         {
             ShowEditIssue(UiText.Get("InsertLoc_SelectedImageEmpty"));
             return;
         }
 
+        var imageBytes = readResult.Bytes;
         var size = DecodePictureSize(imageBytes);
         var anchor = _session.ActiveCell;
         var command = PictureInsertionPlacementPlanner.CreateInsertPictureCommand(
@@ -488,25 +484,22 @@ public sealed partial class MainWindow
 
         if (plan.Rendering == InsertObjectRendering.EmbedImageAsPicture && plan.ImageContentType is not null)
         {
-            try
+            var readResult = await FileByteReadWorkflow.ReadStreamAsync(file.OpenReadAsync);
+            if (readResult.Outcome == FileByteReadOutcome.Canceled)
+                return false;
+            if (readResult.Outcome == FileByteReadOutcome.Failed)
             {
-                await using var stream = await file.OpenReadAsync();
-                using var memory = new MemoryStream();
-                await stream.CopyToAsync(memory);
-                imageBytes = memory.ToArray();
-            }
-            catch (IOException ex)
-            {
-                ShowEditIssue(UiText.Format("WfInsertObject_ErrorRead", ex.Message));
+                ShowEditIssue(UiText.Format("WfInsertObject_ErrorRead", readResult.FailureMessage));
                 return false;
             }
 
-            if (imageBytes.Length == 0)
+            if (readResult.Outcome == FileByteReadOutcome.Empty)
             {
                 ShowEditIssue(UiText.Get("WfInsertObject_ErrorEmptyFile"));
                 return false;
             }
 
+            imageBytes = readResult.Bytes;
             contentType = plan.ImageContentType;
             size = DecodePictureSize(imageBytes);
         }
