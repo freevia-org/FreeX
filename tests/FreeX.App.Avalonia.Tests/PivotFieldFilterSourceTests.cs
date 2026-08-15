@@ -86,11 +86,13 @@ public sealed class PivotFieldFilterSourceTests
         source.Should().Contain("ApplyPivotFilterButtonChrome(cancel, 74)");
         source.Should().Contain("button.CornerRadius = new CornerRadius(0)");
         source.Should().Contain("textBox.CornerRadius = new CornerRadius(0)");
-        // The three-state check-box painting is deliberately no longer local: "Share WPF-aligned
-        // compact checkbox chrome" moved it into Free.Shared.Shell.Avalonia. Both halves of that
-        // contract -- the shared file owning the geometry, and this file delegating to
-        // ApplyCompactCheckBox -- are asserted by
-        // CompactDialogChromeContractTests.SharedCompactCheckBox_OwnsWpfGeometryAndThreeStatePainting.
+        // The three-state check-box painting is deliberately not local: "Share WPF-aligned compact
+        // checkbox chrome" moved it into Free.Shared.Shell.Avalonia. It came back briefly as a local
+        // template to work around the shared tick staying visible in the indeterminate state; that
+        // was a defect in the shared binding, now fixed there and covered by
+        // CompactCheckBoxThreeStateTests, so this dialog delegates again.
+        source.Should().Contain("AvaloniaCompactDialogChrome.ApplyCompactCheckBox(checkBox, PivotDialogChromeStyle);");
+        source.Should().NotContain("IsVisible = checkBox.IsChecked is null");
         source.Should().Contain("Content = labelFilter is null ? \"Add Label Filter...\" : \"Edit Label Filter...\"");
         source.Should().Contain("Content = valueFilter is null ? \"Add Value Filter...\" : \"Edit Value Filter...\"");
         source.Should().NotContain("PlaceholderText = StripDisplayMnemonic(UiText.Get(\"PivotFieldFilter_Search\"))");

@@ -139,8 +139,20 @@ public sealed class PageLayoutSourceGuardTests
         avaloniaQuickActions.Should().NotContain("plan.SuccessStatusText ?? UiText.Get(\"PageBreak_Failed\")");
         avaloniaQuickActions.Should().NotContain("result.ErrorMessage ?? UiText.Get(\"RibbonWire_BackgroundSet\")");
 
+        // "Share FreeX sheet options ribbon state" moved the gridlines/headings print options out of
+        // MainWindow.SheetOptionsNotes.cs (which is now only the comment-list surface) and into the
+        // Page Layout ribbon, so the print path routes through the shared command session and status
+        // planner instead of resolving status locally. Assert that new ownership on both sides rather
+        // than the old file, which no longer participates.
+        avaloniaRibbon.Should().Contain("TogglePrintGridlines(");
+        avaloniaRibbon.Should().Contain("TogglePrintHeadings(");
+        avaloniaRibbon.Should().Contain("CreatePageLayoutCommandSession().PlanPrintGridlines(");
+        avaloniaRibbon.Should().Contain("CreatePageLayoutCommandSession().PlanPrintHeadings(");
+
         var sheetOptions = File.ReadAllText(Path.Combine(avaloniaDirectory, "MainWindow.SheetOptionsNotes.cs"));
-        sheetOptions.Should().Contain("PageLayoutStatusPlanner.ResolveCommandStatus(");
+        sheetOptions.Should().NotContain("PrintOption");
+        sheetOptions.Should().NotContain("ShowGridlinesSheetOptionsAsync");
+        sheetOptions.Should().NotContain("ShowHeadingsSheetOptionsAsync");
         sheetOptions.Should().NotContain("result.ErrorMessage ?? UiText.Get(\"ShellLoc_CouldNotUpdatePrintOptions\")");
     }
 }

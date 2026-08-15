@@ -915,6 +915,13 @@ public static class AvaloniaCompactDialogChrome
         checkBox.Template = CreateCompactCheckBoxTemplate(style, contentSpacing);
     }
 
+    /// <summary>
+    /// Maps <see cref="ToggleButton.IsChecked"/> (bool?) onto a plain bool so the checked tick stays
+    /// hidden in the indeterminate state rather than inheriting IsVisible's default.
+    /// </summary>
+    private static readonly IValueConverter IsCheckedTrueConverter =
+        new FuncValueConverter<bool?, bool>(isChecked => isChecked == true);
+
     public static FuncControlTemplate<CheckBox> CreateCompactCheckBoxTemplate(
         AvaloniaCompactDialogChromeStyle style,
         double contentSpacing = 4)
@@ -948,6 +955,11 @@ public static class AvaloniaCompactDialogChrome
                 new Binding(nameof(ToggleButton.IsChecked))
                 {
                     Source = control,
+                    // IsChecked is bool?, and IsVisible is bool. Without an explicit conversion the
+                    // indeterminate (null) state produces no bool, so the binding falls back to
+                    // IsVisibleProperty's default of true and paints the tick on top of the
+                    // indeterminate bar. Convert null to false so only the bar survives.
+                    Converter = IsCheckedTrueConverter,
                 });
 
             var indeterminateMark = new Border

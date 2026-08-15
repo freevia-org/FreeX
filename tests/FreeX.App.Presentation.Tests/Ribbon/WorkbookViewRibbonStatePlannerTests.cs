@@ -103,7 +103,14 @@ public sealed class WorkbookViewRibbonStatePlannerTests
         avalonia.Should().Contain("private WorkbookViewRibbonStatePlan GetWorkbookViewRibbonState()");
         avalonia.Should().Contain("[\"Show Formulas\"] = () => GetWorkbookViewRibbonState().GetCommandState(\"Show Formulas\")");
         avalonia.Should().Contain("[\"Split\"] = () => GetWorkbookViewRibbonState().GetCommandState(\"Split\")");
-        avalonia.Should().Contain("[\"View Gridlines\"] = () => GetWorkbookViewRibbonState().GetCommandState(\"View Gridlines\")");
-        avalonia.Should().Contain("[\"View Headings\"] = () => GetWorkbookViewRibbonState().GetCommandState(\"View Headings\")");
+        // "Share FreeX sheet options ribbon state" split the gridlines/headings toggles out of the
+        // workbook-view projection into WorkbookPageLayoutSheetOptionsRibbonStatePlanner, because the
+        // view and print halves of those toggles belong to the same sheet-options decision. That is
+        // still one shared neutral planner feeding both renderers -- which is what this guard exists
+        // to protect -- so assert the new owner on both sides rather than the old accessor.
+        avalonia.Should().Contain("[\"View Gridlines\"] = () => GetPageLayoutSheetOptionsRibbonState().GetCommandState(\"View Gridlines\")");
+        avalonia.Should().Contain("[\"View Headings\"] = () => GetPageLayoutSheetOptionsRibbonState().GetCommandState(\"View Headings\")");
+        avalonia.Should().Contain("WorkbookPageLayoutSheetOptionsRibbonStatePlanner.Build(");
+        wpfViewport.Should().Contain("WorkbookPageLayoutSheetOptionsRibbonStatePlanner.Build(");
     }
 }
