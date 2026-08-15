@@ -3335,6 +3335,8 @@ public sealed partial class DocumentView : RichTextBox
         var decorations = selection.GetPropertyValue(Inline.TextDecorationsProperty);
         var capitals = selection.GetPropertyValue(Typography.CapitalsProperty);
         var baseline = selection.GetPropertyValue(Inline.BaselineAlignmentProperty);
+        var family = selection.GetPropertyValue(TextElement.FontFamilyProperty);
+        var size = selection.GetPropertyValue(TextElement.FontSizeProperty);
 
         return new FontDialogSelectionState(
             CaptureSelectionRunFormatting(),
@@ -3342,6 +3344,8 @@ public sealed partial class DocumentView : RichTextBox
             ItalicIndeterminate: style == DependencyProperty.UnsetValue,
             UnderlineIndeterminate: decorations == DependencyProperty.UnsetValue,
             StrikethroughIndeterminate: decorations == DependencyProperty.UnsetValue,
+            FamilyIndeterminate: family == DependencyProperty.UnsetValue,
+            SizeIndeterminate: size == DependencyProperty.UnsetValue,
             SmallCapsIndeterminate: capitals == DependencyProperty.UnsetValue,
             AllCapsIndeterminate: capitals == DependencyProperty.UnsetValue,
             SuperscriptIndeterminate: baseline == DependencyProperty.UnsetValue,

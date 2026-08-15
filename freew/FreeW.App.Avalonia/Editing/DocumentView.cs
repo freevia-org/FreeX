@@ -21605,6 +21605,21 @@ public sealed partial class DocumentView : Control
 
     private (Paragraph Paragraph, int Offset)? PrimaryFormattingProbeTarget()
     {
+        if (_shapeCaret is { } shapeCaret
+            && TryGetShapeTextTarget(
+                shapeCaret.BlockIndex,
+                shapeCaret.RunIndex,
+                _activeShapeTextChildPath,
+                out _,
+                out var shape)
+            && shapeCaret.TextParagraphIndex >= 0
+            && shapeCaret.TextParagraphIndex < shape.TextParagraphs.Count)
+        {
+            return (
+                shape.TextParagraphs[shapeCaret.TextParagraphIndex],
+                ShapeTextOffset(shape, shapeCaret));
+        }
+
         if (_hfCaret is { } headerFooterCaret)
         {
             var paragraphIndex = headerFooterCaret.Target.ParaIdx;
@@ -21662,10 +21677,9 @@ public sealed partial class DocumentView : Control
     }
 
     /// <summary>
-    /// Returns the effective run and paragraph formatting for the current selection, scanning ALL
-    /// selected cells to detect mixed (indeterminate) properties. Used by the Font dialog to show
-    /// indeterminate checkboxes and blank combos when the selection has mixed formatting, matching
-    /// Word / WPF parity.
+    /// Returns effective character formatting for the complete current selection. The renderer only
+    /// identifies model ranges; the shared planner resolves style inheritance and mixed properties for
+    /// body, table-cell, header/footer, and shape text alike.
     /// <para>
     /// When there is no selection, behaves identically to <see cref="GetCaretFormatting"/>
     /// (single-cell read, no indeterminate flags).
@@ -21674,25 +21688,145 @@ public sealed partial class DocumentView : Control
     public FontDialogSelectionState GetSelectionFormatting()
     {
         var (run, _) = GetCaretFormatting();
+        return DocumentSelectionFormattingPlanner.Build(
+            _doc,
+            run,
+            SelectionFormattingRanges());
+    }
 
-        var sel = NormalizedSelection();
-        if (sel is not { } s || s.Start.Block != s.End.Block)
-            return new FontDialogSelectionState(run);
+    private IReadOnlyList<DocumentFormattingTextRange> SelectionFormattingRanges()
+    {
+        var ranges = new List<DocumentFormattingTextRange>();
 
-        if (_doc.Blocks[s.Start.Block] is not Paragraph selPara || !IsEditable(selPara))
-            return new FontDialogSelectionState(run);
+        if (CurrentShapeTextSelection is { } shapeSelection
+            && _shapeCaret is { } shapeCaret
+            && TryGetShapeTextTarget(
+                shapeCaret.BlockIndex,
+                shapeCaret.RunIndex,
+                _activeShapeTextChildPath,
+                out _,
+                out var shape)
+            && IsValidShapeTextSelection(shape, shapeSelection, shapeCaret.BlockIndex, shapeCaret.RunIndex))
+        {
+            AddFormattingRanges(
+                ranges,
+                shape.TextParagraphs,
+                shapeSelection.Start.TextParagraphIndex,
+                ShapeTextOffset(shape, shapeSelection.Start),
+                shapeSelection.End.TextParagraphIndex,
+                ShapeTextOffset(shape, shapeSelection.End));
+            return ranges;
+        }
 
-        var allCells = ParaCells(selPara);
-        var a = Math.Clamp(s.Start.Offset, 0, allCells.Count);
-        var b = Math.Clamp(s.End.Offset, 0, allCells.Count);
-        if (b <= a)
-            return new FontDialogSelectionState(run);
+        if (_hfCaret is { } headerFooterCaret
+            && ResolveHfStore(headerFooterCaret.Target) is { } store
+            && HeaderFooterDialogPlanner.GetSlot(store, headerFooterCaret.Target.Slot) is { } story
+            && NormalizedHfSelection() is { } headerFooterSelection)
+        {
+            AddFormattingRanges(
+                ranges,
+                story.Paragraphs,
+                headerFooterSelection.Start.ParagraphIndex,
+                headerFooterSelection.Start.Offset,
+                headerFooterSelection.End.ParagraphIndex,
+                headerFooterSelection.End.Offset);
+            return ranges;
+        }
 
-        var selectedFormatting = allCells
-            .Skip(a)
-            .Take(b - a)
-            .Select(cell => ResolveRunFmt(cell.Fmt, selPara));
-        return FontDialogPlanner.BuildSelectionState(run, selectedFormatting);
+        if (SelectedCellRange is { } cellRange
+            && cellRange.TableBlock >= 0
+            && cellRange.TableBlock < _doc.Blocks.Count
+            && _doc.Blocks[cellRange.TableBlock] is Table table)
+        {
+            var seen = new HashSet<TableCell>();
+            for (var row = Math.Max(0, cellRange.MinRow);
+                 row <= cellRange.MaxRow && row < table.Rows.Count;
+                 row++)
+            {
+                for (var column = Math.Max(0, cellRange.MinCol);
+                     column <= cellRange.MaxCol;
+                     column++)
+                {
+                    var selectedCell = GetCellModelGridCol(table, row, column);
+                    if (selectedCell is null || !seen.Add(selectedCell))
+                        continue;
+                    foreach (var paragraph in selectedCell.Paragraphs)
+                    {
+                        ranges.Add(new DocumentFormattingTextRange(
+                            paragraph,
+                            0,
+                            paragraph.PlainText.Length,
+                            IncludesParagraphMark: true));
+                    }
+                }
+            }
+            return ranges;
+        }
+
+        if (_cellCaret is { } cellCaret
+            && _cellAnchor is { } cellAnchor
+            && cellCaret.TableBlock == cellAnchor.TableBlock
+            && cellCaret.Row == cellAnchor.Row
+            && cellCaret.Col == cellAnchor.Col
+            && (cellCaret.ParaIdx != cellAnchor.ParaIdx || cellCaret.Offset != cellAnchor.Offset)
+            && GetCellModel(cellCaret.TableBlock, cellCaret.Row, cellCaret.Col) is { } textCell)
+        {
+            var anchorFirst = cellAnchor.ParaIdx < cellCaret.ParaIdx
+                || cellAnchor.ParaIdx == cellCaret.ParaIdx && cellAnchor.Offset <= cellCaret.Offset;
+            var start = anchorFirst ? cellAnchor : cellCaret;
+            var end = anchorFirst ? cellCaret : cellAnchor;
+            AddFormattingRanges(
+                ranges,
+                textCell.Paragraphs,
+                start.ParaIdx,
+                start.Offset,
+                end.ParaIdx,
+                end.Offset);
+            return ranges;
+        }
+
+        if (NormalizedSelection() is not { } bodySelection)
+            return ranges;
+
+        for (var blockIndex = Math.Max(0, bodySelection.Start.Block);
+             blockIndex <= bodySelection.End.Block && blockIndex < _doc.Blocks.Count;
+             blockIndex++)
+        {
+            if (_doc.Blocks[blockIndex] is not Paragraph paragraph || !IsEditable(paragraph))
+                continue;
+            ranges.Add(new DocumentFormattingTextRange(
+                paragraph,
+                blockIndex == bodySelection.Start.Block ? bodySelection.Start.Offset : 0,
+                blockIndex == bodySelection.End.Block ? bodySelection.End.Offset : paragraph.PlainText.Length,
+                IncludesParagraphMark: blockIndex < bodySelection.End.Block));
+        }
+        return ranges;
+    }
+
+    private static void AddFormattingRanges(
+        ICollection<DocumentFormattingTextRange> ranges,
+        IReadOnlyList<Paragraph> paragraphs,
+        int startParagraphIndex,
+        int startOffset,
+        int endParagraphIndex,
+        int endOffset)
+    {
+        if (paragraphs.Count == 0)
+            return;
+
+        startParagraphIndex = Math.Clamp(startParagraphIndex, 0, paragraphs.Count - 1);
+        endParagraphIndex = Math.Clamp(endParagraphIndex, startParagraphIndex, paragraphs.Count - 1);
+        for (var paragraphIndex = startParagraphIndex;
+             paragraphIndex <= endParagraphIndex;
+             paragraphIndex++)
+        {
+            var paragraph = paragraphs[paragraphIndex];
+            ranges.Add(new DocumentFormattingTextRange(
+                paragraph,
+                paragraphIndex == startParagraphIndex ? startOffset : 0,
+                paragraphIndex == endParagraphIndex ? endOffset : paragraph.PlainText.Length,
+                IncludesParagraphMark: paragraphIndex < endParagraphIndex));
+        }
     }
 
     // ── Undo-group pass-throughs (used by FontDialog to group all format steps) ─────────────────
