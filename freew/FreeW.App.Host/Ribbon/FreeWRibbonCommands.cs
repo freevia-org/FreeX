@@ -1253,9 +1253,12 @@ internal static class FreeWRibbonCommands
             registry,
             CreateImageExecutionPorts(editor),
             CreateTableExecutionPorts(editor));
-        FreeWRibbonEditorExecutionProfile.RegisterChartSmartArt(
+        var chartCommands = FreeWRibbonEditorExecutionProfile.RegisterChartSmartArt(
             registry,
             CreateChartSmartArtExecutionPorts(editor));
+        stateful.Add((
+            FreeWRibbonCommandWorkflow.GetPrimaryCommandId(FreeWRibbonCommandAction.ChartToggleLegend),
+            chartCommands.ChartLegend));
 
         RefreshStatefulCommands();
         return FreeWRibbonExecutionProfile.Build(registry).Registry;
