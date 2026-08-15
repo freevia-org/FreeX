@@ -16,8 +16,8 @@ namespace FreeW.App.Host;
 /// (<c>▾</c>) that drops the full style list. Hovering a swatch live-previews the style on the current
 /// selection via <see cref="DocumentView.PreviewParagraphStyle"/>; leaving reverts via
 /// <see cref="DocumentView.EndStylePreview"/>; clicking commits through the editor's normal reversible
-/// <see cref="DocumentView.SetParagraphStyle"/> path. The gallery hosts custom WPF content (it is not a
-/// shared <c>RibbonGallery</c> render) so it stays entirely app-side.
+/// named-style path. The gallery retains custom WPF swatch rendering, while the preview transaction and
+/// command semantics are shared with Avalonia.
 /// </summary>
 internal sealed class StylesGallery : Control
 {

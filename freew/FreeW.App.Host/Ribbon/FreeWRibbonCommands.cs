@@ -1108,7 +1108,10 @@ internal static class FreeWRibbonCommands
                         ? null
                         : new ParagraphBorder(hex, 0.5) { LineStyle = BorderLineStyle.Single }),
                 ApplyHighlightColor: hex => editor.SetHighlightColor(hex),
-                ApplyNamedStyle: styleId => editor.ApplyNamedStyle(styleId)));
+                ApplyNamedStyle: styleId => editor.ApplyNamedStyle(styleId),
+                PreviewNamedStyle: editor.PreviewParagraphStyle,
+                CancelNamedStylePreview: editor.EndStylePreview,
+                CommitNamedStylePreview: editor.CommitStylePreview));
 
         // Home > Styles: New Style opens a dialog capturing name + formatting + based-on, creates a custom
         // DocumentStyle via the pure StyleManager and applies it to the selection. Manage Styles lets the

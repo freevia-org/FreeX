@@ -30,7 +30,13 @@ public sealed class FormattingGalleryRibbonWorkflowTests
         Execute("freew.char-shading.none");
         Execute("freew.char-border.red");
         Execute("freew.highlight.none");
-        Execute(FormattingGalleryRibbonWorkflow.StyleCommandId("Heading1"));
+        var style = Command(registry, FormattingGalleryRibbonWorkflow.StyleCommandId("Heading1"));
+        style.Should().BeAssignableTo<IRibbonPreviewCommand>();
+        var preview = (IRibbonPreviewCommand)style;
+        preview.BeginPreview(RibbonCommandContext.Empty);
+        preview.CancelPreview();
+        style.Execute(RibbonCommandContext.Empty);
+        Execute(FormattingGalleryRibbonWorkflow.StyleCommandId("Strong"));
 
         events.Should().Equal(
             "prepare", "font:",
@@ -38,9 +44,27 @@ public sealed class FormattingGalleryRibbonWorkflowTests
             "prepare", "character:",
             "prepare", "border:#FF0000",
             "prepare", "highlight:",
-            "prepare", "style:Heading1");
+            "preview-style:Heading1", "cancel-style",
+            "commit-style:Heading1", "prepare",
+            "prepare", "style:Strong");
 
         void Execute(string id) => Command(registry, id).Execute(RibbonCommandContext.Empty);
+    }
+
+    [Fact]
+    public void OnlyParagraphStyleRoutesExposeLivePreview()
+    {
+        var registry = new RibbonCommandRegistry();
+        FormattingGalleryRibbonWorkflow.Register(registry, CreatePorts([]));
+
+        foreach (var descriptor in BuiltInStyles.Gallery)
+        {
+            var command = Command(registry, FormattingGalleryRibbonWorkflow.StyleCommandId(descriptor.Id));
+            if (descriptor.Type == StyleType.Paragraph)
+                command.Should().BeAssignableTo<IRibbonPreviewCommand>();
+            else
+                command.Should().NotBeAssignableTo<IRibbonPreviewCommand>();
+        }
     }
 
     [Fact]
@@ -56,6 +80,9 @@ public sealed class FormattingGalleryRibbonWorkflowTests
         {
             source.Should().Contain("FormattingGalleryRibbonWorkflow.Register(");
             source.Should().Contain("new FormattingGalleryRibbonPorts(");
+            source.Should().Contain("PreviewNamedStyle:");
+            source.Should().Contain("CancelNamedStylePreview:");
+            source.Should().Contain("CommitNamedStylePreview:");
         }
 
         foreach (var oldMethod in new[]
@@ -83,7 +110,10 @@ public sealed class FormattingGalleryRibbonWorkflowTests
             ApplyCharacterShading: value => events.Add($"character:{value}"),
             ApplyCharacterBorderColor: value => events.Add($"border:{value}"),
             ApplyHighlightColor: value => events.Add($"highlight:{value}"),
-            ApplyNamedStyle: value => events.Add($"style:{value}"));
+            ApplyNamedStyle: value => events.Add($"style:{value}"),
+            PreviewNamedStyle: value => events.Add($"preview-style:{value}"),
+            CancelNamedStylePreview: () => events.Add("cancel-style"),
+            CommitNamedStylePreview: value => events.Add($"commit-style:{value}"));
 
     private static IEnumerable<FreeWRibbonPaletteChoice> AllPaletteChoices() =>
         FreeWRibbonPaletteCatalog.FontColors
