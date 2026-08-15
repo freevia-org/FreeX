@@ -100,9 +100,12 @@ public partial class GridView
         Dictionary<(CellColor Color, double Thickness), Pen>? penCache,
         Dictionary<CellColor, SolidColorBrush>? brushCache)
     {
-        var y = kind == SparklineKind.Line
-            ? ResolveLineAxisY(values, rect, overrideMin, overrideMax)
-            : ResolveColumnAxisY(values, rect, kind == SparklineKind.WinLoss);
+        var y = SparklineAxisLinePlanner.ResolveY(
+            kind,
+            values,
+            new LayoutRect(rect.Left, rect.Top, rect.Width, rect.Height),
+            overrideMin,
+            overrideMax);
 
         if (y is not { } axisY)
             return;
@@ -115,35 +118,13 @@ public partial class GridView
     /// Zero-crossing Y for a line sparkline, or null when the plotted min/max range does not include
     /// zero (real zero would sit outside the visible plot, so Excel does not draw the axis line).
     /// </summary>
-    private static double? ResolveLineAxisY(IReadOnlyList<double> values, Rect rect, double? overrideMin, double? overrideMax)
-    {
-        double? min = null;
-        double? max = null;
-        foreach (var value in values)
-        {
-            if (!double.IsFinite(value))
-                continue;
-            if (min is null || value < min)
-                min = value;
-            if (max is null || value > max)
-                max = value;
-        }
-
-        if (min is null || max is null)
-            return null;
-
-        var lo = overrideMin ?? min.Value;
-        var hi = overrideMax ?? max.Value;
-        if (lo > hi)
-            (lo, hi) = (hi, lo);
-
-        // Real zero falls outside the plotted range -- no axis line to show.
-        if (0 < lo || 0 > hi)
-            return null;
-
-        var span = Math.Abs(hi - lo) < 0.0000001 ? 1 : hi - lo;
-        return rect.Bottom - (Math.Clamp((0 - lo) / span, 0, 1) * rect.Height);
-    }
+    private static double? ResolveLineAxisY(IReadOnlyList<double> values, Rect rect, double? overrideMin, double? overrideMax) =>
+        SparklineAxisLinePlanner.ResolveY(
+            SparklineKind.Line,
+            values,
+            new LayoutRect(rect.Left, rect.Top, rect.Width, rect.Height),
+            overrideMin,
+            overrideMax);
 
     /// <summary>
     /// Zero-baseline Y for a column/win-loss sparkline: the cell bottom when the data is entirely
@@ -152,29 +133,12 @@ public partial class GridView
     /// <see cref="FreeX.App.Presentation.Sparklines.SparklineLayoutEngine.VisitColumnLayout{TConsumer}(IReadOnlyList{double}, FreeX.App.Presentation.Sparklines.LayoutRect, bool, ref TConsumer, double?)"/>'s
     /// own baseline computation for the bars themselves.
     /// </summary>
-    private static double ResolveColumnAxisY(IReadOnlyList<double> values, Rect rect, bool winLoss)
-    {
-        var hasPositive = false;
-        var hasNegative = false;
-        if (!winLoss)
-        {
-            foreach (var value in values)
-            {
-                if (!double.IsFinite(value))
-                    continue;
-                if (value > 0)
-                    hasPositive = true;
-                else if (value < 0)
-                    hasNegative = true;
-            }
-        }
-
-        if (hasPositive && !hasNegative)
-            return rect.Bottom;
-        if (hasNegative && !hasPositive)
-            return rect.Top;
-        return rect.Top + (rect.Height / 2);
-    }
+    private static double ResolveColumnAxisY(IReadOnlyList<double> values, Rect rect, bool winLoss) =>
+        SparklineAxisLinePlanner.ResolveY(
+            winLoss ? SparklineKind.WinLoss : SparklineKind.Column,
+            values,
+            new LayoutRect(rect.Left, rect.Top, rect.Width, rect.Height)) ??
+        rect.Top + (rect.Height / 2);
 
     // ── Line sparkline ────────────────────────────────────────────────────────
 

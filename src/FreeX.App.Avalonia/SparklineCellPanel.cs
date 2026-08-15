@@ -145,11 +145,19 @@ internal sealed class SparklineCellPanel : Panel
 
     private void BuildAxisLine(LayoutRect rect, CellColor axisColor)
     {
-        var y = rect.Top + (rect.Height / 2);
+        var y = SparklineAxisLinePlanner.ResolveY(
+            _sparkline.Kind,
+            _values,
+            rect,
+            _overrideMin,
+            _overrideMax);
+        if (y is not { } axisY)
+            return;
+
         Children.Add(new AvaloniaLine
         {
-            StartPoint = new AvaloniaPoint(rect.Left, y),
-            EndPoint   = new AvaloniaPoint(rect.Right, y),
+            StartPoint = new AvaloniaPoint(rect.Left, axisY),
+            EndPoint   = new AvaloniaPoint(rect.Right, axisY),
             Stroke = BrushForColor(axisColor),
             StrokeThickness = AxisLineThickness,
             IsHitTestVisible = false,
