@@ -1460,9 +1460,16 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
                 {
                     ["Hide"] = () => new RibbonCommandState(IsEnabled: WindowRegistry.CanHide(this)),
                     ["Unhide"] = () => new RibbonCommandState(IsEnabled: WindowRegistry.HiddenWindows.Count > 0),
-                    ["Gridlines"] = () => new RibbonCommandState(IsChecked: _session.IsShowingGridlines),
-                    ["Headings"] = () => new RibbonCommandState(IsChecked: _session.IsShowingHeadings),
-                    ["Ruler"] = () => new RibbonCommandState(IsChecked: _session.IsShowingRulers),
+                    ["Gridlines"] = () => GetWorkbookViewRibbonState().GetCommandState("Gridlines"),
+                    ["View Gridlines"] = () => GetWorkbookViewRibbonState().GetCommandState("View Gridlines"),
+                    ["Headings"] = () => GetWorkbookViewRibbonState().GetCommandState("Headings"),
+                    ["View Headings"] = () => GetWorkbookViewRibbonState().GetCommandState("View Headings"),
+                    ["Ruler"] = () => GetWorkbookViewRibbonState().GetCommandState("Ruler"),
+                    ["Show Formulas"] = () => GetWorkbookViewRibbonState().GetCommandState("Show Formulas"),
+                    ["Split"] = () => GetWorkbookViewRibbonState().GetCommandState("Split"),
+                    ["Normal"] = () => GetWorkbookViewRibbonState().GetCommandState("Normal"),
+                    ["Page Layout"] = () => GetWorkbookViewRibbonState().GetCommandState("Page Layout"),
+                    ["Page Break Preview"] = () => GetWorkbookViewRibbonState().GetCommandState("Page Break Preview"),
                     ["Formula Bar"] = () => new RibbonCommandState(IsChecked: !_isFormulaBarHidden),
                     [FreeXRibbonCommandIds.FormulasCalculationAutomatic] = () =>
                         CalculationCommandPolicy.ModeCommandState(
@@ -13027,6 +13034,15 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
 
         RefreshShell(showFormulas ? "Showing formulas" : "Showing values");
     }
+
+    private WorkbookViewRibbonStatePlan GetWorkbookViewRibbonState() =>
+        WorkbookViewRibbonStatePlanner.Build(
+            _session.ViewMode,
+            _session.IsShowingGridlines,
+            _session.IsShowingHeadings,
+            _session.IsShowingRulers,
+            _session.IsShowingFormulas,
+            _session.GetEffectiveSplitRow() is not null || _session.GetEffectiveSplitCol() is not null);
 
     private void HideActiveSheet()
     {

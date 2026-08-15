@@ -5,6 +5,7 @@ using System.Windows.Input;
 using FreeX.App.Presentation.Charts.Editing;
 using FreeX.App.Presentation.Filtering;
 using FreeX.App.Presentation.PageLayout;
+using FreeX.App.Presentation.Ribbon;
 using FreeX.App.Presentation.SlicerTimeline;
 using FreeX.App.Presentation.Sparklines;
 using FreeX.Core.Calc;
@@ -593,20 +594,18 @@ public partial class MainWindow
         _suppressViewOptionSync = true;
         try
         {
-            // Push the worksheet's view options into the neutral state store; the renderer-bound
-            // View / Page Layout check boxes update from it. ("Gridlines"/"Headings"/"Ruler" live on
-            // the View tab; "View Gridlines"/"View Headings" on the Page Layout tab.)
-            _ribbonState.SetChecked("Gridlines", SheetGrid.ShowGridLines);
-            _ribbonState.SetChecked("View Gridlines", SheetGrid.ShowGridLines);
-            _ribbonState.SetChecked("Headings", SheetGrid.ShowHeaders);
-            _ribbonState.SetChecked("View Headings", SheetGrid.ShowHeaders);
-            _ribbonState.SetChecked("Ruler", SheetGrid.ShowRulers);
-            _ribbonState.SetEnabled("Ruler", SheetGrid.WorksheetViewMode == WorksheetViewMode.PageLayout);
-            // R89-freeze-split-per-window-1: this window's own effective Split state, not the
-            // shared Sheet's -- a sibling "New Window" may have Split set/cleared without this
-            // window ever touching it.
-            _ribbonState.SetChecked("Split", viewState.SplitRow is not null || viewState.SplitColumn is not null);
-            SyncWorkbookViewModeToggleState(SheetGrid.WorksheetViewMode);
+            // Publish the complete per-window worksheet-view projection through the shared planner.
+            // This includes aliases on Page Layout plus Show Formulas and Split, which must never
+            // read the shared Sheet fields after sibling workbook windows diverge.
+            WorkbookViewRibbonStatePlanner.Build(
+                    viewState.ViewMode,
+                    viewState.ShowGridlines,
+                    viewState.ShowHeadings,
+                    viewState.ShowRulers,
+                    viewState.ShowFormulas,
+                    viewState.SplitRow is not null || viewState.SplitColumn is not null)
+                .Publish(_ribbonState);
+            SyncStatusViewShortcutState(WorksheetViewModeUiStatePlanner.Build(viewState.ViewMode));
             RefreshViewWindowCommandState();
         }
         finally
