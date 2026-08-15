@@ -554,9 +554,11 @@ public sealed class MainWindowSheetTabKeyboardTests
         source.Should().Contain("SheetTabsControl.InputHitTest(position)");
         source.Should().Contain("FindSheetTabDragTargetByBounds(position, draggedId)");
         source.Should().Contain("private void CommitPendingSheetTabDragDrop()");
-        source.Should().Contain("new MoveSheetCommand(fromIndex, toIndex)");
+        source.Should().Contain("_session.SelectSheetFromTab(draggedId, selectRange: false, toggle: false)");
+        source.Should().Contain("_session.MoveActiveSheetTo(toIndex)");
+        source.Should().NotContain("new MoveSheetCommand(fromIndex, toIndex)");
         source.Should().Contain("private void ClearSheetTabDragState()");
-        source.Should().Contain("_currentSheetId = draggedId;");
+        source.Should().Contain("_currentSheetId = _session.ActiveSheet.Id;");
 
         groupClick.Should().Contain("=> UpdateGroupedSheetsForClick(clickedSheetId, Keyboard.Modifiers);");
         groupClick.Should().Contain("UpdateGroupedSheetsForClick(SheetId clickedSheetId, ModifierKeys modifiers)");
