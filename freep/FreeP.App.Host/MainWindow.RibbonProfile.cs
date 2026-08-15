@@ -137,7 +137,7 @@ public sealed partial class MainWindow
                 canvas.TextEditor?.TryApplyActiveShapeParagraphOutdent() == true),
             SetFontFamily = family => WithShapeEditor(editor => editor.ApplyFont(family)),
             SetFontSize = sizePt => WithShapeEditor(editor => editor.ApplyFontSize(sizePt)),
-            SetColor = color => WithShapeEditor(editor => editor.ApplyColor(color)),
+            SetColor = color => WithCanvas(canvas => canvas.TextEditor?.ApplyColor(color) == true),
             RemoveHyperlink = () => WithCanvas(canvas =>
                 canvas.TextEditor?.TryApplySelectedShapeRunHyperlink(null) == true),
         },
@@ -158,7 +158,7 @@ public sealed partial class MainWindow
                 canvas.TableCellEditor?.TryApplyActiveTableCellParagraphOutdent() == true),
             SetFontFamily = family => WithTableEditor(editor => editor.ApplyFont(family)),
             SetFontSize = sizePt => WithTableEditor(editor => editor.ApplyFontSize(sizePt)),
-            SetColor = color => WithTableEditor(editor => editor.ApplyColor(color)),
+            SetColor = color => WithCanvas(canvas => canvas.TableCellEditor?.ApplyColor(color) == true),
             SetTextVerticalType = verticalType => WithCanvas(canvas =>
                 canvas.TableCellEditor?.TryApplyActiveTableCellTextVerticalType(verticalType) == true),
             SetTableCellFill = color => WithCanvas(canvas =>

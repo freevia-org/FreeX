@@ -339,32 +339,34 @@ public sealed class InCanvasTableCellEditor
             _cellTextBox.Selection.ApplyPropertyValue(TextElement.FontSizeProperty, sizePt.Value * (96.0 / 72.0)));
     }
 
-    /// <summary>Sets text color on the current cell RichTextBox selection.</summary>
-    public void ApplyColor(ThemeAwareColor? color)
-    {
-        if (_cellTextBox is null || color is null) return;
-        var wpfColor = TextBodyFlowDocumentConverter.ResolveModelColor(color);
-        if (wpfColor is null) return;
-        ApplyWithPreservedSelection(() =>
-            _cellTextBox.Selection.ApplyPropertyValue(TextElement.ForegroundProperty, new SolidColorBrush(wpfColor.Value)));
-    }
+    /// <summary>
+    /// Sets text color on the current cell RichTextBox selection through the shared run mutation
+    /// planner. A null color is the ribbon's Automatic choice and clears explicit run color.
+    /// </summary>
+    public bool ApplyColor(ThemeAwareColor? color) =>
+        ApplyCellTextMutation((body, selection) =>
+            InCanvasTextEditPlanner.ApplyTextValueFormat(
+                body,
+                TableCellTextValueFormatKind.Color,
+                color,
+                selection));
 
     public bool TryApplyActiveTableCellParagraphAlignment(TextAlign alignment) =>
-        ApplyCellParagraphMutation((body, selection) =>
+        ApplyCellTextMutation((body, selection) =>
             InCanvasTextEditPlanner.ApplyParagraphAlignment(body, alignment, selection));
 
     public bool TryApplyActiveTableCellParagraphBulletToggle() =>
-        ApplyCellParagraphMutation((body, selection) =>
+        ApplyCellTextMutation((body, selection) =>
             InCanvasTextEditPlanner.ApplyParagraphBulletToggle(body, selection));
 
     public bool TryApplyActiveTableCellParagraphNumberingToggle() =>
-        ApplyCellParagraphMutation((body, selection) =>
+        ApplyCellTextMutation((body, selection) =>
             InCanvasTextEditPlanner.ApplyParagraphNumberingToggle(body, selection));
 
     public bool TryApplyActiveTableCellParagraphListPreset(TableCellListPresetDescriptor preset)
     {
         ArgumentNullException.ThrowIfNull(preset);
-        return ApplyCellParagraphMutation((body, selection) =>
+        return ApplyCellTextMutation((body, selection) =>
             InCanvasTextEditPlanner.ApplyParagraphListPreset(body, selection, preset));
     }
 
@@ -374,7 +376,7 @@ public sealed class InCanvasTableCellEditor
         if (!payload.IsValid)
             return false;
 
-        return ApplyCellParagraphMutation((body, selection) =>
+        return ApplyCellTextMutation((body, selection) =>
             InCanvasTextEditPlanner.ApplyParagraphPictureBullet(
                 body,
                 selection,
@@ -382,11 +384,11 @@ public sealed class InCanvasTableCellEditor
     }
 
     public bool TryApplyActiveTableCellParagraphIndent() =>
-        ApplyCellParagraphMutation((body, selection) =>
+        ApplyCellTextMutation((body, selection) =>
             InCanvasTextEditPlanner.ApplyParagraphIndent(body, increase: true, selection));
 
     public bool TryApplyActiveTableCellParagraphOutdent() =>
-        ApplyCellParagraphMutation((body, selection) =>
+        ApplyCellTextMutation((body, selection) =>
             InCanvasTextEditPlanner.ApplyParagraphIndent(body, increase: false, selection));
 
     public bool TryApplyActiveTableCellTextVerticalType(TextVerticalType verticalType) =>
@@ -431,11 +433,11 @@ public sealed class InCanvasTableCellEditor
     }
 
     /// <summary>
-    /// Adapts the live WPF selection to the renderer-neutral paragraph mutation planner. The
+    /// Adapts the live WPF selection to the renderer-neutral text mutation planners. The
     /// native document is rehydrated only after the shared model operation has run, preserving
-    /// the user's selected subrange and keeping paragraph/list semantics identical to Avalonia.
+    /// the user's selected subrange and keeping run/paragraph semantics identical to Avalonia.
     /// </summary>
-    private bool ApplyCellParagraphMutation(
+    private bool ApplyCellTextMutation(
         Func<TextBody, (int Start, int End)?, TextBody> mutate)
     {
         if (!IsCellRichEditActive || _cellTextBox is null || TryGetCurrentCellTextBody() is not { } baseBody)
