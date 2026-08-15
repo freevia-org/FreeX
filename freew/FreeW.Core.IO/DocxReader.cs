@@ -4289,6 +4289,11 @@ public static class DocxReader
             if (trPr is not null)
             {
                 row.AllowBreakAcrossPages = !ReadToggle(trPr, "cantSplit");
+                // Word allows any number of leading, contiguous rows to carry w:tblHeader to build a
+                // multi-row repeating header (e.g. a title row plus a column-labels row). Read the flag
+                // per row rather than only on the first row so a two- or three-row header round-trips
+                // instead of collapsing to a single repeating row. See TableRow.IsRepeatingHeader.
+                row.IsRepeatingHeader = ReadToggle(trPr, "tblHeader");
                 var trHeight = trPr.Element(W + "trHeight");
                 if (trHeight is not null)
                 {

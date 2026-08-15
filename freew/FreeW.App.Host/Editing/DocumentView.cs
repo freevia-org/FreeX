@@ -8498,6 +8498,7 @@ public sealed partial class DocumentView : RichTextBox
                     row.RowRevision = authoredRow.RowRevision;
                     row.RowRevisionAuthor = authoredRow.RowRevisionAuthor;
                     row.RowRevisionDateXml = authoredRow.RowRevisionDateXml;
+                    row.IsRepeatingHeader = authoredRow.AuthoredIsRepeatingHeader;
                 }
                 foreach (var wpfCell in wpfRow.Cells)
                 {
@@ -8903,7 +8904,12 @@ public sealed partial class DocumentView : RichTextBox
         bool AllowBreakAcrossPages,
         RevisionKind RowRevision = RevisionKind.None,
         string? RowRevisionAuthor = null,
-        string? RowRevisionDateXml = null);
+        string? RowRevisionDateXml = null,
+        // The row's OWN authored w:tblHeader flag (TableRow.IsRepeatingHeader), distinct from
+        // IsRepeatedHeader above (which marks a duplicate render-only row inserted for on-screen
+        // pagination). Recovered by CommitToModel so a multi-row repeating header survives an
+        // edit-triggered view->model round-trip instead of collapsing to just row 0.
+        bool AuthoredIsRepeatingHeader = false);
 
     private sealed record WpfFloatingTableFigureTag(int SourceBlockIndex);
 
@@ -9163,7 +9169,8 @@ public sealed partial class DocumentView : RichTextBox
                     modelRow.AllowBreakAcrossPages,
                     modelRow.RowRevision,
                     modelRow.RowRevisionAuthor,
-                    modelRow.RowRevisionDateXml)
+                    modelRow.RowRevisionDateXml,
+                    modelRow.IsRepeatingHeader)
             };
             // WPF System.Windows.Documents.TableRow is a TextElement (not FrameworkElement), so it has
             // no MinHeight / Height property. To enforce a minimum row height we inject a zero-width
@@ -14005,19 +14012,36 @@ public sealed partial class DocumentView : RichTextBox
         if (TryApplyBodyTextInput(text))
             return;
 
-        var selection = Selection;
-        if (!selection.IsEmpty)
-        {
-            // Typing over a selection replaces it: clear it first, then insert at the resulting caret.
-            selection.Text = string.Empty;
-        }
-
-        var caret = CaretPosition.GetInsertionPosition(LogicalDirection.Forward) ?? CaretPosition;
-        caret.InsertTextInRun(text);
-        // Advance the caret past the inserted text so subsequent typing continues from there.
-        CaretPosition = caret.GetPositionAtOffset(text.Length) ?? caret;
+        // Structural fallback (TryApplyBodyTextInput declined, e.g. the caret/selection sits somewhere
+        // the portable body-edit session can't resolve to model coordinates). This mutates the live
+        // FlowDocument directly, so it must be captured as ONE command-bus edit (see InsertInlineAtCaret's
+        // doc comment on ReplaceAllBlocksCommand): a single TextRange.Text assignment already makes the
+        // clear-then-insert one WPF-native undo unit (the same proven idiom as TryAutoCorrect), but the
+        // CommitToModel()+Render() below still discards WPF-native undo entirely by reassigning Document,
+        // so the real undo path is the bus.
         CommitToModel();
-        Render();
+        var before = _model.Blocks.ToList();
+
+        var selection = Selection;
+        var rangeStart = selection.IsEmpty
+            ? (CaretPosition.GetInsertionPosition(LogicalDirection.Forward) ?? CaretPosition)
+            : selection.Start;
+        var rangeEnd = selection.IsEmpty ? rangeStart : selection.End;
+        var range = new TextRange(rangeStart, rangeEnd) { Text = text };
+        var caretAfterInsert = range.End;
+        CaretPosition = caretAfterInsert;
+
+        // Capture the post-insert caret in model coordinates before CommitToModel/Execute rebuild the
+        // FlowDocument (Render() reassigns Document, invalidating caretAfterInsert).
+        var hasModelCaret = TryGetModelTextOffset(caretAfterInsert, out var modelCaret);
+
+        CommitToModel();
+        var after = _model.Blocks.ToList();
+
+        _commands.Execute(new ReplaceAllBlocksCommand(before, after, "Typing"));
+
+        if (hasModelCaret)
+            PlaceCaretAtModelTextOffset(modelCaret.BlockIndex, modelCaret.Offset);
     }
 
     private bool TryApplyBodyTextInput(string text)
@@ -14642,11 +14666,17 @@ public sealed partial class DocumentView : RichTextBox
 
         var selected = Selection?.Text;
         var text = ContentControlInteractionPlanner.PromptText(selected);
+
+        // Snapshot before clearing the selection so the clear + insert are ONE undo unit (see
+        // InsertInlineAtCaret's "before" parameter doc comment).
+        CommitToModel();
+        var before = _model.Blocks.ToList();
+
         if (Selection is { IsEmpty: false })
             Selection.Text = string.Empty;
 
         var run = BuildControlRun(ModelRun.PlainTextControl(text, tag, alias));
-        InsertInlineAtCaret(run);
+        InsertInlineAtCaret(run, before);
     }
 
     /// <summary>
@@ -14678,11 +14708,17 @@ public sealed partial class DocumentView : RichTextBox
 
         var selected = Selection?.Text;
         var text = ContentControlInteractionPlanner.PromptText(selected);
+
+        // Snapshot before clearing the selection so the clear + insert are ONE undo unit (see
+        // InsertInlineAtCaret's "before" parameter doc comment).
+        CommitToModel();
+        var before = _model.Blocks.ToList();
+
         if (Selection is { IsEmpty: false })
             Selection.Text = string.Empty;
 
         var run = BuildControlRun(ModelRun.RichTextControl(text, tag, alias));
-        InsertInlineAtCaret(run);
+        InsertInlineAtCaret(run, before);
     }
 
     /// <summary>
@@ -14744,12 +14780,31 @@ public sealed partial class DocumentView : RichTextBox
     private Inline BuildControlRun(ModelRun run) => BuildRun(run, new ModelParagraph(), _model);
 
     /// <summary>
-    /// Inserts a freshly built inline at the caret (or appends to the last paragraph), then commits and
-    /// re-renders so the new run round-trips through the model. Shared by the content-control inserts.
+    /// Inserts a freshly built inline at the caret (or appends to the last paragraph), then commits so the
+    /// new run round-trips through the model. Shared by the content-control inserts, citations, and the
+    /// field/complex-field inserters.
     /// </summary>
-    private void InsertInlineAtCaret(Inline inline)
+    /// <param name="before">
+    /// Optional pre-gesture block snapshot for a caller that already mutated the live document (e.g.
+    /// cleared a selection) before calling this method, so that mutation is captured as part of the SAME
+    /// undo unit. When omitted, this method captures the current state as the "before" snapshot itself.
+    /// </param>
+    /// <remarks>
+    /// This mutates the live FlowDocument directly and then calls <see cref="Render"/> (via the command
+    /// bus below), which rebuilds a brand-new FlowDocument and reassigns <c>Document</c> — proven
+    /// (empirically, outside this repo) to discard whatever unit(s) WPF's native RichTextBox undo stack
+    /// just recorded for this edit, regardless of whether the edit was one WPF operation or several. So
+    /// grouping the WPF-native mutations alone (e.g. a single TextRange.Text assignment) is not sufficient
+    /// here — undo instead has to survive the model-based <see cref="DocumentCommandBus"/>, which is
+    /// exactly what <see cref="DocumentView.Undo"/> already falls back to when native undo is unavailable.
+    /// </remarks>
+    private void InsertInlineAtCaret(Inline inline, IReadOnlyList<ModelBlock>? before = null)
     {
-        CommitToModel();
+        if (before is null)
+        {
+            CommitToModel();
+            before = _model.Blocks.ToList();
+        }
 
         var caret = CaretPosition.GetInsertionPosition(LogicalDirection.Forward) ?? CaretPosition;
         var paragraph = caret.Paragraph ?? Document.Blocks.OfType<WpfParagraph>().LastOrDefault();
@@ -14759,10 +14814,76 @@ public sealed partial class DocumentView : RichTextBox
             Document.Blocks.Add(paragraph);
         }
         InsertInlineAt(paragraph, caret, inline);
-        CaretPosition = inline.ContentEnd.GetInsertionPosition(LogicalDirection.Forward) ?? inline.ElementEnd;
+        var caretAfterInsert = inline.ContentEnd.GetInsertionPosition(LogicalDirection.Forward) ?? inline.ElementEnd;
+        CaretPosition = caretAfterInsert;
+
+        // Capture the post-insert caret in model coordinates before CommitToModel/Execute rebuild the
+        // FlowDocument (Render() reassigns Document, invalidating caretAfterInsert).
+        var hasModelCaret = TryGetModelTextOffset(caretAfterInsert, out var modelCaret);
 
         CommitToModel();
-        Render();
+        var after = _model.Blocks.ToList();
+
+        _commands.Execute(new ReplaceAllBlocksCommand(before, after, "Insert"));
+
+        if (hasModelCaret)
+            PlaceCaretAtModelTextOffset(modelCaret.BlockIndex, modelCaret.Offset);
+    }
+
+    /// <summary>
+    /// Resolves a live WPF <see cref="TextPointer"/> to model coordinates (leaf-block index + in-paragraph
+    /// text offset), mirroring the indexing <see cref="TryGetCurrentBodyTextRange"/> uses. Must be called
+    /// before <see cref="Render"/> rebuilds the FlowDocument, since <paramref name="position"/> is only
+    /// valid against the current <see cref="System.Windows.Controls.RichTextBox.Document"/>.
+    /// </summary>
+    private bool TryGetModelTextOffset(TextPointer position, out DocumentTextPosition modelPosition)
+    {
+        modelPosition = default;
+        var paragraph = position.Paragraph;
+        if (paragraph is null)
+            return false;
+
+        var indexOf = new Dictionary<WpfParagraph, int>();
+        var visibleIndex = 0;
+        foreach (var block in Document.Blocks)
+            NumberLeafBlocks(block, indexOf, ref visibleIndex);
+        if (!indexOf.TryGetValue(paragraph, out var visible))
+            return false;
+
+        modelPosition = new DocumentTextPosition(ModelIndexFromVisible(visible), OffsetInParagraph(paragraph, position));
+        return true;
+    }
+
+    /// <summary>
+    /// Wholesale-replaces the document's block list with a pre/post snapshot so a raw WPF programmatic
+    /// edit (one that mutates the live FlowDocument directly, then calls <see cref="Render"/>) becomes
+    /// undoable through the <see cref="DocumentCommandBus"/> instead of WPF's native RichTextBox undo,
+    /// which does not survive <see cref="Render"/> reassigning <c>Document</c>. Apply/Revert
+    /// unconditionally set the block list to <c>after</c>/<c>before</c> respectively — since the model is
+    /// typically already in the "after" state by the time <see cref="DocumentCommandBus.Execute"/> calls
+    /// Apply() for the first time (the caller applied the edit directly, then constructed this command),
+    /// Apply() on first execution is an idempotent no-op; it only does real work on redo.
+    /// </summary>
+    private sealed class ReplaceAllBlocksCommand(
+        IReadOnlyList<ModelBlock> before,
+        IReadOnlyList<ModelBlock> after,
+        string label) : IDocumentCommand
+    {
+        public string Label => label;
+
+        public void Apply(IDocumentCommandContext context)
+        {
+            var blocks = context.Document.Blocks;
+            blocks.Clear();
+            blocks.AddRange(after);
+        }
+
+        public void Revert(IDocumentCommandContext context)
+        {
+            var blocks = context.Document.Blocks;
+            blocks.Clear();
+            blocks.AddRange(before);
+        }
     }
 
     private static void InsertInlineAt(WpfParagraph paragraph, TextPointer caret, Inline inline)

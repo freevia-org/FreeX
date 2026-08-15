@@ -201,6 +201,42 @@ public sealed class SortCommandTests
         sheet.HiddenRows.Should().Contain(100);
     }
 
+    /// <summary>
+    /// R136: a whole-row DEFAULT style (sheet.RowStyles -- the <c>&lt;row s customFormat&gt;</c> banner
+    /// format that a row's empty cells inherit) belongs to the row's content, so Sort must carry it to
+    /// the row's new position exactly as it already carries RowHeights. Left pinned to the physical row
+    /// number it paints whichever row happens to land there, and the viewport reads RowStyles directly,
+    /// so the wrong row is formatted on screen the instant the sort completes.
+    /// </summary>
+    [Fact]
+    public void SortCommand_RowDefaultStyleFollowsItsRowAndUndoRestoresIt()
+    {
+        var workbook = new Workbook("test");
+        var sheet = workbook.AddSheet("Sheet1");
+        var ctx = new TestCommandContext(workbook);
+        var range = new GridRange(new CellAddress(sheet.Id, 1, 1), new CellAddress(sheet.Id, 3, 1));
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new NumberValue(3));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 1), new NumberValue(1));
+        sheet.SetCell(new CellAddress(sheet.Id, 3, 1), new NumberValue(2));
+
+        // Row 3 (value 2) carries the banner style; ascending sort moves it to row 2.
+        var bannerStyle = new StyleId(7);
+        sheet.RowStyles[3] = bannerStyle;
+
+        var command = new SortCommand(sheet.Id, range, [new SortKey(0, true)]);
+        command.Apply(ctx);
+
+        sheet.RowStyles.Should().ContainKey(2).WhoseValue.Should().Be(bannerStyle,
+            "the styled row's value moved to row 2, so its whole-row default style must move with it");
+        sheet.RowStyles.Should().NotContainKey(3,
+            "row 3 now holds a different row's value and must not inherit the banner format left behind");
+
+        command.Revert(ctx);
+
+        sheet.RowStyles.Should().ContainKey(3).WhoseValue.Should().Be(bannerStyle);
+        sheet.RowStyles.Should().NotContainKey(2);
+    }
+
     [Fact]
     public void SortCommand_WithActiveAutoFilter_FilterHiddenRowStaysPinnedAtItsOwnRowAndUndo()
     {

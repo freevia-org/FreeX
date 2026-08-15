@@ -63,7 +63,7 @@ public sealed class WpfPresentationFileCommandPortsSourceTests
         session.Should().Contain("PresentationFilePdfExportExecutor.ExportRaster(");
         session.Should().Contain("PresentationFilePdfExportExecutor.ExportNotesPages(");
         session.Should().Contain("PresentationImageExportExecutor.ExportWithDiagnostics(");
-        session.Should().Contain("PresentationPrintOutputPackageExecutor.BuildPackage(");
+        session.Should().Contain("PresentationPrintOutputPackageExecutor.BuildPackageWithDiagnostics(");
         session.Should().Contain("PresentationVideoFramePackageExecutor.BuildPackageWithDiagnostics(");
         session.Should().Contain("PresentationFileTextResources.Presentation");
         source.Should().NotContain("new FileDialogFormatDescriptor");

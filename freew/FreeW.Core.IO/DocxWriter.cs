@@ -66,6 +66,12 @@ public static class DocxWriter
             ? (IReadOnlyList<PreservedPart>)document.Preserved.Parts
             : document.Preserved.Parts.Where(p => !DocxWriteOptions.IsMacroPart(p.PartName)).ToList();
         preservedParts = RemoveCurrentBibliographyCustomXml(preservedParts);
+        // A data-bound plain-text content control's displayed text may have been typed over since its
+        // binding was last resolved. Word re-reads w:dataBinding on open, so without this the typed edit
+        // would be silently discarded (the stale customXml value would reappear) and a genuine edit would
+        // keep round-tripping tagged as placeholder text via a stale w:showingPlcHdr. Mutates `document`'s
+        // runs in place to clear that stale flag, mirroring how the reader already mutates on load.
+        preservedParts = CustomXmlDataBindingResolver.WriteBoundTextEdits(document, preservedParts);
         var usedPartNames = CreateUsedPartNameSet(preservedParts);
 
         // Assign a relationship + media id to every inline image up front so document.xml, the
@@ -2465,8 +2471,12 @@ public static class DocxWriter
                         TableRowHeightRule.AtLeast => "atLeast",
                         _ => "auto"
                     })));
-            // Repeat the header row across page breaks (w:trPr/w:tblHeader) when requested.
-            if (isHeaderRow && fmt.RepeatHeaderRow)
+            // Repeat this row across page breaks (w:trPr/w:tblHeader). A multi-row repeating header
+            // (Word allows any number of leading, contiguous rows to carry the flag) is expressed
+            // per-row via TableRow.IsRepeatingHeader; row 0 also honours the table-level RepeatHeaderRow
+            // convenience flag so callers that only toggle that flag (ribbon/dialog) keep working.
+            var repeatsAsHeader = row.IsRepeatingHeader || (rowIndex == 0 && fmt.RepeatHeaderRow);
+            if (repeatsAsHeader)
                 trPr.Add(new XElement(W + "tblHeader"));
             // Row-level tracked change (the whole row inserted/deleted under Track Changes): the LAST
             // child of trPr, after cantSplit/trHeight/tblHeader.

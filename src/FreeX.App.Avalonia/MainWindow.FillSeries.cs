@@ -185,7 +185,15 @@ public sealed partial class MainWindow
                 return;
             }
 
-            var command = new EditCellsCommand(sheet.Id, edits);
+            // R136-fillseries-grouped-sheets-1: Excel's Group Editing mode mirrors Fill ▸ Series onto
+            // every other grouped sheet (matching the WPF host's FillSeriesMenuItem_Click, which fans
+            // the same computed edits out via GroupedEditCellsCommand). GetCurrentGroupedEditSheetIds
+            // returns just [sheet.Id] when the workbook isn't grouped, so the single-sheet case is
+            // unchanged.
+            var targetSheetIds = _session.GetCurrentGroupedEditSheetIds();
+            IWorkbookCommand command = targetSheetIds.Count > 1
+                ? new GroupedEditCellsCommand(targetSheetIds, sheet.Id, edits)
+                : new EditCellsCommand(sheet.Id, edits);
             var result = _session.ExecuteReviewCommand(command);
             if (!result.Success)
             {

@@ -57,6 +57,76 @@ public partial class InsertDeleteRowsTests
         sheet.RowHeights[6].Should().Be(66);
     }
 
+    // R136-io-worksheet-props-col-row-default-style-shift: sheet.RowStyles is the same
+    // absolute-row key space as RowHeights and must shift/drop entries the same way on delete,
+    // or a whole-row default style lands on the wrong (stale-indexed) row.
+    [Fact]
+    public void DeleteRow_ShiftsRowStylesAndUndoRestores()
+    {
+        var (_, sheet, ctx) = Setup();
+        var aboveStyle = new StyleId(1);
+        var deletedStyle = new StyleId(2);
+        var belowStyle = new StyleId(3);
+        sheet.RowStyles[2] = aboveStyle;
+        sheet.RowStyles[4] = deletedStyle;
+        sheet.RowStyles[6] = belowStyle;
+
+        var cmd = new DeleteRowsCommand(sheet.Id, startRow: 3, count: 2);
+        cmd.Apply(ctx);
+
+        sheet.RowStyles[2].Should().Be(aboveStyle);
+        sheet.RowStyles[4].Should().Be(belowStyle);
+        sheet.RowStyles.Should().NotContainKey(3);
+        sheet.RowStyles.Should().NotContainKey(6);
+
+        cmd.Revert(ctx);
+
+        sheet.RowStyles[2].Should().Be(aboveStyle);
+        sheet.RowStyles[4].Should().Be(deletedStyle);
+        sheet.RowStyles[6].Should().Be(belowStyle);
+    }
+
+    // Deleting the styled row itself must remove its default style entirely (not leave it
+    // painting whatever row slides into that slot), and undo must bring it back.
+    [Fact]
+    public void DeleteRow_DeletesStyledRowItself_UndoRestoresStyle()
+    {
+        var (_, sheet, ctx) = Setup();
+        var bannerStyle = new StyleId(1);
+        sheet.RowStyles[4] = bannerStyle;
+
+        var cmd = new DeleteRowsCommand(sheet.Id, startRow: 4, count: 1);
+        cmd.Apply(ctx);
+
+        sheet.RowStyles.Should().NotContainKey(3);
+        sheet.RowStyles.Should().NotContainKey(4);
+
+        cmd.Revert(ctx);
+
+        sheet.RowStyles[4].Should().Be(bannerStyle);
+    }
+
+    // Deleting a row strictly above the styled row must shift the style up with its row, not
+    // leave it stranded at the old (now-wrong) index.
+    [Fact]
+    public void DeleteRow_AboveStyledRow_ShiftsRowStyleUpAndUndoRestores()
+    {
+        var (_, sheet, ctx) = Setup();
+        var bannerStyle = new StyleId(1);
+        sheet.RowStyles[5] = bannerStyle;
+
+        var cmd = new DeleteRowsCommand(sheet.Id, startRow: 2, count: 1);
+        cmd.Apply(ctx);
+
+        sheet.RowStyles.Should().NotContainKey(5);
+        sheet.RowStyles[4].Should().Be(bannerStyle);
+
+        cmd.Revert(ctx);
+
+        sheet.RowStyles.Should().NotContainKey(4);
+        sheet.RowStyles[5].Should().Be(bannerStyle);
+    }
+
     [Fact]
     public void DeleteRow_ShiftsHiddenRowsAndUndoRestores()
     {

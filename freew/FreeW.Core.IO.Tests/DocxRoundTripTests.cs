@@ -1343,6 +1343,82 @@ public class DocxRoundTripTests
     }
 
     [Fact]
+    public void Table_MultiRowRepeatHeader_RoundTrips()
+    {
+        // Word lets any number of leading, contiguous rows carry w:tblHeader to build a multi-row
+        // repeating header (e.g. a title row plus a column-labels row). Reading must not collapse this
+        // to just row 0, and writing must re-emit tblHeader on every repeating row so the document
+        // doesn't degrade on open+save. See TableRow.IsRepeatingHeader.
+        var document = ReadHandAuthoredDocx(
+            """
+            <w:tbl>
+              <w:tr>
+                <w:trPr><w:tblHeader/></w:trPr>
+                <w:tc><w:p><w:r><w:t>Title</w:t></w:r></w:p></w:tc>
+              </w:tr>
+              <w:tr>
+                <w:trPr><w:tblHeader/></w:trPr>
+                <w:tc><w:p><w:r><w:t>Columns</w:t></w:r></w:p></w:tc>
+              </w:tr>
+              <w:tr>
+                <w:tc><w:p><w:r><w:t>Body</w:t></w:r></w:p></w:tc>
+              </w:tr>
+            </w:tbl>
+            <w:sectPr/>
+            """);
+
+        var table = document.Blocks.OfType<Table>().Single();
+        table.Rows.Should().HaveCount(3);
+        table.Rows[0].IsRepeatingHeader.Should().BeTrue("row 0 carries w:tblHeader");
+        table.Rows[1].IsRepeatingHeader.Should().BeTrue("row 1 also carries w:tblHeader");
+        table.Rows[2].IsRepeatingHeader.Should().BeFalse("row 2 carries no w:tblHeader");
+        // The single-flag convenience mirror still reflects row 0.
+        table.Formatting.RepeatHeaderRow.Should().BeTrue();
+
+        var xml = WriteDocumentXml(document);
+        var ns = XNamespace.Get("http://schemas.openxmlformats.org/wordprocessingml/2006/main");
+        var writtenRows = xml.Descendants(ns + "tbl").Single().Elements(ns + "tr").ToList();
+        writtenRows.Should().HaveCount(3);
+        writtenRows[0].Element(ns + "trPr")?.Element(ns + "tblHeader").Should().NotBeNull(
+            "row 0 must still repeat after a write");
+        writtenRows[1].Element(ns + "trPr")?.Element(ns + "tblHeader").Should().NotBeNull(
+            "row 1 must still repeat after a write — this is the bug: only row 0 used to be emitted");
+        writtenRows[2].Element(ns + "trPr")?.Element(ns + "tblHeader").Should().BeNull(
+            "the plain body row must not gain a repeat flag");
+
+        // A second read→write cycle (full round-trip) must keep both header rows intact.
+        var reopened = RoundTrip(document).Blocks.OfType<Table>().Single();
+        reopened.Rows[0].IsRepeatingHeader.Should().BeTrue();
+        reopened.Rows[1].IsRepeatingHeader.Should().BeTrue();
+        reopened.Rows[2].IsRepeatingHeader.Should().BeFalse();
+    }
+
+    [Fact]
+    public void Table_SingleRowRepeatHeader_RoundTrips_NoRegression()
+    {
+        // Sibling no-regression: a plain single-row repeating header (the common case, and the only
+        // shape the table-level RepeatHeaderRow convenience flag alone can express) must keep working
+        // exactly as before the multi-row fix.
+        var doc = new TextDocument();
+        var table = Table.Create(2, 1);
+        table.Rows[0].Cells[0] = new TableCell("Head");
+        table.Rows[1].Cells[0] = new TableCell("Body");
+        table.Formatting = TableFormatting.Default with { RepeatHeaderRow = true };
+        doc.Blocks.Add(table);
+
+        var xml = WriteDocumentXml(doc);
+        var ns = XNamespace.Get("http://schemas.openxmlformats.org/wordprocessingml/2006/main");
+        var writtenRows = xml.Descendants(ns + "tbl").Single().Elements(ns + "tr").ToList();
+        writtenRows[0].Element(ns + "trPr")?.Element(ns + "tblHeader").Should().NotBeNull();
+        writtenRows[1].Element(ns + "trPr")?.Element(ns + "tblHeader").Should().BeNull();
+
+        var reopened = RoundTrip(doc).Blocks.OfType<Table>().Single();
+        reopened.Rows[0].IsRepeatingHeader.Should().BeTrue();
+        reopened.Rows[1].IsRepeatingHeader.Should().BeFalse();
+        reopened.Formatting.RepeatHeaderRow.Should().BeTrue();
+    }
+
+    [Fact]
     public void Table_LookOnOffLexicalValues_ReadAndCanonicalize()
     {
         var document = ReadHandAuthoredDocx(

@@ -759,6 +759,8 @@ public sealed partial class MainWindow
     internal Task ShowFormatCellsDialogForTestAsync(int initialTabIndex = 0) =>
         ShowFormatCellsDialogAsync(initialTabIndex);
 
+    internal Task ShowFillSeriesDialogForTestAsync() => ShowFillSeriesDialogAsync();
+
     internal Task ShowFindDialogForTestAsync() => ShowFindDialogAsync();
 
     internal Task ShowReplaceDialogForTestAsync() => ShowReplaceDialogAsync();

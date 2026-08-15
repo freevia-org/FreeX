@@ -25,6 +25,19 @@ internal static partial class DelimitedTextWorkbookReader
         ["#GETTING_DATA"] = new ErrorValue("#GETTING_DATA")
     };
 
+    // Real Excel's hard cap on how much literal text a single cell can hold (mirrors
+    // FreeX.Core.Commands.PasteCommandFactory.TruncateToExcelCellTextLimit's identical rule for the
+    // external-clipboard paste path, and FreeX.App.Services.CellEntryParser's identical rule for
+    // typed entry). An imported CSV/TSV field longer than this was previously accepted uncapped, so
+    // an oversized source file produced an FreeX workbook that saves fine but that real Excel then
+    // truncates on open -- silent data loss the user believes was imported intact. Real Excel's own
+    // CSV import truncates an oversized field to this limit rather than rejecting the whole row, so
+    // mirror that here.
+    private const int ExcelCellTextLimit = 32767;
+
+    private static string TruncateToExcelCellTextLimit(string text) =>
+        text.Length > ExcelCellTextLimit ? text[..ExcelCellTextLimit] : text;
+
     public static Workbook Load(
         Stream stream,
         char delimiter,
@@ -71,9 +84,9 @@ internal static partial class DelimitedTextWorkbookReader
                 if (!field.WasQuoted && TryReadFormula(fieldSpan, out var formulaText))
                     sheet.SetCell(address, Cell.FromFormula(formulaText));
                 else if (TryReadQuotedTextMarker(field, out var markedText))
-                    sheet.SetCell(address, new TextValue(markedText));
+                    sheet.SetCell(address, new TextValue(TruncateToExcelCellTextLimit(markedText)));
                 else if (ShouldPreserveQuotedFormulaLikeText(field))
-                    sheet.SetCell(address, new TextValue(field.Value));
+                    sheet.SetCell(address, new TextValue(TruncateToExcelCellTextLimit(field.Value)));
                 else
                     sheet.SetCell(address, CoerceValue(field));
             }
@@ -522,7 +535,7 @@ internal static partial class DelimitedTextWorkbookReader
         if (TryParseTime(trimmed, out var time))
             return new DateTimeValue(time.TotalDays);
 
-        return new TextValue(field.Value);
+        return new TextValue(TruncateToExcelCellTextLimit(field.Value));
     }
 
     private static bool TryReadErrorLike(ReadOnlySpan<char> field, out ErrorValue error)

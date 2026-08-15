@@ -3579,6 +3579,17 @@ public sealed class WorkbookSession : IDisposable
         // viewport sized to the copied range itself instead, mirroring the WPF host's
         // BuildFullRangeViewportForClipboard (P41), so external copy/paste always reflects the full
         // selection regardless of what is currently scrolled into view.
+        // R136-services-clipboard-formats-payload-parity (investigated, REFUTED): the plain-text/
+        // HTML external payload was suspected to still include AutoFilter-hidden rows even after
+        // r135 filtered them out of the internal same-instance snapshot below. It does not --
+        // fullRangeViewport is built via BuildFullRangeViewportForClipboard, which routes through
+        // ViewportService.GetViewport. That materializer already `continue`s past any row where
+        // Sheet.IsRowEffectivelyHidden is true (folds in FilterHiddenRows, HiddenRows, and
+        // GroupHiddenRows -- see ViewportService.cs's per-cell loop and ViewportService.Metrics.
+        // IsRowHidden), so a filter-hidden row's cells were never materialized into this viewport
+        // to begin with, independent of CaptureInternalClipboard's own IsRowFilterHidden guard.
+        // Confirmed empirically: wrapping this in an additional filter-hidden-row exclusion changed
+        // nothing observable in either payload.
         var fullRangeViewport = BuildFullRangeViewportForClipboard(SelectedRange);
         var text = ClipboardSerializer.Serialize(fullRangeViewport, SelectedRange);
         var snapshot = _workbookClipboardSession.Capture(
@@ -3605,7 +3616,9 @@ public sealed class WorkbookSession : IDisposable
 
         // Same rationale as TryCopySelectedRangeText: use a full-range viewport, not the on-screen
         // Viewport, so cutting a selection taller/wider than the visible area does not blank out the
-        // off-screen part of the clipboard payload (R14-clipboard-formats-deep-1).
+        // off-screen part of the clipboard payload (R14-clipboard-formats-deep-1). See
+        // TryCopySelectedRangeText's own comment for why an additional filter-hidden-row exclusion
+        // here would be a no-op (R136-services-clipboard-formats-payload-parity, REFUTED).
         var fullRangeViewport = BuildFullRangeViewportForClipboard(SelectedRange);
         var text = ClipboardSerializer.Serialize(fullRangeViewport, SelectedRange);
         var snapshot = _workbookClipboardSession.Capture(
@@ -4669,9 +4682,22 @@ public sealed class WorkbookSession : IDisposable
         }
 
         var completedSelection = FreeX.App.Presentation.GridInteraction.GridAutofillPlanner.CalculateCompletedSelectionRange(sourceRange, fillRange);
-        var result = _cellEditService.ExecuteEditCommand(
-            Workbook,
-            new AutofillCommand(ActiveSheet.Id, sourceRange, fillRange, ctrlHeld));
+        // R136-services-autofill-grouped-sheets-1: Excel's Group Editing mode mirrors every edit
+        // made on the active sheet -- including a fill-handle drag -- to every other grouped sheet
+        // (matching this session's own FillSelectedRange for keyboard/menu Fill Down/Up/Left/Right,
+        // which already fans out via CurrentGroupedEditSheetIds/CreateGroupedSheetCommand). This
+        // used to run a single AutofillCommand against ActiveSheet.Id only, so dragging the fill
+        // handle silently ignored any other sheet in the group. CurrentGroupedEditSheetIds returns
+        // just [ActiveSheet.Id] when the workbook isn't grouped, so the single-sheet case behaves
+        // identically to before.
+        var command = CreateGroupedSheetCommand(
+            "Autofill",
+            sheetId => new AutofillCommand(
+                sheetId,
+                RemapRangeToSheet(sourceRange, sheetId),
+                RemapRangeToSheet(fillRange, sheetId),
+                ctrlHeld));
+        var result = _cellEditService.ExecuteEditCommand(Workbook, command);
         if (!result.Success)
             return result;
 

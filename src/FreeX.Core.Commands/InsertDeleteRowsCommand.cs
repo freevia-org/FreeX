@@ -25,6 +25,11 @@ public sealed class InsertRowsCommand : IWorkbookCommand, IAffectedCellsCommand,
     private IReadOnlyList<CellAddress> _affectedCells = [];
     private RowColumnMutationSnapshot? _mutationSnapshot;
     private List<KeyValuePair<uint, double>>? _rowHeightSnapshot;
+    // R136-io-worksheet-props-col-row-default-style-shift: sheet.RowStyles is keyed by the same
+    // absolute row index as RowHeights and must shift the same way, or a whole-row default style
+    // (e.g. a customFormat row's "s" style) is left painting the wrong row after an insert --
+    // ViewportService reads this dictionary directly with no other re-key path.
+    private List<KeyValuePair<uint, StyleId>>? _rowStyleSnapshot;
     // R106-io-hyperlink-range-shift: whole-column/row and oversized-bounded hyperlink refs live
     // outside the CellAddress-keyed Hyperlinks/HyperlinkMetadata dictionaries above (see
     // Sheet.RangeHyperlinks) and must be shifted independently.
@@ -115,6 +120,13 @@ public sealed class InsertRowsCommand : IWorkbookCommand, IAffectedCellsCommand,
 
         _rowHeightSnapshot = RowColumnShiftHelpers.CaptureDictionary(sheet.RowHeights);
         RowColumnShiftHelpers.ShiftIndexesUp(sheet.RowHeights, _beforeRow, _count);
+
+        // R136-io-worksheet-props-col-row-default-style-shift: sheet.RowStyles is the same
+        // absolute-row key space as RowHeights above -- re-key it in lockstep or the whole-row
+        // default style painted by ViewportService lands on whatever row ends up at its stale
+        // pre-insert index.
+        _rowStyleSnapshot = RowColumnShiftHelpers.CaptureDictionary(sheet.RowStyles);
+        RowColumnShiftHelpers.ShiftIndexesUp(sheet.RowStyles, _beforeRow, _count);
 
         RowColumnShiftHelpers.ShiftCommentRowsUp(sheet.Comments, _beforeRow, _count);
         // J17: CommentAuthors/ShownComments are address-keyed companions of Comments (legacy note
@@ -429,6 +441,7 @@ public sealed class InsertRowsCommand : IWorkbookCommand, IAffectedCellsCommand,
         RowColumnShiftHelpers.ShiftRowSetDictionaryDownFrom(sheet.ColumnFilterOwnedRows, _beforeRow + _count, _count);
 
         RowColumnShiftHelpers.RestoreDictionary(sheet.RowHeights, _rowHeightSnapshot);
+        RowColumnShiftHelpers.RestoreDictionary(sheet.RowStyles, _rowStyleSnapshot);
         _mutationSnapshot.RestoreCommonState(ctx.Workbook, sheet, restoreRulesInPlace: true);
         sheet.SetPrintAreas(_printAreaSnapshot ?? []);
         RowColumnShiftHelpers.RestoreSortedSet(sheet.RowPageBreaks, _rowPageBreakSnapshot);

@@ -653,6 +653,65 @@ public sealed partial class XlsxFileAdapter : IFileAdapter, IWarningCollectingFi
             if (explicitStyleOnlyRuns is { Count: > 0 })
                 sheet.SetStyleOnlyRuns(explicitStyleOnlyRuns);
 
+            // R136-io-worksheet-props-col-row-default-style: a whole-column (<col style="...">) or
+            // whole-row (row "s"+"customFormat") default style formats every cell in that column/row
+            // that has no explicit style of its own -- including still-empty cells, which is why an
+            // empty cell in a Currency-formatted column used to render as General (R75-io-worksheet-
+            // props-4-2/4-3, RE-DEFERRED). Resolve through ClosedXML's own IXLColumn.Style/IXLRow.Style
+            // (already correctly implementing Excel's cell > row > column precedence) rather than
+            // remapping the source stylesheet index by hand -- that sidesteps the stale-index/crash
+            // hazard the old deferral comments warned about, since we register a fresh StyleId from a
+            // resolved CellStyle value instead of reattaching a source cellXfs index to the rebuilt
+            // styles.xml. Sheet.GetStyleOnly falls back row -> column for any address with no per-cell
+            // style-only entry (see Sheet.StyleOnly.cs), so this alone fixes rendering of still-empty
+            // formatted cells AND seeds the correct style when the user later types into one (both
+            // shells resolve a new cell's starting style via that same fallback chain -- see
+            // CellEntryParser.GetTargetStyleId). Populated cells that predate this fix and rely
+            // purely on column/row default (no per-cell "s") are NOT retroactively restyled here --
+            // ClosedXML's IXLCell.Style already resolves those correctly via the normal per-cell
+            // load path above (GetRegisteredStyleId), so they were never actually broken.
+            if (xmlLayout?.StyledColumns is { Count: > 0 } styledColumns)
+            {
+                Dictionary<CellStyle, StyleId?>? columnStyleCache = null;
+                foreach (var colNum in styledColumns)
+                {
+                    if (!IsValidWorksheetColumn(colNum))
+                        continue;
+
+                    var style = XlsxClosedXmlCellMapper.MapStyle(xlSheet.Column((int)colNum).Style, workbook.Theme, indexedColors);
+                    columnStyleCache ??= new Dictionary<CellStyle, StyleId?>();
+                    if (!columnStyleCache.TryGetValue(style, out var styleId))
+                    {
+                        styleId = style.Equals(CellStyle.Default) ? null : workbook.RegisterStyle(style);
+                        columnStyleCache[style] = styleId;
+                    }
+
+                    if (styleId is { } columnStyleId)
+                        sheet.ColumnStyles[colNum] = columnStyleId;
+                }
+            }
+
+            if (xmlLayout?.StyledRows is { Count: > 0 } styledRows)
+            {
+                Dictionary<CellStyle, StyleId?>? rowStyleCache = null;
+                foreach (var rowNum in styledRows)
+                {
+                    if (!IsValidWorksheetRow(rowNum))
+                        continue;
+
+                    var style = XlsxClosedXmlCellMapper.MapStyle(xlSheet.Row((int)rowNum).Style, workbook.Theme, indexedColors);
+                    rowStyleCache ??= new Dictionary<CellStyle, StyleId?>();
+                    if (!rowStyleCache.TryGetValue(style, out var styleId))
+                    {
+                        styleId = style.Equals(CellStyle.Default) ? null : workbook.RegisterStyle(style);
+                        rowStyleCache[style] = styleId;
+                    }
+
+                    if (styleId is { } rowStyleId)
+                        sheet.RowStyles[rowNum] = rowStyleId;
+                }
+            }
+
             foreach (var hyperlink in xlSheet.Hyperlinks)
             {
                 try

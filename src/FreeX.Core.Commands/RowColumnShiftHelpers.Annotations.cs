@@ -298,10 +298,27 @@ internal static partial class RowColumnShiftHelpers
             return;
 
         // The target is in the form "SheetName!CellRef" (or 'Sheet Name'!CellRef). If there is
-        // no '!' it is a named range reference — leave it alone.
+        // no '!' it is EITHER a named range reference (leave alone) OR a bare cell/range reference
+        // implicitly relative to whichever sheet hosts the hyperlink -- FreeX's own Insert
+        // Hyperlink dialog stores exactly that when the user types e.g. "B10" into the address box
+        // for a same-sheet "Place in This Document" link (see SetHyperlinkCommand). That bare form
+        // must still shift when the structural edit lands on the hyperlink's OWN sheet, or the
+        // hover tooltip/navigation keeps pointing at the pre-shift row/column once rows or columns
+        // are inserted/deleted above or before it -- previously this returned unconditionally,
+        // silently leaving every unqualified same-sheet hyperlink target stale.
         var bangIndex = target.IndexOf('!', StringComparison.Ordinal);
         if (bangIndex < 0)
+        {
+            if (!string.Equals(sheet.Name, affectedSheetName, StringComparison.OrdinalIgnoreCase))
+                return;
+
+            var rewrittenBare = FormulaRewriter.Rewrite(target, op, affectedSheetName);
+            if (rewrittenBare is null || rewrittenBare == target)
+                return;
+
+            sheet.Hyperlinks[addr] = rewrittenBare;
             return;
+        }
 
         var sheetPart = target[..bangIndex].Trim('\'');
         if (!string.Equals(sheetPart, affectedSheetName, StringComparison.OrdinalIgnoreCase))

@@ -131,6 +131,14 @@ public partial class MainWindow
         // selection regardless of what is currently scrolled into view.
         var fullRangeViewport = BuildFullRangeViewportForClipboard(copyRange) ?? viewport;
 
+        // R136-services-clipboard-formats-payload-parity (investigated, REFUTED): the internal
+        // clipboard snapshot's own clipCells loop below skips AutoFilter-hidden rows via
+        // IsRowFilterHidden, which suggested the plain-text/CF_HTML payload below (serialized off
+        // fullRangeViewport) might still resurrect them. It does not: fullRangeViewport is built by
+        // BuildFullRangeViewportForClipboard, which routes through ViewportService.GetViewport --
+        // that materializer already skips any row where Sheet.IsRowEffectivelyHidden is true (folds
+        // in FilterHiddenRows alongside HiddenRows/GroupHiddenRows), so a filter-hidden row's cells
+        // were never present in this viewport to begin with, independent of clipCells' own guard.
         var text = ClipboardSerializer.Serialize(fullRangeViewport, copyRange);
         var clipboardMarker = WorkbookClipboardSession.CreateMarker();
         // Place plain text AND an HTML table fragment (CF_HTML) on the OS clipboard together,

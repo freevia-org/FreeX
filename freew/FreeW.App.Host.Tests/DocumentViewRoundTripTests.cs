@@ -63,6 +63,32 @@ public sealed class DocumentViewRoundTripTests
     }
 
     [StaFact]
+    public void Table_MultiRowRepeatHeader_SurvivesViewRoundTrip()
+    {
+        // The WPF FlowDocument editing surface has no native concept of a per-row repeat-header flag,
+        // so TableRow.IsRepeatingHeader is stashed on WpfTableRowTag (BuildTable) and must be recovered
+        // by CommitToModel. Without that, any edit-triggered view->model round-trip (typing anywhere in
+        // the document forces one) would silently collapse a multi-row repeating header down to just
+        // row 0 — the exact same data loss as the docx read/write bug, but on every edit instead of only
+        // on open+save.
+        var document = TextDocument.CreateEmpty();
+        document.Blocks.Clear();
+        var table = Table.Create(3, 1);
+        table.Rows[0].Cells[0] = new FreeW.Core.Model.TableCell("Title");
+        table.Rows[0].IsRepeatingHeader = true;
+        table.Rows[1].Cells[0] = new FreeW.Core.Model.TableCell("Columns");
+        table.Rows[1].IsRepeatingHeader = true;
+        table.Rows[2].Cells[0] = new FreeW.Core.Model.TableCell("Body");
+        document.Blocks.Add(table);
+
+        var recovered = RoundTrip(document).Blocks.OfType<Table>().Single();
+
+        recovered.Rows[0].IsRepeatingHeader.Should().BeTrue();
+        recovered.Rows[1].IsRepeatingHeader.Should().BeTrue();
+        recovered.Rows[2].IsRepeatingHeader.Should().BeFalse();
+    }
+
+    [StaFact]
     public void ContextualSpacing_SuppressesSharedMarginForAdjacentSameStyleParagraphs()
     {
         var document = TextDocument.CreateEmpty();

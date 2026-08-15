@@ -116,19 +116,31 @@ public static partial class NumberFormatDecimalAdjuster
                 continue;
             }
 
-            if (!inQuote && ch == '[')
+            if (inQuote)
+                continue;
+
+            if (ch == '[')
             {
                 inBracket = true;
                 continue;
             }
 
-            if (!inQuote && ch == ']')
+            if (ch == ']')
             {
                 inBracket = false;
                 continue;
             }
 
-            if (!inQuote && !inBracket && ch == ';')
+            if (!inBracket && ch == '\\' && index + 1 < format.Length)
+            {
+                // A backslash escapes exactly the next character (e.g. "0\;0" is ONE section: the
+                // ';' is a literal, not a positive/negative/zero/text separator). Skip it so the
+                // escaped character is never mistaken for a real section boundary.
+                index++;
+                continue;
+            }
+
+            if (!inBracket && ch == ';')
             {
                 sections.Add(format[sectionStart..index]);
                 sectionStart = index + 1;
@@ -231,7 +243,18 @@ public static partial class NumberFormatDecimalAdjuster
             }
 
             if ((ch == '\\' || ch == '_' || ch == '*') && current + 1 < section.Length)
+            {
+                // The character right after '\' (a literal escape) or '_'/'*' (a spacer-width
+                // argument) is never a real placeholder. When that escaped character IS the
+                // position being asked about, it is a literal -- not the decimal separator or a
+                // digit run to grow/shrink -- so report it as non-editable directly instead of
+                // just skipping past it, which previously let the scan exit the loop (current <
+                // index becomes false) without ever recording that `index` itself was escaped.
+                if (current + 1 == index)
+                    return false;
+
                 current++;
+            }
         }
 
         return !inQuote && !inBracket;

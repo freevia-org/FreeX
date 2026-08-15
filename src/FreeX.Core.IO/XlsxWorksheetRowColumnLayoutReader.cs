@@ -50,6 +50,8 @@ internal static class XlsxWorksheetRowColumnLayoutReader
         var collapsedAnchorCols = new HashSet<uint>();
         var rowHeights = new Dictionary<uint, double>();
         var columnWidths = new Dictionary<uint, double>();
+        var styledRows = new HashSet<uint>();
+        var styledColumns = new HashSet<uint>();
         var explicitStyleOnlyCells = new List<(uint Row, uint Col, int StyleIndex)>();
         var explicitPopulatedCellStyles = new List<(uint Row, uint Col, int StyleIndex)>();
         var cachedFormulaErrors = new Dictionary<(uint Row, uint Col), ErrorValue>();
@@ -70,7 +72,7 @@ internal static class XlsxWorksheetRowColumnLayoutReader
             foreach (var row in root.Element(worksheetNs + "sheetData")?.Elements(rowName) ?? [])
             {
                 if (uint.TryParse(row.Attribute("r")?.Value, out var rowNumber))
-                    ReadRowLayout(row, rowNumber, hiddenRows, rowOutlineLevels, groupHiddenRows, collapsedAnchorRows, rowHeights);
+                    ReadRowLayout(row, rowNumber, hiddenRows, rowOutlineLevels, groupHiddenRows, collapsedAnchorRows, rowHeights, styledRows);
 
                 foreach (var cell in row.Elements(cellName))
                 {
@@ -92,7 +94,7 @@ internal static class XlsxWorksheetRowColumnLayoutReader
             foreach (var cols in root.Elements(worksheetNs + "cols"))
             {
                 foreach (var col in cols.Elements(worksheetNs + "col"))
-                    ReadColumnLayout(col, hiddenCols, colOutlineLevels, groupHiddenCols, collapsedAnchorCols, columnWidths);
+                    ReadColumnLayout(col, hiddenCols, colOutlineLevels, groupHiddenCols, collapsedAnchorCols, columnWidths, styledColumns);
             }
         }
 
@@ -107,7 +109,9 @@ internal static class XlsxWorksheetRowColumnLayoutReader
                 rowHeights,
                 columnWidths,
                 collapsedAnchorRows,
-                collapsedAnchorCols),
+                collapsedAnchorCols,
+                styledRows,
+                styledColumns),
             new XlsxWorksheetCellLayout(
                 cachedFormulaErrors,
                 explicitPopulatedCellStyles,
@@ -142,6 +146,8 @@ internal static class XlsxWorksheetRowColumnLayoutReader
         var collapsedAnchorCols = new HashSet<uint>();
         var rowHeights = new Dictionary<uint, double>();
         var columnWidths = new Dictionary<uint, double>();
+        var styledRows = new HashSet<uint>();
+        var styledColumns = new HashSet<uint>();
         var explicitStyleOnlyCells = new List<(uint Row, uint Col, int StyleIndex)>();
         var explicitPopulatedCellStyles = new List<(uint Row, uint Col, int StyleIndex)>();
         var cachedFormulaErrors = new Dictionary<(uint Row, uint Col), ErrorValue>();
@@ -249,7 +255,7 @@ internal static class XlsxWorksheetRowColumnLayoutReader
                 }
 
                 if (uint.TryParse(reader.GetAttribute("r"), NumberStyles.Integer, CultureInfo.InvariantCulture, out var rowNumber))
-                    ReadRowLayout(reader, rowNumber, hiddenRows, rowOutlineLevels, groupHiddenRows, collapsedAnchorRows, rowHeights);
+                    ReadRowLayout(reader, rowNumber, hiddenRows, rowOutlineLevels, groupHiddenRows, collapsedAnchorRows, rowHeights, styledRows);
 
                 rowDepth = reader.Depth;
                 if (reader.IsEmptyElement)
@@ -361,7 +367,9 @@ internal static class XlsxWorksheetRowColumnLayoutReader
                     rowHeights,
                     columnWidths,
                     collapsedAnchorRows,
-                    collapsedAnchorCols),
+                    collapsedAnchorCols,
+                    styledRows,
+                    styledColumns),
                 new XlsxWorksheetCellLayout(
                     cachedFormulaErrors,
                     explicitPopulatedCellStyles,
@@ -442,20 +450,17 @@ internal static class XlsxWorksheetRowColumnLayoutReader
         }
     }
 
-    // R75-io-worksheet-props-4-3 (RE-DEFERRED): a row's whole-row default style (the "s" +
+    // R136-io-worksheet-props-col-row-default-style: a row's whole-row default style (the "s" +
     // "customFormat" pair that stamps a banner style on every cell in the row that has no explicit
-    // style of its own) is intentionally never read into the Sheet model here, so it cannot round-
-    // trip on a full rebuild. This is coupled to the same stale-index hazard 4-1 fixes for columns:
-    // a source row's "s" indexes the SOURCE stylesheet's cellXfs table, and the full-save path
-    // rebuilds styles.xml via ClosedXML (renumbering/shrinking cellXfs), so reattaching the source
-    // index verbatim can point past the end of the rebuilt table and crash FreeX's own reload.
-    // XlsxWorksheetMetadataPreserver.IsStylesheetIndexRowAttribute already guards the native-merge
-    // path against copying "s"/"customFormat" verbatim (see XlsxWorksheetMetadataPreserverRowStyleTests);
-    // this reader treats both as "modeled" (ModeledRowAttributes) purely so that guard's crash-safety
-    // holds even when nothing here captures the value. A FULL fix needs a per-row-style Sheet model
-    // (e.g. Sheet.RowStyles: Dictionary<uint, StyleId>) populated here and REMAPPED to the rebuilt
-    // cellXfs table at save time (mirroring how explicit per-cell styles are remapped) -- out of
-    // scope for this pass; the crash-safe drop remains the current behavior.
+    // style of its own) used to be dropped entirely (R75-io-worksheet-props-4-3, RE-DEFERRED). It is
+    // now surfaced via styledRows -- just the ROW NUMBER, not the raw "s" stylesheet index -- so the
+    // caller (XlsxFileAdapter) can resolve the effective style through ClosedXML's own
+    // IXLRow.Style (which already implements Excel's cell>row>column precedence) instead of
+    // remapping the source cellXfs index by hand. That sidesteps the stale-index/crash hazard the
+    // old comment warned about: we never re-attach a raw source style index to the rebuilt
+    // styles.xml, we resolve to a CellStyle value and let Workbook.RegisterStyle assign a fresh id.
+    // A row with s="0" (Excel's default style) is not flagged -- registering it would be a wasted
+    // round-trip through the resolver for a style that always maps to CellStyle.Default.
     private static void ReadRowLayout(
         XElement row,
         uint rowNumber,
@@ -463,7 +468,8 @@ internal static class XlsxWorksheetRowColumnLayoutReader
         Dictionary<uint, int> rowOutlineLevels,
         HashSet<uint> groupHiddenRows,
         HashSet<uint> collapsedAnchorRows,
-        Dictionary<uint, double> rowHeights)
+        Dictionary<uint, double> rowHeights,
+        HashSet<uint>? styledRows = null)
     {
         var isHidden = XlsxWorksheetXmlValueParser.IsTruthy(row.Attribute("hidden")?.Value);
         if (TryReadRowHeight(row.Attribute("ht")?.Value, row.Attribute("customHeight")?.Value, out var height))
@@ -485,6 +491,14 @@ internal static class XlsxWorksheetRowColumnLayoutReader
         // must be retained independently of hidden and outlineLevel.
         if (isCollapsed)
             collapsedAnchorRows.Add(rowNumber);
+
+        if (styledRows is not null &&
+            XlsxWorksheetXmlValueParser.IsTruthy(row.Attribute("customFormat")?.Value) &&
+            int.TryParse(row.Attribute("s")?.Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var rowStyleIndex) &&
+            rowStyleIndex != 0)
+        {
+            styledRows.Add(rowNumber);
+        }
     }
 
     private static void ReadRowLayout(
@@ -494,7 +508,8 @@ internal static class XlsxWorksheetRowColumnLayoutReader
         Dictionary<uint, int> rowOutlineLevels,
         HashSet<uint> groupHiddenRows,
         HashSet<uint> collapsedAnchorRows,
-        Dictionary<uint, double> rowHeights)
+        Dictionary<uint, double> rowHeights,
+        HashSet<uint>? styledRows = null)
     {
         var isHidden = XlsxWorksheetXmlValueParser.IsTruthy(row.GetAttribute("hidden"));
         if (TryReadRowHeight(row.GetAttribute("ht"), row.GetAttribute("customHeight"), out var height))
@@ -509,6 +524,14 @@ internal static class XlsxWorksheetRowColumnLayoutReader
             rowOutlineLevels[rowNumber] = outlineLevel;
         }
 
+        if (styledRows is not null &&
+            XlsxWorksheetXmlValueParser.IsTruthy(row.GetAttribute("customFormat")) &&
+            int.TryParse(row.GetAttribute("s"), NumberStyles.Integer, CultureInfo.InvariantCulture, out var rowStyleIndex) &&
+            rowStyleIndex != 0)
+        {
+            styledRows.Add(rowNumber);
+        }
+
         if (isHidden)
             hiddenRows.Add(rowNumber);
 
@@ -516,26 +539,23 @@ internal static class XlsxWorksheetRowColumnLayoutReader
             collapsedAnchorRows.Add(rowNumber);
     }
 
-    // R75-io-worksheet-props-4-2 (RE-DEFERRED): a non-narrow column's whole-column default style
-    // (a <col style="..."> that fills every cell in the column with a style when the cell itself
-    // has none) is intentionally never read into the Sheet model here, so it cannot round-trip on a
-    // full rebuild. This is the read-side half of 4-1's crash-safety fix: the source "style" indexes
-    // the SOURCE stylesheet's cellXfs table, and the full-save path rebuilds styles.xml via
-    // ClosedXML (renumbering/shrinking cellXfs), so reattaching the source index verbatim can point
-    // past the end of the rebuilt table and crash FreeX's own reload --
-    // XlsxWorksheetMetadataPreserver.IsStylesheetIndexColumnAttribute already guards the native-merge
-    // path against copying "style" verbatim for that reason (see
-    // XlsxWorksheetMetadataPreserverColumnStyleTests). A FULL fix needs a per-column-style Sheet
-    // model (e.g. Sheet.ColumnStyles: Dictionary<uint, StyleId>) populated here and REMAPPED to the
-    // rebuilt cellXfs table at save time -- out of scope for this pass; the crash-safe drop (never
-    // reading, never re-copying the stale index) remains the current behavior.
+    // R136-io-worksheet-props-col-row-default-style: a column's whole-column default style (a
+    // <col style="..."> that fills every cell in the column with a style when the cell itself has
+    // none) used to be dropped entirely (R75-io-worksheet-props-4-2, RE-DEFERRED). It is now
+    // surfaced via styledColumns -- just the COLUMN NUMBER, not the raw "style" stylesheet index --
+    // so the caller (XlsxFileAdapter) can resolve the effective style through ClosedXML's own
+    // IXLColumn.Style (which already implements Excel's cell>row>column precedence) instead of
+    // remapping the source cellXfs index by hand, sidestepping the stale-index/crash hazard the old
+    // comment warned about (see the row-side twin above for the full rationale). A column with
+    // style="0" (Excel's default style) is not flagged, matching the row-side skip.
     private static void ReadColumnLayout(
         XElement col,
         HashSet<uint> hiddenCols,
         Dictionary<uint, int> colOutlineLevels,
         HashSet<uint> groupHiddenCols,
         HashSet<uint> collapsedAnchorCols,
-        Dictionary<uint, double> columnWidths)
+        Dictionary<uint, double> columnWidths,
+        HashSet<uint>? styledColumns = null)
     {
         if (!uint.TryParse(col.Attribute("min")?.Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var min))
             return;
@@ -573,6 +593,18 @@ internal static class XlsxWorksheetRowColumnLayoutReader
         {
             for (var colNumber = min; colNumber <= max; colNumber++)
                 collapsedAnchorCols.Add(colNumber);
+        }
+
+        // Capture BEFORE the width-carrier early return below: a narrow "styling-only carrier"
+        // column (Excel/ClosedXML stamp a style + an auto width on a column that merely formats
+        // empty cells) is exactly the case this default-style fallback exists for, so it must not
+        // be skipped just because its width isn't treated as a real custom width.
+        if (styledColumns is not null &&
+            int.TryParse(col.Attribute("style")?.Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var colStyleIndex) &&
+            colStyleIndex != 0)
+        {
+            for (var colNumber = min; colNumber <= max; colNumber++)
+                styledColumns.Add(colNumber);
         }
 
         if (XlsxWorksheetXmlValueParser.IsTruthy(col.Attribute("customWidth")?.Value) &&
@@ -794,4 +826,9 @@ internal sealed record XlsxWorksheetRowColumnLayout(
     // visible, still-uncollapsed anchor of a collapsed outline group (collapsed="1", hidden absent/
     // false) -- see Sheet.CollapsedAnchorRows/CollapsedAnchorCols and R35-deferred-collapse-anchor-1.
     HashSet<uint>? CollapsedAnchorRows = null,
-    HashSet<uint>? CollapsedAnchorCols = null);
+    HashSet<uint>? CollapsedAnchorCols = null,
+    // Rows/columns that carry a whole-row/-column default style (row "s"+"customFormat", or a
+    // <col style> range) with no per-cell override -- see R136-io-worksheet-props-col-row-default-style.
+    // Trailing optional for the same reason as CollapsedAnchorRows/Cols above.
+    HashSet<uint>? StyledRows = null,
+    HashSet<uint>? StyledColumns = null);
