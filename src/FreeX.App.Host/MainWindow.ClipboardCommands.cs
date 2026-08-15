@@ -172,7 +172,8 @@ public partial class MainWindow
         // offer a picture flavour" bar is met for every copy without depending on the shared
         // print/grid rendering pipeline other in-flight work is currently touching.
         PlatformClipboardImage? clipboardImage = null;
-        if (TryRenderClipboardRangeBitmap(ClipboardSerializer.Deserialize(text)) is { } clipboardBitmap)
+        var picturePlan = ClipboardRangePicturePlanner.TryBuild(ClipboardSerializer.Deserialize(text));
+        if (TryRenderClipboardRangeBitmap(picturePlan) is { } clipboardBitmap)
         {
             clipboardImage = new PlatformClipboardImage(
                 EncodeBitmapSourceToPng(clipboardBitmap),
@@ -1534,44 +1535,40 @@ public partial class MainWindow
     /// of the shared print/grid drawing pipeline. Returns null (never throws) for anything that would
     /// make an unreasonable bitmap: empty content, or a huge cell count.
     /// </summary>
-    private static System.Windows.Media.Imaging.BitmapSource? TryRenderClipboardRangeBitmap(string[][] rows)
+    private static System.Windows.Media.Imaging.BitmapSource? TryRenderClipboardRangeBitmap(
+        ClipboardRangePicturePlan? plan)
     {
-        const double cellWidth = 80;
-        const double cellHeight = 20;
-        const int maxCells = 2000;
-
         try
         {
-            if (rows.Length == 0)
+            if (plan is null)
                 return null;
 
-            var colCount = rows.Max(row => row.Length);
-            if (colCount == 0)
-                return null;
-
-            var rowCount = rows.Length;
-            if ((long)rowCount * colCount > maxCells)
-                return null;
-
-            var width = colCount * cellWidth;
-            var height = rowCount * cellHeight;
+            var width = plan.PixelWidth;
+            var height = plan.PixelHeight;
+            var backgroundBrush = CreateBrush(ClipboardRangePicturePlanner.BackgroundColor);
+            var gridBrush = CreateBrush(ClipboardRangePicturePlanner.GridlineColor);
+            var textBrush = CreateBrush(ClipboardRangePicturePlanner.TextColor);
 
             var visual = new System.Windows.Media.DrawingVisual();
             using (var dc = visual.RenderOpen())
             {
-                dc.DrawRectangle(System.Windows.Media.Brushes.White, null, new Rect(0, 0, width, height));
+                dc.DrawRectangle(backgroundBrush, null, new Rect(0, 0, width, height));
 
-                var gridPen = new System.Windows.Media.Pen(System.Windows.Media.Brushes.LightGray, 1);
+                var gridPen = new System.Windows.Media.Pen(gridBrush, 1);
+                gridPen.Freeze();
                 var typeface = new System.Windows.Media.Typeface("Segoe UI");
-                for (var r = 0; r < rowCount; r++)
+                for (var r = 0; r < plan.RowCount; r++)
                 {
-                    var row = rows[r];
-                    for (var c = 0; c < colCount; c++)
+                    for (var c = 0; c < plan.ColumnCount; c++)
                     {
-                        var cellRect = new Rect(c * cellWidth, r * cellHeight, cellWidth, cellHeight);
+                        var cellRect = new Rect(
+                            c * ClipboardRangePicturePlanner.CellWidth,
+                            r * ClipboardRangePicturePlanner.CellHeight,
+                            ClipboardRangePicturePlanner.CellWidth,
+                            ClipboardRangePicturePlanner.CellHeight);
                         dc.DrawRectangle(null, gridPen, cellRect);
 
-                        var cellText = c < row.Length ? row[c] : string.Empty;
+                        var cellText = plan.TextAt(r, c);
                         if (string.IsNullOrEmpty(cellText))
                             continue;
 
@@ -1580,28 +1577,46 @@ public partial class MainWindow
                             System.Globalization.CultureInfo.CurrentCulture,
                             FlowDirection.LeftToRight,
                             typeface,
-                            12,
-                            System.Windows.Media.Brushes.Black,
+                            ClipboardRangePicturePlanner.FontSize,
+                            textBrush,
                             1.0)
                         {
-                            MaxTextWidth = Math.Max(1, cellWidth - 4),
-                            MaxTextHeight = Math.Max(1, cellHeight - 2),
+                            MaxTextWidth = Math.Max(
+                                1,
+                                ClipboardRangePicturePlanner.CellWidth
+                                - (2 * ClipboardRangePicturePlanner.TextPaddingHorizontal)),
+                            MaxTextHeight = Math.Max(
+                                1,
+                                ClipboardRangePicturePlanner.CellHeight
+                                - (2 * ClipboardRangePicturePlanner.TextPaddingVertical)),
                             Trimming = TextTrimming.CharacterEllipsis
                         };
-                        dc.DrawText(formatted, new Point(cellRect.Left + 2, cellRect.Top + 1));
+                        dc.DrawText(
+                            formatted,
+                            new Point(
+                                cellRect.Left + ClipboardRangePicturePlanner.TextPaddingHorizontal,
+                                cellRect.Top + ClipboardRangePicturePlanner.TextPaddingVertical));
                     }
                 }
             }
 
             var bitmap = new System.Windows.Media.Imaging.RenderTargetBitmap(
-                Math.Max(1, (int)Math.Ceiling(width)),
-                Math.Max(1, (int)Math.Ceiling(height)),
+                Math.Max(1, width),
+                Math.Max(1, height),
                 96,
                 96,
                 System.Windows.Media.PixelFormats.Pbgra32);
             bitmap.Render(visual);
             bitmap.Freeze();
             return bitmap;
+
+            static System.Windows.Media.SolidColorBrush CreateBrush(ClipboardRangePictureColor color)
+            {
+                var brush = new System.Windows.Media.SolidColorBrush(
+                    System.Windows.Media.Color.FromRgb(color.Red, color.Green, color.Blue));
+                brush.Freeze();
+                return brush;
+            }
         }
         catch
         {

@@ -23516,6 +23516,15 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
                 _session.Workbook.Theme);
         }
 
+        // Match WPF and Excel's normal range-copy contract: image-only destinations must receive
+        // a picture flavor alongside Text/HTML/CSV. Shared Presentation owns the bounded grid plan;
+        // this shell only realizes it through Skia and attaches the encoded PNG.
+        var picturePlan = ClipboardRangePicturePlanner.TryBuild(ClipboardSerializer.Deserialize(copiedText));
+        clipboardContent = clipboardContent with
+        {
+            Image = SkiaClipboardRangePictureRenderer.TryRender(picturePlan),
+        };
+
         clipboardContent = WorkbookClipboardSession.AttachMarker(
             clipboardContent,
             copyResult.ClipboardMarker);
