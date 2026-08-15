@@ -93,6 +93,26 @@ public sealed class CommonDialogChromeParityTests
             .And.NotContain("Spacing = 13");
     }
 
+    [Fact]
+    public void SlideSectionNamePromptsUseSharedChromeActionRowsAndKeyboardSemantics()
+    {
+        var root = TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeP.slnx");
+
+        var wpf = Read(root, "freep", "FreeP.App.Host", "SlidePane.cs");
+        wpf.Should().Contain("SlideSectionNamePromptDialog : DialogWindow")
+            .And.Contain("DialogButtonRowFactory.Create(ok, cancel)")
+            .And.Contain("new SlideSectionNamePromptDialog")
+            .And.NotContain("var dialog = new Window");
+
+        var avalonia = Read(root, "freep", "FreeP.App.Avalonia", "MainWindow.cs");
+        avalonia.Should().Contain("SlideSectionNamePromptDialog : FreePDialogWindow")
+            .And.Contain("AvaloniaDialogButtonRowFactory.CreateRow([ok, cancel])")
+            .And.Contain("IsDefault = true")
+            .And.Contain("IsCancel = true")
+            .And.Contain("new SlideSectionNamePromptDialog")
+            .And.NotContain("var dialog = new Window");
+    }
+
     private static string Read(string root, params string[] parts) =>
         File.ReadAllText(Path.Combine([root, .. parts]));
 }
