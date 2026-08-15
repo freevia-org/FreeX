@@ -2327,17 +2327,21 @@ public sealed class WorkbookSession : IDisposable
         return changed;
     }
 
-    public WorkbookCellEditResult AddSheet()
-    {
-        var result = _cellEditService.ExecuteEditCommand(
-            Workbook,
-            new AddSheetCommand(SheetTabListPlanner.GenerateUniqueSheetName(Workbook)));
-        if (!result.Success)
-            return result;
-
-        ApplySuccessfulNewWorksheetResult(Workbook.Sheets[^1].Id);
-        return result;
-    }
+    /// <summary>
+    /// Adds a worksheet at the end of the workbook, or immediately before the requested sheet.
+    /// The command is repeatable and the session owns naming, structural recalculation, selection,
+    /// view-state initialization, and history reconciliation for every renderer.
+    /// </summary>
+    public WorkbookCellEditResult AddSheet(SheetId? insertBeforeSheetId = null) =>
+        ExecuteRepeatableCommandPreservingSelection(() =>
+        {
+            var insertIndex = insertBeforeSheetId is { } beforeId
+                ? FindSheetIndex(beforeId)
+                : Workbook.Sheets.Count;
+            return new AddSheetCommand(
+                SheetTabListPlanner.GenerateUniqueSheetName(Workbook),
+                insertIndex);
+        });
 
     public WorkbookCellEditResult DuplicateActiveSheet() => DuplicateSelectedSheets(ActiveSheet.Id);
 
@@ -6121,12 +6125,10 @@ public sealed class WorkbookSession : IDisposable
     /// </summary>
     public WorkbookCellEditResult RepeatLastAction()
     {
-        var range = SelectedRange;
+        var sheetIdsBefore = CaptureSheetIds();
+        var hiddenStatesBefore = CaptureSheetHiddenStates();
         var result = _cellEditService.RepeatLastEdit(Workbook);
-        if (!result.Success)
-            return result;
-
-        ApplySuccessfulRangeEditResult(result, range);
+        ApplySuccessfulPreservedSelectionCommandResult(result, sheetIdsBefore, hiddenStatesBefore);
         return result;
     }
 

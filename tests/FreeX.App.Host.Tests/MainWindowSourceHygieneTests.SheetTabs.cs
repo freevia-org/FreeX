@@ -377,7 +377,10 @@ public sealed partial class MainWindowSourceHygieneTests
         var delete = ExtractMethodSource(source, "private void SheetCtxDelete_Click(");
         var move = ExtractMethodSource(source, "private void MoveSheetTab(");
 
-        insert.Should().Contain("TryExecuteRepeatableCommand(");
+        insert.Should().Contain("_session.AddSheet(insertBeforeSheetId)");
+        insert.Should().Contain("CompleteWorksheetSessionCommand(");
+        insert.Should().NotContain("new AddSheetCommand");
+        insert.Should().NotContain("RecalculateWorkbook()");
         rename.Should().Contain("TryExecuteCommand(new RenameSheetCommand");
         delete.Should().Contain("SynchronizeWorkbookSessionSelection();");
         delete.Should().Contain("_session.DeleteSelectedSheets()");

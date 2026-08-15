@@ -40,9 +40,6 @@ public partial class MainWindow
         UpdateTitleBar();
     }
 
-    private string GenerateUniqueSheetName()
-        => SheetTabListPlanner.GenerateUniqueSheetName(_workbook);
-
     private static SheetTabViewModel MapSheetTabListEntry(SheetTabListEntry entry) =>
         new(entry.Id, entry.Name, entry.TabColor, entry.IsProtected)
         {
@@ -353,32 +350,14 @@ public partial class MainWindow
     /// </summary>
     private void InsertNewSheet(SheetId? insertBeforeSheetId = null)
     {
-        int? insertIndex = null;
-
-        IWorkbookCommand CreateCommand()
+        SynchronizeWorkbookSessionSelection();
+        if (!CompleteWorksheetSessionCommand(
+                _session.AddSheet(insertBeforeSheetId),
+                "Insert Sheet"))
         {
-            insertIndex = insertBeforeSheetId is { } beforeId && FindWorkbookSheetIndex(beforeId) is var idx && idx >= 0
-                ? idx
-                : null;
-            return new AddSheetCommand(GenerateUniqueSheetName(), insertIndex);
-        }
-
-        if (!TryExecuteRepeatableCommand(CreateCommand, "Insert Sheet", out _))
             return;
-
-        if (insertIndex is not null)
-        {
-            // Inserting before an existing tab can place the new sheet inside a 3-D span
-            // reference, so recalculate just like the other structural sheet operations
-            // (delete/move/duplicate/rename) do -- appending (insertIndex null) can never land
-            // inside an existing span, so it deliberately skips this like it always has.
-            RecalculateWorkbook();
         }
 
-        var newSheetId = insertIndex is { } idx2 && idx2 < _workbook.Sheets.Count
-            ? _workbook.Sheets[idx2].Id
-            : _workbook.Sheets[^1].Id;
-        ActivateNewWorksheetAtA1(newSheetId);
         UpdateViewport();
         RefreshSheetTabs();
     }

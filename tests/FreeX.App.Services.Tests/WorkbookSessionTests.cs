@@ -8233,6 +8233,67 @@ public sealed class WorkbookSessionTests
     }
 
     [Fact]
+    public void AddSheet_WithTarget_InsertsBeforeTargetAndRepeatKeepsSharedStructuralStateCoherent()
+    {
+        var workbook = CreateWorkbook();
+        var sheet2 = workbook.AddSheet("Sheet2");
+        var sheet3 = workbook.AddSheet("Sheet3");
+        var session = CreateSession(new StartupWorkbookLoadResult(
+            workbook,
+            "Book.fxl",
+            "Opened .fxl.",
+            IsFallback: false));
+
+        var firstInsert = session.AddSheet(sheet2.Id);
+
+        firstInsert.Success.Should().BeTrue();
+        session.CanRepeatLastAction.Should().BeTrue();
+        workbook.Sheets.Select(sheet => sheet.Name).Should().Equal("Sheet1", "Sheet4", "Sheet2", "Sheet3");
+        var firstInsertedSheet = workbook.Sheets[1];
+        session.ActiveSheet.Should().BeSameAs(firstInsertedSheet);
+        session.ActiveCell.Should().Be(new CellAddress(firstInsertedSheet.Id, 1, 1));
+
+        var repeat = session.RepeatLastAction();
+
+        repeat.Success.Should().BeTrue();
+        workbook.Sheets.Select(sheet => sheet.Name).Should().Equal("Sheet1", "Sheet4", "Sheet5", "Sheet2", "Sheet3");
+        var repeatedSheet = workbook.Sheets[2];
+        session.ActiveSheet.Should().BeSameAs(repeatedSheet);
+        session.ActiveCell.Should().Be(new CellAddress(repeatedSheet.Id, 1, 1));
+
+        session.UndoLastEdit().Success.Should().BeTrue();
+        workbook.Sheets.Select(sheet => sheet.Name).Should().Equal("Sheet1", "Sheet4", "Sheet2", "Sheet3");
+        workbook.Sheets.Should().ContainSingle(sheet => sheet.Id == session.ActiveSheet.Id);
+        session.ActiveSheet.Id.Should().NotBe(repeatedSheet.Id);
+
+        session.RedoLastEdit().Success.Should().BeTrue();
+        workbook.Sheets.Select(sheet => sheet.Name).Should().Equal("Sheet1", "Sheet4", "Sheet5", "Sheet2", "Sheet3");
+        session.ActiveSheet.Id.Should().Be(repeatedSheet.Id);
+        sheet3.Should().BeSameAs(workbook.Sheets[^1]);
+    }
+
+    [Fact]
+    public void AddSheet_WithTarget_RejectsProtectedWorkbookWithoutChangingState()
+    {
+        var workbook = CreateWorkbook();
+        var target = workbook.AddSheet("Sheet2");
+        workbook.IsStructureProtected = true;
+        var session = CreateSession(new StartupWorkbookLoadResult(
+            workbook,
+            "Book.fxl",
+            "Opened .fxl.",
+            IsFallback: false));
+
+        var result = session.AddSheet(target.Id);
+
+        result.Success.Should().BeFalse();
+        result.ErrorMessage.Should().Contain("protected");
+        workbook.Sheets.Select(sheet => sheet.Name).Should().Equal("Sheet1", "Sheet2");
+        session.IsDirty.Should().BeFalse();
+        session.CanUndo.Should().BeFalse();
+    }
+
+    [Fact]
     public void DuplicateActiveSheet_CopiesSheetContentSelectsCopyAndKeepsUndoRedoCoherent()
     {
         var workbook = CreateWorkbook();

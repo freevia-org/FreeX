@@ -55,7 +55,7 @@ public partial class MainWindow
                 "insert-sheet-result",
                 "freex_sheet_tab_workflows_insert_sheet_result",
                 "Insert Sheet result shows the newly added sheet selected through the host InsertNewSheet/AddSheetCommand path.",
-                "InsertNewSheet() -> TryExecuteRepeatableCommand(AddSheetCommand)"));
+                "InsertNewSheet() -> WorkbookSession.AddSheet(insertBeforeSheetId)"));
             workflows.Add(CreateCapturedSheetTabWorkflow(
                 "Insert sheet submitted result",
                 ["UI-CAT-SHEETTAB-001C", "UI-CAT-SHEETTAB-002A-J"],

@@ -5025,7 +5025,8 @@ public sealed class AvaloniaShellSourceTests
         catalogSource.Should().Contain("new(NativeMenuItemId.DeleteSheet, context.IsIdle)");
         source.Should().Contain("private int FindActiveSheetTabIndex()");
         source.Should().Contain("private void AddNewSheet()");
-        source.Should().Contain("var result = _session.AddSheet();");
+        source.Should().Contain("private void AddNewSheet(SheetId? insertBeforeSheetId)");
+        source.Should().Contain("var result = _session.AddSheet(insertBeforeSheetId);");
         source.Should().Contain("RefreshShell(UiText.Format(\"SheetTabs_InsertedStatusFormat\", _session.ActiveSheet.Name));");
         source.Should().Contain("private async Task RenameActiveSheetAsync()");
         source.Should().Contain("var newName = await ShowRenameSheetDialogAsync(currentName);");
@@ -5053,6 +5054,7 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("string Header(SheetTabContextMenuAction action) => UiText.Get(Common(action).ResourceKey);");
         source.Should().Contain("bool Enabled(SheetTabContextMenuAction action) => isIdle && Common(action).IsEnabled;");
         source.Should().Contain("CreateSheetTabContextMenuItem(tab, Header(SheetTabContextMenuAction.Rename), async () => await RenameActiveSheetAsync(), Enabled(SheetTabContextMenuAction.Rename))");
+        source.Should().Contain("CreateSheetTabContextMenuItem(tab, Header(SheetTabContextMenuAction.InsertSheet), () => AddNewSheet(tab.Id), Enabled(SheetTabContextMenuAction.InsertSheet))");
         source.Should().Contain("CreateSheetTabColorContextMenuItem(tab, Header(SheetTabContextMenuAction.TabColor), Enabled(SheetTabContextMenuAction.TabColor))");
         source.Should().Contain("UiText.Get(\"MainWindow_Header_MoveLeft\")");
         source.Should().Contain("UiText.Get(\"MainWindow_Header_MoveRight\")");

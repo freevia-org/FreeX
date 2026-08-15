@@ -2116,7 +2116,7 @@ function Test-SourceWiring {
                 "_showFormulasMenuItem.Click += (_, _) => ToggleShowFormulas();",
                 "[NativeMenuTopLevelId.View] = viewMenu,",
                 "[NativeMenuTopLevelId.Sheet] = sheetMenu,",
-                "var result = _session.AddSheet();",
+                "var result = _session.AddSheet(insertBeforeSheetId);",
                 "var result = _session.RenameActiveSheet(newName);",
                 "private async Task<string?> ShowRenameSheetDialogAsync(string currentName)",
                 "AutomationProperties.SetAutomationId(nameBox, `"RenameSheetNameBox`");",
@@ -2809,8 +2809,8 @@ function Test-SourceWiring {
         @{
             Path = "src\FreeX.App.Services\WorkbookSession.cs"
             Markers = @(
-                "public WorkbookCellEditResult AddSheet()",
-                "new AddSheetCommand(SheetTabListPlanner.GenerateUniqueSheetName(Workbook))",
+                "public WorkbookCellEditResult AddSheet(SheetId? insertBeforeSheetId = null)",
+                "ExecuteRepeatableCommandPreservingSelection(() =>",
                 "public WorkbookCellEditResult RenameActiveSheet(string? name)",
                 "new RenameSheetCommand(ActiveSheet.Id, newName)",
                 "ApplySuccessfulWorkbookMetadataResult(ActiveSheet.Id)",
@@ -2973,7 +2973,7 @@ function Test-SourceWiring {
                 "private WorkbookNavigationResult NavigateToRange(GridRange range)",
                 "SelectSheet(range.Start.Sheet);",
                 "private SheetId? ResolveSheetIdByName(string sheetName)",
-                "ApplySuccessfulNewWorksheetResult(Workbook.Sheets[^1].Id)",
+                "var insertIndex = insertBeforeSheetId is { } beforeId",
                 "ApplySuccessfulHistoryResult(result, sheetIdsBefore)",
                 "private void ApplySuccessfulWorkbookStructureResult(SheetId preferredSheetId)"
             )

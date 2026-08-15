@@ -806,7 +806,7 @@ public sealed class MacOsAppReadinessPreflightTests
         script.Should().Contain("public WorkbookSession CreateNew(");
         script.Should().Contain("WorkbookFactory.Create(options)");
         script.Should().Contain("`\"Created new workbook.`\"");
-        script.Should().Contain("var result = _session.AddSheet();");
+        script.Should().Contain("var result = _session.AddSheet(insertBeforeSheetId);");
         script.Should().Contain("var result = _session.RenameActiveSheet(newName);");
         script.Should().Contain("private async Task<string?> ShowRenameSheetDialogAsync(string currentName)");
         script.Should().Contain("AutomationProperties.SetAutomationId(nameBox, `\"RenameSheetNameBox`\");");
@@ -870,7 +870,7 @@ public sealed class MacOsAppReadinessPreflightTests
         script.Should().Contain("public WorkbookCellEditResult SetActiveSheetTabColor(CellColor? color)");
         script.Should().Contain("public WorkbookCellEditResult SetSelectedSheetTabColor(CellColor? color)");
         script.Should().Contain("new SetSheetTabColorCommand(selectedSheetIds[0], color)");
-        script.Should().Contain("public WorkbookCellEditResult AddSheet()");
+        script.Should().Contain("public WorkbookCellEditResult AddSheet(SheetId? insertBeforeSheetId = null)");
         script.Should().Contain("public WorkbookCellEditResult RenameActiveSheet(string? name)");
         script.Should().Contain("new RenameSheetCommand(ActiveSheet.Id, newName)");
         script.Should().Contain("ApplySuccessfulWorkbookMetadataResult(ActiveSheet.Id)");
@@ -2969,7 +2969,7 @@ public sealed class MacOsAppReadinessPreflightTests
                     _showFormulasMenuItem.Click += (_, _) => ToggleShowFormulas();
                     [NativeMenuTopLevelId.View] = viewMenu,
                     [NativeMenuTopLevelId.Sheet] = sheetMenu,
-                    var result = _session.AddSheet();
+                    var result = _session.AddSheet(insertBeforeSheetId);
                     var result = _session.RenameActiveSheet(newName);
                     ShowRenameSheetDialogAsync(currentName).ToString();
                     AutomationProperties.SetAutomationId(nameBox, "RenameSheetNameBox");
@@ -4422,14 +4422,11 @@ public sealed class MacOsAppReadinessPreflightTests
                 SelectSheet(range.Start.Sheet);
                 private SheetId? ResolveSheetIdByName(string sheetName)
                 */
-                public WorkbookCellEditResult AddSheet()
-                {
-                    var result = _cellEditService.ExecuteEditCommand(
-                        Workbook,
-                        new AddSheetCommand(SheetTabListPlanner.GenerateUniqueSheetName(Workbook)));
-                    ApplySuccessfulNewWorksheetResult(Workbook.Sheets[^1].Id);
-                    return result;
-                }
+                public WorkbookCellEditResult AddSheet(SheetId? insertBeforeSheetId = null) =>
+                    ExecuteRepeatableCommandPreservingSelection(() =>
+                        new AddSheetCommand(
+                            SheetTabListPlanner.GenerateUniqueSheetName(Workbook),
+                            insertBeforeSheetId is null ? Workbook.Sheets.Count : 0));
 
                 public WorkbookCellEditResult RenameActiveSheet(string? name)
                 {

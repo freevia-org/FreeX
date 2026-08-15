@@ -4412,7 +4412,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         bool Enabled(SheetTabContextMenuAction action) => isIdle && Common(action).IsEnabled;
 
         yield return CreateSheetTabContextMenuItem(tab, Header(SheetTabContextMenuAction.Rename), async () => await RenameActiveSheetAsync(), Enabled(SheetTabContextMenuAction.Rename));
-        yield return CreateSheetTabContextMenuItem(tab, Header(SheetTabContextMenuAction.InsertSheet), AddNewSheet, Enabled(SheetTabContextMenuAction.InsertSheet));
+        yield return CreateSheetTabContextMenuItem(tab, Header(SheetTabContextMenuAction.InsertSheet), () => AddNewSheet(tab.Id), Enabled(SheetTabContextMenuAction.InsertSheet));
         yield return CreateSheetTabContextMenuItem(tab, UiText.Get("MainWindow_Header_Duplicate"), DuplicateActiveSheet, isIdle);
         yield return CreateSheetTabContextMenuItem(tab, Header(SheetTabContextMenuAction.MoveOrCopy), ShowMoveOrCopySheetDialog, Enabled(SheetTabContextMenuAction.MoveOrCopy));
         yield return CreateSheetTabContextMenuItem(tab, Header(SheetTabContextMenuAction.DeleteSheet), DeleteActiveSheet, Enabled(SheetTabContextMenuAction.DeleteSheet));
@@ -12366,6 +12366,9 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
     }
 
     private void AddNewSheet()
+        => AddNewSheet(insertBeforeSheetId: null);
+
+    private void AddNewSheet(SheetId? insertBeforeSheetId)
     {
         if (_isOpening || _isSaving)
             return;
@@ -12374,7 +12377,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             return;
 
         ClearSelectedDrawingObject();
-        var result = _session.AddSheet();
+        var result = _session.AddSheet(insertBeforeSheetId);
         if (!result.Success)
         {
             ShowEditIssue(result.ErrorMessage ?? UiText.Get("MainLoc_NewSheetFailed"));
