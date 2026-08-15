@@ -1450,6 +1450,8 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
                 },
                 ExtraCommandStates = new Dictionary<string, Func<RibbonCommandState>>(StringComparer.Ordinal)
                 {
+                    ["Hide"] = () => new RibbonCommandState(IsEnabled: WindowRegistry.CanHide(this)),
+                    ["Unhide"] = () => new RibbonCommandState(IsEnabled: WindowRegistry.HiddenWindows.Count > 0),
                     ["Gridlines"] = () => new RibbonCommandState(IsChecked: _session.IsShowingGridlines),
                     ["Headings"] = () => new RibbonCommandState(IsChecked: _session.IsShowingHeadings),
                     ["Ruler"] = () => new RibbonCommandState(IsChecked: _session.IsShowingRulers),

@@ -86,6 +86,62 @@ public sealed class WorkbookWindowRegistryCoreTests
     }
 
     [Fact]
+    public void HideAndUnhide_OwnVisibilityStateAndRejectTheLastVisibleWindow()
+    {
+        var core = CreateCore();
+        var first = new TestWindow();
+        var second = new TestWindow();
+        core.Register(first);
+        core.Register(second);
+
+        core.CanHide(first).Should().BeTrue();
+        core.Hide(first).Should().BeTrue();
+        core.Hide(first).Should().BeFalse();
+        core.HiddenWindows.Should().Equal(first);
+        core.VisibleWindows.Should().Equal(second);
+        core.VisibleCount.Should().Be(1);
+        core.CanHide(second).Should().BeFalse();
+        core.Hide(second).Should().BeFalse();
+
+        core.Unhide(first).Should().BeTrue();
+        core.Unhide(first).Should().BeFalse();
+        core.HiddenWindows.Should().BeEmpty();
+        core.VisibleWindows.Should().Equal(first, second);
+    }
+
+    [Fact]
+    public void NativeVisibilityStillGatesSharedHidePolicy()
+    {
+        var core = CreateCore();
+        var visible = new TestWindow();
+        var nativeHidden = new TestWindow { IsVisible = false };
+        core.Register(visible);
+        core.Register(nativeHidden);
+
+        core.VisibleCount.Should().Be(1);
+        core.CanHide(visible).Should().BeFalse();
+        core.CanHide(nativeHidden).Should().BeFalse();
+        core.HiddenWindows.Should().BeEmpty();
+    }
+
+    [Fact]
+    public void UnregisterHiddenWindow_RemovesOwnedHiddenState()
+    {
+        var core = CreateCore();
+        var first = new TestWindow();
+        var second = new TestWindow();
+        core.Register(first);
+        core.Register(second);
+        core.Hide(first).Should().BeTrue();
+
+        core.Unregister(first).Should().BeTrue();
+
+        core.HiddenWindows.Should().BeEmpty();
+        core.Windows.Should().Equal(second);
+        core.IsVisible(first).Should().BeFalse();
+    }
+
+    [Fact]
     public void PlanVisibleArrangement_LeavesHiddenWindowsUntouchedAndPreservesRegistrationOrder()
     {
         var core = CreateCore();

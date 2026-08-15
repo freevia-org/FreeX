@@ -340,36 +340,30 @@ public sealed partial class MainWindow
 
     private async Task ShowUnhideWindowDialogAsync()
     {
-        if (HiddenWindows.Count == 0)
+        if (WindowRegistry.HiddenWindows.Count == 0)
         {
             RefreshShell(UiText.Get("MainWindowMessage_UnhideNoHiddenWindows"));
             return;
         }
 
-        var allWindows = AllTopLevelWindows.ToList();
         var targets = WorkbookWindowSelectionPlanner.BuildUnhideWindowTargets(
-            HiddenWindows.Select(window =>
-            {
-                var index = Math.Max(0, allWindows.IndexOf(window));
-                var displayName = window is MainWindow workbookWindow
-                    ? WorkbookWindowSelectionPlanner.FormatDisplayName(workbookWindow._session.Workbook.Name, "")
-                    : string.IsNullOrWhiteSpace(window.Title) ? "Workbook" : window.Title;
-                return new WorkbookWindowSelectionEntry<Window>(window, index, displayName);
-            }),
+            WindowRegistry.HiddenWindows.Select(window =>
+                new WorkbookWindowSelectionEntry<MainWindow>(
+                    window,
+                    WindowRegistry.IndexOf(window),
+                    window.WindowMenuDisplayName)),
             _session.Workbook.Name,
-            allWindows.Count);
+            WindowRegistry.Count);
 
         var selected = await ShowUnhideWindowDialogCoreAsync(targets);
-        if (selected is null || !HiddenWindows.Remove(selected))
+        if (selected is null || !WindowRegistry.Unhide(selected))
             return;
 
-        selected.Show();
-        selected.Activate();
         RefreshShell(UiText.Get("MainWindowMessage_UnhideWindowTitle"));
     }
 
-    private async Task<Window?> ShowUnhideWindowDialogCoreAsync(
-        IReadOnlyList<WorkbookWindowSelectionTarget<Window>> targets)
+    private async Task<MainWindow?> ShowUnhideWindowDialogCoreAsync(
+        IReadOnlyList<WorkbookWindowSelectionTarget<MainWindow>> targets)
     {
         var list = new ListBox
         {
@@ -405,21 +399,21 @@ public sealed partial class MainWindow
         AutomationProperties.SetAutomationId(cancelButton, "UnhideWindowCancelButton");
         AutomationProperties.SetName(cancelButton, UiText.Get("UnhideWindow_CancelAutomationName"));
         AutomationProperties.SetHelpText(cancelButton, UiText.Get("UnhideWindow_CancelHelpText"));
-        okButton.IsEnabled = list.SelectedItem is WorkbookWindowSelectionTarget<Window>;
+        okButton.IsEnabled = list.SelectedItem is WorkbookWindowSelectionTarget<MainWindow>;
         list.SelectionChanged += (_, _) =>
-            okButton.IsEnabled = list.SelectedItem is WorkbookWindowSelectionTarget<Window>;
+            okButton.IsEnabled = list.SelectedItem is WorkbookWindowSelectionTarget<MainWindow>;
 
         void Accept()
         {
-            if (list.SelectedItem is WorkbookWindowSelectionTarget<Window> target)
+            if (list.SelectedItem is WorkbookWindowSelectionTarget<MainWindow> target)
                 dialog.Close(target.Window);
         }
 
         okButton.Click += (_, _) => Accept();
-        cancelButton.Click += (_, _) => dialog.Close((Window?)null);
+        cancelButton.Click += (_, _) => dialog.Close((MainWindow?)null);
         list.PointerPressed += (_, args) =>
         {
-            if (args.ClickCount >= 2 && list.SelectedItem is WorkbookWindowSelectionTarget<Window>)
+            if (args.ClickCount >= 2 && list.SelectedItem is WorkbookWindowSelectionTarget<MainWindow>)
             {
                 Accept();
                 args.Handled = true;
@@ -439,7 +433,7 @@ public sealed partial class MainWindow
         };
         dialog.Opened += (_, _) => list.Focus();
 
-        return await dialog.ShowDialog<Window?>(this);
+        return await dialog.ShowDialog<MainWindow?>(this);
     }
 
     private static HeaderFooterEditorSection ResolveHeaderFooterPictureSection(

@@ -78,23 +78,23 @@ public sealed partial class MainWindow
 
     private async Task ShowUnhideWindowParityDialogAsync()
     {
-        var hidden = new Window
-        {
-            Title = "Parity Demo:2",
-            Width = 320,
-            Height = 200,
-            ShowInTaskbar = false,
-        };
+        var hidden = new MainWindow(
+            App.StartupArguments,
+            _session.CreateSiblingView(InitialViewportHeight, InitialViewportWidth),
+            _optionsRuntimeSession);
         hidden.Show();
-        hidden.Hide();
-        HiddenWindows.Add(hidden);
+        if (!WindowRegistry.Hide(hidden))
+        {
+            hidden.Close();
+            throw new InvalidOperationException("Unable to create the hidden workbook-window capture state.");
+        }
+
         try
         {
             await ShowUnhideWindowDialogAsync();
         }
         finally
         {
-            HiddenWindows.Remove(hidden);
             hidden.Close();
         }
     }

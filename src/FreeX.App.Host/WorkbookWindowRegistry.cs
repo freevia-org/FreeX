@@ -97,15 +97,13 @@ public interface IWorkbookWindow
 public sealed class WorkbookWindowRegistry
 {
     private readonly WorkbookWindowRegistryCore<IWorkbookWindow> _core;
-    private readonly HashSet<IWorkbookWindow> _hidden = [];
-
     private readonly WorkbookSideBySideCoordinator<IWorkbookWindow> _sideBySide = new();
 
     public WorkbookWindowRegistry()
     {
         _core = new WorkbookWindowRegistryCore<IWorkbookWindow>(
             static window => window.DocumentId,
-            window => !_hidden.Contains(window),
+            static _ => true,
             static (window, suffix) => window.ApplyWindowTitleSuffix(suffix));
     }
 
@@ -122,10 +120,10 @@ public sealed class WorkbookWindowRegistry
     public int Count => _core.Count;
 
     /// <summary>Number of registered windows that are currently visible (not hidden).</summary>
-    public int VisibleCount => VisibleWindows.Count;
+    public int VisibleCount => _core.VisibleCount;
 
     /// <summary>Currently-hidden windows, in registration order.</summary>
-    public IReadOnlyList<IWorkbookWindow> HiddenWindows => _core.Windows.Where(_hidden.Contains).ToList();
+    public IReadOnlyList<IWorkbookWindow> HiddenWindows => _core.HiddenWindows;
 
     /// <summary>True when View Side by Side is currently tiling a pair of windows.</summary>
     public bool IsSideBySideActive => _sideBySide.IsActive;
@@ -143,23 +141,20 @@ public sealed class WorkbookWindowRegistry
         _sideBySide.PartnerOf(requester);
 
     /// <summary>True when the window is registered and not hidden.</summary>
-    public bool IsVisible(IWorkbookWindow window) =>
-        window is not null && _core.IndexOf(window) >= 0 && !_hidden.Contains(window);
+    public bool IsVisible(IWorkbookWindow window) => _core.IsVisible(window);
 
     /// <summary>
     /// A window can be hidden only when it is registered, currently visible, and at least one
     /// other window would remain visible (you cannot hide the last visible window).
     /// </summary>
-    public bool CanHide(IWorkbookWindow window) =>
-        window is not null && IsVisible(window) && VisibleCount > 1;
+    public bool CanHide(IWorkbookWindow window) => _core.CanHide(window);
 
     /// <summary>Hides the window if <see cref="CanHide"/> allows. Returns true if it was hidden.</summary>
     public bool Hide(IWorkbookWindow window)
     {
-        if (!CanHide(window))
+        if (!_core.Hide(window))
             return false;
 
-        _hidden.Add(window);
         if (_sideBySide.Contains(window))
             DisableSideBySide();
         window.SetWindowVisible(false);
@@ -169,7 +164,7 @@ public sealed class WorkbookWindowRegistry
     /// <summary>Restores a hidden window and activates it. Returns true if it was unhidden.</summary>
     public bool Unhide(IWorkbookWindow window)
     {
-        if (window is null || !_hidden.Remove(window))
+        if (!_core.Unhide(window))
             return false;
 
         window.SetWindowVisible(true);
@@ -194,7 +189,6 @@ public sealed class WorkbookWindowRegistry
     public void Unregister(IWorkbookWindow window)
     {
         ArgumentNullException.ThrowIfNull(window);
-        _hidden.Remove(window);
         if (_sideBySide.Contains(window))
             DisableSideBySide();
         _core.Unregister(window);

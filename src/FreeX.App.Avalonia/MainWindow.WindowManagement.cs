@@ -4,6 +4,7 @@ using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Platform;
 using Free.Shared.Shell;
 using Free.Shared.Shell.Avalonia;
+using FreeX.App.Presentation.Shell;
 using FreeX.App.Services;
 using FreeX.Core.Commands;
 using FreeX.Core.Model;
@@ -29,10 +30,6 @@ namespace FreeX.App.Avalonia;
 //    WPF; Arrange All tiles visible workbook windows only and never changes hidden state.
 public sealed partial class MainWindow : Window
 {
-    // Tracks windows hidden via HideActiveWindow for the Window-group Unhide dialog.
-    // Static so any visible window can restore windows hidden elsewhere.
-    private static readonly List<Window> HiddenWindows = new();
-
     private IClassicDesktopStyleApplicationLifetime? DesktopLifetime =>
         Application.Current?.ApplicationLifetime as IClassicDesktopStyleApplicationLifetime;
 
@@ -46,6 +43,12 @@ public sealed partial class MainWindow : Window
     }
 
     public WorkbookId DocumentId => _session.Workbook.Id;
+
+    internal string WindowMenuDisplayName => WorkbookWindowSelectionPlanner.FormatDisplayName(
+        _session.Workbook.Name,
+        _windowTitleSuffix);
+
+    internal void RefreshWindowVisibilityCommandStates() => _refreshRibbonToggleStates?.Invoke();
 
     internal void ApplyWindowTitleSuffix(string suffix)
     {
@@ -200,30 +203,24 @@ public sealed partial class MainWindow : Window
     // view.hide
     private void HideActiveWindow()
     {
-        var visibleCount = AllTopLevelWindows.Count(static w => w.IsVisible);
-
         // Hiding the last visible window would strand the user because the Window-group Unhide
         // command itself is available only from a visible workbook window.
-        if (visibleCount <= 1)
+        if (!WindowRegistry.Hide(this))
         {
             RefreshShell(UiText.Get("ShellLoc_CannotHideLastWindow"));
             return;
         }
 
-        if (!HiddenWindows.Contains(this))
-            HiddenWindows.Add(this);
-
-        Hide();
+        SideBySideCoordinator.DisableFor(this);
+        WindowRegistry.NotifyVisibilityChanged(this);
         // The hidden window's own status bar is now off-screen; remaining visible
         // windows can recover it via View ▸ Arrange All.
     }
 
     protected override void OnClosed(EventArgs e)
     {
-        // A window hidden via View ▸ Hide must drop out of the static registry when it closes;
-        // otherwise the closed window (and its whole WorkbookSession/document graph) leaks for the
-        // rest of the session.
-        HiddenWindows.Remove(this);
+        // A closing window must drop out of the shared registry so it and its WorkbookSession
+        // document graph are no longer retained.
         _session.WorkbookChanged -= Session_WorkbookChanged;
         _fileOperationCancellationSession.Dispose();
         _session.Dispose();
