@@ -241,8 +241,35 @@ public sealed record DocumentShareActionPlan(
     public DocumentShareActionSurface EffectiveSurface => Surface ?? DocumentShareActionSurface.MacOsPreview;
 }
 
-public sealed record DocumentShareActionTextSpec(string DocumentNoun)
+public sealed record DocumentShareActionTextSpec(
+    string DocumentNoun,
+    string ReadySavedFileFormat,
+    string ReadyPathFormat,
+    string OpenFolderSavedFileFormat,
+    string OpenFolderPathFormat,
+    string MissingFileFormat,
+    string UnsupportedLinkFormat,
+    string InvalidPathFormat,
+    string UnsavedFormat,
+    string ContainingFolderUnavailableFormat,
+    string DeferredFormat)
 {
+    public DocumentShareActionTextSpec(string documentNoun)
+        : this(
+            documentNoun,
+            "Ready for {0} from the saved local file.",
+            "Ready for {0} from {1}.",
+            "{0} is unavailable in this build; use {1} for the saved local file.",
+            "{0} is unavailable in this build; use {1} for {2}.",
+            "Save As is required before {0} can use the {1} because the saved path is missing: {2}.",
+            "Save As is required before {0} can use the {1} because cloud or web links are not supported; save the {1} to a local file first.",
+            "Save As is required before {0} can use the {1} because the saved path is not a valid local file path.",
+            "Save As is required before {0} can use the {1} because it has not been saved yet.",
+            "{0} is unavailable for the saved {1} path.",
+            "{0} is unavailable in this build and no open-containing-folder adapter is available.")
+    {
+    }
+
     public static DocumentShareActionTextSpec NeutralEnglish { get; } = new("document");
 
     public static DocumentShareActionTextSpec WorkbookEnglish { get; } = new("workbook");
@@ -315,43 +342,43 @@ public static class DocumentShareActionPlanner
         return plan.Kind switch
         {
             DocumentShareActionPlanKind.ShareSheet => string.IsNullOrWhiteSpace(plan.Path)
-                ? $"Ready for {surface.ShareSheetLabel} from the saved local file."
-                : $"Ready for {surface.ShareSheetLabel} from {plan.Path}.",
+                ? string.Format(text.ReadySavedFileFormat, surface.ShareSheetLabel)
+                : string.Format(text.ReadyPathFormat, surface.ShareSheetLabel, plan.Path),
             DocumentShareActionPlanKind.OpenContainingFolder => string.IsNullOrWhiteSpace(plan.Path)
-                ? $"{surface.ShareSheetLabel} is unavailable in this build; use {surface.OpenContainingFolderLabel} for the saved local file."
-                : $"{surface.ShareSheetLabel} is unavailable in this build; use {surface.OpenContainingFolderLabel} for {plan.Path}.",
-            DocumentShareActionPlanKind.SaveAsBeforeShare => FormatSaveAsStatus(plan, surface, text.DocumentNoun),
-            _ => FormatDeferredStatus(plan, surface, text.DocumentNoun)
+                ? string.Format(text.OpenFolderSavedFileFormat, surface.ShareSheetLabel, surface.OpenContainingFolderLabel)
+                : string.Format(text.OpenFolderPathFormat, surface.ShareSheetLabel, surface.OpenContainingFolderLabel, plan.Path),
+            DocumentShareActionPlanKind.SaveAsBeforeShare => FormatSaveAsStatus(plan, surface, text),
+            _ => FormatDeferredStatus(plan, surface, text)
         };
     }
 
     private static string FormatSaveAsStatus(
         DocumentShareActionPlan plan,
         DocumentShareActionSurface surface,
-        string documentNoun)
+        DocumentShareActionTextSpec text)
     {
         var actionLabel = surface.CanShowShareSheet ? surface.ShareSheetLabel : surface.OpenContainingFolderLabel;
         return plan.SaveAsReason switch
         {
             DocumentShareSaveAsReason.MissingFile when !string.IsNullOrWhiteSpace(plan.CandidatePath) =>
-                $"Save As is required before {actionLabel} can use the {documentNoun} because the saved path is missing: {plan.CandidatePath}.",
+                string.Format(text.MissingFileFormat, actionLabel, text.DocumentNoun, plan.CandidatePath),
             DocumentShareSaveAsReason.InvalidPath when DocumentShareReadinessPlanner.IsUnsupportedLinkCandidate(plan.CandidatePath) =>
-                $"Save As is required before {actionLabel} can use the {documentNoun} because cloud or web links are not supported; save the {documentNoun} to a local file first.",
+                string.Format(text.UnsupportedLinkFormat, actionLabel, text.DocumentNoun),
             DocumentShareSaveAsReason.InvalidPath =>
-                $"Save As is required before {actionLabel} can use the {documentNoun} because the saved path is not a valid local file path.",
-            _ => $"Save As is required before {actionLabel} can use the {documentNoun} because it has not been saved yet."
+                string.Format(text.InvalidPathFormat, actionLabel, text.DocumentNoun),
+            _ => string.Format(text.UnsavedFormat, actionLabel, text.DocumentNoun)
         };
     }
 
     private static string FormatDeferredStatus(
         DocumentShareActionPlan plan,
         DocumentShareActionSurface surface,
-        string documentNoun) =>
+        DocumentShareActionTextSpec text) =>
         plan.UnavailableReason switch
         {
             DocumentShareActionUnavailableReason.ContainingFolderUnavailable =>
-                $"{surface.OpenContainingFolderLabel} is unavailable for the saved {documentNoun} path.",
-            _ => $"{surface.ShareSheetLabel} is unavailable in this build and no open-containing-folder adapter is available."
+                string.Format(text.ContainingFolderUnavailableFormat, surface.OpenContainingFolderLabel, text.DocumentNoun),
+            _ => string.Format(text.DeferredFormat, surface.ShareSheetLabel)
         };
 
     private static bool TryGetContainingFolderPath(string? filePath, out string containingFolderPath)
