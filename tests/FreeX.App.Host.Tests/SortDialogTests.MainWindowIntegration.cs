@@ -34,16 +34,16 @@ public sealed partial class SortDialogTests
     // the SortCommand -- otherwise a real multi-area selection would still pop the dialog and let
     // the user "successfully" custom-sort just the active area while every other area silently sat
     // untouched. Verified via source order (rather than driving the modal dialog directly, which
-    // would block indefinitely with no user present to dismiss it) that TryRejectMultiAreaSort is
-    // called, and called strictly before `new SortDialog(`.
+    // would block indefinitely with no user present to dismiss it) that the shared selection-policy
+    // adapter is called strictly before `new SortDialog(`.
     [Fact]
     public void MainWindowCustomSort_RejectsMultiAreaSelectionBeforeOpeningTheDialog()
     {
         var source = DialogSourceTestSupport.ReadHostSources("MainWindow.DataFilterCommands.cs");
 
-        source.Should().Contain("if (TryRejectMultiAreaSort(range)) return;");
+        source.Should().Contain("if (TryRejectInvalidSortSelection()) return;");
 
-        var rejectIndex = source.IndexOf("if (TryRejectMultiAreaSort(range)) return;", StringComparison.Ordinal);
+        var rejectIndex = source.IndexOf("if (TryRejectInvalidSortSelection()) return;", StringComparison.Ordinal);
         var dialogConstructIndex = source.IndexOf("new SortDialog(", StringComparison.Ordinal);
         rejectIndex.Should().BeGreaterThan(-1);
         dialogConstructIndex.Should().BeGreaterThan(-1);

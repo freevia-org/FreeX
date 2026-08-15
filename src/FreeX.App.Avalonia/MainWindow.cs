@@ -18760,6 +18760,12 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         if (!TryCommitPendingFormulaEdit())
             return;
 
+        if (_session.GetSelectedRangeSortError() is { } error)
+        {
+            ShowEditIssue(error);
+            return;
+        }
+
         var selection = await ShowSortInputDialogAsync();
         if (selection is null)
             return;

@@ -27,30 +27,18 @@ public partial class MainWindow
     private void RecalculateAfterFilterOrSort() => RecalculateWorkbook();
 
     /// <summary>
-    /// R127-commands-sort-multiarea-1: real Excel refuses Sort outright on a Ctrl+click multi-area
-    /// selection ("This operation is not allowed on multiple selections. Select a single range and
-    /// click the command again."), rather than quietly reordering only the active area's rows while
-    /// every other selected area is left completely untouched -- which is worse than a no-op if the
-    /// areas held related data the user expected to stay row-aligned (e.g. two side-by-side blocks).
-    /// SortAscButton_Click/SortDescButton_Click/SortCustomButton_Click (and their Home-tab menu
-    /// aliases SortAZMenuItem_Click/SortZAMenuItem_Click/SortCustomMenuItem_Click, which delegate
-    /// straight into these) all gated only on SheetGrid.SelectedRange with no check of
-    /// SheetGrid.SelectedRanges, so a second Ctrl+click area was silently dropped. Mirrors the
-    /// identical refusal ExecuteCopy/ExecuteCut already apply for the same multi-area scenario,
-    /// and the shared Avalonia
-    /// session's SortSelectedRange overloads (WorkbookSession.cs) get the same refusal.
+    /// Keeps invalid selections from opening the modal Custom Sort dialog. The actual policy lives
+    /// in WorkbookSession and is also enforced by both shared sort execution methods.
     /// </summary>
-    private bool TryRejectMultiAreaSort(GridRange range)
+    private bool TryRejectInvalidSortSelection()
     {
-        if (GetCurrentSelectionRanges(range).Count <= 1)
+        SynchronizeWorkbookSessionSelection();
+        if (_session.GetSelectedRangeSortError() is not { } error)
             return false;
 
-        ShowCommandError(new CommandOutcome(false, CreateMultiRangeSortError()), "Sort");
+        ShowCommandError(new CommandOutcome(false, error), "Sort");
         return true;
     }
-
-    private static string CreateMultiRangeSortError() =>
-        "Sort does not support multiple selected ranges yet.";
 
     private bool TryExecuteWorksheetFilterCommand(
         Func<WorkbookCellEditResult> execute,
@@ -63,12 +51,10 @@ public partial class MainWindow
 
     private void SortAscButton_Click(object sender, RoutedEventArgs e)
     {
-        if (SheetGrid.SelectedRange is not { } range) return;
-        if (TryRejectMultiAreaSort(range)) return;
-        if (!TryExecuteRepeatableCurrentRangeCommand(
-                "Sort",
-                range,
-                currentRange => CreateQuickSortCommand(currentRange, ascending: true)))
+        if (SheetGrid.SelectedRange is null) return;
+        if (!TryExecuteWorksheetLayout(
+                () => _session.SortSelectedRange(ascending: true),
+                "Sort"))
             return;
         RecalculateAfterFilterOrSort();
         UpdateViewport();
@@ -76,39 +62,19 @@ public partial class MainWindow
 
     private void SortDescButton_Click(object sender, RoutedEventArgs e)
     {
-        if (SheetGrid.SelectedRange is not { } range) return;
-        if (TryRejectMultiAreaSort(range)) return;
-        if (!TryExecuteRepeatableCurrentRangeCommand(
-                "Sort",
-                range,
-                currentRange => CreateQuickSortCommand(currentRange, ascending: false)))
+        if (SheetGrid.SelectedRange is null) return;
+        if (!TryExecuteWorksheetLayout(
+                () => _session.SortSelectedRange(ascending: false),
+                "Sort"))
             return;
         RecalculateAfterFilterOrSort();
         UpdateViewport();
     }
 
     /// <summary>
-    /// R34-commands-sort-custom-deep-2: the quick ribbon Sort Ascending/Descending buttons passed
-    /// SelectedRange straight into SortCommand with no header exclusion, so a header row (e.g. "Name",
-    /// "Score") got sorted in among the data rows instead of staying pinned at the top -- unlike
-    /// SortCustomButton_Click, which already excludes an (opt-in) header row via
-    /// SortDialogPlanner.ExcludeHeaderRow before building its SortCommand. The quick buttons have no dialog to
-    /// ask the user, so auto-detect a header row with the same heuristic Quick Analysis already uses
-    /// (first row all-text, at least one data row numeric/date) and exclude it the same way.
+    /// Auto-detects whether the range looks like it has a header row, using the same heuristic as
+    /// the shared quick-sort planner instead of always checking "My data has headers".
     /// </summary>
-    private SortCommand CreateQuickSortCommand(GridRange range, bool ascending)
-    {
-        if (_workbook.GetSheet(_currentSheetId) is not { } sheet)
-            return new SortCommand(_currentSheetId, range, sortByColOffset: 0, ascending);
-
-        var plan = QuickSortRangePlanner.Create(sheet, range, SheetGrid.ActiveCell);
-        return new SortCommand(_currentSheetId, plan.Range, plan.SortByColOffset, ascending);
-    }
-
-    // Auto-detects whether `range` looks like it has a header row, using the same heuristic the
-    // quick ribbon Sort Asc/Desc buttons (CreateQuickSortCommand, above) already use, instead of
-    // always defaulting the Custom Sort dialog's "My data has headers"
-    // checkbox to checked (R51-commands-sort-custom-multilevel-3-1).
     private bool DetectSortDialogHasHeaders(GridRange range) =>
         _workbook.GetSheet(_currentSheetId) is { } sheet &&
         QuickSortRangePlanner.HasLikelyHeaderRow(sheet, range);
@@ -116,7 +82,7 @@ public partial class MainWindow
     private void SortCustomButton_Click(object sender, RoutedEventArgs e)
     {
         if (SheetGrid.SelectedRange is not { } range) return;
-        if (TryRejectMultiAreaSort(range)) return;
+        if (TryRejectInvalidSortSelection()) return;
         var sheet = _workbook.GetSheet(_currentSheetId);
         var hasHeaders = DetectSortDialogHasHeaders(range);
         var dialog = new SortDialog(
@@ -142,10 +108,9 @@ public partial class MainWindow
             dialog.ResultHasHeaders,
             SortDialog.PlannerText);
 
-        if (!TryExecuteRepeatableCurrentRangeCommand(
-                "Sort",
-                range,
-                currentRange => sortPlan.CreateCommand(_currentSheetId, currentRange)))
+        if (!TryExecuteWorksheetLayout(
+                () => _session.SortSelectedRange(sortPlan),
+                "Sort"))
             return;
         RecalculateAfterFilterOrSort();
         UpdateViewport();

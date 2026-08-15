@@ -2067,6 +2067,7 @@ public sealed class AvaloniaShellSourceTests
     public void MainWindow_WiresNativeDataSortMenuThroughSharedWorkbookSession()
     {
         var source = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MainWindow.cs"));
+        var wpfSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Host", "MainWindow.DataFilterCommands.cs"));
         var sessionSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Services", "WorkbookSession.cs"));
         var quickSortSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Services", "QuickSortRangePlanner.cs"));
         var smokeSource = File.ReadAllText(RepositoryFileLocator.Find("tools", "FreeX.Validation.Avalonia", "MacOsLaunchSmoke.cs"));
@@ -2076,6 +2077,7 @@ public sealed class AvaloniaShellSourceTests
         sessionSource.Should().Contain("public bool CanSortSelectedRange => SelectedRange.RowCount > 1;");
         sessionSource.Should().Contain("public WorkbookCellEditResult SortSelectedRange(bool ascending)");
         sessionSource.Should().Contain("QuickSortRangePlanner.Create(ActiveSheet, range, ActiveCell)");
+        sessionSource.Should().Contain("_cellEditService.ExecuteRepeatableEditCommand(");
         sessionSource.Should().Contain("sortPlan.SortByColOffset");
         sessionSource.Should().Contain("public WorkbookCellEditResult SortSelectedRange(IReadOnlyList<CoreSortKey> sortKeys, SortOptions options, bool hasHeaders)");
         sessionSource.Should().Contain("public WorkbookCellEditResult SortSelectedRange(SortDialogCommandPlan sortPlan)");
@@ -2112,9 +2114,15 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("\"MainLoc_SortedX\",");
         source.Should().Contain("UiText.Get(ascending ? \"Sort_AtoZ\" : \"Sort_ZtoA\")");
         source.Should().Contain("private async Task ShowSortDialogAsync()");
+        source.Should().Contain("_session.GetSelectedRangeSortError()");
         source.Should().Contain("var selection = await ShowSortInputDialogAsync();");
         source.Should().Contain("var sortPlan = SortDialogPlanner.CreateCommandPlan(");
         source.Should().Contain("var result = _session.SortSelectedRange(sortPlan);");
+        wpfSource.Should().Contain("() => _session.SortSelectedRange(ascending: true)");
+        wpfSource.Should().Contain("() => _session.SortSelectedRange(ascending: false)");
+        wpfSource.Should().Contain("() => _session.SortSelectedRange(sortPlan)");
+        wpfSource.Should().Contain("_session.GetSelectedRangeSortError()");
+        wpfSource.Should().NotContain("CreateQuickSortCommand(");
         source.Should().Contain("private async Task<SortDialogResult?> ShowSortInputDialogAsync()");
         source.Should().Contain("AutomationProperties.SetAutomationId(dialog, \"SortCompactDialog\");");
         source.Should().Contain("AutomationProperties.SetAutomationId(headersCheck, \"SortHeadersCheckBox\");");

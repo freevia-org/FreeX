@@ -20,8 +20,9 @@ namespace FreeX.App.Host.Tests;
 // column C's rows while column A was left completely untouched and unwarned -- worse than a no-op
 // if the two areas held related, row-aligned data. Real Excel refuses Sort outright on a multiple
 // selection ("This operation is not allowed on multiple selections. Select a single range and click
-// the command again."). The fix adds TryRejectMultiAreaSort, checked before any SortCommand is ever
-// built, mirroring ExecuteCopy/ExecuteCut's identical multi-area refusal
+// the command again."). The renderer now synchronizes selection into WorkbookSession, whose shared
+// sort policy rejects the command before any SortCommand is built, mirroring ExecuteCopy/ExecuteCut's
+// identical multi-area refusal
 // (CreateMultiRangeClipboardError, MainWindow.ClipboardCommands.cs) and the shared Avalonia
 // session's SortSelectedRange overloads (WorkbookSession.cs, see
 // R127_WorkbookSessionMultiAreaSortRejectionTests in FreeX.App.Services.Tests).

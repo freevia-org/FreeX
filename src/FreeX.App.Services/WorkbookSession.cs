@@ -4501,6 +4501,17 @@ public sealed class WorkbookSession : IDisposable
 
     public bool CanSortSelectedRange => SelectedRange.RowCount > 1;
 
+    /// <summary>
+    /// Returns the renderer-neutral reason the current selection cannot be sorted. Renderers use
+    /// this before opening a modal Custom Sort dialog; execution methods enforce the same policy.
+    /// </summary>
+    public string? GetSelectedRangeSortError()
+    {
+        if (GetCurrentSelectedRanges().Count > 1)
+            return CreateMultiRangeClipboardError("Sort");
+        return CanSortSelectedRange ? null : "Select at least two rows to sort.";
+    }
+
     /// <summary>True when the active sheet currently has an AutoFilter (filter dropdowns) enabled.</summary>
     public bool ActiveSheetHasAutoFilter => ActiveSheet.AutoFilter is not null;
 
@@ -4523,52 +4534,46 @@ public sealed class WorkbookSession : IDisposable
     /// click the command again."). Both SortSelectedRange overloads previously read only
     /// SelectedRange, so a Sort silently reordered rows in the active area alone while every other
     /// selected area was left completely untouched and unwarned -- worse than a no-op if the areas
-    /// held related data the user expected to stay row-aligned. Mirrors the WPF host's identical
-    /// refusal (MainWindow.DataFilterCommands.TryRejectMultiAreaSort) and this class's own
-    /// CreateMultiRangeClipboardError refusal for multi-area Copy/Cut/Paste Special.
+    /// held related data the user expected to stay row-aligned. The same shared policy rejects
+    /// selections too short to sort before either renderer opens its Custom Sort dialog.
     /// </summary>
-    private bool TryCreateMultiAreaSortRejection(out WorkbookCellEditResult rejection)
+    private bool TryCreateSortRejection(out WorkbookCellEditResult rejection)
     {
-        if (GetCurrentSelectedRanges().Count <= 1)
+        if (GetSelectedRangeSortError() is not { } error)
         {
             rejection = default!;
             return false;
         }
 
-        rejection = new WorkbookCellEditResult(false, CreateMultiRangeClipboardError("Sort"), [], RecalcReport: null);
+        rejection = new WorkbookCellEditResult(false, error, [], RecalcReport: null);
         return true;
     }
 
     public WorkbookCellEditResult SortSelectedRange(bool ascending)
     {
-        if (TryCreateMultiAreaSortRejection(out var multiAreaRejection))
-            return multiAreaRejection;
+        if (TryCreateSortRejection(out var rejection))
+            return rejection;
 
-        if (!CanSortSelectedRange)
-        {
-            return new WorkbookCellEditResult(
-                false,
-                "Select at least two rows to sort.",
-                [],
-                RecalcReport: null);
-        }
-
-        var range = SelectedRange;
-        var sortPlan = QuickSortRangePlanner.Create(ActiveSheet, range, ActiveCell);
-        var result = _cellEditService.ExecuteEditCommand(
+        var initialRange = SelectedRange;
+        var result = _cellEditService.ExecuteRepeatableEditCommand(
             Workbook,
-            CreateRangeCommand(
-                sortPlan.Range,
-                "Sort",
-                (sheetId, sheetRange) => new SortCommand(
-                    sheetId,
-                    sheetRange,
-                    sortPlan.SortByColOffset,
-                    ascending)));
+            () =>
+            {
+                var range = SelectedRange;
+                var sortPlan = QuickSortRangePlanner.Create(ActiveSheet, range, ActiveCell);
+                return CreateRangeCommand(
+                    sortPlan.Range,
+                    "Sort",
+                    (sheetId, sheetRange) => new SortCommand(
+                        sheetId,
+                        sheetRange,
+                        sortPlan.SortByColOffset,
+                        ascending));
+            });
         if (!result.Success)
             return result;
 
-        ApplySuccessfulRangeEditResult(result, range);
+        ApplySuccessfulRangeEditResult(result, initialRange);
         return result;
     }
 
@@ -4584,23 +4589,14 @@ public sealed class WorkbookSession : IDisposable
     {
         ArgumentNullException.ThrowIfNull(sortPlan);
 
-        if (TryCreateMultiAreaSortRejection(out var multiAreaRejection))
-            return multiAreaRejection;
-
-        if (!CanSortSelectedRange)
-        {
-            return new WorkbookCellEditResult(
-                false,
-                "Select at least two rows to sort.",
-                [],
-                RecalcReport: null);
-        }
+        if (TryCreateSortRejection(out var rejection))
+            return rejection;
 
         var range = SelectedRange;
-        var result = _cellEditService.ExecuteEditCommand(
+        var result = _cellEditService.ExecuteRepeatableEditCommand(
             Workbook,
-            CreateRangeCommand(
-                range,
+            () => CreateRangeCommand(
+                SelectedRange,
                 "Sort",
                 sortPlan.CreateCommand));
         if (!result.Success)
