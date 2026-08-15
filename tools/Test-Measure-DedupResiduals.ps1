@@ -50,7 +50,14 @@ $rendererRoots = @(
     "freep/FreeP.App.Host",
     "freep/FreeP.App.Rendering.Wpf",
     "freep/FreeP.App.Avalonia",
-    "freep/FreeP.App.Rendering.Avalonia"
+    "freep/FreeP.App.Rendering.Avalonia",
+    # Neutral tiers and the shared tier are measured alongside the renderers so that
+    # neutral<->neutral and neutral<->renderer duplication is in scope too.
+    "src/FreeX.App.Presentation",
+    "src/FreeX.App.Services",
+    "freew/FreeW.App.Presentation",
+    "freep/FreeP.App.Presentation",
+    "shared"
 )
 
 $sharedCode = @'
@@ -104,8 +111,9 @@ try {
     & $MeasureScriptPath -RepositoryRoot $fixtureRoot -JsonPath $jsonPath -MarkdownPath $markdownPath -BlockSize 4 -MinimumBlockCharacters 20 -MaximumFingerprintOccurrences 64 -TopCandidateCount 5
     $report = Get-Content -LiteralPath $jsonPath -Raw | ConvertFrom-Json
     Assert-Condition ($report.schema -eq "freex.dedup-residual-metrics.v1") "Unexpected metrics schema."
-    Assert-Condition ($report.renderer.roots.Count -eq 8) "All eight renderer roots must be measured."
-    Assert-Condition ($report.renderer.files.Count -eq 10) "Generated and obj C# files must be excluded while empty source files remain inventoried."
+    Assert-Condition ($report.renderer.roots.Count -eq 13) "All thirteen roots (8 renderer + 4 neutral + shared) must be measured."
+    Assert-Condition (@($report.renderer.roots | Where-Object { $_.platform -eq "Neutral" }).Count -eq 5) "The neutral and shared tiers must be measured as their own roots."
+    Assert-Condition ($report.renderer.files.Count -eq 15) "Generated and obj C# files must be excluded while empty source files remain inventoried."
     $emptyFile = @($report.renderer.files | Where-Object { $_.path -eq "freew/FreeW.App.Host/Empty.cs" })[0]
     Assert-Condition ($emptyFile.codeLines -eq 0) "Empty source files must report zero code LOC."
     Assert-Condition ($report.renderer.duplicateBlocks.exact.Count -gt 0) "The fixture must produce exact duplicate blocks."

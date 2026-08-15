@@ -165,10 +165,17 @@ public sealed class CompactDialogChromeContractTests
         shared.Should().Contain("CompactDialogVisualTokens.ToggleDisabledBackgroundHex");
         shared.Should().Contain("CompactDialogVisualTokens.ToggleDisabledBorderHex");
         shared.Should().Contain("CompactDialogVisualTokens.ToggleDisabledMarkHex");
+        shared.Should().Contain("CompactDialogVisualTokens.DisabledFieldBorderHex");
+        shared.Should().Contain("CompactTextBoxClass");
+        shared.Should().Contain("QueueRenderedTextBoxChrome");
+        shared.Should().Contain("Name(\"PART_BorderElement\")");
 
         freeW.Should().Contain(
             "AvaloniaCompactDialogChrome.ApplyCompactCheckBox(checkBox, style, contentSpacing: 5);");
         freeW.Should().NotContain("checkBox.Template = new FuncControlTemplate<CheckBox>");
+        freeW.Should().NotContain("PART_BorderElement");
+        freeW.Should().NotContain("ApplyTextBox");
+        freeW.Should().NotContain("ApplyComboBox");
 
         freeX.Should().Contain(
             "AvaloniaCompactDialogChrome.ApplyCompactCheckBox(checkBox, PivotDialogChromeStyle);");

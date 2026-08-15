@@ -57,6 +57,7 @@ public sealed record AvaloniaCompactDialogChromeStyle(FontFamily FontFamily)
     public IBrush? ButtonPressedBackgroundBrush { get; init; }
     public IBrush? ButtonAccentBrush { get; init; }
     public IBrush? InputBorderBrush { get; init; }
+    public IBrush? DisabledInputBorderBrush { get; init; }
     public IBrush? ComboBoxBackgroundBrush { get; init; }
     public IBrush? TextBoxBackgroundBrush { get; init; }
     public IBrush? DisabledTextBoxBackgroundBrush { get; init; }
@@ -80,6 +81,7 @@ public static class AvaloniaCompactDialogChrome
     public const string ClassicTabClass = "free-classic-dialog-tabs";
     public const string CompactButtonClass = "free-compact-dialog-button";
     public const string CompactComboBoxClass = "free-compact-dialog-combo";
+    public const string CompactTextBoxClass = "free-compact-dialog-textbox";
     private const string ReadOnlyDocumentClass = "free-read-only-document";
 
     public static FontFamily WindowsUiFontFamily { get; } = new(
@@ -99,6 +101,8 @@ public static class AvaloniaCompactDialogChrome
     // Fluent's darker neutral border or the legacy Windows #ABADB3 shade.
     private static readonly IBrush InputBorderBrush = new ImmutableSolidColorBrush(
         Color.Parse(CompactDialogVisualTokens.FieldBorderHex));
+    private static readonly IBrush DisabledInputBorderBrush = new ImmutableSolidColorBrush(
+        Color.Parse(CompactDialogVisualTokens.DisabledFieldBorderHex));
     private static readonly IBrush ComboBoxBackgroundBrush = new ImmutableSolidColorBrush(Color.FromRgb(240, 240, 240));
     private static readonly IBrush TextSelectionBrush = new ImmutableSolidColorBrush(Color.FromRgb(0, 120, 215));
     private static readonly IBrush SelectedItemBackgroundBrush = new ImmutableSolidColorBrush(Color.FromRgb(204, 232, 255));
@@ -333,11 +337,30 @@ public static class AvaloniaCompactDialogChrome
         textBox.FontSize = style.FontSize;
         textBox.FontFamily = style.FontFamily;
         var inputBorder = style.InputBorderBrush ?? InputBorderBrush;
+        var disabledInputBorder = style.DisabledInputBorderBrush ?? DisabledInputBorderBrush;
         var textBoxBackground = style.TextBoxBackgroundBrush ?? ThemeWhiteBrush();
         textBox.Foreground = ThemeTextBrush(style);
         textBox.Background = textBoxBackground;
         textBox.BorderBrush = inputBorder;
         textBox.BorderThickness = new Thickness(CompactDialogVisualTokens.BorderThickness);
+        textBox.SelectionBrush = style.TextSelectionBrush ?? TextSelectionBrush;
+        if (style.TextSelectionBrush is not null)
+            textBox.SelectionForegroundBrush = Brushes.Black;
+        textBox.VerticalContentAlignment = VerticalAlignment.Center;
+        var focusedBorder = style.FocusedInputBorderBrush ?? ThemeAccentBrush(style);
+        if (style.RemoveFocusAdorner)
+            textBox.FocusAdorner = null;
+
+        // Fluent owns the realized field border in PART_BorderElement. Keep the WPF
+        // field authority in this shared adapter so individual applications do not
+        // patch toolkit internals or duplicate focus/disabled event policy.
+        if (textBox.Classes.Contains(CompactTextBoxClass))
+        {
+            QueueRenderedTextBoxChrome(textBox, style, fixedHeight);
+            return;
+        }
+
+        textBox.Classes.Add(CompactTextBoxClass);
         textBox.Styles.Add(new Style(selector => selector.OfType<TextBox>())
         {
             Setters =
@@ -348,11 +371,6 @@ public static class AvaloniaCompactDialogChrome
                 new Setter(TextBox.BorderThicknessProperty, new Thickness(CompactDialogVisualTokens.BorderThickness)),
             },
         });
-        textBox.SelectionBrush = style.TextSelectionBrush ?? TextSelectionBrush;
-        if (style.TextSelectionBrush is not null)
-            textBox.SelectionForegroundBrush = Brushes.Black;
-        textBox.VerticalContentAlignment = VerticalAlignment.Center;
-        var focusedBorder = style.FocusedInputBorderBrush ?? ThemeAccentBrush(style);
         textBox.Styles.Add(new Style(selector => selector.OfType<TextBox>().Class(":focus"))
         {
             Setters =
@@ -365,14 +383,6 @@ public static class AvaloniaCompactDialogChrome
         {
             Setters = { new Setter(TextBox.BorderBrushProperty, focusedBorder) },
         });
-        if (style.RemoveFocusAdorner)
-        {
-            textBox.FocusAdorner = null;
-        }
-        textBox.Styles.Add(new Style(selector => selector.OfType<Border>())
-        {
-            Setters = { new Setter(Border.BackgroundProperty, textBoxBackground) },
-        });
         if (style.DisabledTextBoxBackgroundBrush is not null)
         {
             textBox.Styles.Add(new Style(selector => selector.OfType<TextBox>().Class(":disabled"))
@@ -380,7 +390,7 @@ public static class AvaloniaCompactDialogChrome
                 Setters =
                 {
                     new Setter(TextBox.BackgroundProperty, style.DisabledTextBoxBackgroundBrush),
-                    new Setter(TextBox.BorderBrushProperty, inputBorder),
+                    new Setter(TextBox.BorderBrushProperty, disabledInputBorder),
                 },
             });
             // Avalonia's Fluent disabled template supplies its own surface after the class
@@ -392,6 +402,118 @@ public static class AvaloniaCompactDialogChrome
                 textBox.Background = style.DisabledTextBoxBackgroundBrush;
                 textBox.Foreground = new ImmutableSolidColorBrush(Color.FromRgb(0x70, 0x70, 0x70));
             }
+        }
+        var borderStyle = new Style(selector => selector
+            .OfType<TextBox>()
+            .Template()
+            .OfType<Border>()
+            .Name("PART_BorderElement"));
+        borderStyle.Setters.Add(new Setter(Border.BorderBrushProperty, inputBorder));
+        borderStyle.Setters.Add(new Setter(
+            Border.BorderThicknessProperty,
+            new Thickness(CompactDialogVisualTokens.BorderThickness)));
+        borderStyle.Setters.Add(new Setter(Border.BackgroundProperty, textBoxBackground));
+        if (fixedHeight)
+        {
+            borderStyle.Setters.Add(new Setter(Layoutable.MinHeightProperty, 0d));
+            borderStyle.Setters.Add(new Setter(
+                Layoutable.HeightProperty,
+                style.TextBoxHeight ?? style.ControlHeight));
+        }
+        textBox.Styles.Add(borderStyle);
+        textBox.Styles.Add(new Style(selector => selector
+            .OfType<TextBox>()
+            .Class(":focus")
+            .Template()
+            .OfType<Border>()
+            .Name("PART_BorderElement"))
+        {
+            Setters =
+            {
+                new Setter(Border.BorderBrushProperty, focusedBorder),
+                new Setter(
+                    Border.BorderThicknessProperty,
+                    new Thickness(CompactDialogVisualTokens.BorderThickness)),
+            },
+        });
+        textBox.Styles.Add(new Style(selector => selector
+            .OfType<TextBox>()
+            .Class(":pointerover")
+            .Template()
+            .OfType<Border>()
+            .Name("PART_BorderElement"))
+        {
+            Setters = { new Setter(Border.BorderBrushProperty, focusedBorder) },
+        });
+        textBox.Styles.Add(new Style(selector => selector
+            .OfType<TextBox>()
+            .Class(":disabled")
+            .Template()
+            .OfType<Border>()
+            .Name("PART_BorderElement"))
+        {
+            Setters =
+            {
+                new Setter(Border.BorderBrushProperty, disabledInputBorder),
+                new Setter(
+                    Border.BorderThicknessProperty,
+                    new Thickness(CompactDialogVisualTokens.BorderThickness)),
+                new Setter(
+                    Border.BackgroundProperty,
+                    style.DisabledTextBoxBackgroundBrush ?? textBoxBackground),
+            },
+        });
+
+        textBox.AttachedToVisualTree += (_, _) =>
+            QueueRenderedTextBoxChrome(textBox, style, fixedHeight);
+        textBox.GotFocus += (_, _) =>
+            QueueRenderedTextBoxChrome(textBox, style, fixedHeight);
+        textBox.LostFocus += (_, _) =>
+            QueueRenderedTextBoxChrome(textBox, style, fixedHeight);
+        textBox.PropertyChanged += (_, args) =>
+        {
+            if (args.Property == InputElement.IsEnabledProperty)
+                QueueRenderedTextBoxChrome(textBox, style, fixedHeight);
+        };
+        QueueRenderedTextBoxChrome(textBox, style, fixedHeight);
+    }
+
+    private static void QueueRenderedTextBoxChrome(
+        TextBox textBox,
+        AvaloniaCompactDialogChromeStyle style,
+        bool fixedHeight) =>
+        Dispatcher.UIThread.Post(
+            () => RefreshRenderedTextBoxChrome(textBox, style, fixedHeight),
+            DispatcherPriority.Render);
+
+    private static void RefreshRenderedTextBoxChrome(
+        TextBox textBox,
+        AvaloniaCompactDialogChromeStyle style,
+        bool fixedHeight)
+    {
+        textBox.ApplyTemplate();
+        var normalBorder = style.InputBorderBrush ?? InputBorderBrush;
+        var border = !textBox.IsEnabled
+            ? style.DisabledInputBorderBrush ?? DisabledInputBorderBrush
+            : textBox.IsFocused
+                ? style.FocusedInputBorderBrush ?? ThemeAccentBrush(style)
+                : normalBorder;
+        var background = !textBox.IsEnabled && style.DisabledTextBoxBackgroundBrush is not null
+            ? style.DisabledTextBoxBackgroundBrush
+            : style.TextBoxBackgroundBrush ?? ThemeWhiteBrush();
+        textBox.BorderBrush = border;
+        foreach (var borderElement in textBox.GetVisualDescendants()
+                     .OfType<Border>()
+                     .Where(candidate => candidate.Name == "PART_BorderElement"))
+        {
+            if (fixedHeight)
+            {
+                borderElement.MinHeight = 0;
+                borderElement.Height = style.TextBoxHeight ?? style.ControlHeight;
+            }
+            borderElement.BorderBrush = border;
+            borderElement.BorderThickness = new Thickness(CompactDialogVisualTokens.BorderThickness);
+            borderElement.Background = background;
         }
     }
 
