@@ -5,6 +5,8 @@ namespace FreeW.App.Presentation.Ribbon;
 
 public sealed record TableEditingRibbonPorts(
     Action PrepareExecution,
+    Func<TableFormatting?> CurrentTableFormatting,
+    Func<bool> ViewGridlines,
     Action ToggleHeaderRow,
     Action ToggleBandedRows,
     Action ToggleLastRow,
@@ -35,6 +37,18 @@ public sealed record TableEditingRibbonPorts(
     Action<CellTextDirection> SetCellTextDirection,
     Action<CellBorderEdges, bool> SetCellBorders,
     Action ToggleRepeatHeaderRow);
+
+public enum TableEditingRibbonToggleKind
+{
+    HeaderRow,
+    BandedRows,
+    LastRow,
+    FirstColumn,
+    LastColumn,
+    BandedColumns,
+    ViewGridlines,
+    RepeatHeaderRow,
+}
 
 /// <summary>
 /// Owns renderer-neutral Table Design and Table Layout command policy. WPF and Avalonia provide
@@ -96,13 +110,13 @@ public static class TableEditingRibbonWorkflow
         ArgumentNullException.ThrowIfNull(ports);
         ArgumentNullException.ThrowIfNull(ports.PrepareExecution);
 
-        Bind(bindings, ports, FreeWRibbonCommandAction.TableHeaderRow, ports.ToggleHeaderRow);
-        Bind(bindings, ports, FreeWRibbonCommandAction.TableBandedRows, ports.ToggleBandedRows);
-        Bind(bindings, ports, FreeWRibbonCommandAction.TableLastRow, ports.ToggleLastRow);
-        Bind(bindings, ports, FreeWRibbonCommandAction.TableFirstColumn, ports.ToggleFirstColumn);
-        Bind(bindings, ports, FreeWRibbonCommandAction.TableLastColumn, ports.ToggleLastColumn);
-        Bind(bindings, ports, FreeWRibbonCommandAction.TableBandedCols, ports.ToggleBandedColumns);
-        Bind(bindings, ports, FreeWRibbonCommandAction.TableViewGridlines, ports.ToggleGridlines);
+        BindToggle(bindings, ports, FreeWRibbonCommandAction.TableHeaderRow, TableEditingRibbonToggleKind.HeaderRow, ports.ToggleHeaderRow);
+        BindToggle(bindings, ports, FreeWRibbonCommandAction.TableBandedRows, TableEditingRibbonToggleKind.BandedRows, ports.ToggleBandedRows);
+        BindToggle(bindings, ports, FreeWRibbonCommandAction.TableLastRow, TableEditingRibbonToggleKind.LastRow, ports.ToggleLastRow);
+        BindToggle(bindings, ports, FreeWRibbonCommandAction.TableFirstColumn, TableEditingRibbonToggleKind.FirstColumn, ports.ToggleFirstColumn);
+        BindToggle(bindings, ports, FreeWRibbonCommandAction.TableLastColumn, TableEditingRibbonToggleKind.LastColumn, ports.ToggleLastColumn);
+        BindToggle(bindings, ports, FreeWRibbonCommandAction.TableBandedCols, TableEditingRibbonToggleKind.BandedColumns, ports.ToggleBandedColumns);
+        BindToggle(bindings, ports, FreeWRibbonCommandAction.TableViewGridlines, TableEditingRibbonToggleKind.ViewGridlines, ports.ToggleGridlines);
         Bind(bindings, ports, FreeWRibbonCommandAction.TableSelectTable, ports.SelectTable);
         Bind(bindings, ports, FreeWRibbonCommandAction.TableSelectRow, ports.SelectRow);
         Bind(bindings, ports, FreeWRibbonCommandAction.TableSelectCol, ports.SelectColumn);
@@ -149,7 +163,30 @@ public static class TableEditingRibbonWorkflow
             () => ports.SetCellTextDirection(CellTextDirection.Rotate90));
         Bind(bindings, ports, FreeWRibbonCommandAction.CellTextDirectionRotate270,
             () => ports.SetCellTextDirection(CellTextDirection.Rotate270));
-        Bind(bindings, ports, FreeWRibbonCommandAction.TableRepeatHeader, ports.ToggleRepeatHeaderRow);
+        BindToggle(bindings, ports, FreeWRibbonCommandAction.TableRepeatHeader, TableEditingRibbonToggleKind.RepeatHeaderRow, ports.ToggleRepeatHeaderRow);
+    }
+
+    public static RibbonCommandState BuildToggleState(
+        TableFormatting? formatting,
+        bool viewGridlines,
+        TableEditingRibbonToggleKind kind)
+    {
+        if (formatting is null)
+            return new RibbonCommandState(IsEnabled: false, IsChecked: false);
+
+        var isChecked = kind switch
+        {
+            TableEditingRibbonToggleKind.HeaderRow => formatting.HeaderRow,
+            TableEditingRibbonToggleKind.BandedRows => formatting.BandedRows,
+            TableEditingRibbonToggleKind.LastRow => formatting.LastRow,
+            TableEditingRibbonToggleKind.FirstColumn => formatting.FirstColumn,
+            TableEditingRibbonToggleKind.LastColumn => formatting.LastColumn,
+            TableEditingRibbonToggleKind.BandedColumns => formatting.BandedColumns,
+            TableEditingRibbonToggleKind.ViewGridlines => viewGridlines,
+            TableEditingRibbonToggleKind.RepeatHeaderRow => formatting.RepeatHeaderRow,
+            _ => throw new ArgumentOutOfRangeException(nameof(kind), kind, null),
+        };
+        return new RibbonCommandState(IsEnabled: true, IsChecked: isChecked);
     }
 
     private static void Bind(
@@ -166,6 +203,23 @@ public static class TableEditingRibbonWorkflow
         TableCellVerticalAlignment vertical,
         TextAlignment horizontal) =>
         Bind(bindings, ports, action, () => ports.SetCellAlignment(vertical, horizontal));
+
+    private static void BindToggle(
+        FreeWRibbonEditorCommandFamilyBuilder bindings,
+        TableEditingRibbonPorts ports,
+        FreeWRibbonCommandAction action,
+        TableEditingRibbonToggleKind kind,
+        Action execute) =>
+        BindCommand(
+            bindings,
+            ports,
+            action,
+            new TableToggleCommand(
+                execute,
+                () => BuildToggleState(
+                    ports.CurrentTableFormatting(),
+                    ports.ViewGridlines(),
+                    kind)));
 
     private static void BindCommand(
         FreeWRibbonEditorCommandFamilyBuilder bindings,
@@ -198,5 +252,14 @@ public static class TableEditingRibbonWorkflow
             inner is IRibbonStatefulCommand stateful
                 ? stateful.GetState()
                 : RibbonCommandState.Default;
+    }
+
+    private sealed class TableToggleCommand(
+        Action execute,
+        Func<RibbonCommandState> getState) : IRibbonStatefulCommand
+    {
+        public void Execute(RibbonCommandContext context) => execute();
+
+        public RibbonCommandState GetState() => getState();
     }
 }

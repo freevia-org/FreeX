@@ -1486,6 +1486,8 @@ internal static class FreeWRibbonCommands
         var borders = new CellBordersCommand(editor);
         return new(
             PrepareExecution: () => editor.Focus(),
+            CurrentTableFormatting: () => editor.CaretTableContext()?.Table.Formatting,
+            ViewGridlines: () => editor.ViewGridlines,
             ToggleHeaderRow: editor.ToggleTableHeaderRow,
             ToggleBandedRows: editor.ToggleTableBandedRows,
             ToggleLastRow: editor.ToggleTableLastRow,

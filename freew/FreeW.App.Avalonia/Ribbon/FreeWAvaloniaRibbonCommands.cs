@@ -1342,6 +1342,8 @@ internal static class FreeWAvaloniaRibbonCommands
         FreeWRibbonHostExecutionPorts callbacks) =>
         new(
             PrepareExecution: () => editor.Focus(),
+            CurrentTableFormatting: () => editor.CaretTableContext()?.Table.Formatting,
+            ViewGridlines: () => editor.ViewTableGridlines,
             ToggleHeaderRow: editor.ToggleTableHeaderRow,
             ToggleBandedRows: editor.ToggleBandedRows,
             ToggleLastRow: editor.ToggleTableLastRow,
