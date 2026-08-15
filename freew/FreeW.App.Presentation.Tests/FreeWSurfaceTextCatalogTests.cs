@@ -1,3 +1,4 @@
+using Free.Shared.AppServices;
 using FreeW.App.Presentation.Backstage;
 using FreeW.App.Presentation.Dialogs;
 using FreeW.App.Presentation.Panes;
@@ -21,9 +22,9 @@ public sealed class FreeWSurfaceTextCatalogTests
         var backstage = FreeWBackstagePaneTextCatalog.BuildTextSpec(Localize);
         backstage.RecentEmptyText.Should().Be("localized:FreeW_Backstage_Recent_EmptyText");
         backstage.Info.Heading.Should().Be("localized:FreeW_Backstage_Info_Heading");
-        backstage.Info.CoreProperties.AuthorLabel.Should().Be("localized:FreeW_Backstage_Info_AuthorLabel");
+        backstage.Info.CoreProperties.AuthorLabel.Should().Be($"localized:{CommonShellResourceKeys.Author}");
         backstage.OptionsSummary.DataFolderLabel.Should().Be(
-            "localized:FreeW_Backstage_OptionsSummary_DataFolderLabel");
+            $"localized:{CommonShellResourceKeys.DataFolder}");
     }
 
     [Fact]

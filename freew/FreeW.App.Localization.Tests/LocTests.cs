@@ -37,6 +37,13 @@ public sealed class LocTests
     {
         WithUiCulture("fr-FR", () => Loc.Get("Common_Cancel")).Should().Be("_Annuler");
         WithUiCulture("fr-FR", () => Loc.Get("Common_Ok")).Should().Be("_OK");
+        WithUiCulture("fr-FR", () => Loc.Get("Common_Location")).Should().Be("Emplacement");
+        WithUiCulture("fr-FR", () => Loc.Get("Common_FindReplace_NoMatchesFound"))
+            .Should().Be("Aucune correspondance trouv\u00e9e.");
+        WithUiCulture("fr-FR", () => Loc.Get("Common_FindReplace_SearchTermRequired"))
+            .Should().Be("Saisissez un terme de recherche.");
+        WithUiCulture("fr-FR", () => Loc.Format("Common_FindReplace_MatchStatusFormat", 2, 7))
+            .Should().Be("Correspondance 2 sur 7");
     }
 
     [Fact]

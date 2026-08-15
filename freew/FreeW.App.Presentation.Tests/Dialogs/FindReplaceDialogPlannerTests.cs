@@ -127,11 +127,11 @@ public sealed class FindReplaceDialogPlannerTests
     {
         var text = FindReplaceDialogPlanner.ResolvePolicyText(key => $"resolved:{key}");
 
-        text.SearchTermRequired.Should().Be("resolved:FreeW_FindReplace_SearchTermRequired");
-        text.NoMatches.Should().Be("resolved:FreeW_FindReplace_NoMatches");
+        text.SearchTermRequired.Should().Be($"resolved:{CommonShellResourceKeys.FindReplaceSearchTermRequired}");
+        text.NoMatches.Should().Be($"resolved:{CommonShellResourceKeys.FindReplaceNoMatches}");
         text.NoReplacements.Should().Be("resolved:FreeW_FindReplace_NoReplacements");
-        text.NotFoundFormat.Should().Be("resolved:FreeW_FindReplace_NotFound_Format");
-        text.MatchFormat.Should().Be("resolved:FreeW_FindReplace_Match_Format");
+        text.NotFoundFormat.Should().Be($"resolved:{CommonShellResourceKeys.FindReplaceNotFoundFormat}");
+        text.MatchFormat.Should().Be($"resolved:{CommonShellResourceKeys.FindReplaceMatchFormat}");
         text.ReplacedOccurrencesFormat.Should().Be("resolved:FreeW_FindReplace_ReplacedOccurrences_Format");
         text.ReplacementsMadeFormat.Should().Be("resolved:FreeW_FindReplace_ReplacementsMade_Format");
         FindReplaceDialogPlanner.RequiredResourceKeys.Should().OnlyHaveUniqueItems();

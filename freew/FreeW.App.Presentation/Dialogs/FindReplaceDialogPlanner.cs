@@ -130,11 +130,11 @@ public static class FindReplaceDialogPlanner
     public const string SearchTermRequiredMessage = FindReplaceDialogPolicy.SearchTermRequiredMessage;
 
     public static FindReplacePolicyTextDescriptor PolicyTextDescriptor { get; } = new(
-        Text("FreeW_FindReplace_SearchTermRequired", FindReplacePolicyTextSpec.NeutralEnglish.SearchTermRequired),
-        Text("FreeW_FindReplace_NoMatches", FindReplacePolicyTextSpec.NeutralEnglish.NoMatches),
+        CommonShellTextResources.FindReplaceSearchTermRequired,
+        CommonShellTextResources.FindReplaceNoMatches,
         Text("FreeW_FindReplace_NoReplacements", FindReplacePolicyTextSpec.NeutralEnglish.NoReplacements),
-        Text("FreeW_FindReplace_NotFound_Format", FindReplacePolicyTextSpec.NeutralEnglish.NotFoundFormat),
-        Text("FreeW_FindReplace_Match_Format", FindReplacePolicyTextSpec.NeutralEnglish.MatchFormat),
+        CommonShellTextResources.FindReplaceNotFoundFormat,
+        CommonShellTextResources.FindReplaceMatchFormat,
         Text("FreeW_FindReplace_ReplacedOccurrences_Format", FindReplacePolicyTextSpec.NeutralEnglish.ReplacedOccurrencesFormat),
         Text("FreeW_FindReplace_ReplacementsMade_Format", FindReplacePolicyTextSpec.NeutralEnglish.ReplacementsMadeFormat));
 

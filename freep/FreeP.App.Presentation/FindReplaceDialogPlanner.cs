@@ -5,11 +5,7 @@ namespace FreeP.App.Compositor;
 
 public static class FreePFindReplacePolicyResourceKeys
 {
-    public const string SearchTermRequired = "FreeP_FindReplace_Status_SearchTermRequired";
-    public const string NoMatches = "FreeP_FindReplace_Status_NoMatches";
     public const string NoReplacements = "FreeP_FindReplace_Status_NoReplacements";
-    public const string NotFoundFormat = "FreeP_FindReplace_Status_NotFoundFormat";
-    public const string MatchFormat = "FreeP_FindReplace_Status_MatchFormat";
     public const string ReplacedOccurrencesFormat = "FreeP_FindReplace_Status_ReplacedOccurrencesFormat";
     public const string ReplacementsMadeFormat = "FreeP_FindReplace_Status_ReplacementsMadeFormat";
 }
@@ -17,11 +13,11 @@ public static class FreePFindReplacePolicyResourceKeys
 public static class FreePFindReplacePolicyTextCatalog
 {
     public static FindReplacePolicyTextDescriptor Descriptor { get; } = new(
-        Text(FreePFindReplacePolicyResourceKeys.SearchTermRequired, "Enter a search term."),
-        Text(FreePFindReplacePolicyResourceKeys.NoMatches, "No matches found."),
+        CommonShellTextResources.FindReplaceSearchTermRequired,
+        CommonShellTextResources.FindReplaceNoMatches,
         Text(FreePFindReplacePolicyResourceKeys.NoReplacements, "No replacements made."),
-        Text(FreePFindReplacePolicyResourceKeys.NotFoundFormat, "\"{0}\" not found."),
-        Text(FreePFindReplacePolicyResourceKeys.MatchFormat, "Match {0} of {1}"),
+        CommonShellTextResources.FindReplaceNotFoundFormat,
+        CommonShellTextResources.FindReplaceMatchFormat,
         Text(FreePFindReplacePolicyResourceKeys.ReplacedOccurrencesFormat, "Replaced {0} occurrence{1}."),
         Text(FreePFindReplacePolicyResourceKeys.ReplacementsMadeFormat, "{0} replacement(s) made."));
 

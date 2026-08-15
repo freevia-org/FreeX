@@ -25,4 +25,23 @@
   <data name="Common_WarningTitle" xml:space="preserve"><value>Avertissement</value></data>
   <data name="Options_AppLanguageEnglishUnitedStates" xml:space="preserve"><value>Anglais (États-Unis)</value></data>
   <data name="Options_AppLanguageSystemDefault" xml:space="preserve"><value>Utiliser la langue du systeme</value></data>
+  <data name="Common_Location" xml:space="preserve"><value>Emplacement</value></data>
+  <data name="Common_NotSavedYet" xml:space="preserve"><value>Pas encore enregistr&#xE9;</value></data>
+  <data name="Common_Properties" xml:space="preserve"><value>Propri&#xE9;t&#xE9;s</value></data>
+  <data name="Common_Statistics" xml:space="preserve"><value>Statistiques</value></data>
+  <data name="Common_UnsavedChangesSuffix" xml:space="preserve"><value>  (modifications non enregistr&#xE9;es)</value></data>
+  <data name="Common_Title" xml:space="preserve"><value>Titre</value></data>
+  <data name="Common_Author" xml:space="preserve"><value>Auteur</value></data>
+  <data name="Common_Subject" xml:space="preserve"><value>Objet</value></data>
+  <data name="Common_Keywords" xml:space="preserve"><value>Mots-cl&#xE9;s</value></data>
+  <data name="Common_EmptyValue" xml:space="preserve"><value>&#x2014;</value></data>
+  <data name="Common_RecentFilesKept" xml:space="preserve"><value>Fichiers r&#xE9;cents conserv&#xE9;s</value></data>
+  <data name="Common_DefaultSaveFormat" xml:space="preserve"><value>Format d'enregistrement par d&#xE9;faut</value></data>
+  <data name="Common_UiLanguage" xml:space="preserve"><value>Langue de l'interface</value></data>
+  <data name="Common_DataFolder" xml:space="preserve"><value>Dossier de donn&#xE9;es</value></data>
+  <data name="Common_SystemDefault" xml:space="preserve"><value>Valeur syst&#xE8;me par d&#xE9;faut</value></data>
+  <data name="Common_FindReplace_SearchTermRequired" xml:space="preserve"><value>Saisissez un terme de recherche.</value></data>
+  <data name="Common_FindReplace_NoMatchesFound" xml:space="preserve"><value>Aucune correspondance trouv&#xE9;e.</value></data>
+  <data name="Common_FindReplace_NotFoundFormat" xml:space="preserve"><value>&#xAB; {0} &#xBB; est introuvable.</value></data>
+  <data name="Common_FindReplace_MatchStatusFormat" xml:space="preserve"><value>Correspondance {0} sur {1}</value></data>
 </root>

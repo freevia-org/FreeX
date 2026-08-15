@@ -821,26 +821,7 @@
   <data name="QuickParts_Snippet_Placeholder" xml:space="preserve"><value>Snippet text (one paragraph per line)</value></data>
   <data name="QuickParts_Text_Label" xml:space="preserve"><value>Text:</value></data>
   <data name="FreeW_Backstage_Info_Heading" xml:space="preserve"><value>Document information</value></data>
-  <data name="FreeW_Backstage_Info_LocationLabel" xml:space="preserve"><value>Location</value></data>
-  <data name="FreeW_Backstage_Info_NotSavedYet" xml:space="preserve"><value>Not saved yet</value></data>
-  <data name="FreeW_Backstage_Info_PropertiesHeading" xml:space="preserve"><value>Properties</value></data>
-  <data name="FreeW_Backstage_Info_StatisticsHeading" xml:space="preserve"><value>Statistics</value></data>
-  <data name="FreeW_Backstage_Info_DirtySuffix" xml:space="preserve"><value>  (unsaved changes)</value></data>
-  <data name="FreeW_Backstage_Info_TitleLabel" xml:space="preserve"><value>Title</value></data>
-  <data name="FreeW_Backstage_Info_AuthorLabel" xml:space="preserve"><value>Author</value></data>
-  <data name="FreeW_Backstage_Info_SubjectLabel" xml:space="preserve"><value>Subject</value></data>
-  <data name="FreeW_Backstage_Info_KeywordsLabel" xml:space="preserve"><value>Keywords</value></data>
-  <data name="FreeW_Backstage_Info_EmptyValue" xml:space="preserve"><value>&#x2014;</value></data>
-  <data name="FreeW_Backstage_OptionsSummary_RecentFilesLabel" xml:space="preserve"><value>Recent files kept</value></data>
-  <data name="FreeW_Backstage_OptionsSummary_DefaultSaveFormatLabel" xml:space="preserve"><value>Default save format</value></data>
-  <data name="FreeW_Backstage_OptionsSummary_UiLanguageLabel" xml:space="preserve"><value>UI language</value></data>
-  <data name="FreeW_Backstage_OptionsSummary_DataFolderLabel" xml:space="preserve"><value>Data folder</value></data>
-  <data name="FreeW_Backstage_OptionsSummary_SystemDefaultLanguageLabel" xml:space="preserve"><value>System default</value></data>
-  <data name="FreeW_FindReplace_SearchTermRequired" xml:space="preserve"><value>Enter a search term.</value></data>
-  <data name="FreeW_FindReplace_NoMatches" xml:space="preserve"><value>No matches found.</value></data>
   <data name="FreeW_FindReplace_NoReplacements" xml:space="preserve"><value>No replacements made.</value></data>
-  <data name="FreeW_FindReplace_NotFound_Format" xml:space="preserve"><value>"{0}" not found.</value></data>
-  <data name="FreeW_FindReplace_Match_Format" xml:space="preserve"><value>Match {0} of {1}</value></data>
   <data name="FreeW_FindReplace_ReplacedOccurrences_Format" xml:space="preserve"><value>Replaced {0} occurrence{1}.</value></data>
   <data name="FreeW_FindReplace_ReplacementsMade_Format" xml:space="preserve"><value>{0} replacement(s) made.</value></data>
 </root>

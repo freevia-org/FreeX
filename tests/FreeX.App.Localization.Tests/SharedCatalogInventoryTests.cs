@@ -18,7 +18,7 @@ public sealed class SharedCatalogInventoryTests
         // Tripwire so shared-catalog growth is a deliberate act: bump this only after confirming the
         // dedup loop below still passes, i.e. that the new keys were removed from every app catalog.
         // The merged catalog contains the shared media-insert strings plus the campaign's shell text.
-        sharedKeys.Should().HaveCount(79);
+        sharedKeys.Should().HaveCount(98);
         sharedKeys.Should().Contain([
             "Common_Cancel",
             "Common_AltText",
@@ -30,6 +30,14 @@ public sealed class SharedCatalogInventoryTests
             "Common_OkText",
             "Common_Themes",
             "Common_Zoom",
+            "Common_Location",
+            "Common_NotSavedYet",
+            "Common_Properties",
+            "Common_Statistics",
+            "Common_FindReplace_NoMatchesFound",
+            "Common_FindReplace_SearchTermRequired",
+            "Common_FindReplace_NotFoundFormat",
+            "Common_FindReplace_MatchStatusFormat",
             "Backstage_Recent_LastOpenedTodayAt",
             "Ribbon_Command_Bold_Label",
             "Ribbon_Command_Subscript_Label",
@@ -78,6 +86,55 @@ public sealed class SharedCatalogInventoryTests
             ["FreeP"] = new(StringComparer.Ordinal)
         };
 
+        var retiredNeutralKeys = new Dictionary<string, string[]>(StringComparer.Ordinal)
+        {
+            ["FreeX"] = [],
+            ["FreeW"] =
+            [
+                "FreeW_Backstage_Info_LocationLabel",
+                "FreeW_Backstage_Info_NotSavedYet",
+                "FreeW_Backstage_Info_PropertiesHeading",
+                "FreeW_Backstage_Info_StatisticsHeading",
+                "FreeW_Backstage_Info_DirtySuffix",
+                "FreeW_Backstage_Info_TitleLabel",
+                "FreeW_Backstage_Info_AuthorLabel",
+                "FreeW_Backstage_Info_SubjectLabel",
+                "FreeW_Backstage_Info_KeywordsLabel",
+                "FreeW_Backstage_Info_EmptyValue",
+                "FreeW_Backstage_OptionsSummary_RecentFilesLabel",
+                "FreeW_Backstage_OptionsSummary_DefaultSaveFormatLabel",
+                "FreeW_Backstage_OptionsSummary_UiLanguageLabel",
+                "FreeW_Backstage_OptionsSummary_DataFolderLabel",
+                "FreeW_Backstage_OptionsSummary_SystemDefaultLanguageLabel",
+                "FreeW_FindReplace_NoMatches",
+                "FreeW_FindReplace_Match_Format",
+                "FreeW_FindReplace_SearchTermRequired",
+                "FreeW_FindReplace_NotFound_Format",
+            ],
+            ["FreeP"] =
+            [
+                "FreeP_Backstage_Info_LocationLabel",
+                "FreeP_Backstage_Info_NotSavedYet",
+                "FreeP_Backstage_Info_PropertiesHeading",
+                "FreeP_Backstage_Info_StatisticsHeading",
+                "FreeP_Backstage_Info_DirtySuffix",
+                "FreeP_Backstage_Info_TitleLabel",
+                "FreeP_Backstage_Info_AuthorLabel",
+                "FreeP_Backstage_Info_SubjectLabel",
+                "FreeP_Backstage_Info_KeywordsLabel",
+                "FreeP_Backstage_Info_EmptyValue",
+                "FreeP_Backstage_OptionsSummary_RecentFilesKeptLabel",
+                "FreeP_Backstage_OptionsSummary_DefaultSaveFormatLabel",
+                "FreeP_Backstage_OptionsSummary_UiLanguageLabel",
+                "FreeP_Backstage_OptionsSummary_DataFolderLabel",
+                "FreeP_Backstage_OptionsSummary_SystemDefaultLanguageLabel",
+                "FreeP_FindReplace_Status_NoMatches",
+                "FreeP_FindReplace_Status_MatchFormat",
+                "FreeP_FindReplace_Status_SearchTermRequired",
+                "FreeP_FindReplace_Status_NotFoundFormat",
+            ],
+        };
+
         foreach (var (app, directory) in appResourceDirectories)
         {
             var observedOverrides = new HashSet<string>(StringComparer.Ordinal);
@@ -86,6 +143,9 @@ public sealed class SharedCatalogInventoryTests
             {
                 var fileName = Path.GetFileName(path);
                 var appValues = ResxResourceTestSupport.ReadResxValues(path);
+                appValues.Keys.Should().NotIntersectWith(
+                    retiredNeutralKeys[app],
+                    $"{app} resource {fileName} must resolve neutral shell text from the shared catalog");
                 var overlappingKeys = appValues.Keys
                     .Intersect(sharedKeys, StringComparer.Ordinal)
                     .ToHashSet(StringComparer.Ordinal);

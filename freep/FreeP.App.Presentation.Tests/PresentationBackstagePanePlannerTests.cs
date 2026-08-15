@@ -20,17 +20,15 @@ public sealed class PresentationBackstagePanePlannerTests
         descriptor.Export.PdfActionLabel.FallbackText.Should().Be("Export to PDF...");
         descriptor.Export.XpsActionLabel.Should().BeNull();
         descriptor.Info.Should().NotBeNull();
-        descriptor.Info!.LocationLabel.ResourceKey.Should().Be(
-            FreePBackstagePaneResourceKeys.InfoLocationLabel);
+        descriptor.Info!.LocationLabel.Should().BeSameAs(CommonShellTextResources.Location);
         descriptor.OptionsSummary.Should().NotBeNull();
-        descriptor.OptionsSummary!.UiLanguageLabel.ResourceKey.Should().Be(
-            FreePBackstagePaneResourceKeys.OptionsSummaryUiLanguageLabel);
+        descriptor.OptionsSummary!.UiLanguageLabel.Should().BeSameAs(CommonShellTextResources.UiLanguage);
         FreePBackstagePaneTextCatalog.RequiredResourceKeys
             .Should().OnlyHaveUniqueItems()
             .And.Contain([
                 FreePBackstagePaneResourceKeys.OptionsEditText,
                 FreePBackstagePaneResourceKeys.InfoHeading,
-                FreePBackstagePaneResourceKeys.OptionsSummarySystemDefaultLanguageLabel,
+                CommonShellResourceKeys.SystemDefault,
             ]);
     }
 
@@ -50,10 +48,10 @@ public sealed class PresentationBackstagePanePlannerTests
     {
         var text = FreePBackstagePaneTextCatalog.BuildTextSpec(key => key switch
         {
-            FreePBackstagePaneResourceKeys.InfoLocationLabel => "Emplacement",
-            FreePBackstagePaneResourceKeys.InfoTitleLabel => "Titre",
-            FreePBackstagePaneResourceKeys.OptionsSummaryRecentFilesKeptLabel => "Fichiers recents conserves",
-            FreePBackstagePaneResourceKeys.OptionsSummarySystemDefaultLanguageLabel => "Valeur systeme",
+            CommonShellResourceKeys.Location => "Emplacement",
+            CommonShellResourceKeys.Title => "Titre",
+            CommonShellResourceKeys.RecentFilesKept => "Fichiers recents conserves",
+            CommonShellResourceKeys.SystemDefault => "Valeur systeme",
             _ => null,
         });
 
@@ -124,10 +122,10 @@ public sealed class PresentationBackstagePanePlannerTests
     {
         var planner = new PresentationBackstagePanePlanner(key => key switch
         {
-            FreePBackstagePaneResourceKeys.InfoLocationLabel => "Emplacement",
-            FreePBackstagePaneResourceKeys.InfoTitleLabel => "Titre",
-            FreePBackstagePaneResourceKeys.OptionsSummaryDataFolderLabel => "Dossier de donnees",
-            FreePBackstagePaneResourceKeys.OptionsSummarySystemDefaultLanguageLabel => "Valeur systeme",
+            CommonShellResourceKeys.Location => "Emplacement",
+            CommonShellResourceKeys.Title => "Titre",
+            CommonShellResourceKeys.DataFolder => "Dossier de donnees",
+            CommonShellResourceKeys.SystemDefault => "Valeur systeme",
             _ => null,
         });
         var presentation = Presentation.CreateEmpty();

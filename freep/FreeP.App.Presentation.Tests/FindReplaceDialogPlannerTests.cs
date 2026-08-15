@@ -12,11 +12,11 @@ public sealed class FindReplaceDialogPlannerTests
         var localized = FreePFindReplacePolicyTextCatalog.BuildTextSpec(key => $"localized:{key}");
 
         FreePFindReplacePolicyTextCatalog.RequiredResourceKeys.Should().OnlyHaveUniqueItems();
-        localized.SearchTermRequired.Should().Be($"localized:{FreePFindReplacePolicyResourceKeys.SearchTermRequired}");
-        localized.NoMatches.Should().Be($"localized:{FreePFindReplacePolicyResourceKeys.NoMatches}");
+        localized.SearchTermRequired.Should().Be($"localized:{CommonShellResourceKeys.FindReplaceSearchTermRequired}");
+        localized.NoMatches.Should().Be($"localized:{CommonShellResourceKeys.FindReplaceNoMatches}");
         localized.NoReplacements.Should().Be($"localized:{FreePFindReplacePolicyResourceKeys.NoReplacements}");
-        localized.NotFoundFormat.Should().Be($"localized:{FreePFindReplacePolicyResourceKeys.NotFoundFormat}");
-        localized.MatchFormat.Should().Be($"localized:{FreePFindReplacePolicyResourceKeys.MatchFormat}");
+        localized.NotFoundFormat.Should().Be($"localized:{CommonShellResourceKeys.FindReplaceNotFoundFormat}");
+        localized.MatchFormat.Should().Be($"localized:{CommonShellResourceKeys.FindReplaceMatchFormat}");
         localized.ReplacedOccurrencesFormat.Should().Be($"localized:{FreePFindReplacePolicyResourceKeys.ReplacedOccurrencesFormat}");
         localized.ReplacementsMadeFormat.Should().Be($"localized:{FreePFindReplacePolicyResourceKeys.ReplacementsMadeFormat}");
     }

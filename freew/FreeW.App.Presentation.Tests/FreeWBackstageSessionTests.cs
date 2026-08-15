@@ -72,9 +72,9 @@ public sealed class FreeWBackstageSessionTests
         var pane = session.BuildInfoPane();
 
         pane.EffectiveText.Heading.Should().Be("localized:FreeW_Backstage_Info_Heading");
-        pane.EffectiveText.LocationLabel.Should().Be("localized:FreeW_Backstage_Info_LocationLabel");
+        pane.EffectiveText.LocationLabel.Should().Be($"localized:{CommonShellResourceKeys.Location}");
         pane.Properties.Select(row => row.Label).Should().Contain(
-            "localized:FreeW_Backstage_Info_TitleLabel");
+            $"localized:{CommonShellResourceKeys.Title}");
     }
 
     [Fact]
