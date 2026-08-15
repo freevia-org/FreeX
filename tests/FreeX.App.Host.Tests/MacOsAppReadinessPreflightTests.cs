@@ -174,6 +174,11 @@ public sealed class MacOsAppReadinessPreflightTests
         script.Should().Contain("private static byte EncodeWinAnsiByte(char ch)");
         script.Should().Contain("built-in Helvetica/WinAnsi set");
         script.Should().Contain("WorkbookExportInteractionPlanner.CreateRequestPlan(");
+        script.Should().Contain("shared\\Free.Shared.AppServices\\AtomicExportExecutor.cs");
+        script.Should().Contain("public sealed class AtomicExportExecutor");
+        script.Should().Contain("AtomicFileWriter.CreateTempLease");
+        script.Should().Contain("_replaceDestination(temporaryFile.Path, fullDestinationPath!);");
+        script.Should().NotContain("var exportExecution = await new AtomicExportExecutor()");
         script.Should().Contain("private async Task<bool> ConfirmNormalizedOverwriteAsync(");
         script.Should().Contain("NormalizedOverwriteTargetKind.Pdf");
         script.Should().Contain("IsCancel = true,");
@@ -919,6 +924,32 @@ public sealed class MacOsAppReadinessPreflightTests
         combinedOutput.Should().Contain(
             "RegisterCrashHandlers' in shared\\Free.Shared.AppServices\\LocalAppDiagnostics.cs");
         combinedOutput.Should().Contain("AppCrashHandlers.Register('");
+    }
+
+    [Fact]
+    public void MacOsAppReadinessPreflight_FailsWhenSharedAtomicExportLifecycleIsDisconnected()
+    {
+        using var temp = new TestTemporaryDirectory();
+        CreateMinimalMacOsReadinessRepo(temp.Path);
+        var executorPath = Path.Combine(
+            temp.Path,
+            "shared",
+            "Free.Shared.AppServices",
+            "AtomicExportExecutor.cs");
+        File.WriteAllText(
+            executorPath,
+            File.ReadAllText(executorPath).Replace(
+                "AtomicFileWriter.CreateTempLease",
+                "CreateRendererOwnedTemporaryFile",
+                StringComparison.Ordinal));
+
+        var scriptPath = WorkspaceFileLocator.Find("tools", "Test-MacOsAppReadiness.ps1");
+        var result = RunScriptFromTemporaryWorkingDirectory(scriptPath, $"-ProjectRoot \"{temp.Path}\"");
+
+        result.ExitCode.Should().NotBe(0);
+        var combinedOutput = result.Output + result.Error;
+        combinedOutput.Should().Contain("AtomicFileWriter.CreateTempLease");
+        combinedOutput.Should().Contain("shared\\Free.Shared.AppServices\\AtomicExportExecutor.cs");
     }
 
     [Fact]
@@ -2540,7 +2571,12 @@ public sealed class MacOsAppReadinessPreflightTests
                     AutomationProperties.SetAutomationId(replaceButton, prompt.ReplaceButtonAutomationId)
                     AutomationProperties.SetAutomationId(cancelButton, prompt.CancelButtonAutomationId)
                     var outcome = Pdf.AvaloniaPdfDocumentExporter.Save(
-                    await File.WriteAllBytesAsync(
+                    var exportExecutor = new AtomicExportExecutor();
+                    var exportExecution = await exportExecutor
+                        .ExecuteAsync<Pdf.AvaloniaPdfDocumentExportOutcome>(
+                    StatusBarReadoutKind.Average,
+                    StatusBarReadoutKind.NumericalCount,
+                    StatusBarReadoutKind.Maximum,
                     ConfigureNativeFileMenuItem(_workbookStatisticsMenuItem, NativeFileMenuItemId.WorkbookStatistics);
                     _workbookStatisticsMenuItem.Click += async (_, _) => await ExecuteOwnedNativeFileMenuItemAsync(NativeFileMenuItemId.WorkbookStatistics);
                     ApplyNativeFileMenuAvailability(isIdle);
@@ -3216,6 +3252,7 @@ public sealed class MacOsAppReadinessPreflightTests
                     AutomationProperties.SetName(_cellAddressText, UiText.Get("Toolbar_CellAddressAutomationName"));
                     AutomationProperties.SetHelpText(_cellAddressText, UiText.Get("Toolbar_CellAddressHelpText"));
                     ConfigureSelectionStatisticText(
+                    StatusBarPresentationPlanner.ReadoutAutomationId(kind));
                     AutomationProperties.SetLiveSetting(textBlock, AutomationLiveSetting.Polite);
                     HasFormulaBoxAutomationName: string.Equals(AutomationProperties.GetName(_formulaBox), FormulaBarText(FormulaBarChromePlanner.FormulaBox.AutomationNameResourceKey), StringComparison.Ordinal)
                     HasFormulaBoxAutomationHelp: string.Equals(AutomationProperties.GetHelpText(_formulaBox), FormulaBarText(FormulaBarChromePlanner.FormulaBox.HelpTextResourceKey), StringComparison.Ordinal)
@@ -3233,6 +3270,8 @@ public sealed class MacOsAppReadinessPreflightTests
                     HasSelectionStatsAutomationName: HaveSelectionStatisticAutomationNames(
                     HasSelectionStatsAutomationHelp: HaveSelectionStatisticAutomationHelp(
                     HasSelectionStatsAutomationId: HaveSelectionStatisticAutomationIds(
+                    (_statusAverageText, "StatusAvgText"),
+                    (_statusMaximumText, "StatusMaxText"))
                     (_statusAverageText, "StatusAvgText")
                     (_statusMaximumText, "StatusMaxText")
                     HasNativeMergeAndCenterMenuItem: HasNativeMenuItem(_mergeAndCenterMenuItem, "Merge & Center", requireGesture: false);
@@ -3966,6 +4005,11 @@ public sealed class MacOsAppReadinessPreflightTests
                 private bool HasStatusTextAutomationHelp { get; }
                 private bool HasStatusTextAutomationId { get; }
                 private bool HasStatusTextValue { get; }
+                private static bool HasStatusBarAccessibleValue(
+                    TextBlock statusText,
+                    params TextBlock[] selectionStatisticTexts) =>
+                    !string.IsNullOrWhiteSpace(statusText.Text) ||
+                    selectionStatisticTexts.Any(text => !string.IsNullOrWhiteSpace(text.Text));
                 private bool HasStatusBarAccessibleValue() =>
                     !string.IsNullOrWhiteSpace(_statusText.Text) ||
                     SelectionStatisticTexts().Any(text => !string.IsNullOrWhiteSpace(text.Text));
@@ -4428,6 +4472,7 @@ public sealed class MacOsAppReadinessPreflightTests
                         new AddSheetCommand(
                             SheetTabListPlanner.GenerateUniqueSheetName(Workbook),
                             insertBeforeSheetId is null ? Workbook.Sheets.Count : 0));
+                // var insertIndex = insertBeforeSheetId is { } beforeId
 
                 public WorkbookCellEditResult RenameActiveSheet(string? name)
                 {
@@ -4974,6 +5019,25 @@ public sealed class MacOsAppReadinessPreflightTests
                         stream,
                         target => SkiaPdfDocumentExporter.Save(workbook, exportPlan, target, options, workbookDirectory),
                         target => PortablePdfDocumentExporter.Save(workbook, exportPlan, target, options));
+                }
+            }
+            """);
+
+        WriteFile(
+            root,
+            "shared/Free.Shared.AppServices/AtomicExportExecutor.cs",
+            """
+            namespace Free.Shared.AppServices;
+
+            public sealed class AtomicExportExecutor
+            {
+                private readonly object _createTemporaryFile = AtomicFileWriter.CreateTempLease;
+
+                public async Task<OperationOutcome<TArtifact, AtomicExportValidationIssue, AtomicExportFailure>>
+                    ExecuteAsync<TArtifact>(string destinationPath)
+                {
+                    _replaceDestination(temporaryFile.Path, fullDestinationPath!);
+                    temporaryFile.Commit();
                 }
             }
             """);

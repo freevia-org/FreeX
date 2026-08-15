@@ -1345,7 +1345,7 @@ function Test-SourceWiring {
                 "AutomationProperties.SetAutomationId(replaceButton, prompt.ReplaceButtonAutomationId)",
                 "AutomationProperties.SetAutomationId(cancelButton, prompt.CancelButtonAutomationId)",
                 "var outcome = Pdf.AvaloniaPdfDocumentExporter.Save(",
-                "var exportExecution = await new AtomicExportExecutor()",
+                "AtomicExportExecutor",
                 ".ExecuteAsync<Pdf.AvaloniaPdfDocumentExportOutcome>(",
                 "ConfigureNativeFileMenuItem(_workbookStatisticsMenuItem, NativeFileMenuItemId.WorkbookStatistics);",
                 "_workbookStatisticsMenuItem.Click += async (_, _) => await ExecuteOwnedNativeFileMenuItemAsync(NativeFileMenuItemId.WorkbookStatistics);",
@@ -3209,6 +3209,23 @@ function Test-SourceWiring {
                 "File.Move(sourceTempPath, destinationPath, overwrite: true);"
             )
             OrderedPairs = @()
+        },
+        @{
+            Path = "shared\Free.Shared.AppServices\AtomicExportExecutor.cs"
+            Markers = @(
+                "public sealed class AtomicExportExecutor",
+                "AtomicFileWriter.CreateTempLease",
+                "public async Task<OperationOutcome<TArtifact, AtomicExportValidationIssue, AtomicExportFailure>>",
+                "ExecuteAsync<TArtifact>(",
+                "_replaceDestination(temporaryFile.Path, fullDestinationPath!);",
+                "temporaryFile.Commit();"
+            )
+            OrderedPairs = @(
+                @{
+                    First = "_replaceDestination(temporaryFile.Path, fullDestinationPath!);"
+                    Second = "temporaryFile.Commit();"
+                }
+            )
         },
         @{
             Path = "tools\FreeX.Validation.Avalonia\PackagingSmokeValidation.cs"
