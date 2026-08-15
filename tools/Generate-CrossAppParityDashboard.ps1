@@ -166,6 +166,7 @@ try {
     $freePRenderParity = Read-ToolJson -Path "docs\parity\freep-render-slideshow-media-parity-20260720.json" -RepoRoot $repoRoot -MissingMessage "Required generated parity input is missing"
     $freePNativePickerEvidence = Read-ToolJson -Path "docs\parity\freep-native-picker-human-evidence.json" -RepoRoot $repoRoot -MissingMessage "Required generated parity input is missing"
     $freePOfficeBaseline = Read-ToolJson -Path "docs\parity\freep-powerpoint-baseline-2026-08-14.json" -RepoRoot $repoRoot -MissingMessage "Required PowerPoint Office baseline manifest is missing"
+    $freePOfficeRecalibration = Read-ToolJson -Path "docs\parity\freep-powerpoint-recalibration-2026-08-15.json" -RepoRoot $repoRoot -MissingMessage "Required PowerPoint current-source recalibration is missing"
 
     $commandRows = Get-CommandSurfaceRows $commandInventory.commandSurfaceRows
     $freeXFunctionalMatrix = [ordered]@{
@@ -421,7 +422,8 @@ try {
             "docs/parity/freep-whole-window-visual-evidence/artifact-manifest.json",
             "docs/parity/freep-render-slideshow-media-parity-20260720.json",
             "docs/parity/freep-native-picker-human-evidence.json",
-            "docs/parity/freep-powerpoint-baseline-2026-08-14.json"
+            "docs/parity/freep-powerpoint-baseline-2026-08-14.json",
+            "docs/parity/freep-powerpoint-recalibration-2026-08-15.json"
         )
         routeCoverage = [ordered]@{
             laneEntries = @(
@@ -477,6 +479,15 @@ try {
             artifactCount = [int]$freePOfficeBaseline.artifactCount
             limitation = [string]$freePOfficeBaseline.limitation
             captureMode = [string]$freePOfficeBaseline.captureMode
+            referenceReadyDecks = [int]$freePOfficeBaseline.comparison.referenceReadyDecks
+            missingReferenceDecks = [int]$freePOfficeBaseline.comparison.missingReferenceDecks
+            currentSourceRevision = [string]$freePOfficeRecalibration.sourceRevision
+            wpfAverageMeanPercent = [double]$freePOfficeRecalibration.summary.wpfAverageMeanPercent
+            wpfMaximumMeanPercent = [double]$freePOfficeRecalibration.summary.wpfMaximumMeanPercent
+            avaloniaAverageMeanPercent = [double]$freePOfficeRecalibration.summary.avaloniaAverageMeanPercent
+            avaloniaMaximumMeanPercent = [double]$freePOfficeRecalibration.summary.avaloniaMaximumMeanPercent
+            rendererPairAverageMeanPercent = [double]$freePOfficeRecalibration.summary.rendererPairAverageMeanPercent
+            rendererPairMaximumMeanPercent = [double]$freePOfficeRecalibration.summary.rendererPairMaximumMeanPercent
         }
         claimBoundary = "Route/scenario coverage, committed PNG manifests, and local WPF/Avalonia comparison results only; no PowerPoint visual-parity claim is made."
     }
@@ -497,7 +508,7 @@ try {
             workflowEvidenceRows = [int](Get-JsonPropertyValue $freep.summary "workflowEvidenceRows")
         }
         renderedEvidence = $freePRenderedEvidence
-        nextSlice = "The tracked PowerPoint corpus now has 53 COM-exported reference slides across 27 ready decks. Recalibrate FreeP against this cohort, starting with chart, SmartArt, WordArt, crop, fill, and 3-D slide families; retain the separate real recording-hardware limitation."
+        nextSlice = "The tracked PowerPoint corpus has 43 COM-exported reference slides across 26 ready decks; 15-smartart-grouped-list still lacks ten Office references. Current-source recalibration averages $($freePOfficeRecalibration.summary.wpfAverageMeanPercent)% for WPF and $($freePOfficeRecalibration.summary.avaloniaAverageMeanPercent)% for Avalonia over the 43 paired Office slides, with SmartArt maxima above 21%. Prioritize shared SmartArt geometry and text placement, then text/autofit and 3-D chart projection."
     }
 
     $dashboard = [ordered]@{
@@ -523,7 +534,8 @@ try {
             "docs/parity/freep-whole-window-visual-evidence/artifact-manifest.json",
             "docs/parity/freep-render-slideshow-media-parity-20260720.json",
             "docs/parity/freep-native-picker-human-evidence.json",
-            "docs/parity/freep-powerpoint-baseline-2026-08-14.json"
+            "docs/parity/freep-powerpoint-baseline-2026-08-14.json",
+            "docs/parity/freep-powerpoint-recalibration-2026-08-15.json"
         )
         apps = @($freeX, $freeW, $freeP)
     }
@@ -562,7 +574,7 @@ try {
         "|---|---|---|---|---|---|",
         "| FreeX | $($freeX.renderedEvidence.routeCoverage.inventoryRouteCount) inventoried dialog routes; $($freeX.renderedEvidence.routeCoverage.pairedRouteEvidenceCount) paired route evidence rows | $($freeX.renderedEvidence.artifactCoverage.wpfManifestSurfaceCount) WPF + $($freeX.renderedEvidence.artifactCoverage.avaloniaManifestSurfaceCount) Avalonia manifest surfaces; $($freeX.renderedEvidence.artifactCoverage.pairedManifestSurfaceCount) paired | $($freeX.renderedEvidence.pairedEvidence.pairedSurfaceCount) paired surfaces; $($freeX.renderedEvidence.pairedEvidence.unresolvedVisualReviewCandidateCount) unresolved high-delta candidates | $($freeX.renderedEvidence.physicalEvidence.status); app-owned render manifests plus committed Excel range references | $($freeX.renderedEvidence.authoritativeMicrosoftOfficeBaseline.product): $($freeX.renderedEvidence.authoritativeMicrosoftOfficeBaseline.status); $($freeX.renderedEvidence.authoritativeMicrosoftOfficeBaseline.artifactCount) artifacts. $($freeX.renderedEvidence.authoritativeMicrosoftOfficeBaseline.limitation) |",
         "| FreeW | $($freeW.renderedEvidence.routeCoverage.inventoryRouteCount) inventoried route families; $($freeW.renderedEvidence.routeCoverage.comparedRouteCount) represented in comparison rows; $($freeW.renderedEvidence.routeCoverage.pairedRouteCount) paired and $($freeW.renderedEvidence.routeCoverage.avaloniaOnlyRouteCount) Avalonia-only | $($freeW.renderedEvidence.artifactCoverage.evidenceRowCount) comparison rows; $($freeW.renderedEvidence.artifactCoverage.pairedComparisonRowCount) paired rows; $($freeW.renderedEvidence.artifactCoverage.avaloniaOnlyArtifactRowCount) Avalonia-only rows; committed Word reference PNGs | $($freeW.renderedEvidence.pairedEvidence.pairedScenarioCount) paired rows; $($freeW.renderedEvidence.pairedEvidence.passCount) pass classifications; $($freeW.renderedEvidence.pairedEvidence.mismatchCount) genuine visual mismatch classifications | $($freeW.renderedEvidence.physicalEvidence.status); app-owned comparison rows plus committed Word references | $($freeW.renderedEvidence.authoritativeMicrosoftOfficeBaseline.product): $($freeW.renderedEvidence.authoritativeMicrosoftOfficeBaseline.status); $($freeW.renderedEvidence.authoritativeMicrosoftOfficeBaseline.artifactCount) artifacts. $($freeW.renderedEvidence.authoritativeMicrosoftOfficeBaseline.limitation) |",
-        "| FreeP | Dialog lane: $($freeP.renderedEvidence.routeCoverage.laneEntries[0].routeInventoryCount) routes/$($freeP.renderedEvidence.routeCoverage.laneEntries[0].renderedScenarioCount) scenarios; whole-window lane: $($freeP.renderedEvidence.routeCoverage.laneEntries[1].renderedScenarioCount) scenarios without a separate route inventory | $($freeP.renderedEvidence.artifactCoverage.wpfPngCount) WPF PNGs; $($freeP.renderedEvidence.artifactCoverage.avaloniaPngCount) Avalonia PNGs; $($freeP.renderedEvidence.artifactCoverage.diffPngCount) diff PNGs; $($freeP.renderedEvidence.artifactCoverage.fileCount) manifest files | $($freeP.renderedEvidence.pairedEvidence.pairedScenarioCount) paired scenarios; $($freeP.renderedEvidence.pairedEvidence.passCount) local comparison passes; $($freeP.renderedEvidence.pairedEvidence.mismatchCount) mismatches; $($freeP.renderedEvidence.pairedEvidence.limitationCount) limitations | $($freeP.renderedEvidence.physicalEvidence.status); visible app-owned render targets plus a committed PowerPoint COM corpus | $($freeP.renderedEvidence.authoritativeMicrosoftOfficeBaseline.product): $($freeP.renderedEvidence.authoritativeMicrosoftOfficeBaseline.status); $($freeP.renderedEvidence.authoritativeMicrosoftOfficeBaseline.artifactCount) artifacts. $($freeP.renderedEvidence.authoritativeMicrosoftOfficeBaseline.limitation) |",
+        "| FreeP | Dialog lane: $($freeP.renderedEvidence.routeCoverage.laneEntries[0].routeInventoryCount) routes/$($freeP.renderedEvidence.routeCoverage.laneEntries[0].renderedScenarioCount) scenarios; whole-window lane: $($freeP.renderedEvidence.routeCoverage.laneEntries[1].renderedScenarioCount) scenarios without a separate route inventory | $($freeP.renderedEvidence.artifactCoverage.wpfPngCount) WPF PNGs; $($freeP.renderedEvidence.artifactCoverage.avaloniaPngCount) Avalonia PNGs; $($freeP.renderedEvidence.artifactCoverage.diffPngCount) diff PNGs; $($freeP.renderedEvidence.artifactCoverage.fileCount) manifest files | $($freeP.renderedEvidence.pairedEvidence.pairedScenarioCount) paired scenarios; $($freeP.renderedEvidence.pairedEvidence.passCount) local comparison passes; $($freeP.renderedEvidence.pairedEvidence.mismatchCount) mismatches; $($freeP.renderedEvidence.pairedEvidence.limitationCount) limitations | $($freeP.renderedEvidence.physicalEvidence.status); visible app-owned render targets plus a committed PowerPoint COM corpus | $($freeP.renderedEvidence.authoritativeMicrosoftOfficeBaseline.product): $($freeP.renderedEvidence.authoritativeMicrosoftOfficeBaseline.status); $($freeP.renderedEvidence.authoritativeMicrosoftOfficeBaseline.artifactCount) tracked artifacts across $($freeP.renderedEvidence.authoritativeMicrosoftOfficeBaseline.referenceReadyDecks) decks, with $($freeP.renderedEvidence.authoritativeMicrosoftOfficeBaseline.missingReferenceDecks) deck missing references. Current-source WPF/Avalonia averages: $($freeP.renderedEvidence.authoritativeMicrosoftOfficeBaseline.wpfAverageMeanPercent)% / $($freeP.renderedEvidence.authoritativeMicrosoftOfficeBaseline.avaloniaAverageMeanPercent)%. $($freeP.renderedEvidence.authoritativeMicrosoftOfficeBaseline.limitation) |",
         "",
         "## FreeX Visual Review Queue",
         "",
@@ -593,7 +605,8 @@ try {
         '- `docs/parity/freep-whole-window-visual-evidence/artifact-manifest.json`',
         '- `docs/parity/freep-render-slideshow-media-parity-20260720.json`',
         '- `docs/parity/freep-native-picker-human-evidence.json`',
-        '- `docs/parity/freep-powerpoint-baseline-2026-08-14.json`'
+        '- `docs/parity/freep-powerpoint-baseline-2026-08-14.json`',
+        '- `docs/parity/freep-powerpoint-recalibration-2026-08-15.json`'
     ) -join "`n"
     Set-Content -LiteralPath $tempMarkdownPath -Value ($md + "`n") -NoNewline -Encoding UTF8
 

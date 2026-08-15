@@ -34,7 +34,8 @@ $requiredSources = @(
     "docs/parity/freep-whole-window-visual-evidence/summary.json",
     "docs/parity/freep-whole-window-visual-evidence/artifact-manifest.json",
     "docs/parity/freep-render-slideshow-media-parity-20260720.json",
-    "docs/parity/freep-powerpoint-baseline-2026-08-14.json"
+    "docs/parity/freep-powerpoint-baseline-2026-08-14.json",
+    "docs/parity/freep-powerpoint-recalibration-2026-08-15.json"
 )
 foreach ($source in $requiredSources) {
     Assert-DashboardCondition (@($dashboard.sources) -contains $source) "Cross-app dashboard is missing authoritative source '$source'."
@@ -78,6 +79,10 @@ Assert-DashboardCondition ($freePLanes.Count -eq 2) "FreeP rendered evidence mus
 Assert-DashboardCondition ($freeP.renderedEvidence.routeCoverage.pairedScenarioCount -eq ($freePLanes | Measure-Object -Property pairedScenarioCount -Sum).Sum) "FreeP paired scenario total must equal the lane sum."
 Assert-DashboardCondition ($freeP.renderedEvidence.artifactCoverage.wpfPngCount -gt 0 -and $freeP.renderedEvidence.artifactCoverage.avaloniaPngCount -gt 0) "FreeP artifact coverage must retain both WPF and Avalonia PNG counts."
 Assert-DashboardCondition ($freeP.renderedEvidence.authoritativeMicrosoftOfficeBaseline.available -eq $true) "FreeP must report its committed PowerPoint reference baseline as available."
-Assert-DashboardCondition ($freeP.renderedEvidence.authoritativeMicrosoftOfficeBaseline.artifactCount -eq 53) "FreeP PowerPoint baseline artifact count must remain explicit."
+Assert-DashboardCondition ($freeP.renderedEvidence.authoritativeMicrosoftOfficeBaseline.artifactCount -eq 43) "FreeP tracked PowerPoint baseline artifact count must remain explicit."
+Assert-DashboardCondition ($freeP.renderedEvidence.authoritativeMicrosoftOfficeBaseline.referenceReadyDecks -eq 26) "FreeP tracked PowerPoint ready-deck count must remain explicit."
+Assert-DashboardCondition ($freeP.renderedEvidence.authoritativeMicrosoftOfficeBaseline.missingReferenceDecks -eq 1) "FreeP missing PowerPoint reference deck count must remain explicit."
+Assert-DashboardCondition ($freeP.renderedEvidence.authoritativeMicrosoftOfficeBaseline.wpfAverageMeanPercent -gt 0) "FreeP current-source WPF recalibration must remain explicit."
+Assert-DashboardCondition ($freeP.renderedEvidence.authoritativeMicrosoftOfficeBaseline.avaloniaAverageMeanPercent -gt 0) "FreeP current-source Avalonia recalibration must remain explicit."
 
 Write-Host "Cross-app parity dashboard schema and evidence aggregation guards passed."
