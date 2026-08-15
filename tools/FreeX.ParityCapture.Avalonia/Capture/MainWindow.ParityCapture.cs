@@ -1542,12 +1542,11 @@ public sealed partial class MainWindow
             new CellAddress(sheetId, 2, 3),
             5000d,
             new CellAddress(sheetId, 2, 5));
-        var result = WorkbookGoalSeekResult.AppliedResult(
+        var proposal = WorkbookGoalSeekProposal.Ready(
             request,
-            new GoalSeekResult(true, 125d, 5000d, 7),
-            new WorkbookCellEditResult(true, null, [request.ChangingCell], null));
+            new GoalSeekResult(true, 125d, 5000d, 7));
 
-        return ShowGoalSeekStatusDialogAsync(result);
+        return ShowGoalSeekStatusDialogAsync(proposal);
     }
 
     private Task ShowDataTableParityDialogAsync() =>

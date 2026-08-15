@@ -69,6 +69,28 @@ public sealed class FreeXReview10DataTableTests
             .Which.Value.Should().BeApproximately(100, 1e-4);
     }
 
+    [Fact]
+    public void ApplyGoalSeekProposal_ManualCalculationMode_RefreshesSetCellAfterConfirmation()
+    {
+        var (workbook, sheet, service, _) = CreateEditService();
+        var changingCell = new CellAddress(sheet.Id, 1, 1);
+        var setCell = new CellAddress(sheet.Id, 1, 2);
+        sheet.SetCell(changingCell, new NumberValue(2));
+        sheet.SetFormula(setCell, "A1*10");
+        service.RecalculateAll(workbook);
+        workbook.CalculationMode = WorkbookCalculationMode.Manual;
+        var request = new GoalSeekRequest(setCell, 100, changingCell);
+        var proposal = service.FindGoalSeekProposal(workbook, request);
+
+        var result = service.ApplyGoalSeekProposal(workbook, proposal);
+
+        result.Success.Should().BeTrue();
+        sheet.GetValue(changingCell).Should().BeOfType<NumberValue>()
+            .Which.Value.Should().BeApproximately(10, 1e-4);
+        sheet.GetValue(setCell).Should().BeOfType<NumberValue>()
+            .Which.Value.Should().BeApproximately(100, 1e-4);
+    }
+
     private static (Workbook Workbook, Sheet Sheet, WorkbookCellEditService Service, RecalcEngine RecalcEngine)
         CreateEditService()
     {

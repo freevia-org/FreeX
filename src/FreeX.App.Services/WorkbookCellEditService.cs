@@ -259,6 +259,33 @@ public sealed class WorkbookCellEditService
         if (!seekResult.Converged)
             return WorkbookGoalSeekResult.NotConverged(request, seekResult);
 
+        return ApplyGoalSeekProposal(workbook, proposal);
+    }
+
+    /// <summary>
+    /// Applies a previously calculated Goal Seek proposal through the normal edit, undo, and
+    /// recalculation pipeline. Hosts with a Goal Seek Status confirmation step use this method so
+    /// accepting either a converged result or Excel's closest non-converged approximation has the
+    /// same behavior in every renderer.
+    /// </summary>
+    public WorkbookGoalSeekResult ApplyGoalSeekProposal(
+        Workbook workbook,
+        WorkbookGoalSeekProposal proposal)
+    {
+        ArgumentNullException.ThrowIfNull(workbook);
+        ArgumentNullException.ThrowIfNull(proposal);
+
+        if (!proposal.Success)
+            return WorkbookGoalSeekResult.Invalid(
+                proposal.Request,
+                proposal.ErrorMessage ?? "Goal Seek proposal is not valid.");
+
+        var request = proposal.Request;
+        if (TryValidateGoalSeekRequest(workbook, request, out var errorMessage))
+            return WorkbookGoalSeekResult.Invalid(request, errorMessage);
+
+        var seekResult = proposal.SeekResult!;
+
         var editResult = ExecuteEditCommand(
             workbook,
             new GoalSeekCommand(request.ChangingCell, seekResult.FoundValue));

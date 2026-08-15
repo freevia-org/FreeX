@@ -2544,6 +2544,7 @@ public sealed class AvaloniaShellSourceTests
     {
         var source = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MainWindow.cs"));
         var parityCaptureSource = File.ReadAllText(RepositoryFileLocator.Find("tools", "FreeX.ParityCapture.Avalonia", "Capture", "MainWindow.ParityCapture.cs"));
+        var wpfGoalSeekSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Host", "MainWindow.DataCommands.cs"));
         var sessionSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Services", "WorkbookSession.cs"));
         var parserSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Services", "GoalSeekRequestParser.cs"));
         var statusPlannerSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Presentation", "Dialogs", "GoalSeekStatusDialogPlanner.cs"));
@@ -2563,11 +2564,11 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("private async Task ShowGoalSeekDialogAsync()");
         source.Should().Contain("if (!TryCommitPendingFormulaEdit())");
         source.Should().Contain("var request = await ShowGoalSeekInputDialogAsync();");
-        source.Should().Contain("var result = _session.ExecuteGoalSeek(request);");
-        source.Should().Contain("var choice = await ShowGoalSeekStatusDialogAsync(result);");
-        source.Should().Contain("WorkbookGoalSeekStatus.Applied");
-        source.Should().Contain("choice == GoalSeekStatusDialogChoice.RestoreOriginalValues");
-        source.Should().Contain("var restoreResult = _session.UndoLastEdit();");
+        source.Should().Contain("var proposal = _session.FindGoalSeekProposal(request);");
+        source.Should().Contain("var choice = await ShowGoalSeekStatusDialogAsync(proposal);");
+        source.Should().Contain("choice != GoalSeekStatusDialogChoice.KeepResult");
+        source.Should().Contain("var result = _session.ApplyGoalSeekProposal(proposal);");
+        source.Should().NotContain("var restoreResult = _session.UndoLastEdit();");
         source.Should().Contain("RefreshShell(FormatGoalSeekStatus(result));");
         source.Should().Contain("ShowEditIssue(FormatGoalSeekStatus(result));");
 
@@ -2589,17 +2590,19 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("AutomationProperties.SetAutomationId(cancelButton, \"GoalSeekCancelButton\");");
         source.Should().Contain("FocusGoalSeekErrorField(validation.FocusTarget, setCellBox, targetValueBox, changingCellBox);");
 
-        source.Should().Contain("private async Task<GoalSeekStatusDialogChoice> ShowGoalSeekStatusDialogAsync(WorkbookGoalSeekResult result)");
+        source.Should().Contain("private async Task<GoalSeekStatusDialogChoice> ShowGoalSeekStatusDialogAsync(WorkbookGoalSeekProposal proposal)");
         source.Should().Contain("AutomationProperties.SetAutomationId(dialog, \"GoalSeekStatusDialog\");");
         source.Should().Contain("AutomationProperties.SetAutomationId(summaryBlock, \"GoalSeekStatusText\");");
         source.Should().Contain("AutomationProperties.SetAutomationId(restoreButton, \"GoalSeekRestoreOriginalValuesButton\");");
         source.Should().Contain("AutomationProperties.SetAutomationId(keepButton, \"GoalSeekKeepResultButton\");");
         source.Should().Contain("AutomationProperties.SetAutomationId(okButton, \"GoalSeekStatusOkButton\");");
+        source.Should().Contain("AutomationProperties.SetAutomationId(cancelButton, \"GoalSeekStatusCancelButton\");");
         source.Should().Contain("GoalSeekStatusDialogPlanner.DescribeValidationError(");
         statusPlannerSource.Should().Contain("public static ValidationPresentationDescriptor<GoalSeekValidationFocusTarget> DescribeValidationError(");
         source.Should().Contain("private static string FormatGoalSeekStatus(WorkbookGoalSeekResult result)");
 
         sessionSource.Should().Contain("public WorkbookGoalSeekResult ExecuteGoalSeek(GoalSeekRequest request)");
+        sessionSource.Should().Contain("public WorkbookGoalSeekResult ApplyGoalSeekProposal(WorkbookGoalSeekProposal proposal)");
         parserSource.Should().Contain("public static GoalSeekRequestParseResult Parse(");
         parityCaptureSource.Should().Contain("(\"dialog.GoalSeek\", () => ShowGoalSeekParityDialogAsync()),");
         parityCaptureSource.Should().Contain("(\"dialog.GoalSeekStatus\", () => ShowGoalSeekStatusParityDialogAsync()),");
@@ -2608,6 +2611,11 @@ public sealed class AvaloniaShellSourceTests
         parityCaptureSource.Should().Contain("initialSetCellText: \"C2\"");
         parityCaptureSource.Should().Contain("initialTargetValueText: \"5000\"");
         parityCaptureSource.Should().Contain("initialChangingCellText: \"E2\"");
+
+        wpfGoalSeekSource.Should().Contain("var proposal = _session.FindGoalSeekProposal(");
+        wpfGoalSeekSource.Should().Contain("var applyResult = _session.ApplyGoalSeekProposal(proposal);");
+        wpfGoalSeekSource.Should().NotContain("new GoalSeekCommand");
+        wpfGoalSeekSource.Should().NotContain("RecalculateChangedCellsAlways([changingCell])");
 
         var handlerIndex = normalizedSource.IndexOf("private async Task ShowGoalSeekDialogAsync()", StringComparison.Ordinal);
         handlerIndex.Should().BeGreaterThanOrEqualTo(0);

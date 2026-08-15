@@ -142,6 +142,50 @@ public sealed class WorkbookSessionGoalSeekTests
         session.CanUndo.Should().BeFalse();
     }
 
+    [Fact]
+    public void ApplyGoalSeekProposal_AcceptsClosestNonConvergedValueThroughSessionMutationPath()
+    {
+        var (session, sheet, changingCell, setCell, _) = CreateLinearGoalSeekSession();
+        var request = new GoalSeekRequest(setCell, 20, changingCell);
+        var proposal = WorkbookGoalSeekProposal.Ready(
+            request,
+            new FreeX.Core.Calc.GoalSeekResult(false, 5, 15, 1000));
+
+        var result = session.ApplyGoalSeekProposal(proposal);
+
+        result.Success.Should().BeTrue();
+        result.Status.Should().Be(WorkbookGoalSeekStatus.Applied);
+        result.Converged.Should().BeFalse();
+        result.Applied.Should().BeTrue();
+        GetNumber(sheet, changingCell).Should().Be(5);
+        GetNumber(sheet, setCell).Should().Be(15);
+        session.IsDirty.Should().BeTrue();
+        session.CanUndo.Should().BeTrue();
+        session.ActiveCell.Should().Be(changingCell);
+
+        session.UndoLastEdit().Success.Should().BeTrue();
+        GetNumber(sheet, changingCell).Should().Be(1);
+        GetNumber(sheet, setCell).Should().Be(3);
+    }
+
+    [Fact]
+    public void ApplyGoalSeekProposal_RevalidatesWorkbookStateAtConfirmationTime()
+    {
+        var (session, sheet, changingCell, setCell, _) = CreateLinearGoalSeekSession();
+        var proposal = session.FindGoalSeekProposal(new GoalSeekRequest(setCell, 12, changingCell));
+        proposal.Success.Should().BeTrue();
+        sheet.IsProtected = true;
+
+        var result = session.ApplyGoalSeekProposal(proposal);
+
+        result.Success.Should().BeFalse();
+        result.Status.Should().Be(WorkbookGoalSeekStatus.InvalidRequest);
+        result.ErrorMessage.Should().Be("The sheet is protected.");
+        GetNumber(sheet, changingCell).Should().Be(1);
+        session.IsDirty.Should().BeFalse();
+        session.CanUndo.Should().BeFalse();
+    }
+
     private static (WorkbookSession Session, Sheet Sheet, CellAddress ChangingCell, CellAddress SetCell, CellAddress SelectionCell)
         CreateLinearGoalSeekSession()
     {

@@ -118,8 +118,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
     private enum GoalSeekStatusDialogChoice
     {
         KeepResult,
-        RestoreOriginalValues,
-        Dismiss
+        RestoreOriginalValues
     }
 
     private sealed record ScenarioManagerDialogScenarioItem(ScenarioManagerScenarioChoice Choice)
@@ -19748,28 +19747,25 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         if (request is null)
             return;
 
-        var result = _session.ExecuteGoalSeek(request);
-        var choice = await ShowGoalSeekStatusDialogAsync(result);
-        if (result.Status == WorkbookGoalSeekStatus.Applied)
+        var proposal = _session.FindGoalSeekProposal(request);
+        if (!proposal.Success)
         {
-            if (choice == GoalSeekStatusDialogChoice.RestoreOriginalValues)
-            {
-                var restoreResult = _session.UndoLastEdit();
-                if (!restoreResult.Success)
-                {
-                    ShowEditIssue(restoreResult.ErrorMessage ?? UiText.Get("MainLoc_GoalSeekRestoreFailed"));
-                    return;
-                }
-
-                RefreshShell(UiText.Format("MainLoc_RestoredGoalSeekValues", FormatCellReference(result.Request.ChangingCell)));
-                return;
-            }
-
-            RefreshShell(FormatGoalSeekStatus(result));
+            ShowEditIssue(proposal.ErrorMessage ?? UiText.Get("MainWindowMessage_CommandCouldNotBeCompleted"));
             return;
         }
 
-        ShowEditIssue(FormatGoalSeekStatus(result));
+        var choice = await ShowGoalSeekStatusDialogAsync(proposal);
+        if (choice != GoalSeekStatusDialogChoice.KeepResult)
+            return;
+
+        var result = _session.ApplyGoalSeekProposal(proposal);
+        if (!result.Success)
+        {
+            ShowEditIssue(FormatGoalSeekStatus(result));
+            return;
+        }
+
+        RefreshShell(FormatGoalSeekStatus(result));
     }
 
     private async Task<GoalSeekRequest?> ShowGoalSeekInputDialogAsync(
@@ -19943,20 +19939,19 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         return result;
     }
 
-    private async Task<GoalSeekStatusDialogChoice> ShowGoalSeekStatusDialogAsync(WorkbookGoalSeekResult result)
+    private async Task<GoalSeekStatusDialogChoice> ShowGoalSeekStatusDialogAsync(WorkbookGoalSeekProposal proposal)
     {
-        var choice = result.Status == WorkbookGoalSeekStatus.Applied
-            ? GoalSeekStatusDialogChoice.KeepResult
-            : GoalSeekStatusDialogChoice.Dismiss;
+        var result = proposal.SeekResult ?? throw new ArgumentException("A valid Goal Seek proposal is required.", nameof(proposal));
+        var choice = GoalSeekStatusDialogChoice.RestoreOriginalValues;
         var dialog = new Window
         {
             Title = UiText.Get("GoalSeekStatus_GoalSeekStatus"),
             Width = GoalSeekStatusDialogPlanner.WindowWidth,
-            Height = GoalSeekStatusDialogPlanner.WindowHeight(result.Status == WorkbookGoalSeekStatus.Applied),
+            Height = GoalSeekStatusDialogPlanner.WindowHeight(result.Converged),
             MinWidth = GoalSeekStatusDialogPlanner.WindowWidth,
-            MinHeight = GoalSeekStatusDialogPlanner.WindowHeight(result.Status == WorkbookGoalSeekStatus.Applied),
+            MinHeight = GoalSeekStatusDialogPlanner.WindowHeight(result.Converged),
             MaxWidth = GoalSeekStatusDialogPlanner.WindowWidth,
-            MaxHeight = GoalSeekStatusDialogPlanner.WindowHeight(result.Status == WorkbookGoalSeekStatus.Applied),
+            MaxHeight = GoalSeekStatusDialogPlanner.WindowHeight(result.Converged),
             CanResize = false,
             FontFamily = FormulaBarFontFamily,
             WindowStartupLocation = WindowStartupLocation.CenterOwner,
@@ -19966,7 +19961,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
 
         var summaryBlock = new TextBlock
         {
-            Text = NormalizeAvaloniaMultilineText(FormatGoalSeekStatus(result)),
+            Text = NormalizeAvaloniaMultilineText(FormatGoalSeekStatus(proposal)),
             TextWrapping = TextWrapping.Wrap,
             Margin = new Thickness(
                 0,
@@ -19993,7 +19988,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         DockPanel.SetDock(buttonRow, Dock.Bottom);
 
         Button defaultButton;
-        if (result.Status == WorkbookGoalSeekStatus.Applied)
+        if (result.Converged)
         {
             var restoreButton = new Button
             {
@@ -20046,18 +20041,35 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
                 Width = GoalSeekStatusDialogPlanner.OkButtonWidth,
                 MinWidth = GoalSeekStatusDialogPlanner.OkButtonWidth,
                 IsDefault = true,
-                IsCancel = true,
             };
             ApplyGoalSeekStatusButtonChrome(okButton, GoalSeekStatusDialogPlanner.OkButtonWidth, isDefault: true);
             AutomationProperties.SetName(okButton, UiText.CreateAutomationName(UiText.Get("Common_Ok")));
             AutomationProperties.SetAutomationId(okButton, "GoalSeekStatusOkButton");
-            AutomationProperties.SetHelpText(okButton, UiText.Get("GoalSeekStatus_CloseTheGoalSeekStatusDialog"));
+            AutomationProperties.SetHelpText(okButton, UiText.Get("GoalSeekStatus_KeepTheGoalSeekResultInTheChangingCell"));
             okButton.Click += (_, _) =>
             {
-                choice = GoalSeekStatusDialogChoice.Dismiss;
+                choice = GoalSeekStatusDialogChoice.KeepResult;
+                dialog.Close();
+            };
+
+            var cancelButton = new Button
+            {
+                Content = UiText.Get("Common_Cancel"),
+                Width = GoalSeekStatusDialogPlanner.OkButtonWidth,
+                MinWidth = GoalSeekStatusDialogPlanner.OkButtonWidth,
+                IsCancel = true,
+            };
+            ApplyGoalSeekStatusButtonChrome(cancelButton, GoalSeekStatusDialogPlanner.OkButtonWidth);
+            AutomationProperties.SetName(cancelButton, UiText.CreateAutomationName(UiText.Get("Common_Cancel")));
+            AutomationProperties.SetAutomationId(cancelButton, "GoalSeekStatusCancelButton");
+            AutomationProperties.SetHelpText(cancelButton, UiText.Get("GoalSeekStatus_RestoreTheOriginalWorkbookValuesBeforeGoalSeekRan"));
+            cancelButton.Click += (_, _) =>
+            {
+                choice = GoalSeekStatusDialogChoice.RestoreOriginalValues;
                 dialog.Close();
             };
             buttonRow.Children.Add(okButton);
+            buttonRow.Children.Add(cancelButton);
             defaultButton = okButton;
         }
 
@@ -20066,6 +20078,9 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             if (e.Key is Key.Enter or Key.Escape)
             {
                 e.Handled = true;
+                choice = e.Key == Key.Enter
+                    ? GoalSeekStatusDialogChoice.KeepResult
+                    : GoalSeekStatusDialogChoice.RestoreOriginalValues;
                 dialog.Close();
             }
         };
@@ -20100,7 +20115,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         {
             WorkbookGoalSeekStatus.Applied when result.SeekResult is { } seekResult =>
                 GoalSeekStatusDialogPlanner.DescribeStatus(
-                    true,
+                    seekResult.Converged,
                     result.Request.TargetValue,
                     seekResult.ActualResult,
                     seekResult.FoundValue).Resolve(UiText.Get, UiText.Format),
@@ -20116,6 +20131,16 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
                 setCell,
                 changingCell).Resolve(UiText.Get, UiText.Format)
         };
+    }
+
+    private static string FormatGoalSeekStatus(WorkbookGoalSeekProposal proposal)
+    {
+        var seekResult = proposal.SeekResult ?? throw new ArgumentException("A valid Goal Seek proposal is required.", nameof(proposal));
+        return GoalSeekStatusDialogPlanner.DescribeStatus(
+            seekResult.Converged,
+            proposal.Request.TargetValue,
+            seekResult.ActualResult,
+            seekResult.FoundValue).Resolve(UiText.Get, UiText.Format);
     }
 
     private static void FocusGoalSeekErrorField(

@@ -1674,6 +1674,19 @@ public sealed class WorkbookSession : IDisposable
         return result;
     }
 
+    /// <summary>Applies a Goal Seek proposal after a host confirmation step.</summary>
+    public WorkbookGoalSeekResult ApplyGoalSeekProposal(WorkbookGoalSeekProposal proposal)
+    {
+        ArgumentNullException.ThrowIfNull(proposal);
+
+        var result = _cellEditService.ApplyGoalSeekProposal(Workbook, proposal);
+        if (!result.Success || result.EditResult is null)
+            return result;
+
+        ApplySuccessfulEditResult(result.EditResult, proposal.Request.ChangingCell);
+        return result;
+    }
+
     /// <summary>Calculates a Goal Seek proposal without applying it, for hosts with a confirmation step.</summary>
     public GoalSeekResult FindGoalSeekSolution(GoalSeekRequest request) =>
         _cellEditService.FindGoalSeekSolution(Workbook, request);

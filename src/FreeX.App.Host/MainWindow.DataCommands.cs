@@ -983,24 +983,18 @@ public partial class MainWindow
         var statusDialog = new GoalSeekStatusDialog(result, targetValue) { Owner = this };
         if (statusDialog.ShowDialog() == true && statusDialog.ApplyResult)
         {
-            var cmd = new GoalSeekCommand(changingCell, result.FoundValue);
-            if (TryExecuteCommand(cmd, "Goal Seek"))
+            var applyResult = _session.ApplyGoalSeekProposal(proposal);
+            if (!applyResult.Success)
             {
-                // Excel always refreshes the set cell (and the rest of the dependency chain from
-                // the changing cell) once Goal Seek applies its result, even when the workbook is
-                // in Manual calculation mode -- Goal Seek's recalculation is a deliberate one-time
-                // action, not subject to the "only recalc on F9" rule that otherwise governs Manual
-                // mode. RecalculateIfAutomatic above is a no-op outside Automatic/
-                // AutomaticExceptDataTables mode, so force the recalculation here when it was
-                // skipped, or the set cell would keep displaying its pre-seek value. Mirrors
-                // WorkbookCellEditService.ExecuteGoalSeek (FreeX.App.Services), which the WPF host's
-                // Goal Seek command does not route through.
-                if (_workbook.CalculationMode is not (WorkbookCalculationMode.Automatic or WorkbookCalculationMode.AutomaticExceptDataTables))
-                {
-                    _session.RecalculateChangedCellsAlways([changingCell]);
-                    InvalidateNavigationCaches();
-                }
+                _messageService.ShowWarning(
+                    applyResult.ErrorMessage ?? UiText.Get("MainWindowMessage_CommandCouldNotBeCompleted"),
+                    UiText.Get("MainWindowMessage_CommandErrorTitle"));
+                return;
             }
+
+            ApplySuccessfulWorkbookSessionCommand();
+            ApplyWorkbookSessionDocumentStateToRenderer();
+            UpdateViewport();
         }
     }
 
