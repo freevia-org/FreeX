@@ -57,7 +57,7 @@ public sealed class MacOsAppReadinessPreflightTests
         script.Should().Contain("FullyQualifiedName~FreeX.App.Services.Tests.PortablePdfPageContentPlannerTests");
         script.Should().Contain("FullyQualifiedName~FreeX.App.Services.Tests.PortablePdfTextCapabilityPlannerTests");
         script.Should().Contain("FullyQualifiedName~FreeX.App.Services.Tests.WorkbookExportPrintPlannerTests");
-        script.Should().Contain("FullyQualifiedName~FreeX.App.Services.Tests.WorkbookShareActionPlannerTests");
+        script.Should().Contain("FullyQualifiedName~FreeX.App.Services.Tests.DocumentShareActionPlannerWorkbookTests");
         script.Should().Contain("FullyQualifiedName~FreeX.App.Services.Tests.WorkbookViewportScrollPlannerTests");
         script.Should().Contain("FullyQualifiedName~FreeX.App.Services.Tests.OpenRecentWorkbookMenuPlannerTests");
         script.Should().Contain("FullyQualifiedName~FreeX.App.Services.Tests.AppDiagnosticsFileStoreTests");
@@ -153,8 +153,8 @@ public sealed class MacOsAppReadinessPreflightTests
         script.Should().Contain("launchservices_default_open_app_override=false");
         script.Should().Contain("launchservices_default_open_document_extension=fxl");
         script.Should().Contain("src\\FreeX.App.Services\\PortablePdfDocumentExporter.cs");
-        script.Should().Contain("shared\\Free.Shared.AppServices\\WorkbookShareActionPlanner.cs");
-        script.Should().Contain("public static WorkbookShareActionSurface MacOsPreview");
+        script.Should().Contain("shared\\Free.Shared.AppServices\\DocumentSharePlanner.cs");
+        script.Should().Contain("public static DocumentShareActionSurface MacOsPreview");
         script.Should().Contain("surface.CanShowShareSheet || surface.CanOpenContainingFolder");
         script.Should().Contain("src\\FreeX.App.Services\\WorkbookViewportScrollPlanner.cs");
         script.Should().Contain("public static WorkbookViewportScrollState Create(Sheet sheet, ViewportModel viewport)");
@@ -1301,7 +1301,7 @@ public sealed class MacOsAppReadinessPreflightTests
                     run: |
                       dotnet test tests/FreeX.App.Services.Tests/FreeX.App.Services.Tests.csproj \
                         --configuration Release \
-                        --filter 'FullyQualifiedName~FreeX.App.Services.Tests.PortablePdfDocumentExporterTests|FullyQualifiedName~FreeX.App.Services.Tests.PortablePdfExportPlannerTests|FullyQualifiedName~FreeX.App.Services.Tests.PortablePdfPageContentPlannerTests|FullyQualifiedName~FreeX.App.Services.Tests.PortablePdfTextCapabilityPlannerTests|FullyQualifiedName~FreeX.App.Services.Tests.WorkbookExportPrintPlannerTests|FullyQualifiedName~FreeX.App.Services.Tests.WorkbookShareActionPlannerTests|FullyQualifiedName~FreeX.App.Services.Tests.WorkbookViewportScrollPlannerTests|FullyQualifiedName~FreeX.App.Services.Tests.OpenRecentWorkbookMenuPlannerTests|FullyQualifiedName~FreeX.App.Services.Tests.AppDiagnosticsFileStoreTests|FullyQualifiedName~FreeX.App.Services.Tests.AppServicesPortabilityGuardTests|FullyQualifiedName~FreeX.App.Services.Tests.AvaloniaProjectPortabilityGuardTests|FullyQualifiedName~FreeX.App.Services.Tests.ApplicationDataPathGuardTests|FullyQualifiedName~FreeX.App.Services.Tests.AppStoragePathPlannerTests|FullyQualifiedName~FreeX.App.Services.Tests.AppOptionsStoreTests|FullyQualifiedName~FreeX.App.Services.Tests.AtomicFileWriterTests|FullyQualifiedName~FreeX.App.Services.Tests.AvaloniaShellSourceTests|FullyQualifiedName~FreeX.App.Services.Tests.MacOsLaunchSmokeReportKeyDriftGuardTests' \
+                        --filter 'FullyQualifiedName~FreeX.App.Services.Tests.PortablePdfDocumentExporterTests|FullyQualifiedName~FreeX.App.Services.Tests.PortablePdfExportPlannerTests|FullyQualifiedName~FreeX.App.Services.Tests.PortablePdfPageContentPlannerTests|FullyQualifiedName~FreeX.App.Services.Tests.PortablePdfTextCapabilityPlannerTests|FullyQualifiedName~FreeX.App.Services.Tests.WorkbookExportPrintPlannerTests|FullyQualifiedName~FreeX.App.Services.Tests.DocumentShareActionPlannerWorkbookTests|FullyQualifiedName~FreeX.App.Services.Tests.WorkbookViewportScrollPlannerTests|FullyQualifiedName~FreeX.App.Services.Tests.OpenRecentWorkbookMenuPlannerTests|FullyQualifiedName~FreeX.App.Services.Tests.AppDiagnosticsFileStoreTests|FullyQualifiedName~FreeX.App.Services.Tests.AppServicesPortabilityGuardTests|FullyQualifiedName~FreeX.App.Services.Tests.AvaloniaProjectPortabilityGuardTests|FullyQualifiedName~FreeX.App.Services.Tests.ApplicationDataPathGuardTests|FullyQualifiedName~FreeX.App.Services.Tests.AppStoragePathPlannerTests|FullyQualifiedName~FreeX.App.Services.Tests.AppOptionsStoreTests|FullyQualifiedName~FreeX.App.Services.Tests.AtomicFileWriterTests|FullyQualifiedName~FreeX.App.Services.Tests.AvaloniaShellSourceTests|FullyQualifiedName~FreeX.App.Services.Tests.MacOsLaunchSmokeReportKeyDriftGuardTests' \
                         --logger "trx;LogFileName=freex-${"{{"} matrix.runtime {"}}"}-portable-pdf-exporter-tests.trx" \
                         --results-directory artifacts
                       dotnet test tests/FreeX.Core.Model.Tests/FreeX.Core.Model.Tests.csproj \
@@ -4531,11 +4531,11 @@ public sealed class MacOsAppReadinessPreflightTests
 
         WriteFile(
             root,
-            "shared/Free.Shared.AppServices/WorkbookShareActionPlanner.cs",
+            "shared/Free.Shared.AppServices/DocumentSharePlanner.cs",
             """
             namespace Free.Shared.AppServices;
 
-            public enum WorkbookShareActionPlanKind
+            public enum DocumentShareActionPlanKind
             {
                 ShareSheet,
                 OpenContainingFolder,
@@ -4543,64 +4543,69 @@ public sealed class MacOsAppReadinessPreflightTests
                 Deferred
             }
 
-            public enum WorkbookShareActionUnavailableReason
+            public enum DocumentShareActionUnavailableReason
             {
                 None,
                 ShareSheetUnavailable,
                 ContainingFolderUnavailable
             }
 
-            public sealed record WorkbookShareActionSurface(
+            public sealed record DocumentShareActionSurface(
                 string ShareSheetLabel,
                 bool CanShowShareSheet,
                 bool CanOpenContainingFolder = false,
                 string OpenContainingFolderLabel = "Open Containing Folder")
             {
-                public static WorkbookShareActionSurface MacOsPreview { get; } =
+                public static DocumentShareActionSurface MacOsPreview { get; } =
                     new("macOS Share Sheet", CanShowShareSheet: false);
             }
 
-            public sealed record WorkbookShareActionPlan(
-                WorkbookShareActionPlanKind Kind,
+            public sealed record DocumentShareActionPlan(
+                DocumentShareActionPlanKind Kind,
                 string? Path,
                 string? ContainingFolderPath = null,
-                WorkbookShareReadinessSaveAsReason SaveAsReason = WorkbookShareReadinessSaveAsReason.None,
+                DocumentShareSaveAsReason SaveAsReason = DocumentShareSaveAsReason.None,
                 string? CandidatePath = null,
-                WorkbookShareActionUnavailableReason UnavailableReason = WorkbookShareActionUnavailableReason.None,
-                WorkbookShareActionSurface? Surface = null);
+                DocumentShareActionUnavailableReason UnavailableReason = DocumentShareActionUnavailableReason.None,
+                DocumentShareActionSurface? Surface = null);
 
-            public static class WorkbookShareActionPlanner
+            public sealed record DocumentShareActionTextSpec(string DocumentNoun)
             {
-                public static WorkbookShareActionPlan CreatePlan(
+                public static DocumentShareActionTextSpec WorkbookEnglish { get; } = new("workbook");
+            }
+
+            public static class DocumentShareActionPlanner
+            {
+                public static DocumentShareActionPlan CreatePlan(
                     string? currentFilePath,
                     Func<string, bool>? fileExists = null) =>
-                    CreatePlan(currentFilePath, WorkbookShareActionSurface.MacOsPreview, fileExists);
+                    CreatePlan(currentFilePath, DocumentShareActionSurface.MacOsPreview, fileExists);
 
-                public static WorkbookShareActionPlan CreatePlan(
+                public static DocumentShareActionPlan CreatePlan(
                     string? currentFilePath,
-                    WorkbookShareActionSurface surface,
+                    DocumentShareActionSurface surface,
                     Func<string, bool>? fileExists = null)
                 {
-                    var readiness = WorkbookShareReadinessPlanner.CreatePlan(
+                    var readiness = DocumentShareReadinessPlanner.CreatePlan(
                         currentFilePath,
-                        new WorkbookShareSurface(surface.ShareSheetLabel),
+                        new DocumentShareSurface(surface.ShareSheetLabel),
                         fileExists);
                     var hasNativeAction = surface.CanShowShareSheet || surface.CanOpenContainingFolder;
-                    if (readiness.Kind != WorkbookShareReadinessPlanKind.ShareExistingFile)
-                        return new WorkbookShareActionPlan(
-                            hasNativeAction ? WorkbookShareActionPlanKind.SaveAsBeforeShare : WorkbookShareActionPlanKind.Deferred,
+                    if (readiness.Kind != DocumentShareReadinessPlanKind.ShareExistingFile)
+                        return new DocumentShareActionPlan(
+                            hasNativeAction ? DocumentShareActionPlanKind.SaveAsBeforeShare : DocumentShareActionPlanKind.Deferred,
                             null);
 
                     if (surface.CanOpenContainingFolder &&
                         TryGetContainingFolderPath(readiness.Path, out var containingFolderPath))
-                        return new WorkbookShareActionPlan(
-                            WorkbookShareActionPlanKind.OpenContainingFolder,
+                        return new DocumentShareActionPlan(
+                            DocumentShareActionPlanKind.OpenContainingFolder,
                             readiness.Path,
                             containingFolderPath,
-                            UnavailableReason: WorkbookShareActionUnavailableReason.ShareSheetUnavailable,
+                            UnavailableReason: DocumentShareActionUnavailableReason.ShareSheetUnavailable,
                             Surface: surface);
 
-                    return new WorkbookShareActionPlan(WorkbookShareActionPlanKind.ShareSheet, readiness.Path);
+                    return new DocumentShareActionPlan(DocumentShareActionPlanKind.ShareSheet, readiness.Path);
                 }
 
                 private static bool TryGetContainingFolderPath(string? filePath, out string containingFolderPath)

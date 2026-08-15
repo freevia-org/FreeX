@@ -35,20 +35,17 @@ public sealed class DocumentSharePlannerTests
     }
 
     [Fact]
-    public void WorkbookFacade_PreservesExistingBehaviorOverDocumentAuthority()
+    public void WorkbookTextSpec_PreservesProductSpecificWording()
     {
-        var documentPlan = DocumentShareReadinessPlanner.CreatePlan(
+        var plan = DocumentShareReadinessPlanner.CreatePlan(
             "https://example.test/book.xlsx",
             new DocumentShareSurface("Windows Share"),
             _ => true);
-        var workbookPlan = WorkbookShareReadinessPlanner.CreatePlan(
-            "https://example.test/book.xlsx",
-            WorkbookShareSurface.WindowsShare,
-            _ => true);
 
-        documentPlan.SaveAsReason.Should().Be(DocumentShareSaveAsReason.InvalidPath);
-        workbookPlan.SaveAsReason.Should().Be(WorkbookShareReadinessSaveAsReason.InvalidPath);
-        WorkbookShareReadinessPlanner.FormatStatus(workbookPlan)
+        plan.SaveAsReason.Should().Be(DocumentShareSaveAsReason.InvalidPath);
+        DocumentShareReadinessPlanner.FormatStatus(
+                plan,
+                DocumentShareReadinessTextSpec.WorkbookEnglish)
             .Should().Contain("save the workbook to a local file first");
     }
 }

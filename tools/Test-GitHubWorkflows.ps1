@@ -396,7 +396,7 @@ foreach ($workflow in $workflows) {
                     "FreeX.App.Services.Tests.PortablePdfPageContentPlannerTests",
                     "FreeX.App.Services.Tests.PortablePdfTextCapabilityPlannerTests",
                     "FreeX.App.Services.Tests.WorkbookExportPrintPlannerTests",
-                    "FreeX.App.Services.Tests.WorkbookShareActionPlannerTests",
+                    "FreeX.App.Services.Tests.DocumentShareActionPlannerWorkbookTests",
                     "FreeX.App.Services.Tests.WorkbookViewportScrollPlannerTests",
                     "FreeX.App.Services.Tests.OpenRecentWorkbookMenuPlannerTests",
                     "FreeX.App.Services.Tests.AppDiagnosticsFileStoreTests",

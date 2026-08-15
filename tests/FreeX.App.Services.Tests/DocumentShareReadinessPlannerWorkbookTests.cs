@@ -2,7 +2,7 @@ using FluentAssertions;
 
 namespace FreeX.App.Services.Tests;
 
-public sealed class WorkbookShareReadinessPlannerTests
+public sealed class DocumentShareReadinessPlannerWorkbookTests
 {
     private static string FormatStatus(DocumentShareReadinessPlan plan) =>
         DocumentShareReadinessPlanner.FormatStatus(

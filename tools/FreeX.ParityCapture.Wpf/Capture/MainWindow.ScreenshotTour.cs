@@ -2939,14 +2939,16 @@ public partial class MainWindow
         RefreshStatusBar();
         MarkWorkbookDirty();
 
-        var unsavedSharePlan = WorkbookShareReadinessPlanner.CreatePlan(null, WorkbookShareSurface.WindowsShare);
+        var unsavedSharePlan = DocumentShareReadinessPlanner.CreatePlan(null, DocumentShareSurface.WindowsShare);
         var exportReadiness = WorkbookExportReadinessPlanner.Create(_workbook, hasSelection: SheetGrid?.SelectedRange is not null);
         return new BackstageRecentExportShareTourContext(
             SheetName: sheet.Name,
             ActiveRange: SheetGrid?.SelectedRange?.ToString() ?? activeCell.ToA1(),
             RecentFileNames: recentPaths.Select(Path.GetFileName).OfType<string>().ToArray(),
             PinnedFileNames: pinnedPaths.Select(Path.GetFileName).OfType<string>().ToArray(),
-            UnsavedShareStatus: WorkbookShareReadinessPlanner.FormatStatus(unsavedSharePlan),
+            UnsavedShareStatus: DocumentShareReadinessPlanner.FormatStatus(
+                unsavedSharePlan,
+                DocumentShareReadinessTextSpec.WorkbookEnglish),
             ExportStatus: exportReadiness.StatusText);
     }
 
@@ -3045,7 +3047,7 @@ public partial class MainWindow
         double captureLogicalHeight,
         string? exportRequestSummary)
     {
-        var sharePlan = WorkbookShareReadinessPlanner.CreatePlan(_currentFilePath, WorkbookShareSurface.WindowsShare);
+        var sharePlan = DocumentShareReadinessPlanner.CreatePlan(_currentFilePath, DocumentShareSurface.WindowsShare);
         var focusedAutomationId = Keyboard.FocusedElement is DependencyObject focusedElement
             ? AutomationProperties.GetAutomationId(focusedElement)
             : null;
@@ -3065,7 +3067,9 @@ public partial class MainWindow
             SelectedRange: SheetGrid?.SelectedRange?.ToString() ?? string.Empty,
             CurrentFilePath: _currentFilePath,
             SharePlanKind: sharePlan.Kind.ToString(),
-            ShareStatus: WorkbookShareReadinessPlanner.FormatStatus(sharePlan),
+            ShareStatus: DocumentShareReadinessPlanner.FormatStatus(
+                sharePlan,
+                DocumentShareReadinessTextSpec.WorkbookEnglish),
             ExportStatus: WorkbookExportReadinessPlanner.Create(_workbook, hasSelection: SheetGrid?.SelectedRange is not null).StatusText,
             ExportRequestSummary: exportRequestSummary,
             EvidenceSummary: evidenceSummary);
@@ -3107,7 +3111,7 @@ public partial class MainWindow
             return capturedSize;
         });
 
-        var sharePlan = WorkbookShareReadinessPlanner.CreatePlan(_currentFilePath, WorkbookShareSurface.WindowsShare);
+        var sharePlan = DocumentShareReadinessPlanner.CreatePlan(_currentFilePath, DocumentShareSurface.WindowsShare);
         return new BackstageRecentExportShareTourManifestCapture(
             CaptureKey: captureKey,
             PairKey: $"interactive:backstage-recent-export-share:{state}",
@@ -3124,7 +3128,9 @@ public partial class MainWindow
             SelectedRange: SheetGrid?.SelectedRange?.ToString() ?? string.Empty,
             CurrentFilePath: _currentFilePath,
             SharePlanKind: sharePlan.Kind.ToString(),
-            ShareStatus: WorkbookShareReadinessPlanner.FormatStatus(sharePlan),
+            ShareStatus: DocumentShareReadinessPlanner.FormatStatus(
+                sharePlan,
+                DocumentShareReadinessTextSpec.WorkbookEnglish),
             ExportStatus: WorkbookExportReadinessPlanner.Create(_workbook, hasSelection: SheetGrid?.SelectedRange is not null).StatusText,
             ExportRequestSummary: null,
             EvidenceSummary: evidenceSummary);
