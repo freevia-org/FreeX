@@ -309,6 +309,75 @@ public sealed class FreeWRibbonDefinitionProfileTests
     }
 
     [Fact]
+    public void Picture_adjustment_commands_have_identical_WPF_and_Avalonia_menu_surfaces()
+    {
+        var parentIds = new[]
+        {
+            "freew.image-corrections",
+            "freew.image-color",
+            "freew.image-transparency",
+            "freew.image-effects",
+            "freew.image-artistic",
+        };
+        var expectedLeafIds = ImageAdjustmentCommandPlanner.AdjustmentPresets
+            .Select(preset => FreeWRibbonCommandWorkflow.GetPrimaryCommandId(preset.Action).Value)
+            .Concat(ImageAdjustmentCommandPlanner.RecolorPresets
+                .Select(preset => FreeWRibbonCommandWorkflow.GetPrimaryCommandId(preset.Action).Value))
+            .Concat(ImageAdjustmentCommandPlanner.EffectPresets.Select(preset =>
+                preset.Action is { } action
+                    ? FreeWRibbonCommandWorkflow.GetPrimaryCommandId(action).Value
+                    : preset.CommandId!))
+            .Concat(ImageAdjustmentCommandPlanner.ArtisticEffectPresets.Select(preset => preset.CommandId))
+            .Concat(new[]
+            {
+                "freew.image-adjust-dialog",
+                "freew.image-color-dialog",
+                "freew.image-transparency-dialog",
+            })
+            .Distinct(StringComparer.Ordinal)
+            .ToArray();
+
+        var wpf = FreeWRibbon.Build(FreeWRibbonCapabilities.Wpf)
+            .FindTab("picture-format")!
+            .FindGroup("picture-adjust")!;
+        var avalonia = FreeWRibbon.Build(FreeWRibbonCapabilities.Avalonia)
+            .FindTab("picture-format")!
+            .FindGroup("picture-adjust")!;
+
+        foreach (var parentId in parentIds)
+        {
+            var wpfMenu = wpf.Controls.OfType<RibbonDropdown>()
+                .Single(control => control.CommandId.Value == parentId)
+                .Menu.Items
+                .Select(MenuEntry)
+                .ToArray();
+            var avaloniaMenu = avalonia.Controls.OfType<RibbonDropdown>()
+                .Single(control => control.CommandId.Value == parentId)
+                .Menu.Items
+                .Select(MenuEntry)
+                .ToArray();
+
+            avaloniaMenu.Should().Equal(wpfMenu);
+        }
+
+        var wpfIds = CommandEntries(FreeWRibbon.Build(FreeWRibbonCapabilities.Wpf))
+            .Where(entry => entry.TabId == "picture-format" && entry.GroupId == "picture-adjust")
+            .Select(entry => entry.CommandId)
+            .ToHashSet(StringComparer.Ordinal);
+        var avaloniaIds = CommandEntries(FreeWRibbon.Build(FreeWRibbonCapabilities.Avalonia))
+            .Where(entry => entry.TabId == "picture-format" && entry.GroupId == "picture-adjust")
+            .Select(entry => entry.CommandId)
+            .ToHashSet(StringComparer.Ordinal);
+
+        wpfIds.Should().Contain(parentIds).And.Contain(expectedLeafIds);
+        avaloniaIds.Should().Contain(parentIds).And.Contain(expectedLeafIds);
+
+        static (string Header, string? CommandId, string? KeyTip, RibbonMenuItemKind Kind) MenuEntry(
+            RibbonMenuItem item) =>
+            (item.Header, item.CommandId?.Value, item.KeyTip, item.Kind);
+    }
+
+    [Fact]
     public void Chart_quick_layout_catalog_has_identical_profile_placement_labels_and_icons()
     {
         var expectedIds = FreeW.Core.Model.ChartQuickLayout.Catalog
@@ -388,9 +457,11 @@ public sealed class FreeWRibbonDefinitionProfileTests
                 FreeW.Core.Model.SmartArtColorScheme.Catalog.Select(scheme => $"freew.smartart-colors-{scheme.Id}"));
 
             var styles = styleGroup.Controls
-                .OfType<RibbonComboBox>()
+                .OfType<RibbonDropdown>()
                 .Single(control => control.CommandId.Value == "freew.smartart-change-style");
-            styles.Items.Should().Equal(FreeW.Core.Model.SmartArtStyle.Catalog.Select(style => style.Name));
+            styles.Menu.Items.Select(item => item.CommandId?.Value).Should().Equal(
+                FreeW.Core.Model.SmartArtStyle.Catalog.Select(style =>
+                    SmartArtCommandPlanner.StyleCommandId(style).Value));
         }
 
         var wpfRegistry = ReadRepositoryFile(
