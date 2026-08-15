@@ -86,16 +86,6 @@ public static class TableOfAuthoritiesPageResolverPlanner
         };
     }
 
-    public static bool HasExplicitPageBoundary(TextDocument document)
-    {
-        ArgumentNullException.ThrowIfNull(document);
-        return document.Blocks.OfType<Paragraph>().Any(paragraph =>
-            paragraph.Formatting.PageBreakBefore
-            || paragraph.Runs.Any(run => run.IsPageBreak)
-            || paragraph.SectionBreak is
-                { BreakKind: SectionBreakKind.NextPage or SectionBreakKind.EvenPage or SectionBreakKind.OddPage });
-    }
-
     private static bool TryGetCitationRunOffset(
         TextDocument document,
         int blockIndex,

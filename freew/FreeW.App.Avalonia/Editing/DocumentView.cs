@@ -21026,29 +21026,24 @@ public sealed partial class DocumentView : Control
         {
             Relayout(_laidOutWidth > 0 ? _laidOutWidth : FallbackWidth);
             var pageCount = Math.Max(1, _pageCount);
-            var hasExplicitPageBoundary =
-                TableOfAuthoritiesPageResolverPlanner.HasExplicitPageBoundary(_doc);
-
-            return new DocumentReferenceBlockPageResolution(
-                blockIndex =>
-                {
-                    if (blockIndex < 0 || blockIndex >= _doc.Blocks.Count)
-                        return null;
-
-                    var explicitPage = CrossReferences.ExplicitPageNumberAtBlock(_doc, blockIndex);
-                    if (TryResolvePlacedPageForBlockStart(blockIndex, pageCount, out var pageIndex))
-                        return explicitPage is { } authoredPage
-                            ? Math.Max(pageIndex + 1, authoredPage)
-                            : pageIndex + 1;
-
-                    return explicitPage ?? (pageCount == 1 && !hasExplicitPageBoundary ? 1 : null);
-                },
-                pageCount);
+            return DocumentReferenceBlockPageResolverPlanner.Build(
+                _doc,
+                blockIndex => TryResolvePlacedPageForBlockStart(
+                    blockIndex,
+                    pageCount,
+                    out var pageIndex)
+                        ? pageIndex + 1
+                        : null,
+                pageCount,
+                allowUnobservedFirstPageFallback: pageCount == 1);
         }
         catch (InvalidOperationException)
         {
-            return new DocumentReferenceBlockPageResolution(
-                blockIndex => CrossReferences.ExplicitPageNumberAtBlock(_doc, blockIndex));
+            return DocumentReferenceBlockPageResolverPlanner.Build(
+                _doc,
+                observedPhysicalPageOfBlock: null,
+                pageCount: 1,
+                allowUnobservedFirstPageFallback: false);
         }
     }
 

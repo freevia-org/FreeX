@@ -108,20 +108,6 @@ public sealed class TableOfAuthoritiesPageResolverPlannerTests
     }
 
     [Fact]
-    public void HasExplicitPageBoundary_DetectsParagraphAndSectionBreaks()
-    {
-        var document = DocumentWith(new Paragraph("Body"));
-        TableOfAuthoritiesPageResolverPlanner.HasExplicitPageBoundary(document).Should().BeFalse();
-
-        ((Paragraph)document.Blocks[0]).Formatting = ParagraphFormatting.Default with
-        {
-            PageBreakBefore = true
-        };
-
-        TableOfAuthoritiesPageResolverPlanner.HasExplicitPageBoundary(document).Should().BeTrue();
-    }
-
-    [Fact]
     public void Both_renderers_delegate_generated_authority_page_policy_to_the_shared_planner()
     {
         var root = TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeW.slnx");
@@ -135,7 +121,8 @@ public sealed class TableOfAuthoritiesPageResolverPlannerTests
                 .And.NotContain("private ToaCitationPageReference? ResolveTableOfAuthoritiesCitationPage(");
         }
 
-        avalonia.Should().Contain("TableOfAuthoritiesPageResolverPlanner.HasExplicitPageBoundary(_doc)")
+        avalonia.Should().Contain("DocumentReferenceBlockPageResolverPlanner.Build(")
+            .And.NotContain("TableOfAuthoritiesPageResolverPlanner.HasExplicitPageBoundary(_doc)")
             .And.NotContain("private static bool HasExplicitPageBoundary(TextDocument document)");
     }
 

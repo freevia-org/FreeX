@@ -12134,39 +12134,22 @@ public sealed partial class DocumentView : RichTextBox
         {
             var pagination = PaginationEngine.Compute(this);
             var pageCount = Math.Max(1, pagination.PageCount);
-            if (pageCount == 1 || pagination.PageBreakYsDip.Count == 0)
-            {
-                return new DocumentReferenceBlockPageResolution(
-                    blockIndex => IsModelBlock(blockIndex)
-                        ? CrossReferences.ExplicitPageNumberAtBlock(_model, blockIndex) ?? 1
-                        : null,
-                    pageCount);
-            }
-
             var firstRect = Document.ContentStart.GetCharacterRect(LogicalDirection.Forward);
-            if (firstRect.IsEmpty)
+            Func<int, int?>? observedPhysicalPageOfBlock = null;
+            if (!firstRect.IsEmpty && pagination.PageBreakYsDip.Count > 0)
             {
-                return new DocumentReferenceBlockPageResolution(
-                    blockIndex => IsModelBlock(blockIndex)
-                        ? CrossReferences.ExplicitPageNumberAtBlock(_model, blockIndex)
-                        : null,
-                    pageCount);
-            }
-
-            var topY = firstRect.Top;
-            return new DocumentReferenceBlockPageResolution(
-                blockIndex =>
+                var topY = firstRect.Top;
+                observedPhysicalPageOfBlock = blockIndex =>
                 {
                     if (!IsModelBlock(blockIndex))
                         return null;
 
-                    var explicitPage = CrossReferences.ExplicitPageNumberAtBlock(_model, blockIndex);
                     if (TextPointerAtModelBlockStart(blockIndex) is not { } pointer)
-                        return explicitPage;
+                        return null;
 
                     var rect = pointer.GetCharacterRect(LogicalDirection.Forward);
                     if (rect.IsEmpty)
-                        return explicitPage;
+                        return null;
 
                     var y = rect.Top - topY;
                     var pageIndex = 0;
@@ -12177,17 +12160,24 @@ public sealed partial class DocumentView : RichTextBox
                         pageIndex++;
                     }
 
-                    var placedPage = Math.Min(Math.Max(1, pageIndex + 1), pageCount);
-                    return explicitPage is { } authoredPage
-                        ? Math.Max(placedPage, authoredPage)
-                        : placedPage;
-                },
-                pageCount);
+                    return Math.Min(Math.Max(1, pageIndex + 1), pageCount);
+                };
+            }
+
+            return DocumentReferenceBlockPageResolverPlanner.Build(
+                _model,
+                observedPhysicalPageOfBlock,
+                pageCount,
+                allowUnobservedFirstPageFallback: pageCount == 1
+                    || pagination.PageBreakYsDip.Count == 0);
         }
         catch (InvalidOperationException)
         {
-            return new DocumentReferenceBlockPageResolution(
-                blockIndex => CrossReferences.ExplicitPageNumberAtBlock(_model, blockIndex));
+            return DocumentReferenceBlockPageResolverPlanner.Build(
+                _model,
+                observedPhysicalPageOfBlock: null,
+                pageCount: 1,
+                allowUnobservedFirstPageFallback: false);
         }
     }
 
