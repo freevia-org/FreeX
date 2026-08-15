@@ -85,6 +85,7 @@ public sealed class PresentationPaneAccessibilityTests
             Trigger = AnimationTrigger.OnClick,
             DurationMs = 500,
         });
+        window.ToggleAnimationPane();
         var animation = window.PaneAccessibilitySnapshotForTests
             .Single(entry => entry.PaneId == PresentationPaneAccessibilityPlanner.AnimationPaneId);
         animation.ItemCount.Should().Be(1);

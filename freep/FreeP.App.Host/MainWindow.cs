@@ -370,16 +370,6 @@ public sealed partial class MainWindow : Window,
             _reviewWorkflowSession,
             _workareaSession.Panes,
             this);
-        _wpfMediaPaneHostView = BuildWpfMediaPaneHostView();
-        _mediaPaneHostCoordinator = new(
-            new PresentationMediaPaneSession(
-                () => Editor,
-                new PresentationMediaPaneSessionCallbacks(
-                    MarkDirty: () => _fileSession.MarkDirty(),
-                    RefreshReviewWorkflowPlans: RefreshReviewWorkflowPlans,
-                    UpdateHost: UpdateTitle)),
-            _workareaSession.Panes,
-            _wpfMediaPaneHostView);
         _smartArtTextPaneSession = new(
             () => Editor,
             new PresentationSmartArtTextPaneSessionCallbacks(
@@ -444,6 +434,17 @@ public sealed partial class MainWindow : Window,
 
         // Body: slide pane + stage.
         var body = BuildBody();
+        _wpfMediaPaneHostView = BuildWpfMediaPaneHostView();
+        _mediaPaneHostCoordinator = new(
+            new PresentationMediaPaneSession(
+                () => Editor,
+                new PresentationMediaPaneSessionCallbacks(
+                    MarkDirty: () => _fileSession.MarkDirty(),
+                    RefreshReviewWorkflowPlans: RefreshReviewWorkflowPlans,
+                    UpdateHost: UpdateTitle)),
+            _workareaSession.Panes,
+            _wpfMediaPaneHostView);
+        RefreshPaneAccessibilityMetadata();
         BindMediaPaneEvents();
 
         // Status bar.
@@ -860,7 +861,8 @@ public sealed partial class MainWindow : Window,
             || _accessibilityCheckerPaneHost is null || _altTextPaneHost is null
             || _readingOrderPaneHost is null || _proofingPaneHost is null
             || _mediaCaptionPaneHost is null || _smartArtTextPaneHost is null
-            || _selectionPane is null || _animPaneHost is null)
+            || _selectionPane is null || _animPaneHost is null
+            || _mediaPaneHostCoordinator is null)
             return;
 
         var smartArtItemCount = _smartArtTextPaneRowsPanel?.Children.Count ?? 0;
@@ -2968,6 +2970,10 @@ public sealed partial class MainWindow : Window,
                     onAccessibilityChanged: RefreshPaneAccessibilityMetadata,
                     onEditMotionPath: OpenMotionPathEditor);
                 _animPaneHost.Child = _animPane;
+            }
+            else
+            {
+                _animPane.Rebuild();
             }
             _animPaneHost.Visibility = Visibility.Visible;
             RefreshPaneAccessibilityMetadata();
