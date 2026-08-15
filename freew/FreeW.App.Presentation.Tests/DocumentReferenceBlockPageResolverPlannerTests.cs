@@ -70,6 +70,20 @@ public sealed class DocumentReferenceBlockPageResolverPlannerTests
     }
 
     [Fact]
+    public void Build_only_falls_back_to_page_one_for_the_first_unobserved_block()
+    {
+        var document = DocumentWith(new Paragraph("First"), new Paragraph("Second"));
+        var resolution = DocumentReferenceBlockPageResolverPlanner.Build(
+            document,
+            observedPhysicalPageOfBlock: _ => null,
+            pageCount: 1,
+            allowUnobservedFirstPageFallback: true);
+
+        resolution.PageNumberAtBlock!(0).Should().Be(1);
+        resolution.PageNumberAtBlock(1).Should().BeNull();
+    }
+
+    [Fact]
     public void Both_renderers_delegate_block_page_policy_to_the_shared_planner()
     {
         var root = TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeW.slnx");
