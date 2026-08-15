@@ -48,6 +48,28 @@ public sealed class CalculationWorkflowOwnershipSourceGuardTests
     }
 
     [Fact]
+    public void CalculationModeMenuState_IsSharedAndAvaloniaRefreshesItWhenOpened()
+    {
+        var host = ReadSource("FreeX.App.Host", "MainWindow.FormulaCommands.cs");
+        var avalonia = ReadSource("FreeX.App.Avalonia", "MainWindow.cs");
+        var definition = ReadSource("FreeX.Ribbon.Definitions", "FreeXRibbonDefinition.cs");
+        var renderer = File.ReadAllText(Path.Combine(
+            RepositoryFileLocator.FindDirectory("shared", "Free.Shared.Ribbon.Avalonia"),
+            "AvaloniaRibbonRenderer.cs"));
+
+        host.Should().Contain("CalculationCommandPolicy.ModeCommandState(");
+        avalonia.Should().ContainAll(
+            "[FreeXRibbonCommandIds.FormulasCalculationAutomatic]",
+            "[FreeXRibbonCommandIds.FormulasCalculationAutomaticExceptDataTables]",
+            "[FreeXRibbonCommandIds.FormulasCalculationManual]",
+            "CalculationCommandPolicy.ModeCommandState(");
+        definition.Should().Contain("isChecked: false");
+        renderer.Should().Contain("flyout.Opened += (_, _) => RefreshMenuCommandStates(flyout, registry);");
+        renderer.Should().Contain("RibbonMenuCommandStatePlanner.Plan(");
+        renderer.Should().Contain("item.IsChecked = isChecked;");
+    }
+
+    [Fact]
     public void OptionsSubmissionPlanningAndExecution_AreOwnedByPresentation()
     {
         var hostDialog = ReadSource("FreeX.App.Host", "OptionsDialog.xaml.cs");

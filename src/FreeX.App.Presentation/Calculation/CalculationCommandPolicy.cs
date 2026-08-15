@@ -1,5 +1,6 @@
 using FreeX.Core.Commands;
 using FreeX.Core.Model;
+using Free.Shared.Ribbon;
 
 namespace FreeX.App.Presentation.Calculation;
 
@@ -75,6 +76,11 @@ public static class CalculationCommandPolicy
         WorkbookCalculationMode currentMode,
         WorkbookCalculationMode candidateMode) =>
         currentMode == candidateMode;
+
+    public static RibbonCommandState ModeCommandState(
+        WorkbookCalculationMode currentMode,
+        WorkbookCalculationMode candidateMode) =>
+        new(IsChecked: IsSelected(currentMode, candidateMode));
 
     public static WorkbookCalculationMode ToggleTarget(WorkbookCalculationMode currentMode) =>
         IsManual(currentMode)
