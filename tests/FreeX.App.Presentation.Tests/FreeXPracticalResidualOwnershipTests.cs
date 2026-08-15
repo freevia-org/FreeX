@@ -185,6 +185,26 @@ public sealed class FreeXPracticalResidualOwnershipTests
         wpfCells.Should().NotContain("new RemoveSheetCommand(");
     }
 
+    [Fact]
+    public void ForecastSheetPolicy_IsOwnedByServicesAndBothRenderersUseTheSession()
+    {
+        var planner = Read("src", "FreeX.App.Services", "ForecastSheetPlanner.cs");
+        var sourcePlanner = Read("src", "FreeX.App.Services", "ForecastSheetSourceRangePlanner.cs");
+        var session = Read("src", "FreeX.App.Services", "WorkbookSession.cs");
+        var avalonia = Read("src", "FreeX.App.Avalonia", "MainWindow.cs");
+        var wpf = Read("src", "FreeX.App.Host", "MainWindow.DataCommands.cs");
+
+        planner.Should().Contain("ForecastSheetSourceRangePlanner.Create(sourceSheet, sourceRange)");
+        sourcePlanner.Should().Contain("SelectionRangeService.GetCurrentRegion(sheet, selectedRange.Start)");
+        session.Should().Contain("public WorkbookCellEditResult ExecuteForecastSheetPlan(ForecastSheetPlan plan)");
+        avalonia.Should().Contain("_session.ExecuteForecastSheetPlan(plan)");
+        wpf.Should().Contain("_session.ExecuteForecastSheetPlan(plan)");
+        wpf.Should().Contain("ApplyWorkbookSessionSelectionToRenderer();");
+        wpf.Should().NotContain("new ForecastSheetCommand(");
+        wpf.Should().NotContain("RecalculateWorkbook();");
+        wpf.Should().NotContain("_workbook.Sheets.LastOrDefault()");
+    }
+
     private static string Read(params string[] parts)
     {
         var root = TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeX.slnx");

@@ -38,6 +38,30 @@ public sealed class ForecastSheetPlannerTests
         plan.TryCreateCommand().Should().BeOfType<ForecastSheetCommand>().Which.Label.Should().Be("Forecast Sheet");
     }
 
+    [Fact]
+    public void CreatePlan_ExpandsSingleCellInsideValidTwoColumnCurrentRegionForEveryRenderer()
+    {
+        var workbook = new Workbook();
+        var sheet = workbook.AddSheet("Data");
+        sheet.SetCell(Address(sheet.Id, "A1"), new TextValue("Month"));
+        sheet.SetCell(Address(sheet.Id, "B1"), new TextValue("Revenue"));
+        sheet.SetCell(Address(sheet.Id, "A2"), new NumberValue(1));
+        sheet.SetCell(Address(sheet.Id, "B2"), new NumberValue(10));
+        sheet.SetCell(Address(sheet.Id, "A3"), new NumberValue(2));
+        sheet.SetCell(Address(sheet.Id, "B3"), new NumberValue(20));
+        sheet.SetCell(Address(sheet.Id, "A4"), new NumberValue(3));
+        sheet.SetCell(Address(sheet.Id, "B4"), new NumberValue(30));
+
+        var plan = ForecastSheetPlanner.CreatePlan(
+            workbook,
+            new GridRange(Address(sheet.Id, "B3"), Address(sheet.Id, "B3")),
+            forecastPeriods: 2);
+
+        plan.IsReady.Should().BeTrue();
+        plan.SourceRange.Should().Be(Range(sheet.Id, "A1:B4"));
+        plan.InputExpectation!.SourceRange.Should().Be(Range(sheet.Id, "A1:B4"));
+    }
+
     [Theory]
     [InlineData(" 12 ", 12u)]
     [InlineData("1", 1u)]

@@ -133,7 +133,7 @@ public static class ForecastSheetPlanner
                 forecastPeriods,
                 invalidText);
 
-        if (workbook.GetSheet(sourceRange.Start.Sheet) is null)
+        if (workbook.GetSheet(sourceRange.Start.Sheet) is not { } sourceSheet)
             return Deferred(
                 ForecastSheetPlanStatus.SourceRangeOutsideWorkbook,
                 "Forecast Sheet source range must belong to this workbook.",
@@ -141,6 +141,8 @@ public static class ForecastSheetPlanner
                 null,
                 forecastPeriods,
                 invalidText);
+
+        sourceRange = ForecastSheetSourceRangePlanner.Create(sourceSheet, sourceRange);
 
         if (sourceRange.ColCount != RequiredColumnCount)
             return Deferred(

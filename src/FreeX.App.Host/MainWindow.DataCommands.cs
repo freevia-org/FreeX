@@ -1027,30 +1027,25 @@ public partial class MainWindow
         if (dialog.ShowDialog() != true)
             return;
 
-        var forecastRange = range;
-        if (_workbook.GetSheet(range.Start.Sheet) is { } sheet)
-            forecastRange = ForecastSheetSourceRangePlanner.Create(sheet, range);
-
-        if (!TryExecuteCommand(new ForecastSheetCommand(forecastRange, dialog.Result.Periods), "Forecast Sheet"))
-            return;
-
-        var forecastSheet = _workbook.Sheets.LastOrDefault();
-        var refreshedSelectionUi = false;
-        if (forecastSheet is not null)
+        var plan = ForecastSheetPlanner.CreatePlan(_workbook, range, dialog.Result.Periods);
+        var result = _session.ExecuteForecastSheetPlan(plan);
+        if (!result.Success)
         {
-            _currentSheetId = forecastSheet.Id;
-            _groupedSheetIds.Clear();
-            _groupedSheetIds.Add(_currentSheetId);
-            SetActiveCell(new CellAddress(_currentSheetId, 1, 1));
-            refreshedSelectionUi = true;
+            _messageService.ShowWarning(
+                result.ErrorMessage ?? UiText.Get("MainWindowMessage_ForecastSheetSelectRange"),
+                UiText.Get("MainWindowMessage_ForecastSheetTitle"));
+            return;
         }
 
-        RecalculateWorkbook();
+        _currentSheetId = _session.ActiveSheet.Id;
+        _groupedSheetIds.Clear();
+        _groupedSheetIds.Add(_currentSheetId);
+        _sheetGroupAnchor = _currentSheetId;
+        ApplyWorkbookSessionSelectionToRenderer();
         UpdateViewport();
         PruneCorrectedValidationCircles();
         RefreshSheetTabs();
-        if (!refreshedSelectionUi)
-            RefreshStatusBar();
+        RefreshStatusBar();
     }
 
     private void DataTableBtn_Click(object sender, RoutedEventArgs e)

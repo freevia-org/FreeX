@@ -663,7 +663,7 @@ public sealed partial class MainWindowSourceHygieneTests
             .Contain("RefreshStatusBar();");
         ExtractMethodSource(dataSource, "private void ForecastSheetBtn_Click(")
             .Should()
-            .Contain("if (!refreshedSelectionUi)");
+            .Contain("ApplyWorkbookSessionSelectionToRenderer();");
         ExtractMethodSource(scenarioSource, "private void ShowScenarioByName(")
             .Should()
             .Contain("if (!refreshedSelectionUi)");
