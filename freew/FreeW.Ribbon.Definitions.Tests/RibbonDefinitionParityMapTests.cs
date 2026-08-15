@@ -174,11 +174,13 @@ public sealed class FreeWRibbonCanonicalOwnershipTests
 
         var wpfDrawing = wpf.FindTab("drawing-format")!;
         var avaloniaDrawing = avalonia.FindTab("drawing-format")!;
-        foreach (var groupId in new[] { "drawing-insert", "drawing-text", "drawing-wordart" })
+        foreach (var groupId in new[] { "drawing-insert", "drawing-text" })
         {
             wpfDrawing.FindGroup(groupId).Should().NotBeNull();
             avaloniaDrawing.FindGroup(groupId).Should().BeNull();
         }
+        wpfDrawing.FindGroup("drawing-wordart").Should().NotBeNull();
+        avaloniaDrawing.FindGroup("drawing-wordart").Should().NotBeNull();
 
         wpf.FindTab("smartart-design")!.FindGroup("smartart-size").Should().BeNull();
         avalonia.FindTab("smartart-design")!.FindGroup("smartart-size").Should().NotBeNull();

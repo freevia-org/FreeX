@@ -79,7 +79,7 @@ internal sealed class FloatingRibbonContextSource : IRibbonContextSource
     /// </summary>
     private string? KeyForSelection()
     {
-        if (_editor.SelectedFloatingInfo is not { } sel)
+        if (_editor.SelectedDrawingObjectInfo is not { } sel)
             return null;
         return sel.Kind switch
         {

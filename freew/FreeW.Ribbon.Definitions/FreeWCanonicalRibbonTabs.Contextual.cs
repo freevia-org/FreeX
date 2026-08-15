@@ -324,43 +324,16 @@ internal static partial class FreeWCanonicalRibbonTabs
                     "drawing.wordart",
                     tab => tab.Group("drawing-wordart", "WordArt Styles", "W", 85, group =>
                         {
-                            group.Medium("freew.wordart-style", "WordArt Style", RibbonCommandIconKind.WordArt, menu: menu =>
-                            {
-                                menu.Item("freew.wordart-style-fill-blue", "Fill: Blue", "B");
-                                menu.Item("freew.wordart-style-gradient", "Gradient Fill", "G");
-                                menu.Item("freew.wordart-style-outline", "Outline", "O");
-                                menu.Item("freew.wordart-style-shadow", "Shadow", "S");
-                                menu.Separator();
-                                menu.Item("freew.wordart-style-fill-gold", "Fill: Gold", "D");
-                                menu.Item("freew.wordart-style-fill-white", "Fill: White", "W");
-                                menu.Item("freew.wordart-style-grad-multi", "Gradient: Multicolour", "M");
-                                menu.Item("freew.wordart-style-chrome-one", "Outline Only", "L");
-                                menu.Item("freew.wordart-style-chrome-two", "White + Outline", "H");
-                                menu.Item("freew.wordart-style-shadow-orange", "Shadow: Orange", "A");
-                                menu.Item("freew.wordart-style-glow-blue", "Glow: Blue", "U");
-                                menu.Item("freew.wordart-style-glow-gold", "Glow: Gold", "I");
-                                menu.Item("freew.wordart-style-reflection", "Reflection", "F");
-                                menu.Item("freew.wordart-style-bevel", "Bevel", "V");
-                                menu.Item("freew.wordart-style-pattern", "Pattern Fill", "P");
-                            });
-                            group.Medium("freew.wordart-transform", "Text Effects: Transform", RibbonCommandIconKind.WordArt, menu: menu =>
-                            {
-                                menu.Item("freew.wordart-warp-none", "No Transform", "N");
-                                menu.Separator();
-                                menu.Item("freew.wordart-warp-arch-up", "Arch Up", "A");
-                                menu.Item("freew.wordart-warp-arch-down", "Arch Down", "D");
-                                menu.Item("freew.wordart-warp-circle", "Circle", "C");
-                                menu.Item("freew.wordart-warp-wave1", "Wave 1", "W");
-                                menu.Item("freew.wordart-warp-wave2", "Wave 2", "V");
-                                menu.Item("freew.wordart-warp-inflate", "Inflate", "I");
-                                menu.Item("freew.wordart-warp-deflate", "Deflate", "E");
-                                menu.Item("freew.wordart-warp-chevron-up", "Chevron Up", "U");
-                                menu.Item("freew.wordart-warp-chevron-down", "Chevron Down", "H");
-                                menu.Item("freew.wordart-warp-fade-right", "Fade Right", "F");
-                                menu.Item("freew.wordart-warp-fade-left", "Fade Left", "L");
-                                menu.Item("freew.wordart-warp-slant-up", "Slant Up", "S");
-                                menu.Item("freew.wordart-warp-slant-down", "Slant Down", "T");
-                            });
+                            group.Medium(
+                                WordArtRibbonWorkflow.StyleMenuCommandId.Value,
+                                "WordArt Style",
+                                RibbonCommandIconKind.WordArt,
+                                menu: BuildWordArtStyleMenu);
+                            group.Medium(
+                                WordArtRibbonWorkflow.WarpMenuCommandId.Value,
+                                "Text Effects: Transform",
+                                RibbonCommandIconKind.WordArt,
+                                menu: BuildWordArtWarpMenu);
                         }));
 
                 topology.Section(
@@ -953,6 +926,28 @@ internal static partial class FreeWCanonicalRibbonTabs
             });
 
     private static readonly string[] FloatSizes = FreeWRibbonDefinitionData.FloatSizes;
+
+    private static void BuildWordArtStyleMenu(RibbonMenuBuilder menu)
+    {
+        for (var index = 0; index < WordArtRibbonWorkflow.StylePresets.Count; index++)
+        {
+            if (index == 4)
+                menu.Separator();
+            var preset = WordArtRibbonWorkflow.StylePresets[index];
+            menu.Item(preset.CommandId.Value, preset.Label, preset.KeyTip);
+        }
+    }
+
+    private static void BuildWordArtWarpMenu(RibbonMenuBuilder menu)
+    {
+        for (var index = 0; index < WordArtRibbonWorkflow.WarpPresets.Count; index++)
+        {
+            if (index == 1)
+                menu.Separator();
+            var preset = WordArtRibbonWorkflow.WarpPresets[index];
+            menu.Item(preset.CommandId.Value, preset.Label, preset.KeyTip);
+        }
+    }
 
     private static RibbonMenu BuildWrapMenu(string prefix) =>
         new(new RibbonMenuItem[]

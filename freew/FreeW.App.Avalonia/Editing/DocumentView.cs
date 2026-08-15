@@ -220,6 +220,9 @@ public sealed partial class DocumentView : Control
     // Selected floating object (null = no selection). Kind = "Image"|"Shape"|"Chart"|"WordArt"|"SmartArt"|"Group".
     // Rect is the page-space bounding rect as laid out in the last layout pass.
     private (int BlockIndex, int RunIndex, string Kind, Rect Rect)? _selectedFloating;
+    // Inline chart/WordArt/SmartArt selection. Kept separate from floating selection so native move/
+    // resize handles and arrange commands cannot accidentally mutate inline objects.
+    private (int BlockIndex, int RunIndex, string Kind, Rect Rect)? _selectedInlineObject;
     // AV-SHAPETEXT: bounded one-paragraph caret for the selected floating text box.
     private (int BlockIndex, int RunIndex, int TextParagraphIndex, int TextRunIndex, int Offset)? _shapeCaret;
     // Path of the nested grouped child currently being edited, or null for a direct floating shape.
@@ -302,7 +305,20 @@ public sealed partial class DocumentView : Control
         if (!result.Applied)
             return false;
 
+        var refreshInline = _selectedInlineObject is { } inline
+            && inline.BlockIndex == result.Target.BlockIndex
+            && inline.RunIndex == result.Target.RunIndex;
+        var layoutWidth = _laidOutWidth > 0 ? _laidOutWidth : FallbackWidth;
         InvalidateLayoutAndVisual();
+        if (refreshInline)
+        {
+            Relayout(layoutWidth);
+            RefreshSelectedInlineObjectRect(
+                result.Target.BlockIndex,
+                result.Target.RunIndex,
+                selectionKind);
+            return true;
+        }
         if (relayout)
             Relayout(FallbackWidth);
         RefreshSelectedFloatingRect(result.Target.BlockIndex, result.Target.RunIndex, selectionKind);
@@ -418,7 +434,9 @@ public sealed partial class DocumentView : Control
                 _selectedFloatingGroupChild is { } child
                     ? string.Join(",", child.ChildPath)
                     : null)
-            : null;
+            : _selectedInlineObject is { } inline
+                ? (inline.BlockIndex, inline.RunIndex, "inline")
+                : null;
         if (identity == _lastSignaledFloating)
             return;
         _lastSignaledFloating = identity;
@@ -581,6 +599,7 @@ public sealed partial class DocumentView : Control
         _outlineCollapse.Clear();
         _hfCaret = null; // AV-HFEDIT: clear header/footer caret on document load
         _selectedFloating = null; // AV-PICTAB: clear float selection on document load
+        _selectedInlineObject = null;
         _selectedFloatingGroupChild = null;
         _shapeCaret = null;
         _shapeSelectionAnchor = null;
@@ -1166,6 +1185,7 @@ public sealed partial class DocumentView : Control
         _cellBlockFocus = null;
         _selectionAnchor = null;
         _selectedFloating = null;
+        _selectedInlineObject = null;
         _selectedFloatingGroupChild = null;
         _selectedFloatingObjects.Clear();
         _shapeEditPointsTarget = null;
@@ -6036,6 +6056,8 @@ public sealed partial class DocumentView : Control
 
         if (_selectedFloating is { } selected)
             _selectedFloating = selected with { Rect = MoveRect(selected.Rect) };
+        if (_selectedInlineObject is { } selectedInline)
+            _selectedInlineObject = selectedInline with { Rect = MoveRect(selectedInline.Rect) };
         if (_selectedFloatingGroupChild is { } selectedChild)
             _selectedFloatingGroupChild = selectedChild with { Rect = MoveRect(selectedChild.Rect) };
 
@@ -6211,6 +6233,17 @@ public sealed partial class DocumentView : Control
         {
             var offset = offsetForOwnedObject(selected.BlockIndex, selected.Rect.X, selected.Rect.Y);
             _selectedFloating = selected with { Rect = ShiftRectBy(selected.Rect, offset) };
+        }
+        if (_selectedInlineObject is { } selectedInline)
+        {
+            var offset = offsetForOwnedObject(
+                selectedInline.BlockIndex,
+                selectedInline.Rect.X,
+                selectedInline.Rect.Y);
+            _selectedInlineObject = selectedInline with
+            {
+                Rect = ShiftRectBy(selectedInline.Rect, offset)
+            };
         }
         if (_selectedFloatingGroupChild is { } selectedChild)
         {
@@ -11213,6 +11246,10 @@ public sealed partial class DocumentView : Control
         {
             DrawFloatingSelection(context, selFl.Rect, selFl.BlockIndex, selFl.RunIndex, selFl.Kind);
         }
+        else if (_selectedInlineObject is { } inline)
+        {
+            context.DrawRectangle(null, FloatSelectionPen, inline.Rect);
+        }
 
         // AV-HFEDIT: the header/footer caret renders independently of the body caret.
         if (IsFocused && _hfCaret is not null && TryGetHfCaretRect(out var hfRect))
@@ -12889,6 +12926,49 @@ public sealed partial class DocumentView : Control
         return true;
     }
 
+    /// <summary>
+    /// Hit-tests renderer-owned bounds for inline drawing objects. SmartArt is painted after WordArt,
+    /// which is painted after charts, so the reverse paint order decides overlapping candidates.
+    /// Inline selection deliberately does not enter the floating move/resize path.
+    /// </summary>
+    private bool TryHitTestInlineDrawingObject(
+        Point point,
+        out (int BlockIndex, int RunIndex, string Kind, Rect Rect) hit)
+    {
+        hit = default;
+        if (_laidOutWidth < 0)
+            Relayout(FallbackWidth);
+
+        for (var index = _inlineSmartArts.Count - 1; index >= 0; index--)
+        {
+            var candidate = _inlineSmartArts[index];
+            if (!candidate.Rect.Contains(point))
+                continue;
+            hit = (candidate.BlockIndex, candidate.RunIndex, "SmartArt", candidate.Rect);
+            return true;
+        }
+
+        for (var index = _inlineWordArts.Count - 1; index >= 0; index--)
+        {
+            var candidate = _inlineWordArts[index];
+            if (!candidate.Rect.Contains(point))
+                continue;
+            hit = (candidate.BlockIndex, candidate.RunIndex, "WordArt", candidate.Rect);
+            return true;
+        }
+
+        for (var index = _inlineCharts.Count - 1; index >= 0; index--)
+        {
+            var candidate = _inlineCharts[index];
+            if (!candidate.Rect.Contains(point))
+                continue;
+            hit = (candidate.BlockIndex, candidate.RunIndex, "Chart", candidate.Rect);
+            return true;
+        }
+
+        return false;
+    }
+
     private sealed record FloatingGroupChildGeometry(
         FloatingGroupData OwnerGroup,
         FloatingGroupChildData Child,
@@ -13239,6 +13319,26 @@ public sealed partial class DocumentView : Control
         InvalidateVisual();
     }
 
+    private void RefreshSelectedInlineObjectRect(int blockIndex, int runIndex, string kind)
+    {
+        Rect? rect = kind switch
+        {
+            "Chart" => _inlineCharts.FirstOrDefault(candidate =>
+                candidate.BlockIndex == blockIndex && candidate.RunIndex == runIndex)?.Rect,
+            "WordArt" => _inlineWordArts.FirstOrDefault(candidate =>
+                candidate.BlockIndex == blockIndex && candidate.RunIndex == runIndex)?.Rect,
+            "SmartArt" => _inlineSmartArts.FirstOrDefault(candidate =>
+                candidate.BlockIndex == blockIndex && candidate.RunIndex == runIndex)?.Rect,
+            _ => null,
+        };
+
+        _selectedInlineObject = rect is { } found
+            ? (blockIndex, runIndex, kind, found)
+            : null;
+        RaiseFloatingSelectionChangedIfIdentityChanged();
+        InvalidateVisual();
+    }
+
     private void RefreshSelectedFloatingGroupChildRect(int blockIndex, int runIndex)
     {
         if (_selectedFloatingGroupChild is not { } selected
@@ -13277,6 +13377,13 @@ public sealed partial class DocumentView : Control
     /// </summary>
     public (int BlockIndex, int RunIndex, string Kind, Rect Rect)? SelectedFloatingInfo
         => _selectedFloating;
+
+    /// <summary>
+    /// Current drawing-object context target. Unlike <see cref="SelectedFloatingInfo"/>, this also
+    /// includes inline charts, WordArt, and SmartArt selected from their rendered bounds.
+    /// </summary>
+    public (int BlockIndex, int RunIndex, string Kind, Rect Rect)? SelectedDrawingObjectInfo
+        => _selectedFloating ?? _selectedInlineObject;
 
     /// <summary>
     /// Direct child selected inside the active drawing group, or null when the group itself is active.
@@ -13356,6 +13463,47 @@ public sealed partial class DocumentView : Control
             ? run.WordArt
             : null;
     }
+
+    public Chart? SelectedChart()
+    {
+        if (SelectedDrawingObjectInfo is not { Kind: "Chart" } selected)
+            return null;
+        return TryGetRun(selected.BlockIndex, selected.RunIndex, out var run)
+            ? run.Chart
+            : null;
+    }
+
+    /// <summary>The selected floating or inline WordArt, or null for another object kind.</summary>
+    public WordArt? SelectedWordArt()
+    {
+        if (SelectedDrawingObjectInfo is not { Kind: "WordArt" } selected)
+            return null;
+        return TryGetRun(selected.BlockIndex, selected.RunIndex, out var run)
+            ? run.WordArt
+            : null;
+    }
+
+    public bool HasSelectedWordArt() => SelectedWordArt() is not null;
+
+    public void SetSelectedWordArtStyle(WordArtStyle style)
+    {
+        if (CurrentWordArtTarget() is not { } target)
+            return;
+        InvalidateObjectEdit(ObjectEdits.SetWordArtStyle(target, style), "WordArt");
+    }
+
+    public void SetSelectedWordArtWarp(WordArtWarp warp)
+    {
+        if (CurrentWordArtTarget() is not { } target)
+            return;
+        InvalidateObjectEdit(ObjectEdits.SetWordArtWarp(target, warp), "WordArt");
+    }
+
+    private DocumentObjectTarget? CurrentWordArtTarget() =>
+        SelectedDrawingObjectInfo is { Kind: "WordArt" } selected
+            ? ObjectTarget(selected.BlockIndex, selected.RunIndex)
+            : null;
+
 
     /// <summary>True while keyboard input is editing the first text run of a selected text box.</summary>
     public bool IsShapeTextEditing => _shapeCaret is not null;
@@ -13865,12 +14013,13 @@ public sealed partial class DocumentView : Control
     /// <summary>Deselect any selected floating object. No-op when nothing is selected.</summary>
     public void DeselectFloating()
     {
-        if (_selectedFloating is null && _selectedFloatingObjects.Count == 0) return;
+        if (_selectedFloating is null && _selectedInlineObject is null && _selectedFloatingObjects.Count == 0) return;
         FinishShapeTextSelectionDrag(releasePointerCapture: true);
         _shapeCaret = null;
         _shapeSelectionAnchor = null;
         _activeShapeTextChildPath = null;
         _selectedFloating = null;
+        _selectedInlineObject = null;
         _selectedFloatingGroupChild = null;
         _selectedFloatingObjects.Clear();
         _floatingDrag.Reset();
@@ -13913,6 +14062,7 @@ public sealed partial class DocumentView : Control
         _selectedFloatingGroupChild = null;
         _shapeEditPointsTarget = null;
         _shapeEditPointDragState = null;
+        _selectedInlineObject = null;
         var item = (blockIndex, runIndex, kind);
         if (addToMultiSelect && IsGroupableFloatingKind(kind))
         {
@@ -13949,6 +14099,25 @@ public sealed partial class DocumentView : Control
         // Dummy rect; RefreshSelectedFloatingRect will update.
         _selectedFloating = (blockIndex, runIndex, kind, default);
         RefreshSelectedFloatingRect(blockIndex, runIndex, kind);
+    }
+
+    private void SelectInlineDrawingObjectCore(
+        (int BlockIndex, int RunIndex, string Kind, Rect Rect) selection)
+    {
+        FinishShapeTextSelectionDrag(releasePointerCapture: true);
+        _shapeCaret = null;
+        _shapeSelectionAnchor = null;
+        _activeShapeTextChildPath = null;
+        _selectedFloating = null;
+        _selectedFloatingGroupChild = null;
+        _selectedFloatingObjects.Clear();
+        _floatingDrag.Reset();
+        _shapeEditPointsTarget = null;
+        _shapeEditPointDragState = null;
+        _selectedInlineObject = selection;
+        Cursor = Cursor.Default;
+        RaiseFloatingSelectionChangedIfIdentityChanged();
+        InvalidateVisual();
     }
 
     private void SelectFloatingGroupChildCore(
@@ -14367,7 +14536,7 @@ public sealed partial class DocumentView : Control
             return;
         }
 
-        if (_selectedFloating is not { } sel) return;
+        if (SelectedDrawingObjectInfo is not { } sel) return;
         InvalidateObjectEdit(
             ObjectEdits.SetAltText(ObjectTarget(sel.BlockIndex, sel.RunIndex), altText),
             sel.Kind);
@@ -14845,10 +15014,8 @@ public sealed partial class DocumentView : Control
     /// </summary>
     public void SetChartType(ChartKind kind)
     {
-        if (_selectedFloating is not { Kind: "Chart" } sel) return;
-        InvalidateObjectEdit(
-            ObjectEdits.SetChartKind(ObjectTarget(sel.BlockIndex, sel.RunIndex), kind),
-            sel.Kind);
+        if (CurrentChartTarget() is { } target)
+            InvalidateObjectEdit(ObjectEdits.SetChartKind(target, kind), "Chart");
     }
 
     /// <summary>
@@ -14942,7 +15109,7 @@ public sealed partial class DocumentView : Control
     }
 
     private DocumentObjectTarget? CurrentChartTarget() =>
-        _selectedFloating is { Kind: "Chart" } selected
+        SelectedDrawingObjectInfo is { Kind: "Chart" } selected
             ? ObjectTarget(selected.BlockIndex, selected.RunIndex)
             : null;
 
@@ -14952,10 +15119,8 @@ public sealed partial class DocumentView : Control
     /// </summary>
     public void ToggleChartLegend()
     {
-        if (_selectedFloating is not { Kind: "Chart" } sel) return;
-        InvalidateObjectEdit(
-            ObjectEdits.ToggleChartLegend(ObjectTarget(sel.BlockIndex, sel.RunIndex)),
-            sel.Kind);
+        if (CurrentChartTarget() is { } target)
+            InvalidateObjectEdit(ObjectEdits.ToggleChartLegend(target), "Chart");
     }
 
     /// <summary>
@@ -14964,22 +15129,15 @@ public sealed partial class DocumentView : Control
     /// </summary>
     public void ToggleChartTitle()
     {
-        if (_selectedFloating is not { Kind: "Chart" } sel) return;
-        InvalidateObjectEdit(
-            ObjectEdits.ToggleChartTitle(ObjectTarget(sel.BlockIndex, sel.RunIndex)),
-            sel.Kind);
+        if (CurrentChartTarget() is { } target)
+            InvalidateObjectEdit(ObjectEdits.ToggleChartTitle(target), "Chart");
     }
 
     /// <summary>Set or clear the selected chart title through the shared undoable command.</summary>
     public void SetChartTitle(string? title)
     {
-        if (_selectedFloating is not { Kind: "Chart" } selected)
-            return;
-        InvalidateObjectEdit(
-            ObjectEdits.SetChartTitle(
-                ObjectTarget(selected.BlockIndex, selected.RunIndex),
-                title),
-            selected.Kind);
+        if (CurrentChartTarget() is { } target)
+            InvalidateObjectEdit(ObjectEdits.SetChartTitle(target, title), "Chart");
     }
 
     /// <summary>
@@ -14988,23 +15146,17 @@ public sealed partial class DocumentView : Control
     /// </summary>
     public void ToggleChartAxisTitles()
     {
-        if (_selectedFloating is not { Kind: "Chart" } sel) return;
-        InvalidateObjectEdit(
-            ObjectEdits.ToggleChartAxisTitles(ObjectTarget(sel.BlockIndex, sel.RunIndex)),
-            sel.Kind);
+        if (CurrentChartTarget() is { } target)
+            InvalidateObjectEdit(ObjectEdits.ToggleChartAxisTitles(target), "Chart");
     }
 
     /// <summary>Set or clear the selected chart axis titles through the shared undoable command.</summary>
     public void SetChartAxisTitles(string? categoryTitle, string? valueTitle)
     {
-        if (_selectedFloating is not { Kind: "Chart" } selected)
-            return;
-        InvalidateObjectEdit(
-            ObjectEdits.SetChartAxisTitles(
-                ObjectTarget(selected.BlockIndex, selected.RunIndex),
-                categoryTitle,
-                valueTitle),
-            selected.Kind);
+        if (CurrentChartTarget() is { } target)
+            InvalidateObjectEdit(
+                ObjectEdits.SetChartAxisTitles(target, categoryTitle, valueTitle),
+                "Chart");
     }
 
     /// <summary>
@@ -15013,12 +15165,8 @@ public sealed partial class DocumentView : Control
     /// </summary>
     public void ReplaceSelectedChartData(Chart replacement)
     {
-        if (_selectedFloating is not { Kind: "Chart" } sel) return;
-        InvalidateObjectEdit(
-            ObjectEdits.ReplaceChartData(
-                ObjectTarget(sel.BlockIndex, sel.RunIndex),
-                replacement),
-            sel.Kind);
+        if (CurrentChartTarget() is { } target)
+            InvalidateObjectEdit(ObjectEdits.ReplaceChartData(target, replacement), "Chart");
     }
 
     /// <summary>
@@ -15027,8 +15175,9 @@ public sealed partial class DocumentView : Control
     /// </summary>
     public void SetSelectedChartSize(double widthPt, double heightPt)
     {
-        if (_selectedFloating is not { Kind: "Chart" } sel || widthPt <= 0 || heightPt <= 0) return;
-        SetFloatingSize(widthPt, heightPt);
+        if (CurrentChartTarget() is not { } target || widthPt <= 0 || heightPt <= 0)
+            return;
+        InvalidateObjectEdit(ObjectEdits.SetSize(target, widthPt, heightPt), "Chart");
     }
 
     /// <summary>
@@ -15037,10 +15186,8 @@ public sealed partial class DocumentView : Control
     /// </summary>
     public void SetSmartArtLayout(SmartArtKind kind)
     {
-        if (_selectedFloating is not { Kind: "SmartArt" } sel) return;
-        InvalidateObjectEdit(
-            ObjectEdits.SetSmartArtLayout(ObjectTarget(sel.BlockIndex, sel.RunIndex), kind),
-            sel.Kind);
+        if (CurrentSmartArtTarget() is { } target)
+            InvalidateObjectEdit(ObjectEdits.SetSmartArtLayout(target, kind), "SmartArt");
     }
 
     /// <summary>
@@ -15063,7 +15210,7 @@ public sealed partial class DocumentView : Control
         }
 
         if (CurrentSmartArtTarget() is { } target)
-            InvalidateSmartArtEdit(ObjectEdits.SetSmartArtColor(target, colorSchemeId), target);
+            InvalidateSmartArtEdit(ObjectEdits.SetSmartArtColor(target, colorSchemeId));
     }
 
     /// <summary>Return the currently selected floating SmartArt model, or null for another selection kind.</summary>
@@ -15075,25 +15222,27 @@ public sealed partial class DocumentView : Control
         return paragraph.Runs[sel.RunIndex].SmartArt;
     }
 
+    public SmartArt? SelectedSmartArt()
+    {
+        if (SelectedDrawingObjectInfo is not { Kind: "SmartArt" } selected)
+            return null;
+        return TryGetRun(selected.BlockIndex, selected.RunIndex, out var run)
+            ? run.SmartArt
+            : null;
+    }
+
     /// <summary>Apply a shared structural SmartArt command and retain the floating selection.</summary>
     public void MutateSelectedSmartArt(SmartArtStructureOperation operation)
     {
-        if (_selectedFloating is not { Kind: "SmartArt" } sel)
-            return;
-        if (ObjectEdits.MutateSmartArt(
-                ObjectTarget(sel.BlockIndex, sel.RunIndex),
-                operation).Applied)
-            RefreshSelectedSmartArt(sel);
+        if (CurrentSmartArtTarget() is { } target)
+            InvalidateObjectEdit(ObjectEdits.MutateSmartArt(target, operation), "SmartArt");
     }
 
     /// <summary>Replace SmartArt kind and node text through the shared undoable content command.</summary>
     public void ReplaceSelectedSmartArt(SmartArt replacement)
     {
-        if (_selectedFloating is not { Kind: "SmartArt" } sel) return;
-        if (ObjectEdits.ReplaceSmartArt(
-                ObjectTarget(sel.BlockIndex, sel.RunIndex),
-                replacement).Applied)
-            RefreshSelectedSmartArt(sel);
+        if (CurrentSmartArtTarget() is { } target)
+            InvalidateObjectEdit(ObjectEdits.ReplaceSmartArt(target, replacement), "SmartArt");
     }
 
     /// <summary>Apply a shared SmartArt style catalog entry and retain the floating selection.</summary>
@@ -15134,44 +15283,49 @@ public sealed partial class DocumentView : Control
     {
         var target = SmartArtDesignPreviews.ActiveTarget ?? CurrentSmartArtTarget();
         if (target is { } address)
-            InvalidateSmartArtEdit(SmartArtDesignPreviews.CommitLayout(address, preset), address);
+            InvalidateSmartArtEdit(SmartArtDesignPreviews.CommitLayout(address, preset));
     }
 
     public void CommitSmartArtColorSchemePreview(SmartArtColorScheme scheme)
     {
         var target = SmartArtDesignPreviews.ActiveTarget ?? CurrentSmartArtTarget();
         if (target is { } address)
-            InvalidateSmartArtEdit(SmartArtDesignPreviews.CommitColorScheme(address, scheme), address);
+            InvalidateSmartArtEdit(SmartArtDesignPreviews.CommitColorScheme(address, scheme));
     }
 
     public void CommitSmartArtStylePreview(SmartArtStyle style)
     {
         var target = SmartArtDesignPreviews.ActiveTarget ?? CurrentSmartArtTarget();
         if (target is { } address)
-            InvalidateSmartArtEdit(SmartArtDesignPreviews.CommitStyle(address, style), address);
+            InvalidateSmartArtEdit(SmartArtDesignPreviews.CommitStyle(address, style));
     }
 
     private DocumentObjectTarget? CurrentSmartArtTarget() =>
-        _selectedFloating is { Kind: "SmartArt" } selected
+        SelectedDrawingObjectInfo is { Kind: "SmartArt" } selected
             ? ObjectTarget(selected.BlockIndex, selected.RunIndex)
             : null;
 
-    private void InvalidateSmartArtEdit(DocumentObjectEditResult result, DocumentObjectTarget target)
+    private void InvalidateSmartArtEdit(DocumentObjectEditResult result)
     {
-        if (result.Applied)
-            RefreshSmartArtPreview(target);
+        InvalidateObjectEdit(result, "SmartArt");
     }
 
     private void RefreshSmartArtPreview(DocumentObjectTarget target)
     {
+        var refreshInline = _selectedInlineObject is { } inline
+            && inline.BlockIndex == target.BlockIndex
+            && inline.RunIndex == target.RunIndex;
+        var layoutWidth = _laidOutWidth > 0 ? _laidOutWidth : FallbackWidth;
         InvalidateLayoutAndVisual();
-        RefreshSelectedFloatingRect(target.BlockIndex, target.RunIndex, "SmartArt");
-    }
-
-    private void RefreshSelectedSmartArt((int BlockIndex, int RunIndex, string Kind, Rect Rect) sel)
-    {
-        InvalidateLayoutAndVisual();
-        RefreshSelectedFloatingRect(sel.BlockIndex, sel.RunIndex, sel.Kind);
+        if (refreshInline)
+        {
+            Relayout(layoutWidth);
+            RefreshSelectedInlineObjectRect(target.BlockIndex, target.RunIndex, "SmartArt");
+        }
+        else
+        {
+            RefreshSelectedFloatingRect(target.BlockIndex, target.RunIndex, "SmartArt");
+        }
     }
 
     /// <summary>
@@ -15180,7 +15334,7 @@ public sealed partial class DocumentView : Control
     /// </summary>
     public (ChartKind Kind, int StyleId, string? ColorSchemeId)? GetSelectedChartInfo()
     {
-        if (_selectedFloating is not { Kind: "Chart" } sel) return null;
+        if (SelectedDrawingObjectInfo is not { Kind: "Chart" } sel) return null;
         if (_doc.Blocks[sel.BlockIndex] is not Paragraph para) return null;
         if (sel.RunIndex < 0 || sel.RunIndex >= para.Runs.Count) return null;
         if (para.Runs[sel.RunIndex].Chart is not { } chart) return null;
@@ -15193,7 +15347,7 @@ public sealed partial class DocumentView : Control
     /// </summary>
     public (SmartArtKind Kind, string? ColorSchemeId)? GetSelectedSmartArtInfo()
     {
-        if (_selectedFloating is not { Kind: "SmartArt" } sel) return null;
+        if (SelectedDrawingObjectInfo is not { Kind: "SmartArt" } sel) return null;
         if (_doc.Blocks[sel.BlockIndex] is not Paragraph para) return null;
         if (sel.RunIndex < 0 || sel.RunIndex >= para.Runs.Count) return null;
         if (para.Runs[sel.RunIndex].SmartArt is not { } sa) return null;
@@ -15966,13 +16120,21 @@ public sealed partial class DocumentView : Control
             return;
         }
 
-        // Click outside any float → deselect.
-        if (_selectedFloating is not null)
+        if (!extendFloatingSelection && TryHitTestInlineDrawingObject(point, out var inlineHit))
+        {
+            SelectInlineDrawingObjectCore(inlineHit);
+            e.Handled = true;
+            return;
+        }
+
+        // Click outside any selected drawing object → deselect.
+        if (_selectedFloating is not null || _selectedInlineObject is not null)
         {
             _shapeCaret = null;
             _shapeSelectionAnchor = null;
             _activeShapeTextChildPath = null;
             _selectedFloating = null;
+            _selectedInlineObject = null;
             _selectedFloatingGroupChild = null;
             _selectedFloatingObjects.Clear();
             _floatingDrag.Reset();
@@ -16422,6 +16584,35 @@ public sealed partial class DocumentView : Control
             }
             e.Handled = true;
             return;
+        }
+
+        if (_selectedInlineObject is { } inlineSelection)
+        {
+            if (e.Key == Key.Escape)
+            {
+                _selectedInlineObject = null;
+                RaiseFloatingSelectionChangedIfIdentityChanged();
+                InvalidateVisual();
+                e.Handled = true;
+                return;
+            }
+
+            if (e.Key is Key.Delete or Key.Back
+                && inlineSelection.BlockIndex >= 0
+                && inlineSelection.BlockIndex < _doc.Blocks.Count
+                && _doc.Blocks[inlineSelection.BlockIndex] is Paragraph paragraph
+                && inlineSelection.RunIndex >= 0
+                && inlineSelection.RunIndex < paragraph.Runs.Count)
+            {
+                _bus.Execute(new RemoveFloatingRunCommand(
+                    inlineSelection.BlockIndex,
+                    inlineSelection.RunIndex));
+                _selectedInlineObject = null;
+                RaiseFloatingSelectionChangedIfIdentityChanged();
+                InvalidateLayoutAndVisual();
+                e.Handled = true;
+                return;
+            }
         }
 
         // AV-FLSEL: when a float is selected, intercept navigation/delete keys before body text.

@@ -961,7 +961,7 @@ public sealed partial class MainWindow : Window
     private async Task OpenShapeAltTextDialogAsync()
     {
         var selectedShape = _editor.SelectedFloatingShape();
-        var selectedWordArt = _editor.SelectedFloatingWordArt();
+        var selectedWordArt = _editor.SelectedWordArt();
         if (selectedShape is null && selectedWordArt is null)
             return;
         var seed = selectedShape?.AltText ?? selectedWordArt?.AltText;
