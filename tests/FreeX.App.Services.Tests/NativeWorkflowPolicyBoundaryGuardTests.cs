@@ -12,6 +12,7 @@ public sealed class NativeWorkflowPolicyBoundaryGuardTests
         Path.Combine("src", "FreeX.App.Services", "WorkbookFileLifecycleCoordinator.cs"),
         Path.Combine("src", "FreeX.App.Services", "WorkbookFileWorkflow.cs"),
         Path.Combine("src", "FreeX.App.Services", "WorkbookImportWorkflow.cs"),
+        Path.Combine("src", "FreeX.App.Services", "WorkbookImportRefreshSource.cs"),
         Path.Combine("src", "FreeX.App.Services", "WorkbookExportWorkflow.cs"),
         Path.Combine("src", "FreeX.App.Services", "WorkbookPrintWorkflow.cs"),
         Path.Combine("src", "FreeX.App.Services", "ExportFilePickerPlanner.cs"),
@@ -87,6 +88,12 @@ public sealed class NativeWorkflowPolicyBoundaryGuardTests
         wpfExportSource.Should().Contain("WorkbookExportWorkflow.ExecuteBooleanAsync(");
         wpfExportSource.Should().Contain("WorkbookPrintWorkflow.CreatePlan(");
         wpfImportSource.Should().Contain("WorkbookImportWorkflow.ImportPathAsync(");
+        wpfImportSource.Should().Contain("WorkbookImportRefreshSource");
+        wpfImportSource.Should().Contain("ImportDataFromFileAtDestinationAsync(");
+        wpfImportSource.Should().Contain("source.CanRefresh(_session.Workbook)");
+        wpfImportSource.Should().Contain("File.Exists(source.FilePath)");
+        wpfImportSource.Should().Contain("source.Anchor");
+        wpfImportSource.Should().NotContain("RefreshAllBtn_Click(object sender, RoutedEventArgs e) => CalcNowBtn_Click");
         wpfExportOptionsSource.Should().Contain("ExportOptionsDialogSurfacePlanner.CreateFormatAvailability(");
         wpfExportOptionsSource.Should().Contain("ExportOptionsDialogSurfacePlanner.CreateResult(");
         wpfParitySource.Should().Contain("WorkbookFileDialogSurfacePlanner.CreateOpenPlan(");

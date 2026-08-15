@@ -32,23 +32,12 @@ public partial class MainWindow
     private bool _isImportingData;
 
     /// <summary>
-    /// R134-io-getdata-refresh-shrink-wpf: the extent (row/col count) the most recent SUCCESSFUL
-    /// Get Data import wrote at a given (workbook, sheet, destination anchor). The WPF host has no
-    /// dedicated "Refresh" action (unlike the Avalonia shell's Data ▸ Refresh All, which re-runs a
-    /// remembered file source via MainWindow.GetData.cs's <c>RefreshImportedData</c>/
-    /// <c>_lastImportSource</c>) -- here, RefreshAllBtn_Click still only recalculates (see the
-    /// comment on that method below). What DOES exist, and what this fixes, is the plain case of a
-    /// user running Get Data twice into the same destination cell (e.g. always importing into A1):
-    /// without remembering the prior extent, a second import from a SHRUNK source (fewer
-    /// rows/columns than the first) left the first import's leftover cells behind with stale
-    /// values, indistinguishable from freshly imported data. Fed into
-    /// <see cref="WorkbookImportWorkflow"/>, which constructs the shared import command with the
-    /// prior extent so <c>Apply</c> can clear exactly that leftover rectangle.
-    /// Keyed by workbook id (not just sheet+destination) so a concurrent File > Open mid-import
-    /// (R68-async-ordering-race-sweep-2) can never cause one workbook's remembered extent to bleed
-    /// into another's.
+    /// The most recent successful adapter-backed import. Shared Services owns its workbook/anchor
+    /// identity and written extent so both an explicit Refresh All and a repeated Get Data import
+    /// clear stale cells from a source that has shrunk. The workbook id also prevents an async
+    /// import or later refresh from bleeding into a replacement document.
     /// </summary>
-    private (WorkbookId WorkbookId, SheetId SheetId, CellAddress Destination, uint RowCount, uint ColCount)? _lastImportExtent;
+    private WorkbookImportRefreshSource? _lastImportSource;
 
     private async void GetDataBtn_Click(object sender, RoutedEventArgs e)
     {
@@ -93,7 +82,22 @@ public partial class MainWindow
     /// </summary>
     private async Task ImportDataFromFileAsync(string importPath, IFileAdapter adapter, string ext, FileFormatDescriptor? format)
     {
-        if (_isImportingData) return;
+        await ImportDataFromFileAtDestinationAsync(
+            importPath,
+            adapter,
+            ext,
+            format?.FormatName,
+            destinationOverride: null);
+    }
+
+    private async Task<bool> ImportDataFromFileAtDestinationAsync(
+        string importPath,
+        IFileAdapter adapter,
+        string ext,
+        string? formatName,
+        CellAddress? destinationOverride)
+    {
+        if (_isImportingData) return false;
 
         try
         {
@@ -113,17 +117,11 @@ public partial class MainWindow
             SynchronizeWorkbookSessionSelection();
             var targetSession = _session;
             var targetWorkbook = targetSession.Workbook;
-            var targetSheetId = _currentSheetId;
-            var destination = SheetGrid.SelectedRange?.Start ?? new CellAddress(targetSheetId, 1, 1);
-
-            (uint RowCount, uint ColCount)? previousExtent = null;
-            if (_lastImportExtent is { } previousImport &&
-                previousImport.WorkbookId == targetWorkbook.Id &&
-                previousImport.SheetId == targetSheetId &&
-                previousImport.Destination == destination)
-            {
-                previousExtent = (previousImport.RowCount, previousImport.ColCount);
-            }
+            var targetSheetId = destinationOverride?.Sheet ?? _currentSheetId;
+            var destination = destinationOverride
+                ?? SheetGrid.SelectedRange?.Start
+                ?? new CellAddress(targetSheetId, 1, 1);
+            var previousExtent = _lastImportSource?.PreviousExtentFor(targetWorkbook.Id, destination);
 
             var importResult = await WorkbookImportWorkflow.ImportPathAsync(
                 importPath,
@@ -137,15 +135,15 @@ public partial class MainWindow
             if (importResult.Outcome == WorkbookImportExecutionOutcome.EmptyWorkbook)
             {
                 RecordDiagnosticEvent("import_failed", BuildImportDiagnosticProperties(
-                    ext, format?.FormatName ?? adapter.FormatName, importResult.Reason, importResult.WorksheetCount));
-                return;
+                    ext, formatName ?? adapter.FormatName, importResult.Reason, importResult.WorksheetCount));
+                return false;
             }
 
             if (importResult.Outcome == WorkbookImportExecutionOutcome.Failed)
             {
                 RecordDiagnosticEvent("import_failed", BuildImportDiagnosticProperties(
                     ext,
-                    format?.FormatName ?? adapter.FormatName,
+                    formatName ?? adapter.FormatName,
                     importResult.Reason,
                     importResult.WorksheetCount,
                     importResult.ErrorDetail));
@@ -154,11 +152,11 @@ public partial class MainWindow
                     UiText.Get("MainWindowMessage_GetDataTitle"),
                     MessageBoxButton.OK,
                     MessageBoxImage.Error);
-                return;
+                return false;
             }
 
             if (importResult.Outcome == WorkbookImportExecutionOutcome.Canceled)
-                return;
+                return false;
 
             var outcome = importResult.CommandOutcome
                 ?? throw new InvalidOperationException("Import command did not produce a result.");
@@ -172,17 +170,20 @@ public partial class MainWindow
                 if (ReferenceEquals(_workbook, targetWorkbook))
                     ShowCommandError(outcome, "Get Data");
                 RecordDiagnosticEvent("import_failed", BuildImportDiagnosticProperties(
-                    ext, format?.FormatName ?? adapter.FormatName, importResult.Reason, importResult.WorksheetCount));
-                return;
+                    ext, formatName ?? adapter.FormatName, importResult.Reason, importResult.WorksheetCount));
+                return false;
             }
 
             // Remember this import's actual written extent (the source sheet's used range) for the
             // next Get Data into this same anchor, regardless of whether this window still shows
             // targetWorkbook (a concurrent File > Open does not invalidate what was actually written).
             var importedUsedRange = importResult.ImportedWorkbook!.Sheets[0].GetUsedRange();
-            _lastImportExtent = (
+            _lastImportSource = new WorkbookImportRefreshSource(
                 targetWorkbook.Id,
-                targetSheetId,
+                importPath,
+                ext,
+                adapter,
+                formatName ?? adapter.FormatName,
                 destination,
                 importedUsedRange?.RowCount ?? 0,
                 importedUsedRange?.ColCount ?? 0);
@@ -208,7 +209,8 @@ public partial class MainWindow
             }
 
             RecordDiagnosticEvent("import_completed", BuildImportDiagnosticProperties(
-                ext, format?.FormatName ?? adapter.FormatName, worksheetCount: importResult.WorksheetCount));
+                ext, formatName ?? adapter.FormatName, worksheetCount: importResult.WorksheetCount));
+            return true;
         }
         catch (Exception ex)
         {
@@ -217,10 +219,11 @@ public partial class MainWindow
                 "import_failed",
                 BuildImportDiagnosticProperties(
                     ext,
-                    format?.FormatName ?? adapter.FormatName,
+                    formatName ?? adapter.FormatName,
                     diagnostic.Reason,
                     errorDetail: diagnostic.Detail));
             ShowOwnedMessage(diagnostic.UserMessage, UiText.Get("MainWindowMessage_GetDataTitle"), MessageBoxButton.OK, MessageBoxImage.Error);
+            return false;
         }
         finally
         {
@@ -251,16 +254,31 @@ public partial class MainWindow
             properties["errorDetail"] = errorDetail;
         return properties;
     }
-    // R134-io-getdata-refresh-shrink-wpf: this is a plain RECALCULATION, not a data re-import --
-    // the WPF host has no "remembered import source" concept (no equivalent of the Avalonia shell's
-    // MainWindow.GetData.cs _lastImportSource/RefreshImportedData), so there is nothing here for
-    // Data ▸ Refresh All to re-run. Building that (remembering the file path/adapter/encoding
-    // options across arbitrary file-format adapters -- not just the delimited-text wizard Avalonia
-    // has -- and re-invoking Load off the UI thread with its own error handling) is a materially
-    // larger feature than this fix's scope. Deliberately left as-is; see _lastImportExtent above
-    // for the narrower shrink-on-reimport fix that IS in scope here (a second Get Data run into the
-    // same destination cell, which does not go through this button).
-    private void RefreshAllBtn_Click(object sender, RoutedEventArgs e) => CalcNowBtn_Click(sender, e);
+
+    private async void RefreshAllBtn_Click(object sender, RoutedEventArgs e)
+    {
+        SynchronizeWorkbookSessionSelection();
+        if (_lastImportSource is not { } source
+            || !source.CanRefresh(_session.Workbook)
+            || !File.Exists(source.FilePath))
+        {
+            SetStatusBarModeText(UiText.Get("GetData_RefreshNoSource"));
+            return;
+        }
+
+        var refreshed = await ImportDataFromFileAtDestinationAsync(
+            source.FilePath,
+            source.Adapter,
+            source.Extension,
+            source.FormatName,
+            source.Anchor);
+        if (refreshed)
+        {
+            SetStatusBarModeText(UiText.Format(
+                "GetData_RefreshedStatus",
+                Path.GetFileName(source.FilePath)));
+        }
+    }
 
     private void TextToColumnsBtn_Click(object sender, RoutedEventArgs e)
     {
