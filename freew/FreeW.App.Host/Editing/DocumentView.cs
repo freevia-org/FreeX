@@ -15446,15 +15446,11 @@ public sealed partial class DocumentView : RichTextBox
 
     private Func<int, TableParagraphAddress?, string?>? BuildTableOfFiguresPageTextResolver()
     {
-        var physicalPageOfBlock = BuildCrossReferencePageResolver();
-        if (physicalPageOfBlock is null)
-            return null;
-
-        var paginationContext = GeneratedReferencePaginationContext.Create(
+        var pages = BuildReferenceBlockPageResolution();
+        return TableOfFiguresPageTextResolverPlanner.Build(
             _model,
-            minimumPageCount: 1,
-            physicalPageOfBlock: physicalPageOfBlock);
-        return paginationContext.ResolvePageText;
+            pages.PageNumberAtBlock,
+            minimumPageCount: pages.PageCount ?? 1);
     }
 
     private Func<int, IndexPageReferenceAddress?>? BuildGeneratedIndexPageReferenceResolver()

@@ -19,12 +19,21 @@ public static class TableOfFiguresPageTextResolverPlanner
         if (physicalPageOfBlock is null)
             return null;
 
+        int? KnownPhysicalPageOfBlock(int blockIndex)
+        {
+            var observedPage = physicalPageOfBlock(blockIndex);
+            var explicitPage = CrossReferences.ExplicitPageNumberAtBlock(document, blockIndex);
+            if (observedPage is > 0)
+                return explicitPage is { } authoredPage
+                    ? Math.Max(observedPage.Value, authoredPage)
+                    : observedPage;
+            return explicitPage;
+        }
+
         var pageCount = Math.Max(1, minimumPageCount);
         for (var blockIndex = 0; blockIndex < document.Blocks.Count; blockIndex++)
         {
-            var firstPage = physicalPageOfBlock(blockIndex)
-                ?? CrossReferences.ExplicitPageNumberAtBlock(document, blockIndex)
-                ?? 1;
+            var firstPage = KnownPhysicalPageOfBlock(blockIndex) ?? 1;
             pageCount = Math.Max(
                 pageCount,
                 firstPage + DocumentViewLayoutPlanner.ResolveTablePageSpan(document, blockIndex) - 1);
@@ -32,13 +41,11 @@ public static class TableOfFiguresPageTextResolverPlanner
 
         var displayTextOfPhysicalPage = PageNumberFormatDialogPlanner.BuildPhysicalPageReferenceResolver(
             document,
-            physicalPageOfBlock,
+            KnownPhysicalPageOfBlock,
             pageCount);
         return (blockIndex, tableParagraph) =>
         {
-            var blockPage = physicalPageOfBlock(blockIndex)
-                ?? CrossReferences.ExplicitPageNumberAtBlock(document, blockIndex)
-                ?? 1;
+            var blockPage = KnownPhysicalPageOfBlock(blockIndex) ?? 1;
             var tablePageOffset = DocumentViewLayoutPlanner.ResolveTableParagraphPageOffset(
                 document,
                 blockIndex,

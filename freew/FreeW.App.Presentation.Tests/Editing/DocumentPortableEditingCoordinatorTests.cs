@@ -888,7 +888,7 @@ public sealed class DocumentReferenceEditingCoordinatorTests
     }
 
     [Fact]
-    public void GeneratedReferencePaginationExpandsTableSpanAndFormatsTableParagraphPages()
+    public void GeneratedReferencePlannersExpandTableSpanAndFormatTableParagraphPages()
     {
         var document = FreeWVisualEvidenceDocumentFactory.BuildTablePaginationRepeatHeaderDocument();
         var tableIndex = document.Blocks
@@ -897,18 +897,24 @@ public sealed class DocumentReferenceEditingCoordinatorTests
             .index;
         var table = (Table)document.Blocks[tableIndex];
 
-        var pagination = GeneratedReferencePaginationContext.Create(
+        int? PhysicalPageOfBlock(int blockIndex) => blockIndex == tableIndex ? 3 : 1;
+        var figurePages = TableOfFiguresPageTextResolverPlanner.Build(
             document,
-            minimumPageCount: 2,
-            physicalPageOfBlock: blockIndex => blockIndex == tableIndex ? 3 : 1);
+            PhysicalPageOfBlock,
+            minimumPageCount: 2);
+        var authorityPages = TableOfAuthoritiesPageResolverPlanner.Build(
+            document,
+            PhysicalPageOfBlock,
+            observedPhysicalPageOfBlockOffset: null,
+            minimumPageCount: 2);
         var lastParagraph = new TableParagraphAddress(
             table.Rows.Count - 1,
             CellIndex: 0,
             ParagraphIndex: 0);
 
-        pagination.EffectivePageCount.Should().Be(4);
-        pagination.ResolvePageText(tableIndex, lastParagraph).Should().Be("4");
-        pagination.ResolveTableOfAuthoritiesPageReference(tableIndex, lastParagraph)
+        figurePages.Should().NotBeNull();
+        figurePages!(tableIndex, lastParagraph).Should().Be("4");
+        authorityPages(document, tableIndex, lastParagraph, 0, new Citation("Case"))
             .Should().Be(new ToaCitationPageReference(4, "4"));
     }
 
@@ -1555,7 +1561,9 @@ public sealed class DocumentPortableEditingOwnershipTests
 
         foreach (var source in new[] { wpf, avalonia })
         {
-            source.Should().Contain("GeneratedReferencePaginationContext.Create(");
+            source.Should().Contain("TableOfFiguresPageTextResolverPlanner.Build(");
+            source.Should().Contain("TableOfAuthoritiesPageResolverPlanner.Build(");
+            source.Should().NotContain("GeneratedReferencePaginationContext.Create(");
             source.Should().NotContain("ResolveTableParagraphPageOffset(");
             source.Should().NotContain("private static ToaCitationPageReference CreateTableOfAuthoritiesPageReference(");
             source.Should().NotContain("ApplyTableOfAuthoritiesPlanCommands(");
