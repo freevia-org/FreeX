@@ -1,7 +1,6 @@
 using System.Windows;
 using System.Windows.Automation;
 using System.Windows.Controls;
-using System.Windows.Media;
 using Free.Shared.Ribbon.Wpf;
 using FreeP.App.Compositor;
 using FreeP.Core.Model;
@@ -23,7 +22,6 @@ public sealed partial class RotationOptionsDialog : DialogWindow
         Height = 190;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
         ResizeMode = ResizeMode.NoResize;
-        Background = new SolidColorBrush(Color.FromRgb(0xF3, 0xF3, 0xF3));
         AutomationProperties.SetName(this, surface.Schema.AccessibleName);
         AutomationProperties.SetAutomationId(this, surface.Schema.AutomationId);
 
