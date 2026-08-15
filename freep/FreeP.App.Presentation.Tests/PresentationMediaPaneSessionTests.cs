@@ -403,7 +403,8 @@ public sealed class PresentationMediaPaneSessionTests
         {
             source.Should().Contain("private readonly PresentationMediaPaneHostCoordinator _mediaPaneHostCoordinator;");
             source.Should().Contain("private readonly PresentationMediaPaneHostViewAdapter ");
-            source.Should().Contain("DelegatingPresentationMediaPaneControlSurface");
+            source.Should().Contain("PresentationMediaPaneNativeComposition.Compose(");
+            source.Should().NotContain("new DelegatingPresentationMediaPaneControlSurface");
             source.Should().Contain("PresentationMediaPaneFormEventBinder.Bind(");
             source.Should().Contain("new PresentationMediaPaneFormEventRouter(_mediaPaneHostCoordinator)");
             source.Should().Contain("CaptureMediaCaptionHostSnapshot()");

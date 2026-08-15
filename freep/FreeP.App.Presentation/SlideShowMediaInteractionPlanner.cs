@@ -44,6 +44,14 @@ public sealed record SlideShowMediaActiveSlotMonitorPlan(
     PresentationMediaTranscriptTrackDescriptor? CaptionTrack,
     SlideShowMediaPlaybackHandle? Playback);
 
+public sealed record SlideShowMediaPlaybackProjectionPlan(
+    PresentationMediaOverlayPlacement Placement,
+    bool ShowVisual);
+
+public sealed record SlideShowMediaCaptionProjectionPlan(
+    PresentationMediaTranscriptCueDescriptor? Cue,
+    PresentationMediaOverlayPlacement? Placement);
+
 public readonly record struct SlideShowMediaTrimWindow(
     TimeSpan Start,
     TimeSpan End)
@@ -132,6 +140,65 @@ public static class SlideShowMediaInteractionPlanner
             slot.CaptionTrack is not null
             || slot.Playback is { } playback
             && playbackSession.RequiresPeriodicUpdate(playback));
+    }
+
+    public static SlideShowMediaPlaybackProjectionPlan PlanPlaybackProjection(
+        LayoutRect authoredBounds,
+        PresentationMediaTranscriptTrackDescriptor? captionTrack,
+        TimeSpan playbackPosition,
+        double canvasWidth,
+        double canvasHeight,
+        SlideShowMediaPlaybackSnapshot playback)
+    {
+        ArgumentNullException.ThrowIfNull(playback);
+        return new(
+            PresentationMediaTranscriptPlanner.PlanOverlayPlacement(
+                new PresentationMediaOverlayPlacementRequest(
+                    authoredBounds,
+                    canvasWidth,
+                    canvasHeight,
+                    playback.UseFullScreen,
+                    PresentationMediaTranscriptPlanner.FindActiveCue(captionTrack, playbackPosition),
+                    captionTrack?.Regions)),
+            playback.ShowVisual);
+    }
+
+    public static SlideShowMediaCaptionProjectionPlan PlanCaptionProjection(
+        Slide? activeSlide,
+        uint shapeId,
+        PresentationMediaTranscriptTrackDescriptor? captionTrack,
+        TimeSpan? playbackPosition,
+        bool useFullScreen,
+        double slideWidthDip,
+        double slideHeightDip,
+        double canvasWidth,
+        double canvasHeight)
+    {
+        var cue = playbackPosition is { } position
+            ? PresentationMediaTranscriptPlanner.FindActiveCue(captionTrack, position)
+            : null;
+        if (activeSlide is null
+            || SlideShapeTraversal.FindById(activeSlide, shapeId) is not { Media: not null } shape)
+        {
+            return new(cue, null);
+        }
+
+        var bounds = ComputeMediaBounds(
+            shape,
+            slideWidthDip,
+            slideHeightDip,
+            canvasWidth,
+            canvasHeight);
+        return new(
+            cue,
+            PresentationMediaTranscriptPlanner.PlanOverlayPlacement(
+                new PresentationMediaOverlayPlacementRequest(
+                    bounds,
+                    canvasWidth,
+                    canvasHeight,
+                    useFullScreen,
+                    cue,
+                    captionTrack?.Regions)));
     }
 
     public static SlideShowMediaClickPlan PlanClick(

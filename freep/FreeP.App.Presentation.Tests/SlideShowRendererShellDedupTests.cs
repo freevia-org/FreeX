@@ -143,6 +143,24 @@ public sealed class SlideShowRendererShellDedupTests
         }
     }
 
+    [Fact]
+    public void Native_media_controllers_consume_shared_projection_plans()
+    {
+        var root = TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeP.slnx");
+        foreach (var relativePath in new[]
+                 {
+                     Path.Combine("freep", "FreeP.App.Host", "SlideShowMediaController.cs"),
+                     Path.Combine("freep", "FreeP.App.Avalonia", "AvaloniaSlideShowMediaController.cs"),
+                 })
+        {
+            var source = File.ReadAllText(Path.Combine(root, relativePath));
+            source.Should().Contain("SlideShowMediaInteractionPlanner.PlanPlaybackProjection(");
+            source.Should().Contain("SlideShowMediaInteractionPlanner.PlanCaptionProjection(");
+            source.Should().NotContain("PresentationMediaTranscriptPlanner.FindActiveCue(");
+            source.Should().NotContain("SlideShapeTraversal.FindById(");
+        }
+    }
+
     private static SlideShowPresenterViewPlan CreatePresenterPlan() =>
         new(
             StatusText: "Slide 1 of 2",
