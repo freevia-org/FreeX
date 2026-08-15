@@ -1,5 +1,6 @@
 using System.IO;
 using System.IO.Compression;
+using System.Text;
 using System.Xml.Linq;
 
 namespace FreeW.Core.IO.Tests;
@@ -18,12 +19,21 @@ public sealed class DrawingGroupRoundTripTests
     private static readonly XNamespace Wps = "http://schemas.microsoft.com/office/word/2010/wordprocessingShape";
     private static readonly XNamespace Pic = "http://schemas.openxmlformats.org/drawingml/2006/picture";
     private static readonly XNamespace C   = "http://schemas.openxmlformats.org/drawingml/2006/chart";
+    private static readonly XNamespace Cx  = "http://schemas.microsoft.com/office/drawing/2014/chartex";
     private static readonly XNamespace Dgm = "http://schemas.openxmlformats.org/drawingml/2006/diagram";
     private static readonly XNamespace R   = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
     private static readonly XNamespace Ct  = "http://schemas.openxmlformats.org/package/2006/content-types";
     private static readonly XNamespace Rel = "http://schemas.openxmlformats.org/package/2006/relationships";
 
     private static byte[] Png() => [0x89, 0x50, 0x4E, 0x47];
+    private static readonly byte[] OnePixelPng =
+    [
+        0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, 0x00, 0x00, 0x00, 0x0D, 0x49, 0x48, 0x44, 0x52,
+        0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01, 0x08, 0x06, 0x00, 0x00, 0x00, 0x1F, 0x15, 0xC4,
+        0x89, 0x00, 0x00, 0x00, 0x0A, 0x49, 0x44, 0x41, 0x54, 0x78, 0x9C, 0x63, 0x00, 0x01, 0x00, 0x00,
+        0x05, 0x00, 0x01, 0x0D, 0x0A, 0x2D, 0xB4, 0x00, 0x00, 0x00, 0x00, 0x49, 0x45, 0x4E, 0x44, 0xAE,
+        0x42, 0x60, 0x82,
+    ];
 
     private static TextDocument RoundTrip(TextDocument doc)
     {
@@ -87,6 +97,15 @@ public sealed class DrawingGroupRoundTripTests
         using var zip = new ZipArchive(new MemoryStream(docx), ZipArchiveMode.Read);
         using var stream = zip.GetEntry(entryPath)!.Open();
         return XDocument.Load(stream);
+    }
+
+    private static byte[] EntryBytes(byte[] docx, string entryPath)
+    {
+        using var zip = new ZipArchive(new MemoryStream(docx), ZipArchiveMode.Read);
+        using var stream = zip.GetEntry(entryPath)!.Open();
+        using var bytes = new MemoryStream();
+        stream.CopyTo(bytes);
+        return bytes.ToArray();
     }
 
     private static DrawingGroup TwoMemberGroup()
@@ -295,6 +314,107 @@ public sealed class DrawingGroupRoundTripTests
         return output.ToArray();
     }
 
+    /// <summary>
+    /// Replaces the modelled chart child in a native Word group with an Office 2014 ChartEx child while
+    /// retaining the companion SmartArt frame. ChartEx is a Word-valid DrawingML payload that FreeW does not
+    /// model, so the complete relationship-backed group must travel through the preservation path.
+    /// </summary>
+    private static byte[] AuthorChartExAndSmartArtGroupPackage()
+    {
+        var sourceBytes = WriteBytes(DocumentWith(ChartAndSmartArtGroup()));
+        using var sourceStream = new MemoryStream(sourceBytes);
+        using var source = new ZipArchive(sourceStream, ZipArchiveMode.Read);
+
+        static XDocument ReadXml(ZipArchive zip, string path)
+        {
+            using var stream = zip.GetEntry(path)!.Open();
+            return XDocument.Load(stream);
+        }
+
+        var document = ReadXml(source, "word/document.xml");
+        var chartGraphicData = document.Descendants(Wpg + "graphicFrame")
+            .Single(frame => frame.Descendants(C + "chart").Any())
+            .Descendants(A + "graphicData")
+            .Single();
+        var chartRelationshipId = chartGraphicData.Descendants(C + "chart").Single().Attribute(R + "id")!.Value;
+        chartGraphicData.SetAttributeValue("uri", Cx.NamespaceName);
+        chartGraphicData.Descendants(C + "chart").Single().ReplaceWith(
+            new XElement(Cx + "chart", new XAttribute(R + "id", chartRelationshipId)));
+
+        var relationships = ReadXml(source, "word/_rels/document.xml.rels");
+        var chartRelationship = relationships.Root!.Elements(Rel + "Relationship")
+            .Single(relationship => relationship.Attribute("Id")!.Value == chartRelationshipId);
+        chartRelationship.SetAttributeValue("Type", "http://schemas.microsoft.com/office/2014/relationships/chartEx");
+        chartRelationship.SetAttributeValue("Target", "charts/chartEx1.xml");
+
+        var contentTypes = ReadXml(source, "[Content_Types].xml");
+        contentTypes.Root!.Elements(Ct + "Override")
+            .Single(overrideElement => overrideElement.Attribute("PartName")!.Value == "/word/charts/chart1.xml")
+            .Remove();
+        contentTypes.Root.Add(new XElement(Ct + "Override",
+            new XAttribute("PartName", "/word/charts/chartEx1.xml"),
+            new XAttribute("ContentType", "application/vnd.ms-office.chartex+xml")));
+        if (!contentTypes.Root.Elements(Ct + "Default").Any(defaultElement => defaultElement.Attribute("Extension")?.Value == "png"))
+            contentTypes.Root.Add(new XElement(Ct + "Default",
+                new XAttribute("Extension", "png"),
+                new XAttribute("ContentType", "image/png")));
+
+        using var output = new MemoryStream();
+        using (var destination = new ZipArchive(output, ZipArchiveMode.Create, leaveOpen: true))
+        {
+            void AddText(string path, string content)
+            {
+                var entry = destination.CreateEntry(path, CompressionLevel.Optimal);
+                using var stream = entry.Open();
+                var bytes = Encoding.UTF8.GetBytes(content);
+                stream.Write(bytes, 0, bytes.Length);
+            }
+
+            void AddXml(string path, XDocument xml)
+            {
+                var entry = destination.CreateEntry(path, CompressionLevel.Optimal);
+                using var stream = entry.Open();
+                xml.Save(stream);
+            }
+
+            foreach (var sourceEntry in source.Entries)
+            {
+                if (sourceEntry.FullName is "[Content_Types].xml" or "word/document.xml" or "word/_rels/document.xml.rels"
+                    or "word/charts/chart1.xml" or "word/charts/_rels/chart1.xml.rels")
+                    continue;
+                var entry = destination.CreateEntry(sourceEntry.FullName, CompressionLevel.Optimal);
+                using var input = sourceEntry.Open();
+                using var target = entry.Open();
+                input.CopyTo(target);
+            }
+
+            AddXml("[Content_Types].xml", contentTypes);
+            AddXml("word/document.xml", document);
+            AddXml("word/_rels/document.xml.rels", relationships);
+            AddText("word/charts/chartEx1.xml",
+                """
+                <?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+                <cx:chartSpace xmlns:cx="http://schemas.microsoft.com/office/drawing/2014/chartex"
+                               xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
+                  <cx:chartData><cx:data id="0"/></cx:chartData>
+                  <cx:chart><cx:plotArea><cx:plotAreaRegion><cx:series layoutId="waterfall"><cx:dataPt idx="0" r:embed="rId1"/></cx:series></cx:plotAreaRegion></cx:plotArea></cx:chart>
+                </cx:chartSpace>
+                """);
+            AddText("word/charts/_rels/chartEx1.xml.rels",
+                """
+                <?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+                <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+                  <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" Target="../media/chartExImage1.png"/>
+                </Relationships>
+                """);
+            var media = destination.CreateEntry("word/media/chartExImage1.png", CompressionLevel.Optimal);
+            using var mediaStream = media.Open();
+            mediaStream.Write(OnePixelPng);
+        }
+
+        return output.ToArray();
+    }
+
     // ── XML structure ────────────────────────────────────────────────────────────────────────────
 
     [Fact]
@@ -402,6 +522,33 @@ public sealed class DrawingGroupRoundTripTests
         smartArt.Nodes.Select(node => node.Text).Should().Equal("Plan", "Ship");
         group.ChildOffsets[1].X.Should().BeApproximately(108, 0.1);
         group.ChildOffsets[1].Y.Should().BeApproximately(18, 0.1);
+    }
+
+    [Fact]
+    public void DrawingGroup_ChartExChild_PreservesNativeGroupAndRelationshipGraph()
+    {
+        var source = AuthorChartExAndSmartArtGroupPackage();
+        var read = DocxReader.Read(new MemoryStream(source));
+        var run = ((Paragraph)read.Blocks[0]).Runs.Single();
+        run.PreservedDrawing.Should().NotBeNull("a foreign ChartEx child prevents lossless group reconstruction");
+        run.DrawingGroup.Should().BeNull();
+
+        var rewritten = WriteBytes(read);
+        EntryBytes(rewritten, "word/charts/chartEx1.xml").Should().Equal(EntryBytes(source, "word/charts/chartEx1.xml"));
+        EntryBytes(rewritten, "word/charts/_rels/chartEx1.xml.rels").Should().Equal(EntryBytes(source, "word/charts/_rels/chartEx1.xml.rels"));
+        EntryBytes(rewritten, "word/media/chartExImage1.png").Should().Equal(EntryBytes(source, "word/media/chartExImage1.png"));
+
+        var document = EntryXml(rewritten, "word/document.xml");
+        document.Descendants(Wpg + "wgp").Should().ContainSingle();
+        document.Descendants(Cx + "chart").Should().ContainSingle();
+        var rels = EntryXml(rewritten, "word/_rels/document.xml.rels").Root!.Elements(Rel + "Relationship");
+        rels.Should().ContainSingle(relationship => relationship.Attribute("Type")!.Value == "http://schemas.microsoft.com/office/2014/relationships/chartEx");
+        EntryXml(rewritten, "[Content_Types].xml").Root!.Elements(Ct + "Override")
+            .Should().ContainSingle(overrideElement => overrideElement.Attribute("PartName")!.Value == "/word/charts/chartEx1.xml"
+                && overrideElement.Attribute("ContentType")!.Value == "application/vnd.ms-office.chartex+xml");
+
+        var reopened = DocxReader.Read(new MemoryStream(rewritten));
+        ((Paragraph)reopened.Blocks[0]).Runs.Single().PreservedDrawing.Should().NotBeNull();
     }
 
     [Fact]
