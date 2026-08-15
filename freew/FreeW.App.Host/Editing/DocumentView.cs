@@ -4001,7 +4001,7 @@ public sealed partial class DocumentView : RichTextBox
         }
 
         selection.ApplyPropertyValue(TextElement.ForegroundProperty,
-            TryParseColor(fmt.ColorHex, out var color) ? new SolidColorBrush(color) : Brushes.Black);
+            TryParseColor(fmt.ColorHex, out var color) ? new SolidColorBrush(color) : null!);
         // Highlight: a captured highlight is applied; no highlight clears the background back to none.
         selection.ApplyPropertyValue(TextElement.BackgroundProperty,
             TryParseColor(fmt.HighlightColorHex, out var highlight) ? new SolidColorBrush(highlight) : null!);
@@ -4211,7 +4211,7 @@ public sealed partial class DocumentView : RichTextBox
         {
             Selection.ApplyPropertyValue(
                 TextElement.ForegroundProperty,
-                normalizedColor is null ? Brushes.Black : new SolidColorBrush(color));
+                normalizedColor is null ? null! : new SolidColorBrush(color));
         }
     }
 
@@ -16420,6 +16420,10 @@ public sealed partial class DocumentView : RichTextBox
             // else: the background was set from CharacterShadingHex; don't also capture as highlight.
         }
 
+        var localForegroundHex = run.ReadLocalValue(TextElement.ForegroundProperty) is SolidColorBrush localForeground
+            ? ToHex(localForeground.Color)
+            : null;
+
         return retained with
         {
             Bold = run.FontWeight >= FontWeights.Bold,
@@ -16445,9 +16449,10 @@ public sealed partial class DocumentView : RichTextBox
             Rtl = run.FlowDirection == System.Windows.FlowDirection.RightToLeft,
             FontFamily = run.FontFamily.Source,
             FontSizePt = wasVisuallyHidden ? retained.FontSizePt : fontSizePt,
-            ColorHex = wasVisuallyHidden
-                ? retained.ColorHex
-                : run.Foreground is SolidColorBrush brush ? ToHex(brush.Color) : null,
+            ColorHex = DocumentRunForegroundCommitPlanner.ResolveColorHex(
+                retained.ColorHex,
+                localForegroundHex,
+                wasVisuallyHidden),
             HighlightColorHex = highlightHex,
         };
     }
