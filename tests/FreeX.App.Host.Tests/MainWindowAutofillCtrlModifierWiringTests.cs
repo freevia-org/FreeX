@@ -50,11 +50,15 @@ public sealed class MainWindowAutofillCtrlModifierWiringTests
 
         var handler = source[handlerStart..helperStart];
 
-        // The dragged-fill path must thread the captured Ctrl state through ExecuteAutofill, and
-        // ExecuteAutofill must construct AutofillCommand with that parameter, not the 3-arg overload
-        // that silently defaults ctrlHeld to false.
+        // The dragged-fill path must thread the captured Ctrl state through ExecuteAutofill. The
+        // grouped-sheet implementation must preserve that explicit value for every remapped
+        // AutofillCommand rather than falling back to the overload that defaults it to false.
         handler.Should().Contain("ExecuteAutofill(sourceRange, fillRange, _autofillCtrlHeld);");
-        handler.Should().Contain("new AutofillCommand(_currentSheetId, sourceRange, fillRange, ctrlHeld);");
+        handler.Should().Contain("CurrentGroupedEditSheetIds()");
+        handler.Should().Contain("new AutofillCommand(");
+        handler.Should().Contain("GroupedSheetRangePlanner.RemapRangeToSheet(sourceRange, sheetId)");
+        handler.Should().Contain("GroupedSheetRangePlanner.RemapRangeToSheet(fillRange, sheetId)");
+        handler.Should().Contain("ctrlHeld))");
     }
 
     [Fact]
