@@ -967,6 +967,12 @@ internal static class FreeWRibbonCommands
                 : new GoToFooterCommand(editor);
         }
 
+        var headerFooterPageSettings = HeaderFooterRibbonWorkflow.CreatePageSettingCommands(
+            new HeaderFooterPageSettingsPorts(
+                GetPageSettings: () => editor.Model.Page,
+                ApplyPageSettings: editor.ApplyPageSettings,
+                IsEnabled: static () => true,
+                ResolveSelectedValue: ComboValue));
         var headerFooterRibbon = HeaderFooterRibbonWorkflow.Register(
             headerFooterCommands,
             new HeaderFooterRibbonBindings(
@@ -979,10 +985,10 @@ internal static class FreeWRibbonCommands
                 PageNumberFormat: new PageNumberFormatCommand(editor),
                 DateTime: new InsertDateTimeCommand(resolveFieldTarget),
                 CreateEditSlotCommand: EditHeaderFooterSlot,
-                DifferentFirstPage: new DifferentFirstPageToggleCommand(editor),
-                DifferentOddEvenPages: new DifferentOddEvenPagesCommand(editor),
-                HeaderFromTop: new HeaderFromTopCommand(editor),
-                FooterFromBottom: new FooterFromBottomCommand(editor),
+                DifferentFirstPage: headerFooterPageSettings.DifferentFirstPage,
+                DifferentOddEvenPages: headerFooterPageSettings.DifferentOddEvenPages,
+                HeaderFromTop: headerFooterPageSettings.HeaderFromTop,
+                FooterFromBottom: headerFooterPageSettings.FooterFromBottom,
                 CreateNavigationCommand: NavigateHeaderFooterSlot,
                 Close: onCloseHeaderFooterPane is not null
                     ? new ActionRibbonCommand(onCloseHeaderFooterPane)
@@ -6975,58 +6981,6 @@ internal static class FreeWRibbonCommands
             // return focus to the body.
             editor.Focus();
         }
-    }
-
-    // Header & Footer Design > Options > Different First Page: toggle PageSettings.DifferentFirstPage.
-    // The stateful variant exposes IsChecked so the ribbon toggle reflects the current model state.
-    private sealed class DifferentFirstPageToggleCommand(DocumentView editor) : IRibbonStatefulCommand
-    {
-        public void Execute(RibbonCommandContext context) =>
-            editor.ApplyPageSettings(page => page.DifferentFirstPage = !page.DifferentFirstPage);
-
-        public RibbonCommandState GetState() =>
-            new(IsEnabled: true, IsChecked: editor.Model.Page.DifferentFirstPage);
-    }
-
-    // Header & Footer Design > Options > Different Odd & Even Pages: toggle DifferentOddEvenPages.
-    private sealed class DifferentOddEvenPagesCommand(DocumentView editor) : IRibbonStatefulCommand
-    {
-        public void Execute(RibbonCommandContext context) =>
-            editor.ApplyPageSettings(page => page.DifferentOddEvenPages = !page.DifferentOddEvenPages);
-
-        public RibbonCommandState GetState() =>
-            new(IsEnabled: true, IsChecked: editor.Model.Page.DifferentOddEvenPages);
-    }
-
-    // Header & Footer Design > Position > Header from Top / Footer from Bottom: numeric spinbox-style
-    // commands that accept a points value from the combo and write HeaderDistancePt / FooterDistancePt
-    // via ApplyPageSettings (same path as the Page Setup dialog).
-    private sealed class HeaderFromTopCommand(DocumentView editor) : IRibbonStatefulCommand
-    {
-        public void Execute(RibbonCommandContext context)
-        {
-            if (ComboValue(context) is not { } value)
-                return;
-            if (HeaderFooterDialogPlanner.TryParseDistance(value, out var pt))
-                editor.ApplyPageSettings(page => page.HeaderDistancePt = pt);
-        }
-
-        public RibbonCommandState GetState() =>
-            new(Value: HeaderFooterDialogPlanner.FormatDistance(editor.Model.Page.HeaderDistancePt));
-    }
-
-    private sealed class FooterFromBottomCommand(DocumentView editor) : IRibbonStatefulCommand
-    {
-        public void Execute(RibbonCommandContext context)
-        {
-            if (ComboValue(context) is not { } value)
-                return;
-            if (HeaderFooterDialogPlanner.TryParseDistance(value, out var pt))
-                editor.ApplyPageSettings(page => page.FooterDistancePt = pt);
-        }
-
-        public RibbonCommandState GetState() =>
-            new(Value: HeaderFooterDialogPlanner.FormatDistance(editor.Model.Page.FooterDistancePt));
     }
 
     // Insert into header/footer: insert page number, date/time, or a document-info field into the

@@ -1,4 +1,5 @@
 using Free.Shared.Ribbon;
+using FreeW.Core.Model;
 
 namespace FreeW.App.Presentation.Ribbon;
 
@@ -29,6 +30,18 @@ public sealed record HeaderFooterRibbonCommand(
 
 public sealed record HeaderFooterRibbonCommands(
     IReadOnlyList<HeaderFooterRibbonCommand> StatefulCommands);
+
+public sealed record HeaderFooterPageSettingsPorts(
+    Func<PageSettings> GetPageSettings,
+    Action<Action<PageSettings>> ApplyPageSettings,
+    Func<bool> IsEnabled,
+    Func<RibbonCommandContext, string?>? ResolveSelectedValue = null);
+
+public sealed record HeaderFooterPageSettingCommands(
+    IRibbonStatefulCommand DifferentFirstPage,
+    IRibbonStatefulCommand DifferentOddEvenPages,
+    IRibbonStatefulCommand HeaderFromTop,
+    IRibbonStatefulCommand FooterFromBottom);
 
 /// <summary>
 /// Owns Insert and Header &amp; Footer Design command identity over renderer-provided editor, pane,
@@ -110,5 +123,76 @@ public static class HeaderFooterRibbonWorkflow
                 FreeWRibbonCommandWorkflow.GetPrimaryCommandId(action),
                 command));
         }
+    }
+
+    public static HeaderFooterPageSettingCommands CreatePageSettingCommands(
+        HeaderFooterPageSettingsPorts ports)
+    {
+        ArgumentNullException.ThrowIfNull(ports);
+        ArgumentNullException.ThrowIfNull(ports.GetPageSettings);
+        ArgumentNullException.ThrowIfNull(ports.ApplyPageSettings);
+        ArgumentNullException.ThrowIfNull(ports.IsEnabled);
+
+        return new HeaderFooterPageSettingCommands(
+            DifferentFirstPage: Toggle(
+                page => page.DifferentFirstPage = !page.DifferentFirstPage,
+                page => page.DifferentFirstPage),
+            DifferentOddEvenPages: Toggle(
+                page => page.DifferentOddEvenPages = !page.DifferentOddEvenPages,
+                page => page.DifferentOddEvenPages),
+            HeaderFromTop: Distance(
+                page => page.HeaderDistancePt,
+                (page, points) => page.HeaderDistancePt = points),
+            FooterFromBottom: Distance(
+                page => page.FooterDistancePt,
+                (page, points) => page.FooterDistancePt = points));
+
+        IRibbonStatefulCommand Toggle(
+            Action<PageSettings> apply,
+            Func<PageSettings, bool> isChecked) =>
+            new PageSettingToggleCommand(ports, apply, isChecked);
+
+        IRibbonStatefulCommand Distance(
+            Func<PageSettings, double> getDistance,
+            Action<PageSettings, double> setDistance) =>
+            new PageSettingDistanceCommand(ports, getDistance, setDistance);
+    }
+
+    private sealed class PageSettingToggleCommand(
+        HeaderFooterPageSettingsPorts ports,
+        Action<PageSettings> apply,
+        Func<PageSettings, bool> isChecked) : IRibbonStatefulCommand
+    {
+        public void Execute(RibbonCommandContext context)
+        {
+            if (ports.IsEnabled())
+                ports.ApplyPageSettings(apply);
+        }
+
+        public RibbonCommandState GetState() => new(
+            IsEnabled: ports.IsEnabled(),
+            IsChecked: isChecked(ports.GetPageSettings()));
+    }
+
+    private sealed class PageSettingDistanceCommand(
+        HeaderFooterPageSettingsPorts ports,
+        Func<PageSettings, double> getDistance,
+        Action<PageSettings, double> setDistance) : IRibbonStatefulCommand
+    {
+        public void Execute(RibbonCommandContext context)
+        {
+            var selectedValue = ports.ResolveSelectedValue?.Invoke(context) ?? context.SelectedValue;
+            if (!ports.IsEnabled()
+                || !HeaderFooterDialogPlanner.TryParseDistance(selectedValue, out var points))
+            {
+                return;
+            }
+
+            ports.ApplyPageSettings(page => setDistance(page, points));
+        }
+
+        public RibbonCommandState GetState() => new(
+            IsEnabled: ports.IsEnabled(),
+            Value: HeaderFooterDialogPlanner.FormatDistance(getDistance(ports.GetPageSettings())));
     }
 }

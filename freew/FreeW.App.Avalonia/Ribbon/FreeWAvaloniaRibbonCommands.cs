@@ -216,6 +216,11 @@ internal static class FreeWAvaloniaRibbonCommands
 
         // Header / Footer — match WPF's text prompt when the shell supplies it. The fallback keeps
         // headless registry callers deterministic and retains the old region-creation behavior.
+        var headerFooterPageSettings = HeaderFooterRibbonWorkflow.CreatePageSettingCommands(
+            new HeaderFooterPageSettingsPorts(
+                GetPageSettings: () => editor.Document.Page,
+                ApplyPageSettings: editor.ApplyPageSettings,
+                IsEnabled: () => !editor.IsEditingLocked));
         HeaderFooterRibbonWorkflow.Register(
             headerFooterCommands,
             new HeaderFooterRibbonBindings(
@@ -230,16 +235,10 @@ internal static class FreeWAvaloniaRibbonCommands
                 DateTime: new ActionRibbonCommand(
                     callbacks.OpenDateTimeDialog ?? (() => editor.InsertField(RunFieldKind.Date))),
                 CreateEditSlotCommand: slot => HeaderFooterSlotCommand(editor, slot),
-                DifferentFirstPage: new PageSettingCommand(
-                    editor,
-                    page => page.DifferentFirstPage = !page.DifferentFirstPage,
-                    page => page.DifferentFirstPage),
-                DifferentOddEvenPages: new PageSettingCommand(
-                    editor,
-                    page => page.DifferentOddEvenPages = !page.DifferentOddEvenPages,
-                    page => page.DifferentOddEvenPages),
-                HeaderFromTop: new HeaderFooterDistanceCommand(editor, footer: false),
-                FooterFromBottom: new HeaderFooterDistanceCommand(editor, footer: true),
+                DifferentFirstPage: headerFooterPageSettings.DifferentFirstPage,
+                DifferentOddEvenPages: headerFooterPageSettings.DifferentOddEvenPages,
+                HeaderFromTop: headerFooterPageSettings.HeaderFromTop,
+                FooterFromBottom: headerFooterPageSettings.FooterFromBottom,
                 CreateNavigationCommand: slot => HeaderFooterSlotCommand(editor, slot),
                 Close: new ActionRibbonCommand(editor.CloseHeaderFooterEditing),
                 InsertHeaderPageNumber: new ActionRibbonCommand(() => editor.InsertHeaderFooterPageNumber(footer: false)),
@@ -532,32 +531,6 @@ internal static class FreeWAvaloniaRibbonCommands
         editor.ApplyHeaderFooterText(footer, result);
     }
 
-    private sealed class HeaderFooterDistanceCommand(DocumentView editor, bool footer) : IRibbonStatefulCommand
-    {
-        public void Execute(RibbonCommandContext context)
-        {
-            if (!GetState().IsEnabled
-                || !HeaderFooterDialogPlanner.TryParseDistance(context.SelectedValue, out var points))
-            {
-                return;
-            }
-
-            if (footer)
-                editor.SetFooterDistance(points);
-            else
-                editor.SetHeaderDistance(points);
-        }
-
-        public RibbonCommandState GetState()
-        {
-            var page = editor.Document.Page;
-            var points = footer ? page.FooterDistancePt : page.HeaderDistancePt;
-            return new(
-                IsEnabled: !editor.IsEditingLocked,
-                Value: HeaderFooterDialogPlanner.FormatDistance(points));
-        }
-    }
-
     private static void ExecutePageNumberFormat(
         DocumentView editor,
         FreeWRibbonHostExecutionPorts callbacks,
@@ -590,18 +563,6 @@ internal static class FreeWAvaloniaRibbonCommands
             ? "a4"
             : "letter";
         callbacks.ApplyPaperSize(size);
-    }
-
-    private sealed class PageSettingCommand(
-        DocumentView editor,
-        Action<PageSettings> apply,
-        Func<PageSettings, bool>? isChecked = null) : IRibbonStatefulCommand
-    {
-        public void Execute(RibbonCommandContext context) => editor.ApplyPageSettings(apply);
-
-        public RibbonCommandState GetState() => new(
-            IsEnabled: !editor.IsEditingLocked,
-            IsChecked: isChecked?.Invoke(editor.Document.Page) == true);
     }
 
     private sealed class HostPageSettingCommand(DocumentView editor, Action execute) : IRibbonStatefulCommand
