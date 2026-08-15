@@ -8,8 +8,6 @@ using FreeX.App.Presentation.Ribbon;
 using FreeX.Core.Calc;
 using FreeX.Core.Commands;
 using FreeX.Core.Model;
-using CellHAlign = FreeX.Core.Model.HorizontalAlignment;
-using CellVAlign = FreeX.Core.Model.VerticalAlignment;
 
 namespace FreeX.App.Host;
 
@@ -349,21 +347,9 @@ public partial class MainWindow
         _suppressToolbarSync = true;
         try
         {
-            // Write the neutral state store (the source of truth); the renderer binds each rendered
-            // control to it. The store dedups no-op writes, so this never churns bound controls.
-            _ribbonState.SetChecked("Bold", state.Bold);
-            _ribbonState.SetChecked("Italic", state.Italic);
-            _ribbonState.SetChecked("Underline", state.Underline);
-            _ribbonState.SetChecked("Strikethrough", state.Strikethrough);
-            _ribbonState.SetChecked("Top Align", state.VerticalAlignment == CellVAlign.Top);
-            _ribbonState.SetChecked("Middle Align", state.VerticalAlignment == CellVAlign.Center);
-            _ribbonState.SetChecked("Bottom Align", state.VerticalAlignment == CellVAlign.Bottom);
-            _ribbonState.SetChecked("Align Left", state.HorizontalAlignment == CellHAlign.Left);
-            _ribbonState.SetChecked("Center", state.HorizontalAlignment == CellHAlign.Center);
-            _ribbonState.SetChecked("Align Right", state.HorizontalAlignment == CellHAlign.Right);
-            _ribbonState.SetChecked("Wrap Text", state.WrapText);
-            SetRibbonComboValue("Font", state.FontName);
-            SetRibbonComboValue("Font Size", state.FontSizeText);
+            // One shared publisher owns the canonical command-id mapping consumed by both renderers.
+            // RibbonStateStore deduplicates no-op writes, so selection refreshes do not churn controls.
+            WorkbookHomeFormatRibbonStatePublisher.Publish(_ribbonState, state);
             _lastToolbarVisualState = state;
         }
         finally
@@ -392,15 +378,6 @@ public partial class MainWindow
         var styleId = sheet.GetCell(activeCell)?.StyleId ?? StyleId.Default;
         return _toolbarVisualStateCache.TryGetCurrent(_workbook.Id, styleId, out var state) &&
             state == _lastToolbarVisualState;
-    }
-
-    /// <summary>Pushes a combo's display value into the neutral state store, which drives the rendered
-    /// ribbon combo's <c>Text</c> via the renderer's store binding. The store dedups, so unchanged
-    /// values are no-ops. There is no hidden backplane combo to mirror onto anymore.</summary>
-    private void SetRibbonComboValue(string commandId, object? value)
-    {
-        var text = value?.ToString() ?? string.Empty;
-        _ribbonState.SetValue(commandId, text);
     }
 
     private void ApplyStyleDiff(StyleDiff diff)

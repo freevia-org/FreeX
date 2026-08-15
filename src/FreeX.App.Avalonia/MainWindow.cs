@@ -42,6 +42,7 @@ using FreeX.App.Presentation.PivotUI;
 using FreeX.Ribbon.Definitions;
 using FreeX.App.Presentation.QuickAnalysis;
 using FreeX.App.Presentation.Rendering;
+using FreeX.App.Presentation.Ribbon;
 using FreeX.App.Presentation.ScenarioManager;
 using FreeX.App.Presentation.SheetUI;
 using FreeX.App.Presentation.Shell;
@@ -4018,6 +4019,9 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         RefreshSlicerTimelinePane();
         RefreshPivotContextualTab();
         UpdateSaveButton();
+        WorkbookHomeFormatRibbonStatePublisher.Publish(
+            _ribbonStateStore,
+            ToolbarVisualState.From(_session.SelectedRangeStartStyle));
         _refreshRibbonToggleStates?.Invoke();
         // R126-avalonia-watch-window-live-refresh: RefreshShell is the shell-wide choke point every
         // cell-edit/recalculation path (CommitFormulaBox and its many siblings) already calls once
