@@ -204,6 +204,23 @@ public sealed class SlideShowRuntimeApplicationTests
     }
 
     [Fact]
+    public void RuntimeSession_ProjectsTheStableRendererNeutralControlSurface()
+    {
+        var runtime = CreateRuntime(MakePresentation(2));
+        runtime.BindRenderer(NoOpRenderer());
+        var session = new SlideShowRuntimeSession(runtime);
+
+        session.Controller.Should().BeSameAs(runtime.Controller);
+        session.PresenterToolPlan.Should().BeSameAs(runtime.ToolPlan);
+        session.ExecuteAdvance(StartedAtUtc.AddSeconds(1)).Should().NotBeNull();
+        session.SetScreenMode(SlideShowScreenMode.Black);
+
+        session.ScreenMode.Should().Be(SlideShowScreenMode.Black);
+        session.PresenterStartedAtUtc.Should().Be(StartedAtUtc);
+        session.IsPresenterSessionClosed.Should().BeFalse();
+    }
+
+    [Fact]
     public void Runtime_OwnsDisplayPresenterAndIdempotentRendererTeardown()
     {
         var events = new List<string>();

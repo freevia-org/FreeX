@@ -305,7 +305,6 @@ public sealed partial class MainWindow : Window,
     private Control? _ribbonControl;
     private RibbonDefinition? _ribbonDefinition;
     private RibbonCommandRegistry? _ribbonCommandRegistry;
-    private FreePRibbonHostActionEndpoints? _ribbonHostActionEndpoints;
     private readonly RibbonStateStore _ribbonStateStore = new();
     private FreePRibbonBindingSession? _ribbonBindingSession;
     private bool _ribbonKeyTipsVisible;
@@ -2217,131 +2216,48 @@ public sealed partial class MainWindow : Window,
     private FreePRibbonHostProfile CreateRibbonHostProfile() =>
         FreePRibbonHostProfileFactory.Create(new FreePRibbonHostPorts
         {
-        ActionEndpoints = GetRibbonHostActionEndpoints(),
-        QueryEndpoints = new FreePRibbonHostQueryEndpoints
-        {
-            BeginFormatPainter = () => _gestureHandler?.BeginFormatPainter() == true,
-            EditPointsEnabled = () => _slideCanvas.EditPointsEnabled,
-            AnimationPaneVisible = () => IsAnimationPaneVisible,
-            ViewShowState = () => _viewShowState,
-            ViewZoomState = () => _viewZoomState,
-        },
-        TextActionTargets = CreateRibbonTextActionTargets(),
-        DesignCommands = new FreePRibbonDesignCommandEndpoints
-        {
-            OpenCustomSlideSize = OnCustomSlideSizeRequested,
-            OpenLayoutPicker = OnLayoutPickerRequested,
-        },
-        FileCommands = new FreePRibbonFileCommandEndpoints
-        {
-            New = FileNew,
-            Open = () => _ = FileOpenAsync(),
-            Save = () => _ = FileSaveAsync(),
-            SaveAs = () => _ = FileSaveAsAsync(),
-            ExportPdf = () => _ = FileExportPdfAsync(),
-            ExportNotesPagePdf = () => _ = FileExportNotesPagePdfAsync(),
-            ExportImages = () => _ = FileExportImagesAsync(),
-            Print = () =>
+            ActionProfile = GetRibbonActionPortProfile(),
+            QueryEndpoints = new FreePRibbonHostQueryEndpoints
             {
-                RefreshHandoutLayoutPlan();
-                ShowPrintBackstage();
+                BeginFormatPainter = () => _gestureHandler?.BeginFormatPainter() == true,
+                EditPointsEnabled = () => _slideCanvas.EditPointsEnabled,
+                AnimationPaneVisible = () => IsAnimationPaneVisible,
+                ViewShowState = () => _viewShowState,
+                ViewZoomState = () => _viewZoomState,
             },
-            ExportVideo = () => _ = FileExportVideoAsync(),
-        },
-        OleCommands = new FreePRibbonOleCommandEndpoints
-        {
-            InsertEmbeddedObject = () => _ = InsertEmbeddedObjectFromFileAsync(),
-            TryOpenInlineEmbeddedObject = () => _textEditor?.TryActivateInlineOleObject() == true,
-            TryOpenSelectedEmbeddedObject = ole =>
+            TextActionTargets = CreateRibbonTextActionTargets(),
+            DesignCommands = new FreePRibbonDesignCommandEndpoints
             {
-                OleActivationService.TryActivate(ole);
-                return true;
+                OpenCustomSlideSize = OnCustomSlideSizeRequested,
+                OpenLayoutPicker = OnLayoutPickerRequested,
             },
-        },
-    });
-
-    private FreePRibbonHostActionEndpoints GetRibbonHostActionEndpoints() =>
-        _ribbonHostActionEndpoints ??= new FreePRibbonHostActionEndpoints
-        {
-            Copy = QueueClipboardCopy,
-            Cut = QueueClipboardCut,
-            Paste = QueueClipboardPaste,
-            InsertPicture = () => _ = InsertPictureFromFileAsync(),
-            InsertVideo = () => _ = InsertMediaFromFileAsync(isVideo: true),
-            InsertAudio = () => _ = InsertMediaFromFileAsync(isVideo: false),
-            OpenTablePicker = OpenTablePicker,
-            MergeTableCells = () =>
+            FileCommands = new FreePRibbonFileCommandEndpoints
             {
-                _domainContextMenuSession.ExecuteCurrentTableAction(
-                    PresentationDomainContextActionKind.MergeTableCell,
-                    TryExecuteInlineTableAction);
+                New = FileNew,
+                Open = () => _ = FileOpenAsync(),
+                Save = () => _ = FileSaveAsync(),
+                SaveAs = () => _ = FileSaveAsAsync(),
+                ExportPdf = () => _ = FileExportPdfAsync(),
+                ExportNotesPagePdf = () => _ = FileExportNotesPagePdfAsync(),
+                ExportImages = () => _ = FileExportImagesAsync(),
+                Print = () =>
+                {
+                    RefreshHandoutLayoutPlan();
+                    ShowPrintBackstage();
+                },
+                ExportVideo = () => _ = FileExportVideoAsync(),
             },
-            SplitTableCell = () =>
+            OleCommands = new FreePRibbonOleCommandEndpoints
             {
-                _domainContextMenuSession.ExecuteCurrentTableAction(
-                    PresentationDomainContextActionKind.SplitTableCell,
-                    TryExecuteInlineTableAction);
+                InsertEmbeddedObject = () => _ = InsertEmbeddedObjectFromFileAsync(),
+                TryOpenInlineEmbeddedObject = () => _textEditor?.TryActivateInlineOleObject() == true,
+                TryOpenSelectedEmbeddedObject = ole =>
+                {
+                    OleActivationService.TryActivate(ole);
+                    return true;
+                },
             },
-            PickPictureBullet = () => _ = ApplyPictureBulletFromFileAsync(),
-            InsertSlideZoom = () => _ = OpenSlideZoomDialogAsync(),
-            InsertSectionZoom = () => _ = OpenSectionZoomDialogAsync(),
-            InsertSummaryZoom = () => _ = OpenSummaryZoomDialogAsync(),
-            EditZoomTarget = () => _ = OpenZoomTargetDialogAsync(),
-            EditSummaryZoomTargets = () => _ = OpenSummaryZoomTargetsDialogAsync(),
-            FormatZoom = () => _ = OpenZoomObjectPropertiesDialogAsync(),
-            SetZoomCoverImage = () => _ = OpenZoomCoverImagePickerAsync(),
-            ResetZoomCoverImage = () => _ = RestoreZoomPreviewAsync(),
-            OpenHeaderFooter = OpenHeaderFooterDialog,
-            ApplySmartArtColor = preset => ApplySmartArtColorPreset(preset),
-            ApplySmartArtLayout = preset => ApplySmartArtLayoutPreset(preset),
-            ApplySmartArtQuickStyle = preset => ApplySmartArtQuickStylePreset(preset),
-            ConvertSmartArtToShapes = () => ConvertSelectedSmartArtToShapes(),
-            OpenSmartArtTextPane = () => ShowSmartArtTextPane(),
-            OpenChartData = OpenChartDataDialog,
-            OpenChartDisplayOptions = OpenChartDisplayOptionsDialog,
-            OpenChartAxisOptions = () => OpenChartAxisOptionsDialog(),
-            OpenChartSeriesOptions = () => OpenChartSeriesOptionsDialog(),
-            OpenChartPointOptions = () => OpenChartPointOptionsDialog(),
-            OpenChartLayoutOptions = OpenChartLayoutOptionsDialog,
-            OpenChartExSeriesLayout = OpenChartExSeriesLayoutDialog,
-            OpenChartDataTableOptions = OpenChartDataTableOptionsDialog,
-            OpenChartBubbleOptions = OpenChartBubbleOptionsDialog,
-            OpenChartPieOptions = OpenChartPieOptionsDialog,
-            OpenChartPlotStyleOptions = OpenChartPlotStyleOptionsDialog,
-            OpenChart3DViewOptions = OpenChart3DViewOptionsDialog,
-            OpenChartTextOptions = OpenChartTextOptionsDialog,
-            OpenChartAreaOptions = OpenChartAreaOptionsDialog,
-            OpenChartProtectionOptions = OpenChartProtectionOptionsDialog,
-            OpenHyperlink = OpenHyperlinkDialog,
-            OpenRotationOptions = OpenRotationOptionsDialog,
-            SetEditPointsEnabled = _slideCanvas.SetEditPointsMode,
-            OpenFind = OpenFindDialog,
-            OpenReplace = OpenFindReplaceDialog,
-            ShowCommentsPane = () => ShowReviewCommentsPane(),
-            ShowAccessibilityPane = () => ShowAccessibilityCheckerPane(),
-            ShowAltTextPane = () => ShowAltTextPane(),
-            ShowReadingOrderPane = () => ShowReadingOrderPane(),
-            ShowSelectionPane = () => ShowSelectionPane(),
-            ShowProofingPane = () => ShowProofingPane(),
-            AddComment = () => AddComment(PresentationPaneTextResources.NewCommentDefault),
-            EditComment = () => EditSelectedComment(GetSelectedCommentText()),
-            ReplyComment = () => ReplyToSelectedComment(PresentationPaneTextResources.NewReplyDefault),
-            DeleteComment = () => DeleteSelectedComment(),
-            PreviousComment = () => NavigateReviewComment(PresentationReviewWorkflowIntentKind.PreviousComment),
-            NextComment = () => NavigateReviewComment(PresentationReviewWorkflowIntentKind.NextComment),
-            ResolveComment = () => ResolveSelectedComment(),
-            ReopenComment = () => ReopenSelectedComment(),
-            ApplyViewShowState = ApplyPresentationViewShowState,
-            ApplyViewZoomState = ApplyPresentationViewZoomState,
-            PickTransitionSound = () => _ = PickTransitionSoundAsync(),
-            ToggleAnimationPane = OnAnimationPaneRequested,
-            StartSlideShowFromBeginning = () => StartSlideShow(fromStart: true),
-            StartSlideShowFromCurrent = () => StartSlideShow(fromStart: false),
-            RehearseTimings = () => StartSlideShowWithTiming(SlideShowTimingIntent.RehearseTimings),
-            RecordTimings = () => StartSlideShowWithTiming(SlideShowTimingIntent.RecordTimings),
-            OpenCustomShows = OpenCustomShowDialog,
-            OpenSlideShowSettings = OpenSlideShowSettingsDialog,
-        };
+        });
 
     private FreePRibbonTextActionTargets CreateRibbonTextActionTargets() => new()
     {

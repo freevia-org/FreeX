@@ -334,6 +334,11 @@ public sealed class PresentationDomainSurfaceSessionTests
             "freep",
             "FreeP.App.Host",
             "MainWindow.RibbonProfile.cs"));
+        var sharedRibbonActionProfile = File.ReadAllText(Path.Combine(
+            root,
+            "freep",
+            "RendererShared",
+            "MainWindow.RibbonActionProfile.cs"));
 
         foreach (var source in new[] { wpf, avalonia })
         {
@@ -378,10 +383,10 @@ public sealed class PresentationDomainSurfaceSessionTests
         {
             wpfRibbonProfile.Should().Contain($"{endpoint} =");
         }
-        wpfRibbonProfile.Should().Contain("ExecuteCurrentTableAction(");
-        wpfRibbonProfile.Should().Contain("TryExecuteInlineTableAction");
-        wpfRibbonProfile.Should().NotContain("MergeTableCells = () => Editor.TryMergeActiveTableCell()");
-        wpfRibbonProfile.Should().NotContain("SplitTableCell = () => Editor.TrySplitActiveTableCell()");
+        sharedRibbonActionProfile.Should().Contain("ExecuteCurrentTableAction(");
+        sharedRibbonActionProfile.Should().Contain("TryExecuteInlineTableAction");
+        sharedRibbonActionProfile.Should().NotContain("MergeTableCells = () => Editor.TryMergeActiveTableCell()");
+        sharedRibbonActionProfile.Should().NotContain("SplitTableCell = () => Editor.TrySplitActiveTableCell()");
         wpfTableEditor.Should().NotContain("BuildTableContextMenu(");
         wpfTableEditor.Should().NotContain("OnCanvasRightMouseDown");
         wpfTableEditor.Should().NotContain("\"Insert Row Above\"");

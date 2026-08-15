@@ -49,8 +49,8 @@ public sealed class SlideShowHostPolicySourceTests
         launchStart.Should().BeGreaterThanOrEqualTo(0);
         var launchSource = source[launchStart..];
         launchSource.Should().Contain("if (IsVisible)");
-        launchSource.Should().Contain("slideShow.Show(this);");
-        launchSource.Should().Contain("slideShow.Show();");
+        launchSource.Should().Contain("window.Show(this);");
+        launchSource.Should().Contain("window.Show();");
     }
 
     [Fact]
@@ -68,32 +68,44 @@ public sealed class SlideShowHostPolicySourceTests
             "TestSupport",
             "SlideShow.Avalonia",
             "SlideShowWindow.TestAccess.cs"));
+        var runtimeSessionSource = File.ReadAllText(Path.Combine(
+            root,
+            "freep",
+            "FreeP.App.Presentation",
+            "SlideShowRuntimeSession.cs"));
+        var sharedWindowApiSource = File.ReadAllText(Path.Combine(
+            root,
+            "freep",
+            "RendererShared",
+            "SlideShowWindow.RuntimeSession.cs"));
 
         source.Should().Contain("_runtime.HandleKeyboardInput(");
-        source.Should().Contain("_runtime.ExecuteSlideNumberJump(");
-        source.Should().Contain("ExecuteSlideNumberJump");
-        source.Should().Contain("_runtime.SetScreenMode(mode);");
-        source.Should().Contain("_runtime.ExecuteAdvance(");
-        source.Should().Contain("_runtime.ExecuteBack(");
+        runtimeSessionSource.Should().Contain("_runtime.ExecuteSlideNumberJump(");
+        sharedWindowApiSource.Should().Contain("ExecuteSlideNumberJump");
+        runtimeSessionSource.Should().Contain("_runtime.SetScreenMode(mode);");
+        runtimeSessionSource.Should().Contain("_runtime.ExecuteAdvance(");
+        runtimeSessionSource.Should().Contain("_runtime.ExecuteBack(");
         source.Should().Contain("navigation.UseDestinationBackground");
         source.Should().Contain("navigation => DisplayCurrentSlide(");
         source.Should().Contain("_runtime.HandlePointerInput(");
         source.Should().Contain("_runtime.ActivateHyperlink(");
         source.Should().Contain("_runtime.DisplayCurrentSlide(");
-        source.Should().Contain("_runtime.CreatePresenterState(");
-        source.Should().Contain("_runtime.PresenterSummary");
+        runtimeSessionSource.Should().Contain("_runtime.CreatePresenterState(");
+        runtimeSessionSource.Should().Contain("_runtime.PresenterSummary");
         source.Should().Contain("SlideShowInkNativeProjectionSession.Apply(");
         source.Should().NotContain("SlideShowInkExecutionPlanner.BuildOverlayRenderPlan(");
         source.Should().Contain("SlideShowRuntimeApplication");
         source.Should().NotContain("SlideShowDisplayCoordinator _displayCoordinator");
         source.Should().Contain("ISlideShowDisplayRenderer");
-        source.Should().Contain("_runtime.ApplyPresenterToolIntent(");
+        runtimeSessionSource.Should().Contain("_runtime.ApplyPresenterToolIntent(");
         source.Should().Contain("_runtime.CloseRendererSession(");
-        source.Should().Contain("_runtime.BeginPointerInk(");
-        source.Should().Contain("_runtime.AppendPointerInk(");
-        source.Should().Contain("_runtime.EndPointerInk(");
-        source.Should().Contain("_runtime.ClearInkStrokes(");
-        source.Should().Contain("_runtime.UndoLastInkStroke(");
+        runtimeSessionSource.Should().Contain("_runtime.BeginPointerInk(");
+        runtimeSessionSource.Should().Contain("_runtime.AppendPointerInk(");
+        runtimeSessionSource.Should().Contain("_runtime.EndPointerInk(");
+        runtimeSessionSource.Should().Contain("_runtime.ClearInkStrokes(");
+        runtimeSessionSource.Should().Contain("_runtime.UndoLastInkStroke(");
+        source.Should().NotContain("public AdvanceResult ExecuteAdvance(");
+        source.Should().NotContain("public SlideShowPresenterToolPlan ApplyPresenterToolIntent(");
         source.Should().Contain("SlideShowMaskTimelinePlanner.BuildBlindsRendererPlan(");
         source.Should().Contain("SlideShowMaskTimelinePlanner.BuildRandomBarsRendererPlan(");
         source.Should().Contain("SlideShowMaskTimelinePlanner.BuildCheckerboardRendererPlan(");
@@ -259,7 +271,8 @@ public sealed class SlideShowHostPolicySourceTests
         displayMethod.Should().NotContain("_mediaController.EnterSlide(");
         displayMethod.Should().NotContain("_autoAdvanceTimer");
         source.Should().Contain("_runtime.HandleAutoAdvanceElapsed(");
-        source.Should().Contain("_runtime.TogglePresenterView();");
+        source.Should().Contain("TogglePresenterView,");
+        source.Should().NotContain("_runtime.TogglePresenterView();");
         source.Should().Contain("_runtime.CloseRendererSession(nowUtc);");
         source.Should().NotContain("SlideShowDisplayCoordinator _displayCoordinator");
         source.Should().Contain("void ISlideShowDisplayRenderer.CancelVisualOperations() => CancelActiveTimers();");

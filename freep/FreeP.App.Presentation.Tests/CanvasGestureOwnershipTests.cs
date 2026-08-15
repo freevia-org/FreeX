@@ -102,6 +102,10 @@ public sealed class CanvasGestureOwnershipTests
             "freep",
             "FreeP.App.Presentation",
             "SlideShowRuntimeApplication.cs");
+        var runtimeSession = ReadRepoFile(
+            "freep",
+            "FreeP.App.Presentation",
+            "SlideShowRuntimeSession.cs");
         var wpf = ReadRepoFile("freep", "FreeP.App.Host", "SlideShowWindow.cs");
         var avalonia = ReadRepoFile("freep", "FreeP.App.Avalonia", "SlideShowWindow.cs");
 
@@ -116,14 +120,18 @@ public sealed class CanvasGestureOwnershipTests
         {
             adapter.Should().Contain("_runtime.HandlePointerInput");
             adapter.Should().Contain("_runtime.HitTestHyperlink");
-            adapter.Should().Contain("_runtime.BeginPointerInk");
-            adapter.Should().Contain("_runtime.AppendPointerInk");
-            adapter.Should().Contain("_runtime.EndPointerInk");
+            adapter.Should().NotContain("_runtime.BeginPointerInk");
+            adapter.Should().NotContain("_runtime.AppendPointerInk");
+            adapter.Should().NotContain("_runtime.EndPointerInk");
             adapter.Should().NotContain("_session.PlanPointerInput");
             adapter.Should().NotContain("SlideShowHostPlanner.MapCanvasPointToSlide");
             adapter.Should().NotContain("case SlideShowPointerClickIntentKind.");
             adapter.Should().NotContain("private uint? HitTestTriggerShape");
         }
+
+        runtimeSession.Should().Contain("_runtime.BeginPointerInk(pointer)");
+        runtimeSession.Should().Contain("_runtime.AppendPointerInk(pointer)");
+        runtimeSession.Should().Contain("_runtime.EndPointerInk(pointer)");
     }
 
     private static string ReadRepoFile(params string[] pathParts) =>

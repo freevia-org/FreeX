@@ -11,6 +11,7 @@
     <ApplicationTitle>FreeP</ApplicationTitle>
     <RootNamespace>FreeP.App.Avalonia</RootNamespace>
     <RuntimeIdentifiers>linux-x64;linux-arm64;win-x64;osx-arm64;osx-x64</RuntimeIdentifiers>
+    <DefineConstants>$(DefineConstants);FREEP_AVALONIA_RENDERER</DefineConstants>
   </PropertyGroup>
 
   <PropertyGroup Condition="'$(TargetPlatformIdentifier)' == 'Windows'">
@@ -84,6 +85,10 @@
              Link="SlideShowWindow.TestAccess.cs" />
   </ItemGroup>
   <ItemGroup>
+    <Compile Include="..\RendererShared\SlideShowWindow.RuntimeSession.cs"
+             Link="SlideShowWindow.RuntimeSession.cs" />
+    <Compile Include="..\RendererShared\MainWindow.RibbonActionProfile.cs"
+             Link="MainWindow.RibbonActionProfile.cs" />
     <PackageReference Include="Avalonia" />
     <PackageReference Include="Avalonia.Desktop" />
     <PackageReference Include="Avalonia.Fonts.Inter" />
