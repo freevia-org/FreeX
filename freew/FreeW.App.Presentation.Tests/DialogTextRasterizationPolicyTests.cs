@@ -3,6 +3,25 @@ namespace FreeW.App.Presentation.Tests;
 public sealed class DialogTextRasterizationPolicyTests
 {
     [Fact]
+    public void SharedDialogBasesUseEquivalentLayoutRoundingContracts()
+    {
+        var root = TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeW.slnx");
+        var wpf = File.ReadAllText(Path.Combine(
+            root,
+            "shared",
+            "Free.Shared.Shell.Wpf",
+            "DialogWindow.cs"));
+        var avalonia = File.ReadAllText(Path.Combine(
+            root,
+            "shared",
+            "Free.Shared.Shell.Avalonia",
+            "AvaloniaCompactDialogChrome.cs"));
+
+        wpf.Should().Contain("UseLayoutRounding = true");
+        avalonia.Should().Contain("window.UseLayoutRounding = true");
+    }
+
+    [Fact]
     public void SharedDialogBasesUseEquivalentSubpixelTextContracts()
     {
         var root = TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeW.slnx");
