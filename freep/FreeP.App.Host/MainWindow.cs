@@ -263,6 +263,7 @@ public sealed partial class MainWindow : Window,
 
     // ── Wave 16B: Animation pane (right-side collapsible panel) ──────────────────
     // 16B SEAM START — do not restructure this region (16A/16C may conflict nearby).
+    private readonly AnimationPaneSession _animationPaneSession;
     private AnimationPane? _animPane;
     private Border         _animPaneHost = null!;  // collapsible right-side dock (~240px)
     private readonly PresentationPaneAccessibilityAdapter _paneAccessibility = new();
@@ -301,6 +302,7 @@ public sealed partial class MainWindow : Window,
         var chromeOptions = BuildChromeOptions();
         ShellChrome.ConfigureWindow(this, chromeOptions);
 
+        _animationPaneSession = new(() => Editor);
         _workareaSession = new PresentationWorkareaSession(CreateWorkareaEndpoint());
         _proofingPaneNativeView = new(
             new PresentationProofingPaneNativeViewBindings<UIElement>(
@@ -2961,7 +2963,7 @@ public sealed partial class MainWindow : Window,
             if (_animPane is null || _animPaneHost.Child is null)
             {
                 _animPane = new AnimationPane(
-                    Editor,
+                    _animationPaneSession,
                     onPreview: StartAnimationPanePreview,
                     onAccessibilityChanged: RefreshPaneAccessibilityMetadata,
                     onEditMotionPath: OpenMotionPathEditor);
@@ -2973,18 +2975,14 @@ public sealed partial class MainWindow : Window,
     }
 
     /// <summary>
-    /// Replaces the AnimationPane with one bound to the current (rebuilt) Editor.
-    /// Called from LoadModel after the editor is rebuilt; no-op when pane is hidden.
+    /// Rebuilds the visible native projection from the shared animation-pane session.
+    /// The session resolves the current editor lazily, so replacing the presentation does not
+    /// require replacing the WPF control or creating a second lifecycle owner.
     /// </summary>
     private void RebuildAnimationPaneIfVisible()
     {
         if (_animPaneHost is null || _animPaneHost.Visibility != Visibility.Visible) return;
-        _animPane = new AnimationPane(
-            Editor,
-            onPreview: StartAnimationPanePreview,
-            onAccessibilityChanged: RefreshPaneAccessibilityMetadata,
-            onEditMotionPath: OpenMotionPathEditor);
-        _animPaneHost.Child = _animPane;
+        _animPane?.Rebuild();
         RefreshPaneAccessibilityMetadata();
     }
 

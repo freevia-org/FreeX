@@ -27,7 +27,7 @@ namespace FreeP.App.Host;
 // (calls MainWindow.StartSlideShow via the provided callback so we never touch
 // SlideShowWindow directly — stays within the 16B scope).
 //
-// Refreshes on Editor.CurrentSlideChanged and Editor.Changed.
+// Refreshes only when the shared workarea lifecycle requests a native projection update.
 // ══════════════════════════════════════════════════════════════════════════════
 
 /// <summary>
@@ -50,7 +50,6 @@ public sealed partial class AnimationPane : Border
 
     // ── Fields ────────────────────────────────────────────────────────────────────
 
-    private readonly EditingSession _editor;
     private readonly AnimationPaneSession _session;
     private readonly Action<AnimationPanePlaybackSessionPlan>? _onPreview;
     private readonly Action? _onAccessibilityChanged;
@@ -63,7 +62,7 @@ public sealed partial class AnimationPane : Border
 
     // ── Construction ──────────────────────────────────────────────────────────────
 
-    /// <param name="editor">Active editing session.</param>
+    /// <param name="session">Shared animation-pane state and workflow session owned by MainWindow.</param>
     /// <param name="onPreview">
     ///   Optional callback called when the "▶ Preview" button is clicked.
     ///   The session carries the selected animation index so "Play From Selected"
@@ -71,13 +70,12 @@ public sealed partial class AnimationPane : Border
     ///   May be null (Preview button is hidden in that case).
     /// </param>
     public AnimationPane(
-        EditingSession editor,
+        AnimationPaneSession session,
         Action<AnimationPanePlaybackSessionPlan>? onPreview = null,
         Action? onAccessibilityChanged = null,
         Action<int>? onEditMotionPath = null)
     {
-        _editor    = editor    ?? throw new ArgumentNullException(nameof(editor));
-        _session = new AnimationPaneSession(() => _editor);
+        _session = session ?? throw new ArgumentNullException(nameof(session));
         _onPreview = onPreview;
         _onAccessibilityChanged = onAccessibilityChanged;
         _onEditMotionPath = onEditMotionPath;
@@ -111,10 +109,6 @@ public sealed partial class AnimationPane : Border
             this,
             PresentationPaneAccessibilityPlanner.AnimationPaneId,
             isVisible: false);
-
-        // Subscribe to model events.
-        _editor.CurrentSlideChanged += (_, _) => Rebuild();
-        _editor.Changed             += Rebuild;
 
         Rebuild();
     }
