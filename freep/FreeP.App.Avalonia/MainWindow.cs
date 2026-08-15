@@ -134,6 +134,7 @@ public sealed partial class MainWindow : Window,
     private readonly SlideCanvas _slideCanvas;
     private Border _canvasHost = null!;
     private Canvas _oleOverlay = null!;
+    private Canvas _commentOverlay = null!;
 #if FREEP_WINDOWS_CAPTURE
     private AvaloniaOleInPlaceHost? _activeOleHost;
 #endif
@@ -877,6 +878,15 @@ public sealed partial class MainWindow : Window,
             IsHitTestVisible = false,
         };
 
+        _commentOverlay = new Canvas
+        {
+            IsHitTestVisible = false,
+            HorizontalAlignment = HorizontalAlignment.Stretch,
+            VerticalAlignment = VerticalAlignment.Stretch,
+        };
+        _commentOverlay.SizeChanged += (_, _) =>
+            RenderCommentMarkers(LastCommentPanePlan?.Comments ?? []);
+
         // Match WPF's stage geometry: the canvas uses the 40-DIP canvas margin,
         // while the text editor overlay spans the full stage.
         // Text editor placements are planned in canvas coordinates, so applying the
@@ -902,6 +912,7 @@ public sealed partial class MainWindow : Window,
         };
         canvasStack.Children.Add(canvasContent);
         canvasStack.Children.Add(textOverlay);
+        canvasStack.Children.Add(_commentOverlay);
         canvasStack.Children.Add(_adorner);
 
         _canvasHost = new Border
@@ -3929,6 +3940,8 @@ public sealed partial class MainWindow : Window,
 
     private void ShowReviewCommentsPane(PresentationCommentPanePlan plan)
     {
+        RenderCommentMarkers(plan.Comments);
+
         if (_reviewCommentsPaneHost is null || _reviewCommentsPanePanel is null)
             return;
 
@@ -3960,6 +3973,44 @@ public sealed partial class MainWindow : Window,
             plan.Comments.Count > 0,
             PresentationWorkareaPaneVisibilityPolicy.RequestedOrContent).Current.IsVisible;
         RefreshPaneAccessibilityMetadata();
+    }
+
+    /// <summary>
+    /// Materializes the shared comment-anchor marker plan as Avalonia controls.
+    /// Geometry and semantic metadata remain owned by Presentation code.
+    /// </summary>
+    private void RenderCommentMarkers(IReadOnlyList<PresentationCommentDescriptor> comments)
+    {
+        if (_commentOverlay is null)
+            return;
+
+        _commentOverlay.Children.Clear();
+        var markers = PresentationCommentMarkerLayoutPlanner.Build(
+            comments,
+            _commentOverlay.Bounds.Width,
+            _commentOverlay.Bounds.Height,
+            _presentation.SlideSizeCxEmu,
+            _presentation.SlideSizeCyEmu);
+
+        foreach (var marker in markers)
+        {
+            var dot = new Border
+            {
+                Width = marker.Bounds.Width,
+                Height = marker.Bounds.Height,
+                CornerRadius = new CornerRadius(marker.Bounds.Width / 2),
+                Background = marker.IsSelected ? FreePBrushes.AccentDark : FreePBrushes.Accent,
+                BorderBrush = FreePBrushes.White,
+                BorderThickness = new Thickness(marker.BorderThickness),
+                IsHitTestVisible = false,
+            };
+            AutomationProperties.SetAutomationId(dot, marker.AutomationId);
+            AutomationProperties.SetName(dot, marker.ToolTip);
+            ToolTip.SetTip(dot, marker.ToolTip);
+            Canvas.SetLeft(dot, marker.Bounds.X);
+            Canvas.SetTop(dot, marker.Bounds.Y);
+            _commentOverlay.Children.Add(dot);
+        }
     }
 
     private Control BuildReviewCommentsPaneHeader(PresentationCommentPanePlan plan)
