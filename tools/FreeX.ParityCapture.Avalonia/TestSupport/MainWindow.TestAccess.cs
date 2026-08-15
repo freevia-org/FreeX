@@ -629,7 +629,11 @@ public sealed partial class MainWindow
     /// never gets answered under Xvfb, hanging the capture process. Mirrors the WPF host's
     /// <c>SuppressNextClosePrompt</c>.
     /// </summary>
-    internal void AllowCloseWithoutDirtyPromptForParityCapture() => _allowCloseWithoutDirtyPrompt = true;
+    internal void AllowCloseWithoutDirtyPromptForParityCapture()
+    {
+        _allowCloseWithoutDirtyPrompt = true;
+        WindowRegistry.Unregister(this);
+    }
 
     /// <summary>Test-only seam for <see cref="_currentFileSourceLastWriteTimeUtc"/> (see its
     /// declaration) -- not used by production code paths.</summary>
