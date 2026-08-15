@@ -32,6 +32,9 @@ public static class CompactDialogVisualTokens
     public const double CheckBoxIndeterminateMarkHeight = 2;
     public const double RadioButtonIndicatorSize = 13;
     public const double RadioButtonDotSize = 6;
+    public const double TabHeaderHeight = 24;
+    public const double ListBoxItemMinHeight = 22;
+    public const double DisabledToggleOpacity = 0.45;
 
     public const string BorderHex = "#C8C8C8";
     public const string FieldBorderHex = "#B7BCC2";

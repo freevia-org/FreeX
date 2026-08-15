@@ -7,7 +7,8 @@ public sealed class AvaloniaMnemonicLabelSourceTests
     [Fact]
     public void CustomCheckAndRadioTemplates_RenderAccessKeys()
     {
-        var source = File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "DialogControlStyles.cs"));
+        var source = File.ReadAllText(RepoFile(
+            "shared", "Free.Shared.Shell.Avalonia", "AvaloniaCompactDialogChrome.cs"));
 
         source.Split("RecognizesAccessKey = true", StringSplitOptions.None).Length.Should().BeGreaterThanOrEqualTo(3);
     }

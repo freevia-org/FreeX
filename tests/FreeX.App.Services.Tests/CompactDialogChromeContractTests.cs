@@ -33,6 +33,9 @@ public sealed class CompactDialogChromeContractTests
         CompactDialogVisualTokens.CheckBoxIndeterminateMarkHeight.Should().Be(2);
         CompactDialogVisualTokens.RadioButtonIndicatorSize.Should().Be(13);
         CompactDialogVisualTokens.RadioButtonDotSize.Should().Be(6);
+        CompactDialogVisualTokens.TabHeaderHeight.Should().Be(24);
+        CompactDialogVisualTokens.ListBoxItemMinHeight.Should().Be(22);
+        CompactDialogVisualTokens.DisabledToggleOpacity.Should().Be(0.45);
         CompactDialogVisualTokens.ToggleBorderHex.Should().Be("#707070");
         CompactDialogVisualTokens.ToggleDisabledBackgroundHex.Should().Be("#E6E6E6");
         CompactDialogVisualTokens.ToggleDisabledBorderHex.Should().Be("#BCBCBC");
@@ -149,6 +152,8 @@ public sealed class CompactDialogChromeContractTests
             "src", "FreeX.App.Avalonia", "MainWindow.PivotFilters.cs");
         var freeXStyles = Read(
             "src", "FreeX.App.Avalonia", "DialogControlStyles.cs");
+        var fallbackStyles = Read(
+            "shared", "Free.Shared.Shell.Avalonia", "AvaloniaCompactDialogFallbackStyles.cs");
 
         shared.Should().Contain("Width = CompactDialogVisualTokens.CheckBoxIndicatorWidth");
         shared.Should().Contain("Height = CompactDialogVisualTokens.CheckBoxIndicatorHeight");
@@ -169,12 +174,20 @@ public sealed class CompactDialogChromeContractTests
             "AvaloniaCompactDialogChrome.ApplyCompactCheckBox(checkBox, PivotDialogChromeStyle);");
         freeX.Should().NotContain("checkBox.Template = new global::Avalonia.Controls.Templates.FuncControlTemplate<CheckBox>");
 
-        freeXStyles.Should().Contain("AvaloniaCompactDialogChrome.CreateCompactCheckBoxTemplate(");
-        freeXStyles.Should().Contain("AvaloniaCompactDialogChrome.CreateCompactRadioButtonTemplate(");
+        fallbackStyles.Should().Contain("AvaloniaCompactDialogChrome.CreateCompactCheckBoxTemplate(chrome)");
+        fallbackStyles.Should().Contain("AvaloniaCompactDialogChrome.CreateCompactRadioButtonTemplate(chrome)");
+        fallbackStyles.Should().Contain("CompactDialogVisualTokens.TabHeaderHeight");
+        fallbackStyles.Should().Contain("chrome.ListBoxItemMinHeight");
+        fallbackStyles.Should().Contain("chrome.ListBoxItemPadding");
+        fallbackStyles.Should().Contain("CompactDialogVisualTokens.DisabledToggleOpacity");
+
+        freeXStyles.Should().Contain("AvaloniaCompactDialogFallbackStyles.Create(options)");
         freeXStyles.Should().NotContain("FuncControlTemplate<CheckBox>");
         freeXStyles.Should().NotContain("FuncControlTemplate<RadioButton>");
         freeXStyles.Should().NotContain("DisabledCheckBackgroundBrush");
         freeXStyles.Should().NotContain("DisabledCheckMarkBrush");
+        freeXStyles.Should().NotContain("ListBoxItemMinHeight");
+        freeXStyles.Should().NotContain("TabHeaderHeight");
     }
 
     private static string Read(params string[] path) =>

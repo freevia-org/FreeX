@@ -86,7 +86,7 @@ public sealed class OptionsDialogGeneralParitySourceTests
         planner.Should().Contain("public const double EaseCheckBoxBottomMargin = 6;");
         wpf.Should().Contain("<StackPanel x:Name=\"PanelEaseOfAccess\" Visibility=\"Collapsed\">");
         wpf.Should().Contain("Margin=\"0,0,0,6\" FontSize=\"12\"");
-        styles.Should().Contain("AvaloniaCompactDialogChrome.CreateCompactCheckBoxTemplate(");
+        styles.Should().Contain("AvaloniaCompactDialogFallbackStyles.Create(options)");
         sharedTokens.Should().Contain("ToggleDisabledBackgroundHex");
         sharedTokens.Should().Contain("ToggleDisabledMarkHex");
     }

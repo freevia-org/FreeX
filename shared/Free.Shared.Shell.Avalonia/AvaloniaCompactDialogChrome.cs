@@ -49,7 +49,7 @@ public sealed record AvaloniaCompactDialogChromeStyle(FontFamily FontFamily)
         CompactDialogVisualTokens.GroupBoxPaddingHorizontal,
         CompactDialogVisualTokens.GroupBoxPaddingVertical);
     public Thickness ListBoxItemPadding { get; init; } = new(4, 1);
-    public double ListBoxItemMinHeight { get; init; } = CompactDialogVisualTokens.ControlHeight;
+    public double ListBoxItemMinHeight { get; init; } = CompactDialogVisualTokens.ListBoxItemMinHeight;
     public double ActionSpacing { get; init; } = 8;
     public CornerRadius ButtonCornerRadius { get; init; } = new(CompactDialogVisualTokens.ButtonCornerRadius);
     public IBrush? ButtonBackgroundBrush { get; init; }
