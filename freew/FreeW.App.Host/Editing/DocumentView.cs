@@ -16672,56 +16672,7 @@ public sealed partial class DocumentView : RichTextBox
     // --- formatting resolution (run/paragraph -> style -> document default) ---
 
     private static RunFormatting Resolve(ModelRun run, ModelParagraph paragraph, TextDocument document)
-    {
-        var style = StyleRun(paragraph, document);
-        var d = document.DefaultRun;
-        var r = run.Formatting;
-        return new RunFormatting
-        {
-            Bold = r.Bold || style.Bold || d.Bold,
-            Italic = r.Italic || style.Italic || d.Italic,
-            Underline = r.Underline || style.Underline || d.Underline,
-            Strikethrough = r.Strikethrough || style.Strikethrough || d.Strikethrough,
-            DoubleStrikethrough = r.DoubleStrikethrough || StyleRunDoubleStrikethrough(paragraph, document) || d.DoubleStrikethrough,
-            Hidden = r.Hidden || style.Hidden || d.Hidden,
-            WebHidden = r.WebHidden || style.WebHidden || d.WebHidden,
-            NoProof = r.NoProof || StyleRunNoProof(paragraph, document) || d.NoProof,
-            SmallCaps = r.SmallCaps || style.SmallCaps || d.SmallCaps,
-            AllCaps = r.AllCaps || style.AllCaps || d.AllCaps,
-            Rtl = r.Rtl || style.Rtl || d.Rtl,
-            VerticalAlign = r.VerticalAlign != VerticalAlign.Baseline ? r.VerticalAlign
-                : style.VerticalAlign != VerticalAlign.Baseline ? style.VerticalAlign
-                : d.VerticalAlign,
-            FontFamily = r.FontFamily ?? style.FontFamily ?? d.FontFamily,
-            FontSizePt = r.FontSizePt ?? style.FontSizePt ?? d.FontSizePt,
-            ColorHex = r.ColorHex ?? style.ColorHex ?? d.ColorHex,
-            HighlightColorHex = r.HighlightColorHex ?? style.HighlightColorHex ?? d.HighlightColorHex,
-            CharacterBorder = r.CharacterBorder ?? style.CharacterBorder ?? d.CharacterBorder,
-            CharacterShadingHex = r.CharacterShadingHex ?? style.CharacterShadingHex ?? d.CharacterShadingHex,
-            CharacterShadingPattern = r.CharacterShadingHex is not null ? r.CharacterShadingPattern
-                : style.CharacterShadingHex is not null ? style.CharacterShadingPattern
-                : d.CharacterShadingPattern,
-            CharacterSpacingPt = r.CharacterSpacingPt != 0 ? r.CharacterSpacingPt
-                : style.CharacterSpacingPt != 0 ? style.CharacterSpacingPt
-                : d.CharacterSpacingPt,
-            KerningMinSizePt = r.KerningMinSizePt ?? style.KerningMinSizePt ?? d.KerningMinSizePt,
-            PositionPt = r.PositionPt != 0 ? r.PositionPt
-                : style.PositionPt != 0 ? style.PositionPt
-                : d.PositionPt,
-            Ligatures = r.Ligatures != LigatureMode.None ? r.Ligatures
-                : style.Ligatures != LigatureMode.None ? style.Ligatures
-                : d.Ligatures,
-            StylisticSet = r.StylisticSet ?? style.StylisticSet ?? d.StylisticSet,
-            NumberForm = r.NumberForm != NumberForm.Default ? r.NumberForm
-                : style.NumberForm != NumberForm.Default ? style.NumberForm
-                : d.NumberForm,
-            NumberSpacing = r.NumberSpacing != NumberSpacing.Default ? r.NumberSpacing
-                : style.NumberSpacing != NumberSpacing.Default ? style.NumberSpacing
-                : d.NumberSpacing,
-            // Language is direct-only until FreeW gains explicit style/default language inheritance tracking.
-            LanguageTag = r.LanguageTag,
-        };
-    }
+        => DocumentRunFormattingResolver.Resolve(document, paragraph, run.Formatting);
 
     private static ParagraphFormatting Resolve(ModelParagraph paragraph, TextDocument document)
     {
@@ -16805,11 +16756,6 @@ public sealed partial class DocumentView : RichTextBox
         string.Equals(previous.StyleId, current.StyleId, StringComparison.OrdinalIgnoreCase)
         && Resolve(current, document).ContextualSpacing is true;
 
-    private static RunFormatting StyleRun(ModelParagraph paragraph, TextDocument document) =>
-        paragraph.StyleId is { } id && document.Styles.TryGetValue(id, out var style)
-            ? style.Run
-            : RunFormatting.Default;
-
     private static void AddStrikethroughDecorations(TextDecorationCollection decorations, RunFormatting formatting)
     {
         if (!formatting.DoubleStrikethrough)
@@ -16829,38 +16775,6 @@ public sealed partial class DocumentView : RichTextBox
         PenOffset = offset,
         PenOffsetUnit = TextDecorationUnit.FontRenderingEmSize,
     };
-
-    private static bool StyleRunNoProof(ModelParagraph paragraph, TextDocument document)
-    {
-        var seen = new HashSet<string>(StringComparer.Ordinal);
-        var styleId = paragraph.StyleId;
-        while (!string.IsNullOrEmpty(styleId)
-            && seen.Add(styleId)
-            && document.Styles.TryGetValue(styleId, out var style))
-        {
-            if (style.Run.NoProof)
-                return true;
-            styleId = style.BasedOnStyleId;
-        }
-
-        return false;
-    }
-
-    private static bool StyleRunDoubleStrikethrough(ModelParagraph paragraph, TextDocument document)
-    {
-        var seen = new HashSet<string>(StringComparer.Ordinal);
-        var styleId = paragraph.StyleId;
-        while (!string.IsNullOrEmpty(styleId)
-            && seen.Add(styleId)
-            && document.Styles.TryGetValue(styleId, out var style))
-        {
-            if (style.Run.DoubleStrikethrough)
-                return true;
-            styleId = style.BasedOnStyleId;
-        }
-
-        return false;
-    }
 
     private static WpfTextAlignment ToWpfAlignment(ModelTextAlignment alignment) => alignment switch
     {

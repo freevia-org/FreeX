@@ -196,7 +196,10 @@ public sealed partial class DocumentView
                 return false;
             if (storyContext.Paragraph is null)
                 return true;
-            return storyContext.Story.Paragraphs.IndexOf(storyContext.Paragraph) == headerFooterCaret.Target.ParaIdx;
+            if (storyContext.Story.Paragraphs.IndexOf(storyContext.Paragraph) != headerFooterCaret.Target.ParaIdx)
+                return false;
+            return !IsAutomationTextRangeNode(node.Kind)
+                || AutomationCaretWithinTextRange(node, headerFooterCaret.Offset);
         }
         if (IsAutomationDrawingNode(node.Kind) && node.IsFloatingObject)
         {
@@ -224,13 +227,19 @@ public sealed partial class DocumentView
         }
         if (node.RowIndex >= 0 && node.ColumnIndex >= 0)
         {
-            return _cellCaret is { } caret
-                && caret.TableBlock == node.BlockIndex
-                && caret.Row == node.RowIndex
-                && caret.Col == node.ColumnIndex
-                && (node.ParagraphIndex < 0 || caret.ParaIdx == node.ParagraphIndex);
+            if (_cellCaret is not { } caret
+                || caret.TableBlock != node.BlockIndex
+                || caret.Row != node.RowIndex
+                || caret.Col != node.ColumnIndex
+                || (node.ParagraphIndex >= 0 && caret.ParaIdx != node.ParagraphIndex))
+                return false;
+            return !IsAutomationTextRangeNode(node.Kind)
+                || AutomationCaretWithinTextRange(node, caret.Offset);
         }
-        return _cellCaret is null && _caret.Block == node.BlockIndex;
+        if (_cellCaret is not null || _caret.Block != node.BlockIndex)
+            return false;
+        return !IsAutomationTextRangeNode(node.Kind)
+            || AutomationCaretWithinTextRange(node, _caret.Offset);
     }
 
     internal bool AutomationNodeIsSelected(DocumentAccessibilityNode node)
@@ -302,6 +311,7 @@ public sealed partial class DocumentView
         if (node.StoryKind != DocumentAccessibilityStoryKind.Body
             && node.Kind is DocumentAccessibilityNodeKind.Paragraph
                 or DocumentAccessibilityNodeKind.Heading
+                or DocumentAccessibilityNodeKind.TextRun
                 or DocumentAccessibilityNodeKind.Hyperlink
             && AutomationHeaderFooterContext(node) is { Paragraph: not null } storyContext)
         {
@@ -404,6 +414,7 @@ public sealed partial class DocumentView
                 break;
             case DocumentAccessibilityNodeKind.Paragraph:
             case DocumentAccessibilityNodeKind.Heading:
+            case DocumentAccessibilityNodeKind.TextRun:
             case DocumentAccessibilityNodeKind.Hyperlink:
                 if (node.StoryKind == DocumentAccessibilityStoryKind.Body)
                 {
@@ -434,16 +445,16 @@ public sealed partial class DocumentView
                 || placed.CellCol != node.ColumnIndex
                 || (node.ParagraphIndex >= 0 && placed.CellParaIdx != node.ParagraphIndex))
                 return false;
-            if (node.Kind != DocumentAccessibilityNodeKind.Hyperlink)
+            if (!IsAutomationTextRangeNode(node.Kind))
                 return true;
-            var range = AutomationHyperlinkLayoutRange(node);
+            var range = AutomationTextLayoutRange(node);
             return placed.CellParaOffset >= range.Start && placed.CellParaOffset < range.Start + range.Length;
         }
         if (placed.IsCell)
             return false;
-        if (node.Kind != DocumentAccessibilityNodeKind.Hyperlink)
+        if (!IsAutomationTextRangeNode(node.Kind))
             return true;
-        var bodyRange = AutomationHyperlinkLayoutRange(node);
+        var bodyRange = AutomationTextLayoutRange(node);
         return placed.Offset >= bodyRange.Start && placed.Offset < bodyRange.Start + bodyRange.Length;
     }
 
@@ -454,8 +465,21 @@ public sealed partial class DocumentView
             ? paragraph.Runs[node.RunIndex].Image
             : null;
 
-    private (int Start, int Length) AutomationHyperlinkLayoutRange(DocumentAccessibilityNode node)
+    private static bool IsAutomationTextRangeNode(DocumentAccessibilityNodeKind kind) =>
+        kind is DocumentAccessibilityNodeKind.TextRun or DocumentAccessibilityNodeKind.Hyperlink;
+
+    private bool AutomationCaretWithinTextRange(DocumentAccessibilityNode node, int offset)
     {
+        var (start, length) = AutomationTextLayoutRange(node);
+        return length == 0
+            ? offset == start
+            : offset >= start && offset < start + length;
+    }
+
+    private (int Start, int Length) AutomationTextLayoutRange(DocumentAccessibilityNode node)
+    {
+        if (node.Kind == DocumentAccessibilityNodeKind.TextRun)
+            return (Math.Max(0, node.TextStart), Math.Max(0, node.TextLength));
         if (AutomationNodeParagraph(node) is not { } paragraph)
             return (Math.Max(0, node.TextStart), Math.Max(0, node.TextLength));
         var start = 0;

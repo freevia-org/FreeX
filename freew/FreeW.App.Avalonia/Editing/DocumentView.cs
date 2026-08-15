@@ -22870,13 +22870,7 @@ public sealed partial class DocumentView : Control
         formatting.Hidden || (formatting.WebHidden && _viewMode == DocumentViewMode.WebLayout);
 
     private RunFormatting ResolveRunFmt(RunFormatting raw, Paragraph paragraph)
-    {
-        var resolved = _doc.DefaultRun;
-        foreach (var style in StyleChain(paragraph.StyleId))
-            resolved = OverlayRun(resolved, style.Run);
-
-        return OverlayRun(resolved, raw);
-    }
+        => DocumentRunFormattingResolver.Resolve(_doc, paragraph, raw);
 
     /// <summary>Cascade the paragraph's named-style paragraph formatting (alignment + spacing)
     /// under the paragraph's own values; the paragraph's explicit values win.</summary>
@@ -22940,39 +22934,6 @@ public sealed partial class DocumentView : Control
         for (var i = chain.Count - 1; i >= 0; i--)
             yield return chain[i];
     }
-
-    private static RunFormatting OverlayRun(RunFormatting baseRun, RunFormatting over) => baseRun with
-    {
-        FontFamily = over.FontFamily ?? baseRun.FontFamily,
-        FontSizePt = over.FontSizePt ?? baseRun.FontSizePt,
-        ColorHex = over.ColorHex ?? baseRun.ColorHex,
-        HighlightColorHex = over.HighlightColorHex ?? baseRun.HighlightColorHex,
-        CharacterBorder = over.CharacterBorder ?? baseRun.CharacterBorder,
-        CharacterShadingHex = over.CharacterShadingHex ?? baseRun.CharacterShadingHex,
-        CharacterShadingPattern = over.CharacterShadingHex is not null
-            ? over.CharacterShadingPattern
-            : baseRun.CharacterShadingPattern,
-        LanguageTag = over.LanguageTag ?? baseRun.LanguageTag,
-        VerticalAlign = over.VerticalAlign != VerticalAlign.Baseline ? over.VerticalAlign : baseRun.VerticalAlign,
-        Rtl = baseRun.Rtl || over.Rtl,
-        CharacterSpacingPt = over.CharacterSpacingPt != 0 ? over.CharacterSpacingPt : baseRun.CharacterSpacingPt,
-        KerningMinSizePt = over.KerningMinSizePt ?? baseRun.KerningMinSizePt,
-        PositionPt = over.PositionPt != 0 ? over.PositionPt : baseRun.PositionPt,
-        Ligatures = over.Ligatures != LigatureMode.None ? over.Ligatures : baseRun.Ligatures,
-        NumberForm = over.NumberForm != NumberForm.Default ? over.NumberForm : baseRun.NumberForm,
-        NumberSpacing = over.NumberSpacing != NumberSpacing.Default ? over.NumberSpacing : baseRun.NumberSpacing,
-        StylisticSet = over.StylisticSet ?? baseRun.StylisticSet,
-        Bold = baseRun.Bold || over.Bold,
-        Italic = baseRun.Italic || over.Italic,
-        Underline = baseRun.Underline || over.Underline,
-        Strikethrough = baseRun.Strikethrough || over.Strikethrough,
-        DoubleStrikethrough = baseRun.DoubleStrikethrough || over.DoubleStrikethrough,
-        Hidden = baseRun.Hidden || over.Hidden,
-        WebHidden = baseRun.WebHidden || over.WebHidden,
-        NoProof = baseRun.NoProof || over.NoProof,
-        SmallCaps = baseRun.SmallCaps || over.SmallCaps,
-        AllCaps = baseRun.AllCaps || over.AllCaps,
-    };
 
     private static ParagraphFormatting OverlayParagraph(ParagraphFormatting baseParagraph, ParagraphFormatting over) => baseParagraph with
     {

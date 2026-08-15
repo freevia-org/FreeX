@@ -12,6 +12,7 @@ public enum DocumentAccessibilityNodeKind
     Endnote,
     List,
     ListItem,
+    TextRun,
     Paragraph,
     Heading,
     Table,
@@ -131,6 +132,7 @@ public static class DocumentAccessibilityNodePlanner
                     {
                         var item = items[0];
                         children.Add(BuildParagraph(
+                            document,
                             item.Paragraph,
                             item.BlockIndex,
                             -1,
@@ -145,6 +147,7 @@ public static class DocumentAccessibilityNodePlanner
                     var listItems = items.Select((item, itemIndex) =>
                     {
                         var paragraphNode = BuildParagraph(
+                            document,
                             item.Paragraph,
                             item.BlockIndex,
                             -1,
@@ -179,6 +182,7 @@ public static class DocumentAccessibilityNodePlanner
 
                 case Paragraph paragraph:
                     children.Add(BuildParagraph(
+                        document,
                         paragraph,
                         blockIndex,
                         -1,
@@ -193,14 +197,14 @@ public static class DocumentAccessibilityNodePlanner
 
                 case Table table:
                     tableNumber++;
-                    children.Add(BuildTable(table, blockIndex, tableNumber, $"block:{blockIndex}:table"));
+                    children.Add(BuildTable(document, table, blockIndex, tableNumber, $"block:{blockIndex}:table"));
                     break;
             }
         }
 
         var sections = document.Sections;
         for (var sectionIndex = 0; sectionIndex < sections.Count; sectionIndex++)
-            AddHeaderFooterStories(children, sections[sectionIndex].HeadersFooters, sectionIndex);
+            AddHeaderFooterStories(document, children, sections[sectionIndex].HeadersFooters, sectionIndex);
 
         AddNoteStories(children, document);
 
@@ -276,6 +280,7 @@ public static class DocumentAccessibilityNodePlanner
     }
 
     private static void AddHeaderFooterStories(
+        TextDocument document,
         ICollection<DocumentAccessibilityNode> children,
         SectionHeadersFooters stories,
         int sectionIndex)
@@ -301,13 +306,14 @@ public static class DocumentAccessibilityNodePlanner
             if (story.Table is { } table)
             {
                 storyChildren =
-                [StampStory(BuildTable(table, -1, 1, $"{id}:table"), sectionIndex, storyKind)];
+                [StampStory(BuildTable(document, table, -1, 1, $"{id}:table"), sectionIndex, storyKind)];
             }
             else
             {
                 storyChildren = story.Paragraphs
                     .Select((paragraph, paragraphIndex) => StampStory(
                         BuildParagraph(
+                            document,
                             paragraph,
                             -1,
                             -1,
@@ -346,7 +352,12 @@ public static class DocumentAccessibilityNodePlanner
                 .ToArray()
         };
 
-    private static DocumentAccessibilityNode BuildTable(Table table, int blockIndex, int tableNumber, string id)
+    private static DocumentAccessibilityNode BuildTable(
+        TextDocument document,
+        Table table,
+        int blockIndex,
+        int tableNumber,
+        string id)
     {
         var columnCount = TableGridProjection.TableWidth(table);
         var rows = new List<DocumentAccessibilityNode>(table.Rows.Count);
@@ -367,6 +378,7 @@ public static class DocumentAccessibilityNodePlanner
                 for (var nestedIndex = 0; nestedIndex < cell.NestedTables.Count; nestedIndex++)
                 {
                     content.Add(BuildTable(
+                        document,
                         cell.NestedTables[nestedIndex],
                         blockIndex,
                         nestedIndex + 1,
@@ -375,6 +387,7 @@ public static class DocumentAccessibilityNodePlanner
                 for (var paragraphIndex = 0; paragraphIndex < cell.Paragraphs.Count; paragraphIndex++)
                 {
                     content.Add(BuildParagraph(
+                        document,
                         cell.Paragraphs[paragraphIndex],
                         blockIndex,
                         rowIndex,
@@ -425,6 +438,7 @@ public static class DocumentAccessibilityNodePlanner
     }
 
     private static DocumentAccessibilityNode BuildParagraph(
+        TextDocument document,
         Paragraph paragraph,
         int blockIndex,
         int rowIndex,
@@ -458,6 +472,20 @@ public static class DocumentAccessibilityNodePlanner
                         || !string.Equals(candidate.HyperlinkTooltip, tooltip, StringComparison.Ordinal))
                         break;
                     groupText.Append(candidate.Text);
+                    if (HasAccessibleText(candidate))
+                    {
+                        linkChildren.Add(BuildTextRun(
+                            document,
+                            paragraph,
+                            id,
+                            blockIndex,
+                            rowIndex,
+                            columnIndex,
+                            paragraphIndex,
+                            runIndex,
+                            textOffset,
+                            candidate));
+                    }
                     linkChildren.AddRange(BuildRunObjects(
                         id, blockIndex, rowIndex, columnIndex, paragraphIndex, runIndex, candidate));
                     textOffset += candidate.Text.Length;
@@ -486,6 +514,20 @@ public static class DocumentAccessibilityNodePlanner
                 continue;
             }
 
+            if (HasAccessibleText(run))
+            {
+                children.Add(BuildTextRun(
+                    document,
+                    paragraph,
+                    id,
+                    blockIndex,
+                    rowIndex,
+                    columnIndex,
+                    paragraphIndex,
+                    runIndex,
+                    textOffset,
+                    run));
+            }
             children.AddRange(BuildRunObjects(
                 id, blockIndex, rowIndex, columnIndex, paragraphIndex, runIndex, run));
 
@@ -511,6 +553,44 @@ public static class DocumentAccessibilityNodePlanner
             ListMarker: accessibleMarker,
             Children: children);
     }
+
+    private static DocumentAccessibilityNode BuildTextRun(
+        TextDocument document,
+        Paragraph paragraph,
+        string paragraphId,
+        int blockIndex,
+        int rowIndex,
+        int columnIndex,
+        int paragraphIndex,
+        int runIndex,
+        int textStart,
+        Run run)
+    {
+        var effective = DocumentRunFormattingResolver.Resolve(document, paragraph, run.Formatting);
+        return new DocumentAccessibilityNode(
+            $"{paragraphId}:run:{runIndex}:text",
+            DocumentAccessibilityNodeKind.TextRun,
+            NameWithPreview("Text", run.Text),
+            run.Text,
+            DocumentRunAccessibilityFormatter.Describe(effective, run),
+            blockIndex,
+            rowIndex,
+            columnIndex,
+            paragraphIndex,
+            runIndex,
+            textStart,
+            run.Text.Length);
+    }
+
+    private static bool HasAccessibleText(Run run) =>
+        run.Text.Length > 0
+        && run.Image is null
+        && run.Shape is null
+        && run.Chart is null
+        && run.WordArt is null
+        && run.SmartArt is null
+        && run.DrawingGroup is null
+        && run.EmbeddedObject is null;
 
     private static IEnumerable<DocumentAccessibilityNode> BuildRunObjects(
         string paragraphId,
