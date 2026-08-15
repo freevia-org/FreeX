@@ -27261,21 +27261,32 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
                                 return false;
                             }
 
-                            using var pdfBuffer = new MemoryStream();
-                            var outcome = Pdf.AvaloniaPdfDocumentExporter.Save(
-                                _session.Workbook,
-                                effectiveExportPlan,
-                                pdfBuffer,
-                                options: null,
-                                workbookDirectory: ResolveWorkbookDirectoryForHeaderFooter());
-                            await AtomicFileWriter.WriteAllBytesAsync(
+                            var exportExecution = await new AtomicExportExecutor()
+                                .ExecuteAsync<Pdf.AvaloniaPdfDocumentExportOutcome>(
                                 effectiveRequest.Path,
-                                pdfBuffer.ToArray(),
+                                (output, token) =>
+                                {
+                                    token.ThrowIfCancellationRequested();
+                                    return ValueTask.FromResult(Pdf.AvaloniaPdfDocumentExporter.Save(
+                                        _session.Workbook,
+                                        effectiveExportPlan,
+                                        output,
+                                        options: null,
+                                        workbookDirectory: ResolveWorkbookDirectoryForHeaderFooter()));
+                                },
                                 cancellationToken);
+                            if (!exportExecution.Succeeded)
+                            {
+                                cancellationToken.ThrowIfCancellationRequested();
+                                throw exportExecution.Exception ?? new IOException(
+                                    exportExecution.Error?.Detail.Message ??
+                                    exportExecution.Validation?.Detail.ToString() ??
+                                    "PDF export did not complete.");
+                            }
 
                             RefreshShell(UiText.Format(
                                 "MainLoc_StatusFileName",
-                                outcome.Result.StatusText,
+                                exportExecution.Value!.Result.StatusText,
                                 Path.GetFileName(effectiveRequest.Path)));
                             return true;
                         });

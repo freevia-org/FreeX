@@ -55,13 +55,16 @@ public partial class ExportPlannerTests
         printExport.Should().Contain("HideSaveProgress()");
         printExport.Should().Contain("UiText.Get(\"Progress_ExportingFile\")");
 
-        // XPS temp+replace atomicity (P3 fix)
-        printExport.Should().Contain("AtomicFileWriter.CreateTempLease(xpsPath)");
-        printExport.Should().Contain("AtomicFileWriter.ReplaceTarget(tempPath, xpsPath)");
+        // Shared executor owns temp+replace atomicity for both renderer-specific formats.
+        printExport.Should().Contain("new AtomicExportExecutor().ExecuteAsync<bool>(");
+        printExport.Should().Contain("Package.Open(")
+            .And.Contain("output,");
+        printExport.Should().NotContain("AtomicFileWriter.CreateTempLease(xpsPath)");
+        printExport.Should().NotContain("AtomicFileWriter.ReplaceTarget(tempPath, xpsPath)");
 
         // PDF bytes rendered on UI thread, flushed on background thread (P2 fix)
         printExport.Should().Contain("PdfDocumentExporter.RenderToBytes(");
-        printExport.Should().Contain("AtomicFileWriter.WriteAllBytes(pdfPath, pdfBytes)");
+        printExport.Should().Contain("await output.WriteAsync(pdfBytes, cancellationToken)");
         printExport.Should().Contain("await Task.Run(");
     }
 
