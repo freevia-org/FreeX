@@ -52,10 +52,12 @@ public sealed class PresentationWorkareaOwnershipSourceTests
             .And.NotContain("QueueClipboardCopy();");
         wpfEndpoint.Should().Contain("Copy = () => _osClipboard.Copy(Editor)")
             .And.Contain("RefreshSlidePane = RefreshSlidePane")
+            .And.Contain("RefreshCurrentSlideStatus = UpdateSlideCount")
             .And.NotContain("SlidePaneHost.Child = new SlidePane(context.Snapshot.Editor)");
         avaloniaEndpoint.Should().Contain(
                 "Copy = QueueClipboardCopy")
             .And.Contain("RewireInteractionToEditor();")
+            .And.Contain("RefreshCurrentSlideStatus = UpdateStatus")
             .And.NotContain("SlidePanePlanner.SetSelectedSlide(");
     }
 
