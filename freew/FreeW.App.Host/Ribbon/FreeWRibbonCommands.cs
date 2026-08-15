@@ -3790,27 +3790,29 @@ internal static class FreeWRibbonCommands
         {
             var owner = Window.GetWindow(editor);
 
-            // Seed the author box from the document's Author property, falling back to the OS user.
             editor.CommitToModel();
             var revised = editor.Model;
-            var defaultAuthor = revised.Properties.Author?.Trim();
-            if (string.IsNullOrWhiteSpace(defaultAuthor))
-                defaultAuthor = Environment.UserName;
-
-            var revisedTitle = revised.Properties.Title?.Trim()
-                ?? System.IO.Path.GetFileName(editor.CurrentFileName ?? string.Empty);
-
-            var picked = CompareDocumentsDialog.Prompt(owner, defaultAuthor!, revisedTitle ?? string.Empty);
+            var prompt = ReviewCompareCombineWorkflow.BuildComparePrompt(
+                revised,
+                editor.CurrentFileName,
+                Environment.UserName);
+            var picked = CompareDocumentsDialog.Prompt(
+                owner,
+                prompt.DefaultAuthor,
+                prompt.RevisedTitle);
             if (picked is null)
                 return;
 
             try
             {
                 var original = DocxReader.Read(picked.OriginalFilePath);
-                var dateXml = DateTimeOffset.UtcNow.ToString(
-                    "yyyy-MM-ddTHH:mm:ssZ", System.Globalization.CultureInfo.InvariantCulture);
-
-                var compared = DocumentCompare.Compare(original, revised, picked.Author, dateXml, picked.Settings);
+                var compared = ReviewCompareCombineWorkflow.ExecuteCompare(
+                    new CompareDocumentsExecutionInput(
+                        original,
+                        revised,
+                        picked.Author,
+                        ReviewCompareCombineWorkflow.CreateRevisionDateXml(DateTimeOffset.UtcNow),
+                        picked.Settings));
                 editor.LoadModel(compared);
             }
             catch (Exception ex)
@@ -3837,22 +3839,19 @@ internal static class FreeWRibbonCommands
         {
             var owner = Window.GetWindow(editor);
 
-            // Seed author boxes from the current document (reviewer A) and fall back to the OS user.
             editor.CommitToModel();
             var revisedA = editor.Model;
-
-            var defaultAuthorA = revisedA.Properties.Author?.Trim();
-            if (string.IsNullOrWhiteSpace(defaultAuthorA))
-                defaultAuthorA = Environment.UserName;
-
-            var reviewerATitle = revisedA.Properties.Title?.Trim()
-                ?? System.IO.Path.GetFileName(editor.CurrentFileName ?? string.Empty);
+            var prompt = ReviewCompareCombineWorkflow.BuildCombinePrompt(
+                revisedA,
+                editor.CurrentFileName,
+                Environment.UserName,
+                ReviewCompareCombineWorkflow.DefaultReviewerB);
 
             var picked = CombineDocumentsDialog.Prompt(
                 owner,
-                defaultAuthorA!,
-                defaultAuthorB: "Reviewer 2",
-                reviewerATitle: reviewerATitle ?? string.Empty);
+                prompt.DefaultAuthorA,
+                prompt.DefaultAuthorB,
+                prompt.ReviewerATitle);
             if (picked is null)
                 return;
 
@@ -3861,10 +3860,14 @@ internal static class FreeWRibbonCommands
                 var original = DocxReader.Read(picked.OriginalFilePath);
                 var revisedB = DocxReader.Read(picked.ReviewerBFilePath);
 
-                var dateXml = DateTimeOffset.UtcNow.ToString(
-                    "yyyy-MM-ddTHH:mm:ssZ", System.Globalization.CultureInfo.InvariantCulture);
-
-                var combined = DocumentCombine.Combine(original, revisedA, picked.AuthorA, revisedB, picked.AuthorB, dateXml);
+                var combined = ReviewCompareCombineWorkflow.ExecuteCombine(
+                    new CombineDocumentsExecutionInput(
+                        original,
+                        revisedA,
+                        picked.AuthorA,
+                        revisedB,
+                        picked.AuthorB,
+                        ReviewCompareCombineWorkflow.CreateRevisionDateXml(DateTimeOffset.UtcNow)));
                 editor.LoadModel(combined);
             }
             catch (Exception ex)

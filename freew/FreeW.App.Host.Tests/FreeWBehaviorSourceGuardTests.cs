@@ -159,6 +159,20 @@ public sealed class FreeWBehaviorSourceGuardTests
             .Should().Contain("RegisterCustomDictionary");
     }
 
+    [Fact]
+    public void WpfReviewCommands_DelegateCompareAndCombinePolicyToPresentation()
+    {
+        var source = ReadSource("freew", "FreeW.App.Host", "Ribbon", "FreeWRibbonCommands.cs");
+
+        source.Should().Contain("ReviewCompareCombineWorkflow.BuildComparePrompt(");
+        source.Should().Contain("ReviewCompareCombineWorkflow.ExecuteCompare(");
+        source.Should().Contain("ReviewCompareCombineWorkflow.BuildCombinePrompt(");
+        source.Should().Contain("ReviewCompareCombineWorkflow.ExecuteCombine(");
+        source.Should().Contain("ReviewCompareCombineWorkflow.CreateRevisionDateXml(");
+        source.Should().NotContain("DocumentCompare.Compare(");
+        source.Should().NotContain("DocumentCombine.Combine(");
+    }
+
     private static string ReadSource(params string[] parts) =>
         File.ReadAllText(Path.Combine(new[] { TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeW.slnx") }.Concat(parts).ToArray()));
 
