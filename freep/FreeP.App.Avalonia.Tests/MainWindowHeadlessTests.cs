@@ -635,7 +635,8 @@ public sealed class MainWindowHeadlessTests : IDisposable
         mainWindow.Should().Contain(
             ".BuildStatusPlan(FreePApplicationFrameDescriptor.ResolveDataFolderLabel())");
         mainWindow.Should().Contain("chrome: ribbon,");
-        mainWindow.Should().Contain("workArea: BuildBody(),");
+        mainWindow.Should().Contain("var body = BuildBody();");
+        mainWindow.Should().Contain("workArea: body,");
         mainWindow.Should().Contain("statusBar: statusBar");
         mainWindow.Should().Contain("clientRoot.Children.Add(frame.Root);");
         mainWindow.Should().Contain("clientRoot.Children.Add(_backstage);");
