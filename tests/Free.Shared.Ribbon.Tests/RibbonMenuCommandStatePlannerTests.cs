@@ -51,4 +51,47 @@ public sealed class RibbonMenuCommandStatePlannerTests
                 liveState)
             .Should().Be(new RibbonMenuCommandState(IsEnabled: true, IsChecked: null));
     }
+
+    [Theory]
+    [InlineData(true, true)]
+    [InlineData(false, false)]
+    public void PlanCollapsedControl_PreservesToggleState(bool enabled, bool isChecked)
+    {
+        var plan = RibbonMenuCommandStatePlanner.PlanCollapsedControl(
+            new RibbonToggleButton("toggle", "Toggle"),
+            commandAvailable: true,
+            new RibbonCommandState(IsEnabled: enabled, IsChecked: isChecked));
+
+        plan.Should().Be(new RibbonMenuCommandState(enabled, isChecked));
+    }
+
+    [Fact]
+    public void PlanCollapsedControl_MakesCheckBoxesCheckableAndDefaultsUnchecked()
+    {
+        RibbonMenuCommandStatePlanner.PlanCollapsedControl(
+                new RibbonCheckBox("check", "Check"),
+                commandAvailable: true,
+                commandState: null)
+            .Should().Be(new RibbonMenuCommandState(IsEnabled: true, IsChecked: false));
+    }
+
+    [Fact]
+    public void PlanCollapsedControl_DoesNotInventCheckabilityForOrdinaryCommands()
+    {
+        RibbonMenuCommandStatePlanner.PlanCollapsedControl(
+                new RibbonButton("run", "Run"),
+                commandAvailable: true,
+                new RibbonCommandState(IsEnabled: true, IsChecked: true))
+            .Should().Be(new RibbonMenuCommandState(IsEnabled: true, IsChecked: null));
+    }
+
+    [Fact]
+    public void PlanCollapsedControl_DisablesUnavailableCommands()
+    {
+        RibbonMenuCommandStatePlanner.PlanCollapsedControl(
+                new RibbonToggleButton("missing", "Missing"),
+                commandAvailable: false,
+                new RibbonCommandState(IsEnabled: true, IsChecked: true))
+            .Should().Be(new RibbonMenuCommandState(IsEnabled: false, IsChecked: true));
+    }
 }

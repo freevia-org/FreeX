@@ -67,7 +67,8 @@ public static class AvaloniaRibbonRenderer
     private sealed class MenuCommandStateBinding
     {
         internal required RibbonCommandId CommandId { get; init; }
-        internal required RibbonMenuItem Definition { get; init; }
+        internal RibbonMenuItem? Definition { get; init; }
+        internal RibbonControl? CollapsedControl { get; init; }
     }
 
     private sealed class CheckBoxExecutionState
@@ -2496,13 +2497,19 @@ public static class AvaloniaRibbonRenderer
         var commandState = command is IRibbonStatefulCommand stateful
             ? stateful.GetState()
             : null;
-        var plan = RibbonMenuCommandStatePlanner.Plan(
-            binding.Definition,
-            commandAvailable,
-            commandState);
+        var plan = binding.Definition is { } definition
+            ? RibbonMenuCommandStatePlanner.Plan(definition, commandAvailable, commandState)
+            : RibbonMenuCommandStatePlanner.PlanCollapsedControl(
+                binding.CollapsedControl
+                    ?? throw new InvalidOperationException("Collapsed menu state binding has no control."),
+                commandAvailable,
+                commandState);
         item.IsEnabled = plan.IsEnabled;
         if (plan.IsChecked is { } isChecked)
+        {
+            item.ToggleType = MenuItemToggleType.CheckBox;
             item.IsChecked = isChecked;
+        }
     }
 
     private static global::Avalonia.Input.KeyGesture? TryParseGesture(string gesture)
@@ -2641,7 +2648,7 @@ public static class AvaloniaRibbonRenderer
         };
         RegisterMenuKeyTip(item, control.KeyTip);
         item.Click += (_, _) => Execute(control.CommandId, registry, afterExecute);
-        ApplyEnablement(item, control.CommandId, registry);
+        BindCollapsedGroupCommandState(item, control, registry);
         return item;
     }
 
@@ -2670,8 +2677,21 @@ public static class AvaloniaRibbonRenderer
         if (BuildMenu(control) is { Items.Count: > 0 })
             ApplyControlEnablement(item, control, registry, ResolvePalette());
         else
-            ApplyEnablement(item, control.CommandId, registry);
+            BindCollapsedGroupCommandState(item, control, registry);
         return item;
+    }
+
+    private static void BindCollapsedGroupCommandState(
+        MenuItem item,
+        RibbonControl control,
+        IRibbonCommandRegistry? registry)
+    {
+        MenuCommandStateBindings.Add(item, new MenuCommandStateBinding
+        {
+            CommandId = control.CommandId,
+            CollapsedControl = control,
+        });
+        ApplyMenuCommandState(item, registry);
     }
 
     // WPF BuildInlineDivider: a 1px theme-owned rule, stretched, margin 3.

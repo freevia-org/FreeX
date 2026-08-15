@@ -485,6 +485,53 @@ public sealed class RibbonWpfSplitButtonTests
     }
 
     [Fact]
+    public void CollapsedGroup_ToggleProjectionRefreshesCheckedAndEnabledStateWhenOpened()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var registry = new RibbonCommandRegistry();
+            registry.Register("toggle", new RecordingCommand());
+            var stateStore = new RibbonStateStore();
+            stateStore.SetState("toggle", new RibbonCommandState(IsEnabled: true, IsChecked: false));
+            var root = RibbonWpfRenderer.BuildTabContent(
+                new RibbonDefinitionBuilder()
+                    .Tab("home", "Home", "H", tab => tab.Group("group", "Group", "G", 1, group =>
+                        group.Toggle("toggle", "Toggle")))
+                    .Build()
+                    .FindTab("home")!,
+                new Border(),
+                registry,
+                stateStore);
+            var group = Descendants(root).OfType<RibbonGroupHost>().Single();
+            var window = new Window { Content = root, Width = 420, Height = 130 };
+            window.Show();
+            try
+            {
+                Layout(root, 420, 130);
+                group.Collapsed = true;
+
+                var button = Assert.IsType<Button>(Assert.IsType<Grid>(group.Content).Children[0]);
+                var menu = Assert.IsType<ContextMenu>(button.ContextMenu);
+                var projection = Assert.Single(menu.Items.OfType<MenuItem>());
+                projection.IsCheckable.Should().BeTrue();
+                projection.IsChecked.Should().BeFalse();
+                projection.IsEnabled.Should().BeTrue();
+
+                stateStore.SetState("toggle", new RibbonCommandState(IsEnabled: false, IsChecked: true));
+                button.RaiseEvent(new RoutedEventArgs(ButtonBase.ClickEvent, button));
+
+                projection.IsCheckable.Should().BeTrue();
+                projection.IsChecked.Should().BeTrue();
+                projection.IsEnabled.Should().BeFalse();
+            }
+            finally
+            {
+                window.Close();
+            }
+        });
+    }
+
+    [Fact]
     public void CollapsedGroup_OmitsSeparatorsAndRowBreaksFromOverflowMenu()
     {
         StaTestRunner.Run(() =>

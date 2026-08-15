@@ -24,4 +24,22 @@ public static class RibbonMenuCommandStatePlanner
                 ? null
                 : commandState?.IsChecked ?? definition.IsChecked);
     }
+
+    /// <summary>
+    /// Projects a normal ribbon control into the menu-item state used when its group is adaptively
+    /// collapsed. Toggle and check-box controls remain checkable in that projection; ordinary
+    /// commands expose only availability.
+    /// </summary>
+    public static RibbonMenuCommandState PlanCollapsedControl(
+        RibbonControl control,
+        bool commandAvailable,
+        RibbonCommandState? commandState)
+    {
+        ArgumentNullException.ThrowIfNull(control);
+
+        var isCheckable = control is RibbonToggleButton or RibbonCheckBox;
+        return new RibbonMenuCommandState(
+            commandAvailable && (commandState?.IsEnabled ?? true),
+            isCheckable ? commandState?.IsChecked ?? false : null);
+    }
 }
