@@ -110,17 +110,66 @@ public sealed class WorkbookSessionScenarioManagerTests
         session.IsDirty.Should().BeTrue();
         session.ActiveCell.Should().Be(price);
         session.SelectedRange.Should().Be(new GridRange(price, price));
+        session.CanRepeatLastAction.Should().BeTrue();
+
+        sheet.SetCell(price, new NumberValue(7));
+        session.SelectCell(selectedCell);
+        var repeat = session.RepeatLastAction();
+
+        repeat.Success.Should().BeTrue();
+        sheet.GetValue(price).Should().Be(new NumberValue(42));
+        sheet.GetValue(profit).Should().Be(new NumberValue(84));
+        session.ActiveCell.Should().Be(selectedCell);
 
         session.UndoLastEdit().Success.Should().BeTrue();
 
-        sheet.GetValue(price).Should().Be(new NumberValue(10));
-        sheet.GetValue(profit).Should().Be(new NumberValue(20));
+        sheet.GetValue(price).Should().Be(new NumberValue(7));
         session.CanRedo.Should().BeTrue();
 
         session.RedoLastEdit().Success.Should().BeTrue();
 
         sheet.GetValue(price).Should().Be(new NumberValue(42));
         sheet.GetValue(profit).Should().Be(new NumberValue(84));
+    }
+
+    [Fact]
+    public void MergeScenarios_AppendsUniqueScenariosPreservesSelectionAndSupportsUndoRedo()
+    {
+        var workbook = CreateWorkbook(out var sheet);
+        var changingCell = CellAddress.Parse("A1", sheet.Id);
+        var selectedCell = CellAddress.Parse("B2", sheet.Id);
+        workbook.Scenarios.Add(new WorkbookScenario(
+            "Baseline",
+            [new ScenarioCellValue(changingCell, new NumberValue(1))]));
+        var session = CreateSession(workbook);
+        session.SelectCell(selectedCell);
+        var source = new[]
+        {
+            new WorkbookScenario(
+                "Baseline",
+                [new ScenarioCellValue(changingCell, new NumberValue(2))],
+                "Imported"),
+            new WorkbookScenario(
+                "Upside",
+                [new ScenarioCellValue(changingCell, new NumberValue(3))])
+        };
+
+        var result = session.MergeScenarios(source);
+
+        result.Success.Should().BeTrue();
+        result.AffectedCells.Should().OnlyContain(address => address == changingCell);
+        session.IsDirty.Should().BeTrue();
+        session.SelectedRange.Should().Be(new GridRange(selectedCell, selectedCell));
+        workbook.Scenarios.Select(scenario => scenario.Name)
+            .Should().Equal("Baseline", "Baseline (2)", "Upside");
+        workbook.Scenarios[1].Comment.Should().Be("Imported");
+
+        session.UndoLastEdit().Success.Should().BeTrue();
+        workbook.Scenarios.Select(scenario => scenario.Name).Should().Equal("Baseline");
+
+        session.RedoLastEdit().Success.Should().BeTrue();
+        workbook.Scenarios.Select(scenario => scenario.Name)
+            .Should().Equal("Baseline", "Baseline (2)", "Upside");
     }
 
     [Fact]

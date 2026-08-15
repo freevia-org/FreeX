@@ -90,6 +90,7 @@ public static class FreeWRibbonFloatingFeedbackCatalog
 public sealed record FreeWRibbonFloatingExecutionPorts(
     Action PrepareExecution,
     Func<ObjectFormatTarget, bool> HasSelection,
+    Func<bool> HasTransformSelection,
     Action<ObjectFormatTarget, ImageWrapping> ApplyWrap,
     Func<ObjectFormatTarget, ObjectFormatTransformCommand, bool> ApplyTransform,
     Func<ObjectFormatTarget, ZOrderOperation, bool> ApplyZOrder,
@@ -138,8 +139,7 @@ public sealed record FreeWRibbonChartSmartArtExecutionPorts(
     Action<SmartArtColorScheme> ApplySmartArtColorScheme,
     Action<SmartArtStyle> ApplySmartArtStyle,
     Func<SmartArt, ValueTask<SmartArt?>>? ShowSmartArtEditDialogAsync,
-    Action<SmartArt> ApplySmartArtEditOutcome,
-    string ChartColorCommandPrefix = "freew.chart-colors");
+    Action<SmartArt> ApplySmartArtEditOutcome);
 
 public sealed record FreeWRibbonImageExecutionPorts(
     Action PrepareExecution,
@@ -184,7 +184,13 @@ public static class FreeWRibbonEditorExecutionProfile
         FreeWRibbonCommandAction.TableSelectCol,
         FreeWRibbonCommandAction.TableSelectCell,
         FreeWRibbonCommandAction.TableInsertAbove,
+        FreeWRibbonCommandAction.TableInsertBelow,
         FreeWRibbonCommandAction.TableInsertColLeft,
+        FreeWRibbonCommandAction.TableInsertColRight,
+        FreeWRibbonCommandAction.TableMergeCells,
+        FreeWRibbonCommandAction.TableSplitCell,
+        FreeWRibbonCommandAction.TableShading,
+        FreeWRibbonCommandAction.TableBorders,
         FreeWRibbonCommandAction.TableDeleteRow,
         FreeWRibbonCommandAction.TableDeleteCol,
         FreeWRibbonCommandAction.TableDelete,
@@ -367,7 +373,7 @@ public static class FreeWRibbonEditorExecutionProfile
                 var captured = command;
                 bindings.Register(captured.CommandId, Stateful(
                     () => ports.ApplyTransform(target, captured),
-                    () => ports.HasSelection(target),
+                    ports.HasTransformSelection,
                     ports.PrepareExecution));
             }
 
@@ -516,11 +522,11 @@ public static class FreeWRibbonEditorExecutionProfile
                 ports.PrepareExecution));
         }
 
-        bindings.Register(ports.ChartColorCommandPrefix, EmptyRibbonCommand.Instance);
+        bindings.Register(ChartColorRibbonCommandCatalog.ParentCommandId, EmptyRibbonCommand.Instance);
         foreach (var scheme in ChartColorScheme.Catalog)
         {
             var captured = scheme;
-            bindings.Register($"{ports.ChartColorCommandPrefix}-{captured.Id}", Stateful(
+            bindings.Register(ChartColorRibbonCommandCatalog.CommandId(captured), Stateful(
                 () => ports.ApplyChartColorScheme(captured),
                 () => ports.SelectedChart() is not null,
                 ports.PrepareExecution));

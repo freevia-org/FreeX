@@ -467,6 +467,8 @@ public sealed class AvaloniaCompactDialogChromeSourceTests
         var getDataSource = File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "MainWindow.GetData.cs"));
         var outlineSource = File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "MainWindow.Outline.cs"));
         var printSource = File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "MainWindow.Print.cs"));
+        var sharedPrintSource = File.ReadAllText(RepoFile(
+            "shared", "Free.Shared.Shell.Avalonia", "AvaloniaPrintDialogWorkflow.cs"));
         var autoFilterSource = File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "MainWindow.AutoFilter.cs"));
         var errorCheckingSource = File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "MainWindow.ErrorChecking.cs"));
         var parityCaptureSource = File.ReadAllText(RepoFile(
@@ -486,12 +488,18 @@ public sealed class AvaloniaCompactDialogChromeSourceTests
         outlineSource.Should().Contain("AvaloniaCompactDialogChrome.CreateActionRow([okButton, cancelButton], new Thickness(0, 12, 0, 0))");
 
         printSource.Should().Contain("private static AvaloniaCompactDialogChromeStyle PrintDialogChromeStyle => new(FormulaBarFontFamily);");
-        printSource.Should().Contain("AvaloniaCompactDialogChrome.ApplyButton(button, PrintDialogChromeStyle, minWidth, isDefault);");
-        printSource.Should().Contain("AvaloniaCompactDialogChrome.ApplyTextBox(tb, PrintDialogChromeStyle);");
-        printSource.Should().Contain("AvaloniaCompactDialogChrome.ApplyComboBox(cb, PrintDialogChromeStyle);");
-        printSource.Should().Contain("AvaloniaCompactDialogChrome.ApplyRadioButton(rb, PrintDialogChromeStyle);");
-        printSource.Should().Contain("AvaloniaCompactDialogChrome.ApplyCheckBox(cb, PrintDialogChromeStyle);");
-        printSource.Should().Contain("AvaloniaCompactDialogChrome.CreateActionRow([cancelButton, printButton]);");
+        printSource.Should().Contain("AvaloniaPrintDialogWorkflow.ShowAsync(");
+        printSource.Should().Contain(": base(PrintDialogChromeStyle)");
+        printSource.Should().Contain("AvaloniaCompactDialogChrome.ApplyRadioButton(");
+        printSource.Should().Contain("PrintDialogChromeStyle);");
+        printSource.Should().NotContain("ApplyPrintButtonChrome(");
+        printSource.Should().NotContain("ApplyPrintTextBoxChrome(");
+        printSource.Should().NotContain("ApplyPrintComboBoxChrome(");
+        printSource.Should().NotContain("ApplyPrintCheckBoxChrome(");
+        sharedPrintSource.Should().Contain("AvaloniaCompactDialogChrome.ApplyButton(");
+        sharedPrintSource.Should().Contain("AvaloniaCompactDialogChrome.ApplyTextBox(");
+        sharedPrintSource.Should().Contain("AvaloniaCompactDialogChrome.ApplyComboBox(");
+        sharedPrintSource.Should().Contain("AvaloniaCompactDialogChrome.CreateActionRow([submit, cancel])");
 
         autoFilterSource.Should().Contain("private static AvaloniaCompactDialogChromeStyle AutoFilterDialogChromeStyle => new(FormulaBarFontFamily);");
         autoFilterSource.Should().Contain("AvaloniaCompactDialogChrome.ApplyButton(okButton, AutoFilterDialogChromeStyle, 72, isDefault: true);");
@@ -509,7 +517,7 @@ public sealed class AvaloniaCompactDialogChromeSourceTests
         errorCheckingSource.Should().Contain("ErrorCheckingDialogChromeStyle,");
         errorCheckingSource.Should().NotContain("Height=24, Padding=(4,1), white background");
 
-        foreach (var source in new[] { getDataSource, outlineSource, printSource, autoFilterSource })
+        foreach (var source in new[] { getDataSource, outlineSource, autoFilterSource })
         {
             AssertNoLocalButtonChrome(source);
             AssertNoLocalTextBoxChrome(source, "tb");

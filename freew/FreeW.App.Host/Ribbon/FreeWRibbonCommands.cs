@@ -113,7 +113,7 @@ internal static class FreeWRibbonCommands
         var onToggleReadMode = hostPorts?.ToggleReadMode;
         var isReadModeActive = hostPorts?.IsReadModeActive;
         var onTogglePrintLayout = hostPorts?.SetPrintLayout;
-        var isPrintLayoutActive = hostPorts?.IsPrintLayoutActive;
+        var isPrintLayoutActive = hostPorts?.ResolvePrintLayoutActive();
         var onToggleOutlineView = hostPorts?.SetOutlineView;
         var isOutlineViewActive = hostPorts?.IsOutlineViewActive;
         var onZoomDialog = hostPorts?.OpenZoomDialog;
@@ -121,9 +121,9 @@ internal static class FreeWRibbonCommands
         var onZoomOnePage = hostPorts?.ZoomOnePage;
         var onZoomPageWidth = hostPorts?.ZoomPageWidth;
         var onWebLayout = hostPorts?.SetWebLayout;
-        var isWebLayoutActive = hostPorts?.IsWebLayoutActive;
+        var isWebLayoutActive = hostPorts?.ResolveWebLayoutActive();
         var onDraftView = hostPorts?.SetDraftView;
-        var isDraftViewActive = hostPorts?.IsDraftViewActive;
+        var isDraftViewActive = hostPorts?.ResolveDraftViewActive();
         var onToggleRevealFormatting = hostPorts?.ToggleRevealFormatting;
         var isRevealFormattingVisible = hostPorts?.IsRevealFormattingVisible;
         var onToggleRuler = hostPorts?.ToggleRuler;
@@ -139,7 +139,7 @@ internal static class FreeWRibbonCommands
         var onOpenHeaderFooterPane = hostPorts?.OpenHeaderFooterPane;
         var onCloseHeaderFooterPane = hostPorts?.CloseHeaderFooterPane;
         var onTogglePagedEditView = hostPorts?.TogglePagedEditView;
-        var isPagedEditViewActive = hostPorts?.IsPagedEditViewActive;
+        var isPagedEditViewActive = hostPorts?.ResolvePagedEditViewActive();
         var onReadModeColumnWidth = hostPorts?.ApplyReadModeColumnWidth;
         var onReadModePageColor = hostPorts?.ApplyReadModePageColor;
         var onNewWindow = hostPorts?.NewWindow;
@@ -171,27 +171,54 @@ internal static class FreeWRibbonCommands
             registry.Bind(action,
                 new RoutedEditCommand(editor, command));
 
-        ToggleFormatCommand CreateToggle(
+        IRibbonStatefulCommand CreateToggle(
             FreeWRibbonCommandAction action,
-            RoutedCommand command,
-            DependencyProperty property,
-            Func<object?, bool> isOn,
-            Func<bool>? tryModelToggle = null)
+            FontEffectRibbonKind kind,
+            Action execute)
         {
-            var cmd = new ToggleFormatCommand(editor, command, property, isOn, tryModelToggle);
+            var cmd = FontEffectRibbonStatePlanner.CreateCommand(
+                kind,
+                execute,
+                editor.GetSelectionFormatting,
+                () => editor.CanFormatSelection,
+                () => editor.Focus());
             stateful.Add((FreeWRibbonCommandWorkflow.GetPrimaryCommandId(action), cmd));
             return cmd;
         }
 
-        var bold = CreateToggle(FreeWRibbonCommandAction.Bold, EditingCommands.ToggleBold, TextElement.FontWeightProperty,
-            v => v is FontWeight w && w >= FontWeights.Bold,
-            () => editor.TryToggleSelectedRunFormatting(f => f.Bold, (f, value) => f with { Bold = value }));
-        var italic = CreateToggle(FreeWRibbonCommandAction.Italic, EditingCommands.ToggleItalic, TextElement.FontStyleProperty,
-            v => v is FontStyle s && s == FontStyles.Italic,
-            () => editor.TryToggleSelectedRunFormatting(f => f.Italic, (f, value) => f with { Italic = value }));
-        var underline = CreateToggle(FreeWRibbonCommandAction.Underline, EditingCommands.ToggleUnderline, Inline.TextDecorationsProperty,
-            v => v is TextDecorationCollection d && d.Count > 0,
-            () => editor.TryToggleSelectedRunFormatting(f => f.Underline, (f, value) => f with { Underline = value }));
+        void ToggleRouted(RoutedCommand command, Func<bool> tryModelToggle)
+        {
+            if (tryModelToggle())
+                return;
+            if (command.CanExecute(null, editor))
+                command.Execute(null, editor);
+        }
+
+        Action CreateCharacterEffectExecution(CharacterEffect effect)
+        {
+            var command = new CharacterEffectCommand(editor, effect);
+            return () => command.Execute(RibbonCommandContext.Empty);
+        }
+
+        var bold = CreateToggle(FreeWRibbonCommandAction.Bold, FontEffectRibbonKind.Bold,
+            () => ToggleRouted(EditingCommands.ToggleBold,
+                () => editor.TryToggleSelectedRunFormatting(f => f.Bold, (f, value) => f with { Bold = value })));
+        var italic = CreateToggle(FreeWRibbonCommandAction.Italic, FontEffectRibbonKind.Italic,
+            () => ToggleRouted(EditingCommands.ToggleItalic,
+                () => editor.TryToggleSelectedRunFormatting(f => f.Italic, (f, value) => f with { Italic = value })));
+        var underline = CreateToggle(FreeWRibbonCommandAction.Underline, FontEffectRibbonKind.Underline,
+            () => ToggleRouted(EditingCommands.ToggleUnderline,
+                () => editor.TryToggleSelectedRunFormatting(f => f.Underline, (f, value) => f with { Underline = value })));
+        var strikethrough = CreateToggle(FreeWRibbonCommandAction.Strikethrough, FontEffectRibbonKind.Strikethrough,
+            CreateCharacterEffectExecution(CharacterEffect.Strikethrough));
+        var smallCaps = CreateToggle(FreeWRibbonCommandAction.Smallcaps, FontEffectRibbonKind.SmallCaps,
+            CreateCharacterEffectExecution(CharacterEffect.SmallCaps));
+        var allCaps = CreateToggle(FreeWRibbonCommandAction.Allcaps, FontEffectRibbonKind.AllCaps,
+            CreateCharacterEffectExecution(CharacterEffect.AllCaps));
+        var superscript = CreateToggle(FreeWRibbonCommandAction.Superscript, FontEffectRibbonKind.Superscript,
+            CreateCharacterEffectExecution(CharacterEffect.Superscript));
+        var subscript = CreateToggle(FreeWRibbonCommandAction.Subscript, FontEffectRibbonKind.Subscript,
+            CreateCharacterEffectExecution(CharacterEffect.Subscript));
 
         // Live ribbon state: when the caret/selection moves or a document render replaces the model,
         // recompute state and push it into the shared store. The store deduplicates unchanged values.
@@ -212,11 +239,11 @@ internal static class FreeWRibbonCommands
                 Bold: bold,
                 Italic: italic,
                 Underline: underline,
-                Strikethrough: new CharacterEffectCommand(editor, CharacterEffect.Strikethrough),
-                SmallCaps: new CharacterEffectCommand(editor, CharacterEffect.SmallCaps),
-                AllCaps: new CharacterEffectCommand(editor, CharacterEffect.AllCaps),
-                Superscript: new CharacterEffectCommand(editor, CharacterEffect.Superscript),
-                Subscript: new CharacterEffectCommand(editor, CharacterEffect.Subscript),
+                Strikethrough: strikethrough,
+                SmallCaps: smallCaps,
+                AllCaps: allCaps,
+                Superscript: superscript,
+                Subscript: subscript,
                 GrowFont: new RoutedEditCommand(editor, EditingCommands.IncreaseFontSize),
                 ShrinkFont: new RoutedEditCommand(editor, EditingCommands.DecreaseFontSize)));
 
@@ -337,14 +364,7 @@ internal static class FreeWRibbonCommands
                 editor.Focus();
                 editor.InsertTable(rows, columns);
             }));
-        // Insert tab — Table Tools: structural edits to the table containing the caret (all undoable).
-        tableCommands.Register("freew.table-insert-row", new ActionRibbonCommand(() => { editor.Focus(); editor.InsertTableRow(); }));
-        tableCommands.Register("freew.table-insert-col", new ActionRibbonCommand(() => { editor.Focus(); editor.InsertTableColumn(); }));
-        // Insert tab — Table Tools: merge the selected cells / split a merged cell (all undoable).
-        tableCommands.Register("freew.merge-cells", new ActionRibbonCommand(() => { editor.Focus(); editor.MergeSelectedCells(); }));
-        tableCommands.Register("freew.split-cell", new SplitCellRibbonCommand(editor));
-        // Insert tab — Table Tools: pick/clear a fill colour for the caret's cell (sets model + re-renders).
-        tableCommands.Register("freew.cell-shading", new CellShadingCommand(editor));
+        // Shared Table Tools policy; this host contributes only WPF editor and dialog adapters.
         TableEditingRibbonWorkflow.Register(tableCommands, CreateTableEditingPorts(editor));
 
         // Table Design > Draw Borders: drag-to-insert table (prompted dimensions) and eraser-merges right.
@@ -352,8 +372,6 @@ internal static class FreeWRibbonCommands
         tableCommands.Bind(FreeWRibbonCommandAction.Eraser, new EraserCommand(editor));
         // Table Layout Data group — Convert to Text
         tableCommands.Bind(FreeWRibbonCommandAction.TableToText, new ActionRibbonCommand(() => { editor.Focus(); editor.ConvertTableToText('\t'); }));
-        // Table Design — Cell Borders picker (per-edge borders for the caret cell).
-        tableCommands.Register("freew.cell-borders", new CellBordersCommand(editor));
         // Insert tab — Text: pick a .docx file and insert its body content at the caret (block merge).
         registry.Bind(FreeWRibbonCommandAction.InsertFile, new InsertFileCommand(editor));
         // Insert tab — Illustrations: pick an image file and insert it as an inline image run.
@@ -615,11 +633,6 @@ internal static class FreeWRibbonCommands
                     editor.InsertWordArt(WordArt.Create("WordArt", WordArtStyle.GradientFill));
                 }),
                 EmbeddedObject: new InsertEmbeddedObjectCommand(editor)));
-        // SmartArt Design contextual tab — gallery placeholder commands (no-ops; galleries are injected
-        // as live-preview custom content via InjectGallery; these ids must be registered so the ribbon
-        // renderer does not log "unknown command" warnings for the stub buttons).
-        registry.Register("freew.smartart-change-layout", EmptyRibbonCommand.Instance);
-        registry.Register("freew.smartart-change-colors", EmptyRibbonCommand.Instance);
         // Insert tab — References: prompt for footnote text and insert a footnote reference at the caret.
         var insertFootnote = new InsertFootnoteCommand(editor);
         // Insert tab — References: prompt for endnote text and insert an endnote reference at the caret.
@@ -1424,6 +1437,13 @@ internal static class FreeWRibbonCommands
             HasSelection: target => target == ObjectFormatTarget.Picture
                 ? editor.SelectedImage() is not null
                 : editor.SelectedShape() is not null,
+            HasTransformSelection: () =>
+                editor.SelectedImage() is not null ||
+                editor.SelectedShape() is not null ||
+                editor.SelectedChart() is not null ||
+                editor.SelectedSmartArt() is not null ||
+                editor.SelectedWordArt() is not null ||
+                editor.IsGroupSelected,
             ApplyWrap: (target, wrapping) =>
             {
                 if (target == ObjectFormatTarget.Picture)
@@ -1531,8 +1551,12 @@ internal static class FreeWRibbonCommands
             ToggleParagraphBorder: () => editor.ToggleParagraphBorder(),
             Sort: new SortCommand(editor));
 
-    private static TableEditingRibbonPorts CreateTableEditingPorts(DocumentView editor) =>
-        new(
+    private static TableEditingRibbonPorts CreateTableEditingPorts(DocumentView editor)
+    {
+        var splitCell = new SplitCellRibbonCommand(editor);
+        var shading = new CellShadingCommand(editor);
+        var borders = new CellBordersCommand(editor);
+        return new(
             PrepareExecution: () => editor.Focus(),
             ToggleHeaderRow: editor.ToggleTableHeaderRow,
             ToggleBandedRows: editor.ToggleTableBandedRows,
@@ -1546,7 +1570,13 @@ internal static class FreeWRibbonCommands
             SelectColumn: editor.SelectTableColumn,
             SelectCell: editor.SelectTableCell,
             InsertRowAbove: editor.InsertTableRowAbove,
+            InsertRowBelow: editor.InsertTableRow,
             InsertColumnLeft: editor.InsertTableColumnLeft,
+            InsertColumnRight: editor.InsertTableColumn,
+            MergeCells: editor.MergeSelectedCells,
+            SplitCell: splitCell,
+            Shading: shading,
+            Borders: borders,
             DeleteRow: editor.DeleteTableRow,
             DeleteColumn: editor.DeleteTableColumn,
             DeleteTable: editor.DeleteTable,
@@ -1556,7 +1586,14 @@ internal static class FreeWRibbonCommands
             SetAutoFit: editor.SetTableAutoFit,
             SetCellAlignment: editor.SetCaretCellAlignment,
             SetCellTextDirection: editor.SetCaretCellTextDirection,
+            SetCellBorders: (edges, clearEdges) => editor.SetCellBorders(
+                edges,
+                "#000000",
+                0.5,
+                BorderLineStyle.Single,
+                clearEdges),
             ToggleRepeatHeaderRow: editor.ToggleTableRepeatHeaderRow);
+    }
 
     private static FreeWRibbonTableExecutionPorts CreateTableExecutionPorts(DocumentView editor) =>
         new(
@@ -1574,7 +1611,7 @@ internal static class FreeWRibbonCommands
                 TablePropertiesDialog.Prompt(Window.GetWindow(editor), context)),
             ApplyPropertiesOutcome: editor.ApplyTableProperties,
             ShowTableToTextDialogAsync: () => ValueTask.FromResult(
-                DelimiterDialog.Ask(
+                TableTextConversionDialog.Ask(
                     Window.GetWindow(editor),
                     TableTextConversionDialogPlanner.ResolveText(UiText.Get).TableToTextTitle)),
             ApplyTableToTextOutcome: editor.ConvertTableToText);
@@ -1645,8 +1682,7 @@ internal static class FreeWRibbonCommands
             ApplySmartArtStyle: editor.ApplySmartArtStyle,
             ShowSmartArtEditDialogAsync: smartArt => ValueTask.FromResult(
                 InsertSmartArtDialog.Prompt(Application.Current?.MainWindow, smartArt)),
-            ApplySmartArtEditOutcome: editor.ReplaceSelectedSmartArt,
-            ChartColorCommandPrefix: "freew.chart-color");
+            ApplySmartArtEditOutcome: editor.ReplaceSelectedSmartArt);
 
     // Home > Font character effects wired by CharacterEffectCommand.
     private enum CharacterEffect { Superscript, Subscript, Strikethrough, SmallCaps, AllCaps }
@@ -2334,165 +2370,24 @@ internal static class FreeWRibbonCommands
     }
 
     // Table Design — Borders picker: lets the user pick a border preset (All / Outside / Inside / Top /
-    // Bottom / Left / Right / None) with a style, colour and width chooser, then applies it to the caret
-    // cell via SetCaretCellBorders. Reuses the BorderLineStyle enum and CellBorderEdge record from the model.
+    // Bottom / Left / Right / None) with a style, colour and width chooser, then applies it to the
+    // current cell selection through the shared logical-grid policy.
     private sealed class CellBordersCommand(DocumentView editor) : IRibbonCommand
     {
-        private static readonly string[] ColorPalette =
-        [
-            "#000000", "#FF0000", "#0000FF", "#008000", "#800000",
-            "#808080", "#C0C0C0", "#FF6600", "#9900CC", "#FFFFFF",
-        ];
-
         public void Execute(RibbonCommandContext context)
         {
             editor.Focus();
-            var owner = Window.GetWindow(editor);
-            var result = ShowBordersDialog(owner);
+            var result = CellBordersDialog.Prompt(Window.GetWindow(editor));
             if (result is null)
                 return;
-            editor.SetCaretCellBorders(result);
+            editor.SetCellBorders(
+                result.Edges,
+                result.ColorHex,
+                result.WidthPt,
+                result.Style,
+                result.ClearEdges);
         }
 
-        private static CellBorders? ShowBordersDialog(Window? owner)
-        {
-            CellBorders? result = null;
-
-            var selectedStyle = BorderLineStyle.Single;
-            var selectedColor = "#000000";
-            var selectedWidthPt = 0.5;
-
-            var window = new Window
-            {
-                Title = UiText.Get("CellBorders_Title"),
-                SizeToContent = SizeToContent.WidthAndHeight,
-                ResizeMode = ResizeMode.NoResize,
-                WindowStartupLocation = owner is null
-                    ? WindowStartupLocation.CenterScreen
-                    : WindowStartupLocation.CenterOwner,
-                Owner = owner,
-                ShowInTaskbar = false
-            };
-
-            var outer = new StackPanel { Margin = new Thickness(10) };
-
-            // -- Preset buttons row --
-            var presetLabel = new TextBlock { Text = UiText.Get("Border_Preset_Label"), Margin = new Thickness(0, 0, 0, 4), FontWeight = FontWeights.SemiBold };
-            outer.Children.Add(presetLabel);
-            var presetPanel = new WrapPanel { Margin = new Thickness(0, 0, 0, 10) };
-            string[] presets = ["All", "Outside", "Inside", "Top", "Bottom", "Left", "Right", "None"];
-            Button? applyBtn = null;
-
-            CellBorderEdge MakeEdge() => new(selectedStyle, selectedColor, selectedWidthPt);
-            CellBorders BuildPreset(string preset, System.Func<CellBorderEdge> edge) => preset switch
-            {
-                "All" => new CellBorders { Top = edge(), Bottom = edge(), Left = edge(), Right = edge() },
-                "Outside" => new CellBorders { Top = edge(), Bottom = edge(), Left = edge(), Right = edge() },
-                "Inside" => new CellBorders(), // inside borders handled at table level; clear cell overrides
-                "Top" => new CellBorders { Top = edge() },
-                "Bottom" => new CellBorders { Bottom = edge() },
-                "Left" => new CellBorders { Left = edge() },
-                "Right" => new CellBorders { Right = edge() },
-                _ => null! // "None"
-            };
-
-            string? chosenPreset = null;
-            foreach (var preset in presets)
-            {
-                var btn = new Button
-                {
-                    Content = preset,
-                    Margin = new Thickness(2),
-                    Padding = new Thickness(8, 3, 8, 3),
-                    Tag = preset
-                };
-                btn.Click += (_, _) =>
-                {
-                    chosenPreset = (string)btn.Tag;
-                    if (applyBtn is not null) applyBtn.IsEnabled = true;
-                };
-                presetPanel.Children.Add(btn);
-            }
-            outer.Children.Add(presetPanel);
-
-            // -- Style picker --
-            var styleLabel = new TextBlock { Text = UiText.Get("Border_Style_Label"), Margin = new Thickness(0, 0, 0, 2) };
-            outer.Children.Add(styleLabel);
-            var styleCombo = new ComboBox { Margin = new Thickness(0, 0, 0, 8) };
-            foreach (var s in Enum.GetValues<BorderLineStyle>())
-                styleCombo.Items.Add(s.ToString());
-            styleCombo.SelectedIndex = 0;
-            styleCombo.SelectionChanged += (_, _) =>
-            {
-                if (styleCombo.SelectedItem is string sv && Enum.TryParse<BorderLineStyle>(sv, out var parsed))
-                    selectedStyle = parsed;
-            };
-            outer.Children.Add(styleCombo);
-
-            // -- Colour swatches --
-            var colorLabel = new TextBlock { Text = UiText.Get("Design_PageColor_Color_Label"), Margin = new Thickness(0, 0, 0, 2) };
-            outer.Children.Add(colorLabel);
-            var colorPanel = new WrapPanel { Margin = new Thickness(0, 0, 0, 8) };
-            Border? selectedColorBorder = null;
-            foreach (var hex in ColorPalette)
-            {
-                var swatch = new Border
-                {
-                    Width = 20, Height = 20, Margin = new Thickness(2),
-                    Background = new SolidColorBrush((Color)ColorConverter.ConvertFromString(hex)),
-                    BorderBrush = Brushes.Gray, BorderThickness = new Thickness(1),
-                    ToolTip = hex, Cursor = Cursors.Hand, Tag = hex
-                };
-                swatch.MouseLeftButtonUp += (_, _) =>
-                {
-                    selectedColor = (string)swatch.Tag;
-                    if (selectedColorBorder is not null)
-                        selectedColorBorder.BorderThickness = new Thickness(1);
-                    swatch.BorderThickness = new Thickness(2);
-                    selectedColorBorder = swatch;
-                };
-                colorPanel.Children.Add(swatch);
-            }
-            outer.Children.Add(colorPanel);
-
-            // -- Width spinner --
-            var widthLabel = new TextBlock { Text = UiText.Get("ChartSize_Width_Label"), Margin = new Thickness(0, 0, 0, 2) };
-            outer.Children.Add(widthLabel);
-            var widthBox = new TextBox { Text = "0.5", Width = 60, Margin = new Thickness(0, 0, 0, 10), HorizontalAlignment = HorizontalAlignment.Left };
-            widthBox.TextChanged += (_, _) =>
-            {
-                if (double.TryParse(widthBox.Text, out var w) && w > 0)
-                    selectedWidthPt = w;
-            };
-            outer.Children.Add(widthBox);
-
-            // -- Apply / Cancel --
-            var buttonRow = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right };
-            applyBtn = new Button
-            {
-                Content = UiText.Get("Common_Apply"),
-                IsEnabled = false,
-                Padding = new Thickness(12, 4, 12, 4),
-                Margin = new Thickness(0, 0, 6, 0)
-            };
-            applyBtn.Click += (_, _) =>
-            {
-                if (chosenPreset == "None")
-                    result = null;
-                else if (chosenPreset is not null)
-                    result = BuildPreset(chosenPreset, MakeEdge);
-                window.Close();
-            };
-            var cancelBtn = new Button { Content = UiText.Get("Common_CancelText"), Padding = new Thickness(12, 4, 12, 4) };
-            cancelBtn.Click += (_, _) => window.Close();
-            buttonRow.Children.Add(applyBtn);
-            buttonRow.Children.Add(cancelBtn);
-            outer.Children.Add(buttonRow);
-
-            window.Content = outer;
-            window.ShowDialog();
-            return result;
-        }
     }
 
     // Home / Design > Borders and Shading…: opens the full dialog (paragraph border, page border, shading)
@@ -2630,7 +2525,7 @@ internal static class FreeWRibbonCommands
         public void Execute(RibbonCommandContext context)
         {
             editor.Focus();
-            var dims = DrawTableDimensionPicker.Ask(
+            var dims = DrawTableDimensionDialog.Ask(
                 Window.GetWindow(editor),
                 DrawTableDimensionDialogKind.DrawTable);
             if (dims is null)
@@ -2646,13 +2541,13 @@ internal static class FreeWRibbonCommands
         public void Execute(RibbonCommandContext context)
         {
             editor.Focus();
-            var dimensions = DrawTableDimensionPicker.Ask(
+            var dimensions = DrawTableDimensionDialog.Ask(
                 Window.GetWindow(editor),
                 DrawTableDimensionDialogKind.SplitCells);
             if (dimensions is not { } value)
                 return;
             editor.Focus();
-            editor.SplitCell(value.Rows, value.Cols);
+            editor.SplitCell(value.Rows, value.Columns);
         }
     }
 
@@ -2667,57 +2562,6 @@ internal static class FreeWRibbonCommands
         }
     }
 
-    // A tiny modal dialog letting the user choose rows × columns for Draw Table.
-    private static class DrawTableDimensionPicker
-    {
-        public static (int Rows, int Cols)? Ask(
-            Window? owner,
-            DrawTableDimensionDialogKind kind)
-        {
-            var plan = DrawTableCommandPlanner.BuildDialog(kind, UiText.Get);
-            (int Rows, int Cols)? result = null;
-
-            var rowsBox = new System.Windows.Controls.TextBox { Text = plan.DefaultRows.ToString(), MinWidth = 60, Margin = new Thickness(0, 0, 0, 8) };
-            var colsBox = new System.Windows.Controls.TextBox { Text = plan.DefaultColumns.ToString(), MinWidth = 60, Margin = new Thickness(0, 0, 0, 8) };
-            var ok     = new System.Windows.Controls.Button { Content = plan.OkLabel,     IsDefault = true, MinWidth = 72, Margin = new Thickness(0, 0, 8, 0) };
-            var cancel = new System.Windows.Controls.Button { Content = plan.CancelLabel, IsCancel = true,  MinWidth = 72 };
-
-            var dialog = new Window
-            {
-                Title = plan.Title,
-                SizeToContent = SizeToContent.WidthAndHeight,
-                ResizeMode = ResizeMode.NoResize,
-                WindowStartupLocation = WindowStartupLocation.CenterOwner,
-                Owner = owner,
-                ShowInTaskbar = false
-            };
-
-            ok.Click += (_, _) =>
-            {
-                result = DrawTableCommandPlanner.Normalize(rowsBox.Text, colsBox.Text);
-                dialog.DialogResult = true;
-            };
-
-            var closeRow = new System.Windows.Controls.StackPanel
-            {
-                Orientation = System.Windows.Controls.Orientation.Horizontal,
-                HorizontalAlignment = HorizontalAlignment.Right
-            };
-            closeRow.Children.Add(ok);
-            closeRow.Children.Add(cancel);
-
-            var panel = new System.Windows.Controls.StackPanel { Margin = new Thickness(16) };
-            panel.Children.Add(new System.Windows.Controls.TextBlock { Text = plan.RowsLabel, Margin = new Thickness(0, 0, 0, 4) });
-            panel.Children.Add(rowsBox);
-            panel.Children.Add(new System.Windows.Controls.TextBlock { Text = plan.ColumnsLabel, Margin = new Thickness(0, 0, 0, 4) });
-            panel.Children.Add(colsBox);
-            panel.Children.Add(closeRow);
-            dialog.Content = panel;
-
-            return dialog.ShowDialog() == true ? result : null;
-        }
-    }
-
     // Insert > Text > Text from File: realize the portable import policy through WPF-native ports.
     private sealed class InsertFileCommand(DocumentView editor) : IRibbonCommand
     {
@@ -2729,8 +2573,7 @@ internal static class FreeWRibbonCommands
                 new WpfDocumentFragmentPickerPort(owner),
                 new WpfDocumentFragmentSourceReaderPort(),
                 new WpfDocumentFragmentInsertionPort(editor));
-            var request = FreeWDocumentFragmentImportPlanner.CreateTextFromFileRequest(
-                FreeWDocumentFragmentHostProfile.Wpf);
+            var request = FreeWDocumentFragmentImportPlanner.CreateTextFromFileRequest();
             var result = workflow.ImportAsync(request).GetAwaiter().GetResult();
             ShowDocumentFragmentImportOutcome(owner, result);
         }
@@ -2747,8 +2590,7 @@ internal static class FreeWRibbonCommands
                 new WpfDocumentFragmentPickerPort(owner),
                 new WpfDocumentFragmentSourceReaderPort(),
                 new WpfDocumentFragmentInsertionPort(editor));
-            var request = FreeWDocumentFragmentImportPlanner.CreateEmbeddedObjectRequest(
-                FreeWDocumentFragmentHostProfile.Wpf);
+            var request = FreeWDocumentFragmentImportPlanner.CreateEmbeddedObjectRequest();
             var result = workflow.ImportAsync(request).GetAwaiter().GetResult();
             ShowDocumentFragmentImportOutcome(owner, result);
         }
@@ -3171,24 +3013,24 @@ internal static class FreeWRibbonCommands
         }
     }
 
-    // Insert > Links > Link: prompt for a URL, then apply it as a hyperlink over the selection.
+    // Insert > Links > Link: collect display text + target through the shared dialog contract.
     private sealed class InsertHyperlinkCommand(DocumentView editor) : IRibbonCommand
     {
         public void Execute(RibbonCommandContext context)
         {
             editor.Focus();
-            var seed = editor.Selection.Text is { Length: > 0 } text && Uri.IsWellFormedUriString(text, UriKind.Absolute)
-                ? text
-                : "https://";
-            var dialogText = InsertDialogTextResources.Hyperlink;
-            var url = HyperlinkPrompt.Ask(Window.GetWindow(editor), seed, dialogText.Title, dialogText.AddressLabel);
-            if (!string.IsNullOrWhiteSpace(url))
-                editor.ApplyHyperlink(url!.Trim());
+            var result = HyperlinkDialog.Ask(
+                Window.GetWindow(editor),
+                HyperlinkDialogMode.Insert,
+                editor.Selection.Text,
+                initialAddress: null);
+            if (result is { } accepted)
+                editor.InsertHyperlink(accepted.DisplayText, accepted.Address);
         }
     }
 
-    // Insert > Links > Edit Hyperlink: prompt for a new URL (seeded from the caret link's current URL),
-    // then re-target the hyperlink at the caret. A no-op when the caret is not on a link.
+    // Insert > Links > Edit Hyperlink: seed the shared two-field surface from the complete link span,
+    // then update its visible text and external/internal target. A no-op off a link.
     private sealed class EditHyperlinkCommand(DocumentView editor) : IRibbonCommand
     {
         public void Execute(RibbonCommandContext context)
@@ -3196,11 +3038,13 @@ internal static class FreeWRibbonCommands
             editor.Focus();
             if (!editor.IsCaretOnHyperlink())
                 return;
-            var seed = editor.HyperlinkUrlAtCaret() is { Length: > 0 } current ? current : "https://";
-            var dialogText = InsertDialogTextResources.Hyperlink;
-            var url = HyperlinkPrompt.Ask(Window.GetWindow(editor), seed, dialogText.EditTitle, dialogText.AddressLabel);
-            if (!string.IsNullOrWhiteSpace(url))
-                editor.EditHyperlink(url!.Trim());
+            var result = HyperlinkDialog.Ask(
+                Window.GetWindow(editor),
+                HyperlinkDialogMode.Edit,
+                editor.HyperlinkDisplayTextAtCaret(),
+                editor.HyperlinkTargetAtCaret());
+            if (result is { } accepted)
+                editor.EditHyperlink(accepted.Address, accepted.DisplayText);
         }
     }
 
@@ -3224,8 +3068,7 @@ internal static class FreeWRibbonCommands
             if (!editor.IsCaretOnHyperlink())
                 return;
             var seed = editor.HyperlinkTooltipAtCaret() ?? string.Empty;
-            var dialogText = InsertDialogTextResources.ScreenTip;
-            var tip = HyperlinkPrompt.Ask(Window.GetWindow(editor), seed, dialogText.Title, dialogText.Label);
+            var tip = ScreenTipDialog.Ask(Window.GetWindow(editor), seed);
             // A null result is a cancel (leave unchanged); an empty/blank string clears the ScreenTip.
             if (tip is not null)
                 editor.SetHyperlinkTooltip(tip);
@@ -3658,18 +3501,11 @@ internal static class FreeWRibbonCommands
         public void Execute(RibbonCommandContext context)
         {
             editor.Focus();
-            var presentation = CommentDialogPresentationPlanner.BuildTextEntry(
-                CommentTextEntryKind.NewComment);
-            var text = TextPrompt.Ask(
+            var text = CommentReplyDialog.Ask(
                 Window.GetWindow(editor),
-                presentation.Title,
-                presentation.FieldLabel,
-                string.Empty);
-            var acceptance = CommentDialogPresentationPlanner.PlanTextAcceptance(
-                CommentTextEntryKind.NewComment,
-                text);
-            if (!acceptance.IsAccepted)
-                return; // cancelled or empty — nothing to attach
+                CommentTextEntryKind.NewComment);
+            if (text is null)
+                return;
 
             var identity = ReviewAuthorIdentityPlanner.BuildCommentStamp(
                 editor.RevisionAuthor,
@@ -3677,7 +3513,7 @@ internal static class FreeWRibbonCommands
                 Environment.UserName);
             editor.Focus();
             editor.InsertComment(
-                acceptance.Text,
+                text,
                 identity.Author,
                 identity.Initials);
         }
@@ -3691,16 +3527,11 @@ internal static class FreeWRibbonCommands
         public void Execute(RibbonCommandContext context)
         {
             editor.Focus();
-            var presentation = CommentDialogPresentationPlanner.BuildTextEntry(
-                CommentTextEntryKind.Reply);
-            var text = TextPrompt.Ask(
+            var text = CommentReplyDialog.Ask(
                 Window.GetWindow(editor),
-                presentation.Title,
-                presentation.FieldLabel,
-                string.Empty);
-            var acceptance = CommentDialogPresentationPlanner.PlanReplyAcceptance(text);
-            if (!acceptance.IsAccepted)
-                return; // cancelled or empty
+                CommentTextEntryKind.Reply);
+            if (text is null)
+                return;
 
             var identity = ReviewAuthorIdentityPlanner.BuildCommentStamp(
                 editor.RevisionAuthor,
@@ -3708,7 +3539,7 @@ internal static class FreeWRibbonCommands
                 Environment.UserName);
             editor.Focus();
             if (!editor.ReplyToCommentAtCaret(
-                    acceptance.Text,
+                    text,
                     identity.Author,
                     identity.Initials))
                 DialogMessageHelper.ShowWarning(Window.GetWindow(editor)!,
@@ -3779,54 +3610,6 @@ internal static class FreeWRibbonCommands
             }
 
             CommentListDialog.Show(Window.GetWindow(editor), items);
-        }
-    }
-
-    private static class CommentListDialog
-    {
-        public static void Show(Window? owner, IReadOnlyList<CommentListItem> items)
-        {
-            var presentation = CommentDialogPresentationPlanner.BuildList(items);
-            var list = new System.Windows.Controls.ListBox
-            {
-                MinWidth = 440,
-                MinHeight = 260,
-                Margin = new Thickness(0, 0, 0, 12)
-            };
-
-            foreach (var row in presentation.Rows)
-                list.Items.Add(row.CompactText);
-
-            var dialog = new Window
-            {
-                Title = presentation.Title,
-                SizeToContent = SizeToContent.WidthAndHeight,
-                ResizeMode = ResizeMode.CanResize,
-                WindowStartupLocation = WindowStartupLocation.CenterOwner,
-                Owner = owner,
-                ShowInTaskbar = false
-            };
-
-            var close = new System.Windows.Controls.Button
-            {
-                Content = CommentDialogPresentationPlanner.Text.CloseActionLabel,
-                IsCancel = true,
-                MinWidth = 72,
-                HorizontalAlignment = HorizontalAlignment.Right
-            };
-
-            var panel = new System.Windows.Controls.StackPanel { Margin = new Thickness(16) };
-            panel.Children.Add(new System.Windows.Controls.TextBlock
-            {
-                Text = presentation.SummaryText,
-                FontWeight = FontWeights.SemiBold,
-                Margin = new Thickness(0, 0, 0, 8)
-            });
-            panel.Children.Add(list);
-            panel.Children.Add(close);
-            dialog.Content = panel;
-
-            dialog.ShowDialog();
         }
     }
 
@@ -4115,17 +3898,17 @@ internal static class FreeWRibbonCommands
         public void Execute(RibbonCommandContext context)
         {
             editor.Focus();
-            var bookmarks = editor.BookmarkNames();
-            if (bookmarks.Count == 0)
+            var presentation = LinkBookmarkDialogPlanner.Build(editor.BookmarkNames());
+            if (presentation.IsEmpty)
             {
                 DialogMessageHelper.ShowInfo(
                     Window.GetWindow(editor),
-                    UiText.Get("Bookmark_NoneForLink_Message"),
-                    UiText.Get("FreeW_ProductName"));
+                    presentation.EmptyMessage,
+                    presentation.EmptyTitle);
                 return;
             }
 
-            var chosen = BookmarkPicker.Ask(Window.GetWindow(editor), bookmarks);
+            var chosen = LinkBookmarkDialog.Ask(Window.GetWindow(editor), presentation);
             if (!string.IsNullOrWhiteSpace(chosen))
                 editor.ApplyInternalLink(chosen!);
         }
@@ -4139,56 +3922,6 @@ internal static class FreeWRibbonCommands
         {
             editor.Focus();
             BookmarkManagerDialog.Show(Window.GetWindow(editor), editor);
-        }
-    }
-
-    // A tiny modal dialog to pick one of the document's bookmark names. Returns the chosen name, or
-    // null if cancelled.
-    private static class BookmarkPicker
-    {
-        public static string? Ask(Window? owner, IReadOnlyList<string> bookmarks)
-        {
-            var list = new System.Windows.Controls.ListBox
-            {
-                MinWidth = 280,
-                MinHeight = 120,
-                Margin = new Thickness(0, 0, 0, 12)
-            };
-            foreach (var name in bookmarks)
-                list.Items.Add(name);
-            list.SelectedIndex = 0;
-
-            string? result = null;
-            var dialog = new Window
-            {
-                Title = UiText.Get("LinkBookmark_Title"),
-                SizeToContent = SizeToContent.WidthAndHeight,
-                ResizeMode = ResizeMode.NoResize,
-                WindowStartupLocation = WindowStartupLocation.CenterOwner,
-                Owner = owner,
-                ShowInTaskbar = false
-            };
-
-            var ok = new System.Windows.Controls.Button { Content = UiText.Get("Common_OkText"), IsDefault = true, MinWidth = 72, Margin = new Thickness(0, 0, 8, 0) };
-            var cancel = new System.Windows.Controls.Button { Content = UiText.Get("Common_CancelText"), IsCancel = true, MinWidth = 72 };
-            ok.Click += (_, _) => { result = list.SelectedItem as string; dialog.DialogResult = true; };
-            list.MouseDoubleClick += (_, _) => { result = list.SelectedItem as string; dialog.DialogResult = true; };
-
-            var buttons = new System.Windows.Controls.StackPanel
-            {
-                Orientation = System.Windows.Controls.Orientation.Horizontal,
-                HorizontalAlignment = HorizontalAlignment.Right
-            };
-            buttons.Children.Add(ok);
-            buttons.Children.Add(cancel);
-
-            var panel = new System.Windows.Controls.StackPanel { Margin = new Thickness(16) };
-            panel.Children.Add(new System.Windows.Controls.TextBlock { Text = UiText.Get("LinkBookmark_Bookmark_Label"), Margin = new Thickness(0, 0, 0, 4) });
-            panel.Children.Add(list);
-            panel.Children.Add(buttons);
-            dialog.Content = panel;
-
-            return dialog.ShowDialog() == true ? result : null;
         }
     }
 
@@ -4951,14 +4684,12 @@ internal static class FreeWRibbonCommands
             };
 
             SourceManagementDialogResult? result = null;
-            var dialog = new Window
+            var dialog = new ManageSourcesDialogWindow
             {
                 Title = text.ManageSourcesTitle,
                 SizeToContent = SizeToContent.WidthAndHeight,
                 ResizeMode = ResizeMode.NoResize,
-                WindowStartupLocation = WindowStartupLocation.CenterOwner,
-                Owner = owner,
-                ShowInTaskbar = false
+                Owner = owner
             };
 
             void RefreshMasterList(int? selectedIndex = null)
@@ -5297,6 +5028,18 @@ internal static class FreeWRibbonCommands
 
     }
 
+    /// <summary>
+    /// Opens the production Manage Sources route with deterministic empty lists for the paired visual
+    /// harness. The harness owns capture timing; the dialog still uses the same production planner and
+    /// native adapter as the ribbon command.
+    /// </summary>
+    internal static SourceManagementDialogResult? AskManageSourcesForVisualHarness(Window? owner) =>
+        ManageSourcesDialog.Ask(owner, [], []);
+
+    private sealed class ManageSourcesDialogWindow : Free.Shared.Ribbon.Wpf.DialogWindow
+    {
+    }
+
     private static TextDocument CurrentMailMergeDocument(
         DocumentView editor,
         MailMergeSession session)
@@ -5304,6 +5047,14 @@ internal static class FreeWRibbonCommands
         if (!session.IsPreviewing)
             editor.CommitToModel();
         return session.Template ?? editor.Model;
+    }
+
+    /// <summary>
+    /// Keeps the code-built WPF mail-merge family on the same shared dialog resources and
+    /// typography as its Avalonia counterpart. Mail-merge behavior remains Presentation-owned.
+    /// </summary>
+    private sealed class MailMergeDialogWindow : Free.Shared.Ribbon.Wpf.DialogWindow
+    {
     }
 
     private static void Realize(
@@ -5547,7 +5298,7 @@ internal static class FreeWRibbonCommands
         {
             var session = new MailMergeRuleConditionDialogSession(request.FieldNames);
             MailMergeRuleIfDialogResult? result = null;
-            var dialog = new Window
+            var dialog = new MailMergeDialogWindow
             {
                 Title = request.Title,
                 SizeToContent = SizeToContent.WidthAndHeight,
@@ -5633,7 +5384,7 @@ internal static class FreeWRibbonCommands
         {
             var session = new MailMergeRuleConditionDialogSession(request.FieldNames);
             MailMergeRuleConditionDialogResult? result = null;
-            var dialog = new Window
+            var dialog = new MailMergeDialogWindow
             {
                 Title = request.Title,
                 SizeToContent = SizeToContent.WidthAndHeight,
@@ -5708,7 +5459,7 @@ internal static class FreeWRibbonCommands
         public static string? AskPrompt(Window? owner, string title, string label, string initialValue = "")
         {
             string? result = null;
-            var dialog = new Window
+            var dialog = new MailMergeDialogWindow
             {
                 Title = title,
                 SizeToContent = SizeToContent.WidthAndHeight,
@@ -5755,7 +5506,7 @@ internal static class FreeWRibbonCommands
         {
             var session = new MailMergeRuleNameValueDialogSession();
             MailMergeRuleNameValueDialogResult? result = null;
-            var dialog = new Window
+            var dialog = new MailMergeDialogWindow
             {
                 Title = request.Title,
                 SizeToContent = SizeToContent.WidthAndHeight,
@@ -5997,7 +5748,7 @@ internal static class FreeWRibbonCommands
                 combo.Items.Add(choice.Label);
 
             MailMergeCheckForErrorsMode? result = null;
-            var dialog = new Window
+            var dialog = new MailMergeDialogWindow
             {
                 Title = MailMergeDialogMetadata.CheckForErrorsTitle,
                 SizeToContent = SizeToContent.WidthAndHeight,
@@ -6163,7 +5914,7 @@ internal static class FreeWRibbonCommands
         {
             var dialogPlan = MailMergeFinishPlanner.CreateDialogPlan(recordCount, currentIndex);
             MailMergeFinishPlan? result = null;
-            var dialog = new Window
+            var dialog = new MailMergeDialogWindow
             {
                 Title = MailMergeDialogMetadata.FinishAndMergeTitle,
                 Owner = owner,
@@ -6364,7 +6115,7 @@ internal static class FreeWRibbonCommands
         {
             var dialogPlan = MailMergeEmailDeliveryPlanner.CreateDialogPlan(data, currentRecordIndex, selectedRecordIndexes);
             MailMergeEmailDeliveryIntent? result = null;
-            var dialog = new Window
+            var dialog = new MailMergeDialogWindow
             {
                 Title = MailMergeDialogMetadata.SendEmailTitle,
                 SizeToContent = SizeToContent.WidthAndHeight,
@@ -6625,7 +6376,7 @@ internal static class FreeWRibbonCommands
         {
             var plan = MailMergePreviewDialogPlanner.CreatePlan(index, count);
             var result = MailMergePreviewDialogAction.Cancel;
-            var dialog = new Window
+            var dialog = new MailMergeDialogWindow
             {
                 Title = MailMergeDialogMetadata.PreviewResultsTitle,
                 SizeToContent = SizeToContent.WidthAndHeight,
@@ -6693,7 +6444,7 @@ internal static class FreeWRibbonCommands
             };
 
             string? result = null;
-            var dialog = new Window
+            var dialog = new MailMergeDialogWindow
             {
                 Title = MailMergeDialogMetadata.MergeDataTitle,
                 SizeToContent = SizeToContent.WidthAndHeight,
@@ -6789,7 +6540,7 @@ internal static class FreeWRibbonCommands
             Grid.SetColumnSpan(buttonRow, 2);
             grid.Children.Add(buttonRow);
 
-            var dialog = new Window
+            var dialog = new MailMergeDialogWindow
             {
                 Title = MailMergeDialogMetadata.MatchFieldsTitle,
                 SizeToContent = SizeToContent.WidthAndHeight,
@@ -6828,7 +6579,7 @@ internal static class FreeWRibbonCommands
         {
             MergeData? result = null;
 
-            var dialog = new Window
+            var dialog = new MailMergeDialogWindow
             {
                 Title = MailMergeDialogMetadata.FilterSortRecipientsTitle,
                 SizeToContent = SizeToContent.WidthAndHeight,
@@ -6949,7 +6700,7 @@ internal static class FreeWRibbonCommands
                 combo.Items.Add(s.Name);
             combo.SelectedIndex = plan.SelectedIndex;
 
-            var dialog = new Window
+            var dialog = new MailMergeDialogWindow
             {
                 Title = MailMergeDialogMetadata.EnvelopesTitle,
                 SizeToContent = SizeToContent.WidthAndHeight,
@@ -7032,7 +6783,7 @@ internal static class FreeWRibbonCommands
                     ? Visibility.Visible
                     : Visibility.Collapsed;
 
-            var dialog = new Window
+            var dialog = new MailMergeDialogWindow
             {
                 Title = MailMergeDialogMetadata.LabelsTitle,
                 SizeToContent = SizeToContent.WidthAndHeight,
@@ -7628,150 +7379,6 @@ internal static class FreeWRibbonCommands
         }
     }
 
-    private static class PageNumberFormatDialog
-    {
-        public static PageNumberFormatDialogResult? Prompt(Window? owner, PageSettings page)
-        {
-            var state = PageNumberFormatDialogPlanner.BuildInitialState(page);
-            PageNumberFormatDialogResult? result = null;
-
-            var formatBox = new System.Windows.Controls.ComboBox
-            {
-                MinWidth = 180,
-                ItemsSource = PageNumberFormatDialogPlanner.FormatItems.Select(item => item.Label).ToArray(),
-                SelectedIndex = state.FormatIndex,
-                Margin = new Thickness(0, 2, 0, 10)
-            };
-            var includeChapter = new System.Windows.Controls.CheckBox
-            {
-                Content = PageNumberFormatDialogPlanner.IncludeChapterNumberLabel,
-                IsChecked = state.IncludeChapterNumber,
-                Margin = new Thickness(0, 0, 0, 6)
-            };
-            var chapterStyleBox = new System.Windows.Controls.ComboBox
-            {
-                MinWidth = 160,
-                ItemsSource = PageNumberFormatDialogPlanner.ChapterStyleItems.Select(item => item.Label).ToArray(),
-                SelectedIndex = state.ChapterStyleIndex,
-                Margin = new Thickness(0, 2, 0, 8)
-            };
-            var chapterSeparatorBox = new System.Windows.Controls.ComboBox
-            {
-                MinWidth = 140,
-                ItemsSource = PageNumberFormatDialogPlanner.ChapterSeparatorItems.Select(item => item.Label).ToArray(),
-                SelectedIndex = state.ChapterSeparatorIndex,
-                Margin = new Thickness(0, 2, 0, 10)
-            };
-            void UpdateChapterControlState()
-            {
-                var enabled = includeChapter.IsChecked == true;
-                chapterStyleBox.IsEnabled = enabled;
-                chapterSeparatorBox.IsEnabled = enabled;
-            }
-            includeChapter.Checked += (_, _) => UpdateChapterControlState();
-            includeChapter.Unchecked += (_, _) => UpdateChapterControlState();
-            UpdateChapterControlState();
-            var continueRadio = new System.Windows.Controls.RadioButton
-            {
-                Content = PageNumberFormatDialogPlanner.ContinueLabel,
-                GroupName = "PageNumbering",
-                IsChecked = state.ContinueFromPreviousSection,
-                Margin = new Thickness(0, 2, 0, 4)
-            };
-            var startRadio = new System.Windows.Controls.RadioButton
-            {
-                Content = PageNumberFormatDialogPlanner.StartAtLabel,
-                GroupName = "PageNumbering",
-                IsChecked = !state.ContinueFromPreviousSection,
-                Margin = new Thickness(0, 2, 8, 4)
-            };
-            var startBox = new System.Windows.Controls.TextBox
-            {
-                Text = state.StartAtText,
-                Width = 72,
-                Margin = new Thickness(0, 0, 0, 4)
-            };
-            var status = new System.Windows.Controls.TextBlock
-            {
-                Foreground = Brushes.Firebrick,
-                TextWrapping = TextWrapping.Wrap,
-                Margin = new Thickness(0, 6, 0, 0)
-            };
-
-            var dialog = new Window
-            {
-                Title = PageNumberFormatDialogPlanner.Title,
-                Owner = owner,
-                SizeToContent = SizeToContent.WidthAndHeight,
-                WindowStartupLocation = owner is null
-                    ? WindowStartupLocation.CenterScreen
-                    : WindowStartupLocation.CenterOwner,
-                ResizeMode = ResizeMode.NoResize
-            };
-
-            var ok = new System.Windows.Controls.Button { Content = UiText.Get("Common_OkText"), IsDefault = true, MinWidth = 72, Margin = new Thickness(0, 0, 8, 0) };
-            var cancel = new System.Windows.Controls.Button { Content = UiText.Get("Common_CancelText"), IsCancel = true, MinWidth = 72 };
-            ok.Click += (_, _) =>
-            {
-                if (!PageNumberFormatDialogPlanner.TryBuildResult(
-                        new PageNumberFormatDialogInput(
-                            formatBox.SelectedIndex,
-                            continueRadio.IsChecked == true,
-                            startBox.Text,
-                            includeChapter.IsChecked == true,
-                            chapterStyleBox.SelectedIndex,
-                            chapterSeparatorBox.SelectedIndex),
-                        out result,
-                        out var error))
-                {
-                    status.Text = error ?? PageNumberFormatDialogPlanner.InvalidStartAtMessage;
-                    return;
-                }
-
-                dialog.DialogResult = true;
-            };
-
-            var startRow = new System.Windows.Controls.StackPanel
-            {
-                Orientation = System.Windows.Controls.Orientation.Horizontal,
-                Margin = new Thickness(0, 0, 0, 4)
-            };
-            startRow.Children.Add(startRadio);
-            startRow.Children.Add(startBox);
-
-            var buttons = new System.Windows.Controls.StackPanel
-            {
-                Orientation = System.Windows.Controls.Orientation.Horizontal,
-                HorizontalAlignment = HorizontalAlignment.Right,
-                Margin = new Thickness(0, 12, 0, 0)
-            };
-            buttons.Children.Add(ok);
-            buttons.Children.Add(cancel);
-
-            var panel = new System.Windows.Controls.StackPanel { Margin = new Thickness(16), MinWidth = 280 };
-            panel.Children.Add(new System.Windows.Controls.TextBlock { Text = PageNumberFormatDialogPlanner.NumberFormatLabel });
-            panel.Children.Add(formatBox);
-            panel.Children.Add(includeChapter);
-            panel.Children.Add(new System.Windows.Controls.TextBlock { Text = PageNumberFormatDialogPlanner.ChapterStartsWithStyleLabel });
-            panel.Children.Add(chapterStyleBox);
-            panel.Children.Add(new System.Windows.Controls.TextBlock { Text = PageNumberFormatDialogPlanner.ChapterSeparatorLabel });
-            panel.Children.Add(chapterSeparatorBox);
-            panel.Children.Add(new System.Windows.Controls.TextBlock
-            {
-                Text = PageNumberFormatDialogPlanner.PageNumberingLabel,
-                FontWeight = FontWeights.SemiBold,
-                Margin = new Thickness(0, 4, 0, 2)
-            });
-            panel.Children.Add(continueRadio);
-            panel.Children.Add(startRow);
-            panel.Children.Add(status);
-            panel.Children.Add(buttons);
-
-            dialog.Content = panel;
-            return dialog.ShowDialog() == true ? result : null;
-        }
-    }
-
     // Insert > Quick Parts > Field: open a categorised picker listing Word's common field codes and drop
     // the chosen field at the caret as a generic complex field (w:fldChar/w:instrText), so it round-trips
     // losslessly and supports Alt+F9 (toggle codes) / F9 (update). The picker returns the raw field
@@ -7796,97 +7403,6 @@ internal static class FreeWRibbonCommands
     // (e.g. " PAGE ", " DATE \@ \"M/d/yyyy\" ", " AUTHOR "), or null if cancelled.
     // This is the backing for Insert > Quick Parts > Field (freew.field) and mirrors Word's Field dialog
     // field-name browser.
-    private static class FieldPickerDialog
-    {
-        public static string? Ask(Window? owner)
-        {
-
-            // Category listbox on the left; field listbox on the right — a two-pane layout
-            // matching the spirit of Word's Field dialog without requiring full XAML.
-            var catList = new System.Windows.Controls.ListBox
-            {
-                MinWidth = 160,
-                Margin = new Thickness(0, 0, 8, 0)
-            };
-            foreach (var cat in FieldPickerDialogPlanner.Categories)
-                catList.Items.Add(cat);
-
-            var fieldList = new System.Windows.Controls.ListBox { MinWidth = 220 };
-
-            void RefreshFields()
-            {
-                var cat = catList.SelectedItem as string;
-                fieldList.Items.Clear();
-                foreach (var c in FieldPickerDialogPlanner.ChoicesForCategory(cat))
-                    fieldList.Items.Add(c.Label);
-                if (fieldList.Items.Count > 0)
-                    fieldList.SelectedIndex = 0;
-            }
-
-            catList.SelectionChanged += (_, _) => RefreshFields();
-            catList.SelectedIndex = 0;
-
-            string? result = null;
-            var dialog = new Window
-            {
-                Title = UiText.Get("Field_Insert_Title"),
-                SizeToContent = SizeToContent.WidthAndHeight,
-                ResizeMode = ResizeMode.NoResize,
-                WindowStartupLocation = WindowStartupLocation.CenterOwner,
-                Owner = owner,
-                ShowInTaskbar = false
-            };
-
-            var ok = new System.Windows.Controls.Button
-            {
-                Content = UiText.Get("Common_OkText"),
-                IsDefault = true,
-                MinWidth = 72,
-                Margin = new Thickness(0, 0, 8, 0)
-            };
-            var cancel = new System.Windows.Controls.Button { Content = UiText.Get("Common_CancelText"), IsCancel = true, MinWidth = 72 };
-
-            void Commit()
-            {
-                var cat = catList.SelectedItem as string;
-                var label = fieldList.SelectedItem as string;
-                if (FieldPickerDialogPlanner.TryGetInstruction(cat, label, out var instruction))
-                    result = instruction;
-                dialog.DialogResult = true;
-            }
-            ok.Click += (_, _) => Commit();
-            fieldList.MouseDoubleClick += (_, _) => Commit();
-
-            var buttons = new System.Windows.Controls.StackPanel
-            {
-                Orientation = System.Windows.Controls.Orientation.Horizontal,
-                HorizontalAlignment = HorizontalAlignment.Right
-            };
-            buttons.Children.Add(ok);
-            buttons.Children.Add(cancel);
-
-            var listsRow = new System.Windows.Controls.StackPanel
-            {
-                Orientation = System.Windows.Controls.Orientation.Horizontal,
-                Margin = new Thickness(0, 0, 0, 12)
-            };
-            listsRow.Children.Add(catList);
-            listsRow.Children.Add(fieldList);
-
-            var panel = new System.Windows.Controls.StackPanel { Margin = new Thickness(16) };
-            panel.Children.Add(new System.Windows.Controls.TextBlock
-            {
-                Text = UiText.Get("Field_Insert_Prompt"),
-                Margin = new Thickness(0, 0, 0, 8)
-            });
-            panel.Children.Add(listsRow);
-            panel.Children.Add(buttons);
-            dialog.Content = panel;
-
-            return dialog.ShowDialog() == true ? result : null;
-        }
-    }
-
     // Home > Paragraph > Sort: open the Sort dialog (type + order + case + header-row) and sort either
     // the rows of the table at the caret (by the caret's column, matching Word) or the selected
     // paragraphs. The view routes the reorder through its undo/redo bus and re-renders.
@@ -7916,7 +7432,7 @@ internal static class FreeWRibbonCommands
         public void Execute(RibbonCommandContext context)
         {
             editor.Focus();
-            if (DelimiterDialog.Ask(
+            if (TableTextConversionDialog.Ask(
                     Window.GetWindow(editor),
                     TableTextConversionDialogPlanner.ResolveText(UiText.Get).TextToTableTitle) is not { } delimiter)
                 return; // cancelled
@@ -7925,120 +7441,10 @@ internal static class FreeWRibbonCommands
         }
     }
 
-    // A small modal dialog choosing the cell delimiter for text/table conversion: Tab, Comma, or
-    // Semicolon. Returns the chosen delimiter character, or null if cancelled.
-    private static class DelimiterDialog
-    {
-        public static char? Ask(Window? owner, string title)
-        {
-            var text = TableTextConversionDialogPlanner.ResolveText(UiText.Get);
-            var choices = text.Choices;
-
-            var list = new System.Windows.Controls.ListBox
-            {
-                MinWidth = 240,
-                MinHeight = 90,
-                Margin = new Thickness(0, 0, 0, 12)
-            };
-            foreach (var choice in choices)
-                list.Items.Add(choice.Label);
-            list.SelectedIndex = TableTextConversionDialogPlanner.DefaultChoiceIndex;
-
-            char? result = null;
-            var dialog = new Window
-            {
-                Title = title,
-                SizeToContent = SizeToContent.WidthAndHeight,
-                ResizeMode = ResizeMode.NoResize,
-                WindowStartupLocation = WindowStartupLocation.CenterOwner,
-                Owner = owner,
-                ShowInTaskbar = false
-            };
-
-            var ok = new System.Windows.Controls.Button { Content = UiText.Get("Common_OkText"), IsDefault = true, MinWidth = 72, Margin = new Thickness(0, 0, 8, 0) };
-            var cancel = new System.Windows.Controls.Button { Content = UiText.Get("Common_CancelText"), IsCancel = true, MinWidth = 72 };
-            void Commit()
-            {
-                var index = list.SelectedIndex;
-                if (TableTextConversionDialogPlanner.DelimiterAt(index) is { } delimiter)
-                {
-                    result = delimiter;
-                    dialog.DialogResult = true;
-                }
-            }
-            ok.Click += (_, _) => Commit();
-            list.MouseDoubleClick += (_, _) => Commit();
-
-            var buttons = new System.Windows.Controls.StackPanel
-            {
-                Orientation = System.Windows.Controls.Orientation.Horizontal,
-                HorizontalAlignment = HorizontalAlignment.Right
-            };
-            buttons.Children.Add(ok);
-            buttons.Children.Add(cancel);
-
-            var panel = new System.Windows.Controls.StackPanel { Margin = new Thickness(16) };
-            panel.Children.Add(new System.Windows.Controls.TextBlock { Text = text.PromptLabel, Margin = new Thickness(0, 0, 0, 4) });
-            panel.Children.Add(list);
-            panel.Children.Add(buttons);
-            dialog.Content = panel;
-
-            return dialog.ShowDialog() == true ? result : null;
-        }
-    }
-
     // A tiny modal text-entry dialog. Returns the entered text (possibly empty), or null if cancelled.
     private static class TextPrompt
     {
         public static string? Ask(Window? owner, string title, string label, string seed)
-        {
-            var box = new System.Windows.Controls.TextBox
-            {
-                Text = seed,
-                MinWidth = 360,
-                Margin = new Thickness(0, 0, 0, 12)
-            };
-            box.SelectAll();
-
-            string? result = null;
-            var dialog = new Window
-            {
-                Title = title,
-                SizeToContent = SizeToContent.WidthAndHeight,
-                ResizeMode = ResizeMode.NoResize,
-                WindowStartupLocation = WindowStartupLocation.CenterOwner,
-                Owner = owner,
-                ShowInTaskbar = false
-            };
-
-            var ok = new System.Windows.Controls.Button { Content = UiText.Get("Common_OkText"), IsDefault = true, MinWidth = 72, Margin = new Thickness(0, 0, 8, 0) };
-            var cancel = new System.Windows.Controls.Button { Content = UiText.Get("Common_CancelText"), IsCancel = true, MinWidth = 72 };
-            ok.Click += (_, _) => { result = box.Text; dialog.DialogResult = true; };
-
-            var buttons = new System.Windows.Controls.StackPanel
-            {
-                Orientation = System.Windows.Controls.Orientation.Horizontal,
-                HorizontalAlignment = HorizontalAlignment.Right
-            };
-            buttons.Children.Add(ok);
-            buttons.Children.Add(cancel);
-
-            var panel = new System.Windows.Controls.StackPanel { Margin = new Thickness(16) };
-            panel.Children.Add(new System.Windows.Controls.TextBlock { Text = label, Margin = new Thickness(0, 0, 0, 4) });
-            panel.Children.Add(box);
-            panel.Children.Add(buttons);
-            dialog.Content = panel;
-
-            box.Focus();
-            return dialog.ShowDialog() == true ? result : null;
-        }
-    }
-
-    // A tiny modal dialog asking for a single line of text (a URL, a ScreenTip, …). Returns the entered
-    // text, or null if cancelled. Title/label default to the insert-link wording for existing callers.
-    private static class HyperlinkPrompt
-    {
-        public static string? Ask(Window? owner, string seed, string title, string label)
         {
             var box = new System.Windows.Controls.TextBox
             {
@@ -8110,29 +7516,6 @@ internal static class FreeWRibbonCommands
             editor.Focus();
             if (command.CanExecute(null, editor))
                 command.Execute(null, editor);
-        }
-    }
-
-    private sealed class ToggleFormatCommand(
-        DocumentView editor,
-        RoutedCommand command,
-        DependencyProperty property,
-        Func<object?, bool> isOn,
-        Func<bool>? tryModelToggle) : IRibbonStatefulCommand
-    {
-        public void Execute(RibbonCommandContext context)
-        {
-            editor.Focus();
-            if (tryModelToggle?.Invoke() == true)
-                return;
-            if (command.CanExecute(null, editor))
-                command.Execute(null, editor);
-        }
-
-        public RibbonCommandState GetState()
-        {
-            var value = editor.Selection.GetPropertyValue(property);
-            return new RibbonCommandState(IsEnabled: true, IsChecked: value != DependencyProperty.UnsetValue && isOn(value));
         }
     }
 
@@ -8322,61 +7705,12 @@ internal static class FreeWRibbonCommands
             editor.Focus();
             var owner = Window.GetWindow(editor);
             var current = editor.CurrentRunFormatting.LanguageTag;
-            var chosen = ShowDialog(owner, current);
+            var chosen = ProofingLanguageDialog.Choose(owner, current);
             if (chosen is null)
                 return; // cancelled
             editor.SetProofingLanguage(chosen == string.Empty ? null : chosen);
         }
 
-        private static string? ShowDialog(Window? owner, string? current)
-        {
-            string? result = null;
-            var plan = ProofingLanguageDialogPlanner.Build(current, UiText.Get);
-            var window = new Window
-            {
-                Title = plan.Text.Title,
-                Width = 320,
-                Height = 420,
-                ResizeMode = ResizeMode.NoResize,
-                WindowStartupLocation = owner is null ? WindowStartupLocation.CenterScreen : WindowStartupLocation.CenterOwner,
-                Owner = owner,
-                ShowInTaskbar = false
-            };
-
-            var listBox = new System.Windows.Controls.ListBox { Margin = new Thickness(0, 0, 0, 8) };
-            foreach (var choice in plan.Choices)
-                listBox.Items.Add(new System.Windows.Controls.ListBoxItem { Content = choice.DisplayText, Tag = choice.Tag });
-            listBox.SelectedIndex = plan.SelectedIndex;
-            var ok = new Button { Content = plan.Text.OkLabel, Width = 80, IsDefault = true, Margin = new Thickness(0, 0, 8, 0) };
-            var cancel = new Button { Content = plan.Text.CancelLabel, Width = 80, IsCancel = true };
-            ok.Click += (_, _) =>
-            {
-                if (listBox.SelectedItem is System.Windows.Controls.ListBoxItem selected)
-                    result = (string?)selected.Tag;
-                window.DialogResult = true;
-            };
-            cancel.Click += (_, _) => window.Close();
-
-            var btnRow = new StackPanel
-            {
-                Orientation = System.Windows.Controls.Orientation.Horizontal,
-                HorizontalAlignment = HorizontalAlignment.Right
-            };
-            btnRow.Children.Add(ok);
-            btnRow.Children.Add(cancel);
-
-            var outer = new StackPanel { Margin = new Thickness(12) };
-            outer.Children.Add(new System.Windows.Controls.TextBlock { Text = plan.Text.Instruction, TextWrapping = System.Windows.TextWrapping.Wrap, Margin = new Thickness(0, 0, 0, 8) });
-            outer.Children.Add(listBox);
-            outer.Children.Add(btnRow);
-
-            var scroll = new System.Windows.Controls.ScrollViewer { Content = listBox, Height = 280, VerticalScrollBarVisibility = System.Windows.Controls.ScrollBarVisibility.Auto };
-            outer.Children.RemoveAt(1); // remove the un-scrolled list
-            outer.Children.Insert(1, scroll);
-
-            window.Content = outer;
-            return window.ShowDialog() == true ? result : null; // null = cancelled
-        }
     }
 
     // -----------------------------------------------------------------------------------------

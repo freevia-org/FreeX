@@ -7,31 +7,31 @@ namespace FreeP.App.Host;
 
 public sealed partial class MainWindow
 {
+    private PresentationAssetImportHostSession? _assetImportSession;
+
+    private PresentationAssetImportHostSession AssetImportSession =>
+        _assetImportSession ??= new PresentationAssetImportHostSession(
+            new WpfPresentationAssetPickerPort(this),
+            new WpfPresentationAssetReaderPort(),
+            Editor,
+            new PresentationAssetImportExecutionCallbacks(
+                ApplyPictureBullet: ApplyImportedPictureBullet,
+                ApplySmartArtPicture: (bytes, contentType) =>
+                    ApplySmartArtTextPanePicture(bytes, contentType)?.Applied == true,
+                EmbeddedObjectInserted: () =>
+                {
+                    RefreshCanvas();
+                    UpdateSlideCount();
+                }));
+
     private Task<PresentationAssetImportResult> ImportPresentationAssetAsync(
         PresentationAssetImportKind kind) =>
         ImportPresentationAssetAsync(kind, applyZoomCoverImage: null);
 
-    private async Task<PresentationAssetImportResult> ImportPresentationAssetAsync(
+    private Task<PresentationAssetImportResult> ImportPresentationAssetAsync(
         PresentationAssetImportKind kind,
-        Func<byte[], string, bool>? applyZoomCoverImage)
-    {
-        var workflow = new PresentationAssetImportWorkflow(
-            new WpfPresentationAssetPickerPort(this),
-            new WpfPresentationAssetReaderPort(),
-            new PresentationAssetImportExecutionPort(
-                Editor,
-                new PresentationAssetImportExecutionCallbacks(
-                    ApplyPictureBullet: ApplyImportedPictureBullet,
-                    ApplySmartArtPicture: (bytes, contentType) =>
-                        ApplySmartArtTextPanePicture(bytes, contentType)?.Applied == true,
-                    ApplyZoomCoverImage: applyZoomCoverImage,
-                    EmbeddedObjectInserted: () =>
-                    {
-                        RefreshCanvas();
-                        UpdateSlideCount();
-                    })));
-        return await workflow.ImportAsync(kind);
-    }
+        Func<byte[], string, bool>? applyZoomCoverImage) =>
+        AssetImportSession.ImportAsync(kind, applyZoomCoverImage);
 
     private bool ApplyImportedPictureBullet(PresentationPictureBulletPayload payload)
     {
@@ -48,25 +48,13 @@ public sealed partial class MainWindow
         PresentationAssetImportResult result,
         PresentationAssetImportOutcomePolicy policy,
         Action<string>? statusTarget = null)
-    {
-        var presentation = PresentationAssetImportOutcomePlanner.Plan(
+        => await AssetImportSession.MaterializeOutcomeAsync(
             result,
             PresentationFileTextResources.Presentation,
-            policy);
-        if (presentation.StatusText is { } statusText)
-        {
-            if (statusTarget is null)
-                _slideCountText.Text = statusText;
-            else
-                statusTarget(statusText);
-        }
-
-        if (presentation.Message is { } message)
-        {
-            var messageService = _messageService ?? new WpfUserMessageService(this);
-            await messageService.ShowMessageAsync(message);
-        }
-    }
+            policy,
+            status => _slideCountText.Text = status,
+            _messageService ?? new WpfUserMessageService(this),
+            statusTarget);
 
     private sealed class WpfPresentationAssetPickerPort(Window owner) : IPresentationAssetPickerPort
     {

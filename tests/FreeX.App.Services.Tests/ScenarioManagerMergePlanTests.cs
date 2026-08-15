@@ -104,6 +104,37 @@ public sealed class ScenarioManagerMergePlanTests
         plan.Status.Should().Be(ScenarioManagerPlanStatus.NoWorkbook);
     }
 
+    [Fact]
+    public void RemapScenariosBySheetName_MapsWorkbookLocalIdsPreservesMetadataAndDropsUnresolvedScenarios()
+    {
+        var source = new Workbook("Source");
+        var sourceBudget = source.AddSheet("Budget");
+        var sourceMissing = source.AddSheet("Missing");
+        var target = new Workbook("Target");
+        var targetBudget = target.AddSheet("Budget");
+        source.Scenarios.Add(new WorkbookScenario(
+            "Upside",
+            [new ScenarioCellValue(new CellAddress(sourceBudget.Id, 3, 2), new NumberValue(42))],
+            "Imported assumptions",
+            Hidden: true,
+            Locked: true));
+        source.Scenarios.Add(new WorkbookScenario(
+            "Unresolved",
+            [new ScenarioCellValue(new CellAddress(sourceMissing.Id, 1, 1), new NumberValue(1))]));
+
+        var remapped = ScenarioManagerPlanner.RemapScenariosBySheetName(source, target);
+
+        remapped.Should().ContainSingle();
+        var scenario = remapped[0];
+        scenario.Name.Should().Be("Upside");
+        scenario.Comment.Should().Be("Imported assumptions");
+        scenario.Hidden.Should().BeTrue();
+        scenario.Locked.Should().BeTrue();
+        scenario.ChangingCells.Should().ContainSingle();
+        scenario.ChangingCells[0].Address.Should().Be(new CellAddress(targetBudget.Id, 3, 2));
+        scenario.ChangingCells[0].Value.Should().Be(new NumberValue(42));
+    }
+
     private static Workbook CreateWorkbook(out Sheet sheet)
     {
         var workbook = new Workbook("Budget");

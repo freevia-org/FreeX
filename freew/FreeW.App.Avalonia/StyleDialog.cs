@@ -15,7 +15,7 @@ namespace FreeW.App.Avalonia;
 internal sealed partial class StyleDialog : FreeWDialogWindow
 {
     private static readonly StyleDialogSurfaceSpec Surface = StyleDialogPlanner.Surface;
-    private static readonly AvaloniaCompactDialogChromeStyle DialogChromeStyle =
+    private static AvaloniaCompactDialogChromeStyle DialogChromeStyle =>
         AvaloniaCompactDialogChrome.WindowsStyle with
         {
             // These are the measured WPF metrics for this dialog. Keep the correction local;

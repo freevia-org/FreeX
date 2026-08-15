@@ -7,15 +7,10 @@ namespace FreeX.App.Services.Tests;
 
 /// <summary>
 /// R58-commands-dv-input-enforce-6-2: Circle Invalid Data circles did not auto-clear when the
-/// flagged cell was subsequently corrected. <c>_validationCircleCells</c> (Avalonia,
-/// MainWindow.DataTools.cs) and <c>SheetGrid.ValidationCircleCells</c> (WPF,
-/// MainWindow.DataCommands.cs) were each only ever (re)populated by a fresh Circle Invalid Data
-/// run and cleared by Clear Validation Circles -- nothing pruned an individual corrected cell out
-/// of either list, so a cell that was fixed stayed circled until the user manually re-ran the
-/// command. Both shells now re-check their circled-cell list through the shared,
-/// host-agnostic <see cref="WorkbookSession.PruneCorrectedValidationCircles"/> helper, which this
-/// test exercises directly (the UI-layer overlay lists themselves live in the Avalonia/WPF
-/// projects, which this test project does not reference).
+/// flagged cell was subsequently corrected. Both shells now project the shared per-sheet circle
+/// state owned by <see cref="WorkbookValidationCircleWorkflow"/>. This class retains coverage for
+/// the compatibility helper <see cref="WorkbookSession.PruneCorrectedValidationCircles"/>, which
+/// delegates the same portable prune policy.
 /// </summary>
 public sealed class R58ValidationCirclePruneTests
 {

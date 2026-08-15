@@ -61,13 +61,12 @@ public sealed class OutlineViewParityTests
         source.Should().Contain("OutlineViewPlanner.CommandPlans");
         source.Should().Contain("_controller.Execute(command.Command)");
         source.Should().Contain("_controller.SelectBlock(blockIndex)");
-        source.Should().Contain("_controller.SetShowLevel(level)");
-        source.Should().Contain("_controller.SetFirstLineOnly(firstLineOnly)");
-        source.Should().Contain("_controller.SetOutlineLevel(level)");
+        source.Should().Contain("_controller.SetShowLevel(");
+        source.Should().Contain("_controller.SetFirstLineOnly(");
+        source.Should().Contain("_controller.SetOutlineLevel(");
         source.Should().Contain("_controller.CurrentOutlineLevel");
-        source.Should().Contain("_controller.VisibleRows");
         source.Should().Contain("_controller.ProjectedRows");
-        source.Should().Contain("OutlineViewPlanner.FormatRow(projectedRow, RowMarkers)");
+        source.Should().Contain("OutlineViewPlanner.BuildDisplayRows(_controller.ProjectedRows, RowMarkers)");
         source.Should().Contain("navigateToBlock: blockIndex => _editor.MoveCaretToBlock(blockIndex, 0)",
             "Avalonia adapts native caret movement once and the controller owns navigation decisions");
         source.Should().Contain("\"[+] \"").And.Contain("\"[-] \"", "Avalonia owns its visual marker glyphs");

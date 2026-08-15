@@ -31,23 +31,24 @@ public sealed class FreeWFinalTailOwnershipSourceTests
     }
 
     [Fact]
-    public void TestAndValidationFriendGrantsAreConditional()
+    public void TestValidationAndRenderFriendGrantsUseRequiredBuildVariants()
     {
         AssertFriendCondition(
             "'$(FreeWHostTestSupport)' == 'true'",
             "FreeW.App.Avalonia.Tests",
             "freew", "FreeW.App.Avalonia", "FreeW.App.Avalonia.csproj");
-        AssertFriendCondition(
-            "'$(FreeWValidationHost)' == 'true'",
+        AssertFriendConditions(
+            ["'$(FreeWHostTestSupport)' == 'true'", "'$(FreeWValidationHost)' == 'true'"],
             "FreeW.Validation.Avalonia",
             "freew", "FreeW.App.Avalonia", "FreeW.App.Avalonia.csproj");
-        foreach (var friend in new[] { "FreeW.App.Host.Tests", "FreeW.FidelityRender" })
-        {
-            AssertFriendCondition(
-                "'$(FreeWHostTestSupport)' == 'true'",
-                friend,
-                "freew", "FreeW.App.Host", "FreeW.App.Host.csproj");
-        }
+        AssertFriendCondition(
+            "'$(FreeWHostTestSupport)' == 'true'",
+            "FreeW.App.Host.Tests",
+            "freew", "FreeW.App.Host", "FreeW.App.Host.csproj");
+        AssertFriendCondition(
+            expectedCondition: null,
+            "FreeW.FidelityRender",
+            "freew", "FreeW.App.Host", "FreeW.App.Host.csproj");
         AssertFriendCondition(
             "'$(FreeWRenderCompareSupport)' == 'true'",
             "FreeW.RenderCompare",
@@ -148,12 +149,20 @@ public sealed class FreeWFinalTailOwnershipSourceTests
         wpf.Should().NotContain("CanArrange: static _ => true");
     }
 
-    private static void AssertFriendCondition(string expectedCondition, string friend, params string[] parts)
+    private static void AssertFriendCondition(string? expectedCondition, string friend, params string[] parts) =>
+        AssertFriendConditions([expectedCondition], friend, parts);
+
+    private static void AssertFriendConditions(
+        IReadOnlyCollection<string?> expectedConditions,
+        string friend,
+        params string[] parts)
     {
         var project = XDocument.Load(TestWorkspaceFileLocator.Find(parts));
-        var item = project.Descendants("InternalsVisibleTo")
-            .Single(element => string.Equals((string?)element.Attribute("Include"), friend, StringComparison.Ordinal));
-        ((string?)item.Parent?.Attribute("Condition")).Should().Be(expectedCondition);
+        var conditions = project.Descendants("InternalsVisibleTo")
+            .Where(element => string.Equals((string?)element.Attribute("Include"), friend, StringComparison.Ordinal))
+            .Select(element => (string?)element.Parent?.Attribute("Condition"));
+
+        conditions.Should().BeEquivalentTo(expectedConditions);
     }
 
     private static string Read(params string[] parts) =>

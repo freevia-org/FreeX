@@ -508,8 +508,7 @@ public partial class MainWindow
 
         var presentation = ConsolidateDialogPlanner.DescribeIssue(
             plan.Issue,
-            ConsolidateDialogMessageContext.FinalValidation,
-            ConsolidateDialogTextProfile.Wpf);
+            ConsolidateDialogMessageContext.FinalValidation);
         ShowOwnedMessage(
             presentation.Message.Resolve(UiText.Get, UiText.Format),
             UiText.Get("Consolidate_Consolidate"),
@@ -524,11 +523,10 @@ public partial class MainWindow
         if (sheet is null)
             return;
 
-        var matches = DataValidationCirclePlanner.FindInvalidDataCells(_workbook, sheet);
-        if (matches.Count == 0)
+        var result = WorkbookValidationCircleWorkflow.CircleInvalidData(_workbook, sheet);
+        SheetGrid.ValidationCircleCells = result.HasCircles ? result.Cells : null;
+        if (result.Outcome == WorkbookValidationCircleOutcome.NoInvalidData)
         {
-            SheetGrid.ValidationCircleCells = null;
-            sheet.ValidationCircleCells = null;
             _messageService.ShowInfo(
                 UiText.Get("MainWindowMessage_CircleInvalidDataNoInvalidData"),
                 UiText.Get("MainWindowMessage_CircleInvalidDataTitle"));
@@ -539,21 +537,18 @@ public partial class MainWindow
         // cell that currently fails its validation rule. It does not change the current selection --
         // the previous implementation only reused the (transient) multi-range selection as a stand-in
         // for the circles, which vanished the instant the user clicked elsewhere or pressed an arrow key.
-        // Mirrored onto Sheet.ValidationCircleCells (R90-print-twin-two-tier-sweep-1) so a print/PDF
-        // renderer -- which only has the Workbook/SheetId, not this GridView instance -- can eventually
-        // read the same circled-cell set instead of the state being trapped in a screen-only DependencyProperty.
-        SheetGrid.ValidationCircleCells = matches;
-        sheet.ValidationCircleCells = matches;
-        EnsureCellVisible(matches[0]);
+        // The shared workflow owns Sheet.ValidationCircleCells so native and portable print/PDF
+        // renderers read the same circled-cell set as this interactive GridView projection.
+        EnsureCellVisible(result.FirstCell!.Value);
         UpdateViewport();
         RefreshStatusBar();
     }
 
     private void ClearValidationCirclesMenuItem_Click(object sender, RoutedEventArgs e)
     {
-        SheetGrid.ValidationCircleCells = null;
         if (_workbook.GetSheet(_currentSheetId) is { } sheet)
-            sheet.ValidationCircleCells = null;
+            WorkbookValidationCircleWorkflow.Clear(sheet);
+        SheetGrid.ValidationCircleCells = null;
         UpdateViewport();
         RefreshStatusBar();
     }
@@ -568,23 +563,12 @@ public partial class MainWindow
     // manually re-runs the command.
     private void PruneCorrectedValidationCircles()
     {
-        if (SheetGrid.ValidationCircleCells is not { Count: > 0 } circled)
-            return;
-
         var sheet = _workbook.GetSheet(_currentSheetId);
         if (sheet is null)
             return;
 
-        // The actual re-check is the shared WorkbookSession.PruneCorrectedValidationCircles helper
-        // (FreeX.App.Services) so the Avalonia shell's equivalent overlay (MainWindow.DataTools.cs)
-        // applies the identical rule.
-        var pruned = WorkbookSession.PruneCorrectedValidationCircles(_workbook, sheet, circled);
-        if (ReferenceEquals(pruned, circled))
-            return;
-
-        var remaining = pruned.Count == 0 ? null : pruned;
-        SheetGrid.ValidationCircleCells = remaining;
-        sheet.ValidationCircleCells = remaining;
+        var result = WorkbookValidationCircleWorkflow.Prune(_workbook, sheet);
+        SheetGrid.ValidationCircleCells = result.HasCircles ? result.Cells : null;
     }
 
     private void ApplyConsolidateRangeSelection(
@@ -832,14 +816,9 @@ public partial class MainWindow
 
         if (dialog.Result.Action == SubtotalDialogPlanAction.RemoveAll)
         {
-            if (!TryExecuteRepeatableGroupedSheetCommand(
-                    "Remove Subtotals",
-                    sheetId =>
-                    {
-                        var sheetRange = GroupedSheetRangePlanner.RemapRangeToSheet(sourceRange, sheetId);
-                        return new RemoveSubtotalRowsCommand(sheetId, sheetRange);
-                    },
-                    out var removeOutcome))
+            if (!TryExecuteWorksheetLayout(
+                    _session.RemoveSelectedRangeSubtotals,
+                    "Remove Subtotals"))
                 return;
 
             UpdateViewport();
@@ -847,113 +826,13 @@ public partial class MainWindow
             return;
         }
 
-        if (!TryExecuteRepeatableGroupedSheetCommand(
-                "Subtotal",
-                sheetId => CreateSubtotalApplyCommand(sheetId, GroupedSheetRangePlanner.RemapRangeToSheet(sourceRange, sheetId), dialog.Result),
-                out var outcome))
+        if (!TryExecuteWorksheetLayout(
+                () => _session.ExecuteSubtotalOptions(dialog.Result.ToInputOptions()),
+                "Subtotal"))
             return;
 
-        SelectSubtotalResultRange(
-            SubtotalPlanner.ExpandRangeForInsertedSubtotalRows(sourceRange, outcome.AffectedCells));
         UpdateViewport();
         PruneCorrectedValidationCircles();
-    }
-
-    /// <summary>
-    /// Builds the command for one grouped sheet's "Apply" pass of the Subtotal dialog (as opposed to
-    /// "Remove All", handled separately). Split out of SubtotalBtn_Click so the "Replace current
-    /// subtotals" range-correction fix (R68-commands-group-outline-6-1) is directly testable without
-    /// driving the real SubtotalDialog.
-    /// </summary>
-    private IWorkbookCommand CreateSubtotalApplyCommand(SheetId sheetId, GridRange sheetRange, SubtotalDialogPlanResult result)
-    {
-        if (!result.ReplaceCurrentSubtotals)
-        {
-            return new SubtotalCommand(
-                sheetId,
-                sheetRange,
-                groupByColumnOffset: result.GroupColumnOffset,
-                subtotalColumnOffsets: result.SubtotalColumnOffsets,
-                functionNumber: result.FunctionNumber,
-                pageBreakBetweenGroups: result.PageBreakBetweenGroups,
-                summaryBelowData: result.SummaryBelowData);
-        }
-
-        // "Replace current subtotals": RemoveSubtotalRowsCommand deletes the previous pass's
-        // subtotal rows first, shifting every row below them up. The new SubtotalCommand must
-        // therefore scan the shrunk post-removal extent, not the stale (larger) sheetRange, or it
-        // folds unrelated rows that shifted up into the vacated space into the new subtotal pass.
-        // Predict the shrinkage from the CURRENT (pre-removal) sheet -- this factory runs before
-        // either command applies, so the count below mirrors exactly what
-        // RemoveSubtotalRowsCommand.Apply is about to delete.
-        var removedRowCount = CountSubtotalFormulaRows(_workbook.GetSheet(sheetId), sheetId, sheetRange);
-        var correctedRange = removedRowCount > 0
-            ? new GridRange(
-                sheetRange.Start,
-                new CellAddress(
-                    sheetRange.End.Sheet,
-                    sheetRange.End.Row - (uint)Math.Min(removedRowCount, (int)sheetRange.RowCount - 1),
-                    sheetRange.End.Col))
-            : sheetRange;
-        var subtotalCommand = new SubtotalCommand(
-            sheetId,
-            correctedRange,
-            groupByColumnOffset: result.GroupColumnOffset,
-            subtotalColumnOffsets: result.SubtotalColumnOffsets,
-            functionNumber: result.FunctionNumber,
-            pageBreakBetweenGroups: result.PageBreakBetweenGroups,
-            summaryBelowData: result.SummaryBelowData);
-        return new CompositeWorkbookCommand("Subtotal", [new RemoveSubtotalRowsCommand(sheetId, sheetRange), subtotalCommand]);
-    }
-
-    /// <summary>
-    /// Counts the rows within <paramref name="range"/> that currently carry a SUBTOTAL(...) formula
-    /// in any column -- i.e. the rows RemoveSubtotalRowsCommand is about to delete for this same
-    /// range. Mirrors the row-scan half of the internal FreeX.Core.Commands.SubtotalRowFinder (which
-    /// RemoveSubtotalRowsCommand itself uses) so the "Replace current subtotals" composite can shrink
-    /// the new SubtotalCommand's range by the exact number of rows the removal pass will delete.
-    /// </summary>
-    private static int CountSubtotalFormulaRows(Sheet? sheet, SheetId sheetId, GridRange range)
-    {
-        if (sheet is null)
-            return 0;
-
-        var count = 0;
-        for (var row = range.Start.Row; row <= range.End.Row; row++)
-        {
-            for (var col = range.Start.Col; col <= range.End.Col; col++)
-            {
-                var formula = sheet.GetCell(new CellAddress(sheetId, row, col))?.FormulaText;
-                if (formula is not null &&
-                    formula.AsSpan().TrimStart().StartsWith("SUBTOTAL(", StringComparison.OrdinalIgnoreCase))
-                {
-                    count++;
-                    break;
-                }
-            }
-        }
-
-        return count;
-    }
-
-    private void SelectSubtotalResultRange(GridRange range)
-    {
-        _selectionAnchor = range.Start;
-        _selectionCursor = range.End;
-        if (_workbook.GetSheet(_currentSheetId) is { } sheet)
-        {
-            sheet.ActiveRow = range.Start.Row;
-            sheet.ActiveCol = range.Start.Col;
-        }
-
-        SetSelectedRangesIfChanged(null);
-        SheetGrid.SelectedRange = range;
-        SetCellAddressBoxSelectionText(FormatNameBoxSelectionText(range));
-        RefreshToolbarAfterSelectionChange();
-        RefreshStatusBar();
-        RefreshValidationDropdown();
-        RefreshDvInputMessage();
-        UpdateCommentPreview(range.Start);
     }
 
     private void GoalSeekBtn_Click(object sender, RoutedEventArgs e)
@@ -984,24 +863,18 @@ public partial class MainWindow
         var statusDialog = new GoalSeekStatusDialog(result, targetValue) { Owner = this };
         if (statusDialog.ShowDialog() == true && statusDialog.ApplyResult)
         {
-            var cmd = new GoalSeekCommand(changingCell, result.FoundValue);
-            if (TryExecuteCommand(cmd, "Goal Seek"))
+            var applyResult = _session.ApplyGoalSeekProposal(proposal);
+            if (!applyResult.Success)
             {
-                // Excel always refreshes the set cell (and the rest of the dependency chain from
-                // the changing cell) once Goal Seek applies its result, even when the workbook is
-                // in Manual calculation mode -- Goal Seek's recalculation is a deliberate one-time
-                // action, not subject to the "only recalc on F9" rule that otherwise governs Manual
-                // mode. RecalculateIfAutomatic above is a no-op outside Automatic/
-                // AutomaticExceptDataTables mode, so force the recalculation here when it was
-                // skipped, or the set cell would keep displaying its pre-seek value. Mirrors
-                // WorkbookCellEditService.ExecuteGoalSeek (FreeX.App.Services), which the WPF host's
-                // Goal Seek command does not route through.
-                if (_workbook.CalculationMode is not (WorkbookCalculationMode.Automatic or WorkbookCalculationMode.AutomaticExceptDataTables))
-                {
-                    _session.RecalculateChangedCellsAlways([changingCell]);
-                    InvalidateNavigationCaches();
-                }
+                _messageService.ShowWarning(
+                    applyResult.ErrorMessage ?? UiText.Get("MainWindowMessage_CommandCouldNotBeCompleted"),
+                    UiText.Get("MainWindowMessage_CommandErrorTitle"));
+                return;
             }
+
+            ApplySuccessfulWorkbookSessionCommand();
+            ApplyWorkbookSessionDocumentStateToRenderer();
+            UpdateViewport();
         }
     }
 
@@ -1034,30 +907,25 @@ public partial class MainWindow
         if (dialog.ShowDialog() != true)
             return;
 
-        var forecastRange = range;
-        if (_workbook.GetSheet(range.Start.Sheet) is { } sheet)
-            forecastRange = ForecastSheetSourceRangePlanner.Create(sheet, range);
-
-        if (!TryExecuteCommand(new ForecastSheetCommand(forecastRange, dialog.Result.Periods), "Forecast Sheet"))
-            return;
-
-        var forecastSheet = _workbook.Sheets.LastOrDefault();
-        var refreshedSelectionUi = false;
-        if (forecastSheet is not null)
+        var plan = ForecastSheetPlanner.CreatePlan(_workbook, range, dialog.Result.Periods);
+        var result = _session.ExecuteForecastSheetPlan(plan);
+        if (!result.Success)
         {
-            _currentSheetId = forecastSheet.Id;
-            _groupedSheetIds.Clear();
-            _groupedSheetIds.Add(_currentSheetId);
-            SetActiveCell(new CellAddress(_currentSheetId, 1, 1));
-            refreshedSelectionUi = true;
+            _messageService.ShowWarning(
+                result.ErrorMessage ?? UiText.Get("MainWindowMessage_ForecastSheetSelectRange"),
+                UiText.Get("MainWindowMessage_ForecastSheetTitle"));
+            return;
         }
 
-        RecalculateWorkbook();
+        _currentSheetId = _session.ActiveSheet.Id;
+        _groupedSheetIds.Clear();
+        _groupedSheetIds.Add(_currentSheetId);
+        _sheetGroupAnchor = _currentSheetId;
+        ApplyWorkbookSessionSelectionToRenderer();
         UpdateViewport();
         PruneCorrectedValidationCircles();
         RefreshSheetTabs();
-        if (!refreshedSelectionUi)
-            RefreshStatusBar();
+        RefreshStatusBar();
     }
 
     private void DataTableBtn_Click(object sender, RoutedEventArgs e)

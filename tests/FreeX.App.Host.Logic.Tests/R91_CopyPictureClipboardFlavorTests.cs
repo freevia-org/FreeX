@@ -1,4 +1,5 @@
 using FluentAssertions;
+using Free.Shared.AppServices;
 using FreeX.Core.Model;
 
 namespace FreeX.App.Host.Tests;
@@ -24,9 +25,10 @@ public sealed class R91_CopyPictureClipboardFlavorTests
     [Fact]
     public void ExecuteCopy_PlainRangeCopy_AlsoPlacesABitmapClipboardFlavor()
     {
-        StaTestRunner.RunClipboardIsolated(() =>
+        StaTestRunner.Run(() =>
         {
-            var (window, workbook) = R49MainWindowTestHarness.CreateWindow();
+            var clipboard = new RecordingClipboard();
+            var (window, workbook) = R49MainWindowTestHarness.CreateWindow(clipboard);
             try
             {
                 var sheet = workbook.GetSheetAt(0);
@@ -36,12 +38,13 @@ public sealed class R91_CopyPictureClipboardFlavorTests
                 window.SheetGrid.SelectedRange = new GridRange(a1, a1);
                 R49MainWindowTestHarness.Invoke(window, "ExecuteCopy", false);
 
-                System.Windows.Clipboard.ContainsImage().Should().BeTrue(
+                clipboard.LastWritten.Should().NotBeNull();
+                var image = clipboard.LastWritten!.Image;
+                image.Should().NotBeNull(
                     "a plain range copy must always place a picture flavor on the clipboard, " +
                     "matching real Excel, so an image-only destination still gets something");
-                var image = System.Windows.Clipboard.GetImage();
-                image.Should().NotBeNull();
-                image!.PixelWidth.Should().BeGreaterThan(0);
+                image!.PngBytes.Should().NotBeEmpty();
+                image.PixelWidth.Should().BeGreaterThan(0);
                 image.PixelHeight.Should().BeGreaterThan(0);
             }
             finally
@@ -57,9 +60,10 @@ public sealed class R91_CopyPictureClipboardFlavorTests
     [Fact]
     public void ExecuteCopy_PlainRangeCopy_StillPlacesPlainTextUnaffectedByTheNewBitmapFlavor()
     {
-        StaTestRunner.RunClipboardIsolated(() =>
+        StaTestRunner.Run(() =>
         {
-            var (window, workbook) = R49MainWindowTestHarness.CreateWindow();
+            var clipboard = new RecordingClipboard();
+            var (window, workbook) = R49MainWindowTestHarness.CreateWindow(clipboard);
             try
             {
                 var sheet = workbook.GetSheetAt(0);
@@ -69,12 +73,43 @@ public sealed class R91_CopyPictureClipboardFlavorTests
                 window.SheetGrid.SelectedRange = new GridRange(a1, a1);
                 R49MainWindowTestHarness.Invoke(window, "ExecuteCopy", false);
 
-                System.Windows.Clipboard.GetText().Should().Be("Hello");
+                clipboard.LastWritten.Should().NotBeNull();
+                clipboard.LastWritten!.Text.Should().Be("Hello");
             }
             finally
             {
                 R49MainWindowTestHarness.Close(window);
             }
         });
+    }
+
+    private sealed class RecordingClipboard : IPlatformClipboard
+    {
+        public PlatformClipboardContent? LastWritten { get; private set; }
+
+        public ValueTask<PlatformClipboardReadResult<PlatformClipboardContent>> ReadAsync(
+            PlatformClipboardReadRequest request,
+            CancellationToken cancellationToken = default)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            return ValueTask.FromResult(PlatformClipboardReadResult<PlatformClipboardContent>.Empty());
+        }
+
+        public ValueTask<PlatformClipboardWriteResult> WriteAsync(
+            PlatformClipboardContent content,
+            CancellationToken cancellationToken = default)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            LastWritten = content;
+            return ValueTask.FromResult(PlatformClipboardWriteResult.Success());
+        }
+
+        public ValueTask<PlatformClipboardWriteResult> ClearAsync(
+            CancellationToken cancellationToken = default)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            LastWritten = null;
+            return ValueTask.FromResult(PlatformClipboardWriteResult.Success());
+        }
     }
 }

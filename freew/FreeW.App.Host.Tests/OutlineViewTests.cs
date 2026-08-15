@@ -57,13 +57,13 @@ public sealed class OutlineViewTests
         source.Should().Contain("OutlineViewPlanner.CommandPlans");
         source.Should().Contain("_controller.Execute(command.Command)");
         source.Should().Contain("_controller.SelectBlock(blockIndex)");
-        source.Should().Contain("_controller.SetShowLevel(level)");
-        source.Should().Contain("_controller.SetFirstLineOnly(firstLineOnly)");
-        source.Should().Contain("_controller.SetOutlineLevel(level)");
+        source.Should().Contain("_controller.SetShowLevel(item.Level)");
+        source.Should().Contain("_controller.SetFirstLineOnly(true)");
+        source.Should().Contain("_controller.SetFirstLineOnly(false)");
+        source.Should().Contain("_controller.SetOutlineLevel(item.Level)");
         source.Should().Contain("_controller.CurrentOutlineLevel");
-        source.Should().Contain("_controller.VisibleRows");
         source.Should().Contain("_controller.ProjectedRows");
-        source.Should().Contain("OutlineViewPlanner.FormatRow(projectedRow, RowMarkers)");
+        source.Should().Contain("OutlineViewPlanner.BuildDisplayRows(_controller.ProjectedRows, RowMarkers)");
         source.Should().Contain("private TextDocument GetCommittedDocument()");
         source.Should().Contain("_editor.CommitToModel();", "WPF must still commit native edits before shared refresh");
         source.Should().Contain("\"⊞ \"").And.Contain("\"▢ \"", "WPF owns its visual marker glyphs");

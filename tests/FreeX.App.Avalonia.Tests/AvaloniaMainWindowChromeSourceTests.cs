@@ -1228,14 +1228,15 @@ public sealed class AvaloniaMainWindowChromeSourceTests
         var launchSmokeSource = File.ReadAllText(RepoFile("tools", "FreeX.Validation.Avalonia", "MacOsLaunchSmoke.cs"));
 
         mainSource.Should().NotContain("HasStatusBarAccessibleValue");
-        launchSmokeSource.Should().Contain("HasStatusTextValue: HasStatusBarAccessibleValue(_statusText, _selectionStatsText)");
-        launchSmokeSource.Should().Contain("private static bool HasStatusBarAccessibleValue(TextBlock statusText, TextBlock selectionStatsText) =>");
+        launchSmokeSource.Should().Contain("HasStatusTextValue: HasStatusBarAccessibleValue(");
+        launchSmokeSource.Should().Contain("params TextBlock[] selectionStatisticTexts");
         launchSmokeSource.Should().Contain("!string.IsNullOrWhiteSpace(statusText.Text) ||");
-        launchSmokeSource.Should().Contain("!string.IsNullOrWhiteSpace(selectionStatsText.Text);");
+        launchSmokeSource.Should().Contain("selectionStatisticTexts.Any(text => !string.IsNullOrWhiteSpace(text.Text));");
         statusBarSource.Should().Contain("FreeXStatusBarRendererPlanner.BuildRendererPlan(model, _statusBarOptionVisibility);");
         statusBarSource.Should().Contain("_statusText.IsVisible = rendererPlan.ReadyTextVisible;");
-        statusBarSource.Should().Contain("_selectionStatsText.Text = rendererPlan.VisibleReadoutText;");
-        statusBarSource.Should().Contain("_selectionStatsText.IsVisible = rendererPlan.VisibleReadoutTextVisible;");
+        statusBarSource.Should().Contain("ApplySelectionStatisticReadouts(rendererPlan);");
+        statusBarSource.Should().Contain("_selectionStatsPanel.IsVisible = rendererPlan.VisibleReadoutTextVisible;");
+        statusBarSource.Should().Contain("AutomationProperties.SetLiveSetting(textBlock, AutomationLiveSetting.Polite);");
     }
 
     private static string RepoFile(params string[] parts) =>

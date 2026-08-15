@@ -155,7 +155,7 @@ public sealed class FillSeriesStepDialog : Window
         inputError == FillSeriesInputError.None
             ? null
             : FillSeriesPlanner
-                .DescribeInputError(inputError, FillSeriesValidationTextProfile.Wpf)
+                .DescribeInputError(inputError)
                 .Message
                 .Resolve(UiText.Get, UiText.Format);
 
@@ -189,9 +189,7 @@ public sealed class FillSeriesStepDialog : Window
                 out var error,
                 out var inputError))
         {
-            var presentation = FillSeriesPlanner.DescribeInputError(
-                inputError,
-                FillSeriesValidationTextProfile.Wpf);
+            var presentation = FillSeriesPlanner.DescribeInputError(inputError);
             DialogFocus.ShowWarningAndFocus(
                 this,
                 presentation.Message.Resolve(UiText.Get, UiText.Format),

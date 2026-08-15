@@ -1,5 +1,4 @@
 using Free.Shared.Ribbon;
-using FreeP.App.Compositor;
 
 namespace FreeP.Ribbon.Definitions.Tests;
 
@@ -53,33 +52,19 @@ public sealed class FreePKeyTipInventoryTests
     }
 
     [Fact]
-    public void SharedCommandKeyTipsMatchExceptForDeclaredProfileOverrides()
+    public void SharedCommandKeyTipsMatchAcrossProfiles()
     {
         var wpf = FlattenControls(FreePRibbon.Build(FreePRibbonCapabilities.Wpf));
         var avalonia = FlattenControls(FreePRibbon.Build(FreePRibbonCapabilities.Avalonia));
-        var declaredOverrides = new HashSet<string>(StringComparer.Ordinal)
-        {
-            "freep.new-slide",
-            // "New Slide" (Slides group) uses "N" on WPF but "I" on Avalonia (see freep.new-slide
-            // above). On WPF that "N" collides with the Paragraph group's "Numbering" control,
-            // which also declares "N" - the tab-wide keytip de-duplication in FreePRibbon
-            // (EnsureUnambiguousKeyTips) resolves the collision by suffixing the later-seen
-            // control to "N2" on WPF only, since Avalonia's differing "New Slide" keytip never
-            // collides with it there.
-            PresentationListGalleryPlanner.NumberingCommandId,
-        };
+
+        wpf["freep.new-slide"].Should().Be("N");
+        avalonia["freep.new-slide"].Should().Be("N");
+        wpf["freep.numbering"].Should().Be("N2");
+        avalonia["freep.numbering"].Should().Be("N2");
 
         foreach (var commandId in wpf.Keys.Intersect(avalonia.Keys, StringComparer.Ordinal))
-        {
-            if (declaredOverrides.Contains(commandId))
-            {
-                wpf[commandId].Should().NotBe(avalonia[commandId]);
-                continue;
-            }
-
             avalonia[commandId].Should().Be(wpf[commandId],
                 $"shared command {commandId} must keep the same KeyTip");
-        }
     }
 
     [Fact]

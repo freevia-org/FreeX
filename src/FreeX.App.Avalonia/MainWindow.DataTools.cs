@@ -4,6 +4,7 @@ using Avalonia.Media;
 using Avalonia.Media.Immutable;
 
 using FreeX.App.Presentation.Filtering;
+using FreeX.App.Presentation.PageLayout;
 using FreeX.App.Services;
 using FreeX.Core.Commands;
 using FreeX.Core.Model;
@@ -14,10 +15,6 @@ public sealed partial class MainWindow
 {
     // ── Data-tab tools: Reapply, Circle Invalid Data / Clear Validation Circles, Get Data, Refresh All ──
     //
-    // Validation circles are an in-memory overlay only (same lifetime model as formula-auditing trace
-    // arrows): we keep the active invalid-cell set in this field and repaint it on every overlay rebuild
-    // (RefreshShell -> BuildSheetGrid -> BuildDrawingObjectOverlay). Clearing empties the set and refreshes.
-    private readonly List<CellAddress> _validationCircleCells = new();
     private readonly WorksheetFilterWorkflowSession _filterWorkflowSession = new();
 
     // ── Reapply ─────────────────────────────────────────────────────────────────
@@ -32,9 +29,6 @@ public sealed partial class MainWindow
             return;
 
         var sheet = _session.ActiveSheet;
-        var selectedRange = _session.SelectedRange;
-        var selectedRanges = _session.SelectedRanges;
-        var activeCell = _session.ActiveCell;
         var plan = _filterWorkflowSession.CreateReapplyPlan(sheet);
         if (plan is null)
         {
@@ -42,9 +36,7 @@ public sealed partial class MainWindow
             return;
         }
 
-        var result = _session.ExecuteReviewCommand(
-            plan.CreateCommand("Reapply Filters"),
-            activeCell);
+        var result = _session.ExecuteWorksheetFilterReapplyPlan(plan, "Reapply Filters");
         if (!result.Success)
         {
             ShowEditIssue(result.ErrorMessage ?? UiText.Get("TableLoc_ReapplyFilterFailed"));
@@ -55,10 +47,6 @@ public sealed partial class MainWindow
         // must nevertheless see the new hidden-row set immediately, matching WPF's filter routes.
         RecalculateAfterAutoFilterMutation();
 
-        // ExecuteReviewCommand intentionally collapses ordinary command selections. Reapply is
-        // view-preserving in WPF, so restore the exact selection (including multi-area selections)
-        // after the atomic command succeeds.
-        _session.SelectRanges(selectedRange, selectedRanges, activeCell);
         RefreshShell(UiText.Format(
             plan.DefinitionCount == 1 ? "TableLoc_ReapplyedDefinitionsOne" : "TableLoc_ReapplyedDefinitionsMany",
             plan.DefinitionCount));
@@ -71,29 +59,25 @@ public sealed partial class MainWindow
         if (!TryCommitPendingFormulaEdit())
             return;
 
-        var sheet = _session.ActiveSheet;
-        var invalid = DataValidationCirclePlanner.FindInvalidDataCells(_session.Workbook, sheet);
+        var result = WorkbookValidationCircleWorkflow.CircleInvalidData(
+            _session.Workbook,
+            _session.ActiveSheet);
+        if (result.FirstCell is { } firstCell)
+            EnsureValidationCircleAddressVisible(firstCell);
 
-        _validationCircleCells.Clear();
-        _validationCircleCells.AddRange(invalid);
-
-        RefreshShell(invalid.Count == 0
+        RefreshShell(result.Outcome == WorkbookValidationCircleOutcome.NoInvalidData
             ? UiText.Get("TableLoc_NoInvalidDataFound")
             : UiText.Format(
-                invalid.Count == 1 ? "TableLoc_CircledInvalidCellsOne" : "TableLoc_CircledInvalidCellsMany",
-                invalid.Count));
+                result.Cells.Count == 1 ? "TableLoc_CircledInvalidCellsOne" : "TableLoc_CircledInvalidCellsMany",
+                result.Cells.Count));
     }
 
     private void ClearValidationCircles()
     {
-        if (_validationCircleCells.Count == 0)
-        {
-            RefreshShell(UiText.Get("TableLoc_NoValidationCirclesToClear"));
-            return;
-        }
-
-        _validationCircleCells.Clear();
-        RefreshShell(UiText.Get("TableLoc_ClearedValidationCircles"));
+        var result = WorkbookValidationCircleWorkflow.Clear(_session.ActiveSheet);
+        RefreshShell(UiText.Get(result.Outcome == WorkbookValidationCircleOutcome.NothingToClear
+            ? "TableLoc_NoValidationCirclesToClear"
+            : "TableLoc_ClearedValidationCircles"));
     }
 
     // Excel auto-clears a cell's red "invalid data" circle the instant the flagged value is
@@ -106,17 +90,7 @@ public sealed partial class MainWindow
     // WPF host's equivalent overlay (MainWindow.DataCommands.cs) applies the identical rule.
     private void PruneCorrectedValidationCircles()
     {
-        if (_validationCircleCells.Count == 0)
-            return;
-
-        var pruned = WorkbookSession.PruneCorrectedValidationCircles(
-            _session.Workbook, _session.ActiveSheet, _validationCircleCells);
-
-        if (ReferenceEquals(pruned, _validationCircleCells))
-            return;
-
-        _validationCircleCells.Clear();
-        _validationCircleCells.AddRange(pruned);
+        WorkbookValidationCircleWorkflow.Prune(_session.Workbook, _session.ActiveSheet);
     }
 
     // Called from BuildDrawingObjectOverlay so circles are painted onto the same overlay Canvas that hosts
@@ -125,7 +99,8 @@ public sealed partial class MainWindow
     {
         PruneCorrectedValidationCircles();
 
-        if (_validationCircleCells.Count == 0)
+        var validationCircleCells = _session.ActiveSheet.ValidationCircleCells;
+        if (validationCircleCells is not { Count: > 0 })
             return;
 
         var showHeadings = _session.IsShowingHeadings;
@@ -133,7 +108,7 @@ public sealed partial class MainWindow
         var activeSheetId = _session.ActiveSheet.Id;
 
         var bounds = new List<Rect>();
-        foreach (var address in _validationCircleCells)
+        foreach (var address in validationCircleCells)
         {
             // The viewport renders a single sheet; only circle cells that belong to it.
             if (address.Sheet != activeSheetId)
@@ -160,6 +135,18 @@ public sealed partial class MainWindow
         overlay.Children.Add(circleVisual);
     }
 
+    private void EnsureValidationCircleAddressVisible(CellAddress address)
+    {
+        var rowVisible = _session.Viewport.RowMetrics.Any(metric => metric.Row == address.Row);
+        var columnVisible = _session.Viewport.ColMetrics.Any(metric => metric.Col == address.Col);
+        if (rowVisible && columnVisible)
+            return;
+
+        var topRow = rowVisible ? _session.ActiveSheet.ViewTopRow ?? 1 : address.Row;
+        var leftColumn = columnVisible ? _session.ActiveSheet.ViewLeftCol ?? 1 : address.Col;
+        _session.SetViewportOrigin(topRow, leftColumn);
+    }
+
     // ── Get Data / Refresh All ────────────────────────────────────────────────────
     //
     // Get Data ▸ From Text/CSV (file-based import) lives in MainWindow.GetData.cs and Refresh re-imports the
@@ -169,8 +156,12 @@ public sealed partial class MainWindow
 
     private sealed class ValidationCircleControl : Control
     {
-        private static readonly IPen CirclePen = new ImmutablePen(new ImmutableSolidColorBrush(Color.FromRgb(0xC0, 0x00, 0x00)), 2);
-        private const double Inset = 1.0;
+        private static readonly IPen CirclePen = new ImmutablePen(
+            new ImmutableSolidColorBrush(Color.FromRgb(
+                ValidationCircleLayoutPlanner.StrokeColor.R,
+                ValidationCircleLayoutPlanner.StrokeColor.G,
+                ValidationCircleLayoutPlanner.StrokeColor.B)),
+            ValidationCircleLayoutPlanner.StrokeThickness);
 
         private readonly IReadOnlyList<Rect> _cellBounds;
 
@@ -183,12 +174,17 @@ public sealed partial class MainWindow
         {
             foreach (var cell in _cellBounds)
             {
-                // Excel draws a red oval bounding the cell. Inset slightly so the stroke stays inside the
-                // cell rectangle, and bound the radius so very tall/wide cells stay oval rather than degenerate.
-                var center = new Point(cell.X + cell.Width / 2, cell.Y + cell.Height / 2);
-                var radiusX = Math.Max(2, cell.Width / 2 - Inset);
-                var radiusY = Math.Max(2, cell.Height / 2 - Inset);
-                context.DrawEllipse(null, CirclePen, center, radiusX, radiusY);
+                var ellipse = ValidationCircleLayoutPlanner.CalculateEllipseBounds(
+                    new LayoutRect(cell.X, cell.Y, cell.Width, cell.Height));
+                var center = new Point(
+                    ellipse.Left + (ellipse.Width / 2.0),
+                    ellipse.Top + (ellipse.Height / 2.0));
+                context.DrawEllipse(
+                    null,
+                    CirclePen,
+                    center,
+                    ellipse.Width / 2.0,
+                    ellipse.Height / 2.0);
             }
         }
     }

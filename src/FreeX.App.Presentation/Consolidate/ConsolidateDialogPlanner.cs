@@ -425,27 +425,23 @@ public static class ConsolidateDialogPlanner
 
     public static ValidationPresentationDescriptor<ConsolidateDialogFocusTarget> DescribeIssue(
         ConsolidateDialogIssue issue,
-        ConsolidateDialogMessageContext context,
-        ConsolidateDialogTextProfile profile)
+        ConsolidateDialogMessageContext context)
     {
         var focusTarget = issue.Kind == ConsolidateDialogIssueKind.InvalidDestinationCell
             ? ConsolidateDialogFocusTarget.Destination
             : ConsolidateDialogFocusTarget.Reference;
 
         return new(
-            profile == ConsolidateDialogTextProfile.Wpf
-                ? DescribeWpfIssue(issue, context)
-                : DescribeAvaloniaIssue(issue, context),
+            DescribeIssueCore(issue, context),
             focusTarget);
     }
 
-    public static ValidationPresentationDescriptor<ConsolidateDialogFocusTarget> DescribePendingReference(
-        ConsolidateDialogTextProfile profile) =>
+    public static ValidationPresentationDescriptor<ConsolidateDialogFocusTarget> DescribePendingReference() =>
         new(
             LocalizedTextDescriptor.Resource("Consolidate_AddTheReferenceBeforeClickingOk"),
             ConsolidateDialogFocusTarget.Reference);
 
-    private static LocalizedTextDescriptor DescribeWpfIssue(
+    private static LocalizedTextDescriptor DescribeIssueCore(
         ConsolidateDialogIssue issue,
         ConsolidateDialogMessageContext context)
     {
@@ -466,34 +462,6 @@ public static class ConsolidateDialogPlanner
             ConsolidateDialogIssueKind.InvalidDestinationCell =>
                 LocalizedTextDescriptor.Resource("Consolidate_EnterValidDestinationCell"),
             _ => LocalizedTextDescriptor.Resource("Consolidate_EnterAtLeastOneValidSourceRange")
-        };
-    }
-
-    private static LocalizedTextDescriptor DescribeAvaloniaIssue(
-        ConsolidateDialogIssue issue,
-        ConsolidateDialogMessageContext context)
-    {
-        if (context == ConsolidateDialogMessageContext.AddReference)
-        {
-            return LocalizedTextDescriptor.Resource(
-                issue.Kind == ConsolidateDialogIssueKind.DuplicateSourceReference
-                    ? "TableLoc_ConsolidateSourceAlreadyListed"
-                    : "TableLoc_ConsolidateEnterValidSource");
-        }
-
-        return issue.Kind switch
-        {
-            ConsolidateDialogIssueKind.InvalidSourceRange when !string.IsNullOrWhiteSpace(issue.InvalidPart) =>
-                LocalizedTextDescriptor.Resource("TableLoc_ConsolidateCannotResolveSource", issue.InvalidPart),
-            ConsolidateDialogIssueKind.MismatchedSourceSizes =>
-                LocalizedTextDescriptor.Resource("Consolidate_SourceRangesMustBeSameSize"),
-            ConsolidateDialogIssueKind.InvalidDestinationCell =>
-                LocalizedTextDescriptor.Resource("TableLoc_ConsolidateEnterValidDestination"),
-            ConsolidateDialogIssueKind.NoOutput =>
-                LocalizedTextDescriptor.Resource("TableLoc_ConsolidateNoOutput"),
-            ConsolidateDialogIssueKind.OutsideWorksheetBounds =>
-                LocalizedTextDescriptor.Resource("TableLoc_ConsolidateOutsideBounds"),
-            _ => LocalizedTextDescriptor.Resource("TableLoc_ConsolidateAddAtLeastOne")
         };
     }
 

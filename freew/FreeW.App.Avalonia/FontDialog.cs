@@ -22,7 +22,7 @@ public sealed class FontDialog : FreeWDialogWindow
 {
     private static readonly FontDialogSurfaceSpec Surface = FontDialogPlanner.Surface;
     private static readonly FontDialogVisualMetrics Layout = FontDialogPlanner.VisualMetrics;
-    private static readonly AvaloniaCompactDialogChromeStyle DialogChromeStyle =
+    private static AvaloniaCompactDialogChromeStyle DialogChromeStyle =>
         AvaloniaCompactDialogChrome.WindowsStyle with
         {
             FontFamily = new FontFamily("Segoe UI"),
@@ -220,7 +220,7 @@ public sealed class FontDialog : FreeWDialogWindow
         Opened += (_, _) =>
         {
             foreach (var combo in this.GetVisualDescendants().OfType<ComboBox>())
-                FontParagraphDialogChrome.ApplyComboBox(combo, DialogChromeStyle, combo.IsEditable);
+                FontParagraphDialogChrome.ApplyComboBox(combo, DialogChromeStyle);
             foreach (var box in fieldControls.Values.OfType<TextBox>())
                 FontParagraphDialogChrome.ApplyTextBox(box, DialogChromeStyle);
             ApplyCheckBoxChrome();

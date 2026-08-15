@@ -41,6 +41,8 @@ public sealed partial class MainWindow
     private string ResolveWorkbookDirectoryForHeaderFooter() =>
         PagePrintTextPlanner.ResolveWorkbookDirectoryTokenValue(_session.CurrentFilePath);
 
+    private static AvaloniaCompactDialogChromeStyle PrintDialogChromeStyle => new(FormulaBarFontFamily);
+
     private async Task ShowPrintDialogAsync()
     {
         if (_isOpening || _isSaving)
@@ -171,7 +173,7 @@ public sealed partial class MainWindow
             StripContentMnemonic(radio);
             AvaloniaCompactDialogChrome.ApplyRadioButton(
                 radio,
-                new AvaloniaCompactDialogChromeStyle(FormulaBarFontFamily));
+                PrintDialogChromeStyle);
             AutomationProperties.SetAutomationId(radio, "PrintScope_" + option.Scope);
             var capturedScope = option.Scope;
             radio.IsCheckedChanged += (_, _) =>
@@ -188,7 +190,7 @@ public sealed partial class MainWindow
     private sealed class FreeXPrintDialogWindow : AvaloniaDialogWindow
     {
         public FreeXPrintDialogWindow()
-            : base(new AvaloniaCompactDialogChromeStyle(FormulaBarFontFamily))
+            : base(PrintDialogChromeStyle)
         {
         }
     }

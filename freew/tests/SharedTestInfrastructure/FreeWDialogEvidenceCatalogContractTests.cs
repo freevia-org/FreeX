@@ -19,10 +19,12 @@ public sealed class FreeWDialogEvidenceCatalogContractTests
         Catalog.Routes.Should().HaveCount(98);
         Catalog.Routes.Select(route => route.RouteId.ToUpperInvariant())
             .Should().OnlyHaveUniqueItems();
-        Catalog.Routes.Count(route => route.Coverage == RouteCoverage.Paired).Should().Be(64);
-        Catalog.Routes.Count(route => route.Coverage == RouteCoverage.AvaloniaExtension).Should().Be(34);
-        Catalog.Routes.Where(route => route.Wpf is not null)
-            .Should().OnlyContain(route => route.Avalonia != null);
+        Catalog.Routes.Where(route => route.Coverage == RouteCoverage.Paired)
+            .Should().OnlyContain(route => route.Wpf != null && route.Avalonia != null);
+        Catalog.Routes.Where(route => route.Coverage == RouteCoverage.AvaloniaExtension)
+            .Should().OnlyContain(route => route.Wpf == null && route.Avalonia != null);
+        Catalog.Routes.Where(route => route.Wpf != null)
+            .Should().OnlyContain(route => route.Coverage == RouteCoverage.Paired && route.Avalonia != null);
     }
 
     [Fact]
@@ -44,6 +46,56 @@ public sealed class FreeWDialogEvidenceCatalogContractTests
         backstage.Select(route => route.BackstageMethodName).Should().OnlyHaveUniqueItems();
         backstage.Should().OnlyContain(route => route.Wpf!.OpenAction == OpenAction.BackstagePane
             && route.Avalonia.OpenAction == OpenAction.BackstagePane);
+    }
+
+    [Fact]
+    public void Page_number_format_is_a_real_shared_chrome_dialog_in_both_hosts()
+    {
+        var route = Catalog.GetRequired("page-number-format");
+        route.Coverage.Should().Be(RouteCoverage.Paired);
+        route.Wpf.Should().NotBeNull();
+        route.Wpf!.DialogTypeName.Should().Be("PageNumberFormatDialog");
+        route.Wpf.OpenAction.Should().Be(OpenAction.ReflectedDialog);
+        route.Avalonia.DialogTypeName.Should().Be("PageNumberFormatDialog");
+
+        var wpf = Read("freew", "FreeW.App.Host", "PageNumberFormatDialog.cs");
+        var commandRegistry = Read("freew", "FreeW.App.Host", "Ribbon", "FreeWRibbonCommands.cs");
+        var catalog = Read("freew", "tools", "FreeW.DialogVisualHarness", "FreeWDialogEvidenceCatalog.cs");
+
+        wpf.Should().Contain(": Free.Shared.Ribbon.Wpf.DialogWindow");
+        wpf.Should().Contain("DialogButtonRowFactory.Create(");
+        wpf.Should().Contain("PageNumberFormatDialogPlanner.TryBuildResult(");
+        commandRegistry.Should().Contain("PageNumberFormatDialog.Prompt(Window.GetWindow(editor), editor.Model.Page)");
+        commandRegistry.Should().NotContain("private static class PageNumberFormatDialog");
+        catalog.Should().Contain("Pair(\"page-number-format\", \"PageNumberFormatDialog\")");
+        catalog.Should().NotContain("AvaloniaOnly(\"page-number-format\"");
+    }
+
+    [Fact]
+    public void Comment_field_and_source_dialogs_are_paired_production_routes()
+    {
+        foreach (var routeId in new[]
+                 {
+                     "comment-list",
+                     "comment-reply",
+                     "draw-table-dimension",
+                     "field-picker",
+                     "manage-sources",
+                     "proofing-language",
+                     "table-text-conversion",
+                 })
+        {
+            var route = Catalog.GetRequired(routeId);
+            route.Coverage.Should().Be(RouteCoverage.Paired, routeId);
+            route.Wpf.Should().NotBeNull(routeId);
+            route.Avalonia.Should().NotBeNull(routeId);
+        }
+
+        var manageSources = Catalog.GetRequired("manage-sources");
+        manageSources.Fixture.Should().Be(FixtureKind.EmptySourceLists);
+        manageSources.Wpf!.OpenAction.Should().Be(OpenAction.StaticPrompt);
+        manageSources.Wpf.EntryPointName.Should().Be("AskManageSourcesForVisualHarness");
+        manageSources.UseWpfAuthoritySize.Should().BeTrue();
     }
 
     [Fact]

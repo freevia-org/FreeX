@@ -1,6 +1,7 @@
 using System.IO;
 using Free.Shared.Ribbon;
 using FreeW.App.Presentation.Ribbon;
+using FreeW.App.Presentation.Shell;
 
 namespace FreeW.App.Presentation.Tests;
 
@@ -161,6 +162,38 @@ public sealed class ViewRibbonWorkflowTests
     }
 
     [Fact]
+    public void Host_ports_project_all_document_view_checks_from_one_shared_snapshot()
+    {
+        var projections = 0;
+        var ports = FreeWRibbonHostExecutionPorts.Empty with
+        {
+            GetDocumentViewChecks = () =>
+            {
+                projections++;
+                return new FreeWDocumentViewCheckPlan(
+                    PrintLayout: false,
+                    WebLayout: false,
+                    Draft: false,
+                    PagedEdit: true);
+            },
+        };
+
+        ports.ResolvePrintLayoutActive()!().Should().BeFalse();
+        ports.ResolveWebLayoutActive()!().Should().BeFalse();
+        ports.ResolveDraftViewActive()!().Should().BeFalse();
+        ports.ResolvePagedEditViewActive()!().Should().BeTrue();
+        projections.Should().Be(4);
+
+        var explicitOverride = ports with { IsPrintLayoutActive = static () => true };
+        explicitOverride.ResolvePrintLayoutActive()!().Should().BeTrue();
+        projections.Should().Be(4, "legacy explicit checks remain valid compatibility overrides");
+
+        FreeWRibbonHostExecutionPorts.Empty
+            .ResolveDraftViewActive(static () => true)!()
+            .Should().BeTrue("renderer fallback state is used only without a shared projection");
+    }
+
+    [Fact]
     public void Wpf_and_avalonia_adapters_delegate_view_registration_to_presentation()
     {
         var wpf = ReadSource("freew", "FreeW.App.Host", "Ribbon", "FreeWRibbonCommands.cs");
@@ -182,6 +215,35 @@ public sealed class ViewRibbonWorkflowTests
         avalonia.Should().NotContain("RegisterReadModeChoice(");
         workflow.Should().NotContain("EnabledNoOp",
             "the shared View contract must not permit an enabled command without an execution endpoint");
+    }
+
+    [Fact]
+    public void Hosts_and_adapters_use_the_shared_document_view_check_projection()
+    {
+        var wpfHost = ReadSource("freew", "FreeW.App.Host", "MainWindow.cs");
+        var avaloniaHost = ReadSource("freew", "FreeW.App.Avalonia", "MainWindow.cs");
+        var wpfAdapter = ReadSource(
+            "freew", "FreeW.App.Host", "Ribbon", "FreeWRibbonCommands.cs");
+        var avaloniaAdapter = ReadSource(
+            "freew", "FreeW.App.Avalonia", "Ribbon", "FreeWAvaloniaRibbonCommands.cs");
+
+        foreach (var source in new[] { wpfHost, avaloniaHost })
+        {
+            source.Should().Contain("CurrentDocumentViewChecks");
+            source.Should().Contain("_viewSession.BuildDocumentViewChecks(");
+            source.Should().NotContain("IsPrintLayoutActive = () =>");
+            source.Should().NotContain("IsPrintLayoutActive: () =>");
+            source.Should().NotContain("IsPagedEditViewActive = () =>");
+            source.Should().NotContain("IsPagedEditViewActive: () =>");
+        }
+
+        foreach (var source in new[] { wpfAdapter, avaloniaAdapter })
+        {
+            source.Should().Contain("ResolvePrintLayoutActive(");
+            source.Should().Contain("ResolveWebLayoutActive(");
+            source.Should().Contain("ResolveDraftViewActive(");
+            source.Should().Contain("ResolvePagedEditViewActive(");
+        }
     }
 
     private static void Execute(IRibbonCommandRegistry registry, string commandId) =>

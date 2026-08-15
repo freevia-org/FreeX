@@ -27,11 +27,11 @@ public sealed class CupsPrintDialogTests
             "Free.Shared.Shell.Avalonia",
             "AvaloniaPrintDialogWorkflow.cs"));
 
-        appSource.Should().Contain("CupsPrintDialog : Window");
+        appSource.Should().Contain("CupsPrintDialog : FreePDialogWindow");
         appSource.Should().Contain("AvaloniaPrintDialogWorkflow.ShowAsync");
         appSource.Should().Contain("LayoutSummary = layoutSummary");
         appSource.Should().Contain("Collation = AvaloniaPrintDialogCollation.Selectable");
-        appSource.Should().Contain("ApplyCompactActionButtonChrome = false");
+        appSource.Should().Contain("ApplyCompactActionButtonChrome = true");
         appSource.Should().Contain("FreePPortablePrinterPicker");
         appSource.Should().Contain("FreePPortablePrintCopies");
         appSource.Should().Contain("FreePPortablePrintPageRange");
@@ -41,6 +41,7 @@ public sealed class CupsPrintDialogTests
         appSource.Should().NotContain("PrintDialogSession");
         appSource.Should().NotContain("new ComboBox");
         appSource.Should().NotContain("FocusInvalidField");
+        appSource.Should().NotContain("CupsPrintDialog : Window");
 
         sharedSource.Should().Contain("PrintDialogSession.Start");
         sharedSource.Should().Contain("session.Submit");

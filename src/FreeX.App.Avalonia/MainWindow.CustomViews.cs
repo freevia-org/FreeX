@@ -119,7 +119,7 @@ public sealed partial class MainWindow
                 return;
 
             var name = rows[viewsList.SelectedIndex].Name;
-            var result = _session.ExecuteReviewCommand(CustomViewsPlanner.BuildApplyCommand(name));
+            var result = _session.ExecuteCustomViewCommand(CustomViewsPlanner.BuildApplyCommand(name));
             if (!result.Success)
             {
                 warningText.Text = result.ErrorMessage ?? UiText.Get("CustomViews_ApplyFailed");
@@ -127,7 +127,6 @@ public sealed partial class MainWindow
                 return;
             }
 
-            ResyncActiveSheetToWorkbook();
             RefreshShell(UiText.Format("CustomViews_Applied", name));
             dialog.Close();
         }
@@ -150,7 +149,7 @@ public sealed partial class MainWindow
                 return;
 
             var name = rows[viewsList.SelectedIndex].Name;
-            var result = _session.ExecuteReviewCommand(CustomViewsPlanner.BuildDeleteCommand(name));
+            var result = _session.ExecuteCustomViewCommand(CustomViewsPlanner.BuildDeleteCommand(name));
             if (!result.Success)
             {
                 warningText.Text = result.ErrorMessage ?? UiText.Get("CustomViews_DeleteFailed");
@@ -361,7 +360,7 @@ public sealed partial class MainWindow
                 name,
                 printSettingsBox.IsChecked == true,
                 hiddenFilterBox.IsChecked == true);
-            var result = _session.ExecuteReviewCommand(command);
+            var result = _session.ExecuteCustomViewCommand(command);
             if (!result.Success)
             {
                 warningText.Text = result.ErrorMessage ?? UiText.Get("CustomViews_SaveFailed");
@@ -429,21 +428,6 @@ public sealed partial class MainWindow
 
         await dialog.ShowDialog(this);
         return savedName;
-    }
-
-    /// <summary>
-    /// Re-selects the active sheet the applied custom view chose, so the session's cached active sheet and
-    /// viewport re-sync to the restored workbook state before the grid is rebuilt.
-    /// </summary>
-    private void ResyncActiveSheetToWorkbook()
-    {
-        var index = _session.Workbook.ActiveSheetIndex;
-        if (index is null || index < 0 || index >= _session.Workbook.Sheets.Count)
-            return;
-
-        var sheet = _session.Workbook.Sheets[index.Value];
-        if (!sheet.Id.Equals(_session.ActiveSheet.Id))
-            _session.SelectSheet(sheet.Id);
     }
 
     private static string DescribeCustomViewNameError(CustomViewsPlanner.NameError error) => error switch

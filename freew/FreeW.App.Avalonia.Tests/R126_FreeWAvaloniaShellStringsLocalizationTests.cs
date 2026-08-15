@@ -68,11 +68,18 @@ public sealed class R126_FreeWAvaloniaShellStringsLocalizationTests : IDisposabl
     public void App_InstallsResourceBackedSharedSeamsAtStartup()
     {
         var source = File.ReadAllText(RepositoryFile("freew", "FreeW.App.Avalonia", "App.cs"));
+        var factorySource = File.ReadAllText(RepositoryFile(
+            "shared",
+            "Free.Shared.Shell.Avalonia",
+            "SisterAvaloniaStandardDesktopFactory.cs"));
 
+        source.Should().Contain("new SisterAvaloniaLocalizationStartupDescriptor(");
         source.Should().Contain("AvaloniaAppLocalizationBootstrap.InstallSharedSeams(");
         source.Should().Contain("UiText.Get,");
         source.Should().Contain("UiText.Format,");
-        source.Should().Contain("UiText.CreateAutomationName);");
+        source.Should().Contain("UiText.CreateAutomationName");
+        source.Should().Contain("SisterAvaloniaStandardDesktopFactory.Initialize(this, DesktopProfile)");
+        factorySource.Should().Contain("profile.Localization.Apply();");
     }
 
     private static string RepositoryFile(params string[] parts) =>

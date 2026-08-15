@@ -24,7 +24,7 @@ public sealed class SheetTabWorkflowsScreenshotTourTests
 
         tourSource.Should().Contain("FREEX_SHEET_TAB_WORKFLOWS_TOUR");
         tourSource.Should().Contain("CaptureSheetTabWorkflowsWindowAsync");
-        tourSource.Should().Contain("InsertNewSheet() -> TryExecuteRepeatableCommand(AddSheetCommand)");
+        tourSource.Should().Contain("InsertNewSheet() -> WorkbookSession.AddSheet(insertBeforeSheetId)");
         tourSource.Should().Contain("new RenameSheetCommand(insertedSheet.Id, \"Submitted Plan\")");
         tourSource.Should().Contain("new DuplicateSheetCommand(moveCopySource.Id)");
         tourSource.Should().Contain("new CompositeWorkbookCommand(");

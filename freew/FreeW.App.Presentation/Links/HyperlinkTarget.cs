@@ -13,6 +13,9 @@ public readonly record struct HyperlinkTarget(string? Url, string? Anchor)
 
     public string DisplayFallback => Anchor ?? Url ?? string.Empty;
 
+    /// <summary>The normalized address shown by Insert/Edit Hyperlink surfaces.</summary>
+    public string Address => IsInternal ? "#" + Anchor : Url ?? string.Empty;
+
     public static bool TryParse(string? text, out HyperlinkTarget target)
     {
         target = default;
@@ -30,7 +33,11 @@ public readonly record struct HyperlinkTarget(string? Url, string? Anchor)
             return true;
         }
 
-        target = new HyperlinkTarget(Normalize(trimmed), null);
+        var normalized = Normalize(trimmed);
+        if (!Uri.TryCreate(normalized, UriKind.Absolute, out _))
+            return false;
+
+        target = new HyperlinkTarget(normalized, null);
         return true;
     }
 

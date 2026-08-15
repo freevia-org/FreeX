@@ -27,7 +27,7 @@ public sealed class FinalFiveCommandParityTests
         DirectCommandIds(draw).Should().Contain("freew.draw-table", "freew.eraser");
 
         var quickParts = text.Controls.OfType<RibbonDropdown>()
-            .Single(control => control.CommandId.Value == "freew.quick-parts");
+            .Single(control => control.CommandId.Value == "freew.insert-quickpart");
         quickParts.Menu.Items
             .Where(item => item.CommandId is not null)
             .Select(item => item.CommandId!.Value.Value)

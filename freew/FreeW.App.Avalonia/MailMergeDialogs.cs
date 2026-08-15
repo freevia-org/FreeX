@@ -29,7 +29,7 @@ internal static class MailMergeDialogs
         string seedHeader,
         string? initialCsv = null)
     {
-        var dialog = new Window
+        var dialog = new MailMergeDialogWindow
         {
             Title = MailMergeDialogMetadata.SelectRecipientsTitle,
             Width = 460,
@@ -94,7 +94,7 @@ internal static class MailMergeDialogs
     /// </summary>
     public static async Task<string?> AskMergeFieldNameAsync(Window owner, IReadOnlyList<string> fieldNames)
     {
-        var dialog = new Window
+        var dialog = new MailMergeDialogWindow
         {
             Title = MailMergeDialogMetadata.InsertMergeFieldTitle,
             Width = 320,
@@ -664,7 +664,7 @@ internal static class MailMergeDialogs
     }
 
     private static Window CreateDialog(string title, double width, double height) =>
-        new()
+        new MailMergeDialogWindow()
         {
             Title = title,
             Width = width,
@@ -672,6 +672,10 @@ internal static class MailMergeDialogs
             WindowStartupLocation = WindowStartupLocation.CenterOwner,
             CanResize = false,
         };
+
+    private sealed class MailMergeDialogWindow : FreeWDialogWindow
+    {
+    }
 
     private static TextBox CreateTextBox(string text, string placeholder)
     {

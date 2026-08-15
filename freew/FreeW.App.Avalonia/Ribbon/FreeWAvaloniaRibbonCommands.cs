@@ -224,7 +224,8 @@ internal static class FreeWAvaloniaRibbonCommands
                 PageNumberCurrent: new ActionRibbonCommand(() => editor.InsertField(RunFieldKind.PageNumber)),
                 PageNumberFormat: new ContextRibbonCommand(
                     context => ExecutePageNumberFormat(editor, callbacks, context)),
-                DateTime: OptionalHostCommand(callbacks.OpenDateTimeDialog),
+                DateTime: new ActionRibbonCommand(
+                    callbacks.OpenDateTimeDialog ?? (() => editor.InsertField(RunFieldKind.Date))),
                 CreateEditSlotCommand: slot => HeaderFooterSlotCommand(editor, slot),
                 DifferentFirstPage: new PageSettingCommand(
                     editor,
@@ -249,12 +250,9 @@ internal static class FreeWAvaloniaRibbonCommands
         // ── Developer ────────────────────────────────────────────────────────
 
         // ── Table Design contextual tab ───────────────────────────────────────
-        // Table Style Options toggles — DocumentView guards no-op when outside a table.
-        TableEditingRibbonWorkflow.Register(tableCommands, CreateTableEditingPorts(editor));
+        // Shared Table Tools policy; this host contributes only Avalonia editor and dialog adapters.
+        TableEditingRibbonWorkflow.Register(tableCommands, CreateTableEditingPorts(editor, callbacks));
 
-        // Table shading: open the WPF-parity palette; the shell applies the chosen result only after
-        // the user accepts a swatch or No Color. Closing the picker is a no-op.
-        tableCommands.Register("freew.table-shading", OptionalHostCommand(callbacks.OpenCellShadingDialog));
         tableCommands.Register("freew.table-styles", new ActionRibbonCommand(() => { /* dropdown opener */ }));
         for (var index = 0; index < DocumentTableStyle.Catalog.Count; index++)
         {
@@ -263,21 +261,7 @@ internal static class FreeWAvaloniaRibbonCommands
                 new ActionRibbonCommand(() => editor.ApplyTableStyle(style)));
         }
 
-        // Borders dropdown — opener no-op; sub-commands apply specific edges.
-        tableCommands.Register("freew.table-borders", new ActionRibbonCommand(() => { /* flyout opener */ }));
-        RegisterTableBorderCommands(tableCommands, editor);
         tableCommands.Bind(FreeWRibbonCommandAction.Eraser, new ActionRibbonCommand(editor.EraseTableBorderAtCaret));
-
-        // ── Table Layout contextual tab ───────────────────────────────────────
-        // Row / column mutations.
-        tableCommands.Register("freew.table-insert-below",     new ActionRibbonCommand(editor.InsertTableRowBelow));
-        tableCommands.Register("freew.table-insert-col-right", new ActionRibbonCommand(editor.InsertTableColumnRight));
-
-        // Merge / split.
-        tableCommands.Register("freew.table-merge-cells", new ActionRibbonCommand(editor.MergeSelectedCells));
-        tableCommands.Register(
-            "freew.table-split-cell",
-            OptionalHostCommand(callbacks.OpenSplitCellDialog));
 
         // Layout quick actions share their model policy; Avalonia contributes only the editor adapter.
         PageLayoutRibbonWorkflow.Register(
@@ -286,6 +270,33 @@ internal static class FreeWAvaloniaRibbonCommands
                 GetPageSettings: () => editor.Document.Page,
                 ApplyPageSettings: editor.ApplyPageSettings,
                 IsEnabled: () => !editor.IsEditingLocked));
+
+        // These controls are realized by shell callbacks in Avalonia. The shared workflow still owns
+        // all model-only layout actions; this adapter preserves the native routes and their aliases.
+        var orientationCommand = new HostPageSettingCommand(editor, callbacks.ToggleOrientation);
+        r.Bind(FreeWRibbonCommandAction.Orientation, orientationCommand);
+        r.Register("freew.page-orientation", orientationCommand);
+        r.Bind(FreeWRibbonCommandAction.Margins, new HostPageSettingCommand(
+            editor,
+            () => ToggleNormalNarrowMargins(editor, callbacks)));
+        r.Register("freew.page-margins-normal", new HostPageSettingCommand(
+            editor,
+            () => callbacks.ApplyMarginPreset("normal")));
+        r.Register("freew.page-margins-narrow", new HostPageSettingCommand(
+            editor,
+            () => callbacks.ApplyMarginPreset("narrow")));
+        r.Register("freew.page-margins-wide", new HostPageSettingCommand(
+            editor,
+            () => callbacks.ApplyMarginPreset("wide")));
+        r.Bind(FreeWRibbonCommandAction.Size, new HostPageSettingCommand(
+            editor,
+            () => ToggleLetterA4Paper(editor, callbacks)));
+        r.Register("freew.page-size-letter", new HostPageSettingCommand(
+            editor,
+            () => callbacks.ApplyPaperSize("letter")));
+        r.Register("freew.page-size-a4", new HostPageSettingCommand(
+            editor,
+            () => callbacks.ApplyPaperSize("a4")));
 
         var columnsDialogCommand = OptionalHostCommand(callbacks.OpenColumnsDialog);
         r.Bind(FreeWRibbonCommandAction.Columns, columnsDialogCommand);
@@ -319,23 +330,23 @@ internal static class FreeWAvaloniaRibbonCommands
                 Modes: new ViewRibbonModeBindings(
                     PrintLayout: new ViewRibbonToggleBinding(
                         callbacks.SetPrintLayout,
-                        callbacks.IsPrintLayoutActive ??
-                            (() => editor.ViewMode == DocumentViewMode.PrintLayout)),
+                        callbacks.ResolvePrintLayoutActive(
+                            () => editor.ViewMode == DocumentViewMode.PrintLayout)),
                     WebLayout: new ViewRibbonToggleBinding(
                         callbacks.SetWebLayout,
-                        callbacks.IsWebLayoutActive ??
-                            (() => editor.ViewMode == DocumentViewMode.WebLayout)),
+                        callbacks.ResolveWebLayoutActive(
+                            () => editor.ViewMode == DocumentViewMode.WebLayout)),
                     Draft: new ViewRibbonToggleBinding(
                         callbacks.SetDraftView,
-                        callbacks.IsDraftViewActive ??
-                            (() => editor.ViewMode == DocumentViewMode.Draft)),
+                        callbacks.ResolveDraftViewActive(
+                            () => editor.ViewMode == DocumentViewMode.Draft)),
                     Outline: new ViewRibbonToggleBinding(
                         callbacks.SetOutlineView,
                         callbacks.IsOutlineViewActive,
                         ViewRibbonBindingAvailability.Disabled),
                     PagedEdit: new ViewRibbonToggleBinding(
                         callbacks.TogglePagedEditView ?? callbacks.SetPrintLayout,
-                        callbacks.IsPagedEditViewActive ?? (static () => false))),
+                        callbacks.ResolvePagedEditViewActive(static () => false))),
                 Show: new ViewRibbonShowBindings(
                     NavigationPane: new ViewRibbonToggleBinding(
                         callbacks.ToggleNavigationPane,
@@ -558,6 +569,26 @@ internal static class FreeWAvaloniaRibbonCommands
         callbacks.OpenPageNumberFormatDialog?.Invoke();
     }
 
+    private static void ToggleNormalNarrowMargins(
+        DocumentView editor,
+        FreeWRibbonHostExecutionPorts callbacks)
+    {
+        var preset = PageLayoutCommandPlanner.HasNormalMargins(editor.Document.Page)
+            ? "narrow"
+            : "normal";
+        callbacks.ApplyMarginPreset(preset);
+    }
+
+    private static void ToggleLetterA4Paper(
+        DocumentView editor,
+        FreeWRibbonHostExecutionPorts callbacks)
+    {
+        var size = PageLayoutCommandPlanner.HasLetterPaperSize(editor.Document.Page)
+            ? "a4"
+            : "letter";
+        callbacks.ApplyPaperSize(size);
+    }
+
     private sealed class PageSettingCommand(
         DocumentView editor,
         Action<PageSettings> apply,
@@ -568,6 +599,17 @@ internal static class FreeWAvaloniaRibbonCommands
         public RibbonCommandState GetState() => new(
             IsEnabled: !editor.IsEditingLocked,
             IsChecked: isChecked?.Invoke(editor.Document.Page) == true);
+    }
+
+    private sealed class HostPageSettingCommand(DocumentView editor, Action execute) : IRibbonStatefulCommand
+    {
+        public void Execute(RibbonCommandContext context)
+        {
+            if (GetState().IsEnabled)
+                execute();
+        }
+
+        public RibbonCommandState GetState() => new(IsEnabled: !editor.IsEditingLocked);
     }
 
     private sealed class FontFamilyCommand(DocumentView editor) : IRibbonStatefulCommand
@@ -717,7 +759,8 @@ internal static class FreeWAvaloniaRibbonCommands
                 SmartArt: new EditingActionCommand(editor, callbacks.OpenInsertSmartArtDialog, () => editor.InsertSmartArt()),
                 Icon: new EditingActionCommand(editor, callbacks.OpenIconPickerDialog, editor.InsertIcon),
                 WordArt: new ActionRibbonCommand(() => editor.InsertWordArt()),
-                EmbeddedObject: OptionalHostCommand(callbacks.InsertObject)));
+                EmbeddedObject: new ActionRibbonCommand(
+                    callbacks.InsertObject ?? (() => editor.InsertEmbeddedObject()))));
     }
 
     private static IRibbonCommand OptionalHostCommand(Action? callback) =>
@@ -730,28 +773,6 @@ internal static class FreeWAvaloniaRibbonCommands
         var bookmarks = editor.BookmarkNames();
         if (bookmarks.Count > 0)
             editor.ApplyInternalLink(bookmarks[0]);
-    }
-
-    /// <summary>
-    /// Registers the per-edge sub-commands for the Table Borders dropdown.
-    /// Each command calls <see cref="DocumentView.SetCellBorders"/> with the appropriate
-    /// <see cref="CellBorderEdges"/> flag. The "No Border" entry clears all edges.
-    /// </summary>
-    private static void RegisterTableBorderCommands(
-        FreeWRibbonEditorCommandFamilyBuilder r,
-        DocumentView editor)
-    {
-        static void Add(FreeWRibbonEditorCommandFamilyBuilder reg, DocumentView ed, string id, CellBorderEdges edges, bool clear = false) =>
-            reg.Register(id, new ActionRibbonCommand(() => ed.SetCellBorders(edges, clearEdges: clear)));
-
-        Add(r, editor, "freew.table-borders.all",     CellBorderEdges.All);
-        Add(r, editor, "freew.table-borders.outside", CellBorderEdges.Outside);
-        Add(r, editor, "freew.table-borders.inside",  CellBorderEdges.Inside);
-        Add(r, editor, "freew.table-borders.none",    CellBorderEdges.All, clear: true);
-        Add(r, editor, "freew.table-borders.top",     CellBorderEdges.Top);
-        Add(r, editor, "freew.table-borders.bottom",  CellBorderEdges.Bottom);
-        Add(r, editor, "freew.table-borders.left",    CellBorderEdges.Left);
-        Add(r, editor, "freew.table-borders.right",   CellBorderEdges.Right);
     }
 
     private sealed class ShowMarkupBalloonsCommand(DocumentView editor, FreeWRibbonHostExecutionPorts callbacks) : IRibbonStatefulCommand
@@ -792,8 +813,8 @@ internal static class FreeWAvaloniaRibbonCommands
         NoteReferenceRibbonWorkflow.Register(
             family,
             new NoteReferenceRibbonPorts(
-                callbacks.OpenFootnoteDialog,
-                callbacks.OpenEndnoteDialog,
+                callbacks.OpenFootnoteDialog ?? (() => editor.InsertFootnote()),
+                callbacks.OpenEndnoteDialog ?? (() => editor.InsertEndnote()),
                 () => editor.MoveToNextFootnote(),
                 () => editor.MoveToPreviousFootnote(),
                 () => editor.MoveToNextEndnote(),
@@ -815,7 +836,7 @@ internal static class FreeWAvaloniaRibbonCommands
             family,
             new CaptionRibbonPorts(
                 OptionalHostCommand(callbacks.OpenCaptionDialog),
-                callbacks.OpenCaptionDialogForLabel,
+                callbacks.OpenCaptionDialogForLabel ?? (label => editor.InsertCaption(label)),
                 OptionalHostCommand(callbacks.OpenCrossReferenceDialog)));
 
         CitationRibbonWorkflow.Register(
@@ -835,14 +856,14 @@ internal static class FreeWAvaloniaRibbonCommands
         IndexRibbonWorkflow.Register(
             family,
             new IndexRibbonPorts(
-                callbacks.OpenMarkIndexEntryDialog,
-                callbacks.OpenInsertIndexDialog,
-                callbacks.OpenUpdateIndexDialog));
+                callbacks.OpenMarkIndexEntryDialog ?? (() => editor.MarkIndexEntry()),
+                callbacks.OpenInsertIndexDialog ?? (() => editor.InsertIndex()),
+                callbacks.OpenUpdateIndexDialog ?? (() => editor.RefreshIndex())));
         TableOfAuthoritiesRibbonWorkflow.Register(
             family,
             new TableOfAuthoritiesRibbonPorts(
                 callbacks.OpenMarkCitationDialog,
-                callbacks.ShowTableOfAuthoritiesDialog,
+                callbacks.ShowTableOfAuthoritiesDialog ?? (() => editor.InsertTableOfAuthorities()),
                 editor.RefreshTableOfAuthorities));
     }
 
@@ -1197,6 +1218,7 @@ internal static class FreeWAvaloniaRibbonCommands
             HasSelection: target => target == ObjectFormatTarget.Picture
                 ? editor.SelectedFloatingImage() is not null
                 : editor.SelectedFloatingShape() is not null,
+            HasTransformSelection: () => editor.SelectedFloatingInfo is not null,
             ApplyWrap: (_, wrapping) => editor.SetFloatingWrap(wrapping),
             ApplyTransform: (_, command) =>
             {
@@ -1306,7 +1328,9 @@ internal static class FreeWAvaloniaRibbonCommands
             ToggleParagraphBorder: () => editor.ToggleParagraphBorder(),
             Sort: new ActionRibbonCommand(() => ExecuteSortCommand(editor, callbacks)));
 
-    private static TableEditingRibbonPorts CreateTableEditingPorts(DocumentView editor) =>
+    private static TableEditingRibbonPorts CreateTableEditingPorts(
+        DocumentView editor,
+        FreeWRibbonHostExecutionPorts callbacks) =>
         new(
             PrepareExecution: () => editor.Focus(),
             ToggleHeaderRow: editor.ToggleTableHeaderRow,
@@ -1343,7 +1367,13 @@ internal static class FreeWAvaloniaRibbonCommands
                     editor.SetCellBlockSelection(cell.TableBlock, cell.Row, cell.Col, cell.Row, cell.Col);
             },
             InsertRowAbove: editor.InsertTableRowAbove,
+            InsertRowBelow: editor.InsertTableRowBelow,
             InsertColumnLeft: editor.InsertTableColumnLeft,
+            InsertColumnRight: editor.InsertTableColumnRight,
+            MergeCells: editor.MergeSelectedCells,
+            SplitCell: OptionalHostCommand(callbacks.OpenSplitCellDialog),
+            Shading: OptionalHostCommand(callbacks.OpenCellShadingDialog),
+            Borders: OptionalHostCommand(callbacks.OpenCellBordersDialog),
             DeleteRow: editor.DeleteTableRow,
             DeleteColumn: editor.DeleteTableColumn,
             DeleteTable: () =>
@@ -1357,6 +1387,7 @@ internal static class FreeWAvaloniaRibbonCommands
             SetAutoFit: editor.SetTableAutoFit,
             SetCellAlignment: editor.SetCaretCellAlignment,
             SetCellTextDirection: editor.SetCaretCellTextDirection,
+            SetCellBorders: (edges, clearEdges) => editor.SetCellBorders(edges, clearEdges: clearEdges),
             ToggleRepeatHeaderRow: editor.ToggleTableRepeatHeaderRow);
 
     private static FreeWRibbonTableExecutionPorts CreateTableExecutionPorts(

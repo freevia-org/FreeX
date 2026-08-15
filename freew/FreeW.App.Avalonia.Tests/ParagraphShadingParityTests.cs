@@ -20,8 +20,21 @@ public sealed class ParagraphShadingParityTests
             .OfType<RibbonDropdown>()
             .Single(control => control.CommandId.Value == "freew.para-shading");
 
-        shading.Menu.Items.Select(item => item.CommandId?.Value)
-            .Should().Contain(new[] { "freew.para-shading.light-yellow", "freew.para-shading.none" });
+        var choices = FreeW.App.Presentation.Ribbon.FreeWRibbonPaletteCatalog.ParagraphShading;
+        var expectedMenu = choices
+            .SelectMany(choice => choice.StartsNewGroup
+                ? new[]
+                {
+                    (RibbonMenuItemKind.Separator, "", (string?)null),
+                    (RibbonMenuItemKind.Command, choice.Label, (string?)choice.CommandId),
+                }
+                : new[]
+                {
+                    (RibbonMenuItemKind.Command, choice.Label, (string?)choice.CommandId),
+                });
+        shading.Menu.Items
+            .Select(item => (item.Kind, item.Header, item.CommandId?.Value))
+            .Should().Equal(expectedMenu);
 
         var document = TextDocument.CreateEmpty();
         document.Blocks.Clear();
@@ -30,10 +43,13 @@ public sealed class ParagraphShadingParityTests
         editor.LoadDocument(document);
         var registry = FreeWAvaloniaRibbonCommands.Build(editor, CreateCallbacks());
 
-        Execute(registry, "freew.para-shading.light-blue");
-        ((Paragraph)document.Blocks[0]).Formatting.ShadingColorHex.Should().Be("#DEEBF7");
-        Execute(registry, "freew.para-shading.none");
-        ((Paragraph)document.Blocks[0]).Formatting.ShadingColorHex.Should().BeNull();
+        foreach (var choice in choices)
+        {
+            Execute(registry, choice.CommandId);
+            ((Paragraph)document.Blocks[0]).Formatting.ShadingColorHex.Should().Be(
+                choice.Hex,
+                $"'{choice.CommandId}' must apply the WPF-authority palette payload");
+        }
     }
 
     [Fact]
@@ -41,13 +57,29 @@ public sealed class ParagraphShadingParityTests
     {
         var root = TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeW.slnx");
         var source = File.ReadAllText(Path.Combine(root, "freew", "FreeW.App.Host", "Ribbon", "FreeWRibbonCommands.cs"));
-        var catalog = File.ReadAllText(Path.Combine(root, "freew", "FreeW.App.Presentation", "Ribbon", "FreeWRibbonPaletteCatalog.cs"));
+        var choices = FreeW.App.Presentation.Ribbon.FreeWRibbonPaletteCatalog.ParagraphShading;
 
         source.Should().Contain("private sealed class ParagraphShadingCommand");
         source.Should().Contain("editor.ToggleParagraphShading(hex)");
         source.Should().Contain("FreeWRibbonPaletteCatalog.ParagraphShadingPickerSwatches");
-        source.Should().Contain("Content = \"No Color\"");
-        catalog.Should().Contain("new(\"freew.para-shading.light-yellow\", \"Light Yellow\", \"#FFF2CC\")");
+        source.Should().Contain("Content = UiText.Get(\"Ribbon_Palette_PageColor_NoColor_Label\")");
+        choices.Select(choice => (choice.CommandId, choice.Label, choice.Hex, choice.StartsNewGroup))
+            .Should().Equal(
+                ("freew.para-shading.yellow", "Yellow", "#FFFF00", false),
+                ("freew.para-shading.green", "Green", "#92D050", false),
+                ("freew.para-shading.cyan", "Cyan", "#00B0F0", false),
+                ("freew.para-shading.gold", "Gold", "#FFC000", false),
+                ("freew.para-shading.red", "Red", "#FF0000", false),
+                ("freew.para-shading.gray", "Gray", "#D9D9D9", false),
+                ("freew.para-shading.light-gray", "Light Gray", "#A6A6A6", false),
+                ("freew.para-shading.light-yellow", "Light Yellow", "#FFF2CC", false),
+                ("freew.para-shading.light-blue", "Light Blue", "#DEEBF7", false),
+                ("freew.para-shading.light-green", "Light Green", "#E2EFDA", false),
+                ("freew.para-shading.light-peach", "Light Peach", "#FCE4D6", false),
+                ("freew.para-shading.very-light-gray", "Very Light Gray", "#EDEDED", false),
+                ("freew.para-shading.none", "No Color", (string?)null, true));
+        FreeW.App.Presentation.Ribbon.FreeWRibbonPaletteCatalog.ParagraphShadingPickerSwatches
+            .Should().Equal(choices.Where(choice => choice.Hex is not null).Select(choice => choice.Hex));
     }
 
     [Fact]

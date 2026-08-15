@@ -1,3 +1,4 @@
+using System.Globalization;
 using FluentAssertions;
 using FreeX.App.Presentation.Charts.Editing;
 using FreeX.App.Presentation.Comments;
@@ -6,6 +7,7 @@ using FreeX.App.Presentation.FillSeries;
 using FreeX.App.Presentation.Filtering;
 using FreeX.App.Presentation.PageLayout;
 using FreeX.App.Presentation.PivotUI;
+using FreeX.App.Presentation.Options;
 using FreeX.App.Presentation.TextToColumns;
 using FreeX.App.Services;
 
@@ -14,33 +16,41 @@ namespace FreeX.App.Presentation.Tests.Localization;
 public sealed class ValidationPresentationPlannerTests
 {
     [Fact]
-    public void GoalSeekValidation_PreservesRendererSpecificTextAndSharedFocus()
+    public void GoalSeekValidation_UsesOneSharedMessageAndFocusContract()
     {
         var result = GoalSeekRequestParseResult.Invalid(
             GoalSeekRequestParseError.InvalidSetCellAddress,
             "bad");
 
-        var wpf = GoalSeekStatusDialogPlanner.DescribeValidationError(result, GoalSeekPresentationProfile.Wpf);
-        var avalonia = GoalSeekStatusDialogPlanner.DescribeValidationError(result, GoalSeekPresentationProfile.Avalonia);
+        var presentation = GoalSeekStatusDialogPlanner.DescribeValidationError(result);
 
-        wpf.Message.ResourceKey.Should().Be("GoalSeek_InvalidCellAddressMessage");
-        wpf.Message.Arguments.Should().Equal("bad");
-        avalonia.Message.ResourceKey.Should().Be("GoalSeek_InvalidCellAddressMessage");
-        avalonia.Message.Arguments.Should().Equal("bad");
-        wpf.FocusTarget.Should().Be(GoalSeekValidationFocusTarget.SetCell);
-        avalonia.FocusTarget.Should().Be(GoalSeekValidationFocusTarget.SetCell);
+        presentation.Message.ResourceKey.Should().Be("GoalSeek_InvalidCellAddressMessage");
+        presentation.Message.Arguments.Should().Equal("bad");
+        presentation.FocusTarget.Should().Be(GoalSeekValidationFocusTarget.SetCell);
     }
 
     [Fact]
-    public void GoalSeekStatus_PreservesWpfAndAvaloniaFormattingProfiles()
+    public void GoalSeekStatus_UsesWpfAuthorityPrecisionAndInvariantFormatting()
     {
-        var wpf = GoalSeekStatusDialogPlanner.DescribeStatus(true, 10, 9.5, 2, GoalSeekPresentationProfile.Wpf);
-        var avalonia = GoalSeekStatusDialogPlanner.DescribeStatus(false, 10, 9.5, 2, GoalSeekPresentationProfile.Avalonia);
+        var previousCulture = CultureInfo.CurrentCulture;
+        try
+        {
+            CultureInfo.CurrentCulture = CultureInfo.GetCultureInfo("fr-FR");
+            var target = 1.234567890123;
+            var actual = 9.876543210987;
+            var found = 2.345678901234;
+            var presentation = GoalSeekStatusDialogPlanner.DescribeStatus(true, target, actual, found);
 
-        wpf.ResourceKey.Should().Be("GoalSeekStatus_SuccessSummary");
-        wpf.Arguments.Should().Equal("10", "9.5", "2");
-        avalonia.ResourceKey.Should().Be("GoalSeekStatus_FailureSummary");
-        avalonia.Arguments.Should().Equal("10", "9.5", "2");
+            presentation.ResourceKey.Should().Be("GoalSeekStatus_SuccessSummary");
+            presentation.Arguments.Should().Equal(
+                target.ToString("G10", CultureInfo.InvariantCulture),
+                actual.ToString("G10", CultureInfo.InvariantCulture),
+                found.ToString("G10", CultureInfo.InvariantCulture));
+        }
+        finally
+        {
+            CultureInfo.CurrentCulture = previousCulture;
+        }
     }
 
     [Fact]
@@ -81,16 +91,26 @@ public sealed class ValidationPresentationPlannerTests
             TextToColumnsDialogValidationIssue.InvalidThousandsSeparator);
         var comment = ThreadedCommentDialogPlanner.DescribeValidationError(
             ThreadedCommentDialogValidationError.EnterReply);
-        var fill = FillSeriesPlanner.DescribeInputError(
-            FillSeriesInputError.InvalidStop,
-            FillSeriesValidationTextProfile.Avalonia);
+        var fill = FillSeriesPlanner.DescribeInputError(FillSeriesInputError.InvalidStop);
 
         textToColumns.Message.ResourceKey.Should().Be("TextToColumns_EnterASingleThousandsSeparator");
         textToColumns.FocusTarget.Should().Be(TextToColumnsDialogFocusTarget.ThousandsSeparator);
         comment!.Message.ResourceKey.Should().Be("ThreadedComment_EnterReplyMessage");
         comment.FocusTarget.Should().Be(ThreadedCommentDialogFocusTarget.Reply);
-        fill.Message.ResourceKey.Should().Be("FillSeries_InvalidStop");
+        fill.Message.ResourceKey.Should().Be("FillSeriesStep_InvalidStopMessage");
         fill.FocusTarget.Should().Be(FillSeriesInputFocusTarget.StopValue);
+    }
+
+    [Fact]
+    public void OptionsValidation_UsesSharedWpfAuthorityFontSizeMessage()
+    {
+        var fontSize = OptionsDialogPlanner.DescribeInputError(OptionsDialogPlanner.OptionsInputError.InvalidFontSize);
+        var sheetCount = OptionsDialogPlanner.DescribeInputError(OptionsDialogPlanner.OptionsInputError.InvalidSheetCount);
+
+        fontSize.Message.ResourceKey.Should().Be("Options_InvalidDefaultFontSizeMessage");
+        fontSize.FocusTarget.Should().Be(OptionsValidationFocusTarget.DefaultFontSize);
+        sheetCount.Message.ResourceKey.Should().Be("Options_InvalidSheetCountMessage");
+        sheetCount.FocusTarget.Should().Be(OptionsValidationFocusTarget.DefaultSheetCount);
     }
 
     [Fact]
@@ -106,18 +126,14 @@ public sealed class ValidationPresentationPlannerTests
     }
 
     [Fact]
-    public void HyperlinkValidation_PreservesExactRendererProfiles()
+    public void HyperlinkValidation_UsesSharedLocalizedWpfAuthorityMessage()
     {
-        var wpf = HyperlinkDialogPlanner.DescribeValidationError(
-            HyperlinkDialogValidationError.MissingDocumentLocation,
-            HyperlinkDialogTextProfile.Wpf);
-        var avalonia = HyperlinkDialogPlanner.DescribeValidationError(
-            HyperlinkDialogValidationError.MissingDocumentLocation,
-            HyperlinkDialogTextProfile.Avalonia);
+        var presentation = HyperlinkDialogPlanner.DescribeValidationError(
+            HyperlinkDialogValidationError.MissingDocumentLocation);
 
-        wpf.Message.ResourceKey.Should().Be("Hyperlink_EnterValidCellReferenceOrDefinedName");
-        avalonia.Message.LiteralText.Should().Be("Enter a cell reference or defined name.");
-        wpf.FocusTarget.Should().Be(HyperlinkDialogFocusTarget.Target);
+        presentation.Message.ResourceKey.Should().Be("Hyperlink_EnterValidCellReferenceOrDefinedName");
+        presentation.Message.LiteralText.Should().BeNull();
+        presentation.FocusTarget.Should().Be(HyperlinkDialogFocusTarget.Target);
     }
 
     [Fact]
@@ -150,7 +166,7 @@ public sealed class ValidationPresentationPlannerTests
     }
 
     [Fact]
-    public void PivotMessages_PreserveRendererProfilesAndTypedSuccess()
+    public void PivotMessages_UseSharedWpfAuthorityResourcesAndTypedSuccess()
     {
         var message = new PivotMessageModel(
             PivotApplicationIssue.MissingSource,
@@ -164,10 +180,8 @@ public sealed class ValidationPresentationPlannerTests
             Message: null,
             StatusArgument: "Pivot1");
 
-        PivotApplicationMessagePlanner.DescribeIssue(message, PivotMessageTextProfile.Wpf)
+        PivotApplicationMessagePlanner.DescribeIssue(message)
             .ResourceKey.Should().Be("MainWindowMessage_PivotTableSelectSourceRange");
-        PivotApplicationMessagePlanner.DescribeIssue(message, PivotMessageTextProfile.Avalonia)
-            .ResourceKey.Should().Be("PivotLoc_SelectRangeForPivot");
         PivotApplicationMessagePlanner.DescribeSuccess(outcome).Arguments.Should().Equal("Pivot1");
     }
 

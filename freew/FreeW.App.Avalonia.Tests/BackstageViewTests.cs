@@ -316,7 +316,7 @@ public class BackstageViewTests : IDisposable
         metrics.TabsMinHeight.Should().Be(63);
         metrics.TabsMargin.Should().Be(new BackstageThickness(0, 0, 0, 14));
         metrics.ActionFontSize.Should().Be(13);
-        metrics.DescriptionFontSize.Should().Be(11);
+        metrics.DescriptionFontSize.Should().Be(12);
         metrics.ActionRowMargin.Should().Be(new BackstageThickness(0, 0, 0, 10));
         metrics.DescriptionMargin.Should().Be(new BackstageThickness(0, 2, 0, 0));
     }

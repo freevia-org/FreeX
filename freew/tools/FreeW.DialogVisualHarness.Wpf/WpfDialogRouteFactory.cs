@@ -127,6 +127,9 @@ internal static class WpfDialogRouteFactory
             case FreeWDialogFixtureKind.EmptyTextDocument:
                 ManageStylesDialog.Ask(owner, new TextDocument(), null);
                 break;
+            case FreeWDialogFixtureKind.EmptySourceLists:
+                FreeWRibbonCommands.AskManageSourcesForVisualHarness(owner);
+                break;
             default:
                 throw new ArgumentOutOfRangeException(nameof(routeId));
         }

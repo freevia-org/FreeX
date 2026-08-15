@@ -208,6 +208,7 @@ public static class WorkbookPdfContentBuilder
         var axisScalePlan = SparklineAxisScalePlanner.Build(sheet.Sparklines, sparklineValues);
 
         // ── Draw cell fills and text ───────────────────────────────────────────
+        var validationCircleCellBounds = new List<LayoutRect>();
         foreach (var cell in contentPlan.Cells)
         {
             var rowIndex = FindRowIndex(contentPlan.Rows, cell.Row);
@@ -222,6 +223,8 @@ public static class WorkbookPdfContentBuilder
             var w = colWidths[colIndex];
             var h = rowHeights[rowIndex];
             var y = rowYs[rowIndex];  // bottom of this row in PDF y-up
+            if (cell.HasValidationCircle)
+                validationCircleCellBounds.Add(new LayoutRect(x, y, w, h));
 
             var style = workbook.GetStyle(cell.StyleId);
             // R72-render-cf-visual-4-1: a conditional-format fill (color scale or a matched
@@ -397,6 +400,9 @@ public static class WorkbookPdfContentBuilder
         // R79-services-pagesetup-print-5-2: draw the A/B/C.../1/2/3... heading gutter when the sheet's
         // Page Setup > Sheet > "Row and column headings" is enabled, matching PrintRenderer.Headings.cs
         // (DrawPrintHeadings) for the WPF print path.
+        foreach (var cellBounds in validationCircleCellBounds)
+            DrawValidationCircle(ops, cellBounds);
+
         if (sheet.PrintHeadings)
         {
             AddPrintHeadings(ops, offsetContentLeft, offsetContentTop, headingWidthPt, headingHeightPt,
@@ -555,6 +561,7 @@ public static class WorkbookPdfContentBuilder
         var gridTop = options.PageHeightPoints - options.MarginPoints - options.HeaderHeightPoints;
         var gridLeft = options.MarginPoints;
 
+        var validationCircleCellBounds = new List<LayoutRect>();
         foreach (var cell in contentPlan.Cells)
         {
             var rowIndex = FindRowIndex(contentPlan.Rows, cell.Row);
@@ -564,6 +571,14 @@ public static class WorkbookPdfContentBuilder
 
             var x = gridLeft + (columnIndex * columnWidth);
             var y = gridTop - ((rowIndex + 1) * options.RowHeightPoints);
+            if (cell.HasValidationCircle)
+            {
+                validationCircleCellBounds.Add(new LayoutRect(
+                    x,
+                    y,
+                    columnWidth,
+                    options.RowHeightPoints));
+            }
             var style = workbook.GetStyle(cell.StyleId);
             // R72-render-cf-visual-4-1: same conditional-format fill override as the page-setup-aware
             // path above.
@@ -608,6 +623,9 @@ public static class WorkbookPdfContentBuilder
                 PdfWinAnsiTextCapability.Truncate(cell.DisplayText, options.MaximumCellTextLength)));
         }
 
+        foreach (var cellBounds in validationCircleCellBounds)
+            DrawValidationCircle(ops, cellBounds);
+
         ops.Add(new PdfText(
             options.MarginPoints,
             options.MarginPoints - 12,
@@ -622,6 +640,18 @@ public static class WorkbookPdfContentBuilder
     // -----------------------------------------------------------------------
     // Page-setup helpers
     // -----------------------------------------------------------------------
+
+    private static void DrawValidationCircle(List<PdfDrawOp> ops, LayoutRect cellBounds)
+    {
+        var ellipse = ValidationCircleLayoutPlanner.CalculateEllipseBounds(cellBounds);
+        ops.Add(new PdfStrokeEllipse(
+            ellipse.Left,
+            ellipse.Top,
+            ellipse.Width,
+            ellipse.Height,
+            ToPdfColor(ValidationCircleLayoutPlanner.StrokeColor),
+            ValidationCircleLayoutPlanner.StrokeThickness));
+    }
 
     /// <summary>
     /// Resolves the sheet's Scale%/Fit-to-pages setting to a single shrink ratio for this page, using

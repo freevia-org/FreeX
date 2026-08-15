@@ -26,17 +26,21 @@ public sealed class DialogComboBoxChromeTests
             AvaloniaCompactDialogChrome.ApplyComboBox(
                 comboBox,
                 AvaloniaCompactDialogChrome.WindowsStyle);
+            comboBox.Template.Should().NotBeNull(
+                "compact dialog ComboBoxes own stable framework-required template parts");
 
             var window = new Window { Content = comboBox };
             try
             {
                 window.Show();
                 comboBox.ApplyTemplate();
+                comboBox.Template.Should().NotBeNull();
                 comboBox.IsDropDownOpen = true;
                 comboBox.UpdateLayout();
                 Dispatcher.UIThread.RunJobs(DispatcherPriority.Render);
 
                 comboBox.IsDropDownOpen.Should().BeTrue();
+                comboBox.ContainerFromIndex(0).Should().NotBeNull();
             }
             finally
             {

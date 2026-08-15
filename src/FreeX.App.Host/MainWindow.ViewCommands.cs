@@ -27,21 +27,12 @@ public partial class MainWindow
         if (sheet is null || sender is not System.Windows.Controls.CheckBox chk) return;
 
         var targetSheetIds = CurrentGroupedEditSheetIds();
-        // Preserve THIS window's own effective Headings/Rulers (R87-order-guard-window-state-
-        // sweep-1), not whatever the shared Sheet currently holds -- a sibling "New Window" may
-        // have changed the shared fields without this window ever touching them, and reading the
-        // raw sheet here would silently adopt that sibling's values the moment this window
-        // toggles Gridlines (mirrors the ViewMode/Zoom per-window pattern above).
-        if (!TryExecuteGroupedSheetCommand(
-                "Gridlines",
-                sheetId => new SetWorksheetViewOptionsCommand(
-                    sheetId,
-                    chk.IsChecked == true,
-                    GetEffectiveViewState(_workbook.GetSheet(sheetId)).ShowHeadings,
-                    GetEffectiveViewState(_workbook.GetSheet(sheetId)).ShowRulers)))
+        if (!TryExecuteGroupedWorksheetViewState(
+                targetSheetIds,
+                () => _session.SetShowGridlines(chk.IsChecked == true),
+                "Gridlines"))
             return;
 
-        SyncWindowViewState(targetSheetIds);
         UpdateViewport();
     }
 
@@ -52,18 +43,12 @@ public partial class MainWindow
         if (sheet is null || sender is not System.Windows.Controls.CheckBox chk) return;
 
         var targetSheetIds = CurrentGroupedEditSheetIds();
-        // See ViewGridlinesChk_Changed above -- preserve this window's own effective
-        // Gridlines/Rulers rather than the shared Sheet's current values.
-        if (!TryExecuteGroupedSheetCommand(
-                "Headings",
-                sheetId => new SetWorksheetViewOptionsCommand(
-                    sheetId,
-                    GetEffectiveViewState(_workbook.GetSheet(sheetId)).ShowGridlines,
-                    chk.IsChecked == true,
-                    GetEffectiveViewState(_workbook.GetSheet(sheetId)).ShowRulers)))
+        if (!TryExecuteGroupedWorksheetViewState(
+                targetSheetIds,
+                () => _session.SetShowHeadings(chk.IsChecked == true),
+                "Headings"))
             return;
 
-        SyncWindowViewState(targetSheetIds);
         UpdateViewport();
     }
 
@@ -79,18 +64,12 @@ public partial class MainWindow
         }
 
         var targetSheetIds = CurrentGroupedEditSheetIds();
-        // See ViewGridlinesChk_Changed above -- preserve this window's own effective
-        // Gridlines/Headings rather than the shared Sheet's current values.
-        if (!TryExecuteGroupedSheetCommand(
-                "Ruler",
-                sheetId => new SetWorksheetViewOptionsCommand(
-                    sheetId,
-                    GetEffectiveViewState(_workbook.GetSheet(sheetId)).ShowGridlines,
-                    GetEffectiveViewState(_workbook.GetSheet(sheetId)).ShowHeadings,
-                    chk.IsChecked == true)))
+        if (!TryExecuteGroupedWorksheetViewState(
+                targetSheetIds,
+                () => _session.SetShowRulers(chk.IsChecked == true),
+                "Ruler"))
             return;
 
-        SyncWindowViewState(targetSheetIds);
         UpdateViewport();
     }
 
@@ -114,9 +93,9 @@ public partial class MainWindow
         if (sheet is null) return;
 
         var next = !(sheet.ShowOutlineSymbols ?? true);
-        if (!TryExecuteGroupedSheetCommand(
-                "Show Outline Symbols",
-                sheetId => new SetWorksheetOutlineSymbolsCommand(sheetId, next)))
+        if (!TryExecuteWorksheetLayout(
+                () => _session.SetShowOutlineSymbols(next),
+                "Show Outline Symbols"))
             return;
 
         UpdateViewport();
@@ -131,17 +110,25 @@ public partial class MainWindow
     private void PageLayoutViewBtn_Click(object sender, RoutedEventArgs e) =>
         SetWorksheetViewMode(WorksheetViewMode.PageLayout);
 
+    private bool TryExecuteGroupedWorksheetViewState(
+        IReadOnlyList<SheetId> targetSheetIds,
+        Func<WorkbookCellEditResult> execute,
+        string title)
+    {
+        SynchronizeWorkbookSessionSelection();
+        SynchronizeWorkbookSessionViewState(targetSheetIds);
+        return CompleteWorksheetSessionCommand(execute(), title, targetSheetIds);
+    }
+
     private void SetWorksheetViewMode(WorksheetViewMode viewMode)
     {
         var targetSheetIds = CurrentGroupedEditSheetIds();
-        if (!TryExecuteGroupedSheetCommand("Workbook View",
-                sheetId => new SetWorksheetViewModeCommand(sheetId, viewMode)))
+        if (!TryExecuteGroupedWorksheetViewState(
+                targetSheetIds,
+                () => _session.SetWorksheetViewMode(viewMode),
+                "Workbook View"))
             return;
 
-        // This window chose the new view mode -- remember it as THIS window's own state so a
-        // sibling "New Window" over the same document keeps showing whatever it had before
-        // (R83-app-view-modes-5-1); only the window that changed it should see the change.
-        SyncWindowViewState(targetSheetIds);
         UpdateViewport();
     }
 
@@ -649,14 +636,12 @@ public partial class MainWindow
         }
 
         var targetSheetIds = CurrentGroupedEditSheetIds();
-        if (!TryExecuteGroupedSheetCommand(
-                "Zoom",
-                sheetId => new SetWorksheetZoomCommand(sheetId, inputPlan.ZoomPercent)))
+        if (!TryExecuteGroupedWorksheetViewState(
+                targetSheetIds,
+                () => _session.SetZoomPercent(inputPlan.ZoomPercent),
+                "Zoom"))
             return;
 
-        // This window chose the new zoom -- remember it as THIS window's own state so a sibling
-        // "New Window" over the same document keeps its own zoom (R83-app-view-modes-5-1).
-        SyncWindowViewState(targetSheetIds);
         SyncZoomFromSheet(inputPlan.ZoomPercent, updateSlider: false);
         UpdateViewport();
     }

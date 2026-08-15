@@ -1,5 +1,6 @@
 using System.Windows;
 using System.Windows.Controls;
+using Free.Shared.AppServices;
 using Free.Shared.Shell;
 using FreeP.App.Compositor;
 using CompositorOptions = FreeP.App.Compositor.FreePOptions;
@@ -90,8 +91,8 @@ internal sealed partial class OptionsDialog : Free.Shared.Ribbon.Wpf.DialogWindo
     private void Accept()
     {
         _status.Visibility = Visibility.Collapsed;
-        var format = (_defaultFormat.SelectedItem as OptionsDialogFormatChoice)?.Extension;
-        var commit = _session.PlanAcceptance(new OptionsDialogInput(
+        var format = (_defaultFormat.SelectedItem as ApplicationOptionsFormatChoice)?.Extension;
+        var commit = _session.PlanAcceptance(new BasicApplicationOptionsDialogInput(
             _recentFilesCap.Text,
             format,
             _uiLanguage.Text));

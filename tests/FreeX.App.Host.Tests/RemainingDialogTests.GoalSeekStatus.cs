@@ -73,7 +73,7 @@ public sealed partial class RemainingDialogTests
         var source = ReadStatusDialogSources();
 
         source.Should().Contain("GoalSeekStatusDialogPlanner.DescribeStatus(");
-        source.Should().Contain("GoalSeekPresentationProfile.Wpf).Resolve(UiText.Get, UiText.Format)");
+        source.Should().NotContain("GoalSeekPresentationProfile");
         source.Should().Contain("Content = UiText.Get(\"GoalSeekStatus_KeepResult\")");
         source.Should().Contain("Content = UiText.Get(\"GoalSeekStatus_RestoreOriginalValues\")");
         source.Should().Contain("DialogButtonRowFactory.Create");

@@ -30,7 +30,12 @@ public static partial class PrintRenderer
     // Matches GridView.cs's ValidationCirclePen (red 226,28,33 @ 1.5pt) exactly, so the printed
     // circle is visually identical to the on-screen Circle Invalid Data overlay.
     private static readonly Pen PrintedValidationCirclePen =
-        new(new SolidColorBrush(Color.FromRgb(226, 28, 33)), 1.5);
+        new(
+            new SolidColorBrush(Color.FromRgb(
+                ValidationCircleLayoutPlanner.StrokeColor.R,
+                ValidationCircleLayoutPlanner.StrokeColor.G,
+                ValidationCircleLayoutPlanner.StrokeColor.B)),
+            ValidationCircleLayoutPlanner.StrokeThickness);
 
     private static void DrawPrintedGridCells(
         DrawingContext dc,
@@ -341,10 +346,17 @@ public static partial class PrintRenderer
                 colWidth,
                 rowHeight);
 
-            var radiusX = Math.Max(2.0, rect.Width * 0.38);
-            var radiusY = Math.Max(2.0, rect.Height * 0.32);
-            var center = new Point(rect.Left + rect.Width / 2.0, rect.Top + rect.Height / 2.0);
-            dc.DrawEllipse(null, PrintedValidationCirclePen, center, radiusX, radiusY);
+            var ellipse = ValidationCircleLayoutPlanner.CalculateEllipseBounds(
+                new LayoutRect(rect.Left, rect.Top, rect.Width, rect.Height));
+            var center = new Point(
+                ellipse.Left + (ellipse.Width / 2.0),
+                ellipse.Top + (ellipse.Height / 2.0));
+            dc.DrawEllipse(
+                null,
+                PrintedValidationCirclePen,
+                center,
+                ellipse.Width / 2.0,
+                ellipse.Height / 2.0);
         }
     }
 

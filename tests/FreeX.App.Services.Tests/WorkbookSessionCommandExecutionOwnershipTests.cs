@@ -1,4 +1,5 @@
 using FluentAssertions;
+using FreeX.App.Presentation.Filtering;
 using FreeX.Core.Calc;
 using FreeX.Core.Commands;
 using FreeX.Core.Formula;
@@ -57,6 +58,76 @@ public sealed class WorkbookSessionCommandExecutionOwnershipTests
     }
 
     [Fact]
+    public void ExecuteWorksheetFilterMutationPlan_ExpandsHeaderSelectionAndRegistersRepeat()
+    {
+        using var session = new WorkbookSessionFactory().CreateNew(120, 160);
+        var sheet = session.ActiveSheet;
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("Region"));
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 2), new TextValue("Status"));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 1), new TextValue("North"));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 2), new TextValue("Open"));
+        sheet.SetCell(new CellAddress(sheet.Id, 3, 1), new TextValue("South"));
+        sheet.SetCell(new CellAddress(sheet.Id, 3, 2), new TextValue("Closed"));
+        var filterRange = new GridRange(
+            new CellAddress(sheet.Id, 1, 1),
+            new CellAddress(sheet.Id, 3, 2));
+        var selectedHeader = new CellAddress(sheet.Id, 1, 2);
+        session.SynchronizeSelectionState(
+            sheet.Id,
+            new GridRange(selectedHeader, selectedHeader),
+            [new GridRange(selectedHeader, selectedHeader)],
+            selectedHeader);
+        var workflow = new WorksheetFilterWorkflowSession();
+        var plan = workflow.PlanAllowedValues(sheet.Id, filterRange, 0, ["North"]);
+
+        var result = session.ExecuteWorksheetFilterMutationPlan(plan);
+
+        result.Success.Should().BeTrue();
+        sheet.FilterHiddenRows.Should().Contain(3);
+        session.SelectedRange.Should().Be(filterRange);
+        session.SelectedRanges.Should().Equal(filterRange);
+        session.ActiveCell.Should().Be(selectedHeader);
+        session.CanRepeatLastAction.Should().BeTrue();
+    }
+
+    [Fact]
+    public void ExecuteWorksheetFilterCommand_PreservesNonHeaderMultiAreaAndRebuildsForRepeat()
+    {
+        using var session = new WorkbookSessionFactory().CreateNew(120, 160);
+        var sheet = session.ActiveSheet;
+        var initialRange = new GridRange(
+            new CellAddress(sheet.Id, 1, 1),
+            new CellAddress(sheet.Id, 4, 2));
+        var primary = new GridRange(
+            new CellAddress(sheet.Id, 6, 3),
+            new CellAddress(sheet.Id, 7, 3));
+        var secondary = new GridRange(
+            new CellAddress(sheet.Id, 9, 5),
+            new CellAddress(sheet.Id, 9, 6));
+        var active = primary.End;
+        session.SynchronizeSelectionState(sheet.Id, primary, [primary, secondary], active);
+
+        session.ExecuteWorksheetFilterCommand(
+                initialRange,
+                range => EditCellsCommand.ForValue(sheet.Id, range.Start, new NumberValue(11)))
+            .Success.Should().BeTrue();
+
+        session.SelectedRange.Should().Be(primary);
+        session.SelectedRanges.Should().Equal(primary, secondary);
+        session.ActiveCell.Should().Be(active);
+        sheet.GetCell(initialRange.Start)!.Value.Should().Be(new NumberValue(11));
+
+        var repeatRange = new GridRange(
+            new CellAddress(sheet.Id, 12, 7),
+            new CellAddress(sheet.Id, 13, 8));
+        session.SynchronizeSelectionState(sheet.Id, repeatRange, [repeatRange], repeatRange.Start);
+        session.RepeatLastAction().Success.Should().BeTrue();
+
+        sheet.GetCell(repeatRange.Start)!.Value.Should().Be(new NumberValue(11));
+        session.SelectedRange.Should().Be(repeatRange);
+    }
+
+    [Fact]
     public void ExecuteCommandPreservingSelection_PropagatesNoOpWithoutDirtyingOrHistory()
     {
         using var session = new WorkbookSessionFactory().CreateNew(120, 160);
@@ -92,6 +163,36 @@ public sealed class WorkbookSessionCommandExecutionOwnershipTests
         session.SelectedRange.Should().Be(new GridRange(savedCell, savedCell));
         sheet.ActiveRow.Should().Be(savedCell.Row);
         sheet.ActiveCol.Should().Be(savedCell.Col);
+    }
+
+    [Fact]
+    public void ExecuteCustomViewCommand_ApplyAdoptsSavedSheetCellAndViewStateAcrossSheets()
+    {
+        using var session = new WorkbookSessionFactory().CreateNew(120, 160);
+        var originalSheet = session.ActiveSheet;
+        session.AddSheet().Success.Should().BeTrue();
+        var savedSheet = session.ActiveSheet;
+        var savedCell = new CellAddress(savedSheet.Id, 9, 5);
+
+        Select(session, savedCell);
+        session.SetZoomPercent(175).Success.Should().BeTrue();
+        session.SetShowGridlines(false).Success.Should().BeTrue();
+        session.ExecuteCustomViewCommand(new SaveCustomViewCommand("Cross-sheet View"))
+            .Success.Should().BeTrue();
+
+        session.SelectSheet(originalSheet.Id).Should().BeTrue();
+        Select(session, new CellAddress(originalSheet.Id, 2, 2));
+        savedSheet.ZoomPercent = 90;
+        savedSheet.ShowGridlines = true;
+
+        session.ExecuteCustomViewCommand(new ApplyCustomViewCommand("Cross-sheet View"))
+            .Success.Should().BeTrue();
+
+        session.ActiveSheet.Id.Should().Be(savedSheet.Id);
+        session.ActiveCell.Should().Be(savedCell);
+        session.SelectedRange.Should().Be(new GridRange(savedCell, savedCell));
+        session.ZoomPercent.Should().Be(175);
+        session.IsShowingGridlines.Should().BeFalse();
     }
 
     [Fact]

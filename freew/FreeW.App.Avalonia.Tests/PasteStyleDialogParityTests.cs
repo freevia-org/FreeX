@@ -115,6 +115,24 @@ public sealed class PasteStyleDialogParityTests
         }, CancellationToken.None);
     }
 
+    [Theory]
+    [InlineData("StyleDialog.cs", "DialogChromeStyle")]
+    [InlineData("MultilevelListDialog.cs", "Chrome")]
+    [InlineData("FontDialog.cs", "DialogChromeStyle")]
+    [InlineData("ParagraphDialog.cs", "DialogChromeStyle")]
+    [InlineData("TableDialogs.cs", "DialogChromeStyle")]
+    public void Custom_brush_dialog_styles_are_created_on_the_owning_ui_thread(
+        string fileName,
+        string styleProperty)
+    {
+        var root = TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeW.slnx");
+        var source = File.ReadAllText(Path.Combine(root, "freew", "FreeW.App.Avalonia", fileName));
+
+        source.Should().Contain(
+            $"private static AvaloniaCompactDialogChromeStyle {styleProperty} =>",
+            $"{fileName} must not cache mutable Avalonia brushes across headless UI dispatchers");
+    }
+
     [Fact]
     public void Visual_harness_uses_WPF_authority_dimensions_and_excludes_toggle_buttons()
     {

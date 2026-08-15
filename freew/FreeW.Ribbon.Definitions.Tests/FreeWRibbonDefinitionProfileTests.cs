@@ -56,7 +56,6 @@ public sealed class FreeWRibbonDefinitionProfileTests
             "chart-style" or
             "picture-adjust" or
             "picture-size" or
-            "smartart-colors" or
             "smartart-create-graphic" or
             "smartart-edit" or
             "smartart-layouts"),
@@ -89,9 +88,6 @@ public sealed class FreeWRibbonDefinitionProfileTests
         new("Avalonia-only File tab shell commands", entry => entry.TabId == "file"),
         new("Avalonia portable command registry aliases", entry => entry.CommandId is
             "freew.find-replace-dialog" or
-            "freew.insert-bookmark" or
-            "freew.insert-hyperlink" or
-            "freew.insert-table" or
             "freew.shape" or
             "freew.show-hide-para" or
             "freew.text-box"),
@@ -164,6 +160,21 @@ public sealed class FreeWRibbonDefinitionProfileTests
     }
 
     [Fact]
+    public void ChartAndSmartArtContextualTabsUseWpfAuthorityColorInBothProfiles()
+    {
+        var tabIds = new[] { "chart-design", "chart-format", "smartart-design" };
+
+        foreach (var capabilities in new[] { FreeWRibbonCapabilities.Wpf, FreeWRibbonCapabilities.Avalonia })
+        {
+            var tabs = FreeWRibbon.Build(capabilities).ContextualTabs
+                .ToDictionary(tab => tab.Id, StringComparer.Ordinal);
+
+            foreach (var tabId in tabIds)
+                tabs[tabId].Context!.Color.Should().Be(RibbonContextColor.Orange);
+        }
+    }
+
+    [Fact]
     public void Profile_command_id_differences_are_named_capability_deltas()
     {
         var wpf = CommandEntries(FreeWRibbon.Build(FreeWRibbonCapabilities.Wpf)).ToArray();
@@ -184,6 +195,72 @@ public sealed class FreeWRibbonDefinitionProfileTests
 
         unexpectedWpfOnly.Should().BeEmpty("every WPF-only ribbon id must have an explicit capability rule");
         unexpectedAvaloniaOnly.Should().BeEmpty("every Avalonia-only ribbon id must have an explicit capability rule");
+    }
+
+    [Fact]
+    public void Table_tools_structural_and_formatting_command_ids_are_shared()
+    {
+        string[] sharedIds =
+        [
+            "freew.table-insert-below",
+            "freew.table-insert-col-right",
+            "freew.table-merge-cells",
+            "freew.table-split-cell",
+            "freew.table-shading",
+            "freew.table-borders",
+        ];
+        string[] legacyRendererIds =
+        [
+            "freew.table-insert-row",
+            "freew.table-insert-col",
+            "freew.merge-cells",
+            "freew.split-cell",
+            "freew.cell-shading",
+            "freew.cell-borders",
+        ];
+
+        foreach (var capabilities in new[] { FreeWRibbonCapabilities.Wpf, FreeWRibbonCapabilities.Avalonia })
+        {
+            var ids = CommandEntries(FreeWRibbon.Build(capabilities))
+                .Select(entry => entry.CommandId)
+                .ToArray();
+
+            ids.Should().Contain(sharedIds);
+            ids.Should().NotContain(legacyRendererIds);
+        }
+    }
+
+    [Fact]
+    public void Visible_profiles_use_one_identity_for_insert_page_border_and_split_controls()
+    {
+        string[] sharedIds =
+        [
+            "freew.table",
+            "freew.hyperlink",
+            "freew.bookmark",
+            "freew.page-border",
+            "freew.split-window",
+        ];
+        string[] nonCanonicalSurfaceIds =
+        [
+            "freew.insert-table",
+            "freew.insert-hyperlink",
+            "freew.insert-bookmark",
+            "freew.page-borders",
+            "freew.split",
+            "freew.zoom-in",
+            "freew.zoom-out",
+        ];
+
+        foreach (var capabilities in new[] { FreeWRibbonCapabilities.Wpf, FreeWRibbonCapabilities.Avalonia })
+        {
+            var ids = CommandEntries(FreeWRibbon.Build(capabilities))
+                .Select(entry => entry.CommandId)
+                .ToArray();
+
+            ids.Should().Contain(sharedIds);
+            ids.Should().NotContain(nonCanonicalSurfaceIds);
+        }
     }
 
     [Fact]
@@ -253,6 +330,28 @@ public sealed class FreeWRibbonDefinitionProfileTests
     }
 
     [Fact]
+    public void Chart_color_catalog_uses_one_shared_command_family_across_profiles()
+    {
+        var expectedIds = FreeW.Core.Model.ChartColorScheme.Catalog
+            .Select(ChartColorRibbonCommandCatalog.CommandId)
+            .ToArray();
+
+        foreach (var capabilities in new[] { FreeWRibbonCapabilities.Wpf, FreeWRibbonCapabilities.Avalonia })
+        {
+            var ids = CommandEntries(FreeWRibbon.Build(capabilities))
+                .Where(entry => entry.TabId == "chart-design")
+                .Select(entry => entry.CommandId)
+                .ToArray();
+            ids.Should().Contain(expectedIds);
+        }
+
+        var wpfRegistry = ReadRepositoryFile(
+            "freew", "FreeW.App.Host", "Ribbon", "FreeWRibbonCommands.cs");
+        wpfRegistry.Should().NotContain("ChartColorCommandPrefix");
+        wpfRegistry.Should().NotContain("freew.chart-color");
+    }
+
+    [Fact]
     public void SmartArt_command_slice_uses_shared_ids_and_catalog_across_profiles()
     {
         var expected = new[]
@@ -272,11 +371,34 @@ public sealed class FreeWRibbonDefinitionProfileTests
             ids.Should().Contain(expected);
         }
 
-        var avalonia = FreeWRibbon.Build(FreeWRibbonCapabilities.Avalonia).FindTab("smartart-design")!;
-        var styles = avalonia.FindGroup("smartart-styles")!.Controls
-            .OfType<RibbonComboBox>()
-            .Single(control => control.CommandId.Value == "freew.smartart-change-style");
-        styles.Items.Should().Equal(FreeW.Core.Model.SmartArtStyle.Catalog.Select(style => style.Name));
+        foreach (var capabilities in new[] { FreeWRibbonCapabilities.Wpf, FreeWRibbonCapabilities.Avalonia })
+        {
+            var tab = FreeWRibbon.Build(capabilities).FindTab("smartart-design")!;
+            var layout = tab.FindGroup("smartart-layouts")!.Controls
+                .OfType<RibbonDropdown>()
+                .Single(control => control.CommandId.Value == "freew.smartart-layout");
+            layout.Menu.Items.Select(item => item.CommandId?.Value).Should().Contain(
+                FreeW.Core.Model.SmartArtLayoutPreset.Catalog.Select(preset => $"freew.smartart-layout-{preset.Id}"));
+
+            var styleGroup = tab.FindGroup("smartart-styles")!;
+            var colors = styleGroup.Controls
+                .OfType<RibbonDropdown>()
+                .Single(control => control.CommandId.Value == "freew.smartart-colors");
+            colors.Menu.Items.Select(item => item.CommandId?.Value).Should().Contain(
+                FreeW.Core.Model.SmartArtColorScheme.Catalog.Select(scheme => $"freew.smartart-colors-{scheme.Id}"));
+
+            var styles = styleGroup.Controls
+                .OfType<RibbonComboBox>()
+                .Single(control => control.CommandId.Value == "freew.smartart-change-style");
+            styles.Items.Should().Equal(FreeW.Core.Model.SmartArtStyle.Catalog.Select(style => style.Name));
+        }
+
+        var wpfRegistry = ReadRepositoryFile(
+            "freew", "FreeW.App.Host", "Ribbon", "FreeWRibbonCommands.cs");
+        wpfRegistry.Should().NotContain(
+            "registry.Register(\"freew.smartart-change-layout\", EmptyRibbonCommand.Instance)");
+        wpfRegistry.Should().NotContain(
+            "registry.Register(\"freew.smartart-change-colors\", EmptyRibbonCommand.Instance)");
     }
 
     [Fact]
@@ -324,6 +446,37 @@ public sealed class FreeWRibbonDefinitionProfileTests
         avaloniaIds.Should().NotContain("freew.printlayout");
         avaloniaIds.Should().NotContain("freew.weblayout");
         avaloniaIds.Should().NotContain("freew.draftview");
+    }
+
+    [Fact]
+    public void Print_family_view_modes_are_toggle_controls_in_both_profiles()
+    {
+        var viewModeIds = new[]
+        {
+            "freew.print-layout",
+            "freew.web-layout",
+            "freew.draft-view",
+        };
+
+        foreach (var capabilities in new[]
+                 {
+                     FreeWRibbonCapabilities.Wpf,
+                     FreeWRibbonCapabilities.Avalonia,
+                 })
+        {
+            var controls = FreeWRibbon.Build(capabilities).Tabs
+                .Single(tab => tab.Id == "view")
+                .Groups
+                .SelectMany(group => group.Controls)
+                .ToArray();
+
+            foreach (var commandId in viewModeIds)
+            {
+                controls.Single(control => CommandIds(control).Contains(commandId, StringComparer.Ordinal))
+                    .Should().BeOfType<RibbonToggleButton>(
+                        $"{commandId} exposes live mutually-exclusive checked state in both renderers");
+            }
+        }
     }
 
     [Fact]
@@ -544,6 +697,8 @@ public sealed class FreeWRibbonDefinitionProfileTests
             command.GetProperty("gapClassification").GetString() == "actionable-gap"));
         summary.GetProperty("actionableGaps").GetInt32().Should().Be(0,
             "the checked-in FreeW command profiles must not retain cross-platform command debt");
+        summary.GetProperty("commandIdAliases").GetInt32().Should().Be(0,
+            "visible WPF and Avalonia surfaces must use the same command identity");
         summary.GetProperty("actionableMissingWpf").GetInt32().Should().Be(0);
         summary.GetProperty("actionableMissingAvalonia").GetInt32().Should().Be(0);
 
@@ -580,7 +735,6 @@ public sealed class FreeWRibbonDefinitionProfileTests
         AssertGapClassification(commands, "freew.draw-table", "shared-profile");
         AssertGapClassification(commands, "freew.eraser", "shared-profile");
         AssertGapClassification(commands, "freew.bookmark", "shared-profile");
-        AssertGapClassification(commands, "freew.insert-bookmark", "command-id-alias");
         AssertGapClassification(commands, "freew.check-updates", "shared-profile");
         AssertGapClassification(commands, "freew.copy-diagnostics", "shared-profile");
         AssertGapClassification(commands, "freew.feedback", "shared-profile");
@@ -597,7 +751,6 @@ public sealed class FreeWRibbonDefinitionProfileTests
         AssertGapClassification(commands, "freew.add-to-dictionary", "shared-profile");
         AssertGapClassification(commands, "freew.thesaurus", "shared-profile");
         AssertGapClassification(commands, "freew.set-proofing-language", "shared-profile");
-        AssertGapClassification(commands, "freew.split", "command-id-alias");
         AssertBehaviorEvidence(
             commands,
             "freew.chart-size-dialog",
@@ -1534,8 +1687,7 @@ public sealed class FreeWRibbonDefinitionProfileTests
         var pageBackground = RequiredGroup(FreeWRibbon.Build(capabilities), "design", "page-background");
         var watermark = RequiredControl(pageBackground, "freew.watermark");
         var pageColor = RequiredControl(pageBackground, "freew.page-color");
-        var pageBorders = RequiredControl(pageBackground,
-            capabilities.UsesPortableControlPresentation ? "freew.page-borders" : "freew.page-border");
+        var pageBorders = RequiredControl(pageBackground, "freew.page-border");
 
         return new PageBackgroundRibbonSurface(
             pageBackground.Header,

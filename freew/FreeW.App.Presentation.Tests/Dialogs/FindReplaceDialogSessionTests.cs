@@ -1,3 +1,4 @@
+﻿using Free.Shared.AppServices;
 using FreeW.App.Presentation.Dialogs;
 using FreeW.Core.Model;
 
@@ -94,12 +95,12 @@ public sealed class FindReplaceDialogSessionTests
         {
             ReplaceAllResult = new FindReplaceAllExecutionResult(2, InSelection: true),
         };
-        var session = new FindReplaceDialogSession(host, FindReplaceDialogOpenMode.Replace);
+        var session = new FindReplaceDialogSession(host, FindReplaceOpenMode.Replace);
         session.SetInput("fox", "wolf", false, false, false);
 
         var state = session.ReplaceAll();
 
-        state.OpenMode.Should().Be(FindReplaceDialogOpenMode.Replace);
+        state.OpenMode.Should().Be(FindReplaceOpenMode.Replace);
         state.StatusText.Should().Be("Replaced 2 occurrences in selection.");
         host.ReplaceAllRequest.Should().Be(new FindReplaceReplaceRequest(
             "fox",
@@ -112,8 +113,8 @@ public sealed class FindReplaceDialogSessionTests
     {
         var session = new FindReplaceDialogSession(new RecordingCommandHost());
 
-        session.ActivateFor(FindReplaceDialogOpenMode.Replace).OpenMode
-            .Should().Be(FindReplaceDialogOpenMode.Replace);
+        session.ActivateFor(FindReplaceOpenMode.Replace).OpenMode
+            .Should().Be(FindReplaceOpenMode.Replace);
         session.SetStatus("Jumped to Document end.").StatusText
             .Should().Be("Jumped to Document end.");
     }

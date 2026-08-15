@@ -73,7 +73,8 @@ public sealed class RendererValidationPresentationOwnershipSourceGuardTests
         (chartLayout + chartQuick).Should().NotContain("CommandAppliedStatusResourceKey");
         (chartLayout + chartQuick).Should().NotContain("CommandFailedStatusResourceKey");
 
-        print.Should().Contain("PrintSettingsPlanner.InitialDialogFocusTarget");
+        print.Should().Contain("AvaloniaPrintDialogWorkflow.ShowAsync(");
+        print.Should().NotContain("PrintSettingsPlanner.InitialDialogFocusTarget");
         print.Should().NotContain("dialog.Opened += (_, _) => printButton.Focus()");
     }
 

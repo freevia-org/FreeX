@@ -276,4 +276,19 @@ public sealed class InsertTabDepthTests
         paragraph.Runs.Should().ContainSingle(run => run.FieldKind == RunFieldKind.Date);
         paragraph.PlainText.Should().NotBeEmpty("the cached date text should render immediately");
     }
+
+    [Fact]
+    public void Date_time_command_prefers_the_host_dialog_when_available()
+    {
+        var view = ViewWith("");
+        var invoked = 0;
+        var registry = FreeWAvaloniaRibbonCommands.Build(
+            view,
+            NoopCallbacks() with { OpenDateTimeDialog = () => invoked++ });
+
+        Exec(registry, "freew.datetime");
+
+        invoked.Should().Be(1);
+        ((Paragraph)view.Document.Blocks[0]).Runs.Should().BeEmpty();
+    }
 }

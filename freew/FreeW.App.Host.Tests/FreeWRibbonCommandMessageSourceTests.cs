@@ -17,14 +17,14 @@ public sealed class FreeWRibbonCommandMessageSourceTests
 
         source.Should().Contain("DialogMessageHelper.ShowInfo(");
         source.Should().Contain("DialogMessageHelper.ShowError(");
-        source.Should().Contain("\"Select some text first, then choose Change Case.\"");
+        source.Should().Contain("UiText.Get(\"ChangeCase_SelectText_Message\")");
         fragmentWorkflow.Should().Contain("$\"Could not insert the {subject}:\\n{reason}\"");
         pictureWorkflow.Should().Contain("$\"Could not insert the image:\\n{reason}\"");
-        source.Should().Contain("\"Could not capture the screen clip:");
-        source.Should().Contain("\"Could not compare the documents:");
-        source.Should().Contain("\"Could not combine the documents:");
+        source.Should().Contain("UiText.Format(\"ScreenClip_Failed_Message_Format\"");
+        source.Should().Contain("UiText.Format(\"Review_CompareFailed_Message_Format\"");
+        source.Should().Contain("UiText.Format(\"Review_CombineFailed_Message_Format\"");
         source.Should().Contain("MailMergeDialogMetadata.MailMergeTitle");
-        mailMergeMetadata.Should().Contain("public const string MailMergeTitle = \"Mail Merge\";");
+        mailMergeMetadata.Should().Contain("public static string MailMergeTitle => Text(\"MailMerge_Dialog_Title\");");
         source.Should().NotContain("MessageBox.Show(");
         source.Should().NotContain("MessageBoxButton.");
         source.Should().NotContain("MessageBoxImage.");

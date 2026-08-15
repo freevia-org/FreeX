@@ -257,11 +257,9 @@ public sealed partial class MainWindow : Window
             IsRevealFormattingVisible = () => _revealPaneVisible,
             OpenFindReplaceDialog = () => OpenFindReplace(),
             SetPrintLayout = () => SetViewMode(DocumentViewMode.PrintLayout),
-            IsPrintLayoutActive = () => _editor.ViewMode == DocumentViewMode.PrintLayout,
             SetWebLayout = () => SetViewMode(DocumentViewMode.WebLayout),
-            IsWebLayoutActive = () => !_outlineMode && _editor.ViewMode == DocumentViewMode.WebLayout,
             SetDraftView = () => SetViewMode(DocumentViewMode.Draft),
-            IsDraftViewActive = () => !_outlineMode && _editor.ViewMode == DocumentViewMode.Draft,
+            GetDocumentViewChecks = CurrentDocumentViewChecks,
             SetOutlineView = ToggleOutlineView,
             IsOutlineViewActive = () => _outlineMode,
             OpenZoomDialog = OpenZoomDialog,
@@ -283,7 +281,6 @@ public sealed partial class MainWindow : Window
             ToggleSplit = ToggleSplitWindow,
             IsSplitActive = () => _viewSession.CurrentDepth.IsSplitActive,
             TogglePagedEditView = TogglePagedEditView,
-            IsPagedEditViewActive = () => _pagedEditMode,
             ToggleNotesPane = ToggleNotesPane,
             IsNotesPaneVisible = () => _notesPaneVisible,
             OpenHeaderFooterPane = OpenHeaderFooterPane,
@@ -296,7 +293,7 @@ public sealed partial class MainWindow : Window
             ArrangeAll = ArrangeAllWindows,
             OpenThesaurus = ToggleThesaurusPane,
             ToggleReviewBalloons = ToggleBalloons,
-            IsReviewBalloonsActive = () => _balloonOverlay.BalloonsEnabled,
+            IsReviewBalloonsActive = () => _balloonOverlay?.BalloonsEnabled ?? false,
             OpenHelpOnline = () => OpenExternalHelpLink(
                 FreeWProductInfo.HelpUrl,
                 FreeWApplicationFrameTextCatalog.HelpOnlineCommandName),
@@ -440,8 +437,8 @@ public sealed partial class MainWindow : Window
             SaveDocument: () => _file.Save(),
             SaveDocumentAs: () => _file.SaveAs(),
             PrintDocument: Print,
-            Find: () => OpenFindReplace(FindReplaceDialogOpenMode.Find),
-            Replace: () => OpenFindReplace(FindReplaceDialogOpenMode.Replace),
+            Find: () => OpenFindReplace(FindReplaceOpenMode.Find),
+            Replace: () => OpenFindReplace(FindReplaceOpenMode.Replace),
             Cut: () => ExecuteEditingCommand(ApplicationCommands.Cut),
             Copy: () => ExecuteEditingCommand(ApplicationCommands.Copy),
             Paste: () => ExecuteEditingCommand(ApplicationCommands.Paste),
@@ -2321,7 +2318,7 @@ public sealed partial class MainWindow : Window
             mode);
 
         if (plan.ExitOutlineMode)
-            ToggleOutlineView();
+            LeaveOutlineView(restorePriorView: false);
 
         if (plan.ExitPaginatedView)
             ApplyViewDepthTransition(_viewSession.RestoreLiveEditor());
@@ -2340,10 +2337,7 @@ public sealed partial class MainWindow : Window
     // read-mode / nav-pane toggles keep their buttons in sync.
     private void RefreshViewModeChecks()
     {
-        var plan = _viewSession.BuildDocumentViewChecks(
-            _editor.ViewMode,
-            _outlineMode,
-            _pagedEditMode);
+        var plan = CurrentDocumentViewChecks();
 
         _stateStore.SetChecked("freew.print-layout", plan.PrintLayout);
         _stateStore.SetChecked("freew.web-layout", plan.WebLayout);
@@ -2356,6 +2350,12 @@ public sealed partial class MainWindow : Window
         if (_pagedEditSwitch is not null) _pagedEditSwitch.IsChecked = plan.PagedEdit;
     }
 
+    private FreeWDocumentViewCheckPlan CurrentDocumentViewChecks() =>
+        _viewSession.BuildDocumentViewChecks(
+            _editor.ViewMode,
+            _outlineMode,
+            _pagedEditMode);
+
     // View > Outline: swap the normal editing surface for the heading-structured outline view (and its
     // Outlining mini-toolbar), or back again. Entering hides the workspace + rulers and shows the outline,
     // populated from the live model; exiting restores everything verbatim — the same save/restore shape as
@@ -2364,23 +2364,49 @@ public sealed partial class MainWindow : Window
     // sync, exactly like the Print Layout / Read Mode toggles.
     private void ToggleOutlineView()
     {
-        _outlineMode = !_outlineMode;
         if (_outlineMode)
-        {
-            _workspace.Visibility = Visibility.Collapsed;
-            _hRuler.Visibility = Visibility.Collapsed;
-            _vRuler.Visibility = Visibility.Collapsed;
-
-            _outlineView.Visibility = Visibility.Visible;
-            _outlineView.Refresh();
-        }
+            LeaveOutlineView();
         else
-        {
-            _outlineView.Visibility = Visibility.Collapsed;
-            _workspace.Visibility = Visibility.Visible;
-            ApplyRulerVisibility();
-        }
+            EnterOutlineView();
+    }
 
+    private void EnterOutlineView()
+    {
+        var plan = _viewSession.EnterOutline(_pagedEditMode);
+        if (plan.ExitPageSurface)
+            ApplyViewDepthTransition(_viewSession.RestoreLiveEditor());
+        if (plan.ExitPagedEditSurface)
+            ExitPagedEdit();
+
+        _outlineMode = plan.IsOutlineMode;
+        _workspace.Visibility = Visibility.Collapsed;
+        _hRuler.Visibility = Visibility.Collapsed;
+        _vRuler.Visibility = Visibility.Collapsed;
+        _outlineView.Visibility = Visibility.Visible;
+        _outlineView.Refresh();
+
+        RefreshOutlineViewState();
+    }
+
+    private void LeaveOutlineView(bool restorePriorView = true)
+    {
+        if (!_outlineMode)
+            return;
+
+        var plan = _viewSession.LeaveOutline(restorePriorView);
+        _outlineMode = plan.IsOutlineMode;
+        _outlineView.Visibility = Visibility.Collapsed;
+        _workspace.Visibility = Visibility.Visible;
+        ApplyRulerVisibility();
+
+        if (plan.EnterPagedEditSurface)
+            EnterPagedEdit();
+
+        RefreshOutlineViewState();
+    }
+
+    private void RefreshOutlineViewState()
+    {
         _stateStore.SetChecked("freew.outline-view", _outlineMode);
 
         // Outline and the print-family views are mutually exclusive: entering Outline clears the Print
@@ -2666,7 +2692,7 @@ public sealed partial class MainWindow : Window
         if (_viewSession.CurrentDepth.Mode != FreeWViewDepthMode.LiveEditor)
             ApplyViewDepthTransition(_viewSession.RestoreLiveEditor());
         if (_outlineMode)
-            ToggleOutlineView();
+            LeaveOutlineView(restorePriorView: false);
 
         // Commit so the panel reflects the latest edits.
         _editor.CommitToModel();
@@ -3252,9 +3278,9 @@ public sealed partial class MainWindow : Window
         }
     }
 
-    private void OpenFindReplace() => OpenFindReplace(FindReplaceDialogOpenMode.Find);
+    private void OpenFindReplace() => OpenFindReplace(FindReplaceOpenMode.Find);
 
-    private void OpenFindReplace(FindReplaceDialogOpenMode openMode)
+    private void OpenFindReplace(FindReplaceOpenMode openMode)
     {
         if (_findDialog is null)
         {

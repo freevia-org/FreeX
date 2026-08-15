@@ -14,7 +14,7 @@ public sealed class DialogCaptureAdapterParitySourceTests
         catalog.Should().Contain("Pair(\"manual-hyphenation\", \"ManualHyphenationDialog\"");
         catalog.Should().Contain("wpfAction: FreeWDialogOpenAction.ManualHyphenation");
         factory.Should().Contain("ManualHyphenationPlanner.CreateSession(editor.Model).Current");
-        factory.Should().Contain("FreeW.App.Host.ManualHyphenationDialog");
+        factory.Should().Contain("ManualHyphenationDialog.CreateForVisualHarness(owner, candidate)");
         program.Should().Contain("FreeWDialogPopulationKind.ManualHyphenation");
         program.Should().Contain("PixelContentMetrics.Compute");
         program.Should().Contain("c.FullPixelContent?.PassesContentGate == true");

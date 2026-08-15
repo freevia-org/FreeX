@@ -205,20 +205,25 @@ public class RibbonAndDocumentTests
             "shared",
             "Free.Shared.Shell.Avalonia",
             "SisterAvaloniaFileCommandWorkflow.cs"));
+        var documentCommandSession = File.ReadAllText(FindRepoFile(
+            "freew",
+            "FreeW.App.Presentation",
+            "Shell",
+            "FreeWDocumentFileCommandSession.cs"));
 
         mainWindow.Should().Contain("private readonly SisterAvaloniaFileCommandWorkflow _fileWorkflow;");
         mainWindow.Should().Contain("new SisterAvaloniaFileCommandWorkflow(");
         mainWindow.Should().Contain("new SisterAvaloniaFileTitleSpec(");
         mainWindow.Should().Contain("private readonly DocumentPersistenceWorkflow _documentPersistence");
-        mainWindow.Should().Contain("_fileWorkflow.NewAsync(");
-        mainWindow.Should().Contain("_fileWorkflow.OpenAsync(");
-        mainWindow.Should().Contain("_fileWorkflow.SaveAsync(");
+        mainWindow.Should().Contain("_fileCommands.NewAsync()");
+        mainWindow.Should().Contain("_fileCommands.OpenAsync()");
+        mainWindow.Should().Contain("_fileCommands.SaveAsync()");
         mainWindow.Should().Contain("_fileWorkflow.ConfirmCloseAllowedAsync(");
         mainWindow.Should().Contain("new SisterAvaloniaAsyncWindowCloseCoordinator(");
         mainWindow.Should().Contain("saveAsync: SaveAsync");
         mainWindow.Should().Contain("FreeWDocumentFileWorkflow _documentFileWorkflow");
-        mainWindow.Should().Contain("_documentFileWorkflow.OpenPathAsync(");
-        mainWindow.Should().Contain("_documentFileWorkflow.SavePathAsync(");
+        documentCommandSession.Should().Contain("_workflow.OpenPathAsync(path, suppressRecentFiles)");
+        documentCommandSession.Should().Contain("_workflow.SavePathAsync(path, filterIndex, kind)");
         mainWindow.Should().Contain("SaveCompatibilityWarningDialog.ShowAsync(this, plan)");
         mainWindow.Should().Contain("_documentPersistence.BuildSavePickerPlan(");
         mainWindow.Should().Contain("_fileWorkflow.MarkDirty();");
@@ -324,7 +329,9 @@ public class RibbonAndDocumentTests
     public void Avalonia_protect_toggles_read_state_from_shared_protection_state_planner()
     {
         var editor = new Editing.DocumentView();
-        var registry = FreeWAvaloniaRibbonCommands.Build(editor, NoopCallbacks());
+        var registry = FreeWAvaloniaRibbonCommands.Build(
+            editor,
+            NoopCallbacks() with { RestrictEditing = () => { } });
 
         registry.TryGet(new RibbonCommandId("freew.mark-as-final"), out var markAsFinal).Should().BeTrue();
         registry.TryGet(new RibbonCommandId("freew.restrict-editing"), out var restrictEditing).Should().BeTrue();

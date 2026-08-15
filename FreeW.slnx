@@ -5,6 +5,7 @@
     <Project Path="shared/Free.Shared.IO/Free.Shared.IO.csproj" />
     <Project Path="shared/Free.Shared.Localization/Free.Shared.Localization.csproj" />
     <Project Path="shared/Free.Shared.Opc/Free.Shared.Opc.csproj" />
+    <Project Path="shared/Free.Shared.PageSetup/Free.Shared.PageSetup.csproj" />
     <Project Path="shared/Free.Shared.Pdf/Free.Shared.Pdf.csproj" />
     <Project Path="shared/Free.Shared.Pdf.Skia/Free.Shared.Pdf.Skia.csproj" />
     <Project Path="shared/Free.Shared.Pdf.Wpf/Free.Shared.Pdf.Wpf.csproj" />

@@ -305,6 +305,7 @@ public sealed partial class MainWindow : Window,
     private RibbonCommandRegistry? _ribbonCommandRegistry;
     private FreePRibbonHostActionEndpoints? _ribbonHostActionEndpoints;
     private readonly RibbonStateStore _ribbonStateStore = new();
+    private FreePRibbonBindingSession? _ribbonBindingSession;
     private bool _ribbonKeyTipsVisible;
     private string? _ribbonKeyTipTabId;
     private string? _ribbonKeyTipGroupId;
@@ -1313,6 +1314,7 @@ public sealed partial class MainWindow : Window,
             Minimum = PresentationMediaPaneSession.MinimumVolumePercent,
             Maximum = PresentationMediaPaneSession.MaximumVolumePercent,
             TickFrequency = PresentationMediaPaneSession.VolumeTickFrequency,
+            IsSnapToTickEnabled = PresentationMediaPaneSession.SnapVolumeToTicks,
             Margin = MediaPaneMargin(0, PresentationMediaPaneVisualMetrics.FieldBottomMargin),
         };
         _mediaVolumeApplyButton = BuildMediaCaptionPaneButton();
@@ -2121,34 +2123,22 @@ public sealed partial class MainWindow : Window,
             // Avalonia opens domain context menus at the right-click location.
             Placement = PlacementMode.Pointer,
         };
-        foreach (var entry in plan.Entries)
-        {
-            if (entry.Kind == PresentationDomainContextMenuEntryKind.Separator)
-                menu.Items.Add(new Separator());
-            else
-                menu.Items.Add(BuildDomainContextMenuItem(entry));
-        }
+        PresentationDomainContextMenuNativeAdapter.Populate(
+            plan,
+            menu,
+            new PresentationDomainContextMenuNativeBindings<ContextMenu, MenuItem>(
+                CreateItem: entry => new MenuItem
+                {
+                    Header = entry.Text,
+                    IsEnabled = entry.IsEnabled,
+                },
+                AddRootSeparator: target => target.Items.Add(new Separator()),
+                AddRootItem: (target, item) => target.Items.Add(item),
+                AddChildSeparator: parent => parent.Items.Add(new Separator()),
+                AddChildItem: (parent, item) => parent.Items.Add(item),
+                BindExecute: (item, execute) => item.Click += (_, _) => execute()),
+            action => _domainContextMenuSession.Execute(action, TryExecuteInlineTableAction));
         return menu;
-    }
-
-    private MenuItem BuildDomainContextMenuItem(PresentationDomainContextMenuEntryPlan entry)
-    {
-        var item = new MenuItem
-        {
-            Header = entry.Text,
-            IsEnabled = entry.IsEnabled,
-        };
-        if (entry.Children is { Count: > 0 })
-        {
-            foreach (var child in entry.Children)
-                item.Items.Add(BuildDomainContextMenuItem(child));
-        }
-        else if (entry.Action is { } action)
-        {
-            item.Click += (_, _) =>
-                _domainContextMenuSession.Execute(action, TryExecuteInlineTableAction);
-        }
-        return item;
     }
 
     private bool TryExecuteInlineTableAction(PresentationDomainContextAction action)
@@ -2203,10 +2193,11 @@ public sealed partial class MainWindow : Window,
 
     internal RibbonCommandRegistry BuildCommandRegistry()
     {
-        return FreePRibbonHostRegistryComposer.Build(
+        _ribbonBindingSession = new FreePRibbonBindingSession(
             Editor,
             _ribbonStateStore,
-            CreateRibbonHostProfile()).Registry;
+            CreateRibbonHostProfile);
+        return _ribbonBindingSession.Registry;
     }
 
     private FreePRibbonHostProfile CreateRibbonHostProfile() =>
@@ -2498,47 +2489,43 @@ public sealed partial class MainWindow : Window,
         if (_layoutPickerHost is null || _layoutPickerPanel is null)
             return;
 
-        _layoutPickerPanel.Children.Clear();
-        foreach (var group in plan.Groups)
-        {
-            _layoutPickerPanel.Children.Add(new TextBlock
-            {
-                Text = group.Heading,
-                Margin = new Thickness(10, 8, 10, 2),
-                FontSize = 11,
-                FontWeight = FontWeight.SemiBold,
-                Foreground = FreePBrushes.PaneText,
-            });
-
-            var groupPanel = new WrapPanel
-            {
-                Orientation = Orientation.Horizontal,
-                Margin = new Thickness(4, 0, 4, 4),
-            };
-
-            foreach (var choice in group.Choices)
-            {
-                var button = new Button
+        PresentationLayoutPickerNativeAdapter.Populate(
+            plan,
+            _layoutPickerPanel,
+            new PresentationLayoutPickerNativeBindings<StackPanel, TextBlock, WrapPanel, Button>(
+                Clear: root => root.Children.Clear(),
+                CreateHeading: group => new TextBlock
                 {
-                    Tag = choice.LayoutId,
-                    Content = BuildLayoutChoiceTile(choice),
-                    Margin = new Thickness(4),
-                    Padding = new Thickness(0),
-                    HorizontalContentAlignment = HorizontalAlignment.Stretch,
-                    IsEnabled = choice.Chrome.IsEnabled,
-                };
-                AutomationProperties.SetName(button, choice.DisplayLabel);
-                AutomationProperties.SetAutomationId(button, choice.AutomationId);
-                button.Click += (_, _) =>
+                    Text = group.Heading,
+                    Margin = new Thickness(10, 8, 10, 2),
+                    FontSize = 11,
+                    FontWeight = FontWeight.SemiBold,
+                    Foreground = FreePBrushes.PaneText,
+                },
+                CreateGroup: _ => new WrapPanel
                 {
-                    if (button.Tag is string layoutId)
-                        ApplyLayoutChoice(layoutId);
-                };
-                groupPanel.Children.Add(button);
-            }
-
-            _layoutPickerPanel.Children.Add(groupPanel);
-        }
+                    Orientation = Orientation.Horizontal,
+                    Margin = new Thickness(4, 0, 4, 4),
+                },
+                CreateChoice: choice =>
+                {
+                    var button = new Button
+                    {
+                        Content = BuildLayoutChoiceTile(choice),
+                        Margin = new Thickness(4),
+                        Padding = new Thickness(0),
+                        HorizontalContentAlignment = HorizontalAlignment.Stretch,
+                        IsEnabled = choice.Chrome.IsEnabled,
+                    };
+                    AutomationProperties.SetName(button, choice.DisplayLabel);
+                    AutomationProperties.SetAutomationId(button, choice.AutomationId);
+                    return button;
+                },
+                BindChoice: (choice, execute) => choice.Click += (_, _) => execute(),
+                AddChoice: (group, choice) => group.Children.Add(choice),
+                AddHeading: (root, heading) => root.Children.Add(heading),
+                AddGroup: (root, group) => root.Children.Add(group)),
+            layoutId => ApplyLayoutChoice(layoutId));
 
         HideTablePicker();
         _layoutPickerHost.IsVisible = true;
@@ -6713,14 +6700,7 @@ public sealed partial class MainWindow : Window,
 
     private void SyncRibbonCommandStates()
     {
-        if (_ribbonControl is not null)
-        {
-            AvaloniaRibbonRenderer.SyncToggleStates(
-                _ribbonControl,
-                _ribbonCommandRegistry,
-                RibbonVisualPalette.FromTheme(App.ActiveTheme),
-                _ribbonStateStore);
-        }
+        _ribbonBindingSession?.SyncCommandStates();
     }
 
     private void OnFileWorkflowChanged()

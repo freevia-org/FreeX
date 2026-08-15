@@ -10,21 +10,28 @@ public sealed class MailMergeRuleInsertionTests
     [Fact]
     public void RuleCommandsResolveTheActiveStoryAtExecutionTime()
     {
+        var root = TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeW.slnx");
         var source = File.ReadAllText(Path.Combine(
-            TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeW.slnx"),
+            root,
             "freew",
             "FreeW.App.Host",
             "Ribbon",
             "FreeWRibbonCommands.cs"));
+        var workflow = File.ReadAllText(Path.Combine(
+            root,
+            "freew",
+            "FreeW.App.Presentation",
+            "Ribbon",
+            "MailMergeRibbonWorkflow.cs"));
 
         source.Should().Contain("new InsertMergeRuleCommand(resolveFieldTarget, mergeSession, kind)");
-        source.Should().Contain("RuleCommand(MailMergeRuleKind.IfThenElse)");
-        source.Should().Contain("RuleCommand(MailMergeRuleKind.SkipRecordIf)");
-        source.Should().Contain("RuleCommand(MailMergeRuleKind.NextRecordIf)");
-        source.Should().Contain("RuleCommand(MailMergeRuleKind.FillIn)");
-        source.Should().Contain("RuleCommand(MailMergeRuleKind.Ask)");
-        source.Should().Contain("RuleCommand(MailMergeRuleKind.Set)");
-        source.Should().Contain("RuleCommand(MailMergeRuleKind.Ref)");
+        workflow.Should().Contain("BindRule(FreeWRibbonCommandAction.MergeRuleIf, MailMergeRuleKind.IfThenElse)");
+        workflow.Should().Contain("BindRule(FreeWRibbonCommandAction.MergeRuleSkipRecordIf, MailMergeRuleKind.SkipRecordIf)");
+        workflow.Should().Contain("BindRule(FreeWRibbonCommandAction.MergeRuleNextRecordIf, MailMergeRuleKind.NextRecordIf)");
+        workflow.Should().Contain("BindRule(FreeWRibbonCommandAction.MergeRuleFillIn, MailMergeRuleKind.FillIn)");
+        workflow.Should().Contain("BindRule(FreeWRibbonCommandAction.MergeRuleAsk, MailMergeRuleKind.Ask)");
+        workflow.Should().Contain("BindRule(FreeWRibbonCommandAction.MergeRuleSet, MailMergeRuleKind.Set)");
+        workflow.Should().Contain("BindRule(FreeWRibbonCommandAction.MergeRuleRef, MailMergeRuleKind.Ref)");
         source.Should().NotContain("class InsertMergeRuleFillInCommand");
         source.Should().NotContain("class InsertMergeRuleAskCommand");
         source.Should().NotContain("class InsertMergeRuleCondCommand");

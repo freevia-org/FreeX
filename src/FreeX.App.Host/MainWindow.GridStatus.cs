@@ -159,8 +159,16 @@ public partial class MainWindow
         SetTextIfChanged(StatusReadyText, rendererPlan.ReadyText);
         foreach (var readout in rendererPlan.ReadoutElements)
         {
+            var textBlock = GetStatusBarReadoutTextBlock(readout.Kind);
+            if (!string.Equals(
+                    AutomationProperties.GetAutomationId(textBlock),
+                    readout.AutomationId,
+                    StringComparison.Ordinal))
+            {
+                AutomationProperties.SetAutomationId(textBlock, readout.AutomationId);
+            }
             SetStatusStatisticTextIfChanged(
-                GetStatusBarReadoutTextBlock(readout.Kind),
+                textBlock,
                 readout.Text,
                 UiText.Get(readout.AutomationFallbackResourceKey));
         }

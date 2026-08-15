@@ -364,6 +364,24 @@ public partial class MainWindow
     }
 
     /// <summary>
+    /// Projects this WPF window's existing per-sheet view snapshots into the shared session before
+    /// a session-owned grouped view command runs. This is the view-state counterpart to
+    /// <c>SynchronizeWorkbookSessionSelection</c> and lets the shared command preserve values that
+    /// differ from a sibling window without moving native viewport rendering into services.
+    /// </summary>
+    private void SynchronizeWorkbookSessionViewState(IReadOnlyList<SheetId> sheetIds)
+    {
+        var snapshots = new Dictionary<SheetId, WorksheetViewStateSnapshot>();
+        foreach (var sheetId in sheetIds)
+        {
+            if (_workbook.GetSheet(sheetId) is { } sheet)
+                snapshots[sheetId] = GetEffectiveViewState(sheet);
+        }
+
+        _session.SynchronizeWorksheetViewState(snapshots);
+    }
+
+    /// <summary>
     /// Pushes this window's own remembered view-mode/zoom/display-toggle/Freeze-Panes/Split state
     /// (<see cref="_worksheetViewStates"/>) back onto the shared <see cref="Sheet"/> fields for
     /// every sheet this window has ever rendered, immediately before this window serializes the
@@ -471,6 +489,7 @@ public partial class MainWindow
         var viewport = CreateViewport(sheet, topRow, leftCol, rowHeaderWidth);
 
         SheetGrid.Viewport = viewport;
+        SheetGrid.ValidationCircleCells = sheet?.ValidationCircleCells;
         SheetGrid.PinnedNoteAddresses = sheet is null
             ? null
             : sheet.ShownComments.Count == 0

@@ -420,12 +420,8 @@ public sealed partial class MainWindow
         if (!TryCommitPendingFormulaEdit())
             return;
 
-        var range = _session.SelectedRange;
         var next = !(_session.ActiveSheet.ShowOutlineSymbols ?? true);
-        var result = _session.ExecuteReviewCommand(
-            new SetWorksheetOutlineSymbolsCommand(_session.ActiveSheet.Id, next));
-        if (result.Success)
-            _session.SelectRange(range);
+        var result = _session.SetShowOutlineSymbols(next);
         RefreshShell(result.Success
             ? UiText.Get(next ? "KeyboardLoc_ShowingOutlineSymbols" : "KeyboardLoc_HidingOutlineSymbols")
             : result.ErrorMessage ?? UiText.Get("KeyboardLoc_ChangeOutlineSymbolsFailed"));

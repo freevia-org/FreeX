@@ -109,6 +109,53 @@ public sealed class DocumentTableEditingCoordinatorTests
     }
 
     [Fact]
+    public void BorderEditsInRangeDistinguishesAllOutsideAndInsidePresets()
+    {
+        var session = SessionWith(Table.Create(2, 2));
+        var anchor = new DocumentTableCellAddress(0, 0, 0);
+        var active = new DocumentTableCellAddress(0, 1, 1);
+
+        CellBorderEdges.Outside.Should().NotBe(CellBorderEdges.All);
+        session.Tables.BorderEditsInRange(anchor, active, CellBorderEdges.All)
+            .Should().OnlyContain(edit => edit.Edges == CellBorderEdges.All);
+        session.Tables.BorderEditsInRange(anchor, active, CellBorderEdges.Outside)
+            .Should().Equal(
+                new DocumentTableCellBorderEdit(anchor, CellBorderEdges.Top | CellBorderEdges.Left),
+                new DocumentTableCellBorderEdit(anchor with { GridColumn = 1 }, CellBorderEdges.Top | CellBorderEdges.Right),
+                new DocumentTableCellBorderEdit(anchor with { RowIndex = 1 }, CellBorderEdges.Bottom | CellBorderEdges.Left),
+                new DocumentTableCellBorderEdit(active, CellBorderEdges.Bottom | CellBorderEdges.Right));
+        session.Tables.BorderEditsInRange(anchor, active, CellBorderEdges.Inside)
+            .Should().Equal(
+                new DocumentTableCellBorderEdit(anchor, CellBorderEdges.Bottom | CellBorderEdges.Right),
+                new DocumentTableCellBorderEdit(anchor with { GridColumn = 1 }, CellBorderEdges.Bottom),
+                new DocumentTableCellBorderEdit(anchor with { RowIndex = 1 }, CellBorderEdges.Right));
+    }
+
+    [Fact]
+    public void BorderEditsInRangeNormalizesReversedMergedCellEndpoints()
+    {
+        var table = Table.Create(2, 3);
+        table.Rows[0].Cells[0].GridSpan = 2;
+        table.Rows[0].Cells.RemoveAt(1);
+        var session = SessionWith(table);
+
+        var edits = session.Tables.BorderEditsInRange(
+            new DocumentTableCellAddress(0, 1, 2),
+            new DocumentTableCellAddress(0, 0, 1),
+            CellBorderEdges.Outside);
+
+        edits.Select(edit => edit.Address).Should().Equal(
+            new DocumentTableCellAddress(0, 0, 0),
+            new DocumentTableCellAddress(0, 0, 2),
+            new DocumentTableCellAddress(0, 1, 0),
+            new DocumentTableCellAddress(0, 1, 1),
+            new DocumentTableCellAddress(0, 1, 2));
+        edits[0].Edges.Should().Be(CellBorderEdges.Top | CellBorderEdges.Left);
+        edits[1].Edges.Should().Be(CellBorderEdges.Top | CellBorderEdges.Right);
+        edits[^1].Edges.Should().Be(CellBorderEdges.Bottom | CellBorderEdges.Right);
+    }
+
+    [Fact]
     public void RowAndColumnStructureEditsReportPortableCaretAndUndo()
     {
         var table = Table.Create(2, 2);
@@ -174,6 +221,51 @@ public sealed class DocumentTableEditingCoordinatorTests
         table.Rows[0].Cells.Should().OnlyContain(cell => cell.ShadingColorHex == "#ABCDEF");
         session.Commands.Undo().Should().BeTrue();
         table.Rows[0].Cells.Should().OnlyContain(cell => cell.ShadingColorHex == null);
+        session.Commands.CanUndo.Should().BeFalse();
+    }
+
+    [Fact]
+    public void SelectedRangeShadingUsesCanonicalGridExpansionAndOneUndoStep()
+    {
+        var table = Table.Create(2, 3);
+        table.Rows[0].Cells[0].GridSpan = 2;
+        table.Rows[0].Cells.RemoveAt(1);
+        var session = SessionWith(table);
+        var addresses = session.Tables.AddressesInRange(
+            new DocumentTableCellAddress(0, 1, 2),
+            new DocumentTableCellAddress(0, 0, 0));
+
+        session.Tables.SetCellShading(addresses, "#123456").Applied.Should().BeTrue();
+
+        addresses.Should().HaveCount(5);
+        table.Rows.SelectMany(row => row.Cells)
+            .Should().OnlyContain(cell => cell.ShadingColorHex == "#123456");
+        session.Commands.Undo().Should().BeTrue();
+        table.Rows.SelectMany(row => row.Cells)
+            .Should().OnlyContain(cell => cell.ShadingColorHex == null);
+        session.Commands.CanUndo.Should().BeFalse();
+    }
+
+    [Fact]
+    public void SelectedRangeTextDirectionUsesCanonicalGridExpansionAndOneUndoStep()
+    {
+        var table = Table.Create(2, 3);
+        table.Rows[0].Cells[0].GridSpan = 2;
+        table.Rows[0].Cells.RemoveAt(1);
+        var session = SessionWith(table);
+        var addresses = session.Tables.AddressesInRange(
+            new DocumentTableCellAddress(0, 1, 2),
+            new DocumentTableCellAddress(0, 0, 0));
+
+        session.Tables.SetCellTextDirection(addresses, CellTextDirection.Rotate270)
+            .Applied.Should().BeTrue();
+
+        addresses.Should().HaveCount(5);
+        table.Rows.SelectMany(row => row.Cells)
+            .Should().OnlyContain(cell => cell.TextDirection == CellTextDirection.Rotate270);
+        session.Commands.Undo().Should().BeTrue();
+        table.Rows.SelectMany(row => row.Cells)
+            .Should().OnlyContain(cell => cell.TextDirection == CellTextDirection.Horizontal);
         session.Commands.CanUndo.Should().BeFalse();
     }
 
@@ -1358,6 +1450,62 @@ public sealed class DocumentPortableEditingOwnershipTests
                 TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeW.slnx"),
                 "freew", "FreeW.App.Avalonia", "Editing", "ReferenceCommands.cs"))
             .Should().BeFalse("renderer-neutral reference commands belong in Core or Presentation");
+    }
+
+    [Fact]
+    public void BothRenderersExpandSelectedCellFormattingThroughPresentationCoordinator()
+    {
+        var wpf = ReadSource("freew", "FreeW.App.Host", "Editing", "DocumentView.cs");
+        var avalonia = ReadSource("freew", "FreeW.App.Avalonia", "Editing", "DocumentView.cs");
+
+        static string Slice(string source, string signature, string nextSignature)
+        {
+            var start = source.IndexOf(signature, StringComparison.Ordinal);
+            var end = source.IndexOf(nextSignature, start, StringComparison.Ordinal);
+            start.Should().BeGreaterThanOrEqualTo(0);
+            end.Should().BeGreaterThan(start);
+            return source[start..end];
+        }
+
+        var wpfShading = Slice(
+            wpf,
+            "public void SetCaretCellShading(string? colorHex)",
+            "public void SetCaretCellBorders(");
+        var avaloniaShading = Slice(
+            avalonia,
+            "public void SetCellShading(string? hexColor)",
+            "public void SetCellBorders(");
+
+        foreach (var method in new[] { wpfShading, avaloniaShading })
+        {
+            method.Should().Contain("TableEdits.AddressesInRange(");
+            method.Should().Contain("TableEdits.SetCellShading(");
+        }
+
+        wpfShading.Should().Contain("TableAddressOf(Selection.Start.Parent as TextElement)");
+        wpfShading.Should().Contain("TableAddressOf(Selection.End.Parent as TextElement)");
+        avaloniaShading.Should().NotContain("for (var gridCol");
+        avaloniaShading.Should().NotContain("new List<DocumentTableCellAddress>");
+
+        var wpfDirection = Slice(
+            wpf,
+            "public void SetCaretCellTextDirection(CellTextDirection direction)",
+            "public void ToggleTableHeaderRow(");
+        var avaloniaDirection = Slice(
+            avalonia,
+            "public void SetCaretCellTextDirection(CellTextDirection direction)",
+            "public (Table Table, int RowIndex, int ColumnIndex)? CaretTableCell(");
+
+        foreach (var method in new[] { wpfDirection, avaloniaDirection })
+        {
+            method.Should().Contain("TableEdits.AddressesInRange(");
+            method.Should().Contain("TableEdits.SetCellTextDirection(");
+        }
+
+        wpfDirection.Should().Contain("TableAddressOf(Selection.Start.Parent as TextElement)");
+        wpfDirection.Should().Contain("TableAddressOf(Selection.End.Parent as TextElement)");
+        avaloniaDirection.Should().Contain("SelectedCellRange is { } selection");
+        avaloniaDirection.Should().NotContain("_cellCaret is not");
     }
 
     [Fact]

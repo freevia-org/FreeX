@@ -1,3 +1,4 @@
+﻿using Free.Shared.AppServices;
 using System.Windows;
 using System.Windows.Controls;
 using FreeW.App.Host.Editing;
@@ -9,11 +10,11 @@ namespace FreeW.App.Host;
 
 internal sealed partial class FindReplaceDialog
 {
-    internal FindReplaceDialogOpenMode OpenModeForTest => _session.State.OpenMode;
+    internal FindReplaceOpenMode OpenModeForTest => _session.State.OpenMode;
 
-    internal FindReplaceDialogOpenMode? FocusedFieldForTest =>
-        _findBox.IsKeyboardFocusWithin ? FindReplaceDialogOpenMode.Find :
-        _replaceBox.IsKeyboardFocusWithin ? FindReplaceDialogOpenMode.Replace : null;
+    internal FindReplaceOpenMode? FocusedFieldForTest =>
+        _findBox.IsKeyboardFocusWithin ? FindReplaceOpenMode.Find :
+        _replaceBox.IsKeyboardFocusWithin ? FindReplaceOpenMode.Replace : null;
 
     internal void SetFindTextForTest(string text) => _findBox.Text = text;
     internal void SetReplaceTextForTest(string text) => _replaceBox.Text = text;

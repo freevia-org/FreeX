@@ -3,12 +3,6 @@ using FreeX.Core.Commands;
 
 namespace FreeX.App.Presentation.Options;
 
-public enum OptionsValidationTextProfile
-{
-    Wpf,
-    Avalonia
-}
-
 public enum OptionsValidationFocusTarget
 {
     DefaultFontSize,
@@ -20,14 +14,10 @@ public enum OptionsValidationFocusTarget
 public static class OptionsValidationPresentationPlanner
 {
     public static ValidationPresentationDescriptor<OptionsValidationFocusTarget> DescribeGeneralInput(
-        bool invalidFontSize,
-        OptionsValidationTextProfile profile) =>
+        bool invalidFontSize) =>
         invalidFontSize
             ? new(
-                LocalizedTextDescriptor.Resource(
-                    profile == OptionsValidationTextProfile.Wpf
-                        ? "Options_InvalidDefaultFontSizeMessage"
-                        : "Options_InvalidFontSizeMessage"),
+                LocalizedTextDescriptor.Resource("Options_InvalidDefaultFontSizeMessage"),
                 OptionsValidationFocusTarget.DefaultFontSize)
             : new(
                 LocalizedTextDescriptor.Resource("Options_InvalidSheetCountMessage"),

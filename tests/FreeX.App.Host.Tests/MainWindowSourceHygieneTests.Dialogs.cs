@@ -280,14 +280,10 @@ public sealed partial class MainWindowSourceHygieneTests
     {
         var scenarioSource = DialogSourceTestSupport.ReadHostSources("MainWindow.ScenarioCommands.cs");
 
-        scenarioSource.Should().Contain("TryExecuteRepeatableCommand(");
-        scenarioSource.Should().Contain("() => new ApplyScenarioCommand(name)");
-        scenarioSource.Should().NotContain("RecalculateIfAutomatic(outcome.AffectedCells ?? []);");
-        scenarioSource.Should().Contain("CellAddress? first = null;");
-        scenarioSource.Should().Contain("foreach (var cell in outcome.AffectedCells)");
-        scenarioSource.Should().Contain("if (first is { } firstCell)");
-        scenarioSource.Should().Contain("SetActiveCell(firstCell);");
-        scenarioSource.Should().Contain("EnsureCellVisible(firstCell);");
+        scenarioSource.Should().Contain("_session.ShowScenario(name)");
+        scenarioSource.Should().NotContain("new ApplyScenarioCommand(");
+        scenarioSource.Should().NotContain("TryExecuteRepeatableCommand(");
+        scenarioSource.Should().NotContain("InvalidateNavigationCachesIfManual();");
     }
 
     [Fact]
@@ -326,9 +322,12 @@ public sealed partial class MainWindowSourceHygieneTests
         goalSeekMethod.Should().NotContain("TryExecuteRepeatable");
 
         forecastMethod.Should().Contain("new ForecastSheetDialog");
-        forecastMethod.Should().Contain("ForecastSheetSourceRangePlanner.Create(sheet, range)");
-        forecastMethod.Should().Contain("new ForecastSheetCommand(");
-        forecastMethod.Should().Contain("TryExecuteCommand(new ForecastSheetCommand(forecastRange, dialog.Result.Periods), \"Forecast Sheet\")");
+        forecastMethod.Should().Contain("ForecastSheetPlanner.CreatePlan(_workbook, range, dialog.Result.Periods)");
+        forecastMethod.Should().Contain("_session.ExecuteForecastSheetPlan(plan)");
+        forecastMethod.Should().Contain("ApplyWorkbookSessionSelectionToRenderer()");
+        forecastMethod.Should().NotContain("new ForecastSheetCommand(");
+        forecastMethod.Should().NotContain("TryExecuteCommand(");
+        forecastMethod.Should().NotContain("RecalculateWorkbook()");
         forecastMethod.Should().NotContain("ExecuteRepeatable");
         forecastMethod.Should().NotContain("TryExecuteRepeatable");
     }

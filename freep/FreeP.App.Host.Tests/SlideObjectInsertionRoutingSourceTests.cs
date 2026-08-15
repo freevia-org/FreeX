@@ -35,8 +35,12 @@ public sealed class SlideObjectInsertionRoutingSourceTests
         workflow.Should().Contain("FreePRibbonHostActionKind.InsertPicture");
         host.Should().Contain("QueueAssetImport(PresentationAssetImportKind.Picture)");
         adapter.Should().Contain("WpfFileDialogService.ShowOpenDialog(");
-        adapter.Should().Contain("new PresentationAssetImportWorkflow(");
-        adapter.Should().Contain("new PresentationAssetImportExecutionPort(");
+        adapter.Should().Contain("new PresentationAssetImportHostSession(");
+        adapter.Should().Contain("new WpfPresentationAssetPickerPort(this)");
+        adapter.Should().Contain("new WpfPresentationAssetReaderPort()");
+        adapter.Should().Contain("new PresentationAssetImportExecutionCallbacks(");
+        adapter.Should().Contain("AssetImportSession.ImportAsync(kind, applyZoomCoverImage)");
+        adapter.Should().Contain("AssetImportSession.MaterializeOutcomeAsync(");
         importWorkflow.Should().Contain("SlideObjectInsertionPlanner.CreatePicturePayload(bytes, sourceName)");
         host.Should().NotContain("File.ReadAllBytes(");
         host.Should().NotContain("SlideObjectInsertionPlanner.CreatePicturePayload(");

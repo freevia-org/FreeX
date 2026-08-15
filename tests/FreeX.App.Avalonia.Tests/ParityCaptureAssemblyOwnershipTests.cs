@@ -204,6 +204,7 @@ public sealed class ParityCaptureAssemblyOwnershipTests
         var shippingProgram = File.ReadAllText(Path.Combine(shippingDirectory, "Program.cs"));
 
         shippingProject.Should().Contain("Condition=\"'$(FreeXValidationHost)' == 'true'\"");
+        shippingProject.Should().Contain("<GlobalPropertiesToRemove>FreeXValidationHost</GlobalPropertiesToRemove>");
         shippingProject.Should().Contain("..\\..\\tools\\FreeX.Validation.Avalonia\\RendererHost");
         shippingProject.Should().Contain("MainWindow.DialogInspectionAccess.cs");
         validationProject.Should().Contain("Compile Remove=\"RendererHost\\**\\*.cs\"");

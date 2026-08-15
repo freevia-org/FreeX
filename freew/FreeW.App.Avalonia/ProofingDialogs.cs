@@ -11,7 +11,7 @@ namespace FreeW.App.Avalonia;
 internal sealed class ProofingLanguageDialog : FreeWDialogWindow
 {
     private static readonly AvaloniaCompactDialogChromeStyle ChromeStyle = AvaloniaCompactDialogChrome.WindowsStyle;
-    private readonly ComboBox _languages = new() { MinWidth = 260 };
+    private readonly ListBox _languages = new();
 
     public string? SelectedTag { get; private set; }
 
@@ -19,13 +19,13 @@ internal sealed class ProofingLanguageDialog : FreeWDialogWindow
     {
         var plan = ProofingLanguageDialogPlanner.Build(currentTag, UiText.Get);
         Title = plan.Text.Title;
-        Width = 390;
-        SizeToContent = SizeToContent.Height;
+        Width = 320;
+        Height = 420;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
         CanResize = false;
         ShowInTaskbar = false;
 
-        var items = plan.Choices.Select(choice => new ComboBoxItem
+        var items = plan.Choices.Select(choice => new ListBoxItem
         {
             Content = choice.DisplayText,
             Tag = choice.Tag,
@@ -33,25 +33,37 @@ internal sealed class ProofingLanguageDialog : FreeWDialogWindow
 
         _languages.ItemsSource = items;
         _languages.SelectedItem = items[plan.SelectedIndex];
-        AvaloniaCompactDialogChrome.ApplyComboBox(_languages, ChromeStyle);
+        AvaloniaCompactDialogChrome.ApplyListBox(_languages, ChromeStyle);
+        _languages.DoubleTapped += (_, _) => Accept();
 
-        var grid = new Grid { Margin = new Thickness(14, 12, 14, 0) };
-        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-        InsertDialogLayout.AddLabeledRow(grid, 0, plan.Text.LanguageLabel, _languages);
-
-        var buttons = InsertDialogLayout.OkCancelRow(
-            ok: () =>
-            {
-                SelectedTag = (_languages.SelectedItem as ComboBoxItem)?.Tag as string ?? string.Empty;
-                Close();
-            },
-            cancel: Close);
+        var scroll = new ScrollViewer
+        {
+            Content = _languages,
+            Height = 280,
+            VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
+            Margin = new Thickness(0, 0, 0, 8),
+        };
 
         Content = new StackPanel
         {
-            Children = { grid, buttons },
+            Margin = new Thickness(12),
+            Children =
+            {
+                new TextBlock
+                {
+                    Text = plan.Text.Instruction,
+                    TextWrapping = TextWrapping.Wrap,
+                    Margin = new Thickness(0, 0, 0, 8),
+                },
+                scroll,
+                AvaloniaCompactDialogChrome.CreateOkCancelRow(
+                    Accept,
+                    Close,
+                    buttonWidth: 80,
+                    style: ChromeStyle),
+            },
         };
+        Opened += (_, _) => _languages.Focus();
     }
 
     public static async Task<string?> ChooseAsync(Window owner, string? currentTag)
@@ -59,6 +71,15 @@ internal sealed class ProofingLanguageDialog : FreeWDialogWindow
         var dialog = new ProofingLanguageDialog(currentTag);
         await dialog.ShowDialog(owner);
         return dialog.SelectedTag;
+    }
+
+    private void Accept()
+    {
+        if (_languages.SelectedItem is not ListBoxItem selected)
+            return;
+
+        SelectedTag = selected.Tag as string ?? string.Empty;
+        Close();
     }
 }
 

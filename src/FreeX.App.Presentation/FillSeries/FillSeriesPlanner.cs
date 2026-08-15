@@ -62,12 +62,6 @@ public enum FillSeriesInputFocusTarget
     StopValue,
 }
 
-public enum FillSeriesValidationTextProfile
-{
-    Wpf,
-    Avalonia,
-}
-
 /// <summary>
 /// Portable (no UI) backing logic for the Fill ▸ Series dialog (Home ▸ Fill ▸ Series). It parses and
 /// validates the step/stop inputs and builds the linear / growth / date cell edits over a range, reading the
@@ -101,18 +95,12 @@ public static class FillSeriesPlanner
             : FillSeriesInputFocusTarget.StepValue;
 
     public static ValidationPresentationDescriptor<FillSeriesInputFocusTarget> DescribeInputError(
-        FillSeriesInputError error,
-        FillSeriesValidationTextProfile profile)
+        FillSeriesInputError error)
     {
-        var resourceKey = (profile, error) switch
+        var resourceKey = error switch
         {
-            (FillSeriesValidationTextProfile.Wpf, FillSeriesInputError.InvalidStop) =>
-                "FillSeriesStep_InvalidStopMessage",
-            (FillSeriesValidationTextProfile.Wpf, _) =>
-                "FillSeriesStep_InvalidStepMessage",
-            (FillSeriesValidationTextProfile.Avalonia, FillSeriesInputError.InvalidStop) =>
-                "FillSeries_InvalidStop",
-            _ => "FillSeries_InvalidStep",
+            FillSeriesInputError.InvalidStop => "FillSeriesStep_InvalidStopMessage",
+            _ => "FillSeriesStep_InvalidStepMessage",
         };
 
         return new(

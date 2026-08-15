@@ -617,7 +617,9 @@ public sealed partial class MainWindow
             return;
 
         var plan = _filterWorkflowSession.CreateClearAllPlan(sheet, range);
-        var result = _session.ExecuteReviewCommand(plan.Command);
+        var result = _session.ExecuteWorksheetFilterCommand(
+            range,
+            currentRange => _filterWorkflowSession.CreateClearAllPlan(sheet, currentRange).Command);
         if (!result.Success)
         {
             ShowEditIssue(result.ErrorMessage ?? UiText.Get("ShellLoc_FilterFailed"));
@@ -657,7 +659,7 @@ public sealed partial class MainWindow
         if (!TryCommitPendingFormulaEdit())
             return;
 
-        var result = _session.ExecuteReviewCommand(plan.CreateCommand());
+        var result = _session.ExecuteWorksheetFilterMutationPlan(plan);
         if (!result.Success)
         {
             var fallback = UiText.Get(WorksheetFilterMessagePlanner.GetCommandFailureResourceKey(plan.Kind));

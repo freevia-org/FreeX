@@ -806,7 +806,7 @@ public sealed class MacOsAppReadinessPreflightTests
         script.Should().Contain("public WorkbookSession CreateNew(");
         script.Should().Contain("WorkbookFactory.Create(options)");
         script.Should().Contain("`\"Created new workbook.`\"");
-        script.Should().Contain("var result = _session.AddSheet();");
+        script.Should().Contain("var result = _session.AddSheet(insertBeforeSheetId);");
         script.Should().Contain("var result = _session.RenameActiveSheet(newName);");
         script.Should().Contain("private async Task<string?> ShowRenameSheetDialogAsync(string currentName)");
         script.Should().Contain("AutomationProperties.SetAutomationId(nameBox, `\"RenameSheetNameBox`\");");
@@ -847,7 +847,8 @@ public sealed class MacOsAppReadinessPreflightTests
         script.Should().Contain("new SetFreezePanesCommand(ActiveSheet.Id, frozenRows, frozenCols)");
         script.Should().Contain("public WorkbookCellEditResult SetShowGridlines(bool showGridlines)");
         script.Should().Contain("public WorkbookCellEditResult SetShowHeadings(bool showHeadings)");
-        script.Should().Contain("new SetWorksheetViewOptionsCommand(ActiveSheet.Id, showGridlines, showHeadings, showRulers)");
+        script.Should().Contain("return new SetWorksheetViewOptionsCommand(");
+        script.Should().Contain("ExecuteGroupedWorksheetViewCommand(");
         script.Should().Contain("public WorkbookCellEditResult SetSelectedRangeBorderPreset(CellBorderPreset preset)");
         script.Should().Contain("public bool CanFillSelectedRange(FillCellsDirection direction)");
         script.Should().Contain("public WorkbookCellEditResult FillSelectedRange(FillCellsDirection direction)");
@@ -865,11 +866,11 @@ public sealed class MacOsAppReadinessPreflightTests
         script.Should().Contain("public static StyleDiff Plan(");
         script.Should().Contain("public static bool RequiresPerCellPlanning(CellBorderPreset preset)");
         script.Should().Contain("public WorkbookCellEditResult SetZoomPercent(int zoomPercent)");
-        script.Should().Contain("new SetWorksheetZoomCommand(ActiveSheet.Id, zoomPercent)");
+        script.Should().Contain("sheetId => new SetWorksheetZoomCommand(sheetId, zoomPercent)");
         script.Should().Contain("public WorkbookCellEditResult SetActiveSheetTabColor(CellColor? color)");
         script.Should().Contain("public WorkbookCellEditResult SetSelectedSheetTabColor(CellColor? color)");
         script.Should().Contain("new SetSheetTabColorCommand(selectedSheetIds[0], color)");
-        script.Should().Contain("public WorkbookCellEditResult AddSheet()");
+        script.Should().Contain("public WorkbookCellEditResult AddSheet(SheetId? insertBeforeSheetId = null)");
         script.Should().Contain("public WorkbookCellEditResult RenameActiveSheet(string? name)");
         script.Should().Contain("new RenameSheetCommand(ActiveSheet.Id, newName)");
         script.Should().Contain("ApplySuccessfulWorkbookMetadataResult(ActiveSheet.Id)");
@@ -2968,7 +2969,7 @@ public sealed class MacOsAppReadinessPreflightTests
                     _showFormulasMenuItem.Click += (_, _) => ToggleShowFormulas();
                     [NativeMenuTopLevelId.View] = viewMenu,
                     [NativeMenuTopLevelId.Sheet] = sheetMenu,
-                    var result = _session.AddSheet();
+                    var result = _session.AddSheet(insertBeforeSheetId);
                     var result = _session.RenameActiveSheet(newName);
                     ShowRenameSheetDialogAsync(currentName).ToString();
                     AutomationProperties.SetAutomationId(nameBox, "RenameSheetNameBox");
@@ -3214,25 +3215,26 @@ public sealed class MacOsAppReadinessPreflightTests
                     AutomationProperties.SetAutomationId(_cellAddressText, "CellAddressText");
                     AutomationProperties.SetName(_cellAddressText, UiText.Get("Toolbar_CellAddressAutomationName"));
                     AutomationProperties.SetHelpText(_cellAddressText, UiText.Get("Toolbar_CellAddressHelpText"));
-                    AutomationProperties.SetAutomationId(_selectionStatsText, "SelectionStatsText");
-                    AutomationProperties.SetName(_selectionStatsText, UiText.Get("Toolbar_SelectionStatisticsAutomationName"));
-                    AutomationProperties.SetHelpText(_selectionStatsText, UiText.Get("Toolbar_SelectionStatisticsHelpText"));
+                    ConfigureSelectionStatisticText(
+                    AutomationProperties.SetLiveSetting(textBlock, AutomationLiveSetting.Polite);
                     HasFormulaBoxAutomationName: string.Equals(AutomationProperties.GetName(_formulaBox), FormulaBarText(FormulaBarChromePlanner.FormulaBox.AutomationNameResourceKey), StringComparison.Ordinal)
                     HasFormulaBoxAutomationHelp: string.Equals(AutomationProperties.GetHelpText(_formulaBox), FormulaBarText(FormulaBarChromePlanner.FormulaBox.HelpTextResourceKey), StringComparison.Ordinal)
                     HasFormulaBoxAutomationId: string.Equals(AutomationProperties.GetAutomationId(_formulaBox), "FormulaBox", StringComparison.Ordinal)
                     HasStatusTextAutomationName: string.Equals(AutomationProperties.GetName(_statusText), "Status", StringComparison.Ordinal)
                     HasStatusTextAutomationHelp: string.Equals(AutomationProperties.GetHelpText(_statusText), "Shows the current workbook status.", StringComparison.Ordinal)
                     HasStatusTextAutomationId: string.Equals(AutomationProperties.GetAutomationId(_statusText), "StatusText", StringComparison.Ordinal)
-                    HasStatusTextValue: HasStatusBarAccessibleValue(_statusText, _selectionStatsText)
-                    private static bool HasStatusBarAccessibleValue(TextBlock statusText, TextBlock selectionStatsText) =>
+                    HasStatusTextValue: HasStatusBarAccessibleValue(
+                    params TextBlock[] selectionStatisticTexts) =>
                         !string.IsNullOrWhiteSpace(statusText.Text) ||
-                        !string.IsNullOrWhiteSpace(selectionStatsText.Text);
+                        selectionStatisticTexts.Any(text => !string.IsNullOrWhiteSpace(text.Text));
                     HasCellAddressAutomationName: string.Equals(AutomationProperties.GetName(_cellAddressText), "Cell address", StringComparison.Ordinal)
                     HasCellAddressAutomationHelp: string.Equals(AutomationProperties.GetHelpText(_cellAddressText), "Shows the active cell address.", StringComparison.Ordinal)
                     HasCellAddressAutomationId: string.Equals(AutomationProperties.GetAutomationId(_cellAddressText), "CellAddressText", StringComparison.Ordinal)
-                    HasSelectionStatsAutomationName: string.Equals(AutomationProperties.GetName(_selectionStatsText), "Selection statistics", StringComparison.Ordinal)
-                    HasSelectionStatsAutomationHelp: string.Equals(AutomationProperties.GetHelpText(_selectionStatsText), "Shows statistics for the current selection.", StringComparison.Ordinal)
-                    HasSelectionStatsAutomationId: string.Equals(AutomationProperties.GetAutomationId(_selectionStatsText), "SelectionStatsText", StringComparison.Ordinal)
+                    HasSelectionStatsAutomationName: HaveSelectionStatisticAutomationNames(
+                    HasSelectionStatsAutomationHelp: HaveSelectionStatisticAutomationHelp(
+                    HasSelectionStatsAutomationId: HaveSelectionStatisticAutomationIds(
+                    (_statusAverageText, "StatusAvgText")
+                    (_statusMaximumText, "StatusMaxText")
                     HasNativeMergeAndCenterMenuItem: HasNativeMenuItem(_mergeAndCenterMenuItem, "Merge & Center", requireGesture: false);
                     HasNativeUnmergeCellsMenuItem: HasNativeMenuItem(_unmergeCellsMenuItem, "Unmerge Cells", requireGesture: false);
                     HasSheetTabContextKeyboardHelp: access.HasSheetTab(button =>
@@ -3966,7 +3968,7 @@ public sealed class MacOsAppReadinessPreflightTests
                 private bool HasStatusTextValue { get; }
                 private bool HasStatusBarAccessibleValue() =>
                     !string.IsNullOrWhiteSpace(_statusText.Text) ||
-                    !string.IsNullOrWhiteSpace(_selectionStatsText.Text);
+                    SelectionStatisticTexts().Any(text => !string.IsNullOrWhiteSpace(text.Text));
                 private bool HasCellAddressAutomationName { get; }
                 private bool HasCellAddressAutomationHelp { get; }
                 private bool HasCellAddressAutomationId { get; }
@@ -4352,15 +4354,16 @@ public sealed class MacOsAppReadinessPreflightTests
                 new SetSheetHiddenCommand(sheetId, hidden: false)
                 public bool IsShowingFormulas => ActiveSheet.ShowFormulas;
                 public WorkbookCellEditResult SetShowFormulas(bool showFormulas)
-                new SetWorksheetShowFormulasCommand(ActiveSheet.Id, showFormulas)
+                sheetId => new SetWorksheetShowFormulasCommand(sheetId, showFormulas)
                 public bool IsShowingGridlines => ActiveSheet.ShowGridlines;
                 public bool IsShowingHeadings => ActiveSheet.ShowHeadings;
                 public WorkbookCellEditResult SetShowGridlines(bool showGridlines)
                 public WorkbookCellEditResult SetShowHeadings(bool showHeadings)
-                new SetWorksheetViewOptionsCommand(ActiveSheet.Id, showGridlines, showHeadings, showRulers)
+                return new SetWorksheetViewOptionsCommand(
+                ExecuteGroupedWorksheetViewCommand(
                 public int ZoomPercent => ActiveSheet.ZoomPercent;
                 public WorkbookCellEditResult SetZoomPercent(int zoomPercent)
-                new SetWorksheetZoomCommand(ActiveSheet.Id, zoomPercent)
+                sheetId => new SetWorksheetZoomCommand(sheetId, zoomPercent)
                 public WorkbookCellEditResult FreezePanesAtActiveCell()
                 public WorkbookCellEditResult FreezeTopRow()
                 public WorkbookCellEditResult FreezeFirstColumn()
@@ -4420,14 +4423,11 @@ public sealed class MacOsAppReadinessPreflightTests
                 SelectSheet(range.Start.Sheet);
                 private SheetId? ResolveSheetIdByName(string sheetName)
                 */
-                public WorkbookCellEditResult AddSheet()
-                {
-                    var result = _cellEditService.ExecuteEditCommand(
-                        Workbook,
-                        new AddSheetCommand(SheetTabListPlanner.GenerateUniqueSheetName(Workbook)));
-                    ApplySuccessfulNewWorksheetResult(Workbook.Sheets[^1].Id);
-                    return result;
-                }
+                public WorkbookCellEditResult AddSheet(SheetId? insertBeforeSheetId = null) =>
+                    ExecuteRepeatableCommandPreservingSelection(() =>
+                        new AddSheetCommand(
+                            SheetTabListPlanner.GenerateUniqueSheetName(Workbook),
+                            insertBeforeSheetId is null ? Workbook.Sheets.Count : 0));
 
                 public WorkbookCellEditResult RenameActiveSheet(string? name)
                 {

@@ -14,12 +14,6 @@ public enum HyperlinkDialogValidationError
     InvalidEmailAddress
 }
 
-public enum HyperlinkDialogTextProfile
-{
-    Wpf,
-    Avalonia
-}
-
 public enum HyperlinkDialogFocusTarget
 {
     Target
@@ -73,6 +67,33 @@ public sealed record HyperlinkDialogPrefill(
         SpreadsheetDisplayFormatter.FormatCellValue(value);
 }
 
+/// <summary>
+/// Normalizes and validates the <em>target text</em> a user types into the spreadsheet Insert
+/// Hyperlink dialog, across the four Excel link types in <see cref="HyperlinkTargetKind"/>, and
+/// projects the outcome into a <see cref="HyperlinkDialogPlan"/> plus a
+/// <see cref="HyperlinkDialogValidationError"/> taxonomy that hosts render through
+/// <see cref="ValidationPresentationDescriptor{T}"/>.
+/// <para>
+/// Cross-app note (assessed 2026-08-15): <c>FreeP.App.Compositor.HyperlinkDialogPlanner</c> shares
+/// only this type's <em>name</em>. This planner solves target-text validation: it decides missing
+/// address vs. missing document location vs. missing new-document name from the link type, applies
+/// an <c>@</c>/dot/whitespace email-address rule, adds and strips the <c>mailto:</c> prefix, and
+/// derives default display text — and it owns a five-member error enum plus one localized semantic
+/// message contract shared by both renderers. The FreeP planner solves a different
+/// problem: it publishes a dialog <em>surface schema</em> (field ids, control kinds, labels,
+/// accessible names, automation ids) over FreeP's <c>PresentationDialogSurfacePlan</c>
+/// infrastructure, drives a mutable <c>HyperlinkDialogSession</c> view-state machine, and resolves
+/// PowerPoint slide targets by id/index. Its taxonomy is two target kinds (Url, Slide) against this
+/// one's four, it has no email-address rule, no <c>mailto:</c> normalization, no display-text
+/// derivation, no error enum and no text profile, and it emits literal strings rather than
+/// <see cref="LocalizedTextDescriptor"/> resources. The one primitive both apps genuinely share —
+/// URL scheme allowlisting — is <em>already</em> extracted as
+/// <see cref="Free.Shared.AppServices.ExternalUriLauncher.TryCreateAllowedUri"/>, which FreeP calls
+/// directly and which FreeX routes every launch through. Ignoring braces and short lines, the two
+/// files share exactly one identical line — the <c>public static class</c> declaration. There is no
+/// further stable neutral contract to extract; do not merge them.
+/// </para>
+/// </summary>
 public static class HyperlinkDialogPlanner
 {
     public const double Width = 560;
@@ -91,26 +112,16 @@ public static class HyperlinkDialogPlanner
     public const double LinkTypeListHeight = 96;
 
     public static ValidationPresentationDescriptor<HyperlinkDialogFocusTarget> DescribeValidationError(
-        HyperlinkDialogValidationError error,
-        HyperlinkDialogTextProfile profile)
+        HyperlinkDialogValidationError error)
     {
-        var message = profile == HyperlinkDialogTextProfile.Wpf
-            ? error switch
-            {
-                HyperlinkDialogValidationError.MissingDocumentLocation => LocalizedTextDescriptor.Resource("Hyperlink_EnterValidCellReferenceOrDefinedName"),
-                HyperlinkDialogValidationError.MissingEmailAddress => LocalizedTextDescriptor.Resource("Hyperlink_EnterEmailAddress"),
-                HyperlinkDialogValidationError.MissingNewDocumentName => LocalizedTextDescriptor.Resource("Hyperlink_EnterNewDocumentName"),
-                HyperlinkDialogValidationError.InvalidEmailAddress => LocalizedTextDescriptor.Resource("Hyperlink_EnterValidEmailAddress"),
-                _ => LocalizedTextDescriptor.Resource("Hyperlink_EnterAddress")
-            }
-            : error switch
-            {
-                HyperlinkDialogValidationError.MissingDocumentLocation => LocalizedTextDescriptor.Literal("Enter a cell reference or defined name."),
-                HyperlinkDialogValidationError.MissingEmailAddress => LocalizedTextDescriptor.Literal("Enter an email address."),
-                HyperlinkDialogValidationError.MissingNewDocumentName => LocalizedTextDescriptor.Literal("Enter a new document name."),
-                HyperlinkDialogValidationError.InvalidEmailAddress => LocalizedTextDescriptor.Literal("Enter a valid email address."),
-                _ => LocalizedTextDescriptor.Literal("Enter an address.")
-            };
+        var message = error switch
+        {
+            HyperlinkDialogValidationError.MissingDocumentLocation => LocalizedTextDescriptor.Resource("Hyperlink_EnterValidCellReferenceOrDefinedName"),
+            HyperlinkDialogValidationError.MissingEmailAddress => LocalizedTextDescriptor.Resource("Hyperlink_EnterEmailAddress"),
+            HyperlinkDialogValidationError.MissingNewDocumentName => LocalizedTextDescriptor.Resource("Hyperlink_EnterNewDocumentName"),
+            HyperlinkDialogValidationError.InvalidEmailAddress => LocalizedTextDescriptor.Resource("Hyperlink_EnterValidEmailAddress"),
+            _ => LocalizedTextDescriptor.Resource("Hyperlink_EnterAddress")
+        };
         return new ValidationPresentationDescriptor<HyperlinkDialogFocusTarget>(
             message,
             HyperlinkDialogFocusTarget.Target);

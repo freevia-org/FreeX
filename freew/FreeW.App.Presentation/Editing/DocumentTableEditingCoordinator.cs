@@ -121,6 +121,90 @@ public sealed class DocumentTableEditingCoordinator
         return addresses;
     }
 
+    /// <summary>
+    /// Expands a semantic border preset over a renderer-native table selection. Selection endpoints
+    /// are normalized in logical-grid space, horizontally merged cells are emitted once, and composite
+    /// Outside/Inside presets are reduced to primitive per-cell edges before command construction.
+    /// </summary>
+    public IReadOnlyList<DocumentTableCellBorderEdit> BorderEditsInRange(
+        DocumentTableCellAddress anchor,
+        DocumentTableCellAddress active,
+        CellBorderEdges edges)
+    {
+        if (anchor.BlockIndex != active.BlockIndex
+            || !TryResolveCell(anchor, out var table, out _)
+            || !TryResolveCell(active, out _, out _)
+            || TableGridProjection.At(table, anchor.RowIndex, anchor.GridColumn) is not { } anchorCell
+            || TableGridProjection.At(table, active.RowIndex, active.GridColumn) is not { } activeCell)
+        {
+            return Array.Empty<DocumentTableCellBorderEdit>();
+        }
+
+        var minRow = Math.Min(anchor.RowIndex, active.RowIndex);
+        var maxRow = Math.Max(anchor.RowIndex, active.RowIndex);
+        var minColumn = Math.Min(anchorCell.StartColumn, activeCell.StartColumn);
+        var maxColumn = Math.Max(anchorCell.EndColumnExclusive, activeCell.EndColumnExclusive) - 1;
+        var edits = new List<DocumentTableCellBorderEdit>();
+
+        for (var rowIndex = minRow; rowIndex <= maxRow; rowIndex++)
+        {
+            foreach (var projected in TableGridProjection.ProjectRow(table.Rows[rowIndex]))
+            {
+                if (projected.EndColumnExclusive <= minColumn || projected.StartColumn > maxColumn)
+                    continue;
+
+                var primitiveEdges = ResolveBorderEdges(
+                    edges,
+                    rowIndex,
+                    projected.StartColumn,
+                    projected.EndColumnExclusive - 1,
+                    minRow,
+                    maxRow,
+                    minColumn,
+                    maxColumn);
+                if (primitiveEdges == CellBorderEdges.None)
+                    continue;
+
+                edits.Add(new DocumentTableCellBorderEdit(
+                    new DocumentTableCellAddress(anchor.BlockIndex, rowIndex, projected.StartColumn),
+                    primitiveEdges));
+            }
+        }
+
+        return edits;
+    }
+
+    private static CellBorderEdges ResolveBorderEdges(
+        CellBorderEdges edges,
+        int row,
+        int firstGridColumn,
+        int lastGridColumn,
+        int minRow,
+        int maxRow,
+        int minColumn,
+        int maxColumn)
+    {
+        if ((edges & CellBorderEdges.All) == CellBorderEdges.All)
+            return CellBorderEdges.All;
+
+        var result = edges & CellBorderEdges.All;
+        if ((edges & CellBorderEdges.Outside) != 0)
+        {
+            if (row == minRow) result |= CellBorderEdges.Top;
+            if (row == maxRow) result |= CellBorderEdges.Bottom;
+            if (firstGridColumn == minColumn) result |= CellBorderEdges.Left;
+            if (lastGridColumn == maxColumn) result |= CellBorderEdges.Right;
+        }
+
+        if ((edges & CellBorderEdges.Inside) != 0)
+        {
+            if (row < maxRow) result |= CellBorderEdges.Bottom;
+            if (lastGridColumn < maxColumn) result |= CellBorderEdges.Right;
+        }
+
+        return result;
+    }
+
     public DocumentTableEditResult InsertRow(DocumentTableCellAddress address, bool after)
     {
         if (!TryResolveCell(address, out var table, out _))
@@ -378,17 +462,20 @@ public sealed class DocumentTableEditingCoordinator
 
     public DocumentTableEditResult SetCellTextDirection(
         DocumentTableCellAddress address,
-        CellTextDirection direction)
-    {
-        if (!TryResolveCell(address, out _, out var cellIndex))
-            return DocumentTableEditResult.NoChange(address);
-        _session.Commands.Execute(new SetCellTextDirectionCommand(
-            address.BlockIndex,
-            address.RowIndex,
-            cellIndex,
-            direction));
-        return DocumentTableEditResult.Changed(address);
-    }
+        CellTextDirection direction) =>
+        SetCellTextDirection([address], direction);
+
+    public DocumentTableEditResult SetCellTextDirection(
+        IReadOnlyList<DocumentTableCellAddress> addresses,
+        CellTextDirection direction) =>
+        ExecuteForCells(
+            addresses,
+            "Cell Text Direction",
+            (address, cellIndex) => new SetCellTextDirectionCommand(
+                address.BlockIndex,
+                address.RowIndex,
+                cellIndex,
+                direction));
 
     public DocumentTableEditResult ApplyStyle(
         DocumentTableCellAddress address,

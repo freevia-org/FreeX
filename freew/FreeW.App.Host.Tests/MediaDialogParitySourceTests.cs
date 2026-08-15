@@ -11,7 +11,7 @@ public sealed class MediaDialogParitySourceTests
     [InlineData("InsertChartDialog.cs", "InsertChartDialogPlanner.TryBuildResult(")]
     [InlineData("InsertSmartArtDialog.cs", "SmartArtDialogPlanner.BuildInitialState(")]
     [InlineData("InsertSmartArtDialog.cs", "SmartArtDialogPlanner.TryBuildResult(")]
-    [InlineData("InsertSmartArtDialog.cs", "SmartArtDialogPlanner.NodeTextLabel")]
+    [InlineData("InsertSmartArtDialog.cs", "SmartArtDialogPlanner.ResolveText(")]
     [InlineData("InsertSmartArtDialog.cs", "SmartArtDialogPlanner.VisualMetrics")]
     public void WpfMediaDialogsUseSharedPresentationPolicies(string fileName, string call)
     {
@@ -24,7 +24,7 @@ public sealed class MediaDialogParitySourceTests
     [InlineData("MediaDialogParity.cs", "ChartSizeDialogPlanner.BuildInitialState(")]
     [InlineData("MediaDialogParity.cs", "InsertChartDialogPlanner.BuildInitialState(")]
     [InlineData("MediaDialogParity.cs", "SmartArtDialogPlanner.TryBuildResult(")]
-    [InlineData("MediaDialogParity.cs", "SmartArtDialogPlanner.NodeTextLabel")]
+    [InlineData("MediaDialogParity.cs", "SmartArtDialogPlanner.ResolveText(")]
     [InlineData("MediaDialogParity.cs", "SmartArtDialogPlanner.VisualMetrics")]
     [InlineData("IconPickerDialog.cs", "_session.ApplyFilter(")]
     public void AvaloniaMediaDialogsUseSharedPresentationPolicies(string fileName, string call)

@@ -1,4 +1,5 @@
 using System.Globalization;
+using Free.Shared.PageSetup;
 using FreeW.Core.Model;
 
 namespace FreeW.App.Presentation.Dialogs;
@@ -148,8 +149,7 @@ public sealed record PageSetupDialogPresentationMetrics
 }
 
 public sealed record PageSetupPaperOption(
-    string HostLabel,
-    string AvaloniaLabel,
+    string Label,
     double WidthPt,
     double HeightPt)
 {
@@ -515,28 +515,30 @@ public static class PageSetupDialogPlanner
             new(PageSetupDialogFollowUp.Borders, BordersLabel),
         ]);
 
-    public static readonly IReadOnlyList<PageSetupPaperOption> HostPaperOptions =
-    [
-        new("Letter (8.5\" x 11\")", "Letter (8.5 \u00d7 11 in)", 612, 792),
-        new("Legal (8.5\" x 14\")", "Legal (8.5 \u00d7 14 in)", 612, 1008),
-        new("Tabloid (11\" x 17\")", "Tabloid (11 \u00d7 17 in)", 792, 1224),
-        new("A3 (29.7cm x 42cm)", "A3 (297 \u00d7 420 mm)", 841.9, 1190.55),
-        new("A4 (21cm x 29.7cm)", "A4 (210 \u00d7 297 mm)", 595.3, 841.9),
-        new("A5 (14.8cm x 21cm)", "A5 (148 \u00d7 210 mm)", 419.55, 595.3),
-        new("B4 (25cm x 35.3cm)", "B4 (250 \u00d7 353 mm)", 708.7, 1000.65),
-        new("B5 (17.6cm x 25cm)", "B5 (176 \u00d7 250 mm)", 498.9, 708.7),
-        new("Custom", "Custom", 0, 0),
-    ];
+    /// <summary>The "Custom" row is a dialog affordance, not a named paper size, so it stays app-side.</summary>
+    private static readonly PageSetupPaperOption CustomPaperOption = new("Custom", 0, 0);
 
-    public static readonly IReadOnlyList<PageSetupPaperOption> AvaloniaPaperOptions =
+    /// <summary>
+    /// Builds a paper row from the cross-app <see cref="PaperSizeCatalog"/>. FreeW keeps its own label
+    /// wording (and its own per-surface size list); only the point dimensions are shared.
+    /// </summary>
+    private static PageSetupPaperOption Paper(SharedPaperSize size, string label)
+    {
+        var (widthPt, heightPt) = PaperSizeCatalog.GetSizePoints(size);
+        return new PageSetupPaperOption(label, widthPt, heightPt);
+    }
+
+    public static readonly IReadOnlyList<PageSetupPaperOption> PaperOptions =
     [
-        new("Letter (8.5\" x 11\")", "Letter (8.5 \u00d7 11 in)", 612, 792),
-        new("Legal (8.5\" x 14\")", "Legal (8.5 \u00d7 14 in)", 612, 1008),
-        new("A4 (21cm x 29.7cm)", "A4 (210 \u00d7 297 mm)", 595.3, 841.9),
-        new("A3 (29.7cm x 42cm)", "A3 (297 \u00d7 420 mm)", 841.9, 1190.6),
-        new("A5 (14.8cm x 21cm)", "A5 (148 \u00d7 210 mm)", 419.5, 595.3),
-        new("Executive (7.25\" x 10.5\")", "Executive (7.25 \u00d7 10.5 in)", 522, 756),
-        new("Custom", "Custom", 0, 0),
+        Paper(SharedPaperSize.Letter, "Letter (8.5\" x 11\")"),
+        Paper(SharedPaperSize.Legal, "Legal (8.5\" x 14\")"),
+        Paper(SharedPaperSize.Tabloid, "Tabloid (11\" x 17\")"),
+        Paper(SharedPaperSize.A3, "A3 (29.7cm x 42cm)"),
+        Paper(SharedPaperSize.A4, "A4 (21cm x 29.7cm)"),
+        Paper(SharedPaperSize.A5, "A5 (14.8cm x 21cm)"),
+        Paper(SharedPaperSize.B4, "B4 (25cm x 35.3cm)"),
+        Paper(SharedPaperSize.B5, "B5 (17.6cm x 25cm)"),
+        CustomPaperOption,
     ];
 
     public static readonly IReadOnlyList<string> OrientationNames = ["Portrait", "Landscape"];
@@ -553,7 +555,7 @@ public static class PageSetupDialogPlanner
         PageSettings page,
         SectionBreakKind sectionStart,
         CultureInfo culture) =>
-        new(page, sectionStart, HostPaperOptions, PresentationMetrics.Validation, culture);
+        new(page, sectionStart, PaperOptions, PresentationMetrics.Validation, culture);
 
     public static PageSetupInitialState BuildInitialState(
         PageSettings page,
@@ -625,16 +627,16 @@ public static class PageSetupDialogPlanner
     {
         ArgumentNullException.ThrowIfNull(paperOptions);
 
-        var shortPt = Math.Min(widthPt, heightPt);
-        var longPt = Math.Max(widthPt, heightPt);
+        var (shortPt, longPt) = PageOrientationRules.ToPortrait(widthPt, heightPt);
         for (var i = 0; i < paperOptions.Count; i++)
         {
             var option = paperOptions[i];
             if (option.IsCustom)
                 continue;
 
-            if (Math.Abs(Math.Min(option.WidthPt, option.HeightPt) - shortPt) < tolerancePt &&
-                Math.Abs(Math.Max(option.WidthPt, option.HeightPt) - longPt) < tolerancePt)
+            var (optionShort, optionLong) = PageOrientationRules.ToPortrait(option.WidthPt, option.HeightPt);
+            if (Math.Abs(optionShort - shortPt) < tolerancePt &&
+                Math.Abs(optionLong - longPt) < tolerancePt)
             {
                 return i;
             }
@@ -762,11 +764,8 @@ public static class PageSetupDialogPlanner
         page.VerticalAlignment = result.VerticalAlignment;
     }
 
-    public static string FormatPoints(double value, CultureInfo culture)
-    {
-        ArgumentNullException.ThrowIfNull(culture);
-        return value.ToString("0.##", culture);
-    }
+    public static string FormatPoints(double value, CultureInfo culture) =>
+        PageMarginTextPolicy.Format(value, culture);
 
     public static int CustomIndex(IReadOnlyList<PageSetupPaperOption> paperOptions)
     {
@@ -801,8 +800,7 @@ public static class PageSetupDialogPlanner
             !paperOptions[input.PaperSizeIndex].IsCustom)
         {
             var option = paperOptions[input.PaperSizeIndex];
-            width = Math.Min(option.WidthPt, option.HeightPt);
-            height = Math.Max(option.WidthPt, option.HeightPt);
+            (width, height) = PageOrientationRules.ToPortrait(option.WidthPt, option.HeightPt);
             return true;
         }
 
@@ -851,11 +849,14 @@ public static class PageSetupDialogPlanner
         value = 0;
         errorMessage = null;
         var t = (text ?? string.Empty).Trim();
+
+        // Compact dialog only: a blank box means "zero", so it short-circuits before the shared rule.
         if (profile == PageSetupValidationProfile.CompactDialog && t.Length == 0)
             return true;
 
-        if (!double.TryParse(t, NumberStyles.Float, culture, out value) || value < 0)
+        if (!PageMarginTextPolicy.TryParseNonNegative(t, culture, out value))
         {
+            value = 0;
             errorMessage = profile == PageSetupValidationProfile.CompactDialog
                 ? $"Invalid value for {field}: \"{t}\". Enter a non-negative number."
                 : UnifiedValidationMessage;
@@ -873,10 +874,9 @@ public static class PageSetupDialogPlanner
         out double value,
         out string? errorMessage)
     {
-        value = 1;
         errorMessage = null;
         var t = (text ?? string.Empty).Trim();
-        if (!double.TryParse(t, NumberStyles.Float, culture, out value) || value <= 0)
+        if (!PageMarginTextPolicy.TryParsePositive(t, culture, out value))
         {
             errorMessage = profile == PageSetupValidationProfile.CompactDialog
                 ? $"Invalid value for {field}: \"{t}\". Enter a positive number."
@@ -887,29 +887,20 @@ public static class PageSetupDialogPlanner
         return true;
     }
 
-    private static (double WidthPt, double HeightPt) DisplayGeometry(PageSettings page, PageSetupGeometryMode geometryMode)
-    {
-        if (geometryMode == PageSetupGeometryMode.PortraitInputSwappedWhenLandscape && page.Landscape)
-            return (page.HeightPt, page.WidthPt);
-
-        return (page.WidthPt, page.HeightPt);
-    }
+    private static (double WidthPt, double HeightPt) DisplayGeometry(PageSettings page, PageSetupGeometryMode geometryMode) =>
+        PageOrientationRules.ApplySwapWhenLandscape(
+            page.WidthPt,
+            page.HeightPt,
+            geometryMode == PageSetupGeometryMode.PortraitInputSwappedWhenLandscape && page.Landscape);
 
     private static (double WidthPt, double HeightPt) StoreGeometry(
         double widthPt,
         double heightPt,
         bool landscape,
-        PageSetupGeometryMode geometryMode)
-    {
-        if (geometryMode == PageSetupGeometryMode.PortraitInputSwappedWhenLandscape)
-            return landscape ? (heightPt, widthPt) : (widthPt, heightPt);
-
-        if (landscape && widthPt < heightPt)
-            return (heightPt, widthPt);
-        if (!landscape && widthPt > heightPt)
-            return (heightPt, widthPt);
-        return (widthPt, heightPt);
-    }
+        PageSetupGeometryMode geometryMode) =>
+        geometryMode == PageSetupGeometryMode.PortraitInputSwappedWhenLandscape
+            ? PageOrientationRules.ApplySwapWhenLandscape(widthPt, heightPt, landscape)
+            : PageOrientationRules.NormalizeToOrientation(widthPt, heightPt, landscape);
 
     private static int IndexOf<T>(IReadOnlyList<T> values, T value)
     {

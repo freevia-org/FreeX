@@ -71,7 +71,7 @@ public sealed class PageSetupDialog : FreeWDialogWindow, IPageSetupDialogControl
         _orientation = Combo(PageSetupDialogPlanner.OrientationNames, state.OrientationIndex);
         _multiplePages = Combo(PageSetupDialogPlanner.MultiplePagesNames, state.MultiplePagesIndex);
         _applyTo = Combo(PageSetupDialogPlanner.ApplyToNames, 0);
-        _paperSize = Combo(_session.PaperOptions.Select(option => option.HostLabel), state.PaperSizeIndex);
+        _paperSize = Combo(_session.PaperOptions.Select(option => option.Label), state.PaperSizeIndex);
         _width = NumberBox(state.WidthText);
         _height = NumberBox(state.HeightText);
         _sectionStart = Combo(PageSetupDialogPlanner.SectionStartNames, state.SectionStartIndex);

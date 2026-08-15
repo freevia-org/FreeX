@@ -82,6 +82,7 @@ public sealed class PresentationMediaPaneSession
     public const int MinimumVolumePercent = 0;
     public const int MaximumVolumePercent = 100;
     public const int VolumeTickFrequency = 10;
+    public const bool SnapVolumeToTicks = true;
     public const int DefaultVolumePercent = 80;
     public const int DefaultStopAfterSlides = 1;
 

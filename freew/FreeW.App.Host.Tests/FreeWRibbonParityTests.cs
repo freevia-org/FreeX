@@ -1766,8 +1766,11 @@ public sealed class FreeWRibbonParityTests
             registry.TryGet($"freew.chart-style-{style.Id}", out _)
                 .Should().BeTrue($"freew.chart-style-{style.Id} must be backed");
         foreach (var scheme in ChartColorScheme.Catalog)
-            registry.TryGet($"freew.chart-color-{scheme.Id}", out _)
-                .Should().BeTrue($"freew.chart-color-{scheme.Id} must be backed");
+        {
+            var commandId = ChartColorRibbonCommandCatalog.CommandId(scheme);
+            registry.TryGet(commandId, out _)
+                .Should().BeTrue($"{commandId} must be backed");
+        }
 
         foreach (var commandId in new[]
         {
@@ -1928,7 +1931,8 @@ public sealed class FreeWRibbonParityTests
         chart!.ColorSchemeId.Should().BeNull();
 
         var registry = FreeWRibbonCommands.Build(editor, new RibbonStateStore());
-        registry.TryGet("freew.chart-color-mono-blue", out var command)
+        var monoBlue = ChartColorScheme.Catalog.Single(scheme => scheme.Id == "mono-blue");
+        registry.TryGet(ChartColorRibbonCommandCatalog.CommandId(monoBlue), out var command)
             .Should().BeTrue("the WPF Chart Design color scheme command must be registered");
         command!.Execute(RibbonCommandContext.Empty);
 
@@ -2124,8 +2128,8 @@ public sealed class FreeWRibbonParityTests
                 "freew.table-last-column",
                 "freew.table-banded-rows",
                 "freew.table-banded-cols",
-                "freew.cell-shading",
-                "freew.cell-borders",
+                "freew.table-shading",
+                "freew.table-borders",
                 "freew.draw-table",
                 "freew.eraser");
 
@@ -2264,15 +2268,15 @@ public sealed class FreeWRibbonParityTests
                 "freew.table-properties",
                 // table-rows-cols group
                 "freew.table-insert-above",
-                "freew.table-insert-row",
+                "freew.table-insert-below",
                 "freew.table-insert-col-left",
-                "freew.table-insert-col",
+                "freew.table-insert-col-right",
                 "freew.table-delete-row",
                 "freew.table-delete-col",
                 "freew.table-delete",
                 // table-merge group
-                "freew.merge-cells",
-                "freew.split-cell",
+                "freew.table-merge-cells",
+                "freew.table-split-cell",
                 "freew.split-table",
                 // table-cell-size group
                 "freew.table-row-height",
@@ -2319,13 +2323,13 @@ public sealed class FreeWRibbonParityTests
         CommandIds(insert).Should().Contain("freew.table");
         CommandIds(insert).Should().NotContain(new[]
         {
-            "freew.table-insert-row",
+            "freew.table-insert-below",
             "freew.table-delete-row",
-            "freew.table-insert-col",
+            "freew.table-insert-col-right",
             "freew.table-delete-col",
-            "freew.cell-shading",
-            "freew.merge-cells",
-            "freew.split-cell",
+            "freew.table-shading",
+            "freew.table-merge-cells",
+            "freew.table-split-cell",
             "freew.table-header-row",
             "freew.table-banded-rows",
             "freew.table-repeat-header",

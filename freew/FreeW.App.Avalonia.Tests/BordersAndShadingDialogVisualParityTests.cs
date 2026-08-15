@@ -219,7 +219,9 @@ public sealed class BordersAndShadingDialogVisualParityTests
         var root = TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeW.slnx");
         var source = File.ReadAllText(Path.Combine(root, "freew", "FreeW.App.Avalonia", "ParagraphCommandDialogs.cs"));
 
-        source.Should().Contain("contentPaneMargin: new Thickness(-12, 0, -12, 0)");
+        source.Should().Contain("contentPaneMargin: new Thickness(");
+        source.Should().Contain("Layout.AvaloniaTabPaneHorizontalCompensation");
+        BordersAndShadingDialogPlanner.VisualMetrics.AvaloniaTabPaneHorizontalCompensation.Should().Be(-12);
         source.Should().Contain("dialog.ApplyParagraphSettingPlan();");
     }
 

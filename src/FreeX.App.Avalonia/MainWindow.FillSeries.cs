@@ -170,7 +170,7 @@ public sealed partial class MainWindow
                     out var inputError))
             {
                 ShowWarning(FillSeriesPlanner
-                    .DescribeInputError(inputError, FillSeriesValidationTextProfile.Avalonia)
+                    .DescribeInputError(inputError)
                     .Message
                     .Resolve(UiText.Get, UiText.Format));
                 return;

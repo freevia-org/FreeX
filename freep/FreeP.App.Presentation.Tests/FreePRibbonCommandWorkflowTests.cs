@@ -214,13 +214,18 @@ public sealed class FreePRibbonCommandWorkflowTests
             "freep",
             "FreeP.App.Avalonia",
             "MainWindow.WorkareaEndpoint.cs");
+        var wpfWorkareaEndpoint = Read(
+            root,
+            "freep",
+            "FreeP.App.Host",
+            "MainWindow.WorkareaEndpoint.cs");
         var avaloniaRegistry = Slice(
             avalonia,
             "internal RibbonCommandRegistry BuildCommandRegistry()",
             "private void OnCustomSlideSizeRequested");
 
-        wpfMain.Should().Contain("FreePRibbonHostRegistryComposer.Build(")
-            .And.Contain("CreateRibbonHostProfile()");
+        wpfMain.Should().Contain("new FreePRibbonBindingSession(")
+            .And.Contain("CreateRibbonHostProfile);");
         wpf.Should().Contain("FreePRibbonHostProfileFactory.Create(new FreePRibbonHostPorts")
             .And.Contain("new FreePRibbonOleCommandEndpoints")
             .And.Contain("AnimationPaneVisible = () => IsAnimationPaneVisible")
@@ -237,7 +242,7 @@ public sealed class FreePRibbonCommandWorkflowTests
             .And.NotContain("ExecuteDesignRequest");
         File.Exists(Path.Combine(root, "freep", "FreeP.App.Host", "FreePRibbonCommands.cs"))
             .Should().BeFalse("WPF composes the portable host profile directly");
-        avaloniaRegistry.Should().Contain("FreePRibbonHostRegistryComposer.Build(")
+        avaloniaRegistry.Should().Contain("new FreePRibbonBindingSession(")
             .And.Contain("FreePRibbonHostProfileFactory.Create(new FreePRibbonHostPorts")
             .And.Contain("new FreePRibbonFileCommandEndpoints")
             .And.Contain("new FreePRibbonOleCommandEndpoints")
@@ -256,7 +261,12 @@ public sealed class FreePRibbonCommandWorkflowTests
             .And.NotContain("new FreePRibbonHostProfile")
             .And.NotContain("BuildRibbonTextActionEndpoints")
             .And.NotContain("DesignRequest =");
-        avaloniaWorkareaEndpoint.Should().Contain("FreePRibbonHostRegistryComposer.BindInto(");
+        wpfWorkareaEndpoint.Should().Contain("_ribbonBindingSession?.Rebind(editor)")
+            .And.Contain("RefreshCommandStates = SyncRibbonCommandStates");
+        avaloniaWorkareaEndpoint.Should().Contain("_ribbonBindingSession?.Rebind(editor)")
+            .And.Contain("RefreshCommandStates = SyncRibbonCommandStates");
+        wpfWorkareaEndpoint.Should().NotContain("FreePRibbonHostRegistryComposer.BindInto(");
+        avaloniaWorkareaEndpoint.Should().NotContain("FreePRibbonHostRegistryComposer.BindInto(");
         avalonia.Should().NotContain("TransitionAdvanceOnClickToggleCommand")
             .And.NotContain("AnimationPaneToggleCommand")
             .And.NotContain("ViewShowToggleCommand")

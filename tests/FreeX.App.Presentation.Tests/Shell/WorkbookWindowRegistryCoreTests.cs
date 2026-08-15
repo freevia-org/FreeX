@@ -1,4 +1,5 @@
 using FluentAssertions;
+using Free.Shared.Shell;
 using FreeX.App.Presentation.Shell;
 using FreeX.Core.Model;
 
@@ -82,6 +83,111 @@ public sealed class WorkbookWindowRegistryCoreTests
 
         third.IsVisible = false;
         core.NextWindowTarget(first, WorkbookWindowCycleDirection.Forward).Should().BeNull();
+    }
+
+    [Fact]
+    public void HideAndUnhide_OwnVisibilityStateAndRejectTheLastVisibleWindow()
+    {
+        var core = CreateCore();
+        var first = new TestWindow();
+        var second = new TestWindow();
+        core.Register(first);
+        core.Register(second);
+
+        core.CanHide(first).Should().BeTrue();
+        core.Hide(first).Should().BeTrue();
+        core.Hide(first).Should().BeFalse();
+        core.HiddenWindows.Should().Equal(first);
+        core.VisibleWindows.Should().Equal(second);
+        core.VisibleCount.Should().Be(1);
+        core.CanHide(second).Should().BeFalse();
+        core.Hide(second).Should().BeFalse();
+
+        core.Unhide(first).Should().BeTrue();
+        core.Unhide(first).Should().BeFalse();
+        core.HiddenWindows.Should().BeEmpty();
+        core.VisibleWindows.Should().Equal(first, second);
+    }
+
+    [Fact]
+    public void NativeVisibilityStillGatesSharedHidePolicy()
+    {
+        var core = CreateCore();
+        var visible = new TestWindow();
+        var nativeHidden = new TestWindow { IsVisible = false };
+        core.Register(visible);
+        core.Register(nativeHidden);
+
+        core.VisibleCount.Should().Be(1);
+        core.CanHide(visible).Should().BeFalse();
+        core.CanHide(nativeHidden).Should().BeFalse();
+        core.HiddenWindows.Should().BeEmpty();
+    }
+
+    [Fact]
+    public void UnregisterHiddenWindow_RemovesOwnedHiddenState()
+    {
+        var core = CreateCore();
+        var first = new TestWindow();
+        var second = new TestWindow();
+        core.Register(first);
+        core.Register(second);
+        core.Hide(first).Should().BeTrue();
+
+        core.Unregister(first).Should().BeTrue();
+
+        core.HiddenWindows.Should().BeEmpty();
+        core.Windows.Should().Equal(second);
+        core.IsVisible(first).Should().BeFalse();
+    }
+
+    [Fact]
+    public void PlanVisibleArrangement_LeavesHiddenWindowsUntouchedAndPreservesRegistrationOrder()
+    {
+        var core = CreateCore();
+        var first = new TestWindow();
+        var hidden = new TestWindow { IsVisible = false };
+        var third = new TestWindow();
+        core.Register(first);
+        core.Register(hidden);
+        core.Register(third);
+
+        var plan = core.PlanVisibleArrangement(
+            ShellWindowArrangement.Horizontal,
+            workAreaWidth: 900,
+            workAreaHeight: 600);
+
+        plan.Select(target => target.Window).Should().Equal(first, third);
+        plan.Select(target => target.Bounds).Should().Equal(
+            new ShellRect(0, 0, 900, 300),
+            new ShellRect(0, 300, 900, 300));
+        hidden.IsVisible.Should().BeFalse();
+    }
+
+    [Fact]
+    public void PlanVisibleArrangement_AppliesOptionalDocumentScopeAfterVisibilityFiltering()
+    {
+        var core = CreateCore();
+        var document = NewDocumentId();
+        var first = new TestWindow(document);
+        var hidden = new TestWindow(document) { IsVisible = false };
+        var otherDocument = new TestWindow(NewDocumentId());
+        var second = new TestWindow(document);
+        core.Register(first);
+        core.Register(hidden);
+        core.Register(otherDocument);
+        core.Register(second);
+
+        var plan = core.PlanVisibleArrangement(
+            ShellWindowArrangement.Vertical,
+            workAreaWidth: 800,
+            workAreaHeight: 600,
+            window => window.DocumentId == document);
+
+        plan.Select(target => target.Window).Should().Equal(first, second);
+        plan.Select(target => target.Bounds).Should().Equal(
+            new ShellRect(0, 0, 400, 600),
+            new ShellRect(400, 0, 400, 600));
     }
 
     [Fact]

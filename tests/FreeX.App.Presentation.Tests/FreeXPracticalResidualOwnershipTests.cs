@@ -154,28 +154,106 @@ public sealed class FreeXPracticalResidualOwnershipTests
         var avalonia = Read("src", "FreeX.App.Avalonia", "MainWindow.cs");
         var avaloniaMoveCopy = Read("src", "FreeX.App.Avalonia", "MainWindow.MoveCopySheet.cs");
         var wpf = Read("src", "FreeX.App.Host", "MainWindow.SheetTabs.cs");
+        var wpfCells = Read("src", "FreeX.App.Host", "MainWindow.CellsCommands.cs");
 
         session.Should().Contain("public WorkbookCellEditResult DuplicateSelectedSheets()");
         session.Should().Contain("public WorkbookCellEditResult MoveOrCopySelectedSheets(");
         session.Should().Contain("public WorkbookCellEditResult DeleteSelectedSheets()");
         session.Should().Contain("public WorkbookCellEditResult HideSelectedSheets()");
+        session.Should().Contain("public WorkbookCellEditResult UnhideSheet(SheetId sheetId)");
         session.Should().Contain("public WorkbookCellEditResult SetSelectedSheetTabColor(");
 
         avalonia.Should().Contain("_session.DuplicateSelectedSheets()");
         avaloniaMoveCopy.Should().Contain("_session.MoveOrCopySelectedSheets(");
         avalonia.Should().Contain("_session.DeleteActiveSheet()");
         avalonia.Should().Contain("_session.HideActiveSheet()");
+        avalonia.Should().Contain("_session.UnhideSheet(sheet.Id)");
         avalonia.Should().Contain("_session.SetActiveSheetTabColor(");
         wpf.Should().Contain("_session.DuplicateSelectedSheets(tab.Id)");
         wpf.Should().Contain("_session.MoveOrCopySelectedSheets(");
         wpf.Should().Contain("_session.DeleteSelectedSheets()");
         wpf.Should().Contain("_session.HideSelectedSheets()");
+        wpf.Should().Contain("_session.UnhideSheet(sheet.Id)");
         wpf.Should().Contain("_session.SetSelectedSheetTabColor(");
+        wpfCells.Should().Contain("DeleteSheetsWithConfirmation(_currentSheetId)");
 
         wpf.Should().NotContain("new DuplicateSheetCommand(tab.Id)");
         wpf.Should().NotContain("new CompositeWorkbookCommand(\"Delete Sheet\"");
         wpf.Should().NotContain("new CompositeWorkbookCommand(\"Hide Sheet\"");
+        wpf.Should().NotContain("new SetSheetHiddenCommand(");
         wpf.Should().NotContain("new CompositeWorkbookCommand(\"Tab Color\"");
+        wpfCells.Should().NotContain("new RemoveSheetCommand(");
+    }
+
+    [Fact]
+    public void ForecastSheetPolicy_IsOwnedByServicesAndBothRenderersUseTheSession()
+    {
+        var planner = Read("src", "FreeX.App.Services", "ForecastSheetPlanner.cs");
+        var sourcePlanner = Read("src", "FreeX.App.Services", "ForecastSheetSourceRangePlanner.cs");
+        var session = Read("src", "FreeX.App.Services", "WorkbookSession.cs");
+        var avalonia = Read("src", "FreeX.App.Avalonia", "MainWindow.cs");
+        var wpf = Read("src", "FreeX.App.Host", "MainWindow.DataCommands.cs");
+
+        planner.Should().Contain("ForecastSheetSourceRangePlanner.Create(sourceSheet, sourceRange)");
+        sourcePlanner.Should().Contain("SelectionRangeService.GetCurrentRegion(sheet, selectedRange.Start)");
+        session.Should().Contain("public WorkbookCellEditResult ExecuteForecastSheetPlan(ForecastSheetPlan plan)");
+        avalonia.Should().Contain("_session.ExecuteForecastSheetPlan(plan)");
+        wpf.Should().Contain("_session.ExecuteForecastSheetPlan(plan)");
+        wpf.Should().Contain("ApplyWorkbookSessionSelectionToRenderer();");
+        wpf.Should().NotContain("new ForecastSheetCommand(");
+        wpf.Should().NotContain("RecalculateWorkbook();");
+        wpf.Should().NotContain("_workbook.Sheets.LastOrDefault()");
+    }
+
+    [Fact]
+    public void ScenarioManagerMutations_AreOwnedByServicesAndRenderersUseTheSession()
+    {
+        var planner = Read("src", "FreeX.App.Services", "ScenarioManagerPlanner.cs");
+        var session = Read("src", "FreeX.App.Services", "WorkbookSession.cs");
+        var avalonia = Read("src", "FreeX.App.Avalonia", "MainWindow.cs");
+        var wpf = Read("src", "FreeX.App.Host", "MainWindow.ScenarioCommands.cs");
+
+        planner.Should().Contain("public static IReadOnlyList<WorkbookScenario> RemapScenariosBySheetName(");
+        session.Should().Contain("public WorkbookCellEditResult MergeScenarios(");
+        session.Should().Contain("_cellEditService.ExecuteRepeatableEditCommand(");
+        session.Should().Contain("() => new ApplyScenarioCommand(scenarioName)");
+        avalonia.Should().Contain("_session.ExecuteScenarioManagerSavePlan(savePlan, request)");
+        avalonia.Should().Contain("_session.ExecuteScenarioManagerShowPlan(showPlan)");
+        avalonia.Should().Contain("_session.ExecuteScenarioManagerDeletePlan(deletePlan)");
+        avalonia.Should().Contain("_session.ExecuteScenarioManagerSummaryReportPlan(summaryPlan)");
+        wpf.Should().Contain("_session.SaveScenario(request)");
+        wpf.Should().Contain("_session.ShowScenario(name)");
+        wpf.Should().Contain("_session.DeleteScenario(scenarioName)");
+        wpf.Should().Contain("_session.CreateScenarioSummaryReport(");
+        wpf.Should().Contain("_session.MergeScenarios(mergeCandidates)");
+        wpf.Should().Contain("ScenarioManagerPlanner.RemapScenariosBySheetName(");
+        wpf.Should().NotContain("new SaveScenarioCommand(");
+        wpf.Should().NotContain("new ApplyScenarioCommand(");
+        wpf.Should().NotContain("new DeleteScenarioCommand(");
+        wpf.Should().NotContain("new ScenarioSummaryReportCommand(");
+        wpf.Should().NotContain("new MergeScenarioCommand(");
+        wpf.Should().NotContain("private static List<WorkbookScenario> RemapScenariosBySheetName(");
+    }
+
+    [Fact]
+    public void SubtotalExecution_IsOwnedByServicesAndBothRenderersUseTheSession()
+    {
+        var session = Read("src", "FreeX.App.Services", "WorkbookSession.cs");
+        var avalonia = Read("src", "FreeX.App.Avalonia", "MainWindow.cs");
+        var wpf = Read("src", "FreeX.App.Host", "MainWindow.DataCommands.cs");
+
+        session.Should().Contain("public WorkbookCellEditResult ExecuteSubtotalOptions(SubtotalInputOptions options)");
+        session.Should().Contain("public WorkbookCellEditResult RemoveSelectedRangeSubtotals()");
+        session.Should().Contain("_cellEditService.ExecuteRepeatableEditCommand(Workbook, CreateCommand)");
+        avalonia.Should().Contain("_session.ExecuteSubtotalOptions(selection.ToInputOptions())");
+        avalonia.Should().Contain("_session.RemoveSelectedRangeSubtotals()");
+        wpf.Should().Contain("_session.ExecuteSubtotalOptions(dialog.Result.ToInputOptions())");
+        wpf.Should().Contain("_session.RemoveSelectedRangeSubtotals");
+        wpf.Should().NotContain("new SubtotalCommand(");
+        wpf.Should().NotContain("new RemoveSubtotalRowsCommand(");
+        wpf.Should().NotContain("private IWorkbookCommand CreateSubtotalApplyCommand(");
+        wpf.Should().NotContain("private static int CountSubtotalFormulaRows(");
+        wpf.Should().NotContain("private void SelectSubtotalResultRange(");
     }
 
     private static string Read(params string[] parts)

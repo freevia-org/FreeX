@@ -30,8 +30,8 @@ public sealed class HomeCellsCommandSourceTests
         source.Should().NotContain("new DeleteRowsCommand");
         source.Should().NotContain("new DeleteColumnsCommand");
         source.Should().NotContain("new DeleteCellsCommand");
-        source.Should().Contain("var deletedSheetId = _currentSheetId;");
-        source.Should().Contain("new RemoveSheetCommand(deletedSheetId)");
+        source.Should().Contain("DeleteSheetsWithConfirmation(_currentSheetId)");
+        source.Should().NotContain("new RemoveSheetCommand(");
         source.Should().Contain("_session.SetSelectedRowsHeight(dialog.Result.Height)");
         source.Should().Contain("_session.SetSelectedColumnsWidth(dialog.Result.Width)");
         source.Should().Contain("TryExecuteWorksheetLayout(_session.AutoFitSelectedRowHeight, \"Auto Row Height\")");
@@ -91,7 +91,8 @@ public sealed class HomeCellsCommandSourceTests
         source.Should().NotContain("new SetSheetHiddenCommand(sheetId, hidden: true)");
         source.Should().Contain("private void UnhideSheet()");
         source.Should().Contain("new UnhideSheetDialog(hiddenSheets.Select(sheet => sheet.Name))");
-        source.Should().Contain("new SetSheetHiddenCommand(sheet.Id, hidden: false)");
+        source.Should().Contain("_session.UnhideSheet(sheet.Id)");
+        source.Should().NotContain("new SetSheetHiddenCommand(sheet.Id, hidden: false)");
     }
 
     [Fact]

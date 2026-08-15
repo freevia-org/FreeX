@@ -15,6 +15,18 @@ namespace FreeX.App.Avalonia.Tests;
 [Collection("AvaloniaHeadless")]
 public sealed class AvaloniaSemanticLocalizationConvergenceTests
 {
+    [Fact]
+    public void GoalSeekStatusText_NormalizesResourceLineEndingsForAvaloniaLayout()
+    {
+        var method = typeof(MainWindow).GetMethod(
+            "NormalizeAvaloniaMultilineText",
+            BindingFlags.NonPublic | BindingFlags.Static);
+
+        method.Should().NotBeNull();
+        method!.Invoke(null, ["first\r\r\nsecond\r\nthird\rfourth"])
+            .Should().Be("first\nsecond\nthird\nfourth");
+    }
+
     private static readonly HeadlessUnitTestSession Session =
         HeadlessUnitTestSession.GetOrStartForAssembly(typeof(RibbonHeadlessApp).Assembly);
 
@@ -72,7 +84,6 @@ public sealed class AvaloniaSemanticLocalizationConvergenceTests
         new Dictionary<(string File, string Literal), int>
         {
             [("FreeX.App.Avalonia/MainWindow.FillSeries.cs", "1")] = 1,
-            [("FreeX.App.Avalonia/MainWindow.Print.cs", "1")] = 3,
             [("FreeX.App.Host/PrintPreviewDialog.Layout.cs", "1")] = 3,
         };
 
@@ -168,7 +179,18 @@ public sealed class AvaloniaSemanticLocalizationConvergenceTests
             AssertPseudoLocalized(Field<Button>(window, "_openButton").Content);
             AssertPseudoLocalized(Field<Button>(window, "_fillCellsButton").Content);
             AssertPseudoLocalized(Field<Button>(window, "_clearButton").Content);
-            AssertPseudoLocalized(AutomationProperties.GetName(Field<TextBlock>(window, "_selectionStatsText")));
+            foreach (var fieldName in new[]
+                     {
+                         "_statusAverageText",
+                         "_statusCountText",
+                         "_statusNumericalCountText",
+                         "_statusSumText",
+                         "_statusMinimumText",
+                         "_statusMaximumText",
+                     })
+            {
+                AssertPseudoLocalized(AutomationProperties.GetName(Field<TextBlock>(window, fieldName)));
+            }
 
             var recentColorsPath = Path.Combine(
                 Path.GetTempPath(),
@@ -208,13 +230,11 @@ public sealed class AvaloniaSemanticLocalizationConvergenceTests
                     converged: true,
                     targetValue: 10,
                     actualResult: 10,
-                    foundValue: 5,
-                    GoalSeekPresentationProfile.Avalonia)
+                    foundValue: 5)
                 .Resolve(UiText.Get, UiText.Format));
 
             AssertPseudoLocalized(GoalSeekStatusDialogPlanner.DescribeValidationError(
-                    GoalSeekRequestParseResult.Invalid(GoalSeekRequestParseError.SetCellRequired),
-                    GoalSeekPresentationProfile.Avalonia)
+                    GoalSeekRequestParseResult.Invalid(GoalSeekRequestParseError.SetCellRequired))
                 .Message
                 .Resolve(UiText.Get, UiText.Format));
         });

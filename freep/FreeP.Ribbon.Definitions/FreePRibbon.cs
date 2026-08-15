@@ -42,7 +42,7 @@ public static class FreePRibbon
             {
                 case FreePRibbonHomeGroupId.Slides:
                     tab.Group("slides", FreePRibbonText.SlidesGroupLabel, FreePRibbonText.SlidesGroupKeyTip, priority,
-                        group => AddSlidesControls(group, profile));
+                        AddSlidesControls);
                     break;
                 case FreePRibbonHomeGroupId.Clipboard:
                     tab.Group("clipboard", FreePRibbonText.ClipboardGroupLabel, FreePRibbonText.ClipboardGroupKeyTip,
@@ -77,10 +77,10 @@ public static class FreePRibbon
         }
     }
 
-    private static void AddSlidesControls(RibbonGroupBuilder group, FreePRibbonProfile profile)
+    private static void AddSlidesControls(RibbonGroupBuilder group)
     {
         group.Large("freep.new-slide", FreePRibbonText.NewSlideLabel, RibbonCommandIconKind.Insert,
-            profile.NewSlideKeyTip());
+            FreePRibbonText.NewSlideKeyTip);
         group.Medium("freep.duplicate-slide", FreePRibbonText.DuplicateSlideLabel, RibbonCommandIconKind.Copy,
             FreePRibbonText.DuplicateSlideKeyTip);
         group.Medium("freep.delete-slide", FreePRibbonText.DeleteSlideLabel, RibbonCommandIconKind.Delete,

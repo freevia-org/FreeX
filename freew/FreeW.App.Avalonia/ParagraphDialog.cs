@@ -23,7 +23,7 @@ public sealed class ParagraphDialog : FreeWDialogWindow
         ParagraphBreaksDialogPlanner.Surface;
     private static readonly ParagraphDialogVisualMetrics Layout =
         ParagraphBreaksDialogPlanner.VisualMetrics;
-    private static readonly AvaloniaCompactDialogChromeStyle DialogChromeStyle =
+    private static AvaloniaCompactDialogChromeStyle DialogChromeStyle =>
         AvaloniaCompactDialogChrome.WindowsStyle with
         {
             FontFamily = new FontFamily("Segoe UI"),
@@ -278,7 +278,7 @@ public sealed class ParagraphDialog : FreeWDialogWindow
     {
         foreach (var box in new[] { _left, _right, _specialAmount, _before, _after, _lineSpacing })
             FontParagraphDialogChrome.ApplyTextBox(box, DialogChromeStyle);
-        FontParagraphDialogChrome.ApplyComboBox(_special, DialogChromeStyle, editable: false);
+        FontParagraphDialogChrome.ApplyComboBox(_special, DialogChromeStyle);
         foreach (var checkBox in new[] { _keepWithNext, _keepLinesTogether, _widowControl, _pageBreakBefore, _suppressHyphens, _suppressLineNumbers, _contextualSpacing })
             FontParagraphDialogChrome.ApplyCheckBox(checkBox, DialogChromeStyle);
         foreach (var button in this.GetVisualDescendants().OfType<Button>())

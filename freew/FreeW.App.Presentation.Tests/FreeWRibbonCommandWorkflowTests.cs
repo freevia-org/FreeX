@@ -14,7 +14,7 @@ public sealed class FreeWRibbonCommandWorkflowTests
     {
         var routes = FreeWRibbonCommandWorkflow.Routes;
 
-        routes.Should().HaveCount(399);
+        routes.Should().HaveCount(405);
         routes.Select(route => route.CommandId).Should().OnlyHaveUniqueItems();
         routes.Select(route => route.Action).Should().OnlyHaveUniqueItems();
         routes.Select(route => route.Action)
@@ -119,7 +119,7 @@ public sealed class FreeWRibbonCommandWorkflowTests
 
         var result = bindings.Build();
 
-        result.CanonicalCommandIds.Should().HaveCount(399).And.OnlyHaveUniqueItems();
+        result.CanonicalCommandIds.Should().HaveCount(405).And.OnlyHaveUniqueItems();
         result.CanonicalCommandIds.Should().BeEquivalentTo(
             FreeWRibbonCommandWorkflow.Routes.Select(route => new RibbonCommandId(route.CommandId)));
         result.CommandGroups.Keys.Should().BeEquivalentTo(Enum.GetValues<FreeWRibbonCommandGroup>());
@@ -145,7 +145,7 @@ public sealed class FreeWRibbonCommandWorkflowTests
 
         var result = FreeWRibbonExecutionProfile.Build(bindings);
 
-        result.CanonicalCommandIds.Should().HaveCount(399).And.OnlyHaveUniqueItems();
+        result.CanonicalCommandIds.Should().HaveCount(405).And.OnlyHaveUniqueItems();
         result.Registry.TryGet("freew.bold", out var bold).Should().BeTrue();
         bold.Should().BeSameAs(native);
 
@@ -272,6 +272,7 @@ public sealed class FreeWRibbonCommandWorkflowTests
         SmartArt? smartArt = null;
         ChartKind? appliedKind = null;
         ChartStyle? appliedChartStyle = null;
+        ChartColorScheme? appliedChartColor = null;
         SmartArtStructureOperation? structureOperation = null;
         SmartArtStyle? appliedSmartArtStyle = null;
         var prepared = 0;
@@ -285,7 +286,7 @@ public sealed class FreeWRibbonCommandWorkflowTests
                 SelectedChart: () => chart,
                 SetChartKind: kind => appliedKind = kind,
                 ApplyChartStyle: style => appliedChartStyle = style,
-                ApplyChartColorScheme: _ => { },
+                ApplyChartColorScheme: scheme => appliedChartColor = scheme,
                 ApplyChartQuickLayout: _ => { },
                 ToggleChartLegend: () => { },
                 ShowChartTitleDialogAsync: _ => ValueTask.FromResult<ChartTitleDialogResult?>(null),
@@ -322,6 +323,11 @@ public sealed class FreeWRibbonCommandWorkflowTests
         chartStyle!.Execute(RibbonCommandContext.Empty);
         appliedChartStyle.Should().BeSameAs(firstChartStyle);
 
+        var firstChartColor = ChartColorScheme.Catalog[0];
+        bindings.TryGet(ChartColorRibbonCommandCatalog.CommandId(firstChartColor), out var chartColor).Should().BeTrue();
+        chartColor!.Execute(RibbonCommandContext.Empty);
+        appliedChartColor.Should().BeSameAs(firstChartColor);
+
         smartArt = SmartArt.Create(SmartArtKind.Process, ["One", "Two"]);
         bindings.TryGet("freew.smartart-add-shape", out var addShape).Should().BeTrue();
         addShape!.Execute(RibbonCommandContext.Empty);
@@ -330,7 +336,7 @@ public sealed class FreeWRibbonCommandWorkflowTests
         bindings.TryGet("freew.smartart-change-style", out var smartArtStyle).Should().BeTrue();
         smartArtStyle!.Execute(RibbonCommandContext.ForSelectedValue(SmartArtStyle.Catalog[0].Name));
         appliedSmartArtStyle.Should().BeSameAs(SmartArtStyle.Catalog[0]);
-        prepared.Should().Be(4);
+        prepared.Should().Be(5);
     }
 
     [Fact]
@@ -559,6 +565,8 @@ public sealed class FreeWRibbonCommandWorkflowTests
         ShapeFill? fill = null;
         ObjectFormatSizeDimension? sizeDimension = null;
         double? sizePoints = null;
+        var hasTransformSelection = true;
+        var transformed = false;
         var feedback = new List<FreeWRibbonFloatingFeedback>();
         var bindings = new FreeWRibbonCommandBindingPorts();
 
@@ -567,8 +575,9 @@ public sealed class FreeWRibbonCommandWorkflowTests
             new FreeWRibbonFloatingExecutionPorts(
                 PrepareExecution: () => { },
                 HasSelection: target => target == ObjectFormatTarget.Shape && shape is not null,
+                HasTransformSelection: () => hasTransformSelection,
                 ApplyWrap: (_, _) => { },
-                ApplyTransform: (_, _) => true,
+                ApplyTransform: (_, _) => transformed = true,
                 ApplyZOrder: (_, _) => true,
                 ApplySize: (_, dimension, points) =>
                 {
@@ -605,6 +614,15 @@ public sealed class FreeWRibbonCommandWorkflowTests
         bindings.TryGet("freew.shape-fill-gradient-blue", out var gradient).Should().BeTrue();
         gradient.Should().BeAssignableTo<IRibbonStatefulCommand>()
             .Which.GetState().IsEnabled.Should().BeFalse();
+
+        bindings.TryGet("freew.shape-rotate-right90", out var rotate).Should().BeTrue();
+        rotate.Should().BeAssignableTo<IRibbonStatefulCommand>()
+            .Which.GetState().IsEnabled.Should().BeTrue();
+        rotate!.Execute(RibbonCommandContext.Empty);
+        transformed.Should().BeTrue();
+
+        hasTransformSelection = false;
+        ((IRibbonStatefulCommand)rotate).GetState().IsEnabled.Should().BeFalse();
 
         shape = Shape.Preset(ShapeKind.Rectangle, 100, 50, "#FFFFFF");
         ((IRibbonStatefulCommand)gradient!).GetState().IsEnabled.Should().BeTrue();

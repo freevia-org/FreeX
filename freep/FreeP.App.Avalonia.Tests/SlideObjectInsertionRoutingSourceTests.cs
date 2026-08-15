@@ -38,7 +38,12 @@ public sealed class SlideObjectInsertionRoutingSourceTests
         assetWorkflow.Should().Contain("SlideObjectInsertionPlanner.CreatePicturePayload(bytes, sourceName)");
         assetWorkflow.Should().Contain("SlideObjectInsertionPlanner.ApplyCommand(");
         assetWorkflow.Should().Contain("SlideObjectInsertionPlanner.PictureCommandId");
-        adapter.Should().Contain("new PresentationAssetImportExecutionPort(");
+        adapter.Should().Contain("new PresentationAssetImportHostSession(");
+        adapter.Should().Contain("new AvaloniaPresentationAssetPickerPort(this)");
+        adapter.Should().Contain("new AvaloniaPresentationAssetReaderPort()");
+        adapter.Should().Contain("new PresentationAssetImportExecutionCallbacks(");
+        adapter.Should().Contain("AssetImportSession.ImportAsync(kind, applyZoomCoverImage)");
+        adapter.Should().Contain("AssetImportSession.MaterializeOutcomeAsync(");
         source.Should().NotContain("PickSingleOpenFileAsync(");
         source.Should().NotContain("SlideObjectInsertionPlanner.CreatePicturePayload(");
         workflow.Should().NotContain("editor.InsertDefaultTextBox(");

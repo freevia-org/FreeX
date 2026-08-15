@@ -6,6 +6,7 @@ using System.Windows.Automation.Provider;
 using System.Windows.Media;
 using FreeX.App.Presentation.Accessibility;
 using FreeX.App.Presentation.GridInteraction;
+using FreeX.App.Presentation.PageLayout;
 using FreeX.App.Presentation.Rendering;
 using FreeX.Core.Calc;
 using FreeX.Core.Model;
@@ -797,7 +798,12 @@ public partial class GridView : FrameworkElement
     private static readonly Pen SplitScrollbarPen = MakePen(MakeBrush(196, 196, 196), 1);
     private static readonly Brush FormulaTraceArrowBrush = MakeBrush(0, 102, 204);
     private static readonly Pen FormulaTraceArrowPen = MakeFormulaTraceArrowPen();
-    private static readonly Pen ValidationCirclePen = MakePen(MakeBrush(226, 28, 33), 1.5);
+    private static readonly Pen ValidationCirclePen = MakePen(
+        MakeBrush(
+            ValidationCircleLayoutPlanner.StrokeColor.R,
+            ValidationCircleLayoutPlanner.StrokeColor.G,
+            ValidationCircleLayoutPlanner.StrokeColor.B),
+        ValidationCircleLayoutPlanner.StrokeThickness);
     private static readonly Pen[] MarchingAntsBlackPens = CreateMarchingAntsPens(Brushes.Black, 2.5);
     private static readonly Pen[] MarchingAntsCopyOverlayPens = CreateMarchingAntsPens(Brushes.White, 1.5);
     // Excel does not color-differentiate a Cut marquee from a Copy marquee -- both use the same

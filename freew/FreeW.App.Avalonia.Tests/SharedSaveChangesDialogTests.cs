@@ -92,7 +92,8 @@ public sealed class SharedSaveChangesDialogTests
             .Should()
             .BeFalse("the Avalonia dirty-save prompt should be owned by the shared sister shell");
 
-        sharedDialog.Should().Contain("public sealed class AvaloniaSaveChangesDialog : Window");
+        typeof(AvaloniaSaveChangesDialog).Should().BeAssignableTo<Window>();
+        sharedDialog.Should().Contain("public sealed class AvaloniaSaveChangesDialog : AvaloniaDialogWindow");
         sharedDialog.Should().Contain("SaveChangesPrompt.Save");
         sharedDialog.Should().Contain("SaveChangesPrompt.DontSave");
         sharedDialog.Should().Contain("SaveChangesPrompt.Cancel");

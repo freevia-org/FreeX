@@ -1939,29 +1939,9 @@ public sealed partial class DocumentView : Control
 
         if (SelectedCellRange is { } sel)
         {
-            // Block selection: apply to every cell in the rectangle.
-            if (sel.TableBlock < 0 || sel.TableBlock >= _doc.Blocks.Count
-                || _doc.Blocks[sel.TableBlock] is not Table selTbl)
-                return;
-            var addresses = new List<DocumentTableCellAddress>();
-            for (var r = sel.MinRow; r <= sel.MaxRow; r++)
-            {
-                if (r >= selTbl.Rows.Count) break;
-                var row = selTbl.Rows[r];
-                // BL1/BL3: _cellCaret/SelectedCellRange use GRID columns; SetCellShadingCommand
-                // expects CELL-LIST indices. Convert each grid column and dedupe so a merged cell
-                // spanning multiple grid columns is only shaded once.
-                var lastCellIdx = -1;
-                for (var gridCol = sel.MinCol; gridCol <= sel.MaxCol; gridCol++)
-                {
-                    var cellIdx = GridColumnToCellIndex(row, gridCol);
-                    if (cellIdx < 0) break; // beyond row's grid width
-                    if (cellIdx == lastCellIdx) continue; // merged cell already processed
-                    lastCellIdx = cellIdx;
-                    addresses.Add(new DocumentTableCellAddress(sel.TableBlock, r, gridCol));
-                }
-            }
-            TableEdits.SetCellShading(addresses, hexColor);
+            var anchor = new DocumentTableCellAddress(sel.TableBlock, sel.MinRow, sel.MinCol);
+            var active = new DocumentTableCellAddress(sel.TableBlock, sel.MaxRow, sel.MaxCol);
+            TableEdits.SetCellShading(TableEdits.AddressesInRange(anchor, active), hexColor);
         }
         else if (_cellCaret is { } cc)
         {
@@ -1969,11 +1949,12 @@ public sealed partial class DocumentView : Control
             if (cc.TableBlock < 0 || cc.TableBlock >= _doc.Blocks.Count
                 || _doc.Blocks[cc.TableBlock] is not Table ccTbl)
                 return;
-            // BL1: cc.Col is a GRID column; convert to cell-list index before issuing the command.
-            var caretCellIdx = GridColumnToCellIndex(ccTbl.Rows[cc.Row], cc.Col);
-            if (caretCellIdx < 0) return;
+            if (GridColumnToCellIndex(ccTbl.Rows[cc.Row], cc.Col) < 0)
+                return;
             TableEdits.SetCellShading(
-                [new DocumentTableCellAddress(cc.TableBlock, cc.Row, cc.Col)],
+                TableEdits.AddressesInRange(
+                    new DocumentTableCellAddress(cc.TableBlock, cc.Row, cc.Col),
+                    new DocumentTableCellAddress(cc.TableBlock, cc.Row, cc.Col)),
                 hexColor);
         }
         else
@@ -2009,88 +1990,29 @@ public sealed partial class DocumentView : Control
         if (IsEditingLocked)
             return;
 
-        int blockIdx;
-        int minRow, maxRow, minCol, maxCol;
+        DocumentTableCellAddress anchor;
+        DocumentTableCellAddress active;
 
         if (SelectedCellRange is { } sel)
         {
-            blockIdx = sel.TableBlock;
-            minRow = sel.MinRow; maxRow = sel.MaxRow;
-            minCol = sel.MinCol; maxCol = sel.MaxCol;
+            anchor = new DocumentTableCellAddress(sel.TableBlock, sel.MinRow, sel.MinCol);
+            active = new DocumentTableCellAddress(sel.TableBlock, sel.MaxRow, sel.MaxCol);
         }
         else if (_cellCaret is { } cc)
         {
-            blockIdx = cc.TableBlock;
-            minRow = maxRow = cc.Row;
-            minCol = maxCol = cc.Col;
+            anchor = active = new DocumentTableCellAddress(cc.TableBlock, cc.Row, cc.Col);
         }
         else
         {
-            return; // Not in a table.
-        }
-
-        if (blockIdx < 0 || blockIdx >= _doc.Blocks.Count
-            || _doc.Blocks[blockIdx] is not Table tbl)
             return;
-
-        var borderEdits = new List<DocumentTableCellBorderEdit>();
-        for (var r = minRow; r <= maxRow; r++)
-        {
-            if (r >= tbl.Rows.Count) break;
-            var row = tbl.Rows[r];
-            // BL2/BL3: minCol..maxCol are GRID columns; SetCellBordersCommand expects CELL-LIST
-            // indices. Convert each grid column and dedupe merged cells.
-            // Edge boundary resolution (Outside/Inside) stays in GRID space.
-            // A merged cell spanning multiple grid columns must:
-            //   - get Left  if its FIRST grid column == minCol (it touches the outer-left boundary)
-            //   - get Right if its LAST  grid column == maxCol (it touches the outer-right boundary)
-            //   - get Inside Right if its LAST grid column < maxCol (it has a shared right inner edge)
-            // Track both firstGridCol and lastGridCol per merged cell for correct edge resolution.
-            var lastCellIdx      = -1;
-            int firstGridColForCell = -1;
-            int lastGridColForCell  = -1;
-            for (var gridCol = minCol; gridCol <= maxCol; gridCol++)
-            {
-                var cellIdx = GridColumnToCellIndex(row, gridCol);
-                if (cellIdx < 0) break; // beyond row's grid width
-
-                bool isNewCell = cellIdx != lastCellIdx;
-                if (isNewCell)
-                {
-                    // Flush the previous merged cell using its first/last grid columns for edge checks.
-                    if (lastCellIdx >= 0)
-                    {
-                        var flushedEdges = ResolveEdgesForMergedCell(
-                            edges, r, firstGridColForCell, lastGridColForCell,
-                            minRow, maxRow, minCol, maxCol);
-                        if (flushedEdges != CellBorderEdges.None)
-                            borderEdits.Add(new DocumentTableCellBorderEdit(
-                                new DocumentTableCellAddress(blockIdx, r, firstGridColForCell),
-                                flushedEdges));
-                    }
-                    lastCellIdx         = cellIdx;
-                    firstGridColForCell = gridCol;
-                    lastGridColForCell  = gridCol;
-                }
-                else
-                {
-                    // Same merged cell — extend the last grid column it covers.
-                    lastGridColForCell = gridCol;
-                }
-            }
-            // Flush the final cell.
-            if (lastCellIdx >= 0)
-            {
-                var finalEdges = ResolveEdgesForMergedCell(
-                    edges, r, firstGridColForCell, lastGridColForCell,
-                    minRow, maxRow, minCol, maxCol);
-                if (finalEdges != CellBorderEdges.None)
-                    borderEdits.Add(new DocumentTableCellBorderEdit(
-                        new DocumentTableCellAddress(blockIdx, r, firstGridColForCell),
-                        finalEdges));
-            }
         }
-        TableEdits.SetCellBorderEdges(borderEdits, style, colorHex, widthPt, clearEdges);
+
+        TableEdits.SetCellBorderEdges(
+            TableEdits.BorderEditsInRange(anchor, active, edges),
+            style,
+            colorHex,
+            widthPt,
+            clearEdges);
         InvalidateLayoutAndVisual();
     }
 
@@ -2105,12 +2027,8 @@ public sealed partial class DocumentView : Control
     /// </list>
     /// Routed through <see cref="DocumentCommandBus"/> as a grouped undo action. No-op when the
     /// caret is not inside a table cell.
-    /// <para>
-    /// NOTE — vertical render: the Avalonia table renderer currently top-anchors all cell content
-    /// (ty = rowPageSpaceY + pad in <c>LayoutTablePaged</c>).  Horizontal alignment applies
-    /// immediately through the existing paragraph-alignment render path.  Vertical centering/bottom
-    /// positioning is a follow-up render task (AV-TBL5-VRENDER).
-    /// </para>
+    /// Vertical positioning is resolved by the shared <see cref="TableCellVerticalLayoutPlanner"/>
+    /// from renderer-measured row and content heights.
     /// </summary>
     public void SetCaretCellAlignment(TableCellVerticalAlignment verticalAlignment, TextAlignment horizontalAlignment)
     {
@@ -2137,103 +2055,6 @@ public sealed partial class DocumentView : Control
             return; // Not in a table — no-op.
         }
         InvalidateLayoutAndVisual();
-    }
-
-    /// <summary>
-    /// Translates an abstract edge selector (All/Outside/Inside/primitive flags) into the
-    /// concrete set of primitive edge bits that apply to a specific cell at (row, col) within
-    /// the selected block [minRow..maxRow] × [minCol..maxCol].
-    /// </summary>
-    private static CellBorderEdges ResolveEdgesForCell(
-        CellBorderEdges edges,
-        int row, int col,
-        int minRow, int maxRow, int minCol, int maxCol)
-    {
-        // Expand composite selectors: All = all four primitive edges; treat Outside / Inside below.
-        bool hasAll     = (edges & CellBorderEdges.All)     == CellBorderEdges.All;
-        bool hasOutside = (edges & CellBorderEdges.Outside) == CellBorderEdges.Outside;
-        bool hasInside  = (edges & CellBorderEdges.Inside)  != 0;
-        bool hasTop     = (edges & CellBorderEdges.Top)     != 0;
-        bool hasBottom  = (edges & CellBorderEdges.Bottom)  != 0;
-        bool hasLeft    = (edges & CellBorderEdges.Left)    != 0;
-        bool hasRight   = (edges & CellBorderEdges.Right)   != 0;
-
-        // If All requested, set all four edge bits now.
-        if (hasAll)
-            return CellBorderEdges.Top | CellBorderEdges.Bottom | CellBorderEdges.Left | CellBorderEdges.Right;
-
-        var result = CellBorderEdges.None;
-
-        // Outside: the outer boundary of the selection block.
-        if (hasOutside)
-        {
-            if (row == minRow) result |= CellBorderEdges.Top;
-            if (row == maxRow) result |= CellBorderEdges.Bottom;
-            if (col == minCol) result |= CellBorderEdges.Left;
-            if (col == maxCol) result |= CellBorderEdges.Right;
-        }
-
-        // Inside: shared inner edges (bottom of each non-last row; right of each non-last col).
-        if (hasInside)
-        {
-            if (row < maxRow) result |= CellBorderEdges.Bottom;
-            if (col < maxCol) result |= CellBorderEdges.Right;
-        }
-
-        // Primitive edge bits applied to every cell in the selection.
-        if (hasTop)    result |= CellBorderEdges.Top;
-        if (hasBottom) result |= CellBorderEdges.Bottom;
-        if (hasLeft)   result |= CellBorderEdges.Left;
-        if (hasRight)  result |= CellBorderEdges.Right;
-
-        return result;
-    }
-
-    /// <summary>
-    /// Variant of <see cref="ResolveEdgesForCell"/> for cells that may span multiple grid columns
-    /// (horizontally merged). Uses <paramref name="firstGridCol"/> for Left-boundary checks and
-    /// <paramref name="lastGridCol"/> for Right-boundary / Inside-Right checks so that the outer
-    /// left/right edges land on the correct boundary cell and the inside Right is suppressed for
-    /// the rightmost physical cell in the selection.
-    /// </summary>
-    private static CellBorderEdges ResolveEdgesForMergedCell(
-        CellBorderEdges edges,
-        int row, int firstGridCol, int lastGridCol,
-        int minRow, int maxRow, int minCol, int maxCol)
-    {
-        bool hasAll     = (edges & CellBorderEdges.All)     == CellBorderEdges.All;
-        bool hasOutside = (edges & CellBorderEdges.Outside) == CellBorderEdges.Outside;
-        bool hasInside  = (edges & CellBorderEdges.Inside)  != 0;
-        bool hasTop     = (edges & CellBorderEdges.Top)     != 0;
-        bool hasBottom  = (edges & CellBorderEdges.Bottom)  != 0;
-        bool hasLeft    = (edges & CellBorderEdges.Left)    != 0;
-        bool hasRight   = (edges & CellBorderEdges.Right)   != 0;
-
-        if (hasAll)
-            return CellBorderEdges.Top | CellBorderEdges.Bottom | CellBorderEdges.Left | CellBorderEdges.Right;
-
-        var result = CellBorderEdges.None;
-
-        if (hasOutside)
-        {
-            if (row == minRow)         result |= CellBorderEdges.Top;
-            if (row == maxRow)         result |= CellBorderEdges.Bottom;
-            if (firstGridCol == minCol) result |= CellBorderEdges.Left;   // leftmost grid col of this cell
-            if (lastGridCol  == maxCol) result |= CellBorderEdges.Right;  // rightmost grid col of this cell
-        }
-
-        if (hasInside)
-        {
-            if (row < maxRow)          result |= CellBorderEdges.Bottom;
-            if (lastGridCol < maxCol)  result |= CellBorderEdges.Right;   // has a shared right inner edge
-        }
-
-        if (hasTop)    result |= CellBorderEdges.Top;
-        if (hasBottom) result |= CellBorderEdges.Bottom;
-        if (hasLeft)   result |= CellBorderEdges.Left;
-        if (hasRight)  result |= CellBorderEdges.Right;
-
-        return result;
     }
 
     /// <summary>
@@ -2354,17 +2175,38 @@ public sealed partial class DocumentView : Control
 
     public void SetCaretCellTextDirection(CellTextDirection direction)
     {
-        if (IsEditingLocked || _cellCaret is not { } cc)
-            return;
-        if (cc.TableBlock < 0 || cc.TableBlock >= _doc.Blocks.Count
-            || _doc.Blocks[cc.TableBlock] is not Table table)
+        if (IsEditingLocked)
             return;
 
-        var cellIndex = GridColumnToCellIndex(table.Rows[cc.Row], cc.Col);
-        if (cellIndex >= 0)
-            TableEdits.SetCellTextDirection(
-                new DocumentTableCellAddress(cc.TableBlock, cc.Row, cc.Col),
-                direction);
+        DocumentTableCellAddress anchor;
+        DocumentTableCellAddress active;
+        if (SelectedCellRange is { } selection)
+        {
+            anchor = new DocumentTableCellAddress(
+                selection.TableBlock,
+                selection.MinRow,
+                selection.MinCol);
+            active = new DocumentTableCellAddress(
+                selection.TableBlock,
+                selection.MaxRow,
+                selection.MaxCol);
+        }
+        else if (_cellCaret is { } caret)
+        {
+            anchor = active = new DocumentTableCellAddress(
+                caret.TableBlock,
+                caret.Row,
+                caret.Col);
+        }
+        else
+        {
+            return;
+        }
+
+        TableEdits.SetCellTextDirection(
+            TableEdits.AddressesInRange(anchor, active),
+            direction);
+        InvalidateLayoutAndVisual();
     }
 
     public (Table Table, int RowIndex, int ColumnIndex)? CaretTableCell()
@@ -9069,7 +8911,7 @@ public sealed partial class DocumentView : Control
         // TryGetCaretRect can match (Block == tableBlockIndex && Offset == glyphOffset).
         var glyphOffset = 0;
 
-        // AV-TBL5-VRENDER-VMERGE: pre-compute every row's height up front. A vertical-merge Restart
+        // Pre-compute every row's height up front. A vertical-merge Restart
         // cell needs the TOTAL height of all rows it spans to vertically align its content within the
         // whole merged region rather than just its own (first) row — that total isn't known yet when
         // the row loop below reaches the Restart row, since later rows haven't been measured. This
@@ -9253,26 +9095,16 @@ public sealed partial class DocumentView : Control
                 var cellLines = cellParas.SelectMany(pl => pl).ToList();
                 var contentHeight = cellLines.Sum(l => l.Height)
                     + paragraphSpacings.Sum(spacing => spacing.Before + spacing.After);
-                var mergedSpanHeight = rowHeight;
-                if (cellModel.VerticalMerge == VerticalMergeState.Restart)
-                {
-                    mergedSpanHeight = 0;
-                    for (var mr = r; mr < table.Rows.Count; mr++)
-                    {
-                        if (mr > r && GetCellModelGridCol(table, mr, startCol)?.VerticalMerge != VerticalMergeState.Continue)
-                            break;
-                        mergedSpanHeight += mr == r ? rowHeight : rowHeights[mr];
-                    }
-                }
-                var cellAvailableHeight = mergedSpanHeight - 2 * pad;
-                var vAlignOffset = cellModel.VerticalAlignment switch
-                {
-                    TableCellVerticalAlignment.Center =>
-                        Math.Max(0.0, (cellAvailableHeight - contentHeight) / 2.0),
-                    TableCellVerticalAlignment.Bottom =>
-                        Math.Max(0.0, cellAvailableHeight - contentHeight),
-                    _ => 0.0  // Top (default)
-                };
+                var mergedSpanHeight = TableCellVerticalLayoutPlanner.ResolveRegionHeight(
+                    table,
+                    rowHeights,
+                    r,
+                    startCol);
+                var vAlignOffset = TableCellVerticalLayoutPlanner.ResolveContentOffset(
+                    cellModel.VerticalAlignment,
+                    mergedSpanHeight,
+                    contentHeight,
+                    pad);
                 var contentTopY = rect.Top + pad + vAlignOffset;
 
                 var ty = contentTopY;
@@ -19970,6 +19802,22 @@ public sealed partial class DocumentView : Control
         var links = HyperlinksAtCaret();
         return links.Count > 0 ? links[0].Url : null;
     }
+
+    /// <summary>The normalized external URL or <c>#bookmark</c> target under the caret.</summary>
+    public string? HyperlinkTargetAtCaret()
+    {
+        var links = HyperlinksAtCaret();
+        if (links.Count == 0)
+            return null;
+        return links[0].Anchor is { Length: > 0 } anchor ? "#" + anchor : links[0].Url;
+    }
+
+    /// <summary>The complete visible text of the hyperlink span under the caret.</summary>
+    public string? HyperlinkDisplayTextAtCaret() =>
+        TryFindHyperlinkSpanAtCaret(out var block, out var start, out var end, out _)
+        && _doc.Blocks[block] is Paragraph paragraph
+            ? SpanText(paragraph, start, end)
+            : null;
 
     /// <summary>The current ScreenTip under the caret, or null when no linked ScreenTip exists.</summary>
     public string? HyperlinkTooltipAtCaret()

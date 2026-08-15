@@ -1,5 +1,7 @@
 using FreeX.App.Presentation.Shell;
 using FreeX.App.Presentation.FormulaBar;
+using Free.Shared.Shell;
+using FreeX.Core.Model;
 
 namespace FreeX.App.Avalonia;
 
@@ -11,7 +13,7 @@ internal sealed class AvaloniaWorkbookWindowRegistry
 {
     private readonly WorkbookWindowRegistryCore<MainWindow> _core = new(
         static window => window.DocumentId,
-        static window => window.IsVisible,
+        static _ => true,
         static (window, suffix) => window.ApplyWindowTitleSuffix(suffix));
 
     internal IReadOnlyList<MainWindow> Windows => _core.Windows;
@@ -23,16 +25,57 @@ internal sealed class AvaloniaWorkbookWindowRegistry
 
     internal IReadOnlyList<MainWindow> VisibleWindows => _core.VisibleWindows;
 
+    internal IReadOnlyList<MainWindow> HiddenWindows => _core.HiddenWindows;
+
+    internal int Count => _core.Count;
+
+    internal int VisibleCount => _core.VisibleCount;
+
+    internal int IndexOf(MainWindow window) => _core.IndexOf(window);
+
+    internal bool CanHide(MainWindow window) => _core.CanHide(window);
+
+    internal bool Hide(MainWindow window)
+    {
+        if (!_core.Hide(window))
+            return false;
+
+        window.Hide();
+        return true;
+    }
+
+    internal bool Unhide(MainWindow window)
+    {
+        if (!_core.Unhide(window))
+            return false;
+
+        window.ActivateWorkbookWindow();
+        window.RefreshWindowVisibilityCommandStates();
+        NotifyVisibilityChanged(window);
+        return true;
+    }
+
+    internal IReadOnlyList<WorkbookWindowArrangementTarget<MainWindow>> PlanVisibleArrangement(
+        WorkbookWindowArrangement arrangement,
+        double workAreaWidth,
+        double workAreaHeight) =>
+        _core.PlanVisibleArrangement(
+            (ShellWindowArrangement)arrangement,
+            workAreaWidth,
+            workAreaHeight);
+
     internal void Register(MainWindow window)
     {
         ArgumentNullException.ThrowIfNull(window);
-        _core.Register(window);
+        if (_core.Register(window))
+            NotifyVisibilityChanged(window);
     }
 
     internal void Unregister(MainWindow window)
     {
         ArgumentNullException.ThrowIfNull(window);
-        _core.Unregister(window);
+        if (_core.Unregister(window))
+            NotifyVisibilityChanged(window);
     }
 
     internal bool HasOtherWindowForDocument(MainWindow window)
@@ -53,6 +96,15 @@ internal sealed class AvaloniaWorkbookWindowRegistry
     }
 
     internal void RefreshWindowNumbering() => _core.RefreshWindowNumbering();
+
+    internal void NotifyVisibilityChanged(MainWindow origin)
+    {
+        ArgumentNullException.ThrowIfNull(origin);
+        _core.Notify(
+            origin,
+            WorkbookWindowNotificationAudience.AllExceptOrigin,
+            static window => window.RefreshWindowVisibilityCommandStates());
+    }
 
     internal MainWindow? NextWindowTarget(MainWindow currentWindow, bool forward)
     {

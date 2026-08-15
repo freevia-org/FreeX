@@ -118,31 +118,37 @@ public sealed class StatusBarPresentationPlannerTests
                 StatusBarReadoutKind.Average,
                 StatusBarPresentationElement.Average,
                 "Average: 20",
+                "StatusAvgText",
                 StatusBarTextResourceKeys.Average),
             new StatusBarReadoutPresentationPlan(
                 StatusBarReadoutKind.Count,
                 StatusBarPresentationElement.Count,
                 "Count: 4",
+                "StatusCountText",
                 StatusBarTextResourceKeys.Count),
             new StatusBarReadoutPresentationPlan(
                 StatusBarReadoutKind.NumericalCount,
                 StatusBarPresentationElement.NumericalCount,
                 "Numerical Count: 3",
+                "StatusNumericalCountText",
                 StatusBarTextResourceKeys.NumericalCount),
             new StatusBarReadoutPresentationPlan(
                 StatusBarReadoutKind.Sum,
                 StatusBarPresentationElement.Sum,
                 "Sum: 60",
+                "StatusSumText",
                 StatusBarTextResourceKeys.Sum),
             new StatusBarReadoutPresentationPlan(
                 StatusBarReadoutKind.Minimum,
                 StatusBarPresentationElement.Minimum,
                 "Min: 10",
+                "StatusMinText",
                 StatusBarTextResourceKeys.Minimum),
             new StatusBarReadoutPresentationPlan(
                 StatusBarReadoutKind.Maximum,
                 StatusBarPresentationElement.Maximum,
                 "Max: 30",
+                "StatusMaxText",
                 StatusBarTextResourceKeys.Maximum));
     }
 

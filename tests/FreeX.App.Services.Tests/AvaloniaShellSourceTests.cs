@@ -2067,6 +2067,7 @@ public sealed class AvaloniaShellSourceTests
     public void MainWindow_WiresNativeDataSortMenuThroughSharedWorkbookSession()
     {
         var source = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MainWindow.cs"));
+        var wpfSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Host", "MainWindow.DataFilterCommands.cs"));
         var sessionSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Services", "WorkbookSession.cs"));
         var quickSortSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Services", "QuickSortRangePlanner.cs"));
         var smokeSource = File.ReadAllText(RepositoryFileLocator.Find("tools", "FreeX.Validation.Avalonia", "MacOsLaunchSmoke.cs"));
@@ -2076,6 +2077,7 @@ public sealed class AvaloniaShellSourceTests
         sessionSource.Should().Contain("public bool CanSortSelectedRange => SelectedRange.RowCount > 1;");
         sessionSource.Should().Contain("public WorkbookCellEditResult SortSelectedRange(bool ascending)");
         sessionSource.Should().Contain("QuickSortRangePlanner.Create(ActiveSheet, range, ActiveCell)");
+        sessionSource.Should().Contain("_cellEditService.ExecuteRepeatableEditCommand(");
         sessionSource.Should().Contain("sortPlan.SortByColOffset");
         sessionSource.Should().Contain("public WorkbookCellEditResult SortSelectedRange(IReadOnlyList<CoreSortKey> sortKeys, SortOptions options, bool hasHeaders)");
         sessionSource.Should().Contain("public WorkbookCellEditResult SortSelectedRange(SortDialogCommandPlan sortPlan)");
@@ -2112,9 +2114,15 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("\"MainLoc_SortedX\",");
         source.Should().Contain("UiText.Get(ascending ? \"Sort_AtoZ\" : \"Sort_ZtoA\")");
         source.Should().Contain("private async Task ShowSortDialogAsync()");
+        source.Should().Contain("_session.GetSelectedRangeSortError()");
         source.Should().Contain("var selection = await ShowSortInputDialogAsync();");
         source.Should().Contain("var sortPlan = SortDialogPlanner.CreateCommandPlan(");
         source.Should().Contain("var result = _session.SortSelectedRange(sortPlan);");
+        wpfSource.Should().Contain("() => _session.SortSelectedRange(ascending: true)");
+        wpfSource.Should().Contain("() => _session.SortSelectedRange(ascending: false)");
+        wpfSource.Should().Contain("() => _session.SortSelectedRange(sortPlan)");
+        wpfSource.Should().Contain("_session.GetSelectedRangeSortError()");
+        wpfSource.Should().NotContain("CreateQuickSortCommand(");
         source.Should().Contain("private async Task<SortDialogResult?> ShowSortInputDialogAsync()");
         source.Should().Contain("AutomationProperties.SetAutomationId(dialog, \"SortCompactDialog\");");
         source.Should().Contain("AutomationProperties.SetAutomationId(headersCheck, \"SortHeadersCheckBox\");");
@@ -2536,6 +2544,7 @@ public sealed class AvaloniaShellSourceTests
     {
         var source = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MainWindow.cs"));
         var parityCaptureSource = File.ReadAllText(RepositoryFileLocator.Find("tools", "FreeX.ParityCapture.Avalonia", "Capture", "MainWindow.ParityCapture.cs"));
+        var wpfGoalSeekSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Host", "MainWindow.DataCommands.cs"));
         var sessionSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Services", "WorkbookSession.cs"));
         var parserSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Services", "GoalSeekRequestParser.cs"));
         var statusPlannerSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Presentation", "Dialogs", "GoalSeekStatusDialogPlanner.cs"));
@@ -2555,11 +2564,11 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("private async Task ShowGoalSeekDialogAsync()");
         source.Should().Contain("if (!TryCommitPendingFormulaEdit())");
         source.Should().Contain("var request = await ShowGoalSeekInputDialogAsync();");
-        source.Should().Contain("var result = _session.ExecuteGoalSeek(request);");
-        source.Should().Contain("var choice = await ShowGoalSeekStatusDialogAsync(result);");
-        source.Should().Contain("WorkbookGoalSeekStatus.Applied");
-        source.Should().Contain("choice == GoalSeekStatusDialogChoice.RestoreOriginalValues");
-        source.Should().Contain("var restoreResult = _session.UndoLastEdit();");
+        source.Should().Contain("var proposal = _session.FindGoalSeekProposal(request);");
+        source.Should().Contain("var choice = await ShowGoalSeekStatusDialogAsync(proposal);");
+        source.Should().Contain("choice != GoalSeekStatusDialogChoice.KeepResult");
+        source.Should().Contain("var result = _session.ApplyGoalSeekProposal(proposal);");
+        source.Should().NotContain("var restoreResult = _session.UndoLastEdit();");
         source.Should().Contain("RefreshShell(FormatGoalSeekStatus(result));");
         source.Should().Contain("ShowEditIssue(FormatGoalSeekStatus(result));");
 
@@ -2581,17 +2590,19 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("AutomationProperties.SetAutomationId(cancelButton, \"GoalSeekCancelButton\");");
         source.Should().Contain("FocusGoalSeekErrorField(validation.FocusTarget, setCellBox, targetValueBox, changingCellBox);");
 
-        source.Should().Contain("private async Task<GoalSeekStatusDialogChoice> ShowGoalSeekStatusDialogAsync(WorkbookGoalSeekResult result)");
+        source.Should().Contain("private async Task<GoalSeekStatusDialogChoice> ShowGoalSeekStatusDialogAsync(WorkbookGoalSeekProposal proposal)");
         source.Should().Contain("AutomationProperties.SetAutomationId(dialog, \"GoalSeekStatusDialog\");");
         source.Should().Contain("AutomationProperties.SetAutomationId(summaryBlock, \"GoalSeekStatusText\");");
         source.Should().Contain("AutomationProperties.SetAutomationId(restoreButton, \"GoalSeekRestoreOriginalValuesButton\");");
         source.Should().Contain("AutomationProperties.SetAutomationId(keepButton, \"GoalSeekKeepResultButton\");");
         source.Should().Contain("AutomationProperties.SetAutomationId(okButton, \"GoalSeekStatusOkButton\");");
+        source.Should().Contain("AutomationProperties.SetAutomationId(cancelButton, \"GoalSeekStatusCancelButton\");");
         source.Should().Contain("GoalSeekStatusDialogPlanner.DescribeValidationError(");
         statusPlannerSource.Should().Contain("public static ValidationPresentationDescriptor<GoalSeekValidationFocusTarget> DescribeValidationError(");
         source.Should().Contain("private static string FormatGoalSeekStatus(WorkbookGoalSeekResult result)");
 
         sessionSource.Should().Contain("public WorkbookGoalSeekResult ExecuteGoalSeek(GoalSeekRequest request)");
+        sessionSource.Should().Contain("public WorkbookGoalSeekResult ApplyGoalSeekProposal(WorkbookGoalSeekProposal proposal)");
         parserSource.Should().Contain("public static GoalSeekRequestParseResult Parse(");
         parityCaptureSource.Should().Contain("(\"dialog.GoalSeek\", () => ShowGoalSeekParityDialogAsync()),");
         parityCaptureSource.Should().Contain("(\"dialog.GoalSeekStatus\", () => ShowGoalSeekStatusParityDialogAsync()),");
@@ -2600,6 +2611,11 @@ public sealed class AvaloniaShellSourceTests
         parityCaptureSource.Should().Contain("initialSetCellText: \"C2\"");
         parityCaptureSource.Should().Contain("initialTargetValueText: \"5000\"");
         parityCaptureSource.Should().Contain("initialChangingCellText: \"E2\"");
+
+        wpfGoalSeekSource.Should().Contain("var proposal = _session.FindGoalSeekProposal(");
+        wpfGoalSeekSource.Should().Contain("var applyResult = _session.ApplyGoalSeekProposal(proposal);");
+        wpfGoalSeekSource.Should().NotContain("new GoalSeekCommand");
+        wpfGoalSeekSource.Should().NotContain("RecalculateChangedCellsAlways([changingCell])");
 
         var handlerIndex = normalizedSource.IndexOf("private async Task ShowGoalSeekDialogAsync()", StringComparison.Ordinal);
         handlerIndex.Should().BeGreaterThanOrEqualTo(0);
@@ -5009,7 +5025,8 @@ public sealed class AvaloniaShellSourceTests
         catalogSource.Should().Contain("new(NativeMenuItemId.DeleteSheet, context.IsIdle)");
         source.Should().Contain("private int FindActiveSheetTabIndex()");
         source.Should().Contain("private void AddNewSheet()");
-        source.Should().Contain("var result = _session.AddSheet();");
+        source.Should().Contain("private void AddNewSheet(SheetId? insertBeforeSheetId)");
+        source.Should().Contain("var result = _session.AddSheet(insertBeforeSheetId);");
         source.Should().Contain("RefreshShell(UiText.Format(\"SheetTabs_InsertedStatusFormat\", _session.ActiveSheet.Name));");
         source.Should().Contain("private async Task RenameActiveSheetAsync()");
         source.Should().Contain("var newName = await ShowRenameSheetDialogAsync(currentName);");
@@ -5037,6 +5054,7 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("string Header(SheetTabContextMenuAction action) => UiText.Get(Common(action).ResourceKey);");
         source.Should().Contain("bool Enabled(SheetTabContextMenuAction action) => isIdle && Common(action).IsEnabled;");
         source.Should().Contain("CreateSheetTabContextMenuItem(tab, Header(SheetTabContextMenuAction.Rename), async () => await RenameActiveSheetAsync(), Enabled(SheetTabContextMenuAction.Rename))");
+        source.Should().Contain("CreateSheetTabContextMenuItem(tab, Header(SheetTabContextMenuAction.InsertSheet), () => AddNewSheet(tab.Id), Enabled(SheetTabContextMenuAction.InsertSheet))");
         source.Should().Contain("CreateSheetTabColorContextMenuItem(tab, Header(SheetTabContextMenuAction.TabColor), Enabled(SheetTabContextMenuAction.TabColor))");
         source.Should().Contain("UiText.Get(\"MainWindow_Header_MoveLeft\")");
         source.Should().Contain("UiText.Get(\"MainWindow_Header_MoveRight\")");
@@ -5243,15 +5261,26 @@ public sealed class AvaloniaShellSourceTests
     public void MainWindow_RendersSelectedRangeStatsThroughSharedWorkbookSession()
     {
         var source = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MainWindow.cs"));
+        var statusBarSource = File.ReadAllText(RepositoryFileLocator.Find(
+            "src", "FreeX.App.Avalonia", "MainWindow.StatusBar.cs"));
+        var plannerSource = File.ReadAllText(RepositoryFileLocator.Find(
+            "shared", "Free.Shared.AppServices", "StatusBarPresentationPlanner.cs"));
+        var wpfStatusBarSource = File.ReadAllText(RepositoryFileLocator.Find(
+            "src", "FreeX.App.Host", "MainWindow.GridStatus.cs"));
 
-        source.Should().Contain("private readonly TextBlock _selectionStatsText = new();");
-        source.Should().Contain("_selectionStatsText.FontSize = 12;");
-        source.Should().Contain("_selectionStatsText.MaxWidth = 420;");
-        source.Should().Contain("_selectionStatsText.TextTrimming = TextTrimming.CharacterEllipsis;");
+        source.Should().Contain("private readonly StackPanel _selectionStatsPanel = new();");
+        source.Should().Contain("private readonly TextBlock _statusAverageText = new();");
+        source.Should().Contain("private readonly TextBlock _statusMaximumText = new();");
+        statusBarSource.Should().Contain("ConfigureSelectionStatisticText(");
+        statusBarSource.Should().Contain("ApplySelectionStatisticReadouts(rendererPlan);");
+        plannerSource.Should().Contain("public static string ReadoutAutomationId(StatusBarReadoutKind kind)");
+        wpfStatusBarSource.Should().Contain(
+            "AutomationProperties.SetAutomationId(textBlock, readout.AutomationId);");
+        statusBarSource.Should().Contain(
+            "AutomationProperties.SetAutomationId(textBlock, readout.AutomationId);");
         source.Should().Contain("_statusText,");
-        source.Should().Contain("_selectionStatsText,");
+        source.Should().Contain("Child = _selectionStatsPanel,");
         source.Should().Contain("_statusText.Text = status;");
-        source.Should().Contain("_selectionStatsText.Text = _session.SelectionStatsText;");
         source.Should().Contain("_session.SelectAnchoredRange(anchor, address);");
         source.Should().Contain("RefreshShell(UiText.Get(\"MainLoc_Ready\"));");
     }
@@ -5263,6 +5292,10 @@ public sealed class AvaloniaShellSourceTests
         // line endings.
         var source = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MainWindow.cs"))
             .Replace("\r\n", "\n", StringComparison.Ordinal);
+        var statusBarSource = File.ReadAllText(RepositoryFileLocator.Find(
+            "src", "FreeX.App.Avalonia", "MainWindow.StatusBar.cs"));
+        var plannerSource = File.ReadAllText(RepositoryFileLocator.Find(
+            "shared", "Free.Shared.AppServices", "StatusBarPresentationPlanner.cs"));
         var smokeSource = File.ReadAllText(RepositoryFileLocator.Find("tools", "FreeX.Validation.Avalonia", "MacOsLaunchSmoke.cs"));
 
         source.Should().Contain("AutomationProperties.SetAutomationId(_formulaBox, \"FormulaBox\");");
@@ -5274,9 +5307,10 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("AutomationProperties.SetAutomationId(_cellAddressText, \"CellAddressText\");");
         source.Should().Contain("AutomationProperties.SetName(_cellAddressText, UiText.Get(\"Toolbar_CellAddressAutomationName\"));");
         source.Should().Contain("AutomationProperties.SetHelpText(_cellAddressText, UiText.Get(\"Toolbar_CellAddressHelpText\"));");
-        source.Should().Contain("AutomationProperties.SetAutomationId(_selectionStatsText, \"SelectionStatsText\");");
-        source.Should().Contain("AutomationProperties.SetName(_selectionStatsText, UiText.Get(\"Toolbar_SelectionStatisticsAutomationName\"));");
-        source.Should().Contain("AutomationProperties.SetHelpText(_selectionStatsText, UiText.Get(\"Toolbar_SelectionStatisticsHelpText\"));");
+        plannerSource.Should().Contain("StatusBarReadoutKind.Average => \"StatusAvgText\"");
+        plannerSource.Should().Contain("StatusBarReadoutKind.NumericalCount => \"StatusNumericalCountText\"");
+        plannerSource.Should().Contain("StatusBarReadoutKind.Maximum => \"StatusMaxText\"");
+        statusBarSource.Should().Contain("AutomationProperties.SetLiveSetting(textBlock, AutomationLiveSetting.Polite);");
         smokeSource.Should().Contain("HasFormulaBoxAutomationName: string.Equals(");
         source.Should().Contain("FormulaBarText(FormulaBarChromePlanner.FormulaBox.AutomationNameResourceKey)");
         smokeSource.Should().Contain("HasFormulaBoxAutomationHelp: string.Equals(");
@@ -5285,14 +5319,16 @@ public sealed class AvaloniaShellSourceTests
         smokeSource.Should().Contain("HasStatusTextAutomationName: string.Equals(AutomationProperties.GetName(_statusText), \"Status\", StringComparison.Ordinal)");
         smokeSource.Should().Contain("HasStatusTextAutomationHelp: string.Equals(AutomationProperties.GetHelpText(_statusText), \"Shows the current workbook status.\", StringComparison.Ordinal)");
         smokeSource.Should().Contain("HasStatusTextAutomationId: string.Equals(AutomationProperties.GetAutomationId(_statusText), \"StatusText\", StringComparison.Ordinal)");
-        smokeSource.Should().Contain("HasStatusTextValue: HasStatusBarAccessibleValue(_statusText, _selectionStatsText)");
-        smokeSource.Should().Contain("private static bool HasStatusBarAccessibleValue(TextBlock statusText, TextBlock selectionStatsText) =>");
+        smokeSource.Should().Contain("HasStatusTextValue: HasStatusBarAccessibleValue(");
+        smokeSource.Should().Contain("params TextBlock[] selectionStatisticTexts");
         smokeSource.Should().Contain("HasCellAddressAutomationName: string.Equals(AutomationProperties.GetName(_cellAddressText), \"Cell address\", StringComparison.Ordinal)");
         smokeSource.Should().Contain("HasCellAddressAutomationHelp: string.Equals(AutomationProperties.GetHelpText(_cellAddressText), \"Shows the active cell address.\", StringComparison.Ordinal)");
         smokeSource.Should().Contain("HasCellAddressAutomationId: string.Equals(AutomationProperties.GetAutomationId(_cellAddressText), \"CellAddressText\", StringComparison.Ordinal)");
-        smokeSource.Should().Contain("HasSelectionStatsAutomationName: string.Equals(AutomationProperties.GetName(_selectionStatsText), \"Selection statistics\", StringComparison.Ordinal)");
-        smokeSource.Should().Contain("HasSelectionStatsAutomationHelp: string.Equals(AutomationProperties.GetHelpText(_selectionStatsText), \"Shows statistics for the current selection.\", StringComparison.Ordinal)");
-        smokeSource.Should().Contain("HasSelectionStatsAutomationId: string.Equals(AutomationProperties.GetAutomationId(_selectionStatsText), \"SelectionStatsText\", StringComparison.Ordinal)");
+        smokeSource.Should().Contain("HasSelectionStatsAutomationName: HaveSelectionStatisticAutomationNames(");
+        smokeSource.Should().Contain("HasSelectionStatsAutomationHelp: HaveSelectionStatisticAutomationHelp(");
+        smokeSource.Should().Contain("HasSelectionStatsAutomationId: HaveSelectionStatisticAutomationIds(");
+        smokeSource.Should().Contain("(_statusAverageText, \"StatusAvgText\")");
+        smokeSource.Should().Contain("(_statusMaximumText, \"StatusMaxText\")");
 
         smokeSource.Should().Contain("public bool HasAccessibilitySmokeEvidence =>");
         smokeSource.Should().Contain("HasAccessibilitySmokeEvidence &&");
@@ -5814,9 +5850,10 @@ public sealed class AvaloniaShellSourceTests
         customViewsSource.Should().Contain("CustomViewsPlanner.BuildSaveCommand(");
         customViewsSource.Should().Contain("CustomViewsPlanner.BuildDeleteCommand(name)");
         customViewsSource.Should().Contain("CustomViewsPlanner.ValidateName(_session.Workbook,");
-        customViewsSource.Should().Contain("_session.ExecuteReviewCommand(");
-        // Applying a view that changes the active sheet re-syncs the session's cached active sheet.
-        customViewsSource.Should().Contain("ResyncActiveSheetToWorkbook();");
+        customViewsSource.Should().Contain("_session.ExecuteCustomViewCommand(");
+        customViewsSource.Should().NotContain("_session.ExecuteReviewCommand(");
+        // The shared session adopts the saved sheet/cell and invalidates every per-view cache itself.
+        customViewsSource.Should().NotContain("ResyncActiveSheetToWorkbook");
     }
 
     [Fact]

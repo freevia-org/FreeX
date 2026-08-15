@@ -3,7 +3,7 @@ namespace FreeW.App.Presentation.Tests;
 public sealed class DialogBackedCommandAvailabilityTests
 {
     [Fact]
-    public void AvaloniaDateTimeSplitCellAndInsertObjectCommandsFailClosedWithoutNativeDialogs()
+    public void AvaloniaUsesSafeEditorFallbacksExceptForSplitCellWithoutNativeDialogs()
     {
         var root = TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeW.slnx");
         var source = File.ReadAllText(Path.Combine(
@@ -13,16 +13,12 @@ public sealed class DialogBackedCommandAvailabilityTests
             "Ribbon",
             "FreeWAvaloniaRibbonCommands.cs"));
 
-        source.Should().Contain("OptionalHostCommand(callbacks.OpenDateTimeDialog)");
+        source.Should().Contain("callbacks.OpenDateTimeDialog ?? (() => editor.InsertField(RunFieldKind.Date))");
         source.Should().Contain("OptionalHostCommand(callbacks.OpenSplitCellDialog)");
-        source.Should().Contain("EmbeddedObject: OptionalHostCommand(callbacks.InsertObject)");
+        source.Should().Contain("callbacks.InsertObject ?? (() => editor.InsertEmbeddedObject())");
 
-        source.Should().NotContain("callbacks.OpenDateTimeDialog ??");
         source.Should().NotContain("callbacks.OpenSplitCellDialog ??");
-        source.Should().NotContain("callbacks.InsertObject ??");
-        source.Should().NotContain("editor.InsertField(RunFieldKind.Date)");
         source.Should().NotContain("editor.SplitCurrentCell()");
-        source.Should().NotContain("editor.InsertEmbeddedObject()");
     }
 
     [Fact]

@@ -489,9 +489,7 @@ public partial class OptionsDialog : Window
                 appLanguage: AppLanguageCatalog.NormalizeCultureName(OptAppLanguage.SelectedValue as string),
                 crashAnalyticsEnabled: OptCrashAnalytics.IsChecked == true))
         {
-            var presentation = OptionsDialogPlanner.DescribeInputError(
-                inputError,
-                OptionsValidationTextProfile.Wpf);
+            var presentation = OptionsDialogPlanner.DescribeInputError(inputError);
             ShowInvalidInputWarning(
                 presentation.Message.Resolve(UiText.Get, UiText.Format),
                 presentation.FocusTarget == OptionsValidationFocusTarget.DefaultFontSize

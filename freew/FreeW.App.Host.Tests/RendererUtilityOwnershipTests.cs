@@ -98,7 +98,7 @@ public sealed class RendererUtilityOwnershipTests
         mainWindow.Should().Contain("FreeWDocumentWindowPlanner.FormatWindowSuffix(");
 
         ribbon.Should().Contain("new FreeWPictureImportWorkflow(");
-        ribbon.Should().Contain("PictureInsertionPlanner.FitIcon(");
+        ribbon.Should().Contain("PictureInsertionPlanner.CreatePngIcon(");
         svg.Should().Contain("PictureInsertionPlanner.BuildVectorRasterSurface(");
         svg.Should().Contain("PictureInsertionPlanner.CreatePngImage(");
         zoom.Should().Contain("ZoomDialogFitFactors fitFactors");

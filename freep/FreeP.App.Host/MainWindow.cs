@@ -88,6 +88,8 @@ public sealed partial class MainWindow : Window,
     private TabControl _ribbonTabs = null!;
     private TabItem _fileTab = null!;
     private RibbonFileTabRouter? _fileTabRouter;
+    private readonly RibbonStateStore _ribbonStateStore = new();
+    private FreePRibbonBindingSession? _ribbonBindingSession;
 
     // ── Body layout ───────────────────────────────────────────────────────────────
 
@@ -429,12 +431,14 @@ public sealed partial class MainWindow : Window,
 
         // Ribbon. Wave 4C passes the slideshow launch Actions into the command registry;
         // StartSlideShow (Wave 4B) opens the fullscreen SlideShowWindow.
-        var stateStore = new RibbonStateStore();
-        var commands = FreePRibbonHostRegistryComposer.Build(
+        _ribbonBindingSession = new FreePRibbonBindingSession(
             Editor,
-            stateStore,
-            CreateRibbonHostProfile()).Registry;
-        var ribbon = BuildRibbon(FreeP.Ribbon.Definitions.FreePRibbon.Build(FreeP.Ribbon.Definitions.FreePRibbonCapabilities.Wpf), commands, stateStore);
+            _ribbonStateStore,
+            CreateRibbonHostProfile);
+        var ribbon = BuildRibbon(
+            FreeP.Ribbon.Definitions.FreePRibbon.Build(FreeP.Ribbon.Definitions.FreePRibbonCapabilities.Wpf),
+            _ribbonBindingSession.Registry,
+            _ribbonBindingSession.StateStore);
 
         // Body: slide pane + stage.
         var body = BuildBody();
@@ -571,34 +575,22 @@ public sealed partial class MainWindow : Window,
         {
             Placement = PlacementMode.MousePoint,
         };
-        foreach (var entry in plan.Entries)
-        {
-            if (entry.Kind == PresentationDomainContextMenuEntryKind.Separator)
-                menu.Items.Add(new Separator());
-            else
-                menu.Items.Add(BuildDomainContextMenuItem(entry));
-        }
+        PresentationDomainContextMenuNativeAdapter.Populate(
+            plan,
+            menu,
+            new PresentationDomainContextMenuNativeBindings<ContextMenu, MenuItem>(
+                CreateItem: entry => new MenuItem
+                {
+                    Header = entry.Text,
+                    IsEnabled = entry.IsEnabled,
+                },
+                AddRootSeparator: target => target.Items.Add(new Separator()),
+                AddRootItem: (target, item) => target.Items.Add(item),
+                AddChildSeparator: parent => parent.Items.Add(new Separator()),
+                AddChildItem: (parent, item) => parent.Items.Add(item),
+                BindExecute: (item, execute) => item.Click += (_, _) => execute()),
+            action => _domainContextMenuSession.Execute(action, TryExecuteInlineTableAction));
         return menu;
-    }
-
-    private MenuItem BuildDomainContextMenuItem(PresentationDomainContextMenuEntryPlan entry)
-    {
-        var item = new MenuItem
-        {
-            Header = entry.Text,
-            IsEnabled = entry.IsEnabled,
-        };
-        if (entry.Children is { Count: > 0 })
-        {
-            foreach (var child in entry.Children)
-                item.Items.Add(BuildDomainContextMenuItem(child));
-        }
-        else if (entry.Action is { } action)
-        {
-            item.Click += (_, _) =>
-                _domainContextMenuSession.Execute(action, TryExecuteInlineTableAction);
-        }
-        return item;
     }
 
     private bool TryExecuteInlineTableAction(PresentationDomainContextAction action) =>
@@ -946,7 +938,7 @@ public sealed partial class MainWindow : Window,
             Minimum = PresentationMediaPaneSession.MinimumVolumePercent,
             Maximum = PresentationMediaPaneSession.MaximumVolumePercent,
             TickFrequency = PresentationMediaPaneSession.VolumeTickFrequency,
-            IsSnapToTickEnabled = true,
+            IsSnapToTickEnabled = PresentationMediaPaneSession.SnapVolumeToTicks,
             Margin = MediaPaneMargin(0, PresentationMediaPaneVisualMetrics.FieldBottomMargin),
         };
         _mediaVolumeApplyButton = BuildMediaCaptionPaneButton();
@@ -3487,47 +3479,43 @@ public sealed partial class MainWindow : Window,
         if (_layoutPickerHost is null || _layoutPickerPanel is null)
             return;
 
-        _layoutPickerPanel.Children.Clear();
-        foreach (var group in plan.Groups)
-        {
-            _layoutPickerPanel.Children.Add(new TextBlock
-            {
-                Text = group.Heading,
-                Margin = new Thickness(10, 8, 10, 2),
-                FontSize = 11,
-                FontWeight = FontWeights.SemiBold,
-                Foreground = FreePBrushes.PaneText,
-            });
-
-            var groupPanel = new WrapPanel
-            {
-                Orientation = Orientation.Horizontal,
-                Margin = new Thickness(4, 0, 4, 4),
-            };
-
-            foreach (var choice in group.Choices)
-            {
-                var button = new Button
+        PresentationLayoutPickerNativeAdapter.Populate(
+            plan,
+            _layoutPickerPanel,
+            new PresentationLayoutPickerNativeBindings<StackPanel, TextBlock, WrapPanel, Button>(
+                Clear: root => root.Children.Clear(),
+                CreateHeading: group => new TextBlock
                 {
-                    Tag = choice.LayoutId,
-                    Content = BuildLayoutChoiceTile(choice),
-                    Margin = new Thickness(4),
-                    Padding = new Thickness(0),
-                    HorizontalContentAlignment = HorizontalAlignment.Stretch,
-                    IsEnabled = choice.Chrome.IsEnabled,
-                };
-                AutomationProperties.SetName(button, choice.DisplayLabel);
-                AutomationProperties.SetAutomationId(button, choice.AutomationId);
-                button.Click += (_, _) =>
+                    Text = group.Heading,
+                    Margin = new Thickness(10, 8, 10, 2),
+                    FontSize = 11,
+                    FontWeight = FontWeights.SemiBold,
+                    Foreground = FreePBrushes.PaneText,
+                },
+                CreateGroup: _ => new WrapPanel
                 {
-                    if (button.Tag is string layoutId)
-                        ApplyLayoutChoice(layoutId);
-                };
-                groupPanel.Children.Add(button);
-            }
-
-            _layoutPickerPanel.Children.Add(groupPanel);
-        }
+                    Orientation = Orientation.Horizontal,
+                    Margin = new Thickness(4, 0, 4, 4),
+                },
+                CreateChoice: choice =>
+                {
+                    var button = new Button
+                    {
+                        Content = BuildLayoutChoiceTile(choice),
+                        Margin = new Thickness(4),
+                        Padding = new Thickness(0),
+                        HorizontalContentAlignment = HorizontalAlignment.Stretch,
+                        IsEnabled = choice.Chrome.IsEnabled,
+                    };
+                    AutomationProperties.SetName(button, choice.DisplayLabel);
+                    AutomationProperties.SetAutomationId(button, choice.AutomationId);
+                    return button;
+                },
+                BindChoice: (choice, execute) => choice.Click += (_, _) => execute(),
+                AddChoice: (group, choice) => group.Children.Add(choice),
+                AddHeading: (root, heading) => root.Children.Add(heading),
+                AddGroup: (root, group) => root.Children.Add(group)),
+            layoutId => ApplyLayoutChoice(layoutId));
 
         HideTablePicker();
         _layoutPickerHost.Visibility = Visibility.Visible;

@@ -12,7 +12,7 @@ namespace FreeW.App.Avalonia;
 
 internal sealed partial class MultilevelListDialog : FreeWDialogWindow
 {
-    private static readonly AvaloniaCompactDialogChromeStyle Chrome = new(AvaloniaCompactDialogChrome.WindowsUiFontFamily)
+    private static AvaloniaCompactDialogChromeStyle Chrome => new(AvaloniaCompactDialogChrome.WindowsUiFontFamily)
     {
         ControlHeight = 20,
         TextBoxHeight = 18,
@@ -29,7 +29,7 @@ internal sealed partial class MultilevelListDialog : FreeWDialogWindow
             ],
         },
     };
-    private static readonly IBrush ComboBorderBrush = new SolidColorBrush(Color.FromRgb(172, 172, 172));
+    private static IBrush ComboBorderBrush => new SolidColorBrush(Color.FromRgb(172, 172, 172));
     private readonly MultilevelListDialogSession _session;
     private readonly ComboBox _levels;
     private readonly TextBox _level0Start;

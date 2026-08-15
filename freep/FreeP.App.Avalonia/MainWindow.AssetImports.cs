@@ -6,31 +6,31 @@ namespace FreeP.App.Avalonia;
 
 public sealed partial class MainWindow
 {
+    private PresentationAssetImportHostSession? _assetImportSession;
+
+    private PresentationAssetImportHostSession AssetImportSession =>
+        _assetImportSession ??= new PresentationAssetImportHostSession(
+            new AvaloniaPresentationAssetPickerPort(this),
+            new AvaloniaPresentationAssetReaderPort(),
+            Editor,
+            new PresentationAssetImportExecutionCallbacks(
+                ApplyPictureBullet: ApplyImportedPictureBullet,
+                ApplySmartArtPicture: (bytes, contentType) =>
+                    ApplySmartArtTextPanePicture(bytes, contentType)?.Applied == true,
+                EmbeddedObjectInserted: () =>
+                {
+                    RefreshCanvas();
+                    UpdateStatus();
+                }));
+
     private Task<PresentationAssetImportResult> ImportPresentationAssetAsync(
         PresentationAssetImportKind kind) =>
         ImportPresentationAssetAsync(kind, applyZoomCoverImage: null);
 
-    private async Task<PresentationAssetImportResult> ImportPresentationAssetAsync(
+    private Task<PresentationAssetImportResult> ImportPresentationAssetAsync(
         PresentationAssetImportKind kind,
-        Func<byte[], string, bool>? applyZoomCoverImage)
-    {
-        var workflow = new PresentationAssetImportWorkflow(
-            new AvaloniaPresentationAssetPickerPort(this),
-            new AvaloniaPresentationAssetReaderPort(),
-            new PresentationAssetImportExecutionPort(
-                Editor,
-                new PresentationAssetImportExecutionCallbacks(
-                    ApplyPictureBullet: ApplyImportedPictureBullet,
-                    ApplySmartArtPicture: (bytes, contentType) =>
-                        ApplySmartArtTextPanePicture(bytes, contentType)?.Applied == true,
-                    ApplyZoomCoverImage: applyZoomCoverImage,
-                    EmbeddedObjectInserted: () =>
-                    {
-                        RefreshCanvas();
-                        UpdateStatus();
-                    })));
-        return await workflow.ImportAsync(kind);
-    }
+        Func<byte[], string, bool>? applyZoomCoverImage) =>
+        AssetImportSession.ImportAsync(kind, applyZoomCoverImage);
 
     private bool ApplyImportedPictureBullet(PresentationPictureBulletPayload payload) =>
         _textEditor?.TryApplyActiveShapeParagraphPictureBullet(payload) == true ||
@@ -41,25 +41,13 @@ public sealed partial class MainWindow
         PresentationAssetImportResult result,
         PresentationAssetImportOutcomePolicy policy,
         Action<string>? statusTarget = null)
-    {
-        var presentation = PresentationAssetImportOutcomePlanner.Plan(
+        => await AssetImportSession.MaterializeOutcomeAsync(
             result,
             FileText,
-            policy);
-        if (presentation.StatusText is { } statusText)
-        {
-            if (statusTarget is null)
-                _statusText.Text = statusText;
-            else
-                statusTarget(statusText);
-        }
-
-        if (presentation.Message is { } message)
-        {
-            var messageService = _messageService ?? new AvaloniaUserMessageService(this);
-            await messageService.ShowMessageAsync(message);
-        }
-    }
+            policy,
+            status => _statusText.Text = status,
+            _messageService ?? new AvaloniaUserMessageService(this),
+            statusTarget);
 
     private sealed class AvaloniaPresentationAssetPickerPort(MainWindow owner) : IPresentationAssetPickerPort
     {

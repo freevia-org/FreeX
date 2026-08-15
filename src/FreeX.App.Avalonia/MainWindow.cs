@@ -118,8 +118,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
     private enum GoalSeekStatusDialogChoice
     {
         KeepResult,
-        RestoreOriginalValues,
-        Dismiss
+        RestoreOriginalValues
     }
 
     private sealed record ScenarioManagerDialogScenarioItem(ScenarioManagerScenarioChoice Choice)
@@ -384,7 +383,13 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
     // in flight (see UpdateSaveButton) -- the Linux/macOS analogue of the WPF host's
     // StatusSaveProgressCancelButton/CancelFileOperation_Click.
     private readonly Button _fileOperationCancelButton = new();
-    private readonly TextBlock _selectionStatsText = new();
+    private readonly StackPanel _selectionStatsPanel = new();
+    private readonly TextBlock _statusAverageText = new();
+    private readonly TextBlock _statusCountText = new();
+    private readonly TextBlock _statusNumericalCountText = new();
+    private readonly TextBlock _statusSumText = new();
+    private readonly TextBlock _statusMinimumText = new();
+    private readonly TextBlock _statusMaximumText = new();
     private readonly TextBlock _statusCapsLockText = new();
     private readonly TextBlock _statusNumLockText = new();
     private readonly TextBlock _zoomText = new();
@@ -1451,6 +1456,8 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
                 },
                 ExtraCommandStates = new Dictionary<string, Func<RibbonCommandState>>(StringComparer.Ordinal)
                 {
+                    ["Hide"] = () => new RibbonCommandState(IsEnabled: WindowRegistry.CanHide(this)),
+                    ["Unhide"] = () => new RibbonCommandState(IsEnabled: WindowRegistry.HiddenWindows.Count > 0),
                     ["Gridlines"] = () => new RibbonCommandState(IsChecked: _session.IsShowingGridlines),
                     ["Headings"] = () => new RibbonCommandState(IsChecked: _session.IsShowingHeadings),
                     ["Ruler"] = () => new RibbonCommandState(IsChecked: _session.IsShowingRulers),
@@ -2878,14 +2885,36 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         AutomationProperties.SetName(_statusText, UiText.Get("Toolbar_StatusAutomationName"));
         AutomationProperties.SetHelpText(_statusText, UiText.Get("Toolbar_StatusHelpText"));
 
-        _selectionStatsText.FontSize = 12;
-        _selectionStatsText.Foreground = StatusBarForeground;
-        _selectionStatsText.MaxWidth = 420;
-        _selectionStatsText.TextTrimming = TextTrimming.CharacterEllipsis;
-        _selectionStatsText.VerticalAlignment = AvaloniaVerticalAlignment.Center;
-        AutomationProperties.SetAutomationId(_selectionStatsText, "SelectionStatsText");
-        AutomationProperties.SetName(_selectionStatsText, UiText.Get("Toolbar_SelectionStatisticsAutomationName"));
-        AutomationProperties.SetHelpText(_selectionStatsText, UiText.Get("Toolbar_SelectionStatisticsHelpText"));
+        ConfigureSelectionStatisticText(
+            _statusAverageText,
+            StatusBarReadoutKind.Average,
+            maxWidth: 140,
+            trailingMargin: 16);
+        ConfigureSelectionStatisticText(
+            _statusCountText,
+            StatusBarReadoutKind.Count,
+            maxWidth: 110,
+            trailingMargin: 16);
+        ConfigureSelectionStatisticText(
+            _statusNumericalCountText,
+            StatusBarReadoutKind.NumericalCount,
+            maxWidth: 160,
+            trailingMargin: 16);
+        ConfigureSelectionStatisticText(
+            _statusSumText,
+            StatusBarReadoutKind.Sum,
+            maxWidth: 140,
+            trailingMargin: 16);
+        ConfigureSelectionStatisticText(
+            _statusMinimumText,
+            StatusBarReadoutKind.Minimum,
+            maxWidth: 120,
+            trailingMargin: 16);
+        ConfigureSelectionStatisticText(
+            _statusMaximumText,
+            StatusBarReadoutKind.Maximum,
+            maxWidth: 120,
+            trailingMargin: 0);
 
         // CAPS LOCK / NUM LOCK warning indicators (parity with the WPF host's StatusCapsLockText /
         // StatusNumLockText): hidden until RefreshKeyLockIndicators finds the corresponding key toggled on.
@@ -3527,7 +3556,9 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
     {
         var statusBarCustomizeMenu = BuildStatusBarCustomizeContextMenu();
         _statusText.ContextMenu = statusBarCustomizeMenu;
-        _selectionStatsText.ContextMenu = statusBarCustomizeMenu;
+        _selectionStatsPanel.ContextMenu = statusBarCustomizeMenu;
+        foreach (var statisticText in SelectionStatisticTexts())
+            statisticText.ContextMenu = statusBarCustomizeMenu;
         _statusCapsLockText.ContextMenu = statusBarCustomizeMenu;
         _statusNumLockText.ContextMenu = statusBarCustomizeMenu;
         _zoomText.ContextMenu = statusBarCustomizeMenu;
@@ -3574,8 +3605,11 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         var statusBarTextFontSize = AvaloniaThemeResourceResolver.ResolveOr(ThemeResources.StatusBarTextFontSize, 12.0);
         _statusText.FontSize = statusBarTextFontSize;
         _statusText.Foreground = StatusBarForeground;
-        _selectionStatsText.FontSize = statusBarTextFontSize;
-        _selectionStatsText.Foreground = StatusBarForeground;
+        foreach (var statisticText in SelectionStatisticTexts())
+        {
+            statisticText.FontSize = statusBarTextFontSize;
+            statisticText.Foreground = StatusBarForeground;
+        }
         _statusCapsLockText.FontSize = statusBarTextFontSize;
         _statusCapsLockText.Foreground = StatusBarForeground;
         _statusNumLockText.FontSize = statusBarTextFontSize;
@@ -3607,14 +3641,21 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         leftPanel.Children.Add(_statusText);
         leftPanel.Children.Add(_fileOperationCancelButton);
 
+        _selectionStatsPanel.Orientation = Orientation.Horizontal;
+        _selectionStatsPanel.HorizontalAlignment = AvaloniaHorizontalAlignment.Right;
+        _selectionStatsPanel.VerticalAlignment = AvaloniaVerticalAlignment.Center;
+        _selectionStatsPanel.ClipToBounds = true;
+        _selectionStatsPanel.Children.Clear();
+        foreach (var statisticText in SelectionStatisticTexts())
+            _selectionStatsPanel.Children.Add(statisticText);
+        AutomationProperties.SetAutomationId(_selectionStatsPanel, "StatusStatsPanel");
+
         var statsViewport = new Border
         {
             Margin = new Thickness(8, 0, 12, 0),
             ClipToBounds = true,
-            Child = _selectionStatsText,
+            Child = _selectionStatsPanel,
         };
-        _selectionStatsText.HorizontalAlignment = AvaloniaHorizontalAlignment.Right;
-        _selectionStatsText.TextTrimming = TextTrimming.CharacterEllipsis;
 
         var viewButtons = new StackPanel
         {
@@ -3936,7 +3977,6 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         // shared model is built from; ApplyStatusBarModel then refines them with the customize toggles.
         RefreshKeyLockIndicators();
         _statusText.Text = status;
-        _selectionStatsText.Text = _session.SelectionStatsText;
         _zoomText.Text = StatusBarZoomSliderPlanner.FormatZoomPercent(_session.ZoomPercent);
         ApplyStatusBarModel(status);
         UpdateStatusBarViewButtons();
@@ -4413,7 +4453,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         bool Enabled(SheetTabContextMenuAction action) => isIdle && Common(action).IsEnabled;
 
         yield return CreateSheetTabContextMenuItem(tab, Header(SheetTabContextMenuAction.Rename), async () => await RenameActiveSheetAsync(), Enabled(SheetTabContextMenuAction.Rename));
-        yield return CreateSheetTabContextMenuItem(tab, Header(SheetTabContextMenuAction.InsertSheet), AddNewSheet, Enabled(SheetTabContextMenuAction.InsertSheet));
+        yield return CreateSheetTabContextMenuItem(tab, Header(SheetTabContextMenuAction.InsertSheet), () => AddNewSheet(tab.Id), Enabled(SheetTabContextMenuAction.InsertSheet));
         yield return CreateSheetTabContextMenuItem(tab, UiText.Get("MainWindow_Header_Duplicate"), DuplicateActiveSheet, isIdle);
         yield return CreateSheetTabContextMenuItem(tab, Header(SheetTabContextMenuAction.MoveOrCopy), ShowMoveOrCopySheetDialog, Enabled(SheetTabContextMenuAction.MoveOrCopy));
         yield return CreateSheetTabContextMenuItem(tab, Header(SheetTabContextMenuAction.DeleteSheet), DeleteActiveSheet, Enabled(SheetTabContextMenuAction.DeleteSheet));
@@ -9446,7 +9486,6 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
 
         var range = result.Range;
         _cellAddressText.Text = FormatRangeReference(range);
-        _selectionStatsText.Text = _session.SelectionStatsText;
         RefreshFormulaReferenceHighlights();
         RefreshFormulaReferenceGridHighlights();
         ApplyFormulaEditStatusBarPlan(_formulaRangeEditingSession.BuildEditStatusBarPlan(pointMode: true));
@@ -9544,7 +9583,6 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         if (plan.UpdateLocalSelection)
         {
             _cellAddressText.Text = FormatRangeReference(range);
-            _selectionStatsText.Text = _session.SelectionStatsText;
         }
         RefreshFormulaReferenceHighlights();
         RefreshFormulaReferenceGridHighlights();
@@ -10300,7 +10338,6 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         if (plan.UpdateLocalSelection)
         {
             _cellAddressText.Text = FormatRangeReference(range);
-            _selectionStatsText.Text = _session.SelectionStatsText;
         }
         RefreshFormulaReferenceHighlights();
         RefreshFormulaReferenceGridHighlights();
@@ -12367,6 +12404,9 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
     }
 
     private void AddNewSheet()
+        => AddNewSheet(insertBeforeSheetId: null);
+
+    private void AddNewSheet(SheetId? insertBeforeSheetId)
     {
         if (_isOpening || _isSaving)
             return;
@@ -12375,7 +12415,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             return;
 
         ClearSelectedDrawingObject();
-        var result = _session.AddSheet();
+        var result = _session.AddSheet(insertBeforeSheetId);
         if (!result.Success)
         {
             ShowEditIssue(result.ErrorMessage ?? UiText.Get("MainLoc_NewSheetFailed"));
@@ -12616,7 +12656,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             var zoom = ZoomDialogPlanner.Presets[index];
             var button = new RadioButton
             {
-                Content = $"{zoom}%",
+                Content = ZoomDialogPlanner.FormatPresetLabel(zoom),
                 GroupName = "ZoomDialogOptions",
                 IsChecked = currentZoom == zoom,
                 Margin = new Thickness(0, 0, 0, index < ZoomDialogPlanner.Presets.Count - 1
@@ -13386,13 +13426,16 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         var replaceTabItem = new TabItem { Header = Fr(FindReplaceDialogText.Replace), Content = replaceTabPanel };
         AutomationProperties.SetAutomationId(replaceTabItem, "FindReplaceReplaceTab");
 
+        var openTabHeight = FindReplaceDialogPlanner.ShowsReplaceCommands(replaceMode)
+            ? FindReplaceDialogPlanner.ReplaceTabHeight
+            : FindReplaceDialogPlanner.FindTabHeight;
         var tabs = new TabControl
         {
             Items = { findTabItem, replaceTabItem },
-            SelectedIndex = replaceMode ? 1 : 0,
-            Height = replaceMode ? FindReplaceDialogPlanner.ReplaceTabHeight : FindReplaceDialogPlanner.FindTabHeight,
-            MinHeight = replaceMode ? FindReplaceDialogPlanner.ReplaceTabHeight : FindReplaceDialogPlanner.FindTabHeight,
-            MaxHeight = replaceMode ? FindReplaceDialogPlanner.ReplaceTabHeight : FindReplaceDialogPlanner.FindTabHeight,
+            SelectedIndex = FindReplaceDialogPlanner.ShowsReplaceCommands(replaceMode) ? 1 : 0,
+            Height = openTabHeight,
+            MinHeight = openTabHeight,
+            MaxHeight = openTabHeight,
         };
         AutomationProperties.SetAutomationId(tabs, "FindReplaceTabs");
         AvaloniaCompactDialogChrome.ApplyClassicTabChrome(tabs);
@@ -13581,7 +13624,11 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         foreach (var textBox in new[] { findBox, replaceFindBox, replaceWithBox })
             textBox.CornerRadius = new CornerRadius(0);
 
-        bool OnReplaceTab() => tabs.SelectedItem == replaceTabItem;
+        // The selected TabItem is this renderer's rendering of the cross-app FindReplaceOpenMode;
+        // every mode-dependent decision below is resolved through the shared planner projection.
+        FindReplaceOpenMode CurrentOpenMode() =>
+            FindReplaceDialogPlanner.OpenModeFor(tabs.SelectedItem == replaceTabItem);
+        bool OnReplaceTab() => FindReplaceDialogPlanner.ShowsReplaceCommands(CurrentOpenMode());
         string CurrentFindText() => (OnReplaceTab() ? replaceFindBox.Text : findBox.Text) ?? "";
 
         void FocusSearchBox()
@@ -15325,7 +15372,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
 
     private static string GetHyperlinkValidationErrorText(HyperlinkDialogValidationError error) =>
         HyperlinkDialogPlanner
-            .DescribeValidationError(error, HyperlinkDialogTextProfile.Avalonia)
+            .DescribeValidationError(error)
             .Message.Resolve(UiText.Get, UiText.Format);
 
     private async Task ShowWorkbookStatisticsDialogAsync()
@@ -18753,6 +18800,12 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         if (!TryCommitPendingFormulaEdit())
             return;
 
+        if (_session.GetSelectedRangeSortError() is { } error)
+        {
+            ShowEditIssue(error);
+            return;
+        }
+
         var selection = await ShowSortInputDialogAsync();
         if (selection is null)
             return;
@@ -19735,28 +19788,25 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         if (request is null)
             return;
 
-        var result = _session.ExecuteGoalSeek(request);
-        var choice = await ShowGoalSeekStatusDialogAsync(result);
-        if (result.Status == WorkbookGoalSeekStatus.Applied)
+        var proposal = _session.FindGoalSeekProposal(request);
+        if (!proposal.Success)
         {
-            if (choice == GoalSeekStatusDialogChoice.RestoreOriginalValues)
-            {
-                var restoreResult = _session.UndoLastEdit();
-                if (!restoreResult.Success)
-                {
-                    ShowEditIssue(restoreResult.ErrorMessage ?? UiText.Get("MainLoc_GoalSeekRestoreFailed"));
-                    return;
-                }
-
-                RefreshShell(UiText.Format("MainLoc_RestoredGoalSeekValues", FormatCellReference(result.Request.ChangingCell)));
-                return;
-            }
-
-            RefreshShell(FormatGoalSeekStatus(result));
+            ShowEditIssue(proposal.ErrorMessage ?? UiText.Get("MainWindowMessage_CommandCouldNotBeCompleted"));
             return;
         }
 
-        ShowEditIssue(FormatGoalSeekStatus(result));
+        var choice = await ShowGoalSeekStatusDialogAsync(proposal);
+        if (choice != GoalSeekStatusDialogChoice.KeepResult)
+            return;
+
+        var result = _session.ApplyGoalSeekProposal(proposal);
+        if (!result.Success)
+        {
+            ShowEditIssue(FormatGoalSeekStatus(result));
+            return;
+        }
+
+        RefreshShell(FormatGoalSeekStatus(result));
     }
 
     private async Task<GoalSeekRequest?> ShowGoalSeekInputDialogAsync(
@@ -19858,9 +19908,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
                 changingCellBox.Text);
             if (!parseResult.Success)
             {
-                var validation = GoalSeekStatusDialogPlanner.DescribeValidationError(
-                    parseResult,
-                    GoalSeekPresentationProfile.Avalonia);
+                var validation = GoalSeekStatusDialogPlanner.DescribeValidationError(parseResult);
                 errorText.Text = validation.Message.Resolve(UiText.Get, UiText.Format);
                 errorText.IsVisible = true;
                 FocusGoalSeekErrorField(validation.FocusTarget, setCellBox, targetValueBox, changingCellBox);
@@ -19932,20 +19980,19 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         return result;
     }
 
-    private async Task<GoalSeekStatusDialogChoice> ShowGoalSeekStatusDialogAsync(WorkbookGoalSeekResult result)
+    private async Task<GoalSeekStatusDialogChoice> ShowGoalSeekStatusDialogAsync(WorkbookGoalSeekProposal proposal)
     {
-        var choice = result.Status == WorkbookGoalSeekStatus.Applied
-            ? GoalSeekStatusDialogChoice.KeepResult
-            : GoalSeekStatusDialogChoice.Dismiss;
+        var result = proposal.SeekResult ?? throw new ArgumentException("A valid Goal Seek proposal is required.", nameof(proposal));
+        var choice = GoalSeekStatusDialogChoice.RestoreOriginalValues;
         var dialog = new Window
         {
             Title = UiText.Get("GoalSeekStatus_GoalSeekStatus"),
             Width = GoalSeekStatusDialogPlanner.WindowWidth,
-            Height = GoalSeekStatusDialogPlanner.WindowHeight(result.Status == WorkbookGoalSeekStatus.Applied),
+            Height = GoalSeekStatusDialogPlanner.WindowHeight(result.Converged),
             MinWidth = GoalSeekStatusDialogPlanner.WindowWidth,
-            MinHeight = GoalSeekStatusDialogPlanner.WindowHeight(result.Status == WorkbookGoalSeekStatus.Applied),
+            MinHeight = GoalSeekStatusDialogPlanner.WindowHeight(result.Converged),
             MaxWidth = GoalSeekStatusDialogPlanner.WindowWidth,
-            MaxHeight = GoalSeekStatusDialogPlanner.WindowHeight(result.Status == WorkbookGoalSeekStatus.Applied),
+            MaxHeight = GoalSeekStatusDialogPlanner.WindowHeight(result.Converged),
             CanResize = false,
             FontFamily = FormulaBarFontFamily,
             WindowStartupLocation = WindowStartupLocation.CenterOwner,
@@ -19955,7 +20002,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
 
         var summaryBlock = new TextBlock
         {
-            Text = FormatGoalSeekStatus(result),
+            Text = NormalizeAvaloniaMultilineText(FormatGoalSeekStatus(proposal)),
             TextWrapping = TextWrapping.Wrap,
             Margin = new Thickness(
                 0,
@@ -19982,7 +20029,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         DockPanel.SetDock(buttonRow, Dock.Bottom);
 
         Button defaultButton;
-        if (result.Status == WorkbookGoalSeekStatus.Applied)
+        if (result.Converged)
         {
             var restoreButton = new Button
             {
@@ -20035,18 +20082,35 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
                 Width = GoalSeekStatusDialogPlanner.OkButtonWidth,
                 MinWidth = GoalSeekStatusDialogPlanner.OkButtonWidth,
                 IsDefault = true,
-                IsCancel = true,
             };
             ApplyGoalSeekStatusButtonChrome(okButton, GoalSeekStatusDialogPlanner.OkButtonWidth, isDefault: true);
             AutomationProperties.SetName(okButton, UiText.CreateAutomationName(UiText.Get("Common_Ok")));
             AutomationProperties.SetAutomationId(okButton, "GoalSeekStatusOkButton");
-            AutomationProperties.SetHelpText(okButton, UiText.Get("GoalSeekStatus_CloseTheGoalSeekStatusDialog"));
+            AutomationProperties.SetHelpText(okButton, UiText.Get("GoalSeekStatus_KeepTheGoalSeekResultInTheChangingCell"));
             okButton.Click += (_, _) =>
             {
-                choice = GoalSeekStatusDialogChoice.Dismiss;
+                choice = GoalSeekStatusDialogChoice.KeepResult;
+                dialog.Close();
+            };
+
+            var cancelButton = new Button
+            {
+                Content = UiText.Get("Common_Cancel"),
+                Width = GoalSeekStatusDialogPlanner.OkButtonWidth,
+                MinWidth = GoalSeekStatusDialogPlanner.OkButtonWidth,
+                IsCancel = true,
+            };
+            ApplyGoalSeekStatusButtonChrome(cancelButton, GoalSeekStatusDialogPlanner.OkButtonWidth);
+            AutomationProperties.SetName(cancelButton, UiText.CreateAutomationName(UiText.Get("Common_Cancel")));
+            AutomationProperties.SetAutomationId(cancelButton, "GoalSeekStatusCancelButton");
+            AutomationProperties.SetHelpText(cancelButton, UiText.Get("GoalSeekStatus_RestoreTheOriginalWorkbookValuesBeforeGoalSeekRan"));
+            cancelButton.Click += (_, _) =>
+            {
+                choice = GoalSeekStatusDialogChoice.RestoreOriginalValues;
                 dialog.Close();
             };
             buttonRow.Children.Add(okButton);
+            buttonRow.Children.Add(cancelButton);
             defaultButton = okButton;
         }
 
@@ -20055,6 +20119,9 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             if (e.Key is Key.Enter or Key.Escape)
             {
                 e.Handled = true;
+                choice = e.Key == Key.Enter
+                    ? GoalSeekStatusDialogChoice.KeepResult
+                    : GoalSeekStatusDialogChoice.RestoreOriginalValues;
                 dialog.Close();
             }
         };
@@ -20077,6 +20144,10 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         return choice;
     }
 
+    private static string NormalizeAvaloniaMultilineText(string text) =>
+        text.Replace("\r\r\n", "\r\n", StringComparison.Ordinal)
+            .ReplaceLineEndings("\n");
+
     private static string FormatGoalSeekStatus(WorkbookGoalSeekResult result)
     {
         var setCell = FormatCellReference(result.Request.SetCell);
@@ -20085,24 +20156,32 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         {
             WorkbookGoalSeekStatus.Applied when result.SeekResult is { } seekResult =>
                 GoalSeekStatusDialogPlanner.DescribeStatus(
-                    true,
+                    seekResult.Converged,
                     result.Request.TargetValue,
                     seekResult.ActualResult,
-                    seekResult.FoundValue,
-                    GoalSeekPresentationProfile.Avalonia).Resolve(UiText.Get, UiText.Format),
+                    seekResult.FoundValue).Resolve(UiText.Get, UiText.Format),
             WorkbookGoalSeekStatus.NotConverged when result.SeekResult is { } seekResult =>
                 GoalSeekStatusDialogPlanner.DescribeStatus(
                     false,
                     result.Request.TargetValue,
                     seekResult.ActualResult,
-                    seekResult.FoundValue,
-                    GoalSeekPresentationProfile.Avalonia).Resolve(UiText.Get, UiText.Format),
+                    seekResult.FoundValue).Resolve(UiText.Get, UiText.Format),
             _ => GoalSeekStatusDialogPlanner.DescribeExecutionFailure(
                 result.Status,
                 result.ErrorMessage,
                 setCell,
                 changingCell).Resolve(UiText.Get, UiText.Format)
         };
+    }
+
+    private static string FormatGoalSeekStatus(WorkbookGoalSeekProposal proposal)
+    {
+        var seekResult = proposal.SeekResult ?? throw new ArgumentException("A valid Goal Seek proposal is required.", nameof(proposal));
+        return GoalSeekStatusDialogPlanner.DescribeStatus(
+            seekResult.Converged,
+            proposal.Request.TargetValue,
+            seekResult.ActualResult,
+            seekResult.FoundValue).Resolve(UiText.Get, UiText.Format);
     }
 
     private static void FocusGoalSeekErrorField(

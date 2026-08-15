@@ -281,6 +281,19 @@ public static class PrintPreviewInstructionBuilder
                     cell.TextOrigin, cell.Bounds.Width, cell.Text, cell.Font, PageTextAlignment.Left));
         }
 
+        // 7b. Data Validation circles are a print-visible overlay above cell text and gridlines.
+        foreach (var cell in layout.Cells)
+        {
+            if (!cell.HasValidationCircle)
+                continue;
+
+            instructions.Add(PrintPreviewPaintInstruction.Ellipse(
+                ValidationCircleLayoutPlanner.CalculateEllipseBounds(cell.Bounds),
+                fill: null,
+                ValidationCircleLayoutPlanner.StrokeColor,
+                ValidationCircleLayoutPlanner.StrokeThickness));
+        }
+
         // 8. Charts over the grid/cell text.
         foreach (var chart in layout.Charts)
         {

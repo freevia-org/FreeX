@@ -18,15 +18,33 @@ namespace FreeX.App.Services;
 /// so the Avalonia view is pure UI and macOS inherits identical behaviour. The numeric validation mirrors
 /// the shared parser entry points below; the projection reuses the <see cref="AppOptions"/> normalizers.
 /// </para>
+///
+/// <para>
+/// <b>Cross-app dedup verdict (Options planning core, 2026-08): NOT duplication of the sister apps.</b>
+/// FreeW and FreeP share a real neutral core in <c>Free.Shared.AppServices</c>
+/// (<c>BasicApplicationOptionsDialogSession</c>, <c>ApplicationOptionsNormalizer</c>,
+/// <c>BasicApplicationOptionsSurfacePlanner</c>) because they edit the same three settings — a
+/// recent-files cap, a single-entry default-save-format picker, and a free-text UI-language override —
+/// on a one-page surface with one validation target. This planner shares the name and nothing else:
+/// FreeX has no recent-files cap and no UI-language picker on this dialog at all; its format field is an
+/// index&#8596;string mapping over two formats with a legacy <c>.json</c> migration rather than a choice
+/// list keyed by extension; its input record carries ~20 spreadsheet-specific fields (calculation mode,
+/// R1C1, sheet count, after-Enter direction, object display, gridlines/headings) with two numeric
+/// validation errors instead of one; and its OK path is a reload-and-diff-merge against the on-disk
+/// options document (<see cref="MergeOntoFreshLoad"/>) that exists because FreeX allows multiple windows
+/// over one whole-document store — a concern the sister apps do not have. Merging these would mean
+/// inventing a union type that no shell could consume without branching, so per the extraction rule in
+/// <c>docs/unification/DEDUP-EXHAUSTION-2026-08-09.md</c> ("file size or lexical equality alone is not a
+/// reason to extract") this stays local. Recorded here rather than as a forced merge, following the
+/// <c>SortDialogPlanner</c> precedent.
+/// </para>
 /// </summary>
 public static class OptionsDialogPlanner
 {
     public static ValidationPresentationDescriptor<OptionsValidationFocusTarget> DescribeInputError(
-        OptionsInputError error,
-        OptionsValidationTextProfile profile) =>
+        OptionsInputError error) =>
         OptionsValidationPresentationPlanner.DescribeGeneralInput(
-            error == OptionsInputError.InvalidFontSize,
-            profile);
+            error == OptionsInputError.InvalidFontSize);
 
     /// <summary>The fixed outer window width used by the WPF Options dialog.</summary>
     public const double WindowWidth = 760;

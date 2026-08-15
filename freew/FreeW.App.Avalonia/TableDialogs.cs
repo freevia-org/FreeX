@@ -169,7 +169,7 @@ internal sealed partial class TablePropertiesDialog : FreeWDialogWindow
     private static readonly TablePropertiesDialogVisualMetrics Layout =
         TablePropertiesDialogPlanner.VisualMetrics;
 
-    private static readonly AvaloniaCompactDialogChromeStyle DialogChromeStyle =
+    private static AvaloniaCompactDialogChromeStyle DialogChromeStyle =>
         AvaloniaCompactDialogChrome.WindowsStyle with
         {
             // WPF's standard action row keeps the two buttons 14px apart and does not

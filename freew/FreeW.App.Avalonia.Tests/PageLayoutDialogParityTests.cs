@@ -17,10 +17,11 @@ public sealed class PageLayoutDialogParityTests
     public void Mandatory_dialogs_share_planners_and_modal_lifecycle(string dialogName, string plannerName)
     {
         var source = ReadSource("PageLayoutDialogs.cs");
-        var start = source.IndexOf($"public sealed class {dialogName}", StringComparison.Ordinal);
+        var start = source.IndexOf($"class {dialogName}", StringComparison.Ordinal);
         start.Should().BeGreaterThanOrEqualTo(0);
-        var next = source.IndexOf("public sealed class ", start + 20, StringComparison.Ordinal);
-        var dialog = next < 0 ? source[start..] : source[start..next];
+        var declarationStart = source.LastIndexOf("public sealed ", start, StringComparison.Ordinal);
+        var next = source.IndexOf("public sealed ", start + dialogName.Length, StringComparison.Ordinal);
+        var dialog = next < 0 ? source[declarationStart..] : source[declarationStart..next];
 
         dialog.Should().Contain(plannerName);
         dialog.Should().Contain("PageLayoutDialogChrome.Actions(");
@@ -85,7 +86,22 @@ public sealed class PageLayoutDialogParityTests
         {
             definition.Should().Contain(id);
             workflow.Should().Contain($"new(\"{id}\", FreeWRibbonCommandAction.{action})");
-            (profile + renderer).Should().Contain($"FreeWRibbonCommandAction.{action}");
+            switch (action)
+            {
+                case "CustomParagraphSpacing":
+                    ReadPresentationSource(Path.Combine("Ribbon", "DesignRibbonWorkflow.cs"))
+                        .Should().Contain($"FreeWRibbonCommandAction.{action}");
+                    renderer.Should().Contain($"{action}: OptionalHostCommand(callbacks.Open{action}Dialog)");
+                    break;
+                case "DropCapOptions":
+                    ReadPresentationSource(Path.Combine("Ribbon", "DropCapRibbonWorkflow.cs"))
+                        .Should().Contain($"FreeWRibbonCommandAction.{action}");
+                    renderer.Should().Contain("Options: OptionalHostCommand(callbacks.OpenDropCapOptionsDialog)");
+                    break;
+                default:
+                    (profile + renderer).Should().Contain($"FreeWRibbonCommandAction.{action}");
+                    break;
+            }
         }
     }
 

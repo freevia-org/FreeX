@@ -373,19 +373,42 @@ public sealed partial class MainWindowSourceHygieneTests
         // Round 84 (dd5f3056c3) gave InsertNewSheet an optional insertBeforeSheetId parameter so a
         // sheet-tab context-menu "Insert" could insert before a specific tab, not just append.
         var insert = ExtractMethodSource(source, "private void InsertNewSheet(SheetId? insertBeforeSheetId = null)");
+        var dragMove = ExtractMethodSource(source, "private void CommitPendingSheetTabDragDrop()");
         var rename = ExtractMethodSource(source, "private void RenameSheet(");
-        var delete = ExtractMethodSource(source, "private void SheetCtxDelete_Click(");
+        var deleteRoute = ExtractMethodSource(source, "private void SheetCtxDelete_Click(");
+        var delete = ExtractMethodSource(source, "private void DeleteSheetsWithConfirmation(");
         var move = ExtractMethodSource(source, "private void MoveSheetTab(");
 
-        insert.Should().Contain("TryExecuteRepeatableCommand(");
-        rename.Should().Contain("TryExecuteCommand(new RenameSheetCommand");
+        insert.Should().Contain("_session.AddSheet(insertBeforeSheetId)");
+        insert.Should().Contain("CompleteWorksheetSessionCommand(");
+        insert.Should().NotContain("new AddSheetCommand");
+        insert.Should().NotContain("RecalculateWorkbook()");
+        dragMove.Should().Contain("_session.MoveActiveSheetTo(toIndex)");
+        dragMove.Should().Contain("CompleteWorksheetSessionCommand(");
+        dragMove.Should().NotContain("new MoveSheetCommand");
+        dragMove.Should().NotContain("RecalculateWorkbook()");
+        rename.Should().Contain("_session.RenameActiveSheet(name)");
+        rename.Should().Contain("CompleteWorksheetSessionCommand(");
+        rename.Should().NotContain("new RenameSheetCommand");
+        rename.Should().NotContain("RecalculateWorkbook()");
+        deleteRoute.Should().Contain("DeleteSheetsWithConfirmation(tab.Id)");
         delete.Should().Contain("SynchronizeWorkbookSessionSelection();");
         delete.Should().Contain("_session.DeleteSelectedSheets()");
+        delete.Should().Contain("foreach (var sheetId in selectedSheetIds)");
+        delete.Should().Contain("_currentSheetId = _session.ActiveSheet.Id;");
+        delete.Should().Contain("ApplyWorkbookSessionSelectionToRenderer();");
         delete.Should().NotContain("new RemoveSheetCommand");
-        move.Should().Contain("TryExecuteCommand(new MoveSheetCommand");
+        delete.Should().NotContain("_workbook.Sheets[0].Id");
+        delete.Should().NotContain("RecalculateWorkbook()");
+        move.Should().Contain("_session.MoveActiveSheetTo(toIndex)");
+        move.Should().Contain("_session.UngroupSheets()");
+        move.Should().Contain("CompleteWorksheetSessionCommand(");
+        move.Should().NotContain("new MoveSheetCommand");
+        move.Should().NotContain("RecalculateWorkbook()");
 
         insert.Should().NotContain("_commandBus.Execute");
         rename.Should().NotContain("_commandBus.Execute");
+        deleteRoute.Should().NotContain("_commandBus.Execute");
         delete.Should().NotContain("_commandBus.Execute");
         move.Should().NotContain("_commandBus.Execute");
     }

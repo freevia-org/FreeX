@@ -4,6 +4,7 @@ using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Platform;
 using Free.Shared.Shell;
 using Free.Shared.Shell.Avalonia;
+using FreeX.App.Presentation.Shell;
 using FreeX.App.Services;
 using FreeX.Core.Commands;
 using FreeX.Core.Model;
@@ -24,19 +25,11 @@ namespace FreeX.App.Avalonia;
 //    per-view WorkbookSessions over shared document state plus a local window registry, so model
 //    mutations and document state are visible to every sibling while selection/viewport/prompt
 //    state remains local and opening/replacing a document detaches one view.
-//  * HIDE: view.unhide is already wired (MainWindow.cs:732) but it maps to
-//    UnhideSheetAsync() -- that restores a hidden *worksheet*, NOT a hidden window.
-//    So there is no existing window-restore path to stay consistent with. To avoid
-//    stranding the user with an unrecoverable hidden window, Hide records hidden
-//    windows in a static registry and ArrangeAllWindows() re-shows every hidden
-//    window before tiling. Thus "Arrange All" is the reliable way back from "Hide",
-//    and Hide refuses to hide the last remaining visible window.
+//  * HIDE / UNHIDE: hidden workbook windows remain separate from worksheet visibility and from
+//    Arrange All. The Window-group Unhide dialog restores one explicitly selected window, matching
+//    WPF; Arrange All tiles visible workbook windows only and never changes hidden state.
 public sealed partial class MainWindow : Window
 {
-    // Tracks windows hidden via HideActiveWindow so ArrangeAllWindows can restore them.
-    // Static so any visible window's "Arrange All" can recover windows hidden elsewhere.
-    private static readonly List<Window> HiddenWindows = new();
-
     private IClassicDesktopStyleApplicationLifetime? DesktopLifetime =>
         Application.Current?.ApplicationLifetime as IClassicDesktopStyleApplicationLifetime;
 
@@ -50,6 +43,12 @@ public sealed partial class MainWindow : Window
     }
 
     public WorkbookId DocumentId => _session.Workbook.Id;
+
+    internal string WindowMenuDisplayName => WorkbookWindowSelectionPlanner.FormatDisplayName(
+        _session.Workbook.Name,
+        _windowTitleSuffix);
+
+    internal void RefreshWindowVisibilityCommandStates() => _refreshRibbonToggleStates?.Invoke();
 
     internal void ApplyWindowTitleSuffix(string suffix)
     {
@@ -150,29 +149,16 @@ public sealed partial class MainWindow : Window
 
     // View ▸ Window ▸ Arrange All ▸ Tiled / Horizontal / Vertical / Cascade.
     // Each submenu item runs SetWorkbookWindowArrangementCommand (persists the choice with
-    // undo/redo, parity with the WPF host) and then positions every visible top-level window
-    // using the shared, WPF-free ArrangeAllLayoutPlanner in Free.Shared.Shell. The planner is the
-    // single source of arrangement geometry for both the WPF and the cross-platform shells.
+    // undo/redo, parity with the WPF host) and then applies the shared registry core's visible-window
+    // target/geometry plan. Hidden workbook windows remain untouched until explicitly unhidden.
     private void ArrangeAllWindows(WorkbookWindowArrangement arrangement)
     {
-        // First, restore anything previously hidden so "Arrange All" is the reliable
-        // way back from "Hide".
-        if (HiddenWindows.Count > 0)
-        {
-            foreach (var hidden in HiddenWindows.ToArray())
-            {
-                if (!hidden.IsVisible)
-                    hidden.Show();
-            }
-
-            HiddenWindows.Clear();
-        }
-
-        var windows = AllTopLevelWindows
-            .Where(static w => w.IsVisible)
-            .ToList();
-
-        if (windows.Count == 0)
+        var (workArea, scaling) = GetPrimaryWorkAreaMetrics();
+        var targets = WindowRegistry.PlanVisibleArrangement(
+            arrangement,
+            AvaloniaWindowBoundsTranslator.PixelsToDips(workArea.Width, scaling),
+            AvaloniaWindowBoundsTranslator.PixelsToDips(workArea.Height, scaling));
+        if (targets.Count == 0)
         {
             RefreshShell(UiText.Get("WTA_ArrangeAll_NoWindows"));
             return;
@@ -186,23 +172,13 @@ public sealed partial class MainWindow : Window
             return;
         }
 
-        var (workArea, scaling) = GetPrimaryWorkAreaMetrics();
-        var bounds = ArrangeAllLayoutPlanner.Arrange(
-            (ShellWindowArrangement)arrangement,
-            AvaloniaWindowBoundsTranslator.PixelsToDips(workArea.Width, scaling),
-            AvaloniaWindowBoundsTranslator.PixelsToDips(workArea.Height, scaling),
-            windows.Count);
-
-        if (bounds.Count != windows.Count)
+        var tiles = AvaloniaWindowBoundsTranslator.Translate(
+            workArea,
+            scaling,
+            targets.Select(target => target.Bounds).ToArray());
+        for (var index = 0; index < targets.Count; index++)
         {
-            RefreshShell(UiText.Get("WTA_ArrangeAll_Failed"));
-            return;
-        }
-
-        var tiles = AvaloniaWindowBoundsTranslator.Translate(workArea, scaling, bounds);
-        for (var index = 0; index < windows.Count; index++)
-        {
-            var window = windows[index];
+            var window = targets[index].Window;
             var tile = tiles[index];
 
             // A maximized/full-screen window cannot be positioned; normalize first.
@@ -213,7 +189,7 @@ public sealed partial class MainWindow : Window
             window.Height = Math.Max(window.MinHeight, tile.Height);
         }
 
-        RefreshShell(UiText.Format("WTA_ArrangeAll_Arranged", windows.Count, ArrangementDisplayName(arrangement)));
+        RefreshShell(UiText.Format("WTA_ArrangeAll_Arranged", targets.Count, ArrangementDisplayName(arrangement)));
     }
 
     private static string ArrangementDisplayName(WorkbookWindowArrangement arrangement) => arrangement switch
@@ -227,30 +203,24 @@ public sealed partial class MainWindow : Window
     // view.hide
     private void HideActiveWindow()
     {
-        var visibleCount = AllTopLevelWindows.Count(static w => w.IsVisible);
-
-        // Hiding the last visible window with no on-screen way back would strand the
-        // user, since view.unhide restores worksheets, not windows.
-        if (visibleCount <= 1)
+        // Hiding the last visible window would strand the user because the Window-group Unhide
+        // command itself is available only from a visible workbook window.
+        if (!WindowRegistry.Hide(this))
         {
             RefreshShell(UiText.Get("ShellLoc_CannotHideLastWindow"));
             return;
         }
 
-        if (!HiddenWindows.Contains(this))
-            HiddenWindows.Add(this);
-
-        Hide();
+        SideBySideCoordinator.DisableFor(this);
+        WindowRegistry.NotifyVisibilityChanged(this);
         // The hidden window's own status bar is now off-screen; remaining visible
         // windows can recover it via View ▸ Arrange All.
     }
 
     protected override void OnClosed(EventArgs e)
     {
-        // A window hidden via View ▸ Hide must drop out of the static registry when it closes;
-        // otherwise the closed window (and its whole WorkbookSession/document graph) leaks for the
-        // rest of the session.
-        HiddenWindows.Remove(this);
+        // A closing window must drop out of the shared registry so it and its WorkbookSession
+        // document graph are no longer retained.
         _session.WorkbookChanged -= Session_WorkbookChanged;
         _fileOperationCancellationSession.Dispose();
         _session.Dispose();

@@ -23,14 +23,24 @@ public sealed class RibbonCommandIconPackagingTests
     [Fact]
     public void Canonical_command_icons_are_linked_for_Avalonia_output_and_publish()
     {
-        var project = XDocument.Load(FindRepositoryFile("freew", "FreeW.App.Avalonia", "FreeW.App.Avalonia.csproj"));
+        var projectPath = FindRepositoryFile("freew", "FreeW.App.Avalonia", "FreeW.App.Avalonia.csproj");
+        var project = XDocument.Load(projectPath);
+        var assetsImport = project
+            .Descendants("Import")
+            .Single(item => (string?)item.Attribute("Project") ==
+                @"..\FreeW.Ribbon.Definitions\FreeW.Ribbon.Assets.props");
+        var assetsPath = Path.GetFullPath(Path.Combine(
+            Path.GetDirectoryName(projectPath)!,
+            (string)assetsImport.Attribute("Project")!));
+        var assets = XDocument.Load(assetsPath);
+
         foreach (var include in new[]
         {
-            @"..\..\src\FreeX.Ribbon.Definitions\Resources\CommandIconsSvg\**\*.svg",
-            @"..\FreeW.Ribbon.Definitions\Resources\CommandIconsSvg\**\*.svg",
+            @"$(MSBuildThisFileDirectory)..\..\src\FreeX.Ribbon.Definitions\Resources\CommandIconsSvg\**\*.svg",
+            @"$(MSBuildThisFileDirectory)Resources\CommandIconsSvg\**\*.svg",
         })
         {
-            var canonicalIcons = project
+            var canonicalIcons = assets
                 .Descendants("Content")
                 .Single(item => (string?)item.Attribute("Include") == include);
 

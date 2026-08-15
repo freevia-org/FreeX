@@ -13,7 +13,8 @@ public sealed class SisterDialogTextResourceSourceTests
         source.Should().Contain("using FreeW.App.Presentation.Dialogs;");
         source.Should().Contain("InsertDialogTextResources.Hyperlink");
         source.Should().Contain("InsertDialogTextResources.Bookmark");
-        source.Should().Contain("InsertDialogTextResources.QuickPart");
+        source.Should().Contain("QuickPartCommandPlanner.ResolveText(UiText.Get)");
+        source.Should().Contain("Title = text.InsertTitle");
         source.Should().Contain("InsertDialogTextResources.OkButton");
         source.Should().NotContain("PlaceholderText = \"Text to display\"");
         source.Should().NotContain("Title = \"Insert Hyperlink\"");
@@ -41,12 +42,15 @@ public sealed class SisterDialogTextResourceSourceTests
     {
         var source = ReadAvaloniaSource("MainWindow.cs");
         var outputWorkflow = ReadPresentationSource("Shell", "FreeWOutputWorkflow.cs");
+        var fileCommandSession = ReadPresentationSource("Shell", "FreeWDocumentFileCommandSession.cs");
         var fragmentWorkflow = ReadPresentationSource(
             "DocumentFragments", "FreeWDocumentFragmentImportWorkflow.cs");
 
         source.Should().Contain("FreeWFileTextResources.Document");
         source.Should().Contain("FileText.OpenPickerTitle");
-        source.Should().Contain("FileText.SavePickerTitle");
+        source.Should().Contain("new FreeWDocumentFileCommandSession(");
+        source.Should().Contain("AvaloniaFilePickerSaveRequest.FromSavePlan(request.Title, savePlan)");
+        fileCommandSession.Should().Contain("_text.SavePickerTitle");
         source.Should().Contain("FreeWExportWorkflow.CreatePlan(");
         outputWorkflow.Should().Contain("FreeWFileTextResources.ExportPdfPickerTitle");
         outputWorkflow.Should().Contain("FreeWFileTextResources.ExportXpsPickerTitle");

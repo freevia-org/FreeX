@@ -14,18 +14,25 @@ public sealed class RibbonDialogAutomationOwnershipSourceTests
             "FreeW.App.Presentation",
             "Ribbon",
             "FreeWRibbonEditorExecutionProfile.cs");
+        var floatingObjectFactory = ReadSource(
+            "freew",
+            "FreeW.App.Presentation",
+            "Ribbon",
+            "FreeWRibbonFloatingObjectCommandFactory.cs");
 
         foreach (var source in new[] { wpf, avalonia })
         {
             source.Should().Contain("FreeWRibbonNumericValueParser.TryParseFontSize(");
-            source.Should().Contain("FreeWRibbonNumericValueParser.TryParseObjectPosition(");
-            source.Should().Contain("FreeWRibbonNumericValueParser.TryParseObjectSize(");
+            source.Should().NotContain("FreeWRibbonNumericValueParser.TryParseObjectPosition(");
+            source.Should().NotContain("FreeWRibbonNumericValueParser.TryParseObjectSize(");
             source.Should().NotContain("FreeWRibbonNumericValueParser.TryParseChartSize(");
             source.Should().NotContain("private static bool TryParsePosition(");
             source.Should().NotContain("private static bool TryParseSize(");
             source.Should().NotContain("private static bool TryParseChartSize(");
         }
 
+        floatingObjectFactory.Should().Contain("FreeWRibbonNumericValueParser.TryParseObjectPosition(");
+        floatingObjectFactory.Should().Contain("FreeWRibbonNumericValueParser.TryParseObjectSize(");
         profile.Should().Contain("FreeWRibbonNumericValueParser.TryParseChartSize(");
 
         wpf.Should().Contain("CultureInfo.CurrentCulture");

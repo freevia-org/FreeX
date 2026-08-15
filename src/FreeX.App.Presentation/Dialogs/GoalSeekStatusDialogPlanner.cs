@@ -4,12 +4,6 @@ using FreeX.App.Services;
 
 namespace FreeX.App.Presentation.Dialogs;
 
-public enum GoalSeekPresentationProfile
-{
-    Wpf,
-    Avalonia
-}
-
 public enum GoalSeekValidationFocusTarget
 {
     SetCell,
@@ -40,23 +34,17 @@ public static class GoalSeekStatusDialogPlanner
         converged ? ConvergedWindowHeight : NotConvergedWindowHeight;
 
     public static ValidationPresentationDescriptor<GoalSeekValidationFocusTarget> DescribeValidationError(
-        GoalSeekRequestParseResult result,
-        GoalSeekPresentationProfile profile) =>
-        profile == GoalSeekPresentationProfile.Wpf
-            ? DescribeWpfValidationError(result)
-            : DescribeAvaloniaValidationError(result);
+        GoalSeekRequestParseResult result) =>
+        DescribeValidationErrorCore(result);
 
     public static LocalizedTextDescriptor DescribeStatus(
         bool converged,
         double targetValue,
         double actualResult,
-        double foundValue,
-        GoalSeekPresentationProfile profile)
+        double foundValue)
     {
-        var format = profile == GoalSeekPresentationProfile.Wpf ? "G10" : "G12";
-        var culture = profile == GoalSeekPresentationProfile.Wpf
-            ? CultureInfo.InvariantCulture
-            : CultureInfo.CurrentCulture;
+        const string format = "G10";
+        var culture = CultureInfo.InvariantCulture;
         return LocalizedTextDescriptor.Resource(
             converged ? "GoalSeekStatus_SuccessSummary" : "GoalSeekStatus_FailureSummary",
             targetValue.ToString(format, culture),
@@ -82,7 +70,7 @@ public static class GoalSeekStatusDialogPlanner
                 _ => LocalizedTextDescriptor.Resource("GoalSeek_CouldNotComplete")
             };
 
-    private static ValidationPresentationDescriptor<GoalSeekValidationFocusTarget> DescribeWpfValidationError(
+    private static ValidationPresentationDescriptor<GoalSeekValidationFocusTarget> DescribeValidationErrorCore(
         GoalSeekRequestParseResult result) =>
         result.Error switch
         {
@@ -109,30 +97,4 @@ public static class GoalSeekStatusDialogPlanner
                 GoalSeekValidationFocusTarget.SetCell)
         };
 
-    private static ValidationPresentationDescriptor<GoalSeekValidationFocusTarget> DescribeAvaloniaValidationError(
-        GoalSeekRequestParseResult result) =>
-        result.Error switch
-        {
-            GoalSeekRequestParseError.SetCellRequired => new(
-                LocalizedTextDescriptor.Resource("GoalSeek_SetCellRequiredMessage"),
-                GoalSeekValidationFocusTarget.SetCell),
-            GoalSeekRequestParseError.InvalidSetCellAddress => new(
-                LocalizedTextDescriptor.Resource("GoalSeek_InvalidCellAddressMessage", result.InvalidText),
-                GoalSeekValidationFocusTarget.SetCell),
-            GoalSeekRequestParseError.InvalidTargetValue => new(
-                LocalizedTextDescriptor.Resource("GoalSeek_InvalidNumberMessage", result.InvalidText),
-                GoalSeekValidationFocusTarget.TargetValue),
-            GoalSeekRequestParseError.ChangingCellRequired => new(
-                LocalizedTextDescriptor.Resource("GoalSeek_ByChangingCellRequiredMessage"),
-                GoalSeekValidationFocusTarget.ChangingCell),
-            GoalSeekRequestParseError.InvalidChangingCellAddress => new(
-                LocalizedTextDescriptor.Resource("GoalSeek_InvalidCellAddressMessage", result.InvalidText),
-                GoalSeekValidationFocusTarget.ChangingCell),
-            GoalSeekRequestParseError.CellsMustDiffer => new(
-                LocalizedTextDescriptor.Resource("GoalSeek_CellsMustDifferMessage"),
-                GoalSeekValidationFocusTarget.ChangingCell),
-            _ => new(
-                LocalizedTextDescriptor.Resource("GoalSeek_RequestInvalid"),
-                GoalSeekValidationFocusTarget.SetCell)
-        };
 }

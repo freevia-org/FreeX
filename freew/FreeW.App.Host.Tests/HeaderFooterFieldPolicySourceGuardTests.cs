@@ -21,7 +21,7 @@ public sealed class HeaderFooterFieldPolicySourceGuardTests
         source.Should().Contain("FieldPickerDialogPlanner.Categories");
         source.Should().Contain("FieldPickerDialogPlanner.ChoicesForCategory(");
         source.Should().Contain("FieldPickerDialogPlanner.TryGetInstruction(");
-        source.Should().Contain("DocumentPropertyFieldPlanner.CommandPlans");
+        source.Should().Contain("QuickPartRibbonWorkflow.Register(");
     }
 
     [Fact]

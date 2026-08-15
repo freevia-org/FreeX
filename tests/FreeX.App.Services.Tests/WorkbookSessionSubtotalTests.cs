@@ -35,6 +35,7 @@ public sealed class WorkbookSessionSubtotalTests
         sheet.GetValue(4, 1).Should().Be(new TextValue("West"));
         sheet.GetValue(5, 2).Should().Be(new NumberValue(25));
         session.CanRedo.Should().BeTrue();
+
     }
 
     [Fact]
@@ -63,6 +64,59 @@ public sealed class WorkbookSessionSubtotalTests
         undo.Success.Should().BeTrue();
         sheet.GetValue(4, 1).Should().Be(new TextValue("East Total"));
         sheet.GetCell(Address(sheet, 4, 2))!.FormulaText.Should().Be("SUBTOTAL(9,B2:B3)");
+
+    }
+
+    [Fact]
+    public void ExecuteSubtotalOptions_RepeatLastAppliesSameOptionsToNewActiveSheet()
+    {
+        var workbook = CreateWorkbook();
+        var summary = workbook.Sheets.Single();
+        var details = workbook.AddSheet("Details");
+        SeedSubtotalRows(summary);
+        SeedSubtotalRows(details);
+        var session = CreateSession(workbook);
+        session.SelectRange(Range(summary, 1, 1, 5, 2));
+
+        session.ExecuteSubtotalOptions(CreateSumOptions()).Success.Should().BeTrue();
+        session.CanRepeatLastAction.Should().BeTrue();
+        session.SelectSheet(details.Id).Should().BeTrue();
+        session.SelectRange(Range(details, 1, 1, 5, 2));
+
+        var repeat = session.RepeatLastAction();
+
+        repeat.Success.Should().BeTrue();
+        summary.GetValue(4, 1).Should().Be(new TextValue("East Total"));
+        details.GetValue(4, 1).Should().Be(new TextValue("East Total"));
+        details.GetValue(8, 1).Should().Be(new TextValue("Grand Total"));
+    }
+
+    [Fact]
+    public void RemoveSelectedRangeSubtotals_RepeatLastRemovesFromNewActiveSheet()
+    {
+        var workbook = CreateWorkbook();
+        var summary = workbook.Sheets.Single();
+        var details = workbook.AddSheet("Details");
+        SeedSubtotalRows(summary);
+        SeedSubtotalRows(details);
+        var session = CreateSession(workbook);
+        session.SelectAllVisibleSheets();
+        session.SelectRange(Range(summary, 1, 1, 5, 2));
+        session.ExecuteSubtotalOptions(CreateSumOptions()).Success.Should().BeTrue();
+        session.SelectSheet(summary.Id).Should().BeTrue();
+        session.SelectRange(Range(summary, 1, 1, 8, 2));
+
+        session.RemoveSelectedRangeSubtotals().Success.Should().BeTrue();
+        session.CanRepeatLastAction.Should().BeTrue();
+        session.SelectSheet(details.Id).Should().BeTrue();
+        session.SelectRange(Range(details, 1, 1, 8, 2));
+
+        var repeat = session.RepeatLastAction();
+
+        repeat.Success.Should().BeTrue();
+        summary.GetValue(4, 1).Should().Be(new TextValue("West"));
+        details.GetValue(4, 1).Should().Be(new TextValue("West"));
+        details.GetValue(6, 1).Should().BeOfType<BlankValue>();
     }
 
     [Fact]

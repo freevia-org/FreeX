@@ -1,3 +1,4 @@
+using Free.Shared.Shell;
 using FreeX.Core.Model;
 
 namespace FreeX.App.Presentation.Shell;
@@ -15,16 +16,21 @@ public enum WorkbookWindowNotificationAudience
     AllExceptOrigin,
 }
 
+public sealed record WorkbookWindowArrangementTarget<TWindow>(
+    TWindow Window,
+    ShellRect Bounds);
+
 /// <summary>
 /// Renderer-neutral ownership of live workbook-window registration, document grouping, title
-/// numbering, notification audiences, and switch-window cycling. The registry deliberately holds
-/// strong references until <see cref="Unregister"/> so native shells retain their existing explicit
-/// close/unregister lifetime contract.
+/// numbering, visibility policy, notification audiences, and switch-window cycling. The registry
+/// deliberately holds strong references until <see cref="Unregister"/> so native shells retain
+/// their existing explicit close/unregister lifetime contract.
 /// </summary>
 public sealed class WorkbookWindowRegistryCore<TWindow>
     where TWindow : class
 {
     private readonly List<TWindow> _windows = [];
+    private readonly HashSet<TWindow> _hidden = [];
     private readonly Func<TWindow, WorkbookId> _documentId;
     private readonly Func<TWindow, bool> _isVisible;
     private readonly Action<TWindow, string> _applyTitleSuffix;
@@ -41,9 +47,13 @@ public sealed class WorkbookWindowRegistryCore<TWindow>
 
     public IReadOnlyList<TWindow> Windows => _windows;
 
-    public IReadOnlyList<TWindow> VisibleWindows => _windows.Where(_isVisible).ToArray();
+    public IReadOnlyList<TWindow> VisibleWindows => _windows.Where(IsVisible).ToArray();
+
+    public IReadOnlyList<TWindow> HiddenWindows => _windows.Where(_hidden.Contains).ToArray();
 
     public int Count => _windows.Count;
+
+    public int VisibleCount => _windows.Count(IsVisible);
 
     public bool HasWindows => _windows.Count > 0;
 
@@ -54,9 +64,32 @@ public sealed class WorkbookWindowRegistryCore<TWindow>
             return false;
 
         _windows.Add(window);
+        _hidden.Remove(window);
         RefreshWindowNumbering();
         return true;
     }
+
+    public bool IsVisible(TWindow? window) =>
+        window is not null
+        && _windows.Contains(window)
+        && !_hidden.Contains(window)
+        && _isVisible(window);
+
+    public bool CanHide(TWindow? window) =>
+        IsVisible(window) && VisibleCount > 1;
+
+    public bool Hide(TWindow? window)
+    {
+        if (!CanHide(window))
+            return false;
+
+        return _hidden.Add(window!);
+    }
+
+    public bool Unhide(TWindow? window) =>
+        window is not null
+        && _windows.Contains(window)
+        && _hidden.Remove(window);
 
     public bool Unregister(TWindow window)
     {
@@ -64,6 +97,7 @@ public sealed class WorkbookWindowRegistryCore<TWindow>
         if (!_windows.Remove(window))
             return false;
 
+        _hidden.Remove(window);
         RefreshWindowNumbering();
         return true;
     }
@@ -84,6 +118,36 @@ public sealed class WorkbookWindowRegistryCore<TWindow>
 
     public bool HasWindowForDocument(WorkbookId documentId) =>
         _windows.Any(candidate => _documentId(candidate) == documentId);
+
+    /// <summary>
+    /// Selects visible windows in registration order and pairs them with the shared Arrange All
+    /// geometry. Hidden windows are never returned, preserving the separate Hide/Unhide workflow.
+    /// </summary>
+    public IReadOnlyList<WorkbookWindowArrangementTarget<TWindow>> PlanVisibleArrangement(
+        ShellWindowArrangement arrangement,
+        double workAreaWidth,
+        double workAreaHeight,
+        Func<TWindow, bool>? include = null)
+    {
+        if (!Enum.IsDefined(arrangement))
+            return [];
+
+        var windows = _windows
+            .Where(IsVisible)
+            .Where(window => include?.Invoke(window) ?? true)
+            .ToArray();
+        var bounds = ArrangeAllLayoutPlanner.Arrange(
+            arrangement,
+            workAreaWidth,
+            workAreaHeight,
+            windows.Length);
+        if (bounds.Count != windows.Length)
+            return [];
+
+        return windows
+            .Select((window, index) => new WorkbookWindowArrangementTarget<TWindow>(window, bounds[index]))
+            .ToArray();
+    }
 
     public IReadOnlyList<TWindow> NotificationTargets(
         TWindow origin,
@@ -126,7 +190,7 @@ public sealed class WorkbookWindowRegistryCore<TWindow>
         if (!Enum.IsDefined(direction))
             throw new ArgumentOutOfRangeException(nameof(direction));
 
-        var visibleWindows = _windows.Where(_isVisible).ToList();
+        var visibleWindows = _windows.Where(IsVisible).ToList();
         if (visibleWindows.Count <= 1)
             return null;
 

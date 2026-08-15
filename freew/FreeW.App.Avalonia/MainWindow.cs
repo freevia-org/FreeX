@@ -142,7 +142,6 @@ public sealed partial class MainWindow : Window
     // Keep the prior continuous view so entering the alias does not change the user's view when it
     // is exited again (WPF restores the live editor that was underneath its page panel).
     private DocumentViewMode _viewModeBeforePagedEdit = DocumentViewMode.PrintLayout;
-    private bool _pagedEditModeBeforeOutline;
     private bool _outlineMode;
     private double _editorMaxWidthBeforeReadMode = double.PositiveInfinity;
     private HorizontalAlignment _editorAlignmentBeforeReadMode = HorizontalAlignment.Stretch;
@@ -302,8 +301,8 @@ public sealed partial class MainWindow : Window
             SaveDocument: () => _ = SaveAsync(),
             SaveDocumentAs: () => _ = SaveAsAsync(),
             PrintDocument: () => _ = PrintAsync(),
-            Find: () => OpenFindReplaceDialog(FindReplaceDialogOpenMode.Find),
-            Replace: () => OpenFindReplaceDialog(FindReplaceDialogOpenMode.Replace),
+            Find: () => OpenFindReplaceDialog(FindReplaceOpenMode.Find),
+            Replace: () => OpenFindReplaceDialog(FindReplaceOpenMode.Replace),
             Cut: () => _ = CutAsync(),
             Copy: () => _ = CopyAsync(),
             Paste: () => _ = PasteAsync(),
@@ -543,7 +542,7 @@ public sealed partial class MainWindow : Window
     /// brought to the front. Wired to <c>freew.find-replace-dialog</c> ribbon command and Ctrl+H.
     /// </summary>
     internal void OpenFindReplaceDialog(
-        FindReplaceDialogOpenMode openMode = FindReplaceDialogOpenMode.Find)
+        FindReplaceOpenMode openMode = FindReplaceOpenMode.Find)
     {
         if (_findReplaceDialog is not null)
         {
@@ -614,6 +613,9 @@ public sealed partial class MainWindow : Window
 
     private Task OpenCellShadingDialogAsync() =>
         CellShadingDialog.ShowAndApplyAsync(this, _editor);
+
+    private Task OpenCellBordersDialogAsync() =>
+        CellBordersDialog.ShowAndApplyAsync(this, _editor);
 
     private Task OpenSortDialogAsync() =>
         SortDialog.ShowAndApplyAsync(this, _editor);
@@ -1842,12 +1844,7 @@ public sealed partial class MainWindow : Window
             SetPrintLayout: () => SetViewMode(DocumentViewMode.PrintLayout),
             SetWebLayout:   () => SetViewMode(DocumentViewMode.WebLayout),
             SetDraftView:   () => SetViewMode(DocumentViewMode.Draft),
-            IsPrintLayoutActive: () => !_outlineMode && !_pagedEditMode &&
-                _editor.ViewMode == DocumentViewMode.PrintLayout,
-            IsWebLayoutActive: () => !_outlineMode && !_pagedEditMode &&
-                _editor.ViewMode == DocumentViewMode.WebLayout,
-            IsDraftViewActive: () => !_outlineMode && !_pagedEditMode &&
-                _editor.ViewMode == DocumentViewMode.Draft,
+            GetDocumentViewChecks: CurrentDocumentViewChecks,
             IsNavigationPaneVisible: () => _navPane.IsVisible,
             IsRevealFormattingVisible: () => _revealPane.IsVisible,
             IsReviewingPaneVisible: () => _reviewingPane.IsVisible,
@@ -1924,6 +1921,7 @@ public sealed partial class MainWindow : Window
             OpenCharacterBorderDialog: () => _ = OpenCharacterBorderDialogAsync(),
             OpenCharacterShadingDialog: () => _ = OpenCharacterShadingDialogAsync(),
             OpenCellShadingDialog: () => _ = OpenCellShadingDialogAsync(),
+            OpenCellBordersDialog: () => _ = OpenCellBordersDialogAsync(),
             OpenSortDialog: () => _ = OpenSortDialogAsync(),
             OpenZoomDialog: () => _ = OpenZoomDialogAsync(),
             OpenPrintPreview: () => _ = OpenPrintPreviewAsync(),
@@ -1938,7 +1936,6 @@ public sealed partial class MainWindow : Window
             ToggleSideToSide: ToggleSideToSide,
             IsSideToSideActive: () => _viewSession.CurrentDepth.IsSideToSideActive,
             TogglePagedEditView: TogglePagedEditView,
-            IsPagedEditViewActive: () => _pagedEditMode,
             // AV-INSERT2: Insert depth 2 dialog launchers (optional callbacks).
             OpenHyperlinkDialog: () => _ = OpenHyperlinkDialogAsync(),
             OpenEditHyperlinkDialog: () => _ = OpenEditHyperlinkDialogAsync(),
@@ -2690,12 +2687,12 @@ public sealed partial class MainWindow : Window
             return;
         }
 
-        if (_viewSession.CurrentDepth.Mode != FreeWViewDepthMode.LiveEditor)
+        var plan = _viewSession.EnterOutline(_pagedEditMode);
+        if (plan.ExitPageSurface)
             ApplyViewDepthTransition(_viewSession.RestoreLiveEditor(), updateStatus: false);
 
-        _pagedEditModeBeforeOutline = _pagedEditMode;
-        _pagedEditMode = false;
-        _outlineMode = true;
+        _pagedEditMode = plan.IsPagedEditMode;
+        _outlineMode = plan.IsOutlineMode;
         _workspace.Child = _outlineView;
         _outlineView.Refresh();
         UpdateViewModeButtons();
@@ -2708,8 +2705,9 @@ public sealed partial class MainWindow : Window
         if (!_outlineMode)
             return;
 
-        _outlineMode = false;
-        _pagedEditMode = restorePriorView && _pagedEditModeBeforeOutline;
+        var plan = _viewSession.LeaveOutline(restorePriorView);
+        _outlineMode = plan.IsOutlineMode;
+        _pagedEditMode = plan.IsPagedEditMode;
         if (_liveWorkspaceContent is not null)
             _workspace.Child = _liveWorkspaceContent;
         UpdateViewModeButtons();
@@ -2744,15 +2742,18 @@ public sealed partial class MainWindow : Window
 
     private void UpdateViewModeButtons()
     {
-        var plan = _viewSession.BuildDocumentViewChecks(
-            _editor.ViewMode,
-            _outlineMode,
-            _pagedEditMode);
+        var plan = CurrentDocumentViewChecks();
         ApplyStatusToggleState(_printLayoutSwitch, plan.PrintLayout);
         ApplyStatusToggleState(_webLayoutSwitch, plan.WebLayout);
         ApplyStatusToggleState(_draftSwitch, plan.Draft);
         ApplyStatusToggleState(_pagedEditSwitch, plan.PagedEdit);
     }
+
+    private FreeWDocumentViewCheckPlan CurrentDocumentViewChecks() =>
+        _viewSession.BuildDocumentViewChecks(
+            _editor.ViewMode,
+            _outlineMode,
+            _pagedEditMode);
 
     private static void ApplyStatusToggleState(ToggleButton toggle, bool isChecked)
     {
@@ -3442,8 +3443,7 @@ public sealed partial class MainWindow : Window
 
     /// <summary>Pick a file and insert it as a Word-compatible generic OLE Package.</summary>
     private Task InsertEmbeddedObjectAsync() => ExecuteDocumentFragmentImportAsync(
-        FreeWDocumentFragmentImportPlanner.CreateEmbeddedObjectRequest(
-            FreeWDocumentFragmentHostProfile.Avalonia));
+        FreeWDocumentFragmentImportPlanner.CreateEmbeddedObjectRequest());
 
     private async Task OpenSymbolPickerAsync()
     {
@@ -3571,14 +3571,10 @@ public sealed partial class MainWindow : Window
         if (!_editor.IsCaretOnHyperlink())
             return;
 
-        var links = _editor.HyperlinksAtCaret();
-        var target = links.Count > 0
-            ? links[0].Url ?? (links[0].Anchor is { Length: > 0 } anchor ? "#" + anchor : string.Empty)
-            : string.Empty;
         var dialog = new HyperlinkDialog(
-            initialDisplay: _editor.SelectedText,
-            initialAddress: target,
-            title: InsertDialogTextResources.Hyperlink.EditTitle);
+            initialDisplay: _editor.HyperlinkDisplayTextAtCaret(),
+            initialAddress: _editor.HyperlinkTargetAtCaret(),
+            mode: HyperlinkDialogMode.Edit);
         await dialog.ShowDialog(this);
         if (dialog.Address is { } address)
             _editor.EditHyperlink(address, dialog.DisplayText);
@@ -3630,11 +3626,15 @@ public sealed partial class MainWindow : Window
     /// </summary>
     private async Task OpenLinkBookmarkDialogAsync()
     {
-        var names = _editor.BookmarkNames();
-        if (names.Count == 0)
+        var presentation = LinkBookmarkDialogPlanner.Build(_editor.BookmarkNames());
+        if (presentation.IsEmpty)
+        {
+            await FreeWInfoDialog.ShowAsync(this, presentation.EmptyMessage, presentation.EmptyTitle);
+            _editor.Focus();
             return;
+        }
 
-        var dialog = new LinkBookmarkDialog(names);
+        var dialog = new LinkBookmarkDialog(presentation);
         await dialog.ShowDialog(this);
         if (dialog.BookmarkName is { } bookmark)
             _editor.ApplyInternalLink(bookmark);
@@ -3719,8 +3719,7 @@ public sealed partial class MainWindow : Window
     /// Wired to <c>freew.text-from-file</c> (Insert -> Text).
     /// </summary>
     private Task InsertTextFromFileAsync() => ExecuteDocumentFragmentImportAsync(
-        FreeWDocumentFragmentImportPlanner.CreateTextFromFileRequest(
-            FreeWDocumentFragmentHostProfile.Avalonia));
+        FreeWDocumentFragmentImportPlanner.CreateTextFromFileRequest());
 
     private async Task ExecuteDocumentFragmentImportAsync(FreeWDocumentFragmentImportRequest request)
     {

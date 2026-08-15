@@ -78,23 +78,23 @@ public sealed partial class MainWindow
 
     private async Task ShowUnhideWindowParityDialogAsync()
     {
-        var hidden = new Window
-        {
-            Title = "Parity Demo:2",
-            Width = 320,
-            Height = 200,
-            ShowInTaskbar = false,
-        };
+        var hidden = new MainWindow(
+            App.StartupArguments,
+            _session.CreateSiblingView(InitialViewportHeight, InitialViewportWidth),
+            _optionsRuntimeSession);
         hidden.Show();
-        hidden.Hide();
-        HiddenWindows.Add(hidden);
+        if (!WindowRegistry.Hide(hidden))
+        {
+            hidden.Close();
+            throw new InvalidOperationException("Unable to create the hidden workbook-window capture state.");
+        }
+
         try
         {
             await ShowUnhideWindowDialogAsync();
         }
         finally
         {
-            HiddenWindows.Remove(hidden);
             hidden.Close();
         }
     }
@@ -1542,12 +1542,11 @@ public sealed partial class MainWindow
             new CellAddress(sheetId, 2, 3),
             5000d,
             new CellAddress(sheetId, 2, 5));
-        var result = WorkbookGoalSeekResult.AppliedResult(
+        var proposal = WorkbookGoalSeekProposal.Ready(
             request,
-            new GoalSeekResult(true, 125d, 5000d, 7),
-            new WorkbookCellEditResult(true, null, [request.ChangingCell], null));
+            new GoalSeekResult(true, 125d, 5000d, 7));
 
-        return ShowGoalSeekStatusDialogAsync(result);
+        return ShowGoalSeekStatusDialogAsync(proposal);
     }
 
     private Task ShowDataTableParityDialogAsync() =>

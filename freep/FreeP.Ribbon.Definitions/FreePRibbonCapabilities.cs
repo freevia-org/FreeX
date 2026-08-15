@@ -40,7 +40,6 @@ internal enum FreePRibbonHomeGroupId
 internal sealed record FreePRibbonProfile(
     IReadOnlyList<FreePRibbonHomeGroupId> HomeGroups,
     IReadOnlyDictionary<FreePRibbonHomeGroupId, int> HomeGroupPriorities,
-    Func<string> NewSlideKeyTip,
     Func<string> SlideShowGroupKeyTip,
     RibbonCommandIconKind SlideShowFromCurrentSlideIcon,
     bool IncludeAnimationSeparators,
@@ -67,7 +66,6 @@ internal sealed record FreePRibbonProfile(
             [FreePRibbonHomeGroupId.Edit] = 75,
             [FreePRibbonHomeGroupId.Editing] = 70,
         },
-        NewSlideKeyTip: () => FreePRibbonText.NewSlideKeyTip,
         SlideShowGroupKeyTip: () => FreePRibbonText.SlideShowGroupWpfKeyTip,
         SlideShowFromCurrentSlideIcon: RibbonCommandIconKind.Previous,
         IncludeAnimationSeparators: true,
@@ -94,7 +92,6 @@ internal sealed record FreePRibbonProfile(
             [FreePRibbonHomeGroupId.Edit] = 80,
             [FreePRibbonHomeGroupId.Editing] = 75,
         },
-        NewSlideKeyTip: () => FreePRibbonText.NewSlideAvaloniaKeyTip,
         SlideShowGroupKeyTip: () => FreePRibbonText.SlideShowGroupWpfKeyTip,
         SlideShowFromCurrentSlideIcon: RibbonCommandIconKind.Previous,
         IncludeAnimationSeparators: false,

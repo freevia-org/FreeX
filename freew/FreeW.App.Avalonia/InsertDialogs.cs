@@ -24,14 +24,12 @@ public sealed class HyperlinkDialog : FreeWDialogWindow
     private readonly TextBox _displayBox = new()
     {
         MinWidth = 280,
-        PlaceholderText = InsertDialogTextResources.Hyperlink.DisplayPlaceholder,
         Margin = new Thickness(0, 6, 0, 0),
     };
 
     private readonly TextBox _addressBox = new()
     {
         MinWidth = 280,
-        PlaceholderText = InsertDialogTextResources.Hyperlink.AddressPlaceholder,
         Margin = new Thickness(0, 6, 0, 0),
     };
 
@@ -44,34 +42,40 @@ public sealed class HyperlinkDialog : FreeWDialogWindow
     /// </summary>
     public string? Address { get; private set; }
 
-    public HyperlinkDialog(string? initialDisplay = null, string? initialAddress = null, string? title = null)
+    public HyperlinkDialog(
+        string? initialDisplay = null,
+        string? initialAddress = null,
+        HyperlinkDialogMode mode = HyperlinkDialogMode.Insert)
     {
-        Title = title ?? InsertDialogTextResources.Hyperlink.Title;
+        var presentation = HyperlinkDialogPlanner.Build(mode, initialDisplay, initialAddress);
+        Title = presentation.Title;
         Width = 420;
         SizeToContent = SizeToContent.Height;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
         CanResize = false;
         ShowInTaskbar = false;
 
-        _displayBox.Text = initialDisplay ?? string.Empty;
-        _addressBox.Text = initialAddress ?? string.Empty;
+        _displayBox.Text = presentation.InitialDisplayText;
+        _displayBox.PlaceholderText = presentation.DisplayPlaceholder;
+        _addressBox.Text = presentation.InitialAddress;
+        _addressBox.PlaceholderText = presentation.AddressPlaceholder;
         AvaloniaCompactDialogChrome.ApplyTextBox(_displayBox, InsertDialogLayout.ChromeStyle);
         AvaloniaCompactDialogChrome.ApplyTextBox(_addressBox, InsertDialogLayout.ChromeStyle);
 
         var grid = new Grid { Margin = new Thickness(14, 12, 14, 0) };
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-        InsertDialogLayout.AddLabeledRow(grid, 0, InsertDialogTextResources.Hyperlink.DisplayLabel, _displayBox);
-        InsertDialogLayout.AddLabeledRow(grid, 1, InsertDialogTextResources.Hyperlink.AddressLabel, _addressBox);
+        InsertDialogLayout.AddLabeledRow(grid, 0, presentation.DisplayLabel, _displayBox);
+        InsertDialogLayout.AddLabeledRow(grid, 1, presentation.AddressLabel, _addressBox);
 
         var buttons = InsertDialogLayout.OkCancelRow(
             ok: () =>
             {
-                var addr = _addressBox.Text?.Trim();
-                if (string.IsNullOrEmpty(addr))
-                    return; // address is required; keep the dialog open
-                DisplayText = _displayBox.Text?.Trim();
-                Address = addr;
+                var acceptance = HyperlinkDialogPlanner.PlanAcceptance(_displayBox.Text, _addressBox.Text);
+                if (!acceptance.IsAccepted)
+                    return;
+                DisplayText = acceptance.DisplayText;
+                Address = acceptance.Address;
                 Close();
             },
             cancel: Close);
@@ -94,7 +98,6 @@ public sealed class ScreenTipDialog : FreeWDialogWindow
     private readonly TextBox _tipBox = new()
     {
         MinWidth = 280,
-        PlaceholderText = InsertDialogTextResources.ScreenTip.Placeholder,
         Margin = new Thickness(0, 6, 0, 0),
     };
 
@@ -103,25 +106,27 @@ public sealed class ScreenTipDialog : FreeWDialogWindow
 
     public ScreenTipDialog(string? initialTip = null)
     {
-        Title = InsertDialogTextResources.ScreenTip.Title;
+        var presentation = ScreenTipDialogPlanner.Build(initialTip);
+        Title = presentation.Title;
         Width = 380;
         SizeToContent = SizeToContent.Height;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
         CanResize = false;
         ShowInTaskbar = false;
 
-        _tipBox.Text = initialTip ?? string.Empty;
+        _tipBox.Text = presentation.InitialScreenTip;
+        _tipBox.PlaceholderText = presentation.Placeholder;
         AvaloniaCompactDialogChrome.ApplyTextBox(_tipBox, InsertDialogLayout.ChromeStyle);
 
         var grid = new Grid { Margin = new Thickness(14, 12, 14, 0) };
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-        InsertDialogLayout.AddLabeledRow(grid, 0, InsertDialogTextResources.ScreenTip.Label, _tipBox);
+        InsertDialogLayout.AddLabeledRow(grid, 0, presentation.Label, _tipBox);
 
         var buttons = InsertDialogLayout.OkCancelRow(
             ok: () =>
             {
-                ScreenTip = _tipBox.Text?.Trim() ?? string.Empty;
+                ScreenTip = ScreenTipDialogPlanner.PlanAcceptance(_tipBox.Text);
                 Close();
             },
             cancel: Close);
@@ -222,52 +227,57 @@ public sealed class BookmarkDialog : FreeWDialogWindow
 /// </summary>
 public sealed class LinkBookmarkDialog : FreeWDialogWindow
 {
-    private readonly ComboBox _existing = new()
+    private readonly LinkBookmarkDialogPresentation _presentation;
+    private readonly ListBox _existing = new()
     {
-        MinWidth = 260,
-        Margin = new Thickness(0, 6, 0, 0),
+        MinWidth = 280,
+        MinHeight = 120,
     };
 
     /// <summary>The chosen bookmark name, or null when cancelled.</summary>
     public string? BookmarkName { get; private set; }
 
-    public LinkBookmarkDialog(IReadOnlyList<string> existingNames)
+    public LinkBookmarkDialog()
+        : this(LinkBookmarkDialogPlanner.Build([]))
     {
-        ArgumentNullException.ThrowIfNull(existingNames);
+    }
 
-        Title = InsertDialogTextResources.LinkBookmark.Title;
+    public LinkBookmarkDialog(LinkBookmarkDialogPresentation presentation)
+    {
+        ArgumentNullException.ThrowIfNull(presentation);
+        _presentation = presentation;
+
+        Title = presentation.Title;
         Width = 380;
         SizeToContent = SizeToContent.Height;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
         CanResize = false;
         ShowInTaskbar = false;
 
-        _existing.ItemsSource = existingNames;
-        if (existingNames.Count > 0)
-            _existing.SelectedIndex = 0;
-        _existing.IsEnabled = existingNames.Count > 0;
-        AvaloniaCompactDialogChrome.ApplyComboBox(_existing, InsertDialogLayout.ChromeStyle);
+        _existing.ItemsSource = presentation.BookmarkNames;
+        _existing.SelectedIndex = presentation.SelectedIndex;
+        _existing.IsEnabled = !presentation.IsEmpty;
+        _existing.DoubleTapped += (_, _) => Accept();
+        AvaloniaCompactDialogChrome.ApplyListBox(_existing, InsertDialogLayout.ChromeStyle);
 
-        var grid = new Grid { Margin = new Thickness(14, 12, 14, 0) };
-        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-        InsertDialogLayout.AddLabeledRow(grid, 0, InsertDialogTextResources.LinkBookmark.BookmarkLabel, _existing);
-
-        var linkButton = InsertDialogLayout.MakeButton(InsertDialogTextResources.LinkBookmark.LinkButton, (_, _) =>
+        var body = new StackPanel { Margin = new Thickness(14, 12, 14, 12) };
+        body.Children.Add(new TextBlock
         {
-            if (_existing.SelectedItem is string s && !string.IsNullOrWhiteSpace(s))
-            {
-                BookmarkName = s;
-                Close();
-            }
+            Text = presentation.BookmarkLabel,
+            Margin = new Thickness(0, 0, 0, 6),
         });
-        var closeButton = InsertDialogLayout.MakeButton(InsertDialogTextResources.LinkBookmark.CloseButton, (_, _) => Close());
-        var btnRow = AvaloniaCompactDialogChrome.CreateActionRow([linkButton, closeButton], new Thickness(14, 12, 14, 12));
+        body.Children.Add(_existing);
+        body.Children.Add(InsertDialogLayout.OkCancelRow(Accept, Close));
+        Content = body;
+    }
 
-        var outer = new StackPanel();
-        outer.Children.Add(grid);
-        outer.Children.Add(btnRow);
-        Content = outer;
+    private void Accept()
+    {
+        if (LinkBookmarkDialogPlanner.PlanAcceptance(_presentation, _existing.SelectedIndex) is not { } bookmark)
+            return;
+
+        BookmarkName = bookmark;
+        Close();
     }
 }
 
