@@ -54,6 +54,29 @@ public sealed class AnimationPaneSessionTests
         session.PlaybackWorkflowEvidence.Should().BeNull();
     }
 
+    [Fact]
+    public void ResetSelection_BeforeSlideNavigationRefresh_DoesNotCarryAPlaybackStartRow()
+    {
+        var editor = CreateEditorWithTwoAnimatedSlides();
+        var session = new AnimationPaneSession(() => editor);
+
+        session.SelectAnimation(1).SelectedIndex.Should().Be(1);
+
+        editor.SelectSlide(1);
+        session.ResetSelection();
+        var timeline = session.Refresh();
+
+        timeline.SelectedIndex.Should().Be(-1);
+        timeline.PlaybackControls
+            .Single(control => control.Kind == AnimationPanePlaybackControlKind.PlayFromSelected)
+            .Should().Match<AnimationPanePlaybackControlDescriptor>(control =>
+                !control.IsEnabled && control.StartAnimationIndex == null);
+
+        var transition = session.ExecutePlayback(AnimationPanePlaybackControlKind.PlayFromSelected);
+        transition.ShouldStartPreview.Should().BeFalse();
+        transition.Playback.StartAnimationIndex.Should().BeNull();
+    }
+
     private static EditingSession CreateEditor()
     {
         var presentation = Presentation.CreateEmpty();
@@ -77,5 +100,29 @@ public sealed class AnimationPaneSessionTests
             DurationMs = 750,
         });
         return new EditingSession(presentation, new PresentationCommandBus(presentation));
+    }
+
+    private static EditingSession CreateEditorWithTwoAnimatedSlides()
+    {
+        var editor = CreateEditor();
+        var second = new Slide();
+        second.Shapes.Add(new SlideShape { Id = 11, Name = "Second slide first" });
+        second.Shapes.Add(new SlideShape { Id = 12, Name = "Second slide second" });
+        second.Animations.Add(new ShapeAnimation
+        {
+            ShapeId = 11,
+            Kind = AnimationKind.Entrance,
+            Preset = AnimationPreset.Appear,
+            DurationMs = 400,
+        });
+        second.Animations.Add(new ShapeAnimation
+        {
+            ShapeId = 12,
+            Kind = AnimationKind.Entrance,
+            Preset = AnimationPreset.Fade,
+            DurationMs = 600,
+        });
+        editor.Presentation.Slides.Add(second);
+        return editor;
     }
 }

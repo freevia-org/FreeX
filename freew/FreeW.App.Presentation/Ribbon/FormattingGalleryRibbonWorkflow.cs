@@ -10,7 +10,10 @@ public sealed record FormattingGalleryRibbonPorts(
     Action<string?> ApplyCharacterShading,
     Action<string?> ApplyCharacterBorderColor,
     Action<string?> ApplyHighlightColor,
-    Action<string> ApplyNamedStyle);
+    Action<string> ApplyNamedStyle,
+    Action<string> PreviewNamedStyle,
+    Action CancelNamedStylePreview,
+    Action<string> CommitNamedStylePreview);
 
 /// <summary>
 /// Owns the command identity and payload mapping for Home-tab formatting palettes and the
@@ -42,7 +45,9 @@ public static class FormattingGalleryRibbonWorkflow
             var captured = descriptor;
             registry.Register(
                 StyleCommandId(captured.Id),
-                Prepared(() => ports.ApplyNamedStyle(captured.Id)));
+                captured.Type == StyleType.Paragraph
+                    ? new PreviewableNamedStyleCommand(captured.Id, ports)
+                    : Prepared(() => ports.ApplyNamedStyle(captured.Id)));
         }
 
         void RegisterPalette(
@@ -66,6 +71,21 @@ public static class FormattingGalleryRibbonWorkflow
         {
             prepare();
             execute();
+        }
+    }
+
+    private sealed class PreviewableNamedStyleCommand(
+        string styleId,
+        FormattingGalleryRibbonPorts ports) : IRibbonPreviewCommand
+    {
+        public void BeginPreview(RibbonCommandContext context) => ports.PreviewNamedStyle(styleId);
+
+        public void CancelPreview() => ports.CancelNamedStylePreview();
+
+        public void Execute(RibbonCommandContext context)
+        {
+            ports.CommitNamedStylePreview(styleId);
+            ports.PrepareExecution();
         }
     }
 }

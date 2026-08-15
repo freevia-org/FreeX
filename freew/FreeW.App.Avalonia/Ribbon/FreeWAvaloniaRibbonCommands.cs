@@ -175,7 +175,10 @@ internal static class FreeWAvaloniaRibbonCommands
                         ? null
                         : new ParagraphBorder(hex, 0.5) { LineStyle = BorderLineStyle.Single }),
                 ApplyHighlightColor: hex => editor.SetHighlightColor(hex),
-                ApplyNamedStyle: styleId => editor.ApplyNamedStyle(styleId)));
+                ApplyNamedStyle: styleId => editor.ApplyNamedStyle(styleId),
+                PreviewNamedStyle: editor.PreviewParagraphStyle,
+                CancelNamedStylePreview: editor.CancelParagraphStylePreview,
+                CommitNamedStylePreview: editor.CommitParagraphStylePreview));
 
         // Clear style — revert the paragraph to the document default (Word's paragraph-level reset).
         r.Bind(FreeWRibbonCommandAction.StyleClear, new ActionRibbonCommand(editor.ClearParagraphStyle));

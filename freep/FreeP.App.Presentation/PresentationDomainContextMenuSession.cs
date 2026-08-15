@@ -25,6 +25,8 @@ public enum PresentationDomainContextActionKind
     FormatChartText,
     FormatChartArea,
     OpenChartOptions,
+    DistributeTableRows,
+    DistributeTableColumns,
     InsertTableRowAbove,
     InsertTableRowBelow,
     InsertTableColumnLeft,
@@ -375,7 +377,8 @@ public sealed class PresentationDomainContextMenuSession
             : PresentationTableStructureActionDispatcher.CanExecute(kind, state);
 
     private static bool IsTableAction(PresentationDomainContextActionKind kind) =>
-        kind >= PresentationDomainContextActionKind.InsertTableRowAbove;
+        kind == PresentationDomainContextActionKind.SetTableColumnWidth
+        || PresentationTableStructureActionDispatcher.IsSupported(kind);
 
     private static PresentationDomainContextMenuEntryPlan TableCommand(
         string text,

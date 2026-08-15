@@ -139,6 +139,55 @@ public sealed class WorkbookSideBySideCoordinatorTests
     }
 
     [Fact]
+    public void DisableIfAny_ReconcilesArrangedPairButIgnoresUnrelatedWindows()
+    {
+        var coordinator = new WorkbookSideBySideCoordinator<Window>();
+        var primary = new Window();
+        var partner = new Window();
+        var unrelated = new Window();
+        coordinator.Enable(primary, partner);
+        coordinator.SetSynchronousScroll(true);
+
+        coordinator.DisableIfAny([unrelated]).Should().BeFalse();
+        coordinator.IsActive.Should().BeTrue();
+        coordinator.IsSynchronousScrollActive.Should().BeTrue();
+
+        coordinator.DisableIfAny([unrelated, partner]).Should().BeTrue();
+        coordinator.IsActive.Should().BeFalse();
+        coordinator.IsSynchronousScrollActive.Should().BeFalse();
+    }
+
+    [Theory]
+    [InlineData(1, false, false, false, false, false, false, false, false)]
+    [InlineData(2, false, false, false, true, false, false, false, false)]
+    [InlineData(3, true, false, false, false, false, false, false, false)]
+    [InlineData(2, true, true, false, true, true, true, true, false)]
+    [InlineData(2, true, true, true, true, true, true, true, true)]
+    public void CommandStatePlanner_UsesRegisteredWorkbookCountAndRequesterOwnership(
+        int visibleWorkbookWindows,
+        bool anyPairActive,
+        bool requesterInPair,
+        bool synchronousForRequester,
+        bool viewEnabled,
+        bool viewChecked,
+        bool resetEnabled,
+        bool syncEnabled,
+        bool syncChecked)
+    {
+        WorkbookSideBySideCommandStatePlanner.Build(
+                visibleWorkbookWindows,
+                anyPairActive,
+                requesterInPair,
+                synchronousForRequester)
+            .Should().Be(new WorkbookSideBySideCommandStatePlan(
+                viewEnabled,
+                viewChecked,
+                resetEnabled,
+                syncEnabled,
+                syncChecked));
+    }
+
+    [Fact]
     public void BothRenderersUseRequesterScopedSideBySidePolicy()
     {
         var root = TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeX.slnx");
@@ -162,14 +211,24 @@ public sealed class WorkbookSideBySideCoordinatorTests
             "src",
             "FreeX.App.Avalonia",
             "MainWindow.RibbonMenuWires.cs"));
+        var avaloniaWindowManagement = File.ReadAllText(Path.Combine(
+            root,
+            "src",
+            "FreeX.App.Avalonia",
+            "MainWindow.WindowManagement.cs"));
 
         wpfMultiWindow.Should().Contain("ResetSideBySidePair(this,");
         wpfMultiWindow.Should().Contain("DisableSideBySideFor(this)");
         wpfMultiWindow.Should().Contain("SetSynchronousScrollFor(");
-        wpfViewCommands.Should().Contain("IsSideBySideActiveFor(this)");
-        wpfViewCommands.Should().Contain("IsSynchronousScrollActiveFor(this)");
+        wpfViewCommands.Should().Contain("WorkbookSideBySideCommandStatePlanner.Build(");
         avaloniaSideBySide.Should().Contain("SideBySideCoordinator.DisableFor(this)");
         avaloniaSideBySide.Should().Contain("ToggleSynchronousScrollFor(this)");
+        avaloniaSideBySide.Should().Contain("WindowRegistry.VisibleWindows");
+        avaloniaSideBySide.Should().Contain("WindowRegistry.VisibleCount");
+        avaloniaSideBySide.Should().Contain("WorkbookSideBySideCommandStatePlanner.Build(");
+        avaloniaSideBySide.Should().Contain("SideBySideCoordinator.DisableIfAny(arrangedWindows)");
+        avaloniaSideBySide.Should().NotContain("DesktopLifetime?.Windows");
+        avaloniaWindowManagement.Should().Contain("ReconcileSideBySideAfterWindowArrangement(");
         avaloniaReset.Should().Contain("SideBySideCoordinator.TryGetPairFor(this,");
         avaloniaReset.Should().Contain("primary.TileThisWindowToWorkArea(tiles[0])");
         avaloniaReset.Should().NotContain("WindowResetPositionPlanner.Compute(");

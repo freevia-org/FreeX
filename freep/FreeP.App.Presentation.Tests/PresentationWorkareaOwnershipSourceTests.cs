@@ -83,6 +83,37 @@ public sealed class PresentationWorkareaOwnershipSourceTests
     }
 
     [Fact]
+    public void BothRenderersProjectAnimationPaneLifecycleFromTheSharedWorkareaSession()
+    {
+        var root = TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeP.slnx");
+        var wpfMain = Read(root, "freep", "FreeP.App.Host", "MainWindow.cs");
+        var wpfPane = Read(root, "freep", "FreeP.App.Host", "AnimationPane.cs");
+
+        foreach (var endpoint in new[]
+                 {
+                     Read(root, "freep", "FreeP.App.Host", "MainWindow.WorkareaEndpoint.cs"),
+                     Read(root, "freep", "FreeP.App.Avalonia", "MainWindow.WorkareaEndpoint.cs"),
+                 })
+        {
+            endpoint.Should().Contain("ResetAnimationSession =")
+                .And.Contain("ResetAnimationSelection =")
+                .And.Contain("RefreshAnimationPaneAfterEditorChanged =")
+                .And.Contain("RefreshAnimationPaneAfterNavigation =")
+                .And.Contain("RefreshAnimationPaneAfterSelection =")
+                .And.Contain("RefreshAnimationPaneAfterPresentationChanged =");
+        }
+
+        wpfMain.Should().Contain("private readonly AnimationPaneSession _animationPaneSession;")
+            .And.Contain("_animationPaneSession = new(() => Editor);")
+            .And.Contain("new AnimationPane(")
+            .And.Contain("_animationPaneSession,");
+        wpfPane.Should().Contain("AnimationPaneSession session")
+            .And.NotContain("new AnimationPaneSession(")
+            .And.NotContain("CurrentSlideChanged +=")
+            .And.NotContain("Changed             +=");
+    }
+
+    [Fact]
     public void PortableWorkareaHasNoRendererDependenciesAndOwnsOperationPlans()
     {
         var root = TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeP.slnx");

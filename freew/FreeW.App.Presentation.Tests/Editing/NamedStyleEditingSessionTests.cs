@@ -7,6 +7,86 @@ namespace FreeW.App.Presentation.Tests.Editing;
 public sealed class NamedStyleEditingSessionTests
 {
     [Fact]
+    public void ParagraphStylePreviewSwitchesAgainstOneBaselineAndCancelsWithoutUndo()
+    {
+        var document = LinkedDocument("first", "second", "third");
+        document.Styles["Quote"] = new DocumentStyle
+        {
+            Id = "Quote",
+            Name = "Quote",
+            Type = StyleType.Paragraph,
+        };
+        ((Paragraph)document.Blocks[0]).StyleId = "Quote";
+        var session = new DocumentEditingSession();
+        session.LoadDocument(document);
+        var target = new NamedStyleApplicationTarget(
+            [Range(0, 0, 5), Range(1, 0, 6)],
+            [0, 1],
+            HasTextSelection: true);
+
+        session.ParagraphStylePreview.Preview("Heading1", target).Should().BeTrue();
+        document.Blocks.Cast<Paragraph>().Select(paragraph => paragraph.StyleId)
+            .Should().Equal("Heading1", "Heading1", null);
+
+        session.ParagraphStylePreview.Preview("Quote", Target(false, Range(2, 0, 5)))
+            .Should().BeTrue();
+        document.Blocks.Cast<Paragraph>().Select(paragraph => paragraph.StyleId)
+            .Should().Equal(
+                ["Quote", "Quote", null],
+                "later hovers must reuse the original selection and baseline");
+
+        var cancelledTarget = session.ParagraphStylePreview.Cancel();
+
+        cancelledTarget.Should().BeEquivalentTo(target);
+        document.Blocks.Cast<Paragraph>().Select(paragraph => paragraph.StyleId)
+            .Should().Equal("Quote", null, null);
+        session.ParagraphStylePreview.HasActivePreview.Should().BeFalse();
+        session.Commands.CanUndo.Should().BeFalse();
+    }
+
+    [Fact]
+    public void ParagraphStylePreviewCommitRestoresBaselineAndUsesCapturedLinkedStyleTarget()
+    {
+        var document = LinkedDocument("alpha", "bravo");
+        var session = new DocumentEditingSession();
+        session.LoadDocument(document);
+        var target = Target(hasTextSelection: true, Range(0, 1, 4));
+
+        session.ParagraphStylePreview.Preview("Heading1", target).Should().BeTrue();
+        ((Paragraph)document.Blocks[0]).StyleId.Should().Be("Heading1");
+
+        var committed = session.ParagraphStylePreview.Commit("Heading1");
+
+        committed.Should().NotBeNull();
+        committed!.Target.Should().BeEquivalentTo(target);
+        committed.Application.Should().NotBeNull();
+        committed.Application!.Kind.Should().Be(NamedStyleApplicationKind.Character);
+        ((Paragraph)document.Blocks[0]).StyleId.Should().BeNull(
+            "the linked character side must commit after restoring the paragraph preview");
+        StyledText((Paragraph)document.Blocks[0]).Should().Be("lph");
+        session.Commands.Undo().Should().BeTrue();
+        StyledText((Paragraph)document.Blocks[0]).Should().BeEmpty();
+    }
+
+    [Fact]
+    public void LoadingAnotherDocumentCancelsParagraphStylePreviewBeforeReplacement()
+    {
+        var original = LinkedDocument("original");
+        var replacement = LinkedDocument("replacement");
+        var session = new DocumentEditingSession();
+        session.LoadDocument(original);
+        session.ParagraphStylePreview.Preview(
+            "Heading1",
+            Target(hasTextSelection: false, Range(0, 0, 0))).Should().BeTrue();
+
+        session.LoadDocument(replacement);
+
+        ((Paragraph)original.Blocks[0]).StyleId.Should().BeNull();
+        ((Paragraph)replacement.Blocks[0]).StyleId.Should().BeNull();
+        session.ParagraphStylePreview.HasActivePreview.Should().BeFalse();
+    }
+
+    [Fact]
     public void ApplyNamedStyle_LinkedStyleFormatsExactCrossParagraphRangesAsOneUndoStep()
     {
         var document = LinkedDocument("alpha", "bravo");
@@ -171,6 +251,12 @@ public sealed class NamedStyleEditingSessionTests
             StringComparison.Ordinal));
         rendererSources.Should().OnlyContain(source => !source.Contains(
             "CommitUndoGroup(\"Apply Character Style\")",
+            StringComparison.Ordinal));
+        rendererSources.Should().OnlyContain(source => source.Contains(
+            "_editingSession.ParagraphStylePreview",
+            StringComparison.Ordinal));
+        rendererSources.Should().OnlyContain(source => !source.Contains(
+            "_styleStyleIdSnapshot",
             StringComparison.Ordinal));
     }
 

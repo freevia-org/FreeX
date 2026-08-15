@@ -126,6 +126,8 @@ public sealed class PresentationDomainSurfaceSessionTests
     }
 
     [Theory]
+    [InlineData(PresentationDomainContextActionKind.DistributeTableRows)]
+    [InlineData(PresentationDomainContextActionKind.DistributeTableColumns)]
     [InlineData(PresentationDomainContextActionKind.InsertTableRowAbove)]
     [InlineData(PresentationDomainContextActionKind.InsertTableRowBelow)]
     [InlineData(PresentationDomainContextActionKind.InsertTableColumnLeft)]
@@ -142,6 +144,10 @@ public sealed class PresentationDomainSurfaceSessionTests
         var shape = editor.InsertTable(2, 2);
         editor.Select(shape.Id);
         editor.SetActiveTableCell(0, 0);
+        if (kind == PresentationDomainContextActionKind.DistributeTableRows)
+            editor.TryApplyActiveTableRowHeight(914_400).Should().BeTrue();
+        if (kind == PresentationDomainContextActionKind.DistributeTableColumns)
+            editor.TryApplyActiveTableColumnWidth(1_371_600).Should().BeTrue();
         if (kind == PresentationDomainContextActionKind.SplitTableCell)
             editor.TryMergeActiveTableCell().Should().BeTrue();
 
@@ -445,10 +451,9 @@ public sealed class PresentationDomainSurfaceSessionTests
     }
 
     private static string TableStructureSignature(SlideShape shape) =>
-        string.Join(
-            ";",
-            shape.Table!.Rows.Select((row, rowIndex) =>
-                $"{rowIndex}:{string.Join(",", row.Cells.Select(cell => cell.GridSpan))}"));
+        $"rows={string.Join(";", shape.Table!.Rows.Select((row, rowIndex) =>
+            $"{rowIndex}:{row.HeightEmu}:{string.Join(",", row.Cells.Select(cell => cell.GridSpan))}"))}"
+        + $"|columns={string.Join(",", shape.Table.ColumnWidthsEmu)}";
 
     private static string FindWorkspaceRoot() =>
         TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeP.slnx");

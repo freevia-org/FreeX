@@ -62,6 +62,21 @@ public sealed class WorkbookSideBySideCoordinator<TWindow>
         return true;
     }
 
+    /// <summary>
+    /// Disables the active pair when at least one of its members is included in a broader native
+    /// window operation such as Arrange All. Unrelated window sets leave the pair and synchronous
+    /// scrolling intact.
+    /// </summary>
+    public bool DisableIfAny(IEnumerable<TWindow> windows)
+    {
+        ArgumentNullException.ThrowIfNull(windows);
+        if (!windows.Any(Contains))
+            return false;
+
+        Disable();
+        return true;
+    }
+
     public bool Contains(TWindow window)
     {
         ArgumentNullException.ThrowIfNull(window);

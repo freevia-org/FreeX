@@ -33,6 +33,8 @@ public sealed partial class MainWindow
                 InsertAudio = () => _ = InsertMediaFromFileAsync(isVideo: false),
 #endif
                 OpenTablePicker = OpenTablePicker,
+                ExecuteTableStructureAction = kind =>
+                    _domainContextMenuSession.ExecuteCurrentTableAction(kind, TryExecuteInlineTableAction),
                 MergeTableCells = () =>
                 {
                     _domainContextMenuSession.ExecuteCurrentTableAction(

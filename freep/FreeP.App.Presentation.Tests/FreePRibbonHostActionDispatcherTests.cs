@@ -46,6 +46,36 @@ public sealed class FreePRibbonHostActionDispatcherTests
     }
 
     [Fact]
+    public void Dispatch_PreservesTypedTableStructureEndpointOutcome()
+    {
+        PresentationDomainContextActionKind? received = null;
+        var endpoints = new FreePRibbonHostActionEndpoints
+        {
+            ExecuteTableStructureAction = kind =>
+            {
+                received = kind;
+                return false;
+            },
+        };
+
+        FreePRibbonHostActionDispatcher.Dispatch(
+                new FreePRibbonHostAction(
+                    FreePRibbonHostActionKind.ExecuteTableStructureAction,
+                    PresentationDomainContextActionKind.DeleteTableRow),
+                endpoints)
+            .Should().BeFalse("the native editor declined the command");
+        received.Should().Be(PresentationDomainContextActionKind.DeleteTableRow);
+
+        FreePRibbonHostActionDispatcher.Dispatch(
+                new FreePRibbonHostAction(
+                    FreePRibbonHostActionKind.ExecuteTableStructureAction,
+                    "DeleteTableRow"),
+                endpoints)
+            .Should().BeFalse();
+        received.Should().Be(PresentationDomainContextActionKind.DeleteTableRow);
+    }
+
+    [Fact]
     public void EndpointCatalog_RemainsExhaustiveForHostActionKinds()
     {
         var endpointNames = typeof(FreePRibbonHostActionEndpoints)

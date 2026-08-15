@@ -159,6 +159,7 @@ public sealed partial class DocumentView : RichTextBox
 
     private DocumentCommandBus _commands => _editingSession.Commands;
     private DocumentDesignEditingCoordinator DesignEdits => _editingSession.Design;
+    private DocumentParagraphStylePreviewSession ParagraphStylePreviews => _editingSession.ParagraphStylePreview;
     private DocumentParagraphFormattingCoordinator ParagraphEdits => _editingSession.Paragraphs;
     private DocumentObjectEditingCoordinator ObjectEdits => _editingSession.Objects;
     private DocumentTableEditingCoordinator TableEdits => _editingSession.Tables;
@@ -1134,88 +1135,50 @@ public sealed partial class DocumentView : RichTextBox
     //
     // The Styles / Themes galleries preview a choice while the pointer hovers a swatch and revert it
     // when the pointer leaves (unless the user clicks, which commits through the normal reversible
-    // path). Preview deliberately bypasses the undo/redo bus: the shared DesignEdits coordinator owns
-    // the exact model baseline and restoration, while this renderer only commits pending native edits and
-    // redraws. Commit (the real apply) is a separate, reversible operation the gallery triggers on click —
-    // preview only ever shows, never persists.
-
-    // Snapshot of the paragraph StyleIds a style preview overwrote (model index -> prior style id).
-    private Dictionary<int, string?>? _styleStyleIdSnapshot;
-
-    // The model paragraph indices a style-preview session targets. Captured from the selection when the
-    // session starts (first hover) and reused for every subsequent hover, so re-rendering between hovers
-    // (which clears the editor selection) doesn't make later previews target nothing.
-    private IReadOnlyList<int>? _stylePreviewTargets;
-
-    // Exact body selection/caret captured before a style hover re-renders the FlowDocument. The click
-    // restores this range so linked paragraph styles can apply their character side to the original text.
-    private (int StartBlock, int StartOffset, int EndBlock, int EndOffset, bool HasTextSelection)?
-        _stylePreviewSelection;
+    // path). Preview deliberately bypasses the undo/redo bus: shared Presentation sessions own the exact
+    // model baselines, frozen style target, and restoration, while this renderer only commits pending
+    // native edits, translates selection coordinates, restores native selection, and redraws.
 
     /// <summary>
-    /// Preview a paragraph style on the current selection without committing: snapshot the selected
-    /// paragraphs' current <see cref="ModelParagraph.StyleId"/>, set the previewed id on each, and
-    /// re-render so the style's formatting shows. <see cref="EndStylePreview"/> restores them. A no-op
-    /// for an unknown style id. Used by the Styles gallery's hover live-preview.
+    /// Preview a paragraph style on the current selection without committing. The shared preview session
+    /// freezes the first-hover model target and restores its exact baseline between choices; this adapter
+    /// only translates the native selection and redraws.
     /// </summary>
     public void PreviewParagraphStyle(string? styleId)
     {
-        if (styleId is { Length: > 0 } && !_model.Styles.ContainsKey(styleId))
-            return;
-
-        // Re-baseline against the committed model: on the first hover of a session commit pending edits
-        // and capture the target paragraphs from the selection; on a subsequent hover revert the prior
-        // preview and reuse the captured targets (the re-render between hovers clears the selection).
-        if (_styleStyleIdSnapshot is null)
+        NamedStyleApplicationTarget target;
+        if (!ParagraphStylePreviews.HasActivePreview)
         {
-            _stylePreviewSelection = CaptureStylePreviewSelection();
+            var selection = CaptureStylePreviewSelection();
             CommitToModel();
-            _stylePreviewTargets = SelectedModelParagraphIndices();
+            target = selection is { } captured
+                ? CreateNamedStyleApplicationTarget(captured, SelectedModelParagraphIndices())
+                : CreateNamedStyleApplicationTarget(
+                    SelectedVisibleTextRange(),
+                    SelectedModelParagraphIndices(),
+                    hasTextSelection: false);
+        }
+        else if (ParagraphStylePreviews.ActiveTarget is { } activeTarget)
+        {
+            target = activeTarget;
         }
         else
         {
-            RestoreStylePreview();
+            return;
         }
 
-        var snapshot = new Dictionary<int, string?>();
-        foreach (var index in _stylePreviewTargets ?? [])
-        {
-            if (index >= 0 && index < _model.Blocks.Count && _model.Blocks[index] is ModelParagraph paragraph)
-            {
-                snapshot[index] = paragraph.StyleId;
-                paragraph.StyleId = styleId;
-            }
-        }
-
-        _styleStyleIdSnapshot = snapshot;
-        Render();
+        if (ParagraphStylePreviews.Preview(styleId, target))
+            Render();
     }
 
     /// <summary>Revert a style preview started by <see cref="PreviewParagraphStyle"/> and re-render. No-op if none is active.</summary>
     public void EndStylePreview()
     {
-        if (_styleStyleIdSnapshot is null)
+        if (ParagraphStylePreviews.Cancel() is not { } target)
             return;
-        var previewSelection = _stylePreviewSelection;
-        RestoreStylePreview();
-        _stylePreviewTargets = null;
-        _stylePreviewSelection = null;
-        Render();
-        if (previewSelection is { } selection)
-            RestoreStylePreviewSelection(selection);
-    }
 
-    // Restore previewed paragraph style ids from the snapshot (without re-rendering).
-    private void RestoreStylePreview()
-    {
-        if (_styleStyleIdSnapshot is null)
-            return;
-        foreach (var (index, styleId) in _styleStyleIdSnapshot)
-        {
-            if (index >= 0 && index < _model.Blocks.Count && _model.Blocks[index] is ModelParagraph paragraph)
-                paragraph.StyleId = styleId;
-        }
-        _styleStyleIdSnapshot = null;
+        Render();
+        RestoreStylePreviewSelection(target);
     }
 
     /// <summary>
@@ -3474,49 +3437,39 @@ public sealed partial class DocumentView : RichTextBox
         if (styleId is { Length: > 0 } && !_model.Styles.ContainsKey(styleId))
             return;
 
-        var targets = _stylePreviewTargets;
-        var previewSelection = _stylePreviewSelection;
-        if (_styleStyleIdSnapshot is not null)
+        if (styleId is { Length: > 0 }
+            && ParagraphStylePreviews.Commit(styleId) is { } committed)
         {
-            RestoreStylePreview();
             Render();
-        }
-        _stylePreviewTargets = null;
-        _stylePreviewSelection = null;
-
-        if (styleId is { Length: > 0 } && previewSelection is { } selection)
-        {
-            var result = _editingSession.ApplyNamedStyle(
-                styleId,
-                CreateNamedStyleApplicationTarget(selection, targets ?? []));
+            var result = committed.Application;
             if (result is not null)
             {
                 if (result.RequiresRendererProjection
-                    && RestoreStylePreviewSelection(selection))
+                    && RestoreStylePreviewSelection(committed.Target))
                 {
                     ApplyRunFormattingToSelection(result.ProjectCharacterFormatting(
                         CaptureSelectionRunFormatting()));
                 }
                 else if (result.Kind == NamedStyleApplicationKind.Character)
                 {
-                    RestoreStylePreviewSelection(selection);
+                    RestoreStylePreviewSelection(committed.Target);
                 }
-                return;
             }
-        }
-
-        if (targets is null || targets.Count == 0)
-        {
-            if (styleId is { Length: > 0 })
-                ApplyNamedStyle(styleId);
-            else
-                SetParagraphStyle(null);
             return;
         }
 
-        Focus();
-        CommitToModel();
-        ApplyParagraphStyleToIndices(styleId, targets);
+        if (ParagraphStylePreviews.Cancel() is { } target)
+        {
+            Render();
+            if (styleId is null)
+                _editingSession.SetParagraphStyles(target.ParagraphIndices, null);
+            return;
+        }
+
+        if (styleId is { Length: > 0 })
+            ApplyNamedStyle(styleId);
+        else
+            SetParagraphStyle(null);
     }
 
     // Apply a paragraph style id to the given model paragraph indices, one reversible command each.
@@ -4466,11 +4419,15 @@ public sealed partial class DocumentView : RichTextBox
             startBlock != endBlock || range.Value.StartOffset != range.Value.EndOffset);
     }
 
-    private bool RestoreStylePreviewSelection(
-        (int StartBlock, int StartOffset, int EndBlock, int EndOffset, bool HasTextSelection) selection)
+    private bool RestoreStylePreviewSelection(NamedStyleApplicationTarget target)
     {
-        var start = TextPointerAtModelTextOffset(selection.StartBlock, selection.StartOffset);
-        var end = TextPointerAtModelTextOffset(selection.EndBlock, selection.EndOffset);
+        if (target.TextRanges.Count == 0)
+            return false;
+
+        var first = target.TextRanges[0].Normalize();
+        var last = target.TextRanges[^1].Normalize();
+        var start = TextPointerAtModelTextOffset(first.Start.BlockIndex, first.Start.Offset);
+        var end = TextPointerAtModelTextOffset(last.End.BlockIndex, last.End.Offset);
         if (start is null || end is null)
             return false;
 

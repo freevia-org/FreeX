@@ -279,6 +279,7 @@ public sealed partial class DocumentView : Control
     private TextDocument _doc => _editingSession.Document;
     private DocumentCommandBus _bus => _editingSession.Commands;
     private DocumentDesignEditingCoordinator DesignEdits => _editingSession.Design;
+    private DocumentParagraphStylePreviewSession ParagraphStylePreviews => _editingSession.ParagraphStylePreview;
     private DocumentParagraphFormattingCoordinator ParagraphEdits => _editingSession.Paragraphs;
     private DocumentObjectEditingCoordinator ObjectEdits => _editingSession.Objects;
     private DocumentTableEditingCoordinator TableEdits => _editingSession.Tables;
@@ -21336,6 +21337,75 @@ public sealed partial class DocumentView : Control
         if (result.RequiresRendererProjection)
             ApplyRunFormatting(result.ProjectCharacterFormatting);
         return result.RequestedStyleId;
+    }
+
+    /// <summary>Previews a Home &gt; Styles gallery choice through the shared transient transaction.</summary>
+    public void PreviewParagraphStyle(string styleId)
+    {
+        var target = ParagraphStylePreviews.ActiveTarget ?? CurrentNamedStyleApplicationTarget();
+        if (!ParagraphStylePreviews.Preview(styleId, target))
+            return;
+
+        ClearBitmapCache();
+        InvalidateLayoutAndVisual();
+    }
+
+    /// <summary>Restores the exact pre-hover paragraph styles without adding an undo entry.</summary>
+    public void CancelParagraphStylePreview()
+    {
+        if (ParagraphStylePreviews.Cancel() is null)
+            return;
+
+        ClearBitmapCache();
+        InvalidateLayoutAndVisual();
+    }
+
+    /// <summary>Commits a Styles gallery choice to the target captured by the first hover.</summary>
+    public void CommitParagraphStylePreview(string styleId)
+    {
+        var hadActivePreview = ParagraphStylePreviews.HasActivePreview;
+        var committed = ParagraphStylePreviews.Commit(styleId);
+        if (committed is null)
+        {
+            if (!hadActivePreview)
+                ApplyNamedStyle(styleId);
+            return;
+        }
+
+        ClearBitmapCache();
+        InvalidateLayoutAndVisual();
+        if (committed.Application is not { } result)
+            return;
+
+        if (result.Kind == NamedStyleApplicationKind.Character)
+            RestoreNamedStyleApplicationTarget(committed.Target);
+        if (result.RequiresRendererProjection)
+            ApplyRunFormatting(result.ProjectCharacterFormatting);
+    }
+
+    private NamedStyleApplicationTarget CurrentNamedStyleApplicationTarget()
+    {
+        var selection = NormalizedSelection();
+        return new NamedStyleApplicationTarget(
+            BodyTextRanges(selection),
+            SelectedParagraphIndices(),
+            HasTextSelection: selection is not null,
+            CanApplyCharacterFormatting: !IsEditingLocked);
+    }
+
+    private void RestoreNamedStyleApplicationTarget(NamedStyleApplicationTarget target)
+    {
+        if (target.TextRanges.Count == 0)
+            return;
+
+        var first = target.TextRanges[0].Normalize();
+        var last = target.TextRanges[^1].Normalize();
+        _selectionAnchor = new DocPosition(first.Start.BlockIndex, first.Start.Offset);
+        _caret = new DocPosition(last.End.BlockIndex, last.End.Offset);
+        _cellCaret = null;
+        _cellAnchor = null;
+        InvalidateVisual();
+        CaretMoved?.Invoke();
     }
 
     // ---- AV-DESIGN: Design-tab document mutations -----------------------------------------------

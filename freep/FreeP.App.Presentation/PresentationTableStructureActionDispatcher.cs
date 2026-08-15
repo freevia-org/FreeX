@@ -33,7 +33,9 @@ public static class PresentationTableCellOwnedActionDispatcher
 public static class PresentationTableStructureActionDispatcher
 {
     public static bool IsSupported(PresentationDomainContextActionKind kind) => kind is
-        PresentationDomainContextActionKind.InsertTableRowAbove
+        PresentationDomainContextActionKind.DistributeTableRows
+        or PresentationDomainContextActionKind.DistributeTableColumns
+        or PresentationDomainContextActionKind.InsertTableRowAbove
         or PresentationDomainContextActionKind.InsertTableRowBelow
         or PresentationDomainContextActionKind.InsertTableColumnLeft
         or PresentationDomainContextActionKind.InsertTableColumnRight
@@ -46,6 +48,8 @@ public static class PresentationTableStructureActionDispatcher
         PresentationDomainContextActionKind kind,
         TableCellEditState state) => kind switch
     {
+        PresentationDomainContextActionKind.DistributeTableRows
+            or PresentationDomainContextActionKind.DistributeTableColumns => state.HasActiveCell,
         PresentationDomainContextActionKind.InsertTableRowAbove
             or PresentationDomainContextActionKind.InsertTableRowBelow => state.CanInsertRow,
         PresentationDomainContextActionKind.InsertTableColumnLeft
@@ -76,6 +80,10 @@ public static class PresentationTableStructureActionDispatcher
 
         return kind switch
         {
+            PresentationDomainContextActionKind.DistributeTableRows =>
+                editor.TryDistributeActiveTableRows(),
+            PresentationDomainContextActionKind.DistributeTableColumns =>
+                editor.TryDistributeActiveTableColumns(),
             PresentationDomainContextActionKind.InsertTableRowAbove =>
                 editor.TryInsertActiveTableRowAbove(),
             PresentationDomainContextActionKind.InsertTableRowBelow =>
