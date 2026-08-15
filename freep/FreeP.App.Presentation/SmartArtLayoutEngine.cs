@@ -3568,7 +3568,7 @@ public static class SmartArtLayoutEngine
         }
 
         if (visibleData.Nodes.Count != 2)
-            return LayoutTopDownHierarchy(visibleData, fx, fy, fcx, fcy, stylePlan, "Hierarchy3");
+            return LayoutHorizontalHierarchy(visibleData, fx, fy, fcx, fcy, stylePlan);
 
         var rootW = Math.Max((long)(fcx * 0.25243), 1L);
         var rootH = Math.Max((long)(fcy * 0.28572), 1L);
