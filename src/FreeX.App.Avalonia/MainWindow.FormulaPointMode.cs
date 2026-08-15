@@ -97,6 +97,11 @@ public sealed partial class MainWindow
 
     private bool TryRouteFormulaPointModeKey(Key key)
     {
+        // A local edit owns its Enter/Escape/F4 lifecycle even when it is in Edit mode rather
+        // than Point mode. Only a window with no edit of its own may forward these keys.
+        if (_session.FormulaEditAddress is not null)
+            return false;
+
         var command = _formulaRangeEditingSession.GetRoutedPointModeCommand(
             FormulaBarAvaloniaInputAdapter.ToFormulaEditorKey(key),
             GetFormulaRangeEntryEditor() is not null,
