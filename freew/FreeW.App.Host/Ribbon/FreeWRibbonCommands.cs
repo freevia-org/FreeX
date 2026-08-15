@@ -1611,7 +1611,7 @@ internal static class FreeWRibbonCommands
                 TablePropertiesDialog.Prompt(Window.GetWindow(editor), context)),
             ApplyPropertiesOutcome: editor.ApplyTableProperties,
             ShowTableToTextDialogAsync: () => ValueTask.FromResult(
-                DelimiterDialog.Ask(
+                TableTextConversionDialog.Ask(
                     Window.GetWindow(editor),
                     TableTextConversionDialogPlanner.ResolveText(UiText.Get).TableToTextTitle)),
             ApplyTableToTextOutcome: editor.ConvertTableToText);
@@ -2525,7 +2525,7 @@ internal static class FreeWRibbonCommands
         public void Execute(RibbonCommandContext context)
         {
             editor.Focus();
-            var dims = DrawTableDimensionPicker.Ask(
+            var dims = DrawTableDimensionDialog.Ask(
                 Window.GetWindow(editor),
                 DrawTableDimensionDialogKind.DrawTable);
             if (dims is null)
@@ -2541,13 +2541,13 @@ internal static class FreeWRibbonCommands
         public void Execute(RibbonCommandContext context)
         {
             editor.Focus();
-            var dimensions = DrawTableDimensionPicker.Ask(
+            var dimensions = DrawTableDimensionDialog.Ask(
                 Window.GetWindow(editor),
                 DrawTableDimensionDialogKind.SplitCells);
             if (dimensions is not { } value)
                 return;
             editor.Focus();
-            editor.SplitCell(value.Rows, value.Cols);
+            editor.SplitCell(value.Rows, value.Columns);
         }
     }
 
@@ -2559,57 +2559,6 @@ internal static class FreeWRibbonCommands
         {
             editor.Focus();
             editor.EraseTableBorderAtCaret();
-        }
-    }
-
-    // A tiny modal dialog letting the user choose rows × columns for Draw Table.
-    private static class DrawTableDimensionPicker
-    {
-        public static (int Rows, int Cols)? Ask(
-            Window? owner,
-            DrawTableDimensionDialogKind kind)
-        {
-            var plan = DrawTableCommandPlanner.BuildDialog(kind, UiText.Get);
-            (int Rows, int Cols)? result = null;
-
-            var rowsBox = new System.Windows.Controls.TextBox { Text = plan.DefaultRows.ToString(), MinWidth = 60, Margin = new Thickness(0, 0, 0, 8) };
-            var colsBox = new System.Windows.Controls.TextBox { Text = plan.DefaultColumns.ToString(), MinWidth = 60, Margin = new Thickness(0, 0, 0, 8) };
-            var ok     = new System.Windows.Controls.Button { Content = plan.OkLabel,     IsDefault = true, MinWidth = 72, Margin = new Thickness(0, 0, 8, 0) };
-            var cancel = new System.Windows.Controls.Button { Content = plan.CancelLabel, IsCancel = true,  MinWidth = 72 };
-
-            var dialog = new Window
-            {
-                Title = plan.Title,
-                SizeToContent = SizeToContent.WidthAndHeight,
-                ResizeMode = ResizeMode.NoResize,
-                WindowStartupLocation = WindowStartupLocation.CenterOwner,
-                Owner = owner,
-                ShowInTaskbar = false
-            };
-
-            ok.Click += (_, _) =>
-            {
-                result = DrawTableCommandPlanner.Normalize(rowsBox.Text, colsBox.Text);
-                dialog.DialogResult = true;
-            };
-
-            var closeRow = new System.Windows.Controls.StackPanel
-            {
-                Orientation = System.Windows.Controls.Orientation.Horizontal,
-                HorizontalAlignment = HorizontalAlignment.Right
-            };
-            closeRow.Children.Add(ok);
-            closeRow.Children.Add(cancel);
-
-            var panel = new System.Windows.Controls.StackPanel { Margin = new Thickness(16) };
-            panel.Children.Add(new System.Windows.Controls.TextBlock { Text = plan.RowsLabel, Margin = new Thickness(0, 0, 0, 4) });
-            panel.Children.Add(rowsBox);
-            panel.Children.Add(new System.Windows.Controls.TextBlock { Text = plan.ColumnsLabel, Margin = new Thickness(0, 0, 0, 4) });
-            panel.Children.Add(colsBox);
-            panel.Children.Add(closeRow);
-            dialog.Content = panel;
-
-            return dialog.ShowDialog() == true ? result : null;
         }
     }
 
@@ -7544,74 +7493,12 @@ internal static class FreeWRibbonCommands
         public void Execute(RibbonCommandContext context)
         {
             editor.Focus();
-            if (DelimiterDialog.Ask(
+            if (TableTextConversionDialog.Ask(
                     Window.GetWindow(editor),
                     TableTextConversionDialogPlanner.ResolveText(UiText.Get).TextToTableTitle) is not { } delimiter)
                 return; // cancelled
             editor.Focus();
             editor.ConvertSelectionToTable(delimiter);
-        }
-    }
-
-    // A small modal dialog choosing the cell delimiter for text/table conversion: Tab, Comma, or
-    // Semicolon. Returns the chosen delimiter character, or null if cancelled.
-    private static class DelimiterDialog
-    {
-        public static char? Ask(Window? owner, string title)
-        {
-            var text = TableTextConversionDialogPlanner.ResolveText(UiText.Get);
-            var choices = text.Choices;
-
-            var list = new System.Windows.Controls.ListBox
-            {
-                MinWidth = 240,
-                MinHeight = 90,
-                Margin = new Thickness(0, 0, 0, 12)
-            };
-            foreach (var choice in choices)
-                list.Items.Add(choice.Label);
-            list.SelectedIndex = TableTextConversionDialogPlanner.DefaultChoiceIndex;
-
-            char? result = null;
-            var dialog = new Window
-            {
-                Title = title,
-                SizeToContent = SizeToContent.WidthAndHeight,
-                ResizeMode = ResizeMode.NoResize,
-                WindowStartupLocation = WindowStartupLocation.CenterOwner,
-                Owner = owner,
-                ShowInTaskbar = false
-            };
-
-            var ok = new System.Windows.Controls.Button { Content = UiText.Get("Common_OkText"), IsDefault = true, MinWidth = 72, Margin = new Thickness(0, 0, 8, 0) };
-            var cancel = new System.Windows.Controls.Button { Content = UiText.Get("Common_CancelText"), IsCancel = true, MinWidth = 72 };
-            void Commit()
-            {
-                var index = list.SelectedIndex;
-                if (TableTextConversionDialogPlanner.DelimiterAt(index) is { } delimiter)
-                {
-                    result = delimiter;
-                    dialog.DialogResult = true;
-                }
-            }
-            ok.Click += (_, _) => Commit();
-            list.MouseDoubleClick += (_, _) => Commit();
-
-            var buttons = new System.Windows.Controls.StackPanel
-            {
-                Orientation = System.Windows.Controls.Orientation.Horizontal,
-                HorizontalAlignment = HorizontalAlignment.Right
-            };
-            buttons.Children.Add(ok);
-            buttons.Children.Add(cancel);
-
-            var panel = new System.Windows.Controls.StackPanel { Margin = new Thickness(16) };
-            panel.Children.Add(new System.Windows.Controls.TextBlock { Text = text.PromptLabel, Margin = new Thickness(0, 0, 0, 4) });
-            panel.Children.Add(list);
-            panel.Children.Add(buttons);
-            dialog.Content = panel;
-
-            return dialog.ShowDialog() == true ? result : null;
         }
     }
 
@@ -7927,61 +7814,12 @@ internal static class FreeWRibbonCommands
             editor.Focus();
             var owner = Window.GetWindow(editor);
             var current = editor.CurrentRunFormatting.LanguageTag;
-            var chosen = ShowDialog(owner, current);
+            var chosen = ProofingLanguageDialog.Choose(owner, current);
             if (chosen is null)
                 return; // cancelled
             editor.SetProofingLanguage(chosen == string.Empty ? null : chosen);
         }
 
-        private static string? ShowDialog(Window? owner, string? current)
-        {
-            string? result = null;
-            var plan = ProofingLanguageDialogPlanner.Build(current, UiText.Get);
-            var window = new Window
-            {
-                Title = plan.Text.Title,
-                Width = 320,
-                Height = 420,
-                ResizeMode = ResizeMode.NoResize,
-                WindowStartupLocation = owner is null ? WindowStartupLocation.CenterScreen : WindowStartupLocation.CenterOwner,
-                Owner = owner,
-                ShowInTaskbar = false
-            };
-
-            var listBox = new System.Windows.Controls.ListBox { Margin = new Thickness(0, 0, 0, 8) };
-            foreach (var choice in plan.Choices)
-                listBox.Items.Add(new System.Windows.Controls.ListBoxItem { Content = choice.DisplayText, Tag = choice.Tag });
-            listBox.SelectedIndex = plan.SelectedIndex;
-            var ok = new Button { Content = plan.Text.OkLabel, Width = 80, IsDefault = true, Margin = new Thickness(0, 0, 8, 0) };
-            var cancel = new Button { Content = plan.Text.CancelLabel, Width = 80, IsCancel = true };
-            ok.Click += (_, _) =>
-            {
-                if (listBox.SelectedItem is System.Windows.Controls.ListBoxItem selected)
-                    result = (string?)selected.Tag;
-                window.DialogResult = true;
-            };
-            cancel.Click += (_, _) => window.Close();
-
-            var btnRow = new StackPanel
-            {
-                Orientation = System.Windows.Controls.Orientation.Horizontal,
-                HorizontalAlignment = HorizontalAlignment.Right
-            };
-            btnRow.Children.Add(ok);
-            btnRow.Children.Add(cancel);
-
-            var outer = new StackPanel { Margin = new Thickness(12) };
-            outer.Children.Add(new System.Windows.Controls.TextBlock { Text = plan.Text.Instruction, TextWrapping = System.Windows.TextWrapping.Wrap, Margin = new Thickness(0, 0, 0, 8) });
-            outer.Children.Add(listBox);
-            outer.Children.Add(btnRow);
-
-            var scroll = new System.Windows.Controls.ScrollViewer { Content = listBox, Height = 280, VerticalScrollBarVisibility = System.Windows.Controls.ScrollBarVisibility.Auto };
-            outer.Children.RemoveAt(1); // remove the un-scrolled list
-            outer.Children.Insert(1, scroll);
-
-            window.Content = outer;
-            return window.ShowDialog() == true ? result : null; // null = cancelled
-        }
     }
 
     // -----------------------------------------------------------------------------------------

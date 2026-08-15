@@ -150,10 +150,10 @@ $workflows = @(
         -Validation "TableTextConversionDialogPlanner supplies supported delimiters and default choice; ragged rows are preserved by the shared conversion model." `
         -ResultApplication "One replace-blocks command creates the table, places the caret in the first cell, and undoes in one step." `
         -SharedPolicy "TableTextConversionDialogPlanner; TextTableConvert" `
-        -WpfSources @("freew/FreeW.App.Host/Ribbon/FreeWRibbonCommands.cs", "freew/FreeW.App.Host/Editing/DocumentView.cs") `
+        -WpfSources @("freew/FreeW.App.Host/Ribbon/FreeWRibbonCommands.cs", "freew/FreeW.App.Host/TableTextConversionDialog.cs", "freew/FreeW.App.Host/Editing/DocumentView.cs") `
         -AvaloniaSources @("freew/FreeW.App.Avalonia/ImageAndTableConversionDialogs.cs", "freew/FreeW.App.Avalonia/MainWindow.cs", "freew/FreeW.App.Avalonia/Editing/DocumentView.cs") `
         -Tests @("freew/FreeW.App.Host.Tests/ImageAndTableConversionParityTests.cs", "freew/FreeW.App.Avalonia.Tests/EditingReferenceParityTests.cs") `
-        -RequiredWpfTokens @("DelimiterDialog.Ask", "ConvertSelectionToTable(delimiter)") `
+        -RequiredWpfTokens @("TableTextConversionDialog.Ask", "ConvertSelectionToTable(delimiter)") `
         -RequiredAvaloniaTokens @("TableTextConversionDialog.ShowAsync", "ConvertSelectedParagraphsToTable(value)", "new ReplaceBlocksCommand")
 
     New-Workflow -Id "references.table-of-authorities" `

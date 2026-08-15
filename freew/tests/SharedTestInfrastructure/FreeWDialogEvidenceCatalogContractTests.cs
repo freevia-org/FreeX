@@ -74,7 +74,15 @@ public sealed class FreeWDialogEvidenceCatalogContractTests
     [Fact]
     public void Comment_field_and_source_dialogs_are_paired_production_routes()
     {
-        foreach (var routeId in new[] { "comment-list", "field-picker", "manage-sources" })
+        foreach (var routeId in new[]
+                 {
+                     "comment-list",
+                     "draw-table-dimension",
+                     "field-picker",
+                     "manage-sources",
+                     "proofing-language",
+                     "table-text-conversion",
+                 })
         {
             var route = Catalog.GetRequired(routeId);
             route.Coverage.Should().Be(RouteCoverage.Paired, routeId);
