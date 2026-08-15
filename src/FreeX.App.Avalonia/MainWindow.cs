@@ -383,7 +383,13 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
     // in flight (see UpdateSaveButton) -- the Linux/macOS analogue of the WPF host's
     // StatusSaveProgressCancelButton/CancelFileOperation_Click.
     private readonly Button _fileOperationCancelButton = new();
-    private readonly TextBlock _selectionStatsText = new();
+    private readonly StackPanel _selectionStatsPanel = new();
+    private readonly TextBlock _statusAverageText = new();
+    private readonly TextBlock _statusCountText = new();
+    private readonly TextBlock _statusNumericalCountText = new();
+    private readonly TextBlock _statusSumText = new();
+    private readonly TextBlock _statusMinimumText = new();
+    private readonly TextBlock _statusMaximumText = new();
     private readonly TextBlock _statusCapsLockText = new();
     private readonly TextBlock _statusNumLockText = new();
     private readonly TextBlock _zoomText = new();
@@ -2879,14 +2885,36 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         AutomationProperties.SetName(_statusText, UiText.Get("Toolbar_StatusAutomationName"));
         AutomationProperties.SetHelpText(_statusText, UiText.Get("Toolbar_StatusHelpText"));
 
-        _selectionStatsText.FontSize = 12;
-        _selectionStatsText.Foreground = StatusBarForeground;
-        _selectionStatsText.MaxWidth = 420;
-        _selectionStatsText.TextTrimming = TextTrimming.CharacterEllipsis;
-        _selectionStatsText.VerticalAlignment = AvaloniaVerticalAlignment.Center;
-        AutomationProperties.SetAutomationId(_selectionStatsText, "SelectionStatsText");
-        AutomationProperties.SetName(_selectionStatsText, UiText.Get("Toolbar_SelectionStatisticsAutomationName"));
-        AutomationProperties.SetHelpText(_selectionStatsText, UiText.Get("Toolbar_SelectionStatisticsHelpText"));
+        ConfigureSelectionStatisticText(
+            _statusAverageText,
+            StatusBarReadoutKind.Average,
+            maxWidth: 140,
+            trailingMargin: 16);
+        ConfigureSelectionStatisticText(
+            _statusCountText,
+            StatusBarReadoutKind.Count,
+            maxWidth: 110,
+            trailingMargin: 16);
+        ConfigureSelectionStatisticText(
+            _statusNumericalCountText,
+            StatusBarReadoutKind.NumericalCount,
+            maxWidth: 160,
+            trailingMargin: 16);
+        ConfigureSelectionStatisticText(
+            _statusSumText,
+            StatusBarReadoutKind.Sum,
+            maxWidth: 140,
+            trailingMargin: 16);
+        ConfigureSelectionStatisticText(
+            _statusMinimumText,
+            StatusBarReadoutKind.Minimum,
+            maxWidth: 120,
+            trailingMargin: 16);
+        ConfigureSelectionStatisticText(
+            _statusMaximumText,
+            StatusBarReadoutKind.Maximum,
+            maxWidth: 120,
+            trailingMargin: 0);
 
         // CAPS LOCK / NUM LOCK warning indicators (parity with the WPF host's StatusCapsLockText /
         // StatusNumLockText): hidden until RefreshKeyLockIndicators finds the corresponding key toggled on.
@@ -3528,7 +3556,9 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
     {
         var statusBarCustomizeMenu = BuildStatusBarCustomizeContextMenu();
         _statusText.ContextMenu = statusBarCustomizeMenu;
-        _selectionStatsText.ContextMenu = statusBarCustomizeMenu;
+        _selectionStatsPanel.ContextMenu = statusBarCustomizeMenu;
+        foreach (var statisticText in SelectionStatisticTexts())
+            statisticText.ContextMenu = statusBarCustomizeMenu;
         _statusCapsLockText.ContextMenu = statusBarCustomizeMenu;
         _statusNumLockText.ContextMenu = statusBarCustomizeMenu;
         _zoomText.ContextMenu = statusBarCustomizeMenu;
@@ -3575,8 +3605,11 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         var statusBarTextFontSize = AvaloniaThemeResourceResolver.ResolveOr(ThemeResources.StatusBarTextFontSize, 12.0);
         _statusText.FontSize = statusBarTextFontSize;
         _statusText.Foreground = StatusBarForeground;
-        _selectionStatsText.FontSize = statusBarTextFontSize;
-        _selectionStatsText.Foreground = StatusBarForeground;
+        foreach (var statisticText in SelectionStatisticTexts())
+        {
+            statisticText.FontSize = statusBarTextFontSize;
+            statisticText.Foreground = StatusBarForeground;
+        }
         _statusCapsLockText.FontSize = statusBarTextFontSize;
         _statusCapsLockText.Foreground = StatusBarForeground;
         _statusNumLockText.FontSize = statusBarTextFontSize;
@@ -3608,14 +3641,21 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         leftPanel.Children.Add(_statusText);
         leftPanel.Children.Add(_fileOperationCancelButton);
 
+        _selectionStatsPanel.Orientation = Orientation.Horizontal;
+        _selectionStatsPanel.HorizontalAlignment = AvaloniaHorizontalAlignment.Right;
+        _selectionStatsPanel.VerticalAlignment = AvaloniaVerticalAlignment.Center;
+        _selectionStatsPanel.ClipToBounds = true;
+        _selectionStatsPanel.Children.Clear();
+        foreach (var statisticText in SelectionStatisticTexts())
+            _selectionStatsPanel.Children.Add(statisticText);
+        AutomationProperties.SetAutomationId(_selectionStatsPanel, "StatusStatsPanel");
+
         var statsViewport = new Border
         {
             Margin = new Thickness(8, 0, 12, 0),
             ClipToBounds = true,
-            Child = _selectionStatsText,
+            Child = _selectionStatsPanel,
         };
-        _selectionStatsText.HorizontalAlignment = AvaloniaHorizontalAlignment.Right;
-        _selectionStatsText.TextTrimming = TextTrimming.CharacterEllipsis;
 
         var viewButtons = new StackPanel
         {
@@ -3937,7 +3977,6 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         // shared model is built from; ApplyStatusBarModel then refines them with the customize toggles.
         RefreshKeyLockIndicators();
         _statusText.Text = status;
-        _selectionStatsText.Text = _session.SelectionStatsText;
         _zoomText.Text = StatusBarZoomSliderPlanner.FormatZoomPercent(_session.ZoomPercent);
         ApplyStatusBarModel(status);
         UpdateStatusBarViewButtons();
@@ -9447,7 +9486,6 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
 
         var range = result.Range;
         _cellAddressText.Text = FormatRangeReference(range);
-        _selectionStatsText.Text = _session.SelectionStatsText;
         RefreshFormulaReferenceHighlights();
         RefreshFormulaReferenceGridHighlights();
         ApplyFormulaEditStatusBarPlan(_formulaRangeEditingSession.BuildEditStatusBarPlan(pointMode: true));
@@ -9545,7 +9583,6 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         if (plan.UpdateLocalSelection)
         {
             _cellAddressText.Text = FormatRangeReference(range);
-            _selectionStatsText.Text = _session.SelectionStatsText;
         }
         RefreshFormulaReferenceHighlights();
         RefreshFormulaReferenceGridHighlights();
@@ -10301,7 +10338,6 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         if (plan.UpdateLocalSelection)
         {
             _cellAddressText.Text = FormatRangeReference(range);
-            _selectionStatsText.Text = _session.SelectionStatsText;
         }
         RefreshFormulaReferenceHighlights();
         RefreshFormulaReferenceGridHighlights();

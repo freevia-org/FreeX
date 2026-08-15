@@ -3215,25 +3215,26 @@ public sealed class MacOsAppReadinessPreflightTests
                     AutomationProperties.SetAutomationId(_cellAddressText, "CellAddressText");
                     AutomationProperties.SetName(_cellAddressText, UiText.Get("Toolbar_CellAddressAutomationName"));
                     AutomationProperties.SetHelpText(_cellAddressText, UiText.Get("Toolbar_CellAddressHelpText"));
-                    AutomationProperties.SetAutomationId(_selectionStatsText, "SelectionStatsText");
-                    AutomationProperties.SetName(_selectionStatsText, UiText.Get("Toolbar_SelectionStatisticsAutomationName"));
-                    AutomationProperties.SetHelpText(_selectionStatsText, UiText.Get("Toolbar_SelectionStatisticsHelpText"));
+                    ConfigureSelectionStatisticText(
+                    AutomationProperties.SetLiveSetting(textBlock, AutomationLiveSetting.Polite);
                     HasFormulaBoxAutomationName: string.Equals(AutomationProperties.GetName(_formulaBox), FormulaBarText(FormulaBarChromePlanner.FormulaBox.AutomationNameResourceKey), StringComparison.Ordinal)
                     HasFormulaBoxAutomationHelp: string.Equals(AutomationProperties.GetHelpText(_formulaBox), FormulaBarText(FormulaBarChromePlanner.FormulaBox.HelpTextResourceKey), StringComparison.Ordinal)
                     HasFormulaBoxAutomationId: string.Equals(AutomationProperties.GetAutomationId(_formulaBox), "FormulaBox", StringComparison.Ordinal)
                     HasStatusTextAutomationName: string.Equals(AutomationProperties.GetName(_statusText), "Status", StringComparison.Ordinal)
                     HasStatusTextAutomationHelp: string.Equals(AutomationProperties.GetHelpText(_statusText), "Shows the current workbook status.", StringComparison.Ordinal)
                     HasStatusTextAutomationId: string.Equals(AutomationProperties.GetAutomationId(_statusText), "StatusText", StringComparison.Ordinal)
-                    HasStatusTextValue: HasStatusBarAccessibleValue(_statusText, _selectionStatsText)
-                    private static bool HasStatusBarAccessibleValue(TextBlock statusText, TextBlock selectionStatsText) =>
+                    HasStatusTextValue: HasStatusBarAccessibleValue(
+                    params TextBlock[] selectionStatisticTexts) =>
                         !string.IsNullOrWhiteSpace(statusText.Text) ||
-                        !string.IsNullOrWhiteSpace(selectionStatsText.Text);
+                        selectionStatisticTexts.Any(text => !string.IsNullOrWhiteSpace(text.Text));
                     HasCellAddressAutomationName: string.Equals(AutomationProperties.GetName(_cellAddressText), "Cell address", StringComparison.Ordinal)
                     HasCellAddressAutomationHelp: string.Equals(AutomationProperties.GetHelpText(_cellAddressText), "Shows the active cell address.", StringComparison.Ordinal)
                     HasCellAddressAutomationId: string.Equals(AutomationProperties.GetAutomationId(_cellAddressText), "CellAddressText", StringComparison.Ordinal)
-                    HasSelectionStatsAutomationName: string.Equals(AutomationProperties.GetName(_selectionStatsText), "Selection statistics", StringComparison.Ordinal)
-                    HasSelectionStatsAutomationHelp: string.Equals(AutomationProperties.GetHelpText(_selectionStatsText), "Shows statistics for the current selection.", StringComparison.Ordinal)
-                    HasSelectionStatsAutomationId: string.Equals(AutomationProperties.GetAutomationId(_selectionStatsText), "SelectionStatsText", StringComparison.Ordinal)
+                    HasSelectionStatsAutomationName: HaveSelectionStatisticAutomationNames(
+                    HasSelectionStatsAutomationHelp: HaveSelectionStatisticAutomationHelp(
+                    HasSelectionStatsAutomationId: HaveSelectionStatisticAutomationIds(
+                    (_statusAverageText, "StatusAvgText")
+                    (_statusMaximumText, "StatusMaxText")
                     HasNativeMergeAndCenterMenuItem: HasNativeMenuItem(_mergeAndCenterMenuItem, "Merge & Center", requireGesture: false);
                     HasNativeUnmergeCellsMenuItem: HasNativeMenuItem(_unmergeCellsMenuItem, "Unmerge Cells", requireGesture: false);
                     HasSheetTabContextKeyboardHelp: access.HasSheetTab(button =>
@@ -3967,7 +3968,7 @@ public sealed class MacOsAppReadinessPreflightTests
                 private bool HasStatusTextValue { get; }
                 private bool HasStatusBarAccessibleValue() =>
                     !string.IsNullOrWhiteSpace(_statusText.Text) ||
-                    !string.IsNullOrWhiteSpace(_selectionStatsText.Text);
+                    SelectionStatisticTexts().Any(text => !string.IsNullOrWhiteSpace(text.Text));
                 private bool HasCellAddressAutomationName { get; }
                 private bool HasCellAddressAutomationHelp { get; }
                 private bool HasCellAddressAutomationId { get; }

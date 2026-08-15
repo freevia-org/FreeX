@@ -1321,9 +1321,27 @@ internal static class MacOsLaunchSmokeCoordinator
         controls.SearchBox.SelectedIndex == 0 &&
         controls.LookInBox.SelectedIndex == defaultLookInIndex;
 
-    private static bool HasStatusBarAccessibleValue(TextBlock statusText, TextBlock selectionStatsText) =>
+    private static bool HasStatusBarAccessibleValue(
+        TextBlock statusText,
+        params TextBlock[] selectionStatisticTexts) =>
         !string.IsNullOrWhiteSpace(statusText.Text) ||
-        !string.IsNullOrWhiteSpace(selectionStatsText.Text);
+        selectionStatisticTexts.Any(text => !string.IsNullOrWhiteSpace(text.Text));
+
+    private static bool HaveSelectionStatisticAutomationNames(params TextBlock[] texts) =>
+        texts.All(text => !string.IsNullOrWhiteSpace(AutomationProperties.GetName(text)));
+
+    private static bool HaveSelectionStatisticAutomationHelp(params TextBlock[] texts) =>
+        texts.All(text => string.Equals(
+            AutomationProperties.GetHelpText(text),
+            AutomationProperties.GetName(text),
+            StringComparison.Ordinal));
+
+    private static bool HaveSelectionStatisticAutomationIds(
+        params (TextBlock Text, string AutomationId)[] fields) =>
+        fields.All(field => string.Equals(
+            AutomationProperties.GetAutomationId(field.Text),
+            field.AutomationId,
+            StringComparison.Ordinal));
 
     private static bool HasToolbarMenuItem(MenuItem item, string expectedHeader) =>
         string.Equals(item.Header?.ToString(), expectedHeader, StringComparison.Ordinal);
@@ -1515,7 +1533,12 @@ internal static class MacOsLaunchSmokeCoordinator
         var _saveMenuItem = access.GetNativeMenuItem("_saveMenuItem");
         var _selectAllMenuItem = access.GetNativeMenuItem("_selectAllMenuItem");
         var _selectAllSheetsMenuItem = access.GetNativeMenuItem("_selectAllSheetsMenuItem");
-        var _selectionStatsText = access.GetControl<TextBlock>("_selectionStatsText");
+        var _statusAverageText = access.GetControl<TextBlock>("_statusAverageText");
+        var _statusCountText = access.GetControl<TextBlock>("_statusCountText");
+        var _statusNumericalCountText = access.GetControl<TextBlock>("_statusNumericalCountText");
+        var _statusSumText = access.GetControl<TextBlock>("_statusSumText");
+        var _statusMinimumText = access.GetControl<TextBlock>("_statusMinimumText");
+        var _statusMaximumText = access.GetControl<TextBlock>("_statusMaximumText");
         var _sendFeedbackMenuItem = access.GetNativeMenuItem("_sendFeedbackMenuItem");
         var _shareWorkbookMenuItem = access.GetNativeMenuItem("_shareWorkbookMenuItem");
         var _sheetGridHost = access.GetControl<ContentControl>("_sheetGridHost");
@@ -1644,13 +1667,38 @@ internal static class MacOsLaunchSmokeCoordinator
             HasStatusTextAutomationName: string.Equals(AutomationProperties.GetName(_statusText), "Status", StringComparison.Ordinal),
             HasStatusTextAutomationHelp: string.Equals(AutomationProperties.GetHelpText(_statusText), "Shows the current workbook status.", StringComparison.Ordinal),
             HasStatusTextAutomationId: string.Equals(AutomationProperties.GetAutomationId(_statusText), "StatusText", StringComparison.Ordinal),
-            HasStatusTextValue: HasStatusBarAccessibleValue(_statusText, _selectionStatsText),
+            HasStatusTextValue: HasStatusBarAccessibleValue(
+                _statusText,
+                _statusAverageText,
+                _statusCountText,
+                _statusNumericalCountText,
+                _statusSumText,
+                _statusMinimumText,
+                _statusMaximumText),
             HasCellAddressAutomationName: string.Equals(AutomationProperties.GetName(_cellAddressText), "Cell address", StringComparison.Ordinal),
             HasCellAddressAutomationHelp: string.Equals(AutomationProperties.GetHelpText(_cellAddressText), "Shows the active cell address.", StringComparison.Ordinal),
             HasCellAddressAutomationId: string.Equals(AutomationProperties.GetAutomationId(_cellAddressText), "CellAddressText", StringComparison.Ordinal),
-            HasSelectionStatsAutomationName: string.Equals(AutomationProperties.GetName(_selectionStatsText), "Selection statistics", StringComparison.Ordinal),
-            HasSelectionStatsAutomationHelp: string.Equals(AutomationProperties.GetHelpText(_selectionStatsText), "Shows statistics for the current selection.", StringComparison.Ordinal),
-            HasSelectionStatsAutomationId: string.Equals(AutomationProperties.GetAutomationId(_selectionStatsText), "SelectionStatsText", StringComparison.Ordinal),
+            HasSelectionStatsAutomationName: HaveSelectionStatisticAutomationNames(
+                _statusAverageText,
+                _statusCountText,
+                _statusNumericalCountText,
+                _statusSumText,
+                _statusMinimumText,
+                _statusMaximumText),
+            HasSelectionStatsAutomationHelp: HaveSelectionStatisticAutomationHelp(
+                _statusAverageText,
+                _statusCountText,
+                _statusNumericalCountText,
+                _statusSumText,
+                _statusMinimumText,
+                _statusMaximumText),
+            HasSelectionStatsAutomationId: HaveSelectionStatisticAutomationIds(
+                (_statusAverageText, "StatusAvgText"),
+                (_statusCountText, "StatusCountText"),
+                (_statusNumericalCountText, "StatusNumericalCountText"),
+                (_statusSumText, "StatusSumText"),
+                (_statusMinimumText, "StatusMinText"),
+                (_statusMaximumText, "StatusMaxText")),
             HasFocusableSheetTab: access.HasSheetTab(button => button.Focusable),
             HasFocusableActiveSheetTab: access.ActiveSheetTab?.Focusable == true,
             HasShellFocusCycleTargets: _sheetGridHost.Focusable &&

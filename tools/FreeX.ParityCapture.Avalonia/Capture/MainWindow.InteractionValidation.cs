@@ -514,7 +514,7 @@ public sealed partial class MainWindow
             _isApplyingFormulaBoxText = false;
         }
         _statusText.Text = "Shortcut validation fixture ready";
-        _selectionStatsText.Text = _session.SelectionStatsText;
+        ApplyStatusBarModel(_statusText.Text);
         _zoomText.Text = StatusBarZoomSliderPlanner.FormatZoomPercent(_session.ZoomPercent);
         Title = FormatWindowWorkbookTitle();
         UpdateSaveButton();

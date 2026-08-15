@@ -179,7 +179,18 @@ public sealed class AvaloniaSemanticLocalizationConvergenceTests
             AssertPseudoLocalized(Field<Button>(window, "_openButton").Content);
             AssertPseudoLocalized(Field<Button>(window, "_fillCellsButton").Content);
             AssertPseudoLocalized(Field<Button>(window, "_clearButton").Content);
-            AssertPseudoLocalized(AutomationProperties.GetName(Field<TextBlock>(window, "_selectionStatsText")));
+            foreach (var fieldName in new[]
+                     {
+                         "_statusAverageText",
+                         "_statusCountText",
+                         "_statusNumericalCountText",
+                         "_statusSumText",
+                         "_statusMinimumText",
+                         "_statusMaximumText",
+                     })
+            {
+                AssertPseudoLocalized(AutomationProperties.GetName(Field<TextBlock>(window, fieldName)));
+            }
 
             var recentColorsPath = Path.Combine(
                 Path.GetTempPath(),

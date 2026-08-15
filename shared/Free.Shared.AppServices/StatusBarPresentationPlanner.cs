@@ -39,6 +39,7 @@ public readonly record struct StatusBarReadoutPresentationPlan(
     StatusBarReadoutKind Kind,
     StatusBarPresentationElement Element,
     string Text,
+    string AutomationId,
     string AutomationFallbackResourceKey);
 
 public sealed record StatusBarRendererPlan(
@@ -155,9 +156,25 @@ public static class StatusBarPresentationPlanner
         return model.FindReadout(kind)?.Value ?? string.Empty;
     }
 
+    public static string ReadoutAutomationId(StatusBarReadoutKind kind) => kind switch
+    {
+        StatusBarReadoutKind.Average => "StatusAvgText",
+        StatusBarReadoutKind.Count => "StatusCountText",
+        StatusBarReadoutKind.NumericalCount => "StatusNumericalCountText",
+        StatusBarReadoutKind.Sum => "StatusSumText",
+        StatusBarReadoutKind.Minimum => "StatusMinText",
+        StatusBarReadoutKind.Maximum => "StatusMaxText",
+        _ => throw new ArgumentOutOfRangeException(nameof(kind), kind, null),
+    };
+
     private static StatusBarReadoutPresentationPlan ReadoutElement(
         StatusBarReadoutKind kind,
         StatusBarPresentationElement element,
         string text) =>
-        new(kind, element, text, StatusBarTextResourceKeys.ReadoutLabel(kind));
+        new(
+            kind,
+            element,
+            text,
+            ReadoutAutomationId(kind),
+            StatusBarTextResourceKeys.ReadoutLabel(kind));
 }

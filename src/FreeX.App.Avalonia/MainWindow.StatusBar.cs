@@ -29,13 +29,8 @@ public sealed partial class MainWindow
     // be refreshed on open, mirroring the WPF host's _statusBarCustomizeMenuItems registry.
     private readonly Dictionary<string, MenuItem> _statusBarCustomizeMenuItems = new(StringComparer.Ordinal);
 
-    // Whether AutomationProperties.LiveSetting has already been applied to _selectionStatsText.
-    // Applied lazily on the first render rather than at construction time (which lives in
-    // MainWindow.cs) so this file alone can wire the live-region behavior.
-    private bool _selectionStatsLiveSettingApplied;
-
-    // Whether AutomationProperties.LiveSetting has already been applied to _statusText. Same lazy
-    // pattern as _selectionStatsLiveSettingApplied — see EnsureStatusTextLiveRegion.
+    // Selection statistic controls receive their polite live-region metadata at construction.
+    // Only the status text still needs lazy initialization because it is renderer-global state.
     private bool _statusTextLiveSettingApplied;
 
     private bool GetStatusBarOption(string optionTag) =>
@@ -62,7 +57,7 @@ public sealed partial class MainWindow
             StatusBarTextProvider);
 
     /// <summary>
-    /// Renders the footer readout (<see cref="_selectionStatsText"/>) and ready text
+    /// Renders the six selection-statistic fields and ready text
     /// (<see cref="_statusText"/>) from the neutral model, and reflects zoom on the zoom readout. The
     /// per-readout visibility map (driven by the customize menu) filters which aggregate readouts appear,
     /// mirroring the WPF host's per-option StatusBarShow* gating.
@@ -79,16 +74,7 @@ public sealed partial class MainWindow
         _statusText.Foreground = StatusBarForeground;
         _statusText.IsVisible = rendererPlan.ReadyTextVisible;
 
-        _selectionStatsText.Text = rendererPlan.VisibleReadoutText;
-        _selectionStatsText.Foreground = StatusBarForeground;
-        _selectionStatsText.IsVisible = rendererPlan.VisibleReadoutTextVisible;
-        // Keep the accessible NAME a stable label ("Selection statistics"); the dynamic readouts are the
-        // element's Text (value/content). Overwriting Name with the readouts broke the accessibility
-        // contract (GetName must equal "Selection statistics") whenever a selection had stats.
-        AutomationProperties.SetName(
-            _selectionStatsText,
-            UiText.Get("Toolbar_SelectionStatisticsAutomationName"));
-        EnsureSelectionStatsLiveRegion();
+        ApplySelectionStatisticReadouts(rendererPlan);
 
         _zoomText.IsVisible = rendererPlan.IsElementVisible(StatusBarPresentationElement.ZoomText);
         _zoomText.Foreground = StatusBarForeground;
@@ -154,35 +140,102 @@ public sealed partial class MainWindow
     }
 
     // ── Accessibility: live-region announcement for selection statistics ─────
-    // WPF's StatusAvgText/StatusCountText/StatusNumericalCountText/StatusSumText/StatusMinText/
-    // StatusMaxText are each individually AutomationProperties.LiveSetting="Polite", so a screen
-    // reader announces the new values whenever a selection's Sum/Average/Count/etc. change
-    // (MainWindow.xaml:1183-1212 + MainWindow.GridStatus.cs's SetStatusStatisticTextIfChanged /
-    // NotifyStatusStatisticAutomationChanged, which re-raises AutomationElementIdentifiers.NameProperty
-    // with the new value text). Avalonia renders all readouts into a single _selectionStatsText
-    // TextBlock whose accessible NAME and HelpText must both stay their fixed, static values —
-    // "Selection statistics" / "Shows statistics for the current selection." because accessibility
-    // clients require both to remain stable after construction, not just at startup.
-    // so, unlike WPF, neither Name nor HelpText is a safe carrier for the live value here.
-    //
-    // Mark the control as an AT-SPI/UIA live region (LiveSetting="Polite") so any backend that
-    // announces on the element's Text/content change (rather than only Name/HelpText) picks up the
-    // new Sum/Average/Count readout as _selectionStatsText.Text is updated above. This is applied
-    // once, lazily, since the field is constructed in MainWindow.cs (out of scope for this file).
-    //
-    // Full parity with WPF's per-field Name-carried announcement would additionally require either
-    // restructuring this single TextBlock into six separately-named controls (mirroring WPF's
-    // StatusAvgText/StatusCountText/.../StatusMaxText) or a MainWindow.cs-level accessible-name
-    // strategy change — both out of scope for this pass, since MainWindow.cs (the field's owner) is
-    // assigned to another change in this pass. Tracked as a residual gap rather than worked around
-    // by violating the pinned Name/HelpText contract above.
-    private void EnsureSelectionStatsLiveRegion()
+    // Match WPF's six independently named polite live controls. Each field carries its formatted
+    // value in Name and HelpText while visible so assistive clients announce the statistic that
+    // changed. The shared renderer plan remains the sole authority for text and visibility.
+    private void ConfigureSelectionStatisticText(
+        TextBlock textBlock,
+        StatusBarReadoutKind kind,
+        double maxWidth,
+        double trailingMargin)
     {
-        if (_selectionStatsLiveSettingApplied)
-            return;
+        var fallbackName = UiText.Get(StatusBarTextResourceKeys.ReadoutLabel(kind));
+        textBlock.FontSize = 12;
+        textBlock.Foreground = StatusBarForeground;
+        textBlock.MaxWidth = maxWidth;
+        textBlock.Margin = new global::Avalonia.Thickness(0, 0, trailingMargin, 0);
+        textBlock.TextTrimming = global::Avalonia.Media.TextTrimming.CharacterEllipsis;
+        textBlock.VerticalAlignment = global::Avalonia.Layout.VerticalAlignment.Center;
+        textBlock.IsVisible = false;
+        AutomationProperties.SetAutomationId(
+            textBlock,
+            StatusBarPresentationPlanner.ReadoutAutomationId(kind));
+        AutomationProperties.SetName(textBlock, fallbackName);
+        AutomationProperties.SetHelpText(textBlock, fallbackName);
+        AutomationProperties.SetLiveSetting(textBlock, AutomationLiveSetting.Polite);
+    }
 
-        AutomationProperties.SetLiveSetting(_selectionStatsText, AutomationLiveSetting.Polite);
-        _selectionStatsLiveSettingApplied = true;
+    private IEnumerable<TextBlock> SelectionStatisticTexts()
+    {
+        yield return _statusAverageText;
+        yield return _statusCountText;
+        yield return _statusNumericalCountText;
+        yield return _statusSumText;
+        yield return _statusMinimumText;
+        yield return _statusMaximumText;
+    }
+
+    private TextBlock SelectionStatisticText(StatusBarReadoutKind kind) => kind switch
+    {
+        StatusBarReadoutKind.Average => _statusAverageText,
+        StatusBarReadoutKind.Count => _statusCountText,
+        StatusBarReadoutKind.NumericalCount => _statusNumericalCountText,
+        StatusBarReadoutKind.Sum => _statusSumText,
+        StatusBarReadoutKind.Minimum => _statusMinimumText,
+        StatusBarReadoutKind.Maximum => _statusMaximumText,
+        _ => throw new ArgumentOutOfRangeException(nameof(kind), kind, null),
+    };
+
+    private void ApplySelectionStatisticReadouts(StatusBarRendererPlan rendererPlan)
+    {
+        _selectionStatsPanel.IsVisible = rendererPlan.VisibleReadoutTextVisible;
+        var panelAutomationText = string.IsNullOrWhiteSpace(rendererPlan.StatsPanelAutomationText)
+            ? UiText.Get("Toolbar_SelectionStatisticsAutomationName")
+            : rendererPlan.StatsPanelAutomationText;
+        if (!string.Equals(
+                AutomationProperties.GetName(_selectionStatsPanel),
+                panelAutomationText,
+                StringComparison.Ordinal))
+        {
+            AutomationProperties.SetName(_selectionStatsPanel, panelAutomationText);
+        }
+        AutomationProperties.SetHelpText(_selectionStatsPanel, panelAutomationText);
+
+        foreach (var readout in rendererPlan.ReadoutElements)
+        {
+            var textBlock = SelectionStatisticText(readout.Kind);
+            var isVisible = rendererPlan.IsElementVisible(readout.Element) &&
+                !string.IsNullOrWhiteSpace(readout.Text);
+            if (!string.Equals(textBlock.Text, readout.Text, StringComparison.Ordinal))
+                textBlock.Text = readout.Text;
+            textBlock.Foreground = StatusBarForeground;
+            textBlock.IsVisible = isVisible;
+            if (!string.Equals(
+                    AutomationProperties.GetAutomationId(textBlock),
+                    readout.AutomationId,
+                    StringComparison.Ordinal))
+            {
+                AutomationProperties.SetAutomationId(textBlock, readout.AutomationId);
+            }
+
+            var automationText = isVisible
+                ? readout.Text
+                : UiText.Get(readout.AutomationFallbackResourceKey);
+            if (!string.Equals(
+                    AutomationProperties.GetName(textBlock),
+                    automationText,
+                    StringComparison.Ordinal))
+            {
+                AutomationProperties.SetName(textBlock, automationText);
+            }
+            if (!string.Equals(
+                    AutomationProperties.GetHelpText(textBlock),
+                    automationText,
+                    StringComparison.Ordinal))
+            {
+                AutomationProperties.SetHelpText(textBlock, automationText);
+            }
+        }
     }
 
     // ── Accessibility: live-region announcement for status/edit-issue text ───
@@ -191,9 +244,8 @@ public sealed partial class MainWindow
     // shell has no owned modal MessageBox for validation violations the way WPF's
     // MainWindow.Editing.cs ShowOwnedMessage does, so this text update is the ONLY signal a failed
     // commit occurred. Without a live region a screen-reader user gets no announcement at all and can
-    // believe a rejected edit succeeded. Mirrors EnsureSelectionStatsLiveRegion's lazy-apply pattern
-    // (Name/HelpText stay their fixed "Status"/help-text values; LiveSetting is what makes a
-    // content/Text change get announced).
+    // believe a rejected edit succeeded. Name/HelpText stay their fixed "Status"/help-text values;
+    // LiveSetting is what makes a content/Text change get announced.
     private void EnsureStatusTextLiveRegion()
     {
         if (_statusTextLiveSettingApplied)

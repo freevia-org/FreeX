@@ -5261,15 +5261,26 @@ public sealed class AvaloniaShellSourceTests
     public void MainWindow_RendersSelectedRangeStatsThroughSharedWorkbookSession()
     {
         var source = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MainWindow.cs"));
+        var statusBarSource = File.ReadAllText(RepositoryFileLocator.Find(
+            "src", "FreeX.App.Avalonia", "MainWindow.StatusBar.cs"));
+        var plannerSource = File.ReadAllText(RepositoryFileLocator.Find(
+            "shared", "Free.Shared.AppServices", "StatusBarPresentationPlanner.cs"));
+        var wpfStatusBarSource = File.ReadAllText(RepositoryFileLocator.Find(
+            "src", "FreeX.App.Host", "MainWindow.GridStatus.cs"));
 
-        source.Should().Contain("private readonly TextBlock _selectionStatsText = new();");
-        source.Should().Contain("_selectionStatsText.FontSize = 12;");
-        source.Should().Contain("_selectionStatsText.MaxWidth = 420;");
-        source.Should().Contain("_selectionStatsText.TextTrimming = TextTrimming.CharacterEllipsis;");
+        source.Should().Contain("private readonly StackPanel _selectionStatsPanel = new();");
+        source.Should().Contain("private readonly TextBlock _statusAverageText = new();");
+        source.Should().Contain("private readonly TextBlock _statusMaximumText = new();");
+        statusBarSource.Should().Contain("ConfigureSelectionStatisticText(");
+        statusBarSource.Should().Contain("ApplySelectionStatisticReadouts(rendererPlan);");
+        plannerSource.Should().Contain("public static string ReadoutAutomationId(StatusBarReadoutKind kind)");
+        wpfStatusBarSource.Should().Contain(
+            "AutomationProperties.SetAutomationId(textBlock, readout.AutomationId);");
+        statusBarSource.Should().Contain(
+            "AutomationProperties.SetAutomationId(textBlock, readout.AutomationId);");
         source.Should().Contain("_statusText,");
-        source.Should().Contain("_selectionStatsText,");
+        source.Should().Contain("Child = _selectionStatsPanel,");
         source.Should().Contain("_statusText.Text = status;");
-        source.Should().Contain("_selectionStatsText.Text = _session.SelectionStatsText;");
         source.Should().Contain("_session.SelectAnchoredRange(anchor, address);");
         source.Should().Contain("RefreshShell(UiText.Get(\"MainLoc_Ready\"));");
     }
@@ -5281,6 +5292,10 @@ public sealed class AvaloniaShellSourceTests
         // line endings.
         var source = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MainWindow.cs"))
             .Replace("\r\n", "\n", StringComparison.Ordinal);
+        var statusBarSource = File.ReadAllText(RepositoryFileLocator.Find(
+            "src", "FreeX.App.Avalonia", "MainWindow.StatusBar.cs"));
+        var plannerSource = File.ReadAllText(RepositoryFileLocator.Find(
+            "shared", "Free.Shared.AppServices", "StatusBarPresentationPlanner.cs"));
         var smokeSource = File.ReadAllText(RepositoryFileLocator.Find("tools", "FreeX.Validation.Avalonia", "MacOsLaunchSmoke.cs"));
 
         source.Should().Contain("AutomationProperties.SetAutomationId(_formulaBox, \"FormulaBox\");");
@@ -5292,9 +5307,10 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("AutomationProperties.SetAutomationId(_cellAddressText, \"CellAddressText\");");
         source.Should().Contain("AutomationProperties.SetName(_cellAddressText, UiText.Get(\"Toolbar_CellAddressAutomationName\"));");
         source.Should().Contain("AutomationProperties.SetHelpText(_cellAddressText, UiText.Get(\"Toolbar_CellAddressHelpText\"));");
-        source.Should().Contain("AutomationProperties.SetAutomationId(_selectionStatsText, \"SelectionStatsText\");");
-        source.Should().Contain("AutomationProperties.SetName(_selectionStatsText, UiText.Get(\"Toolbar_SelectionStatisticsAutomationName\"));");
-        source.Should().Contain("AutomationProperties.SetHelpText(_selectionStatsText, UiText.Get(\"Toolbar_SelectionStatisticsHelpText\"));");
+        plannerSource.Should().Contain("StatusBarReadoutKind.Average => \"StatusAvgText\"");
+        plannerSource.Should().Contain("StatusBarReadoutKind.NumericalCount => \"StatusNumericalCountText\"");
+        plannerSource.Should().Contain("StatusBarReadoutKind.Maximum => \"StatusMaxText\"");
+        statusBarSource.Should().Contain("AutomationProperties.SetLiveSetting(textBlock, AutomationLiveSetting.Polite);");
         smokeSource.Should().Contain("HasFormulaBoxAutomationName: string.Equals(");
         source.Should().Contain("FormulaBarText(FormulaBarChromePlanner.FormulaBox.AutomationNameResourceKey)");
         smokeSource.Should().Contain("HasFormulaBoxAutomationHelp: string.Equals(");
@@ -5303,14 +5319,16 @@ public sealed class AvaloniaShellSourceTests
         smokeSource.Should().Contain("HasStatusTextAutomationName: string.Equals(AutomationProperties.GetName(_statusText), \"Status\", StringComparison.Ordinal)");
         smokeSource.Should().Contain("HasStatusTextAutomationHelp: string.Equals(AutomationProperties.GetHelpText(_statusText), \"Shows the current workbook status.\", StringComparison.Ordinal)");
         smokeSource.Should().Contain("HasStatusTextAutomationId: string.Equals(AutomationProperties.GetAutomationId(_statusText), \"StatusText\", StringComparison.Ordinal)");
-        smokeSource.Should().Contain("HasStatusTextValue: HasStatusBarAccessibleValue(_statusText, _selectionStatsText)");
-        smokeSource.Should().Contain("private static bool HasStatusBarAccessibleValue(TextBlock statusText, TextBlock selectionStatsText) =>");
+        smokeSource.Should().Contain("HasStatusTextValue: HasStatusBarAccessibleValue(");
+        smokeSource.Should().Contain("params TextBlock[] selectionStatisticTexts");
         smokeSource.Should().Contain("HasCellAddressAutomationName: string.Equals(AutomationProperties.GetName(_cellAddressText), \"Cell address\", StringComparison.Ordinal)");
         smokeSource.Should().Contain("HasCellAddressAutomationHelp: string.Equals(AutomationProperties.GetHelpText(_cellAddressText), \"Shows the active cell address.\", StringComparison.Ordinal)");
         smokeSource.Should().Contain("HasCellAddressAutomationId: string.Equals(AutomationProperties.GetAutomationId(_cellAddressText), \"CellAddressText\", StringComparison.Ordinal)");
-        smokeSource.Should().Contain("HasSelectionStatsAutomationName: string.Equals(AutomationProperties.GetName(_selectionStatsText), \"Selection statistics\", StringComparison.Ordinal)");
-        smokeSource.Should().Contain("HasSelectionStatsAutomationHelp: string.Equals(AutomationProperties.GetHelpText(_selectionStatsText), \"Shows statistics for the current selection.\", StringComparison.Ordinal)");
-        smokeSource.Should().Contain("HasSelectionStatsAutomationId: string.Equals(AutomationProperties.GetAutomationId(_selectionStatsText), \"SelectionStatsText\", StringComparison.Ordinal)");
+        smokeSource.Should().Contain("HasSelectionStatsAutomationName: HaveSelectionStatisticAutomationNames(");
+        smokeSource.Should().Contain("HasSelectionStatsAutomationHelp: HaveSelectionStatisticAutomationHelp(");
+        smokeSource.Should().Contain("HasSelectionStatsAutomationId: HaveSelectionStatisticAutomationIds(");
+        smokeSource.Should().Contain("(_statusAverageText, \"StatusAvgText\")");
+        smokeSource.Should().Contain("(_statusMaximumText, \"StatusMaxText\")");
 
         smokeSource.Should().Contain("public bool HasAccessibilitySmokeEvidence =>");
         smokeSource.Should().Contain("HasAccessibilitySmokeEvidence &&");
