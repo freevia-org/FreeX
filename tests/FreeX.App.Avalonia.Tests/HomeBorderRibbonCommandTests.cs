@@ -31,6 +31,7 @@ public sealed class HomeBorderRibbonCommandTests
             window.ApplySelectedRangeBorderPresetForTest(CellBorderPreset.All);
 
             GetStyle(window, address).BorderTop.Should().Be(new CellBorder(expectedStyle, CellColor.Black));
+            window.AllowCloseWithoutDirtyPromptForParityCapture();
             window.Close();
         }, CancellationToken.None);
     }
@@ -58,6 +59,7 @@ public sealed class HomeBorderRibbonCommandTests
             window.ApplySelectedRangeBorderPresetForTest(CellBorderPreset.All);
 
             GetStyle(window, address).BorderTop.Should().Be(new CellBorder(BorderStyle.Thin, expectedColor));
+            window.AllowCloseWithoutDirtyPromptForParityCapture();
             window.Close();
         }, CancellationToken.None);
     }

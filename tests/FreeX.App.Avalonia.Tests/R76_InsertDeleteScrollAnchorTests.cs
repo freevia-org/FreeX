@@ -45,6 +45,7 @@ public sealed class R76_InsertDeleteScrollAnchorTests
             }
             finally
             {
+                window.AllowCloseWithoutDirtyPromptForParityCapture();
                 window.Close();
             }
         }, CancellationToken.None);
@@ -74,6 +75,7 @@ public sealed class R76_InsertDeleteScrollAnchorTests
             }
             finally
             {
+                window.AllowCloseWithoutDirtyPromptForParityCapture();
                 window.Close();
             }
         }, CancellationToken.None);
@@ -104,6 +106,7 @@ public sealed class R76_InsertDeleteScrollAnchorTests
             }
             finally
             {
+                window.AllowCloseWithoutDirtyPromptForParityCapture();
                 window.Close();
             }
         }, CancellationToken.None);
@@ -132,6 +135,7 @@ public sealed class R76_InsertDeleteScrollAnchorTests
             }
             finally
             {
+                window.AllowCloseWithoutDirtyPromptForParityCapture();
                 window.Close();
             }
         }, CancellationToken.None);
@@ -160,6 +164,7 @@ public sealed class R76_InsertDeleteScrollAnchorTests
             }
             finally
             {
+                window.AllowCloseWithoutDirtyPromptForParityCapture();
                 window.Close();
             }
         }, CancellationToken.None);

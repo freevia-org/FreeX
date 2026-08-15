@@ -48,6 +48,7 @@ public sealed class R93_FormulaSignatureHelpAvaloniaTests
             window.SignatureHelpBoldArgumentIndexForTest.Should().Be(0,
                 "the caret sitting right after '(' is inside the first argument");
 
+            window.AllowCloseWithoutDirtyPromptForParityCapture();
             window.Close();
         }, CancellationToken.None);
     }
@@ -69,6 +70,7 @@ public sealed class R93_FormulaSignatureHelpAvaloniaTests
                 "two commas typed at the top level of the call means the caret is now in the third " +
                 "argument (Col_index_num)");
 
+            window.AllowCloseWithoutDirtyPromptForParityCapture();
             window.Close();
         }, CancellationToken.None);
     }
@@ -91,6 +93,7 @@ public sealed class R93_FormulaSignatureHelpAvaloniaTests
             window.SignatureHelpOpenForTest.Should().BeTrue("a pasted formula must be resolved just like a typed one");
             window.SignatureHelpTextForTest.Should().Be("SUM(Number1, [Number2])");
 
+            window.AllowCloseWithoutDirtyPromptForParityCapture();
             window.Close();
         }, CancellationToken.None);
     }
@@ -114,6 +117,7 @@ public sealed class R93_FormulaSignatureHelpAvaloniaTests
             window.SignatureHelpBoldArgumentIndexForTest.Should().Be(0);
 
             window.RaiseInlineCellEditorKeyDownForTest(new KeyEventArgs { Key = Key.Escape, KeyModifiers = KeyModifiers.None });
+            window.AllowCloseWithoutDirtyPromptForParityCapture();
             window.Close();
         }, CancellationToken.None);
     }
@@ -141,6 +145,7 @@ public sealed class R93_FormulaSignatureHelpAvaloniaTests
             window.SignatureHelpOpenForTest.Should().BeFalse("canceling the edit must close the live tooltip too");
             sheet.GetCell(start).Should().BeNull("Escape must restore the original (empty) cell, not commit the unclosed formula");
 
+            window.AllowCloseWithoutDirtyPromptForParityCapture();
             window.Close();
         }, CancellationToken.None);
     }
@@ -162,6 +167,7 @@ public sealed class R93_FormulaSignatureHelpAvaloniaTests
             window.SignatureHelpOpenForTest.Should().BeFalse(
                 "plain non-formula text must never show the function signature tooltip");
 
+            window.AllowCloseWithoutDirtyPromptForParityCapture();
             window.Close();
         }, CancellationToken.None);
     }
@@ -184,6 +190,7 @@ public sealed class R93_FormulaSignatureHelpAvaloniaTests
             window.FunctionAutocompleteOpenForTest.Should().BeTrue();
             window.SignatureHelpOpenForTest.Should().BeFalse();
 
+            window.AllowCloseWithoutDirtyPromptForParityCapture();
             window.Close();
         }, CancellationToken.None);
     }
