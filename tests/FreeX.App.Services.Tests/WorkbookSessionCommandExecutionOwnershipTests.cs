@@ -95,6 +95,36 @@ public sealed class WorkbookSessionCommandExecutionOwnershipTests
     }
 
     [Fact]
+    public void ExecuteCustomViewCommand_ApplyAdoptsSavedSheetCellAndViewStateAcrossSheets()
+    {
+        using var session = new WorkbookSessionFactory().CreateNew(120, 160);
+        var originalSheet = session.ActiveSheet;
+        session.AddSheet().Success.Should().BeTrue();
+        var savedSheet = session.ActiveSheet;
+        var savedCell = new CellAddress(savedSheet.Id, 9, 5);
+
+        Select(session, savedCell);
+        session.SetZoomPercent(175).Success.Should().BeTrue();
+        session.SetShowGridlines(false).Success.Should().BeTrue();
+        session.ExecuteCustomViewCommand(new SaveCustomViewCommand("Cross-sheet View"))
+            .Success.Should().BeTrue();
+
+        session.SelectSheet(originalSheet.Id).Should().BeTrue();
+        Select(session, new CellAddress(originalSheet.Id, 2, 2));
+        savedSheet.ZoomPercent = 90;
+        savedSheet.ShowGridlines = true;
+
+        session.ExecuteCustomViewCommand(new ApplyCustomViewCommand("Cross-sheet View"))
+            .Success.Should().BeTrue();
+
+        session.ActiveSheet.Id.Should().Be(savedSheet.Id);
+        session.ActiveCell.Should().Be(savedCell);
+        session.SelectedRange.Should().Be(new GridRange(savedCell, savedCell));
+        session.ZoomPercent.Should().Be(175);
+        session.IsShowingGridlines.Should().BeFalse();
+    }
+
+    [Fact]
     public void Dispose_RetiresCommandHistoryOnlyAfterLastSiblingViewCloses()
     {
         var workbook = new Workbook("Book");
