@@ -7,7 +7,8 @@ public sealed class WorkbookWindowRegistryDedupSourceGuardTests
     [Fact]
     public void WpfAndAvaloniaRegistries_DelegatePortablePolicyToTheSharedCore()
     {
-        var srcRoot = RepositoryFileLocator.FindDirectory("src");
+        var repositoryRoot = TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeX.slnx");
+        var srcRoot = Path.Combine(repositoryRoot, "src");
         var wpfSource = File.ReadAllText(Path.Combine(
             srcRoot,
             "FreeX.App.Host",
@@ -28,7 +29,6 @@ public sealed class WorkbookWindowRegistryDedupSourceGuardTests
             srcRoot,
             "FreeX.App.Avalonia",
             "MainWindow.cs"));
-        var repositoryRoot = Directory.GetParent(srcRoot)!.FullName;
         var avaloniaParityCapture = File.ReadAllText(Path.Combine(
             repositoryRoot,
             "tools",
