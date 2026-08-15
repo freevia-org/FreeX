@@ -208,14 +208,14 @@ public partial class MainWindow
         if (fromIndex < 0 || toIndex < 0 || fromIndex == toIndex)
             return;
 
-        if (!TryExecuteCommand(new MoveSheetCommand(fromIndex, toIndex), "Move Sheet"))
+        SynchronizeWorkbookSessionSelection();
+        if (!CompleteWorksheetSessionCommand(
+                _session.MoveActiveSheetTo(toIndex),
+                "Move Sheet"))
             return;
 
-        _currentSheetId = draggedId;
-        // Moving a sheet can change which sheets fall inside a 3-D span reference
-        // (e.g. =SUM(Sheet1:Sheet3!A1)), so recalculate just like the other structural
-        // sheet operations (rename/delete/duplicate) do.
-        RecalculateWorkbook();
+        _currentSheetId = _session.ActiveSheet.Id;
+        UpdateViewport();
         RefreshSheetTabs();
     }
 
@@ -330,7 +330,7 @@ public partial class MainWindow
         SelectSingleSheetTab(tab.Id);
         UpdateViewport();
         RefreshSheetTabs();
-        RenameSheet(tab.Id, tab.Name);
+        RenameSheet(tab.Name);
     }
 
     private void AddSheetButton_Click(object sender, RoutedEventArgs e)
@@ -1616,7 +1616,7 @@ public partial class MainWindow
     {
         var tab = GetContextMenuTab(sender);
         if (tab == null) return;
-        RenameSheet(tab.Id, tab.Name);
+        RenameSheet(tab.Name);
     }
 
     private void RenameCurrentSheet()
@@ -1625,10 +1625,10 @@ public partial class MainWindow
         if (sheet is null)
             return;
 
-        RenameSheet(_currentSheetId, sheet.Name);
+        RenameSheet(sheet.Name);
     }
 
-    private void RenameSheet(SheetId sheetId, string currentName)
+    private void RenameSheet(string currentName)
     {
         var dialog = new SheetNameDialog(currentName) { Owner = this };
         if (dialog.ShowDialog() != true)
@@ -1637,10 +1637,12 @@ public partial class MainWindow
         var name = dialog.Result.SheetName;
         if (!string.IsNullOrWhiteSpace(name) && name != currentName)
         {
-            if (!TryExecuteCommand(new RenameSheetCommand(sheetId, name), "Rename Sheet"))
+            SynchronizeWorkbookSessionSelection();
+            if (!CompleteWorksheetSessionCommand(
+                    _session.RenameActiveSheet(name),
+                    "Rename Sheet"))
                 return;
 
-            RecalculateWorkbook();
             RefreshSheetTabs();
         }
     }
@@ -1953,17 +1955,18 @@ public partial class MainWindow
 
         var fromIndex = FindWorkbookSheetIndex(tab.Id);
         var toIndex = fromIndex + direction;
-        if (!TryExecuteCommand(new MoveSheetCommand(fromIndex, toIndex), "Move Sheet"))
+        SynchronizeWorkbookSessionSelection();
+        if (!CompleteWorksheetSessionCommand(
+                _session.MoveActiveSheetTo(toIndex),
+                "Move Sheet"))
             return;
 
-        _currentSheetId = tab.Id;
+        _session.UngroupSheets();
+        _currentSheetId = _session.ActiveSheet.Id;
         _groupedSheetIds.Clear();
         _groupedSheetIds.Add(_currentSheetId);
         _sheetGroupAnchor = _currentSheetId;
-        // Moving a sheet can change which sheets fall inside a 3-D span reference
-        // (e.g. =SUM(Sheet1:Sheet3!A1)), so recalculate just like the other structural
-        // sheet operations (rename/delete/duplicate) do.
-        RecalculateWorkbook();
+        UpdateViewport();
         RefreshSheetTabs();
     }
 

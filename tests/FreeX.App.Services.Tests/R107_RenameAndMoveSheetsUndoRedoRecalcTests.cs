@@ -11,13 +11,9 @@ namespace FreeX.App.Services.Tests;
 /// MoveSheetsCommand) rewrite cross-sheet formula text and reorder sheets respectively -- either
 /// of which can change which sheets fall inside a 3-D span reference (e.g.
 /// <c>=SUM(Sheet1:Sheet3!A1)</c>) -- but neither implemented <see cref="IWholeWorkbookRecalcCommand"/>.
-/// The forward Execute path is covered by an explicit <c>RecalculateWorkbook()</c> call in
-/// <c>WorkbookSession.RenameActiveSheet</c> (and, for MoveSheetsCommand, in the WPF host's sheet-tab
-/// handlers), but <see cref="ICommandBus.Undo"/>/<see cref="ICommandBus.Redo"/> call straight into the
-/// command bus and never reach those wrapper methods -- so Undo/Redo of either operation left 3-D
-/// span formulas showing a stale value forever (until the next F9), unlike Excel, which always
-/// recalculates immediately. See R30_PasteOperationTileAndSheetOpsRecalcTests for the sibling
-/// forward-path coverage this suite does not duplicate.
+/// The shared <see cref="WorkbookCellEditService"/> owns full recalculation for forward, undo,
+/// and redo outcomes from these structural commands. Renderers must not compensate with local
+/// recalculation calls, which previously let command-level and cross-renderer regressions hide.
 /// </summary>
 public sealed class R107_RenameAndMoveSheetsUndoRedoRecalcTests
 {
@@ -150,14 +146,11 @@ public sealed class R107_RenameAndMoveSheetsUndoRedoRecalcTests
         // SheetX starts outside the Sheet1:Sheet3 span (order: Sheet1, Sheet2, Sheet3, SheetX).
         sheet1.GetValue(b1Sheet1).Should().Be(new NumberValue(30));
 
-        // Move SheetX to before Sheet2 -- inside the span. MoveSheetsCommand itself reports no
-        // AffectedCells, so mirror the real WPF host's forward-path compensation
-        // (MainWindow.SheetTabs.cs calls RecalculateWorkbook() right after the command) with an
-        // explicit recalc here, exactly like the product does.
+        // Move SheetX to before Sheet2 -- inside the span. The shared edit service must recalculate
+        // from MoveSheetsCommand's whole-workbook marker without renderer compensation.
         var moveResult = service.ExecuteEditCommand(
             workbook, new MoveSheetsCommand([sheetX.Id], insertBeforeIndex: 1));
         moveResult.Success.Should().BeTrue();
-        recalcEngine.RecalculateAllFormulas(workbook);
         sheet1.GetValue(b1Sheet1).Should().Be(new NumberValue(130), "SheetX now sits inside the Sheet1:Sheet3 span");
 
         // Undo the reorder via the generic command-bus path (exactly what a sheet-tab drag-reorder
@@ -169,6 +162,44 @@ public sealed class R107_RenameAndMoveSheetsUndoRedoRecalcTests
         undoResult.Success.Should().BeTrue();
         workbook.Sheets.Select(s => s.Name).Should().Equal("Sheet1", "Sheet2", "Sheet3", "SheetX");
         sheet1.GetValue(b1Sheet1).Should().Be(new NumberValue(30), "SheetX must be excluded from the span again after Undo");
+    }
+
+    [Fact]
+    public void WpfSheetRenameAndMoveRoutesDelegatePolicyToWorkbookSession()
+    {
+        var source = File.ReadAllText(RepositoryFileLocator.Find(
+            "src", "FreeX.App.Host", "MainWindow.SheetTabs.cs"));
+
+        source.Should().Contain("_session.RenameActiveSheet(name)");
+        source.Should().Contain("_session.MoveActiveSheetTo(toIndex)");
+        source.Should().Contain("_session.UngroupSheets()");
+        source.Should().NotContain("new RenameSheetCommand(");
+        source.Should().NotContain("new MoveSheetCommand(");
+
+        Slice(
+                source,
+                "private void RenameSheet(string currentName)",
+                "private void SheetCtxInsert_Click")
+            .Should().NotContain("RecalculateWorkbook()");
+        Slice(
+                source,
+                "private void CommitPendingSheetTabDragDrop()",
+                "private void ClearSheetTabDragState()")
+            .Should().NotContain("RecalculateWorkbook()");
+        Slice(
+                source,
+                "private void MoveSheetTab(object sender, int direction)",
+                "private static SheetTabViewModel? GetContextMenuTab")
+            .Should().NotContain("RecalculateWorkbook()");
+    }
+
+    private static string Slice(string source, string startMarker, string endMarker)
+    {
+        var start = source.IndexOf(startMarker, StringComparison.Ordinal);
+        start.Should().BeGreaterThanOrEqualTo(0);
+        var end = source.IndexOf(endMarker, start, StringComparison.Ordinal);
+        end.Should().BeGreaterThan(start);
+        return source[start..end];
     }
 
     private static WorkbookSession CreateSession(Workbook workbook) =>
