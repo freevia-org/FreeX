@@ -440,27 +440,13 @@ public partial class MainWindow
         if (sheet is null)
             return null;
 
-        // Generous per-row/per-column pixel bounds so the viewport's internal "stop materializing"
-        // heuristic (which walks actual row heights/column widths, not these estimates) always
-        // reaches past the end of the requested range even for tall rows / wide columns, while still
-        // being a small constant multiple of the range size rather than the whole sheet.
-        const double MaxPlausibleRowHeight = 500.0;
-        const double MaxPlausibleColWidth = 2000.0;
-
-        var rowSpan = (double)range.RowCount;
-        var colSpan = (double)range.ColCount;
-        var availableHeight = Math.Min(double.MaxValue / 2, (rowSpan + 2) * MaxPlausibleRowHeight);
-        var availableWidth = Math.Min(double.MaxValue / 2, (colSpan + 2) * MaxPlausibleColWidth);
-
-        var request = new ViewportRequest(
-            TopRow: range.Start.Row,
-            LeftCol: range.Start.Col,
-            AvailableHeight: availableHeight,
-            AvailableWidth: availableWidth,
-            IncludeObjects: false,
-            SplitPaneOffsets: null);
-
-        return _viewportService.GetViewport(_workbook, _currentSheetId, request);
+        // The request's generous per-row/per-column pixel bounds and its overflow clamp live in the
+        // neutral tier (ClipboardViewportPlanner), shared with WorkbookSession's own clipboard copy
+        // path, so this host cannot drift from it.
+        return _viewportService.GetViewport(
+            _workbook,
+            _currentSheetId,
+            ClipboardViewportPlanner.BuildFullRangeViewportRequest(range));
     }
 
     private static List<(CellAddress Source, PictureCellSnapshot Snapshot)> CapturePictureCells(

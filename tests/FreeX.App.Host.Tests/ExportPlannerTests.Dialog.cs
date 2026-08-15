@@ -7,9 +7,9 @@ namespace FreeX.App.Host.Tests;
 public partial class ExportPlannerTests
 {
     [Fact]
-    public void ExportOptionsDialog_CreateResult_NormalizesExcelOptions()
+    public void ExportOptionsDialogSurfacePlanner_CreateResult_NormalizesExcelOptions()
     {
-        ExportOptionsDialog.CreateResult(
+        ExportOptionsDialogSurfacePlanner.CreateResult(
                 ExportContentScope.EntireWorkbook,
                 includeDocumentProperties: true,
                 openAfterPublish: true,
@@ -32,9 +32,9 @@ public partial class ExportPlannerTests
     }
 
     [Fact]
-    public void ExportOptionsDialog_CreateResult_IgnoresBookmarkModeWhenBookmarksAreUnchecked()
+    public void ExportOptionsDialogSurfacePlanner_CreateResult_IgnoresBookmarkModeWhenBookmarksAreUnchecked()
     {
-        ExportOptionsDialog.CreateResult(
+        ExportOptionsDialogSurfacePlanner.CreateResult(
                 ExportContentScope.ActiveSheet,
                 includeDocumentProperties: false,
                 openAfterPublish: false,
@@ -49,9 +49,9 @@ public partial class ExportPlannerTests
     }
 
     [Fact]
-    public void ExportOptionsDialog_CreateResult_ClearsPdfOnlyChoicesForXps()
+    public void ExportOptionsDialogSurfacePlanner_CreateResult_ClearsPdfOnlyChoicesForXps()
     {
-        ExportOptionsDialog.CreateResult(
+        ExportOptionsDialogSurfacePlanner.CreateResult(
                 ExportContentScope.EntireWorkbook,
                 includeDocumentProperties: true,
                 openAfterPublish: true,
@@ -177,6 +177,14 @@ public partial class ExportPlannerTests
         source.Should().Contain("AutomationProperties.SetAutomationId(this, ExportOptionsDialogSurfacePlanner.DialogAutomationId);");
         source.Should().Contain("ApplyFormatAvailability(ExportOptionsDialogSurfacePlanner.CreateFormatAvailability(format));");
         source.Should().Contain("DisableOption(_bookmarksBox, UiText.Get(\"Export_BookmarksPdfOnly\"));");
+
+        // The WPF dialog must not re-declare a CreateResult of its own (not even a pass-through
+        // forwarder whose 15-parameter signature is a byte-for-byte copy of the planner's): the
+        // OK handler calls the neutral planner directly, so the option-normalization contract is
+        // declared exactly once, in FreeX.App.Services.
+        source.Should().NotContain("public static ExportOptions CreateResult(");
+        source.Should().NotContain("Result = CreateResult(");
+        source.Should().Contain("Result = ExportOptionsDialogSurfacePlanner.CreateResult(");
     }
 
     [Fact]

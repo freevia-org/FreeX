@@ -3615,36 +3615,16 @@ public sealed class WorkbookSession : IDisposable
 
     /// <summary>
     /// Builds a <see cref="ViewportModel"/> that materializes every cell in <paramref name="range"/>,
-    /// independent of the current scroll position. Mirrors the WPF host's
-    /// <c>MainWindow.BuildFullRangeViewportForClipboard</c> (P41 / R14-clipboard-formats-deep-1):
-    /// requesting a viewport whose top-left is the range's own start and whose available
-    /// height/width is sized (generously) to the range's own row/column span guarantees every cell
-    /// in the range is present regardless of what is currently scrolled into view.
+    /// independent of the current scroll position (P41 / R14-clipboard-formats-deep-1). The request
+    /// itself is owned by <see cref="ClipboardViewportPlanner.BuildFullRangeViewportRequest"/>, which
+    /// the WPF host's <c>MainWindow.BuildFullRangeViewportForClipboard</c> also calls, so both
+    /// renderer families size the copy viewport identically.
     /// </summary>
-    private ViewportModel BuildFullRangeViewportForClipboard(GridRange range)
-    {
-        // Generous per-row/per-column pixel bounds so the viewport's internal "stop materializing"
-        // heuristic (which walks actual row heights/column widths, not these estimates) always
-        // reaches past the end of the requested range even for tall rows / wide columns, while still
-        // being a small constant multiple of the range size rather than the whole sheet.
-        const double MaxPlausibleRowHeight = 500.0;
-        const double MaxPlausibleColWidth = 2000.0;
-
-        var rowSpan = (double)range.RowCount;
-        var colSpan = (double)range.ColCount;
-        var availableHeight = Math.Min(double.MaxValue / 2, (rowSpan + 2) * MaxPlausibleRowHeight);
-        var availableWidth = Math.Min(double.MaxValue / 2, (colSpan + 2) * MaxPlausibleColWidth);
-
-        var request = new ViewportRequest(
-            TopRow: range.Start.Row,
-            LeftCol: range.Start.Col,
-            AvailableHeight: availableHeight,
-            AvailableWidth: availableWidth,
-            IncludeObjects: false,
-            SplitPaneOffsets: null);
-
-        return _viewportService.GetViewport(Workbook, range.Start.Sheet, request);
-    }
+    private ViewportModel BuildFullRangeViewportForClipboard(GridRange range) =>
+        _viewportService.GetViewport(
+            Workbook,
+            range.Start.Sheet,
+            ClipboardViewportPlanner.BuildFullRangeViewportRequest(range));
 
     public WorkbookCellEditResult PasteClipboardTextAtActiveCell(
         string? text,

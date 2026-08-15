@@ -145,7 +145,7 @@ internal sealed class ExportOptionsDialog : Window
                 return;
             }
 
-            Result = CreateResult(
+            Result = ExportOptionsDialogSurfacePlanner.CreateResult(
                 _entireWorkbookButton.IsChecked == true
                     ? ExportContentScope.EntireWorkbook
                     : _selectionButton.IsChecked == true
@@ -244,39 +244,6 @@ internal sealed class ExportOptionsDialog : Window
             ? _toPageBox
             : _fromPageBox;
     }
-
-    public static ExportOptions CreateResult(
-        ExportContentScope scope,
-        bool includeDocumentProperties,
-        bool openAfterPublish,
-        bool ignorePrintAreas = false,
-        ExportPageRange? pageRange = null,
-        ExportQuality quality = ExportQuality.Standard,
-        bool createBookmarks = false,
-        PdfBookmarkMode bookmarkMode = PdfBookmarkMode.None,
-        PdfInitialView initialView = PdfInitialView.SinglePage,
-        PdfOpenMode openMode = PdfOpenMode.Normal,
-        bool bitmapTextWhenFontsMayNotBeEmbedded = false,
-        string? pdfLanguage = ExportPlanner.DefaultPdfLanguage,
-        PdfConformance pdfConformance = PdfConformance.Standard,
-        bool includeDocumentStructureTags = false,
-        ExportFormat format = ExportFormat.Pdf) =>
-        ExportOptionsDialogSurfacePlanner.CreateResult(
-            scope,
-            includeDocumentProperties,
-            openAfterPublish,
-            ignorePrintAreas,
-            pageRange,
-            quality,
-            createBookmarks,
-            bookmarkMode,
-            initialView,
-            openMode,
-            bitmapTextWhenFontsMayNotBeEmbedded,
-            pdfLanguage,
-            pdfConformance,
-            includeDocumentStructureTags,
-            format);
 
     private PdfBookmarkMode GetSelectedBookmarkMode() =>
         ExportOptionsDialogSurfacePlanner.BookmarkModeFromIndex(_bookmarkModeBox.SelectedIndex);
