@@ -3937,7 +3937,11 @@ public sealed partial class MainWindow : Window
             ImportPdfText: () => _ = ImportPdfTextAsync(),
             Save: () => _applicationCommands.Execute(FreeWKeyboardCommand.SaveDocument),
             SaveAs: () => _applicationCommands.Execute(FreeWKeyboardCommand.SaveDocumentAs),
-            SaveAsFormat: (ext, filterIndex) => _ = SaveAsWithFormatAsync(ext, filterIndex),
+            SaveAsFormat: (extension, filterIndex) =>
+            {
+                _ = filterIndex;
+                _ = _fileCommands.SaveAsFormatAsync(extension);
+            },
             SaveCopy: () => _ = SaveCopyAsync(),
             OpenContainingFolder: path =>
             {
@@ -4064,43 +4068,6 @@ public sealed partial class MainWindow : Window
         var result = DesktopPathLauncher.OpenDirectory(folder);
         if (result.Error is not null)
             _status.Text = UiText.Format("Shell_OpenFolderFailed_Status_Format", result.Error.Message);
-    }
-
-    /// <summary>
-    /// Save As targeting a specific file format chosen from the backstage planner.
-    /// Builds a save-picker pre-filtered to the requested format and lets the user
-    /// confirm the filename before saving.
-    /// </summary>
-    private async Task SaveAsWithFormatAsync(string extension, int filterIndex)
-    {
-        var normalizedExt = DocumentFileFormatResolver.NormalizeExtension(extension);
-        if (!_documentPersistence.TryGetSaveFormat(filterIndex, out var format) &&
-            !_documentPersistence.TryGetSaveFormat(normalizedExt, out format))
-        {
-            _status.Text = SisterAppFileTextPlanner.FormatUnsupportedExtension(FileText, extension);
-            return;
-        }
-
-        var savePlan = _documentPersistence.BuildSavePickerPlan(
-            _fileWorkflow.CurrentPath,
-            _fileWorkflow.CurrentFileName,
-            FileText.FallbackDisplayName,
-            normalizedExt);
-
-        using var file = await AvaloniaFilePickerService.PickSaveFileWithLocalPathAsync(
-            StorageProvider,
-            AvaloniaFilePickerSaveRequest.FromFileTypes(
-                SisterAppFileTextPlanner.FormatSaveAsTitle(FileText, format?.FormatName ?? extension),
-                [
-                    AvaloniaFilePickerTypeAdapter.CreateFileType(
-                        format?.FormatName ?? extension,
-                        [$"*{normalizedExt}"])
-                ],
-                savePlan.SuggestedFileName,
-                savePlan.DefaultExtensionWithoutDot));
-        var path = file?.LocalPath;
-        if (path is not null)
-            await _fileCommands.SavePathAsync(path, filterIndex);
     }
 
     // Opens an external URL raised by DocumentView.HyperlinkActivated through the shared scheme allowlist.

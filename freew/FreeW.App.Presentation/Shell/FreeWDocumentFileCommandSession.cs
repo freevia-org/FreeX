@@ -89,6 +89,9 @@ public sealed class FreeWDocumentFileCommandSession
 
     public Task<bool> SaveAsAsync() => SaveAsAsync(null, null);
 
+    public Task<bool> SaveAsFormatAsync(string preferredExtension) =>
+        SaveAsAsync(suggestedFileName: null, preferredExtension);
+
     public async Task<bool> SaveAsAsync(
         string? suggestedFileName,
         string? preferredExtension)
