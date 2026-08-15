@@ -49,7 +49,7 @@ public sealed class FreeXR14T11Tests
                 .Should().NotBe(global::Avalonia.Automation.AutomationLiveSetting.Polite,
                     "test setup sanity: the live region must not already be applied before the commit");
 
-            window.FormulaBoxTextForTest = "hello";
+            window.BeginFormulaEditForTest(address, "hello");
             window.RaiseFormulaBoxKeyDownForTest(new KeyEventArgs { Key = Key.Enter, KeyModifiers = KeyModifiers.None });
 
             global::Avalonia.Automation.AutomationProperties.GetLiveSetting(window.StatusTextForTest)
