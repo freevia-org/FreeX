@@ -2046,12 +2046,8 @@ public sealed partial class DocumentView : Control
     /// </list>
     /// Routed through <see cref="DocumentCommandBus"/> as a grouped undo action. No-op when the
     /// caret is not inside a table cell.
-    /// <para>
-    /// NOTE — vertical render: the Avalonia table renderer currently top-anchors all cell content
-    /// (ty = rowPageSpaceY + pad in <c>LayoutTablePaged</c>).  Horizontal alignment applies
-    /// immediately through the existing paragraph-alignment render path.  Vertical centering/bottom
-    /// positioning is a follow-up render task (AV-TBL5-VRENDER).
-    /// </para>
+    /// Vertical positioning is resolved by the shared <see cref="TableCellVerticalLayoutPlanner"/>
+    /// from renderer-measured row and content heights.
     /// </summary>
     public void SetCaretCellAlignment(TableCellVerticalAlignment verticalAlignment, TextAlignment horizontalAlignment)
     {
@@ -8913,7 +8909,7 @@ public sealed partial class DocumentView : Control
         // TryGetCaretRect can match (Block == tableBlockIndex && Offset == glyphOffset).
         var glyphOffset = 0;
 
-        // AV-TBL5-VRENDER-VMERGE: pre-compute every row's height up front. A vertical-merge Restart
+        // Pre-compute every row's height up front. A vertical-merge Restart
         // cell needs the TOTAL height of all rows it spans to vertically align its content within the
         // whole merged region rather than just its own (first) row — that total isn't known yet when
         // the row loop below reaches the Restart row, since later rows haven't been measured. This
@@ -9097,26 +9093,16 @@ public sealed partial class DocumentView : Control
                 var cellLines = cellParas.SelectMany(pl => pl).ToList();
                 var contentHeight = cellLines.Sum(l => l.Height)
                     + paragraphSpacings.Sum(spacing => spacing.Before + spacing.After);
-                var mergedSpanHeight = rowHeight;
-                if (cellModel.VerticalMerge == VerticalMergeState.Restart)
-                {
-                    mergedSpanHeight = 0;
-                    for (var mr = r; mr < table.Rows.Count; mr++)
-                    {
-                        if (mr > r && GetCellModelGridCol(table, mr, startCol)?.VerticalMerge != VerticalMergeState.Continue)
-                            break;
-                        mergedSpanHeight += mr == r ? rowHeight : rowHeights[mr];
-                    }
-                }
-                var cellAvailableHeight = mergedSpanHeight - 2 * pad;
-                var vAlignOffset = cellModel.VerticalAlignment switch
-                {
-                    TableCellVerticalAlignment.Center =>
-                        Math.Max(0.0, (cellAvailableHeight - contentHeight) / 2.0),
-                    TableCellVerticalAlignment.Bottom =>
-                        Math.Max(0.0, cellAvailableHeight - contentHeight),
-                    _ => 0.0  // Top (default)
-                };
+                var mergedSpanHeight = TableCellVerticalLayoutPlanner.ResolveRegionHeight(
+                    table,
+                    rowHeights,
+                    r,
+                    startCol);
+                var vAlignOffset = TableCellVerticalLayoutPlanner.ResolveContentOffset(
+                    cellModel.VerticalAlignment,
+                    mergedSpanHeight,
+                    contentHeight,
+                    pad);
                 var contentTopY = rect.Top + pad + vAlignOffset;
 
                 var ty = contentTopY;
