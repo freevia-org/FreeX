@@ -346,6 +346,46 @@ public static class ScenarioManagerPlanner
             []);
     }
 
+    /// <summary>
+    /// Projects scenarios loaded from another workbook onto same-named sheets in the target
+    /// workbook. Sheet identifiers are workbook-local, so renderer file-open flows must never pass
+    /// source addresses directly to the merge command. A scenario is omitted when any changing
+    /// cell cannot be resolved, avoiding a misleading partial merge.
+    /// </summary>
+    public static IReadOnlyList<WorkbookScenario> RemapScenariosBySheetName(
+        Workbook source,
+        Workbook target)
+    {
+        ArgumentNullException.ThrowIfNull(source);
+        ArgumentNullException.ThrowIfNull(target);
+
+        var remapped = new List<WorkbookScenario>();
+        foreach (var scenario in source.Scenarios)
+        {
+            var remappedCells = new List<ScenarioCellValue>(scenario.ChangingCells.Count);
+            var allResolved = true;
+            foreach (var cell in scenario.ChangingCells)
+            {
+                var sourceSheet = source.GetSheet(cell.Address.Sheet);
+                var targetSheet = sourceSheet is null ? null : target.GetSheet(sourceSheet.Name);
+                if (targetSheet is null)
+                {
+                    allResolved = false;
+                    break;
+                }
+
+                remappedCells.Add(new ScenarioCellValue(
+                    new CellAddress(targetSheet.Id, cell.Address.Row, cell.Address.Col),
+                    cell.Value));
+            }
+
+            if (allResolved && remappedCells.Count > 0)
+                remapped.Add(scenario with { ChangingCells = remappedCells });
+        }
+
+        return remapped;
+    }
+
     private static ScenarioManagerPlan CreateScenarioActionPlan(
         Workbook? workbook,
         ScenarioManagerOperation operation,

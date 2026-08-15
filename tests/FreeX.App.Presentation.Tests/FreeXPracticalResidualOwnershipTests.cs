@@ -205,6 +205,36 @@ public sealed class FreeXPracticalResidualOwnershipTests
         wpf.Should().NotContain("_workbook.Sheets.LastOrDefault()");
     }
 
+    [Fact]
+    public void ScenarioManagerMutations_AreOwnedByServicesAndRenderersUseTheSession()
+    {
+        var planner = Read("src", "FreeX.App.Services", "ScenarioManagerPlanner.cs");
+        var session = Read("src", "FreeX.App.Services", "WorkbookSession.cs");
+        var avalonia = Read("src", "FreeX.App.Avalonia", "MainWindow.cs");
+        var wpf = Read("src", "FreeX.App.Host", "MainWindow.ScenarioCommands.cs");
+
+        planner.Should().Contain("public static IReadOnlyList<WorkbookScenario> RemapScenariosBySheetName(");
+        session.Should().Contain("public WorkbookCellEditResult MergeScenarios(");
+        session.Should().Contain("_cellEditService.ExecuteRepeatableEditCommand(");
+        session.Should().Contain("() => new ApplyScenarioCommand(scenarioName)");
+        avalonia.Should().Contain("_session.ExecuteScenarioManagerSavePlan(savePlan, request)");
+        avalonia.Should().Contain("_session.ExecuteScenarioManagerShowPlan(showPlan)");
+        avalonia.Should().Contain("_session.ExecuteScenarioManagerDeletePlan(deletePlan)");
+        avalonia.Should().Contain("_session.ExecuteScenarioManagerSummaryReportPlan(summaryPlan)");
+        wpf.Should().Contain("_session.SaveScenario(request)");
+        wpf.Should().Contain("_session.ShowScenario(name)");
+        wpf.Should().Contain("_session.DeleteScenario(scenarioName)");
+        wpf.Should().Contain("_session.CreateScenarioSummaryReport(");
+        wpf.Should().Contain("_session.MergeScenarios(mergeCandidates)");
+        wpf.Should().Contain("ScenarioManagerPlanner.RemapScenariosBySheetName(");
+        wpf.Should().NotContain("new SaveScenarioCommand(");
+        wpf.Should().NotContain("new ApplyScenarioCommand(");
+        wpf.Should().NotContain("new DeleteScenarioCommand(");
+        wpf.Should().NotContain("new ScenarioSummaryReportCommand(");
+        wpf.Should().NotContain("new MergeScenarioCommand(");
+        wpf.Should().NotContain("private static List<WorkbookScenario> RemapScenariosBySheetName(");
+    }
+
     private static string Read(params string[] parts)
     {
         var root = TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeX.slnx");

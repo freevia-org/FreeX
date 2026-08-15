@@ -2,7 +2,6 @@ using System.Linq;
 using System.Windows;
 using FreeX.App.Presentation.ScenarioManager;
 using FreeX.App.Services;
-using FreeX.Core.Commands;
 using FreeX.Core.IO;
 using FreeX.Core.Model;
 using FileDialogFilterBuilder = Free.Shared.IO.FileDialogFilterBuilder;
@@ -116,7 +115,14 @@ public partial class MainWindow
         }
 
         var scenarioManagerTitle = ScenarioManagerDialogPlanner.Title.Resolve(UiText.Get, UiText.Format);
-        if (!TryExecuteCommand(new SaveScenarioCommand(name, changes, comment, hidden, locked, replaceScenarioName), scenarioManagerTitle))
+        var request = new ScenarioManagerSaveRequest(
+            name,
+            changes,
+            replaceScenarioName,
+            comment,
+            hidden,
+            locked);
+        if (!TryExecuteWorksheetLayout(() => _session.SaveScenario(request), scenarioManagerTitle))
             return;
 
         _messageService.ShowInfo(ScenarioManagerPlanner.FormatSavedMessage(name, changes.Count), scenarioManagerTitle);
@@ -144,43 +150,13 @@ public partial class MainWindow
         if (name is null)
             return;
 
-        if (!TryExecuteRepeatableCommand(
-                () => new ApplyScenarioCommand(name),
-                ScenarioManagerDialogPlanner.Title.Resolve(UiText.Get, UiText.Format),
-                out var outcome))
+        if (!TryExecuteWorksheetLayout(
+                () => _session.ShowScenario(name),
+                ScenarioManagerDialogPlanner.Title.Resolve(UiText.Get, UiText.Format)))
             return;
 
-        // Scenario "Show" writes the changing cells' values directly (Sheet.SetCell), and Excel
-        // always reflects a value change immediately regardless of calculation mode -- only
-        // formula recalculation is deferred by Manual mode. RecalculateIfAutomatic above is a
-        // no-op outside Automatic/AutomaticExceptDataTables mode, so it never bumps the
-        // navigation-cache revision that SparklineValueCache/WorkbookSelectionStatsCache are keyed on;
-        // force that invalidation here so sparklines and status-bar stats over the changed cells
-        // refresh immediately instead of showing pre-scenario data until an unrelated edit
-        // happens to bump the revision. Mirrors the Goal Seek fix in MainWindow.DataCommands.cs.
-        InvalidateNavigationCachesIfManual();
-
-        var refreshedSelectionUi = false;
-        CellAddress? first = null;
-        if (outcome.AffectedCells is not null)
-        {
-            foreach (var cell in outcome.AffectedCells)
-            {
-                first = cell;
-                break;
-            }
-        }
-
-        if (first is { } firstCell)
-        {
-            SetActiveCell(firstCell);
-            EnsureCellVisible(firstCell);
-            refreshedSelectionUi = true;
-        }
-
         UpdateViewport();
-        if (!refreshedSelectionUi)
-            RefreshStatusBar();
+        RefreshStatusBar();
     }
 
     private void DeleteScenarioByName(string? scenarioName)
@@ -189,11 +165,8 @@ public partial class MainWindow
             return;
 
         var scenarioManagerTitle = ScenarioManagerDialogPlanner.Title.Resolve(UiText.Get, UiText.Format);
-        if (!TryExecuteCommand(new DeleteScenarioCommand(scenarioName), scenarioManagerTitle, out var outcome))
-        {
-            ShowCommandError(outcome, scenarioManagerTitle);
+        if (!TryExecuteWorksheetLayout(() => _session.DeleteScenario(scenarioName), scenarioManagerTitle))
             return;
-        }
 
         UpdateViewport();
         RefreshStatusBar();
@@ -224,33 +197,18 @@ public partial class MainWindow
 
     private void CreateScenarioSummaryReport(string? resultCellsText = null)
     {
-        if (!TryExecuteCommand(
-            new ScenarioSummaryReportCommand(
-                ParseScenarioResultCells(resultCellsText),
-                // Always recalculate here, independent of the workbook's calculation mode: the
-                // summary report's whole purpose is to show each scenario's distinct computed
-                // result, so Manual mode must not leave every scenario column reading the same
-                // stale pre-report value (Excel's own Scenario Summary always computes fresh
-                // per-scenario results).
-                (_, changedCells) => _session.RecalculateChangedCellsAlways(changedCells)),
-            ScenarioManagerDialogPlanner.Title.Resolve(UiText.Get, UiText.Format)))
+        if (!TryExecuteWorksheetLayout(
+                () => _session.CreateScenarioSummaryReport(ParseScenarioResultCells(resultCellsText)),
+                ScenarioManagerDialogPlanner.Title.Resolve(UiText.Get, UiText.Format)))
             return;
 
-        var report = _workbook.Sheets.LastOrDefault();
-        var refreshedSelectionUi = false;
-        if (report is not null)
-        {
-            _currentSheetId = report.Id;
-            _groupedSheetIds.Clear();
-            _groupedSheetIds.Add(_currentSheetId);
-            SetActiveCell(new CellAddress(_currentSheetId, 1, 1));
-            refreshedSelectionUi = true;
-        }
+        _groupedSheetIds.Clear();
+        _groupedSheetIds.Add(_session.ActiveSheet.Id);
+        _sheetGroupAnchor = _session.ActiveSheet.Id;
 
         UpdateViewport();
         RefreshSheetTabs();
-        if (!refreshedSelectionUi)
-            RefreshStatusBar();
+        RefreshStatusBar();
     }
 
     /// <summary>
@@ -301,50 +259,11 @@ public partial class MainWindow
             return;
         }
 
-        var mergeCandidates = RemapScenariosBySheetName(sourceWorkbook, _workbook);
-        if (!TryExecuteCommand(new MergeScenarioCommand(mergeCandidates), scenarioManagerTitle, out var outcome))
-        {
-            ShowCommandError(outcome, scenarioManagerTitle);
+        var mergeCandidates = ScenarioManagerPlanner.RemapScenariosBySheetName(sourceWorkbook, _workbook);
+        if (!TryExecuteWorksheetLayout(() => _session.MergeScenarios(mergeCandidates), scenarioManagerTitle))
             return;
-        }
 
         UpdateViewport();
         RefreshStatusBar();
-    }
-
-    /// <summary>
-    /// Remaps every source scenario's changing cells from <paramref name="source"/>'s sheets onto
-    /// <paramref name="target"/>'s sheets of the same name (source and target workbooks each mint
-    /// their own <see cref="SheetId"/>s, so a scenario's addresses can never be reused as-is). A
-    /// scenario with any changing cell on a sheet name absent from the target is dropped entirely
-    /// rather than partially merged.
-    /// </summary>
-    private static List<WorkbookScenario> RemapScenariosBySheetName(Workbook source, Workbook target)
-    {
-        var remapped = new List<WorkbookScenario>();
-        foreach (var scenario in source.Scenarios)
-        {
-            var remappedCells = new List<ScenarioCellValue>(scenario.ChangingCells.Count);
-            var allResolved = true;
-            foreach (var cell in scenario.ChangingCells)
-            {
-                var sourceSheet = source.GetSheet(cell.Address.Sheet);
-                var targetSheet = sourceSheet is null ? null : target.GetSheet(sourceSheet.Name);
-                if (targetSheet is null)
-                {
-                    allResolved = false;
-                    break;
-                }
-
-                remappedCells.Add(new ScenarioCellValue(
-                    new CellAddress(targetSheet.Id, cell.Address.Row, cell.Address.Col),
-                    cell.Value));
-            }
-
-            if (allResolved && remappedCells.Count > 0)
-                remapped.Add(scenario with { ChangingCells = remappedCells });
-        }
-
-        return remapped;
     }
 }

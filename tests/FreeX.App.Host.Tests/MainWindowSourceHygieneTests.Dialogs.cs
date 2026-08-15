@@ -280,14 +280,10 @@ public sealed partial class MainWindowSourceHygieneTests
     {
         var scenarioSource = DialogSourceTestSupport.ReadHostSources("MainWindow.ScenarioCommands.cs");
 
-        scenarioSource.Should().Contain("TryExecuteRepeatableCommand(");
-        scenarioSource.Should().Contain("() => new ApplyScenarioCommand(name)");
-        scenarioSource.Should().NotContain("RecalculateIfAutomatic(outcome.AffectedCells ?? []);");
-        scenarioSource.Should().Contain("CellAddress? first = null;");
-        scenarioSource.Should().Contain("foreach (var cell in outcome.AffectedCells)");
-        scenarioSource.Should().Contain("if (first is { } firstCell)");
-        scenarioSource.Should().Contain("SetActiveCell(firstCell);");
-        scenarioSource.Should().Contain("EnsureCellVisible(firstCell);");
+        scenarioSource.Should().Contain("_session.ShowScenario(name)");
+        scenarioSource.Should().NotContain("new ApplyScenarioCommand(");
+        scenarioSource.Should().NotContain("TryExecuteRepeatableCommand(");
+        scenarioSource.Should().NotContain("InvalidateNavigationCachesIfManual();");
     }
 
     [Fact]

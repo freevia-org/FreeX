@@ -107,16 +107,15 @@ public sealed partial class ScenarioManagerDialogTests
         handlerSource.Should().Contain("dialog.ScenarioHidden");
         handlerSource.Should().Contain("dialog.ScenarioLocked");
         handlerSource.Should().Contain("dialog.ResultCellsText");
-        handlerSource.Should().Contain("new ScenarioSummaryReportCommand(");
+        handlerSource.Should().Contain("_session.CreateScenarioSummaryReport(ParseScenarioResultCells(resultCellsText))");
         handlerSource.Should().Contain("ParseScenarioResultCells(resultCellsText)");
         handlerSource.Should().Contain("WorkbookRangeTextCodec.TryParseMany(_currentSheetId, resultCellsText, ResolveSheetIdByName, out var ranges)");
         handlerSource.Should().Contain("ranges.SelectMany(range => range.AllCells()).Distinct().ToList()");
-        // P20 fix: the Scenario Summary recalculate delegate is now unconditional (independent of
-        // WorkbookCalculationMode) so Manual-mode workbooks still get a genuinely distinct
-        // recalculated result per scenario column instead of repeating the same stale value.
-        handlerSource.Should().Contain("_session.RecalculateChangedCellsAlways(changedCells)");
         handlerSource.Should().Contain("dialog.SelectedAction == ScenarioManagerAction.Edit ? dialog.SelectedScenarioName : null");
-        handlerSource.Should().Contain("new SaveScenarioCommand(name, changes, comment, hidden, locked, replaceScenarioName)");
+        handlerSource.Should().Contain("new ScenarioManagerSaveRequest(");
+        handlerSource.Should().Contain("_session.SaveScenario(request)");
+        handlerSource.Should().NotContain("new SaveScenarioCommand(");
+        handlerSource.Should().NotContain("new ScenarioSummaryReportCommand(");
         handlerSource.Should().Contain("TryParseScenarioChangingCells");
     }
 

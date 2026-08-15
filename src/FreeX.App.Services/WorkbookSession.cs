@@ -1862,6 +1862,15 @@ public sealed class WorkbookSession : IDisposable
     public WorkbookCellEditResult CreateScenarioSummaryReport(IReadOnlyList<CellAddress>? resultCells = null) =>
         ExecuteScenarioManagerSummaryReportPlan(ScenarioManagerPlanner.CreateSummaryReportPlan(Workbook, resultCells));
 
+    public WorkbookCellEditResult MergeScenarios(IReadOnlyList<WorkbookScenario> sourceScenarios)
+    {
+        ArgumentNullException.ThrowIfNull(sourceScenarios);
+
+        return ExecuteScenarioManagerMergePlan(
+            ScenarioManagerPlanner.CreateMergePlan(Workbook, sourceScenarios),
+            sourceScenarios);
+    }
+
     public WorkbookCellEditResult ExecuteScenarioManagerSavePlan(
         ScenarioManagerPlan plan,
         ScenarioManagerSaveRequest request)
@@ -1897,9 +1906,10 @@ public sealed class WorkbookSession : IDisposable
         if (plan.SelectedScenario is null)
             return FailedScenarioManagerResult("Select a scenario before continuing.");
 
-        var result = _cellEditService.ExecuteEditCommand(
+        var scenarioName = plan.SelectedScenario.Name;
+        var result = _cellEditService.ExecuteRepeatableEditCommand(
             Workbook,
-            new ApplyScenarioCommand(plan.SelectedScenario.Name));
+            () => new ApplyScenarioCommand(scenarioName));
         if (!result.Success)
             return result;
 
@@ -1948,6 +1958,26 @@ public sealed class WorkbookSession : IDisposable
             return result;
 
         ApplySuccessfulHistoryResult(result, sheetIdsBefore);
+        return result;
+    }
+
+    public WorkbookCellEditResult ExecuteScenarioManagerMergePlan(
+        ScenarioManagerPlan plan,
+        IReadOnlyList<WorkbookScenario> sourceScenarios)
+    {
+        ArgumentNullException.ThrowIfNull(plan);
+        ArgumentNullException.ThrowIfNull(sourceScenarios);
+
+        if (ValidateScenarioManagerPlan(plan, ScenarioManagerOperation.Merge) is { } validationResult)
+            return validationResult;
+
+        var result = _cellEditService.ExecuteEditCommand(
+            Workbook,
+            new MergeScenarioCommand(sourceScenarios));
+        if (!result.Success)
+            return result;
+
+        ApplySuccessfulWorkbookMetadataResult(ActiveSheet.Id);
         return result;
     }
 
