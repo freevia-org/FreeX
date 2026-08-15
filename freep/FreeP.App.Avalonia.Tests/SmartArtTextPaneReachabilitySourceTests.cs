@@ -35,8 +35,9 @@ public sealed class SmartArtTextPaneReachabilitySourceTests
 
         mainWindow.Should().Contain(
             "_workareaSession = new PresentationWorkareaSession(CreateWorkareaEndpoint());");
-        mainWindow.Should().Contain(
-            "_workareaSession.Panes.Show(PresentationWorkareaPane.SmartArtText)");
+        mainWindow.Should().Contain("SmartArtTextPaneHostCoordinator.Show();")
+            .And.Contain("_workareaSession.Panes,")
+            .And.Contain("PresentationWorkareaPane.SmartArtText,");
         endpoint.Should().Contain("RefreshSmartArtPane = () => ShowSmartArtTextPane()");
         workareaSession.Should().Contain(
             "Panes.IsVisible(PresentationWorkareaPane.SmartArtText)");
@@ -48,7 +49,7 @@ public sealed class SmartArtTextPaneReachabilitySourceTests
     public void AvaloniaSmartArtTextPane_IsReachableFromTheRibbonRegistry()
     {
         var sourcePath = TestWorkspaceFileLocator.Find(
-            "freep", "FreeP.App.Avalonia", "MainWindow.cs");
+            "freep", "RendererShared", "MainWindow.RibbonActionProfile.cs");
         var source = File.ReadAllText(sourcePath);
         var workflow = TestWorkspaceFileLocator.ReadAllText(
             "freep", "FreeP.App.Presentation", "Ribbon", "FreePRibbonCommandWorkflow.cs");

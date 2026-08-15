@@ -156,7 +156,9 @@ public sealed class MainWindowHeadlessTests : IDisposable
                     .OfType<Grid>()
                     .Single(candidate => candidate.Children.OfType<SlideCanvas>().Any());
                 var canvas = canvasContent.Children.OfType<SlideCanvas>().Single();
-                var textOverlay = stack.Children.OfType<Canvas>().Single();
+                var textOverlay = stack.Children
+                    .OfType<Canvas>()
+                    .Single(candidate => !candidate.IsVisible && !candidate.IsHitTestVisible);
                 textOverlay.IsVisible = true;
                 global::Avalonia.Threading.Dispatcher.UIThread.RunJobs();
 
@@ -635,7 +637,8 @@ public sealed class MainWindowHeadlessTests : IDisposable
         mainWindow.Should().Contain(
             ".BuildStatusPlan(FreePApplicationFrameDescriptor.ResolveDataFolderLabel())");
         mainWindow.Should().Contain("chrome: ribbon,");
-        mainWindow.Should().Contain("workArea: BuildBody(),");
+        mainWindow.Should().Contain("var body = BuildBody();");
+        mainWindow.Should().Contain("workArea: body,");
         mainWindow.Should().Contain("statusBar: statusBar");
         mainWindow.Should().Contain("clientRoot.Children.Add(frame.Root);");
         mainWindow.Should().Contain("clientRoot.Children.Add(_backstage);");
