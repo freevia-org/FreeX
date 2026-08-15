@@ -585,7 +585,7 @@ public static class AvaloniaCompactDialogChrome
     private static FuncControlTemplate<ComboBox> CreateCompactComboBoxTemplate(
         AvaloniaCompactDialogChromeStyle style,
         IBrush backgroundBrush,
-        IBrush foregroundBrush) => new((comboBox, _) =>
+        IBrush foregroundBrush) => new((comboBox, nameScope) =>
     {
         var field = new Border
         {
@@ -705,6 +705,7 @@ public static class AvaloniaCompactDialogChrome
             Child = popupSurface,
             Placement = PlacementMode.BottomEdgeAlignedLeft,
             PlacementTarget = field,
+            InheritsTransform = true,
             IsLightDismissEnabled = true,
         };
         popup.Bind(Popup.IsOpenProperty, new Binding(nameof(ComboBox.IsDropDownOpen))
@@ -714,6 +715,10 @@ public static class AvaloniaCompactDialogChrome
         });
         popup.Bind(Layoutable.MinWidthProperty, new Binding("Bounds.Width") { Source = comboBox });
         popup.Bind(Layoutable.MaxHeightProperty, new Binding(nameof(ComboBox.MaxDropDownHeight)) { Source = comboBox });
+
+        nameScope.Register("PART_EditableTextBox", editableText);
+        nameScope.Register("PART_ItemsPresenter", items);
+        nameScope.Register("PART_Popup", popup);
 
         var grid = new Grid { ColumnDefinitions = new ColumnDefinitions("*,20") };
         Grid.SetColumnSpan(field, 2);

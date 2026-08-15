@@ -44,6 +44,10 @@ public sealed class SharedAvaloniaDialogChromeOwnershipTests
             .And.Contain("Name = \"PART_EditableTextBox\"")
             .And.Contain("Name = \"PART_Popup\"")
             .And.Contain("Name = \"PART_ItemsPresenter\"")
+            .And.Contain("nameScope.Register(\"PART_Popup\", popup)")
+            .And.Contain("nameScope.Register(\"PART_EditableTextBox\", editableText)")
+            .And.Contain("nameScope.Register(\"PART_ItemsPresenter\", items)")
+            .And.Contain("InheritsTransform = true")
             .And.Contain("Mode = BindingMode.TwoWay")
             .And.NotContain("void ApplyWpfComboGlyph()")
             .And.NotContain("selector.OfType<Border>().Name(\"PART_LayoutRoot\")");
