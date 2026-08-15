@@ -3942,7 +3942,7 @@ public sealed partial class DocumentView : RichTextBox
         // Model-only fields are not in the WPF selection property bag. Start with the full model snapshot
         // carried by the caret run, then overlay the properties WPF can represent and may have changed.
         var caretRun = (CaretPosition?.Parent as WpfRun ?? selection.Start.Parent as WpfRun);
-        var retained = (caretRun?.Tag as RunMarkers)?.CharacterFormat?.Formatting ?? RunFormatting.Default;
+        var retained = (caretRun?.Tag as RunMarkers)?.CharacterFormat?.RenderedFormatting ?? RunFormatting.Default;
 
         return retained with
         {
@@ -10314,7 +10314,7 @@ public sealed partial class DocumentView : RichTextBox
         // WPF has no property slots for several Word run properties (advanced typography, character
         // border/shading metadata, proofing language). Keep the authoritative model snapshot on every
         // live run so a later CommitToModel cannot silently erase properties the compositor cannot paint.
-        AddMarker(wpf, markers => markers with { CharacterFormat = new CharacterFormatMarker(fmt) });
+        AddMarker(wpf, markers => markers with { CharacterFormat = new CharacterFormatMarker(run.Formatting, fmt) });
         // Right-to-left run direction (w:rtl): force this run RTL even inside an LTR paragraph.
         if (fmt.Rtl)
             wpf.FlowDirection = System.Windows.FlowDirection.RightToLeft;
@@ -10923,7 +10923,9 @@ public sealed partial class DocumentView : RichTextBox
     /// of Word's run properties, so ReadRunFormatting overlays the live WPF values onto this snapshot and
     /// preserves everything the host cannot represent directly.
     /// </summary>
-    private sealed record CharacterFormatMarker(RunFormatting Formatting);
+    private sealed record CharacterFormatMarker(
+        RunFormatting DirectFormatting,
+        RunFormatting RenderedFormatting);
 
     /// <summary>
     /// Merge a marker facet into the run's composite <see cref="RunMarkers"/> Tag (creating it on first
@@ -16393,38 +16395,41 @@ public sealed partial class DocumentView : RichTextBox
             BaselineAlignment.Subscript => VerticalAlign.Subscript,
             _ => VerticalAlign.Baseline
         };
-        // Super/subscript glyphs are rendered shrunk by SuperSubScale; undo that so the committed
-        // point size matches what the user actually chose.
-        var fontSizePt = run.FontSize / PxPerPoint;
-        if (verticalAlign != VerticalAlign.Baseline)
-            fontSizePt /= SuperSubScale;
-
         var capitals = Typography.GetCapitals(run);
 
         // Recover the complete model snapshot set by BuildRun. Live WPF properties are overlaid below;
         // model-only Word properties remain authoritative through an edit/commit round-trip.
         var wasVisuallyHidden = HiddenRunFormatting.TryGetValue(run, out var hiddenFormatting);
-        var retained = (run.Tag as RunMarkers)?.CharacterFormat?.Formatting
+        var characterMarker = (run.Tag as RunMarkers)?.CharacterFormat;
+        var direct = characterMarker?.DirectFormatting
             ?? (run.Tag as ComplexFieldMarker)?.Formatting
             ?? (wasVisuallyHidden ? hiddenFormatting! : RunFormatting.Default);
-        var charBorder = retained.CharacterBorder;
-        var charShadingHex = retained.CharacterShadingHex;
+        var rendered = characterMarker?.RenderedFormatting
+            ?? (run.Tag as ComplexFieldMarker)?.Formatting
+            ?? (wasVisuallyHidden ? hiddenFormatting! : direct);
+        var charBorder = rendered.CharacterBorder;
+        var charShadingHex = rendered.CharacterShadingHex;
 
         // The background brush is the rendered colour of either CharacterShading or Highlight; use the
         // marker to tell them apart (marker present → shading, no marker → highlight).
-        var highlightHex = retained.HighlightColorHex;
-        if (run.Background is SolidColorBrush bg)
-        {
-            if (charShadingHex is null)
-                highlightHex = ToHex(bg.Color);
-            // else: the background was set from CharacterShadingHex; don't also capture as highlight.
-        }
+        var highlightHex = charShadingHex is null
+            ? run.ReadLocalValue(TextElement.BackgroundProperty) is SolidColorBrush localBackground
+                ? ToHex(localBackground.Color)
+                : null
+            // The local background was set from CharacterShadingHex; don't also capture it as highlight.
+            : rendered.HighlightColorHex;
 
+        var localFontFamily = run.ReadLocalValue(TextElement.FontFamilyProperty) is FontFamily family
+            ? family.Source
+            : null;
+        double? localFontSizePt = run.ReadLocalValue(TextElement.FontSizeProperty) is double localFontSize
+            ? localFontSize / PxPerPoint / (verticalAlign == VerticalAlign.Baseline ? 1 : SuperSubScale)
+            : null;
         var localForegroundHex = run.ReadLocalValue(TextElement.ForegroundProperty) is SolidColorBrush localForeground
             ? ToHex(localForeground.Color)
             : null;
 
-        return retained with
+        var observed = rendered with
         {
             Bold = run.FontWeight >= FontWeights.Bold,
             Italic = run.FontStyle == FontStyles.Italic,
@@ -16438,23 +16443,26 @@ public sealed partial class DocumentView : RichTextBox
             // For the common case (no character border), the standard paths apply unchanged.
             Underline = charBorder is null
                 ? run.TextDecorations?.Contains(TextDecorations.Underline[0]) == true
-                : retained.Underline,
-            Strikethrough = charBorder is null && !retained.DoubleStrikethrough
+                : rendered.Underline,
+            Strikethrough = charBorder is null && !rendered.DoubleStrikethrough
                 ? run.TextDecorations?.Contains(TextDecorations.Strikethrough[0]) == true
-                : retained.Strikethrough,
+                : rendered.Strikethrough,
             SmallCaps = capitals == FontCapitals.SmallCaps,
             AllCaps = capitals == FontCapitals.AllSmallCaps,
             VerticalAlign = verticalAlign,
             // Right-to-left run direction reads back off the WPF run's FlowDirection (set in BuildRun).
             Rtl = run.FlowDirection == System.Windows.FlowDirection.RightToLeft,
-            FontFamily = run.FontFamily.Source,
-            FontSizePt = wasVisuallyHidden ? retained.FontSizePt : fontSizePt,
-            ColorHex = DocumentRunForegroundCommitPlanner.ResolveColorHex(
-                retained.ColorHex,
-                localForegroundHex,
-                wasVisuallyHidden),
+            FontFamily = localFontFamily,
+            FontSizePt = localFontSizePt,
+            ColorHex = localForegroundHex,
             HighlightColorHex = highlightHex,
         };
+
+        return DocumentRunFormattingCommitPlanner.Resolve(
+            direct,
+            rendered,
+            observed,
+            wasVisuallyHidden);
     }
 
     // Undo the view-only chrome BuildRun injects for a tracked-change run: clear the revision colour
