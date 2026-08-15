@@ -3,6 +3,45 @@ using FreeP.Core.Model;
 
 namespace FreeP.App.Compositor;
 
+public static class FreePFindReplacePolicyResourceKeys
+{
+    public const string SearchTermRequired = "FreeP_FindReplace_Status_SearchTermRequired";
+    public const string NoMatches = "FreeP_FindReplace_Status_NoMatches";
+    public const string NoReplacements = "FreeP_FindReplace_Status_NoReplacements";
+    public const string NotFoundFormat = "FreeP_FindReplace_Status_NotFoundFormat";
+    public const string MatchFormat = "FreeP_FindReplace_Status_MatchFormat";
+    public const string ReplacedOccurrencesFormat = "FreeP_FindReplace_Status_ReplacedOccurrencesFormat";
+    public const string ReplacementsMadeFormat = "FreeP_FindReplace_Status_ReplacementsMadeFormat";
+}
+
+public static class FreePFindReplacePolicyTextCatalog
+{
+    public static FindReplacePolicyTextDescriptor Descriptor { get; } = new(
+        Text(FreePFindReplacePolicyResourceKeys.SearchTermRequired, "Enter a search term."),
+        Text(FreePFindReplacePolicyResourceKeys.NoMatches, "No matches found."),
+        Text(FreePFindReplacePolicyResourceKeys.NoReplacements, "No replacements made."),
+        Text(FreePFindReplacePolicyResourceKeys.NotFoundFormat, "\"{0}\" not found."),
+        Text(FreePFindReplacePolicyResourceKeys.MatchFormat, "Match {0} of {1}"),
+        Text(FreePFindReplacePolicyResourceKeys.ReplacedOccurrencesFormat, "Replaced {0} occurrence{1}."),
+        Text(FreePFindReplacePolicyResourceKeys.ReplacementsMadeFormat, "{0} replacement(s) made."));
+
+    public static IReadOnlyList<string> RequiredResourceKeys =>
+    [
+        Descriptor.SearchTermRequired.ResourceKey,
+        Descriptor.NoMatches.ResourceKey,
+        Descriptor.NoReplacements.ResourceKey,
+        Descriptor.NotFoundFormat.ResourceKey,
+        Descriptor.MatchFormat.ResourceKey,
+        Descriptor.ReplacedOccurrencesFormat.ResourceKey,
+        Descriptor.ReplacementsMadeFormat.ResourceKey,
+    ];
+
+    public static FindReplacePolicyTextSpec BuildTextSpec(Func<string, string?>? getText = null) =>
+        FindReplacePolicyTextSpec.FromDescriptor(Descriptor, getText);
+
+    private static ResourceTextDescriptor Text(string key, string fallbackText) => new(key, fallbackText);
+}
+
 public enum FindReplaceDialogOptionKind
 {
     MatchCase,
@@ -208,11 +247,14 @@ public static class FindReplaceDialogPlanner
     public static FindReplaceNavigationPolicyPlan Navigate(
         int currentMatchIndex,
         int matchCount,
-        int direction) =>
-        FindReplaceDialogPolicy.Navigate(currentMatchIndex, matchCount, direction);
+        int direction,
+        FindReplacePolicyTextSpec? text = null) =>
+        FindReplaceDialogPolicy.Navigate(currentMatchIndex, matchCount, direction, text);
 
-    public static FindReplaceReplacementPolicyStatus ReplacementStatus(int replacementCount) =>
-        FindReplaceDialogPolicy.BuildReplacementStatus(replacementCount);
+    public static FindReplaceReplacementPolicyStatus ReplacementStatus(
+        int replacementCount,
+        FindReplacePolicyTextSpec? text = null) =>
+        FindReplaceDialogPolicy.BuildReplacementStatus(replacementCount, text);
 
     public static FindReplaceWorkflowPlan BuildWorkflowPlan(
         bool showReplace,

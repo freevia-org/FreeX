@@ -3809,5 +3809,12 @@
   <data name="Print_Host_AvaloniaLinux" xml:space="preserve"><value>Avalonia Linux print host</value></data>
   <data name="Print_Host_UnavailableFormat" xml:space="preserve"><value>{0} is unavailable on this platform.</value></data>
   <data name="Print_Host_WpfWindowsOnly" xml:space="preserve"><value>Native WPF printing is available only on Windows.</value></data>
+  <data name="FreeP_FindReplace_Status_SearchTermRequired" xml:space="preserve"><value>Enter a search term.</value></data>
+  <data name="FreeP_FindReplace_Status_NoMatches" xml:space="preserve"><value>No matches found.</value></data>
+  <data name="FreeP_FindReplace_Status_NoReplacements" xml:space="preserve"><value>No replacements made.</value></data>
+  <data name="FreeP_FindReplace_Status_NotFoundFormat" xml:space="preserve"><value>"{0}" not found.</value></data>
+  <data name="FreeP_FindReplace_Status_MatchFormat" xml:space="preserve"><value>Match {0} of {1}</value></data>
+  <data name="FreeP_FindReplace_Status_ReplacedOccurrencesFormat" xml:space="preserve"><value>Replaced {0} occurrence{1}.</value></data>
+  <data name="FreeP_FindReplace_Status_ReplacementsMadeFormat" xml:space="preserve"><value>{0} replacement(s) made.</value></data>
   <data name="Renderer_InlineOleObjectFallback" xml:space="preserve"><value>OLE object</value></data>
 </root>

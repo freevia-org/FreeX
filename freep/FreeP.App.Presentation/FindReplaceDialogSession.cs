@@ -11,16 +11,19 @@ public sealed class FindReplaceDialogSession
 {
     private readonly EditingSession _editor;
     private readonly Action? _onNavigationOrMutation;
+    private readonly FindReplacePolicyTextSpec _policyText;
     private readonly List<TextSearchMatch> _matches = [];
     private int _currentMatchIndex = -1;
 
     public FindReplaceDialogSession(
         EditingSession editor,
         bool showReplace = false,
-        Action? onNavigationOrMutation = null)
+        Action? onNavigationOrMutation = null,
+        FindReplacePolicyTextSpec? policyText = null)
     {
         _editor = editor ?? throw new ArgumentNullException(nameof(editor));
         _onNavigationOrMutation = onNavigationOrMutation;
+        _policyText = policyText ?? FreePFindReplacePolicyTextCatalog.BuildTextSpec();
         InitialState = FindReplaceDialogPlanner.BuildInitialState(showReplace);
         Query = InitialState.Query;
         Replacement = InitialState.Replacement;
@@ -105,7 +108,8 @@ public sealed class FindReplaceDialogSession
         var navigation = FindReplaceDialogPlanner.Navigate(
             _currentMatchIndex,
             _matches.Count,
-            direction);
+            direction,
+            _policyText);
         if (navigation.HasMatch)
         {
             _currentMatchIndex = navigation.MatchIndex;
@@ -125,7 +129,7 @@ public sealed class FindReplaceDialogSession
         if (targetIndex < 0)
         {
             return RefreshWorkflowPlan(
-                FindReplaceDialogPolicy.NoMatchesStatus,
+                _policyText.NoMatches,
                 FindReplacePolicyStatusKind.NoMatches);
         }
 
@@ -140,14 +144,16 @@ public sealed class FindReplaceDialogSession
         if (!FindReplaceDialogPlanner.CanReplaceAll(Query))
         {
             return RefreshWorkflowPlan(
-                FindReplaceDialogPolicy.SearchTermRequiredMessage,
+                FindReplaceDialogPolicy.ValidationMessageFor(
+                    FindReplaceValidationErrorKind.SearchTermRequired,
+                    _policyText),
                 FindReplacePolicyStatusKind.None);
         }
 
         var replacementCount = _editor.ReplaceAll(Query, Replacement, BuildOptions());
         _onNavigationOrMutation?.Invoke();
         InvalidateSearch();
-        var status = FindReplaceDialogPlanner.ReplacementStatus(replacementCount);
+        var status = FindReplaceDialogPlanner.ReplacementStatus(replacementCount, _policyText);
         return RefreshWorkflowPlan(status.StatusText, status.StatusKind);
     }
 

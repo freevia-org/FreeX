@@ -36,7 +36,11 @@ internal sealed partial class FindReplaceDialog : FreePDialogWindow
         bool showReplace = false,
         Action? onNavigationOrMutation = null)
     {
-        _session = new FindReplaceDialogSession(editor, showReplace, onNavigationOrMutation);
+        _session = new FindReplaceDialogSession(
+            editor,
+            showReplace,
+            onNavigationOrMutation,
+            FreePFindReplacePolicyTextCatalog.BuildTextSpec(UiText.Get));
         var initial = _session.InitialState;
         var surface = _session.Surface;
 
