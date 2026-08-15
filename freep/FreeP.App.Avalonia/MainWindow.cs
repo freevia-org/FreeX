@@ -111,6 +111,7 @@ public sealed partial class MainWindow : Window,
     private readonly IUserMessageService? _messageService;
     private LinuxNativeOutputCapabilities _nativeOutputCapabilities;
     private readonly IPlatformPrintService _printService;
+    private readonly PortablePrintSubmissionWorkflow _portablePrintWorkflow;
     private readonly Func<Window, PrinterDiscoveryResult, PrintSelection?, CancellationToken, Task<PrintSelection?>>
         _showPrintSelectionDialog;
     private PrinterDiscoveryResult? _latestPrinterDiscovery;
@@ -425,6 +426,7 @@ public sealed partial class MainWindow : Window,
             LinuxNativeOutputCapabilities.Unavailable(PresentationShellTextCatalog.Resolve(
                 PresentationShellTextCatalog.NativeOutputDetectionPendingStatus));
         _printService = printService ?? CreatePlatformPrintService();
+        _portablePrintWorkflow = new PortablePrintSubmissionWorkflow(_printService);
         _showPrintSelectionDialog = showPrintSelectionDialog ??
             ShowPlatformPrintSelectionDialogAsync;
         _videoExportAdapter = videoExportAdapter ?? CreateVideoExportAdapter(_nativeOutputCapabilities.Video);
@@ -3417,121 +3419,77 @@ public sealed partial class MainWindow : Window,
         CancellationToken cancellationToken,
         bool promptForSelection = true)
     {
-        var requestedRequest = request;
+        var requestedSelection = new PrintSelection(
+            _selectedPrinterName,
+            request.Copies,
+            PrintPageRange.All,
+            PrintOrientation.Document,
+            request.Collate,
+            JobTitle: PresentationFileTextResources.NormalizePrintJobName(
+                LastNativePrintHandoffPlan?.SuggestedPrintJobName));
+        PrintSelection? selectedSelection = null;
+        string? packageFailureMessage = null;
+        using var linkedCancellation = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        _printCancellation = linkedCancellation;
         try
         {
-            _latestPrinterDiscovery = await _printService.DiscoverAsync(cancellationToken).ConfigureAwait(true);
-            if (!_latestPrinterDiscovery.IsAvailable)
-            {
-                LastPrintSubmissionResult = FromDiscovery(_latestPrinterDiscovery);
-                _statusText.Text = PresentationNativeCommandOutcomePlanner.BuildPrintStatusText(
-                    LastPrintSubmissionResult);
-                return LastPrintSubmissionResult;
-            }
-
-            var requestedSelection = new PrintSelection(
-                _selectedPrinterName ?? _latestPrinterDiscovery.DefaultPrinter,
-                requestedRequest.Copies,
-                PrintPageRange.All,
-                PrintOrientation.Document,
-                requestedRequest.Collate);
-            var selection = promptForSelection
-                ? await _showPrintSelectionDialog(
-                    this,
-                    _latestPrinterDiscovery,
-                    requestedSelection,
-                    cancellationToken).ConfigureAwait(true)
-                : requestedSelection;
-            if (selection is null)
-            {
-                LastPrintSubmissionResult = new PrintSubmissionResult(
-                    PrintSubmissionStatus.Cancelled,
-                    requestedSelection.PrinterName);
-                _statusText.Text = PresentationNativeCommandOutcomePlanner.BuildPrintStatusText(
-                    LastPrintSubmissionResult);
-                return LastPrintSubmissionResult;
-            }
-
-            selection.Validate();
-            _selectedPrinterName = selection.PrinterName;
-            _lastPrintSelection = selection;
-            var effectiveRequest = requestedRequest with
-            {
-                Copies = selection.Copies,
-                Collate = selection.Collate,
-            };
-            var package = buildPackage(effectiveRequest);
-            LastPrintOutputPackage = package;
-            LastPrintExecutionDescriptor = _fileSession.LastPrintExecutionDescriptor;
-            LastNativePrintHandoffPlan = _fileSession.LastNativePrintHandoffPlan;
-            var validation = package is null
-                ? null
-                : PresentationPrintOutputPackageExecutor.ValidatePackage(package);
-            if (validation?.IsValid != true)
-            {
-                LastPrintSubmissionResult = new PrintSubmissionResult(
-                    PrintSubmissionStatus.Failed,
-                    selection.PrinterName,
-                    Message: validation?.FailureReason ??
-                        PresentationNativeCommandOutcomePlanner.PrintPackageNotBuiltFailure);
-                _statusText.Text = PresentationNativeCommandOutcomePlanner.BuildPrintPackageFailureStatus(
-                    LastPrintSubmissionResult.Message);
-                return LastPrintSubmissionResult;
-            }
-
-            using var temporaryFile = TemporaryFileLease.Create("freep-print-", ".pdf");
-            using var linkedCancellation = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-            _printCancellation = linkedCancellation;
-            try
-            {
-                await temporaryFile.WriteAllBytesAsync(package!.Bytes, linkedCancellation.Token).ConfigureAwait(true);
-                LastPrintSubmissionResult = await _printService.SubmitAsync(
-                    temporaryFile.Path,
-                    selection with
+            var execution = await _portablePrintWorkflow.ExecuteAsync(
+                async (intent, token) =>
+                {
+                    selectedSelection = promptForSelection
+                        ? await _showPrintSelectionDialog(
+                            this,
+                            intent.Discovery,
+                            intent.RequestedSelection,
+                            token).ConfigureAwait(true)
+                        : intent.RequestedSelection;
+                    return selectedSelection;
+                },
+                async (output, _, token) =>
+                {
+                    var selection = selectedSelection ?? requestedSelection;
+                    _selectedPrinterName = selection.PrinterName;
+                    _lastPrintSelection = selection;
+                    var package = buildPackage(request with
                     {
-                        JobTitle = PresentationFileTextResources.NormalizePrintJobName(
-                            LastNativePrintHandoffPlan?.SuggestedPrintJobName),
-                    },
-                    linkedCancellation.Token).ConfigureAwait(true);
-            }
-            finally
-            {
-                if (ReferenceEquals(_printCancellation, linkedCancellation))
-                    _printCancellation = null;
-                temporaryFile.Release();
-            }
-        }
-        catch (OperationCanceledException)
-        {
-            LastPrintSubmissionResult = new PrintSubmissionResult(
-                PrintSubmissionStatus.Cancelled,
-                _selectedPrinterName);
-        }
-        catch (Exception ex) when (ex is not OutOfMemoryException)
-        {
-            LastPrintSubmissionResult = new PrintSubmissionResult(
+                        Copies = selection.Copies,
+                        Collate = selection.Collate,
+                    });
+                    LastPrintOutputPackage = package;
+                    LastPrintExecutionDescriptor = _fileSession.LastPrintExecutionDescriptor;
+                    LastNativePrintHandoffPlan = _fileSession.LastNativePrintHandoffPlan;
+                    var validation = package is null
+                        ? null
+                        : PresentationPrintOutputPackageExecutor.ValidatePackage(package);
+                    if (validation?.IsValid != true)
+                    {
+                        packageFailureMessage = validation?.FailureReason ??
+                            PresentationNativeCommandOutcomePlanner.PrintPackageNotBuiltFailure;
+                        throw new InvalidDataException(packageFailureMessage);
+                    }
+
+                    await output.WriteAsync(package!.Bytes, token).ConfigureAwait(true);
+                },
+                requestedSelection,
+                linkedCancellation.Token).ConfigureAwait(true);
+            _latestPrinterDiscovery = execution.Discovery ?? _latestPrinterDiscovery;
+            LastPrintSubmissionResult = execution.Submission ?? new PrintSubmissionResult(
                 PrintSubmissionStatus.Failed,
-                _selectedPrinterName,
-                Message: ex.Message);
+                selectedSelection?.PrinterName ?? requestedSelection.PrinterName,
+                Message: execution.Operation.Exception?.Message);
+        }
+        finally
+        {
+            if (ReferenceEquals(_printCancellation, linkedCancellation))
+                _printCancellation = null;
         }
 
-        _statusText.Text = PresentationNativeCommandOutcomePlanner.BuildPrintStatusText(
-            LastPrintSubmissionResult!);
+        _statusText.Text = packageFailureMessage is null
+            ? PresentationNativeCommandOutcomePlanner.BuildPrintStatusText(LastPrintSubmissionResult!)
+            : PresentationNativeCommandOutcomePlanner.BuildPrintPackageFailureStatus(packageFailureMessage);
 
         return LastPrintSubmissionResult;
     }
-
-    private static PrintSubmissionResult FromDiscovery(PrinterDiscoveryResult discovery) =>
-        new(
-            discovery.Status switch
-            {
-                PrinterDiscoveryStatus.Cancelled => PrintSubmissionStatus.Cancelled,
-                PrinterDiscoveryStatus.NoPrinters => PrintSubmissionStatus.NoPrinters,
-                PrinterDiscoveryStatus.Unavailable => PrintSubmissionStatus.Unavailable,
-                _ => PrintSubmissionStatus.Failed,
-            },
-            discovery.DefaultPrinter,
-            Message: discovery.Message ?? PresentationNativeCommandOutcomePlanner.PrintSubmissionFailureFallback);
 
     internal void HidePrintOptionsPane()
     {

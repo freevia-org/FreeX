@@ -34,7 +34,10 @@ public sealed class PrintPlatformDedupSourceTests
         freePAvalonia.Should().Contain("IPlatformPrintService");
         freePAvalonia.Should().Contain("PlatformPrintServiceSelector.Select(");
         freePAvalonia.Should().Contain("new WindowsPrintService(");
-        freePAvalonia.Should().Contain("_printService.SubmitAsync(");
+        freePAvalonia.Should().Contain("new PortablePrintSubmissionWorkflow(_printService)");
+        freePAvalonia.Should().Contain("_portablePrintWorkflow.ExecuteAsync(");
+        freePAvalonia.Should().NotContain("_printService.SubmitAsync(");
+        freePAvalonia.Should().NotContain("TemporaryFileLease.Create(\"freep-print-");
         freeP.Should().NotContain("IWindowsPdfPrintHandoff");
         freeP.Should().NotContain("EnumPrinters(");
         freeP.Should().NotContain("GetDefaultPrinter(");
