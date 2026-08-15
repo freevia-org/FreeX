@@ -235,6 +235,27 @@ public sealed class FreeXPracticalResidualOwnershipTests
         wpf.Should().NotContain("private static List<WorkbookScenario> RemapScenariosBySheetName(");
     }
 
+    [Fact]
+    public void SubtotalExecution_IsOwnedByServicesAndBothRenderersUseTheSession()
+    {
+        var session = Read("src", "FreeX.App.Services", "WorkbookSession.cs");
+        var avalonia = Read("src", "FreeX.App.Avalonia", "MainWindow.cs");
+        var wpf = Read("src", "FreeX.App.Host", "MainWindow.DataCommands.cs");
+
+        session.Should().Contain("public WorkbookCellEditResult ExecuteSubtotalOptions(SubtotalInputOptions options)");
+        session.Should().Contain("public WorkbookCellEditResult RemoveSelectedRangeSubtotals()");
+        session.Should().Contain("_cellEditService.ExecuteRepeatableEditCommand(Workbook, CreateCommand)");
+        avalonia.Should().Contain("_session.ExecuteSubtotalOptions(selection.ToInputOptions())");
+        avalonia.Should().Contain("_session.RemoveSelectedRangeSubtotals()");
+        wpf.Should().Contain("_session.ExecuteSubtotalOptions(dialog.Result.ToInputOptions())");
+        wpf.Should().Contain("_session.RemoveSelectedRangeSubtotals");
+        wpf.Should().NotContain("new SubtotalCommand(");
+        wpf.Should().NotContain("new RemoveSubtotalRowsCommand(");
+        wpf.Should().NotContain("private IWorkbookCommand CreateSubtotalApplyCommand(");
+        wpf.Should().NotContain("private static int CountSubtotalFormulaRows(");
+        wpf.Should().NotContain("private void SelectSubtotalResultRange(");
+    }
+
     private static string Read(params string[] parts)
     {
         var root = TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeX.slnx");

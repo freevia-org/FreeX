@@ -831,14 +831,9 @@ public partial class MainWindow
 
         if (dialog.Result.Action == SubtotalDialogPlanAction.RemoveAll)
         {
-            if (!TryExecuteRepeatableGroupedSheetCommand(
-                    "Remove Subtotals",
-                    sheetId =>
-                    {
-                        var sheetRange = GroupedSheetRangePlanner.RemapRangeToSheet(sourceRange, sheetId);
-                        return new RemoveSubtotalRowsCommand(sheetId, sheetRange);
-                    },
-                    out var removeOutcome))
+            if (!TryExecuteWorksheetLayout(
+                    _session.RemoveSelectedRangeSubtotals,
+                    "Remove Subtotals"))
                 return;
 
             UpdateViewport();
@@ -846,113 +841,13 @@ public partial class MainWindow
             return;
         }
 
-        if (!TryExecuteRepeatableGroupedSheetCommand(
-                "Subtotal",
-                sheetId => CreateSubtotalApplyCommand(sheetId, GroupedSheetRangePlanner.RemapRangeToSheet(sourceRange, sheetId), dialog.Result),
-                out var outcome))
+        if (!TryExecuteWorksheetLayout(
+                () => _session.ExecuteSubtotalOptions(dialog.Result.ToInputOptions()),
+                "Subtotal"))
             return;
 
-        SelectSubtotalResultRange(
-            SubtotalPlanner.ExpandRangeForInsertedSubtotalRows(sourceRange, outcome.AffectedCells));
         UpdateViewport();
         PruneCorrectedValidationCircles();
-    }
-
-    /// <summary>
-    /// Builds the command for one grouped sheet's "Apply" pass of the Subtotal dialog (as opposed to
-    /// "Remove All", handled separately). Split out of SubtotalBtn_Click so the "Replace current
-    /// subtotals" range-correction fix (R68-commands-group-outline-6-1) is directly testable without
-    /// driving the real SubtotalDialog.
-    /// </summary>
-    private IWorkbookCommand CreateSubtotalApplyCommand(SheetId sheetId, GridRange sheetRange, SubtotalDialogPlanResult result)
-    {
-        if (!result.ReplaceCurrentSubtotals)
-        {
-            return new SubtotalCommand(
-                sheetId,
-                sheetRange,
-                groupByColumnOffset: result.GroupColumnOffset,
-                subtotalColumnOffsets: result.SubtotalColumnOffsets,
-                functionNumber: result.FunctionNumber,
-                pageBreakBetweenGroups: result.PageBreakBetweenGroups,
-                summaryBelowData: result.SummaryBelowData);
-        }
-
-        // "Replace current subtotals": RemoveSubtotalRowsCommand deletes the previous pass's
-        // subtotal rows first, shifting every row below them up. The new SubtotalCommand must
-        // therefore scan the shrunk post-removal extent, not the stale (larger) sheetRange, or it
-        // folds unrelated rows that shifted up into the vacated space into the new subtotal pass.
-        // Predict the shrinkage from the CURRENT (pre-removal) sheet -- this factory runs before
-        // either command applies, so the count below mirrors exactly what
-        // RemoveSubtotalRowsCommand.Apply is about to delete.
-        var removedRowCount = CountSubtotalFormulaRows(_workbook.GetSheet(sheetId), sheetId, sheetRange);
-        var correctedRange = removedRowCount > 0
-            ? new GridRange(
-                sheetRange.Start,
-                new CellAddress(
-                    sheetRange.End.Sheet,
-                    sheetRange.End.Row - (uint)Math.Min(removedRowCount, (int)sheetRange.RowCount - 1),
-                    sheetRange.End.Col))
-            : sheetRange;
-        var subtotalCommand = new SubtotalCommand(
-            sheetId,
-            correctedRange,
-            groupByColumnOffset: result.GroupColumnOffset,
-            subtotalColumnOffsets: result.SubtotalColumnOffsets,
-            functionNumber: result.FunctionNumber,
-            pageBreakBetweenGroups: result.PageBreakBetweenGroups,
-            summaryBelowData: result.SummaryBelowData);
-        return new CompositeWorkbookCommand("Subtotal", [new RemoveSubtotalRowsCommand(sheetId, sheetRange), subtotalCommand]);
-    }
-
-    /// <summary>
-    /// Counts the rows within <paramref name="range"/> that currently carry a SUBTOTAL(...) formula
-    /// in any column -- i.e. the rows RemoveSubtotalRowsCommand is about to delete for this same
-    /// range. Mirrors the row-scan half of the internal FreeX.Core.Commands.SubtotalRowFinder (which
-    /// RemoveSubtotalRowsCommand itself uses) so the "Replace current subtotals" composite can shrink
-    /// the new SubtotalCommand's range by the exact number of rows the removal pass will delete.
-    /// </summary>
-    private static int CountSubtotalFormulaRows(Sheet? sheet, SheetId sheetId, GridRange range)
-    {
-        if (sheet is null)
-            return 0;
-
-        var count = 0;
-        for (var row = range.Start.Row; row <= range.End.Row; row++)
-        {
-            for (var col = range.Start.Col; col <= range.End.Col; col++)
-            {
-                var formula = sheet.GetCell(new CellAddress(sheetId, row, col))?.FormulaText;
-                if (formula is not null &&
-                    formula.AsSpan().TrimStart().StartsWith("SUBTOTAL(", StringComparison.OrdinalIgnoreCase))
-                {
-                    count++;
-                    break;
-                }
-            }
-        }
-
-        return count;
-    }
-
-    private void SelectSubtotalResultRange(GridRange range)
-    {
-        _selectionAnchor = range.Start;
-        _selectionCursor = range.End;
-        if (_workbook.GetSheet(_currentSheetId) is { } sheet)
-        {
-            sheet.ActiveRow = range.Start.Row;
-            sheet.ActiveCol = range.Start.Col;
-        }
-
-        SetSelectedRangesIfChanged(null);
-        SheetGrid.SelectedRange = range;
-        SetCellAddressBoxSelectionText(FormatNameBoxSelectionText(range));
-        RefreshToolbarAfterSelectionChange();
-        RefreshStatusBar();
-        RefreshValidationDropdown();
-        RefreshDvInputMessage();
-        UpdateCommentPreview(range.Start);
     }
 
     private void GoalSeekBtn_Click(object sender, RoutedEventArgs e)

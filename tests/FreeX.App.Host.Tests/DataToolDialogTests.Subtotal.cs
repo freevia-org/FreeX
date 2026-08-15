@@ -265,20 +265,19 @@ public sealed partial class DataToolDialogTests
     }
 
     [Fact]
-    public void SubtotalCommandSurface_RoutesRemoveAllToRemoveSubtotalRowsCommand()
+    public void SubtotalCommandSurface_RoutesApplyAndRemoveThroughSharedSession()
     {
         var source = DialogSourceTestSupport.ReadHostSources("MainWindow.DataCommands.cs");
 
         source.Should().Contain("SubtotalDialogPlanAction.RemoveAll");
-        source.Should().Contain("TryExecuteRepeatableGroupedSheetCommand(");
-        source.Should().Contain("new RemoveSubtotalRowsCommand(");
+        source.Should().Contain("_session.RemoveSelectedRangeSubtotals");
+        source.Should().Contain("_session.ExecuteSubtotalOptions(dialog.Result.ToInputOptions())");
         source.Should().Contain("SubtotalPlanner.TryCreateSourceRange(");
         source.Should().Contain("out var sourceRange");
-        source.Should().Contain("GroupedSheetRangePlanner.RemapRangeToSheet(sourceRange, sheetId)");
-        source.Should().Contain("CreateSubtotalApplyCommand(sheetId, GroupedSheetRangePlanner.RemapRangeToSheet(sourceRange, sheetId), dialog.Result)");
-        source.Should().Contain("result.ReplaceCurrentSubtotals");
-        source.Should().Contain("new CompositeWorkbookCommand(\"Subtotal\", [new RemoveSubtotalRowsCommand(sheetId, sheetRange), subtotalCommand])");
-        source.Should().Contain("result.PageBreakBetweenGroups");
-        source.Should().Contain("result.SummaryBelowData");
+        source.Should().NotContain("new RemoveSubtotalRowsCommand(");
+        source.Should().NotContain("new SubtotalCommand(");
+        source.Should().NotContain("CreateSubtotalApplyCommand(");
+        source.Should().NotContain("CountSubtotalFormulaRows(");
+        source.Should().NotContain("SelectSubtotalResultRange(");
     }
 }

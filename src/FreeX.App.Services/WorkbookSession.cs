@@ -1768,7 +1768,7 @@ public sealed class WorkbookSession : IDisposable
         if (!SubtotalPlanner.TryCreateSourceRange(ActiveSheet, SelectedRange, out var range, out var sourceRangeError))
             return new WorkbookCellEditResult(false, sourceRangeError, [], RecalcReport: null);
 
-        var command = CreateGroupedSheetCommand(
+        IWorkbookCommand CreateCommand() => CreateGroupedSheetCommand(
             options.ReplaceExisting ? "Replace Subtotals" : "Subtotal",
             sheetId =>
             {
@@ -1793,7 +1793,7 @@ public sealed class WorkbookSession : IDisposable
                     : subtotalCommand;
             });
 
-        var result = _cellEditService.ExecuteEditCommand(Workbook, command);
+        var result = _cellEditService.ExecuteRepeatableEditCommand(Workbook, CreateCommand);
         if (!result.Success)
             return result;
 
@@ -1806,7 +1806,7 @@ public sealed class WorkbookSession : IDisposable
     public WorkbookCellEditResult RemoveSelectedRangeSubtotals()
     {
         var range = SubtotalPlanner.NormalizeSourceRange(ActiveSheet, SelectedRange);
-        var command = CreateGroupedSheetCommand(
+        IWorkbookCommand CreateCommand() => CreateGroupedSheetCommand(
             "Remove Subtotals",
             sheetId =>
             {
@@ -1814,7 +1814,7 @@ public sealed class WorkbookSession : IDisposable
                 return new RemoveSubtotalRowsCommand(sheetId, sheetRange);
             });
 
-        var result = _cellEditService.ExecuteEditCommand(Workbook, command);
+        var result = _cellEditService.ExecuteRepeatableEditCommand(Workbook, CreateCommand);
         if (!result.Success)
             return result;
 
