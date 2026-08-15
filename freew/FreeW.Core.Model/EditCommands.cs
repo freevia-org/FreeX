@@ -1524,10 +1524,10 @@ public enum CellBorderEdges
     Left   = 4,
     Right  = 8,
     All      = Top | Bottom | Left | Right,
-    /// <summary>All four primitive edges — alias for <see cref="All"/>.</summary>
-    Outside  = All,
+    /// <summary>Only the outer boundary of a multi-cell selection.</summary>
+    Outside  = 16,
     /// <summary>Inside edges of a selection (handled at the DocumentView layer).</summary>
-    Inside   = 16,
+    Inside   = 32,
 }
 
 /// <summary>
