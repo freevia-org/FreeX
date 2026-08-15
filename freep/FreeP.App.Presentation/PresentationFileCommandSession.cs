@@ -391,6 +391,7 @@ public sealed class PresentationFileCommandSession
     private readonly IPresentationFileRenderPort _render;
     private readonly IPresentationPrintPort _print;
     private readonly IPresentationVideoPort _video;
+    private readonly AtomicExportExecutor _atomicExportExecutor = new();
     private readonly IPresentationFileCommandFeedbackPort? _feedback;
     private readonly Func<PresentationSlideRangeRequest?> _getImageExportRange;
     private readonly Func<int?> _getPrintCurrentSlideNumber;
@@ -606,31 +607,14 @@ public sealed class PresentationFileCommandSession
         if (pickerResult is not null)
             return await CompleteAsync(pickerResult, cancellationToken);
 
-        try
-        {
-            var artifact = PresentationFilePdfExportExecutor.ExportRaster(
+        return await ExportPdfArtifactAsync(
+            command,
+            selection.Path!,
+            () => PresentationFilePdfExportExecutor.ExportRaster(
                 _getPresentation(),
                 request: null,
-                _render);
-            AtomicFileWriter.WriteAllBytes(selection.Path!, artifact.Bytes);
-            return await CompleteAsync(
-                PresentationFileCommandResult.Success(
-                    command,
-                    selection.Path,
-                    $"Exported {Path.GetFileName(selection.Path)}",
-                    artifact.ImageDiagnostics),
-                cancellationToken);
-        }
-        catch (Exception ex) when (ex is not OperationCanceledException)
-        {
-            return await CompleteAsync(
-                PresentationFileCommandResult.Failure(
-                    command,
-                    PresentationFileTextResources.ErrorSummary(command),
-                    ex,
-                    selection.Path),
-                cancellationToken);
-        }
+                _render),
+            cancellationToken);
     }
 
     public async Task<PresentationFileCommandResult> ExportNotesPagePdfAsync(
@@ -662,37 +646,67 @@ public sealed class PresentationFileCommandSession
         if (pickerResult is not null)
             return await CompleteAsync(pickerResult, cancellationToken);
 
-        try
-        {
-            var request = new PresentationNotesPagePdfExportRequest(new PresentationPrintRequest(
-                PresentationPrintLayoutKind.NotesPages,
-                range));
-            LastNotesPagePdfRenderPlan = PresentationNotesPagePdfExporter.BuildRenderPlan(
-                presentation,
-                request);
-            var artifact = PresentationFilePdfExportExecutor.ExportNotesPages(
+        var request = new PresentationNotesPagePdfExportRequest(new PresentationPrintRequest(
+            PresentationPrintLayoutKind.NotesPages,
+            range));
+        LastNotesPagePdfRenderPlan = PresentationNotesPagePdfExporter.BuildRenderPlan(
+            presentation,
+            request);
+        return await ExportPdfArtifactAsync(
+            command,
+            selection.Path!,
+            () => PresentationFilePdfExportExecutor.ExportNotesPages(
                 presentation,
                 request,
-                _render);
-            AtomicFileWriter.WriteAllBytes(selection.Path!, artifact.Bytes);
-            return await CompleteAsync(
-                PresentationFileCommandResult.Success(
-                    command,
-                    selection.Path,
-                    $"Exported {Path.GetFileName(selection.Path)}",
-                    artifact.ImageDiagnostics),
-                cancellationToken);
-        }
-        catch (Exception ex) when (ex is not OperationCanceledException)
+                _render),
+            cancellationToken);
+    }
+
+    private async Task<PresentationFileCommandResult> ExportPdfArtifactAsync(
+        PresentationFileCommand command,
+        string path,
+        Func<PresentationPdfExportArtifact> render,
+        CancellationToken cancellationToken)
+    {
+        var execution = await _atomicExportExecutor.ExecuteAsync<PresentationPdfExportArtifact>(
+            path,
+            async (output, token) =>
+            {
+                token.ThrowIfCancellationRequested();
+                var artifact = render();
+                await output.WriteAsync(artifact.Bytes, token);
+                return artifact;
+            },
+            cancellationToken);
+
+        PresentationFileCommandResult result;
+        if (execution.Succeeded)
         {
-            return await CompleteAsync(
-                PresentationFileCommandResult.Failure(
-                    command,
-                    PresentationFileTextResources.ErrorSummary(command),
-                    ex,
-                    selection.Path),
-                cancellationToken);
+            var artifact = execution.Value!;
+            result = PresentationFileCommandResult.Success(
+                command,
+                execution.Path,
+                $"Exported {Path.GetFileName(execution.Path)}",
+                artifact.ImageDiagnostics);
         }
+        else if (execution.Cancelled)
+        {
+            result = PresentationFileCommandResult.Cancel(command);
+        }
+        else
+        {
+            var exception = execution.Exception ?? new IOException(
+                execution.Error?.Detail.Message ??
+                execution.Validation?.Detail.ToString() ??
+                "PDF export did not complete.");
+            result = PresentationFileCommandResult.Failure(
+                command,
+                PresentationFileTextResources.ErrorSummary(command),
+                exception,
+                execution.Path ?? path);
+        }
+
+        return await CompleteAsync(result, cancellationToken);
     }
 
     public async Task<PresentationFileCommandResult> ExportImagesAsync(CancellationToken cancellationToken = default)

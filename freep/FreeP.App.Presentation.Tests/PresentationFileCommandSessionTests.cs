@@ -155,6 +155,7 @@ public sealed class PresentationFileCommandSessionTests : IDisposable
     public async Task ExportCommands_OrchestratePortableRenderAndNativeVideoPorts()
     {
         var pdfPath = Path.Combine(TempDirectory, "deck.pdf");
+        var notesPdfPath = Path.Combine(TempDirectory, "deck-notes.pdf");
         var imageDirectory = Path.Combine(TempDirectory, "images");
         var videoPath = Path.Combine(TempDirectory, "deck.mp4");
         var lifecycle = new FakeLifecyclePort();
@@ -175,6 +176,8 @@ public sealed class PresentationFileCommandSessionTests : IDisposable
             video: video);
 
         var pdf = await session.ExportPdfAsync();
+        picker.SaveResult = PresentationFilePickerResult.Selected(notesPdfPath);
+        var notesPdf = await session.ExportNotesPagePdfAsync();
         var images = await session.ExportImagesAsync();
         picker.SaveResult = PresentationFilePickerResult.Selected(videoPath);
         var exportedVideo = await session.ExportVideoAsync(new PresentationVideoExportRequest(
@@ -184,6 +187,9 @@ public sealed class PresentationFileCommandSessionTests : IDisposable
 
         pdf.Succeeded.Should().BeTrue();
         File.ReadAllBytes(pdfPath).Should().Equal(FakeRenderPort.PdfBytes);
+        notesPdf.Succeeded.Should().BeTrue();
+        File.ReadAllBytes(notesPdfPath).Should().Equal(FakeRenderPort.PdfBytes);
+        session.LastNotesPagePdfRenderPlan.Should().NotBeNull();
         images.Succeeded.Should().BeTrue();
         session.LastImageExportResult!.ExportedSlides.Should().ContainSingle();
         File.Exists(session.LastImageExportResult.ExportedSlides[0].Path).Should().BeTrue();
@@ -193,6 +199,34 @@ public sealed class PresentationFileCommandSessionTests : IDisposable
         session.LastVideoFramePackage.Should().NotBeNull();
         render.RenderCount.Should().BeGreaterThanOrEqualTo(3);
         lifecycle.CurrentPath.Should().BeNull();
+    }
+
+    [Fact]
+    public async Task ExportPdf_RenderFailurePreservesExistingTargetAndCleansTemporaryFile()
+    {
+        var target = Path.Combine(TempDirectory, "deck.pdf");
+        await File.WriteAllTextAsync(target, "old");
+        var picker = new FakePickerPort
+        {
+            SaveResult = PresentationFilePickerResult.Selected(target),
+        };
+        var render = new FakeRenderPort
+        {
+            PdfFailure = new InvalidOperationException("render failed"),
+        };
+        var session = CreateSession(
+            Presentation.CreateEmpty,
+            _ => { },
+            new FakeLifecyclePort(),
+            picker,
+            render);
+
+        var result = await session.ExportPdfAsync();
+
+        result.Status.Should().Be(PresentationFileCommandStatus.Failed);
+        result.Error!.Exception.Message.Should().Contain("render failed");
+        (await File.ReadAllTextAsync(target)).Should().Be("old");
+        Directory.GetFiles(TempDirectory).Should().Equal(target);
     }
 
     [Fact]
@@ -409,11 +443,19 @@ public sealed class PresentationFileCommandSessionTests : IDisposable
         public static readonly byte[] PdfBytes = "%PDF-session-test"u8.ToArray();
 
         public int RenderCount { get; private set; }
+        public Exception? PdfFailure { get; init; }
         public PresentationSlideImageRenderer RenderSlideToPng => Render;
         public PresentationSlideImageRendererWithPrintMarkup RenderSlideToPngWithPrintMarkup =>
             (presentation, slideIndex, widthPx, heightPx, _) => Render(presentation, slideIndex, widthPx, heightPx);
-        public PresentationRasterPdfWriter WriteRasterPdf => _ => PdfBytes;
-        public PresentationPdfContentWriter WriteVectorPdf => _ => PdfBytes;
+        public PresentationRasterPdfWriter WriteRasterPdf => _ => WritePdf();
+        public PresentationPdfContentWriter WriteVectorPdf => _ => WritePdf();
+
+        private byte[] WritePdf()
+        {
+            if (PdfFailure is not null)
+                throw PdfFailure;
+            return PdfBytes;
+        }
 
         private byte[] Render(Presentation presentation, int slideIndex, int widthPx, int heightPx)
         {
