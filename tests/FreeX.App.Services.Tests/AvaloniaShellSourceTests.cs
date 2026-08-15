@@ -5814,9 +5814,10 @@ public sealed class AvaloniaShellSourceTests
         customViewsSource.Should().Contain("CustomViewsPlanner.BuildSaveCommand(");
         customViewsSource.Should().Contain("CustomViewsPlanner.BuildDeleteCommand(name)");
         customViewsSource.Should().Contain("CustomViewsPlanner.ValidateName(_session.Workbook,");
-        customViewsSource.Should().Contain("_session.ExecuteReviewCommand(");
-        // Applying a view that changes the active sheet re-syncs the session's cached active sheet.
-        customViewsSource.Should().Contain("ResyncActiveSheetToWorkbook();");
+        customViewsSource.Should().Contain("_session.ExecuteCustomViewCommand(");
+        customViewsSource.Should().NotContain("_session.ExecuteReviewCommand(");
+        // The shared session adopts the saved sheet/cell and invalidates every per-view cache itself.
+        customViewsSource.Should().NotContain("ResyncActiveSheetToWorkbook");
     }
 
     [Fact]
