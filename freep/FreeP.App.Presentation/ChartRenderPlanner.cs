@@ -806,6 +806,8 @@ public static partial class ChartRenderPlanner
     private const double ImportedSurfaceMinimumLightFactor = 0.72;
     private const double ImportedSurfaceMaximumLightFactor = 1.04;
     private const double ImportedExplicitSurfaceHorizontalScale = 0.70;
+    private const double ImportedTallSurfacePlotLeftInset = 33.0;
+    private const double ImportedTallSurfacePlotRightReduction = 109.0;
 
     private static readonly SrgbColor[] FallbackSeriesColors =
     [
@@ -1470,11 +1472,18 @@ public static partial class ChartRenderPlanner
         {
             // PowerPoint's classic 3-D surface view reserves an explicit right
             // series-axis band and a deep lower projection band.
+            bool usesTallImportedFrame = UsesImportedTallSurfaceTitleWrap(chart, bounds);
+            double leftInset = usesTallImportedFrame
+                ? ImportedTallSurfacePlotLeftInset
+                : 44.0;
+            double rightReduction = usesTallImportedFrame
+                ? ImportedTallSurfacePlotRightReduction
+                : 120.0;
             plot = new ChartPlanRect(
-                bounds.X + 44.0,
-                bounds.Y + (UsesImportedTallSurfaceTitleWrap(chart, bounds) ? 95.0 : 57.0),
-                bounds.Width - 120.0,
-                bounds.Height - (UsesImportedTallSurfaceTitleWrap(chart, bounds) ? 149.0 : 99.0));
+                bounds.X + leftInset,
+                bounds.Y + (usesTallImportedFrame ? 95.0 : 57.0),
+                bounds.Width - rightReduction,
+                bounds.Height - (usesTallImportedFrame ? 149.0 : 99.0));
         }
         else if (chart.ChartType == ChartType.ColumnStacked100 && UsesImportedTextMetrics(chart))
         {
