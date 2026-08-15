@@ -160,7 +160,11 @@ public sealed class SaveCustomViewCommand : IWorkbookCommand
             foreach (var row in filterHiddenRows)
                 sheet.FilterHiddenRows.Add(row);
         }
-        if (state.AutoFilter is not null)
+        var hasCapturedHiddenFilterState =
+            state.HiddenRows is not null ||
+            state.HiddenCols is not null ||
+            state.FilterHiddenRows is not null;
+        if (hasCapturedHiddenFilterState || state.AutoFilter is not null)
             // R111-custom-view-autofilter-alias: clone rather than aliasing state.AutoFilter onto
             // the live sheet -- state may be a persisted WorkbookCustomView's own stored snapshot
             // (view.Sheets[i]), and assigning it by reference would let a subsequent ordinary

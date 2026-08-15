@@ -4,18 +4,16 @@ namespace FreeX.Core.IO;
 
 public sealed partial class NativeJsonAdapter
 {
-    // N13 (partial — see notes on ToWorksheetCustomViewState/ToCustomViewSheetDto below): the
-    // hidden-rows/cols/filter and print-setting fields WorksheetCustomViewState gained in wave 1
-    // (MODEL-A, Workbook.cs) are NOT yet round-tripped through native .fxl JSON. CustomViewSheetDto
-    // (private class, declared in NativeJsonAdapter.Dto.cs — out of scope for this change) has no
-    // matching properties, so there is nowhere to read/write them from in this file without editing
-    // that DTO. The XLSX side (XlsxCustomViewMapper.cs) and the in-memory planner
-    // (CustomViewStatePlanner.cs) are both fully wired; only this native-JSON leg is outstanding.
-    private static WorksheetCustomViewState ToWorksheetCustomViewState(CustomViewSheetDto sheetDto)
+    private static WorksheetCustomViewState ToWorksheetCustomViewState(CustomViewSheetDto sheetDto, SheetId sheetId)
     {
         var frozenRows = NativeJsonValueSanitizer.ValidFrozenRowsOrZero(sheetDto.FrozenRows);
         var frozenCols = NativeJsonValueSanitizer.ValidFrozenColumnsOrZero(sheetDto.FrozenCols);
         var hasFrozenPanes = frozenRows > 0 || frozenCols > 0;
+        WorksheetScaleToFit? scaleToFit = sheetDto.ScaleToFit is { } scale
+            ? NativeJsonValueSanitizer.ValidScaleToFitOrDefault(
+                new WorksheetScaleToFit(scale.ScalePercent, scale.FitToPagesWide, scale.FitToPagesTall),
+                WorksheetScaleToFit.Default)
+            : null;
         return new WorksheetCustomViewState(
             sheetDto.SheetName,
             Enum.IsDefined(sheetDto.ViewMode) ? sheetDto.ViewMode : WorksheetViewMode.Normal,
@@ -31,7 +29,26 @@ public sealed partial class NativeJsonAdapter
             NativeJsonValueSanitizer.ValidRowPaneOrNull(sheetDto.ActiveRow),
             NativeJsonValueSanitizer.ValidColumnPaneOrNull(sheetDto.ActiveCol),
             NativeJsonValueSanitizer.ValidRowPaneOrNull(sheetDto.ViewTopRow),
-            NativeJsonValueSanitizer.ValidColumnPaneOrNull(sheetDto.ViewLeftCol));
+            NativeJsonValueSanitizer.ValidColumnPaneOrNull(sheetDto.ViewLeftCol),
+            SanitizeRows(sheetDto.HiddenRows),
+            SanitizeColumns(sheetDto.HiddenCols),
+            SanitizeRows(sheetDto.FilterHiddenRows),
+            ToWorksheetAutoFilter(sheetDto.AutoFilter, sheetId),
+            ParsePrintAreas(sheetDto.PrintAreas, sheetId),
+            NativeJsonValueSanitizer.ValidNullableEnumOrNull(sheetDto.PageOrientation),
+            NativeJsonValueSanitizer.ValidNullableEnumOrNull(sheetDto.PaperSize),
+            sheetDto.PaperSizeCode is > 0 ? sheetDto.PaperSizeCode : null,
+            sheetDto.PageMargins is { } margins
+                ? NativeJsonValueSanitizer.ValidPageMarginsOrDefault(
+                    new WorksheetPageMargins(margins.Left, margins.Right, margins.Top, margins.Bottom),
+                    WorksheetPageMargins.Narrow)
+                : null,
+            ValidNonNegativeFiniteOrNull(sheetDto.HeaderMargin),
+            ValidNonNegativeFiniteOrNull(sheetDto.FooterMargin),
+            sheetDto.PrintGridlines,
+            sheetDto.PrintHeadings,
+            scaleToFit,
+            sheetDto.FitToPage);
     }
 
     private static WorksheetCustomViewState? ToWorksheetCustomViewState(
@@ -42,9 +59,10 @@ public sealed partial class NativeJsonAdapter
         if (string.IsNullOrWhiteSpace(sheetDto?.SheetName))
             return null;
 
-        var state = ToWorksheetCustomViewState(sheetDto);
-        var sheet = ResolveLoadedSheet(workbook, loadedSheetsBySourceName, state.SheetName);
-        return sheet is null ? null : state with { SheetName = sheet.Name };
+        var sheet = ResolveLoadedSheet(workbook, loadedSheetsBySourceName, sheetDto.SheetName);
+        return sheet is null
+            ? null
+            : ToWorksheetCustomViewState(sheetDto, sheet.Id) with { SheetName = sheet.Name };
     }
 
     private static CustomViewSheetDto ToCustomViewSheetDto(WorksheetCustomViewState state)
@@ -52,6 +70,9 @@ public sealed partial class NativeJsonAdapter
         var frozenRows = NativeJsonValueSanitizer.ValidFrozenRowsOrZero(state.FrozenRows);
         var frozenCols = NativeJsonValueSanitizer.ValidFrozenColumnsOrZero(state.FrozenCols);
         var hasFrozenPanes = frozenRows > 0 || frozenCols > 0;
+        var serializedSheetId = state.PrintAreas is { Count: > 0 }
+            ? state.PrintAreas[0].Start.Sheet
+            : SheetId.New();
         return new CustomViewSheetDto
         {
             SheetName = state.SheetName,
@@ -68,7 +89,59 @@ public sealed partial class NativeJsonAdapter
             ActiveRow = NativeJsonValueSanitizer.ValidRowPaneOrNull(state.ActiveRow),
             ActiveCol = NativeJsonValueSanitizer.ValidColumnPaneOrNull(state.ActiveCol),
             ViewTopRow = NativeJsonValueSanitizer.ValidRowPaneOrNull(state.ViewTopRow),
-            ViewLeftCol = NativeJsonValueSanitizer.ValidColumnPaneOrNull(state.ViewLeftCol)
+            ViewLeftCol = NativeJsonValueSanitizer.ValidColumnPaneOrNull(state.ViewLeftCol),
+            HiddenRows = SanitizeRows(state.HiddenRows)?.ToList(),
+            HiddenCols = SanitizeColumns(state.HiddenCols)?.ToList(),
+            FilterHiddenRows = SanitizeRows(state.FilterHiddenRows)?.ToList(),
+            AutoFilter = ToWorksheetAutoFilterDto(state.AutoFilter, serializedSheetId),
+            PrintAreas = state.PrintAreas?.Select(range => range.ToString()).ToArray(),
+            PageOrientation = NativeJsonValueSanitizer.ValidNullableEnumOrNull(state.PageOrientation),
+            PaperSize = NativeJsonValueSanitizer.ValidNullableEnumOrNull(state.PaperSize),
+            PaperSizeCode = state.PaperSizeCode is > 0 ? state.PaperSizeCode : null,
+            PageMargins = state.PageMargins is { } margins
+                ? FromPageMargins(NativeJsonValueSanitizer.ValidPageMarginsOrDefault(margins, WorksheetPageMargins.Narrow))
+                : null,
+            HeaderMargin = ValidNonNegativeFiniteOrNull(state.HeaderMargin),
+            FooterMargin = ValidNonNegativeFiniteOrNull(state.FooterMargin),
+            PrintGridlines = state.PrintGridlines,
+            PrintHeadings = state.PrintHeadings,
+            ScaleToFit = state.ScaleToFit is { } scale
+                ? ToScaleToFitDto(NativeJsonValueSanitizer.ValidScaleToFitOrDefault(scale, WorksheetScaleToFit.Default))
+                : null,
+            FitToPage = state.FitToPage
         };
     }
+
+    private static IReadOnlyList<uint>? SanitizeRows(IEnumerable<uint>? rows) =>
+        rows?.Where(NativeJsonValueSanitizer.IsValidRowIndex).Distinct().OrderBy(row => row).ToArray();
+
+    private static IReadOnlyList<uint>? SanitizeColumns(IEnumerable<uint>? columns) =>
+        columns?.Where(NativeJsonValueSanitizer.IsValidColumnIndex).Distinct().OrderBy(column => column).ToArray();
+
+    private static IReadOnlyList<GridRange>? ParsePrintAreas(string[]? references, SheetId sheetId)
+    {
+        if (references is null)
+            return null;
+
+        var areas = new List<GridRange>(references.Length);
+        foreach (var reference in references)
+        {
+            if (string.IsNullOrWhiteSpace(reference))
+                continue;
+            try { areas.Add(GridRange.Parse(reference, sheetId)); }
+            catch (FormatException) { }
+        }
+        return areas;
+    }
+
+    private static double? ValidNonNegativeFiniteOrNull(double? value) =>
+        value is { } concrete && NativeJsonValueSanitizer.IsNonNegativeFinite(concrete) ? concrete : null;
+
+    private static ScaleToFitDto ToScaleToFitDto(WorksheetScaleToFit scale) =>
+        new()
+        {
+            ScalePercent = scale.ScalePercent,
+            FitToPagesWide = scale.FitToPagesWide,
+            FitToPagesTall = scale.FitToPagesTall
+        };
 }

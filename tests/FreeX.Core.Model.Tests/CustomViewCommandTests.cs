@@ -188,6 +188,41 @@ public sealed class CustomViewCommandTests
     }
 
     [Fact]
+    public void ApplyCustomViewCommand_CapturedNoFilterClearsLiveFilterAndUndoRestoresIt()
+    {
+        var workbook = new Workbook("test");
+        var sheet = workbook.AddSheet("Sheet1");
+        workbook.CustomViews.Add(new WorkbookCustomView(
+            "No Filter",
+            [new WorksheetCustomViewState(
+                sheet.Name,
+                WorksheetViewMode.Normal,
+                0,
+                0,
+                null,
+                null,
+                HiddenRows: [],
+                HiddenCols: [],
+                FilterHiddenRows: [],
+                AutoFilter: null)],
+            IncludeHiddenRowsColumnsAndFilterSettings: true));
+        sheet.AutoFilter = new WorksheetAutoFilterModel("A1:B4", null);
+        sheet.AutoFilter.FilterColumns.Add(new WorksheetAutoFilterColumnModel(0, ["North"]));
+        var command = new ApplyCustomViewCommand("No Filter");
+        var context = new TestCommandContext(workbook);
+
+        command.Apply(context).Success.Should().BeTrue();
+
+        sheet.AutoFilter.Should().BeNull();
+
+        command.Revert(context);
+
+        sheet.AutoFilter.Should().NotBeNull();
+        sheet.AutoFilter!.Reference.Should().Be("A1:B4");
+        sheet.AutoFilter.FilterColumns.Should().ContainSingle().Which.Values.Should().Equal("North");
+    }
+
+    [Fact]
     public void ApplyCustomViewCommand_DropsSplitPaneStateWhenSavedViewHasFrozenPanes()
     {
         var workbook = new Workbook("test");
