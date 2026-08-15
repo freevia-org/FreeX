@@ -79,7 +79,9 @@ internal static class WpfDialogRouteFactory
             editor.Model.Blocks.Clear();
             editor.Model.Blocks.Add(new Paragraph("First target") { BookmarkNames = { "FirstTarget" } });
             editor.Model.Blocks.Add(new Paragraph("Second target") { BookmarkNames = { "SecondTarget" } });
-            editor.Rerender();
+            // Rerender() was removed when the design-preview work made Render() private; LoadModel is
+            // the supported way to push a directly-mutated model back into the view.
+            editor.LoadModel(editor.Model);
         }
 
         return BookmarkManagerDialog.CreateForVisualHarness(owner, editor);
