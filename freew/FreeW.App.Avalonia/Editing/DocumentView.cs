@@ -280,6 +280,7 @@ public sealed partial class DocumentView : Control
     private DocumentCommandBus _bus => _editingSession.Commands;
     private DocumentDesignEditingCoordinator DesignEdits => _editingSession.Design;
     private DocumentParagraphStylePreviewSession ParagraphStylePreviews => _editingSession.ParagraphStylePreview;
+    private DocumentTableStylePreviewSession TableStylePreviews => _editingSession.TableStylePreview;
     private DocumentParagraphFormattingCoordinator ParagraphEdits => _editingSession.Paragraphs;
     private DocumentObjectEditingCoordinator ObjectEdits => _editingSession.Objects;
     private DocumentTableEditingCoordinator TableEdits => _editingSession.Tables;
@@ -2238,12 +2239,43 @@ public sealed partial class DocumentView : Control
 
     public void ApplyTableStyle(DocumentTableStyle style)
     {
-        ArgumentNullException.ThrowIfNull(style);
-        if (_cellCaret is { } caret)
-            TableEdits.ApplyStyle(
-                new DocumentTableCellAddress(caret.TableBlock, caret.Row, caret.Col),
-                style);
+        CommitTableStylePreview(style);
     }
+
+    public void PreviewTableStyle(DocumentTableStyle style)
+    {
+        ArgumentNullException.ThrowIfNull(style);
+        var target = TableStylePreviews.ActiveTarget ?? CurrentTableStyleTarget();
+        if (target is not { } address || !TableStylePreviews.Preview(address, style))
+            return;
+
+        ClearBitmapCache();
+        InvalidateLayoutAndVisual();
+    }
+
+    public void CancelTableStylePreview()
+    {
+        if (TableStylePreviews.Cancel() is null)
+            return;
+
+        ClearBitmapCache();
+        InvalidateLayoutAndVisual();
+    }
+
+    public void CommitTableStylePreview(DocumentTableStyle style)
+    {
+        ArgumentNullException.ThrowIfNull(style);
+        var target = TableStylePreviews.ActiveTarget ?? CurrentTableStyleTarget();
+        if (target is not { } address)
+            return;
+
+        TableStylePreviews.Commit(address, style);
+    }
+
+    private DocumentTableCellAddress? CurrentTableStyleTarget() =>
+        _cellCaret is { } caret
+            ? TableEdits.AddressFromGridColumn(caret.TableBlock, caret.Row, caret.Col)
+            : null;
 
     public void ApplyTableProperties(TablePropertiesValues values)
     {

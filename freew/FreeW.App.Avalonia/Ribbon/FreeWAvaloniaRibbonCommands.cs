@@ -255,14 +255,12 @@ internal static class FreeWAvaloniaRibbonCommands
         // ── Table Design contextual tab ───────────────────────────────────────
         // Shared Table Tools policy; this host contributes only Avalonia editor and dialog adapters.
         TableEditingRibbonWorkflow.Register(tableCommands, CreateTableEditingPorts(editor, callbacks));
-
-        tableCommands.Register("freew.table-styles", new ActionRibbonCommand(() => { /* dropdown opener */ }));
-        for (var index = 0; index < DocumentTableStyle.Catalog.Count; index++)
-        {
-            var style = DocumentTableStyle.Catalog[index];
-            tableCommands.Register(FreeWContextMenuPlanner.TableStylesPrefix + index,
-                new ActionRibbonCommand(() => editor.ApplyTableStyle(style)));
-        }
+        TableStyleRibbonWorkflow.Register(
+            r,
+            new TableStyleRibbonPorts(
+                editor.PreviewTableStyle,
+                editor.CancelTableStylePreview,
+                editor.CommitTableStylePreview));
 
         tableCommands.Bind(FreeWRibbonCommandAction.Eraser, new ActionRibbonCommand(editor.EraseTableBorderAtCaret));
 

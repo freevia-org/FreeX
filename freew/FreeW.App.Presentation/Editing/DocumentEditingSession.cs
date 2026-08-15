@@ -87,6 +87,7 @@ public sealed class DocumentEditingSession
         Review = new DocumentReviewEditingSession(this, _revisionDateXml);
         Design = new DocumentDesignEditingCoordinator(this);
         ParagraphStylePreview = new DocumentParagraphStylePreviewSession(this);
+        TableStylePreview = new DocumentTableStylePreviewSession(this);
         Paragraphs = new DocumentParagraphFormattingCoordinator(this);
         Objects = new DocumentObjectEditingCoordinator(this);
         Tables = new DocumentTableEditingCoordinator(this);
@@ -109,6 +110,8 @@ public sealed class DocumentEditingSession
 
     public DocumentParagraphStylePreviewSession ParagraphStylePreview { get; }
 
+    public DocumentTableStylePreviewSession TableStylePreview { get; }
+
     public DocumentParagraphFormattingCoordinator Paragraphs { get; }
 
     public DocumentObjectEditingCoordinator Objects { get; }
@@ -124,6 +127,7 @@ public sealed class DocumentEditingSession
 
         Design.CancelPreview();
         ParagraphStylePreview.Cancel();
+        TableStylePreview.Cancel();
         _commands.Changed -= OnCommandsChanged;
         Document = document;
         _commands = CreateCommandBus(document);

@@ -160,6 +160,7 @@ public sealed partial class DocumentView : RichTextBox
     private DocumentCommandBus _commands => _editingSession.Commands;
     private DocumentDesignEditingCoordinator DesignEdits => _editingSession.Design;
     private DocumentParagraphStylePreviewSession ParagraphStylePreviews => _editingSession.ParagraphStylePreview;
+    private DocumentTableStylePreviewSession TableStylePreviews => _editingSession.TableStylePreview;
     private DocumentParagraphFormattingCoordinator ParagraphEdits => _editingSession.Paragraphs;
     private DocumentObjectEditingCoordinator ObjectEdits => _editingSession.Objects;
     private DocumentTableEditingCoordinator TableEdits => _editingSession.Tables;
@@ -11755,22 +11756,13 @@ public sealed partial class DocumentView : RichTextBox
         DesignEdits.ApplyDocumentProperties(values);
     }
 
-    // Snapshot of the caret table's previous style id for table-style live-preview.
-    private (int BlockIndex, string? PriorStyleId, string? PriorBorderColorHex, bool PriorBorders)? _tableStyleSnapshot;
-
     /// <summary>
     /// Apply a catalog table style to the table at the caret as one undoable edit after the gallery reverts
     /// any live preview.
     /// </summary>
     public void ApplyTableStyle(DocumentTableStyle style)
     {
-        ArgumentNullException.ThrowIfNull(style);
-        CommitToModel();
-        var (blockIndex, _, _) = CaretTableLocation();
-        if (blockIndex < 0 || _model.Blocks[blockIndex] is not ModelTable)
-            return;
-
-        TableEdits.ApplyStyle(new DocumentTableCellAddress(blockIndex, 0, 0), style);
+        CommitTableStylePreview(style);
     }
 
     /// <summary>
@@ -11782,41 +11774,42 @@ public sealed partial class DocumentView : RichTextBox
     {
         ArgumentNullException.ThrowIfNull(style);
 
-        if (_tableStyleSnapshot is null)
+        if (!TableStylePreviews.HasActivePreview)
             CommitToModel();
-        else
-            RestoreTableStylePreview();
 
-        var (blockIndex, _, _) = CaretTableLocation();
-        if (blockIndex < 0 || _model.Blocks[blockIndex] is not ModelTable table)
+        var target = TableStylePreviews.ActiveTarget ?? CurrentTableStyleTarget();
+        if (target is not { } address || !TableStylePreviews.Preview(address, style))
             return;
 
-        _tableStyleSnapshot = (blockIndex, table.TableStyleId, null, table.Formatting.Borders);
-        table.TableStyleId = style.WordStyleId;
-        table.Formatting = table.Formatting with { Borders = style.Borders };
         Render();
     }
 
     /// <summary>Revert a live preview started by <see cref="PreviewTableStyle"/>. No-op if none is active.</summary>
     public void EndTableStylePreview()
     {
-        if (_tableStyleSnapshot is null)
+        if (TableStylePreviews.Cancel() is null)
             return;
-        RestoreTableStylePreview();
         Render();
     }
 
-    private void RestoreTableStylePreview()
+    /// <summary>Commits a Table Styles choice to the target frozen by the first hover.</summary>
+    public void CommitTableStylePreview(DocumentTableStyle style)
     {
-        if (_tableStyleSnapshot is not { } snap)
+        ArgumentNullException.ThrowIfNull(style);
+        if (!TableStylePreviews.HasActivePreview)
+            CommitToModel();
+
+        var target = TableStylePreviews.ActiveTarget ?? CurrentTableStyleTarget();
+        if (target is not { } address)
             return;
-        if (snap.BlockIndex >= 0 && snap.BlockIndex < _model.Blocks.Count
-            && _model.Blocks[snap.BlockIndex] is ModelTable table)
-        {
-            table.TableStyleId = snap.PriorStyleId;
-            table.Formatting = table.Formatting with { Borders = snap.PriorBorders };
-        }
-        _tableStyleSnapshot = null;
+
+        TableStylePreviews.Commit(address, style);
+    }
+
+    private DocumentTableCellAddress? CurrentTableStyleTarget()
+    {
+        var (blockIndex, rowIndex, columnIndex) = CaretTableLocation();
+        return TableEdits.AddressFromCellIndex(blockIndex, rowIndex, columnIndex);
     }
 
     public void InsertField(RunFieldKind kind)

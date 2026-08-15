@@ -366,6 +366,12 @@ internal static class FreeWRibbonCommands
             }));
         // Shared Table Tools policy; this host contributes only WPF editor and dialog adapters.
         TableEditingRibbonWorkflow.Register(tableCommands, CreateTableEditingPorts(editor));
+        TableStyleRibbonWorkflow.Register(
+            registry,
+            new TableStyleRibbonPorts(
+                editor.PreviewTableStyle,
+                editor.EndTableStylePreview,
+                editor.CommitTableStylePreview));
 
         // Table Design > Draw Borders: drag-to-insert table (prompted dimensions) and eraser-merges right.
         tableCommands.Bind(FreeWRibbonCommandAction.DrawTable, new DrawTableCommand(editor));

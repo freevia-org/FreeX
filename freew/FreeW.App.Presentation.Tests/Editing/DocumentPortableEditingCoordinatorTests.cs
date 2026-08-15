@@ -357,6 +357,92 @@ public sealed class DocumentTableEditingCoordinatorTests
             .Contain(run => run.TableFormula != null);
     }
 
+    [Fact]
+    public void TableStylePreviewSwitchAndCancelRestoreTheCompleteBaselineWithoutUndo()
+    {
+        var table = Table.Create(1, 1);
+        table.TableStyleId = "TableGrid";
+        table.Formatting = new TableFormatting
+        {
+            Borders = false,
+            HeaderRow = true,
+            BandedRows = true,
+            RepeatHeaderRow = true,
+            LastRow = true,
+            FirstColumn = true,
+            LastColumn = true,
+            BandedColumns = true,
+        };
+        var baseline = table.Formatting;
+        var session = SessionWith(table);
+        var address = new DocumentTableCellAddress(0, 0, 0);
+        var first = DocumentTableStyle.Catalog[0];
+        var second = DocumentTableStyle.Catalog[1];
+
+        session.TableStylePreview.Preview(address, first).Should().BeTrue();
+        table.TableStyleId.Should().Be(first.WordStyleId);
+        session.Commands.CanUndo.Should().BeFalse();
+
+        session.TableStylePreview.Preview(address, second).Should().BeTrue();
+        table.TableStyleId.Should().Be(second.WordStyleId);
+        table.Formatting.HeaderRow.Should().BeTrue("each preview starts from the captured baseline");
+
+        session.TableStylePreview.Cancel().Should().Be(address);
+        table.TableStyleId.Should().Be("TableGrid");
+        table.Formatting.Should().Be(baseline);
+        session.Commands.CanUndo.Should().BeFalse();
+    }
+
+    [Fact]
+    public void TableStylePreviewFreezesFirstTargetAndCommitsExactlyOneUndoEntry()
+    {
+        var document = new TextDocument();
+        var firstTable = Table.Create(1, 1);
+        var secondTable = Table.Create(1, 1);
+        firstTable.Formatting = firstTable.Formatting with { HeaderRow = true, BandedColumns = true };
+        var baseline = firstTable.Formatting;
+        document.Blocks.Add(firstTable);
+        document.Blocks.Add(secondTable);
+        var session = new DocumentEditingSession();
+        session.LoadDocument(document);
+        var firstAddress = new DocumentTableCellAddress(0, 0, 0);
+        var secondAddress = new DocumentTableCellAddress(1, 0, 0);
+        var preview = DocumentTableStyle.Catalog[0];
+        var committed = DocumentTableStyle.Catalog[1];
+
+        session.TableStylePreview.Preview(firstAddress, preview).Should().BeTrue();
+        session.TableStylePreview.Preview(secondAddress, committed).Should().BeTrue();
+        session.TableStylePreview.ActiveTarget.Should().Be(firstAddress);
+
+        session.TableStylePreview.Commit(secondAddress, committed).Applied.Should().BeTrue();
+        firstTable.TableStyleId.Should().Be(committed.WordStyleId);
+        secondTable.TableStyleId.Should().BeNull();
+        session.Commands.CanUndo.Should().BeTrue();
+
+        session.Commands.Undo().Should().BeTrue();
+        firstTable.TableStyleId.Should().BeNull();
+        firstTable.Formatting.Should().Be(baseline);
+        session.Commands.CanUndo.Should().BeFalse();
+    }
+
+    [Fact]
+    public void LoadingAnotherDocumentCancelsAnActiveTableStylePreview()
+    {
+        var originalTable = Table.Create(1, 1);
+        originalTable.Formatting = originalTable.Formatting with { LastRow = true };
+        var baseline = originalTable.Formatting;
+        var session = SessionWith(originalTable);
+        session.TableStylePreview.Preview(
+            new DocumentTableCellAddress(0, 0, 0),
+            DocumentTableStyle.Catalog[0]).Should().BeTrue();
+
+        session.LoadDocument(TextDocument.CreateEmpty());
+
+        originalTable.TableStyleId.Should().BeNull();
+        originalTable.Formatting.Should().Be(baseline);
+        session.TableStylePreview.HasActivePreview.Should().BeFalse();
+    }
+
     private static DocumentEditingSession SessionWith(Block block)
     {
         var document = new TextDocument();

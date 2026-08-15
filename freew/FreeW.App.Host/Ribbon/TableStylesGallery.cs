@@ -6,14 +6,14 @@ using FreeW.App.Host.Editing;
 using FreeW.App.Presentation;
 using FreeW.App.Presentation.ContextMenus;
 using FreeW.Core.Model;
+using Free.Shared.Ribbon;
 
 namespace FreeW.App.Host;
 
 /// <summary>
 /// Word-style Table Styles gallery for the Table Design contextual tab. Builds a button that opens a
-/// <see cref="ContextMenu"/> dropdown of catalog table-style entries; hovering a menu item live-previews
-/// the style on the caret's table via <see cref="DocumentView.PreviewTableStyle"/>; leaving reverts via
-/// <see cref="DocumentView.EndTableStylePreview"/>; clicking commits via <see cref="DocumentView.ApplyTableStyle"/>.
+/// <see cref="ContextMenu"/> dropdown of catalog table-style entries. Native pointer/menu events invoke
+/// Presentation-owned <see cref="IRibbonPreviewCommand"/> instances for preview, cancellation, and commit.
 /// Reuses the same hover/preview/commit idiom as <see cref="ThemeGallery"/> and
 /// <see cref="StylesGallery"/>. Hosted as app-side custom content — no shared RibbonGallery render needed.
 /// </summary>
@@ -24,6 +24,10 @@ internal static class TableStylesGallery
     /// Returns a <see cref="Button"/> that opens a context menu of style thumbnails on click.
     /// </summary>
     public static FrameworkElement Build(DocumentView editor)
+        => Build(editor, registry: null);
+
+    /// <summary>Builds the native WPF gallery over Presentation-owned preview commands.</summary>
+    public static FrameworkElement Build(DocumentView editor, IRibbonCommandRegistry? registry)
     {
         var button = new Button
         {
@@ -65,10 +69,10 @@ internal static class TableStylesGallery
             }
         };
 
-        var menu = BuildMenu(editor, button);
+        var menu = BuildMenu(editor, registry, out var cancelActivePreview);
         menu.Closed += (_, _) =>
         {
-            editor.EndTableStylePreview();
+            cancelActivePreview();
             button.Background = Brushes.Transparent;
             button.BorderBrush = Brushes.Transparent;
         };
@@ -82,9 +86,18 @@ internal static class TableStylesGallery
         return button;
     }
 
-    private static ContextMenu BuildMenu(DocumentView editor, FrameworkElement anchor)
+    private static ContextMenu BuildMenu(
+        DocumentView editor,
+        IRibbonCommandRegistry? registry,
+        out Action cancelActivePreview)
     {
         var menu = new ContextMenu();
+        IRibbonPreviewCommand? activePreview = null;
+        cancelActivePreview = () =>
+        {
+            activePreview?.CancelPreview();
+            activePreview = null;
+        };
         foreach (var planned in FreeWContextMenuPlanner.BuildTableStyles().Items)
         {
             if (planned.CommandId is not { } commandId
@@ -99,12 +112,48 @@ internal static class TableStylesGallery
                 IsEnabled = planned.IsEnabled,
             };
             AutomationProperties.SetName(item, FreeWUiTextCatalog.TableStyleAutomationName(style.Name));
-            item.MouseEnter += (_, _) => editor.PreviewTableStyle(style);
-            item.MouseLeave += (_, _) => editor.EndTableStylePreview();
+            IRibbonCommand? command = null;
+            if (registry is not null)
+                registry.TryGet(commandId, out command);
+            var preview = command as IRibbonPreviewCommand;
+            item.MouseEnter += (_, _) =>
+            {
+                if (preview is null)
+                {
+                    editor.PreviewTableStyle(style);
+                    return;
+                }
+
+                if (!ReferenceEquals(activePreview, preview))
+                    activePreview?.CancelPreview();
+                activePreview = preview;
+                preview.BeginPreview(RibbonCommandContext.Empty);
+            };
+            item.MouseLeave += (_, _) =>
+            {
+                if (preview is null)
+                {
+                    editor.EndTableStylePreview();
+                    return;
+                }
+
+                if (ReferenceEquals(activePreview, preview))
+                {
+                    preview.CancelPreview();
+                    activePreview = null;
+                }
+            };
             item.Click += (_, _) =>
             {
-                editor.EndTableStylePreview();
-                editor.ApplyTableStyle(style);
+                if (command is null)
+                {
+                    editor.EndTableStylePreview();
+                    editor.ApplyTableStyle(style);
+                    return;
+                }
+
+                command.Execute(RibbonCommandContext.Empty);
+                activePreview = null;
             };
             menu.Items.Add(item);
         }

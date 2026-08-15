@@ -3426,7 +3426,7 @@ public sealed partial class MainWindow : Window
             if (tab.Id == "table-design")
                 // Table Styles gallery: inject a live-preview style picker into the Table Style group,
                 // replacing the Shading button placeholder so the gallery owns that lane.
-                InjectGallery(content, "table-style", TableStylesGallery.Build(_editor), removeKind: RemoveKind.All);
+                InjectGallery(content, "table-style", TableStylesGallery.Build(_editor, registry), removeKind: RemoveKind.All);
 
             if (tab.Id == "chart-design")
             {
