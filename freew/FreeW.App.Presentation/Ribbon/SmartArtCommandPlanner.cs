@@ -1,3 +1,4 @@
+using Free.Shared.Ribbon;
 using FreeW.Core.Model;
 
 namespace FreeW.App.Presentation.Ribbon;
@@ -5,6 +6,12 @@ namespace FreeW.App.Presentation.Ribbon;
 /// <summary>Shared command-state and dialog-value planning for SmartArt contextual commands.</summary>
 public static class SmartArtCommandPlanner
 {
+    public static RibbonCommandId StyleCommandId(SmartArtStyle style)
+    {
+        ArgumentNullException.ThrowIfNull(style);
+        return new RibbonCommandId($"freew.smartart-style-{style.Id}");
+    }
+
     public static bool IsEnabled(SmartArt? smartArt, SmartArtStructureOperation operation) =>
         MutateSmartArtStructureCommand.CanApply(smartArt, operation);
 

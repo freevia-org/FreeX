@@ -4,7 +4,8 @@ using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
 using System.Windows.Media;
 using System.Windows.Media.Effects;
-using FreeW.App.Host.Editing;
+using Free.Shared.Ribbon;
+using FreeW.App.Presentation.Ribbon;
 using FreeW.Core.Model;
 
 namespace FreeW.App.Host;
@@ -12,23 +13,24 @@ namespace FreeW.App.Host;
 /// <summary>
 /// Galleries for the SmartArt Design contextual tab: Change Layout, Change Colors, and SmartArt Styles.
 /// Each gallery is a horizontal strip of thumbnail swatches; hovering a swatch live-previews it on the
-/// selected SmartArt (via <see cref="DocumentView.ApplySmartArtLayout"/> etc.), clicking commits.
-/// Matches the ThemeGallery / StylesGallery pattern: catalog-driven swatches, borderless hover highlight,
-/// injected via <c>InjectGallery</c> in <c>MainWindow.BuildRibbon</c>.
+/// selected SmartArt through Presentation-owned preview commands, while clicking commits through the same
+/// registry. This class owns only native thumbnails and pointer adaptation.
 /// </summary>
 internal static class SmartArtGallery
 {
     // ── Change Layout gallery ────────────────────────────────────────────────────────────────────────
 
-    public static FrameworkElement BuildLayouts(DocumentView editor)
+    public static FrameworkElement BuildLayouts(IRibbonCommandRegistry registry)
     {
         var strip = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center };
         foreach (var preset in SmartArtLayoutPreset.Catalog)
-            strip.Children.Add(BuildLayoutSwatch(editor, preset));
+            strip.Children.Add(BuildLayoutSwatch(preset, registry));
         return WithLabel("Layouts", strip);
     }
 
-    private static FrameworkElement BuildLayoutSwatch(DocumentView editor, SmartArtLayoutPreset preset)
+    private static FrameworkElement BuildLayoutSwatch(
+        SmartArtLayoutPreset preset,
+        IRibbonCommandRegistry registry)
     {
         var thumb = new StackPanel { Margin = new Thickness(3, 3, 3, 3), Width = 56 };
 
@@ -55,10 +57,11 @@ internal static class SmartArtGallery
             Margin = new Thickness(0, 2, 0, 0)
         });
 
+        var command = Resolve(registry, $"freew.smartart-layout-{preset.Id}");
         return WrapGalleryButton(thumb, preset.Name,
-            onEnter: () => PreviewLayout(editor, preset),
-            onLeave: () => EndPreview(editor),
-            onClick: () => { EndPreview(editor); editor.ApplySmartArtLayout(preset); });
+            onEnter: () => BeginPreview(command),
+            onLeave: () => CancelPreview(command),
+            onClick: () => command.Execute(RibbonCommandContext.Empty));
     }
 
     // Miniature that sketches the layout with simple bars/boxes.
@@ -184,15 +187,17 @@ internal static class SmartArtGallery
 
     // ── Change Colors gallery ────────────────────────────────────────────────────────────────────────
 
-    public static FrameworkElement BuildColors(DocumentView editor)
+    public static FrameworkElement BuildColors(IRibbonCommandRegistry registry)
     {
         var strip = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center };
         foreach (var scheme in SmartArtColorScheme.Catalog)
-            strip.Children.Add(BuildColorSwatch(editor, scheme));
+            strip.Children.Add(BuildColorSwatch(scheme, registry));
         return WithLabel("Change Colors", strip);
     }
 
-    private static FrameworkElement BuildColorSwatch(DocumentView editor, SmartArtColorScheme scheme)
+    private static FrameworkElement BuildColorSwatch(
+        SmartArtColorScheme scheme,
+        IRibbonCommandRegistry registry)
     {
         var thumb = new StackPanel { Margin = new Thickness(3, 3, 3, 3), Width = 44 };
 
@@ -225,23 +230,26 @@ internal static class SmartArtGallery
             Margin = new Thickness(0, 2, 0, 0)
         });
 
+        var command = Resolve(registry, $"freew.smartart-colors-{scheme.Id}");
         return WrapGalleryButton(thumb, scheme.Name + " colors",
-            onEnter: () => PreviewColor(editor, scheme),
-            onLeave: () => EndPreview(editor),
-            onClick: () => { EndPreview(editor); editor.ApplySmartArtColorScheme(scheme); });
+            onEnter: () => BeginPreview(command),
+            onLeave: () => CancelPreview(command),
+            onClick: () => command.Execute(RibbonCommandContext.Empty));
     }
 
     // ── SmartArt Styles gallery ──────────────────────────────────────────────────────────────────────
 
-    public static FrameworkElement BuildStyles(DocumentView editor)
+    public static FrameworkElement BuildStyles(IRibbonCommandRegistry registry)
     {
         var strip = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center };
         foreach (var style in SmartArtStyle.Catalog)
-            strip.Children.Add(BuildStyleSwatch(editor, style));
+            strip.Children.Add(BuildStyleSwatch(style, registry));
         return WithLabel("SmartArt Styles", strip);
     }
 
-    private static FrameworkElement BuildStyleSwatch(DocumentView editor, SmartArtStyle style)
+    private static FrameworkElement BuildStyleSwatch(
+        SmartArtStyle style,
+        IRibbonCommandRegistry registry)
     {
         var thumb = new StackPanel { Margin = new Thickness(3, 3, 3, 3), Width = 52 };
 
@@ -296,78 +304,28 @@ internal static class SmartArtGallery
             Margin = new Thickness(0, 2, 0, 0)
         });
 
+        var command = Resolve(registry, SmartArtCommandPlanner.StyleCommandId(style));
         return WrapGalleryButton(thumb, style.Name + " style",
-            onEnter: () => PreviewStyle(editor, style),
-            onLeave: () => EndPreview(editor),
-            onClick: () => { EndPreview(editor); editor.ApplySmartArtStyle(style); });
+            onEnter: () => BeginPreview(command),
+            onLeave: () => CancelPreview(command),
+            onClick: () => command.Execute(RibbonCommandContext.Empty));
     }
 
-    private sealed record PreviewSnapshot(
-        SmartArt SmartArt,
-        SmartArtKind Kind,
-        string? LayoutId,
-        string? ColorSchemeId,
-        string? StyleId);
+    private static IRibbonCommand Resolve(IRibbonCommandRegistry registry, RibbonCommandId id) =>
+        registry.TryGet(id, out var command)
+            ? command!
+            : throw new InvalidOperationException($"Missing shared SmartArt gallery command '{id}'.");
 
-    private static PreviewSnapshot? _previewSnapshot;
-
-    internal static void PreviewLayout(DocumentView editor, SmartArtLayoutPreset preset)
+    private static void BeginPreview(IRibbonCommand command)
     {
-        if (BeginPreview(editor) is not { } smartArt)
-            return;
-        smartArt.Kind = preset.Kind;
-        smartArt.LayoutId = preset.Id;
-        editor.Rerender();
+        if (command is IRibbonPreviewCommand preview)
+            preview.BeginPreview(RibbonCommandContext.Empty);
     }
 
-    internal static void PreviewColor(DocumentView editor, SmartArtColorScheme scheme)
+    private static void CancelPreview(IRibbonCommand command)
     {
-        if (BeginPreview(editor) is not { } smartArt)
-            return;
-        smartArt.ColorSchemeId = scheme.Id;
-        editor.Rerender();
-    }
-
-    internal static void PreviewStyle(DocumentView editor, SmartArtStyle style)
-    {
-        if (BeginPreview(editor) is not { } smartArt)
-            return;
-        smartArt.StyleId = style.Id;
-        editor.Rerender();
-    }
-
-    private static SmartArt? BeginPreview(DocumentView editor)
-    {
-        RestorePreviewFields();
-        var smartArt = editor.SelectedSmartArt();
-        if (smartArt is null)
-            return null;
-        _previewSnapshot = new PreviewSnapshot(
-            smartArt,
-            smartArt.Kind,
-            smartArt.LayoutId,
-            smartArt.ColorSchemeId,
-            smartArt.StyleId);
-        return smartArt;
-    }
-
-    internal static void EndPreview(DocumentView editor)
-    {
-        if (_previewSnapshot is null)
-            return;
-        RestorePreviewFields();
-        editor.Rerender();
-    }
-
-    private static void RestorePreviewFields()
-    {
-        if (_previewSnapshot is not { } snapshot)
-            return;
-        snapshot.SmartArt.Kind = snapshot.Kind;
-        snapshot.SmartArt.LayoutId = snapshot.LayoutId;
-        snapshot.SmartArt.ColorSchemeId = snapshot.ColorSchemeId;
-        snapshot.SmartArt.StyleId = snapshot.StyleId;
-        _previewSnapshot = null;
+        if (command is IRibbonPreviewCommand preview)
+            preview.CancelPreview();
     }
 
     // ── Shared helpers ───────────────────────────────────────────────────────────────────────────────

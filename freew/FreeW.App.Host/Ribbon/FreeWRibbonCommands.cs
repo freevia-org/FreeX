@@ -366,6 +366,12 @@ internal static class FreeWRibbonCommands
             }));
         // Shared Table Tools policy; this host contributes only WPF editor and dialog adapters.
         TableEditingRibbonWorkflow.Register(tableCommands, CreateTableEditingPorts(editor));
+        TableStyleRibbonWorkflow.Register(
+            registry,
+            new TableStyleRibbonPorts(
+                editor.PreviewTableStyle,
+                editor.EndTableStylePreview,
+                editor.CommitTableStylePreview));
 
         // Table Design > Draw Borders: drag-to-insert table (prompted dimensions) and eraser-merges right.
         tableCommands.Bind(FreeWRibbonCommandAction.DrawTable, new DrawTableCommand(editor));
@@ -1698,7 +1704,21 @@ internal static class FreeWRibbonCommands
             ApplySmartArtStyle: editor.ApplySmartArtStyle,
             ShowSmartArtEditDialogAsync: smartArt => ValueTask.FromResult(
                 InsertSmartArtDialog.Prompt(Application.Current?.MainWindow, smartArt)),
-            ApplySmartArtEditOutcome: editor.ReplaceSelectedSmartArt);
+            ApplySmartArtEditOutcome: editor.ReplaceSelectedSmartArt,
+            PreviewChartStyle: editor.PreviewSelectedChartStyle,
+            PreviewChartColorScheme: editor.PreviewSelectedChartColorScheme,
+            PreviewChartQuickLayout: editor.PreviewSelectedChartQuickLayout,
+            CancelChartDesignPreview: editor.CancelChartDesignPreview,
+            CommitChartStyle: editor.CommitChartStylePreview,
+            CommitChartColorScheme: editor.CommitChartColorSchemePreview,
+            CommitChartQuickLayout: editor.CommitChartQuickLayoutPreview,
+            PreviewSmartArtLayout: editor.PreviewSelectedSmartArtLayout,
+            PreviewSmartArtColorScheme: editor.PreviewSelectedSmartArtColorScheme,
+            PreviewSmartArtStyle: editor.PreviewSelectedSmartArtStyle,
+            CancelSmartArtDesignPreview: editor.CancelSmartArtDesignPreview,
+            CommitSmartArtLayout: editor.CommitSmartArtLayoutPreview,
+            CommitSmartArtColorScheme: editor.CommitSmartArtColorSchemePreview,
+            CommitSmartArtStyle: editor.CommitSmartArtStylePreview);
 
     // Home > Font character effects wired by CharacterEffectCommand.
     private enum CharacterEffect { Superscript, Subscript, Strikethrough, SmallCaps, AllCaps }

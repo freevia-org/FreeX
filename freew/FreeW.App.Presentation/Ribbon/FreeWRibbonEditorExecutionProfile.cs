@@ -139,7 +139,21 @@ public sealed record FreeWRibbonChartSmartArtExecutionPorts(
     Action<SmartArtColorScheme> ApplySmartArtColorScheme,
     Action<SmartArtStyle> ApplySmartArtStyle,
     Func<SmartArt, ValueTask<SmartArt?>>? ShowSmartArtEditDialogAsync,
-    Action<SmartArt> ApplySmartArtEditOutcome);
+    Action<SmartArt> ApplySmartArtEditOutcome,
+    Action<ChartStyle>? PreviewChartStyle = null,
+    Action<ChartColorScheme>? PreviewChartColorScheme = null,
+    Action<ChartQuickLayout>? PreviewChartQuickLayout = null,
+    Action? CancelChartDesignPreview = null,
+    Action<ChartStyle>? CommitChartStyle = null,
+    Action<ChartColorScheme>? CommitChartColorScheme = null,
+    Action<ChartQuickLayout>? CommitChartQuickLayout = null,
+    Action<SmartArtLayoutPreset>? PreviewSmartArtLayout = null,
+    Action<SmartArtColorScheme>? PreviewSmartArtColorScheme = null,
+    Action<SmartArtStyle>? PreviewSmartArtStyle = null,
+    Action? CancelSmartArtDesignPreview = null,
+    Action<SmartArtLayoutPreset>? CommitSmartArtLayout = null,
+    Action<SmartArtColorScheme>? CommitSmartArtColorScheme = null,
+    Action<SmartArtStyle>? CommitSmartArtStyle = null);
 
 public sealed record FreeWRibbonImageExecutionPorts(
     Action PrepareExecution,
@@ -507,29 +521,44 @@ public static class FreeWRibbonEditorExecutionProfile
         foreach (var style in ChartStyle.Catalog)
         {
             var captured = style;
-            bindings.Register($"freew.chart-style-{captured.Id}", Stateful(
-                () => ports.ApplyChartStyle(captured),
-                () => ports.SelectedChart() is not null,
-                ports.PrepareExecution));
+            bindings.Register(
+                $"freew.chart-style-{captured.Id}",
+                ChartGalleryCommand(
+                    captured,
+                    ports.ApplyChartStyle,
+                    ports.PreviewChartStyle,
+                    ports.CancelChartDesignPreview,
+                    ports.CommitChartStyle,
+                    ports));
         }
 
         foreach (var layout in ChartQuickLayout.Catalog)
         {
             var captured = layout;
-            bindings.Register($"freew.chart-quick-layout-{captured.Id}", Stateful(
-                () => ports.ApplyChartQuickLayout(captured),
-                () => ports.SelectedChart() is not null,
-                ports.PrepareExecution));
+            bindings.Register(
+                $"freew.chart-quick-layout-{captured.Id}",
+                ChartGalleryCommand(
+                    captured,
+                    ports.ApplyChartQuickLayout,
+                    ports.PreviewChartQuickLayout,
+                    ports.CancelChartDesignPreview,
+                    ports.CommitChartQuickLayout,
+                    ports));
         }
 
         bindings.Register(ChartColorRibbonCommandCatalog.ParentCommandId, EmptyRibbonCommand.Instance);
         foreach (var scheme in ChartColorScheme.Catalog)
         {
             var captured = scheme;
-            bindings.Register(ChartColorRibbonCommandCatalog.CommandId(captured), Stateful(
-                () => ports.ApplyChartColorScheme(captured),
-                () => ports.SelectedChart() is not null,
-                ports.PrepareExecution));
+            bindings.Register(
+                ChartColorRibbonCommandCatalog.CommandId(captured),
+                ChartGalleryCommand(
+                    captured,
+                    ports.ApplyChartColorScheme,
+                    ports.PreviewChartColorScheme,
+                    ports.CancelChartDesignPreview,
+                    ports.CommitChartColorScheme,
+                    ports));
         }
 
         bindings.Bind(FreeWRibbonCommandAction.ChartToggleLegend, Stateful(
@@ -571,10 +600,16 @@ public static class FreeWRibbonEditorExecutionProfile
         foreach (var preset in SmartArtLayoutPreset.Catalog)
         {
             var captured = preset;
-            bindings.Register($"freew.smartart-layout-{captured.Id}", Stateful(
-                () => ports.ApplySmartArtLayout(captured),
-                () => SmartArtCommandPlanner.CanEdit(ports.SelectedSmartArt()),
-                ports.PrepareExecution));
+            bindings.Register(
+                $"freew.smartart-layout-{captured.Id}",
+                CatalogGalleryCommand(
+                    captured,
+                    ports.ApplySmartArtLayout,
+                    ports.PreviewSmartArtLayout,
+                    ports.CancelSmartArtDesignPreview,
+                    ports.CommitSmartArtLayout,
+                    () => SmartArtCommandPlanner.CanEdit(ports.SelectedSmartArt()),
+                    ports.PrepareExecution));
         }
         RegisterSmartArtLayoutAlias(bindings, ports, "freew.smartart-layout-list", SmartArtKind.List);
         RegisterSmartArtLayoutAlias(bindings, ports, "freew.smartart-layout-process", SmartArtKind.Process);
@@ -585,10 +620,31 @@ public static class FreeWRibbonEditorExecutionProfile
         foreach (var scheme in SmartArtColorScheme.Catalog)
         {
             var captured = scheme;
-            bindings.Register($"freew.smartart-colors-{captured.Id}", Stateful(
-                () => ports.ApplySmartArtColorScheme(captured),
-                () => SmartArtCommandPlanner.CanEdit(ports.SelectedSmartArt()),
-                ports.PrepareExecution));
+            bindings.Register(
+                $"freew.smartart-colors-{captured.Id}",
+                CatalogGalleryCommand(
+                    captured,
+                    ports.ApplySmartArtColorScheme,
+                    ports.PreviewSmartArtColorScheme,
+                    ports.CancelSmartArtDesignPreview,
+                    ports.CommitSmartArtColorScheme,
+                    () => SmartArtCommandPlanner.CanEdit(ports.SelectedSmartArt()),
+                    ports.PrepareExecution));
+        }
+
+        foreach (var style in SmartArtStyle.Catalog)
+        {
+            var captured = style;
+            bindings.Register(
+                SmartArtCommandPlanner.StyleCommandId(captured),
+                CatalogGalleryCommand(
+                    captured,
+                    ports.ApplySmartArtStyle,
+                    ports.PreviewSmartArtStyle,
+                    ports.CancelSmartArtDesignPreview,
+                    ports.CommitSmartArtStyle,
+                    () => SmartArtCommandPlanner.CanEdit(ports.SelectedSmartArt()),
+                    ports.PrepareExecution));
         }
 
         BindSmartArtStructure(bindings, ports, FreeWRibbonCommandAction.SmartartAddShape, SmartArtStructureOperation.AddShape);
@@ -605,7 +661,7 @@ public static class FreeWRibbonEditorExecutionProfile
             context =>
             {
                 if (SmartArtCommandPlanner.ResolveStyle(context.SelectedValue) is { } style)
-                    ports.ApplySmartArtStyle(style);
+                    (ports.CommitSmartArtStyle ?? ports.ApplySmartArtStyle)(style);
             },
             () => new RibbonCommandState(IsEnabled: SmartArtCommandPlanner.CanEdit(ports.SelectedSmartArt())),
             ports.PrepareExecution));
@@ -990,6 +1046,67 @@ public static class FreeWRibbonEditorExecutionProfile
             _ => execute(),
             () => new RibbonCommandState(IsEnabled: isEnabled()),
             prepareExecution);
+
+    private static IRibbonStatefulCommand ChartGalleryCommand<T>(
+        T value,
+        Action<T> apply,
+        Action<T>? preview,
+        Action? cancelPreview,
+        Action<T>? commit,
+        FreeWRibbonChartSmartArtExecutionPorts ports)
+        where T : class =>
+        CatalogGalleryCommand(
+            value,
+            apply,
+            preview,
+            cancelPreview,
+            commit,
+            () => ports.SelectedChart() is not null,
+            ports.PrepareExecution);
+
+    private static IRibbonStatefulCommand CatalogGalleryCommand<T>(
+        T value,
+        Action<T> apply,
+        Action<T>? preview,
+        Action? cancelPreview,
+        Action<T>? commit,
+        Func<bool> isEnabled,
+        Action prepareExecution)
+        where T : class =>
+        preview is not null && cancelPreview is not null && commit is not null
+            ? new PreviewableCatalogCommand<T>(
+                value,
+                preview,
+                cancelPreview,
+                commit,
+                isEnabled,
+                prepareExecution)
+            : Stateful(
+                () => apply(value),
+                isEnabled,
+                prepareExecution);
+
+    private sealed class PreviewableCatalogCommand<T>(
+        T value,
+        Action<T> preview,
+        Action cancelPreview,
+        Action<T> commit,
+        Func<bool> isEnabled,
+        Action prepareExecution) : IRibbonPreviewCommand, IRibbonStatefulCommand
+        where T : class
+    {
+        public void BeginPreview(RibbonCommandContext context) => preview(value);
+
+        public void CancelPreview() => cancelPreview();
+
+        public void Execute(RibbonCommandContext context)
+        {
+            prepareExecution();
+            commit(value);
+        }
+
+        public RibbonCommandState GetState() => new(IsEnabled: isEnabled());
+    }
 
     private static void ExecuteOrShowFeedback(
         Func<bool> canExecute,

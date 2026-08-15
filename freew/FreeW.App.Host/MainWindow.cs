@@ -3413,23 +3413,23 @@ public sealed partial class MainWindow : Window
             if (tab.Id == "table-design")
                 // Table Styles gallery: inject a live-preview style picker into the Table Style group,
                 // replacing the Shading button placeholder so the gallery owns that lane.
-                InjectGallery(content, "table-style", TableStylesGallery.Build(_editor), removeKind: RemoveKind.All);
+                InjectGallery(content, "table-style", TableStylesGallery.Build(_editor, registry), removeKind: RemoveKind.All);
 
             if (tab.Id == "chart-design")
             {
                 // Inject the three Chart Design galleries (Quick Layout, Chart Styles, Change Colors)
                 // into the corresponding groups on the chart contextual tab. Each gallery replaces the
                 // group's placeholder ribbon commands with live-preview swatches.
-                InjectGallery(content, "chart-quick-layout", ChartDesignGallery.BuildQuickLayouts(_editor), removeKind: RemoveKind.All);
-                InjectGallery(content, "chart-style", ChartDesignGallery.BuildChartStyles(_editor), removeKind: RemoveKind.All);
-                InjectGallery(content, "chart-colors", ChartDesignGallery.BuildChangeColors(_editor), removeKind: RemoveKind.All);
+                InjectGallery(content, "chart-quick-layout", ChartDesignGallery.BuildQuickLayouts(registry), removeKind: RemoveKind.All);
+                InjectGallery(content, "chart-style", ChartDesignGallery.BuildChartStyles(registry), removeKind: RemoveKind.All);
+                InjectGallery(content, "chart-colors", ChartDesignGallery.BuildChangeColors(registry), removeKind: RemoveKind.All);
             }
 
             if (tab.Id == "smartart-design")
             {
                 // Inject the three SmartArt gallery strips: Layouts, Change Colors, Styles.
-                InjectGallery(content, "smartart-layouts", SmartArtGallery.BuildLayouts(_editor), removeKind: RemoveKind.All);
-                InjectGallery(content, "smartart-colors", SmartArtGallery.BuildColors(_editor), removeKind: RemoveKind.All, extra: SmartArtGallery.BuildStyles(_editor));
+                InjectGallery(content, "smartart-layouts", SmartArtGallery.BuildLayouts(registry), removeKind: RemoveKind.All);
+                InjectGallery(content, "smartart-colors", SmartArtGallery.BuildColors(registry), removeKind: RemoveKind.All, extra: SmartArtGallery.BuildStyles(registry));
             }
 
             }

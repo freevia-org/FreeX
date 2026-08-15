@@ -254,14 +254,12 @@ internal static class FreeWAvaloniaRibbonCommands
         // ── Table Design contextual tab ───────────────────────────────────────
         // Shared Table Tools policy; this host contributes only Avalonia editor and dialog adapters.
         TableEditingRibbonWorkflow.Register(tableCommands, CreateTableEditingPorts(editor, callbacks));
-
-        tableCommands.Register("freew.table-styles", new ActionRibbonCommand(() => { /* dropdown opener */ }));
-        for (var index = 0; index < DocumentTableStyle.Catalog.Count; index++)
-        {
-            var style = DocumentTableStyle.Catalog[index];
-            tableCommands.Register(FreeWContextMenuPlanner.TableStylesPrefix + index,
-                new ActionRibbonCommand(() => editor.ApplyTableStyle(style)));
-        }
+        TableStyleRibbonWorkflow.Register(
+            r,
+            new TableStyleRibbonPorts(
+                editor.PreviewTableStyle,
+                editor.CancelTableStylePreview,
+                editor.CommitTableStylePreview));
 
         tableCommands.Bind(FreeWRibbonCommandAction.Eraser, new ActionRibbonCommand(editor.EraseTableBorderAtCaret));
 
@@ -1385,7 +1383,21 @@ internal static class FreeWAvaloniaRibbonCommands
             ApplySmartArtColorScheme: scheme => editor.SetSmartArtColor(scheme.Id),
             ApplySmartArtStyle: editor.SetSmartArtStyle,
             ShowSmartArtEditDialogAsync: callbacks.ShowSmartArtEditDialogAsync,
-            ApplySmartArtEditOutcome: editor.ReplaceSelectedSmartArt);
+            ApplySmartArtEditOutcome: editor.ReplaceSelectedSmartArt,
+            PreviewChartStyle: editor.PreviewChartStyle,
+            PreviewChartColorScheme: editor.PreviewChartColorScheme,
+            PreviewChartQuickLayout: editor.PreviewChartQuickLayout,
+            CancelChartDesignPreview: editor.CancelChartDesignPreview,
+            CommitChartStyle: editor.CommitChartStylePreview,
+            CommitChartColorScheme: editor.CommitChartColorSchemePreview,
+            CommitChartQuickLayout: editor.CommitChartQuickLayoutPreview,
+            PreviewSmartArtLayout: editor.PreviewSmartArtLayout,
+            PreviewSmartArtColorScheme: editor.PreviewSmartArtColorScheme,
+            PreviewSmartArtStyle: editor.PreviewSmartArtStyle,
+            CancelSmartArtDesignPreview: editor.CancelSmartArtDesignPreview,
+            CommitSmartArtLayout: editor.CommitSmartArtLayoutPreview,
+            CommitSmartArtColorScheme: editor.CommitSmartArtColorSchemePreview,
+            CommitSmartArtStyle: editor.CommitSmartArtStylePreview);
 
     /// <summary>
     /// AV-MAIL: Registers the Mailings-tab commands over the portable <see cref="MailMerge"/> engine. The

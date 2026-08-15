@@ -1,4 +1,5 @@
 using Free.Shared.Ribbon;
+using FreeW.App.Presentation.ContextMenus;
 using FreeW.App.Presentation.Ribbon;
 using FreeW.Core.Model;
 
@@ -116,11 +117,44 @@ public sealed class TableEditingRibbonWorkflowTests
     }
 
     [Fact]
+    public void TableStyleWorkflowOwnsCatalogPreviewCancelAndCommitLifecycle()
+    {
+        var events = new List<string>();
+        var registry = new RibbonCommandRegistry();
+        TableStyleRibbonWorkflow.Register(
+            registry,
+            new TableStyleRibbonPorts(
+                style => events.Add($"preview:{style.WordStyleId}"),
+                () => events.Add("cancel"),
+                style => events.Add($"commit:{style.WordStyleId}")));
+
+        registry.TryGet(TableStyleRibbonWorkflow.ParentCommandId, out var parent).Should().BeTrue();
+        parent.Should().NotBeNull();
+        for (var index = 0; index < DocumentTableStyle.Catalog.Count; index++)
+        {
+            var style = DocumentTableStyle.Catalog[index];
+            registry.TryGet(FreeWContextMenuPlanner.TableStylesPrefix + index, out var command)
+                .Should().BeTrue();
+            var preview = command.Should().BeAssignableTo<IRibbonPreviewCommand>().Subject;
+            preview.BeginPreview(RibbonCommandContext.Empty);
+            preview.CancelPreview();
+            preview.Execute(RibbonCommandContext.Empty);
+            events.TakeLast(3).Should().Equal(
+                $"preview:{style.WordStyleId}",
+                "cancel",
+                $"commit:{style.WordStyleId}");
+        }
+    }
+
+    [Fact]
     public void BothRenderersDelegateTableEditingPolicyToSharedPresentation()
     {
         var root = TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeW.slnx");
         var wpf = File.ReadAllText(Path.Combine(root, "freew", "FreeW.App.Host", "Ribbon", "FreeWRibbonCommands.cs"));
         var avalonia = File.ReadAllText(Path.Combine(root, "freew", "FreeW.App.Avalonia", "Ribbon", "FreeWAvaloniaRibbonCommands.cs"));
+        var wpfEditor = File.ReadAllText(Path.Combine(root, "freew", "FreeW.App.Host", "Editing", "DocumentView.cs"));
+        var avaloniaEditor = File.ReadAllText(Path.Combine(root, "freew", "FreeW.App.Avalonia", "Editing", "DocumentView.cs"));
+        var wpfGallery = File.ReadAllText(Path.Combine(root, "freew", "FreeW.App.Host", "Ribbon", "TableStylesGallery.cs"));
 
         foreach (var source in new[] { wpf, avalonia })
         {
@@ -147,6 +181,20 @@ public sealed class TableEditingRibbonWorkflowTests
             .And.NotContain("tableCommands.Register(\"freew.table-split-cell\"")
             .And.NotContain("tableCommands.Register(\"freew.table-shading\"")
             .And.NotContain("tableCommands.Register(\"freew.table-borders\"");
+        foreach (var source in new[] { wpf, avalonia })
+        {
+            source.Should().Contain("TableStyleRibbonWorkflow.Register(")
+                .And.Contain("editor.PreviewTableStyle")
+                .And.Contain("editor.CommitTableStylePreview");
+        }
+        wpfEditor.Should().Contain("_editingSession.TableStylePreview")
+            .And.NotContain("_tableStyleSnapshot");
+        avaloniaEditor.Should().Contain("_editingSession.TableStylePreview");
+        avalonia.Should().NotContain("new ActionRibbonCommand(() => editor.ApplyTableStyle(style))");
+        wpfGallery.Should().Contain("IRibbonPreviewCommand")
+            .And.Contain("preview.BeginPreview(RibbonCommandContext.Empty)")
+            .And.Contain("preview.CancelPreview()")
+            .And.Contain("command.Execute(RibbonCommandContext.Empty)");
     }
 
     private static void Execute(

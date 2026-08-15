@@ -160,6 +160,9 @@ public sealed partial class DocumentView : RichTextBox
     private DocumentCommandBus _commands => _editingSession.Commands;
     private DocumentDesignEditingCoordinator DesignEdits => _editingSession.Design;
     private DocumentParagraphStylePreviewSession ParagraphStylePreviews => _editingSession.ParagraphStylePreview;
+    private DocumentTableStylePreviewSession TableStylePreviews => _editingSession.TableStylePreview;
+    private DocumentChartDesignPreviewSession ChartDesignPreviews => _editingSession.ChartDesignPreview;
+    private DocumentSmartArtDesignPreviewSession SmartArtDesignPreviews => _editingSession.SmartArtDesignPreview;
     private DocumentParagraphFormattingCoordinator ParagraphEdits => _editingSession.Paragraphs;
     private DocumentObjectEditingCoordinator ObjectEdits => _editingSession.Objects;
     private DocumentTableEditingCoordinator TableEdits => _editingSession.Tables;
@@ -2573,33 +2576,21 @@ public sealed partial class DocumentView : RichTextBox
     }
 
     /// <summary>
-    /// Re-render the document without committing to the model first. Called by the gallery hover
-    /// preview path (ChartDesignGallery) after transiently mutating the selected chart's style/color/
-    /// quick-layout properties so the live preview is visible. The next CommitToModel call (or the
-    /// leave-revert) restores the pre-hover state.
-    /// </summary>
-    public void RerenderSelectedChart() => Render();
-
-    /// <summary>
-    /// Trigger a full re-render of the document surface from the current model state.  Use this after
-    /// directly mutating model objects (e.g. batch floating-object position changes) that bypass the undo
-    /// bus's built-in render call.
-    /// </summary>
-    public void Rerender() => Render();
-
-    /// <summary>
     /// Apply a <see cref="ChartStyle"/> to the selected chart and re-render.
     /// No-op without a chart selection.
     /// </summary>
     public void ApplySelectedChartStyle(ChartStyle style)
+        => CommitChartStylePreview(style);
+
+    public void PreviewSelectedChartStyle(ChartStyle style)
     {
-        CommitToModel();
-        var location = SelectedChartLocation();
-        if (location.Chart is null)
+        ArgumentNullException.ThrowIfNull(style);
+        if (!ChartDesignPreviews.HasActivePreview)
+            CommitToModel();
+        var target = ChartDesignPreviews.ActiveTarget ?? SelectedChartTarget();
+        if (target is not { } address || !ChartDesignPreviews.PreviewStyle(address, style))
             return;
-        RenderObjectEdit(ObjectEdits.SetChartStyle(
-            ObjectTarget(location.BlockIndex, location.RunIndex),
-            style.Id));
+        Render();
     }
 
     /// <summary>
@@ -2607,14 +2598,17 @@ public sealed partial class DocumentView : RichTextBox
     /// No-op without a chart selection.
     /// </summary>
     public void ApplySelectedChartColorScheme(ChartColorScheme scheme)
+        => CommitChartColorSchemePreview(scheme);
+
+    public void PreviewSelectedChartColorScheme(ChartColorScheme scheme)
     {
-        CommitToModel();
-        var location = SelectedChartLocation();
-        if (location.Chart is null)
+        ArgumentNullException.ThrowIfNull(scheme);
+        if (!ChartDesignPreviews.HasActivePreview)
+            CommitToModel();
+        var target = ChartDesignPreviews.ActiveTarget ?? SelectedChartTarget();
+        if (target is not { } address || !ChartDesignPreviews.PreviewColorScheme(address, scheme))
             return;
-        RenderObjectEdit(ObjectEdits.SetChartColorScheme(
-            ObjectTarget(location.BlockIndex, location.RunIndex),
-            scheme.Id));
+        Render();
     }
 
     /// <summary>
@@ -2622,14 +2616,61 @@ public sealed partial class DocumentView : RichTextBox
     /// No-op without a chart selection.
     /// </summary>
     public void ApplySelectedChartQuickLayout(ChartQuickLayout layout)
+        => CommitChartQuickLayoutPreview(layout);
+
+    public void PreviewSelectedChartQuickLayout(ChartQuickLayout layout)
     {
-        CommitToModel();
-        var location = SelectedChartLocation();
-        if (location.Chart is null)
+        ArgumentNullException.ThrowIfNull(layout);
+        if (!ChartDesignPreviews.HasActivePreview)
+            CommitToModel();
+        var target = ChartDesignPreviews.ActiveTarget ?? SelectedChartTarget();
+        if (target is not { } address || !ChartDesignPreviews.PreviewQuickLayout(address, layout))
             return;
-        RenderObjectEdit(ObjectEdits.SetChartQuickLayout(
-            ObjectTarget(location.BlockIndex, location.RunIndex),
-            layout));
+        Render();
+    }
+
+    public void CancelChartDesignPreview()
+    {
+        if (ChartDesignPreviews.Cancel() is not null)
+            Render();
+    }
+
+    public void CommitChartStylePreview(ChartStyle style)
+    {
+        ArgumentNullException.ThrowIfNull(style);
+        if (!ChartDesignPreviews.HasActivePreview)
+            CommitToModel();
+        var target = ChartDesignPreviews.ActiveTarget ?? SelectedChartTarget();
+        if (target is { } address)
+            RenderObjectEdit(ChartDesignPreviews.CommitStyle(address, style));
+    }
+
+    public void CommitChartColorSchemePreview(ChartColorScheme scheme)
+    {
+        ArgumentNullException.ThrowIfNull(scheme);
+        if (!ChartDesignPreviews.HasActivePreview)
+            CommitToModel();
+        var target = ChartDesignPreviews.ActiveTarget ?? SelectedChartTarget();
+        if (target is { } address)
+            RenderObjectEdit(ChartDesignPreviews.CommitColorScheme(address, scheme));
+    }
+
+    public void CommitChartQuickLayoutPreview(ChartQuickLayout layout)
+    {
+        ArgumentNullException.ThrowIfNull(layout);
+        if (!ChartDesignPreviews.HasActivePreview)
+            CommitToModel();
+        var target = ChartDesignPreviews.ActiveTarget ?? SelectedChartTarget();
+        if (target is { } address)
+            RenderObjectEdit(ChartDesignPreviews.CommitQuickLayout(address, layout));
+    }
+
+    private DocumentObjectTarget? SelectedChartTarget()
+    {
+        var location = SelectedChartLocation();
+        return location.Chart is null
+            ? null
+            : ObjectTarget(location.BlockIndex, location.RunIndex);
     }
 
     // ── SmartArt selection (mirrors SelectedChart / SelectedChartLocation) ────────────────────────
@@ -2778,14 +2819,17 @@ public sealed partial class DocumentView : RichTextBox
     /// No-op without a SmartArt selection.
     /// </summary>
     public void ApplySmartArtLayout(SmartArtLayoutPreset preset)
+        => CommitSmartArtLayoutPreview(preset);
+
+    public void PreviewSelectedSmartArtLayout(SmartArtLayoutPreset preset)
     {
-        CommitToModel();
-        var location = SelectedSmartArtLocation();
-        if (location.SmartArt is null) return;
-        RenderObjectEdit(ObjectEdits.SetSmartArtLayout(
-            ObjectTarget(location.BlockIndex, location.RunIndex),
-            preset.Kind,
-            preset.Id));
+        ArgumentNullException.ThrowIfNull(preset);
+        if (!SmartArtDesignPreviews.HasActivePreview)
+            CommitToModel();
+        var target = SmartArtDesignPreviews.ActiveTarget ?? SelectedSmartArtTarget();
+        if (target is not { } address || !SmartArtDesignPreviews.PreviewLayout(address, preset))
+            return;
+        Render();
     }
 
     /// <summary>
@@ -2794,13 +2838,17 @@ public sealed partial class DocumentView : RichTextBox
     /// No-op without a SmartArt selection.
     /// </summary>
     public void ApplySmartArtColorScheme(SmartArtColorScheme scheme)
+        => CommitSmartArtColorSchemePreview(scheme);
+
+    public void PreviewSelectedSmartArtColorScheme(SmartArtColorScheme scheme)
     {
-        CommitToModel();
-        var location = SelectedSmartArtLocation();
-        if (location.SmartArt is null) return;
-        RenderObjectEdit(ObjectEdits.SetSmartArtColor(
-            ObjectTarget(location.BlockIndex, location.RunIndex),
-            scheme.Id));
+        ArgumentNullException.ThrowIfNull(scheme);
+        if (!SmartArtDesignPreviews.HasActivePreview)
+            CommitToModel();
+        var target = SmartArtDesignPreviews.ActiveTarget ?? SelectedSmartArtTarget();
+        if (target is not { } address || !SmartArtDesignPreviews.PreviewColorScheme(address, scheme))
+            return;
+        Render();
     }
 
     /// <summary>
@@ -2809,13 +2857,61 @@ public sealed partial class DocumentView : RichTextBox
     /// No-op without a SmartArt selection.
     /// </summary>
     public void ApplySmartArtStyle(SmartArtStyle style)
+        => CommitSmartArtStylePreview(style);
+
+    public void PreviewSelectedSmartArtStyle(SmartArtStyle style)
     {
-        CommitToModel();
+        ArgumentNullException.ThrowIfNull(style);
+        if (!SmartArtDesignPreviews.HasActivePreview)
+            CommitToModel();
+        var target = SmartArtDesignPreviews.ActiveTarget ?? SelectedSmartArtTarget();
+        if (target is not { } address || !SmartArtDesignPreviews.PreviewStyle(address, style))
+            return;
+        Render();
+    }
+
+    public void CancelSmartArtDesignPreview()
+    {
+        if (SmartArtDesignPreviews.Cancel() is not null)
+            Render();
+    }
+
+    public void CommitSmartArtLayoutPreview(SmartArtLayoutPreset preset)
+    {
+        ArgumentNullException.ThrowIfNull(preset);
+        if (!SmartArtDesignPreviews.HasActivePreview)
+            CommitToModel();
+        var target = SmartArtDesignPreviews.ActiveTarget ?? SelectedSmartArtTarget();
+        if (target is { } address)
+            RenderObjectEdit(SmartArtDesignPreviews.CommitLayout(address, preset));
+    }
+
+    public void CommitSmartArtColorSchemePreview(SmartArtColorScheme scheme)
+    {
+        ArgumentNullException.ThrowIfNull(scheme);
+        if (!SmartArtDesignPreviews.HasActivePreview)
+            CommitToModel();
+        var target = SmartArtDesignPreviews.ActiveTarget ?? SelectedSmartArtTarget();
+        if (target is { } address)
+            RenderObjectEdit(SmartArtDesignPreviews.CommitColorScheme(address, scheme));
+    }
+
+    public void CommitSmartArtStylePreview(SmartArtStyle style)
+    {
+        ArgumentNullException.ThrowIfNull(style);
+        if (!SmartArtDesignPreviews.HasActivePreview)
+            CommitToModel();
+        var target = SmartArtDesignPreviews.ActiveTarget ?? SelectedSmartArtTarget();
+        if (target is { } address)
+            RenderObjectEdit(SmartArtDesignPreviews.CommitStyle(address, style));
+    }
+
+    private DocumentObjectTarget? SelectedSmartArtTarget()
+    {
         var location = SelectedSmartArtLocation();
-        if (location.SmartArt is null) return;
-        RenderObjectEdit(ObjectEdits.SetSmartArtStyle(
-            ObjectTarget(location.BlockIndex, location.RunIndex),
-            style.Id));
+        return location.SmartArt is null
+            ? null
+            : ObjectTarget(location.BlockIndex, location.RunIndex);
     }
 
     private void ExecuteSmartArtStructureCommand(SmartArtStructureOperation operation)
@@ -11695,22 +11791,13 @@ public sealed partial class DocumentView : RichTextBox
         DesignEdits.ApplyDocumentProperties(values);
     }
 
-    // Snapshot of the caret table's previous style id for table-style live-preview.
-    private (int BlockIndex, string? PriorStyleId, string? PriorBorderColorHex, bool PriorBorders)? _tableStyleSnapshot;
-
     /// <summary>
     /// Apply a catalog table style to the table at the caret as one undoable edit after the gallery reverts
     /// any live preview.
     /// </summary>
     public void ApplyTableStyle(DocumentTableStyle style)
     {
-        ArgumentNullException.ThrowIfNull(style);
-        CommitToModel();
-        var (blockIndex, _, _) = CaretTableLocation();
-        if (blockIndex < 0 || _model.Blocks[blockIndex] is not ModelTable)
-            return;
-
-        TableEdits.ApplyStyle(new DocumentTableCellAddress(blockIndex, 0, 0), style);
+        CommitTableStylePreview(style);
     }
 
     /// <summary>
@@ -11722,41 +11809,42 @@ public sealed partial class DocumentView : RichTextBox
     {
         ArgumentNullException.ThrowIfNull(style);
 
-        if (_tableStyleSnapshot is null)
+        if (!TableStylePreviews.HasActivePreview)
             CommitToModel();
-        else
-            RestoreTableStylePreview();
 
-        var (blockIndex, _, _) = CaretTableLocation();
-        if (blockIndex < 0 || _model.Blocks[blockIndex] is not ModelTable table)
+        var target = TableStylePreviews.ActiveTarget ?? CurrentTableStyleTarget();
+        if (target is not { } address || !TableStylePreviews.Preview(address, style))
             return;
 
-        _tableStyleSnapshot = (blockIndex, table.TableStyleId, null, table.Formatting.Borders);
-        table.TableStyleId = style.WordStyleId;
-        table.Formatting = table.Formatting with { Borders = style.Borders };
         Render();
     }
 
     /// <summary>Revert a live preview started by <see cref="PreviewTableStyle"/>. No-op if none is active.</summary>
     public void EndTableStylePreview()
     {
-        if (_tableStyleSnapshot is null)
+        if (TableStylePreviews.Cancel() is null)
             return;
-        RestoreTableStylePreview();
         Render();
     }
 
-    private void RestoreTableStylePreview()
+    /// <summary>Commits a Table Styles choice to the target frozen by the first hover.</summary>
+    public void CommitTableStylePreview(DocumentTableStyle style)
     {
-        if (_tableStyleSnapshot is not { } snap)
+        ArgumentNullException.ThrowIfNull(style);
+        if (!TableStylePreviews.HasActivePreview)
+            CommitToModel();
+
+        var target = TableStylePreviews.ActiveTarget ?? CurrentTableStyleTarget();
+        if (target is not { } address)
             return;
-        if (snap.BlockIndex >= 0 && snap.BlockIndex < _model.Blocks.Count
-            && _model.Blocks[snap.BlockIndex] is ModelTable table)
-        {
-            table.TableStyleId = snap.PriorStyleId;
-            table.Formatting = table.Formatting with { Borders = snap.PriorBorders };
-        }
-        _tableStyleSnapshot = null;
+
+        TableStylePreviews.Commit(address, style);
+    }
+
+    private DocumentTableCellAddress? CurrentTableStyleTarget()
+    {
+        var (blockIndex, rowIndex, columnIndex) = CaretTableLocation();
+        return TableEdits.AddressFromCellIndex(blockIndex, rowIndex, columnIndex);
     }
 
     public void InsertField(RunFieldKind kind)

@@ -188,6 +188,11 @@ internal static partial class FreeWCanonicalRibbonTabs
                         }),
                     tab => tab.Group("picture-adjust", "Adjust", null, 90, group =>
                         {
+                            group.Dropdown("freew.image-corrections", "Corrections", BuildPictureCorrectionsMenu());
+                            group.Dropdown("freew.image-color", "Color", BuildPictureColorMenu());
+                            group.Dropdown("freew.image-transparency", "Transparency", BuildPictureTransparencyMenu());
+                            group.Dropdown("freew.image-effects", "Picture Effects", BuildPictureEffectsMenu());
+                            group.Dropdown("freew.image-artistic", "Artistic Effects", BuildPictureArtisticEffectsMenu());
                             group.Button("freew.image-reset", "Reset Picture", button => button with
                             {
                                 Icon = new RibbonCommandIcon(RibbonCommandIconKind.Refresh)
@@ -655,11 +660,7 @@ internal static partial class FreeWCanonicalRibbonTabs
                     tab => tab.Group("smartart-styles", "SmartArt Styles", "C", 90, group =>
                         {
                             group.Dropdown("freew.smartart-colors", "Change Colors", BuildSmartArtColorsMenu());
-                            group.ComboBox("freew.smartart-change-style", "Styles", combo => combo with
-                            {
-                                Items = SmartArtStyle.Catalog.Select(style => style.Name).ToArray(),
-                                Width = 116,
-                            });
+                            group.Dropdown("freew.smartart-change-style", "Styles", BuildSmartArtStylesMenu());
                         }));
 
                 topology.Section(
@@ -984,6 +985,102 @@ internal static partial class FreeWCanonicalRibbonTabs
                 : [])
             .ToArray());
 
+    private static RibbonMenu BuildPictureCorrectionsMenu() =>
+        new(new RibbonMenuItem[]
+        {
+            new("Brightness: +20%", new RibbonCommandId("freew.image-brightness-plus20"), "1"),
+            new("Brightness: +40%", new RibbonCommandId("freew.image-brightness-plus40"), "2"),
+            new("Brightness: -20%", new RibbonCommandId("freew.image-brightness-minus20"), "3"),
+            new("Brightness: -40%", new RibbonCommandId("freew.image-brightness-minus40"), "4"),
+            new("Contrast: +20%", new RibbonCommandId("freew.image-contrast-plus20"), "5"),
+            new("Contrast: -20%", new RibbonCommandId("freew.image-contrast-minus20"), "6"),
+            new("Picture Corrections\u2026", new RibbonCommandId("freew.image-adjust-dialog"), "D"),
+        });
+
+    private static RibbonMenu BuildPictureColorMenu() =>
+        new(new RibbonMenuItem[]
+        {
+            new("Saturation: 0% (Greyscale)", new RibbonCommandId("freew.image-saturation-0"), "G"),
+            new("Saturation: 50%", new RibbonCommandId("freew.image-saturation-50"), "H"),
+            new("Saturation: 200%", new RibbonCommandId("freew.image-saturation-200"), "J"),
+            new("Color\u2026", new RibbonCommandId("freew.image-color-dialog"), "C"),
+            RibbonMenuItem.Separator(),
+            new("Recolor: Grayscale", new RibbonCommandId("freew.image-recolor-grayscale"), "1"),
+            new("Recolor: Sepia", new RibbonCommandId("freew.image-recolor-sepia"), "2"),
+            new("Recolor: Washout", new RibbonCommandId("freew.image-recolor-washout"), "3"),
+            new("Recolor: Black and White", new RibbonCommandId("freew.image-recolor-blackwhite"), "4"),
+            new("Recolor: No Recolor", new RibbonCommandId("freew.image-recolor-none"), "N"),
+            RibbonMenuItem.Separator(),
+            new("Color Tone: Warm (3000K)", new RibbonCommandId("freew.image-colortemp-warm"), "W"),
+            new("Color Tone: Cool (8000K)", new RibbonCommandId("freew.image-colortemp-cool"), "L"),
+            new("Color Tone: Neutral", new RibbonCommandId("freew.image-colortemp-neutral"), "T"),
+        });
+
+    private static RibbonMenu BuildPictureTransparencyMenu() =>
+        new(new RibbonMenuItem[]
+        {
+            new("Transparency: 25%", new RibbonCommandId("freew.image-transparency-25"), "A"),
+            new("Transparency: 50%", new RibbonCommandId("freew.image-transparency-50"), "B"),
+            new("Transparency: 75%", new RibbonCommandId("freew.image-transparency-75"), "C"),
+            new("Transparency\u2026", new RibbonCommandId("freew.image-transparency-dialog"), "D"),
+        });
+
+    private static RibbonMenu BuildPictureEffectsMenu() =>
+        new(new RibbonMenuItem[]
+        {
+            new("Shadow: No Shadow", new RibbonCommandId("freew.image-shadow-none"), "N"),
+            new("Shadow: Offset Diagonal", new RibbonCommandId("freew.image-shadow-1"), "1"),
+            new("Shadow: Offset Diagonal Medium", new RibbonCommandId("freew.image-shadow-2"), "2"),
+            new("Shadow: Perspective", new RibbonCommandId("freew.image-shadow-3"), "3"),
+            new("Shadow: Offset Bottom", new RibbonCommandId("freew.image-shadow-4"), "4"),
+            new("Shadow: Large", new RibbonCommandId("freew.image-shadow-5"), "5"),
+            RibbonMenuItem.Separator(),
+            new("Reflection: No Reflection", new RibbonCommandId("freew.image-reflection-none"), "R"),
+            new("Reflection: Tight, Touching", new RibbonCommandId("freew.image-reflection-1"), "A"),
+            new("Reflection: Tight, 4pt", new RibbonCommandId("freew.image-reflection-2"), "B"),
+            new("Reflection: Tight, 8pt", new RibbonCommandId("freew.image-reflection-3"), "C"),
+            new("Reflection: Half, Touching", new RibbonCommandId("freew.image-reflection-4"), "D"),
+            new("Reflection: Half, 4pt", new RibbonCommandId("freew.image-reflection-5"), "E"),
+            RibbonMenuItem.Separator(),
+            new("Glow: No Glow", new RibbonCommandId("freew.image-glow-none"), "G"),
+            new("Glow: 5 pt", new RibbonCommandId("freew.image-glow-5"), "H"),
+            new("Glow: 8 pt", new RibbonCommandId("freew.image-glow-8"), "I"),
+            new("Glow: 11 pt", new RibbonCommandId("freew.image-glow-11"), "J"),
+            new("Glow: 18 pt", new RibbonCommandId("freew.image-glow-18"), "K"),
+            RibbonMenuItem.Separator(),
+            new("Soft Edges: None", new RibbonCommandId("freew.image-softedge-none"), "S"),
+            new("Soft Edges: 1 pt", new RibbonCommandId("freew.image-softedge-1"), "T"),
+            new("Soft Edges: 2.5 pt", new RibbonCommandId("freew.image-softedge-2pt5"), "U"),
+            new("Soft Edges: 5 pt", new RibbonCommandId("freew.image-softedge-5"), "V"),
+            new("Soft Edges: 10 pt", new RibbonCommandId("freew.image-softedge-10"), "X"),
+            RibbonMenuItem.Separator(),
+            new("Bevel: No Bevel", new RibbonCommandId("freew.image-bevel-none"), "O"),
+            new("Bevel: Circle", new RibbonCommandId("freew.image-bevel-1"), "P"),
+            new("Bevel: Relaxed Inset", new RibbonCommandId("freew.image-bevel-2"), "Q"),
+            new("Bevel: Cross", new RibbonCommandId("freew.image-bevel-3"), "F"),
+            new("Bevel: Cool Slant", new RibbonCommandId("freew.image-bevel-4"), "M"),
+        });
+
+    private static RibbonMenu BuildPictureArtisticEffectsMenu() =>
+        new(new RibbonMenuItem[]
+        {
+            new("No Artistic Effect", new RibbonCommandId("freew.image-artistic-none"), "N"),
+            new("Blur", new RibbonCommandId("freew.image-artistic-blur"), "B"),
+            new("Glow Diffused", new RibbonCommandId("freew.image-artistic-glow-diffused"), "G"),
+            new("Glow Edges", new RibbonCommandId("freew.image-artistic-glow-edges"), "E"),
+            new("Pencil Grayscale", new RibbonCommandId("freew.image-artistic-pencil-gray"), "A"),
+            new("Pencil Sketch", new RibbonCommandId("freew.image-artistic-pencil-sketch"), "K"),
+            new("Line Drawing", new RibbonCommandId("freew.image-artistic-line-drawing"), "L"),
+            new("Paint Brush", new RibbonCommandId("freew.image-artistic-paintbrush"), "P"),
+            new("Paint Strokes", new RibbonCommandId("freew.image-artistic-paint-strokes"), "T"),
+            new("Photocopy", new RibbonCommandId("freew.image-artistic-photocopy"), "H"),
+            new("Posterize", new RibbonCommandId("freew.image-artistic-posterize"), "O"),
+            new("Pastels", new RibbonCommandId("freew.image-artistic-pastels"), "S"),
+            new("Watercolor Sponge", new RibbonCommandId("freew.image-artistic-watercolor"), "W"),
+            new("Film Grain", new RibbonCommandId("freew.image-artistic-film-grain"), "F"),
+            new("Mosaic Bubbles", new RibbonCommandId("freew.image-artistic-mosaic"), "M"),
+        });
+
     private static RibbonMenu BuildShapeSizeMenu() =>
         new(FreeWRibbonDefinitionData.FloatingSizePresets
             .Select(preset => new RibbonMenuItem(
@@ -1092,6 +1189,13 @@ internal static partial class FreeWCanonicalRibbonTabs
             .Select(scheme => new RibbonMenuItem(
                 scheme.Name,
                 new RibbonCommandId($"freew.smartart-colors-{scheme.Id}")))
+            .ToArray());
+
+    private static RibbonMenu BuildSmartArtStylesMenu() =>
+        new(SmartArtStyle.Catalog
+            .Select(style => new RibbonMenuItem(
+                style.Name,
+                SmartArtCommandPlanner.StyleCommandId(style)))
             .ToArray());
 
     private static RibbonMenu BuildTableBordersMenu() =>

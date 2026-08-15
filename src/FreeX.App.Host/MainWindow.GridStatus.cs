@@ -103,7 +103,7 @@ public partial class MainWindow
             return;
 
         var rendererPlan = BuildStatusBarRendererPlan(state);
-        ApplyStatusBarRendererPlan(state, rendererPlan);
+        ApplyStatusBarRendererPlan(rendererPlan);
         _lastStatusBarDisplayState = state;
     }
 
@@ -149,9 +149,7 @@ public partial class MainWindow
             ToVisibility(rendererPlan.IsElementVisible(StatusBarPresentationElement.InteractiveControls)));
     }
 
-    private void ApplyStatusBarRendererPlan(
-        Free.Shared.AppServices.StatusBarViewModel state,
-        StatusBarRendererPlan rendererPlan)
+    private void ApplyStatusBarRendererPlan(StatusBarRendererPlan rendererPlan)
     {
         foreach (var entry in rendererPlan.VisibilityElements)
             SetVisibilityIfChanged(GetStatusBarElement(entry.Element), ToVisibility(entry.IsVisible));
@@ -167,13 +165,10 @@ public partial class MainWindow
             {
                 AutomationProperties.SetAutomationId(textBlock, readout.AutomationId);
             }
-            SetStatusStatisticTextIfChanged(
-                textBlock,
-                readout.Text,
-                UiText.Get(readout.AutomationFallbackResourceKey));
+            SetTextIfChanged(textBlock, readout.Text);
         }
 
-        UpdateStatusStatsPanelAutomation(state, rendererPlan.StatsPanelAutomationText);
+        ApplyStatusBarAutomation(rendererPlan);
     }
 
     private bool IsStatusBarRendererPlanApplied(StatusBarRendererPlan rendererPlan)
@@ -272,7 +267,6 @@ public partial class MainWindow
         }
 
         _lastStatusBarDisplayState = null;
-        _lastStatusBarAutomationState = null;
         RefreshStatusBar();
     }
 
@@ -288,57 +282,56 @@ public partial class MainWindow
             textBlock.Text = text;
     }
 
-    private static void SetStatusStatisticTextIfChanged(TextBlock textBlock, string text, string fallbackAutomationName)
+    private void ApplyStatusBarAutomation(StatusBarRendererPlan rendererPlan)
     {
-        SetTextIfChanged(textBlock, text);
-
-        var automationName = string.IsNullOrWhiteSpace(text)
-            ? fallbackAutomationName
-            : text;
-        var previousAutomationName = AutomationProperties.GetName(textBlock);
-        if (!string.Equals(previousAutomationName, automationName, StringComparison.Ordinal))
+        var current = StatusBarAutomationChangePlanner.BuildSnapshot(
+            rendererPlan,
+            UiText.Get,
+            UiText.Get("StatusBar_CustomizeStatusBar"));
+        foreach (var change in StatusBarAutomationChangePlanner.PlanChanges(
+                     _lastStatusBarAutomationSnapshot,
+                     current))
         {
-            AutomationProperties.SetName(textBlock, automationName);
-            NotifyStatusStatisticAutomationChanged(textBlock, previousAutomationName, automationName);
-        }
-
-        if (!string.Equals(AutomationProperties.GetHelpText(textBlock), automationName, StringComparison.Ordinal))
-            AutomationProperties.SetHelpText(textBlock, automationName);
-    }
-
-    private void UpdateStatusStatsPanelAutomation(
-        Free.Shared.AppServices.StatusBarViewModel state,
-        string automationName)
-    {
-        if (_lastStatusBarAutomationName is { } cachedName &&
-            _lastStatusBarAutomationState == state &&
-            string.Equals(cachedName, automationName, StringComparison.Ordinal))
-        {
-            var currentName = AutomationProperties.GetName(StatusStatsPanel);
-            if (!string.Equals(currentName, cachedName, StringComparison.Ordinal))
+            if (change.Current.Element == StatusBarPresentationElement.StatsPanel)
             {
-                AutomationProperties.SetName(StatusStatsPanel, cachedName);
-                NotifyStatusStatsPanelAutomationChanged(currentName, cachedName);
+                AutomationProperties.SetAutomationId(StatusStatsPanel, change.Current.AutomationId);
+                AutomationProperties.SetName(StatusStatsPanel, change.Current.Name);
+                AutomationProperties.SetHelpText(StatusStatsPanel, change.Current.HelpText);
+                if (change.ShouldNotify)
+                {
+                    NotifyStatusStatsPanelAutomationChanged(
+                        change.PreviousName,
+                        change.Current.Name);
+                }
+                continue;
             }
 
-            if (!string.Equals(AutomationProperties.GetHelpText(StatusStatsPanel), cachedName, StringComparison.Ordinal))
-                AutomationProperties.SetHelpText(StatusStatsPanel, cachedName);
-            return;
+            var textBlock = GetStatusBarReadoutTextBlock(ReadoutKind(change.Current.Element));
+            AutomationProperties.SetAutomationId(textBlock, change.Current.AutomationId);
+            AutomationProperties.SetName(textBlock, change.Current.Name);
+            AutomationProperties.SetHelpText(textBlock, change.Current.HelpText);
+            if (change.ShouldNotify)
+            {
+                NotifyStatusStatisticAutomationChanged(
+                    textBlock,
+                    change.PreviousName,
+                    change.Current.Name);
+            }
         }
 
-        var previousAutomationName = AutomationProperties.GetName(StatusStatsPanel);
-        if (!string.Equals(previousAutomationName, automationName, StringComparison.Ordinal))
-        {
-            AutomationProperties.SetName(StatusStatsPanel, automationName);
-            NotifyStatusStatsPanelAutomationChanged(previousAutomationName, automationName);
-        }
-
-        if (!string.Equals(AutomationProperties.GetHelpText(StatusStatsPanel), automationName, StringComparison.Ordinal))
-            AutomationProperties.SetHelpText(StatusStatsPanel, automationName);
-
-        _lastStatusBarAutomationState = state;
-        _lastStatusBarAutomationName = automationName;
+        _lastStatusBarAutomationSnapshot = current;
     }
+
+    private static StatusBarReadoutKind ReadoutKind(StatusBarPresentationElement element) => element switch
+    {
+        StatusBarPresentationElement.Average => StatusBarReadoutKind.Average,
+        StatusBarPresentationElement.Count => StatusBarReadoutKind.Count,
+        StatusBarPresentationElement.NumericalCount => StatusBarReadoutKind.NumericalCount,
+        StatusBarPresentationElement.Sum => StatusBarReadoutKind.Sum,
+        StatusBarPresentationElement.Minimum => StatusBarReadoutKind.Minimum,
+        StatusBarPresentationElement.Maximum => StatusBarReadoutKind.Maximum,
+        _ => throw new ArgumentOutOfRangeException(nameof(element), element, null),
+    };
 
     private void NotifyStatusStatsPanelAutomationChanged(string previousAutomationName, string automationName)
     {

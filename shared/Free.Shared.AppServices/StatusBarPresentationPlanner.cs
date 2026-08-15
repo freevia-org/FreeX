@@ -64,6 +64,102 @@ public sealed record StatusBarRendererPlan(
     }
 }
 
+public readonly record struct StatusBarAutomationElementState(
+    StatusBarPresentationElement Element,
+    string AutomationId,
+    string Name,
+    string HelpText,
+    bool IsVisible);
+
+public sealed record StatusBarAutomationSnapshot(
+    IReadOnlyList<StatusBarAutomationElementState> Elements)
+{
+    public StatusBarAutomationElementState? Find(StatusBarPresentationElement element)
+    {
+        foreach (var entry in Elements)
+        {
+            if (entry.Element == element)
+                return entry;
+        }
+
+        return null;
+    }
+}
+
+public readonly record struct StatusBarAutomationChange(
+    StatusBarAutomationElementState Current,
+    string PreviousName,
+    bool ShouldNotify);
+
+/// <summary>
+/// Owns the deterministic accessible-name state and change policy for status-bar statistics.
+/// Renderers only apply the planned properties and translate notifications to their native peers.
+/// </summary>
+public static class StatusBarAutomationChangePlanner
+{
+    public const string StatsPanelAutomationId = "StatusStatsPanel";
+
+    public static StatusBarAutomationSnapshot BuildSnapshot(
+        StatusBarRendererPlan rendererPlan,
+        Func<string, string> resolveResource,
+        string statsPanelFallbackName)
+    {
+        ArgumentNullException.ThrowIfNull(rendererPlan);
+        ArgumentNullException.ThrowIfNull(resolveResource);
+
+        var elements = new List<StatusBarAutomationElementState>(rendererPlan.ReadoutElements.Count + 1);
+        foreach (var readout in rendererPlan.ReadoutElements)
+        {
+            var isVisible = rendererPlan.IsElementVisible(readout.Element)
+                && !string.IsNullOrWhiteSpace(readout.Text);
+            var automationText = isVisible
+                ? readout.Text
+                : resolveResource(readout.AutomationFallbackResourceKey);
+            elements.Add(new StatusBarAutomationElementState(
+                readout.Element,
+                readout.AutomationId,
+                automationText,
+                automationText,
+                isVisible));
+        }
+
+        var panelText = string.IsNullOrWhiteSpace(rendererPlan.StatsPanelAutomationText)
+            ? statsPanelFallbackName
+            : rendererPlan.StatsPanelAutomationText;
+        elements.Add(new StatusBarAutomationElementState(
+            StatusBarPresentationElement.StatsPanel,
+            StatsPanelAutomationId,
+            panelText,
+            panelText,
+            rendererPlan.VisibleReadoutTextVisible));
+        return new StatusBarAutomationSnapshot(elements);
+    }
+
+    public static IReadOnlyList<StatusBarAutomationChange> PlanChanges(
+        StatusBarAutomationSnapshot? previous,
+        StatusBarAutomationSnapshot current)
+    {
+        ArgumentNullException.ThrowIfNull(current);
+
+        var changes = new List<StatusBarAutomationChange>(current.Elements.Count);
+        foreach (var entry in current.Elements)
+        {
+            var old = previous?.Find(entry.Element);
+            if (old == entry)
+                continue;
+
+            changes.Add(new StatusBarAutomationChange(
+                entry,
+                old?.Name ?? string.Empty,
+                old is not null
+                    && entry.IsVisible
+                    && !string.Equals(old.Value.Name, entry.Name, StringComparison.Ordinal)));
+        }
+
+        return changes;
+    }
+}
+
 public static class StatusBarPresentationPlanner
 {
     public static StatusBarPresentationPlan Build(
