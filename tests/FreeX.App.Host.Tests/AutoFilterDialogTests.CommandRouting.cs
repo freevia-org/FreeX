@@ -11,6 +11,7 @@ public sealed partial class AutoFilterDialogTests
 
         source.Should().Contain("_filterWorkflowSession.PlanDialogResult(");
         source.Should().Contain("TryExecuteAutoFilterMutation(plan)");
+        source.Should().Contain("_session.ExecuteWorksheetFilterMutationPlan(plan)");
         source.Should().Contain("WorksheetFilterMessagePlanner.GetPlanErrorResourceKey(plan)");
         source.Should().NotContain("private static string FormatFilterPromptPlanError(");
         source.Should().NotContain("new CellFillColorFilterCommand");
@@ -18,8 +19,12 @@ public sealed partial class AutoFilterDialogTests
         source.Should().NotContain("new CellFontColorFilterCommand");
         source.Should().NotContain("FilterPromptPlanner.TryPlan");
 
+        var dialogResultHandler = SourceMethodExtractor.ExtractMethodSource(source, "private bool ApplyAutoFilterDialogResult(");
+        dialogResultHandler.Should().NotContain("new CompositeWorkbookCommand");
+
         var filterButtonHandler = SourceMethodExtractor.ExtractMethodSource(source, "private void FilterButton_Click(");
-        filterButtonHandler.Should().Contain("new ToggleWorksheetAutoFilterCommand");
+        filterButtonHandler.Should().Contain("_session.ToggleSelectedRangeAutoFilter");
+        filterButtonHandler.Should().NotContain("new ToggleWorksheetAutoFilterCommand");
         filterButtonHandler.Should().NotContain("new AutoFilterDialog");
     }
 
@@ -32,7 +37,8 @@ public sealed partial class AutoFilterDialogTests
         dataSource.Should().Contain("private readonly WorksheetFilterWorkflowSession _filterWorkflowSession = new();");
         dataSource.Should().Contain("private void ReapplyAutoFilter()");
         dataSource.Should().Contain("_filterWorkflowSession.CreateReapplyPlan(sheet)");
-        dataSource.Should().Contain("plan.CreateCommand(\"Reapply Filter\")");
+        dataSource.Should().Contain("_session.ExecuteWorksheetFilterReapplyPlan(plan, \"Reapply Filter\")");
+        dataSource.Should().NotContain("plan.CreateCommand(\"Reapply Filter\")");
         dataSource.Should().NotContain("_activeAutoFilterColumnFactories");
         dataSource.Should().NotContain("TryExecuteRememberedAutoFilterCommand");
         homeEditingSource.Should().Contain("private void FilterReapplyMenuItem_Click(object sender, RoutedEventArgs e) => ReapplyAutoFilter();");
