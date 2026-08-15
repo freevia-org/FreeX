@@ -138,7 +138,7 @@ public static class FreeXRibbonDefinition
                 g => g
                 .Large("Calculate Now", "Calculate Now", Ico.Refresh, "CN")
                 .Large("Calculate Sheet", "Calculate Sheet", Ico.Refresh, "SC")
-                .Large("Calculation Options", "Calculation Options", Ico.Refresh, "O", menu: m => m.Item(FreeXRibbonCommandIds.FormulasCalculationAutomatic, "Automatic", "A").Item(FreeXRibbonCommandIds.FormulasCalculationAutomaticExceptDataTables, "Automatic Except Data Tables", "E").Item(FreeXRibbonCommandIds.FormulasCalculationManual, "Manual", "M")))
+                .Large("Calculation Options", "Calculation Options", Ico.Refresh, "O", menu: m => m.Item(FreeXRibbonCommandIds.FormulasCalculationAutomatic, "Automatic", "A", isChecked: false).Item(FreeXRibbonCommandIds.FormulasCalculationAutomaticExceptDataTables, "Automatic Except Data Tables", "E", isChecked: false).Item(FreeXRibbonCommandIds.FormulasCalculationManual, "Manual", "M", isChecked: false)))
         )
         .Tab("DataTab", "Data", "A", tab => tab
             .Group("DataGetTransformGroup", "Get Transform", null, priority: 180,

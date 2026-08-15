@@ -25,6 +25,7 @@ using System.Globalization;
 using FreeX.App.Presentation;
 using FreeX.App.Presentation.Accessibility;
 using FreeX.App.Presentation.Backstage;
+using FreeX.App.Presentation.Calculation;
 using FreeX.App.Presentation.Comments;
 using FreeX.App.Presentation.DataTools;
 using FreeX.App.Presentation.DefinedNames;
@@ -1462,6 +1463,18 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
                     ["Headings"] = () => new RibbonCommandState(IsChecked: _session.IsShowingHeadings),
                     ["Ruler"] = () => new RibbonCommandState(IsChecked: _session.IsShowingRulers),
                     ["Formula Bar"] = () => new RibbonCommandState(IsChecked: !_isFormulaBarHidden),
+                    [FreeXRibbonCommandIds.FormulasCalculationAutomatic] = () =>
+                        CalculationCommandPolicy.ModeCommandState(
+                            _session.Workbook.CalculationMode,
+                            WorkbookCalculationMode.Automatic),
+                    [FreeXRibbonCommandIds.FormulasCalculationAutomaticExceptDataTables] = () =>
+                        CalculationCommandPolicy.ModeCommandState(
+                            _session.Workbook.CalculationMode,
+                            WorkbookCalculationMode.AutomaticExceptDataTables),
+                    [FreeXRibbonCommandIds.FormulasCalculationManual] = () =>
+                        CalculationCommandPolicy.ModeCommandState(
+                            _session.Workbook.CalculationMode,
+                            WorkbookCalculationMode.Manual),
                     ["Scale Width"] = () => new RibbonCommandState(
                         Value: PageLayoutInputParser.FormatScalePages(_session.ActiveSheet.ScaleToFit.FitToPagesWide)),
                     ["Scale Height"] = () => new RibbonCommandState(
