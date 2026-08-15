@@ -32,6 +32,36 @@ public sealed class R123_FormulaAuditingAllLevelsDependentsPerfTests
     // under this test's budget even on a loaded CI box.
     private const int ChainLength = 300;
     private const int NoiseFormulaCount = 10000;
+    private const int TimingRounds = 3;
+
+    /// <summary>
+    /// Best-of-N protects the complexity guard from a single scheduler pause in a busy full-suite
+    /// run. Interference only adds time, so the minimum remains the closest measurement of the
+    /// operation's actual cost. A regressed O(chain-length * formula-count) implementation remains
+    /// above the unchanged two-second budget on every attempt.
+    /// </summary>
+    private static (T Result, TimeSpan BestElapsed, TimeSpan[] Samples) MeasureBestOf<T>(Func<T> operation)
+    {
+        var bestResult = default(T)!;
+        var bestElapsed = TimeSpan.MaxValue;
+        var samples = new TimeSpan[TimingRounds];
+
+        for (var round = 0; round < TimingRounds; round++)
+        {
+            var stopwatch = Stopwatch.StartNew();
+            var result = operation();
+            stopwatch.Stop();
+            samples[round] = stopwatch.Elapsed;
+
+            if (stopwatch.Elapsed < bestElapsed)
+            {
+                bestResult = result;
+                bestElapsed = stopwatch.Elapsed;
+            }
+        }
+
+        return (bestResult, bestElapsed, samples);
+    }
 
     private static (Workbook workbook, Sheet sheet, CellAddress root) BuildChainWithNoise()
     {
@@ -66,15 +96,14 @@ public sealed class R123_FormulaAuditingAllLevelsDependentsPerfTests
         var (workbook, sheet, root) = BuildChainWithNoise();
         var range = new GridRange(root, root);
 
-        var stopwatch = Stopwatch.StartNew();
-        var result = GoToSpecialService.Find(
-            workbook,
-            sheet,
-            range,
-            GoToSpecialKind.Dependents,
-            activeCell: root,
-            options: new GoToSpecialOptions(AllLevels: true));
-        stopwatch.Stop();
+        var (result, bestElapsed, samples) = MeasureBestOf(() =>
+            GoToSpecialService.Find(
+                workbook,
+                sheet,
+                range,
+                GoToSpecialKind.Dependents,
+                activeCell: root,
+                options: new GoToSpecialOptions(AllLevels: true)));
 
         // Correctness: every cell in the chain must still be discovered.
         result.Should().HaveCount(ChainLength);
@@ -82,10 +111,11 @@ public sealed class R123_FormulaAuditingAllLevelsDependentsPerfTests
         // Performance: this is the assertion that fails before the fix (O(L*N) full re-parses --
         // multiple seconds for L=150, N=3000) and passes after it (O(N) parses total, well under a
         // second). Proven both ways with the cp-backup revert technique; see the round report.
-        stopwatch.Elapsed.Should().BeLessThan(
+        bestElapsed.Should().BeLessThan(
             TimeSpan.FromSeconds(2),
             "the reverse-dependency index should be built once and reused across every BFS level, " +
-            "not re-scanned/re-parsed from scratch per level");
+            "not re-scanned/re-parsed from scratch per level; timing samples were {0}",
+            string.Join(", ", samples.Select(sample => $"{sample.TotalMilliseconds:F0}ms")));
     }
 
     [Fact]
@@ -93,17 +123,17 @@ public sealed class R123_FormulaAuditingAllLevelsDependentsPerfTests
     {
         var (workbook, _, root) = BuildChainWithNoise();
 
-        var stopwatch = Stopwatch.StartNew();
-        var arrows = FormulaAuditingService.GetDependentTraceArrows(workbook, root);
-        stopwatch.Stop();
+        var (arrows, bestElapsed, samples) = MeasureBestOf(() =>
+            FormulaAuditingService.GetDependentTraceArrows(workbook, root));
 
         arrows.Should().HaveCount(ChainLength);
 
-        stopwatch.Elapsed.Should().BeLessThan(
+        bestElapsed.Should().BeLessThan(
             TimeSpan.FromSeconds(2),
             "the ribbon/keyboard Trace Dependents recursive collector should build the reverse-" +
             "dependency index once and reuse it at every recursion step, not re-scan/re-parse the " +
-            "whole workbook per step");
+            "whole workbook per step; timing samples were {0}",
+            string.Join(", ", samples.Select(sample => $"{sample.TotalMilliseconds:F0}ms")));
     }
 
     /// <summary>
