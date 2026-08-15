@@ -599,16 +599,6 @@ public sealed partial class MainWindow : Window,
             _reviewWorkflowSession,
             _workareaSession.Panes,
             this);
-        _avaloniaMediaPaneHostView = BuildAvaloniaMediaPaneHostView();
-        _mediaPaneHostCoordinator = new(
-            new PresentationMediaPaneSession(
-                () => Editor,
-                new PresentationMediaPaneSessionCallbacks(
-                    MarkDirty: () => _fileWorkflow.MarkDirty(),
-                    RefreshReviewWorkflowPlans: RefreshReviewWorkflowPlans,
-                    UpdateHost: UpdateStatus)),
-            _workareaSession.Panes,
-            _avaloniaMediaPaneHostView);
         _smartArtTextPaneSession = new(
             () => Editor,
             new PresentationSmartArtTextPaneSessionCallbacks(
@@ -652,9 +642,21 @@ public sealed partial class MainWindow : Window,
                 ThemeResources.StatusSurfaceBrush,
                 FreePBrushes.Accent),
             LeftContent: _statusText)).Root;
+        var body = BuildBody();
+        _avaloniaMediaPaneHostView = BuildAvaloniaMediaPaneHostView();
+        _mediaPaneHostCoordinator = new(
+            new PresentationMediaPaneSession(
+                () => Editor,
+                new PresentationMediaPaneSessionCallbacks(
+                    MarkDirty: () => _fileWorkflow.MarkDirty(),
+                    RefreshReviewWorkflowPlans: RefreshReviewWorkflowPlans,
+                    UpdateHost: UpdateStatus)),
+            _workareaSession.Panes,
+            _avaloniaMediaPaneHostView);
+        RefreshPaneAccessibilityMetadata();
         var frame = SisterAppClientFrameBuilder.Build(SisterAppClientFrameSpec.ForWorkArea(
             chrome: ribbon,
-            workArea: BuildBody(),
+            workArea: body,
             statusBar: statusBar));
         BindMediaPaneEvents();
         _backstage = new BackstageView(BuildBackstageEndpoints());
@@ -1077,7 +1079,8 @@ public sealed partial class MainWindow : Window,
             || _accessibilityCheckerPaneHost is null || _altTextPaneHost is null
             || _readingOrderPaneHost is null || _proofingPaneHost is null
             || _mediaCaptionPaneHost is null || _smartArtTextPaneHost is null
-            || _selectionPane is null || _animationPaneHost is null)
+            || _selectionPane is null || _animationPaneHost is null
+            || _mediaPaneHostCoordinator is null)
             return;
 
         var smartArtItemCount = _smartArtTextPaneRowsPanel?.Children.Count ?? 0;
