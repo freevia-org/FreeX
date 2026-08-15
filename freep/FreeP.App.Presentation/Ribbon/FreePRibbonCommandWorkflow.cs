@@ -689,7 +689,8 @@ public static class FreePRibbonCommandWorkflow
             commands.Register(
                 FreePRibbonCommandGroup.Transition,
                 plan.CommandId,
-                plan.Intent == PresentationTransitionCommandIntentKind.ToggleAdvanceOnClick
+                plan.Intent is PresentationTransitionCommandIntentKind.ToggleAdvanceOnClick
+                    or PresentationTransitionCommandIntentKind.ToggleSoundLoop
                     ? new TransitionToggleCommand(stateStore, editor, plan)
                     : new ContextRibbonCommand(context =>
                         PresentationTransitionCommandPlanner.TryApply(
@@ -1262,12 +1263,24 @@ public static class FreePRibbonCommandWorkflow
                 Sync();
         }
 
-        public RibbonCommandState GetState() => new(
-            IsChecked: PresentationTransitionCommandPlanner.IsAdvanceOnClickChecked(_editor.CurrentSlideTransition));
+        public RibbonCommandState GetState()
+        {
+            var state = PresentationTransitionCommandPlanner.GetToggleState(
+                _editor.CurrentSlideTransition,
+                _plan.Intent);
+            return new RibbonCommandState(
+                IsEnabled: state.IsEnabled,
+                IsChecked: state.IsChecked);
+        }
 
         private void OnCurrentSlideChanged(object? sender, EventArgs args) => Sync();
 
-        private void Sync() => _stateStore.SetChecked(_plan.CommandId, GetState().IsChecked);
+        private void Sync()
+        {
+            var state = GetState();
+            _stateStore.SetEnabled(_plan.CommandId, state.IsEnabled);
+            _stateStore.SetChecked(_plan.CommandId, state.IsChecked);
+        }
     }
 
     private sealed class AnimationPaneToggleCommand : IRibbonStatefulCommand

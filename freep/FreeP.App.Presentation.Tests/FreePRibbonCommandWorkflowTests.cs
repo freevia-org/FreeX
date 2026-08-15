@@ -70,6 +70,33 @@ public sealed class FreePRibbonCommandWorkflowTests
     }
 
     [Fact]
+    public void TransitionSoundLoop_IsStatefulAndTracksCurrentSlideSound()
+    {
+        var editor = MakeEditor();
+        var store = new RibbonStateStore();
+        var registry = FreePRibbonCommandWorkflow.Build(editor, store).Registry;
+        var command = Stateful(registry, "freep.transition.sound-loop");
+
+        command.GetState().Should().Match<RibbonCommandState>(state =>
+            !state.IsEnabled && !state.IsChecked);
+
+        editor.SetTransition(new SlideTransition
+        {
+            Kind = TransitionKind.Fade,
+            Sound = new TransitionSound { ContentType = "audio/wav", Loop = false },
+        });
+        command.GetState().Should().Match<RibbonCommandState>(state =>
+            state.IsEnabled && !state.IsChecked);
+
+        command.Execute(RibbonCommandContext.Empty);
+
+        editor.CurrentSlideTransition!.Sound!.Loop.Should().BeTrue();
+        command.GetState().Should().Match<RibbonCommandState>(state =>
+            state.IsEnabled && state.IsChecked);
+        store.GetState("freep.transition.sound-loop").IsChecked.Should().BeTrue();
+    }
+
+    [Fact]
     public void ListGalleryOwnerCommandsAcceptExistingPresetIds()
     {
         var editor = MakeEditor();
