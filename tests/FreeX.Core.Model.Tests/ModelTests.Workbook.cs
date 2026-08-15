@@ -32,6 +32,18 @@ public partial class WorkbookTests
     }
 
     [Fact]
+    public void IndexOfSheet_ReturnsPositionOrMinusOne()
+    {
+        var wb = new Workbook();
+        var first = wb.AddSheet("First");
+        var second = wb.AddSheet("Second");
+
+        wb.IndexOfSheet(first.Id).Should().Be(0);
+        wb.IndexOfSheet(second.Id).Should().Be(1);
+        wb.IndexOfSheet(SheetId.New()).Should().Be(-1);
+    }
+
+    [Fact]
     public void AddSheet_DuplicateName_Throws()
     {
         var wb = new Workbook();

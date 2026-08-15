@@ -38,11 +38,12 @@ public static class BackstageInfoPlanner
         var accessibilityIssues = AccessibilityCheckerService.FindIssues(workbook);
         var formulaIssues = FormulaAuditingService.FindFormulaErrorIssues(workbook, sheetId: null, cyclicCells);
         var summary = InfoPanelSummaryPlanner.Create(workbook, activeSheet, culture);
-        var sharingStatus = WorkbookShareReadinessPlanner.FormatStatus(
-            WorkbookShareReadinessPlanner.CreatePlan(
+        var sharingStatus = DocumentShareReadinessPlanner.FormatStatus(
+            DocumentShareReadinessPlanner.CreatePlan(
                 currentFilePath,
-                WorkbookShareSurface.WindowsShare,
-                fileExists));
+                DocumentShareSurface.WindowsShare,
+                fileExists),
+            DocumentShareReadinessTextSpec.WorkbookEnglish);
         var exportStatus = WorkbookExportReadinessPlanner.Create(workbook, hasSelection).StatusText;
         var workbookInfoPlan = WorkbookInfoFileMetadataReader.BuildPlan(
             workbook,
@@ -99,11 +100,9 @@ public static class BackstageInfoPlanner
     {
         if (activeSheet is not null)
         {
-            for (var i = 0; i < workbook.Sheets.Count; i++)
-            {
-                if (ReferenceEquals(workbook.Sheets[i], activeSheet))
-                    return i;
-            }
+            var index = workbook.IndexOfSheet(activeSheet.Id);
+            if (index >= 0)
+                return index;
         }
 
         return workbook.ActiveSheetIndex ?? 0;

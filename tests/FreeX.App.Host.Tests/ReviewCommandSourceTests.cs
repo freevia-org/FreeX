@@ -100,9 +100,9 @@ public sealed class ReviewCommandSourceTests
         source.Should().Contain("AllowEditRangePlanner.CreateCommandPlan(");
         source.Should().Contain("TryExecuteCommand(plan.Command, \"Allow Users to Edit Ranges\")");
         source.Should().Contain("_messageService.ShowInfo(successMessage, UiText.Get(\"MainWindowMessage_AllowEditRangesTitle\"))");
-        source.Should().Contain("WorkbookShareReadinessPlanner.CreatePlan(");
-        source.Should().Contain("WorkbookShareSurface.WindowsShare");
-        source.Should().Contain("WorkbookShareReadinessPlanKind.SaveAsBeforeShare");
+        source.Should().Contain("DocumentShareReadinessPlanner.CreatePlan(");
+        source.Should().Contain("DocumentShareSurface.WindowsShare");
+        source.Should().Contain("DocumentShareReadinessPlanKind.SaveAsBeforeShare");
         source.Should().NotContain("ShareWorkbookPlanner.CreatePlan(_currentFilePath)");
         source.Should().Contain("_shareService.ShareFileAsync(this, sharePath, _workbook.Name)");
         controllerSource.Should().Contain("PresentationReviewSessionController");

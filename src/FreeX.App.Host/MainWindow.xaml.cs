@@ -9,6 +9,7 @@ using System.Collections.Generic;
 using System.ComponentModel;
 using FreeX.App.Presentation.GridInteraction;
 using FreeX.App.Presentation.FormulaBar;
+using FreeX.App.Presentation.Dialogs;
 using FreeX.App.Presentation.Ribbon;
 using FreeX.App.Presentation.PivotUI;
 using FreeX.App.Presentation.Sparklines;
@@ -46,7 +47,8 @@ public partial class MainWindow : Window, IWorkbookWindow, IFormulaPointModeWork
     private readonly AppDiagnosticsOptions _diagnosticsOptions;
     private readonly FreeXRibbonKeyTipInputSession _ribbonKeyTipSession = new();
     private readonly KeyboardCommandDispatcher _keyboardCommandDispatcher = new();
-    private readonly WorkbookSessionFactory _sessionFactory = new();
+    private readonly WorkbookSessionFactory _sessionFactory =
+        new(FindReplaceDialogSchema.ResolvePolicyText(UiText.Get));
     private WorkbookSession _session;
     private bool _workbookSessionDisposed;
     private readonly StandaloneAltKeyTipTracker _standaloneAltKeyTipTracker = new();

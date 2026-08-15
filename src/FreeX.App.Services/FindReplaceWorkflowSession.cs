@@ -69,10 +69,18 @@ public sealed record FindReplaceWorkflowReplaceResult(
 /// </summary>
 public sealed class FindReplaceWorkflowSession
 {
+    private static readonly FindReplacePolicyTextSpec DefaultPolicyText =
+        FindReplacePolicyTextSpec.NeutralEnglish with
+        {
+            SearchTermRequired = "Find text is required.",
+            NotFoundFormat = "No matches found for \"{0}\"."
+        };
+
     private readonly Func<Workbook> _getWorkbook;
     private readonly Func<CellAddress?> _getActiveCell;
     private readonly Func<CellAddress, WorkbookNavigationResult> _navigateTo;
     private readonly Func<IWorkbookCommand, WorkbookCellEditResult> _executeEdit;
+    private readonly FindReplacePolicyTextSpec _policyText;
     private string? _lastFindText;
     private FindOptions? _lastFindOptions;
     private bool _lastFindMatchCase;
@@ -84,7 +92,8 @@ public sealed class FindReplaceWorkflowSession
         Func<Workbook> getWorkbook,
         Func<CellAddress?> getActiveCell,
         Func<CellAddress, WorkbookNavigationResult> navigateTo,
-        Func<IWorkbookCommand, WorkbookCellEditResult> executeEdit)
+        Func<IWorkbookCommand, WorkbookCellEditResult> executeEdit,
+        FindReplacePolicyTextSpec? policyText = null)
     {
         ArgumentNullException.ThrowIfNull(getWorkbook);
         ArgumentNullException.ThrowIfNull(getActiveCell);
@@ -95,6 +104,7 @@ public sealed class FindReplaceWorkflowSession
         _getActiveCell = getActiveCell;
         _navigateTo = navigateTo;
         _executeEdit = executeEdit;
+        _policyText = policyText ?? DefaultPolicyText;
     }
 
     public string LastFindText => _lastFindText ?? "";
@@ -107,7 +117,10 @@ public sealed class FindReplaceWorkflowSession
     {
         var text = searchText ?? _lastFindText ?? string.Empty;
         if (string.IsNullOrEmpty(text) && options?.RequiredFormat is null)
-            return FindReplaceWorkflowSearchResult.Failed("Find text is required.");
+            return FindReplaceWorkflowSearchResult.Failed(
+                FindReplaceDialogPolicy.ValidationMessageFor(
+                    FindReplaceValidationErrorKind.SearchTermRequired,
+                    _policyText));
 
         if (searchText is null && options is null)
         {
@@ -130,7 +143,8 @@ public sealed class FindReplaceWorkflowSession
         if (results.Count == 0)
         {
             ClearLastFindTargets();
-            return FindReplaceWorkflowSearchResult.Failed($"No matches found for \"{text}\".");
+            return FindReplaceWorkflowSearchResult.Failed(
+                FindReplaceDialogPolicy.BuildNotFoundStatus(text, _policyText));
         }
 
         var index = GetNextFindResultIndex(workbook, results, effectiveOptions.SearchOrder, sameSearch);
@@ -152,7 +166,10 @@ public sealed class FindReplaceWorkflowSession
     {
         ArgumentNullException.ThrowIfNull(searchText);
         if (string.IsNullOrEmpty(searchText) && options?.RequiredFormat is null)
-            return FindReplaceWorkflowSearchResult.Failed("Find text is required.");
+            return FindReplaceWorkflowSearchResult.Failed(
+                FindReplaceDialogPolicy.ValidationMessageFor(
+                    FindReplaceValidationErrorKind.SearchTermRequired,
+                    _policyText));
 
         var workbook = _getWorkbook();
         var effectiveOptions = ResolveFindOptions(workbook, options, FindLookIn.Formulas);
@@ -173,7 +190,10 @@ public sealed class FindReplaceWorkflowSession
         ArgumentNullException.ThrowIfNull(searchText);
         ArgumentNullException.ThrowIfNull(replaceText);
         if (string.IsNullOrEmpty(searchText) && options?.RequiredFormat is null)
-            return FindReplaceWorkflowReplaceResult.Failed("Find text is required.");
+            return FindReplaceWorkflowReplaceResult.Failed(
+                FindReplaceDialogPolicy.ValidationMessageFor(
+                    FindReplaceValidationErrorKind.SearchTermRequired,
+                    _policyText));
 
         var workbook = _getWorkbook();
         var effectiveOptions = ResolveFindOptions(workbook, options, FindLookIn.Values);
@@ -231,7 +251,10 @@ public sealed class FindReplaceWorkflowSession
         ArgumentNullException.ThrowIfNull(searchText);
         ArgumentNullException.ThrowIfNull(replaceText);
         if (string.IsNullOrEmpty(searchText) && options?.RequiredFormat is null)
-            return FindReplaceWorkflowReplaceResult.Failed("Find text is required.");
+            return FindReplaceWorkflowReplaceResult.Failed(
+                FindReplaceDialogPolicy.ValidationMessageFor(
+                    FindReplaceValidationErrorKind.SearchTermRequired,
+                    _policyText));
 
         behavior ??= FindReplaceNextBehavior.CommandStyle;
         var workbook = _getWorkbook();
@@ -570,8 +593,10 @@ public sealed class FindReplaceWorkflowSession
         CellAddress right,
         FindSearchOrder searchOrder)
     {
-        var leftSheetIndex = FindSheetIndex(workbook, left.Sheet);
-        var rightSheetIndex = FindSheetIndex(workbook, right.Sheet);
+        var leftSheetIndex = workbook.IndexOfSheet(left.Sheet);
+        var rightSheetIndex = workbook.IndexOfSheet(right.Sheet);
+        leftSheetIndex = leftSheetIndex < 0 ? int.MaxValue : leftSheetIndex;
+        rightSheetIndex = rightSheetIndex < 0 ? int.MaxValue : rightSheetIndex;
         var sheetComparison = leftSheetIndex.CompareTo(rightSheetIndex);
         if (sheetComparison != 0)
             return sheetComparison;
@@ -584,17 +609,6 @@ public sealed class FindReplaceWorkflowSession
 
         var rowComparison = left.Row.CompareTo(right.Row);
         return rowComparison != 0 ? rowComparison : left.Col.CompareTo(right.Col);
-    }
-
-    private static int FindSheetIndex(Workbook workbook, SheetId sheetId)
-    {
-        for (var index = 0; index < workbook.Sheets.Count; index++)
-        {
-            if (workbook.Sheets[index].Id.Equals(sheetId))
-                return index;
-        }
-
-        return int.MaxValue;
     }
 
     private void ClearLastFindTargets()

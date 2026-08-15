@@ -62,7 +62,8 @@ public sealed partial class FindReplaceDialog : Window
                     outcome.AffectedCells ?? [],
                     RecalcReport: null,
                     IsNoOp: outcome.IsNoOp);
-            });
+            },
+            FindReplaceDialogSchema.ResolvePolicyText(UiText.Get));
         InitializeComponent();
         ApplySharedDialogSchema();
         if (FindReplaceDialogPlanner.ShowsReplaceCommands(replaceMode))

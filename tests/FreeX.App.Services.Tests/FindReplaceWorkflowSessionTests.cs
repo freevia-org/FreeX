@@ -1,4 +1,5 @@
 using FluentAssertions;
+using Free.Shared.AppServices;
 using FreeX.Core.Commands;
 using FreeX.Core.Model;
 
@@ -6,6 +7,25 @@ namespace FreeX.App.Services.Tests;
 
 public sealed class FindReplaceWorkflowSessionTests
 {
+    [Fact]
+    public void SearchFailures_UseInjectedPolicyText()
+    {
+        var workbook = CreateWorkbook();
+        var sheet = workbook.Sheets.Single();
+        var workflow = CreateWorkflow(
+            workbook,
+            () => Address(sheet, 1, 1),
+            _ => { },
+            FindReplacePolicyTextSpec.NeutralEnglish with
+            {
+                SearchTermRequired = "localized required",
+                NotFoundFormat = "localized missing: {0}"
+            });
+
+        workflow.FindNext().ErrorMessage.Should().Be("localized required");
+        workflow.FindNext("needle").ErrorMessage.Should().Be("localized missing: needle");
+    }
+
     [Fact]
     public void FindNext_ChangedSearchOrder_RestartsFromActiveCellInTheNewOrder()
     {
@@ -89,7 +109,8 @@ public sealed class FindReplaceWorkflowSessionTests
     private static FindReplaceWorkflowSession CreateWorkflow(
         Workbook workbook,
         Func<CellAddress?> getActiveCell,
-        Action<CellAddress> setActiveCell)
+        Action<CellAddress> setActiveCell,
+        FindReplacePolicyTextSpec? policyText = null)
     {
         var commandBus = new CommandBus(_ => new WorkbookCommandContext(workbook));
         return new FindReplaceWorkflowSession(
@@ -109,7 +130,8 @@ public sealed class FindReplaceWorkflowSessionTests
                     outcome.AffectedCells ?? [],
                     RecalcReport: null,
                     IsNoOp: outcome.IsNoOp);
-            });
+            },
+            policyText);
     }
 
     private static FindOptions Options(Sheet sheet, FindSearchOrder searchOrder) =>

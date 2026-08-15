@@ -83,10 +83,12 @@ public static class LocalAccountInfoPlanner
                 fileExists)
             : null;
         var sharingStatus = hasWorkbookContext
-            ? WorkbookShareReadinessPlanner.FormatStatus(WorkbookShareReadinessPlanner.CreatePlan(
-                request.CurrentWorkbookPath,
-                WorkbookShareSurface.WindowsShare,
-                fileExists))
+            ? DocumentShareReadinessPlanner.FormatStatus(
+                DocumentShareReadinessPlanner.CreatePlan(
+                    request.CurrentWorkbookPath,
+                    DocumentShareSurface.WindowsShare,
+                    fileExists),
+                DocumentShareReadinessTextSpec.WorkbookEnglish)
             : null;
         var exportStatus = hasWorkbookContext
             ? request.Workbook is null
@@ -155,18 +157,18 @@ public static class LocalAccountInfoPlanner
         string? currentFilePath,
         Func<string, bool> fileExists)
     {
-        var sharePlan = WorkbookShareReadinessPlanner.CreatePlan(
+        var sharePlan = DocumentShareReadinessPlanner.CreatePlan(
             currentFilePath,
-            WorkbookShareSurface.WindowsShare,
+            DocumentShareSurface.WindowsShare,
             fileExists);
-        if (sharePlan.Kind == WorkbookShareReadinessPlanKind.ShareExistingFile)
+        if (sharePlan.Kind == DocumentShareReadinessPlanKind.ShareExistingFile)
             return $"{workbookDisplayName} ({sharePlan.Path})";
 
         return sharePlan.SaveAsReason switch
         {
-            WorkbookShareReadinessSaveAsReason.MissingFile when !string.IsNullOrWhiteSpace(sharePlan.CandidatePath) =>
+            DocumentShareSaveAsReason.MissingFile when !string.IsNullOrWhiteSpace(sharePlan.CandidatePath) =>
                 $"{workbookDisplayName} (saved path missing: {sharePlan.CandidatePath})",
-            WorkbookShareReadinessSaveAsReason.InvalidPath when !string.IsNullOrWhiteSpace(sharePlan.CandidatePath) =>
+            DocumentShareSaveAsReason.InvalidPath when !string.IsNullOrWhiteSpace(sharePlan.CandidatePath) =>
                 $"{workbookDisplayName} (saved path is not a valid local file path: {sharePlan.CandidatePath})",
             _ => $"{workbookDisplayName} (not saved yet)"
         };
