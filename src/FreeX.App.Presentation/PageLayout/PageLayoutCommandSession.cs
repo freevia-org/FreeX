@@ -212,24 +212,40 @@ public sealed class PageLayoutCommandSession
     public PageLayoutCommandExecutionPlan PlanPrintGridlines(
         bool printGridlines,
         bool currentPrintHeadings) =>
-        PlanForTargets(
+        PlanPrintGridlines(printGridlines, _ => currentPrintHeadings);
+
+    public PageLayoutCommandExecutionPlan PlanPrintGridlines(
+        bool printGridlines,
+        Func<SheetId, bool> currentPrintHeadings)
+    {
+        ArgumentNullException.ThrowIfNull(currentPrintHeadings);
+        return PlanForTargets(
             PageLayoutRibbonActionPlanner.PrintGridlinesCommandLabel,
             sheetId => PageLayoutRibbonCommandPlanner.BuildPrintGridlinesCommand(
                 sheetId,
                 printGridlines,
-                currentPrintHeadings),
+                currentPrintHeadings(sheetId)),
             PageLayoutStatusPlanner.PrintOptions);
+    }
 
     public PageLayoutCommandExecutionPlan PlanPrintHeadings(
         bool currentPrintGridlines,
         bool printHeadings) =>
-        PlanForTargets(
+        PlanPrintHeadings(_ => currentPrintGridlines, printHeadings);
+
+    public PageLayoutCommandExecutionPlan PlanPrintHeadings(
+        Func<SheetId, bool> currentPrintGridlines,
+        bool printHeadings)
+    {
+        ArgumentNullException.ThrowIfNull(currentPrintGridlines);
+        return PlanForTargets(
             PageLayoutRibbonActionPlanner.PrintHeadingsCommandLabel,
             sheetId => PageLayoutRibbonCommandPlanner.BuildPrintHeadingsCommand(
                 sheetId,
-                currentPrintGridlines,
+                currentPrintGridlines(sheetId),
                 printHeadings),
             PageLayoutStatusPlanner.PrintOptions);
+    }
 
     private PageLayoutCommandExecutionPlan PlanForTargets(
         string commandLabel,

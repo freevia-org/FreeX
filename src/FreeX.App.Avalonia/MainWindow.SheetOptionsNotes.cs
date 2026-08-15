@@ -15,7 +15,6 @@ using Avalonia.Styling;
 
 using Free.Shared.Shell.Avalonia;
 using FreeX.App.Presentation.Comments;
-using FreeX.App.Presentation.PageLayout;
 using FreeX.Core.Model;
 
 using AvaloniaHorizontalAlignment = Avalonia.Layout.HorizontalAlignment;
@@ -31,165 +30,6 @@ public sealed partial class MainWindow
     private Action<IReadOnlyList<CommentListRowPlan>>? _refreshCommentListWindow;
 
     private static AvaloniaCompactDialogChromeStyle SheetOptionsDialogChromeStyle => new(FormulaBarFontFamily);
-
-    // Page Layout ▸ Sheet Options ▸ Gridlines / Headings, and Review ▸ Show Notes.
-    //
-    // In Excel the Page Layout "Gridlines" and "Headings" Sheet Options expose two
-    // sub-toggles each (View + Print). The View tab already wires the on-screen view
-    // toggles (view.gridlines -> ToggleShowGridlines, view.headings -> ToggleShowHeadings,
-    // backed by WorkbookSession.SetShowGridlines / SetShowHeadings).
-    //
-    // The print side IS modeled: Sheet.PrintGridlines / Sheet.PrintHeadings are real,
-    // editable fields persisted via SetPrintOptionsCommand. We therefore present the same
-    // two-checkbox popup Excel does (View / Print), so the Page Layout buttons control BOTH
-    // the view setting and the print setting, with undo/redo for the print half (the view
-    // half routes through the existing session toggles which also support undo).
-
-    /// <summary>
-    /// Page Layout ▸ Sheet Options ▸ Gridlines. Two-checkbox popup: View + Print.
-    /// View half reuses SetShowGridlines; Print half routes through a narrow print-options command
-    /// so it participates in undo/redo without rebuilding the full Page Setup state.
-    /// </summary>
-    private async Task ShowGridlinesSheetOptionsAsync() =>
-        await ShowSheetOptionTwoToggleAsync(
-            title: UiText.Get("ShellLoc_GridlinesTitle"),
-            label: UiText.Get("ShellLoc_GridlinesTitle"),
-            getView: () => _session.IsShowingGridlines,
-            getPrint: () => _session.ActiveSheet.PrintGridlines,
-            setView: showView =>
-            {
-                if (showView == _session.IsShowingGridlines)
-                    return true;
-                var result = _session.SetShowGridlines(showView);
-                if (!result.Success)
-                    ShowEditIssue(result.ErrorMessage ?? UiText.Get("ShellLoc_GridlinesFailed"));
-                return result.Success;
-            },
-            planPrintCommand: print => CreatePageLayoutCommandSession().PlanPrintGridlines(
-                print,
-                _session.ActiveSheet.PrintHeadings));
-
-    /// <summary>
-    /// Page Layout ▸ Sheet Options ▸ Headings. Two-checkbox popup: View + Print.
-    /// </summary>
-    private async Task ShowHeadingsSheetOptionsAsync() =>
-        await ShowSheetOptionTwoToggleAsync(
-            title: UiText.Get("ShellLoc_HeadingsTitle"),
-            label: UiText.Get("ShellLoc_HeadingsTitle"),
-            getView: () => _session.IsShowingHeadings,
-            getPrint: () => _session.ActiveSheet.PrintHeadings,
-            setView: showView =>
-            {
-                if (showView == _session.IsShowingHeadings)
-                    return true;
-                var result = _session.SetShowHeadings(showView);
-                if (!result.Success)
-                {
-                    ShowEditIssue(result.ErrorMessage ?? UiText.Get("ShellLoc_HeadingsFailed"));
-                    return false;
-                }
-
-                RefreshViewportSizeForZoom();
-                return true;
-            },
-            planPrintCommand: print => CreatePageLayoutCommandSession().PlanPrintHeadings(
-                _session.ActiveSheet.PrintGridlines,
-                print));
-
-    private async Task ShowSheetOptionTwoToggleAsync(
-        string title,
-        string label,
-        Func<bool> getView,
-        Func<bool> getPrint,
-        Func<bool, bool> setView,
-        Func<bool, PageLayoutCommandExecutionPlan> planPrintCommand)
-    {
-        if (_isOpening || _isSaving)
-            return;
-
-        if (!TryCommitPendingFormulaEdit())
-            return;
-
-        ClearSelectedDrawingObject();
-
-        var viewCheck = new CheckBox { Content = UiText.Get("ShellLoc_SheetOptionView"), IsChecked = getView() };
-        ApplySheetOptionCheckBoxChrome(viewCheck);
-        AutomationProperties.SetAutomationId(viewCheck, "SheetOptionViewCheck");
-        var printCheck = new CheckBox { Content = UiText.Get("ShellLoc_SheetOptionPrint"), IsChecked = getPrint() };
-        ApplySheetOptionCheckBoxChrome(printCheck);
-        AutomationProperties.SetAutomationId(printCheck, "SheetOptionPrintCheck");
-
-        var ok = new Button { Content = UiText.Get("Common_Ok"), IsDefault = true, MinWidth = 84 };
-        ApplySheetOptionButtonChrome(ok, 84, isDefault: true);
-        AutomationProperties.SetAutomationId(ok, "SheetOptionOkButton");
-        var cancel = new Button
-        {
-            Content = UiText.Get("Common_Cancel"),
-            IsCancel = true,
-            MinWidth = 84,
-        };
-        ApplySheetOptionButtonChrome(cancel, 84);
-
-        var buttonRow = AvaloniaCompactDialogChrome.CreateActionRow([ok, cancel], new Thickness(0, 14, 0, 0));
-
-        var dialog = new Window
-        {
-            Title = title,
-            Width = 280,
-            Height = 180,
-            WindowStartupLocation = WindowStartupLocation.CenterOwner,
-            ShowInTaskbar = false,
-            CanResize = false,
-            Content = new StackPanel
-            {
-                Margin = new Thickness(16),
-                Children =
-                {
-                    new TextBlock { Text = label, FontWeight = FontWeight.SemiBold, FontSize = 12, FontFamily = FormulaBarFontFamily, Margin = new Thickness(0, 0, 0, 8) },
-                    viewCheck,
-                    printCheck,
-                    buttonRow,
-                },
-            },
-        };
-        AutomationProperties.SetAutomationId(dialog, "SheetOptionDialog");
-
-        ok.Click += (_, _) => dialog.Close(true);
-        cancel.Click += (_, _) => dialog.Close(false);
-
-        var confirmed = await dialog.ShowDialog<bool>(this);
-        if (!confirmed)
-            return;
-
-        var wantView = viewCheck.IsChecked == true;
-        var wantPrint = printCheck.IsChecked == true;
-
-        // View half via the existing session toggles.
-        if (wantView != getView() && !setView(wantView))
-            return;
-
-        // Print half via a rebuilt page-setup command (undo/redo aware).
-        if (wantPrint != getPrint())
-        {
-            var plan = planPrintCommand(wantPrint);
-            var result = _session.ExecuteReviewCommand(plan.Command);
-            if (!result.Success)
-            {
-                ShowEditIssue(PageLayoutStatusPlanner.ResolveCommandStatus(
-                    plan,
-                    success: false,
-                    result.ErrorMessage,
-                    UiText.Get));
-                return;
-            }
-        }
-
-        RefreshShell(UiText.Format(
-            "ShellLoc_SheetOptionStatus",
-            label,
-            wantView ? UiText.Get("ShellLoc_OnState") : UiText.Get("ShellLoc_OffState"),
-            wantPrint ? UiText.Get("ShellLoc_OnState") : UiText.Get("ShellLoc_OffState")));
-    }
 
     /// <summary>
     /// Review ▸ Show Comments — list every threaded comment on the active sheet
@@ -419,17 +259,6 @@ public sealed partial class MainWindow
     /// </summary>
     private static void ApplySheetOptionButtonChrome(Button button, double minWidth, bool isDefault = false)
         => AvaloniaCompactDialogChrome.ApplyButton(button, SheetOptionsDialogChromeStyle, minWidth, isDefault);
-
-    /// <summary>
-    /// Applies standard SheetOption-dialog check-box chrome (MinHeight=20, MaxHeight=20, FontSize=12).
-    /// </summary>
-    private static void ApplySheetOptionCheckBoxChrome(CheckBox checkBox)
-    {
-        StripContentMnemonic(checkBox);
-        checkBox.MinHeight = 20;
-        checkBox.MaxHeight = 20;
-        AvaloniaCompactDialogChrome.ApplyCheckBox(checkBox, SheetOptionsDialogChromeStyle);
-    }
 
     /// <summary>
     /// Applies standard Show Comments list-box row chrome (MinHeight=24 per row, FontSize=12).

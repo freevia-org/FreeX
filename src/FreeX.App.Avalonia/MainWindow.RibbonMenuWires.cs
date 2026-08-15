@@ -287,8 +287,10 @@ public sealed partial class MainWindow
         {
             PageLayoutRibbonActionKind.OpenPageSetupDialog => () => _ = ShowPageSetupDialogAsync(descriptor.PageSetupOpenSource),
             PageLayoutRibbonActionKind.ShowPageBreaksMenu => ShowPageBreaksMenu,
-            PageLayoutRibbonActionKind.ShowGridlinesSheetOptions => () => _ = ShowGridlinesSheetOptionsAsync(),
-            PageLayoutRibbonActionKind.ShowHeadingsSheetOptions => () => _ = ShowHeadingsSheetOptionsAsync(),
+            PageLayoutRibbonActionKind.ToggleViewGridlines => ToggleShowGridlines,
+            PageLayoutRibbonActionKind.TogglePrintGridlines => TogglePrintGridlines,
+            PageLayoutRibbonActionKind.ToggleViewHeadings => ToggleShowHeadings,
+            PageLayoutRibbonActionKind.TogglePrintHeadings => TogglePrintHeadings,
             PageLayoutRibbonActionKind.ChooseBackground => ChooseSheetBackground,
             PageLayoutRibbonActionKind.DeleteBackground => DeleteSheetBackground,
             PageLayoutRibbonActionKind.SetPrintArea => SetPrintAreaFromSelection,

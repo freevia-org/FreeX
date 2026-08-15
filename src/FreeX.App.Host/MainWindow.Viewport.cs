@@ -612,8 +612,12 @@ public partial class MainWindow
         {
             _suppressViewOptionSync = false;
         }
-        _ribbonState.SetChecked("Print Gridlines", sheet?.PrintGridlines ?? false);
-        _ribbonState.SetChecked("Print Headings", sheet?.PrintHeadings ?? false);
+        WorkbookPageLayoutSheetOptionsRibbonStatePlanner.Build(
+                viewState.ShowGridlines,
+                sheet?.PrintGridlines ?? false,
+                viewState.ShowHeadings,
+                sheet?.PrintHeadings ?? false)
+            .Publish(_ribbonState);
         SheetGrid.RowPageBreaks = sheet?.RowPageBreaks;
         SheetGrid.ColumnPageBreaks = sheet?.ColumnPageBreaks;
         SheetGrid.PrintArea = sheet?.PrintArea;
