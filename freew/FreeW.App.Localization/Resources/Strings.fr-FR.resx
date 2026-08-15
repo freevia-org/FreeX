@@ -376,4 +376,20 @@
   <data name="LinkBookmark_Link_Button" xml:space="preserve"><value>Lier</value></data>
   <data name="QuickParts_Snippet_Placeholder" xml:space="preserve"><value>Texte du bloc (un paragraphe par ligne)</value></data>
   <data name="QuickParts_Text_Label" xml:space="preserve"><value>Texte :</value></data>
+  <data name="FreeW_Backstage_Info_Heading" xml:space="preserve"><value>Informations sur le document</value></data>
+  <data name="FreeW_Backstage_Info_LocationLabel" xml:space="preserve"><value>Emplacement</value></data>
+  <data name="FreeW_Backstage_Info_NotSavedYet" xml:space="preserve"><value>Pas encore enregistr&#xE9;</value></data>
+  <data name="FreeW_Backstage_Info_PropertiesHeading" xml:space="preserve"><value>Propri&#xE9;t&#xE9;s</value></data>
+  <data name="FreeW_Backstage_Info_StatisticsHeading" xml:space="preserve"><value>Statistiques</value></data>
+  <data name="FreeW_Backstage_Info_DirtySuffix" xml:space="preserve"><value>  (modifications non enregistr&#xE9;es)</value></data>
+  <data name="FreeW_Backstage_Info_TitleLabel" xml:space="preserve"><value>Titre</value></data>
+  <data name="FreeW_Backstage_Info_AuthorLabel" xml:space="preserve"><value>Auteur</value></data>
+  <data name="FreeW_Backstage_Info_SubjectLabel" xml:space="preserve"><value>Objet</value></data>
+  <data name="FreeW_Backstage_Info_KeywordsLabel" xml:space="preserve"><value>Mots-cl&#xE9;s</value></data>
+  <data name="FreeW_Backstage_Info_EmptyValue" xml:space="preserve"><value>&#x2014;</value></data>
+  <data name="FreeW_Backstage_OptionsSummary_RecentFilesLabel" xml:space="preserve"><value>Fichiers r&#xE9;cents conserv&#xE9;s</value></data>
+  <data name="FreeW_Backstage_OptionsSummary_DefaultSaveFormatLabel" xml:space="preserve"><value>Format d'enregistrement par d&#xE9;faut</value></data>
+  <data name="FreeW_Backstage_OptionsSummary_UiLanguageLabel" xml:space="preserve"><value>Langue de l'interface</value></data>
+  <data name="FreeW_Backstage_OptionsSummary_DataFolderLabel" xml:space="preserve"><value>Dossier de donn&#xE9;es</value></data>
+  <data name="FreeW_Backstage_OptionsSummary_SystemDefaultLanguageLabel" xml:space="preserve"><value>Valeur syst&#xE8;me par d&#xE9;faut</value></data>
 </root>

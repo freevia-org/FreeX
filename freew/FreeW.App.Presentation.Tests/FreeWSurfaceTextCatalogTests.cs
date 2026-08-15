@@ -18,7 +18,12 @@ public sealed class FreeWSurfaceTextCatalogTests
         SourceManagementDialogPlanner.ResolveText(Localize).ManageSourcesTitle.Should().Be("localized:SourceManagement_Manage_Title");
         BackstageInfoSafetyPanePlanner.ResolveText(Localize).MarkedAsFinalStatus.Should().Be("localized:Backstage_Safety_MarkedAsFinal_Status");
         DesignDialogTextCatalog.Resolve(Localize).EffectsTitle.Should().Be("localized:Design_Effects_Title");
-        FreeWBackstagePaneTextCatalog.BuildTextSpec(Localize).RecentEmptyText.Should().Be("localized:FreeW_Backstage_Recent_EmptyText");
+        var backstage = FreeWBackstagePaneTextCatalog.BuildTextSpec(Localize);
+        backstage.RecentEmptyText.Should().Be("localized:FreeW_Backstage_Recent_EmptyText");
+        backstage.Info.Heading.Should().Be("localized:FreeW_Backstage_Info_Heading");
+        backstage.Info.CoreProperties.AuthorLabel.Should().Be("localized:FreeW_Backstage_Info_AuthorLabel");
+        backstage.OptionsSummary.DataFolderLabel.Should().Be(
+            "localized:FreeW_Backstage_OptionsSummary_DataFolderLabel");
     }
 
     [Fact]

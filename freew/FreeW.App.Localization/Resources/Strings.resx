@@ -820,4 +820,20 @@
   <data name="LinkBookmark_Link_Button" xml:space="preserve"><value>Link</value></data>
   <data name="QuickParts_Snippet_Placeholder" xml:space="preserve"><value>Snippet text (one paragraph per line)</value></data>
   <data name="QuickParts_Text_Label" xml:space="preserve"><value>Text:</value></data>
+  <data name="FreeW_Backstage_Info_Heading" xml:space="preserve"><value>Document information</value></data>
+  <data name="FreeW_Backstage_Info_LocationLabel" xml:space="preserve"><value>Location</value></data>
+  <data name="FreeW_Backstage_Info_NotSavedYet" xml:space="preserve"><value>Not saved yet</value></data>
+  <data name="FreeW_Backstage_Info_PropertiesHeading" xml:space="preserve"><value>Properties</value></data>
+  <data name="FreeW_Backstage_Info_StatisticsHeading" xml:space="preserve"><value>Statistics</value></data>
+  <data name="FreeW_Backstage_Info_DirtySuffix" xml:space="preserve"><value>  (unsaved changes)</value></data>
+  <data name="FreeW_Backstage_Info_TitleLabel" xml:space="preserve"><value>Title</value></data>
+  <data name="FreeW_Backstage_Info_AuthorLabel" xml:space="preserve"><value>Author</value></data>
+  <data name="FreeW_Backstage_Info_SubjectLabel" xml:space="preserve"><value>Subject</value></data>
+  <data name="FreeW_Backstage_Info_KeywordsLabel" xml:space="preserve"><value>Keywords</value></data>
+  <data name="FreeW_Backstage_Info_EmptyValue" xml:space="preserve"><value>&#x2014;</value></data>
+  <data name="FreeW_Backstage_OptionsSummary_RecentFilesLabel" xml:space="preserve"><value>Recent files kept</value></data>
+  <data name="FreeW_Backstage_OptionsSummary_DefaultSaveFormatLabel" xml:space="preserve"><value>Default save format</value></data>
+  <data name="FreeW_Backstage_OptionsSummary_UiLanguageLabel" xml:space="preserve"><value>UI language</value></data>
+  <data name="FreeW_Backstage_OptionsSummary_DataFolderLabel" xml:space="preserve"><value>Data folder</value></data>
+  <data name="FreeW_Backstage_OptionsSummary_SystemDefaultLanguageLabel" xml:space="preserve"><value>System default</value></data>
 </root>
