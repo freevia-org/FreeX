@@ -1,3 +1,4 @@
+using Free.Shared.AppServices.Printing;
 using FreeP.App.Compositor;
 using FreeP.App.Recording;
 
@@ -195,6 +196,42 @@ public sealed class LinuxNarrationCapturePlannerTests
         runner.Invocations.Should().BeEmpty();
     }
 
+    [Fact]
+    public void SystemProbeRunner_DelegatesTimeoutAndMapsSharedProcessResult()
+    {
+        var processRunner = new CapturingProcessRunner(
+            new ProcessResult(-1, "partial output", "", TimedOut: true));
+
+        var result = new SystemLinuxRecordingProbeRunner(processRunner).Run(
+            "/usr/bin/pw-record",
+            ["--list-targets"],
+            TimeSpan.FromSeconds(3));
+
+        result.TimedOut.Should().BeTrue();
+        result.StandardOutput.Should().Be("partial output");
+        processRunner.Invocation.Should().BeEquivalentTo(new ProcessInvocation(
+            "/usr/bin/pw-record",
+            new[] { "--list-targets" },
+            Timeout: TimeSpan.FromSeconds(3)));
+    }
+
+    [Fact]
+    public void SystemProbeRunner_ContainsNoSecondNativeProcessImplementation()
+    {
+        var root = TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeP.slnx");
+        var source = File.ReadAllText(Path.Combine(
+            root,
+            "freep",
+            "FreeP.App.Recording",
+            "Recording",
+            "LinuxRecordingDeviceCatalog.cs"));
+
+        source.Should().Contain("processRunner ?? new SystemProcessRunner()");
+        source.Should().Contain("Timeout: timeout");
+        source.Should().NotContain("using System.Diagnostics;");
+        source.Should().NotContain("new ProcessStartInfo");
+    }
+
     private static SlideShowRecordingCaptureDeviceDescriptor Microphone(string id, bool isDefault) =>
         new(
             SlideShowRecordingCaptureDeviceKind.Microphone,
@@ -237,5 +274,18 @@ public sealed class LinuxNarrationCapturePlannerTests
 
         private static string Key(string fileName, string arguments) =>
             fileName + " " + arguments;
+    }
+
+    private sealed class CapturingProcessRunner(ProcessResult result) : IProcessRunner
+    {
+        public ProcessInvocation? Invocation { get; private set; }
+
+        public Task<ProcessResult> RunAsync(
+            ProcessInvocation invocation,
+            CancellationToken cancellationToken = default)
+        {
+            Invocation = invocation;
+            return Task.FromResult(result);
+        }
     }
 }

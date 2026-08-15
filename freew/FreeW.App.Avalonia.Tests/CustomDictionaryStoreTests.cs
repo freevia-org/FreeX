@@ -92,6 +92,20 @@ public sealed class CustomDictionaryStoreTests
         reloaded.Contains("teh").Should().BeFalse();
     }
 
+    [Fact]
+    public void Failed_atomic_write_leaves_the_previous_dictionary_file_intact()
+    {
+        var fs = new FakeFileSystem();
+        fs.Seed(Path, "existing");
+        var store = new CustomDictionaryStore(Path, fs);
+        fs.FailNextAtomicWrite = true;
+
+        store.Add("new-word").Should().BeTrue();
+
+        fs.Files[Path].Should().Equal("existing");
+        new CustomDictionaryStore(Path, fs).Words.Should().Equal("existing");
+    }
+
     // ── Real-disk round trip (temp dir — never the real user data folder) ──────────────────────────
 
     /// <summary>
@@ -126,6 +140,7 @@ public sealed class CustomDictionaryStoreTests
     {
         public Dictionary<string, List<string>> Files { get; } = new();
         public int WriteCount { get; private set; }
+        public bool FailNextAtomicWrite { get; set; }
 
         public void Seed(string path, params string[] lines) => Files[path] = new List<string>(lines);
 
@@ -133,9 +148,16 @@ public sealed class CustomDictionaryStoreTests
 
         public string[] ReadAllLines(string path) => Files.TryGetValue(path, out var lines) ? lines.ToArray() : [];
 
-        public void WriteAllLines(string path, IEnumerable<string> lines)
+        public void WriteAllLinesAtomically(string path, IEnumerable<string> lines)
         {
-            Files[path] = new List<string>(lines);
+            var replacement = new List<string>(lines);
+            if (FailNextAtomicWrite)
+            {
+                FailNextAtomicWrite = false;
+                throw new IOException("simulated atomic write failure");
+            }
+
+            Files[path] = replacement;
             WriteCount++;
         }
 

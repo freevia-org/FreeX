@@ -102,11 +102,35 @@ public sealed class WpfPageRangeDocumentPaginatorTests
     {
         var root = TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeX.slnx");
         var freeW = File.ReadAllText(Path.Combine(root, "freew", "FreeW.App.Host", "MainWindow.cs"));
+        var sharedWorkflow = File.ReadAllText(Path.Combine(
+            root,
+            "shared",
+            "Free.Shared.Shell.Wpf",
+            "WpfPaginatorPrintWorkflow.cs"));
+        var freeP = File.ReadAllText(Path.Combine(
+            root,
+            "freep",
+            "FreeP.App.Host",
+            "WpfPresentationPrintService.cs"));
+        var freePPorts = File.ReadAllText(Path.Combine(
+            root,
+            "freep",
+            "FreeP.App.Host",
+            "WpfPresentationFileCommandPorts.cs"));
         var freeXPreview = File.ReadAllText(Path.Combine(root, "src", "FreeX.App.Host", "WpfPrintPreviewToolbarPlanner.cs"));
         var freeXExport = File.ReadAllText(Path.Combine(root, "src", "FreeX.App.Host", "MainWindow.PrintExport.cs"));
         var freeXBackstage = File.ReadAllText(Path.Combine(root, "src", "FreeX.App.Host", "MainWindow.Backstage.cs"));
 
-        freeW.Should().Contain("WpfPageRangeDocumentPaginator.CreateClampedInclusive(");
+        freeW.Should().Contain("WpfPaginatorPrintWorkflow.Execute(");
+        freeW.Should().NotContain("new PrintDialog()");
+        freeP.Should().Contain("WpfPaginatorPrintWorkflow.Execute(");
+        freeP.Should().NotContain("new PrintDialog()");
+        freeP.Should().NotContain(".PrintDocument(");
+        freePPorts.Should().Contain("WpfPaginatorPrintOutcome.Printed");
+        freePPorts.Should().Contain("WpfPaginatorPrintOutcome.Cancelled");
+        freePPorts.Should().Contain("WpfPaginatorPrintOutcome.Failed");
+        freePPorts.Should().Contain("printResult.Error?.Message");
+        sharedWorkflow.Should().Contain("WpfPageRangeDocumentPaginator.CreateClampedInclusive(");
         freeXPreview.Should().Contain("WpfPageRangeDocumentPaginator.CreateValidatedInclusive(");
         freeXExport.Should().Contain("WpfPageRangeDocumentPaginator.CreateValidatedInclusive(");
         freeXBackstage.Should().Contain("WpfPageRangeDocumentPaginator.CreateValidatedInclusive(");

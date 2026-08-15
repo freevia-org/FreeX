@@ -89,6 +89,70 @@ public sealed class PresentationMediaPaneHostViewAdapterTests
         surface.PlaybackApplyEnabled.Should().BeFalse();
     }
 
+    [Fact]
+    public void Native_composition_maps_renderer_controls_to_the_shared_adapter()
+    {
+        var controls = CreateNativeControls();
+        controls.Pane.Visible = true;
+        controls.CaptionLabel.Text = "English";
+        controls.VolumePercent.Value = 64.6;
+        controls.PlaybackStartMode.Index = 2;
+        controls.Loop.Checked = true;
+        controls.StopAfterSlides.Text = "4";
+        var refreshed = 0;
+
+        var adapter = PresentationMediaPaneNativeComposition.Compose(
+            controls,
+            new PresentationMediaPaneNativeAccessors<FakeControl>(
+                control => control.Visible,
+                (control, value) => control.Visible = value,
+                control => control.Text,
+                (control, value) => control.Text = value,
+                control => control.Value,
+                (control, value) => control.Value = value,
+                control => control.Index,
+                (control, value) => control.Index = value,
+                control => control.Checked,
+                (control, value) => control.Checked = value,
+                (control, value) => control.Enabled = value),
+            _ => { },
+            (_, _) => { },
+            (_, _) => { },
+            _ => { },
+            () => refreshed++);
+
+        adapter.IsPaneVisible.Should().BeTrue();
+        adapter.CaptureCaption().Label.Should().Be("English");
+        adapter.CaptureVolume().NormalizedVolumePercent.Should().Be(65);
+        adapter.CapturePlayback().Should().Be(new PresentationMediaPlaybackHostSnapshot(
+            2, true, true, false, false, "4"));
+
+        adapter.SetPaneVisible(false);
+        adapter.SetCaptionInput(new("French", "fr-FR", "captions.vtt", "Bonjour"));
+        adapter.SetVolumeInput(new(30));
+        adapter.RefreshAccessibilityMetadata();
+
+        controls.Pane.Visible.Should().BeFalse();
+        controls.CaptionLabel.Text.Should().Be("French");
+        controls.CaptionLanguage.Text.Should().Be("fr-FR");
+        controls.VolumePercent.Value.Should().Be(30);
+        refreshed.Should().Be(1);
+    }
+
+    private static PresentationMediaPaneNativeControls<FakeControl> CreateNativeControls() => new(
+        new(), new(), new(), new(), new(), new(), new(), new(), new(), new(), new(), new(),
+        new(), new(), new(), new(), new(), new(), new(), new(), new(), new(), new());
+
+    private sealed class FakeControl
+    {
+        public bool Visible { get; set; }
+        public bool Enabled { get; set; }
+        public string? Text { get; set; }
+        public double? Value { get; set; }
+        public int? Index { get; set; }
+        public bool? Checked { get; set; }
+    }
+
     private sealed class RecordingSurface : IPresentationMediaPaneControlSurface
     {
         public bool IsPaneVisible { get; set; }

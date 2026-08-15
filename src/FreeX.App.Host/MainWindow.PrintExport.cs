@@ -230,7 +230,20 @@ public partial class MainWindow
                 UiText.Get("Progress_ExportingFileWriting"),
                 50);
 
-            await Task.Run(() => AtomicFileWriter.WriteAllBytes(pdfPath, pdfBytes));
+            var pdfExport = await Task.Run(() => new AtomicExportExecutor().ExecuteAsync<bool>(
+                pdfPath,
+                async (output, cancellationToken) =>
+                {
+                    await output.WriteAsync(pdfBytes, cancellationToken);
+                    return true;
+                }));
+            if (!pdfExport.Succeeded)
+            {
+                throw pdfExport.Exception ?? new IOException(
+                    pdfExport.Error?.Detail.Message ??
+                    pdfExport.Validation?.Detail.ToString() ??
+                    "PDF export did not complete.");
+            }
 
             ShowOwnedMessage(
                 UiText.Format("MainWindowMessage_ExportPdfSavedFormat", optionSummary, pdfPath),
@@ -317,50 +330,46 @@ public partial class MainWindow
 
             // Write to a sibling temp file so that a mid-write failure does not corrupt or lock the
             // destination the user chose, then atomically replace the destination on success.
-            using var temporaryFile = AtomicFileWriter.CreateTempLease(xpsPath);
-            var tempPath = temporaryFile.Path;
-            try
-            {
-                // Open the XPS package for write and close it before replacing the destination.
-                // XpsDocument takes ownership of the package when constructed — the package is
-                // disposed when XpsDocument is disposed, which is why the package using-block must
-                // nest OUTSIDE the XpsDocument using-block.
-                using (var pkg = System.IO.Packaging.Package.Open(
-                    tempPath,
-                    System.IO.FileMode.Create,
-                    System.IO.FileAccess.ReadWrite))
+            var xpsExport = await new AtomicExportExecutor().ExecuteAsync<bool>(
+                xpsPath,
+                (output, cancellationToken) =>
                 {
-                    XpsPackagePropertiesAdapter.Apply(
-                        pkg,
-                        ExportDocumentPropertiesPlanner.FromWorkbook(_workbook, effectiveOptions));
+                    cancellationToken.ThrowIfCancellationRequested();
+                    // XpsDocument takes ownership of the package, so the package scope must enclose it.
+                    using (var pkg = System.IO.Packaging.Package.Open(
+                        output,
+                        System.IO.FileMode.Create,
+                        System.IO.FileAccess.ReadWrite))
+                    {
+                        XpsPackagePropertiesAdapter.Apply(
+                            pkg,
+                            ExportDocumentPropertiesPlanner.FromWorkbook(_workbook, effectiveOptions));
 
-                    using var xpsDoc = new System.Windows.Xps.Packaging.XpsDocument(pkg);
+                        using var xpsDoc = new System.Windows.Xps.Packaging.XpsDocument(pkg);
 
-                    // XpsDocumentWriter(XpsDocument) is internal in ReachFramework; create it via reflection
-                    var writerType = typeof(System.Windows.Xps.XpsDocumentWriter);
-                    var ctor = writerType.GetConstructor(
-                        System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic,
-                        null,
-                        [typeof(System.Windows.Xps.Packaging.XpsDocument)],
-                        null);
+                        // XpsDocumentWriter(XpsDocument) is internal in ReachFramework; create it via reflection
+                        var writerType = typeof(System.Windows.Xps.XpsDocumentWriter);
+                        var ctor = writerType.GetConstructor(
+                            System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic,
+                            null,
+                            [typeof(System.Windows.Xps.Packaging.XpsDocument)],
+                            null);
 
-                    if (ctor == null)
-                        throw new InvalidOperationException("XpsDocumentWriter(XpsDocument) constructor not found in ReachFramework.");
+                        if (ctor == null)
+                            throw new InvalidOperationException("XpsDocumentWriter(XpsDocument) constructor not found in ReachFramework.");
 
-                    var writer = (System.Windows.Xps.XpsDocumentWriter)ctor.Invoke([xpsDoc]);
-                    writer.Write(paginator);
-                }
+                        var writer = (System.Windows.Xps.XpsDocumentWriter)ctor.Invoke([xpsDoc]);
+                        writer.Write(paginator);
+                    }
 
-                AtomicFileWriter.ReplaceTarget(tempPath, xpsPath);
-                temporaryFile.Commit();
-            }
-            catch
+                    return ValueTask.FromResult(true);
+                });
+            if (!xpsExport.Succeeded)
             {
-                // On any failure ensure the temp artifact is cleaned up.  The destination is
-                // untouched — ReplaceTarget has not been called yet.
-                temporaryFile.Release();
-
-                throw;
+                throw xpsExport.Exception ?? new IOException(
+                    xpsExport.Error?.Detail.Message ??
+                    xpsExport.Validation?.Detail.ToString() ??
+                    "XPS export did not complete.");
             }
 
             if (showSuccessMessage)

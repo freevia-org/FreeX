@@ -21,16 +21,19 @@ public sealed class WindowsNativePrintHandoffAdapterTests
     }
 
     [Fact]
-    public void Avalonia_print_workflow_uses_shared_services_and_owns_the_temporary_pdf()
+    public void Avalonia_print_workflow_uses_shared_portable_submission_lifecycle()
     {
         var source = Read("freep", "FreeP.App.Avalonia", "MainWindow.cs");
 
         source.Should().Contain("IPlatformPrintService _printService")
             .And.Contain("new CupsPrintService()")
             .And.Contain("new WindowsPrintService(")
+            .And.Contain("PortablePrintSubmissionWorkflow _portablePrintWorkflow")
+            .And.Contain("_portablePrintWorkflow.ExecuteAsync(")
             .And.Contain("PresentationPrintOutputPackageExecutor.ValidatePackage(package)")
-            .And.Contain("TemporaryFileLease.Create(\"freep-print-\", \".pdf\")")
-            .And.Contain("_printService.SubmitAsync(")
+            .And.Contain("await output.WriteAsync(package!.Bytes, token)")
+            .And.NotContain("TemporaryFileLease.Create(")
+            .And.NotContain("_printService.SubmitAsync(")
             .And.NotContain("LinuxNativePrintHandoffAdapter")
             .And.NotContain("WindowsNativePrintHandoffAdapter");
     }

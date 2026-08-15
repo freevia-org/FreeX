@@ -108,6 +108,30 @@ public interface IFreeWDocumentFragmentSourceReaderPort
         TextDocument document);
 }
 
+/// <summary>
+/// Shared local-file reading for renderer adapters. Native hosts retain linked-image preview
+/// realization because that depends on renderer-specific image support.
+/// </summary>
+public abstract class FreeWDocumentFragmentFileSourceReaderPort :
+    IFreeWDocumentFragmentSourceReaderPort
+{
+    public Task<byte[]> ReadBytesAsync(
+        FreeWDocumentFragmentImportSelection selection,
+        CancellationToken cancellationToken) =>
+        FileByteReadWorkflow.ReadLocalPathBytesAsync(
+            (string)selection.Source,
+            cancellationToken);
+
+    public Task<string> ReadTextAsync(
+        FreeWDocumentFragmentImportSelection selection,
+        CancellationToken cancellationToken) =>
+        File.ReadAllTextAsync((string)selection.Source, cancellationToken);
+
+    public abstract void ResolveLinkedImagePreviews(
+        FreeWDocumentFragmentImportSelection selection,
+        TextDocument document);
+}
+
 public enum FreeWDocumentFragmentInsertionKind
 {
     Document,

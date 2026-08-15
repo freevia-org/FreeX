@@ -3116,8 +3116,6 @@ public sealed partial class MainWindow : Window
 
     private void PrintDocument(DocumentView editor, string description)
     {
-        var dialog = new PrintDialog();
-
         // Compose the same physical sequence used by Print Preview before opening the dialog. This
         // gives the native range control exact bounds that include section parity blanks and note
         // continuation pages.
@@ -3127,43 +3125,32 @@ public sealed partial class MainWindow : Window
             description,
             editor.Model.Page,
             paginator.PageCount);
-        dialog.UserPageRangeEnabled = plan.TotalPages > 1;
-        dialog.MinPage = 1;
-        dialog.MaxPage = (uint)plan.TotalPages;
+        var result = WpfPaginatorPrintWorkflow.Execute(new WpfPaginatorPrintRequest(
+            plan.Description,
+            _ => paginator,
+            new WpfPaginatorPrintTicketOptions(
+                PageWidthDip: plan.PageWidthDip,
+                PageHeightDip: plan.PageHeightDip),
+            new WpfPaginatorPageRangeOptions(
+                plan.TotalPages,
+                (from, to) =>
+                {
+                    var selectedRange = FreeWPrintRequestPlanner.FromOneBasedRange(
+                        from,
+                        to,
+                        plan.TotalPages);
+                    var (firstPage, lastPage) = FreeWPrintRequestPlanner.ResolvePageRange(
+                        selectedRange,
+                        plan.TotalPages);
+                    return new WpfPaginatorPageRange(firstPage, lastPage);
+                }),
+            this));
 
-        // Print at the model's page size (points -> DIP), not just the printer's printable area, so
-        // margins and page breaks match what the user sees in Print Preview.
-        dialog.PrintTicket.PageMediaSize = new System.Printing.PageMediaSize(
-            plan.PageWidthDip,
-            plan.PageHeightDip);
-
-        if (dialog.ShowDialog() != true)
-            return;
-
-        if (dialog.PageRangeSelection == PageRangeSelection.UserPages)
-        {
-            var selectedRange = FreeWPrintRequestPlanner.FromOneBasedRange(
-                (int)dialog.PageRange.PageFrom,
-                (int)dialog.PageRange.PageTo,
-                plan.TotalPages);
-            var (firstPage, lastPage) = FreeWPrintRequestPlanner.ResolvePageRange(
-                selectedRange,
-                plan.TotalPages);
-            paginator = WpfPageRangeDocumentPaginator.CreateClampedInclusive(
-                paginator,
-                firstPage,
-                lastPage);
-        }
-
-        try
-        {
-            dialog.PrintDocument(paginator, plan.Description);
-        }
-        catch (Exception ex) when (ex is not OutOfMemoryException)
+        if (result is { Outcome: WpfPaginatorPrintOutcome.Failed, Error: not null })
         {
             DialogMessageHelper.ShowError(
                 this,
-                UiText.Format("Print_Failed_Message_Format", ex.Message),
+                UiText.Format("Print_Failed_Message_Format", result.Error.Message),
                 UiText.Get("Print_Title"));
         }
     }

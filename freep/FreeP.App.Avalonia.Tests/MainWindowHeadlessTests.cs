@@ -156,7 +156,9 @@ public sealed class MainWindowHeadlessTests : IDisposable
                     .OfType<Grid>()
                     .Single(candidate => candidate.Children.OfType<SlideCanvas>().Any());
                 var canvas = canvasContent.Children.OfType<SlideCanvas>().Single();
-                var textOverlay = stack.Children.OfType<Canvas>().Single();
+                var textOverlay = stack.Children
+                    .OfType<Canvas>()
+                    .Single(candidate => !candidate.IsVisible && !candidate.IsHitTestVisible);
                 textOverlay.IsVisible = true;
                 global::Avalonia.Threading.Dispatcher.UIThread.RunJobs();
 

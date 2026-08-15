@@ -209,6 +209,7 @@ public sealed class FreeXPracticalResidualOwnershipTests
     public void ScenarioManagerMutations_AreOwnedByServicesAndRenderersUseTheSession()
     {
         var planner = Read("src", "FreeX.App.Services", "ScenarioManagerPlanner.cs");
+        var mergeWorkflow = Read("src", "FreeX.App.Services", "ScenarioMergeWorkflow.cs");
         var session = Read("src", "FreeX.App.Services", "WorkbookSession.cs");
         var avalonia = Read("src", "FreeX.App.Avalonia", "MainWindow.cs");
         var wpf = Read("src", "FreeX.App.Host", "MainWindow.ScenarioCommands.cs");
@@ -225,8 +226,16 @@ public sealed class FreeXPracticalResidualOwnershipTests
         wpf.Should().Contain("_session.ShowScenario(name)");
         wpf.Should().Contain("_session.DeleteScenario(scenarioName)");
         wpf.Should().Contain("_session.CreateScenarioSummaryReport(");
-        wpf.Should().Contain("_session.MergeScenarios(mergeCandidates)");
-        wpf.Should().Contain("ScenarioManagerPlanner.RemapScenariosBySheetName(");
+        mergeWorkflow.Should().Contain("ScenarioManagerPlanner.RemapScenariosBySheetName(");
+        mergeWorkflow.Should().Contain("applied = host.ApplyMerge(scenarios)");
+        wpf.Should().Contain("new ScenarioMergeWorkflow(_fileAdapters)");
+        wpf.Should().Contain("_session.MergeScenarios(scenarios)");
+        wpf.Should().Contain("WpfFileDialogService.ShowOpenDialog(");
+        wpf.Should().NotContain("new Microsoft.Win32.OpenFileDialog");
+        wpf.Should().NotContain("new WorkbookOpenService(");
+        wpf.Should().NotContain("ScenarioManagerPlanner.RemapScenariosBySheetName(");
+        avalonia.Should().NotContain("ScenarioManagerAction.Merge")
+            .And.NotContain("MergeScenariosFromFileAsync(");
         wpf.Should().NotContain("new SaveScenarioCommand(");
         wpf.Should().NotContain("new ApplyScenarioCommand(");
         wpf.Should().NotContain("new DeleteScenarioCommand(");

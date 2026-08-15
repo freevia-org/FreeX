@@ -498,6 +498,11 @@ public sealed class SlideShowPresenterSessionDedupTests
             Read(root, "freep", "FreeP.App.Host", "SlideShowWindow.cs"),
             Read(root, "freep", "FreeP.App.Avalonia", "SlideShowWindow.cs"),
         };
+        var portableSlideShowSurface = Read(
+            root,
+            "freep",
+            "RendererShared",
+            "SlideShowWindow.PortableSurface.cs");
 
         foreach (var source in presenterFiles)
         {
@@ -572,7 +577,6 @@ public sealed class SlideShowPresenterSessionDedupTests
             source.Should().Contain("_runtime.HandleKeyboardInput(");
             source.Should().Contain("_runtime.HandlePointerInput(");
             source.Should().Contain("_runtime.ActivateHyperlink(");
-            source.Should().Contain("_runtime.DisplayCurrentSlide(");
             source.Should().Contain("_runtime.StartRendererSession(");
             source.Should().Contain("_runtime.DisplaySlide");
             source.Should().Contain("_runtime.CreatePresenterViewOperations(_setSlideNotesText)");
@@ -604,7 +608,11 @@ public sealed class SlideShowPresenterSessionDedupTests
             source.Should().NotContain("case SlideShowPointerClickIntentKind.");
             source.Should().NotContain("if (e.Key == Key.P");
             source.Should().NotContain("if (hlink.IsExternal)");
+            source.Should().NotContain("private void DisplayCurrentSlide(");
         }
+
+        portableSlideShowSurface.Should().Contain("private void DisplayCurrentSlide(")
+            .And.Contain("_runtime.DisplayCurrentSlide(");
     }
 
     private static SlideShowHostExecutionCallbacks NoOpCallbacks() => new(

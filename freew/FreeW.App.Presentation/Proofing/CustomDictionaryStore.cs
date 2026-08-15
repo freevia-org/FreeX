@@ -1,4 +1,3 @@
-using System.Text;
 using Free.Shared.AppServices;
 using FreeW.Core.Model;
 
@@ -100,7 +99,7 @@ public sealed class CustomDictionaryStore
             if (!string.IsNullOrEmpty(directory))
                 _fileSystem.CreateDirectory(directory);
 
-            _fileSystem.WriteAllLines(_storePath, _dictionary.Words);
+            _fileSystem.WriteAllLinesAtomically(_storePath, _dictionary.Words);
             return true;
         }
         catch
@@ -114,7 +113,7 @@ public interface ICustomDictionaryFileSystem
 {
     bool Exists(string path);
     string[] ReadAllLines(string path);
-    void WriteAllLines(string path, IEnumerable<string> lines);
+    void WriteAllLinesAtomically(string path, IEnumerable<string> lines);
     void CreateDirectory(string path);
 }
 
@@ -128,7 +127,14 @@ public sealed class RealCustomDictionaryFileSystem : ICustomDictionaryFileSystem
 
     public bool Exists(string path) => File.Exists(path);
     public string[] ReadAllLines(string path) => File.ReadAllLines(path);
-    public void WriteAllLines(string path, IEnumerable<string> lines) =>
-        File.WriteAllLines(path, lines, new UTF8Encoding(encoderShouldEmitUTF8Identifier: false));
+    public void WriteAllLinesAtomically(string path, IEnumerable<string> lines)
+    {
+        var materialized = lines.ToArray();
+        var content = string.Join(Environment.NewLine, materialized);
+        if (materialized.Length > 0)
+            content += Environment.NewLine;
+
+        AtomicFileWriter.WriteAllText(path, content);
+    }
     public void CreateDirectory(string path) => Directory.CreateDirectory(path);
 }

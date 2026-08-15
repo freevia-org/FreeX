@@ -28,8 +28,6 @@ public sealed class MacOsPlanningReadinessPreflightTests
         combined.Should().Contain("ClearSelectedRangeDataValidation");
         combined.Should().Contain("DataValidationPreviewPlanner");
         combined.Should().Contain("Native Share Sheet Integration Plan");
-        combined.Should().Contain("WorkbookShareActionPlanner");
-        combined.Should().Contain("WorkbookShareActionSurface");
         combined.Should().Contain("NSSharingServicePicker");
         combined.Should().Contain("GitHub-hosted macOS runners can build the app and prove that the menu route, saved-path preconditions, and fallback evidence stay wired");
         combined.Should().Contain("matching multi-range Paste Special");

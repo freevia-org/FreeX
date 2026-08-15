@@ -376,4 +376,8 @@
   <data name="LinkBookmark_Link_Button" xml:space="preserve"><value>Lier</value></data>
   <data name="QuickParts_Snippet_Placeholder" xml:space="preserve"><value>Texte du bloc (un paragraphe par ligne)</value></data>
   <data name="QuickParts_Text_Label" xml:space="preserve"><value>Texte :</value></data>
+  <data name="FreeW_Backstage_Info_Heading" xml:space="preserve"><value>Informations sur le document</value></data>
+  <data name="FreeW_FindReplace_NoReplacements" xml:space="preserve"><value>Aucun remplacement effectu&#xE9;.</value></data>
+  <data name="FreeW_FindReplace_ReplacedOccurrences_Format" xml:space="preserve"><value>{0} occurrence{1} remplac&#xE9;e{1}.</value></data>
+  <data name="FreeW_FindReplace_ReplacementsMade_Format" xml:space="preserve"><value>{0} remplacement(s) effectu&#xE9;(s).</value></data>
 </root>

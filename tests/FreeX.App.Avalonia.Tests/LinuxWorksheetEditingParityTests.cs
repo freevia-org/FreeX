@@ -99,21 +99,29 @@ public sealed class LinuxWorksheetEditingParityTests
         await Session.Dispatch(() =>
         {
             var window = CreateCleanWindow(out var sheet);
-            var formulaAddress = new CellAddress(sheet.Id, 1, 1);
-            var target = new CellAddress(sheet.Id, 2, 2);
-            var formulaBox = GetField<TextBox>(window, "_formulaBox");
+            try
+            {
+                var formulaAddress = new CellAddress(sheet.Id, 1, 1);
+                var target = new CellAddress(sheet.Id, 2, 2);
+                var formulaBox = GetField<TextBox>(window, "_formulaBox");
 
-            window.BeginFormulaEditForTest(formulaAddress, "=");
-            formulaBox.CaretIndex = 1;
-            formulaBox.SelectionStart = 1;
-            formulaBox.SelectionEnd = 1;
+                window.BeginFormulaEditForTest(formulaAddress, "=");
+                formulaBox.CaretIndex = 1;
+                formulaBox.SelectionStart = 1;
+                formulaBox.SelectionEnd = 1;
 
-            Invoke<bool>(window, "TryInsertFormulaPointReference", target).Should().BeTrue();
-            formulaBox.Text.Should().Be("=B2");
+                Invoke<bool>(window, "TryInsertFormulaPointReference", target).Should().BeTrue();
+                formulaBox.Text.Should().Be("=B2");
 
-            var overlay = GetField<TextBlock>(window, "_formulaReferenceTextOverlay");
-            string.Concat(overlay.Inlines?.OfType<Run>().Select(run => run.Text) ?? [])
-                .Should().Be("=B2");
+                var overlay = GetField<TextBlock>(window, "_formulaReferenceTextOverlay");
+                string.Concat(overlay.Inlines?.OfType<Run>().Select(run => run.Text) ?? [])
+                    .Should().Be("=B2");
+            }
+            finally
+            {
+                window.AllowCloseWithoutDirtyPromptForParityCapture();
+                window.Close();
+            }
         }, CancellationToken.None);
     }
 
@@ -137,6 +145,7 @@ public sealed class LinuxWorksheetEditingParityTests
             }
             finally
             {
+                window.AllowCloseWithoutDirtyPromptForParityCapture();
                 window.Close();
             }
         }, CancellationToken.None);

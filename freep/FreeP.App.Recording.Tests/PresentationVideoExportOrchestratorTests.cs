@@ -112,6 +112,24 @@ public sealed class PresentationVideoExportOrchestratorTests : IDisposable
     }
 
     [Fact]
+    public async Task ExportAsync_BackendFailurePreservesExistingDestination()
+    {
+        var outputPath = Path.Combine(_temporaryDirectory.Path, "existing.mp4");
+        await File.WriteAllTextAsync(outputPath, "existing video");
+        var backend = new DelegateBackend((workspace, _, _) =>
+        {
+            File.WriteAllText(workspace.FullOutputPath, "partial replacement");
+            return Task.FromResult(PresentationVideoExportBackendResult.Failed("encoder rejected input"));
+        });
+
+        var result = await CreateOrchestrator(backend).ExportAsync(BuildPackage(), outputPath);
+
+        result.Succeeded.Should().BeFalse();
+        result.FailureReason.Should().Be("encoder rejected input");
+        File.ReadAllText(outputPath).Should().Be("existing video");
+    }
+
+    [Fact]
     public async Task ExportAsync_InvalidBackendOutputUsesConfiguredFailureAndDeletesFile()
     {
         var outputPath = Path.Combine(_temporaryDirectory.Path, "invalid.mp4");
@@ -181,7 +199,7 @@ public sealed class PresentationVideoExportOrchestratorTests : IDisposable
 
         var result = await CreateOrchestrator(backend).ExportAsync(BuildPackage(), outputPath);
 
-        result.Should().BeSameAs(fallbackResult);
+        result.Should().BeEquivalentTo(fallbackResult);
         File.Exists(outputPath).Should().BeTrue();
     }
 
@@ -216,6 +234,22 @@ public sealed class PresentationVideoExportOrchestratorTests : IDisposable
         source.Should().NotContain("catch (OperationCanceledException)");
         source.Should().NotContain("LinuxVideoExportResult.CanceledResult(");
         source.Should().NotContain("LinuxVideoExportResult.Failed(");
+    }
+
+    [Fact]
+    public void Orchestrator_DelegatesDestinationOwnershipToSharedAtomicExecutor()
+    {
+        var root = TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeP.slnx");
+        var source = File.ReadAllText(Path.Combine(
+            root,
+            "freep",
+            "FreeP.App.Recording",
+            "Recording",
+            "PresentationVideoExportOrchestrator.cs"));
+
+        source.Should().Contain("_atomicExportExecutor.ExecutePathAsync(");
+        source.Should().NotContain("Directory.CreateDirectory(Path.GetDirectoryName(");
+        source.Should().NotContain("TryDelete(");
     }
 
     private static PresentationVideoExportOrchestrator CreateOrchestrator(

@@ -32,11 +32,10 @@ internal sealed class WpfPictureImportSourceReaderPort : IFreeWPictureImportSour
 {
     public Task<byte[]> ReadAsync(
         FreeWPictureImportSelection selection,
-        CancellationToken cancellationToken)
-    {
-        cancellationToken.ThrowIfCancellationRequested();
-        return Task.FromResult(File.ReadAllBytes((string)selection.Source));
-    }
+        CancellationToken cancellationToken) =>
+        FileByteReadWorkflow.ReadLocalPathBytesAsync(
+            (string)selection.Source,
+            cancellationToken);
 }
 
 internal sealed class WpfPictureDecoderPort : IFreeWPictureDecoderPort

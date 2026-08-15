@@ -112,6 +112,81 @@ public sealed class SlideShowRendererShellDedupTests
         snapshots[^1].BaseVolumePercent.Should().Be(35);
     }
 
+    [Fact]
+    public void Native_renderer_sources_keep_residual_composition_in_shared_sessions()
+    {
+        var root = TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeP.slnx");
+        var chartEndpoints = File.ReadAllText(Path.Combine(
+            root,
+            "freep",
+            "RendererShared",
+            "MainWindow.ChartDialogEndpoints.cs"));
+        chartEndpoints.Should().Contain("private void OpenChartDialog(");
+        chartEndpoints.Should().Contain("private void OnChartPointDoubleClick(");
+        foreach (var project in new[] { "FreeP.App.Host", "FreeP.App.Avalonia" })
+        {
+            var directory = Path.Combine(root, "freep", project);
+            var mainWindow = File.ReadAllText(Path.Combine(directory, "MainWindow.cs"));
+            var presenter = File.ReadAllText(Path.Combine(directory, "PresenterViewWindow.cs"));
+            var customShows = File.ReadAllText(Path.Combine(directory, "CustomShowDialog.cs"));
+            var selectionPane = File.ReadAllText(Path.Combine(directory, "SelectionPane.cs"));
+
+            mainWindow.Should().Contain("PresentationMediaPaneNativeComposition.Compose(");
+            mainWindow.Should().NotContain("new DelegatingPresentationMediaPaneControlSurface");
+            mainWindow.Should().NotContain("internal void OpenChartDataDialog(");
+            mainWindow.Should().NotContain("private void OnChartPointDoubleClick(");
+            presenter.Should().Contain("SlideShowPresenterViewNativeBinding<");
+            presenter.Should().Contain("SlideShowPresenterViewHeaderComposition.Compose(");
+            customShows.Should().Contain("SlideShowCustomShowDialogNativeComposition<");
+            selectionPane.Should().Contain("PresentationSelectionPaneFormSession<");
+            selectionPane.Should().Contain("PresentationSelectionPaneItemFormSession(");
+        }
+    }
+
+    [Fact]
+    public void Native_media_controllers_consume_shared_projection_plans()
+    {
+        var root = TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeP.slnx");
+        foreach (var relativePath in new[]
+                 {
+                     Path.Combine("freep", "FreeP.App.Host", "SlideShowMediaController.cs"),
+                     Path.Combine("freep", "FreeP.App.Avalonia", "AvaloniaSlideShowMediaController.cs"),
+                 })
+        {
+            var source = File.ReadAllText(Path.Combine(root, relativePath));
+            source.Should().Contain("SlideShowMediaInteractionPlanner.PlanPlaybackProjection(");
+            source.Should().Contain("SlideShowMediaInteractionPlanner.PlanCaptionProjection(");
+            source.Should().NotContain("PresentationMediaTranscriptPlanner.FindActiveCue(");
+            source.Should().NotContain("SlideShapeTraversal.FindById(");
+        }
+    }
+
+    [Fact]
+    public void Slideshow_portable_surface_is_source_shared_by_both_renderers()
+    {
+        var root = TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeP.slnx");
+        var portableSurface = File.ReadAllText(Path.Combine(
+            root, "freep", "RendererShared", "SlideShowWindow.PortableSurface.cs"));
+
+        portableSurface.Should().Contain("public SlideShowWindow(Presentation presentation, int startIndex = 0)");
+        portableSurface.Should().Contain("private void CloseSlideShow(DateTimeOffset nowUtc)");
+        portableSurface.Should().Contain("private void DisplayCurrentSlide(");
+        portableSurface.Should().Contain("BuildAnimationTargetAvailability()");
+
+        foreach (var project in new[] { "FreeP.App.Host", "FreeP.App.Avalonia" })
+        {
+            var projectDirectory = Path.Combine(root, "freep", project);
+            var projectSource = File.ReadAllText(Path.Combine(projectDirectory, $"{project}.csproj"));
+            var windowSource = File.ReadAllText(Path.Combine(projectDirectory, "SlideShowWindow.cs"));
+
+            projectSource.Should().Contain("RendererShared\\SlideShowWindow.PortableSurface.cs");
+            windowSource.Should().NotContain("public SlideShowWindow(Presentation presentation, int startIndex = 0)");
+            windowSource.Should().NotContain("private void CloseSlideShow(DateTimeOffset nowUtc)");
+            windowSource.Should().NotContain("private void DisplayCurrentSlide(");
+            windowSource.Should().NotContain("_animationTargets.BuildAvailability()");
+        }
+    }
+
     private static SlideShowPresenterViewPlan CreatePresenterPlan() =>
         new(
             StatusText: "Slide 1 of 2",

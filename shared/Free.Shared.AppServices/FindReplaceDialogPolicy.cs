@@ -39,6 +39,49 @@ public sealed record FindReplaceReplacementPolicyStatus(
     string StatusText,
     FindReplacePolicyStatusKind StatusKind);
 
+public sealed record FindReplacePolicyTextDescriptor(
+    ResourceTextDescriptor SearchTermRequired,
+    ResourceTextDescriptor NoMatches,
+    ResourceTextDescriptor NoReplacements,
+    ResourceTextDescriptor NotFoundFormat,
+    ResourceTextDescriptor MatchFormat,
+    ResourceTextDescriptor ReplacedOccurrencesFormat,
+    ResourceTextDescriptor ReplacementsMadeFormat);
+
+public sealed record FindReplacePolicyTextSpec(
+    string SearchTermRequired,
+    string NoMatches,
+    string NoReplacements,
+    string NotFoundFormat,
+    string MatchFormat,
+    string ReplacedOccurrencesFormat,
+    string ReplacementsMadeFormat)
+{
+    public static FindReplacePolicyTextSpec NeutralEnglish { get; } = new(
+        "Enter a search term.",
+        "No matches found.",
+        "No replacements made.",
+        "\"{0}\" not found.",
+        "Match {0} of {1}",
+        "Replaced {0} occurrence{1}.",
+        "{0} replacement(s) made.");
+
+    public static FindReplacePolicyTextSpec FromDescriptor(
+        FindReplacePolicyTextDescriptor descriptor,
+        Func<string, string?>? getText = null)
+    {
+        ArgumentNullException.ThrowIfNull(descriptor);
+        return new FindReplacePolicyTextSpec(
+            descriptor.SearchTermRequired.Resolve(getText),
+            descriptor.NoMatches.Resolve(getText),
+            descriptor.NoReplacements.Resolve(getText),
+            descriptor.NotFoundFormat.Resolve(getText),
+            descriptor.MatchFormat.Resolve(getText),
+            descriptor.ReplacedOccurrencesFormat.Resolve(getText),
+            descriptor.ReplacementsMadeFormat.Resolve(getText));
+    }
+}
+
 public static class FindReplaceDialogPolicy
 {
     public const string SearchTermRequiredMessage = "Enter a search term.";
@@ -81,31 +124,46 @@ public static class FindReplaceDialogPolicy
         return true;
     }
 
-    public static string ValidationMessageFor(FindReplaceValidationErrorKind? error) =>
+    public static string ValidationMessageFor(
+        FindReplaceValidationErrorKind? error,
+        FindReplacePolicyTextSpec? text = null) =>
         error switch
         {
-            FindReplaceValidationErrorKind.SearchTermRequired => SearchTermRequiredMessage,
-            _ => SearchTermRequiredMessage
+            FindReplaceValidationErrorKind.SearchTermRequired => EffectiveText(text).SearchTermRequired,
+            _ => EffectiveText(text).SearchTermRequired
         };
 
-    public static string BuildFindStatus(string term, bool found)
+    public static string BuildFindStatus(
+        string term,
+        bool found,
+        FindReplacePolicyTextSpec? text = null)
     {
         ArgumentNullException.ThrowIfNull(term);
-        return found ? string.Empty : BuildNotFoundStatus(term);
+        return found ? string.Empty : BuildNotFoundStatus(term, text);
     }
 
-    public static string BuildReplaceStatus(string term, bool replaced)
+    public static string BuildReplaceStatus(
+        string term,
+        bool replaced,
+        FindReplacePolicyTextSpec? text = null)
     {
         ArgumentNullException.ThrowIfNull(term);
-        return replaced ? string.Empty : BuildNotFoundStatus(term);
+        return replaced ? string.Empty : BuildNotFoundStatus(term, text);
     }
 
-    public static string BuildReplaceAllOccurrenceStatus(string term, int replacementCount)
+    public static string BuildReplaceAllOccurrenceStatus(
+        string term,
+        int replacementCount,
+        FindReplacePolicyTextSpec? text = null)
     {
         ArgumentNullException.ThrowIfNull(term);
+        var effectiveText = EffectiveText(text);
         return replacementCount == 0
-            ? BuildNotFoundStatus(term)
-            : $"Replaced {replacementCount} occurrence{(replacementCount == 1 ? "" : "s")}.";
+            ? BuildNotFoundStatus(term, effectiveText)
+            : string.Format(
+                effectiveText.ReplacedOccurrencesFormat,
+                replacementCount,
+                replacementCount == 1 ? "" : "s");
     }
 
     public static int ReplacementTargetIndex(int currentMatchIndex, int matchCount)
@@ -121,29 +179,41 @@ public static class FindReplaceDialogPolicy
     public static FindReplaceNavigationPolicyPlan Navigate(
         int currentMatchIndex,
         int matchCount,
-        int direction)
+        int direction,
+        FindReplacePolicyTextSpec? text = null)
     {
+        var effectiveText = EffectiveText(text);
         if (matchCount <= 0)
-            return new FindReplaceNavigationPolicyPlan(false, -1, NoMatchesStatus, FindReplacePolicyStatusKind.NoMatches);
+            return new FindReplaceNavigationPolicyPlan(false, -1, effectiveText.NoMatches, FindReplacePolicyStatusKind.NoMatches);
 
         var nextIndex = (currentMatchIndex + direction + matchCount) % matchCount;
         return new FindReplaceNavigationPolicyPlan(
             true,
             nextIndex,
-            $"Match {nextIndex + 1} of {matchCount}",
+            string.Format(effectiveText.MatchFormat, nextIndex + 1, matchCount),
             FindReplacePolicyStatusKind.Match);
     }
 
-    public static FindReplaceReplacementPolicyStatus BuildReplacementStatus(int replacementCount) =>
-        replacementCount == 0
-            ? new FindReplaceReplacementPolicyStatus(NoReplacementsStatus, FindReplacePolicyStatusKind.NoReplacements)
+    public static FindReplaceReplacementPolicyStatus BuildReplacementStatus(
+        int replacementCount,
+        FindReplacePolicyTextSpec? text = null)
+    {
+        var effectiveText = EffectiveText(text);
+        return replacementCount == 0
+            ? new FindReplaceReplacementPolicyStatus(effectiveText.NoReplacements, FindReplacePolicyStatusKind.NoReplacements)
             : new FindReplaceReplacementPolicyStatus(
-                $"{replacementCount} replacement(s) made.",
+                string.Format(effectiveText.ReplacementsMadeFormat, replacementCount),
                 FindReplacePolicyStatusKind.Replacements);
+    }
 
-    public static string BuildNotFoundStatus(string term)
+    public static string BuildNotFoundStatus(
+        string term,
+        FindReplacePolicyTextSpec? text = null)
     {
         ArgumentNullException.ThrowIfNull(term);
-        return $"\"{term}\" not found.";
+        return string.Format(EffectiveText(text).NotFoundFormat, term);
     }
+
+    private static FindReplacePolicyTextSpec EffectiveText(FindReplacePolicyTextSpec? text) =>
+        text ?? FindReplacePolicyTextSpec.NeutralEnglish;
 }

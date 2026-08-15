@@ -49,7 +49,8 @@ public sealed class PresentationBackstagePanePlanner
             Statistics:
             [
                 new BackstageFieldRow("Slides", presentation.Slides.Count.ToString()),
-            ]));
+            ],
+            Text: _paneSpecs.Text.Info));
     }
 
     public BackstageRecentPaneSpec BuildRecentPane(

@@ -95,28 +95,19 @@ internal sealed partial class AvaloniaSlideShowMediaController
 
         foreach (var slot in _slots)
         {
-            var shape = SlideShapeTraversal.FindById(slide, slot.ShapeId);
-            if (shape?.Media is null || shape.Kind != SlideShapeKind.Media)
-                continue;
-
-            var bounds = SlideShowMediaInteractionPlanner.ComputeMediaBounds(
-                shape,
+            var projection = SlideShowMediaInteractionPlanner.PlanCaptionProjection(
+                slide,
+                slot.ShapeId,
+                slot.CaptionTrack,
+                slot.Session.Position,
+                PlaybackSession.Snapshot(slot.Playback).UseFullScreen,
                 slideDipW,
                 slideDipH,
                 canvasW,
                 canvasH);
-            var useFullScreen = PlaybackSession.Snapshot(slot.Playback).UseFullScreen;
-            var cue = PresentationMediaTranscriptPlanner.FindActiveCue(
-                slot.CaptionTrack,
-                slot.Session.Position);
-            var placement = PresentationMediaTranscriptPlanner.PlanOverlayPlacement(
-                new PresentationMediaOverlayPlacementRequest(
-                    bounds,
-                    canvasW,
-                    canvasH,
-                    useFullScreen,
-                    cue,
-                    slot.CaptionTrack?.Regions));
+            if (projection.Placement is not { } placement)
+                continue;
+
             if (slot.VideoView is not null)
                 ApplyVideoViewBounds(slot.VideoView, placement.MediaBounds);
 
@@ -397,33 +388,22 @@ internal sealed partial class AvaloniaSlideShowMediaController
             if (slot.CaptionHost is null || slot.CaptionText is null)
                 continue;
 
-            var cue = PresentationMediaTranscriptPlanner.FindActiveCue(
+            var projection = SlideShowMediaInteractionPlanner.PlanCaptionProjection(
+                _interaction.ActiveSlide,
+                slot.ShapeId,
                 slot.CaptionTrack,
-                slot.Playback.Port.Position);
-            ApplyCaptionText(slot.CaptionText, cue);
-            if (cue is not null
-                && _interaction.ActiveSlide is { } activeSlide
-                && SlideShapeTraversal.FindById(activeSlide, slot.ShapeId) is { Media: not null } shape)
+                slot.Playback.Port.Position,
+                PlaybackSession.Snapshot(slot.Playback).UseFullScreen,
+                _interaction.SlideWidthDip,
+                _interaction.SlideHeightDip,
+                _interaction.CanvasWidth,
+                _interaction.CanvasHeight);
+            ApplyCaptionText(slot.CaptionText, projection.Cue);
+            if (projection.Placement is { } placement)
             {
-                var bounds = SlideShowMediaInteractionPlanner.ComputeMediaBounds(
-                    shape,
-                    _interaction.SlideWidthDip,
-                    _interaction.SlideHeightDip,
-                    _interaction.CanvasWidth,
-                    _interaction.CanvasHeight);
-                ApplyCaptionPlacement(
-                    slot.CaptionHost,
-                    slot.CaptionText,
-                    PresentationMediaTranscriptPlanner.PlanOverlayPlacement(
-                        new PresentationMediaOverlayPlacementRequest(
-                            bounds,
-                            _interaction.CanvasWidth,
-                            _interaction.CanvasHeight,
-                            PlaybackSession.Snapshot(slot.Playback).UseFullScreen,
-                            cue,
-                            slot.CaptionTrack?.Regions)));
+                ApplyCaptionPlacement(slot.CaptionHost, slot.CaptionText, placement);
             }
-            slot.CaptionHost.IsVisible = cue is not null;
+            slot.CaptionHost.IsVisible = projection.Cue is not null;
         }
     }
 
@@ -555,22 +535,19 @@ internal sealed partial class AvaloniaSlideShowMediaController
         if (slot.VideoView is null)
             return;
 
-        var placement = PresentationMediaTranscriptPlanner.PlanOverlayPlacement(
-            new PresentationMediaOverlayPlacementRequest(
-                slot.AuthoredBounds,
-                _interaction.CanvasWidth,
-                _interaction.CanvasHeight,
-                snapshot.UseFullScreen,
-                PresentationMediaTranscriptPlanner.FindActiveCue(
-                    slot.CaptionTrack,
-                    slot.Playback.Port.Position),
-                slot.CaptionTrack?.Regions));
+        var projection = SlideShowMediaInteractionPlanner.PlanPlaybackProjection(
+            slot.AuthoredBounds,
+            slot.CaptionTrack,
+            slot.Playback.Port.Position,
+            _interaction.CanvasWidth,
+            _interaction.CanvasHeight,
+            snapshot);
         ApplyVideoViewBounds(
             slot.VideoView,
-            placement.MediaBounds);
+            projection.Placement.MediaBounds);
         if (slot.CaptionHost is not null && slot.CaptionText is not null)
-            ApplyCaptionPlacement(slot.CaptionHost, slot.CaptionText, placement);
-        slot.VideoView.IsVisible = snapshot.ShowVisual;
+            ApplyCaptionPlacement(slot.CaptionHost, slot.CaptionText, projection.Placement);
+        slot.VideoView.IsVisible = projection.ShowVisual;
     }
 
     private static void ApplyVideoViewBounds(VideoView view, LayoutRect bounds)

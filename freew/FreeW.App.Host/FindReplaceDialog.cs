@@ -41,7 +41,10 @@ internal sealed partial class FindReplaceDialog : Free.Shared.Ribbon.Wpf.DialogW
         FindReplaceOpenMode openMode = FindReplaceOpenMode.Find)
     {
         _editor = editor;
-        _session = new FindReplaceDialogSession(new WpfFindReplaceCommandHost(editor), openMode);
+        _session = new FindReplaceDialogSession(
+            new WpfFindReplaceCommandHost(editor),
+            openMode,
+            FindReplaceDialogPlanner.ResolvePolicyText(UiText.Get));
         Owner = owner;
         Title = Surface.Title;
         Width = Surface.Metrics.WindowWidth;

@@ -7,6 +7,21 @@ namespace FreeP.App.Compositor.Tests;
 public sealed class FindReplaceDialogPlannerTests
 {
     [Fact]
+    public void PolicyTextCatalog_OwnsUniqueResourceKeysAndResolvesEveryStatus()
+    {
+        var localized = FreePFindReplacePolicyTextCatalog.BuildTextSpec(key => $"localized:{key}");
+
+        FreePFindReplacePolicyTextCatalog.RequiredResourceKeys.Should().OnlyHaveUniqueItems();
+        localized.SearchTermRequired.Should().Be($"localized:{CommonShellResourceKeys.FindReplaceSearchTermRequired}");
+        localized.NoMatches.Should().Be($"localized:{CommonShellResourceKeys.FindReplaceNoMatches}");
+        localized.NoReplacements.Should().Be($"localized:{FreePFindReplacePolicyResourceKeys.NoReplacements}");
+        localized.NotFoundFormat.Should().Be($"localized:{CommonShellResourceKeys.FindReplaceNotFoundFormat}");
+        localized.MatchFormat.Should().Be($"localized:{CommonShellResourceKeys.FindReplaceMatchFormat}");
+        localized.ReplacedOccurrencesFormat.Should().Be($"localized:{FreePFindReplacePolicyResourceKeys.ReplacedOccurrencesFormat}");
+        localized.ReplacementsMadeFormat.Should().Be($"localized:{FreePFindReplacePolicyResourceKeys.ReplacementsMadeFormat}");
+    }
+
+    [Fact]
     public void BuildSurfacePlan_OwnsLabelsAndOrderedOptionCatalogs()
     {
         var surface = FindReplaceDialogPlanner.BuildSurfacePlan();
@@ -114,6 +129,24 @@ public sealed class FindReplaceDialogPlannerTests
         plan.MatchIndex.Should().Be(-1);
         plan.StatusText.Should().Be(FindReplaceDialogPolicy.NoMatchesStatus);
         plan.StatusKind.Should().Be(FindReplacePolicyStatusKind.NoMatches);
+    }
+
+    [Fact]
+    public void Navigate_AndReplacementStatus_UseInjectedPolicyText()
+    {
+        var text = new FindReplacePolicyTextSpec(
+            "query required",
+            "nothing found",
+            "nothing replaced",
+            "missing {0}",
+            "result {0}/{1}",
+            "changed {0}{1}",
+            "changed total {0}");
+
+        FindReplaceDialogPlanner.Navigate(-1, 2, 1, text).StatusText.Should().Be("result 1/2");
+        FindReplaceDialogPlanner.Navigate(-1, 0, 1, text).StatusText.Should().Be("nothing found");
+        FindReplaceDialogPlanner.ReplacementStatus(0, text).StatusText.Should().Be("nothing replaced");
+        FindReplaceDialogPlanner.ReplacementStatus(3, text).StatusText.Should().Be("changed total 3");
     }
 
     [Theory]

@@ -887,6 +887,12 @@ internal static class FreeWRibbonCommands
                 : new GoToFooterCommand(editor);
         }
 
+        var headerFooterPageSettings = HeaderFooterRibbonWorkflow.CreatePageSettingCommands(
+            new HeaderFooterPageSettingsPorts(
+                GetPageSettings: () => editor.Model.Page,
+                ApplyPageSettings: editor.ApplyPageSettings,
+                IsEnabled: static () => true,
+                ResolveSelectedValue: ComboValue));
         var headerFooterRibbon = HeaderFooterRibbonWorkflow.Register(
             headerFooterCommands,
             new HeaderFooterRibbonBindings(
@@ -899,10 +905,10 @@ internal static class FreeWRibbonCommands
                 PageNumberFormat: new PageNumberFormatCommand(editor),
                 DateTime: new InsertDateTimeCommand(resolveFieldTarget),
                 CreateEditSlotCommand: EditHeaderFooterSlot,
-                DifferentFirstPage: new DifferentFirstPageToggleCommand(editor),
-                DifferentOddEvenPages: new DifferentOddEvenPagesCommand(editor),
-                HeaderFromTop: new HeaderFromTopCommand(editor),
-                FooterFromBottom: new FooterFromBottomCommand(editor),
+                DifferentFirstPage: headerFooterPageSettings.DifferentFirstPage,
+                DifferentOddEvenPages: headerFooterPageSettings.DifferentOddEvenPages,
+                HeaderFromTop: headerFooterPageSettings.HeaderFromTop,
+                FooterFromBottom: headerFooterPageSettings.FooterFromBottom,
                 CreateNavigationCommand: NavigateHeaderFooterSlot,
                 Close: onCloseHeaderFooterPane is not null
                     ? new ActionRibbonCommand(onCloseHeaderFooterPane)
@@ -963,19 +969,19 @@ internal static class FreeWRibbonCommands
         // Layout > Paragraph > numeric indent/spacing combos: exact-value controls that mirror Word's
         // Layout tab Paragraph group. Each is stateful so SelectionChanged can push the live value
         // back into the ribbon combo and the displayed number tracks the current paragraph.
-        var indentLeft = new ParagraphValueCommand(formatting, FreeWParagraphValueKind.IndentLeft);
+        var indentLeft = new FreeWRibbonParagraphValueCommand(formatting, FreeWParagraphValueKind.IndentLeft);
         registry.Bind(FreeWRibbonCommandAction.IndentLeft, indentLeft);
         stateful.Add(("freew.indent-left", indentLeft));
 
-        var indentRight = new ParagraphValueCommand(formatting, FreeWParagraphValueKind.IndentRight);
+        var indentRight = new FreeWRibbonParagraphValueCommand(formatting, FreeWParagraphValueKind.IndentRight);
         registry.Bind(FreeWRibbonCommandAction.IndentRight, indentRight);
         stateful.Add(("freew.indent-right", indentRight));
 
-        var spaceBefore = new ParagraphValueCommand(formatting, FreeWParagraphValueKind.SpaceBefore);
+        var spaceBefore = new FreeWRibbonParagraphValueCommand(formatting, FreeWParagraphValueKind.SpaceBefore);
         registry.Bind(FreeWRibbonCommandAction.SpaceBefore, spaceBefore);
         stateful.Add(("freew.space-before", spaceBefore));
 
-        var spaceAfter = new ParagraphValueCommand(formatting, FreeWParagraphValueKind.SpaceAfter);
+        var spaceAfter = new FreeWRibbonParagraphValueCommand(formatting, FreeWParagraphValueKind.SpaceAfter);
         registry.Bind(FreeWRibbonCommandAction.SpaceAfter, spaceAfter);
         stateful.Add(("freew.space-after", spaceAfter));
 
@@ -1011,7 +1017,7 @@ internal static class FreeWRibbonCommands
 
         // Home > Styles: the styles dropdown. Picking an entry sets the selected paragraph(s)' StyleId
         // (reversible via the bus), then re-renders so the style's run/paragraph formatting resolves.
-        var paragraphStyle = new ApplyParagraphStyleCommand(formatting);
+        var paragraphStyle = new FreeWRibbonParagraphStyleCommand(formatting);
         registry.Bind(FreeWRibbonCommandAction.Style, paragraphStyle);
         stateful.Add(("freew.style", paragraphStyle));
         stateStore.SetState("freew.style", paragraphStyle.GetState());
@@ -1884,20 +1890,6 @@ internal static class FreeWRibbonCommands
                 editor.ApplyStyleSet(styleSet);
             }));
 
-    // Layout > Paragraph > Indent Left / Indent Right: numeric combo boxes (points) that display the
-    // first selected paragraph's left/right indent and apply an exact value while preserving the
-    // existing first-line indent. Both implement IRibbonStatefulCommand so SelectionChanged can push
-    // the live value into the ribbon store and the combo reflects the current paragraph state.
-    private sealed class ParagraphValueCommand(
-        FreeWRibbonFormattingSession session,
-        FreeWParagraphValueKind kind) : IRibbonStatefulCommand
-    {
-        public void Execute(RibbonCommandContext context) =>
-            session.ApplyParagraphValue(kind, ComboValue(context));
-
-        public RibbonCommandState GetState() => new(Value: session.CurrentParagraphValue(kind));
-    }
-
     // Home > Paragraph > Paragraph…: open the indent dialog seeded with the first selected paragraph's
     // current left/right/first-line indents, and apply the chosen values to every selected paragraph
     // through the view (reversible via the bus). A negative first-line value is a hanging indent.
@@ -1963,23 +1955,31 @@ internal static class FreeWRibbonCommands
         public void Execute(RibbonCommandContext context)
         {
             editor.Focus();
-            var option = PasteSpecialDialog.Prompt(
-                Window.GetWindow(editor),
-                editor.PlatformClipboard);
+            var owner = Window.GetWindow(editor);
+            var transfer = FreeWClipboardApplicationWorkflow
+                .ReadPasteSpecialAsync(editor.PlatformClipboard)
+                .AsTask()
+                .GetAwaiter()
+                .GetResult();
+            if (!transfer.IsSuccess || transfer.Payload is null)
+            {
+                DialogMessageHelper.ShowWarning(
+                    owner,
+                    transfer.FeedbackMessage ?? FreeWClipboardApplicationWorkflow.EmptyClipboardMessage);
+                return;
+            }
+
+            var option = PasteSpecialDialog.Prompt(owner);
             if (option is null)
                 return;
+
             editor.Focus();
-            switch (option.Value)
+            var plan = FreeWClipboardApplicationWorkflow.PlanPaste(transfer.Payload, option.Value);
+            if (!editor.ApplyClipboardPastePlan(plan))
             {
-                case PasteSpecialOption.KeepSourceFormatting:
-                    editor.PasteKeepSourceFormatting();
-                    break;
-                case PasteSpecialOption.KeepTextOnly:
-                    editor.PastePlainText();
-                    break;
-                default:
-                    editor.PasteMergeFormatting();
-                    break;
+                DialogMessageHelper.ShowWarning(
+                    owner,
+                    FreeWClipboardApplicationWorkflow.EmptyClipboardMessage);
             }
         }
     }
@@ -2024,18 +2024,6 @@ internal static class FreeWRibbonCommands
             editor.Focus();
             editor.ApplyNamedStyle(styleId);
         }
-    }
-
-    // Home > Styles: apply a real paragraph style. The styles dropdown's value is a display name
-    // (e.g. "Heading 1"); this maps it to the matching style id in the model's catalog and sets the
-    // selected paragraph(s)' StyleId through the view's undo/redo bus (re-rendered to resolve formatting).
-    private sealed class ApplyParagraphStyleCommand(FreeWRibbonFormattingSession session) : IRibbonStatefulCommand
-    {
-        public void Execute(RibbonCommandContext context) =>
-            session.ApplyParagraphStyle(ComboValue(context));
-
-        public RibbonCommandState GetState() =>
-            new(Value: session.CurrentParagraphStyleName());
     }
 
     // Home > Styles: New Style. Opens a dialog capturing a name + a few formatting options + a based-on
@@ -2616,48 +2604,54 @@ internal static class FreeWRibbonCommands
     // empty drag cancels and inserts nothing (mirroring Word).
     private sealed class ScreenClippingCommand(DocumentView editor) : IRibbonCommand
     {
+        private readonly ScreenClipWorkflowCoordinator _workflow = new();
+
         public void Execute(RibbonCommandContext context)
         {
             var window = Window.GetWindow(editor);
-            var previousState = window?.WindowState ?? WindowState.Normal;
-            try
+            var result = _workflow.Execute(Capture, image =>
             {
-                // Briefly hide FreeW so it isn't part of the captured region (Word does the same).
-                if (window is not null)
-                {
-                    window.WindowState = WindowState.Minimized;
-                    // Let the minimize animation settle before the overlay/capture so we grab the desktop,
-                    // not a half-faded FreeW frame.
-                    window.Dispatcher.Invoke(static () => { }, System.Windows.Threading.DispatcherPriority.ApplicationIdle);
-                }
-
-                var region = ScreenClipOverlay.PromptForRegion();
-
-                if (window is not null)
-                {
-                    window.WindowState = previousState;
-                    window.Activate();
-                }
-
-                if (region is not { } captured)
-                    return;
-
-                var pngBytes = ScreenshotCapture.CaptureRegionPng(captured);
-                if (pngBytes is null)
-                    return;
-
-                var image = ScreenshotCapture.PngToInlineImage(pngBytes);
                 editor.Focus();
                 editor.InsertImage(image);
-            }
-            catch (Exception ex)
+            });
+            if (result.Outcome == ScreenClipWorkflowOutcome.Failed)
             {
-                if (window is not null && window.WindowState == WindowState.Minimized)
-                    window.WindowState = previousState;
                 DialogMessageHelper.ShowError(
                     window,
-                    UiText.Format("ScreenClip_Failed_Message_Format", ex.Message),
+                    UiText.Format("ScreenClip_Failed_Message_Format", result.FailureMessage ?? string.Empty),
                     UiText.Get("FreeW_ProductName"));
+            }
+
+            ScreenClipCapture? Capture()
+            {
+                var previousState = window?.WindowState ?? WindowState.Normal;
+                try
+                {
+                    // Briefly hide FreeW so it isn't part of the captured region (Word does the same).
+                    if (window is not null)
+                    {
+                        window.WindowState = WindowState.Minimized;
+                        // Let the minimize animation settle before the overlay/capture so we grab the desktop,
+                        // not a half-faded FreeW frame.
+                        window.Dispatcher.Invoke(static () => { }, System.Windows.Threading.DispatcherPriority.ApplicationIdle);
+                    }
+
+                    var region = ScreenClipOverlay.PromptForRegion();
+                    if (window is not null)
+                    {
+                        window.WindowState = previousState;
+                        window.Activate();
+                    }
+
+                    return region is { } captured
+                        ? ScreenshotCapture.CaptureRegion(captured)
+                        : null;
+                }
+                finally
+                {
+                    if (window is not null && window.WindowState == WindowState.Minimized)
+                        window.WindowState = previousState;
+                }
             }
         }
     }
@@ -3719,27 +3713,29 @@ internal static class FreeWRibbonCommands
         {
             var owner = Window.GetWindow(editor);
 
-            // Seed the author box from the document's Author property, falling back to the OS user.
             editor.CommitToModel();
             var revised = editor.Model;
-            var defaultAuthor = revised.Properties.Author?.Trim();
-            if (string.IsNullOrWhiteSpace(defaultAuthor))
-                defaultAuthor = Environment.UserName;
-
-            var revisedTitle = revised.Properties.Title?.Trim()
-                ?? System.IO.Path.GetFileName(editor.CurrentFileName ?? string.Empty);
-
-            var picked = CompareDocumentsDialog.Prompt(owner, defaultAuthor!, revisedTitle ?? string.Empty);
+            var prompt = ReviewCompareCombineWorkflow.BuildComparePrompt(
+                revised,
+                editor.CurrentFileName,
+                Environment.UserName);
+            var picked = CompareDocumentsDialog.Prompt(
+                owner,
+                prompt.DefaultAuthor,
+                prompt.RevisedTitle);
             if (picked is null)
                 return;
 
             try
             {
                 var original = DocxReader.Read(picked.OriginalFilePath);
-                var dateXml = DateTimeOffset.UtcNow.ToString(
-                    "yyyy-MM-ddTHH:mm:ssZ", System.Globalization.CultureInfo.InvariantCulture);
-
-                var compared = DocumentCompare.Compare(original, revised, picked.Author, dateXml, picked.Settings);
+                var compared = ReviewCompareCombineWorkflow.ExecuteCompare(
+                    new CompareDocumentsExecutionInput(
+                        original,
+                        revised,
+                        picked.Author,
+                        ReviewCompareCombineWorkflow.CreateRevisionDateXml(DateTimeOffset.UtcNow),
+                        picked.Settings));
                 editor.LoadModel(compared);
             }
             catch (Exception ex)
@@ -3766,22 +3762,19 @@ internal static class FreeWRibbonCommands
         {
             var owner = Window.GetWindow(editor);
 
-            // Seed author boxes from the current document (reviewer A) and fall back to the OS user.
             editor.CommitToModel();
             var revisedA = editor.Model;
-
-            var defaultAuthorA = revisedA.Properties.Author?.Trim();
-            if (string.IsNullOrWhiteSpace(defaultAuthorA))
-                defaultAuthorA = Environment.UserName;
-
-            var reviewerATitle = revisedA.Properties.Title?.Trim()
-                ?? System.IO.Path.GetFileName(editor.CurrentFileName ?? string.Empty);
+            var prompt = ReviewCompareCombineWorkflow.BuildCombinePrompt(
+                revisedA,
+                editor.CurrentFileName,
+                Environment.UserName,
+                ReviewCompareCombineWorkflow.DefaultReviewerB);
 
             var picked = CombineDocumentsDialog.Prompt(
                 owner,
-                defaultAuthorA!,
-                defaultAuthorB: "Reviewer 2",
-                reviewerATitle: reviewerATitle ?? string.Empty);
+                prompt.DefaultAuthorA,
+                prompt.DefaultAuthorB,
+                prompt.ReviewerATitle);
             if (picked is null)
                 return;
 
@@ -3790,10 +3783,14 @@ internal static class FreeWRibbonCommands
                 var original = DocxReader.Read(picked.OriginalFilePath);
                 var revisedB = DocxReader.Read(picked.ReviewerBFilePath);
 
-                var dateXml = DateTimeOffset.UtcNow.ToString(
-                    "yyyy-MM-ddTHH:mm:ssZ", System.Globalization.CultureInfo.InvariantCulture);
-
-                var combined = DocumentCombine.Combine(original, revisedA, picked.AuthorA, revisedB, picked.AuthorB, dateXml);
+                var combined = ReviewCompareCombineWorkflow.ExecuteCombine(
+                    new CombineDocumentsExecutionInput(
+                        original,
+                        revisedA,
+                        picked.AuthorA,
+                        revisedB,
+                        picked.AuthorB,
+                        ReviewCompareCombineWorkflow.CreateRevisionDateXml(DateTimeOffset.UtcNow)));
                 editor.LoadModel(combined);
             }
             catch (Exception ex)
@@ -6063,7 +6060,8 @@ internal static class FreeWRibbonCommands
             int currentRecordIndex,
             IReadOnlyList<int> selectedRecordIndexes)
         {
-            var dialogPlan = MailMergeEmailDeliveryPlanner.CreateDialogPlan(data, currentRecordIndex, selectedRecordIndexes);
+            var session = new MailMergeEmailDeliveryDialogSession(data, currentRecordIndex, selectedRecordIndexes);
+            var dialogPlan = session.InitialPlan;
             MailMergeEmailDeliveryIntent? result = null;
             var dialog = new MailMergeDialogWindow
             {
@@ -6108,24 +6106,19 @@ internal static class FreeWRibbonCommands
                 MinWidth = 72
             };
 
-            MailMergeEmailDeliveryIntent CurrentIntent() =>
-                MailMergeEmailDeliveryPlanner.CreateIntent(
+            MailMergeEmailDeliveryDialogState CurrentState() =>
+                session.Evaluate(
                     toCombo.SelectedItem?.ToString() ?? dialogPlan.RecipientAddressField,
                     subjectBox.Text,
                     outputCombo.SelectedIndex,
                     bodyCombo.SelectedIndex,
-                    scopeCombo.SelectedIndex,
-                    currentRecordIndex,
-                    selectedRecordIndexes);
+                    scopeCombo.SelectedIndex);
 
             void RefreshValidation()
             {
-                var plan = MailMerge.CreateEmailDeliveryPlan(data, CurrentIntent());
-                var messages = MailMergeEmailDeliveryPlanner.GetValidationMessages(plan);
-                validation.Text = messages.Count == 0
-                    ? MailMergeDialogMetadata.ReadyEmailMessage
-                    : string.Join(Environment.NewLine, messages);
-                ok.IsEnabled = plan.Errors.Count == 0;
+                var state = CurrentState();
+                validation.Text = state.ValidationText;
+                ok.IsEnabled = state.CanSubmit;
             }
 
             toCombo.SelectionChanged += (_, _) => RefreshValidation();
@@ -6136,7 +6129,7 @@ internal static class FreeWRibbonCommands
 
             ok.Click += (_, _) =>
             {
-                result = CurrentIntent();
+                result = CurrentState().Intent;
                 dialog.DialogResult = true;
             };
 
@@ -6902,58 +6895,6 @@ internal static class FreeWRibbonCommands
             // return focus to the body.
             editor.Focus();
         }
-    }
-
-    // Header & Footer Design > Options > Different First Page: toggle PageSettings.DifferentFirstPage.
-    // The stateful variant exposes IsChecked so the ribbon toggle reflects the current model state.
-    private sealed class DifferentFirstPageToggleCommand(DocumentView editor) : IRibbonStatefulCommand
-    {
-        public void Execute(RibbonCommandContext context) =>
-            editor.ApplyPageSettings(page => page.DifferentFirstPage = !page.DifferentFirstPage);
-
-        public RibbonCommandState GetState() =>
-            new(IsEnabled: true, IsChecked: editor.Model.Page.DifferentFirstPage);
-    }
-
-    // Header & Footer Design > Options > Different Odd & Even Pages: toggle DifferentOddEvenPages.
-    private sealed class DifferentOddEvenPagesCommand(DocumentView editor) : IRibbonStatefulCommand
-    {
-        public void Execute(RibbonCommandContext context) =>
-            editor.ApplyPageSettings(page => page.DifferentOddEvenPages = !page.DifferentOddEvenPages);
-
-        public RibbonCommandState GetState() =>
-            new(IsEnabled: true, IsChecked: editor.Model.Page.DifferentOddEvenPages);
-    }
-
-    // Header & Footer Design > Position > Header from Top / Footer from Bottom: numeric spinbox-style
-    // commands that accept a points value from the combo and write HeaderDistancePt / FooterDistancePt
-    // via ApplyPageSettings (same path as the Page Setup dialog).
-    private sealed class HeaderFromTopCommand(DocumentView editor) : IRibbonStatefulCommand
-    {
-        public void Execute(RibbonCommandContext context)
-        {
-            if (ComboValue(context) is not { } value)
-                return;
-            if (HeaderFooterDialogPlanner.TryParseDistance(value, out var pt))
-                editor.ApplyPageSettings(page => page.HeaderDistancePt = pt);
-        }
-
-        public RibbonCommandState GetState() =>
-            new(Value: HeaderFooterDialogPlanner.FormatDistance(editor.Model.Page.HeaderDistancePt));
-    }
-
-    private sealed class FooterFromBottomCommand(DocumentView editor) : IRibbonStatefulCommand
-    {
-        public void Execute(RibbonCommandContext context)
-        {
-            if (ComboValue(context) is not { } value)
-                return;
-            if (HeaderFooterDialogPlanner.TryParseDistance(value, out var pt))
-                editor.ApplyPageSettings(page => page.FooterDistancePt = pt);
-        }
-
-        public RibbonCommandState GetState() =>
-            new(Value: HeaderFooterDialogPlanner.FormatDistance(editor.Model.Page.FooterDistancePt));
     }
 
     // Insert into header/footer: insert page number, date/time, or a document-info field into the

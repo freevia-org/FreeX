@@ -129,6 +129,34 @@ public sealed class FreeWDocumentFileCommandSessionTests : IDisposable
         File.ReadAllText(copyPath).Should().Be("copy");
     }
 
+    [Fact]
+    public async Task SaveAsFormatAsync_DelegatesPreferredExtensionToSharedPickerRequest()
+    {
+        var lifecycle = CreateLifecycle();
+        var document = Document("draft");
+        var workflow = CreateWorkflow(
+            lifecycle,
+            [new RecordingAdapter(".odt", canSave: true, document)],
+            () => document,
+            _ => { });
+        FreeWDocumentSavePickerRequest? request = null;
+        var session = CreateSession(
+            workflow,
+            lifecycle,
+            pickSaveTargetAsync: value =>
+            {
+                request = value;
+                return Task.FromResult<FreeWDocumentSavePickerResult?>(null);
+            });
+
+        var saved = await session.SaveAsFormatAsync(".odt");
+
+        saved.Should().BeFalse();
+        request.Should().NotBeNull();
+        request!.PreferredExtension.Should().Be(".odt");
+        request.SuggestedFileName.Should().BeNull();
+    }
+
     private FreeWDocumentFileCommandSession CreateSession(
         FreeWDocumentFileWorkflow workflow,
         FileCommandWorkflow lifecycle,

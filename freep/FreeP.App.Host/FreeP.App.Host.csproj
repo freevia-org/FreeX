@@ -7,6 +7,7 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <UseWPF>true</UseWPF>
     <StartupObject>FreeP.App.Host.Program</StartupObject>
+    <DefineConstants>$(DefineConstants);FREEP_WPF_RENDERER</DefineConstants>
   </PropertyGroup>
 
   <Import Project="..\FreeP.RendererHostVariants.props" />
@@ -48,6 +49,14 @@
   </ItemGroup>
 
   <ItemGroup>
+    <Compile Include="..\RendererShared\SlideShowWindow.RuntimeSession.cs"
+             Link="SlideShowWindow.RuntimeSession.cs" />
+    <Compile Include="..\RendererShared\SlideShowWindow.PortableSurface.cs"
+             Link="SlideShowWindow.PortableSurface.cs" />
+    <Compile Include="..\RendererShared\MainWindow.RibbonActionProfile.cs"
+             Link="MainWindow.RibbonActionProfile.cs" />
+    <Compile Include="..\RendererShared\MainWindow.ChartDialogEndpoints.cs"
+             Link="MainWindow.ChartDialogEndpoints.cs" />
     <Resource Include="..\..\shared\Free.Shared.Shell\Resources\FreeP.ico" Link="Resources\FreeP.ico" />
   </ItemGroup>
 

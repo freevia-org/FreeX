@@ -47,4 +47,29 @@ public sealed class FormulaAuditSelectionPlannerTests
             .Should()
             .BeNull();
     }
+
+    [Fact]
+    public void Plan_ResolvesDirectAndTransitivePrecedentDependentQueries()
+    {
+        var workbook = new Workbook("test");
+        var sheet = workbook.AddSheet("Sheet1");
+        var a1 = new CellAddress(sheet.Id, 1, 1);
+        var b1 = new CellAddress(sheet.Id, 1, 2);
+        var c1 = new CellAddress(sheet.Id, 1, 3);
+        var d1 = new CellAddress(sheet.Id, 1, 4);
+        sheet.SetCell(a1, new NumberValue(5));
+        sheet.SetCell(b1, Cell.FromFormula("A1+1"));
+        sheet.SetCell(c1, Cell.FromFormula("B1+1"));
+        sheet.SetCell(d1, Cell.FromFormula("C1+1"));
+
+        FormulaAuditSelectionPlanner.Plan(workbook, c1, selectDependents: false, includeTransitive: false)!
+            .Matches.Should().Equal(b1);
+        FormulaAuditSelectionPlanner.Plan(workbook, c1, selectDependents: false, includeTransitive: true)!
+            .Matches.Should().Equal(b1, a1);
+        FormulaAuditSelectionPlanner.Plan(workbook, b1, selectDependents: true, includeTransitive: false)!
+            .Matches.Should().Equal(c1);
+        FormulaAuditSelectionPlanner.Plan(workbook, b1, selectDependents: true, includeTransitive: true)!
+            .Matches.Should().Equal(c1, d1);
+    }
+
 }

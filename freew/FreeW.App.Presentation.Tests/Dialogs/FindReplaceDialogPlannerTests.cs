@@ -123,6 +123,38 @@ public sealed class FindReplaceDialogPlannerTests
     }
 
     [Fact]
+    public void ResolvePolicyText_UsesFreeWResourceDescriptors()
+    {
+        var text = FindReplaceDialogPlanner.ResolvePolicyText(key => $"resolved:{key}");
+
+        text.SearchTermRequired.Should().Be($"resolved:{CommonShellResourceKeys.FindReplaceSearchTermRequired}");
+        text.NoMatches.Should().Be($"resolved:{CommonShellResourceKeys.FindReplaceNoMatches}");
+        text.NoReplacements.Should().Be("resolved:FreeW_FindReplace_NoReplacements");
+        text.NotFoundFormat.Should().Be($"resolved:{CommonShellResourceKeys.FindReplaceNotFoundFormat}");
+        text.MatchFormat.Should().Be($"resolved:{CommonShellResourceKeys.FindReplaceMatchFormat}");
+        text.ReplacedOccurrencesFormat.Should().Be("resolved:FreeW_FindReplace_ReplacedOccurrences_Format");
+        text.ReplacementsMadeFormat.Should().Be("resolved:FreeW_FindReplace_ReplacementsMade_Format");
+        FindReplaceDialogPlanner.RequiredResourceKeys.Should().OnlyHaveUniqueItems();
+    }
+
+    [Fact]
+    public void StatusBuilders_ForwardResolvedPolicyText()
+    {
+        var search = new FindReplaceSearchRequest("fox", new FindReplaceSearchOptions());
+        var replace = new FindReplaceReplaceRequest("fox", "wolf", new FindReplaceSearchOptions());
+        var text = LocalizedPolicyText();
+
+        FindReplaceDialogPlanner.ValidationMessageFor(FindReplaceValidationError.SearchTermRequired, text)
+            .Should().Be("search required");
+        FindReplaceDialogPlanner.BuildFindStatus(search, found: false, text)
+            .Should().Be("missing fox");
+        FindReplaceDialogPlanner.BuildReplaceStatus(replace, replaced: false, text)
+            .Should().Be("missing fox");
+        FindReplaceDialogPlanner.BuildReplaceAllStatus(replace, replacementCount: 2, text: text)
+            .Should().Be("changed 2 items");
+    }
+
+    [Fact]
     public void ShouldUsePlainEditorSearch_OnlyForDefaultOptions()
     {
         FindReplaceDialogPlanner.ShouldUsePlainEditorSearch(new FindReplaceSearchOptions()).Should().BeTrue();
@@ -412,4 +444,13 @@ public sealed class FindReplaceDialogPlannerTests
             .Should()
             .Be("Free.Shared.AppServices");
     }
+
+    private static FindReplacePolicyTextSpec LocalizedPolicyText() => new(
+        "search required",
+        "no matches",
+        "no replacements",
+        "missing {0}",
+        "match {0}/{1}",
+        "changed {0} item{1}",
+        "made {0} replacements");
 }

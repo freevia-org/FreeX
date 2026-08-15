@@ -77,13 +77,13 @@ public static class WorkbookPrintWorkflow
         string? printerId,
         string jobTitle,
         Func<PortablePdfExportPlan, CancellationToken, Task<WorkbookPrintRenderResult>> renderPdfAsync,
-        Func<string, PrintSelection, CancellationToken, Task<PrintSubmissionResult>> submitAsync,
+        IPlatformPrintService printService,
         Func<byte[], CancellationToken, Task<WorkbookPrintFallbackResult>> saveFallbackAsync,
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(plan);
         ArgumentNullException.ThrowIfNull(renderPdfAsync);
-        ArgumentNullException.ThrowIfNull(submitAsync);
+        ArgumentNullException.ThrowIfNull(printService);
         ArgumentNullException.ThrowIfNull(saveFallbackAsync);
 
         if (!plan.IsReady)
@@ -104,17 +104,11 @@ public static class WorkbookPrintWorkflow
 
         try
         {
-            cancellationToken.ThrowIfCancellationRequested();
-            var renderedDocument = await renderPdfAsync(portablePlan, cancellationToken).ConfigureAwait(true);
-            cancellationToken.ThrowIfCancellationRequested();
-
             if (plan.Readiness.NativePrintPlan.RouteKind == PrintExportNativePrintRouteKind.PlatformPrinter)
             {
                 var job = plan.Readiness.NativePrintPlan.JobPlan;
-                using var temporaryFile = TemporaryFileLease.Create("freex-print-", ".pdf");
-                await temporaryFile.WriteAllBytesAsync(renderedDocument.DocumentBytes, cancellationToken)
-                    .ConfigureAwait(true);
-                var selection = new PrintSelection(
+                WorkbookPrintRenderResult? platformRenderedDocument = null;
+                var requestedSelection = new PrintSelection(
                     PrinterName: string.IsNullOrWhiteSpace(printerId) ? null : printerId.Trim(),
                     Copies: job.Copies,
                     PageRange: job.FirstPage == job.LastPage
@@ -122,21 +116,36 @@ public static class WorkbookPrintWorkflow
                         : PrintPageRange.Between(job.FirstPage, job.LastPage),
                     Collate: job.Collate,
                     JobTitle: jobTitle);
-                var submission = await submitAsync(temporaryFile.Path, selection, cancellationToken)
-                    .ConfigureAwait(true);
+                var portableExecution = await new PortablePrintSubmissionWorkflow(printService).ExecuteAsync(
+                    static (intent, _) => Task.FromResult<PrintSelection?>(intent.RequestedSelection),
+                    async (output, _, token) =>
+                    {
+                        platformRenderedDocument = await renderPdfAsync(portablePlan, token).ConfigureAwait(true);
+                        await output.WriteAsync(platformRenderedDocument.DocumentBytes, token).ConfigureAwait(true);
+                    },
+                    requestedSelection,
+                    cancellationToken).ConfigureAwait(true);
+                var submission = portableExecution.Submission ?? new PrintSubmissionResult(
+                    PrintSubmissionStatus.Failed,
+                    requestedSelection.PrinterName,
+                    Message: portableExecution.Operation.Exception?.Message);
                 var statusText = FormatSubmissionStatus(submission);
                 return new WorkbookPrintExecutionResult(
-                    submission.Succeeded
+                    portableExecution.Status == OperationStatus.Completed
                         ? WorkbookPrintExecutionOutcome.Succeeded
-                        : submission.Status == PrintSubmissionStatus.Cancelled
+                        : portableExecution.Status == OperationStatus.Cancelled
                             ? WorkbookPrintExecutionOutcome.Canceled
                             : WorkbookPrintExecutionOutcome.Failed,
                     plan,
                     statusText,
                     Submission: submission,
-                    RenderedDocument: renderedDocument);
+                    RenderedDocument: platformRenderedDocument,
+                    Exception: portableExecution.Operation.Exception);
             }
 
+            cancellationToken.ThrowIfCancellationRequested();
+            var renderedDocument = await renderPdfAsync(portablePlan, cancellationToken).ConfigureAwait(true);
+            cancellationToken.ThrowIfCancellationRequested();
             var fallback = await saveFallbackAsync(renderedDocument.DocumentBytes, cancellationToken).ConfigureAwait(true);
             return new WorkbookPrintExecutionResult(
                 fallback.Outcome,

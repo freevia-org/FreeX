@@ -128,7 +128,7 @@ public sealed class LinuxNativeOutputTests : IDisposable
     public async Task Linux_ffmpeg_export_muxes_persisted_narration_at_its_slide_start_time()
     {
         var output = Path.Combine(_temporaryDirectory.Path, "narrated-video.mp4");
-        var runner = new CapturingVideoProcessRunner(output);
+        var runner = new CapturingVideoProcessRunner();
         var presentation = Presentation.CreateEmpty();
         presentation.Slides.Add(new Slide
         {
@@ -179,7 +179,7 @@ public sealed class LinuxNativeOutputTests : IDisposable
     public async Task Linux_ffmpeg_export_muxes_persisted_caption_as_timed_mov_text()
     {
         var output = Path.Combine(_temporaryDirectory.Path, "captioned-video.mp4");
-        var runner = new CapturingVideoProcessRunner(output);
+        var runner = new CapturingVideoProcessRunner();
         var presentation = Presentation.CreateEmpty();
         presentation.Slides.Add(new Slide
         {
@@ -233,7 +233,7 @@ public sealed class LinuxNativeOutputTests : IDisposable
     public async Task Linux_ffmpeg_export_muxes_persisted_camera_as_timed_picture_in_picture()
     {
         var output = Path.Combine(_temporaryDirectory.Path, "camera-video.mp4");
-        var runner = new CapturingVideoProcessRunner(output);
+        var runner = new CapturingVideoProcessRunner();
         var presentation = FreeP.Core.Model.Presentation.CreateEmpty();
         presentation.Slides.Add(new FreeP.Core.Model.Slide
         {
@@ -285,11 +285,11 @@ public sealed class LinuxNativeOutputTests : IDisposable
     }
 
     [Fact]
-    public async Task Video_export_cancellation_removes_partial_output_after_runner_is_cancelled()
+    public async Task Video_export_cancellation_preserves_existing_output_after_runner_is_cancelled()
     {
         var output = Path.Combine(_temporaryDirectory.Path, "cancelled-video.mp4");
-        await File.WriteAllTextAsync(output, "partial");
-        var runner = new BlockingProcessRunner(output);
+        await File.WriteAllTextAsync(output, "existing video");
+        var runner = new BlockingProcessRunner();
         using var cts = new CancellationTokenSource();
         var package = FreeP.App.Compositor.PresentationVideoFramePackageExecutor.BuildPackage(
             FreeP.Core.Model.Presentation.CreateEmpty(),
@@ -310,7 +310,7 @@ public sealed class LinuxNativeOutputTests : IDisposable
         result.Succeeded.Should().BeFalse();
         result.Canceled.Should().BeTrue();
         runner.CancellationObserved.Should().BeTrue();
-        File.Exists(output).Should().BeFalse();
+        File.ReadAllText(output).Should().Be("existing video");
     }
 
     [Fact]
@@ -327,7 +327,7 @@ public sealed class LinuxNativeOutputTests : IDisposable
 
         var result = await new LinuxVideoExportAdapter(
             new LinuxVideoEncoderCapability(true, "ffmpeg", "mpeg4", false, "ready"),
-            new InvalidOutputProcessRunner(output))
+            new InvalidOutputProcessRunner())
             .ExportAsync(package, output);
 
         result.Succeeded.Should().BeFalse();
@@ -349,7 +349,7 @@ public sealed class LinuxNativeOutputTests : IDisposable
                 IncludeNarration: includeNarration),
             static (_, _, _, _) => EvenTwoByTwoPng);
 
-    private sealed class BlockingProcessRunner(string outputPath) : IProcessRunner
+    private sealed class BlockingProcessRunner : IProcessRunner
     {
         public TaskCompletionSource Started { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
         public bool CancellationObserved { get; private set; }
@@ -367,24 +367,24 @@ public sealed class LinuxNativeOutputTests : IDisposable
             catch (OperationCanceledException)
             {
                 CancellationObserved = true;
-                await File.WriteAllTextAsync(outputPath, "partial-after-kill");
+                await File.WriteAllTextAsync(invocation.Arguments[^1], "partial-after-kill");
                 throw;
             }
         }
     }
 
-    private sealed class InvalidOutputProcessRunner(string outputPath) : IProcessRunner
+    private sealed class InvalidOutputProcessRunner : IProcessRunner
     {
         public async Task<ProcessResult> RunAsync(
             ProcessInvocation invocation,
             CancellationToken cancellationToken = default)
         {
-            await File.WriteAllTextAsync(outputPath, "not an mp4", cancellationToken);
+            await File.WriteAllTextAsync(invocation.Arguments[^1], "not an mp4", cancellationToken);
             return new ProcessResult(0, string.Empty, string.Empty);
         }
     }
 
-    private sealed class CapturingVideoProcessRunner(string outputPath) : IProcessRunner
+    private sealed class CapturingVideoProcessRunner : IProcessRunner
     {
         public List<string> Arguments { get; } = [];
 
@@ -393,7 +393,7 @@ public sealed class LinuxNativeOutputTests : IDisposable
             CancellationToken cancellationToken = default)
         {
             Arguments.AddRange(invocation.Arguments);
-            File.WriteAllBytes(outputPath, Encoding.ASCII.GetBytes("0000ftyp0000moov0000mdat"));
+            File.WriteAllBytes(invocation.Arguments[^1], Encoding.ASCII.GetBytes("0000ftyp0000moov0000mdat"));
             return Task.FromResult(new ProcessResult(0, string.Empty, string.Empty));
         }
     }

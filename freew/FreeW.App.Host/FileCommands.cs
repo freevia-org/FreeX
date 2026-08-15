@@ -233,7 +233,9 @@ internal sealed class FileCommands
     public bool SaveAs() => SaveAs(preferredExtension: null);
 
     public bool SaveAs(string? preferredExtension) =>
-        SaveAsSuggested(suggestedFileName: null, preferredExtension);
+        string.IsNullOrWhiteSpace(preferredExtension)
+            ? SaveAsSuggested(suggestedFileName: null, preferredExtension: null)
+            : _fileCommands.SaveAsFormatAsync(preferredExtension).GetAwaiter().GetResult();
 
     public bool SaveAsSuggested(string? suggestedFileName, string? preferredExtension) =>
         _fileCommands

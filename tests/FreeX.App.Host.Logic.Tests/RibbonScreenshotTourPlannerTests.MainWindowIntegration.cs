@@ -428,7 +428,8 @@ public sealed partial class RibbonScreenshotTourPlannerTests
         source.Should().Contain("SwitchToPinnedTab();");
         source.Should().Contain("new ExportOptionsDialog(");
         source.Should().Contain("WpfExportDescriptionPlanner.DescribeRequest(request)");
-        source.Should().Contain("WorkbookShareReadinessPlanner.CreatePlan(null, WorkbookShareSurface.WindowsShare)");
+        source.Should().Contain("DocumentShareReadinessPlanner.CreatePlan(null, DocumentShareSurface.WindowsShare)");
+        source.Should().Contain("DocumentShareReadinessTextSpec.WorkbookEnglish");
         source.Should().Contain("SaveBackstageRecentExportShareTourWorkbookAsync");
         source.Should().Contain("ConfirmUnsupportedXlsxFeatureSave();");
         source.Should().Contain("CaptureBackstageOwnedNativeDialogWhenShownAsync");
@@ -1270,8 +1271,9 @@ public sealed partial class RibbonScreenshotTourPlannerTests
         source.Should().Contain("SelectRibbonTourTab(RibbonScreenshotTourPlanner.DefaultTabs.Single(tab => tab.Header == \"Review\"))");
         source.Should().Contain("new WorkbookStatisticsDialog(WorkbookStatisticsService.GetStatistics(_workbook))");
         source.Should().Contain("WorkbookStatisticsDialog.CreateMessage(WorkbookStatisticsService.GetStatistics(_workbook))");
-        source.Should().Contain("WorkbookShareReadinessPlanner.CreatePlan(null, WorkbookShareSurface.WindowsShare)");
-        source.Should().Contain("WorkbookShareReadinessPlanner.FormatStatus(savedSharePlan)");
+        source.Should().Contain("DocumentShareReadinessPlanner.CreatePlan(null, DocumentShareSurface.WindowsShare)");
+        source.Should().Contain("DocumentShareReadinessPlanner.FormatStatus(");
+        source.Should().Contain("DocumentShareReadinessTextSpec.WorkbookEnglish");
         source.Should().Contain("ReviewShareButton");
         source.Should().Contain("freex_review_workbook_statistics_dialog");
         source.Should().Contain("freex_review_share_unsaved_guard_status");

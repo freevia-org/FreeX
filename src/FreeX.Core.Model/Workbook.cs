@@ -731,7 +731,7 @@ public sealed class Workbook
     /// <summary>Remove a sheet by its ID. Returns true if found and removed.</summary>
     public bool RemoveSheet(SheetId sheetId)
     {
-        var idx = FindSheetIndex(sheetId);
+        var idx = IndexOfSheet(sheetId);
         if (idx < 0) return false;
         _sheets.RemoveAt(idx);
         _sheetById.Remove(sheetId);
@@ -740,7 +740,8 @@ public sealed class Workbook
         return true;
     }
 
-    private int FindSheetIndex(SheetId sheetId)
+    /// <summary>Get the zero-based position of a sheet, or -1 when it is not in this workbook.</summary>
+    public int IndexOfSheet(SheetId sheetId)
     {
         for (var index = 0; index < _sheets.Count; index++)
         {
@@ -905,7 +906,7 @@ public sealed class Workbook
         if (sheetId is null)
             return null;
 
-        var index = FindSheetIndex(sheetId.Value);
+        var index = IndexOfSheet(sheetId.Value);
         return index < 0 ? null : index;
     }
 }

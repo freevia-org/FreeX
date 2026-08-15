@@ -29,19 +29,10 @@ internal sealed class AvaloniaDocumentFragmentPickerPort(IStorageProvider storag
     }
 }
 
-internal sealed class AvaloniaDocumentFragmentSourceReaderPort : IFreeWDocumentFragmentSourceReaderPort
+internal sealed class AvaloniaDocumentFragmentSourceReaderPort :
+    FreeWDocumentFragmentFileSourceReaderPort
 {
-    public Task<byte[]> ReadBytesAsync(
-        FreeWDocumentFragmentImportSelection selection,
-        CancellationToken cancellationToken) =>
-        File.ReadAllBytesAsync((string)selection.Source, cancellationToken);
-
-    public Task<string> ReadTextAsync(
-        FreeWDocumentFragmentImportSelection selection,
-        CancellationToken cancellationToken) =>
-        File.ReadAllTextAsync((string)selection.Source, cancellationToken);
-
-    public void ResolveLinkedImagePreviews(
+    public override void ResolveLinkedImagePreviews(
         FreeWDocumentFragmentImportSelection selection,
         TextDocument document)
     {

@@ -12,13 +12,19 @@ $repoRoot = Split-Path -Parent $PSScriptRoot
 
 $wpfMainRoot = Join-Path $repoRoot "freep\FreeP.App.Host"
 $avaloniaMainRoot = Join-Path $repoRoot "freep\FreeP.App.Avalonia"
+$rendererSharedRoot = Join-Path $repoRoot "freep\RendererShared"
 $workareaSessionPath = Join-Path $repoRoot "freep\FreeP.App.Presentation\PresentationWorkareaSession.cs"
+$rendererShared = @(Get-ChildItem -LiteralPath $rendererSharedRoot -Filter "*.cs" -File |
+    Sort-Object FullName |
+    ForEach-Object { Get-Content -LiteralPath $_.FullName -Raw }) -join [Environment]::NewLine
 $wpfMain = @(Get-ChildItem -LiteralPath $wpfMainRoot -Filter "MainWindow*.cs" -File |
     Sort-Object FullName |
     ForEach-Object { Get-Content -LiteralPath $_.FullName -Raw }) -join [Environment]::NewLine
+$wpfMain = $wpfMain + [Environment]::NewLine + $rendererShared
 $avaloniaMain = @(Get-ChildItem -LiteralPath $avaloniaMainRoot -Filter "MainWindow*.cs" -File |
     Sort-Object FullName |
     ForEach-Object { Get-Content -LiteralPath $_.FullName -Raw }) -join [Environment]::NewLine
+$avaloniaMain = $avaloniaMain + [Environment]::NewLine + $rendererShared
 $workareaSession = Get-Content -LiteralPath $workareaSessionPath -Raw
 
 function New-Route {
@@ -246,7 +252,7 @@ $routes = @(
         -WpfSources @("freep/FreeP.App.Host/MainWindow.cs") -AvaloniaSources @("freep/FreeP.App.Avalonia/MainWindow.cs") `
         -Tests @("freep/FreeP.App.Host.Tests/SectionsCommentsTests.cs", "freep/FreeP.App.Avalonia.Tests/MainWindowHeadlessTests.cs") `
         -ExistingVisualEvidence @("docs/parity/freep-comments-review-accessibility-evidence-inventory-2026-07-05.md") `
-        -VisualEvidenceStatus "semantic evidence only" -RequiredWpfTokens @("ShowAltTextPane = ShowAltTextPane") -RequiredAvaloniaTokens @("ShowAltTextPane = () => ShowAltTextPane()")
+        -VisualEvidenceStatus "semantic evidence only" -RequiredWpfTokens @("ShowAltTextPane = () => ShowAltTextPane()") -RequiredAvaloniaTokens @("ShowAltTextPane = () => ShowAltTextPane()")
 
     New-Route -Id "review.reading-order-pane" -Area "Reading order" `
         -Triggers @("freep.review.reading-order") `

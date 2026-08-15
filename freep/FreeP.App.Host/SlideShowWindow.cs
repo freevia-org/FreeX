@@ -57,6 +57,7 @@ public sealed partial class SlideShowWindow : Window, ISlideShowTransitionPlayba
 
     private readonly Presentation    _presentation;
     private readonly SlideShowRuntimeApplication _runtime;
+    private readonly SlideShowRuntimeSession _runtimeSession;
     private readonly Action<int, string?>? _setSlideNotesText;
     private readonly DispatcherTimer  _autoAdvanceTimer;
     private readonly DispatcherTimer  _kioskRestartTimer;
@@ -96,70 +97,13 @@ public sealed partial class SlideShowWindow : Window, ISlideShowTransitionPlayba
 
     // ── Construction ─────────────────────────────────────────────────────────────
 
-    /// <param name="presentation">The presentation to play.</param>
-    /// <param name="startIndex">Zero-based slide index to start from.</param>
-    public SlideShowWindow(Presentation presentation, int startIndex = 0)
-        : this(SlideShowWindowLaunchPlan.FullPresentation(presentation, startIndex))
-    {
-    }
-
-    internal SlideShowWindow(
-        Presentation presentation,
-        int startIndex,
-        ISlideShowRecordingCaptureBackend? captureBackend)
-        : this(SlideShowWindowLaunchPlan.FullPresentation(presentation, startIndex, captureBackend))
-    {
-    }
-
-    /// <param name="presentation">The presentation that owns slide size, theme, and timing state.</param>
-    /// <param name="playbackRoute">The ordered slide route to play.</param>
-    public SlideShowWindow(Presentation presentation, SlideShowPlaybackRoute playbackRoute)
-        : this(new(presentation, playbackRoute))
-    {
-    }
-
-    public SlideShowWindow(
-        Presentation presentation,
-        SlideShowPlaybackRoute playbackRoute,
-        Action<int, string?>? setSlideNotesText,
-        int? preferredCaptionSlideIndex = null,
-        uint? preferredCaptionShapeId = null,
-        int? preferredCaptionTrackIndex = null)
-        : this(new(
-            presentation,
-            playbackRoute,
-            SetSlideNotesText: setSlideNotesText,
-            PreferredCaptionSlideIndex: preferredCaptionSlideIndex,
-            PreferredCaptionShapeId: preferredCaptionShapeId,
-            PreferredCaptionTrackIndex: preferredCaptionTrackIndex))
-    {
-    }
-
-    internal SlideShowWindow(
-        Presentation presentation,
-        SlideShowPlaybackRoute playbackRoute,
-        ISlideShowRecordingCaptureBackend? captureBackend,
-        Action<int, string?>? setSlideNotesText = null,
-        int? preferredCaptionSlideIndex = null,
-        uint? preferredCaptionShapeId = null,
-        int? preferredCaptionTrackIndex = null)
-        : this(new(
-            presentation,
-            playbackRoute,
-            captureBackend,
-            setSlideNotesText,
-            preferredCaptionSlideIndex,
-            preferredCaptionShapeId,
-            preferredCaptionTrackIndex))
-    {
-    }
-
-    private SlideShowWindow(SlideShowWindowLaunchPlan launchPlan)
+    internal SlideShowWindow(SlideShowWindowLaunchPlan launchPlan)
     {
         ArgumentNullException.ThrowIfNull(launchPlan);
         _presentation = launchPlan.Presentation;
         _setSlideNotesText = launchPlan.SetSlideNotesText;
         _runtime = launchPlan.CreateRuntime(CreateDefaultRecordingCaptureBackend);
+        _runtimeSession = new SlideShowRuntimeSession(_runtime);
         _presenterViewHost = new SlideShowNativePresenterWindowHost<PresenterViewWindow>(
             operations => new PresenterViewWindow(_presentation, operations),
             (window, onClosed) => window.Closed += (_, _) => onClosed(),
@@ -348,34 +292,6 @@ public sealed partial class SlideShowWindow : Window, ISlideShowTransitionPlayba
         Closed               += (_, _) => Teardown();
     }
 
-    // ── Public API (callable by test code without showing the window) ─────────────
-
-    /// <summary>
-    /// Execute a single logical advance step and return what happened.
-    /// Drives the state machine and applies visual effects if the window is loaded.
-    /// </summary>
-    public AdvanceResult ExecuteAdvance(DateTimeOffset? nowUtc = null) =>
-        _runtime.ExecuteAdvance(nowUtc);
-
-    /// <summary>Execute a logical back step and return what happened.</summary>
-    public BackResult ExecuteBack(DateTimeOffset? nowUtc = null) =>
-        _runtime.ExecuteBack(nowUtc);
-
-    /// <summary>Jump to a one-based slide number without playing its entrance transition.</summary>
-    public void ExecuteSlideNumberJump(int oneBasedSlideNumber) =>
-        _runtime.ExecuteSlideNumberJump(oneBasedSlideNumber);
-
-    public Slide? ExecuteHiddenSlideReveal() => _runtime.ExecuteHiddenSlideReveal();
-
-    /// <summary>The underlying state machine (for test assertions).</summary>
-    public SlideShowController Controller => _runtime.Controller;
-
-    /// <summary>The presenter blank-screen mode currently covering the slide.</summary>
-    public SlideShowScreenMode ScreenMode => _runtime.ScreenMode;
-
-    /// <summary>Show the slide, a black screen, or a white screen during presentation.</summary>
-    public void SetScreenMode(SlideShowScreenMode mode) => _runtime.SetScreenMode(mode);
-
     private void RenderScreenMode(SlideShowRuntimeScreenModePlan plan)
     {
         _screenModeOverlay.Fill = plan.UseWhiteSurface ? Brushes.White : Brushes.Black;
@@ -383,50 +299,6 @@ public sealed partial class SlideShowWindow : Window, ISlideShowTransitionPlayba
             ? Visibility.Visible
             : Visibility.Collapsed;
     }
-
-    public DateTimeOffset PresenterStartedAtUtc => _runtime.StartedAtUtc;
-
-    public SlideShowPresenterToolPlan PresenterToolPlan => _runtime.ToolPlan;
-
-    public IReadOnlyList<SlideShowPresenterWorkflowAction> PresenterWorkflowActions =>
-        _runtime.ToolPlan.WorkflowActions;
-
-    public IReadOnlyList<SlideShowPresenterCommandState> PresenterCommandStates =>
-        _runtime.ToolPlan.CommandStates;
-
-    public SlideShowTimingRecorderState TimingRecorderState => _runtime.TimingRecorderState;
-
-    public SlideShowRecordingExecutionState RecordingExecutionState => _runtime.RecordingExecutionState;
-
-    public SlideShowRecordingCaptureAdapterReadiness RecordingCaptureAdapterReadiness =>
-        _runtime.RecordingExecutionState.HostCapabilities.EffectiveCaptureAdapterReadiness;
-
-    public IReadOnlyList<SlideShowRecordingExecutionAction> RecordingExecutionActions =>
-        _runtime.RecordingExecutionState.LastActions;
-
-    public bool IsPresenterSessionClosed => _runtime.IsClosed;
-
-    public SlideShowInkExecutionState InkExecutionState => _runtime.InkExecutionState;
-    public SlideShowPresenterSessionSummary PresenterSessionSummary =>
-        _runtime.PresenterSummary;
-
-    public SlideShowRecordingReviewPlan RecordingReviewPlan =>
-        _runtime.RecordingReviewPlan;
-
-    public SlideShowRecordingReviewApplyResult ApplyRecordingReview() =>
-        _runtime.ApplyRecordingReview();
-
-    public SlideShowPresenterState CreatePresenterState(
-        DateTimeOffset nowUtc,
-        SlideShowPresenterDisplayIntent? displayIntent = null) =>
-        _runtime.CreatePresenterState(nowUtc, displayIntent);
-
-    /// <summary>Whether the synchronized presenter dashboard is currently open.</summary>
-    public bool IsPresenterViewOpen => _runtime.IsPresenterViewOpen;
-
-    /// <summary>Opens or closes the presenter dashboard without changing audience playback.</summary>
-    public void TogglePresenterView()
-        => _runtime.TogglePresenterView();
 
     void ISlideShowDisplayRenderer.OpenPresenterView()
         => _presenterViewHost.Open(
@@ -436,53 +308,6 @@ public sealed partial class SlideShowWindow : Window, ISlideShowTransitionPlayba
 
     void ISlideShowDisplayRenderer.RefreshPresenterView() =>
         _presenterViewHost.Refresh();
-
-    public SlideShowPresenterToolPlan ApplyPresenterToolIntent(
-        SlideShowTimingIntent timingIntent = SlideShowTimingIntent.None,
-        SlideShowRecordingMediaIntent mediaIntent = SlideShowRecordingMediaIntent.None,
-        SlideShowPresenterPointerMode pointerMode = SlideShowPresenterPointerMode.Arrow,
-        string? inkColorHex = null,
-        double inkThicknessDip = 0,
-        SlideShowInkRetentionDecision inkRetentionDecision = SlideShowInkRetentionDecision.KeepInk,
-        DateTimeOffset? nowUtc = null)
-        => _runtime.ApplyPresenterToolIntent(
-            timingIntent,
-            mediaIntent,
-            pointerMode,
-            inkColorHex,
-            inkThicknessDip,
-            inkRetentionDecision,
-            nowUtc);
-
-    public SlideShowPresenterToolPlan SetPresenterPointerMode(
-        SlideShowPresenterPointerMode pointerMode,
-        DateTimeOffset? nowUtc = null)
-        => _runtime.SetPointerMode(pointerMode, nowUtc);
-
-    public SlideShowPresenterToolPlan SetPresenterTimingIntent(
-        SlideShowTimingIntent timingIntent,
-        DateTimeOffset? nowUtc = null)
-        => _runtime.SetTimingIntent(timingIntent, nowUtc);
-
-    public SlideShowPresenterToolPlan SetPresenterMediaIntent(
-        SlideShowRecordingMediaIntent mediaIntent,
-        DateTimeOffset? nowUtc = null)
-        => _runtime.SetMediaIntent(mediaIntent, nowUtc);
-
-    public SlideShowInkExecutionResult BeginPresenterInkStroke(double canvasX, double canvasY) =>
-        _runtime.BeginPointerInk(CreateCanvasPointer(canvasX, canvasY));
-
-    public SlideShowInkExecutionResult AppendPresenterInkStroke(double canvasX, double canvasY) =>
-        _runtime.AppendPointerInk(CreateCanvasPointer(canvasX, canvasY));
-
-    public SlideShowInkExecutionResult EndPresenterInkStroke(double canvasX, double canvasY) =>
-        _runtime.EndPointerInk(CreateCanvasPointer(canvasX, canvasY));
-
-    public SlideShowInkExecutionResult ClearPresenterInkStrokes() =>
-        _runtime.ClearInkStrokes();
-
-    public SlideShowInkExecutionResult UndoLastPresenterInkStroke() =>
-        _runtime.UndoLastInkStroke();
 
     private static ISlideShowRecordingCaptureBackend CreateDefaultRecordingCaptureBackend() =>
         new WindowsRecordingCaptureBackend(
@@ -696,26 +521,7 @@ public sealed partial class SlideShowWindow : Window, ISlideShowTransitionPlayba
             _ => Cursors.Arrow
         };
 
-    private void CloseSlideShow(DateTimeOffset nowUtc)
-    {
-        Teardown(nowUtc);
-        Close();
-    }
-
     // ── Slide display + transitions ───────────────────────────────────────────────
-
-    /// <summary>
-    /// Renders the controller's current slide with the optional entry transition.
-    /// When <paramref name="animated"/> is false (first display, Home/End, Back), skip the transition.
-    /// </summary>
-    private void DisplayCurrentSlide(
-        bool animated,
-        int? zoomTransitionDurationMs = null,
-        bool zoomShowBackground = true)
-        => _runtime.DisplayCurrentSlide(
-            animated,
-            zoomTransitionDurationMs,
-            zoomShowBackground);
 
     void ISlideShowDisplayRenderer.ApplyDisplayState(SlideShowRuntimeDisplayPlan plan)
     {
@@ -2660,9 +2466,6 @@ public sealed partial class SlideShowWindow : Window, ISlideShowTransitionPlayba
             },
             PlayShapeAnimation);
     }
-
-    private SlideShowAnimationPlaybackTargetAvailability BuildAnimationTargetAvailability() =>
-        _animationTargets.BuildAvailability();
 
     private FrameworkElement? ResolveAnimationTarget(SlideShowAnimationPlaybackOperation operation) =>
         _animationTargets.Resolve(operation);

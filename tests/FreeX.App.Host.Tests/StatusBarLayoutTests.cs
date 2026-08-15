@@ -57,6 +57,9 @@ public sealed class StatusBarLayoutTests
             sheet.SetCell(new CellAddress(sheet.Id, 1, 1), Cell.FromValue(new NumberValue(2)));
             sheet.SetCell(new CellAddress(sheet.Id, 1, 2), Cell.FromValue(new NumberValue(4)));
 
+            harness.SetStatusBarCustomizeMenuItemChecked("StatusBarNumericalCountMenuItem", true);
+            harness.SetStatusBarCustomizeMenuItemChecked("StatusBarMinimumMenuItem", true);
+            harness.SetStatusBarCustomizeMenuItemChecked("StatusBarMaximumMenuItem", true);
             harness.InvalidateNavigationCaches();
             harness.SelectRange(1, 1, 1, 2);
             harness.RefreshStatusBar();
@@ -72,8 +75,8 @@ public sealed class StatusBarLayoutTests
             harness.StatusAutomationLiveSetting("StatusNumericalCountText").Should().Be(AutomationLiveSetting.Polite);
             harness.StatusAutomationName("StatusMinText").Should().Be("Min: 2");
             harness.StatusAutomationName("StatusMaxText").Should().Be("Max: 4");
-            harness.StatusStatsAutomationName.Should().Be("Average: 3; Count: 2; Sum: 6");
-            harness.StatusStatsAutomationHelpText.Should().Be("Average: 3; Count: 2; Sum: 6");
+            harness.StatusStatsAutomationName.Should().Be("Average: 3; Count: 2; Numerical Count: 2; Sum: 6; Min: 2; Max: 4");
+            harness.StatusStatsAutomationHelpText.Should().Be("Average: 3; Count: 2; Numerical Count: 2; Sum: 6; Min: 2; Max: 4");
 
             sheet.SetCell(new CellAddress(sheet.Id, 1, 2), Cell.FromValue(new NumberValue(8)));
             harness.InvalidateNavigationCaches();
@@ -84,7 +87,7 @@ public sealed class StatusBarLayoutTests
             harness.StatusAutomationName("StatusNumericalCountText").Should().Be("Numerical Count: 2");
             harness.StatusAutomationHelpText("StatusNumericalCountText").Should().Be("Numerical Count: 2");
             harness.StatusAutomationName("StatusMaxText").Should().Be("Max: 8");
-            harness.StatusStatsAutomationName.Should().Be("Average: 5; Count: 2; Sum: 10");
+            harness.StatusStatsAutomationName.Should().Be("Average: 5; Count: 2; Numerical Count: 2; Sum: 10; Min: 2; Max: 8");
         });
     }
 

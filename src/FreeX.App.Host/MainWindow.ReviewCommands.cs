@@ -555,10 +555,10 @@ public partial class MainWindow
 
     private async Task ShareWorkbookAsync()
     {
-        var plan = WorkbookShareReadinessPlanner.CreatePlan(
+        var plan = DocumentShareReadinessPlanner.CreatePlan(
             _currentFilePath,
-            WorkbookShareSurface.WindowsShare);
-        if (plan.Kind == WorkbookShareReadinessPlanKind.SaveAsBeforeShare)
+            DocumentShareSurface.WindowsShare);
+        if (plan.Kind == DocumentShareReadinessPlanKind.SaveAsBeforeShare)
         {
             if (!await SaveWorkbookWithDialogAsync())
                 return;
@@ -569,7 +569,7 @@ public partial class MainWindow
                 return;
         }
 
-        var sharePath = plan.Kind == WorkbookShareReadinessPlanKind.ShareExistingFile
+        var sharePath = plan.Kind == DocumentShareReadinessPlanKind.ShareExistingFile
             ? plan.Path
             : _currentFilePath;
         if (string.IsNullOrWhiteSpace(sharePath))

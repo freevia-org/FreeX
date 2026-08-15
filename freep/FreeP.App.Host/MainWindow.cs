@@ -2358,22 +2358,24 @@ public sealed partial class MainWindow : Window,
     private void RefreshAltTextRequestPlan()
         => _altTextPaneHostCoordinator.RefreshSelection();
 
-    internal IReadOnlyList<SmartArtNodeOutlineItem> ShowSmartArtTextPane()
-    {
-        _workareaSession.Panes.Show(PresentationWorkareaPane.SmartArtText);
-        var outline = RefreshSmartArtTextPane();
-        _smartArtTextPaneHost.Visibility = Visibility.Visible;
-        RefreshPaneAccessibilityMetadata();
-        return outline;
-    }
+    internal IReadOnlyList<SmartArtNodeOutlineItem> ShowSmartArtTextPane() =>
+        SmartArtTextPaneHostCoordinator.Show();
 
-    internal void HideSmartArtTextPane()
-    {
-        _workareaSession.Panes.Hide(PresentationWorkareaPane.SmartArtText);
-        if (_smartArtTextPaneHost is not null)
-            _smartArtTextPaneHost.Visibility = Visibility.Collapsed;
-        RefreshPaneAccessibilityMetadata();
-    }
+    internal void HideSmartArtTextPane() => SmartArtTextPaneHostCoordinator.Hide();
+
+    private PresentationWorkareaPaneHostCoordinator<IReadOnlyList<SmartArtNodeOutlineItem>>?
+        _smartArtTextPaneHostCoordinator;
+
+    private PresentationWorkareaPaneHostCoordinator<IReadOnlyList<SmartArtNodeOutlineItem>>
+        SmartArtTextPaneHostCoordinator =>
+        _smartArtTextPaneHostCoordinator ??= new(
+            _workareaSession.Panes,
+            PresentationWorkareaPane.SmartArtText,
+            RefreshSmartArtTextPane,
+            visible => _smartArtTextPaneHost.Visibility = visible
+                ? Visibility.Visible
+                : Visibility.Collapsed,
+            RefreshPaneAccessibilityMetadata);
 
     internal void SetSmartArtTextPaneRowText(int rowIndex, string text)
     {
@@ -2519,61 +2521,65 @@ public sealed partial class MainWindow : Window,
     private PresentationMediaBookmarkHostSnapshot CaptureMediaBookmarkHostSnapshot() =>
         _wpfMediaPaneHostView.CaptureBookmark();
 
-    private PresentationMediaPaneHostViewAdapter BuildWpfMediaPaneHostView() => new(
-        new DelegatingPresentationMediaPaneControlSurface(new(
-            PaneVisible: new(() => IsMediaCaptionPaneVisible,
-                value => SetWpfVisibility(_mediaCaptionPaneHost, value)),
-            CaptionLabel: new(() => ReadWpfText(_mediaCaptionLabelBox), value => WriteWpfText(_mediaCaptionLabelBox, value)),
-            CaptionLanguage: new(() => ReadWpfText(_mediaCaptionLanguageBox), value => WriteWpfText(_mediaCaptionLanguageBox, value)),
-            CaptionSource: new(() => ReadWpfText(_mediaCaptionSourceBox), value => WriteWpfText(_mediaCaptionSourceBox, value)),
-            CaptionTranscript: new(() => ReadWpfText(_mediaCaptionTranscriptBox), value => WriteWpfText(_mediaCaptionTranscriptBox, value)),
-            VolumePercent: new(() => ReadWpfValue(_mediaVolumeSlider), value => WriteWpfValue(_mediaVolumeSlider, value)),
-            PlaybackStartModeIndex: new(() => ReadWpfIndex(_mediaStartModeBox), value => WriteWpfIndex(_mediaStartModeBox, value)),
-            Loop: new(() => ReadWpfCheck(_mediaLoopCheckBox), value => WriteWpfCheck(_mediaLoopCheckBox, value)),
-            ShowWhenStopped: new(() => ReadWpfCheck(_mediaShowWhenStoppedCheckBox),
-                value => WriteWpfCheck(_mediaShowWhenStoppedCheckBox, value)),
-            RewindAfterPlaying: new(() => ReadWpfCheck(_mediaRewindAfterPlayingCheckBox),
-                value => WriteWpfCheck(_mediaRewindAfterPlayingCheckBox, value)),
-            PlayFullScreen: new(() => ReadWpfCheck(_mediaPlayFullScreenCheckBox),
-                value => WriteWpfCheck(_mediaPlayFullScreenCheckBox, value)),
-            StopAfterSlides: new(() => ReadWpfText(_mediaStopAfterSlidesBox), value => WriteWpfText(_mediaStopAfterSlidesBox, value)),
-            TrimStart: new(() => ReadWpfText(_mediaTrimStartBox), value => WriteWpfText(_mediaTrimStartBox, value)),
-            TrimEnd: new(() => ReadWpfText(_mediaTrimEndBox), value => WriteWpfText(_mediaTrimEndBox, value)),
-            FadeIn: new(() => ReadWpfText(_mediaFadeInBox), value => WriteWpfText(_mediaFadeInBox, value)),
-            FadeOut: new(() => ReadWpfText(_mediaFadeOutBox), value => WriteWpfText(_mediaFadeOutBox, value)),
-            BookmarkName: new(() => ReadWpfText(_mediaBookmarkNameBox), value => WriteWpfText(_mediaBookmarkNameBox, value)),
-            BookmarkTime: new(() => ReadWpfText(_mediaBookmarkTimeBox), value => WriteWpfText(_mediaBookmarkTimeBox, value)),
-            SetHeading: value => WriteWpfText(_mediaCaptionPaneHeading, value),
-            SetMessage: value => WriteWpfText(_mediaCaptionPaneMessage, value),
-            SetPlaybackStartModeEnabled: value => SetWpfEnabled(_mediaStartModeBox, value),
-            SetLoopEnabled: value => SetWpfEnabled(_mediaLoopCheckBox, value),
-            SetShowWhenStoppedEnabled: value => SetWpfEnabled(_mediaShowWhenStoppedCheckBox, value),
-            SetRewindAfterPlayingEnabled: value => SetWpfEnabled(_mediaRewindAfterPlayingCheckBox, value),
-            SetPlayFullScreenEnabled: value => SetWpfEnabled(_mediaPlayFullScreenCheckBox, value),
-            SetStopAfterSlidesEnabled: value => SetWpfEnabled(_mediaStopAfterSlidesBox, value),
-            SetPlaybackApplyEnabled: value => SetWpfEnabled(_mediaPlaybackApplyButton, value),
-            SetVolumeEnabled: value => SetWpfEnabled(_mediaVolumeSlider, value),
-            SetVolumeApplyEnabled: value => SetWpfEnabled(_mediaVolumeApplyButton, value),
-            SetTimingApplyEnabled: value => SetWpfEnabled(_mediaTimingApplyButton, value),
-            RenderCaptionTracks: RenderMediaCaptionTrackOptions,
-            RenderCaptionField: RenderWpfMediaCaptionField,
-            RenderCaptionAction: RenderWpfMediaCaptionAction,
-            RenderBookmarks: RenderWpfMediaBookmarkOptions,
-            RefreshAccessibilityMetadata: RefreshPaneAccessibilityMetadata)));
+    private PresentationMediaPaneHostViewAdapter BuildWpfMediaPaneHostView() =>
+        PresentationMediaPaneNativeComposition.Compose(
+            new PresentationMediaPaneNativeControls<FrameworkElement>(
+                _mediaCaptionPaneHost,
+                _mediaCaptionLabelBox,
+                _mediaCaptionLanguageBox,
+                _mediaCaptionSourceBox,
+                _mediaCaptionTranscriptBox,
+                _mediaVolumeSlider,
+                _mediaStartModeBox,
+                _mediaLoopCheckBox,
+                _mediaShowWhenStoppedCheckBox,
+                _mediaRewindAfterPlayingCheckBox,
+                _mediaPlayFullScreenCheckBox,
+                _mediaStopAfterSlidesBox,
+                _mediaTrimStartBox,
+                _mediaTrimEndBox,
+                _mediaFadeInBox,
+                _mediaFadeOutBox,
+                _mediaBookmarkNameBox,
+                _mediaBookmarkTimeBox,
+                _mediaCaptionPaneHeading,
+                _mediaCaptionPaneMessage,
+                _mediaPlaybackApplyButton,
+                _mediaVolumeApplyButton,
+                _mediaTimingApplyButton),
+            new PresentationMediaPaneNativeAccessors<FrameworkElement>(
+                control => control?.Visibility == Visibility.Visible,
+                (control, value) => control.Visibility = value ? Visibility.Visible : Visibility.Collapsed,
+                control => (control as TextBox)?.Text,
+                WriteWpfMediaText,
+                control => (control as Slider)?.Value,
+                (control, value) => ((Slider)control).Value =
+                    value ?? PresentationMediaPaneSession.DefaultVolumePercent,
+                control => (control as ComboBox)?.SelectedIndex,
+                (control, value) => ((ComboBox)control).SelectedIndex = value ?? -1,
+                control => (control as CheckBox)?.IsChecked,
+                (control, value) => ((CheckBox)control).IsChecked = value,
+                (control, value) => control.IsEnabled = value),
+            RenderMediaCaptionTrackOptions,
+            RenderWpfMediaCaptionField,
+            RenderWpfMediaCaptionAction,
+            RenderWpfMediaBookmarkOptions,
+            RefreshPaneAccessibilityMetadata);
 
-    private static string? ReadWpfText(TextBox? control) => control?.Text;
-    private static void WriteWpfText(TextBox control, string? value) => control.Text = value ?? string.Empty;
-    private static void WriteWpfText(TextBlock control, string value) => control.Text = value;
-    private static double? ReadWpfValue(Slider? control) => control?.Value;
-    private static void WriteWpfValue(Slider control, double? value) =>
-        control.Value = value ?? PresentationMediaPaneSession.DefaultVolumePercent;
-    private static int? ReadWpfIndex(ComboBox? control) => control?.SelectedIndex;
-    private static void WriteWpfIndex(ComboBox control, int? value) => control.SelectedIndex = value ?? -1;
-    private static bool? ReadWpfCheck(CheckBox? control) => control?.IsChecked;
-    private static void WriteWpfCheck(CheckBox control, bool? value) => control.IsChecked = value;
-    private static void SetWpfEnabled(UIElement control, bool value) => control.IsEnabled = value;
-    private static void SetWpfVisibility(UIElement control, bool value) =>
-        control.Visibility = value ? Visibility.Visible : Visibility.Collapsed;
+    private static void WriteWpfMediaText(FrameworkElement control, string? value)
+    {
+        switch (control)
+        {
+            case TextBox textBox:
+                textBox.Text = value ?? string.Empty;
+                break;
+            case TextBlock textBlock:
+                textBlock.Text = value ?? string.Empty;
+                break;
+            default:
+                throw new ArgumentException("The media control does not expose text.", nameof(control));
+        }
+    }
 
     private void RenderWpfMediaCaptionField(
         PresentationMediaPaneCaptionField field,
@@ -2647,14 +2653,21 @@ public sealed partial class MainWindow : Window,
     internal PresentationReadingOrderPlan ShowReadingOrderPane()
         => _reviewWorkflowSession.ShowReadingOrderPane();
 
-    internal PresentationSelectionPanePlan ShowSelectionPane()
-    {
-        _workareaSession.Panes.Show(PresentationWorkareaPane.Selection);
-        var plan = _selectionPane.Refresh();
-        _selectionPane.Visibility = Visibility.Visible;
-        RefreshPaneAccessibilityMetadata();
-        return plan;
-    }
+    internal PresentationSelectionPanePlan ShowSelectionPane() => SelectionPaneHostCoordinator.Show();
+
+    private PresentationWorkareaPaneHostCoordinator<PresentationSelectionPanePlan>?
+        _selectionPaneHostCoordinator;
+
+    private PresentationWorkareaPaneHostCoordinator<PresentationSelectionPanePlan>
+        SelectionPaneHostCoordinator =>
+        _selectionPaneHostCoordinator ??= new(
+            _workareaSession.Panes,
+            PresentationWorkareaPane.Selection,
+            _selectionPane.Refresh,
+            visible => _selectionPane.Visibility = visible
+                ? Visibility.Visible
+                : Visibility.Collapsed,
+            RefreshPaneAccessibilityMetadata);
 
     internal PresentationReadingOrderMutationPlan ApplyReadingOrderMoveEarlier()
         => ApplyReadingOrderMove(PresentationReviewWorkflowIntentKind.MoveReadingOrderEarlier);
@@ -3122,29 +3135,7 @@ public sealed partial class MainWindow : Window,
         bool fromStart,
         FreeP.App.Compositor.SlideShowTimingIntent timingIntent,
         int? animationStartIndex = null)
-    {
-        if (!_customShowSession.TryBuildPlaybackLaunch(
-                fromStart,
-                animationStartIndex,
-                _mediaPaneHostCoordinator.SelectedCaptionTrackIndex,
-                out var launchPlan))
-            return;
-
-        var selectedCaption = launchPlan.CaptionSelection;
-        var window = new SlideShowWindow(
-            _presentation,
-            launchPlan.Route,
-            Editor.SetSlideNotesText,
-            selectedCaption?.SlideIndex,
-            selectedCaption?.ShapeId,
-            selectedCaption?.TrackIndex);
-        if (timingIntent != FreeP.App.Compositor.SlideShowTimingIntent.None)
-            window.SetPresenterTimingIntent(timingIntent);
-        // Owner can only be set when the main window is already shown (not during unit tests).
-        if (IsVisible)
-            window.Owner = this;
-        window.Show();
-    }
+        => SlideShowWindowLauncher.TryLaunch(fromStart, timingIntent, animationStartIndex);
 
     // ── Chart data editing (Wave 9B) ──────────────────────────────────────────────
 
@@ -3161,164 +3152,40 @@ public sealed partial class MainWindow : Window,
         _customShowSession.BuildLaunchPlan();
 
     internal bool TryStartCustomSlideShow(string? customShowName, int startIndex = 0)
-    {
-        if (!_customShowSession.TryBuildNamedPlaybackLaunch(
-                customShowName,
-                startIndex,
-                _mediaPaneHostCoordinator.SelectedCaptionTrackIndex,
-                out var launchPlan))
-        {
-            return false;
-        }
+        => SlideShowWindowLauncher.TryLaunchNamed(customShowName, startIndex);
 
-        var selectedCaption = launchPlan.CaptionSelection;
-        var window = new SlideShowWindow(
-            _presentation,
-            launchPlan.Route,
+    private SlideShowWindowLaunchCoordinator<SlideShowWindow>? _slideShowWindowLauncher;
+
+    private SlideShowWindowLaunchCoordinator<SlideShowWindow> SlideShowWindowLauncher =>
+        _slideShowWindowLauncher ??= new(
+            _customShowSession,
+            () => _presentation,
+            () => _mediaPaneHostCoordinator.SelectedCaptionTrackIndex,
             Editor.SetSlideNotesText,
-            selectedCaption?.SlideIndex,
-            selectedCaption?.ShapeId,
-            selectedCaption?.TrackIndex);
+            static plan => new SlideShowWindow(plan),
+            static (window, intent) => window.SetPresenterTimingIntent(intent),
+            ShowSlideShowWindow);
+
+    private void ShowSlideShowWindow(SlideShowWindow window)
+    {
+        // Owner can only be set when the main window is already shown (not during unit tests).
         if (IsVisible)
             window.Owner = this;
         window.Show();
-        return true;
     }
 
     internal void OpenCustomShowDialog()
     {
-        ShowOwnedDomainDialog(new CustomShowDialog(
+        ShowDomainDialog(new CustomShowDialog(
             _customShowSession,
             name => TryStartCustomSlideShow(name)));
     }
 
-    private void ShowOwnedDomainDialog(Window dialog)
+    private void ShowDomainDialog(Window dialog)
     {
         if (IsVisible)
             dialog.Owner = this;
         dialog.ShowDialog();
-    }
-
-    /// <summary>
-    /// Opens the <see cref="ChartDataDialog"/> for the currently selected chart.
-    /// If the selection is empty or the selected shape is not a chart, does nothing.
-    /// </summary>
-    internal void OpenChartDataDialog()
-    {
-        if (!_workareaSession.CanOpenDomainDialog(PresentationDomainDialogKind.ChartData)) return;
-
-        ShowOwnedDomainDialog(new ChartDataDialog(Editor));
-    }
-
-    internal void OpenChartDisplayOptionsDialog()
-    {
-        if (!_workareaSession.CanOpenDomainDialog(PresentationDomainDialogKind.ChartDisplayOptions)) return;
-
-        ShowOwnedDomainDialog(new ChartDisplayOptionsDialog(Editor));
-    }
-
-    internal void OpenChartAxisOptionsDialog() => OpenChartAxisOptionsDialog(null);
-
-    internal void OpenChartAxisOptionsDialog(ChartAxisKind? initialAxis)
-    {
-        if (!_workareaSession.CanOpenDomainDialog(PresentationDomainDialogKind.ChartAxisOptions)) return;
-
-        ShowOwnedDomainDialog(new ChartAxisOptionsDialog(Editor, initialAxis));
-    }
-
-    internal void OpenChartSeriesOptionsDialog() => OpenChartSeriesOptionsDialog(null);
-
-    internal void OpenChartSeriesOptionsDialog(int? initialSeriesIndex)
-    {
-        if (!_workareaSession.CanOpenDomainDialog(PresentationDomainDialogKind.ChartSeriesOptions)) return;
-
-        ShowOwnedDomainDialog(new ChartSeriesOptionsDialog(Editor, initialSeriesIndex));
-    }
-
-    private void OnChartPointDoubleClick(ChartPointHit hit)
-    {
-        Editor.Select(hit.ShapeId);
-        OpenChartPointOptionsDialog(hit.SeriesIndex, hit.PointIndex);
-    }
-
-    internal void OpenChartPointOptionsDialog(int? seriesIndex = null, int? pointIndex = null)
-    {
-        if (!_workareaSession.CanOpenDomainDialog(PresentationDomainDialogKind.ChartPointOptions)) return;
-
-        ShowOwnedDomainDialog(new ChartPointOptionsDialog(Editor, seriesIndex, pointIndex));
-    }
-
-    internal void OpenChartLayoutOptionsDialog()
-    {
-        if (!_workareaSession.CanOpenDomainDialog(PresentationDomainDialogKind.ChartLayoutOptions)) return;
-
-        ShowOwnedDomainDialog(new ChartLayoutOptionsDialog(Editor));
-    }
-
-    internal void OpenChartExSeriesLayoutDialog()
-    {
-        if (!_workareaSession.CanOpenDomainDialog(PresentationDomainDialogKind.ChartExSeriesLayout)) return;
-
-        ShowOwnedDomainDialog(new ChartExSeriesLayoutDialog(Editor));
-    }
-
-    internal void OpenChartDataTableOptionsDialog()
-    {
-        if (!_workareaSession.CanOpenDomainDialog(PresentationDomainDialogKind.ChartDataTableOptions)) return;
-
-        ShowOwnedDomainDialog(new ChartDataTableOptionsDialog(Editor));
-    }
-
-    internal void OpenChartBubbleOptionsDialog()
-    {
-        if (!_workareaSession.CanOpenDomainDialog(PresentationDomainDialogKind.ChartBubbleOptions)) return;
-
-        ShowOwnedDomainDialog(new ChartBubbleOptionsDialog(Editor));
-    }
-
-    internal void OpenChartPieOptionsDialog()
-    {
-        if (!_workareaSession.CanOpenDomainDialog(PresentationDomainDialogKind.ChartPieOptions)) return;
-
-        ShowOwnedDomainDialog(new ChartPieOptionsDialog(Editor));
-    }
-
-    internal void OpenChartPlotStyleOptionsDialog()
-    {
-        if (!_workareaSession.CanOpenDomainDialog(PresentationDomainDialogKind.ChartPlotStyleOptions)) return;
-
-        ShowOwnedDomainDialog(new ChartPlotStyleOptionsDialog(Editor));
-    }
-
-    internal void OpenChart3DViewOptionsDialog()
-    {
-        if (!_workareaSession.CanOpenDomainDialog(PresentationDomainDialogKind.Chart3DViewOptions)) return;
-
-        ShowOwnedDomainDialog(new Chart3DViewOptionsDialog(Editor));
-    }
-
-    internal void OpenChartTextOptionsDialog() => OpenChartTextOptionsDialog(ChartTextTarget.Chart);
-
-    internal void OpenChartTextOptionsDialog(ChartTextTarget target)
-    {
-        if (!_workareaSession.CanOpenDomainDialog(PresentationDomainDialogKind.ChartTextOptions)) return;
-
-        ShowOwnedDomainDialog(new ChartTextOptionsDialog(Editor, target));
-    }
-
-    internal void OpenChartAreaOptionsDialog() => OpenChartAreaOptionsDialog(null);
-
-    internal void OpenChartAreaOptionsDialog(ChartAreaFormattingTarget? initialTarget)
-    {
-        if (!_workareaSession.CanOpenDomainDialog(PresentationDomainDialogKind.ChartAreaOptions)) return;
-        var dialog = new ChartAreaOptionsDialog(Editor, initialTarget) { Owner = this };
-        dialog.ShowDialog();
-    }
-
-    internal void OpenChartProtectionOptionsDialog()
-    {
-        if (!_workareaSession.CanOpenDomainDialog(PresentationDomainDialogKind.ChartProtectionOptions)) return;
-        ShowOwnedDomainDialog(new ChartProtectionOptionsDialog(Editor));
     }
 
     internal void OpenRotationOptionsDialog()
@@ -3338,17 +3205,17 @@ public sealed partial class MainWindow : Window,
     /// </summary>
     internal void OpenSlideSizeDialog()
     {
-        ShowOwnedDomainDialog(new SlideSizeDialog(Editor));
+        ShowDomainDialog(new SlideSizeDialog(Editor));
     }
 
     internal void OpenHeaderFooterDialog(HeaderFooterCommandFocus focus)
     {
-        ShowOwnedDomainDialog(new HeaderFooterDialog(Editor, focus));
+        ShowDomainDialog(new HeaderFooterDialog(Editor, focus));
     }
 
     internal void OpenSlideShowSettingsDialog()
     {
-        ShowOwnedDomainDialog(new SlideShowSettingsDialog(Editor));
+        ShowDomainDialog(new SlideShowSettingsDialog(Editor));
     }
 
     internal void OpenLayoutPicker()

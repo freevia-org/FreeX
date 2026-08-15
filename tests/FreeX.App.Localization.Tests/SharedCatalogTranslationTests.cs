@@ -25,7 +25,7 @@ public sealed class SharedCatalogTranslationTests
             var values = ResxResourceTestSupport.ReadResxValues(
                 resourceDirectory,
                 $"Strings.{culture}.resx");
-            values.Should().HaveCount(culture == "fr-FR" ? 21 : 20, because: culture);
+            values.Should().HaveCount(culture == "fr-FR" ? 40 : 20, because: culture);
 
             var canonical = string.Join(
                 "\n",

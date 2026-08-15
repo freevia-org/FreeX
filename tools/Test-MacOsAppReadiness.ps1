@@ -561,7 +561,7 @@ function Test-MacOsWorkflow {
         "FullyQualifiedName~FreeX.App.Services.Tests.PortablePdfPageContentPlannerTests",
         "FullyQualifiedName~FreeX.App.Services.Tests.PortablePdfTextCapabilityPlannerTests",
         "FullyQualifiedName~FreeX.App.Services.Tests.WorkbookExportPrintPlannerTests",
-        "FullyQualifiedName~FreeX.App.Services.Tests.WorkbookShareActionPlannerTests",
+        "FullyQualifiedName~FreeX.App.Services.Tests.DocumentShareActionPlannerWorkbookTests",
         "FullyQualifiedName~FreeX.App.Services.Tests.WorkbookViewportScrollPlannerTests",
         "FullyQualifiedName~FreeX.App.Services.Tests.OpenRecentWorkbookMenuPlannerTests",
         "FullyQualifiedName~FreeX.App.Services.Tests.AppDiagnosticsFileStoreTests",
@@ -1345,7 +1345,8 @@ function Test-SourceWiring {
                 "AutomationProperties.SetAutomationId(replaceButton, prompt.ReplaceButtonAutomationId)",
                 "AutomationProperties.SetAutomationId(cancelButton, prompt.CancelButtonAutomationId)",
                 "var outcome = Pdf.AvaloniaPdfDocumentExporter.Save(",
-                "await File.WriteAllBytesAsync(",
+                "AtomicExportExecutor",
+                ".ExecuteAsync<Pdf.AvaloniaPdfDocumentExportOutcome>(",
                 "ConfigureNativeFileMenuItem(_workbookStatisticsMenuItem, NativeFileMenuItemId.WorkbookStatistics);",
                 "_workbookStatisticsMenuItem.Click += async (_, _) => await ExecuteOwnedNativeFileMenuItemAsync(NativeFileMenuItemId.WorkbookStatistics);",
                 "ApplyNativeFileMenuAvailability(isIdle);",
@@ -3080,25 +3081,26 @@ function Test-SourceWiring {
             OrderedPairs = @()
         },
         @{
-            Path = "shared\Free.Shared.AppServices\WorkbookShareActionPlanner.cs"
+            Path = "shared\Free.Shared.AppServices\DocumentSharePlanner.cs"
             Markers = @(
-                "public enum WorkbookShareActionPlanKind",
+                "public enum DocumentShareActionPlanKind",
                 "ShareSheet,",
                 "OpenContainingFolder,",
                 "SaveAsBeforeShare,",
                 "Deferred",
-                "public sealed record WorkbookShareActionSurface(",
+                "public sealed record DocumentShareActionSurface(",
                 "bool CanShowShareSheet,",
                 "bool CanOpenContainingFolder = false",
-                "public static WorkbookShareActionSurface MacOsPreview",
+                "public static DocumentShareActionSurface MacOsPreview",
                 'new("macOS Share Sheet", CanShowShareSheet: false);',
-                "public static class WorkbookShareActionPlanner",
-                "CreatePlan(currentFilePath, WorkbookShareActionSurface.MacOsPreview, fileExists);",
-                "WorkbookShareReadinessPlanner.CreatePlan(",
+                "public static class DocumentShareActionPlanner",
+                "CreatePlan(currentFilePath, DocumentShareActionSurface.MacOsPreview, fileExists);",
+                "DocumentShareReadinessPlanner.CreatePlan(",
                 "surface.CanShowShareSheet || surface.CanOpenContainingFolder",
-                "WorkbookShareActionPlanKind.SaveAsBeforeShare",
-                "WorkbookShareActionPlanKind.OpenContainingFolder",
-                "WorkbookShareActionUnavailableReason.ShareSheetUnavailable",
+                "DocumentShareActionPlanKind.SaveAsBeforeShare",
+                "DocumentShareActionPlanKind.OpenContainingFolder",
+                "DocumentShareActionUnavailableReason.ShareSheetUnavailable",
+                'public static DocumentShareActionTextSpec WorkbookEnglish { get; } = new("workbook");',
                 "TryGetContainingFolderPath(readiness.Path, out var containingFolderPath)"
             )
             OrderedPairs = @()
@@ -3207,6 +3209,23 @@ function Test-SourceWiring {
                 "File.Move(sourceTempPath, destinationPath, overwrite: true);"
             )
             OrderedPairs = @()
+        },
+        @{
+            Path = "shared\Free.Shared.AppServices\AtomicExportExecutor.cs"
+            Markers = @(
+                "public sealed class AtomicExportExecutor",
+                "AtomicFileWriter.CreateTempLease",
+                "public async Task<OperationOutcome<TArtifact, AtomicExportValidationIssue, AtomicExportFailure>>",
+                "ExecuteAsync<TArtifact>(",
+                "_replaceDestination(temporaryFile.Path, fullDestinationPath!);",
+                "temporaryFile.Commit();"
+            )
+            OrderedPairs = @(
+                @{
+                    First = "_replaceDestination(temporaryFile.Path, fullDestinationPath!);"
+                    Second = "temporaryFile.Commit();"
+                }
+            )
         },
         @{
             Path = "tools\FreeX.Validation.Avalonia\PackagingSmokeValidation.cs"

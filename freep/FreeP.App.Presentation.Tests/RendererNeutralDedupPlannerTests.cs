@@ -200,6 +200,46 @@ public sealed class RendererNeutralDedupPlannerTests
     }
 
     [Fact]
+    public void SlideShowMediaInteractionPlanner_ProjectsPlaybackAndCaptionPlacement()
+    {
+        var slide = new Slide();
+        slide.Shapes.Add(MediaShape(42, 1, 2, 3, 4, embedded: true));
+        var track = new PresentationMediaTranscriptTrackDescriptor(
+            0, 42, "Video", 0, "English", "en-US", "captions.vtt", "text/vtt",
+            PresentationMediaTranscriptTrackStatus.Available, string.Empty,
+            [new(TimeSpan.Zero, TimeSpan.FromSeconds(2), "Hello")]);
+        var playback = new SlideShowMediaPlaybackSnapshot(
+            42, IsPlaying: true, ShowVisual: true, UseFullScreen: false, 80, 80);
+
+        var playbackProjection = SlideShowMediaInteractionPlanner.PlanPlaybackProjection(
+            new LayoutRect(1, 2, 3, 4),
+            track,
+            TimeSpan.FromSeconds(1),
+            10,
+            10,
+            playback);
+        var captionProjection = SlideShowMediaInteractionPlanner.PlanCaptionProjection(
+            slide,
+            42,
+            track,
+            TimeSpan.FromSeconds(1),
+            useFullScreen: false,
+            10,
+            10,
+            10,
+            10);
+
+        playbackProjection.ShowVisual.Should().BeTrue();
+        playbackProjection.Placement.MediaBounds.Should().Be(new LayoutRect(1, 2, 3, 4));
+        captionProjection.Cue!.Text.Should().Be("Hello");
+        captionProjection.Placement.Should().NotBeNull();
+        SlideShowMediaInteractionPlanner.PlanCaptionProjection(
+            slide, 42, track, null, false, 10, 10, 10, 10)
+            .Should().Match<SlideShowMediaCaptionProjectionPlan>(plan =>
+                plan.Cue == null && plan.Placement != null);
+    }
+
+    [Fact]
     public void SlideShowMediaInteractionPlanner_ResolvesRewindBeforeStopAndLoop()
     {
         SlideShowMediaInteractionPlanner.ResolveEndAction(new MediaInfo()).Should()

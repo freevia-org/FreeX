@@ -49,6 +49,7 @@ public sealed class FreePRibbonOleCommandEndpoints
 public sealed class FreePRibbonHostPorts
 {
     public FreePRibbonHostActionEndpoints ActionEndpoints { get; init; } = new();
+    public FreePRibbonActionPortProfile? ActionProfile { get; init; }
     public FreePRibbonHostQueryEndpoints QueryEndpoints { get; init; } = new();
     public FreePRibbonTextActionTargets TextActionTargets { get; init; } = new();
     public FreePRibbonDesignCommandEndpoints DesignCommands { get; init; } = new();
@@ -64,7 +65,7 @@ public sealed class FreePRibbonHostProfile
 {
     internal FreePRibbonHostProfile(FreePRibbonHostPorts ports)
     {
-        ActionEndpoints = ports.ActionEndpoints;
+        ActionEndpoints = ports.ActionProfile?.Endpoints ?? ports.ActionEndpoints;
         QueryEndpoints = ports.QueryEndpoints;
         TextActionTargets = ports.TextActionTargets;
         DesignCommands = ports.DesignCommands;
@@ -90,6 +91,39 @@ public sealed class FreePRibbonHostProfile
         TryHandleTextAction = action =>
             FreePRibbonTextActionTargetRouter.Dispatch(action, TextActionTargets),
     };
+}
+
+/// <summary>
+/// Canonical inventory of renderer callbacks that realize native FreeP ribbon actions.
+/// </summary>
+public sealed class FreePRibbonActionPortProfile
+{
+    internal FreePRibbonActionPortProfile(
+        FreePRibbonHostActionEndpoints endpoints,
+        IReadOnlyList<FreePRibbonHostActionKind> boundActions)
+    {
+        Endpoints = endpoints;
+        BoundActions = boundActions;
+    }
+
+    internal FreePRibbonHostActionEndpoints Endpoints { get; }
+
+    public IReadOnlyList<FreePRibbonHostActionKind> BoundActions { get; }
+}
+
+/// <summary>Builds the renderer-neutral action inventory from native callback ports.</summary>
+public static class FreePRibbonActionPortProfileFactory
+{
+    public static FreePRibbonActionPortProfile Create(FreePRibbonHostActionEndpoints endpoints)
+    {
+        ArgumentNullException.ThrowIfNull(endpoints);
+
+        var endpointType = typeof(FreePRibbonHostActionEndpoints);
+        var boundActions = Enum.GetValues<FreePRibbonHostActionKind>()
+            .Where(kind => endpointType.GetProperty(kind.ToString())?.GetValue(endpoints) is not null)
+            .ToArray();
+        return new FreePRibbonActionPortProfile(endpoints, boundActions);
+    }
 }
 
 /// <summary>Creates the canonical typed profile from renderer-owned native ports.</summary>

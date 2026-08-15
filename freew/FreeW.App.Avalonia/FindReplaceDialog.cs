@@ -91,7 +91,10 @@ public sealed partial class FindReplaceDialog : FreeWDialogWindow
         FindReplaceOpenMode openMode = FindReplaceOpenMode.Find)
     {
         _editor = editor ?? throw new ArgumentNullException(nameof(editor));
-        _session = new FindReplaceDialogSession(new AvaloniaFindReplaceCommandHost(_editor), openMode);
+        _session = new FindReplaceDialogSession(
+            new AvaloniaFindReplaceCommandHost(_editor),
+            openMode,
+            FindReplaceDialogPlanner.ResolvePolicyText(UiText.Get));
 
         Title = Surface.Title;
         Width = Surface.Metrics.WindowWidth;

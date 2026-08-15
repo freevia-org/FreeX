@@ -115,6 +115,7 @@ public sealed partial class MainWindow : Window,
     private readonly IUserMessageService? _messageService;
     private LinuxNativeOutputCapabilities _nativeOutputCapabilities;
     private readonly IPlatformPrintService _printService;
+    private readonly PortablePrintSubmissionWorkflow _portablePrintWorkflow;
     private readonly Func<Window, PrinterDiscoveryResult, PrintSelection?, CancellationToken, Task<PrintSelection?>>
         _showPrintSelectionDialog;
     private PrinterDiscoveryResult? _latestPrinterDiscovery;
@@ -127,7 +128,7 @@ public sealed partial class MainWindow : Window,
     private readonly Func<PresentationVideoExportRequest?, PresentationVideoFramePackageArtifact>?
         _videoFramePackageArtifactFactory;
     private bool _nativeOutputDetectionStarted;
-    private CancellationTokenSource? _nativeOutputCancellation;
+    private readonly PresentationVideoExportSession _videoExportSession;
 
     // ── Editing session ────────────────────────────────────────────────────────
 
@@ -308,7 +309,6 @@ public sealed partial class MainWindow : Window,
     private Control? _ribbonControl;
     private RibbonDefinition? _ribbonDefinition;
     private RibbonCommandRegistry? _ribbonCommandRegistry;
-    private FreePRibbonHostActionEndpoints? _ribbonHostActionEndpoints;
     private readonly RibbonStateStore _ribbonStateStore = new();
     private FreePRibbonBindingSession? _ribbonBindingSession;
     private bool _ribbonKeyTipsVisible;
@@ -429,9 +429,11 @@ public sealed partial class MainWindow : Window,
             LinuxNativeOutputCapabilities.Unavailable(PresentationShellTextCatalog.Resolve(
                 PresentationShellTextCatalog.NativeOutputDetectionPendingStatus));
         _printService = printService ?? CreatePlatformPrintService();
+        _portablePrintWorkflow = new PortablePrintSubmissionWorkflow(_printService);
         _showPrintSelectionDialog = showPrintSelectionDialog ??
             ShowPlatformPrintSelectionDialogAsync;
         _videoExportAdapter = videoExportAdapter ?? CreateVideoExportAdapter(_nativeOutputCapabilities.Video);
+        _videoExportSession = new PresentationVideoExportSession(() => _videoExportAdapter);
         _nativePrintHostCapabilities = BuildNativePrintHostCapabilities(_printService);
         _videoExportHostCapabilities = BuildVideoExportHostCapabilities(_nativeOutputCapabilities.Video);
         _nativeOutputCapabilityDetector = nativeOutputCapabilityDetector ??
@@ -525,7 +527,7 @@ public sealed partial class MainWindow : Window,
             new AvaloniaPresentationFilePickerPort(this),
             new AvaloniaPresentationFileRenderPort(),
             new AvaloniaPresentationPrintPort(this),
-            new AvaloniaPresentationVideoPort(this),
+            new AvaloniaPresentationVideoPort(this, _videoExportSession),
             new AvaloniaPresentationFileFeedbackPort(this),
             getImageExportRange: () => PresentationExportPlanner.BuildCurrentSlideRangeRequest(Editor.CurrentSlideIndex),
             getPrintCurrentSlideNumber: () => Editor.CurrentSlideIndex + 1,
@@ -2221,133 +2223,48 @@ public sealed partial class MainWindow : Window,
     private FreePRibbonHostProfile CreateRibbonHostProfile() =>
         FreePRibbonHostProfileFactory.Create(new FreePRibbonHostPorts
         {
-        ActionEndpoints = GetRibbonHostActionEndpoints(),
-        QueryEndpoints = new FreePRibbonHostQueryEndpoints
-        {
-            BeginFormatPainter = () => _gestureHandler?.BeginFormatPainter() == true,
-            EditPointsEnabled = () => _slideCanvas.EditPointsEnabled,
-            AnimationPaneVisible = () => IsAnimationPaneVisible,
-            ViewShowState = () => _viewShowState,
-            ViewZoomState = () => _viewZoomState,
-        },
-        TextActionTargets = CreateRibbonTextActionTargets(),
-        DesignCommands = new FreePRibbonDesignCommandEndpoints
-        {
-            OpenCustomSlideSize = OnCustomSlideSizeRequested,
-            OpenLayoutPicker = OnLayoutPickerRequested,
-        },
-        FileCommands = new FreePRibbonFileCommandEndpoints
-        {
-            New = FileNew,
-            Open = () => _ = FileOpenAsync(),
-            Save = () => _ = FileSaveAsync(),
-            SaveAs = () => _ = FileSaveAsAsync(),
-            ExportPdf = () => _ = FileExportPdfAsync(),
-            ExportNotesPagePdf = () => _ = FileExportNotesPagePdfAsync(),
-            ExportImages = () => _ = FileExportImagesAsync(),
-            Print = () =>
+            ActionProfile = GetRibbonActionPortProfile(),
+            QueryEndpoints = new FreePRibbonHostQueryEndpoints
             {
-                RefreshHandoutLayoutPlan();
-                ShowPrintBackstage();
+                BeginFormatPainter = () => _gestureHandler?.BeginFormatPainter() == true,
+                EditPointsEnabled = () => _slideCanvas.EditPointsEnabled,
+                AnimationPaneVisible = () => IsAnimationPaneVisible,
+                ViewShowState = () => _viewShowState,
+                ViewZoomState = () => _viewZoomState,
             },
-            ExportVideo = () => _ = FileExportVideoAsync(),
-        },
-        OleCommands = new FreePRibbonOleCommandEndpoints
-        {
-            InsertEmbeddedObject = () => _ = InsertEmbeddedObjectFromFileAsync(),
-            TryOpenInlineEmbeddedObject = () => _textEditor?.TryActivateInlineOleObject() == true,
-            TryOpenSelectedEmbeddedObject = ole =>
+            TextActionTargets = CreateRibbonTextActionTargets(),
+            DesignCommands = new FreePRibbonDesignCommandEndpoints
             {
-                OleActivationService.TryActivate(ole);
-                return true;
+                OpenCustomSlideSize = OnCustomSlideSizeRequested,
+                OpenLayoutPicker = OnLayoutPickerRequested,
             },
-        },
-    });
-
-    private FreePRibbonHostActionEndpoints GetRibbonHostActionEndpoints() =>
-        _ribbonHostActionEndpoints ??= new FreePRibbonHostActionEndpoints
-        {
-            Copy = QueueClipboardCopy,
-            Cut = QueueClipboardCut,
-            Paste = QueueClipboardPaste,
-            InsertPicture = () => _ = InsertPictureFromFileAsync(),
-            InsertVideo = () => _ = InsertMediaFromFileAsync(isVideo: true),
-            InsertAudio = () => _ = InsertMediaFromFileAsync(isVideo: false),
-            OpenTablePicker = OpenTablePicker,
-            ExecuteTableStructureAction = kind =>
-                _domainContextMenuSession.ExecuteCurrentTableAction(kind, TryExecuteInlineTableAction),
-            MergeTableCells = () =>
+            FileCommands = new FreePRibbonFileCommandEndpoints
             {
-                _domainContextMenuSession.ExecuteCurrentTableAction(
-                    PresentationDomainContextActionKind.MergeTableCell,
-                    TryExecuteInlineTableAction);
+                New = FileNew,
+                Open = () => _ = FileOpenAsync(),
+                Save = () => _ = FileSaveAsync(),
+                SaveAs = () => _ = FileSaveAsAsync(),
+                ExportPdf = () => _ = FileExportPdfAsync(),
+                ExportNotesPagePdf = () => _ = FileExportNotesPagePdfAsync(),
+                ExportImages = () => _ = FileExportImagesAsync(),
+                Print = () =>
+                {
+                    RefreshHandoutLayoutPlan();
+                    ShowPrintBackstage();
+                },
+                ExportVideo = () => _ = FileExportVideoAsync(),
             },
-            SplitTableCell = () =>
+            OleCommands = new FreePRibbonOleCommandEndpoints
             {
-                _domainContextMenuSession.ExecuteCurrentTableAction(
-                    PresentationDomainContextActionKind.SplitTableCell,
-                    TryExecuteInlineTableAction);
+                InsertEmbeddedObject = () => _ = InsertEmbeddedObjectFromFileAsync(),
+                TryOpenInlineEmbeddedObject = () => _textEditor?.TryActivateInlineOleObject() == true,
+                TryOpenSelectedEmbeddedObject = ole =>
+                {
+                    OleActivationService.TryActivate(ole);
+                    return true;
+                },
             },
-            PickPictureBullet = () => _ = ApplyPictureBulletFromFileAsync(),
-            InsertSlideZoom = () => _ = OpenSlideZoomDialogAsync(),
-            InsertSectionZoom = () => _ = OpenSectionZoomDialogAsync(),
-            InsertSummaryZoom = () => _ = OpenSummaryZoomDialogAsync(),
-            EditZoomTarget = () => _ = OpenZoomTargetDialogAsync(),
-            EditSummaryZoomTargets = () => _ = OpenSummaryZoomTargetsDialogAsync(),
-            FormatZoom = () => _ = OpenZoomObjectPropertiesDialogAsync(),
-            SetZoomCoverImage = () => _ = OpenZoomCoverImagePickerAsync(),
-            ResetZoomCoverImage = () => _ = RestoreZoomPreviewAsync(),
-            OpenHeaderFooter = OpenHeaderFooterDialog,
-            ApplySmartArtColor = preset => ApplySmartArtColorPreset(preset),
-            ApplySmartArtLayout = preset => ApplySmartArtLayoutPreset(preset),
-            ApplySmartArtQuickStyle = preset => ApplySmartArtQuickStylePreset(preset),
-            ConvertSmartArtToShapes = () => ConvertSelectedSmartArtToShapes(),
-            OpenSmartArtTextPane = () => ShowSmartArtTextPane(),
-            OpenChartData = OpenChartDataDialog,
-            OpenChartDisplayOptions = OpenChartDisplayOptionsDialog,
-            OpenChartAxisOptions = () => OpenChartAxisOptionsDialog(),
-            OpenChartSeriesOptions = () => OpenChartSeriesOptionsDialog(),
-            OpenChartPointOptions = () => OpenChartPointOptionsDialog(),
-            OpenChartLayoutOptions = OpenChartLayoutOptionsDialog,
-            OpenChartExSeriesLayout = OpenChartExSeriesLayoutDialog,
-            OpenChartDataTableOptions = OpenChartDataTableOptionsDialog,
-            OpenChartBubbleOptions = OpenChartBubbleOptionsDialog,
-            OpenChartPieOptions = OpenChartPieOptionsDialog,
-            OpenChartPlotStyleOptions = OpenChartPlotStyleOptionsDialog,
-            OpenChart3DViewOptions = OpenChart3DViewOptionsDialog,
-            OpenChartTextOptions = OpenChartTextOptionsDialog,
-            OpenChartAreaOptions = OpenChartAreaOptionsDialog,
-            OpenChartProtectionOptions = OpenChartProtectionOptionsDialog,
-            OpenHyperlink = OpenHyperlinkDialog,
-            OpenRotationOptions = OpenRotationOptionsDialog,
-            SetEditPointsEnabled = _slideCanvas.SetEditPointsMode,
-            OpenFind = OpenFindDialog,
-            OpenReplace = OpenFindReplaceDialog,
-            ShowCommentsPane = () => ShowReviewCommentsPane(),
-            ShowAccessibilityPane = () => ShowAccessibilityCheckerPane(),
-            ShowAltTextPane = () => ShowAltTextPane(),
-            ShowReadingOrderPane = () => ShowReadingOrderPane(),
-            ShowSelectionPane = () => ShowSelectionPane(),
-            ShowProofingPane = () => ShowProofingPane(),
-            AddComment = () => AddComment(PresentationPaneTextResources.NewCommentDefault),
-            EditComment = () => EditSelectedComment(GetSelectedCommentText()),
-            ReplyComment = () => ReplyToSelectedComment(PresentationPaneTextResources.NewReplyDefault),
-            DeleteComment = () => DeleteSelectedComment(),
-            PreviousComment = () => NavigateReviewComment(PresentationReviewWorkflowIntentKind.PreviousComment),
-            NextComment = () => NavigateReviewComment(PresentationReviewWorkflowIntentKind.NextComment),
-            ResolveComment = () => ResolveSelectedComment(),
-            ReopenComment = () => ReopenSelectedComment(),
-            ApplyViewShowState = ApplyPresentationViewShowState,
-            ApplyViewZoomState = ApplyPresentationViewZoomState,
-            PickTransitionSound = () => _ = PickTransitionSoundAsync(),
-            ToggleAnimationPane = OnAnimationPaneRequested,
-            StartSlideShowFromBeginning = () => StartSlideShow(fromStart: true),
-            StartSlideShowFromCurrent = () => StartSlideShow(fromStart: false),
-            RehearseTimings = () => StartSlideShowWithTiming(SlideShowTimingIntent.RehearseTimings),
-            RecordTimings = () => StartSlideShowWithTiming(SlideShowTimingIntent.RecordTimings),
-            OpenCustomShows = OpenCustomShowDialog,
-            OpenSlideShowSettings = OpenSlideShowSettingsDialog,
-        };
+        });
 
     private FreePRibbonTextActionTargets CreateRibbonTextActionTargets() => new()
     {
@@ -2803,139 +2720,6 @@ public sealed partial class MainWindow : Window,
         }
 
         dialog.Show();
-    }
-
-    internal void OpenChartDataDialog()
-    {
-        if (!_workareaSession.CanOpenDomainDialog(PresentationDomainDialogKind.ChartData))
-            return;
-
-        ShowDomainDialog(new ChartDataDialog(Editor));
-    }
-
-    internal void OpenChartDisplayOptionsDialog()
-    {
-        if (!_workareaSession.CanOpenDomainDialog(PresentationDomainDialogKind.ChartDisplayOptions))
-            return;
-
-        ShowDomainDialog(new ChartDisplayOptionsDialog(Editor));
-    }
-
-    internal void OpenChartAxisOptionsDialog() => OpenChartAxisOptionsDialog(null);
-
-    internal void OpenChartAxisOptionsDialog(ChartAxisKind? initialAxis)
-    {
-        if (!_workareaSession.CanOpenDomainDialog(PresentationDomainDialogKind.ChartAxisOptions))
-            return;
-
-        ShowDomainDialog(new ChartAxisOptionsDialog(Editor, initialAxis));
-    }
-
-    internal void OpenChartSeriesOptionsDialog() => OpenChartSeriesOptionsDialog(null);
-
-    internal void OpenChartSeriesOptionsDialog(int? initialSeriesIndex)
-    {
-        if (!_workareaSession.CanOpenDomainDialog(PresentationDomainDialogKind.ChartSeriesOptions))
-            return;
-
-        ShowDomainDialog(new ChartSeriesOptionsDialog(Editor, initialSeriesIndex));
-    }
-
-    private void OnChartPointDoubleClick(ChartPointHit hit)
-    {
-        Editor.Select(hit.ShapeId);
-        OpenChartPointOptionsDialog(hit.SeriesIndex, hit.PointIndex);
-    }
-
-    internal void OpenChartPointOptionsDialog(int? seriesIndex = null, int? pointIndex = null)
-    {
-        if (!_workareaSession.CanOpenDomainDialog(PresentationDomainDialogKind.ChartPointOptions))
-            return;
-
-        ShowDomainDialog(new ChartPointOptionsDialog(Editor, seriesIndex, pointIndex));
-    }
-
-    internal void OpenChartLayoutOptionsDialog()
-    {
-        if (!_workareaSession.CanOpenDomainDialog(PresentationDomainDialogKind.ChartLayoutOptions))
-            return;
-
-        ShowDomainDialog(new ChartLayoutOptionsDialog(Editor));
-    }
-
-    internal void OpenChartExSeriesLayoutDialog()
-    {
-        if (!_workareaSession.CanOpenDomainDialog(PresentationDomainDialogKind.ChartExSeriesLayout))
-            return;
-
-        ShowDomainDialog(new ChartExSeriesLayoutDialog(Editor));
-    }
-
-    internal void OpenChartDataTableOptionsDialog()
-    {
-        if (!_workareaSession.CanOpenDomainDialog(PresentationDomainDialogKind.ChartDataTableOptions))
-            return;
-
-        ShowDomainDialog(new ChartDataTableOptionsDialog(Editor));
-    }
-
-    internal void OpenChartBubbleOptionsDialog()
-    {
-        if (!_workareaSession.CanOpenDomainDialog(PresentationDomainDialogKind.ChartBubbleOptions))
-            return;
-
-        ShowDomainDialog(new ChartBubbleOptionsDialog(Editor));
-    }
-
-    internal void OpenChartPieOptionsDialog()
-    {
-        if (!_workareaSession.CanOpenDomainDialog(PresentationDomainDialogKind.ChartPieOptions))
-            return;
-
-        ShowDomainDialog(new ChartPieOptionsDialog(Editor));
-    }
-
-    internal void OpenChartPlotStyleOptionsDialog()
-    {
-        if (!_workareaSession.CanOpenDomainDialog(PresentationDomainDialogKind.ChartPlotStyleOptions))
-            return;
-
-        ShowDomainDialog(new ChartPlotStyleOptionsDialog(Editor));
-    }
-
-    internal void OpenChart3DViewOptionsDialog()
-    {
-        if (!_workareaSession.CanOpenDomainDialog(PresentationDomainDialogKind.Chart3DViewOptions))
-            return;
-
-        ShowDomainDialog(new Chart3DViewOptionsDialog(Editor));
-    }
-
-    internal void OpenChartTextOptionsDialog() => OpenChartTextOptionsDialog(ChartTextTarget.Chart);
-
-    internal void OpenChartTextOptionsDialog(ChartTextTarget target)
-    {
-        if (!_workareaSession.CanOpenDomainDialog(PresentationDomainDialogKind.ChartTextOptions))
-            return;
-
-        ShowDomainDialog(new ChartTextOptionsDialog(Editor, target));
-    }
-
-    internal void OpenChartAreaOptionsDialog() => OpenChartAreaOptionsDialog(null);
-
-    internal void OpenChartAreaOptionsDialog(ChartAreaFormattingTarget? initialTarget)
-    {
-        if (!_workareaSession.CanOpenDomainDialog(PresentationDomainDialogKind.ChartAreaOptions)) return;
-        var dialog = new ChartAreaOptionsDialog(Editor, initialTarget);
-        dialog.ShowDialog(this);
-    }
-
-    internal void OpenChartProtectionOptionsDialog()
-    {
-        if (!_workareaSession.CanOpenDomainDialog(PresentationDomainDialogKind.ChartProtectionOptions))
-            return;
-
-        ShowDomainDialog(new ChartProtectionOptionsDialog(Editor));
     }
 
     internal void OpenRotationOptionsDialog()
@@ -3426,121 +3210,77 @@ public sealed partial class MainWindow : Window,
         CancellationToken cancellationToken,
         bool promptForSelection = true)
     {
-        var requestedRequest = request;
+        var requestedSelection = new PrintSelection(
+            _selectedPrinterName,
+            request.Copies,
+            PrintPageRange.All,
+            PrintOrientation.Document,
+            request.Collate,
+            JobTitle: PresentationFileTextResources.NormalizePrintJobName(
+                LastNativePrintHandoffPlan?.SuggestedPrintJobName));
+        PrintSelection? selectedSelection = null;
+        string? packageFailureMessage = null;
+        using var linkedCancellation = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        _printCancellation = linkedCancellation;
         try
         {
-            _latestPrinterDiscovery = await _printService.DiscoverAsync(cancellationToken).ConfigureAwait(true);
-            if (!_latestPrinterDiscovery.IsAvailable)
-            {
-                LastPrintSubmissionResult = FromDiscovery(_latestPrinterDiscovery);
-                _statusText.Text = PresentationNativeCommandOutcomePlanner.BuildPrintStatusText(
-                    LastPrintSubmissionResult);
-                return LastPrintSubmissionResult;
-            }
-
-            var requestedSelection = new PrintSelection(
-                _selectedPrinterName ?? _latestPrinterDiscovery.DefaultPrinter,
-                requestedRequest.Copies,
-                PrintPageRange.All,
-                PrintOrientation.Document,
-                requestedRequest.Collate);
-            var selection = promptForSelection
-                ? await _showPrintSelectionDialog(
-                    this,
-                    _latestPrinterDiscovery,
-                    requestedSelection,
-                    cancellationToken).ConfigureAwait(true)
-                : requestedSelection;
-            if (selection is null)
-            {
-                LastPrintSubmissionResult = new PrintSubmissionResult(
-                    PrintSubmissionStatus.Cancelled,
-                    requestedSelection.PrinterName);
-                _statusText.Text = PresentationNativeCommandOutcomePlanner.BuildPrintStatusText(
-                    LastPrintSubmissionResult);
-                return LastPrintSubmissionResult;
-            }
-
-            selection.Validate();
-            _selectedPrinterName = selection.PrinterName;
-            _lastPrintSelection = selection;
-            var effectiveRequest = requestedRequest with
-            {
-                Copies = selection.Copies,
-                Collate = selection.Collate,
-            };
-            var package = buildPackage(effectiveRequest);
-            LastPrintOutputPackage = package;
-            LastPrintExecutionDescriptor = _fileSession.LastPrintExecutionDescriptor;
-            LastNativePrintHandoffPlan = _fileSession.LastNativePrintHandoffPlan;
-            var validation = package is null
-                ? null
-                : PresentationPrintOutputPackageExecutor.ValidatePackage(package);
-            if (validation?.IsValid != true)
-            {
-                LastPrintSubmissionResult = new PrintSubmissionResult(
-                    PrintSubmissionStatus.Failed,
-                    selection.PrinterName,
-                    Message: validation?.FailureReason ??
-                        PresentationNativeCommandOutcomePlanner.PrintPackageNotBuiltFailure);
-                _statusText.Text = PresentationNativeCommandOutcomePlanner.BuildPrintPackageFailureStatus(
-                    LastPrintSubmissionResult.Message);
-                return LastPrintSubmissionResult;
-            }
-
-            using var temporaryFile = TemporaryFileLease.Create("freep-print-", ".pdf");
-            using var linkedCancellation = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-            _printCancellation = linkedCancellation;
-            try
-            {
-                await temporaryFile.WriteAllBytesAsync(package!.Bytes, linkedCancellation.Token).ConfigureAwait(true);
-                LastPrintSubmissionResult = await _printService.SubmitAsync(
-                    temporaryFile.Path,
-                    selection with
+            var execution = await _portablePrintWorkflow.ExecuteAsync(
+                async (intent, token) =>
+                {
+                    selectedSelection = promptForSelection
+                        ? await _showPrintSelectionDialog(
+                            this,
+                            intent.Discovery,
+                            intent.RequestedSelection,
+                            token).ConfigureAwait(true)
+                        : intent.RequestedSelection;
+                    return selectedSelection;
+                },
+                async (output, _, token) =>
+                {
+                    var selection = selectedSelection ?? requestedSelection;
+                    _selectedPrinterName = selection.PrinterName;
+                    _lastPrintSelection = selection;
+                    var package = buildPackage(request with
                     {
-                        JobTitle = PresentationFileTextResources.NormalizePrintJobName(
-                            LastNativePrintHandoffPlan?.SuggestedPrintJobName),
-                    },
-                    linkedCancellation.Token).ConfigureAwait(true);
-            }
-            finally
-            {
-                if (ReferenceEquals(_printCancellation, linkedCancellation))
-                    _printCancellation = null;
-                temporaryFile.Release();
-            }
-        }
-        catch (OperationCanceledException)
-        {
-            LastPrintSubmissionResult = new PrintSubmissionResult(
-                PrintSubmissionStatus.Cancelled,
-                _selectedPrinterName);
-        }
-        catch (Exception ex) when (ex is not OutOfMemoryException)
-        {
-            LastPrintSubmissionResult = new PrintSubmissionResult(
+                        Copies = selection.Copies,
+                        Collate = selection.Collate,
+                    });
+                    LastPrintOutputPackage = package;
+                    LastPrintExecutionDescriptor = _fileSession.LastPrintExecutionDescriptor;
+                    LastNativePrintHandoffPlan = _fileSession.LastNativePrintHandoffPlan;
+                    var validation = package is null
+                        ? null
+                        : PresentationPrintOutputPackageExecutor.ValidatePackage(package);
+                    if (validation?.IsValid != true)
+                    {
+                        packageFailureMessage = validation?.FailureReason ??
+                            PresentationNativeCommandOutcomePlanner.PrintPackageNotBuiltFailure;
+                        throw new InvalidDataException(packageFailureMessage);
+                    }
+
+                    await output.WriteAsync(package!.Bytes, token).ConfigureAwait(true);
+                },
+                requestedSelection,
+                linkedCancellation.Token).ConfigureAwait(true);
+            _latestPrinterDiscovery = execution.Discovery ?? _latestPrinterDiscovery;
+            LastPrintSubmissionResult = execution.Submission ?? new PrintSubmissionResult(
                 PrintSubmissionStatus.Failed,
-                _selectedPrinterName,
-                Message: ex.Message);
+                selectedSelection?.PrinterName ?? requestedSelection.PrinterName,
+                Message: execution.Operation.Exception?.Message);
+        }
+        finally
+        {
+            if (ReferenceEquals(_printCancellation, linkedCancellation))
+                _printCancellation = null;
         }
 
-        _statusText.Text = PresentationNativeCommandOutcomePlanner.BuildPrintStatusText(
-            LastPrintSubmissionResult!);
+        _statusText.Text = packageFailureMessage is null
+            ? PresentationNativeCommandOutcomePlanner.BuildPrintStatusText(LastPrintSubmissionResult!)
+            : PresentationNativeCommandOutcomePlanner.BuildPrintPackageFailureStatus(packageFailureMessage);
 
         return LastPrintSubmissionResult;
     }
-
-    private static PrintSubmissionResult FromDiscovery(PrinterDiscoveryResult discovery) =>
-        new(
-            discovery.Status switch
-            {
-                PrinterDiscoveryStatus.Cancelled => PrintSubmissionStatus.Cancelled,
-                PrinterDiscoveryStatus.NoPrinters => PrintSubmissionStatus.NoPrinters,
-                PrinterDiscoveryStatus.Unavailable => PrintSubmissionStatus.Unavailable,
-                _ => PrintSubmissionStatus.Failed,
-            },
-            discovery.DefaultPrinter,
-            Message: discovery.Message ?? PresentationNativeCommandOutcomePlanner.PrintSubmissionFailureFallback);
 
     internal void HidePrintOptionsPane()
     {
@@ -5309,22 +5049,22 @@ public sealed partial class MainWindow : Window,
     private void RefreshAltTextRequestPlan()
         => _altTextPaneHostCoordinator.RefreshSelection();
 
-    internal IReadOnlyList<SmartArtNodeOutlineItem> ShowSmartArtTextPane()
-    {
-        _workareaSession.Panes.Show(PresentationWorkareaPane.SmartArtText);
-        var outline = RefreshSmartArtTextPane();
-        _smartArtTextPaneHost.IsVisible = true;
-        RefreshPaneAccessibilityMetadata();
-        return outline;
-    }
+    internal IReadOnlyList<SmartArtNodeOutlineItem> ShowSmartArtTextPane() =>
+        SmartArtTextPaneHostCoordinator.Show();
 
-    internal void HideSmartArtTextPane()
-    {
-        _workareaSession.Panes.Hide(PresentationWorkareaPane.SmartArtText);
-        if (_smartArtTextPaneHost is not null)
-            _smartArtTextPaneHost.IsVisible = false;
-        RefreshPaneAccessibilityMetadata();
-    }
+    internal void HideSmartArtTextPane() => SmartArtTextPaneHostCoordinator.Hide();
+
+    private PresentationWorkareaPaneHostCoordinator<IReadOnlyList<SmartArtNodeOutlineItem>>?
+        _smartArtTextPaneHostCoordinator;
+
+    private PresentationWorkareaPaneHostCoordinator<IReadOnlyList<SmartArtNodeOutlineItem>>
+        SmartArtTextPaneHostCoordinator =>
+        _smartArtTextPaneHostCoordinator ??= new(
+            _workareaSession.Panes,
+            PresentationWorkareaPane.SmartArtText,
+            RefreshSmartArtTextPane,
+            visible => _smartArtTextPaneHost.IsVisible = visible,
+            RefreshPaneAccessibilityMetadata);
 
     internal void SetSmartArtTextPaneRowText(int rowIndex, string text)
     {
@@ -5469,60 +5209,65 @@ public sealed partial class MainWindow : Window,
     private PresentationMediaBookmarkHostSnapshot CaptureMediaBookmarkHostSnapshot() =>
         _avaloniaMediaPaneHostView.CaptureBookmark();
 
-    private PresentationMediaPaneHostViewAdapter BuildAvaloniaMediaPaneHostView() => new(
-        new DelegatingPresentationMediaPaneControlSurface(new(
-            PaneVisible: new(() => IsMediaCaptionPaneVisible, value => SetAvaloniaVisible(_mediaCaptionPaneHost, value)),
-            CaptionLabel: new(() => ReadAvaloniaText(_mediaCaptionLabelBox), value => WriteAvaloniaText(_mediaCaptionLabelBox, value)),
-            CaptionLanguage: new(() => ReadAvaloniaText(_mediaCaptionLanguageBox), value => WriteAvaloniaText(_mediaCaptionLanguageBox, value)),
-            CaptionSource: new(() => ReadAvaloniaText(_mediaCaptionSourceBox), value => WriteAvaloniaText(_mediaCaptionSourceBox, value)),
-            CaptionTranscript: new(() => ReadAvaloniaText(_mediaCaptionTranscriptBox), value => WriteAvaloniaText(_mediaCaptionTranscriptBox, value)),
-            VolumePercent: new(() => ReadAvaloniaValue(_mediaVolumeSlider), value => WriteAvaloniaValue(_mediaVolumeSlider, value)),
-            PlaybackStartModeIndex: new(() => ReadAvaloniaIndex(_mediaStartModeBox), value => WriteAvaloniaIndex(_mediaStartModeBox, value)),
-            Loop: new(() => ReadAvaloniaCheck(_mediaLoopCheckBox), value => WriteAvaloniaCheck(_mediaLoopCheckBox, value)),
-            ShowWhenStopped: new(() => ReadAvaloniaCheck(_mediaShowWhenStoppedCheckBox),
-                value => WriteAvaloniaCheck(_mediaShowWhenStoppedCheckBox, value)),
-            RewindAfterPlaying: new(() => ReadAvaloniaCheck(_mediaRewindAfterPlayingCheckBox),
-                value => WriteAvaloniaCheck(_mediaRewindAfterPlayingCheckBox, value)),
-            PlayFullScreen: new(() => ReadAvaloniaCheck(_mediaPlayFullScreenCheckBox),
-                value => WriteAvaloniaCheck(_mediaPlayFullScreenCheckBox, value)),
-            StopAfterSlides: new(() => ReadAvaloniaText(_mediaStopAfterSlidesBox),
-                value => WriteAvaloniaText(_mediaStopAfterSlidesBox, value)),
-            TrimStart: new(() => ReadAvaloniaText(_mediaTrimStartBox), value => WriteAvaloniaText(_mediaTrimStartBox, value)),
-            TrimEnd: new(() => ReadAvaloniaText(_mediaTrimEndBox), value => WriteAvaloniaText(_mediaTrimEndBox, value)),
-            FadeIn: new(() => ReadAvaloniaText(_mediaFadeInBox), value => WriteAvaloniaText(_mediaFadeInBox, value)),
-            FadeOut: new(() => ReadAvaloniaText(_mediaFadeOutBox), value => WriteAvaloniaText(_mediaFadeOutBox, value)),
-            BookmarkName: new(() => ReadAvaloniaText(_mediaBookmarkNameBox), value => WriteAvaloniaText(_mediaBookmarkNameBox, value)),
-            BookmarkTime: new(() => ReadAvaloniaText(_mediaBookmarkTimeBox), value => WriteAvaloniaText(_mediaBookmarkTimeBox, value)),
-            SetHeading: value => WriteAvaloniaText(_mediaCaptionPaneHeading, value),
-            SetMessage: value => WriteAvaloniaText(_mediaCaptionPaneMessage, value),
-            SetPlaybackStartModeEnabled: value => SetAvaloniaEnabled(_mediaStartModeBox, value),
-            SetLoopEnabled: value => SetAvaloniaEnabled(_mediaLoopCheckBox, value),
-            SetShowWhenStoppedEnabled: value => SetAvaloniaEnabled(_mediaShowWhenStoppedCheckBox, value),
-            SetRewindAfterPlayingEnabled: value => SetAvaloniaEnabled(_mediaRewindAfterPlayingCheckBox, value),
-            SetPlayFullScreenEnabled: value => SetAvaloniaEnabled(_mediaPlayFullScreenCheckBox, value),
-            SetStopAfterSlidesEnabled: value => SetAvaloniaEnabled(_mediaStopAfterSlidesBox, value),
-            SetPlaybackApplyEnabled: value => SetAvaloniaEnabled(_mediaPlaybackApplyButton, value),
-            SetVolumeEnabled: value => SetAvaloniaEnabled(_mediaVolumeSlider, value),
-            SetVolumeApplyEnabled: value => SetAvaloniaEnabled(_mediaVolumeApplyButton, value),
-            SetTimingApplyEnabled: value => SetAvaloniaEnabled(_mediaTimingApplyButton, value),
-            RenderCaptionTracks: RenderMediaCaptionTrackOptions,
-            RenderCaptionField: RenderAvaloniaMediaCaptionField,
-            RenderCaptionAction: RenderAvaloniaMediaCaptionAction,
-            RenderBookmarks: RenderAvaloniaMediaBookmarkOptions,
-            RefreshAccessibilityMetadata: RefreshPaneAccessibilityMetadata)));
+    private PresentationMediaPaneHostViewAdapter BuildAvaloniaMediaPaneHostView() =>
+        PresentationMediaPaneNativeComposition.Compose(
+            new PresentationMediaPaneNativeControls<Control>(
+                _mediaCaptionPaneHost,
+                _mediaCaptionLabelBox,
+                _mediaCaptionLanguageBox,
+                _mediaCaptionSourceBox,
+                _mediaCaptionTranscriptBox,
+                _mediaVolumeSlider,
+                _mediaStartModeBox,
+                _mediaLoopCheckBox,
+                _mediaShowWhenStoppedCheckBox,
+                _mediaRewindAfterPlayingCheckBox,
+                _mediaPlayFullScreenCheckBox,
+                _mediaStopAfterSlidesBox,
+                _mediaTrimStartBox,
+                _mediaTrimEndBox,
+                _mediaFadeInBox,
+                _mediaFadeOutBox,
+                _mediaBookmarkNameBox,
+                _mediaBookmarkTimeBox,
+                _mediaCaptionPaneHeading,
+                _mediaCaptionPaneMessage,
+                _mediaPlaybackApplyButton,
+                _mediaVolumeApplyButton,
+                _mediaTimingApplyButton),
+            new PresentationMediaPaneNativeAccessors<Control>(
+                control => control.IsVisible,
+                (control, value) => control.IsVisible = value,
+                control => (control as TextBox)?.Text,
+                WriteAvaloniaMediaText,
+                control => (control as Slider)?.Value,
+                (control, value) => ((Slider)control).Value =
+                    value ?? PresentationMediaPaneSession.DefaultVolumePercent,
+                control => (control as ComboBox)?.SelectedIndex,
+                (control, value) => ((ComboBox)control).SelectedIndex = value ?? -1,
+                control => (control as CheckBox)?.IsChecked,
+                (control, value) => ((CheckBox)control).IsChecked = value,
+                (control, value) => control.IsEnabled = value),
+            RenderMediaCaptionTrackOptions,
+            RenderAvaloniaMediaCaptionField,
+            RenderAvaloniaMediaCaptionAction,
+            RenderAvaloniaMediaBookmarkOptions,
+            RefreshPaneAccessibilityMetadata);
 
-    private static string? ReadAvaloniaText(TextBox? control) => control?.Text;
-    private static void WriteAvaloniaText(TextBox control, string? value) => control.Text = value ?? string.Empty;
-    private static void WriteAvaloniaText(TextBlock control, string value) => control.Text = value;
-    private static double? ReadAvaloniaValue(Slider? control) => control?.Value;
-    private static void WriteAvaloniaValue(Slider control, double? value) =>
-        control.Value = value ?? PresentationMediaPaneSession.DefaultVolumePercent;
-    private static int? ReadAvaloniaIndex(ComboBox? control) => control?.SelectedIndex;
-    private static void WriteAvaloniaIndex(ComboBox control, int? value) => control.SelectedIndex = value ?? -1;
-    private static bool? ReadAvaloniaCheck(CheckBox? control) => control?.IsChecked;
-    private static void WriteAvaloniaCheck(CheckBox control, bool? value) => control.IsChecked = value;
-    private static void SetAvaloniaEnabled(Control control, bool value) => control.IsEnabled = value;
-    private static void SetAvaloniaVisible(Control control, bool value) => control.IsVisible = value;
+    private static void WriteAvaloniaMediaText(Control control, string? value)
+    {
+        switch (control)
+        {
+            case TextBox textBox:
+                textBox.Text = value ?? string.Empty;
+                break;
+            case TextBlock textBlock:
+                textBlock.Text = value ?? string.Empty;
+                break;
+            default:
+                throw new ArgumentException("The media control does not expose text.", nameof(control));
+        }
+    }
 
     private void RenderAvaloniaMediaCaptionField(
         PresentationMediaPaneCaptionField field,
@@ -5601,14 +5346,19 @@ public sealed partial class MainWindow : Window,
     internal PresentationReadingOrderPlan ShowReadingOrderPane()
         => _reviewWorkflowSession.ShowReadingOrderPane();
 
-    internal PresentationSelectionPanePlan ShowSelectionPane()
-    {
-        _workareaSession.Panes.Show(PresentationWorkareaPane.Selection);
-        var plan = _selectionPane.Refresh();
-        _selectionPane.IsVisible = true;
-        RefreshPaneAccessibilityMetadata();
-        return plan;
-    }
+    internal PresentationSelectionPanePlan ShowSelectionPane() => SelectionPaneHostCoordinator.Show();
+
+    private PresentationWorkareaPaneHostCoordinator<PresentationSelectionPanePlan>?
+        _selectionPaneHostCoordinator;
+
+    private PresentationWorkareaPaneHostCoordinator<PresentationSelectionPanePlan>
+        SelectionPaneHostCoordinator =>
+        _selectionPaneHostCoordinator ??= new(
+            _workareaSession.Panes,
+            PresentationWorkareaPane.Selection,
+            _selectionPane.Refresh,
+            visible => _selectionPane.IsVisible = visible,
+            RefreshPaneAccessibilityMetadata);
 
     internal PresentationReadingOrderMutationPlan ApplyReadingOrderMoveEarlier()
         => ApplyReadingOrderMove(PresentationReviewWorkflowIntentKind.MoveReadingOrderEarlier);
@@ -7406,38 +7156,7 @@ public sealed partial class MainWindow : Window,
         bool fromStart,
         FreeP.App.Compositor.SlideShowTimingIntent timingIntent,
         int? animationStartIndex = null)
-    {
-        if (!_customShowSession.TryBuildPlaybackLaunch(
-                fromStart,
-                animationStartIndex,
-                _mediaPaneHostCoordinator.SelectedCaptionTrackIndex,
-                out var launchPlan))
-            return;
-
-        var selectedCaption = launchPlan.CaptionSelection;
-        var slideShow = new SlideShowWindow(
-            _presentation,
-            launchPlan.Route,
-            Editor.SetSlideNotesText,
-            selectedCaption?.SlideIndex,
-            selectedCaption?.ShapeId,
-            selectedCaption?.TrackIndex);
-        ConfigureSlideShowObserver(slideShow);
-        if (timingIntent != FreeP.App.Compositor.SlideShowTimingIntent.None)
-            slideShow.SetPresenterTimingIntent(timingIntent);
-
-        // WPF leaves the editor selection unchanged while the separate slideshow window
-        // plays. Avalonia must keep that same editor-side selection authority on close.
-        slideShow.Closed += (_, _) =>
-        {
-            RestoreOwnerFocus();
-        };
-
-        if (IsVisible)
-            slideShow.Show(this);
-        else
-            slideShow.Show();
-    }
+        => SlideShowWindowLauncher.TryLaunch(fromStart, timingIntent, animationStartIndex);
 
     internal bool TryBuildCustomSlideShowRoute(
         string? customShowName,
@@ -7449,34 +7168,34 @@ public sealed partial class MainWindow : Window,
         _customShowSession.BuildLaunchPlan();
 
     internal bool TryStartCustomSlideShow(string? customShowName, int startIndex = 0)
-    {
-        if (!_customShowSession.TryBuildNamedPlaybackLaunch(
-                customShowName,
-                startIndex,
-                _mediaPaneHostCoordinator.SelectedCaptionTrackIndex,
-                out var launchPlan))
-        {
-            return false;
-        }
+        => SlideShowWindowLauncher.TryLaunchNamed(customShowName, startIndex);
 
-        var selectedCaption = launchPlan.CaptionSelection;
-        var slideShow = new SlideShowWindow(
-            _presentation,
-            launchPlan.Route,
+    private SlideShowWindowLaunchCoordinator<SlideShowWindow>? _slideShowWindowLauncher;
+
+    private SlideShowWindowLaunchCoordinator<SlideShowWindow> SlideShowWindowLauncher =>
+        _slideShowWindowLauncher ??= new(
+            _customShowSession,
+            () => _presentation,
+            () => _mediaPaneHostCoordinator.SelectedCaptionTrackIndex,
             Editor.SetSlideNotesText,
-            selectedCaption?.SlideIndex,
-            selectedCaption?.ShapeId,
-            selectedCaption?.TrackIndex);
-        ConfigureSlideShowObserver(slideShow);
-        // A named custom show is still a separate playback window. Restore the
-        // editor's focus when it closes just like the normal slideshow route.
-        slideShow.Closed += (_, _) => RestoreOwnerFocus();
+            CreateSlideShowWindow,
+            static (window, intent) => window.SetPresenterTimingIntent(intent),
+            ShowSlideShowWindow);
 
+    private SlideShowWindow CreateSlideShowWindow(SlideShowWindowLaunchPlan launchPlan)
+    {
+        var window = new SlideShowWindow(launchPlan);
+        ConfigureSlideShowObserver(window);
+        window.Closed += (_, _) => RestoreOwnerFocus();
+        return window;
+    }
+
+    private void ShowSlideShowWindow(SlideShowWindow window)
+    {
         if (IsVisible)
-            slideShow.Show(this);
+            window.Show(this);
         else
-            slideShow.Show();
-        return true;
+            window.Show();
     }
 
     internal void OpenCustomShowDialog() =>

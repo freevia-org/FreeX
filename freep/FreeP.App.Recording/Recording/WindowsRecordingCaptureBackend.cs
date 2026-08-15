@@ -40,48 +40,48 @@ public sealed class WindowsRecordingCaptureBackend : ISlideShowRecordingCaptureB
     {
         ArgumentNullException.ThrowIfNull(request);
 
-        var canCapture = request.Kind switch
-        {
-            SlideShowRecordingMediaArtifactKind.NarrationAudio => AdapterReadiness.CanCaptureNarration,
-            SlideShowRecordingMediaArtifactKind.CameraVideo => AdapterReadiness.CanCaptureCamera,
-            _ => false
-        };
-        if (!canCapture)
+        if (!SlideShowRecordingMediaArtifactPolicy.TryDescribe(request.Kind, out var artifact))
+            return;
+        if (!SlideShowRecordingMediaArtifactPolicy.CanCapture(artifact, AdapterReadiness))
         {
             return;
         }
 
         var device = AdapterReadiness.Devices.First(device =>
-            device.Kind == DeviceKind(request.Kind) &&
+            device.Kind == artifact.DeviceKind &&
             device.IsAvailable);
         _captureEngine.BeginCapture(new WindowsRecordingCaptureStartRequest(
             device,
             request.SlideIndex,
             request.StartedAtUtc,
-            NormalizePackagePath(request.SuggestedFileName, Extension(request.Kind))));
+            SlideShowRecordingMediaArtifactPolicy.NormalizePackagePath(
+                request.Kind,
+                _metadata.PackageRoot,
+                request.SuggestedFileName,
+                "ppt/media/freep-recordings/windows")));
     }
 
     public SlideShowRecordingCaptureResult CompleteCapture(SlideShowRecordingCaptureRequest request)
     {
         ArgumentNullException.ThrowIfNull(request);
 
-        var canCapture = request.Kind switch
-        {
-            SlideShowRecordingMediaArtifactKind.NarrationAudio => AdapterReadiness.CanCaptureNarration,
-            SlideShowRecordingMediaArtifactKind.CameraVideo => AdapterReadiness.CanCaptureCamera,
-            _ => false
-        };
-        if (!canCapture)
+        if (!SlideShowRecordingMediaArtifactPolicy.TryDescribe(request.Kind, out var artifact))
+            return SlideShowRecordingCaptureResult.Deferred($"{_metadata.AdapterName}: {AdapterReadiness.UnavailableReason}");
+        if (!SlideShowRecordingMediaArtifactPolicy.CanCapture(artifact, AdapterReadiness))
             return SlideShowRecordingCaptureResult.Deferred($"{_metadata.AdapterName}: {AdapterReadiness.UnavailableReason}");
 
         var device = AdapterReadiness.Devices.First(device =>
-            device.Kind == DeviceKind(request.Kind) &&
+            device.Kind == artifact.DeviceKind &&
             device.IsAvailable);
         var capture = _captureEngine.CompleteCapture(new WindowsRecordingCaptureRequest(
             device,
             request.SlideIndex,
             request.DurationMs,
-            NormalizePackagePath(request.SuggestedFileName, Extension(request.Kind))));
+            SlideShowRecordingMediaArtifactPolicy.NormalizePackagePath(
+                request.Kind,
+                _metadata.PackageRoot,
+                request.SuggestedFileName,
+                "ppt/media/freep-recordings/windows")));
 
         if (!capture.IsCaptured)
             return SlideShowRecordingCaptureResult.Deferred(capture.StatusText);
@@ -94,7 +94,7 @@ public sealed class WindowsRecordingCaptureBackend : ISlideShowRecordingCaptureB
             Convert.ToHexString(SHA256.HashData(capture.PayloadBytes)).ToLowerInvariant(),
             capture.PayloadBytes,
             fileName,
-            ContentType(request.Kind));
+            artifact.ContentType);
     }
 
     private static SlideShowRecordingCaptureAdapterReadiness BuildReadiness(
@@ -128,27 +128,6 @@ public sealed class WindowsRecordingCaptureBackend : ISlideShowRecordingCaptureB
             (false, true) => "No Windows microphone devices were reported by the host OS.",
             _ => NoDevicesReason
         };
-
-    private static SlideShowRecordingCaptureDeviceKind DeviceKind(SlideShowRecordingMediaArtifactKind kind) =>
-        kind == SlideShowRecordingMediaArtifactKind.NarrationAudio
-            ? SlideShowRecordingCaptureDeviceKind.Microphone
-            : SlideShowRecordingCaptureDeviceKind.Camera;
-
-    private static string Extension(SlideShowRecordingMediaArtifactKind kind) =>
-        kind == SlideShowRecordingMediaArtifactKind.NarrationAudio ? ".wav" : ".mp4";
-
-    private static string ContentType(SlideShowRecordingMediaArtifactKind kind) =>
-        kind == SlideShowRecordingMediaArtifactKind.NarrationAudio ? "audio/wav" : "video/mp4";
-
-    private string NormalizePackagePath(string suggestedFileName, string extension)
-    {
-        var fileName = string.IsNullOrWhiteSpace(suggestedFileName)
-            ? "slide-narration" + extension
-            : suggestedFileName.Trim().Replace('\\', '/').Split('/').Last();
-        fileName = Path.ChangeExtension(fileName, extension);
-
-        return $"{_metadata.PackageRoot}/{fileName}";
-    }
 
     private sealed class UnavailableWindowsRecordingDeviceCatalog : IWindowsRecordingDeviceCatalog
     {

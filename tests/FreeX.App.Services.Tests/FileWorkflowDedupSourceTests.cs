@@ -434,6 +434,22 @@ public sealed class FileWorkflowDedupSourceTests
     }
 
     [Fact]
+    public void AvaloniaPdfExport_UsesSharedAtomicExportExecutor()
+    {
+        var avaloniaSource = File.ReadAllText(RepositoryFileLocator.Find(
+            "src",
+            "FreeX.App.Avalonia",
+            "MainWindow.cs"));
+
+        avaloniaSource.Should().Contain("new AtomicExportExecutor()")
+            .And.Contain(".ExecuteAsync<Pdf.AvaloniaPdfDocumentExportOutcome>(")
+            .And.Contain("Pdf.AvaloniaPdfDocumentExporter.Save(");
+        avaloniaSource.Should().NotContain("pdfBuffer.ToArray()");
+        avaloniaSource.Should().NotContain("AtomicFileWriter.WriteAllBytesAsync(");
+        avaloniaSource.Should().NotContain("File.WriteAllBytesAsync(");
+    }
+
+    [Fact]
     public void AvaloniaStorageProviderPickerCalls_StayInSharedShellService()
     {
         var pickerService = File.ReadAllText(RepositoryFileLocator.Find(

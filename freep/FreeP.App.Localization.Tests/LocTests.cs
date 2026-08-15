@@ -30,6 +30,11 @@ public sealed class LocTests
     {
         WithUiCulture("en-US", () => Loc.Get("Common_Cancel")).Should().Be("_Cancel");
         WithUiCulture("en-US", () => LocalizedUiText.ErrorTitle).Should().Be("Error");
+        WithUiCulture("en-US", () => Loc.Get("Common_Location")).Should().Be("Location");
+        WithUiCulture("en-US", () => Loc.Get("Common_FindReplace_NoMatchesFound"))
+            .Should().Be("No matches found.");
+        WithUiCulture("en-US", () => Loc.Get("Common_FindReplace_NotFoundFormat"))
+            .Should().Be("\"{0}\" not found.");
     }
 
     [Fact]

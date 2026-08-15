@@ -1,4 +1,4 @@
-using System.Diagnostics;
+using Free.Shared.AppServices.Printing;
 
 namespace FreeP.App.Recording;
 
@@ -188,6 +188,11 @@ public sealed class PathLinuxRecordingExecutableLocator : ILinuxRecordingExecuta
 
 public sealed class SystemLinuxRecordingProbeRunner : ILinuxRecordingProbeRunner
 {
+    private readonly IProcessRunner _processRunner;
+
+    public SystemLinuxRecordingProbeRunner(IProcessRunner? processRunner = null) =>
+        _processRunner = processRunner ?? new SystemProcessRunner();
+
     public LinuxRecordingProbeResult Run(
         string fileName,
         IReadOnlyList<string> arguments,
@@ -198,64 +203,21 @@ public sealed class SystemLinuxRecordingProbeRunner : ILinuxRecordingProbeRunner
         if (timeout <= TimeSpan.Zero)
             throw new ArgumentOutOfRangeException(nameof(timeout));
 
-        using var process = new Process
-        {
-            StartInfo = new ProcessStartInfo
-            {
-                FileName = fileName,
-                UseShellExecute = false,
-                RedirectStandardOutput = true,
-                RedirectStandardError = true,
-                CreateNoWindow = true
-            }
-        };
-        foreach (var argument in arguments)
-            process.StartInfo.ArgumentList.Add(argument);
-
         try
         {
-            if (!process.Start())
-                return new LinuxRecordingProbeResult(-1, string.Empty, $"Could not start '{fileName}'.");
-
-            var outputTask = process.StandardOutput.ReadToEndAsync();
-            var errorTask = process.StandardError.ReadToEndAsync();
-            if (!process.WaitForExit(timeout))
-            {
-                TryKill(process);
-                return new LinuxRecordingProbeResult(
-                    -1,
-                    GetCompletedText(outputTask),
-                    GetCompletedText(errorTask),
-                    TimedOut: true);
-            }
-
+            var result = _processRunner.RunAsync(
+                    new ProcessInvocation(fileName, arguments, Timeout: timeout))
+                .GetAwaiter()
+                .GetResult();
             return new LinuxRecordingProbeResult(
-                process.ExitCode,
-                outputTask.GetAwaiter().GetResult(),
-                errorTask.GetAwaiter().GetResult());
+                result.ExitCode,
+                result.StandardOutput,
+                result.StandardError,
+                result.TimedOut);
         }
         catch (Exception ex) when (ex is not OutOfMemoryException)
         {
-            TryKill(process);
             return new LinuxRecordingProbeResult(-1, string.Empty, ex.Message);
-        }
-    }
-
-    private static string GetCompletedText(Task<string> task) =>
-        task.IsCompletedSuccessfully ? task.Result : string.Empty;
-
-    private static void TryKill(Process process)
-    {
-        try
-        {
-            if (!process.HasExited)
-            {
-                process.Kill(entireProcessTree: true);
-                process.WaitForExit(1000);
-            }
-        }
-        catch (InvalidOperationException)
-        {
         }
     }
 }

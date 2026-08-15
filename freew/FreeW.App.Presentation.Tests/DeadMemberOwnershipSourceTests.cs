@@ -32,6 +32,44 @@ public sealed class DeadMemberOwnershipSourceTests
             "GetDestinationChoices(");
     }
 
+    [Fact]
+    public void Superseded_renderer_facades_stay_retired()
+    {
+        var wpf = TestWorkspaceFileLocator.ReadAllText(
+            "freew", "FreeW.App.Host", "Editing", "DocumentView.cs");
+        var avalonia = TestWorkspaceFileLocator.ReadAllText(
+            "freew", "FreeW.App.Avalonia", "Editing", "DocumentView.cs");
+
+        foreach (var member in new[]
+        {
+            "public void RefreshStyles(",
+            "public void SetSelectedShapeRotation(",
+            "public void SetSelectedImageRotation(",
+            "public string CurrentParagraphStyleName",
+            "public void EscapeFormatPainter(",
+            "public void ChangeSelectedImageZOrder(",
+            "public void InsertInternalLink(",
+        })
+        {
+            wpf.Should().NotContain(member);
+        }
+
+        foreach (var member in new[]
+        {
+            "public IReadOnlyList<string> CustomDictionaryWords",
+            "public bool IsShapeTextEditing",
+            "public (SmartArtKind Kind, string? ColorSchemeId)? GetSelectedSmartArtInfo(",
+            "public void ApplyMultiLevelListStartOverrides(",
+            "public void ApplyMultiLevelHeadingPreset(",
+            "public void ToggleDifferentFirstPage(",
+            "public void ToggleDifferentOddEvenPages(",
+            "public void CyclePageVerticalAlignment(",
+        })
+        {
+            avalonia.Should().NotContain(member);
+        }
+    }
+
     private static void AssertMissing(params string[] pathAndMembers)
     {
         var firstMemberIndex = Array.FindIndex(pathAndMembers, part => part.EndsWith('('));

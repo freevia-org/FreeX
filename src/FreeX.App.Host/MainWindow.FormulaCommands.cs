@@ -23,8 +23,11 @@ public partial class MainWindow
             return;
 
         var activeCell = _selectionCursor ?? _selectionAnchor ?? range.Start;
-        var matches = GetFormulaAuditMatches(activeCell, selectDependents, includeTransitive);
-        var plan = FormulaAuditSelectionPlanner.Plan(_currentSheetId, matches);
+        var plan = FormulaAuditSelectionPlanner.Plan(
+            _workbook,
+            activeCell,
+            selectDependents,
+            includeTransitive);
         if (plan is null)
         {
             StatusReadyText.Visibility = Visibility.Visible;
@@ -54,26 +57,6 @@ public partial class MainWindow
         RefreshSheetTabs();
         RefreshToolbar();
         RefreshStatusBar();
-    }
-
-    private IReadOnlyList<CellAddress> GetFormulaAuditMatches(
-        CellAddress activeCell,
-        bool selectDependents,
-        bool includeTransitive)
-    {
-        if (!includeTransitive)
-        {
-            return selectDependents
-                ? FormulaAuditingService.GetDirectDependents(_workbook, activeCell)
-                : FormulaAuditingService.GetDirectPrecedents(_workbook, activeCell);
-        }
-
-        var arrows = selectDependents
-            ? FormulaAuditingService.GetDependentTraceArrows(_workbook, activeCell)
-            : FormulaAuditingService.GetPrecedentTraceArrows(_workbook, activeCell);
-        return arrows
-            .Select(arrow => selectDependents ? arrow.To : arrow.From)
-            .ToList();
     }
 
     private void InsertFunctionBtn_Click(object sender, RoutedEventArgs e)

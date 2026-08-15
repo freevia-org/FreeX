@@ -1,4 +1,5 @@
 using FluentAssertions;
+using Free.Shared.AppServices;
 using FreeX.App.Presentation.Dialogs;
 using FreeX.Core.Commands;
 
@@ -38,6 +39,29 @@ public sealed class FindReplaceDialogSchemaTests
                 Format,
                 stripAccessKeys: true)
             .Should().Be("Find");
+    }
+
+    [Fact]
+    public void ResolvePolicyText_UsesFreeXResourceDescriptors()
+    {
+        var values = new Dictionary<string, string>
+        {
+            ["FindReplace_FindWhatRequired"] = "localized required",
+            ["FindReplace_NoMatchesFound"] = "localized missing",
+            ["FindReplace_NoReplaceableMatchFound"] = "localized no replacement",
+            ["FindReplace_MatchStatus"] = "localized match {0}/{1}",
+            ["FindReplace_ReplacedCellsStatus"] = "localized replaced {0}",
+        };
+
+        var text = FindReplaceDialogSchema.ResolvePolicyText(key => values[key]);
+
+        text.SearchTermRequired.Should().Be("localized required");
+        text.NoMatches.Should().Be("localized missing");
+        text.NoReplacements.Should().Be("localized no replacement");
+        text.NotFoundFormat.Should().Be("localized missing");
+        text.MatchFormat.Should().Be("localized match {0}/{1}");
+        text.ReplacedOccurrencesFormat.Should().Be("localized replaced {0}");
+        text.ReplacementsMadeFormat.Should().Be("localized replaced {0}");
     }
 
     [Fact]

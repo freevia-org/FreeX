@@ -43,6 +43,16 @@ public sealed record SisterBackstagePaneTextSpec(
     string OptionsDescription,
     string? OptionsEditText = null)
 {
+    public string RecentHeading { get; init; } = "Recent";
+
+    public string OptionsHeading { get; init; } = "Options";
+
+    public BackstageInfoPaneTextSpec Info { get; init; } =
+        BackstageInfoPaneTextSpec.NeutralEnglish;
+
+    public ApplicationOptionsSummaryTextSpec OptionsSummary { get; init; } =
+        ApplicationOptionsSummaryTextSpec.NeutralEnglish;
+
     public SisterBackstageAccountPaneTextSpec Account { get; init; } =
         SisterBackstageAccountPaneTextSpec.NeutralEnglish;
 
@@ -63,6 +73,14 @@ public sealed record SisterBackstagePaneTextSpec(
             descriptor.OptionsDescription.Resolve(getText),
             descriptor.OptionsEditText?.Resolve(getText))
         {
+            RecentHeading = descriptor.RecentHeading?.Resolve(getText) ?? "Recent",
+            OptionsHeading = descriptor.OptionsHeading?.Resolve(getText) ?? "Options",
+            Info = descriptor.Info is null
+                ? BackstageInfoPaneTextSpec.NeutralEnglish
+                : BackstageInfoPaneTextSpec.FromDescriptor(descriptor.Info, getText),
+            OptionsSummary = descriptor.OptionsSummary is null
+                ? ApplicationOptionsSummaryTextSpec.NeutralEnglish
+                : ApplicationOptionsSummaryTextSpec.FromDescriptor(descriptor.OptionsSummary, getText),
             Export = SisterBackstageExportPaneTextSpec.FromDescriptor(descriptor.Export, getText)
         };
     }
@@ -93,7 +111,8 @@ public sealed class SisterBackstagePaneSpecPlanner
         return new BackstageRecentPaneSpec(
             recentPaths.ToArray(),
             _text.RecentEmptyText,
-            openPath);
+            openPath,
+            _text.RecentHeading);
     }
 
     public BackstageTemplatePaneSpec BuildNewPaneSpec(Action create)
@@ -120,7 +139,9 @@ public sealed class SisterBackstagePaneSpecPlanner
             options,
             dataFolder,
             _text.OptionsEditText,
-            edit);
+            edit,
+            _text.OptionsHeading,
+            _text.OptionsSummary);
     }
 
     public BackstageAccountPaneSpec BuildAccountPaneSpec(
@@ -182,17 +203,20 @@ public static class BackstageApplicationOptionsPanePlanner
         IApplicationOptionsSummarySource options,
         string dataFolder,
         string? editText = null,
-        Action? edit = null)
+        Action? edit = null,
+        string heading = "Options",
+        ApplicationOptionsSummaryTextSpec? text = null)
     {
         ArgumentNullException.ThrowIfNull(description);
         ArgumentNullException.ThrowIfNull(options);
         ArgumentNullException.ThrowIfNull(dataFolder);
 
-        var summary = ApplicationOptionsSummaryPlanner.Build(options, dataFolder);
+        var summary = ApplicationOptionsSummaryPlanner.Build(options, dataFolder, text);
         return new BackstageOptionsPaneSpec(
             description,
             summary.Rows.Select(row => new BackstageFieldRow(row.Label, row.Value)).ToArray(),
             editText,
-            edit);
+            edit,
+            heading);
     }
 }

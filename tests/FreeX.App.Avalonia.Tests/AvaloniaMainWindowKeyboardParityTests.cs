@@ -286,31 +286,46 @@ public sealed class AvaloniaMainWindowKeyboardParityTests
     {
         await Run(async (window, sheet) =>
         {
-            window.KeyboardSelectionModeForTest.Should().Be(FreeX.App.Presentation.ExcelSelectionMode.Normal);
-            var origin = new CellAddress(sheet.Id, 2, 2);
-            window.Session.SelectCell(origin);
+            var formulaOwner = new MainWindow([]);
+            var formulaAddress = new CellAddress(formulaOwner.Session.ActiveSheet.Id, 1, 1);
+            formulaOwner.Session.SelectCell(formulaAddress);
+            formulaOwner.BeginFormulaPointModeEditForTest(formulaAddress, "=SUM(");
 
-            await Press(window, Key.F8, KeyModifiers.None);
-            window.KeyboardSelectionModeForTest.Should().Be(FreeX.App.Presentation.ExcelSelectionMode.Extend);
-            await Press(window, Key.Right, KeyModifiers.None);
-            window.Session.SelectedRange.Should().Be(new GridRange(
-                origin,
-                new CellAddress(sheet.Id, 2, 3)));
-            await Press(window, Key.F8, KeyModifiers.None);
-            window.KeyboardSelectionModeForTest.Should().Be(FreeX.App.Presentation.ExcelSelectionMode.Normal);
+            try
+            {
+                window.KeyboardSelectionModeForTest.Should().Be(FreeX.App.Presentation.ExcelSelectionMode.Normal);
+                var origin = new CellAddress(sheet.Id, 2, 2);
+                window.Session.SelectCell(origin);
 
-            window.Session.SelectCell(origin);
-            await Press(window, Key.F8, KeyModifiers.Shift);
-            window.KeyboardSelectionModeForTest.Should().Be(FreeX.App.Presentation.ExcelSelectionMode.Add);
-            await Press(window, Key.Down, KeyModifiers.None);
-            window.Session.SelectedRanges.Should().BeEquivalentTo([
-                new GridRange(origin, origin),
-                new GridRange(
-                    new CellAddress(sheet.Id, 3, 2),
-                    new CellAddress(sheet.Id, 3, 2)),
-            ]);
-            await Press(window, Key.Escape, KeyModifiers.None);
-            window.KeyboardSelectionModeForTest.Should().Be(FreeX.App.Presentation.ExcelSelectionMode.Normal);
+                await Press(window, Key.F8, KeyModifiers.None);
+                window.KeyboardSelectionModeForTest.Should().Be(FreeX.App.Presentation.ExcelSelectionMode.Extend);
+                await Press(window, Key.Right, KeyModifiers.None);
+                window.Session.SelectedRange.Should().Be(new GridRange(
+                    origin,
+                    new CellAddress(sheet.Id, 2, 3)));
+                await Press(window, Key.F8, KeyModifiers.None);
+                window.KeyboardSelectionModeForTest.Should().Be(FreeX.App.Presentation.ExcelSelectionMode.Normal);
+
+                window.Session.SelectCell(origin);
+                await Press(window, Key.F8, KeyModifiers.Shift);
+                window.KeyboardSelectionModeForTest.Should().Be(FreeX.App.Presentation.ExcelSelectionMode.Add);
+                await Press(window, Key.Down, KeyModifiers.None);
+                window.Session.SelectedRanges.Should().BeEquivalentTo([
+                    new GridRange(origin, origin),
+                    new GridRange(
+                        new CellAddress(sheet.Id, 3, 2),
+                        new CellAddress(sheet.Id, 3, 2)),
+                ]);
+                await Press(window, Key.Escape, KeyModifiers.None);
+                window.KeyboardSelectionModeForTest.Should().Be(FreeX.App.Presentation.ExcelSelectionMode.Normal);
+                formulaOwner.HasActiveFormulaPointMode.Should().BeTrue(
+                    "Escape belongs to the local sticky selection mode before another workbook's formula edit");
+            }
+            finally
+            {
+                formulaOwner.AllowCloseWithoutDirtyPromptForParityCapture();
+                formulaOwner.Close();
+            }
         });
     }
 

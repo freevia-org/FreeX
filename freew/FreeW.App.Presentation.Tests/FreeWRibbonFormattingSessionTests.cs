@@ -1,3 +1,4 @@
+using Free.Shared.Ribbon;
 using FreeW.App.Presentation.Ribbon;
 using FreeW.Core.Model;
 
@@ -74,13 +75,52 @@ public sealed class FreeWRibbonFormattingSessionTests
         session.CurrentThemeName().Should().Be(document.Theme.Name);
     }
 
+    [Fact]
+    public void PortableCommandsOwnParagraphValueAndStyleRibbonAdapters()
+    {
+        var document = TextDocument.CreateEmpty();
+        document.Styles["CustomHeading"] = new DocumentStyle
+        {
+            Id = "CustomHeading",
+            Name = "Custom Heading",
+            Type = StyleType.Paragraph,
+        };
+        var paragraph = ParagraphFormatting.Default with { IndentLeftPt = 12.5 };
+        var appliedValues = new List<(FreeWParagraphValueKind Kind, double Value)>();
+        string? appliedStyle = null;
+        var session = CreateSession(
+            document,
+            () => paragraph,
+            (kind, value) => appliedValues.Add((kind, value)),
+            value => appliedStyle = value,
+            getCurrentStyleId: () => "CustomHeading");
+        var valueCommand = new FreeWRibbonParagraphValueCommand(
+            session,
+            FreeWParagraphValueKind.IndentLeft);
+        var styleCommand = new FreeWRibbonParagraphStyleCommand(session);
+
+        valueCommand.GetState().Value.Should().Be("12.5");
+        valueCommand.Execute(RibbonCommandContext.ForSelectedValue("24"));
+        valueCommand.Execute(new RibbonCommandContext(
+            new Dictionary<string, object?> { ["value"] = "36" }));
+        appliedValues.Should().Equal(
+            (FreeWParagraphValueKind.IndentLeft, 24),
+            (FreeWParagraphValueKind.IndentLeft, 36));
+
+        styleCommand.GetState().Value.Should().Be("Custom Heading");
+        styleCommand.Execute(new RibbonCommandContext(
+            new Dictionary<string, object?> { ["value"] = "Custom Heading" }));
+        appliedStyle.Should().Be("CustomHeading");
+    }
+
     private static FreeWRibbonFormattingSession CreateSession(
         TextDocument document,
         Func<ParagraphFormatting>? getParagraph = null,
         Action<FreeWParagraphValueKind, double>? applyParagraphValue = null,
         Action<string>? applyStyle = null,
         Action<DocumentTheme>? applyTheme = null,
-        Action<DocumentStyleSet>? applyStyleSet = null) =>
+        Action<DocumentStyleSet>? applyStyleSet = null,
+        Func<string?>? getCurrentStyleId = null) =>
         new(new FreeWRibbonFormattingPorts(
             getParagraph ?? (() => ParagraphFormatting.Default),
             value => applyParagraphValue?.Invoke(FreeWParagraphValueKind.IndentLeft, value),
@@ -88,7 +128,7 @@ public sealed class FreeWRibbonFormattingSessionTests
             value => applyParagraphValue?.Invoke(FreeWParagraphValueKind.SpaceBefore, value),
             value => applyParagraphValue?.Invoke(FreeWParagraphValueKind.SpaceAfter, value),
             () => document,
-            () => null,
+            getCurrentStyleId ?? (() => null),
             applyStyle ?? (_ => { }),
             applyTheme ?? (_ => { }),
             applyStyleSet ?? (_ => { })));

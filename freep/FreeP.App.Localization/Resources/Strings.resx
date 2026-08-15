@@ -3768,6 +3768,7 @@
   <data name="FreeP_Backstage_Options_EditText" xml:space="preserve">
     <value>Edit options…</value>
   </data>
+  <data name="FreeP_Backstage_Info_Heading" xml:space="preserve"><value>Info</value></data>
   <data name="Options_Title" xml:space="preserve"><value>FreeP Options</value></data>
   <data name="Options_RecentFilesLabel" xml:space="preserve"><value>Recent files to keep:</value></data>
   <data name="Options_DefaultSaveFormatLabel" xml:space="preserve"><value>Default save format:</value></data>
@@ -3793,5 +3794,8 @@
   <data name="Print_Host_AvaloniaLinux" xml:space="preserve"><value>Avalonia Linux print host</value></data>
   <data name="Print_Host_UnavailableFormat" xml:space="preserve"><value>{0} is unavailable on this platform.</value></data>
   <data name="Print_Host_WpfWindowsOnly" xml:space="preserve"><value>Native WPF printing is available only on Windows.</value></data>
+  <data name="FreeP_FindReplace_Status_NoReplacements" xml:space="preserve"><value>No replacements made.</value></data>
+  <data name="FreeP_FindReplace_Status_ReplacedOccurrencesFormat" xml:space="preserve"><value>Replaced {0} occurrence{1}.</value></data>
+  <data name="FreeP_FindReplace_Status_ReplacementsMadeFormat" xml:space="preserve"><value>{0} replacement(s) made.</value></data>
   <data name="Renderer_InlineOleObjectFallback" xml:space="preserve"><value>OLE object</value></data>
 </root>

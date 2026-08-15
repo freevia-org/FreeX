@@ -198,7 +198,7 @@ public sealed class FreeWDocumentFragmentImportWorkflowTests
         workflow.Should().NotContain("FreeWTextImportPolicy");
         workflow.Should().NotContain("using System.Windows");
         workflow.Should().NotContain("using Avalonia");
-        workflow.Should().NotContain("File.ReadAll");
+        workflow.Should().NotContain("File.ReadAllBytes");
 
         wpfCommands.Should().Contain("new FreeWDocumentFragmentImportWorkflow(");
         wpfCommands.Should().Contain("CreateTextFromFileRequest()");
@@ -207,7 +207,13 @@ public sealed class FreeWDocumentFragmentImportWorkflowTests
         wpfCommands.Should().NotContain("OlePackagePayloadBuilder.Create(");
         wpfCommands.Should().NotContain("DocxReader.Read(result.FileName");
         wpfPorts.Should().Contain("WpfFileDialogService.ShowOpenDialog(");
-        wpfPorts.Should().Contain("File.ReadAllBytes(");
+        workflow.Should().Contain("class FreeWDocumentFragmentFileSourceReaderPort");
+        workflow.Should().Contain("FileByteReadWorkflow.ReadLocalPathBytesAsync(");
+        workflow.Should().Contain("File.ReadAllTextAsync(");
+        wpfPorts.Should().Contain("FreeWDocumentFragmentFileSourceReaderPort");
+        wpfPorts.Should().NotContain("FileByteReadWorkflow.ReadLocalPathBytesAsync(");
+        wpfPorts.Should().NotContain("File.ReadAllTextAsync(");
+        wpfPorts.Should().NotContain("File.ReadAllBytes(");
         wpfPorts.Should().Contain("LinkedImagePreviewResolver.ResolveLocalPreviews(");
         wpfPorts.Should().Contain("editor.InsertDocument(");
 
@@ -218,7 +224,10 @@ public sealed class FreeWDocumentFragmentImportWorkflowTests
         avaloniaWindow.Should().NotContain("EmbeddedObjectFileType");
         avaloniaWindow.Should().NotContain("OlePackagePayloadBuilder.Create(");
         avaloniaPorts.Should().Contain("AvaloniaFilePickerService.PickSingleOpenFileWithLocalPathAsync(");
-        avaloniaPorts.Should().Contain("File.ReadAllTextAsync(");
+        avaloniaPorts.Should().Contain("FreeWDocumentFragmentFileSourceReaderPort");
+        avaloniaPorts.Should().NotContain("FileByteReadWorkflow.ReadLocalPathBytesAsync(");
+        avaloniaPorts.Should().NotContain("File.ReadAllBytesAsync(");
+        avaloniaPorts.Should().NotContain("File.ReadAllTextAsync(");
         avaloniaPorts.Should().Contain("editor.InsertQuickPartText(");
     }
 

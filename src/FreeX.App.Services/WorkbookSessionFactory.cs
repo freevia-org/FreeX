@@ -8,6 +8,13 @@ namespace FreeX.App.Services;
 
 public sealed class WorkbookSessionFactory
 {
+    private readonly FindReplacePolicyTextSpec? _findReplacePolicyText;
+
+    public WorkbookSessionFactory(FindReplacePolicyTextSpec? findReplacePolicyText = null)
+    {
+        _findReplacePolicyText = findReplacePolicyText;
+    }
+
     /// <summary>
     /// Creates a session over host-provided command, calculation, viewport, and document-state
     /// services. This lets an existing renderer migrate to <see cref="WorkbookSession"/> ownership
@@ -40,7 +47,8 @@ public sealed class WorkbookSessionFactory
             viewportHeight,
             viewportWidth,
             includeObjects,
-            documentState: documentState);
+            documentState: documentState,
+            findReplacePolicyText: _findReplacePolicyText);
     }
 
     public WorkbookSession Create(

@@ -67,6 +67,30 @@ public sealed class FindReplaceDialogSessionTests
     }
 
     [Fact]
+    public void Commands_UseInjectedPolicyTextForValidationAndResults()
+    {
+        var host = new RecordingCommandHost
+        {
+            FindResult = false,
+            ReplaceAllResult = new FindReplaceAllExecutionResult(2),
+        };
+        var text = new FindReplacePolicyTextSpec(
+            "search required",
+            "no matches",
+            "no replacements",
+            "missing {0}",
+            "match {0}/{1}",
+            "changed {0} item{1}",
+            "made {0} replacements");
+        var session = new FindReplaceDialogSession(host, policyText: text);
+
+        session.FindNext().StatusText.Should().Be("search required");
+        session.SetInput("fox", "wolf", false, false, false);
+        session.FindNext().StatusText.Should().Be("missing fox");
+        session.ReplaceAll().StatusText.Should().Be("changed 2 items");
+    }
+
+    [Fact]
     public void Execute_AppliesTheInputSchemaAndDispatchesTheSharedAction()
     {
         var host = new RecordingCommandHost { ReplaceResult = true };

@@ -112,17 +112,8 @@ public static class FormulaReferenceEditingController
                 formulaCell,
                 tableName,
                 selector),
-            sheetId => FindSheetIndex(workbook, sheetId));
-    }
-
-    private static int? FindSheetIndex(Workbook workbook, SheetId sheetId)
-    {
-        for (var index = 0; index < workbook.Sheets.Count; index++)
-        {
-            if (workbook.Sheets[index].Id == sheetId)
-                return index;
-        }
-
-        return null;
+            sheetId => workbook.IndexOfSheet(sheetId) is var index && index >= 0
+                ? index
+                : null);
     }
 }

@@ -133,6 +133,7 @@ public sealed class WorkbookSession : IDisposable
     private readonly WorkbookSheetSelectionService _sheetSelectionService;
     private readonly IViewportService _viewportService;
     private readonly FindReplaceWorkflowSession _findReplaceWorkflow;
+    private readonly FindReplacePolicyTextSpec? _findReplacePolicyText;
     private readonly bool _includeObjects;
     private readonly WorkbookSession? _sharedDocumentStateOwner;
     private readonly WorkbookDocumentState _documentState;
@@ -271,7 +272,8 @@ public sealed class WorkbookSession : IDisposable
         double viewportWidth,
         bool includeObjects,
         WorkbookSession? sharedDocumentStateOwner = null,
-        WorkbookDocumentState? documentState = null)
+        WorkbookDocumentState? documentState = null,
+        FindReplacePolicyTextSpec? findReplacePolicyText = null)
     {
         ArgumentNullException.ThrowIfNull(source);
         ArgumentNullException.ThrowIfNull(adapters);
@@ -289,6 +291,7 @@ public sealed class WorkbookSession : IDisposable
         _viewportHeight = NormalizeViewportDimension(viewportHeight, fallback: 1);
         _viewportWidth = NormalizeViewportDimension(viewportWidth, fallback: 1);
         _includeObjects = includeObjects;
+        _findReplacePolicyText = findReplacePolicyText;
         _sharedDocumentStateOwner = sharedDocumentStateOwner;
         _documentState = sharedDocumentStateOwner?._documentState ?? documentState ?? new WorkbookDocumentState();
 
@@ -315,7 +318,8 @@ public sealed class WorkbookSession : IDisposable
             () => Workbook,
             () => ActiveCell,
             GoToCell,
-            command => _cellEditService.ExecuteEditCommand(Workbook, command));
+            command => _cellEditService.ExecuteEditCommand(Workbook, command),
+            _findReplacePolicyText);
     }
 
     public IReadOnlyList<IFileAdapter> FileAdapters => _adapters;
@@ -341,7 +345,8 @@ public sealed class WorkbookSession : IDisposable
                 viewportHeight,
                 viewportWidth,
                 _includeObjects,
-                documentOwner);
+                sharedDocumentStateOwner: documentOwner,
+                findReplacePolicyText: _findReplacePolicyText);
             sibling.InitializeSiblingView(ActiveSheet.Id);
             return sibling;
         }
@@ -6758,13 +6763,8 @@ public sealed class WorkbookSession : IDisposable
 
     private int FindSheetIndex(SheetId sheetId, int notFoundIndex = int.MaxValue)
     {
-        for (var index = 0; index < Workbook.Sheets.Count; index++)
-        {
-            if (Workbook.Sheets[index].Id.Equals(sheetId))
-                return index;
-        }
-
-        return notFoundIndex;
+        var index = Workbook.IndexOfSheet(sheetId);
+        return index >= 0 ? index : notFoundIndex;
     }
 
     private SheetId? ResolveSheetIdByName(string sheetName) =>

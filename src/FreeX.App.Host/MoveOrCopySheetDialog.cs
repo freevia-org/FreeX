@@ -77,15 +77,7 @@ public sealed class MoveOrCopySheetDialog : Window
         MoveCopySheetPlanner.CreatePlan(insertBeforeIndex, createCopy, sheetCount);
 
     private static int FindSheetIndexOrZero(Workbook workbook, SheetId sourceSheetId)
-    {
-        for (var index = 0; index < workbook.Sheets.Count; index++)
-        {
-            if (workbook.Sheets[index].Id == sourceSheetId)
-                return index;
-        }
-
-        return 0;
-    }
+        => Math.Max(0, workbook.IndexOfSheet(sourceSheetId));
 
     private UIElement CreateContent()
     {

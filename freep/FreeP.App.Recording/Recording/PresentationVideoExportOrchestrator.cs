@@ -97,15 +97,18 @@ public sealed class PresentationVideoExportOrchestrator
     private readonly LinuxVideoEncoderCapability _capability;
     private readonly IPresentationVideoExportBackend _backend;
     private readonly PresentationVideoExportOrchestrationOptions _options;
+    private readonly AtomicExportExecutor _atomicExportExecutor;
 
     public PresentationVideoExportOrchestrator(
         LinuxVideoEncoderCapability capability,
         IPresentationVideoExportBackend backend,
-        PresentationVideoExportOrchestrationOptions options)
+        PresentationVideoExportOrchestrationOptions options,
+        AtomicExportExecutor? atomicExportExecutor = null)
     {
         _capability = capability ?? throw new ArgumentNullException(nameof(capability));
         _backend = backend ?? throw new ArgumentNullException(nameof(backend));
         _options = options ?? throw new ArgumentNullException(nameof(options));
+        _atomicExportExecutor = atomicExportExecutor ?? new AtomicExportExecutor();
         ArgumentException.ThrowIfNullOrWhiteSpace(options.TemporaryDirectoryPrefix);
         ArgumentException.ThrowIfNullOrWhiteSpace(options.InvalidOutputReason);
         ArgumentNullException.ThrowIfNull(options.CanExport);
@@ -119,7 +122,6 @@ public sealed class PresentationVideoExportOrchestrator
         IReadOnlyList<PresentationRecordingMediaArtifact>? mediaArtifacts = null)
     {
         ArgumentNullException.ThrowIfNull(package);
-        ArgumentException.ThrowIfNullOrWhiteSpace(outputPath);
         if (cancellationToken.IsCancellationRequested)
             return LinuxVideoExportResult.CanceledResult(outputPath);
         if (!_options.CanExport(_capability))
@@ -134,69 +136,84 @@ public sealed class PresentationVideoExportOrchestrator
         }
 
         var stage = new PresentationVideoExportStage(_options.InitialStage);
-        string? fullOutputPath = null;
-        try
+        var export = await _atomicExportExecutor.ExecutePathAsync(
+            outputPath,
+            async (temporaryOutputPath, token) =>
+            {
+                using var temporaryDirectoryLease = TemporaryDirectoryLease.Create(
+                    _options.TemporaryDirectoryPrefix);
+                var workspace = PrepareWorkspace(
+                    package,
+                    temporaryOutputPath,
+                    Path.GetFullPath(temporaryOutputPath),
+                    temporaryDirectoryLease.Path,
+                    mediaArtifacts,
+                    stage,
+                    token);
+                stage.Set(_options.InitialStage);
+
+                var backendResult = await _backend.EncodeAsync(
+                    workspace,
+                    stage,
+                    token).ConfigureAwait(false);
+                if (backendResult.CompletedResult is { Succeeded: false } completedFailure)
+                    throw new BackendResultException(completedFailure);
+                if (backendResult.FailureReason is { } backendFailure)
+                    throw new BackendFailureException(backendFailure);
+
+                var bytes = await File.ReadAllBytesAsync(temporaryOutputPath, token)
+                    .ConfigureAwait(false);
+                if (!HasNonEmptyMp4Payload(bytes))
+                    throw new InvalidVideoOutputException();
+
+                return new AtomicVideoExportArtifact(backendResult, bytes.LongLength);
+            },
+            cancellationToken).ConfigureAwait(false);
+
+        if (export.Succeeded)
         {
-            fullOutputPath = Path.GetFullPath(outputPath);
-            using var temporaryDirectoryLease = TemporaryDirectoryLease.Create(
-                _options.TemporaryDirectoryPrefix);
-            var workspace = PrepareWorkspace(
-                package,
-                outputPath,
-                fullOutputPath,
-                temporaryDirectoryLease.Path,
-                mediaArtifacts,
-                stage,
-                cancellationToken);
-            Directory.CreateDirectory(Path.GetDirectoryName(fullOutputPath)!);
-            stage.Set(_options.InitialStage);
-
-            var backendResult = await _backend.EncodeAsync(
-                workspace,
-                stage,
-                cancellationToken).ConfigureAwait(false);
-            if (backendResult.CompletedResult is { } completed && !completed.Succeeded)
+            var artifact = export.Value!;
+            if (artifact.BackendResult.CompletedResult is { } completedSuccess)
             {
-                TryDelete(fullOutputPath);
-                return completed;
+                return completedSuccess with
+                {
+                    OutputPath = outputPath,
+                    ByteCount = artifact.ByteCount,
+                };
             }
-            if (backendResult.FailureReason is { } backendFailure)
-            {
-                TryDelete(fullOutputPath);
-                return LinuxVideoExportResult.Failed(backendFailure, outputPath);
-            }
-
-            var bytes = await File.ReadAllBytesAsync(fullOutputPath, cancellationToken)
-                .ConfigureAwait(false);
-            if (!HasNonEmptyMp4Payload(bytes))
-            {
-                TryDelete(fullOutputPath);
-                return LinuxVideoExportResult.Failed(_options.InvalidOutputReason, outputPath);
-            }
-
-            if (backendResult.CompletedResult is { } completedSuccess)
-                return completedSuccess;
 
             return LinuxVideoExportResult.Success(
                 outputPath,
-                backendResult.EncoderName ?? _capability.EncoderName ?? string.Empty,
-                bytes.LongLength,
-                backendResult.MuxedNarrationTrackCount,
-                backendResult.MuxedCameraTrackCount,
-                backendResult.MuxedCaptionTrackCount);
+                artifact.BackendResult.EncoderName ?? _capability.EncoderName ?? string.Empty,
+                artifact.ByteCount,
+                artifact.BackendResult.MuxedNarrationTrackCount,
+                artifact.BackendResult.MuxedCameraTrackCount,
+                artifact.BackendResult.MuxedCaptionTrackCount);
         }
-        catch (OperationCanceledException)
-        {
-            TryDelete(fullOutputPath ?? outputPath);
+
+        if (export.Status == OperationStatus.Cancelled)
             return LinuxVideoExportResult.CanceledResult(outputPath);
-        }
-        catch (Exception ex) when (ex is not OutOfMemoryException)
+
+        if (export.Exception is BackendResultException backendResultFailure)
+            return backendResultFailure.Result with { OutputPath = outputPath };
+        if (export.Exception is BackendFailureException backendFailure)
+            return LinuxVideoExportResult.Failed(backendFailure.Reason, outputPath);
+        if (export.Exception is InvalidVideoOutputException)
+            return LinuxVideoExportResult.Failed(_options.InvalidOutputReason, outputPath);
+
+        var exception = export.Exception;
+        if (exception is null && export.Validation is not null)
         {
-            TryDelete(fullOutputPath ?? outputPath);
-            return LinuxVideoExportResult.Failed(
-                _options.FormatFailureReason(stage.Current, ex),
-                outputPath);
+            exception = new ArgumentException(
+                $"Invalid video export destination: {export.Validation.Detail}.",
+                nameof(outputPath));
         }
+
+        return LinuxVideoExportResult.Failed(
+            _options.FormatFailureReason(
+                stage.Current,
+                exception ?? new IOException("Atomic video export failed.")),
+            outputPath);
     }
 
     public static bool HasNonEmptyMp4Payload(byte[] bytes)
@@ -279,15 +296,22 @@ public sealed class PresentationVideoExportOrchestrator
     private static string EscapeConcatPath(string path) =>
         path.Replace("'", "'\\''", StringComparison.Ordinal);
 
-    private static void TryDelete(string path)
+    private sealed record AtomicVideoExportArtifact(
+        PresentationVideoExportBackendResult BackendResult,
+        long ByteCount);
+
+    private sealed class BackendFailureException(string reason) : Exception(reason)
     {
-        try
-        {
-            if (File.Exists(path))
-                File.Delete(path);
-        }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
-        {
-        }
+        public string Reason { get; } = reason;
+    }
+
+    private sealed class BackendResultException(LinuxVideoExportResult result)
+        : Exception(result.FailureReason ?? result.StatusText)
+    {
+        public LinuxVideoExportResult Result { get; } = result;
+    }
+
+    private sealed class InvalidVideoOutputException : Exception
+    {
     }
 }

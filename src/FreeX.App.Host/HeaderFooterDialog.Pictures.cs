@@ -1,10 +1,10 @@
 using System.IO;
-using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media.Imaging;
 using FreeX.App.Presentation.PageLayout;
+using FreeX.App.Services;
 using FreeX.Core.Model;
 
 namespace FreeX.App.Host;
@@ -20,12 +20,20 @@ public partial class HeaderFooterDialog
         if (!result.Chosen)
             return;
 
-        byte[] bytes;
+        var readResult = await FileByteReadWorkflow.ReadLocalPathAsync(result.FileName!);
+        if (readResult.Outcome == FileByteReadOutcome.Canceled)
+            return;
+        if (!readResult.IsReadable)
+        {
+            ShowPictureOpenFailure(readResult.FailureMessage);
+            return;
+        }
+
+        var bytes = readResult.Bytes;
         double width;
         double height;
         try
         {
-            bytes = await Task.Run(() => File.ReadAllBytes(result.FileName!));
             (width, height) = GetImageSize(bytes);
         }
         catch (Exception ex)
@@ -34,21 +42,13 @@ public partial class HeaderFooterDialog
             // truncated, zero-byte, wrong extension, locked, or removed between the picker and the
             // read) would otherwise escape as an unhandled exception and crash the app. The Insert
             // Picture ribbon command already degrades this way; match it here.
-            var presentation = PageLayoutMessagePresentationCatalog
-                .DescribeHeaderFooterPictureOpenFailure(ex.Message)
-                .Resolve(UiText.Get, UiText.Format);
-            DialogMessageHelper.ShowMessage(
-                this,
-                presentation.Message,
-                presentation.Title,
-                presentation.Buttons,
-                presentation.Kind);
+            ShowPictureOpenFailure(ex.Message);
             return;
         }
 
         var picture = new WorksheetHeaderFooterPicture(
             bytes,
-            GetContentType(result.FileName!),
+            InsertPictureCommandFactory.ContentTypeForPath(result.FileName!) ?? "image/png",
             Path.GetFileName(result.FileName!),
             width,
             height);
@@ -209,12 +209,16 @@ public partial class HeaderFooterDialog
         return (frame.PixelWidth, frame.PixelHeight);
     }
 
-    private static string GetContentType(string path) =>
-        Path.GetExtension(path).ToLowerInvariant() switch
-        {
-            ".jpg" or ".jpeg" => "image/jpeg",
-            ".bmp" => "image/bmp",
-            ".gif" => "image/gif",
-            _ => "image/png"
-        };
+    private void ShowPictureOpenFailure(string detail)
+    {
+        var presentation = PageLayoutMessagePresentationCatalog
+            .DescribeHeaderFooterPictureOpenFailure(detail)
+            .Resolve(UiText.Get, UiText.Format);
+        DialogMessageHelper.ShowMessage(
+            this,
+            presentation.Message,
+            presentation.Title,
+            presentation.Buttons,
+            presentation.Kind);
+    }
 }

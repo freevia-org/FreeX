@@ -332,6 +332,11 @@ public sealed class FreePRibbonCommandWorkflowTests
             "freep",
             "FreeP.App.Avalonia",
             "MainWindow.WorkareaEndpoint.cs");
+        var sharedActionProfile = Read(
+            root,
+            "freep",
+            "RendererShared",
+            "MainWindow.RibbonActionProfile.cs");
         var wpfWorkareaEndpoint = Read(
             root,
             "freep",
@@ -348,7 +353,7 @@ public sealed class FreePRibbonCommandWorkflowTests
             .And.Contain("new FreePRibbonOleCommandEndpoints")
             .And.Contain("AnimationPaneVisible = () => IsAnimationPaneVisible")
             .And.Contain("FreePRibbonTextActionTargets");
-        wpf.Should().Contain("ExecuteTableStructureAction = kind =>")
+        sharedActionProfile.Should().Contain("ExecuteTableStructureAction = kind =>")
             .And.Contain("ExecuteCurrentTableAction(kind, TryExecuteInlineTableAction)");
         wpfMain.Should().Contain("internal bool IsAnimationPaneVisible");
         wpf.Should().NotContain("registry.Register(")
@@ -369,8 +374,6 @@ public sealed class FreePRibbonCommandWorkflowTests
             .And.Contain("new FreePRibbonHostQueryEndpoints")
             .And.Contain("AnimationPaneVisible = () => IsAnimationPaneVisible")
             .And.Contain("FreePRibbonTextActionTargets");
-        avaloniaRegistry.Should().Contain("ExecuteTableStructureAction = kind =>")
-            .And.Contain("ExecuteCurrentTableAction(kind, TryExecuteInlineTableAction)");
         var workflow = Read(
             root,
             "freep",

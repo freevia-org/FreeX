@@ -86,56 +86,44 @@ public static class FreeWExportWorkflow
         ArgumentException.ThrowIfNullOrWhiteSpace(path);
         ArgumentNullException.ThrowIfNull(renderAsync);
 
-        TemporaryFileLease? temporaryFile = null;
-        try
+        var execution = await new AtomicExportExecutor().ExecuteAsync<FreeWExportArtifact>(
+            path,
+            (output, token) => renderAsync(output, token),
+            cancellationToken);
+        if (execution.Succeeded)
         {
-            cancellationToken.ThrowIfCancellationRequested();
-            var directory = Path.GetDirectoryName(Path.GetFullPath(path));
-            if (!string.IsNullOrWhiteSpace(directory))
-                Directory.CreateDirectory(directory);
-
-            temporaryFile = AtomicFileWriter.CreateTempLease(path);
-            FreeWExportArtifact artifact;
-            await using (var stream = temporaryFile.OpenWrite(useAsync: true))
-            {
-                artifact = await renderAsync(stream, cancellationToken);
-                await stream.FlushAsync(cancellationToken);
-            }
-            cancellationToken.ThrowIfCancellationRequested();
-            AtomicFileWriter.ReplaceTarget(temporaryFile.Path, path);
-            temporaryFile.Commit();
+            var artifact = execution.Value!;
             return new(
                 FreeWExportExecutionOutcome.Succeeded,
                 plan,
-                path,
-                FormatSuccess(plan, path, artifact),
+                execution.Path,
+                FormatSuccess(plan, execution.Path!, artifact),
                 artifact);
         }
-        catch (OperationCanceledException ex) when (cancellationToken.IsCancellationRequested)
+
+        if (execution.Cancelled)
         {
             return new(
                 FreeWExportExecutionOutcome.Canceled,
                 plan,
-                path,
+                execution.Path ?? path,
                 $"{plan.CommandName} canceled.",
-                Exception: ex);
+                Exception: execution.Exception);
         }
-        catch (Exception ex)
-        {
-            return new(
-                FreeWExportExecutionOutcome.Failed,
-                plan,
-                path,
-                SisterAppFileTextPlanner.FormatCommandFailed(
-                    FreeWFileTextResources.Document,
-                    plan.CommandName,
-                    ex.Message),
-                Exception: ex);
-        }
-        finally
-        {
-            temporaryFile?.Release();
-        }
+
+        var exception = execution.Exception ?? new IOException(
+            execution.Error?.Detail.Message ??
+            execution.Validation?.Detail.ToString() ??
+            "Export did not complete.");
+        return new(
+            FreeWExportExecutionOutcome.Failed,
+            plan,
+            execution.Path ?? path,
+            SisterAppFileTextPlanner.FormatCommandFailed(
+                FreeWFileTextResources.Document,
+                plan.CommandName,
+                exception.Message),
+            Exception: exception);
     }
 
     private static string FormatSuccess(
@@ -217,166 +205,6 @@ public static class FreeWPrintRequestPlanner
     }
 }
 
-public enum FreeWPrintExecutionOutcome
-{
-    Submitted,
-    Canceled,
-    Unavailable,
-    Failed,
-}
-
-public sealed record FreeWPrintExecutionResult(
-    FreeWPrintExecutionOutcome Outcome,
-    string Message,
-    PrinterDiscoveryResult? Discovery = null,
-    PrintSelection? Selection = null,
-    PrintSubmissionResult? Submission = null,
-    Exception? Exception = null)
-{
-    public bool Succeeded => Outcome == FreeWPrintExecutionOutcome.Submitted;
-}
-
-public sealed record FreeWPrintSelectionHandoffPlan(
-    PrintSelection PdfSelection,
-    PrintSelection SubmissionSelection);
-
-public static class FreeWPrintSelectionHandoffPlanner
-{
-    public static FreeWPrintSelectionHandoffPlan Build(
-        PrintSelection selection,
-        PrintRangeAndOrientationHandling handling)
-    {
-        ArgumentNullException.ThrowIfNull(selection);
-        selection.Validate();
-
-        return handling == PrintRangeAndOrientationHandling.PreparedPdf
-            ? new FreeWPrintSelectionHandoffPlan(
-                selection,
-                selection with
-                {
-                    PageRange = PrintPageRange.All,
-                    Orientation = PrintOrientation.Document,
-                })
-            : new FreeWPrintSelectionHandoffPlan(new PrintSelection(), selection);
-    }
-}
-
-public sealed class FreeWPortablePrintWorkflow
-{
-    private readonly IPlatformPrintService _printService;
-
-    public FreeWPortablePrintWorkflow(IPlatformPrintService printService) =>
-        _printService = printService ?? throw new ArgumentNullException(nameof(printService));
-
-    public async Task<PrinterDiscoveryResult> DiscoverAsync(
-        CancellationToken cancellationToken = default)
-    {
-        try
-        {
-            return await _printService.DiscoverAsync(cancellationToken);
-        }
-        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
-        {
-            return new(
-                PrinterDiscoveryStatus.Cancelled,
-                [],
-                null,
-                FreeWPrintMessagePlanner.Canceled);
-        }
-        catch (Exception ex)
-        {
-            return new(
-                PrinterDiscoveryStatus.Failed,
-                [],
-                null,
-                $"Printer discovery failed: {ex.Message}");
-        }
-    }
-
-    public async Task<FreeWPrintExecutionResult> ExecuteAsync(
-        Func<PrinterDiscoveryResult, CancellationToken, Task<PrintSelection?>> selectAsync,
-        Func<Stream, PrintSelection, CancellationToken, ValueTask> renderPdfAsync,
-        CancellationToken cancellationToken = default)
-    {
-        ArgumentNullException.ThrowIfNull(selectAsync);
-        ArgumentNullException.ThrowIfNull(renderPdfAsync);
-
-        TemporaryFileLease? temporaryFile = null;
-        PrinterDiscoveryResult? discovery = null;
-        try
-        {
-            discovery = await DiscoverAsync(cancellationToken);
-            if (discovery.Status == PrinterDiscoveryStatus.Cancelled)
-                return Canceled(discovery);
-            if (!discovery.IsAvailable)
-            {
-                return new(
-                    FreeWPrintExecutionOutcome.Unavailable,
-                    FreeWPrintMessagePlanner.FormatDiscovery(discovery),
-                    discovery);
-            }
-
-            var selection = await selectAsync(discovery, cancellationToken);
-            if (selection is null)
-                return Canceled(discovery);
-            selection.Validate();
-            var handoff = FreeWPrintSelectionHandoffPlanner.Build(
-                selection,
-                _printService.RangeAndOrientationHandling);
-
-            temporaryFile = TemporaryFileLease.Create("FreeW-print-", ".pdf");
-            await using (var stream = temporaryFile.OpenWrite(useAsync: true))
-            {
-                await renderPdfAsync(stream, handoff.PdfSelection, cancellationToken);
-                await stream.FlushAsync(cancellationToken);
-            }
-            cancellationToken.ThrowIfCancellationRequested();
-            var submission = await _printService.SubmitAsync(
-                temporaryFile.Path,
-                handoff.SubmissionSelection,
-                cancellationToken);
-            return new(
-                submission.Succeeded
-                    ? FreeWPrintExecutionOutcome.Submitted
-                    : submission.Status == PrintSubmissionStatus.Cancelled
-                        ? FreeWPrintExecutionOutcome.Canceled
-                        : submission.Status is PrintSubmissionStatus.NoPrinters or PrintSubmissionStatus.Unavailable
-                            ? FreeWPrintExecutionOutcome.Unavailable
-                            : FreeWPrintExecutionOutcome.Failed,
-                FreeWPrintMessagePlanner.FormatSubmission(submission),
-                discovery,
-                selection,
-                submission);
-        }
-        catch (OperationCanceledException ex)
-        {
-            return new(
-                FreeWPrintExecutionOutcome.Canceled,
-                FreeWPrintMessagePlanner.Canceled,
-                discovery,
-                Exception: ex);
-        }
-        catch (Exception ex)
-        {
-            return new(
-                FreeWPrintExecutionOutcome.Failed,
-                SisterAppFileTextPlanner.FormatCommandFailed(
-                    FreeWFileTextResources.Document,
-                    "Print",
-                    ex.Message),
-                discovery,
-                Exception: ex);
-        }
-        finally
-        {
-            temporaryFile?.Release();
-        }
-    }
-
-    private static FreeWPrintExecutionResult Canceled(PrinterDiscoveryResult discovery) =>
-        new(FreeWPrintExecutionOutcome.Canceled, FreeWPrintMessagePlanner.Canceled, discovery);
-}
-
 public static class FreeWPrintMessagePlanner
 {
     public const string Canceled = "Print canceled.";
@@ -413,6 +241,22 @@ public static class FreeWPrintMessagePlanner
                 ? $"Print submission failed. {Fallback}"
                 : submission.Message,
         };
+    }
+
+    public static string FormatExecution(PortablePrintExecutionResult execution)
+    {
+        ArgumentNullException.ThrowIfNull(execution);
+        if (execution.Submission is { } submission)
+            return FormatSubmission(submission);
+        if (execution.Discovery is { IsAvailable: false } discovery)
+            return FormatDiscovery(discovery);
+        if (execution.Status == OperationStatus.Cancelled)
+            return Canceled;
+
+        return SisterAppFileTextPlanner.FormatCommandFailed(
+            FreeWFileTextResources.Document,
+            "Print",
+            execution.Operation.Exception?.Message ?? "Print submission failed.");
     }
 
     public static BackstageDirectPrintCapability PlanCapability(

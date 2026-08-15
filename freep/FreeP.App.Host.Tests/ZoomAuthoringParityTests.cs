@@ -54,8 +54,8 @@ public sealed class ZoomAuthoringParityTests
         var ribbonProfile = File.ReadAllText(Path.Combine(
             TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeP.slnx"),
             "freep",
-            "FreeP.App.Host",
-            "MainWindow.RibbonProfile.cs"));
+            "RendererShared",
+            "MainWindow.RibbonActionProfile.cs"));
 
         ribbonProfile.Should().Contain("FormatZoom = OpenZoomObjectPropertiesDialog");
         source.Should().Contain("PresentationZoomAuthoringSession _zoomAuthoringSession");

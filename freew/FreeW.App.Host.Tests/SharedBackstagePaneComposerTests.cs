@@ -323,6 +323,9 @@ public sealed class SharedBackstagePaneComposerTests
         descriptor.Export.XpsActionLabel.Should().Be(new ResourceTextDescriptor(
             FreeWBackstagePaneResourceKeys.ExportXpsActionLabel,
             "Export to XPS"));
+        descriptor.Info!.LocationLabel.Should().BeSameAs(CommonShellTextResources.Location);
+        descriptor.Info.CoreProperties.TitleLabel.Should().BeSameAs(CommonShellTextResources.Title);
+        descriptor.OptionsSummary!.UiLanguageLabel.Should().BeSameAs(CommonShellTextResources.UiLanguage);
         FreeWBackstagePaneTextCatalog.RequiredResourceKeys
             .Should().OnlyHaveUniqueItems()
             .And.Contain(FreeWBackstagePaneResourceKeys.OptionsEditText);

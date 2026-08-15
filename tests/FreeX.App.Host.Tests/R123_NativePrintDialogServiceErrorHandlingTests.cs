@@ -80,7 +80,9 @@ public sealed class R123_NativePrintDialogServiceErrorHandlingTests
 
         var headerFooterPictures = DialogSourceTestSupport.ReadHostSourceFile(
             "HeaderFooterDialog.Pictures.cs");
-        headerFooterPictures.Should().Contain("DescribeHeaderFooterPictureOpenFailure(ex.Message)");
+        headerFooterPictures.Should().Contain("ShowPictureOpenFailure(readResult.FailureMessage);");
+        headerFooterPictures.Should().Contain("ShowPictureOpenFailure(ex.Message);");
+        headerFooterPictures.Should().Contain("DescribeHeaderFooterPictureOpenFailure(detail)");
         headerFooterPictures.Should().Contain("DialogMessageHelper.ShowMessage(");
     }
 

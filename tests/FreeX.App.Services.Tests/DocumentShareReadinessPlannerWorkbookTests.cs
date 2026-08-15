@@ -2,21 +2,26 @@ using FluentAssertions;
 
 namespace FreeX.App.Services.Tests;
 
-public sealed class WorkbookShareReadinessPlannerTests
+public sealed class DocumentShareReadinessPlannerWorkbookTests
 {
+    private static string FormatStatus(DocumentShareReadinessPlan plan) =>
+        DocumentShareReadinessPlanner.FormatStatus(
+            plan,
+            DocumentShareReadinessTextSpec.WorkbookEnglish);
+
     [Fact]
     public void FormatStatus_PreservesDefaultWindowsShareWording()
     {
-        WorkbookShareReadinessPlanner.FormatStatus(new WorkbookShareReadinessPlan(
-                WorkbookShareReadinessPlanKind.ShareExistingFile,
+        FormatStatus(new DocumentShareReadinessPlan(
+                DocumentShareReadinessPlanKind.ShareExistingFile,
                 @"C:\Work\Budget.xlsx"))
             .Should()
             .Be(@"Ready for Windows Share from C:\Work\Budget.xlsx.");
 
-        WorkbookShareReadinessPlanner.FormatStatus(new WorkbookShareReadinessPlan(
-                WorkbookShareReadinessPlanKind.SaveAsBeforeShare,
+        FormatStatus(new DocumentShareReadinessPlan(
+                DocumentShareReadinessPlanKind.SaveAsBeforeShare,
                 null,
-                WorkbookShareReadinessSaveAsReason.MissingFile,
+                DocumentShareSaveAsReason.MissingFile,
                 @"C:\Missing\Budget.xlsx"))
             .Should()
             .Be(@"Save As is required before Windows Share can send the workbook because the saved path is missing: C:\Missing\Budget.xlsx.");
@@ -25,19 +30,19 @@ public sealed class WorkbookShareReadinessPlannerTests
     [Fact]
     public void CreatePlan_UsesInjectedMacOsShareSurfaceWithoutWinRt()
     {
-        var surface = new WorkbookShareSurface("macOS Share");
+        var surface = new DocumentShareSurface("macOS Share");
         var expectedPath = Path.GetFullPath("Budget.xlsx");
 
-        var plan = WorkbookShareReadinessPlanner.CreatePlan(
+        var plan = DocumentShareReadinessPlanner.CreatePlan(
             "  Budget.xlsx  ",
             surface,
             path => path == expectedPath);
 
-        plan.Kind.Should().Be(WorkbookShareReadinessPlanKind.ShareExistingFile);
+        plan.Kind.Should().Be(DocumentShareReadinessPlanKind.ShareExistingFile);
         plan.Path.Should().Be(expectedPath);
-        plan.SaveAsReason.Should().Be(WorkbookShareReadinessSaveAsReason.None);
+        plan.SaveAsReason.Should().Be(DocumentShareSaveAsReason.None);
         plan.EffectiveSurface.Should().Be(surface);
-        WorkbookShareReadinessPlanner.FormatStatus(plan)
+        FormatStatus(plan)
             .Should()
             .Be($"Ready for macOS Share from {expectedPath}.");
     }
@@ -45,34 +50,34 @@ public sealed class WorkbookShareReadinessPlannerTests
     [Fact]
     public void CreatePlan_AcceptsLocalFileUriForMacOsShare()
     {
-        var surface = new WorkbookShareSurface("macOS Share");
+        var surface = new DocumentShareSurface("macOS Share");
         var expectedPath = Path.GetFullPath("Budget.xlsx");
 
-        var plan = WorkbookShareReadinessPlanner.CreatePlan(
+        var plan = DocumentShareReadinessPlanner.CreatePlan(
             new Uri(expectedPath).AbsoluteUri,
             surface,
             path => path == expectedPath);
 
-        plan.Kind.Should().Be(WorkbookShareReadinessPlanKind.ShareExistingFile);
+        plan.Kind.Should().Be(DocumentShareReadinessPlanKind.ShareExistingFile);
         plan.Path.Should().Be(expectedPath);
-        plan.SaveAsReason.Should().Be(WorkbookShareReadinessSaveAsReason.None);
+        plan.SaveAsReason.Should().Be(DocumentShareSaveAsReason.None);
     }
 
     [Fact]
     public void CreatePlan_RejectsNonFileUriBeforeFileProbe()
     {
-        var surface = new WorkbookShareSurface("macOS Share");
+        var surface = new DocumentShareSurface("macOS Share");
 
-        var plan = WorkbookShareReadinessPlanner.CreatePlan(
+        var plan = DocumentShareReadinessPlanner.CreatePlan(
             "https://example.test/Budget.xlsx",
             surface,
             _ => throw new InvalidOperationException("non-file URIs must not probe the file system"));
 
-        plan.Kind.Should().Be(WorkbookShareReadinessPlanKind.SaveAsBeforeShare);
+        plan.Kind.Should().Be(DocumentShareReadinessPlanKind.SaveAsBeforeShare);
         plan.Path.Should().BeNull();
-        plan.SaveAsReason.Should().Be(WorkbookShareReadinessSaveAsReason.InvalidPath);
+        plan.SaveAsReason.Should().Be(DocumentShareSaveAsReason.InvalidPath);
         plan.CandidatePath.Should().Be("https://example.test/Budget.xlsx");
-        WorkbookShareReadinessPlanner.FormatStatus(plan)
+        FormatStatus(plan)
             .Should()
             .Be("Save As is required before macOS Share can send the workbook because cloud or web links are not supported; save the workbook to a local file first.");
     }
@@ -80,16 +85,16 @@ public sealed class WorkbookShareReadinessPlannerTests
     [Fact]
     public void FormatStatus_PreservesInvalidLocalPathWording()
     {
-        var surface = new WorkbookShareSurface("macOS Share");
+        var surface = new DocumentShareSurface("macOS Share");
 
-        var plan = new WorkbookShareReadinessPlan(
-            WorkbookShareReadinessPlanKind.SaveAsBeforeShare,
+        var plan = new DocumentShareReadinessPlan(
+            DocumentShareReadinessPlanKind.SaveAsBeforeShare,
             null,
-            WorkbookShareReadinessSaveAsReason.InvalidPath,
+            DocumentShareSaveAsReason.InvalidPath,
             "bad\0path.xlsx",
             surface);
 
-        WorkbookShareReadinessPlanner.FormatStatus(plan)
+        FormatStatus(plan)
             .Should()
             .Be("Save As is required before macOS Share can send the workbook because the saved path is not a valid local file path.");
     }
@@ -97,19 +102,19 @@ public sealed class WorkbookShareReadinessPlannerTests
     [Fact]
     public void CreatePlan_HonorsInjectedSurfaceCapabilityBeforeFileProbe()
     {
-        var surface = new WorkbookShareSurface("macOS Share", CanShareLocalFiles: false);
+        var surface = new DocumentShareSurface("macOS Share", CanShareLocalFiles: false);
 
-        var plan = WorkbookShareReadinessPlanner.CreatePlan(
+        var plan = DocumentShareReadinessPlanner.CreatePlan(
             "Budget.xlsx",
             surface,
             _ => throw new InvalidOperationException("unavailable surfaces must not probe the file system"));
 
-        plan.Kind.Should().Be(WorkbookShareReadinessPlanKind.ShareSurfaceUnavailable);
+        plan.Kind.Should().Be(DocumentShareReadinessPlanKind.ShareSurfaceUnavailable);
         plan.Path.Should().BeNull();
-        plan.SaveAsReason.Should().Be(WorkbookShareReadinessSaveAsReason.None);
+        plan.SaveAsReason.Should().Be(DocumentShareSaveAsReason.None);
         plan.CandidatePath.Should().BeNull();
         plan.EffectiveSurface.Should().Be(surface);
-        WorkbookShareReadinessPlanner.FormatStatus(plan)
+        FormatStatus(plan)
             .Should()
             .Be("macOS Share cannot send local workbook files from this build.");
     }

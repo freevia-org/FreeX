@@ -56,6 +56,38 @@ public sealed class MailMergeEmailDeliveryPlannerTests
     }
 
     [Fact]
+    public void DialogSession_EvaluatesIntentValidationTextAndSubmitState()
+    {
+        var data = new MergeData(
+            ["Name", "Email"],
+            [["Ada", "ada@example.test"], ["Grace", "grace@example.test"]]);
+        var session = new MailMergeEmailDeliveryDialogSession(data, currentRecordIndex: 1, [1]);
+
+        var ready = session.Evaluate(
+            " Email ",
+            " Quarterly update ",
+            outputFormatIndex: 0,
+            bodyFormatIndex: 0,
+            recordScopeIndex: 2);
+        var invalid = session.Evaluate(
+            "Missing",
+            string.Empty,
+            outputFormatIndex: 0,
+            bodyFormatIndex: 0,
+            recordScopeIndex: 2);
+
+        ready.Intent.RecipientAddressField.Should().Be("Email");
+        ready.Intent.Subject.Should().Be("Quarterly update");
+        ready.Intent.CurrentRecordIndex.Should().Be(1);
+        ready.Intent.SelectedRecordIndexes.Should().Equal(1);
+        ready.ValidationText.Should().Be(MailMergeDialogMetadata.ReadyEmailMessage);
+        ready.CanSubmit.Should().BeTrue();
+        invalid.ValidationText.Should().Contain("not in the recipient data source");
+        invalid.ValidationText.Should().Contain("Subject line is blank");
+        invalid.CanSubmit.Should().BeFalse();
+    }
+
+    [Fact]
     public void FormatStatus_ReportsPlanOnlyAndWarnings()
     {
         var data = new MergeData(["Email"], [["ada@example.test"], [""]]);

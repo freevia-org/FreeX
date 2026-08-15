@@ -11,8 +11,11 @@ public sealed class ApplicationFrameAndSlideShowLaunchOwnershipSourceTests
         {
             source.Should().Contain("FreePApplicationFrameDescriptor.ResolveDataFolderLabel");
             source.Should().Contain("FreePApplicationFrameDescriptor.Title");
-            source.Should().Contain("_customShowSession.TryBuildPlaybackLaunch(");
-            source.Should().Contain("_customShowSession.TryBuildNamedPlaybackLaunch(");
+            source.Should().Contain("SlideShowWindowLauncher.TryLaunch(");
+            source.Should().Contain("SlideShowWindowLauncher.TryLaunchNamed(");
+            source.Should().Contain("SlideShowWindowLaunchCoordinator<SlideShowWindow>");
+            source.Should().NotContain("_customShowSession.TryBuildPlaybackLaunch(");
+            source.Should().NotContain("_customShowSession.TryBuildNamedPlaybackLaunch(");
             source.Should().NotContain("private static string ResolveDataFolderLabel");
             source.Should().NotContain("AppStoragePathPlanner.GetOptionsFilePathLabelOrFallback");
             source.Should().NotContain("GetSelectedCaptionPlaybackSelection");
@@ -26,6 +29,7 @@ public sealed class ApplicationFrameAndSlideShowLaunchOwnershipSourceTests
         var root = TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeP.slnx");
         var frame = Read(root, "freep", "FreeP.App.Presentation", "FreePApplicationFrameDescriptor.cs");
         var launch = Read(root, "freep", "FreeP.App.Presentation", "SlideShowCustomShowSession.cs");
+        var coordinator = Read(root, "freep", "FreeP.App.Presentation", "SlideShowWindowLaunchCoordinator.cs");
 
         frame.Should().Contain("ApplicationFrameDescriptor.Create(")
             .And.Contain("Descriptor.ResolveDataFolderLabel(pathProvider)")
@@ -38,6 +42,11 @@ public sealed class ApplicationFrameAndSlideShowLaunchOwnershipSourceTests
             .And.Contain("public bool TryBuildPlaybackLaunch(")
             .And.Contain("public bool TryBuildNamedPlaybackLaunch(")
             .And.Contain("PresentationMediaTranscriptPlanner.FindSelectedMediaShape(")
+            .And.NotContain("using System.Windows")
+            .And.NotContain("using Avalonia");
+        coordinator.Should().Contain("public sealed class SlideShowWindowLaunchCoordinator<TWindow>")
+            .And.Contain("_customShows.TryBuildPlaybackLaunch(")
+            .And.Contain("_customShows.TryBuildNamedPlaybackLaunch(")
             .And.NotContain("using System.Windows")
             .And.NotContain("using Avalonia");
     }

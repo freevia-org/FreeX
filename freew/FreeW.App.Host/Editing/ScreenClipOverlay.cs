@@ -11,7 +11,7 @@ namespace FreeW.App.Host.Editing;
 /// A full-screen, semi-transparent overlay that lets the user drag-select a rectangular screen region
 /// for Insert &gt; Illustrations &gt; Screenshot &gt; Screen Clipping (mirroring Word). On mouse-up the
 /// selected rectangle is returned in <em>physical screen pixels</em> (ready for
-/// <see cref="ScreenshotCapture.CaptureRegionPng"/>); pressing Escape, right-clicking, or a zero-size
+/// <see cref="ScreenshotCapture.CaptureRegion"/>); pressing Escape, right-clicking, or a zero-size
 /// drag cancels and returns <see langword="null"/>.
 /// </summary>
 internal sealed partial class ScreenClipOverlay : Window

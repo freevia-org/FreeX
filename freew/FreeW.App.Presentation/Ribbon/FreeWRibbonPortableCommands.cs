@@ -4,6 +4,19 @@ using FreeW.Core.Model;
 
 namespace FreeW.App.Presentation.Ribbon;
 
+internal static class FreeWRibbonSelectedValue
+{
+    public static string? Resolve(RibbonCommandContext context)
+    {
+        if (context.SelectedValue is { } selectedValue)
+            return selectedValue;
+
+        return context.Parameters.TryGetValue("value", out var legacyRaw)
+            ? legacyRaw as string
+            : null;
+    }
+}
+
 public sealed class FreeWRibbonFormatPainterCommand(Action<bool> activate) : IRibbonCommand
 {
     private readonly FormatPainterActivationSession _activation = new();
@@ -21,7 +34,8 @@ public sealed class FreeWRibbonNumericValueCommand(
 {
     public void Execute(RibbonCommandContext context)
     {
-        if (!TryGetSelectedValue(context, out var value)
+        var value = FreeWRibbonSelectedValue.Resolve(context);
+        if (value is null
             || !FreeWRibbonNumericValueParser.TryParseScalar(
                 value,
                 culture ?? CultureInfo.InvariantCulture,
@@ -39,17 +53,6 @@ public sealed class FreeWRibbonNumericValueCommand(
     public RibbonCommandState GetState() =>
         new(Value: FreeWRibbonNumericValueParser.FormatInvariant(getValue()));
 
-    private static bool TryGetSelectedValue(RibbonCommandContext context, out string? value)
-    {
-        value = context.SelectedValue;
-        if (value is not null)
-            return true;
-
-        if (context.Parameters.TryGetValue("value", out var legacyRaw))
-            value = legacyRaw as string;
-
-        return value is not null;
-    }
 }
 
 public readonly record struct FreeWRibbonObjectPositionInput(
@@ -176,9 +179,7 @@ public sealed class FreeWRibbonChoiceCommand(
 {
     public void Execute(RibbonCommandContext context)
     {
-        var value = context.SelectedValue;
-        if (value is null && context.Parameters.TryGetValue("value", out var legacyRaw))
-            value = legacyRaw as string;
+        var value = FreeWRibbonSelectedValue.Resolve(context);
         if (string.IsNullOrWhiteSpace(value))
             return;
 
@@ -187,6 +188,27 @@ public sealed class FreeWRibbonChoiceCommand(
     }
 
     public RibbonCommandState GetState() => new(Value: getValue());
+}
+
+public sealed class FreeWRibbonParagraphValueCommand(
+    FreeWRibbonFormattingSession session,
+    FreeWParagraphValueKind kind) : IRibbonStatefulCommand
+{
+    public void Execute(RibbonCommandContext context) =>
+        session.ApplyParagraphValue(kind, FreeWRibbonSelectedValue.Resolve(context));
+
+    public RibbonCommandState GetState() =>
+        new(Value: session.CurrentParagraphValue(kind));
+}
+
+public sealed class FreeWRibbonParagraphStyleCommand(
+    FreeWRibbonFormattingSession session) : IRibbonStatefulCommand
+{
+    public void Execute(RibbonCommandContext context) =>
+        session.ApplyParagraphStyle(FreeWRibbonSelectedValue.Resolve(context));
+
+    public RibbonCommandState GetState() =>
+        new(Value: session.CurrentParagraphStyleName());
 }
 
 public sealed class FreeWRibbonStatefulPortCommand(

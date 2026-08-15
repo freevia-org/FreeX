@@ -18,6 +18,7 @@ public static class FreeWBackstagePaneResourceKeys
     public const string ExportPdfActionDescription = "FreeW_Backstage_Export_PdfActionDescription";
     public const string ExportXpsActionLabel = "FreeW_Backstage_Export_XpsActionLabel";
     public const string ExportXpsActionDescription = "FreeW_Backstage_Export_XpsActionDescription";
+    public const string InfoHeading = "FreeW_Backstage_Info_Heading";
 }
 
 /// <summary>Owns FreeW-specific Backstage resource keys and fallback copy.</summary>
@@ -37,7 +38,26 @@ public static class FreeWBackstagePaneTextCatalog
             Text(FreeWBackstagePaneResourceKeys.ExportPdfActionDescription, "Publish a fixed-layout copy for sharing or printing."),
             Text(FreeWBackstagePaneResourceKeys.ExportXpsActionLabel, "Export to XPS"),
             Text(FreeWBackstagePaneResourceKeys.ExportXpsActionDescription, "Publish an XPS document with selectable, searchable vector text.")),
-        Text(FreeWBackstagePaneResourceKeys.OptionsEditText, "Edit options\u2026"));
+        Text(FreeWBackstagePaneResourceKeys.OptionsEditText, "Edit options\u2026"),
+        Info: new SisterBackstageInfoPaneTextDescriptor(
+            Text(FreeWBackstagePaneResourceKeys.InfoHeading, "Document information"),
+            CommonShellTextResources.Location,
+            CommonShellTextResources.NotSavedYet,
+            CommonShellTextResources.Properties,
+            CommonShellTextResources.Statistics,
+            CommonShellTextResources.UnsavedChangesSuffix,
+            new SisterBackstageCorePropertiesTextDescriptor(
+                CommonShellTextResources.Title,
+                CommonShellTextResources.Author,
+                CommonShellTextResources.Subject,
+                CommonShellTextResources.Keywords,
+                CommonShellTextResources.EmptyValue)),
+        OptionsSummary: new ApplicationOptionsSummaryTextDescriptor(
+            CommonShellTextResources.RecentFilesKept,
+            CommonShellTextResources.DefaultSaveFormat,
+            CommonShellTextResources.UiLanguage,
+            CommonShellTextResources.DataFolder,
+            CommonShellTextResources.SystemDefault));
 
     public static IReadOnlyList<string> RequiredResourceKeys => Descriptor.ResourceKeys;
 

@@ -209,6 +209,7 @@ public partial class MainWindow
             return;
 
         SynchronizeWorkbookSessionSelection();
+        _session.SelectSheetFromTab(draggedId, selectRange: false, toggle: false);
         if (!CompleteWorksheetSessionCommand(
                 _session.MoveActiveSheetTo(toIndex),
                 "Move Sheet"))
@@ -358,6 +359,10 @@ public partial class MainWindow
             return;
         }
 
+        _currentSheetId = _session.ActiveSheet.Id;
+        _groupedSheetIds.Clear();
+        _groupedSheetIds.Add(_currentSheetId);
+        _sheetGroupAnchor = _currentSheetId;
         UpdateViewport();
         RefreshSheetTabs();
     }
@@ -1972,6 +1977,7 @@ public partial class MainWindow
         var fromIndex = FindWorkbookSheetIndex(tab.Id);
         var toIndex = fromIndex + direction;
         SynchronizeWorkbookSessionSelection();
+        _session.SelectSheetFromTab(tab.Id, selectRange: false, toggle: false);
         if (!CompleteWorksheetSessionCommand(
                 _session.MoveActiveSheetTo(toIndex),
                 "Move Sheet"))

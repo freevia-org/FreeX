@@ -202,13 +202,14 @@ public sealed class TemporaryResourceLeaseTests
             "DocumentPersistenceWorkflow.cs");
         var freeXWpfExport = ReadSource("src", "FreeX.App.Host", "MainWindow.PrintExport.cs");
 
-        freeXPrintWorkflow.Should().Contain("TemporaryFileLease.Create(\"freex-print-\", \".pdf\")");
-        freeXPrintWorkflow.Should().Contain("temporaryFile.WriteAllBytesAsync(");
+        freeXPrintWorkflow.Should().Contain("new PortablePrintSubmissionWorkflow(printService).ExecuteAsync(");
+        freeXPrintWorkflow.Should().NotContain("TemporaryFileLease.Create(");
         freeXPrintWorkflow.Should().NotContain("Path.GetTempPath()");
         freeXPrintWorkflow.Should().NotContain("private static void TryDelete");
 
-        freeWOutput.Should().Contain("AtomicFileWriter.CreateTempLease(path)");
-        freeWOutput.Should().Contain("TemporaryFileLease.Create(\"FreeW-print-\", \".pdf\")");
+        freeWOutput.Should().Contain("new AtomicExportExecutor().ExecuteAsync<FreeWExportArtifact>(");
+        freeWOutput.Should().NotContain("AtomicFileWriter.CreateTempLease(path)");
+        freeWOutput.Should().NotContain("TemporaryFileLease.Create(");
         freeWOutput.Should().NotContain("Path.GetTempPath()");
         freeWOutput.Should().NotContain("File.Delete(");
 
@@ -217,7 +218,8 @@ public sealed class TemporaryResourceLeaseTests
         media.Should().NotContain("Path.GetTempPath()");
         media.Should().NotContain("File.Delete(");
 
-        freePWindow.Should().Contain("TemporaryFileLease.Create(\"freep-print-\", \".pdf\")");
+        freePWindow.Should().Contain("_portablePrintWorkflow.ExecuteAsync(");
+        freePWindow.Should().NotContain("TemporaryFileLease.Create(\"freep-print-\", \".pdf\")");
         freePWindow.Should().NotContain("TryDeletePrintFile");
         freePWindow.Should().NotContain("$\"freep-print-{Guid.NewGuid():N}.pdf\"");
 
@@ -227,7 +229,8 @@ public sealed class TemporaryResourceLeaseTests
 
         freeWDocumentSave.Should().Contain("AtomicFileWriter.CreateTempLease(target.Path)");
         freeWDocumentSave.Should().NotContain("AtomicFileWriter.CreateTempPath(");
-        freeXWpfExport.Should().Contain("AtomicFileWriter.CreateTempLease(xpsPath)");
+        freeXWpfExport.Should().Contain("new AtomicExportExecutor().ExecuteAsync<bool>(");
+        freeXWpfExport.Should().NotContain("AtomicFileWriter.CreateTempLease(xpsPath)");
         freeXWpfExport.Should().NotContain("AtomicFileWriter.CreateTempPath(");
     }
 
@@ -258,7 +261,8 @@ public sealed class TemporaryResourceLeaseTests
             "ReadAloudPauseSmoke.cs");
         var autosave = ReadSource("shared", "Free.Shared.AppServices", "AutosaveSnapshotCoordinator.cs");
 
-        freepAvalonia.Should().Contain("TemporaryFileLease.Create(\"freep-print-\", \".pdf\")");
+        freepAvalonia.Should().Contain("_portablePrintWorkflow.ExecuteAsync(");
+        freepAvalonia.Should().NotContain("TemporaryFileLease.Create(\"freep-print-\", \".pdf\")");
         linuxOutput.Should().Contain("TemporaryDirectoryPrefix: \"freep-video-\"");
         videoExportOrchestrator.Should().Contain("TemporaryDirectoryLease.Create(");
         videoExportOrchestrator.Should().Contain("_options.TemporaryDirectoryPrefix");

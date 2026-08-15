@@ -352,26 +352,22 @@ public sealed partial class MainWindow
             return;
         }
 
-        byte[] imageBytes;
-        try
+        var readResult = await FileByteReadWorkflow.ReadStreamAsync(file.OpenReadAsync);
+        if (readResult.Outcome == FileByteReadOutcome.Canceled)
+            return;
+        if (readResult.Outcome == FileByteReadOutcome.Failed)
         {
-            await using var stream = await file.OpenReadAsync();
-            using var memory = new MemoryStream();
-            await stream.CopyToAsync(memory);
-            imageBytes = memory.ToArray();
-        }
-        catch (IOException ex)
-        {
-            ShowEditIssue(UiText.Format("InsertLoc_CouldNotReadImage", ex.Message));
+            ShowEditIssue(UiText.Format("InsertLoc_CouldNotReadImage", readResult.FailureMessage));
             return;
         }
 
-        if (imageBytes.Length == 0)
+        if (readResult.Outcome == FileByteReadOutcome.Empty)
         {
             ShowEditIssue(UiText.Get("RibbonWire_BackgroundUnsupported"));
             return;
         }
 
+        var imageBytes = readResult.Bytes;
         if (!SheetBackgroundPickerPlanner.TryBuildBackgroundImage(imageBytes, file.Name, out var background)
             || background is null)
         {

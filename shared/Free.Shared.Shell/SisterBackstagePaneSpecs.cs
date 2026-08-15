@@ -3,7 +3,8 @@ namespace Free.Shared.Shell;
 public sealed record BackstageRecentPaneSpec(
     IReadOnlyList<string> Paths,
     string EmptyText,
-    Action<string> OpenPath);
+    Action<string> OpenPath,
+    string Heading = "Recent");
 
 public sealed record BackstageTemplatePaneSpec(
     string Heading,
@@ -15,7 +16,8 @@ public sealed record BackstageOptionsPaneSpec(
     string Description,
     IReadOnlyList<BackstageFieldRow> Fields,
     string? EditText = null,
-    Action? Edit = null);
+    Action? Edit = null,
+    string Heading = "Options");
 
 public sealed record BackstageAccountPaneSpec(
     string Heading,

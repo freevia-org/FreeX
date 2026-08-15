@@ -55,7 +55,7 @@ public sealed partial class MainWindow : Window
     private readonly FreeWDocumentFileWorkflow _documentFileWorkflow;
     private readonly FreeWDocumentFileCommandSession _fileCommands;
     private readonly IPlatformPrintService _printService;
-    private readonly FreeWPortablePrintWorkflow _portablePrintWorkflow;
+    private readonly PortablePrintSubmissionWorkflow _portablePrintWorkflow;
     private readonly Func<Window, PrinterDiscoveryResult, CancellationToken, Task<PrintSelection?>> _showPrintSelectionDialog;
     private readonly Action<IInputElement?> _restorePrintOwnerFocus;
     private readonly Func<DocumentView, Stream, PrintSelection, FreeWAvaloniaPdfExportResult> _savePrintPdf;
@@ -69,6 +69,7 @@ public sealed partial class MainWindow : Window
     private readonly Func<Task<string?>> _pickPdfImportPathAsync;
     private readonly Func<bool, string, Task<string?>>? _askHeaderFooterText;
     private readonly IScreenClipService _screenClipService;
+    private readonly ScreenClipWorkflowCoordinator _screenClipWorkflow = new();
     private readonly IPlatformClipboard _platformClipboard;
     private readonly DocumentView _editor = new();
     private readonly QuickPartLibrary _quickParts = QuickPartLibrary.Load();
@@ -201,7 +202,7 @@ public sealed partial class MainWindow : Window
         _printService = printService ?? PlatformPrintServiceSelector.Select(
             windowsFactory: static () => new WindowsPrintService(),
             cupsFactory: static () => new CupsPrintService());
-        _portablePrintWorkflow = new FreeWPortablePrintWorkflow(_printService);
+        _portablePrintWorkflow = new PortablePrintSubmissionWorkflow(_printService);
         _showPrintSelectionDialog = showPrintSelectionDialog ??
             ((owner, discovery, cancellationToken) =>
                 CupsPrintDialog.ShowAsync(owner, discovery, cancellationToken: cancellationToken));
@@ -294,7 +295,8 @@ public sealed partial class MainWindow : Window
                 PresentFeedback: feedback => ApplyFileFeedback(feedback)),
             FileText);
         _inlineFindReplaceSession = new FindReplaceDialogSession(
-            new AvaloniaFindReplaceCommandHost(_editor));
+            new AvaloniaFindReplaceCommandHost(_editor),
+            policyText: FindReplaceDialogPlanner.ResolvePolicyText(UiText.Get));
         _applicationCommands = new FreeWApplicationCommandRouter(new FreeWApplicationCommandActions(
             NewDocument: NewDocument,
             OpenDocument: () => _ = OpenAsync(),
@@ -3319,7 +3321,7 @@ public sealed partial class MainWindow : Window
         {
             FreeWAvaloniaPdfExportResult? printPdfResult = null;
             var execution = await _portablePrintWorkflow.ExecuteAsync(
-                (discovery, token) => _showPrintSelectionDialog(this, discovery, token),
+                (intent, token) => _showPrintSelectionDialog(this, intent.Discovery, token),
                 (stream, selection, _) =>
                 {
                     var printView = _editor;
@@ -3332,14 +3334,16 @@ public sealed partial class MainWindow : Window
                     printPdfResult = _savePrintPdf(printView, stream, selection);
                     return ValueTask.CompletedTask;
                 },
-                cancellation.Token);
+                requestedSelection: null,
+                cancellationToken: cancellation.Token);
             _latestPrinterDiscovery = execution.Discovery ?? _latestPrinterDiscovery;
+            var message = FreeWPrintMessagePlanner.FormatExecution(execution);
             _status.Text = printPdfResult is { ImageDiagnostics.Count: > 0 }
                 ? UiText.Format(
                     "Print_ImageWarnings_Status_Format",
-                    execution.Message,
+                    message,
                     printPdfResult.ImageDiagnostics.Count)
-                : execution.Message;
+                : message;
         }
         finally
         {
@@ -3401,7 +3405,20 @@ public sealed partial class MainWindow : Window
 
     private async Task RefreshPrinterDiscoveryAsync()
     {
-        _latestPrinterDiscovery = await _portablePrintWorkflow.DiscoverAsync();
+        try
+        {
+            _latestPrinterDiscovery = _printService.IsSupported
+                ? await _printService.DiscoverAsync()
+                : new PrinterDiscoveryResult(PrinterDiscoveryStatus.Unavailable, [], null);
+        }
+        catch (Exception ex) when (ex is not OutOfMemoryException)
+        {
+            _latestPrinterDiscovery = new PrinterDiscoveryResult(
+                PrinterDiscoveryStatus.Failed,
+                [],
+                null,
+                ex.Message);
+        }
     }
 
     private BackstageDirectPrintCapability DirectPrintCapability =>
@@ -3507,19 +3524,22 @@ public sealed partial class MainWindow : Window
     {
         try
         {
-            var capture = await _screenClipService.CaptureAsync(this);
-            if (capture is null)
-                return;
-
-            ApplyScreenClipCapture(_editor, capture);
-            _status.Text = UiText.Format(
-                "ScreenClip_Inserted_Status_Format",
-                capture.PixelWidth,
-                capture.PixelHeight);
-        }
-        catch (Exception ex)
-        {
-            _status.Text = UiText.Format("ScreenClip_Failed_Status_Format", ex.Message);
+            var result = await _screenClipWorkflow.ExecuteAsync(
+                cancellationToken => _screenClipService.CaptureAsync(this, cancellationToken),
+                image => ApplyScreenClipImage(_editor, image));
+            if (result.Outcome == ScreenClipWorkflowOutcome.Inserted)
+            {
+                _status.Text = UiText.Format(
+                    "ScreenClip_Inserted_Status_Format",
+                    result.PixelWidth,
+                    result.PixelHeight);
+            }
+            else if (result.Outcome == ScreenClipWorkflowOutcome.Failed)
+            {
+                _status.Text = UiText.Format(
+                    "ScreenClip_Failed_Status_Format",
+                    result.FailureMessage ?? string.Empty);
+            }
         }
         finally
         {
@@ -3527,15 +3547,10 @@ public sealed partial class MainWindow : Window
         }
     }
 
-    internal static void ApplyScreenClipCapture(DocumentView editor, ScreenClipCapture capture)
+    internal static void ApplyScreenClipImage(DocumentView editor, InlineImage image)
     {
         ArgumentNullException.ThrowIfNull(editor);
-        ArgumentNullException.ThrowIfNull(capture);
-
-        var image = ScreenClipImageFactory.Create(
-            capture.PngBytes,
-            capture.PixelWidth,
-            capture.PixelHeight);
+        ArgumentNullException.ThrowIfNull(image);
         editor.InsertInlineImage(
             image.Bytes,
             image.WidthPt,
@@ -3937,7 +3952,11 @@ public sealed partial class MainWindow : Window
             ImportPdfText: () => _ = ImportPdfTextAsync(),
             Save: () => _applicationCommands.Execute(FreeWKeyboardCommand.SaveDocument),
             SaveAs: () => _applicationCommands.Execute(FreeWKeyboardCommand.SaveDocumentAs),
-            SaveAsFormat: (ext, filterIndex) => _ = SaveAsWithFormatAsync(ext, filterIndex),
+            SaveAsFormat: (extension, filterIndex) =>
+            {
+                _ = filterIndex;
+                _ = _fileCommands.SaveAsFormatAsync(extension);
+            },
             SaveCopy: () => _ = SaveCopyAsync(),
             OpenContainingFolder: path =>
             {
@@ -4068,43 +4087,6 @@ public sealed partial class MainWindow : Window
         var result = DesktopPathLauncher.OpenDirectory(folder);
         if (result.Error is not null)
             _status.Text = UiText.Format("Shell_OpenFolderFailed_Status_Format", result.Error.Message);
-    }
-
-    /// <summary>
-    /// Save As targeting a specific file format chosen from the backstage planner.
-    /// Builds a save-picker pre-filtered to the requested format and lets the user
-    /// confirm the filename before saving.
-    /// </summary>
-    private async Task SaveAsWithFormatAsync(string extension, int filterIndex)
-    {
-        var normalizedExt = DocumentFileFormatResolver.NormalizeExtension(extension);
-        if (!_documentPersistence.TryGetSaveFormat(filterIndex, out var format) &&
-            !_documentPersistence.TryGetSaveFormat(normalizedExt, out format))
-        {
-            _status.Text = SisterAppFileTextPlanner.FormatUnsupportedExtension(FileText, extension);
-            return;
-        }
-
-        var savePlan = _documentPersistence.BuildSavePickerPlan(
-            _fileWorkflow.CurrentPath,
-            _fileWorkflow.CurrentFileName,
-            FileText.FallbackDisplayName,
-            normalizedExt);
-
-        using var file = await AvaloniaFilePickerService.PickSaveFileWithLocalPathAsync(
-            StorageProvider,
-            AvaloniaFilePickerSaveRequest.FromFileTypes(
-                SisterAppFileTextPlanner.FormatSaveAsTitle(FileText, format?.FormatName ?? extension),
-                [
-                    AvaloniaFilePickerTypeAdapter.CreateFileType(
-                        format?.FormatName ?? extension,
-                        [$"*{normalizedExt}"])
-                ],
-                savePlan.SuggestedFileName,
-                savePlan.DefaultExtensionWithoutDot));
-        var path = file?.LocalPath;
-        if (path is not null)
-            await _fileCommands.SavePathAsync(path, filterIndex);
     }
 
     // Opens an external URL raised by DocumentView.HyperlinkActivated through the shared scheme allowlist.

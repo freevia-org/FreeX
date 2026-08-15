@@ -63,12 +63,14 @@ public sealed class FileWorkflowArchitectureTests
         session.Should().Contain("FreeWDocumentFileFeedbackPlanner.PlanOpen(");
         session.Should().Contain("FreeWDocumentFileFeedbackPlanner.PlanImport(");
         session.Should().Contain("FreeWDocumentFileFeedbackPlanner.PlanSave(");
+        session.Should().Contain("public Task<bool> SaveAsFormatAsync(string preferredExtension)");
 
         foreach (var renderer in new[] { wpf, avalonia })
         {
             renderer.Should().Contain("FreeWDocumentFileCommandSession");
             renderer.Should().Contain("FreeWDocumentFileCommandPorts");
             renderer.Should().Contain("FreeWFileCommandLifecyclePorts");
+            renderer.Should().Contain("_fileCommands.SaveAsFormatAsync(");
             renderer.Should().NotContain("FreeWDocumentFileFeedbackPlanner.PlanOpen(");
             renderer.Should().NotContain("FreeWDocumentFileFeedbackPlanner.PlanImport(");
             renderer.Should().NotContain("FreeWDocumentFileFeedbackPlanner.PlanSave(");
@@ -85,6 +87,9 @@ public sealed class FileWorkflowArchitectureTests
             renderer.Should().NotContain("execution.Outcome == DocumentFileExecutionOutcome.UnsupportedFormat");
             renderer.Should().NotContain("HandleSaveResult(");
         }
+
+        avalonia.Should().NotContain("SaveAsWithFormatAsync(");
+        avalonia.Should().NotContain("_documentPersistence.TryGetSaveFormat(");
     }
 
     private static string ReadSource(params string[] parts)

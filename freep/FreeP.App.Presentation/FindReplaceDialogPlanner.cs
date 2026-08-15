@@ -3,6 +3,41 @@ using FreeP.Core.Model;
 
 namespace FreeP.App.Compositor;
 
+public static class FreePFindReplacePolicyResourceKeys
+{
+    public const string NoReplacements = "FreeP_FindReplace_Status_NoReplacements";
+    public const string ReplacedOccurrencesFormat = "FreeP_FindReplace_Status_ReplacedOccurrencesFormat";
+    public const string ReplacementsMadeFormat = "FreeP_FindReplace_Status_ReplacementsMadeFormat";
+}
+
+public static class FreePFindReplacePolicyTextCatalog
+{
+    public static FindReplacePolicyTextDescriptor Descriptor { get; } = new(
+        CommonShellTextResources.FindReplaceSearchTermRequired,
+        CommonShellTextResources.FindReplaceNoMatches,
+        Text(FreePFindReplacePolicyResourceKeys.NoReplacements, "No replacements made."),
+        CommonShellTextResources.FindReplaceNotFoundFormat,
+        CommonShellTextResources.FindReplaceMatchFormat,
+        Text(FreePFindReplacePolicyResourceKeys.ReplacedOccurrencesFormat, "Replaced {0} occurrence{1}."),
+        Text(FreePFindReplacePolicyResourceKeys.ReplacementsMadeFormat, "{0} replacement(s) made."));
+
+    public static IReadOnlyList<string> RequiredResourceKeys =>
+    [
+        Descriptor.SearchTermRequired.ResourceKey,
+        Descriptor.NoMatches.ResourceKey,
+        Descriptor.NoReplacements.ResourceKey,
+        Descriptor.NotFoundFormat.ResourceKey,
+        Descriptor.MatchFormat.ResourceKey,
+        Descriptor.ReplacedOccurrencesFormat.ResourceKey,
+        Descriptor.ReplacementsMadeFormat.ResourceKey,
+    ];
+
+    public static FindReplacePolicyTextSpec BuildTextSpec(Func<string, string?>? getText = null) =>
+        FindReplacePolicyTextSpec.FromDescriptor(Descriptor, getText);
+
+    private static ResourceTextDescriptor Text(string key, string fallbackText) => new(key, fallbackText);
+}
+
 public enum FindReplaceDialogOptionKind
 {
     MatchCase,
@@ -208,11 +243,14 @@ public static class FindReplaceDialogPlanner
     public static FindReplaceNavigationPolicyPlan Navigate(
         int currentMatchIndex,
         int matchCount,
-        int direction) =>
-        FindReplaceDialogPolicy.Navigate(currentMatchIndex, matchCount, direction);
+        int direction,
+        FindReplacePolicyTextSpec? text = null) =>
+        FindReplaceDialogPolicy.Navigate(currentMatchIndex, matchCount, direction, text);
 
-    public static FindReplaceReplacementPolicyStatus ReplacementStatus(int replacementCount) =>
-        FindReplaceDialogPolicy.BuildReplacementStatus(replacementCount);
+    public static FindReplaceReplacementPolicyStatus ReplacementStatus(
+        int replacementCount,
+        FindReplacePolicyTextSpec? text = null) =>
+        FindReplaceDialogPolicy.BuildReplacementStatus(replacementCount, text);
 
     public static FindReplaceWorkflowPlan BuildWorkflowPlan(
         bool showReplace,

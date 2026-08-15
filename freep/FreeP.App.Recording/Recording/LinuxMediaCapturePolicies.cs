@@ -17,7 +17,8 @@ internal sealed class LinuxNarrationMediaCapturePolicy : ILinuxMediaCapturePolic
 
     public string TemporaryDirectoryName => "freep-narration";
 
-    public string ContentType => "audio/wav";
+    public string ContentType =>
+        SlideShowRecordingMediaArtifactPolicy.Describe(Kind).ContentType;
 
     public bool IsAvailable(SlideShowRecordingCaptureAdapterReadiness readiness) =>
         readiness.CanCaptureNarration;
@@ -43,11 +44,11 @@ internal sealed class LinuxNarrationMediaCapturePolicy : ILinuxMediaCapturePolic
     public string NormalizePackagePath(
         LinuxRecordingHostMetadata metadata,
         string suggestedFileName) =>
-        LinuxMediaCapturePathPolicy.NormalizePackagePath(
-            metadata,
+        SlideShowRecordingMediaArtifactPolicy.NormalizePackagePath(
+            Kind,
+            metadata.PackageRoot,
             suggestedFileName,
-            "slide-narration.wav",
-            ".wav");
+            "ppt/media/freep-recordings/avalonia");
 
     public bool HasValidPayload(byte[] payload) => HasNonEmptyWavePayload(payload);
 
@@ -141,7 +142,8 @@ internal sealed class LinuxCameraMediaCapturePolicy : ILinuxMediaCapturePolicy
 
     public string TemporaryDirectoryName => "freep-camera";
 
-    public string ContentType => "video/mp4";
+    public string ContentType =>
+        SlideShowRecordingMediaArtifactPolicy.Describe(Kind).ContentType;
 
     public bool IsAvailable(SlideShowRecordingCaptureAdapterReadiness readiness) =>
         readiness.CanCaptureCamera;
@@ -167,11 +169,11 @@ internal sealed class LinuxCameraMediaCapturePolicy : ILinuxMediaCapturePolicy
     public string NormalizePackagePath(
         LinuxRecordingHostMetadata metadata,
         string suggestedFileName) =>
-        LinuxMediaCapturePathPolicy.NormalizePackagePath(
-            metadata,
+        SlideShowRecordingMediaArtifactPolicy.NormalizePackagePath(
+            Kind,
+            metadata.PackageRoot,
             suggestedFileName,
-            "slide-camera.mp4",
-            ".mp4");
+            "ppt/media/freep-recordings/avalonia");
 
     public bool HasValidPayload(byte[] payload) =>
         LinuxVideoExportAdapter.HasNonEmptyMp4Payload(payload);

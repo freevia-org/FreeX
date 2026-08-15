@@ -146,30 +146,20 @@ public partial class MainWindow
             return;
         }
 
-        byte[] bytes;
-        try
-        {
-            bytes = await File.ReadAllBytesAsync(result.FileName!);
-        }
-        catch (IOException ex)
-        {
-            ShowOwnedMessage(
-                UiText.Format("MainWindowMessage_SheetBackgroundReadFailed", ex.Message),
-                UiText.Get("MainWindowMessage_SheetBackgroundTitle"),
-                MessageBoxButton.OK,
-                MessageBoxImage.Warning);
+        var readResult = await FileByteReadWorkflow.ReadLocalPathAsync(result.FileName!);
+        if (readResult.Outcome == FileByteReadOutcome.Canceled)
             return;
-        }
-        catch (UnauthorizedAccessException ex)
+        if (!readResult.IsReadable)
         {
             ShowOwnedMessage(
-                UiText.Format("MainWindowMessage_SheetBackgroundReadFailed", ex.Message),
+                UiText.Format("MainWindowMessage_SheetBackgroundReadFailed", readResult.FailureMessage),
                 UiText.Get("MainWindowMessage_SheetBackgroundTitle"),
                 MessageBoxButton.OK,
                 MessageBoxImage.Warning);
             return;
         }
 
+        var bytes = readResult.Bytes;
         if (!SheetBackgroundPickerPlanner.TryBuildBackgroundImage(bytes, result.FileName!, out var background)
             || background is null)
         {

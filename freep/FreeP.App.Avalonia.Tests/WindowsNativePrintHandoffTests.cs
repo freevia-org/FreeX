@@ -30,7 +30,9 @@ public sealed class WindowsNativePrintHandoffTests
 
         source.Should().Contain("PresentationPrintOutputPackageExecutor.ValidatePackage(package)");
         source.IndexOf("ValidatePackage(package)", StringComparison.Ordinal).Should().BeLessThan(
-            source.IndexOf("_printService.SubmitAsync(", StringComparison.Ordinal));
+            source.IndexOf("await output.WriteAsync(package!.Bytes", StringComparison.Ordinal));
+        source.Should().Contain("_portablePrintWorkflow.ExecuteAsync(");
+        source.Should().NotContain("_printService.SubmitAsync(");
     }
 
     [Fact]

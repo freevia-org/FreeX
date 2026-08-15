@@ -64,6 +64,20 @@ public sealed class FreeWBackstageSessionTests
     }
 
     [Fact]
+    public void InfoPaneUsesResolvedFreeWTextDescriptor()
+    {
+        static string Localize(string key) => $"localized:{key}";
+        var session = new FreeWBackstageSession(CreateCallbacks(), getText: Localize);
+
+        var pane = session.BuildInfoPane();
+
+        pane.EffectiveText.Heading.Should().Be("localized:FreeW_Backstage_Info_Heading");
+        pane.EffectiveText.LocationLabel.Should().Be($"localized:{CommonShellResourceKeys.Location}");
+        pane.Properties.Select(row => row.Label).Should().Contain(
+            $"localized:{CommonShellResourceKeys.Title}");
+    }
+
+    [Fact]
     public void PrintPaneInfersNativeCapabilityAndDismissesBeforeDispatch()
     {
         var calls = new List<string>();

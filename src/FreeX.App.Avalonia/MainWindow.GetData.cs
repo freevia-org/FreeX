@@ -261,17 +261,12 @@ public sealed partial class MainWindow
                 return;
             }
 
-            byte[] bytes;
-            try
+            var readResult = await FileByteReadWorkflow.ReadStreamAsync(pickedFile.StorageFile.OpenReadAsync);
+            if (readResult.Outcome == FileByteReadOutcome.Canceled)
+                return;
+            if (!readResult.IsReadable)
             {
-                await using var stream = await pickedFile.StorageFile.OpenReadAsync();
-                using var memory = new MemoryStream();
-                await stream.CopyToAsync(memory);
-                bytes = memory.ToArray();
-            }
-            catch (IOException ex)
-            {
-                warningText.Text = UiText.Format("GetData_ReadError", ex.Message);
+                warningText.Text = UiText.Format("GetData_ReadError", readResult.FailureMessage);
                 warningText.IsVisible = true;
                 return;
             }
@@ -279,7 +274,7 @@ public sealed partial class MainWindow
             selectedPath = path;
             fileBox.Text = path;
             var encodingKind = GetDataEncodingChoices[Math.Max(0, encodingBox.SelectedIndex)].Kind;
-            decodedText = ImportDataPlanner.DecodeBytes(bytes, encodingKind);
+            decodedText = ImportDataPlanner.DecodeBytes(readResult.Bytes, encodingKind);
             warningText.IsVisible = false;
             RefreshPreview();
         }
@@ -294,15 +289,11 @@ public sealed partial class MainWindow
                 return;
             }
 
-            try
+            var readResult = await FileByteReadWorkflow.ReadLocalPathAsync(selectedPath);
+            if (readResult.IsReadable)
             {
-                var bytes = await File.ReadAllBytesAsync(selectedPath);
                 var encodingKind = GetDataEncodingChoices[Math.Max(0, encodingBox.SelectedIndex)].Kind;
-                decodedText = ImportDataPlanner.DecodeBytes(bytes, encodingKind);
-            }
-            catch (IOException)
-            {
-                // Keep the previous decode; the preview simply reflects the last good read.
+                decodedText = ImportDataPlanner.DecodeBytes(readResult.Bytes, encodingKind);
             }
 
             RefreshPreview();
@@ -406,7 +397,7 @@ public sealed partial class MainWindow
     /// <see cref="ImportSheetCommand"/>. Remembers the source (including the exact anchor written to) so
     /// Refresh can re-run it. When <paramref name="anchorOverride"/> is supplied and its sheet still
     /// exists, the import re-targets that exact anchor instead of resolving a destination fresh (see
-    /// <see cref="RefreshImportedData"/> / R88-io-text-import-wizard-5-1) — this is what lets a refresh
+    /// <see cref="RefreshImportedDataAsync"/> / R88-io-text-import-wizard-5-1) — this is what lets a refresh
     /// land back on the original B2:D10-style block instead of the current selection, and what stops a
     /// repeated new-sheet refresh from adding a new sheet on every run. Returns false with a user message
     /// on failure.
@@ -522,7 +513,7 @@ public sealed partial class MainWindow
     /// when one exists; otherwise reports that there is nothing to refresh. There is no external DB/web
     /// connection engine, so file re-import is the entire refresh surface.
     /// </summary>
-    private void RefreshImportedData()
+    private async Task RefreshImportedDataAsync()
     {
         if (_isOpening || _isSaving || !TryCommitPendingFormulaEdit())
             return;
@@ -533,18 +524,16 @@ public sealed partial class MainWindow
             return;
         }
 
-        byte[] bytes;
-        try
+        var readResult = await FileByteReadWorkflow.ReadLocalPathAsync(source.FilePath);
+        if (readResult.Outcome == FileByteReadOutcome.Canceled)
+            return;
+        if (!readResult.IsReadable)
         {
-            bytes = File.ReadAllBytes(source.FilePath);
-        }
-        catch (IOException ex)
-        {
-            ShowEditIssue(UiText.Format("GetData_ReadError", ex.Message));
+            ShowEditIssue(UiText.Format("GetData_ReadError", readResult.FailureMessage));
             return;
         }
 
-        var decoded = ImportDataPlanner.DecodeBytes(bytes, source.Options.Encoding);
+        var decoded = ImportDataPlanner.DecodeBytes(readResult.Bytes, source.Options.Encoding);
         if (!TryImportFromText(source.FilePath, decoded, source.Options, out var error, source.Anchor))
         {
             ShowEditIssue(error ?? UiText.Get("GetData_ImportFailed"));

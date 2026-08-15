@@ -114,7 +114,9 @@ public sealed class R16_autosave_Tests
             {
                 registry.Count.Should().Be(2);
 
-                documentState.MarkDirty();
+                // Loaded replaces the primary window's constructor-time session. Exercise the
+                // live shared session that owns dirty state for both application-frame views.
+                primary.Session.MarkDirtyForRecovery();
                 primary.AutosaveServiceForCrashHandler!.OnTimerTick();
                 secondary.AutosaveServiceForCrashHandler!.OnTimerTick();
 

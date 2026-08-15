@@ -64,10 +64,14 @@ public sealed partial class MainWindowSourceHygieneTests
         drawingSource.Should().Contain("checkFileExists: true");
         drawingSource.Should().Contain("multiselect: false");
         drawingSource.Should().Contain("if (!result.Chosen) return;");
-        drawingSource.Should().Contain("System.IO.File.ReadAllBytesAsync(result.FileName!)");
+        drawingSource.Should().Contain("FileByteReadWorkflow.ReadLocalPathAsync(result.FileName!)");
+        drawingSource.Should().Contain("readResult.Outcome == FileByteReadOutcome.Canceled");
+        drawingSource.Should().Contain("if (!readResult.IsReadable)");
+        drawingSource.Should().Contain("var bytes = readResult.Bytes;");
         drawingSource.Should().Contain("DrawingInputParser.GetImageContentType(result.FileName!)");
         drawingSource.Should().Contain("PictureInsertionPlacementPlanner.CreateInsertPictureCommand(");
-        drawingSource.Should().Contain("UiText.Format(\"MainWindowMessage_InsertPictureReadFailed\", ex.Message)");
+        drawingSource.Should().Contain("UiText.Format(\"MainWindowMessage_InsertPictureReadFailed\", readResult.FailureMessage)");
+        drawingSource.Should().NotContain("File.ReadAllBytesAsync(");
         drawingSource.Should().Contain("SetActiveCell(range.Start);");
         drawingSource.Should().Contain("UpdateViewport();");
         drawingSource.Should().NotContain("new Microsoft.Win32.OpenFileDialog");
@@ -143,14 +147,18 @@ public sealed partial class MainWindowSourceHygieneTests
         pageLayoutSource.Should().Contain("if (!result.Chosen)");
         pageLayoutSource.Should().Contain("SheetBackgroundPickerPlanner.IsSupportedImagePath(result.FileName!)");
         pageLayoutSource.Should().Contain("UiText.Get(\"MainWindowMessage_SheetBackgroundUnsupportedImageType\")");
-        pageLayoutSource.Should().Contain("File.ReadAllBytesAsync(result.FileName!)");
-        pageLayoutSource.Should().Contain("UiText.Format(\"MainWindowMessage_SheetBackgroundReadFailed\", ex.Message)");
+        pageLayoutSource.Should().Contain("FileByteReadWorkflow.ReadLocalPathAsync(result.FileName!)");
+        pageLayoutSource.Should().Contain("readResult.Outcome == FileByteReadOutcome.Canceled");
+        pageLayoutSource.Should().Contain("if (!readResult.IsReadable)");
+        pageLayoutSource.Should().Contain("var bytes = readResult.Bytes;");
+        pageLayoutSource.Should().Contain("UiText.Format(\"MainWindowMessage_SheetBackgroundReadFailed\", readResult.FailureMessage)");
         pageLayoutSource.Should().Contain("UiText.Get(\"MainWindowMessage_SheetBackgroundTitle\")");
         pageLayoutSource.Should().Contain("SheetBackgroundPickerPlanner.TryBuildBackgroundImage(bytes, result.FileName!, out var background)");
         pageLayoutSource.Should().Contain("CreatePageLayoutCommandSession().PlanSetBackground(background)");
         pageLayoutSource.Should().NotContain("new Microsoft.Win32.OpenFileDialog");
         pageLayoutSource.Should().NotContain("private static bool IsSupportedSheetBackgroundFile(string fileName)");
         pageLayoutSource.Should().NotContain("DrawingInputParser.GetImageContentType(result.FileName!)");
+        pageLayoutSource.Should().NotContain("File.ReadAllBytesAsync(");
         pageLayoutSource.Should().Contain("private void BackgroundClearMenuItem_Click(");
         pageLayoutSource.Should().Contain("CreatePageLayoutCommandSession().PlanClearBackground()");
     }
@@ -316,8 +324,12 @@ public sealed partial class MainWindowSourceHygieneTests
 
         goalSeekMethod.Should().Contain("new GoalSeekDialog(");
         goalSeekMethod.Should().Contain("new GoalSeekStatusDialog(");
-        goalSeekMethod.Should().Contain("new GoalSeekCommand(");
-        goalSeekMethod.Should().Contain("TryExecuteCommand(cmd, \"Goal Seek\")");
+        goalSeekMethod.Should().Contain("_session.FindGoalSeekProposal(");
+        goalSeekMethod.Should().Contain("_session.ApplyGoalSeekProposal(proposal)");
+        goalSeekMethod.Should().Contain("ApplySuccessfulWorkbookSessionCommand();");
+        goalSeekMethod.Should().Contain("ApplyWorkbookSessionDocumentStateToRenderer();");
+        goalSeekMethod.Should().NotContain("new GoalSeekCommand(");
+        goalSeekMethod.Should().NotContain("TryExecuteCommand(");
         goalSeekMethod.Should().NotContain("ExecuteRepeatable");
         goalSeekMethod.Should().NotContain("TryExecuteRepeatable");
 

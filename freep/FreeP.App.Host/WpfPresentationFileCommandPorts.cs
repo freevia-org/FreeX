@@ -213,54 +213,54 @@ internal sealed class WpfPresentationPrintPort : IPresentationPrintPort
                 PresentationNativeCommandOutcomePlanner.PrintHandoffPlanNotBuiltFailure));
         }
 
-        var printed = WpfPresentationPrintService.ShowPrintDialogAndPrint(
+        var printResult = WpfPresentationPrintService.ShowPrintDialogAndPrint(
             presentation,
             request,
             handoffPlan.SuggestedPrintJobName,
             _owner);
-        return Task.FromResult(printed
-            ? PresentationNativePrintPortResult.Success(
-                PresentationNativePrintStatusProfile.PresentationDialog)
-            : PresentationNativePrintPortResult.Cancel(
-                PresentationNativePrintStatusProfile.PresentationDialog));
+        return Task.FromResult(printResult.Outcome switch
+        {
+            WpfPaginatorPrintOutcome.Printed => PresentationNativePrintPortResult.Success(
+                PresentationNativePrintStatusProfile.PresentationDialog),
+            WpfPaginatorPrintOutcome.Cancelled => PresentationNativePrintPortResult.Cancel(
+                PresentationNativePrintStatusProfile.PresentationDialog),
+            WpfPaginatorPrintOutcome.Failed => PresentationNativePrintPortResult.Failure(
+                PresentationNativePrintStatusProfile.PresentationDialog,
+                printResult.Error?.Message),
+            _ => throw new ArgumentOutOfRangeException(
+                nameof(printResult),
+                printResult.Outcome,
+                "Unsupported WPF print outcome."),
+        });
     }
 }
 
 internal sealed class WpfPresentationVideoPort : IPresentationVideoPort
 {
-    private readonly ILinuxVideoExportAdapter _adapter;
+    private readonly PresentationVideoExportSession _session;
 
     public WpfPresentationVideoPort(
         ILinuxVideoExportAdapter adapter,
         PresentationVideoExportHandoffHostCapabilities capabilities)
     {
-        _adapter = adapter;
+        ArgumentNullException.ThrowIfNull(adapter);
+        _session = new PresentationVideoExportSession(() => adapter);
         Capabilities = capabilities;
     }
 
     public PresentationVideoExportHandoffHostCapabilities Capabilities { get; }
-    public LinuxVideoExportResult? LastResult { get; private set; }
+    public LinuxVideoExportResult? LastResult => _session.LastResult;
 
     public async Task<PresentationNativeCommandResult> ExportAsync(
         PresentationVideoFramePackage package,
         string outputPath,
         IReadOnlyList<PresentationRecordingMediaArtifact> recordingMediaArtifacts,
         CancellationToken cancellationToken)
-    {
-        var result = await _adapter.ExportAsync(
+        => await _session.ExportAsync(
             package,
             outputPath,
-            cancellationToken,
-            recordingMediaArtifacts).ConfigureAwait(true);
-        LastResult = result;
-        return PresentationNativeCommandOutcomePlanner.BuildVideoExportCommandResult(
-            result.Succeeded,
-            result.Canceled,
-            result.FailureReason,
-            result.MuxedNarrationTrackCount,
-            result.MuxedCameraTrackCount,
-            result.MuxedCaptionTrackCount);
-    }
+            recordingMediaArtifacts,
+            cancellationToken).ConfigureAwait(true);
 }
 
 internal sealed class WpfPresentationFileFeedbackPort : IPresentationFileCommandFeedbackPort

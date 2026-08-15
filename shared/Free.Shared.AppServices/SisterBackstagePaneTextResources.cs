@@ -36,6 +36,49 @@ public sealed record SisterBackstageExportPaneTextDescriptor(
         }.OfType<ResourceTextDescriptor>().ToArray();
 }
 
+public sealed record SisterBackstageCorePropertiesTextDescriptor(
+    ResourceTextDescriptor TitleLabel,
+    ResourceTextDescriptor AuthorLabel,
+    ResourceTextDescriptor SubjectLabel,
+    ResourceTextDescriptor KeywordsLabel,
+    ResourceTextDescriptor EmptyValue)
+{
+    public IReadOnlyList<ResourceTextDescriptor> Texts =>
+        [TitleLabel, AuthorLabel, SubjectLabel, KeywordsLabel, EmptyValue];
+}
+
+public sealed record SisterBackstageInfoPaneTextDescriptor(
+    ResourceTextDescriptor Heading,
+    ResourceTextDescriptor LocationLabel,
+    ResourceTextDescriptor NotSavedYet,
+    ResourceTextDescriptor PropertiesHeading,
+    ResourceTextDescriptor StatisticsHeading,
+    ResourceTextDescriptor DirtySuffix,
+    SisterBackstageCorePropertiesTextDescriptor CoreProperties)
+{
+    public IReadOnlyList<ResourceTextDescriptor> Texts =>
+        new[]
+        {
+            Heading,
+            LocationLabel,
+            NotSavedYet,
+            PropertiesHeading,
+            StatisticsHeading,
+            DirtySuffix
+        }.Concat(CoreProperties.Texts).ToArray();
+}
+
+public sealed record ApplicationOptionsSummaryTextDescriptor(
+    ResourceTextDescriptor RecentFilesKeptLabel,
+    ResourceTextDescriptor DefaultSaveFormatLabel,
+    ResourceTextDescriptor UiLanguageLabel,
+    ResourceTextDescriptor DataFolderLabel,
+    ResourceTextDescriptor SystemDefaultLanguageLabel)
+{
+    public IReadOnlyList<ResourceTextDescriptor> Texts =>
+        [RecentFilesKeptLabel, DefaultSaveFormatLabel, UiLanguageLabel, DataFolderLabel, SystemDefaultLanguageLabel];
+}
+
 public sealed record SisterBackstagePaneTextDescriptor(
     ResourceTextDescriptor RecentEmptyText,
     ResourceTextDescriptor TemplateHeading,
@@ -43,7 +86,11 @@ public sealed record SisterBackstagePaneTextDescriptor(
     ResourceTextDescriptor TemplateFooterText,
     ResourceTextDescriptor OptionsDescription,
     SisterBackstageExportPaneTextDescriptor Export,
-    ResourceTextDescriptor? OptionsEditText = null)
+    ResourceTextDescriptor? OptionsEditText = null,
+    ResourceTextDescriptor? RecentHeading = null,
+    ResourceTextDescriptor? OptionsHeading = null,
+    SisterBackstageInfoPaneTextDescriptor? Info = null,
+    ApplicationOptionsSummaryTextDescriptor? OptionsSummary = null)
 {
     public IReadOnlyList<ResourceTextDescriptor> Texts =>
         new[]
@@ -53,9 +100,13 @@ public sealed record SisterBackstagePaneTextDescriptor(
             TemplateTileCaption,
             TemplateFooterText,
             OptionsDescription,
-            OptionsEditText
+            OptionsEditText,
+            RecentHeading,
+            OptionsHeading
         }.OfType<ResourceTextDescriptor>()
             .Concat(Export.Texts)
+            .Concat(Info?.Texts ?? [])
+            .Concat(OptionsSummary?.Texts ?? [])
             .ToArray();
 
     public IReadOnlyList<string> ResourceKeys =>

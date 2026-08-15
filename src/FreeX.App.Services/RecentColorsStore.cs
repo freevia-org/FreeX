@@ -1,4 +1,3 @@
-using System.Text.Json;
 using FreeX.Core.Model;
 
 namespace FreeX.App.Services;
@@ -14,12 +13,7 @@ public sealed class RecentColorsStore
 {
     public const string RecentColorsPathEnvironmentVariable = "FREEX_RECENT_COLORS_PATH";
 
-    private static readonly JsonSerializerOptions StoreJsonOptions = new()
-    {
-        WriteIndented = true
-    };
-
-    private readonly string _storePath;
+    private readonly JsonSettingsStore<List<string>> _store;
     private readonly int _capacity;
     private List<CellColor> _colors;
 
@@ -28,8 +22,9 @@ public sealed class RecentColorsStore
         int capacity = CellColorPalettePlanner.DefaultRecentColorCapacity)
     {
         _capacity = capacity > 0 ? capacity : CellColorPalettePlanner.DefaultRecentColorCapacity;
-        _storePath = !string.IsNullOrWhiteSpace(storePath) ? storePath : DefaultStorePath;
-        _colors = ReadFromPath(_storePath, _capacity);
+        _store = JsonSettingsStore<List<string>>.ForPath(
+            !string.IsNullOrWhiteSpace(storePath) ? storePath : DefaultStorePath);
+        _colors = ParseStoredColors(_store.Load(), _capacity);
     }
 
     public static string DefaultStorePath =>
@@ -37,7 +32,7 @@ public sealed class RecentColorsStore
             PlatformApplicationDataPathProvider.Instance,
             Environment.GetEnvironmentVariable(RecentColorsPathEnvironmentVariable));
 
-    public string StorePath => _storePath;
+    public string StorePath => _store.StorePath;
 
     public int Capacity => _capacity;
 
@@ -55,33 +50,21 @@ public sealed class RecentColorsStore
     public IReadOnlyList<CellColor> Remember(CellColor color)
     {
         _colors = CellColorPalettePlanner.PromoteRecentColor(_colors, color, _capacity).ToList();
-        SaveToPath(_storePath, _colors);
+        _store.Save(_colors.Select(CellColorPalettePlanner.FormatHexColor).ToList());
         return _colors;
     }
 
-    private static List<CellColor> ReadFromPath(string storePath, int capacity)
+    private static List<CellColor> ParseStoredColors(IReadOnlyList<string> hexes, int capacity)
     {
-        try
+        var colors = new List<CellColor>(hexes.Count);
+        foreach (var hex in hexes)
         {
-            if (!File.Exists(storePath))
-                return [];
-
-            var json = File.ReadAllText(storePath);
-            var hexes = JsonSerializer.Deserialize<List<string>>(json) ?? [];
-            var colors = new List<CellColor>(hexes.Count);
-            foreach (var hex in hexes)
-            {
-                if (CellColorPalettePlanner.TryParseHexColor(hex, out var color))
-                    colors.Add(color);
-            }
-
-            // De-dupe and cap through the shared planner so the loaded list obeys the same rules.
-            return DedupeAndCap(colors, capacity);
+            if (CellColorPalettePlanner.TryParseHexColor(hex, out var color))
+                colors.Add(color);
         }
-        catch
-        {
-            return [];
-        }
+
+        // De-dupe and cap through the shared planner so loaded and newly promoted colors agree.
+        return DedupeAndCap(colors, capacity);
     }
 
     private static List<CellColor> DedupeAndCap(IReadOnlyList<CellColor> colors, int capacity)
@@ -98,18 +81,5 @@ public sealed class RecentColorsStore
         }
 
         return result;
-    }
-
-    private static void SaveToPath(string storePath, IReadOnlyList<CellColor> colors)
-    {
-        try
-        {
-            var hexes = colors.Select(CellColorPalettePlanner.FormatHexColor).ToList();
-            AtomicFileWriter.WriteAllText(storePath, JsonSerializer.Serialize(hexes, StoreJsonOptions));
-        }
-        catch
-        {
-            // Recent colors are a convenience; never let a persistence failure crash the shell.
-        }
     }
 }

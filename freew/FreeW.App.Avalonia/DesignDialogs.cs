@@ -359,10 +359,8 @@ public sealed partial class WatermarkDialog : FreeWDialogWindow
             if (file is null)
                 return;
 
-            await using var stream = await file.OpenReadAsync();
-            using var memory = new MemoryStream();
-            await stream.CopyToAsync(memory);
-            LoadPictureImage(file.Name, memory.ToArray());
+            var imageBytes = await FileByteReadWorkflow.ReadStreamBytesAsync(file.OpenReadAsync);
+            LoadPictureImage(file.Name, imageBytes);
         }
         catch (Exception ex)
         {

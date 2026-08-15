@@ -1,5 +1,6 @@
 using Free.Shared.Ribbon;
 using FreeW.App.Presentation.Ribbon;
+using FreeW.Core.Model;
 
 namespace FreeW.App.Presentation.Tests;
 
@@ -68,11 +69,78 @@ public sealed class HeaderFooterRibbonWorkflowTests
         foreach (var source in new[] { wpf, avalonia })
         {
             source.Should().Contain("HeaderFooterRibbonWorkflow.Register(");
+            source.Should().Contain("HeaderFooterRibbonWorkflow.CreatePageSettingCommands(");
             source.Should().Contain("new HeaderFooterRibbonBindings(");
             source.Should().NotContain("headerFooterCommands.Bind(");
             source.Should().NotContain("ConfigureHeaderFooterCommandFamily(");
             source.Should().NotContain("BindHeaderFooterSlot(");
+            source.Should().NotContain("class PageSettingCommand");
+            source.Should().NotContain("class HeaderFooterDistanceCommand");
         }
+    }
+
+    [Fact]
+    public void PageSettingCommandsOwnToggleDistanceAndEnablementPolicy()
+    {
+        var page = new PageSettings
+        {
+            HeaderDistancePt = 18,
+            FooterDistancePt = 24,
+        };
+        var enabled = true;
+        var mutationCount = 0;
+        var commands = HeaderFooterRibbonWorkflow.CreatePageSettingCommands(
+            new HeaderFooterPageSettingsPorts(
+                GetPageSettings: () => page,
+                ApplyPageSettings: apply =>
+                {
+                    apply(page);
+                    mutationCount++;
+                },
+                IsEnabled: () => enabled));
+
+        commands.DifferentFirstPage.GetState().Should().BeEquivalentTo(
+            new RibbonCommandState(IsEnabled: true, IsChecked: false));
+        commands.DifferentFirstPage.Execute(RibbonCommandContext.Empty);
+        page.DifferentFirstPage.Should().BeTrue();
+
+        commands.DifferentOddEvenPages.Execute(RibbonCommandContext.Empty);
+        page.DifferentOddEvenPages.Should().BeTrue();
+
+        commands.HeaderFromTop.GetState().Value.Should().Be("18");
+        commands.HeaderFromTop.Execute(RibbonCommandContext.ForSelectedValue("36.25"));
+        page.HeaderDistancePt.Should().Be(36.25);
+
+        commands.FooterFromBottom.GetState().Value.Should().Be("24");
+        commands.FooterFromBottom.Execute(RibbonCommandContext.ForSelectedValue("bad"));
+        page.FooterDistancePt.Should().Be(24);
+        mutationCount.Should().Be(3);
+
+        enabled = false;
+        commands.DifferentFirstPage.Execute(RibbonCommandContext.Empty);
+        commands.FooterFromBottom.Execute(RibbonCommandContext.ForSelectedValue("48"));
+        page.DifferentFirstPage.Should().BeTrue();
+        page.FooterDistancePt.Should().Be(24);
+        commands.FooterFromBottom.GetState().IsEnabled.Should().BeFalse();
+    }
+
+    [Fact]
+    public void PageSettingCommandsAllowRendererSpecificValueResolution()
+    {
+        var page = new PageSettings();
+        var commands = HeaderFooterRibbonWorkflow.CreatePageSettingCommands(
+            new HeaderFooterPageSettingsPorts(
+                GetPageSettings: () => page,
+                ApplyPageSettings: apply => apply(page),
+                IsEnabled: static () => true,
+                ResolveSelectedValue: context => context.Parameters.TryGetValue("legacy", out var value)
+                    ? value as string
+                    : null));
+
+        commands.HeaderFromTop.Execute(new RibbonCommandContext(
+            new Dictionary<string, object?> { ["legacy"] = "42" }));
+
+        page.HeaderDistancePt.Should().Be(42);
     }
 
     private static HeaderFooterRibbonBindings CreateBindings(ICollection<string> events)

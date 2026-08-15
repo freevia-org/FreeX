@@ -5,14 +5,16 @@ public sealed class ChartProtectionSourceTests
     [Fact]
     public void Avalonia_ChartDialogsRespectImportedProtectionPolicy()
     {
-        var source = File.ReadAllText(RepoFile("freep", "FreeP.App.Avalonia", "MainWindow.cs"));
+        var endpoints = File.ReadAllText(RepoFile(
+            "freep", "RendererShared", "MainWindow.ChartDialogEndpoints.cs"));
         var planner = File.ReadAllText(RepoFile(
             "freep", "FreeP.App.Presentation", "PresentationDomainDialogLaunchPlanner.cs"));
 
-        source.Should().Contain(
-            "_workareaSession.CanOpenDomainDialog(PresentationDomainDialogKind.ChartData)");
-        source.Should().Contain(
-            "_workareaSession.CanOpenDomainDialog(PresentationDomainDialogKind.ChartDisplayOptions)");
+        endpoints.Should().Contain(
+            "OpenChartDialog(PresentationDomainDialogKind.ChartData")
+            .And.Contain("OpenChartDialog(PresentationDomainDialogKind.ChartDisplayOptions")
+            .And.Contain("if (!_workareaSession.CanOpenDomainDialog(kind))")
+            .And.Contain("ShowDomainDialog(createDialog());");
         planner.Should().Contain(
             "PresentationDomainDialogKind.ChartData => editor.CanEditSelectedChartData");
         planner.Should().Contain("editor.CanEditSelectedChartFormatting");
@@ -21,12 +23,17 @@ public sealed class ChartProtectionSourceTests
     [Fact]
     public void Avalonia_ChartProtectionDialogIsRegistered()
     {
-        var source = File.ReadAllText(RepoFile("freep", "FreeP.App.Avalonia", "MainWindow.cs"));
+        var actions = File.ReadAllText(RepoFile(
+            "freep", "RendererShared", "MainWindow.RibbonActionProfile.cs"));
+        var endpoints = File.ReadAllText(RepoFile(
+            "freep", "RendererShared", "MainWindow.ChartDialogEndpoints.cs"));
         var workflow = File.ReadAllText(RepoFile(
             "freep", "FreeP.App.Presentation", "Ribbon", "FreePRibbonCommandWorkflow.cs"));
 
         workflow.Should().Contain("ChartProtectionOptionsPlanner.CommandId");
-        source.Should().Contain("OpenChartProtectionOptionsDialog");
+        actions.Should().Contain("OpenChartProtectionOptions = OpenChartProtectionOptionsDialog");
+        endpoints.Should().Contain(
+            "OpenChartDialog(PresentationDomainDialogKind.ChartProtectionOptions");
     }
 
     private static string RepoFile(params string[] parts) =>

@@ -768,7 +768,7 @@ public sealed class ChartDataDialogTests : IDisposable
     public void Chart3DAndTextOptions_AreReachableThroughHostSourceRoutes()
     {
         var ribbonSource = ReadWorkspaceFile("freep", "FreeP.App.Presentation", "Ribbon", "FreePRibbonCommandWorkflow.cs");
-        var windowSource = ReadWorkspaceFile("freep", "FreeP.App.Host", "MainWindow.cs");
+        var windowSource = ReadWorkspaceFile("freep", "RendererShared", "MainWindow.ChartDialogEndpoints.cs");
 
         ribbonSource.Should().Contain("Chart3DViewOptionsPlanner.CommandId");
         ribbonSource.Should().Contain("ChartTextOptionsPlanner.CommandId");
@@ -781,7 +781,7 @@ public sealed class ChartDataDialogTests : IDisposable
     {
         var source = ReadWorkspaceFile("freep", "FreeP.App.Host", "ChartBubbleOptionsDialog.cs");
         var ribbonSource = ReadWorkspaceFile("freep", "FreeP.App.Presentation", "Ribbon", "FreePRibbonCommandWorkflow.cs");
-        var windowSource = ReadWorkspaceFile("freep", "FreeP.App.Host", "MainWindow.cs");
+        var windowSource = ReadWorkspaceFile("freep", "RendererShared", "MainWindow.ChartDialogEndpoints.cs");
 
         source.Should().Contain("new ChartBubbleOptionsDialogSession(editor");
         source.Should().Contain("_session.Submit(ReadInput())");
@@ -797,7 +797,7 @@ public sealed class ChartDataDialogTests : IDisposable
     {
         var source = ReadWorkspaceFile("freep", "FreeP.App.Host", "ChartPieOptionsDialog.cs");
         var ribbonSource = ReadWorkspaceFile("freep", "FreeP.App.Presentation", "Ribbon", "FreePRibbonCommandWorkflow.cs");
-        var windowSource = ReadWorkspaceFile("freep", "FreeP.App.Host", "MainWindow.cs");
+        var windowSource = ReadWorkspaceFile("freep", "RendererShared", "MainWindow.ChartDialogEndpoints.cs");
 
         source.Should().Contain("new ChartPieOptionsDialogSession(editor)");
         source.Should().Contain("_session.TryCommit(");
@@ -813,7 +813,7 @@ public sealed class ChartDataDialogTests : IDisposable
     {
         var source = ReadWorkspaceFile("freep", "FreeP.App.Host", "ChartPlotStyleOptionsDialog.cs");
         var ribbonSource = ReadWorkspaceFile("freep", "FreeP.App.Presentation", "Ribbon", "FreePRibbonCommandWorkflow.cs");
-        var windowSource = ReadWorkspaceFile("freep", "FreeP.App.Host", "MainWindow.cs");
+        var windowSource = ReadWorkspaceFile("freep", "RendererShared", "MainWindow.ChartDialogEndpoints.cs");
 
         source.Should().Contain("new ChartPlotStyleOptionsDialogSession(editor");
         source.Should().Contain("_session.Submit(ReadInput())");
@@ -878,16 +878,15 @@ public sealed class ChartDataDialogTests : IDisposable
     [Fact]
     public void MainWindow_ChartDialogsDelegateImportedProtectionPolicyToSharedLaunchPlanner()
     {
-        var source = ReadWorkspaceFile("freep", "FreeP.App.Host", "MainWindow.cs");
+        var source = ReadWorkspaceFile("freep", "RendererShared", "MainWindow.ChartDialogEndpoints.cs");
         var planner = ReadWorkspaceFile(
             "freep",
             "FreeP.App.Presentation",
             "PresentationDomainDialogLaunchPlanner.cs");
 
-        source.Should().Contain(
-            "_workareaSession.CanOpenDomainDialog(PresentationDomainDialogKind.ChartData)");
-        source.Should().Contain(
-            "_workareaSession.CanOpenDomainDialog(PresentationDomainDialogKind.ChartDisplayOptions)");
+        source.Should().Contain("_workareaSession.CanOpenDomainDialog(kind)");
+        source.Should().Contain("OpenChartDialog(PresentationDomainDialogKind.ChartData");
+        source.Should().Contain("OpenChartDialog(PresentationDomainDialogKind.ChartDisplayOptions");
         planner.Should().Contain(
             "PresentationDomainDialogKind.ChartData => editor.CanEditSelectedChartData");
         planner.Should().Contain("editor.CanEditSelectedChartFormatting");
@@ -896,7 +895,7 @@ public sealed class ChartDataDialogTests : IDisposable
     [Fact]
     public void MainWindow_ChartProtectionDialogRouteIsAvailableForSelectedCharts()
     {
-        var source = ReadWorkspaceFile("freep", "FreeP.App.Host", "MainWindow.cs");
+        var source = ReadWorkspaceFile("freep", "RendererShared", "MainWindow.ChartDialogEndpoints.cs");
         var ribbon = ReadWorkspaceFile("freep", "FreeP.App.Presentation", "Ribbon", "FreePRibbonCommandWorkflow.cs");
 
         source.Should().Contain("OpenChartProtectionOptionsDialog");

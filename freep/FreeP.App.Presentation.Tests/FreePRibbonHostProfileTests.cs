@@ -104,6 +104,42 @@ public sealed class FreePRibbonHostProfileTests
     }
 
     [Fact]
+    public void ActionPortProfileFactoryOwnsTheBoundNativeActionInventory()
+    {
+        var profile = FreePRibbonActionPortProfileFactory.Create(
+            new FreePRibbonHostActionEndpoints
+            {
+                Copy = () => { },
+                OpenTablePicker = () => { },
+                OpenSlideShowSettings = () => { },
+            });
+
+        profile.BoundActions.Should().Equal(
+            FreePRibbonHostActionKind.Copy,
+            FreePRibbonHostActionKind.OpenTablePicker,
+            FreePRibbonHostActionKind.OpenSlideShowSettings);
+    }
+
+    [Fact]
+    public void RendererActionCompositionIsSharedAndHostProfilesOnlyConsumeIt()
+    {
+        var shared = TestWorkspaceFileLocator.ReadAllText(
+            "freep", "RendererShared", "MainWindow.RibbonActionProfile.cs");
+        var wpf = TestWorkspaceFileLocator.ReadAllText(
+            "freep", "FreeP.App.Host", "MainWindow.RibbonProfile.cs");
+        var avalonia = TestWorkspaceFileLocator.ReadAllText(
+            "freep", "FreeP.App.Avalonia", "MainWindow.cs");
+
+        shared.Should().Contain("FreePRibbonActionPortProfileFactory.Create(")
+            .And.Contain("PresentationDomainContextActionKind.MergeTableCell")
+            .And.Contain("PresentationDomainContextActionKind.SplitTableCell");
+        wpf.Should().Contain("ActionProfile = GetRibbonActionPortProfile()")
+            .And.NotContain("private FreePRibbonHostActionEndpoints CreateRibbonHostActionEndpoints");
+        avalonia.Should().Contain("ActionProfile = GetRibbonActionPortProfile()")
+            .And.NotContain("private FreePRibbonHostActionEndpoints GetRibbonHostActionEndpoints");
+    }
+
+    [Fact]
     public void OleActivationPrefersInlineBeforeSelectedObjectPort()
     {
         var editor = MakeEditorWithSelectedOle(out _);

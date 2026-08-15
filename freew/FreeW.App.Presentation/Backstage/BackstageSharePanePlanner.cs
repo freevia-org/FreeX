@@ -5,8 +5,11 @@ namespace FreeW.App.Presentation.Backstage;
 
 public static class BackstageSharePanePlanner
 {
-    private static readonly WorkbookShareActionSurface LocalShareSurface =
+    private static readonly DocumentShareActionSurface LocalShareSurface =
         new("Windows Share", CanShowShareSheet: false, CanOpenContainingFolder: true);
+
+    private static readonly DocumentShareActionTextSpec ShareText =
+        DocumentShareActionTextSpec.NeutralEnglish;
 
     public static IReadOnlyList<BackstageActionGroup> Build(
         string? currentPath,
@@ -22,16 +25,16 @@ public static class BackstageSharePanePlanner
         ArgumentNullException.ThrowIfNull(saveCopy);
         ArgumentNullException.ThrowIfNull(exportPdf);
 
-        var sharePlan = WorkbookShareActionPlanner.CreatePlan(currentPath, LocalShareSurface, fileExists);
-        var primaryAction = sharePlan.Kind == WorkbookShareActionPlanKind.OpenContainingFolder &&
+        var sharePlan = DocumentShareActionPlanner.CreatePlan(currentPath, LocalShareSurface, fileExists);
+        var primaryAction = sharePlan.Kind == DocumentShareActionPlanKind.OpenContainingFolder &&
             !string.IsNullOrWhiteSpace(sharePlan.Path)
                 ? new BackstageActionRow(
                     "Open Containing Folder",
-                    WorkbookShareActionPlanner.FormatStatus(sharePlan),
+                    DocumentShareActionPlanner.FormatStatus(sharePlan, ShareText),
                     () => openContainingFolder(sharePlan.Path!))
                 : new BackstageActionRow(
                     "Save As",
-                    WorkbookShareActionPlanner.FormatStatus(sharePlan),
+                    DocumentShareActionPlanner.FormatStatus(sharePlan, ShareText),
                     saveAs);
 
         return

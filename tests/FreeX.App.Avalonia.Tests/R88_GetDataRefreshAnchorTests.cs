@@ -27,7 +27,7 @@ public sealed class R88_GetDataRefreshAnchorTests
 
     [Fact]
     public Task RefreshImportedData_AfterSelectionMoves_ReimportsAtOriginalAnchorNotCurrentSelection() =>
-        Session.Dispatch(() =>
+        Session.Dispatch(async () =>
         {
             var path = Path.Combine(Path.GetTempPath(), $"freex-r88-getdata-refresh-anchor-{Guid.NewGuid():N}.csv");
             File.WriteAllText(path, "11,22\r\n33,44\r\n");
@@ -58,7 +58,7 @@ public sealed class R88_GetDataRefreshAnchorTests
                 // The source file changes (as a real refreshed data source would) before Refresh All.
                 File.WriteAllText(path, "99,88\r\n77,66\r\n");
 
-                InvokePrivateVoid(window, "RefreshImportedData");
+                await InvokePrivateTaskAsync(window, "RefreshImportedDataAsync");
 
                 // Refreshed data must land back at the original anchor (B2:C3), updated in place...
                 sheet.GetValue(new CellAddress(sheet.Id, 2, 2)).Should().Be(new NumberValue(99),
@@ -132,11 +132,11 @@ public sealed class R88_GetDataRefreshAnchorTests
         return result;
     }
 
-    private static void InvokePrivateVoid(MainWindow window, string methodName)
+    private static async Task InvokePrivateTaskAsync(MainWindow window, string methodName)
     {
         var method = typeof(MainWindow).GetMethod(
             methodName, BindingFlags.NonPublic | BindingFlags.Instance)
             ?? throw new MissingMethodException(nameof(MainWindow), methodName);
-        method.Invoke(window, null);
+        await (Task)method.Invoke(window, null)!;
     }
 }

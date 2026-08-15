@@ -152,6 +152,34 @@ public sealed class FindReplaceDialogSessionTests
         callbackCount.Should().Be(2);
     }
 
+    [Fact]
+    public void Session_UsesInjectedPolicyTextAcrossSearchAndReplacementTransitions()
+    {
+        var (editor, _) = MakeSession("cat cat");
+        var text = new FindReplacePolicyTextSpec(
+            "query required",
+            "nothing found",
+            "nothing replaced",
+            "missing {0}",
+            "result {0}/{1}",
+            "changed {0}{1}",
+            "changed total {0}");
+        var session = new FindReplaceDialogSession(
+            editor,
+            showReplace: true,
+            policyText: text);
+
+        session.ReplaceAll().StatusText.Should().Be("query required");
+
+        session.SetQuery("missing");
+        session.Navigate(+1).StatusText.Should().Be("nothing found");
+        session.ReplaceAll().StatusText.Should().Be("nothing replaced");
+
+        session.SetInput("cat", "dog");
+        session.Navigate(+1).StatusText.Should().Be("result 1/2");
+        session.ReplaceAll().StatusText.Should().Be("changed total 2");
+    }
+
     private static (EditingSession Editor, SlideShape Shape) MakeSession(string text)
     {
         var presentation = new Presentation

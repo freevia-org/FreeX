@@ -146,6 +146,7 @@ public sealed class FreeWBackstageSession
     public BackstageInfoPaneSpec BuildInfoPane()
     {
         var document = _callbacks.GetDocument();
+        var paneText = FreeWBackstagePaneTextCatalog.BuildTextSpec(_getText);
         var safetySurface = BackstagePaneSurfacePlanner.BuildInfoPane(
             [],
             Bind(_callbacks.MarkAsFinal),
@@ -168,7 +169,8 @@ public sealed class FreeWBackstageSession
             Statistics: BackstageInfoStatisticsPlanner.Build(document),
             EditPropertiesText: "Edit document properties\u2026",
             EditProperties: Bind(_callbacks.EditProperties),
-            ActionGroups: ToActionGroups(safetySurface.SafetyGroups)));
+            ActionGroups: ToActionGroups(safetySurface.SafetyGroups),
+            Text: paneText.Info));
     }
 
     public BackstageAccountPaneSurfaceSpec BuildAccountPane(string productVersion) =>

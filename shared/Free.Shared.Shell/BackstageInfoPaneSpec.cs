@@ -12,4 +12,8 @@ public sealed record BackstageInfoPaneSpec(
     IReadOnlyList<BackstageFieldRow> Statistics,
     string? EditPropertiesText = null,
     Action? EditProperties = null,
-    IReadOnlyList<BackstageActionGroup>? ActionGroups = null);
+    IReadOnlyList<BackstageActionGroup>? ActionGroups = null,
+    BackstageInfoPaneTextSpec? Text = null)
+{
+    public BackstageInfoPaneTextSpec EffectiveText => Text ?? BackstageInfoPaneTextSpec.NeutralEnglish;
+}

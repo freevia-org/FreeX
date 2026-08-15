@@ -1,3 +1,4 @@
+using Free.Shared.AppServices;
 using Free.Shared.Localization;
 using FreeX.Core.Commands;
 
@@ -66,6 +67,15 @@ public sealed record FindReplaceDialogChoice<T>(T Value, FindReplaceDialogText T
 
 public static class FindReplaceDialogSchema
 {
+    public static FindReplacePolicyTextDescriptor PolicyTextDescriptor { get; } = new(
+        new ResourceTextDescriptor("FindReplace_FindWhatRequired", "Find text is required."),
+        new ResourceTextDescriptor("FindReplace_NoMatchesFound", "No matches found."),
+        new ResourceTextDescriptor("FindReplace_NoReplaceableMatchFound", "No replaceable match found."),
+        new ResourceTextDescriptor("FindReplace_NoMatchesFound", "No matches found for \"{0}\"."),
+        new ResourceTextDescriptor("FindReplace_MatchStatus", "Match {0} of {1}"),
+        new ResourceTextDescriptor("FindReplace_ReplacedCellsStatus", "Replaced {0} occurrence{1}."),
+        new ResourceTextDescriptor("FindReplace_ReplacedCellsStatus", "{0} replacement(s) made."));
+
     private static readonly IReadOnlyList<FindReplaceDialogChoice<FindWithin>> WithinChoiceValues =
         Array.AsReadOnly(
         [
@@ -94,6 +104,9 @@ public static class FindReplaceDialogSchema
     public static IReadOnlyList<FindReplaceDialogChoice<FindSearchOrder>> SearchChoices => SearchChoiceValues;
 
     public static IReadOnlyList<FindReplaceDialogChoice<FindLookIn>> LookInChoices => LookInChoiceValues;
+
+    public static FindReplacePolicyTextSpec ResolvePolicyText(Func<string, string?>? getText = null) =>
+        FindReplacePolicyTextSpec.FromDescriptor(PolicyTextDescriptor, getText);
 
     public static LocalizedTextDescriptor Describe(FindReplaceDialogText text, params object?[] arguments) =>
         LocalizedTextDescriptor.Resource(ResourceKey(text), arguments);

@@ -8,6 +8,8 @@ public sealed class HeaderFooterFieldPolicySourceGuardTests
     public void FreeWRibbonCommands_DelegatesHeaderFooterAndFieldPolicyToPresentationPlanners()
     {
         var source = ReadHostRibbonSource();
+        var workflow = ReadPresentationRibbonSource("HeaderFooterRibbonWorkflow.cs");
+        var fieldPicker = ReadHostSource("FieldPickerDialog.cs");
 
         source.Should().Contain("HeaderFooterDialogPlanner.PlanSlotActivation(");
         source.Should().Contain("HeaderFooterDialogPlanner.GetSlot(");
@@ -16,11 +18,12 @@ public sealed class HeaderFooterFieldPolicySourceGuardTests
         source.Should().Contain("HeaderFooterDialogPlanner.AddPageNumberToSlot(");
         source.Should().Contain("HeaderFooterDialogPlanner.BuildSlotDialogState(");
         source.Should().Contain("HeaderFooterDialogPlanner.BuildSlotDialogResult(");
-        source.Should().Contain("HeaderFooterDialogPlanner.TryParseDistance(");
-        source.Should().Contain("HeaderFooterDialogPlanner.FormatDistance(");
-        source.Should().Contain("FieldPickerDialogPlanner.Categories");
-        source.Should().Contain("FieldPickerDialogPlanner.ChoicesForCategory(");
-        source.Should().Contain("FieldPickerDialogPlanner.TryGetInstruction(");
+        source.Should().Contain("HeaderFooterRibbonWorkflow.CreatePageSettingCommands(");
+        workflow.Should().Contain("HeaderFooterDialogPlanner.TryParseDistance(");
+        workflow.Should().Contain("HeaderFooterDialogPlanner.FormatDistance(");
+        fieldPicker.Should().Contain("FieldPickerDialogPlanner.Categories");
+        fieldPicker.Should().Contain(".ChoicesForCategory(");
+        fieldPicker.Should().Contain("FieldPickerDialogPlanner.TryGetInstruction(");
         source.Should().Contain("QuickPartRibbonWorkflow.Register(");
     }
 
@@ -37,16 +40,35 @@ public sealed class HeaderFooterFieldPolicySourceGuardTests
         source.Should().NotContain("FieldKind == RunFieldKind.PageNumber) ?? false");
         source.Should().NotContain("new HeaderFooter();");
         source.Should().NotContain("new Run(\"Page \")");
+        source.Should().NotContain("class DifferentFirstPageToggleCommand");
+        source.Should().NotContain("class DifferentOddEvenPagesCommand");
+        source.Should().NotContain("class HeaderFromTopCommand");
+        source.Should().NotContain("class FooterFromBottomCommand");
     }
 
     private static string ReadHostRibbonSource()
+        => ReadHostSource("Ribbon", "FreeWRibbonCommands.cs");
+
+    private static string ReadHostSource(params string[] relativePath)
+    {
+        var path = Path.Combine(
+            [
+                TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeW.slnx"),
+                "freew",
+                "FreeW.App.Host",
+                .. relativePath,
+            ]);
+        return File.ReadAllText(path);
+    }
+
+    private static string ReadPresentationRibbonSource(string fileName)
     {
         var path = Path.Combine(
             TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeW.slnx"),
             "freew",
-            "FreeW.App.Host",
+            "FreeW.App.Presentation",
             "Ribbon",
-            "FreeWRibbonCommands.cs");
+            fileName);
         return File.ReadAllText(path);
     }
 

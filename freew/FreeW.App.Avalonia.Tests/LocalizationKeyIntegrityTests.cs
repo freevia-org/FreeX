@@ -40,7 +40,8 @@ public sealed class LocalizationKeyIntegrityTests
     public void SharedFreeWSurfaceCatalogKeys_AllExistInNeutralResources()
     {
         var available = UiText.GetNeutralResourceKeys();
-        var required = MailMergeRuleDialogPlanner.RequiredResourceKeys
+        var required = FindReplaceDialogPlanner.RequiredResourceKeys
+            .Concat(MailMergeRuleDialogPlanner.RequiredResourceKeys)
             .Concat(MailMergeDialogMetadata.RequiredResourceKeys)
             .Concat(InsertDialogTextResources.RequiredResourceKeys)
             .Concat(NavigationPaneTextCatalog.RequiredResourceKeys)

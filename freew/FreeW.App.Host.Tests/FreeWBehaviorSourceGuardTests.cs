@@ -121,7 +121,8 @@ public sealed class FreeWBehaviorSourceGuardTests
         session.Should().Contain("new AutosaveSnapshotCoordinator(");
         session.Should().Contain("AutosaveRecoveryPlanner.PlanAll(_store)");
         session.Should().Contain("AutosaveRecoveryPlanner.Complete(");
-        planner.Should().Contain("SelectAllOrdered(store.ExcludeLiveOwned(store.EnumerateCandidates()))");
+        planner.Should().Contain("AutosaveRecoveryPolicy");
+        planner.Should().NotContain("OrderByDescending");
         workflow.Should().Contain("for (var index = 0; index < recoveries.Count; index++)");
         workflow.Should().Contain("var useCurrentWindow = !anyAccepted;");
         workflow.Should().Contain("FreeWRecoveryPromptMode.Manual");
@@ -157,6 +158,31 @@ public sealed class FreeWBehaviorSourceGuardTests
             .Should().Contain("customDictionary.EnsurePersisted()");
         ReadSource("freew", "FreeW.App.Host", "Editing", "DocumentView.cs")
             .Should().Contain("RegisterCustomDictionary");
+
+        var dictionaryStore = ReadSource(
+            "freew", "FreeW.App.Presentation", "Proofing", "CustomDictionaryStore.cs");
+        dictionaryStore.Should().Contain("WriteAllLinesAtomically(");
+        dictionaryStore.Should().Contain("AtomicFileWriter.WriteAllText(");
+
+        var quickParts = ReadSource(
+            "freew", "FreeW.App.Presentation", "QuickParts", "QuickPartLibrary.cs");
+        quickParts.Should().Contain("JsonSettingsStore<List<PersistedQuickPart>>");
+        quickParts.Should().NotContain("JsonSerializer.");
+        quickParts.Should().NotContain("File.WriteAllText(");
+    }
+
+    [Fact]
+    public void WpfReviewCommands_DelegateCompareAndCombinePolicyToPresentation()
+    {
+        var source = ReadSource("freew", "FreeW.App.Host", "Ribbon", "FreeWRibbonCommands.cs");
+
+        source.Should().Contain("ReviewCompareCombineWorkflow.BuildComparePrompt(");
+        source.Should().Contain("ReviewCompareCombineWorkflow.ExecuteCompare(");
+        source.Should().Contain("ReviewCompareCombineWorkflow.BuildCombinePrompt(");
+        source.Should().Contain("ReviewCompareCombineWorkflow.ExecuteCombine(");
+        source.Should().Contain("ReviewCompareCombineWorkflow.CreateRevisionDateXml(");
+        source.Should().NotContain("DocumentCompare.Compare(");
+        source.Should().NotContain("DocumentCombine.Combine(");
     }
 
     private static string ReadSource(params string[] parts) =>

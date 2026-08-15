@@ -37,19 +37,24 @@ public sealed class PresentationWorkareaOwnershipSourceTests
         var avalonia = Read(root, "freep", "FreeP.App.Avalonia", "MainWindow.cs");
         var wpfEndpoint = Read(root, "freep", "FreeP.App.Host", "MainWindow.WorkareaEndpoint.cs");
         var avaloniaEndpoint = Read(root, "freep", "FreeP.App.Avalonia", "MainWindow.WorkareaEndpoint.cs");
+        var chartEndpoints = Read(root, "freep", "RendererShared", "MainWindow.ChartDialogEndpoints.cs");
 
         wpf.Should().Contain("ToWpfKey(")
-            .And.Contain("private void ShowOwnedDomainDialog(Window dialog)")
-            .And.Contain("ShowOwnedDomainDialog(new ChartDataDialog(Editor))")
+            .And.Contain("private void ShowDomainDialog(Window dialog)")
+            .And.NotContain("new ChartDataDialog(Editor)")
             .And.NotContain("WpfClipboardCommands.Copy(Editor, _osClipboard)");
         avalonia.Should().Contain("TryMapKeyboardKey(")
             .And.Contain("private void ShowDomainDialog(Window dialog)")
-            .And.Contain("ShowDomainDialog(new ChartDataDialog(Editor))")
+            .And.NotContain("new ChartDataDialog(Editor)")
             .And.Contain("LastCustomSlideSizeInitialState = dialog.InitialState;")
             .And.Contain("LastHeaderFooterState = dialog.InitialState;")
             .And.NotContain("SlideSizeDialogPlanner.BuildInitialState(")
             .And.NotContain("LastHeaderFooterState = HeaderFooterCommandPlanner.BuildState(Editor)")
             .And.NotContain("QueueClipboardCopy();");
+        chartEndpoints.Should().Contain(
+                "OpenChartDialog(PresentationDomainDialogKind.ChartData, () => new ChartDataDialog(Editor))")
+            .And.Contain("ShowDomainDialog(createDialog())")
+            .And.Contain("_workareaSession.CanOpenDomainDialog(kind)");
         wpfEndpoint.Should().Contain("Copy = () => _osClipboard.Copy(Editor)")
             .And.Contain("RefreshSlidePane = RefreshSlidePane")
             .And.Contain("RefreshCurrentSlideStatus = UpdateSlideCount")

@@ -58,7 +58,7 @@ public sealed class AutosaveAdapterTests
             new AutosaveRecoveryCandidate("snap2.docx", "snap2.sidecar", later),
         };
 
-        var selected = AutosaveRecoveryPlanner.SelectLatest(candidates);
+        var selected = AutosaveRecoveryPolicy.SelectLatest(candidates);
 
         selected.Should().NotBeNull();
         selected!.Sidecar.DisplayName.Should().Be("newer");

@@ -10,11 +10,6 @@ using FreeW.App.Presentation.Dialogs;
 
 namespace FreeW.App.Avalonia.Editing;
 
-internal sealed record ScreenClipCapture(
-    byte[] PngBytes,
-    int PixelWidth,
-    int PixelHeight);
-
 internal interface IScreenClipService
 {
     Task<ScreenClipCapture?> CaptureAsync(
@@ -96,7 +91,9 @@ internal sealed class AvaloniaScreenClipService : IScreenClipService
                 var result = await _processRunner.RunAsync(attempt, cancellationToken);
                 if (result.Succeeded && File.Exists(outputPath))
                 {
-                    var bytes = await File.ReadAllBytesAsync(outputPath, cancellationToken);
+                    var bytes = await FileByteReadWorkflow.ReadLocalPathBytesAsync(
+                        outputPath,
+                        cancellationToken);
                     if (bytes.Length > 0)
                         return bytes;
                 }

@@ -156,6 +156,8 @@ public sealed class PresentationNativeCommandOutcomePlannerTests
         var wpf = Read("freep", "FreeP.App.Host", "WpfPresentationFileCommandPorts.cs");
         var avaloniaPorts = Read("freep", "FreeP.App.Avalonia", "MainWindow.FileCommandPorts.cs");
         var avaloniaWindow = Read("freep", "FreeP.App.Avalonia", "MainWindow.cs");
+        var videoExportSession = Read(
+            "freep", "FreeP.App.Recording", "Recording", "PresentationVideoExportSession.cs");
 
         wpf.Should().NotContain("\"Print failed\"")
             .And.NotContain("\"Printed presentation\"")
@@ -168,8 +170,12 @@ public sealed class PresentationNativeCommandOutcomePlannerTests
             .And.NotContain("\"The command failed.\"")
             .And.NotContain("\"Export completed\"")
             .And.Contain("BuildSystemPrintResult")
-            .And.Contain("BuildVideoExportCommandResult")
+            .And.Contain("_session.ExportAsync(")
+            .And.Contain("return commandResult;")
+            .And.NotContain("BuildVideoExportCommandResult(")
             .And.Contain("BuildFileFeedback(result)");
+        videoExportSession.Should().Contain(
+            "PresentationNativeCommandOutcomePlanner.BuildVideoExportCommandResult(");
         avaloniaWindow.Should().NotContain(
                 "$\"{LastNativePrintResult.StatusText}: {LastNativePrintResult.FailureReason}\"")
             .And.NotContain("\"Portable print submission failed.\"")

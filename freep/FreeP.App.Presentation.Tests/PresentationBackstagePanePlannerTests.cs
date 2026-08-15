@@ -19,9 +19,17 @@ public sealed class PresentationBackstagePanePlannerTests
             "Edit options…"));
         descriptor.Export.PdfActionLabel.FallbackText.Should().Be("Export to PDF...");
         descriptor.Export.XpsActionLabel.Should().BeNull();
+        descriptor.Info.Should().NotBeNull();
+        descriptor.Info!.LocationLabel.Should().BeSameAs(CommonShellTextResources.Location);
+        descriptor.OptionsSummary.Should().NotBeNull();
+        descriptor.OptionsSummary!.UiLanguageLabel.Should().BeSameAs(CommonShellTextResources.UiLanguage);
         FreePBackstagePaneTextCatalog.RequiredResourceKeys
             .Should().OnlyHaveUniqueItems()
-            .And.Contain(FreePBackstagePaneResourceKeys.OptionsEditText);
+            .And.Contain([
+                FreePBackstagePaneResourceKeys.OptionsEditText,
+                FreePBackstagePaneResourceKeys.InfoHeading,
+                CommonShellResourceKeys.SystemDefault,
+            ]);
     }
 
     [Fact]
@@ -33,6 +41,24 @@ public sealed class PresentationBackstagePanePlannerTests
                 : null);
 
         text.OptionsEditText.Should().Be("Modifier les options…");
+    }
+
+    [Fact]
+    public void FreePBackstagePaneTextCatalog_ResolvesInfoAndOptionsSummaryText()
+    {
+        var text = FreePBackstagePaneTextCatalog.BuildTextSpec(key => key switch
+        {
+            CommonShellResourceKeys.Location => "Emplacement",
+            CommonShellResourceKeys.Title => "Titre",
+            CommonShellResourceKeys.RecentFilesKept => "Fichiers recents conserves",
+            CommonShellResourceKeys.SystemDefault => "Valeur systeme",
+            _ => null,
+        });
+
+        text.Info.LocationLabel.Should().Be("Emplacement");
+        text.Info.CoreProperties.TitleLabel.Should().Be("Titre");
+        text.OptionsSummary.RecentFilesKeptLabel.Should().Be("Fichiers recents conserves");
+        text.OptionsSummary.SystemDefaultLanguageLabel.Should().Be("Valeur systeme");
     }
 
     [Fact]
@@ -71,6 +97,7 @@ public sealed class PresentationBackstagePanePlannerTests
         info.DocumentKindLabel.Should().Be("Presentation");
         info.DisplayName.Should().Be("Roadmap.fxp");
         info.IsDirty.Should().BeTrue();
+        info.Text.Should().BeSameAs(info.EffectiveText);
         info.Properties.Should().Contain(new BackstageFieldRow("Title", "Roadmap"));
         info.Properties.Should().Contain(new BackstageFieldRow("Author", "Ada"));
         info.Statistics.Should().ContainSingle()
@@ -88,6 +115,29 @@ public sealed class PresentationBackstagePanePlannerTests
         account.Groups[0].Fields.Should().Contain(new BackstageFieldRow("Device", "DECK-PC"));
         account.Groups[1].Fields.Should().Contain(new BackstageFieldRow("Windows user", "Ada"));
         account.OptionsText.Should().Be("FreeP Options...");
+    }
+
+    [Fact]
+    public void BuildStandardPanes_UsesResolvedInfoAndOptionsSummarySpecs()
+    {
+        var planner = new PresentationBackstagePanePlanner(key => key switch
+        {
+            CommonShellResourceKeys.Location => "Emplacement",
+            CommonShellResourceKeys.Title => "Titre",
+            CommonShellResourceKeys.DataFolder => "Dossier de donnees",
+            CommonShellResourceKeys.SystemDefault => "Valeur systeme",
+            _ => null,
+        });
+        var presentation = Presentation.CreateEmpty();
+        presentation.Properties.Title = "Roadmap";
+
+        var info = planner.BuildInfoPane(presentation, "Roadmap.fxp", false, null);
+        var options = planner.BuildOptionsPane(new FreePOptions(), "data");
+
+        info.EffectiveText.LocationLabel.Should().Be("Emplacement");
+        info.Properties.Should().Contain(new BackstageFieldRow("Titre", "Roadmap"));
+        options.Fields.Should().Contain(new BackstageFieldRow("Dossier de donnees", "data"));
+        options.Fields.Should().Contain(new BackstageFieldRow("UI language", "Valeur systeme"));
     }
 
     [Fact]
