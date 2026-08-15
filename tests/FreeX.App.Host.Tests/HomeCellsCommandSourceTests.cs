@@ -30,8 +30,8 @@ public sealed class HomeCellsCommandSourceTests
         source.Should().NotContain("new DeleteRowsCommand");
         source.Should().NotContain("new DeleteColumnsCommand");
         source.Should().NotContain("new DeleteCellsCommand");
-        source.Should().Contain("var deletedSheetId = _currentSheetId;");
-        source.Should().Contain("new RemoveSheetCommand(deletedSheetId)");
+        source.Should().Contain("DeleteSheetsWithConfirmation(_currentSheetId)");
+        source.Should().NotContain("new RemoveSheetCommand(");
         source.Should().Contain("_session.SetSelectedRowsHeight(dialog.Result.Height)");
         source.Should().Contain("_session.SetSelectedColumnsWidth(dialog.Result.Width)");
         source.Should().Contain("TryExecuteWorksheetLayout(_session.AutoFitSelectedRowHeight, \"Auto Row Height\")");

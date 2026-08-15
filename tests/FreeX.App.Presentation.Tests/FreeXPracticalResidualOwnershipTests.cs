@@ -154,6 +154,7 @@ public sealed class FreeXPracticalResidualOwnershipTests
         var avalonia = Read("src", "FreeX.App.Avalonia", "MainWindow.cs");
         var avaloniaMoveCopy = Read("src", "FreeX.App.Avalonia", "MainWindow.MoveCopySheet.cs");
         var wpf = Read("src", "FreeX.App.Host", "MainWindow.SheetTabs.cs");
+        var wpfCells = Read("src", "FreeX.App.Host", "MainWindow.CellsCommands.cs");
 
         session.Should().Contain("public WorkbookCellEditResult DuplicateSelectedSheets()");
         session.Should().Contain("public WorkbookCellEditResult MoveOrCopySelectedSheets(");
@@ -174,12 +175,14 @@ public sealed class FreeXPracticalResidualOwnershipTests
         wpf.Should().Contain("_session.HideSelectedSheets()");
         wpf.Should().Contain("_session.UnhideSheet(sheet.Id)");
         wpf.Should().Contain("_session.SetSelectedSheetTabColor(");
+        wpfCells.Should().Contain("DeleteSheetsWithConfirmation(_currentSheetId)");
 
         wpf.Should().NotContain("new DuplicateSheetCommand(tab.Id)");
         wpf.Should().NotContain("new CompositeWorkbookCommand(\"Delete Sheet\"");
         wpf.Should().NotContain("new CompositeWorkbookCommand(\"Hide Sheet\"");
         wpf.Should().NotContain("new SetSheetHiddenCommand(");
         wpf.Should().NotContain("new CompositeWorkbookCommand(\"Tab Color\"");
+        wpfCells.Should().NotContain("new RemoveSheetCommand(");
     }
 
     private static string Read(params string[] parts)

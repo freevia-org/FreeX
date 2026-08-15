@@ -375,7 +375,8 @@ public sealed partial class MainWindowSourceHygieneTests
         var insert = ExtractMethodSource(source, "private void InsertNewSheet(SheetId? insertBeforeSheetId = null)");
         var dragMove = ExtractMethodSource(source, "private void CommitPendingSheetTabDragDrop()");
         var rename = ExtractMethodSource(source, "private void RenameSheet(");
-        var delete = ExtractMethodSource(source, "private void SheetCtxDelete_Click(");
+        var deleteRoute = ExtractMethodSource(source, "private void SheetCtxDelete_Click(");
+        var delete = ExtractMethodSource(source, "private void DeleteSheetsWithConfirmation(");
         var move = ExtractMethodSource(source, "private void MoveSheetTab(");
 
         insert.Should().Contain("_session.AddSheet(insertBeforeSheetId)");
@@ -390,9 +391,15 @@ public sealed partial class MainWindowSourceHygieneTests
         rename.Should().Contain("CompleteWorksheetSessionCommand(");
         rename.Should().NotContain("new RenameSheetCommand");
         rename.Should().NotContain("RecalculateWorkbook()");
+        deleteRoute.Should().Contain("DeleteSheetsWithConfirmation(tab.Id)");
         delete.Should().Contain("SynchronizeWorkbookSessionSelection();");
         delete.Should().Contain("_session.DeleteSelectedSheets()");
+        delete.Should().Contain("foreach (var sheetId in selectedSheetIds)");
+        delete.Should().Contain("_currentSheetId = _session.ActiveSheet.Id;");
+        delete.Should().Contain("ApplyWorkbookSessionSelectionToRenderer();");
         delete.Should().NotContain("new RemoveSheetCommand");
+        delete.Should().NotContain("_workbook.Sheets[0].Id");
+        delete.Should().NotContain("RecalculateWorkbook()");
         move.Should().Contain("_session.MoveActiveSheetTo(toIndex)");
         move.Should().Contain("_session.UngroupSheets()");
         move.Should().Contain("CompleteWorksheetSessionCommand(");
@@ -401,6 +408,7 @@ public sealed partial class MainWindowSourceHygieneTests
 
         insert.Should().NotContain("_commandBus.Execute");
         rename.Should().NotContain("_commandBus.Execute");
+        deleteRoute.Should().NotContain("_commandBus.Execute");
         delete.Should().NotContain("_commandBus.Execute");
         move.Should().NotContain("_commandBus.Execute");
     }

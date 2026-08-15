@@ -114,37 +114,7 @@ public partial class MainWindow
     }
 
     private void DeleteSheetMenuItem_Click(object sender, RoutedEventArgs e)
-    {
-        var deletedSheetId = _currentSheetId;
-        var sheet = _workbook.GetSheet(deletedSheetId);
-        if (sheet is null || _workbook.Sheets.Count <= 1)
-        {
-            _messageService.ShowWarning(
-                UiText.Get("MainWindowMessage_DeleteOnlyVisibleSheet"),
-                UiText.Get("MainWindowMessage_DeleteSheetTitle"));
-            return;
-        }
-
-        if (!_messageService.AskYesNo(
-                UiText.Format("MainWindowMessage_DeleteSheetPrompt", sheet.Name),
-                UiText.Get("MainWindowMessage_DeleteSheetTitle"))) return;
-        if (!TryExecuteCommand(new RemoveSheetCommand(deletedSheetId), "Delete Sheet"))
-            return;
-
-        // R126-viewstate-delete-purge-1: drop this window's own remembered view state/split
-        // offsets for the deleted sheet id too -- otherwise WorksheetViewStateStore and
-        // _splitPaneViewportOffsets each keep one stale entry per deleted sheet for the rest of
-        // this window's lifetime (only a full New/Open Clear() ever drops them).
-        // TryExecuteCommand synchronizes the session's new active sheet back into _currentSheetId,
-        // so retain the deleted id captured before execution for renderer-cache cleanup.
-        _worksheetSelections.Remove(deletedSheetId);
-        _worksheetViewStates.Remove(deletedSheetId);
-        _splitPaneViewportOffsets.Remove(deletedSheetId);
-        _currentSheetId = _workbook.Sheets[0].Id;
-        RecalculateWorkbook();
-        RefreshSheetTabs();
-        UpdateViewport();
-    }
+        => DeleteSheetsWithConfirmation(_currentSheetId);
 
     /// <summary>
     /// R124-cellscmds-multiarea-rowheight-1: mirrors R123-cellscmds-multiarea-insert-1/-delete-1 for

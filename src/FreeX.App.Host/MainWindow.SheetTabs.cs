@@ -1661,6 +1661,15 @@ public partial class MainWindow
         var tab = GetContextMenuTab(sender);
         if (tab == null) return;
 
+        DeleteSheetsWithConfirmation(tab.Id);
+    }
+
+    private void DeleteSheetsWithConfirmation(SheetId promptSheetId)
+    {
+        var promptSheet = _workbook.GetSheet(promptSheetId);
+        if (promptSheet is null)
+            return;
+
         SynchronizeWorkbookSessionSelection();
         var selectedSheetIds = _session.GetCurrentGroupedStructureSheetIds();
 
@@ -1676,7 +1685,7 @@ public partial class MainWindow
 
         var prompt = selectedSheetIds.Count > 1
             ? UiText.Format("MainWindowMessage_DeleteSheetsPrompt", selectedSheetIds.Count)
-            : UiText.Format("MainWindowMessage_DeleteSheetPrompt", tab.Name);
+            : UiText.Format("MainWindowMessage_DeleteSheetPrompt", promptSheet.Name);
         if (!_messageService.AskYesNo(prompt, UiText.Get("MainWindowMessage_DeleteSheetTitle"))) return;
 
         var result = _session.DeleteSelectedSheets();
