@@ -29,11 +29,9 @@ public sealed class ImportSheetCommand : IWorkbookCommand, IEstimatesMemory
     /// shrunk, cells inside the previous rectangle that fall outside the new one are cleared during
     /// <see cref="Apply"/> so a Data ▸ Refresh All against a source that lost rows/columns doesn't
     /// leave the old values behind as if they were still part of the import (round 134 fix). Callers
-    /// that remember an import for refresh (currently the Avalonia shell's
-    /// <c>MainWindow.GetData.cs</c> / <c>ImportDataSource</c>) are responsible for persisting this
-    /// extent across refreshes -- see <c>ImportDataSource.LastRowCount</c>/<c>LastColCount</c>, which
-    /// are set from this same source sheet's used range right after each successful import/refresh
-    /// and fed back in as <paramref name="previousExtent"/> on the next one. Omitted (null) for a
+    /// that remember an import for refresh persist this extent in shared presentation/service
+    /// state, set from the source sheet's used range after each successful import or refresh and
+    /// fed back in as <paramref name="previousExtent"/> on the next one. Omitted (null) for a
     /// first-time import, which has no prior extent to reconcile against.
     /// </summary>
     public ImportSheetCommand(
