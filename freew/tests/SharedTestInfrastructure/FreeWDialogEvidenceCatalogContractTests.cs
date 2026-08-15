@@ -72,6 +72,24 @@ public sealed class FreeWDialogEvidenceCatalogContractTests
     }
 
     [Fact]
+    public void Comment_field_and_source_dialogs_are_paired_production_routes()
+    {
+        foreach (var routeId in new[] { "comment-list", "field-picker", "manage-sources" })
+        {
+            var route = Catalog.GetRequired(routeId);
+            route.Coverage.Should().Be(RouteCoverage.Paired, routeId);
+            route.Wpf.Should().NotBeNull(routeId);
+            route.Avalonia.Should().NotBeNull(routeId);
+        }
+
+        var manageSources = Catalog.GetRequired("manage-sources");
+        manageSources.Fixture.Should().Be(FixtureKind.EmptySourceLists);
+        manageSources.Wpf!.OpenAction.Should().Be(OpenAction.StaticPrompt);
+        manageSources.Wpf.EntryPointName.Should().Be("AskManageSourcesForVisualHarness");
+        manageSources.UseWpfAuthoritySize.Should().BeTrue();
+    }
+
+    [Fact]
     public void Capture_plan_preserves_evidence_names_manifest_metadata_and_route_sizing()
     {
         var wpf = Catalog.CreateCapturePlan(

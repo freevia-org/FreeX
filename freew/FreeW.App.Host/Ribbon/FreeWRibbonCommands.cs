@@ -3675,54 +3675,6 @@ internal static class FreeWRibbonCommands
         }
     }
 
-    private static class CommentListDialog
-    {
-        public static void Show(Window? owner, IReadOnlyList<CommentListItem> items)
-        {
-            var presentation = CommentDialogPresentationPlanner.BuildList(items);
-            var list = new System.Windows.Controls.ListBox
-            {
-                MinWidth = 440,
-                MinHeight = 260,
-                Margin = new Thickness(0, 0, 0, 12)
-            };
-
-            foreach (var row in presentation.Rows)
-                list.Items.Add(row.CompactText);
-
-            var dialog = new Window
-            {
-                Title = presentation.Title,
-                SizeToContent = SizeToContent.WidthAndHeight,
-                ResizeMode = ResizeMode.CanResize,
-                WindowStartupLocation = WindowStartupLocation.CenterOwner,
-                Owner = owner,
-                ShowInTaskbar = false
-            };
-
-            var close = new System.Windows.Controls.Button
-            {
-                Content = CommentDialogPresentationPlanner.Text.CloseActionLabel,
-                IsCancel = true,
-                MinWidth = 72,
-                HorizontalAlignment = HorizontalAlignment.Right
-            };
-
-            var panel = new System.Windows.Controls.StackPanel { Margin = new Thickness(16) };
-            panel.Children.Add(new System.Windows.Controls.TextBlock
-            {
-                Text = presentation.SummaryText,
-                FontWeight = FontWeights.SemiBold,
-                Margin = new Thickness(0, 0, 0, 8)
-            });
-            panel.Children.Add(list);
-            panel.Children.Add(close);
-            dialog.Content = panel;
-
-            dialog.ShowDialog();
-        }
-    }
-
     // Review > Proofing > Word Count: commit pending edits, then open the statistics dialog. The dialog
     // accepts the TextDocument directly so it can recompute when the user toggles "Include footnotes
     // and endnotes" — no need to pre-compute here.
@@ -4844,14 +4796,12 @@ internal static class FreeWRibbonCommands
             };
 
             SourceManagementDialogResult? result = null;
-            var dialog = new Window
+            var dialog = new ManageSourcesDialogWindow
             {
                 Title = text.ManageSourcesTitle,
                 SizeToContent = SizeToContent.WidthAndHeight,
                 ResizeMode = ResizeMode.NoResize,
-                WindowStartupLocation = WindowStartupLocation.CenterOwner,
-                Owner = owner,
-                ShowInTaskbar = false
+                Owner = owner
             };
 
             void RefreshMasterList(int? selectedIndex = null)
@@ -5188,6 +5138,18 @@ internal static class FreeWRibbonCommands
             return dialog.ShowDialog() == true ? result : null;
         }
 
+    }
+
+    /// <summary>
+    /// Opens the production Manage Sources route with deterministic empty lists for the paired visual
+    /// harness. The harness owns capture timing; the dialog still uses the same production planner and
+    /// native adapter as the ribbon command.
+    /// </summary>
+    internal static SourceManagementDialogResult? AskManageSourcesForVisualHarness(Window? owner) =>
+        ManageSourcesDialog.Ask(owner, [], []);
+
+    private sealed class ManageSourcesDialogWindow : Free.Shared.Ribbon.Wpf.DialogWindow
+    {
     }
 
     private static TextDocument CurrentMailMergeDocument(
@@ -7553,97 +7515,6 @@ internal static class FreeWRibbonCommands
     // (e.g. " PAGE ", " DATE \@ \"M/d/yyyy\" ", " AUTHOR "), or null if cancelled.
     // This is the backing for Insert > Quick Parts > Field (freew.field) and mirrors Word's Field dialog
     // field-name browser.
-    private static class FieldPickerDialog
-    {
-        public static string? Ask(Window? owner)
-        {
-
-            // Category listbox on the left; field listbox on the right — a two-pane layout
-            // matching the spirit of Word's Field dialog without requiring full XAML.
-            var catList = new System.Windows.Controls.ListBox
-            {
-                MinWidth = 160,
-                Margin = new Thickness(0, 0, 8, 0)
-            };
-            foreach (var cat in FieldPickerDialogPlanner.Categories)
-                catList.Items.Add(cat);
-
-            var fieldList = new System.Windows.Controls.ListBox { MinWidth = 220 };
-
-            void RefreshFields()
-            {
-                var cat = catList.SelectedItem as string;
-                fieldList.Items.Clear();
-                foreach (var c in FieldPickerDialogPlanner.ChoicesForCategory(cat))
-                    fieldList.Items.Add(c.Label);
-                if (fieldList.Items.Count > 0)
-                    fieldList.SelectedIndex = 0;
-            }
-
-            catList.SelectionChanged += (_, _) => RefreshFields();
-            catList.SelectedIndex = 0;
-
-            string? result = null;
-            var dialog = new Window
-            {
-                Title = UiText.Get("Field_Insert_Title"),
-                SizeToContent = SizeToContent.WidthAndHeight,
-                ResizeMode = ResizeMode.NoResize,
-                WindowStartupLocation = WindowStartupLocation.CenterOwner,
-                Owner = owner,
-                ShowInTaskbar = false
-            };
-
-            var ok = new System.Windows.Controls.Button
-            {
-                Content = UiText.Get("Common_OkText"),
-                IsDefault = true,
-                MinWidth = 72,
-                Margin = new Thickness(0, 0, 8, 0)
-            };
-            var cancel = new System.Windows.Controls.Button { Content = UiText.Get("Common_CancelText"), IsCancel = true, MinWidth = 72 };
-
-            void Commit()
-            {
-                var cat = catList.SelectedItem as string;
-                var label = fieldList.SelectedItem as string;
-                if (FieldPickerDialogPlanner.TryGetInstruction(cat, label, out var instruction))
-                    result = instruction;
-                dialog.DialogResult = true;
-            }
-            ok.Click += (_, _) => Commit();
-            fieldList.MouseDoubleClick += (_, _) => Commit();
-
-            var buttons = new System.Windows.Controls.StackPanel
-            {
-                Orientation = System.Windows.Controls.Orientation.Horizontal,
-                HorizontalAlignment = HorizontalAlignment.Right
-            };
-            buttons.Children.Add(ok);
-            buttons.Children.Add(cancel);
-
-            var listsRow = new System.Windows.Controls.StackPanel
-            {
-                Orientation = System.Windows.Controls.Orientation.Horizontal,
-                Margin = new Thickness(0, 0, 0, 12)
-            };
-            listsRow.Children.Add(catList);
-            listsRow.Children.Add(fieldList);
-
-            var panel = new System.Windows.Controls.StackPanel { Margin = new Thickness(16) };
-            panel.Children.Add(new System.Windows.Controls.TextBlock
-            {
-                Text = UiText.Get("Field_Insert_Prompt"),
-                Margin = new Thickness(0, 0, 0, 8)
-            });
-            panel.Children.Add(listsRow);
-            panel.Children.Add(buttons);
-            dialog.Content = panel;
-
-            return dialog.ShowDialog() == true ? result : null;
-        }
-    }
-
     // Home > Paragraph > Sort: open the Sort dialog (type + order + case + header-row) and sort either
     // the rows of the table at the caret (by the caret's column, matching Word) or the selected
     // paragraphs. The view routes the reorder through its undo/redo bus and re-renders.
