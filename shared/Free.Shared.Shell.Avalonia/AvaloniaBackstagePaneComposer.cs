@@ -16,8 +16,6 @@ namespace Free.Shared.Shell.Avalonia;
 /// </summary>
 public sealed class AvaloniaBackstagePaneComposer
 {
-    private const string DirtySuffix = "  (unsaved changes)";
-
     private readonly AvaloniaBackstageChromeStyle _style;
     private readonly BackstagePaneComposerProfile _profile;
 
@@ -50,27 +48,28 @@ public sealed class AvaloniaBackstagePaneComposer
     public Control BuildInfoPane(BackstageInfoPaneSpec spec)
     {
         ArgumentNullException.ThrowIfNull(spec);
+        var text = spec.EffectiveText;
 
         var panel = CreatePane(_profile.InfoPaneMaxWidth);
-        panel.Children.Add(AvaloniaBackstageChrome.CreateHeading(BackstageInfoPaneText.Title, _style));
+        panel.Children.Add(AvaloniaBackstageChrome.CreateHeading(text.Heading, _style));
         var documentGrid = AvaloniaBackstageChrome.CreateDetailGrid(_style);
         AvaloniaBackstageChrome.AddDetailRow(
             documentGrid,
             spec.DocumentKindLabel,
-            spec.DisplayName + (spec.IsDirty ? DirtySuffix : string.Empty),
+            spec.DisplayName + (spec.IsDirty ? text.DirtySuffix : string.Empty),
             "InfoDocumentName",
             _style);
         AvaloniaBackstageChrome.AddDetailRow(
             documentGrid,
-            BackstageInfoPaneText.LocationLabel,
-            spec.Location ?? BackstageInfoPaneText.NotSavedYet,
+            text.LocationLabel,
+            spec.Location ?? text.NotSavedYet,
             "InfoDocumentPath",
             _style);
         panel.Children.Add(documentGrid);
 
         if (spec.Properties.Count > 0)
         {
-            panel.Children.Add(AvaloniaBackstageChrome.CreateSectionHeader(BackstageInfoPaneText.PropertiesHeading, _style));
+            panel.Children.Add(AvaloniaBackstageChrome.CreateSectionHeader(text.PropertiesHeading, _style));
             AddFields(panel, spec.Properties, "InfoProperty");
         }
 
@@ -83,7 +82,7 @@ public sealed class AvaloniaBackstagePaneComposer
 
         if (spec.Statistics.Count > 0)
         {
-            panel.Children.Add(AvaloniaBackstageChrome.CreateSectionHeader(BackstageInfoPaneText.StatisticsHeading, _style));
+            panel.Children.Add(AvaloniaBackstageChrome.CreateSectionHeader(text.StatisticsHeading, _style));
             AddFields(panel, spec.Statistics, "InfoStatistic");
         }
 
@@ -98,7 +97,7 @@ public sealed class AvaloniaBackstagePaneComposer
         ArgumentNullException.ThrowIfNull(spec);
 
         var panel = CreatePane(_profile.RecentPaneMaxWidth);
-        panel.Children.Add(AvaloniaBackstageChrome.CreateHeading("Recent", _style));
+        panel.Children.Add(AvaloniaBackstageChrome.CreateHeading(spec.Heading, _style));
         if (spec.Paths.Count == 0)
         {
             panel.Children.Add(AvaloniaBackstageChrome.CreateNote(
@@ -151,7 +150,7 @@ public sealed class AvaloniaBackstagePaneComposer
         ArgumentNullException.ThrowIfNull(spec);
 
         var panel = CreatePane(_profile.OptionsPaneMaxWidth);
-        panel.Children.Add(AvaloniaBackstageChrome.CreateHeading("Options", _style));
+        panel.Children.Add(AvaloniaBackstageChrome.CreateHeading(spec.Heading, _style));
         panel.Children.Add(AvaloniaBackstageChrome.CreateNote(
             spec.Description,
             _style,

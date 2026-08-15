@@ -14,8 +14,6 @@ namespace Free.Shared.Shell.Wpf;
 /// </summary>
 public sealed class BackstagePaneComposer
 {
-    private const string DirtySuffix = "  (unsaved changes)";
-
     private readonly BackstageVisualKit _kit;
     private readonly BackstagePaneComposerProfile _profile;
 
@@ -31,17 +29,18 @@ public sealed class BackstagePaneComposer
     public UIElement BuildInfoPane(BackstageInfoPaneSpec spec)
     {
         ArgumentNullException.ThrowIfNull(spec);
+        var text = spec.EffectiveText;
 
         var panel = CreatePane(_profile.InfoPaneMaxWidth);
-        panel.Children.Add(Heading(BackstageInfoPaneText.Title));
+        panel.Children.Add(Heading(text.Heading));
         panel.Children.Add(Field(
             spec.DocumentKindLabel,
-            spec.DisplayName + (spec.IsDirty ? DirtySuffix : string.Empty)));
-        panel.Children.Add(Field(BackstageInfoPaneText.LocationLabel, spec.Location ?? BackstageInfoPaneText.NotSavedYet));
+            spec.DisplayName + (spec.IsDirty ? text.DirtySuffix : string.Empty)));
+        panel.Children.Add(Field(text.LocationLabel, spec.Location ?? text.NotSavedYet));
 
         if (spec.Properties.Count > 0)
         {
-            panel.Children.Add(SubHeading(BackstageInfoPaneText.PropertiesHeading));
+            panel.Children.Add(SubHeading(text.PropertiesHeading));
             AddFields(panel, spec.Properties);
         }
 
@@ -54,7 +53,7 @@ public sealed class BackstagePaneComposer
 
         if (spec.Statistics.Count > 0)
         {
-            panel.Children.Add(SubHeading(BackstageInfoPaneText.StatisticsHeading));
+            panel.Children.Add(SubHeading(text.StatisticsHeading));
             AddFields(panel, spec.Statistics);
         }
 
@@ -69,7 +68,7 @@ public sealed class BackstagePaneComposer
         ArgumentNullException.ThrowIfNull(spec);
 
         var panel = CreatePane(_profile.RecentPaneMaxWidth);
-        panel.Children.Add(Heading("Recent"));
+        panel.Children.Add(Heading(spec.Heading));
 
         if (spec.Paths.Count == 0)
         {
@@ -134,7 +133,7 @@ public sealed class BackstagePaneComposer
         ArgumentNullException.ThrowIfNull(spec);
 
         var panel = CreatePane(_profile.OptionsPaneMaxWidth);
-        panel.Children.Add(Heading("Options"));
+        panel.Children.Add(Heading(spec.Heading));
         panel.Children.Add(Description(spec.Description));
 
         AddFields(panel, spec.Fields);
