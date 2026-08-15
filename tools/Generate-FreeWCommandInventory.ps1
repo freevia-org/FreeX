@@ -612,6 +612,10 @@ internal static class FreeWCommandInventory
             "MailMergeDialogSurfaceTests.MailingsCommandHost_RoutesFindAndErrorChecksThroughDialogsAndSharedPlanners"),
         ["freew.print-layout"] = PrintFamilyViewEvidence(
             "Routes the shared Print Layout command through WPF stateful view-mode commands and the Avalonia host callback so the Word-style page surface can be restored from print-family view changes."),
+        ["freew.web-layout"] = PrintFamilyViewEvidence(
+            "Routes Web Layout through the shared stateful view workflow so WPF and Avalonia expose the same mutually-exclusive live checked state."),
+        ["freew.draft-view"] = PrintFamilyViewEvidence(
+            "Routes Draft through the shared stateful view workflow so WPF and Avalonia expose the same mutually-exclusive live checked state."),
         ["freew.print-preview"] = BackstagePrintEvidence(
             "Routes the shared Print Preview command to host-backed WPF and Avalonia preview callbacks while the Backstage evidence contract retains paired fixed-layout renderer rows."),
         ["freew.arrange-all"] = WindowShellEvidence(
@@ -1361,7 +1365,7 @@ internal static class FreeWCommandInventory
                 Test: "WebLayoutDraftCommandTests.ViewToggles_AreMutuallyExclusive_InCheckedState"),
             AvaloniaEvidence: new BehaviorEvidenceLink(
                 Path: "freew/FreeW.App.Avalonia.Tests/ViewTabDepthTests.cs",
-                Test: "ViewTabDepthTests.Print_layout_command_invokes_host_callback"));
+                Test: "ViewTabDepthTests.View_mode_commands_report_one_live_checked_state_and_keep_legacy_aliases"));
 
     private static CommandBehaviorEvidence WpfHelpShellEvidence(string summary) =>
         new(

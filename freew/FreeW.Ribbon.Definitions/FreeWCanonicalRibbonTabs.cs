@@ -307,10 +307,10 @@ internal static partial class FreeWCanonicalRibbonTabs
                         {
                             Icon = new RibbonCommandIcon(RibbonCommandIconKind.ReadMode),
                         });
-                        group.Button("freew.print-layout", "Print Layout");
-                        group.Button("freew.web-layout", "Web Layout");
+                        group.Toggle("freew.print-layout", "Print Layout");
+                        group.Toggle("freew.web-layout", "Web Layout");
                         group.Toggle("freew.outline-view", "Outline");
-                        group.Button("freew.draft-view", "Draft");
+                        group.Toggle("freew.draft-view", "Draft");
                         group.Toggle("freew.paged-edit-view", "Page Edit");
                     }));
 

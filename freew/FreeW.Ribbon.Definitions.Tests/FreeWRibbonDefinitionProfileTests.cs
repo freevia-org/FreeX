@@ -449,6 +449,37 @@ public sealed class FreeWRibbonDefinitionProfileTests
     }
 
     [Fact]
+    public void Print_family_view_modes_are_toggle_controls_in_both_profiles()
+    {
+        var viewModeIds = new[]
+        {
+            "freew.print-layout",
+            "freew.web-layout",
+            "freew.draft-view",
+        };
+
+        foreach (var capabilities in new[]
+                 {
+                     FreeWRibbonCapabilities.Wpf,
+                     FreeWRibbonCapabilities.Avalonia,
+                 })
+        {
+            var controls = FreeWRibbon.Build(capabilities).Tabs
+                .Single(tab => tab.Id == "view")
+                .Groups
+                .SelectMany(group => group.Controls)
+                .ToArray();
+
+            foreach (var commandId in viewModeIds)
+            {
+                controls.Single(control => CommandIds(control).Contains(commandId, StringComparer.Ordinal))
+                    .Should().BeOfType<RibbonToggleButton>(
+                        $"{commandId} exposes live mutually-exclusive checked state in both renderers");
+            }
+        }
+    }
+
+    [Fact]
     public void Avalonia_profile_uses_shared_layout_page_setup_command_ids()
     {
         var avaloniaIds = CommandEntries(FreeWRibbon.Build(FreeWRibbonCapabilities.Avalonia))
