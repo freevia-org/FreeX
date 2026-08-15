@@ -1871,13 +1871,20 @@ public partial class MainWindow
             return;
         }
 
-        if (!TryExecuteCommand(new SetSheetHiddenCommand(sheet.Id, hidden: false), "Unhide Sheet"))
+        var result = _session.UnhideSheet(sheet.Id);
+        if (!result.Success)
+        {
+            _messageService.ShowWarning(
+                result.ErrorMessage ?? UiText.Get("MainWindowMessage_HiddenSheetNotFound"),
+                UiText.Get("MainWindowMessage_UnhideSheetTitle"));
             return;
+        }
 
-        _currentSheetId = sheet.Id;
+        _currentSheetId = _session.ActiveSheet.Id;
         _groupedSheetIds.Clear();
         _groupedSheetIds.Add(_currentSheetId);
         _sheetGroupAnchor = _currentSheetId;
+        ApplyWorkbookSessionSelectionToRenderer();
         UpdateViewport();
         RefreshSheetTabs();
     }

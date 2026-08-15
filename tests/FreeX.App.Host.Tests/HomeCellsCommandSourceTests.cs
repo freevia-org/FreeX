@@ -91,7 +91,8 @@ public sealed class HomeCellsCommandSourceTests
         source.Should().NotContain("new SetSheetHiddenCommand(sheetId, hidden: true)");
         source.Should().Contain("private void UnhideSheet()");
         source.Should().Contain("new UnhideSheetDialog(hiddenSheets.Select(sheet => sheet.Name))");
-        source.Should().Contain("new SetSheetHiddenCommand(sheet.Id, hidden: false)");
+        source.Should().Contain("_session.UnhideSheet(sheet.Id)");
+        source.Should().NotContain("new SetSheetHiddenCommand(sheet.Id, hidden: false)");
     }
 
     [Fact]

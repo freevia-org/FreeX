@@ -159,22 +159,26 @@ public sealed class FreeXPracticalResidualOwnershipTests
         session.Should().Contain("public WorkbookCellEditResult MoveOrCopySelectedSheets(");
         session.Should().Contain("public WorkbookCellEditResult DeleteSelectedSheets()");
         session.Should().Contain("public WorkbookCellEditResult HideSelectedSheets()");
+        session.Should().Contain("public WorkbookCellEditResult UnhideSheet(SheetId sheetId)");
         session.Should().Contain("public WorkbookCellEditResult SetSelectedSheetTabColor(");
 
         avalonia.Should().Contain("_session.DuplicateSelectedSheets()");
         avaloniaMoveCopy.Should().Contain("_session.MoveOrCopySelectedSheets(");
         avalonia.Should().Contain("_session.DeleteActiveSheet()");
         avalonia.Should().Contain("_session.HideActiveSheet()");
+        avalonia.Should().Contain("_session.UnhideSheet(sheet.Id)");
         avalonia.Should().Contain("_session.SetActiveSheetTabColor(");
         wpf.Should().Contain("_session.DuplicateSelectedSheets(tab.Id)");
         wpf.Should().Contain("_session.MoveOrCopySelectedSheets(");
         wpf.Should().Contain("_session.DeleteSelectedSheets()");
         wpf.Should().Contain("_session.HideSelectedSheets()");
+        wpf.Should().Contain("_session.UnhideSheet(sheet.Id)");
         wpf.Should().Contain("_session.SetSelectedSheetTabColor(");
 
         wpf.Should().NotContain("new DuplicateSheetCommand(tab.Id)");
         wpf.Should().NotContain("new CompositeWorkbookCommand(\"Delete Sheet\"");
         wpf.Should().NotContain("new CompositeWorkbookCommand(\"Hide Sheet\"");
+        wpf.Should().NotContain("new SetSheetHiddenCommand(");
         wpf.Should().NotContain("new CompositeWorkbookCommand(\"Tab Color\"");
     }
 
