@@ -1148,8 +1148,9 @@ public static class DocumentViewLayoutPlanner
             .TakeWhile(RepeatsAsHeaderRow)
             .ToArray();
         var headerRowSet = headerRowIndexes.ToHashSet();
+        var paginationColumnWidthsDip = ResolvePaginationColumnWidths(table, page);
         var estimatedHeights = table.Rows
-            .Select(EstimateTableRowHeightDip)
+            .Select(row => EstimateTableRowHeightDip(table, row, paginationColumnWidthsDip))
             .ToArray();
         var headerHeightDip = RoundDip(headerRowIndexes.Sum(index => estimatedHeights[index]));
 
@@ -2760,25 +2761,55 @@ public static class DocumentViewLayoutPlanner
         return modelObject is InlineImage or Shape or Chart or WordArt or SmartArt or DrawingGroup;
     }
 
-    private static double EstimateTableRowHeightDip(TableRow row)
+    private static double[] ResolvePaginationColumnWidths(Table table, PageSettings page)
+    {
+        var columnCount = Math.Max(1, TableGridProjection.TableWidth(table));
+        var (availableWidthDip, _) = PageLayout.ContentAreaDip(page);
+        var tableWidthDip = TableColumnLayoutPlanner.ResolveTableWidthDip(table);
+        if (tableWidthDip <= 0)
+            tableWidthDip = availableWidthDip;
+
+        return TableColumnLayoutPlanner.AllocateColumnWidths(
+            table,
+            columnCount,
+            Math.Min(Math.Max(0, availableWidthDip), Math.Max(0, tableWidthDip)));
+    }
+
+    private static double EstimateTableRowHeightDip(
+        Table table,
+        TableRow row,
+        IReadOnlyList<double> columnWidthsDip)
     {
         var authoredHeight = row.HeightPt is { } heightPt && heightPt > 0
             ? PageLayout.PointsToDip(heightPt)
             : 0;
-        var textHeight = EstimateTableRowTextHeightDip(row);
+        var textHeight = EstimateTableRowTextHeightDip(table, row, columnWidthsDip);
 
         return row.HeightRule == TableRowHeightRule.Exact && authoredHeight > 0
             ? RoundDip(Math.Max(MinimumTableRowHeightDip, authoredHeight))
             : RoundDip(Math.Max(DefaultTableRowHeightDip, Math.Max(authoredHeight, textHeight)));
     }
 
-    private static double EstimateTableRowTextHeightDip(TableRow row)
+    private static double EstimateTableRowTextHeightDip(
+        Table table,
+        TableRow row,
+        IReadOnlyList<double> columnWidthsDip)
     {
         if (row.Cells.Count == 0)
             return DefaultTableRowHeightDip;
 
-        var maxContentHeight = row.Cells
-            .Select(EstimateTableCellContentHeightDip)
+        var maxContentHeight = TableGridProjection.ProjectRow(row)
+            .Select(projected =>
+            {
+                var span = TableGridProjection.SpanWithinWidth(projected, columnWidthsDip.Count);
+                var widthDip = Enumerable.Range(projected.StartColumn, span)
+                    .Where(column => column >= 0 && column < columnWidthsDip.Count)
+                    .Sum(column => columnWidthsDip[column]);
+                return EstimateTableCellContentHeightDip(
+                    table,
+                    projected.Cell,
+                    Math.Max(0, widthDip));
+            })
             .DefaultIfEmpty(DefaultTableRowHeightDip)
             .Max();
         return Math.Max(MinimumTableRowHeightDip, maxContentHeight);
@@ -2791,25 +2822,46 @@ public static class DocumentViewLayoutPlanner
     /// height to the row estimate that drives page-break placement -- otherwise the row is estimated far
     /// too short and the break lands in the wrong place.
     /// </summary>
-    private static double EstimateTableCellContentHeightDip(TableCell cell)
+    private static double EstimateTableCellContentHeightDip(
+        Table table,
+        TableCell cell,
+        double cellWidthDip)
     {
-        var lines = Math.Max(1, cell.Paragraphs.Sum(EstimateParagraphLineCount));
-        var textHeightDip = lines * EstimatedTableLineHeightDip + EstimatedTableVerticalPaddingDip;
-        var nestedTablesHeightDip = cell.NestedTables.Sum(EstimateTableHeightDip);
+        var margins = cell.Margins ?? table.DefaultCellMargins ?? TableCellMargins.Default;
+        var horizontalPaddingDip = PageLayout.PointsToDip(
+            Math.Max(0, margins.LeftPt) + Math.Max(0, margins.RightPt));
+        var contentWidthDip = Math.Max(12, cellWidthDip - horizontalPaddingDip);
+        var lines = Math.Max(1, cell.Paragraphs.Sum(paragraph =>
+            EstimateParagraphLineCount(paragraph, contentWidthDip)));
+        var verticalPaddingDip = PageLayout.PointsToDip(
+            Math.Max(0, margins.TopPt) + Math.Max(0, margins.BottomPt));
+        var textHeightDip = lines * EstimatedTableLineHeightDip
+            + Math.Max(EstimatedTableVerticalPaddingDip, verticalPaddingDip);
+        var nestedTablesHeightDip = cell.NestedTables.Sum(nested =>
+            EstimateTableHeightDip(nested, Math.Max(12, contentWidthDip)));
         return textHeightDip + nestedTablesHeightDip;
     }
 
-    private static double EstimateTableHeightDip(Table table) =>
-        table.Rows.Sum(EstimateTableRowHeightDip);
+    private static double EstimateTableHeightDip(Table table, double availableWidthDip)
+    {
+        var widths = TableColumnLayoutPlanner.AllocateColumnWidths(
+            table,
+            Math.Max(1, TableGridProjection.TableWidth(table)),
+            availableWidthDip);
+        return table.Rows.Sum(row => EstimateTableRowHeightDip(table, row, widths));
+    }
 
-    private static int EstimateParagraphLineCount(Paragraph paragraph)
+    private static int EstimateParagraphLineCount(Paragraph paragraph, double contentWidthDip)
     {
         var text = paragraph.PlainText;
         if (string.IsNullOrEmpty(text))
             return 1;
 
         var explicitLines = text.Count(ch => ch == '\n') + 1;
-        var wrappedLines = Math.Max(1, (int)Math.Ceiling(text.Length / 48.0));
+        // A 9pt Word table character occupies roughly 7dip. Use the authored grid width so the
+        // pagination plan agrees with both hosts when a narrow cell wraps before a page boundary.
+        var charsPerLine = Math.Max(1, (int)Math.Floor(Math.Max(12, contentWidthDip) / 7.0));
+        var wrappedLines = Math.Max(1, (int)Math.Ceiling(text.Length / (double)charsPerLine));
         return Math.Max(explicitLines, wrappedLines);
     }
 

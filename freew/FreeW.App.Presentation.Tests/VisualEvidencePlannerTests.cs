@@ -509,6 +509,26 @@ public sealed class VisualEvidencePlannerTests : IDisposable
     }
 
     [Fact]
+    public void SharedNoteRegionPlanner_UsesOneWidthModelForInitialAndContinuationBands()
+    {
+        var document = new TextDocument();
+        var text = string.Join(" ", Enumerable.Repeat("word", 90));
+        document.Footnotes[1] = new Footnote(1, text);
+
+        var region = DocumentNoteRegionPlanner.BuildFootnoteRegion(document, [1], 1, 480);
+        var continuation = DocumentNoteRegionPlanner.BuildFootnoteContinuation(
+            document,
+            [1],
+            firstPageNumber: 1,
+            contentWidthDip: 480,
+            firstAvailableHeightDip: region.EstimatedHeightDip,
+            continuationAvailableHeightDip: region.EstimatedHeightDip);
+
+        continuation.Pages.Should().ContainSingle();
+        continuation.Pages[0].Fragments.Should().ContainSingle(fragment => fragment.EndsNote);
+    }
+
+    [Fact]
     public void SharedNoteRegionPlanner_DoesNotInventAnOmittedAutomaticReferenceMark()
     {
         var document = new TextDocument();
