@@ -1,6 +1,8 @@
 using Avalonia;
 using Avalonia.Automation;
 using Avalonia.Controls;
+using Avalonia.Controls.Presenters;
+using Avalonia.Controls.Primitives;
 using Avalonia.Input;
 using Avalonia.Layout;
 using Avalonia.Media;
@@ -53,6 +55,68 @@ public sealed partial class MainWindow
     private static void ApplyPivotFilterCheckBoxChrome(CheckBox checkBox)
     {
         AvaloniaCompactDialogChrome.ApplyCompactCheckBox(checkBox, PivotDialogChromeStyle);
+        if (!checkBox.IsThreeState)
+            return;
+
+        var checkMark = new global::Avalonia.Controls.Shapes.Path
+        {
+            Data = Geometry.Parse("M 2 6 L 5 9 L 11 2"),
+            Stroke = Brush(31, 31, 31),
+            StrokeThickness = 1.4,
+            Width = 11,
+            Height = 10,
+            IsVisible = checkBox.IsChecked == true,
+        };
+        var indeterminateMark = new Border
+        {
+            Width = 7,
+            Height = 2,
+            Background = Brush(31, 31, 31),
+            IsVisible = checkBox.IsChecked is null,
+        };
+        checkBox.PropertyChanged += (_, args) =>
+        {
+            if (args.Property != ToggleButton.IsCheckedProperty)
+                return;
+
+            checkMark.IsVisible = checkBox.IsChecked == true;
+            indeterminateMark.IsVisible = checkBox.IsChecked is null;
+        };
+
+        checkBox.Template = new global::Avalonia.Controls.Templates.FuncControlTemplate<CheckBox>((control, _) =>
+        {
+            var indicator = new Border
+            {
+                Width = 13,
+                Height = 13,
+                Background = Brushes.White,
+                BorderBrush = Brush(112, 112, 112),
+                BorderThickness = new Thickness(1),
+                Child = new Panel
+                {
+                    HorizontalAlignment = AvaloniaHorizontalAlignment.Center,
+                    VerticalAlignment = global::Avalonia.Layout.VerticalAlignment.Center,
+                    Children = { checkMark, indeterminateMark },
+                },
+            };
+            var content = new ContentPresenter
+            {
+                VerticalContentAlignment = global::Avalonia.Layout.VerticalAlignment.Center,
+            };
+            content.Bind(
+                ContentPresenter.ContentProperty,
+                new global::Avalonia.Data.Binding(nameof(ContentControl.Content)) { Source = control });
+            content.Bind(
+                ContentPresenter.ContentTemplateProperty,
+                new global::Avalonia.Data.Binding(nameof(ContentControl.ContentTemplate)) { Source = control });
+            return new StackPanel
+            {
+                Orientation = Orientation.Horizontal,
+                VerticalAlignment = global::Avalonia.Layout.VerticalAlignment.Center,
+                Spacing = 4,
+                Children = { indicator, content },
+            };
+        });
     }
 
     /// <summary>
