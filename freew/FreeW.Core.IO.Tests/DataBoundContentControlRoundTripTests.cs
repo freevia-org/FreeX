@@ -296,7 +296,7 @@ public sealed class DataBoundContentControlRoundTripTests
     }
 
     [Fact]
-    public void BoundControl_RetainsCustomXmlGraphAndRefreshesEditedDisplayTextWhenReopened()
+    public void BoundControl_PersistsEditedDisplayTextAcrossReopenAndResave()
     {
         using var input = BuildPackage();
         var document = DocxReader.Read(input);
@@ -305,22 +305,155 @@ public sealed class DataBoundContentControlRoundTripTests
         run.Text = "Edited display value";
 
         var first = Write(document);
-        EntryBytes(first, "customXml/item1.xml").Should().Equal(ItemBytes);
+        var firstItemBytes = EntryBytes(first, "customXml/item1.xml");
+        firstItemBytes.Should().NotEqual(ItemBytes);
+        Encoding.UTF8.GetString(firstItemBytes).Should().Contain("Edited display value");
         EntryBytes(first, "customXml/itemProps1.xml").Should().Equal(ItemPropsBytes);
         EntryText(first, "word/_rels/document.xml.rels").Should().Contain("../customXml/item1.xml");
         AssertBoundDocument(first, "Edited display value");
 
         var reopened = DocxReader.Read(new MemoryStream(first));
-        reopened.Paragraphs.Single().Runs.Single().Control!.WordMetadata!.DataBinding
+        var reopenedRun = reopened.Paragraphs.Single().Runs.Single();
+        reopenedRun.Text.Should().Be("Edited display value");
+        reopenedRun.Control!.WordMetadata!.DataBinding
             .Should().Be(new ContentControlDataBinding(
                 StoreItemId,
                 "/ns0:root/ns0:name",
                 "xmlns:ns0='urn:freew:test'"));
 
+        // Nothing diverges from the store on the second save, so it must re-emit byte-identically rather
+        // than drift or (worse) revert to the pre-edit value.
         var second = Write(reopened);
-        EntryBytes(second, "customXml/item1.xml").Should().Equal(ItemBytes);
+        EntryBytes(second, "customXml/item1.xml").Should().Equal(firstItemBytes);
         EntryBytes(second, "customXml/itemProps1.xml").Should().Equal(ItemPropsBytes);
-        AssertBoundDocument(second, "Original value");
+        AssertBoundDocument(second, "Edited display value");
+    }
+
+    [Fact]
+    public void BoundPlainTextControl_EditedDisplayTextIsWrittenBackToCustomXml()
+    {
+        using var input = BuildPackage();
+        var document = DocxReader.Read(input);
+        document.Paragraphs.Single().Runs.Single().Text = "Edited display value";
+
+        var saved = Write(document);
+
+        var itemXml = Encoding.UTF8.GetString(EntryBytes(saved, "customXml/item1.xml"));
+        itemXml.Should().Contain("Edited display value");
+        itemXml.Should().NotContain("Original value");
+        AssertBoundDocument(saved, "Edited display value");
+        SchemaErrors(saved).Should().BeEmpty();
+
+        // Word re-reads w:dataBinding on open: the edit must survive a full round-trip, not just the save.
+        var reopened = DocxReader.Read(new MemoryStream(saved));
+        reopened.Paragraphs.Single().Runs.Single().Text.Should().Be("Edited display value");
+    }
+
+    [Fact]
+    public void BoundPlainTextControl_UnmodifiedDisplayTextLeavesCustomXmlByteIdentical()
+    {
+        using var input = BuildPackage();
+        var document = DocxReader.Read(input);
+        // No edit: run.Text is left exactly as the load-time refresh set it ("Original value").
+
+        var saved = Write(document);
+
+        EntryBytes(saved, "customXml/item1.xml").Should().Equal(ItemBytes);
+        EntryBytes(saved, "customXml/itemProps1.xml").Should().Equal(ItemPropsBytes);
+        AssertBoundDocument(saved, "Original value");
+    }
+
+    [Fact]
+    public void BoundPlainTextControl_EditedAwayFromPlaceholderClearsShowingPlcHdr()
+    {
+        using var input = BuildPackage(showingPlaceholder: true);
+        var document = DocxReader.Read(input);
+        var run = document.Paragraphs.Single().Runs.Single();
+        run.Control!.WordMetadata!.ShowingPlaceholder.Should().BeTrue();
+        run.Text = "Edited display value";
+
+        var saved = Write(document);
+
+        XNamespace w = "http://schemas.openxmlformats.org/wordprocessingml/2006/main";
+        XDocument.Load(new MemoryStream(EntryBytes(saved, "word/document.xml")))
+            .Descendants(w + "showingPlcHdr").Should().BeEmpty();
+
+        var reopened = DocxReader.Read(new MemoryStream(saved));
+        (reopened.Paragraphs.Single().Runs.Single().Control!.WordMetadata?.ShowingPlaceholder ?? false)
+            .Should().BeFalse();
+    }
+
+    [Fact]
+    public void BoundPlainTextControls_LinkedToSameXPath_EditingOnePropagatesToBothOnReopen()
+    {
+        using var input = BuildLinkedPackage();
+        var document = DocxReader.Read(input);
+        var paragraphs = document.Paragraphs.ToList();
+        paragraphs.Should().HaveCount(2);
+        paragraphs[0].Runs.Single().Text.Should().Be("Original value");
+        paragraphs[1].Runs.Single().Text.Should().Be("Original value");
+
+        // Edit only the first of the two linked controls; the second is left displaying the value it
+        // had before the edit (mirrors a document loaded and only one of its two occurrences typed
+        // into before save -- Word itself keeps linked controls live-synced, but our in-memory model
+        // does not, so the write-back pass is what must reconcile them).
+        paragraphs[0].Runs.Single().Text = "Edited display value";
+
+        var saved = Write(document);
+
+        var itemXml = Encoding.UTF8.GetString(EntryBytes(saved, "customXml/item1.xml"));
+        itemXml.Should().Contain("Edited display value");
+        itemXml.Should().NotContain("Original value");
+        // The store holds the field once; the edit must not be discarded, and must not be duplicated.
+        XDocument.Parse(itemXml).Descendants().Count(element => element.Name.LocalName == "name")
+            .Should().Be(1);
+
+        var reopened = DocxReader.Read(new MemoryStream(saved));
+        var reopenedParagraphs = reopened.Paragraphs.ToList();
+        reopenedParagraphs.Should().HaveCount(2);
+        reopenedParagraphs[0].Runs.Single().Text.Should().Be("Edited display value");
+        reopenedParagraphs[1].Runs.Single().Text.Should().Be("Edited display value");
+        SchemaErrors(saved).Should().BeEmpty();
+    }
+
+    [Fact]
+    public void BoundPlainTextControls_LinkedToSameXPath_ConflictingEditsPickFirstInDocumentOrder()
+    {
+        using var input = BuildLinkedPackage();
+        var document = DocxReader.Read(input);
+        var paragraphs = document.Paragraphs.ToList();
+
+        // Both linked controls edited to DIFFERENT values in the same session: the documented
+        // "first writer wins" rule means the first control in document order is the one that is
+        // persisted to the store, and that single value is what both controls resolve back to on
+        // the next open.
+        paragraphs[0].Runs.Single().Text = "First edit";
+        paragraphs[1].Runs.Single().Text = "Second edit";
+
+        var saved = Write(document);
+
+        var itemXml = Encoding.UTF8.GetString(EntryBytes(saved, "customXml/item1.xml"));
+        itemXml.Should().Contain("First edit");
+        itemXml.Should().NotContain("Second edit");
+
+        var reopened = DocxReader.Read(new MemoryStream(saved));
+        var reopenedParagraphs = reopened.Paragraphs.ToList();
+        reopenedParagraphs[0].Runs.Single().Text.Should().Be("First edit");
+        reopenedParagraphs[1].Runs.Single().Text.Should().Be("First edit");
+    }
+
+    [Fact]
+    public void BoundPlainTextControl_UnmodifiedPlaceholderKeepsShowingPlcHdr()
+    {
+        using var input = BuildPackage(showingPlaceholder: true);
+        var document = DocxReader.Read(input);
+        // No edit: the control is still genuinely showing its placeholder.
+
+        var saved = Write(document);
+
+        XNamespace w = "http://schemas.openxmlformats.org/wordprocessingml/2006/main";
+        XDocument.Load(new MemoryStream(EntryBytes(saved, "word/document.xml")))
+            .Descendants(w + "showingPlcHdr").Should().ContainSingle();
     }
 
     private static void AssertBoundDocument(byte[] package, string expectedText)
@@ -379,9 +512,12 @@ public sealed class DataBoundContentControlRoundTripTests
         string controlElement = "text",
         IReadOnlyList<ContentControlListItem>? listItems = null,
         string? dateStorage = null,
-        bool multipleRuns = false)
+        bool multipleRuns = false,
+        bool showingPlaceholder = false)
     {
-        var controlProperties = BuildControlProperties(controlElement, listItems, dateStorage);
+        var controlProperties =
+            (showingPlaceholder ? "<w:showingPlcHdr/>" : string.Empty)
+            + BuildControlProperties(controlElement, listItems, dateStorage);
         var inlineContent = multipleRuns
             ? "<w:r><w:t>Original display</w:t></w:r><w:r><w:t> value</w:t></w:r>"
             : "<w:r><w:t>Original display value</w:t></w:r>";
@@ -429,6 +565,57 @@ public sealed class DataBoundContentControlRoundTripTests
                 </Relationships>
                 """);
             Add(zip, "customXml/item1.xml", itemBytes ?? ItemBytes);
+            Add(zip, "customXml/itemProps1.xml", ItemPropsBytes);
+            Add(zip, "customXml/_rels/item1.xml.rels", """
+                <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+                  <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/customXmlProps" Target="itemProps1.xml"/>
+                </Relationships>
+                """);
+        }
+        stream.Position = 0;
+        return stream;
+    }
+
+    /// <summary>
+    /// Builds a package with TWO plain-text content controls -- one per body paragraph -- both bound to
+    /// the same store item and XPath, matching Word's "linked" content control construct (e.g. the same
+    /// field repeated in a header and in the body; here both occurrences live in the body for simplicity).
+    /// </summary>
+    private static MemoryStream BuildLinkedPackage()
+    {
+        var stream = new MemoryStream();
+        using (var zip = new ZipArchive(stream, ZipArchiveMode.Create, leaveOpen: true))
+        {
+            Add(zip, "[Content_Types].xml", """
+                <Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
+                  <Default Extension="xml" ContentType="application/xml"/>
+                  <Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
+                  <Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>
+                  <Override PartName="/customXml/itemProps1.xml" ContentType="application/vnd.openxmlformats-officedocument.customXmlProperties+xml"/>
+                </Types>
+                """);
+            Add(zip, "_rels/.rels", """
+                <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+                  <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/>
+                </Relationships>
+                """);
+            var sdt = $$"""
+                <w:sdt><w:sdtPr>
+                  <w:dataBinding w:prefixMappings="xmlns:ns0='urn:freew:test'" w:xpath="/ns0:root/ns0:name" w:storeItemID="{{StoreItemId}}"/>
+                  <w:id w:val="17"/><w:tag w:val="BoundName"/><w:text/>
+                </w:sdtPr><w:sdtContent><w:r><w:t>Original display value</w:t></w:r></w:sdtContent></w:sdt>
+                """;
+            Add(zip, "word/document.xml", $$"""
+                <w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+                  <w:body><w:p>{{sdt}}</w:p><w:p>{{sdt}}</w:p><w:sectPr/></w:body>
+                </w:document>
+                """);
+            Add(zip, "word/_rels/document.xml.rels", """
+                <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+                  <Relationship Id="rIdCustomXml" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/customXml" Target="../customXml/item1.xml"/>
+                </Relationships>
+                """);
+            Add(zip, "customXml/item1.xml", ItemBytes);
             Add(zip, "customXml/itemProps1.xml", ItemPropsBytes);
             Add(zip, "customXml/_rels/item1.xml.rels", """
                 <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">

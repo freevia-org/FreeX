@@ -58,6 +58,129 @@ public sealed class MediaFieldsTests
         Assert.Equal("video/mp4", shape2.Media.ContentType);
     }
 
+    // ── Externally-linked (non-http) media: reader must not silently drop it ───────
+
+    /// <summary>
+    /// R136 finding A (HIGH): a video/audio relationship marked TargetMode="External" whose
+    /// Target is NOT an http(s) URL (a relative path, a UNC path, a bare filesystem path, etc.)
+    /// was previously misread as an embedded part: the reader tried to resolve it inside the zip,
+    /// found nothing, and left BOTH MediaInfo.Bytes and MediaInfo.LinkUrl empty. On the next save,
+    /// WriteSlideMediaFiles saw an empty Bytes AND an empty LinkUrl and skipped writing any
+    /// relationship for the shape at all -- yet BuildMediaPicEl still emitted a hardcoded
+    /// "rIdVid1" r:link, producing a genuinely invalid package (a relationship id with no matching
+    /// &lt;Relationship&gt; element) just by opening and re-saving an untouched deck.
+    /// </summary>
+    [Fact]
+    public void Media_ExternalNonHttpLinkedVideo_RoundTrip_PreservesLinkAndAvoidsDanglingRelationship()
+    {
+        const string externalTarget = "media/linked-video.mp4"; // relative, non-http, TargetMode=External
+
+        var pres = new Presentation();
+        var slide = new Slide();
+        slide.Shapes.Add(new SlideShape
+        {
+            Id          = 1,
+            Name        = "Linked video",
+            Kind        = SlideShapeKind.Media,
+            OffsetXEmu  = 914400,
+            OffsetYEmu  = 914400,
+            ExtentCxEmu = 4572000,
+            ExtentCyEmu = 2743200,
+            // Written with real bytes first so PptxPackageWriter emits a well-formed baseline
+            // a:videoFile + embedded relationship; the helper below then rewrites that
+            // relationship's Target/TargetMode to simulate a PowerPoint-authored *external*,
+            // non-http video link -- the exact input shape the reader mis-handled.
+            Media = new MediaInfo
+            {
+                IsVideo = true,
+                Bytes = [0x00, 0x00, 0x00, 0x18, 0x66, 0x74, 0x79, 0x70],
+                ContentType = "video/mp4",
+            },
+        });
+        pres.Slides.Add(slide);
+
+        using var ms = new MemoryStream();
+        PptxPackageWriter.Write(pres, ms);
+        MakeVideoRelExternalNonHttp(ms, "ppt/slides/_rels/slide1.xml.rels", externalTarget);
+
+        ms.Position = 0;
+        var loaded = PptxPackageReader.Read(ms);
+        var loadedMedia = loaded.Slides[0].Shapes[0].Media;
+        loadedMedia.Should().NotBeNull();
+        loadedMedia!.LinkUrl.Should().Be(externalTarget,
+            "TargetMode=External is authoritative even for a non-http, relative-path video link -- " +
+            "relying on a \"starts with http\" check silently dropped it");
+        loadedMedia.Bytes.Should().BeEmpty(
+            "an externally-linked video has no embedded bytes to read out of the package");
+
+        using var saved = new MemoryStream();
+        PptxPackageWriter.Write(loaded, saved);
+        saved.Position = 0;
+        var savedBytes = saved.ToArray();
+
+        AssertNoDanglingRelationships(savedBytes, "ppt/slides/slide1.xml");
+
+        using var zip = new ZipArchive(new MemoryStream(savedBytes), ZipArchiveMode.Read, leaveOpen: true);
+        var rels = ReadXml(zip, "ppt/slides/_rels/slide1.xml.rels");
+        var relNs = XNamespace.Get("http://schemas.openxmlformats.org/package/2006/relationships");
+        var videoRel = rels.Root!.Elements(relNs + "Relationship")
+            .Single(e => e.Attribute("Type")?.Value == "http://schemas.openxmlformats.org/officeDocument/2006/relationships/video");
+        videoRel.Attribute("Target")!.Value.Should().Be(externalTarget);
+        videoRel.Attribute("TargetMode")!.Value.Should().Be("External");
+
+        var slideXml = ReadXml(zip, "ppt/slides/slide1.xml");
+        var a = XNamespace.Get("http://schemas.openxmlformats.org/drawingml/2006/main");
+        var r = XNamespace.Get("http://schemas.openxmlformats.org/officeDocument/2006/relationships");
+        slideXml.Descendants(a + "videoFile").Single()
+            .Attribute(r + "link")!.Value.Should().Be(videoRel.Attribute("Id")!.Value,
+                "a:videoFile/@r:link must point at the relationship actually written, not a hardcoded fallback id");
+    }
+
+    /// <summary>
+    /// Sibling/no-regression: an http(s) external video link is the case the old "starts with
+    /// http" check already handled correctly, and must keep working after switching the primary
+    /// signal to TargetMode=External.
+    /// </summary>
+    [Fact]
+    public void Media_ExternalHttpLinkedVideo_RoundTrip_StillPreservesLink()
+    {
+        const string externalTarget = "http://example.com/clip.mp4";
+
+        var pres = new Presentation();
+        var slide = new Slide();
+        slide.Shapes.Add(new SlideShape
+        {
+            Id          = 1,
+            Name        = "Linked video (http)",
+            Kind        = SlideShapeKind.Media,
+            OffsetXEmu  = 914400,
+            OffsetYEmu  = 914400,
+            ExtentCxEmu = 4572000,
+            ExtentCyEmu = 2743200,
+            Media = new MediaInfo
+            {
+                IsVideo = true,
+                Bytes = Array.Empty<byte>(),
+                LinkUrl = externalTarget,
+            },
+        });
+        pres.Slides.Add(slide);
+
+        using var ms = new MemoryStream();
+        PptxPackageWriter.Write(pres, ms);
+        ms.Position = 0;
+
+        var loaded = PptxPackageReader.Read(ms);
+        var loadedMedia = loaded.Slides[0].Shapes[0].Media;
+        loadedMedia.Should().NotBeNull();
+        loadedMedia!.LinkUrl.Should().Be(externalTarget);
+        loadedMedia.Bytes.Should().BeEmpty();
+
+        using var saved = new MemoryStream();
+        PptxPackageWriter.Write(loaded, saved);
+        AssertNoDanglingRelationships(saved.ToArray(), "ppt/slides/slide1.xml");
+    }
+
     [Fact]
     public void Media_AutomaticPlayback_RoundTripsThroughPresentationTiming()
     {
@@ -2350,6 +2473,81 @@ public sealed class MediaFieldsTests
 
     private static string CaptionText(string text)
         => $"WEBVTT\r\n\r\n00:00.000 --> 00:01.000\r\n{text}\r\n";
+
+    /// <summary>
+    /// Post-processes an already-written package: rewrites the (single) video relationship in
+    /// <paramref name="relsPath"/> so it is externally linked (TargetMode="External") to a
+    /// NON-http <paramref name="externalTarget"/> -- simulating a PowerPoint-authored deck that
+    /// links to a video via a relative/UNC/filesystem path rather than an http(s) URL.
+    /// </summary>
+    private static void MakeVideoRelExternalNonHttp(MemoryStream package, string relsPath, string externalTarget)
+    {
+        package.Position = 0;
+        using var archive = new ZipArchive(package, ZipArchiveMode.Update, leaveOpen: true);
+        var rels = ReadXml(archive, relsPath);
+        var relNs = XNamespace.Get("http://schemas.openxmlformats.org/package/2006/relationships");
+        var videoRel = rels.Root!.Elements(relNs + "Relationship")
+            .Single(e => e.Attribute("Type")?.Value == "http://schemas.openxmlformats.org/officeDocument/2006/relationships/video");
+        videoRel.SetAttributeValue("Target", externalTarget);
+        videoRel.SetAttributeValue("TargetMode", "External");
+        WriteXml(archive, relsPath, rels);
+    }
+
+    /// <summary>
+    /// Strict package-validity check for the dangling-relationship defect class: every
+    /// r:embed/r:link/r:id (any attribute in the officeDocument relationships namespace) found in
+    /// each of <paramref name="partPaths"/> must resolve to an &lt;Relationship Id="..."&gt;
+    /// actually present in that part's sibling .rels file. This is independent of
+    /// PptxPackageReader -- it walks the raw saved zip/XML directly, so it can catch exactly the
+    /// class of bug where the reader "looks fine" (because it tolerates missing relationships) but
+    /// the package itself is invalid OOXML.
+    /// </summary>
+    private static void AssertNoDanglingRelationships(byte[] pptxBytes, params string[] partPaths)
+    {
+        var officeRelNs = XNamespace.Get("http://schemas.openxmlformats.org/officeDocument/2006/relationships");
+        var packageRelNs = XNamespace.Get("http://schemas.openxmlformats.org/package/2006/relationships");
+
+        using var ms = new MemoryStream(pptxBytes);
+        using var archive = new ZipArchive(ms, ZipArchiveMode.Read, leaveOpen: true);
+
+        foreach (var partPath in partPaths)
+        {
+            archive.GetEntry(partPath).Should().NotBeNull($"{partPath} must exist in the saved package");
+            var partXml = ReadXml(archive, partPath);
+
+            var referencedIds = partXml.Descendants()
+                .SelectMany(element => element.Attributes())
+                .Where(attr => attr.Name.Namespace == officeRelNs)
+                .Select(attr => attr.Value)
+                .Where(id => !string.IsNullOrEmpty(id))
+                .Distinct()
+                .ToArray();
+
+            if (referencedIds.Length == 0)
+                continue;
+
+            var lastSlash = partPath.LastIndexOf('/');
+            var relsPath = lastSlash >= 0
+                ? partPath[..(lastSlash + 1)] + "_rels/" + partPath[(lastSlash + 1)..] + ".rels"
+                : "_rels/" + partPath + ".rels";
+
+            var relsEntry = archive.GetEntry(relsPath);
+            relsEntry.Should().NotBeNull(
+                $"{partPath} references relationship id(s) [{string.Join(", ", referencedIds)}] but has no {relsPath} part");
+
+            var declaredIds = ReadXml(archive, relsPath).Root!.Elements(packageRelNs + "Relationship")
+                .Select(e => e.Attribute("Id")?.Value)
+                .Where(id => !string.IsNullOrEmpty(id))
+                .ToHashSet(StringComparer.Ordinal);
+
+            foreach (var id in referencedIds)
+            {
+                declaredIds.Should().Contain(id,
+                    $"{partPath} references relationship id '{id}' but {relsPath} has no matching " +
+                    $"<Relationship Id=\"{id}\"> -- this is a dangling relationship");
+            }
+        }
+    }
 
     private static void AddCaptionTrack(MemoryStream package)
         => AddCaptionTracks(

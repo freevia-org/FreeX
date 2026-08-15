@@ -206,6 +206,84 @@ public sealed class DocumentTableEditingCoordinatorTests
     }
 
     [Fact]
+    public void MergeCellsOnARectangularSelectionMergesEveryRowNotJustTheFirst()
+    {
+        var table = Table.Create(3, 3);
+        var session = SessionWith(table);
+
+        // Select a 2x2 block: rows 0-1, columns 0-1. Row 2 (untouched) and column 2 (untouched)
+        // are the control group proving the merge stayed inside the selection.
+        var result = session.Tables.MergeCells(
+            new DocumentTableCellAddress(0, 0, 0),
+            new DocumentTableCellAddress(0, 1, 1));
+
+        result.Applied.Should().BeTrue();
+
+        // Every selected row must have collapsed its first two columns into one cell -- not just
+        // row 0. This is the crux of the bug: the old code merged row 0 only and left row 1 as two
+        // separate, unmerged cells.
+        table.Rows[0].Cells.Should().HaveCount(2, "row 0 must be merged across the selected columns");
+        table.Rows[1].Cells.Should().HaveCount(2, "row 1 must be merged across the selected columns too");
+        table.Rows[0].Cells[0].GridSpan.Should().Be(2);
+        table.Rows[1].Cells[0].GridSpan.Should().Be(2);
+
+        // The two merged row-cells must also be merged vertically into a single block.
+        table.Rows[0].Cells[0].VerticalMerge.Should().Be(VerticalMergeState.Restart);
+        table.Rows[1].Cells[0].VerticalMerge.Should().Be(VerticalMergeState.Continue);
+
+        // Column 2 (outside the selection) is untouched in every selected row.
+        table.Rows[0].Cells[1].GridSpan.Should().Be(1);
+        table.Rows[1].Cells[1].GridSpan.Should().Be(1);
+        table.Rows[0].Cells[1].VerticalMerge.Should().Be(VerticalMergeState.None);
+        table.Rows[1].Cells[1].VerticalMerge.Should().Be(VerticalMergeState.None);
+
+        // Row 2 (outside the selection) is completely untouched.
+        table.Rows[2].Cells.Should().HaveCount(3);
+        table.Rows[2].Cells.Should().OnlyContain(cell => cell.GridSpan == 1);
+
+        // The whole rectangular merge undoes in a single step.
+        session.Commands.Undo().Should().BeTrue();
+        table.Rows[0].Cells.Should().HaveCount(3);
+        table.Rows[1].Cells.Should().HaveCount(3);
+        table.Rows.Should().OnlyContain(row => row.Cells.All(cell => cell.GridSpan == 1));
+        table.Rows.Should().OnlyContain(
+            row => row.Cells.All(cell => cell.VerticalMerge == VerticalMergeState.None));
+
+        session.Commands.Redo().Should().BeTrue();
+        table.Rows[0].Cells.Should().HaveCount(2);
+        table.Rows[1].Cells.Should().HaveCount(2);
+        table.Rows[0].Cells[0].VerticalMerge.Should().Be(VerticalMergeState.Restart);
+        table.Rows[1].Cells[0].VerticalMerge.Should().Be(VerticalMergeState.Continue);
+    }
+
+    [Fact]
+    public void MergeCellsOnASingleColumnSelectionStillOnlyMergesVertically()
+    {
+        // Sibling no-regression test: a selection confined to one column (multiple rows, single
+        // grid column) must take the vertical-only merge path and must NOT touch the neighboring
+        // column, before or after the rectangular-merge fix above.
+        var table = Table.Create(3, 2);
+        var session = SessionWith(table);
+
+        var result = session.Tables.MergeCells(
+            new DocumentTableCellAddress(0, 0, 0),
+            new DocumentTableCellAddress(0, 2, 0));
+
+        result.Applied.Should().BeTrue();
+        table.Rows.Should().OnlyContain(row => row.Cells.Count == 2, "no horizontal merge occurred");
+        table.Rows[0].Cells[0].VerticalMerge.Should().Be(VerticalMergeState.Restart);
+        table.Rows[1].Cells[0].VerticalMerge.Should().Be(VerticalMergeState.Continue);
+        table.Rows[2].Cells[0].VerticalMerge.Should().Be(VerticalMergeState.Continue);
+        table.Rows.Should().OnlyContain(
+            row => row.Cells[1].VerticalMerge == VerticalMergeState.None,
+            "the untouched column must stay unmerged");
+
+        session.Commands.Undo().Should().BeTrue();
+        table.Rows.Should().OnlyContain(
+            row => row.Cells[0].VerticalMerge == VerticalMergeState.None);
+    }
+
+    [Fact]
     public void MultiCellFormattingIsOneUndoableOperation()
     {
         var table = Table.Create(1, 2);

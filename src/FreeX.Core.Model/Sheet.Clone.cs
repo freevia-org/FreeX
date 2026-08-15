@@ -675,6 +675,10 @@ public sealed partial class Sheet
             copy.ColumnWidths[col] = width;
         foreach (var (row, height) in RowHeights)
             copy.RowHeights[row] = height;
+        foreach (var (col, styleId) in ColumnStyles)
+            copy.ColumnStyles[col] = styleId;
+        foreach (var (row, styleId) in RowStyles)
+            copy.RowStyles[row] = styleId;
 
         foreach (var row in HiddenRows)
             copy.HiddenRows.Add(row);

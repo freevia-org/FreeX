@@ -337,4 +337,65 @@ public class ViewportStyleTests
             .Should().BeFalse("value 20 equals the average, not strictly above");
     }
 
+    // R136-io-worksheet-props-col-row-default-style: a sheet can have a column/row default style
+    // (Sheet.ColumnStyles/RowStyles) with NO legacy per-cell style-only entries at all -- in that
+    // case sheet.HasStyleOnlyCells is false, and the viewport's fast-path guard
+    // (hasAnyStyleOnlyCells in ViewportService) must still consult GetStyleOnly for empty cells, or
+    // the live spreadsheet grid would render an empty formatted cell as unformatted even though
+    // display formatters/print layout/cell-entry seeding all resolve it correctly.
+    [Fact]
+    public void GetViewport_EmptyCellWithOnlyColumnDefaultStyle_PopulatesStyleOnDisplayCell()
+    {
+        var workbook = new Workbook("test");
+        var sheet = workbook.AddSheet("Sheet1");
+        var style = new CellStyle { NumberFormat = "0.0000%" };
+        var styleId = workbook.RegisterStyle(style);
+        sheet.ColumnStyles[4] = styleId;
+        // No legacy style-only entries anywhere on the sheet -- sheet.HasStyleOnlyCells is false.
+        sheet.HasStyleOnlyCells.Should().BeFalse();
+
+        var svc = new ViewportService();
+        var vp = svc.GetViewport(workbook, sheet.Id, new ViewportRequest(1, 1, 500, 500));
+
+        var dc = vp.Cells.SingleOrDefault(c => c.Row == 5 && c.Col == 4);
+        dc.Should().NotBeNull(
+            "the viewport must surface a resolved style for an empty cell relying solely on the " +
+            "sheet's column default -- not skip it because there are no legacy style-only entries");
+        dc!.Style!.NumberFormat.Should().Be("0.0000%");
+    }
+
+    [Fact]
+    public void GetViewport_EmptyCellWithOnlyRowDefaultStyle_PopulatesStyleOnDisplayCell()
+    {
+        var workbook = new Workbook("test");
+        var sheet = workbook.AddSheet("Sheet1");
+        var style = new CellStyle { NumberFormat = "\"$\"0.0000" };
+        var styleId = workbook.RegisterStyle(style);
+        sheet.RowStyles[7] = styleId;
+        sheet.HasStyleOnlyCells.Should().BeFalse();
+
+        var svc = new ViewportService();
+        var vp = svc.GetViewport(workbook, sheet.Id, new ViewportRequest(1, 1, 500, 500));
+
+        var dc = vp.Cells.SingleOrDefault(c => c.Row == 7 && c.Col == 2);
+        dc.Should().NotBeNull("the viewport must surface a resolved style for an empty cell relying solely on the sheet's row default");
+        dc!.Style!.NumberFormat.Should().Be("\"$\"0.0000");
+    }
+
+    [Fact]
+    public void GetViewport_EmptyCellInUnstyledColumn_NoRegression_NotSurfacedWithSpuriousStyle()
+    {
+        // Sibling no-regression: a sheet with no style-only cells, no column/row defaults, and no
+        // comments/conditional formats must still take the original fast-path skip -- an ordinary
+        // empty cell must not appear in the viewport with a synthesized style.
+        var workbook = new Workbook("test");
+        var sheet = workbook.AddSheet("Sheet1");
+        sheet.ColumnWidths[4] = 25; // a real custom width, but no style at all
+
+        var svc = new ViewportService();
+        var vp = svc.GetViewport(workbook, sheet.Id, new ViewportRequest(1, 1, 500, 500));
+
+        vp.Cells.Any(c => c.Row == 5 && c.Col == 4).Should().BeFalse(
+            "an ordinary empty cell with no style source at all must not be materialized in the viewport");
+    }
 }

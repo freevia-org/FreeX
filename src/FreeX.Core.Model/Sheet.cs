@@ -232,6 +232,24 @@ public sealed partial class Sheet
     /// <summary>Row heights override (1-based row index → height in pixels).</summary>
     public Dictionary<uint, double> RowHeights { get; } = [];
 
+    /// <summary>
+    /// Whole-column default style (1-based column index → StyleId), from an XLSX <c>&lt;col
+    /// style="..."&gt;</c> range. Formats every cell in that column that carries no explicit style
+    /// of its own -- including still-empty cells -- and only applies as a fallback when the cell
+    /// has neither its own style nor a row default; see <see cref="GetStyleOnly"/> and
+    /// R136-io-worksheet-props-col-row-default-style.
+    /// </summary>
+    public Dictionary<uint, StyleId> ColumnStyles { get; } = [];
+
+    /// <summary>
+    /// Whole-row default style (1-based row index → StyleId), from an XLSX row's "s"+"customFormat"
+    /// pair. Formats every cell in that row that carries no explicit style of its own -- including
+    /// still-empty cells -- and takes precedence over a column default per Excel's cell &gt; row &gt;
+    /// column resolution order; see <see cref="GetStyleOnly"/> and
+    /// R136-io-worksheet-props-col-row-default-style.
+    /// </summary>
+    public Dictionary<uint, StyleId> RowStyles { get; } = [];
+
     /// <summary>Default column width in characters.</summary>
     public double DefaultColumnWidth { get; set; } = 8.43;
 

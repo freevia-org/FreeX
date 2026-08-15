@@ -212,4 +212,72 @@ public sealed class FillCellsCommandTests
         sheet.GetCell(target)!.Value.Should().Be(new TextValue("source"));
     }
 
+    [Fact]
+    public void MergeTiledFillDown_ClearsStalePhoneticGuideWhenSourceTileIsBlank()
+    {
+        var workbook = new Workbook("test");
+        var sheet = workbook.AddSheet("Sheet1");
+
+        // Two equal-size merges stacked vertically -- the "Q1 header repeated below" shape
+        // ApplyMergeTiledFill allows through. The source tile (row 1, A1:B1) is left blank; the
+        // target tile (row 2, A2:B2) starts with content plus a phonetic guide.
+        var sourceMerge = new GridRange(new CellAddress(sheet.Id, 1, 1), new CellAddress(sheet.Id, 1, 2));
+        var targetMerge = new GridRange(new CellAddress(sheet.Id, 2, 1), new CellAddress(sheet.Id, 2, 2));
+        sheet.AddMergedRegion(sourceMerge);
+        sheet.AddMergedRegion(targetMerge);
+
+        var targetAnchor = new CellAddress(sheet.Id, 2, 1);
+        sheet.SetCell(targetAnchor, Cell.FromValue(new TextValue("たなか")));
+        var originalGuide = new CellPhoneticGuide(["<rPh sb=\"0\" eb=\"1\"><t>たなか</t></rPh>"], null);
+        sheet.CellPhoneticGuides[targetAnchor] = originalGuide;
+
+        var context = new TestCommandContext(workbook);
+        var command = new FillCellsCommand(
+            sheet.Id,
+            new GridRange(new CellAddress(sheet.Id, 1, 1), new CellAddress(sheet.Id, 2, 2)),
+            FillCellsDirection.Down);
+
+        command.Apply(context).Success.Should().BeTrue();
+
+        // Filling a blank source tile over the target must blank the target's content too --
+        // and the phonetic guide describing content that no longer exists must go with it.
+        sheet.GetCell(targetAnchor).Should().BeNull();
+        sheet.CellPhoneticGuides.Should().NotContainKey(targetAnchor);
+
+        command.Revert(context);
+
+        sheet.CellPhoneticGuides.Should().ContainKey(targetAnchor)
+            .WhoseValue.Should().Be(originalGuide);
+    }
+
+    [Fact]
+    public void MergeTiledFillDown_CopiesPhoneticGuideFromSourceTileAnchor()
+    {
+        var workbook = new Workbook("test");
+        var sheet = workbook.AddSheet("Sheet1");
+
+        var sourceMerge = new GridRange(new CellAddress(sheet.Id, 1, 1), new CellAddress(sheet.Id, 1, 2));
+        var targetMerge = new GridRange(new CellAddress(sheet.Id, 2, 1), new CellAddress(sheet.Id, 2, 2));
+        sheet.AddMergedRegion(sourceMerge);
+        sheet.AddMergedRegion(targetMerge);
+
+        var sourceAnchor = new CellAddress(sheet.Id, 1, 1);
+        var targetAnchor = new CellAddress(sheet.Id, 2, 1);
+        sheet.SetCell(sourceAnchor, Cell.FromValue(new TextValue("すずき")));
+        var sourceGuide = new CellPhoneticGuide(["<rPh sb=\"0\" eb=\"1\"><t>すずき</t></rPh>"], null);
+        sheet.CellPhoneticGuides[sourceAnchor] = sourceGuide;
+
+        var context = new TestCommandContext(workbook);
+        var command = new FillCellsCommand(
+            sheet.Id,
+            new GridRange(new CellAddress(sheet.Id, 1, 1), new CellAddress(sheet.Id, 2, 2)),
+            FillCellsDirection.Down);
+
+        command.Apply(context).Success.Should().BeTrue();
+
+        sheet.GetCell(targetAnchor)!.Value.Should().Be(new TextValue("すずき"));
+        sheet.CellPhoneticGuides.Should().ContainKey(targetAnchor)
+            .WhoseValue.Should().Be(sourceGuide);
+    }
+
 }

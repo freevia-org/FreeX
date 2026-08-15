@@ -14,7 +14,6 @@ public sealed record FreeWRibbonCapabilities
         FreeWRibbonTopologySection.HomeFormatting,
         FreeWRibbonTopologySection.DrawingInsert,
         FreeWRibbonTopologySection.DrawingText,
-        FreeWRibbonTopologySection.DrawingWordArt,
     };
 
     private FreeWRibbonCapabilities(
@@ -78,6 +77,5 @@ internal static class FreeWRibbonTopologySection
     internal const string HomeFormatting = "home.formatting";
     internal const string DrawingInsert = "drawing.insert";
     internal const string DrawingText = "drawing.text";
-    internal const string DrawingWordArt = "drawing.wordart";
     internal const string SmartArtSize = "smartart.size";
 }

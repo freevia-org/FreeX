@@ -886,6 +886,14 @@ internal static class FreeWAvaloniaRibbonCommands
                 $"freew.shape-alt-text-{captured.Suffix}",
                 new FloatingObjectAltTextPresetCommand(editor, captured));
         }
+
+        WordArtRibbonWorkflow.Register(
+            r,
+            new WordArtRibbonPorts(
+                HasSelection: editor.HasSelectedWordArt,
+                ApplyStyle: editor.SetSelectedWordArtStyle,
+                ApplyWarp: editor.SetSelectedWordArtWarp,
+                PrepareExecution: () => editor.Focus()));
     }
 
     private static void RegisterImageAdjustmentCommands(
@@ -1359,7 +1367,7 @@ internal static class FreeWAvaloniaRibbonCommands
         new(
             PrepareExecution: () => editor.Focus(),
             CompleteExecution: () => editor.Focus(),
-            SelectedChart: editor.SelectedFloatingChart,
+            SelectedChart: editor.SelectedChart,
             SetChartKind: editor.SetChartType,
             ApplyChartStyle: style => editor.SetChartStyle(style.Id),
             ApplyChartColorScheme: scheme => editor.SetChartColorScheme(scheme.Id),
@@ -1377,7 +1385,7 @@ internal static class FreeWAvaloniaRibbonCommands
             ApplyChartDataOutcome: editor.ReplaceSelectedChartData,
             ShowChartSizeDialogAsync: callbacks.ShowChartSizeDialogAsync,
             ApplyChartSizeOutcome: result => editor.SetSelectedChartSize(result.WidthPt, result.HeightPt),
-            SelectedSmartArt: editor.SelectedFloatingSmartArt,
+            SelectedSmartArt: editor.SelectedSmartArt,
             MutateSmartArt: editor.MutateSelectedSmartArt,
             ApplySmartArtLayout: editor.SetSmartArtLayout,
             ApplySmartArtColorScheme: scheme => editor.SetSmartArtColor(scheme.Id),

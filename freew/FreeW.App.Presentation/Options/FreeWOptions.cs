@@ -61,4 +61,22 @@ public sealed class FreeWOptions : IBasicApplicationOptions, IApplicationOptions
         AutoCorrect ??= AutoCorrectOptions.Default;
         AutoCorrect.Normalize();
     }
+
+    /// <summary>
+    /// A shallow snapshot of the current field values, taken as an independent <see cref="FreeWOptions"/>
+    /// instance. Production code never mutates <see cref="AutoFormat"/> or <see cref="AutoCorrect"/> in
+    /// place -- an edit always assigns a freshly built replacement object -- so holding the current
+    /// references is enough to freeze this snapshot against later changes to the source. Used to capture
+    /// an Options dialog's open-time state for the reload-before-write merge in
+    /// <see cref="FreeWOptionsRuntimeSession.ApplyAndPersist"/>.
+    /// </summary>
+    public FreeWOptions Clone() => new()
+    {
+        RecentFilesCap = RecentFilesCap,
+        DefaultSaveFormat = DefaultSaveFormat,
+        UiLanguage = UiLanguage,
+        AutoCorrectEnabled = AutoCorrectEnabled,
+        AutoFormat = AutoFormat,
+        AutoCorrect = AutoCorrect,
+    };
 }

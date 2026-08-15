@@ -31,7 +31,7 @@ public sealed class FreeWApplicationFrameOwnershipSourceTests
         {
             source.Should().Contain("new FreeWOptionsRuntimeSession(_options)");
             source.Should().Contain("_optionsRuntime.EditorTypingOptions");
-            source.Should().Contain("_optionsRuntime.Apply(edited)");
+            source.Should().Contain("_optionsRuntime.ApplyAndPersist(");
             source.Should().NotContain("_options.RecentFilesCap = edited.RecentFilesCap");
             source.Should().NotContain("_options.AutoCorrectEnabled = edited.AutoCorrectEnabled");
         }

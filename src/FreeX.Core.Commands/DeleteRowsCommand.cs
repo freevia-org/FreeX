@@ -33,6 +33,9 @@ public sealed class DeleteRowsCommand : IWorkbookCommand, IAffectedCellsCommand,
     private IReadOnlyList<CellAddress> _affectedCells = [];
     private RowColumnMutationSnapshot? _mutationSnapshot;
     private List<KeyValuePair<uint, double>>? _rowHeightSnapshot;
+    // R136-io-worksheet-props-col-row-default-style-shift: see InsertRowsCommand's identical field
+    // -- must shift/drop the same way RowHeights does on row delete.
+    private List<KeyValuePair<uint, StyleId>>? _rowStyleSnapshot;
     private List<uint>? _hiddenRowsSnapshot;
     private List<uint>? _filterHiddenRowsSnapshot;
     private List<uint>? _valueFilterHiddenRowsSnapshot;
@@ -133,6 +136,12 @@ public sealed class DeleteRowsCommand : IWorkbookCommand, IAffectedCellsCommand,
         _chartPositionSnapshot = RowColumnShiftHelpers.CaptureChartPositions(sheet);
         RowColumnShiftHelpers.ShiftChartPositionRowsDown(sheet, _startRow, _count, sheet.RowHeights, sheet.DefaultRowHeight);
         RowColumnShiftHelpers.ShiftIndexesDown(sheet.RowHeights, _startRow, _count);
+
+        // R136-io-worksheet-props-col-row-default-style-shift: same key-space as RowHeights -- must
+        // shift/drop entries the same way, or a row deleted (or lying after the deletion point)
+        // leaves its whole-row default style painting the wrong (stale-indexed) row.
+        _rowStyleSnapshot = RowColumnShiftHelpers.CaptureDictionary(sheet.RowStyles);
+        RowColumnShiftHelpers.ShiftIndexesDown(sheet.RowStyles, _startRow, _count);
 
         RowColumnShiftHelpers.ShiftCommentRowsDown(sheet.Comments, _startRow, _count);
         // J17: CommentAuthors/ShownComments are address-keyed companions of Comments (legacy note
@@ -385,6 +394,7 @@ public sealed class DeleteRowsCommand : IWorkbookCommand, IAffectedCellsCommand,
             sheet.SetCell(snapshot.ToAddress(sheet.Id), snapshot.ToCell());
 
         RowColumnShiftHelpers.RestoreDictionary(sheet.RowHeights, _rowHeightSnapshot);
+        RowColumnShiftHelpers.RestoreDictionary(sheet.RowStyles, _rowStyleSnapshot);
         RowColumnShiftHelpers.RestoreSet(sheet.HiddenRows, _hiddenRowsSnapshot);
         RowColumnShiftHelpers.RestoreSet(sheet.FilterHiddenRows, _filterHiddenRowsSnapshot);
         RowColumnShiftHelpers.RestoreSet(sheet.ValueFilterHiddenRows, _valueFilterHiddenRowsSnapshot);

@@ -1,3 +1,5 @@
+using Free.Shared.AppServices;
+
 namespace FreeP.App.Compositor;
 
 public enum FreePOptionKind
@@ -230,17 +232,45 @@ public sealed class FreePOptionsRuntimeSession
         return plan;
     }
 
+    /// <summary>
+    /// Applies the edited options to <see cref="LiveOptions"/> and persists them. When
+    /// <paramref name="reloadFresh"/> is supplied, reloads the freshest on-disk snapshot immediately before
+    /// saving and copies across only the fields that actually changed between this dialog session's
+    /// open-time snapshot (<see cref="LiveOptions"/> as it stood when this method was called) and
+    /// <paramref name="editedOptions"/> -- so a concurrently running FreeP window or process that already
+    /// persisted a change to a field this session never touched is not silently reverted (last-writer-wins
+    /// lost update). Mirrors FreeX's <c>FreeXOptionsRuntimeSession.CommitDialog</c>. Omitting
+    /// <paramref name="reloadFresh"/> preserves the previous whole-document-overwrite behavior for callers
+    /// that only need an in-memory apply (e.g. tests).
+    /// </summary>
     public FreePOptionsCommitOutcome ApplyAndPersist(
         FreePOptions editedOptions,
-        Func<FreePOptions, bool> persist)
+        Func<FreePOptions, bool> persist,
+        Func<FreePOptions>? reloadFresh = null)
     {
         ArgumentNullException.ThrowIfNull(persist);
 
+        var openTimeSnapshot = reloadFresh is null ? null : FreePOptionsPolicy.CaptureNormalized(LiveOptions).ToOptions();
         var plan = Apply(editedOptions);
-        var persisted = !plan.ShouldPersist || persist(LiveOptions);
-        return new FreePOptionsCommitOutcome(
-            plan,
-            PersistenceAttempted: plan.ShouldPersist,
-            Persisted: persisted);
+
+        if (!plan.ShouldPersist)
+            return new FreePOptionsCommitOutcome(plan, PersistenceAttempted: false, Persisted: true);
+
+        if (reloadFresh is null || openTimeSnapshot is null)
+        {
+            var persistedNoReload = persist(LiveOptions);
+            return new FreePOptionsCommitOutcome(plan, PersistenceAttempted: true, Persisted: persistedNoReload);
+        }
+
+        var fresh = reloadFresh();
+        fresh.Normalize();
+        var edited = plan.After.ToOptions();
+        BasicApplicationOptionsMerge.MergeOntoFreshLoad(fresh, openTimeSnapshot, edited);
+
+        var persisted = persist(fresh);
+        if (persisted)
+            FreePOptionsPolicy.ApplySnapshot(LiveOptions, FreePOptionsPolicy.CaptureNormalized(fresh));
+
+        return new FreePOptionsCommitOutcome(plan, PersistenceAttempted: true, Persisted: persisted);
     }
 }

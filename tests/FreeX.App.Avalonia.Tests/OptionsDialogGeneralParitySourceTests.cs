@@ -75,6 +75,7 @@ public sealed class OptionsDialogGeneralParitySourceTests
         var planner = File.ReadAllText(RepoFile("src", "FreeX.App.Services", "OptionsDialogPlanner.cs"));
         var wpf = File.ReadAllText(RepoFile("src", "FreeX.App.Host", "OptionsDialog.xaml"));
         var styles = File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "DialogControlStyles.cs"));
+        var sharedTokens = File.ReadAllText(RepoFile("shared", "Free.Shared.Shell", "CompactDialogVisualTokens.cs"));
 
         source.Should().Contain("OptionsDialogPlanner.EaseSectionRuleBottomMargin");
         source.Should().Contain("OptionsDialogPlanner.EaseCheckBoxBottomMargin");
@@ -85,8 +86,9 @@ public sealed class OptionsDialogGeneralParitySourceTests
         planner.Should().Contain("public const double EaseCheckBoxBottomMargin = 6;");
         wpf.Should().Contain("<StackPanel x:Name=\"PanelEaseOfAccess\" Visibility=\"Collapsed\">");
         wpf.Should().Contain("Margin=\"0,0,0,6\" FontSize=\"12\"");
-        styles.Should().Contain("DisabledCheckBackgroundBrush");
-        styles.Should().Contain("DisabledCheckMarkBrush");
+        styles.Should().Contain("AvaloniaCompactDialogFallbackStyles.Create(options)");
+        sharedTokens.Should().Contain("ToggleDisabledBackgroundHex");
+        sharedTokens.Should().Contain("ToggleDisabledMarkHex");
     }
 
     private static string RepoFile(params string[] parts) =>

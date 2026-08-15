@@ -3219,7 +3219,10 @@ public sealed class FreeWRibbonParityTests
                 })
             }
         });
-        editor.Rerender();
+        // Rerender() was removed when the design-preview work made Render() private; LoadModel is the
+        // supported way to push a directly-mutated model back into the view, and is what every other
+        // test in this file already uses.
+        editor.LoadModel(editor.Model);
 
         var registry = FreeWRibbonCommands.Build(editor, new RibbonStateStore());
         registry.TryGet("freew.image-align-to-margin", out var command).Should().BeTrue();

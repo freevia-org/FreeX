@@ -136,7 +136,7 @@ public sealed class AvaloniaCompactDialogChromeSourceTests
         source.Should().Contain("CompactDialogVisualTokens.GroupBoxPaddingHorizontal");
         source.Should().Contain("CompactDialogVisualTokens.GroupBoxPaddingVertical");
         source.Should().Contain("public Thickness ListBoxItemPadding { get; init; } = new(4, 1);");
-        source.Should().Contain("public double ListBoxItemMinHeight { get; init; } = CompactDialogVisualTokens.ControlHeight;");
+        source.Should().Contain("public double ListBoxItemMinHeight { get; init; } = CompactDialogVisualTokens.ListBoxItemMinHeight;");
         source.Should().Contain("public CornerRadius ButtonCornerRadius { get; init; } = new(CompactDialogVisualTokens.ButtonCornerRadius);");
         source.Should().Contain("public IBrush? ButtonHoverBackgroundBrush { get; init; }");
         source.Should().Contain("public IBrush? ButtonPressedBackgroundBrush { get; init; }");

@@ -963,7 +963,7 @@ public sealed partial class MainWindow : Window
     private async Task OpenShapeAltTextDialogAsync()
     {
         var selectedShape = _editor.SelectedFloatingShape();
-        var selectedWordArt = _editor.SelectedFloatingWordArt();
+        var selectedWordArt = _editor.SelectedWordArt();
         if (selectedShape is null && selectedWordArt is null)
             return;
         var seed = selectedShape?.AltText ?? selectedWordArt?.AltText;
@@ -4064,8 +4064,12 @@ public sealed partial class MainWindow : Window
         if (dialog.Result is not { } edited)
             return;
 
-        ApplyEditorTypingOptions(_optionsRuntime.Apply(edited));
-        if (!_optionsStore.Save(_options))
+        var outcome = _optionsRuntime.ApplyAndPersist(
+            edited,
+            options => _optionsStore.Save(options),
+            () => _optionsStore.Load());
+        ApplyEditorTypingOptions(outcome.EditorTypingOptions);
+        if (!outcome.Persisted)
             _status.Text = _optionsStore.LastError ?? UiText.Get("Options_SaveFailed_Status");
         else
             _status.Text = UiText.Get("Options_Saved_Status");

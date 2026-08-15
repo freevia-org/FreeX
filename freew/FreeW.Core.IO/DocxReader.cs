@@ -3845,6 +3845,21 @@ public static class DocxReader
             return;
         }
 
+        // A body group is normally reconstructed so its native chart and SmartArt children remain editable.
+        // Keep the whole group verbatim when any relationship-backed child is outside that modelled subset
+        // (for example an Office 2014 ChartEx frame). Replacing only that child with the generic placeholder
+        // would silently destroy its source payload and leave the other children in a mixed representation.
+        if (preservedDrawingTarget is not null
+            && preservedDrawingRelationshipTargets is null
+            && HasUnmodelledDrawingGroupPayload(r, archive, imageRelationships)
+            && CapturePartLocalDrawingGroup(r, archive, preservedDrawingTarget, imageRelationships, documentRelationships: true) is { } preservedDrawingGroup)
+        {
+            var groupRun = new Run(string.Empty) { PreservedDrawing = preservedDrawingGroup, HyperlinkUrl = hyperlinkUrl, HyperlinkAnchor = hyperlinkAnchor, HyperlinkTooltip = hyperlinkTooltip, CommentId = commentId };
+            ApplyRevision(groupRun);
+            paragraph.Runs.Add(groupRun);
+            return;
+        }
+
         var drawingGroup = ReadDrawingGroup(r, archive, imageRelationships, hyperlinkRelationships, numbering);
         if (drawingGroup is not null)
         {
@@ -4289,6 +4304,11 @@ public static class DocxReader
             if (trPr is not null)
             {
                 row.AllowBreakAcrossPages = !ReadToggle(trPr, "cantSplit");
+                // Word allows any number of leading, contiguous rows to carry w:tblHeader to build a
+                // multi-row repeating header (e.g. a title row plus a column-labels row). Read the flag
+                // per row rather than only on the first row so a two- or three-row header round-trips
+                // instead of collapsing to a single repeating row. See TableRow.IsRepeatingHeader.
+                row.IsRepeatingHeader = ReadToggle(trPr, "tblHeader");
                 var trHeight = trPr.Element(W + "trHeight");
                 if (trHeight is not null)
                 {
@@ -6036,7 +6056,8 @@ public static class DocxReader
         XElement run,
         ZipArchive archive,
         TextDocument document,
-        IReadOnlyDictionary<string, string> partRelationshipTargets)
+        IReadOnlyDictionary<string, string> partRelationshipTargets,
+        bool documentRelationships = false)
     {
         var drawing = run.Element(W + "drawing");
         if (drawing?.Descendants(Wpg + "wgp").Any() != true)
@@ -6079,7 +6100,13 @@ public static class DocxReader
             var partName = "/" + localPartPath.TrimStart('/');
             var relationshipType = RelationshipTypeFor(partName);
             if (relationshipType is null
-                || !CapturePreservedPart(archive, document, partName, contentTypeOverrides, contentTypeDefaults, relationshipType: null))
+                || !CapturePreservedPart(
+                    archive,
+                    document,
+                    partName,
+                    contentTypeOverrides,
+                    contentTypeDefaults,
+                    relationshipType: documentRelationships ? relationshipType : null))
                 return;
 
             CaptureReferencedParts(archive, document, partName, contentTypeOverrides, contentTypeDefaults);
@@ -8056,6 +8083,45 @@ public static class DocxReader
         }
 
         return group.Children.Count >= 2 ? group : null;
+    }
+
+    /// <summary>
+    /// Returns true when a native group contains a relationship-backed chart or SmartArt frame that the
+    /// modelled group reader cannot reconstruct. The writer must then preserve the entire source group instead
+    /// of substituting a generic placeholder for just that child.
+    /// </summary>
+    private static bool HasUnmodelledDrawingGroupPayload(
+        XElement run,
+        ZipArchive archive,
+        IReadOnlyDictionary<string, string> relationships)
+    {
+        var wgp = run.Element(W + "drawing")?.Descendants(Wpg + "wgp").FirstOrDefault();
+        if (wgp is null)
+            return false;
+
+        foreach (var frame in wgp.Elements(Wpg + "graphicFrame"))
+        {
+            // ChartEx is deliberately outside the modelled Chart subset and must retain its native payload.
+            if (frame.Descendants(Cx + "chart").Any())
+                return true;
+
+            var hasChart = frame.Descendants(C + "chart").Any();
+            var hasSmartArt = frame.Descendants(Dgm + "relIds").Any();
+            if (!hasChart && !hasSmartArt)
+                continue;
+
+            var xfrm = frame.Element(Wpg + "xfrm") ?? frame.Element(A + "xfrm");
+            var ext = xfrm?.Element(A + "ext");
+            var widthPt = EmuToPoints(ext?.Attribute("cx")?.Value ?? "0");
+            var heightPt = EmuToPoints(ext?.Attribute("cy")?.Value ?? "0");
+            var fakeRun = BuildGroupChildRun(frame, frame.Element(Wpg + "cNvPr"), widthPt, heightPt);
+
+            if ((hasChart && ReadChart(fakeRun, archive, relationships) is null)
+                || (hasSmartArt && ReadSmartArt(fakeRun, archive, relationships) is null))
+                return true;
+        }
+
+        return false;
     }
 
     private static XElement BuildGroupChildRun(XElement groupChild, XElement? childDocPr, double widthPt, double heightPt)

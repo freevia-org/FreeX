@@ -3787,7 +3787,8 @@ public sealed partial class MainWindow : Window,
 
         var outcome = _optionsRuntime.ApplyAndPersist(
             dialog.Result,
-            _ => _optionsStore.Save(_options));
+            options => _optionsStore.Save(options),
+            () => _optionsStore.Load());
         if (!outcome.Persisted)
             DialogMessageHelper.ShowError(this, _optionsStore.LastError, OptionsDialogPlanner.Title);
     }

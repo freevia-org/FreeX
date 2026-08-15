@@ -1137,9 +1137,16 @@ public static class DocumentViewLayoutPlanner
         var firstPageAvailableBodyHeightDip = RoundDip(Math.Max(
             MinimumTableRowHeightDip,
             availableBodyHeightDip - Math.Max(0, firstPageLeadingContentHeightDip)));
-        var headerRowIndexes = table.Formatting.RepeatHeaderRow && table.Rows.Count > 0
-            ? new[] { 0 }
-            : [];
+        // A repeating header can span any number of leading, contiguous rows (e.g. a title row plus a
+        // column-labels row), not just row 0: each row's own IsRepeatingHeader flag drives this, with
+        // row 0 also honouring the table-level RepeatHeaderRow convenience flag for callers (ribbon/
+        // dialog) that only toggle that single flag. Word stops repeating at the first row that doesn't
+        // carry the flag, so take the leading run rather than every flagged row in the table.
+        bool RepeatsAsHeaderRow(int index) =>
+            table.Rows[index].IsRepeatingHeader || (index == 0 && table.Formatting.RepeatHeaderRow);
+        var headerRowIndexes = Enumerable.Range(0, table.Rows.Count)
+            .TakeWhile(RepeatsAsHeaderRow)
+            .ToArray();
         var headerRowSet = headerRowIndexes.ToHashSet();
         var estimatedHeights = table.Rows
             .Select(EstimateTableRowHeightDip)
@@ -2770,14 +2777,30 @@ public static class DocumentViewLayoutPlanner
         if (row.Cells.Count == 0)
             return DefaultTableRowHeightDip;
 
-        var maxLines = row.Cells
-            .Select(cell => Math.Max(1, cell.Paragraphs.Sum(EstimateParagraphLineCount)))
-            .DefaultIfEmpty(1)
+        var maxContentHeight = row.Cells
+            .Select(EstimateTableCellContentHeightDip)
+            .DefaultIfEmpty(DefaultTableRowHeightDip)
             .Max();
-        return Math.Max(
-            MinimumTableRowHeightDip,
-            maxLines * EstimatedTableLineHeightDip + EstimatedTableVerticalPaddingDip);
+        return Math.Max(MinimumTableRowHeightDip, maxContentHeight);
     }
+
+    /// <summary>
+    /// A cell's estimated content height: its own paragraph text plus, recursively, the height of any
+    /// tables nested directly inside it (<see cref="TableCell.NestedTables"/>). A row containing a cell
+    /// whose only substantial content is a nested table must still contribute that nested table's full
+    /// height to the row estimate that drives page-break placement -- otherwise the row is estimated far
+    /// too short and the break lands in the wrong place.
+    /// </summary>
+    private static double EstimateTableCellContentHeightDip(TableCell cell)
+    {
+        var lines = Math.Max(1, cell.Paragraphs.Sum(EstimateParagraphLineCount));
+        var textHeightDip = lines * EstimatedTableLineHeightDip + EstimatedTableVerticalPaddingDip;
+        var nestedTablesHeightDip = cell.NestedTables.Sum(EstimateTableHeightDip);
+        return textHeightDip + nestedTablesHeightDip;
+    }
+
+    private static double EstimateTableHeightDip(Table table) =>
+        table.Rows.Sum(EstimateTableRowHeightDip);
 
     private static int EstimateParagraphLineCount(Paragraph paragraph)
     {

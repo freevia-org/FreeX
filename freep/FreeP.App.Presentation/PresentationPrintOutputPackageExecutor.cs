@@ -286,7 +286,58 @@ public static class PresentationPrintOutputPackageExecutor
             return new PresentationPrintOutputPackage(plan, []);
 
         var normalizedRequest = ToPrintRequest(plan.PrintPlan);
-        var bytes = plan.Route switch
+        var bytes = BuildPackageBytes(
+            plan,
+            presentation,
+            normalizedRequest,
+            renderSlideToPng,
+            writeRasterPdf,
+            writeVectorPdf,
+            renderSlideWithMarkup);
+        return new PresentationPrintOutputPackage(plan, bytes);
+    }
+
+    /// <summary>
+    /// Like <see cref="BuildPackage"/> but captures image-decode diagnostics from both the slide
+    /// composite render pass and the PDF writer, mirroring the PDF/Image/Video export paths (see
+    /// <see cref="SlideImageRenderDiagnostics"/>). Print silently dropped undecodable pictures with
+    /// no way for the caller to learn a page rendered incomplete until this overload existed.
+    /// </summary>
+    public static PresentationPrintOutputPackage BuildPackageWithDiagnostics(
+        Presentation presentation,
+        PresentationPrintRequest? request,
+        IPresentationFileRenderPort render,
+        ICollection<string> imageDiagnostics)
+    {
+        ArgumentNullException.ThrowIfNull(presentation);
+        ArgumentNullException.ThrowIfNull(render);
+        ArgumentNullException.ThrowIfNull(imageDiagnostics);
+
+        var plan = BuildPackagePlan(request, presentation);
+        if (!plan.CanBuildPackage)
+            return new PresentationPrintOutputPackage(plan, []);
+
+        var normalizedRequest = ToPrintRequest(plan.PrintPlan);
+        using var capture = SlideImageRenderDiagnostics.Capture(imageDiagnostics);
+        var bytes = BuildPackageBytes(
+            plan,
+            presentation,
+            normalizedRequest,
+            render.RenderSlideToPng,
+            document => render.WriteRasterPdfWithDiagnostics(document, imageDiagnostics),
+            document => render.WriteVectorPdfWithDiagnostics(document, imageDiagnostics),
+            render.RenderSlideToPngWithPrintMarkup);
+        return new PresentationPrintOutputPackage(plan, bytes);
+    }
+
+    private static byte[] BuildPackageBytes(
+        PresentationPrintOutputPackagePlan plan,
+        Presentation presentation,
+        PresentationPrintRequest normalizedRequest,
+        PresentationSlideImageRenderer renderSlideToPng,
+        PresentationRasterPdfWriter writeRasterPdf,
+        PresentationPdfContentWriter? writeVectorPdf,
+        PresentationSlideImageRendererWithPrintMarkup? renderSlideWithMarkup) => plan.Route switch
         {
             PresentationPrintOutputPackageRoute.FullPageSlidesRasterPdf =>
                 PresentationRasterPdfExporter.ExportToBytes(
@@ -313,11 +364,8 @@ public static class PresentationPrintOutputPackageExecutor
                         presentation,
                         new PresentationHandoutPdfExportRequest(normalizedRequest),
                         writeVectorPdf),
-            _ => throw new ArgumentOutOfRangeException(nameof(request), plan.Route, "Unsupported print output route."),
+            _ => throw new ArgumentOutOfRangeException(nameof(plan), plan.Route, "Unsupported print output route."),
         };
-
-        return new PresentationPrintOutputPackage(plan, bytes);
-    }
 
     public static PresentationPrintOutputPackageValidation ValidatePackage(
         PresentationPrintOutputPackage package)

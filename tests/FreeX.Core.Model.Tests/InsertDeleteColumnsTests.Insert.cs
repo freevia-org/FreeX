@@ -54,6 +54,71 @@ public partial class InsertDeleteColumnsTests
         sheet.ColumnWidths.Should().NotContainKey(7);
     }
 
+    // R136-io-worksheet-props-col-row-default-style-shift: sheet.ColumnStyles is the same
+    // absolute-column key space as ColumnWidths and must re-key the same way on insert, or a
+    // whole-column default style lands on the wrong (stale-indexed) column after the shift.
+    [Fact]
+    public void InsertColumn_ShiftsColumnStylesAndUndoRestores()
+    {
+        var (_, sheet, ctx) = Setup();
+        var currencyStyle = new StyleId(1);
+        var percentStyle = new StyleId(2);
+        sheet.ColumnStyles[3] = currencyStyle;
+        sheet.ColumnStyles[5] = percentStyle;
+
+        var cmd = new InsertColumnsCommand(sheet.Id, beforeCol: 3, count: 2);
+        cmd.Apply(ctx);
+
+        sheet.ColumnStyles.Should().NotContainKey(3);
+        sheet.ColumnStyles.Should().NotContainKey(4);
+        sheet.ColumnStyles[5].Should().Be(currencyStyle);
+        sheet.ColumnStyles[7].Should().Be(percentStyle);
+
+        cmd.Revert(ctx);
+
+        sheet.ColumnStyles[3].Should().Be(currencyStyle);
+        sheet.ColumnStyles[5].Should().Be(percentStyle);
+        sheet.ColumnStyles.Should().NotContainKey(7);
+    }
+
+    // Insert BEFORE the styled column (styled column ends up further right, at a higher key).
+    [Fact]
+    public void InsertColumn_BeforeStyledColumn_ShiftsColumnStyleRightAndUndoRestores()
+    {
+        var (_, sheet, ctx) = Setup();
+        var currencyStyle = new StyleId(1);
+        sheet.ColumnStyles[4] = currencyStyle;
+
+        var cmd = new InsertColumnsCommand(sheet.Id, beforeCol: 2, count: 1);
+        cmd.Apply(ctx);
+
+        sheet.ColumnStyles.Should().NotContainKey(4);
+        sheet.ColumnStyles[5].Should().Be(currencyStyle);
+
+        cmd.Revert(ctx);
+
+        sheet.ColumnStyles[4].Should().Be(currencyStyle);
+        sheet.ColumnStyles.Should().NotContainKey(5);
+    }
+
+    // Insert AFTER the styled column (styled column is untouched by the shift).
+    [Fact]
+    public void InsertColumn_AfterStyledColumn_LeavesColumnStyleInPlaceAndUndoRestores()
+    {
+        var (_, sheet, ctx) = Setup();
+        var currencyStyle = new StyleId(1);
+        sheet.ColumnStyles[2] = currencyStyle;
+
+        var cmd = new InsertColumnsCommand(sheet.Id, beforeCol: 4, count: 1);
+        cmd.Apply(ctx);
+
+        sheet.ColumnStyles[2].Should().Be(currencyStyle);
+
+        cmd.Revert(ctx);
+
+        sheet.ColumnStyles[2].Should().Be(currencyStyle);
+    }
+
     [Fact]
     public void InsertColumn_ShiftsCommentsAndUndoRestores()
     {

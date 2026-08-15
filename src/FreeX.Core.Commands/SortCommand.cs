@@ -48,6 +48,12 @@ public sealed class SortCommand : IWorkbookCommand, IAffectedCellsCommand, IEsti
     private HashSet<CellAddress>? _shownCommentsSnapshot;
     private Dictionary<CellAddress, ThreadedComment>? _threadedCommentSnapshot;
     private Dictionary<uint, double>? _rowHeightSnapshot;
+    // R136: a whole-row DEFAULT style (sheet.RowStyles, the <row s="..." customFormat="1"> banner
+    // format that empty cells in that row inherit) belongs to the row's CONTENT, so it has to follow
+    // the row to its new position exactly like RowHeights does. Left unpermuted it stays pinned to
+    // the physical row number, and after a sort the banner format paints whichever row happens to
+    // land there -- visible on screen immediately, since the viewport reads RowStyles directly.
+    private Dictionary<uint, StyleId>? _rowStyleSnapshot;
     private HashSet<uint>? _hiddenRowsSnapshot;
     private HashSet<uint>? _filterHiddenRowsSnapshot;
     private HashSet<uint>? _valueFilterHiddenRowsSnapshot;
@@ -270,6 +276,7 @@ public sealed class SortCommand : IWorkbookCommand, IAffectedCellsCommand, IEsti
         // Read current state and save snapshot. Redo replays Apply after Revert,
         // so the snapshot must describe the current pre-sort state each time.
         _rowHeightSnapshot = CaptureRowHeights(sheet, startRow, rowCount);
+        _rowStyleSnapshot = CaptureRowStyles(sheet, startRow, rowCount);
         _hiddenRowsSnapshot = CaptureHiddenRows(sheet, startRow, rowCount);
         _filterHiddenRowsSnapshot = CaptureFilterHiddenRows(sheet, startRow, rowCount);
         _valueFilterHiddenRowsSnapshot = CaptureValueFilterHiddenRows(sheet, startRow, rowCount);
@@ -433,6 +440,17 @@ public sealed class SortCommand : IWorkbookCommand, IAffectedCellsCommand, IEsti
             sheet.RowHeights.Remove(row);
             if (finalRows[ri].HasRowHeight)
                 sheet.RowHeights[row] = finalRows[ri].RowHeight;
+            // Permuted from the pre-sort snapshot via OriginalIndex rather than carried in the row
+            // tuple: the whole-row default style is keyed by row number in sheet.RowStyles, so the
+            // row that MOVED here must bring its own banner format with it. _rowStyleSnapshot is
+            // read-only here (it is also the Revert baseline), so it stays correct across the loop
+            // even as sheet.RowStyles is being rewritten.
+            sheet.RowStyles.Remove(row);
+            if (_rowStyleSnapshot is { } rowStyles
+                && rowStyles.TryGetValue(startRow + (uint)finalRows[ri].OriginalIndex, out var movedRowStyle))
+            {
+                sheet.RowStyles[row] = movedRowStyle;
+            }
             sheet.HiddenRows.Remove(row);
             if (finalRows[ri].IsHidden)
                 sheet.HiddenRows.Add(row);
@@ -529,6 +547,9 @@ public sealed class SortCommand : IWorkbookCommand, IAffectedCellsCommand, IEsti
         int colCount)
     {
         _rowHeightSnapshot = null;
+        // Left-to-right sort permutes COLUMNS, so per-ROW state (heights, banner styles, hidden
+        // flags) is untouched by it -- null here means Revert skips restoring what Apply never moved.
+        _rowStyleSnapshot = null;
         _hiddenRowsSnapshot = null;
         _filterHiddenRowsSnapshot = null;
         _valueFilterHiddenRowsSnapshot = null;
@@ -853,6 +874,7 @@ public sealed class SortCommand : IWorkbookCommand, IAffectedCellsCommand, IEsti
         RestoreCellSnapshot(sheet, _snapshot);
         RestoreCommentSnapshots(sheet);
         RestoreRowHeights(sheet);
+        RestoreRowStyles(sheet);
         RestoreHiddenRows(sheet);
         RestoreFilterHiddenRows(sheet);
         RestoreValueFilterHiddenRows(sheet);
@@ -909,6 +931,19 @@ public sealed class SortCommand : IWorkbookCommand, IAffectedCellsCommand, IEsti
         }
 
         return new SortPayloadCapture(rows, cellSnapshot, commentSnapshot, commentAuthorsSnapshot, shownCommentsSnapshot, threadedCommentSnapshot);
+    }
+
+    private static Dictionary<uint, StyleId> CaptureRowStyles(Sheet sheet, uint startRow, int rowCount)
+    {
+        var snapshot = new Dictionary<uint, StyleId>();
+        for (int ri = 0; ri < rowCount; ri++)
+        {
+            var row = startRow + (uint)ri;
+            if (sheet.RowStyles.TryGetValue(row, out var styleId))
+                snapshot[row] = styleId;
+        }
+
+        return snapshot;
     }
 
     private static Dictionary<uint, double> CaptureRowHeights(Sheet sheet, uint startRow, int rowCount)
@@ -1169,6 +1204,18 @@ public sealed class SortCommand : IWorkbookCommand, IAffectedCellsCommand, IEsti
 
         foreach (var (row, height) in _rowHeightSnapshot)
             sheet.RowHeights[row] = height;
+    }
+
+    private void RestoreRowStyles(Sheet sheet)
+    {
+        if (_rowStyleSnapshot is null)
+            return;
+
+        for (var row = _range.Start.Row; row <= _range.End.Row; row++)
+            sheet.RowStyles.Remove(row);
+
+        foreach (var (row, styleId) in _rowStyleSnapshot)
+            sheet.RowStyles[row] = styleId;
     }
 
     private void RestoreHiddenRows(Sheet sheet)

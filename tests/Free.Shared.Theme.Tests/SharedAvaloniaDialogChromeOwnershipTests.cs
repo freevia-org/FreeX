@@ -74,6 +74,56 @@ public sealed class SharedAvaloniaDialogChromeOwnershipTests
             .Contain("AvaloniaCompactDialogChrome.ApplyWpfDisabledComboSurface(_slideCombo)");
     }
 
+    [Fact]
+    public void CompactTextBoxOwnsFluentBorderRealizationAndApplicationsDoNotRepairIt()
+    {
+        var root = TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeX.slnx");
+        var shared = Read(root, "AvaloniaCompactDialogChrome.cs");
+        var tokens = File.ReadAllText(Path.Combine(
+            root,
+            "shared",
+            "Free.Shared.Shell",
+            "CompactDialogVisualTokens.cs"));
+        var freeWHelper = File.ReadAllText(Path.Combine(
+            root,
+            "freew",
+            "FreeW.App.Avalonia",
+            "FontParagraphDialogChrome.cs"));
+        var fontDialog = File.ReadAllText(Path.Combine(
+            root,
+            "freew",
+            "FreeW.App.Avalonia",
+            "FontDialog.cs"));
+        var paragraphDialog = File.ReadAllText(Path.Combine(
+            root,
+            "freew",
+            "FreeW.App.Avalonia",
+            "ParagraphDialog.cs"));
+
+        tokens.Should().Contain("DisabledFieldBorderHex = \"#D0D1D4\"");
+        shared.Should().Contain("CompactTextBoxClass = \"free-compact-dialog-textbox\"")
+            .And.Contain("CompactDialogVisualTokens.DisabledFieldBorderHex")
+            .And.Contain("Name(\"PART_BorderElement\")")
+            .And.Contain("QueueRenderedTextBoxChrome(textBox, style, fixedHeight)")
+            .And.Contain("if (fixedHeight)")
+            .And.Contain("style.DisabledTextBoxBackgroundBrush ?? textBoxBackground");
+
+        freeWHelper.Should().NotContain("PART_BorderElement")
+            .And.NotContain("GetVisualDescendants")
+            .And.NotContain("Dispatcher")
+            .And.NotContain("ApplyTextBox")
+            .And.NotContain("ApplyComboBox")
+            .And.NotContain("WpfDisabledInputBorderBrush");
+        fontDialog.Should().Contain("AvaloniaCompactDialogChrome.ApplyTextBox(box, DialogChromeStyle);")
+            .And.Contain("AvaloniaCompactDialogChrome.ApplyComboBox(combo, DialogChromeStyle);")
+            .And.NotContain("FontParagraphDialogChrome.ApplyTextBox")
+            .And.NotContain("FontParagraphDialogChrome.ApplyComboBox");
+        paragraphDialog.Should().Contain("AvaloniaCompactDialogChrome.ApplyTextBox(box, DialogChromeStyle);")
+            .And.Contain("AvaloniaCompactDialogChrome.ApplyComboBox(_special, DialogChromeStyle);")
+            .And.NotContain("FontParagraphDialogChrome.ApplyTextBox")
+            .And.NotContain("FontParagraphDialogChrome.ApplyComboBox");
+    }
+
     private static string Read(string root, string fileName) =>
         File.ReadAllText(Path.Combine(
             root,

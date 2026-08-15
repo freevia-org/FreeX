@@ -330,16 +330,35 @@ public sealed class DocumentTableEditingCoordinator
         }
         else
         {
-            var row = table.Rows[firstRow];
-            var firstCell = CellIndexAtGridColumn(row, firstGridColumn);
-            var lastCell = CellIndexAtGridColumn(row, lastGridColumn);
-            if (firstCell < 0 || lastCell < 0 || firstCell == lastCell)
-                return DocumentTableEditResult.NoChange(anchor);
-            _session.Commands.Execute(new MergeCellsHorizontalCommand(
+            // Rectangular selection spanning multiple rows AND columns: horizontally merge every
+            // touched row across the column range first (each row collapses to a single cell that
+            // spans the full width), then vertically merge that column range so the whole block
+            // becomes one cell, not just its first row.
+            var commands = new List<IDocumentCommand>();
+            for (var r = firstRow; r <= lastRow; r++)
+            {
+                var row = table.Rows[r];
+                var firstCell = CellIndexAtGridColumn(row, firstGridColumn);
+                var lastCell = CellIndexAtGridColumn(row, lastGridColumn);
+                if (firstCell < 0 || lastCell < 0)
+                    return DocumentTableEditResult.NoChange(anchor);
+                if (firstCell != lastCell)
+                {
+                    commands.Add(new MergeCellsHorizontalCommand(
+                        anchor.BlockIndex,
+                        r,
+                        firstCell,
+                        lastCell));
+                }
+            }
+
+            commands.Add(new MergeCellsVerticalCommand(
                 anchor.BlockIndex,
+                firstGridColumn,
                 firstRow,
-                firstCell,
-                lastCell));
+                lastRow));
+
+            ExecuteGroup(commands, "Merge Cells");
         }
 
         return DocumentTableEditResult.Changed(

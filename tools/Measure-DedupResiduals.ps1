@@ -266,7 +266,7 @@ function Get-RendererFiles {
     foreach ($rootSpec in $RootSpecs) {
         $rootPath = Resolve-ToolRepoPath -Path $rootSpec.path -RepoRoot $repoRoot
         if (-not (Test-Path -LiteralPath $rootPath -PathType Container)) {
-            throw "Renderer root is missing: $($rootSpec.path)"
+            throw "Configured root is missing: $($rootSpec.path)"
         }
 
         $sourceFiles = @(Get-ChildItem -LiteralPath $rootPath -Filter "*.cs" -File -Recurse | Sort-Object FullName)
@@ -648,10 +648,20 @@ try {
         [pscustomobject][ordered]@{ id = "FreeP.Wpf.App"; app = "FreeP"; platform = "WPF"; path = "freep/FreeP.App.Host" },
         [pscustomobject][ordered]@{ id = "FreeP.Wpf.Rendering"; app = "FreeP"; platform = "WPF"; path = "freep/FreeP.App.Rendering.Wpf" },
         [pscustomobject][ordered]@{ id = "FreeP.Avalonia.App"; app = "FreeP"; platform = "Avalonia"; path = "freep/FreeP.App.Avalonia" },
-        [pscustomobject][ordered]@{ id = "FreeP.Avalonia.Rendering"; app = "FreeP"; platform = "Avalonia"; path = "freep/FreeP.App.Rendering.Avalonia" }
+        [pscustomobject][ordered]@{ id = "FreeP.Avalonia.Rendering"; app = "FreeP"; platform = "Avalonia"; path = "freep/FreeP.App.Rendering.Avalonia" },
+
+        # Neutral tiers and the cross-app shared tier. Measuring these alongside the renderers is what
+        # surfaces (a) the same portable decision implemented twice in two apps' planner layers and
+        # (b) portable logic that has leaked back into a shell -- a thin-renderer violation. Neither
+        # was visible while the boundary only compared renderer roots against each other.
+        [pscustomobject][ordered]@{ id = "FreeX.Presentation"; app = "FreeX"; platform = "Neutral"; path = "src/FreeX.App.Presentation" },
+        [pscustomobject][ordered]@{ id = "FreeX.Services"; app = "FreeX"; platform = "Neutral"; path = "src/FreeX.App.Services" },
+        [pscustomobject][ordered]@{ id = "FreeW.Presentation"; app = "FreeW"; platform = "Neutral"; path = "freew/FreeW.App.Presentation" },
+        [pscustomobject][ordered]@{ id = "FreeP.Presentation"; app = "FreeP"; platform = "Neutral"; path = "freep/FreeP.App.Presentation" },
+        [pscustomobject][ordered]@{ id = "Shared"; app = "Shared"; platform = "Neutral"; path = "shared" }
     )
 
-    Write-Host "Reading renderer C# roots..."
+    Write-Host "Reading C# roots (renderer + neutral + shared)..."
     $rendererFiles = @(Get-RendererFiles -RootSpecs $rendererRoots)
     Write-Host "Measuring exact duplicate blocks..."
     $exactAnalysis = Get-DuplicateAnalysis -Files $rendererFiles -Mode exact
@@ -758,8 +768,8 @@ try {
             topCandidateCount = $TopCandidateCount
             exactNormalization = "trim lines; omit blank and comment-only lines"
             lexicalNormalization = "exact normalization plus string/char/number literal folding, FreeX/FreeW/FreeP folding, WPF/Avalonia folding, line-comment removal, and whitespace removal"
-            coverageDenominator = "nonblank, non-comment-only renderer C# lines"
-            duplicateBoundary = "matching windows must occur in distinct configured renderer roots"
+            coverageDenominator = "nonblank, non-comment-only C# lines in the configured roots (renderer, neutral, and shared tiers)"
+            duplicateBoundary = "matching windows must occur in distinct configured roots; roots span renderer shells, per-app neutral tiers, and the shared tier, so renderer<->renderer, neutral<->neutral, and neutral<->renderer duplication are all in scope"
             excludedDirectories = @("bin", "obj", ".git", ".worktrees", ".claude", "generated")
             excludedFilePatterns = @("*.g.cs", "*.g.i.cs", "*.generated.cs", "*.designer.cs", "AssemblyInfo.cs", "GlobalUsings.g.cs")
         }
@@ -846,9 +856,9 @@ try {
     $markdown.Add("- High-frequency reporting cap: $MaximumFingerprintOccurrences occurrences per fingerprint; coverage still includes capped fingerprints")
     $markdown.Add("- Exclusions: ``bin``, ``obj``, Git/worktree metadata, generated directories, and generated C# filename patterns")
     $markdown.Add("")
-    $markdown.Add("## Renderer summary")
+    $markdown.Add("## Root summary")
     $markdown.Add("")
-    $markdown.Add("| Renderer root | Files | Code LOC | Exact duplicate LOC | Exact coverage | Normalized duplicate LOC | Normalized coverage |")
+    $markdown.Add("| Root | Files | Code LOC | Exact duplicate LOC | Exact coverage | Normalized duplicate LOC | Normalized coverage |")
     $markdown.Add("|---|---:|---:|---:|---:|---:|---:|")
     foreach ($root in $rendererByRoot) {
         $exactRoot = @($exactAnalysis.coverage.byRoot | Where-Object { $_.rootId -eq $root.id })[0]

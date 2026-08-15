@@ -378,6 +378,36 @@ public sealed class FreeWRibbonDefinitionProfileTests
     }
 
     [Fact]
+    public void WordArt_commands_have_identical_WPF_and_Avalonia_menu_surfaces()
+    {
+        var expectedStyleItems = WordArtRibbonWorkflow.StylePresets
+            .Select(preset => (preset.Label, preset.CommandId.Value, preset.KeyTip))
+            .ToArray();
+        var expectedWarpItems = WordArtRibbonWorkflow.WarpPresets
+            .Select(preset => (preset.Label, preset.CommandId.Value, preset.KeyTip))
+            .ToArray();
+
+        foreach (var capabilities in new[] { FreeWRibbonCapabilities.Wpf, FreeWRibbonCapabilities.Avalonia })
+        {
+            var group = FreeWRibbon.Build(capabilities)
+                .FindTab("drawing-format")!
+                .FindGroup("drawing-wordart");
+            group.Should().NotBeNull("WordArt is a shared drawing-format capability");
+
+            var menus = group!.Controls.OfType<RibbonDropdown>()
+                .ToDictionary(control => control.CommandId.Value, StringComparer.Ordinal);
+            MenuItems(menus[WordArtRibbonWorkflow.StyleMenuCommandId.Value]).Should().Equal(expectedStyleItems);
+            MenuItems(menus[WordArtRibbonWorkflow.WarpMenuCommandId.Value]).Should().Equal(expectedWarpItems);
+        }
+
+        static IEnumerable<(string Label, string CommandId, string? KeyTip)> MenuItems(
+            RibbonDropdown dropdown) =>
+            dropdown.Menu.Items
+                .Where(item => item.Kind != RibbonMenuItemKind.Separator)
+                .Select(item => (item.Header, item.CommandId!.Value.Value, item.KeyTip));
+    }
+
+    [Fact]
     public void Chart_quick_layout_catalog_has_identical_profile_placement_labels_and_icons()
     {
         var expectedIds = FreeW.Core.Model.ChartQuickLayout.Catalog

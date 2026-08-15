@@ -220,6 +220,9 @@ public sealed partial class DocumentView : Control
     // Selected floating object (null = no selection). Kind = "Image"|"Shape"|"Chart"|"WordArt"|"SmartArt"|"Group".
     // Rect is the page-space bounding rect as laid out in the last layout pass.
     private (int BlockIndex, int RunIndex, string Kind, Rect Rect)? _selectedFloating;
+    // Inline chart/WordArt/SmartArt selection. Kept separate from floating selection so native move/
+    // resize handles and arrange commands cannot accidentally mutate inline objects.
+    private (int BlockIndex, int RunIndex, string Kind, Rect Rect)? _selectedInlineObject;
     // AV-SHAPETEXT: bounded one-paragraph caret for the selected floating text box.
     private (int BlockIndex, int RunIndex, int TextParagraphIndex, int TextRunIndex, int Offset)? _shapeCaret;
     // Path of the nested grouped child currently being edited, or null for a direct floating shape.
@@ -302,7 +305,20 @@ public sealed partial class DocumentView : Control
         if (!result.Applied)
             return false;
 
+        var refreshInline = _selectedInlineObject is { } inline
+            && inline.BlockIndex == result.Target.BlockIndex
+            && inline.RunIndex == result.Target.RunIndex;
+        var layoutWidth = _laidOutWidth > 0 ? _laidOutWidth : FallbackWidth;
         InvalidateLayoutAndVisual();
+        if (refreshInline)
+        {
+            Relayout(layoutWidth);
+            RefreshSelectedInlineObjectRect(
+                result.Target.BlockIndex,
+                result.Target.RunIndex,
+                selectionKind);
+            return true;
+        }
         if (relayout)
             Relayout(FallbackWidth);
         RefreshSelectedFloatingRect(result.Target.BlockIndex, result.Target.RunIndex, selectionKind);
@@ -418,7 +434,9 @@ public sealed partial class DocumentView : Control
                 _selectedFloatingGroupChild is { } child
                     ? string.Join(",", child.ChildPath)
                     : null)
-            : null;
+            : _selectedInlineObject is { } inline
+                ? (inline.BlockIndex, inline.RunIndex, "inline")
+                : null;
         if (identity == _lastSignaledFloating)
             return;
         _lastSignaledFloating = identity;
@@ -579,6 +597,7 @@ public sealed partial class DocumentView : Control
         _outlineCollapse.Clear();
         _hfCaret = null; // AV-HFEDIT: clear header/footer caret on document load
         _selectedFloating = null; // AV-PICTAB: clear float selection on document load
+        _selectedInlineObject = null;
         _selectedFloatingGroupChild = null;
         _shapeCaret = null;
         _shapeSelectionAnchor = null;
@@ -588,6 +607,9 @@ public sealed partial class DocumentView : Control
         _floatingDrag.Reset();
         _shapeEditPointsTarget = null;
         _shapeEditPointDragState = null;
+        // AV-PROOFING: Ignore All is session-scoped to the OPEN DOCUMENT, not the editor instance —
+        // without this, words ignored in one document stayed silently ignored after loading another.
+        _ignoredProofingWords.Clear();
         _trackChangesEnabled = _doc.TrackRevisions || RestrictEditingPolicy.ShouldForceTrackChanges;
         RaiseFloatingSelectionChangedIfIdentityChanged();
         InvalidateLayoutAndVisual();
@@ -1164,6 +1186,7 @@ public sealed partial class DocumentView : Control
         _cellBlockFocus = null;
         _selectionAnchor = null;
         _selectedFloating = null;
+        _selectedInlineObject = null;
         _selectedFloatingGroupChild = null;
         _selectedFloatingObjects.Clear();
         _shapeEditPointsTarget = null;
@@ -6034,6 +6057,8 @@ public sealed partial class DocumentView : Control
 
         if (_selectedFloating is { } selected)
             _selectedFloating = selected with { Rect = MoveRect(selected.Rect) };
+        if (_selectedInlineObject is { } selectedInline)
+            _selectedInlineObject = selectedInline with { Rect = MoveRect(selectedInline.Rect) };
         if (_selectedFloatingGroupChild is { } selectedChild)
             _selectedFloatingGroupChild = selectedChild with { Rect = MoveRect(selectedChild.Rect) };
 
@@ -6209,6 +6234,17 @@ public sealed partial class DocumentView : Control
         {
             var offset = offsetForOwnedObject(selected.BlockIndex, selected.Rect.X, selected.Rect.Y);
             _selectedFloating = selected with { Rect = ShiftRectBy(selected.Rect, offset) };
+        }
+        if (_selectedInlineObject is { } selectedInline)
+        {
+            var offset = offsetForOwnedObject(
+                selectedInline.BlockIndex,
+                selectedInline.Rect.X,
+                selectedInline.Rect.Y);
+            _selectedInlineObject = selectedInline with
+            {
+                Rect = ShiftRectBy(selectedInline.Rect, offset)
+            };
         }
         if (_selectedFloatingGroupChild is { } selectedChild)
         {
@@ -11211,6 +11247,10 @@ public sealed partial class DocumentView : Control
         {
             DrawFloatingSelection(context, selFl.Rect, selFl.BlockIndex, selFl.RunIndex, selFl.Kind);
         }
+        else if (_selectedInlineObject is { } inline)
+        {
+            context.DrawRectangle(null, FloatSelectionPen, inline.Rect);
+        }
 
         // AV-HFEDIT: the header/footer caret renders independently of the body caret.
         if (IsFocused && _hfCaret is not null && TryGetHfCaretRect(out var hfRect))
@@ -12887,6 +12927,49 @@ public sealed partial class DocumentView : Control
         return true;
     }
 
+    /// <summary>
+    /// Hit-tests renderer-owned bounds for inline drawing objects. SmartArt is painted after WordArt,
+    /// which is painted after charts, so the reverse paint order decides overlapping candidates.
+    /// Inline selection deliberately does not enter the floating move/resize path.
+    /// </summary>
+    private bool TryHitTestInlineDrawingObject(
+        Point point,
+        out (int BlockIndex, int RunIndex, string Kind, Rect Rect) hit)
+    {
+        hit = default;
+        if (_laidOutWidth < 0)
+            Relayout(FallbackWidth);
+
+        for (var index = _inlineSmartArts.Count - 1; index >= 0; index--)
+        {
+            var candidate = _inlineSmartArts[index];
+            if (!candidate.Rect.Contains(point))
+                continue;
+            hit = (candidate.BlockIndex, candidate.RunIndex, "SmartArt", candidate.Rect);
+            return true;
+        }
+
+        for (var index = _inlineWordArts.Count - 1; index >= 0; index--)
+        {
+            var candidate = _inlineWordArts[index];
+            if (!candidate.Rect.Contains(point))
+                continue;
+            hit = (candidate.BlockIndex, candidate.RunIndex, "WordArt", candidate.Rect);
+            return true;
+        }
+
+        for (var index = _inlineCharts.Count - 1; index >= 0; index--)
+        {
+            var candidate = _inlineCharts[index];
+            if (!candidate.Rect.Contains(point))
+                continue;
+            hit = (candidate.BlockIndex, candidate.RunIndex, "Chart", candidate.Rect);
+            return true;
+        }
+
+        return false;
+    }
+
     private sealed record FloatingGroupChildGeometry(
         FloatingGroupData OwnerGroup,
         FloatingGroupChildData Child,
@@ -13237,6 +13320,26 @@ public sealed partial class DocumentView : Control
         InvalidateVisual();
     }
 
+    private void RefreshSelectedInlineObjectRect(int blockIndex, int runIndex, string kind)
+    {
+        Rect? rect = kind switch
+        {
+            "Chart" => _inlineCharts.FirstOrDefault(candidate =>
+                candidate.BlockIndex == blockIndex && candidate.RunIndex == runIndex)?.Rect,
+            "WordArt" => _inlineWordArts.FirstOrDefault(candidate =>
+                candidate.BlockIndex == blockIndex && candidate.RunIndex == runIndex)?.Rect,
+            "SmartArt" => _inlineSmartArts.FirstOrDefault(candidate =>
+                candidate.BlockIndex == blockIndex && candidate.RunIndex == runIndex)?.Rect,
+            _ => null,
+        };
+
+        _selectedInlineObject = rect is { } found
+            ? (blockIndex, runIndex, kind, found)
+            : null;
+        RaiseFloatingSelectionChangedIfIdentityChanged();
+        InvalidateVisual();
+    }
+
     private void RefreshSelectedFloatingGroupChildRect(int blockIndex, int runIndex)
     {
         if (_selectedFloatingGroupChild is not { } selected
@@ -13275,6 +13378,13 @@ public sealed partial class DocumentView : Control
     /// </summary>
     public (int BlockIndex, int RunIndex, string Kind, Rect Rect)? SelectedFloatingInfo
         => _selectedFloating;
+
+    /// <summary>
+    /// Current drawing-object context target. Unlike <see cref="SelectedFloatingInfo"/>, this also
+    /// includes inline charts, WordArt, and SmartArt selected from their rendered bounds.
+    /// </summary>
+    public (int BlockIndex, int RunIndex, string Kind, Rect Rect)? SelectedDrawingObjectInfo
+        => _selectedFloating ?? _selectedInlineObject;
 
     /// <summary>
     /// Direct child selected inside the active drawing group, or null when the group itself is active.
@@ -13354,6 +13464,50 @@ public sealed partial class DocumentView : Control
             ? run.WordArt
             : null;
     }
+
+    public Chart? SelectedChart()
+    {
+        if (SelectedDrawingObjectInfo is not { Kind: "Chart" } selected)
+            return null;
+        return TryGetRun(selected.BlockIndex, selected.RunIndex, out var run)
+            ? run.Chart
+            : null;
+    }
+
+    /// <summary>The selected floating or inline WordArt, or null for another object kind.</summary>
+    public WordArt? SelectedWordArt()
+    {
+        if (SelectedDrawingObjectInfo is not { Kind: "WordArt" } selected)
+            return null;
+        return TryGetRun(selected.BlockIndex, selected.RunIndex, out var run)
+            ? run.WordArt
+            : null;
+    }
+
+    public bool HasSelectedWordArt() => SelectedWordArt() is not null;
+
+    public void SetSelectedWordArtStyle(WordArtStyle style)
+    {
+        if (CurrentWordArtTarget() is not { } target)
+            return;
+        InvalidateObjectEdit(ObjectEdits.SetWordArtStyle(target, style), "WordArt");
+    }
+
+    public void SetSelectedWordArtWarp(WordArtWarp warp)
+    {
+        if (CurrentWordArtTarget() is not { } target)
+            return;
+        InvalidateObjectEdit(ObjectEdits.SetWordArtWarp(target, warp), "WordArt");
+    }
+
+    private DocumentObjectTarget? CurrentWordArtTarget() =>
+        SelectedDrawingObjectInfo is { Kind: "WordArt" } selected
+            ? ObjectTarget(selected.BlockIndex, selected.RunIndex)
+            : null;
+
+
+    /// <summary>True while keyboard input is editing the first text run of a selected text box.</summary>
+    public bool IsShapeTextEditing => _shapeCaret is not null;
 
     /// <summary>Current selected text-box caret, or null when the object is not in text-edit mode.</summary>
     public (int BlockIndex, int RunIndex, int TextParagraphIndex, int TextRunIndex, int Offset)? ShapeTextCaretInfo =>
@@ -13860,12 +14014,13 @@ public sealed partial class DocumentView : Control
     /// <summary>Deselect any selected floating object. No-op when nothing is selected.</summary>
     public void DeselectFloating()
     {
-        if (_selectedFloating is null && _selectedFloatingObjects.Count == 0) return;
+        if (_selectedFloating is null && _selectedInlineObject is null && _selectedFloatingObjects.Count == 0) return;
         FinishShapeTextSelectionDrag(releasePointerCapture: true);
         _shapeCaret = null;
         _shapeSelectionAnchor = null;
         _activeShapeTextChildPath = null;
         _selectedFloating = null;
+        _selectedInlineObject = null;
         _selectedFloatingGroupChild = null;
         _selectedFloatingObjects.Clear();
         _floatingDrag.Reset();
@@ -13908,6 +14063,7 @@ public sealed partial class DocumentView : Control
         _selectedFloatingGroupChild = null;
         _shapeEditPointsTarget = null;
         _shapeEditPointDragState = null;
+        _selectedInlineObject = null;
         var item = (blockIndex, runIndex, kind);
         if (addToMultiSelect && IsGroupableFloatingKind(kind))
         {
@@ -13944,6 +14100,25 @@ public sealed partial class DocumentView : Control
         // Dummy rect; RefreshSelectedFloatingRect will update.
         _selectedFloating = (blockIndex, runIndex, kind, default);
         RefreshSelectedFloatingRect(blockIndex, runIndex, kind);
+    }
+
+    private void SelectInlineDrawingObjectCore(
+        (int BlockIndex, int RunIndex, string Kind, Rect Rect) selection)
+    {
+        FinishShapeTextSelectionDrag(releasePointerCapture: true);
+        _shapeCaret = null;
+        _shapeSelectionAnchor = null;
+        _activeShapeTextChildPath = null;
+        _selectedFloating = null;
+        _selectedFloatingGroupChild = null;
+        _selectedFloatingObjects.Clear();
+        _floatingDrag.Reset();
+        _shapeEditPointsTarget = null;
+        _shapeEditPointDragState = null;
+        _selectedInlineObject = selection;
+        Cursor = Cursor.Default;
+        RaiseFloatingSelectionChangedIfIdentityChanged();
+        InvalidateVisual();
     }
 
     private void SelectFloatingGroupChildCore(
@@ -14362,7 +14537,7 @@ public sealed partial class DocumentView : Control
             return;
         }
 
-        if (_selectedFloating is not { } sel) return;
+        if (SelectedDrawingObjectInfo is not { } sel) return;
         InvalidateObjectEdit(
             ObjectEdits.SetAltText(ObjectTarget(sel.BlockIndex, sel.RunIndex), altText),
             sel.Kind);
@@ -14840,10 +15015,8 @@ public sealed partial class DocumentView : Control
     /// </summary>
     public void SetChartType(ChartKind kind)
     {
-        if (_selectedFloating is not { Kind: "Chart" } sel) return;
-        InvalidateObjectEdit(
-            ObjectEdits.SetChartKind(ObjectTarget(sel.BlockIndex, sel.RunIndex), kind),
-            sel.Kind);
+        if (CurrentChartTarget() is { } target)
+            InvalidateObjectEdit(ObjectEdits.SetChartKind(target, kind), "Chart");
     }
 
     /// <summary>
@@ -14937,7 +15110,7 @@ public sealed partial class DocumentView : Control
     }
 
     private DocumentObjectTarget? CurrentChartTarget() =>
-        _selectedFloating is { Kind: "Chart" } selected
+        SelectedDrawingObjectInfo is { Kind: "Chart" } selected
             ? ObjectTarget(selected.BlockIndex, selected.RunIndex)
             : null;
 
@@ -14947,10 +15120,8 @@ public sealed partial class DocumentView : Control
     /// </summary>
     public void ToggleChartLegend()
     {
-        if (_selectedFloating is not { Kind: "Chart" } sel) return;
-        InvalidateObjectEdit(
-            ObjectEdits.ToggleChartLegend(ObjectTarget(sel.BlockIndex, sel.RunIndex)),
-            sel.Kind);
+        if (CurrentChartTarget() is { } target)
+            InvalidateObjectEdit(ObjectEdits.ToggleChartLegend(target), "Chart");
     }
 
     /// <summary>
@@ -14959,22 +15130,15 @@ public sealed partial class DocumentView : Control
     /// </summary>
     public void ToggleChartTitle()
     {
-        if (_selectedFloating is not { Kind: "Chart" } sel) return;
-        InvalidateObjectEdit(
-            ObjectEdits.ToggleChartTitle(ObjectTarget(sel.BlockIndex, sel.RunIndex)),
-            sel.Kind);
+        if (CurrentChartTarget() is { } target)
+            InvalidateObjectEdit(ObjectEdits.ToggleChartTitle(target), "Chart");
     }
 
     /// <summary>Set or clear the selected chart title through the shared undoable command.</summary>
     public void SetChartTitle(string? title)
     {
-        if (_selectedFloating is not { Kind: "Chart" } selected)
-            return;
-        InvalidateObjectEdit(
-            ObjectEdits.SetChartTitle(
-                ObjectTarget(selected.BlockIndex, selected.RunIndex),
-                title),
-            selected.Kind);
+        if (CurrentChartTarget() is { } target)
+            InvalidateObjectEdit(ObjectEdits.SetChartTitle(target, title), "Chart");
     }
 
     /// <summary>
@@ -14983,23 +15147,17 @@ public sealed partial class DocumentView : Control
     /// </summary>
     public void ToggleChartAxisTitles()
     {
-        if (_selectedFloating is not { Kind: "Chart" } sel) return;
-        InvalidateObjectEdit(
-            ObjectEdits.ToggleChartAxisTitles(ObjectTarget(sel.BlockIndex, sel.RunIndex)),
-            sel.Kind);
+        if (CurrentChartTarget() is { } target)
+            InvalidateObjectEdit(ObjectEdits.ToggleChartAxisTitles(target), "Chart");
     }
 
     /// <summary>Set or clear the selected chart axis titles through the shared undoable command.</summary>
     public void SetChartAxisTitles(string? categoryTitle, string? valueTitle)
     {
-        if (_selectedFloating is not { Kind: "Chart" } selected)
-            return;
-        InvalidateObjectEdit(
-            ObjectEdits.SetChartAxisTitles(
-                ObjectTarget(selected.BlockIndex, selected.RunIndex),
-                categoryTitle,
-                valueTitle),
-            selected.Kind);
+        if (CurrentChartTarget() is { } target)
+            InvalidateObjectEdit(
+                ObjectEdits.SetChartAxisTitles(target, categoryTitle, valueTitle),
+                "Chart");
     }
 
     /// <summary>
@@ -15008,12 +15166,8 @@ public sealed partial class DocumentView : Control
     /// </summary>
     public void ReplaceSelectedChartData(Chart replacement)
     {
-        if (_selectedFloating is not { Kind: "Chart" } sel) return;
-        InvalidateObjectEdit(
-            ObjectEdits.ReplaceChartData(
-                ObjectTarget(sel.BlockIndex, sel.RunIndex),
-                replacement),
-            sel.Kind);
+        if (CurrentChartTarget() is { } target)
+            InvalidateObjectEdit(ObjectEdits.ReplaceChartData(target, replacement), "Chart");
     }
 
     /// <summary>
@@ -15022,8 +15176,9 @@ public sealed partial class DocumentView : Control
     /// </summary>
     public void SetSelectedChartSize(double widthPt, double heightPt)
     {
-        if (_selectedFloating is not { Kind: "Chart" } sel || widthPt <= 0 || heightPt <= 0) return;
-        SetFloatingSize(widthPt, heightPt);
+        if (CurrentChartTarget() is not { } target || widthPt <= 0 || heightPt <= 0)
+            return;
+        InvalidateObjectEdit(ObjectEdits.SetSize(target, widthPt, heightPt), "Chart");
     }
 
     /// <summary>
@@ -15032,10 +15187,8 @@ public sealed partial class DocumentView : Control
     /// </summary>
     public void SetSmartArtLayout(SmartArtKind kind)
     {
-        if (_selectedFloating is not { Kind: "SmartArt" } sel) return;
-        InvalidateObjectEdit(
-            ObjectEdits.SetSmartArtLayout(ObjectTarget(sel.BlockIndex, sel.RunIndex), kind),
-            sel.Kind);
+        if (CurrentSmartArtTarget() is { } target)
+            InvalidateObjectEdit(ObjectEdits.SetSmartArtLayout(target, kind), "SmartArt");
     }
 
     /// <summary>
@@ -15058,7 +15211,7 @@ public sealed partial class DocumentView : Control
         }
 
         if (CurrentSmartArtTarget() is { } target)
-            InvalidateSmartArtEdit(ObjectEdits.SetSmartArtColor(target, colorSchemeId), target);
+            InvalidateSmartArtEdit(ObjectEdits.SetSmartArtColor(target, colorSchemeId));
     }
 
     /// <summary>Return the currently selected floating SmartArt model, or null for another selection kind.</summary>
@@ -15070,25 +15223,27 @@ public sealed partial class DocumentView : Control
         return paragraph.Runs[sel.RunIndex].SmartArt;
     }
 
+    public SmartArt? SelectedSmartArt()
+    {
+        if (SelectedDrawingObjectInfo is not { Kind: "SmartArt" } selected)
+            return null;
+        return TryGetRun(selected.BlockIndex, selected.RunIndex, out var run)
+            ? run.SmartArt
+            : null;
+    }
+
     /// <summary>Apply a shared structural SmartArt command and retain the floating selection.</summary>
     public void MutateSelectedSmartArt(SmartArtStructureOperation operation)
     {
-        if (_selectedFloating is not { Kind: "SmartArt" } sel)
-            return;
-        if (ObjectEdits.MutateSmartArt(
-                ObjectTarget(sel.BlockIndex, sel.RunIndex),
-                operation).Applied)
-            RefreshSelectedSmartArt(sel);
+        if (CurrentSmartArtTarget() is { } target)
+            InvalidateObjectEdit(ObjectEdits.MutateSmartArt(target, operation), "SmartArt");
     }
 
     /// <summary>Replace SmartArt kind and node text through the shared undoable content command.</summary>
     public void ReplaceSelectedSmartArt(SmartArt replacement)
     {
-        if (_selectedFloating is not { Kind: "SmartArt" } sel) return;
-        if (ObjectEdits.ReplaceSmartArt(
-                ObjectTarget(sel.BlockIndex, sel.RunIndex),
-                replacement).Applied)
-            RefreshSelectedSmartArt(sel);
+        if (CurrentSmartArtTarget() is { } target)
+            InvalidateObjectEdit(ObjectEdits.ReplaceSmartArt(target, replacement), "SmartArt");
     }
 
     /// <summary>Apply a shared SmartArt style catalog entry and retain the floating selection.</summary>
@@ -15129,44 +15284,49 @@ public sealed partial class DocumentView : Control
     {
         var target = SmartArtDesignPreviews.ActiveTarget ?? CurrentSmartArtTarget();
         if (target is { } address)
-            InvalidateSmartArtEdit(SmartArtDesignPreviews.CommitLayout(address, preset), address);
+            InvalidateSmartArtEdit(SmartArtDesignPreviews.CommitLayout(address, preset));
     }
 
     public void CommitSmartArtColorSchemePreview(SmartArtColorScheme scheme)
     {
         var target = SmartArtDesignPreviews.ActiveTarget ?? CurrentSmartArtTarget();
         if (target is { } address)
-            InvalidateSmartArtEdit(SmartArtDesignPreviews.CommitColorScheme(address, scheme), address);
+            InvalidateSmartArtEdit(SmartArtDesignPreviews.CommitColorScheme(address, scheme));
     }
 
     public void CommitSmartArtStylePreview(SmartArtStyle style)
     {
         var target = SmartArtDesignPreviews.ActiveTarget ?? CurrentSmartArtTarget();
         if (target is { } address)
-            InvalidateSmartArtEdit(SmartArtDesignPreviews.CommitStyle(address, style), address);
+            InvalidateSmartArtEdit(SmartArtDesignPreviews.CommitStyle(address, style));
     }
 
     private DocumentObjectTarget? CurrentSmartArtTarget() =>
-        _selectedFloating is { Kind: "SmartArt" } selected
+        SelectedDrawingObjectInfo is { Kind: "SmartArt" } selected
             ? ObjectTarget(selected.BlockIndex, selected.RunIndex)
             : null;
 
-    private void InvalidateSmartArtEdit(DocumentObjectEditResult result, DocumentObjectTarget target)
+    private void InvalidateSmartArtEdit(DocumentObjectEditResult result)
     {
-        if (result.Applied)
-            RefreshSmartArtPreview(target);
+        InvalidateObjectEdit(result, "SmartArt");
     }
 
     private void RefreshSmartArtPreview(DocumentObjectTarget target)
     {
+        var refreshInline = _selectedInlineObject is { } inline
+            && inline.BlockIndex == target.BlockIndex
+            && inline.RunIndex == target.RunIndex;
+        var layoutWidth = _laidOutWidth > 0 ? _laidOutWidth : FallbackWidth;
         InvalidateLayoutAndVisual();
-        RefreshSelectedFloatingRect(target.BlockIndex, target.RunIndex, "SmartArt");
-    }
-
-    private void RefreshSelectedSmartArt((int BlockIndex, int RunIndex, string Kind, Rect Rect) sel)
-    {
-        InvalidateLayoutAndVisual();
-        RefreshSelectedFloatingRect(sel.BlockIndex, sel.RunIndex, sel.Kind);
+        if (refreshInline)
+        {
+            Relayout(layoutWidth);
+            RefreshSelectedInlineObjectRect(target.BlockIndex, target.RunIndex, "SmartArt");
+        }
+        else
+        {
+            RefreshSelectedFloatingRect(target.BlockIndex, target.RunIndex, "SmartArt");
+        }
     }
 
     /// <summary>
@@ -15175,11 +15335,24 @@ public sealed partial class DocumentView : Control
     /// </summary>
     public (ChartKind Kind, int StyleId, string? ColorSchemeId)? GetSelectedChartInfo()
     {
-        if (_selectedFloating is not { Kind: "Chart" } sel) return null;
+        if (SelectedDrawingObjectInfo is not { Kind: "Chart" } sel) return null;
         if (_doc.Blocks[sel.BlockIndex] is not Paragraph para) return null;
         if (sel.RunIndex < 0 || sel.RunIndex >= para.Runs.Count) return null;
         if (para.Runs[sel.RunIndex].Chart is not { } chart) return null;
         return (chart.Kind, chart.StyleId, chart.ColorSchemeId);
+    }
+
+    /// <summary>
+    /// AV-CHARTTAB: Read the selected SmartArt's current kind/colour-scheme, or null when the selected
+    /// float is not SmartArt. Used by tests and the contextual-tab live-state.
+    /// </summary>
+    public (SmartArtKind Kind, string? ColorSchemeId)? GetSelectedSmartArtInfo()
+    {
+        if (SelectedDrawingObjectInfo is not { Kind: "SmartArt" } sel) return null;
+        if (_doc.Blocks[sel.BlockIndex] is not Paragraph para) return null;
+        if (sel.RunIndex < 0 || sel.RunIndex >= para.Runs.Count) return null;
+        if (para.Runs[sel.RunIndex].SmartArt is not { } sa) return null;
+        return (sa.Kind, sa.ColorSchemeId);
     }
 
     /// <summary>
@@ -15948,13 +16121,21 @@ public sealed partial class DocumentView : Control
             return;
         }
 
-        // Click outside any float → deselect.
-        if (_selectedFloating is not null)
+        if (!extendFloatingSelection && TryHitTestInlineDrawingObject(point, out var inlineHit))
+        {
+            SelectInlineDrawingObjectCore(inlineHit);
+            e.Handled = true;
+            return;
+        }
+
+        // Click outside any selected drawing object → deselect.
+        if (_selectedFloating is not null || _selectedInlineObject is not null)
         {
             _shapeCaret = null;
             _shapeSelectionAnchor = null;
             _activeShapeTextChildPath = null;
             _selectedFloating = null;
+            _selectedInlineObject = null;
             _selectedFloatingGroupChild = null;
             _selectedFloatingObjects.Clear();
             _floatingDrag.Reset();
@@ -16406,6 +16587,35 @@ public sealed partial class DocumentView : Control
             return;
         }
 
+        if (_selectedInlineObject is { } inlineSelection)
+        {
+            if (e.Key == Key.Escape)
+            {
+                _selectedInlineObject = null;
+                RaiseFloatingSelectionChangedIfIdentityChanged();
+                InvalidateVisual();
+                e.Handled = true;
+                return;
+            }
+
+            if (e.Key is Key.Delete or Key.Back
+                && inlineSelection.BlockIndex >= 0
+                && inlineSelection.BlockIndex < _doc.Blocks.Count
+                && _doc.Blocks[inlineSelection.BlockIndex] is Paragraph paragraph
+                && inlineSelection.RunIndex >= 0
+                && inlineSelection.RunIndex < paragraph.Runs.Count)
+            {
+                _bus.Execute(new RemoveFloatingRunCommand(
+                    inlineSelection.BlockIndex,
+                    inlineSelection.RunIndex));
+                _selectedInlineObject = null;
+                RaiseFloatingSelectionChangedIfIdentityChanged();
+                InvalidateLayoutAndVisual();
+                e.Handled = true;
+                return;
+            }
+        }
+
         // AV-FLSEL: when a float is selected, intercept navigation/delete keys before body text.
         if (_selectedFloating is { } selFloat)
         {
@@ -16755,40 +16965,61 @@ public sealed partial class DocumentView : Control
         }
 
         // Structurally special paragraphs stay on the renderer-owned path.
-        if (NormalizedSelection() is not null)
-            DeleteSelection();
-        if (CurrentParagraph() is not { } fallbackParagraph || !IsEditable(fallbackParagraph))
-            return;
-        block = _caret.Block;
-        bodyOffset = _caret.Offset;
-        bodyFmt = pendingFmt ?? ActiveFormatting(fallbackParagraph, bodyOffset);
-        insLink = ActiveLink(fallbackParagraph, bodyOffset);
-        _bus.Execute(new ReplaceParagraphRunsCommand(block, p =>
+        // AV-UNDOGROUP: DeleteSelection() and the ReplaceParagraphRunsCommand below are two separate
+        // bus commands. Without an explicit group, one Ctrl+Z only undoes the insert and leaves the
+        // selection permanently deleted. Group them so a single undo restores the pre-gesture state.
+        var ownsFallbackUndoGroup = !_bus.IsUndoGroupOpen;
+        if (ownsFallbackUndoGroup)
+            _bus.BeginUndoGroup();
+        try
         {
-            // BE4 (body parity): insert at an incrementing position so multi-char text (paste / IME /
-            // model inserts like a citation string) keeps its order — a fixed insert index would reverse it.
-            RevisionEditPlanner.InsertText(
-                p,
-                bodyOffset,
-                text,
-                bodyFmt,
-                TrackChangesEnabled
-                    ? new RevisionEditPlanner.InsertOptions(
-                        RevisionKind.Inserted,
-                        RevisionAuthor,
-                        _editingSession.RevisionDateXmlForEdit(),
-                        insLink?.Url,
-                        insLink?.Anchor,
-                        insLink?.Tooltip)
-                    : new RevisionEditPlanner.InsertOptions(
-                        HyperlinkUrl: insLink?.Url,
-                        HyperlinkAnchor: insLink?.Anchor,
-                        HyperlinkTooltip: insLink?.Tooltip));
-            CoalesceAdjacentPlainTextRuns(p);
-            CoalesceAdjacentHyperlinkRuns(p);
-        }));
-        _caret = new DocPosition(block, bodyOffset + text.Length);
-        _selectionAnchor = _caret;
+            if (NormalizedSelection() is not null)
+                DeleteSelection();
+            if (CurrentParagraph() is not { } fallbackParagraph || !IsEditable(fallbackParagraph))
+            {
+                if (ownsFallbackUndoGroup)
+                    _bus.AbortUndoGroup();
+                return;
+            }
+            block = _caret.Block;
+            bodyOffset = _caret.Offset;
+            bodyFmt = pendingFmt ?? ActiveFormatting(fallbackParagraph, bodyOffset);
+            insLink = ActiveLink(fallbackParagraph, bodyOffset);
+            _bus.Execute(new ReplaceParagraphRunsCommand(block, p =>
+            {
+                // BE4 (body parity): insert at an incrementing position so multi-char text (paste / IME /
+                // model inserts like a citation string) keeps its order — a fixed insert index would reverse it.
+                RevisionEditPlanner.InsertText(
+                    p,
+                    bodyOffset,
+                    text,
+                    bodyFmt,
+                    TrackChangesEnabled
+                        ? new RevisionEditPlanner.InsertOptions(
+                            RevisionKind.Inserted,
+                            RevisionAuthor,
+                            _editingSession.RevisionDateXmlForEdit(),
+                            insLink?.Url,
+                            insLink?.Anchor,
+                            insLink?.Tooltip)
+                        : new RevisionEditPlanner.InsertOptions(
+                            HyperlinkUrl: insLink?.Url,
+                            HyperlinkAnchor: insLink?.Anchor,
+                            HyperlinkTooltip: insLink?.Tooltip));
+                CoalesceAdjacentPlainTextRuns(p);
+                CoalesceAdjacentHyperlinkRuns(p);
+            }));
+            _caret = new DocPosition(block, bodyOffset + text.Length);
+            _selectionAnchor = _caret;
+            if (ownsFallbackUndoGroup)
+                _bus.CommitUndoGroup("Insert text");
+        }
+        catch
+        {
+            if (ownsFallbackUndoGroup)
+                _bus.AbortUndoGroup();
+            throw;
+        }
     }
 
     private void InsertShapeText(
@@ -17111,16 +17342,37 @@ public sealed partial class DocumentView : Control
         if (IsEditingLocked || _hfCaret is not null || _cellCaret is not null)
             return;
 
-        if (NormalizedSelection() is not null)
-            DeleteSelection();
-        if (CurrentParagraph() is not { } paragraph || !IsEditable(paragraph))
-            return;
+        // AV-UNDOGROUP: DeleteSelection() and the ReplaceParagraphRunsCommand below are two separate
+        // bus commands. Without an explicit group, one Ctrl+Z only undoes the insert and leaves the
+        // selection permanently deleted.
+        var ownsUndoGroup = !_bus.IsUndoGroupOpen;
+        if (ownsUndoGroup)
+            _bus.BeginUndoGroup();
+        try
+        {
+            if (NormalizedSelection() is not null)
+                DeleteSelection();
+            if (CurrentParagraph() is not { } paragraph || !IsEditable(paragraph))
+            {
+                if (ownsUndoGroup)
+                    _bus.AbortUndoGroup();
+                return;
+            }
 
-        var block = _caret.Block;
-        var offset = _caret.Offset;
-        _bus.Execute(new ReplaceParagraphRunsCommand(block, p => InsertRunAtOffset(p, offset, run)));
-        _caret = new DocPosition(block, offset + run.Text.Length);
-        _selectionAnchor = _caret;
+            var block = _caret.Block;
+            var offset = _caret.Offset;
+            _bus.Execute(new ReplaceParagraphRunsCommand(block, p => InsertRunAtOffset(p, offset, run)));
+            _caret = new DocPosition(block, offset + run.Text.Length);
+            _selectionAnchor = _caret;
+            if (ownsUndoGroup)
+                _bus.CommitUndoGroup("Insert content control");
+        }
+        catch
+        {
+            if (ownsUndoGroup)
+                _bus.AbortUndoGroup();
+            throw;
+        }
     }
 
     private void Backspace()
@@ -17424,25 +17676,46 @@ public sealed partial class DocumentView : Control
         }
 
         // AV-TBL: route into table cell.
+        // AV-UNDOGROUP: DeleteCellSelection() and the SpliceCellParagraphsCommand below are two
+        // separate bus commands. Without an explicit group, one Ctrl+Z only undoes the paragraph-break
+        // insert and leaves the selection permanently deleted.
         if (_cellCaret is { } cc)
         {
-            if (DeleteCellSelection(cc))
-                cc = _cellCaret!.Value;
-            var para = GetCellParagraph(cc.TableBlock, cc.Row, cc.Col, cc.ParaIdx);
-            if (para == null || !IsEditable(para))
-                return;
-            var offset = cc.Offset;
-            var chars = ParaCells(para);
-            var first = new Paragraph { Formatting = para.Formatting, StyleId = para.StyleId };
-            SetRuns(first, chars.Take(offset).ToList());
-            var second = new Paragraph { Formatting = para.Formatting };
-            SetRuns(second, chars.Skip(offset).ToList());
-            _bus.Execute(new SpliceCellParagraphsCommand(cc.TableBlock, cc.Row, cc.Col, cc.ParaIdx, 1, [first, second]));
-            // Move caret to start of the new second paragraph.
-            _cellCaret = cc with { ParaIdx = cc.ParaIdx + 1, Offset = 0 };
-            _cellAnchor = _cellCaret;
-            _caret = new DocPosition(cc.TableBlock, FindCellGlyphOffset(cc.TableBlock, cc.Row, cc.Col, cc.ParaIdx + 1, 0));
-            _selectionAnchor = _caret;
+            var ownsCellUndoGroup = !_bus.IsUndoGroupOpen;
+            if (ownsCellUndoGroup)
+                _bus.BeginUndoGroup();
+            try
+            {
+                if (DeleteCellSelection(cc, beginUndoGroup: false))
+                    cc = _cellCaret!.Value;
+                var para = GetCellParagraph(cc.TableBlock, cc.Row, cc.Col, cc.ParaIdx);
+                if (para == null || !IsEditable(para))
+                {
+                    if (ownsCellUndoGroup)
+                        _bus.AbortUndoGroup();
+                    return;
+                }
+                var offset = cc.Offset;
+                var chars = ParaCells(para);
+                var first = new Paragraph { Formatting = para.Formatting, StyleId = para.StyleId };
+                SetRuns(first, chars.Take(offset).ToList());
+                var second = new Paragraph { Formatting = para.Formatting };
+                SetRuns(second, chars.Skip(offset).ToList());
+                _bus.Execute(new SpliceCellParagraphsCommand(cc.TableBlock, cc.Row, cc.Col, cc.ParaIdx, 1, [first, second]));
+                // Move caret to start of the new second paragraph.
+                _cellCaret = cc with { ParaIdx = cc.ParaIdx + 1, Offset = 0 };
+                _cellAnchor = _cellCaret;
+                _caret = new DocPosition(cc.TableBlock, FindCellGlyphOffset(cc.TableBlock, cc.Row, cc.Col, cc.ParaIdx + 1, 0));
+                _selectionAnchor = _caret;
+                if (ownsCellUndoGroup)
+                    _bus.CommitUndoGroup("Insert paragraph break");
+            }
+            catch
+            {
+                if (ownsCellUndoGroup)
+                    _bus.AbortUndoGroup();
+                throw;
+            }
             return;
         }
 
@@ -17454,47 +17727,72 @@ public sealed partial class DocumentView : Control
             return;
         }
 
-        if (NormalizedSelection() is not null)
-            DeleteSelection();
-        if (CurrentParagraph() is not { } paragraph || !IsEditable(paragraph))
-            return;
-
-        var block = _caret.Block;
-        var bodyOffset = _caret.Offset;
-        var bodyCells = ParaCells(paragraph);
-
-        // AV-LIST: list continuation / exit-list logic.
-        var listFmt = paragraph.Formatting;
-        if (listFmt.ListKind != ListKind.None)
+        // AV-UNDOGROUP: DeleteSelection() and the ReplaceBlocksCommand (or FormatParagraphs) below are
+        // separate bus commands. Without an explicit group, one Ctrl+Z only undoes the paragraph-break
+        // insert and leaves the selection permanently deleted.
+        var ownsBodyUndoGroup = !_bus.IsUndoGroupOpen;
+        if (ownsBodyUndoGroup)
+            _bus.BeginUndoGroup();
+        try
         {
-            if (bodyCells.Count == 0)
+            if (NormalizedSelection() is not null)
+                DeleteSelection();
+            if (CurrentParagraph() is not { } paragraph || !IsEditable(paragraph))
             {
-                // Enter on an EMPTY list item → exit the list: turn the paragraph into a normal one.
-                var exitFmt = listFmt with { ListKind = ListKind.None, ListLevel = 0 };
-                _editingSession.FormatParagraphs([block], _ => exitFmt);
-                // Caret stays at block 0 (now a normal paragraph). No split.
+                if (ownsBodyUndoGroup)
+                    _bus.AbortUndoGroup();
                 return;
             }
-            // Enter on a NON-EMPTY list item → split and continue the list on the new paragraph.
-            // The new paragraph inherits ListKind + ListLevel (not StyleId, same as Word).
-            var firstPara = new Paragraph { Formatting = listFmt, StyleId = paragraph.StyleId };
-            SetRuns(firstPara, bodyCells.Take(bodyOffset).ToList());
-            var contFmt = listFmt with { };   // same list kind + level; renumbering is render-time
-            var secondPara = new Paragraph { Formatting = contFmt };
-            SetRuns(secondPara, bodyCells.Skip(bodyOffset).ToList());
-            _bus.Execute(new ReplaceBlocksCommand(block, 1, new Block[] { firstPara, secondPara }));
+
+            var block = _caret.Block;
+            var bodyOffset = _caret.Offset;
+            var bodyCells = ParaCells(paragraph);
+
+            // AV-LIST: list continuation / exit-list logic.
+            var listFmt = paragraph.Formatting;
+            if (listFmt.ListKind != ListKind.None)
+            {
+                if (bodyCells.Count == 0)
+                {
+                    // Enter on an EMPTY list item → exit the list: turn the paragraph into a normal one.
+                    var exitFmt = listFmt with { ListKind = ListKind.None, ListLevel = 0 };
+                    _editingSession.FormatParagraphs([block], _ => exitFmt);
+                    // Caret stays at block 0 (now a normal paragraph). No split.
+                    if (ownsBodyUndoGroup)
+                        _bus.CommitUndoGroup("Insert paragraph break");
+                    return;
+                }
+                // Enter on a NON-EMPTY list item → split and continue the list on the new paragraph.
+                // The new paragraph inherits ListKind + ListLevel (not StyleId, same as Word).
+                var firstPara = new Paragraph { Formatting = listFmt, StyleId = paragraph.StyleId };
+                SetRuns(firstPara, bodyCells.Take(bodyOffset).ToList());
+                var contFmt = listFmt with { };   // same list kind + level; renumbering is render-time
+                var secondPara = new Paragraph { Formatting = contFmt };
+                SetRuns(secondPara, bodyCells.Skip(bodyOffset).ToList());
+                _bus.Execute(new ReplaceBlocksCommand(block, 1, new Block[] { firstPara, secondPara }));
+                _caret = new DocPosition(block + 1, 0);
+                _selectionAnchor = _caret;
+                if (ownsBodyUndoGroup)
+                    _bus.CommitUndoGroup("Insert paragraph break");
+                return;
+            }
+
+            var firstParaNL = new Paragraph { Formatting = paragraph.Formatting, StyleId = paragraph.StyleId };
+            SetRuns(firstParaNL, bodyCells.Take(bodyOffset).ToList());
+            var secondParaNL = new Paragraph { Formatting = paragraph.Formatting };
+            SetRuns(secondParaNL, bodyCells.Skip(bodyOffset).ToList());
+            _bus.Execute(new ReplaceBlocksCommand(block, 1, new Block[] { firstParaNL, secondParaNL }));
             _caret = new DocPosition(block + 1, 0);
             _selectionAnchor = _caret;
-            return;
+            if (ownsBodyUndoGroup)
+                _bus.CommitUndoGroup("Insert paragraph break");
         }
-
-        var firstParaNL = new Paragraph { Formatting = paragraph.Formatting, StyleId = paragraph.StyleId };
-        SetRuns(firstParaNL, bodyCells.Take(bodyOffset).ToList());
-        var secondParaNL = new Paragraph { Formatting = paragraph.Formatting };
-        SetRuns(secondParaNL, bodyCells.Skip(bodyOffset).ToList());
-        _bus.Execute(new ReplaceBlocksCommand(block, 1, new Block[] { firstParaNL, secondParaNL }));
-        _caret = new DocPosition(block + 1, 0);
-        _selectionAnchor = _caret;
+        catch
+        {
+            if (ownsBodyUndoGroup)
+                _bus.AbortUndoGroup();
+            throw;
+        }
     }
 
     // AV-TBL: merge the current cell paragraph with the previous one (Backspace at start of para).
@@ -20204,25 +20502,41 @@ public sealed partial class DocumentView : Control
             return;
         }
 
-        if (NormalizedSelection() is not null)
-            DeleteSelection();
-        if (CurrentParagraph() is not { } paragraph || !IsEditable(paragraph))
-            return;
-
-        var block = _caret.Block;
-        var bodyOffset = _caret.Offset;
-        var bodyFmt = _pendingRunFmt ?? ActiveFormatting(paragraph, bodyOffset);
-        _pendingRunFmt = null;
-
-        var formattedRun = new Run(citationRun.Text, bodyFmt)
+        // AV-UNDOGROUP: DeleteSelection() and the ReplaceParagraphRunsCommand below are two separate
+        // bus commands. Without an explicit group, one Ctrl+Z only undoes the citation insert and
+        // leaves the selection permanently deleted.
+        _bus.BeginUndoGroup();
+        try
         {
-            ComplexField = citationRun.ComplexField
-        };
+            if (NormalizedSelection() is not null)
+                DeleteSelection();
+            if (CurrentParagraph() is not { } paragraph || !IsEditable(paragraph))
+            {
+                _bus.AbortUndoGroup();
+                return;
+            }
 
-        _bus.Execute(new ReplaceParagraphRunsCommand(block, p =>
-            InsertRunAtOffset(p, bodyOffset, formattedRun)));
-        _caret = new DocPosition(block, bodyOffset + formattedRun.Text.Length);
-        _selectionAnchor = _caret;
+            var block = _caret.Block;
+            var bodyOffset = _caret.Offset;
+            var bodyFmt = _pendingRunFmt ?? ActiveFormatting(paragraph, bodyOffset);
+            _pendingRunFmt = null;
+
+            var formattedRun = new Run(citationRun.Text, bodyFmt)
+            {
+                ComplexField = citationRun.ComplexField
+            };
+
+            _bus.Execute(new ReplaceParagraphRunsCommand(block, p =>
+                InsertRunAtOffset(p, bodyOffset, formattedRun)));
+            _caret = new DocPosition(block, bodyOffset + formattedRun.Text.Length);
+            _selectionAnchor = _caret;
+            _bus.CommitUndoGroup("Insert Citation");
+        }
+        catch
+        {
+            _bus.AbortUndoGroup();
+            throw;
+        }
     }
 
     /// <summary>

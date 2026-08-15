@@ -1336,13 +1336,27 @@ public static class PasteCommandFactory
         System.Globalization.NumberStyles.AllowExponent |
         System.Globalization.NumberStyles.AllowCurrencySymbol;
 
+    // Real Excel's hard cap on how much literal text a single cell can hold. A formula RESULT that
+    // would exceed this already errors out (see BuiltInFunctions.ExceedsExcelTextLimit's #VALUE!
+    // for CONCAT/TEXTJOIN/REPT/&), but pasted or typed LITERAL text had no equivalent enforcement at
+    // all: an arbitrarily long external-clipboard field (or a Text("@")-formatted destination's raw
+    // paste below) was accepted uncapped into a cell, producing a workbook that saves as XLSX but
+    // that real Excel then truncates (or refuses to open cleanly) -- silent data loss the user
+    // believes was saved intact. Real Excel's own paste behavior for an oversized field is to
+    // truncate the pasted text to this limit rather than reject the whole paste, so mirror that here
+    // rather than erroring the cell out.
+    internal const int ExcelCellTextLimit = 32767;
+
+    internal static string TruncateToExcelCellTextLimit(string text) =>
+        text.Length > ExcelCellTextLimit ? text[..ExcelCellTextLimit] : text;
+
     internal static ScalarValue ParseClipboardValue(string text)
     {
         // Excel's text-escape convention: a leading apostrophe forces the pasted field to be kept
         // as text (apostrophe stripped), exactly like typing '123 into a cell. This must be checked
         // before any numeric/boolean coercion below.
         if (text.StartsWith('\''))
-            return new TextValue(text[1..]);
+            return new TextValue(TruncateToExcelCellTextLimit(text[1..]));
 
         // Culture-safe plain decimal, matching the same first pass CellEntryParser uses for typed
         // entry (NumberStyles.Float against the current culture) so a user whose locale writes
@@ -1401,7 +1415,7 @@ public static class PasteCommandFactory
             return DateTimeValue.FromDateTime(pasteDate);
         }
 
-        return new TextValue(text);
+        return new TextValue(TruncateToExcelCellTextLimit(text));
     }
 
     /// <summary>Returns true when <paramref name="text"/> would be coerced into something other than
@@ -1608,7 +1622,7 @@ internal sealed class ExternalTextPasteValuesCommand : IWorkbookCommand, IAffect
                 // A destination pre-formatted as Text (or an explicit paste-as-text request) keeps
                 // the pasted field as a literal string exactly as Excel does, even when it looks
                 // like a formula -- so the leading-'=' formula check below is skipped entirely.
-                newCell = Cell.FromValue(new TextValue(text));
+                newCell = Cell.FromValue(new TextValue(PasteCommandFactory.TruncateToExcelCellTextLimit(text)));
             }
             else if (PasteCommandFactory.TryGetPasteFormula(text, out var formula))
             {

@@ -2846,6 +2846,15 @@ public sealed class TableRow
     public string? RowRevisionAuthor { get; set; }
 
     /// <summary>
+    /// Whether THIS row repeats at the top of every page the table spans (<c>tr/trPr/w:tblHeader</c>).
+    /// Word allows any number of leading, contiguous rows to carry this flag to build a multi-row
+    /// repeating header (e.g. a title row plus a column-labels row); only a run starting at row 0 is
+    /// honoured when rendering/printing. Default false. See also <see cref="TableFormatting.RepeatHeaderRow"/>,
+    /// which mirrors this flag on row 0 for callers that only toggle the table-level convenience flag.
+    /// </summary>
+    public bool IsRepeatingHeader { get; set; }
+
+    /// <summary>
     /// The row revision timestamp as a W3CDTF string (the w:date on trPr/w:ins or trPr/w:del), or null when
     /// unset. Mirrors <see cref="Run.RevisionDateXml"/>.
     /// </summary>
@@ -2876,7 +2885,10 @@ public sealed record TableFormatting
 
     /// <summary>
     /// When true, the header (first) row repeats at the top of each page the table spans. Round-trips
-    /// via <c>w:trPr/w:tblHeader</c> on the first row. Default false.
+    /// via <c>w:trPr/w:tblHeader</c> on the first row. Default false. This is a convenience mirror of
+    /// <see cref="TableRow.IsRepeatingHeader"/> on row 0; a multi-row repeating header (Word allows any
+    /// number of leading rows to repeat) is expressed per-row via <see cref="TableRow.IsRepeatingHeader"/>
+    /// and is not fully representable by this single table-level flag.
     /// </summary>
     public bool RepeatHeaderRow { get; init; }
 

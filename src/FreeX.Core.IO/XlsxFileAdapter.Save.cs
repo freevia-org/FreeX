@@ -166,6 +166,35 @@ public sealed partial class XlsxFileAdapter
             else if (sheet.TabColor is { } tabColor)
                 xlSheet.TabColor = XLColor.FromArgb(tabColor.R, tabColor.G, tabColor.B);
 
+            // R136-io-worksheet-props-col-row-default-style: whole-column/-row default styles must be
+            // applied BEFORE any per-cell style below. ClosedXML's IXLColumn.Style/IXLRow.Style setter
+            // propagates onto every cell already in that column/row (verified: setting it after an
+            // explicit per-cell style silently overwrites that cell's style), so applying it first —
+            // column before row, since row must win at their intersection per Excel's cell > row >
+            // column precedence, and each subsequent per-cell ApplyStyleFast/ApplyStyleOnlySeedCells
+            // call below naturally overrides it for any cell that actually has its own style — is what
+            // keeps every level of the precedence chain intact instead of the row/column default
+            // stomping real cell-level formatting.
+            foreach (var (colNum, columnStyleId) in sheet.ColumnStyles)
+            {
+                if (!IsValidWorksheetColumn(colNum))
+                    continue;
+
+                var columnStyle = GetCachedStyle(workbook, styleCache, columnStyleId);
+                if (!columnStyle.Equals(CellStyle.Default))
+                    XlsxClosedXmlCellMapper.ApplyStyle(xlSheet.Column((int)colNum).Style, columnStyle);
+            }
+
+            foreach (var (rowNum, rowStyleId) in sheet.RowStyles)
+            {
+                if (!IsValidWorksheetRow(rowNum))
+                    continue;
+
+                var rowStyle = GetCachedStyle(workbook, styleCache, rowStyleId);
+                if (!rowStyle.Equals(CellStyle.Default))
+                    XlsxClosedXmlCellMapper.ApplyStyle(xlSheet.Row((int)rowNum).Style, rowStyle);
+            }
+
             // Cells claimed as non-anchor members of an array-formula range written below (via
             // FormulaArrayA1 over the full extent). These are skipped when the outer loop reaches
             // them so their provisional cached scalar (loaded into _cells by SetProvisionalSpillCell)

@@ -27,6 +27,11 @@ public sealed class InsertColumnsCommand : IWorkbookCommand, IAffectedCellsComma
     private List<KeyValuePair<uint, double>>? _columnWidthSnapshot;
     private List<KeyValuePair<uint, IReadOnlyList<string>>>? _activeValueFilterColumnsSnapshot;
     private List<KeyValuePair<uint, HashSet<uint>>>? _columnFilterOwnedRowsSnapshot;
+    // R136-io-worksheet-props-col-row-default-style-shift: sheet.ColumnStyles is keyed by the same
+    // absolute column index as ColumnWidths and must shift the same way, or a whole-column default
+    // style (e.g. a Currency <col style="..."> band) is left painting the wrong column after an
+    // insert -- ViewportService reads this dictionary directly with no other re-key path.
+    private List<KeyValuePair<uint, StyleId>>? _columnStyleSnapshot;
     // R106-io-hyperlink-range-shift: see Sheet.RangeHyperlinks -- whole-column/row and oversized-
     // bounded hyperlink refs shift independently of the CellAddress-keyed dictionaries above.
     private List<GridRange>? _printAreaSnapshot;
@@ -114,6 +119,13 @@ public sealed class InsertColumnsCommand : IWorkbookCommand, IAffectedCellsComma
         // owned-hidden-row bookkeeping is mis-attributed to whatever column ends up at its old index.
         _columnFilterOwnedRowsSnapshot = RowColumnShiftHelpers.CaptureDictionary(sheet.ColumnFilterOwnedRows);
         RowColumnShiftHelpers.ShiftIndexesUp(sheet.ColumnFilterOwnedRows, _beforeCol, _count);
+
+        // R136-io-worksheet-props-col-row-default-style-shift: sheet.ColumnStyles is the same
+        // absolute-column key space as ColumnWidths above -- re-key it in lockstep or the whole-
+        // column default style painted by ViewportService lands on whatever column ends up at its
+        // stale pre-insert index.
+        _columnStyleSnapshot = RowColumnShiftHelpers.CaptureDictionary(sheet.ColumnStyles);
+        RowColumnShiftHelpers.ShiftIndexesUp(sheet.ColumnStyles, _beforeCol, _count);
 
         RowColumnShiftHelpers.ShiftCommentColumnsUp(sheet.Comments, _beforeCol, _count);
         // J17: CommentAuthors/ShownComments are address-keyed companions of Comments (legacy note
@@ -332,6 +344,7 @@ public sealed class InsertColumnsCommand : IWorkbookCommand, IAffectedCellsComma
         RowColumnShiftHelpers.RestoreDictionary(sheet.ColumnWidths, _columnWidthSnapshot);
         RowColumnShiftHelpers.RestoreDictionary(sheet.ActiveValueFilterColumns, _activeValueFilterColumnsSnapshot);
         RowColumnShiftHelpers.RestoreDictionary(sheet.ColumnFilterOwnedRows, _columnFilterOwnedRowsSnapshot);
+        RowColumnShiftHelpers.RestoreDictionary(sheet.ColumnStyles, _columnStyleSnapshot);
         _mutationSnapshot.RestoreCommonState(ctx.Workbook, sheet, restoreRulesInPlace: true);
         sheet.SetPrintAreas(_printAreaSnapshot ?? []);
         RowColumnShiftHelpers.RestoreSortedSet(sheet.ColumnPageBreaks, _columnPageBreakSnapshot);
@@ -497,6 +510,9 @@ public sealed class DeleteColumnsCommand : IWorkbookCommand, IAffectedCellsComma
     private List<KeyValuePair<uint, double>>? _columnWidthSnapshot;
     private List<KeyValuePair<uint, IReadOnlyList<string>>>? _activeValueFilterColumnsSnapshot;
     private List<KeyValuePair<uint, HashSet<uint>>>? _columnFilterOwnedRowsSnapshot;
+    // R136-io-worksheet-props-col-row-default-style-shift: see InsertColumnsCommand's identical
+    // field -- must shift/drop the same way ColumnWidths does on column delete.
+    private List<KeyValuePair<uint, StyleId>>? _columnStyleSnapshot;
     private List<uint>? _hiddenColsSnapshot;
     // R106-io-hyperlink-range-shift: see Sheet.RangeHyperlinks -- whole-column/row and oversized-
     // bounded hyperlink refs shift/delete independently of the CellAddress-keyed dictionaries above.
@@ -594,6 +610,12 @@ public sealed class DeleteColumnsCommand : IWorkbookCommand, IAffectedCellsComma
         // way, or a filter column's owned-hidden-row bookkeeping goes stale/misaligned after delete.
         _columnFilterOwnedRowsSnapshot = RowColumnShiftHelpers.CaptureDictionary(sheet.ColumnFilterOwnedRows);
         RowColumnShiftHelpers.ShiftIndexesDown(sheet.ColumnFilterOwnedRows, _startCol, _count);
+
+        // R136-io-worksheet-props-col-row-default-style-shift: same key-space as ColumnWidths --
+        // must shift/drop entries the same way, or a column deleted (or lying after the deletion
+        // point) leaves its whole-column default style painting the wrong (stale-indexed) column.
+        _columnStyleSnapshot = RowColumnShiftHelpers.CaptureDictionary(sheet.ColumnStyles);
+        RowColumnShiftHelpers.ShiftIndexesDown(sheet.ColumnStyles, _startCol, _count);
 
         RowColumnShiftHelpers.ShiftCommentColumnsDown(sheet.Comments, _startCol, _count);
         // J17: CommentAuthors/ShownComments are address-keyed companions of Comments (legacy note
@@ -811,6 +833,7 @@ public sealed class DeleteColumnsCommand : IWorkbookCommand, IAffectedCellsComma
         RowColumnShiftHelpers.RestoreDictionary(sheet.ColumnWidths, _columnWidthSnapshot);
         RowColumnShiftHelpers.RestoreDictionary(sheet.ActiveValueFilterColumns, _activeValueFilterColumnsSnapshot);
         RowColumnShiftHelpers.RestoreDictionary(sheet.ColumnFilterOwnedRows, _columnFilterOwnedRowsSnapshot);
+        RowColumnShiftHelpers.RestoreDictionary(sheet.ColumnStyles, _columnStyleSnapshot);
         RowColumnShiftHelpers.RestoreSet(sheet.HiddenCols, _hiddenColsSnapshot);
         _mutationSnapshot.RestoreCommonState(ctx.Workbook, sheet, restoreRulesInPlace: false);
         sheet.SetPrintAreas(_printAreaSnapshot ?? []);

@@ -75,7 +75,7 @@ public sealed class FilePickerPlannerSourceTests
         session.Should().Contain("PresentationExportPlanner.BuildVideoExportPlan(");
         session.Should().Contain("PresentationVideoFramePackageExecutor.BuildPackageWithDiagnostics(");
         session.Should().Contain("PresentationVideoFramePackageExecutor.BuildExecutionDescriptor(");
-        session.Should().Contain("PresentationPrintOutputPackageExecutor.BuildPackage(");
+        session.Should().Contain("PresentationPrintOutputPackageExecutor.BuildPackageWithDiagnostics(");
         session.Should().Contain("PresentationPrintOutputPackageExecutor.BuildExecutionDescriptor(");
         session.Should().Contain("PresentationPrintBackstagePlanner.Build(");
         source.Should().Contain("ShowPrintBackstage");

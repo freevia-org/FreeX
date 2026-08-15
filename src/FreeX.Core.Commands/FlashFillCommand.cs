@@ -77,7 +77,11 @@ public sealed class FlashFillCommand : IWorkbookCommand, IEstimatesMemory
             var addr = new CellAddress(_sheetId, rowsToFill[i], _fillColIndex);
             _snapshot.Add((addr, sheet.GetCell(addr)?.Clone()));
 
-            var newCell = Cell.FromValue(new TextValue(filled[i]));
+            // Mirrors PasteCommandFactory.TruncateToExcelCellTextLimit's cap on literal cell text:
+            // Flash Fill can concatenate several source columns into one generated value, so an
+            // inferred pattern applied across wide/long source text could otherwise produce a
+            // result past Excel's 32,767-character cell limit.
+            var newCell = Cell.FromValue(new TextValue(PasteCommandFactory.TruncateToExcelCellTextLimit(filled[i])));
             sheet.SetCell(addr, newCell);
             affected.Add(addr);
         }

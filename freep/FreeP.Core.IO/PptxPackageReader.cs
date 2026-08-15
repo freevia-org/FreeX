@@ -3123,8 +3123,9 @@ public static class PptxPackageReader
         }
 
         // Build parent→children map from cxnLst parOf connections
-        var childrenOf = new Dictionary<string, List<string>>(StringComparer.OrdinalIgnoreCase);
+        var childrenOf = new Dictionary<string, List<(string Id, int Order, int Sequence)>>(StringComparer.OrdinalIgnoreCase);
         var hasParent  = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var connectionSequence = 0;
 
         if (cxnLst is not null)
         {
@@ -3146,8 +3147,11 @@ public static class PptxPackageReader
                     continue;
 
                 if (!childrenOf.TryGetValue(srcId, out var kids))
-                    childrenOf[srcId] = kids = new List<string>();
-                kids.Add(destId);
+                    childrenOf[srcId] = kids = new List<(string Id, int Order, int Sequence)>();
+                var srcOrd = int.TryParse(cxn.Attribute("srcOrd")?.Value, out var parsedSrcOrd)
+                    ? parsedSrcOrd
+                    : int.MaxValue;
+                kids.Add((destId, srcOrd, connectionSequence++));
                 hasParent.Add(destId);
             }
         }
@@ -3185,10 +3189,10 @@ public static class PptxPackageReader
             {
                 if (childrenOf.TryGetValue(id, out var kids))
                 {
-                    foreach (var kid in kids)
+                    foreach (var kid in kids.OrderBy(edge => edge.Order).ThenBy(edge => edge.Sequence))
                     {
-                        if (points.ContainsKey(kid))
-                            node.Children.Add(BuildNode(kid, level + 1));
+                        if (points.ContainsKey(kid.Id))
+                            node.Children.Add(BuildNode(kid.Id, level + 1));
                     }
                 }
             }
@@ -4898,9 +4902,18 @@ public static class PptxPackageReader
                     if (!string.IsNullOrEmpty(mediaRel.Target))
                     {
                         if (mediaRel.Type == HyperlinkRelType ||
+                            mediaRel.IsExternal ||
                             mediaRel.Target.StartsWith("http", StringComparison.OrdinalIgnoreCase))
                         {
-                            // External / link-only
+                            // External / link-only. TargetMode="External" (mediaRel.IsExternal) is the
+                            // authoritative OOXML signal — a linked video/audio can target a UNC path,
+                            // a bare filesystem path, or any non-http scheme, not just http(s) URLs.
+                            // Relying on a "http" prefix alone silently dropped those: the target was
+                            // neither an in-package path (ResolveRelativeZipPath+ReadEntryBytes below
+                            // would just miss) nor captured as a link, so both Bytes and LinkUrl stayed
+                            // empty and the media info vanished — yet the writer still emitted a
+                            // p:videoFile/audioFile r:link pointing at a relationship it never wrote
+                            // (dangling relationship on save).
                             mediaInfo.LinkUrl = mediaRel.Target;
                         }
                         else

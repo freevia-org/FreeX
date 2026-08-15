@@ -516,102 +516,14 @@ internal static class FreeWRibbonCommands
             FreeWRibbonDefinitionData.FloatingPositionPresets);
 
         // ── WordArt style gallery — original four + extended eleven (W24) ─────────────────────────
-        registry.Register("freew.wordart-style", new ActionRibbonCommand(() =>
-        {
-            editor.Focus();
-            DialogMessageHelper.ShowInfo(
-                Window.GetWindow(editor),
-                UiText.Get("WordArt_Style_Choose_Message"),
-                UiText.Get("WordArt_Style_Title"));
-        }));
-
-        // Map each WordArtStyle to its ribbon command id (original four by legacy name, extended by slug).
-        static string WordArtStyleId(WordArtStyle s) => s switch
-        {
-            WordArtStyle.FillBlue      => "freew.wordart-style-fill-blue",
-            WordArtStyle.GradientFill  => "freew.wordart-style-gradient",
-            WordArtStyle.Outline       => "freew.wordart-style-outline",
-            WordArtStyle.Shadow        => "freew.wordart-style-shadow",
-            WordArtStyle.FillGold      => "freew.wordart-style-fill-gold",
-            WordArtStyle.FillWhite     => "freew.wordart-style-fill-white",
-            WordArtStyle.GradFillMulti => "freew.wordart-style-grad-multi",
-            WordArtStyle.ChromeOne     => "freew.wordart-style-chrome-one",
-            WordArtStyle.ChromeTwo     => "freew.wordart-style-chrome-two",
-            WordArtStyle.ShadowOrange  => "freew.wordart-style-shadow-orange",
-            WordArtStyle.GlowBlue      => "freew.wordart-style-glow-blue",
-            WordArtStyle.GlowGold      => "freew.wordart-style-glow-gold",
-            WordArtStyle.Reflection    => "freew.wordart-style-reflection",
-            WordArtStyle.Bevel         => "freew.wordart-style-bevel",
-            WordArtStyle.PatternFill   => "freew.wordart-style-pattern",
-            _                          => $"freew.wordart-style-{s.ToString().ToLowerInvariant()}"
-        };
-
-        foreach (WordArtStyle wapresent in Enum.GetValues<WordArtStyle>())
-        {
-            var p = wapresent;
-            registry.Register(WordArtStyleId(p), new ActionRibbonCommand(() =>
-            {
-                editor.Focus();
-                if (editor.SelectedWordArt() is null)
-                {
-                    DialogMessageHelper.ShowInfo(
-                        Window.GetWindow(editor),
-                        UiText.Get("WordArt_SelectFirst_Message"),
-                        UiText.Get("WordArt_Style_Title"));
-                    return;
-                }
-                editor.SetSelectedWordArtStyle(p);
-            }));
-        }
-
         // ── WordArt Transform / Warp (W24) ────────────────────────────────────────────────────────
-        registry.Register("freew.wordart-transform", new ActionRibbonCommand(() =>
-        {
-            editor.Focus();
-            DialogMessageHelper.ShowInfo(
-                Window.GetWindow(editor),
-                UiText.Get("WordArt_Transform_Choose_Message"),
-                UiText.Get("WordArt_Transform_Title"));
-        }));
-
-        static string WarpId(WordArtWarp w) => w switch
-        {
-            WordArtWarp.None          => "freew.wordart-warp-none",
-            WordArtWarp.ArchUp        => "freew.wordart-warp-arch-up",
-            WordArtWarp.ArchDown      => "freew.wordart-warp-arch-down",
-            WordArtWarp.Circle        => "freew.wordart-warp-circle",
-            WordArtWarp.Button        => "freew.wordart-warp-button",
-            WordArtWarp.Wave1         => "freew.wordart-warp-wave1",
-            WordArtWarp.Wave2         => "freew.wordart-warp-wave2",
-            WordArtWarp.Inflate       => "freew.wordart-warp-inflate",
-            WordArtWarp.Deflate       => "freew.wordart-warp-deflate",
-            WordArtWarp.InflateBottom => "freew.wordart-warp-inflate-bottom",
-            WordArtWarp.ChevronUp     => "freew.wordart-warp-chevron-up",
-            WordArtWarp.ChevronDown   => "freew.wordart-warp-chevron-down",
-            WordArtWarp.FadeRight     => "freew.wordart-warp-fade-right",
-            WordArtWarp.FadeLeft      => "freew.wordart-warp-fade-left",
-            WordArtWarp.SlantUp       => "freew.wordart-warp-slant-up",
-            WordArtWarp.SlantDown     => "freew.wordart-warp-slant-down",
-            _                         => $"freew.wordart-warp-{w.ToString().ToLowerInvariant()}"
-        };
-
-        foreach (WordArtWarp warp in Enum.GetValues<WordArtWarp>())
-        {
-            var w = warp;
-            registry.Register(WarpId(w), new ActionRibbonCommand(() =>
-            {
-                editor.Focus();
-                if (editor.SelectedWordArt() is null)
-                {
-                    DialogMessageHelper.ShowInfo(
-                        Window.GetWindow(editor),
-                        UiText.Get("WordArt_SelectFirst_Message"),
-                        UiText.Get("WordArt_Transform_Title"));
-                    return;
-                }
-                editor.SetSelectedWordArtWarp(w);
-            }));
-        }
+        WordArtRibbonWorkflow.Register(
+            registry,
+            new WordArtRibbonPorts(
+                HasSelection: () => editor.SelectedWordArt() is not null,
+                ApplyStyle: editor.SetSelectedWordArtStyle,
+                ApplyWarp: editor.SetSelectedWordArtWarp,
+                PrepareExecution: () => editor.Focus()));
         // ── End Drawing Format commands ───────────────────────────────────────────────────────────
 
         InsertMediaRibbonWorkflow.Register(

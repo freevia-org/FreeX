@@ -753,7 +753,22 @@ public partial class MainWindow
     /// </summary>
     private void ExecuteAutofill(GridRange sourceRange, GridRange fillRange, bool ctrlHeld)
     {
-        var cmd = new AutofillCommand(_currentSheetId, sourceRange, fillRange, ctrlHeld);
+        // R136-services-autofill-grouped-sheets-1: Excel's Group Editing mode mirrors a fill-handle
+        // drag to every other grouped sheet, matching this same file's ExecuteFillCells (routed
+        // through _session.FillSelectedRange, which already fans out via CurrentGroupedEditSheetIds)
+        // and CreateFlashFillCommand above. This used to run a single AutofillCommand against
+        // _currentSheetId only, so dragging the fill handle silently ignored any other sheet in the
+        // group. CurrentGroupedEditSheetIds returns just [_currentSheetId] when the workbook isn't
+        // grouped, so the single-sheet case is unchanged.
+        var targetSheetIds = CurrentGroupedEditSheetIds();
+        var commands = targetSheetIds
+            .Select(sheetId => (IWorkbookCommand)new AutofillCommand(
+                sheetId,
+                GroupedSheetRangePlanner.RemapRangeToSheet(sourceRange, sheetId),
+                GroupedSheetRangePlanner.RemapRangeToSheet(fillRange, sheetId),
+                ctrlHeld))
+            .ToList();
+        var cmd = commands.Count == 1 ? commands[0] : new CompositeWorkbookCommand("Autofill", commands);
         if (!TryExecuteCommand(cmd, "Autofill", out var outcome))
             return;
 

@@ -337,6 +337,37 @@ public static class PptxPackageWriter
             }
         }
 
+        // Slide layouts and masters can carry their own picture/media placeholder shapes (they
+        // are shared chrome, not just slide content) and step 6/7 below now writes those bytes.
+        // Register their extensions here too -- BuildContentTypesXml runs BEFORE layouts/masters
+        // are written, so without this a layout/master picture whose extension no SLIDE happens
+        // to use would land in the package with no [Content_Types].xml Default entry: a second,
+        // independent OOXML validity defect layered on top of the dangling-relationship one this
+        // round is fixing.
+        foreach (var shape in masters.SelectMany(m => AllShapes(m.Placeholders))
+                     .Concat(layouts.SelectMany(l => AllShapes(l.Placeholders))))
+        {
+            if ((shape.Kind == SlideShapeKind.Picture || shape.Kind == SlideShapeKind.Media)
+                && shape.Picture?.Bytes is { Length: > 0 })
+            {
+                var ct = shape.Picture.ContentType ?? "image/png";
+                mediaExtensions.Add(OpcMediaTypes.GetDrawingMediaExtension(ct));
+            }
+
+            if (shape.Fill is ShapeFill.Picture picFill && picFill.ImageBytes.Length > 0)
+            {
+                var fillCt = picFill.ContentType ?? "image/png";
+                mediaExtensions.Add(OpcMediaTypes.GetDrawingMediaExtension(fillCt));
+            }
+
+            if (shape.Kind == SlideShapeKind.Media && shape.Media?.Bytes is { Length: > 0 } && shape.Media.ContentType is not null)
+            {
+                mediaExtensions.Add(OpcMediaTypes.GetMediaFileExtension(
+                    shape.Media.ContentType,
+                    OpcMediaExtensionProfile.PresentationPackageMediaPart));
+            }
+        }
+
         foreach (var artifact in presentation.RecordingMediaArtifacts)
         {
             if (artifact.PayloadBytes is not { Length: > 0 } ||
@@ -481,6 +512,11 @@ public static class PptxPackageWriter
         WriteEntry(archive, "ppt/viewProps.xml", BuildViewPropsXml(packageSnapshot));
         WriteEntry(archive, "ppt/tableStyles.xml", BuildTableStylesXml(packageSnapshot));
 
+        // Media dedup map shared across layouts, masters, AND slides below (step 8) — a picture
+        // or video/audio part preserved unchanged from the original package must resolve to the
+        // SAME written path no matter which owning part (layout/master/slide) first references it.
+        var writtenMediaPaths = new Dictionary<string, byte[]>(StringComparer.OrdinalIgnoreCase);
+
         // --- 6. Layouts ---
         // We map each layout to a sequential number; index within the overall layouts list.
         var layoutPaths = new Dictionary<string, string>(); // layout.Id -> "ppt/slideLayouts/slideLayoutN.xml"
@@ -496,12 +532,34 @@ public static class PptxPackageWriter
             var masterPath = $"ppt/slideMasters/slideMaster{masterIdx + 1}.xml";
             var layoutColorScheme = masterThemes[masterIdx].ColorScheme;
 
-            // Layout xml
-            WriteEntry(archive, layoutPath, BuildSlideLayoutXml(layout, layoutColorScheme));
+            // Write picture/fill-blip images and video/audio files owned directly by this
+            // layout's placeholder shapes. Previously these were never written at all and
+            // BuildShapeEl was handed an empty mediaById map, so any Picture/Media placeholder on
+            // a layout fell back to a hardcoded "rIdMedia1"/"rIdVid1" r:embed/r:link with no
+            // matching Relationship ever emitted — a dangling relationship on every save, even of
+            // an untouched deck.
+            var (layoutMediaRelIds, layoutFillBlipRelIds) = WriteSlideMedia(archive, layout.Placeholders, $"layout{li + 1}");
+            var layoutMediaFileRelIds = WriteSlideMediaFiles(archive, layout.Placeholders, $"layout{li + 1}", packageSnapshot, writtenMediaPaths);
 
-            // Layout rels: -> master
+            var layoutMediaById = new Dictionary<uint, string>();
+            foreach (var (id, relId, _) in layoutMediaRelIds) layoutMediaById[id] = relId;
+            foreach (var (id, relId, _, _, _) in layoutMediaFileRelIds) layoutMediaById[id | 0x80000000u] = relId;
+            var layoutFillBlipById = new Dictionary<uint, string>();
+            foreach (var (id, relId, _) in layoutFillBlipRelIds) layoutFillBlipById[id] = relId;
+
+            // Layout xml
+            WriteEntry(archive, layoutPath, BuildSlideLayoutXml(layout, layoutColorScheme, layoutMediaById, layoutFillBlipById));
+
+            // Layout rels: -> master, plus any picture/media parts this layout owns
             var layoutRels = new OpcRelationshipDocument();
             layoutRels.Add("rId1", SlideMasterRelType, $"../{masterPath.Replace("ppt/", "")}");
+            foreach (var (_, relId, mediaPath) in layoutMediaRelIds)
+                layoutRels.Add(relId, ImageRelType, $"../media/{mediaPath.Split('/').Last()}");
+            foreach (var (_, relId, mediaPath) in layoutFillBlipRelIds)
+                layoutRels.Add(relId, ImageRelType, $"../media/{mediaPath.Split('/').Last()}");
+            foreach (var (_, relId, mediaTarget, isVideo, isExternalMedia) in layoutMediaFileRelIds)
+                layoutRels.Add(relId, isVideo ? VideoRelType : AudioRelType,
+                    isExternalMedia ? mediaTarget : MakeRelativePath(layoutPath, mediaTarget), isExternalMedia);
             WriteRels(archive, layoutPath, layoutRels, packageSnapshot);
         }
 
@@ -522,9 +580,23 @@ public static class PptxPackageWriter
                 .Select((l, i) => ($"rId{i + 2}", layoutPaths.TryGetValue(l.Id, out var lp) ? lp : $"ppt/slideLayouts/slideLayout{i+1}.xml"))
                 .ToList();
 
-            WriteEntry(archive, masterPath, BuildSlideMasterXml(master, masterThemes[mi].ColorScheme, layoutRelIds));
+            // Write picture/fill-blip images and video/audio files owned directly by this
+            // master's placeholder shapes — same dangling-relationship class as layouts above:
+            // an empty mediaById map previously left any Picture/Media placeholder on a master
+            // with a hardcoded fallback r:embed/r:link and no matching Relationship element.
+            var (masterMediaRelIds, masterFillBlipRelIds) = WriteSlideMedia(archive, master.Placeholders, $"master{mi + 1}");
+            var masterMediaFileRelIds = WriteSlideMediaFiles(archive, master.Placeholders, $"master{mi + 1}", packageSnapshot, writtenMediaPaths);
 
-            // Master rels: rId1=theme (points to THIS master's own theme part), rId2..=layouts
+            var masterMediaById = new Dictionary<uint, string>();
+            foreach (var (id, relId, _) in masterMediaRelIds) masterMediaById[id] = relId;
+            foreach (var (id, relId, _, _, _) in masterMediaFileRelIds) masterMediaById[id | 0x80000000u] = relId;
+            var masterFillBlipById = new Dictionary<uint, string>();
+            foreach (var (id, relId, _) in masterFillBlipRelIds) masterFillBlipById[id] = relId;
+
+            WriteEntry(archive, masterPath, BuildSlideMasterXml(master, masterThemes[mi].ColorScheme, layoutRelIds, masterMediaById, masterFillBlipById));
+
+            // Master rels: rId1=theme (points to THIS master's own theme part), rId2..=layouts,
+            // plus any picture/media parts this master owns.
             var masterRels = new OpcRelationshipDocument();
             // Each master references its own theme file (theme1.xml, theme2.xml, …).
             var themeRelTarget = $"../theme/theme{mi + 1}.xml";
@@ -536,6 +608,13 @@ public static class PptxPackageWriter
                 var relTarget = $"../slideLayouts/{layoutPath.Split('/').Last()}";
                 masterRels.Add(relId, SlideLayoutRelType, relTarget);
             }
+            foreach (var (_, relId, mediaPath) in masterMediaRelIds)
+                masterRels.Add(relId, ImageRelType, $"../media/{mediaPath.Split('/').Last()}");
+            foreach (var (_, relId, mediaPath) in masterFillBlipRelIds)
+                masterRels.Add(relId, ImageRelType, $"../media/{mediaPath.Split('/').Last()}");
+            foreach (var (_, relId, mediaTarget, isVideo, isExternalMedia) in masterMediaFileRelIds)
+                masterRels.Add(relId, isVideo ? VideoRelType : AudioRelType,
+                    isExternalMedia ? mediaTarget : MakeRelativePath(masterPath, mediaTarget), isExternalMedia);
             WriteRels(archive, masterPath, masterRels, packageSnapshot);
         }
 
@@ -571,7 +650,8 @@ public static class PptxPackageWriter
 
         int globalChartIndex = 1; // monotonically increasing across all slides
         int globalOleIndex = 1; // Round 131: monotonically increasing across all slides (mirrors globalChartIndex)
-        var writtenMediaPaths = new Dictionary<string, byte[]>(StringComparer.OrdinalIgnoreCase);
+        // writtenMediaPaths is declared above (before step 6/Layouts) so layouts, masters, AND
+        // slides all share the same package-wide media-dedup map.
         var writtenCaptionPaths = new Dictionary<string, byte[]>(StringComparer.OrdinalIgnoreCase);
         // R135 GATE FIX: GLOBAL (not per-slide) guards against duplicate zip entries for preserved
         // objects (ink/3D/zoom/unknown) and SmartArt diagram parts. Threaded across the whole
@@ -602,10 +682,10 @@ public static class PptxPackageWriter
             var slideColorScheme = masterThemes[slideMasterIdx].ColorScheme;
 
             // Write media (images) into the archive, get back rel-id maps
-            var (mediaRelIds, fillBlipRelIds) = WriteSlideMedia(archive, slide, si + 1);
+            var (mediaRelIds, fillBlipRelIds) = WriteSlideMedia(archive, slide.Shapes, $"slide{si + 1}");
 
             // Write media audio/video files for Media shapes
-            var mediaFileRelIds = WriteSlideMediaFiles(archive, slide, si + 1, packageSnapshot, writtenMediaPaths);
+            var mediaFileRelIds = WriteSlideMediaFiles(archive, slide.Shapes, $"slide{si + 1}", packageSnapshot, writtenMediaPaths);
 
             // Write charts into the archive, get back rel-id map
             var chartRelIds = WriteSlideCharts(archive, slide, ref globalChartIndex, packageSnapshot);
@@ -2854,7 +2934,9 @@ public static class PptxPackageWriter
 
     // ── slideLayout.xml ──────────────────────────────────────────────────────────
 
-    private static XDocument BuildSlideLayoutXml(SlideLayout layout, PresentationColorScheme scheme) =>
+    private static XDocument BuildSlideLayoutXml(
+        SlideLayout layout, PresentationColorScheme scheme,
+        Dictionary<uint, string> mediaById, Dictionary<uint, string> fillBlipById) =>
         new XDocument(
             new XDeclaration("1.0", "UTF-8", "yes"),
             new XElement(P + "sldLayout",
@@ -2862,10 +2944,12 @@ public static class PptxPackageWriter
                 new XAttribute("type", ToLayoutTypeStr(layout.LayoutType)),
                 new XAttribute("preserve", "1"),
                 !layout.ShowMasterShapes ? new XAttribute("showMasterSp", "0") : null,
-                BuildLayoutCSlotEl(layout, scheme),
+                BuildLayoutCSlotEl(layout, scheme, mediaById, fillBlipById),
                 BuildSlideClrMapOvrEl(layout.ColorMapOverride)));
 
-    private static XElement BuildLayoutCSlotEl(SlideLayout layout, PresentationColorScheme scheme)
+    private static XElement BuildLayoutCSlotEl(
+        SlideLayout layout, PresentationColorScheme scheme,
+        Dictionary<uint, string> mediaById, Dictionary<uint, string> fillBlipById)
     {
         XElement? bgEl = layout.Background is not null
             ? new XElement(P + "bg",
@@ -2876,7 +2960,7 @@ public static class PptxPackageWriter
 
         var spTree = new XElement(P + "spTree",
             GrpSpHeader(),
-            layout.Placeholders.Select(s => BuildShapeEl(s, scheme, new())).OfType<XElement>());
+            layout.Placeholders.Select(s => BuildShapeEl(s, scheme, mediaById, fillBlipById: fillBlipById)).OfType<XElement>());
 
         return layout.Name is { Length: > 0 }
             ? new XElement(P + "cSld", new XAttribute("name", layout.Name), bgEl, spTree)
@@ -2887,7 +2971,8 @@ public static class PptxPackageWriter
 
     private static XDocument BuildSlideMasterXml(
         SlideMaster master, PresentationColorScheme scheme,
-        List<(string relId, string layoutPath)> layoutRelIds) =>
+        List<(string relId, string layoutPath)> layoutRelIds,
+        Dictionary<uint, string> mediaById, Dictionary<uint, string> fillBlipById) =>
         new XDocument(
             new XDeclaration("1.0", "UTF-8", "yes"),
             new XElement(P + "sldMaster",
@@ -2901,7 +2986,7 @@ public static class PptxPackageWriter
                         : null,
                     new XElement(P + "spTree",
                         GrpSpHeader(),
-                        master.Placeholders.Select(s => BuildShapeEl(s, scheme, new())).OfType<XElement>())),
+                        master.Placeholders.Select(s => BuildShapeEl(s, scheme, mediaById, fillBlipById: fillBlipById)).OfType<XElement>())),
                 BuildColorMapEl(master.ColorMap),
                 new XElement(P + "sldLayoutIdLst",
                     layoutRelIds.Select((lr, i) =>
@@ -5043,19 +5128,22 @@ public static class PptxPackageWriter
     // ── Media writing ─────────────────────────────────────────────────────────────
 
     /// <summary>
-    /// Writes all media (picture shapes + picture fill blips) for a slide.
-    /// Returns two lists: one for picture shapes, one for fill blips (both as (shapeId, relId, mediaPath)).
+    /// Writes all media (picture shapes + picture fill blips) for a slide, slide layout, or
+    /// slide master (any shape collection). Returns two lists: one for picture shapes, one for
+    /// fill blips (both as (shapeId, relId, mediaPath)).
+    /// <paramref name="pathPrefix"/> distinguishes the owning part in the generated media
+    /// filenames (e.g. "slide1", "layout1", "master1") so parts never collide.
     /// </summary>
     private static (
         List<(uint shapeId, string relId, string mediaPath)> pictureShapeMedia,
         List<(uint shapeId, string relId, string mediaPath)> fillBlipMedia)
-    WriteSlideMedia(ZipArchive archive, Slide slide, int slideIndex)
+    WriteSlideMedia(ZipArchive archive, IEnumerable<SlideShape> shapes, string pathPrefix)
     {
         var pictureResult = new List<(uint, string, string)>();
         var fillBlipResult = new List<(uint, string, string)>();
         int mediaIdx = 1;
 
-        foreach (var shape in AllShapes(slide.Shapes))
+        foreach (var shape in AllShapes(shapes))
         {
             // Picture shape OR media-shape poster image.
             if ((shape.Kind == SlideShapeKind.Picture || shape.Kind == SlideShapeKind.Media)
@@ -5063,7 +5151,7 @@ public static class PptxPackageWriter
             {
                 var ct = shape.Picture.ContentType ?? "image/png";
                 var ext = OpcMediaTypes.GetDrawingMediaExtension(ct);
-                var mediaPath = $"ppt/media/slide{slideIndex}_media{mediaIdx}.{ext}";
+                var mediaPath = $"ppt/media/{pathPrefix}_media{mediaIdx}.{ext}";
 
                 var entry = archive.CreateEntry(mediaPath, CompressionLevel.Optimal);
                 using (var es = entry.Open())
@@ -5080,7 +5168,7 @@ public static class PptxPackageWriter
             {
                 var ct = picFill.ContentType ?? "image/png";
                 var ext = OpcMediaTypes.GetDrawingMediaExtension(ct);
-                var mediaPath = $"ppt/media/slide{slideIndex}_media{mediaIdx}.{ext}";
+                var mediaPath = $"ppt/media/{pathPrefix}_media{mediaIdx}.{ext}";
 
                 var entry = archive.CreateEntry(mediaPath, CompressionLevel.Optimal);
                 using (var es = entry.Open())
@@ -5158,20 +5246,25 @@ public static class PptxPackageWriter
     }
 
     /// <summary>
-    /// Writes audio/video bytes for Media shapes. Returns (shapeId, relId, mediaPath, isVideo) tuples.
+    /// Writes audio/video bytes for Media shapes (owned by a slide, slide layout, or slide
+    /// master). Returns (shapeId, relId, mediaPath, isVideo) tuples.
     /// The relId uses prefix "rIdVid" to avoid collision with the "rIdMedia" image prefix.
+    /// <paramref name="pathPrefix"/> distinguishes the owning part in generated media filenames
+    /// (e.g. "slide1", "layout1", "master1"). <paramref name="writtenMediaPaths"/> is shared
+    /// across every call for the whole package so preserved/reused media parts are deduplicated
+    /// package-wide, not just within one owner.
     /// </summary>
     private static List<(uint shapeId, string relId, string mediaTarget, bool isVideo, bool isExternal)> WriteSlideMediaFiles(
         ZipArchive archive,
-        Slide slide,
-        int slideIndex,
+        IEnumerable<SlideShape> shapes,
+        string pathPrefix,
         PptxPackageSnapshot? packageSnapshot,
         Dictionary<string, byte[]> writtenMediaPaths)
     {
         var result = new List<(uint, string, string, bool, bool)>();
         int n = 1;
 
-        foreach (var shape in AllShapes(slide.Shapes))
+        foreach (var shape in AllShapes(shapes))
         {
             if (shape.Kind != SlideShapeKind.Media) continue;
             var media = shape.Media;
@@ -5197,7 +5290,7 @@ public static class PptxPackageWriter
                 OpcMediaExtensionProfile.PresentationPackageMediaPart);
             var mediaPath = TryGetPreservedMediaPackagePath(media, packageSnapshot, writtenMediaPaths, out var preservedPath)
                 ? preservedPath
-                : $"ppt/media/slide{slideIndex}_video{n}.{ext}";
+                : $"ppt/media/{pathPrefix}_video{n}.{ext}";
             mediaPath = EnsureUniqueMediaPackagePath(mediaPath, writtenMediaPaths, media.Bytes);
             var relId = $"rIdVid{n}";
 

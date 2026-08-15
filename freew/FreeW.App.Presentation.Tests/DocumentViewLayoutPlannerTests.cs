@@ -447,6 +447,98 @@ public sealed class DocumentViewLayoutPlannerTests
     }
 
     [Fact]
+    public void BuildTablePaginationPlan_MultiRowRepeatHeader_RepeatsAllHeaderRowsAcrossPages()
+    {
+        // Word lets any number of leading, contiguous rows carry the repeat-header flag (e.g. a title
+        // row plus a column-labels row). The shared paginator must repeat the WHOLE pair on every page
+        // after the first, not collapse to just row 0 (see TableRow.IsRepeatingHeader).
+        var page = new PageSettings
+        {
+            WidthPt = 612,
+            HeightPt = 288,
+            MarginLeftPt = 36,
+            MarginRightPt = 36,
+            MarginTopPt = 36,
+            MarginBottomPt = 36
+        };
+
+        var table = new Table();
+        table.ColumnWidthsPt.Add(200);
+
+        static TableRow MakeRow(string text, bool isRepeatingHeader) => new()
+        {
+            HeightPt = 54,
+            HeightRule = TableRowHeightRule.Exact,
+            IsRepeatingHeader = isRepeatingHeader,
+            Cells = { new TableCell(text) }
+        };
+
+        table.Rows.Add(MakeRow("Title", isRepeatingHeader: true));    // row 0
+        table.Rows.Add(MakeRow("Columns", isRepeatingHeader: true));  // row 1
+        table.Rows.Add(MakeRow("Body 1", isRepeatingHeader: false));  // row 2
+        table.Rows.Add(MakeRow("Body 2", isRepeatingHeader: false));  // row 3
+        table.Rows.Add(MakeRow("Body 3", isRepeatingHeader: false));  // row 4
+        table.Rows.Add(MakeRow("Body 4", isRepeatingHeader: false));  // row 5
+        table.Rows.Add(MakeRow("Body 5", isRepeatingHeader: false));  // row 6
+
+        var pagination = DocumentViewLayoutPlanner.BuildTablePaginationPlan(table, page);
+
+        pagination.EstimatedPageCount.Should().Be(3);
+        pagination.HeaderRowIndexes.Should().Equal(0, 1);
+        pagination.Pages.Should().HaveCount(3);
+        pagination.Pages[0].IncludesRepeatedHeader.Should().BeFalse();
+        pagination.Pages[1].RepeatedHeaderRowIndexes.Should().Equal(0, 1);
+        pagination.Pages[2].RepeatedHeaderRowIndexes.Should().Equal(0, 1);
+        // Both header rows must actually render at the top of page 2, not just row 0.
+        pagination.Pages[1].RenderRows.Take(2).Select(r => r.SourceRowIndex).Should().Equal(0, 1);
+        pagination.Pages[1].RenderRows.Take(2).Should().OnlyContain(r => r.IsRepeatedHeader);
+        pagination.Pages[1].RenderRows[2].SourceRowIndex.Should().Be(4);
+        pagination.Pages[1].RenderRows[2].IsRepeatedHeader.Should().BeFalse();
+    }
+
+    [Fact]
+    public void BuildTablePaginationPlan_SingleRowRepeatHeader_StillRepeatsOnlyRowZero()
+    {
+        // Sibling no-regression: the historical single-row RepeatHeaderRow toggle (no per-row
+        // IsRepeatingHeader set) must keep repeating only row 0, exactly as before.
+        var page = new PageSettings
+        {
+            WidthPt = 612,
+            HeightPt = 288,
+            MarginLeftPt = 36,
+            MarginRightPt = 36,
+            MarginTopPt = 36,
+            MarginBottomPt = 36
+        };
+
+        var table = new Table
+        {
+            Formatting = TableFormatting.Default with { RepeatHeaderRow = true }
+        };
+        table.ColumnWidthsPt.Add(200);
+
+        static TableRow MakeRow(string text) => new()
+        {
+            HeightPt = 54,
+            HeightRule = TableRowHeightRule.Exact,
+            Cells = { new TableCell(text) }
+        };
+
+        table.Rows.Add(MakeRow("Header"));  // row 0 — only the convenience flag marks this repeating
+        table.Rows.Add(MakeRow("Body 1"));  // row 1
+        table.Rows.Add(MakeRow("Body 2"));  // row 2
+        table.Rows.Add(MakeRow("Body 3"));  // row 3
+        table.Rows.Add(MakeRow("Body 4"));  // row 4
+        table.Rows.Add(MakeRow("Body 5"));  // row 5
+
+        var pagination = DocumentViewLayoutPlanner.BuildTablePaginationPlan(table, page);
+
+        pagination.HeaderRowIndexes.Should().Equal(0);
+        pagination.Pages.Should().HaveCountGreaterThan(1);
+        pagination.Pages[1].RepeatedHeaderRowIndexes.Should().Equal(0);
+    }
+
+    [Fact]
     public void BuildTableLayoutPlans_AccountsForLeadingDocumentContentWhenEstimatingFirstTablePage()
     {
         var document = FreeWVisualEvidenceDocumentFactory.BuildTablePageCompositionStressDocument();
@@ -488,6 +580,97 @@ public sealed class DocumentViewLayoutPlannerTests
             && row.StartsPlannedPage
             && row.PageNumber == 2
             && row.PageOffsetYDip == 0);
+    }
+
+    [Fact]
+    public void BuildTablePaginationPlan_RowWithNestedTableTallerThanRemainingSpace_OverflowsToNextPage()
+    {
+        // Page body is 864dip tall (612x792pt page, 1" margins all round -> 468x648pt content area).
+        var page = new PageSettings
+        {
+            WidthPt = 612,
+            HeightPt = 792,
+            MarginLeftPt = 72,
+            MarginRightPt = 72,
+            MarginTopPt = 72,
+            MarginBottomPt = 72,
+        };
+
+        // Row 0: an authored-exact 600dip row that alone leaves only 264dip of page-1 space.
+        var leadingRow = new TableRow
+        {
+            HeightPt = 450, // 450pt * 96/72 = 600dip
+            HeightRule = TableRowHeightRule.Exact,
+        };
+        leadingRow.Cells.Add(new TableCell());
+        leadingRow.Cells[0].Paragraphs.Add(new Paragraph(string.Empty));
+
+        // Row 1: its own paragraph text is a single trailing empty paragraph (as Word requires after a
+        // nested table), so its *text* height is tiny -- but it also nests a 15-row table whose own rows
+        // default to 24dip each (360dip total), which alone exceeds the 264dip left on page 1.
+        var nestedTable = new Table();
+        for (var i = 0; i < 15; i++)
+        {
+            var nestedRow = new TableRow();
+            nestedRow.Cells.Add(new TableCell());
+            nestedRow.Cells[0].Paragraphs.Add(new Paragraph(string.Empty));
+            nestedTable.Rows.Add(nestedRow);
+        }
+
+        var nestedTableRow = new TableRow();
+        var hostCell = new TableCell();
+        hostCell.NestedTables.Add(nestedTable);
+        hostCell.Paragraphs.Add(new Paragraph(string.Empty));
+        nestedTableRow.Cells.Add(hostCell);
+
+        var table = new Table();
+        table.Rows.Add(leadingRow);
+        table.Rows.Add(nestedTableRow);
+
+        var pagination = DocumentViewLayoutPlanner.BuildTablePaginationPlan(table, page);
+
+        var nestedRowPlan = pagination.Rows.Single(row => row.RowIndex == 1);
+
+        // The row's estimated height must reflect its nested table's content, not just its own (empty)
+        // trailing paragraph -- otherwise it is estimated at only a few dip and the row is wrongly kept
+        // on page 1 even though its nested table cannot possibly fit in the remaining space.
+        nestedRowPlan.EstimatedHeightDip.Should().BeGreaterThan(300,
+            "the nested table's 15 rows must contribute to the estimate");
+        nestedRowPlan.AssignedPageNumber.Should().Be(2,
+            "600dip (row 0) + a correctly-estimated nested-table row cannot both fit in an 864dip page body");
+        pagination.EstimatedPageCount.Should().Be(2);
+    }
+
+    [Fact]
+    public void BuildTablePaginationPlan_RowWithoutNestedTable_EstimatesFromParagraphTextOnly()
+    {
+        var page = new PageSettings
+        {
+            WidthPt = 612,
+            HeightPt = 792,
+            MarginLeftPt = 72,
+            MarginRightPt = 72,
+            MarginTopPt = 72,
+            MarginBottomPt = 72,
+        };
+
+        var row = new TableRow();
+        var cell = new TableCell();
+        cell.Paragraphs.Add(new Paragraph(string.Empty));
+        row.Cells.Add(cell);
+
+        var table = new Table();
+        table.Rows.Add(row);
+
+        var pagination = DocumentViewLayoutPlanner.BuildTablePaginationPlan(table, page);
+        var rowPlan = pagination.Rows.Single();
+
+        // No nested tables -> the row must still be estimated from its own paragraph text only (one empty
+        // line: 1 * 18dip line height + 8dip padding = 26dip), unaffected by the nested-table recursion
+        // added above.
+        rowPlan.EstimatedHeightDip.Should().Be(26);
+        rowPlan.AssignedPageNumber.Should().Be(1);
+        pagination.EstimatedPageCount.Should().Be(1);
     }
 
     [Fact]
