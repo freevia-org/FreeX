@@ -1,7 +1,6 @@
-using FluentAssertions;
-using FreeX.App.Services;
+using Free.Shared.AppServices;
 
-namespace FreeX.App.Services.Tests;
+namespace Free.Shared.AppServices.Tests;
 
 public sealed class FileByteReadWorkflowTests
 {
@@ -34,6 +33,7 @@ public sealed class FileByteReadWorkflowTests
         result.Outcome.Should().Be(FileByteReadOutcome.Empty);
         result.IsReadable.Should().BeTrue();
         result.Bytes.Should().BeEmpty();
+        result.GetBytesOrThrow().Should().BeEmpty();
     }
 
     [Fact]
@@ -47,6 +47,8 @@ public sealed class FileByteReadWorkflowTests
         result.Outcome.Should().Be(FileByteReadOutcome.Failed);
         result.Exception.Should().BeSameAs(exception);
         result.FailureMessage.Should().Be("read failed");
+        var action = result.GetBytesOrThrow;
+        action.Should().Throw<IOException>().Which.Should().BeSameAs(exception);
     }
 
     [Fact]
@@ -61,5 +63,35 @@ public sealed class FileByteReadWorkflowTests
 
         result.Outcome.Should().Be(FileByteReadOutcome.Canceled);
         result.Bytes.Should().BeEmpty();
+        var action = result.GetBytesOrThrow;
+        action.Should().Throw<OperationCanceledException>();
+    }
+
+    [Fact]
+    public async Task ReadLocalPathBytesAsync_PreservesEmptyPayloadForCallerValidation()
+    {
+        var path = Path.GetTempFileName();
+        try
+        {
+            var bytes = await FileByteReadWorkflow.ReadLocalPathBytesAsync(path);
+
+            bytes.Should().BeEmpty();
+        }
+        finally
+        {
+            File.Delete(path);
+        }
+    }
+
+    [Fact]
+    public async Task ReadStreamBytesAsync_RethrowsOpenFailure()
+    {
+        var exception = new UnauthorizedAccessException("denied");
+
+        Func<Task> action = async () => await FileByteReadWorkflow.ReadStreamBytesAsync(
+            () => Task.FromException<Stream>(exception));
+
+        (await action.Should().ThrowAsync<UnauthorizedAccessException>())
+            .Which.Should().BeSameAs(exception);
     }
 }

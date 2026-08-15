@@ -1,4 +1,6 @@
-namespace FreeX.App.Services;
+using System.Runtime.ExceptionServices;
+
+namespace Free.Shared.AppServices;
 
 public enum FileByteReadOutcome
 {
@@ -21,6 +23,19 @@ public sealed record FileByteReadResult(
         FileByteReadOutcome.Canceled => "The file read was canceled.",
         _ => "The selected file could not be read."
     };
+
+    public byte[] GetBytesOrThrow()
+    {
+        if (IsReadable)
+            return Bytes;
+
+        if (Exception is not null)
+            ExceptionDispatchInfo.Capture(Exception).Throw();
+
+        throw Outcome == FileByteReadOutcome.Canceled
+            ? new OperationCanceledException(FailureMessage)
+            : new IOException(FailureMessage);
+    }
 }
 
 /// <summary>
@@ -45,6 +60,11 @@ public static class FileByteReadWorkflow
                 FileOptions.Asynchronous | FileOptions.SequentialScan)),
             cancellationToken);
     }
+
+    public static async Task<byte[]> ReadLocalPathBytesAsync(
+        string path,
+        CancellationToken cancellationToken = default) =>
+        (await ReadLocalPathAsync(path, cancellationToken).ConfigureAwait(false)).GetBytesOrThrow();
 
     public static async Task<FileByteReadResult> ReadStreamAsync(
         Func<Task<Stream>> openReadAsync,
@@ -74,4 +94,9 @@ public static class FileByteReadWorkflow
             return new FileByteReadResult(FileByteReadOutcome.Failed, [], ex);
         }
     }
+
+    public static async Task<byte[]> ReadStreamBytesAsync(
+        Func<Task<Stream>> openReadAsync,
+        CancellationToken cancellationToken = default) =>
+        (await ReadStreamAsync(openReadAsync, cancellationToken).ConfigureAwait(false)).GetBytesOrThrow();
 }

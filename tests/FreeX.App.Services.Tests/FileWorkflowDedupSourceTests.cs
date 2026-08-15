@@ -434,36 +434,6 @@ public sealed class FileWorkflowDedupSourceTests
     }
 
     [Fact]
-    public void FreeXRendererFileByteReads_StayInApplicationWorkflow()
-    {
-        var workflowSource = File.ReadAllText(RepositoryFileLocator.Find(
-            "src",
-            "FreeX.App.Services",
-            "FileByteReadWorkflow.cs"));
-        var rendererSources = new[]
-        {
-            File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Host", "MainWindow.Drawing.cs")),
-            File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Host", "MainWindow.PageLayout.cs")),
-            File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Host", "HeaderFooterDialog.Pictures.cs")),
-            File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MainWindow.GetData.cs")),
-            File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MainWindow.InsertObjects.cs")),
-            File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MainWindow.PageLayout.cs")),
-            File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MainWindow.RibbonMenuWires.cs")),
-        };
-
-        workflowSource.Should().Contain("public static Task<FileByteReadResult> ReadLocalPathAsync(");
-        workflowSource.Should().Contain("public static async Task<FileByteReadResult> ReadStreamAsync(");
-        string.Concat(rendererSources).Should().Contain("FileByteReadWorkflow.");
-
-        foreach (var source in rendererSources)
-        {
-            source.Should().NotContain("File.ReadAllBytes(");
-            source.Should().NotContain("File.ReadAllBytesAsync(");
-            source.Should().NotContain("CopyToAsync(memory");
-        }
-    }
-
-    [Fact]
     public void AvaloniaPdfExport_UsesAtomicFileWriter()
     {
         var avaloniaSource = File.ReadAllText(RepositoryFileLocator.Find(

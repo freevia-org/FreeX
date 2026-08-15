@@ -47,10 +47,9 @@ internal sealed class AvaloniaPictureImportSourceReaderPort : IFreeWPictureImpor
 
         try
         {
-            await using var source = await file.OpenReadAsync();
-            using var output = new MemoryStream();
-            await source.CopyToAsync(output, cancellationToken);
-            return output.ToArray();
+            return await FileByteReadWorkflow.ReadStreamBytesAsync(
+                file.OpenReadAsync,
+                cancellationToken);
         }
         finally
         {

@@ -144,7 +144,7 @@ internal sealed class WatermarkOptionsDialog : Free.Shared.Ribbon.Wpf.DialogWind
         var fileRow = new StackPanel { Orientation = Orientation.Horizontal };
         _pathBox.MinWidth = 240;
         var browseBtn = new Button { Content = WatermarkOptionsDialogPlanner.SelectPictureButton, MinWidth = 100, Margin = new Thickness(8, 0, 0, 0) };
-        browseBtn.Click += (_, _) => BrowseForImage();
+        browseBtn.Click += async (_, _) => await BrowseForImageAsync();
         fileRow.Children.Add(_pathBox);
         fileRow.Children.Add(browseBtn);
 
@@ -207,7 +207,7 @@ internal sealed class WatermarkOptionsDialog : Free.Shared.Ribbon.Wpf.DialogWind
         return grid;
     }
 
-    private void BrowseForImage()
+    private async Task BrowseForImageAsync()
     {
         var result = WpfFileDialogService.ShowOpenDialog(
             this,
@@ -219,9 +219,10 @@ internal sealed class WatermarkOptionsDialog : Free.Shared.Ribbon.Wpf.DialogWind
 
         try
         {
+            var imageBytes = await FileByteReadWorkflow.ReadLocalPathBytesAsync(fileName);
             var import = _session.ImportImage(
                 fileName,
-                File.ReadAllBytes(fileName));
+                imageBytes);
             _pathBox.Text = import.DisplayLabel;
         }
         catch (Exception ex)

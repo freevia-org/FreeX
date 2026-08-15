@@ -82,10 +82,9 @@ public sealed partial class MainWindow
     {
         public Task<byte[]> ReadAsync(
             PresentationAssetSelection selection,
-            CancellationToken cancellationToken)
-        {
-            cancellationToken.ThrowIfCancellationRequested();
-            return Task.FromResult(File.ReadAllBytes((string)selection.Source));
-        }
+            CancellationToken cancellationToken) =>
+            FileByteReadWorkflow.ReadLocalPathBytesAsync(
+                (string)selection.Source,
+                cancellationToken);
     }
 }

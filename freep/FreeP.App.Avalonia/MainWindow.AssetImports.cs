@@ -94,10 +94,9 @@ public sealed partial class MainWindow
 
             try
             {
-                await using var source = await file.OpenReadAsync();
-                using var memory = new MemoryStream();
-                await source.CopyToAsync(memory, cancellationToken);
-                return memory.ToArray();
+                return await FileByteReadWorkflow.ReadStreamBytesAsync(
+                    file.OpenReadAsync,
+                    cancellationToken);
             }
             finally
             {

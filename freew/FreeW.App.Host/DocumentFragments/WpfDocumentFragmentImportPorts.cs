@@ -34,11 +34,10 @@ internal sealed class WpfDocumentFragmentSourceReaderPort : IFreeWDocumentFragme
 {
     public Task<byte[]> ReadBytesAsync(
         FreeWDocumentFragmentImportSelection selection,
-        CancellationToken cancellationToken)
-    {
-        cancellationToken.ThrowIfCancellationRequested();
-        return Task.FromResult(File.ReadAllBytes((string)selection.Source));
-    }
+        CancellationToken cancellationToken) =>
+        FileByteReadWorkflow.ReadLocalPathBytesAsync(
+            (string)selection.Source,
+            cancellationToken);
 
     public Task<string> ReadTextAsync(
         FreeWDocumentFragmentImportSelection selection,

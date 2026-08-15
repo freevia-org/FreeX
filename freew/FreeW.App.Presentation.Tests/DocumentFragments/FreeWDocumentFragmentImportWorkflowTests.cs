@@ -207,7 +207,8 @@ public sealed class FreeWDocumentFragmentImportWorkflowTests
         wpfCommands.Should().NotContain("OlePackagePayloadBuilder.Create(");
         wpfCommands.Should().NotContain("DocxReader.Read(result.FileName");
         wpfPorts.Should().Contain("WpfFileDialogService.ShowOpenDialog(");
-        wpfPorts.Should().Contain("File.ReadAllBytes(");
+        wpfPorts.Should().Contain("FileByteReadWorkflow.ReadLocalPathBytesAsync(");
+        wpfPorts.Should().NotContain("File.ReadAllBytes(");
         wpfPorts.Should().Contain("LinkedImagePreviewResolver.ResolveLocalPreviews(");
         wpfPorts.Should().Contain("editor.InsertDocument(");
 
@@ -218,6 +219,8 @@ public sealed class FreeWDocumentFragmentImportWorkflowTests
         avaloniaWindow.Should().NotContain("EmbeddedObjectFileType");
         avaloniaWindow.Should().NotContain("OlePackagePayloadBuilder.Create(");
         avaloniaPorts.Should().Contain("AvaloniaFilePickerService.PickSingleOpenFileWithLocalPathAsync(");
+        avaloniaPorts.Should().Contain("FileByteReadWorkflow.ReadLocalPathBytesAsync(");
+        avaloniaPorts.Should().NotContain("File.ReadAllBytesAsync(");
         avaloniaPorts.Should().Contain("File.ReadAllTextAsync(");
         avaloniaPorts.Should().Contain("editor.InsertQuickPartText(");
     }

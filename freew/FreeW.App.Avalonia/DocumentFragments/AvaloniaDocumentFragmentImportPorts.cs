@@ -34,7 +34,9 @@ internal sealed class AvaloniaDocumentFragmentSourceReaderPort : IFreeWDocumentF
     public Task<byte[]> ReadBytesAsync(
         FreeWDocumentFragmentImportSelection selection,
         CancellationToken cancellationToken) =>
-        File.ReadAllBytesAsync((string)selection.Source, cancellationToken);
+        FileByteReadWorkflow.ReadLocalPathBytesAsync(
+            (string)selection.Source,
+            cancellationToken);
 
     public Task<string> ReadTextAsync(
         FreeWDocumentFragmentImportSelection selection,
