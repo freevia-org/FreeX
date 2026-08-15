@@ -3500,18 +3500,11 @@ internal static class FreeWRibbonCommands
         public void Execute(RibbonCommandContext context)
         {
             editor.Focus();
-            var presentation = CommentDialogPresentationPlanner.BuildTextEntry(
-                CommentTextEntryKind.NewComment);
-            var text = TextPrompt.Ask(
+            var text = CommentReplyDialog.Ask(
                 Window.GetWindow(editor),
-                presentation.Title,
-                presentation.FieldLabel,
-                string.Empty);
-            var acceptance = CommentDialogPresentationPlanner.PlanTextAcceptance(
-                CommentTextEntryKind.NewComment,
-                text);
-            if (!acceptance.IsAccepted)
-                return; // cancelled or empty — nothing to attach
+                CommentTextEntryKind.NewComment);
+            if (text is null)
+                return;
 
             var identity = ReviewAuthorIdentityPlanner.BuildCommentStamp(
                 editor.RevisionAuthor,
@@ -3519,7 +3512,7 @@ internal static class FreeWRibbonCommands
                 Environment.UserName);
             editor.Focus();
             editor.InsertComment(
-                acceptance.Text,
+                text,
                 identity.Author,
                 identity.Initials);
         }
@@ -3533,16 +3526,11 @@ internal static class FreeWRibbonCommands
         public void Execute(RibbonCommandContext context)
         {
             editor.Focus();
-            var presentation = CommentDialogPresentationPlanner.BuildTextEntry(
-                CommentTextEntryKind.Reply);
-            var text = TextPrompt.Ask(
+            var text = CommentReplyDialog.Ask(
                 Window.GetWindow(editor),
-                presentation.Title,
-                presentation.FieldLabel,
-                string.Empty);
-            var acceptance = CommentDialogPresentationPlanner.PlanReplyAcceptance(text);
-            if (!acceptance.IsAccepted)
-                return; // cancelled or empty
+                CommentTextEntryKind.Reply);
+            if (text is null)
+                return;
 
             var identity = ReviewAuthorIdentityPlanner.BuildCommentStamp(
                 editor.RevisionAuthor,
@@ -3550,7 +3538,7 @@ internal static class FreeWRibbonCommands
                 Environment.UserName);
             editor.Focus();
             if (!editor.ReplyToCommentAtCaret(
-                    acceptance.Text,
+                    text,
                     identity.Author,
                     identity.Initials))
                 DialogMessageHelper.ShowWarning(Window.GetWindow(editor)!,

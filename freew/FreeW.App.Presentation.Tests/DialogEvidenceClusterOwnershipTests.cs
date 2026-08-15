@@ -8,6 +8,7 @@ public sealed class DialogEvidenceClusterOwnershipTests
         var root = TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeW.slnx");
         var commandRegistry = Read(root, "freew", "FreeW.App.Host", "Ribbon", "FreeWRibbonCommands.cs");
         var wpfComment = Read(root, "freew", "FreeW.App.Host", "CommentListDialog.cs");
+        var wpfReply = Read(root, "freew", "FreeW.App.Host", "CommentReplyDialog.cs");
         var wpfField = Read(root, "freew", "FreeW.App.Host", "FieldPickerDialog.cs");
         var avaloniaComment = Read(root, "freew", "FreeW.App.Avalonia", "CommentDialogs.cs");
         var avaloniaField = Read(root, "freew", "FreeW.App.Avalonia", "FinalCommandParityDialogs.cs");
@@ -17,6 +18,8 @@ public sealed class DialogEvidenceClusterOwnershipTests
 
         wpfComment.Should().Contain(": Free.Shared.Ribbon.Wpf.DialogWindow");
         wpfComment.Should().Contain("CommentDialogPresentationPlanner.BuildList(items)");
+        wpfReply.Should().Contain(": Free.Shared.Ribbon.Wpf.DialogWindow");
+        wpfReply.Should().Contain("CommentDialogPresentationPlanner.PlanTextAcceptance(");
         wpfField.Should().Contain(": Free.Shared.Ribbon.Wpf.DialogWindow");
         wpfField.Should().Contain("FieldPickerDialogPlanner.TryGetInstruction(");
         commandRegistry.Should().Contain("class ManageSourcesDialogWindow : Free.Shared.Ribbon.Wpf.DialogWindow");
@@ -29,9 +32,11 @@ public sealed class DialogEvidenceClusterOwnershipTests
         avaloniaSources.Should().Contain("class ManageSourcesDialog : FreeWDialogWindow");
 
         catalog.Should().Contain("Pair(\"comment-list\", \"CommentListDialog\")");
+        catalog.Should().Contain("Pair(\"comment-reply\", \"CommentReplyDialog\")");
         catalog.Should().Contain("Pair(\"field-picker\", \"FieldPickerDialog\")");
         catalog.Should().Contain("Pair(\"manage-sources\", \"ManageSourcesDialogWindow\", \"ManageSourcesDialog\"");
         catalog.Should().NotContain("AvaloniaOnly(\"comment-list\"");
+        catalog.Should().NotContain("AvaloniaOnly(\"comment-reply\"");
         catalog.Should().NotContain("AvaloniaOnly(\"field-picker\"");
         catalog.Should().NotContain("AvaloniaOnly(\"manage-sources\"");
         wpfFactory.Should().Contain("FreeWRibbonCommands.AskManageSourcesForVisualHarness(owner)");

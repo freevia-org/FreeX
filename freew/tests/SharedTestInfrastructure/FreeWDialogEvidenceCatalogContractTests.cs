@@ -77,6 +77,7 @@ public sealed class FreeWDialogEvidenceCatalogContractTests
         foreach (var routeId in new[]
                  {
                      "comment-list",
+                     "comment-reply",
                      "draw-table-dimension",
                      "field-picker",
                      "manage-sources",

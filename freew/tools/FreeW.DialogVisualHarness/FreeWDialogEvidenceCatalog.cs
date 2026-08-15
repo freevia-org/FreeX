@@ -401,7 +401,7 @@ public static class FreeWDialogEvidenceCatalog
             AvaloniaOnly("caption", "CaptionDialog"),
             AvaloniaOnly("citation-source-picker", "CitationSourcePickerDialog"),
             Pair("comment-list", "CommentListDialog"),
-            AvaloniaOnly("comment-reply", "CommentReplyDialog"),
+            Pair("comment-reply", "CommentReplyDialog"),
             AvaloniaOnly("character-formatting-picker", "CharacterFormattingPickerDialog",
                 FreeWDialogFixtureKind.CharacterFormattingPicker, FreeWDialogOpenAction.CharacterFormattingPicker),
             Pair("draw-table-dimension", "DrawTableDimensionDialog"),
