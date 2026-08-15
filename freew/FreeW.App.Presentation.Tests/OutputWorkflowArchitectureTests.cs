@@ -13,7 +13,9 @@ public sealed class OutputWorkflowArchitectureTests
 
         source.Should().Contain("public static class FreeWExportWorkflow");
         source.Should().Contain("Func<Stream, CancellationToken, ValueTask<FreeWExportArtifact>> renderAsync");
-        source.Should().Contain("AtomicFileWriter.ReplaceTarget(");
+        source.Should().Contain("new AtomicExportExecutor().ExecuteAsync<FreeWExportArtifact>(");
+        source.Should().NotContain("AtomicFileWriter.CreateTempLease(");
+        source.Should().NotContain("AtomicFileWriter.ReplaceTarget(");
         source.Should().Contain("public static class FreeWPrintRequestPlanner");
         source.Should().NotContain("FreeWPortablePrintWorkflow");
         source.Should().NotContain("FreeWPrintSelectionHandoffPlanner");

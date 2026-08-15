@@ -81,6 +81,31 @@ public sealed class FreeWOutputWorkflowTests : IDisposable
     }
 
     [Fact]
+    public async Task ExportExecution_CancellationPreservesExistingTargetAndCleansTemporaryFile()
+    {
+        var target = Path.Combine(TempDirectory, "Document.pdf");
+        await File.WriteAllTextAsync(target, "old");
+        var plan = FreeWExportWorkflow.CreatePlan(FreeWExportFormat.Pdf, "Document");
+        using var cancellation = new CancellationTokenSource();
+
+        var result = await FreeWExportWorkflow.ExecuteAsync(
+            plan,
+            target,
+            async (stream, token) =>
+            {
+                await stream.WriteAsync(System.Text.Encoding.UTF8.GetBytes("partial"), token);
+                cancellation.Cancel();
+                token.ThrowIfCancellationRequested();
+                return new FreeWExportArtifact();
+            },
+            cancellation.Token);
+
+        result.Outcome.Should().Be(FreeWExportExecutionOutcome.Canceled);
+        (await File.ReadAllTextAsync(target)).Should().Be("old");
+        Directory.GetFiles(TempDirectory).Should().Equal(target);
+    }
+
+    [Fact]
     public void PrintRequestPlanner_OwnsGeometryAndBoundedPageRanges()
     {
         var page = new PageSettings { WidthPt = 612, HeightPt = 792 };

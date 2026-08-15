@@ -86,56 +86,44 @@ public static class FreeWExportWorkflow
         ArgumentException.ThrowIfNullOrWhiteSpace(path);
         ArgumentNullException.ThrowIfNull(renderAsync);
 
-        TemporaryFileLease? temporaryFile = null;
-        try
+        var execution = await new AtomicExportExecutor().ExecuteAsync<FreeWExportArtifact>(
+            path,
+            (output, token) => renderAsync(output, token),
+            cancellationToken);
+        if (execution.Succeeded)
         {
-            cancellationToken.ThrowIfCancellationRequested();
-            var directory = Path.GetDirectoryName(Path.GetFullPath(path));
-            if (!string.IsNullOrWhiteSpace(directory))
-                Directory.CreateDirectory(directory);
-
-            temporaryFile = AtomicFileWriter.CreateTempLease(path);
-            FreeWExportArtifact artifact;
-            await using (var stream = temporaryFile.OpenWrite(useAsync: true))
-            {
-                artifact = await renderAsync(stream, cancellationToken);
-                await stream.FlushAsync(cancellationToken);
-            }
-            cancellationToken.ThrowIfCancellationRequested();
-            AtomicFileWriter.ReplaceTarget(temporaryFile.Path, path);
-            temporaryFile.Commit();
+            var artifact = execution.Value!;
             return new(
                 FreeWExportExecutionOutcome.Succeeded,
                 plan,
-                path,
-                FormatSuccess(plan, path, artifact),
+                execution.Path,
+                FormatSuccess(plan, execution.Path!, artifact),
                 artifact);
         }
-        catch (OperationCanceledException ex) when (cancellationToken.IsCancellationRequested)
+
+        if (execution.Cancelled)
         {
             return new(
                 FreeWExportExecutionOutcome.Canceled,
                 plan,
-                path,
+                execution.Path ?? path,
                 $"{plan.CommandName} canceled.",
-                Exception: ex);
+                Exception: execution.Exception);
         }
-        catch (Exception ex)
-        {
-            return new(
-                FreeWExportExecutionOutcome.Failed,
-                plan,
-                path,
-                SisterAppFileTextPlanner.FormatCommandFailed(
-                    FreeWFileTextResources.Document,
-                    plan.CommandName,
-                    ex.Message),
-                Exception: ex);
-        }
-        finally
-        {
-            temporaryFile?.Release();
-        }
+
+        var exception = execution.Exception ?? new IOException(
+            execution.Error?.Detail.Message ??
+            execution.Validation?.Detail.ToString() ??
+            "Export did not complete.");
+        return new(
+            FreeWExportExecutionOutcome.Failed,
+            plan,
+            execution.Path ?? path,
+            SisterAppFileTextPlanner.FormatCommandFailed(
+                FreeWFileTextResources.Document,
+                plan.CommandName,
+                exception.Message),
+            Exception: exception);
     }
 
     private static string FormatSuccess(
