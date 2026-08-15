@@ -1483,12 +1483,9 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
                         CalculationCommandPolicy.ModeCommandState(
                             _session.Workbook.CalculationMode,
                             WorkbookCalculationMode.Manual),
-                    ["Scale Width"] = () => new RibbonCommandState(
-                        Value: PageLayoutInputParser.FormatScalePages(_session.ActiveSheet.ScaleToFit.FitToPagesWide)),
-                    ["Scale Height"] = () => new RibbonCommandState(
-                        Value: PageLayoutInputParser.FormatScalePages(_session.ActiveSheet.ScaleToFit.FitToPagesTall)),
-                    ["Scale Percent"] = () => new RibbonCommandState(
-                        Value: PageLayoutInputParser.FormatScalePercent(_session.ActiveSheet.ScaleToFit.ScalePercent)),
+                    ["Scale Width"] = () => GetPageLayoutScaleRibbonState().GetCommandState("Scale Width"),
+                    ["Scale Height"] = () => GetPageLayoutScaleRibbonState().GetCommandState("Scale Height"),
+                    ["Scale Percent"] = () => GetPageLayoutScaleRibbonState().GetCommandState("Scale Percent"),
                     ["Crop Picture"] = () => GetDrawingObjectContextualRibbonCommandState(DrawingObjectContextualRibbonCommand.CropPicture),
                     ["Shape Gradient"] = () => GetDrawingObjectContextualRibbonCommandState(DrawingObjectContextualRibbonCommand.ShapeGradient),
                     ["Shape Effects"] = () => GetDrawingObjectContextualRibbonCommandState(DrawingObjectContextualRibbonCommand.ShapeEffects),
@@ -13043,6 +13040,9 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             _session.IsShowingRulers,
             _session.IsShowingFormulas,
             _session.GetEffectiveSplitRow() is not null || _session.GetEffectiveSplitCol() is not null);
+
+    private WorkbookPageLayoutScaleRibbonStatePlan GetPageLayoutScaleRibbonState() =>
+        WorkbookPageLayoutScaleRibbonStatePlanner.Build(_session.ActiveSheet.ScaleToFit);
 
     private void HideActiveSheet()
     {

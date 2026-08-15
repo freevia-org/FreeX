@@ -4,6 +4,7 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
 using FreeX.App.Presentation.PageLayout;
+using FreeX.App.Presentation.Ribbon;
 using FreeX.App.Presentation.ThemeUI;
 using FreeX.App.Services;
 using FreeX.App.UI;
@@ -320,16 +321,17 @@ public partial class MainWindow
 
     private void SyncPageLayoutScaleToFitControls(Sheet? sheet)
     {
-        var scaleToFit = sheet?.ScaleToFit ?? WorksheetScaleToFit.Default;
+        var state = WorkbookPageLayoutScaleRibbonStatePlanner.Build(sheet?.ScaleToFit);
+        state.Publish(_ribbonState);
         _suppressToolbarSync = true;
         try
         {
             if (FindRenderedRibbonControl("Scale Width") is ComboBox widthBox)
-                SetComboBoxTextIfChanged(widthBox, PageLayoutInputParser.FormatScalePages(scaleToFit.FitToPagesWide));
+                SetComboBoxTextIfChanged(widthBox, state.WidthValue);
             if (FindRenderedRibbonControl("Scale Height") is ComboBox heightBox)
-                SetComboBoxTextIfChanged(heightBox, PageLayoutInputParser.FormatScalePages(scaleToFit.FitToPagesTall));
+                SetComboBoxTextIfChanged(heightBox, state.HeightValue);
             if (FindRenderedRibbonControl("Scale Percent") is ComboBox percentBox)
-                SetComboBoxTextIfChanged(percentBox, PageLayoutInputParser.FormatScalePercent(scaleToFit.ScalePercent));
+                SetComboBoxTextIfChanged(percentBox, state.PercentValue);
         }
         finally
         {
