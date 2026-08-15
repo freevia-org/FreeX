@@ -5872,7 +5872,7 @@ public sealed class AvaloniaShellSourceTests
 
         // The Data-tab Get Data button + Refresh route to the new file-based import, not the old stubs.
         windowSource.Should().Contain("[\"Get Data\"] = GetDataFromText,");
-        windowSource.Should().Contain("[\"Refresh All\"] = RefreshImportedData,");
+        windowSource.Should().Contain("[\"Refresh All\"] = () => _ = RefreshImportedDataAsync(),");
         windowSource.Should().NotContain("GetDataNotSupported");
         windowSource.Should().NotContain("RefreshAllNotSupported");
 
@@ -5882,7 +5882,7 @@ public sealed class AvaloniaShellSourceTests
         getDataSource.Should().Contain("AvaloniaFilePickerService.PickSingleOpenFileWithLocalPathAsync(");
         getDataSource.Should().Contain("AvaloniaFilePickerOpenRequest.FromDescriptors(");
         getDataSource.Should().NotContain("Patterns = [\"*.csv\", \"*.tsv\", \"*.tab\", \"*.txt\"]");
-        getDataSource.Should().Contain("ImportDataPlanner.DecodeBytes(bytes, encodingKind)");
+        getDataSource.Should().Contain("ImportDataPlanner.DecodeBytes(readResult.Bytes, encodingKind)");
         getDataSource.Should().Contain("ImportDataPlanner.PreviewText(decodedText, options");
         getDataSource.Should().Contain("ImportDataPlanner.ResolveDelimiter(options, decodedText)");
 
@@ -5897,7 +5897,8 @@ public sealed class AvaloniaShellSourceTests
         getDataSource.Should().NotContain("new ImportSheetCommand(");
         getDataSource.Should().Contain("_session.AddSheet()");
         getDataSource.Should().Contain("filePath, options, resolvedDestination, destination, used.RowCount, used.ColCount);");
-        getDataSource.Should().Contain("private void RefreshImportedData()");
+        getDataSource.Should().Contain("private async Task RefreshImportedDataAsync()");
+        getDataSource.Should().Contain("FileByteReadWorkflow.ReadLocalPathAsync(source.FilePath)");
 
         // R134 fix: the extent (row/col count) the previous import wrote at this same anchor is
         // remembered and fed back into the next refresh's ImportSheetCommand so a source that has

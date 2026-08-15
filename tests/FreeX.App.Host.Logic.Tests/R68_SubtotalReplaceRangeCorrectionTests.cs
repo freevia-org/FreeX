@@ -1,121 +1,89 @@
 using FluentAssertions;
-using FreeX.App.Presentation.DataTools;
 using FreeX.Core.Commands;
 using FreeX.Core.Model;
 
 namespace FreeX.App.Host.Tests;
 
 /// <summary>
-/// Regression coverage for R68-commands-group-outline-6-1 (src/FreeX.App.Host/MainWindow.DataCommands.cs,
-/// SubtotalBtn_Click's "Replace current subtotals" composite, extracted into CreateSubtotalApplyCommand).
-///
-/// Before the fix: the composite [RemoveSubtotalRowsCommand(sheetRange), SubtotalCommand(sheetRange)]
-/// built BOTH commands with the SAME pre-removal sheetRange. RemoveSubtotalRowsCommand deletes the old
-/// subtotal rows (shifting every row below them up), but the new SubtotalCommand's range still spanned
-/// the old (larger) extent -- so once the block shrank, that same absolute range reached past the
-/// restored data and swept in whatever had shifted up to fill the vacated rows (e.g. unrelated content
-/// that used to sit just below the subtotaled block), folding it into the new subtotal pass.
-///
-/// After the fix, CreateSubtotalApplyCommand predicts how many rows RemoveSubtotalRowsCommand is about
-/// to delete (by counting existing SUBTOTAL(...) formula rows in the stale range) and shrinks the new
-/// SubtotalCommand's range by that count before building the composite, so the new pass only ever scans
-/// the actual (post-removal) data block.
+/// Regression coverage for replacing existing subtotal rows through the shared workbook session.
+/// The replacement pass must resolve its range after removing old subtotal rows so adjacent user
+/// data is never pulled into the new subtotal scan.
 /// </summary>
 public sealed class R68_SubtotalReplaceRangeCorrectionTests
 {
     [Fact]
-    public void CreateSubtotalApplyCommand_ReplaceCurrentSubtotals_DoesNotFoldInUnrelatedRowsBelow()
+    public void ExecuteSubtotalOptions_ReplaceCurrentSubtotals_DoesNotFoldInUnrelatedRowsBelow()
     {
-        StaTestRunner.Run(() =>
-        {
-            var (window, workbook) = R49MainWindowTestHarness.CreateWindow();
-            try
-            {
-                var sheet = workbook.GetSheetAt(0);
-                var sheetId = sheet.Id;
-                SeedSubtotalData(sheet, sheetId);
+        var workbook = new Workbook("SubtotalReplaceRange");
+        var sheet = workbook.AddSheet("Sheet1");
+        var sheetId = sheet.Id;
+        SeedSubtotalData(sheet, sheetId);
+        var session = CreateSession(workbook);
+        session.SelectRange(Range(sheetId, 1, 1, 7, 2));
 
-                var ctx = new TestCommandContext(workbook);
-                var firstRange = new GridRange(new CellAddress(sheetId, 1, 1), new CellAddress(sheetId, 7, 2));
-                var applyResult = new SubtotalDialogPlanResult(
-                    GroupColumnOffset: 0,
-                    SubtotalColumnOffsets: [1],
-                    FunctionNumber: 9,
-                    ReplaceCurrentSubtotals: false,
-                    PageBreakBetweenGroups: false,
-                    SummaryBelowData: true);
+        var firstResult = session.ExecuteSubtotalOptions(CreateOptions(replaceExisting: false));
+        firstResult.Success.Should().BeTrue(firstResult.ErrorMessage);
 
-                var firstCommand = (IWorkbookCommand)R49MainWindowTestHarness.Invoke(
-                    window, "CreateSubtotalApplyCommand", sheetId, firstRange, applyResult)!;
-                var firstOutcome = firstCommand.Apply(ctx);
-                firstOutcome.Success.Should().BeTrue(firstOutcome.ErrorMessage);
+        var usedAfterFirst = sheet.GetUsedRange()!.Value;
+        usedAfterFirst.End.Row.Should().BeGreaterThan(7, "the first pass must insert subtotal rows");
+        var unrelatedRow = usedAfterFirst.End.Row + 1;
+        sheet.SetCell(new CellAddress(sheetId, unrelatedRow, 1), new TextValue("UNRELATED"));
+        session.SelectRange(Range(sheetId, 1, 1, usedAfterFirst.End.Row, 2));
 
-                // The first pass inserted group + grand-total subtotal rows below the original 7-row
-                // block; place unrelated content directly adjacent below it, exactly like the
-                // originally-reported scenario (no blank-row gap).
-                var usedAfterFirst = sheet.GetUsedRange()!.Value;
-                usedAfterFirst.End.Row.Should().BeGreaterThan(7, "the first Subtotal pass must have inserted rows");
-                var unrelatedRow = usedAfterFirst.End.Row + 1;
-                sheet.SetCell(new CellAddress(sheetId, unrelatedRow, 1), new TextValue("UNRELATED"));
+        var replaceResult = session.ExecuteSubtotalOptions(CreateOptions(replaceExisting: true));
 
-                // Re-Subtotal with Replace, using the CURRENT (stale, post-first-pass) block extent --
-                // exactly what SubtotalBtn_Click passes as sheetRange on a second invocation.
-                var secondRange = new GridRange(
-                    new CellAddress(sheetId, 1, 1),
-                    new CellAddress(sheetId, usedAfterFirst.End.Row, 2));
-                var replaceResult = applyResult with { ReplaceCurrentSubtotals = true };
-
-                var secondCommand = (IWorkbookCommand)R49MainWindowTestHarness.Invoke(
-                    window, "CreateSubtotalApplyCommand", sheetId, secondRange, replaceResult)!;
-                var secondOutcome = secondCommand.Apply(ctx);
-                secondOutcome.Success.Should().BeTrue(secondOutcome.ErrorMessage);
-
-                sheet.GetValue(unrelatedRow, 1).Should().Be(
-                    new TextValue("UNRELATED"),
-                    "the replace pass must not fold rows that shifted up into the vacated subtotal-row space into the new subtotal scan");
-                sheet.GetCell(unrelatedRow, 2).Should().BeNull(
-                    "the unrelated row must not receive a subtotal formula from the new pass");
-            }
-            finally
-            {
-                R49MainWindowTestHarness.Close(window);
-            }
-        });
+        replaceResult.Success.Should().BeTrue(replaceResult.ErrorMessage);
+        sheet.GetValue(unrelatedRow, 1).Should().Be(
+            new TextValue("UNRELATED"),
+            "the replace pass must not fold rows shifted into the old subtotal space into the new scan");
+        sheet.GetCell(unrelatedRow, 2).Should().BeNull(
+            "the unrelated row must not receive a subtotal formula from the new pass");
     }
 
     [Fact]
-    public void CreateSubtotalApplyCommand_FirstTimeApply_ReturnsPlainSubtotalCommandUnaffected()
+    public void ExecuteSubtotalOptions_FirstTimeApply_RemainsUnaffected()
     {
-        // Sibling/no-regression: a first-time (non-replace) Subtotal apply must still be the plain
-        // SubtotalCommand over the caller-supplied range, untouched by the range-correction fix.
-        StaTestRunner.Run(() =>
-        {
-            var (window, workbook) = R49MainWindowTestHarness.CreateWindow();
-            try
-            {
-                var sheet = workbook.GetSheetAt(0);
-                var sheetId = sheet.Id;
-                SeedSubtotalData(sheet, sheetId);
+        var workbook = new Workbook("SubtotalFirstApply");
+        var sheet = workbook.AddSheet("Sheet1");
+        var sheetId = sheet.Id;
+        SeedSubtotalData(sheet, sheetId);
+        var session = CreateSession(workbook);
+        session.SelectRange(Range(sheetId, 1, 1, 7, 2));
 
-                var ctx = new TestCommandContext(workbook);
-                var range = new GridRange(new CellAddress(sheetId, 1, 1), new CellAddress(sheetId, 7, 2));
-                var applyResult = new SubtotalDialogPlanResult(0, [1], 9, false, false, true);
+        var result = session.ExecuteSubtotalOptions(CreateOptions(replaceExisting: false));
 
-                var command = (IWorkbookCommand)R49MainWindowTestHarness.Invoke(
-                    window, "CreateSubtotalApplyCommand", sheetId, range, applyResult)!;
-
-                command.Should().BeOfType<SubtotalCommand>("a first-time apply must not be wrapped in a remove-then-reapply composite");
-
-                var outcome = command.Apply(ctx);
-                outcome.Success.Should().BeTrue(outcome.ErrorMessage);
-                sheet.GetUsedRange()!.Value.End.Row.Should().BeGreaterThan(7, "the plain apply must still insert the expected subtotal rows");
-            }
-            finally
-            {
-                R49MainWindowTestHarness.Close(window);
-            }
-        });
+        result.Success.Should().BeTrue(result.ErrorMessage);
+        sheet.GetUsedRange()!.Value.End.Row.Should().BeGreaterThan(7,
+            "a first apply must still insert the expected subtotal rows");
+        session.CanUndo.Should().BeTrue();
+        session.UndoLastEdit().Success.Should().BeTrue();
+        sheet.GetUsedRange()!.Value.End.Row.Should().Be(7);
     }
+
+    private static WorkbookSession CreateSession(Workbook workbook) =>
+        new WorkbookSessionFactory().Create(
+            new StartupWorkbookLoadResult(workbook, "Book.fxl", "Opened .fxl.", IsFallback: false),
+            viewportHeight: 240,
+            viewportWidth: 320);
+
+    private static SubtotalInputOptions CreateOptions(bool replaceExisting) =>
+        new(
+            GroupColumnOffset: 0,
+            SubtotalColumnOffsets: [1],
+            FunctionNumber: 9,
+            ReplaceExisting: replaceExisting,
+            PageBreakBetweenGroups: false,
+            SummaryBelowData: true);
+
+    private static GridRange Range(
+        SheetId sheetId,
+        uint startRow,
+        uint startColumn,
+        uint endRow,
+        uint endColumn) =>
+        new(
+            new CellAddress(sheetId, startRow, startColumn),
+            new CellAddress(sheetId, endRow, endColumn));
 
     private static void SeedSubtotalData(Sheet sheet, SheetId sheetId)
     {
