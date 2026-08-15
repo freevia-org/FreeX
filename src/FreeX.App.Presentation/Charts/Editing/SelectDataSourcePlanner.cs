@@ -376,10 +376,32 @@ public static class SelectDataSourcePlanner
         uint EndCol,
         uint EndRow);
 
+    /// <summary>
+    /// Parses a single rectangular range reference, or returns <c>null</c> when the text is not one
+    /// (the caller then shows its "cannot parse" fallback preview).
+    /// <para>
+    /// R137-app-select-data-source-multiarea: a discontiguous union such as
+    /// <c>Sheet1!$A$1:$A$5,Sheet1!$C$1:$C$5</c> is NOT a single rectangle and must take the fallback
+    /// path. Without the explicit union check below, <see cref="string.LastIndexOf(char)"/> on '!'
+    /// lands on the LAST area's sheet separator, so the tail (<c>$C$1:$C$5</c>) splits cleanly on ':'
+    /// and the parse "succeeds" against only the final area -- silently dropping every earlier one
+    /// and leaving a garbage <c>SheetName</c> ("Sheet1!$A$1:$A$5,Sheet1") that then gets re-emitted
+    /// into every previewed series range. The prefix-less spelling (<c>$A$1:$A$5,$C$1:$C$5</c>)
+    /// already fell out to <c>null</c> via the 3-way ':' split, so this only makes the sheet-prefixed
+    /// spelling behave the same way. It also matches what the dialog's own OK-time validation does:
+    /// <c>ChartInputParser.TryParseDataRange</c> rejects every union spelling, so a preview built
+    /// from one area was describing a range the user could never actually apply.
+    /// </para>
+    /// </summary>
     private static ParsedRange? TryParseRangeReference(string text)
     {
         var trimmed = text.Trim();
         if (trimmed.Length == 0)
+            return null;
+
+        // Quote-aware split, shared with the range-text codec, so a comma inside a quoted sheet name
+        // ('Budget, Q1'!$A$1:$A$5) is not mistaken for a union separator.
+        if (WorkbookRangeTextCodec.SplitReferences(trimmed).Count > 1)
             return null;
 
         string? sheetName = null;
