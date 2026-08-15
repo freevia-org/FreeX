@@ -163,6 +163,10 @@ public static class AvaloniaCompactDialogChrome
         window.Foreground = ThemeTextBrush(style);
         window.FontFamily = style.FontFamily;
         window.FontSize = style.FontSize;
+        // Match WPF DialogWindow's inherited layout contract. Keeping rounding at the shared
+        // window boundary makes every descendant use device-pixel-aligned measure/arrange values
+        // instead of letting individual dialogs compensate for recurring one-pixel geometry drift.
+        window.UseLayoutRounding = true;
         // WPF's shared DialogWindow explicitly requests ClearType. Avalonia's closest rendering
         // contract is subpixel antialiasing; forcing grayscale here collapses the glyph palette
         // and inflates text-edge deltas across every paired dialog.
