@@ -3,6 +3,8 @@ using FluentAssertions;
 using FreeX.App.Presentation.Calculation;
 using FreeX.Core.Commands;
 using FreeX.Core.Model;
+using FreeX.Ribbon.Definitions;
+using Free.Shared.Ribbon;
 
 namespace FreeX.App.Presentation.Tests.Calculation;
 
@@ -17,6 +19,44 @@ public sealed class CalculationCommandPolicyTests
             .Should().Be(WorkbookCalculationMode.Manual);
         CalculationCommandPolicy.ToggleTarget(WorkbookCalculationMode.AutomaticExceptDataTables)
             .Should().Be(WorkbookCalculationMode.Manual);
+    }
+
+    [Theory]
+    [InlineData(WorkbookCalculationMode.Automatic)]
+    [InlineData(WorkbookCalculationMode.AutomaticExceptDataTables)]
+    [InlineData(WorkbookCalculationMode.Manual)]
+    public void ModeCommandState_ChecksExactlyTheCurrentMode(WorkbookCalculationMode currentMode)
+    {
+        var candidates = new[]
+        {
+            WorkbookCalculationMode.Automatic,
+            WorkbookCalculationMode.AutomaticExceptDataTables,
+            WorkbookCalculationMode.Manual,
+        };
+
+        var states = candidates.Select(candidate =>
+            CalculationCommandPolicy.ModeCommandState(currentMode, candidate)).ToArray();
+
+        states.Should().ContainSingle(state => state.IsChecked);
+        states[Array.IndexOf(candidates, currentMode)].IsChecked.Should().BeTrue();
+        states.Should().OnlyContain(state => state.IsEnabled);
+    }
+
+    [Fact]
+    public void CanonicalCalculationMenu_DeclaresEveryModeChoiceCheckable()
+    {
+        var menu = FreeXRibbon.Build().Tabs
+            .SelectMany(tab => tab.Groups)
+            .SelectMany(group => group.Controls)
+            .OfType<RibbonDropdown>()
+            .Single(control => control.CommandId.Value == "Calculation Options")
+            .Menu;
+
+        menu.Items.Select(item => item.CommandId?.Value).Should().Equal(
+            FreeXRibbonCommandIds.FormulasCalculationAutomatic,
+            FreeXRibbonCommandIds.FormulasCalculationAutomaticExceptDataTables,
+            FreeXRibbonCommandIds.FormulasCalculationManual);
+        menu.Items.Should().OnlyContain(item => item.IsChecked == false);
     }
 
     [Fact]

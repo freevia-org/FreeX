@@ -431,6 +431,19 @@ public static class PresentationTransitionCommandPlanner
     public static bool IsAdvanceOnClickChecked(SlideTransition? currentTransition) =>
         currentTransition?.AdvanceOnClick ?? true;
 
+    /// <summary>Returns whether a transition toggle is currently available and selected.</summary>
+    public static (bool IsEnabled, bool IsChecked) GetToggleState(
+        SlideTransition? currentTransition,
+        PresentationTransitionCommandIntentKind intent) =>
+        intent switch
+        {
+            PresentationTransitionCommandIntentKind.ToggleAdvanceOnClick =>
+                (true, IsAdvanceOnClickChecked(currentTransition)),
+            PresentationTransitionCommandIntentKind.ToggleSoundLoop =>
+                (currentTransition?.Sound is not null, currentTransition?.Sound?.Loop == true),
+            _ => (false, false),
+        };
+
     public static SlideTransition BuildAdvanceAfterTransition(
         SlideTransition? currentTransition,
         int? advanceAfterMs)

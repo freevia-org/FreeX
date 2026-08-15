@@ -674,6 +674,35 @@ public sealed class DocumentViewLayoutPlannerTests
     }
 
     [Fact]
+    public void BuildTablePaginationPlan_UsesAuthoredGridWidthAndCellMarginsForWrapping()
+    {
+        var page = new PageSettings
+        {
+            WidthPt = 612,
+            HeightPt = 792,
+            MarginLeftPt = 72,
+            MarginRightPt = 72,
+            MarginTopPt = 72,
+            MarginBottomPt = 72,
+        };
+        var table = new Table
+        {
+            DefaultCellMargins = new TableCellMargins(TopPt: 0, LeftPt: 6, BottomPt: 0, RightPt: 6),
+        };
+        table.ColumnWidthsPt.Add(72);
+        var row = new TableRow();
+        row.Cells.Add(new TableCell("North account group"));
+        table.Rows.Add(row);
+
+        var pagination = DocumentViewLayoutPlanner.BuildTablePaginationPlan(table, page);
+
+        // The 72pt authored grid leaves only 80dip for text after the 6pt side margins. The
+        // renderer-neutral plan must therefore reserve two text lines, matching both hosts' table
+        // wrapping, rather than the old fixed 48-character estimate.
+        pagination.Rows.Single().EstimatedHeightDip.Should().Be(44);
+    }
+
+    [Fact]
     public void BuildGridlinesAndRulerTicks_ArePageSpacePlans()
     {
         var page = new PageSettings

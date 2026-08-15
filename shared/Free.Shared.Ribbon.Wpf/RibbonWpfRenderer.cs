@@ -41,6 +41,14 @@ public static class RibbonWpfRenderer
 
     private const int MaxRowsPerColumn = 3;
     private static readonly ConditionalWeakTable<ComboBox, ComboExecutionState> ComboExecutionStates = new();
+    private static readonly ConditionalWeakTable<MenuItem, MenuCommandStateBinding> MenuCommandStateBindings = new();
+
+    private sealed class MenuCommandStateBinding
+    {
+        internal required RibbonCommandId CommandId { get; init; }
+        internal RibbonMenuItem? Definition { get; init; }
+        internal RibbonControl? CollapsedControl { get; init; }
+    }
 
     public static FrameworkElement BuildTabContent(
         RibbonTab tab,
@@ -77,7 +85,7 @@ public static class RibbonWpfRenderer
                 () => (FrameworkElement)BuildGroup(captured, resourceHost, registry, stateStore, options),
                 resourceHost,
                 collapsedKeyTip,
-                () => BuildCollapsedGroupMenu(captured, registry)));
+                () => BuildCollapsedGroupMenu(captured, registry, stateStore)));
             first = false;
         }
 
@@ -92,14 +100,17 @@ public static class RibbonWpfRenderer
     // Builds the collapsed group's dropdown: every commandable control becomes a menu item carrying
     // the control's keytip and routed through the registry, so a keytip opens the group and selects a
     // command exactly like the expanded form.
-    private static ContextMenu BuildCollapsedGroupMenu(RibbonGroup group, IRibbonCommandRegistry? registry)
+    private static ContextMenu BuildCollapsedGroupMenu(
+        RibbonGroup group,
+        IRibbonCommandRegistry? registry,
+        IRibbonStateStore? stateStore)
     {
         var menu = new ContextMenu();
         foreach (var control in RibbonCollapsedGroupPresentationPlanner.GetOverflowControls(group))
         {
             if (control is RibbonSplitButton splitButton)
             {
-                AddCollapsedSplitButtonItems(menu.Items, splitButton, registry);
+                AddCollapsedSplitButtonItems(menu.Items, splitButton, registry, stateStore);
                 continue;
             }
 
@@ -112,21 +123,23 @@ public static class RibbonWpfRenderer
             var nested = GetMenu(control);
             if (registry is not null && nested is not null && nested.Items.Count > 0)
             {
-                AddMenuItems(menuItem.Items, nested.Items, registry);
+                AddMenuItems(menuItem.Items, nested.Items, registry, stateStore);
             }
             else if (registry is not null)
             {
                 var commandId = control.CommandId;
-                menuItem.IsEnabled = registry.TryGet(commandId, out _);
                 menuItem.Click += (sender, _) =>
                 {
                     if (registry.TryGet(commandId, out var command) && command is not null)
                         ExecuteGuarded(command, commandId, SenderContext(sender));
                 };
+                BindCollapsedGroupCommandState(menuItem, control, registry, stateStore);
             }
 
             menu.Items.Add(menuItem);
         }
+
+        menu.Opened += (_, _) => RefreshMenuCommandStates(menu, registry, stateStore);
 
         return menu;
     }
@@ -134,7 +147,8 @@ public static class RibbonWpfRenderer
     private static void AddCollapsedSplitButtonItems(
         ItemCollection target,
         RibbonSplitButton splitButton,
-        IRibbonCommandRegistry? registry)
+        IRibbonCommandRegistry? registry,
+        IRibbonStateStore? stateStore)
     {
         var primary = new MenuItem
         {
@@ -144,11 +158,13 @@ public static class RibbonWpfRenderer
         };
         if (!string.IsNullOrEmpty(splitButton.KeyTip))
             RibbonTooltip.SetKeyTip(primary, splitButton.KeyTip);
+        RibbonMetadata.SetCommandName(primary, splitButton.CommandId.Value);
         primary.Click += (sender, _) =>
         {
             if (registry?.TryGet(splitButton.CommandId, out var command) == true && command is not null)
                 ExecuteGuarded(command, splitButton.CommandId, SenderContext(sender));
         };
+        BindCollapsedGroupCommandState(primary, splitButton, registry, stateStore);
         target.Add(primary);
 
         if (registry is null)
@@ -164,7 +180,7 @@ public static class RibbonWpfRenderer
                 continue;
             }
 
-            AddMenuItem(target, item, registry);
+            AddMenuItem(target, item, registry, stateStore);
         }
     }
 
@@ -841,7 +857,7 @@ public static class RibbonWpfRenderer
 
         if (hasMenuItems)
         {
-            var contextMenu = BuildContextMenu(menu!, registry);
+            var contextMenu = BuildContextMenu(menu!, registry, stateStore);
             RibbonWpfPopupAdapter.Configure(contextMenu, buttonBase, resourceHost ?? element);
             buttonBase.ContextMenu = contextMenu;
             buttonBase.Click += (_, _) => contextMenu.IsOpen = true;
@@ -951,22 +967,34 @@ public static class RibbonWpfRenderer
         _ => null
     };
 
-    private static ContextMenu BuildContextMenu(RibbonMenu menu, IRibbonCommandRegistry registry)
+    private static ContextMenu BuildContextMenu(
+        RibbonMenu menu,
+        IRibbonCommandRegistry registry,
+        IRibbonStateStore? stateStore)
     {
         var contextMenu = new ContextMenu();
-        AddMenuItems(contextMenu.Items, menu.Items, registry);
+        AddMenuItems(contextMenu.Items, menu.Items, registry, stateStore);
+        contextMenu.Opened += (_, _) => RefreshMenuCommandStates(contextMenu, registry, stateStore);
         return contextMenu;
     }
 
-    private static void AddMenuItems(ItemCollection target, IReadOnlyList<RibbonMenuItem> items, IRibbonCommandRegistry registry)
+    private static void AddMenuItems(
+        ItemCollection target,
+        IReadOnlyList<RibbonMenuItem> items,
+        IRibbonCommandRegistry registry,
+        IRibbonStateStore? stateStore)
     {
         foreach (var item in items)
         {
-            AddMenuItem(target, item, registry);
+            AddMenuItem(target, item, registry, stateStore);
         }
     }
 
-    private static void AddMenuItem(ItemCollection target, RibbonMenuItem item, IRibbonCommandRegistry registry)
+    private static void AddMenuItem(
+        ItemCollection target,
+        RibbonMenuItem item,
+        IRibbonCommandRegistry registry,
+        IRibbonStateStore? stateStore)
     {
         if (item.Kind == Free.Shared.Ribbon.RibbonMenuItemKind.Separator)
         {
@@ -997,11 +1025,17 @@ public static class RibbonWpfRenderer
 
         if (item.Children.Count > 0)
         {
-            AddMenuItems(menuItem.Items, item.Children, registry);
+            AddMenuItems(menuItem.Items, item.Children, registry, stateStore);
         }
         else if (item.CommandId is { } commandId)
         {
-            menuItem.IsEnabled = item.IsEnabled && registry.TryGet(commandId, out _);
+            RibbonMetadata.SetCommandName(menuItem, commandId.Value);
+            MenuCommandStateBindings.Add(menuItem, new MenuCommandStateBinding
+            {
+                CommandId = commandId,
+                Definition = item,
+            });
+            ApplyMenuCommandState(menuItem, registry, stateStore);
             // Some menu-item handlers read state off their sender. Carry the values the original
             // authored menu set as Tag so those handlers resolve against the rendered menu item.
             menuItem.Tag = item.Header;
@@ -1013,6 +1047,64 @@ public static class RibbonWpfRenderer
         }
 
         target.Add(menuItem);
+    }
+
+    private static void BindCollapsedGroupCommandState(
+        MenuItem item,
+        RibbonControl control,
+        IRibbonCommandRegistry? registry,
+        IRibbonStateStore? stateStore)
+    {
+        MenuCommandStateBindings.Add(item, new MenuCommandStateBinding
+        {
+            CommandId = control.CommandId,
+            CollapsedControl = control,
+        });
+        ApplyMenuCommandState(item, registry, stateStore);
+    }
+
+    private static void RefreshMenuCommandStates(
+        ContextMenu menu,
+        IRibbonCommandRegistry? registry,
+        IRibbonStateStore? stateStore)
+    {
+        var pending = new Stack<MenuItem>(menu.Items.OfType<MenuItem>().Reverse());
+        while (pending.Count > 0)
+        {
+            var item = pending.Pop();
+            ApplyMenuCommandState(item, registry, stateStore);
+            foreach (var child in item.Items.OfType<MenuItem>().Reverse())
+                pending.Push(child);
+        }
+    }
+
+    private static void ApplyMenuCommandState(
+        MenuItem item,
+        IRibbonCommandRegistry? registry,
+        IRibbonStateStore? stateStore)
+    {
+        if (!MenuCommandStateBindings.TryGetValue(item, out var binding))
+            return;
+
+        IRibbonCommand? command = null;
+        var commandAvailable = registry is not null
+            && registry.TryGet(binding.CommandId, out command);
+        RibbonCommandState? commandState = command is IRibbonStatefulCommand stateful
+            ? stateful.GetState()
+            : stateStore?.TryGetState(binding.CommandId, out var storedState) == true
+                ? storedState
+                : null;
+        var plan = binding.Definition is { } definition
+            ? RibbonMenuCommandStatePlanner.Plan(definition, commandAvailable, commandState)
+            : RibbonMenuCommandStatePlanner.PlanCollapsedControl(
+                binding.CollapsedControl
+                    ?? throw new InvalidOperationException("Collapsed menu state binding has no control."),
+                commandAvailable,
+                commandState);
+        item.IsEnabled = plan.IsEnabled;
+        item.IsCheckable = plan.IsChecked.HasValue;
+        if (plan.IsChecked is { } isChecked)
+            item.IsChecked = isChecked;
     }
 
     private static FrameworkElement BuildInlineDivider() => new Rectangle

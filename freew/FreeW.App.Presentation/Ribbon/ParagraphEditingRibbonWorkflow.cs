@@ -1,11 +1,13 @@
 using Free.Shared.Ribbon;
+using FreeW.Core.Model;
 
 namespace FreeW.App.Presentation.Ribbon;
 
 public sealed record ParagraphEditingRibbonPorts(
     Action PrepareExecution,
-    IRibbonCommand ToggleBullets,
-    IRibbonCommand ToggleNumbering,
+    Func<ListKind> CurrentListKind,
+    Action ToggleBullets,
+    Action ToggleNumbering,
     IRibbonCommand AlignLeft,
     IRibbonCommand AlignCenter,
     IRibbonCommand AlignRight,
@@ -19,6 +21,13 @@ public sealed record ParagraphEditingRibbonPorts(
     Action ToggleWidowControl,
     Action ToggleParagraphBorder,
     IRibbonCommand Sort);
+
+public sealed record ParagraphEditingRibbonStatefulCommand(
+    RibbonCommandId Id,
+    IRibbonStatefulCommand Command);
+
+public sealed record ParagraphEditingRibbonCommands(
+    IReadOnlyList<ParagraphEditingRibbonStatefulCommand> StatefulCommands);
 
 /// <summary>
 /// Owns Home/Layout paragraph command identity and execution preparation. Renderers retain only
@@ -45,7 +54,7 @@ public static class ParagraphEditingRibbonWorkflow
         FreeWRibbonCommandAction.Sort,
     ];
 
-    public static void Register(
+    public static ParagraphEditingRibbonCommands Register(
         IRibbonCommandRegistry bindings,
         ParagraphEditingRibbonPorts ports)
     {
@@ -53,8 +62,18 @@ public static class ParagraphEditingRibbonWorkflow
         ArgumentNullException.ThrowIfNull(ports);
         ArgumentNullException.ThrowIfNull(ports.PrepareExecution);
 
-        BindCommand(bindings, ports, FreeWRibbonCommandAction.Bullets, ports.ToggleBullets);
-        BindCommand(bindings, ports, FreeWRibbonCommandAction.Numbering, ports.ToggleNumbering);
+        var bullets = BindListToggle(
+            bindings,
+            ports,
+            FreeWRibbonCommandAction.Bullets,
+            ListKind.Bullet,
+            ports.ToggleBullets);
+        var numbering = BindListToggle(
+            bindings,
+            ports,
+            FreeWRibbonCommandAction.Numbering,
+            ListKind.Number,
+            ports.ToggleNumbering);
         BindCommand(bindings, ports, FreeWRibbonCommandAction.AlignLeft, ports.AlignLeft);
         BindCommand(bindings, ports, FreeWRibbonCommandAction.AlignCenter, ports.AlignCenter);
         BindCommand(bindings, ports, FreeWRibbonCommandAction.AlignRight, ports.AlignRight);
@@ -81,6 +100,12 @@ public static class ParagraphEditingRibbonWorkflow
         BindAction(bindings, ports, FreeWRibbonCommandAction.WidowControl, ports.ToggleWidowControl);
         BindAction(bindings, ports, FreeWRibbonCommandAction.ParaBorder, ports.ToggleParagraphBorder);
         BindCommand(bindings, ports, FreeWRibbonCommandAction.Sort, ports.Sort);
+
+        return new ParagraphEditingRibbonCommands(
+        [
+            new("freew.bullets", bullets),
+            new("freew.numbering", numbering),
+        ]);
     }
 
     private static IRibbonCommand BindAction(
@@ -96,6 +121,31 @@ public static class ParagraphEditingRibbonWorkflow
         FreeWRibbonCommandAction action,
         IRibbonCommand command) =>
         bindings.Bind(action, new PreparedCommand(ports.PrepareExecution, command));
+
+    private static IRibbonStatefulCommand BindListToggle(
+        IRibbonCommandRegistry bindings,
+        ParagraphEditingRibbonPorts ports,
+        FreeWRibbonCommandAction action,
+        ListKind kind,
+        Action execute)
+    {
+        var command = new PreparedCommand(
+            ports.PrepareExecution,
+            new ParagraphListToggleCommand(execute, ports.CurrentListKind, kind));
+        bindings.Bind(action, command);
+        return command;
+    }
+
+    private sealed class ParagraphListToggleCommand(
+        Action execute,
+        Func<ListKind> currentListKind,
+        ListKind kind) : IRibbonStatefulCommand
+    {
+        public void Execute(RibbonCommandContext context) => execute();
+
+        public RibbonCommandState GetState() =>
+            new(IsChecked: currentListKind() == kind);
+    }
 
     private sealed class PreparedCommand(Action prepareExecution, IRibbonCommand inner) : IRibbonStatefulCommand
     {

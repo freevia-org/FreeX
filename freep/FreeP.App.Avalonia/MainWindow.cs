@@ -70,6 +70,10 @@ public sealed partial class MainWindow : Window,
     IPresentationAltTextPaneHostView,
     IPresentationReadingOrderPaneHostView
 {
+    private sealed class SlideSectionNamePromptDialog : FreePDialogWindow
+    {
+    }
+
     partial void InitializeConditionalHost();
     partial void RecordStartupObservation(string stage);
     partial void RegisterStartupOpenedObservation();
@@ -6065,20 +6069,16 @@ public sealed partial class MainWindow : Window,
         {
             Content = prompt.PromptAcceptText,
             Width = 76,
-            Margin = new Thickness(0, 0, 8, 0),
+            IsDefault = true,
         };
         var cancel = new Button
         {
             Content = prompt.PromptCancelText,
             Width = 76,
+            IsCancel = true,
         };
 
-        var buttons = new StackPanel
-        {
-            Orientation = Orientation.Horizontal,
-            HorizontalAlignment = HorizontalAlignment.Right,
-            Children = { ok, cancel },
-        };
+        var buttons = AvaloniaDialogButtonRowFactory.CreateRow([ok, cancel]);
 
         var panel = new StackPanel
         {
@@ -6095,7 +6095,7 @@ public sealed partial class MainWindow : Window,
             },
         };
 
-        var dialog = new Window
+        var dialog = new SlideSectionNamePromptDialog
         {
             Title = prompt.PromptTitle,
             Content = panel,

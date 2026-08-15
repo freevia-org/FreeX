@@ -23,7 +23,7 @@ internal static class PasteSpecialDialog
 
         PasteSpecialOption? result = null;
 
-        var dialog = new Window
+        var dialog = new FreeWDialogWindow
         {
             Title = PasteSpecialDialogSession.Title,
             Width = 380,

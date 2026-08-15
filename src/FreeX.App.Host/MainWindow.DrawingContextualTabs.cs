@@ -27,6 +27,14 @@ public partial class MainWindow
         _ribbonState.SetEnabled(DrawingObjectContextualRibbonPlanner.ShapeGradientCommandName, plan.ShapeGradientEnabled);
         _ribbonState.SetEnabled(DrawingObjectContextualRibbonPlanner.ShapeEffectsCommandName, plan.ShapeEffectsEnabled);
         _ribbonState.SetEnabled(DrawingObjectContextualRibbonPlanner.CropPictureCommandName, plan.CropPictureEnabled);
+        var currentShapeEffect = GetTargetDrawingShape(_currentSheetId)?.GetEffectiveEffectPreset()
+            ?? DrawingShapeEffectPreset.None;
+        foreach (var commandState in DrawingObjectContextualRibbonPlanner.BuildShapeEffectCommandStates(
+                     currentShapeEffect,
+                     plan.ShapeEffectsEnabled))
+        {
+            _ribbonState.SetState(commandState.CommandId, commandState.State);
+        }
 
         SetDrawingObjectContextualTabsVisible(plan.ShapeFormatVisible, plan.PictureFormatVisible);
     }

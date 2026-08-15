@@ -689,7 +689,8 @@ public static class FreePRibbonCommandWorkflow
             commands.Register(
                 FreePRibbonCommandGroup.Transition,
                 plan.CommandId,
-                plan.Intent == PresentationTransitionCommandIntentKind.ToggleAdvanceOnClick
+                plan.Intent is PresentationTransitionCommandIntentKind.ToggleAdvanceOnClick
+                    or PresentationTransitionCommandIntentKind.ToggleSoundLoop
                     ? new TransitionToggleCommand(stateStore, editor, plan)
                     : new ContextRibbonCommand(context =>
                         PresentationTransitionCommandPlanner.TryApply(
@@ -885,7 +886,10 @@ public static class FreePRibbonCommandWorkflow
         EditingSession editor,
         string commandId,
         TableStyleFlagKind kind) =>
-        commands.Action(FreePRibbonCommandGroup.Table, commandId, () => editor.ToggleSelectedTableStyleFlag(kind));
+        commands.Register(
+            FreePRibbonCommandGroup.Table,
+            commandId,
+            new TableStyleFlagToggleCommand(editor, kind));
 
     private static void RegisterTableEdit(
         Registrar commands,
@@ -1187,6 +1191,22 @@ public static class FreePRibbonCommandWorkflow
         public RibbonCommandState GetState() => new(IsEnabled: canExecute());
     }
 
+    private sealed class TableStyleFlagToggleCommand(
+        EditingSession editor,
+        TableStyleFlagKind kind) : IRibbonStatefulCommand
+    {
+        public void Execute(RibbonCommandContext context) =>
+            editor.ToggleSelectedTableStyleFlag(kind);
+
+        public RibbonCommandState GetState()
+        {
+            var isAvailable = editor.TryGetSelectedTableStyleFlag(kind, out var isChecked);
+            return new RibbonCommandState(
+                IsEnabled: isAvailable,
+                IsChecked: isAvailable && isChecked);
+        }
+    }
+
     private sealed class EditPointsToggleCommand : IRibbonStatefulCommand
     {
         private readonly RibbonStateStore _stateStore;
@@ -1243,12 +1263,24 @@ public static class FreePRibbonCommandWorkflow
                 Sync();
         }
 
-        public RibbonCommandState GetState() => new(
-            IsChecked: PresentationTransitionCommandPlanner.IsAdvanceOnClickChecked(_editor.CurrentSlideTransition));
+        public RibbonCommandState GetState()
+        {
+            var state = PresentationTransitionCommandPlanner.GetToggleState(
+                _editor.CurrentSlideTransition,
+                _plan.Intent);
+            return new RibbonCommandState(
+                IsEnabled: state.IsEnabled,
+                IsChecked: state.IsChecked);
+        }
 
         private void OnCurrentSlideChanged(object? sender, EventArgs args) => Sync();
 
-        private void Sync() => _stateStore.SetChecked(_plan.CommandId, GetState().IsChecked);
+        private void Sync()
+        {
+            var state = GetState();
+            _stateStore.SetEnabled(_plan.CommandId, state.IsEnabled);
+            _stateStore.SetChecked(_plan.CommandId, state.IsChecked);
+        }
     }
 
     private sealed class AnimationPaneToggleCommand : IRibbonStatefulCommand

@@ -23,7 +23,7 @@ internal static class MultilevelListDialog
         MultilevelListDialogSession session = MultilevelListDialogPlanner.CreateSession(
             currentNumberFormats,
             System.Globalization.CultureInfo.CurrentCulture);
-        var dialog = new Window
+        var dialog = new FreeWDialogWindow
         {
             Title = MultilevelListDialogPlanner.Title,
             Width = MultilevelListDialogPlanner.DialogWidth,

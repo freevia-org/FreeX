@@ -2854,6 +2854,38 @@ public sealed class AvaloniaShellSourceTests
     }
 
     [Fact]
+    public void DrawingFormatDialogs_UseSharedFreeXDialogWindowChrome()
+    {
+        var dialogBaseSource = File.ReadAllText(RepositoryFileLocator.Find(
+            "src", "FreeX.App.Avalonia", "FreeXDialogWindow.cs"));
+        var drawingFormatSource = File.ReadAllText(RepositoryFileLocator.Find(
+            "src", "FreeX.App.Avalonia", "MainWindow.DrawingFormatDialogs.cs"));
+
+        dialogBaseSource.Should().Contain("class FreeXDialogWindow : AvaloniaDialogWindow")
+            .And.Contain(": base(style)");
+        System.Text.RegularExpressions.Regex.Matches(
+                drawingFormatSource,
+                "new FreeXDialogWindow\\(DrawingDialogChromeStyle\\)")
+            .Should().HaveCount(4);
+        drawingFormatSource.Should().NotContain("new Window");
+    }
+
+    [Fact]
+    public void InsertObjectDialogs_UseSharedFreeXDialogWindowChromeAndModalKeys()
+    {
+        var source = File.ReadAllText(RepositoryFileLocator.Find(
+            "src", "FreeX.App.Avalonia", "MainWindow.InsertObjects.cs"));
+
+        System.Text.RegularExpressions.Regex.Matches(
+                source,
+                "new FreeXDialogWindow\\(InsertObjectDialogChromeStyle\\)")
+            .Should().HaveCount(2);
+        source.Should().NotContain("new Window")
+            .And.Contain("IsDefault = true")
+            .And.Contain("IsCancel = true");
+    }
+
+    [Fact]
     public void AvaloniaPageSetupDialog_UsesSharedPlannerForChoiceSurface()
     {
         var source = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MainWindow.PageLayout.cs"));

@@ -7,8 +7,10 @@ public enum PageLayoutRibbonActionKind
 {
     OpenPageSetupDialog,
     ShowPageBreaksMenu,
-    ShowGridlinesSheetOptions,
-    ShowHeadingsSheetOptions,
+    ToggleViewGridlines,
+    TogglePrintGridlines,
+    ToggleViewHeadings,
+    TogglePrintHeadings,
     ChooseBackground,
     DeleteBackground,
     SetPrintArea,
@@ -55,8 +57,8 @@ public static class PageLayoutRibbonActionPlanner
 
     public static IReadOnlyList<PageLayoutRibbonActionDescriptor> RibbonActionDescriptors { get; } =
     [
-        new("View Gridlines", PageLayoutRibbonActionKind.ShowGridlinesSheetOptions),
-        new("View Headings", PageLayoutRibbonActionKind.ShowHeadingsSheetOptions),
+        new("View Gridlines", PageLayoutRibbonActionKind.ToggleViewGridlines),
+        new("View Headings", PageLayoutRibbonActionKind.ToggleViewHeadings),
 
         new("Margins", PageLayoutRibbonActionKind.OpenPageSetupDialog,
             PageSetupOpenSource: PageLayoutPageSetupOpenSource.CustomMargins),
@@ -121,8 +123,8 @@ public static class PageLayoutRibbonActionPlanner
         new("Page Setup dialog", PageLayoutRibbonActionKind.OpenPageSetupDialog),
         new("Scale to Fit", PageLayoutRibbonActionKind.OpenPageSetupDialog,
             PageSetupOpenSource: PageLayoutPageSetupOpenSource.ScaleToFit),
-        new("Print Gridlines", PageLayoutRibbonActionKind.ShowGridlinesSheetOptions),
-        new("Print Headings", PageLayoutRibbonActionKind.ShowHeadingsSheetOptions),
+        new("Print Gridlines", PageLayoutRibbonActionKind.TogglePrintGridlines),
+        new("Print Headings", PageLayoutRibbonActionKind.TogglePrintHeadings),
         new(FreeXRibbonCommandIds.PageLayoutBreakInsert, PageLayoutRibbonActionKind.ApplyPageBreakAction,
             PageBreakAction: PageBreakMenuAction.Insert),
         new(FreeXRibbonCommandIds.PageLayoutBreakRemove, PageLayoutRibbonActionKind.ApplyPageBreakAction,

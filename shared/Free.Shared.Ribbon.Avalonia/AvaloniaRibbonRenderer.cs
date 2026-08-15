@@ -48,6 +48,7 @@ public static class AvaloniaRibbonRenderer
     private static readonly ConditionalWeakTable<CheckBox, CheckBoxExecutionState> CheckBoxExecutionStates = new();
     private static readonly ConditionalWeakTable<Control, KeyTipFlyoutState> KeyTipFlyoutStates = new();
     private static readonly ConditionalWeakTable<MenuItem, MenuKeyTipState> MenuKeyTipStates = new();
+    private static readonly ConditionalWeakTable<MenuItem, MenuCommandStateBinding> MenuCommandStateBindings = new();
     private static readonly ConditionalWeakTable<Application, object> PopupChromeStyleApplications = new();
 
     private sealed class KeyTipFlyoutState
@@ -61,6 +62,13 @@ public static class AvaloniaRibbonRenderer
     {
         public required Border Badge { get; init; }
         public object? OriginalIcon { get; set; }
+    }
+
+    private sealed class MenuCommandStateBinding
+    {
+        internal required RibbonCommandId CommandId { get; init; }
+        internal RibbonMenuItem? Definition { get; init; }
+        internal RibbonControl? CollapsedControl { get; init; }
     }
 
     private sealed class CheckBoxExecutionState
@@ -2348,6 +2356,7 @@ public static class AvaloniaRibbonRenderer
         var flyout = new MenuFlyout();
         foreach (var item in menu.Items)
             flyout.Items.Add(BuildMenuItem(item, registry, afterExecute));
+        flyout.Opened += (_, _) => RefreshMenuCommandStates(flyout, registry);
         flyout.Closed += (_, _) => CancelMenuPreviews(flyout, registry);
         return flyout;
     }
@@ -2390,8 +2399,12 @@ public static class AvaloniaRibbonRenderer
         else if (item.CommandId is { } commandId)
         {
             menuItem.Click += (_, _) => Execute(commandId, registry, afterExecute);
-            if (item.IsEnabled)
-                ApplyEnablement(menuItem, commandId, registry);
+            MenuCommandStateBindings.Add(menuItem, new MenuCommandStateBinding
+            {
+                CommandId = commandId,
+                Definition = item,
+            });
+            ApplyMenuCommandState(menuItem, registry);
             WirePreview(menuItem, commandId, registry);
         }
 
@@ -2454,6 +2467,48 @@ public static class AvaloniaRibbonRenderer
             }
 
             InvokePreview(new RibbonCommandId(commandId), _ => preview.CancelPreview());
+        }
+    }
+
+    private static void RefreshMenuCommandStates(
+        MenuFlyout flyout,
+        IRibbonCommandRegistry? registry)
+    {
+        var pending = new Stack<MenuItem>(flyout.Items.OfType<MenuItem>().Reverse());
+        while (pending.Count > 0)
+        {
+            var item = pending.Pop();
+            ApplyMenuCommandState(item, registry);
+            foreach (var child in item.Items.OfType<MenuItem>().Reverse())
+                pending.Push(child);
+        }
+    }
+
+    private static void ApplyMenuCommandState(
+        MenuItem item,
+        IRibbonCommandRegistry? registry)
+    {
+        if (!MenuCommandStateBindings.TryGetValue(item, out var binding))
+            return;
+
+        IRibbonCommand? command = null;
+        var commandAvailable = registry is not null
+            && registry.TryGet(binding.CommandId, out command);
+        var commandState = command is IRibbonStatefulCommand stateful
+            ? stateful.GetState()
+            : null;
+        var plan = binding.Definition is { } definition
+            ? RibbonMenuCommandStatePlanner.Plan(definition, commandAvailable, commandState)
+            : RibbonMenuCommandStatePlanner.PlanCollapsedControl(
+                binding.CollapsedControl
+                    ?? throw new InvalidOperationException("Collapsed menu state binding has no control."),
+                commandAvailable,
+                commandState);
+        item.IsEnabled = plan.IsEnabled;
+        if (plan.IsChecked is { } isChecked)
+        {
+            item.ToggleType = MenuItemToggleType.CheckBox;
+            item.IsChecked = isChecked;
         }
     }
 
@@ -2550,6 +2605,7 @@ public static class AvaloniaRibbonRenderer
         }
 
         flyout.Closed += (_, _) => CancelMenuPreviews(flyout, registry);
+        flyout.Opened += (_, _) => RefreshMenuCommandStates(flyout, registry);
 
         return flyout;
     }
@@ -2592,7 +2648,7 @@ public static class AvaloniaRibbonRenderer
         };
         RegisterMenuKeyTip(item, control.KeyTip);
         item.Click += (_, _) => Execute(control.CommandId, registry, afterExecute);
-        ApplyEnablement(item, control.CommandId, registry);
+        BindCollapsedGroupCommandState(item, control, registry);
         return item;
     }
 
@@ -2621,8 +2677,21 @@ public static class AvaloniaRibbonRenderer
         if (BuildMenu(control) is { Items.Count: > 0 })
             ApplyControlEnablement(item, control, registry, ResolvePalette());
         else
-            ApplyEnablement(item, control.CommandId, registry);
+            BindCollapsedGroupCommandState(item, control, registry);
         return item;
+    }
+
+    private static void BindCollapsedGroupCommandState(
+        MenuItem item,
+        RibbonControl control,
+        IRibbonCommandRegistry? registry)
+    {
+        MenuCommandStateBindings.Add(item, new MenuCommandStateBinding
+        {
+            CommandId = control.CommandId,
+            CollapsedControl = control,
+        });
+        ApplyMenuCommandState(item, registry);
     }
 
     // WPF BuildInlineDivider: a 1px theme-owned rule, stretched, margin 3.

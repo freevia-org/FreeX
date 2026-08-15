@@ -26,7 +26,7 @@ internal static class ParagraphBreaksDialog
         ParagraphBreaksResult? result = null;
         var surface = ParagraphBreaksDialogPlanner.Surface;
 
-        var dialog = new Window
+        var dialog = new FreeWDialogWindow
         {
             Title = surface.Title,
             Width = Layout.WindowWidth,

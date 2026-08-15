@@ -132,16 +132,6 @@ public partial class MainWindow
         UpdateViewport();
     }
 
-    private void SyncWorkbookViewModeToggleState(WorksheetViewMode viewMode)
-    {
-        var state = WorksheetViewModeUiStatePlanner.Build(viewMode);
-        _ribbonState.SetChecked("Normal", state.NormalChecked);
-        _ribbonState.SetChecked("Page Layout", state.PageLayoutChecked);
-        _ribbonState.SetChecked("Page Break Preview", state.PageBreakPreviewChecked);
-
-        SyncStatusViewShortcutState(state);
-    }
-
     private void SyncStatusViewShortcutState(WorksheetViewModeUiState state)
     {
         if (StatusNormalViewButton is not null)

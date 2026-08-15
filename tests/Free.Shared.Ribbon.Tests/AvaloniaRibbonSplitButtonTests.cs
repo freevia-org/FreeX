@@ -200,6 +200,47 @@ public sealed class AvaloniaRibbonSplitButtonTests
     }
 
     [Fact]
+    public async Task CollapsedGroup_ToggleProjectionRefreshesCheckedAndEnabledStateWhenOpened()
+    {
+        await Session.Dispatch(() =>
+        {
+            var command = new MutableStatefulCommand(
+                new RibbonCommandState(IsEnabled: true, IsChecked: false));
+            var registry = new RibbonCommandRegistry();
+            registry.Register("toggle", command);
+            var content = AvaloniaRibbonRenderer.BuildTabContent(
+                new RibbonDefinitionBuilder()
+                    .Tab("home", "Home", "H", tab => tab.Group("group", "Group", "G", 1, group =>
+                        group.Toggle("toggle", "Toggle")))
+                    .Build()
+                    .FindTab("home")!,
+                registry);
+            var window = Show(content, 90);
+            try
+            {
+                var collapsed = content.GetLogicalDescendants().OfType<Button>()
+                    .Single(button => button.Classes.Contains("free-ribbon-collapsed-group"));
+                var flyout = Assert.IsType<MenuFlyout>(collapsed.Flyout);
+                var projection = Assert.Single(flyout.Items.OfType<MenuItem>());
+                Assert.Equal(MenuItemToggleType.CheckBox, projection.ToggleType);
+                Assert.False(projection.IsChecked);
+                Assert.True(projection.IsEnabled);
+
+                command.State = new RibbonCommandState(IsEnabled: false, IsChecked: true);
+                flyout.ShowAt(collapsed);
+
+                Assert.Equal(MenuItemToggleType.CheckBox, projection.ToggleType);
+                Assert.True(projection.IsChecked);
+                Assert.False(projection.IsEnabled);
+            }
+            finally
+            {
+                window.Close();
+            }
+        }, CancellationToken.None);
+    }
+
+    [Fact]
     public async Task CollapsedGroupPopup_FocusesEnabledItemsTraversesAndRestoresAnchorOnEscape()
     {
         await Session.Dispatch(() =>
@@ -451,5 +492,16 @@ public sealed class AvaloniaRibbonSplitButtonTests
     private sealed class RecordingCommand(Action action) : IRibbonCommand
     {
         public void Execute(RibbonCommandContext context) => action();
+    }
+
+    private sealed class MutableStatefulCommand(RibbonCommandState initialState) : IRibbonStatefulCommand
+    {
+        public RibbonCommandState State { get; set; } = initialState;
+
+        public void Execute(RibbonCommandContext context)
+        {
+        }
+
+        public RibbonCommandState GetState() => State;
     }
 }

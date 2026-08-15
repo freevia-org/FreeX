@@ -3,6 +3,8 @@ using System.Windows.Automation;
 using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
+using Free.Shared.Shell;
+using Free.Shared.Shell.Wpf;
 using FreeP.App.Compositor;
 using FreeP.App.Rendering.Wpf;
 
@@ -21,6 +23,10 @@ public sealed partial class SlidePane : Border
     private bool _restoreFocusAfterRefresh;
 
     private sealed record SectionHeaderTag(string SectionId, int SectionIndex);
+
+    private sealed class SlideSectionNamePromptDialog : DialogWindow
+    {
+    }
 
     public SlidePane(PresentationWorkareaSession workarea)
     {
@@ -454,27 +460,18 @@ public sealed partial class SlidePane : Border
         {
             Content = prompt.PromptAcceptText,
             Width = 76,
-            IsDefault = true,
-            Margin = new Thickness(0, 0, 8, 0),
         };
         var cancel = new Button
         {
             Content = prompt.PromptCancelText,
             Width = 76,
-            IsCancel = true,
         };
-        var buttons = new StackPanel
-        {
-            Orientation = Orientation.Horizontal,
-            HorizontalAlignment = HorizontalAlignment.Right,
-        };
-        buttons.Children.Add(ok);
-        buttons.Children.Add(cancel);
+        var buttons = DialogButtonRowFactory.Create(ok, cancel);
         var panel = new StackPanel { Margin = new Thickness(14) };
         panel.Children.Add(new TextBlock { Text = prompt.PromptLabel, Margin = new Thickness(0, 0, 0, 4) });
         panel.Children.Add(textBox);
         panel.Children.Add(buttons);
-        var dialog = new Window
+        var dialog = new SlideSectionNamePromptDialog
         {
             Title = prompt.PromptTitle,
             Content = panel,

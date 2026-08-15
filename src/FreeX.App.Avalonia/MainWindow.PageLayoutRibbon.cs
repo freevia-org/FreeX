@@ -19,6 +19,30 @@ public partial class MainWindow
         return result.Success;
     }
 
+    private void TogglePrintGridlines()
+    {
+        if (_isOpening || _isSaving || !TryCommitPendingFormulaEdit())
+            return;
+
+        ClearSelectedDrawingObject();
+        ExecutePageLayoutCommandWithShellRefresh(
+            CreatePageLayoutCommandSession().PlanPrintGridlines(
+                !_session.ActiveSheet.PrintGridlines,
+                sheetId => _session.Workbook.GetSheet(sheetId)?.PrintHeadings ?? false));
+    }
+
+    private void TogglePrintHeadings()
+    {
+        if (_isOpening || _isSaving || !TryCommitPendingFormulaEdit())
+            return;
+
+        ClearSelectedDrawingObject();
+        ExecutePageLayoutCommandWithShellRefresh(
+            CreatePageLayoutCommandSession().PlanPrintHeadings(
+                sheetId => _session.Workbook.GetSheet(sheetId)?.PrintGridlines ?? false,
+                !_session.ActiveSheet.PrintHeadings));
+    }
+
     private void ApplyPageLayoutScaleWidth(string? text) =>
         ApplyPageLayoutScale(PageLayoutScaleField.Width, text);
 

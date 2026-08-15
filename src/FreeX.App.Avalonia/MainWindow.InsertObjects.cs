@@ -238,7 +238,7 @@ public sealed partial class MainWindow
     private async Task<CreateTableDialogPlan?> ShowCreateTableDialogAsync(string defaultRangeText, string tableStyleName)
     {
         CreateTableDialogPlan? result = null;
-        var dialog = new Window
+        var dialog = new FreeXDialogWindow(InsertObjectDialogChromeStyle)
         {
             Title = UiText.Get(CreateTableDialogPlanner.TitleKey),
             Width = CreateTableDialogPlanner.Width,
@@ -393,9 +393,20 @@ public sealed partial class MainWindow
 
         var browse = new Button { Content = UiText.Get("WfInsertObject_BrowseButton"), Width = 110 };
         AutomationProperties.SetAutomationId(browse, "WfInsertObjectBrowseButton");
-        var insert = new Button { Content = UiText.Get("WfInsertObject_InsertButton"), Width = 90, IsEnabled = false };
+        var insert = new Button
+        {
+            Content = UiText.Get("WfInsertObject_InsertButton"),
+            Width = 90,
+            IsEnabled = false,
+            IsDefault = true,
+        };
         AutomationProperties.SetAutomationId(insert, "WfInsertObjectInsertButton");
-        var cancel = new Button { Content = UiText.Get("WfInsertObject_CancelButton"), Width = 90 };
+        var cancel = new Button
+        {
+            Content = UiText.Get("WfInsertObject_CancelButton"),
+            Width = 90,
+            IsCancel = true,
+        };
         AutomationProperties.SetAutomationId(cancel, "WfInsertObjectCancelButton");
 
         browse.Click += async (_, _) =>
@@ -425,11 +436,12 @@ public sealed partial class MainWindow
             Foreground = Brush(120, 120, 120),
         });
 
-        var dialog = new Window
+        var dialog = new FreeXDialogWindow(InsertObjectDialogChromeStyle)
         {
             Title = UiText.Get("WfInsertObject_Title"),
             Width = 420,
             Height = 280,
+            CanResize = false,
             WindowStartupLocation = WindowStartupLocation.CenterOwner,
             ShowInTaskbar = false,
         };

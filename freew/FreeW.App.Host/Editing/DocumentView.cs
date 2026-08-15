@@ -9685,6 +9685,11 @@ public sealed partial class DocumentView : RichTextBox
             if (applicationClearancePt > 0)
                 paraFmt = paraFmt with { SpaceAfterPt = paraFmt.SpaceAfterPt + applicationClearancePt };
         }
+        var hasNonTextLayoutObject = paragraph.Runs.Any(run =>
+            run.Chart is { IsFloating: false } ||
+            run.SmartArt is { IsFloating: false } ||
+            run.WordArt is { IsFloating: false } ||
+            run.Image is { IsFloating: false });
         // Imported WordprocessingML uses Word's application default multiple when the package cascade
         // omits w:spacing/@w:line. Model-authored FreeW documents keep the host's natural single-line box.
         // Explicit paragraph/style rules and non-default model values remain authoritative.
@@ -9744,21 +9749,15 @@ public sealed partial class DocumentView : RichTextBox
             // they survive an edit/commit cycle without a Tag. WidowControl has no FlowDocument slot and
             // is carried on the Tag instead (see below).
             KeepWithNext = paraFmt.KeepWithNext,
-            // WPF has no widow/orphan setting, and Word's widowControl only guards against a single
-            // stranded first/last LINE — it never forces a whole paragraph to move as one unbreakable
-            // unit. An omitted (default) w:widowControl token therefore must NOT map to KeepTogether:
-            // doing so previously pushed every long default-formatted paragraph wholesale to the next
-            // page, changing pagination everywhere a real Word document leaves it to break normally.
-            // An explicit w:widowControl=1 token remains mapped to KeepTogether as the closest override
-            // WPF can express for a paragraph the source document singled out.
-            // Word keeps the caption/text run with a large inline object when the object would otherwise
-            // cross a page boundary. Apply the same paragraph-level constraint to inline charts, SmartArt,
-            // WordArt, and images while preserving the explicit model setting for ordinary paragraphs.
-            KeepTogether = paraFmt.KeepLinesTogether || paraFmt.WidowControl || paragraph.Runs.Any(run =>
-                run.Chart is { IsFloating: false } ||
-                run.SmartArt is { IsFloating: false } ||
-                run.WordArt is { IsFloating: false } ||
-                run.Image is { IsFloating: false })
+            // WPF has no widow/orphan setting. Use the shared Word pagination policy for ordinary
+            // paragraphs; its keep-together primitive is the closest native representation of the
+            // default two-line widow/orphan guard. Table-cell and non-text-object paths retain their
+            // existing ownership so this policy only changes ordinary body composition.
+            KeepTogether = DocumentParagraphPaginationPlanner.ShouldKeepParagraphTogether(
+                paraFmt,
+                isTableCell: inTableCell,
+                hasNonTextLayoutObject: hasNonTextLayoutObject) ||
+                hasNonTextLayoutObject
         };
 
         if (paraFmt.Border is { } border && TryParseColor(border.ColorHex, out var borderColor))

@@ -1,5 +1,6 @@
 using Free.Shared.Ribbon;
 using FreeW.App.Presentation.Dialogs;
+using FreeW.App.Presentation.DocumentView;
 using FreeW.App.Presentation.Editing;
 using FreeW.Core.Model;
 
@@ -154,6 +155,9 @@ public sealed record FreeWRibbonChartSmartArtExecutionPorts(
     Action<SmartArtLayoutPreset>? CommitSmartArtLayout = null,
     Action<SmartArtColorScheme>? CommitSmartArtColorScheme = null,
     Action<SmartArtStyle>? CommitSmartArtStyle = null);
+
+public sealed record FreeWRibbonChartSmartArtCommands(
+    IRibbonStatefulCommand ChartLegend);
 
 public sealed record FreeWRibbonImageExecutionPorts(
     Action PrepareExecution,
@@ -500,7 +504,7 @@ public static class FreeWRibbonEditorExecutionProfile
 
     }
 
-    public static void RegisterChartSmartArt(
+    public static FreeWRibbonChartSmartArtCommands RegisterChartSmartArt(
         FreeWRibbonCommandBindingPorts bindings,
         FreeWRibbonChartSmartArtExecutionPorts ports)
     {
@@ -561,10 +565,11 @@ public static class FreeWRibbonEditorExecutionProfile
                     ports));
         }
 
-        bindings.Bind(FreeWRibbonCommandAction.ChartToggleLegend, Stateful(
-            ports.ToggleChartLegend,
-            () => ports.SelectedChart() is not null,
-            ports.PrepareExecution));
+        var chartLegend = new FreeWRibbonStatefulPortCommand(
+            _ => ports.ToggleChartLegend(),
+            () => BuildChartLegendState(ports.SelectedChart()),
+            ports.PrepareExecution);
+        bindings.Bind(FreeWRibbonCommandAction.ChartToggleLegend, chartLegend);
         bindings.Bind(FreeWRibbonCommandAction.ChartTitle, AsyncStateful(
             _ => ExecuteSelectedDialogAsync(
                 ports.SelectedChart,
@@ -665,6 +670,19 @@ public static class FreeWRibbonEditorExecutionProfile
             },
             () => new RibbonCommandState(IsEnabled: SmartArtCommandPlanner.CanEdit(ports.SelectedSmartArt())),
             ports.PrepareExecution));
+
+        return new FreeWRibbonChartSmartArtCommands(chartLegend);
+    }
+
+    public static RibbonCommandState BuildChartLegendState(Chart? chart)
+    {
+        if (chart is null)
+            return new RibbonCommandState(IsEnabled: false, IsChecked: false);
+
+        var state = ChartSmartArtVisualPlanner.BuildChartElementCommandState(chart);
+        return new RibbonCommandState(
+            IsEnabled: state.CanToggleLegend,
+            IsChecked: state.IsLegendVisible);
     }
 
     public static void RegisterImageTableWorkflows(

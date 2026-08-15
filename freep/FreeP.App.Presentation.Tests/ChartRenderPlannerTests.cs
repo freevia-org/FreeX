@@ -446,7 +446,7 @@ public sealed class ChartRenderPlannerTests
         scene.Title.Should().NotBeNull();
         scene.Title!.Value.MaxLineCount.Should().Be(2);
         scene.Title.Value.Bounds.Should().Be(new ChartPlanRect(60, 11, 280, 56));
-        scene.Frame.Plot.Should().Be(new ChartPlanRect(44, 95, 280, 171));
+        scene.Frame.Plot.Should().Be(new ChartPlanRect(33, 95, 291, 171));
 
         var shortFrame = ChartRenderPlanner.BuildScenePlan(
             chart,

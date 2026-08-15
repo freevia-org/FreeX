@@ -106,6 +106,7 @@ public static class DocumentNoteRegionPlanner
     public const double RowHorizontalGapDip = 6.0;
 
     private const double PxPerPoint = 96.0 / 72.0;
+    private const double NoteAverageCharacterWidthDip = 6.0;
 
     public static DocumentNoteRegionPlan BuildFootnoteRegion(
         TextDocument document,
@@ -473,14 +474,14 @@ public static class DocumentNoteRegionPlanner
     private static int ApproximateCharsPerLine(double contentWidthDip)
     {
         var usableWidth = Math.Max(80, contentWidthDip - 20);
-        return Math.Max(12, (int)Math.Floor(usableWidth / 6.0));
+        return Math.Max(12, (int)Math.Floor(usableWidth / NoteAverageCharacterWidthDip));
     }
 
     private static int ApproximateContinuationCharsPerLine(double contentWidthDip)
-    {
-        var usableWidth = Math.Max(80, contentWidthDip - 20);
-        return Math.Max(12, (int)Math.Floor(usableWidth / 7.4));
-    }
+        // Continuation pages use the same note text column and font as the initial region. Keeping
+        // one width model prevents a long footnote from being split at a different line count than
+        // the renderer uses for its ordinary note band.
+        => ApproximateCharsPerLine(contentWidthDip);
 
     private static int WordsThatFit(IReadOnlyList<string> words, int maxCharacters)
     {

@@ -25,6 +25,7 @@ using System.Globalization;
 using FreeX.App.Presentation;
 using FreeX.App.Presentation.Accessibility;
 using FreeX.App.Presentation.Backstage;
+using FreeX.App.Presentation.Calculation;
 using FreeX.App.Presentation.Comments;
 using FreeX.App.Presentation.DataTools;
 using FreeX.App.Presentation.DefinedNames;
@@ -41,6 +42,7 @@ using FreeX.App.Presentation.PivotUI;
 using FreeX.Ribbon.Definitions;
 using FreeX.App.Presentation.QuickAnalysis;
 using FreeX.App.Presentation.Rendering;
+using FreeX.App.Presentation.Ribbon;
 using FreeX.App.Presentation.ScenarioManager;
 using FreeX.App.Presentation.SheetUI;
 using FreeX.App.Presentation.Shell;
@@ -171,7 +173,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
     {
         public override string ToString() => Label;
     }
-    private sealed class FormatCellsDialogWindow : Window
+    private sealed class FormatCellsDialogWindow : AvaloniaDialogWindow
     {
         internal void ResizeClient(Size size) => ClientSize = size;
     }
@@ -1459,19 +1461,53 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
                 {
                     ["Hide"] = () => new RibbonCommandState(IsEnabled: WindowRegistry.CanHide(this)),
                     ["Unhide"] = () => new RibbonCommandState(IsEnabled: WindowRegistry.HiddenWindows.Count > 0),
-                    ["Gridlines"] = () => new RibbonCommandState(IsChecked: _session.IsShowingGridlines),
-                    ["Headings"] = () => new RibbonCommandState(IsChecked: _session.IsShowingHeadings),
-                    ["Ruler"] = () => new RibbonCommandState(IsChecked: _session.IsShowingRulers),
+                    ["Gridlines"] = () => GetWorkbookViewRibbonState().GetCommandState("Gridlines"),
+                    ["View Gridlines"] = () => GetPageLayoutSheetOptionsRibbonState().GetCommandState("View Gridlines"),
+                    ["Print Gridlines"] = () => GetPageLayoutSheetOptionsRibbonState().GetCommandState("Print Gridlines"),
+                    ["Headings"] = () => GetWorkbookViewRibbonState().GetCommandState("Headings"),
+                    ["View Headings"] = () => GetPageLayoutSheetOptionsRibbonState().GetCommandState("View Headings"),
+                    ["Print Headings"] = () => GetPageLayoutSheetOptionsRibbonState().GetCommandState("Print Headings"),
+                    ["Ruler"] = () => GetWorkbookViewRibbonState().GetCommandState("Ruler"),
+                    ["Show Formulas"] = () => GetWorkbookViewRibbonState().GetCommandState("Show Formulas"),
+                    ["Split"] = () => GetWorkbookViewRibbonState().GetCommandState("Split"),
+                    ["Normal"] = () => GetWorkbookViewRibbonState().GetCommandState("Normal"),
+                    ["Page Layout"] = () => GetWorkbookViewRibbonState().GetCommandState("Page Layout"),
+                    ["Page Break Preview"] = () => GetWorkbookViewRibbonState().GetCommandState("Page Break Preview"),
                     ["Formula Bar"] = () => new RibbonCommandState(IsChecked: !_isFormulaBarHidden),
-                    ["Scale Width"] = () => new RibbonCommandState(
-                        Value: PageLayoutInputParser.FormatScalePages(_session.ActiveSheet.ScaleToFit.FitToPagesWide)),
-                    ["Scale Height"] = () => new RibbonCommandState(
-                        Value: PageLayoutInputParser.FormatScalePages(_session.ActiveSheet.ScaleToFit.FitToPagesTall)),
-                    ["Scale Percent"] = () => new RibbonCommandState(
-                        Value: PageLayoutInputParser.FormatScalePercent(_session.ActiveSheet.ScaleToFit.ScalePercent)),
+                    [FreeXRibbonCommandIds.FormulasCalculationAutomatic] = () =>
+                        CalculationCommandPolicy.ModeCommandState(
+                            _session.Workbook.CalculationMode,
+                            WorkbookCalculationMode.Automatic),
+                    [FreeXRibbonCommandIds.FormulasCalculationAutomaticExceptDataTables] = () =>
+                        CalculationCommandPolicy.ModeCommandState(
+                            _session.Workbook.CalculationMode,
+                            WorkbookCalculationMode.AutomaticExceptDataTables),
+                    [FreeXRibbonCommandIds.FormulasCalculationManual] = () =>
+                        CalculationCommandPolicy.ModeCommandState(
+                            _session.Workbook.CalculationMode,
+                            WorkbookCalculationMode.Manual),
+                    ["Scale Width"] = () => GetPageLayoutScaleRibbonState().GetCommandState("Scale Width"),
+                    ["Scale Height"] = () => GetPageLayoutScaleRibbonState().GetCommandState("Scale Height"),
+                    ["Scale Percent"] = () => GetPageLayoutScaleRibbonState().GetCommandState("Scale Percent"),
                     ["Crop Picture"] = () => GetDrawingObjectContextualRibbonCommandState(DrawingObjectContextualRibbonCommand.CropPicture),
                     ["Shape Gradient"] = () => GetDrawingObjectContextualRibbonCommandState(DrawingObjectContextualRibbonCommand.ShapeGradient),
                     ["Shape Effects"] = () => GetDrawingObjectContextualRibbonCommandState(DrawingObjectContextualRibbonCommand.ShapeEffects),
+                    [FreeXRibbonCommandIds.DrawingShapeEffectNone] = () =>
+                        GetShapeEffectPresetRibbonState(DrawingShapeEffectPreset.None),
+                    [FreeXRibbonCommandIds.DrawingShapeEffectShadow] = () =>
+                        GetShapeEffectPresetRibbonState(DrawingShapeEffectPreset.Shadow),
+                    [FreeXRibbonCommandIds.DrawingShapeEffectInnerShadow] = () =>
+                        GetShapeEffectPresetRibbonState(DrawingShapeEffectPreset.InnerShadow),
+                    [FreeXRibbonCommandIds.DrawingShapeEffectReflection] = () =>
+                        GetShapeEffectPresetRibbonState(DrawingShapeEffectPreset.Reflection),
+                    [FreeXRibbonCommandIds.DrawingShapeEffectGlow] = () =>
+                        GetShapeEffectPresetRibbonState(DrawingShapeEffectPreset.Glow),
+                    [FreeXRibbonCommandIds.DrawingShapeEffectSoftEdges] = () =>
+                        GetShapeEffectPresetRibbonState(DrawingShapeEffectPreset.SoftEdges),
+                    [FreeXRibbonCommandIds.DrawingShapeEffectBevel] = () =>
+                        GetShapeEffectPresetRibbonState(DrawingShapeEffectPreset.Bevel),
+                    [FreeXRibbonCommandIds.DrawingShapeEffectThreeDRotation] = () =>
+                        GetShapeEffectPresetRibbonState(DrawingShapeEffectPreset.ThreeDRotation),
                     // View ▸ Window ▸ Side by Side + Synchronous Scrolling toggle states.
                     ["View Side by Side"] = GetSideBySideRibbonState,
                     ["Synchronous Scrolling"] = GetSynchronousScrollingRibbonState,
@@ -2372,9 +2408,9 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         _chooseSheetBackgroundMenuItem.Click += (_, _) => ChooseSheetBackground();
         _deleteSheetBackgroundMenuItem.Click += (_, _) => DeleteSheetBackground();
 
-        _printGridlinesMenuItem.Click += async (_, _) => await ShowGridlinesSheetOptionsAsync();
+        _printGridlinesMenuItem.Click += (_, _) => TogglePrintGridlines();
 
-        _printHeadingsMenuItem.Click += async (_, _) => await ShowHeadingsSheetOptionsAsync();
+        _printHeadingsMenuItem.Click += (_, _) => TogglePrintHeadings();
 
         _showGridlinesMenuItem.ToggleType = MenuItemToggleType.CheckBox;
         _showGridlinesMenuItem.Click += (_, _) => ToggleShowGridlines();
@@ -3990,6 +4026,9 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         RefreshSlicerTimelinePane();
         RefreshPivotContextualTab();
         UpdateSaveButton();
+        WorkbookHomeFormatRibbonStatePublisher.Publish(
+            _ribbonStateStore,
+            ToolbarVisualState.From(_session.SelectedRangeStartStyle));
         _refreshRibbonToggleStates?.Invoke();
         // R126-avalonia-watch-window-live-refresh: RefreshShell is the shell-wide choke point every
         // cell-edit/recalculation path (CommitFormulaBox and its many siblings) already calls once
@@ -12995,6 +13034,25 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
 
         RefreshShell(showFormulas ? "Showing formulas" : "Showing values");
     }
+
+    private WorkbookViewRibbonStatePlan GetWorkbookViewRibbonState() =>
+        WorkbookViewRibbonStatePlanner.Build(
+            _session.ViewMode,
+            _session.IsShowingGridlines,
+            _session.IsShowingHeadings,
+            _session.IsShowingRulers,
+            _session.IsShowingFormulas,
+            _session.GetEffectiveSplitRow() is not null || _session.GetEffectiveSplitCol() is not null);
+
+    private WorkbookPageLayoutSheetOptionsRibbonStatePlan GetPageLayoutSheetOptionsRibbonState() =>
+        WorkbookPageLayoutSheetOptionsRibbonStatePlanner.Build(
+            _session.IsShowingGridlines,
+            _session.ActiveSheet.PrintGridlines,
+            _session.IsShowingHeadings,
+            _session.ActiveSheet.PrintHeadings);
+
+    private WorkbookPageLayoutScaleRibbonStatePlan GetPageLayoutScaleRibbonState() =>
+        WorkbookPageLayoutScaleRibbonStatePlanner.Build(_session.ActiveSheet.ScaleToFit);
 
     private void HideActiveSheet()
     {

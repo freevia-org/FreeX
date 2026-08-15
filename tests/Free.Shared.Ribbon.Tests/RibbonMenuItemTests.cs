@@ -46,4 +46,19 @@ public class RibbonMenuItemTests
             RibbonCommandIconKind.Warning,
             RibbonCommandIconAccent.Warning));
     }
+
+    [Fact]
+    public void Builder_CarriesCheckableMenuState()
+    {
+        var definition = new RibbonDefinitionBuilder()
+            .Tab("tab", "Tab", "T", tab => tab.Group("group", "Group", "G", 1, group =>
+                group.Medium("menu", "Menu", RibbonCommandIconKind.More, menu: menu =>
+                    menu.Item("choice", "Choice", "C", isChecked: false))))
+            .Build();
+
+        var item = definition.Tabs.Single().Groups.Single().Controls
+            .OfType<RibbonDropdown>().Single().Menu.Items.Single();
+
+        item.IsChecked.Should().BeFalse();
+    }
 }

@@ -84,7 +84,33 @@ public sealed class CommonDialogChromeParityTests
 
         var hyperlink = Read(root, "freep", "FreeP.App.Avalonia", "HyperlinkDialog.cs");
         hyperlink.Should().Contain(": base(DialogChromeStyle)")
-            .And.NotContain("AvaloniaCompactDialogChrome.ApplyWindow(this, DialogChromeStyle)");
+            .And.Contain("AvaloniaDialogButtonRowFactory.CreateRow(")
+            .And.Contain("AvaloniaCompactDialogChrome.ApplyWpfDisabledComboSurface(_slideCombo)")
+            .And.NotContain("AvaloniaCompactDialogChrome.ApplyWindow(this, DialogChromeStyle)")
+            .And.NotContain("WpfCancelButtonBackgroundBrush")
+            .And.NotContain("WpfDefaultButtonBorderBrush")
+            .And.NotContain("ApplyWpfButtonChrome")
+            .And.NotContain("Spacing = 13");
+    }
+
+    [Fact]
+    public void SlideSectionNamePromptsUseSharedChromeActionRowsAndKeyboardSemantics()
+    {
+        var root = TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeP.slnx");
+
+        var wpf = Read(root, "freep", "FreeP.App.Host", "SlidePane.cs");
+        wpf.Should().Contain("SlideSectionNamePromptDialog : DialogWindow")
+            .And.Contain("DialogButtonRowFactory.Create(ok, cancel)")
+            .And.Contain("new SlideSectionNamePromptDialog")
+            .And.NotContain("var dialog = new Window");
+
+        var avalonia = Read(root, "freep", "FreeP.App.Avalonia", "MainWindow.cs");
+        avalonia.Should().Contain("SlideSectionNamePromptDialog : FreePDialogWindow")
+            .And.Contain("AvaloniaDialogButtonRowFactory.CreateRow([ok, cancel])")
+            .And.Contain("IsDefault = true")
+            .And.Contain("IsCancel = true")
+            .And.Contain("new SlideSectionNamePromptDialog")
+            .And.NotContain("var dialog = new Window");
     }
 
     private static string Read(string root, params string[] parts) =>

@@ -284,6 +284,18 @@ public sealed class FormatCellsDialogPlannerTests
             .And.NotContain("new FormatCellsCompactRequest(");
     }
 
+    [Fact]
+    public void AvaloniaFormatCells_UsesSharedCompactDialogWindowPolicy()
+    {
+        var source = File.ReadAllText(RepositoryFileLocator.Find(
+            "src",
+            "FreeX.App.Avalonia",
+            "MainWindow.cs"));
+
+        source.Should().Contain("private sealed class FormatCellsDialogWindow : AvaloniaDialogWindow")
+            .And.NotContain("private sealed class FormatCellsDialogWindow : Window");
+    }
+
     private static void AssertValidation(
         FormatCellsDialogInput input,
         FormatCellsDialogPlannerTab expectedTab,

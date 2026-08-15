@@ -74,7 +74,7 @@ public static class FreeXRibbonDefinition
                 .Medium("Object Outline", "Object Outline", Ico.Border, "OO")
                 .Medium("Crop Picture", "Crop Picture", Ico.Picture, "C", menu: m => m.Item(FreeXRibbonCommandIds.DrawingCrop, "Crop...", "C").Item(FreeXRibbonCommandIds.DrawingResetCrop, "Reset Crop", "R"))
                 .Medium("Shape Gradient", "Shape Gradient", Ico.RibbonShape, "G")
-                .Medium("Shape Effects", "Shape Effects", Ico.RibbonShape, "FX", menu: m => m.Item(FreeXRibbonCommandIds.DrawingShapeEffectNone, "No Effect", "N").Separator().Item(FreeXRibbonCommandIds.DrawingShapeEffectShadow, "Shadow", "S").Item(FreeXRibbonCommandIds.DrawingShapeEffectInnerShadow, "Inner Shadow", "I").Item(FreeXRibbonCommandIds.DrawingShapeEffectReflection, "Reflection", "R").Item(FreeXRibbonCommandIds.DrawingShapeEffectGlow, "Glow", "G").Item(FreeXRibbonCommandIds.DrawingShapeEffectSoftEdges, "Soft Edges", "E").Item(FreeXRibbonCommandIds.DrawingShapeEffectBevel, "Bevel", "B").Item(FreeXRibbonCommandIds.DrawingShapeEffectThreeDRotation, "3-D Rotation", "D")))
+                .Medium("Shape Effects", "Shape Effects", Ico.RibbonShape, "FX", menu: AddShapeEffectMenuItems))
         )
         .Tab("PageLayoutTab", "Page Layout", "P", tab => tab
             .Group("PageLayoutThemesGroup", "Themes", null, priority: 110,
@@ -138,7 +138,7 @@ public static class FreeXRibbonDefinition
                 g => g
                 .Large("Calculate Now", "Calculate Now", Ico.Refresh, "CN")
                 .Large("Calculate Sheet", "Calculate Sheet", Ico.Refresh, "SC")
-                .Large("Calculation Options", "Calculation Options", Ico.Refresh, "O", menu: m => m.Item(FreeXRibbonCommandIds.FormulasCalculationAutomatic, "Automatic", "A").Item(FreeXRibbonCommandIds.FormulasCalculationAutomaticExceptDataTables, "Automatic Except Data Tables", "E").Item(FreeXRibbonCommandIds.FormulasCalculationManual, "Manual", "M")))
+                .Large("Calculation Options", "Calculation Options", Ico.Refresh, "O", menu: m => m.Item(FreeXRibbonCommandIds.FormulasCalculationAutomatic, "Automatic", "A", isChecked: false).Item(FreeXRibbonCommandIds.FormulasCalculationAutomaticExceptDataTables, "Automatic Except Data Tables", "E", isChecked: false).Item(FreeXRibbonCommandIds.FormulasCalculationManual, "Manual", "M", isChecked: false)))
         )
         .Tab("DataTab", "Data", "A", tab => tab
             .Group("DataGetTransformGroup", "Get Transform", null, priority: 180,
@@ -371,7 +371,7 @@ public static class FreeXRibbonDefinition
                 .Medium("Shape Fill", "Shape Fill", Ico.RibbonShape, "F")
                 .Medium("Object Outline", "Object Outline", Ico.Border, "O")
                 .Medium("Shape Gradient", "Shape Gradient", Ico.RibbonShape, "G")
-                .Medium("Shape Effects", "Shape Effects", Ico.RibbonShape, "E", menu: m => m.Item(FreeXRibbonCommandIds.DrawingShapeEffectNone, "No Effect", "N").Separator().Item(FreeXRibbonCommandIds.DrawingShapeEffectShadow, "Shadow", "S").Item(FreeXRibbonCommandIds.DrawingShapeEffectInnerShadow, "Inner Shadow", "I").Item(FreeXRibbonCommandIds.DrawingShapeEffectReflection, "Reflection", "R").Item(FreeXRibbonCommandIds.DrawingShapeEffectGlow, "Glow", "G").Item(FreeXRibbonCommandIds.DrawingShapeEffectSoftEdges, "Soft Edges", "E").Item(FreeXRibbonCommandIds.DrawingShapeEffectBevel, "Bevel", "B").Item(FreeXRibbonCommandIds.DrawingShapeEffectThreeDRotation, "3-D Rotation", "D")))
+                .Medium("Shape Effects", "Shape Effects", Ico.RibbonShape, "E", menu: AddShapeEffectMenuItems))
             .Group("ShapeFormatArrangeGroup", "Arrange", null, priority: 70,
                 g => g
                 .Large("Bring Forward", "Bring Forward", Ico.BringForward, "BF")
@@ -464,4 +464,18 @@ public static class FreeXRibbonDefinition
                 .Medium("PivotTable Styles", "PivotTable Styles", Ico.PivotTable, "Y"))
         )
         .Build();
+
+    private static void AddShapeEffectMenuItems(RibbonMenuBuilder menu)
+    {
+        menu
+            .Item(FreeXRibbonCommandIds.DrawingShapeEffectNone, "No Effect", "N", isChecked: false)
+            .Separator()
+            .Item(FreeXRibbonCommandIds.DrawingShapeEffectShadow, "Shadow", "S", isChecked: false)
+            .Item(FreeXRibbonCommandIds.DrawingShapeEffectInnerShadow, "Inner Shadow", "I", isChecked: false)
+            .Item(FreeXRibbonCommandIds.DrawingShapeEffectReflection, "Reflection", "R", isChecked: false)
+            .Item(FreeXRibbonCommandIds.DrawingShapeEffectGlow, "Glow", "G", isChecked: false)
+            .Item(FreeXRibbonCommandIds.DrawingShapeEffectSoftEdges, "Soft Edges", "E", isChecked: false)
+            .Item(FreeXRibbonCommandIds.DrawingShapeEffectBevel, "Bevel", "B", isChecked: false)
+            .Item(FreeXRibbonCommandIds.DrawingShapeEffectThreeDRotation, "3-D Rotation", "D", isChecked: false);
+    }
 }

@@ -492,6 +492,8 @@ try {
         claimBoundary = "Route/scenario coverage, committed PNG manifests, and local WPF/Avalonia comparison results only; no PowerPoint visual-parity claim is made."
     }
 
+    $freePNextSlice = "The tracked PowerPoint corpus has 43 COM-exported reference slides across 26 ready decks; the grouped-list SmartArt deck still lacks ten Office references. Current-source recalibration averages $($freePOfficeRecalibration.summary.wpfAverageMeanPercent)% for WPF and $($freePOfficeRecalibration.summary.avaloniaAverageMeanPercent)% for Avalonia over the 43 paired Office slides, with current maxima of $($freePOfficeRecalibration.summary.wpfMaximumMeanPercent)% for WPF and $($freePOfficeRecalibration.summary.avaloniaMaximumMeanPercent)% for Avalonia. Prioritize bullets/text-autofit and 3-D charts."
+
     $freeP = [ordered]@{
         app = "FreeP"
         commandInventory = [ordered]@{
@@ -508,7 +510,7 @@ try {
             workflowEvidenceRows = [int](Get-JsonPropertyValue $freep.summary "workflowEvidenceRows")
         }
         renderedEvidence = $freePRenderedEvidence
-        nextSlice = "The tracked PowerPoint corpus has 43 COM-exported reference slides across 26 ready decks; 15-smartart-grouped-list still lacks ten Office references. Current-source recalibration averages $($freePOfficeRecalibration.summary.wpfAverageMeanPercent)% for WPF and $($freePOfficeRecalibration.summary.avaloniaAverageMeanPercent)% for Avalonia over the 43 paired Office slides, with SmartArt maxima above 21%. Prioritize shared SmartArt geometry and text placement, then text/autofit and 3-D chart projection."
+        nextSlice = $freePNextSlice
     }
 
     $dashboard = [ordered]@{

@@ -120,6 +120,18 @@ public sealed partial class MainWindow
         return null;
     }
 
+    private RibbonCommandState GetShapeEffectPresetRibbonState(DrawingShapeEffectPreset candidatePreset)
+    {
+        var shape = DrawingTargetResolver.ResolveSelectedDrawingShape(
+            _session.ActiveSheet,
+            _selectedDrawingObjectKind,
+            _selectedDrawingObjectId).Target;
+        return DrawingObjectContextualRibbonPlanner.BuildShapeEffectCommandState(
+            shape?.GetEffectiveEffectPreset() ?? DrawingShapeEffectPreset.None,
+            candidatePreset,
+            isEnabled: shape is not null);
+    }
+
     private DrawingObjectFormatTarget? ResolveSelectedFormatTarget()
     {
         var result = DrawingObjectFormatCommandPolicy.ResolveSelectedFormatTarget(

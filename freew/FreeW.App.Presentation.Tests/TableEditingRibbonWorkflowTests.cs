@@ -82,6 +82,48 @@ public sealed class TableEditingRibbonWorkflowTests
             "prepare", "borders");
     }
 
+    [Theory]
+    [InlineData(FreeWRibbonCommandAction.TableHeaderRow, true)]
+    [InlineData(FreeWRibbonCommandAction.TableBandedRows, false)]
+    [InlineData(FreeWRibbonCommandAction.TableLastRow, true)]
+    [InlineData(FreeWRibbonCommandAction.TableFirstColumn, false)]
+    [InlineData(FreeWRibbonCommandAction.TableLastColumn, true)]
+    [InlineData(FreeWRibbonCommandAction.TableBandedCols, false)]
+    [InlineData(FreeWRibbonCommandAction.TableViewGridlines, true)]
+    [InlineData(FreeWRibbonCommandAction.TableRepeatHeader, true)]
+    public void TableTogglesPublishLiveCheckedStateAndDisableOutsideTables(
+        FreeWRibbonCommandAction action,
+        bool expectedChecked)
+    {
+        var events = new List<string>();
+        var state = new TableToggleStateSource
+        {
+            Formatting = new TableFormatting
+            {
+                HeaderRow = true,
+                BandedRows = false,
+                LastRow = true,
+                FirstColumn = false,
+                LastColumn = true,
+                BandedColumns = false,
+                RepeatHeaderRow = true,
+            },
+            ViewGridlines = true,
+        };
+        var builder = new FreeWRibbonEditorCommandFamilyBuilder();
+        TableEditingRibbonWorkflow.Register(builder, CreatePorts(events, state));
+        var command = builder.Build().Commands[action]
+            .Should().BeAssignableTo<IRibbonStatefulCommand>().Subject;
+
+        command.GetState().Should().Be(
+            new RibbonCommandState(IsEnabled: true, IsChecked: expectedChecked));
+
+        state.Formatting = null;
+
+        command.GetState().Should().Be(
+            new RibbonCommandState(IsEnabled: false, IsChecked: false));
+    }
+
     [Fact]
     public void SharedWorkflowOwnsEveryFixedBorderPresetAndClearSemantics()
     {
@@ -160,6 +202,8 @@ public sealed class TableEditingRibbonWorkflowTests
         {
             source.Should().Contain("TableEditingRibbonWorkflow.Register(");
             source.Should().Contain("CreateTableEditingPorts(");
+            source.Should().Contain("CurrentTableFormatting: () => editor.CaretTableContext()?.Table.Formatting");
+            source.Should().Contain("ViewGridlines: () => editor.");
             source.Should().NotContain(".Bind(FreeWRibbonCommandAction.TableHeaderRow");
             source.Should().NotContain(".Bind(FreeWRibbonCommandAction.TableSelectTable");
             source.Should().NotContain(".Bind(FreeWRibbonCommandAction.TableAutofitContents");
@@ -202,9 +246,13 @@ public sealed class TableEditingRibbonWorkflowTests
         FreeWRibbonCommandAction action) =>
         commands[action].Execute(RibbonCommandContext.Empty);
 
-    private static TableEditingRibbonPorts CreatePorts(ICollection<string> events) =>
+    private static TableEditingRibbonPorts CreatePorts(
+        ICollection<string> events,
+        TableToggleStateSource? state = null) =>
         new(
             PrepareExecution: () => events.Add("prepare"),
+            CurrentTableFormatting: () => state?.Formatting,
+            ViewGridlines: () => state?.ViewGridlines ?? false,
             ToggleHeaderRow: () => events.Add("toggle-header-row"),
             ToggleBandedRows: () => events.Add("toggle-banded-rows"),
             ToggleLastRow: () => events.Add("toggle-last-row"),
@@ -235,4 +283,10 @@ public sealed class TableEditingRibbonWorkflowTests
             SetCellTextDirection: direction => events.Add($"direction:{direction}"),
             SetCellBorders: (edges, clearEdges) => events.Add($"border:{edges}:{clearEdges}"),
             ToggleRepeatHeaderRow: () => events.Add("toggle-repeat-header"));
+
+    private sealed class TableToggleStateSource
+    {
+        public TableFormatting? Formatting { get; set; }
+        public bool ViewGridlines { get; set; }
+    }
 }

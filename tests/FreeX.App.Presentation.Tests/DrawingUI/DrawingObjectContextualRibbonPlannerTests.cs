@@ -2,6 +2,7 @@ using FluentAssertions;
 using FreeX.App.Presentation.DrawingUI;
 using FreeX.Core.Model;
 using FreeX.Ribbon.Definitions;
+using Free.Shared.Ribbon;
 
 namespace FreeX.App.Presentation.Tests.DrawingUI;
 
@@ -113,5 +114,99 @@ public sealed class DrawingObjectContextualRibbonPlannerTests
             FreeXRibbonCommandIds.DrawingShapeEffectThreeDRotation,
             DrawingObjectContextualCommandAction.ShapeEffectPreset,
             DrawingShapeEffectPreset.ThreeDRotation));
+    }
+
+    [Theory]
+    [InlineData(DrawingShapeEffectPreset.None)]
+    [InlineData(DrawingShapeEffectPreset.Glow)]
+    [InlineData(DrawingShapeEffectPreset.ThreeDRotation)]
+    public void BuildShapeEffectCommandStates_ChecksExactlyTheCurrentPreset(
+        DrawingShapeEffectPreset currentPreset)
+    {
+        var states = DrawingObjectContextualRibbonPlanner.BuildShapeEffectCommandStates(
+            currentPreset,
+            isEnabled: true);
+
+        states.Should().HaveCount(8);
+        states.Select(state => state.CommandId).Should().OnlyHaveUniqueItems();
+        states.Should().ContainSingle(state => state.State.IsChecked)
+            .Which.CommandId.Should().Be(
+                DrawingObjectContextualRibbonPlanner.CreatePictureShapeCommandSpecs()
+                    .Single(spec => spec.EffectPreset == currentPreset).CommandId);
+        states.Should().OnlyContain(state => state.State.IsEnabled);
+    }
+
+    [Fact]
+    public void BuildShapeEffectCommandStates_DisablesEveryPresetWithoutLosingSelection()
+    {
+        var states = DrawingObjectContextualRibbonPlanner.BuildShapeEffectCommandStates(
+            DrawingShapeEffectPreset.Reflection,
+            isEnabled: false);
+
+        states.Should().OnlyContain(state => !state.State.IsEnabled);
+        states.Should().ContainSingle(state => state.State.IsChecked);
+    }
+
+    [Fact]
+    public void TryResolveShapeEffectPreset_UsesCanonicalCommandIds()
+    {
+        foreach (var spec in DrawingObjectContextualRibbonPlanner.CreatePictureShapeCommandSpecs()
+                     .Where(spec => spec.Action == DrawingObjectContextualCommandAction.ShapeEffectPreset))
+        {
+            DrawingObjectContextualRibbonPlanner.TryResolveShapeEffectPreset(
+                    spec.CommandId,
+                    out var preset)
+                .Should().BeTrue();
+            preset.Should().Be(spec.EffectPreset);
+        }
+
+        DrawingObjectContextualRibbonPlanner.TryResolveShapeEffectPreset(
+                DrawingObjectContextualRibbonPlanner.ShapeEffectsCommandName,
+                out _)
+            .Should().BeFalse();
+    }
+
+    [Fact]
+    public void CanonicalShapeEffectMenus_DeclareEveryPresetCheckable()
+    {
+        var menus = FreeXRibbon.Build().Tabs
+            .SelectMany(tab => tab.Groups)
+            .SelectMany(group => group.Controls)
+            .OfType<RibbonDropdown>()
+            .Where(control => control.CommandId.Value == DrawingObjectContextualRibbonPlanner.ShapeEffectsCommandName)
+            .Select(control => control.Menu)
+            .ToArray();
+
+        menus.Should().HaveCount(2);
+        foreach (var menu in menus)
+        {
+            var commands = menu.Items.Where(item => item.CommandId is not null).ToArray();
+            commands.Should().HaveCount(8);
+            commands.Should().OnlyContain(item => item.IsChecked == false);
+        }
+    }
+
+    [Fact]
+    public void Hosts_ConsumeSharedShapeEffectStateAndWpfMenuMetadata()
+    {
+        var wpfDrawing = ReadSource("src", "FreeX.App.Host", "MainWindow.Drawing.cs");
+        var wpfContext = ReadSource("src", "FreeX.App.Host", "MainWindow.DrawingContextualTabs.cs");
+        var avalonia = ReadSource("src", "FreeX.App.Avalonia", "MainWindow.cs");
+        var wpfRenderer = ReadSource("shared", "Free.Shared.Ribbon.Wpf", "RibbonWpfRenderer.cs");
+
+        wpfDrawing.Should().Contain("DrawingObjectContextualRibbonPlanner.TryResolveShapeEffectPreset(");
+        wpfDrawing.Should().NotContain("ShapeEffectsMenu_Opened");
+        wpfContext.Should().Contain("DrawingObjectContextualRibbonPlanner.BuildShapeEffectCommandStates(");
+        wpfContext.Should().Contain("_ribbonState.SetState(commandState.CommandId, commandState.State);");
+        avalonia.Should().Contain("GetShapeEffectPresetRibbonState(DrawingShapeEffectPreset.");
+        wpfRenderer.Should().Contain("RibbonMetadata.SetCommandName(menuItem, commandId.Value);");
+        wpfRenderer.Should().Contain("contextMenu.Opened += (_, _) => RefreshMenuCommandStates(");
+        wpfRenderer.Should().Contain("RibbonMenuCommandStatePlanner.Plan(");
+    }
+
+    private static string ReadSource(params string[] path)
+    {
+        var directory = RepositoryFileLocator.FindDirectory(path[..^1]);
+        return File.ReadAllText(Path.Combine(directory, path[^1]));
     }
 }

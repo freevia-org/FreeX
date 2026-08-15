@@ -186,6 +186,42 @@ public sealed class PageLayoutCommandSessionTests
     }
 
     [Fact]
+    public void PrintOptionPlans_PreserveEachGroupedSheetsCompanionSetting()
+    {
+        var workbook = new Workbook("Book");
+        var first = workbook.AddSheet("First");
+        var second = workbook.AddSheet("Second");
+        var context = new TestCommandContext(workbook);
+        var session = new PageLayoutCommandSession([first.Id, second.Id]);
+        first.PrintHeadings = false;
+        second.PrintHeadings = true;
+
+        session.PlanPrintGridlines(
+                printGridlines: true,
+                sheetId => workbook.GetSheet(sheetId)!.PrintHeadings)
+            .Command.Apply(context)
+            .Success.Should().BeTrue();
+
+        first.PrintGridlines.Should().BeTrue();
+        second.PrintGridlines.Should().BeTrue();
+        first.PrintHeadings.Should().BeFalse();
+        second.PrintHeadings.Should().BeTrue();
+
+        first.PrintGridlines = false;
+        second.PrintGridlines = true;
+        session.PlanPrintHeadings(
+                sheetId => workbook.GetSheet(sheetId)!.PrintGridlines,
+                printHeadings: false)
+            .Command.Apply(context)
+            .Success.Should().BeTrue();
+
+        first.PrintGridlines.Should().BeFalse();
+        second.PrintGridlines.Should().BeTrue();
+        first.PrintHeadings.Should().BeFalse();
+        second.PrintHeadings.Should().BeFalse();
+    }
+
+    [Fact]
     public void Constructor_DeduplicatesTargetsAndRejectsEmptyTargetSet()
     {
         var sheetId = SheetId.New();

@@ -335,6 +335,25 @@ public sealed class PresentationTransitionCommandPlannerTests
     }
 
     [Fact]
+    public void GetToggleState_SoundLoopRequiresSoundAndReflectsLoopFlag()
+    {
+        PresentationTransitionCommandPlanner.GetToggleState(
+                null,
+                PresentationTransitionCommandIntentKind.ToggleSoundLoop)
+            .Should().Be((false, false));
+
+        PresentationTransitionCommandPlanner.GetToggleState(
+                new SlideTransition(),
+                PresentationTransitionCommandIntentKind.ToggleSoundLoop)
+            .Should().Be((false, false));
+
+        PresentationTransitionCommandPlanner.GetToggleState(
+                new SlideTransition { Sound = new TransitionSound { Loop = true } },
+                PresentationTransitionCommandIntentKind.ToggleSoundLoop)
+            .Should().Be((true, true));
+    }
+
+    [Fact]
     public void TryApply_ApplyAllCommand_ClonesCurrentTransitionAcrossSlides()
     {
         var editor = MakeSession(out var presentation);

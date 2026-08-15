@@ -1265,8 +1265,9 @@ internal static class FreeWAvaloniaRibbonCommands
         FreeWRibbonHostExecutionPorts callbacks) =>
         new(
             PrepareExecution: () => editor.Focus(),
-            ToggleBullets: new ActionRibbonCommand(() => editor.ToggleList(ListKind.Bullet)),
-            ToggleNumbering: new ActionRibbonCommand(() => editor.ToggleList(ListKind.Number)),
+            CurrentListKind: () => editor.GetCaretFormatting().Paragraph.ListKind,
+            ToggleBullets: () => editor.ToggleList(ListKind.Bullet),
+            ToggleNumbering: () => editor.ToggleList(ListKind.Number),
             AlignLeft: new ActionRibbonCommand(() => editor.SetAlignment(TextAlignment.Left)),
             AlignCenter: new ActionRibbonCommand(() => editor.SetAlignment(TextAlignment.Center)),
             AlignRight: new ActionRibbonCommand(() => editor.SetAlignment(TextAlignment.Right)),
@@ -1286,6 +1287,8 @@ internal static class FreeWAvaloniaRibbonCommands
         FreeWRibbonHostExecutionPorts callbacks) =>
         new(
             PrepareExecution: () => editor.Focus(),
+            CurrentTableFormatting: () => editor.CaretTableContext()?.Table.Formatting,
+            ViewGridlines: () => editor.ViewTableGridlines,
             ToggleHeaderRow: editor.ToggleTableHeaderRow,
             ToggleBandedRows: editor.ToggleBandedRows,
             ToggleLastRow: editor.ToggleTableLastRow,

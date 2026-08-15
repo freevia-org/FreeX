@@ -278,7 +278,7 @@ public sealed class FreeWRibbonCommandWorkflowTests
         var prepared = 0;
         var bindings = new FreeWRibbonCommandBindingPorts();
 
-        FreeWRibbonEditorExecutionProfile.RegisterChartSmartArt(
+        var commands = FreeWRibbonEditorExecutionProfile.RegisterChartSmartArt(
             bindings,
             new FreeWRibbonChartSmartArtExecutionPorts(
                 PrepareExecution: () => prepared++,
@@ -307,6 +307,9 @@ public sealed class FreeWRibbonCommandWorkflowTests
                 ShowSmartArtEditDialogAsync: _ => ValueTask.FromResult<SmartArt?>(null),
                 ApplySmartArtEditOutcome: _ => { }));
 
+        commands.ChartLegend.GetState().Should().Be(
+            new RibbonCommandState(IsEnabled: false, IsChecked: false));
+
         bindings.TryGet("freew.chart-type-column", out var chartType).Should().BeTrue();
         chartType.Should().BeAssignableTo<IRibbonStatefulCommand>()
             .Which.GetState().IsEnabled.Should().BeFalse();
@@ -314,7 +317,13 @@ public sealed class FreeWRibbonCommandWorkflowTests
         appliedKind.Should().BeNull();
 
         chart = Chart.Create(ChartKind.Line, ["A"], [1d]);
+        chart.ShowLegend = false;
         ((IRibbonStatefulCommand)chartType!).GetState().IsEnabled.Should().BeTrue();
+        commands.ChartLegend.GetState().Should().Be(
+            new RibbonCommandState(IsEnabled: true, IsChecked: false));
+        chart.ShowLegend = true;
+        commands.ChartLegend.GetState().Should().Be(
+            new RibbonCommandState(IsEnabled: true, IsChecked: true));
         chartType.Execute(RibbonCommandContext.Empty);
         appliedKind.Should().Be(ChartKind.Column);
 
@@ -975,6 +984,7 @@ public sealed class FreeWRibbonCommandWorkflowTests
         wpfNativePorts.Should().NotContain("ToggleReviewingPane");
         wpf.Should().Contain("FreeWRibbonEditorExecutionProfile.RegisterFloating(");
         wpf.Should().Contain("FreeWRibbonEditorExecutionProfile.RegisterChartSmartArt(");
+        wpf.Should().Contain("chartCommands.ChartLegend");
         avalonia.Should().Contain("FreeWRibbonEditorExecutionProfile.RegisterFloating(");
         avalonia.Should().Contain("FreeWRibbonEditorExecutionProfile.RegisterChartSmartArt(");
         wpf.Should().Contain("FreeWRibbonEditorExecutionProfile.RegisterImageTableWorkflows(");

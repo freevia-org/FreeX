@@ -30,7 +30,7 @@ internal static class FontDialog
         var surface = FontDialogPlanner.Surface;
         var layout = FontDialogPlanner.VisualMetrics;
 
-        var dialog = new Window
+        var dialog = new FreeWDialogWindow
         {
             Title = surface.Title,
             Width = surface.WindowWidth,

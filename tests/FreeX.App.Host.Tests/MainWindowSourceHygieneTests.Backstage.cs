@@ -486,11 +486,11 @@ public sealed partial class MainWindowSourceHygieneTests
         // Round 68 (8007e3ef6c, "R68-async-ordering-race-sweep-2") captures _currentSheetId into a
         // local targetSheetId BEFORE the async import's await, so a concurrent File > Open swapping
         // _currentSheetId out from under this await can't redirect the import to the wrong sheet.
-        dataCommandsSource.Should().Contain("var targetSheetId = _currentSheetId;");
+        dataCommandsSource.Should().Contain("var targetSheetId = destinationOverride?.Sheet ?? _currentSheetId;");
         dataCommandsSource.Should().Contain("var targetSession = _session;");
         dataCommandsSource.Should().Contain("targetSession.ExecuteCommandPreservingSelection(command)");
         dataCommandsSource.Should().Contain("previousExtent: previousExtent");
-        dataCommandsSource.Should().Contain("_lastImportExtent = (");
+        dataCommandsSource.Should().Contain("_lastImportSource = new WorkbookImportRefreshSource(");
         dataCommandsSource.Should().NotContain("_commandBus.Execute(");
         dataCommandsSource.Should().NotContain("RecalculateIfAutomatic(outcome.AffectedCells ?? []);");
         dataCommandsSource.Should().Contain("SetActiveCell(destination);");
@@ -505,11 +505,20 @@ public sealed partial class MainWindowSourceHygieneTests
     }
 
     [Fact]
-    public void RefreshAll_RoutesToCalculateNow()
+    public void RefreshAll_ReimportsRememberedSourceAtOriginalAnchor()
     {
         var dataCommandsSource = DialogSourceTestSupport.ReadHostSources("MainWindow.DataCommands.cs");
 
-        dataCommandsSource.Should().Contain("private void RefreshAllBtn_Click(object sender, RoutedEventArgs e) => CalcNowBtn_Click(sender, e);");
+        dataCommandsSource.Should().Contain("private async void RefreshAllBtn_Click(object sender, RoutedEventArgs e)");
+        dataCommandsSource.Should().Contain("source.CanRefresh(_session.Workbook)");
+        dataCommandsSource.Should().Contain("File.Exists(source.FilePath)");
+        dataCommandsSource.Should().Contain("source.FilePath,");
+        dataCommandsSource.Should().Contain("source.Adapter,");
+        dataCommandsSource.Should().Contain("source.Anchor);");
+        dataCommandsSource.Should().Contain("UiText.Get(\"GetData_RefreshNoSource\")");
+        dataCommandsSource.Should().Contain("UiText.Format(");
+        dataCommandsSource.Should().Contain("\"GetData_RefreshedStatus\"");
+        dataCommandsSource.Should().NotContain("RefreshAllBtn_Click(object sender, RoutedEventArgs e) => CalcNowBtn_Click");
     }
 
     [Fact]

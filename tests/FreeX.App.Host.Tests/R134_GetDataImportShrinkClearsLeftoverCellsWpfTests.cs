@@ -23,11 +23,9 @@ namespace FreeX.App.Host.Tests;
 /// cell -- exactly the bug round 134 fixed for Avalonia, left open in WPF.
 ///
 /// Entry point under test: <c>MainWindow.ImportDataFromFileAsync</c> (private, invoked via reflection
-/// below), which is what <c>GetDataBtn_Click</c> (src/FreeX.App.Host/MainWindow.DataCommands.cs) calls
-/// after the user picks a file in the Get Data open-file dialog. There is no dedicated "Refresh" entry
-/// point in the WPF host -- unlike the Avalonia shell, <c>RefreshAllBtn_Click</c> here only recalculates
-/// (see the comment on that method) -- so this test drives the same reachable path a real user hits by
-/// invoking Get Data twice into the same destination cell, which is exactly the scenario the fix covers.
+/// below), which is what <c>GetDataBtn_Click</c> calls after the user picks a file. Refresh All now
+/// delegates to the same core import path with the remembered source and original anchor; this test
+/// keeps direct coverage of repeated Get Data imports into that anchor.
 /// </summary>
 public sealed class R134_GetDataImportShrinkClearsLeftoverCellsWpfTests
 {
