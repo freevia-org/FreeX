@@ -313,7 +313,7 @@ public sealed class LinuxFamilyInteractionToolTests
             "tools", "Run-FamilyLinuxInteractionValidation.ps1"));
 
         freeWDefinition.Should().Contain(".AddInsertTab(capabilities)");
-        freeWCanonicalTabs.Should().Contain(".Tab(\"insert\", \"Insert\", (capabilities.UsesPortableControls ? \"I\" : \"N\")");
+        freeWCanonicalTabs.Should().Contain(".Tab(\"insert\", \"Insert\", \"N\",");
         freePResources.Should().Contain("Ribbon_Tab_Insert_KeyTip").And.Contain("<value>N</value>");
         runner.Should().Contain("RibbonTabKey = \"I\"").And.Contain("RibbonTabKey = \"N\"");
         runner.Should().Contain("WindowPattern = \"FreeW\"").And.Contain("WindowPattern = \"FreeP\"");
