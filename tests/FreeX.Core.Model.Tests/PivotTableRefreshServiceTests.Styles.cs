@@ -93,6 +93,107 @@ public sealed partial class PivotTableRefreshServiceTests
     }
 
     [Fact]
+    public void Refresh_MaterializesPivotStyleAcrossBlankMultiLevelHeaderFootprintCells()
+    {
+        var workbook = new Workbook("PivotHeaderFootprintMaterializationTest");
+        var source = workbook.AddSheet("Data");
+        var sheet = workbook.AddSheet("Pivot");
+        source.SetCell(Addr(source, "A1"), new TextValue("Region"));
+        source.SetCell(Addr(source, "B1"), new TextValue("Year"));
+        source.SetCell(Addr(source, "C1"), new TextValue("Quarter"));
+        source.SetCell(Addr(source, "D1"), new TextValue("Amount"));
+        source.SetCell(Addr(source, "A2"), new TextValue("East"));
+        source.SetCell(Addr(source, "B2"), new TextValue("2026"));
+        source.SetCell(Addr(source, "C2"), new TextValue("Q1"));
+        source.SetCell(Addr(source, "D2"), new NumberValue(100));
+        source.SetCell(Addr(source, "A3"), new TextValue("East"));
+        source.SetCell(Addr(source, "B3"), new TextValue("2026"));
+        source.SetCell(Addr(source, "C3"), new TextValue("Q2"));
+        source.SetCell(Addr(source, "D3"), new NumberValue(200));
+        source.SetCell(Addr(source, "A4"), new TextValue("East"));
+        source.SetCell(Addr(source, "B4"), new TextValue("2027"));
+        source.SetCell(Addr(source, "C4"), new TextValue("Q1"));
+        source.SetCell(Addr(source, "D4"), new NumberValue(300));
+
+        var pivot = new PivotTableModel
+        {
+            Name = "PivotTable1",
+            CacheId = 1,
+            SourceRange = Range(source, "A1", "D4"),
+            TargetRange = Range(sheet, "E2", "K12"),
+            StyleName = "PivotStyleMedium9",
+            ShowSubtotals = true
+        };
+        pivot.RowFields.Add(new PivotFieldModel(0));
+        pivot.ColumnFields.Add(new PivotFieldModel(1));
+        pivot.ColumnFields.Add(new PivotFieldModel(2));
+        pivot.DataFields.Add(new PivotDataFieldModel(3, "Sum of Amount", "sum"));
+
+        PivotTableRefreshService.Refresh(workbook, sheet, pivot);
+
+        pivot.LastRenderedRange.Should().NotBeNull();
+        var materialized = pivot.LastRenderedRange!.Value;
+        var headerEndRow = pivot.TargetRange.Start.Row + (uint)pivot.ColumnFields.Count - 1;
+        Cell? blankHeaderCell = null;
+        for (var row = materialized.Start.Row; row <= headerEndRow && blankHeaderCell is null; row++)
+        for (var col = materialized.Start.Col; col <= materialized.End.Col; col++)
+        {
+            var cell = sheet.GetCell(row, col);
+            if (cell?.Value is BlankValue)
+            {
+                blankHeaderCell = cell;
+                break;
+            }
+        }
+
+        blankHeaderCell.Should().NotBeNull("the subtotal column leaves a blank lower-level header cell");
+        workbook.GetStyle(blankHeaderCell!.StyleId).FillColor.Should().Be(new CellColor(21, 96, 130));
+    }
+
+    [Fact]
+    public void Refresh_MaterializesPivotStyleAcrossBlankSpacerRows()
+    {
+        var workbook = new Workbook("PivotSpacerRowMaterializationTest");
+        var source = workbook.AddSheet("Data");
+        var sheet = workbook.AddSheet("Pivot");
+        source.SetCell(Addr(source, "A1"), new TextValue("Region"));
+        source.SetCell(Addr(source, "B1"), new TextValue("Category"));
+        source.SetCell(Addr(source, "C1"), new TextValue("Amount"));
+        source.SetCell(Addr(source, "A2"), new TextValue("East"));
+        source.SetCell(Addr(source, "B2"), new TextValue("Hardware"));
+        source.SetCell(Addr(source, "C2"), new NumberValue(100));
+        source.SetCell(Addr(source, "A3"), new TextValue("East"));
+        source.SetCell(Addr(source, "B3"), new TextValue("Services"));
+        source.SetCell(Addr(source, "C3"), new NumberValue(200));
+        source.SetCell(Addr(source, "A4"), new TextValue("West"));
+        source.SetCell(Addr(source, "B4"), new TextValue("Hardware"));
+        source.SetCell(Addr(source, "C4"), new NumberValue(300));
+
+        var pivot = new PivotTableModel
+        {
+            Name = "PivotTable1",
+            CacheId = 1,
+            SourceRange = Range(source, "A1", "C4"),
+            TargetRange = Range(sheet, "E2", "H10"),
+            StyleName = "PivotStyleMedium9",
+            ReportLayout = PivotReportLayout.Tabular,
+            ShowSubtotals = false,
+            BlankLineAfterItems = true,
+            ShowRowStripes = true
+        };
+        pivot.RowFields.Add(new PivotFieldModel(0));
+        pivot.RowFields.Add(new PivotFieldModel(1));
+        pivot.DataFields.Add(new PivotDataFieldModel(2, "Sum of Amount", "sum"));
+
+        PivotTableRefreshService.Refresh(workbook, sheet, pivot);
+
+        var spacerRowCell = sheet.GetCell(5, 5);
+        spacerRowCell.Should().NotBeNull("the blank line between outer row-field groups is inside the pivot footprint");
+        spacerRowCell!.Value.Should().BeOfType<BlankValue>();
+        workbook.GetStyle(spacerRowCell.StyleId).FillColor.Should().Be(new CellColor(224, 242, 250));
+    }
+
+    [Fact]
     public void Refresh_AppliesGrandTotalRowStyleAcrossBlankRowFieldCells()
     {
         var workbook = new Workbook("PivotGrandTotalRowFootprintStyleTest");
