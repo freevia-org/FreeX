@@ -89,6 +89,8 @@
              Link="SlideShowWindow.RuntimeSession.cs" />
     <Compile Include="..\RendererShared\MainWindow.RibbonActionProfile.cs"
              Link="MainWindow.RibbonActionProfile.cs" />
+    <Compile Include="..\RendererShared\MainWindow.ChartDialogEndpoints.cs"
+             Link="MainWindow.ChartDialogEndpoints.cs" />
     <PackageReference Include="Avalonia" />
     <PackageReference Include="Avalonia.Desktop" />
     <PackageReference Include="Avalonia.Fonts.Inter" />

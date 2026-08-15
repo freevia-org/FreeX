@@ -112,6 +112,37 @@ public sealed class SlideShowRendererShellDedupTests
         snapshots[^1].BaseVolumePercent.Should().Be(35);
     }
 
+    [Fact]
+    public void Native_renderer_sources_keep_residual_composition_in_shared_sessions()
+    {
+        var root = TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeP.slnx");
+        var chartEndpoints = File.ReadAllText(Path.Combine(
+            root,
+            "freep",
+            "RendererShared",
+            "MainWindow.ChartDialogEndpoints.cs"));
+        chartEndpoints.Should().Contain("private void OpenChartDialog(");
+        chartEndpoints.Should().Contain("private void OnChartPointDoubleClick(");
+        foreach (var project in new[] { "FreeP.App.Host", "FreeP.App.Avalonia" })
+        {
+            var directory = Path.Combine(root, "freep", project);
+            var mainWindow = File.ReadAllText(Path.Combine(directory, "MainWindow.cs"));
+            var presenter = File.ReadAllText(Path.Combine(directory, "PresenterViewWindow.cs"));
+            var customShows = File.ReadAllText(Path.Combine(directory, "CustomShowDialog.cs"));
+            var selectionPane = File.ReadAllText(Path.Combine(directory, "SelectionPane.cs"));
+
+            mainWindow.Should().Contain("PresentationMediaPaneNativeComposition.Compose(");
+            mainWindow.Should().NotContain("new DelegatingPresentationMediaPaneControlSurface");
+            mainWindow.Should().NotContain("internal void OpenChartDataDialog(");
+            mainWindow.Should().NotContain("private void OnChartPointDoubleClick(");
+            presenter.Should().Contain("SlideShowPresenterViewNativeBinding<");
+            presenter.Should().Contain("SlideShowPresenterViewHeaderComposition.Compose(");
+            customShows.Should().Contain("SlideShowCustomShowDialogNativeComposition<");
+            selectionPane.Should().Contain("PresentationSelectionPaneFormSession<");
+            selectionPane.Should().Contain("PresentationSelectionPaneItemFormSession(");
+        }
+    }
+
     private static SlideShowPresenterViewPlan CreatePresenterPlan() =>
         new(
             StatusText: "Slide 1 of 2",

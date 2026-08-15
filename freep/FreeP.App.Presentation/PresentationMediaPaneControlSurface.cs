@@ -107,6 +107,120 @@ public sealed record PresentationMediaPaneControlBindings(
     Action<PresentationMediaPaneProjection> RenderBookmarks,
     Action RefreshAccessibilityMetadata);
 
+public sealed record PresentationMediaPaneNativeControls<TControl>(
+    TControl Pane,
+    TControl CaptionLabel,
+    TControl CaptionLanguage,
+    TControl CaptionSource,
+    TControl CaptionTranscript,
+    TControl VolumePercent,
+    TControl PlaybackStartMode,
+    TControl Loop,
+    TControl ShowWhenStopped,
+    TControl RewindAfterPlaying,
+    TControl PlayFullScreen,
+    TControl StopAfterSlides,
+    TControl TrimStart,
+    TControl TrimEnd,
+    TControl FadeIn,
+    TControl FadeOut,
+    TControl BookmarkName,
+    TControl BookmarkTime,
+    TControl Heading,
+    TControl Message,
+    TControl PlaybackApply,
+    TControl VolumeApply,
+    TControl TimingApply)
+    where TControl : class;
+
+public sealed record PresentationMediaPaneNativeAccessors<TControl>(
+    Func<TControl, bool> IsVisible,
+    Action<TControl, bool> SetVisible,
+    Func<TControl, string?> ReadText,
+    Action<TControl, string?> WriteText,
+    Func<TControl, double?> ReadValue,
+    Action<TControl, double?> WriteValue,
+    Func<TControl, int?> ReadIndex,
+    Action<TControl, int?> WriteIndex,
+    Func<TControl, bool?> ReadCheck,
+    Action<TControl, bool?> WriteCheck,
+    Action<TControl, bool> SetEnabled)
+    where TControl : class;
+
+/// <summary>
+/// Maps the common media-pane control inventory to the portable host adapter. Renderers provide
+/// only native control accessors and callbacks for visual realization.
+/// </summary>
+public static class PresentationMediaPaneNativeComposition
+{
+    public static PresentationMediaPaneHostViewAdapter Compose<TControl>(
+        PresentationMediaPaneNativeControls<TControl> controls,
+        PresentationMediaPaneNativeAccessors<TControl> accessors,
+        Action<PresentationMediaCaptionAuthoringPanePlan> renderCaptionTracks,
+        Action<PresentationMediaPaneCaptionField, PresentationMediaCaptionAuthoringFieldPlan> renderCaptionField,
+        Action<PresentationMediaPaneCaptionAction, PresentationMediaCaptionAuthoringActionPlan> renderCaptionAction,
+        Action<PresentationMediaPaneProjection> renderBookmarks,
+        Action refreshAccessibilityMetadata)
+        where TControl : class
+    {
+        ArgumentNullException.ThrowIfNull(controls);
+        ArgumentNullException.ThrowIfNull(accessors);
+        ArgumentNullException.ThrowIfNull(renderCaptionTracks);
+        ArgumentNullException.ThrowIfNull(renderCaptionField);
+        ArgumentNullException.ThrowIfNull(renderCaptionAction);
+        ArgumentNullException.ThrowIfNull(renderBookmarks);
+        ArgumentNullException.ThrowIfNull(refreshAccessibilityMetadata);
+
+        PresentationMediaPaneControlBinding<string?> Text(TControl control) =>
+            new(() => accessors.ReadText(control), value => accessors.WriteText(control, value));
+        PresentationMediaPaneControlBinding<bool?> Check(TControl control) =>
+            new(() => accessors.ReadCheck(control), value => accessors.WriteCheck(control, value));
+
+        return new(new DelegatingPresentationMediaPaneControlSurface(new(
+            PaneVisible: new(
+                () => accessors.IsVisible(controls.Pane),
+                value => accessors.SetVisible(controls.Pane, value)),
+            CaptionLabel: Text(controls.CaptionLabel),
+            CaptionLanguage: Text(controls.CaptionLanguage),
+            CaptionSource: Text(controls.CaptionSource),
+            CaptionTranscript: Text(controls.CaptionTranscript),
+            VolumePercent: new(
+                () => accessors.ReadValue(controls.VolumePercent),
+                value => accessors.WriteValue(controls.VolumePercent, value)),
+            PlaybackStartModeIndex: new(
+                () => accessors.ReadIndex(controls.PlaybackStartMode),
+                value => accessors.WriteIndex(controls.PlaybackStartMode, value)),
+            Loop: Check(controls.Loop),
+            ShowWhenStopped: Check(controls.ShowWhenStopped),
+            RewindAfterPlaying: Check(controls.RewindAfterPlaying),
+            PlayFullScreen: Check(controls.PlayFullScreen),
+            StopAfterSlides: Text(controls.StopAfterSlides),
+            TrimStart: Text(controls.TrimStart),
+            TrimEnd: Text(controls.TrimEnd),
+            FadeIn: Text(controls.FadeIn),
+            FadeOut: Text(controls.FadeOut),
+            BookmarkName: Text(controls.BookmarkName),
+            BookmarkTime: Text(controls.BookmarkTime),
+            SetHeading: value => accessors.WriteText(controls.Heading, value),
+            SetMessage: value => accessors.WriteText(controls.Message, value),
+            SetPlaybackStartModeEnabled: value => accessors.SetEnabled(controls.PlaybackStartMode, value),
+            SetLoopEnabled: value => accessors.SetEnabled(controls.Loop, value),
+            SetShowWhenStoppedEnabled: value => accessors.SetEnabled(controls.ShowWhenStopped, value),
+            SetRewindAfterPlayingEnabled: value => accessors.SetEnabled(controls.RewindAfterPlaying, value),
+            SetPlayFullScreenEnabled: value => accessors.SetEnabled(controls.PlayFullScreen, value),
+            SetStopAfterSlidesEnabled: value => accessors.SetEnabled(controls.StopAfterSlides, value),
+            SetPlaybackApplyEnabled: value => accessors.SetEnabled(controls.PlaybackApply, value),
+            SetVolumeEnabled: value => accessors.SetEnabled(controls.VolumePercent, value),
+            SetVolumeApplyEnabled: value => accessors.SetEnabled(controls.VolumeApply, value),
+            SetTimingApplyEnabled: value => accessors.SetEnabled(controls.TimingApply, value),
+            RenderCaptionTracks: renderCaptionTracks,
+            RenderCaptionField: renderCaptionField,
+            RenderCaptionAction: renderCaptionAction,
+            RenderBookmarks: renderBookmarks,
+            RefreshAccessibilityMetadata: refreshAccessibilityMetadata)));
+    }
+}
+
 public sealed class DelegatingPresentationMediaPaneControlSurface : IPresentationMediaPaneControlSurface
 {
     private readonly PresentationMediaPaneControlBindings _bindings;

@@ -2715,139 +2715,6 @@ public sealed partial class MainWindow : Window,
         dialog.Show();
     }
 
-    internal void OpenChartDataDialog()
-    {
-        if (!_workareaSession.CanOpenDomainDialog(PresentationDomainDialogKind.ChartData))
-            return;
-
-        ShowDomainDialog(new ChartDataDialog(Editor));
-    }
-
-    internal void OpenChartDisplayOptionsDialog()
-    {
-        if (!_workareaSession.CanOpenDomainDialog(PresentationDomainDialogKind.ChartDisplayOptions))
-            return;
-
-        ShowDomainDialog(new ChartDisplayOptionsDialog(Editor));
-    }
-
-    internal void OpenChartAxisOptionsDialog() => OpenChartAxisOptionsDialog(null);
-
-    internal void OpenChartAxisOptionsDialog(ChartAxisKind? initialAxis)
-    {
-        if (!_workareaSession.CanOpenDomainDialog(PresentationDomainDialogKind.ChartAxisOptions))
-            return;
-
-        ShowDomainDialog(new ChartAxisOptionsDialog(Editor, initialAxis));
-    }
-
-    internal void OpenChartSeriesOptionsDialog() => OpenChartSeriesOptionsDialog(null);
-
-    internal void OpenChartSeriesOptionsDialog(int? initialSeriesIndex)
-    {
-        if (!_workareaSession.CanOpenDomainDialog(PresentationDomainDialogKind.ChartSeriesOptions))
-            return;
-
-        ShowDomainDialog(new ChartSeriesOptionsDialog(Editor, initialSeriesIndex));
-    }
-
-    private void OnChartPointDoubleClick(ChartPointHit hit)
-    {
-        Editor.Select(hit.ShapeId);
-        OpenChartPointOptionsDialog(hit.SeriesIndex, hit.PointIndex);
-    }
-
-    internal void OpenChartPointOptionsDialog(int? seriesIndex = null, int? pointIndex = null)
-    {
-        if (!_workareaSession.CanOpenDomainDialog(PresentationDomainDialogKind.ChartPointOptions))
-            return;
-
-        ShowDomainDialog(new ChartPointOptionsDialog(Editor, seriesIndex, pointIndex));
-    }
-
-    internal void OpenChartLayoutOptionsDialog()
-    {
-        if (!_workareaSession.CanOpenDomainDialog(PresentationDomainDialogKind.ChartLayoutOptions))
-            return;
-
-        ShowDomainDialog(new ChartLayoutOptionsDialog(Editor));
-    }
-
-    internal void OpenChartExSeriesLayoutDialog()
-    {
-        if (!_workareaSession.CanOpenDomainDialog(PresentationDomainDialogKind.ChartExSeriesLayout))
-            return;
-
-        ShowDomainDialog(new ChartExSeriesLayoutDialog(Editor));
-    }
-
-    internal void OpenChartDataTableOptionsDialog()
-    {
-        if (!_workareaSession.CanOpenDomainDialog(PresentationDomainDialogKind.ChartDataTableOptions))
-            return;
-
-        ShowDomainDialog(new ChartDataTableOptionsDialog(Editor));
-    }
-
-    internal void OpenChartBubbleOptionsDialog()
-    {
-        if (!_workareaSession.CanOpenDomainDialog(PresentationDomainDialogKind.ChartBubbleOptions))
-            return;
-
-        ShowDomainDialog(new ChartBubbleOptionsDialog(Editor));
-    }
-
-    internal void OpenChartPieOptionsDialog()
-    {
-        if (!_workareaSession.CanOpenDomainDialog(PresentationDomainDialogKind.ChartPieOptions))
-            return;
-
-        ShowDomainDialog(new ChartPieOptionsDialog(Editor));
-    }
-
-    internal void OpenChartPlotStyleOptionsDialog()
-    {
-        if (!_workareaSession.CanOpenDomainDialog(PresentationDomainDialogKind.ChartPlotStyleOptions))
-            return;
-
-        ShowDomainDialog(new ChartPlotStyleOptionsDialog(Editor));
-    }
-
-    internal void OpenChart3DViewOptionsDialog()
-    {
-        if (!_workareaSession.CanOpenDomainDialog(PresentationDomainDialogKind.Chart3DViewOptions))
-            return;
-
-        ShowDomainDialog(new Chart3DViewOptionsDialog(Editor));
-    }
-
-    internal void OpenChartTextOptionsDialog() => OpenChartTextOptionsDialog(ChartTextTarget.Chart);
-
-    internal void OpenChartTextOptionsDialog(ChartTextTarget target)
-    {
-        if (!_workareaSession.CanOpenDomainDialog(PresentationDomainDialogKind.ChartTextOptions))
-            return;
-
-        ShowDomainDialog(new ChartTextOptionsDialog(Editor, target));
-    }
-
-    internal void OpenChartAreaOptionsDialog() => OpenChartAreaOptionsDialog(null);
-
-    internal void OpenChartAreaOptionsDialog(ChartAreaFormattingTarget? initialTarget)
-    {
-        if (!_workareaSession.CanOpenDomainDialog(PresentationDomainDialogKind.ChartAreaOptions)) return;
-        var dialog = new ChartAreaOptionsDialog(Editor, initialTarget);
-        dialog.ShowDialog(this);
-    }
-
-    internal void OpenChartProtectionOptionsDialog()
-    {
-        if (!_workareaSession.CanOpenDomainDialog(PresentationDomainDialogKind.ChartProtectionOptions))
-            return;
-
-        ShowDomainDialog(new ChartProtectionOptionsDialog(Editor));
-    }
-
     internal void OpenRotationOptionsDialog()
     {
         if (!_workareaSession.CanOpenDomainDialog(PresentationDomainDialogKind.RotationOptions))
@@ -5334,60 +5201,65 @@ public sealed partial class MainWindow : Window,
     private PresentationMediaBookmarkHostSnapshot CaptureMediaBookmarkHostSnapshot() =>
         _avaloniaMediaPaneHostView.CaptureBookmark();
 
-    private PresentationMediaPaneHostViewAdapter BuildAvaloniaMediaPaneHostView() => new(
-        new DelegatingPresentationMediaPaneControlSurface(new(
-            PaneVisible: new(() => IsMediaCaptionPaneVisible, value => SetAvaloniaVisible(_mediaCaptionPaneHost, value)),
-            CaptionLabel: new(() => ReadAvaloniaText(_mediaCaptionLabelBox), value => WriteAvaloniaText(_mediaCaptionLabelBox, value)),
-            CaptionLanguage: new(() => ReadAvaloniaText(_mediaCaptionLanguageBox), value => WriteAvaloniaText(_mediaCaptionLanguageBox, value)),
-            CaptionSource: new(() => ReadAvaloniaText(_mediaCaptionSourceBox), value => WriteAvaloniaText(_mediaCaptionSourceBox, value)),
-            CaptionTranscript: new(() => ReadAvaloniaText(_mediaCaptionTranscriptBox), value => WriteAvaloniaText(_mediaCaptionTranscriptBox, value)),
-            VolumePercent: new(() => ReadAvaloniaValue(_mediaVolumeSlider), value => WriteAvaloniaValue(_mediaVolumeSlider, value)),
-            PlaybackStartModeIndex: new(() => ReadAvaloniaIndex(_mediaStartModeBox), value => WriteAvaloniaIndex(_mediaStartModeBox, value)),
-            Loop: new(() => ReadAvaloniaCheck(_mediaLoopCheckBox), value => WriteAvaloniaCheck(_mediaLoopCheckBox, value)),
-            ShowWhenStopped: new(() => ReadAvaloniaCheck(_mediaShowWhenStoppedCheckBox),
-                value => WriteAvaloniaCheck(_mediaShowWhenStoppedCheckBox, value)),
-            RewindAfterPlaying: new(() => ReadAvaloniaCheck(_mediaRewindAfterPlayingCheckBox),
-                value => WriteAvaloniaCheck(_mediaRewindAfterPlayingCheckBox, value)),
-            PlayFullScreen: new(() => ReadAvaloniaCheck(_mediaPlayFullScreenCheckBox),
-                value => WriteAvaloniaCheck(_mediaPlayFullScreenCheckBox, value)),
-            StopAfterSlides: new(() => ReadAvaloniaText(_mediaStopAfterSlidesBox),
-                value => WriteAvaloniaText(_mediaStopAfterSlidesBox, value)),
-            TrimStart: new(() => ReadAvaloniaText(_mediaTrimStartBox), value => WriteAvaloniaText(_mediaTrimStartBox, value)),
-            TrimEnd: new(() => ReadAvaloniaText(_mediaTrimEndBox), value => WriteAvaloniaText(_mediaTrimEndBox, value)),
-            FadeIn: new(() => ReadAvaloniaText(_mediaFadeInBox), value => WriteAvaloniaText(_mediaFadeInBox, value)),
-            FadeOut: new(() => ReadAvaloniaText(_mediaFadeOutBox), value => WriteAvaloniaText(_mediaFadeOutBox, value)),
-            BookmarkName: new(() => ReadAvaloniaText(_mediaBookmarkNameBox), value => WriteAvaloniaText(_mediaBookmarkNameBox, value)),
-            BookmarkTime: new(() => ReadAvaloniaText(_mediaBookmarkTimeBox), value => WriteAvaloniaText(_mediaBookmarkTimeBox, value)),
-            SetHeading: value => WriteAvaloniaText(_mediaCaptionPaneHeading, value),
-            SetMessage: value => WriteAvaloniaText(_mediaCaptionPaneMessage, value),
-            SetPlaybackStartModeEnabled: value => SetAvaloniaEnabled(_mediaStartModeBox, value),
-            SetLoopEnabled: value => SetAvaloniaEnabled(_mediaLoopCheckBox, value),
-            SetShowWhenStoppedEnabled: value => SetAvaloniaEnabled(_mediaShowWhenStoppedCheckBox, value),
-            SetRewindAfterPlayingEnabled: value => SetAvaloniaEnabled(_mediaRewindAfterPlayingCheckBox, value),
-            SetPlayFullScreenEnabled: value => SetAvaloniaEnabled(_mediaPlayFullScreenCheckBox, value),
-            SetStopAfterSlidesEnabled: value => SetAvaloniaEnabled(_mediaStopAfterSlidesBox, value),
-            SetPlaybackApplyEnabled: value => SetAvaloniaEnabled(_mediaPlaybackApplyButton, value),
-            SetVolumeEnabled: value => SetAvaloniaEnabled(_mediaVolumeSlider, value),
-            SetVolumeApplyEnabled: value => SetAvaloniaEnabled(_mediaVolumeApplyButton, value),
-            SetTimingApplyEnabled: value => SetAvaloniaEnabled(_mediaTimingApplyButton, value),
-            RenderCaptionTracks: RenderMediaCaptionTrackOptions,
-            RenderCaptionField: RenderAvaloniaMediaCaptionField,
-            RenderCaptionAction: RenderAvaloniaMediaCaptionAction,
-            RenderBookmarks: RenderAvaloniaMediaBookmarkOptions,
-            RefreshAccessibilityMetadata: RefreshPaneAccessibilityMetadata)));
+    private PresentationMediaPaneHostViewAdapter BuildAvaloniaMediaPaneHostView() =>
+        PresentationMediaPaneNativeComposition.Compose(
+            new PresentationMediaPaneNativeControls<Control>(
+                _mediaCaptionPaneHost,
+                _mediaCaptionLabelBox,
+                _mediaCaptionLanguageBox,
+                _mediaCaptionSourceBox,
+                _mediaCaptionTranscriptBox,
+                _mediaVolumeSlider,
+                _mediaStartModeBox,
+                _mediaLoopCheckBox,
+                _mediaShowWhenStoppedCheckBox,
+                _mediaRewindAfterPlayingCheckBox,
+                _mediaPlayFullScreenCheckBox,
+                _mediaStopAfterSlidesBox,
+                _mediaTrimStartBox,
+                _mediaTrimEndBox,
+                _mediaFadeInBox,
+                _mediaFadeOutBox,
+                _mediaBookmarkNameBox,
+                _mediaBookmarkTimeBox,
+                _mediaCaptionPaneHeading,
+                _mediaCaptionPaneMessage,
+                _mediaPlaybackApplyButton,
+                _mediaVolumeApplyButton,
+                _mediaTimingApplyButton),
+            new PresentationMediaPaneNativeAccessors<Control>(
+                control => control.IsVisible,
+                (control, value) => control.IsVisible = value,
+                control => (control as TextBox)?.Text,
+                WriteAvaloniaMediaText,
+                control => (control as Slider)?.Value,
+                (control, value) => ((Slider)control).Value =
+                    value ?? PresentationMediaPaneSession.DefaultVolumePercent,
+                control => (control as ComboBox)?.SelectedIndex,
+                (control, value) => ((ComboBox)control).SelectedIndex = value ?? -1,
+                control => (control as CheckBox)?.IsChecked,
+                (control, value) => ((CheckBox)control).IsChecked = value,
+                (control, value) => control.IsEnabled = value),
+            RenderMediaCaptionTrackOptions,
+            RenderAvaloniaMediaCaptionField,
+            RenderAvaloniaMediaCaptionAction,
+            RenderAvaloniaMediaBookmarkOptions,
+            RefreshPaneAccessibilityMetadata);
 
-    private static string? ReadAvaloniaText(TextBox? control) => control?.Text;
-    private static void WriteAvaloniaText(TextBox control, string? value) => control.Text = value ?? string.Empty;
-    private static void WriteAvaloniaText(TextBlock control, string value) => control.Text = value;
-    private static double? ReadAvaloniaValue(Slider? control) => control?.Value;
-    private static void WriteAvaloniaValue(Slider control, double? value) =>
-        control.Value = value ?? PresentationMediaPaneSession.DefaultVolumePercent;
-    private static int? ReadAvaloniaIndex(ComboBox? control) => control?.SelectedIndex;
-    private static void WriteAvaloniaIndex(ComboBox control, int? value) => control.SelectedIndex = value ?? -1;
-    private static bool? ReadAvaloniaCheck(CheckBox? control) => control?.IsChecked;
-    private static void WriteAvaloniaCheck(CheckBox control, bool? value) => control.IsChecked = value;
-    private static void SetAvaloniaEnabled(Control control, bool value) => control.IsEnabled = value;
-    private static void SetAvaloniaVisible(Control control, bool value) => control.IsVisible = value;
+    private static void WriteAvaloniaMediaText(Control control, string? value)
+    {
+        switch (control)
+        {
+            case TextBox textBox:
+                textBox.Text = value ?? string.Empty;
+                break;
+            case TextBlock textBlock:
+                textBlock.Text = value ?? string.Empty;
+                break;
+            default:
+                throw new ArgumentException("The media control does not expose text.", nameof(control));
+        }
+    }
 
     private void RenderAvaloniaMediaCaptionField(
         PresentationMediaPaneCaptionField field,
