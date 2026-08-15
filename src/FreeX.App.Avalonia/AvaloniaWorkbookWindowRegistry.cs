@@ -1,5 +1,7 @@
 using FreeX.App.Presentation.Shell;
 using FreeX.App.Presentation.FormulaBar;
+using Free.Shared.Shell;
+using FreeX.Core.Model;
 
 namespace FreeX.App.Avalonia;
 
@@ -22,6 +24,15 @@ internal sealed class AvaloniaWorkbookWindowRegistry
             .ToArray();
 
     internal IReadOnlyList<MainWindow> VisibleWindows => _core.VisibleWindows;
+
+    internal IReadOnlyList<WorkbookWindowArrangementTarget<MainWindow>> PlanVisibleArrangement(
+        WorkbookWindowArrangement arrangement,
+        double workAreaWidth,
+        double workAreaHeight) =>
+        _core.PlanVisibleArrangement(
+            (ShellWindowArrangement)arrangement,
+            workAreaWidth,
+            workAreaHeight);
 
     internal void Register(MainWindow window)
     {

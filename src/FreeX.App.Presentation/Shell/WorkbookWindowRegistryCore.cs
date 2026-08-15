@@ -1,3 +1,4 @@
+using Free.Shared.Shell;
 using FreeX.Core.Model;
 
 namespace FreeX.App.Presentation.Shell;
@@ -14,6 +15,10 @@ public enum WorkbookWindowNotificationAudience
     SameDocumentExceptOrigin,
     AllExceptOrigin,
 }
+
+public sealed record WorkbookWindowArrangementTarget<TWindow>(
+    TWindow Window,
+    ShellRect Bounds);
 
 /// <summary>
 /// Renderer-neutral ownership of live workbook-window registration, document grouping, title
@@ -84,6 +89,36 @@ public sealed class WorkbookWindowRegistryCore<TWindow>
 
     public bool HasWindowForDocument(WorkbookId documentId) =>
         _windows.Any(candidate => _documentId(candidate) == documentId);
+
+    /// <summary>
+    /// Selects visible windows in registration order and pairs them with the shared Arrange All
+    /// geometry. Hidden windows are never returned, preserving the separate Hide/Unhide workflow.
+    /// </summary>
+    public IReadOnlyList<WorkbookWindowArrangementTarget<TWindow>> PlanVisibleArrangement(
+        ShellWindowArrangement arrangement,
+        double workAreaWidth,
+        double workAreaHeight,
+        Func<TWindow, bool>? include = null)
+    {
+        if (!Enum.IsDefined(arrangement))
+            return [];
+
+        var windows = _windows
+            .Where(_isVisible)
+            .Where(window => include?.Invoke(window) ?? true)
+            .ToArray();
+        var bounds = ArrangeAllLayoutPlanner.Arrange(
+            arrangement,
+            workAreaWidth,
+            workAreaHeight,
+            windows.Length);
+        if (bounds.Count != windows.Length)
+            return [];
+
+        return windows
+            .Select((window, index) => new WorkbookWindowArrangementTarget<TWindow>(window, bounds[index]))
+            .ToArray();
+    }
 
     public IReadOnlyList<TWindow> NotificationTargets(
         TWindow origin,

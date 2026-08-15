@@ -1,4 +1,5 @@
 using FluentAssertions;
+using Free.Shared.Shell;
 using FreeX.App.Presentation.Shell;
 using FreeX.Core.Model;
 
@@ -82,6 +83,55 @@ public sealed class WorkbookWindowRegistryCoreTests
 
         third.IsVisible = false;
         core.NextWindowTarget(first, WorkbookWindowCycleDirection.Forward).Should().BeNull();
+    }
+
+    [Fact]
+    public void PlanVisibleArrangement_LeavesHiddenWindowsUntouchedAndPreservesRegistrationOrder()
+    {
+        var core = CreateCore();
+        var first = new TestWindow();
+        var hidden = new TestWindow { IsVisible = false };
+        var third = new TestWindow();
+        core.Register(first);
+        core.Register(hidden);
+        core.Register(third);
+
+        var plan = core.PlanVisibleArrangement(
+            ShellWindowArrangement.Horizontal,
+            workAreaWidth: 900,
+            workAreaHeight: 600);
+
+        plan.Select(target => target.Window).Should().Equal(first, third);
+        plan.Select(target => target.Bounds).Should().Equal(
+            new ShellRect(0, 0, 900, 300),
+            new ShellRect(0, 300, 900, 300));
+        hidden.IsVisible.Should().BeFalse();
+    }
+
+    [Fact]
+    public void PlanVisibleArrangement_AppliesOptionalDocumentScopeAfterVisibilityFiltering()
+    {
+        var core = CreateCore();
+        var document = NewDocumentId();
+        var first = new TestWindow(document);
+        var hidden = new TestWindow(document) { IsVisible = false };
+        var otherDocument = new TestWindow(NewDocumentId());
+        var second = new TestWindow(document);
+        core.Register(first);
+        core.Register(hidden);
+        core.Register(otherDocument);
+        core.Register(second);
+
+        var plan = core.PlanVisibleArrangement(
+            ShellWindowArrangement.Vertical,
+            workAreaWidth: 800,
+            workAreaHeight: 600,
+            window => window.DocumentId == document);
+
+        plan.Select(target => target.Window).Should().Equal(first, second);
+        plan.Select(target => target.Bounds).Should().Equal(
+            new ShellRect(0, 0, 400, 600),
+            new ShellRect(400, 0, 400, 600));
     }
 
     [Fact]

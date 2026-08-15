@@ -356,35 +356,27 @@ public sealed class WorkbookWindowRegistry
         double workAreaHeight,
         WorkbookId? restrictToDocumentId = null)
     {
-        if (!Enum.IsDefined(arrangement))
-            return false;
-
-        IEnumerable<IWorkbookWindow> candidates = _core.VisibleWindows;
-        if (restrictToDocumentId is { } documentId)
-            candidates = candidates.Where(w => w.DocumentId == documentId);
-        var visibleWindows = candidates.ToList();
-        if (visibleWindows.Count == 0)
-            return false;
-
-        var bounds = ArrangeAllLayoutPlanner.Arrange(
+        var targets = _core.PlanVisibleArrangement(
             (ShellWindowArrangement)arrangement,
             workAreaWidth,
             workAreaHeight,
-            visibleWindows.Count);
-        if (bounds.Count != visibleWindows.Count)
+            restrictToDocumentId is { } documentId
+                ? window => window.DocumentId == documentId
+                : null);
+        if (targets.Count == 0)
             return false;
 
         // An unrestricted Arrange All always breaks any active side-by-side pairing (unchanged
         // behavior). A restricted one only breaks it if the pair is actually among the windows
         // being re-tiled -- arranging one workbook's windows must not silently un-pair an unrelated
         // side-by-side comparison between two OTHER documents.
-        if (restrictToDocumentId is null || visibleWindows.Any(_sideBySide.Contains))
+        if (restrictToDocumentId is null || targets.Any(target => _sideBySide.Contains(target.Window)))
             DisableSideBySide();
 
-        for (var index = 0; index < visibleWindows.Count; index++)
+        foreach (var target in targets)
         {
-            var b = bounds[index];
-            visibleWindows[index].TileToWorkArea(new Rect(b.X, b.Y, b.Width, b.Height));
+            var b = target.Bounds;
+            target.Window.TileToWorkArea(new Rect(b.X, b.Y, b.Width, b.Height));
         }
 
         return true;

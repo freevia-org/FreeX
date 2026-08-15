@@ -16,9 +16,18 @@ public sealed class WorkbookWindowRegistryDedupSourceGuardTests
             srcRoot,
             "FreeX.App.Avalonia",
             "AvaloniaWorkbookWindowRegistry.cs"));
+        var avaloniaWindowManagement = File.ReadAllText(Path.Combine(
+            srcRoot,
+            "FreeX.App.Avalonia",
+            "MainWindow.WindowManagement.cs"));
 
         wpfSource.Should().Contain("WorkbookWindowRegistryCore<IWorkbookWindow>");
         avaloniaSource.Should().Contain("WorkbookWindowRegistryCore<MainWindow>");
+        wpfSource.Should().Contain("_core.PlanVisibleArrangement(");
+        avaloniaSource.Should().Contain("_core.PlanVisibleArrangement(");
+        avaloniaWindowManagement.Should().Contain("WindowRegistry.PlanVisibleArrangement(");
+        avaloniaWindowManagement.Should().NotContain("foreach (var hidden in HiddenWindows.ToArray())");
+        avaloniaWindowManagement.Should().NotContain("HiddenWindows.Clear();");
 
         foreach (var rendererSource in new[] { wpfSource, avaloniaSource })
         {
