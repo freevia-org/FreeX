@@ -3244,15 +3244,7 @@ public sealed class WorkbookSession : IDisposable
         ArgumentNullException.ThrowIfNull(activeSheet);
         ArgumentNullException.ThrowIfNull(circledCells);
 
-        if (circledCells.Count == 0)
-            return circledCells;
-
-        var stillInvalid = new HashSet<CellAddress>(DataValidationCirclePlanner.FindInvalidDataCells(workbook, activeSheet));
-        var pruned = circledCells
-            .Where(address => address.Sheet != activeSheet.Id || stillInvalid.Contains(address))
-            .ToList();
-
-        return pruned.Count == circledCells.Count ? circledCells : pruned;
+        return WorkbookValidationCircleWorkflow.PruneCells(workbook, activeSheet, circledCells);
     }
 
     public WorkbookCellEditResult CommitCellText(string text, bool useR1C1ReferenceStyle = false)

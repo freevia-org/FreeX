@@ -489,6 +489,7 @@ public partial class MainWindow
         var viewport = CreateViewport(sheet, topRow, leftCol, rowHeaderWidth);
 
         SheetGrid.Viewport = viewport;
+        SheetGrid.ValidationCircleCells = sheet?.ValidationCircleCells;
         SheetGrid.PinnedNoteAddresses = sheet is null
             ? null
             : sheet.ShownComments.Count == 0

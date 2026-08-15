@@ -523,11 +523,10 @@ public partial class MainWindow
         if (sheet is null)
             return;
 
-        var matches = DataValidationCirclePlanner.FindInvalidDataCells(_workbook, sheet);
-        if (matches.Count == 0)
+        var result = WorkbookValidationCircleWorkflow.CircleInvalidData(_workbook, sheet);
+        SheetGrid.ValidationCircleCells = result.HasCircles ? result.Cells : null;
+        if (result.Outcome == WorkbookValidationCircleOutcome.NoInvalidData)
         {
-            SheetGrid.ValidationCircleCells = null;
-            sheet.ValidationCircleCells = null;
             _messageService.ShowInfo(
                 UiText.Get("MainWindowMessage_CircleInvalidDataNoInvalidData"),
                 UiText.Get("MainWindowMessage_CircleInvalidDataTitle"));
@@ -538,21 +537,18 @@ public partial class MainWindow
         // cell that currently fails its validation rule. It does not change the current selection --
         // the previous implementation only reused the (transient) multi-range selection as a stand-in
         // for the circles, which vanished the instant the user clicked elsewhere or pressed an arrow key.
-        // Mirrored onto Sheet.ValidationCircleCells (R90-print-twin-two-tier-sweep-1) so a print/PDF
-        // renderer -- which only has the Workbook/SheetId, not this GridView instance -- can eventually
-        // read the same circled-cell set instead of the state being trapped in a screen-only DependencyProperty.
-        SheetGrid.ValidationCircleCells = matches;
-        sheet.ValidationCircleCells = matches;
-        EnsureCellVisible(matches[0]);
+        // The shared workflow owns Sheet.ValidationCircleCells so native and portable print/PDF
+        // renderers read the same circled-cell set as this interactive GridView projection.
+        EnsureCellVisible(result.FirstCell!.Value);
         UpdateViewport();
         RefreshStatusBar();
     }
 
     private void ClearValidationCirclesMenuItem_Click(object sender, RoutedEventArgs e)
     {
-        SheetGrid.ValidationCircleCells = null;
         if (_workbook.GetSheet(_currentSheetId) is { } sheet)
-            sheet.ValidationCircleCells = null;
+            WorkbookValidationCircleWorkflow.Clear(sheet);
+        SheetGrid.ValidationCircleCells = null;
         UpdateViewport();
         RefreshStatusBar();
     }
@@ -567,23 +563,12 @@ public partial class MainWindow
     // manually re-runs the command.
     private void PruneCorrectedValidationCircles()
     {
-        if (SheetGrid.ValidationCircleCells is not { Count: > 0 } circled)
-            return;
-
         var sheet = _workbook.GetSheet(_currentSheetId);
         if (sheet is null)
             return;
 
-        // The actual re-check is the shared WorkbookSession.PruneCorrectedValidationCircles helper
-        // (FreeX.App.Services) so the Avalonia shell's equivalent overlay (MainWindow.DataTools.cs)
-        // applies the identical rule.
-        var pruned = WorkbookSession.PruneCorrectedValidationCircles(_workbook, sheet, circled);
-        if (ReferenceEquals(pruned, circled))
-            return;
-
-        var remaining = pruned.Count == 0 ? null : pruned;
-        SheetGrid.ValidationCircleCells = remaining;
-        sheet.ValidationCircleCells = remaining;
+        var result = WorkbookValidationCircleWorkflow.Prune(_workbook, sheet);
+        SheetGrid.ValidationCircleCells = result.HasCircles ? result.Cells : null;
     }
 
     private void ApplyConsolidateRangeSelection(

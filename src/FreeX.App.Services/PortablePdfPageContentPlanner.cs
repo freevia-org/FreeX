@@ -37,7 +37,8 @@ public sealed record PortablePdfPageCell(
     // (see PageContentRenderModelBuilder's identical PageCellBlock.DataBar/IconSet fields, which this
     // mirrors for the PDF export path).
     DataBarLayout? DataBar = null,
-    IconSetResult? IconSet = null)
+    IconSetResult? IconSet = null,
+    bool HasValidationCircle = false)
 {
     public bool IsTitle => IsTitleRow || IsTitleColumn;
     public bool IsBody => !IsTitle;
@@ -141,6 +142,9 @@ public static class PortablePdfPageContentPlanner
         var cells = new List<PortablePdfPageCell>(rows.Count * columns.Count);
 
         var conditionalFormats = new ConditionalFormatRenderEvaluator(sheet);
+        var validationCircleCells = sheet.ValidationCircleCells is { Count: > 0 } circled
+            ? circled.Where(address => address.Sheet == sheet.Id).ToHashSet()
+            : new HashSet<CellAddress>();
 
         // R112-pdf-width-overflow-1: precompute each page column's character-width budget once
         // (from the sheet's real column width, same source ComputeActualGridSizes already reads for
@@ -175,7 +179,8 @@ public static class PortablePdfPageContentPlanner
                     column.Role == PortablePdfPageAxisRole.Title,
                     cfResult.Style?.FillColor,
                     cfResult.DataBar,
-                    cfResult.IconSet));
+                    cfResult.IconSet,
+                    validationCircleCells.Contains(address)));
             }
         }
 

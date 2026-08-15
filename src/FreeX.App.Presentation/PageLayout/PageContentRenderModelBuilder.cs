@@ -348,6 +348,9 @@ public static class PageContentRenderModelBuilder
         var cells = new List<PageCellBlock>();
 
         var conditionalFormats = new ConditionalFormatRenderEvaluator(sheet);
+        var validationCircleCells = sheet.ValidationCircleCells is { Count: > 0 } circled
+            ? circled.Where(address => address.Sheet == sheet.Id).ToHashSet()
+            : new HashSet<CellAddress>();
 
         for (var rowIndex = 0; rowIndex < pageRows.Count; rowIndex++)
         {
@@ -406,8 +409,9 @@ public static class PageContentRenderModelBuilder
                 var targetWidthCharacters = EstimateCharacterWidth(scaleRatio > 0 ? width / scaleRatio : width);
                 var text = cell is not null ? FormatCellText(workbook, sheet, cell, style, targetWidthCharacters) : "";
                 var borders = ResolveBorders(style);
+                var hasValidationCircle = validationCircleCells.Contains(address);
                 if (string.IsNullOrEmpty(text) && fill is null && !borders.HasAny &&
-                    cfResult.DataBar is null && cfResult.IconSet is null)
+                    cfResult.DataBar is null && cfResult.IconSet is null && !hasValidationCircle)
                 {
                     continue;
                 }
@@ -428,7 +432,8 @@ public static class PageContentRenderModelBuilder
                     borders,
                     textOrigin,
                     cfResult.DataBar,
-                    cfResult.IconSet));
+                    cfResult.IconSet,
+                    hasValidationCircle));
             }
         }
 

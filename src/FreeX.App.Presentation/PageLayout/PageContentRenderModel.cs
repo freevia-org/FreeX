@@ -79,7 +79,8 @@ public sealed record PageCellBlock(
     PageCellBorders Borders,
     LayoutPoint TextOrigin,
     DataBarLayout? DataBar = null,
-    IconSetResult? IconSet = null);
+    IconSetResult? IconSet = null,
+    bool HasValidationCircle = false);
 
 /// <summary>A single straight gridline segment between two pixel-space endpoints.</summary>
 public readonly record struct PageGridLine(LayoutPoint Start, LayoutPoint End);

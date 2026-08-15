@@ -9,7 +9,7 @@ public sealed partial class Sheet
     /// property is the sheet/session-level store a print renderer can read directly from
     /// <c>workbook.GetSheet(sheetId).ValidationCircleCells</c> (unlike a shell-side
     /// DependencyProperty, which only the interactive grid instance can see) so print/PDF/XPS
-    /// output can eventually draw the same circles the user sees live (R90-print-twin-two-tier-sweep-1).
+    /// output draws the same circles the user sees live.
     /// Transient session state only: never written to or read from the XLSX/native file formats
     /// (Excel does not persist Circle Invalid Data across a save/reopen either -- it is always a
     /// fresh re-check), and deliberately NOT copied by <see cref="Clone(SheetId, string)"/> -- a duplicated
