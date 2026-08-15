@@ -69,6 +69,7 @@ public sealed partial class MainWindow : Window
     private readonly Func<Task<string?>> _pickPdfImportPathAsync;
     private readonly Func<bool, string, Task<string?>>? _askHeaderFooterText;
     private readonly IScreenClipService _screenClipService;
+    private readonly ScreenClipWorkflowCoordinator _screenClipWorkflow = new();
     private readonly IPlatformClipboard _platformClipboard;
     private readonly DocumentView _editor = new();
     private readonly QuickPartLibrary _quickParts = QuickPartLibrary.Load();
@@ -3523,19 +3524,22 @@ public sealed partial class MainWindow : Window
     {
         try
         {
-            var capture = await _screenClipService.CaptureAsync(this);
-            if (capture is null)
-                return;
-
-            ApplyScreenClipCapture(_editor, capture);
-            _status.Text = UiText.Format(
-                "ScreenClip_Inserted_Status_Format",
-                capture.PixelWidth,
-                capture.PixelHeight);
-        }
-        catch (Exception ex)
-        {
-            _status.Text = UiText.Format("ScreenClip_Failed_Status_Format", ex.Message);
+            var result = await _screenClipWorkflow.ExecuteAsync(
+                cancellationToken => _screenClipService.CaptureAsync(this, cancellationToken),
+                image => ApplyScreenClipImage(_editor, image));
+            if (result.Outcome == ScreenClipWorkflowOutcome.Inserted)
+            {
+                _status.Text = UiText.Format(
+                    "ScreenClip_Inserted_Status_Format",
+                    result.PixelWidth,
+                    result.PixelHeight);
+            }
+            else if (result.Outcome == ScreenClipWorkflowOutcome.Failed)
+            {
+                _status.Text = UiText.Format(
+                    "ScreenClip_Failed_Status_Format",
+                    result.FailureMessage ?? string.Empty);
+            }
         }
         finally
         {
@@ -3543,15 +3547,10 @@ public sealed partial class MainWindow : Window
         }
     }
 
-    internal static void ApplyScreenClipCapture(DocumentView editor, ScreenClipCapture capture)
+    internal static void ApplyScreenClipImage(DocumentView editor, InlineImage image)
     {
         ArgumentNullException.ThrowIfNull(editor);
-        ArgumentNullException.ThrowIfNull(capture);
-
-        var image = ScreenClipImageFactory.Create(
-            capture.PngBytes,
-            capture.PixelWidth,
-            capture.PixelHeight);
+        ArgumentNullException.ThrowIfNull(image);
         editor.InsertInlineImage(
             image.Bytes,
             image.WidthPt,

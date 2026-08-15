@@ -10,14 +10,18 @@ public sealed class RendererUtilityOwnershipTests
         var overlay = ReadSource("freew", "FreeW.App.Host", "Editing", "ScreenClipOverlay.cs");
         var capture = ReadSource("freew", "FreeW.App.Host", "Editing", "ScreenshotCapture.cs");
         var factory = ReadSource("freew", "FreeW.App.Presentation", "Dialogs", "ScreenClipImageFactory.cs");
+        var workflow = ReadSource("freew", "FreeW.App.Presentation", "Dialogs", "ScreenClipWorkflowCoordinator.cs");
 
         overlay.Should().Contain("ScreenClipPlanner.BuildPhysicalSelectionFromMappedEndpoints(");
         overlay.Should().NotContain("System.Math.Round(");
-        capture.Should().Contain("ScreenClipImageFactory.Create(pngBytes, pixelWidth, pixelHeight)");
+        capture.Should().Contain("new ScreenClipCapture(pngBytes, pixelWidth, pixelHeight)");
+        capture.Should().NotContain("ScreenClipImageFactory.Create(");
         capture.Should().NotContain("ScreenClipPlanner.BuildImageInsertionPlan(");
         capture.Should().NotContain("new InlineImage(");
         factory.Should().Contain("ScreenClipPlanner.BuildImageInsertionPlan(");
         factory.Should().Contain("new InlineImage(");
+        workflow.Should().Contain("ScreenClipImageFactory.Create(");
+        workflow.Should().Contain("insert(image)");
         capture.Should().NotContain("PxPerPoint");
         capture.Should().NotContain("MaxWidthPt");
     }

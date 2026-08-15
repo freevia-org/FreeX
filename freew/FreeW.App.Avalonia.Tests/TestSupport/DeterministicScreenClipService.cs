@@ -1,5 +1,6 @@
 using Avalonia.Controls;
 using FreeW.App.Avalonia.Editing;
+using FreeW.App.Presentation.Dialogs;
 
 namespace FreeW.App.Avalonia.Tests.TestSupport;
 

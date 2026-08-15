@@ -2,27 +2,18 @@ using System.Drawing;
 using System.Drawing.Imaging;
 using System.IO;
 using FreeW.App.Presentation.Dialogs;
-using FreeW.Core.Model;
 
 namespace FreeW.App.Host.Editing;
 
 /// <summary>
-/// Screen-capture helpers backing Insert &gt; Illustrations &gt; Screenshot (Screen Clipping). The
-/// region capture uses GDI+ <see cref="Graphics.CopyFromScreen(int, int, int, int, Size)"/> against the
-/// virtual screen, encodes the result to PNG, and the bytes are inserted through the exact same
-/// <see cref="DocumentView.InsertImage"/> path as Insert Picture. PNG decoding remains native while
-/// portable image-model construction is delegated to the shared presentation factory.
+/// Native GDI+ capture and PNG decoding for Insert > Illustrations > Screenshot.
+/// Portable image construction and insertion sequencing belong to the presentation workflow.
 /// </summary>
 internal static class ScreenshotCapture
 {
-    /// <summary>
-    /// Converts PNG bytes (e.g. a screen clip) to an <see cref="InlineImage"/>, deriving the point
-    /// width/height from the PNG's pixel dimensions (96 DPI device-independent pixels → points) and
-    /// applying the shared screen-clip insertion plan. The bytes are stored verbatim as
-    /// <see cref="ImageFormat.Png"/>.
-    /// </summary>
+    /// <summary>Decodes PNG dimensions into a toolkit-neutral capture payload.</summary>
     /// <exception cref="ArgumentException">The bytes are empty or not a decodable image.</exception>
-    public static InlineImage PngToInlineImage(byte[] pngBytes)
+    public static ScreenClipCapture PngToCapture(byte[] pngBytes)
     {
         ArgumentNullException.ThrowIfNull(pngBytes);
         if (pngBytes.Length == 0)
@@ -42,15 +33,21 @@ internal static class ScreenshotCapture
             throw new ArgumentException("Screenshot bytes are not a valid image.", nameof(pngBytes), ex);
         }
 
-        return ScreenClipImageFactory.Create(pngBytes, pixelWidth, pixelHeight);
+        return new ScreenClipCapture(pngBytes, pixelWidth, pixelHeight);
+    }
+
+    public static ScreenClipCapture? CaptureRegion(System.Drawing.Rectangle region)
+    {
+        var pngBytes = CaptureRegionPng(region);
+        return pngBytes is null
+            ? null
+            : PngToCapture(pngBytes);
     }
 
     /// <summary>
-    /// Captures a rectangular screen region (in virtual-screen pixel coordinates) and encodes it as PNG.
-    /// Returns <see langword="null"/> when the region is degenerate (zero/negative width or height) so a
-    /// cancelled or empty drag inserts nothing.
+    /// Captures a virtual-screen pixel rectangle and encodes it as PNG, or returns null for an empty region.
     /// </summary>
-    public static byte[]? CaptureRegionPng(System.Drawing.Rectangle region)
+    private static byte[]? CaptureRegionPng(System.Drawing.Rectangle region)
     {
         if (region.Width <= 0 || region.Height <= 0)
             return null;

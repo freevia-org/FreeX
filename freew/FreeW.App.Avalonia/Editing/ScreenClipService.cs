@@ -10,11 +10,6 @@ using FreeW.App.Presentation.Dialogs;
 
 namespace FreeW.App.Avalonia.Editing;
 
-internal sealed record ScreenClipCapture(
-    byte[] PngBytes,
-    int PixelWidth,
-    int PixelHeight);
-
 internal interface IScreenClipService
 {
     Task<ScreenClipCapture?> CaptureAsync(

@@ -2681,48 +2681,54 @@ internal static class FreeWRibbonCommands
     // empty drag cancels and inserts nothing (mirroring Word).
     private sealed class ScreenClippingCommand(DocumentView editor) : IRibbonCommand
     {
+        private readonly ScreenClipWorkflowCoordinator _workflow = new();
+
         public void Execute(RibbonCommandContext context)
         {
             var window = Window.GetWindow(editor);
-            var previousState = window?.WindowState ?? WindowState.Normal;
-            try
+            var result = _workflow.Execute(Capture, image =>
             {
-                // Briefly hide FreeW so it isn't part of the captured region (Word does the same).
-                if (window is not null)
-                {
-                    window.WindowState = WindowState.Minimized;
-                    // Let the minimize animation settle before the overlay/capture so we grab the desktop,
-                    // not a half-faded FreeW frame.
-                    window.Dispatcher.Invoke(static () => { }, System.Windows.Threading.DispatcherPriority.ApplicationIdle);
-                }
-
-                var region = ScreenClipOverlay.PromptForRegion();
-
-                if (window is not null)
-                {
-                    window.WindowState = previousState;
-                    window.Activate();
-                }
-
-                if (region is not { } captured)
-                    return;
-
-                var pngBytes = ScreenshotCapture.CaptureRegionPng(captured);
-                if (pngBytes is null)
-                    return;
-
-                var image = ScreenshotCapture.PngToInlineImage(pngBytes);
                 editor.Focus();
                 editor.InsertImage(image);
-            }
-            catch (Exception ex)
+            });
+            if (result.Outcome == ScreenClipWorkflowOutcome.Failed)
             {
-                if (window is not null && window.WindowState == WindowState.Minimized)
-                    window.WindowState = previousState;
                 DialogMessageHelper.ShowError(
                     window,
-                    UiText.Format("ScreenClip_Failed_Message_Format", ex.Message),
+                    UiText.Format("ScreenClip_Failed_Message_Format", result.FailureMessage ?? string.Empty),
                     UiText.Get("FreeW_ProductName"));
+            }
+
+            ScreenClipCapture? Capture()
+            {
+                var previousState = window?.WindowState ?? WindowState.Normal;
+                try
+                {
+                    // Briefly hide FreeW so it isn't part of the captured region (Word does the same).
+                    if (window is not null)
+                    {
+                        window.WindowState = WindowState.Minimized;
+                        // Let the minimize animation settle before the overlay/capture so we grab the desktop,
+                        // not a half-faded FreeW frame.
+                        window.Dispatcher.Invoke(static () => { }, System.Windows.Threading.DispatcherPriority.ApplicationIdle);
+                    }
+
+                    var region = ScreenClipOverlay.PromptForRegion();
+                    if (window is not null)
+                    {
+                        window.WindowState = previousState;
+                        window.Activate();
+                    }
+
+                    return region is { } captured
+                        ? ScreenshotCapture.CaptureRegion(captured)
+                        : null;
+                }
+                finally
+                {
+                    if (window is not null && window.WindowState == WindowState.Minimized)
+                        window.WindowState = previousState;
+                }
             }
         }
     }

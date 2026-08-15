@@ -4,6 +4,7 @@ using System.Drawing.Imaging;
 using System.IO;
 using System.Linq;
 using FreeW.App.Host.Editing;
+using FreeW.App.Presentation.Dialogs;
 using FreeW.Core.IO;
 using FreeW.Core.Model;
 using Xunit;
@@ -31,12 +32,12 @@ public sealed class ScreenshotCaptureTests
     }
 
     [Fact]
-    public void PngToInlineImage_PreservesBytesAndDerivesPointDimensions()
+    public void PngToCapture_PreservesBytesAndDerivesPointDimensions()
     {
         // 96x48 px at 96 DPI -> 72x36 pt (no width cap needed).
         var png = MakePng(96, 48);
 
-        var image = ScreenshotCapture.PngToInlineImage(png);
+        var image = BuildImage(ScreenshotCapture.PngToCapture(png));
 
         image.Format.Should().Be(FreeW.Core.Model.ImageFormat.Png);
         image.Bytes.Should().Equal(png);
@@ -47,38 +48,38 @@ public sealed class ScreenshotCaptureTests
     }
 
     [Fact]
-    public void PngToInlineImage_CapsWidthAndPreservesAspectRatio()
+    public void SharedWorkflow_CapsWidthAndPreservesAspectRatio()
     {
         // 1200x600 px -> 900x450 pt before the 400 pt cap; capping width keeps the 2:1 aspect ratio.
         var png = MakePng(1200, 600);
 
-        var image = ScreenshotCapture.PngToInlineImage(png);
+        var image = BuildImage(ScreenshotCapture.PngToCapture(png));
 
         image.WidthPt.Should().BeApproximately(400, 0.001);
         image.HeightPt.Should().BeApproximately(200, 0.001);
     }
 
     [Fact]
-    public void PngToInlineImage_RejectsEmptyBytes()
+    public void PngToCapture_RejectsEmptyBytes()
     {
-        var act = () => ScreenshotCapture.PngToInlineImage(Array.Empty<byte>());
+        var act = () => ScreenshotCapture.PngToCapture(Array.Empty<byte>());
         act.Should().Throw<ArgumentException>();
     }
 
     [Fact]
-    public void PngToInlineImage_RejectsNonImageBytes()
+    public void PngToCapture_RejectsNonImageBytes()
     {
-        var act = () => ScreenshotCapture.PngToInlineImage(new byte[] { 1, 2, 3, 4, 5 });
+        var act = () => ScreenshotCapture.PngToCapture(new byte[] { 1, 2, 3, 4, 5 });
         act.Should().Throw<ArgumentException>();
     }
 
     [Fact]
     public void CapturedClip_WrittenToDocx_RoundTripsBytesAndDimensions()
     {
-        // A screen clip flows: PNG bytes -> PngToInlineImage -> InsertImage -> docx write. Assert the
+        // A screen clip flows: native PNG payload -> shared workflow -> InsertImage -> docx write. Assert the
         // captured PNG (bytes + derived point size) survives a real DocxWriter -> DocxReader round-trip.
         var png = MakePng(128, 64);
-        var image = ScreenshotCapture.PngToInlineImage(png);
+        var image = BuildImage(ScreenshotCapture.PngToCapture(png));
 
         var doc = new TextDocument();
         var paragraph = new FreeW.Core.Model.Paragraph();
@@ -95,5 +96,17 @@ public sealed class ScreenshotCaptureTests
         recoveredImage.Bytes.Should().Equal(png);
         recoveredImage.WidthPt.Should().BeApproximately(image.WidthPt, 0.001);
         recoveredImage.HeightPt.Should().BeApproximately(image.HeightPt, 0.001);
+    }
+
+    private static InlineImage BuildImage(ScreenClipCapture capture)
+    {
+        InlineImage? inserted = null;
+        var result = new ScreenClipWorkflowCoordinator().Execute(
+            () => capture,
+            image => inserted = image);
+
+        result.Outcome.Should().Be(ScreenClipWorkflowOutcome.Inserted);
+        inserted.Should().NotBeNull();
+        return inserted!;
     }
 }
