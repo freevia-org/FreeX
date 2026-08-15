@@ -173,7 +173,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
     {
         public override string ToString() => Label;
     }
-    private sealed class FormatCellsDialogWindow : Window
+    private sealed class FormatCellsDialogWindow : AvaloniaDialogWindow
     {
         internal void ResizeClient(Size size) => ClientSize = size;
     }
