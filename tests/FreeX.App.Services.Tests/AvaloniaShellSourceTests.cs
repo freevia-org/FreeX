@@ -2870,6 +2870,21 @@ public sealed class AvaloniaShellSourceTests
     }
 
     [Fact]
+    public void InsertObjectDialogs_UseSharedFreeXDialogWindowChromeAndModalKeys()
+    {
+        var source = File.ReadAllText(RepositoryFileLocator.Find(
+            "src", "FreeX.App.Avalonia", "MainWindow.InsertObjects.cs"));
+
+        System.Text.RegularExpressions.Regex.Matches(
+                source,
+                "new FreeXDialogWindow\\(InsertObjectDialogChromeStyle\\)")
+            .Should().HaveCount(2);
+        source.Should().NotContain("new Window")
+            .And.Contain("IsDefault = true")
+            .And.Contain("IsCancel = true");
+    }
+
+    [Fact]
     public void AvaloniaPageSetupDialog_UsesSharedPlannerForChoiceSurface()
     {
         var source = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MainWindow.PageLayout.cs"));
