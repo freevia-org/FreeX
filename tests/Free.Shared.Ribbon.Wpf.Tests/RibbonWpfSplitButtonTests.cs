@@ -401,6 +401,45 @@ public sealed class RibbonWpfSplitButtonTests
     }
 
     [Fact]
+    public void DropdownMenu_RefreshesCheckableStateFromStoreWheneverOpened()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var registry = new RibbonCommandRegistry();
+            registry.Register("menu", new RecordingCommand());
+            registry.Register("choice", new RecordingCommand());
+            var stateStore = new RibbonStateStore();
+            stateStore.SetChecked("choice", false);
+            var root = BuildRibbon(
+                registry,
+                new RibbonMenu(new[]
+                {
+                    new RibbonMenuItem("Choice", "choice") { IsChecked = false },
+                }),
+                stateStore: stateStore);
+            var window = new Window { Content = root, Width = 420, Height = 130 };
+            window.Show();
+            try
+            {
+                Layout(root, 420, 130);
+                var dropdown = FindButton(root, "paste.Dropdown");
+                var menu = Assert.IsType<ContextMenu>(dropdown.ContextMenu);
+                var item = Assert.Single(menu.Items.OfType<MenuItem>());
+                item.IsChecked.Should().BeFalse();
+
+                stateStore.SetChecked("choice", true);
+                menu.IsOpen = true;
+
+                item.IsChecked.Should().BeTrue();
+            }
+            finally
+            {
+                window.Close();
+            }
+        });
+    }
+
+    [Fact]
     public void DropdownMenu_RendersNeutralInputGestureInShortcutColumn()
     {
         StaTestRunner.Run(() =>
@@ -525,7 +564,8 @@ public sealed class RibbonWpfSplitButtonTests
     private static FrameworkElement BuildRibbon(
         IRibbonCommandRegistry registry,
         RibbonMenu? menu = null,
-        RibbonCommandLayoutKind layout = RibbonCommandLayoutKind.Medium) =>
+        RibbonCommandLayoutKind layout = RibbonCommandLayoutKind.Medium,
+        IRibbonStateStore? stateStore = null) =>
         RibbonWpfRenderer.BuildTabContent(
             new RibbonDefinitionBuilder()
                 .Tab("home", "Home", "H", tab => tab
@@ -542,7 +582,8 @@ public sealed class RibbonWpfSplitButtonTests
                 .Build()
                 .FindTab("home")!,
             new Border(),
-            registry);
+            registry,
+            stateStore);
 
     private static FrameworkElement BuildComboRibbon(IRibbonCommandRegistry registry) =>
         RibbonWpfRenderer.BuildTabContent(

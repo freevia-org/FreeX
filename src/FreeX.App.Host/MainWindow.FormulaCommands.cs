@@ -11,6 +11,7 @@ using FreeX.App.Presentation.FormulaAuditing;
 using FreeX.App.Services;
 using FreeX.Core.Commands;
 using FreeX.Core.Model;
+using FreeX.Ribbon.Definitions;
 
 namespace FreeX.App.Host;
 
@@ -570,28 +571,23 @@ public partial class MainWindow
             OpenRibbonContextMenu(btn, cm);
     }
 
-    private void CalculationOptionsContextMenu_Opened(object sender, RoutedEventArgs e)
+    private void RefreshCalculationModeRibbonStates()
     {
-        if (sender is not ContextMenu menu)
-            return;
-
-        foreach (var item in menu.Items.OfType<MenuItem>())
-        {
-            item.IsChecked = item.Name switch
-            {
-                _ when string.Equals(item.Header?.ToString(), UiText.Get("MainWindow_Header_Manual"), StringComparison.Ordinal) =>
-                    CalculationCommandPolicy.ModeCommandState(
-                        _workbook.CalculationMode,
-                        WorkbookCalculationMode.Manual).IsChecked,
-                _ when string.Equals(item.Header?.ToString(), UiText.Get("MainWindow_Header_AutomaticExceptDataTables"), StringComparison.Ordinal) =>
-                    CalculationCommandPolicy.ModeCommandState(
-                        _workbook.CalculationMode,
-                        WorkbookCalculationMode.AutomaticExceptDataTables).IsChecked,
-                _ => CalculationCommandPolicy.ModeCommandState(
-                    _workbook.CalculationMode,
-                    WorkbookCalculationMode.Automatic).IsChecked
-            };
-        }
+        _ribbonState.SetState(
+            FreeXRibbonCommandIds.FormulasCalculationAutomatic,
+            CalculationCommandPolicy.ModeCommandState(
+                _workbook.CalculationMode,
+                WorkbookCalculationMode.Automatic));
+        _ribbonState.SetState(
+            FreeXRibbonCommandIds.FormulasCalculationAutomaticExceptDataTables,
+            CalculationCommandPolicy.ModeCommandState(
+                _workbook.CalculationMode,
+                WorkbookCalculationMode.AutomaticExceptDataTables));
+        _ribbonState.SetState(
+            FreeXRibbonCommandIds.FormulasCalculationManual,
+            CalculationCommandPolicy.ModeCommandState(
+                _workbook.CalculationMode,
+                WorkbookCalculationMode.Manual));
     }
 
     private void CalcAutoMenuItem_Click(object sender, RoutedEventArgs e) =>

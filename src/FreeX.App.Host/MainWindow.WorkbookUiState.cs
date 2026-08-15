@@ -289,6 +289,7 @@ public partial class MainWindow
 
     private void RefreshToolbar()
     {
+        RefreshCalculationModeRibbonStates();
         RefreshQuickAccessToolbarCommandStates();
         RefreshToolbarVisualState();
     }

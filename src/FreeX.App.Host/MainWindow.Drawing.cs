@@ -8,6 +8,7 @@ using FreeX.App.Presentation.DrawingUI;
 using FreeX.App.Services;
 using FreeX.Core.Commands;
 using FreeX.Core.Model;
+using Free.Shared.Ribbon.Wpf;
 
 namespace FreeX.App.Host;
 
@@ -698,26 +699,20 @@ public partial class MainWindow
         UpdateViewport();
     }
 
-    private void ShapeEffectsMenu_Opened(object sender, RoutedEventArgs e)
-    {
-        if (sender is not ContextMenu menu)
-            return;
-
-        var currentPreset = GetTargetDrawingShape(_currentSheetId)?.GetEffectiveEffectPreset()
-            ?? DrawingShapeEffectPreset.None;
-        currentPreset = ShapeEffectsPlanner.NormalizePreset(currentPreset);
-
-        foreach (var item in menu.Items)
-        {
-            if (item is MenuItem { Tag: DrawingShapeEffectPreset preset } menuItem)
-                menuItem.IsChecked = preset == currentPreset;
-        }
-    }
-
     private void ShapeEffectPresetMenuItem_Click(object sender, RoutedEventArgs e)
     {
-        if (sender is MenuItem { Tag: DrawingShapeEffectPreset preset })
+        if (sender is MenuItem { Tag: DrawingShapeEffectPreset taggedPreset })
+        {
+            SetSelectedDrawingShapeEffect(taggedPreset);
+            return;
+        }
+
+        if (sender is DependencyObject element
+            && RibbonMetadata.TryGetCommandName(element, out var commandId)
+            && DrawingObjectContextualRibbonPlanner.TryResolveShapeEffectPreset(commandId, out var preset))
+        {
             SetSelectedDrawingShapeEffect(preset);
+        }
     }
 
     private void SetSelectedDrawingShapeEffect(DrawingShapeEffectPreset preset)

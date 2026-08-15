@@ -35,6 +35,7 @@ public partial class MainWindow
             InitializeRibbonControlBackplane();
             var originals = RibbonBackplaneControls;
             var registry = BuildNativeRibbonRegistry();
+            RefreshCalculationModeRibbonStates();
             foreach (var (name, control) in originals)
             {
                 if (!registry.TryGet(name, out _))

@@ -48,7 +48,7 @@ public sealed class CalculationWorkflowOwnershipSourceGuardTests
     }
 
     [Fact]
-    public void CalculationModeMenuState_IsSharedAndAvaloniaRefreshesItWhenOpened()
+    public void CalculationModeMenuState_IsSharedAndBothRenderersRefreshItWhenOpened()
     {
         var host = ReadSource("FreeX.App.Host", "MainWindow.FormulaCommands.cs");
         var avalonia = ReadSource("FreeX.App.Avalonia", "MainWindow.cs");
@@ -56,8 +56,15 @@ public sealed class CalculationWorkflowOwnershipSourceGuardTests
         var renderer = File.ReadAllText(Path.Combine(
             RepositoryFileLocator.FindDirectory("shared", "Free.Shared.Ribbon.Avalonia"),
             "AvaloniaRibbonRenderer.cs"));
+        var wpfRenderer = File.ReadAllText(Path.Combine(
+            RepositoryFileLocator.FindDirectory("shared", "Free.Shared.Ribbon.Wpf"),
+            "RibbonWpfRenderer.cs"));
+        var wpfRibbon = ReadSource("FreeX.App.Host", "MainWindow.RibbonDeclarative.cs");
 
         host.Should().Contain("CalculationCommandPolicy.ModeCommandState(");
+        host.Should().Contain("private void RefreshCalculationModeRibbonStates()");
+        host.Should().NotContain("CalculationOptionsContextMenu_Opened");
+        wpfRibbon.Should().Contain("RefreshCalculationModeRibbonStates();");
         avalonia.Should().ContainAll(
             "[FreeXRibbonCommandIds.FormulasCalculationAutomatic]",
             "[FreeXRibbonCommandIds.FormulasCalculationAutomaticExceptDataTables]",
@@ -67,6 +74,9 @@ public sealed class CalculationWorkflowOwnershipSourceGuardTests
         renderer.Should().Contain("flyout.Opened += (_, _) => RefreshMenuCommandStates(flyout, registry);");
         renderer.Should().Contain("RibbonMenuCommandStatePlanner.Plan(");
         renderer.Should().Contain("item.IsChecked = isChecked;");
+        wpfRenderer.Should().Contain("contextMenu.Opened += (_, _) => RefreshMenuCommandStates(");
+        wpfRenderer.Should().Contain("RibbonMenuCommandStatePlanner.Plan(");
+        wpfRenderer.Should().Contain("item.IsChecked = isChecked;");
     }
 
     [Fact]

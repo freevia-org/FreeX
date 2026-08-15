@@ -1484,6 +1484,22 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
                     ["Crop Picture"] = () => GetDrawingObjectContextualRibbonCommandState(DrawingObjectContextualRibbonCommand.CropPicture),
                     ["Shape Gradient"] = () => GetDrawingObjectContextualRibbonCommandState(DrawingObjectContextualRibbonCommand.ShapeGradient),
                     ["Shape Effects"] = () => GetDrawingObjectContextualRibbonCommandState(DrawingObjectContextualRibbonCommand.ShapeEffects),
+                    [FreeXRibbonCommandIds.DrawingShapeEffectNone] = () =>
+                        GetShapeEffectPresetRibbonState(DrawingShapeEffectPreset.None),
+                    [FreeXRibbonCommandIds.DrawingShapeEffectShadow] = () =>
+                        GetShapeEffectPresetRibbonState(DrawingShapeEffectPreset.Shadow),
+                    [FreeXRibbonCommandIds.DrawingShapeEffectInnerShadow] = () =>
+                        GetShapeEffectPresetRibbonState(DrawingShapeEffectPreset.InnerShadow),
+                    [FreeXRibbonCommandIds.DrawingShapeEffectReflection] = () =>
+                        GetShapeEffectPresetRibbonState(DrawingShapeEffectPreset.Reflection),
+                    [FreeXRibbonCommandIds.DrawingShapeEffectGlow] = () =>
+                        GetShapeEffectPresetRibbonState(DrawingShapeEffectPreset.Glow),
+                    [FreeXRibbonCommandIds.DrawingShapeEffectSoftEdges] = () =>
+                        GetShapeEffectPresetRibbonState(DrawingShapeEffectPreset.SoftEdges),
+                    [FreeXRibbonCommandIds.DrawingShapeEffectBevel] = () =>
+                        GetShapeEffectPresetRibbonState(DrawingShapeEffectPreset.Bevel),
+                    [FreeXRibbonCommandIds.DrawingShapeEffectThreeDRotation] = () =>
+                        GetShapeEffectPresetRibbonState(DrawingShapeEffectPreset.ThreeDRotation),
                     // View ▸ Window ▸ Side by Side + Synchronous Scrolling toggle states.
                     ["View Side by Side"] = GetSideBySideRibbonState,
                     ["Synchronous Scrolling"] = GetSynchronousScrollingRibbonState,

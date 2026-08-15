@@ -1,5 +1,6 @@
 using FreeX.Core.Model;
 using FreeX.Ribbon.Definitions;
+using Free.Shared.Ribbon;
 
 namespace FreeX.App.Presentation.DrawingUI;
 
@@ -33,6 +34,10 @@ public sealed record DrawingObjectContextualCommandSpec(
     string CommandId,
     DrawingObjectContextualCommandAction Action,
     DrawingShapeEffectPreset? EffectPreset = null);
+
+public sealed record DrawingObjectContextualCommandStatePlan(
+    string CommandId,
+    RibbonCommandState State);
 
 public sealed record DrawingObjectContextualRibbonPlan(
     bool ShapeFormatVisible,
@@ -95,6 +100,44 @@ public static class DrawingObjectContextualRibbonPlanner
         new(FreeXRibbonCommandIds.DrawingShapeEffectBevel, DrawingObjectContextualCommandAction.ShapeEffectPreset, DrawingShapeEffectPreset.Bevel),
         new(FreeXRibbonCommandIds.DrawingShapeEffectThreeDRotation, DrawingObjectContextualCommandAction.ShapeEffectPreset, DrawingShapeEffectPreset.ThreeDRotation),
     ];
+
+    public static IReadOnlyList<DrawingObjectContextualCommandStatePlan> BuildShapeEffectCommandStates(
+        DrawingShapeEffectPreset currentPreset,
+        bool isEnabled) =>
+        CreatePictureShapeCommandSpecs()
+            .Where(spec => spec.Action == DrawingObjectContextualCommandAction.ShapeEffectPreset)
+            .Select(spec => new DrawingObjectContextualCommandStatePlan(
+                spec.CommandId,
+                BuildShapeEffectCommandState(
+                    currentPreset,
+                    spec.EffectPreset ?? DrawingShapeEffectPreset.None,
+                    isEnabled)))
+            .ToArray();
+
+    public static RibbonCommandState BuildShapeEffectCommandState(
+        DrawingShapeEffectPreset currentPreset,
+        DrawingShapeEffectPreset candidatePreset,
+        bool isEnabled) =>
+        new(
+            IsEnabled: isEnabled,
+            IsChecked: currentPreset == candidatePreset);
+
+    public static bool TryResolveShapeEffectPreset(
+        string? commandId,
+        out DrawingShapeEffectPreset preset)
+    {
+        var spec = CreatePictureShapeCommandSpecs().FirstOrDefault(candidate =>
+            candidate.Action == DrawingObjectContextualCommandAction.ShapeEffectPreset
+            && string.Equals(candidate.CommandId, commandId, StringComparison.Ordinal));
+        if (spec?.EffectPreset is not { } resolved)
+        {
+            preset = DrawingShapeEffectPreset.None;
+            return false;
+        }
+
+        preset = resolved;
+        return true;
+    }
 
     public static DrawingObjectContextualRibbonPlan Build(
         Sheet? sheet,

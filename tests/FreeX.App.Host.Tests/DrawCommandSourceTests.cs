@@ -41,9 +41,11 @@ public sealed class DrawCommandSourceTests
         source.Should().Contain("private void ObjectGradientBtn_Click(object sender, RoutedEventArgs e) => SetSelectedDrawingShapeGradient();");
         source.Should().Contain("private void ObjectEffectsBtn_Click(object sender, RoutedEventArgs e)");
         source.Should().Contain("OpenRibbonContextMenu(button, menu);");
-        source.Should().Contain("private void ShapeEffectsMenu_Opened(object sender, RoutedEventArgs e)");
-        source.Should().Contain("menuItem.IsChecked = preset == currentPreset;");
+        source.Should().NotContain("ShapeEffectsMenu_Opened");
+        contextualSource.Should().Contain("DrawingObjectContextualRibbonPlanner.BuildShapeEffectCommandStates(");
+        contextualSource.Should().Contain("_ribbonState.SetState(commandState.CommandId, commandState.State);");
         source.Should().Contain("private void ShapeEffectPresetMenuItem_Click(object sender, RoutedEventArgs e)");
+        source.Should().Contain("DrawingObjectContextualRibbonPlanner.TryResolveShapeEffectPreset(commandId, out var preset)");
         source.Should().Contain("SetSelectedDrawingShapeEffect(preset);");
         source.Should().Contain("var normalizedPreset = ShapeEffectsPlanner.NormalizePreset(preset);");
         source.Should().NotContain("Enum.IsDefined(preset)");
