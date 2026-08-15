@@ -32,6 +32,7 @@ public sealed partial class MainWindow
                 RefreshSlidePaneChrome = RefreshSlidePaneChrome,
                 RefreshReviewPaneBeforePlans = RefreshCommentPane,
                 RefreshVisibleMediaPane = RefreshVisibleMediaCaptionPaneFromFields,
+                RefreshCurrentSlideStatus = UpdateSlideCount,
                 RefreshAltTextRequest = RefreshAltTextRequestPlan,
                 RefreshReadingOrder = () => _ = _reviewWorkflowSession.RefreshReadingOrderPlan(),
                 RefreshAltTextPane = ShowAltTextPane,

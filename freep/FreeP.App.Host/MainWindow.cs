@@ -662,6 +662,8 @@ public sealed partial class MainWindow : Window,
             HorizontalAlignment = HorizontalAlignment.Stretch,
             VerticalAlignment   = VerticalAlignment.Stretch
         };
+        _commentOverlay.SizeChanged += (_, _) =>
+            DrawCommentDots(LastCommentPanePlan?.Comments ?? []);
 
         // Wrap canvas + overlays in a Grid so the overlays occupy the same bounds.
         var stageGrid = new Grid();
@@ -1671,17 +1673,6 @@ public sealed partial class MainWindow : Window,
         _commentOverlay.Children.Clear();
         if (plan.HasComments)
         {
-            // The overlay is stretched over the same area as SlideCanvas.
-            // SlideCanvas.Margin = 40 on all sides; the slide itself is rendered inside that margin.
-            // We approximate the slide area as the canvas actual size minus the 40px margins.
-            // At runtime the canvas layout has been measured; we use actual dimensions.
-            // Since RefreshCommentPane is called after layout pass via events, ActualWidth is valid
-            // except on the very first call (before Loaded).  We add a safe fallback of 0.
-            var presW = _presentation.SlideSizeCxEmu;
-            var presH = _presentation.SlideSizeCyEmu;
-            if (presW <= 0) presW = 12192000;
-            if (presH <= 0) presH = 6858000;
-
             // We'll draw the dots when the overlay has been laid out.  Register a one-shot handler.
             _commentOverlay.Loaded -= OnCommentOverlayLoaded;
             _commentOverlay.Loaded += OnCommentOverlayLoaded;
@@ -2080,57 +2071,37 @@ public sealed partial class MainWindow : Window,
 
     /// <summary>
     /// Paints speech-bubble dot markers on <see cref="_commentOverlay"/> for each comment.
-    /// Positions are derived from the comment's EMU coordinates mapped into the overlay bounds,
-    /// accounting for SlideCanvas's 40 px margin on each side.
+    /// Shared Presentation code owns all marker geometry and semantics; this method only
+    /// materializes WPF controls.
     /// </summary>
     private void DrawCommentDots(IReadOnlyList<PresentationCommentDescriptor> comments)
     {
         _commentOverlay.Children.Clear();
-        if (comments.Count == 0) return;
+        var markers = PresentationCommentMarkerLayoutPlanner.Build(
+            comments,
+            _commentOverlay.ActualWidth,
+            _commentOverlay.ActualHeight,
+            _presentation.SlideSizeCxEmu,
+            _presentation.SlideSizeCyEmu);
 
-        const double CanvasMargin = 40.0;
-        double w = _commentOverlay.ActualWidth;
-        double h = _commentOverlay.ActualHeight;
-        if (w <= 0 || h <= 0) return;
-
-        double slideW = w - 2 * CanvasMargin;
-        double slideH = h - 2 * CanvasMargin;
-        if (slideW <= 0 || slideH <= 0) return;
-
-        long presW = _presentation.SlideSizeCxEmu > 0 ? _presentation.SlideSizeCxEmu : 12192000;
-        long presH = _presentation.SlideSizeCyEmu > 0 ? _presentation.SlideSizeCyEmu : 6858000;
-
-        // Scale so the slide fits within the available area (same as SlideCanvas renderer).
-        double scaleX = slideW / presW;
-        double scaleY = slideH / presH;
-        double scale  = Math.Min(scaleX, scaleY);
-
-        double rendW = presW * scale;
-        double rendH = presH * scale;
-
-        // Centre the rendered slide within the available area.
-        double offX = CanvasMargin + (slideW - rendW) / 2.0;
-        double offY = CanvasMargin + (slideH - rendH) / 2.0;
-
-        foreach (var cm in comments)
+        foreach (var marker in markers)
         {
-            double cx = offX + cm.Xemu * scale;
-            double cy = offY + cm.Yemu * scale;
-
             // Speech-bubble: a small orange circle with a tooltip showing author+text.
             var dot = new Border
             {
-                Width           = cm.IsSelected ? 18 : 14,
-                Height          = cm.IsSelected ? 18 : 14,
-                CornerRadius    = new CornerRadius(cm.IsSelected ? 9 : 7),
-                Background      = cm.IsSelected ? FreePBrushes.AccentDark : FreePBrushes.Accent,
+                Width           = marker.Bounds.Width,
+                Height          = marker.Bounds.Height,
+                CornerRadius    = new CornerRadius(marker.Bounds.Width / 2),
+                Background      = marker.IsSelected ? FreePBrushes.AccentDark : FreePBrushes.Accent,
                 BorderBrush     = FreePBrushes.White,
-                BorderThickness = new Thickness(cm.IsSelected ? 2.0 : 1.5),
-                ToolTip         = $"{cm.Author}: {cm.TextPreview}",
+                BorderThickness = new Thickness(marker.BorderThickness),
+                ToolTip         = marker.ToolTip,
             };
+            AutomationProperties.SetAutomationId(dot, marker.AutomationId);
+            AutomationProperties.SetName(dot, marker.ToolTip);
 
-            Canvas.SetLeft(dot, cx - (cm.IsSelected ? 9 : 7));
-            Canvas.SetTop(dot,  cy - (cm.IsSelected ? 9 : 7));
+            Canvas.SetLeft(dot, marker.Bounds.X);
+            Canvas.SetTop(dot, marker.Bounds.Y);
             _commentOverlay.Children.Add(dot);
         }
     }
