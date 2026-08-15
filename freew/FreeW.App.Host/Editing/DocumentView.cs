@@ -1119,18 +1119,6 @@ public sealed partial class DocumentView : RichTextBox
         DesignEdits.ApplyEffectSet(effectSet);
     }
 
-    /// <summary>
-    /// Re-render the surface after the document's <see cref="TextDocument.Styles"/> catalog has been
-    /// mutated out-of-band (e.g. a style created/modified/deleted via <see cref="StyleManager"/>), so the
-    /// new run/paragraph formatting resolves for any paragraph referencing the affected style. Commits the
-    /// in-progress edits first, mirroring <see cref="ApplyTheme"/>.
-    /// </summary>
-    public void RefreshStyles()
-    {
-        CommitToModel();
-        Render();
-    }
-
     // --- Live preview (galleries) ---------------------------------------------------------------
     //
     // The Styles / Themes galleries preview a choice while the pointer hovers a swatch and revert it
@@ -2412,22 +2400,6 @@ public sealed partial class DocumentView : RichTextBox
         RenderObjectEdit(ObjectEdits.SetWrap(ObjectTarget(blockIndex, runIndex), wrapping));
     }
 
-    /// <summary>
-    /// Set rotation angle (degrees) and flip flags on the currently selected shape. Undoable.
-    /// No-op without a shape selection.
-    /// </summary>
-    public void SetSelectedShapeRotation(double angleDeg, bool flipH, bool flipV)
-    {
-        CommitToModel();
-        var (blockIndex, runIndex, shape) = SelectedShapeLocation();
-        if (shape is null) return;
-        RenderObjectEdit(ObjectEdits.SetRotation(
-            ObjectTarget(blockIndex, runIndex),
-            angleDeg,
-            flipH,
-            flipV));
-    }
-
     /// <summary>Return the selected direct shape position or nested shape's group-local offset.</summary>
     public (double HorizontalOffsetPt, double VerticalOffsetPt,
         HorizontalAnchor HorizontalAnchor, VerticalAnchor VerticalAnchor, bool IsGroupLocal)?
@@ -2900,22 +2872,6 @@ public sealed partial class DocumentView : RichTextBox
         if (image is null)
             return;
         RenderObjectEdit(ObjectEdits.SetWrap(ObjectTarget(blockIndex, runIndex), wrapping));
-    }
-
-    /// <summary>
-    /// Set rotation angle (degrees) and flip flags on the currently selected image. Undoable.
-    /// No-op without an image selection.
-    /// </summary>
-    public void SetSelectedImageRotation(double angleDeg, bool flipH, bool flipV)
-    {
-        CommitToModel();
-        var (blockIndex, runIndex, image) = SelectedImageLocation();
-        if (image is null) return;
-        RenderObjectEdit(ObjectEdits.SetImageRotation(
-            ObjectTarget(blockIndex, runIndex),
-            angleDeg,
-            flipH,
-            flipV));
     }
 
     /// <summary>
@@ -3491,25 +3447,6 @@ public sealed partial class DocumentView : RichTextBox
         }
     }
 
-    /// <summary>
-    /// Display name of the paragraph style at the caret without committing pending text. Used by passive
-    /// ribbon-state refreshes, where reading state must not mutate the document or its undo history.
-    /// </summary>
-    public string CurrentParagraphStyleName
-    {
-        get
-        {
-            var index = SelectedModelParagraphIndices().FirstOrDefault(-1);
-            var styleId = index >= 0 && index < _model.Blocks.Count && _model.Blocks[index] is ModelParagraph paragraph
-                ? paragraph.StyleId
-                : null;
-            styleId = string.IsNullOrWhiteSpace(styleId) ? "Normal" : styleId;
-            return _model.Styles.TryGetValue(styleId, out var style) && !string.IsNullOrWhiteSpace(style.Name)
-                ? style.Name
-                : styleId;
-        }
-    }
-
     /// <summary>Home &gt; Styles &gt; New Style: create a paragraph style and apply it to the selection.</summary>
     public DocumentStyle? CreateParagraphStyleAndApply(
         string name,
@@ -3851,10 +3788,6 @@ public sealed partial class DocumentView : RichTextBox
             CaptureCaretParagraphFormatting(),
             locked);
     }
-
-    /// <summary>Disarm the Format Painter regardless of lock mode (e.g. on Escape key).</summary>
-    public void EscapeFormatPainter() =>
-        _editingSession.Interaction.CancelFormatPainter();
 
     /// <summary>
     /// If the Format Painter is armed and the current selection is non-empty, stamp the captured run
@@ -7262,9 +7195,6 @@ public sealed partial class DocumentView : RichTextBox
 
         return false;
     }
-
-    public void ChangeSelectedImageZOrder(ZOrderOperation operation) =>
-        ChangeSelectedFloatingZOrder(operation);
 
     /// <summary>
     /// Groups the current multi-select set into a FreeW.Core.Model.DrawingGroup, if at least 2 objects are selected.
@@ -16281,38 +16211,6 @@ public sealed partial class DocumentView : RichTextBox
                 return;
             }
         }
-
-        CommitToModel();
-        Render();
-    }
-
-    /// <summary>
-    /// Inserts <paramref name="display"/> at the caret as a clickable internal link to the bookmark
-    /// <paramref name="anchor"/> (used by Insert &gt; Cross-reference for anchored targets). Mirrors the
-    /// empty-selection branch of <see cref="ApplyInternalLink"/> but lets the visible text differ from
-    /// the anchor name. Re-renders so the link is styled and round-trips on the next commit.
-    /// </summary>
-    public void InsertInternalLink(string display, string anchor)
-    {
-        if (string.IsNullOrEmpty(display) || string.IsNullOrWhiteSpace(anchor))
-            return;
-        anchor = anchor.Trim();
-
-        Focus();
-        var selection = Selection;
-        if (!selection.IsEmpty)
-            selection.Text = string.Empty;
-
-        var caret = CaretPosition.GetInsertionPosition(LogicalDirection.Forward) ?? CaretPosition;
-        var paragraph = caret.Paragraph ?? Document.Blocks.OfType<WpfParagraph>().LastOrDefault();
-        if (paragraph is null)
-        {
-            paragraph = new WpfParagraph();
-            Document.Blocks.Add(paragraph);
-        }
-        var link = new WpfHyperlink(new WpfRun(display));
-        StyleInternalLink(link, anchor);
-        paragraph.Inlines.Add(link);
 
         CommitToModel();
         Render();

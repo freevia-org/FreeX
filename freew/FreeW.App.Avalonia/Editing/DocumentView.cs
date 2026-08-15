@@ -531,8 +531,6 @@ public sealed partial class DocumentView : Control
         DocumentCommandMutationKind? mutationKind) =>
         _editingSession.Review.DecisionForHistory(historyOperation, mutationKind);
     public bool SpellCheckEnabled { get; private set; } = true;
-    public IReadOnlyList<string> CustomDictionaryWords => _customDictionary.Words;
-
     /// <summary>Raised whenever document protection or Mark-as-Final state changes.</summary>
     public event EventHandler? ProtectionStateChanged;
 
@@ -13323,9 +13321,6 @@ public sealed partial class DocumentView : Control
             : null;
     }
 
-    /// <summary>True while keyboard input is editing the first text run of a selected text box.</summary>
-    public bool IsShapeTextEditing => _shapeCaret is not null;
-
     /// <summary>Current selected text-box caret, or null when the object is not in text-edit mode.</summary>
     public (int BlockIndex, int RunIndex, int TextParagraphIndex, int TextRunIndex, int Offset)? ShapeTextCaretInfo =>
         _shapeCaret;
@@ -15038,19 +15033,6 @@ public sealed partial class DocumentView : Control
         if (sel.RunIndex < 0 || sel.RunIndex >= para.Runs.Count) return null;
         if (para.Runs[sel.RunIndex].Chart is not { } chart) return null;
         return (chart.Kind, chart.StyleId, chart.ColorSchemeId);
-    }
-
-    /// <summary>
-    /// AV-CHARTTAB: Read the selected SmartArt's current kind/colour-scheme, or null when the selected
-    /// float is not SmartArt. Used by tests and the contextual-tab live-state.
-    /// </summary>
-    public (SmartArtKind Kind, string? ColorSchemeId)? GetSelectedSmartArtInfo()
-    {
-        if (_selectedFloating is not { Kind: "SmartArt" } sel) return null;
-        if (_doc.Blocks[sel.BlockIndex] is not Paragraph para) return null;
-        if (sel.RunIndex < 0 || sel.RunIndex >= para.Runs.Count) return null;
-        if (para.Runs[sel.RunIndex].SmartArt is not { } sa) return null;
-        return (sa.Kind, sa.ColorSchemeId);
     }
 
     /// <summary>
@@ -18812,29 +18794,6 @@ public sealed partial class DocumentView : Control
         _editingSession.ApplyMultilevelListDefinition(indices, definition);
     }
 
-    public void ApplyMultiLevelListStartOverrides(int? level0StartAt, int? level1StartAt)
-    {
-        FormatSelectedParagraphs(formatting =>
-            formatting.ListKind != ListKind.MultiLevel ? formatting :
-            formatting.ListLevel == 0 && level0StartAt.HasValue ? formatting with { ListStartOverride = level0StartAt } :
-            formatting.ListLevel == 1 && level1StartAt.HasValue ? formatting with { ListStartOverride = level1StartAt } :
-            formatting);
-    }
-
-    public void ApplyMultiLevelHeadingPreset()
-    {
-        ApplyMultiLevelListToSelection();
-
-        var styleId = GetCaretFormatting().Paragraph.ListLevel switch
-        {
-            0 => "Heading1",
-            1 => "Heading2",
-            _ => "Heading3",
-        };
-
-        ApplyNamedStyle(styleId);
-    }
-
     /// <summary>
     /// Enumerate every paragraph block index spanned by the current selection (start block to end
     /// block inclusive). When there is no selection the result is just the caret's block (if it is
@@ -19058,12 +19017,6 @@ public sealed partial class DocumentView : Control
     public void ApplyPageNumberFormat(PageNumberFormatDialogResult result) =>
         ApplyPageSettings(page => PageNumberFormatDialogPlanner.ApplyResult(page, result));
 
-    public void ToggleDifferentFirstPage() =>
-        ApplyPageSettings(settings => settings.DifferentFirstPage = !settings.DifferentFirstPage);
-
-    public void ToggleDifferentOddEvenPages() =>
-        ApplyPageSettings(settings => settings.DifferentOddEvenPages = !settings.DifferentOddEvenPages);
-
     public void SetHeaderDistance(double valuePt) =>
         ApplyPageSettings(settings => settings.HeaderDistancePt = Math.Max(0, valuePt));
 
@@ -19120,10 +19073,6 @@ public sealed partial class DocumentView : Control
         MutateDefaultHeaderFooterSlot(
             footer: false,
             current => HeaderFooterDialogPlanner.AppendComplexFieldToSlot(current, "FILENAME"));
-
-    public void CyclePageVerticalAlignment() =>
-        ApplyPageSettings(settings =>
-            settings.VerticalAlignment = PageVerticalAlignmentPlanner.Next(settings.VerticalAlignment));
 
     private void MutateDefaultHeaderFooterSlot(bool footer, Func<HeaderFooter?, HeaderFooter> mutate)
     {
