@@ -14,8 +14,6 @@ internal sealed partial class HyperlinkDialog : FreePDialogWindow
 {
     private static readonly AvaloniaCompactDialogChromeStyle DialogChromeStyle =
         AvaloniaCompactDialogChrome.WindowsStyle with { ControlHeight = 26 };
-    private static IBrush WpfDefaultButtonBorderBrush => FreePBrushes.Accent;
-    private static readonly IBrush WpfCancelButtonBackgroundBrush = new SolidColorBrush(Color.FromRgb(0xF1, 0xF1, 0xF1));
 
     private readonly HyperlinkDialogSession _session;
     private readonly HyperlinkDialogSurfacePlan _surface;
@@ -134,7 +132,7 @@ internal sealed partial class HyperlinkDialog : FreePDialogWindow
         _tooltipBox.TextChanged += (_, _) => _session.SetTooltipText(_tooltipBox.Text);
 
         Content = BuildContent();
-        Opened += (_, _) => ApplyWpfButtonChrome();
+        Opened += (_, _) => AvaloniaCompactDialogChrome.ApplyWpfDisabledComboSurface(_slideCombo);
     }
 
     private Control BuildContent()
@@ -186,13 +184,6 @@ internal sealed partial class HyperlinkDialog : FreePDialogWindow
         Grid.SetColumnSpan(_validationText, 2);
         grid.Children.Add(_validationText);
 
-        var buttons = new StackPanel
-        {
-            Orientation = Orientation.Horizontal,
-            HorizontalAlignment = HorizontalAlignment.Right,
-            Spacing = 13,
-            Margin = new Thickness(0, 2, 0, 0),
-        };
         var ok = MakeDialogButton(
             _surface.Action(HyperlinkDialogAction.Accept),
             OnOk);
@@ -201,8 +192,10 @@ internal sealed partial class HyperlinkDialog : FreePDialogWindow
             () => Close(null));
         ok.TabIndex = 5;
         cancel.TabIndex = 6;
-        buttons.Children.Add(ok);
-        buttons.Children.Add(cancel);
+        var buttons = AvaloniaDialogButtonRowFactory.CreateRow(
+            [ok, cancel],
+            new Thickness(0, 2, 0, 0),
+            DialogChromeStyle);
         Grid.SetRow(buttons, 5);
         Grid.SetColumnSpan(buttons, 2);
         grid.Children.Add(buttons);
@@ -240,10 +233,6 @@ internal sealed partial class HyperlinkDialog : FreePDialogWindow
             DialogChromeStyle,
             minWidth: 75,
             isDefault: action.IsDefault);
-        button.Background = action.IsDefault ? FreePBrushes.White : WpfCancelButtonBackgroundBrush;
-        button.BorderBrush = action.IsDefault
-            ? WpfDefaultButtonBorderBrush
-            : FreePBrushes.DisabledBorder;
         button.Click += (_, _) => onClick();
         return button;
     }
@@ -266,32 +255,6 @@ internal sealed partial class HyperlinkDialog : FreePDialogWindow
         _slideCombo.SelectedIndex = state.SelectedSlideIndex;
         _tooltipBox.Text = state.TooltipText;
         RenderTargetState(state);
-    }
-
-    private void ApplyWpfButtonChrome()
-    {
-        if (Content is not Grid grid)
-            return;
-
-        var row = grid.Children
-            .OfType<StackPanel>()
-            .FirstOrDefault(panel => Grid.GetRow(panel) == 5);
-        if (row is null)
-            return;
-
-        var buttons = row.Children.OfType<Button>().ToArray();
-        if (buttons.Length > 0)
-        {
-            buttons[0].Background = FreePBrushes.White;
-            buttons[0].BorderBrush = WpfDefaultButtonBorderBrush;
-        }
-        if (buttons.Length > 1)
-        {
-            buttons[1].Background = WpfCancelButtonBackgroundBrush;
-            buttons[1].BorderBrush = FreePBrushes.DisabledBorder;
-        }
-
-        AvaloniaCompactDialogChrome.ApplyWpfDisabledComboSurface(_slideCombo);
     }
 
     private void OnOk() => Apply();
