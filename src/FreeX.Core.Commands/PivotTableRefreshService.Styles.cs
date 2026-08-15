@@ -80,7 +80,11 @@ public static partial class PivotTableRefreshService
             preserveExistingVisualStyles &&
             HasLoadedNativePivotLocation(pivotTable) &&
             palette.BodyFill is null;
-        StyleId? bodyStyle = palette.BodyFill is not null || palette.BodyBorder is not null || materializeLoadedBodySurface
+        var materializeBodySurface =
+            palette.BodyFill is not null ||
+            palette.BodyBorder is not null ||
+            materializeLoadedBodySurface;
+        StyleId? bodyStyle = materializeBodySurface
             ? workbook.RegisterStyle(new CellStyle
             {
                 FillColor = palette.BodyFill ?? CellColor.White,
@@ -135,7 +139,7 @@ public static partial class PivotTableRefreshService
             materialized,
             bodyStart,
             headerEndRow,
-            materializeLoadedBodySurface);
+            materializeBodySurface);
 
         var firstDataRow = GetStyledPivotFirstDataRow(pivotTable, bodyStart, headerEndRow);
         var firstDataColumn = GetStyledPivotFirstDataColumn(pivotTable, materialized);
@@ -424,15 +428,18 @@ public static partial class PivotTableRefreshService
         GridRange materialized,
         CellAddress bodyStart,
         uint headerEndRow,
-        bool materializeLoadedBodySurface)
+        bool materializeBodySurface)
     {
-        if (!HasLoadedNativePivotLocation(pivotTable))
-            return;
-
         for (var row = bodyStart.Row; row <= headerEndRow; row++)
-            MaterializePivotBlankRowCells(sheet, pivotTable, row, materialized.Start.Col, materialized.End.Col);
+        for (var col = materialized.Start.Col; col <= materialized.End.Col; col++)
+        {
+            if (IsDeferredCompactRowLabelHeaderCell(pivotTable, bodyStart, headerEndRow, row, col))
+                continue;
 
-        if (!pivotTable.ShowRowStripes && !pivotTable.ShowColumnStripes && !materializeLoadedBodySurface)
+            MaterializePivotBlankCell(sheet, pivotTable, row, col);
+        }
+
+        if (!pivotTable.ShowRowStripes && !pivotTable.ShowColumnStripes && !materializeBodySurface)
             return;
 
         var firstDataRow = GetStyledPivotFirstDataRow(pivotTable, bodyStart, headerEndRow);
@@ -440,7 +447,7 @@ public static partial class PivotTableRefreshService
         for (var row = firstDataRow; row <= materialized.End.Row; row++)
         for (var col = materialized.Start.Col; col <= materialized.End.Col; col++)
         {
-            if (materializeLoadedBodySurface ||
+            if (materializeBodySurface ||
                 pivotTable.ShowColumnStripes && col >= firstDataColumn ||
                 pivotTable.ShowRowStripes)
             {
@@ -459,6 +466,20 @@ public static partial class PivotTableRefreshService
         for (var col = startCol; col <= endCol; col++)
             MaterializePivotBlankCell(sheet, pivotTable, row, col);
     }
+
+    private static bool IsDeferredCompactRowLabelHeaderCell(
+        PivotTableModel pivotTable,
+        CellAddress bodyStart,
+        uint headerEndRow,
+        uint row,
+        uint col) =>
+        pivotTable.MergeAndCenterLabels &&
+        pivotTable.ReportLayout == PivotReportLayout.Compact &&
+        pivotTable.RowFields.Count > 1 &&
+        pivotTable.ColumnFields.Count > 1 &&
+        col == bodyStart.Col &&
+        row > bodyStart.Row &&
+        row <= headerEndRow;
 
     private static void MaterializePivotBlankColumnCells(
         Sheet sheet,
