@@ -53,9 +53,23 @@ public sealed class CustomDialogChromeOwnershipTests
         }
     }
 
-    private static string ReadSource(string project, string fileName)
+    [Fact]
+    public void WpfRibbonModalRoutesFlowThroughTheSharedWindowBase()
+    {
+        var source = ReadSource("FreeW.App.Host", "Ribbon", "FreeWRibbonCommands.cs");
+
+        source.Should().NotContain("new Window", "ribbon modal routes must not bypass shared WPF dialog chrome");
+        Count(source, "new FreeWDialogWindow").Should().Be(
+            13,
+            "all color, note, caption, Quick Part, source, author, header/footer, and text prompt routes are modal dialogs");
+    }
+
+    private static int Count(string source, string value) =>
+        source.Split(value, StringSplitOptions.None).Length - 1;
+
+    private static string ReadSource(string project, params string[] parts)
     {
         var root = TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeX.slnx");
-        return File.ReadAllText(Path.Combine(root, "freew", project, fileName));
+        return File.ReadAllText(Path.Combine([root, "freew", project, .. parts]));
     }
 }

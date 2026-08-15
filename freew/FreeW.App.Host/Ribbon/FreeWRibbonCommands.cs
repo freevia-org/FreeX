@@ -2193,7 +2193,7 @@ internal static class FreeWRibbonCommands
         private ColorChoice? ShowPicker(Window? owner)
         {
             ColorChoice? result = null;
-            var window = new Window
+            var window = new FreeWDialogWindow
             {
                 Title = isHighlight ? "Highlight Colour" : "Text Colour",
                 SizeToContent = SizeToContent.WidthAndHeight,
@@ -2257,7 +2257,7 @@ internal static class FreeWRibbonCommands
         {
             var chosen = false;
             string? hex = null;
-            var window = new Window
+            var window = new FreeWDialogWindow
             {
                 Title = UiText.Get("ParagraphShading_Title"),
                 SizeToContent = SizeToContent.WidthAndHeight,
@@ -3197,7 +3197,7 @@ internal static class FreeWRibbonCommands
             foreach (var item in items)
                 list.Items.Add($"{item.Kind} {item.Id}: {item.Text}");
 
-            var dialog = new Window
+            var dialog = new FreeWDialogWindow
             {
                 Title = UiText.Get("Notes_Show_Title"),
                 SizeToContent = SizeToContent.WidthAndHeight,
@@ -3389,7 +3389,7 @@ internal static class FreeWRibbonCommands
             list.SelectedItem = defaultLabel;
 
             string? result = null;
-            var dialog = new Window
+            var dialog = new FreeWDialogWindow
             {
                 Title = UiText.Get("Caption_Insert_Title"),
                 SizeToContent = SizeToContent.WidthAndHeight,
@@ -4084,7 +4084,7 @@ internal static class FreeWRibbonCommands
             list.SelectedIndex = state.SelectedIndex;
 
             QuickPartInsertAction? result = null;
-            var dialog = new Window
+            var dialog = new FreeWDialogWindow
             {
                 Title = text.InsertTitle,
                 SizeToContent = SizeToContent.WidthAndHeight,
@@ -4144,7 +4144,7 @@ internal static class FreeWRibbonCommands
             list.SelectedIndex = 0;
 
             SourceManagementPick? result = null;
-            var dialog = new Window
+            var dialog = new FreeWDialogWindow
             {
                 Title = text.SourcePickerTitle,
                 SizeToContent = SizeToContent.WidthAndHeight,
@@ -4204,7 +4204,7 @@ internal static class FreeWRibbonCommands
                 .ToDictionary(plan => plan.Field, plan => NewField(plan.Text));
 
             SourceManagementSourceEntry? result = null;
-            var dialog = new Window
+            var dialog = new FreeWDialogWindow
             {
                 Title = source is null
                     ? SourceManagementDialogPlanner.AddNewSourceTitle
@@ -4354,7 +4354,7 @@ internal static class FreeWRibbonCommands
             var text = SourceManagementDialogPlanner.ResolveText(UiText.Get);
             SourceManagementAuthorEditorState? result = null;
 
-            var dialog = new Window
+            var dialog = new FreeWDialogWindow
             {
                 Title = SourceManagementDialogPlanner.PrimaryAuthorEditorTitle,
                 SizeToContent = SizeToContent.WidthAndHeight,
@@ -7043,7 +7043,7 @@ internal static class FreeWRibbonCommands
 
             HeaderFooter? result = null;
 
-            var dialog = new Window
+            var dialog = new FreeWDialogWindow
             {
                 Title = UiText.Format("HeaderFooter_Edit_Title_Format", slotLabel),
                 SizeToContent = SizeToContent.WidthAndHeight,
@@ -7187,7 +7187,7 @@ internal static class FreeWRibbonCommands
         {
             var chosen = false;
             string? hex = null;
-            var window = new Window
+            var window = new FreeWDialogWindow
             {
                 Title = UiText.Get("Ribbon_Dialog_PageColor_Title"),
                 SizeToContent = SizeToContent.WidthAndHeight,
@@ -7405,7 +7405,7 @@ internal static class FreeWRibbonCommands
             box.SelectAll();
 
             string? result = null;
-            var dialog = new Window
+            var dialog = new FreeWDialogWindow
             {
                 Title = title,
                 SizeToContent = SizeToContent.WidthAndHeight,
@@ -7517,7 +7517,7 @@ internal static class FreeWRibbonCommands
         {
             var chosen = false;
             ParagraphBorder? border = null;
-            var window = new Window
+            var window = new FreeWDialogWindow
             {
                 Title = CharacterFormattingPickerPlanner.BorderTitle,
                 SizeToContent = SizeToContent.WidthAndHeight,
@@ -7590,7 +7590,7 @@ internal static class FreeWRibbonCommands
         {
             var chosen = false;
             string? hex = null;
-            var window = new Window
+            var window = new FreeWDialogWindow
             {
                 Title = CharacterFormattingPickerPlanner.ShadingTitle,
                 SizeToContent = SizeToContent.WidthAndHeight,
