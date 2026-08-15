@@ -1,7 +1,6 @@
 using System.Windows;
 using System.Windows.Automation;
 using System.Windows.Controls;
-using System.Windows.Media;
 using FreeP.App.Compositor;
 
 namespace FreeP.App.Host;
@@ -41,7 +40,6 @@ public sealed partial class SlideSizeDialog : Free.Shared.Ribbon.Wpf.DialogWindo
         Height = 260;
         ResizeMode = ResizeMode.NoResize;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
-        Background = new SolidColorBrush(Color.FromRgb(0xF3, 0xF3, 0xF3));
 
         _presetCombo = new ComboBox
         {
