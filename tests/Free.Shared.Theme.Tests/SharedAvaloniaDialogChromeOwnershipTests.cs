@@ -34,6 +34,42 @@ public sealed class SharedAvaloniaDialogChromeOwnershipTests
             .And.NotContain("new AvaloniaCompactDialogChromeStyle(FontFamily.Default)");
     }
 
+    [Fact]
+    public void CompactComboBoxOwnsStableRequiredPartsInsteadOfPatchingFluentInternals()
+    {
+        var root = TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeX.slnx");
+        var source = Read(root, "AvaloniaCompactDialogChrome.cs");
+
+        source.Should().Contain("comboBox.Template = CreateCompactComboBoxTemplate(")
+            .And.Contain("Name = \"PART_EditableTextBox\"")
+            .And.Contain("Name = \"PART_Popup\"")
+            .And.Contain("Name = \"PART_ItemsPresenter\"")
+            .And.Contain("Mode = BindingMode.TwoWay")
+            .And.NotContain("void ApplyWpfComboGlyph()")
+            .And.NotContain("selector.OfType<Border>().Name(\"PART_LayoutRoot\")");
+    }
+
+    [Fact]
+    public void AppDialogsDoNotRepairSharedComboBoxTemplateParts()
+    {
+        var root = TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeX.slnx");
+        var consumers = new[]
+        {
+            Path.Combine(root, "freew", "FreeW.App.Avalonia", "FontParagraphDialogChrome.cs"),
+            Path.Combine(root, "freep", "FreeP.App.Avalonia", "HyperlinkDialog.cs"),
+        };
+
+        foreach (var path in consumers)
+        {
+            var source = File.ReadAllText(path);
+            source.Should().NotContain("PART_LayoutRoot", path)
+                .And.NotContain("GetVisualDescendants().OfType<ContentPresenter>()", path);
+        }
+
+        File.ReadAllText(consumers[1]).Should()
+            .Contain("AvaloniaCompactDialogChrome.ApplyWpfDisabledComboSurface(_slideCombo)");
+    }
+
     private static string Read(string root, string fileName) =>
         File.ReadAllText(Path.Combine(
             root,

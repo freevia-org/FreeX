@@ -25,9 +25,6 @@ internal static class FontParagraphDialogChrome
 {
     private const string TextBoxClass = "freew-font-paragraph-textbox";
     private const string CheckBoxClass = "freew-font-paragraph-checkbox";
-    private const string ComboBoxClass = "freew-font-paragraph-combo";
-    private static readonly IBrush WpfComboBorderBrush =
-        new ImmutableSolidColorBrush(Color.FromRgb(0xAC, 0xAC, 0xAC));
     private static readonly IBrush WpfDisabledInputBorderBrush =
         new ImmutableSolidColorBrush(Color.FromRgb(0xD0, 0xD1, 0xD4));
 
@@ -185,43 +182,11 @@ internal static class FontParagraphDialogChrome
 
     public static void ApplyComboBox(
         ComboBox comboBox,
-        AvaloniaCompactDialogChromeStyle style,
-        bool editable)
+        AvaloniaCompactDialogChromeStyle style)
     {
         ArgumentNullException.ThrowIfNull(comboBox);
         ArgumentNullException.ThrowIfNull(style);
 
         AvaloniaCompactDialogChrome.ApplyComboBox(comboBox, style);
-        if (editable || comboBox.Classes.Contains(ComboBoxClass))
-            return;
-
-        comboBox.Classes.Add(ComboBoxClass);
-        comboBox.BorderBrush = WpfComboBorderBrush;
-        comboBox.Styles.Add(new Style(selector => selector
-            .OfType<Border>()
-            .Name("PART_LayoutRoot"))
-        {
-            Setters =
-            {
-                new Setter(Border.BorderBrushProperty, WpfComboBorderBrush),
-                new Setter(Border.BorderThicknessProperty, new Thickness(1)),
-            },
-        });
-
-        void RefreshRenderedChrome()
-        {
-            comboBox.ApplyTemplate();
-            comboBox.BorderBrush = WpfComboBorderBrush;
-            foreach (var border in comboBox.GetVisualDescendants().OfType<Border>()
-                         .Where(border => border.Name == "PART_LayoutRoot"))
-            {
-                border.BorderBrush = WpfComboBorderBrush;
-                border.BorderThickness = new Thickness(1);
-            }
-        }
-
-        comboBox.AttachedToVisualTree += (_, _) =>
-            Dispatcher.UIThread.Post(RefreshRenderedChrome, DispatcherPriority.Render);
-        Dispatcher.UIThread.Post(RefreshRenderedChrome, DispatcherPriority.Render);
     }
 }

@@ -5,6 +5,8 @@ using Avalonia.Controls.Primitives;
 using Avalonia.Controls.Shapes;
 using Avalonia.Controls.Templates;
 using Avalonia.Data;
+using Avalonia.Data.Converters;
+using Avalonia.Input;
 using Avalonia.Layout;
 using Avalonia.Media;
 using Avalonia.Media.Immutable;
@@ -539,6 +541,11 @@ public static class AvaloniaCompactDialogChrome
         comboBox.BorderBrush = style.InputBorderBrush ?? InputBorderBrush;
         comboBox.BorderThickness = new Thickness(CompactDialogVisualTokens.BorderThickness);
         comboBox.VerticalContentAlignment = VerticalAlignment.Center;
+        if (comboBox.IsEditable)
+        {
+            comboBox.IsTabStop = false;
+            KeyboardNavigation.SetTabNavigation(comboBox, KeyboardNavigationMode.Local);
+        }
         if (comboBox.Classes.Contains(CompactComboBoxClass))
             return;
 
@@ -561,69 +568,168 @@ public static class AvaloniaCompactDialogChrome
             },
         });
 
-        // Keep Avalonia's native popup, editing, keyboard, focus, and automation behavior.
-        // The shared chrome only applies WPF-authority surface and glyph styling.
-        comboBox.Styles.Add(new Style(selector => selector.OfType<Border>().Name("PART_LayoutRoot"))
-        {
-            Setters = { new Setter(Border.BackgroundProperty, comboBackground) },
-        });
-        comboBox.Styles.Add(new Style(selector => selector.OfType<ContentPresenter>().Name("PART_ContentPresenter"))
-        {
-            Setters =
-            {
-                new Setter(ContentPresenter.BackgroundProperty, comboBackground),
-                new Setter(ContentPresenter.ForegroundProperty, foreground),
-            },
-        });
-        comboBox.Styles.Add(new Style(selector =>
-            selector.OfType<global::Avalonia.Controls.PathIcon>().Name("DropDownGlyph"))
-        {
-            Setters =
-            {
-                new Setter(global::Avalonia.Controls.PathIcon.ForegroundProperty, foreground),
-                new Setter(Layoutable.WidthProperty, 8d),
-                new Setter(Layoutable.HeightProperty, 5d),
-                new Setter(Layoutable.MarginProperty, new Thickness(0, 0, 4, 0)),
-                new Setter(Layoutable.HorizontalAlignmentProperty, HorizontalAlignment.Right),
-                new Setter(Layoutable.VerticalAlignmentProperty, VerticalAlignment.Center),
-            },
-        });
-
-        void ApplyWpfComboGlyph()
-        {
-            comboBox.ApplyTemplate();
-            foreach (var glyph in comboBox.GetVisualDescendants()
-                .OfType<global::Avalonia.Controls.PathIcon>()
-                .Where(path => path.Name == "DropDownGlyph"))
-            {
-                glyph.Data = Geometry.Parse("M 0 0 L 4 4 L 8 0 L 8 1 L 4 5 L 0 1 Z");
-                glyph.Foreground = foreground;
-                glyph.Width = 8;
-                glyph.Height = 5;
-                glyph.Margin = new Thickness(0, 0, 4, 0);
-                glyph.HorizontalAlignment = HorizontalAlignment.Right;
-                glyph.VerticalAlignment = VerticalAlignment.Center;
-            }
-        }
-
-        comboBox.AttachedToVisualTree += (_, _) =>
-            Dispatcher.UIThread.Post(ApplyWpfComboGlyph, DispatcherPriority.Render);
-        Dispatcher.UIThread.Post(ApplyWpfComboGlyph, DispatcherPriority.Render);
+        // Own the compact template instead of repairing private Fluent-theme parts after attach.
+        // The required Avalonia ComboBox parts retain native selection, editable text, popup,
+        // keyboard, and automation behavior while their geometry is now stable across theme updates.
+        comboBox.Template = CreateCompactComboBoxTemplate(style, comboBackground, foreground);
     }
 
     public static void ApplyWpfDisabledComboSurface(ComboBox comboBox)
     {
         ArgumentNullException.ThrowIfNull(comboBox);
-        comboBox.ApplyTemplate();
-        foreach (var surface in comboBox.GetVisualDescendants()
-            .OfType<Border>()
-            .Where(border => border.Name is "PART_LayoutRoot" or "Background"))
-            surface.Background = comboBox.Background;
-        foreach (var presenter in comboBox.GetVisualDescendants()
-            .OfType<ContentPresenter>()
-            .Where(presenter => presenter.Name == "PART_ContentPresenter"))
-            presenter.Background = comboBox.Background;
+        // The shared template binds both the field surface and selection presenter directly to
+        // ComboBox.Background, so callers only need to update the public control property.
+        comboBox.InvalidateVisual();
     }
+
+    private static FuncControlTemplate<ComboBox> CreateCompactComboBoxTemplate(
+        AvaloniaCompactDialogChromeStyle style,
+        IBrush backgroundBrush,
+        IBrush foregroundBrush) => new((comboBox, _) =>
+    {
+        var field = new Border
+        {
+            Name = "Background",
+            Background = backgroundBrush,
+        };
+        field.Bind(Border.BackgroundProperty, new Binding(nameof(TemplatedControl.Background)) { Source = comboBox });
+        field.Bind(Border.BorderBrushProperty, new Binding(nameof(TemplatedControl.BorderBrush)) { Source = comboBox });
+        field.Bind(Border.BorderThicknessProperty, new Binding(nameof(TemplatedControl.BorderThickness)) { Source = comboBox });
+        field.Bind(Border.CornerRadiusProperty, new Binding(nameof(TemplatedControl.CornerRadius)) { Source = comboBox });
+
+        var selection = new ContentPresenter
+        {
+            Name = "PART_ContentPresenter",
+            Background = backgroundBrush,
+            Foreground = foregroundBrush,
+            VerticalContentAlignment = VerticalAlignment.Center,
+        };
+        selection.Bind(ContentPresenter.BackgroundProperty, new Binding(nameof(TemplatedControl.Background)) { Source = comboBox });
+        selection.Bind(ContentPresenter.ForegroundProperty, new Binding(nameof(TemplatedControl.Foreground)) { Source = comboBox });
+        selection.Bind(ContentPresenter.ContentProperty, new Binding(nameof(ComboBox.SelectionBoxItem)) { Source = comboBox });
+        selection.Bind(ContentPresenter.ContentTemplateProperty, new Binding(nameof(ComboBox.SelectionBoxItemTemplate)) { Source = comboBox });
+        selection.Bind(ContentPresenter.PaddingProperty, new Binding(nameof(TemplatedControl.Padding)) { Source = comboBox });
+        selection.Bind(ContentPresenter.HorizontalContentAlignmentProperty, new Binding(nameof(ContentControl.HorizontalContentAlignment)) { Source = comboBox });
+        selection.Bind(ContentPresenter.VerticalContentAlignmentProperty, new Binding(nameof(ContentControl.VerticalContentAlignment)) { Source = comboBox });
+        selection.Bind(Visual.IsVisibleProperty, new Binding(nameof(ComboBox.IsEditable))
+        {
+            Source = comboBox,
+            Converter = BoolConverters.Not,
+        });
+
+        var editableText = new TextBox
+        {
+            Name = "PART_EditableTextBox",
+            Padding = new Thickness(
+                style.ComboBoxPadding.Left,
+                style.ComboBoxPadding.Top,
+                20,
+                style.ComboBoxPadding.Bottom),
+            Background = Brushes.Transparent,
+            BorderThickness = new Thickness(0),
+            Foreground = foregroundBrush,
+            HorizontalAlignment = HorizontalAlignment.Stretch,
+            VerticalContentAlignment = VerticalAlignment.Center,
+        };
+        editableText.Bind(TextBox.ForegroundProperty, new Binding(nameof(TemplatedControl.Foreground)) { Source = comboBox });
+        editableText.Bind(TextBox.TextProperty, new Binding(nameof(ComboBox.Text))
+        {
+            Source = comboBox,
+            Mode = BindingMode.TwoWay,
+        });
+        editableText.Bind(TextBox.PlaceholderTextProperty, new Binding(nameof(ComboBox.PlaceholderText)) { Source = comboBox });
+        editableText.Bind(Visual.IsVisibleProperty, new Binding(nameof(ComboBox.IsEditable)) { Source = comboBox });
+
+        var placeholder = new TextBlock
+        {
+            Background = backgroundBrush,
+            Foreground = foregroundBrush,
+            VerticalAlignment = VerticalAlignment.Center,
+        };
+        placeholder.Bind(TextBlock.TextProperty, new Binding(nameof(ComboBox.PlaceholderText)) { Source = comboBox });
+        placeholder.Bind(TextBlock.BackgroundProperty, new Binding(nameof(TemplatedControl.Background)) { Source = comboBox });
+        placeholder.Bind(TextBlock.ForegroundProperty, new Binding(nameof(ComboBox.PlaceholderForeground)) { Source = comboBox });
+        placeholder.Bind(TextBlock.PaddingProperty, new Binding(nameof(TemplatedControl.Padding)) { Source = comboBox });
+        placeholder.Bind(Visual.IsVisibleProperty, new MultiBinding
+        {
+            Converter = BoolConverters.And,
+            Bindings =
+            {
+                new Binding(nameof(ComboBox.SelectionBoxItem))
+                {
+                    Source = comboBox,
+                    Converter = ObjectConverters.IsNull,
+                },
+                new Binding(nameof(ComboBox.IsEditable))
+                {
+                    Source = comboBox,
+                    Converter = BoolConverters.Not,
+                },
+            },
+        });
+
+        var glyph = new global::Avalonia.Controls.PathIcon
+        {
+            Name = "DropDownGlyph",
+            Data = Geometry.Parse("M 0 0 L 4 4 L 8 0 L 8 1 L 4 5 L 0 1 Z"),
+            Foreground = foregroundBrush,
+            Width = 8,
+            Height = 5,
+            Margin = new Thickness(0, 0, 4, 0),
+            HorizontalAlignment = HorizontalAlignment.Right,
+            VerticalAlignment = VerticalAlignment.Center,
+            IsHitTestVisible = false,
+        };
+        glyph.Bind(global::Avalonia.Controls.PathIcon.ForegroundProperty, new Binding(nameof(TemplatedControl.Foreground)) { Source = comboBox });
+
+        var items = new ItemsPresenter { Name = "PART_ItemsPresenter" };
+        items.Bind(ItemsPresenter.ItemsPanelProperty, new Binding(nameof(ItemsControl.ItemsPanel)) { Source = comboBox });
+        var popupScroll = new ScrollViewer
+        {
+            Content = items,
+            HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled,
+            VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
+            IsScrollChainingEnabled = false,
+        };
+        var popupSurface = new Border
+        {
+            Name = "PopupBorder",
+            Background = ThemeWhiteBrush(),
+            BorderBrush = style.InputBorderBrush ?? InputBorderBrush,
+            BorderThickness = new Thickness(CompactDialogVisualTokens.BorderThickness),
+            Child = popupScroll,
+        };
+        var popup = new Popup
+        {
+            Name = "PART_Popup",
+            Child = popupSurface,
+            Placement = PlacementMode.BottomEdgeAlignedLeft,
+            PlacementTarget = field,
+            IsLightDismissEnabled = true,
+        };
+        popup.Bind(Popup.IsOpenProperty, new Binding(nameof(ComboBox.IsDropDownOpen))
+        {
+            Source = comboBox,
+            Mode = BindingMode.TwoWay,
+        });
+        popup.Bind(Layoutable.MinWidthProperty, new Binding("Bounds.Width") { Source = comboBox });
+        popup.Bind(Layoutable.MaxHeightProperty, new Binding(nameof(ComboBox.MaxDropDownHeight)) { Source = comboBox });
+
+        var grid = new Grid { ColumnDefinitions = new ColumnDefinitions("*,20") };
+        Grid.SetColumnSpan(field, 2);
+        Grid.SetColumn(placeholder, 0);
+        Grid.SetColumnSpan(editableText, 2);
+        Grid.SetColumn(selection, 0);
+        Grid.SetColumn(glyph, 1);
+        Grid.SetColumnSpan(popup, 2);
+        grid.Children.Add(field);
+        grid.Children.Add(placeholder);
+        grid.Children.Add(selection);
+        grid.Children.Add(editableText);
+        grid.Children.Add(glyph);
+        grid.Children.Add(popup);
+        return grid;
+    });
 
     public static double CalculateReadOnlyDocumentInset(double viewportHeight, double documentHeight)
     {

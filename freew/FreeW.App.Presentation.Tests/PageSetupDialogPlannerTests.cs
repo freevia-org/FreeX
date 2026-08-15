@@ -84,6 +84,34 @@ public sealed class PageSetupDialogPlannerTests
     }
 
     [Fact]
+    public void PaperCatalog_IsOneSharedAuthorityConsumedByBothRenderers()
+    {
+        PageSetupDialogPlanner.PaperOptions.Select(option => option.Label).Should().Equal(
+            "Letter (8.5\" x 11\")",
+            "Legal (8.5\" x 14\")",
+            "Tabloid (11\" x 17\")",
+            "A3 (29.7cm x 42cm)",
+            "A4 (21cm x 29.7cm)",
+            "A5 (14.8cm x 21cm)",
+            "B4 (25cm x 35.3cm)",
+            "B5 (17.6cm x 25cm)",
+            "Custom");
+
+        var root = TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeW.slnx");
+        var planner = File.ReadAllText(Path.Combine(
+            root, "freew", "FreeW.App.Presentation", "Dialogs", "PageSetupDialogPlanner.cs"));
+        var wpf = File.ReadAllText(Path.Combine(root, "freew", "FreeW.App.Host", "PageSetupDialog.cs"));
+        var avalonia = File.ReadAllText(Path.Combine(root, "freew", "FreeW.App.Avalonia", "PageSetupDialog.cs"));
+
+        planner.Should().NotContain("HostPaperOptions");
+        planner.Should().NotContain("AvaloniaPaperOptions");
+        planner.Should().NotContain("HostLabel");
+        planner.Should().NotContain("AvaloniaLabel");
+        wpf.Should().Contain("_session.PaperOptions.Select(p => p.Label)");
+        avalonia.Should().Contain("_session.PaperOptions.Select(option => option.Label)");
+    }
+
+    [Fact]
     public void Surface_GroupsFieldsTogglesAndLaunchersInSharedDisplayOrder()
     {
         var surface = PageSetupDialogPlanner.Surface;
@@ -135,7 +163,7 @@ public sealed class PageSetupDialogPlannerTests
         var state = PageSetupDialogPlanner.BuildInitialState(
             page,
             SectionBreakKind.NextPage,
-            PageSetupDialogPlanner.HostPaperOptions,
+            PageSetupDialogPlanner.PaperOptions,
             PageSetupGeometryMode.PortraitInputSwappedWhenLandscape,
             CultureInfo.InvariantCulture);
 
@@ -144,7 +172,7 @@ public sealed class PageSetupDialogPlannerTests
         state.GutterPositionIndex.Should().Be(1);
         state.WidthText.Should().Be("1224");
         state.HeightText.Should().Be("792");
-        state.PaperSizeIndex.Should().Be(PageSetupDialogPlanner.CustomIndex(PageSetupDialogPlanner.HostPaperOptions));
+        state.PaperSizeIndex.Should().Be(PageSetupDialogPlanner.CustomIndex(PageSetupDialogPlanner.PaperOptions));
         state.HeaderDistanceText.Should().Be("30");
         state.FooterDistanceText.Should().Be("40");
         state.VerticalAlignmentIndex.Should().Be(1);
@@ -163,7 +191,7 @@ public sealed class PageSetupDialogPlannerTests
         session.InitialState.PaperSizeIndex.Should().Be(0);
         session.InitialState.WidthText.Should().Be("612.4");
         session.InitialState.HeightText.Should().Be("791.6");
-        session.PaperOptions.Should().Equal(PageSetupDialogPlanner.HostPaperOptions);
+        session.PaperOptions.Should().Equal(PageSetupDialogPlanner.PaperOptions);
         session.EnabledState.Should().Be(new PageSetupDialogEnabledState(true, true));
 
         var letter = session.PlanPaperSelection(session.InitialState.PaperSizeIndex);
@@ -339,7 +367,7 @@ public sealed class PageSetupDialogPlannerTests
 
         PageSetupDialogPlanner.TryBuildResult(
                 input,
-                PageSetupDialogPlanner.HostPaperOptions,
+                PageSetupDialogPlanner.PaperOptions,
                 CultureInfo.InvariantCulture,
                 out var result,
                 out var error)
@@ -362,7 +390,7 @@ public sealed class PageSetupDialogPlannerTests
 
         PageSetupDialogPlanner.TryBuildResult(
                 input,
-                PageSetupDialogPlanner.HostPaperOptions,
+                PageSetupDialogPlanner.PaperOptions,
                 CultureInfo.InvariantCulture,
                 out var result,
                 out var error)
@@ -375,9 +403,9 @@ public sealed class PageSetupDialogPlannerTests
     [Fact]
     public void TryBuildResult_CompactDialog_UsesSelectedPresetAndNormalizesLandscape()
     {
-        var a4Index = PageSetupDialogPlanner.AvaloniaPaperOptions
+        var a4Index = PageSetupDialogPlanner.PaperOptions
             .Select((option, index) => (option, index))
-            .Single(pair => pair.option.AvaloniaLabel.StartsWith("A4", StringComparison.Ordinal))
+            .Single(pair => pair.option.Label.StartsWith("A4", StringComparison.Ordinal))
             .index;
         var input = ValidCompactInput() with
         {
@@ -388,7 +416,7 @@ public sealed class PageSetupDialogPlannerTests
 
         PageSetupDialogPlanner.TryBuildResult(
                 input,
-                PageSetupDialogPlanner.AvaloniaPaperOptions,
+                PageSetupDialogPlanner.PaperOptions,
                 CultureInfo.InvariantCulture,
                 out var result,
                 out var error)
@@ -408,7 +436,7 @@ public sealed class PageSetupDialogPlannerTests
 
         PageSetupDialogPlanner.TryBuildResult(
                 blankMargin,
-                PageSetupDialogPlanner.AvaloniaPaperOptions,
+                PageSetupDialogPlanner.PaperOptions,
                 CultureInfo.InvariantCulture,
                 out var result,
                 out _)
@@ -418,14 +446,14 @@ public sealed class PageSetupDialogPlannerTests
 
         var badWidth = blankMargin with
         {
-            PaperSizeIndex = PageSetupDialogPlanner.CustomIndex(PageSetupDialogPlanner.AvaloniaPaperOptions),
+            PaperSizeIndex = PageSetupDialogPlanner.CustomIndex(PageSetupDialogPlanner.PaperOptions),
             WidthText = "wide",
             UseSelectedPaperPreset = true,
         };
 
         PageSetupDialogPlanner.TryBuildResult(
                 badWidth,
-                PageSetupDialogPlanner.AvaloniaPaperOptions,
+                PageSetupDialogPlanner.PaperOptions,
                 CultureInfo.InvariantCulture,
                 out _,
                 out var error)
