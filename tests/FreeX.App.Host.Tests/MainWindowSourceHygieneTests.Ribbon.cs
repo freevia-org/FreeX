@@ -652,24 +652,32 @@ public sealed partial class MainWindowSourceHygieneTests
         adoptSharedWorkbook.Should().NotContain("RefreshToolbar();");
         adoptSharedWorkbook.Should().NotContain("RefreshStatusBar();");
 
-        // R68-async-ordering-race-sweep-2 split the actual import work (and its RefreshStatusBar
-        // call) out of GetDataBtn_Click into ImportDataFromFileAsync so the ordering-race guard is
-        // directly testable without a real WPF OpenFileDialog; GetDataBtn_Click now just awaits it.
+        // File selection remains renderer-owned, while the chosen-path overload delegates to the
+        // shared import workflow before applying the destination selection to the renderer.
         ExtractMethodSource(dataSource, "private async void GetDataBtn_Click(")
             .Should()
             .Contain("await ImportDataFromFileAsync(result.FileName!, adapter, ext, format);");
         ExtractMethodSource(dataSource, "private async Task ImportDataFromFileAsync(")
             .Should()
-            .Contain("RefreshStatusBar();");
+            .Contain("await ImportDataFromFileAtDestinationAsync(");
+        var importAtDestination = ExtractMethodSource(dataSource, "private async Task<bool> ImportDataFromFileAtDestinationAsync(");
+        importAtDestination.Should().Contain("SetActiveCell(destination);");
+        importAtDestination.Should().NotContain("RefreshToolbar();");
         ExtractMethodSource(dataSource, "private void ForecastSheetBtn_Click(")
             .Should()
             .Contain("ApplyWorkbookSessionSelectionToRenderer();");
         ExtractMethodSource(scenarioSource, "private void ShowScenarioByName(")
             .Should()
-            .Contain("if (!refreshedSelectionUi)");
+            .Contain("() => _session.ShowScenario(name)");
         ExtractMethodSource(scenarioSource, "private void CreateScenarioSummaryReport(")
             .Should()
-            .Contain("if (!refreshedSelectionUi)");
+            .Contain("() => _session.CreateScenarioSummaryReport(");
+        ExtractMethodSource(scenarioSource, "private void ShowScenarioByName(")
+            .Should()
+            .NotContain("RefreshToolbar();");
+        ExtractMethodSource(scenarioSource, "private void CreateScenarioSummaryReport(")
+            .Should()
+            .NotContain("RefreshToolbar();");
     }
 
     [Fact]
