@@ -28,7 +28,7 @@ public sealed class WorkbookWindowRegistryDedupSourceGuardTests
             srcRoot,
             "FreeX.App.Avalonia",
             "MainWindow.cs"));
-        var repositoryRoot = Directory.GetParent(srcRoot)!.FullName;
+        var repositoryRoot = TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeX.slnx");
         var avaloniaParityCapture = File.ReadAllText(Path.Combine(
             repositoryRoot,
             "tools",

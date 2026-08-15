@@ -23,10 +23,41 @@ public sealed class FileByteReadWorkflowSourceGuardTests
         var source = Read(parts);
 
         source.Should().Contain("FileByteReadWorkflow.");
-        source.Should().NotContain("File.ReadAllBytes(");
-        source.Should().NotContain("File.ReadAllBytesAsync(");
-        source.Should().NotContain("CopyToAsync(memory");
-        source.Should().NotContain("CopyToAsync(output");
+        AssertNoPrivateByteReader(source);
+    }
+
+    [Fact]
+    public void FreeWDocumentFragmentReaders_UseTheSharedPresentationReader()
+    {
+        var sharedReader = Read(
+            "freew",
+            "FreeW.App.Presentation",
+            "DocumentFragments",
+            "FreeWDocumentFragmentImportWorkflow.cs");
+        var rendererReaders = new[]
+        {
+            Read(
+                "freew",
+                "FreeW.App.Host",
+                "DocumentFragments",
+                "WpfDocumentFragmentImportPorts.cs"),
+            Read(
+                "freew",
+                "FreeW.App.Avalonia",
+                "DocumentFragments",
+                "AvaloniaDocumentFragmentImportPorts.cs"),
+        };
+
+        sharedReader.Should().Contain("class FreeWDocumentFragmentFileSourceReaderPort");
+        sharedReader.Should().Contain("FileByteReadWorkflow.ReadLocalPathBytesAsync(");
+        AssertNoPrivateByteReader(sharedReader);
+
+        foreach (var rendererReader in rendererReaders)
+        {
+            rendererReader.Should().Contain("FreeWDocumentFragmentFileSourceReaderPort");
+            rendererReader.Should().NotContain("FileByteReadWorkflow.");
+            AssertNoPrivateByteReader(rendererReader);
+        }
     }
 
     public static TheoryData<string[]> DirectImportReaderPaths => new()
@@ -40,8 +71,6 @@ public sealed class FileByteReadWorkflowSourceGuardTests
         { ["src", "FreeX.App.Avalonia", "MainWindow.RibbonMenuWires.cs"] },
         { ["freew", "FreeW.App.Host", "PictureImport", "WpfPictureImportPorts.cs"] },
         { ["freew", "FreeW.App.Avalonia", "PictureImport", "AvaloniaPictureImportPorts.cs"] },
-        { ["freew", "FreeW.App.Host", "DocumentFragments", "WpfDocumentFragmentImportPorts.cs"] },
-        { ["freew", "FreeW.App.Avalonia", "DocumentFragments", "AvaloniaDocumentFragmentImportPorts.cs"] },
         { ["freew", "FreeW.App.Host", "WatermarkOptionsDialog.cs"] },
         { ["freew", "FreeW.App.Avalonia", "DesignDialogs.cs"] },
         { ["freep", "FreeP.App.Host", "MainWindow.AssetImports.cs"] },
@@ -49,6 +78,14 @@ public sealed class FileByteReadWorkflowSourceGuardTests
     };
 
     private static string Read(params string[] parts) => File.ReadAllText(Path(parts));
+
+    private static void AssertNoPrivateByteReader(string source)
+    {
+        source.Should().NotContain("File.ReadAllBytes(");
+        source.Should().NotContain("File.ReadAllBytesAsync(");
+        source.Should().NotContain("CopyToAsync(memory");
+        source.Should().NotContain("CopyToAsync(output");
+    }
 
     private static string Path(params string[] parts) =>
         TestWorkspaceFileLocator.FindFromWorkspaceRoot(parts);
