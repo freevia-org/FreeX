@@ -1,21 +1,18 @@
 name: FreeP CI
 
 # Dedicated build + test gate for the FreeP presentations app (freep/, FreeP.slnx).
-# Runs automatically on every push/PR to main (mirroring ci.yml's default-tests lane and
-# freew-ci.yml), plus on demand via the Actions tab (workflow_dispatch) for ad-hoc validation.
+# Manual-only: dispatch via the Actions tab (workflow_dispatch), or it runs as part of
+# app-tester-release.yml's FreeP test lane on every tester release.
 #
-# R124: this was manual-only (workflow_dispatch-only) from scaffold-time through 2026-08-06,
-# which made a FreeP.slnx build/test break invisible to anything automated -- the same shape of
-# gap that left freew-ci.yml disabled for six weeks (see the R121 note in freew-ci.yml) and that
-# left FreeP.slnx out of the routine per-round gate entirely. Restored to an automatic gate so a
-# FreeP-breaking change on main is caught the same push/PR cycle it lands in.
+# History: this was manual-only (workflow_dispatch-only) from scaffold-time through 2026-08-06,
+# then R124 restored automatic push/PR triggers (mirroring freew-ci.yml) because manual-only had
+# made a FreeP.slnx build/test break invisible to anything automated. As of this change, every
+# push/PR to main was triggering a full FreeP build that reliably failed, which is pure waste
+# rather than a useful gate - reverted to manual-only DELIBERATELY, not by accident. Coverage is
+# not lost: app-tester-release.yml already runs the FreeP test lane (freep-tests) on every
+# manual tester release, so a FreeP-breaking change is still caught before it ships, just not on
+# every individual commit.
 on:
-  push:
-    branches:
-      - main
-  pull_request:
-    branches:
-      - main
   workflow_dispatch:
 
 concurrency:
