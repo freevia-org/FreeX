@@ -25,26 +25,45 @@ public delegate ValueTask<TArtifact> AtomicExportRenderPort<TArtifact>(
     Stream output,
     CancellationToken cancellationToken);
 
+public delegate ValueTask<TArtifact> AtomicExportPathRenderPort<TArtifact>(
+    string outputPath,
+    CancellationToken cancellationToken);
+
 /// <summary>
-/// Owns the product-neutral file lifecycle for exports rendered to a stream. Format planning,
-/// destination pickers, localized presentation, and product rendering remain with the caller.
+/// Owns the product-neutral file lifecycle for exports rendered to a stream or native output
+/// path. Format planning, destination pickers, localized presentation, and product rendering
+/// remain with the caller.
 /// </summary>
 public sealed class AtomicExportExecutor
 {
     private readonly Func<string, TemporaryFileLease> _createTemporaryFile;
+    private readonly Func<string, TemporaryFileLease> _createTemporaryPathFile;
     private readonly Action<string, string> _replaceDestination;
 
     public AtomicExportExecutor()
-        : this(AtomicFileWriter.CreateTempLease, AtomicFileWriter.ReplaceTarget)
+        : this(
+            AtomicFileWriter.CreateTempLease,
+            CreatePathRenderTemporaryFile,
+            AtomicFileWriter.ReplaceTarget)
     {
     }
 
     internal AtomicExportExecutor(
         Func<string, TemporaryFileLease> createTemporaryFile,
         Action<string, string> replaceDestination)
+        : this(createTemporaryFile, CreatePathRenderTemporaryFile, replaceDestination)
+    {
+    }
+
+    internal AtomicExportExecutor(
+        Func<string, TemporaryFileLease> createTemporaryFile,
+        Func<string, TemporaryFileLease> createTemporaryPathFile,
+        Action<string, string> replaceDestination)
     {
         _createTemporaryFile = createTemporaryFile ??
             throw new ArgumentNullException(nameof(createTemporaryFile));
+        _createTemporaryPathFile = createTemporaryPathFile ??
+            throw new ArgumentNullException(nameof(createTemporaryPathFile));
         _replaceDestination = replaceDestination ??
             throw new ArgumentNullException(nameof(replaceDestination));
     }
@@ -57,6 +76,77 @@ public sealed class AtomicExportExecutor
     {
         ArgumentNullException.ThrowIfNull(renderAsync);
 
+        return await ExecuteCoreAsync(
+            destinationPath,
+            _createTemporaryFile,
+            async (temporaryFile, setStage, token) =>
+            {
+                await using var output = temporaryFile.OpenWrite(useAsync: true);
+                setStage(AtomicExportFailureStage.Rendering);
+                var artifact = await renderAsync(output, token).ConfigureAwait(false);
+                token.ThrowIfCancellationRequested();
+
+                setStage(AtomicExportFailureStage.Flushing);
+                await output.FlushAsync(token).ConfigureAwait(false);
+                token.ThrowIfCancellationRequested();
+                if (output is FileStream fileStream)
+                    fileStream.Flush(flushToDisk: true);
+                token.ThrowIfCancellationRequested();
+                return artifact;
+            },
+            cancellationToken).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Executes a renderer that requires a file-system path, such as a native media encoder.
+    /// The renderer receives an owned sibling temporary path with the destination extension;
+    /// the destination is replaced only after rendering and durable flushing complete.
+    /// </summary>
+    public async Task<OperationOutcome<TArtifact, AtomicExportValidationIssue, AtomicExportFailure>>
+        ExecutePathAsync<TArtifact>(
+            string? destinationPath,
+            AtomicExportPathRenderPort<TArtifact> renderAsync,
+            CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(renderAsync);
+
+        return await ExecuteCoreAsync(
+            destinationPath,
+            _createTemporaryPathFile,
+            async (temporaryFile, setStage, token) =>
+            {
+                setStage(AtomicExportFailureStage.Rendering);
+                var artifact = await renderAsync(temporaryFile.Path, token).ConfigureAwait(false);
+                token.ThrowIfCancellationRequested();
+
+                setStage(AtomicExportFailureStage.Flushing);
+                await using var output = new FileStream(
+                    temporaryFile.Path,
+                    FileMode.Open,
+                    FileAccess.ReadWrite,
+                    FileShare.Read,
+                    bufferSize: 81920,
+                    FileOptions.Asynchronous);
+                await output.FlushAsync(token).ConfigureAwait(false);
+                token.ThrowIfCancellationRequested();
+                output.Flush(flushToDisk: true);
+                token.ThrowIfCancellationRequested();
+                return artifact;
+            },
+            cancellationToken).ConfigureAwait(false);
+    }
+
+    private async Task<OperationOutcome<TArtifact, AtomicExportValidationIssue, AtomicExportFailure>>
+        ExecuteCoreAsync<TArtifact>(
+            string? destinationPath,
+            Func<string, TemporaryFileLease> createTemporaryFile,
+            Func<
+                TemporaryFileLease,
+                Action<AtomicExportFailureStage>,
+                CancellationToken,
+                ValueTask<TArtifact>> renderAsync,
+            CancellationToken cancellationToken)
+    {
         string? fullDestinationPath = null;
         TemporaryFileLease? temporaryFile = null;
         var failureStage = AtomicExportFailureStage.DestinationValidation;
@@ -74,24 +164,14 @@ public sealed class AtomicExportExecutor
 
             cancellationToken.ThrowIfCancellationRequested();
             failureStage = AtomicExportFailureStage.TemporaryFileCreation;
-            temporaryFile = _createTemporaryFile(fullDestinationPath!) ??
+            temporaryFile = createTemporaryFile(fullDestinationPath!) ??
                 throw new InvalidOperationException("The temporary file factory returned null.");
 
             cancellationToken.ThrowIfCancellationRequested();
-            TArtifact artifact;
-            await using (var output = temporaryFile.OpenWrite(useAsync: true))
-            {
-                failureStage = AtomicExportFailureStage.Rendering;
-                artifact = await renderAsync(output, cancellationToken).ConfigureAwait(false);
-                cancellationToken.ThrowIfCancellationRequested();
-
-                failureStage = AtomicExportFailureStage.Flushing;
-                await output.FlushAsync(cancellationToken).ConfigureAwait(false);
-                cancellationToken.ThrowIfCancellationRequested();
-                if (output is FileStream fileStream)
-                    fileStream.Flush(flushToDisk: true);
-                cancellationToken.ThrowIfCancellationRequested();
-            }
+            var artifact = await renderAsync(
+                temporaryFile,
+                stage => failureStage = stage,
+                cancellationToken).ConfigureAwait(false);
 
             cancellationToken.ThrowIfCancellationRequested();
             failureStage = AtomicExportFailureStage.ReplacingDestination;
@@ -118,6 +198,19 @@ public sealed class AtomicExportExecutor
         {
             temporaryFile?.Release();
         }
+    }
+
+    private static TemporaryFileLease CreatePathRenderTemporaryFile(string destinationPath)
+    {
+        var fullDestinationPath = Path.GetFullPath(destinationPath);
+        var extension = Path.GetExtension(fullDestinationPath);
+        if (string.IsNullOrEmpty(extension))
+            extension = ".tmp";
+
+        return TemporaryFileLease.CreateForExternalWriter(
+            $".{Path.GetFileNameWithoutExtension(fullDestinationPath)}.",
+            extension,
+            Path.GetDirectoryName(fullDestinationPath));
     }
 
     private static AtomicExportValidationIssue? ValidateDestination(

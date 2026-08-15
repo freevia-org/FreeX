@@ -58,6 +58,64 @@ public sealed class AtomicExportExecutorTests : IDisposable
         TemporaryFiles(destination).Should().BeEmpty();
     }
 
+    [Fact]
+    public async Task ExecutePathAsync_PreservesExtensionAndAtomicallyReplacesDestination()
+    {
+        var destination = CreateExistingDestination("old export");
+        string? renderPath = null;
+
+        var result = await new AtomicExportExecutor().ExecutePathAsync(
+            destination,
+            async (outputPath, token) =>
+            {
+                renderPath = outputPath;
+                File.ReadAllText(destination).Should().Be("old export");
+                Path.GetExtension(outputPath).Should().Be(Path.GetExtension(destination));
+                await File.WriteAllTextAsync(outputPath, "new export", token);
+                return new TestArtifact(7);
+            });
+
+        result.Succeeded.Should().BeTrue();
+        result.Value.Should().Be(new TestArtifact(7));
+        renderPath.Should().NotBe(destination);
+        File.ReadAllText(destination).Should().Be("new export");
+        TemporaryFiles(destination).Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task ExecutePathAsync_RendererFailurePreservesDestinationAndCleansPartialOutput()
+    {
+        var destination = CreateExistingDestination("old export");
+
+        var result = await new AtomicExportExecutor().ExecutePathAsync<int>(
+            destination,
+            async (outputPath, token) =>
+            {
+                await File.WriteAllTextAsync(outputPath, "partial", token);
+                throw new InvalidOperationException("native renderer failed");
+            });
+
+        result.Status.Should().Be(OperationStatus.Failed);
+        result.Error!.Detail.Stage.Should().Be(AtomicExportFailureStage.Rendering);
+        File.ReadAllText(destination).Should().Be("old export");
+        TemporaryFiles(destination).Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task ExecutePathAsync_MissingRendererOutputFailsBeforeReplacement()
+    {
+        var destination = CreateExistingDestination("old export");
+
+        var result = await new AtomicExportExecutor().ExecutePathAsync(
+            destination,
+            (_, _) => ValueTask.FromResult(3));
+
+        result.Status.Should().Be(OperationStatus.Failed);
+        result.Error!.Detail.Stage.Should().Be(AtomicExportFailureStage.Flushing);
+        File.ReadAllText(destination).Should().Be("old export");
+        TemporaryFiles(destination).Should().BeEmpty();
+    }
+
     [Theory]
     [InlineData(null, AtomicExportValidationIssue.DestinationPathMissing)]
     [InlineData("", AtomicExportValidationIssue.DestinationPathMissing)]
@@ -379,12 +437,20 @@ public sealed class AtomicExportExecutorTests : IDisposable
             },
             replace ?? AtomicFileWriter.ReplaceTarget);
 
-    private static string[] TemporaryFiles(string destination) =>
-        Directory.Exists(Path.GetDirectoryName(destination))
-            ? Directory.GetFiles(
-                Path.GetDirectoryName(destination)!,
-                $".{Path.GetFileName(destination)}.*.tmp")
-            : [];
+    private static string[] TemporaryFiles(string destination)
+    {
+        var directory = Path.GetDirectoryName(destination);
+        if (!Directory.Exists(directory))
+            return [];
+
+        var fileName = Path.GetFileName(destination);
+        var stem = Path.GetFileNameWithoutExtension(destination);
+        return Directory.GetFiles(directory!)
+            .Where(path =>
+                Path.GetFileName(path).StartsWith($".{fileName}.", StringComparison.Ordinal) ||
+                Path.GetFileName(path).StartsWith($".{stem}.", StringComparison.Ordinal))
+            .ToArray();
+    }
 
     private static void AssertCanceledAndPreserved<TArtifact>(
         OperationOutcome<TArtifact, AtomicExportValidationIssue, AtomicExportFailure> result,
