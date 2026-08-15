@@ -7400,38 +7400,7 @@ public sealed partial class MainWindow : Window,
         bool fromStart,
         FreeP.App.Compositor.SlideShowTimingIntent timingIntent,
         int? animationStartIndex = null)
-    {
-        if (!_customShowSession.TryBuildPlaybackLaunch(
-                fromStart,
-                animationStartIndex,
-                _mediaPaneHostCoordinator.SelectedCaptionTrackIndex,
-                out var launchPlan))
-            return;
-
-        var selectedCaption = launchPlan.CaptionSelection;
-        var slideShow = new SlideShowWindow(
-            _presentation,
-            launchPlan.Route,
-            Editor.SetSlideNotesText,
-            selectedCaption?.SlideIndex,
-            selectedCaption?.ShapeId,
-            selectedCaption?.TrackIndex);
-        ConfigureSlideShowObserver(slideShow);
-        if (timingIntent != FreeP.App.Compositor.SlideShowTimingIntent.None)
-            slideShow.SetPresenterTimingIntent(timingIntent);
-
-        // WPF leaves the editor selection unchanged while the separate slideshow window
-        // plays. Avalonia must keep that same editor-side selection authority on close.
-        slideShow.Closed += (_, _) =>
-        {
-            RestoreOwnerFocus();
-        };
-
-        if (IsVisible)
-            slideShow.Show(this);
-        else
-            slideShow.Show();
-    }
+        => SlideShowWindowLauncher.TryLaunch(fromStart, timingIntent, animationStartIndex);
 
     internal bool TryBuildCustomSlideShowRoute(
         string? customShowName,
@@ -7443,34 +7412,34 @@ public sealed partial class MainWindow : Window,
         _customShowSession.BuildLaunchPlan();
 
     internal bool TryStartCustomSlideShow(string? customShowName, int startIndex = 0)
-    {
-        if (!_customShowSession.TryBuildNamedPlaybackLaunch(
-                customShowName,
-                startIndex,
-                _mediaPaneHostCoordinator.SelectedCaptionTrackIndex,
-                out var launchPlan))
-        {
-            return false;
-        }
+        => SlideShowWindowLauncher.TryLaunchNamed(customShowName, startIndex);
 
-        var selectedCaption = launchPlan.CaptionSelection;
-        var slideShow = new SlideShowWindow(
-            _presentation,
-            launchPlan.Route,
+    private SlideShowWindowLaunchCoordinator<SlideShowWindow>? _slideShowWindowLauncher;
+
+    private SlideShowWindowLaunchCoordinator<SlideShowWindow> SlideShowWindowLauncher =>
+        _slideShowWindowLauncher ??= new(
+            _customShowSession,
+            () => _presentation,
+            () => _mediaPaneHostCoordinator.SelectedCaptionTrackIndex,
             Editor.SetSlideNotesText,
-            selectedCaption?.SlideIndex,
-            selectedCaption?.ShapeId,
-            selectedCaption?.TrackIndex);
-        ConfigureSlideShowObserver(slideShow);
-        // A named custom show is still a separate playback window. Restore the
-        // editor's focus when it closes just like the normal slideshow route.
-        slideShow.Closed += (_, _) => RestoreOwnerFocus();
+            CreateSlideShowWindow,
+            static (window, intent) => window.SetPresenterTimingIntent(intent),
+            ShowSlideShowWindow);
 
+    private SlideShowWindow CreateSlideShowWindow(SlideShowWindowLaunchPlan launchPlan)
+    {
+        var window = new SlideShowWindow(launchPlan);
+        ConfigureSlideShowObserver(window);
+        window.Closed += (_, _) => RestoreOwnerFocus();
+        return window;
+    }
+
+    private void ShowSlideShowWindow(SlideShowWindow window)
+    {
         if (IsVisible)
-            slideShow.Show(this);
+            window.Show(this);
         else
-            slideShow.Show();
-        return true;
+            window.Show();
     }
 
     internal void OpenCustomShowDialog() =>

@@ -3118,29 +3118,7 @@ public sealed partial class MainWindow : Window,
         bool fromStart,
         FreeP.App.Compositor.SlideShowTimingIntent timingIntent,
         int? animationStartIndex = null)
-    {
-        if (!_customShowSession.TryBuildPlaybackLaunch(
-                fromStart,
-                animationStartIndex,
-                _mediaPaneHostCoordinator.SelectedCaptionTrackIndex,
-                out var launchPlan))
-            return;
-
-        var selectedCaption = launchPlan.CaptionSelection;
-        var window = new SlideShowWindow(
-            _presentation,
-            launchPlan.Route,
-            Editor.SetSlideNotesText,
-            selectedCaption?.SlideIndex,
-            selectedCaption?.ShapeId,
-            selectedCaption?.TrackIndex);
-        if (timingIntent != FreeP.App.Compositor.SlideShowTimingIntent.None)
-            window.SetPresenterTimingIntent(timingIntent);
-        // Owner can only be set when the main window is already shown (not during unit tests).
-        if (IsVisible)
-            window.Owner = this;
-        window.Show();
-    }
+        => SlideShowWindowLauncher.TryLaunch(fromStart, timingIntent, animationStartIndex);
 
     // ── Chart data editing (Wave 9B) ──────────────────────────────────────────────
 
@@ -3157,28 +3135,26 @@ public sealed partial class MainWindow : Window,
         _customShowSession.BuildLaunchPlan();
 
     internal bool TryStartCustomSlideShow(string? customShowName, int startIndex = 0)
-    {
-        if (!_customShowSession.TryBuildNamedPlaybackLaunch(
-                customShowName,
-                startIndex,
-                _mediaPaneHostCoordinator.SelectedCaptionTrackIndex,
-                out var launchPlan))
-        {
-            return false;
-        }
+        => SlideShowWindowLauncher.TryLaunchNamed(customShowName, startIndex);
 
-        var selectedCaption = launchPlan.CaptionSelection;
-        var window = new SlideShowWindow(
-            _presentation,
-            launchPlan.Route,
+    private SlideShowWindowLaunchCoordinator<SlideShowWindow>? _slideShowWindowLauncher;
+
+    private SlideShowWindowLaunchCoordinator<SlideShowWindow> SlideShowWindowLauncher =>
+        _slideShowWindowLauncher ??= new(
+            _customShowSession,
+            () => _presentation,
+            () => _mediaPaneHostCoordinator.SelectedCaptionTrackIndex,
             Editor.SetSlideNotesText,
-            selectedCaption?.SlideIndex,
-            selectedCaption?.ShapeId,
-            selectedCaption?.TrackIndex);
+            static plan => new SlideShowWindow(plan),
+            static (window, intent) => window.SetPresenterTimingIntent(intent),
+            ShowSlideShowWindow);
+
+    private void ShowSlideShowWindow(SlideShowWindow window)
+    {
+        // Owner can only be set when the main window is already shown (not during unit tests).
         if (IsVisible)
             window.Owner = this;
         window.Show();
-        return true;
     }
 
     internal void OpenCustomShowDialog()

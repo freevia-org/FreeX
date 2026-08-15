@@ -154,7 +154,7 @@ public sealed partial class SlideShowWindow : Window, ISlideShowTransitionPlayba
     {
     }
 
-    private SlideShowWindow(SlideShowWindowLaunchPlan launchPlan)
+    internal SlideShowWindow(SlideShowWindowLaunchPlan launchPlan)
     {
         ArgumentNullException.ThrowIfNull(launchPlan);
         _presentation = launchPlan.Presentation;
