@@ -25,6 +25,12 @@ public sealed class CompactDialogChromeContractTests
         CompactDialogVisualTokens.GroupBoxPaddingVertical.Should().Be(6);
         CompactDialogVisualTokens.ButtonCornerRadius.Should().Be(3);
         CompactDialogVisualTokens.BorderThickness.Should().Be(1);
+        CompactDialogVisualTokens.CheckBoxIndicatorWidth.Should().Be(14);
+        CompactDialogVisualTokens.CheckBoxIndicatorHeight.Should().Be(13);
+        CompactDialogVisualTokens.CheckBoxCheckMarkWidth.Should().Be(12);
+        CompactDialogVisualTokens.CheckBoxCheckMarkHeight.Should().Be(10);
+        CompactDialogVisualTokens.CheckBoxIndeterminateMarkWidth.Should().Be(7);
+        CompactDialogVisualTokens.CheckBoxIndeterminateMarkHeight.Should().Be(2);
         DialogTabChromeMetrics.PaneBorderHex.Should().Be("#C0C0C0");
         DialogTabChromeMetrics.InactiveTabBorderHex.Should().Be("#808080");
         DialogTabChromeMetrics.InactiveTabBackgroundHex.Should().Be("#F5F5F5");
@@ -124,6 +130,30 @@ public sealed class CompactDialogChromeContractTests
         wpfTabs.Should().Contain("DialogTabChromeMetrics.SelectedTabBackgroundHex");
         wpfTabs.Should().NotContain("Brushes.Gray");
         wpfTabs.Should().NotContain("Brushes.WhiteSmoke");
+    }
+
+    [Fact]
+    public void SharedCompactCheckBox_OwnsWpfGeometryAndThreeStatePainting()
+    {
+        var shared = Read(
+            "shared", "Free.Shared.Shell.Avalonia", "AvaloniaCompactDialogChrome.cs");
+        var freeW = Read(
+            "freew", "FreeW.App.Avalonia", "FontParagraphDialogChrome.cs");
+        var freeX = Read(
+            "src", "FreeX.App.Avalonia", "MainWindow.PivotFilters.cs");
+
+        shared.Should().Contain("Width = CompactDialogVisualTokens.CheckBoxIndicatorWidth");
+        shared.Should().Contain("Height = CompactDialogVisualTokens.CheckBoxIndicatorHeight");
+        shared.Should().Contain("Converter = ObjectConverters.IsNull");
+        shared.Should().Contain("Children = { checkMark, indeterminateMark }");
+
+        freeW.Should().Contain(
+            "AvaloniaCompactDialogChrome.ApplyCompactCheckBox(checkBox, style, contentSpacing: 5);");
+        freeW.Should().NotContain("checkBox.Template = new FuncControlTemplate<CheckBox>");
+
+        freeX.Should().Contain(
+            "AvaloniaCompactDialogChrome.ApplyCompactCheckBox(checkBox, PivotDialogChromeStyle);");
+        freeX.Should().NotContain("checkBox.Template = new global::Avalonia.Controls.Templates.FuncControlTemplate<CheckBox>");
     }
 
     private static string Read(params string[] path) =>

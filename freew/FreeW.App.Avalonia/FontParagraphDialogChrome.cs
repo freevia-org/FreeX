@@ -17,9 +17,9 @@ using Free.Shared.Shell.Avalonia;
 namespace FreeW.App.Avalonia;
 
 /// <summary>
-/// FreeW-local compensation for the Fluent templates used by the Font and Paragraph dialogs.
-/// The shared compact chrome owns the common contract; these selectors only restore the WPF
-/// authority's one-line field and checkbox geometry on this dialog family.
+/// FreeW-local compensation for the Fluent field templates used by the Font and Paragraph dialogs.
+/// The shared compact chrome owns the checkbox template; these selectors only restore the WPF
+/// authority's one-line field geometry and route-specific checkbox inset on this dialog family.
 /// </summary>
 internal static class FontParagraphDialogChrome
 {
@@ -123,61 +123,13 @@ internal static class FontParagraphDialogChrome
         if (checkBox.Classes.Contains(CheckBoxClass))
             return;
 
-        AvaloniaCompactDialogChrome.ApplyCompactCheckBox(checkBox, style);
+        AvaloniaCompactDialogChrome.ApplyCompactCheckBox(checkBox, style, contentSpacing: 5);
         checkBox.Classes.Add(CheckBoxClass);
         checkBox.Margin = new Thickness(
             checkBox.Margin.Left + 1,
             checkBox.Margin.Top,
             checkBox.Margin.Right,
             checkBox.Margin.Bottom);
-        checkBox.Template = new FuncControlTemplate<CheckBox>((control, _) =>
-        {
-            var checkMark = new global::Avalonia.Controls.Shapes.Path
-            {
-                Data = Geometry.Parse("M 2 6 L 5 9 L 12 2"),
-                Stroke = style.ForegroundBrush ?? Brushes.Black,
-                StrokeThickness = 1.4,
-                Width = 12,
-                Height = 10,
-                HorizontalAlignment = HorizontalAlignment.Center,
-                VerticalAlignment = VerticalAlignment.Center,
-            };
-            checkMark.Bind(
-                Visual.IsVisibleProperty,
-                new Binding(nameof(ToggleButton.IsChecked))
-                {
-                    Source = control,
-                });
-
-            var indicator = new Border
-            {
-                Width = 14,
-                // WPF's default checkbox paints a 14px wide, 13px high device-pixel frame.
-                // Keep the control's 18px hit row while matching the authority's painted glyph.
-                Height = 13,
-                Background = Brushes.White,
-                BorderBrush = new ImmutableSolidColorBrush(Color.FromRgb(112, 112, 112)),
-                BorderThickness = new Thickness(1),
-                Child = checkMark,
-            };
-            var content = new ContentPresenter
-            {
-                FontFamily = style.FontFamily,
-                FontSize = style.FontSize,
-                VerticalContentAlignment = VerticalAlignment.Center,
-                Foreground = style.ForegroundBrush ?? Brushes.Black,
-            };
-            content.Bind(ContentPresenter.ContentProperty, new Binding(nameof(ContentControl.Content)) { Source = control });
-            content.Bind(ContentPresenter.ContentTemplateProperty, new Binding(nameof(ContentControl.ContentTemplate)) { Source = control });
-
-            return new StackPanel
-            {
-                Orientation = Orientation.Horizontal,
-                VerticalAlignment = VerticalAlignment.Center,
-                Spacing = 5,
-                Children = { indicator, content },
-            };
-        });
     }
 
     public static void ApplyComboBox(

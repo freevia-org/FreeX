@@ -24,6 +24,12 @@ public static class CompactDialogVisualTokens
     public const double GroupBoxPaddingVertical = 6;
     public const double ButtonCornerRadius = 3;
     public const double BorderThickness = 1;
+    public const double CheckBoxIndicatorWidth = 14;
+    public const double CheckBoxIndicatorHeight = 13;
+    public const double CheckBoxCheckMarkWidth = 12;
+    public const double CheckBoxCheckMarkHeight = 10;
+    public const double CheckBoxIndeterminateMarkWidth = 7;
+    public const double CheckBoxIndeterminateMarkHeight = 2;
 
     public const string BorderHex = "#C8C8C8";
     public const string FieldBorderHex = "#B7BCC2";

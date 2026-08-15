@@ -792,11 +792,11 @@ public static class AvaloniaCompactDialogChrome
         {
             var checkMark = new global::Avalonia.Controls.Shapes.Path
             {
-                Data = Geometry.Parse("M 2 6 L 5 9 L 11 2"),
+                Data = Geometry.Parse("M 2 6 L 5 9 L 12 2"),
                 Stroke = foreground,
                 StrokeThickness = 1.4,
-                Width = 11,
-                Height = 10,
+                Width = CompactDialogVisualTokens.CheckBoxCheckMarkWidth,
+                Height = CompactDialogVisualTokens.CheckBoxCheckMarkHeight,
                 HorizontalAlignment = HorizontalAlignment.Center,
                 VerticalAlignment = VerticalAlignment.Center,
             };
@@ -807,14 +807,38 @@ public static class AvaloniaCompactDialogChrome
                     Source = control,
                 });
 
+            var indeterminateMark = new Border
+            {
+                Width = CompactDialogVisualTokens.CheckBoxIndeterminateMarkWidth,
+                Height = CompactDialogVisualTokens.CheckBoxIndeterminateMarkHeight,
+                Background = foreground,
+                HorizontalAlignment = HorizontalAlignment.Center,
+                VerticalAlignment = VerticalAlignment.Center,
+            };
+            indeterminateMark.Bind(
+                Visual.IsVisibleProperty,
+                new Binding(nameof(ToggleButton.IsChecked))
+                {
+                    Source = control,
+                    Converter = ObjectConverters.IsNull,
+                });
+
             var indicator = new Border
             {
-                Width = 13,
-                Height = 13,
+                // WPF's native compact checkbox paints a 14 x 13 device-pixel frame at 96 DPI.
+                // Keep the separately configured interaction row height while sharing that authority
+                // geometry across FreeX, FreeW, and FreeP dialog renderers.
+                Width = CompactDialogVisualTokens.CheckBoxIndicatorWidth,
+                Height = CompactDialogVisualTokens.CheckBoxIndicatorHeight,
                 Background = white,
                 BorderBrush = new ImmutableSolidColorBrush(Color.FromRgb(112, 112, 112)),
                 BorderThickness = new Thickness(CompactDialogVisualTokens.BorderThickness),
-                Child = checkMark,
+                Child = new Panel
+                {
+                    HorizontalAlignment = HorizontalAlignment.Center,
+                    VerticalAlignment = VerticalAlignment.Center,
+                    Children = { checkMark, indeterminateMark },
+                },
             };
             var content = new ContentPresenter
             {
