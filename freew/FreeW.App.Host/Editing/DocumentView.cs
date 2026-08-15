@@ -15322,63 +15322,23 @@ public sealed partial class DocumentView : RichTextBox
             var blockPageAssignments = PaginationEngine.ComputeBlockPageAssignment(this);
             var hasReliableBlockAssignments = pagination.PageCount == 1
                 || blockPageAssignments.Any(pageIndex => pageIndex > 0);
-            var physicalPageOfBlock = BuildCrossReferencePageResolver();
-            int? KnownPhysicalPageOfBlock(int blockIndex) =>
-                physicalPageOfBlock?.Invoke(blockIndex)
-                ?? (hasReliableBlockAssignments
-                    && blockIndex >= 0
-                    && blockIndex < blockPageAssignments.Length
-                    ? (int?)(blockPageAssignments[blockIndex] + 1)
-                    : null)
-                ?? CrossReferences.ExplicitPageNumberAtBlock(_model, blockIndex)
-                ?? (blockIndex == 0 ? 1 : null);
-            var paginationContext = GeneratedReferencePaginationContext.Create(
-                _model,
-                pagination.PageCount,
-                KnownPhysicalPageOfBlock);
+            int? ObservedPhysicalPageOfBlock(int blockIndex) =>
+                hasReliableBlockAssignments
+                && blockIndex >= 0
+                && blockIndex < blockPageAssignments.Length
+                    ? blockPageAssignments[blockIndex] + 1
+                    : null;
             var firstRect = Document.ContentStart.GetCharacterRect(LogicalDirection.Forward);
             var topY = firstRect.IsEmpty ? (double?)null : firstRect.Top;
-            return (_, blockIndex, tableParagraph, runIndex, _) =>
+            int? PhysicalPageAtTextOffset(int blockIndex, int offset)
             {
-                if (tableParagraph is not null)
-                {
-                    if (blockIndex < 0
-                        || blockIndex >= _model.Blocks.Count
-                        || _model.Blocks[blockIndex] is not ModelTable)
-                    {
-                        return null;
-                    }
-
-                    return paginationContext.ResolveTableOfAuthoritiesPageReference(
-                        blockIndex,
-                        tableParagraph,
-                        clampToEffectivePageCount: true);
-                }
-
-                if (!IsModelCitationRun(blockIndex, runIndex))
-                    return null;
-
-                if (paginationContext.EffectivePageCount == 1 || pagination.PageBreakYsDip.Count == 0)
-                    return paginationContext.CreateTableOfAuthoritiesPageReference(1);
-
-                var offset = _editingSession.Interaction.BodyRunStartOffset(blockIndex, runIndex);
                 var pointer = TextPointerAtModelTextOffset(blockIndex, offset);
                 if (pointer is null || topY is null)
-                {
-                    var blockPage = KnownPhysicalPageOfBlock(blockIndex);
-                    return blockPage is { } fallbackPage
-                        ? paginationContext.CreateTableOfAuthoritiesPageReference(fallbackPage)
-                        : null;
-                }
+                    return null;
 
                 var rect = pointer.GetCharacterRect(LogicalDirection.Forward);
                 if (rect.IsEmpty)
-                {
-                    var blockPage = KnownPhysicalPageOfBlock(blockIndex);
-                    return blockPage is { } fallbackPage
-                        ? paginationContext.CreateTableOfAuthoritiesPageReference(fallbackPage)
-                        : null;
-                }
+                    return null;
 
                 var y = rect.Top - topY.Value;
                 var pageIndex = 0;
@@ -15389,31 +15349,25 @@ public sealed partial class DocumentView : RichTextBox
                     pageIndex++;
                 }
 
-                var pageNumber = Math.Min(Math.Max(1, pageIndex + 1), paginationContext.EffectivePageCount);
-                return paginationContext.CreateTableOfAuthoritiesPageReference(pageNumber);
-            };
+                return pageIndex + 1;
+            }
+
+            return TableOfAuthoritiesPageResolverPlanner.Build(
+                _model,
+                ObservedPhysicalPageOfBlock,
+                PhysicalPageAtTextOffset,
+                minimumPageCount: pagination.PageCount,
+                allowSinglePageFallback: pagination.PageCount == 1
+                    || pagination.PageBreakYsDip.Count == 0);
         }
         catch (InvalidOperationException)
         {
-            int? KnownPhysicalPageOfBlock(int blockIndex) =>
-                CrossReferences.ExplicitPageNumberAtBlock(_model, blockIndex)
-                ?? (blockIndex == 0 ? 1 : null);
-            var paginationContext = GeneratedReferencePaginationContext.Create(
+            return TableOfAuthoritiesPageResolverPlanner.Build(
                 _model,
-                minimumPageCount: 1,
-                physicalPageOfBlock: KnownPhysicalPageOfBlock);
-            return (_, blockIndex, tableParagraph, _, _) =>
-                paginationContext.ResolveTableOfAuthoritiesPageReference(blockIndex, tableParagraph);
+                observedPhysicalPageOfBlock: null,
+                observedPhysicalPageOfBlockOffset: null);
         }
     }
-
-    private bool IsModelCitationRun(int modelBlockIndex, int runIndex) =>
-        modelBlockIndex >= 0
-        && modelBlockIndex < _model.Blocks.Count
-        && _model.Blocks[modelBlockIndex] is ModelParagraph paragraph
-        && runIndex >= 0
-        && runIndex < paragraph.Runs.Count
-        && paragraph.Runs[runIndex].Citation is not null;
 
     /// <summary>
     /// Insert a Table of Figures (or Table of Tables) generated from the document's <see cref="CaptionLabel"/>

@@ -22,9 +22,12 @@ public static class TableOfAuthoritiesPageResolverPlanner
         int? KnownPhysicalPageOfBlock(int blockIndex)
         {
             var observed = observedPhysicalPageOfBlock?.Invoke(blockIndex);
+            var explicitPage = CrossReferences.ExplicitPageNumberAtBlock(document, blockIndex);
             if (observed is > 0)
-                return observed;
-            return CrossReferences.ExplicitPageNumberAtBlock(document, blockIndex)
+                return explicitPage is { } authoredPage
+                    ? Math.Max(observed.Value, authoredPage)
+                    : observed;
+            return explicitPage
                 ?? (blockIndex == 0 ? 1 : null);
         }
 
