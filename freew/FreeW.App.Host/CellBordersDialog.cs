@@ -150,8 +150,7 @@ internal sealed class CellBordersDialog : Free.Shared.Ribbon.Wpf.DialogWindow
                 out var validation))
         {
             _validation.Text = validation;
-            _width.Focus();
-            _width.SelectAll();
+            DialogFocus.FocusAndSelect(_width);
             return;
         }
 

@@ -5,6 +5,7 @@ using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Layout;
 using Avalonia.Media;
+using Free.Shared.Shell.Avalonia;
 using FreeW.App.Avalonia.Editing;
 using FreeW.App.Presentation.Dialogs;
 
@@ -106,12 +107,6 @@ internal sealed class CellBordersDialog : FreeWDialogWindow
         AutomationProperties.SetAutomationId(_validation, CellBordersDialogPlanner.ValidationAutomationId);
         outer.Children.Add(_validation);
 
-        var actions = new StackPanel
-        {
-            Orientation = Orientation.Horizontal,
-            HorizontalAlignment = HorizontalAlignment.Right,
-            Margin = new Thickness(0, 8, 0, 0),
-        };
         apply = new Button
         {
             Content = text.ApplyLabel,
@@ -128,9 +123,9 @@ internal sealed class CellBordersDialog : FreeWDialogWindow
             MinWidth = 72,
         };
         cancel.Click += (_, _) => Close(null);
-        actions.Children.Add(apply);
-        actions.Children.Add(cancel);
-        outer.Children.Add(actions);
+        outer.Children.Add(AvaloniaCompactDialogChrome.CreateActionRow(
+            [apply, cancel],
+            new Thickness(0, 8, 0, 0)));
         Content = outer;
 
         KeyDown += (_, eventArgs) =>
@@ -162,8 +157,7 @@ internal sealed class CellBordersDialog : FreeWDialogWindow
                 out var validation))
         {
             _validation.Text = validation;
-            _width.Focus();
-            _width.SelectAll();
+            AvaloniaCompactDialogChrome.FocusAndSelect(_width);
             return;
         }
 
