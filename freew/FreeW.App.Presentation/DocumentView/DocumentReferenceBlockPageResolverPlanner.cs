@@ -37,7 +37,7 @@ public static class DocumentReferenceBlockPageResolverPlanner
             if (authoredPage is > 0)
                 return authoredPage;
 
-            return allowUnobservedFirstPageFallback ? 1 : null;
+            return allowUnobservedFirstPageFallback && blockIndex == 0 ? 1 : null;
         }
 
         return new DocumentReferenceBlockPageResolution(Resolve, pageCount);
