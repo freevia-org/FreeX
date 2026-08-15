@@ -64,6 +64,7 @@ public sealed class AvaloniaWorksheetPhysicalEditingTests
             }
             finally
             {
+                window.AllowCloseWithoutDirtyPromptForParityCapture();
                 window.Close();
             }
         }, CancellationToken.None);
@@ -104,6 +105,7 @@ public sealed class AvaloniaWorksheetPhysicalEditingTests
             }
             finally
             {
+                window.AllowCloseWithoutDirtyPromptForParityCapture();
                 window.Close();
             }
         }, CancellationToken.None);
@@ -204,6 +206,7 @@ public sealed class AvaloniaWorksheetPhysicalEditingTests
             }
             finally
             {
+                window.AllowCloseWithoutDirtyPromptForParityCapture();
                 window.Close();
             }
         }, CancellationToken.None);
@@ -244,6 +247,7 @@ public sealed class AvaloniaWorksheetPhysicalEditingTests
             }
             finally
             {
+                window.AllowCloseWithoutDirtyPromptForParityCapture();
                 window.Close();
             }
         }, CancellationToken.None);
@@ -295,6 +299,7 @@ public sealed class AvaloniaWorksheetPhysicalEditingTests
             }
             finally
             {
+                window.AllowCloseWithoutDirtyPromptForParityCapture();
                 window.Close();
             }
         }, CancellationToken.None);
@@ -335,6 +340,7 @@ public sealed class AvaloniaWorksheetPhysicalEditingTests
             }
             finally
             {
+                window.AllowCloseWithoutDirtyPromptForParityCapture();
                 window.Close();
             }
         }, CancellationToken.None);
@@ -380,6 +386,7 @@ public sealed class AvaloniaWorksheetPhysicalEditingTests
             }
             finally
             {
+                window.AllowCloseWithoutDirtyPromptForParityCapture();
                 window.Close();
             }
         }, CancellationToken.None);
@@ -435,6 +442,7 @@ public sealed class AvaloniaWorksheetPhysicalEditingTests
             }
             finally
             {
+                window.AllowCloseWithoutDirtyPromptForParityCapture();
                 window.Close();
             }
         }, CancellationToken.None);
@@ -464,6 +472,7 @@ public sealed class AvaloniaWorksheetPhysicalEditingTests
             }
             finally
             {
+                window.AllowCloseWithoutDirtyPromptForParityCapture();
                 window.Close();
             }
         }, CancellationToken.None);
@@ -504,6 +513,7 @@ public sealed class AvaloniaWorksheetPhysicalEditingTests
             }
             finally
             {
+                window.AllowCloseWithoutDirtyPromptForParityCapture();
                 window.Close();
             }
         }, CancellationToken.None);

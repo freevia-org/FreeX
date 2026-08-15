@@ -41,6 +41,7 @@ public sealed class R78_FormulaReferenceInlineOverlayAndSelectionCycleTests
             window.InlineCellEditorForegroundForTest.Should().BeSameAs(Brushes.Transparent);
 
             window.RaiseInlineCellEditorKeyDownForTest(Press(Key.Escape));
+            window.AllowCloseWithoutDirtyPromptForParityCapture();
             window.Close();
         }, CancellationToken.None);
     }
@@ -60,6 +61,7 @@ public sealed class R78_FormulaReferenceInlineOverlayAndSelectionCycleTests
             window.InlineCellEditorForegroundForTest.Should().NotBeSameAs(Brushes.Transparent);
 
             window.RaiseInlineCellEditorKeyDownForTest(Press(Key.Escape));
+            window.AllowCloseWithoutDirtyPromptForParityCapture();
             window.Close();
         }, CancellationToken.None);
     }
@@ -132,6 +134,7 @@ public sealed class R78_FormulaReferenceInlineOverlayAndSelectionCycleTests
             window.Session.ActiveCell.Should().Be(new CellAddress(sheet.Id, 2, 3));
             window.Session.SelectedRange.Should().Be(range);
 
+            window.AllowCloseWithoutDirtyPromptForParityCapture();
             window.Close();
             return true;
         }, CancellationToken.None);
@@ -166,6 +169,7 @@ public sealed class R78_FormulaReferenceInlineOverlayAndSelectionCycleTests
             window.Session.ActiveCell.Should().Be(new CellAddress(sheet.Id, 3, 2));
             window.Session.SelectedRange.Should().Be(range);
 
+            window.AllowCloseWithoutDirtyPromptForParityCapture();
             window.Close();
             return true;
         }, CancellationToken.None);
@@ -205,6 +209,7 @@ public sealed class R78_FormulaReferenceInlineOverlayAndSelectionCycleTests
             window.Session.SelectedRange.Should().Be(first);
             window.Session.SelectedRanges.Should().Equal(areas);
 
+            window.AllowCloseWithoutDirtyPromptForParityCapture();
             window.Close();
             return true;
         }, CancellationToken.None);
@@ -237,6 +242,7 @@ public sealed class R78_FormulaReferenceInlineOverlayAndSelectionCycleTests
             window.Session.SelectedRange.Should().Be(
                 new GridRange(new CellAddress(sheet.Id, 4, 2), new CellAddress(sheet.Id, 4, 2)));
 
+            window.AllowCloseWithoutDirtyPromptForParityCapture();
             window.Close();
             return true;
         }, CancellationToken.None);

@@ -29,6 +29,7 @@ public sealed class R92_PivotClickGetPivotDataToggleAvaloniaTests
                 }
                 finally
                 {
+                    window.AllowCloseWithoutDirtyPromptForParityCapture();
                     window.Close();
                 }
             }, CancellationToken.None);
@@ -51,6 +52,7 @@ public sealed class R92_PivotClickGetPivotDataToggleAvaloniaTests
                 }
                 finally
                 {
+                    window.AllowCloseWithoutDirtyPromptForParityCapture();
                     window.Close();
                 }
             }, CancellationToken.None);
@@ -73,6 +75,7 @@ public sealed class R92_PivotClickGetPivotDataToggleAvaloniaTests
                 }
                 finally
                 {
+                    window.AllowCloseWithoutDirtyPromptForParityCapture();
                     window.Close();
                 }
             }, CancellationToken.None);

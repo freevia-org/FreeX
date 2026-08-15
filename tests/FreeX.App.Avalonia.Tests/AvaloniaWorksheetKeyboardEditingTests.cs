@@ -66,6 +66,7 @@ public sealed class AvaloniaWorksheetKeyboardEditingTests
             window.RaiseFormulaBoxKeyDownForTest(Press(Key.F2));
             window.FormulaPointModeForTest.Should().BeTrue();
             window.RaiseFormulaBoxKeyDownForTest(Press(Key.Escape));
+            window.AllowCloseWithoutDirtyPromptForParityCapture();
             window.Close();
         }, CancellationToken.None);
     }
@@ -94,6 +95,7 @@ public sealed class AvaloniaWorksheetKeyboardEditingTests
                 "the reverse Shift+Arrow extension must retain the formula-point anchor");
 
             window.RaiseFormulaBoxKeyDownForTest(Press(Key.Escape));
+            window.AllowCloseWithoutDirtyPromptForParityCapture();
             window.Close();
         }, CancellationToken.None);
     }
@@ -123,6 +125,7 @@ public sealed class AvaloniaWorksheetKeyboardEditingTests
             window.FormulaBoxTextForTest.Should().Be("=D3,D4,D4:E4");
 
             window.RaiseFormulaBoxKeyDownForTest(Press(Key.Escape));
+            window.AllowCloseWithoutDirtyPromptForParityCapture();
             window.Close();
         }, CancellationToken.None);
     }
@@ -159,6 +162,7 @@ public sealed class AvaloniaWorksheetKeyboardEditingTests
             }
             finally
             {
+                window.AllowCloseWithoutDirtyPromptForParityCapture();
                 window.Close();
             }
         }, CancellationToken.None);
@@ -184,6 +188,7 @@ public sealed class AvaloniaWorksheetKeyboardEditingTests
             window.InlineCellEditorTextForTest.Should().Be("=C2,C3");
 
             window.RaiseInlineCellEditorKeyDownForTest(Press(Key.Escape));
+            window.AllowCloseWithoutDirtyPromptForParityCapture();
             window.Close();
         }, CancellationToken.None);
     }
@@ -221,6 +226,7 @@ public sealed class AvaloniaWorksheetKeyboardEditingTests
             }
             finally
             {
+                window.AllowCloseWithoutDirtyPromptForParityCapture();
                 window.Close();
             }
         }, CancellationToken.None);
@@ -243,6 +249,7 @@ public sealed class AvaloniaWorksheetKeyboardEditingTests
             f4.Handled.Should().BeTrue();
             window.FormulaBoxTextForTest.Should().Be("=$A$1");
             window.RaiseFormulaBoxKeyDownForTest(Press(Key.Escape));
+            window.AllowCloseWithoutDirtyPromptForParityCapture();
             window.Close();
         }, CancellationToken.None);
     }
@@ -277,6 +284,7 @@ public sealed class AvaloniaWorksheetKeyboardEditingTests
             window.InlineCellEditorTextForTest.Should().Be("=C2:C3");
 
             window.RaiseInlineCellEditorKeyDownForTest(Press(Key.Escape));
+            window.AllowCloseWithoutDirtyPromptForParityCapture();
             window.Close();
         }, CancellationToken.None);
 
@@ -294,6 +302,7 @@ public sealed class AvaloniaWorksheetKeyboardEditingTests
             window.InlineCellEditorTextForTest.Should().Be("=$A$1");
             window.FormulaBoxTextForTest.Should().Be("=$A$1");
             window.RaiseInlineCellEditorKeyDownForTest(Press(Key.Escape));
+            window.AllowCloseWithoutDirtyPromptForParityCapture();
             window.Close();
         }, CancellationToken.None);
     }
@@ -320,6 +329,7 @@ public sealed class AvaloniaWorksheetKeyboardEditingTests
             args.Handled.Should().BeTrue();
             window.Session.ActiveCell.Should().Be(new CellAddress(sheet.Id, expectedRow, expectedColumn));
             window.Session.SelectedRange.Should().Be(new GridRange(window.Session.ActiveCell, window.Session.ActiveCell));
+            window.AllowCloseWithoutDirtyPromptForParityCapture();
             window.Close();
             return true;
         }, CancellationToken.None);
