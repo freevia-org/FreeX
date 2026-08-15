@@ -783,12 +783,29 @@ public static class AvaloniaCompactDialogChrome
         double contentSpacing = 4)
     {
         ApplyCheckBox(checkBox, style);
-        var foreground = ThemeTextBrush(style);
-        var white = ThemeWhiteBrush();
         checkBox.Height = 18;
         checkBox.MinHeight = 18;
         checkBox.Padding = new Thickness(0);
-        checkBox.Template = new FuncControlTemplate<CheckBox>((control, _) =>
+        checkBox.Template = CreateCompactCheckBoxTemplate(style, contentSpacing);
+    }
+
+    public static FuncControlTemplate<CheckBox> CreateCompactCheckBoxTemplate(
+        AvaloniaCompactDialogChromeStyle style,
+        double contentSpacing = 4)
+    {
+        ArgumentNullException.ThrowIfNull(style);
+
+        var foreground = ThemeTextBrush(style);
+        var white = ThemeWhiteBrush();
+        var border = new ImmutableSolidColorBrush(Color.Parse(CompactDialogVisualTokens.ToggleBorderHex));
+        var disabledBackground = new ImmutableSolidColorBrush(
+            Color.Parse(CompactDialogVisualTokens.ToggleDisabledBackgroundHex));
+        var disabledBorder = new ImmutableSolidColorBrush(
+            Color.Parse(CompactDialogVisualTokens.ToggleDisabledBorderHex));
+        var disabledMark = new ImmutableSolidColorBrush(
+            Color.Parse(CompactDialogVisualTokens.ToggleDisabledMarkHex));
+
+        return new FuncControlTemplate<CheckBox>((control, _) =>
         {
             var checkMark = new global::Avalonia.Controls.Shapes.Path
             {
@@ -831,7 +848,7 @@ public static class AvaloniaCompactDialogChrome
                 Width = CompactDialogVisualTokens.CheckBoxIndicatorWidth,
                 Height = CompactDialogVisualTokens.CheckBoxIndicatorHeight,
                 Background = white,
-                BorderBrush = new ImmutableSolidColorBrush(Color.FromRgb(112, 112, 112)),
+                BorderBrush = border,
                 BorderThickness = new Thickness(CompactDialogVisualTokens.BorderThickness),
                 Child = new Panel
                 {
@@ -840,12 +857,29 @@ public static class AvaloniaCompactDialogChrome
                     Children = { checkMark, indeterminateMark },
                 },
             };
+
+            void UpdateEnabledChrome()
+            {
+                indicator.Background = control.IsEnabled ? white : disabledBackground;
+                indicator.BorderBrush = control.IsEnabled ? border : disabledBorder;
+                checkMark.Stroke = control.IsEnabled ? foreground : disabledMark;
+                indeterminateMark.Background = control.IsEnabled ? foreground : disabledMark;
+            }
+
+            UpdateEnabledChrome();
+            control.PropertyChanged += (_, args) =>
+            {
+                if (args.Property == InputElement.IsEnabledProperty)
+                    UpdateEnabledChrome();
+            };
+
             var content = new ContentPresenter
             {
                 FontFamily = style.FontFamily,
                 FontSize = style.FontSize,
                 VerticalContentAlignment = VerticalAlignment.Center,
                 Foreground = foreground,
+                RecognizesAccessKey = true,
             };
             content.Bind(ContentPresenter.ContentProperty, new Binding(nameof(ContentControl.Content)) { Source = control });
             content.Bind(ContentPresenter.ContentTemplateProperty, new Binding(nameof(ContentControl.ContentTemplate)) { Source = control });
@@ -867,18 +901,36 @@ public static class AvaloniaCompactDialogChrome
 
         ApplyRadioButton(radioButton, style);
         var foreground = ThemeTextBrush(style);
-        var white = ThemeWhiteBrush();
         radioButton.Height = style.CompactRadioButtonHeight;
         radioButton.MinHeight = style.CompactRadioButtonHeight;
         radioButton.MaxHeight = style.CompactRadioButtonHeight;
         radioButton.Padding = new Thickness(0);
         radioButton.Foreground = foreground;
-        radioButton.Template = new FuncControlTemplate<RadioButton>((control, _) =>
+        radioButton.Template = CreateCompactRadioButtonTemplate(style);
+    }
+
+    public static FuncControlTemplate<RadioButton> CreateCompactRadioButtonTemplate(
+        AvaloniaCompactDialogChromeStyle style,
+        double contentSpacing = 4)
+    {
+        ArgumentNullException.ThrowIfNull(style);
+
+        var foreground = ThemeTextBrush(style);
+        var white = ThemeWhiteBrush();
+        var border = new ImmutableSolidColorBrush(Color.Parse(CompactDialogVisualTokens.ToggleBorderHex));
+        var disabledBackground = new ImmutableSolidColorBrush(
+            Color.Parse(CompactDialogVisualTokens.ToggleDisabledBackgroundHex));
+        var disabledBorder = new ImmutableSolidColorBrush(
+            Color.Parse(CompactDialogVisualTokens.ToggleDisabledBorderHex));
+        var disabledMark = new ImmutableSolidColorBrush(
+            Color.Parse(CompactDialogVisualTokens.ToggleDisabledMarkHex));
+
+        return new FuncControlTemplate<RadioButton>((control, _) =>
         {
             var dot = new Ellipse
             {
-                Width = 6,
-                Height = 6,
+                Width = CompactDialogVisualTokens.RadioButtonDotSize,
+                Height = CompactDialogVisualTokens.RadioButtonDotSize,
                 Fill = foreground,
                 HorizontalAlignment = HorizontalAlignment.Center,
                 VerticalAlignment = VerticalAlignment.Center,
@@ -892,17 +944,33 @@ public static class AvaloniaCompactDialogChrome
 
             var indicator = new Border
             {
-                Width = 13,
-                Height = 13,
+                Width = CompactDialogVisualTokens.RadioButtonIndicatorSize,
+                Height = CompactDialogVisualTokens.RadioButtonIndicatorSize,
                 Background = white,
-                BorderBrush = new ImmutableSolidColorBrush(Color.FromRgb(112, 112, 112)),
+                BorderBrush = border,
                 BorderThickness = new Thickness(CompactDialogVisualTokens.BorderThickness),
-                CornerRadius = new CornerRadius(7),
+                CornerRadius = new CornerRadius(CompactDialogVisualTokens.RadioButtonIndicatorSize / 2),
                 Child = dot,
             };
+
+            void UpdateEnabledChrome()
+            {
+                indicator.Background = control.IsEnabled ? white : disabledBackground;
+                indicator.BorderBrush = control.IsEnabled ? border : disabledBorder;
+                dot.Fill = control.IsEnabled ? foreground : disabledMark;
+            }
+
+            UpdateEnabledChrome();
+            control.PropertyChanged += (_, args) =>
+            {
+                if (args.Property == InputElement.IsEnabledProperty)
+                    UpdateEnabledChrome();
+            };
+
             var content = new ContentPresenter
             {
                 VerticalContentAlignment = VerticalAlignment.Center,
+                RecognizesAccessKey = true,
             };
             content.Bind(ContentPresenter.ContentProperty, new Binding(nameof(ContentControl.Content)) { Source = control });
             content.Bind(ContentPresenter.ContentTemplateProperty, new Binding(nameof(ContentControl.ContentTemplate)) { Source = control });
@@ -911,7 +979,7 @@ public static class AvaloniaCompactDialogChrome
             {
                 Orientation = Orientation.Horizontal,
                 VerticalAlignment = VerticalAlignment.Center,
-                Spacing = 4,
+                Spacing = contentSpacing,
                 Children = { indicator, content },
             };
         });

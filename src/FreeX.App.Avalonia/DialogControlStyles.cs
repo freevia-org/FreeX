@@ -1,15 +1,11 @@
 using Avalonia;
 using Avalonia.Controls;
-using Avalonia.Controls.Presenters;
 using Avalonia.Controls.Primitives;
-using Avalonia.Controls.Shapes;
-using Avalonia.Controls.Templates;
-using Avalonia.Data;
-using Avalonia.Input;
 using Avalonia.Layout;
 using Avalonia.Media;
 using Avalonia.Media.Immutable;
 using Avalonia.Styling;
+using Free.Shared.Shell.Avalonia;
 using Free.Shared.Theme;
 using Free.Shared.Theme.Avalonia;
 
@@ -38,155 +34,18 @@ internal static class DialogControlStyles
 {
     // ── Sizing constants (WPF ground-truth) ─────────────────────────────────────────────────────────
     private const double DialogFontSize = 12d;
-    private const double CheckGlyphSize = 13d;   // WPF default checkbox glyph ~13 px
-    private const double RadioGlyphSize = 13d;   // WPF default radio glyph   ~13 px
     private const double TabHeaderHeight = 24d;  // WPF tab header ~24-26 px
     private const double ListItemMinHeight = 22d;
 
     // ── Colors (shared with the ribbon palette) ──────────────────────────────────────────────────────
     // WS-G divergence: BorderBrush (#ABABAB) has no matching FreeX token role — left as literal.
     private static readonly IBrush BorderBrush = new ImmutableSolidColorBrush(Color.FromRgb(0xAB, 0xAB, 0xAB));
-    // WS-G token: FreeXAccentBrush (#0F6D8C) — byte-identical to the literal; falls back when no app.
-    private static readonly IBrush AccentBrush =
-        AvaloniaThemeResourceResolver.Find<IBrush>(ProductThemeResourceProfiles.FreeX.Brush("Accent"))
-        ?? new ImmutableSolidColorBrush(Color.FromRgb(0x0F, 0x6D, 0x8C));
     // WS-G note: SelectionBrush is derived (AccentSoft @ alpha 0x40) — no standalone token role; left as literal.
     private static readonly IBrush SelectionBrush = new ImmutableSolidColorBrush(Color.FromArgb(0x40, 0x0F, 0x6D, 0x8C));
     // WS-G token: FreeXTextBrush (#1F1F1F) — byte-identical to the literal; falls back when no app.
     private static readonly IBrush SelectionForegroundBrush =
         AvaloniaThemeResourceResolver.Find<IBrush>(ProductThemeResourceProfiles.FreeX.Brush("Text"))
         ?? new ImmutableSolidColorBrush(Color.FromRgb(0x1F, 0x1F, 0x1F));
-    private static readonly IBrush DisabledCheckBackgroundBrush = new ImmutableSolidColorBrush(Color.FromRgb(0xE6, 0xE6, 0xE6));
-    private static readonly IBrush DisabledCheckBorderBrush = new ImmutableSolidColorBrush(Color.FromRgb(0xBC, 0xBC, 0xBC));
-    private static readonly IBrush DisabledCheckMarkBrush = new ImmutableSolidColorBrush(Color.FromRgb(0x9E, 0x9E, 0x9E));
-
-    // ── CheckBox template (compact, WPF-like 13 px box) ─────────────────────────────────────────────
-    private static readonly FuncControlTemplate<CheckBox> CompactCheckBoxTemplate = new((checkBox, _) =>
-    {
-        var checkMark = new global::Avalonia.Controls.Shapes.Path
-        {
-            Data = Geometry.Parse("M2,5.5 L4.4,8 L9,2.7"),
-            Stroke = AccentBrush,
-            StrokeThickness = 1.5,
-            StrokeLineCap = PenLineCap.Round,
-            StrokeJoin = PenLineJoin.Round,
-            Fill = Brushes.Transparent,
-            IsVisible = checkBox.IsChecked == true,
-            HorizontalAlignment = HorizontalAlignment.Center,
-            VerticalAlignment = VerticalAlignment.Center,
-        };
-        checkBox.PropertyChanged += (_, args) =>
-        {
-            if (args.Property == ToggleButton.IsCheckedProperty)
-                checkMark.IsVisible = checkBox.IsChecked == true;
-        };
-
-        var indicator = new Border
-        {
-            Width = CheckGlyphSize,
-            Height = CheckGlyphSize,
-            Background = Brushes.White,
-            BorderBrush = BorderBrush,
-            BorderThickness = new Thickness(1),
-            Margin = new Thickness(0, 0, 4, 0),
-            Child = checkMark,
-            VerticalAlignment = VerticalAlignment.Center,
-        };
-
-        void UpdateDisabledCheckChrome()
-        {
-            if (checkBox.IsEnabled)
-            {
-                indicator.Background = Brushes.White;
-                indicator.BorderBrush = BorderBrush;
-                checkMark.Stroke = AccentBrush;
-            }
-            else
-            {
-                indicator.Background = DisabledCheckBackgroundBrush;
-                indicator.BorderBrush = DisabledCheckBorderBrush;
-                checkMark.Stroke = DisabledCheckMarkBrush;
-            }
-        }
-
-        UpdateDisabledCheckChrome();
-        checkBox.PropertyChanged += (_, args) =>
-        {
-            if (args.Property == InputElement.IsEnabledProperty)
-                UpdateDisabledCheckChrome();
-        };
-
-        var presenter = new ContentPresenter
-        {
-            VerticalAlignment = VerticalAlignment.Center,
-            RecognizesAccessKey = true,
-        };
-        presenter.Bind(ContentPresenter.ContentProperty, new Binding(nameof(ContentControl.Content)) { Source = checkBox });
-        presenter.Bind(ContentPresenter.ContentTemplateProperty, new Binding(nameof(ContentControl.ContentTemplate)) { Source = checkBox });
-
-        return new Border
-        {
-            Padding = new Thickness(0),
-            Child = new StackPanel
-            {
-                Orientation = Orientation.Horizontal,
-                VerticalAlignment = VerticalAlignment.Center,
-                Children = { indicator, presenter },
-            },
-        };
-    });
-
-    // ── RadioButton template (compact, WPF-like 13 px circle) ───────────────────────────────────────
-    private static readonly FuncControlTemplate<RadioButton> CompactRadioButtonTemplate = new((radioButton, _) =>
-    {
-        // Inner dot (visible when selected)
-        var innerDot = new Ellipse
-        {
-            Width = 5,
-            Height = 5,
-            Fill = AccentBrush,
-            HorizontalAlignment = HorizontalAlignment.Center,
-            VerticalAlignment = VerticalAlignment.Center,
-            IsVisible = radioButton.IsChecked == true,
-        };
-        radioButton.PropertyChanged += (_, args) =>
-        {
-            if (args.Property == ToggleButton.IsCheckedProperty)
-                innerDot.IsVisible = radioButton.IsChecked == true;
-        };
-
-        var indicator = new Border
-        {
-            Width = RadioGlyphSize,
-            Height = RadioGlyphSize,
-            Background = Brushes.White,
-            BorderBrush = BorderBrush,
-            BorderThickness = new Thickness(1),
-            CornerRadius = new CornerRadius(RadioGlyphSize / 2),
-            Margin = new Thickness(0, 0, 4, 0),
-            Child = innerDot,
-            VerticalAlignment = VerticalAlignment.Center,
-        };
-
-        var presenter = new ContentPresenter
-        {
-            VerticalAlignment = VerticalAlignment.Center,
-            RecognizesAccessKey = true,
-        };
-        presenter.Bind(ContentPresenter.ContentProperty, new Binding(nameof(ContentControl.Content)) { Source = radioButton });
-        presenter.Bind(ContentPresenter.ContentTemplateProperty, new Binding(nameof(ContentControl.ContentTemplate)) { Source = radioButton });
-
-        return new Border
-        {
-            Padding = new Thickness(0),
-            Child = new StackPanel
-            {
-                Orientation = Orientation.Horizontal,
-                VerticalAlignment = VerticalAlignment.Center,
-                Children = { indicator, presenter },
-            },
-        };
-    });
 
     /// <summary>
     /// Builds the <see cref="Styles"/> collection to add to <see cref="Application.Styles"/>.
@@ -194,8 +53,8 @@ internal static class DialogControlStyles
     public static IEnumerable<IStyle> Build()
     {
         // ── CheckBox ────────────────────────────────────────────────────────────────────────────────
-        // Avalonia Fluent default checkbox is ~20 px with a large rounded glyph; WPF's is a flat 13 px
-        // square. Replace the template entirely (same approach as the ribbon's RibbonCheckBoxTemplate).
+        // Avalonia Fluent defaults are much larger than WPF dialog toggles. Keep only the
+        // application-level selector here; shared compact chrome owns the actual template.
         yield return new Style(x => x.OfType<CheckBox>())
         {
             Setters =
@@ -203,7 +62,10 @@ internal static class DialogControlStyles
                 new Setter(TemplatedControl.FontSizeProperty, DialogFontSize),
                 new Setter(TemplatedControl.PaddingProperty, new Thickness(0)),
                 new Setter(Layoutable.MinHeightProperty, 0d),
-                new Setter(TemplatedControl.TemplateProperty, CompactCheckBoxTemplate),
+                new Setter(
+                    TemplatedControl.TemplateProperty,
+                    AvaloniaCompactDialogChrome.CreateCompactCheckBoxTemplate(
+                        AvaloniaCompactDialogChrome.WindowsStyle)),
             },
         };
 
@@ -227,7 +89,10 @@ internal static class DialogControlStyles
                 new Setter(TemplatedControl.FontSizeProperty, DialogFontSize),
                 new Setter(TemplatedControl.PaddingProperty, new Thickness(0)),
                 new Setter(Layoutable.MinHeightProperty, 0d),
-                new Setter(TemplatedControl.TemplateProperty, CompactRadioButtonTemplate),
+                new Setter(
+                    TemplatedControl.TemplateProperty,
+                    AvaloniaCompactDialogChrome.CreateCompactRadioButtonTemplate(
+                        AvaloniaCompactDialogChrome.WindowsStyle)),
             },
         };
 

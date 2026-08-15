@@ -30,11 +30,17 @@ public static class CompactDialogVisualTokens
     public const double CheckBoxCheckMarkHeight = 10;
     public const double CheckBoxIndeterminateMarkWidth = 7;
     public const double CheckBoxIndeterminateMarkHeight = 2;
+    public const double RadioButtonIndicatorSize = 13;
+    public const double RadioButtonDotSize = 6;
 
     public const string BorderHex = "#C8C8C8";
     public const string FieldBorderHex = "#B7BCC2";
     public const string DisabledForegroundHex = "#9AA0A6";
     public const string DisabledBorderHex = "#E0E0E0";
+    public const string ToggleBorderHex = "#707070";
+    public const string ToggleDisabledBackgroundHex = "#E6E6E6";
+    public const string ToggleDisabledBorderHex = "#BCBCBC";
+    public const string ToggleDisabledMarkHex = "#9E9E9E";
     public const string PrimaryPressedHex = "#093F52";
     public const string PrimaryDisabledHex = "#9FC4CF";
 }
