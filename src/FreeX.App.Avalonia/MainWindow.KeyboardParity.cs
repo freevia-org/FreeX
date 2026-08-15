@@ -470,24 +470,11 @@ public sealed partial class MainWindow
     private void SelectFormulaAuditCells(bool selectDependents, bool includeTransitive)
     {
         var activeCell = _session.ActiveCell;
-        IReadOnlyList<CellAddress> matches;
-        if (includeTransitive)
-        {
-            var arrows = selectDependents
-                ? FormulaAuditingService.GetDependentTraceArrows(_session.Workbook, activeCell)
-                : FormulaAuditingService.GetPrecedentTraceArrows(_session.Workbook, activeCell);
-            matches = arrows
-                .Select(arrow => selectDependents ? arrow.To : arrow.From)
-                .ToList();
-        }
-        else
-        {
-            matches = selectDependents
-                ? FormulaAuditingService.GetDirectDependents(_session.Workbook, activeCell)
-                : FormulaAuditingService.GetDirectPrecedents(_session.Workbook, activeCell);
-        }
-
-        var plan = FormulaAuditSelectionPlanner.Plan(_session.ActiveSheet.Id, matches);
+        var plan = FormulaAuditSelectionPlanner.Plan(
+            _session.Workbook,
+            activeCell,
+            selectDependents,
+            includeTransitive);
         if (plan is null)
         {
             var statusKey = (selectDependents, includeTransitive) switch

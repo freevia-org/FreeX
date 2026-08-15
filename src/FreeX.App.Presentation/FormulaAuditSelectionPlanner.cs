@@ -1,3 +1,4 @@
+using FreeX.Core.Commands;
 using FreeX.Core.Model;
 
 namespace FreeX.App.Presentation;
@@ -8,6 +9,34 @@ public sealed record FormulaAuditSelectionPlan(
 
 public static class FormulaAuditSelectionPlanner
 {
+    public static FormulaAuditSelectionPlan? Plan(
+        Workbook workbook,
+        CellAddress activeCell,
+        bool selectDependents,
+        bool includeTransitive)
+    {
+        ArgumentNullException.ThrowIfNull(workbook);
+
+        IReadOnlyList<CellAddress> matches;
+        if (includeTransitive)
+        {
+            var arrows = selectDependents
+                ? FormulaAuditingService.GetDependentTraceArrows(workbook, activeCell)
+                : FormulaAuditingService.GetPrecedentTraceArrows(workbook, activeCell);
+            matches = arrows
+                .Select(arrow => selectDependents ? arrow.To : arrow.From)
+                .ToList();
+        }
+        else
+        {
+            matches = selectDependents
+                ? FormulaAuditingService.GetDirectDependents(workbook, activeCell)
+                : FormulaAuditingService.GetDirectPrecedents(workbook, activeCell);
+        }
+
+        return Plan(activeCell.Sheet, matches);
+    }
+
     public static FormulaAuditSelectionPlan? Plan(SheetId currentSheetId, IReadOnlyList<CellAddress> matches)
     {
         if (matches.Count == 0)
