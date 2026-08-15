@@ -55,7 +55,7 @@ public sealed partial class MainWindow : Window
     private readonly FreeWDocumentFileWorkflow _documentFileWorkflow;
     private readonly FreeWDocumentFileCommandSession _fileCommands;
     private readonly IPlatformPrintService _printService;
-    private readonly FreeWPortablePrintWorkflow _portablePrintWorkflow;
+    private readonly PortablePrintSubmissionWorkflow _portablePrintWorkflow;
     private readonly Func<Window, PrinterDiscoveryResult, CancellationToken, Task<PrintSelection?>> _showPrintSelectionDialog;
     private readonly Action<IInputElement?> _restorePrintOwnerFocus;
     private readonly Func<DocumentView, Stream, PrintSelection, FreeWAvaloniaPdfExportResult> _savePrintPdf;
@@ -201,7 +201,7 @@ public sealed partial class MainWindow : Window
         _printService = printService ?? PlatformPrintServiceSelector.Select(
             windowsFactory: static () => new WindowsPrintService(),
             cupsFactory: static () => new CupsPrintService());
-        _portablePrintWorkflow = new FreeWPortablePrintWorkflow(_printService);
+        _portablePrintWorkflow = new PortablePrintSubmissionWorkflow(_printService);
         _showPrintSelectionDialog = showPrintSelectionDialog ??
             ((owner, discovery, cancellationToken) =>
                 CupsPrintDialog.ShowAsync(owner, discovery, cancellationToken: cancellationToken));
@@ -3320,7 +3320,7 @@ public sealed partial class MainWindow : Window
         {
             FreeWAvaloniaPdfExportResult? printPdfResult = null;
             var execution = await _portablePrintWorkflow.ExecuteAsync(
-                (discovery, token) => _showPrintSelectionDialog(this, discovery, token),
+                (intent, token) => _showPrintSelectionDialog(this, intent.Discovery, token),
                 (stream, selection, _) =>
                 {
                     var printView = _editor;
@@ -3333,14 +3333,16 @@ public sealed partial class MainWindow : Window
                     printPdfResult = _savePrintPdf(printView, stream, selection);
                     return ValueTask.CompletedTask;
                 },
-                cancellation.Token);
+                requestedSelection: null,
+                cancellationToken: cancellation.Token);
             _latestPrinterDiscovery = execution.Discovery ?? _latestPrinterDiscovery;
+            var message = FreeWPrintMessagePlanner.FormatExecution(execution);
             _status.Text = printPdfResult is { ImageDiagnostics.Count: > 0 }
                 ? UiText.Format(
                     "Print_ImageWarnings_Status_Format",
-                    execution.Message,
+                    message,
                     printPdfResult.ImageDiagnostics.Count)
-                : execution.Message;
+                : message;
         }
         finally
         {
@@ -3402,7 +3404,20 @@ public sealed partial class MainWindow : Window
 
     private async Task RefreshPrinterDiscoveryAsync()
     {
-        _latestPrinterDiscovery = await _portablePrintWorkflow.DiscoverAsync();
+        try
+        {
+            _latestPrinterDiscovery = _printService.IsSupported
+                ? await _printService.DiscoverAsync()
+                : new PrinterDiscoveryResult(PrinterDiscoveryStatus.Unavailable, [], null);
+        }
+        catch (Exception ex) when (ex is not OutOfMemoryException)
+        {
+            _latestPrinterDiscovery = new PrinterDiscoveryResult(
+                PrinterDiscoveryStatus.Failed,
+                [],
+                null,
+                ex.Message);
+        }
     }
 
     private BackstageDirectPrintCapability DirectPrintCapability =>

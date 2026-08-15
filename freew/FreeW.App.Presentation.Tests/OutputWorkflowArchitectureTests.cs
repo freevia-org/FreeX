@@ -15,9 +15,8 @@ public sealed class OutputWorkflowArchitectureTests
         source.Should().Contain("Func<Stream, CancellationToken, ValueTask<FreeWExportArtifact>> renderAsync");
         source.Should().Contain("AtomicFileWriter.ReplaceTarget(");
         source.Should().Contain("public static class FreeWPrintRequestPlanner");
-        source.Should().Contain("public sealed class FreeWPortablePrintWorkflow");
-        source.Should().Contain("Func<Stream, PrintSelection, CancellationToken, ValueTask> renderPdfAsync");
-        source.Should().Contain("_printService.SubmitAsync(");
+        source.Should().NotContain("FreeWPortablePrintWorkflow");
+        source.Should().NotContain("FreeWPrintSelectionHandoffPlanner");
         source.Should().Contain("public static class FreeWPrintMessagePlanner");
         source.Should().Contain("public sealed class FreeWPrintPreviewSession");
         source.Should().NotContain("System.Windows");
@@ -40,7 +39,8 @@ public sealed class OutputWorkflowArchitectureTests
         avalonia.Should().Contain("FreeWExportWorkflow.CreatePlan(");
         avalonia.Should().Contain("FreeWExportWorkflow.ExecuteAsync(");
         avalonia.Should().Contain("_portablePrintWorkflow.ExecuteAsync(");
-        avalonia.Should().Contain("_portablePrintWorkflow.DiscoverAsync(");
+        avalonia.Should().Contain("new PortablePrintSubmissionWorkflow(_printService)");
+        avalonia.Should().Contain("(intent, token) => _showPrintSelectionDialog(this, intent.Discovery, token)");
         avalonia.Should().Contain("FreeWPrintMessagePlanner.PlanCapability(");
         avalonia.Should().Contain("PlatformPrintServiceSelector.Select(");
         avalonia.Should().Contain("windowsFactory: static () => new WindowsPrintService()");
@@ -57,7 +57,6 @@ public sealed class OutputWorkflowArchitectureTests
         }
 
         avalonia.Should().NotContain("_printService.SubmitAsync(");
-        avalonia.Should().NotContain("_printService.DiscoverAsync(");
         avalonia.Should().NotContain("FormatPrintDiscoveryStatus(");
         avalonia.Should().NotContain("FormatPrintSubmissionStatus(");
         avalonia.Should().NotContain("DirectPrintDeferredReason(");
