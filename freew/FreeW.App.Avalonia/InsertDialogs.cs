@@ -24,14 +24,12 @@ public sealed class HyperlinkDialog : FreeWDialogWindow
     private readonly TextBox _displayBox = new()
     {
         MinWidth = 280,
-        PlaceholderText = InsertDialogTextResources.Hyperlink.DisplayPlaceholder,
         Margin = new Thickness(0, 6, 0, 0),
     };
 
     private readonly TextBox _addressBox = new()
     {
         MinWidth = 280,
-        PlaceholderText = InsertDialogTextResources.Hyperlink.AddressPlaceholder,
         Margin = new Thickness(0, 6, 0, 0),
     };
 
@@ -44,34 +42,40 @@ public sealed class HyperlinkDialog : FreeWDialogWindow
     /// </summary>
     public string? Address { get; private set; }
 
-    public HyperlinkDialog(string? initialDisplay = null, string? initialAddress = null, string? title = null)
+    public HyperlinkDialog(
+        string? initialDisplay = null,
+        string? initialAddress = null,
+        HyperlinkDialogMode mode = HyperlinkDialogMode.Insert)
     {
-        Title = title ?? InsertDialogTextResources.Hyperlink.Title;
+        var presentation = HyperlinkDialogPlanner.Build(mode, initialDisplay, initialAddress);
+        Title = presentation.Title;
         Width = 420;
         SizeToContent = SizeToContent.Height;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
         CanResize = false;
         ShowInTaskbar = false;
 
-        _displayBox.Text = initialDisplay ?? string.Empty;
-        _addressBox.Text = initialAddress ?? string.Empty;
+        _displayBox.Text = presentation.InitialDisplayText;
+        _displayBox.PlaceholderText = presentation.DisplayPlaceholder;
+        _addressBox.Text = presentation.InitialAddress;
+        _addressBox.PlaceholderText = presentation.AddressPlaceholder;
         AvaloniaCompactDialogChrome.ApplyTextBox(_displayBox, InsertDialogLayout.ChromeStyle);
         AvaloniaCompactDialogChrome.ApplyTextBox(_addressBox, InsertDialogLayout.ChromeStyle);
 
         var grid = new Grid { Margin = new Thickness(14, 12, 14, 0) };
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-        InsertDialogLayout.AddLabeledRow(grid, 0, InsertDialogTextResources.Hyperlink.DisplayLabel, _displayBox);
-        InsertDialogLayout.AddLabeledRow(grid, 1, InsertDialogTextResources.Hyperlink.AddressLabel, _addressBox);
+        InsertDialogLayout.AddLabeledRow(grid, 0, presentation.DisplayLabel, _displayBox);
+        InsertDialogLayout.AddLabeledRow(grid, 1, presentation.AddressLabel, _addressBox);
 
         var buttons = InsertDialogLayout.OkCancelRow(
             ok: () =>
             {
-                var addr = _addressBox.Text?.Trim();
-                if (string.IsNullOrEmpty(addr))
-                    return; // address is required; keep the dialog open
-                DisplayText = _displayBox.Text?.Trim();
-                Address = addr;
+                var acceptance = HyperlinkDialogPlanner.PlanAcceptance(_displayBox.Text, _addressBox.Text);
+                if (!acceptance.IsAccepted)
+                    return;
+                DisplayText = acceptance.DisplayText;
+                Address = acceptance.Address;
                 Close();
             },
             cancel: Close);

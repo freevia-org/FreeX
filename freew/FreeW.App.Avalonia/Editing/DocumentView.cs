@@ -19803,6 +19803,22 @@ public sealed partial class DocumentView : Control
         return links.Count > 0 ? links[0].Url : null;
     }
 
+    /// <summary>The normalized external URL or <c>#bookmark</c> target under the caret.</summary>
+    public string? HyperlinkTargetAtCaret()
+    {
+        var links = HyperlinksAtCaret();
+        if (links.Count == 0)
+            return null;
+        return links[0].Anchor is { Length: > 0 } anchor ? "#" + anchor : links[0].Url;
+    }
+
+    /// <summary>The complete visible text of the hyperlink span under the caret.</summary>
+    public string? HyperlinkDisplayTextAtCaret() =>
+        TryFindHyperlinkSpanAtCaret(out var block, out var start, out var end, out _)
+        && _doc.Blocks[block] is Paragraph paragraph
+            ? SpanText(paragraph, start, end)
+            : null;
+
     /// <summary>The current ScreenTip under the caret, or null when no linked ScreenTip exists.</summary>
     public string? HyperlinkTooltipAtCaret()
     {

@@ -3571,14 +3571,10 @@ public sealed partial class MainWindow : Window
         if (!_editor.IsCaretOnHyperlink())
             return;
 
-        var links = _editor.HyperlinksAtCaret();
-        var target = links.Count > 0
-            ? links[0].Url ?? (links[0].Anchor is { Length: > 0 } anchor ? "#" + anchor : string.Empty)
-            : string.Empty;
         var dialog = new HyperlinkDialog(
-            initialDisplay: _editor.SelectedText,
-            initialAddress: target,
-            title: InsertDialogTextResources.Hyperlink.EditTitle);
+            initialDisplay: _editor.HyperlinkDisplayTextAtCaret(),
+            initialAddress: _editor.HyperlinkTargetAtCaret(),
+            mode: HyperlinkDialogMode.Edit);
         await dialog.ShowDialog(this);
         if (dialog.Address is { } address)
             _editor.EditHyperlink(address, dialog.DisplayText);

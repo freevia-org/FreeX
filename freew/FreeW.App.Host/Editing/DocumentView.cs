@@ -15,6 +15,7 @@ using FreeW.App.Presentation.Dialogs;
 using FreeW.App.Presentation.ContextMenus;
 using FreeW.App.Presentation.DocumentView;
 using FreeW.App.Presentation.Editing;
+using FreeW.App.Presentation.Links;
 using FreeW.App.Presentation.Ribbon;
 using FreeW.App.Presentation.Shell;
 using FreeW.Core.Model;
@@ -16056,20 +16057,20 @@ public sealed partial class DocumentView : RichTextBox
         => _editingSession.TryApplyProofingLanguage(plan);
 
     /// <summary>
-    /// Applies an external hyperlink to the current selection. If the selection is non-empty its text
-    /// becomes the link; if it is empty the URL itself is inserted as a linked run. Re-renders so the
-    /// link is styled and round-trips through the model on the next commit.
+    /// Applies a normalized external or internal hyperlink. With a selection, a non-empty changed
+    /// display value replaces the selected text before it is linked; otherwise the selection text is
+    /// preserved. With no selection, the display value (or shared target fallback) is inserted at the caret.
     /// </summary>
-    public void ApplyHyperlink(string url)
+    public void InsertHyperlink(string displayText, string target)
     {
-        if (string.IsNullOrWhiteSpace(url) || !Uri.TryCreate(url, UriKind.Absolute, out var uri))
+        if (!HyperlinkTarget.TryParse(target, out var parsedTarget))
             return;
 
         Focus();
         var selection = Selection;
         if (selection.IsEmpty)
         {
-            // No selection: drop the URL as its own linked run at the caret.
+            var text = string.IsNullOrEmpty(displayText) ? parsedTarget.DisplayFallback : displayText;
             var caret = CaretPosition.GetInsertionPosition(LogicalDirection.Forward) ?? CaretPosition;
             var paragraph = caret.Paragraph ?? Document.Blocks.OfType<WpfParagraph>().LastOrDefault();
             if (paragraph is null)
@@ -16077,19 +16078,20 @@ public sealed partial class DocumentView : RichTextBox
                 paragraph = new WpfParagraph();
                 Document.Blocks.Add(paragraph);
             }
-            paragraph.Inlines.Add(NewLink(new WpfRun(url), uri, url));
+            InsertInlineAtCaret(paragraph, caret, NewLink(new WpfRun(text), parsedTarget));
         }
         else
         {
-            // Wrap the selected text range in a hyperlink (WPF splits runs at the range boundaries).
             try
             {
-                var link = new WpfHyperlink(selection.Start, selection.End)
+                if (!string.IsNullOrEmpty(displayText)
+                    && !string.Equals(displayText, selection.Text, StringComparison.Ordinal))
                 {
-                    NavigateUri = uri,
-                    ToolTip = url
-                };
-                StyleLink(link, url);
+                    selection.Text = displayText;
+                }
+
+                var link = new WpfHyperlink(selection.Start, selection.End);
+                StyleLinkTarget(link, parsedTarget);
             }
             catch (ArgumentException)
             {
@@ -16102,11 +16104,39 @@ public sealed partial class DocumentView : RichTextBox
         Render();
     }
 
-    private static WpfHyperlink NewLink(WpfRun content, Uri uri, string url)
+    /// <summary>Compatibility entry point for callers that only provide an external target.</summary>
+    public void ApplyHyperlink(string target) => InsertHyperlink(string.Empty, target);
+
+    private static WpfHyperlink NewLink(WpfRun content, HyperlinkTarget target)
     {
-        var link = new WpfHyperlink(content) { NavigateUri = uri, ToolTip = url };
-        StyleLink(link, url);
+        var link = new WpfHyperlink(content);
+        StyleLinkTarget(link, target);
         return link;
+    }
+
+    private static void InsertInlineAtCaret(WpfParagraph paragraph, TextPointer caret, Inline inline)
+    {
+        if (caret.Parent is WpfRun run && ReferenceEquals(run.Parent, paragraph))
+        {
+            InsertInlineIntoRun(paragraph, run, caret, inline);
+            return;
+        }
+
+        if (caret.GetAdjacentElement(LogicalDirection.Backward) is Inline previous
+            && ReferenceEquals(previous.Parent, paragraph))
+        {
+            paragraph.Inlines.InsertAfter(previous, inline);
+            return;
+        }
+
+        if (caret.GetAdjacentElement(LogicalDirection.Forward) is Inline next
+            && ReferenceEquals(next.Parent, paragraph))
+        {
+            paragraph.Inlines.InsertBefore(next, inline);
+            return;
+        }
+
+        paragraph.Inlines.Add(inline);
     }
 
     // --- hyperlink management (edit / remove / screentip) ---
@@ -16135,13 +16165,60 @@ public sealed partial class DocumentView : RichTextBox
     }
 
     /// <summary>
+    /// Consecutive native hyperlink fragments that represent one logical model span. Rendering keeps
+    /// differently formatted model runs separate, while link-management commands must affect them together.
+    /// </summary>
+    private IReadOnlyList<WpfHyperlink> HyperlinkSpanAtCaret()
+    {
+        if (HyperlinkAtCaret() is not { } current)
+            return [];
+        if (current.Parent is not WpfParagraph paragraph)
+            return [current];
+
+        var inlines = paragraph.Inlines.ToList();
+        var index = inlines.FindIndex(inline => ReferenceEquals(inline, current));
+        if (index < 0)
+            return [current];
+
+        var start = index;
+        while (start > 0
+               && inlines[start - 1] is WpfHyperlink previous
+               && SameLogicalHyperlink(previous, current))
+        {
+            start--;
+        }
+
+        var end = index;
+        while (end + 1 < inlines.Count
+               && inlines[end + 1] is WpfHyperlink next
+               && SameLogicalHyperlink(next, current))
+        {
+            end++;
+        }
+
+        return inlines.Skip(start).Take(end - start + 1).Cast<WpfHyperlink>().ToList();
+    }
+
+    private static bool SameLogicalHyperlink(WpfHyperlink left, WpfHyperlink right) =>
+        string.Equals(HyperlinkTargetText(left), HyperlinkTargetText(right), StringComparison.Ordinal)
+        && string.Equals(
+            (left.Tag as HyperlinkInfo)?.Tooltip,
+            (right.Tag as HyperlinkInfo)?.Tooltip,
+            StringComparison.Ordinal);
+
+    private static string? HyperlinkTargetText(WpfHyperlink? link) =>
+        (link?.Tag as HyperlinkInfo)?.Anchor is { Length: > 0 } anchor
+            ? "#" + anchor
+            : link?.NavigateUri?.ToString();
+
+    /// <summary>
     /// True when the caret sits on a hyperlink (external URL or internal bookmark). Lets the ribbon
     /// enable/disable the manage-link commands.
     /// </summary>
     public bool IsCaretOnHyperlink()
     {
         Focus();
-        return HyperlinkAtCaret() is not null;
+        return HyperlinkSpanAtCaret().Count > 0;
     }
 
     /// <summary>
@@ -16154,35 +16231,84 @@ public sealed partial class DocumentView : RichTextBox
         return HyperlinkAtCaret()?.NavigateUri?.ToString();
     }
 
+    /// <summary>The normalized external URL or <c>#bookmark</c> target under the caret.</summary>
+    public string? HyperlinkTargetAtCaret()
+    {
+        Focus();
+        return HyperlinkTargetText(HyperlinkSpanAtCaret().FirstOrDefault());
+    }
+
+    /// <summary>The complete visible text of the hyperlink span under the caret.</summary>
+    public string? HyperlinkDisplayTextAtCaret()
+    {
+        Focus();
+        var links = HyperlinkSpanAtCaret();
+        return links.Count == 0
+            ? null
+            : string.Concat(links.Select(link => new TextRange(link.ContentStart, link.ContentEnd).Text));
+    }
+
     /// <summary>The current ScreenTip of the hyperlink at the caret, or null when none/not on a link.</summary>
     public string? HyperlinkTooltipAtCaret()
     {
         Focus();
-        return (HyperlinkAtCaret()?.Tag as HyperlinkInfo)?.Tooltip;
+        return (HyperlinkSpanAtCaret().FirstOrDefault()?.Tag as HyperlinkInfo)?.Tooltip;
     }
 
     /// <summary>
-    /// Changes the external URL of the hyperlink at the caret to <paramref name="newUrl"/> (preserving its
-    /// ScreenTip and visible text), re-styling it. A no-op when the caret is not on a link or the URL is
-    /// not a valid absolute Uri. Commits + re-renders so the change round-trips.
+    /// Retargets the hyperlink at the caret while preserving its ScreenTip. A supplied changed display
+    /// value replaces the link contents while retaining the first run's native formatting.
     /// </summary>
-    public void EditHyperlink(string newUrl)
+    public void EditHyperlink(string newTarget, string? newDisplayText)
     {
         Focus();
-        if (string.IsNullOrWhiteSpace(newUrl) || !Uri.TryCreate(newUrl, UriKind.Absolute, out var uri))
+        if (!HyperlinkTarget.TryParse(newTarget, out var parsedTarget))
             return;
-        if (HyperlinkAtCaret() is not { } link)
+        var links = HyperlinkSpanAtCaret();
+        if (links.Count == 0)
             return;
 
-        var tooltip = (link.Tag as HyperlinkInfo)?.Tooltip;
-        // Re-target as an external link: drop any internal-anchor wiring and restyle for the new URL.
-        link.Click -= OnInternalLinkClick;
-        link.RequestNavigate -= OnHyperlinkRequestNavigate;
-        link.NavigateUri = uri;
-        StyleLink(link, newUrl, tooltip);
+        var tooltip = (links[0].Tag as HyperlinkInfo)?.Tooltip;
+        var currentDisplay = string.Concat(
+            links.Select(link => new TextRange(link.ContentStart, link.ContentEnd).Text));
+        if (!string.IsNullOrEmpty(newDisplayText)
+            && !string.Equals(newDisplayText, currentDisplay, StringComparison.Ordinal))
+        {
+            var firstLink = links[0];
+            if (firstLink.Parent is not WpfParagraph paragraph)
+                return;
+            var firstRun = firstLink.Inlines.OfType<WpfRun>().FirstOrDefault();
+            var replacement = firstRun is null
+                ? new WpfRun(newDisplayText)
+                : CloneHyperlinkDisplayRun(firstRun, newDisplayText);
+            var replacementLink = new WpfHyperlink(replacement);
+            StyleLinkTarget(replacementLink, parsedTarget, tooltip);
+            paragraph.Inlines.InsertBefore(firstLink, replacementLink);
+            foreach (var fragment in links)
+                paragraph.Inlines.Remove(fragment);
+        }
+        else
+        {
+            foreach (var fragment in links)
+                StyleLinkTarget(fragment, parsedTarget, tooltip);
+        }
 
         CommitToModel();
         Render();
+    }
+
+    public void EditHyperlink(string newTarget) => EditHyperlink(newTarget, newDisplayText: null);
+
+    private static WpfRun CloneHyperlinkDisplayRun(WpfRun source, string text)
+    {
+        var clone = CloneTextRun(source, text);
+        // Replacing a link's display text is a real text edit: retain the complete formatting snapshot,
+        // but do not accidentally clone comments, revisions, or content-control membership onto new text.
+        clone.Tag = source.Tag is RunMarkers markers
+            ? new RunMarkers(CharacterFormat: markers.CharacterFormat)
+            : null;
+        clone.ToolTip = null;
+        return clone;
     }
 
     /// <summary>
@@ -16192,22 +16318,22 @@ public sealed partial class DocumentView : RichTextBox
     public void RemoveHyperlink()
     {
         Focus();
-        if (HyperlinkAtCaret() is not { } link || link.Parent is not WpfParagraph paragraph)
+        var links = HyperlinkSpanAtCaret();
+        if (links.Count == 0)
             return;
 
-        // Unwrap: replace the Hyperlink span with its child inlines, in order, then re-render so the
-        // freed runs commit as plain (un-linked) text.
-        var children = link.Inlines.ToList();
-        var anchorPos = paragraph.Inlines.FirstOrDefault(inline => ReferenceEquals(inline, link));
-        foreach (var child in children)
+        foreach (var link in links)
         {
-            link.Inlines.Remove(child);
-            if (anchorPos is not null)
-                paragraph.Inlines.InsertBefore(anchorPos, child);
-            else
-                paragraph.Inlines.Add(child);
+            if (link.Parent is not WpfParagraph paragraph)
+                continue;
+            var children = link.Inlines.ToList();
+            foreach (var child in children)
+            {
+                link.Inlines.Remove(child);
+                paragraph.Inlines.InsertBefore(link, child);
+            }
+            paragraph.Inlines.Remove(link);
         }
-        paragraph.Inlines.Remove(link);
 
         CommitToModel();
         Render();
@@ -16220,25 +16346,16 @@ public sealed partial class DocumentView : RichTextBox
     public void SetHyperlinkTooltip(string? tip)
     {
         Focus();
-        if (HyperlinkAtCaret() is not { } link)
+        var links = HyperlinkSpanAtCaret();
+        if (links.Count == 0)
             return;
 
         var tooltip = string.IsNullOrWhiteSpace(tip) ? null : tip.Trim();
-        if ((link.Tag as HyperlinkInfo)?.Anchor is { Length: > 0 } anchor)
+        foreach (var link in links)
         {
-            // Internal link: re-apply its bookmark styling carrying the new tip.
-            link.Click -= OnInternalLinkClick;
-            StyleInternalLink(link, anchor, tooltip);
-        }
-        else if (link.NavigateUri?.ToString() is { Length: > 0 } url)
-        {
-            // External link: re-apply its URL styling carrying the new tip.
-            link.RequestNavigate -= OnHyperlinkRequestNavigate;
-            StyleLink(link, url, tooltip);
-        }
-        else
-        {
-            return;
+            if (!HyperlinkTarget.TryParse(HyperlinkTargetText(link), out var target))
+                continue;
+            StyleLinkTarget(link, target, tooltip);
         }
 
         CommitToModel();
@@ -16473,6 +16590,26 @@ public sealed partial class DocumentView : RichTextBox
         link.ToolTip = tooltip is { Length: > 0 } ? tooltip : url;
         link.Foreground = new SolidColorBrush(Color.FromRgb(0x05, 0x63, 0xC1));
         link.RequestNavigate += OnHyperlinkRequestNavigate;
+    }
+
+    private static void StyleLinkTarget(WpfHyperlink link, HyperlinkTarget target, string? tooltip = null)
+    {
+        link.Click -= OnInternalLinkClick;
+        link.RequestNavigate -= OnHyperlinkRequestNavigate;
+
+        if (target.Anchor is { Length: > 0 } anchor)
+        {
+            link.NavigateUri = null;
+            StyleInternalLink(link, anchor, tooltip);
+            return;
+        }
+
+        if (target.Url is { Length: > 0 } url
+            && Uri.TryCreate(url, UriKind.Absolute, out var uri))
+        {
+            link.NavigateUri = uri;
+            StyleLink(link, url, tooltip);
+        }
     }
 
     // --- view -> model ---

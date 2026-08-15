@@ -3013,24 +3013,24 @@ internal static class FreeWRibbonCommands
         }
     }
 
-    // Insert > Links > Link: prompt for a URL, then apply it as a hyperlink over the selection.
+    // Insert > Links > Link: collect display text + target through the shared dialog contract.
     private sealed class InsertHyperlinkCommand(DocumentView editor) : IRibbonCommand
     {
         public void Execute(RibbonCommandContext context)
         {
             editor.Focus();
-            var seed = editor.Selection.Text is { Length: > 0 } text && Uri.IsWellFormedUriString(text, UriKind.Absolute)
-                ? text
-                : "https://";
-            var dialogText = InsertDialogTextResources.Hyperlink;
-            var url = HyperlinkPrompt.Ask(Window.GetWindow(editor), seed, dialogText.Title, dialogText.AddressLabel);
-            if (!string.IsNullOrWhiteSpace(url))
-                editor.ApplyHyperlink(url!.Trim());
+            var result = HyperlinkDialog.Ask(
+                Window.GetWindow(editor),
+                HyperlinkDialogMode.Insert,
+                editor.Selection.Text,
+                initialAddress: null);
+            if (result is { } accepted)
+                editor.InsertHyperlink(accepted.DisplayText, accepted.Address);
         }
     }
 
-    // Insert > Links > Edit Hyperlink: prompt for a new URL (seeded from the caret link's current URL),
-    // then re-target the hyperlink at the caret. A no-op when the caret is not on a link.
+    // Insert > Links > Edit Hyperlink: seed the shared two-field surface from the complete link span,
+    // then update its visible text and external/internal target. A no-op off a link.
     private sealed class EditHyperlinkCommand(DocumentView editor) : IRibbonCommand
     {
         public void Execute(RibbonCommandContext context)
@@ -3038,11 +3038,13 @@ internal static class FreeWRibbonCommands
             editor.Focus();
             if (!editor.IsCaretOnHyperlink())
                 return;
-            var seed = editor.HyperlinkUrlAtCaret() is { Length: > 0 } current ? current : "https://";
-            var dialogText = InsertDialogTextResources.Hyperlink;
-            var url = HyperlinkPrompt.Ask(Window.GetWindow(editor), seed, dialogText.EditTitle, dialogText.AddressLabel);
-            if (!string.IsNullOrWhiteSpace(url))
-                editor.EditHyperlink(url!.Trim());
+            var result = HyperlinkDialog.Ask(
+                Window.GetWindow(editor),
+                HyperlinkDialogMode.Edit,
+                editor.HyperlinkDisplayTextAtCaret(),
+                editor.HyperlinkTargetAtCaret());
+            if (result is { } accepted)
+                editor.EditHyperlink(accepted.Address, accepted.DisplayText);
         }
     }
 

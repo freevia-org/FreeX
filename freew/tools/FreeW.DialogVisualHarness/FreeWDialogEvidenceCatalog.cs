@@ -407,7 +407,7 @@ public static class FreeWDialogEvidenceCatalog
             Pair("draw-table-dimension", "DrawTableDimensionDialog"),
             Pair("field-picker", "FieldPickerDialog"),
             AvaloniaOnly("header-footer-text", "HeaderFooterTextDialog"),
-            AvaloniaOnly("hyperlink", "HyperlinkDialog"),
+            Pair("hyperlink", "HyperlinkDialog"),
             AvaloniaOnly("image-alt-text", "ImageAltTextDialog"),
             AvaloniaOnly("link-bookmark", "LinkBookmarkDialog"),
             Pair("manage-sources", "ManageSourcesDialogWindow", "ManageSourcesDialog",
