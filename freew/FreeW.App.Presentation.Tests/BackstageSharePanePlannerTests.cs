@@ -48,6 +48,8 @@ public sealed class BackstageSharePanePlannerTests
         var primary = groups[0].Actions.Should().ContainSingle().Subject;
         primary.Label.Should().Be("Save As");
         primary.Description.Should().Contain("Save As is required");
+        primary.Description.Should().Contain("document");
+        primary.Description.Should().NotContain("workbook");
 
         primary.Invoke();
 
