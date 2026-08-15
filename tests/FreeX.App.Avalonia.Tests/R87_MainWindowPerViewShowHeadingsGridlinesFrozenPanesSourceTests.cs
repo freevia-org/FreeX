@@ -98,8 +98,15 @@ public sealed class R87_MainWindowPerViewShowHeadingsGridlinesFrozenPanesSourceT
         source.Should().NotContain("_session.ActiveSheet.ViewMode");
         source.Should().Contain("WorksheetViewModeUiStatePlanner.Build(_session.ViewMode)");
 
-        source.Should().Contain("[\"Gridlines\"] = () => new RibbonCommandState(IsChecked: _session.IsShowingGridlines),");
-        source.Should().Contain("[\"Headings\"] = () => new RibbonCommandState(IsChecked: _session.IsShowingHeadings),");
+        // "Share FreeX worksheet view ribbon state" replaced the inline RibbonCommandState lookups
+        // with the shared WorkbookViewRibbonStatePlanner. R87 exists to keep these reading per-view
+        // session state rather than sheet-level state, and that still holds -- the planner is fed the
+        // same per-view accessors -- so assert the routing plus the accessors feeding it.
+        source.Should().Contain("[\"Gridlines\"] = () => GetWorkbookViewRibbonState().GetCommandState(\"Gridlines\"),");
+        source.Should().Contain("[\"Headings\"] = () => GetWorkbookViewRibbonState().GetCommandState(\"Headings\"),");
+        source.Should().Contain("WorkbookViewRibbonStatePlanner.Build(");
+        source.Should().NotContain("IsChecked: _session.ActiveSheet.ShowGridlines");
+        source.Should().NotContain("IsChecked: _session.ActiveSheet.ShowHeadings");
         source.Should().Contain("IsShowingGridlines: _session.IsShowingGridlines,");
         source.Should().Contain("IsShowingHeadings: _session.IsShowingHeadings,");
         source.Should().Contain("var showGridlines = !_session.IsShowingGridlines;");
