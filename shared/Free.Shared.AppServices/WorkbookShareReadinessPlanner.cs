@@ -21,6 +21,8 @@ public sealed record WorkbookShareSurface(string Label, bool CanShareLocalFiles 
 
     public string Label { get; init; } = NormalizeLabel(Label);
 
+    internal DocumentShareSurface ToDocumentSurface() => new(Label, CanShareLocalFiles);
+
     private static string NormalizeLabel(string label)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(label);
@@ -38,6 +40,7 @@ public sealed record WorkbookShareReadinessPlan(
     public WorkbookShareSurface EffectiveSurface => Surface ?? WorkbookShareSurface.WindowsShare;
 }
 
+/// <summary>Compatibility facade over the document-neutral share planner.</summary>
 public static class WorkbookShareReadinessPlanner
 {
     public static WorkbookShareReadinessPlan CreatePlan(
@@ -51,141 +54,52 @@ public static class WorkbookShareReadinessPlanner
         Func<string, bool>? fileExists = null)
     {
         ArgumentNullException.ThrowIfNull(surface);
-
-        if (!surface.CanShareLocalFiles)
-            return new WorkbookShareReadinessPlan(
-                WorkbookShareReadinessPlanKind.ShareSurfaceUnavailable,
-                null,
-                Surface: surface);
-
-        return TryGetShareableWorkbookPath(
+        return FromDocumentPlan(DocumentShareReadinessPlanner.CreatePlan(
             currentFilePath,
-            fileExists ?? File.Exists,
-            out var shareablePath,
-            out var saveAsReason,
-            out var candidatePath)
-            ? new WorkbookShareReadinessPlan(
-                WorkbookShareReadinessPlanKind.ShareExistingFile,
-                shareablePath,
-                Surface: surface)
-            : new WorkbookShareReadinessPlan(
-                WorkbookShareReadinessPlanKind.SaveAsBeforeShare,
-                null,
-                saveAsReason,
-                candidatePath,
-                surface);
+            surface.ToDocumentSurface(),
+            fileExists));
     }
 
     public static string FormatStatus(WorkbookShareReadinessPlan plan)
     {
         ArgumentNullException.ThrowIfNull(plan);
+        return DocumentShareReadinessPlanner.FormatStatus(
+            ToDocumentPlan(plan),
+            DocumentShareReadinessTextSpec.WorkbookEnglish);
+    }
 
-        var surfaceLabel = plan.EffectiveSurface.Label;
-        if (plan.Kind == WorkbookShareReadinessPlanKind.ShareSurfaceUnavailable)
-            return $"{surfaceLabel} cannot send local workbook files from this build.";
+    internal static bool IsUnsupportedLinkCandidate(string? candidatePath) =>
+        DocumentShareReadinessPlanner.IsUnsupportedLinkCandidate(candidatePath);
 
-        if (plan.Kind == WorkbookShareReadinessPlanKind.ShareExistingFile)
-            return string.IsNullOrWhiteSpace(plan.Path)
-                ? $"Ready for {surfaceLabel} from the saved local file."
-                : $"Ready for {surfaceLabel} from {plan.Path}.";
+    internal static DocumentShareReadinessPlan ToDocumentPlan(WorkbookShareReadinessPlan plan) => new(
+        (DocumentShareReadinessPlanKind)plan.Kind,
+        plan.Path,
+        ToDocumentReason(plan.SaveAsReason),
+        plan.CandidatePath,
+        plan.EffectiveSurface.ToDocumentSurface());
 
-        return plan.SaveAsReason switch
+    private static WorkbookShareReadinessPlan FromDocumentPlan(DocumentShareReadinessPlan plan) => new(
+        (WorkbookShareReadinessPlanKind)plan.Kind,
+        plan.Path,
+        FromDocumentReason(plan.SaveAsReason),
+        plan.CandidatePath,
+        new WorkbookShareSurface(plan.EffectiveSurface.Label, plan.EffectiveSurface.CanShareLocalFiles));
+
+    internal static DocumentShareSaveAsReason ToDocumentReason(WorkbookShareReadinessSaveAsReason reason) =>
+        reason switch
         {
-            WorkbookShareReadinessSaveAsReason.MissingFile when !string.IsNullOrWhiteSpace(plan.CandidatePath) =>
-                $"Save As is required before {surfaceLabel} can send the workbook because the saved path is missing: {plan.CandidatePath}.",
-            WorkbookShareReadinessSaveAsReason.InvalidPath when IsUnsupportedLinkCandidate(plan.CandidatePath) =>
-                $"Save As is required before {surfaceLabel} can send the workbook because cloud or web links are not supported; save the workbook to a local file first.",
-            WorkbookShareReadinessSaveAsReason.InvalidPath =>
-                $"Save As is required before {surfaceLabel} can send the workbook because the saved path is not a valid local file path.",
-            _ =>
-                $"Save As is required before {surfaceLabel} can send the workbook because it has not been saved yet."
+            WorkbookShareReadinessSaveAsReason.UnsavedWorkbook => DocumentShareSaveAsReason.UnsavedDocument,
+            WorkbookShareReadinessSaveAsReason.MissingFile => DocumentShareSaveAsReason.MissingFile,
+            WorkbookShareReadinessSaveAsReason.InvalidPath => DocumentShareSaveAsReason.InvalidPath,
+            _ => DocumentShareSaveAsReason.None
         };
-    }
 
-    private static bool TryGetShareableWorkbookPath(
-        string? currentFilePath,
-        Func<string, bool> fileExists,
-        out string shareablePath,
-        out WorkbookShareReadinessSaveAsReason saveAsReason,
-        out string? candidatePath)
-    {
-        shareablePath = "";
-        candidatePath = null;
-        saveAsReason = WorkbookShareReadinessSaveAsReason.None;
-
-        if (string.IsNullOrWhiteSpace(currentFilePath))
+    internal static WorkbookShareReadinessSaveAsReason FromDocumentReason(DocumentShareSaveAsReason reason) =>
+        reason switch
         {
-            saveAsReason = WorkbookShareReadinessSaveAsReason.UnsavedWorkbook;
-            return false;
-        }
-
-        var trimmedPath = currentFilePath.Trim();
-        if (!TryNormalizePath(trimmedPath, out var normalizedPath))
-        {
-            saveAsReason = WorkbookShareReadinessSaveAsReason.InvalidPath;
-            candidatePath = trimmedPath;
-            return false;
-        }
-
-        candidatePath = normalizedPath;
-        if (!FileExists(fileExists, normalizedPath))
-        {
-            saveAsReason = WorkbookShareReadinessSaveAsReason.MissingFile;
-            return false;
-        }
-
-        shareablePath = normalizedPath;
-        return true;
-    }
-
-    private static bool TryNormalizePath(string path, out string normalizedPath)
-    {
-        return LocalFilePath.TryNormalize(path, out normalizedPath);
-    }
-
-    internal static bool IsUnsupportedLinkCandidate(string? candidatePath)
-    {
-        if (string.IsNullOrWhiteSpace(candidatePath))
-            return false;
-
-        var candidate = candidatePath.Trim();
-        if (!Uri.TryCreate(candidate, UriKind.Absolute, out var uri))
-            return false;
-
-        return !uri.IsFile && !IsWindowsDrivePath(candidate, uri.Scheme);
-    }
-
-    private static bool IsWindowsDrivePath(string candidate, string scheme) =>
-        scheme.Length == 1 &&
-        candidate.Length >= 2 &&
-        candidate[1] == ':' &&
-        char.IsAsciiLetter(candidate[0]);
-
-    private static bool FileExists(Func<string, bool> fileExists, string path)
-    {
-        try
-        {
-            return fileExists(path);
-        }
-        catch (ArgumentException)
-        {
-            return false;
-        }
-        catch (NotSupportedException)
-        {
-            return false;
-        }
-        catch (PathTooLongException)
-        {
-            return false;
-        }
-        catch (IOException)
-        {
-            return false;
-        }
-        catch (UnauthorizedAccessException)
-        {
-            return false;
-        }
-    }
+            DocumentShareSaveAsReason.UnsavedDocument => WorkbookShareReadinessSaveAsReason.UnsavedWorkbook,
+            DocumentShareSaveAsReason.MissingFile => WorkbookShareReadinessSaveAsReason.MissingFile,
+            DocumentShareSaveAsReason.InvalidPath => WorkbookShareReadinessSaveAsReason.InvalidPath,
+            _ => WorkbookShareReadinessSaveAsReason.None
+        };
 }
