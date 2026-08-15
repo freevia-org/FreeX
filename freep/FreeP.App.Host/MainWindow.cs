@@ -2354,22 +2354,24 @@ public sealed partial class MainWindow : Window,
     private void RefreshAltTextRequestPlan()
         => _altTextPaneHostCoordinator.RefreshSelection();
 
-    internal IReadOnlyList<SmartArtNodeOutlineItem> ShowSmartArtTextPane()
-    {
-        _workareaSession.Panes.Show(PresentationWorkareaPane.SmartArtText);
-        var outline = RefreshSmartArtTextPane();
-        _smartArtTextPaneHost.Visibility = Visibility.Visible;
-        RefreshPaneAccessibilityMetadata();
-        return outline;
-    }
+    internal IReadOnlyList<SmartArtNodeOutlineItem> ShowSmartArtTextPane() =>
+        SmartArtTextPaneHostCoordinator.Show();
 
-    internal void HideSmartArtTextPane()
-    {
-        _workareaSession.Panes.Hide(PresentationWorkareaPane.SmartArtText);
-        if (_smartArtTextPaneHost is not null)
-            _smartArtTextPaneHost.Visibility = Visibility.Collapsed;
-        RefreshPaneAccessibilityMetadata();
-    }
+    internal void HideSmartArtTextPane() => SmartArtTextPaneHostCoordinator.Hide();
+
+    private PresentationWorkareaPaneHostCoordinator<IReadOnlyList<SmartArtNodeOutlineItem>>?
+        _smartArtTextPaneHostCoordinator;
+
+    private PresentationWorkareaPaneHostCoordinator<IReadOnlyList<SmartArtNodeOutlineItem>>
+        SmartArtTextPaneHostCoordinator =>
+        _smartArtTextPaneHostCoordinator ??= new(
+            _workareaSession.Panes,
+            PresentationWorkareaPane.SmartArtText,
+            RefreshSmartArtTextPane,
+            visible => _smartArtTextPaneHost.Visibility = visible
+                ? Visibility.Visible
+                : Visibility.Collapsed,
+            RefreshPaneAccessibilityMetadata);
 
     internal void SetSmartArtTextPaneRowText(int rowIndex, string text)
     {
@@ -2643,14 +2645,21 @@ public sealed partial class MainWindow : Window,
     internal PresentationReadingOrderPlan ShowReadingOrderPane()
         => _reviewWorkflowSession.ShowReadingOrderPane();
 
-    internal PresentationSelectionPanePlan ShowSelectionPane()
-    {
-        _workareaSession.Panes.Show(PresentationWorkareaPane.Selection);
-        var plan = _selectionPane.Refresh();
-        _selectionPane.Visibility = Visibility.Visible;
-        RefreshPaneAccessibilityMetadata();
-        return plan;
-    }
+    internal PresentationSelectionPanePlan ShowSelectionPane() => SelectionPaneHostCoordinator.Show();
+
+    private PresentationWorkareaPaneHostCoordinator<PresentationSelectionPanePlan>?
+        _selectionPaneHostCoordinator;
+
+    private PresentationWorkareaPaneHostCoordinator<PresentationSelectionPanePlan>
+        SelectionPaneHostCoordinator =>
+        _selectionPaneHostCoordinator ??= new(
+            _workareaSession.Panes,
+            PresentationWorkareaPane.Selection,
+            _selectionPane.Refresh,
+            visible => _selectionPane.Visibility = visible
+                ? Visibility.Visible
+                : Visibility.Collapsed,
+            RefreshPaneAccessibilityMetadata);
 
     internal PresentationReadingOrderMutationPlan ApplyReadingOrderMoveEarlier()
         => ApplyReadingOrderMove(PresentationReviewWorkflowIntentKind.MoveReadingOrderEarlier);
