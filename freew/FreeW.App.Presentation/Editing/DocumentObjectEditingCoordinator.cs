@@ -70,6 +70,10 @@ public sealed class DocumentObjectEditingCoordinator
     public static Chart PlanChartInsertion(Chart? chart = null) =>
         chart ?? ChartDataPresetCatalog.CreateDefaultInsertion();
 
+    /// <summary>Resolves the chart currently addressed by a renderer-native selection target.</summary>
+    public Chart? ResolveChart(DocumentObjectTarget target) =>
+        TryResolve(target, out Chart? chart) ? chart : null;
+
     public DocumentShapePositionPlan? GetShapePosition(DocumentObjectTarget target)
     {
         if (target.IsNested)

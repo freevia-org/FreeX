@@ -88,6 +88,7 @@ public sealed class DocumentEditingSession
         Design = new DocumentDesignEditingCoordinator(this);
         ParagraphStylePreview = new DocumentParagraphStylePreviewSession(this);
         TableStylePreview = new DocumentTableStylePreviewSession(this);
+        ChartDesignPreview = new DocumentChartDesignPreviewSession(this);
         Paragraphs = new DocumentParagraphFormattingCoordinator(this);
         Objects = new DocumentObjectEditingCoordinator(this);
         Tables = new DocumentTableEditingCoordinator(this);
@@ -112,6 +113,8 @@ public sealed class DocumentEditingSession
 
     public DocumentTableStylePreviewSession TableStylePreview { get; }
 
+    public DocumentChartDesignPreviewSession ChartDesignPreview { get; }
+
     public DocumentParagraphFormattingCoordinator Paragraphs { get; }
 
     public DocumentObjectEditingCoordinator Objects { get; }
@@ -128,6 +131,7 @@ public sealed class DocumentEditingSession
         Design.CancelPreview();
         ParagraphStylePreview.Cancel();
         TableStylePreview.Cancel();
+        ChartDesignPreview.Cancel();
         _commands.Changed -= OnCommandsChanged;
         Document = document;
         _commands = CreateCommandBus(document);

@@ -161,6 +161,7 @@ public sealed partial class DocumentView : RichTextBox
     private DocumentDesignEditingCoordinator DesignEdits => _editingSession.Design;
     private DocumentParagraphStylePreviewSession ParagraphStylePreviews => _editingSession.ParagraphStylePreview;
     private DocumentTableStylePreviewSession TableStylePreviews => _editingSession.TableStylePreview;
+    private DocumentChartDesignPreviewSession ChartDesignPreviews => _editingSession.ChartDesignPreview;
     private DocumentParagraphFormattingCoordinator ParagraphEdits => _editingSession.Paragraphs;
     private DocumentObjectEditingCoordinator ObjectEdits => _editingSession.Objects;
     private DocumentTableEditingCoordinator TableEdits => _editingSession.Tables;
@@ -2592,14 +2593,6 @@ public sealed partial class DocumentView : RichTextBox
     }
 
     /// <summary>
-    /// Re-render the document without committing to the model first. Called by the gallery hover
-    /// preview path (ChartDesignGallery) after transiently mutating the selected chart's style/color/
-    /// quick-layout properties so the live preview is visible. The next CommitToModel call (or the
-    /// leave-revert) restores the pre-hover state.
-    /// </summary>
-    public void RerenderSelectedChart() => Render();
-
-    /// <summary>
     /// Trigger a full re-render of the document surface from the current model state.  Use this after
     /// directly mutating model objects (e.g. batch floating-object position changes) that bypass the undo
     /// bus's built-in render call.
@@ -2611,14 +2604,17 @@ public sealed partial class DocumentView : RichTextBox
     /// No-op without a chart selection.
     /// </summary>
     public void ApplySelectedChartStyle(ChartStyle style)
+        => CommitChartStylePreview(style);
+
+    public void PreviewSelectedChartStyle(ChartStyle style)
     {
-        CommitToModel();
-        var location = SelectedChartLocation();
-        if (location.Chart is null)
+        ArgumentNullException.ThrowIfNull(style);
+        if (!ChartDesignPreviews.HasActivePreview)
+            CommitToModel();
+        var target = ChartDesignPreviews.ActiveTarget ?? SelectedChartTarget();
+        if (target is not { } address || !ChartDesignPreviews.PreviewStyle(address, style))
             return;
-        RenderObjectEdit(ObjectEdits.SetChartStyle(
-            ObjectTarget(location.BlockIndex, location.RunIndex),
-            style.Id));
+        Render();
     }
 
     /// <summary>
@@ -2626,14 +2622,17 @@ public sealed partial class DocumentView : RichTextBox
     /// No-op without a chart selection.
     /// </summary>
     public void ApplySelectedChartColorScheme(ChartColorScheme scheme)
+        => CommitChartColorSchemePreview(scheme);
+
+    public void PreviewSelectedChartColorScheme(ChartColorScheme scheme)
     {
-        CommitToModel();
-        var location = SelectedChartLocation();
-        if (location.Chart is null)
+        ArgumentNullException.ThrowIfNull(scheme);
+        if (!ChartDesignPreviews.HasActivePreview)
+            CommitToModel();
+        var target = ChartDesignPreviews.ActiveTarget ?? SelectedChartTarget();
+        if (target is not { } address || !ChartDesignPreviews.PreviewColorScheme(address, scheme))
             return;
-        RenderObjectEdit(ObjectEdits.SetChartColorScheme(
-            ObjectTarget(location.BlockIndex, location.RunIndex),
-            scheme.Id));
+        Render();
     }
 
     /// <summary>
@@ -2641,14 +2640,61 @@ public sealed partial class DocumentView : RichTextBox
     /// No-op without a chart selection.
     /// </summary>
     public void ApplySelectedChartQuickLayout(ChartQuickLayout layout)
+        => CommitChartQuickLayoutPreview(layout);
+
+    public void PreviewSelectedChartQuickLayout(ChartQuickLayout layout)
     {
-        CommitToModel();
-        var location = SelectedChartLocation();
-        if (location.Chart is null)
+        ArgumentNullException.ThrowIfNull(layout);
+        if (!ChartDesignPreviews.HasActivePreview)
+            CommitToModel();
+        var target = ChartDesignPreviews.ActiveTarget ?? SelectedChartTarget();
+        if (target is not { } address || !ChartDesignPreviews.PreviewQuickLayout(address, layout))
             return;
-        RenderObjectEdit(ObjectEdits.SetChartQuickLayout(
-            ObjectTarget(location.BlockIndex, location.RunIndex),
-            layout));
+        Render();
+    }
+
+    public void CancelChartDesignPreview()
+    {
+        if (ChartDesignPreviews.Cancel() is not null)
+            Render();
+    }
+
+    public void CommitChartStylePreview(ChartStyle style)
+    {
+        ArgumentNullException.ThrowIfNull(style);
+        if (!ChartDesignPreviews.HasActivePreview)
+            CommitToModel();
+        var target = ChartDesignPreviews.ActiveTarget ?? SelectedChartTarget();
+        if (target is { } address)
+            RenderObjectEdit(ChartDesignPreviews.CommitStyle(address, style));
+    }
+
+    public void CommitChartColorSchemePreview(ChartColorScheme scheme)
+    {
+        ArgumentNullException.ThrowIfNull(scheme);
+        if (!ChartDesignPreviews.HasActivePreview)
+            CommitToModel();
+        var target = ChartDesignPreviews.ActiveTarget ?? SelectedChartTarget();
+        if (target is { } address)
+            RenderObjectEdit(ChartDesignPreviews.CommitColorScheme(address, scheme));
+    }
+
+    public void CommitChartQuickLayoutPreview(ChartQuickLayout layout)
+    {
+        ArgumentNullException.ThrowIfNull(layout);
+        if (!ChartDesignPreviews.HasActivePreview)
+            CommitToModel();
+        var target = ChartDesignPreviews.ActiveTarget ?? SelectedChartTarget();
+        if (target is { } address)
+            RenderObjectEdit(ChartDesignPreviews.CommitQuickLayout(address, layout));
+    }
+
+    private DocumentObjectTarget? SelectedChartTarget()
+    {
+        var location = SelectedChartLocation();
+        return location.Chart is null
+            ? null
+            : ObjectTarget(location.BlockIndex, location.RunIndex);
     }
 
     // ── SmartArt selection (mirrors SelectedChart / SelectedChartLocation) ────────────────────────

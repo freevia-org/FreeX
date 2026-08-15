@@ -105,6 +105,94 @@ public sealed class DocumentObjectEditingCoordinatorTests
     }
 
     [Fact]
+    public void ChartDesignPreviewSwitchAndCancelRestoreTheCompleteBaselineWithoutUndo()
+    {
+        var chart = new Chart
+        {
+            StyleId = ChartStyle.Catalog[6].Id,
+            ColorSchemeId = ChartColorScheme.Catalog[6].Id,
+            QuickLayoutId = ChartQuickLayout.Catalog[7].Id,
+        };
+        var paragraph = new Paragraph();
+        paragraph.Runs.Add(Run.FromChart(chart));
+        var session = SessionWith(paragraph);
+        var target = new DocumentObjectTarget(0, 0);
+        var changed = 0;
+        session.Changed += () => changed++;
+
+        session.ChartDesignPreview.PreviewStyle(target, ChartStyle.Catalog[1]).Should().BeTrue();
+        chart.StyleId.Should().Be(ChartStyle.Catalog[1].Id);
+        chart.ColorSchemeId.Should().Be(ChartColorScheme.Catalog[6].Id);
+
+        session.ChartDesignPreview.PreviewColorScheme(target, ChartColorScheme.Catalog[1]).Should().BeTrue();
+        chart.StyleId.Should().Be(ChartStyle.Catalog[6].Id, "each preview starts from the full captured baseline");
+        chart.ColorSchemeId.Should().Be(ChartColorScheme.Catalog[1].Id);
+
+        session.ChartDesignPreview.PreviewQuickLayout(target, ChartQuickLayout.Catalog[1]).Should().BeTrue();
+        chart.ColorSchemeId.Should().Be(ChartColorScheme.Catalog[6].Id);
+        chart.QuickLayoutId.Should().Be(ChartQuickLayout.Catalog[1].Id);
+
+        session.ChartDesignPreview.Cancel().Should().Be(target);
+        (chart.StyleId, chart.ColorSchemeId, chart.QuickLayoutId).Should().Be(
+            (ChartStyle.Catalog[6].Id, ChartColorScheme.Catalog[6].Id, ChartQuickLayout.Catalog[7].Id));
+        changed.Should().Be(0);
+        session.Commands.CanUndo.Should().BeFalse();
+    }
+
+    [Fact]
+    public void ChartDesignPreviewFreezesFirstTargetAndCommitsExactlyOneUndoEntry()
+    {
+        var firstChart = new Chart { StyleId = 3, ColorSchemeId = "colorful3", QuickLayoutId = 4 };
+        var secondChart = new Chart { StyleId = 5, ColorSchemeId = "mono-blue", QuickLayoutId = 6 };
+        var paragraph = new Paragraph();
+        paragraph.Runs.Add(Run.FromChart(firstChart));
+        paragraph.Runs.Add(Run.FromChart(secondChart));
+        var session = SessionWith(paragraph);
+        var firstTarget = new DocumentObjectTarget(0, 0);
+        var secondTarget = new DocumentObjectTarget(0, 1);
+        var committedScheme = ChartColorScheme.Catalog[5];
+        var changed = 0;
+        session.Changed += () => changed++;
+
+        session.ChartDesignPreview.PreviewStyle(firstTarget, ChartStyle.Catalog[1]).Should().BeTrue();
+        session.ChartDesignPreview.PreviewQuickLayout(secondTarget, ChartQuickLayout.Catalog[8]).Should().BeTrue();
+        session.ChartDesignPreview.ActiveTarget.Should().Be(firstTarget);
+        firstChart.QuickLayoutId.Should().Be(ChartQuickLayout.Catalog[8].Id);
+        secondChart.QuickLayoutId.Should().Be(6);
+
+        session.ChartDesignPreview.CommitColorScheme(secondTarget, committedScheme).Applied.Should().BeTrue();
+        (firstChart.StyleId, firstChart.ColorSchemeId, firstChart.QuickLayoutId).Should().Be(
+            (3, committedScheme.Id, 4));
+        (secondChart.StyleId, secondChart.ColorSchemeId, secondChart.QuickLayoutId).Should().Be(
+            (5, "mono-blue", 6));
+        changed.Should().Be(1);
+        session.Commands.CanUndo.Should().BeTrue();
+
+        session.Commands.Undo().Should().BeTrue();
+        (firstChart.StyleId, firstChart.ColorSchemeId, firstChart.QuickLayoutId).Should().Be(
+            (3, "colorful3", 4));
+        session.Commands.CanUndo.Should().BeFalse();
+    }
+
+    [Fact]
+    public void LoadingAnotherDocumentCancelsAnActiveChartDesignPreview()
+    {
+        var chart = new Chart { StyleId = 4, ColorSchemeId = "colorful4", QuickLayoutId = 5 };
+        var paragraph = new Paragraph();
+        paragraph.Runs.Add(Run.FromChart(chart));
+        var session = SessionWith(paragraph);
+
+        session.ChartDesignPreview.PreviewStyle(
+            new DocumentObjectTarget(0, 0),
+            ChartStyle.Catalog[7]).Should().BeTrue();
+
+        session.LoadDocument(TextDocument.CreateEmpty());
+
+        (chart.StyleId, chart.ColorSchemeId, chart.QuickLayoutId).Should().Be((4, "colorful4", 5));
+        session.ChartDesignPreview.HasActivePreview.Should().BeFalse();
+    }
+
+    [Fact]
     public void NestedShapeMutation_PreservesFullChildPathAndUndo()
     {
         var nestedShape = new Shape(ShapeKind.Rectangle, 30, 20);

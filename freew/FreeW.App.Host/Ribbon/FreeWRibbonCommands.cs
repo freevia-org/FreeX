@@ -1698,7 +1698,14 @@ internal static class FreeWRibbonCommands
             ApplySmartArtStyle: editor.ApplySmartArtStyle,
             ShowSmartArtEditDialogAsync: smartArt => ValueTask.FromResult(
                 InsertSmartArtDialog.Prompt(Application.Current?.MainWindow, smartArt)),
-            ApplySmartArtEditOutcome: editor.ReplaceSelectedSmartArt);
+            ApplySmartArtEditOutcome: editor.ReplaceSelectedSmartArt,
+            PreviewChartStyle: editor.PreviewSelectedChartStyle,
+            PreviewChartColorScheme: editor.PreviewSelectedChartColorScheme,
+            PreviewChartQuickLayout: editor.PreviewSelectedChartQuickLayout,
+            CancelChartDesignPreview: editor.CancelChartDesignPreview,
+            CommitChartStyle: editor.CommitChartStylePreview,
+            CommitChartColorScheme: editor.CommitChartColorSchemePreview,
+            CommitChartQuickLayout: editor.CommitChartQuickLayoutPreview);
 
     // Home > Font character effects wired by CharacterEffectCommand.
     private enum CharacterEffect { Superscript, Subscript, Strikethrough, SmallCaps, AllCaps }

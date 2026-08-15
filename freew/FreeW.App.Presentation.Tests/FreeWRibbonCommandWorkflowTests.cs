@@ -340,6 +340,125 @@ public sealed class FreeWRibbonCommandWorkflowTests
     }
 
     [Fact]
+    public void Chart_gallery_commands_share_preview_cancel_and_single_commit_lifecycle()
+    {
+        var chart = Chart.Create(ChartKind.Column, ["A"], [1d]);
+        var events = new List<string>();
+        var bindings = new FreeWRibbonCommandBindingPorts();
+
+        FreeWRibbonEditorExecutionProfile.RegisterChartSmartArt(
+            bindings,
+            new FreeWRibbonChartSmartArtExecutionPorts(
+                PrepareExecution: () => events.Add("prepare"),
+                CompleteExecution: () => { },
+                SelectedChart: () => chart,
+                SetChartKind: _ => { },
+                ApplyChartStyle: _ => events.Add("legacy-style"),
+                ApplyChartColorScheme: _ => events.Add("legacy-color"),
+                ApplyChartQuickLayout: _ => events.Add("legacy-layout"),
+                ToggleChartLegend: () => { },
+                ShowChartTitleDialogAsync: null,
+                ApplyChartTitleOutcome: _ => { },
+                ToggleChartTitleFallback: null,
+                ShowChartAxisTitlesDialogAsync: null,
+                ApplyChartAxisTitlesOutcome: _ => { },
+                ToggleChartAxisTitlesFallback: null,
+                ShowChartDataDialogAsync: null,
+                ApplyChartDataOutcome: _ => { },
+                ShowChartSizeDialogAsync: null,
+                ApplyChartSizeOutcome: _ => { },
+                SelectedSmartArt: () => null,
+                MutateSmartArt: _ => { },
+                ApplySmartArtLayout: _ => { },
+                ApplySmartArtColorScheme: _ => { },
+                ApplySmartArtStyle: _ => { },
+                ShowSmartArtEditDialogAsync: null,
+                ApplySmartArtEditOutcome: _ => { },
+                PreviewChartStyle: style => events.Add($"preview-style:{style.Id}"),
+                PreviewChartColorScheme: scheme => events.Add($"preview-color:{scheme.Id}"),
+                PreviewChartQuickLayout: layout => events.Add($"preview-layout:{layout.Id}"),
+                CancelChartDesignPreview: () => events.Add("cancel"),
+                CommitChartStyle: style => events.Add($"commit-style:{style.Id}"),
+                CommitChartColorScheme: scheme => events.Add($"commit-color:{scheme.Id}"),
+                CommitChartQuickLayout: layout => events.Add($"commit-layout:{layout.Id}")));
+
+        var style = ChartStyle.Catalog[1];
+        AssertPreviewLifecycle(
+            bindings,
+            $"freew.chart-style-{style.Id}",
+            events,
+            $"preview-style:{style.Id}",
+            $"commit-style:{style.Id}");
+
+        var scheme = ChartColorScheme.Catalog[1];
+        AssertPreviewLifecycle(
+            bindings,
+            ChartColorRibbonCommandCatalog.CommandId(scheme),
+            events,
+            $"preview-color:{scheme.Id}",
+            $"commit-color:{scheme.Id}");
+
+        var layout = ChartQuickLayout.Catalog[1];
+        AssertPreviewLifecycle(
+            bindings,
+            $"freew.chart-quick-layout-{layout.Id}",
+            events,
+            $"preview-layout:{layout.Id}",
+            $"commit-layout:{layout.Id}");
+
+        events.Should().NotContain(item => item.StartsWith("legacy-", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void Both_renderers_adapt_chart_galleries_to_the_shared_preview_transaction()
+    {
+        var wpfCommands = ReadSource("freew", "FreeW.App.Host", "Ribbon", "FreeWRibbonCommands.cs");
+        var avaloniaCommands = ReadSource(
+            "freew",
+            "FreeW.App.Avalonia",
+            "Ribbon",
+            "FreeWAvaloniaRibbonCommands.cs");
+        var wpfEditor = ReadSource("freew", "FreeW.App.Host", "Editing", "DocumentView.cs");
+        var avaloniaEditor = ReadSource("freew", "FreeW.App.Avalonia", "Editing", "DocumentView.cs");
+        var wpfGallery = ReadSource("freew", "FreeW.App.Host", "Ribbon", "ChartDesignGallery.cs");
+
+        foreach (var commands in new[] { wpfCommands, avaloniaCommands })
+        {
+            commands.Should().Contain("PreviewChartStyle:")
+                .And.Contain("PreviewChartColorScheme:")
+                .And.Contain("PreviewChartQuickLayout:")
+                .And.Contain("CancelChartDesignPreview:")
+                .And.Contain("CommitChartStyle:")
+                .And.Contain("CommitChartColorScheme:")
+                .And.Contain("CommitChartQuickLayout:");
+        }
+
+        foreach (var editor in new[] { wpfEditor, avaloniaEditor })
+        {
+            editor.Should().Contain("_editingSession.ChartDesignPreview")
+                .And.Contain("ChartDesignPreviews.PreviewStyle(")
+                .And.Contain("ChartDesignPreviews.PreviewColorScheme(")
+                .And.Contain("ChartDesignPreviews.PreviewQuickLayout(")
+                .And.Contain("ChartDesignPreviews.Cancel()")
+                .And.Contain("ChartDesignPreviews.CommitStyle(")
+                .And.Contain("ChartDesignPreviews.CommitColorScheme(")
+                .And.Contain("ChartDesignPreviews.CommitQuickLayout(");
+        }
+
+        wpfGallery.Should().Contain("IRibbonPreviewCommand")
+            .And.Contain("preview.BeginPreview(RibbonCommandContext.Empty)")
+            .And.Contain("preview.CancelPreview()")
+            .And.Contain("command.Execute(RibbonCommandContext.Empty)")
+            .And.NotContain("DocumentView")
+            .And.NotContain("PreviewSelectedChart")
+            .And.NotContain("CommitChart")
+            .And.NotContain("_savedQuickLayoutId")
+            .And.NotContain("_savedStyleId")
+            .And.NotContain("_savedColorSchemeId")
+            .And.NotContain("RevertChart(");
+    }
+
+    [Fact]
     public void Editor_execution_profile_applies_typed_chart_and_smartart_dialog_outcomes()
     {
         var chart = Chart.Create(ChartKind.Column, ["A"], [1d]);
@@ -868,6 +987,26 @@ public sealed class FreeWRibbonCommandWorkflowTests
             .Select(match => match.Groups["action"].Value)
             .Distinct(StringComparer.Ordinal)
             .ToArray();
+
+    private static void AssertPreviewLifecycle(
+        IRibbonCommandRegistry bindings,
+        RibbonCommandId commandId,
+        List<string> events,
+        string previewEvent,
+        string commitEvent)
+    {
+        bindings.TryGet(commandId, out var command).Should().BeTrue();
+        command.Should().BeAssignableTo<IRibbonStatefulCommand>()
+            .Which.GetState().IsEnabled.Should().BeTrue();
+        var preview = command.Should().BeAssignableTo<IRibbonPreviewCommand>().Subject;
+
+        events.Clear();
+        preview.BeginPreview(RibbonCommandContext.Empty);
+        preview.CancelPreview();
+        preview.Execute(RibbonCommandContext.Empty);
+
+        events.Should().Equal(previewEvent, "cancel", "prepare", commitEvent);
+    }
 
     private sealed class RecordingCommand : IRibbonCommand
     {

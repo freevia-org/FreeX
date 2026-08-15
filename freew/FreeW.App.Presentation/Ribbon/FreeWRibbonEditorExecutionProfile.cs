@@ -139,7 +139,14 @@ public sealed record FreeWRibbonChartSmartArtExecutionPorts(
     Action<SmartArtColorScheme> ApplySmartArtColorScheme,
     Action<SmartArtStyle> ApplySmartArtStyle,
     Func<SmartArt, ValueTask<SmartArt?>>? ShowSmartArtEditDialogAsync,
-    Action<SmartArt> ApplySmartArtEditOutcome);
+    Action<SmartArt> ApplySmartArtEditOutcome,
+    Action<ChartStyle>? PreviewChartStyle = null,
+    Action<ChartColorScheme>? PreviewChartColorScheme = null,
+    Action<ChartQuickLayout>? PreviewChartQuickLayout = null,
+    Action? CancelChartDesignPreview = null,
+    Action<ChartStyle>? CommitChartStyle = null,
+    Action<ChartColorScheme>? CommitChartColorScheme = null,
+    Action<ChartQuickLayout>? CommitChartQuickLayout = null);
 
 public sealed record FreeWRibbonImageExecutionPorts(
     Action PrepareExecution,
@@ -507,29 +514,44 @@ public static class FreeWRibbonEditorExecutionProfile
         foreach (var style in ChartStyle.Catalog)
         {
             var captured = style;
-            bindings.Register($"freew.chart-style-{captured.Id}", Stateful(
-                () => ports.ApplyChartStyle(captured),
-                () => ports.SelectedChart() is not null,
-                ports.PrepareExecution));
+            bindings.Register(
+                $"freew.chart-style-{captured.Id}",
+                ChartGalleryCommand(
+                    captured,
+                    ports.ApplyChartStyle,
+                    ports.PreviewChartStyle,
+                    ports.CancelChartDesignPreview,
+                    ports.CommitChartStyle,
+                    ports));
         }
 
         foreach (var layout in ChartQuickLayout.Catalog)
         {
             var captured = layout;
-            bindings.Register($"freew.chart-quick-layout-{captured.Id}", Stateful(
-                () => ports.ApplyChartQuickLayout(captured),
-                () => ports.SelectedChart() is not null,
-                ports.PrepareExecution));
+            bindings.Register(
+                $"freew.chart-quick-layout-{captured.Id}",
+                ChartGalleryCommand(
+                    captured,
+                    ports.ApplyChartQuickLayout,
+                    ports.PreviewChartQuickLayout,
+                    ports.CancelChartDesignPreview,
+                    ports.CommitChartQuickLayout,
+                    ports));
         }
 
         bindings.Register(ChartColorRibbonCommandCatalog.ParentCommandId, EmptyRibbonCommand.Instance);
         foreach (var scheme in ChartColorScheme.Catalog)
         {
             var captured = scheme;
-            bindings.Register(ChartColorRibbonCommandCatalog.CommandId(captured), Stateful(
-                () => ports.ApplyChartColorScheme(captured),
-                () => ports.SelectedChart() is not null,
-                ports.PrepareExecution));
+            bindings.Register(
+                ChartColorRibbonCommandCatalog.CommandId(captured),
+                ChartGalleryCommand(
+                    captured,
+                    ports.ApplyChartColorScheme,
+                    ports.PreviewChartColorScheme,
+                    ports.CancelChartDesignPreview,
+                    ports.CommitChartColorScheme,
+                    ports));
         }
 
         bindings.Bind(FreeWRibbonCommandAction.ChartToggleLegend, Stateful(
@@ -990,6 +1012,49 @@ public static class FreeWRibbonEditorExecutionProfile
             _ => execute(),
             () => new RibbonCommandState(IsEnabled: isEnabled()),
             prepareExecution);
+
+    private static IRibbonStatefulCommand ChartGalleryCommand<T>(
+        T value,
+        Action<T> apply,
+        Action<T>? preview,
+        Action? cancelPreview,
+        Action<T>? commit,
+        FreeWRibbonChartSmartArtExecutionPorts ports)
+        where T : class =>
+        preview is not null && cancelPreview is not null && commit is not null
+            ? new PreviewableChartGalleryCommand<T>(
+                value,
+                preview,
+                cancelPreview,
+                commit,
+                () => ports.SelectedChart() is not null,
+                ports.PrepareExecution)
+            : Stateful(
+                () => apply(value),
+                () => ports.SelectedChart() is not null,
+                ports.PrepareExecution);
+
+    private sealed class PreviewableChartGalleryCommand<T>(
+        T value,
+        Action<T> preview,
+        Action cancelPreview,
+        Action<T> commit,
+        Func<bool> isEnabled,
+        Action prepareExecution) : IRibbonPreviewCommand, IRibbonStatefulCommand
+        where T : class
+    {
+        public void BeginPreview(RibbonCommandContext context) => preview(value);
+
+        public void CancelPreview() => cancelPreview();
+
+        public void Execute(RibbonCommandContext context)
+        {
+            prepareExecution();
+            commit(value);
+        }
+
+        public RibbonCommandState GetState() => new(IsEnabled: isEnabled());
+    }
 
     private static void ExecuteOrShowFeedback(
         Func<bool> canExecute,

@@ -1439,7 +1439,14 @@ internal static class FreeWAvaloniaRibbonCommands
             ApplySmartArtColorScheme: scheme => editor.SetSmartArtColor(scheme.Id),
             ApplySmartArtStyle: editor.SetSmartArtStyle,
             ShowSmartArtEditDialogAsync: callbacks.ShowSmartArtEditDialogAsync,
-            ApplySmartArtEditOutcome: editor.ReplaceSelectedSmartArt);
+            ApplySmartArtEditOutcome: editor.ReplaceSelectedSmartArt,
+            PreviewChartStyle: editor.PreviewChartStyle,
+            PreviewChartColorScheme: editor.PreviewChartColorScheme,
+            PreviewChartQuickLayout: editor.PreviewChartQuickLayout,
+            CancelChartDesignPreview: editor.CancelChartDesignPreview,
+            CommitChartStyle: editor.CommitChartStylePreview,
+            CommitChartColorScheme: editor.CommitChartColorSchemePreview,
+            CommitChartQuickLayout: editor.CommitChartQuickLayoutPreview);
 
     /// <summary>
     /// AV-MAIL: Registers the Mailings-tab commands over the portable <see cref="MailMerge"/> engine. The

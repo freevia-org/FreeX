@@ -281,6 +281,7 @@ public sealed partial class DocumentView : Control
     private DocumentDesignEditingCoordinator DesignEdits => _editingSession.Design;
     private DocumentParagraphStylePreviewSession ParagraphStylePreviews => _editingSession.ParagraphStylePreview;
     private DocumentTableStylePreviewSession TableStylePreviews => _editingSession.TableStylePreview;
+    private DocumentChartDesignPreviewSession ChartDesignPreviews => _editingSession.ChartDesignPreview;
     private DocumentParagraphFormattingCoordinator ParagraphEdits => _editingSession.Paragraphs;
     private DocumentObjectEditingCoordinator ObjectEdits => _editingSession.Objects;
     private DocumentTableEditingCoordinator TableEdits => _editingSession.Tables;
@@ -14855,10 +14856,14 @@ public sealed partial class DocumentView : Control
     /// </summary>
     public void SetChartStyle(int styleId)
     {
-        if (_selectedFloating is not { Kind: "Chart" } sel) return;
-        InvalidateObjectEdit(
-            ObjectEdits.SetChartStyle(ObjectTarget(sel.BlockIndex, sel.RunIndex), styleId),
-            sel.Kind);
+        if (ChartStyle.FindById(styleId) is { } style)
+        {
+            CommitChartStylePreview(style);
+            return;
+        }
+
+        if (CurrentChartTarget() is { } target)
+            InvalidateObjectEdit(ObjectEdits.SetChartStyle(target, styleId), "Chart");
     }
 
     /// <summary>
@@ -14867,12 +14872,14 @@ public sealed partial class DocumentView : Control
     /// </summary>
     public void SetChartColorScheme(string? colorSchemeId)
     {
-        if (_selectedFloating is not { Kind: "Chart" } sel) return;
-        InvalidateObjectEdit(
-            ObjectEdits.SetChartColorScheme(
-                ObjectTarget(sel.BlockIndex, sel.RunIndex),
-                colorSchemeId),
-            sel.Kind);
+        if (colorSchemeId is not null && ChartColorScheme.FindById(colorSchemeId) is { } scheme)
+        {
+            CommitChartColorSchemePreview(scheme);
+            return;
+        }
+
+        if (CurrentChartTarget() is { } target)
+            InvalidateObjectEdit(ObjectEdits.SetChartColorScheme(target, colorSchemeId), "Chart");
     }
 
     /// <summary>
@@ -14880,12 +14887,63 @@ public sealed partial class DocumentView : Control
     /// Undoable + re-renders. No-op when the selected float is not a chart.
     /// </summary>
     public void SetChartQuickLayout(ChartQuickLayout layout)
+        => CommitChartQuickLayoutPreview(layout);
+
+    public void PreviewChartStyle(ChartStyle style)
     {
-        if (_selectedFloating is not { Kind: "Chart" } sel) return;
-        InvalidateObjectEdit(
-            ObjectEdits.SetChartQuickLayout(ObjectTarget(sel.BlockIndex, sel.RunIndex), layout),
-            sel.Kind);
+        var target = ChartDesignPreviews.ActiveTarget ?? CurrentChartTarget();
+        if (target is not { } address || !ChartDesignPreviews.PreviewStyle(address, style))
+            return;
+        InvalidateLayoutAndVisual();
     }
+
+    public void PreviewChartColorScheme(ChartColorScheme scheme)
+    {
+        var target = ChartDesignPreviews.ActiveTarget ?? CurrentChartTarget();
+        if (target is not { } address || !ChartDesignPreviews.PreviewColorScheme(address, scheme))
+            return;
+        InvalidateLayoutAndVisual();
+    }
+
+    public void PreviewChartQuickLayout(ChartQuickLayout layout)
+    {
+        var target = ChartDesignPreviews.ActiveTarget ?? CurrentChartTarget();
+        if (target is not { } address || !ChartDesignPreviews.PreviewQuickLayout(address, layout))
+            return;
+        InvalidateLayoutAndVisual();
+    }
+
+    public void CancelChartDesignPreview()
+    {
+        if (ChartDesignPreviews.Cancel() is not null)
+            InvalidateLayoutAndVisual();
+    }
+
+    public void CommitChartStylePreview(ChartStyle style)
+    {
+        var target = ChartDesignPreviews.ActiveTarget ?? CurrentChartTarget();
+        if (target is { } address)
+            InvalidateObjectEdit(ChartDesignPreviews.CommitStyle(address, style), "Chart");
+    }
+
+    public void CommitChartColorSchemePreview(ChartColorScheme scheme)
+    {
+        var target = ChartDesignPreviews.ActiveTarget ?? CurrentChartTarget();
+        if (target is { } address)
+            InvalidateObjectEdit(ChartDesignPreviews.CommitColorScheme(address, scheme), "Chart");
+    }
+
+    public void CommitChartQuickLayoutPreview(ChartQuickLayout layout)
+    {
+        var target = ChartDesignPreviews.ActiveTarget ?? CurrentChartTarget();
+        if (target is { } address)
+            InvalidateObjectEdit(ChartDesignPreviews.CommitQuickLayout(address, layout), "Chart");
+    }
+
+    private DocumentObjectTarget? CurrentChartTarget() =>
+        _selectedFloating is { Kind: "Chart" } selected
+            ? ObjectTarget(selected.BlockIndex, selected.RunIndex)
+            : null;
 
     /// <summary>
     /// AV-CHARTTAB: Toggle the legend on the selected floating chart.

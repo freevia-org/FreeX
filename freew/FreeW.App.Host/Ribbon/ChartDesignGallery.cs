@@ -3,8 +3,9 @@ using System.Windows.Automation;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
 using System.Windows.Media;
-using FreeW.App.Host.Editing;
+using FreeW.App.Presentation.Ribbon;
 using FreeW.Core.Model;
+using Free.Shared.Ribbon;
 
 namespace FreeW.App.Host;
 
@@ -15,23 +16,25 @@ namespace FreeW.App.Host;
 ///   <item><description><b>Chart Styles</b> — eight style swatches controlling gridline visibility, plot-area fill, markers and data-value labels.</description></item>
 ///   <item><description><b>Change Colors</b> — seven colour-scheme swatches (colorful + monochromatic palettes) applied to series/slices.</description></item>
 /// </list>
-/// All three galleries follow the ThemeGallery pattern: hover previews via model mutation + Render,
-/// leave reverts, click commits. Hosted as app-side custom content (no shared RibbonGallery render).
+/// Native WPF thumbnails and pointer events adapt to the shared chart-gallery commands. Presentation
+/// owns target freezing, baseline restoration, cancel, and one-entry commit semantics.
 /// </summary>
 internal static class ChartDesignGallery
 {
     // ── Quick Layout ──────────────────────────────────────────────────────────────────────────────
 
     /// <summary>Build the Quick Layout gallery strip for the Chart Design contextual tab.</summary>
-    public static FrameworkElement BuildQuickLayouts(DocumentView editor)
+    public static FrameworkElement BuildQuickLayouts(IRibbonCommandRegistry registry)
     {
         var strip = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center };
         foreach (var layout in ChartQuickLayout.Catalog)
-            strip.Children.Add(BuildLayoutSwatch(editor, layout));
+            strip.Children.Add(BuildLayoutSwatch(layout, registry));
         return WithLabel("Quick Layout", strip);
     }
 
-    private static FrameworkElement BuildLayoutSwatch(DocumentView editor, ChartQuickLayout layout)
+    private static FrameworkElement BuildLayoutSwatch(
+        ChartQuickLayout layout,
+        IRibbonCommandRegistry registry)
     {
         var thumb = new StackPanel { Margin = new Thickness(3, 3, 3, 3), Width = 46 };
 
@@ -76,24 +79,27 @@ internal static class ChartDesignGallery
             Margin = new Thickness(0, 2, 0, 0)
         });
 
-        return WrapAsChartButton(editor, thumb, layout.Name,
-            onEnter: () => PreviewQuickLayout(editor, layout),
-            onLeave: () => RevertChart(editor),
-            onClick: () => { RevertChart(editor); editor.ApplySelectedChartQuickLayout(layout); });
+        var command = Resolve(registry, $"freew.chart-quick-layout-{layout.Id}");
+        return WrapAsChartButton(thumb, layout.Name,
+            onEnter: () => BeginPreview(command),
+            onLeave: () => CancelPreview(command),
+            onClick: () => command.Execute(RibbonCommandContext.Empty));
     }
 
     // ── Chart Styles ──────────────────────────────────────────────────────────────────────────────
 
     /// <summary>Build the Chart Styles gallery strip for the Chart Design contextual tab.</summary>
-    public static FrameworkElement BuildChartStyles(DocumentView editor)
+    public static FrameworkElement BuildChartStyles(IRibbonCommandRegistry registry)
     {
         var strip = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center };
         foreach (var style in ChartStyle.Catalog)
-            strip.Children.Add(BuildStyleSwatch(editor, style));
+            strip.Children.Add(BuildStyleSwatch(style, registry));
         return WithLabel("Chart Styles", strip);
     }
 
-    private static FrameworkElement BuildStyleSwatch(DocumentView editor, ChartStyle style)
+    private static FrameworkElement BuildStyleSwatch(
+        ChartStyle style,
+        IRibbonCommandRegistry registry)
     {
         var thumb = new StackPanel { Margin = new Thickness(3, 3, 3, 3), Width = 46 };
 
@@ -137,24 +143,27 @@ internal static class ChartDesignGallery
             Margin = new Thickness(0, 2, 0, 0)
         });
 
-        return WrapAsChartButton(editor, thumb, style.Name,
-            onEnter: () => PreviewStyle(editor, style),
-            onLeave: () => RevertChart(editor),
-            onClick: () => { RevertChart(editor); editor.ApplySelectedChartStyle(style); });
+        var command = Resolve(registry, $"freew.chart-style-{style.Id}");
+        return WrapAsChartButton(thumb, style.Name,
+            onEnter: () => BeginPreview(command),
+            onLeave: () => CancelPreview(command),
+            onClick: () => command.Execute(RibbonCommandContext.Empty));
     }
 
     // ── Change Colors ─────────────────────────────────────────────────────────────────────────────
 
     /// <summary>Build the Change Colors gallery strip for the Chart Design contextual tab.</summary>
-    public static FrameworkElement BuildChangeColors(DocumentView editor)
+    public static FrameworkElement BuildChangeColors(IRibbonCommandRegistry registry)
     {
         var strip = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center };
         foreach (var scheme in ChartColorScheme.Catalog)
-            strip.Children.Add(BuildColorSwatch(editor, scheme));
+            strip.Children.Add(BuildColorSwatch(scheme, registry));
         return WithLabel("Change Colors", strip);
     }
 
-    private static FrameworkElement BuildColorSwatch(DocumentView editor, ChartColorScheme scheme)
+    private static FrameworkElement BuildColorSwatch(
+        ChartColorScheme scheme,
+        IRibbonCommandRegistry registry)
     {
         var thumb = new StackPanel { Margin = new Thickness(3, 3, 3, 3), Width = 46 };
 
@@ -189,63 +198,34 @@ internal static class ChartDesignGallery
             Margin = new Thickness(0, 2, 0, 0)
         });
 
-        return WrapAsChartButton(editor, thumb, scheme.Name,
-            onEnter: () => PreviewColorScheme(editor, scheme),
-            onLeave: () => RevertChart(editor),
-            onClick: () => { RevertChart(editor); editor.ApplySelectedChartColorScheme(scheme); });
+        var command = Resolve(registry, ChartColorRibbonCommandCatalog.CommandId(scheme));
+        return WrapAsChartButton(thumb, scheme.Name,
+            onEnter: () => BeginPreview(command),
+            onLeave: () => CancelPreview(command),
+            onClick: () => command.Execute(RibbonCommandContext.Empty));
     }
 
     // ── Preview helpers ───────────────────────────────────────────────────────────────────────────
-    // Live-preview by temporarily mutating the model chart + calling Render; leave-revert restores.
-    // The commit path calls RevertChart (to undo preview) then applies the real change.
-    // This mirrors the ThemeGallery pattern (PreviewTheme / EndThemePreview / ApplyTheme).
+    private static IRibbonCommand Resolve(IRibbonCommandRegistry registry, RibbonCommandId id) =>
+        registry.TryGet(id, out var command)
+            ? command!
+            : throw new InvalidOperationException($"Missing shared chart gallery command '{id}'.");
 
-    private static void PreviewQuickLayout(DocumentView editor, ChartQuickLayout layout)
+    private static void BeginPreview(IRibbonCommand command)
     {
-        var chart = editor.SelectedChart();
-        if (chart is null) return;
-        _savedQuickLayoutId = chart.QuickLayoutId;
-        chart.QuickLayoutId = layout.Id;
-        editor.RerenderSelectedChart();
+        if (command is IRibbonPreviewCommand preview)
+            preview.BeginPreview(RibbonCommandContext.Empty);
     }
 
-    private static void PreviewStyle(DocumentView editor, ChartStyle style)
+    private static void CancelPreview(IRibbonCommand command)
     {
-        var chart = editor.SelectedChart();
-        if (chart is null) return;
-        _savedStyleId = chart.StyleId;
-        chart.StyleId = style.Id;
-        editor.RerenderSelectedChart();
+        if (command is IRibbonPreviewCommand preview)
+            preview.CancelPreview();
     }
-
-    private static void PreviewColorScheme(DocumentView editor, ChartColorScheme scheme)
-    {
-        var chart = editor.SelectedChart();
-        if (chart is null) return;
-        _savedColorSchemeId = chart.ColorSchemeId;
-        chart.ColorSchemeId = scheme.Id;
-        editor.RerenderSelectedChart();
-    }
-
-    private static void RevertChart(DocumentView editor)
-    {
-        var chart = editor.SelectedChart();
-        if (chart is null) return;
-        if (_savedQuickLayoutId.HasValue) { chart.QuickLayoutId = _savedQuickLayoutId.Value; _savedQuickLayoutId = null; }
-        if (_savedStyleId.HasValue) { chart.StyleId = _savedStyleId.Value; _savedStyleId = null; }
-        if (_savedColorSchemeId is not null) { chart.ColorSchemeId = _savedColorSchemeId; _savedColorSchemeId = null; }
-        editor.RerenderSelectedChart();
-    }
-
-    // Saved-state for revert on leave (only one is active at a time because galleries don't overlap).
-    private static int? _savedQuickLayoutId;
-    private static int? _savedStyleId;
-    private static string? _savedColorSchemeId;
 
     // ── Shared helpers ─────────────────────────────────────────────────────────────────────────────
 
     private static FrameworkElement WrapAsChartButton(
-        DocumentView editor,
         FrameworkElement content,
         string tip,
         Action onEnter,

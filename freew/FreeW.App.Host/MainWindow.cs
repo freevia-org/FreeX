@@ -3433,9 +3433,9 @@ public sealed partial class MainWindow : Window
                 // Inject the three Chart Design galleries (Quick Layout, Chart Styles, Change Colors)
                 // into the corresponding groups on the chart contextual tab. Each gallery replaces the
                 // group's placeholder ribbon commands with live-preview swatches.
-                InjectGallery(content, "chart-quick-layout", ChartDesignGallery.BuildQuickLayouts(_editor), removeKind: RemoveKind.All);
-                InjectGallery(content, "chart-style", ChartDesignGallery.BuildChartStyles(_editor), removeKind: RemoveKind.All);
-                InjectGallery(content, "chart-colors", ChartDesignGallery.BuildChangeColors(_editor), removeKind: RemoveKind.All);
+                InjectGallery(content, "chart-quick-layout", ChartDesignGallery.BuildQuickLayouts(registry), removeKind: RemoveKind.All);
+                InjectGallery(content, "chart-style", ChartDesignGallery.BuildChartStyles(registry), removeKind: RemoveKind.All);
+                InjectGallery(content, "chart-colors", ChartDesignGallery.BuildChangeColors(registry), removeKind: RemoveKind.All);
             }
 
             if (tab.Id == "smartart-design")
