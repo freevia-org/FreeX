@@ -1132,7 +1132,10 @@ Header\cell Value\cell\row}")),
 
                 window.Editor.CurrentSlide!.Shapes.Should().Contain(shape => shape.Id == first.Id);
                 window.Editor.CurrentSlide.Shapes.Should().Contain(shape => shape.Id == later.Id);
-                window.Editor.CurrentSlide.Shapes.Should().NotContain(shape => shape.Id == middle.Id);
+                // Identity, not id: pasting allocates the lowest free shape id on the slide, and the
+                // cut has just freed the one the original held, so the pasted copy legitimately
+                // reuses it. Asserting on the id reports a working cut as a failure.
+                window.Editor.CurrentSlide.Shapes.Should().NotContain(shape => ReferenceEquals(shape, middle));
                 window.Editor.CurrentSlide.Shapes
                     .Count(shape => shape.Name == middle.Name)
                     .Should().Be(1);
