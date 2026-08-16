@@ -542,6 +542,13 @@ public sealed partial class MainWindow
     internal FileSaveTarget? ResolveExistingSaveTargetForTest() => ResolveExistingSaveTarget();
 
     /// <summary>
+    /// True while a save is still in flight. The write runs off the UI thread, so pumping the
+    /// dispatcher alone does not guarantee the file on disk is complete -- a test that reads the saved
+    /// file straight after Ctrl+S is racing the writer.
+    /// </summary>
+    internal bool IsSavingForTest => _isSaving;
+
+    /// <summary>
     /// Test-only seam onto the static reference-coloring decision logic below (which cell/overlay
     /// pair receives which run gets exercised in production via <see cref="RefreshFormulaReferenceHighlights"/>
     /// for both the formula bar and, since R78-render-inplace-editor-5-2, the in-cell editor).
