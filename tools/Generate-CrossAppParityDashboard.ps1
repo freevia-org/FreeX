@@ -234,6 +234,7 @@ try {
             "docs/parity/dialog-visual-evidence-summary.json",
             "docs/parity/dialog-visual-assets/wpf-capture/manifest.json",
             "docs/parity/dialog-visual-assets/avalonia-capture/manifest.json",
+            "docs/parity/freex-excel-foreground-capture-2026-08-16.md",
             "docs/parity/freex-excel-com-baseline-2026-08-14/manifest.json"
         )
         routeCoverage = [ordered]@{
@@ -258,11 +259,13 @@ try {
             evidenceClassification = "paired WPF/Avalonia app-owned dialog screenshots and manifest metadata; not a visual-parity result"
         }
         physicalEvidence = [ordered]@{
-            status = "not-present-in-inputs"
-            captureMode = "generated WPF/Avalonia dialog render manifests"
-            noComStatus = "not-present-in-inputs"
+            status = "available-interactive-foreground"
+            captureMode = "foreground-owned Excel ribbon/dialog capture plus generated WPF/Avalonia dialog render manifests"
+            noComStatus = "not-applicable"
             limitations = @(
-                "The consumed FreeX inputs contain app-owned WPF/Avalonia render evidence only; no physical-device capture manifest is included.",
+                "The 2026-08-16 interactive run captured 32 Excel ribbon states and six guarded popup/dialog surfaces; it is Office UI coverage, not a pixel-level FreeX-versus-Excel chrome comparison.",
+                "The installed Office profile does not expose the Draw tab; the ribbon manifest records its four unavailable-tab skips.",
+                "WPF captured 116/116 app-host surfaces and Avalonia captured 180/181; popup.nameBoxDropdown remains intentionally diagnostic-only.",
                 [string]$freeXOfficeBaseline.limitation
             )
         }
@@ -525,6 +528,7 @@ try {
             "docs/parity/dialog-visual-evidence-summary.json",
             "docs/parity/dialog-visual-assets/wpf-capture/manifest.json",
             "docs/parity/dialog-visual-assets/avalonia-capture/manifest.json",
+            "docs/parity/freex-excel-foreground-capture-2026-08-16.md",
             "docs/parity/freex-excel-com-baseline-2026-08-14/manifest.json",
             "docs/parity/freew-command-inventory.json",
             "docs/parity/freew-dialog-harness/freew_dialog_route_inventory.json",
@@ -596,6 +600,7 @@ try {
         '- `docs/parity/dialog-visual-evidence-summary.json`',
         '- `docs/parity/dialog-visual-assets/wpf-capture/manifest.json`',
         '- `docs/parity/dialog-visual-assets/avalonia-capture/manifest.json`',
+        '- `docs/parity/freex-excel-foreground-capture-2026-08-16.md`',
         '- `docs/parity/freex-excel-com-baseline-2026-08-14/manifest.json`',
         '- `docs/parity/freew-command-inventory.json`',
         '- `docs/parity/freew-dialog-harness/freew_dialog_route_inventory.json`',
