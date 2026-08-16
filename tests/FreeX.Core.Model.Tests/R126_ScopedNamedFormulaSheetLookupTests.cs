@@ -28,19 +28,57 @@ namespace FreeX.Core.Model.Tests;
 /// </summary>
 public class R126_ScopedNamedFormulaSheetLookupTests
 {
-    private static (Workbook Workbook, Sheet[] Sheets) BuildWorkbookWithOneScopedNameEachSheet(int sheetCount)
+    /// <summary>
+    /// Ratio above which the sheet lookup is judged to scale with sheet count. Sized from measured
+    /// values, not from theory: with this harness the O(1) dictionary measures 1.0-1.3 and the O(N)
+    /// scan it guards against measures 6.8-18.1, so 4.0 sits ~3x above the former and below the
+    /// latter's worst observed run. See BuildWorkbook's remarks for why the previous design could
+    /// not be separated by any threshold at all.
+    /// </summary>
+    private const double ScanRegressionRatioThreshold = 4.0;
+
+    /// <summary>
+    /// Builds a workbook with <paramref name="sheetCount"/> sheets carrying exactly
+    /// <paramref name="scopedNameCount"/> sheet-scoped names, so the two can be varied
+    /// independently.
+    /// </summary>
+    /// <remarks>
+    /// Holding the name count fixed is what makes this test discriminate. RewriteNamedFormulas does
+    /// two things per scoped name: look the owning sheet up, and rewrite the formula text. Only the
+    /// lookup depends on sheet count. An earlier version of this test grew names and sheets together,
+    /// so the text-rewriting term grew 30x alongside and swamped the signal -- measured here, the
+    /// O(N)-scan regression it exists to catch produced a ratio of ~80 while the correct O(1) code
+    /// produced ~30, and the same correct code reached ~152 under a loaded gate. The bug's signature
+    /// sat *below* the noise floor of the fix, so no threshold could separate them: 150 was
+    /// simultaneously too loose to catch the regression and too tight to avoid false failures. With
+    /// the name count pinned, the rewriting cost is identical on both sides and cancels out of the
+    /// ratio, leaving only the lookup: ~1x for the O(1) dictionary, ~30x for the O(N) scan.
+    /// </remarks>
+    private static (Workbook Workbook, Sheet[] Sheets) BuildWorkbook(int sheetCount, int scopedNameCount)
     {
+        // Names are scoped to the tail sheets (below), so asking for more names than sheets would
+        // index off the front of the array. Fail with the reason rather than an IndexOutOfRange.
+        scopedNameCount.Should().BeLessThanOrEqualTo(
+            sheetCount,
+            "each scoped name needs its own sheet to own it");
+
         var workbook = new Workbook("perf");
         var sheets = new Sheet[sheetCount];
         for (var i = 0; i < sheetCount; i++)
             sheets[i] = workbook.AddSheet($"S{i}");
 
-        // One sheet-scoped named formula per sheet -- the formula text itself is irrelevant to
-        // the sheet-lookup cost under test; the FirstOrDefault/GetSheet scan runs unconditionally
-        // for every entry in ScopedNamedFormulas before the rewriter even inspects the text
-        // (RowColumnShiftHelpers.NamedRanges.cs:48-56).
-        for (var i = 0; i < sheetCount; i++)
-            workbook.DefineNamedFormula($"ScopedName_{i}", "1+1", sheets[i].Id);
+        // Scope the names to the LAST sheets, not the first. A linear FirstOrDefault scan stops at
+        // the match, so names owned by early sheets are found after a few steps no matter how many
+        // sheets follow -- with the names on sheets[0..n) the scan measured exactly as fast as the
+        // dictionary and the regression was invisible. Owning the tail forces the scan to walk the
+        // whole list, which is the cost this test exists to detect. The O(1) lookup is indifferent
+        // to the position either way.
+        //
+        // The formula text is irrelevant to the sheet-lookup cost under test; the
+        // FirstOrDefault/GetSheet call runs unconditionally for every entry in ScopedNamedFormulas
+        // before the rewriter even inspects the text.
+        for (var i = 0; i < scopedNameCount; i++)
+            workbook.DefineNamedFormula($"ScopedName_{i}", "1+1", sheets[sheetCount - 1 - i].Id);
 
         return (workbook, sheets);
     }
@@ -59,17 +97,19 @@ public class R126_ScopedNamedFormulaSheetLookupTests
     /// could never get lucky enough to slip under the bound, so best-of-N loses no discriminating
     /// power while removing the false failures.
     /// </remarks>
-    private static double BestOfMeasureRewriteNamedFormulasMsPerCall(int sheetCount, int iterations, int rounds = 5)
+    private static double BestOfMeasureRewriteNamedFormulasMsPerCall(
+        int sheetCount, int scopedNameCount, int iterations, int rounds = 5)
     {
         var best = double.MaxValue;
         for (var round = 0; round < rounds; round++)
-            best = Math.Min(best, MeasureRewriteNamedFormulasMsPerCall(sheetCount, iterations));
+            best = Math.Min(best, MeasureRewriteNamedFormulasMsPerCall(sheetCount, scopedNameCount, iterations));
         return best;
     }
 
-    private static double MeasureRewriteNamedFormulasMsPerCall(int sheetCount, int iterations)
+    private static double MeasureRewriteNamedFormulasMsPerCall(
+        int sheetCount, int scopedNameCount, int iterations)
     {
-        var (workbook, sheets) = BuildWorkbookWithOneScopedNameEachSheet(sheetCount);
+        var (workbook, sheets) = BuildWorkbook(sheetCount, scopedNameCount);
         var op = new InsertRowsOp(sheets[0].Name, BeforeRow: 1, Count: 1);
 
         // Warm up JIT / first-call allocation costs outside the timed region.
@@ -93,30 +133,31 @@ public class R126_ScopedNamedFormulaSheetLookupTests
     public void R126_RewriteNamedFormulas_ScopedSheetLookupScalesLinearlyWithSheetCount()
     {
         const int smallSheetCount = 100;
-        const int largeSheetCount = 3_000; // 30x more sheets AND 30x more scoped names
+        const int largeSheetCount = 3_000; // 30x more sheets, with the scoped-name count held fixed
+        const int scopedNameCount = 100;   // constant on both sides -- see BuildWorkbook's remarks
         const int iterations = 15;
 
         // Best-of-N on BOTH sides: see BestOfMeasureRewriteNamedFormulasMsPerCall. Taking the mean
         // here made the gate report a scaling regression that did not exist.
-        var smallMs = BestOfMeasureRewriteNamedFormulasMsPerCall(smallSheetCount, iterations);
-        var largeMs = BestOfMeasureRewriteNamedFormulasMsPerCall(largeSheetCount, iterations);
+        var smallMs = BestOfMeasureRewriteNamedFormulasMsPerCall(
+            smallSheetCount, scopedNameCount, iterations);
+        var largeMs = BestOfMeasureRewriteNamedFormulasMsPerCall(
+            largeSheetCount, scopedNameCount, iterations);
 
         // Floor the small measurement so a near-zero denominator can't produce a spuriously huge
         // (or spuriously tiny) ratio on a very fast machine.
         var ratio = largeMs / Math.Max(smallMs, 0.01);
 
-        // With an O(1) GetSheet lookup, total cost is O(scoped-name-count) -- it should scale
-        // ~linearly with the 30x growth in sheet count (and scoped-name count, since this
-        // workbook defines one name per sheet). With the old O(sheet-count) FirstOrDefault scan,
-        // total cost is O(scoped-name-count * sheet-count) -- quadratic, i.e. ~900x (30 * 30) for
-        // the same growth. A threshold of 150 sits comfortably above the expected ~30x linear
-        // scaling and comfortably below the ~900x quadratic scaling, so it distinguishes the two
-        // implementations without being sensitive to per-call measurement noise.
-        ratio.Should().BeLessThan(150,
-            because: $"GetSheet(SheetId) is an O(1) dictionary lookup, so RewriteNamedFormulas's " +
-                     $"cost should scale ~linearly (~{largeSheetCount / smallSheetCount}x) with " +
-                     $"sheet count, not quadratically like the old workbook.Sheets.FirstOrDefault " +
-                     $"scan would (smallMs={smallMs:F3}, largeMs={largeMs:F3}, ratio={ratio:F1})");
+        // With the scoped-name count fixed, the only sheet-count-dependent work left is the owning
+        // sheet lookup. An O(1) GetSheet keeps the total cost flat as sheets grow 30x, so the ratio
+        // sits near 1. The old O(sheet-count) FirstOrDefault scan makes it grow with sheet count, so
+        // the ratio tracks the 30x growth.
+        ratio.Should().BeLessThan(ScanRegressionRatioThreshold,
+            because: $"GetSheet(SheetId) is an O(1) dictionary lookup, so with the scoped-name " +
+                     $"count held at {scopedNameCount} the cost must not grow as sheets go " +
+                     $"{smallSheetCount} -> {largeSheetCount}; the old workbook.Sheets.FirstOrDefault " +
+                     $"scan grows it ~{largeSheetCount / smallSheetCount}x " +
+                     $"(smallMs={smallMs:F3}, largeMs={largeMs:F3}, ratio={ratio:F1})");
     }
 
     // ── No-regression siblings: the O(1) lookup must still resolve the SAME sheet as the old
