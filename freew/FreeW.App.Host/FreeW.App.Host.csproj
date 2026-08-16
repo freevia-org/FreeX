@@ -71,10 +71,8 @@
     <!-- FidelityRender's normal Release build composes internal pagination, overlay, and column-rule
          primitives into visual-parity artifacts. Its access must not depend on the host-test variant. -->
     <InternalsVisibleTo Include="FreeW.FidelityRender" />
-  </ItemGroup>
-
-  <ItemGroup Condition="'$(FreeWRenderCompareSupport)' == 'true'">
-    <!-- The on-demand DOCX visual-fidelity harness renders through the internal print paginator. -->
+    <!-- RenderCompare is also built through FreeW.slnx, where the host is shared with the other
+         projects rather than built in a render-compare-specific variant. -->
     <InternalsVisibleTo Include="FreeW.RenderCompare" />
   </ItemGroup>
 

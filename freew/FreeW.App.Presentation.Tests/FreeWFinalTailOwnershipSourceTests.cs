@@ -53,7 +53,7 @@ public sealed class FreeWFinalTailOwnershipSourceTests
             "FreeW.FidelityRender",
             "freew", "FreeW.App.Host", "FreeW.App.Host.csproj");
         AssertFriendCondition(
-            "'$(FreeWRenderCompareSupport)' == 'true'",
+            expectedCondition: null,
             "FreeW.RenderCompare",
             "freew", "FreeW.App.Host", "FreeW.App.Host.csproj");
     }
