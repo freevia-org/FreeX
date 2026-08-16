@@ -842,7 +842,8 @@ public sealed class ReferencesTabTests
             .Where(TableOfAuthorities.IsTableOfAuthoritiesParagraph)
             .Select(paragraph => paragraph.PlainText)
             .Should()
-            .ContainInOrder("Table of Authorities", "Cases", "Brown v. Board, 347 U.S. 483 (1954)");
+            // A freshly built Table of Authorities entry carries its tab-separated page reference.
+            .ContainInOrder("Table of Authorities", "Cases", "Brown v. Board, 347 U.S. 483 (1954)\t1");
 
         using var stream = new MemoryStream();
         DocxWriter.Write(view.Document, stream);
@@ -2007,7 +2008,8 @@ public sealed class ReferencesTabTests
             .Where(TableOfAuthorities.IsTableOfAuthoritiesParagraph)
             .Select(paragraph => paragraph.PlainText)
             .Should()
-            .Contain("Brown v. Board");
+            // The generated entry carries its tab-separated page reference.
+            .Contain("Brown v. Board\t1");
     }
 
     [Fact]
