@@ -108,6 +108,15 @@ public static class FreeWDocumentFileFeedbackPlanner
         if (execution.Outcome == DocumentFileExecutionOutcome.CompatibilityDeclined)
             return new(false, isCopy ? "Save a Copy canceled." : "Save canceled.");
 
+        if (execution.Outcome == DocumentFileExecutionOutcome.ExternalWriteConflict)
+        {
+            return new(
+                false,
+                isCopy
+                    ? "Save a Copy canceled -- the file was changed by another program."
+                    : "Save canceled -- the file was changed by another program.");
+        }
+
         if (execution.Outcome == DocumentFileExecutionOutcome.UnsupportedFormat)
         {
             return Failure(

@@ -26060,7 +26060,25 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
                 UiText.Get("DirtyWorkbook_DiscardAndQuit")))
             return;
 
-        _allowCloseWithoutDirtyPrompt = true;
+        // The confirmation above answers for the shared document, not just this window: a
+        // "New Window" sibling views the SAME WorkbookSession document state (CreateSiblingView),
+        // so on Discard the document stays dirty (only Save clears it) and _allowCloseWithoutDirtyPrompt
+        // is otherwise a per-window flag. Without propagating it here, desktop.TryShutdown's cascade
+        // reaches each sibling's own MainWindow_Closing, which re-checks the still-dirty shared session
+        // and -- once this window has already unregistered -- finds itself the "last" window for the
+        // document and prompts a SECOND time for the identical file. If the user cancels that redundant
+        // prompt, shutdown aborts with this window already gone: a half-quit split of one document
+        // across an open and a closed window. Marking every sibling here keeps the single confirmation
+        // authoritative for the whole document and matches the WPF host, which has no separate quit
+        // gate at all -- it relies solely on the per-window Closing handler's own
+        // DocumentSharedWithOtherWindows() check (see MainWindow.WorkbookLifecycle.cs), so it never
+        // duplicates a prompt in the first place.
+        foreach (var sibling in WindowRegistry.Windows)
+        {
+            if (sibling.DocumentId == DocumentId)
+                sibling._allowCloseWithoutDirtyPrompt = true;
+        }
+
         if (Application.Current?.ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)
         {
             desktop.TryShutdown(0);

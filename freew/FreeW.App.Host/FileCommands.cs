@@ -89,6 +89,8 @@ internal sealed class FileCommands
                 },
                 ConfirmSaveCompatibilityAsync: (plan, _) =>
                     ValueTask.FromResult(confirmCompatibility(plan)),
+                ConfirmExternallyModifiedOverwriteAsync: (path, cancellationToken) =>
+                    _workflow.ConfirmExternallyModifiedOverwriteAsync(path, cancellationToken),
                 UpdateFieldsAsync: _ =>
                 {
                     _editor.UpdateFields();

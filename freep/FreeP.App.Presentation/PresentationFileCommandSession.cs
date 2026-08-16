@@ -400,6 +400,17 @@ public sealed class PresentationFileCommandSession
     private readonly Func<PresentationPrintRequest?, PresentationPrintOutputPackage>? _printPackageFactory;
     private readonly Func<PresentationVideoExportRequest?, PresentationVideoFramePackageArtifact>?
         _videoPackageArtifactFactory;
+    private readonly Func<string, CancellationToken, Task<bool>>? _confirmExternallyModifiedOverwriteAsync;
+
+    // r137-remediation2: the write time observed on the CURRENT presentation's source file, captured
+    // at open (PresentationFileOpenResult.SourceLastWriteTimeUtc) and rebased after each successful
+    // save to the path it just wrote. SavePathCoreAsync only forwards this as the external-
+    // modification guard's expected time when the save target is the SAME path this field tracks
+    // (PlatformPathIdentityComparer) -- Save-As to a different path establishes a new identity with
+    // nothing to compare, so the guard is naturally skipped there. Never explicitly reset on File>New:
+    // New clears _lifecycle.CurrentPath to null, and the path-identity gate is already false against
+    // a null CurrentPath, so a stale value here is inert.
+    private DateTime? _currentFileSourceLastWriteTimeUtc;
 
     public PresentationFileCommandSession(
         Func<Presentation> getPresentation,
@@ -415,7 +426,11 @@ public sealed class PresentationFileCommandSession
         Func<IReadOnlyList<int>?>? getPrintSelectedSlideNumbers = null,
         Func<PresentationPrintRequest?, PresentationPrintOutputPackage>? printPackageFactory = null,
         Func<PresentationVideoExportRequest?, PresentationVideoFramePackageArtifact>?
-            videoPackageArtifactFactory = null)
+            videoPackageArtifactFactory = null,
+        // r137-remediation2: asks whether to overwrite a save target that another program changed
+        // since it was opened/last saved. Null (the default) means the host wired nothing, which
+        // SavePathCoreAsync treats as "always decline" -- never silently overwrite.
+        Func<string, CancellationToken, Task<bool>>? confirmExternallyModifiedOverwriteAsync = null)
     {
         ArgumentNullException.ThrowIfNull(getPresentation);
         ArgumentNullException.ThrowIfNull(loadPresentation);
@@ -438,6 +453,7 @@ public sealed class PresentationFileCommandSession
         _getPrintSelectedSlideNumbers = getPrintSelectedSlideNumbers ?? (() => null);
         _printPackageFactory = printPackageFactory;
         _videoPackageArtifactFactory = videoPackageArtifactFactory;
+        _confirmExternallyModifiedOverwriteAsync = confirmExternallyModifiedOverwriteAsync;
     }
 
     public bool IsDirty => _lifecycle.IsDirty;
@@ -1046,6 +1062,7 @@ public sealed class PresentationFileCommandSession
             cancellationToken.ThrowIfCancellationRequested();
             var result = PresentationFilePersistenceWorkflow.Open(path);
             _loadPresentation(result.Presentation);
+            _currentFileSourceLastWriteTimeUtc = result.SourceLastWriteTimeUtc;
             SetSaved(result.SavedPath, suppressRecentFiles || result.SuppressRecentFiles);
             return await CompleteAsync(
                 PresentationFileCommandResult.Success(
@@ -1098,6 +1115,11 @@ public sealed class PresentationFileCommandSession
         return await SavePathCoreAsync(PresentationFileCommand.SaveAs, resolvedPath, cancellationToken);
     }
 
+    private static readonly Func<PresentationFileCommand, PresentationFileCommandResult>
+        ExternalWriteConflictResult = static command => PresentationFileCommandResult.Cancel(
+            command,
+            "Save canceled -- the file was changed by another program.");
+
     private async Task<PresentationFileCommandResult> SavePathCoreAsync(
         PresentationFileCommand command,
         string path,
@@ -1106,7 +1128,38 @@ public sealed class PresentationFileCommandSession
         try
         {
             cancellationToken.ThrowIfCancellationRequested();
-            var result = PresentationFilePersistenceWorkflow.Save(path, _getPresentation());
+
+            // Only guard a save that overwrites the SAME path this session's identity already
+            // tracks (CurrentPath). Save-As to a different path -- or the first save of a
+            // never-saved presentation, where CurrentPath is null -- has nothing to compare
+            // against, so the comparer's null-safe Equals naturally turns the guard off.
+            var expectedLastWriteTimeUtc = PlatformPathIdentityComparer.Current.Equals(CurrentPath, path)
+                ? _currentFileSourceLastWriteTimeUtc
+                : null;
+
+            if (expectedLastWriteTimeUtc is { } expectedWriteTimeUtc &&
+                File.Exists(path) &&
+                File.GetLastWriteTimeUtc(path) != expectedWriteTimeUtc)
+            {
+                // Someone else wrote path since it was last observed (another FreeP instance, a
+                // sync client, a colleague on a shared path). Ask before clobbering their write; a
+                // null callback (host wired nothing) or a declined prompt both refuse the overwrite.
+                var observedWriteTimeUtc = File.GetLastWriteTimeUtc(path);
+                var confirmed = _confirmExternallyModifiedOverwriteAsync is not null &&
+                    await _confirmExternallyModifiedOverwriteAsync(path, cancellationToken);
+                if (!confirmed)
+                    return await CompleteAsync(ExternalWriteConflictResult(command), cancellationToken);
+
+                // The user accepted the write visible at the prompt. Advance the baseline to that
+                // accepted version so Save's own check-then-act guard (last line of defense
+                // against a race between the prompt and the write below) compares against what was
+                // just approved rather than the stale value that triggered this prompt.
+                expectedLastWriteTimeUtc = observedWriteTimeUtc;
+            }
+
+            var result = PresentationFilePersistenceWorkflow.Save(path, _getPresentation(), expectedLastWriteTimeUtc);
+            _currentFileSourceLastWriteTimeUtc =
+                File.Exists(result.SavedPath) ? File.GetLastWriteTimeUtc(result.SavedPath) : null;
             _lifecycle.MarkSavedWithPath(result.SavedPath, result.SuppressRecentFiles);
             return await CompleteAsync(
                 PresentationFileCommandResult.Success(
@@ -1116,6 +1169,12 @@ public sealed class PresentationFileCommandSession
                         PresentationFileTextResources.Presentation,
                         Path.GetFileName(result.SavedPath))),
                 cancellationToken);
+        }
+        catch (PresentationExternallyModifiedException)
+        {
+            // A second writer landed between the check above and the write (race). Report the
+            // same conflict outcome rather than re-prompting for a version the user never saw.
+            return await CompleteAsync(ExternalWriteConflictResult(command), cancellationToken);
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {

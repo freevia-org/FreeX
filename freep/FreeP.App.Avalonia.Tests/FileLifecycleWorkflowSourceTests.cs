@@ -61,7 +61,7 @@ public sealed class FileLifecycleWorkflowSourceTests
         lifecycleAdapter.Should().Contain("FileCommandWorkflow _workflow");
         lifecycleAdapter.Should().Contain("_workflow.SaveAsync(saveToCurrentPathAsync, saveAsAsync)");
         session.Should().Contain("PresentationFilePersistenceWorkflow.Open(path)");
-        session.Should().Contain("PresentationFilePersistenceWorkflow.Save(path, _getPresentation())");
+        session.Should().Contain("PresentationFilePersistenceWorkflow.Save(path, _getPresentation(), expectedLastWriteTimeUtc)");
         session.Should().Contain("PresentationFileDialogPlanner.BuildOpenPickerPlan()");
         session.Should().Contain("PresentationFileDialogPlanner.BuildSavePickerPlan(");
         sharedShellWorkflow.Should().Contain("new FileCommandWorkflow(");

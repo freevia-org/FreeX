@@ -15,11 +15,29 @@ public enum PresentationFilePersistenceFormat
 public sealed record PresentationFileOpenResult(
     Presentation Presentation,
     string? SavedPath,
-    bool SuppressRecentFiles);
+    bool SuppressRecentFiles,
+    // r137-remediation2: the write time observed on SavedPath at open, threaded back into a later
+    // Save's expectedLastWriteTimeUtc so it can detect another writer having changed the file since
+    // -- see Save's own comment and PresentationExternallyModifiedException.
+    DateTime? SourceLastWriteTimeUtc = null);
 
 public sealed record PresentationFileSaveResult(
     string SavedPath,
     bool SuppressRecentFiles);
+
+/// <summary>
+/// Thrown by <see cref="PresentationFilePersistenceWorkflow.Save"/> when the caller passed the
+/// write time it observed on the target path (<c>expectedLastWriteTimeUtc</c>, sourced from
+/// <see cref="PresentationFileOpenResult.SourceLastWriteTimeUtc"/>) and the file on disk has since
+/// been changed by someone else -- another FreeP instance, a sync client, a colleague on a shared
+/// path. Hosts should catch this the same way FreeX's hosts catch
+/// <c>WorkbookExternallyModifiedException</c> and prompt the user instead of silently overwriting.
+/// </summary>
+public sealed class PresentationExternallyModifiedException(string path)
+    : Exception($"'{path}' was modified by another program since it was opened.")
+{
+    public string Path { get; } = path;
+}
 
 /// <summary>
 /// Renderer-neutral FreeP presentation file workflow. Platform hosts provide picker UI and status text;
@@ -70,13 +88,29 @@ public static class PresentationFilePersistenceWorkflow
         return new PresentationFileOpenResult(
             presentation,
             SavedPath: path,
-            SuppressRecentFiles: false);
+            SuppressRecentFiles: false,
+            SourceLastWriteTimeUtc: File.GetLastWriteTimeUtc(path));
     }
 
-    public static PresentationFileSaveResult Save(string path, Presentation presentation)
+    public static PresentationFileSaveResult Save(
+        string path,
+        Presentation presentation,
+        DateTime? expectedLastWriteTimeUtc = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(path);
         ArgumentNullException.ThrowIfNull(presentation);
+
+        // r137-remediation2: port of FreeX's WorkbookSaveService.SaveAsync / FreeW's
+        // DocumentPersistenceWorkflow.Save check. Best-effort check-then-act (not a held file lock,
+        // same caveat as those two) -- but it catches the common "someone else saved while I was
+        // still editing" case instead of silently discarding their write. Callers that don't pass
+        // expectedLastWriteTimeUtc (the default) get the pre-existing unchecked behavior.
+        if (expectedLastWriteTimeUtc is { } expectedWriteTimeUtc &&
+            File.Exists(path) &&
+            File.GetLastWriteTimeUtc(path) != expectedWriteTimeUtc)
+        {
+            throw new PresentationExternallyModifiedException(path);
+        }
 
         AtomicFileWriter.WriteAllBytes(path, SerializePresentation(path, presentation));
         return new PresentationFileSaveResult(

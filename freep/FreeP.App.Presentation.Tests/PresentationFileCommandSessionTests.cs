@@ -389,6 +389,117 @@ public sealed class PresentationFileCommandSessionTests : IDisposable
         video.ExportCount.Should().Be(2);
     }
 
+    // r137-remediation2: proves the external-modification guard fires through the REAL entry point
+    // (OpenPathAsync captures the write time via PresentationFilePersistenceWorkflow.Open; a second
+    // writer mutates the file on disk; session.SaveAsync fires the guard on its own) -- nothing in
+    // this test passes expectedLastWriteTimeUtc directly, unlike PresentationFilePersistenceWorkflow
+    // Tests's unit-level coverage of the Save check itself.
+    [Fact]
+    public async Task SaveAsync_ExternallyModifiedFile_DeclinedPromptDoesNotOverwrite()
+    {
+        var path = Path.Combine(TempDirectory, "Shared.pptx");
+        PresentationFilePersistenceWorkflow.Save(path, TitledPresentation("Original"));
+        var lifecycle = new FakeLifecyclePort();
+        var presentation = TitledPresentation("My Edit");
+        var session = CreateSession(
+            () => presentation,
+            _ => { },
+            lifecycle,
+            new FakePickerPort(),
+            confirmExternallyModifiedOverwriteAsync: (_, _) => Task.FromResult(false));
+
+        var opened = await session.OpenPathAsync(path);
+        opened.Succeeded.Should().BeTrue();
+
+        // Simulate a second writer (another FreeP instance, a sync client) touching the file on
+        // disk after we opened it but before we save -- a real mtime change, not a fabricated one.
+        PresentationFilePersistenceWorkflow.Save(path, TitledPresentation("Someone Else's Edit"));
+        File.SetLastWriteTimeUtc(path, File.GetLastWriteTimeUtc(path) + TimeSpan.FromMinutes(1));
+
+        var saved = await session.SaveAsync();
+
+        saved.Status.Should().Be(PresentationFileCommandStatus.Cancelled);
+        PresentationFilePersistenceWorkflow.Open(path).Presentation.Properties.Title.Should().Be(
+            "Someone Else's Edit",
+            "a declined overwrite must never clobber the other writer's changes");
+    }
+
+    [Fact]
+    public async Task SaveAsync_ExternallyModifiedFile_ConfirmedPromptOverwrites()
+    {
+        var path = Path.Combine(TempDirectory, "Shared.pptx");
+        PresentationFilePersistenceWorkflow.Save(path, TitledPresentation("Original"));
+        var lifecycle = new FakeLifecyclePort();
+        var presentation = TitledPresentation("My Edit");
+        var confirmedPaths = new List<string>();
+        var session = CreateSession(
+            () => presentation,
+            _ => { },
+            lifecycle,
+            new FakePickerPort(),
+            confirmExternallyModifiedOverwriteAsync: (confirmedPath, _) =>
+            {
+                confirmedPaths.Add(confirmedPath);
+                return Task.FromResult(true);
+            });
+
+        var opened = await session.OpenPathAsync(path);
+        opened.Succeeded.Should().BeTrue();
+
+        PresentationFilePersistenceWorkflow.Save(path, TitledPresentation("Someone Else's Edit"));
+        File.SetLastWriteTimeUtc(path, File.GetLastWriteTimeUtc(path) + TimeSpan.FromMinutes(1));
+
+        var saved = await session.SaveAsync();
+
+        saved.Succeeded.Should().BeTrue();
+        confirmedPaths.Should().Equal(path);
+        PresentationFilePersistenceWorkflow.Open(path).Presentation.Properties.Title.Should().Be("My Edit");
+    }
+
+    // Save-As to a DIFFERENT path than the one that was opened must never fire the guard: the new
+    // target has no prior observation to compare against, even though the ORIGINAL file was changed
+    // externally in the meantime.
+    [Fact]
+    public async Task SaveAsAsync_ToDifferentPath_NeverFiresGuardEvenWhenOriginalWasModified()
+    {
+        var originalPath = Path.Combine(TempDirectory, "Original.pptx");
+        PresentationFilePersistenceWorkflow.Save(originalPath, TitledPresentation("Original"));
+        var differentPath = Path.Combine(TempDirectory, "SaveAsTarget.pptx");
+        var lifecycle = new FakeLifecyclePort();
+        var presentation = TitledPresentation("My Edit");
+        var promptInvoked = false;
+        var picker = new FakePickerPort { SaveResult = PresentationFilePickerResult.Selected(differentPath) };
+        var session = CreateSession(
+            () => presentation,
+            _ => { },
+            lifecycle,
+            picker,
+            confirmExternallyModifiedOverwriteAsync: (_, _) =>
+            {
+                promptInvoked = true;
+                return Task.FromResult(false);
+            });
+
+        var opened = await session.OpenPathAsync(originalPath);
+        opened.Succeeded.Should().BeTrue();
+
+        PresentationFilePersistenceWorkflow.Save(originalPath, TitledPresentation("Someone Else's Edit"));
+        File.SetLastWriteTimeUtc(originalPath, File.GetLastWriteTimeUtc(originalPath) + TimeSpan.FromMinutes(1));
+
+        var savedAs = await session.SaveAsAsync();
+
+        savedAs.Succeeded.Should().BeTrue();
+        promptInvoked.Should().BeFalse("Save-As to a different path has no prior observation to compare");
+        PresentationFilePersistenceWorkflow.Open(differentPath).Presentation.Properties.Title.Should().Be("My Edit");
+    }
+
+    private static Presentation TitledPresentation(string title)
+    {
+        var presentation = Presentation.CreateEmpty();
+        presentation.Properties.Title = title;
+        return presentation;
+    }
+
     [Fact]
     public void Result_and_picker_compatibility_types_project_the_shared_outcome()
     {
@@ -433,7 +544,8 @@ public sealed class PresentationFileCommandSessionTests : IDisposable
         IPresentationVideoPort? video = null,
         FakeFeedbackPort? feedback = null,
         Func<PresentationVideoExportRequest?, PresentationVideoFramePackageArtifact>?
-            videoPackageArtifactFactory = null) =>
+            videoPackageArtifactFactory = null,
+        Func<string, CancellationToken, Task<bool>>? confirmExternallyModifiedOverwriteAsync = null) =>
         new(
             getPresentation,
             loadPresentation,
@@ -443,7 +555,8 @@ public sealed class PresentationFileCommandSessionTests : IDisposable
             print ?? new FakePrintPort(),
             video ?? new FakeVideoPort(),
             feedback,
-            videoPackageArtifactFactory: videoPackageArtifactFactory);
+            videoPackageArtifactFactory: videoPackageArtifactFactory,
+            confirmExternallyModifiedOverwriteAsync: confirmExternallyModifiedOverwriteAsync);
 
     private sealed class FakeLifecyclePort : IPresentationFileLifecyclePort
     {

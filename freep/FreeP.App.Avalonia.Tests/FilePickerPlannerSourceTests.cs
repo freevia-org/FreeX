@@ -115,7 +115,7 @@ public sealed class FilePickerPlannerSourceTests
             .And.Contain("await output.WriteAsync(artifact.Bytes, token)");
         session.Should().NotContain("AtomicFileWriter.WriteAllBytes(selection.Path!, artifact.Bytes)");
         session.Should().Contain("PresentationFilePersistenceWorkflow.Open(path)");
-        session.Should().Contain("PresentationFilePersistenceWorkflow.Save(path, _getPresentation())");
+        session.Should().Contain("PresentationFilePersistenceWorkflow.Save(path, _getPresentation(), expectedLastWriteTimeUtc)");
         ports.Should().Contain("AvaloniaFilePickerService.PickSingleOpenFileWithLocalPathAsync(");
         ports.Should().Contain("AvaloniaFilePickerService.PickSaveFileWithLocalPathAsync(");
         ports.Should().Contain("AvaloniaFilePickerOpenRequest.FromDescriptors(request.Title, request.PickerPlan.FileTypes)");

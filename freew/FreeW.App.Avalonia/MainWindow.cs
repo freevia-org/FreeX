@@ -262,6 +262,8 @@ public sealed partial class MainWindow : Window
                 },
                 ConfirmSaveCompatibilityAsync: (plan, _) =>
                     new ValueTask<bool>(SaveCompatibilityWarningDialog.ShowAsync(this, plan)),
+                ConfirmExternallyModifiedOverwriteAsync: (path, cancellationToken) =>
+                    _fileWorkflow.ConfirmExternallyModifiedOverwriteAsync(path, cancellationToken),
                 UpdateFieldsAsync: _ =>
                 {
                     _suppressEditorDirty = true;

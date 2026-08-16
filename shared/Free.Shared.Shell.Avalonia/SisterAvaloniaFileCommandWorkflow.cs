@@ -45,6 +45,7 @@ public sealed class SisterAvaloniaFileCommandWorkflow
     private readonly Func<string, Exception, Task> _showFileCommandErrorAsync;
     private readonly Action? _restoreOwnerFocus;
     private readonly SemaphoreSlim _destructiveActionGate = new(1, 1);
+    private readonly IUserMessageService _messageService;
 
     public SisterAvaloniaFileCommandWorkflow(
         Window owner,
@@ -56,7 +57,8 @@ public sealed class SisterAvaloniaFileCommandWorkflow
         Func<Task<bool>>? saveAsync = null,
         Func<string, Task<SaveChangesPrompt>>? promptSaveChangesAsync = null,
         Func<string, Exception, Task>? showFileCommandErrorAsync = null,
-        Action? restoreOwnerFocus = null)
+        Action? restoreOwnerFocus = null,
+        IUserMessageService? messageService = null)
     {
         ArgumentNullException.ThrowIfNull(owner);
         ArgumentNullException.ThrowIfNull(titleSpec);
@@ -75,6 +77,7 @@ public sealed class SisterAvaloniaFileCommandWorkflow
         _saveAsync = saveAsync ?? (() => Task.FromResult(save!()));
         _showFileCommandErrorAsync = showFileCommandErrorAsync ?? ShowFileCommandErrorCoreAsync;
         _restoreOwnerFocus = restoreOwnerFocus;
+        _messageService = messageService ?? new AvaloniaUserMessageService(owner);
         _workflow = new FileCommandWorkflow(
             maxRecentEntries,
             OnWorkflowChanged,
@@ -168,6 +171,15 @@ public sealed class SisterAvaloniaFileCommandWorkflow
         ArgumentNullException.ThrowIfNull(exception);
         return _showFileCommandErrorAsync(summary, exception);
     }
+
+    /// <summary>
+    /// Asks whether to overwrite a save target that was changed by another program since it was
+    /// opened/last saved. See <see cref="Free.Shared.AppServices.UserMessageServiceFileCommandExtensions.AskExternallyModifiedOverwriteAsync"/>.
+    /// </summary>
+    public ValueTask<bool> ConfirmExternallyModifiedOverwriteAsync(
+        string path,
+        CancellationToken cancellationToken = default) =>
+        _messageService.AskExternallyModifiedOverwriteAsync(path, _titleSpec.ApplicationName, cancellationToken);
 
     public void MarkSavedWithoutPath(Action? beforeChanged = null) =>
         _workflow.MarkSavedWithoutPath(beforeChanged);
