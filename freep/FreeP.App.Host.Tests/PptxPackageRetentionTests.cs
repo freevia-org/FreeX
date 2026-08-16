@@ -64,6 +64,9 @@ public sealed class PptxPackageRetentionTests
         "ppt/comments/",
         "ppt/notesSlides/",
         "ppt/notesMasters/",
+        // Preserve-only, but re-emitted by the writer from Presentation.HandoutMasterXml with a
+        // regenerated relationship id — so it is writer-owned for retention purposes.
+        "ppt/handoutMasters/",
         "ppt/embeddings/",
         "ppt/diagrams/",
     ];
@@ -83,6 +86,7 @@ public sealed class PptxPackageRetentionTests
         "http://schemas.openxmlformats.org/officeDocument/2006/relationships/chart",
         "http://schemas.openxmlformats.org/officeDocument/2006/relationships/notesSlide",
         "http://schemas.openxmlformats.org/officeDocument/2006/relationships/notesMaster",
+        "http://schemas.openxmlformats.org/officeDocument/2006/relationships/handoutMaster",
         "http://schemas.openxmlformats.org/officeDocument/2006/relationships/hyperlink",
         "http://schemas.openxmlformats.org/officeDocument/2006/relationships/comments",
         "http://schemas.openxmlformats.org/officeDocument/2006/relationships/commentAuthors",

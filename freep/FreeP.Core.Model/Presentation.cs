@@ -98,6 +98,15 @@ public sealed class Presentation
     public List<SlideShape> HandoutMasterPlaceholders { get; } = new();
 
     /// <summary>
+    /// Original handout-master XML and relationships, retained so a read/write round trip keeps
+    /// an authored handout master (custom header/footer text and placement) instead of dropping
+    /// the part. Null when the package had none — the writer never synthesizes a handout master,
+    /// matching the "only preserve, never invent" behavior of the reader.
+    /// </summary>
+    public byte[]? HandoutMasterXml { get; set; }
+    public byte[]? HandoutMasterRelsXml { get; set; }
+
+    /// <summary>
     /// Header/footer visibility flags from the handout master's own <c>p:hf</c> element
     /// (ppt/handoutMasters/handoutMaster1.xml). Null means the package had no explicit handout
     /// master <c>p:hf</c>; consumers should fall back to <see cref="NotesHfVisibility"/> (the
