@@ -211,7 +211,15 @@ internal sealed class AvaloniaRichTextEditor : Grid
     internal string Text
     {
         get => EditingTarget.InputBox.Text ?? string.Empty;
-        set => EditingTarget.InputBox.Text = value;
+        set
+        {
+            EditingTarget.InputBox.Text = value;
+            // Assigning InputBox.Text alone leaves the rich body on its previous content until the
+            // TextChanged handler runs, so anything reading the body in the same turn (a paste, for
+            // instance) operated on stale text and spliced the new content into the OLD string.
+            // Resync eagerly; ReplacePlainText is idempotent when the handler follows.
+            EditingTarget.SynchronizeText();
+        }
     }
 
     internal int SelectionStart
