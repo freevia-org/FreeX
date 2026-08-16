@@ -140,6 +140,36 @@ public sealed class GridCaptureTests
         remaining.Should().Equal("--some-other-flag");
     }
 
+    [Fact]
+    public void GridCaptureOptions_TryParse_AcceptsExplicitWorksheet()
+    {
+        var args = new[]
+        {
+            "--parity-grid", "book.xlsx", "A1:C3", @"C:\out",
+            "--parity-grid-sheet", "Pivot Output"
+        };
+
+        var parsed = GridCaptureOptions.TryParse(args, out var options, out var remaining, out var error);
+
+        parsed.Should().BeTrue();
+        error.Should().BeEmpty();
+        options.Should().NotBeNull();
+        options!.WorksheetName.Should().Be("Pivot Output");
+        remaining.Should().BeEmpty();
+    }
+
+    [Fact]
+    public void GridCaptureOptions_TryParse_RejectsWorksheetWithoutGridCapture()
+    {
+        var args = new[] { "--parity-grid-sheet", "Pivot Output" };
+
+        var parsed = GridCaptureOptions.TryParse(args, out var options, out _, out var error);
+
+        parsed.Should().BeFalse();
+        options.Should().BeNull();
+        error.Should().Contain("requires --parity-grid");
+    }
+
     // ── Headless integration smoke ────────────────────────────────────────────────────────────────
 
     [Fact]

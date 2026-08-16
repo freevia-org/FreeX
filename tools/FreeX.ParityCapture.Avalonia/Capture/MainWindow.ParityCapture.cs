@@ -4356,18 +4356,20 @@ public sealed partial class MainWindow
     internal Task<GridCaptureResult> CaptureGridRangeAsync(
         string workbookPath,
         string rangeText,
-        string outputDirectory)
+        string outputDirectory,
+        string? worksheetName = null)
     {
         // All rendering must happen on the UI thread; we are called from the coordinator which already
         // runs on it via the Opened event, so there is nothing to marshal. Return a completed task so the
         // coordinator can await us uniformly.
-        return Task.FromResult(CaptureGridRangeCore(workbookPath, rangeText, outputDirectory));
+        return Task.FromResult(CaptureGridRangeCore(workbookPath, rangeText, outputDirectory, worksheetName));
     }
 
     private GridCaptureResult CaptureGridRangeCore(
         string workbookPath,
         string rangeText,
-        string outputDirectory)
+        string outputDirectory,
+        string? worksheetName)
     {
         // ── 1. Load the workbook ───────────────────────────────────────────────────────────────────
         // StartupWorkbookLoader silently falls back to the sample workbook for a missing/unsupported
@@ -4389,9 +4391,19 @@ public sealed partial class MainWindow
         }
 
         var workbook = source.Workbook;
-        var sheet = workbook.Sheets.FirstOrDefault(s => !s.IsHidden && !s.IsVeryHidden);
+        var sheet = string.IsNullOrWhiteSpace(worksheetName)
+            ? workbook.Sheets.FirstOrDefault(s => !s.IsHidden && !s.IsVeryHidden)
+            : workbook.Sheets.FirstOrDefault(s =>
+                !s.IsHidden &&
+                !s.IsVeryHidden &&
+                string.Equals(s.Name, worksheetName, StringComparison.OrdinalIgnoreCase));
         if (sheet is null)
-            return GridCaptureFailure(workbookPath, rangeText, outputDirectory, "Workbook has no visible sheet.");
+        {
+            var message = string.IsNullOrWhiteSpace(worksheetName)
+                ? "Workbook has no visible sheet."
+                : $"Workbook has no visible worksheet named '{worksheetName}'.";
+            return GridCaptureFailure(workbookPath, rangeText, outputDirectory, message);
+        }
 
         // ── 2. Parse the cell range ────────────────────────────────────────────────────────────────
         GridRange range;

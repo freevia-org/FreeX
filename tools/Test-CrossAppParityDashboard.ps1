@@ -32,6 +32,7 @@ $requiredSources = @(
     "docs/parity/freew-word-chrome-2026-08-16/manifest.json",
     "docs/parity/freex-excel-chrome-comparison.md",
     "docs/parity/freex-excel-com-baseline-2026-08-14/manifest.json",
+    "docs/parity/freex-avalonia-grid-corpus-2026-08-16/manifest.json",
     "tools/screenshots/screenshot_manifest.json",
     "tools/screenshots_avalonia_ribbon/screenshot_manifest.json",
     "docs/parity/freep-dialog-pane-visual-evidence/summary.json",
@@ -90,6 +91,8 @@ Assert-DashboardCondition ((@($freeX.renderedEvidence.physicalEvidence.limitatio
 Assert-DashboardCondition ($freeX.renderedEvidence.chromeCapture.wpfCaptureCount -eq 36) "FreeX must report its complete WPF chrome matrix."
 Assert-DashboardCondition ($freeX.renderedEvidence.chromeCapture.avaloniaCaptureCount -eq 36) "FreeX must report its complete Avalonia chrome matrix."
 Assert-DashboardCondition ($freeX.renderedEvidence.chromeCapture.fixedViewportComparisonCount -eq 27) "FreeX must report its fixed-viewport chrome comparison count."
+Assert-DashboardCondition ([string]$freeX.renderedEvidence.gridCorpus.captureStatus -eq "complete") "FreeX Avalonia grid corpus must be complete."
+Assert-DashboardCondition ($freeX.renderedEvidence.gridCorpus.totalAvaloniaCaptureCount -eq 35) "FreeX must report all 35 Avalonia grid corpus captures."
 
 $freeP = $apps["FreeP"]
 $freePLanes = @($freeP.renderedEvidence.routeCoverage.laneEntries)
