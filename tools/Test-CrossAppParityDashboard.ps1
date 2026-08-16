@@ -29,8 +29,11 @@ $requiredSources = @(
     "docs/parity/freew-dialog-harness/freew_dialog_visual_comparison.json",
     "docs/parity/freew-word-baseline-2026-08-16/manifest.json",
     "docs/parity/freew-shell-visual-2026-08-16/freew_shell_visual_evidence.json",
+    "docs/parity/freew-word-chrome-2026-08-16/manifest.json",
     "docs/parity/freex-excel-chrome-comparison.md",
     "docs/parity/freex-excel-com-baseline-2026-08-14/manifest.json",
+    "tools/screenshots/screenshot_manifest.json",
+    "tools/screenshots_avalonia_ribbon/screenshot_manifest.json",
     "docs/parity/freep-dialog-pane-visual-evidence/summary.json",
     "docs/parity/freep-dialog-pane-visual-evidence/artifact-manifest.json",
     "docs/parity/freep-whole-window-visual-evidence/summary.json",
@@ -39,7 +42,7 @@ $requiredSources = @(
     "docs/parity/freep-powerpoint-baseline-2026-08-14.json",
     "docs/parity/freep-powerpoint-recalibration-2026-08-15.json",
     "docs/parity/freep-powerpoint-chrome-2026-08-16/README.md",
-    "docs/parity/freep-powerpoint-chrome-2026-08-16/blocker-manifest.json"
+    "docs/parity/freep-powerpoint-chrome-2026-08-16/manifest.json"
 )
 foreach ($source in $requiredSources) {
     Assert-DashboardCondition (@($dashboard.sources) -contains $source) "Cross-app dashboard is missing authoritative source '$source'."
@@ -74,14 +77,19 @@ Assert-DashboardCondition ($freeWPaired.mismatchCount -gt 0 -or $freeWPaired.pas
 Assert-DashboardCondition ($freeW.renderedEvidence.authoritativeMicrosoftOfficeBaseline.available -eq $true) "FreeW must report its committed Word reference baseline as available."
 Assert-DashboardCondition ($freeW.renderedEvidence.authoritativeMicrosoftOfficeBaseline.artifactCount -eq 65) "FreeW Word baseline artifact count must remain explicit."
 Assert-DashboardCondition ($freeW.renderedEvidence.shellChrome.pairedStaticCaptureCount -eq 40) "FreeW must report its 40 paired static shell captures."
-Assert-DashboardCondition ($freeW.renderedEvidence.shellChrome.avaloniaContextualMissingCount -eq 32) "FreeW must report its 32 explicit Avalonia contextual shell gaps."
-Assert-DashboardCondition ($freeW.renderedEvidence.shellChrome.wordOfficeChromeReferenceCount -eq 0) "FreeW must not fabricate Word chrome references."
+Assert-DashboardCondition ($freeW.renderedEvidence.shellChrome.pairedContextualCaptureCount -eq 32) "FreeW must report its 32 paired contextual shell captures."
+Assert-DashboardCondition ($freeW.renderedEvidence.shellChrome.avaloniaContextualMissingCount -eq 0) "FreeW must not retain contextual shell gaps after the paired capture."
+Assert-DashboardCondition ($freeW.renderedEvidence.shellChrome.wordOfficeChromeReferenceCount -eq 36) "FreeW must report its 36 native Word chrome references."
+Assert-DashboardCondition ([string]$freeW.renderedEvidence.shellChrome.wordOfficeChromeStatus -eq "complete") "FreeW Word chrome evidence must be complete."
 
 Assert-DashboardCondition ($freeX.renderedEvidence.authoritativeMicrosoftOfficeBaseline.available -eq $true) "FreeX must report its committed Excel reference baseline as available."
 Assert-DashboardCondition ($freeX.renderedEvidence.authoritativeMicrosoftOfficeBaseline.artifactCount -eq 45) "FreeX Excel baseline artifact count must remain explicit."
 Assert-DashboardCondition ($freeX.renderedEvidence.physicalEvidence.status -eq "available-interactive-foreground") "FreeX must report its interactive foreground Excel evidence."
 Assert-DashboardCondition ((@($freeX.renderedEvidence.physicalEvidence.limitations) -join " ") -match "36 Excel ribbon states") "FreeX dashboard must report the complete interactive ribbon capture."
 Assert-DashboardCondition ((@($freeX.renderedEvidence.physicalEvidence.limitations) -join " ") -notmatch "unavailable during the 2026-08-16 refresh") "FreeX dashboard must not retain the resolved foreground-capture blocker."
+Assert-DashboardCondition ($freeX.renderedEvidence.chromeCapture.wpfCaptureCount -eq 36) "FreeX must report its complete WPF chrome matrix."
+Assert-DashboardCondition ($freeX.renderedEvidence.chromeCapture.avaloniaCaptureCount -eq 36) "FreeX must report its complete Avalonia chrome matrix."
+Assert-DashboardCondition ($freeX.renderedEvidence.chromeCapture.fixedViewportComparisonCount -eq 27) "FreeX must report its fixed-viewport chrome comparison count."
 
 $freeP = $apps["FreeP"]
 $freePLanes = @($freeP.renderedEvidence.routeCoverage.laneEntries)
@@ -95,6 +103,7 @@ Assert-DashboardCondition ($freeP.renderedEvidence.authoritativeMicrosoftOfficeB
 Assert-DashboardCondition ($freeP.renderedEvidence.authoritativeMicrosoftOfficeBaseline.wpfAverageMeanPercent -gt 0) "FreeP current-source WPF recalibration must remain explicit."
 Assert-DashboardCondition ($freeP.renderedEvidence.authoritativeMicrosoftOfficeBaseline.avaloniaAverageMeanPercent -gt 0) "FreeP current-source Avalonia recalibration must remain explicit."
 Assert-DashboardCondition ($freeP.renderedEvidence.nativeOfficeChrome.expectedCaptureCount -eq 28) "FreeP must report its 28-state native PowerPoint chrome capture contract."
-Assert-DashboardCondition ([string]$freeP.renderedEvidence.nativeOfficeChrome.captureStatus -eq "blocked") "FreeP must preserve the explicit blocked native PowerPoint chrome capture status."
+Assert-DashboardCondition ($freeP.renderedEvidence.nativeOfficeChrome.capturedReferenceCount -eq 28) "FreeP must report its 28 captured native PowerPoint chrome references."
+Assert-DashboardCondition ([string]$freeP.renderedEvidence.nativeOfficeChrome.captureStatus -eq "complete") "FreeP native PowerPoint chrome evidence must be complete."
 
 Write-Host "Cross-app parity dashboard schema and evidence aggregation guards passed."
