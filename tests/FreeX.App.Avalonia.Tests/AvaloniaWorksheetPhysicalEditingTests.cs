@@ -289,7 +289,10 @@ public sealed class AvaloniaWorksheetPhysicalEditingTests
                 FindByAutomationId<Canvas>(window, "WorksheetFormulaReferenceOverlay").Should().BeSameAs(referenceOverlay);
                 var referenceHighlight = FormulaReferenceHighlights(window).Should().ContainSingle().Which;
                 referenceHighlight.IsAttachedToVisualTree().Should().BeTrue();
-                referenceHighlight.BorderBrush.Should().BeOfType<SolidColorBrush>()
+                // ISolidColorBrush, not the concrete SolidColorBrush: Avalonia hands back an
+                // ImmutableSolidColorBrush here, which is not a SolidColorBrush. The colour is what this
+                // assertion is about.
+                referenceHighlight.BorderBrush.Should().BeAssignableTo<ISolidColorBrush>()
                     .Which.Color.Should().Be(Color.FromRgb(32, 112, 214));
                 window.InlineCellEditorTextForTest.Should().Be("=B2");
                 window.Session.FormulaEditAddress.Should().Be(formulaAddress);

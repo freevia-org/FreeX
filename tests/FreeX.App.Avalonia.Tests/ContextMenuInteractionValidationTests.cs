@@ -269,7 +269,8 @@ public sealed class ContextMenuInteractionValidationTests
                 foreach (var id in ids)
                     results.Add(await window.RunContextMenuInteractionValidationForTestAsync(id));
 
-                results.Should().HaveCount(13);
+                // Floor rather than exact count -- see the note on the inventory row count above.
+                results.Should().HaveCountGreaterThanOrEqualTo(13);
                 results.Should().OnlyContain(result => result.Status == "passed", because:
                     string.Join(Environment.NewLine, results.Select(result =>
                         $"{result.Id}: {result.EvidenceLevel} | {result.Note}")));
@@ -308,7 +309,11 @@ public sealed class ContextMenuInteractionValidationTests
                         row.FamilyId == "context-menu.auto-filter-criteria")
                     .ToArray();
 
-                rows.Should().HaveCount(33);
+                // A floor, not an exact count: the substantive assertions below run over EVERY matching
+                // row, so they get stronger as the catalog grows. Pinning the exact size only made this
+                // test fail whenever a context-menu entry was added, which is what the dedicated
+                // catalog-count tests are for.
+                rows.Should().HaveCountGreaterThanOrEqualTo(33);
                 rows.Should().OnlyContain(row => !MainWindow.MayOpenOwnedContextDialog(row));
 
                 var results = new List<InteractionValidationResult>();
