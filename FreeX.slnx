@@ -101,6 +101,7 @@
     <Project Path="tools/FreeX.AppIoBench/FreeX.AppIoBench.csproj" />
     <Project Path="tools/FreeX.ChartFileCompare/FreeX.ChartFileCompare.csproj" />
     <Project Path="tools/FreeX.ChartInteropCompare/FreeX.ChartInteropCompare.csproj" />
+    <Project Path="tools/FreeX.ExcelChromeCompare/FreeX.ExcelChromeCompare.csproj" />
     <Project Path="tools/FreeX.ExcelExamplesCharts/FreeX.ExcelExamplesCharts.csproj" />
     <Project Path="tools/FreeX.ExcelOpenSmoke/FreeX.ExcelOpenSmoke.csproj" />
     <Project Path="tools/FreeX.FidelityCompare/FreeX.FidelityCompare.csproj" />
