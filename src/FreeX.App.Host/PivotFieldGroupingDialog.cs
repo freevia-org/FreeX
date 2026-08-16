@@ -35,6 +35,7 @@ public sealed class PivotFieldGroupingDialog : Window
         Content = CreateContent();
         Load(Result);
         Loaded += (_, _) => FocusInitialKeyboardTarget();
+            ApplyAutomationNames();
     }
 
     private StackPanel CreateContent()
@@ -161,5 +162,19 @@ public sealed class PivotFieldGroupingDialog : Window
     }
 
     private sealed record PivotSourceFieldOption(int Index, string Name);
+
+    /// <summary>
+    /// Screen-reader names for this dialog's controls. Ported from the abandoned
+    /// codex/dialog-parity-loop branch, whose paths predate the Freexcel -> FreeX rename.
+    /// </summary>
+    private void ApplyAutomationNames()
+    {
+        AutomationProperties.SetName(_fieldBox, "Field");
+        AutomationProperties.SetName(_groupingBox, "Group by");
+        AutomationProperties.SetName(_startBox, "Starting at");
+        AutomationProperties.SetName(_endBox, "Ending at");
+        AutomationProperties.SetName(_intervalBox, "By");
+        AutomationProperties.SetName(_ungroupBox, "Ungroup selected field");
+    }
 }
 

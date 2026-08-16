@@ -332,6 +332,7 @@ public sealed partial class AutoFilterDialog : Window
         PreviewKeyDown += AutoFilterDialog_PreviewKeyDown;
         Loaded += (_, _) => FocusInitialKeyboardTarget();
         UpdateSelectAllBoxState();
+            ApplyAutomationNames();
     }
 
     public void ConfigureAsModelessFlyout()
@@ -406,4 +407,13 @@ public sealed partial class AutoFilterDialog : Window
             new(UiText.Get("AutoFilter_ConnectorAnd"), "And"),
             new(UiText.Get("AutoFilter_ConnectorOr"), "Or")
         ];
+
+    /// <summary>
+    /// Screen-reader names for this dialog's controls. Ported from the abandoned
+    /// codex/dialog-parity-loop branch, whose paths predate the Freexcel -> FreeX rename.
+    /// </summary>
+    private void ApplyAutomationNames()
+    {
+        AutomationProperties.SetName(_searchBox, "Search");
+    }
 }

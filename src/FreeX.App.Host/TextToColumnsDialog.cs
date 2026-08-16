@@ -1,4 +1,5 @@
 using System.Windows;
+using System.Windows.Automation;
 using System.Windows.Controls;
 using System.Windows.Data;
 using System.Windows.Media;
@@ -168,6 +169,7 @@ public sealed partial class TextToColumnsDialog : Window
         RefreshMode();
         RefreshPreview();
         Loaded += (_, _) => FocusInitialKeyboardTarget();
+            ApplyAutomationNames();
     }
 
     private GroupBox CreateFixedWidthPanel()
@@ -346,4 +348,21 @@ public sealed partial class TextToColumnsDialog : Window
         RefreshColumnFormatChoices(columnCount);
     }
 
+
+    /// <summary>
+    /// Screen-reader names for this dialog's controls. Ported from the abandoned
+    /// codex/dialog-parity-loop branch, whose paths predate the Freexcel -> FreeX rename.
+    /// </summary>
+    private void ApplyAutomationNames()
+    {
+        AutomationProperties.SetName(_customBox, "Other delimiter");
+        AutomationProperties.SetName(_textQualifierBox, "Text qualifier");
+        AutomationProperties.SetName(_fixedWidthBreaksBox, "Fixed width breaks");
+        AutomationProperties.SetName(_destinationBox, "Destination");
+        AutomationProperties.SetName(_formatColumnBox, "Column");
+        AutomationProperties.SetName(_dateFormatBox, "Date format");
+        AutomationProperties.SetName(_decimalSeparatorBox, "Decimal separator");
+        AutomationProperties.SetName(_thousandsSeparatorBox, "Thousands separator");
+        AutomationProperties.SetName(_previewGrid, "Data preview");
+    }
 }

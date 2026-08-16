@@ -113,6 +113,7 @@ public sealed class SubtotalDialog : Window
         root.Children.Add(CreateSubtotalButtonRow(Accept, RemoveAll));
         Content = root;
         Loaded += (_, _) => FocusInitialKeyboardTarget();
+            ApplyAutomationNames();
     }
 
     private void ApplyAutomationMetadata()
@@ -373,4 +374,14 @@ public sealed class SubtotalDialog : Window
                 .Resolve(UiText.Get, UiText.Format);
 
     private static SubtotalDialogPlannerText PlannerText => SubtotalDialogPlannerText.From(UiText.Get);
+
+    /// <summary>
+    /// Screen-reader names for this dialog's controls. Ported from the abandoned
+    /// codex/dialog-parity-loop branch, whose paths predate the Freexcel -> FreeX rename.
+    /// </summary>
+    private void ApplyAutomationNames()
+    {
+        AutomationProperties.SetName(_groupColumnBox, "At each change in");
+        AutomationProperties.SetName(_functionBox, "Use function");
+    }
 }

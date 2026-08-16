@@ -47,6 +47,7 @@ public sealed class ObjectSizeDialog : Window
         _heightBox.TextChanged += HeightBox_TextChanged;
         Content = CreateSizeContent(Accept);
         Loaded += (_, _) => FocusInitialKeyboardTarget();
+            ApplyAutomationNames();
     }
 
     public static bool TryParseSize(string input, out ObjectSizeDialogSize result)
@@ -163,6 +164,17 @@ public sealed class ObjectSizeDialog : Window
         box.Margin = new Thickness(0, 0, 0, 8);
         stack.Children.Add(box);
     }
+
+    /// <summary>
+    /// Screen-reader names for this dialog's controls. Ported from the abandoned
+    /// codex/dialog-parity-loop branch, whose paths predate the Freexcel -> FreeX rename.
+    /// </summary>
+    private void ApplyAutomationNames()
+    {
+        AutomationProperties.SetName(_heightBox, "Height");
+        AutomationProperties.SetName(_widthBox, "Width");
+        AutomationProperties.SetName(_lockAspectRatioBox, "Lock aspect ratio");
+    }
 }
 
 public sealed class RotationDialog : Window
@@ -186,6 +198,7 @@ public sealed class RotationDialog : Window
         AutomationProperties.SetHelpText(_rotationBox, UiText.Get("ObjectSizing_EnterTheObjectSRotationInDegrees"));
         Content = ObjectSizeDialog.CreateSingleInputContent(UiText.Get("ObjectSizing_Degrees"), _rotationBox, Accept);
         Loaded += (_, _) => FocusInitialKeyboardTarget();
+            ApplyAutomationNames();
     }
 
     public static bool TryParseRotation(string input, out FormatPicturePlanner.RotationResult result)
@@ -222,6 +235,15 @@ public sealed class RotationDialog : Window
     private void FocusInvalidRotationInput()
     {
         DialogFocus.FocusAndSelect(_rotationBox);
+    }
+
+    /// <summary>
+    /// Screen-reader names for this dialog's controls. Ported from the abandoned
+    /// codex/dialog-parity-loop branch, whose paths predate the Freexcel -> FreeX rename.
+    /// </summary>
+    private void ApplyAutomationNames()
+    {
+        AutomationProperties.SetName(_rotationBox, "Degrees");
     }
 }
 
@@ -265,6 +287,7 @@ public sealed class PictureCropDialog : Window
         AutomationProperties.SetHelpText(_cropBottomBox, UiText.Get("ObjectSizing_EnterTheBottomCropPercentage"));
         Content = CreateCropContent(Accept);
         Loaded += (_, _) => FocusInitialKeyboardTarget();
+            ApplyAutomationNames();
     }
 
     public static bool TryCreateResult(string input, out PictureCropDialogPlanner.CropResult result, out string? error)
@@ -338,5 +361,17 @@ public sealed class PictureCropDialog : Window
         stack.Children.Add(new Label { Content = label, Target = box, Padding = new Thickness(0), Margin = new Thickness(0, 0, 0, 4) });
         box.Margin = new Thickness(0, 0, 0, 8);
         stack.Children.Add(box);
+    }
+
+    /// <summary>
+    /// Screen-reader names for this dialog's controls. Ported from the abandoned
+    /// codex/dialog-parity-loop branch, whose paths predate the Freexcel -> FreeX rename.
+    /// </summary>
+    private void ApplyAutomationNames()
+    {
+        AutomationProperties.SetName(_cropLeftBox, "Left crop");
+        AutomationProperties.SetName(_cropTopBox, "Top crop");
+        AutomationProperties.SetName(_cropRightBox, "Right crop");
+        AutomationProperties.SetName(_cropBottomBox, "Bottom crop");
     }
 }

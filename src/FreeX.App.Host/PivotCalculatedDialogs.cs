@@ -41,6 +41,7 @@ public sealed class PivotCalculatedFieldDialog : Window
         if (_session.FieldReferences.Count > 0)
             _fieldList.SelectedIndex = 0;
         Loaded += (_, _) => FocusInitialKeyboardTarget();
+            ApplyAutomationNames();
     }
 
     public static PivotCalculatedFieldResult CreateResult(string name, string formula)
@@ -140,6 +141,18 @@ public sealed class PivotCalculatedFieldDialog : Window
     {
         PivotDialogLayout.AddLabeledControl(stack, label, textBox);
     }
+
+    /// <summary>
+    /// Screen-reader names for this dialog's controls. Ported from the abandoned
+    /// codex/dialog-parity-loop branch, whose paths predate the Freexcel -> FreeX rename.
+    /// </summary>
+    private void ApplyAutomationNames()
+    {
+        AutomationProperties.SetName(_nameBox, "Calculated field name");
+        AutomationProperties.SetName(_formulaBox, "Calculated field formula");
+        AutomationProperties.SetName(_nameBox, "Calculated item name");
+        AutomationProperties.SetName(_formulaBox, "Calculated item formula");
+    }
 }
 
 public sealed class PivotCalculatedItemDialog : Window
@@ -186,6 +199,7 @@ public sealed class PivotCalculatedItemDialog : Window
         Content = CreateContent();
         Load(Result);
         Loaded += (_, _) => FocusInitialKeyboardTarget();
+            ApplyAutomationNames();
     }
 
     public static PivotCalculatedItemResult CreateResult(
@@ -349,5 +363,14 @@ public sealed class PivotCalculatedItemDialog : Window
     private static void AddTextBox(Panel stack, string label, TextBox textBox)
     {
         PivotDialogLayout.AddLabeledControl(stack, label, textBox);
+    }
+
+    /// <summary>
+    /// Screen-reader names for this dialog's controls. Ported from the abandoned
+    /// codex/dialog-parity-loop branch, whose paths predate the Freexcel -> FreeX rename.
+    /// </summary>
+    private void ApplyAutomationNames()
+    {
+        AutomationProperties.SetName(_fieldBox, "Source field");
     }
 }

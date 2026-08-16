@@ -174,6 +174,7 @@ public sealed partial class ScenarioManagerDialog : Window
 
         Content = root;
         Loaded += (_, _) => FocusInitialKeyboardTarget();
+            ApplyAutomationNames();
     }
 
     private static void AddField(Grid grid, int row, string label, Control field)
@@ -405,5 +406,17 @@ public sealed partial class ScenarioManagerDialog : Window
     private void ShowInvalidInputWarning(string message, TextBox target)
     {
         DialogFocus.ShowWarningAndFocus(this, message, Title, target);
+    }
+
+    /// <summary>
+    /// Screen-reader names for this dialog's controls. Ported from the abandoned
+    /// codex/dialog-parity-loop branch, whose paths predate the Freexcel -> FreeX rename.
+    /// </summary>
+    private void ApplyAutomationNames()
+    {
+        AutomationProperties.SetName(_newNameBox, "Scenario name");
+        AutomationProperties.SetName(_changingCellsBox, "Changing cells");
+        AutomationProperties.SetName(_resultCellsBox, "Result cells");
+        AutomationProperties.SetName(_commentBox, "Comment");
     }
 }

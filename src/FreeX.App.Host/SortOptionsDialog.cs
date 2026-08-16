@@ -1,4 +1,5 @@
 using System.Windows;
+using System.Windows.Automation;
 using System.Windows.Controls;
 using System.Windows.Input;
 using FreeX.App.Presentation.Dialogs;
@@ -116,11 +117,23 @@ public sealed class SortOptionsDialog : Window
         root.Children.Add(buttons);
         Content = root;
         Loaded += (_, _) => FocusInitialKeyboardTarget();
+            ApplyAutomationNames();
     }
 
     private void FocusInitialKeyboardTarget()
     {
         _caseSensitiveBox.Focus();
         Keyboard.Focus(_caseSensitiveBox);
+    }
+
+    /// <summary>
+    /// Screen-reader names for this dialog's controls. Ported from the abandoned
+    /// codex/dialog-parity-loop branch, whose paths predate the Freexcel -> FreeX rename.
+    /// </summary>
+    private void ApplyAutomationNames()
+    {
+        AutomationProperties.SetName(_caseSensitiveBox, "Case sensitive");
+        AutomationProperties.SetName(_topToBottomButton, "Sort top to bottom");
+        AutomationProperties.SetName(_leftToRightButton, "Sort left to right");
     }
 }

@@ -213,6 +213,7 @@ public sealed partial class SelectionPaneDialog : Window
         Content = root;
         UpdateMoveButtons();
         Loaded += (_, _) => FocusInitialKeyboardTarget();
+            ApplyAutomationNames();
     }
 
     private static void AddGridChild(Grid grid, UIElement child, int index, bool isRow = false)
@@ -338,5 +339,16 @@ public sealed partial class SelectionPaneDialog : Window
                 }
             }
         };
+    }
+
+    /// <summary>
+    /// Screen-reader names for this dialog's controls. Ported from the abandoned
+    /// codex/dialog-parity-loop branch, whose paths predate the Freexcel -> FreeX rename.
+    /// </summary>
+    private void ApplyAutomationNames()
+    {
+        AutomationProperties.SetName(_searchBox, "Search objects");
+        AutomationProperties.SetName(_filterBox, "Filter objects");
+        AutomationProperties.SetName(_renameBox, "Object name");
     }
 }

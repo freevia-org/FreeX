@@ -57,6 +57,7 @@ public sealed class FillSeriesStepDialog : Window
         UpdateDateUnitAvailability();
         UpdateTrendAvailability();
         Loaded += (_, _) => FocusInitialKeyboardTarget();
+            ApplyAutomationNames();
     }
 
     private void FocusInitialKeyboardTarget()
@@ -237,5 +238,15 @@ public sealed class FillSeriesStepDialog : Window
         Grid.SetColumn(textBox, 1);
         grid.Children.Add(textBox);
         return grid;
+    }
+
+    /// <summary>
+    /// Screen-reader names for this dialog's controls. Ported from the abandoned
+    /// codex/dialog-parity-loop branch, whose paths predate the Freexcel -> FreeX rename.
+    /// </summary>
+    private void ApplyAutomationNames()
+    {
+        AutomationProperties.SetName(_stepBox, "Step value");
+        AutomationProperties.SetName(_stopBox, "Stop value");
     }
 }

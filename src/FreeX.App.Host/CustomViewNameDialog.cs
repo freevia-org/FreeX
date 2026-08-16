@@ -67,6 +67,7 @@ public sealed class CustomViewNameDialog : Window
         Content = grid;
 
         Loaded += (_, _) => FocusInitialKeyboardTarget();
+            ApplyAutomationNames();
     }
 
     public static CustomViewsPlanner.NameSubmission CreateResult(
@@ -102,5 +103,14 @@ public sealed class CustomViewNameDialog : Window
     private void FocusNameInput()
     {
         DialogFocus.FocusAndSelect(_nameBox);
+    }
+
+    /// <summary>
+    /// Screen-reader names for this dialog's controls. Ported from the abandoned
+    /// codex/dialog-parity-loop branch, whose paths predate the Freexcel -> FreeX rename.
+    /// </summary>
+    private void ApplyAutomationNames()
+    {
+        AutomationProperties.SetName(_nameBox, "View name");
     }
 }
