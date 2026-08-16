@@ -33,7 +33,7 @@ public sealed partial class MainWindow
         if (SelectionRangeService.IsWholeRowSelection(range))
         {
             ApplyWorksheetStructureResult(
-                _session.InsertSelectedRows(),
+                () => _session.InsertSelectedRows(),
                 "Inserted rows",
                 "Could not insert rows.");
             return;
@@ -41,7 +41,7 @@ public sealed partial class MainWindow
         if (SelectionRangeService.IsWholeColumnSelection(range))
         {
             ApplyWorksheetStructureResult(
-                _session.InsertSelectedColumns(),
+                () => _session.InsertSelectedColumns(),
                 "Inserted columns",
                 "Could not insert columns.");
             return;
@@ -54,7 +54,7 @@ public sealed partial class MainWindow
             ? InsertCellsShiftDirection.Down
             : InsertCellsShiftDirection.Right;
         ApplyWorksheetStructureResult(
-            _session.InsertSelectedCells(direction),
+            () => _session.InsertSelectedCells(direction),
             $"Inserted cells ({(direction == InsertCellsShiftDirection.Right ? "shift right" : "shift down")})",
             "Could not insert cells.");
     }
@@ -65,7 +65,7 @@ public sealed partial class MainWindow
         if (SelectionRangeService.IsWholeRowSelection(range))
         {
             ApplyWorksheetStructureResult(
-                _session.DeleteSelectedRows(),
+                () => _session.DeleteSelectedRows(),
                 "Deleted rows",
                 "Could not delete rows.");
             return;
@@ -73,7 +73,7 @@ public sealed partial class MainWindow
         if (SelectionRangeService.IsWholeColumnSelection(range))
         {
             ApplyWorksheetStructureResult(
-                _session.DeleteSelectedColumns(),
+                () => _session.DeleteSelectedColumns(),
                 "Deleted columns",
                 "Could not delete columns.");
             return;
@@ -86,17 +86,26 @@ public sealed partial class MainWindow
             ? DeleteCellsShiftDirection.Up
             : DeleteCellsShiftDirection.Left;
         ApplyWorksheetStructureResult(
-            _session.DeleteSelectedCells(direction),
+            () => _session.DeleteSelectedCells(direction),
             $"Deleted cells ({(direction == DeleteCellsShiftDirection.Left ? "shift left" : "shift up")})",
             "Could not delete cells.");
     }
 
+    /// <summary>
+    /// Takes the operation as a delegate rather than its result so the PRE-EDIT scroll origin can be
+    /// captured first. The structural edit re-anchors the view onto the selection on its way through
+    /// the session, so a shift computed afterwards starts from the already-clobbered origin and lands
+    /// one row/column away from the edit point instead of preserving the visible content (R76).
+    /// </summary>
     private void ApplyWorksheetStructureResult(
-        WorkbookWorksheetStructureResult result,
+        Func<WorkbookWorksheetStructureResult> operation,
         string successStatus,
         string failureStatus,
         bool recalculateWorkbook = false)
     {
+        var (topRowBeforeEdit, leftColBeforeEdit) = _session.ViewportOrigin;
+        var result = operation();
+
         if (result.Success && !result.IsNoOp)
         {
             if (result.InvalidatesFormulaTraceArrows)
@@ -104,9 +113,17 @@ public sealed partial class MainWindow
             SetClipboardMarquee(null, isCut: false);
 
             if (result.ViewportRowDelta != 0)
-                ShiftScrollOriginForRowEdit(result.TargetRange.Start.Row, result.ViewportRowDelta);
+                ShiftScrollOriginForRowEdit(
+                    result.TargetRange.Start.Row,
+                    result.ViewportRowDelta,
+                    topRowBeforeEdit,
+                    leftColBeforeEdit);
             if (result.ViewportColumnDelta != 0)
-                ShiftScrollOriginForColEdit(result.TargetRange.Start.Col, result.ViewportColumnDelta);
+                ShiftScrollOriginForColEdit(
+                    result.TargetRange.Start.Col,
+                    result.ViewportColumnDelta,
+                    topRowBeforeEdit,
+                    leftColBeforeEdit);
 
             if (recalculateWorkbook)
                 _session.RecalculateWorkbook();

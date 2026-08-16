@@ -13,7 +13,7 @@ public sealed partial class MainWindow
             return;
 
         ApplyWorksheetStructureResult(
-            _session.InsertRows(beforeRow),
+            () => _session.InsertRows(beforeRow),
             UiText.Get("RibbonWire_InsertedSheetRows"),
             UiText.Get("RibbonWire_InsertSheetRowsFailed"),
             recalculateWorkbook: true);
@@ -25,7 +25,7 @@ public sealed partial class MainWindow
             return;
 
         ApplyWorksheetStructureResult(
-            _session.InsertColumns(beforeColumn),
+            () => _session.InsertColumns(beforeColumn),
             UiText.Get("RibbonWire_InsertedSheetColumns"),
             UiText.Get("RibbonWire_InsertSheetColumnsFailed"),
             recalculateWorkbook: true);
