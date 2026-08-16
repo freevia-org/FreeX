@@ -206,12 +206,16 @@ public sealed class OwnedDialogLifecycleRegressionTests
                     await window.CaptureParitySurfacesAsync(
                         outputDirectory,
                         interactionOnly: true,
+                        // The filter matches ParityInteractionDialogRoute.CatalogId, which keeps the
+                        // "Dialog" suffix, while contracts are keyed by SurfaceId, which drops it.
+                        // Passing the surface id here selected no route, so nothing was captured and
+                        // the lookup below could never find its key.
                         interactionDialogCatalogIds: new HashSet<string>(StringComparer.Ordinal)
                         {
-                            "dialog.AdvancedFilter",
+                            "dialog.AdvancedFilterDialog",
                         });
 
-                    var contract = window.DialogInteractionContracts["dialog.AdvancedFilterDialog"];
+                    var contract = window.DialogInteractionContracts["dialog.AdvancedFilter"];
                     contract.ActualModality.Should().Be("modal");
                     contract.Ownership.Should().StartWith("passed:");
                     contract.OpenerLifecycle.Should().StartWith("passed:");
