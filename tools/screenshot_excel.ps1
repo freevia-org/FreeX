@@ -29,6 +29,15 @@ $homeBordersDropdownOutDir = Join-Path $outDir "home-borders-dropdown-tour"
 $worksheetContextMenuOutDir = Join-Path $outDir "worksheet-context-menu-tour"
 $openWorkbookDialogOutDir = Join-Path $outDir "open-workbook-dialog-tour"
 $saveAsWorkbookDialogOutDir = Join-Path $outDir "save-as-workbook-dialog-tour"
+
+function Clear-ExcelTourArtifacts {
+    param(
+        [Parameter(Mandatory = $true)][string]$OutputDirectory,
+        [Parameter(Mandatory = $true)][string]$ManifestFileName
+    )
+
+    Clear-ScreenshotTourEvidenceArtifacts -OutputDirectory $OutputDirectory -ManifestFileName $ManifestFileName
+}
 $tabNames = @("Home", "Insert", "Draw", "Page Layout", "Formulas", "Data", "Review", "View", "Help")
 $script:requestedTabNames = $tabNames
 $script:availableTabNames = @()
@@ -373,7 +382,7 @@ function Expand-ExcelNumberFormatDropdown($expectedPid, $excelElement, $expected
         [System.Windows.Automation.TreeScope]::Descendants,
         $comboCondition)
     if ($null -eq $combo) {
-        Clear-NumberFormatDropdownEvidenceArtifacts
+        Clear-ExcelTourArtifacts $numberFormatDropdownOutDir "excel_home_number_format_dropdown_tour_manifest.json"
         throw "Excel Home number-format dropdown tour could not find the NumberFormatGallery ComboBox."
     }
 
@@ -381,7 +390,7 @@ function Expand-ExcelNumberFormatDropdown($expectedPid, $excelElement, $expected
     if (-not $combo.TryGetCurrentPattern(
             [System.Windows.Automation.ExpandCollapsePattern]::Pattern,
             [ref]$pattern)) {
-        Clear-NumberFormatDropdownEvidenceArtifacts
+        Clear-ExcelTourArtifacts $numberFormatDropdownOutDir "excel_home_number_format_dropdown_tour_manifest.json"
         throw "Excel Home number-format dropdown tour could not expand NumberFormatGallery through UI Automation."
     }
 
@@ -433,7 +442,7 @@ function Invoke-ExcelAutoFilterFlyoutTour {
 
         $excelHwnd = [IntPtr]$excelApp.Hwnd
         if ($excelHwnd -eq [IntPtr]::Zero) {
-            Clear-AutoFilterFlyoutEvidenceArtifacts
+            Clear-ExcelTourArtifacts $autoFilterFlyoutOutDir "excel_autofilter_flyout_tour_manifest.json"
             throw "Excel AutoFilter flyout tour could not resolve the Excel window handle."
         }
 
@@ -449,7 +458,7 @@ function Invoke-ExcelAutoFilterFlyoutTour {
 
         $popup = Find-ExcelAutoFilterPopupWindow $excelPid $excelHwnd
         if ($null -eq $popup) {
-            Clear-AutoFilterFlyoutEvidenceArtifacts
+            Clear-ExcelTourArtifacts $autoFilterFlyoutOutDir "excel_autofilter_flyout_tour_manifest.json"
             throw "Excel AutoFilter flyout tour did not detect a foreground Excel popup window after opening the header dropdown."
         }
 
@@ -572,7 +581,7 @@ function Invoke-ExcelNumberFormatDropdownTour {
 
         $excelHwnd = [IntPtr]$excelApp.Hwnd
         if ($excelHwnd -eq [IntPtr]::Zero) {
-            Clear-NumberFormatDropdownEvidenceArtifacts
+            Clear-ExcelTourArtifacts $numberFormatDropdownOutDir "excel_home_number_format_dropdown_tour_manifest.json"
             throw "Excel Home number-format dropdown tour could not resolve the Excel window handle."
         }
 
@@ -590,7 +599,7 @@ function Invoke-ExcelNumberFormatDropdownTour {
             [System.Windows.Automation.TreeScope]::Children,
             $processCondition)
         if ($null -eq $excelElement) {
-            Clear-NumberFormatDropdownEvidenceArtifacts
+            Clear-ExcelTourArtifacts $numberFormatDropdownOutDir "excel_home_number_format_dropdown_tour_manifest.json"
             throw "Excel Home number-format dropdown tour could not find the Excel UI Automation root."
         }
 
@@ -600,7 +609,7 @@ function Invoke-ExcelNumberFormatDropdownTour {
 
         $popup = Find-ExcelPopupWindow $excelPid $excelHwnd 120 120
         if ($null -eq $popup) {
-            Clear-NumberFormatDropdownEvidenceArtifacts
+            Clear-ExcelTourArtifacts $numberFormatDropdownOutDir "excel_home_number_format_dropdown_tour_manifest.json"
             throw "Excel Home number-format dropdown tour did not detect a foreground Excel popup window after expanding NumberFormatGallery."
         }
 
@@ -717,7 +726,7 @@ function Invoke-ExcelHomeBordersDropdownTour {
 
         $excelHwnd = [IntPtr]$excelApp.Hwnd
         if ($excelHwnd -eq [IntPtr]::Zero) {
-            Clear-HomeBordersDropdownEvidenceArtifacts
+            Clear-ExcelTourArtifacts $homeBordersDropdownOutDir "excel_home_borders_dropdown_tour_manifest.json"
             throw "Excel Home Borders dropdown tour could not resolve the Excel window handle."
         }
 
@@ -733,12 +742,12 @@ function Invoke-ExcelHomeBordersDropdownTour {
 
         $popup = Find-ExcelPopupWindow $excelPid $excelHwnd 120 160
         if ($null -eq $popup) {
-            Clear-HomeBordersDropdownEvidenceArtifacts
+            Clear-ExcelTourArtifacts $homeBordersDropdownOutDir "excel_home_borders_dropdown_tour_manifest.json"
             throw "Excel Home Borders dropdown tour did not detect a foreground Excel popup window after Alt,H,B."
         }
 
         if (($popup.Right - $popup.Left) -gt 560 -or ($popup.Bottom - $popup.Top) -gt 1040) {
-            Clear-HomeBordersDropdownEvidenceArtifacts
+            Clear-ExcelTourArtifacts $homeBordersDropdownOutDir "excel_home_borders_dropdown_tour_manifest.json"
             throw "Excel Home Borders dropdown tour detected an oversized candidate window ($($popup.Right - $popup.Left)x$($popup.Bottom - $popup.Top)) instead of the Borders menu."
         }
 
@@ -841,7 +850,7 @@ function Invoke-ExcelWorksheetContextMenuTour {
 
         $excelHwnd = [IntPtr]$excelApp.Hwnd
         if ($excelHwnd -eq [IntPtr]::Zero) {
-            Clear-WorksheetContextMenuEvidenceArtifacts
+            Clear-ExcelTourArtifacts $worksheetContextMenuOutDir "excel_worksheet_context_menu_tour_manifest.json"
             throw "Excel worksheet context menu tour could not resolve the Excel window handle."
         }
 
@@ -857,7 +866,7 @@ function Invoke-ExcelWorksheetContextMenuTour {
 
         $popup = Find-ExcelPopupWindow $excelPid $excelHwnd 120 120
         if ($null -eq $popup) {
-            Clear-WorksheetContextMenuEvidenceArtifacts
+            Clear-ExcelTourArtifacts $worksheetContextMenuOutDir "excel_worksheet_context_menu_tour_manifest.json"
             throw "Excel worksheet context menu tour did not detect a foreground Excel popup window after Shift+F10."
         }
 
@@ -975,7 +984,7 @@ function Invoke-ExcelOpenWorkbookDialogTour {
 
         $excelHwnd = [IntPtr]$excelApp.Hwnd
         if ($excelHwnd -eq [IntPtr]::Zero) {
-            Clear-OpenWorkbookDialogEvidenceArtifacts
+            Clear-ExcelTourArtifacts $openWorkbookDialogOutDir "excel_open_workbook_dialog_tour_manifest.json"
             throw "Excel native Open dialog tour could not resolve the Excel window handle."
         }
 
@@ -990,7 +999,7 @@ function Invoke-ExcelOpenWorkbookDialogTour {
 
         $dialog = Find-ExcelOpenWorkbookDialogWindow $excelPid $excelHwnd
         if ($null -eq $dialog) {
-            Clear-OpenWorkbookDialogEvidenceArtifacts
+            Clear-ExcelTourArtifacts $openWorkbookDialogOutDir "excel_open_workbook_dialog_tour_manifest.json"
             throw "Excel native Open dialog tour did not detect an Excel-owned '#32770' Open dialog after Ctrl+F12."
         }
 
@@ -1105,7 +1114,7 @@ function Invoke-ExcelSaveAsWorkbookDialogTour {
 
         $excelHwnd = [IntPtr]$excelApp.Hwnd
         if ($excelHwnd -eq [IntPtr]::Zero) {
-            Clear-SaveAsWorkbookDialogEvidenceArtifacts
+            Clear-ExcelTourArtifacts $saveAsWorkbookDialogOutDir "excel_save_as_workbook_dialog_tour_manifest.json"
             throw "Excel native Save As dialog tour could not resolve the Excel window handle."
         }
 
@@ -1120,7 +1129,7 @@ function Invoke-ExcelSaveAsWorkbookDialogTour {
 
         $dialog = Find-ExcelSaveAsWorkbookDialogWindow $excelPid $excelHwnd
         if ($null -eq $dialog) {
-            Clear-SaveAsWorkbookDialogEvidenceArtifacts
+            Clear-ExcelTourArtifacts $saveAsWorkbookDialogOutDir "excel_save_as_workbook_dialog_tour_manifest.json"
             throw "Excel Save As dialog tour did not detect an Excel-owned NUIDialog or '#32770' Save As dialog after F12."
         }
 
