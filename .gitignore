@@ -64,6 +64,9 @@ capture_*.ps1
 enum_tabs.ps1
 *.png
 
+# Committed parity evidence is intentionally versioned, including its PNG fixtures.
+!docs/parity/freew-shell-visual-2026-08-16/avalonia/*.png
+
 # Test run artifacts
 TestResults/
 tools/_old_mainwindow.xaml
