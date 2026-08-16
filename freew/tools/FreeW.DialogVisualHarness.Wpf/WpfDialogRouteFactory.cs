@@ -11,6 +11,7 @@ using FreeW.App.Host.Editing;
 using FreeW.App.Presentation.Dialogs;
 using FreeW.App.Presentation.Options;
 using FreeW.App.Presentation.Ribbon;
+using FreeW.App.Presentation.Shell;
 using FreeW.Core.Model;
 using FreeW.DialogVisualHarness;
 using LinqExpression = System.Linq.Expressions.Expression;
@@ -24,6 +25,15 @@ internal static class WpfDialogRouteFactory
     {
         if (!FreeWDialogEvidenceCatalog.TryGet(routeId, out var route) || route.Wpf is null)
             return null;
+
+        // These production dialogs intentionally expose only workflow entry points
+        // (file picker or save pipeline), so their constructors cannot be discovered
+        // with the generic default-argument probe.  The harness supplies the same
+        // app-owned planning inputs without invoking either external workflow.
+        if (routeId.Equals("compare-documents", StringComparison.OrdinalIgnoreCase))
+            return CreatePrivateWindow("CompareDocumentsDialog", owner, @"C:\\Evidence\\Original.docx", "FreeW Reviewer", "Revised document.docx");
+        if (routeId.Equals("save-compatibility-warning", StringComparison.OrdinalIgnoreCase))
+            return CreatePrivateWindow("SaveCompatibilityWarningDialog", CreateCompatibilityPlan());
 
         switch (route.Wpf.OpenAction)
         {
@@ -70,6 +80,25 @@ internal static class WpfDialogRouteFactory
         }
         throw new InvalidOperationException($"No constructible WPF adapter for {typeName}: {last?.GetType().Name}: {last?.Message}", last);
     }
+
+    private static Window CreatePrivateWindow(string typeName, params object?[] arguments)
+    {
+        var assembly = typeof(MainWindow).Assembly;
+        var type = assembly.GetType($"FreeW.App.Host.{typeName}", throwOnError: true)!;
+        var constructor = type.GetConstructors(BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic)
+            .Single(candidate => candidate.GetParameters().Length == arguments.Length);
+        return (Window)(constructor.Invoke(arguments)
+            ?? throw new InvalidOperationException($"WPF visual-harness constructor returned null for {typeName}."));
+    }
+
+    private static DocumentSaveCompatibilityPlan CreateCompatibilityPlan() =>
+        DocumentSaveCompatibilityPlan.Warning(
+            "Word 97-2003 Document",
+            "This document contains features that may not be supported by the selected file format.",
+            [new DocumentSaveCompatibilityWarning(
+                DocumentSaveCompatibilityWarningKind.CompatibilityTarget,
+                "Compatibility check",
+                "Continue to save using the selected format.")]);
 
     private static Window CreateBookmarkManager(string state, Window owner)
     {

@@ -1,4 +1,5 @@
 using Free.Shared.AppServices.Printing;
+using Free.Shared.Shell.Avalonia;
 
 namespace FreeW.App.Avalonia.Printing;
 
@@ -11,7 +12,8 @@ internal sealed partial class CupsPrintDialog
             [],
             null,
             "No printers are installed or available.");
-        _ = PrintSelectionPlanner.Build(discovery, requested: null);
-        return new CupsPrintDialog();
+        var dialog = new CupsPrintDialog();
+        AvaloniaPrintDialogWorkflow.ConfigureForVisualHarness(dialog, discovery, Options);
+        return dialog;
     }
 }

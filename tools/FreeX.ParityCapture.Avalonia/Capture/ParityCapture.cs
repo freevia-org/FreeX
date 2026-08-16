@@ -328,7 +328,8 @@ internal static class ParityCaptureCoordinator
 }
 
 /// <summary>
-/// Options for the headless <c>--parity-grid &lt;fixture.xlsx&gt; &lt;A1:Range&gt; &lt;outDir&gt;</c> mode.
+/// Options for the headless <c>--parity-grid &lt;fixture.xlsx&gt; &lt;A1:Range&gt; &lt;outDir&gt;
+/// [--parity-grid-sheet &lt;worksheet&gt;]</c> mode.
 /// Renders a specific cell range of a workbook to a PNG using Avalonia's in-process
 /// <see cref="global::Avalonia.Media.Imaging.RenderTargetBitmap"/> — cropped to the exact pixel extent of the
 /// requested range with no row/column header chrome — so it can be diffed against the WPF/Excel
@@ -337,15 +338,24 @@ internal static class ParityCaptureCoordinator
 /// Runs headless (same bootstrap as <c>--parity-capture</c>) and emits a small JSON result alongside the PNG:
 /// <c>{ "png", "widthPx", "heightPx", "sheet", "range" }</c>.
 /// </summary>
-internal sealed record GridCaptureOptions(string WorkbookPath, string RangeText, string OutputDirectory)
+internal sealed record GridCaptureOptions(
+    string WorkbookPath,
+    string RangeText,
+    string OutputDirectory,
+    string? WorksheetName = null)
 {
     public const string Argument = "--parity-grid";
+    public const string SheetArgument = "--parity-grid-sheet";
 
-    private static bool IsArgument(string argument) =>
+    private static bool IsGridArgument(string argument) =>
         string.Equals(argument, Argument, StringComparison.OrdinalIgnoreCase);
 
+    private static bool IsSheetArgument(string argument) =>
+        string.Equals(argument, SheetArgument, StringComparison.OrdinalIgnoreCase);
+
     /// <summary>
-    /// Parses <c>--parity-grid &lt;xlsx&gt; &lt;range&gt; &lt;outDir&gt;</c> out of <paramref name="args"/>,
+    /// Parses <c>--parity-grid &lt;xlsx&gt; &lt;range&gt; &lt;outDir&gt;
+    /// [--parity-grid-sheet &lt;worksheet&gt;]</c> out of <paramref name="args"/>,
     /// returning remaining (filtered) startup args. When the flag is absent, <paramref name="options"/> is null
     /// and parsing still succeeds.
     /// </summary>
@@ -361,45 +371,77 @@ internal sealed record GridCaptureOptions(string WorkbookPath, string RangeText,
         error = "";
         var filteredArguments = new List<string>();
         string? workbookPath = null;
+        string? rangeText = null;
+        string? outputDirectory = null;
+        string? worksheetName = null;
         for (var index = 0; index < args.Count; index++)
         {
             var argument = args[index];
-            if (!IsArgument(argument))
+            if (IsGridArgument(argument))
             {
-                filteredArguments.Add(argument);
+                if (workbookPath is not null)
+                {
+                    startupArguments = [];
+                    error = $"{Argument} was specified more than once.";
+                    return false;
+                }
+
+                // Expect exactly three positional values after the flag: <xlsx> <range> <outDir>
+                if (index + 3 >= args.Count)
+                {
+                    startupArguments = [];
+                    error = $"{Argument} requires three arguments: <workbook.xlsx> <A1:Range> <outDir>.";
+                    return false;
+                }
+
+                workbookPath = args[++index];
+                rangeText = args[++index];
+                outputDirectory = args[++index];
+
+                if (string.IsNullOrWhiteSpace(workbookPath) ||
+                    string.IsNullOrWhiteSpace(rangeText) ||
+                    string.IsNullOrWhiteSpace(outputDirectory))
+                {
+                    startupArguments = [];
+                    error = $"{Argument}: none of <workbook.xlsx>, <A1:Range>, <outDir> may be blank.";
+                    return false;
+                }
+
                 continue;
             }
 
-            if (workbookPath is not null)
+            if (IsSheetArgument(argument))
             {
-                startupArguments = [];
-                error = $"{Argument} was specified more than once.";
-                return false;
+                if (worksheetName is not null)
+                {
+                    startupArguments = [];
+                    error = $"{SheetArgument} was specified more than once.";
+                    return false;
+                }
+
+                if (index + 1 >= args.Count || string.IsNullOrWhiteSpace(args[index + 1]))
+                {
+                    startupArguments = [];
+                    error = $"{SheetArgument} requires a non-empty worksheet name.";
+                    return false;
+                }
+
+                worksheetName = args[++index];
+                continue;
             }
 
-            // Expect exactly three positional values after the flag: <xlsx> <range> <outDir>
-            if (index + 3 >= args.Count)
-            {
-                startupArguments = [];
-                error = $"{Argument} requires three arguments: <workbook.xlsx> <A1:Range> <outDir>.";
-                return false;
-            }
-
-            workbookPath = args[++index];
-            var rangeText = args[++index];
-            var outputDirectory = args[++index];
-
-            if (string.IsNullOrWhiteSpace(workbookPath) ||
-                string.IsNullOrWhiteSpace(rangeText) ||
-                string.IsNullOrWhiteSpace(outputDirectory))
-            {
-                startupArguments = [];
-                error = $"{Argument}: none of <workbook.xlsx>, <A1:Range>, <outDir> may be blank.";
-                return false;
-            }
-
-            options = new GridCaptureOptions(workbookPath, rangeText, outputDirectory);
+            filteredArguments.Add(argument);
         }
+
+        if (worksheetName is not null && workbookPath is null)
+        {
+            startupArguments = [];
+            error = $"{SheetArgument} requires {Argument} to be specified.";
+            return false;
+        }
+
+        if (workbookPath is not null)
+            options = new GridCaptureOptions(workbookPath, rangeText!, outputDirectory!, worksheetName);
 
         startupArguments = filteredArguments.ToArray();
         return true;
@@ -440,7 +482,8 @@ internal static class GridCaptureCoordinator
             var result = await mainWindow.CaptureGridRangeAsync(
                 options.WorkbookPath,
                 options.RangeText,
-                options.OutputDirectory);
+                options.OutputDirectory,
+                options.WorksheetName);
 
             Console.WriteLine(result.JsonLog);
 
