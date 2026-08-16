@@ -145,16 +145,23 @@ public sealed class AvaloniaPlatformClipboard : IPlatformClipboard
         }
 
         bitmap = null;
-        if (content.Image?.PngBytes is { Length: > 0 } pngBytes)
+        if (content.Image?.PngBytes is { Length: > 0 } pngBytes && HasPngSignature(pngBytes))
         {
             try
             {
                 bitmap = new Bitmap(new MemoryStream(pngBytes, writable: false));
                 item.SetBitmap(bitmap);
+                // Carry the encoded bytes alongside the decoded bitmap. Reading an image back out
+                // otherwise means re-encoding with Bitmap.Save, which is a lossy round trip and is
+                // not guaranteed to produce anything at all: under Avalonia's headless backend Save
+                // writes zero bytes, so a copy would paste an empty image. This app-scoped flavor is
+                // invisible to other applications, which still see the standard bitmap format.
+                item.Set(OriginalPngFormat, pngBytes);
             }
             catch
             {
                 // Keep the remaining flavors if the PNG cannot be decoded.
+                bitmap = null;
             }
         }
 
@@ -199,15 +206,31 @@ public sealed class AvaloniaPlatformClipboard : IPlatformClipboard
             {
                 try
                 {
+                    // Prefer the encoded bytes we wrote ourselves; re-encoding a decoded bitmap is
+                    // lossy and, on some backends, produces nothing.
+                    var originalPng = await transfer.TryGetValueAsync(OriginalPngFormat);
                     using var bitmap = await transfer.TryGetBitmapAsync();
-                    if (bitmap is not null)
+                    if (originalPng is { Length: > 0 })
+                    {
+                        image = new PlatformClipboardImage(
+                            originalPng,
+                            bitmap?.PixelSize.Width,
+                            bitmap?.PixelSize.Height);
+                    }
+                    else if (bitmap is not null)
                     {
                         using var stream = new MemoryStream();
                         bitmap.Save(stream);
-                        image = new PlatformClipboardImage(
-                            stream.ToArray(),
-                            bitmap.PixelSize.Width,
-                            bitmap.PixelSize.Height);
+                        var encoded = stream.ToArray();
+                        // An image whose bytes are empty is not an image. Reporting one hands the
+                        // caller a PlatformClipboardImage that looks present and pastes as nothing.
+                        if (encoded.Length > 0)
+                        {
+                            image = new PlatformClipboardImage(
+                                encoded,
+                                bitmap.PixelSize.Width,
+                                bitmap.PixelSize.Height);
+                        }
                     }
                 }
                 catch (OperationCanceledException)
@@ -262,6 +285,27 @@ public sealed class AvaloniaPlatformClipboard : IPlatformClipboard
         format.Scope == PlatformClipboardFormatScope.Application
             ? DataFormat.CreateStringApplicationFormat(format.Name)
             : DataFormat.CreateStringPlatformFormat(format.Name);
+
+    /// <summary>
+    /// App-scoped flavor carrying the exact PNG bytes that were written, so reading an image back
+    /// does not depend on re-encoding a decoded bitmap.
+    /// </summary>
+    private static readonly DataFormat<byte[]> OriginalPngFormat =
+        DataFormat.CreateBytesApplicationFormat("Free.Shared.Clipboard.OriginalPng");
+
+    /// <summary>
+    /// True when the bytes start with the 8-byte PNG signature.
+    /// </summary>
+    /// <remarks>
+    /// Checked explicitly rather than relying on the Bitmap constructor to reject bad input: image
+    /// decoders are not required to be strict, and Avalonia's headless backend happily turns three
+    /// arbitrary bytes into a 1x1 bitmap. Without this, malformed image data reaches the clipboard
+    /// as a bogus one-pixel image instead of being skipped.
+    /// </remarks>
+    private static bool HasPngSignature(ReadOnlySpan<byte> bytes) =>
+        bytes.Length >= 8
+        && bytes[0] == 0x89 && bytes[1] == 0x50 && bytes[2] == 0x4E && bytes[3] == 0x47
+        && bytes[4] == 0x0D && bytes[5] == 0x0A && bytes[6] == 0x1A && bytes[7] == 0x0A;
 
     public static DataFormat<byte[]> CreateBytesFormat(PlatformClipboardFormat format) =>
         format.Scope == PlatformClipboardFormatScope.Application
