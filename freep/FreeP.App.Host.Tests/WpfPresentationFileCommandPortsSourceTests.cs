@@ -26,7 +26,7 @@ public sealed class WpfPresentationFileCommandPortsSourceTests
 
         source.Should().Contain("internal static class WpfPresentationFileCommandSessionFactory");
         source.Should().Contain("public static PresentationFileCommandSession Create(");
-        source.Should().Contain("new PresentationFileCommandSession(");
+        source.Should().Contain("PresentationFileCommandSessionFactory.Create(");
         source.Should().Contain("new PresentationFileLifecycleAdapter(workflow.Workflow)");
         source.Should().Contain("WpfPresentationFilePickerPort");
         source.Should().Contain("WpfPresentationFileRenderPort");
