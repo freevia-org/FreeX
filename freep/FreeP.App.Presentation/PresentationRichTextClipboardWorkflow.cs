@@ -11,11 +11,21 @@ public static class PresentationRichTextClipboardWorkflow
     {
         ArgumentNullException.ThrowIfNull(payload);
         return new PresentationClipboardContent(
-            Text: payload.PlainText,
+            Text: ToExternalPlainText(payload.PlainText),
             RichTextBytes: InCanvasRichClipboardPlanner.Serialize(payload),
             XamlPackageBytes: xamlPackageBytes,
             RtfBytes: rtfBytes);
     }
+
+    /// <summary>
+    /// U+FFFC (OBJECT REPLACEMENT CHARACTER) anchors inline objects -- images, tables, OLE -- inside
+    /// the internal text so caret and selection offsets line up with the rich body. It must not reach
+    /// the external text/plain flavor: the object itself cannot follow, so a plain-text target would
+    /// show a stray placeholder glyph where nothing was copied. The private rich format still carries
+    /// the anchor and the object with it.
+    /// </summary>
+    private static string ToExternalPlainText(string text) =>
+        string.IsNullOrEmpty(text) ? text : text.Replace("￼", string.Empty, StringComparison.Ordinal);
 
     public static ValueTask<PlatformClipboardWriteResult> WriteAsync(
         IPlatformClipboard clipboard,
