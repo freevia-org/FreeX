@@ -167,7 +167,13 @@ public sealed class R101_AvaloniaAdvancedFilterProductionWorkflowTests
 
                 // Advanced Filter's initial application is intentionally followed by Reapply; the
                 // latter is the WPF-authoritative operation that combines all active definitions.
-                sheet.FilterHiddenRows.Should().BeEquivalentTo([4u, 5u, 6u]);
+                // So at THIS point only the Advanced Filter's own result is in effect: applying it in
+                // place recomputes the hidden set across its list range, which drops the AutoFilter
+                // hides rather than unioning with them (AdvancedFilterCommand, shared with the WPF
+                // host, whose ApplyAdvancedFilterResult likewise only remembers the filter for
+                // Reapply). Status=Keep leaves rows 5 and 6 hidden; row 4, hidden a moment ago by the
+                // Region AutoFilter, comes back until Reapply below recombines the definitions.
+                sheet.FilterHiddenRows.Should().BeEquivalentTo([5u, 6u]);
 
                 // Row 4 now passes both AutoFilter criteria. Row 5 now passes Advanced Filter, while
                 // row 3 still fails Amount and row 6 still fails both mechanisms.
@@ -181,7 +187,7 @@ public sealed class R101_AvaloniaAdvancedFilterProductionWorkflowTests
                 // A single undo restores the visibility before Reapply, proving the composite was
                 // recorded as one history item instead of one item per filter definition.
                 window.Session.UndoLastEdit().Success.Should().BeTrue();
-                sheet.FilterHiddenRows.Should().BeEquivalentTo([4u, 5u, 6u]);
+                sheet.FilterHiddenRows.Should().BeEquivalentTo([5u, 6u]);
                 window.Session.RedoLastEdit().Success.Should().BeTrue();
                 sheet.FilterHiddenRows.Should().BeEquivalentTo([3u, 6u]);
 

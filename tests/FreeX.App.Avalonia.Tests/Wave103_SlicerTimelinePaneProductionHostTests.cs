@@ -25,6 +25,15 @@ public sealed class Wave103_SlicerTimelinePaneProductionHostTests
     {
         await Session.Dispatch(async () =>
         {
+            // The workbook window registry is process-wide, and this test reasons about pane state
+            // and keyboard traversal across it, so windows an earlier test left open change what it
+            // observes -- it passes in isolation and fails in a full run purely on ordering.
+            foreach (var stale in MainWindow.WindowRegistryForTest.Windows.ToList())
+            {
+                stale.AllowCloseWithoutDirtyPromptForParityCapture();
+                stale.Close();
+            }
+
             var window = new MainWindow([]);
             try
             {
