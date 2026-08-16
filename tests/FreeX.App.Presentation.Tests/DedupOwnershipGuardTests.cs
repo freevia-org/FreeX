@@ -8,7 +8,7 @@ public sealed class DedupOwnershipGuardTests
     public void ConditionalFormatMathAndReferenceGrammarHaveSingleProductionOwners()
     {
         var root = TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeX.slnx");
-        var productionSources = Directory.GetFiles(Path.Combine(root, "src"), "*.cs", SearchOption.AllDirectories);
+        var productionSources = EnumerateProductionSources(Path.Combine(root, "src"));
         var mathOwners = productionSources.Where(path => File.ReadAllText(path).Contains("class ConditionalFormatEvaluationMath", StringComparison.Ordinal));
         var referenceTokenOwners = productionSources.Where(path => File.ReadAllText(path).Contains("IReadOnlyList<string> SplitReferences", StringComparison.Ordinal));
         var numberFormatOwners = productionSources.Where(path => File.ReadAllText(path).Contains("class NumberFormatSectionTokenizer", StringComparison.Ordinal));
@@ -39,4 +39,23 @@ public sealed class DedupOwnershipGuardTests
         dataValidation.Should().NotContain("CreateDefaultRule(");
         dataTable.Should().NotContain("public static CellAddress GetDefaultFormulaCell(");
     }
+
+    /// <summary>
+    /// Checked-in production sources only. Enumerating every .cs under src/ also walks obj/ and bin/,
+    /// which is wrong twice over: those directories hold generated files that a concurrent build can
+    /// delete between enumeration and read (this guard failed with a FileNotFoundException on a
+    /// localization satellite's generated resources.cs), and a build artifact mirroring a source file
+    /// would be counted as a second "owner" and fail the guard for no real reason.
+    /// </summary>
+    private static string[] EnumerateProductionSources(string sourceRoot) =>
+        Directory.GetFiles(sourceRoot, "*.cs", SearchOption.AllDirectories)
+            .Where(path => !IsBuildArtifact(path, sourceRoot))
+            .ToArray();
+
+    private static bool IsBuildArtifact(string path, string sourceRoot) =>
+        Path.GetRelativePath(sourceRoot, path)
+            .Split(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar)
+            .Any(segment =>
+                segment.Equals("obj", StringComparison.OrdinalIgnoreCase) ||
+                segment.Equals("bin", StringComparison.OrdinalIgnoreCase));
 }
