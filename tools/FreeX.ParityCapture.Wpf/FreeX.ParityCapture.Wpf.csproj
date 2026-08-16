@@ -4,6 +4,13 @@
     <AssemblyName>FreeX.ParityCapture.Wpf</AssemblyName>
     <ApplicationIcon>..\..\shared\Free.Shared.Shell\Resources\FreeX.ico</ApplicationIcon>
     <ApplicationManifest>..\..\src\FreeX.App.Host\app.manifest</ApplicationManifest>
+    <!--
+      The interactive WPF capture host must use the machine-wide runtime registration when it is
+      launched directly. This avoids a stale user DOTNET_ROOT (which can contain only an older SDK)
+      taking precedence over the installed Windows Desktop runtime and displaying the generic
+      install-runtime modal instead of FreeX.
+    -->
+    <AppHostDotNetSearch>Global</AppHostDotNetSearch>
     <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
     <EnableDefaultPageItems>false</EnableDefaultPageItems>
     <NoWarn>$(NoWarn);WFO0003</NoWarn>
@@ -105,4 +112,25 @@
     <Using Include="FreeX.App.Presentation.PivotUI" />
     <Using Include="FreeX.App.Presentation.TableUI" />
   </ItemGroup>
+
+  <!--
+    The SDK only applies AppHostDotNetSearch while publishing by default. The screenshot harness
+    discovers the normal Release build output, so apply the identical CreateAppHost configuration
+    after the SDK creates that build apphost as well.
+  -->
+  <Target Name="ConfigureCaptureBuildAppHostRuntimeSearch"
+          AfterTargets="_CreateAppHost"
+          Condition="'$(UseAppHost)' == 'true' and '$(AppHostSourcePath)' != '' and '$(AppHostIntermediatePath)' != ''">
+    <CreateAppHost AppHostSourcePath="$(AppHostSourcePath)"
+                   AppHostDestinationPath="$(AppHostIntermediatePath)"
+                   AppBinaryName="$(AssemblyName)$(TargetExt)"
+                   IntermediateAssembly="@(IntermediateAssembly->'%(FullPath)')"
+                   WindowsGraphicalUserInterface="$(_UseWindowsGraphicalUserInterface)"
+                   Retries="$(CopyRetryCount)"
+                   RetryDelayMilliseconds="$(CopyRetryDelayMilliseconds)"
+                   EnableMacOSCodeSign="$(_EnableMacOSCodeSign)"
+                   DisableCetCompat="$(_DisableCetCompat)"
+                   DotNetSearchLocations="$(AppHostDotNetSearch)"
+                   AppRelativeDotNet="$(AppHostRelativeDotNet)" />
+  </Target>
 </Project>

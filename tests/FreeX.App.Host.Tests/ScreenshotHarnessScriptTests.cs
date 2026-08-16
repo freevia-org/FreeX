@@ -286,7 +286,7 @@ public sealed class ScreenshotHarnessScriptTests
     }
 
     [Fact]
-    public void FreeXScreenshotScript_AcceptsExplicitExePathAndDiscoversBuiltHost()
+    public void FreeXScreenshotScript_AcceptsExplicitExePathAndLaunchesTheMatchingAssemblyThroughDotNet()
     {
         var script = ReadScript("screenshot_ribbon.ps1");
 
@@ -297,7 +297,25 @@ public sealed class ScreenshotHarnessScriptTests
         script.Should().Contain("Get-ChildItem -LiteralPath $binRoot -Recurse -Filter \"FreeX.ParityCapture.Wpf.exe\" -File");
         script.Should().Contain("Sort-Object LastWriteTimeUtc -Descending");
         script.Should().Contain("$exe = Resolve-FreeXExecutablePath $ExePath");
-        script.Should().Contain("$proc = Start-Process -FilePath $exe -WorkingDirectory (Split-Path -Parent $exe) -PassThru");
+        script.Should().Contain("function Resolve-FreeXCaptureAssemblyPath");
+        script.Should().Contain("[System.IO.Path]::ChangeExtension($executablePath, \".dll\")");
+        script.Should().Contain("function Resolve-DotNetHostPath");
+        script.Should().Contain("$captureAssembly = Resolve-FreeXCaptureAssemblyPath $exe");
+        script.Should().Contain("$dotnetHost = Resolve-DotNetHostPath");
+        script.Should().Contain("$proc = Start-Process -FilePath $dotnetHost -ArgumentList @($captureAssembly) -WorkingDirectory (Split-Path -Parent $captureAssembly) -PassThru");
+    }
+
+    [Fact]
+    public void FreeXParityCaptureHost_UsesTheGlobalDesktopRuntimeForItsDirectAppHost()
+    {
+        var project = File.ReadAllText(WorkspaceFileLocator.Find(
+            "tools", "FreeX.ParityCapture.Wpf", "FreeX.ParityCapture.Wpf.csproj"));
+
+        project.Should().Contain("<AppHostDotNetSearch>Global</AppHostDotNetSearch>");
+        project.Should().Contain("Target Name=\"ConfigureCaptureBuildAppHostRuntimeSearch\"");
+        project.Should().Contain("AfterTargets=\"_CreateAppHost\"");
+        project.Should().Contain("DotNetSearchLocations=\"$(AppHostDotNetSearch)\"");
+        project.Should().Contain("AppHostDestinationPath=\"$(AppHostIntermediatePath)\"");
     }
 
     [Fact]
