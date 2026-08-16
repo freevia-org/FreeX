@@ -41,6 +41,13 @@ public sealed class FreePHeadlessApp : Application
 {
     public override void Initialize() => Styles.Add(new FluentTheme());
 
+    // NOTE: two PresentationClipboardInteropTests round-trip a PNG through DataFormat.Bitmap, which
+    // needs a real imaging backend -- under this headless drawing stub the encode silently yields
+    // nothing and the PNG comes back empty. Switching this assembly to .UseSkia() with
+    // UseHeadlessDrawing = false does fix them, but it also changes how the video-export host name
+    // resolves ("Avalonia Linux video export host" instead of "Avalonia video export host"), breaking
+    // Video_export_command_records_shared_frame_package. That interaction is not understood, so the
+    // stub stays until the two clipboard tests can be covered without whole-assembly side effects.
     public static AppBuilder BuildAvaloniaApp() =>
         AppBuilder.Configure<FreePHeadlessApp>()
             .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = true });
