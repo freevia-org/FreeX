@@ -1020,6 +1020,12 @@ internal sealed class AvaloniaRichTextEditor : Grid
             }
 
             _pointerSelectionAnchor = _keyboardSelectionAnchor.Value;
+            // The caret must follow the moving end of the selection. Assigning SelectionEnd alone
+            // leaves CaretIndex where it was, and every navigation above reads CaretIndex as its
+            // origin -- so a second Shift+Arrow re-navigated from the stale position and collapsed
+            // the selection instead of extending it. Set the caret first: assigning CaretIndex can
+            // itself collapse the selection, so the range assignment has to come after it.
+            InputBox.CaretIndex = target;
             InputBox.SelectionStart = _keyboardSelectionAnchor.Value;
             InputBox.SelectionEnd = target;
             _keyboardSelectionCaret = target;
