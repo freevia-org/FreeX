@@ -109,6 +109,12 @@ public sealed partial class MainWindow
         AvaloniaGrid.SetColumn(title, 0);
         AvaloniaGrid.SetColumn(_slicerTimelinePaneCloseButton, 1);
         header.Children.Add(title);
+        // The close button is a reused field but this method builds a BRAND NEW header grid on every
+        // refresh, so on the second pass the button still belongs to the previous grid and Avalonia
+        // throws "already has a visual parent". RefreshShell rebuilds this pane (a plain window resize
+        // is enough), so the second refresh with the pane open would take the shell down. Detach first.
+        if (_slicerTimelinePaneCloseButton.Parent is Panel previousHeader)
+            previousHeader.Children.Remove(_slicerTimelinePaneCloseButton);
         header.Children.Add(_slicerTimelinePaneCloseButton);
         content.Children.Add(header);
 

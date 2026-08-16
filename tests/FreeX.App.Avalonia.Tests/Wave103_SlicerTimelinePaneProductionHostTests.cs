@@ -4,6 +4,7 @@ using Avalonia.Automation;
 using Avalonia.Controls;
 using Avalonia.Headless;
 using Avalonia.Input;
+using Avalonia.Threading;
 using Avalonia.Interactivity;
 using Avalonia.LogicalTree;
 using Avalonia.VisualTree;
@@ -53,10 +54,16 @@ public sealed class Wave103_SlicerTimelinePaneProductionHostTests
                 window.SlicerTimelinePaneVisibleForTest.Should().BeTrue();
 
                 host = window.SlicerTimelinePaneHostForTest;
+                // The undo above rebuilds the pane; lay it out before looking into the visual tree,
+                // the same way this test does before its other Find calls.
+                window.UpdateLayout();
                 var start = Find<TextBox>(host, "TimelinePaneStart_Order Date Timeline");
                 var end = Find<TextBox>(host, "TimelinePaneEnd_Order Date Timeline");
                 start.Text = "2026-01-01";
                 end.Text = "2026-01-31";
+                // Apply reads paneItem.SelectedStartDate/EndDate, which the boxes update from their TextChanged
+                // handlers -- let those run before clicking, or Apply commits the pre-edit dates.
+                Dispatcher.UIThread.RunJobs(DispatcherPriority.Input);
                 Find<Button>(host, "TimelinePaneApply_Order Date Timeline").RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
 
                 var timeline = window.Session.Workbook.Timelines.Single();
@@ -64,11 +71,13 @@ public sealed class Wave103_SlicerTimelinePaneProductionHostTests
                 timeline.SelectedEndDate.Should().Be("2026-01-31");
 
                 host = window.SlicerTimelinePaneHostForTest;
+                window.UpdateLayout();
                 Find<Button>(host, "TimelinePaneClear_Order Date Timeline").RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
                 timeline.SelectedStartDate.Should().BeNull();
                 timeline.SelectedEndDate.Should().BeNull();
 
                 host = window.SlicerTimelinePaneHostForTest;
+                window.UpdateLayout();
                 var close = Find<Button>(host, "SlicerTimelinePaneCloseButton");
                 close.Focus().Should().BeTrue();
                 await window.RaiseKeyDownForTest(new KeyEventArgs
