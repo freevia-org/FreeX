@@ -363,8 +363,13 @@ public sealed class VisualEvidencePageLayoutShotSourceTests
         var source = File.ReadAllText(RepositoryFile("freew", "FreeW.App.Avalonia", "Editing", "DocumentView.cs"));
 
         source.Should().Contain("var cellSpacingInset = table.CellSpacingPt is > 0");
-        source.Should().Contain("Rect SurfaceRectFor(double x, double y, double width, double height, int startCol, int span, int rowIndex)");
-        source.Should().Contain("var rect = SurfaceRectFor(cellX, rowPageSpaceY, cellWidth, rowHeight, startCol, span, r);");
+        // The helper gained a merged-span end row and is now written one parameter per line, so match
+        // its name and parameters rather than a single-line signature literal.
+        source.Should().Contain("Rect SurfaceRectFor(");
+        source.Should().MatchRegex(
+            @"Rect SurfaceRectFor\(\s*double x,\s*double y,\s*double width,\s*double height,\s*int startCol,\s*int span,\s*int rowIndex,\s*int endRowIndex\)");
+        source.Should().MatchRegex(
+            @"var rect = SurfaceRectFor\(\s*cellX,\s*rowPageSpaceY,\s*cellWidth,\s*mergedSpanHeight,\s*startCol,\s*span,\s*r,\s*mergedEndRow\);");
         source.Should().Contain("var contentTopY = rect.Top + pad + vAlignOffset;");
         source.Should().Contain("var tx = rect.Left + pad + markerInset;");
     }
