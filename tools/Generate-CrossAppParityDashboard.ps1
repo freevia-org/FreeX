@@ -492,7 +492,7 @@ try {
         claimBoundary = "Route/scenario coverage, committed PNG manifests, and local WPF/Avalonia comparison results only; no PowerPoint visual-parity claim is made."
     }
 
-    $freePNextSlice = "The tracked PowerPoint corpus has 43 COM-exported reference slides across 26 ready decks; the grouped-list SmartArt deck still lacks ten Office references. Current-source recalibration averages $($freePOfficeRecalibration.summary.wpfAverageMeanPercent)% for WPF and $($freePOfficeRecalibration.summary.avaloniaAverageMeanPercent)% for Avalonia over the 43 paired Office slides, with current maxima of $($freePOfficeRecalibration.summary.wpfMaximumMeanPercent)% for WPF and $($freePOfficeRecalibration.summary.avaloniaMaximumMeanPercent)% for Avalonia. Prioritize bullets/text-autofit and 3-D charts."
+    $freePNextSlice = "The tracked PowerPoint corpus now has $($freePOfficeBaseline.artifactCount) COM-exported reference slides across $($freePOfficeBaseline.comparison.referenceReadyDecks) ready decks, with $($freePOfficeBaseline.comparison.missingReferenceDecks) deck missing references. The last current-source recalibration covers $($freePOfficeRecalibration.summary.officeReferenceSlides) paired Office slides and averages $($freePOfficeRecalibration.summary.wpfAverageMeanPercent)% for WPF and $($freePOfficeRecalibration.summary.avaloniaAverageMeanPercent)% for Avalonia, with maxima of $($freePOfficeRecalibration.summary.wpfMaximumMeanPercent)% / $($freePOfficeRecalibration.summary.avaloniaMaximumMeanPercent)%. Recalibrate against all tracked references, then prioritize bullets/text-autofit and 3-D charts."
 
     $freeP = [ordered]@{
         app = "FreeP"
