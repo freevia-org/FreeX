@@ -242,12 +242,23 @@ public static class AvaloniaCompactDialogChrome
                     ApplyClassicTabChrome(tabControl, style);
                     break;
                 case Button button:
+                {
+                    // Respect an explicitly-sized button, exactly as the TextBox and ComboBox cases
+                    // above do. This pass runs on Window.Opened over every descendant, so without the
+                    // guard it replaced the WPF-parity metrics a dialog had deliberately set (24 tall,
+                    // 4x1 padding) with the compact defaults (26, 12x3) after construction -- the
+                    // dialog's own chrome call was silently undone.
+                    var hasExplicitHeight = button.IsSet(Layoutable.HeightProperty)
+                        || button.IsSet(Layoutable.MinHeightProperty)
+                        || button.IsSet(Layoutable.MaxHeightProperty);
                     ApplyButton(
                         button,
                         style,
                         button.IsSet(Layoutable.MinWidthProperty) ? button.MinWidth : style.ButtonMinWidth,
-                        button.IsDefault);
+                        button.IsDefault,
+                        fixedHeight: !hasExplicitHeight);
                     break;
+                }
             }
         }
     }
@@ -256,16 +267,20 @@ public static class AvaloniaCompactDialogChrome
         Button button,
         AvaloniaCompactDialogChromeStyle style,
         double minWidth,
-        bool isDefault = false)
+        bool isDefault = false,
+        bool fixedHeight = true)
     {
         ArgumentNullException.ThrowIfNull(button);
         ArgumentNullException.ThrowIfNull(style);
 
         button.MinWidth = minWidth;
-        button.Height = style.ButtonHeight;
-        button.MinHeight = style.ButtonHeight;
-        button.MaxHeight = style.ButtonHeight;
-        button.Padding = style.ButtonPadding;
+        if (fixedHeight)
+        {
+            button.Height = style.ButtonHeight;
+            button.MinHeight = style.ButtonHeight;
+            button.MaxHeight = style.ButtonHeight;
+            button.Padding = style.ButtonPadding;
+        }
         button.CornerRadius = style.ButtonCornerRadius;
         button.BorderThickness = new Thickness(CompactDialogVisualTokens.BorderThickness);
         button.FontSize = style.FontSize;
