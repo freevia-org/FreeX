@@ -9693,9 +9693,8 @@ public sealed partial class DocumentView : RichTextBox
         // Imported WordprocessingML uses Word's application default multiple when the package cascade
         // omits w:spacing/@w:line. Model-authored FreeW documents keep the host's natural single-line box.
         // Explicit paragraph/style rules and non-default model values remain authoritative.
-        var usesWordApplicationDefaultLineSpacing = !paraFmt.LineSpacingIsSet &&
-            Math.Abs(paraFmt.LineSpacing - ParagraphFormatting.Default.LineSpacing) <= 0.0001 &&
-            document.UseWordApplicationDefaultLineSpacing;
+        var usesWordApplicationDefaultLineSpacing =
+            ImportedWordLineSpacingPlanner.UsesApplicationDefaultLineSpacing(document, paraFmt);
         var hasExplicitMultipleLineSpacing = paraFmt.LineSpacingIsSet ||
             Math.Abs(paraFmt.LineSpacing - ParagraphFormatting.Default.LineSpacing) > 0.0001 ||
             usesWordApplicationDefaultLineSpacing;
@@ -9736,7 +9735,7 @@ public sealed partial class DocumentView : RichTextBox
             LineHeight = paraFmt.LineRule == LineSpacingRule.Multiple && hasExplicitMultipleLineSpacing
                 ? (paraFmt.LineSpacing > 0
                     ? paraFmt.LineSpacing * DefaultLineHeightRatio(document) *
-                      (usesWordApplicationDefaultLineSpacing && document.UseWordApplicationDefaultRunFormatting
+                      (ImportedWordLineSpacingPlanner.UsesApplicationDefaultRunLineHeightCalibration(document, paraFmt)
                           ? ImportedWordApplicationLineHeightScale
                           : 1.0) *
                       (document.DefaultRun.FontSizePt ?? 11) * PxPerPoint

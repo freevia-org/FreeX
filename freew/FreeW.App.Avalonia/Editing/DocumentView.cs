@@ -74,10 +74,9 @@ public sealed partial class DocumentView : Control
     // Superscript / subscript rendering approximation (matches Word's ~58% size + ~33% raise/lower).
     // SuperSubScale: font shrinks to ~58% of the run's size (Word uses 58.3%).
     private const double SuperSubScale = 0.583;
-    // Avalonia's Calibri 11 FormattedText line box is about 6% taller than Word's natural
-    // single-line box. Apply this only to unstyled/Normal body text; headings and explicit line
-    // spacing retain their own metrics.
-    private const double WordDefaultBodyLineHeightScale = 0.94;
+    // Avalonia's application-default Word line box is about 6% taller than Word's natural
+    // single-line box. Shared provenance policy decides when this native font-metric calibration applies.
+    private const double ImportedWordApplicationLineHeightScale = 0.94;
     // SuperYRaiseFraction: superscript baseline sits at ~33% from the top of the line box.
     private const double SuperYRaiseFraction = 0.15;
     // SubYLowerFraction: subscript top sits at ~33% from the top of the line box so the shrunk
@@ -8024,8 +8023,9 @@ public sealed partial class DocumentView : Control
             var nextIndentLeft  = nextPf.IndentLeftPt  * PxPerPoint;
             var nextIndentRight = nextPf.IndentRightPt * PxPerPoint;
             var nextAvailableWidth = Math.Max(60, textWidth - nextIndentLeft - nextIndentRight);
-            var nextNaturalLineHeightScale = UsesWordDefaultBodyLineBox(nextParagraph, nextPf, nextCells)
-                ? WordDefaultBodyLineHeightScale
+            var nextNaturalLineHeightScale = ImportedWordLineSpacingPlanner
+                .UsesApplicationDefaultRunLineHeightCalibration(_doc, nextPf)
+                ? ImportedWordApplicationLineHeightScale
                 : 1.0;
 
             var reviewPolicy = CurrentReviewDisplayPolicy;
@@ -8264,8 +8264,9 @@ public sealed partial class DocumentView : Control
         var pf = ResolveParagraphFmt(paragraph);
         var alignment = pf.Alignment;
         var spaceAfter = pf.SpaceAfterPt * PxPerPoint;
-        var naturalLineHeightScale = UsesWordDefaultBodyLineBox(paragraph, pf, cells)
-            ? WordDefaultBodyLineHeightScale
+        var naturalLineHeightScale = ImportedWordLineSpacingPlanner
+            .UsesApplicationDefaultRunLineHeightCalibration(_doc, pf)
+            ? ImportedWordApplicationLineHeightScale
             : 1.0;
 
         // Paragraph indents: left/right reduce available width; first-line applies only to line 0.
@@ -8952,23 +8953,6 @@ public sealed partial class DocumentView : Control
                 ? naturalHeight * (pf.LineSpacing > 0 ? pf.LineSpacing : 1.15)
                 : naturalHeight,
         };
-    }
-
-    private bool UsesWordDefaultBodyLineBox(
-        Paragraph paragraph,
-        ParagraphFormatting paragraphFormatting,
-        IReadOnlyList<Cell> cells)
-    {
-        if (paragraphFormatting.LineRule != LineSpacingRule.Multiple || paragraphFormatting.LineSpacingIsSet)
-            return false;
-
-        if (paragraph.StyleId is { Length: > 0 } styleId &&
-            !string.Equals(styleId, "Normal", StringComparison.OrdinalIgnoreCase))
-            return false;
-
-        return cells.Count > 0 && cells.Where(cell => !IsTextHiddenInCurrentView(cell.Fmt)).All(cell =>
-            string.Equals(cell.Fmt.FontFamily, "Calibri", StringComparison.OrdinalIgnoreCase) &&
-            Math.Abs((cell.Fmt.FontSizePt ?? DefaultFontSizePt) - 11.0) < 0.01);
     }
 
     private static double AlignmentOffset(TextAlignment alignment, double textWidth, double lineWidth, bool isLast = false) => alignment switch
