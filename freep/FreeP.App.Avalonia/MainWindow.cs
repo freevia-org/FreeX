@@ -3707,7 +3707,7 @@ public sealed partial class MainWindow : Window,
         _reviewCommentsPanePanel.Children.Clear();
         _reviewCommentsPanePanel.Children.Add(BuildReviewCommentsPaneHeader(plan));
         _reviewCommentsPanePanel.Children.Add(BuildAddCommentInput());
-        _reviewCommentsPanePanel.Children.Add(BuildReviewCommentActions(plan.Actions));
+        _reviewCommentsPanePanel.Children.Add(BuildReviewCommentActions(plan.ToolbarActions));
 
         if (plan.ShouldShowEmptyState)
         {
@@ -3850,7 +3850,9 @@ public sealed partial class MainWindow : Window,
                 MinWidth  = 88,
                 Margin    = new Thickness(0, 0, 6, 6),
             };
-            button.Click += (_, _) => ExecuteReviewCommentAction(action.CommandId);
+            AutomationProperties.SetAutomationId(button, action.CommandId);
+            AutomationProperties.SetName(button, action.Label);
+            button.Click += (_, _) => _reviewPaneHostCoordinator.ExecuteCommentCommand(action.CommandId);
             panel.Children.Add(button);
         }
 
@@ -4206,39 +4208,6 @@ public sealed partial class MainWindow : Window,
                 CreateItem: plan => new MenuItem { Header = plan.Label, Tag = plan.SemanticTag },
                 BindClick: (item, execute) => item.Click += (_, _) => execute(),
                 AddItem: (menu, item) => menu.Items.Add(item)));
-
-    private void ExecuteReviewCommentAction(string commandId)
-    {
-        if (commandId == PresentationReviewWorkflowPlanner.AddCommentCommandId)
-        {
-            AddComment(PresentationPaneTextResources.NewCommentDefault);
-        }
-        else if (commandId == PresentationReviewWorkflowPlanner.EditCommentCommandId)
-        {
-            EditSelectedComment(GetSelectedCommentText());
-        }
-        else if (commandId == PresentationReviewWorkflowPlanner.ResolveCommentCommandId)
-        {
-            ResolveSelectedComment();
-        }
-        else if (commandId == PresentationReviewWorkflowPlanner.ReopenCommentCommandId)
-        {
-            ReopenSelectedComment();
-        }
-        else if (commandId == PresentationReviewWorkflowPlanner.DeleteCommentCommandId)
-        {
-            DeleteSelectedComment();
-        }
-        else if (commandId == PresentationReviewWorkflowPlanner.PreviousCommentCommandId)
-        {
-            NavigateReviewComment(PresentationReviewWorkflowIntentKind.PreviousComment);
-        }
-        else if (commandId == PresentationReviewWorkflowPlanner.NextCommentCommandId)
-        {
-            NavigateReviewComment(PresentationReviewWorkflowIntentKind.NextComment);
-        }
-    }
-
 
     private void SelectReviewComment(int commentIndex) => _reviewWorkflowSession.SelectReviewComment(commentIndex);
     internal PresentationCommentNavigationPlan NavigateReviewComment(PresentationReviewWorkflowIntentKind intent) => _reviewWorkflowSession.NavigateReviewComment(intent);

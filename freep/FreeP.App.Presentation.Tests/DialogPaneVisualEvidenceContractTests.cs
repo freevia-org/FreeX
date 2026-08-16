@@ -184,6 +184,56 @@ public sealed class DialogPaneVisualEvidenceContractTests
     }
 
     [Fact]
+    public void Print_evidence_adapters_capture_the_same_shared_backstage_surface()
+    {
+        var root = TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeP.slnx");
+        var wpf = File.ReadAllText(Path.Combine(
+            root, "freep", "TestSupport", "VisualEvidence.Wpf", "MainWindow.VisualCaptureAdapter.cs"));
+        var avalonia = File.ReadAllText(Path.Combine(
+            root, "freep", "TestSupport", "VisualEvidence.Avalonia", "MainWindow.VisualCaptureAdapter.cs"));
+
+        wpf.Should().Contain("owner._backstage.CurrentPaneContent ?? owner._backstage");
+        avalonia.Should().Contain("owner._backstage.CurrentPaneContent ?? owner._backstage");
+        wpf.Should().Contain("owner._backstage.Show(\"Print\")");
+        avalonia.Should().Contain("owner._backstage.TryActivateEntry(\"Print\")");
+        avalonia.Should().NotContain("internal void ShowPrintOptionsPane() => owner.ShowPrintOptionsPane()");
+    }
+
+    [Fact]
+    public void Comments_hosts_render_and_dispatch_the_shared_toolbar_plan()
+    {
+        var root = TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeP.slnx");
+        foreach (var relativePath in new[]
+        {
+            Path.Combine("freep", "FreeP.App.Host", "MainWindow.cs"),
+            Path.Combine("freep", "FreeP.App.Avalonia", "MainWindow.cs"),
+        })
+        {
+            var source = File.ReadAllText(Path.Combine(root, relativePath));
+            source.Should().Contain("plan.ToolbarActions");
+            source.Should().Contain("_reviewPaneHostCoordinator.ExecuteCommentCommand(action.CommandId)");
+            source.Should().Contain("AutomationProperties.SetAutomationId(button, action.CommandId)");
+        }
+    }
+
+    [Fact]
+    public void Slide_size_hosts_project_shared_action_automation_ids()
+    {
+        var root = TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeP.slnx");
+        foreach (var relativePath in new[]
+        {
+            Path.Combine("freep", "FreeP.App.Host", "SlideSizeDialog.cs"),
+            Path.Combine("freep", "FreeP.App.Avalonia", "SlideSizeDialog.cs"),
+        })
+        {
+            var source = File.ReadAllText(Path.Combine(root, relativePath));
+            source.Should().Contain("surface.Action(SlideSizeDialogAction.Accept)");
+            source.Should().Contain("surface.Action(SlideSizeDialogAction.Cancel)");
+            source.Should().Contain("AutomationId");
+        }
+    }
+
+    [Fact]
     public void Comparer_reports_pass_for_equivalent_nonblank_pair()
     {
         var scenario = DialogPaneVisualEvidenceCatalog.Get("design.slide-size.initial");

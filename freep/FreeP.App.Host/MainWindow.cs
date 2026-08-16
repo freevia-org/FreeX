@@ -1690,6 +1690,7 @@ public sealed partial class MainWindow : Window,
         _commentListPanel.Children.Clear();
         AddCommentPaneSummary(_commentListPanel, plan);
         AddCommentInput(_commentListPanel);
+        AddReviewCommentActions(_commentListPanel, plan.ToolbarActions);
         if (plan.HasComments)
         {
             foreach (var (cm, itemIndex) in comments.Select((comment, index) => (comment, index)))
@@ -1840,6 +1841,34 @@ public sealed partial class MainWindow : Window,
         row.Children.Add(input);
         row.Children.Add(button);
         host.Children.Add(row);
+    }
+
+    private void AddReviewCommentActions(
+        Panel host,
+        IReadOnlyList<PresentationReviewWorkflowActionPlan> actions)
+    {
+        var panel = new WrapPanel
+        {
+            Margin = new Thickness(12, 0, 12, 2),
+        };
+
+        foreach (var action in actions)
+        {
+            var button = new Button
+            {
+                Content = action.Label,
+                IsEnabled = action.IsEnabled,
+                Tag = action.CommandId,
+                MinWidth = 88,
+                Margin = new Thickness(0, 0, 6, 6),
+            };
+            AutomationProperties.SetAutomationId(button, action.CommandId);
+            AutomationProperties.SetName(button, action.Label);
+            button.Click += (_, _) => _reviewPaneHostCoordinator.ExecuteCommentCommand(action.CommandId);
+            panel.Children.Add(button);
+        }
+
+        host.Children.Add(panel);
     }
 
     private void AddEditCommentInput(

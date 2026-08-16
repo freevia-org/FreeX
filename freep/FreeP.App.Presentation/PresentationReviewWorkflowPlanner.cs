@@ -272,6 +272,17 @@ public sealed record PresentationCommentPanePlan(
             ? Comments[SelectedCommentIndex]
             : null;
 
+    /// <summary>
+    /// Commands materialized in the pane toolbar. Show, add, and reply already have
+    /// dedicated pane affordances, so rendering them again would create duplicate
+    /// actions and unstable evidence ordering.
+    /// </summary>
+    public IReadOnlyList<PresentationReviewWorkflowActionPlan> ToolbarActions =>
+        Actions.Where(action => action.Intent is not (
+            PresentationReviewWorkflowIntentKind.ShowCommentsPane or
+            PresentationReviewWorkflowIntentKind.AddComment or
+            PresentationReviewWorkflowIntentKind.ReplyComment)).ToArray();
+
     public PresentationReviewSurfaceActionPlan CloseAction => new(
         PresentationPaneTextResources.CommentsCloseCommand,
         true);

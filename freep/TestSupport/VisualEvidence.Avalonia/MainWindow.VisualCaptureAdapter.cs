@@ -68,7 +68,7 @@ public sealed partial class MainWindow
         "accessibility.media-caption-pane" => owner._mediaCaptionPaneHost,
         "context.smartart-text-pane" => owner._smartArtTextPaneHost,
         "animations.animation-pane" => owner._animationPaneHost,
-        "file.print-options" => owner._printOptionsPaneHost,
+        "file.print-options" => owner._backstage.CurrentPaneContent ?? owner._backstage,
         "insert.table-picker" => owner._tablePickerHost,
         "design.layout-picker" => owner._layoutPickerHost,
         _ => owner,
@@ -103,7 +103,11 @@ public sealed partial class MainWindow
         if (!owner.IsAnimationPaneVisible)
             owner.ShowAnimationPane();
     }
-    internal void ShowPrintOptionsPane() => owner.ShowPrintOptionsPane();
+    internal void ShowPrintOptionsPane()
+    {
+        owner._backstage.Show();
+        owner._backstage.TryActivateEntry("Print");
+    }
     internal void ShowBackstagePane(string paneId)
     {
         owner._backstage.Show();
