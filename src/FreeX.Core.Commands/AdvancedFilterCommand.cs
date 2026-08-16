@@ -95,7 +95,14 @@ public sealed class AdvancedFilterCommand : IWorkbookCommand
             return lockedDestination;
 
         CopyMatches(sheet, matches, copyPlan);
-        return new CommandOutcome(true, AffectedCells: [_copyTo.Value]);
+        // Report both corners of the copy-to range, not just its top-left. Undo/Redo re-select the
+        // BOUNDING range of AffectedCells, so a single cell collapsed the restored selection to the
+        // destination corner while running the command forward selected the whole copy-to range --
+        // undo visibly shrank the selection. Reporting the range the user nominated keeps both
+        // directions on the same selection.
+        return _copyToRange is { } copyToRange
+            ? new CommandOutcome(true, AffectedCells: [copyToRange.Start, copyToRange.End])
+            : new CommandOutcome(true, AffectedCells: [_copyTo.Value]);
     }
 
     public static bool IsListRangeWithinSupportedBounds(GridRange range) =>

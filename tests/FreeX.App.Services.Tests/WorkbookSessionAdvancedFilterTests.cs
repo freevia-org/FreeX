@@ -15,7 +15,10 @@ public sealed class WorkbookSessionAdvancedFilterTests
         var result = session.ExecuteAdvancedFilterPlan(plan);
 
         result.Success.Should().BeTrue();
-        result.AffectedCells.Should().Equal(copyToRange.Start);
+        // Both corners: Undo/Redo re-select the BOUNDING range of AffectedCells, so reporting only the
+        // top-left made undo collapse the selection to the destination corner while running the
+        // command forward selected the whole copy-to range.
+        result.AffectedCells.Should().Equal(copyToRange.Start, copyToRange.End);
         AssertCopiedEastRows(sheet);
         session.IsDirty.Should().BeTrue();
         session.CanUndo.Should().BeTrue();
