@@ -64,7 +64,11 @@ public static class WpfXpsTextOverlayExtractor
     private static PdfTextOverlay BuildOverlay(Glyphs glyphs, Matrix transform, double dipToPointScale)
     {
         var origin = transform.Transform(new Point(glyphs.OriginX, glyphs.OriginY));
-        var scale = EstimateUniformScale(transform);
+        var scale = PdfTransformMath.EstimateUniformScale(
+            transform.M11,
+            transform.M12,
+            transform.M21,
+            transform.M22);
         var fontSizeDip = (glyphs.FontRenderingEmSize > 0 ? glyphs.FontRenderingEmSize : 12) * scale;
 
         // Glyphs.OriginX/Y is the run's baseline; WpfRasterPdfWriter.DrawTextOverlays draws at
@@ -103,25 +107,11 @@ public static class WpfXpsTextOverlayExtractor
         return transform;
     }
 
-    private static double EstimateUniformScale(Matrix transform)
-    {
-        var scaleX = Math.Sqrt(transform.M11 * transform.M11 + transform.M12 * transform.M12);
-        var scaleY = Math.Sqrt(transform.M21 * transform.M21 + transform.M22 * transform.M22);
-        var scale = (scaleX + scaleY) / 2.0;
-        return IsFinite(scale) && scale > 0 ? scale : 1.0;
-    }
-
     private static double ReadLeft(UIElement element)
-    {
-        var left = Canvas.GetLeft(element);
-        return double.IsNaN(left) ? 0 : left;
-    }
+        => PdfTransformMath.ResolveCanvasCoordinate(Canvas.GetLeft(element));
 
     private static double ReadTop(UIElement element)
-    {
-        var top = Canvas.GetTop(element);
-        return double.IsNaN(top) ? 0 : top;
-    }
+        => PdfTransformMath.ResolveCanvasCoordinate(Canvas.GetTop(element));
 
     private static bool TryGetFiniteMatrix(Transform? transform, out Matrix matrix)
     {
@@ -132,15 +122,14 @@ public static class WpfXpsTextOverlayExtractor
         }
 
         matrix = transform.Value;
-        return IsFinite(matrix);
+        return PdfTransformMath.IsFiniteAffineMatrix(
+            matrix.M11,
+            matrix.M12,
+            matrix.M21,
+            matrix.M22,
+            matrix.OffsetX,
+            matrix.OffsetY);
     }
-
-    private static bool IsFinite(Matrix matrix) =>
-        IsFinite(matrix.M11) && IsFinite(matrix.M12) &&
-        IsFinite(matrix.M21) && IsFinite(matrix.M22) &&
-        IsFinite(matrix.OffsetX) && IsFinite(matrix.OffsetY);
-
-    private static bool IsFinite(double value) => !double.IsNaN(value) && !double.IsInfinity(value);
 
     private static PdfColor ResolveColor(Brush? brush) =>
         brush is SolidColorBrush solid
