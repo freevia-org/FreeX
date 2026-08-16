@@ -71,6 +71,7 @@ public sealed class R91_AvaloniaObjectClipboardCopyPasteTests
 
                 window.Close();
             }
+            return true;
         }, CancellationToken.None);
     }
 
@@ -128,6 +129,7 @@ public sealed class R91_AvaloniaObjectClipboardCopyPasteTests
 
                 window.Close();
             }
+            return true;
         }, CancellationToken.None);
     }
 
@@ -180,6 +182,7 @@ public sealed class R91_AvaloniaObjectClipboardCopyPasteTests
 
                 window.Close();
             }
+            return true;
         }, CancellationToken.None);
     }
 
@@ -218,6 +221,7 @@ public sealed class R91_AvaloniaObjectClipboardCopyPasteTests
 
                 window.Close();
             }
+            return true;
         }, CancellationToken.None);
     }
 
@@ -263,6 +267,7 @@ public sealed class R91_AvaloniaObjectClipboardCopyPasteTests
 
                 window.Close();
             }
+            return true;
         }, CancellationToken.None);
     }
 
@@ -305,6 +310,7 @@ public sealed class R91_AvaloniaObjectClipboardCopyPasteTests
 
                 window.Close();
             }
+            return true;
         }, CancellationToken.None);
     }
 
@@ -353,6 +359,7 @@ public sealed class R91_AvaloniaObjectClipboardCopyPasteTests
 
                 window.Close();
             }
+            return true;
         }, CancellationToken.None);
     }
 
@@ -411,6 +418,7 @@ public sealed class R91_AvaloniaObjectClipboardCopyPasteTests
 
                 window.Close();
             }
+            return true;
         }, CancellationToken.None);
     }
 
@@ -455,6 +463,7 @@ public sealed class R91_AvaloniaObjectClipboardCopyPasteTests
 
                 window.Close();
             }
+            return true;
         }, CancellationToken.None);
     }
 
@@ -486,6 +495,7 @@ public sealed class R91_AvaloniaObjectClipboardCopyPasteTests
 
                 window.Close();
             }
+            return true;
         }, CancellationToken.None);
     }
 

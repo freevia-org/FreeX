@@ -45,6 +45,7 @@ public sealed class AvaloniaRichTextClipboardBoundaryTests
             editor.Text.Should().Be("Avalonia rich text");
             clipboard.ReadRequest.Should().BeSameAs(
                 PresentationClipboardPlatformMapper.RichTextReadRequest);
+            return true;
         }, CancellationToken.None);
     }
 
@@ -71,6 +72,7 @@ public sealed class AvaloniaRichTextClipboardBoundaryTests
             cancellation.Cancel();
             await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
                 editor.CopySelectionAsync(cancellation.Token));
+            return true;
         }, CancellationToken.None);
     }
 

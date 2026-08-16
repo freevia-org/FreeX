@@ -99,6 +99,7 @@ public sealed class ContextMenuInteractionValidationTests
 
                 window.Close();
             }
+            return true;
         }, CancellationToken.None);
     }
 
@@ -222,6 +223,7 @@ public sealed class ContextMenuInteractionValidationTests
 
                 window.Close();
             }
+            return true;
         }, CancellationToken.None);
     }
 
@@ -286,6 +288,7 @@ public sealed class ContextMenuInteractionValidationTests
 
                 window.Close();
             }
+            return true;
         }, CancellationToken.None);
     }
 
@@ -322,6 +325,7 @@ public sealed class ContextMenuInteractionValidationTests
 
                 window.Close();
             }
+            return true;
         }, CancellationToken.None);
     }
 
@@ -374,6 +378,7 @@ public sealed class ContextMenuInteractionValidationTests
 
                 window.Close();
             }
+            return true;
         }, CancellationToken.None);
     }
 
@@ -414,6 +419,7 @@ public sealed class ContextMenuInteractionValidationTests
 
                 window.Close();
             }
+            return true;
         }, CancellationToken.None);
     }
 
@@ -440,6 +446,7 @@ public sealed class ContextMenuInteractionValidationTests
 
                 window.Close();
             }
+            return true;
         }, CancellationToken.None);
     }
 
@@ -483,6 +490,7 @@ public sealed class ContextMenuInteractionValidationTests
 
                 window.Close();
             }
+            return true;
         }, CancellationToken.None);
     }
 
@@ -541,6 +549,7 @@ public sealed class ContextMenuInteractionValidationTests
 
                 window.Close();
             }
+            return true;
         }, CancellationToken.None);
     }
 

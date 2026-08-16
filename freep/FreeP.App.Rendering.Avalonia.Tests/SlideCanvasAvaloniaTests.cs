@@ -989,6 +989,7 @@ public sealed class SlideCanvasAvaloniaTests
             {
                 window.Close();
             }
+            return true;
         }, CancellationToken.None);
 
         editor!.CanUndo.Should().BeTrue("the shared shape planner should issue the formatting command");
@@ -2042,6 +2043,7 @@ public sealed class SlideCanvasAvaloniaTests
             {
                 window.Close();
             }
+            return true;
         }, CancellationToken.None);
 
         editor!.CanUndo.Should().BeTrue();

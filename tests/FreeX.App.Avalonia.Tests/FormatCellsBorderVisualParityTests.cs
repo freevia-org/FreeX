@@ -197,6 +197,7 @@ public sealed class FormatCellsBorderVisualParityTests
 
                 window.Close();
             }
+            return true;
         }, CancellationToken.None);
     }
 
@@ -242,6 +243,7 @@ public sealed class FormatCellsBorderVisualParityTests
 
                 window.Close();
             }
+            return true;
         }, CancellationToken.None);
     }
 

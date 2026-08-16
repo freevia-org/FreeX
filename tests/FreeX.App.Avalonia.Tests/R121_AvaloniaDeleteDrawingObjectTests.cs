@@ -52,6 +52,7 @@ public sealed class R121_AvaloniaDeleteDrawingObjectTests
 
                 window.Close();
             }
+            return true;
         }, CancellationToken.None);
     }
 
@@ -79,6 +80,7 @@ public sealed class R121_AvaloniaDeleteDrawingObjectTests
 
                 window.Close();
             }
+            return true;
         }, CancellationToken.None);
     }
 
@@ -110,6 +112,7 @@ public sealed class R121_AvaloniaDeleteDrawingObjectTests
 
                 window.Close();
             }
+            return true;
         }, CancellationToken.None);
     }
 

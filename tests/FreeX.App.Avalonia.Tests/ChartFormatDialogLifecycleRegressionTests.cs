@@ -113,6 +113,7 @@ public sealed class ChartFormatDialogLifecycleRegressionTests
                     if (window.IsVisible)
                         window.Close();
                 }
+                return true;
             }, CancellationToken.None);
         }
     }

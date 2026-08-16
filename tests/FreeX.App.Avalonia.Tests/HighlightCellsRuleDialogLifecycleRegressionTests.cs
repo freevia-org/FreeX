@@ -59,6 +59,7 @@ public sealed class HighlightCellsRuleDialogLifecycleRegressionTests
                     if (window.IsVisible)
                         window.Close();
                 }
+                return true;
             }, CancellationToken.None);
         }
     }

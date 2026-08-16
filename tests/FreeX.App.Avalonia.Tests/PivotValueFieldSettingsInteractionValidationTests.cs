@@ -106,6 +106,7 @@ public sealed class PivotValueFieldSettingsInteractionValidationTests
                     if (window.IsVisible)
                         window.Close();
                 }
+                return true;
             }, CancellationToken.None);
         }
     }

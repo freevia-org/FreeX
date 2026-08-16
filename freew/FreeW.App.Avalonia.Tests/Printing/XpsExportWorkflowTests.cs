@@ -23,6 +23,7 @@ public sealed class XpsExportWorkflowTests : IDisposable
         {
             var window = CreateWindow((_, _) => Task.FromResult((true, (string?)null)));
             await window.ExportXpsForTests();
+            return true;
         }, CancellationToken.None);
     }
 
@@ -42,6 +43,7 @@ public sealed class XpsExportWorkflowTests : IDisposable
                     return Task.FromResult((false, (string?)path));
                 });
                 await window.ExportXpsForTests();
+                return true;
             }, CancellationToken.None);
 
             request.Should().NotBeNull();
@@ -64,6 +66,7 @@ public sealed class XpsExportWorkflowTests : IDisposable
             var window = CreateWindow((_, _) => Task.FromResult((false, (string?)null)));
             await window.ExportXpsForTests();
             status = window.PrintStatusForTests;
+            return true;
         }, CancellationToken.None);
 
         status.Should().Contain("local");

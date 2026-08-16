@@ -124,6 +124,7 @@ public sealed class R101_AvaloniaAdvancedFilterProductionWorkflowTests
                 if (window.IsVisible)
                     window.Close();
             }
+            return true;
         }, CancellationToken.None);
     }
 
@@ -198,6 +199,7 @@ public sealed class R101_AvaloniaAdvancedFilterProductionWorkflowTests
                 if (window.IsVisible)
                     window.Close();
             }
+            return true;
         }, CancellationToken.None);
     }
 

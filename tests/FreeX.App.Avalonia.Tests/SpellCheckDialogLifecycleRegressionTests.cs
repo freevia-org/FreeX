@@ -64,6 +64,7 @@ public sealed class SpellCheckDialogLifecycleRegressionTests
                     if (window.IsVisible)
                         window.Close();
                 }
+                return true;
             }, CancellationToken.None);
         }
     }

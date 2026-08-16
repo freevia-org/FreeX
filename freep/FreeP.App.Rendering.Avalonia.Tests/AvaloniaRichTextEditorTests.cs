@@ -492,6 +492,7 @@ public sealed class AvaloniaRichTextEditorTests
             {
                 window.Close();
             }
+            return true;
         }, CancellationToken.None);
     }
 
@@ -569,6 +570,7 @@ public sealed class AvaloniaRichTextEditorTests
             {
                 window.Close();
             }
+            return true;
         }, CancellationToken.None);
     }
 
@@ -622,6 +624,7 @@ public sealed class AvaloniaRichTextEditorTests
             {
                 window.Close();
             }
+            return true;
         }, CancellationToken.None);
     }
 
@@ -672,6 +675,7 @@ public sealed class AvaloniaRichTextEditorTests
             {
                 window.Close();
             }
+            return true;
         }, CancellationToken.None);
     }
 
@@ -735,6 +739,7 @@ public sealed class AvaloniaRichTextEditorTests
             {
                 window.Close();
             }
+            return true;
         }, CancellationToken.None);
     }
 
@@ -811,6 +816,7 @@ public sealed class AvaloniaRichTextEditorTests
             {
                 window.Close();
             }
+            return true;
         }, CancellationToken.None);
     }
 
@@ -876,6 +882,7 @@ public sealed class AvaloniaRichTextEditorTests
             {
                 window.Close();
             }
+            return true;
         }, CancellationToken.None);
     }
 
@@ -920,6 +927,7 @@ public sealed class AvaloniaRichTextEditorTests
                 && run.Italic
                 && run.Underline
                 && run.Hyperlink!.Url == "https://example.com");
+            return true;
         }, CancellationToken.None);
     }
 
@@ -972,6 +980,7 @@ public sealed class AvaloniaRichTextEditorTests
                 run.Text == "rich"
                 && run.Italic
                 && run.Hyperlink!.Url == "https://example.com");
+            return true;
         }, CancellationToken.None);
     }
 
@@ -1014,6 +1023,7 @@ public sealed class AvaloniaRichTextEditorTests
             restored.Body.Paragraphs[0].AutoNumStartAt.Should().Be(3);
             restored.Body.Paragraphs[0].AutoNumStartAtSpecified.Should().BeTrue();
             restored.Body.Paragraphs[1].BulletChar.Should().Be("\u25E6");
+            return true;
         }, CancellationToken.None);
     }
 
@@ -1101,6 +1111,7 @@ public sealed class AvaloniaRichTextEditorTests
             restored.Body.Paragraphs.Single().Runs[2].Strikethrough.Should().BeTrue();
             restored.Body.Paragraphs.Single().Runs[2].Hyperlink!.Url
                 .Should().Be("https://example.test/wave161");
+            return true;
         }, CancellationToken.None);
     }
 
@@ -1150,6 +1161,7 @@ public sealed class AvaloniaRichTextEditorTests
             {
                 window.Close();
             }
+            return true;
         }, CancellationToken.None);
     }
 
@@ -1192,6 +1204,7 @@ public sealed class AvaloniaRichTextEditorTests
             {
                 window.Close();
             }
+            return true;
         }, CancellationToken.None);
     }
 
@@ -1237,6 +1250,7 @@ public sealed class AvaloniaRichTextEditorTests
             {
                 window.Close();
             }
+            return true;
         }, CancellationToken.None);
     }
 
@@ -1279,6 +1293,7 @@ public sealed class AvaloniaRichTextEditorTests
             {
                 window.Close();
             }
+            return true;
         }, CancellationToken.None);
     }
 
@@ -1316,6 +1331,7 @@ public sealed class AvaloniaRichTextEditorTests
             {
                 window.Close();
             }
+            return true;
         }, CancellationToken.None);
     }
 
@@ -1357,6 +1373,7 @@ public sealed class AvaloniaRichTextEditorTests
             {
                 window.Close();
             }
+            return true;
         }, CancellationToken.None);
     }
 
@@ -1400,6 +1417,7 @@ public sealed class AvaloniaRichTextEditorTests
             {
                 window.Close();
             }
+            return true;
         }, CancellationToken.None);
     }
 
@@ -1437,6 +1455,7 @@ public sealed class AvaloniaRichTextEditorTests
             {
                 window.Close();
             }
+            return true;
         }, CancellationToken.None);
     }
 
@@ -1488,6 +1507,7 @@ public sealed class AvaloniaRichTextEditorTests
             {
                 window.Close();
             }
+            return true;
         }, CancellationToken.None);
     }
 
@@ -1522,6 +1542,7 @@ public sealed class AvaloniaRichTextEditorTests
             {
                 window.Close();
             }
+            return true;
         }, CancellationToken.None);
     }
 
@@ -1558,6 +1579,7 @@ public sealed class AvaloniaRichTextEditorTests
             {
                 window.Close();
             }
+            return true;
         }, CancellationToken.None);
     }
 
@@ -1636,6 +1658,7 @@ public sealed class AvaloniaRichTextEditorTests
             {
                 window.Close();
             }
+            return true;
         }, CancellationToken.None);
     }
 
@@ -1691,6 +1714,7 @@ public sealed class AvaloniaRichTextEditorTests
             {
                 window.Close();
             }
+            return true;
         }, CancellationToken.None);
     }
 
@@ -1754,6 +1778,7 @@ public sealed class AvaloniaRichTextEditorTests
             {
                 window.Close();
             }
+            return true;
         }, CancellationToken.None);
     }
 
@@ -1809,6 +1834,7 @@ public sealed class AvaloniaRichTextEditorTests
             {
                 window.Close();
             }
+            return true;
         }, CancellationToken.None);
     }
 
@@ -1858,6 +1884,7 @@ public sealed class AvaloniaRichTextEditorTests
             {
                 window.Close();
             }
+            return true;
         }, CancellationToken.None);
     }
 
@@ -1910,6 +1937,7 @@ public sealed class AvaloniaRichTextEditorTests
             {
                 window.Close();
             }
+            return true;
         }, CancellationToken.None);
     }
 
@@ -1977,6 +2005,7 @@ public sealed class AvaloniaRichTextEditorTests
             {
                 window.Close();
             }
+            return true;
         }, CancellationToken.None);
     }
 
@@ -2027,6 +2056,7 @@ public sealed class AvaloniaRichTextEditorTests
             {
                 window.Close();
             }
+            return true;
         }, CancellationToken.None);
     }
 
@@ -2098,6 +2128,7 @@ public sealed class AvaloniaRichTextEditorTests
             {
                 window.Close();
             }
+            return true;
         }, CancellationToken.None);
     }
 
@@ -2136,6 +2167,7 @@ public sealed class AvaloniaRichTextEditorTests
             {
                 window.Close();
             }
+            return true;
         }, CancellationToken.None);
     }
 
@@ -2170,6 +2202,7 @@ public sealed class AvaloniaRichTextEditorTests
             {
                 window.Close();
             }
+            return true;
         }, CancellationToken.None);
     }
 

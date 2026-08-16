@@ -109,6 +109,7 @@ public sealed class DialogTabCycleFocusGraphTests
 
                 owner.Close();
             }
+            return true;
         }, CancellationToken.None);
     }
 

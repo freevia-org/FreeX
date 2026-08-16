@@ -85,6 +85,7 @@ public sealed class MissingParityDialogsTests
 
                     window.Close();
                 }
+                return true;
             }, CancellationToken.None);
         }
     }

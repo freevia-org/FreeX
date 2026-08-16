@@ -149,6 +149,7 @@ public sealed class Wave158AvaloniaQuickAccessKeyTipParityTests
                     window.AllowCloseWithoutDirtyPromptForParityCapture();
                     window.Close();
                 }
+                return true;
             }, CancellationToken.None);
         }
         finally

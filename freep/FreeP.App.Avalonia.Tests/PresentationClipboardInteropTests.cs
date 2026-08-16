@@ -102,6 +102,7 @@ public sealed class PresentationClipboardInteropTests
             decoded.Should().NotBeNull();
             decoded!.Body.Paragraphs.Single().Runs.Single().TextGlow!.RadiusPt
                 .Should().BeApproximately(4.5, 0.0001);
+            return true;
         }, CancellationToken.None);
     }
 
@@ -239,6 +240,7 @@ public sealed class PresentationClipboardInteropTests
                 bitmap?.Dispose();
                 ((IDisposable)transfer).Dispose();
             }
+            return true;
         }, CancellationToken.None);
     }
 
@@ -261,6 +263,7 @@ public sealed class PresentationClipboardInteropTests
             content.OwnerToken.Should().Be("wpf-owner");
             content.Text.Should().Be("WPF fallback");
             content.RichTextBytes.Should().Equal(1, 2, 3);
+            return true;
         }, CancellationToken.None);
     }
 
@@ -283,6 +286,7 @@ public sealed class PresentationClipboardInteropTests
 
             content.RtfBytes.Should().Equal(rtf);
             content.HasRichText.Should().BeTrue();
+            return true;
         }, CancellationToken.None);
     }
 
@@ -312,6 +316,7 @@ public sealed class PresentationClipboardInteropTests
             {
                 ((IDisposable)transfer).Dispose();
             }
+            return true;
         }, CancellationToken.None);
     }
 
@@ -358,6 +363,7 @@ public sealed class PresentationClipboardInteropTests
             {
                 ((IDisposable)transfer).Dispose();
             }
+            return true;
         }, CancellationToken.None);
     }
 
@@ -1080,6 +1086,7 @@ Header\cell Value\cell\row}")),
             {
                 window.Close();
             }
+            return true;
         }, CancellationToken.None);
     }
 
@@ -1135,6 +1142,7 @@ Header\cell Value\cell\row}")),
             {
                 window.Close();
             }
+            return true;
         }, CancellationToken.None);
     }
 

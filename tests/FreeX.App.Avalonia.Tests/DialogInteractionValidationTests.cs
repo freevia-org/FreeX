@@ -110,6 +110,7 @@ public sealed class DialogInteractionValidationTests
                     if (window.IsVisible)
                         window.Close();
                 }
+                return true;
             }, CancellationToken.None);
         }
     }
@@ -177,6 +178,7 @@ public sealed class DialogInteractionValidationTests
                 if (owner.IsVisible)
                     owner.Close();
             }
+            return true;
         }, CancellationToken.None);
     }
 
@@ -299,6 +301,7 @@ public sealed class DialogInteractionValidationTests
                 if (owner?.IsVisible == true)
                     owner.Close();
             }
+            return true;
         }, CancellationToken.None);
     }
 
@@ -342,6 +345,7 @@ public sealed class DialogInteractionValidationTests
                 if (owner.IsVisible)
                     owner.Close();
             }
+            return true;
         }, CancellationToken.None);
     }
 

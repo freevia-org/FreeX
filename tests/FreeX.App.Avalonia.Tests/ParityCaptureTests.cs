@@ -149,6 +149,7 @@ public sealed class ParityCaptureTests
                     if (window.IsVisible)
                         window.Close();
                 }
+                return true;
             }, CancellationToken.None);
         }
     }
@@ -298,6 +299,7 @@ public sealed class ParityCaptureTests
                     if (window.IsVisible)
                         window.Close();
                 }
+                return true;
             }, CancellationToken.None);
         }
     }
@@ -340,6 +342,7 @@ public sealed class ParityCaptureTests
                     if (window.IsVisible)
                         window.Close();
                 }
+                return true;
             }, CancellationToken.None);
         }
     }
@@ -409,6 +412,7 @@ public sealed class ParityCaptureTests
                 window.AllowCloseWithoutDirtyPromptForParityCapture();
 
                 window.Close();
+                return true;
             }, CancellationToken.None);
         }
     }
@@ -452,6 +456,7 @@ public sealed class ParityCaptureTests
                     if (window.IsVisible)
                         window.Close();
                 }
+                return true;
             }, CancellationToken.None);
         }
     }
@@ -483,6 +488,7 @@ public sealed class ParityCaptureTests
                 window.AllowCloseWithoutDirtyPromptForParityCapture();
 
                 window.Close();
+                return true;
             }, CancellationToken.None);
         }
     }
@@ -523,6 +529,7 @@ public sealed class ParityCaptureTests
                 window.AllowCloseWithoutDirtyPromptForParityCapture();
 
                 window.Close();
+                return true;
             }, CancellationToken.None);
         }
     }
@@ -566,6 +573,7 @@ public sealed class ParityCaptureTests
                 window.AllowCloseWithoutDirtyPromptForParityCapture();
 
                 window.Close();
+                return true;
             }, CancellationToken.None);
         }
     }
@@ -619,6 +627,7 @@ public sealed class ParityCaptureTests
                 window.AllowCloseWithoutDirtyPromptForParityCapture();
 
                 window.Close();
+                return true;
             }, CancellationToken.None);
         }
     }
@@ -652,6 +661,7 @@ public sealed class ParityCaptureTests
                 window.AllowCloseWithoutDirtyPromptForParityCapture();
 
                 window.Close();
+                return true;
             }, CancellationToken.None);
         }
     }
@@ -678,6 +688,7 @@ public sealed class ParityCaptureTests
 
                 window.AllowCloseWithoutDirtyPromptForParityCapture();
                 window.Close();
+                return true;
             }, CancellationToken.None);
         }
     }

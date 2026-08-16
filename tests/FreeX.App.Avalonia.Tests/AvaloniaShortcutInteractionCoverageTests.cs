@@ -134,6 +134,7 @@ public sealed class AvaloniaShortcutInteractionCoverageTests
 
                 window.Close();
             }
+            return true;
         }, CancellationToken.None);
     }
 

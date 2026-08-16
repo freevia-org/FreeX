@@ -81,6 +81,7 @@ public sealed class FormatCellsDialogNegativeSymbolSeedTests
 
                 window.Close();
             }
+            return true;
         }, CancellationToken.None);
 
         result.Should().NotBeNull();
@@ -121,6 +122,7 @@ public sealed class FormatCellsDialogNegativeSymbolSeedTests
 
                 window.Close();
             }
+            return true;
         }, CancellationToken.None);
 
         // Assert: the resolved request must either omit NumberFormat (no change requested) or
