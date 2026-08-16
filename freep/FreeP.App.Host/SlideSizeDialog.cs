@@ -78,12 +78,33 @@ public sealed partial class SlideSizeDialog : Free.Shared.Ribbon.Wpf.DialogWindo
 
         LoadInitialState();
 
+        var acceptPlan = surface.Action(SlideSizeDialogAction.Accept);
+        var accept = new Button
+        {
+            Content = acceptPlan.Label,
+            MinWidth = 80,
+        };
+        PresentationDialogControlAdapter.ApplySemantic(
+            accept,
+            acceptPlan.AccessibleName,
+            acceptPlan.AutomationId);
+        accept.Click += (_, _) => OnOk();
+
+        var cancelPlan = surface.Action(SlideSizeDialogAction.Cancel);
+        var cancel = new Button
+        {
+            Content = cancelPlan.Label,
+            MinWidth = 80,
+        };
+        PresentationDialogControlAdapter.ApplySemantic(
+            cancel,
+            cancelPlan.AccessibleName,
+            cancelPlan.AutomationId);
+
         var btnRow = DialogButtonRowFactory.Create(
-            OnOk,
-            buttonWidth: 80,
-            rowMargin: new Thickness(4, 8, 8, 8),
-            acceptContent: surface.Action(SlideSizeDialogAction.Accept).Label,
-            cancelContent: surface.Action(SlideSizeDialogAction.Cancel).Label);
+            accept,
+            cancel,
+            rowMargin: new Thickness(4, 8, 8, 8));
 
         var grid = new Grid { Margin = new Thickness(12) };
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });

@@ -76,6 +76,13 @@ public sealed class PresentationReviewWorkflowPlannerTests
         plan.SelectedComment.MentionSummary.Should().Be("0 mentions");
         plan.CloseAction.Should().Be(new PresentationReviewSurfaceActionPlan("Close", true));
         plan.SaveEditAction.Should().Be(new PresentationReviewSurfaceActionPlan("Save", true));
+        plan.ToolbarActions.Select(action => action.CommandId).Should().Equal(
+            PresentationReviewWorkflowPlanner.EditCommentCommandId,
+            PresentationReviewWorkflowPlanner.DeleteCommentCommandId,
+            PresentationReviewWorkflowPlanner.PreviousCommentCommandId,
+            PresentationReviewWorkflowPlanner.NextCommentCommandId,
+            PresentationReviewWorkflowPlanner.ResolveCommentCommandId,
+            PresentationReviewWorkflowPlanner.ReopenCommentCommandId);
 
         Action(PresentationReviewWorkflowPlanner.EditCommentCommandId).IsEnabled.Should().BeTrue();
         Action(PresentationReviewWorkflowPlanner.DeleteCommentCommandId).IsEnabled.Should().BeTrue();
