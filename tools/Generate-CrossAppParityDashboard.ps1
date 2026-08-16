@@ -263,8 +263,8 @@ try {
             captureMode = "foreground-owned Excel ribbon/dialog capture plus generated WPF/Avalonia dialog render manifests"
             noComStatus = "not-applicable"
             limitations = @(
-                "The 2026-08-16 interactive run captured 32 Excel ribbon states and six guarded popup/dialog surfaces; it is Office UI coverage, not a pixel-level FreeX-versus-Excel chrome comparison.",
-                "The installed Office profile does not expose the Draw tab; the ribbon manifest records its four unavailable-tab skips.",
+                "The 2026-08-16 interactive run captured 36 Excel ribbon states, including Draw at all four widths, and six guarded popup/dialog surfaces; it is Office UI coverage, not a pixel-level FreeX-versus-Excel chrome comparison.",
+                "The ribbon harness creates a blank workbook before tab discovery so the enabled Draw tab is materialized; the current manifest records no unavailable-tab skips.",
                 "WPF captured 116/116 app-host surfaces and Avalonia captured 180/181; popup.nameBoxDropdown remains intentionally diagnostic-only.",
                 [string]$freeXOfficeBaseline.limitation
             )

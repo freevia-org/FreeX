@@ -1271,7 +1271,7 @@ if (-not (Test-Path -LiteralPath $exe)) {
 }
 
 $excelLaunchStarted = Get-Date
-$excelProcess = Start-Process -FilePath $exe -ArgumentList @("/x", "/e") -PassThru
+$excelProcess = Start-Process -FilePath $exe -ArgumentList @("/x") -PassThru
 Write-Host "Launched Excel PID $($excelProcess.Id) (searching for matching class XLMAIN)"
 
 function Resolve-LaunchedExcelMainWindow($preferredProcessId, $launchStarted) {
@@ -1334,6 +1334,46 @@ $cond    = New-Object System.Windows.Automation.PropertyCondition(
                [System.Windows.Automation.AutomationElement]::ProcessIdProperty, [int]$wpid)
 $appEl   = $desktop.FindFirst([System.Windows.Automation.TreeScope]::Children, $cond)
 if ($appEl -eq $null) { Write-Error "UIA element not found"; exit 1 }
+
+function Open-ExcelBlankWorkbook {
+    $blankWorkbookCondition = New-Object System.Windows.Automation.PropertyCondition(
+        [System.Windows.Automation.AutomationElement]::NameProperty,
+        "Blank workbook")
+    $blankWorkbook = $appEl.FindFirst(
+        [System.Windows.Automation.TreeScope]::Descendants,
+        $blankWorkbookCondition)
+    if ($null -eq $blankWorkbook) {
+        Clear-ScreenshotEvidenceArtifacts
+        throw "The launched Excel start surface did not expose the required 'Blank workbook' template; refusing to capture a ribbon without an active workbook."
+    }
+
+    Assert-ForegroundWindowOwnership $wpid $expectedTitle "blank workbook setup" $script:ForegroundWindowOwnershipFailureAction
+    try {
+        $invokePattern = [System.Windows.Automation.InvokePattern]$blankWorkbook.GetCurrentPattern(
+            [System.Windows.Automation.InvokePattern]::Pattern)
+        $invokePattern.Invoke()
+    }
+    catch {
+        Clear-ScreenshotEvidenceArtifacts
+        throw "Failed to create the blank Excel workbook required for ribbon capture: $($_.Exception.Message)"
+    }
+
+    for ($attempt = 0; $attempt -lt 30; $attempt++) {
+        Start-Sleep -Milliseconds 250
+        $currentTitle = Get-WindowTitle $hwnd
+        if (-not [string]::IsNullOrWhiteSpace($currentTitle) -and
+            $currentTitle -ne $expectedTitle -and
+            $currentTitle -match '.+ - Excel$') {
+            return $currentTitle
+        }
+    }
+
+    Clear-ScreenshotEvidenceArtifacts
+    throw "Excel did not open the requested blank workbook; refusing to capture a workbook-less ribbon."
+}
+
+$expectedTitle = Open-ExcelBlankWorkbook
+Set-ExcelForegroundWindow $hwnd $wpid $expectedTitle "blank workbook capture setup"
 
 $captureH = [int]([Math]::Ceiling(300 * $scale))
 Write-Host "Capture height: $captureH physical px (300 logical)"
