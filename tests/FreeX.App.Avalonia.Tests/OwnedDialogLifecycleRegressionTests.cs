@@ -132,6 +132,7 @@ public sealed class OwnedDialogLifecycleRegressionTests
                     if (window.IsVisible)
                         window.Close();
                 }
+                return true;
             }, CancellationToken.None);
         }
     }
@@ -185,6 +186,7 @@ public sealed class OwnedDialogLifecycleRegressionTests
                     if (window.IsVisible)
                         window.Close();
                 }
+                return true;
             }, CancellationToken.None);
         }
     }
@@ -227,6 +229,7 @@ public sealed class OwnedDialogLifecycleRegressionTests
                     if (window.IsVisible)
                         window.Close();
                 }
+                return true;
             }, CancellationToken.None);
         }
     }
@@ -324,6 +327,7 @@ public sealed class OwnedDialogLifecycleRegressionTests
                     if (window.IsVisible)
                         window.Close();
                 }
+                return true;
             }, CancellationToken.None);
         }
     }

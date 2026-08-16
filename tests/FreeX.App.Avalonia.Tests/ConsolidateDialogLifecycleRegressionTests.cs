@@ -61,6 +61,7 @@ public sealed class ConsolidateDialogLifecycleRegressionTests
                     if (window.IsVisible)
                         window.Close();
                 }
+                return true;
             }, CancellationToken.None);
         }
     }
@@ -107,6 +108,7 @@ public sealed class ConsolidateDialogLifecycleRegressionTests
                     if (window.IsVisible)
                         window.Close();
                 }
+                return true;
             }, CancellationToken.None);
         }
     }

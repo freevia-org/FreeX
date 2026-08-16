@@ -57,6 +57,7 @@ public sealed class SelectionPaneDialogLifecycleRegressionTests
                     if (window.IsVisible)
                         window.Close();
                 }
+                return true;
             }, CancellationToken.None);
         }
     }

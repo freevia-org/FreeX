@@ -2569,7 +2569,11 @@ public static class ExternalRichTextClipboardPlanner
                 || uri.Scheme is not ("http" or "https" or "mailto" or "file"))
                 return null;
 
-            return new Hyperlink { Url = uri.AbsoluteUri };
+            // Validate through the Uri, but keep the AUTHORED text: Uri.AbsoluteUri normalizes
+            // (notably appending a root slash, so "https://example.com" becomes
+            // "https://example.com/"), which would silently rewrite the user's link every time a
+            // fragment made a round trip through the RTF clipboard format.
+            return new Hyperlink { Url = url };
         }
 
         private static string? TryReadExternalFieldType(string? instruction)

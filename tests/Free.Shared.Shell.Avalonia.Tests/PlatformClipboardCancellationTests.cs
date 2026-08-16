@@ -33,10 +33,12 @@ public sealed class PlatformClipboardCancellationTests
                 cancellation.Token);
 
             await action.Should().ThrowAsync<OperationCanceledException>();
+            return true;
         }, CancellationToken.None);
     }
 
-    private sealed class UnexpectedClipboardProxy : DispatchProxy
+    // Not sealed: DispatchProxy.Create<,> generates a derived type and rejects sealed base types.
+    private class UnexpectedClipboardProxy : DispatchProxy
     {
         protected override object? Invoke(MethodInfo? targetMethod, object?[]? args) =>
             throw new InvalidOperationException("Cancellation should occur before native clipboard access.");

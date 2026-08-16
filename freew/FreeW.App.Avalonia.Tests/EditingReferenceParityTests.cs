@@ -213,6 +213,7 @@ public sealed class EditingReferenceParityTests
             copied.Should().Be("cheerful");
             thesaurus.ReplaceForTest("cheerful").Should().BeTrue();
             ((Paragraph)view.Document.Blocks[0]).PlainText.Should().Be("A cheerful day");
+            return true;
         }, CancellationToken.None);
 
     private static DocumentView ViewWith(params Block[] blocks)

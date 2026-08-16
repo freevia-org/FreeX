@@ -121,6 +121,7 @@ public sealed class R120_ManageConditionalFormatsTableScopeTests
 
                 window.Close();
             }
+            return true;
         }, CancellationToken.None);
 
         itemCount.Should().Be(3,
@@ -203,6 +204,7 @@ public sealed class R120_ManageConditionalFormatsTableScopeTests
 
                 window.Close();
             }
+            return true;
         }, CancellationToken.None);
 
         itemCount.Should().Be(2,

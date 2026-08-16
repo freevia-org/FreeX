@@ -74,6 +74,7 @@ public sealed class KeyboardContextParityTests
             {
                 window.Close();
             }
+            return true;
         }, CancellationToken.None);
     }
 

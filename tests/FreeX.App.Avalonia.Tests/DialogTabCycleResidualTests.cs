@@ -89,6 +89,7 @@ public sealed class DialogTabCycleResidualTests
                     if (window.IsVisible)
                         window.Close();
                 }
+                return true;
             }, CancellationToken.None);
         }
     }

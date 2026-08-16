@@ -95,6 +95,7 @@ public sealed class TextToColumnsDialogLifecycleRegressionTests
                 if (owner.IsVisible)
                     owner.Close();
             }
+            return true;
         }, CancellationToken.None);
     }
 
@@ -141,6 +142,7 @@ public sealed class TextToColumnsDialogLifecycleRegressionTests
                     if (window.IsVisible)
                         window.Close();
                 }
+                return true;
             }, CancellationToken.None);
         }
     }

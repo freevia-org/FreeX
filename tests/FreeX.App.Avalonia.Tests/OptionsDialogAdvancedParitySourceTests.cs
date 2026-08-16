@@ -247,6 +247,7 @@ public sealed class OptionsDialogAdvancedParitySourceTests
                 if (optionsTask is { IsCompleted: false })
                     await optionsTask;
             }
+            return true;
         }, CancellationToken.None);
     }
 

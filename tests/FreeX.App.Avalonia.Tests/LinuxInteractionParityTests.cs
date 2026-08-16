@@ -44,6 +44,7 @@ public sealed class LinuxInteractionParityTests
             window.AllowCloseWithoutDirtyPromptForParityCapture();
 
             window.Close();
+            return true;
         }, CancellationToken.None);
     }
 
@@ -63,6 +64,7 @@ public sealed class LinuxInteractionParityTests
             window.AllowCloseWithoutDirtyPromptForParityCapture();
 
             window.Close();
+            return true;
         }, CancellationToken.None);
     }
 }

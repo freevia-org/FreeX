@@ -53,6 +53,7 @@ public sealed class ScenarioManagerDialogRenderParityTests
                     if (window.IsVisible)
                         window.Close();
                 }
+                return true;
             }, CancellationToken.None);
         }
     }

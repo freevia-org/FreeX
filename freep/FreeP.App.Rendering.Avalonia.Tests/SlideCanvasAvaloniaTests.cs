@@ -25,11 +25,18 @@ namespace FreeP.App.Rendering.Avalonia.Tests;
 
 /// <summary>
 /// Minimal headless Avalonia application for FreeP rendering tests.
-/// No theme required — SlideCanvas is a plain custom-rendered Control.
+/// <para>
+/// The theme is REQUIRED even though SlideCanvas itself is a plain custom-rendered Control:
+/// AvaloniaRichTextEditor hosts a real <see cref="global::Avalonia.Controls.TextBox"/>
+/// (its transparent InputBox). Without a control theme that TextBox gets no template, so it has no
+/// visual children, renders nothing, and is invisible to hit-testing -- which silently routes every
+/// simulated pointer press to the editor panel instead of the input, leaving the editor unfocused
+/// and every caret/selection/inline-table assertion downstream of a click unmet.
+/// </para>
 /// </summary>
 public sealed class SlideHeadlessApp : global::Avalonia.Application
 {
-    public override void Initialize() { /* no styles needed */ }
+    public override void Initialize() => Styles.Add(new global::Avalonia.Themes.Fluent.FluentTheme());
 
     public static AppBuilder BuildAvaloniaApp() =>
         AppBuilder.Configure<SlideHeadlessApp>()
@@ -989,6 +996,7 @@ public sealed class SlideCanvasAvaloniaTests
             {
                 window.Close();
             }
+            return true;
         }, CancellationToken.None);
 
         editor!.CanUndo.Should().BeTrue("the shared shape planner should issue the formatting command");
@@ -2042,6 +2050,7 @@ public sealed class SlideCanvasAvaloniaTests
             {
                 window.Close();
             }
+            return true;
         }, CancellationToken.None);
 
         editor!.CanUndo.Should().BeTrue();

@@ -162,6 +162,7 @@ public sealed class R120_PasteSpecialRibbonDialogFullOptionSetTests
 
                 window.Close();
             }
+            return true;
         }, CancellationToken.None);
 
         selection.Should().NotBeNull(
@@ -206,6 +207,7 @@ public sealed class R120_PasteSpecialRibbonDialogFullOptionSetTests
 
                 window.Close();
             }
+            return true;
         }, CancellationToken.None);
 
         selection.Should().NotBeNull();
@@ -238,6 +240,7 @@ public sealed class R120_PasteSpecialRibbonDialogFullOptionSetTests
 
                 window.Close();
             }
+            return true;
         }, CancellationToken.None);
 
         selection.Should().NotBeNull();
@@ -270,6 +273,7 @@ public sealed class R120_PasteSpecialRibbonDialogFullOptionSetTests
 
                 window.Close();
             }
+            return true;
         }, CancellationToken.None);
 
         selection.Should().NotBeNull();
@@ -308,6 +312,7 @@ public sealed class R120_PasteSpecialRibbonDialogFullOptionSetTests
 
                 window.Close();
             }
+            return true;
         }, CancellationToken.None);
 
         receivedCallback.Should().BeTrue();

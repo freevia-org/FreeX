@@ -58,6 +58,7 @@ public sealed class WatchWindowDialogLifecycleRegressionTests
                     if (window.IsVisible)
                         window.Close();
                 }
+                return true;
             }, CancellationToken.None);
         }
     }

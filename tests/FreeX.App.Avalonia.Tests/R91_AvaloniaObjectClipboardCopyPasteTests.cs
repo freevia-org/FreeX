@@ -31,6 +31,7 @@ public sealed class R91_AvaloniaObjectClipboardCopyPasteTests
             try
             {
                 var sheet = window.Session.ActiveSheet;
+                ClearSampleDrawingObjects(sheet);
                 var anchor = new CellAddress(sheet.Id, 2, 2);
                 var destination = new CellAddress(sheet.Id, 12, 12);
                 sheet.SetCell(anchor, new NumberValue(99));
@@ -71,6 +72,7 @@ public sealed class R91_AvaloniaObjectClipboardCopyPasteTests
 
                 window.Close();
             }
+            return true;
         }, CancellationToken.None);
     }
 
@@ -88,6 +90,7 @@ public sealed class R91_AvaloniaObjectClipboardCopyPasteTests
             try
             {
                 var sourceSheet = window.Session.ActiveSheet;
+                ClearSampleDrawingObjects(sourceSheet);
                 var sourceAnchor = new CellAddress(sourceSheet.Id, 2, 2);
                 var destinationAnchor = new CellAddress(sourceSheet.Id, 12, 12);
                 sourceSheet.SetCell(sourceAnchor, new NumberValue(99));
@@ -128,6 +131,7 @@ public sealed class R91_AvaloniaObjectClipboardCopyPasteTests
 
                 window.Close();
             }
+            return true;
         }, CancellationToken.None);
     }
 
@@ -140,6 +144,7 @@ public sealed class R91_AvaloniaObjectClipboardCopyPasteTests
             try
             {
                 var sourceSheet = window.Session.ActiveSheet;
+                ClearSampleDrawingObjects(sourceSheet);
                 var destinationSheet = window.Session.Workbook.AddSheet("CutDestination");
                 var sourceAnchor = new CellAddress(sourceSheet.Id, 2, 2);
                 var destinationAnchor = new CellAddress(destinationSheet.Id, 4, 4);
@@ -180,6 +185,7 @@ public sealed class R91_AvaloniaObjectClipboardCopyPasteTests
 
                 window.Close();
             }
+            return true;
         }, CancellationToken.None);
     }
 
@@ -192,6 +198,7 @@ public sealed class R91_AvaloniaObjectClipboardCopyPasteTests
             try
             {
                 var sheet = window.Session.ActiveSheet;
+                ClearSampleDrawingObjects(sheet);
                 var anchor = new CellAddress(sheet.Id, 2, 2);
                 var destination = new CellAddress(sheet.Id, 12, 12);
                 var objectId = AddObject(sheet, SelectionPaneObjectKind.Picture, anchor);
@@ -218,6 +225,7 @@ public sealed class R91_AvaloniaObjectClipboardCopyPasteTests
 
                 window.Close();
             }
+            return true;
         }, CancellationToken.None);
     }
 
@@ -230,6 +238,7 @@ public sealed class R91_AvaloniaObjectClipboardCopyPasteTests
             try
             {
                 var sourceSheet = window.Session.ActiveSheet;
+                ClearSampleDrawingObjects(sourceSheet);
                 var destinationSheet = window.Session.Workbook.AddSheet("ProtectedDestination");
                 var sourceAnchor = new CellAddress(sourceSheet.Id, 2, 2);
                 var destinationAnchor = new CellAddress(destinationSheet.Id, 4, 4);
@@ -263,6 +272,7 @@ public sealed class R91_AvaloniaObjectClipboardCopyPasteTests
 
                 window.Close();
             }
+            return true;
         }, CancellationToken.None);
     }
 
@@ -280,6 +290,7 @@ public sealed class R91_AvaloniaObjectClipboardCopyPasteTests
             try
             {
                 var sourceSheet = window.Session.ActiveSheet;
+                ClearSampleDrawingObjects(sourceSheet);
                 var destinationSheet = window.Session.Workbook.AddSheet("ProtectedCopyDestination");
                 var sourceAnchor = new CellAddress(sourceSheet.Id, 2, 2);
                 var objectId = AddObject(sourceSheet, kind, sourceAnchor);
@@ -305,6 +316,7 @@ public sealed class R91_AvaloniaObjectClipboardCopyPasteTests
 
                 window.Close();
             }
+            return true;
         }, CancellationToken.None);
     }
 
@@ -322,6 +334,7 @@ public sealed class R91_AvaloniaObjectClipboardCopyPasteTests
             try
             {
                 var sheet = window.Session.ActiveSheet;
+                ClearSampleDrawingObjects(sheet);
                 var anchor = new CellAddress(sheet.Id, 2, 2);
                 var objectId = AddObject(sheet, kind, anchor);
                 SetObjectLocked(sheet, kind, objectId, locked: false);
@@ -353,6 +366,7 @@ public sealed class R91_AvaloniaObjectClipboardCopyPasteTests
 
                 window.Close();
             }
+            return true;
         }, CancellationToken.None);
     }
 
@@ -377,6 +391,7 @@ public sealed class R91_AvaloniaObjectClipboardCopyPasteTests
             try
             {
                 var sourceSheet = window.Session.ActiveSheet;
+                ClearSampleDrawingObjects(sourceSheet);
                 var destinationSheet = window.Session.Workbook.AddSheet("GuardDestination");
                 var sourceAnchor = new CellAddress(sourceSheet.Id, 2, 2);
                 var objectId = AddObject(sourceSheet, kind, sourceAnchor);
@@ -411,6 +426,7 @@ public sealed class R91_AvaloniaObjectClipboardCopyPasteTests
 
                 window.Close();
             }
+            return true;
         }, CancellationToken.None);
     }
 
@@ -428,6 +444,7 @@ public sealed class R91_AvaloniaObjectClipboardCopyPasteTests
             try
             {
                 var sourceSheet = window.Session.ActiveSheet;
+                ClearSampleDrawingObjects(sourceSheet);
                 var destinationSheet = window.Session.Workbook.AddSheet("UnlockedSourceDestination");
                 var sourceAnchor = new CellAddress(sourceSheet.Id, 2, 2);
                 var objectId = AddObject(sourceSheet, kind, sourceAnchor);
@@ -455,6 +472,7 @@ public sealed class R91_AvaloniaObjectClipboardCopyPasteTests
 
                 window.Close();
             }
+            return true;
         }, CancellationToken.None);
     }
 
@@ -467,6 +485,7 @@ public sealed class R91_AvaloniaObjectClipboardCopyPasteTests
             try
             {
                 var sheet = window.Session.ActiveSheet;
+                ClearSampleDrawingObjects(sheet);
                 var source = new CellAddress(sheet.Id, 2, 2);
                 var destination = new CellAddress(sheet.Id, 12, 12);
                 var objectId = AddObject(sheet, SelectionPaneObjectKind.Chart, source);
@@ -486,6 +505,7 @@ public sealed class R91_AvaloniaObjectClipboardCopyPasteTests
 
                 window.Close();
             }
+            return true;
         }, CancellationToken.None);
     }
 
@@ -538,6 +558,22 @@ public sealed class R91_AvaloniaObjectClipboardCopyPasteTests
             default:
                 throw new ArgumentOutOfRangeException(nameof(kind), kind, null);
         }
+    }
+
+    /// <summary>
+    /// The Avalonia shell's no-argument startup deliberately loads <c>PortPreviewWorkbookFactory</c>'s
+    /// SAMPLE workbook ("Showing sample workbook."), which already carries one shape, one text box and
+    /// two pictures. These tests assert ABSOLUTE object counts and exact id sets, so the sample objects
+    /// are dropped here to establish the empty precondition the assertions describe. (Chart is the only
+    /// kind the sample has none of, which is why the Chart theory case was the only one that ever
+    /// passed.) Freshly added destination sheets start empty and need no such reset.
+    /// </summary>
+    private static void ClearSampleDrawingObjects(Sheet sheet)
+    {
+        sheet.Pictures.Clear();
+        sheet.TextBoxes.Clear();
+        sheet.DrawingShapes.Clear();
+        sheet.Charts.Clear();
     }
 
     private static int CountObjects(Sheet sheet, SelectionPaneObjectKind kind) => kind switch

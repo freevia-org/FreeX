@@ -177,6 +177,7 @@ public sealed class GridCaptureTests
                 window.AllowCloseWithoutDirtyPromptForParityCapture();
 
                 window.Close();
+                return true;
             }, CancellationToken.None);
 
             // Assert result record
@@ -224,6 +225,7 @@ public sealed class GridCaptureTests
                 window.AllowCloseWithoutDirtyPromptForParityCapture();
 
                 window.Close();
+                return true;
             }, CancellationToken.None);
 
             result.Should().NotBeNull();

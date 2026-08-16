@@ -33,6 +33,7 @@ public sealed class R121_AvaloniaDeleteDrawingObjectTests
             try
             {
                 var sheet = window.Session.ActiveSheet;
+                ClearSampleDrawingObjects(sheet);
                 var anchor = new CellAddress(sheet.Id, 2, 2);
                 sheet.SetCell(anchor, new NumberValue(99));
 
@@ -52,6 +53,7 @@ public sealed class R121_AvaloniaDeleteDrawingObjectTests
 
                 window.Close();
             }
+            return true;
         }, CancellationToken.None);
     }
 
@@ -64,13 +66,17 @@ public sealed class R121_AvaloniaDeleteDrawingObjectTests
             try
             {
                 var sheet = window.Session.ActiveSheet;
+                ClearSampleDrawingObjects(sheet);
                 var anchor = new CellAddress(sheet.Id, 3, 3);
                 sheet.SetCell(anchor, new NumberValue(7));
                 window.SelectCellForTest(anchor);
 
                 await window.RaiseKeyDownForTest(new KeyEventArgs { Key = Key.Delete });
 
-                sheet.GetCell(anchor)?.Value.Should().BeNull(
+                // Clear Contents blanks the cell in place (preserving its formatting) rather than
+                // dropping the cell entirely, so the cleared value is BlankValue -- never null. This
+                // matches the sibling R124_BackspaceDrawingObjectTests assertion.
+                sheet.GetCell(anchor)?.Value.Should().Be(BlankValue.Instance,
                     "with no drawing object selected, Delete must fall through to ordinary Clear Contents");
             }
             finally
@@ -79,6 +85,7 @@ public sealed class R121_AvaloniaDeleteDrawingObjectTests
 
                 window.Close();
             }
+            return true;
         }, CancellationToken.None);
     }
 
@@ -91,6 +98,7 @@ public sealed class R121_AvaloniaDeleteDrawingObjectTests
             try
             {
                 var sheet = window.Session.ActiveSheet;
+                ClearSampleDrawingObjects(sheet);
                 var anchor = new CellAddress(sheet.Id, 2, 2);
                 var objectId = AddObject(sheet, SelectionPaneObjectKind.Picture, anchor);
                 window.Session.ExecuteReviewCommand(new ProtectSheetCommand(
@@ -110,6 +118,7 @@ public sealed class R121_AvaloniaDeleteDrawingObjectTests
 
                 window.Close();
             }
+            return true;
         }, CancellationToken.None);
     }
 
@@ -156,6 +165,21 @@ public sealed class R121_AvaloniaDeleteDrawingObjectTests
             default:
                 throw new ArgumentOutOfRangeException(nameof(kind), kind, null);
         }
+    }
+
+    /// <summary>
+    /// The Avalonia shell's no-argument startup deliberately loads <c>PortPreviewWorkbookFactory</c>'s
+    /// SAMPLE workbook ("Showing sample workbook."), which already carries one shape, one text box and
+    /// two pictures. These tests assert ABSOLUTE object counts, so the sample objects are dropped here
+    /// to establish the empty precondition the assertions describe. (Chart is the only kind the sample
+    /// has none of, which is why the Chart theory case was the only one that ever passed.)
+    /// </summary>
+    private static void ClearSampleDrawingObjects(Sheet sheet)
+    {
+        sheet.Pictures.Clear();
+        sheet.TextBoxes.Clear();
+        sheet.DrawingShapes.Clear();
+        sheet.Charts.Clear();
     }
 
     private static int CountObjects(Sheet sheet, SelectionPaneObjectKind kind) => kind switch

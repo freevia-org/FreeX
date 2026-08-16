@@ -46,6 +46,7 @@ public sealed class EditingInteractionValidationTests
 
                 window.Close();
             }
+            return true;
         }, CancellationToken.None);
     }
 }

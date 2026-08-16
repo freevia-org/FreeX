@@ -105,6 +105,7 @@ public sealed class Wave103_SlicerTimelinePaneProductionHostTests
                 if (window.IsVisible)
                     window.Close();
             }
+            return true;
         }, CancellationToken.None);
     }
 

@@ -67,6 +67,7 @@ public sealed class AvaloniaWorksheetPhysicalEditingTests
                 window.AllowCloseWithoutDirtyPromptForParityCapture();
                 window.Close();
             }
+            return true;
         }, CancellationToken.None);
     }
 
@@ -108,6 +109,7 @@ public sealed class AvaloniaWorksheetPhysicalEditingTests
                 window.AllowCloseWithoutDirtyPromptForParityCapture();
                 window.Close();
             }
+            return true;
         }, CancellationToken.None);
     }
 
@@ -171,6 +173,7 @@ public sealed class AvaloniaWorksheetPhysicalEditingTests
                 }
                 File.Delete(path);
             }
+            return true;
         }, CancellationToken.None);
     }
 
@@ -209,6 +212,7 @@ public sealed class AvaloniaWorksheetPhysicalEditingTests
                 window.AllowCloseWithoutDirtyPromptForParityCapture();
                 window.Close();
             }
+            return true;
         }, CancellationToken.None);
     }
 
@@ -250,6 +254,7 @@ public sealed class AvaloniaWorksheetPhysicalEditingTests
                 window.AllowCloseWithoutDirtyPromptForParityCapture();
                 window.Close();
             }
+            return true;
         }, CancellationToken.None);
     }
 
@@ -302,6 +307,7 @@ public sealed class AvaloniaWorksheetPhysicalEditingTests
                 window.AllowCloseWithoutDirtyPromptForParityCapture();
                 window.Close();
             }
+            return true;
         }, CancellationToken.None);
     }
 
@@ -343,6 +349,7 @@ public sealed class AvaloniaWorksheetPhysicalEditingTests
                 window.AllowCloseWithoutDirtyPromptForParityCapture();
                 window.Close();
             }
+            return true;
         }, CancellationToken.None);
     }
 
@@ -389,6 +396,7 @@ public sealed class AvaloniaWorksheetPhysicalEditingTests
                 window.AllowCloseWithoutDirtyPromptForParityCapture();
                 window.Close();
             }
+            return true;
         }, CancellationToken.None);
     }
 
@@ -516,6 +524,7 @@ public sealed class AvaloniaWorksheetPhysicalEditingTests
                 window.AllowCloseWithoutDirtyPromptForParityCapture();
                 window.Close();
             }
+            return true;
         }, CancellationToken.None);
     }
 

@@ -236,6 +236,7 @@ public sealed class AvaloniaSharedWorkbookWindowTests
                 second.Close();
                 first.Close();
             }
+            return true;
         }, CancellationToken.None);
     }
 

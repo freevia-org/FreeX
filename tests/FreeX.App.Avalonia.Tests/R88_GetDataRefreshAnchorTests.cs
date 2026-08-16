@@ -79,6 +79,7 @@ public sealed class R88_GetDataRefreshAnchorTests
             {
                 File.Delete(path);
             }
+            return true;
         }, CancellationToken.None);
 
     // No-regression sibling: a FIRST import (no prior remembered source) must still land at the current

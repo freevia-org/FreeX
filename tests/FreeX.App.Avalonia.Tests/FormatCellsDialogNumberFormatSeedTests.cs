@@ -61,6 +61,7 @@ public sealed class FormatCellsDialogNumberFormatSeedTests
 
                 window.Close();
             }
+            return true;
         }, CancellationToken.None);
 
         // Assert: the resolved request must either omit NumberFormat (no change requested) or

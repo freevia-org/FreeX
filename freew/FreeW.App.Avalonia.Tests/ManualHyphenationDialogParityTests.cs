@@ -45,6 +45,7 @@ public sealed class ManualHyphenationDialogParityTests
             {
                 owner.Close();
             }
+            return true;
         }, CancellationToken.None);
     }
 

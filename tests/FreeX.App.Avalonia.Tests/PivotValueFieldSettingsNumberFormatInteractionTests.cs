@@ -38,6 +38,7 @@ public sealed class PivotValueFieldSettingsNumberFormatInteractionTests
 
                 window.Close();
             }
+            return true;
         }, CancellationToken.None);
 
         result.Should().NotBeNull();
@@ -67,6 +68,7 @@ public sealed class PivotValueFieldSettingsNumberFormatInteractionTests
 
                 window.Close();
             }
+            return true;
         }, CancellationToken.None);
 
         result.Should().BeNull();

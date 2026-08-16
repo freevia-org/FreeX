@@ -63,6 +63,7 @@ public sealed class ShapeEffectsDialogLifecycleRegressionTests
                     if (window.IsVisible)
                         window.Close();
                 }
+                return true;
             }, CancellationToken.None);
         }
     }

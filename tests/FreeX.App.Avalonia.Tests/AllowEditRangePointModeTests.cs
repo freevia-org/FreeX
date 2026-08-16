@@ -93,6 +93,7 @@ public sealed class AllowEditRangePointModeTests
                 if (owner.IsVisible)
                     owner.Close();
             }
+            return true;
         }, CancellationToken.None);
     }
 
