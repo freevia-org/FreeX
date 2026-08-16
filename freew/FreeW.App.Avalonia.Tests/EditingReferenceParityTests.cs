@@ -218,7 +218,9 @@ public sealed class EditingReferenceParityTests
             await thesaurus.CopyForTestAsync("cheerful");
             copied.Should().Be("cheerful");
             thesaurus.ReplaceForTest("cheerful").Should().BeTrue();
-            ((Paragraph)view.Document.Blocks[0]).PlainText.Should().Be("A cheerful day");
+            // The paragraph still carries the footnote reference mark inserted above, so its plain text
+            // is "1A cheerful day" -- the leading "1" is the note mark, not body text.
+            ((Paragraph)view.Document.Blocks[0]).PlainText.Should().Be("1A cheerful day");
             return true;
         }, CancellationToken.None);
 
