@@ -157,7 +157,7 @@ try {
     if ($null -eq $freeWVisualComparison.scope -or [string]$freeWVisualComparison.scope.kind -ne "canonical-inputs-only") {
         throw "FreeW visual comparison must declare canonical-inputs-only scope before the cross-app dashboard can be generated."
     }
-    $freeWOfficeBaseline = Read-ToolJson -Path "docs\parity\freew-word-baseline-2026-08-14\manifest.json" -RepoRoot $repoRoot -MissingMessage "Required Word Office baseline manifest is missing"
+    $freeWOfficeBaseline = Read-ToolJson -Path "docs\parity\freew-word-baseline-2026-08-16\manifest.json" -RepoRoot $repoRoot -MissingMessage "Required Word Office baseline manifest is missing"
     $freep = Read-ToolJson -Path "docs\parity\freep-command-parity-inventory.json" -RepoRoot $repoRoot -MissingMessage "Required generated parity input is missing"
     $freePDialogVisualEvidence = Read-ToolJson -Path "docs\parity\freep-dialog-pane-visual-evidence\summary.json" -RepoRoot $repoRoot -MissingMessage "Required generated parity input is missing"
     $freePDialogArtifactManifest = Read-ToolJson -Path "docs\parity\freep-dialog-pane-visual-evidence\artifact-manifest.json" -RepoRoot $repoRoot -MissingMessage "Required generated parity input is missing"
@@ -306,7 +306,7 @@ try {
         sourceFiles = @(
             "docs/parity/freew-dialog-harness/freew_dialog_route_inventory.json",
             "docs/parity/freew-dialog-harness/freew_dialog_visual_comparison.json",
-            "docs/parity/freew-word-baseline-2026-08-14/manifest.json"
+            "docs/parity/freew-word-baseline-2026-08-16/manifest.json"
         )
         canonicalComparison = [ordered]@{
             kind = [string]$freeWVisualComparison.scope.kind
@@ -329,6 +329,7 @@ try {
             pairedAvaloniaArtifactRowCount = $freeWPairedComparisonRows.Count
             avaloniaOnlyArtifactRowCount = $freeWAvaloniaExtensionRows.Count
             stateNotApplicableRowCount = $freeWStateNotApplicableRows.Count
+            otherComparisonRowCount = $freeWComparisonRows.Count - $freeWPairedComparisonRows.Count - $freeWAvaloniaExtensionRows.Count - $freeWStateNotApplicableRows.Count
             artifactManifestAvailable = $false
             artifactKind = "embedded comparison-row content metrics and classifications"
         }
@@ -379,7 +380,7 @@ try {
             classifiedRows = $true
         }
         renderedEvidence = $freeWRenderedEvidence
-        nextSlice = "A committed Word PNG baseline bundle is now available for 89 comparable rows, but 87 comparisons remain outside tolerance. Triage font metrics, pagination, drawing/object, chart, table, and WordArt deltas against the captured references before refreshing this cohort on the current source revision."
+        nextSlice = "A committed current-source Word PNG baseline bundle is available for $($freeWOfficeBaseline.comparison.comparableRows) comparable rows, but $($freeWOfficeBaseline.comparison.failedRows) comparisons remain outside tolerance. Triage font metrics, pagination, drawing/object, chart, table, and WordArt deltas against the captured references before the next Word baseline refresh."
     }
 
     $freePExternalPowerPointResidual = Get-ResidualById -Residuals $freePRenderParity.Residuals -Id "external-powerpoint-baseline"
@@ -528,7 +529,7 @@ try {
             "docs/parity/freew-command-inventory.json",
             "docs/parity/freew-dialog-harness/freew_dialog_route_inventory.json",
             "docs/parity/freew-dialog-harness/freew_dialog_visual_comparison.json",
-            "docs/parity/freew-word-baseline-2026-08-14/manifest.json",
+            "docs/parity/freew-word-baseline-2026-08-16/manifest.json",
             "docs/parity/freep-command-parity-inventory.json",
             "docs/parity/freep-dialog-pane-visual-evidence/summary.json",
             "docs/parity/freep-dialog-pane-visual-evidence/artifact-manifest.json",
@@ -599,7 +600,7 @@ try {
         '- `docs/parity/freew-command-inventory.json`',
         '- `docs/parity/freew-dialog-harness/freew_dialog_route_inventory.json`',
         '- `docs/parity/freew-dialog-harness/freew_dialog_visual_comparison.json`',
-        '- `docs/parity/freew-word-baseline-2026-08-14/manifest.json`',
+        '- `docs/parity/freew-word-baseline-2026-08-16/manifest.json`',
         '- `docs/parity/freep-command-parity-inventory.json`',
         '- `docs/parity/freep-dialog-pane-visual-evidence/summary.json`',
         '- `docs/parity/freep-dialog-pane-visual-evidence/artifact-manifest.json`',
