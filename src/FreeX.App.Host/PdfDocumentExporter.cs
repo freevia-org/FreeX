@@ -648,22 +648,16 @@ internal static class PdfDocumentExporter
         if (pen is null || pen.Thickness <= 0 || pen.Brush is not SolidColorBrush solid)
             return null;
 
-        var width = pen.Thickness * EstimateStrokeScale(transform);
+        var width = pen.Thickness * SharedPdf.PdfTransformMath.EstimateUniformScale(
+            transform.M11,
+            transform.M12,
+            transform.M21,
+            transform.M22,
+            DipToPoint);
         if (!IsFinite(width) || width <= 0)
             return null;
 
         return new XPen(ToXColor(solid.Color, opacity * solid.Opacity), width);
-    }
-
-    private static double EstimateStrokeScale(Matrix transform)
-    {
-        var scaleX = Math.Sqrt(transform.M11 * transform.M11 + transform.M12 * transform.M12);
-        var scaleY = Math.Sqrt(transform.M21 * transform.M21 + transform.M22 * transform.M22);
-        var scale = (scaleX + scaleY) / 2.0;
-
-        return IsFinite(scale) && scale > 0
-            ? scale
-            : DipToPoint;
     }
 
     private static XColor ToXColor(Color color, double opacity)
@@ -689,16 +683,14 @@ internal static class PdfDocumentExporter
         }
 
         matrix = transform.Value;
-        return IsFinite(matrix);
+        return SharedPdf.PdfTransformMath.IsFiniteAffineMatrix(
+            matrix.M11,
+            matrix.M12,
+            matrix.M21,
+            matrix.M22,
+            matrix.OffsetX,
+            matrix.OffsetY);
     }
-
-    private static bool IsFinite(Matrix matrix) =>
-        IsFinite(matrix.M11) &&
-        IsFinite(matrix.M12) &&
-        IsFinite(matrix.M21) &&
-        IsFinite(matrix.M22) &&
-        IsFinite(matrix.OffsetX) &&
-        IsFinite(matrix.OffsetY);
 
     private static bool IsFinite(Point point) =>
         IsFinite(point.X) &&
@@ -727,16 +719,10 @@ internal static class PdfDocumentExporter
         Math.Abs(value) < 0.000001;
 
     private static double ReadLeft(UIElement element)
-    {
-        var left = Canvas.GetLeft(element);
-        return double.IsNaN(left) ? 0 : left;
-    }
+        => SharedPdf.PdfTransformMath.ResolveCanvasCoordinate(Canvas.GetLeft(element));
 
     private static double ReadTop(UIElement element)
-    {
-        var top = Canvas.GetTop(element);
-        return double.IsNaN(top) ? 0 : top;
-    }
+        => SharedPdf.PdfTransformMath.ResolveCanvasCoordinate(Canvas.GetTop(element));
 
     private static IReadOnlyDictionary<CellAddress, PdfInternalDestination> BuildInternalDestinationLookup(
         PdfDocument pdf,
