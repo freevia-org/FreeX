@@ -28,6 +28,7 @@ $requiredSources = @(
     "docs/parity/freew-dialog-harness/freew_dialog_route_inventory.json",
     "docs/parity/freew-dialog-harness/freew_dialog_visual_comparison.json",
     "docs/parity/freew-word-baseline-2026-08-16/manifest.json",
+    "docs/parity/freex-excel-chrome-comparison.md",
     "docs/parity/freex-excel-com-baseline-2026-08-14/manifest.json",
     "docs/parity/freep-dialog-pane-visual-evidence/summary.json",
     "docs/parity/freep-dialog-pane-visual-evidence/artifact-manifest.json",
@@ -73,6 +74,8 @@ Assert-DashboardCondition ($freeW.renderedEvidence.authoritativeMicrosoftOfficeB
 Assert-DashboardCondition ($freeX.renderedEvidence.authoritativeMicrosoftOfficeBaseline.available -eq $true) "FreeX must report its committed Excel reference baseline as available."
 Assert-DashboardCondition ($freeX.renderedEvidence.authoritativeMicrosoftOfficeBaseline.artifactCount -eq 45) "FreeX Excel baseline artifact count must remain explicit."
 Assert-DashboardCondition ($freeX.renderedEvidence.physicalEvidence.status -eq "available-interactive-foreground") "FreeX must report its interactive foreground Excel evidence."
+Assert-DashboardCondition ((@($freeX.renderedEvidence.physicalEvidence.limitations) -join " ") -match "36 Excel ribbon states") "FreeX dashboard must report the complete interactive ribbon capture."
+Assert-DashboardCondition ((@($freeX.renderedEvidence.physicalEvidence.limitations) -join " ") -notmatch "unavailable during the 2026-08-16 refresh") "FreeX dashboard must not retain the resolved foreground-capture blocker."
 
 $freeP = $apps["FreeP"]
 $freePLanes = @($freeP.renderedEvidence.routeCoverage.laneEntries)
