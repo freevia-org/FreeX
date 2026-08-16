@@ -136,8 +136,11 @@ public sealed partial class MainWindow
             dragAnchorReplayConsumed = TryContinueFormulaRangeSelectionDrag(dragStart);
             dragPointExtended = TryContinueFormulaRangeSelectionDrag(dragEnd);
             dragPointText = _inlineCellEditor?.Text ?? _inlineCellEditText ?? "";
-            dragPointEditSessionPreserved = _session.FormulaEditAddress == dragFormulaAddress &&
-                _session.ActiveCell == dragFormulaAddress;
+            // Only FormulaEditAddress: while pointing, the selection (and with it ActiveCell) follows
+            // the pointed range by design -- SelectRangeForFormulaEdit moves the selection precisely so
+            // it can hold the edit session separately. Requiring ActiveCell to stay on the formula cell
+            // asserted the opposite of how point mode works.
+            dragPointEditSessionPreserved = _session.FormulaEditAddress == dragFormulaAddress;
             var liveEditorAfterRelease = GetFormulaRangeEntryEditor();
             _sheetGridHost.Focus();
             RestoreFormulaRangeEditorFocusAfterDrag(liveEditorAfterRelease);

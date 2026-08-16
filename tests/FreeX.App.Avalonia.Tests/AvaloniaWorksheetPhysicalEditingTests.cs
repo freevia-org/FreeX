@@ -125,13 +125,20 @@ public sealed class AvaloniaWorksheetPhysicalEditingTests
             try
             {
                 File.WriteAllText(path, CreateCsvRows(11));
-                using var input = File.OpenRead(path);
-                var source = new StartupWorkbookLoadResult(
-                    new CsvFileAdapter().Load(input),
-                    Path.GetFileName(path),
-                    "Opened CSV.",
-                    IsFallback: false,
-                    SourcePath: path);
+                // Scope the read stream: `using var` at method scope keeps the handle open for the whole
+                // test, so Ctrl+S cannot reopen the file for writing and the save fails silently -- the
+                // file stays exactly as written above while the session reports dirty and a valid save
+                // target.
+                StartupWorkbookLoadResult source;
+                using (var input = File.OpenRead(path))
+                {
+                    source = new StartupWorkbookLoadResult(
+                        new CsvFileAdapter().Load(input),
+                        Path.GetFileName(path),
+                        "Opened CSV.",
+                        IsFallback: false,
+                        SourcePath: path);
+                }
                 var session = new WorkbookSessionFactory().Create(
                     source,
                     viewportHeight: 240,
@@ -156,8 +163,12 @@ public sealed class AvaloniaWorksheetPhysicalEditingTests
 
                 await SaveThroughWindowHandler(window);
 
+
                 using var stream = File.OpenRead(path);
-                var savedWorkbook = new DelimitedTextFileAdapter(".csv", "CSV", ',').Load(stream);
+                // Read back through the SAME adapter that wrote the file. CsvFileAdapter.Save uses the
+                // locale list separator (as Excel does), so hard-coding ',' parses a ';'-delimited save
+                // as a single column and every column past the first reads blank.
+                var savedWorkbook = new CsvFileAdapter().Load(stream);
                 savedWorkbook.GetSheet(sheet.Name)!
                     .GetValue(beyondUsedRange)
                     .Should()
@@ -344,7 +355,14 @@ public sealed class AvaloniaWorksheetPhysicalEditingTests
 
                 window.InlineCellEditorTextForTest.Should().Be("=B2:D4");
                 editor.IsFocused.Should().BeTrue();
-                window.Session.SelectedRange.Should().Be(new GridRange(formulaAddress, formulaAddress));
+                // While pointing, the SELECTION follows the pointed range -- SelectRangeForFormulaEdit
+                // exists precisely to move it while holding the edit session elsewhere, and Excel shows
+                // the dragged range in the Name Box. What must stay put is the edit session itself,
+                // which FormulaEditAddress records.
+                window.Session.SelectedRange.Should().Be(new GridRange(
+                    new CellAddress(formulaAddress.Sheet, 2, 2),
+                    new CellAddress(formulaAddress.Sheet, 4, 4)));
+                window.Session.FormulaEditAddress.Should().Be(formulaAddress);
                 FormulaReferenceHighlights(window).Should().ContainSingle();
             }
             finally
@@ -611,6 +629,13 @@ public sealed class AvaloniaWorksheetPhysicalEditingTests
         await window.RaiseKeyDownForTest(args);
         args.Handled.Should().BeTrue();
         await DrainInputAsync();
+
+        // The write runs off the UI thread, so pumping the dispatcher does not by itself mean the file
+        // on disk is complete -- reading it straight after Ctrl+S races the writer.
+        for (var attempt = 0; attempt < 400 && window.IsSavingForTest; attempt++)
+            await DrainInputAsync();
+
+        window.IsSavingForTest.Should().BeFalse("the save must finish before the file is inspected");
     }
 
     private static void RaiseRawTextInput(InputElement target, string text) =>
