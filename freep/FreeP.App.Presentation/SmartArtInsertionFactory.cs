@@ -1,6 +1,7 @@
 using System.Text;
 using System.Xml.Linq;
 using Free.Shared.Opc;
+using FreeP.Core.IO;
 using FreeP.Core.Model;
 
 namespace FreeP.App.Compositor;
@@ -146,6 +147,17 @@ internal static class SmartArtInsertionFactory
         AddPart(smart, "application/vnd.ms-office.drawingml.diagramDrawing+xml", drawingPath,
             BuildDrawingXml(nodePictures));
 
+        // Office discovers the cached dsp:drawing through a data-model extension whose
+        // relationship id is resolved in the containing slide. Keep this link in the
+        // authored package model from the start; the writer preserves the stable id when
+        // it regenerates the slide relationship. Without it PowerPoint opens the diagram
+        // data but paints a blank graphic frame.
+        var drawingRelationshipId =
+            SmartArtDrawingLinkPlanner.CreateStableRelationshipId(drawingPath);
+        smart.Parts[dataPath].Bytes = SmartArtDrawingLinkPlanner.EnsureDrawingLink(
+            smart.Parts[dataPath].Bytes,
+            drawingRelationshipId);
+
         if (nodePictures is not null)
         {
             var drawingRelationships = new List<(string id, string type, string target)>();
@@ -175,7 +187,7 @@ internal static class SmartArtInsertionFactory
         smart.DiagramRelIds["cs"] = $"rIdCs{partIndex}";
         smart.DrawingPartPath = drawingPath;
         smart.PartRels[dataPath] = SerializeRelationships((
-            $"rIdDrawing{partIndex}",
+            drawingRelationshipId,
             "http://schemas.microsoft.com/office/2007/relationships/diagramDrawing",
             $"drawing{partIndex}.xml"));
 
