@@ -1780,7 +1780,13 @@ public sealed class AvaloniaRichTextEditorTests
                     InCanvasRichTextPointerSelectionPlanner.Plan(first, second, editor.Text.Length),
                     "Shift-click must extend from the original caret");
 
-                var wordPoint = new Point(32, 8);
+                // Derive the point from the laid-out caret instead of hard-coding a pixel: "beta"
+                // starts at index 6, and a fixed x only lands inside it for one particular glyph
+                // width -- under the headless font stack 32 fell back inside "Alpha".
+                editor.SelectionStart = 7;
+                editor.SelectionEnd = 7;
+                await DrainInputAsync();
+                var wordPoint = new Point(editor.RichTextView.CaretRect.X, 8);
                 window.MouseMove(wordPoint, RawInputModifiers.None);
                 window.MouseDown(wordPoint, MouseButton.Left, RawInputModifiers.LeftMouseButton);
                 window.MouseUp(wordPoint, MouseButton.Left, RawInputModifiers.None);
