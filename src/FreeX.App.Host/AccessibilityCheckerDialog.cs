@@ -47,7 +47,6 @@ public sealed class AccessibilityCheckerDialog : Window
 
         Content = BuildContent();
         Loaded += (_, _) => FocusInitialKeyboardTarget();
-            ApplyAutomationNames();
     }
 
     public static string CreateMessage(IReadOnlyList<AccessibilityIssue> issues) =>
@@ -263,14 +262,5 @@ public sealed class AccessibilityCheckerDialog : Window
         AutomationProperties.SetName(target, automation.Name);
         AutomationProperties.SetAutomationId(target, automation.AutomationId);
         AutomationProperties.SetHelpText(target, automation.HelpText);
-    }
-
-    /// <summary>
-    /// Screen-reader names for this dialog's controls. Ported from the abandoned
-    /// codex/dialog-parity-loop branch, whose paths predate the Freexcel -> FreeX rename.
-    /// </summary>
-    private void ApplyAutomationNames()
-    {
-        AutomationProperties.SetName(_messageBox, "Accessibility checker summary");
     }
 }

@@ -113,9 +113,6 @@ public sealed class ThreadedCommentDialog : Window
             target.Focus();
             Keyboard.Focus(target);
         };
-            ApplyAutomationNames();
-            // Depends on the constructor's parameter, so it cannot live in the parameterless helper.
-            AutomationProperties.SetName(_rootBox, existing is null ? "Comment" : "Edit comment");
     }
 
     private void SubmitThreadedCommentDialog(ThreadedComment? existing)
@@ -320,14 +317,5 @@ public sealed class ThreadedCommentDialog : Window
     private void ShowInvalidThreadedCommentWarning(string message, TextBox target)
     {
         DialogFocus.ShowWarningAndFocus(this, message, Title, target);
-    }
-
-    /// <summary>
-    /// Screen-reader names for this dialog's controls. Ported from the abandoned
-    /// codex/dialog-parity-loop branch, whose paths predate the Freexcel -> FreeX rename.
-    /// </summary>
-    private void ApplyAutomationNames()
-    {
-        AutomationProperties.SetName(_replyBox, "Reply");
     }
 }

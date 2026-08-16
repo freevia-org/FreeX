@@ -65,7 +65,6 @@ public sealed class PasswordProtectionDialog : Window
             width: isProtectSheet ? ProtectionDialogPlanner.ProtectSheetWidth : ProtectionDialogPlanner.ProtectWorkbookCaptureWidth,
             minHeight: isProtectSheet ? ProtectionDialogPlanner.ProtectSheetHeight : ProtectionDialogPlanner.ProtectWorkbookCaptureHeight);
         Loaded += (_, _) => FocusInitialKeyboardTarget();
-            ApplyAutomationNames();
     }
 
     private void AddSheetPermissionChecklist(Panel root)
@@ -125,15 +124,6 @@ public sealed class PasswordProtectionDialog : Window
     private static bool IsProtectSheetTitle(string title) =>
         title.Equals("Protect Sheet", StringComparison.OrdinalIgnoreCase) ||
         title.Equals(UiText.Get("Protection_ProtectSheetTitle"), StringComparison.OrdinalIgnoreCase);
-
-    /// <summary>
-    /// Screen-reader names for this dialog's controls. Ported from the abandoned
-    /// codex/dialog-parity-loop branch, whose paths predate the Freexcel -> FreeX rename.
-    /// </summary>
-    private void ApplyAutomationNames()
-    {
-        AutomationProperties.SetName(_passwordBox, "Password");
-    }
 }
 
 public sealed class ConfirmPasswordDialog : Window
@@ -165,7 +155,6 @@ public sealed class ConfirmPasswordDialog : Window
         Content = root;
         DialogSizing.ApplyContentHeight(this, width: 360, minHeight: 180);
         Loaded += (_, _) => FocusInitialKeyboardTarget();
-            ApplyAutomationNames();
     }
 
     private void Accept()
@@ -190,14 +179,5 @@ public sealed class ConfirmPasswordDialog : Window
     private void FocusInitialKeyboardTarget()
     {
         FocusConfirmationInput();
-    }
-
-    /// <summary>
-    /// Screen-reader names for this dialog's controls. Ported from the abandoned
-    /// codex/dialog-parity-loop branch, whose paths predate the Freexcel -> FreeX rename.
-    /// </summary>
-    private void ApplyAutomationNames()
-    {
-        AutomationProperties.SetName(_confirmationBox, "Confirm password");
     }
 }

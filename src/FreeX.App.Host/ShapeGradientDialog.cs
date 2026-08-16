@@ -125,7 +125,6 @@ public sealed class ShapeGradientDialog : Window
         UpdateColorVisuals();
         Content = CreateContent();
         Loaded += (_, _) => FocusInitialKeyboardTarget();
-            ApplyAutomationNames();
     }
 
     public static bool TryCreateResult(string input, out ShapeGradientDialogResult result, out string? error)
@@ -398,14 +397,4 @@ public sealed class ShapeGradientDialog : Window
 
     private static Color ToMediaColor(CellColor color) =>
         Color.FromRgb(color.R, color.G, color.B);
-
-    /// <summary>
-    /// Screen-reader names for this dialog's controls. Ported from the abandoned
-    /// codex/dialog-parity-loop branch, whose paths predate the Freexcel -> FreeX rename.
-    /// </summary>
-    private void ApplyAutomationNames()
-    {
-        AutomationProperties.SetName(_startColorBox, "Stop 1 color RGB");
-        AutomationProperties.SetName(_endColorBox, "Stop 2 color RGB");
-    }
 }

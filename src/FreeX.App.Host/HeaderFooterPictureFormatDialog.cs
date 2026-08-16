@@ -46,7 +46,6 @@ public sealed class HeaderFooterPictureFormatDialog : Window
         _heightBox.TextChanged += HeightBox_TextChanged;
         Content = CreateContent(_pictureState.FileName);
         Loaded += (_, _) => FocusInitialKeyboardTarget();
-            ApplyAutomationNames();
     }
 
     private StackPanel CreateContent(string fileName)
@@ -177,15 +176,5 @@ public sealed class HeaderFooterPictureFormatDialog : Window
         stack.Children.Add(new Label { Content = label, Target = box, Padding = new Thickness(0), Margin = new Thickness(0, 0, 0, 4) });
         box.Margin = new Thickness(0, 0, 0, 8);
         stack.Children.Add(box);
-    }
-
-    /// <summary>
-    /// Screen-reader names for this dialog's controls. Ported from the abandoned
-    /// codex/dialog-parity-loop branch, whose paths predate the Freexcel -> FreeX rename.
-    /// </summary>
-    private void ApplyAutomationNames()
-    {
-        AutomationProperties.SetName(_widthBox, "Picture width");
-        AutomationProperties.SetName(_heightBox, "Picture height");
     }
 }
