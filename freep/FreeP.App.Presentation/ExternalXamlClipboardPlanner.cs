@@ -736,10 +736,14 @@ public static class ExternalXamlClipboardPlanner
             var target = AttributeValue(element, "NavigateUri");
             var tooltip = AttributeValue(element, "ToolTip")
                 ?? AttributeValue(element, "Tooltip");
-            var hyperlink = ExternalUriLauncher.TryCreateAllowedUri(target ?? string.Empty, out var uri)
+            // Validate through the Uri but keep the AUTHORED text: Uri.AbsoluteUri normalizes
+            // (notably appending a root slash, so "https://example.com" becomes
+            // "https://example.com/"), which would rewrite the user's link on every round trip
+            // through the XAML package format. Mirrors ExternalRichTextClipboardPlanner.
+            var hyperlink = ExternalUriLauncher.TryCreateAllowedUri(target ?? string.Empty, out _)
                 ? new Hyperlink
                 {
-                    Url = uri.AbsoluteUri,
+                    Url = target!,
                     Tooltip = string.IsNullOrWhiteSpace(tooltip) ? null : tooltip,
                 }
                 : null;
