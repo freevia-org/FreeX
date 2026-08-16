@@ -63,6 +63,11 @@ foreach ($classification in $allClassifications) {
     Assert-EvidenceCondition ($derived -eq $reported) "FreeW canonical count drift for '$classification': rows=$derived, report=$reported."
 }
 
+Assert-EvidenceCondition ([int]$comparison.wpfCaptureCount -eq 221) "FreeW must retain all 221 app-owned WPF dialog captures."
+Assert-EvidenceCondition ([int]$comparison.avaloniaCaptureCount -eq 291) "FreeW must retain all 291 app-owned Avalonia dialog captures."
+Assert-EvidenceCondition (-not $reportedCounts.ContainsKey("pending-wpf-factory")) "FreeW must not retain pending WPF-factory capture rows."
+Assert-EvidenceCondition (-not $reportedCounts.ContainsKey("invalid-capture-content")) "FreeW must not retain invalid-content capture rows."
+
 Assert-EvidenceCondition ($null -ne $comparison.scope) "FreeW canonical comparison must declare its evidence scope."
 Assert-EvidenceCondition ([string]$comparison.scope.kind -eq "canonical-inputs-only") "FreeW canonical comparison scope kind must be canonical-inputs-only."
 Assert-EvidenceCondition ([string]$comparison.scope.description -match "only the inventory and WPF/Avalonia capture manifests") "FreeW canonical comparison scope must identify its exact inputs."
@@ -100,6 +105,8 @@ Assert-EvidenceCondition ($freeW.Count -eq 1) "Cross-app dashboard must contain 
 $freeWPairedEvidence = $freeW[0].renderedEvidence.pairedEvidence
 Assert-EvidenceCondition ([int]$freeWPairedEvidence.mismatchCount -eq $(if ($reportedCounts.ContainsKey("genuine-visual-mismatch")) { $reportedCounts["genuine-visual-mismatch"] } else { 0 })) "Cross-app dashboard FreeW mismatch count drifted from the canonical comparison."
 Assert-EvidenceCondition ([int]$freeWPairedEvidence.passCount -eq $(if ($reportedCounts.ContainsKey("pass")) { $reportedCounts["pass"] } else { 0 })) "Cross-app dashboard FreeW pass count drifted from the canonical comparison."
+Assert-EvidenceCondition ([int]$freeW[0].renderedEvidence.artifactCoverage.pairedWpfArtifactRowCount -eq [int]$comparison.wpfCaptureCount) "Cross-app dashboard FreeW WPF artifact count drifted from the canonical comparison."
+Assert-EvidenceCondition (([int]$freeW[0].renderedEvidence.artifactCoverage.pairedAvaloniaArtifactRowCount + [int]$freeW[0].renderedEvidence.artifactCoverage.avaloniaOnlyArtifactRowCount) -eq [int]$comparison.avaloniaCaptureCount) "Cross-app dashboard FreeW Avalonia artifact count drifted from the canonical comparison."
 
 Write-Host ("FreeW evidence consistency passed: {0} rows; {1} genuine visual mismatches; {2} passes; {3} Avalonia extensions; {4} not-applicable." -f `
     $rows.Count,

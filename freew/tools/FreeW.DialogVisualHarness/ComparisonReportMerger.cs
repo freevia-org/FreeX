@@ -38,15 +38,29 @@ public static class ComparisonReportMerger
         var counts = merged
             .GroupBy(row => row.Classification, StringComparer.Ordinal)
             .ToDictionary(group => group.Key, group => group.Count(), StringComparer.Ordinal);
+        var baselineRouteRows = baseline.Rows.Where(row => BelongsToRoute(row.ScenarioId, refreshRoute)).ToArray();
+        var refreshedRouteRows = refreshedById.Values.ToArray();
         return new MergedComparison(
             merged,
             baseline.InventoryScenarioCount,
-            baseline.WpfCaptureCount,
-            baseline.AvaloniaCaptureCount,
+            baseline.WpfCaptureCount + CaptureDelta(baselineRouteRows, refreshedRouteRows, hostIndex: 0),
+            baseline.AvaloniaCaptureCount + CaptureDelta(baselineRouteRows, refreshedRouteRows, hostIndex: 1),
             baseline.GeneratedFromSha256,
             baseline.TargetDpi,
             counts);
     }
+
+    private static int CaptureDelta(IReadOnlyList<ComparisonRow> baselineRows, IReadOnlyList<ComparisonRow> refreshedRows, int hostIndex) =>
+        CountCaptured(refreshedRows, hostIndex) - CountCaptured(baselineRows, hostIndex);
+
+    private static int CountCaptured(IEnumerable<ComparisonRow> rows, int hostIndex) =>
+        rows.Count(row =>
+        {
+            if (hostIndex == 1 && row.Classification.Equals("avalonia-extension", StringComparison.OrdinalIgnoreCase))
+                return true;
+            var statuses = row.CaptureStatus.Split('/', StringSplitOptions.TrimEntries);
+            return statuses.Length == 2 && statuses[hostIndex].Equals("captured", StringComparison.OrdinalIgnoreCase);
+        });
 
     private static bool BelongsToRoute(string scenarioId, string route)
     {

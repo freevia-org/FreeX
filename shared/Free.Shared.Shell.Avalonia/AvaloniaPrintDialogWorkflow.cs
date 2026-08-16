@@ -108,6 +108,25 @@ public sealed record AvaloniaPrintDialogOptions
 /// </summary>
 public static class AvaloniaPrintDialogWorkflow
 {
+    /// <summary>
+    /// Configures the real print-selection surface without opening a modal window or submitting a job.
+    /// This is used by deterministic visual harnesses for unavailable-printer states.
+    /// </summary>
+    public static void ConfigureForVisualHarness(
+        Window dialog,
+        PrinterDiscoveryResult discovery,
+        AvaloniaPrintDialogOptions options,
+        PrintSelection? requested = null)
+    {
+        ArgumentNullException.ThrowIfNull(dialog);
+        ArgumentNullException.ThrowIfNull(discovery);
+        ArgumentNullException.ThrowIfNull(options);
+
+        var session = PrintDialogSession.Start(discovery, requested);
+        var controls = Configure(dialog, session, options, ValidatePageRangeChoices(options));
+        UpdateRangeVisibility(controls);
+    }
+
     public static async Task<PrintSelection?> ShowAsync(
         Window owner,
         PrinterDiscoveryResult discovery,

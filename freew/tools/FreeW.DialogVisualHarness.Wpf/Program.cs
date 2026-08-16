@@ -282,6 +282,12 @@ static void Populate(Window dialog, Scenario scenario)
         foreach (var box in textBoxes) if (string.IsNullOrWhiteSpace(box.Text)) box.Text = "12";
     if (state == "validation-error" && textBoxes.Length > 0)
         textBoxes[0].Text = "not-a-number";
+    if (scenario.RouteId == "compare-documents" && scenario.Tab == "More")
+    {
+        var expander = FindVisualChildren<Expander>(dialog).FirstOrDefault();
+        if (expander is not null)
+            expander.IsExpanded = true;
+    }
     var tabs = FindVisualChildren<TabControl>(dialog).FirstOrDefault();
     if (tabs is not null)
     {
