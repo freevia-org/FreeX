@@ -306,6 +306,47 @@ public sealed class PptxRepairCorpusValidityTests
     }
 
     [Fact]
+    public void GroupedSmartArtCorpus_RoundTripLinksEveryDataModelToItsSlideDrawingRelationship()
+    {
+        var deckPath = Path.Combine(FindCorpusDirectory(), "15-smartart-grouped-list.pptx");
+        var presentation = PptxPackageReader.Read(deckPath);
+        using var stream = new MemoryStream();
+        PptxPackageWriter.Write(presentation, stream);
+        stream.Position = 0;
+
+        using var archive = new ZipArchive(stream, ZipArchiveMode.Read, leaveOpen: false);
+        XNamespace relationships = PackageRelationshipNamespace;
+        XNamespace diagram = "http://schemas.openxmlformats.org/drawingml/2006/diagram";
+        XNamespace drawing = "http://schemas.openxmlformats.org/drawingml/2006/main";
+        XNamespace diagramDrawing = SmartArtDrawingLinkPlanner.DrawingExtensionUri;
+
+        for (var slideIndex = 1; slideIndex <= presentation.Slides.Count; slideIndex++)
+        {
+            var slideRelationships = LoadXml(
+                archive,
+                $"ppt/slides/_rels/slide{slideIndex}.xml.rels");
+            var drawingRelationship = slideRelationships.Root!
+                .Elements(relationships + "Relationship")
+                .Single(element =>
+                    (string?)element.Attribute("Type") == DiagramDrawingRelationshipType);
+            var drawingRelationshipId = (string)drawingRelationship.Attribute("Id")!;
+
+            var dataModel = LoadXml(archive, $"ppt/diagrams/data{slideIndex}.xml");
+            var linkedRelationshipId = dataModel.Root!
+                .Element(diagram + "extLst")!
+                .Elements(drawing + "ext")
+                .Single(element =>
+                    (string?)element.Attribute("uri") == SmartArtDrawingLinkPlanner.DrawingExtensionUri)
+                .Element(diagramDrawing + "dataModelExt")!
+                .Attribute("relId")!
+                .Value;
+
+            linkedRelationshipId.Should().Be(drawingRelationshipId,
+                "PowerPoint resolves the cached dsp:drawing through the slide-scoped relationship named by dgm:dataModel");
+        }
+    }
+
+    [Fact]
     public void SmartArtLiveCorpus_AdmitsObservedHierarchy3CacheToSharedLivePlan()
     {
         var deckPath = Path.Combine(FindCorpusDirectory(), "14-smartart-live.pptx");

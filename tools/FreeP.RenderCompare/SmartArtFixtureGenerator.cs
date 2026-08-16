@@ -256,7 +256,7 @@ internal static class SmartArtFixtureGenerator
                 ("rIdDraw1", DgmDrawRelType, $"../diagrams/drawing{si}.xml")));
 
             // data#.xml (ptLst + cxnLst)
-            WriteXml($"ppt/diagrams/data{si}.xml",  BuildDataXml(spec));
+            WriteXml($"ppt/diagrams/data{si}.xml",  BuildDataXml(spec, $"rIdDraw{si}"));
             WriteXml($"ppt/diagrams/layout{si}.xml", BuildLayoutXml(spec.LayoutUid));
             WriteXml($"ppt/diagrams/quickStyle{si}.xml", MakeSimpleDoc(Dgm + "styleDef"));
             WriteXml($"ppt/diagrams/colors{si}.xml",     MakeSimpleDoc(Dgm + "colorsDef"));
@@ -623,7 +623,7 @@ internal static class SmartArtFixtureGenerator
 
     // ── data1.xml builder ─────────────────────────────────────────────────────
 
-    private static XDocument BuildDataXml(SlideSpec spec)
+    private static XDocument BuildDataXml(SlideSpec spec, string drawingRelationshipId)
     {
         var modelIds = spec.Nodes.ToDictionary(node => node.id, node => SmartArtModelId(node.id));
         var documentId = SmartArtModelId($"doc:{spec.LayoutUid}");
@@ -675,7 +675,12 @@ internal static class SmartArtFixtureGenerator
                 new XElement(Dgm + "cxnLst", cxnElems),
                 new XElement(Dgm + "bg"),
                 new XElement(Dgm + "whole"),
-                new XElement(Dgm + "extLst")));
+                new XElement(Dgm + "extLst",
+                    new XElement(A + "ext",
+                        new XAttribute("uri", "http://schemas.microsoft.com/office/drawing/2008/diagram"),
+                        new XElement(Dsp + "dataModelExt",
+                            new XAttribute("relId", drawingRelationshipId),
+                            new XAttribute("minVer", Dgm.NamespaceName))))));
     }
 
     // ── layout1.xml builder ───────────────────────────────────────────────────

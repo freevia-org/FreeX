@@ -5740,15 +5740,69 @@ public static class PptxPackageWriter
             if (shape.Kind != SlideShapeKind.SmartArt || shape.SmartArt is not { } smart)
                 continue;
 
+            var dataPartPath = FindDiagramPartPathForKey(smart, "dm");
+            var drawingPartPath = !string.IsNullOrWhiteSpace(smart.DrawingPartPath)
+                && smart.Parts.ContainsKey(smart.DrawingPartPath)
+                    ? smart.DrawingPartPath
+                    : null;
+            string? drawingRelationshipId = null;
+            string? drawingTarget = null;
+            if (drawingPartPath is not null)
+            {
+                var partPathFromPpt = drawingPartPath.StartsWith("ppt/", StringComparison.OrdinalIgnoreCase)
+                    ? drawingPartPath["ppt/".Length..]
+                    : drawingPartPath;
+                drawingTarget = $"../{partPathFromPpt}";
+
+                var existingDrawingRelationship = slideRels.FirstOrDefault(relationship =>
+                    relationship.Item3 == drawingTarget
+                    && relationship.Item2 == DiagramDrawingRelType);
+                if (existingDrawingRelationship != default)
+                {
+                    drawingRelationshipId = existingDrawingRelationship.Item1;
+                }
+                else
+                {
+                    drawingRelationshipId =
+                        SmartArtDrawingLinkPlanner.CreateStableRelationshipId(drawingPartPath);
+                    if (!usedRelIds.Add(drawingRelationshipId))
+                    {
+                        throw new InvalidDataException(
+                            $"The SmartArt drawing relationship id '{drawingRelationshipId}' is already in use on this slide.");
+                    }
+
+                    slideRels.Add((drawingRelationshipId, DiagramDrawingRelType, drawingTarget));
+                }
+            }
+
             // Write each raw diagram part that hasn't been written yet
             foreach (var part in smart.Parts.Values)
             {
                 if (string.IsNullOrEmpty(part.PartPath) || part.Bytes.Length == 0) continue;
                 if (!writtenParts.Add(part.PartPath)) continue; // already written
 
+                var partBytes = part.Bytes;
+                if (drawingRelationshipId is not null
+                    && string.Equals(part.PartPath, dataPartPath, StringComparison.OrdinalIgnoreCase))
+                {
+                    try
+                    {
+                        partBytes = SmartArtDrawingLinkPlanner.EnsureDrawingLink(
+                            partBytes,
+                            drawingRelationshipId);
+                    }
+                    catch (Exception exception) when (exception is XmlException or InvalidDataException)
+                    {
+                        // Preserve malformed or non-data XML verbatim. The package reader already
+                        // treats an unreadable SmartArt data part as cache-only content; saving a
+                        // presentation must not turn that graceful degradation into a hard failure.
+                        partBytes = part.Bytes;
+                    }
+                }
+
                 var entry = archive.CreateEntry(part.PartPath, CompressionLevel.Optimal);
                 using (var es = entry.Open())
-                    es.Write(part.Bytes);
+                    es.Write(partBytes);
 
                 // Write this part's rels file if we have it
                 if (smart.PartRels.TryGetValue(part.PartPath, out var relsBytes) && relsBytes.Length > 0)
@@ -5806,19 +5860,6 @@ public static class PptxPackageWriter
                 }
 
                 shapeRemap[key] = newRelId;
-            }
-
-            if (!string.IsNullOrWhiteSpace(smart.DrawingPartPath)
-                && smart.Parts.ContainsKey(smart.DrawingPartPath))
-            {
-                var partPathFromPpt = smart.DrawingPartPath.StartsWith("ppt/", StringComparison.OrdinalIgnoreCase)
-                    ? smart.DrawingPartPath["ppt/".Length..]
-                    : smart.DrawingPartPath;
-                var target = $"../{partPathFromPpt}";
-                var existing = slideRels.FirstOrDefault(r => r.Item3 == target && r.Item2 == DiagramDrawingRelType);
-
-                if (existing == default)
-                    slideRels.Add((AllocDgmRelId(), DiagramDrawingRelType, target));
             }
 
             // S2: only register the shape in the remap if dm is present (required for rendering)
