@@ -2400,10 +2400,19 @@ public sealed partial class XlsxFileAdapter : IFileAdapter, IWarningCollectingFi
         }
     }
 
+    // "Where it failed" is genuinely the identifying fact here -- no exception type or message
+    // distinguishes a conditional-formatting load failure -- so this one has to read the stack.
+    // Check the throwing method itself as well as the rendered trace: the trace only lists frames
+    // the JIT chose not to inline, which is exactly how the shared-formula detector below used to
+    // miss under load. LoadConditionalFormatting is far too large to inline, so this is defence in
+    // depth rather than a known break.
     private static bool IsClosedXmlConditionalFormattingLoadFailure(Exception exception)
     {
         for (var current = exception; current is not null; current = current.InnerException)
         {
+            if (current.TargetSite?.Name.Contains("ConditionalFormatting", StringComparison.Ordinal) == true)
+                return true;
+
             if (current.StackTrace?.Contains("LoadConditionalFormatting", StringComparison.Ordinal) == true)
                 return true;
         }
@@ -2413,19 +2422,42 @@ public sealed partial class XlsxFileAdapter : IFileAdapter, IWarningCollectingFi
 
     // ClosedXML uses .First() when resolving part relationships; files authored by LibreOffice
     // (and other non-Excel producers) sometimes emit table or pivot-cache relationships in a
-    // layout ClosedXML doesn't match, causing InvalidOperationException with the LINQ sentinel
-    // message.  Strip pivot metadata and retry so the rest of the workbook loads cleanly.
+    // layout ClosedXML doesn't match, causing an empty-sequence InvalidOperationException. Strip
+    // pivot metadata and retry so the rest of the workbook loads cleanly.
+    //
+    // Recognized by origin rather than by message text. Matching "Sequence contains no matching
+    // element" meant reading a localizable framework resource: it is the English wording, and on a
+    // runtime with localized satellite resources the recovery would silently stop firing and these
+    // files would fail to open with no sign of why. It also only covered First(predicate) -- Single()
+    // and First() on an empty sequence say "Sequence contains no elements" instead and were missed.
+    // Every one of those throws comes from System.Linq.ThrowHelper, in any culture.
     private static bool IsClosedXmlRelationshipLookupFailure(Exception exception)
     {
         for (var current = exception; current is not null; current = current.InnerException)
         {
-            if (current is InvalidOperationException &&
-                current.Message.Contains("Sequence contains no matching element", StringComparison.Ordinal))
+            if (current is not InvalidOperationException invalidOperation)
+                continue;
+
+            if (IsLinqEmptySequenceThrow(invalidOperation))
                 return true;
         }
 
         return false;
     }
+
+    private static bool IsLinqEmptySequenceThrow(InvalidOperationException exception)
+    {
+        if (exception.TargetSite?.DeclaringType?.FullName == LinqThrowHelperTypeName)
+            return true;
+
+        // TargetSite is null for exceptions that crossed a serialization boundary. Fall back to the
+        // English wordings, which is what an unlocalized runtime produces anyway.
+        return exception.Message.Contains("Sequence contains no matching element", StringComparison.Ordinal)
+            || exception.Message.Contains("Sequence contains no elements", StringComparison.Ordinal);
+    }
+
+    /// <summary>Where BCL LINQ raises its empty-sequence failures, independent of culture.</summary>
+    private const string LinqThrowHelperTypeName = "System.Linq.ThrowHelper";
 
     // A shared-formula slave cell (<c><f t="shared" si="N"/><v>...</v></c>) has no formula text
     // of its own -- it relies on a master cell elsewhere on the same sheet (<f t="shared"
