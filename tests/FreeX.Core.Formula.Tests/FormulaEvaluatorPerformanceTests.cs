@@ -995,11 +995,23 @@ public sealed class FormulaEvaluatorPerformanceTests
         return sheet;
     }
 
-    private static TimeSpan MaxElapsedForPerformanceAssertion()
-    {
-        return string.Equals(Environment.GetEnvironmentVariable("GITHUB_ACTIONS"), "true", StringComparison.OrdinalIgnoreCase)
-            ? TimeSpan.FromSeconds(30)
-            : TimeSpan.FromSeconds(2);
-    }
+    /// <summary>
+    /// Wall-clock ceiling for the 23 performance assertions in this file. It is a catastrophe check,
+    /// not the measurement of record: each of those tests also asserts allocated bytes, and that is
+    /// the assertion that actually pins the behaviour being guarded (no list materialization, no
+    /// group-by materialization), because allocation is deterministic while wall-clock time is not.
+    /// </summary>
+    /// <remarks>
+    /// This used to allow 30s under GITHUB_ACTIONS and 2s everywhere else, on the theory that only
+    /// CI runs contended. A developer machine running the full 31-assembly gate is contended in the
+    /// same way and got the tight budget: AGGREGATE(11,4,A1:A100000) took 4.59s there while
+    /// allocating 64 bytes against its 8,000-byte budget -- the guarded property held perfectly and
+    /// the run failed anyway. Since the tests rotate through the gate, a different one of the 23 was
+    /// failing on each run. The generous budget is the project's own answer to "what survives a
+    /// contended machine", so apply it everywhere rather than only where an environment variable
+    /// happens to say so. It still catches what it is for: a materializing or quadratic regression
+    /// on a 100,000-cell range runs for minutes, not seconds.
+    /// </remarks>
+    private static TimeSpan MaxElapsedForPerformanceAssertion() => TimeSpan.FromSeconds(30);
 
 }

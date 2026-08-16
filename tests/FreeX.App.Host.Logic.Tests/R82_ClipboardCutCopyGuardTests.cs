@@ -146,10 +146,20 @@ public sealed class R82_ClipboardCutCopyGuardTests
                 new CellAddress(sheetId, 1, 5), new CellAddress(sheetId, 1, 5)); // E1
             harness.InvokeExecutePaste();
 
+            // Assert the paste landed before dereferencing. The null-forgiving "!" here used to turn
+            // a copy/paste that produced nothing into a bare NullReferenceException, which reads as a
+            // defect in the filter logic under test when the actual cause is that the copy never made
+            // it to the clipboard -- that is one global OS resource, and the full test gate has other
+            // processes contending for it.
+            sheet.GetCell(1, 5).Should().NotBeNull(
+                "the internal paste must have written A1's value to E1; a null here means the copy " +
+                "or paste did not complete, not that filtered rows were mishandled");
             sheet.GetCell(1, 5)!.Value.Should().Be(new NumberValue(1));
             (sheet.GetCell(2, 5)?.Value ?? BlankValue.Instance).Should().Be(
                 BlankValue.Instance,
                 "row 2 is AutoFilter-hidden and must not be reproduced by an internal paste");
+            sheet.GetCell(3, 5).Should().NotBeNull(
+                "the internal paste must have written A3's value to E3");
             sheet.GetCell(3, 5)!.Value.Should().Be(new NumberValue(3));
         });
     }
