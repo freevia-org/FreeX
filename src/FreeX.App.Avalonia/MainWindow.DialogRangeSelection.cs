@@ -45,7 +45,7 @@ public sealed partial class MainWindow
         new("range.page-setup.print-area", "PageSetupDialog", "PageSetupPrintAreaPickerButton", "PageSetupPrintAreaBox", DialogRangeSelectionFormat.PageSetupPrintArea),
         new("range.page-setup.rows-to-repeat", "PageSetupDialog", "PageSetupRowsRepeatPickerButton", "PageSetupRepeatRowsBox", DialogRangeSelectionFormat.PageSetupRepeatRows),
         new("range.page-setup.columns-to-repeat", "PageSetupDialog", "PageSetupColumnsRepeatPickerButton", "PageSetupRepeatColumnsBox", DialogRangeSelectionFormat.PageSetupRepeatColumns),
-        new("range.allow-edit-range.range", "AllowEditRangeDialog", "AllowEditRangePickerButton", "AllowEditRangeBox", DialogRangeSelectionFormat.Range),
+        new("range.allow-edit-range.range", "AllowEditRangeDialog", "AllowEditRangePickerButton", "AllowEditRangeBox", DialogRangeSelectionFormat.AbsoluteRange),
         new("range.text-to-columns.destination", "TextToColumnsDialog", "TextToColumnsDestinationPickerButton", "TextToColumnsDestinationBox", DialogRangeSelectionFormat.StartCell),
         new("range.resize-table.range", "TableResizeDialog", "TableResizeRangePickerButton", "TableResizeRangeBox", DialogRangeSelectionFormat.Range),
         new("range.named-ranges.selected-refers-to", "NameManagerDialog", "NameManagerSelectedRefersToPickerButton", "NameManagerSelectedRefersToBox", DialogRangeSelectionFormat.Range),

@@ -21,6 +21,8 @@ public static class DialogRangeSelectionFormatter
                 SpreadsheetDisplayFormatter.FormatCellReference(
                     range.Start,
                     useR1C1ReferenceStyle: false),
+            DialogRangeSelectionFormat.AbsoluteRange =>
+                FormatAbsoluteRange(range, context.UseR1C1ReferenceStyle),
             DialogRangeSelectionFormat.DataValidationFormula =>
                 DataValidationService.FormatListSourceRange(
                     range,
@@ -46,4 +48,18 @@ public static class DialogRangeSelectionFormatter
                 range.End,
                 useR1C1ReferenceStyle: false),
         };
+
+    /// <summary>
+    /// A1-style absolute reference ($B$2:$C$3). R1C1 has no $ notation -- an R1C1 reference is already
+    /// absolute unless written in brackets -- so that style falls through to the ordinary formatting.
+    /// </summary>
+    private static string FormatAbsoluteRange(GridRange range, bool useR1C1ReferenceStyle) =>
+        useR1C1ReferenceStyle
+            ? SpreadsheetDisplayFormatter.FormatRangeReference(range.Start, range.End, useR1C1ReferenceStyle: true)
+            : range.Start == range.End
+                ? FormatAbsoluteCell(range.Start)
+                : $"{FormatAbsoluteCell(range.Start)}:{FormatAbsoluteCell(range.End)}";
+
+    private static string FormatAbsoluteCell(CellAddress address) =>
+        $"${SpreadsheetDisplayFormatter.FormatColumnReference(address.Col, useR1C1ReferenceStyle: false)}${address.Row}";
 }

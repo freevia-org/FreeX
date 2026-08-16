@@ -27,6 +27,13 @@ public readonly record struct DialogRangeSelectionKeyTransition<TContext>(
 public enum DialogRangeSelectionFormat
 {
     Range,
+
+    /// <summary>
+    /// Like <see cref="Range"/> but written with absolute markers ($B$2:$C$3). Excel's
+    /// "Allow Users to Edit Ranges" refers-to-cells box stores an absolute reference, so the range
+    /// keeps pointing at the same cells when rows or columns move around it.
+    /// </summary>
+    AbsoluteRange,
     StartCell,
     DataValidationFormula,
     PageSetupPrintArea,
