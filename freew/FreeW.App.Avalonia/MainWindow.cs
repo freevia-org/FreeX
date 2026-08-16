@@ -186,7 +186,12 @@ public sealed partial class MainWindow : Window
         IPlatformClipboard? platformClipboard = null,
         bool suppressStartupRecoveryOffer = false,
         FreeWDocumentWindowPlanner? documentWindowPlanner = null,
-        int documentWindowNumber = 1)
+        int documentWindowNumber = 1,
+        // r137-remediation2: lets headless tests observe the shell's own message boxes (notably the
+        // externally-modified-file overwrite prompt) instead of a real Avalonia dialog nothing can
+        // answer. Matches the WPF host, which already takes an IUserMessageService. Null keeps the
+        // production AvaloniaUserMessageService owned by this window.
+        IUserMessageService? messageService = null)
     {
         if (documentWindowNumber < 1)
             throw new ArgumentOutOfRangeException(nameof(documentWindowNumber));
@@ -248,7 +253,8 @@ public sealed partial class MainWindow : Window
             saveAsync: SaveAsync,
             promptSaveChangesAsync: promptSaveChangesAsync,
             showFileCommandErrorAsync: showFileCommandErrorAsync,
-            restoreOwnerFocus: RestoreOwnerFocus);
+            restoreOwnerFocus: RestoreOwnerFocus,
+            messageService: messageService);
         RefreshDocumentWindowTitle();
         _documentFileWorkflow = new FreeWDocumentFileWorkflow(
             _fileWorkflow.Workflow,

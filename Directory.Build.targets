@@ -13,7 +13,9 @@
     <Compile Include="$(MSBuildThisFileDirectory)tests\SharedTestInfrastructure\RecordingUserMessageService.cs"
              Link="%(Filename)%(Extension)"
              Condition="'$(MSBuildProjectName)' == 'FreeW.App.Host.Tests' Or
-                        '$(MSBuildProjectName)' == 'FreeP.App.Host.Tests'" />
+                        '$(MSBuildProjectName)' == 'FreeP.App.Host.Tests' Or
+                        '$(MSBuildProjectName)' == 'FreeW.App.Avalonia.Tests' Or
+                        '$(MSBuildProjectName)' == 'FreeP.App.Avalonia.Tests'" />
     <Compile Include="$(MSBuildThisFileDirectory)tests\SharedTestInfrastructure\XunitDisableTestParallelization.cs"
              Link="%(Filename)%(Extension)"
              Condition="'$(MSBuildProjectName)' == 'FreeP.App.Host.Tests' Or

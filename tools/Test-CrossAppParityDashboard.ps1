@@ -27,7 +27,7 @@ Assert-DashboardCondition ($dashboard.scopeBoundary -match "visual parity") "Cro
 $requiredSources = @(
     "docs/parity/freew-dialog-harness/freew_dialog_route_inventory.json",
     "docs/parity/freew-dialog-harness/freew_dialog_visual_comparison.json",
-    "docs/parity/freew-word-baseline-2026-08-14/manifest.json",
+    "docs/parity/freew-word-baseline-2026-08-16/manifest.json",
     "docs/parity/freex-excel-com-baseline-2026-08-14/manifest.json",
     "docs/parity/freep-dialog-pane-visual-evidence/summary.json",
     "docs/parity/freep-dialog-pane-visual-evidence/artifact-manifest.json",
@@ -64,11 +64,11 @@ $freeWArtifacts = $freeW.renderedEvidence.artifactCoverage
 $freeWPaired = $freeW.renderedEvidence.pairedEvidence
 Assert-DashboardCondition ([string]$freeW.renderedEvidence.canonicalComparison.kind -eq "canonical-inputs-only") "FreeW dashboard must expose the canonical comparison scope."
 Assert-DashboardCondition ([string]$freeW.renderedEvidence.canonicalComparison.refreshInstruction -match "baseline.*refresh-route") "FreeW dashboard must expose the route refresh instruction."
-Assert-DashboardCondition (($freeWArtifacts.pairedComparisonRowCount + $freeWArtifacts.avaloniaOnlyArtifactRowCount + $freeWArtifacts.stateNotApplicableRowCount) -eq $freeWArtifacts.evidenceRowCount) "FreeW comparison rows must partition into paired, Avalonia-only, and not-applicable rows."
+Assert-DashboardCondition (($freeWArtifacts.pairedComparisonRowCount + $freeWArtifacts.avaloniaOnlyArtifactRowCount + $freeWArtifacts.stateNotApplicableRowCount + $freeWArtifacts.otherComparisonRowCount) -eq $freeWArtifacts.evidenceRowCount) "FreeW comparison rows must partition into paired, Avalonia-only, not-applicable, and non-paired classifications."
 Assert-DashboardCondition ($freeWPaired.pairedScenarioCount -eq $freeWArtifacts.pairedComparisonRowCount) "FreeW paired evidence must use the paired comparison-row count."
 Assert-DashboardCondition ($freeWPaired.mismatchCount -gt 0 -or $freeWPaired.passCount -gt 0) "FreeW paired evidence must retain comparison classifications."
 Assert-DashboardCondition ($freeW.renderedEvidence.authoritativeMicrosoftOfficeBaseline.available -eq $true) "FreeW must report its committed Word reference baseline as available."
-Assert-DashboardCondition ($freeW.renderedEvidence.authoritativeMicrosoftOfficeBaseline.artifactCount -eq 61) "FreeW Word baseline artifact count must remain explicit."
+Assert-DashboardCondition ($freeW.renderedEvidence.authoritativeMicrosoftOfficeBaseline.artifactCount -eq 65) "FreeW Word baseline artifact count must remain explicit."
 
 Assert-DashboardCondition ($freeX.renderedEvidence.authoritativeMicrosoftOfficeBaseline.available -eq $true) "FreeX must report its committed Excel reference baseline as available."
 Assert-DashboardCondition ($freeX.renderedEvidence.authoritativeMicrosoftOfficeBaseline.artifactCount -eq 45) "FreeX Excel baseline artifact count must remain explicit."

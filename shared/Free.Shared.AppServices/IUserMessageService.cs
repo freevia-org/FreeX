@@ -133,7 +133,9 @@ public static class UserMessageServiceFileCommandExtensions
 
         var result = await messageService.ShowMessageAsync(
             new UserMessageRequest(
-                $"'{Path.GetFileName(path)}' has been changed by another program since it was opened. " +
+                // Wording kept verbatim in step with FreeX's MainWindowMessage_ExternallyModifiedFileBody
+                // so the same situation reads identically across the sister apps.
+                $"'{Path.GetFileName(path)}' has been changed by another program since you opened it. " +
                 "Do you want to overwrite those changes with your version?",
                 appTitle,
                 UserMessageButtons.YesNo,
