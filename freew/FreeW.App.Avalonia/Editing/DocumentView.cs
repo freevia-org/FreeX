@@ -9048,6 +9048,30 @@ public sealed partial class DocumentView : Control
         return Math.Max(measuredHeight, authoredHeight);
     }
 
+    private static int ResolveVerticalMergeEndRow(Table table, int restartRow, int gridColumn)
+    {
+        if (restartRow < 0 || restartRow >= table.Rows.Count)
+            return restartRow;
+
+        var cell = TableGridProjection.StartingAt(table.Rows[restartRow], gridColumn)?.Cell;
+        if (cell?.VerticalMerge != VerticalMergeState.Restart)
+            return restartRow;
+
+        var endRow = restartRow;
+        for (var row = restartRow + 1; row < table.Rows.Count; row++)
+        {
+            if (TableGridProjection.StartingAt(table.Rows[row], gridColumn)?.Cell.VerticalMerge
+                != VerticalMergeState.Continue)
+            {
+                break;
+            }
+
+            endRow = row;
+        }
+
+        return endRow;
+    }
+
     // ---- Table rendering (grid + modal cell text editing) ----------------------------------------
 
     private void LayoutTablePaged(int blockIndex, Table table, double textWidth)
@@ -9094,7 +9118,15 @@ public sealed partial class DocumentView : Control
                 ? null
                 : BrushFor(fillPlan.EffectiveFillHex);
 
-        Rect SurfaceRectFor(double x, double y, double width, double height, int startCol, int span, int rowIndex)
+        Rect SurfaceRectFor(
+            double x,
+            double y,
+            double width,
+            double height,
+            int startCol,
+            int span,
+            int rowIndex,
+            int endRowIndex)
         {
             if (cellSpacingInset <= 0)
                 return new Rect(x, y, width, height);
@@ -9103,7 +9135,10 @@ public sealed partial class DocumentView : Control
             var left = startCol == 0 ? 2 * cellSpacingInset : cellSpacingInset;
             var right = endCol == cols ? 2 * cellSpacingInset : cellSpacingInset;
             var top = rowIndex == 0 ? 2 * cellSpacingInset : cellSpacingInset;
-            var bottom = rowIndex == table.Rows.Count - 1 ? 2 * cellSpacingInset : cellSpacingInset;
+            // A vertical-merge restart paints one continuous physical surface over every
+            // continuation row. Use the final row in that region for the lower cell-spacing
+            // edge so the internal row gap does not split the merged Word cell.
+            var bottom = endRowIndex == table.Rows.Count - 1 ? 2 * cellSpacingInset : cellSpacingInset;
             return new Rect(
                 x + left,
                 y + top,
@@ -9276,11 +9311,31 @@ public sealed partial class DocumentView : Control
 
             foreach (var (cellModel, cellIndex, startCol, span, cellParas, paragraphSpacings, markerInsets, fmt) in measured)
             {
+                // Word absorbs a vMerge continuation into its restart cell: it has no surface,
+                // border, text, or independent hit target. The restart below paints the whole
+                // combined region so the shared table layout is visually continuous.
+                if (cellModel.VerticalMerge == VerticalMergeState.Continue)
+                    continue;
+
                 double cellWidth = 0;
                 for (var s = 0; s < span; s++)
                     cellWidth += colWidths[startCol + s];
                 var cellX = rowColLeft + colOffsets[startCol];
-                var rect = SurfaceRectFor(cellX, rowPageSpaceY, cellWidth, rowHeight, startCol, span, r);
+                var mergedSpanHeight = TableCellVerticalLayoutPlanner.ResolveRegionHeight(
+                    table,
+                    rowHeights,
+                    r,
+                    startCol);
+                var mergedEndRow = ResolveVerticalMergeEndRow(table, r, startCol);
+                var rect = SurfaceRectFor(
+                    cellX,
+                    rowPageSpaceY,
+                    cellWidth,
+                    mergedSpanHeight,
+                    startCol,
+                    span,
+                    r,
+                    mergedEndRow);
                 var fill = EffectiveFillBrush(EffectiveFillFor(r, cellIndex));
                 var cellBorderPlan = TableCellBorderVisualPlanner.Build(cellModel.Borders, PxPerPoint);
                 _rects.Add((rect, fill, borders, cellBorderPlan.HasVisibleEdges ? cellBorderPlan : null));
@@ -9307,11 +9362,6 @@ public sealed partial class DocumentView : Control
                 var cellLines = cellParas.SelectMany(pl => pl).ToList();
                 var contentHeight = cellLines.Sum(l => l.Height)
                     + paragraphSpacings.Sum(spacing => spacing.Before + spacing.After);
-                var mergedSpanHeight = TableCellVerticalLayoutPlanner.ResolveRegionHeight(
-                    table,
-                    rowHeights,
-                    r,
-                    startCol);
                 var vAlignOffset = TableCellVerticalLayoutPlanner.ResolveContentOffset(
                     cellModel.VerticalAlignment,
                     mergedSpanHeight,

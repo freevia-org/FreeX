@@ -277,6 +277,9 @@ public static class PptxPackageReader
             var handoutMasterPath = ResolveRelativeZipPath(presDir, handoutMasterTarget);
             if (TryReadPackageEntry(archive, handoutMasterPath, out var handoutMasterBytes))
             {
+                // Retained verbatim (before parsing, so an unparseable part is still round-tripped)
+                // for PptxPackageWriter to re-emit — see Presentation.HandoutMasterXml.
+                presentation.HandoutMasterXml = handoutMasterBytes;
                 var handoutMasterXml = OpcXml.TryLoadXml(handoutMasterBytes);
                 if (handoutMasterXml?.Root is { } handoutMasterRoot)
                 {
@@ -303,6 +306,10 @@ public static class PptxPackageReader
                     }
                 }
             }
+
+            var handoutMasterRelsPath = GetRelationshipPartPath(handoutMasterPath);
+            if (TryReadPackageEntry(archive, handoutMasterRelsPath, out var handoutMasterRelsBytes))
+                presentation.HandoutMasterRelsXml = handoutMasterRelsBytes;
         }
 
         var slideRelEntries = presRels.ToDictionary(r => r.Id, StringComparer.OrdinalIgnoreCase);

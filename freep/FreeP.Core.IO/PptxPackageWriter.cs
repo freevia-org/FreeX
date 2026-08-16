@@ -59,6 +59,7 @@ public static class PptxPackageWriter
     private const string ChartExRelType     = PptxChartWriter.ChartExRelType;
     private const string NotesSlideRelType  = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/notesSlide";
     private const string NotesMasterRelType = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/notesMaster";
+    private const string HandoutMasterRelType = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/handoutMaster";
     private const string HyperlinkRelType   = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/hyperlink";
     private const string CommentsRelType    = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/comments";
     private const string CommentAuthorsRelType = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/commentAuthors";
@@ -98,6 +99,7 @@ public static class PptxPackageWriter
         ChartExRelType,
         NotesSlideRelType,
         NotesMasterRelType,
+        HandoutMasterRelType,
         HyperlinkRelType,
         CommentsRelType,
         CommentAuthorsRelType,
@@ -141,6 +143,7 @@ public static class PptxPackageWriter
         "ppt/authors/",
         "ppt/notesSlides/",
         "ppt/notesMasters/",
+        "ppt/handoutMasters/",
         "ppt/embeddings/",
         "ppt/diagrams/",
     ];
@@ -169,6 +172,9 @@ public static class PptxPackageWriter
     private const string ChartExCT       = PptxChartWriter.ChartExCT;
     private const string NotesSlideCT    = "application/vnd.openxmlformats-officedocument.presentationml.notesSlide+xml";
     private const string NotesMasterCT   = "application/vnd.openxmlformats-officedocument.presentationml.notesMaster+xml";
+    private const string HandoutMasterCT = "application/vnd.openxmlformats-officedocument.presentationml.handoutMaster+xml";
+    private const string HandoutMasterPath = "ppt/handoutMasters/handoutMaster1.xml";
+    private const string HandoutMasterRelsPath = "ppt/handoutMasters/_rels/handoutMaster1.xml.rels";
     private const string CommentsCT      = "application/vnd.openxmlformats-officedocument.presentationml.comments+xml";
     private const string CommentAuthorsCT = "application/vnd.openxmlformats-officedocument.presentationml.commentAuthors+xml";
     private const string ModernCommentsCT = "application/vnd.ms-powerpoint.comments+xml";
@@ -463,6 +469,20 @@ public static class PptxPackageWriter
             preservedContentTypeWriterOwnedPaths.Add(captionPath);
         }
 
+        // Theme/media parts referenced by a preserved handout master's verbatim rels.
+        var writerGeneratedThemePaths = Enumerable.Range(1, masters.Count)
+            .Select(i => $"ppt/theme/theme{i}.xml")
+            .Concat(hasSomeNotes ? ["ppt/theme/theme2.xml"] : Array.Empty<string>())
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var preservedHandoutMasterPaths = FindPreservedHandoutMasterDependencyPaths(
+            packageSnapshot,
+            presentation,
+            writerGeneratedThemePaths);
+        foreach (var handoutDependencyPath in preservedHandoutMasterPaths)
+        {
+            preservedContentTypeWriterOwnedPaths.Add(handoutDependencyPath);
+        }
+
         var ctXml = BuildContentTypesXml(
             presentation,
             masters,
@@ -646,6 +666,18 @@ public static class PptxPackageWriter
                 WriteRawEntry(archive, "ppt/notesMasters/_rels/notesMaster1.xml.rels", notesMasterRelsXml);
             else
                 WriteRels(archive, "ppt/notesMasters/notesMaster1.xml", nmRels, packageSnapshot);
+        }
+
+        // Handout master: preserve-only (never synthesized), mirroring the notes-master branch
+        // above. PowerPoint writes the part once the user edits View > Handout Master or gives
+        // handouts their own header/footer text, and PresentationHandoutPdfExporter renders from
+        // it — dropping it on save would silently discard that authoring.
+        bool hasHandoutMaster = presentation.HandoutMasterXml is { Length: > 0 };
+        if (presentation.HandoutMasterXml is { Length: > 0 } handoutMasterXml)
+        {
+            WriteRawEntry(archive, HandoutMasterPath, handoutMasterXml);
+            if (presentation.HandoutMasterRelsXml is { Length: > 0 } handoutMasterRelsXml)
+                WriteRawEntry(archive, HandoutMasterRelsPath, handoutMasterRelsXml);
         }
 
         int globalChartIndex = 1; // monotonically increasing across all slides
@@ -884,6 +916,13 @@ public static class PptxPackageWriter
             presRels.Add(notesMasterRelId, NotesMasterRelType, "notesMasters/notesMaster1.xml");
             extraPresRelOffset++;
         }
+        string? handoutMasterRelId = null;
+        if (hasHandoutMaster)
+        {
+            handoutMasterRelId = $"rId{masterRelIdStart + masters.Count + extraPresRelOffset}";
+            presRels.Add(handoutMasterRelId, HandoutMasterRelType, "handoutMasters/handoutMaster1.xml");
+            extraPresRelOffset++;
+        }
         if (hasLegacyComments)
         {
             presRels.Add($"rId{masterRelIdStart + masters.Count + extraPresRelOffset}", CommentAuthorsRelType, "commentAuthors.xml");
@@ -900,7 +939,7 @@ public static class PptxPackageWriter
             .ToList();
 
         WriteEntry(archive, "ppt/presentation.xml",
-            BuildPresentationXml(presentation, sldIdElements, masterRelIds, notesMasterRelId));
+            BuildPresentationXml(presentation, sldIdElements, masterRelIds, notesMasterRelId, handoutMasterRelId));
 
         if (presentation.RecordingMediaArtifacts.Count > 0)
         {
@@ -922,7 +961,10 @@ public static class PptxPackageWriter
         CopyPreservedPackageEntries(
             archive,
             packageSnapshot,
-            preservedChartWorkbookPaths.Concat(preservedChartExPaths).ToHashSet(StringComparer.OrdinalIgnoreCase),
+            preservedChartWorkbookPaths
+                .Concat(preservedChartExPaths)
+                .Concat(preservedHandoutMasterPaths)
+                .ToHashSet(StringComparer.OrdinalIgnoreCase),
             alreadyWrittenPaths);
     }
 
@@ -1067,6 +1109,12 @@ public static class PptxPackageWriter
         }
         if (hasSomeNotes)
             overrides.Add(Override(CT, "/ppt/notesMasters/notesMaster1.xml", NotesMasterCT));
+
+        // Preserve-only handout master (see the WriteArchive handout branch): the part is written
+        // verbatim, so its override must be declared here — ppt/handoutMasters/ is writer-owned,
+        // which means MergePreservedContentTypes drops the source package's own override.
+        if (p.HandoutMasterXml is { Length: > 0 })
+            overrides.Add(Override(CT, "/" + HandoutMasterPath, HandoutMasterCT));
 
         // Collect chart content types
         int chartGlobalIdx = 1;
@@ -1246,7 +1294,8 @@ public static class PptxPackageWriter
         Presentation p,
         List<XElement> sldIdElements,
         List<(string relId, string masterPath)> masterRelIds,
-        string? notesMasterRelId)
+        string? notesMasterRelId,
+        string? handoutMasterRelId)
     {
         var slideWidthEmu = p.SlideSizeCxEmu > 0
             ? p.SlideSizeCxEmu
@@ -1273,6 +1322,12 @@ public static class PptxPackageWriter
                 ? new XElement(P + "notesMasterIdLst",
                     new XElement(P + "notesMasterId",
                         new XAttribute(R + "id", notesMasterRelId)))
+                : null,
+            // CT_Presentation order: sldMasterIdLst, notesMasterIdLst, handoutMasterIdLst, sldIdLst.
+            handoutMasterRelId is not null
+                ? new XElement(P + "handoutMasterIdLst",
+                    new XElement(P + "handoutMasterId",
+                        new XAttribute(R + "id", handoutMasterRelId)))
                 : null,
             new XElement(P + "sldIdLst", sldIdElements),
             new XElement(P + "sldSz",
@@ -6572,6 +6627,47 @@ public static class PptxPackageWriter
 
         document = preserved;
         return true;
+    }
+
+    /// <summary>
+    /// Parts the preserved handout master's own rels point at (its theme, background images, …)
+    /// that live under a writer-owned prefix and would therefore be dropped by
+    /// <see cref="CopyPreservedPackageEntries"/> / <see cref="MergePreservedContentTypes"/>.
+    /// Carving them back in keeps the verbatim handout-master rels from dangling, which
+    /// PowerPoint reports as a repair. Paths the writer regenerates itself (theme1..N, plus
+    /// theme2 for the notes master) are excluded so this never writes a duplicate zip entry.
+    /// </summary>
+    private static HashSet<string> FindPreservedHandoutMasterDependencyPaths(
+        PptxPackageSnapshot? packageSnapshot,
+        Presentation presentation,
+        IReadOnlySet<string> writerGeneratedPaths)
+    {
+        var paths = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        if (packageSnapshot is null || presentation.HandoutMasterRelsXml is not { Length: > 0 } relsBytes)
+            return paths;
+
+        var relsXml = OpcXml.TryLoadXml(relsBytes);
+        if (relsXml is null)
+            return paths;
+
+        var handoutDirectory = GetDirectoryName(HandoutMasterPath);
+        foreach (var relationship in OpcRelationships.Load(relsXml))
+        {
+            if (relationship.IsExternal || string.IsNullOrWhiteSpace(relationship.Target))
+                continue;
+
+            var targetPath = ToZipEntryPath(ResolveRelativeZipPath(handoutDirectory, relationship.Target));
+            if (writerGeneratedPaths.Contains(targetPath) ||
+                !IsWriterOwnedPath(targetPath) ||
+                !packageSnapshot.TryGetEntry(targetPath, out _))
+            {
+                continue;
+            }
+
+            paths.Add(targetPath);
+        }
+
+        return paths;
     }
 
     private static HashSet<string> FindPreservedChartWorkbookPaths(
