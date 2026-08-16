@@ -812,23 +812,39 @@ internal sealed class AvaloniaRichTextEditingSurface : Control
                 continue;
 
             // The overlap is computed in LOGICAL coordinates, which can extend past the paragraph's
-            // display text. Project both ends the way BuildCaretRect does (ToDisplayPosition clamps
-            // to Text.Length) and re-check emptiness afterwards: a logically non-empty overlap can
-            // collapse to nothing in display space, and Avalonia's HitTestTextRange throws
-            // ArgumentOutOfRangeException("textLength") rather than returning no rectangles.
-            int displayStart = ToDisplayPosition(item.Paragraph, overlapStart);
-            int displayEnd = ToDisplayPosition(item.Paragraph, overlapEnd);
+            // display text, and ToDisplayPosition only clamps to Text.Length -- which can itself
+            // exceed what the layout actually holds. Clamp to the laid-out extent too.
+            int layoutLength = GetLayoutTextLength(item.Layout);
+            int displayStart = Math.Min(ToDisplayPosition(item.Paragraph, overlapStart), layoutLength);
+            int displayEnd = Math.Min(ToDisplayPosition(item.Paragraph, overlapEnd), layoutLength);
             if (displayEnd <= displayStart)
                 continue;
 
-            foreach (var rect in item.Layout.HitTestTextRange(displayStart, displayEnd - displayStart))
+            // Intersect the range with each line individually instead of handing the whole span to
+            // HitTestTextRange: that walks the lines itself and throws
+            // ArgumentOutOfRangeException("textLength") as soon as one of them intersects the range
+            // in zero characters -- which happens routinely for a selection that ends exactly on a
+            // wrap boundary or a trailing line break, crashing the editor mid-drag.
+            foreach (var line in item.Layout.TextLines)
             {
-                var translated = rect.Translate(item.Origin);
-                result.Add(new Rect(
-                    translated.X - (includeHorizontalScroll ? _scrollOffsetX : 0),
-                    translated.Y - _scrollOffsetY,
-                    translated.Width,
-                    translated.Height));
+                // line.Length counts the trailing break; GetTextBounds can only cover actual runs and
+                // throws "Covered length must be greater than zero" for a range inside the break.
+                int lineStart = Math.Max(displayStart, line.FirstTextSourceIndex);
+                int lineEnd = Math.Min(
+                    displayEnd,
+                    line.FirstTextSourceIndex + line.Length - line.NewLineLength);
+                if (lineEnd <= lineStart)
+                    continue;
+
+                foreach (var bounds in line.GetTextBounds(lineStart, lineEnd - lineStart))
+                {
+                    var translated = bounds.Rectangle.Translate(item.Origin);
+                    result.Add(new Rect(
+                        translated.X - (includeHorizontalScroll ? _scrollOffsetX : 0),
+                        translated.Y - _scrollOffsetY,
+                        translated.Width,
+                        translated.Height));
+                }
             }
         }
 
@@ -894,6 +910,21 @@ internal sealed class AvaloniaRichTextEditingSurface : Control
                 return index;
         }
         return 0;
+    }
+
+    /// <summary>
+    /// The number of text-source characters the layout actually covers. Avalonia's
+    /// <c>HitTestTextRange</c> throws when a range starts at or past this, so callers must clamp to
+    /// it rather than to the paragraph's logical text.
+    /// </summary>
+    private static int GetLayoutTextLength(TextLayout layout)
+    {
+        var lines = layout.TextLines;
+        if (lines.Count == 0)
+            return 0;
+
+        var last = lines[^1];
+        return last.FirstTextSourceIndex + last.Length;
     }
 
     private static int ToDisplayPosition(
