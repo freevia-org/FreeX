@@ -65,13 +65,16 @@ public sealed class SlideSizeDialogTests
         var ok = buttons.Single(button => Equals(button.Content, LocalizedUiText.Ok));
         ok.MinWidth.Should().Be(80);
         ok.IsDefault.Should().BeTrue();
-        AutomationProperties.GetName(ok).Should().Be(LocalizedUiText.CreateAutomationName(LocalizedUiText.Ok));
+        // The session plan supplies a descriptive accessible name per action, which is what a
+        // screen reader should announce -- "Apply slide size" tells the user what OK does. The
+        // localized label stays on Content; only the announced name is the richer string.
+        AutomationProperties.GetName(ok).Should().Be("Apply slide size");
         AutomationProperties.GetAcceleratorKey(ok).Should().Be("Alt+O");
 
         var cancel = buttons.Single(button => Equals(button.Content, LocalizedUiText.Cancel));
         cancel.MinWidth.Should().Be(80);
         cancel.IsCancel.Should().BeTrue();
-        AutomationProperties.GetName(cancel).Should().Be(LocalizedUiText.CreateAutomationName(LocalizedUiText.Cancel));
+        AutomationProperties.GetName(cancel).Should().Be("Cancel slide size changes");
         AutomationProperties.GetAcceleratorKey(cancel).Should().Be("Alt+C");
     }
 

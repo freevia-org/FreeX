@@ -81,6 +81,11 @@ public static class DialogButtonRowFactory
         acceptButton.IsDefault = true;
         cancelButton.Margin = new Thickness();
         cancelButton.IsCancel = true;
+        // The overloads that build their own buttons publish an accelerator key from the label's
+        // mnemonic; callers that hand in ready-made buttons were silently losing it, so every dialog
+        // on this overload announced no Alt shortcut to assistive technology.
+        SetAcceleratorKey(acceptButton, acceptButton.Content as string ?? string.Empty);
+        SetAcceleratorKey(cancelButton, cancelButton.Content as string ?? string.Empty);
         row.Children.Add(acceptButton);
         row.Children.Add(cancelButton);
         return row;

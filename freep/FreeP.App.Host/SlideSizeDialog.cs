@@ -1,3 +1,4 @@
+using FreeP.App.Localization;
 using System.Windows;
 using System.Windows.Automation;
 using System.Windows.Controls;
@@ -81,7 +82,9 @@ public sealed partial class SlideSizeDialog : Free.Shared.Ribbon.Wpf.DialogWindo
         var acceptPlan = surface.Action(SlideSizeDialogAction.Accept);
         var accept = new Button
         {
-            Content = acceptPlan.Label,
+            // Localized text at the renderer boundary: the session plan carries an English label,
+            // while Common_Ok/Common_Cancel ship translated (and with mnemonics).
+            Content = LocalizedUiText.Ok,
             MinWidth = 80,
         };
         PresentationDialogControlAdapter.ApplySemantic(
@@ -93,7 +96,7 @@ public sealed partial class SlideSizeDialog : Free.Shared.Ribbon.Wpf.DialogWindo
         var cancelPlan = surface.Action(SlideSizeDialogAction.Cancel);
         var cancel = new Button
         {
-            Content = cancelPlan.Label,
+            Content = LocalizedUiText.Cancel,
             MinWidth = 80,
         };
         PresentationDialogControlAdapter.ApplySemantic(

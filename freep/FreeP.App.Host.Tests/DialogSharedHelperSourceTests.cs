@@ -25,7 +25,11 @@ public sealed class DialogSharedHelperSourceTests
     {
         var slideSize = ReadHostSource("SlideSizeDialog.cs");
         slideSize.Should().Contain("DialogButtonRowFactory.Create(");
-        slideSize.Should().Contain("buttonWidth: 80");
+        // SlideSizeDialog builds its own accept/cancel buttons and passes them to the
+        // Button-taking DialogButtonRowFactory.Create overload, so it sets MinWidth on the
+        // buttons rather than passing a buttonWidth to the factory.
+        slideSize.Should().Contain("DialogButtonRowFactory.Create(");
+        slideSize.Should().Contain("MinWidth = 80,");
         slideSize.Should().Contain("DialogMessageHelper.ShowWarning(this, validation.Message, validation.Caption)");
         slideSize.Should().Contain("DialogFocus.FocusAndSelect(box)");
         slideSize.Should().NotContain("Content = \"OK\"");
