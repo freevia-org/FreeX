@@ -360,13 +360,22 @@ public static class AvaloniaCompactDialogChrome
         var textBoxBackground = style.TextBoxBackgroundBrush ?? ThemeWhiteBrush();
         textBox.Foreground = ThemeTextBrush(style);
         textBox.Background = textBoxBackground;
-        textBox.BorderBrush = inputBorder;
+        // A box that is already disabled has to get the disabled border here, not only from the
+        // deferred render pass: this assignment runs on EVERY call (including the repeat calls that
+        // early-return below), so writing the enabled brush unconditionally left disabled fields
+        // painting the enabled shade.
+        textBox.BorderBrush = textBox.IsEnabled ? inputBorder : disabledInputBorder;
         textBox.BorderThickness = new Thickness(CompactDialogVisualTokens.BorderThickness);
         textBox.SelectionBrush = style.TextSelectionBrush ?? TextSelectionBrush;
         if (style.TextSelectionBrush is not null)
             textBox.SelectionForegroundBrush = Brushes.Black;
         textBox.VerticalContentAlignment = VerticalAlignment.Center;
-        var focusedBorder = style.FocusedInputBorderBrush ?? ThemeAccentBrush(style);
+        // A read-only document box owns its own WPF-authority focus blue through the :focus styles
+        // installed alongside ReadOnlyDocumentClass. The styles added below are registered later on
+        // the same control and would otherwise win, replacing that blue with the brand accent.
+        var focusedBorder = textBox.Classes.Contains(ReadOnlyDocumentClass)
+            ? ReadOnlyDocumentFocusedBorderBrush
+            : style.FocusedInputBorderBrush ?? ThemeAccentBrush(style);
         if (style.RemoveFocusAdorner)
             textBox.FocusAdorner = null;
 
@@ -491,8 +500,10 @@ public static class AvaloniaCompactDialogChrome
             QueueRenderedTextBoxChrome(textBox, style, fixedHeight);
         textBox.PropertyChanged += (_, args) =>
         {
-            if (args.Property == InputElement.IsEnabledProperty)
-                QueueRenderedTextBoxChrome(textBox, style, fixedHeight);
+            if (args.Property != InputElement.IsEnabledProperty)
+                return;
+            textBox.BorderBrush = textBox.IsEnabled ? inputBorder : disabledInputBorder;
+            QueueRenderedTextBoxChrome(textBox, style, fixedHeight);
         };
         QueueRenderedTextBoxChrome(textBox, style, fixedHeight);
     }
@@ -512,10 +523,17 @@ public static class AvaloniaCompactDialogChrome
     {
         textBox.ApplyTemplate();
         var normalBorder = style.InputBorderBrush ?? InputBorderBrush;
+        // A read-only document box owns its own WPF-authority focus blue through the :focus
+        // styles installed alongside ReadOnlyDocumentClass. This refresh writes a LOCAL value on
+        // PART_BorderElement, which outranks those styles, so it has to honour the class here or
+        // the brand accent wins on focus.
+        var focusedBorder = textBox.Classes.Contains(ReadOnlyDocumentClass)
+            ? ReadOnlyDocumentFocusedBorderBrush
+            : style.FocusedInputBorderBrush ?? ThemeAccentBrush(style);
         var border = !textBox.IsEnabled
             ? style.DisabledInputBorderBrush ?? DisabledInputBorderBrush
             : textBox.IsFocused
-                ? style.FocusedInputBorderBrush ?? ThemeAccentBrush(style)
+                ? focusedBorder
                 : normalBorder;
         var background = !textBox.IsEnabled && style.DisabledTextBoxBackgroundBrush is not null
             ? style.DisabledTextBoxBackgroundBrush
