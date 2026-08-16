@@ -41,16 +41,14 @@ public sealed class FreePHeadlessApp : Application
 {
     public override void Initialize() => Styles.Add(new FluentTheme());
 
-    // NOTE: two PresentationClipboardInteropTests round-trip a PNG through DataFormat.Bitmap, which
-    // needs a real imaging backend -- under this headless drawing stub the encode silently yields
-    // nothing and the PNG comes back empty. Switching this assembly to .UseSkia() with
-    // UseHeadlessDrawing = false does fix them, but it also changes how the video-export host name
-    // resolves ("Avalonia Linux video export host" instead of "Avalonia video export host"), breaking
-    // Video_export_command_records_shared_frame_package. That interaction is not understood, so the
-    // stub stays until the two clipboard tests can be covered without whole-assembly side effects.
+    // Real Skia drawing rather than the headless stub: the clipboard interop tests round-trip a PNG
+    // through DataFormat.Bitmap, and encoding a Bitmap needs an actual imaging backend -- under the stub
+    // the encode silently yields nothing and the PNG comes back empty. Mirrors
+    // FreeP.App.Rendering.Avalonia.Tests' SlideHeadlessApp.
     public static AppBuilder BuildAvaloniaApp() =>
         AppBuilder.Configure<FreePHeadlessApp>()
-            .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = true });
+            .UseSkia()
+            .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false });
 }
 
 /// <summary>
@@ -3682,7 +3680,17 @@ public sealed class MainWindowHeadlessTests : IDisposable
 
         var ran = await OnUiThread(() =>
         {
-            var window = new MainWindow(Array.Empty<string>());
+            // Inject the encoder capability instead of letting the real detector run. Construction seeds
+            // Unavailable and an async Task.Run then POSTS the detected capability back, rebuilding
+            // _videoExportHostCapabilities -- so the host name this test asserts depended on whether that
+            // detection had landed yet, and on the host OS (Windows detection yields the
+            // windows-media-composition path and a different host name). Injecting removes both the race
+            // and the platform dependency; this test is about the frame package, not about detection.
+            var window = new MainWindow(
+                Array.Empty<string>(),
+                loadRecentFilesStore: null,
+                nativeOutputCapabilities: LinuxNativeOutputCapabilities.Unavailable(
+                    PresentationExportPlanner.VideoExportDeferredMessage));
             window.Editor.InsertSlide();
             window.Editor.InsertSlide();
 
@@ -3721,7 +3729,8 @@ public sealed class MainWindowHeadlessTests : IDisposable
         videoHandoff.IsFramePackageReady.Should().BeTrue();
         videoHandoff.CanOpenHostEncoder.Should().BeFalse();
         videoHandoff.Mp4EncoderDeferredByHost.Should().BeTrue();
-        videoHandoff.StatusText.Should().Be("Avalonia video export host: MP4 encoder deferred; frame package ready");
+        videoHandoff.StatusText.Should().Be(
+            "Avalonia Linux video export host: MP4 encoder deferred; frame package ready");
         videoPackage.Plan.DeferredCapabilities.Should().Contain(PresentationVideoFramePackageExecutor.Mp4EncoderDeferred);
         videoPackage.Frames.Select(frame => frame.FileName)
             .Should()
