@@ -443,7 +443,11 @@ public sealed class SparklinePanelRenderTests
     {
         await Session.Dispatch(() =>
         {
-            var values    = new double[] { 2, 4, 3 };
+            // The axis marks zero, so it only appears when the plotted range actually contains zero.
+            // "Share FreeX sparkline axis geometry" replaced this panel's private always-draw-at-the-
+            // midpoint line with the shared SparklineAxisLinePlanner, which is what the WPF grid had
+            // been using; see SparklineAxisLinePlannerTests.ResolveY_LineRangeOutsideZero_ReturnsNull.
+            var values    = new double[] { -2, 4, -3 };
             var sparkline = new SparklineModel { Kind = SparklineKind.Line, ShowAxis = true };
             var panel     = new SparklineCellPanel(values, sparkline);
 
@@ -453,6 +457,26 @@ public sealed class SparklinePanelRenderTests
             // Axis line (Line) + 2 sparkline segments (Line) = 3 total.
             panel.Children.OfType<Line>().Should().HaveCount(3,
                 "axis=1 + 2 segments for 3-value line = 3 Lines");
+        }, CancellationToken.None);
+    }
+
+    [Fact]
+    public async Task SparklineCellPanel_ShowAxis_OmitsAxisWhenRangeExcludesZero()
+    {
+        await Session.Dispatch(() =>
+        {
+            var values    = new double[] { 2, 4, 3 };
+            var sparkline = new SparklineModel { Kind = SparklineKind.Line, ShowAxis = true };
+            var panel     = new SparklineCellPanel(values, sparkline);
+
+            panel.Measure(new Size(80, 24));
+            panel.Arrange(new Rect(0, 0, 80, 24));
+
+            // All-positive data never crosses zero, so ShowAxis has nothing to draw and only the
+            // 2 sparkline segments remain. Before the shared planner this panel drew a meaningless
+            // line across the vertical midpoint here.
+            panel.Children.OfType<Line>().Should().HaveCount(2,
+                "an all-positive range has no zero crossing for the axis to mark");
         }, CancellationToken.None);
     }
 
