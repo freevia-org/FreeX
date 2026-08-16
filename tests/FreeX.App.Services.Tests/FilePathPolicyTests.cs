@@ -68,6 +68,35 @@ public sealed class FilePathPolicyTests
     }
 
     [Fact]
+    public void OutputFileNameStemPolicy_NormalizesPathsExtensionsAndCallerSelectedReplacement()
+    {
+        var invalidCharacter = Path.GetInvalidFileNameChars().FirstOrDefault(character =>
+            character is not '\0' and not '/' and not '\\' && !char.IsWhiteSpace(character));
+        if (invalidCharacter == default)
+            return;
+        var candidate = $"reports{Path.DirectorySeparatorChar}Quarter{invalidCharacter} Review.pptx";
+
+        OutputFileNameStemPolicy.Normalize(candidate, "Presentation", '-')
+            .Should()
+            .Be("Quarter- Review");
+        OutputFileNameStemPolicy.Normalize(candidate, "Presentation", '_')
+            .Should()
+            .Be("Quarter_ Review");
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    [InlineData("   ")]
+    [InlineData(".")]
+    public void OutputFileNameStemPolicy_UsesNormalizedFallbackForMissingStem(string? candidate)
+    {
+        OutputFileNameStemPolicy.Normalize(candidate, "Presentation.pptx", '-')
+            .Should()
+            .Be("Presentation");
+    }
+
+    [Fact]
     public void AreEquivalent_NormalizesRelativeSegmentsAndUsesPlatformCaseRules()
     {
         FilePathPolicy.AreEquivalent("reports/../Budget.xlsx", "Budget.xlsx").Should().BeTrue();

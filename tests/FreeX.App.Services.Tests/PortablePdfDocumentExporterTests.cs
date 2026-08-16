@@ -9,6 +9,18 @@ namespace FreeX.App.Services.Tests;
 public sealed class PortablePdfDocumentExporterTests
 {
     [Fact]
+    public void PathSave_UsesSharedAtomicExportLifecycle()
+    {
+        var source = File.ReadAllText(RepositoryFileLocator.Find(
+            "src",
+            "FreeX.App.Services",
+            "PortablePdfDocumentExporter.cs"));
+
+        source.Should().Contain("new AtomicExportExecutor().ExecuteAsync(");
+        source.Should().NotContain("File.WriteAllBytes(path, bytes)");
+    }
+
+    [Fact]
     public void Save_WritesPortablePdfWithWorkbookSheetAndCellText()
     {
         var workbook = new Workbook("Budget");

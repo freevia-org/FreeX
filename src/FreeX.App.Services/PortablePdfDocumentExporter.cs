@@ -43,8 +43,21 @@ public static class PortablePdfDocumentExporter
         if (!string.IsNullOrWhiteSpace(directory))
             Directory.CreateDirectory(directory);
 
-        File.WriteAllBytes(path, bytes);
-        return result;
+        var execution = new AtomicExportExecutor().ExecuteAsync(
+            path,
+            async (output, cancellationToken) =>
+            {
+                await output.WriteAsync(bytes, cancellationToken).ConfigureAwait(false);
+                return result;
+            }).GetAwaiter().GetResult();
+
+        if (execution.Succeeded)
+            return execution.Value!;
+
+        throw execution.Exception ?? new IOException(
+            execution.Error?.Detail.Message ??
+            execution.Validation?.Detail.ToString() ??
+            "Portable PDF export did not complete.");
     }
 
     public static PortablePdfDocumentExportResult Save(
