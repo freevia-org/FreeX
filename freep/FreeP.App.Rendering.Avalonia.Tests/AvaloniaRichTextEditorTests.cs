@@ -663,13 +663,19 @@ public sealed class AvaloniaRichTextEditorTests
             var window = Show(editor);
             try
             {
+                // CaretRect only reflects a new selection once the editor has focus and the
+                // pending input has drained; reading it straight after Show returns the same
+                // stale rect both times, which silently made this comparison 0 - 0.
+                editor.FocusEditor().Should().BeTrue();
                 editor.SelectionStart = 7;
                 editor.SelectionEnd = 7;
+                await DrainInputAsync();
                 double imageFollowingX = editor.RichTextView.CaretRect.X;
 
                 editor.Text = "BeforeAfter";
                 editor.SelectionStart = 6;
                 editor.SelectionEnd = 6;
+                await DrainInputAsync();
                 double plainFollowingX = editor.RichTextView.CaretRect.X;
 
                 (imageFollowingX - plainFollowingX).Should().BeGreaterThan(20);
