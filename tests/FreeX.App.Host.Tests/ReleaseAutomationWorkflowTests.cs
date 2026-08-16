@@ -311,6 +311,9 @@ public sealed class ReleaseAutomationWorkflowTests
         workflow.Should().Contain("Invoke-Dotnet test FreeP.slnx");
         workflow.Should().Contain("-Runtimes \"${{ matrix.runtime }}\"");
         workflow.Should().Contain("-WindowsPackageMode SingleFile");
+        publisher.Should().Contain("AvaloniaValidationProject = \"tools\\FreeX.Validation.Avalonia\\FreeX.Validation.Avalonia.csproj\"");
+        publisher.Should().Contain("AvaloniaValidationHost = \"FreeX.Validation.Avalonia\"");
+        publisher.Should().Contain("if (-not $isWindowsRuntime) {");
         workflow.Should().Contain("$tag = \"$($app.ToLowerInvariant())-v$version\"");
         workflow.Should().Contain("## Install and deploy");
         workflow.Should().Contain("### Windows x64");
