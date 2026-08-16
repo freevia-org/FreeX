@@ -73,6 +73,10 @@ public sealed class R101_AvaloniaAdvancedFilterProductionWorkflowTests
                 opener = null;
                 dialog = null;
 
+
+
+
+
                 sheet.GetValue(new CellAddress(sheet.Id, 1, 7)).Should().Be(new TextValue("Region"));
                 sheet.GetValue(new CellAddress(sheet.Id, 1, 8)).Should().Be(new TextValue("Amount"));
                 sheet.GetValue(new CellAddress(sheet.Id, 2, 7)).Should().Be(new TextValue("West"));
@@ -256,7 +260,7 @@ public sealed class R101_AvaloniaAdvancedFilterProductionWorkflowTests
 
     private static Task InvokeAdvancedFilterOpener(MainWindow window) =>
         typeof(MainWindow)
-            .GetMethod("ShowAdvancedFilterInputDialogAsync", BindingFlags.Instance | BindingFlags.NonPublic)
+            .GetMethod("ShowAdvancedFilterDialogAsync", BindingFlags.Instance | BindingFlags.NonPublic)
             ?.Invoke(window, null) as Task
         ?? throw new InvalidOperationException("Missing production Advanced Filter dialog opener.");
 
