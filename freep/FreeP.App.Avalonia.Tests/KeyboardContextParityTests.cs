@@ -36,15 +36,21 @@ public sealed class KeyboardContextParityTests
                 Press(window, Key.Z, KeyModifiers.Control | KeyModifiers.Shift).Handled.Should().BeTrue();
                 window.Editor.Presentation.Slides.Should().HaveCount(originalSlideCount + 1);
 
+                // The slide is not empty: InsertSlide gives every new slide a title, which is itself
+                // a shape. Ctrl+A selects every shape on the slide, so the expected selection is
+                // whatever was already there plus the two added here -- asserting only the two read
+                // as a Select All bug when it is this test's assumption that was wrong.
+                var preExistingShapeIds = window.Editor.CurrentSlide!.Shapes.Select(s => s.Id).ToArray();
                 var shape = new SlideShape { Id = 701, Name = "Clipboard shape" };
-                window.Editor.CurrentSlide!.Shapes.Add(shape);
+                window.Editor.CurrentSlide.Shapes.Add(shape);
                 var secondShape = new SlideShape { Id = 702, Name = "Second clipboard shape" };
                 window.Editor.CurrentSlide.Shapes.Add(secondShape);
                 var shapeCountBeforeCut = window.Editor.CurrentSlide.Shapes.Count;
                 window.Editor.Select(shape.Id);
 
                 Press(window, Key.A, KeyModifiers.Control).Handled.Should().BeTrue();
-                window.Editor.SelectedShapeIds.Should().Equal(shape.Id, secondShape.Id);
+                window.Editor.SelectedShapeIds.Should().Equal(
+                    [.. preExistingShapeIds, shape.Id, secondShape.Id]);
                 Press(window, Key.C, KeyModifiers.Control).Handled.Should().BeTrue();
                 await window.ClipboardOperationForTests;
                 Press(window, Key.X, KeyModifiers.Control).Handled.Should().BeTrue();
