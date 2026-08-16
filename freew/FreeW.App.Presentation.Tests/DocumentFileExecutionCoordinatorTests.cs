@@ -130,6 +130,121 @@ public sealed class DocumentFileExecutionCoordinatorTests : IDisposable
         events.Should().Equal("prepare", "persist-save");
     }
 
+    // r137-remediation2 (coordinator level): ExpectedLastWriteTimeUtc is the argument the hosts
+    // thread through DocumentSaveExecutionRequest. These pin the coordinator's own decisions --
+    // prompt, decline, confirm, and the null-callback default -- independent of any host.
+    [Fact]
+    public async Task SaveAsync_ExternallyModifiedTarget_DeclinedPromptStopsBeforePersistence()
+    {
+        var events = new List<string>();
+        var adapter = new RecordingAdapter(".txt", events);
+        var coordinator = Coordinator(adapter);
+        var target = Target(adapter, "Shared.txt");
+        var staleWriteTimeUtc = await WriteExternallyModifiedAsync(target.Path);
+
+        var result = await coordinator.SaveAsync(new DocumentSaveExecutionRequest(
+            Document("my edit"),
+            target,
+            DocumentSaveExecutionKind.Save,
+            ConfirmCompatibilityAsync: (_, _) => Record(events, "confirm-compatibility", result: true),
+            CompleteSaveAsync: (_, _) => Record(events, "complete"),
+            ExpectedLastWriteTimeUtc: staleWriteTimeUtc,
+            ConfirmExternallyModifiedOverwriteAsync: (path, _) =>
+                Record(events, $"confirm-overwrite:{Path.GetFileName(path)}", result: false)));
+
+        result.Outcome.Should().Be(DocumentFileExecutionOutcome.ExternalWriteConflict);
+        result.Operation.Status.Should().Be(OperationStatus.ValidationFailed);
+        result.Operation.Path.Should().Be(target.Path);
+        events.Should().Equal("confirm-compatibility", "confirm-overwrite:Shared.txt");
+        File.ReadAllText(target.Path).Should().Be(
+            "someone else's edit",
+            "a declined overwrite must never clobber the other writer's changes");
+    }
+
+    [Fact]
+    public async Task SaveAsync_ExternallyModifiedTarget_ConfirmedPromptPersistsOverTheOtherWriter()
+    {
+        var events = new List<string>();
+        var adapter = new RecordingAdapter(".docx", events);
+        var coordinator = Coordinator(adapter);
+        var target = Target(adapter, "Shared.docx");
+        var staleWriteTimeUtc = await WriteExternallyModifiedAsync(target.Path);
+
+        var result = await coordinator.SaveAsync(new DocumentSaveExecutionRequest(
+            Document("my edit"),
+            target,
+            DocumentSaveExecutionKind.Save,
+            CompleteSaveAsync: (_, _) => Record(events, "complete"),
+            ExpectedLastWriteTimeUtc: staleWriteTimeUtc,
+            ConfirmExternallyModifiedOverwriteAsync: (_, _) =>
+                Record(events, "confirm-overwrite", result: true)));
+
+        result.Succeeded.Should().BeTrue();
+        events.Should().Equal("confirm-overwrite", "persist-save", "complete");
+        File.ReadAllText(target.Path).Should().Be("my edit");
+    }
+
+    // A host that wires no prompt must still refuse the overwrite rather than silently winning the
+    // race -- the guard defaults to the safe answer, not to the pre-guard behaviour.
+    [Fact]
+    public async Task SaveAsync_ExternallyModifiedTargetWithNoPromptCallback_RefusesTheOverwrite()
+    {
+        var events = new List<string>();
+        var adapter = new RecordingAdapter(".docx", events);
+        var coordinator = Coordinator(adapter);
+        var target = Target(adapter, "Shared.docx");
+        var staleWriteTimeUtc = await WriteExternallyModifiedAsync(target.Path);
+
+        var result = await coordinator.SaveAsync(new DocumentSaveExecutionRequest(
+            Document("my edit"),
+            target,
+            DocumentSaveExecutionKind.Save,
+            CompleteSaveAsync: (_, _) => Record(events, "complete"),
+            ExpectedLastWriteTimeUtc: staleWriteTimeUtc));
+
+        result.Outcome.Should().Be(DocumentFileExecutionOutcome.ExternalWriteConflict);
+        events.Should().BeEmpty();
+        File.ReadAllText(target.Path).Should().Be("someone else's edit");
+    }
+
+    // The guard is opt-in per call: Save-As/Save-Copy targets pass null because there is nothing to
+    // compare, and must never be blocked by whatever happens to be on disk at that path.
+    [Fact]
+    public async Task SaveAsync_WithoutExpectedWriteTime_NeverPromptsEvenWhenTheTargetChanged()
+    {
+        var events = new List<string>();
+        var adapter = new RecordingAdapter(".docx", events);
+        var coordinator = Coordinator(adapter);
+        var target = Target(adapter, "Shared.docx");
+        await WriteExternallyModifiedAsync(target.Path);
+
+        var result = await coordinator.SaveAsync(new DocumentSaveExecutionRequest(
+            Document("my edit"),
+            target,
+            DocumentSaveExecutionKind.SaveCopy,
+            ExpectedLastWriteTimeUtc: null,
+            ConfirmExternallyModifiedOverwriteAsync: (_, _) =>
+                Record(events, "confirm-overwrite", result: false)));
+
+        result.Succeeded.Should().BeTrue();
+        events.Should().Equal("persist-save");
+        File.ReadAllText(target.Path).Should().Be("my edit");
+    }
+
+    /// <summary>
+    /// Writes <paramref name="path"/> twice with a real mtime change in between and returns the
+    /// FIRST (now stale) write time -- what a caller would have captured at open before a second
+    /// writer touched the file.
+    /// </summary>
+    private static async Task<DateTime> WriteExternallyModifiedAsync(string path)
+    {
+        await File.WriteAllTextAsync(path, "original");
+        var openedWriteTimeUtc = File.GetLastWriteTimeUtc(path);
+        await File.WriteAllTextAsync(path, "someone else's edit");
+        File.SetLastWriteTimeUtc(path, openedWriteTimeUtc + TimeSpan.FromMinutes(1));
+        return openedWriteTimeUtc;
+    }
+
     [Fact]
     public void Compatibility_results_map_legacy_outcomes_through_the_shared_envelope()
     {

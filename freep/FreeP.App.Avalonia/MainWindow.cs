@@ -515,7 +515,12 @@ public sealed partial class MainWindow : Window,
             saveAsync: FileSaveAsync,
             promptSaveChangesAsync: promptSaveChangesAsync,
             showFileCommandErrorAsync: showFileCommandErrorAsync,
-            restoreOwnerFocus: RestoreOwnerFocus);
+            restoreOwnerFocus: RestoreOwnerFocus,
+            // r137-remediation2: the shell's file-command prompts (notably the externally-modified
+            // overwrite question) go through the injected service when one is supplied, matching
+            // MainWindow.AssetImports.cs's own `_messageService ?? new AvaloniaUserMessageService`
+            // fallback. Null keeps the production owner-parented dialog.
+            messageService: messageService);
         _fileSession = new PresentationFileCommandSession(
             () => _presentation,
             LoadPresentationContent,

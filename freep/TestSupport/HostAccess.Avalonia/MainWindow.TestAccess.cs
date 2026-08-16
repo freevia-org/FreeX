@@ -71,7 +71,12 @@ public sealed partial class MainWindow
     internal Control? CurrentBackstagePaneContentForTests => _backstage.CurrentPaneContent;
     internal bool HandleBackstageKeyForTests(Key key) => _backstage.HandleKey(key);
     internal Task<bool> FileOpenAsyncForTests() => FileOpenAsync();
+    internal Task<bool> FileSaveAsyncForTests() => FileSaveAsync();
     internal Task<bool> FileSaveAsAsyncForTests() => FileSaveAsAsync();
+    internal async Task<bool> OpenPathAsyncForTests(string path) =>
+        (await _fileSession.OpenPathAsync(path)).Succeeded;
+    internal void MarkDirtyForTests() => _fileSession.MarkDirty();
+    internal Presentation PresentationForTests => _presentation;
 
     internal void SetFilePickerOverridesForTests(
         Func<FileOpenPickerPlan, Task<string?>>? openPicker,
