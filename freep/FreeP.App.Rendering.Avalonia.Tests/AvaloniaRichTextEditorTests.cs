@@ -2199,6 +2199,9 @@ public sealed class AvaloniaRichTextEditorTests
                     .Select(paragraph => paragraph.BulletText)
                     .Should().Equal("4.", "1.", "", "7.");
 
+                // The caret rect is only built while the editor shows a caret, so the surface has to
+                // be focused before asserting on it (same convention as the sibling navigation tests).
+                editor.FocusEditor().Should().BeTrue();
                 editor.SelectionStart = "First\nNested\nPlain\nRestart".Length;
                 editor.SelectionEnd = editor.SelectionStart;
                 editor.RichTextView.CaretRect.Height.Should().BeGreaterThan(0);

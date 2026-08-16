@@ -811,8 +811,17 @@ internal sealed class AvaloniaRichTextEditingSurface : Control
             if (overlapEnd <= overlapStart)
                 continue;
 
-            int displayStart = overlapStart - item.Paragraph.GlobalStart;
-            foreach (var rect in item.Layout.HitTestTextRange(displayStart, overlapEnd - overlapStart))
+            // The overlap is computed in LOGICAL coordinates, which can extend past the paragraph's
+            // display text. Project both ends the way BuildCaretRect does (ToDisplayPosition clamps
+            // to Text.Length) and re-check emptiness afterwards: a logically non-empty overlap can
+            // collapse to nothing in display space, and Avalonia's HitTestTextRange throws
+            // ArgumentOutOfRangeException("textLength") rather than returning no rectangles.
+            int displayStart = ToDisplayPosition(item.Paragraph, overlapStart);
+            int displayEnd = ToDisplayPosition(item.Paragraph, overlapEnd);
+            if (displayEnd <= displayStart)
+                continue;
+
+            foreach (var rect in item.Layout.HitTestTextRange(displayStart, displayEnd - displayStart))
             {
                 var translated = rect.Translate(item.Origin);
                 result.Add(new Rect(
