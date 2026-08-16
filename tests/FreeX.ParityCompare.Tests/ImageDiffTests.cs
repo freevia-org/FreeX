@@ -62,4 +62,24 @@ public class ImageDiffTests
         var diff = ImageDiff.MeanPixelDiffPercent(wide, tall);
         diff.Should().BeGreaterThan(0).And.BeLessThan(100);
     }
+
+    [Fact]
+    public void Logical_viewport_diff_normalizes_equivalent_dpi_sizes()
+    {
+        var logical = PixelImage.Solid(40, 30, 20, 40, 60, 255);
+        var highDpi = PixelImage.Solid(50, 38, 20, 40, 60, 255);
+
+        ImageDiff.LogicalViewportMeanPixelDiffPercent(logical, highDpi, 40, 30)
+            .Should().BeApproximately(0.0, 0.001);
+    }
+
+    [Fact]
+    public void Logical_viewport_diff_uses_full_viewport_without_letterbox_bars()
+    {
+        var black = PixelImage.Solid(50, 38, 0, 0, 0, 255);
+        var white = PixelImage.Solid(40, 30, 255, 255, 255, 255);
+
+        ImageDiff.LogicalViewportMeanPixelDiffPercent(black, white, 40, 30)
+            .Should().BeApproximately(100.0, 0.001);
+    }
 }
