@@ -903,13 +903,17 @@ public sealed class ChartSmartArtContextualTabTests
             "freew.smartart-edit-text",
             "freew.smartart-change-style",
         });
-        var styles = tab.FindGroup("smartart-styles")!.Controls.OfType<RibbonComboBox>().Single();
-        styles.Items.Should().Equal(SmartArtStyle.Catalog.Select(style => style.Name));
+        // SmartArt Styles now presents Change Colors and Styles as two dropdowns rather than a combo
+        // box, so select each by its command id instead of assuming a single control of a given type.
+        var styleControls = tab.FindGroup("smartart-styles")!.Controls.OfType<RibbonDropdown>().ToArray();
+        var styles = styleControls.Single(control => control.CommandId.Value == "freew.smartart-change-style");
+        styles.Menu.Items.Select(item => item.Header)
+            .Should().Equal(SmartArtStyle.Catalog.Select(style => style.Name));
         var layouts = tab.FindGroup("smartart-layouts")!.Controls.OfType<RibbonDropdown>().Single();
         layouts.Menu.Items.Select(item => item.CommandId!.Value)
             .Should().Equal(SmartArtLayoutPreset.Catalog.Select(preset =>
                 new RibbonCommandId($"freew.smartart-layout-{preset.Id}")));
-        var colors = tab.FindGroup("smartart-styles")!.Controls.OfType<RibbonDropdown>().Single();
+        var colors = styleControls.Single(control => control.CommandId.Value == "freew.smartart-colors");
         colors.Menu.Items.Select(item => item.CommandId!.Value)
             .Should().Equal(SmartArtColorScheme.Catalog.Select(scheme =>
                 new RibbonCommandId($"freew.smartart-colors-{scheme.Id}")));

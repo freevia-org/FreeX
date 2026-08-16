@@ -11,7 +11,9 @@ public sealed class SisterDialogTextResourceSourceTests
         var source = ReadAvaloniaSource("InsertDialogs.cs");
 
         source.Should().Contain("using FreeW.App.Presentation.Dialogs;");
-        source.Should().Contain("InsertDialogTextResources.Hyperlink");
+        // The hyperlink dialog reaches the shared resources through HyperlinkDialogPlanner, which is
+        // what reads InsertDialogTextResources.Hyperlink and hands back the resolved presentation.
+        source.Should().Contain("HyperlinkDialogPlanner.Build(");
         source.Should().Contain("InsertDialogTextResources.Bookmark");
         source.Should().Contain("QuickPartCommandPlanner.ResolveText(UiText.Get)");
         source.Should().Contain("Title = text.InsertTitle");
@@ -56,7 +58,10 @@ public sealed class SisterDialogTextResourceSourceTests
         outputWorkflow.Should().Contain("FreeWFileTextResources.ExportXpsPickerTitle");
         source.Should().Contain("showOverwritePrompt: true");
         source.Should().Contain("FreeWExportWorkflow.ExecuteAsync(");
-        outputWorkflow.Should().Contain("AtomicFileWriter.ReplaceTarget(");
+        // The export path still replaces atomically, but through AtomicExportExecutor rather than
+        // calling AtomicFileWriter directly -- the executor is what invokes
+        // AtomicFileWriter.CreateTempLease/ReplaceTarget now.
+        outputWorkflow.Should().Contain("AtomicExportExecutor");
         fragmentWorkflow.Should().Contain("InsertDialogTextResources.TextFromFilePickerTitle");
         fragmentWorkflow.Should().Contain("SisterAppFileTextPlanner.FormatUnsupportedFileType(");
         fragmentWorkflow.Should().Contain("SisterAppFileTextPlanner.FormatCommandFailed(");
