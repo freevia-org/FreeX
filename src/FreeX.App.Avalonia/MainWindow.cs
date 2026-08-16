@@ -19628,7 +19628,14 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
     private static void ApplyDialogButtonChrome(Button button, double width = 0, bool isDefault = false)
     {
         if (width > 0) { button.Width = width; button.MinWidth = width; }
-        button.Height = 24; button.MinHeight = 24; button.MaxHeight = 24;
+        // Height from the shared token, not a local 24. "Share compact dialog geometry across
+        // renderers" moved both hosts to global::Free.Shared.Shell.CompactDialogVisualTokens.ButtonHeight, but this local
+        // helper kept its own number, so a button chromed by both paths ended up 24 or 26 depending
+        // on which ran last -- the Format Cells border test measured 26 in one full run and 24 in
+        // the next.
+        button.Height = global::Free.Shared.Shell.CompactDialogVisualTokens.ButtonHeight;
+        button.MinHeight = global::Free.Shared.Shell.CompactDialogVisualTokens.ButtonHeight;
+        button.MaxHeight = global::Free.Shared.Shell.CompactDialogVisualTokens.ButtonHeight;
         button.Padding = new Thickness(4, 1);
         button.Background = Brushes.White;
         button.BorderBrush = isDefault ? Brush(0, 120, 215) : Brush(112, 112, 112);
