@@ -69,6 +69,19 @@ public sealed class VisualEvidenceFidelityRenderSourceTests
     }
 
     [Fact]
+    public void FidelityRender_PaintsNativeTextWatermarksThroughTheLiveWpfGeometryPath()
+    {
+        var source = File.ReadAllText(RepositoryFile("freew", "tools", "FreeW.FidelityRender", "Program.cs"));
+
+        source.Should().Contain("var geometry = text.BuildGeometry(");
+        source.Should().Contain("var transform = new TransformGroup();");
+        source.Should().Contain("transform.Children.Add(new ScaleTransform(scaleX, scaleY, plan.CenterXDip, plan.CenterYDip));");
+        source.Should().Contain("transform.Children.Add(new RotateTransform(plan.RotationDegrees, plan.CenterXDip, plan.CenterYDip));");
+        source.Should().Contain("geometry.Transform = transform;");
+        source.Should().Contain("dc.DrawGeometry(foreground, null, geometry);");
+    }
+
+    [Fact]
     public void DocumentView_UsesAPageRelativeFigureForTheExactImportedReviewCopyWordArt()
     {
         var source = File.ReadAllText(RepositoryFile("freew", "FreeW.App.Host", "Editing", "DocumentView.cs"));

@@ -2018,20 +2018,20 @@ static RenderTargetBitmap RenderWatermarkPage(WatermarkOptions options, Color pa
             var unitText = new FormattedText(options.Text, System.Globalization.CultureInfo.InvariantCulture, FlowDirection.LeftToRight, typeface, 1, foreground, 1);
             var fontSize = WatermarkVisualPlanner.ResolveTextPathFontSize(options, plan, unitText.Width);
             var text = new FormattedText(options.Text, System.Globalization.CultureInfo.InvariantCulture, FlowDirection.LeftToRight, typeface, fontSize, foreground, 1);
-            dc.PushClip(new RectangleGeometry(new Rect(0, 0, pixW, pixH)));
-            if (Math.Abs(plan.RotationDegrees) > 0.01)
-                dc.PushTransform(new RotateTransform(plan.RotationDegrees, plan.CenterXDip, plan.CenterYDip));
+            // Match the live DocumentView watermark brush. Rendering transformed glyph geometry is
+            // materially different from applying transforms to DrawText: the latter changes the
+            // native VML DRAFT watermark's raster footprint in the Word-baseline evidence path.
+            var geometry = text.BuildGeometry(new Point(plan.CenterXDip - text.Width / 2, plan.CenterYDip - text.Height / 2));
+            var transform = new TransformGroup();
             var scaleX = WatermarkVisualPlanner.ResolveTextPathScaleX(options);
             var scaleY = WatermarkVisualPlanner.ResolveTextPathScaleY(options);
-            var hasScale = Math.Abs(scaleX - 1) > 0.001 || Math.Abs(scaleY - 1) > 0.001;
-            if (hasScale)
-                dc.PushTransform(new ScaleTransform(scaleX, scaleY, plan.CenterXDip, plan.CenterYDip));
-            dc.DrawText(text, new Point(plan.CenterXDip - text.Width / 2, plan.CenterYDip - text.Height / 2));
-            if (hasScale)
-                dc.Pop();
+            if (Math.Abs(scaleX - 1) > 0.001 || Math.Abs(scaleY - 1) > 0.001)
+                transform.Children.Add(new ScaleTransform(scaleX, scaleY, plan.CenterXDip, plan.CenterYDip));
             if (Math.Abs(plan.RotationDegrees) > 0.01)
-                dc.Pop();
-            dc.Pop();
+                transform.Children.Add(new RotateTransform(plan.RotationDegrees, plan.CenterXDip, plan.CenterYDip));
+            if (transform.Children.Count > 0)
+                geometry.Transform = transform;
+            dc.DrawGeometry(foreground, null, geometry);
         }
     }
     pageBmp.Render(pageVis);
