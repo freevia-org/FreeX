@@ -313,6 +313,116 @@ public sealed partial class PivotTableRefreshServiceTests
         Number(sheet, "G9").Should().Be(140);
     }
 
+    // Companion to Refresh_EvaluatesCalculatedItemsForInnerRowField above, which dodges
+    // subtotal coverage entirely (ShowSubtotals = false). Here subtotals ARE on, using the
+    // model's default Top placement. Excel includes a calculated item in every subtotal of
+    // its enclosing field, so "East Total"/"West Total" must equal the real Q1+Q2 rows PLUS
+    // the calculated item's own "Q1 + Q2" row (25+25=50, 45+45=90) - not just the raw rows
+    // (25, 45), which would silently disagree with the Grand Total of 140 that already
+    // included the calculated items.
+    [Fact]
+    public void Refresh_TopSubtotalsIncludeCalculatedItemContribution()
+    {
+        var workbook = new Workbook("PivotRefreshTest");
+        var sheet = workbook.AddSheet("Data");
+        SeedSalesData(sheet);
+        var pivot = new PivotTableModel
+        {
+            Name = "PivotTable1",
+            CacheId = 1,
+            SourceRange = Range(sheet, "A1", "C5"),
+            TargetRange = Range(sheet, "E2", "H14"),
+            ReportLayout = PivotReportLayout.Tabular,
+            ShowSubtotals = true,
+            SubtotalPlacement = PivotSubtotalPlacement.Top
+        };
+        pivot.RowFields.Add(new PivotFieldModel(0));
+        pivot.RowFields.Add(new PivotFieldModel(1));
+        pivot.DataFields.Add(new PivotDataFieldModel(2, "Sum of Amount", "sum"));
+        pivot.CalculatedItems.Add(new PivotCalculatedItemModel(1, "Q1 + Q2", "Q1+Q2"));
+
+        PivotTableRefreshService.Refresh(workbook, sheet, pivot);
+
+        Text(sheet, "E3").Should().Be("East Total");
+        Number(sheet, "G3").Should().Be(50);
+        Text(sheet, "E4").Should().Be("East");
+        Text(sheet, "F4").Should().Be("Q1");
+        Number(sheet, "G4").Should().Be(10);
+        Text(sheet, "E5").Should().Be("East");
+        Text(sheet, "F5").Should().Be("Q2");
+        Number(sheet, "G5").Should().Be(15);
+        Text(sheet, "E6").Should().Be("East");
+        Text(sheet, "F6").Should().Be("Q1 + Q2");
+        Number(sheet, "G6").Should().Be(25);
+        Text(sheet, "E7").Should().Be("West Total");
+        Number(sheet, "G7").Should().Be(90);
+        Text(sheet, "E8").Should().Be("West");
+        Text(sheet, "F8").Should().Be("Q1");
+        Number(sheet, "G8").Should().Be(20);
+        Text(sheet, "E9").Should().Be("West");
+        Text(sheet, "F9").Should().Be("Q2");
+        Number(sheet, "G9").Should().Be(25);
+        Text(sheet, "E10").Should().Be("West");
+        Text(sheet, "F10").Should().Be("Q1 + Q2");
+        Number(sheet, "G10").Should().Be(45);
+        Text(sheet, "E11").Should().Be("Grand Total");
+        Number(sheet, "G11").Should().Be(140);
+    }
+
+    // Sibling of Refresh_TopSubtotalsIncludeCalculatedItemContribution for the other subtotal
+    // placement mechanism (Bottom): the fix must apply to both write paths, since Top
+    // subtotals are precomputed before their child rows are visited while Bottom subtotals
+    // accumulate incrementally during the row loop - two different code paths that both
+    // needed the calculated-item contribution added.
+    [Fact]
+    public void Refresh_BottomSubtotalsIncludeCalculatedItemContribution()
+    {
+        var workbook = new Workbook("PivotRefreshTest");
+        var sheet = workbook.AddSheet("Data");
+        SeedSalesData(sheet);
+        var pivot = new PivotTableModel
+        {
+            Name = "PivotTable1",
+            CacheId = 1,
+            SourceRange = Range(sheet, "A1", "C5"),
+            TargetRange = Range(sheet, "E2", "H14"),
+            ReportLayout = PivotReportLayout.Tabular,
+            ShowSubtotals = true,
+            SubtotalPlacement = PivotSubtotalPlacement.Bottom
+        };
+        pivot.RowFields.Add(new PivotFieldModel(0));
+        pivot.RowFields.Add(new PivotFieldModel(1));
+        pivot.DataFields.Add(new PivotDataFieldModel(2, "Sum of Amount", "sum"));
+        pivot.CalculatedItems.Add(new PivotCalculatedItemModel(1, "Q1 + Q2", "Q1+Q2"));
+
+        PivotTableRefreshService.Refresh(workbook, sheet, pivot);
+
+        Text(sheet, "E3").Should().Be("East");
+        Text(sheet, "F3").Should().Be("Q1");
+        Number(sheet, "G3").Should().Be(10);
+        Text(sheet, "E4").Should().Be("East");
+        Text(sheet, "F4").Should().Be("Q2");
+        Number(sheet, "G4").Should().Be(15);
+        Text(sheet, "E5").Should().Be("East");
+        Text(sheet, "F5").Should().Be("Q1 + Q2");
+        Number(sheet, "G5").Should().Be(25);
+        Text(sheet, "E6").Should().Be("East Total");
+        Number(sheet, "G6").Should().Be(50);
+        Text(sheet, "E7").Should().Be("West");
+        Text(sheet, "F7").Should().Be("Q1");
+        Number(sheet, "G7").Should().Be(20);
+        Text(sheet, "E8").Should().Be("West");
+        Text(sheet, "F8").Should().Be("Q2");
+        Number(sheet, "G8").Should().Be(25);
+        Text(sheet, "E9").Should().Be("West");
+        Text(sheet, "F9").Should().Be("Q1 + Q2");
+        Number(sheet, "G9").Should().Be(45);
+        Text(sheet, "E10").Should().Be("West Total");
+        Number(sheet, "G10").Should().Be(90);
+        Text(sheet, "E11").Should().Be("Grand Total");
+        Number(sheet, "G11").Should().Be(140);
+    }
+
     // A calculated field's formula is unbounded text — typed by the user, or read from the pivot
     // definition in an opened .xlsx. The expression parser descends one stack frame per nesting
     // level, so without a depth cap a deeply nested formula overflowed the stack, and

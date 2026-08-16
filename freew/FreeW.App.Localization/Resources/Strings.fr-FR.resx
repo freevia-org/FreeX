@@ -263,6 +263,7 @@
   <data name="Bookmark_Title" xml:space="preserve"><value>Signet</value></data>
   <data name="Bookmark_NameOrRemove_Prompt" xml:space="preserve"><value>Nom du signet (laisser vide pour supprimer) :</value></data>
   <data name="Bookmark_NoneForLink_Message" xml:space="preserve"><value>Aucun signet n'existe. Ajoutez d'abord un signet (Insertion &gt; Signet), puis créez le lien.</value></data>
+  <data name="Bookmark_DuplicateName_Message_Format" xml:space="preserve"><value>Un signet nommé « {0} » existe déjà dans ce document. Choisissez un autre nom.</value></data>
   <data name="LinkBookmark_Title" xml:space="preserve"><value>Lier à un signet</value></data>
   <data name="LinkBookmark_Bookmark_Label" xml:space="preserve"><value>Signet :</value></data>
   <data name="Field_InsertPageNumber_Title" xml:space="preserve"><value>Insérer le numéro de page</value></data>

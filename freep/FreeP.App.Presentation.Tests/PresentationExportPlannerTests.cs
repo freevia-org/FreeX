@@ -1113,13 +1113,24 @@ public sealed class PresentationExportPlannerTests : IDisposable
         var slide = new Slide
         {
             Title = "Roadmap",
+            // Deliberately the OPPOSITE of the notes-master flags below: notes-page
+            // header/footer visibility must come from the "Notes and Handouts" tab
+            // (presentation.NotesHfVisibility), never from the slide's own "Slide" tab
+            // flags, so this also guards against the two settings being conflated.
             HfVisibility = new HfFlags
             {
-                ShowDate = true,
-                ShowFooter = false,
-                ShowSlideNum = true,
-                ShowHeader = false
+                ShowDate = false,
+                ShowFooter = true,
+                ShowSlideNum = false,
+                ShowHeader = true
             }
+        };
+        presentation.NotesHfVisibility = new HfFlags
+        {
+            ShowDate = true,
+            ShowFooter = false,
+            ShowSlideNum = true,
+            ShowHeader = false
         };
         slide.Notes = MakeTextBody("Talk track");
         slide.Shapes.Add(MakeHeaderFooterPlaceholder(
@@ -1159,6 +1170,83 @@ public sealed class PresentationExportPlannerTests : IDisposable
         plan.HeaderFooterPlaceholders
             .Single(placeholder => placeholder.Kind == PresentationNotesPagePlaceholderKind.SlideNumber)
             .Text.Should().Be("1", "visible slide-number intent gets deterministic metadata even before notes-master IO is modeled");
+    }
+
+    // R137: notes-page header/footer/date/slide-number visibility must come from the notes
+    // master's own settings (PowerPoint's "Notes and Handouts" tab), independent of the slide's
+    // own "Slide" tab flags. Turning a footer off for slides must not turn it off on notes pages,
+    // and vice versa.
+    [Fact]
+    public void NotesPagePreviewPlan_FooterVisibility_UsesNotesHfFlags_NotSlideHfFlags()
+    {
+        var presentation = Presentation.CreateEmpty();
+        presentation.Slides.Clear();
+        var slide = new Slide
+        {
+            Title = "Quarterly",
+            // Slide ("Slide" tab) says: hide the footer during the slideshow.
+            HfVisibility = new HfFlags { ShowFooter = false, ShowDate = true, ShowSlideNum = true }
+        };
+        // Notes master ("Notes and Handouts" tab) says: show the footer on notes pages.
+        presentation.NotesHfVisibility = new HfFlags { ShowFooter = true, ShowDate = true, ShowSlideNum = true };
+        slide.Notes = MakeTextBody("Talk track");
+        slide.Shapes.Add(MakeHeaderFooterPlaceholder(PlaceholderType.Footer, "Confidential", "footer", "Confidential"));
+        presentation.Slides.Add(slide);
+
+        var plan = PresentationNotesPagePreviewPlanner.Build(presentation, currentSlideIndex: 0);
+
+        plan.HeaderFooterPlaceholders
+            .Single(placeholder => placeholder.Kind == PresentationNotesPagePlaceholderKind.Footer)
+            .IsVisible.Should().BeTrue(
+                "the notes master's own footer flag is ON even though the slide's own footer flag is OFF");
+    }
+
+    [Fact]
+    public void NotesPagePreviewPlan_FooterVisibility_HiddenWhenNotesHfFlagsHideIt_EvenIfSlideShowsIt()
+    {
+        var presentation = Presentation.CreateEmpty();
+        presentation.Slides.Clear();
+        var slide = new Slide
+        {
+            Title = "Quarterly",
+            // Slide ("Slide" tab) says: show the footer during the slideshow.
+            HfVisibility = new HfFlags { ShowFooter = true, ShowDate = true, ShowSlideNum = true }
+        };
+        // Notes master ("Notes and Handouts" tab) says: hide the footer on notes pages.
+        presentation.NotesHfVisibility = new HfFlags { ShowFooter = false, ShowDate = true, ShowSlideNum = true };
+        slide.Notes = MakeTextBody("Talk track");
+        slide.Shapes.Add(MakeHeaderFooterPlaceholder(PlaceholderType.Footer, "Confidential", "footer", "Confidential"));
+        presentation.Slides.Add(slide);
+
+        var plan = PresentationNotesPagePreviewPlanner.Build(presentation, currentSlideIndex: 0);
+
+        plan.HeaderFooterPlaceholders
+            .Single(placeholder => placeholder.Kind == PresentationNotesPagePlaceholderKind.Footer)
+            .IsVisible.Should().BeFalse(
+                "the notes master's own footer flag is OFF even though the slide's own footer flag is ON");
+    }
+
+    // Sibling no-regression: the SLIDE-show header/footer state (HeaderFooterCommandPlanner,
+    // used by the Insert > Header & Footer dialog's "Slide" tab) is a separate mechanism from the
+    // notes-page one above and must keep reading the slide's own HfVisibility, unaffected by
+    // NotesHfVisibility. This guards against a fix that (incorrectly) rewires BOTH consumers onto
+    // NotesHfVisibility instead of only the notes-page one.
+    [Fact]
+    public void HeaderFooterCommandPlanner_SlideVisibility_StillUsesSlideHfFlags_NotNotesHfFlags()
+    {
+        var presentation = Presentation.CreateEmpty();
+        presentation.Slides.Clear();
+        var slide = new Slide
+        {
+            Title = "Quarterly",
+            HfVisibility = new HfFlags { ShowFooter = true, ShowDate = true, ShowSlideNum = true }
+        };
+        presentation.NotesHfVisibility = new HfFlags { ShowFooter = false, ShowDate = false, ShowSlideNum = false };
+        presentation.Slides.Add(slide);
+
+        var state = HeaderFooterCommandPlanner.BuildState(presentation, slideIndex: 0);
+
+        state.ShowFooter.Should().BeTrue("slideshow footer visibility must keep using the slide's own HfVisibility flag");
     }
 
     [Fact]
@@ -1445,6 +1533,58 @@ public sealed class PresentationExportPlannerTests : IDisposable
         doc.Properties!.Creator.Should().Be("FreeP");
         doc.Properties.Title.Should().Be("Handout Deck");
         doc.Properties.Author.Should().Be("Parity");
+    }
+
+    // R137: handout PDF/print output must draw the handout master's header/footer/date/
+    // slide-number placeholders, not silently drop them.
+    [Fact]
+    public void HandoutPdfRenderPlan_DrawsHandoutMasterHeaderFooterPlaceholders()
+    {
+        var presentation = BuildHandoutDeck(1);
+        presentation.HandoutHfVisibility = new HfFlags
+        {
+            ShowFooter = true,
+            ShowDate = true,
+            ShowSlideNum = true,
+            ShowHeader = true
+        };
+        presentation.HandoutMasterPlaceholders.Add(MakeHeaderFooterPlaceholder(
+            PlaceholderType.Footer, "Confidential Handout", "footer", "Confidential Handout"));
+        presentation.HandoutMasterPlaceholders.Add(MakeHeaderFooterPlaceholder(
+            PlaceholderType.Header, "Q3 Review", "hdr", "Q3 Review"));
+
+        var plan = PresentationHandoutPdfExporter.BuildRenderPlan(
+            presentation,
+            new PresentationHandoutPdfExportRequest(
+                new PresentationPrintRequest(PresentationPrintLayoutKind.Handouts, HandoutSlidesPerPage: 1)));
+
+        var texts = plan.Pages[0].Ops.OfType<PdfText>().Select(text => text.Text).ToList();
+        texts.Should().Contain("Confidential Handout", "the handout master's footer text must be drawn");
+        texts.Should().Contain("Q3 Review", "the handout master's header text must be drawn");
+        texts.Should().Contain("1", "the handout master's slide/page-number placeholder must be drawn even with no authored text");
+    }
+
+    [Fact]
+    public void HandoutPdfRenderPlan_OmitsHeaderFooterPlaceholderTextWhenHandoutHfFlagHidesIt()
+    {
+        var presentation = BuildHandoutDeck(1);
+        presentation.HandoutHfVisibility = new HfFlags
+        {
+            ShowFooter = false,
+            ShowDate = true,
+            ShowSlideNum = true,
+            ShowHeader = true
+        };
+        presentation.HandoutMasterPlaceholders.Add(MakeHeaderFooterPlaceholder(
+            PlaceholderType.Footer, "Confidential Handout", "footer", "Confidential Handout"));
+
+        var plan = PresentationHandoutPdfExporter.BuildRenderPlan(
+            presentation,
+            new PresentationHandoutPdfExportRequest(
+                new PresentationPrintRequest(PresentationPrintLayoutKind.Handouts, HandoutSlidesPerPage: 1)));
+
+        plan.Pages[0].Ops.OfType<PdfText>().Select(text => text.Text)
+            .Should().NotContain("Confidential Handout", "ShowFooter = false on the handout master must suppress the footer text");
     }
 
     [Fact]
@@ -1734,12 +1874,21 @@ public sealed class PresentationExportPlannerTests : IDisposable
         var slide = new Slide
         {
             Title = "Roadmap",
+            // Deliberately the OPPOSITE of the notes-master flags below: the notes-page PDF must
+            // follow the notes-master ("Notes and Handouts" tab) visibility, not the slide's own
+            // "Slide" tab flags.
             HfVisibility = new HfFlags
             {
-                ShowDate = true,
-                ShowFooter = false,
-                ShowSlideNum = true
+                ShowDate = false,
+                ShowFooter = true,
+                ShowSlideNum = false
             }
+        };
+        presentation.NotesHfVisibility = new HfFlags
+        {
+            ShowDate = true,
+            ShowFooter = false,
+            ShowSlideNum = true
         };
         slide.Notes = MakeTextBody("Talk track");
         slide.Shapes.Add(MakeHeaderFooterPlaceholder(

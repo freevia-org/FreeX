@@ -433,6 +433,101 @@ public sealed class DocumentViewColumnLayoutTests
             "an explicit w:widowControl=1 token still keeps the complete ordinary paragraph together");
     }
 
+    // R137: KeepWithNext must keep a heading and its following body paragraph on the same page.
+    // WPF maps Paragraph.KeepWithNext straight onto FlowDocument's own Paragraph.KeepWithNext, so the
+    // framework's built-in pagination engine never lets a page break fall between the two. This custom
+    // Avalonia paginator has no such native primitive and previously ignored the flag entirely, so a
+    // heading with KeepWithNext set could be the last content on a page while its body paragraph
+    // started on the next page -- the exact shell divergence this finding reports.
+    [Fact]
+    public async Task KeepWithNext_moves_the_whole_heading_to_the_next_page_with_its_body_paragraph()
+    {
+        double headingBottomY = double.NaN;
+        double bodyTopY = double.NaN;
+        var ran = await OnUiThread(() =>
+        {
+            var doc = TextDocument.CreateEmpty();
+            doc.Blocks.Clear();
+            doc.Page.WidthPt = 360;
+            doc.Page.HeightPt = 216;
+            doc.Page.MarginLeftPt = 36;
+            doc.Page.MarginRightPt = 36;
+            doc.Page.MarginTopPt = 36;
+            doc.Page.MarginBottomPt = 36;
+
+            for (var index = 0; index < 8; index++)
+                doc.Blocks.Add(new Paragraph($"Filler paragraph {index + 1}."));
+
+            var headingIndex = doc.Blocks.Count;
+            doc.Blocks.Add(new Paragraph("A short heading.")
+            {
+                Formatting = ParagraphFormatting.Default with { KeepWithNext = true }
+            });
+            var bodyIndex = doc.Blocks.Count;
+            doc.Blocks.Add(new Paragraph(
+                "A wrapped paragraph that has enough words to span several measured lines and must " +
+                "move as one unit when Word's default widow control is active at a page boundary."));
+
+            var view = new DocumentView();
+            view.LoadDocument(doc);
+            view.Measure(new Size(600, 3000));
+
+            headingBottomY = view.GetPlacedForBlock(headingIndex).Select(glyph => glyph.Y).Max();
+            bodyTopY = view.GetPlacedForBlock(bodyIndex).Select(glyph => glyph.Y).Min();
+        });
+
+        if (!ran) return;
+
+        (bodyTopY - headingBottomY).Should().BeLessThan(60,
+            "KeepWithNext must carry the whole heading paragraph onto the same page as the body " +
+            "paragraph that follows it, so the two are adjacent lines rather than separated by a " +
+            "page break's margin gap");
+    }
+
+    // Sibling/no-regression: an otherwise-identical heading WITHOUT KeepWithNext set must still be
+    // free to split from the paragraph that follows it at the same low-space page boundary -- the fix
+    // must be gated strictly on the flag, not applied to every short paragraph ahead of a long one.
+    [Fact]
+    public async Task Without_KeepWithNext_the_same_low_space_boundary_still_lets_the_heading_split_from_the_next_paragraph()
+    {
+        double headingBottomY = double.NaN;
+        double bodyTopY = double.NaN;
+        var ran = await OnUiThread(() =>
+        {
+            var doc = TextDocument.CreateEmpty();
+            doc.Blocks.Clear();
+            doc.Page.WidthPt = 360;
+            doc.Page.HeightPt = 216;
+            doc.Page.MarginLeftPt = 36;
+            doc.Page.MarginRightPt = 36;
+            doc.Page.MarginTopPt = 36;
+            doc.Page.MarginBottomPt = 36;
+
+            for (var index = 0; index < 8; index++)
+                doc.Blocks.Add(new Paragraph($"Filler paragraph {index + 1}."));
+
+            var headingIndex = doc.Blocks.Count;
+            doc.Blocks.Add(new Paragraph("A short heading."));
+            var bodyIndex = doc.Blocks.Count;
+            doc.Blocks.Add(new Paragraph(
+                "A wrapped paragraph that has enough words to span several measured lines and must " +
+                "move as one unit when Word's default widow control is active at a page boundary."));
+
+            var view = new DocumentView();
+            view.LoadDocument(doc);
+            view.Measure(new Size(600, 3000));
+
+            headingBottomY = view.GetPlacedForBlock(headingIndex).Select(glyph => glyph.Y).Max();
+            bodyTopY = view.GetPlacedForBlock(bodyIndex).Select(glyph => glyph.Y).Min();
+        });
+
+        if (!ran) return;
+
+        (bodyTopY - headingBottomY).Should().BeGreaterThan(60,
+            "without KeepWithNext, the heading remains free to be the last content on a page while " +
+            "the following paragraph starts on the next page");
+    }
+
     // ── Test 4: All glyphs land in one of the two column bands ─────────────────────────────────────
 
     [Fact]

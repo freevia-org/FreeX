@@ -367,28 +367,57 @@ public static class PresentationExportPlanner
         ArgumentNullException.ThrowIfNull(presentation);
 
         var plan = BuildPrintPlan(request, presentation.Slides.Count);
-        if (plan.PrintHiddenSlides || plan.SlideRange.SlideNumbers.Count == 0)
+        if (plan.PrintHiddenSlides)
             return plan;
 
-        var visibleNumbers = plan.SlideRange.SlideNumbers
+        return plan with { SlideRange = FilterHiddenSlides(plan.SlideRange, presentation) };
+    }
+
+    /// <summary>
+    /// Builds a slide-range plan with the presentation's hidden-slide policy applied, resolving the
+    /// requested range against <paramref name="presentation"/>'s actual slide count and then, unless
+    /// <paramref name="includeHiddenSlides"/> is set, dropping any hidden slide the range expanded to
+    /// include. Every caller that renders real PDF/print bytes from a
+    /// <see cref="PresentationSlideRangeRequest"/> -- not just callers that go through
+    /// <see cref="BuildPrintPlan(PresentationPrintRequest?, Presentation)"/> -- must resolve the range
+    /// through this overload (rather than the count-only <see cref="BuildSlideRangePlan(PresentationSlideRangeRequest?, int)"/>)
+    /// so hidden slides stay excluded regardless of how the caller's request shape (e.g. a
+    /// reconstructed "All Slides" range) lost track of which specific slide numbers were already
+    /// filtered upstream.
+    /// </summary>
+    public static PresentationSlideRangePlan BuildSlideRangePlan(
+        PresentationSlideRangeRequest? request,
+        Presentation presentation,
+        bool includeHiddenSlides)
+    {
+        ArgumentNullException.ThrowIfNull(presentation);
+
+        var range = BuildSlideRangePlan(request, presentation.Slides.Count);
+        return includeHiddenSlides ? range : FilterHiddenSlides(range, presentation);
+    }
+
+    private static PresentationSlideRangePlan FilterHiddenSlides(
+        PresentationSlideRangePlan range,
+        Presentation presentation)
+    {
+        if (range.SlideNumbers.Count == 0)
+            return range;
+
+        var visibleNumbers = range.SlideNumbers
             .Where(slideNumber =>
                 slideNumber >= 1 &&
                 slideNumber <= presentation.Slides.Count &&
                 !presentation.Slides[slideNumber - 1].IsHidden)
             .ToArray();
+        if (visibleNumbers.Length == range.SlideNumbers.Count)
+            return range;
 
-        return plan with
-        {
-            SlideRange = new PresentationSlideRangePlan(
-                plan.SlideRange.Kind,
-                visibleNumbers,
-                FormatRangeDisplayName(
-                    plan.SlideRange.Kind,
-                    visibleNumbers,
-                    presentation.Slides.Count),
-                plan.SlideRange.CustomRangeText,
-                plan.SlideRange.ValidationMessage),
-        };
+        return new PresentationSlideRangePlan(
+            range.Kind,
+            visibleNumbers,
+            FormatRangeDisplayName(range.Kind, visibleNumbers, presentation.Slides.Count),
+            range.CustomRangeText,
+            range.ValidationMessage);
     }
 
     public static PresentationHandoutLayoutPlan BuildHandoutLayoutPlan(

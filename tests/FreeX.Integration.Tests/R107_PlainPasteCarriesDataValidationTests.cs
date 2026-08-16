@@ -190,4 +190,170 @@ public sealed class R107_PlainPasteCarriesDataValidationTests
 
         sheet.DataValidations.Should().BeEmpty();
     }
+
+    /// <summary>
+    /// R137-paste-data-validation-clear-1: the core failing-before-fix case for the non-tiled plain
+    /// Ctrl+V path -- a plain paste of a cell that has NO data-validation rule onto a destination
+    /// cell that HAS one must clear the destination's rule, exactly as real Excel does. Before the
+    /// fix, PasteCommandFactory's non-tiled carry call site only constructed PasteDataValidationCommand
+    /// when SourceHasOverlappingDataValidation(sourceRange) was true, so a source with no rule at
+    /// all skipped construction entirely and left the destination's pre-existing rule silently in
+    /// force over the newly-pasted value.
+    /// </summary>
+    [Fact]
+    public void PlainPaste_NonTiled_ClearsDestinationValidationWhenSourceHasNone()
+    {
+        var wb = new Workbook("test");
+        var sheet = wb.AddSheet("Sheet1");
+        var ctx = new TestCommandContext(wb);
+
+        var sourceStart = new CellAddress(sheet.Id, 1, 1);
+        var sourceRange = new GridRange(sourceStart, sourceStart);
+        var sourceCell = Cell.FromValue(new NumberValue(42));
+        sheet.SetCell(sourceStart, sourceCell);
+
+        var destinationStart = new CellAddress(sheet.Id, 5, 5);
+        var destinationRule = MakeRule(new GridRange(destinationStart, destinationStart));
+        sheet.DataValidations.Add(destinationRule);
+
+        var command = PasteCommandFactory.CreateInternalPasteCommand(
+            wb,
+            sheet.Id,
+            sourceRange,
+            [(sourceStart, sourceCell.Clone())],
+            destinationStart,
+            PasteCellsMode.All,
+            new PasteSpecialOptions());
+
+        var outcome = command.Apply(ctx);
+        outcome.Success.Should().BeTrue(outcome.ErrorMessage);
+
+        sheet.GetValue(destinationStart).Should().Be(new NumberValue(42));
+        sheet.DataValidations.Should().BeEmpty();
+
+        command.Revert(ctx);
+
+        sheet.DataValidations.Should().ContainSingle(rule => rule.AppliesTo == destinationRule.AppliesTo);
+    }
+
+    /// <summary>
+    /// Tiled counterpart of the non-tiled clear case above -- covers CreateTiledInternalPasteCommand's
+    /// own PasteDataValidationCommand construction site (the third of three redundant call sites
+    /// that all shared the same SourceHasOverlappingDataValidation gate).
+    /// </summary>
+    [Fact]
+    public void PlainPaste_Tiled_ClearsDestinationValidationWhenSourceHasNone()
+    {
+        var wb = new Workbook("test");
+        var sheet = wb.AddSheet("Sheet1");
+        var ctx = new TestCommandContext(wb);
+
+        var sourceStart = new CellAddress(sheet.Id, 1, 1);
+        var sourceRange = new GridRange(sourceStart, sourceStart);
+        var sourceCell = Cell.FromValue(new NumberValue(42));
+        sheet.SetCell(sourceStart, sourceCell);
+
+        var destinationStart = new CellAddress(sheet.Id, 1, 2);
+        var destinationRange = new GridRange(destinationStart, new CellAddress(sheet.Id, 3, 2));
+        var destinationRule = MakeRule(new GridRange(destinationStart, destinationStart));
+        sheet.DataValidations.Add(destinationRule);
+
+        var command = PasteCommandFactory.CreateInternalPasteCommand(
+            wb,
+            sheet.Id,
+            sourceRange,
+            [(sourceStart, sourceCell.Clone())],
+            destinationRange,
+            PasteCellsMode.All,
+            new PasteSpecialOptions());
+
+        var outcome = command.Apply(ctx);
+        outcome.Success.Should().BeTrue(outcome.ErrorMessage);
+
+        sheet.GetValue(new CellAddress(sheet.Id, 1, 2)).Should().Be(new NumberValue(42));
+        sheet.DataValidations.Should().BeEmpty();
+
+        command.Revert(ctx);
+
+        sheet.DataValidations.Should().ContainSingle(rule => rule.AppliesTo == destinationRule.AppliesTo);
+    }
+
+    /// <summary>
+    /// Paste Special (mode All, an explicit option set that routes through the
+    /// specialCarriesFormatting branch -- here, Transpose) counterpart of the clear case above,
+    /// covering the second of the three redundant call sites.
+    /// </summary>
+    [Fact]
+    public void PasteSpecialWithTranspose_ClearsDestinationValidationWhenSourceHasNone()
+    {
+        var wb = new Workbook("test");
+        var sheet = wb.AddSheet("Sheet1");
+        var ctx = new TestCommandContext(wb);
+
+        var sourceStart = new CellAddress(sheet.Id, 1, 1);
+        var sourceRange = new GridRange(sourceStart, sourceStart);
+        var sourceCell = Cell.FromValue(new NumberValue(42));
+        sheet.SetCell(sourceStart, sourceCell);
+
+        var destinationStart = new CellAddress(sheet.Id, 5, 5);
+        var destinationRule = MakeRule(new GridRange(destinationStart, destinationStart));
+        sheet.DataValidations.Add(destinationRule);
+
+        var command = PasteCommandFactory.CreateInternalPasteCommand(
+            wb,
+            sheet.Id,
+            sourceRange,
+            [(sourceStart, sourceCell.Clone())],
+            destinationStart,
+            PasteCellsMode.All,
+            new PasteSpecialOptions { Transpose = true });
+
+        var outcome = command.Apply(ctx);
+        outcome.Success.Should().BeTrue(outcome.ErrorMessage);
+
+        sheet.GetValue(destinationStart).Should().Be(new NumberValue(42));
+        sheet.DataValidations.Should().BeEmpty();
+
+        command.Revert(ctx);
+
+        sheet.DataValidations.Should().ContainSingle(rule => rule.AppliesTo == destinationRule.AppliesTo);
+    }
+
+    /// <summary>
+    /// No-regression sibling: a Values-only paste (mode==Values) must leave a pre-existing
+    /// destination data-validation rule COMPLETELY untouched -- matching real Excel's Paste Special
+    /// &gt; Values, which never carries or clears validation at all. This must remain true after the
+    /// fix (the carry/clear logic lives entirely behind the mode==All gate).
+    /// </summary>
+    [Fact]
+    public void ValuesOnlyPaste_DoesNotClearDestinationValidation()
+    {
+        var wb = new Workbook("test");
+        var sheet = wb.AddSheet("Sheet1");
+        var ctx = new TestCommandContext(wb);
+
+        var sourceStart = new CellAddress(sheet.Id, 1, 1);
+        var sourceRange = new GridRange(sourceStart, sourceStart);
+        var sourceCell = Cell.FromValue(new NumberValue(42));
+        sheet.SetCell(sourceStart, sourceCell);
+
+        var destinationStart = new CellAddress(sheet.Id, 5, 5);
+        var destinationRule = MakeRule(new GridRange(destinationStart, destinationStart));
+        sheet.DataValidations.Add(destinationRule);
+
+        var command = PasteCommandFactory.CreateInternalPasteCommand(
+            wb,
+            sheet.Id,
+            sourceRange,
+            [(sourceStart, sourceCell.Clone())],
+            destinationStart,
+            PasteCellsMode.Values,
+            new PasteSpecialOptions());
+
+        var outcome = command.Apply(ctx);
+        outcome.Success.Should().BeTrue(outcome.ErrorMessage);
+
+        sheet.GetValue(destinationStart).Should().Be(new NumberValue(42));
+        sheet.DataValidations.Should().ContainSingle(rule => rule.AppliesTo == destinationRule.AppliesTo);
+    }
 }

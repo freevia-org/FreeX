@@ -11247,7 +11247,7 @@ public sealed partial class DocumentView : RichTextBox
     /// </summary>
     private static WpfRun BuildFootnoteReference(int footnoteId, TextDocument document)
     {
-        var marker = new WpfRun(footnoteId.ToString(System.Globalization.CultureInfo.InvariantCulture))
+        var marker = new WpfRun(ResolveNoteBodyMarkDisplayNumber(document, footnoteId, isFootnote: true))
         {
             Tag = new FootnoteMarker(footnoteId)
         };
@@ -11255,6 +11255,25 @@ public sealed partial class DocumentView : RichTextBox
         if (document.Footnotes.TryGetValue(footnoteId, out var footnote) && footnote.PlainText is { Length: > 0 } text)
             marker.ToolTip = text;
         return marker;
+    }
+
+    /// <summary>
+    /// Resolves the number a note's in-body superscript reference mark should display: the note's
+    /// computed display sequence (honoring <see cref="NoteNumberingOptions.NumberRestart"/> where it
+    /// can be determined without page layout — Continuous and EachSection), NOT the raw internal
+    /// <see cref="Run.FootnoteId"/>/<see cref="Run.EndnoteId"/> used to key <see cref="TextDocument.Footnotes"/>/
+    /// <see cref="TextDocument.Endnotes"/>. Deleting an earlier note leaves the surviving notes' ids
+    /// unchanged (matching Word) but shifts their display sequence, so this must be recomputed at
+    /// render time rather than baked into the run at insertion.
+    /// </summary>
+    private static string ResolveNoteBodyMarkDisplayNumber(TextDocument document, int noteId, bool isFootnote)
+    {
+        var options = isFootnote ? document.FootnoteNumbering : document.EndnoteNumbering;
+        var sequenceById = DocumentNoteRegionPlanner.ComputeSequenceById(document, isFootnote);
+        var sequence = sequenceById.TryGetValue(noteId, out var resolvedSequence)
+            ? resolvedSequence
+            : Math.Max(1, options.StartAt);
+        return DocumentNoteRegionPlanner.ComputeDisplayNumber(sequence, options);
     }
 
     /// <summary>Carried on a footnote-marker WPF run's Tag so CommitToModel can round-trip its id.</summary>
@@ -11446,7 +11465,7 @@ public sealed partial class DocumentView : RichTextBox
     /// </summary>
     private static WpfRun BuildEndnoteReference(int endnoteId, TextDocument document)
     {
-        var marker = new WpfRun(endnoteId.ToString(System.Globalization.CultureInfo.InvariantCulture))
+        var marker = new WpfRun(ResolveNoteBodyMarkDisplayNumber(document, endnoteId, isFootnote: false))
         {
             Tag = new EndnoteMarker(endnoteId)
         };
@@ -16365,19 +16384,35 @@ public sealed partial class DocumentView : RichTextBox
     }
 
     /// <summary>
-    /// Names the paragraph containing the caret as a bookmark target (an invisible marker). An empty
-    /// or whitespace name clears any existing bookmark on that paragraph. Re-renders so the name
-    /// round-trips through the model on the next commit.
+    /// Names the paragraph containing the caret as a bookmark target (an invisible marker). Matches
+    /// Word's unique-name rule: a name already used by a different paragraph is rejected (see
+    /// <see cref="BookmarkInsertOutcome.DuplicateName"/>) rather than creating a second instance sharing
+    /// it. On success, re-renders so the name round-trips through the model on the next commit.
     /// </summary>
-    public void SetBookmarkAtCaret(string? name)
+    public BookmarkInsertOutcome SetBookmarkAtCaret(string? name)
     {
         Focus();
         CommitToModel();
         var index = CaretBlockIndex();
         if (index < 0 || index >= _model.Blocks.Count || _model.Blocks[index] is not ModelParagraph)
-            return;
-        ReferenceEdits.SetBookmark(index, name);
-        Render();
+            return BookmarkInsertOutcome.Invalid;
+
+        var outcome = ReferenceEdits.TrySetBookmark(index, name);
+        if (outcome == BookmarkInsertOutcome.Applied)
+            Render();
+        return outcome;
+    }
+
+    /// <summary>
+    /// Removes exactly the bookmark instance at <paramref name="location"/> — not every paragraph that
+    /// happens to share the same name — via the pure <see cref="Bookmarks.RemoveBookmarkAt"/> helper. Used
+    /// by the Bookmark Manager's Delete action so selecting one duplicate-named entry never destroys a
+    /// different one. No-op when the location no longer resolves.
+    /// </summary>
+    public void RemoveBookmarkAt(BookmarkLocation location)
+    {
+        CommitToModel();
+        _editingSession.RemoveBookmarkAt(location);
     }
 
     /// <summary>

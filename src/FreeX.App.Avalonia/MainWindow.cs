@@ -26015,7 +26015,11 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             return;
         }
 
-        if (!_session.IsDirty)
+        // A sibling "New Window" view keeps the document (and its dirty state) alive, so closing
+        // this view must not prompt to save -- only the document's last view prompts (Excel
+        // parity, mirrors the WPF host's DocumentSharedWithOtherWindows() guard in its own
+        // MainWindow_Closing).
+        if (!_session.IsDirty || WindowRegistry.HasOtherWindowForDocument(this))
             return;
 
         e.Cancel = true;

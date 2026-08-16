@@ -297,6 +297,25 @@ public sealed class DocumentEditingSession
         return true;
     }
 
+    /// <summary>
+    /// Removes exactly the bookmark instance at <paramref name="location"/> through the shared undo
+    /// history — not every paragraph document-wide that happens to share its name. Used by the Bookmark
+    /// Manager's Delete action so selecting one duplicate-named entry never destroys a different one (see
+    /// <see cref="Bookmarks.RemoveBookmarkAt"/>).
+    /// </summary>
+    public bool RemoveBookmarkAt(BookmarkLocation location)
+    {
+        if (string.IsNullOrEmpty(location.Name)
+            || Bookmarks.ResolveLocation(Document, location) is not { } paragraph
+            || !paragraph.BookmarkNames.Contains(location.Name, StringComparer.Ordinal))
+        {
+            return false;
+        }
+
+        _commands.Execute(new RemoveBookmarkAtCommand(location));
+        return true;
+    }
+
     /// <summary>Applies one portable paragraph-format transform as a single undoable edit.</summary>
     public bool FormatParagraphs(
         IReadOnlyList<int> blockIndices,

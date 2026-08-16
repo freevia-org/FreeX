@@ -275,6 +275,72 @@ public sealed class DocumentPersistenceWorkflowTests : IDisposable
         File.ReadAllText(path).Should().Be("new");
     }
 
+    // ── r137-freew-persistence-external-modification ───────────────────────────────────────────
+    //
+    // FreeW had NO external-modification detection at all, unlike FreeX's WorkbookSaveService: if
+    // the file changed on disk since it was opened (another app, another FreeW/Word instance, a
+    // sync client), Save silently overwrote it with zero warning. These port FreeX's
+    // expectedLastWriteTimeUtc check (WorkbookSaveServiceTests.SaveAsync_FileModifiedSinceOpen_...)
+    // onto DocumentPersistenceWorkflow.
+
+    [Fact]
+    public void Open_CapturesSourceLastWriteTimeUtcMatchingFileSystem()
+    {
+        var adapter = new FakeDocumentAdapter([new FileFormatDescriptor(".docx", "Word Document")]);
+        var workflow = new DocumentPersistenceWorkflow([adapter]);
+        var path = WriteText("Existing.docx", "content");
+
+        var result = workflow.Open(path);
+
+        result.SourceLastWriteTimeUtc.Should().Be(File.GetLastWriteTimeUtc(path));
+    }
+
+    [Fact]
+    public void Save_FileModifiedSinceOpen_ThrowsAndLeavesTargetAndTempUntouched()
+    {
+        // FAIL-BEFORE: before the fix, DocumentPersistenceWorkflow.Save had no
+        // expectedLastWriteTimeUtc parameter and no external-modification check at all -- it always
+        // overwrote the target unconditionally, so the second writer's content on disk would be
+        // clobbered with "clobbered" and this assertion would fail (both the exception assertion
+        // and the "content preserved" assertion).
+        var adapter = new FakeDocumentAdapter([new FileFormatDescriptor(".docx", "Word Document")]);
+        var workflow = new DocumentPersistenceWorkflow([adapter]);
+        var path = WriteText("Existing.docx", "original");
+        workflow.TryResolveCurrentSaveTarget(path, out var target).Should().BeTrue();
+        var openedAtUtc = File.GetLastWriteTimeUtc(path);
+
+        // Simulate a second writer (another app instance, a sync client, a colleague) touching the
+        // file after we "opened" it.
+        Thread.Sleep(20);
+        File.WriteAllText(path, "someone else's edit");
+        File.SetLastWriteTimeUtc(path, DateTime.UtcNow);
+
+        var act = () => workflow.Save(Document("clobbered"), target, expectedLastWriteTimeUtc: openedAtUtc);
+
+        act.Should().Throw<DocumentExternallyModifiedException>();
+        File.ReadAllText(path).Should().Be(
+            "someone else's edit",
+            "the save must bail out before writing over the other writer's change");
+        Directory.GetFiles(_tempDir, "*.tmp").Should().BeEmpty();
+    }
+
+    [Fact]
+    public void Save_FileUnmodifiedSinceOpen_SavesNormallyWithExpectedWriteTimePassed()
+    {
+        // No-regression sibling: when the file on disk still has the write time captured at open,
+        // the save must proceed exactly as before.
+        var adapter = new FakeDocumentAdapter([new FileFormatDescriptor(".docx", "Word Document")]);
+        var workflow = new DocumentPersistenceWorkflow([adapter]);
+        var path = WriteText("Existing.docx", "original");
+        workflow.TryResolveCurrentSaveTarget(path, out var target).Should().BeTrue();
+        var openedAtUtc = File.GetLastWriteTimeUtc(path);
+
+        workflow.Save(Document("updated"), target, expectedLastWriteTimeUtc: openedAtUtc);
+
+        File.ReadAllText(path).Should().Be("updated");
+        Directory.GetFiles(_tempDir, "*.tmp").Should().BeEmpty();
+    }
+
     private string WriteText(string name, string text)
     {
         var path = Path.Combine(_tempDir, name);

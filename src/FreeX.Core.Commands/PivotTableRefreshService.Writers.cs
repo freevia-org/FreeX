@@ -60,6 +60,65 @@ public static partial class PivotTableRefreshService
                 topSubtotalRowsByLevel[level] = [];
         }
 
+        // Excel includes a row field's calculated items in every subtotal of its enclosing
+        // fields, not just the grand total - a calculated item is itself a value of its field,
+        // and Excel's field subtotal sums ALL of a field's items, real and calculated. Without
+        // this, a subtotal only summed the raw group rows and could disagree with its own
+        // grand total (which does add calculatedItemTotals below) by exactly the calculated
+        // items' contribution. Precomputed once here, rather than accumulated during the main
+        // loop below, because Top-placement subtotals are written before their child
+        // rows/calculated items are ever visited by that loop.
+        var subtotalCalculatedItemTotals = new Dictionary<PivotKey, double[]>[subtotalLevelCount];
+        for (var level = 0; level < subtotalLevelCount; level++)
+            subtotalCalculatedItemTotals[level] = [];
+
+        if (pivotTable.ShowSubtotals && subtotalLevelCount > 0 && rowCalculatedItems.Count > 0)
+        {
+            var calculatedItemGroupKeys = groups.Select(group => group.Key).ToList();
+            var calculatedItemContext = new PivotDisplayContext(retainedRows, retainedRows, retainedRows);
+            foreach (var (calculatedItem, fieldPosition) in rowCalculatedItems)
+            {
+                if (fieldPosition == 0)
+                    continue; // no enclosing subtotal level exists above the outermost field
+
+                var parentPrefixes = groups
+                    .Select(group => new PivotKey(group.Key.Values.Take(fieldPosition).ToArray()))
+                    .Distinct();
+
+                foreach (var parentPrefix in parentPrefixes)
+                {
+                    var values = new double[pivotTable.DataFields.Count];
+                    for (var index = 0; index < pivotTable.DataFields.Count; index++)
+                        values[index] = EvaluateCalculatedItemForField(
+                            calculatedItem.Formula,
+                            calculatedItemGroupKeys,
+                            key => groups.Where(group => group.Key.Equals(key)).SelectMany(group => group),
+                            fieldPosition,
+                            parentPrefix.Values,
+                            pivotTable.DataFields[index],
+                            pivotTable,
+                            headers,
+                            context: calculatedItemContext);
+
+                    // The calculated item belongs inside every subtotal level strictly
+                    // shallower than its own field position - those subtotals collapse over
+                    // deeper fields (including this one), so they must add the item's
+                    // contribution too, in addition to the raw rows they already sum.
+                    for (var level = 0; level < Math.Min(fieldPosition, subtotalLevelCount); level++)
+                    {
+                        var key = new PivotKey(parentPrefix.Values.Take(level + 1).ToArray());
+                        if (!subtotalCalculatedItemTotals[level].TryGetValue(key, out var existing))
+                        {
+                            existing = new double[pivotTable.DataFields.Count];
+                            subtotalCalculatedItemTotals[level][key] = existing;
+                        }
+                        for (var index = 0; index < pivotTable.DataFields.Count; index++)
+                            existing[index] += values[index];
+                    }
+                }
+            }
+        }
+
         var outputRow = start.Row + 1;
         // Per-level state for bottom subtotals: current prefix key and accumulated rows
         var currentSubtotalKeys = new PivotKey?[subtotalLevelCount];
@@ -113,7 +172,8 @@ public static partial class PivotTableRefreshService
                             if (currentSubtotalKeys[level] is not null)
                             {
                                 var subtotalParentRows = ComputeParentPrefixRows(currentSubtotalKeys[level]!, prefixRowsByLevel, retainedRows);
-                                WriteSubtotalRow(workbook, sheet, pivotTable, headers, start, rowFieldOutputColumns, currentSubtotalKeys[level]!, subtotalRowSets[level], retainedRows, subtotalParentRows, outputRow);
+                                subtotalCalculatedItemTotals[level].TryGetValue(currentSubtotalKeys[level]!, out var calculatedItemAddend);
+                                WriteSubtotalRow(workbook, sheet, pivotTable, headers, start, rowFieldOutputColumns, currentSubtotalKeys[level]!, subtotalRowSets[level], retainedRows, subtotalParentRows, outputRow, calculatedItemAddend);
                                 if (compactRowIndentLevels is not null)
                                     compactRowIndentLevels[outputRow] = level * indentStep;
                                 outputRow++;
@@ -148,7 +208,8 @@ public static partial class PivotTableRefreshService
                             if (topSubtotalRowsByLevel[level].TryGetValue(newKey, out var rowsForSubtotal))
                             {
                                 var subtotalParentRows = ComputeParentPrefixRows(newKey, prefixRowsByLevel, retainedRows);
-                                WriteSubtotalRow(workbook, sheet, pivotTable, headers, start, rowFieldOutputColumns, newKey, rowsForSubtotal, retainedRows, subtotalParentRows, outputRow);
+                                subtotalCalculatedItemTotals[level].TryGetValue(newKey, out var calculatedItemAddend);
+                                WriteSubtotalRow(workbook, sheet, pivotTable, headers, start, rowFieldOutputColumns, newKey, rowsForSubtotal, retainedRows, subtotalParentRows, outputRow, calculatedItemAddend);
                                 if (compactRowIndentLevels is not null)
                                     compactRowIndentLevels[outputRow] = level * indentStep;
                                 outputRow++;
@@ -263,7 +324,8 @@ public static partial class PivotTableRefreshService
                 if (currentSubtotalKeys[level] is not null)
                 {
                     var subtotalParentRows = ComputeParentPrefixRows(currentSubtotalKeys[level]!, prefixRowsByLevel, retainedRows);
-                    WriteSubtotalRow(workbook, sheet, pivotTable, headers, start, rowFieldOutputColumns, currentSubtotalKeys[level]!, subtotalRowSets[level], retainedRows, subtotalParentRows, outputRow);
+                    subtotalCalculatedItemTotals[level].TryGetValue(currentSubtotalKeys[level]!, out var calculatedItemAddend);
+                    WriteSubtotalRow(workbook, sheet, pivotTable, headers, start, rowFieldOutputColumns, currentSubtotalKeys[level]!, subtotalRowSets[level], retainedRows, subtotalParentRows, outputRow, calculatedItemAddend);
                     if (compactRowIndentLevels is not null)
                         compactRowIndentLevels[outputRow] = level * indentStep;
                     outputRow++;
@@ -628,7 +690,8 @@ public static partial class PivotTableRefreshService
         IReadOnlyList<IReadOnlyList<ScalarValue>> subtotalRows,
         IReadOnlyList<IReadOnlyList<ScalarValue>> grandTotalRows,
         IEnumerable<IReadOnlyList<ScalarValue>>? parentRowRows,
-        uint outputRow)
+        uint outputRow,
+        IReadOnlyList<double>? calculatedItemAddend = null)
     {
         var captionItem = subtotalKey.Values.Count == 0
             ? ""
@@ -645,10 +708,10 @@ public static partial class PivotTableRefreshService
                         ParentRowRows: parentRowRows),
                     pivotTable.DataFields[index],
                     pivotTable,
-                    headers),
+                    headers) + (calculatedItemAddend is null ? 0 : calculatedItemAddend[index]),
                 pivotTable.DataFields[index],
                 pivotTable,
-                isEmptyIntersection: subtotalRows.Count == 0);
+                isEmptyIntersection: subtotalRows.Count == 0 && calculatedItemAddend is null);
     }
 
     private static bool ShouldSuppressRepeatedRowLabel(

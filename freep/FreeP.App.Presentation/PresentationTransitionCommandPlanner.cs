@@ -336,11 +336,16 @@ public static class PresentationTransitionCommandPlanner
                 var transitions = BuildApplyToAllTransitions(
                     editor.Presentation.Slides.Count,
                     editor.CurrentSlideTransition);
+                var applyAllCommands = new List<IPresentationCommand>(transitions.Count);
                 for (int i = 0; i < transitions.Count; i++)
                 {
-                    editor.Presentation.Slides[i].Transition = transitions[i];
+                    applyAllCommands.Add(new SetSlideTransitionCommand(i, transitions[i]));
                 }
 
+                // Route through the bus as one undoable step (rather than mutating slides
+                // directly) so Ctrl+Z can undo "Apply to All Slides" and the dirty/undo
+                // machinery sees the change.
+                editor.Bus.Execute(new BatchCommand("Apply to All Slides", applyAllCommands));
                 return true;
 
             case PresentationTransitionCommandIntentKind.RequestSoundPicker:

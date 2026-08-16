@@ -113,8 +113,16 @@ public sealed class DocumentPersistenceWorkflow
         using var stream = File.OpenRead(path);
         var document = adapter.Load(stream);
         LinkedImagePreviewResolver.ResolveLocalPreviews(document, path);
-        var savedPath = format?.OpensAsTemplate == true ? null : path;
-        return new DocumentOpenResult(document, savedPath, format?.OpensAsTemplate == true, adapter, format);
+        var opensAsTemplate = format?.OpensAsTemplate == true;
+        var savedPath = opensAsTemplate ? null : path;
+        // r137-freew-persistence-external-modification: capture the write time we observed at open
+        // so a later Save can detect a second writer (another FreeW/Word instance, a sync client, a
+        // colleague on a shared path) changing the file in between -- see Save's own comment and
+        // DocumentExternallyModifiedException. A template open starts life as a brand-new, not-yet-
+        // saved document (SavedPath is already null for the same reason), so there is no "source"
+        // file to compare a future save against here.
+        var sourceLastWriteTimeUtc = opensAsTemplate ? (DateTime?)null : File.GetLastWriteTimeUtc(path);
+        return new DocumentOpenResult(document, savedPath, opensAsTemplate, adapter, format, sourceLastWriteTimeUtc);
     }
 
     public DocumentSnapshotOpenResult OpenSnapshot(string snapshotPath, string? originalPath)
@@ -173,10 +181,26 @@ public sealed class DocumentPersistenceWorkflow
     public DocumentSaveCompatibilityPlan BuildSaveCompatibilityPlan(TextDocument document, DocumentSaveTarget target) =>
         DocumentSaveCompatibilityPlanner.Build(document, target);
 
-    public void Save(TextDocument document, DocumentSaveTarget target)
+    public void Save(TextDocument document, DocumentSaveTarget target, DateTime? expectedLastWriteTimeUtc = null)
     {
         ArgumentNullException.ThrowIfNull(document);
         ArgumentNullException.ThrowIfNull(target);
+
+        // r137-freew-persistence-external-modification: port of FreeX's WorkbookSaveService.SaveAsync
+        // check. FreeW previously had NO external-modification detection at all (unlike FreeX): if the
+        // caller passes the write time it captured at open (DocumentOpenResult.SourceLastWriteTimeUtc)
+        // and the file on disk now has a different write time, someone else (another FreeW/Word
+        // instance, a sync client, a colleague on a shared path) changed it since we read it, and
+        // writing over it here would silently discard their changes with zero warning. This is a
+        // best-effort check-then-act (not a held file lock, matching FreeX's own caveat), but it
+        // catches the common "someone else saved while I was still editing" case. Callers that don't
+        // pass expectedLastWriteTimeUtc (the default) get the pre-existing unchecked behavior.
+        if (expectedLastWriteTimeUtc is { } expectedWriteTimeUtc &&
+            File.Exists(target.Path) &&
+            File.GetLastWriteTimeUtc(target.Path) != expectedWriteTimeUtc)
+        {
+            throw new DocumentExternallyModifiedException(target.Path);
+        }
 
         var directory = Path.GetDirectoryName(Path.GetFullPath(target.Path));
         if (!string.IsNullOrEmpty(directory))
@@ -216,7 +240,8 @@ public sealed record DocumentOpenResult(
     string? SavedPath,
     bool OpenedAsTemplate,
     IDocumentFileAdapter Adapter,
-    FileFormatDescriptor? Format);
+    FileFormatDescriptor? Format,
+    DateTime? SourceLastWriteTimeUtc = null);
 
 public sealed record DocumentSnapshotOpenResult(TextDocument Document, string? TargetPath);
 
@@ -229,3 +254,18 @@ public sealed record DocumentSaveTarget(
     string Path,
     IDocumentFileAdapter Adapter,
     FileFormatDescriptor? Format);
+
+/// <summary>
+/// Thrown by <see cref="DocumentPersistenceWorkflow.Save"/> when the caller passed the file's write
+/// time from open (<c>expectedLastWriteTimeUtc</c>, sourced from
+/// <see cref="DocumentOpenResult.SourceLastWriteTimeUtc"/>) and the target file on disk has since
+/// been modified by someone else -- a second FreeW/Word instance, or a colleague on a shared path.
+/// Hosts should catch this the same way FreeX's hosts catch
+/// <c>WorkbookExternallyModifiedException</c> and prompt the user (overwrite anyway / reload /
+/// save-as) instead of silently clobbering the other writer's changes.
+/// </summary>
+public sealed class DocumentExternallyModifiedException(string path)
+    : Exception($"'{path}' was modified by another program since it was opened.")
+{
+    public string Path { get; } = path;
+}

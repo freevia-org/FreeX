@@ -14,9 +14,10 @@ namespace FreeW.App.Host;
 /// A modal Bookmark Manager over the FreeW editing surface. Lists the document's bookmark targets (via
 /// the pure <see cref="Bookmarks"/> helper, in document order) and offers two actions on the selected
 /// entry: <b>Go To</b> scrolls/carets to the bookmarked paragraph (via
-/// <see cref="DocumentView.BringBlockIntoView(int)"/>) and closes; <b>Delete</b> clears the bookmark
-/// (via <see cref="Bookmarks.RemoveBookmark(TextDocument, string)"/>), re-renders, and refreshes the
-/// list. View-only: it touches no docx I/O and changes no model shapes — only the existing
+/// <see cref="DocumentView.BringBlockIntoView(int)"/>) and closes; <b>Delete</b> clears exactly the
+/// selected instance (via <see cref="Bookmarks.RemoveBookmarkAt(TextDocument, BookmarkLocation)"/> — not
+/// every paragraph sharing that name), re-renders, and refreshes the list. View-only: it touches no docx
+/// I/O and changes no model shapes — only the existing
 /// <see cref="Paragraph.BookmarkName"/> marker.
 /// </summary>
 internal sealed partial class BookmarkManagerDialog : Free.Shared.Ribbon.Wpf.DialogWindow
@@ -148,8 +149,8 @@ internal sealed partial class BookmarkManagerDialog : Free.Shared.Ribbon.Wpf.Dia
         if (plan is null)
             return;
 
-        // Removes the marker from the model and re-renders, then refresh the list.
-        _editor.RemoveBookmark(plan.Name);
+        // Removes exactly the selected instance from the model and re-renders, then refresh the list.
+        _editor.RemoveBookmarkAt(plan.Location);
         RefreshList(plan);
     }
 

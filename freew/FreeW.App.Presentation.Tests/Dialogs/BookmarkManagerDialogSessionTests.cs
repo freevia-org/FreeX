@@ -106,7 +106,7 @@ public sealed class BookmarkManagerDialogSessionTests
             new BookmarkLocation("Last", 3),
         ]);
 
-        plan.Should().Be(new BookmarkManagerDeleteRefreshPlan("Removed"));
+        plan.Should().Be(new BookmarkManagerDeleteRefreshPlan(new BookmarkLocation("Removed", 2)));
         state.SelectedIndex.Should().Be(0);
         state.SelectedName.Should().Be("First");
         state.StatusText.Should().Be("Removed bookmark \"Removed\".");
@@ -140,6 +140,26 @@ public sealed class BookmarkManagerDialogSessionTests
         session.SelectIndex(1);
 
         session.PlanGoTo().Should().Be(new BookmarkManagerGoToIntent("Target", 12));
+    }
+
+    // Regression for the confirmed HIGH finding: duplicate bookmark names are allowed (see
+    // Bookmarks.cs / BookmarkCommands.cs), and the Bookmark Manager's Delete action must target only the
+    // selected instance, not every paragraph document-wide sharing that name. The plan's Location (not
+    // just Name) is what lets a renderer resolve the exact paragraph via Bookmarks.RemoveBookmarkAt.
+    [Fact]
+    public void DeletePlanTargetsTheSelectedInstanceEvenWhenNamesCollide()
+    {
+        var session = new BookmarkManagerDialogSession();
+        session.Refresh([
+            new BookmarkLocation("Dup", 1),
+            new BookmarkLocation("Dup", 5),
+        ]);
+        session.SelectIndex(1);
+
+        var plan = session.PlanDelete();
+
+        plan.Should().Be(new BookmarkManagerDeleteRefreshPlan(new BookmarkLocation("Dup", 5)));
+        plan!.Name.Should().Be("Dup");
     }
 
     [Fact]
@@ -184,9 +204,9 @@ public sealed class BookmarkManagerDialogSourceOwnershipTests
             source.Should().NotContain("Button(\"Go To\"");
         }
 
-        wpf.Should().Contain("_editor.RemoveBookmark(plan.Name)");
+        wpf.Should().Contain("_editor.RemoveBookmarkAt(plan.Location)");
         wpf.Should().Contain("_editor.GoToBookmark(intent.Location)");
-        avalonia.Should().Contain("_editor.DeleteBookmark(plan.Name)");
+        avalonia.Should().Contain("_editor.DeleteBookmarkAt(plan.Location)");
         avalonia.Should().Contain("_editor.GoToBookmark(intent.Location)");
 
         var wpfEditor = ReadSource("freew", "FreeW.App.Host", "Editing", "DocumentView.cs");

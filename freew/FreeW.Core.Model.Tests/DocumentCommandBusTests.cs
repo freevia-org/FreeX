@@ -22,6 +22,28 @@ public class DocumentCommandBusTests
         public void Revert(IDocumentCommandContext context) { }
     }
 
+    /// <summary>Command whose Apply/Revert can be made to throw on demand, for exercising the
+    /// rollback/safety-net paths in <see cref="CompositeDocumentCommand"/> and
+    /// <see cref="DocumentCommandBus"/> that a normal always-succeeding command never touches.</summary>
+    private sealed class ThrowingCommand(bool throwOnApply = false, bool throwOnRevert = false) : IDocumentCommand
+    {
+        public string Label => "Throw";
+        public bool ThrowOnApply { get; set; } = throwOnApply;
+        public bool ThrowOnRevert { get; set; } = throwOnRevert;
+
+        public void Apply(IDocumentCommandContext context)
+        {
+            if (ThrowOnApply)
+                throw new InvalidOperationException("apply boom");
+        }
+
+        public void Revert(IDocumentCommandContext context)
+        {
+            if (ThrowOnRevert)
+                throw new InvalidOperationException("revert boom");
+        }
+    }
+
     [Fact]
     public void InsertParagraph_Execute_Undo_Redo()
     {
@@ -100,6 +122,149 @@ public class DocumentCommandBusTests
         doc.Blocks.Should().BeEmpty();
         bus.IsUndoGroupOpen.Should().BeFalse();
         bus.CanUndo.Should().BeFalse();
+    }
+
+    // R137-documentcommands-composite-rollback-1 (finding A): a composite command whose Nth
+    // child throws mid-Apply must not leave the earlier children applied. Before the fix,
+    // CompositeDocumentCommand.Apply had no try/catch, so the first child's edit stuck around
+    // in the document even though the whole composite failed and no undo entry was pushed.
+    [Fact]
+    public void CompositeCommand_SecondChildThrows_RollsBackFirstChild_AndPushesNoUndoEntry()
+    {
+        var (doc, bus) = New();
+        doc.Blocks.Add(new Paragraph("existing"));
+        var beforeState = doc.PlainText;
+
+        var first = new InsertParagraphCommand(0, new Paragraph("A"));
+        var second = new ThrowingCommand(throwOnApply: true);
+        var composite = new CompositeDocumentCommand("Two-step", [first, second]);
+
+        Action act = () => bus.Execute(composite);
+
+        act.Should().Throw<InvalidOperationException>().WithMessage("apply boom");
+        // The differentiator: before the fix, "A" from the first child remained inserted.
+        doc.PlainText.Should().Be(beforeState);
+        doc.Blocks.Should().ContainSingle().Which.Should().BeOfType<Paragraph>();
+        bus.CanUndo.Should().BeFalse();
+    }
+
+    // Sibling no-regression: a composite whose children all succeed still applies and reverts
+    // normally through the same Apply()/Revert() code path exercised above.
+    [Fact]
+    public void CompositeCommand_AllChildrenSucceed_AppliesAndReverts()
+    {
+        var (doc, bus) = New();
+        var first = new InsertParagraphCommand(0, new Paragraph("A"));
+        var second = new InsertParagraphCommand(1, new Paragraph("B"));
+        var composite = new CompositeDocumentCommand("Two-step", [first, second]);
+
+        bus.Execute(composite);
+        doc.Blocks.Should().HaveCount(2);
+        bus.CanUndo.Should().BeTrue();
+
+        bus.Undo().Should().BeTrue();
+        doc.Blocks.Should().BeEmpty();
+
+        bus.Redo().Should().BeTrue();
+        doc.Blocks.Should().HaveCount(2);
+    }
+
+    // R137-documentcommands-undoredo-safetynet-1 (finding B): Undo()/Redo() must restore the
+    // shared UndoRedoStack's bookkeeping (via RollbackPopUndo/PushRedo) when the command's own
+    // Revert()/Apply() throws, or the entry is left dangling in the wrong stack -- neither
+    // undoable nor redoable, or double-counted. Before the fix there was no try/catch at all.
+    [Fact]
+    public void Undo_WhenRevertThrows_RestoresEntryToUndoStack_AndDoesNotLeaveItOnRedoStack()
+    {
+        var (_, bus) = New();
+        var throwing = new ThrowingCommand(throwOnRevert: true);
+        bus.Execute(throwing);
+        bus.CanUndo.Should().BeTrue();
+
+        Action act = () => bus.Undo();
+
+        act.Should().Throw<InvalidOperationException>().WithMessage("revert boom");
+        // The differentiator: before the fix, PopUndo already moved the entry onto the redo
+        // stack and the throw left it stranded there (CanUndo false, CanRedo true).
+        bus.CanUndo.Should().BeTrue();
+        bus.CanRedo.Should().BeFalse();
+
+        // The command must still be the live top-of-stack entry: a subsequent successful
+        // Undo (once the fault clears) reverts it, not some other stale state.
+        throwing.ThrowOnRevert = false;
+        bus.Undo().Should().BeTrue();
+        bus.CanUndo.Should().BeFalse();
+        bus.CanRedo.Should().BeTrue();
+    }
+
+    [Fact]
+    public void Redo_WhenApplyThrows_RestoresEntryToRedoStack_AndDoesNotLoseIt()
+    {
+        var (_, bus) = New();
+        var throwing = new ThrowingCommand();
+        bus.Execute(throwing);
+        bus.Undo().Should().BeTrue();
+        bus.CanRedo.Should().BeTrue();
+
+        throwing.ThrowOnApply = true;
+        Action act = () => bus.Redo();
+
+        act.Should().Throw<InvalidOperationException>().WithMessage("apply boom");
+        // The differentiator: before the fix, PopRedo already removed the entry from the redo
+        // stack and the throw lost it entirely (CanRedo false, CanUndo false too).
+        bus.CanRedo.Should().BeTrue();
+        bus.CanUndo.Should().BeFalse();
+
+        throwing.ThrowOnApply = false;
+        bus.Redo().Should().BeTrue();
+        bus.CanRedo.Should().BeFalse();
+        bus.CanUndo.Should().BeTrue();
+    }
+
+    // Sibling no-regression: normal (non-throwing) Undo/Redo through the new try/catch wrapping
+    // still behaves exactly as before.
+    [Fact]
+    public void Undo_Redo_WhenCommandsDoNotThrow_BehaveNormally()
+    {
+        var (doc, bus) = New();
+        bus.Execute(new InsertParagraphCommand(0, new Paragraph("A")));
+
+        bus.Undo().Should().BeTrue();
+        doc.Blocks.Should().BeEmpty();
+        bus.CanRedo.Should().BeTrue();
+
+        bus.Redo().Should().BeTrue();
+        doc.PlainText.Should().Be("A");
+        bus.CanUndo.Should().BeTrue();
+    }
+
+    // Trap guard (see round-137 task notes): CommitUndoGroup builds its CompositeDocumentCommand
+    // from children that were already applied individually as Execute() collected them -- it
+    // never calls the composite's own Apply(). A "track outstanding children via an Apply-only
+    // list" fix would leave that list empty for every grouped edit, making Revert() (and
+    // therefore one Undo() call) a silent no-op. This pins the correct behavior: one Undo
+    // reverts the whole group.
+    [Fact]
+    public void CommitUndoGroup_ThenOneUndo_RevertsEveryChild()
+    {
+        var (doc, bus) = New();
+        bus.BeginUndoGroup();
+        bus.Execute(new InsertParagraphCommand(0, new Paragraph("A")));
+        bus.Execute(new InsertParagraphCommand(1, new Paragraph("B")));
+        bus.CommitUndoGroup("Insert Two");
+
+        doc.Blocks.Should().HaveCount(2);
+        bus.CanUndo.Should().BeTrue();
+        bus.CanRedo.Should().BeFalse();
+
+        bus.Undo().Should().BeTrue();
+
+        doc.Blocks.Should().BeEmpty();
+        bus.CanUndo.Should().BeFalse();
+        bus.CanRedo.Should().BeTrue();
+
+        bus.Redo().Should().BeTrue();
+        doc.Blocks.Should().HaveCount(2);
     }
 
     [Fact]

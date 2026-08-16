@@ -44,6 +44,7 @@ public static class PptxPackageReader
     private const string ChartRelType         = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/chart";
     private const string NotesSlideRelType    = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/notesSlide";
     private const string NotesMasterRelType   = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/notesMaster";
+    private const string HandoutMasterRelType = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/handoutMaster";
     private const string PresPropsRelType     = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/presProps";
     private const string HyperlinkRelType     = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/hyperlink";
     private const string SlideHlinkRelType    = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/slide";
@@ -244,12 +245,64 @@ public static class PptxPackageReader
                         presentation.NotesMasterTextStyles = new MasterTextStyles();
                         ReadTextStyleLevels(notesStyle, presentation.NotesMasterTextStyles.BodyStyle, notesMasterScheme);
                     }
+
+                    // p:hf — notes/handout header/footer visibility flags. Presentation-wide:
+                    // there is no per-notes-slide override in the file format.
+                    var notesHfEl = notesMasterRoot.Element(P + "hf");
+                    if (notesHfEl is not null)
+                    {
+                        presentation.NotesHfVisibility = new HfFlags
+                        {
+                            ShowFooter   = notesHfEl.Attribute("ftr")?.Value    is not "0",
+                            ShowDate     = notesHfEl.Attribute("dt")?.Value     is not "0",
+                            ShowSlideNum = notesHfEl.Attribute("sldNum")?.Value is not "0",
+                            ShowHeader   = notesHfEl.Attribute("hdr")?.Value    is not "0",
+                        };
+                    }
                 }
             }
 
             var notesMasterRelsPath = GetRelationshipPartPath(notesMasterPath);
             if (TryReadPackageEntry(archive, notesMasterRelsPath, out var notesMasterRelsBytes))
                 presentation.NotesMasterRelsXml = notesMasterRelsBytes;
+        }
+
+        // Handout master: exposes header/footer/date/slide-number placeholder geometry and text
+        // to the handout PDF/print exporter (same pattern as the notes master above). The part is
+        // optional — PowerPoint only writes one once the user visits View > Handout Master or sets
+        // handout-specific header/footer text.
+        var handoutMasterTarget = OpcRelationships.FirstTargetByType(presRels, HandoutMasterRelType);
+        if (handoutMasterTarget is not null)
+        {
+            var handoutMasterPath = ResolveRelativeZipPath(presDir, handoutMasterTarget);
+            if (TryReadPackageEntry(archive, handoutMasterPath, out var handoutMasterBytes))
+            {
+                var handoutMasterXml = OpcXml.TryLoadXml(handoutMasterBytes);
+                if (handoutMasterXml?.Root is { } handoutMasterRoot)
+                {
+                    var handoutMasterScheme = presentation.Theme.ColorScheme;
+                    var spTree = handoutMasterRoot.Element(P + "cSld")?.Element(P + "spTree");
+                    if (spTree is not null)
+                    {
+                        foreach (var shape in ReadShapesFromTree(spTree, archive, handoutMasterPath, handoutMasterScheme, theme: presentation.Theme))
+                            presentation.HandoutMasterPlaceholders.Add(shape);
+                    }
+
+                    // p:hf — handout header/footer visibility flags, independent part from the
+                    // notes master's own p:hf even though PowerPoint's UI keeps both in sync.
+                    var handoutHfEl = handoutMasterRoot.Element(P + "hf");
+                    if (handoutHfEl is not null)
+                    {
+                        presentation.HandoutHfVisibility = new HfFlags
+                        {
+                            ShowFooter   = handoutHfEl.Attribute("ftr")?.Value    is not "0",
+                            ShowDate     = handoutHfEl.Attribute("dt")?.Value     is not "0",
+                            ShowSlideNum = handoutHfEl.Attribute("sldNum")?.Value is not "0",
+                            ShowHeader   = handoutHfEl.Attribute("hdr")?.Value    is not "0",
+                        };
+                    }
+                }
+            }
         }
 
         var slideRelEntries = presRels.ToDictionary(r => r.Id, StringComparer.OrdinalIgnoreCase);
@@ -2742,7 +2795,20 @@ public static class PptxPackageReader
         if (!string.IsNullOrWhiteSpace(embRelId))
         {
             var embRel = slideRels.FirstOrDefault(r => r.Id == embRelId);
-            if (!string.IsNullOrWhiteSpace(embRel.Target))
+            if (!string.IsNullOrWhiteSpace(embRel.Target) && embRel.IsExternal)
+            {
+                // LINKED OLE object: the relationship's target is an external file/URL, not a
+                // package part. There is nothing to read from the zip — preserve the link target
+                // and rel type so the writer can re-emit the External relationship verbatim
+                // instead of silently dropping the link (which would leave the shape's r:id
+                // dangling with no matching relationship).
+                ole.IsLinked = true;
+                ole.LinkTarget = embRel.Target;
+                ole.RelType = string.IsNullOrWhiteSpace(embRel.Type)
+                    ? OleObjectRelType
+                    : embRel.Type;
+            }
+            else if (!string.IsNullOrWhiteSpace(embRel.Target))
             {
                 var embPath = ResolveRelativeZipPath(slideDir, embRel.Target);
                 var embBytes = ReadEntryBytes(archive, embPath);

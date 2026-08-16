@@ -255,6 +255,79 @@ public class Wordml2003WriteTests
     }
 
     // -----------------------------------------------------------------------
+    // Bookmark markers (internal-link targets)
+    // -----------------------------------------------------------------------
+
+    [Fact]
+    public void Write_EmitsBookmarkMarkerAtTheInternalLinkTargetParagraph()
+    {
+        var source = TextDocument.CreateEmpty();
+        source.Blocks.Clear();
+
+        var target = new Paragraph("Summary section");
+        target.BookmarkNames.Add("Summary");
+        source.Blocks.Add(target);
+
+        var link = new Paragraph();
+        link.Runs.Add(new Run("Jump to section") { HyperlinkAnchor = "Summary" });
+        source.Blocks.Add(link);
+
+        var xml = WriteToXml(source);
+
+        // The hyperlink reference (w:hlink w:bookmark="Summary") is only half the story — without a
+        // matching w:bookmarkStart/w:bookmarkEnd on the target paragraph the link has nowhere to land.
+        var bookmarkStart = xml.Descendants(Wordml2003Reader.W + "bookmarkStart").Should().ContainSingle().Subject;
+        bookmarkStart.Attribute(Wordml2003Reader.W + "name")!.Value.Should().Be("Summary");
+
+        var bookmarkEnd = xml.Descendants(Wordml2003Reader.W + "bookmarkEnd").Should().ContainSingle().Subject;
+        bookmarkEnd.Attribute(Wordml2003Reader.W + "id")!.Value
+            .Should().Be(bookmarkStart.Attribute(Wordml2003Reader.W + "id")!.Value);
+
+        // The marker must sit on the TARGET paragraph specifically, not merely exist somewhere.
+        var markedParagraph = xml.Descendants(Wordml2003Reader.W + "p")
+            .Single(p => p.Elements(Wordml2003Reader.W + "bookmarkStart").Any());
+        markedParagraph.Descendants(Wordml2003Reader.W + "t")
+            .Select(t => t.Value).Should().Contain("Summary section");
+    }
+
+    [Fact]
+    public void Write_OmitsBookmarkMarkersWhenNoParagraphCarriesABookmark()
+    {
+        var source = TextDocument.CreateEmpty();
+        source.Blocks.Clear();
+        source.Blocks.Add(new Paragraph("Plain paragraph, no bookmark"));
+        source.Blocks.Add(new Paragraph("Another plain paragraph"));
+
+        var xml = WriteToXml(source);
+
+        xml.Descendants(Wordml2003Reader.W + "bookmarkStart").Should().BeEmpty();
+        xml.Descendants(Wordml2003Reader.W + "bookmarkEnd").Should().BeEmpty();
+    }
+
+    [Fact]
+    public void Write_GivesEachBookmarkMarkerAUniqueIdAcrossParagraphs()
+    {
+        var source = TextDocument.CreateEmpty();
+        source.Blocks.Clear();
+
+        var first = new Paragraph("First target");
+        first.BookmarkNames.Add("One");
+        source.Blocks.Add(first);
+
+        var second = new Paragraph("Second target");
+        second.BookmarkNames.Add("Two");
+        source.Blocks.Add(second);
+
+        var xml = WriteToXml(source);
+
+        var ids = xml.Descendants(Wordml2003Reader.W + "bookmarkStart")
+            .Select(e => e.Attribute(Wordml2003Reader.W + "id")!.Value)
+            .ToList();
+        ids.Should().HaveCount(2);
+        ids.Should().OnlyHaveUniqueItems();
+    }
+
+    // -----------------------------------------------------------------------
     // R18 — super/subscript round-trip
     // -----------------------------------------------------------------------
 

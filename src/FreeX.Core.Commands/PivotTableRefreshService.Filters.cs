@@ -416,6 +416,15 @@ public static partial class PivotTableRefreshService
         if (end.HasValue && end.Value > start && number >= end.Value)
             return $">{end.Value:0.########}";
 
+        // Symmetric with the overflow bucket above: values below the "Starting at" bound
+        // don't get their own interval-sized bucket extrapolated backwards past the
+        // configured start - they fall into a single underflow group labeled "<start", the
+        // same way Excel does. Without this, a value below start fell into a bucket derived
+        // by extending the interval grid backwards, whose label described a range the
+        // grid math places it in but that isn't the range Excel would show.
+        if (number < start)
+            return $"<{start:0.########}";
+
         var bucketStart = start + Math.Floor((number - start) / interval) * interval;
 
         // Excel labels integer-interval groups as an inclusive range ("0-9", "10-19", the
@@ -527,7 +536,8 @@ public static partial class PivotTableRefreshService
         private static bool TryGetLabelSortNumber(string text, out double number) =>
             double.TryParse(text, NumberStyles.Float, CultureInfo.CurrentCulture, out number) ||
             TryParseNumberRangeLabelStart(text, out number) ||
-            TryParseNumberRangeOverflowLabel(text, out number);
+            TryParseNumberRangeOverflowLabel(text, out number) ||
+            TryParseNumberRangeUnderflowLabel(text, out number);
 
         /// <summary>
         /// Parses the leading number out of a "{start}-{end}" numeric-group bucket label (see
@@ -574,6 +584,26 @@ public static partial class PivotTableRefreshService
                 return false;
 
             return double.TryParse(text[1..], NumberStyles.Float, CultureInfo.CurrentCulture, out boundary);
+        }
+
+        /// <summary>
+        /// Parses a "&lt;{start}" underflow-bucket label (see <see cref="NumberRangeKeyText"/>),
+        /// produced for values below a numeric-range group's "Starting at" setting, so that
+        /// underflow bucket sorts numerically before every in-range bucket - including the
+        /// bucket that begins exactly at "start", which would otherwise tie with it if this
+        /// returned that same start value instead of negative infinity.
+        /// </summary>
+        private static bool TryParseNumberRangeUnderflowLabel(string text, out double boundary)
+        {
+            boundary = 0;
+            if (string.IsNullOrEmpty(text) || text[0] != '<')
+                return false;
+
+            if (!double.TryParse(text[1..], NumberStyles.Float, CultureInfo.CurrentCulture, out _))
+                return false;
+
+            boundary = double.NegativeInfinity;
+            return true;
         }
     }
 

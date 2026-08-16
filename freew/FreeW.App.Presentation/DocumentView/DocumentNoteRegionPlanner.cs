@@ -356,6 +356,132 @@ public static class DocumentNoteRegionPlanner
     public static string ComputeDisplayNumber(int sequenceIndex, NoteNumberingOptions options)
         => NoteNumberFormatter.Format(sequenceIndex, options);
 
+    /// <summary>
+    /// Computes each footnote's (or endnote's) Word-compatible display sequence number, honoring
+    /// <see cref="NoteNumberingOptions.NumberRestart"/> instead of always numbering the whole
+    /// document as one continuous series. This is the single authoritative sequence calculator —
+    /// every renderer (the WPF note-region/body-mark builders, the Avalonia PrintLayout note bands
+    /// and body-mark glyphs, and the accessibility tree) must call this rather than recomputing its
+    /// own "StartAt + index" series, or a restart setting fixed here would silently stay broken in
+    /// whichever call site still rolls its own continuous-only math.
+    /// <para>
+    /// <see cref="NoteNumberRestart.Continuous"/> (the default) numbers every note the document owns
+    /// in one series, in id order, from <see cref="NoteNumberingOptions.StartAt"/>.
+    /// </para>
+    /// <para>
+    /// <see cref="NoteNumberRestart.EachSection"/> restarts at StartAt for every document section,
+    /// grouping each note by the section that contains the body paragraph carrying its reference
+    /// run (<see cref="Run.FootnoteId"/> / <see cref="Run.EndnoteId"/>). This needs no layout
+    /// information, so it applies exactly everywhere, including the in-body reference mark.
+    /// </para>
+    /// <para>
+    /// <see cref="NoteNumberRestart.EachPage"/> (footnotes only — Word does not offer it for
+    /// endnotes, and <paramref name="pageGroupIds"/> should stay null for endnote callers) restarts
+    /// at StartAt for the ids in <paramref name="pageGroupIds"/> when supplied — callers that build
+    /// one note region per physical page (the ordinary renderers) already have exactly that page's
+    /// ids in hand and pass them straight through. Callers with no resolved page (height/measurement
+    /// estimates, the accessibility tree, and the in-body mark before layout can place it) omit
+    /// <paramref name="pageGroupIds"/> and fall back to continuous numbering across the whole
+    /// document, which is an accepted approximation for those non-final-display uses.
+    /// </para>
+    /// </summary>
+    public static IReadOnlyDictionary<int, int> ComputeSequenceById(
+        TextDocument document,
+        bool isFootnote,
+        IReadOnlyList<int>? pageGroupIds = null)
+    {
+        ArgumentNullException.ThrowIfNull(document);
+
+        var options = isFootnote ? document.FootnoteNumbering : document.EndnoteNumbering;
+        var startAt = Math.Max(1, options.StartAt);
+        IEnumerable<int> documentIds = isFootnote ? document.Footnotes.Keys : document.Endnotes.Keys;
+        var orderedIds = documentIds.OrderBy(id => id).ToList();
+
+        if (options.NumberRestart == NoteNumberRestart.EachPage && pageGroupIds is not null)
+        {
+            var pageIdSet = new HashSet<int>(pageGroupIds);
+            var scoped = orderedIds.Where(pageIdSet.Contains).ToList();
+            return scoped
+                .Select((id, index) => (id, sequence: startAt + index))
+                .ToDictionary(pair => pair.id, pair => pair.sequence);
+        }
+
+        if (options.NumberRestart == NoteNumberRestart.EachSection)
+        {
+            var sectionById = ResolveSectionIndexById(document, isFootnote, orderedIds);
+            var result = new Dictionary<int, int>();
+            var nextInSection = new Dictionary<int, int>();
+            foreach (var id in orderedIds)
+            {
+                var section = sectionById.TryGetValue(id, out var s) ? s : 0;
+                var sequence = nextInSection.TryGetValue(section, out var next) ? next : startAt;
+                result[id] = sequence;
+                nextInSection[section] = sequence + 1;
+            }
+            return result;
+        }
+
+        return orderedIds
+            .Select((id, index) => (id, sequence: startAt + index))
+            .ToDictionary(pair => pair.id, pair => pair.sequence);
+    }
+
+    /// <summary>
+    /// Maps each id in <paramref name="orderedIds"/> to the 0-based index of the document section
+    /// whose body content carries its reference run, by walking <see cref="TextDocument.Blocks"/>
+    /// (recursing through table cells and nested tables) and incrementing the section counter after
+    /// every paragraph that ends a section (<see cref="Paragraph.SectionBreak"/> set). Ids with no
+    /// locatable reference run (should not normally happen) default to section 0.
+    /// </summary>
+    private static IReadOnlyDictionary<int, int> ResolveSectionIndexById(
+        TextDocument document,
+        bool isFootnote,
+        IReadOnlyList<int> orderedIds)
+    {
+        var result = new Dictionary<int, int>();
+        var remaining = new HashSet<int>(orderedIds);
+        var sectionIndex = 0;
+
+        void Scan(IEnumerable<Block> blocks)
+        {
+            foreach (var block in blocks)
+            {
+                if (block is Paragraph paragraph)
+                {
+                    if (remaining.Count > 0)
+                    {
+                        foreach (var run in paragraph.Runs)
+                        {
+                            var id = isFootnote ? run.FootnoteId : run.EndnoteId;
+                            if (id is { } noteId && remaining.Remove(noteId))
+                                result[noteId] = sectionIndex;
+                        }
+                    }
+
+                    if (paragraph.SectionBreak is not null)
+                        sectionIndex++;
+                    continue;
+                }
+
+                if (block is not Table table)
+                    continue;
+
+                foreach (var row in table.Rows)
+                {
+                    foreach (var cell in row.Cells)
+                    {
+                        Scan(cell.Paragraphs);
+                        foreach (var nestedTable in cell.NestedTables)
+                            Scan([nestedTable]);
+                    }
+                }
+            }
+        }
+
+        Scan(document.Blocks);
+        return result;
+    }
+
     private static IReadOnlyList<DocumentNoteRegionRow> BuildRows(
         TextDocument document,
         IReadOnlyList<int> ids,
@@ -364,13 +490,7 @@ public static class DocumentNoteRegionPlanner
     {
         var rows = new List<DocumentNoteRegionRow>();
         var options = isFootnote ? document.FootnoteNumbering : document.EndnoteNumbering;
-        IEnumerable<int> documentIds = isFootnote ? document.Footnotes.Keys : document.Endnotes.Keys;
-        var orderedDocumentIds = documentIds
-            .OrderBy(id => id)
-            .ToList();
-        var sequenceById = orderedDocumentIds
-            .Select((id, index) => (id, sequence: Math.Max(1, options.StartAt) + index))
-            .ToDictionary(pair => pair.id, pair => pair.sequence);
+        var sequenceById = ComputeSequenceById(document, isFootnote, ids);
 
         foreach (var id in ids)
         {

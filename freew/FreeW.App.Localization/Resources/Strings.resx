@@ -707,6 +707,7 @@
   <data name="Bookmark_Title" xml:space="preserve"><value>Bookmark</value></data>
   <data name="Bookmark_NameOrRemove_Prompt" xml:space="preserve"><value>Bookmark name (leave blank to remove):</value></data>
   <data name="Bookmark_NoneForLink_Message" xml:space="preserve"><value>No bookmarks exist yet. Add a bookmark first (Insert &gt; Bookmark), then link to it.</value></data>
+  <data name="Bookmark_DuplicateName_Message_Format" xml:space="preserve"><value>A bookmark named "{0}" already exists in this document. Choose a different name.</value></data>
   <data name="LinkBookmark_Title" xml:space="preserve"><value>Link to Bookmark</value></data>
   <data name="LinkBookmark_Bookmark_Label" xml:space="preserve"><value>Bookmark:</value></data>
   <data name="Field_InsertPageNumber_Title" xml:space="preserve"><value>Insert Page Number</value></data>

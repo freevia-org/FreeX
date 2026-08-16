@@ -136,6 +136,24 @@ internal static class XlsxChartSeriesRangeReader
         range = default;
         var local = formula.Trim();
 
+        // R137-io-chart-series-multiarea: a discontiguous union such as
+        // "Sheet1!$A$1:$A$5,Sheet1!$C$1:$C$5" is NOT a single rectangle. Without this check,
+        // LastIndexOf('!') below lands on the LAST area's sheet separator, so the tail
+        // ($C$1:$C$5) splits cleanly on ':' and this method "succeeds" against only the final
+        // area — silently discarding every earlier area while leaving a garbage sheet prefix
+        // ("Sheet1!$A$1:$A$5,Sheet1") that gets thrown away too. Because the parse "succeeds",
+        // HasUnparsableFormula's own doc comment promise ("Multi-area formulas ... also trigger
+        // this path") never actually held: the verbatim-formula bypass never engaged, so the
+        // truncated single-area GridRange was recorded as the series' real range and the next
+        // save regenerated the formula from it, permanently losing every area but the last.
+        // Rejecting here routes multi-area formulas through the same "cannot parse" path as
+        // named ranges and external-workbook links, matching the doc comment. The comma check is
+        // quote-aware (mirrors WorkbookRangeTextCodec.SplitReferences in FreeX.App.Presentation,
+        // duplicated locally since Core.IO cannot reference that project) so a comma inside a
+        // quoted sheet name, e.g. 'Budget, Q1'!$A$1:$A$5, is not mistaken for a union separator.
+        if (HasUnquotedComma(local))
+            return false;
+
         // Extract and resolve the sheet name from the formula prefix (e.g. 'Sheet1'!$A$1:$A$5).
         var bang = local.LastIndexOf('!');
         if (bang >= 0)
@@ -181,6 +199,35 @@ internal static class XlsxChartSeriesRangeReader
 
         range = new GridRange(start, end);
         return true;
+    }
+
+    /// <summary>
+    /// True when <paramref name="text"/> contains a ',' outside of any single-quoted sheet name
+    /// segment — the marker of a multi-area (union) reference such as
+    /// <c>Sheet1!$A$1:$A$5,Sheet1!$C$1:$C$5</c>. A doubled single-quote (<c>''</c>) inside a
+    /// quoted sheet name is the OOXML escape for a literal quote and does not toggle quote state.
+    /// </summary>
+    private static bool HasUnquotedComma(string text)
+    {
+        var inQuotedSheetName = false;
+        for (var index = 0; index < text.Length; index++)
+        {
+            if (text[index] == '\'')
+            {
+                if (index + 1 < text.Length && text[index + 1] == '\'')
+                {
+                    index++;
+                    continue;
+                }
+                inQuotedSheetName = !inQuotedSheetName;
+            }
+            else if (text[index] == ',' && !inQuotedSheetName)
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /// <summary>

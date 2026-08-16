@@ -450,7 +450,18 @@ public static class PasteCommandFactory
                 // it is wired directly to PasteDataValidationCommand from
                 // WorkbookSession.PasteDataValidationFromClipboardAtActiveCell -- so this cannot
                 // double-add).
-                if (SourceHasOverlappingDataValidation(sourceSheet, sourceRange))
+                //
+                // R137-paste-data-validation-clear-1: this must run even when the SOURCE has no
+                // overlapping rule at all, not only when SourceHasOverlappingDataValidation is true.
+                // PasteDataValidationCommand.Apply always clears any pre-existing destination rule
+                // that overlaps the paste footprint (ClearOverlappingValidationRanges) before
+                // (re)adding the source's rule(s), if any -- so gating construction on "source has a
+                // rule" skipped that clear whenever the source cell had none, leaving a stale
+                // destination rule in force over a value that real Excel's plain Ctrl+V would have
+                // left with NO validation (matching the source). Paste Special > Values intentionally
+                // does not reach this branch at all (mode gate above), so it correctly leaves the
+                // destination's own validation untouched, as Excel does.
+                if (sourceSheet is not null)
                     specialExtraCommands.Add(new PasteDataValidationCommand(targetSheetId, sourceRange, destination, options.Transpose, sourceAreas));
 
                 if (ShouldCarryComments(sourceSheet, sourceRange, targetSheet, specialFootprint))
@@ -602,7 +613,14 @@ public static class PasteCommandFactory
             // around it -- see the identical comment on the specialCarriesFormatting branch above
             // for why this can never double-add with the dedicated Paste Special > Validation
             // action.
-            if (SourceHasOverlappingDataValidation(sourceSheet, sourceRange))
+            //
+            // R137-paste-data-validation-clear-1: see the identical comment on the
+            // specialCarriesFormatting branch above -- this must construct the command even when
+            // the source has NO overlapping validation, so a plain Ctrl+V correctly clears a
+            // pre-existing destination rule instead of leaving it silently in force over the pasted
+            // value (matching real Excel, which carries the source's validation state -- including
+            // "none" -- on an ordinary paste).
+            if (sourceSheet is not null)
                 extraCommands.Add(new PasteDataValidationCommand(targetSheetId, sourceRange, destination, transpose: false, sourceAreas));
 
             var picturesToCarry = FindPicturesAnchoredIn(sourceSheet, sourceRange);
@@ -632,14 +650,6 @@ public static class PasteCommandFactory
 
     private static bool IsBlank(Cell cell) =>
         cell.FormulaText is null && cell.Value is BlankValue;
-
-    // R107-paste-data-validation-1: a data-validation rule can be anchored purely by an
-    // AdditionalRanges entry (AppliesTo elsewhere, or vice versa) -- mirrors
-    // PasteDataValidationCommand.EnumerateRuleRanges/ClearOverlappingValidationRanges checking both,
-    // and ConditionalFormat.AllRanges's identical treatment just above.
-    private static bool SourceHasOverlappingDataValidation(Sheet? sourceSheet, GridRange sourceRange) =>
-        sourceSheet is not null && sourceSheet.DataValidations.Any(rule =>
-            rule.AppliesTo.Overlaps(sourceRange) || rule.AdditionalRanges.Any(range => range.Overlaps(sourceRange)));
 
     /// <summary>
     /// Whether a Paste Special content kind copies full cell formatting (and therefore should
@@ -955,7 +965,12 @@ public static class PasteCommandFactory
             // also bring the source's validation rule(s) along. Anchored once at the untiled
             // sourceRange/destination pair (not tiledFootprint), mirroring how the conditional-format
             // carry just above pastes its rule once rather than once per tile.
-            if (SourceHasOverlappingDataValidation(sourceSheet, sourceRange))
+            //
+            // R137-paste-data-validation-clear-1: see the identical comment on the non-tiled branch
+            // above -- this must construct the command even when the source has NO overlapping
+            // validation, so the tiled paste's anchor cell(s) also lose a pre-existing destination
+            // rule instead of silently keeping it.
+            if (sourceSheet is not null)
                 tiledExtraCommands.Add(new PasteDataValidationCommand(targetSheetId, sourceRange, destination, options.Transpose, sourceAreas));
 
             if (ShouldCarryComments(sourceSheet, sourceRange, targetSheet, tiledFootprint))

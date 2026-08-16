@@ -191,4 +191,74 @@ public class BookmarksTests
         cellParagraph.PlainText.Should().Be("Cell text");
         Bookmarks.List(doc).Should().BeEmpty();
     }
+
+    // --- Duplicate-name-safe, single-instance removal (confirmed HIGH finding) ---
+    // A document can carry two paragraphs with the same bookmark name (Word forbids creating a second
+    // one via the UI, but an imported/legacy document may already have duplicates). RemoveBookmarkAt must
+    // clear only the one instance its BookmarkLocation identifies, unlike RemoveBookmark(name) above,
+    // which intentionally clears every paragraph sharing that name.
+
+    [Fact]
+    public void RemoveBookmarkAt_ClearsOnlyTheTargetedInstance_LeavingASiblingWithTheSameNameIntact()
+    {
+        var doc = new TextDocument();
+        var first = new Paragraph("First") { BookmarkName = "Dup" };
+        var second = new Paragraph("Second") { BookmarkName = "Dup" };
+        doc.Blocks.Add(first);
+        doc.Blocks.Add(second);
+
+        Bookmarks.RemoveBookmarkAt(doc, new BookmarkLocation("Dup", 1));
+
+        first.BookmarkNames.Should().Equal("Dup");
+        second.BookmarkNames.Should().BeEmpty();
+        Bookmarks.List(doc).Should().Equal(new BookmarkLocation("Dup", 0));
+    }
+
+    [Fact]
+    public void RemoveBookmarkAt_ResolvesATableCellLocation_LeavingTheCellTextIntact()
+    {
+        var doc = new TextDocument();
+        var table = Table.Create(1, 1);
+        var cellParagraph = table.Rows[0].Cells[0].Paragraphs[0];
+        cellParagraph.Runs.Add(new Run("Cell text"));
+        cellParagraph.BookmarkName = "cellMark";
+        doc.Blocks.Add(table);
+        var location = Bookmarks.List(doc).Single();
+
+        Bookmarks.RemoveBookmarkAt(doc, location);
+
+        cellParagraph.BookmarkName.Should().BeNull();
+        cellParagraph.PlainText.Should().Be("Cell text");
+    }
+
+    [Fact]
+    public void RemoveBookmarkAt_StaleBlockIndex_IsNoOp()
+    {
+        var doc = new TextDocument();
+        doc.Blocks.Add(new Paragraph("Chapter One") { BookmarkName = "ch1" });
+
+        Bookmarks.RemoveBookmarkAt(doc, new BookmarkLocation("ch1", 99));
+
+        Bookmarks.List(doc).Should().Equal(new BookmarkLocation("ch1", 0));
+    }
+
+    [Fact]
+    public void ResolveLocation_ReturnsTheExactBodyParagraph()
+    {
+        var doc = new TextDocument();
+        doc.Blocks.Add(new Paragraph("Intro"));
+        var target = new Paragraph("Chapter One") { BookmarkName = "ch1" };
+        doc.Blocks.Add(target);
+
+        Bookmarks.ResolveLocation(doc, new BookmarkLocation("ch1", 1)).Should().BeSameAs(target);
+    }
+
+    [Fact]
+    public void ResolveLocation_OutOfRangeBlockIndex_ReturnsNull()
+    {
+        var doc = new TextDocument();
+        doc.Blocks.Add(new Paragraph("Only"));
+
+        Bookmarks.ResolveLocation(doc, new BookmarkLocation("x", 5)).Should().BeNull();
+    }
 }

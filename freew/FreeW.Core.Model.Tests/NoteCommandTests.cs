@@ -170,6 +170,77 @@ public sealed class NoteCommandTests
     }
 
     [Fact]
+    public void DeleteNote_RemovesMarkerInHeaderAndFooter_AndUndoRedoRestoresExactRuns()
+    {
+        // Word allows a footnote/endnote reference mark inside a header or footer. DeleteNoteCommand
+        // must scan those regions too, or the mark is left dangling (pointing at a note that no
+        // longer exists) after the note is deleted.
+        var document = TextDocument.CreateEmpty();
+        document.Blocks.Clear();
+        document.Blocks.Add(new Paragraph("body text"));
+        document.Footnotes[9] = new Footnote(9, "orphaned-marker note");
+
+        var headerParagraph = new Paragraph();
+        headerParagraph.Runs.Add(new Run("header-before"));
+        headerParagraph.Runs.Add(Run.FootnoteReference(9));
+        headerParagraph.Runs.Add(new Run("header-after"));
+        document.Header = new HeaderFooter();
+        document.Header.Paragraphs.Add(headerParagraph);
+
+        var footerParagraph = new Paragraph();
+        footerParagraph.Runs.Add(new Run("footer-before"));
+        footerParagraph.Runs.Add(Run.FootnoteReference(9));
+        footerParagraph.Runs.Add(new Run("footer-after"));
+        document.Footer = new HeaderFooter();
+        document.Footer.Paragraphs.Add(footerParagraph);
+
+        var bus = new DocumentCommandBus(new Context(document));
+
+        bus.Execute(new DeleteNoteCommand(9, footnote: true));
+
+        document.Footnotes.Should().NotContainKey(9);
+        headerParagraph.Runs.Should().NotContain(run => run.FootnoteId == 9);
+        footerParagraph.Runs.Should().NotContain(run => run.FootnoteId == 9);
+
+        bus.Undo().Should().BeTrue();
+        document.Footnotes[9].PlainText.Should().Be("orphaned-marker note");
+        headerParagraph.Runs.Select(run => (run.Text, run.FootnoteId))
+            .Should().Equal(("header-before", null), ("9", 9), ("header-after", null));
+        footerParagraph.Runs.Select(run => (run.Text, run.FootnoteId))
+            .Should().Equal(("footer-before", null), ("9", 9), ("footer-after", null));
+
+        bus.Redo().Should().BeTrue();
+        document.Footnotes.Should().NotContainKey(9);
+        headerParagraph.Runs.Should().NotContain(run => run.FootnoteId == 9);
+        footerParagraph.Runs.Should().NotContain(run => run.FootnoteId == 9);
+    }
+
+    [Fact]
+    public void DeleteNote_StillRemovesBodyAndTableMarkers_WhenDocumentHasNoHeaderFooter()
+    {
+        // Sibling no-regression: a document with no headers/footers at all (Sections still yields the
+        // single trailing final section) must keep working exactly as before — body + table markers
+        // removed, header/footer scan finding nothing to do.
+        var document = TextDocument.CreateEmpty();
+        document.Blocks.Clear();
+        var body = new Paragraph();
+        body.Runs.Add(new Run("body"));
+        body.Runs.Add(Run.FootnoteReference(5));
+        document.Blocks.Add(body);
+        document.Footnotes[5] = new Footnote(5, "plain note");
+        var bus = new DocumentCommandBus(new Context(document));
+
+        bus.Execute(new DeleteNoteCommand(5, footnote: true));
+
+        document.Footnotes.Should().NotContainKey(5);
+        body.Runs.Should().NotContain(run => run.FootnoteId == 5);
+
+        bus.Undo().Should().BeTrue();
+        document.Footnotes[5].PlainText.Should().Be("plain note");
+        body.Runs.Should().Contain(run => run.FootnoteId == 5);
+    }
+
+    [Fact]
     public void SetNoteNumberingOptions_UpdatesBothKinds_AndUndoRedoRestoresExactSettings()
     {
         var document = TextDocument.CreateEmpty();

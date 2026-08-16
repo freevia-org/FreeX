@@ -15,7 +15,14 @@ public delegate byte[] PresentationSlideImageRendererWithPrintMarkup(
 public sealed record PresentationRasterPdfExportRequest(
     PresentationSlideRangeRequest? SlideRange = null,
     int WidthPx = PresentationRasterPdfExporter.DefaultWidthPx,
-    int? HeightPx = null);
+    int? HeightPx = null,
+    // R137: mirrors PresentationPrintRequest.PrintHiddenSlides. Notes/Handout PDF export already
+    // excludes hidden slides by default (PresentationExportPlanner.BuildPrintPlan's
+    // presentation-aware overload). File > Export as PDF and the FullPageSlides print/native-print
+    // routes go through this raster request instead, so the same default -- and the same live
+    // "Print hidden slides" backstage toggle -- must be honoured here too, or a PDF exported to hide
+    // slides from a client silently ships them (see docs/parity findings, R137).
+    bool PrintHiddenSlides = false);
 
 public sealed record PresentationRasterPdfRenderPlan(
     PresentationSlideRangePlan SlideRange,
@@ -83,7 +90,14 @@ public static class PresentationRasterPdfExporter
         var pageHeight = rasterSize.SlideSize.HeightPoints;
         var widthPx = rasterSize.WidthPx;
         var heightPx = rasterSize.HeightPx;
-        var range = PresentationExportPlanner.BuildSlideRangePlan(request.SlideRange, presentation.Slides.Count);
+        // R137: presentation-aware so hidden slides are excluded by default (matching Notes/Handout
+        // via PresentationExportPlanner.BuildPrintPlan) unless the caller's PrintHiddenSlides flag --
+        // threaded from the live "Print hidden slides" backstage toggle for the print routes, and
+        // left at its default false for File > Export as PDF, which has no such option -- opts in.
+        var range = PresentationExportPlanner.BuildSlideRangePlan(
+            request.SlideRange,
+            presentation,
+            request.PrintHiddenSlides);
 
         var pages = new List<PdfRasterPage>(Math.Max(1, range.SlideNumbers.Count));
         foreach (var slideNumber in range.SlideNumbers)
@@ -95,8 +109,23 @@ public static class PresentationRasterPdfExporter
             if (imageBytes.Length == 0)
                 throw new InvalidOperationException($"Slide PDF renderer returned no bytes for slide {slideNumber}.");
 
-            var textOverlays = BuildSlideTextOverlays(presentation, presentation.Slides[slideIndex], pageHeight);
-            pages.Add(new PdfRasterPage(pageWidth, pageHeight, imageBytes, textOverlays.Count > 0 ? textOverlays : null));
+            var vectorPage = BuildSlideVectorPage(presentation, presentation.Slides[slideIndex]);
+            var textOverlays = CollectTextOverlays(vectorPage, pageHeight);
+            // R137: the vector builder's LinkOverlays are already in the same top-left, y-down page
+            // space PdfRasterPage.LinkOverlays wants (see PdfLinkOverlay's doc comment), so no
+            // per-shape coordinate transform is needed here -- unlike the text-overlay conversion
+            // above, which has to walk PDF-native draw ops. Internal (slide-to-slide) hyperlinks stay
+            // in this list too even though the raster backends only act on external Uri overlays
+            // today (PdfRasterDocument has no cross-page named-destination table yet); each writer
+            // silently skips the DestinationName-only entries, so carrying them through is harmless
+            // and forward-compatible rather than filtering them out here.
+            var linkOverlays = vectorPage.LinkOverlays;
+            pages.Add(new PdfRasterPage(
+                pageWidth,
+                pageHeight,
+                imageBytes,
+                textOverlays.Count > 0 ? textOverlays : null,
+                linkOverlays is { Count: > 0 } ? linkOverlays : null));
         }
 
         if (pages.Count == 0)
@@ -127,18 +156,22 @@ public static class PresentationRasterPdfExporter
     // so rotated shapes' PdfText children were never visited by a flat top-level scan. Both are fixed
     // below: BuildSlidePage is asked to include non-title placeholder text, and the walk recurses into
     // group ops, carrying the enclosing rotation (if any) so the overlay lands on the rotated glyphs.
-    private static IReadOnlyList<PdfTextOverlay> BuildSlideTextOverlays(
-        Presentation presentation,
-        Slide slide,
-        double pageHeightPoints)
-    {
-        var vectorPage = PresentationPdfExporter.BuildSlidePage(
+    // R137: split out of the former BuildSlideTextOverlays so the same vector page (and its
+    // LinkOverlays, populated by FreeP.Core.IO.PresentationPdfExporter.BuildSlidePage for shape and
+    // text-run hyperlinks) can also feed PdfRasterPage.LinkOverlays -- one shared derivation instead
+    // of building the vector page twice per slide.
+    private static PdfContentPage BuildSlideVectorPage(Presentation presentation, Slide slide) =>
+        PresentationPdfExporter.BuildSlidePage(
             slide,
             presentation.SlideSizeCxEmu,
             presentation.SlideSizeCyEmu,
             includeCommentsAndInkMarkup: false,
             includePlaceholderShapeText: true);
 
+    private static IReadOnlyList<PdfTextOverlay> CollectTextOverlays(
+        PdfContentPage vectorPage,
+        double pageHeightPoints)
+    {
         var overlays = new List<PdfTextOverlay>();
         CollectTextOverlays(vectorPage.Ops, pageHeightPoints, activeRotation: null, overlays);
         return overlays;

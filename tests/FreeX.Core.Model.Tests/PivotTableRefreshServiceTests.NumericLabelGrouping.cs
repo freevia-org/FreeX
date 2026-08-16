@@ -72,6 +72,75 @@ public sealed partial class PivotTableRefreshServiceTests
         Number(sheet, "E6").Should().Be(180);
     }
 
+    [Fact]
+    public void Refresh_NumberRangeGroupedField_ValuesBelowStartFormUnderflowGroup()
+    {
+        var workbook = new Workbook("PivotRefreshTest");
+        var sheet = workbook.AddSheet("Data");
+        SeedPriceSalesData(sheet);
+        var pivot = new PivotTableModel
+        {
+            Name = "PivotTable1",
+            CacheId = 1,
+            SourceRange = Range(sheet, "A1", "B5"),
+            TargetRange = Range(sheet, "D2", "F10")
+        };
+        // "Starting at" 5 with no "Ending at": price 2 is below the start, so it must land in
+        // its own "<5" bucket - not extrapolate the 10-wide interval grid backwards into a
+        // "-5-4" bucket that doesn't reflect the "Starting at" boundary Excel shows.
+        pivot.RowFields.Add(new PivotFieldModel(0, Grouping: PivotFieldGrouping.NumberRange, GroupStart: 5, GroupInterval: 10));
+        pivot.DataFields.Add(new PivotDataFieldModel(1, "Sum of Amount", "sum"));
+
+        PivotTableRefreshService.Refresh(workbook, sheet, pivot);
+
+        Text(sheet, "D3").Should().Be("<5");
+        Number(sheet, "E3").Should().Be(10);
+        Text(sheet, "D4").Should().Be("5-14");
+        // Prices 7 and 12 both fall in 5-14: amounts 20+30
+        Number(sheet, "E4").Should().Be(50);
+        Text(sheet, "D5").Should().Be("15-24");
+        Number(sheet, "E5").Should().Be(40);
+        Text(sheet, "D6").Should().Be("Grand Total");
+        Number(sheet, "E6").Should().Be(100);
+    }
+
+    // Sibling of Refresh_NumberRangeGroupedField_ValuesBelowStartFormUnderflowGroup: a value
+    // exactly AT "Starting at" must land in the normal first bucket, not the "<start" bucket -
+    // guards the strict "<" in the fix against drifting to "<=" and swallowing the boundary.
+    [Fact]
+    public void Refresh_NumberRangeGroupedField_ValueAtStartIsNotUnderflow()
+    {
+        var workbook = new Workbook("PivotRefreshTest");
+        var sheet = workbook.AddSheet("Data");
+        sheet.SetCell(Addr(sheet, "A1"), new TextValue("Price"));
+        sheet.SetCell(Addr(sheet, "B1"), new TextValue("Amount"));
+        sheet.SetCell(Addr(sheet, "A2"), new NumberValue(3));
+        sheet.SetCell(Addr(sheet, "B2"), new NumberValue(10));
+        sheet.SetCell(Addr(sheet, "A3"), new NumberValue(5));
+        sheet.SetCell(Addr(sheet, "B3"), new NumberValue(20));
+        sheet.SetCell(Addr(sheet, "A4"), new NumberValue(10));
+        sheet.SetCell(Addr(sheet, "B4"), new NumberValue(30));
+        var pivot = new PivotTableModel
+        {
+            Name = "PivotTable1",
+            CacheId = 1,
+            SourceRange = Range(sheet, "A1", "B4"),
+            TargetRange = Range(sheet, "D2", "F10")
+        };
+        pivot.RowFields.Add(new PivotFieldModel(0, Grouping: PivotFieldGrouping.NumberRange, GroupStart: 5, GroupInterval: 10));
+        pivot.DataFields.Add(new PivotDataFieldModel(1, "Sum of Amount", "sum"));
+
+        PivotTableRefreshService.Refresh(workbook, sheet, pivot);
+
+        Text(sheet, "D3").Should().Be("<5");
+        Number(sheet, "E3").Should().Be(10);
+        Text(sheet, "D4").Should().Be("5-14");
+        // Price 5 (== start) and price 10 both belong in 5-14: amounts 20+30
+        Number(sheet, "E4").Should().Be(50);
+        Text(sheet, "D5").Should().Be("Grand Total");
+        Number(sheet, "E5").Should().Be(60);
+    }
+
     private static void SeedNumericQuantitySalesData(Sheet sheet)
     {
         sheet.SetCell(Addr(sheet, "A1"), new TextValue("Quantity"));
