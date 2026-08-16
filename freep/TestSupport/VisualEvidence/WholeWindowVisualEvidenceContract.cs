@@ -26,6 +26,7 @@ public static class WholeWindowVisualEvidenceCatalog
     public const int LogicalClientWidth = 1280;
     public const int LogicalClientHeight = 760;
     public const double TargetDpi = 96d;
+    public static IReadOnlyList<int> ResponsiveChromeWidths { get; } = [1280, 1100, 900, 750];
 
     public static IReadOnlyList<WholeWindowVisualEvidenceScenario> All { get; } =
     [

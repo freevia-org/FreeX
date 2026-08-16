@@ -41,6 +41,7 @@ internal sealed record VisualEvidenceCaptureRequest(
     bool IsRequested,
     string? OutputRoot,
     string? ScenarioId,
+    int? WholeWindowLogicalWidth,
     string? Error)
 {
     internal bool IsValid => IsRequested && Error is null;
@@ -154,7 +155,8 @@ internal static class FreePVisualEvidenceCaptureOrchestration
 
     internal static FreePVisualEvidenceAppHostPolicy CreateAppHostPolicy(
         string host,
-        VisualEvidenceCaptureRoute route) => route.Kind switch
+        VisualEvidenceCaptureRoute route,
+        int? wholeWindowLogicalWidth = null) => route.Kind switch
         {
             VisualEvidenceCaptureKind.DialogPane => new(
                 host,
@@ -168,7 +170,7 @@ internal static class FreePVisualEvidenceCaptureOrchestration
                 route,
                 "visible-app-owned-full-client-render-target; native-non-client-excluded; scenario-isolated-process",
                 WholeWindowVisualEvidenceCatalog.TargetDpi,
-                WholeWindowVisualEvidenceCatalog.LogicalClientWidth,
+                wholeWindowLogicalWidth ?? WholeWindowVisualEvidenceCatalog.LogicalClientWidth,
                 WholeWindowVisualEvidenceCatalog.LogicalClientHeight),
             _ => throw new ArgumentOutOfRangeException(nameof(route)),
         };
@@ -180,21 +182,37 @@ internal static class FreePVisualEvidenceCaptureOrchestration
     {
         var output = VisualEvidenceArgumentParser.ReadFirst(args, route.OutputArgument);
         if (!output.IsPresent)
-            return new(false, null, null, null);
+            return new(false, null, null, null, null);
 
         if (output.Value is null)
-            return new(true, null, null, $"{route.OutputArgument} requires an output directory.");
+            return new(true, null, null, null, $"{route.OutputArgument} requires an output directory.");
 
         var outputRoot = Path.GetFullPath(output.Value);
         var scenario = VisualEvidenceArgumentParser.ReadFirst(args, route.ScenarioArgument);
         if (scenario.IsPresent && scenario.Value is null)
-            return new(true, outputRoot, null, $"{route.ScenarioArgument} requires a scenario id.");
+            return new(true, outputRoot, null, null, $"{route.ScenarioArgument} requires a scenario id.");
 
         var scenarioId = scenario.Value;
         if (scenarioId is not null && !knownScenarioIds.Contains(scenarioId, StringComparer.Ordinal))
-            return new(true, outputRoot, scenarioId, route.UnknownScenarioMessagePrefix + scenarioId);
+            return new(true, outputRoot, scenarioId, null, route.UnknownScenarioMessagePrefix + scenarioId);
 
-        return new(true, outputRoot, scenarioId, null);
+        if (route.Kind != VisualEvidenceCaptureKind.WholeWindow)
+            return new(true, outputRoot, scenarioId, null, null);
+
+        var width = VisualEvidenceArgumentParser.ReadFirst(args, "--whole-window-visual-evidence-width");
+        if (!width.IsPresent)
+            return new(true, outputRoot, scenarioId, null, null);
+
+        if (width.Value is null ||
+            !int.TryParse(width.Value, NumberStyles.None, CultureInfo.InvariantCulture, out var logicalWidth) ||
+            !WholeWindowVisualEvidenceCatalog.ResponsiveChromeWidths.Contains(logicalWidth))
+        {
+            var allowed = string.Join(", ", WholeWindowVisualEvidenceCatalog.ResponsiveChromeWidths);
+            return new(true, outputRoot, scenarioId, null,
+                $"--whole-window-visual-evidence-width requires one of: {allowed}.");
+        }
+
+        return new(true, outputRoot, scenarioId, logicalWidth, null);
     }
 
     internal static VisualEvidenceHostOutputPlan CreateHostOutputPlan(

@@ -11,10 +11,11 @@ internal static class Program
                 args,
                 out var outputRoot,
                 out var scenarioId,
+                out var logicalWidth,
                 out var error))
         {
             return Run(error, mainWindow =>
-                AvaloniaWholeWindowVisualEvidenceCapture.Start(mainWindow, outputRoot!, scenarioId));
+                AvaloniaWholeWindowVisualEvidenceCapture.Start(mainWindow, outputRoot!, scenarioId, logicalWidth));
         }
 
         if (AvaloniaDialogPaneVisualEvidenceCapture.TryParse(

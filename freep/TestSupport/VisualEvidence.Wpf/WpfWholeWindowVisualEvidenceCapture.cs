@@ -34,11 +34,11 @@ internal static class WpfWholeWindowVisualEvidenceCapture
             return true;
         }
 
-        exitCode = Run(request.OutputRoot!, request.ScenarioId);
+        exitCode = Run(request.OutputRoot!, request.ScenarioId, request.WholeWindowLogicalWidth);
         return true;
     }
 
-    private static int Run(string outputRoot, string? scenarioId)
+    private static int Run(string outputRoot, string? scenarioId, int? logicalWidth)
     {
         var app = new Application { ShutdownMode = ShutdownMode.OnExplicitShutdown };
         AppComposition.InstallSharedSeams();
@@ -48,7 +48,7 @@ internal static class WpfWholeWindowVisualEvidenceCapture
         {
             try
             {
-                result = CaptureAll(outputRoot, scenarioId);
+                result = CaptureAll(outputRoot, scenarioId, logicalWidth);
             }
             catch (Exception ex)
             {
@@ -64,11 +64,12 @@ internal static class WpfWholeWindowVisualEvidenceCapture
         return result;
     }
 
-    private static int CaptureAll(string outputRoot, string? scenarioId)
+    private static int CaptureAll(string outputRoot, string? scenarioId, int? logicalWidth)
     {
         var hostPolicy = FreePVisualEvidenceCaptureOrchestration.CreateAppHostPolicy(
             FreePVisualEvidenceCaptureOrchestration.WpfHost,
-            FreePVisualEvidenceRoutes.WholeWindow);
+            FreePVisualEvidenceRoutes.WholeWindow,
+            logicalWidth);
         var outputPlan = hostPolicy.CreateOutputPlan(outputRoot);
         var run = VisualEvidenceCaptureOrchestrator.RunScenariosAsync(
             WholeWindowVisualEvidenceCatalog.All,
@@ -81,7 +82,7 @@ internal static class WpfWholeWindowVisualEvidenceCapture
                 var fixture = DialogPaneVisualEvidenceFixtureFactory.Create();
                 var owner = new MainWindow
                 {
-                    Width = WholeWindowVisualEvidenceCatalog.LogicalClientWidth,
+                    Width = hostPolicy.LogicalWidth,
                     Height = WholeWindowVisualEvidenceCatalog.LogicalClientHeight,
                     WindowState = WindowState.Normal,
                     WindowStartupLocation = WindowStartupLocation.Manual,
@@ -110,7 +111,7 @@ internal static class WpfWholeWindowVisualEvidenceCapture
                     var clientRaster = Capture(
                         root,
                         clientPath,
-                        WholeWindowVisualEvidenceCatalog.LogicalClientWidth,
+                        hostPolicy.LogicalWidth,
                         WholeWindowVisualEvidenceCatalog.LogicalClientHeight);
                     var semantic = coordinator.CaptureSemantic(scenario, assertions);
                     return Task.FromResult(new WholeWindowVisualEvidenceCapture(
