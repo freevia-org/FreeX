@@ -944,7 +944,7 @@ public sealed partial class DocumentView : Control
     {
         if (NormalizedSelection() is not { } sel || sel.Start.Block != sel.End.Block)
             return;
-        if (_doc.Blocks[sel.Start.Block] is not Paragraph paragraph || !IsEditable(paragraph))
+        if (_doc.Blocks[sel.Start.Block] is not Paragraph paragraph || !IsTextReplaceable(paragraph))
             return;
 
         _selectionAnchor = sel.Start;
@@ -17106,7 +17106,9 @@ public sealed partial class DocumentView : Control
         if (bodyStart.BlockIndex < 0
             || bodyStart.BlockIndex >= _doc.Blocks.Count
             || _doc.Blocks[bodyStart.BlockIndex] is not Paragraph paragraph
-            || !IsEditable(paragraph))
+            // AV-NOTE: IsTextReplaceable, not IsEditable — a footnote/endnote reference must not freeze
+            // the paragraph's text (Word keeps it editable). IsEditable stays the LAYOUT selector.
+            || !IsTextReplaceable(paragraph))
         {
             return;
         }
@@ -17152,7 +17154,7 @@ public sealed partial class DocumentView : Control
         {
             if (NormalizedSelection() is not null)
                 DeleteSelection();
-            if (CurrentParagraph() is not { } fallbackParagraph || !IsEditable(fallbackParagraph))
+            if (CurrentParagraph() is not { } fallbackParagraph || !IsTextReplaceable(fallbackParagraph))
             {
                 if (ownsFallbackUndoGroup)
                     _bus.AbortUndoGroup();
@@ -23315,6 +23317,23 @@ public sealed partial class DocumentView : Control
             && r.ComplexField is null && r.FootnoteId is null && r.EndnoteId is null && r.Control is null
             && !IsFloatingDrawingRun(r));
 
+    /// <summary>
+    /// AV-NOTE: whether a paragraph's TEXT may be edited in place. Word keeps the text around a
+    /// footnote/endnote reference fully editable, so a note mark — a run mark like a comment or a
+    /// hyperlink — must not freeze the paragraph. It is still excluded from
+    /// <see cref="IsPlainTextEditable"/> because that predicate additionally selects the LAYOUT cell
+    /// source, and only <c>DisplayCells</c> resolves a note mark to its computed display number
+    /// (<c>ResolveNoteBodyMarkDisplayNumber</c>); routing note paragraphs through <c>ParaCells</c> for
+    /// layout would render raw internal ids instead. The reference survives an edit because
+    /// <see cref="Cell"/> carries FootnoteId/EndnoteId through the ParaCells → SetRuns round-trip, the
+    /// same mechanism that preserves CommentId and hyperlinks.
+    /// </summary>
+    private bool IsTextReplaceable(Paragraph paragraph) =>
+        !IsEditingLocked
+        && paragraph.Runs.All(r => r.Image is null && r.Equation is null && r.FieldKind == RunFieldKind.None
+            && r.ComplexField is null && r.Control is null
+            && !IsFloatingDrawingRun(r));
+
     private static bool IsFloatingDrawingRun(Run run) =>
         run.Image is { IsFloating: true }
         || run.Shape is { IsFloating: true }
@@ -23345,7 +23364,18 @@ public sealed partial class DocumentView : Control
                 // (layout + edit). Textless comment-reference runs contribute no cells, as before.
                 // AV-TRACKEDIT: also carry the run's tracked-change mark so recorded revisions survive the
                 // round-trip (and SetRuns can re-segment runs on a revision boundary).
-                cells.Add(new Cell(ch, run.Formatting, run.CommentId, run.Revision, run.RevisionAuthor, run.RevisionDateXml, link, run.FormatRevision));
+                // AV-NOTE: carry the footnote/endnote reference id so note marks survive the round-trip.
+                cells.Add(new Cell(
+                    ch,
+                    run.Formatting,
+                    run.CommentId,
+                    run.Revision,
+                    run.RevisionAuthor,
+                    run.RevisionDateXml,
+                    link,
+                    run.FormatRevision,
+                    FootnoteId: run.FootnoteId,
+                    EndnoteId: run.EndnoteId));
         }
         return cells;
     }
@@ -23614,6 +23644,11 @@ public sealed partial class DocumentView : Control
             // hyperlink survives the cell round-trip and re-emits as a w:hyperlink-wrapped run on save.
             var link = cells[i].Link;
             var formatRevision = cells[i].FormatRevision;
+            // AV-NOTE: a run is also one contiguous span of equal footnote/endnote reference id, so a
+            // note mark keeps its reference across an edit elsewhere in the paragraph instead of being
+            // flattened into the surrounding text.
+            var footnoteId = cells[i].FootnoteId;
+            var endnoteId = cells[i].EndnoteId;
             var start = i;
             while (i < cells.Count
                    && cells[i].Fmt.Equals(fmt)
@@ -23622,7 +23657,9 @@ public sealed partial class DocumentView : Control
                    && cells[i].RevisionAuthor == revisionAuthor
                    && cells[i].RevisionDateXml == revisionDateXml
                    && cells[i].Link == link
-                   && cells[i].FormatRevision == formatRevision)
+                   && cells[i].FormatRevision == formatRevision
+                   && cells[i].FootnoteId == footnoteId
+                   && cells[i].EndnoteId == endnoteId)
                 i++;
             var text = new string(cells.Skip(start).Take(i - start).Select(c => c.Ch).ToArray());
             paragraph.Runs.Add(new Run(text, fmt)
@@ -23635,6 +23672,8 @@ public sealed partial class DocumentView : Control
                 HyperlinkAnchor = link?.Anchor,
                 HyperlinkTooltip = link?.Tooltip,
                 FormatRevision = formatRevision,
+                FootnoteId = footnoteId,
+                EndnoteId = endnoteId,
             });
             if (commentId is { } cid)
                 lastAnchorIndexFor[cid] = paragraph.Runs.Count - 1;
@@ -24207,7 +24246,13 @@ public sealed partial class DocumentView : Control
         FormatRevision? FormatRevision = null,
         EquationVisualElement? EquationElement = null,
         bool IsPageBreak = false,
-        bool IsColumnBreak = false);
+        bool IsColumnBreak = false,
+        // AV-NOTE: the run's footnote/endnote reference id, carried per-character so a note reference
+        // survives the cell round-trip (ParaCells → edit → SetRuns) and so SetRuns re-segments runs on a
+        // note boundary. Without it the round-trip stripped the reference and left the mark as ordinary
+        // text, which is why note-bearing paragraphs used to be excluded from editing outright.
+        int? FootnoteId = null,
+        int? EndnoteId = null);
 
     private readonly record struct AutomaticHyphenGlyph(
         int Block,
