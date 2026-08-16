@@ -2117,10 +2117,15 @@ public sealed class AvaloniaRichTextEditorTests
                 RaiseRawTextInput(editor.InputBox, "X");
                 await DrainInputAsync();
 
-                editor.Text.Should().Be("AlXta\nBetaTwo");
+                // "AlphaOne" with [3,8) replaced by "X" is "Alp" + "X"; the second paragraph is
+                // untouched. (The original expectation, "AlXta", is not a reachable edit of this
+                // body under any selection -- it was authored while the assertions were unreachable.)
+                editor.Text.Should().Be("AlpX\nBetaTwo");
                 editor.EditedBody.Paragraphs.Should().HaveCount(2);
+                // The deletion removes "ha" from the bold run and all of the italic "One" run, so the
+                // inserted "X" adopts the surviving run's formatting and merges into it.
                 editor.EditedBody.Paragraphs[0].Runs
-                    .Select(run => run.Text).Should().Equal("AlX", "ta");
+                    .Select(run => run.Text).Should().Equal("AlpX");
                 editor.EditedBody.Paragraphs[1].Runs
                     .Select(run => run.Text).Should().Equal("Beta", "Two");
             }
