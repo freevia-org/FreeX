@@ -183,6 +183,12 @@ public sealed class AvaloniaSharedWorkbookWindowTests
     {
         await Session.Dispatch(async () =>
         {
+            // The workbook window registry is process-wide. Ctrl+F6 cycles through EVERY registered
+            // window, so a window an earlier test left open changes the cycle order and this test's
+            // "next window" expectations fail depending on which tests ran before it -- it passes in
+            // isolation and fails in a full run. Start from a registry holding only our own windows.
+            CloseRegisteredWorkbookWindows();
+
             var first = new MainWindow([]);
             var second = first.CreateSharedViewForTest();
             var third = first.CreateSharedViewForTest();
@@ -464,6 +470,19 @@ public sealed class AvaloniaSharedWorkbookWindowTests
     {
         await Dispatcher.UIThread.InvokeAsync(() => { }, DispatcherPriority.Input);
         await Dispatcher.UIThread.InvokeAsync(() => { }, DispatcherPriority.Render);
+    }
+
+    /// <summary>
+    /// Closes every window still in the process-wide workbook registry, so a test that reasons about
+    /// registry ordering is not affected by windows an earlier test left open.
+    /// </summary>
+    private static void CloseRegisteredWorkbookWindows()
+    {
+        foreach (var stale in MainWindow.WindowRegistryForTest.Windows.ToList())
+        {
+            stale.AllowCloseWithoutDirtyPromptForParityCapture();
+            stale.Close();
+        }
     }
 
     private static void Show(MainWindow window)
