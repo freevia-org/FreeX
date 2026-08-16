@@ -1,4 +1,5 @@
 using FreeW.Core.Model;
+using Free.Shared.Shell;
 
 namespace FreeW.App.Presentation.Dialogs;
 
@@ -104,6 +105,17 @@ public static class ManualHyphenationPlanner
     public static DialogSurfaceSpec<ManualHyphenationDialogField> AvaloniaSurface { get; } = CreateSurface(
         YesLabel,
         NoLabel);
+
+    public static DialogFocusPlan<ManualHyphenationDialogField> FocusPlan { get; } = new(
+        InitialFocusTarget: ManualHyphenationDialogField.Choices,
+        ValidationFocusTarget: ManualHyphenationDialogField.Choices,
+        SelectAllOnFocus: false,
+        ActionButtons:
+        [
+            new DialogActionPlan(YesLabel, IsDefault: true),
+            new DialogActionPlan(NoLabel),
+            new DialogActionPlan(CancelLabel, IsCancel: true),
+        ]);
 
     public static string FormatCandidateLabel(int candidateNumber) => $"Word {candidateNumber}";
 

@@ -26,6 +26,7 @@ internal sealed class DrawTableDimensionDialog : Free.Shared.Ribbon.Wpf.DialogWi
         Width = 290;
         SizeToContent = SizeToContent.Height;
         ResizeMode = ResizeMode.NoResize;
+        WpfDialogSurfaceSemantics.Apply(this, plan.Surface);
 
         _rows = new TextBox
         {
@@ -39,20 +40,37 @@ internal sealed class DrawTableDimensionDialog : Free.Shared.Ribbon.Wpf.DialogWi
             Width = 72,
             Margin = new Thickness(0, 0, 0, 8),
         };
+        WpfDialogSurfaceSemantics.Apply(_rows, plan.Surface.Field(DrawTableDimensionDialogField.Rows));
+        WpfDialogSurfaceSemantics.Apply(_columns, plan.Surface.Field(DrawTableDimensionDialogField.Columns));
 
         var panel = new StackPanel { Margin = new Thickness(16) };
         panel.Children.Add(new TextBlock { Text = plan.RowsLabel, Margin = new Thickness(0, 0, 0, 4) });
         panel.Children.Add(_rows);
         panel.Children.Add(new TextBlock { Text = plan.ColumnsLabel, Margin = new Thickness(0, 0, 0, 4) });
         panel.Children.Add(_columns);
-        panel.Children.Add(DialogButtonRowFactory.Create(
+        var actions = plan.FocusPlan.ActionButtons;
+        var actionRow = DialogButtonRowFactory.Create(
             Accept,
             buttonWidth: 72,
-            acceptContent: plan.OkLabel,
-            cancelContent: plan.CancelLabel));
+            acceptContent: actions[0].Label,
+            cancelContent: actions[1].Label);
+        var actionButtons = actionRow.Children.OfType<Button>().ToArray();
+        for (var index = 0; index < actionButtons.Length; index++)
+        {
+            actionButtons[index].IsDefault = actions[index].IsDefault;
+            actionButtons[index].IsCancel = actions[index].IsCancel;
+        }
+        panel.Children.Add(actionRow);
         Content = panel;
 
-        Loaded += (_, _) => _rows.Focus();
+        Loaded += (_, _) =>
+        {
+            var target = ResolveFocusTarget(plan.FocusPlan.InitialFocusTarget);
+            if (plan.FocusPlan.SelectAllOnFocus)
+                DialogFocus.FocusAndSelect(target);
+            else
+                DialogFocus.Focus(target);
+        };
     }
 
     public (int Rows, int Columns)? Result { get; private set; }
@@ -71,4 +89,11 @@ internal sealed class DrawTableDimensionDialog : Free.Shared.Ribbon.Wpf.DialogWi
         Result = DrawTableCommandPlanner.Normalize(_rows.Text, _columns.Text);
         DialogResult = true;
     }
+
+    private TextBox ResolveFocusTarget(DrawTableDimensionDialogField field) => field switch
+    {
+        DrawTableDimensionDialogField.Rows => _rows,
+        DrawTableDimensionDialogField.Columns => _columns,
+        _ => throw new ArgumentOutOfRangeException(nameof(field), field, null),
+    };
 }

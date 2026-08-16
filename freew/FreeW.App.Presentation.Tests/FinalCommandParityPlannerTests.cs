@@ -35,6 +35,42 @@ public sealed class FinalCommandParityPlannerTests
         split.Title.Should().Be("localized:SplitCells_Dialog_Title");
         split.DefaultRows.Should().Be(DrawTableCommandPlanner.SplitDefaultRows);
         split.DefaultColumns.Should().Be(DrawTableCommandPlanner.SplitDefaultColumns);
+
+        foreach (var plan in new[] { draw, split })
+        {
+            plan.Surface.AutomationId.Should().Be("DrawTableDimensionDialog");
+            plan.Surface.Fields.Select(field => field.AutomationId).Should().Equal(
+                "DrawTableRowsTextBox",
+                "DrawTableColumnsTextBox");
+            plan.FocusPlan.InitialFocusTarget.Should().Be(DrawTableDimensionDialogField.Rows);
+            plan.FocusPlan.ValidationFocusTarget.Should().Be(DrawTableDimensionDialogField.Rows);
+            plan.FocusPlan.SelectAllOnFocus.Should().BeTrue();
+            plan.FocusPlan.ActionButtons.Select(action => action.Label).Should().Equal(
+                "localized:Common_Ok",
+                "localized:Common_Cancel");
+            plan.FocusPlan.ActionButtons[0].IsDefault.Should().BeTrue();
+            plan.FocusPlan.ActionButtons[0].IsCancel.Should().BeFalse();
+            plan.FocusPlan.ActionButtons[1].IsDefault.Should().BeFalse();
+            plan.FocusPlan.ActionButtons[1].IsCancel.Should().BeTrue();
+        }
+    }
+
+    [Fact]
+    public void DrawTableRenderersConsumeSharedSurfaceFocusAndActionPolicy()
+    {
+        var root = TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeW.slnx");
+        var wpf = File.ReadAllText(Path.Combine(root, "freew", "FreeW.App.Host", "DrawTableDimensionDialog.cs"));
+        var avalonia = File.ReadAllText(Path.Combine(root, "freew", "FreeW.App.Avalonia", "FinalCommandParityDialogs.cs"));
+
+        foreach (var source in new[] { wpf, avalonia })
+        {
+            source.Should().Contain("plan.Surface");
+            source.Should().Contain("plan.FocusPlan.InitialFocusTarget");
+            source.Should().Contain("plan.FocusPlan.SelectAllOnFocus");
+            source.Should().Contain("plan.FocusPlan.ActionButtons");
+        }
+        wpf.Should().Contain("actions[index].IsDefault");
+        wpf.Should().Contain("actions[index].IsCancel");
     }
 
     [Fact]

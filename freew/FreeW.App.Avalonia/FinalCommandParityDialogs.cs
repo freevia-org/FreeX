@@ -147,6 +147,9 @@ internal sealed class DrawTableDimensionDialog : FreeWDialogWindow
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
         CanResize = false;
         ShowInTaskbar = false;
+        ImageChartDialogSurfaceSemantics.Apply(this, plan.Surface);
+        ImageChartDialogSurfaceSemantics.Apply(_rows, plan.Surface.Field(DrawTableDimensionDialogField.Rows));
+        ImageChartDialogSurfaceSemantics.Apply(_columns, plan.Surface.Field(DrawTableDimensionDialogField.Columns));
 
         var panel = QuickPartNameDialog.DialogPanel();
         panel.Children.Add(new TextBlock { Text = plan.RowsLabel });
@@ -154,10 +157,25 @@ internal sealed class DrawTableDimensionDialog : FreeWDialogWindow
         panel.Children.Add(new TextBlock { Text = plan.ColumnsLabel });
         panel.Children.Add(_columns);
         panel.Children.Add(QuickPartNameDialog.ButtonRow(
-            QuickPartNameDialog.Button(plan.OkLabel, Accept, isDefault: true),
-            QuickPartNameDialog.Button(plan.CancelLabel, () => Close(null), isCancel: true)));
+            QuickPartNameDialog.Button(
+                plan.FocusPlan.ActionButtons[0].Label,
+                Accept,
+                isDefault: plan.FocusPlan.ActionButtons[0].IsDefault,
+                isCancel: plan.FocusPlan.ActionButtons[0].IsCancel),
+            QuickPartNameDialog.Button(
+                plan.FocusPlan.ActionButtons[1].Label,
+                () => Close(null),
+                isDefault: plan.FocusPlan.ActionButtons[1].IsDefault,
+                isCancel: plan.FocusPlan.ActionButtons[1].IsCancel)));
         Content = panel;
-        Opened += (_, _) => _rows.Focus();
+        Opened += (_, _) =>
+        {
+            var target = ResolveFocusTarget(plan.FocusPlan.InitialFocusTarget);
+            if (plan.FocusPlan.SelectAllOnFocus)
+                AvaloniaCompactDialogChrome.FocusAndSelect(target);
+            else
+                target.Focus();
+        };
         QuickPartNameDialog.CloseOnEscape(this);
     }
 
@@ -173,6 +191,13 @@ internal sealed class DrawTableDimensionDialog : FreeWDialogWindow
             .ShowDialog<(int Rows, int Columns)?>(owner);
 
     private void Accept() => Close(DrawTableCommandPlanner.Normalize(_rows.Text, _columns.Text));
+
+    private TextBox ResolveFocusTarget(DrawTableDimensionDialogField field) => field switch
+    {
+        DrawTableDimensionDialogField.Rows => _rows,
+        DrawTableDimensionDialogField.Columns => _columns,
+        _ => throw new ArgumentOutOfRangeException(nameof(field), field, null),
+    };
 }
 
 internal sealed class BuildingBlocksOrganizerDialog : FreeWDialogWindow

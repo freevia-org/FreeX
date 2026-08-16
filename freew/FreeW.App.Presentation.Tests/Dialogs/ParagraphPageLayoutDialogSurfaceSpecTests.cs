@@ -116,6 +116,14 @@ public sealed class ParagraphPageLayoutDialogSurfaceSpecTests
             "Hyphenate at:", "_Yes", "_No", "Cancel");
         ManualHyphenationPlanner.AvaloniaSurface.Fields.Select(field => field.Label).Should().Equal(
             "Hyphenate at:", "Yes", "No", "Cancel");
+
+        var focus = ManualHyphenationPlanner.FocusPlan;
+        focus.InitialFocusTarget.Should().Be(ManualHyphenationDialogField.Choices);
+        focus.ValidationFocusTarget.Should().Be(ManualHyphenationDialogField.Choices);
+        focus.SelectAllOnFocus.Should().BeFalse();
+        focus.ActionButtons.Select(action => action.Label).Should().Equal("Yes", "No", "Cancel");
+        focus.ActionButtons.Select(action => action.IsDefault).Should().Equal(true, false, false);
+        focus.ActionButtons.Select(action => action.IsCancel).Should().Equal(false, false, true);
     }
 
     [Fact]
@@ -158,6 +166,20 @@ public sealed class ParagraphPageLayoutDialogSurfaceSpecTests
         source.Should().Contain("LineNumberOptionsDialogPlanner.Surface");
         source.Should().Contain("DropCapOptionsDialogPlanner.Surface");
         source.Should().Contain("ManualHyphenationPlanner.AvaloniaSurface");
+    }
+
+    [Fact]
+    public void ManualHyphenationRenderersConsumeSharedFocusAndActionPolicy()
+    {
+        var wpf = ReadSource("FreeW.App.Host", "ManualHyphenationDialog.cs");
+        var avalonia = ReadSource("FreeW.App.Avalonia", "PageLayoutDialogs.cs");
+
+        foreach (var source in new[] { wpf, avalonia })
+        {
+            source.Should().Contain("ManualHyphenationPlanner.FocusPlan.ActionButtons");
+            source.Should().Contain("ManualHyphenationPlanner.FocusPlan.InitialFocusTarget");
+            source.Should().Contain("ResolveFocusTarget(");
+        }
     }
 
     private static void AssertSurface<TField>(
