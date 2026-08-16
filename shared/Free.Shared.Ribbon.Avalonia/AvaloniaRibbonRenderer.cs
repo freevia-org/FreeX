@@ -656,8 +656,40 @@ public static class AvaloniaRibbonRenderer
             UpdateTabHeaderSelectionStates(tabControl);
         };
         if (contextSource is not null)
-            contextSource.ContextChanged += (_, _) => SyncContextualTabs(
-                tabControl, definition, registry, contextSource, afterExecute, resolvedPalette, stateStore);
+        {
+            contextSource.ContextChanged += (_, _) =>
+            {
+                // Adding/removing contextual tabs makes TabControl re-resolve its selection, which can
+                // land on index 0 -- the File tab -- and fire the SelectionChanged handler above. That
+                // would invoke onFileTabSelected and pop the backstage open purely because the user
+                // selected a picture/shape/table. Suppress the handler for the duration of this
+                // PROGRAMMATIC sync (the same guard the content-tab restore already uses), then put the
+                // selection back on a content tab ourselves.
+                var previousContentTabIndex = lastContentTabIndex;
+                restoringContentTab = true;
+                try
+                {
+                    SyncContextualTabs(
+                        tabControl, definition, registry, contextSource, afterExecute, resolvedPalette, stateStore);
+
+                    if ((tabControl.SelectedItem as TabItem)?.Tag is string syncedId &&
+                        string.Equals(syncedId, FileRibbonTabId, StringComparison.Ordinal))
+                    {
+                        tabControl.SelectedIndex =
+                            previousContentTabIndex > 0 && previousContentTabIndex < tabControl.Items.Count
+                                ? previousContentTabIndex
+                                : Math.Min(1, tabControl.Items.Count - 1);
+                    }
+                }
+                finally
+                {
+                    restoringContentTab = false;
+                }
+
+                lastContentTabIndex = tabControl.SelectedIndex;
+                UpdateTabHeaderSelectionStates(tabControl);
+            };
+        }
 
         return tabControl;
     }
