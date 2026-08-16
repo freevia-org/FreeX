@@ -217,7 +217,11 @@ public static partial class PrintRenderer
         var lineHeight = MeasurePrintedTextBoxText("Ag").Height;
         var maxLines = Math.Max(1, (int)Math.Floor(textRect.Height / Math.Max(1, lineHeight)));
         var lineIndex = 0;
-        foreach (var line in WrapPrintedTextBoxOverlayText(text, textRect.Width, maxLines))
+        foreach (var line in MeasuredTextWrapPlanner.WrapWithCharacterEllipsis(
+                     text,
+                     textRect.Width,
+                     MeasurePrintedTextBoxWidth,
+                     maxLines))
         {
             textOverlays.Add(new PdfTextOverlay(
                 line,
@@ -232,92 +236,8 @@ public static partial class PrintRenderer
         }
     }
 
-    private static IReadOnlyList<string> WrapPrintedTextBoxOverlayText(
-        string text,
-        double maxWidth,
-        int maxLines)
-    {
-        var lines = new List<string>();
-        var hardLines = text.Replace("\r\n", "\n", StringComparison.Ordinal)
-            .Replace('\r', '\n')
-            .Split('\n');
-
-        var truncated = false;
-        for (var hardLineIndex = 0; hardLineIndex < hardLines.Length && lines.Count < maxLines && !truncated; hardLineIndex++)
-            truncated = AddWrappedPrintedTextBoxHardLine(lines, hardLines[hardLineIndex], maxWidth, maxLines);
-
-        if (lines.Count > 0 &&
-            !lines[^1].EndsWith("\u2026", StringComparison.Ordinal) &&
-            (truncated || lines.Count == maxLines && ProducesMorePrintedTextBoxLines(text, lines.Count, maxWidth, maxLines)))
-        {
-            lines[^1] = TrimPrintedTextBoxOverlayText(lines[^1], maxWidth);
-        }
-
-        return lines;
-    }
-
-    private static bool AddWrappedPrintedTextBoxHardLine(
-        ICollection<string> lines,
-        string hardLine,
-        double maxWidth,
-        int maxLines)
-    {
-        var words = hardLine.Split(' ', StringSplitOptions.RemoveEmptyEntries);
-        if (words.Length == 0)
-        {
-            if (lines.Count < maxLines)
-                lines.Add("");
-            return false;
-        }
-
-        var index = 0;
-        while (index < words.Length && lines.Count < maxLines)
-        {
-            var line = words[index++];
-            while (index < words.Length && FitsPrintedTextBoxWidth($"{line} {words[index]}", maxWidth))
-                line = $"{line} {words[index++]}";
-
-            if (!FitsPrintedTextBoxWidth(line, maxWidth))
-            {
-                lines.Add(TrimPrintedTextBoxOverlayText(line, maxWidth));
-                return true;
-            }
-
-            lines.Add(line);
-        }
-
-        return index < words.Length;
-    }
-
-    private static bool ProducesMorePrintedTextBoxLines(string text, int emittedLineCount, double maxWidth, int maxLines)
-    {
-        var replay = new List<string>();
-        var hardLines = text.Replace("\r\n", "\n", StringComparison.Ordinal)
-            .Replace('\r', '\n')
-            .Split('\n');
-
-        foreach (var hardLine in hardLines)
-        {
-            AddWrappedPrintedTextBoxHardLine(replay, hardLine, maxWidth, int.MaxValue);
-            if (replay.Count > maxLines)
-                return true;
-        }
-
-        return replay.Count > emittedLineCount;
-    }
-
-    private static bool FitsPrintedTextBoxWidth(string text, double maxWidth) =>
-        MeasurePrintedTextBoxText(text).WidthIncludingTrailingWhitespace <= Math.Max(1, maxWidth);
-
-    private static string TrimPrintedTextBoxOverlayText(string text, double maxWidth)
-    {
-        const string ellipsis = "\u2026";
-        var candidate = text.TrimEnd();
-        while (candidate.Length > 0 && !FitsPrintedTextBoxWidth(candidate + ellipsis, maxWidth))
-            candidate = candidate[..^1].TrimEnd();
-
-        return candidate.Length == 0 ? ellipsis : candidate + ellipsis;
-    }
+    private static double MeasurePrintedTextBoxWidth(string text) =>
+        MeasurePrintedTextBoxText(text).WidthIncludingTrailingWhitespace;
 
     private static FormattedText MeasurePrintedTextBoxText(string text) =>
         new(
