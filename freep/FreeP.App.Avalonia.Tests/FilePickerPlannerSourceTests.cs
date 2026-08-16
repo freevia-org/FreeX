@@ -45,7 +45,10 @@ public sealed class FilePickerPlannerSourceTests
             "FreeP.App.Avalonia",
             "FreeP.App.Avalonia.csproj"));
 
-        source.Should().Contain("new PresentationFileCommandSession(");
+        // Constructed through PresentationFileCommandSessionFactory now; the guard is that the
+        // shell still routes file commands through that shared session, not that it news it up.
+        source.Should().Contain("PresentationFileCommandSessionFactory.Create(");
+        source.Should().Contain("new PresentationFileCommandSessionComposition(");
         source.Should().Contain("_fileSession.OpenAsync()");
         source.Should().Contain("_fileSession.SaveAsync()");
         source.Should().Contain("_fileSession.ExportPdfAsync()");

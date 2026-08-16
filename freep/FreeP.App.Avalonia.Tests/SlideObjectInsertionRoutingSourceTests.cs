@@ -39,8 +39,10 @@ public sealed class SlideObjectInsertionRoutingSourceTests
         assetWorkflow.Should().Contain("SlideObjectInsertionPlanner.ApplyCommand(");
         assetWorkflow.Should().Contain("SlideObjectInsertionPlanner.PictureCommandId");
         adapter.Should().Contain("new PresentationAssetImportHostSession(");
-        adapter.Should().Contain("new AvaloniaPresentationAssetPickerPort(this)");
-        adapter.Should().Contain("new AvaloniaPresentationAssetReaderPort()");
+        // The Avalonia-specific port types gave way to the shared adapters, which take the
+        // platform callbacks directly; the routing they guard is unchanged.
+        adapter.Should().Contain("new PresentationAssetPickerAdapter(PickPresentationAssetAsync)");
+        adapter.Should().Contain("new PresentationAssetReaderAdapter<IStorageFile>(");
         adapter.Should().Contain("new PresentationAssetImportExecutionCallbacks(");
         adapter.Should().Contain("AssetImportSession.ImportAsync(kind, applyZoomCoverImage)");
         adapter.Should().Contain("AssetImportSession.MaterializeOutcomeAsync(");

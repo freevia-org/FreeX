@@ -42,7 +42,10 @@ public sealed class FileLifecycleWorkflowSourceTests
         source.Should().Contain("private readonly SisterAvaloniaFileCommandWorkflow _fileWorkflow;");
         source.Should().Contain("private readonly PresentationFileCommandSession _fileSession;");
         source.Should().Contain("new SisterAvaloniaFileCommandWorkflow(");
-        source.Should().Contain("new PresentationFileCommandSession(");
+        // Constructed through PresentationFileCommandSessionFactory now; the guard is that the
+        // shell still routes file commands through that shared session, not that it news it up.
+        source.Should().Contain("PresentationFileCommandSessionFactory.Create(");
+        source.Should().Contain("new PresentationFileCommandSessionComposition(");
         source.Should().Contain("new SisterAvaloniaFileTitleSpec(");
         source.Should().Contain("_fileSession.NewAsync()");
         source.Should().Contain("_fileSession.OpenAsync()");

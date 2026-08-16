@@ -6305,8 +6305,11 @@ public sealed class MainWindowHeadlessTests : IDisposable
 
             panePlan = window.SetSelectedReviewCommentIndexForTests(0);
             renderedActionStates = window.ReviewCommentsPaneRenderedActionStates.ToArray();
-            sharedActionStates = panePlan.Actions
-                .Where(action => action.CommandId != PresentationReviewWorkflowPlanner.ReplyCommentCommandId)
+            // ToolbarActions is the set the pane's toolbar is contracted to render: it drops the
+            // pane toggle, New Comment and Reply, which the pane already offers as dedicated
+            // affordances. Deriving the expectation from it beats filtering Actions by hand here,
+            // which silently went stale when the renderer moved to ToolbarActions.
+            sharedActionStates = panePlan.ToolbarActions
                 .Select(action => $"{action.CommandId}|{action.Label}|{action.IsEnabled}")
                 .ToArray();
         });
