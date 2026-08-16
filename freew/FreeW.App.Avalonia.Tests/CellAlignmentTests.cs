@@ -583,6 +583,39 @@ public sealed class CellAlignmentTests
     }
 
     [Fact]
+    public async Task VerticalMerge_RendersOneContinuousRestartCellSurface()
+    {
+        (Rect Rect, int Row)[] leftColumn = [];
+        Rect[] rightColumn = [];
+        var ran = await OnUiThread(() =>
+        {
+            var (view, tableBlock, _) = MakeVerticalMergeTable(TableCellVerticalAlignment.Top);
+            var renderedCells = view.TableCellRects
+                .Where(cell => cell.Block == tableBlock)
+                .ToList();
+            leftColumn = renderedCells
+                .Where(cell => cell.Col == 0)
+                .Select(cell => (cell.Rect, cell.Row))
+                .ToArray();
+            rightColumn = renderedCells
+                .Where(cell => cell.Col == 1)
+                .Select(cell => cell.Rect)
+                .ToArray();
+        });
+
+        if (!ran) return;
+
+        leftColumn.Should().ContainSingle(
+            "Word vMerge continuation rows are absorbed into their restart cell, rather than painting separate surfaces");
+        leftColumn[0].Row.Should().Be(0);
+        rightColumn.Should().HaveCount(3);
+        leftColumn[0].Rect.Height.Should().BeApproximately(
+            rightColumn.Sum(rect => rect.Height),
+            0.5,
+            "the restart-cell surface must span every continuation row");
+    }
+
+    [Fact]
     public async Task VerticalMerge_Center_ContentCentersWithinFullSpan_NotJustFirstRow()
     {
         // The bug: cellAvailableHeight used only row 0's height, so Center offset was computed
