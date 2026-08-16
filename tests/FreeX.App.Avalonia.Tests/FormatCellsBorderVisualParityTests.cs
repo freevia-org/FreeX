@@ -2,6 +2,7 @@ using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
 using Avalonia;
+using Free.Shared.Shell;
 using Avalonia.Automation;
 using Avalonia.Controls;
 using Avalonia.Controls.Primitives;
@@ -180,8 +181,14 @@ public sealed class FormatCellsBorderVisualParityTests
                     AssertFullyInside(probe.Dialog, "FormatCellsCancelButton");
                     var okButton = FindControl<Button>(probe.Dialog, "FormatCellsOkButton");
                     var cancelButton = FindControl<Button>(probe.Dialog, "FormatCellsCancelButton");
-                    okButton.Bounds.Size.Should().Be(new Size(74, 24));
-                    cancelButton.Bounds.Size.Should().Be(new Size(74, 24));
+                    // Height comes from the shared CompactDialogVisualTokens.ButtonHeight, which
+                    // "Share compact dialog geometry across renderers" set to 26 for both hosts --
+                    // it patched AvaloniaCompactDialogChrome, WpfCompactDialogMetrics and WPF's
+                    // DialogResources.xaml together, so parity holds. This assertion kept the
+                    // pre-sharing 24 and never caught up because the test itself was not running.
+                    var expectedButtonSize = new Size(74, CompactDialogVisualTokens.ButtonHeight);
+                    okButton.Bounds.Size.Should().Be(expectedButtonSize);
+                    cancelButton.Bounds.Size.Should().Be(expectedButtonSize);
                     HorizontalOrigin(cancelButton, probe.Dialog).Should()
                         .BeApproximately(HorizontalOrigin(okButton, probe.Dialog) + 82, 0.01);
                     VerticalOrigin(cancelButton, probe.Dialog).Should()
