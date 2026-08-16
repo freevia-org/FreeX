@@ -62,7 +62,7 @@ public sealed class VisualEvidenceToolSupportTests
                 ["--unrelated"],
                 FreePVisualEvidenceRoutes.DialogPane,
                 knownScenarios)
-            .Should().Be(new VisualEvidenceCaptureRequest(false, null, null, null));
+            .Should().Be(new VisualEvidenceCaptureRequest(false, null, null, null, null));
 
         FreePVisualEvidenceCaptureOrchestration.ParseRequest(
                 [FreePVisualEvidenceRoutes.DialogPane.OutputArgument],
@@ -90,6 +90,28 @@ public sealed class VisualEvidenceToolSupportTests
                 FreePVisualEvidenceRoutes.WholeWindow,
                 knownScenarios)
             .Error.Should().Be("Unknown whole-window visual evidence scenario: unknown");
+
+        FreePVisualEvidenceCaptureOrchestration.ParseRequest(
+                [
+                    FreePVisualEvidenceRoutes.WholeWindow.OutputArgument,
+                    ".",
+                    "--whole-window-visual-evidence-width",
+                    "900",
+                ],
+                FreePVisualEvidenceRoutes.WholeWindow,
+                knownScenarios)
+            .WholeWindowLogicalWidth.Should().Be(900);
+
+        FreePVisualEvidenceCaptureOrchestration.ParseRequest(
+                [
+                    FreePVisualEvidenceRoutes.WholeWindow.OutputArgument,
+                    ".",
+                    "--whole-window-visual-evidence-width",
+                    "1000",
+                ],
+                FreePVisualEvidenceRoutes.WholeWindow,
+                knownScenarios)
+            .Error.Should().Contain("requires one of: 1280, 1100, 900, 750");
     }
 
     [Fact]

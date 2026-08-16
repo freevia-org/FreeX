@@ -13,7 +13,7 @@ namespace FreeP.VisualEvidence.Avalonia;
 
 internal static class AvaloniaWholeWindowVisualEvidenceCapture
 {
-    internal static bool TryParse(string[] args, out string? outputRoot, out string? scenarioId, out string? error)
+    internal static bool TryParse(string[] args, out string? outputRoot, out string? scenarioId, out int? logicalWidth, out string? error)
     {
         var request = FreePVisualEvidenceCaptureOrchestration.ParseRequest(
             args,
@@ -21,18 +21,19 @@ internal static class AvaloniaWholeWindowVisualEvidenceCapture
             WholeWindowVisualEvidenceCatalog.All.Select(scenario => scenario.Id));
         outputRoot = request.OutputRoot;
         scenarioId = request.ScenarioId;
+        logicalWidth = request.WholeWindowLogicalWidth;
         error = request.Error;
         return request.IsRequested;
     }
 
-    internal static void Start(MainWindow anchor, string outputRoot, string? scenarioId)
+    internal static void Start(MainWindow anchor, string outputRoot, string? scenarioId, int? logicalWidth)
     {
         Dispatcher.UIThread.Post(async () =>
         {
             var exitCode = 1;
             try
             {
-                exitCode = await CaptureAll(anchor, outputRoot, scenarioId);
+                exitCode = await CaptureAll(anchor, outputRoot, scenarioId, logicalWidth);
             }
             catch (Exception ex)
             {
@@ -46,14 +47,15 @@ internal static class AvaloniaWholeWindowVisualEvidenceCapture
         }, DispatcherPriority.Background);
     }
 
-    private static async Task<int> CaptureAll(MainWindow anchor, string outputRoot, string? scenarioId)
+    private static async Task<int> CaptureAll(MainWindow anchor, string outputRoot, string? scenarioId, int? logicalWidth)
     {
         var hostPolicy = FreePVisualEvidenceCaptureOrchestration.CreateAppHostPolicy(
             FreePVisualEvidenceCaptureOrchestration.AvaloniaHost,
-            FreePVisualEvidenceRoutes.WholeWindow);
+            FreePVisualEvidenceRoutes.WholeWindow,
+            logicalWidth);
         var outputPlan = hostPolicy.CreateOutputPlan(outputRoot);
 
-        anchor.Width = WholeWindowVisualEvidenceCatalog.LogicalClientWidth;
+        anchor.Width = hostPolicy.LogicalWidth;
         anchor.Height = WholeWindowVisualEvidenceCatalog.LogicalClientHeight;
         anchor.Position = new PixelPoint(40, 40);
         anchor.Show();
@@ -81,7 +83,7 @@ internal static class AvaloniaWholeWindowVisualEvidenceCapture
                 var clientRaster = Capture(
                     anchor,
                     clientPath,
-                    WholeWindowVisualEvidenceCatalog.LogicalClientWidth,
+                    hostPolicy.LogicalWidth,
                     WholeWindowVisualEvidenceCatalog.LogicalClientHeight);
                 var semantic = coordinator.CaptureSemantic(scenario, assertions);
                 return new WholeWindowVisualEvidenceCapture(
