@@ -137,7 +137,9 @@ public sealed class DialogInteractionValidationTests
                 FindOwnedWindow(owner, "FindReplaceDialog").Should().BeSameAs(findReplace);
                 findReplace.GetVisualDescendants().OfType<TabControl>().Single().SelectedIndex.Should().Be(1);
                 findReplace.GetVisualDescendants().OfType<Button>().Single(button =>
-                        AutomationProperties.GetAutomationId(button) == "FindReplaceReplacementChooseFormatFromCellButton")
+                        // The dialog exposes FindReplaceReplaceWithChooseFormatFromCellButton; there is
+                        // no "...Replacement..." id, so this lookup could never match.
+                        AutomationProperties.GetAutomationId(button) == "FindReplaceReplaceWithChooseFormatFromCellButton")
                     .IsVisible.Should().BeTrue();
                 findReplace.Close();
 
