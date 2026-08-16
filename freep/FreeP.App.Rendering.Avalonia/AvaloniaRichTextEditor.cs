@@ -854,6 +854,7 @@ internal sealed class AvaloniaRichTextEditor : Grid
         int direction = InCanvasRichTextPointerSelectionPlanner.ResolveVerticalEdgeDirection(
             _lastPointerPosition.Y,
             _richTextView.Bounds.Height);
+        bool clampedAtExtent = false;
         if (direction == 0)
         {
             _pointerAutoScrollTimer.Stop();
@@ -868,12 +869,30 @@ internal sealed class AvaloniaRichTextEditor : Grid
                 direction);
             _richTextView.SetScrollOffset(offset);
             if (Math.Abs(offset - previousOffset) >= 0.01)
+            {
                 _pointerAutoScrollTimer.Start();
+            }
             else
+            {
                 _pointerAutoScrollTimer.Stop();
+                // Only when there was scrolling to exhaust. A document that fits the viewport never
+                // advances either, and treating that as "dragged past the end" would clamp ordinary
+                // drags inside short documents to the document end.
+                clampedAtExtent =
+                    _richTextView.ContentExtentHeight - _richTextView.Bounds.Height > 0.01;
+            }
         }
 
         int logicalPosition = _richTextView.HitTestLogicalPosition(_lastPointerPosition);
+        if (clampedAtExtent)
+        {
+            // The pointer is held past an edge with nothing left to scroll, so hit-testing it keeps
+            // returning the last visible line rather than the content beyond. Dragging below the
+            // document selects to its end (and above it, to the start), which is what the edge band
+            // means once the offset can no longer advance.
+            logicalPosition = direction > 0 ? Text.Length : 0;
+        }
+
         ApplyPointerSelection(_pointerSelectionAnchor, logicalPosition);
         _keyboardSelectionAnchor = _pointerSelectionAnchor;
         _keyboardSelectionCaret = logicalPosition;

@@ -829,14 +829,36 @@ internal sealed class AvaloniaRichTextEditingSurface : Control
             {
                 // line.Length counts the trailing break; GetTextBounds can only cover actual runs and
                 // throws "Covered length must be greater than zero" for a range inside the break.
-                int lineStart = Math.Max(displayStart, line.FirstTextSourceIndex);
-                int lineEnd = Math.Min(
-                    displayEnd,
-                    line.FirstTextSourceIndex + line.Length - line.NewLineLength);
+                // GetTextBounds can only answer for a range the line's runs actually cover, and
+                // throws "Covered length must be greater than zero" otherwise -- not only for a
+                // range inside the trailing break, but for any request that falls outside the runs,
+                // which a drag past the document end produces. Intersect the requested span with the
+                // line's real coverage and skip the line when nothing is left.
+                int coveredLength = Math.Max(
+                    0,
+                    Math.Min(line.Length - line.NewLineLength, line.TextRuns.Sum(run => run.Length)));
+                int coverStart = line.FirstTextSourceIndex;
+                int coverEnd = coverStart + coveredLength;
+                int lineStart = Math.Max(displayStart, coverStart);
+                int lineEnd = Math.Min(displayEnd, coverEnd);
                 if (lineEnd <= lineStart)
                     continue;
 
-                foreach (var bounds in line.GetTextBounds(lineStart, lineEnd - lineStart))
+                // GetTextBounds rejects ranges its runs cannot cover, and the clamping above does
+                // not capture every case it refuses -- a drag past the document end still reaches
+                // one. This runs from Render, so letting it escape tears the visual tree down over
+                // a selection highlight; a line that cannot report bounds simply contributes none.
+                IReadOnlyList<TextBounds> lineBounds;
+                try
+                {
+                    lineBounds = line.GetTextBounds(lineStart, lineEnd - lineStart);
+                }
+                catch (InvalidOperationException)
+                {
+                    continue;
+                }
+
+                foreach (var bounds in lineBounds)
                 {
                     var translated = bounds.Rectangle.Translate(item.Origin);
                     result.Add(new Rect(

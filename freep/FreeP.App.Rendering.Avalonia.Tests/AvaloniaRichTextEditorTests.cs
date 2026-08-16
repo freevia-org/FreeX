@@ -1708,9 +1708,25 @@ public sealed class AvaloniaRichTextEditorTests
                     "the captured pointer endpoint should advance with the scrolled content");
 
                 window.MouseMove(new Point(8, 500), RawInputModifiers.LeftMouseButton);
-                for (int i = 0; i < 40; i++)
+                // Auto-scroll advances a fixed step per move, so a magic iteration count only
+                // reaches the end for one particular document height and step size -- 40 moves left
+                // it at 1062 of 1371. Hold at the edge until the offset stops advancing, which is
+                // what "held in the edge band" means and is independent of both.
+                double previousOffset = -1;
+                for (int i = 0; i < 400 && editor.RichTextView.ScrollOffsetY > previousOffset; i++)
+                {
+                    previousOffset = editor.RichTextView.ScrollOffsetY;
                     window.MouseMove(new Point(8, 88), RawInputModifiers.LeftMouseButton);
-                await DrainInputAsync();
+                    await DrainInputAsync();
+                }
+
+                // The endpoint is resolved from the pointer against the freshly scrolled content, so
+                // it settles one move after the offset stops moving.
+                for (int i = 0; i < 4; i++)
+                {
+                    window.MouseMove(new Point(8, 88), RawInputModifiers.LeftMouseButton);
+                    await DrainInputAsync();
+                }
 
                 editor.RichTextView.ScrollOffsetY.Should().BeApproximately(
                     editor.RichTextView.ContentExtentHeight - editor.Bounds.Height,
