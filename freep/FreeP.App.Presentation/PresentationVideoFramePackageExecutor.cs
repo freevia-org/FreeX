@@ -1,6 +1,7 @@
 using System.IO.Compression;
 using System.Text;
 using System.Text.Json;
+using Free.Shared.IO;
 using Free.Shared.Shell;
 using FreeP.Core.Model;
 
@@ -410,15 +411,11 @@ public static class PresentationVideoFramePackageExecutor
 
     private static string BuildSuggestedPackageName(string? suggestedBaseFileName)
     {
-        var baseName = string.IsNullOrWhiteSpace(suggestedBaseFileName)
-            ? "Presentation"
-            : Path.GetFileNameWithoutExtension(suggestedBaseFileName.Trim());
-        var invalid = Path.GetInvalidFileNameChars();
-        var sanitized = new string(baseName.Select(ch => invalid.Contains(ch) ? '-' : ch).ToArray()).Trim();
-        if (string.IsNullOrWhiteSpace(sanitized))
-            sanitized = "Presentation";
-
-        return $"{sanitized}-video-encoder-input{PackageExtension}";
+        var stem = OutputFileNameStemPolicy.Normalize(
+            suggestedBaseFileName,
+            fallback: "Presentation",
+            invalidCharacterReplacement: '-');
+        return $"{stem}-video-encoder-input{PackageExtension}";
     }
 
     private static IReadOnlyList<PresentationVideoExportCapabilityPlan> BuildCapabilityPlans(

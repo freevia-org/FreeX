@@ -1,5 +1,6 @@
 using Free.Shared.Shell;
 using Free.Shared.Localization;
+using Free.Shared.IO;
 using FreeP.Core.Model;
 
 namespace FreeP.App.Compositor;
@@ -490,14 +491,10 @@ public static class PresentationPrintOutputPackageExecutor
         };
 
     private static string BuildSuggestedDocumentName(string? suggestedBaseFileName)
-    {
-        var baseName = string.IsNullOrWhiteSpace(suggestedBaseFileName)
-            ? "Presentation"
-            : Path.GetFileNameWithoutExtension(suggestedBaseFileName.Trim());
-        var invalid = Path.GetInvalidFileNameChars();
-        var sanitized = new string(baseName.Select(ch => invalid.Contains(ch) ? '-' : ch).ToArray()).Trim();
-        return string.IsNullOrWhiteSpace(sanitized) ? "Presentation" : sanitized;
-    }
+        => OutputFileNameStemPolicy.Normalize(
+            suggestedBaseFileName,
+            fallback: "Presentation",
+            invalidCharacterReplacement: '-');
 
     private static string BuildSuggestedTempFileName(string suggestedDocumentName, string extensionWithDot) =>
         $"{suggestedDocumentName}-print{extensionWithDot}";

@@ -1,4 +1,5 @@
 using System.IO;
+using Free.Shared.IO;
 using Free.Shared.Shell;
 using FreeP.Core.IO;
 using FreeP.Core.Model;
@@ -100,16 +101,8 @@ public static class PresentationImageExportExecutor
     }
 
     private static string SanitizeBaseFileName(string? baseFileName)
-    {
-        var name = string.IsNullOrWhiteSpace(baseFileName)
-            ? FallbackBaseFileName
-            : System.IO.Path.GetFileNameWithoutExtension(baseFileName.Trim());
-        if (string.IsNullOrWhiteSpace(name))
-            name = FallbackBaseFileName;
-
-        foreach (var c in System.IO.Path.GetInvalidFileNameChars())
-            name = name.Replace(c, '_');
-
-        return name;
-    }
+        => OutputFileNameStemPolicy.Normalize(
+            baseFileName,
+            FallbackBaseFileName,
+            invalidCharacterReplacement: '_');
 }
