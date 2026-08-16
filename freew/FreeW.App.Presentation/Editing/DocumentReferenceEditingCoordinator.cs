@@ -53,6 +53,24 @@ public readonly record struct DocumentComplexFieldEditResult(
     int UpdatedFieldCount);
 
 /// <summary>
+/// Outcome of <see cref="DocumentReferenceEditingCoordinator.TrySetBookmark"/>. Word enforces unique
+/// bookmark names within a document, so a name already used by a different paragraph is rejected rather
+/// than silently creating a second bookmark instance sharing that name (which would make the Bookmark
+/// Manager's Delete-by-selection ambiguous — see <see cref="Bookmarks.RemoveBookmarkAt"/>).
+/// </summary>
+public enum BookmarkInsertOutcome
+{
+    /// <summary>The bookmark was applied to the target paragraph.</summary>
+    Applied,
+
+    /// <summary>The name was empty/whitespace, or the target block was not an editable paragraph.</summary>
+    Invalid,
+
+    /// <summary>A different paragraph already carries this exact name; nothing was changed.</summary>
+    DuplicateName,
+}
+
+/// <summary>
 /// Owns portable field transitions, recomputation, generated-reference replacement, and insertion.
 /// Renderers retain native target extraction, focus, and projection of the resulting model position.
 /// </summary>
@@ -538,7 +556,17 @@ public sealed class DocumentReferenceEditingCoordinator
         string undoLabel) =>
         ApplyGeneratedRegion(Array.Empty<int>(), insertIndex, paragraphs, undoLabel);
 
-    public bool SetBookmark(int blockIndex, string? name)
+    public bool SetBookmark(int blockIndex, string? name) =>
+        TrySetBookmark(blockIndex, name) == BookmarkInsertOutcome.Applied;
+
+    /// <summary>
+    /// Names the paragraph at <paramref name="blockIndex"/> as a bookmark target, matching Word's
+    /// unique-name rule: when a <em>different</em> paragraph already carries this exact name, the insert
+    /// is rejected (<see cref="BookmarkInsertOutcome.DuplicateName"/>) rather than creating a second
+    /// instance sharing the name — re-applying the same name to its own current paragraph is not a
+    /// duplicate and still succeeds.
+    /// </summary>
+    public BookmarkInsertOutcome TrySetBookmark(int blockIndex, string? name)
     {
         var normalized = name?.Trim();
         if (string.IsNullOrEmpty(normalized)
@@ -546,11 +574,17 @@ public sealed class DocumentReferenceEditingCoordinator
             || blockIndex >= _session.Document.Blocks.Count
             || _session.Document.Blocks[blockIndex] is not Paragraph)
         {
-            return false;
+            return BookmarkInsertOutcome.Invalid;
         }
 
+        var isDuplicate = Bookmarks.List(_session.Document).Any(location =>
+            location.BlockIndex != blockIndex
+            && string.Equals(location.Name, normalized, StringComparison.Ordinal));
+        if (isDuplicate)
+            return BookmarkInsertOutcome.DuplicateName;
+
         _session.Commands.Execute(new SetParagraphBookmarkNameCommand(blockIndex, normalized));
-        return true;
+        return BookmarkInsertOutcome.Applied;
     }
 
     public DocumentReferenceTextEditResult InsertNote(

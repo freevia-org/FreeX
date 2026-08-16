@@ -292,7 +292,10 @@ public static class PresentationNotesPagePreviewPlanner
         var notesDateTime = FindPlaceholderShape(presentation.NotesMasterPlaceholders, PlaceholderType.DateTime);
         var notesFooter = FindPlaceholderShape(presentation.NotesMasterPlaceholders, PlaceholderType.Footer);
         var notesSlideNumber = FindPlaceholderShape(presentation.NotesMasterPlaceholders, PlaceholderType.SlideNumber);
-        var flags = slide.HfVisibility;
+        // Notes-page header/footer/date/slide-number visibility is the notes-master's own
+        // setting (PowerPoint's "Notes and Handouts" tab), independent of the slide's own
+        // "Slide" tab flags — turning a footer off on slides must not also turn it off here.
+        var flags = presentation.NotesHfVisibility;
 
         var result = new List<PresentationNotesPagePlaceholder>(4);
         AddIfPresent(
@@ -405,7 +408,13 @@ public static class PresentationNotesPagePreviewPlanner
         };
     }
 
-    private static string ResolveHeaderFooterText(
+    /// <summary>
+    /// Resolves the display text for one header/footer/date/slide-number placeholder. Shared with
+    /// <see cref="FreeP.App.Compositor.PresentationHandoutPdfExporter"/> so handout pages and
+    /// notes pages resolve field text (slide-number substitution, date-time formatting, cached
+    /// field text) identically instead of drifting via a second implementation.
+    /// </summary>
+    internal static string ResolveHeaderFooterText(
         PresentationNotesPagePlaceholderKind kind,
         SlideShape? shape,
         int slideNumber)
@@ -450,7 +459,13 @@ public static class PresentationNotesPagePreviewPlanner
         Flatten(slide.Shapes)
             .FirstOrDefault(shape => shape.Placeholder?.Type == placeholderType);
 
-    private static SlideShape? FindPlaceholderShape(
+    /// <summary>
+    /// Finds the first shape of a given placeholder type among <paramref name="shapes"/> (and
+    /// their children). Shared with <see cref="FreeP.App.Compositor.PresentationHandoutPdfExporter"/>
+    /// so it can look up header/footer/date/slide-number shapes on the handout master the same
+    /// way this planner looks them up on the notes master.
+    /// </summary>
+    internal static SlideShape? FindPlaceholderShape(
         IEnumerable<SlideShape> shapes,
         PlaceholderType placeholderType) =>
         Flatten(shapes).FirstOrDefault(shape => shape.Placeholder?.Type == placeholderType);

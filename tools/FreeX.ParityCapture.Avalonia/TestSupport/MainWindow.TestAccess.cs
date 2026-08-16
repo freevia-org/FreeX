@@ -635,6 +635,18 @@ public sealed partial class MainWindow
         WindowRegistry.Unregister(this);
     }
 
+    /// <summary>
+    /// Test-only seam driving the exact same private method the real Quit path invokes
+    /// (<c>_quitMenuItem.Click += async (_, _) => await TryQuitApplicationAsync();</c>). Headless
+    /// tests cannot raise a native OS menu's <c>Click</c> (it is platform chrome, not an Avalonia
+    /// routed event), so -- mirroring this file's established convention for other native-menu-gated
+    /// actions like <see cref="OpenWorkbookFromTargetAsyncForTest"/> and
+    /// <see cref="SaveWorkbookToTargetAsyncForTest"/> -- this calls straight through to the shared
+    /// method body, exercising the real dirty-gate/sibling-propagation/shutdown logic rather than any
+    /// test-only shortcut around it.
+    /// </summary>
+    internal Task TryQuitApplicationAsyncForTest() => TryQuitApplicationAsync();
+
     /// <summary>Test-only seam for <see cref="_currentFileSourceLastWriteTimeUtc"/> (see its
     /// declaration) -- not used by production code paths.</summary>
     internal DateTime? CurrentFileSourceLastWriteTimeUtcForTest => _currentFileSourceLastWriteTimeUtc;

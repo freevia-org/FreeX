@@ -76,13 +76,7 @@ public sealed class WorkbookSaveService
                 () =>
                 {
                     cancellationToken.ThrowIfCancellationRequested();
-                    using var file = new FileStream(
-                        tempPath,
-                        FileMode.Create,
-                        FileAccess.ReadWrite,
-                        FileShare.None,
-                        BufferSize,
-                        FileOptions.Asynchronous | FileOptions.SequentialScan);
+                    using var file = _fileOperations.CreateTemporaryFileStream(tempPath, BufferSize);
                     // R123-appservices-save-warnings-xlsm-xltm-xltx: check the CAPABILITY
                     // (IWarningCollectingFileAdapter), not the concrete XlsxFileAdapter type.
                     // XlsmFileAdapter/XltmFileAdapter/XltxFileAdapter all compose an internal
@@ -92,16 +86,35 @@ public sealed class WorkbookSaveService
                     // on a .xlsx save, and this single choke point is what makes every adapter
                     // built on that shared pipeline surface it, without every call site (WPF host,
                     // Avalonia shell, ...) needing to special-case each concrete adapter type.
+                    IReadOnlyList<string> writtenWarnings;
                     if (adapter is IWarningCollectingFileAdapter warningAdapter)
                     {
                         var result = warningAdapter.SaveWithWarnings(workbook, file);
                         cancellationToken.ThrowIfCancellationRequested();
-                        return result.Warnings;
+                        writtenWarnings = result.Warnings;
+                    }
+                    else
+                    {
+                        adapter.Save(workbook, file);
+                        cancellationToken.ThrowIfCancellationRequested();
+                        writtenWarnings = [];
                     }
 
-                    adapter.Save(workbook, file);
-                    cancellationToken.ThrowIfCancellationRequested();
-                    return [];
+                    // r137-appservices-save-flush-to-disk: the plain (parameterless) Flush() above
+                    // -- and the implicit flush that FileStream.Dispose performs via the `using` when
+                    // this lambda returns -- only pushes OUR .NET-buffered bytes into the OS's page
+                    // cache; it does NOT force the OS to write those dirty pages to the physical
+                    // storage medium. ReplaceTargetFile below performs an atomic rename of `tempPath`
+                    // over `path`, and that rename is only atomic with respect to the DIRECTORY ENTRY
+                    // -- if the machine loses power or the process is killed between the rename and
+                    // the OS lazily writing those cached pages out, the renamed file can still be
+                    // sitting on zeros or a partial/torn write on disk, destroying both the new
+                    // content AND (because we already renamed over it) the previous good save.
+                    // Flush(flushToDisk: true) issues the platform's durable-write primitive
+                    // (FlushFileBuffers on Windows, fsync on Linux/macOS) so every byte is physically
+                    // committed before we ever attempt the rename.
+                    file.Flush(flushToDisk: true);
+                    return writtenWarnings;
                 },
                 CreateProgressUpdate).ConfigureAwait(false);
 
@@ -334,6 +347,15 @@ public sealed class WorkbookSaveService
 
         public DateTime GetLastWriteTimeUtc(string path) => File.GetLastWriteTimeUtc(path);
 
+        public FileStream CreateTemporaryFileStream(string path, int bufferSize) =>
+            new(
+                path,
+                FileMode.Create,
+                FileAccess.ReadWrite,
+                FileShare.None,
+                bufferSize,
+                FileOptions.Asynchronous | FileOptions.SequentialScan);
+
         public void ReplaceFile(string sourcePath, string destinationPath) =>
             File.Replace(sourcePath, destinationPath, null, ignoreMetadataErrors: true);
 
@@ -362,6 +384,15 @@ internal interface IWorkbookSaveFileOperations
     bool FileExists(string path);
 
     DateTime GetLastWriteTimeUtc(string path);
+
+    /// <summary>
+    /// Opens the save pipeline's temporary output file. Exposed as a seam (rather than
+    /// <see cref="WorkbookSaveService"/> calling <c>new FileStream(...)</c> directly) purely so
+    /// tests can substitute a stream that observes whether the caller durably flushed it
+    /// (<c>Flush(flushToDisk: true)</c>) before the atomic rename -- production always returns a
+    /// real <see cref="FileStream"/> opened the same way it always has.
+    /// </summary>
+    FileStream CreateTemporaryFileStream(string path, int bufferSize);
 
     void ReplaceFile(string sourcePath, string destinationPath);
 

@@ -113,6 +113,35 @@ public static class UserMessageServiceFileCommandExtensions
             UserMessageIcon.Warning);
     }
 
+    /// <summary>
+    /// Asks whether to overwrite a save target that was changed by another program (another
+    /// instance of this app, a sync client, a colleague on a shared path) since the caller last
+    /// observed it. Shared so every sister app's external-modification guard (FreeX's
+    /// WorkbookExternallyModifiedException, FreeW's DocumentExternallyModifiedException, FreeP's
+    /// presentation equivalent) prompts with identical wording instead of each growing its own.
+    /// Works for both synchronous and asynchronous <see cref="IUserMessageService"/>
+    /// implementations via <see cref="IUserMessageService.ShowMessageAsync"/>.
+    /// </summary>
+    public static async ValueTask<bool> AskExternallyModifiedOverwriteAsync(
+        this IUserMessageService messageService,
+        string path,
+        string appTitle,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(messageService);
+        ArgumentException.ThrowIfNullOrWhiteSpace(path);
+
+        var result = await messageService.ShowMessageAsync(
+            new UserMessageRequest(
+                $"'{Path.GetFileName(path)}' has been changed by another program since it was opened. " +
+                "Do you want to overwrite those changes with your version?",
+                appTitle,
+                UserMessageButtons.YesNo,
+                UserMessageIcon.Warning),
+            cancellationToken);
+        return result == UserMessageResult.Yes;
+    }
+
     public static string? BuildExportImageWarningMessage(
         string exportedSummary,
         IReadOnlyCollection<string> imageDiagnostics)

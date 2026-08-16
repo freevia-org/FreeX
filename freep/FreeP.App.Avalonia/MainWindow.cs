@@ -532,7 +532,9 @@ public sealed partial class MainWindow : Window,
             getImageExportRange: () => PresentationExportPlanner.BuildCurrentSlideRangeRequest(Editor.CurrentSlideIndex),
             getPrintCurrentSlideNumber: () => Editor.CurrentSlideIndex + 1,
             printPackageFactory: _printOutputPackageFactory,
-            videoPackageArtifactFactory: _videoFramePackageArtifactFactory);
+            videoPackageArtifactFactory: _videoFramePackageArtifactFactory,
+            confirmExternallyModifiedOverwriteAsync: (path, ct) =>
+                _fileWorkflow.ConfirmExternallyModifiedOverwriteAsync(path, ct).AsTask());
         RecordStartupObservation("file-workflow-created");
         _closeCoordinator = new SisterAvaloniaAsyncWindowCloseCoordinator(
             confirmCloseAllowedAsync: () => _fileSession.ConfirmCloseAllowedAsync(),

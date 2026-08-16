@@ -74,6 +74,96 @@ public sealed class FreeWDocumentFileWorkflowTests : IDisposable
         events.Should().ContainInOrder("prepare", "file-name:Saved.docx", "changed", "prepare");
     }
 
+    // r137-remediation2: proves the external-modification guard fires through the REAL entry point
+    // (OpenPathAsync captures the write time; a second writer mutates the file on disk; SaveAsync
+    // fires the guard on its own) -- nothing in this test passes expectedLastWriteTimeUtc directly,
+    // unlike DocumentFileExecutionCoordinatorTests's unit-level coverage of the coordinator itself.
+    [Fact]
+    public async Task SaveCurrentPathAsync_ExternallyModifiedFile_DeclinedPromptDoesNotOverwrite()
+    {
+        var adapter = new RecordingAdapter(".docx", canSave: true, Document("loaded"));
+        var (workflow, _) = CreateWorkflow(adapter, currentDocument: Document("my edit"));
+        var path = Path.Combine(TempDirectory, "Shared.docx");
+        await File.WriteAllTextAsync(path, "original");
+
+        var opened = await workflow.OpenPathAsync(path);
+        opened.Succeeded.Should().BeTrue();
+
+        // Simulate a second writer (another FreeW instance, a sync client) touching the file on
+        // disk after we opened it but before we save -- a real mtime change, not a fabricated one.
+        await File.WriteAllTextAsync(path, "someone else's edit");
+        File.SetLastWriteTimeUtc(path, File.GetLastWriteTimeUtc(path) + TimeSpan.FromMinutes(1));
+
+        var declined = await workflow.SaveCurrentPathAsync(path);
+
+        declined.Outcome.Should().Be(DocumentFileExecutionOutcome.ExternalWriteConflict);
+        File.ReadAllText(path).Should().Be(
+            "someone else's edit",
+            "a declined overwrite must never clobber the other writer's changes");
+    }
+
+    [Fact]
+    public async Task SaveCurrentPathAsync_ExternallyModifiedFile_ConfirmedPromptOverwrites()
+    {
+        var confirmedPaths = new List<string>();
+        var adapter = new RecordingAdapter(".docx", canSave: true, Document("loaded"));
+        var (workflow, _) = CreateWorkflow(
+            adapter,
+            currentDocument: Document("my edit"),
+            confirmExternallyModifiedOverwriteAsync: (confirmedPath, _) =>
+            {
+                confirmedPaths.Add(confirmedPath);
+                return ValueTask.FromResult(true);
+            });
+        var path = Path.Combine(TempDirectory, "Shared.docx");
+        await File.WriteAllTextAsync(path, "original");
+
+        var opened = await workflow.OpenPathAsync(path);
+        opened.Succeeded.Should().BeTrue();
+
+        await File.WriteAllTextAsync(path, "someone else's edit");
+        File.SetLastWriteTimeUtc(path, File.GetLastWriteTimeUtc(path) + TimeSpan.FromMinutes(1));
+
+        var confirmed = await workflow.SaveCurrentPathAsync(path);
+
+        confirmed.Succeeded.Should().BeTrue();
+        confirmedPaths.Should().Equal(path);
+        File.ReadAllText(path).Should().Be("my edit");
+    }
+
+    // Save-As to a DIFFERENT path than the one that was opened must never fire the guard: the new
+    // target has no prior observation to compare against, even though the ORIGINAL file was changed
+    // externally in the meantime.
+    [Fact]
+    public async Task SavePathAsync_SaveAsToDifferentPath_NeverFiresGuardEvenWhenOriginalWasModified()
+    {
+        var promptInvoked = false;
+        var adapter = new RecordingAdapter(".docx", canSave: true, Document("loaded"));
+        var (workflow, _) = CreateWorkflow(
+            adapter,
+            currentDocument: Document("my edit"),
+            confirmExternallyModifiedOverwriteAsync: (_, _) =>
+            {
+                promptInvoked = true;
+                return ValueTask.FromResult(false);
+            });
+        var originalPath = Path.Combine(TempDirectory, "Original.docx");
+        await File.WriteAllTextAsync(originalPath, "original");
+
+        var opened = await workflow.OpenPathAsync(originalPath);
+        opened.Succeeded.Should().BeTrue();
+
+        await File.WriteAllTextAsync(originalPath, "someone else's edit");
+        File.SetLastWriteTimeUtc(originalPath, File.GetLastWriteTimeUtc(originalPath) + TimeSpan.FromMinutes(1));
+
+        var differentPath = Path.Combine(TempDirectory, "SaveAsTarget.docx");
+        var savedAs = await workflow.SavePathAsync(differentPath);
+
+        savedAs.Succeeded.Should().BeTrue();
+        promptInvoked.Should().BeFalse("Save-As to a different path has no prior observation to compare");
+        File.ReadAllText(differentPath).Should().Be("my edit");
+    }
+
     [Fact]
     public async Task SaveCurrentPathAsync_ReadOnlyFormatRequestsSaveAs()
     {
@@ -116,7 +206,8 @@ public sealed class FreeWDocumentFileWorkflowTests : IDisposable
     private (FreeWDocumentFileWorkflow Workflow, FileCommandWorkflow Lifecycle) CreateWorkflow(
         IDocumentFileAdapter adapter,
         List<string>? events = null,
-        TextDocument? currentDocument = null)
+        TextDocument? currentDocument = null,
+        Func<string, CancellationToken, ValueTask<bool>>? confirmExternallyModifiedOverwriteAsync = null)
     {
         events ??= [];
         currentDocument ??= TextDocument.CreateEmpty();
@@ -141,7 +232,8 @@ public sealed class FreeWDocumentFileWorkflowTests : IDisposable
                     events.Add("update-fields");
                     return ValueTask.CompletedTask;
                 },
-                SetCurrentFileName: name => events.Add($"file-name:{name}")));
+                SetCurrentFileName: name => events.Add($"file-name:{name}"),
+                ConfirmExternallyModifiedOverwriteAsync: confirmExternallyModifiedOverwriteAsync));
         return (workflow, lifecycle);
     }
 

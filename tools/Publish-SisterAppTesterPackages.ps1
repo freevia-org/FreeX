@@ -64,8 +64,10 @@ $config = switch ($App) {
         @{
             WpfProject = "src\FreeX.App.Host\FreeX.App.Host.csproj"
             AvaloniaProject = "src\FreeX.App.Avalonia\FreeX.App.Avalonia.csproj"
+            AvaloniaValidationProject = "tools\FreeX.Validation.Avalonia\FreeX.Validation.Avalonia.csproj"
             WpfHost = "FreeX.App.Host"
             AvaloniaHost = "FreeX"
+            AvaloniaValidationHost = "FreeX.Validation.Avalonia"
         }
     }
     "FreeW" {
@@ -169,7 +171,7 @@ foreach ($runtime in $Runtimes) {
     $expectedExe = (Resolve-Path -LiteralPath $expectedAppHost).Path
     $smokeExecutable = $expectedExe
 
-    if (-not $isWindowsRuntime -and $App -in @("FreeW", "FreeP")) {
+    if (-not $isWindowsRuntime) {
         $validationPublishDir = Join-Path $OutputDir "validation\$App-$runtime"
         if (Test-Path -LiteralPath $validationPublishDir) {
             Remove-Item -LiteralPath $validationPublishDir -Recurse -Force

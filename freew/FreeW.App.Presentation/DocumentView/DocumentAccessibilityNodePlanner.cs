@@ -241,9 +241,14 @@ public static class DocumentAccessibilityNodePlanner
             if (notes.Count == 0)
                 return;
 
+            // AV-NUMRESTART/WPF-NUMRESTART shared: honors NoteNumberRestart via the same authoritative
+            // sequence calculator the note-region renderers use, instead of a hardcoded "StartAt + index"
+            // continuous series that ignored a restart setting and drifted from what the document shows.
+            var isFootnote = noteKind == DocumentAccessibilityNodeKind.Footnote;
+            var sequenceById = DocumentNoteRegionPlanner.ComputeSequenceById(document, isFootnote);
             var noteNodes = notes
                 .OrderBy(entry => entry.Key)
-                .Select((entry, index) =>
+                .Select(entry =>
                 {
                     var text = entry.Value switch
                     {
@@ -251,9 +256,10 @@ public static class DocumentAccessibilityNodePlanner
                         Endnote endnote => DocumentNoteRegionPlanner.ResolveVisiblePlainText(document, endnote.Content),
                         _ => string.Empty
                     };
-                    var displayNumber = DocumentNoteRegionPlanner.ComputeDisplayNumber(
-                        Math.Max(1, numbering.StartAt) + index,
-                        numbering);
+                    var sequence = sequenceById.TryGetValue(entry.Key, out var resolvedSequence)
+                        ? resolvedSequence
+                        : Math.Max(1, numbering.StartAt);
+                    var displayNumber = DocumentNoteRegionPlanner.ComputeDisplayNumber(sequence, numbering);
                     var value = PrefixMarker(displayNumber, text);
                     var singular = noteKind == DocumentAccessibilityNodeKind.Footnote
                         ? "Footnote"

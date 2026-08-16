@@ -62,3 +62,35 @@ public sealed class RemoveBookmarkCommand(string name) : IDocumentCommand
         _previous = null;
     }
 }
+
+/// <summary>
+/// Remove exactly one bookmark instance — the paragraph at <paramref name="location"/> — while preserving
+/// undo state. Unlike <see cref="RemoveBookmarkCommand"/> (which clears every paragraph sharing the name),
+/// this targets a single location, so deleting one duplicate-named bookmark in the Bookmark Manager never
+/// silently removes a different one that happens to share its name.
+/// </summary>
+public sealed class RemoveBookmarkAtCommand(BookmarkLocation location) : IDocumentCommand
+{
+    private string[]? _previous;
+
+    public string Label => "Delete Bookmark";
+
+    public void Apply(IDocumentCommandContext context)
+    {
+        if (Bookmarks.ResolveLocation(context.Document, location) is not { } paragraph)
+            return;
+
+        _previous = [.. paragraph.BookmarkNames];
+        paragraph.BookmarkNames.RemoveAll(n => string.Equals(n, location.Name, StringComparison.Ordinal));
+    }
+
+    public void Revert(IDocumentCommandContext context)
+    {
+        if (_previous is null || Bookmarks.ResolveLocation(context.Document, location) is not { } paragraph)
+            return;
+
+        paragraph.BookmarkNames.Clear();
+        paragraph.BookmarkNames.AddRange(_previous);
+        _previous = null;
+    }
+}

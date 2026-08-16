@@ -731,7 +731,7 @@ public static class PptxPackageWriter
             // Media file rel IDs use synthetic key: shape.Id | 0x80000000
             foreach (var (id, relId, _, _, _) in mediaFileRelIds)  mediaById[id | 0x80000000u] = relId;
             // OLE embedded rel IDs keyed by shape.Id (used in BuildOleGraphicFrameEl)
-            foreach (var (shapeId, embRelId, _, _) in oleEmbRels)  mediaById[shapeId] = embRelId;
+            foreach (var (shapeId, embRelId, _, _, _) in oleEmbRels)  mediaById[shapeId] = embRelId;
             // OLE fallback image rel IDs use synthetic key: shape.Id | 0x40000000
             foreach (var (shapeId, imgRelId, _) in oleImgRels)     mediaById[shapeId | 0x40000000u] = imgRelId;
             // EA4: preserved object rel-id patch map, keyed by the FULL (shapeId, oldRelId) pair
@@ -785,8 +785,10 @@ public static class PptxPackageWriter
             foreach (var (relId, relType, target) in smartArtSlideRels)
                 slideRels.Add(relId, relType, target);
             // Theme 21: OLE embedded object + fallback image rels
-            foreach (var (_, embRelId, embRelType, embPath) in oleEmbRels)
-                slideRels.Add(embRelId, embRelType, $"../embeddings/{embPath.Split('/').Last()}");
+            foreach (var (_, embRelId, embRelType, embPath, embIsExternal) in oleEmbRels)
+                slideRels.Add(embRelId, embRelType,
+                    embIsExternal ? embPath : $"../embeddings/{embPath.Split('/').Last()}",
+                    embIsExternal);
             foreach (var (_, imgRelId, imgPath) in oleImgRels)
                 slideRels.Add(imgRelId, ImageRelType, $"../media/{imgPath.Split('/').Last()}");
             foreach (var (_, relId, mediaPath) in bulletImageRelIds)
@@ -6247,11 +6249,11 @@ public static class PptxPackageWriter
     }
 
     private static (
-        List<(uint shapeId, string embRelId, string embRelType, string embPath)> embRels,
+        List<(uint shapeId, string embRelId, string embRelType, string embPath, bool isExternal)> embRels,
         List<(uint shapeId, string imgRelId, string imgPath)> imgRels)
     WriteSlideOleObjects(ZipArchive archive, Slide slide, int slideIdx, HashSet<string> usedRelIds, ref int globalOleIndex)
     {
-        var embRels = new List<(uint, string, string, string)>();
+        var embRels = new List<(uint, string, string, string, bool)>();
         var imgRels = new List<(uint, string, string)>();
 
         int relCounter = 1;
@@ -6279,7 +6281,20 @@ public static class PptxPackageWriter
 
                 var relType = string.IsNullOrWhiteSpace(ole.RelType) ? PackageRelType : ole.RelType;
                 var embRelId = NextRelId();
-                embRels.Add((shape.Id, embRelId, relType, embPath));
+                embRels.Add((shape.Id, embRelId, relType, embPath, false));
+            }
+            else if (ole.IsLinked && !string.IsNullOrWhiteSpace(ole.LinkTarget))
+            {
+                // LINKED (non-embedded) OLE object: there is no binary to write into the
+                // package, but the shape's p:oleObj element still carries an r:id that MUST
+                // resolve to a relationship or the package is invalid. Re-emit the original
+                // External relationship pointing at the link target instead of dropping it —
+                // previously this branch didn't exist, so the r:id in OleObjXml was preserved
+                // verbatim (see BuildOleGraphicFrameEl) while no matching relationship was ever
+                // written, producing a dangling reference.
+                var relType = string.IsNullOrWhiteSpace(ole.RelType) ? OleObjectRelType : ole.RelType;
+                var embRelId = NextRelId();
+                embRels.Add((shape.Id, embRelId, relType, ole.LinkTarget, true));
             }
 
             // ── Write fallback image ───────────────────────────────────────────

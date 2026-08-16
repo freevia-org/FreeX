@@ -1520,6 +1520,63 @@ public sealed class DocumentReferenceEditingCoordinatorTests
             .Contain(run => run.Citation != null);
     }
 
+    // Confirmed HIGH finding: Insert Bookmark allowed a duplicate name, which then made the Bookmark
+    // Manager's Delete (name-keyed) remove every instance at once. Word enforces unique bookmark names —
+    // TrySetBookmark must reject a name already used by a different paragraph.
+    [Fact]
+    public void TrySetBookmark_RejectsANameAlreadyUsedByADifferentParagraph()
+    {
+        var document = new TextDocument();
+        document.Blocks.Add(new Paragraph("First"));
+        document.Blocks.Add(new Paragraph("Second"));
+        var session = new DocumentEditingSession();
+        session.LoadDocument(document);
+
+        session.References.TrySetBookmark(0, "Shared").Should().Be(BookmarkInsertOutcome.Applied);
+        session.References.TrySetBookmark(1, "Shared").Should().Be(BookmarkInsertOutcome.DuplicateName);
+
+        ((Paragraph)document.Blocks[0]).BookmarkNames.Should().Equal("Shared");
+        ((Paragraph)document.Blocks[1]).BookmarkNames.Should().BeEmpty();
+    }
+
+    // Sibling no-regression: re-applying a paragraph's own current name is not a duplicate.
+    [Fact]
+    public void TrySetBookmark_AllowsReapplyingTheSameNameToItsOwnParagraph()
+    {
+        var document = new TextDocument();
+        document.Blocks.Add(new Paragraph("First"));
+        var session = new DocumentEditingSession();
+        session.LoadDocument(document);
+
+        session.References.TrySetBookmark(0, "Target").Should().Be(BookmarkInsertOutcome.Applied);
+        session.References.TrySetBookmark(0, "Target").Should().Be(BookmarkInsertOutcome.Applied);
+
+        ((Paragraph)document.Blocks[0]).BookmarkNames.Should().Equal("Target");
+    }
+
+    // Confirmed HIGH finding, other half: Bookmark Manager Delete must target only the selected instance.
+    [Fact]
+    public void RemoveBookmarkAt_RemovesOnlyTheSelectedInstance_NotEveryParagraphSharingTheName()
+    {
+        var first = new Paragraph("First");
+        first.BookmarkNames.Add("Dup");
+        var second = new Paragraph("Second");
+        second.BookmarkNames.Add("Dup");
+        var document = new TextDocument();
+        document.Blocks.Add(first);
+        document.Blocks.Add(second);
+        var session = new DocumentEditingSession();
+        session.LoadDocument(document);
+
+        session.RemoveBookmarkAt(new BookmarkLocation("Dup", 1)).Should().BeTrue();
+
+        first.BookmarkNames.Should().Equal("Dup");
+        second.BookmarkNames.Should().BeEmpty();
+
+        session.Commands.Undo().Should().BeTrue();
+        second.BookmarkNames.Should().Equal("Dup");
+    }
+
     [Fact]
     public void IndexEntryInsertion_RejectsEquivalentMarksAndRoundTripsHistory()
     {

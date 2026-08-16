@@ -101,7 +101,16 @@ public sealed record BookmarkManagerDialogState(
     };
 }
 
-public sealed record BookmarkManagerDeleteRefreshPlan(string Name);
+/// <summary>
+/// Carries the exact selected instance (not just its name) forward into <see cref="BookmarkManagerDialogSession.CompleteDelete"/>,
+/// so a renderer can remove precisely the paragraph the user selected — see
+/// <see cref="FreeW.Core.Model.Bookmarks.RemoveBookmarkAt"/> — instead of every paragraph document-wide
+/// that happens to share the same name.
+/// </summary>
+public sealed record BookmarkManagerDeleteRefreshPlan(BookmarkLocation Location)
+{
+    public string Name => Location.Name;
+}
 
 public sealed record BookmarkManagerGoToIntent(BookmarkLocation Location)
 {
@@ -161,7 +170,7 @@ public sealed class BookmarkManagerDialogSession
         if (State.SelectedIndex < 0 || State.SelectedIndex >= State.Items.Count)
             return null;
 
-        return new BookmarkManagerDeleteRefreshPlan(State.Items[State.SelectedIndex].Name);
+        return new BookmarkManagerDeleteRefreshPlan(State.Items[State.SelectedIndex].Location);
     }
 
     public BookmarkManagerDialogState CompleteDelete(

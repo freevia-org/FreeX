@@ -342,7 +342,13 @@ public static class PresentationPrintOutputPackageExecutor
             PresentationPrintOutputPackageRoute.FullPageSlidesRasterPdf =>
                 PresentationRasterPdfExporter.ExportToBytes(
                     presentation,
-                    new PresentationRasterPdfExportRequest(normalizedRequest.SlideRange),
+                    // R137: thread the "Print hidden slides" toggle through -- without it the
+                    // FullPageSlides raster route always fell back to PrintHiddenSlides's default
+                    // (false), which happened to match the common case but silently ignored the
+                    // toggle when a caller actually turned it on.
+                    new PresentationRasterPdfExportRequest(
+                        normalizedRequest.SlideRange,
+                        PrintHiddenSlides: normalizedRequest.PrintHiddenSlides),
                     renderSlideToPng,
                     writeRasterPdf,
                     normalizedRequest.IncludeCommentsAndInkMarkup ? renderSlideWithMarkup : null),

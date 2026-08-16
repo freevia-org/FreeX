@@ -262,6 +262,8 @@ public sealed partial class MainWindow : Window
                 },
                 ConfirmSaveCompatibilityAsync: (plan, _) =>
                     new ValueTask<bool>(SaveCompatibilityWarningDialog.ShowAsync(this, plan)),
+                ConfirmExternallyModifiedOverwriteAsync: (path, cancellationToken) =>
+                    _fileWorkflow.ConfirmExternallyModifiedOverwriteAsync(path, cancellationToken),
                 UpdateFieldsAsync: _ =>
                 {
                     _suppressEditorDirty = true;
@@ -3624,7 +3626,15 @@ public sealed partial class MainWindow : Window
         var dialog = new BookmarkDialog(names);
         await dialog.ShowDialog(this);
         if (dialog.BookmarkName is { } add)
-            _editor.InsertBookmark(add);
+        {
+            if (_editor.InsertBookmark(add) == BookmarkInsertOutcome.DuplicateName)
+            {
+                await FreeWInfoDialog.ShowAsync(
+                    this,
+                    UiText.Format("Bookmark_DuplicateName_Message_Format", add),
+                    UiText.Get("Bookmark_Title"));
+            }
+        }
         else if (dialog.GoToName is { } go)
             _editor.GoToBookmark(go);
         _editor.Focus();

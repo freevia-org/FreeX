@@ -525,8 +525,11 @@ public sealed class MoveSlideCommand : IPresentationCommand
 
         _beforeSections ??= PresentationSectionMembershipSnapshot.Capture(p);
 
+        var movedSlideId = p.Slides[_from].Id;
         MoveInList(p.Slides, _from, _to);
-        PresentationSectionMembershipSnapshot.SynchronizeOrder(p);
+        var newIndex = p.Slides.FindIndex(slide =>
+            string.Equals(slide.Id, movedSlideId, StringComparison.Ordinal));
+        PresentationSectionMembershipSnapshot.ReassignMovedSlide(p, newIndex, movedSlideId);
     }
 
     public void Revert(Presentation p)

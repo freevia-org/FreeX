@@ -71,4 +71,21 @@ public sealed class OleObjectInfo
     /// Derived from the content type on read; used to choose the archive path on write.
     /// </summary>
     public string EmbeddedExtension { get; set; } = "bin";
+
+    // ── Linked (non-embedded) OLE object ───────────────────────────────────────────
+
+    /// <summary>
+    /// True when the source p:oleObj's r:id relationship had TargetMode="External" — i.e. this
+    /// is a LINKED OLE object (points at an external file/URL) rather than an embedded one.
+    /// EmbeddedBytes is empty for a linked object; the link target lives in
+    /// <see cref="LinkTarget"/> instead and must be re-emitted as an External relationship on
+    /// write so the shape's r:id is not left dangling.
+    /// </summary>
+    public bool IsLinked { get; set; }
+
+    /// <summary>
+    /// The external relationship Target (path or URL) for a linked OLE object. Only meaningful
+    /// when <see cref="IsLinked"/> is true. Preserved verbatim for round-trip.
+    /// </summary>
+    public string? LinkTarget { get; set; }
 }

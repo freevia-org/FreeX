@@ -3834,7 +3834,14 @@ internal static class FreeWRibbonCommands
                 string.Empty);
             if (name is null)
                 return; // cancelled — leave the model untouched
-            editor.SetBookmarkAtCaret(name);
+
+            if (editor.SetBookmarkAtCaret(name) == BookmarkInsertOutcome.DuplicateName)
+            {
+                DialogMessageHelper.ShowInfo(
+                    Window.GetWindow(editor),
+                    UiText.Format("Bookmark_DuplicateName_Message_Format", name),
+                    UiText.Get("Bookmark_Title"));
+            }
         }
     }
 

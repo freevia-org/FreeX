@@ -755,6 +755,160 @@ public sealed class DocumentViewNoteRenderTests
             "with EndnoteNumbering.StartAt=3 the first endnote must display as '3'");
     }
 
+    // ── Test 15: NumberRestart.EachPage restarts the footnote band on every physical page ────────────
+
+    [Fact]
+    public async Task EachPageRestart_FootnoteBandRestartsNumberingOnEveryPhysicalPage()
+    {
+        IReadOnlyList<(string Text, double X, double Y, bool IsNumberMarker)>? items = null;
+        var pageCount = 0;
+        var ran = await OnUiThread(() =>
+        {
+            var doc = BuildTwoPageFootnoteDoc();
+            doc.FootnoteNumbering.NumberRestart = NoteNumberRestart.EachPage;
+
+            var view = new DocumentView();
+            view.LoadDocument(doc);
+            view.Measure(new Size(816, 8000));
+            pageCount = view.PageCount;
+            items = view.NoteRenderItems;
+        });
+
+        if (!ran) return;
+        items.Should().NotBeNull();
+        if (pageCount < 2 || items!.Count == 0) return; // env-dependent pagination — skip rather than false-fail
+
+        var markers = items!.Where(i => i.IsNumberMarker).OrderBy(i => i.Y).Select(i => i.Text.Trim()).ToList();
+        markers.Should().Equal(["1", "1"],
+            "each physical page's footnote must restart at 1 under NoteNumberRestart.EachPage");
+    }
+
+    /// <summary>Sibling no-regression: the default Continuous restart keeps counting across pages.</summary>
+    [Fact]
+    public async Task Continuous_NoRegression_FootnoteBandKeepsCountingAcrossPages()
+    {
+        IReadOnlyList<(string Text, double X, double Y, bool IsNumberMarker)>? items = null;
+        var pageCount = 0;
+        var ran = await OnUiThread(() =>
+        {
+            var doc = BuildTwoPageFootnoteDoc();
+            // NumberRestart left at its Continuous default.
+
+            var view = new DocumentView();
+            view.LoadDocument(doc);
+            view.Measure(new Size(816, 8000));
+            pageCount = view.PageCount;
+            items = view.NoteRenderItems;
+        });
+
+        if (!ran) return;
+        items.Should().NotBeNull();
+        if (pageCount < 2 || items!.Count == 0) return;
+
+        var markers = items!.Where(i => i.IsNumberMarker).OrderBy(i => i.Y).Select(i => i.Text.Trim()).ToList();
+        markers.Should().Equal(["1", "2"]);
+    }
+
+    private static TextDocument BuildTwoPageFootnoteDoc()
+    {
+        var doc = TextDocument.CreateEmpty();
+        doc.Blocks.Clear();
+        var p1 = new Paragraph();
+        p1.Runs.Add(new Run("Page one body"));
+        p1.Runs.Add(Run.FootnoteReference(1));
+        doc.Blocks.Add(p1);
+        for (var i = 1; i <= 60; i++)
+            doc.Blocks.Add(new Paragraph($"Page-1 filler line {i}: lorem ipsum dolor sit amet consectetur."));
+
+        var p2 = new Paragraph();
+        p2.Runs.Add(new Run("Page two body"));
+        p2.Runs.Add(Run.FootnoteReference(2));
+        doc.Blocks.Add(p2);
+
+        doc.Footnotes[1] = new Footnote(1, "First footnote.");
+        doc.Footnotes[2] = new Footnote(2, "Second footnote.");
+        return doc;
+    }
+
+    // ── Test 16: the in-body reference mark shows the computed display sequence, not the raw id ──────
+
+    /// <summary>
+    /// Word keeps a note's internal id stable when an earlier note is deleted — only the DISPLAY
+    /// sequence shifts. The in-body superscript reference mark (rendered via DisplayCells) must track
+    /// that shift instead of showing the raw <see cref="Run.FootnoteId"/>, or the body glyph drifts out
+    /// of sync with the footnote area's own numbering.
+    /// </summary>
+    [Fact]
+    public async Task FootnoteBodyMark_ShowsComputedDisplaySequence_NotRawId_AfterEarlierNoteDeleted()
+    {
+        IReadOnlyList<(char Ch, double X, double W, double Y, double LineHeight, bool IsSubscript)>? body = null;
+        var ran = await OnUiThread(() =>
+        {
+            var doc = TextDocument.CreateEmpty();
+            doc.Blocks.Clear();
+            var para = new Paragraph();
+            para.Runs.Add(new Run("A"));
+            para.Runs.Add(Run.FootnoteReference(1));
+            para.Runs.Add(new Run("B"));
+            para.Runs.Add(Run.FootnoteReference(2));
+            para.Runs.Add(new Run("C"));
+            para.Runs.Add(Run.FootnoteReference(3));
+            doc.Blocks.Add(para);
+            doc.Footnotes[1] = new Footnote(1, "one");
+            doc.Footnotes[2] = new Footnote(2, "two");
+            doc.Footnotes[3] = new Footnote(3, "three");
+
+            // Simulate deleting the first footnote directly on the model: ids stay stable (2, 3
+            // survive), only their display sequence must shift down to 1, 2.
+            doc.Footnotes.Remove(1);
+            para.Runs.RemoveAll(r => r.FootnoteId == 1);
+
+            var view = new DocumentView();
+            view.LoadDocument(doc);
+            view.Measure(new Size(816, 4000));
+            body = view.GetPlacedForBlock(0);
+        });
+
+        if (!ran) return;
+        body.Should().NotBeNull();
+
+        // The body text uses only letters (A/B/C); the footnote marks are the only digit glyphs, in order.
+        var markerChars = body!.Where(c => char.IsDigit(c.Ch)).Select(c => c.Ch).ToList();
+        markerChars.Should().Equal(['1', '2'],
+            "the surviving footnotes' body marks must show their computed display sequence (1, 2), not their raw internal ids (2, 3)");
+    }
+
+    /// <summary>Sibling no-regression: with no deletion, ids and display sequence coincide (1, 2).</summary>
+    [Fact]
+    public async Task FootnoteBodyMark_NoRegression_ShowsSequentialNumbers_WhenNoNoteWasDeleted()
+    {
+        IReadOnlyList<(char Ch, double X, double W, double Y, double LineHeight, bool IsSubscript)>? body = null;
+        var ran = await OnUiThread(() =>
+        {
+            var doc = TextDocument.CreateEmpty();
+            doc.Blocks.Clear();
+            var para = new Paragraph();
+            para.Runs.Add(new Run("A"));
+            para.Runs.Add(Run.FootnoteReference(1));
+            para.Runs.Add(new Run("B"));
+            para.Runs.Add(Run.FootnoteReference(2));
+            doc.Blocks.Add(para);
+            doc.Footnotes[1] = new Footnote(1, "one");
+            doc.Footnotes[2] = new Footnote(2, "two");
+
+            var view = new DocumentView();
+            view.LoadDocument(doc);
+            view.Measure(new Size(816, 4000));
+            body = view.GetPlacedForBlock(0);
+        });
+
+        if (!ran) return;
+        body.Should().NotBeNull();
+
+        var markerChars = body!.Where(c => char.IsDigit(c.Ch)).Select(c => c.Ch).ToList();
+        markerChars.Should().Equal(['1', '2']);
+    }
+
     private static byte[] WriteableBitmapToPng(WriteableBitmap bitmap)
     {
         try

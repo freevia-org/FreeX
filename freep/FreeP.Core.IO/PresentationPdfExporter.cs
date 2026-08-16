@@ -130,6 +130,14 @@ public static class PresentationPdfExporter
         ArgumentNullException.ThrowIfNull(slide);
 
         var ops = new List<PdfDrawOp>();
+        // R137: link annotations for shape/text hyperlinks, plus this slide's own landing point so
+        // any OTHER slide's internal hyperlink can jump here regardless of export/render order (see
+        // ResolveShapeHyperlink and SlideDestinationName below).
+        var linkOverlays = new List<PdfLinkOverlay>();
+        var namedDestinations = new List<PdfNamedDestination>
+        {
+            new(SlideDestinationName(slide.Id), 0, 0),
+        };
 
         if (TryMapFillLinearGradient(
                 slide.Background,
@@ -194,13 +202,25 @@ public static class PresentationPdfExporter
                     AppendShapeText(shapeOps, box, content);
 
                 AppendShapeOps(ops, shapeOps, box, shape.RotationDeg);
+
+                // R137: covers the shape's whole bounding box, not individual glyph runs -- this
+                // exporter lays out only the shape's flattened text (see `content`/`shape.Text`
+                // above), not per-run positions, so a run-level hyperlink inside a text box becomes a
+                // click target over the whole shape rather than just the linked substring. Rotation is
+                // not accounted for either (the annotation stays axis-aligned), matching this
+                // exporter's other rotation approximations. Still a real, clickable improvement over
+                // emitting nothing.
+                if (ResolveShapeHyperlink(shape) is { } hyperlink &&
+                    BuildLinkOverlay(hyperlink, box, slideHeightPoints) is { } overlay)
+                    linkOverlays.Add(overlay);
+
                 continue;
             }
 
             foreach (var line in Lines(content))
             {
                 if (y < MarginPt)
-                    return new PdfContentPage(slideWidthPoints, slideHeightPoints, ops); // ran out of room on this slide
+                    return new PdfContentPage(slideWidthPoints, slideHeightPoints, ops, linkOverlays.Count > 0 ? linkOverlays : null, namedDestinations); // ran out of room on this slide
                 ops.Add(new PdfText(MarginPt, y, BodySize, PdfFontFace.Regular, PdfColor.Black, OneLine(line)));
                 y -= BodyLeadingPt;
             }
@@ -209,7 +229,61 @@ public static class PresentationPdfExporter
         if (includeCommentsAndInkMarkup)
             AppendCommentMarkup(ops, slide, slideWidthPoints, slideHeightPoints);
 
-        return new PdfContentPage(slideWidthPoints, slideHeightPoints, ops);
+        return new PdfContentPage(
+            slideWidthPoints,
+            slideHeightPoints,
+            ops,
+            linkOverlays.Count > 0 ? linkOverlays : null,
+            namedDestinations);
+    }
+
+    /// <summary>
+    /// The internal-hyperlink target name for <paramref name="slideId"/>'s own page (see
+    /// <see cref="Slide.Id"/>): every slide registers this as a <see cref="PdfNamedDestination"/> on
+    /// its own page, and a <see cref="Hyperlink.TargetSlideId"/> elsewhere in the deck resolves to it
+    /// via the matching <see cref="PdfLinkOverlay.DestinationName"/>, independent of slide order.
+    /// </summary>
+    private static string SlideDestinationName(string slideId) => $"freep-slide-{slideId}";
+
+    /// <summary>
+    /// The hyperlink that should make <paramref name="shape"/> clickable in the exported PDF: an
+    /// explicit action on the shape itself (e.g. an action button) takes priority, falling back to
+    /// the first hyperlinked text run inside the shape's body (<c>a:hlinkClick</c> on <c>a:rPr</c>).
+    /// </summary>
+    private static Hyperlink? ResolveShapeHyperlink(SlideShape shape)
+    {
+        if (shape.Hyperlink is { } shapeLink)
+            return shapeLink;
+
+        if (shape.TextBody is { } textBody)
+            foreach (var paragraph in textBody.Paragraphs)
+                foreach (var run in paragraph.Runs)
+                    if (run.Hyperlink is { } runLink)
+                        return runLink;
+
+        return null;
+    }
+
+    private static PdfLinkOverlay? BuildLinkOverlay(Hyperlink hyperlink, ShapeBox box, double slideHeightPoints)
+    {
+        var uri = hyperlink.IsExternal ? hyperlink.Url : null;
+        var destinationName = !hyperlink.IsExternal && !string.IsNullOrEmpty(hyperlink.TargetSlideId)
+            ? SlideDestinationName(hyperlink.TargetSlideId)
+            : null;
+        if (string.IsNullOrEmpty(uri) && string.IsNullOrEmpty(destinationName))
+            return null;
+
+        // box.Y is PDF-native bottom-left/y-up (the box's bottom edge); PdfLinkOverlay wants
+        // top-left/y-down, so flip the same way BuildTextOverlay's raster-overlay conversion does:
+        // topDownY = pageHeight - bottomUpY - height.
+        return new PdfLinkOverlay(
+            box.X,
+            slideHeightPoints - box.Y - box.Height,
+            box.Width,
+            box.Height,
+            uri,
+            hyperlink.Tooltip,
+            destinationName);
     }
 
     private static void AppendShapeEffectOps(

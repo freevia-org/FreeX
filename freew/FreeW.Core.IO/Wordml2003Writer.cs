@@ -77,16 +77,20 @@ public static class Wordml2003Writer
         var body = new XElement(W + "body");
         wordDocument.Add(body);
 
+        // Shared across every paragraph in the document so bookmark ids stay unique document-wide (a
+        // fresh per-paragraph counter would collide across paragraphs/cells).
+        var nextBookmarkId = 0;
+
         // Body-level content blocks.
         foreach (var block in document.Blocks)
         {
             switch (block)
             {
                 case Paragraph paragraph:
-                    body.Add(BuildParagraph(paragraph));
+                    body.Add(BuildParagraph(paragraph, ref nextBookmarkId));
                     break;
                 case Table table:
-                    body.Add(BuildTable(table));
+                    body.Add(BuildTable(table, ref nextBookmarkId));
                     break;
                 // Other block kinds (unsupported by 2003 WordML writer) are skipped.
             }
@@ -102,7 +106,7 @@ public static class Wordml2003Writer
     // Paragraphs
     // -----------------------------------------------------------------------
 
-    private static XElement BuildParagraph(Paragraph paragraph)
+    private static XElement BuildParagraph(Paragraph paragraph, ref int nextBookmarkId)
     {
         var p = new XElement(W + "p");
 
@@ -111,6 +115,24 @@ public static class Wordml2003Writer
         if (pPr is not null)
             p.Add(pPr);
 
+        // w:bookmarkStart — mark this paragraph as a named target *before* its runs so an internal
+        // hyperlink elsewhere in the document (w:hlink w:bookmark="Name", see BuildHyperlink) has
+        // somewhere to land. Without this, every internal link in the exported file is broken: the
+        // reference is written but the target marker never was. w:bookmarkEnd closes each one after the
+        // runs, mirroring how DocxWriter marks a whole-paragraph bookmark.
+        var openBookmarkIds = new List<int>();
+        foreach (var name in paragraph.BookmarkNames)
+        {
+            if (string.IsNullOrEmpty(name))
+                continue;
+
+            var id = nextBookmarkId++;
+            openBookmarkIds.Add(id);
+            p.Add(new XElement(W + "bookmarkStart",
+                new XAttribute(W + "id", id),
+                new XAttribute(W + "name", name)));
+        }
+
         // w:r elements for each run.
         foreach (var run in paragraph.Runs)
         {
@@ -118,6 +140,9 @@ public static class Wordml2003Writer
             if (r is not null)
                 p.Add(BuildHyperlink(run, r));
         }
+
+        foreach (var id in openBookmarkIds)
+            p.Add(new XElement(W + "bookmarkEnd", new XAttribute(W + "id", id)));
 
         return p;
     }
@@ -262,7 +287,7 @@ public static class Wordml2003Writer
     // Tables
     // -----------------------------------------------------------------------
 
-    private static XElement BuildTable(Table table)
+    private static XElement BuildTable(Table table, ref int nextBookmarkId)
     {
         var tbl = new XElement(W + "tbl");
 
@@ -273,7 +298,7 @@ public static class Wordml2003Writer
             {
                 var tc = new XElement(W + "tc");
                 foreach (var paragraph in cell.Paragraphs)
-                    tc.Add(BuildParagraph(paragraph));
+                    tc.Add(BuildParagraph(paragraph, ref nextBookmarkId));
                 // A cell with no paragraphs gets one empty placeholder paragraph, mirroring the reader.
                 if (!tc.HasElements)
                     tc.Add(new XElement(W + "p"));

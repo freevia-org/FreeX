@@ -661,6 +661,185 @@ public sealed class PresentationCommandTests
         p.Slides.Should().Equal(originalOrder);
     }
 
+    // ── R137: MoveSlideCommand must reassign section membership across boundaries ──
+
+    [Fact]
+    public void MoveSlideCommand_AcrossSectionBoundary_ReassignsSectionMembership()
+    {
+        // 4 slides, two adjacent sections: A=[0,1], C=[2,3].
+        var (p, bus) = Make(4);
+        var id0 = p.Slides[0].Id;
+        var id1 = p.Slides[1].Id;
+        var id2 = p.Slides[2].Id;
+        var id3 = p.Slides[3].Id;
+
+        var sectionA = new PresentationSection { Id = "A", Name = "A" };
+        sectionA.SlideIds.AddRange(new[] { id0, id1 });
+        var sectionC = new PresentationSection { Id = "C", Name = "C" };
+        sectionC.SlideIds.AddRange(new[] { id2, id3 });
+        p.Sections.Add(sectionA);
+        p.Sections.Add(sectionC);
+
+        // Move slide 1 (a member of A) out past the end of C's range.
+        bus.Execute(new MoveSlideCommand(1, 3));
+
+        p.Slides.Select(s => s.Id).Should().Equal(id0, id2, id3, id1);
+
+        // The moved slide must now belong to C (where it physically sits), not still be
+        // listed under A (its stale, pre-move section).
+        p.Sections[0].SlideIds.Should().Equal(id0);
+        p.Sections[1].SlideIds.Should().Equal(id2, id3, id1);
+    }
+
+    [Fact]
+    public void MoveSlideCommand_AcrossSectionBoundary_Undo_RestoresOriginalMembership()
+    {
+        var (p, bus) = Make(4);
+        var id0 = p.Slides[0].Id;
+        var id1 = p.Slides[1].Id;
+        var id2 = p.Slides[2].Id;
+        var id3 = p.Slides[3].Id;
+
+        var sectionA = new PresentationSection { Id = "A", Name = "A" };
+        sectionA.SlideIds.AddRange(new[] { id0, id1 });
+        var sectionC = new PresentationSection { Id = "C", Name = "C" };
+        sectionC.SlideIds.AddRange(new[] { id2, id3 });
+        p.Sections.Add(sectionA);
+        p.Sections.Add(sectionC);
+
+        bus.Execute(new MoveSlideCommand(1, 3));
+        bus.Undo();
+
+        p.Slides.Select(s => s.Id).Should().Equal(id0, id1, id2, id3);
+        p.Sections[0].SlideIds.Should().Equal(id0, id1);
+        p.Sections[1].SlideIds.Should().Equal(id2, id3);
+    }
+
+    [Fact]
+    public void MoveSlideCommand_WithinSameSection_KeepsSlideInThatSection()
+    {
+        // Sibling no-regression case: a move that stays inside one section must not
+        // un-section the slide or leave it behind in a different section.
+        var (p, bus) = Make(3);
+        var id0 = p.Slides[0].Id;
+        var id1 = p.Slides[1].Id;
+        var id2 = p.Slides[2].Id;
+
+        var section = new PresentationSection { Id = "A", Name = "A" };
+        section.SlideIds.AddRange(new[] { id0, id1, id2 });
+        p.Sections.Add(section);
+
+        bus.Execute(new MoveSlideCommand(1, 0));
+
+        p.Slides.Select(s => s.Id).Should().Equal(id1, id0, id2);
+        p.Sections[0].SlideIds.Should().Equal(id1, id0, id2);
+    }
+
+    [Fact]
+    public void MoveSlideCommand_IntoEmptySection_AssignsToEmptySection()
+    {
+        // 5 slides. A=[0,1], empty section B sits between A and C in section order,
+        // C=[2,3]; slide 4 starts out unsectioned (past C).
+        var (p, bus) = Make(5);
+        var id0 = p.Slides[0].Id;
+        var id1 = p.Slides[1].Id;
+        var id2 = p.Slides[2].Id;
+        var id3 = p.Slides[3].Id;
+        var id4 = p.Slides[4].Id;
+
+        var sectionA = new PresentationSection { Id = "A", Name = "A" };
+        sectionA.SlideIds.AddRange(new[] { id0, id1 });
+        var sectionB = new PresentationSection { Id = "B", Name = "Empty" };
+        var sectionC = new PresentationSection { Id = "C", Name = "C" };
+        sectionC.SlideIds.AddRange(new[] { id2, id3 });
+        p.Sections.Add(sectionA);
+        p.Sections.Add(sectionB);
+        p.Sections.Add(sectionC);
+
+        // Drop the previously-unsectioned slide 4 exactly between A and C — into B's slot.
+        bus.Execute(new MoveSlideCommand(4, 2));
+
+        p.Slides.Select(s => s.Id).Should().Equal(id0, id1, id4, id2, id3);
+        p.Sections[0].SlideIds.Should().Equal(id0, id1);
+        p.Sections[1].SlideIds.Should().Equal(id4);
+        p.Sections[2].SlideIds.Should().Equal(id2, id3);
+    }
+
+    [Fact]
+    public void MoveSlideCommand_IntoEmptySection_Undo_RestoresOriginalMembership()
+    {
+        var (p, bus) = Make(5);
+        var id0 = p.Slides[0].Id;
+        var id1 = p.Slides[1].Id;
+        var id2 = p.Slides[2].Id;
+        var id3 = p.Slides[3].Id;
+        var id4 = p.Slides[4].Id;
+
+        var sectionA = new PresentationSection { Id = "A", Name = "A" };
+        sectionA.SlideIds.AddRange(new[] { id0, id1 });
+        var sectionB = new PresentationSection { Id = "B", Name = "Empty" };
+        var sectionC = new PresentationSection { Id = "C", Name = "C" };
+        sectionC.SlideIds.AddRange(new[] { id2, id3 });
+        p.Sections.Add(sectionA);
+        p.Sections.Add(sectionB);
+        p.Sections.Add(sectionC);
+
+        bus.Execute(new MoveSlideCommand(4, 2));
+        bus.Undo();
+
+        p.Slides.Select(s => s.Id).Should().Equal(id0, id1, id2, id3, id4);
+        p.Sections.Should().HaveCount(3);
+        p.Sections[0].SlideIds.Should().Equal(id0, id1);
+        p.Sections[1].SlideIds.Should().BeEmpty();
+        p.Sections[2].SlideIds.Should().Equal(id2, id3);
+    }
+
+    [Fact]
+    public void MoveSlideCommand_ToEndOfPresentation_BecomesLastMemberOfLastSection()
+    {
+        // Moving the first slide of A to the very end must make it the new LAST member
+        // of the section it now trails (C), not leave it stranded in A.
+        var (p, bus) = Make(4);
+        var id0 = p.Slides[0].Id;
+        var id1 = p.Slides[1].Id;
+        var id2 = p.Slides[2].Id;
+        var id3 = p.Slides[3].Id;
+
+        var sectionA = new PresentationSection { Id = "A", Name = "A" };
+        sectionA.SlideIds.AddRange(new[] { id0, id1 });
+        var sectionC = new PresentationSection { Id = "C", Name = "C" };
+        sectionC.SlideIds.AddRange(new[] { id2, id3 });
+        p.Sections.Add(sectionA);
+        p.Sections.Add(sectionC);
+
+        bus.Execute(new MoveSlideCommand(0, 3));
+
+        p.Slides.Select(s => s.Id).Should().Equal(id1, id2, id3, id0);
+        p.Sections[0].SlideIds.Should().Equal(id1);
+        p.Sections[1].SlideIds.Should().Equal(id2, id3, id0);
+    }
+
+    [Fact]
+    public void MoveSlideCommand_ToStartOfPresentation_BecomesFirstMemberOfFirstSection()
+    {
+        // Moving the last slide of a single-section deck to the very front must make it
+        // the new FIRST member of that section.
+        var (p, bus) = Make(4);
+        var id0 = p.Slides[0].Id;
+        var id1 = p.Slides[1].Id;
+        var id2 = p.Slides[2].Id;
+        var id3 = p.Slides[3].Id;
+
+        var section = new PresentationSection { Id = "A", Name = "A" };
+        section.SlideIds.AddRange(new[] { id0, id1, id2, id3 });
+        p.Sections.Add(section);
+
+        bus.Execute(new MoveSlideCommand(3, 0));
+
+        p.Slides.Select(s => s.Id).Should().Equal(id3, id0, id1, id2);
+        p.Sections[0].SlideIds.Should().Equal(id3, id0, id1, id2);
+    }
+
     // ════════════════════════════════════════════════════════════════════════════
     // SHAPE COMMANDS
     // ════════════════════════════════════════════════════════════════════════════

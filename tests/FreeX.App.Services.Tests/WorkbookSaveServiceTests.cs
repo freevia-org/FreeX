@@ -439,6 +439,65 @@ public sealed class WorkbookSaveServiceTests
         Directory.GetFiles(temp.Path, "*.tmp").Should().BeEmpty();
     }
 
+    // ── r137-appservices-save-flush-to-disk ─────────────────────────────────────────────────────
+    //
+    // The temp file used to be renamed over `path` without ever forcing the OS to write its dirty
+    // pages to physical storage first: FileStream.Dispose (and any plain Flush()) only pushes bytes
+    // into the OS page cache. On a crash/power-loss immediately after the rename, the renamed file
+    // could still be sitting on zeros or a partial write, destroying both the new content and (since
+    // it already replaced the original) the last good save. These tests go through the real
+    // WorkbookSaveService.SaveAsync entry point and observe the actual FileStream.Flush(bool) calls
+    // via a FileStream subclass, so they prove the fix reaches the concrete stream the save writes
+    // through -- not a mock unrelated to production wiring.
+
+    [Fact]
+    public async Task SaveAsync_FlushesTemporaryFileToPhysicalDiskBeforeReplacingTarget()
+    {
+        // FAIL-BEFORE: before the fix, nothing ever called Flush(flushToDisk: true) on the temp
+        // stream, so FlushCalls never contains `true` and this assertion fails.
+        using var temp = new TestTemporaryDirectory();
+        var tempPath = Path.Combine(temp.Path, "saved.fxjson");
+        var workbook = new Workbook("Saved");
+        workbook.AddSheet("Sheet1");
+        var adapter = new TestFileAdapter(save: (_, stream) =>
+        {
+            using var writer = new StreamWriter(stream, leaveOpen: true);
+            writer.Write("payload");
+        });
+        var fileOperations = new FlushTrackingFileOperations();
+
+        await new WorkbookSaveService(fileOperations).SaveAsync(tempPath, adapter, workbook);
+
+        fileOperations.LastStream.Should().NotBeNull("the save pipeline must create its temp file through the tracked seam");
+        fileOperations.LastStream!.FlushCalls.Should().Contain(
+            true,
+            "the save must durably flush the temp file to physical storage (Flush(flushToDisk: true)) " +
+            "before the atomic rename replaces the target, otherwise a crash right after the rename can " +
+            "leave the target zeroed or truncated with no recoverable original");
+    }
+
+    [Fact]
+    public async Task SaveAsync_DurableFlushDoesNotAlterWrittenContentOrCleanup()
+    {
+        // No-regression sibling: routing the temp stream through the new seam, and adding the
+        // durable flush, must not change what ends up on disk or leave any temp artifact behind.
+        using var temp = new TestTemporaryDirectory();
+        var tempPath = Path.Combine(temp.Path, "saved.fxjson");
+        var workbook = new Workbook("Saved");
+        workbook.AddSheet("Sheet1");
+        var adapter = new TestFileAdapter(save: (_, stream) =>
+        {
+            using var writer = new StreamWriter(stream, leaveOpen: true);
+            writer.Write("payload");
+        });
+        var fileOperations = new FlushTrackingFileOperations();
+
+        await new WorkbookSaveService(fileOperations).SaveAsync(tempPath, adapter, workbook);
+
+        (await File.ReadAllTextAsync(tempPath)).Should().Be("payload");
+        Directory.GetFiles(temp.Path, "*.tmp").Should().BeEmpty();
+    }
+
     [Fact]
     public async Task SaveAsync_PreservesExistingFileAndDeletesTemporaryFileWhenAdapterFails()
     {
@@ -590,6 +649,76 @@ public sealed class WorkbookSaveServiceTests
         File.Exists(path).Should().BeTrue();
     }
 
+    /// <summary>
+    /// Fake used only by the r137 durable-flush tests: routes the save pipeline's temp file through
+    /// a <see cref="FlushTrackingFileStream"/> that records every <see cref="FileStream.Flush(bool)"/>
+    /// call (and its <c>flushToDisk</c> argument), while every other operation is the real file-system
+    /// call -- so the save still runs against a real temp file/rename on disk, exactly like production.
+    /// </summary>
+    private sealed class FlushTrackingFileOperations : IWorkbookSaveFileOperations
+    {
+        public FlushTrackingFileStream? LastStream { get; private set; }
+
+        public bool FileExists(string path) => File.Exists(path);
+
+        public DateTime GetLastWriteTimeUtc(string path) => File.GetLastWriteTimeUtc(path);
+
+        public FileStream CreateTemporaryFileStream(string path, int bufferSize)
+        {
+            var stream = new FlushTrackingFileStream(path, bufferSize);
+            LastStream = stream;
+            return stream;
+        }
+
+        public void ReplaceFile(string sourcePath, string destinationPath) =>
+            File.Replace(sourcePath, destinationPath, null, ignoreMetadataErrors: true);
+
+        public void MoveFile(string sourcePath, string destinationPath, bool overwrite)
+        {
+            if (overwrite)
+                File.Move(sourcePath, destinationPath, overwrite: true);
+            else
+                File.Move(sourcePath, destinationPath);
+        }
+
+        public void CopyFile(string sourcePath, string destinationPath, bool overwrite) =>
+            File.Copy(sourcePath, destinationPath, overwrite);
+
+        public void DeleteFile(string path) => File.Delete(path);
+
+        public IEnumerable<string> EnumerateFiles(string directory, string searchPattern) =>
+            Directory.Exists(directory)
+                ? Directory.EnumerateFiles(directory, searchPattern)
+                : [];
+    }
+
+    /// <summary>
+    /// Real <see cref="FileStream"/> (so the save still performs an actual, working write-then-rename)
+    /// that additionally records every <see cref="Flush(bool)"/> call so a test can assert whether the
+    /// caller ever requested a durable (<c>flushToDisk: true</c>) flush before disposing/renaming.
+    /// </summary>
+    private sealed class FlushTrackingFileStream : FileStream
+    {
+        public List<bool> FlushCalls { get; } = [];
+
+        public FlushTrackingFileStream(string path, int bufferSize)
+            : base(
+                path,
+                FileMode.Create,
+                FileAccess.ReadWrite,
+                FileShare.None,
+                bufferSize,
+                FileOptions.Asynchronous | FileOptions.SequentialScan)
+        {
+        }
+
+        public override void Flush(bool flushToDisk)
+        {
+            FlushCalls.Add(flushToDisk);
+            base.Flush(flushToDisk);
+        }
+    }
+
     private sealed class TestWorkbookSaveFileOperations : IWorkbookSaveFileOperations
     {
         public Exception? ReplaceException { get; init; }
@@ -629,6 +758,15 @@ public sealed class WorkbookSaveServiceTests
         public bool FileExists(string path) => File.Exists(path);
 
         public DateTime GetLastWriteTimeUtc(string path) => File.GetLastWriteTimeUtc(path);
+
+        public FileStream CreateTemporaryFileStream(string path, int bufferSize) =>
+            new(
+                path,
+                FileMode.Create,
+                FileAccess.ReadWrite,
+                FileShare.None,
+                bufferSize,
+                FileOptions.Asynchronous | FileOptions.SequentialScan);
 
         public void ReplaceFile(string sourcePath, string destinationPath)
         {

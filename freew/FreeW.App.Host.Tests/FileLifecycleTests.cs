@@ -296,7 +296,9 @@ public sealed class FileLifecycleTests : IDisposable
         Assert.DoesNotContain("new DocumentSaveExecutionRequest(", source);
 
         var confirmationIndex = coordinator.IndexOf("await request.ConfirmCompatibilityAsync", StringComparison.Ordinal);
-        var saveIndex = coordinator.IndexOf("_persistence.Save(request.Document, request.Target);", StringComparison.Ordinal);
+        var saveIndex = coordinator.IndexOf(
+            "_persistence.Save(request.Document, request.Target, expectedLastWriteTimeUtc);",
+            StringComparison.Ordinal);
         var completionIndex = coordinator.IndexOf("await request.CompleteSaveAsync!", StringComparison.Ordinal);
         Assert.True(confirmationIndex >= 0);
         Assert.True(saveIndex > confirmationIndex);

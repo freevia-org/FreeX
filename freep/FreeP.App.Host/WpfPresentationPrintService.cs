@@ -86,7 +86,10 @@ internal static class WpfPresentationPrintService
     {
         var renderPlan = PresentationRasterPdfExporter.BuildRenderPlan(
             presentation,
-            new PresentationRasterPdfExportRequest(request.SlideRange),
+            // R137: carry the print request's own "Print hidden slides" choice through -- this native
+            // WPF print path bypasses PresentationPrintOutputPackageExecutor entirely, so it needs the
+            // same threading independently rather than defaulting to always-excluded.
+            new PresentationRasterPdfExportRequest(request.SlideRange, PrintHiddenSlides: request.PrintHiddenSlides),
             WpfPresentationSlideImageRenderer.RenderSlideToPng,
             request.IncludeCommentsAndInkMarkup
                 ? WpfPresentationSlideImageRenderer.RenderSlideToPngWithPrintMarkup

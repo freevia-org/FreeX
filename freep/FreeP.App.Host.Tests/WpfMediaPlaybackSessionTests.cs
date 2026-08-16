@@ -187,12 +187,24 @@ public sealed class WpfMediaPlaybackSessionTests
 
         public Uri Materialize(MediaPlaybackSource source)
         {
-            var uri = new Uri($"https://example.test/materialized/{Materialized.Count}");
+            var mediaPath = Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.Windows),
+                "Media",
+                "Windows Notify System Generic.wav");
+            var materializedPath = Path.Combine(
+                Path.GetTempPath(),
+                $"freep-media-session-{Guid.NewGuid():N}.wav");
+            File.Copy(mediaPath, materializedPath);
+            var uri = new Uri(materializedPath);
             Materialized.Add(uri);
             return uri;
         }
 
-        public void Release(Uri uri) => Released.Add(uri);
+        public void Release(Uri uri)
+        {
+            Released.Add(uri);
+            File.Delete(uri.LocalPath);
+        }
     }
 
     private sealed class CancelingSourceStore : IMediaPlaybackSourceStore

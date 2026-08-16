@@ -51,6 +51,8 @@ public static class SkiaRasterPdfWriter
                 }
                 if (page.TextOverlays is { Count: > 0 } textOverlays)
                     DrawTextOverlays(canvas, textOverlays, typefaces, textRenderer, overlayPaint);
+                if (page.LinkOverlays is { Count: > 0 })
+                    AddLinkAnnotations(canvas, page);
                 pdf.EndPage();
                 pageCount++;
             }
@@ -126,6 +128,27 @@ public static class SkiaRasterPdfWriter
         using var stream = new MemoryStream();
         Write(document, stream, imageDiagnostics);
         return stream.ToArray();
+    }
+
+    // R137: FreeP's raster PDF export (its default File > Export as PDF / Print > Full Page Slides
+    // path) carries hyperlinks as PdfRasterPage.LinkOverlays, but this writer -- unlike
+    // WpfRasterPdfWriter, which already implemented external-URI annotations -- silently dropped them
+    // entirely, so Avalonia-exported PDFs had zero clickable links where WPF-exported ones at least
+    // had external ones. Mirrors WpfRasterPdfWriter.AddLinkAnnotations' scope: external URI targets
+    // only. Internal (slide-to-slide) targets are intentionally skipped here -- PdfRasterDocument has
+    // no cross-page named-destination table the way PdfContentDocument does (see
+    // SkiaPdfWriter.AddNamedDestinations/AddLinkAnnotations), so a DestinationName-only overlay has no
+    // page to resolve to on this backend yet.
+    private static void AddLinkAnnotations(SKCanvas canvas, PdfRasterPage page)
+    {
+        foreach (var link in PdfAnnotationPlanner.BuildLinkAnnotations(page.WidthPoints, page.HeightPoints, page.LinkOverlays))
+        {
+            if (string.IsNullOrEmpty(link.Uri))
+                continue;
+
+            var rect = new SKRect((float)link.Left, (float)link.Top, (float)link.Right, (float)link.Bottom);
+            canvas.DrawUrlAnnotation(rect, link.Uri);
+        }
     }
 
     private static SKImage? TryDecodeImage(byte[] imageBytes, int pageNumber, ICollection<string>? imageDiagnostics)

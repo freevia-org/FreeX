@@ -36,26 +36,83 @@ public enum DocumentCommandMutationKind
 /// This makes multi-property dialog applications (e.g. the Font dialog setting family +
 /// size + bold in one OK) appear as a single undo step.
 /// </summary>
-public sealed class CompositeDocumentCommand(string label, IReadOnlyList<IDocumentCommand> commands)
-    : IDocumentCommand
+public sealed class CompositeDocumentCommand : IDocumentCommand
 {
-    public string Label => label;
+    private readonly string _label;
+    private readonly IReadOnlyList<IDocumentCommand> _commands;
 
-    public DocumentCommandMutationKind MutationKind => Classify(commands);
+    // Tracks which children are currently applied and therefore must be reverted.
+    // Seeded to EVERY child at construction time (not left empty) because
+    // DocumentCommandBus.CommitUndoGroup builds a composite from children that were
+    // already applied individually as Execute() collected them into the batch -- it
+    // never calls this composite's own Apply(). Without seeding, Revert() on such a
+    // composite would find an empty list and silently do nothing (a no-op "undo" that
+    // leaves the document exactly as edited). Apply() below resets this list itself
+    // when it actually runs, so the direct-construct-then-Execute path (e.g.
+    // DocumentObjectEditingCoordinator's Resize composites) is unaffected.
+    private readonly List<IDocumentCommand> _applied;
+
+    public CompositeDocumentCommand(string label, IReadOnlyList<IDocumentCommand> commands)
+    {
+        _label = label;
+        _commands = commands;
+        _applied = [.. commands];
+    }
+
+    public string Label => _label;
+
+    public DocumentCommandMutationKind MutationKind => Classify(_commands);
 
     public int EstimatedBytes =>
-        commands.Count == 0 ? 0 : commands.Sum(c => c.EstimatedBytes);
+        _commands.Count == 0 ? 0 : _commands.Sum(c => c.EstimatedBytes);
 
     public void Apply(IDocumentCommandContext context)
     {
-        foreach (var cmd in commands)
-            cmd.Apply(context);
+        _applied.Clear();
+        foreach (var cmd in _commands)
+        {
+            try
+            {
+                cmd.Apply(context);
+            }
+            catch
+            {
+                // A child threw mid-apply: roll back the children that already
+                // succeeded so the composite stays atomic (no user-unauthored partial
+                // state), then let the caller see the failure -- DocumentCommandBus.Execute
+                // never pushes an undo entry for a command whose Apply throws.
+                RevertApplied(context);
+                throw;
+            }
+
+            _applied.Add(cmd);
+        }
     }
 
-    public void Revert(IDocumentCommandContext context)
+    public void Revert(IDocumentCommandContext context) => RevertApplied(context);
+
+    private void RevertApplied(IDocumentCommandContext context)
     {
-        for (var i = commands.Count - 1; i >= 0; i--)
-            commands[i].Revert(context);
+        try
+        {
+            for (var i = _applied.Count - 1; i >= 0; i--)
+            {
+                try
+                {
+                    _applied[i].Revert(context);
+                }
+                catch
+                {
+                    // Best-effort rollback: a failing child revert must not abort the
+                    // rest of the rollback, nor leave _applied populated for a second
+                    // (double) revert pass. Mirrors FreeX's CompositeWorkbookCommand.
+                }
+            }
+        }
+        finally
+        {
+            _applied.Clear();
+        }
     }
 
     private static DocumentCommandMutationKind Classify(IReadOnlyList<IDocumentCommand> commands)
@@ -177,7 +234,23 @@ public sealed class DocumentCommandBus(IDocumentCommandContext context)
         if (!_stack.CanUndo)
             return false;
         var entry = _stack.PopUndo();
-        entry.Command.Revert(_context);
+        try
+        {
+            entry.Command.Revert(_context);
+        }
+        catch
+        {
+            // Revert threw mid-undo: PopUndo already moved the entry onto the redo
+            // stack, so without this the entry would be stranded there while the
+            // document may be left half-reverted -- a later Undo() call would see a
+            // shorter/wrong undo stack. RollbackPopUndo restores the entry to the top
+            // of the undo stack (and removes it from the redo stack), matching
+            // FreeX's CommandBus.Undo safety net so the stacks stay consistent even
+            // though this attempt failed.
+            _stack.RollbackPopUndo(entry);
+            throw;
+        }
+
         Changed?.Invoke();
         return true;
     }
@@ -187,7 +260,20 @@ public sealed class DocumentCommandBus(IDocumentCommandContext context)
         if (!_stack.CanRedo)
             return false;
         var entry = _stack.PopRedo();
-        entry.Command.Apply(_context);
+        try
+        {
+            entry.Command.Apply(_context);
+        }
+        catch
+        {
+            // Apply threw mid-redo: PopRedo already removed the entry from the redo
+            // stack, so without this the entry would be lost entirely. PushRedo
+            // restores it so the user can retry, matching FreeX's CommandBus.Redo
+            // safety net.
+            _stack.PushRedo(entry);
+            throw;
+        }
+
         _stack.PushWithoutClearingRedo(entry);
         Changed?.Invoke();
         return true;

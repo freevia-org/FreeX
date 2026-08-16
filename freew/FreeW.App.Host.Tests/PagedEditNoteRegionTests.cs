@@ -164,6 +164,88 @@ public sealed class PagedEditNoteRegionTests
     }
 
     // ─────────────────────────────────────────────────────────────────────────────────────────────
+    // 1b. The body reference mark shows the computed display sequence, not the raw internal id
+    // ─────────────────────────────────────────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// Word keeps a note's internal id stable when an earlier note is deleted — only the DISPLAY
+    /// sequence shifts. The in-body superscript reference mark must track that shift; it must not
+    /// keep showing the raw <see cref="Run.FootnoteId"/> baked into the model run at insertion time,
+    /// or the body mark drifts out of sync with the footnote area's own numbering (e.g. body shows
+    /// "2","3" while the area shows "1","2").
+    /// </summary>
+    [StaFact]
+    public void FootnoteBodyMark_ShowsComputedDisplaySequence_NotRawId_AfterEarlierNoteDeleted()
+    {
+        var doc = TextDocument.CreateEmpty();
+        doc.Blocks.Clear();
+        doc.Footnotes[1] = new Footnote(1, "one");
+        doc.Footnotes[2] = new Footnote(2, "two");
+        doc.Footnotes[3] = new Footnote(3, "three");
+
+        var para = new Paragraph();
+        para.Runs.Add(new Run("A"));
+        para.Runs.Add(Run.FootnoteReference(1));
+        para.Runs.Add(new Run("B"));
+        para.Runs.Add(Run.FootnoteReference(2));
+        para.Runs.Add(new Run("C"));
+        para.Runs.Add(Run.FootnoteReference(3));
+        doc.Blocks.Add(para);
+
+        // Simulate the user deleting the first footnote: ids stay stable (2, 3 survive) but their
+        // display sequence must shift down to 1, 2.
+        doc.Footnotes.Remove(1);
+        para.Runs.RemoveAll(r => r.FootnoteId == 1);
+
+        var editor = new DocumentView();
+        editor.LoadModel(doc);
+
+        var markers = DocumentView.CollectFootnoteMarkers(editor.Document.Blocks);
+        markers.Select(m => m.FootnoteId).Should().Equal(2, 3);
+
+        var displayed = markers
+            .Select(marker => new System.Windows.Documents.TextRange(
+                    marker.Position,
+                    marker.Position.GetPositionAtOffset(1, System.Windows.Documents.LogicalDirection.Forward))
+                .Text)
+            .ToList();
+
+        displayed.Should().Equal(
+            new[] { "1", "2" },
+            "the surviving footnotes' body marks must show their computed display sequence, not their raw internal ids (2, 3)");
+    }
+
+    /// <summary>Sibling no-regression: with no deletion, ids and display sequence coincide (1, 2).</summary>
+    [StaFact]
+    public void FootnoteBodyMark_NoRegression_ShowsSequentialNumbers_WhenNoNoteWasDeleted()
+    {
+        var doc = TextDocument.CreateEmpty();
+        doc.Blocks.Clear();
+        doc.Footnotes[1] = new Footnote(1, "one");
+        doc.Footnotes[2] = new Footnote(2, "two");
+
+        var para = new Paragraph();
+        para.Runs.Add(new Run("A"));
+        para.Runs.Add(Run.FootnoteReference(1));
+        para.Runs.Add(new Run("B"));
+        para.Runs.Add(Run.FootnoteReference(2));
+        doc.Blocks.Add(para);
+
+        var editor = new DocumentView();
+        editor.LoadModel(doc);
+
+        var markers = DocumentView.CollectFootnoteMarkers(editor.Document.Blocks);
+        var displayed = markers
+            .Select(marker => new System.Windows.Documents.TextRange(
+                    marker.Position,
+                    marker.Position.GetPositionAtOffset(1, System.Windows.Documents.LogicalDirection.Forward))
+                .Text)
+            .ToList();
+
+        displayed.Should().Equal("1", "2");
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────────────────────────
     // 2. Endnote physical-page ownership
     // ─────────────────────────────────────────────────────────────────────────────────────────────
 

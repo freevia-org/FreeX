@@ -211,7 +211,7 @@ public sealed class DeleteNoteCommand(int id, bool footnote) : IDocumentCommand
         }
 
         _paragraphRuns = [];
-        foreach (var paragraph in EnumerateBodyParagraphs(document.Blocks))
+        foreach (var paragraph in EnumerateBodyParagraphs(document.Blocks).Concat(EnumerateHeaderFooterParagraphs(document)))
         {
             if (!paragraph.Runs.Any(IsMarker))
                 continue;
@@ -268,6 +268,37 @@ public sealed class DeleteNoteCommand(int id, bool footnote) : IDocumentCommand
                         foreach (var nestedParagraph in EnumerateBodyParagraphs([nestedTable]))
                             yield return nestedParagraph;
                 }
+            }
+        }
+    }
+
+    /// <summary>
+    /// Yields every paragraph in every header/footer of every document section (header, footer,
+    /// even/first variants), so a reference marker placed in a header or footer (Word allows footnote
+    /// and endnote references there) is found and removed alongside body/table markers. Without this,
+    /// deleting a note leaves a dangling superscript marker in the header or footer that no longer
+    /// resolves to any note content.
+    /// </summary>
+    private static IEnumerable<Paragraph> EnumerateHeaderFooterParagraphs(TextDocument document)
+    {
+        foreach (var section in document.Sections)
+        {
+            var headersFooters = section.HeadersFooters;
+            foreach (var headerFooter in new[]
+                     {
+                         headersFooters.Header,
+                         headersFooters.Footer,
+                         headersFooters.EvenHeader,
+                         headersFooters.EvenFooter,
+                         headersFooters.FirstHeader,
+                         headersFooters.FirstFooter,
+                     })
+            {
+                if (headerFooter is null)
+                    continue;
+
+                foreach (var paragraph in headerFooter.Paragraphs)
+                    yield return paragraph;
             }
         }
     }

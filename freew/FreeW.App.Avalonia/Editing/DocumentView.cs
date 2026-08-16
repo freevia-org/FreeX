@@ -7177,6 +7177,23 @@ public sealed partial class DocumentView : Control
         => NoteNumberFormatter.Format(sequenceIndex, opts);
 
     /// <summary>
+    /// Resolves the number a note's in-body superscript reference mark should display: the note's
+    /// computed display sequence (via <see cref="DocumentNoteRegionPlanner.ComputeSequenceById"/>,
+    /// honoring <see cref="NoteNumberingOptions.NumberRestart"/> where determinable without page
+    /// layout), NOT the raw internal <see cref="Run.FootnoteId"/>/<see cref="Run.EndnoteId"/>. Mirrors
+    /// the WPF host's identically-named helper so both shells show the same number.
+    /// </summary>
+    private static string ResolveNoteBodyMarkDisplayNumber(TextDocument document, int noteId, bool isFootnote)
+    {
+        var options = isFootnote ? document.FootnoteNumbering : document.EndnoteNumbering;
+        var sequenceById = DocumentNoteRegionPlanner.ComputeSequenceById(document, isFootnote);
+        var sequence = sequenceById.TryGetValue(noteId, out var resolvedSequence)
+            ? resolvedSequence
+            : Math.Max(1, options.StartAt);
+        return DocumentNoteRegionPlanner.ComputeDisplayNumber(sequence, options);
+    }
+
+    /// <summary>
     /// Resolves the 0-based page index that hosts the body reference for the note with the given id.
     /// Locates the body run carrying <paramref name="footnote"/>'s matching <see cref="Run.FootnoteId"/>
     /// (or <see cref="Run.EndnoteId"/>), computes its first character's cell offset within the host
@@ -7502,12 +7519,14 @@ public sealed partial class DocumentView : Control
 
         // DB3: footnote numbering options — format (Decimal/LowerRoman/…) + StartAt offset.
         var opts = _doc.FootnoteNumbering;
-        var sequenceById = _doc.Footnotes.Keys.OrderBy(id => id)
-            .Select((id, index) => (id, sequence: Math.Max(1, opts.StartAt) + index))
-            .ToDictionary(pair => pair.id, pair => pair.sequence);
 
         foreach (var (pg, ids) in byPage.OrderBy(kv => kv.Key))
         {
+            // AV-NUMRESTART: computed per page (not hoisted above the loop) so
+            // NoteNumberRestart.EachPage/EachSection actually restarts — each page's ids are its own
+            // sequence-1 group under EachPage; Continuous/EachSection ignore the page grouping and
+            // number from the whole document, matching DocumentNoteRegionPlanner.ComputeSequenceById.
+            var sequenceById = DocumentNoteRegionPlanner.ComputeSequenceById(_doc, isFootnote: true, ids);
             var pageTop    = _surfacePlan.PageTopDip(PhysicalPageForBodyPage(pg));
             var pageBottom = pageTop + _pageHeightPx;
             // Body text area bottom on this page (page-space), using the reserved effective height.
@@ -7613,17 +7632,21 @@ public sealed partial class DocumentView : Control
         y += 6;
 
         // DB3: endnote numbering options — Word defaults to LowerRoman; users may override.
-        var opts     = _doc.EndnoteNumbering;
-        var seqIndex = Math.Max(1, opts.StartAt); // 1-based display sequence counter
+        // AV-NUMRESTART: sequence-by-id honors NoteNumberRestart.EachSection (endnotes have no
+        // EachPage option in the options dialog, so no page grouping is passed here).
+        var opts = _doc.EndnoteNumbering;
+        var sequenceById = DocumentNoteRegionPlanner.ComputeSequenceById(_doc, isFootnote: false);
 
         foreach (var id in _doc.Endnotes.Keys.OrderBy(k => k))
         {
             var note = _doc.Endnotes[id];
             // DB3: compute display number from EndnoteNumbering options.
+            var sequence = sequenceById.TryGetValue(id, out var resolvedSequence)
+                ? resolvedSequence
+                : Math.Max(1, opts.StartAt);
             var displayNum = note.HasAutomaticReferenceMark
-                ? ComputeNoteDisplayNumber(seqIndex, opts)
+                ? ComputeNoteDisplayNumber(sequence, opts)
                 : string.Empty;
-            seqIndex++;
             y = LayoutNoteContent(displayNum,
                 note.Content.Count > 0 ? note.Content : new List<Paragraph> { new Paragraph(string.Empty) },
                 _contentLeft, y, _contentWidth);
@@ -7656,18 +7679,20 @@ public sealed partial class DocumentView : Control
     {
         var height = EndnoteSeparatorToTextGap;
         var options = _doc.EndnoteNumbering;
-        var sequence = Math.Max(1, options.StartAt);
         var ids = _doc.Endnotes.Keys.OrderBy(id => id).ToList();
+        var sequenceById = DocumentNoteRegionPlanner.ComputeSequenceById(_doc, isFootnote: false);
         for (var index = 0; index < ids.Count; index++)
         {
             var note = _doc.Endnotes[ids[index]];
             var content = note.Content.Count > 0
                 ? note.Content
                 : (IReadOnlyList<Paragraph>)new List<Paragraph> { new Paragraph(string.Empty) };
+            var sequence = sequenceById.TryGetValue(ids[index], out var resolvedSequence)
+                ? resolvedSequence
+                : Math.Max(1, options.StartAt);
             var displayNumber = note.HasAutomaticReferenceMark
                 ? ComputeNoteDisplayNumber(sequence, options)
                 : string.Empty;
-            sequence++;
             height += MeasureNoteContentHeight(displayNumber, content, _contentLeft, _contentWidth);
             height += index == ids.Count - 1 ? EndnoteTrailingPadding : EndnoteInterNoteSpacing;
         }
@@ -7680,18 +7705,20 @@ public sealed partial class DocumentView : Control
         _noteSeparators.Add((_contentLeft, _contentLeft + separatorWidth, separatorY));
         var y = separatorY + EndnoteSeparatorToTextGap;
         var options = _doc.EndnoteNumbering;
-        var sequence = Math.Max(1, options.StartAt);
         var ids = _doc.Endnotes.Keys.OrderBy(id => id).ToList();
+        var sequenceById = DocumentNoteRegionPlanner.ComputeSequenceById(_doc, isFootnote: false);
         for (var index = 0; index < ids.Count; index++)
         {
             var note = _doc.Endnotes[ids[index]];
             var content = note.Content.Count > 0
                 ? note.Content
                 : (IReadOnlyList<Paragraph>)new List<Paragraph> { new Paragraph(string.Empty) };
+            var sequence = sequenceById.TryGetValue(ids[index], out var resolvedSequence)
+                ? resolvedSequence
+                : Math.Max(1, options.StartAt);
             var displayNumber = note.HasAutomaticReferenceMark
                 ? ComputeNoteDisplayNumber(sequence, options)
                 : string.Empty;
-            sequence++;
             y = LayoutNoteContent(displayNumber, content, _contentLeft, y, _contentWidth);
             if (index < ids.Count - 1)
                 y += EndnoteInterNoteSpacing;
@@ -7947,6 +7974,107 @@ public sealed partial class DocumentView : Control
         var posInPage = _layoutContentY % _layoutTextAreaHeight;
         if (posInPage > 0 && posInPage + paragraphHeight > effectiveHeight)
             _layoutContentY += _layoutTextAreaHeight - posInPage;
+    }
+
+    /// <summary>
+    /// Measures the space-before gap plus the reservation height of the paragraph immediately
+    /// following <paramref name="blockIndex"/>, for the KeepWithNext reservation in
+    /// <see cref="LayoutParagraphPaged"/>. Returns 0 when there is no following paragraph, or it
+    /// carries layout objects the fast complete-paragraph path does not model -- callers then skip
+    /// the extra reservation and fall back to ordinary line-by-line flow for the pair, same as any
+    /// other unsupported combination.
+    /// <para>
+    /// When the following paragraph itself falls under this paginator's own keep-together policy
+    /// (<see cref="DocumentParagraphPaginationPlanner.ShouldKeepParagraphTogether"/> -- the default
+    /// for ordinary body paragraphs; see the R132 note above), that paragraph will refuse to start
+    /// unless its COMPLETE height fits on the page, not merely its first line. Reserving only a
+    /// first-line estimate here would under-count in that (common) case: the combined reservation
+    /// would appear to fit, so the heading would stay put, and the next paragraph would then still
+    /// jump to the next page alone when its own reservation runs -- reproducing the exact split this
+    /// fix exists to prevent. So the full paragraph height is used whenever that policy applies, and
+    /// only a first-line estimate otherwise (matching Word's real KeepWithNext semantics, which never
+    /// requires more than adjacency of the two paragraphs' boundary lines).
+    /// </para>
+    /// </summary>
+    private double MeasureKeepWithNextFollowOnHeight(int blockIndex, double textWidth)
+    {
+        if (blockIndex + 1 >= _doc.Blocks.Count)
+            return 0.0;
+        if (_doc.Blocks[blockIndex + 1] is not Paragraph nextParagraph)
+            return 0.0;
+        if (nextParagraph.Runs.Any(r =>
+                r.Image is not null || r.Shape is not null || r.Chart is not null
+                || r.WordArt is not null || r.SmartArt is not null || r.EmbeddedObject is not null))
+            return 0.0;
+
+        var nextPf = ResolveParagraphFmt(nextParagraph);
+        var nextIndentFirst = nextPf.FirstLineIndentPt * PxPerPoint;
+
+        var nextRawCells = IsEditable(nextParagraph)
+            ? ParaCells(nextParagraph, includeFlowBreaks: true)
+            : DisplayCells(blockIndex + 1, nextParagraph, includeFlowBreaks: true);
+        var nextCells = nextRawCells.Select(c => c with { Fmt = ResolveRunFmt(c.Fmt, nextParagraph) }).ToList();
+        var nextSupportsCompleteParagraphPlanning = nextIndentFirst == 0
+            && _wrapExclusions.Count == 0
+            && nextCells.All(cell =>
+                !cell.IsPageBreak && !cell.IsColumnBreak && cell.Ch != '\t' && cell.EquationElement is null);
+
+        if (DocumentParagraphPaginationPlanner.ShouldKeepParagraphTogether(nextPf) && nextSupportsCompleteParagraphPlanning)
+        {
+            var nextIndentLeft  = nextPf.IndentLeftPt  * PxPerPoint;
+            var nextIndentRight = nextPf.IndentRightPt * PxPerPoint;
+            var nextAvailableWidth = Math.Max(60, textWidth - nextIndentLeft - nextIndentRight);
+            var nextNaturalLineHeightScale = UsesWordDefaultBodyLineBox(nextParagraph, nextPf, nextCells)
+                ? WordDefaultBodyLineHeightScale
+                : 1.0;
+
+            var reviewPolicy = CurrentReviewDisplayPolicy;
+            var nextMeasured = new double[nextCells.Count];
+            var nextHeights = new double[nextCells.Count];
+            for (var c = 0; c < nextCells.Count; c++)
+            {
+                var decision = reviewPolicy.RevisionDecision(nextCells[c].Revision);
+                if (!decision.IsTextVisible) continue;
+                var ft = BuildForLayout(nextCells[c].Ch.ToString(), nextCells[c].Fmt);
+                nextMeasured[c] = ft.WidthIncludingTrailingWhitespace;
+                nextHeights[c] = ft.Height;
+            }
+            var nextAutomaticHyphenationText = new string(nextCells.Select(cell =>
+                !IsTextHiddenInCurrentView(cell.Fmt) && reviewPolicy.RevisionDecision(cell.Revision).IsTextVisible
+                    ? cell.Ch
+                    : ' ').ToArray());
+            var nextAutomaticHyphenWidths = AutomaticHyphenationDisplayPlanner.BuildBreakOffsets(
+                    nextAutomaticHyphenationText, _doc.Page, nextPf)
+                .Where(offset => offset > 0 && offset < nextCells.Count)
+                .Distinct()
+                .ToDictionary(
+                    offset => offset,
+                    offset => BuildForLayout("-", nextCells[offset - 1].Fmt).WidthIncludingTrailingWhitespace);
+
+            var nextParagraphHeight = MeasurePlainParagraphHeight(
+                nextCells, nextMeasured, nextHeights, nextAvailableWidth, nextPf, _doc.Page,
+                nextNaturalLineHeightScale, nextAutomaticHyphenationText, nextAutomaticHyphenWidths);
+            return nextPf.SpaceBeforePt * PxPerPoint + nextParagraphHeight;
+        }
+
+        // The next paragraph is free to split (or has content this fast path does not model beyond
+        // the basics already filtered above) -- only its first line needs to land with the heading.
+        var firstLineNaturalH = DefaultFontSizePt * PxPerPoint * 1.3;
+        var sawVisibleText = false;
+        foreach (var cell in nextCells)
+        {
+            if (cell.EquationElement is not null) continue;
+            if (IsTextHiddenInCurrentView(cell.Fmt)) continue;
+            if (!CurrentReviewDisplayPolicy.RevisionDecision(cell.Revision).IsTextVisible) continue;
+            sawVisibleText = true;
+            var h = BuildForLayout(cell.Ch.ToString(), cell.Fmt).Height;
+            if (h > firstLineNaturalH) firstLineNaturalH = h;
+        }
+        if (!sawVisibleText && nextCells.Count > 0)
+            return 0.0; // fully hidden next paragraph carries no visible line to keep with
+
+        var firstLineHeight = ApplyLineSpacing(firstLineNaturalH, nextPf);
+        return nextPf.SpaceBeforePt * PxPerPoint + firstLineHeight;
     }
 
     private static double MeasurePlainParagraphHeight(
@@ -8304,15 +8432,30 @@ public sealed partial class DocumentView : Control
         // defect that has to be closed first -- tracked separately. The WPF host's fix for the same
         // finding is implemented differently and is unaffected by this line.
         var keepParagraphTogether = DocumentParagraphPaginationPlanner.ShouldKeepParagraphTogether(pf);
+        // R137 fix: WPF maps Paragraph.KeepWithNext straight onto FlowDocument's Paragraph.KeepWithNext,
+        // so the framework's own pagination engine never lets a page break fall between this paragraph
+        // and the next one (the classic "heading stays with its body text" rule). This custom paginator
+        // has no such native primitive, so without this, a heading with KeepWithNext set could land as
+        // the last content on a page while its following paragraph starts on the next page -- a shell
+        // divergence from WPF. Approximate the same outcome: when reserving this paragraph as a unit,
+        // also require room for the space-after gap and at least the first line of the next paragraph;
+        // if that combined block does not fit, the whole heading paragraph moves to the next page.
+        var keepWithNext = pf.KeepWithNext;
         var supportsCompleteParagraphPlanning = indentFirst == 0
             && dropCapPlan is null
             && _wrapExclusions.Count == 0
             && cells.All(cell => !cell.IsPageBreak && !cell.IsColumnBreak && cell.Ch != '\t' && cell.EquationElement is null);
-        if (keepParagraphTogether && supportsCompleteParagraphPlanning)
+        if ((keepParagraphTogether || keepWithNext) && supportsCompleteParagraphPlanning)
         {
             var paragraphHeight = MeasurePlainParagraphHeight(
                 cells, measured, heights, availableWidth, pf, _doc.Page,
                 naturalLineHeightScale, automaticHyphenationText, automaticHyphenWidths);
+            if (keepWithNext)
+            {
+                var followOnHeight = MeasureKeepWithNextFollowOnHeight(blockIndex, textWidth);
+                if (followOnHeight > 0)
+                    paragraphHeight += spaceAfter + followOnHeight;
+            }
             ReserveCompleteParagraph(paragraphHeight);
         }
 
@@ -20104,20 +20247,23 @@ public sealed partial class DocumentView : Control
     /// AV-LINK: Mark the caret's body paragraph as a bookmark named <paramref name="name"/> (Word's
     /// Insert &gt; Bookmark). Reuses the AV-REF <see cref="SetBookmarkNameCommand"/> so it is undoable and
     /// round-trips. When a selection spans multiple paragraphs the bookmark is placed on the selection's
-    /// first paragraph (Word anchors the bookmark at the range start). A no-op for a blank name or when the
-    /// caret is not in an editable body paragraph.
+    /// first paragraph (Word anchors the bookmark at the range start). Matches Word's unique-name rule: a
+    /// name already used by a different paragraph is rejected (<see cref="BookmarkInsertOutcome.DuplicateName"/>)
+    /// rather than creating a second instance sharing it. A no-op (<see cref="BookmarkInsertOutcome.Invalid"/>)
+    /// for a blank name or when the caret is not in an editable body paragraph.
     /// </summary>
-    public void InsertBookmark(string name)
+    public BookmarkInsertOutcome InsertBookmark(string name)
     {
         if (string.IsNullOrWhiteSpace(name))
-            return;
+            return BookmarkInsertOutcome.Invalid;
 
         var block = NormalizedSelection() is { } sel ? sel.Start.Block : _caret.Block;
         if (block < 0 || block >= _doc.Blocks.Count || _doc.Blocks[block] is not Paragraph)
-            return;
+            return BookmarkInsertOutcome.Invalid;
 
-        ReferenceEdits.SetBookmark(block, name);
+        var outcome = ReferenceEdits.TrySetBookmark(block, name);
         Focus();
+        return outcome;
     }
 
     /// <summary>
@@ -20184,6 +20330,16 @@ public sealed partial class DocumentView : Control
     public void DeleteBookmark(string name)
     {
         _editingSession.RemoveBookmark(name);
+    }
+
+    /// <summary>
+    /// Removes exactly the bookmark instance at <paramref name="location"/> — not every paragraph that
+    /// happens to share the same name — used by the Bookmark Manager's Delete action so selecting one
+    /// duplicate-named entry never destroys a different one. No-op when the location no longer resolves.
+    /// </summary>
+    public void DeleteBookmarkAt(BookmarkLocation location)
+    {
+        _editingSession.RemoveBookmarkAt(location);
     }
 
     /// <summary>
@@ -23191,6 +23347,18 @@ public sealed partial class DocumentView : Control
                 displayText = displayPlan.Text;
                 if (displayPlan.IsFieldCode)
                     displayFormatting = displayFormatting with { ColorHex = ComplexFieldDisplayPlanner.FieldCodeColorHex };
+            }
+            else if (run.FootnoteId is { } footnoteId)
+            {
+                // The body reference mark must show the note's computed display sequence, not the raw
+                // internal FootnoteId that keys _doc.Footnotes — otherwise it drifts from the footnote
+                // area's own number the moment an earlier note is deleted (ids stay stable; only the
+                // display sequence shifts).
+                displayText = ResolveNoteBodyMarkDisplayNumber(_doc, footnoteId, isFootnote: true);
+            }
+            else if (run.EndnoteId is { } endnoteId)
+            {
+                displayText = ResolveNoteBodyMarkDisplayNumber(_doc, endnoteId, isFootnote: false);
             }
 
             foreach (var ch in displayText)

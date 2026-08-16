@@ -104,6 +104,18 @@ public sealed class SisterWpfFileCommandWorkflow
         _messageService.ShowFileCommandError(summary, exception, _applicationName);
 
     /// <summary>
+    /// Asks whether to overwrite a save target that was changed by another program since it was
+    /// opened/last saved. Wired into each sister app's file-execution coordinator as the
+    /// external-modification confirm port (FreeW's DocumentFileExecutionCoordinator, FreeP's
+    /// PresentationFileCommandSession); a declined or unanswered prompt must never let the caller
+    /// silently overwrite someone else's changes.
+    /// </summary>
+    public ValueTask<bool> ConfirmExternallyModifiedOverwriteAsync(
+        string path,
+        CancellationToken cancellationToken = default) =>
+        _messageService.AskExternallyModifiedOverwriteAsync(path, _applicationName, cancellationToken);
+
+    /// <summary>
     /// Surfaces non-fatal image-decode losses collected during an export. No-op when empty.
     /// See <see cref="UserMessageServiceFileCommandExtensions.ShowExportImageWarnings"/>.
     /// </summary>

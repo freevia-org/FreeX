@@ -79,6 +79,32 @@ public sealed class Presentation
     public byte[]? NotesMasterXml { get; set; }
     public byte[]? NotesMasterRelsXml { get; set; }
 
+    /// <summary>
+    /// Header/footer visibility flags from the notes master's own <c>p:hf</c> element
+    /// (ppt/notesMasters/notesMaster1.xml). PowerPoint's "Notes and Handouts" tab in the
+    /// Header and Footer dialog is presentation-wide — there is no per-notes-slide override in
+    /// the file format (<c>p:hf</c> is not a valid child of <c>p:notes</c>) — so this is modeled
+    /// once here rather than on <see cref="Slide"/>. Null means the package had no explicit
+    /// notes-master <c>p:hf</c>; consumers should fall back to placeholder presence, matching
+    /// the null-flags fallback already used for slide-level <see cref="HfFlags"/>.
+    /// </summary>
+    public HfFlags? NotesHfVisibility { get; set; }
+
+    /// <summary>
+    /// Native handout-master placeholder shapes imported from ppt/handoutMasters. The handout
+    /// PDF/print exporter uses their authored geometry and header/footer/date/slide-number text
+    /// before falling back to its deterministic corner-of-the-page defaults.
+    /// </summary>
+    public List<SlideShape> HandoutMasterPlaceholders { get; } = new();
+
+    /// <summary>
+    /// Header/footer visibility flags from the handout master's own <c>p:hf</c> element
+    /// (ppt/handoutMasters/handoutMaster1.xml). Null means the package had no explicit handout
+    /// master <c>p:hf</c>; consumers should fall back to <see cref="NotesHfVisibility"/> (the
+    /// same "Notes and Handouts" dialog tab drives both surfaces in PowerPoint).
+    /// </summary>
+    public HfFlags? HandoutHfVisibility { get; set; }
+
     // ── Content ───────────────────────────────────────────────────────────────────
 
     /// <summary>Slides, in presentation order.</summary>

@@ -153,7 +153,8 @@ internal sealed partial class BookmarkManagerDialog : FreeWDialogWindow
         var plan = _session.PlanDelete();
         if (plan is null)
             return;
-        _editor.DeleteBookmark(plan.Name);
+        // Removes exactly the selected instance, not every paragraph sharing the same name.
+        _editor.DeleteBookmarkAt(plan.Location);
         RefreshList(plan);
     }
 

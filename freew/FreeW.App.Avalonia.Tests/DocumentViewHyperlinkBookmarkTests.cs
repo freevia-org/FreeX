@@ -7,6 +7,7 @@ using Avalonia.Headless;
 using FluentAssertions;
 using Free.Shared.AppServices;
 using FreeW.App.Avalonia.Editing;
+using FreeW.App.Presentation.Editing;
 using FreeW.Core.Model;
 using Xunit;
 
@@ -288,6 +289,34 @@ public sealed class DocumentViewHyperlinkBookmarkTests
 
         if (!ran) return;
         hasBookmark.Should().BeTrue("InsertBookmark adds the name to the caret paragraph's BookmarkNames");
+    }
+
+    // Confirmed HIGH finding: Insert Bookmark allowed a duplicate name. InsertBookmark must reject a name
+    // already used by a different paragraph (Word's unique-name rule), leaving the original target
+    // untouched, instead of silently creating a second bookmark instance sharing that name.
+    [Fact]
+    public async Task InsertBookmark_rejects_a_duplicate_name_and_leaves_the_original_target_in_place()
+    {
+        var outcome = BookmarkInsertOutcome.Applied;
+        var firstStillHasIt = false;
+        var secondGotIt = true;
+        var ran = await OnUiThread(() =>
+        {
+            var view = Build("First", "Second");
+            view.MoveCaretToBlock(0, 0);
+            view.InsertBookmark("Shared");
+
+            view.MoveCaretToBlock(1, 0);
+            outcome = view.InsertBookmark("Shared");
+
+            firstStillHasIt = ((Paragraph)view.Document.Blocks[0]).BookmarkNames.Contains("Shared");
+            secondGotIt = ((Paragraph)view.Document.Blocks[1]).BookmarkNames.Contains("Shared");
+        });
+
+        if (!ran) return;
+        outcome.Should().Be(BookmarkInsertOutcome.DuplicateName);
+        firstStillHasIt.Should().BeTrue("the original bookmark target must be untouched");
+        secondGotIt.Should().BeFalse("a duplicate name must not be applied to a second paragraph");
     }
 
     [Fact]

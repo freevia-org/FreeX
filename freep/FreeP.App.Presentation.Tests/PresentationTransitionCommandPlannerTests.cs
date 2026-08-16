@@ -377,4 +377,70 @@ public sealed class PresentationTransitionCommandPlannerTests
         presentation.Slides[1].Transition!.RawXml.Should().Be("<p:transition />");
         presentation.Slides[1].Transition!.Sound.Should().NotBeNull();
     }
+
+    [Fact]
+    public void TryApply_ApplyAllCommand_IsOneUndoableStep()
+    {
+        // R137: "Apply to All Slides" must go through the command bus as a single
+        // undoable step, not mutate slides directly (which Ctrl+Z can't see).
+        var editor = MakeSession(out var presentation);
+        editor.InsertSlide();
+        editor.InsertSlide();
+        editor.SelectSlide(0);
+
+        // Establish a known transition on slide 0 via a separate, already-undoable command
+        // BEFORE the apply-all step, so we can tell the two undo entries apart.
+        editor.SetTransition(new SlideTransition { Kind = TransitionKind.Zoom });
+        presentation.Slides[1].Transition.Should().BeNull();
+        presentation.Slides[2].Transition.Should().BeNull();
+
+        PresentationTransitionCommandPlanner.TryPlan("freep.transition.apply-all", out var plan)
+            .Should()
+            .BeTrue();
+        PresentationTransitionCommandPlanner.TryApply(editor, plan).Should().BeTrue();
+
+        presentation.Slides.Should().OnlyContain(
+            slide => slide.Transition != null && slide.Transition.Kind == TransitionKind.Zoom);
+        editor.CanUndo.Should().BeTrue();
+
+        // A single Undo() must revert the WHOLE apply-all step in one shot, leaving only
+        // slide 0's original (pre-apply-all) transition in place.
+        editor.Undo();
+
+        presentation.Slides[0].Transition.Should().NotBeNull();
+        presentation.Slides[0].Transition!.Kind.Should().Be(TransitionKind.Zoom);
+        presentation.Slides[1].Transition.Should().BeNull();
+        presentation.Slides[2].Transition.Should().BeNull();
+
+        // And redo restores the all-slides state again.
+        editor.Redo();
+        presentation.Slides.Should().OnlyContain(
+            slide => slide.Transition != null && slide.Transition.Kind == TransitionKind.Zoom);
+    }
+
+    [Fact]
+    public void TryApply_ApplyAllCommand_WithNoAdditionalSlides_StillClonesOntoCurrentSlide()
+    {
+        // Sibling no-regression: a single-slide presentation (the common case) must keep
+        // working exactly as before — apply-all still sets the current slide's transition
+        // and remains undoable (as its own, separate undo step from the prior SetTransition).
+        var editor = MakeSession(out var presentation);
+        editor.SetTransition(new SlideTransition { Kind = TransitionKind.Push });
+
+        PresentationTransitionCommandPlanner.TryPlan("freep.transition.apply-all", out var plan)
+            .Should()
+            .BeTrue();
+        PresentationTransitionCommandPlanner.TryApply(editor, plan).Should().BeTrue();
+
+        presentation.Slides.Should().ContainSingle();
+        presentation.Slides[0].Transition!.Kind.Should().Be(TransitionKind.Push);
+
+        // First undo reverts only the apply-all step, back to its pre-apply-all value.
+        editor.Undo();
+        presentation.Slides[0].Transition!.Kind.Should().Be(TransitionKind.Push);
+
+        // Second undo reverts the original SetTransition, back to no transition at all.
+        editor.Undo();
+        presentation.Slides[0].Transition.Should().BeNull();
+    }
 }

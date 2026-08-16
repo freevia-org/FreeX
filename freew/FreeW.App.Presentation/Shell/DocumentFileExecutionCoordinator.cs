@@ -9,6 +9,11 @@ public enum DocumentFileExecutionOutcome
     UnsupportedFormat,
     SaveAsRequired,
     CompatibilityDeclined,
+    // r137-remediation2: the save target's on-disk write time no longer matches what the caller
+    // observed when it opened/last saved the document (ExpectedLastWriteTimeUtc), and the user
+    // either declined the overwrite prompt or a race let a second write land between the prompt
+    // and the actual write. See DocumentSaveExecutionRequest.ExpectedLastWriteTimeUtc.
+    ExternalWriteConflict,
     Canceled,
     Failed
 }
@@ -113,7 +118,39 @@ public sealed class DocumentFileExecutionCoordinator
             }
 
             cancellationToken.ThrowIfCancellationRequested();
-            _persistence.Save(request.Document, request.Target);
+            var expectedLastWriteTimeUtc = request.ExpectedLastWriteTimeUtc;
+            if (expectedLastWriteTimeUtc is { } expectedWriteTimeUtc &&
+                File.Exists(request.Target.Path) &&
+                File.GetLastWriteTimeUtc(request.Target.Path) != expectedWriteTimeUtc)
+            {
+                // Someone else wrote request.Target.Path since the caller last observed it (another
+                // instance, a sync client, a colleague on a shared path). Ask before clobbering their
+                // write; a null callback (host wired nothing) or a declined prompt both refuse the
+                // overwrite so we never silently discard someone else's changes.
+                var observedWriteTimeUtc = File.GetLastWriteTimeUtc(request.Target.Path);
+                var confirmed = request.ConfirmExternallyModifiedOverwriteAsync is not null &&
+                    await request.ConfirmExternallyModifiedOverwriteAsync(request.Target.Path, cancellationToken);
+                if (!confirmed)
+                    return DocumentSaveExecutionResult.ExternalWriteConflict(request.Target.Path);
+
+                // The user accepted the write visible at the prompt. Advance the baseline to that
+                // accepted version so _persistence.Save's own check-then-act guard (last line of
+                // defense against a race between the prompt and the write below) compares against
+                // what was just approved rather than the stale value that triggered this prompt.
+                expectedLastWriteTimeUtc = observedWriteTimeUtc;
+            }
+
+            cancellationToken.ThrowIfCancellationRequested();
+            try
+            {
+                _persistence.Save(request.Document, request.Target, expectedLastWriteTimeUtc);
+            }
+            catch (DocumentExternallyModifiedException)
+            {
+                // A second writer landed between the check above and this write (race). Report the
+                // same conflict outcome rather than re-prompting for a version the user never saw.
+                return DocumentSaveExecutionResult.ExternalWriteConflict(request.Target.Path);
+            }
 
             if (request.Kind == DocumentSaveExecutionKind.Save)
             {
@@ -199,7 +236,13 @@ public sealed record DocumentSaveExecutionRequest(
     DocumentSaveExecutionKind Kind,
     Func<CancellationToken, ValueTask>? PrepareDocumentAsync = null,
     Func<DocumentSaveCompatibilityPlan, CancellationToken, ValueTask<bool>>? ConfirmCompatibilityAsync = null,
-    Func<DocumentSaveTarget, CancellationToken, ValueTask>? CompleteSaveAsync = null);
+    Func<DocumentSaveTarget, CancellationToken, ValueTask>? CompleteSaveAsync = null,
+    // r137-remediation2: the write time the caller observed on Target.Path when it last opened or
+    // saved this document (DocumentOpenResult.SourceLastWriteTimeUtc, rebased on each successful
+    // save). Null disables the external-modification guard entirely -- used for Save-As/Save-Copy
+    // targets that differ from the path the caller is tracking, where there is nothing to compare.
+    DateTime? ExpectedLastWriteTimeUtc = null,
+    Func<string, CancellationToken, ValueTask<bool>>? ConfirmExternallyModifiedOverwriteAsync = null);
 
 public sealed record DocumentSaveExecutionResult
 {
@@ -255,6 +298,13 @@ public sealed record DocumentSaveExecutionResult
                 DocumentFileExecutionOutcome,
                 DocumentFileExecutionOutcome>
             .Decline(compatibilityPlan, path));
+
+    internal static DocumentSaveExecutionResult ExternalWriteConflict(string path) =>
+        new(OperationOutcome<
+                DocumentSaveCompatibilityPlan,
+                DocumentFileExecutionOutcome,
+                DocumentFileExecutionOutcome>
+            .ValidationFailure(DocumentFileExecutionOutcome.ExternalWriteConflict, path: path));
 
     internal static DocumentSaveExecutionResult Canceled(OperationCanceledException exception, string path) =>
         new(OperationOutcome<
@@ -340,7 +390,9 @@ internal static class DocumentFileExecutionOutcomeMapper
             DocumentSaveCompatibilityPlan,
             DocumentFileExecutionOutcome,
             DocumentFileExecutionOutcome>.Decline(compatibilityPlan),
-        DocumentFileExecutionOutcome.UnsupportedFormat or DocumentFileExecutionOutcome.SaveAsRequired =>
+        DocumentFileExecutionOutcome.UnsupportedFormat
+            or DocumentFileExecutionOutcome.SaveAsRequired
+            or DocumentFileExecutionOutcome.ExternalWriteConflict =>
             OperationOutcome<
                 DocumentSaveCompatibilityPlan,
                 DocumentFileExecutionOutcome,

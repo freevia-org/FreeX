@@ -196,4 +196,61 @@ public static class Bookmarks
 
     private static void RemoveBookmarkName(Paragraph paragraph, string name) =>
         paragraph.BookmarkNames.RemoveAll(n => string.Equals(n, name, StringComparison.Ordinal));
+
+    /// <summary>
+    /// Resolves a <see cref="BookmarkLocation"/> (as produced by <see cref="List"/>) back to its exact
+    /// target paragraph: a body paragraph directly for a non-table location, or — for a table-cell
+    /// location — the specific cell paragraph identified by logical row, grid column, and paragraph index
+    /// (walking the same <see cref="TableGridProjection"/> shape as <see cref="List"/>). Returns null when
+    /// the location no longer resolves (stale index, row/column out of range, etc.).
+    /// </summary>
+    public static Paragraph? ResolveLocation(TextDocument doc, BookmarkLocation location)
+    {
+        ArgumentNullException.ThrowIfNull(doc);
+        if (location.BlockIndex < 0 || location.BlockIndex >= doc.Blocks.Count)
+            return null;
+
+        var block = doc.Blocks[location.BlockIndex];
+        if (!location.IsTableLocation)
+            return block as Paragraph;
+
+        if (block is not Table table
+            || location.TableRowIndex is not { } rowIndex
+            || rowIndex < 0 || rowIndex >= table.Rows.Count)
+        {
+            return null;
+        }
+
+        foreach (var projectedCell in TableGridProjection.ProjectRow(table.Rows[rowIndex]))
+        {
+            if (projectedCell.StartColumn != location.TableGridColumnIndex)
+                continue;
+
+            var paragraphIndex = location.TableParagraphIndex!.Value;
+            return paragraphIndex >= 0 && paragraphIndex < projectedCell.Cell.Paragraphs.Count
+                ? projectedCell.Cell.Paragraphs[paragraphIndex]
+                : null;
+        }
+
+        return null;
+    }
+
+    /// <summary>
+    /// Removes exactly the bookmark <em>instance</em> at <paramref name="location"/> — the one specific
+    /// paragraph it targets — leaving any other paragraph that happens to carry the same name (a document
+    /// can have duplicate bookmark names, e.g. imported from a source that didn't enforce uniqueness)
+    /// untouched. Contrast with <see cref="RemoveBookmark"/>, which clears every paragraph sharing that
+    /// name document-wide. Used by the Bookmark Manager's Delete action so removing one duplicate-named
+    /// entry never silently destroys a different one. A null/empty name, or a location that no longer
+    /// resolves, is a no-op.
+    /// </summary>
+    public static void RemoveBookmarkAt(TextDocument doc, BookmarkLocation location)
+    {
+        ArgumentNullException.ThrowIfNull(doc);
+        if (string.IsNullOrEmpty(location.Name))
+            return;
+
+        if (ResolveLocation(doc, location) is { } paragraph)
+            RemoveBookmarkName(paragraph, location.Name);
+    }
 }

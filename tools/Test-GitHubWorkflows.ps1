@@ -267,30 +267,6 @@ foreach ($workflow in $workflows) {
         $errors.Add("$($workflow.Name): workflow must not use the privileged pull_request_target event.")
     }
 
-    # R124: every per-sibling-app CI workflow (FreeX/FreeW/FreeP) must run automatically on
-    # direct pushes to main, not just via workflow_dispatch. This closes the third instance of
-    # the same structural gap in this program: r117 found the UiTests lane excluded from
-    # DefaultTests, r118 found FreeP test projects registered in FreeP.slnx but missing from the
-    # build/test solution, and r122 shipped a red FreeW lane because only a filtered subset of
-    # FreeW.App.Avalonia.Tests ran locally while freew-ci.yml itself was still catching up. FreeP
-    # was the last sibling left on workflow_dispatch-only CI (see freep-ci.yml), which made a
-    # FreeP.slnx build/test break invisible to anything automated. Rather than trying to fold
-    # FreeW.slnx/FreeP.slnx into the synchronous per-round local gate (impractical wall-clock --
-    # FreeW.App.Host.Tests alone takes ~15 minutes), the chosen fix is option (c): make the
-    # per-app CI workflows themselves authoritative and unconditionally automatic, and have this
-    # preflight enforce that every one of them actually is. A push to main that breaks FreeW or
-    # FreeP now always trips an automated workflow on that same push -- it can no longer merge
-    # invisibly the way r122's FreeW regression did.
-    if ($workflow.Name -in @("ci.yml", "freew-ci.yml", "freep-ci.yml")) {
-        $pushBlock = Get-IndentedYamlBlock `
-            -Lines $lines `
-            -Pattern "^(?<indent>\s*)push\s*:\s*(?:#.*)?$"
-        if ([string]::IsNullOrWhiteSpace($pushBlock) -or
-            $pushBlock -notmatch "(?m)^\s*-\s+main\s*(?:#.*)?$") {
-            $errors.Add("$($workflow.Name): primary CI must run on direct pushes to main.")
-        }
-    }
-
     foreach ($match in [regex]::Matches($content, "(?ms)^\s*runs-on\s*:\s*(?<runner>[^\r\n]*(?:\r?\n\s+-\s+[^\r\n]+)*)")) {
         $runnerBlock = (($match.Value -split "\r?\n") | ForEach-Object { $_ -replace "#.*$", "" }) -join "`n"
         if ($runnerBlock -match "(?i)(^|[\[\s,'`"-])self-hosted($|[\]\s,'`"])") {

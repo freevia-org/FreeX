@@ -75,7 +75,9 @@ internal static class WpfPresentationFileCommandSessionFactory
             getImageExportRange,
             getPrintCurrentSlideNumber,
             getPrintSelectedSlideNumbers,
-            videoPackageArtifactFactory: videoFramePackageArtifactFactory);
+            videoPackageArtifactFactory: videoFramePackageArtifactFactory,
+            confirmExternallyModifiedOverwriteAsync: (path, ct) =>
+                workflow.ConfirmExternallyModifiedOverwriteAsync(path, ct).AsTask());
         return session;
     }
 
