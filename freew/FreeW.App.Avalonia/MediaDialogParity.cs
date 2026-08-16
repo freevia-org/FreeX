@@ -201,12 +201,17 @@ internal sealed class ChartTitleDialog : FreeWDialogWindow
         CanResize = false;
         ShowInTaskbar = false;
         _title = Chrome.TextBox(currentTitle ?? string.Empty, 220);
+        ImageChartDialogSurfaceSemantics.Apply(this, surface);
+        ImageChartDialogSurfaceSemantics.Apply(
+            _title,
+            surface.Field(ChartTitleDialogPlanner.InitialFocusField));
 
         var grid = AvaloniaLabeledFormRow.CreateCompactGrid(2);
         AvaloniaLabeledFormRow.AddCompact(grid, surface.Field(ChartTitleDialogField.Title).Label, _title, 0);
         AvaloniaLabeledFormRow.Place(grid, Chrome.ActionRow(Accept, () => Close(null)), 1, 1);
         Content = new Border { Padding = new Thickness(14), Child = grid };
-        Opened += (_, _) => AvaloniaCompactDialogChrome.FocusAndSelect(_title);
+        Opened += (_, _) => AvaloniaCompactDialogChrome.FocusAndSelect(
+            ResolveFocusTarget(ChartTitleDialogPlanner.InitialFocusField));
         Chrome.Escape(this, () => Close(null));
     }
 
@@ -214,6 +219,12 @@ internal sealed class ChartTitleDialog : FreeWDialogWindow
         new ChartTitleDialog(currentTitle).ShowDialog<ChartTitleDialogResult?>(owner);
 
     private void Accept() => Close(ChartTitleDialogPlanner.BuildResult(_title.Text));
+
+    private TextBox ResolveFocusTarget(ChartTitleDialogField field) => field switch
+    {
+        ChartTitleDialogField.Title => _title,
+        _ => throw new ArgumentOutOfRangeException(nameof(field), field, null),
+    };
 }
 
 internal sealed class ChartAxisTitlesDialog : FreeWDialogWindow
@@ -232,13 +243,21 @@ internal sealed class ChartAxisTitlesDialog : FreeWDialogWindow
         ShowInTaskbar = false;
         _category = Chrome.TextBox(categoryTitle ?? string.Empty, 220);
         _value = Chrome.TextBox(valueTitle ?? string.Empty, 220);
+        ImageChartDialogSurfaceSemantics.Apply(this, surface);
+        ImageChartDialogSurfaceSemantics.Apply(
+            _category,
+            surface.Field(ChartAxisTitlesDialogPlanner.InitialFocusField));
+        ImageChartDialogSurfaceSemantics.Apply(
+            _value,
+            surface.Field(ChartAxisTitlesDialogField.Value));
 
         var grid = AvaloniaLabeledFormRow.CreateCompactGrid(3);
         AvaloniaLabeledFormRow.AddCompact(grid, surface.Field(ChartAxisTitlesDialogField.Category).Label, _category, 0);
         AvaloniaLabeledFormRow.AddCompact(grid, surface.Field(ChartAxisTitlesDialogField.Value).Label, _value, 1);
         AvaloniaLabeledFormRow.Place(grid, Chrome.ActionRow(Accept, () => Close(null)), 2, 1);
         Content = new Border { Padding = new Thickness(14), Child = grid };
-        Opened += (_, _) => AvaloniaCompactDialogChrome.FocusAndSelect(_category);
+        Opened += (_, _) => AvaloniaCompactDialogChrome.FocusAndSelect(
+            ResolveFocusTarget(ChartAxisTitlesDialogPlanner.InitialFocusField));
         Chrome.Escape(this, () => Close(null));
     }
 
@@ -249,6 +268,13 @@ internal sealed class ChartAxisTitlesDialog : FreeWDialogWindow
         new ChartAxisTitlesDialog(categoryTitle, valueTitle).ShowDialog<ChartAxisTitlesDialogResult?>(owner);
 
     private void Accept() => Close(ChartAxisTitlesDialogPlanner.BuildResult(_category.Text, _value.Text));
+
+    private TextBox ResolveFocusTarget(ChartAxisTitlesDialogField field) => field switch
+    {
+        ChartAxisTitlesDialogField.Category => _category,
+        ChartAxisTitlesDialogField.Value => _value,
+        _ => throw new ArgumentOutOfRangeException(nameof(field), field, null),
+    };
 }
 
 internal sealed class ChartSizeDialog : FreeWDialogWindow
@@ -270,6 +296,14 @@ internal sealed class ChartSizeDialog : FreeWDialogWindow
         _width = Chrome.TextBox(state.WidthText, 120);
         _height = Chrome.TextBox(state.HeightText, 120);
         AvaloniaCompactDialogChrome.ApplyValidationStatus(_status, Chrome.Style, new Thickness(0, 6, 0, 0));
+        ImageChartDialogSurfaceSemantics.Apply(this, surface);
+        ImageChartDialogSurfaceSemantics.Apply(
+            _width,
+            surface.Field(ChartSizeDialogPlanner.InitialFocusField));
+        ImageChartDialogSurfaceSemantics.Apply(
+            _height,
+            surface.Field(ChartSizeDialogField.Height));
+        ImageChartDialogSurfaceSemantics.ApplyValidation(_status, surface);
 
         var grid = AvaloniaLabeledFormRow.CreateCompactGrid(4);
         AvaloniaLabeledFormRow.AddCompact(grid, surface.Field(ChartSizeDialogField.Width).Label, _width, 0);
@@ -279,7 +313,8 @@ internal sealed class ChartSizeDialog : FreeWDialogWindow
         grid.Children.Add(_status);
         AvaloniaLabeledFormRow.Place(grid, Chrome.ActionRow(Accept, () => Close(null)), 3, 1);
         Content = new Border { Padding = new Thickness(14), Child = grid };
-        Opened += (_, _) => AvaloniaCompactDialogChrome.FocusAndSelect(_width);
+        Opened += (_, _) => AvaloniaCompactDialogChrome.FocusAndSelect(
+            ResolveFocusTarget(ChartSizeDialogPlanner.InitialFocusField));
         Chrome.Escape(this, () => Close(null));
     }
 
@@ -303,6 +338,13 @@ internal sealed class ChartSizeDialog : FreeWDialogWindow
         AvaloniaCompactDialogChrome.FocusAndSelect(
             validation.Field == ChartSizeDialogField.Height ? _height : _width);
     }
+
+    private TextBox ResolveFocusTarget(ChartSizeDialogField field) => field switch
+    {
+        ChartSizeDialogField.Width => _width,
+        ChartSizeDialogField.Height => _height,
+        _ => throw new ArgumentOutOfRangeException(nameof(field), field, null),
+    };
 }
 
 internal sealed class InsertSmartArtDialog : FreeWDialogWindow

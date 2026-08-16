@@ -478,15 +478,15 @@ public sealed class ManualHyphenationDialog : FreeWDialogWindow
             _choices,
             surface.Field(ManualHyphenationDialogField.Choices));
 
-        var yes = Button(surface.Field(ManualHyphenationDialogField.Yes), isDefault: true, () =>
+        var actions = ManualHyphenationPlanner.FocusPlan.ActionButtons;
+        var yes = Button(surface.Field(ManualHyphenationDialogField.Yes), actions[0], () =>
         {
             var result = _session.PlanAcceptance(_choices.SelectedIndex);
             if (result is not null)
                 Close(result);
         });
-        var no = Button(surface.Field(ManualHyphenationDialogField.No), isDefault: false, () => Close(_session.PlanSkip()));
-        var cancel = Button(surface.Field(ManualHyphenationDialogField.Cancel), isDefault: false, () => Close(_session.PlanCancel()));
-        cancel.IsCancel = true;
+        var no = Button(surface.Field(ManualHyphenationDialogField.No), actions[1], () => Close(_session.PlanSkip()));
+        var cancel = Button(surface.Field(ManualHyphenationDialogField.Cancel), actions[2], () => Close(_session.PlanCancel()));
 
         var buttons = AvaloniaCompactDialogChrome.CreateActionRow(
             [yes, no, cancel],
@@ -499,6 +499,7 @@ public sealed class ManualHyphenationDialog : FreeWDialogWindow
         content.Children.Add(_choices);
         content.Children.Add(buttons);
         Content = content;
+        Opened += (_, _) => ResolveFocusTarget(ManualHyphenationPlanner.FocusPlan.InitialFocusTarget).Focus();
 
         KeyDown += (_, e) =>
         {
@@ -511,15 +512,27 @@ public sealed class ManualHyphenationDialog : FreeWDialogWindow
 
     private static Button Button(
         DialogFieldSurfaceSpec<ManualHyphenationDialogField> field,
-        bool isDefault,
+        Free.Shared.Shell.DialogActionPlan actionPlan,
         Action action)
     {
-        var button = new Button { Content = field.Label, MinWidth = 72, IsDefault = isDefault };
+        var button = new Button
+        {
+            Content = field.Label,
+            MinWidth = 72,
+            IsDefault = actionPlan.IsDefault,
+            IsCancel = actionPlan.IsCancel,
+        };
         button.Click += (_, _) => action();
-        AvaloniaCompactDialogChrome.ApplyButton(button, PageLayoutDialogChrome.Style, 72, isDefault);
+        AvaloniaCompactDialogChrome.ApplyButton(button, PageLayoutDialogChrome.Style, 72, actionPlan.IsDefault);
         PageLayoutDialogChrome.ApplySurface(button, field);
         return button;
     }
+
+    private ComboBox ResolveFocusTarget(ManualHyphenationDialogField field) => field switch
+    {
+        ManualHyphenationDialogField.Choices => _choices,
+        _ => throw new ArgumentOutOfRangeException(nameof(field), field, null),
+    };
 
     public static async Task ShowAndApplyAsync(Window owner, DocumentView editor, Action<string> report)
     {

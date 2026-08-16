@@ -70,6 +70,44 @@ public sealed class ImageChartDialogSurfaceSpecTests
     }
 
     [Fact]
+    public void ChartDialogInitialFocusIsOwnedBySharedPresentationPolicy()
+    {
+        ChartTitleDialogPlanner.InitialFocusField.Should().Be(ChartTitleDialogField.Title);
+        ChartAxisTitlesDialogPlanner.InitialFocusField.Should().Be(ChartAxisTitlesDialogField.Category);
+        ChartSizeDialogPlanner.InitialFocusField.Should().Be(ChartSizeDialogField.Width);
+
+        ChartTitleDialogPlanner.Surface.Field(ChartTitleDialogPlanner.InitialFocusField).AutomationId
+            .Should().Be("ChartTitleTextBox");
+        ChartAxisTitlesDialogPlanner.Surface.Field(ChartAxisTitlesDialogPlanner.InitialFocusField).AutomationId
+            .Should().Be("ChartCategoryAxisTitleTextBox");
+        ChartSizeDialogPlanner.Surface.Field(ChartSizeDialogPlanner.InitialFocusField).AutomationId
+            .Should().Be("ChartSizeWidthTextBox");
+    }
+
+    [Fact]
+    public void BothChartRenderersProjectTheSharedAutomationAndFocusContracts()
+    {
+        var avalonia = ReadSource("freew", "FreeW.App.Avalonia", "MediaDialogParity.cs");
+        var wpf = new[]
+        {
+            ReadSource("freew", "FreeW.App.Host", "ChartTitleDialog.cs"),
+            ReadSource("freew", "FreeW.App.Host", "ChartAxisTitlesDialog.cs"),
+            ReadSource("freew", "FreeW.App.Host", "ChartSizeDialog.cs"),
+        };
+
+        avalonia.Should().Contain("ChartTitleDialogPlanner.InitialFocusField");
+        avalonia.Should().Contain("ChartAxisTitlesDialogPlanner.InitialFocusField");
+        avalonia.Should().Contain("ChartSizeDialogPlanner.InitialFocusField");
+        avalonia.Should().Contain("ImageChartDialogSurfaceSemantics.Apply(this, surface);");
+        avalonia.Should().Contain("ImageChartDialogSurfaceSemantics.ApplyValidation(_status, surface);");
+        avalonia.Should().Contain("ResolveFocusTarget(");
+        wpf.Should().OnlyContain(source => source.Contains("ResolveFocusTarget(", StringComparison.Ordinal));
+        wpf[0].Should().Contain("ChartTitleDialogPlanner.InitialFocusField");
+        wpf[1].Should().Contain("ChartAxisTitlesDialogPlanner.InitialFocusField");
+        wpf[2].Should().Contain("ChartSizeDialogPlanner.InitialFocusField");
+    }
+
+    [Fact]
     public void SurfaceAutomationContractsAreCompleteAndStable()
     {
         AssertSurface(ImageCropDialogPlanner.Surface, "ImageCropDialog");
@@ -94,5 +132,11 @@ public sealed class ImageChartDialogSurfaceSpecTests
         surface.Fields.Should().OnlyContain(field =>
             !string.IsNullOrWhiteSpace(field.Label)
             && !string.IsNullOrWhiteSpace(field.AutomationName));
+    }
+
+    private static string ReadSource(params string[] segments)
+    {
+        var root = TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeW.slnx");
+        return File.ReadAllText(Path.Combine(new[] { root }.Concat(segments).ToArray()));
     }
 }

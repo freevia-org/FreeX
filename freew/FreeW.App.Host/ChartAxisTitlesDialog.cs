@@ -47,7 +47,7 @@ internal sealed class ChartAxisTitlesDialog : Free.Shared.Ribbon.Wpf.DialogWindo
         grid.Children.Add(buttons);
 
         Content = grid;
-        DialogFocus.FocusAndSelect(_catBox);
+        DialogFocus.FocusAndSelect(ResolveFocusTarget(ChartAxisTitlesDialogPlanner.InitialFocusField));
     }
 
     private static void AddRow(Grid grid, int row, string label, TextBox box)
@@ -66,6 +66,13 @@ internal sealed class ChartAxisTitlesDialog : Free.Shared.Ribbon.Wpf.DialogWindo
         _result = (result.CategoryTitle, result.ValueTitle);
         Close();
     }
+
+    private TextBox ResolveFocusTarget(ChartAxisTitlesDialogField field) => field switch
+    {
+        ChartAxisTitlesDialogField.Category => _catBox,
+        ChartAxisTitlesDialogField.Value => _valBox,
+        _ => throw new ArgumentOutOfRangeException(nameof(field), field, null),
+    };
 
     public static (string? CategoryTitle, string? ValueTitle)? Prompt(Window? owner, string? currentCategory, string? currentValue)
     {

@@ -27,6 +27,8 @@ public sealed record ChartSizeDialogValidation(
 
 public static class ChartSizeDialogPlanner
 {
+    public const ChartSizeDialogField InitialFocusField = ChartSizeDialogField.Width;
+
     public const string WidthValidationMessage = "Enter a positive width in points.";
     public const string HeightValidationMessage = "Enter a positive height in points.";
 

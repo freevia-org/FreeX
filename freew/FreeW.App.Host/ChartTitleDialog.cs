@@ -46,7 +46,7 @@ internal sealed class ChartTitleDialog : Free.Shared.Ribbon.Wpf.DialogWindow
         grid.Children.Add(buttons);
 
         Content = grid;
-        DialogFocus.FocusAndSelect(_titleBox);
+        DialogFocus.FocusAndSelect(ResolveFocusTarget(ChartTitleDialogPlanner.InitialFocusField));
     }
 
     private void Accept()
@@ -55,6 +55,12 @@ internal sealed class ChartTitleDialog : Free.Shared.Ribbon.Wpf.DialogWindow
         _title = ChartTitleDialogPlanner.BuildResult(_titleBox.Text).NewTitle;
         Close();
     }
+
+    private TextBox ResolveFocusTarget(ChartTitleDialogField field) => field switch
+    {
+        ChartTitleDialogField.Title => _titleBox,
+        _ => throw new ArgumentOutOfRangeException(nameof(field), field, null),
+    };
 
     /// <summary>
     /// Show the dialog. Returns (true, newTitle) on OK — newTitle may be null to clear the title —

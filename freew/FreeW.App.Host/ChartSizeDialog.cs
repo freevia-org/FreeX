@@ -57,7 +57,7 @@ internal sealed class ChartSizeDialog : Free.Shared.Ribbon.Wpf.DialogWindow
         grid.Children.Add(buttons);
 
         Content = grid;
-        DialogFocus.FocusAndSelect(_widthBox);
+        DialogFocus.FocusAndSelect(ResolveFocusTarget(ChartSizeDialogPlanner.InitialFocusField));
     }
 
     private static void AddRow(Grid grid, int row, string label, TextBox box)
@@ -69,6 +69,13 @@ internal sealed class ChartSizeDialog : Free.Shared.Ribbon.Wpf.DialogWindow
         box.Margin = new Thickness(0, 0, 0, 6);
         grid.Children.Add(box);
     }
+
+    private TextBox ResolveFocusTarget(ChartSizeDialogField field) => field switch
+    {
+        ChartSizeDialogField.Width => _widthBox,
+        ChartSizeDialogField.Height => _heightBox,
+        _ => throw new ArgumentOutOfRangeException(nameof(field), field, null),
+    };
 
     private void Accept()
     {

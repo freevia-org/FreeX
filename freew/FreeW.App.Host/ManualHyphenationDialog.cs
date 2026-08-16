@@ -36,12 +36,13 @@ internal sealed partial class ManualHyphenationDialog : Free.Shared.Ribbon.Wpf.D
             _choices,
             surface.Field(ManualHyphenationDialogField.Choices));
 
-        var yes = new Button { Content = surface.Field(ManualHyphenationDialogField.Yes).Label, MinWidth = 72, IsDefault = true };
+        var actions = ManualHyphenationPlanner.FocusPlan.ActionButtons;
+        var yes = new Button { Content = surface.Field(ManualHyphenationDialogField.Yes).Label, MinWidth = 72, IsDefault = actions[0].IsDefault, IsCancel = actions[0].IsCancel };
         yes.Click += (_, _) => Accept();
-        var no = new Button { Content = surface.Field(ManualHyphenationDialogField.No).Label, MinWidth = 72, Margin = new Thickness(8, 0, 0, 0) };
+        var no = new Button { Content = surface.Field(ManualHyphenationDialogField.No).Label, MinWidth = 72, Margin = new Thickness(8, 0, 0, 0), IsDefault = actions[1].IsDefault, IsCancel = actions[1].IsCancel };
         no.Click += (_, _) => CloseWith(_session.PlanSkip());
         var cancelContent = ShellStrings.Current.Cancel;
-        var cancel = new Button { Content = cancelContent, MinWidth = 72, Margin = new Thickness(8, 0, 0, 0), IsCancel = true };
+        var cancel = new Button { Content = cancelContent, MinWidth = 72, Margin = new Thickness(8, 0, 0, 0), IsDefault = actions[2].IsDefault, IsCancel = actions[2].IsCancel };
         cancel.Click += (_, _) => CloseWith(_session.PlanCancel());
         WpfDialogSurfaceSemantics.Apply(yes, surface.Field(ManualHyphenationDialogField.Yes));
         WpfDialogSurfaceSemantics.Apply(no, surface.Field(ManualHyphenationDialogField.No));
@@ -68,6 +69,8 @@ internal sealed partial class ManualHyphenationDialog : Free.Shared.Ribbon.Wpf.D
         content.Children.Add(_choices);
         content.Children.Add(buttons);
         Content = content;
+        Loaded += (_, _) => DialogFocus.Focus(
+            ResolveFocusTarget(ManualHyphenationPlanner.FocusPlan.InitialFocusTarget));
     }
 
     private void Accept()
@@ -90,4 +93,10 @@ internal sealed partial class ManualHyphenationDialog : Free.Shared.Ribbon.Wpf.D
         dialog.ShowDialog();
         return dialog._result;
     }
+
+    private ComboBox ResolveFocusTarget(ManualHyphenationDialogField field) => field switch
+    {
+        ManualHyphenationDialogField.Choices => _choices,
+        _ => throw new ArgumentOutOfRangeException(nameof(field), field, null),
+    };
 }

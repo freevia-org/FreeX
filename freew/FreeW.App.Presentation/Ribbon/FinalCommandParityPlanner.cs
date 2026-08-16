@@ -1,6 +1,8 @@
 using Free.Shared.AppServices;
+using Free.Shared.Shell;
 using FreeW.Core.Model;
 using FreeW.App.Presentation.Editing;
+using FreeW.App.Presentation.Dialogs;
 
 namespace FreeW.App.Presentation.Ribbon;
 
@@ -10,14 +12,24 @@ public enum DrawTableDimensionDialogKind
     SplitCells,
 }
 
+public enum DrawTableDimensionDialogField
+{
+    Rows,
+    Columns,
+}
+
 public sealed record DrawTableDimensionDialogPlan(
-    string Title,
-    string RowsLabel,
-    string ColumnsLabel,
-    string OkLabel,
-    string CancelLabel,
+    DialogSurfaceSpec<DrawTableDimensionDialogField> Surface,
+    DialogFocusPlan<DrawTableDimensionDialogField> FocusPlan,
     int DefaultRows,
-    int DefaultColumns);
+    int DefaultColumns)
+{
+    public string Title => Surface.Title;
+    public string RowsLabel => Surface.Field(DrawTableDimensionDialogField.Rows).Label;
+    public string ColumnsLabel => Surface.Field(DrawTableDimensionDialogField.Columns).Label;
+    public string OkLabel => FocusPlan.ActionButtons[0].Label;
+    public string CancelLabel => FocusPlan.ActionButtons[1].Label;
+}
 
 public static class DrawTableCommandPlanner
 {
@@ -42,15 +54,31 @@ public static class DrawTableCommandPlanner
 
     public static DrawTableDimensionDialogPlan BuildDialog(
         DrawTableDimensionDialogKind kind,
-        Func<string, string?>? getText = null) =>
-        new(
-            DialogTexts[kind == DrawTableDimensionDialogKind.DrawTable ? 0 : 1].Resolve(getText),
-            DialogTexts[2].Resolve(getText),
-            DialogTexts[3].Resolve(getText),
-            DialogTexts[4].Resolve(getText),
-            DialogTexts[5].Resolve(getText),
+        Func<string, string?>? getText = null)
+    {
+        var title = DialogTexts[kind == DrawTableDimensionDialogKind.DrawTable ? 0 : 1].Resolve(getText);
+        var surface = new DialogSurfaceSpec<DrawTableDimensionDialogField>(
+            title,
+            "DrawTableDimensionDialog",
+            title,
+            [
+                new(DrawTableDimensionDialogField.Rows, DialogTexts[2].Resolve(getText), "DrawTableRowsTextBox", "Number of rows"),
+                new(DrawTableDimensionDialogField.Columns, DialogTexts[3].Resolve(getText), "DrawTableColumnsTextBox", "Number of columns"),
+            ]);
+        var focusPlan = new DialogFocusPlan<DrawTableDimensionDialogField>(
+            DrawTableDimensionDialogField.Rows,
+            DrawTableDimensionDialogField.Rows,
+            SelectAllOnFocus: true,
+            [
+                new DialogActionPlan(DialogTexts[4].Resolve(getText), IsDefault: true),
+                new DialogActionPlan(DialogTexts[5].Resolve(getText), IsCancel: true),
+            ]);
+        return new(
+            surface,
+            focusPlan,
             kind == DrawTableDimensionDialogKind.DrawTable ? DefaultRows : SplitDefaultRows,
             kind == DrawTableDimensionDialogKind.DrawTable ? DefaultColumns : SplitDefaultColumns);
+    }
 
     public static (int Rows, int Columns) Normalize(string? rowsText, string? columnsText) =>
         (NormalizeDimension(rowsText, DefaultRows), NormalizeDimension(columnsText, DefaultColumns));

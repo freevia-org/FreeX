@@ -12,6 +12,8 @@ public enum ChartTitleDialogField
 
 public static class ChartTitleDialogPlanner
 {
+    public const ChartTitleDialogField InitialFocusField = ChartTitleDialogField.Title;
+
     private static readonly ResourceTextDescriptor[] Texts =
     [
         new("ChartTitle_Dialog_Title", "Chart Title"),
@@ -54,6 +56,8 @@ public enum ChartAxisTitlesDialogField
 
 public static class ChartAxisTitlesDialogPlanner
 {
+    public const ChartAxisTitlesDialogField InitialFocusField = ChartAxisTitlesDialogField.Category;
+
     private static readonly ResourceTextDescriptor[] Texts =
     [
         new("ChartAxisTitles_Dialog_Title", "Axis Titles"),
