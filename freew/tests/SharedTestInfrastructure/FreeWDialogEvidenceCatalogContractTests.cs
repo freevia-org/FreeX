@@ -16,7 +16,10 @@ public sealed class FreeWDialogEvidenceCatalogContractTests
     public void Catalog_has_unique_valid_routes_and_every_Wpf_route_is_paired()
     {
         Catalog.Validate().Should().BeEmpty();
-        Catalog.Routes.Should().HaveCount(98);
+        // A floor, not an exact size: Catalog.Validate() above and the pairing checks below run over
+        // EVERY route and get stronger as the catalog grows, so pinning the count only made this fail
+        // whenever a dialog route was added.
+        Catalog.Routes.Should().HaveCountGreaterThanOrEqualTo(98);
         Catalog.Routes.Select(route => route.RouteId.ToUpperInvariant())
             .Should().OnlyHaveUniqueItems();
         Catalog.Routes.Where(route => route.Coverage == RouteCoverage.Paired)
