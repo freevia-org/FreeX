@@ -20,6 +20,7 @@ $captureSource = Get-Content -LiteralPath $resolvedCaptureScript -Raw
 foreach ($requiredText in @(
         "ScreenshotCaptureSupport.ps1",
         "Assert-ForegroundWindowOwnership",
+        "AttachThreadInput",
         "CopyFromScreen-window-rectangle-top-band",
         "Clear-CurrentCapture",
         "PowerPoint.Application")) {
