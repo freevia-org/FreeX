@@ -210,22 +210,28 @@ public sealed class AvaloniaSharedWorkbookWindowTests
                     Key = Key.F6,
                     KeyModifiers = KeyModifiers.Control,
                 });
-                second.IsActive.Should().BeTrue();
+                // Headless has no window manager, so neither IsActive nor the Activated event ever reports the
+
+                // switch. ActivateWorkbookWindow also focuses the target's sheet grid, and focus DOES work
+
+                // headless -- assert the focused element now lives inside the expected window.
+
+                AssertFocusMovedInto(second);
+
 
                 await second.RaiseKeyDownForTest(new KeyEventArgs
                 {
                     Key = Key.F6,
                     KeyModifiers = KeyModifiers.Control,
                 });
-                third.IsActive.Should().BeTrue();
+                AssertFocusMovedInto(third);
 
                 await third.RaiseKeyDownForTest(new KeyEventArgs
                 {
                     Key = Key.F6,
                     KeyModifiers = KeyModifiers.Control | KeyModifiers.Shift,
                 });
-                second.IsActive.Should().BeTrue();
-                activeBefore.Should().BeSameAs(second);
+                AssertFocusMovedInto(second);
             }
             finally
             {
@@ -466,5 +472,17 @@ public sealed class AvaloniaSharedWorkbookWindowTests
         window.Measure(new Size(1120, 720));
         window.Arrange(new Rect(0, 0, 1120, 720));
         window.UpdateLayout();
+    }
+
+    /// <summary>
+    /// Asserts the keyboard focus now sits inside <paramref name="window"/>. Written as two statements
+    /// rather than a null-conditional chain on purpose: <c>focused?.Ancestor().Should()...</c> silently
+    /// SKIPS the assertion when focus is null, which would let this pass vacuously.
+    /// </summary>
+    private static void AssertFocusMovedInto(Window window)
+    {
+        var focused = window.FocusManager!.GetFocusedElement() as Visual;
+        focused.Should().NotBeNull("cycling to a workbook window must move keyboard focus into it");
+        focused!.FindAncestorOfType<Window>(includeSelf: true).Should().BeSameAs(window);
     }
 }
