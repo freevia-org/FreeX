@@ -12,17 +12,28 @@ public sealed class BackstageAndLifecycleOwnershipSourceTests
         var avalonia = Read("freep", "FreeP.App.Avalonia", "MainWindow.cs");
         var avaloniaPorts = Read("freep", "FreeP.App.Avalonia", "MainWindow.FileCommandPorts.cs");
         var adapter = Read("freep", "FreeP.App.Presentation", "PresentationFileLifecycleAdapter.cs");
+        var composition = Read("freep", "FreeP.App.Presentation", "PresentationFileCommandSession.cs");
 
         wpf.Should().Contain("new PresentationFileLifecycleAdapter(workflow.Workflow)");
+        wpf.Should().Contain("PresentationFileCommandSessionFactory.Create(")
+            .And.Contain("new PresentationFileCommandSessionComposition(")
+            .And.NotContain("session = new PresentationFileCommandSession(");
         wpfMain.Should().Contain("private PresentationFileCommandSession _fileSession")
             .And.NotContain("private FileCommands");
         avalonia.Should().Contain("new PresentationFileLifecycleAdapter(")
             .And.Contain("_fileWorkflow.Workflow")
-            .And.Contain("_fileWorkflow.ConfirmCloseAllowedAsync");
+            .And.Contain("_fileWorkflow.ConfirmCloseAllowedAsync")
+            .And.Contain("PresentationFileCommandSessionFactory.Create(")
+            .And.Contain("new PresentationFileCommandSessionComposition(")
+            .And.NotContain("_fileSession = new PresentationFileCommandSession(");
         wpf.Should().NotContain("WpfPresentationFileLifecyclePort");
         avaloniaPorts.Should().NotContain("AvaloniaPresentationFileLifecyclePort")
             .And.NotContain(": IPresentationFileLifecyclePort");
         adapter.Should().Contain("FileCommandWorkflow _workflow")
+            .And.NotContain("System.Windows")
+            .And.NotContain("Avalonia");
+        composition.Should().Contain("public static class PresentationFileCommandSessionFactory")
+            .And.Contain("PresentationFileCommandSessionComposition")
             .And.NotContain("System.Windows")
             .And.NotContain("Avalonia");
     }

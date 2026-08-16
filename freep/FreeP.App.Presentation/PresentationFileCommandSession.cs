@@ -381,6 +381,52 @@ public interface IPresentationFileCommandFeedbackPort
     Task ReportAsync(PresentationFileCommandResult result, CancellationToken cancellationToken);
 }
 
+/// <summary>
+/// Renderer-neutral dependencies used to compose the presentation file-command session.
+/// Native hosts supply ports and callbacks; construction policy remains shared.
+/// </summary>
+public sealed record PresentationFileCommandSessionComposition(
+    Func<Presentation> GetPresentation,
+    Action<Presentation> LoadPresentation,
+    IPresentationFileLifecyclePort Lifecycle,
+    IPresentationFilePickerPort Picker,
+    IPresentationFileRenderPort Render,
+    IPresentationPrintPort Print,
+    IPresentationVideoPort Video,
+    IPresentationFileCommandFeedbackPort? Feedback = null,
+    Func<PresentationSlideRangeRequest?>? GetImageExportRange = null,
+    Func<int?>? GetPrintCurrentSlideNumber = null,
+    Func<IReadOnlyList<int>?>? GetPrintSelectedSlideNumbers = null,
+    Func<PresentationPrintRequest?, PresentationPrintOutputPackage>? PrintPackageFactory = null,
+    Func<PresentationVideoExportRequest?, PresentationVideoFramePackageArtifact>?
+        VideoPackageArtifactFactory = null,
+    Func<string, CancellationToken, Task<bool>>? ConfirmExternallyModifiedOverwriteAsync = null);
+
+public static class PresentationFileCommandSessionFactory
+{
+    public static PresentationFileCommandSession Create(
+        PresentationFileCommandSessionComposition composition)
+    {
+        ArgumentNullException.ThrowIfNull(composition);
+
+        return new PresentationFileCommandSession(
+            composition.GetPresentation,
+            composition.LoadPresentation,
+            composition.Lifecycle,
+            composition.Picker,
+            composition.Render,
+            composition.Print,
+            composition.Video,
+            composition.Feedback,
+            composition.GetImageExportRange,
+            composition.GetPrintCurrentSlideNumber,
+            composition.GetPrintSelectedSlideNumbers,
+            composition.PrintPackageFactory,
+            composition.VideoPackageArtifactFactory,
+            composition.ConfirmExternallyModifiedOverwriteAsync);
+    }
+}
+
 public sealed class PresentationFileCommandSession
 {
     public const string CloseAction = "closing";

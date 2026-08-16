@@ -1,5 +1,4 @@
 using System.IO;
-using System.Windows;
 using Free.Shared.Shell;
 using FreeP.App.Compositor;
 
@@ -11,8 +10,9 @@ public sealed partial class MainWindow
 
     private PresentationAssetImportHostSession AssetImportSession =>
         _assetImportSession ??= new PresentationAssetImportHostSession(
-            new WpfPresentationAssetPickerPort(this),
-            new WpfPresentationAssetReaderPort(),
+            new PresentationAssetPickerAdapter(PickPresentationAssetAsync),
+            new PresentationAssetReaderAdapter<string>(
+                FileByteReadWorkflow.ReadLocalPathBytesAsync),
             Editor,
             new PresentationAssetImportExecutionCallbacks(
                 ApplyPictureBullet: ApplyImportedPictureBullet,
@@ -56,35 +56,21 @@ public sealed partial class MainWindow
             _messageService ?? new WpfUserMessageService(this),
             statusTarget);
 
-    private sealed class WpfPresentationAssetPickerPort(Window owner) : IPresentationAssetPickerPort
+    private Task<PresentationAssetPickerResult> PickPresentationAssetAsync(
+        PresentationAssetImportRequest request,
+        CancellationToken cancellationToken)
     {
-        public Task<PresentationAssetPickerResult> PickAsync(
-            PresentationAssetImportRequest request,
-            CancellationToken cancellationToken)
-        {
-            cancellationToken.ThrowIfCancellationRequested();
-            var pickerProfile = request.PickerProfile;
-            var result = WpfFileDialogService.ShowOpenDialog(
-                pickerProfile.UseUnownedWpfDialog ? null : owner,
-                pickerProfile.Wpf.BuildWpfFilter(),
-                title: request.PickerTitle);
-            var fileName = result.FileName;
-            if (!result.Chosen || string.IsNullOrWhiteSpace(fileName))
-                return Task.FromResult(PresentationAssetPickerResult.Cancelled);
-
-            return Task.FromResult(PresentationAssetPickerResult.Selected(
+        cancellationToken.ThrowIfCancellationRequested();
+        var pickerProfile = request.PickerProfile;
+        var result = WpfFileDialogService.ShowOpenDialog(
+            pickerProfile.UseUnownedWpfDialog ? null : this,
+            pickerProfile.Wpf.BuildWpfFilter(),
+            title: request.PickerTitle);
+        var fileName = result.FileName;
+        return !result.Chosen || string.IsNullOrWhiteSpace(fileName)
+            ? Task.FromResult(PresentationAssetPickerResult.Cancelled)
+            : Task.FromResult(PresentationAssetPickerResult.Selected(
                 Path.GetFileName(fileName),
                 fileName));
-        }
-    }
-
-    private sealed class WpfPresentationAssetReaderPort : IPresentationAssetReaderPort
-    {
-        public Task<byte[]> ReadAsync(
-            PresentationAssetSelection selection,
-            CancellationToken cancellationToken) =>
-            FileByteReadWorkflow.ReadLocalPathBytesAsync(
-                (string)selection.Source,
-                cancellationToken);
     }
 }
