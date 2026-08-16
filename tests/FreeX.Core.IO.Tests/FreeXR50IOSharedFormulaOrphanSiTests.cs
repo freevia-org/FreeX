@@ -51,6 +51,31 @@ public sealed class FreeXR50IOSharedFormulaOrphanSiTests
         sheet.GetCell(b3)!.FormulaText.Should().Be("$A$1*2");
     }
 
+    // The two load tests above only prove the recovery works when ClosedXML's stack trace happens to
+    // contain the frame the detector looks for. It originally keyed solely on "ModContext", which the
+    // JIT is free to inline away -- under the full parallel gate it did, the detector missed, and the
+    // orphan package failed to load while passing in isolation. Pin the origin-based check so the
+    // recovery cannot silently regress to depending on one frame name surviving.
+    [Fact]
+    public void OrphanDetector_RecognizesTheFailureByOrigin_NotByASingleFrameName()
+    {
+        var adapterSource = File.ReadAllText(RepositoryFile(
+            "src", "FreeX.Core.IO", "XlsxFileAdapter.cs"));
+
+        adapterSource.Should().Contain(
+            "IsClosedXmlAssembly(argument.TargetSite?.DeclaringType?.Assembly)",
+            "the detector must recognize the throwing assembly, which no inlining decision can change");
+        adapterSource.Should().Contain(
+            "assembly?.GetName().Name?.StartsWith(\"ClosedXML\", StringComparison.Ordinal)");
+    }
+
+    private static string RepositoryFile(params string[] parts) =>
+        Path.Combine(
+            [
+                TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeX.slnx"),
+                .. parts,
+            ]);
+
     private static byte[] CreateOrphanedSharedFormulaSlavePackage()
     {
         using var package = XlsxPackageTestFixtures.CreatePackage(

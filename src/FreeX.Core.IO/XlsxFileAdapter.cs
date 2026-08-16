@@ -2437,17 +2437,39 @@ public sealed partial class XlsxFileAdapter : IFileAdapter, IWarningCollectingFi
     // rather than degrading gracefully. Real Excel opens such a file and keeps the orphaned
     // slave's cached value. Recognize the failure signature so the caller can retry with the
     // dangling shared-formula references stripped instead of failing the whole workbook load.
+    //
+    // Recognized by where the ArgumentException came from rather than by one frame's name. The
+    // original check required the string "ModContext" in the stack trace, which is only present
+    // while that constructor has its own frame: the JIT is free to inline it, and under the full
+    // parallel test gate it did, leaving a trace of just FormulaConverter.ToR1C1 /
+    // XLWorkbook.SetCellFormula. The detector then returned false, every later recovery retried the
+    // same unstripped package, and a workbook that loads fine on its own failed the load. Frame
+    // names are a JIT-dependent detail; the throwing method's declaring assembly is not.
     private static bool IsClosedXmlSharedFormulaReconstructionFailure(Exception exception)
     {
         for (var current = exception; current is not null; current = current.InnerException)
         {
-            if (current is ArgumentException &&
-                current.StackTrace?.Contains("ModContext", StringComparison.Ordinal) == true)
+            if (current is not ArgumentException argument)
+                continue;
+
+            if (IsClosedXmlAssembly(argument.TargetSite?.DeclaringType?.Assembly))
+                return true;
+
+            // TargetSite is null for exceptions that crossed a remoting/serialization boundary, and
+            // the frames that do survive still identify this path, so keep a trace-based check too.
+            var trace = argument.StackTrace;
+            if (trace is not null &&
+                (trace.Contains("ModContext", StringComparison.Ordinal) ||
+                 trace.Contains("FormulaConverter", StringComparison.Ordinal) ||
+                 trace.Contains("SetCellFormula", StringComparison.Ordinal)))
                 return true;
         }
 
         return false;
     }
+
+    private static bool IsClosedXmlAssembly(Assembly? assembly) =>
+        assembly?.GetName().Name?.StartsWith("ClosedXML", StringComparison.Ordinal) == true;
 
     private static readonly XNamespace SharedFormulaWorksheetNamespace =
         "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
