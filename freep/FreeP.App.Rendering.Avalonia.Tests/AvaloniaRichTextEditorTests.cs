@@ -479,7 +479,10 @@ public sealed class AvaloniaRichTextEditorTests
 
                 var appendedEditor = editor.Children.OfType<AvaloniaRichTextEditor>().Single();
                 appendedEditor.Text.Should().BeEmpty();
-                table.Rows.Should().HaveCount(2);
+                // The appended row is held in the editor's pending set until the edit commits, so
+                // the source table deliberately still has its original row here. The committed shape
+                // is asserted through EditedBody below.
+                table.Rows.Should().HaveCount(1);
 
                 var edited = editor.EditedBody;
                 var editedTable = edited.Paragraphs.Single().Runs.Single().InlineTable!.Table;
