@@ -13683,9 +13683,6 @@ public sealed partial class DocumentView : Control
             : null;
 
 
-    /// <summary>True while keyboard input is editing the first text run of a selected text box.</summary>
-    public bool IsShapeTextEditing => _shapeCaret is not null;
-
     /// <summary>Current selected text-box caret, or null when the object is not in text-edit mode.</summary>
     public (int BlockIndex, int RunIndex, int TextParagraphIndex, int TextRunIndex, int Offset)? ShapeTextCaretInfo =>
         _shapeCaret;
@@ -15517,19 +15514,6 @@ public sealed partial class DocumentView : Control
         if (sel.RunIndex < 0 || sel.RunIndex >= para.Runs.Count) return null;
         if (para.Runs[sel.RunIndex].Chart is not { } chart) return null;
         return (chart.Kind, chart.StyleId, chart.ColorSchemeId);
-    }
-
-    /// <summary>
-    /// AV-CHARTTAB: Read the selected SmartArt's current kind/colour-scheme, or null when the selected
-    /// float is not SmartArt. Used by tests and the contextual-tab live-state.
-    /// </summary>
-    public (SmartArtKind Kind, string? ColorSchemeId)? GetSelectedSmartArtInfo()
-    {
-        if (SelectedDrawingObjectInfo is not { Kind: "SmartArt" } sel) return null;
-        if (_doc.Blocks[sel.BlockIndex] is not Paragraph para) return null;
-        if (sel.RunIndex < 0 || sel.RunIndex >= para.Runs.Count) return null;
-        if (para.Runs[sel.RunIndex].SmartArt is not { } sa) return null;
-        return (sa.Kind, sa.ColorSchemeId);
     }
 
     /// <summary>
