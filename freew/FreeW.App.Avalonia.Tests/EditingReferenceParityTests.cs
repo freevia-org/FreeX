@@ -204,7 +204,13 @@ public sealed class EditingReferenceParityTests
             view.Document.Footnotes[1].PlainText.Should().Be("old");
 
             string? copied = null;
-            view.SetSelectionRangePublic(0, 2, 0, 7);
+            // InsertFootnote above prepends the footnote reference mark ("1") to the paragraph, so the
+            // word's offsets are one past where the authored text alone would put them. Derive them
+            // from the live text instead of hard-coding pre-footnote positions.
+            var paragraphText = ((Paragraph)view.Document.Blocks[0]).PlainText;
+            var happyStart = paragraphText.IndexOf("happy", StringComparison.Ordinal);
+            happyStart.Should().BeGreaterThanOrEqualTo(0);
+            view.SetSelectionRangePublic(0, happyStart, 0, happyStart + "happy".Length);
             var thesaurus = new ThesaurusPane(view, text => { copied = text; return Task.CompletedTask; });
             thesaurus.Toggle();
             thesaurus.HeadingForTest.Should().Be("happy");

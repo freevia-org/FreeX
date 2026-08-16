@@ -23,13 +23,16 @@ public sealed class ManualHyphenationDialogParityTests
             try
             {
                 var dialog = new ManualHyphenationDialog(Candidate());
+
+                // Show first: a Window builds no visual tree until it is shown, so querying visual
+                // descendants on the freshly constructed dialog finds no buttons at all.
+                var resultTask = dialog.ShowDialog<ManualHyphenationDialogResult?>(owner);
+
                 var buttons = dialog.GetVisualDescendants().OfType<Button>().ToArray();
                 var cancel = buttons.Single(button => button.Content?.ToString() == "Cancel");
 
                 cancel.IsCancel.Should().BeTrue();
                 cancel.IsDefault.Should().BeFalse();
-
-                var resultTask = dialog.ShowDialog<ManualHyphenationDialogResult?>(owner);
                 var escape = new KeyEventArgs
                 {
                     RoutedEvent = InputElement.KeyDownEvent,
