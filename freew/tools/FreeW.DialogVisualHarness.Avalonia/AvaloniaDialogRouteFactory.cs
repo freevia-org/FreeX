@@ -17,6 +17,7 @@ using FreeW.App.Presentation.Backstage;
 using FreeW.Core.Model;
 using FreeW.App.Presentation.Options;
 using FreeW.App.Presentation.Ribbon;
+using FreeW.App.Presentation.Shell;
 using FreeW.DialogVisualHarness;
 
 internal static class AvaloniaDialogRouteFactory
@@ -28,6 +29,9 @@ internal static class AvaloniaDialogRouteFactory
     {
         if (!FreeWDialogEvidenceCatalog.TryGet(routeId, out var route))
             return null;
+
+        if (routeId.Equals("save-compatibility-warning", StringComparison.OrdinalIgnoreCase))
+            return CreatePrivateWindow("SaveCompatibilityWarningDialog", CreateCompatibilityPlan());
 
         return route.Avalonia.OpenAction switch
         {
@@ -50,6 +54,25 @@ internal static class AvaloniaDialogRouteFactory
             _ => throw new InvalidOperationException($"Unsupported Avalonia dialog harness action {route.Avalonia.OpenAction} for {routeId}."),
         };
     }
+
+    private static Window CreatePrivateWindow(string typeName, params object?[] arguments)
+    {
+        var assembly = typeof(MainWindow).Assembly;
+        var type = assembly.GetType($"FreeW.App.Avalonia.{typeName}", throwOnError: true)!;
+        var constructor = type.GetConstructors(BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic)
+            .Single(candidate => candidate.GetParameters().Length == arguments.Length);
+        return (Window)(constructor.Invoke(arguments)
+            ?? throw new InvalidOperationException($"Avalonia visual-harness constructor returned null for {typeName}."));
+    }
+
+    private static DocumentSaveCompatibilityPlan CreateCompatibilityPlan() =>
+        DocumentSaveCompatibilityPlan.Warning(
+            "Word 97-2003 Document",
+            "This document contains features that may not be supported by the selected file format.",
+            [new DocumentSaveCompatibilityWarning(
+                DocumentSaveCompatibilityWarningKind.CompatibilityTarget,
+                "Compatibility check",
+                "Continue to save using the selected format.")]);
 
     private static Window CreateBookmarkManager(string state)
     {
