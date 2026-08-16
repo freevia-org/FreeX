@@ -63,21 +63,22 @@ internal static class WpfPresentationFileCommandSessionFactory
         var videoPort = new WpfPresentationVideoPort(
             videoExportAdapter ?? WindowsNativePrintOutput.CreateVideoAdapter(resolvedVideoCapability),
             BuildVideoExportHostCapabilities(resolvedVideoCapability));
-        session = new PresentationFileCommandSession(
-            getModel,
-            loadModel,
-            lifecycle,
-            picker,
-            render,
-            print,
-            videoPort,
-            new WpfPresentationFileFeedbackPort(workflow),
-            getImageExportRange,
-            getPrintCurrentSlideNumber,
-            getPrintSelectedSlideNumbers,
-            videoPackageArtifactFactory: videoFramePackageArtifactFactory,
-            confirmExternallyModifiedOverwriteAsync: (path, ct) =>
-                workflow.ConfirmExternallyModifiedOverwriteAsync(path, ct).AsTask());
+        session = PresentationFileCommandSessionFactory.Create(
+            new PresentationFileCommandSessionComposition(
+                getModel,
+                loadModel,
+                lifecycle,
+                picker,
+                render,
+                print,
+                videoPort,
+                new WpfPresentationFileFeedbackPort(workflow),
+                getImageExportRange,
+                getPrintCurrentSlideNumber,
+                getPrintSelectedSlideNumbers,
+                VideoPackageArtifactFactory: videoFramePackageArtifactFactory,
+                ConfirmExternallyModifiedOverwriteAsync: (path, ct) =>
+                    workflow.ConfirmExternallyModifiedOverwriteAsync(path, ct).AsTask()));
         return session;
     }
 

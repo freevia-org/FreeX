@@ -521,25 +521,27 @@ public sealed partial class MainWindow : Window,
             // MainWindow.AssetImports.cs's own `_messageService ?? new AvaloniaUserMessageService`
             // fallback. Null keeps the production owner-parented dialog.
             messageService: messageService);
-        _fileSession = new PresentationFileCommandSession(
-            () => _presentation,
-            LoadPresentationContent,
-            new PresentationFileLifecycleAdapter(
-                _fileWorkflow.Workflow,
-                (action, load) => _fileWorkflow.NewAsync(action, load),
-                _fileWorkflow.OpenAsync,
-                _fileWorkflow.ConfirmCloseAllowedAsync),
-            new AvaloniaPresentationFilePickerPort(this),
-            new AvaloniaPresentationFileRenderPort(),
-            new AvaloniaPresentationPrintPort(this),
-            new AvaloniaPresentationVideoPort(this, _videoExportSession),
-            new AvaloniaPresentationFileFeedbackPort(this),
-            getImageExportRange: () => PresentationExportPlanner.BuildCurrentSlideRangeRequest(Editor.CurrentSlideIndex),
-            getPrintCurrentSlideNumber: () => Editor.CurrentSlideIndex + 1,
-            printPackageFactory: _printOutputPackageFactory,
-            videoPackageArtifactFactory: _videoFramePackageArtifactFactory,
-            confirmExternallyModifiedOverwriteAsync: (path, ct) =>
-                _fileWorkflow.ConfirmExternallyModifiedOverwriteAsync(path, ct).AsTask());
+        _fileSession = PresentationFileCommandSessionFactory.Create(
+            new PresentationFileCommandSessionComposition(
+                () => _presentation,
+                LoadPresentationContent,
+                new PresentationFileLifecycleAdapter(
+                    _fileWorkflow.Workflow,
+                    (action, load) => _fileWorkflow.NewAsync(action, load),
+                    _fileWorkflow.OpenAsync,
+                    _fileWorkflow.ConfirmCloseAllowedAsync),
+                new AvaloniaPresentationFilePickerPort(this),
+                new AvaloniaPresentationFileRenderPort(),
+                new AvaloniaPresentationPrintPort(this),
+                new AvaloniaPresentationVideoPort(this, _videoExportSession),
+                new AvaloniaPresentationFileFeedbackPort(this),
+                GetImageExportRange: () =>
+                    PresentationExportPlanner.BuildCurrentSlideRangeRequest(Editor.CurrentSlideIndex),
+                GetPrintCurrentSlideNumber: () => Editor.CurrentSlideIndex + 1,
+                PrintPackageFactory: _printOutputPackageFactory,
+                VideoPackageArtifactFactory: _videoFramePackageArtifactFactory,
+                ConfirmExternallyModifiedOverwriteAsync: (path, ct) =>
+                    _fileWorkflow.ConfirmExternallyModifiedOverwriteAsync(path, ct).AsTask()));
         RecordStartupObservation("file-workflow-created");
         _closeCoordinator = new SisterAvaloniaAsyncWindowCloseCoordinator(
             confirmCloseAllowedAsync: () => _fileSession.ConfirmCloseAllowedAsync(),

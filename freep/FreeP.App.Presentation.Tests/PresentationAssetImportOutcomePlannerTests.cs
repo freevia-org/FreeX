@@ -124,6 +124,11 @@ public sealed class PresentationAssetImportOutcomePlannerTests
             "freep",
             "FreeP.App.Presentation",
             "PresentationAssetImportHostSession.cs");
+        var sharedPorts = Read(
+            root,
+            "freep",
+            "FreeP.App.Presentation",
+            "PresentationAssetImportPortAdapters.cs");
         var wpfAdapter = Read(root, "freep", "FreeP.App.Host", "MainWindow.AssetImports.cs");
         var wpfWindow = Read(root, "freep", "FreeP.App.Host", "MainWindow.cs");
         var avaloniaAdapter = Read(root, "freep", "FreeP.App.Avalonia", "MainWindow.AssetImports.cs");
@@ -133,11 +138,19 @@ public sealed class PresentationAssetImportOutcomePlannerTests
             .And.Contain("messageService.ShowMessageAsync(message, cancellationToken)")
             .And.Contain("new PresentationAssetImportWorkflow(")
             .And.Contain("new PresentationAssetImportExecutionPort(_editor, callbacks)");
+        sharedPorts.Should().Contain("PresentationAssetPickerAdapter")
+            .And.Contain("PresentationAssetReaderAdapter<TSource>")
+            .And.NotContain("System.Windows")
+            .And.NotContain("Avalonia");
         wpfAdapter.Should().Contain("PresentationAssetImportHostSession")
+            .And.Contain("new PresentationAssetPickerAdapter(PickPresentationAssetAsync)")
+            .And.Contain("new PresentationAssetReaderAdapter<string>(")
             .And.Contain("Action<string>? statusTarget = null")
             .And.Contain("_messageService ?? new WpfUserMessageService(this)")
             .And.Contain("AssetImportSession.MaterializeOutcomeAsync(")
             .And.NotContain("new PresentationAssetImportWorkflow(")
+            .And.NotContain("WpfPresentationAssetPickerPort")
+            .And.NotContain("WpfPresentationAssetReaderPort")
             .And.NotContain("PresentationAssetImportOutcomePlanner.Plan(")
             .And.NotContain("MessageBox.Show(");
         wpfWindow.Should().Contain("PresentationAssetImportOutcomePolicy.ModalError")
@@ -146,10 +159,14 @@ public sealed class PresentationAssetImportOutcomePlannerTests
             .And.NotContain("Could not replace SmartArt picture:")
             .And.NotContain("MessageBox.Show(this, result.Message");
         avaloniaAdapter.Should().Contain("PresentationAssetImportHostSession")
+            .And.Contain("new PresentationAssetPickerAdapter(PickPresentationAssetAsync)")
+            .And.Contain("new PresentationAssetReaderAdapter<IStorageFile>(")
             .And.Contain("Action<string>? statusTarget = null")
             .And.Contain("_messageService ?? new AvaloniaUserMessageService(this)")
             .And.Contain("AssetImportSession.MaterializeOutcomeAsync(")
             .And.NotContain("new PresentationAssetImportWorkflow(")
+            .And.NotContain("AvaloniaPresentationAssetPickerPort")
+            .And.NotContain("AvaloniaPresentationAssetReaderPort")
             .And.NotContain("PresentationAssetImportOutcomePlanner.Plan(")
             .And.NotContain("switch (result.Status)")
             .And.NotContain("SisterAppFileTextPlanner.FormatCommand");

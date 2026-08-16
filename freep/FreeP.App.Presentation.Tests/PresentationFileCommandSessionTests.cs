@@ -546,17 +546,18 @@ public sealed class PresentationFileCommandSessionTests : IDisposable
         Func<PresentationVideoExportRequest?, PresentationVideoFramePackageArtifact>?
             videoPackageArtifactFactory = null,
         Func<string, CancellationToken, Task<bool>>? confirmExternallyModifiedOverwriteAsync = null) =>
-        new(
-            getPresentation,
-            loadPresentation,
-            lifecycle,
-            picker,
-            render ?? new FakeRenderPort(),
-            print ?? new FakePrintPort(),
-            video ?? new FakeVideoPort(),
-            feedback,
-            videoPackageArtifactFactory: videoPackageArtifactFactory,
-            confirmExternallyModifiedOverwriteAsync: confirmExternallyModifiedOverwriteAsync);
+        PresentationFileCommandSessionFactory.Create(
+            new PresentationFileCommandSessionComposition(
+                getPresentation,
+                loadPresentation,
+                lifecycle,
+                picker,
+                render ?? new FakeRenderPort(),
+                print ?? new FakePrintPort(),
+                video ?? new FakeVideoPort(),
+                feedback,
+                VideoPackageArtifactFactory: videoPackageArtifactFactory,
+                ConfirmExternallyModifiedOverwriteAsync: confirmExternallyModifiedOverwriteAsync));
 
     private sealed class FakeLifecyclePort : IPresentationFileLifecyclePort
     {

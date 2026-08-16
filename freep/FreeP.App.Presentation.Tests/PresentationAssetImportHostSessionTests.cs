@@ -77,6 +77,49 @@ public sealed class PresentationAssetImportHostSessionTests
             .Which.Should().Be(failure.Message);
     }
 
+    [Fact]
+    public async Task NativePortAdapters_ForwardPickerAndReadWhileOwningTypedSourceLifetime()
+    {
+        var request = PresentationAssetImportRequest.Create(PresentationAssetImportKind.Picture);
+        var nativeSource = new DisposableAssetSource();
+        var picker = new PresentationAssetPickerAdapter((observed, cancellationToken) =>
+        {
+            observed.Should().BeSameAs(request);
+            cancellationToken.Should().Be(CancellationToken.None);
+            return Task.FromResult(PresentationAssetPickerResult.Selected("asset.png", nativeSource));
+        });
+        var reader = new PresentationAssetReaderAdapter<DisposableAssetSource>(
+            static (_, _) => Task.FromResult<byte[]>([4, 5, 6]),
+            static source => source.Dispose());
+
+        var picked = await picker.PickAsync(request, CancellationToken.None);
+        var bytes = await reader.ReadAsync(picked.Selection!, CancellationToken.None);
+
+        bytes.Should().Equal(4, 5, 6);
+        nativeSource.Disposed.Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task NativeReaderAdapter_RejectsMismatchedSourcesWithoutInvokingReader()
+    {
+        var invoked = false;
+        var reader = new PresentationAssetReaderAdapter<DisposableAssetSource>(
+            (_, _) =>
+            {
+                invoked = true;
+                return Task.FromResult<byte[]>([]);
+            },
+            invalidSourceMessage: _ => "invalid native source");
+
+        var act = () => reader.ReadAsync(
+            new PresentationAssetSelection("asset.png", "wrong"),
+            CancellationToken.None);
+
+        await act.Should().ThrowAsync<InvalidOperationException>()
+            .WithMessage("invalid native source");
+        invoked.Should().BeFalse();
+    }
+
     private static EditingSession CreateEditor()
     {
         var presentation = Presentation.CreateEmpty();
@@ -95,6 +138,13 @@ public sealed class PresentationAssetImportHostSessionTests
         public Task<byte[]> ReadAsync(
             PresentationAssetSelection selection,
             CancellationToken cancellationToken) => Task.FromResult(bytes);
+    }
+
+    private sealed class DisposableAssetSource : IDisposable
+    {
+        public bool Disposed { get; private set; }
+
+        public void Dispose() => Disposed = true;
     }
 
     private sealed class RecordingMessageService : IUserMessageService

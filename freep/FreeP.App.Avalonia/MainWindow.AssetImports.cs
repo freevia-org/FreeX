@@ -10,8 +10,13 @@ public sealed partial class MainWindow
 
     private PresentationAssetImportHostSession AssetImportSession =>
         _assetImportSession ??= new PresentationAssetImportHostSession(
-            new AvaloniaPresentationAssetPickerPort(this),
-            new AvaloniaPresentationAssetReaderPort(),
+            new PresentationAssetPickerAdapter(PickPresentationAssetAsync),
+            new PresentationAssetReaderAdapter<IStorageFile>(
+                static (file, cancellationToken) => FileByteReadWorkflow.ReadStreamBytesAsync(
+                    file.OpenReadAsync,
+                    cancellationToken),
+                static file => file.Dispose(),
+                _ => UiText.Get("File_Error_InvalidAvaloniaAssetSelection")),
             Editor,
             new PresentationAssetImportExecutionCallbacks(
                 ApplyPictureBullet: ApplyImportedPictureBullet,
@@ -49,59 +54,33 @@ public sealed partial class MainWindow
             _messageService ?? new AvaloniaUserMessageService(this),
             statusTarget);
 
-    private sealed class AvaloniaPresentationAssetPickerPort(MainWindow owner) : IPresentationAssetPickerPort
+    private async Task<PresentationAssetPickerResult> PickPresentationAssetAsync(
+        PresentationAssetImportRequest request,
+        CancellationToken cancellationToken)
     {
-        public async Task<PresentationAssetPickerResult> PickAsync(
-            PresentationAssetImportRequest request,
-            CancellationToken cancellationToken)
+        cancellationToken.ThrowIfCancellationRequested();
+        if (!AvaloniaFilePickerService.CanOpen(StorageProvider))
         {
-            cancellationToken.ThrowIfCancellationRequested();
-            if (!AvaloniaFilePickerService.CanOpen(owner.StorageProvider))
-            {
-                return PresentationAssetPickerResult.Unavailable(
-                    UiText.Format(
-                        "File_Error_PlatformPickerUnavailableFormat",
-                        request.CommandName));
-            }
-
-            var file = await AvaloniaFilePickerService.PickSingleOpenFileAsync(
-                owner.StorageProvider,
-                AvaloniaFilePickerOpenRequest.FromFileTypes(
-                    request.PickerTitle,
-                    [ResolveFileType(request.PickerProfile.Avalonia)]));
-            return file is null
-                ? PresentationAssetPickerResult.Cancelled
-                : PresentationAssetPickerResult.Selected(file.Name, file);
+            return PresentationAssetPickerResult.Unavailable(
+                UiText.Format(
+                    "File_Error_PlatformPickerUnavailableFormat",
+                    request.CommandName));
         }
 
-        private static FilePickerFileType ResolveFileType(
-            PresentationAssetPickerFileTypeProfile profile) =>
-            AvaloniaFilePickerTypeAdapter.CreateFileType(
-                profile.DisplayName,
-                profile.Patterns,
-                profile.MimeTypes);
+        var file = await AvaloniaFilePickerService.PickSingleOpenFileAsync(
+            StorageProvider,
+            AvaloniaFilePickerOpenRequest.FromFileTypes(
+                request.PickerTitle,
+                [ResolvePresentationAssetFileType(request.PickerProfile.Avalonia)]));
+        return file is null
+            ? PresentationAssetPickerResult.Cancelled
+            : PresentationAssetPickerResult.Selected(file.Name, file);
     }
 
-    private sealed class AvaloniaPresentationAssetReaderPort : IPresentationAssetReaderPort
-    {
-        public async Task<byte[]> ReadAsync(
-            PresentationAssetSelection selection,
-            CancellationToken cancellationToken)
-        {
-            if (selection.Source is not IStorageFile file)
-                throw new InvalidOperationException(
-                    UiText.Get("File_Error_InvalidAvaloniaAssetSelection"));
-
-            try
-            {
-                return await FileByteReadWorkflow.ReadStreamBytesAsync(
-                    file.OpenReadAsync,
-                    cancellationToken);
-            }
-            finally
-            {
-                file.Dispose();
-            }
-        }
-    }
+    private static FilePickerFileType ResolvePresentationAssetFileType(
+        PresentationAssetPickerFileTypeProfile profile) =>
+        AvaloniaFilePickerTypeAdapter.CreateFileType(
+            profile.DisplayName,
+            profile.Patterns,
+            profile.MimeTypes);
 }
