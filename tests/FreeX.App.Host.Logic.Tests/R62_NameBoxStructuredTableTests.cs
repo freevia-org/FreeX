@@ -22,17 +22,35 @@ public sealed class R62_NameBoxStructuredTableTests
     private static GridRange? GetSelectedRange(MainWindow window) =>
         ((SheetGridView)window.FindName("SheetGrid")!).SelectedRange;
 
-    private static bool PressEnter(MainWindow window, ComboBox box)
+    /// <summary>
+    /// Presses Enter on the Name Box and reports whether the handler took it, along with the state
+    /// the handler actually branched on.
+    /// </summary>
+    /// <remarks>
+    /// CellAddressBox_KeyDown returns without handling unless the modifiers are None, and it reads
+    /// them from the KeyboardDevice rather than from the event we construct -- WPF resolves those
+    /// from the Win32 async key state, which is global to the desktop rather than private to this
+    /// test. Under the full 31-assembly gate other UI-driving test processes are synthesising input
+    /// at the same time, and this test failed there with a bare "expected True, found False" while
+    /// passing alone and passing with its own 1,455-test assembly alone. Report the branch inputs so
+    /// a recurrence identifies its own cause instead of only proving that something went wrong.
+    /// </remarks>
+    private static (bool Handled, string Diagnostics) PressEnter(MainWindow window, ComboBox box)
     {
         var source = PresentationSource.FromVisual(window)
             ?? throw new InvalidOperationException("MainWindow presentation source is not available.");
+        var modifiersBefore = Keyboard.PrimaryDevice.Modifiers;
         var args = new KeyEventArgs(Keyboard.PrimaryDevice, source, Environment.TickCount, Key.Enter)
         {
             RoutedEvent = Keyboard.KeyDownEvent
         };
         R49MainWindowTestHarness.Invoke(window, "CellAddressBox_KeyDown", box, args);
         R49MainWindowTestHarness.PumpDispatcher();
-        return args.Handled;
+
+        var diagnostics =
+            $"modifiers before={modifiersBefore}, during={args.KeyboardDevice.Modifiers}, " +
+            $"box.Text='{box.Text}'";
+        return (args.Handled, diagnostics);
     }
 
     [Fact]
@@ -59,7 +77,9 @@ public sealed class R62_NameBoxStructuredTableTests
                 box.Text = "SalesTable";
                 R49MainWindowTestHarness.PumpDispatcher();
 
-                PressEnter(window, box).Should().BeTrue();
+                var enter = PressEnter(window, box);
+                enter.Handled.Should().BeTrue(
+                    "the Name Box must take Enter ({0})", enter.Diagnostics);
 
                 var expectedDataBody = new GridRange(
                     new CellAddress(sheet.Id, 2, 1),
@@ -95,7 +115,9 @@ public sealed class R62_NameBoxStructuredTableTests
                 box.Text = "BrandNewName";
                 R49MainWindowTestHarness.PumpDispatcher();
 
-                PressEnter(window, box).Should().BeTrue();
+                var enter = PressEnter(window, box);
+                enter.Handled.Should().BeTrue(
+                    "the Name Box must take Enter ({0})", enter.Diagnostics);
 
                 workbook.NamedRanges.Should().ContainKey("BrandNewName",
                     "typing a brand-new, non-colliding name in the Name Box must still define it, exactly as before this fix");
