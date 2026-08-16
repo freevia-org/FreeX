@@ -882,9 +882,27 @@ internal sealed class AvaloniaRichTextEditingSurface : Control
                     localStart + Math.Max(0, line.Length - line.NewLineLength),
                     localStart,
                     item.Paragraph.Text.Length);
+                // A wrapped line's final caret sits at that line's trailing edge, but the position
+                // is shared with the next line's start and HitTestTextPosition resolves it there --
+                // reporting the following line's left edge. Vertical navigation then carries that X
+                // downward and lands back on the same logical position. Use the line's own trailing
+                // edge for it; a line that genuinely ends the paragraph has no such ambiguity.
+                bool wrapsToNextLine = line.NewLineLength == 0
+                    && localEnd < item.Paragraph.Text.Length;
+                double lineTrailingX = item.Origin.X
+                    + line.Start
+                    + line.WidthIncludingTrailingWhitespace
+                    - _scrollOffsetX;
                 var carets = Enumerable.Range(localStart, localEnd - localStart + 1)
                     .Select(localPosition =>
                     {
+                        if (wrapsToNextLine && localPosition == localEnd)
+                        {
+                            return new InCanvasTextVisualCaret(
+                                item.Paragraph.GlobalStart + localPosition,
+                                lineTrailingX);
+                        }
+
                         var hit = item.Layout.HitTestTextPosition(localPosition);
                         return new InCanvasTextVisualCaret(
                             item.Paragraph.GlobalStart + localPosition,
