@@ -1564,11 +1564,13 @@ public sealed class WorkbookSession : IDisposable
     {
         var targetRange = SelectedRange;
         var title = WorkbookWorksheetStructureResult.GetCommandTitle(operation);
+        var originBeforeEdit = ViewportOrigin;
         var result = ExecuteRepeatableCommandPreservingSelection(
             () => CreateGroupedSelectionRangeCommand(
                 title,
                 OrderStructuralRanges(operation, GetSelectionSizingRanges()),
                 (sheetId, range) => CreateWorksheetStructureCommand(operation, range, sheetId)));
+        RestoreViewportOriginAfterStructuralEdit(originBeforeEdit);
         return new WorkbookWorksheetStructureResult(result, operation, targetRange);
     }
 
@@ -1590,12 +1592,25 @@ public sealed class WorkbookSession : IDisposable
         WorkbookWorksheetStructureOperation operation,
         GridRange targetRange)
     {
+        var originBeforeEdit = ViewportOrigin;
         var result = ExecuteRepeatableCommandPreservingSelection(
             () => CreateWorksheetStructureCommand(
                 operation,
                 RemapRangeToSheet(targetRange, ActiveSheet.Id)));
+        RestoreViewportOriginAfterStructuralEdit(originBeforeEdit);
         return new WorkbookWorksheetStructureResult(result, operation, targetRange);
     }
+
+    /// <summary>
+    /// Re-selecting the preserved range after a structural edit scrolls that range back into view, so
+    /// an edit made against a selection that sits OUTSIDE the current viewport dragged the view onto
+    /// it. R76 requires the opposite: an edit strictly below/right of the view must not move the view
+    /// at all, and an edit at/above it moves by exactly the inserted/deleted count -- a shift the
+    /// shells apply deliberately afterwards. Preserving the selection therefore has to preserve the
+    /// scroll origin too, leaving that shift as the only thing that moves the view.
+    /// </summary>
+    private void RestoreViewportOriginAfterStructuralEdit((uint TopRow, uint LeftCol) origin) =>
+        SetViewportOrigin(origin.TopRow, origin.LeftCol);
 
     private IWorkbookCommand CreateWorksheetStructureCommand(
         WorkbookWorksheetStructureOperation operation,

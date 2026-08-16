@@ -151,7 +151,7 @@ public sealed partial class MainWindow
     private void InsertSheetRows()
     {
         ApplyWorksheetStructureResult(
-            _session.InsertSelectedRows(),
+            () => _session.InsertSelectedRows(),
             UiText.Get("RibbonWire_InsertedSheetRows"),
             UiText.Get("RibbonWire_InsertSheetRowsFailed"));
     }
@@ -159,7 +159,7 @@ public sealed partial class MainWindow
     private void InsertSheetColumns()
     {
         ApplyWorksheetStructureResult(
-            _session.InsertSelectedColumns(),
+            () => _session.InsertSelectedColumns(),
             UiText.Get("RibbonWire_InsertedSheetColumns"),
             UiText.Get("RibbonWire_InsertSheetColumnsFailed"));
     }
@@ -167,7 +167,7 @@ public sealed partial class MainWindow
     private void DeleteSheetRows()
     {
         ApplyWorksheetStructureResult(
-            _session.DeleteSelectedRows(),
+            () => _session.DeleteSelectedRows(),
             UiText.Get("RibbonWire_DeletedSheetRows"),
             UiText.Get("RibbonWire_DeleteSheetRowsFailed"));
     }
@@ -175,7 +175,7 @@ public sealed partial class MainWindow
     private void DeleteSheetColumns()
     {
         ApplyWorksheetStructureResult(
-            _session.DeleteSelectedColumns(),
+            () => _session.DeleteSelectedColumns(),
             UiText.Get("RibbonWire_DeletedSheetColumns"),
             UiText.Get("RibbonWire_DeleteSheetColumnsFailed"));
     }
@@ -204,33 +204,44 @@ public sealed partial class MainWindow
     /// before the RefreshShell() call every caller already makes, since that is what rebuilds the
     /// grid from ActiveSheet.ViewTopRow.
     /// </summary>
-    private void ShiftScrollOriginForRowEdit(uint editRow, int rowDelta)
+    // The origin is passed in because it must be sampled BEFORE the structural edit (see
+    // ApplyWorksheetStructureResult), and it is applied through the SESSION rather than
+    // Sheet.ViewTopRow: the scroll origin is per-VIEW state that WorkbookSession keeps in
+    // _viewViewportOrigins -- so sibling windows on one shared workbook scroll independently -- and
+    // reads in preference to the sheet's persisted value. Writing the model directly left that cache
+    // holding the pre-edit origin, so the shift was discarded the next time the grid asked the
+    // session where the view starts.
+    private void ShiftScrollOriginForRowEdit(
+        uint editRow,
+        int rowDelta,
+        uint currentTopRow,
+        uint currentLeftCol)
     {
-        var sheet = _session.ActiveSheet;
-        var currentTopRow = WorkbookViewportScrollPlanner.GetViewportRowOrigin(sheet);
         var newTopRow = WorkbookViewportScrollPlanner.PlanStructuralEditOriginShift(
             currentTopRow,
             editRow,
             rowDelta,
             CellAddress.MaxRow);
         if (newTopRow is not null)
-            sheet.ViewTopRow = newTopRow.Value;
+            _session.SetViewportOrigin(newTopRow.Value, currentLeftCol);
     }
 
     /// <summary>
     /// Column counterpart of <see cref="ShiftScrollOriginForRowEdit"/> for Insert/Delete Columns.
     /// </summary>
-    private void ShiftScrollOriginForColEdit(uint editCol, int colDelta)
+    private void ShiftScrollOriginForColEdit(
+        uint editCol,
+        int colDelta,
+        uint currentTopRow,
+        uint currentLeftCol)
     {
-        var sheet = _session.ActiveSheet;
-        var currentLeftCol = WorkbookViewportScrollPlanner.GetViewportColumnOrigin(sheet);
         var newLeftCol = WorkbookViewportScrollPlanner.PlanStructuralEditOriginShift(
             currentLeftCol,
             editCol,
             colDelta,
             CellAddress.MaxCol);
         if (newLeftCol is not null)
-            sheet.ViewLeftCol = newLeftCol.Value;
+            _session.SetViewportOrigin(currentTopRow, newLeftCol.Value);
     }
 
     // ── Home ▸ Cells ▸ Format ▸ Lock Cell ────────────────────────────────────────
