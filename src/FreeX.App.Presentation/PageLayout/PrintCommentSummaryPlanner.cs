@@ -21,7 +21,7 @@ public static class PrintCommentSummaryPlanner
     public const double HeaderHeight = 34.0;
     public const double LineHeight = 24.0;
     public const int MaxOverlayLines = 3;
-    public const string Ellipsis = "\u2026";
+    public const string Ellipsis = MeasuredTextWrapPlanner.Ellipsis;
 
     /// <summary>
     /// Returns only notes/threaded comments whose row and column are printed together by at least one
@@ -134,106 +134,6 @@ public static class PrintCommentSummaryPlanner
         string text,
         double maxWidth,
         Func<string, double> measureWidth,
-        int maxLines = MaxOverlayLines)
-    {
-        ArgumentNullException.ThrowIfNull(text);
-        ArgumentNullException.ThrowIfNull(measureWidth);
-
-        if (maxLines <= 0)
-            return [];
-
-        var width = Math.Max(1, maxWidth);
-        var lines = new List<string>();
-        var hardLines = text.Replace("\r\n", "\n", StringComparison.Ordinal)
-            .Replace('\r', '\n')
-            .Split('\n');
-
-        var truncated = false;
-        for (var hardLineIndex = 0; hardLineIndex < hardLines.Length && lines.Count < maxLines && !truncated; hardLineIndex++)
-        {
-            truncated = AddWrappedHardLine(
-                lines,
-                hardLines[hardLineIndex],
-                width,
-                measureWidth,
-                maxLines);
-        }
-
-        if (lines.Count > 0 &&
-            !lines[^1].EndsWith(Ellipsis, StringComparison.Ordinal) &&
-            (truncated || lines.Count == maxLines && ProducesMoreLines(text, lines, width, measureWidth, maxLines)))
-        {
-            lines[^1] = TrimToWidth(lines[^1], width, measureWidth);
-        }
-
-        return lines;
-    }
-
-    private static bool AddWrappedHardLine(
-        ICollection<string> lines,
-        string hardLine,
-        double maxWidth,
-        Func<string, double> measureWidth,
-        int maxLines)
-    {
-        var words = hardLine.Split(' ', StringSplitOptions.RemoveEmptyEntries);
-        if (words.Length == 0)
-        {
-            if (lines.Count < maxLines)
-                lines.Add("");
-            return false;
-        }
-
-        var index = 0;
-        while (index < words.Length && lines.Count < maxLines)
-        {
-            var line = words[index++];
-            while (index < words.Length && FitsWidth($"{line} {words[index]}", maxWidth, measureWidth))
-                line = $"{line} {words[index++]}";
-
-            if (!FitsWidth(line, maxWidth, measureWidth))
-            {
-                lines.Add(TrimToWidth(line, maxWidth, measureWidth));
-                return true;
-            }
-
-            lines.Add(line);
-        }
-
-        return index < words.Length;
-    }
-
-    private static bool ProducesMoreLines(
-        string originalText,
-        IReadOnlyList<string> emittedLines,
-        double maxWidth,
-        Func<string, double> measureWidth,
-        int maxLines)
-    {
-        var replay = new List<string>();
-        var hardLines = originalText.Replace("\r\n", "\n", StringComparison.Ordinal)
-            .Replace('\r', '\n')
-            .Split('\n');
-
-        foreach (var hardLine in hardLines)
-        {
-            AddWrappedHardLine(replay, hardLine, maxWidth, measureWidth, int.MaxValue);
-            if (replay.Count > maxLines)
-                return true;
-        }
-
-        return replay.Count > emittedLines.Count;
-    }
-
-    private static bool FitsWidth(string text, double maxWidth, Func<string, double> measureWidth) =>
-        measureWidth(text) <= maxWidth;
-
-    private static string TrimToWidth(string text, double maxWidth, Func<string, double> measureWidth)
-    {
-        var candidate = text.TrimEnd();
-        while (candidate.Length > 0 && !FitsWidth(candidate + Ellipsis, maxWidth, measureWidth))
-            candidate = candidate[..^1].TrimEnd();
-
-        return candidate.Length == 0 ? Ellipsis : candidate + Ellipsis;
-    }
+        int maxLines = MaxOverlayLines) =>
+        MeasuredTextWrapPlanner.WrapWithCharacterEllipsis(text, maxWidth, measureWidth, maxLines);
 }
