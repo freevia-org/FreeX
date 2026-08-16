@@ -450,6 +450,13 @@ public sealed class DocumentViewHeadlessTests
         var ran = await OnUiThread(() =>
         {
             var doc = TextDocument.CreateEmpty();
+            // Word's cadence is opt-in per document: ImportedWordLineSpacingPlanner only calibrates
+            // when the package omitted the docDefaults that Word itself omits, which is what these
+            // two flags model and what DocxReader sets. Model-authored documents deliberately keep
+            // the host text engine's natural line box, so this evidence has to declare the Word
+            // provenance it is measuring rather than rely on CreateEmpty's defaults.
+            doc.UseWordApplicationDefaultLineSpacing = true;
+            doc.UseWordApplicationDefaultRunFormatting = true;
             doc.Blocks.Clear();
             doc.Blocks.Add(new Paragraph("First body paragraph."));
             doc.Blocks.Add(new Paragraph("Second body paragraph."));

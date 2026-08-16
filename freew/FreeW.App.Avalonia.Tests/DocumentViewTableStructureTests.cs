@@ -226,6 +226,7 @@ public sealed class DocumentViewTableStructureTests
     {
         int headerCellCount = -1;
         int renderedCellCount = -1;
+        int renderedRowCount = -1;
         string? renderedText = null;
         var ran = await OnUiThread(() =>
         {
@@ -245,14 +246,21 @@ public sealed class DocumentViewTableStructureTests
             var hits = GetTableCellHits(view);
             headerCellCount = hits.Count(hit => hit.Row == 0);
             renderedCellCount = hits.Count;
+            renderedRowCount = hits.Select(hit => hit.Row).Distinct().Count();
             renderedText = string.Concat(view.GetPlacedForBlock(tableBlockIndex).Select(glyph => glyph.Ch));
         });
 
         ran.Should().BeTrue("the Avalonia dispatcher and renderer must be available for merge pagination evidence");
         headerCellCount.Should().Be(4,
             "a vertical-merge table must not synthesize repeated header rows from the shared multi-page plan");
-        renderedCellCount.Should().Be(36,
-            "disabling synthetic segmentation must preserve all nine source rows and four cells per row");
+        renderedRowCount.Should().Be(9,
+            "disabling synthetic segmentation must preserve all nine source rows");
+        // Nine rows x four cells, minus the one vertical-merge continuation this test installs on
+        // row 2: like Word, a continuation gets no hit region of its own -- clicking it lands in the
+        // cell that started the merge -- so 35 boxes for 36 source cells is the correct total. The
+        // row count above is what actually guards against segmentation dropping rows.
+        renderedCellCount.Should().Be(35,
+            "every source cell except the vertical-merge continuation must be independently hit-testable");
         renderedText.Should().Contain("Segment 8");
     }
 
