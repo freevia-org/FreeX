@@ -65,6 +65,10 @@ public sealed class TextToColumnsDialogLifecycleRegressionTests
                         RawInputModifiers.None,
                         out var escapeError)
                     .Should().BeTrue(escapeError);
+                // ConfigureDeferredDialogCancel posts the cancel at Input priority rather than closing
+                // inline, so the dialog is still visible until the dispatcher runs -- pump it the same
+                // way every other step in this test does.
+                Dispatcher.UIThread.RunJobs(DispatcherPriority.Input);
                 dialog.IsVisible.Should().BeFalse();
             }
             finally

@@ -156,15 +156,48 @@ function Resolve-FreeXExecutablePath($requestedExePath) {
     throw "FreeX capture executable was not found. Pass -ExePath with an existing FreeX.ParityCapture.Wpf.exe or build the Release capture host before running tools\screenshot_ribbon.ps1."
 }
 
+function Resolve-FreeXCaptureAssemblyPath($executablePath) {
+    $assemblyPath = if ([System.IO.Path]::GetExtension($executablePath) -ieq ".dll") {
+        $executablePath
+    } else {
+        [System.IO.Path]::ChangeExtension($executablePath, ".dll")
+    }
+
+    if (Test-Path -LiteralPath $assemblyPath -PathType Leaf) {
+        return [System.IO.Path]::GetFullPath($assemblyPath)
+    }
+
+    throw "FreeX capture assembly was not found at $assemblyPath. Build the matching FreeX.ParityCapture.Wpf host so its DLL is next to the executable before running tools\screenshot_ribbon.ps1."
+}
+
+function Resolve-DotNetHostPath {
+    $dotnetCommand = Get-Command "dotnet.exe" -ErrorAction SilentlyContinue
+    if ($null -ne $dotnetCommand -and -not [string]::IsNullOrWhiteSpace($dotnetCommand.Source)) {
+        return $dotnetCommand.Source
+    }
+
+    $dotnetCommand = Get-Command "dotnet" -ErrorAction SilentlyContinue
+    if ($null -ne $dotnetCommand -and -not [string]::IsNullOrWhiteSpace($dotnetCommand.Source)) {
+        return $dotnetCommand.Source
+    }
+
+    throw "The dotnet host was not found. Install the .NET Windows Desktop runtime used by FreeX before running tools\screenshot_ribbon.ps1."
+}
+
 # Get screen DPI to calculate physical pixels for a 300px logical capture
 $dpi   = [ScreenshotWin32]::GetScreenDpi()
 $scale = $dpi / 96.0
 Write-Host "Screen DPI: $dpi  Scale: $scale"
 
 $exe = Resolve-FreeXExecutablePath $ExePath
+$captureAssembly = Resolve-FreeXCaptureAssemblyPath $exe
+$dotnetHost = Resolve-DotNetHostPath
 
-$proc = Start-Process -FilePath $exe -WorkingDirectory (Split-Path -Parent $exe) -PassThru
-Write-Host "Launched PID $($proc.Id)"
+# Launch the managed assembly through the installed dotnet host rather than the generated apphost.
+# The apphost can surface the generic ".NET install/update" modal on an otherwise capable machine,
+# whereas the host selected by the active dotnet installation starts the same assembly normally.
+$proc = Start-Process -FilePath $dotnetHost -ArgumentList @($captureAssembly) -WorkingDirectory (Split-Path -Parent $captureAssembly) -PassThru
+Write-Host "Launched PID $($proc.Id) through $dotnetHost"
 
 $hwnd = [IntPtr]::Zero
 for ($i = 0; $i -lt 40; $i++) {
@@ -173,14 +206,14 @@ for ($i = 0; $i -lt 40; $i++) {
     if ($hwnd -ne [IntPtr]::Zero) { break }
 }
 if ($hwnd -eq [IntPtr]::Zero) {
-    $visibleProcess = Get-Process FreeX.App.Host -ErrorAction SilentlyContinue |
-        Where-Object { $_.Path -eq $exe -and $_.MainWindowHandle -ne 0 } |
+    $visibleProcess = Get-Process -Id $proc.Id -ErrorAction SilentlyContinue |
+        Where-Object { $_.MainWindowHandle -ne 0 } |
         Sort-Object StartTime -Descending |
         Select-Object -First 1
     if ($null -ne $visibleProcess) {
         $proc = $visibleProcess
         $hwnd = [IntPtr]$visibleProcess.MainWindowHandle
-        Write-Host "Reusing visible FreeX window PID $($proc.Id)"
+        Write-Host "Resolved visible FreeX window PID $($proc.Id)"
     }
 }
 if ($hwnd -eq [IntPtr]::Zero) { Write-Error "No window"; $proc.Kill(); exit 1 }

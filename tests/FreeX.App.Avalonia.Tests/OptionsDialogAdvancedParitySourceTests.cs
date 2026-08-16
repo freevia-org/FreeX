@@ -194,7 +194,10 @@ public sealed class OptionsDialogAdvancedParitySourceTests
                 var options = FindOwnedWindow(owner, "OptionsDialog");
                 var categoryList = FindByAutomationId<StackPanel>(options, "OptionsCategoryList");
                 categoryList.Should().NotBeNull();
-                categoryList!.Tag.Should().BeOfType<Action<int>>().Subject(8);
+                // 7 = Customize Ribbon (General, Formulas, Proofing, Save, Language, Ease of Access,
+                // Advanced, Customize Ribbon, ...). Index 8 is Quick Access Toolbar, which has no
+                // RibbonImportExportButton -- hence the null lookup below.
+                categoryList!.Tag.Should().BeOfType<Action<int>>().Subject(7);
                 options.UpdateLayout();
 
                 var importExport = FindByAutomationId<Button>(options, "RibbonImportExportButton");

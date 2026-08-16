@@ -9,6 +9,8 @@ param(
     [string]$FreePDialogPaneVisualEvidenceManifestScriptPath = "tools\Generate-FreePDialogPaneVisualEvidenceManifest.ps1",
     [string]$FreePWholeWindowVisualEvidenceManifestScriptPath = "tools\Generate-FreePWholeWindowVisualEvidenceManifest.ps1",
     [string]$FreePPowerPointChromeEvidenceScriptPath = "tools\Test-FreePPowerPointChromeEvidence.ps1",
+    [string]$FreeWShellVisualEvidenceScriptPath = "tools\Test-FreeWShellVisualEvidence.ps1",
+    [string]$FreeWWordChromeEvidenceScriptPath = "tools\Test-FreeWWordChromeEvidence.ps1",
     [string]$FreeWEditingReferenceParityEvidenceScriptPath = "tools\Generate-FreeWEditingReferenceParityEvidence.ps1",
     [string]$FreeWPageLayoutDialogParityEvidenceScriptPath = "tools\Generate-FreeWPageLayoutDialogParityEvidence.ps1",
     [string]$FreeWCommandInventoryScriptPath = "tools\Generate-FreeWCommandInventory.ps1",
@@ -46,6 +48,8 @@ Invoke-GeneratedDocsCheck -ScriptPath $FreePDialogPaneParityInventoryScriptPath 
 Invoke-GeneratedDocsCheck -ScriptPath $FreePDialogPaneVisualEvidenceManifestScriptPath -Label "FreeP dialog/pane visual evidence"
 Invoke-GeneratedDocsCheck -ScriptPath $FreePWholeWindowVisualEvidenceManifestScriptPath -Label "FreeP whole-window visual evidence"
 Invoke-GeneratedDocsCheck -ScriptPath $FreePPowerPointChromeEvidenceScriptPath -Label "FreeP PowerPoint chrome evidence"
+Invoke-GeneratedDocsCheck -ScriptPath $FreeWShellVisualEvidenceScriptPath -Label "FreeW shell visual evidence"
+Invoke-GeneratedDocsCheck -ScriptPath $FreeWWordChromeEvidenceScriptPath -Label "FreeW Word chrome evidence"
 Invoke-GeneratedDocsCheck -ScriptPath $FreeWEditingReferenceParityEvidenceScriptPath -Label "FreeW editing/reference parity evidence"
 Invoke-GeneratedDocsCheck -ScriptPath $FreeWPageLayoutDialogParityEvidenceScriptPath -Label "FreeW page-layout dialog parity evidence"
 Invoke-GeneratedDocsCheck -ScriptPath $FreeWCommandInventoryScriptPath -Label "FreeW command inventory"

@@ -49,9 +49,43 @@ function Set-PowerPointForegroundWindow {
         [Parameter(Mandatory = $true)][string]$Operation
     )
 
-    [ScreenshotWin32]::ShowWindow($WindowHandle, 1) | Out-Null
-    [ScreenshotWin32]::BringWindowToTop($WindowHandle) | Out-Null
-    [ScreenshotWin32]::SetForegroundWindow($WindowHandle) | Out-Null
+    # Windows may reject a direct foreground transfer while another desktop
+    # process owns the active input queue.  Temporarily attaching this helper
+    # to both queues makes the transfer explicit; the postcondition remains
+    # the exact process/title guard below, so this never weakens provenance.
+    $foregroundWindow = [ScreenshotWin32]::GetForegroundWindow()
+    $foregroundThreadId = [uint32]0
+    $foregroundProcessId = [uint32]0
+    if ($foregroundWindow -ne [IntPtr]::Zero) {
+        $foregroundThreadId = [ScreenshotWin32]::GetWindowThreadProcessId($foregroundWindow, [ref]$foregroundProcessId)
+    }
+    $targetThreadId = [uint32]0
+    $targetProcessId = [uint32]0
+    $targetThreadId = [ScreenshotWin32]::GetWindowThreadProcessId($WindowHandle, [ref]$targetProcessId)
+    $currentThreadId = [ScreenshotWin32]::GetCurrentThreadId()
+    $attachedForeground = $false
+    $attachedTarget = $false
+    try {
+        if ($foregroundThreadId -ne 0 -and $foregroundThreadId -ne $currentThreadId) {
+            $attachedForeground = [ScreenshotWin32]::AttachThreadInput($currentThreadId, $foregroundThreadId, $true)
+        }
+        if ($targetThreadId -ne 0 -and $targetThreadId -ne $currentThreadId) {
+            $attachedTarget = [ScreenshotWin32]::AttachThreadInput($currentThreadId, $targetThreadId, $true)
+        }
+        [ScreenshotWin32]::ShowWindow($WindowHandle, 1) | Out-Null
+        [ScreenshotWin32]::BringWindowToTop($WindowHandle) | Out-Null
+        [ScreenshotWin32]::SetActiveWindow($WindowHandle) | Out-Null
+        [ScreenshotWin32]::SetForegroundWindow($WindowHandle) | Out-Null
+        [ScreenshotWin32]::SetFocus($WindowHandle) | Out-Null
+    }
+    finally {
+        if ($attachedTarget) {
+            [ScreenshotWin32]::AttachThreadInput($currentThreadId, $targetThreadId, $false) | Out-Null
+        }
+        if ($attachedForeground) {
+            [ScreenshotWin32]::AttachThreadInput($currentThreadId, $foregroundThreadId, $false) | Out-Null
+        }
+    }
     Start-Sleep -Milliseconds 350
     Assert-ForegroundWindowOwnership $ProcessId $ExpectedTitle $Operation
 }
@@ -154,7 +188,7 @@ try {
     $desktop = [System.Windows.Automation.AutomationElement]::RootElement
     $processCondition = New-Object System.Windows.Automation.PropertyCondition(
         [System.Windows.Automation.AutomationElement]::ProcessIdProperty,
-        $powerPointProcessId)
+        [int]$powerPointProcessId)
     $appElement = $desktop.FindFirst([System.Windows.Automation.TreeScope]::Children, $processCondition)
     if ($null -eq $appElement) {
         throw "Could not resolve the PowerPoint UI Automation root."

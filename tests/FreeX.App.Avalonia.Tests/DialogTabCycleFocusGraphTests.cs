@@ -4,6 +4,7 @@ using Avalonia.Automation;
 using Avalonia.Controls;
 using Avalonia.Headless;
 using Avalonia.Input;
+using Avalonia.LogicalTree;
 using Avalonia.Input.Raw;
 using Avalonia.Interactivity;
 using Avalonia.Threading;
@@ -318,7 +319,14 @@ public sealed class DialogTabCycleFocusGraphTests
     private static T? FindByAutomationId<T>(Window dialog, string automationId, bool required = true)
         where T : Control
     {
-        var match = dialog.GetVisualDescendants().OfType<T>().FirstOrDefault(control => AutomationProperties.GetAutomationId(control) == automationId);
+        // Visual first, then LOGICAL: the Header/Footer editor dialog builds every editor up front but
+        // keeps them on unselected tabs and inside collapsed "different first page"/"different odd and
+        // even" groups, so they are absent from the visual tree until those are realised. The logical
+        // tree still contains them, which is what "does this dialog have this control" means here.
+        var match = dialog.GetVisualDescendants().OfType<T>()
+                        .FirstOrDefault(control => AutomationProperties.GetAutomationId(control) == automationId)
+                    ?? dialog.GetLogicalDescendants().OfType<T>()
+                        .FirstOrDefault(control => AutomationProperties.GetAutomationId(control) == automationId);
         if (required && match is null)
             throw new InvalidOperationException($"Missing {typeof(T).Name}#{automationId}.");
         return match;
