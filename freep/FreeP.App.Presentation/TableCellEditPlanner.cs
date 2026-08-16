@@ -270,7 +270,26 @@ public sealed record InCanvasTableCellRichTextEditPlan(
     InCanvasEditorSelectedListState SelectedListState,
     bool HasMixedParagraphFormatting)
 {
-    public bool HasRichFormatting => Runs.Count > 1 || HasMixedFormatting;
+    /// <summary>
+    /// True when the cell carries formatting a plain-text round trip would discard.
+    /// </summary>
+    /// <remarks>
+    /// Run count alone is not the question. A cell holding one bold Consolas run has exactly one
+    /// run and nothing to be "mixed" against, yet dropping to plain text still loses the bold and
+    /// the face -- so it is rich. This previously reported false for that shape, which is the only
+    /// case the two original terms miss.
+    /// </remarks>
+    public bool HasRichFormatting =>
+        Runs.Count > 1 || HasMixedFormatting || Runs.Any(RunCarriesFormatting);
+
+    private static bool RunCarriesFormatting(InCanvasEditorRunStyle run) =>
+        run.Bold
+        || run.Italic
+        || run.Underline
+        || run.Strikethrough
+        || run.FontFamily is not null
+        || run.FontSizePt is not null
+        || run.Color is not null;
     public bool HasListFormatting => Paragraphs.Any(paragraph => paragraph.HasListFormatting);
 }
 
