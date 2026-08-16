@@ -136,7 +136,12 @@ public sealed class InsertDepth2Tests
             .ToList();
 
         foreach (var id in ids)
-            registry.TryGet(id, out _).Should().BeTrue($"'{id.Value}' declared in ribbon but not registered");
+            {
+                // Pure menu openers carry no direct action; see RibbonMenuOpenerIds.
+                if (RibbonMenuOpenerIds.IsMenuOpener(id.Value))
+                    continue;
+                registry.TryGet(id, out _).Should().BeTrue($"'{id.Value}' declared in ribbon but not registered");
+            }
     }
 
     [Fact]

@@ -83,7 +83,12 @@ public sealed class CommandRegistryTests
         ids.Should().NotBeEmpty("ribbon must declare at least the existing commands");
 
         foreach (var id in ids)
-            registry.TryGet(id, out _).Should().BeTrue($"command '{id.Value}' declared in ribbon but not registered");
+            {
+                // Pure menu openers carry no direct action; see RibbonMenuOpenerIds.
+                if (RibbonMenuOpenerIds.IsMenuOpener(id.Value))
+                    continue;
+                registry.TryGet(id, out _).Should().BeTrue($"command '{id.Value}' declared in ribbon but not registered");
+            }
     }
 
     [Fact]

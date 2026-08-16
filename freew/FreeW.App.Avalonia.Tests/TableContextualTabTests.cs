@@ -167,8 +167,13 @@ public sealed class TableContextualTabTests
             .ToList();
 
         foreach (var id in ids)
-            registry.TryGet(id, out _)
+            {
+                // Pure menu openers carry no direct action; see RibbonMenuOpenerIds.
+                if (RibbonMenuOpenerIds.IsMenuOpener(id.Value))
+                    continue;
+                registry.TryGet(id, out _)
                 .Should().BeTrue($"Ribbon command '{id.Value}' must be registered");
+            }
     }
 
     [Fact]

@@ -844,6 +844,10 @@ internal static class FreeWAvaloniaRibbonCommands
             editor,
             callbacks.OpenImageBorderDialog));
         RegisterImageAdjustmentCommands(r, editor, callbacks);
+        // Artistic Effects gallery opener. The WPF host registers this id too (its handler just tells
+        // the user to pick an effect from the gallery); without it the one ribbon-declared picture id
+        // that is meant to be wired could not be resolved from the registry.
+        r.Register("freew.image-artistic", new ActionRibbonCommand(() => { /* gallery opener — the presets carry the actions */ }));
         foreach (var preset in PictureStyleCatalog.Catalog)
         {
             var captured = preset;

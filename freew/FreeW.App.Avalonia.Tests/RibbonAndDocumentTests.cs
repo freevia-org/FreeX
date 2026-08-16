@@ -176,7 +176,12 @@ public class RibbonAndDocumentTests
         var registry = FreeWAvaloniaRibbonCommands.Build(new Editing.DocumentView(), callbacks);
 
         foreach (var id in CommandIds(definition))
-            registry.TryGet(id, out _).Should().BeTrue($"command '{id.Value}' should be wired");
+            {
+                // Pure menu openers carry no direct action; see RibbonMenuOpenerIds.
+                if (RibbonMenuOpenerIds.IsMenuOpener(id.Value))
+                    continue;
+                registry.TryGet(id, out _).Should().BeTrue($"command '{id.Value}' should be wired");
+            }
     }
 
     [Fact]
