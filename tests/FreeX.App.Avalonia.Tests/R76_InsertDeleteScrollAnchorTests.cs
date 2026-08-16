@@ -30,12 +30,13 @@ public sealed class R76_InsertDeleteScrollAnchorTests
             {
                 for (var row = 1; row <= 200; row++)
                     sheet.SetCell(new CellAddress(sheet.Id, (uint)row, 1), new NumberValue(row));
-
-                // Scrolled so the view's first (top) row is 50.
-                sheet.ViewTopRow = 50;
-
                 var row1 = new CellAddress(sheet.Id, 1, 1);
                 window.Session.SelectRange(new GridRange(row1, row1));
+
+                // Scroll AFTER establishing the selection, and through the SESSION. Selecting a cell scrolls
+                // it into view, so scrolling first would be undone; and the scroll origin is per-view state
+                // owned by WorkbookSession, so poking Sheet.ViewTopRow leaves that per-view origin stale.
+                window.Session.SetViewportOrigin(50, 1);
 
                 InvokeParameterless(window, "InsertSheetRows");
 
@@ -63,10 +64,13 @@ public sealed class R76_InsertDeleteScrollAnchorTests
                 for (var row = 1; row <= 200; row++)
                     sheet.SetCell(new CellAddress(sheet.Id, (uint)row, 1), new NumberValue(row));
 
-                sheet.ViewTopRow = 50;
-
                 var row1 = new CellAddress(sheet.Id, 1, 1);
                 window.Session.SelectRange(new GridRange(row1, row1));
+
+                // Scroll AFTER establishing the selection, and through the SESSION. Selecting a cell scrolls
+                // it into view, so scrolling first would be undone; and the scroll origin is per-view state
+                // owned by WorkbookSession, so poking Sheet.ViewTopRow leaves that per-view origin stale.
+                window.Session.SetViewportOrigin(50, 1);
 
                 InvokeParameterless(window, "DeleteSheetRows");
 
@@ -96,10 +100,13 @@ public sealed class R76_InsertDeleteScrollAnchorTests
                 for (var row = 1; row <= 200; row++)
                     sheet.SetCell(new CellAddress(sheet.Id, (uint)row, 1), new NumberValue(row));
 
-                sheet.ViewTopRow = 50;
-
                 var row100 = new CellAddress(sheet.Id, 100, 1);
                 window.Session.SelectRange(new GridRange(row100, row100));
+
+                // Scroll AFTER establishing the selection, and through the SESSION. Selecting a cell scrolls
+                // it into view, so scrolling first would be undone; and the scroll origin is per-view state
+                // owned by WorkbookSession, so poking Sheet.ViewTopRow leaves that per-view origin stale.
+                window.Session.SetViewportOrigin(50, 1);
 
                 InvokeParameterless(window, "InsertSheetRows");
 
@@ -126,10 +133,13 @@ public sealed class R76_InsertDeleteScrollAnchorTests
                 for (var col = 1; col <= 60; col++)
                     sheet.SetCell(new CellAddress(sheet.Id, 1, (uint)col), new NumberValue(col));
 
-                sheet.ViewLeftCol = 10;
-
                 var col1 = new CellAddress(sheet.Id, 1, 1);
                 window.Session.SelectRange(new GridRange(col1, col1));
+
+                // Scroll AFTER establishing the selection, and through the SESSION. Selecting a cell scrolls
+                // it into view, so scrolling first would be undone; and the scroll origin is per-view state
+                // owned by WorkbookSession, so poking Sheet.ViewTopRow leaves that per-view origin stale.
+                window.Session.SetViewportOrigin(1, 10);
 
                 InvokeParameterless(window, "InsertSheetColumns");
 
@@ -156,10 +166,13 @@ public sealed class R76_InsertDeleteScrollAnchorTests
                 for (var col = 1; col <= 60; col++)
                     sheet.SetCell(new CellAddress(sheet.Id, 1, (uint)col), new NumberValue(col));
 
-                sheet.ViewLeftCol = 10;
-
                 var col1 = new CellAddress(sheet.Id, 1, 1);
                 window.Session.SelectRange(new GridRange(col1, col1));
+
+                // Scroll AFTER establishing the selection, and through the SESSION. Selecting a cell scrolls
+                // it into view, so scrolling first would be undone; and the scroll origin is per-view state
+                // owned by WorkbookSession, so poking Sheet.ViewTopRow leaves that per-view origin stale.
+                window.Session.SetViewportOrigin(1, 10);
 
                 InvokeParameterless(window, "DeleteSheetColumns");
 
