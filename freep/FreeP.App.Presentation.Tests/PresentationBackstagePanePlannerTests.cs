@@ -192,21 +192,48 @@ public sealed class PresentationBackstagePanePlannerTests
         surface.Groups[0].Actions[0].Description.Should().Be(expected.FixedLayoutActions[0].Description);
     }
 
+    private static BackstageActionRow RecoveryRow(BackstageActionPaneSpec surface) =>
+        surface.Groups.Single(group => group.Heading == "Recovery").Actions.Single();
+
     [Fact]
     public void BuildOpenPane_ExposesTheManualRecoverUnsavedPresentationsCommand()
     {
         var invoked = false;
         var planner = new PresentationBackstagePanePlanner();
 
-        var surface = planner.BuildOpenPane(() => invoked = true);
+        var surface = planner.BuildOpenPane(static () => { }, () => invoked = true);
 
-        surface.Groups.Should().ContainSingle();
-        var recovery = surface.Groups.Single().Actions.Should().ContainSingle().Subject;
+        var recovery = RecoveryRow(surface);
         recovery.Label.Should().Be("Recover Unsaved Presentations");
 
         recovery.Invoke();
 
         invoked.Should().BeTrue();
+    }
+
+    /// <summary>
+    /// REGRESSION GUARD. Adding the recovery command turned the "Open" Backstage entry from a
+    /// direct Command (one click = file picker) into a Pane. The first cut of that change left the
+    /// pane containing ONLY the recovery row, which silently removed the user's ability to open a
+    /// presentation from Backstage &gt; Open at all — the entry-kind count assertion in
+    /// FreeP.App.Avalonia.Tests' MainWindowHeadlessTests was updated to match rather than the loss
+    /// being noticed. Browsing must survive the entry becoming a pane.
+    /// </summary>
+    [Fact]
+    public void BuildOpenPane_ExposesBrowseSoTheOpenEntryStillOpensFiles()
+    {
+        var browsed = false;
+        var planner = new PresentationBackstagePanePlanner();
+
+        var surface = planner.BuildOpenPane(() => browsed = true, static () => { });
+
+        var browse = surface.Groups.Single(group => group.Heading == "Places").Actions.Single();
+        browse.Label.Should().Be("Browse");
+        browse.AutomationId.Should().Be("BackstageOpen_Browse");
+
+        browse.Invoke();
+
+        browsed.Should().BeTrue("Backstage > Open must still be able to open a presentation");
     }
 
     [Fact]
@@ -215,38 +242,38 @@ public sealed class PresentationBackstagePanePlannerTests
         var planner = new PresentationBackstagePanePlanner(key =>
             key == "Autosave_Recovery_Backstage_Label" ? "Recuperer les presentations non enregistrees" : null);
 
-        var surface = planner.BuildOpenPane(static () => { });
+        var surface = planner.BuildOpenPane(static () => { }, static () => { });
 
-        surface.Groups.Single().Actions.Single().Label
-            .Should().Be("Recuperer les presentations non enregistrees");
+        RecoveryRow(surface).Label.Should().Be("Recuperer les presentations non enregistrees");
     }
 
     [Fact]
-    public void BuildOpenPane_ThrowsWhenRecoverUnsavedIsNull()
+    public void BuildOpenPane_ThrowsWhenAnActionIsNull()
     {
         var planner = new PresentationBackstagePanePlanner();
 
-        var act = () => planner.BuildOpenPane(null!);
+        var missingRecover = () => planner.BuildOpenPane(static () => { }, null!);
+        var missingBrowse = () => planner.BuildOpenPane(null!, static () => { });
 
-        act.Should().Throw<ArgumentNullException>();
+        missingRecover.Should().Throw<ArgumentNullException>();
+        missingBrowse.Should().Throw<ArgumentNullException>();
     }
 
     /// <summary>
     /// Sibling of <see cref="BuildOpenPane_ExposesTheManualRecoverUnsavedPresentationsCommand"/>:
     /// pins the pane's heading and the group/automation identity the WPF and Avalonia renderers key
-    /// off of, mirroring FreeW's "Recovery" group in its own Open pane.
+    /// off of, mirroring FreeW's "Places" + "Recovery" groups in its own Open pane.
     /// </summary>
     [Fact]
     public void BuildOpenPane_UsesTheRecoveryGroupHeadingAndStableAutomationId()
     {
         var planner = new PresentationBackstagePanePlanner();
 
-        var surface = planner.BuildOpenPane(static () => { });
+        var surface = planner.BuildOpenPane(static () => { }, static () => { });
 
         surface.Heading.Should().Be("Open");
-        surface.Groups.Single().Heading.Should().Be("Recovery");
-        surface.Groups.Single().Actions.Single().AutomationId
-            .Should().Be("BackstageOpen_RecoverUnsavedPresentations");
+        surface.Groups.Select(group => group.Heading).Should().Equal("Places", "Recovery");
+        RecoveryRow(surface).AutomationId.Should().Be("BackstageOpen_RecoverUnsavedPresentations");
     }
 
     [Fact]

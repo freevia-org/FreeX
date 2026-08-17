@@ -197,7 +197,9 @@ internal sealed partial class BackstageView : UserControl
     private Control BuildOpenPane()
     {
         return Panes.BuildActionPane(
-            PanePlans.BuildOpenPane(_dismissBeforeDispatch.Bind(_endpoints.RecoverUnsaved)),
+            PanePlans.BuildOpenPane(
+                _dismissBeforeDispatch.Bind(_endpoints.Open),
+                _dismissBeforeDispatch.Bind(_endpoints.RecoverUnsaved)),
             "BackstageOpen");
     }
 

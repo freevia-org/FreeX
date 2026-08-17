@@ -28,6 +28,12 @@ public sealed class BackstageViewRecoverUnsavedTests
             "freep", "FreeP.App.Avalonia", "Backstage", "BackstageView.cs");
 
         source.Should().Contain("BuildOpenPane = BuildOpenPane,");
-        source.Should().Contain("PanePlans.BuildOpenPane(_dismissBeforeDispatch.Bind(_endpoints.RecoverUnsaved))");
+        source.Should().Contain("_dismissBeforeDispatch.Bind(_endpoints.RecoverUnsaved)");
+
+        // The Open Backstage entry became a Pane to host the recovery command; it must still bind
+        // the plain Open action too, or Backstage > Open silently loses the ability to open a
+        // presentation. See PresentationBackstagePanePlannerTests.
+        // BuildOpenPane_ExposesBrowseSoTheOpenEntryStillOpensFiles.
+        source.Should().Contain("_dismissBeforeDispatch.Bind(_endpoints.Open)");
     }
 }

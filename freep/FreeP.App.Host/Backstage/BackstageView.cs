@@ -99,6 +99,7 @@ internal sealed partial class BackstageView : UserControl
     private UIElement BuildOpenPane()
     {
         return Panes.BuildActionPane(PanePlans.BuildOpenPane(
+            _backstage.HideThen(_endpoints.Open),
             _backstage.HideThen(_endpoints.RecoverUnsaved)));
     }
 

@@ -22,6 +22,9 @@ public sealed class PresentationBackstagePanePlanner
     private const string OpenPaneHeading = "Open";
     private const string OpenPaneDescription =
         "Open an existing presentation, or recover one FreeP didn't get to save.";
+    private const string OpenPanePlacesGroupHeading = "Places";
+    private const string OpenPaneBrowseLabel = "Browse";
+    private const string OpenPaneBrowseDescription = "Open an existing presentation from this PC.";
     private const string OpenPaneRecoveryGroupHeading = "Recovery";
     private const string OpenPaneRecoveryRowDescription =
         "Open the latest autosave recovery snapshot saved by FreeP.";
@@ -81,14 +84,23 @@ public sealed class PresentationBackstagePanePlanner
         _paneSpecs.BuildNewPaneSpec(create);
 
     /// <summary>
-    /// The "Open" Backstage pane's sole purpose today is surfacing the manual
-    /// "Recover Unsaved Presentations" command (FreeP's autosave/crash-recovery feature).
-    /// Mirrors the "Recovery" group in FreeW's <c>BackstageOpenPanePlanner</c>, simplified to
-    /// FreeP's existing single-group action-pane shape (see <see cref="BuildExportPane"/>)
-    /// rather than FreeW's full recent-documents/places/search open surface.
+    /// The "Open" Backstage pane: a Places group that browses for a presentation, plus a Recovery
+    /// group carrying the manual "Recover Unsaved Presentations" command (FreeP's autosave/
+    /// crash-recovery feature). Mirrors the "Places" + "Recovery" groups of FreeW's
+    /// <c>BackstageOpenPanePlanner</c>, minus FreeW's recent-documents/search surface — FreeP
+    /// already has its own top-level "Recent" Backstage entry.
+    ///
+    /// <para>
+    /// The <paramref name="browse"/> row is NOT optional garnish. Adding a recovery command turned
+    /// this Backstage entry from a direct Command (which opened the file picker on click) into a
+    /// Pane, so without a Browse row here "Backstage &gt; Open" would silently stop being able to
+    /// open a presentation at all. <c>BuildOpenPane_ExposesBrowseSoTheOpenEntryStillOpensFiles</c>
+    /// pins that.
+    /// </para>
     /// </summary>
-    public BackstageActionPaneSpec BuildOpenPane(Action recoverUnsaved)
+    public BackstageActionPaneSpec BuildOpenPane(Action browse, Action recoverUnsaved)
     {
+        ArgumentNullException.ThrowIfNull(browse);
         ArgumentNullException.ThrowIfNull(recoverUnsaved);
 
         var text = AutosaveRecoveryTextCatalog.Resolve(_getText);
@@ -96,6 +108,16 @@ public sealed class PresentationBackstagePanePlanner
             OpenPaneHeading,
             OpenPaneDescription,
             [
+                new BackstageActionGroup(OpenPanePlacesGroupHeading,
+                [
+                    new BackstageActionRow(
+                        OpenPaneBrowseLabel,
+                        OpenPaneBrowseDescription,
+                        browse)
+                    {
+                        AutomationId = "BackstageOpen_Browse",
+                    },
+                ]),
                 new BackstageActionGroup(OpenPaneRecoveryGroupHeading,
                 [
                     new BackstageActionRow(

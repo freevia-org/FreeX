@@ -562,8 +562,11 @@ public sealed class MainWindowHeadlessTests : IDisposable
                 "Info", "New", "Open", "|", "Save", "Save As", "Print", "Export",
                 "Recent", "New from template", "Account", "Options", "Close");
         entries.Should().HaveCount(13);
-        // R139: "Open" became a Pane entry (its manual "Recover Unsaved Presentations" command lives
-        // inside it) instead of a direct Command entry, so Pane gains one and Command loses one.
+        // R139: "Open" became a Pane entry instead of a direct Command entry, so Pane gains one and
+        // Command loses one. The pane hosts both a "Browse" row (preserving what the old Command
+        // did — see PresentationBackstagePanePlannerTests.
+        // BuildOpenPane_ExposesBrowseSoTheOpenEntryStillOpensFiles) and the manual
+        // "Recover Unsaved Presentations" command.
         entries.Count(entry => entry.Kind == SisterBackstageEntryKind.Pane).Should().Be(8);
         entries.Count(entry => entry.Kind == SisterBackstageEntryKind.Command).Should().Be(4);
         entries.Count(entry => entry.Kind == SisterBackstageEntryKind.Divider).Should().Be(1);
