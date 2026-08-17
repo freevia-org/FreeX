@@ -27,6 +27,10 @@
          its internal createTemporaryFile/replaceDestination constructor so it can inject a custom
          ITemporaryResourceFileSystem whose write genuinely completes asynchronously. -->
     <InternalsVisibleTo Include="FreeP.App.Presentation.Tests" />
+    <!-- r139-remediation: same seam, needed by the WPF-hosted regression test for the
+         cross-thread feedback-port crash (WpfPresentationFileFeedbackPort lives in
+         FreeP.App.Host, so its test lives in FreeP.App.Host.Tests, not FreeP.App.Presentation.Tests). -->
+    <InternalsVisibleTo Include="FreeP.App.Host.Tests" />
   </ItemGroup>
 
 </Project>

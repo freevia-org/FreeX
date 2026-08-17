@@ -3546,7 +3546,7 @@ public sealed partial class MainWindow : Window,
         var printers = _latestPrinterDiscovery.Printers
             .Select(static printer => printer.Name)
             .ToArray();
-        if (printers.Count == 0)
+        if (printers.Length == 0)
         {
             AddPrintOptionsPaneField(
                 PresentationShellTextCatalog.Resolve(surface.QueueLabel),

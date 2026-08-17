@@ -438,23 +438,30 @@ public static class ComplexFieldEngine
 
     // Locates the Paragraph that owns `run`, given the top-level block index the caller resolved it
     // from. The block can be either the paragraph itself (the main-document case) or a Table containing
-    // it (a table-cell field), per Recompute's own contract; nested/synthetic field runs (which are never
-    // actually linked into any paragraph's Runs list) resolve to null and fall back to the document
-    // default only.
+    // it (a table-cell field), per Recompute's own contract. Header/footer/footnote/endnote/comment
+    // stories carry no body block index -- DocumentFieldStories reports BodyBlockIndex = -1 for them --
+    // so those fall back to a full story walk instead: a date field in a header is exactly as ordinary
+    // as one in the body, and should inherit its paragraph's style chain the same way. Nested/synthetic
+    // field runs (which are never actually linked into any paragraph's Runs list) resolve to null and
+    // fall back to the document default only.
     private static Paragraph? FindOwningParagraph(TextDocument document, int blockIndex, Run run)
     {
-        if (blockIndex < 0 || blockIndex >= document.Blocks.Count)
-            return null;
-
-        return document.Blocks[blockIndex] switch
+        if (blockIndex >= 0 && blockIndex < document.Blocks.Count)
         {
-            Paragraph paragraph => paragraph,
-            Table table => table.Rows
-                .SelectMany(row => row.Cells)
-                .SelectMany(cell => cell.Paragraphs)
-                .FirstOrDefault(paragraph => paragraph.Runs.Contains(run)),
-            _ => null
-        };
+            return document.Blocks[blockIndex] switch
+            {
+                Paragraph paragraph => paragraph,
+                Table table => table.Rows
+                    .SelectMany(row => row.Cells)
+                    .SelectMany(cell => cell.Paragraphs)
+                    .FirstOrDefault(paragraph => paragraph.Runs.Contains(run)),
+                _ => null
+            };
+        }
+
+        return DocumentFieldStories.Enumerate(document)
+            .Select(story => story.Paragraph)
+            .FirstOrDefault(paragraph => paragraph.Runs.Contains(run));
     }
 
     // Mirrors Proofing.cs's ResolveStyleNoProof: walks the paragraph style's based-on chain looking for

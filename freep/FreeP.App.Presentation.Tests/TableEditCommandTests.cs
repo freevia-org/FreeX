@@ -2248,6 +2248,129 @@ public sealed class TableEditCommandTests
         table.Rows[2].Cells[2].VMerge.Should().BeFalse();
     }
 
+    // ════════════════════════════════════════════════════════════════════════════
+    // R139c regression tests — InsertTableColumnCommand + 2-D merges (mirror of R139a,
+    // which fixed the same bug for InsertTableRowCommand).
+    // ════════════════════════════════════════════════════════════════════════════
+
+    [Fact]
+    public void R139c_InsertColumn_Inside2DMerge_WidensAnchorOnceAndMarksAllSpannedRowsVMerge()
+    {
+        // 2×2 anchor merge at (0,0)-(1,1) in a 3×3 table (see Make2DMergedTable doc comment).
+        // Insert a column at index 1 — strictly inside the anchor's horizontal span (cols 0-1).
+        var (p, bus, shape) = Make2DMergedTable();
+        bus.Execute(new InsertTableColumnCommand(0, 4, 1));
+
+        var table = shape.Table!;
+        table.ColumnWidthsEmu.Should().HaveCount(4);
+
+        // The true anchor (row 0) must have its GridSpan widened exactly once: 2 -> 3.
+        var anchor = table.Rows[0].Cells[0];
+        anchor.GridSpan.Should().Be(3, "the anchor's horizontal span must grow by exactly one column");
+        anchor.RowSpan.Should().Be(2, "the anchor's vertical span must be untouched by a column insert");
+        anchor.HMerge.Should().BeFalse();
+        anchor.VMerge.Should().BeFalse();
+
+        // Row 0 must carry an HMerge continuation at the inserted slot (index 1) and the
+        // original HMerge continuation now shifted to index 2.
+        table.Rows[0].Cells[1].HMerge.Should().BeTrue();
+        table.Rows[0].Cells[2].HMerge.Should().BeTrue();
+        CellText(shape, 0, 3).Should().Be("C00", "the independent cell must shift right, unaffected");
+
+        // Row 1 (the VMerge continuation row of the 2-D merge) must carry a VMerge continuation
+        // in BOTH the original column 1 AND the newly-inserted column — a real user reaching
+        // this through EditingSession.InsertColumnRight after clicking anywhere in the merge
+        // (which always resolves to the anchor) hits this row. Leaving the inserted cell as an
+        // ordinary independent cell here is exactly the grid corruption this test guards against.
+        table.Rows[1].Cells[0].VMerge.Should().BeTrue("column 0 is covered by the widened anchor");
+        table.Rows[1].Cells[1].VMerge.Should().BeTrue(
+            "the newly-inserted column is ALSO covered by the widened anchor's RowSpan=2 rectangle");
+        table.Rows[1].Cells[2].VMerge.Should().BeTrue("the original column-1 VMerge cell, now shifted right");
+        table.Rows[1].Cells[1].HMerge.Should().BeFalse("a VMerge continuation must never itself be HMerge");
+        CellText(shape, 1, 3).Should().Be("C10");
+
+        // Row 2 (fully independent, outside the merge) is unaffected except for the new column.
+        table.Rows[2].Cells[0].VMerge.Should().BeFalse();
+        table.Rows[2].Cells[1].VMerge.Should().BeFalse();
+        table.Rows[2].Cells[1].HMerge.Should().BeFalse();
+
+        // Grid integrity: every row has exactly ColumnWidthsEmu.Count cells.
+        int gridWidth = table.ColumnWidthsEmu.Count;
+        foreach (var row in table.Rows)
+            row.Cells.Should().HaveCount(gridWidth);
+    }
+
+    [Fact]
+    public void R139c_InsertColumn_Inside2DMerge_Undo_RestoresExactOriginalGrid()
+    {
+        var (p, bus, shape) = Make2DMergedTable();
+        bus.Execute(new InsertTableColumnCommand(0, 4, 1));
+        bus.Undo();
+
+        var table = shape.Table!;
+        table.ColumnWidthsEmu.Should().HaveCount(3, "undo must remove the inserted column");
+
+        var anchor = table.Rows[0].Cells[0];
+        anchor.GridSpan.Should().Be(2, "undo must restore the pre-insert GridSpan exactly");
+        anchor.RowSpan.Should().Be(2);
+        anchor.HMerge.Should().BeFalse();
+        anchor.VMerge.Should().BeFalse();
+
+        table.Rows[0].Cells[1].HMerge.Should().BeTrue();
+        table.Rows[0].Cells[1].VMerge.Should().BeFalse();
+
+        table.Rows[1].Cells[0].VMerge.Should().BeTrue();
+        table.Rows[1].Cells[1].VMerge.Should().BeTrue();
+
+        table.Rows[2].Cells[0].HMerge.Should().BeFalse();
+        table.Rows[2].Cells[0].VMerge.Should().BeFalse();
+    }
+
+    [Fact]
+    public void R139c_Sibling_InsertColumn_AtSpanBoundaryOf2DMerge_AddsFullyIndependentColumn()
+    {
+        // Sibling/regression guard: inserting AFTER the 2-D merge's horizontal span (col 2, the
+        // boundary) must add an ordinary independent column, not a spurious VMerge/HMerge
+        // continuation — the anchor-walk fix must not over-fire outside the true span.
+        var (p, bus, shape) = Make2DMergedTable();
+        bus.Execute(new InsertTableColumnCommand(0, 4, 2));
+
+        var table = shape.Table!;
+        table.ColumnWidthsEmu.Should().HaveCount(4);
+        // Anchor GridSpan must stay 2 — the insertion point (col 2) is the boundary, not inside.
+        table.Rows[0].Cells[0].GridSpan.Should().Be(2);
+        table.Rows[0].Cells[2].HMerge.Should().BeFalse();
+        table.Rows[1].Cells[2].VMerge.Should().BeFalse();
+        table.Rows[2].Cells[2].VMerge.Should().BeFalse();
+    }
+
+    [Fact]
+    public void R139c_DeleteColumn_Inside2DMerge_DecrementsAnchorAndRemovesVMergeCellCleanly()
+    {
+        // Sibling coverage: DeleteTableColumnCommand walks per-row same-index cell state
+        // (HMerge for the anchor's own row, blind removal elsewhere) rather than needing an
+        // anchor walk, because VMerge cells never carry GridSpan themselves — so deleting a
+        // column inside a 2-D merge's horizontal span should already be safe. This test locks
+        // that in as a regression guard rather than a fix.
+        var (p, bus, shape) = Make2DMergedTable();
+        bus.Execute(new DeleteTableColumnCommand(0, 4, 1));
+
+        var table = shape.Table!;
+        table.ColumnWidthsEmu.Should().HaveCount(2);
+
+        var anchor = table.Rows[0].Cells[0];
+        anchor.GridSpan.Should().Be(1, "the anchor's horizontal span must shrink by exactly one column");
+        anchor.RowSpan.Should().Be(2, "the anchor's vertical span must be untouched by a column delete");
+        anchor.HMerge.Should().BeFalse();
+
+        table.Rows[1].Cells[0].VMerge.Should().BeTrue("column 0 is still covered by the shrunken anchor");
+        CellText(shape, 1, 1).Should().Be("C10", "the surviving independent cell must shift left");
+
+        int gridWidth = table.ColumnWidthsEmu.Count;
+        foreach (var row in table.Rows)
+            row.Cells.Should().HaveCount(gridWidth);
+    }
+
     [Fact]
     public void R139b_InsertRow_ResyncsShapeExtentCyToActualRowHeightSum()
     {

@@ -1127,8 +1127,23 @@ public sealed class InsertTableColumnCommand : IPresentationCommand
         //
         // Otherwise (the cell at idx is an anchor or independent cell, i.e. not HMerge), the
         // insertion is at a span boundary → insert an independent new cell at idx.
-        foreach (var row in table.Rows)
+        //
+        // R139 / 2-D-merge fix (mirror of the InsertTableRowCommand fix above): the checks
+        // above are same-row info and are correct for the anchor's OWN row. But a row that is
+        // a VERTICAL-merge continuation of a 2-D (row+col) rectangle carries VMerge=true at the
+        // spanned columns, never HMerge — so row.Cells[idx].HMerge is false there even when idx
+        // is strictly inside the rectangle's horizontal span, and the old code fell through to
+        // the "independent cell" branch, splitting the merged rectangle from below. When the
+        // cell at idx is VMerge, walk UP to the nearest non-VMerge cell in that same grid column
+        // to find the anchor's row, then LEFT through any HMerge chain in that row to reach the
+        // true anchor cell and its column position. If idx is strictly inside that anchor's
+        // GridSpan (not at its own leading column), this row's inserted cell must be a VMerge
+        // continuation too, not an independent cell — the anchor's own GridSpan widening still
+        // happens exactly once, via the "row.Cells[idx].HMerge" branch above firing on the
+        // anchor's own row.
+        for (int r = 0; r < table.Rows.Count; r++)
         {
+            var row = table.Rows[r];
             if (idx >= row.Cells.Count)
             {
                 // Inserting at or beyond the end of the row — append an independent cell.
@@ -1147,6 +1162,14 @@ public sealed class InsertTableColumnCommand : IPresentationCommand
                 // Insert a new HMerge continuation immediately after the anchor slot.
                 row.Cells.Insert(ai + 1, new TableCell { HMerge = true });
             }
+            else if (row.Cells[idx].VMerge && IsStrictlyInsideAnchorGridSpan(table, r, idx))
+            {
+                // Vertical-merge continuation row, and column idx is strictly inside the
+                // covering anchor's horizontal span → insert a matching VMerge continuation
+                // here so the rectangle stays intact; the anchor's own GridSpan was already
+                // widened via that anchor's own row above.
+                row.Cells.Insert(idx, new TableCell { VMerge = true });
+            }
             else
             {
                 // Span boundary — insert an independent cell at idx.
@@ -1155,6 +1178,34 @@ public sealed class InsertTableColumnCommand : IPresentationCommand
         }
 
         PresentationModelCloneHelper.SyncTableShapeExtent(shape!);
+    }
+
+    /// <summary>
+    /// True if grid column <paramref name="col"/>, as seen from the VMerge continuation cell at
+    /// <c>table.Rows[vmergeRowIndex].Cells[col]</c> (evaluated BEFORE the insert), is strictly
+    /// inside the horizontal span of the 2-D merge anchor that covers it — i.e. <paramref
+    /// name="col"/> is not the anchor's own (leading) column. Walks up to the anchor's row
+    /// (skipping VMerge cells at the same column), then left through any HMerge chain in that
+    /// row to reach the true anchor cell and its column position.
+    /// </summary>
+    private static bool IsStrictlyInsideAnchorGridSpan(TableShape table, int vmergeRowIndex, int col)
+    {
+        for (int r = vmergeRowIndex - 1; r >= 0; r--)
+        {
+            var candidateRow = table.Rows[r];
+            if (col >= candidateRow.Cells.Count) return false;
+            var candidateCell = candidateRow.Cells[col];
+            if (candidateCell.VMerge)
+                continue; // still inside the vertical run — keep scanning upward
+
+            // Found the anchor's row for this column. If it's an HMerge continuation, walk
+            // left to the true anchor cell and compare its column to `col`.
+            int anchorCol = col;
+            while (anchorCol > 0 && candidateRow.Cells[anchorCol].HMerge)
+                anchorCol--;
+            return anchorCol < col;
+        }
+        return false;
     }
 
     public void Revert(Presentation p)

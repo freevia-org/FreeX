@@ -2620,7 +2620,26 @@ public sealed class SetSlideLayoutCommand : IPresentationCommand
             // from the master. Only skip when the placeholder tag itself is missing, or a
             // matching shape already exists on the slide; never skip solely for lack of geometry,
             // or the placeholder becomes permanently unreachable (can never be shown or clicked).
+            //
+            // Header/DateTime/Footer/SlideNumber are deliberately excluded here (unlike
+            // Title/Body/content placeholders): their on-slide presence and visibility are
+            // owned by HeaderFooterCommandPlanner (Insert > Header & Footer), which toggles
+            // Slide.HfVisibility and lazily creates the shape via EnsureHeaderFooterShape only
+            // when the user turns a checkbox on. HeaderFooterCommandPlanner.BuildState treats a
+            // slide with HfVisibility == null (the default for any slide the user never ran
+            // Insert > Header & Footer on) as "checkbox state = whatever shapes already exist",
+            // and SlideCompositor's IsVisibleByHeaderFooterFlags does the same for rendering. If
+            // this loop materialized these placeholders too, merely picking a layout would plant
+            // a shape that both reads as "visible" under that null-flags default — silently
+            // turning on Date/Footer/Slide Number (and showing them as checked in the dialog) for
+            // a slide the user never touched. Real PowerPoint does not do this: switching a
+            // slide's layout never creates or reveals header/footer/date/page-number content:
+            // that stays governed solely by the Header and Footer dialog. Title/Body placeholders
+            // are different because their content is the slide's own subject matter, authored
+            // directly into the slide the moment the layout supplies them — not a global
+            // decoration gated by a separate on/off flow.
             if (target.Placeholder is null ||
+                IsHeaderFooterPlaceholder(target.Placeholder.Type) ||
                 slide.Shapes.Any(shape => MatchesPlaceholder(target.Placeholder, shape.Placeholder)))
             {
                 continue;
@@ -2695,6 +2714,14 @@ public sealed class SetSlideLayoutCommand : IPresentationCommand
         PlaceholderType.Body or PlaceholderType.Object or PlaceholderType.Chart or
         PlaceholderType.Table or PlaceholderType.ClipArt or PlaceholderType.Diagram or
         PlaceholderType.Media or PlaceholderType.Picture;
+
+    /// <summary>
+    /// Header/DateTime/Footer/SlideNumber: owned end-to-end by HeaderFooterCommandPlanner (see
+    /// the caller in <see cref="Apply"/> for why a layout switch must never materialize these).
+    /// </summary>
+    private static bool IsHeaderFooterPlaceholder(PlaceholderType type) => type is
+        PlaceholderType.Header or PlaceholderType.DateTime or
+        PlaceholderType.Footer or PlaceholderType.SlideNumber;
 
     private static bool HasGeometry(SlideShape shape) =>
         shape.ExtentCxEmu > 0 || shape.ExtentCyEmu > 0 || shape.HasExplicitZeroExtentTransform;
