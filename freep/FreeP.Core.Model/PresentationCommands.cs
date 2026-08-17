@@ -72,16 +72,8 @@ internal static class PresentationCommandSizeEstimator
     /// fallback shapes (each a fully-resolved <see cref="SlideShape"/> that can itself carry a
     /// picture fill or embedded image, same as any other captured shape).
     /// </summary>
-    public static int EstimateBytes(SmartArtShape? smartArt)
-    {
-        if (smartArt is null)
-            return BaseOverheadBytes;
-
-        long total = BaseOverheadBytes;
-        foreach (var shape in smartArt.FallbackShapes)
-            total += EstimateShapeBytes(shape);
-        return Clamp(total);
-    }
+    public static int EstimateBytes(SmartArtShape? smartArt) =>
+        Clamp(BaseOverheadBytes + EstimateSmartArtBytes(smartArt));
 
     /// <summary>
     /// Estimated retained bytes for a captured set of package parts, e.g. a preserved Zoom
@@ -140,10 +132,52 @@ internal static class PresentationCommandSizeEstimator
         total += EstimateFillBytes(shape.Fill);
         total += EstimateTextBytes(shape.TextBody);
         total += EstimateTableBytes(shape.Table);
+        total += shape.OleObject?.EmbeddedBytes.Length ?? 0;
+        total += EstimateSmartArtBytes(shape.SmartArt);
+        total += EstimatePreservedObjectBytes(shape.PreservedObject);
 
         foreach (var child in shape.Children)
             total += EstimateShapeBytes(child);
 
+        return total;
+    }
+
+    /// <summary>
+    /// Estimated retained bytes for a SmartArt payload: its dsp:drawing fallback shapes (each a
+    /// fully-resolved <see cref="SlideShape"/> that can carry a picture fill/embedded image, same
+    /// as any other captured shape) plus the raw OPC parts (data/layout/quickStyle/colors/drawing)
+    /// and their rels, all kept verbatim for lossless round-trip.
+    /// </summary>
+    private static long EstimateSmartArtBytes(SmartArtShape? smartArt)
+    {
+        if (smartArt is null)
+            return 0;
+
+        long total = 0;
+        foreach (var shape in smartArt.FallbackShapes)
+            total += EstimateShapeBytes(shape);
+        foreach (var part in smartArt.Parts.Values)
+            total += part.Bytes.Length;
+        foreach (var bytes in smartArt.PartRels.Values)
+            total += bytes.Length;
+        return total;
+    }
+
+    /// <summary>
+    /// Estimated retained bytes for a preserved modern-object payload (Zoom/Ink/3D-model/unknown):
+    /// every referenced OPC part (e.g. a .glb 3D model or an ink XML part) plus its rels, kept
+    /// verbatim so undo can restore the exact bytes.
+    /// </summary>
+    private static long EstimatePreservedObjectBytes(PreservedObjectInfo? preserved)
+    {
+        if (preserved is null)
+            return 0;
+
+        long total = 0;
+        foreach (var bytes in preserved.Parts.Values)
+            total += bytes.Length;
+        foreach (var bytes in preserved.PartRels.Values)
+            total += bytes.Length;
         return total;
     }
 
@@ -2741,6 +2775,12 @@ public sealed class SetSlideLayoutCommand : IPresentationCommand
     }
 
     public string Label => "Set Slide Layout";
+
+    // _addedPlaceholders are full clones of layout placeholder shapes, which can carry a picture
+    // fill or other large payload (found during enumeration: this command had no override at all
+    // and was silently defaulting to the interface's flat 256 bytes).
+    public int EstimatedBytes => PresentationCommandSizeEstimator.Combine(
+        _addedPlaceholders.Select(PresentationCommandSizeEstimator.EstimateBytes));
 
     public bool HasEffect(Presentation p) =>
         _slideIndex >= 0 &&

@@ -23,7 +23,11 @@ public sealed class PasteShapesCommand : IPresentationCommand
 
     public string Label => "Paste";
 
-    public int EstimatedBytes => 256 + _shapes.Count * 512;
+    // Real content estimate (pictures, OLE/SmartArt/preserved-object payloads, table cells, text)
+    // rather than a flat per-shape heuristic: this is the literal Ctrl+V path, so a pasted image
+    // or embedded object must actually count toward the 50MB undo budget.
+    public int EstimatedBytes => PresentationCommandSizeEstimator.Combine(
+        _shapes.Select(PresentationCommandSizeEstimator.EstimateBytes));
 
     public void Apply(Presentation p)
     {

@@ -33,6 +33,7 @@ public sealed class SetChartSeriesOptionsCommand : IPresentationCommand
     {
         PresentationCommandSizeEstimator.EstimateBytes(_newOptions.Fill),
         PresentationCommandSizeEstimator.EstimateBytes(_oldFill),
+        PresentationCommandSizeEstimator.EstimateBytes(_oldMarkerStyle?.Fill),
     });
 
     public void Apply(Presentation p)

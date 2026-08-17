@@ -759,4 +759,97 @@ public sealed class EditingSession5ATests
 
         shape.TextBody!.Paragraphs[0].Runs[0].FontFamily.Should().Be("Verdana");
     }
+
+    // ════════════════════════════════════════════════════════════════════════════════
+    // UNDO BYTE-BUDGET — PASTE / OLE (r140 remediation 2: the estimator was blind to
+    // pasted shapes, OLE objects, SmartArt pictures, and chart picture fills)
+    // ════════════════════════════════════════════════════════════════════════════════
+
+    private static SlideShape MakePictureShape(uint id, int imageBytes) => new()
+    {
+        Id          = id,
+        Name        = $"Picture{id}",
+        Kind        = SlideShapeKind.Picture,
+        OffsetXEmu  = 0,
+        OffsetYEmu  = 0,
+        ExtentCxEmu = 1_000_000,
+        ExtentCyEmu = 1_000_000,
+        Picture     = new ImagePart { Bytes = new byte[imageBytes], ContentType = "image/png" },
+    };
+
+    /// <summary>
+    /// The literal Ctrl+V path: <c>EditingSession.CopySelectedShapes</c> then
+    /// <c>EditingSession.Paste</c> (which dispatches to <c>PasteShapes</c> ->
+    /// <c>PasteShapeCopies</c> -> <c>Bus.Execute(new PasteShapesCommand(...))</c>), driven
+    /// through the real session with the real <see cref="PresentationCommandBus"/> -- no direct
+    /// command construction. Before the fix, <c>PasteShapesCommand.EstimatedBytes</c> was
+    /// <c>256 + _shapes.Count * 512</c>, a flat heuristic blind to the pasted shapes' actual
+    /// picture content, so pasting a handful of image-heavy shapes repeatedly never tripped the
+    /// 50MB undo byte budget.
+    /// </summary>
+    [Fact]
+    public void Paste_LargeImagePayload_TriggersByteBudgetEviction_ViaRealEditingSessionEntryPoint()
+    {
+        const int pasteCount = 8;
+        const int imageBytesPerPaste = 8 * 1024 * 1024; // 8 x 8MB = 64MB > 50MB budget.
+
+        var sess = Make();
+        sess.CurrentSlide!.Shapes.Add(MakePictureShape(1, imageBytesPerPaste));
+        sess.Select(1u);
+        sess.CopySelectedShapes();
+
+        for (var i = 0; i < pasteCount; i++)
+            sess.Paste();
+
+        sess.CurrentSlide!.Shapes.Should().HaveCount(1 + pasteCount);
+
+        var undone = 0;
+        while (sess.CanUndo)
+        {
+            sess.Undo();
+            undone++;
+        }
+
+        undone.Should().BeLessThan(pasteCount,
+            "64MB of pasted picture bytes across eight real Paste() calls should have tripped the " +
+            "50MB undo byte budget; before the fix PasteShapesCommand always reported a flat " +
+            "256 + count*512 estimate regardless of the pasted shapes' picture content, so every " +
+            "paste stayed undoable");
+    }
+
+    /// <summary>
+    /// The real Insert &gt; Object path: <c>EditingSession.InsertEmbeddedObject</c> builds an
+    /// OLE shape (<c>Kind == Ole</c>, <c>OleObject.EmbeddedBytes</c> holding the raw embedded
+    /// file) and adds it via the shared <c>AddShape</c> -&gt; <c>Bus.Execute(new
+    /// AddShapeCommand(...))</c> path. <c>AddShapeCommand</c> itself was already fixed to use
+    /// <c>PresentationCommandSizeEstimator.EstimateBytes(SlideShape)</c>, but that SHARED helper
+    /// never read <c>SlideShape.OleObject</c> at all, so the fix didn't actually cover this case
+    /// until the estimator itself was extended.
+    /// </summary>
+    [Fact]
+    public void InsertEmbeddedObject_LargeEmbeddedPayload_TriggersByteBudgetEviction_ViaRealEditingSessionEntryPoint()
+    {
+        const int insertCount = 8;
+        const int embeddedBytesPerObject = 8 * 1024 * 1024; // 8 x 8MB = 64MB > 50MB budget.
+
+        var sess = Make();
+
+        for (var i = 0; i < insertCount; i++)
+            sess.InsertEmbeddedObject(new byte[embeddedBytesPerObject], $"Workbook{i}.xlsx");
+
+        sess.CurrentSlide!.Shapes.Should().HaveCount(insertCount);
+
+        var undone = 0;
+        while (sess.CanUndo)
+        {
+            sess.Undo();
+            undone++;
+        }
+
+        undone.Should().BeLessThan(insertCount,
+            "64MB of embedded OLE object bytes across eight real InsertEmbeddedObject() calls " +
+            "(the Insert > Object path) should have tripped the 50MB undo byte budget; before the " +
+            "fix the shared PresentationCommandSizeEstimator never read SlideShape.OleObject at " +
+            "all, so every embedded object stayed undoable no matter how large");
+    }
 }
