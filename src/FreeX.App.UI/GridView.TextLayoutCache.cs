@@ -63,6 +63,37 @@ public partial class GridView
         return formatted;
     }
 
+    /// <summary>
+    /// Header-label counterpart to <see cref="GetDefaultFormattedText"/>: column letters, row
+    /// numbers, and outline level glyphs are grid CHROME, not cell content, so they are colored
+    /// with <see cref="HeaderTextBrush"/> (which reacts to Windows High Contrast -- see
+    /// ApplyHighContrastChromePalette in GridView.cs) rather than the fixed <see cref="TextBrush"/>
+    /// used for the workbook's own cell text. Cached separately from
+    /// <see cref="_defaultTextLayoutCache"/> for the same reason: the two caches key on identical
+    /// (text, culture, font size, pixels-per-dip) tuples but must never share entries, since they
+    /// bake in different brushes.
+    /// </summary>
+    private FormattedText GetDefaultHeaderFormattedText(string text, double fontSize, double pixelsPerDip)
+    {
+        var key = new DefaultTextLayoutKey(text, CultureInfo.CurrentCulture.Name, fontSize, pixelsPerDip);
+        if (_defaultHeaderTextLayoutCache.TryGetValue(key, out var cached))
+            return cached;
+
+        if (_defaultHeaderTextLayoutCache.Count >= DefaultTextLayoutCacheLimit)
+            _defaultHeaderTextLayoutCache.Clear();
+
+        var formatted = new FormattedText(
+            text,
+            CultureInfo.CurrentCulture,
+            FlowDirection.LeftToRight,
+            DefaultTypeface,
+            fontSize,
+            HeaderTextBrush,
+            pixelsPerDip);
+        _defaultHeaderTextLayoutCache.Add(key, formatted);
+        return formatted;
+    }
+
     private FormattedText GetDefaultWrappedFormattedText(
         string text,
         double fontSize,

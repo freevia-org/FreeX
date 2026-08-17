@@ -44,6 +44,12 @@ public sealed class DuplicateSheetCommand : IWorkbookCommand, IWholeWorkbookReca
             return protectedOutcome;
 
         var source = ctx.GetSheet(_sourceSheetId);
+        // R139-workbook-protection: an individually-protected sheet must refuse Duplicate of its
+        // own tab even when the workbook's structure is not protected -- see RenameSheetCommand's
+        // matching comment in SheetCommands.cs.
+        if (CommandGuards.RejectIfProtected(source) is { } sheetProtectedOutcome)
+            return sheetProtectedOutcome;
+
         var sourceIndex = FindSheetIndex(ctx.Workbook, _sourceSheetId);
         if (sourceIndex < 0)
             return CommandGuards.RejectSourceSheetNotFound();

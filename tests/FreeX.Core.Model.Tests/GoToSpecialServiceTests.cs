@@ -214,7 +214,11 @@ public sealed class GoToSpecialServiceTests
         var shapeAnchor = new CellAddress(sheet.Id, 3, 3);
         var pictureAnchor = new CellAddress(sheet.Id, 4, 4);
         var outsideAnchor = new CellAddress(sheet.Id, 5, 5);
-        sheet.Charts.Add(new ChartModel { DataRange = new GridRange(chartAnchor, chartAnchor) });
+        // Left/Top place the chart's on-screen anchor at row 2/col 2 (default 8.43-char columns =
+        // 67.44px, default 20px rows), independent of DataRange -- which is deliberately set to a
+        // DIFFERENT cell (outsideAnchor) below to prove Objects selects by screen position, not by
+        // where the chart's source data lives.
+        sheet.Charts.Add(new ChartModel { DataRange = new GridRange(outsideAnchor, outsideAnchor), Left = 70, Top = 25 });
         sheet.DrawingShapes.Add(new DrawingShapeModel { Anchor = shapeAnchor });
         sheet.Pictures.Add(new PictureModel { Anchor = pictureAnchor });
         sheet.TextBoxes.Add(new TextBoxModel { Anchor = outsideAnchor });
@@ -222,6 +226,85 @@ public sealed class GoToSpecialServiceTests
         GoToSpecialService.Find(wb, sheet, range, GoToSpecialKind.Objects)
             .Should()
             .Equal(chartAnchor, shapeAnchor, pictureAnchor);
+    }
+
+    [Fact]
+    public void FindObjects_ChartDraggedAwayFromItsDataRange_IsNotSelectedByDataRangeAlone()
+    {
+        // Regression for goto-special-objects-chart-datarange-not-anchor: a chart whose DataRange
+        // (source data) falls inside the user's search range, but which has been dragged far away
+        // so its actual on-screen anchor sits outside that range, must NOT be selected by
+        // Go To Special > Objects -- matching Excel, which selects by where the object visually
+        // sits, not by where its source data lives.
+        var wb = new Workbook("test");
+        var sheet = wb.AddSheet("Sheet1");
+        var range = new GridRange(new CellAddress(sheet.Id, 1, 1), new CellAddress(sheet.Id, 3, 3));
+        var dataRangeStart = new CellAddress(sheet.Id, 1, 1);
+        // Left=2000/Top=500 land the chart's on-screen anchor around row ~26/col ~30 (default
+        // 67.44px columns, 20px rows) -- well outside the A1:C3 search range -- even though
+        // DataRange starts inside it.
+        var chart = new ChartModel
+        {
+            DataRange = new GridRange(dataRangeStart, new CellAddress(sheet.Id, 10, 2)),
+            Left = 2000,
+            Top = 500
+        };
+        sheet.Charts.Add(chart);
+
+        GoToSpecialService.Find(sheet, range, GoToSpecialKind.Objects).Should().BeEmpty();
+    }
+
+    [Fact]
+    public void FindObjects_ShapesAndPicturesStillKeyOffTheirOwnAnchor()
+    {
+        // Sibling to the chart-anchor fix above: shapes/pictures/text boxes were never keyed off a
+        // chart-style DataRange to begin with -- they must keep matching by their own Anchor cell,
+        // unaffected by the ResolveChartAnchor change.
+        var wb = new Workbook("test");
+        var sheet = wb.AddSheet("Sheet1");
+        var range = new GridRange(new CellAddress(sheet.Id, 1, 1), new CellAddress(sheet.Id, 3, 3));
+        var shapeAnchor = new CellAddress(sheet.Id, 2, 2);
+        var outsideAnchor = new CellAddress(sheet.Id, 9, 9);
+        sheet.DrawingShapes.Add(new DrawingShapeModel { Anchor = shapeAnchor });
+        sheet.Pictures.Add(new PictureModel { Anchor = outsideAnchor });
+
+        GoToSpecialService.Find(sheet, range, GoToSpecialKind.Objects).Should().Equal(shapeAnchor);
+    }
+
+    [Fact]
+    public void FindBlanks_BoundedSelectionOverThreshold_IsNotClampedToUsedRange()
+    {
+        // Regression for goto-special-usedrange-clamp-overreach: an explicit, fully bounded
+        // selection (never touching the sheet's nominal row/column boundary) over the
+        // 1,000,000-cell direct-scan threshold must still be scanned in full, not silently
+        // narrowed to the sheet's used range.
+        var wb = new Workbook("test");
+        var sheet = wb.AddSheet("Sheet1");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new NumberValue(1)); // tiny used range
+        var farBelowUsedRange = new CellAddress(sheet.Id, 1_000_000, 1);
+        var range = new GridRange(new CellAddress(sheet.Id, 1, 1), new CellAddress(sheet.Id, 1_000_001, 1));
+
+        var result = GoToSpecialService.Find(sheet, range, GoToSpecialKind.Blanks);
+
+        result.Should().Contain(farBelowUsedRange);
+    }
+
+    [Fact]
+    public void FindBlanks_WholeColumnSelectionOverThreshold_IsStillClampedToUsedRange()
+    {
+        // Sibling to the bounded-selection fix above: an explicit whole-column selection (reaching
+        // the sheet's nominal row boundary) over the threshold must still be clamped to the used
+        // range exactly as before, so this doesn't regress into an unbounded ~1M-row scan on every
+        // sparse sheet.
+        var wb = new Workbook("test");
+        var sheet = wb.AddSheet("Sheet1");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new NumberValue(1)); // used range = A1 only
+        var farBeyondUsedRange = new CellAddress(sheet.Id, 1_000_000, 1);
+        var range = new GridRange(new CellAddress(sheet.Id, 1, 1), new CellAddress(sheet.Id, CellAddress.MaxRow, 1));
+
+        var result = GoToSpecialService.Find(sheet, range, GoToSpecialKind.Blanks);
+
+        result.Should().NotContain(farBeyondUsedRange);
     }
 
     [Fact]

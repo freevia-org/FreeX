@@ -2615,7 +2615,12 @@ public sealed class SetSlideLayoutCommand : IPresentationCommand
         var nextShapeId = NextShapeId(slide);
         foreach (var target in layout.Placeholders)
         {
-            if (!HasGeometry(target) || target.Placeholder is null ||
+            // A layout placeholder with no explicit xfrm is not "nothing to place" — per
+            // ECMA-376 19.3.1.53, a missing xfrm means the placeholder inherits its geometry
+            // from the master. Only skip when the placeholder tag itself is missing, or a
+            // matching shape already exists on the slide; never skip solely for lack of geometry,
+            // or the placeholder becomes permanently unreachable (can never be shown or clicked).
+            if (target.Placeholder is null ||
                 slide.Shapes.Any(shape => MatchesPlaceholder(target.Placeholder, shape.Placeholder)))
             {
                 continue;
@@ -2627,6 +2632,17 @@ public sealed class SetSlideLayoutCommand : IPresentationCommand
             placeholder.Name = string.IsNullOrWhiteSpace(target.Name)
                 ? $"Placeholder {placeholder.Id}"
                 : target.Name;
+
+            // Reuse the same layout/master inheritance chain the compositor and hit-tester
+            // already resolve placeholder geometry through (PlaceholderResolver.ResolveAnchor):
+            // when the cloned placeholder still carries no geometry of its own, pull the
+            // concrete offset/extent down from the matching master placeholder now, so the
+            // shape round-trips with real coordinates instead of staying an inheriting stub.
+            if (!HasGeometry(placeholder))
+            {
+                ApplyInheritedMasterGeometry(placeholder, layout, p);
+            }
+
             slide.Shapes.Add(placeholder);
             _addedPlaceholders.Add(placeholder);
         }
@@ -2682,6 +2698,37 @@ public sealed class SetSlideLayoutCommand : IPresentationCommand
 
     private static bool HasGeometry(SlideShape shape) =>
         shape.ExtentCxEmu > 0 || shape.ExtentCyEmu > 0 || shape.HasExplicitZeroExtentTransform;
+
+    /// <summary>
+    /// Resolves a materialized-but-geometry-less placeholder's offset/extent from the matching
+    /// placeholder on the layout's master, using the same <see cref="MatchesPlaceholder"/>
+    /// idx/type-compatibility rule already applied one level up (slide-shape vs. layout
+    /// placeholder). Mirrors the layout-then-master walk that
+    /// FreeP.App.Presentation's PlaceholderResolver.ResolveAnchor performs at render/hit-test
+    /// time for any shape; a placeholder that still has no geometry after this call falls
+    /// back to that same resolver when composited, so leaving it at (0,0,0,0) here is safe.
+    /// </summary>
+    private static void ApplyInheritedMasterGeometry(SlideShape placeholder, SlideLayout layout, Presentation p)
+    {
+        if (placeholder.Placeholder is null)
+            return;
+
+        var master = p.Masters.FirstOrDefault(m => m.Id == layout.MasterId);
+        var masterPlaceholder = master?.Placeholders.FirstOrDefault(candidate =>
+            MatchesPlaceholder(candidate.Placeholder, placeholder.Placeholder));
+
+        if (masterPlaceholder is null || !HasGeometry(masterPlaceholder))
+            return;
+
+        placeholder.OffsetXEmu = masterPlaceholder.OffsetXEmu;
+        placeholder.OffsetYEmu = masterPlaceholder.OffsetYEmu;
+        placeholder.ExtentCxEmu = masterPlaceholder.ExtentCxEmu;
+        placeholder.ExtentCyEmu = masterPlaceholder.ExtentCyEmu;
+        placeholder.RotationDeg = masterPlaceholder.RotationDeg;
+        placeholder.FlipH = masterPlaceholder.FlipH;
+        placeholder.FlipV = masterPlaceholder.FlipV;
+        placeholder.HasExplicitZeroExtentTransform = masterPlaceholder.HasExplicitZeroExtentTransform;
+    }
 
     private static uint NextShapeId(Slide slide)
     {
@@ -3266,7 +3313,13 @@ public sealed class DeleteShapeCommand : IPresentationCommand
         }
     }
 
-    private static string? RemoveBuildListEntriesForShapes(
+    /// <summary>
+    /// Prunes any &lt;p:bldP&gt; entry in the slide's authored build-list XML that targets one of
+    /// <paramref name="shapeIds"/>. Internal (not private) so other commands that remove a shape
+    /// id from the slide - e.g. <see cref="UngroupShapeCommand"/> destroying a group's own id -
+    /// can reuse the exact same cleanup instead of re-implementing bldLst parsing.
+    /// </summary>
+    internal static string? RemoveBuildListEntriesForShapes(
         string? rawXml,
         IReadOnlySet<uint> shapeIds)
     {

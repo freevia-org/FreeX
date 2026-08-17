@@ -85,16 +85,38 @@ public sealed record PortablePrintExecutionResult(
 /// </summary>
 public sealed class PortablePrintSubmissionWorkflow
 {
+    private const string TemporaryPdfPrefix = "portable-print-";
+    private const string TemporaryPdfExtension = ".pdf";
+
+    /// <summary>
+    /// How long a "kept" temporary PDF (submission accepted but the external reader never
+    /// confirmed it exited) is left alone before a later print is allowed to sweep it away. Far
+    /// larger than <c>WindowsShellPdfPrintHandoff.DefaultAcceptanceTimeout</c> (8s) so a reader
+    /// that is merely slow to open, or a resident viewer the user leaves open for a while, is never
+    /// caught by the sweep; short enough that repeated everyday printing bounds disk growth instead
+    /// of leaking one file per unconfirmed handoff forever.
+    /// </summary>
+    private static readonly TimeSpan DefaultStaleTemporaryPdfAge = TimeSpan.FromHours(1);
+
     private readonly IPlatformPrintService _printService;
     private readonly Func<TemporaryFileLease> _createTemporaryPdf;
+    private readonly string _staleTemporaryPdfDirectoryPath;
+    private readonly TimeSpan _staleTemporaryPdfAge;
 
     public PortablePrintSubmissionWorkflow(
         IPlatformPrintService printService,
-        Func<TemporaryFileLease>? createTemporaryPdf = null)
+        Func<TemporaryFileLease>? createTemporaryPdf = null,
+        string? staleTemporaryPdfDirectoryPath = null,
+        TimeSpan? staleTemporaryPdfAge = null)
     {
         _printService = printService ?? throw new ArgumentNullException(nameof(printService));
+        _staleTemporaryPdfDirectoryPath = staleTemporaryPdfDirectoryPath ?? Path.GetTempPath();
         _createTemporaryPdf = createTemporaryPdf ??
-            (() => TemporaryFileLease.Create("portable-print-", ".pdf"));
+            (() => TemporaryFileLease.Create(
+                TemporaryPdfPrefix,
+                TemporaryPdfExtension,
+                _staleTemporaryPdfDirectoryPath));
+        _staleTemporaryPdfAge = staleTemporaryPdfAge ?? DefaultStaleTemporaryPdfAge;
     }
 
     public async Task<PortablePrintExecutionResult> ExecuteAsync(
@@ -152,6 +174,7 @@ public sealed class PortablePrintSubmissionWorkflow
                 _printService.RangeAndOrientationHandling);
 
             failureStage = PortablePrintFailureStage.TemporaryPdf;
+            SweepStaleKeptTemporaryPdfs();
             using var temporaryPdf = _createTemporaryPdf() ??
                 throw new InvalidOperationException("The temporary PDF factory returned null.");
             await using (var output = temporaryPdf.OpenWrite(useAsync: true))
@@ -175,6 +198,11 @@ public sealed class PortablePrintSubmissionWorkflow
                 // accepted but the handler process never exited within the acceptance window).
                 // Deleting the temp PDF here would race that still-reading process, so relinquish
                 // cleanup ownership instead of guessing at a safe deletion time with a delay.
+                // Keep() is terminal -- nothing else in this process ever revisits this path -- so
+                // ownership of eventually removing the file passes to SweepStaleKeptTemporaryPdfs,
+                // which a later print (even for an unrelated document) runs before reserving its own
+                // temporary PDF. That sweep only looks at on-disk file age, so it still runs and
+                // bounds disk growth even after a crash of this process.
                 temporaryPdf.Keep();
             }
             return FromSubmission(submission, discovery, selection, handoff);
@@ -203,6 +231,28 @@ public sealed class PortablePrintSubmissionWorkflow
                 discovery,
                 selection,
                 handoff);
+        }
+    }
+
+    /// <summary>
+    /// Opportunistically removes previously-kept temporary PDFs (see the comment on
+    /// <c>temporaryPdf.Keep()</c> above) once they are old enough that any external reader has had
+    /// ample time to finish. Best-effort: a failed sweep must never prevent the print this call is
+    /// actually here to perform.
+    /// </summary>
+    private void SweepStaleKeptTemporaryPdfs()
+    {
+        try
+        {
+            TemporaryFileLease.SweepStale(
+                _staleTemporaryPdfDirectoryPath,
+                TemporaryPdfPrefix,
+                TemporaryPdfExtension,
+                _staleTemporaryPdfAge);
+        }
+        catch
+        {
+            // Cleanup must never fail the print job it happens to run alongside.
         }
     }
 

@@ -24,7 +24,11 @@ public static class SisterAvaloniaAppBootstrap
         ArgumentNullException.ThrowIfNull(spec.StartupArguments);
         ArgumentNullException.ThrowIfNull(spec.CreateMainWindow);
 
-        application.RequestedThemeVariant = ThemeVariant.Light;
+        // ThemeVariant.Default (not a hardcoded Light) lets Avalonia's FluentTheme resolve each
+        // control's actual variant from the platform's live color-scheme preference (OS-wide
+        // dark-mode/high-contrast), instead of forcing every sister app to Light regardless of
+        // what the user has configured on Linux/macOS/Windows (r139 avalonia-hardcoded-light-theme).
+        application.RequestedThemeVariant = ThemeVariant.Default;
         application.Styles.Add(new FluentTheme());
 
         if (application.ApplicationLifetime is not IClassicDesktopStyleApplicationLifetime desktop)

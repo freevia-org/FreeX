@@ -23,6 +23,10 @@
     <!-- Tests exercise the internal normalization and recovery policy hooks directly. -->
     <InternalsVisibleTo Include="FreeX.App.Services.Tests" />
     <InternalsVisibleTo Include="Free.Shared.AppServices.Tests" />
+    <!-- r139 sweep78-1: the FreeP export-deadlock repro test constructs AtomicExportExecutor via
+         its internal createTemporaryFile/replaceDestination constructor so it can inject a custom
+         ITemporaryResourceFileSystem whose write genuinely completes asynchronously. -->
+    <InternalsVisibleTo Include="FreeP.App.Presentation.Tests" />
   </ItemGroup>
 
 </Project>

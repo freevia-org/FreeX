@@ -7417,9 +7417,14 @@ public static class DocxReader
         // structure so we delegate to it directly.
         var charBorder = ReadParagraphBorder(rPr.Element(W + "bdr"));
 
-        // w:lang (proofing language) — recover the val attribute (BCP-47 tag). @w:eastAsia and @w:bidi are
-        // also written but the main @w:val is authoritative for spell-check; we use it as the canonical tag.
-        var langTag = rPr.Element(W + "lang")?.Attribute(W + "val")?.Value;
+        // w:lang (proofing language) — the val/eastAsia/bidi attributes are three independent BCP-47 tags
+        // (one per script: general/Latin, East Asian, complex-script/RTL). Word commonly writes all three
+        // with distinct values (e.g. val="en-US" eastAsia="en-US" bidi="ar-SA"), so each must be modeled
+        // and round-tripped separately instead of being collapsed to a single canonical tag.
+        var langElement = rPr.Element(W + "lang");
+        var langTag = langElement?.Attribute(W + "val")?.Value;
+        var langEastAsiaTag = langElement?.Attribute(W + "eastAsia")?.Value;
+        var langBidiTag = langElement?.Attribute(W + "bidi")?.Value;
 
         return new RunFormatting
         {
@@ -7466,6 +7471,8 @@ public static class DocxReader
             CharacterShadingHex = charShadingHex,
             CharacterShadingPattern = charShadingHex is not null ? shdPattern : ShadingPattern.Clear,
             LanguageTag = string.IsNullOrEmpty(langTag) ? null : langTag,
+            EastAsiaLanguageTag = string.IsNullOrEmpty(langEastAsiaTag) ? null : langEastAsiaTag,
+            BidiLanguageTag = string.IsNullOrEmpty(langBidiTag) ? null : langBidiTag,
         };
     }
 
@@ -7834,6 +7841,8 @@ public static class DocxReader
                     ? defaultRun.CharacterShadingPattern
                     : document.DefaultRun.CharacterShadingPattern,
                 LanguageTag = defaultRun.LanguageTag ?? document.DefaultRun.LanguageTag,
+                EastAsiaLanguageTag = defaultRun.EastAsiaLanguageTag ?? document.DefaultRun.EastAsiaLanguageTag,
+                BidiLanguageTag = defaultRun.BidiLanguageTag ?? document.DefaultRun.BidiLanguageTag,
                 Bold = defaultRun.Bold,
                 Italic = defaultRun.Italic,
                 AllCaps = defaultRun.AllCaps || document.DefaultRun.AllCaps,

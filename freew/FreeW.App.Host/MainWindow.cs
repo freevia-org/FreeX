@@ -1824,6 +1824,9 @@ public sealed partial class MainWindow : Window
     private void ToggleBalloons()
     {
         _balloonOverlay.Toggle();
+        // Print/Print Preview/PDF/XPS export (PrintLayout.BuildPaginator) read this flag so the
+        // printed page reserves and draws the same balloon strip shown on screen (Word's behaviour).
+        _editor.ShowMarkupBalloons = _balloonOverlay.BalloonsEnabled;
         _stateStore.SetChecked("freew.show-markup-balloons", _balloonOverlay.BalloonsEnabled);
     }
 

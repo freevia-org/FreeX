@@ -367,6 +367,58 @@ public class ComplexFieldEngineTests
         ComplexFieldEngine.Recompute(doc, 2, 0).Should().Be("ADA LOVELACE");
     }
 
+    // Word stores a run's language on the run only when it diverges from what the run would otherwise
+    // inherit — the common case is the language living solely on the paragraph's style or the document
+    // default. CREATEDATE/SAVEDATE/PRINTDATE must resolve through that same cascade instead of falling
+    // straight to the host process culture whenever the run itself carries no direct w:lang.
+    [Fact]
+    public void CreateDateField_WithNoDirectRunLanguage_ResolvesCultureFromParagraphStyle()
+    {
+        var doc = new TextDocument();
+        doc.Styles["Journal"] = new DocumentStyle
+        {
+            Id = "Journal",
+            Name = "Journal",
+            Run = new RunFormatting { LanguageTag = "fr-FR" },
+        };
+        doc.Properties.Created = new DateTimeOffset(new DateTime(2026, 1, 5), TimeSpan.Zero);
+        var paragraph = AddField(doc, " CREATEDATE \\@ \"d MMMM yyyy\" ", "stale");
+        paragraph.StyleId = "Journal";
+
+        ComplexFieldEngine.Recompute(doc, 0, 0).Should().Be("5 janvier 2026");
+    }
+
+    [Fact]
+    public void CreateDateField_WithNoDirectRunOrStyleLanguage_ResolvesCultureFromDocumentDefault()
+    {
+        var doc = new TextDocument();
+        doc.DefaultRun = doc.DefaultRun with { LanguageTag = "fr-FR" };
+        doc.Properties.Created = new DateTimeOffset(new DateTime(2026, 1, 5), TimeSpan.Zero);
+        AddField(doc, " CREATEDATE \\@ \"d MMMM yyyy\" ", "stale");
+
+        ComplexFieldEngine.Recompute(doc, 0, 0).Should().Be("5 janvier 2026");
+    }
+
+    // Sibling/no-regression coverage: a run's own direct w:lang still wins over both the paragraph
+    // style's language and the document default, exactly as before this fix.
+    [Fact]
+    public void CreateDateField_WithDirectRunLanguage_StillWinsOverStyleAndDocumentDefault()
+    {
+        var doc = new TextDocument();
+        doc.DefaultRun = doc.DefaultRun with { LanguageTag = "es-ES" };
+        doc.Styles["Journal"] = new DocumentStyle
+        {
+            Id = "Journal",
+            Name = "Journal",
+            Run = new RunFormatting { LanguageTag = "de-DE" },
+        };
+        doc.Properties.Created = new DateTimeOffset(new DateTime(2026, 1, 5), TimeSpan.Zero);
+        var paragraph = AddField(doc, " CREATEDATE \\@ \"d MMMM yyyy\" ", "stale", languageTag: "fr-FR");
+        paragraph.StyleId = "Journal";
+
+        ComplexFieldEngine.Recompute(doc, 0, 0).Should().Be("5 janvier 2026");
+    }
+
     [Theory]
     [InlineData(" CREATEDATE ")]
     [InlineData(" SAVEDATE ")]

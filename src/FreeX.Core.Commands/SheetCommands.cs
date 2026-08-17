@@ -186,6 +186,13 @@ public sealed class RenameSheetCommand : IWorkbookCommand, IWholeWorkbookRecalcC
             return protectedOutcome;
 
         var sheet = ctx.GetSheet(_sheetId);
+        // R139-workbook-protection: a sheet protected individually (Protect Sheet, no workbook
+        // structure protection) must refuse renaming its own tab, mirroring the tab-context-menu
+        // gate real Excel applies -- previously this command only checked workbook-level structure
+        // protection, so an individually-protected sheet could be silently renamed.
+        if (CommandGuards.RejectIfProtected(sheet) is { } sheetProtectedOutcome)
+            return sheetProtectedOutcome;
+
         var validationError = ctx.Workbook.ValidateSheetName(_newName, _sheetId);
         if (validationError is not null)
             return new CommandOutcome(false, validationError);
@@ -771,6 +778,12 @@ public sealed class RemoveSheetCommand : IWorkbookCommand, IWholeWorkbookRecalcC
             return new CommandOutcome(false, "Cannot delete the only visible sheet.");
 
         var sheet = ctx.GetSheet(_sheetId);
+        // R139-workbook-protection: an individually-protected sheet must refuse Delete of its own
+        // tab even when the workbook's structure is not protected -- see RenameSheetCommand's
+        // matching comment above.
+        if (CommandGuards.RejectIfProtected(sheet) is { } sheetProtectedOutcome)
+            return sheetProtectedOutcome;
+
         _removedSheet = sheet;
         var sheets = ctx.Workbook.Sheets;
         for (int i = 0; i < sheets.Count; i++)
@@ -1562,6 +1575,13 @@ public sealed class MoveSheetCommand : IWorkbookCommand, IWholeWorkbookRecalcCom
         if (_fromIndex == _toIndex)
             return new CommandOutcome(true, IsNoOp: true);
 
+        // R139-workbook-protection: an individually-protected sheet must refuse Move of its own
+        // tab even when the workbook's structure is not protected -- see RenameSheetCommand's
+        // matching comment above. Checked after the no-op short-circuit so dragging a protected
+        // tab to its own position (a true no-op) is not rejected.
+        if (CommandGuards.RejectIfProtected(ctx.Workbook.Sheets[_fromIndex]) is { } sheetProtectedOutcome)
+            return sheetProtectedOutcome;
+
         ctx.Workbook.MoveSheet(_fromIndex, _toIndex);
         _applied = true;
         return new CommandOutcome(true);
@@ -1601,6 +1621,14 @@ public sealed class SetSheetHiddenCommand : IWorkbookCommand
             return protectedOutcome;
 
         var sheet = ctx.GetSheet(_sheetId);
+        // R139-workbook-protection: an individually-protected sheet must refuse being Hidden even
+        // when the workbook's structure is not protected -- see RenameSheetCommand's matching
+        // comment above. Unhide (_hidden == false) is deliberately left ungated: revealing an
+        // already-hidden sheet does not alter its protection state and real Excel's Unhide dialog
+        // operates at the workbook level, not gated by the target sheet's own protection.
+        if (_hidden && CommandGuards.RejectIfProtected(sheet) is { } sheetProtectedOutcome)
+            return sheetProtectedOutcome;
+
         if (_hidden && !ctx.Workbook.Sheets.Any(s => s.Id != _sheetId && !s.IsHidden && !s.IsVeryHidden))
             return new CommandOutcome(false, "Cannot hide the only visible sheet.");
 

@@ -1460,13 +1460,23 @@ public partial class MainWindow
         var hiddenSheetCount = _workbook.Sheets.Count(sheet => sheet.IsHidden && !sheet.IsVeryHidden);
         var selectedSheetIsVisible = tab is not null &&
                                      _workbook.Sheets.Any(sheet => sheet.Id == tab.Id && !sheet.IsHidden);
+        // R139-workbook-protection: gray out structural tab commands under workbook structure
+        // protection (F2) and additionally gray Delete/Rename/Hide of the target tab specifically
+        // when that individual sheet is protected (matches the SheetCommands.cs command-layer
+        // guards, so the menu never offers an action the command layer would then refuse).
+        var isStructureProtected = _workbook.IsStructureProtected;
+        var isTargetSheetProtected = tab is not null &&
+            _workbook.Sheets.FirstOrDefault(sheet => sheet.Id == tab.Id)?.IsProtected == true;
 
         return new SheetTabContextMenuState(
-            CanDeleteSheet: selectedSheetIsVisible && visibleSheetCount > 1,
-            CanHideSheet: selectedSheetIsVisible && visibleSheetCount > 1,
-            CanUnhideSheet: hiddenSheetCount > 0,
+            CanDeleteSheet: selectedSheetIsVisible && visibleSheetCount > 1 && !isStructureProtected && !isTargetSheetProtected,
+            CanHideSheet: selectedSheetIsVisible && visibleSheetCount > 1 && !isStructureProtected && !isTargetSheetProtected,
+            CanUnhideSheet: hiddenSheetCount > 0 && !isStructureProtected,
             CanSelectAllSheets: visibleSheetCount > 1,
-            CanUngroupSheets: _groupedSheetIds.Count > 1);
+            CanUngroupSheets: _groupedSheetIds.Count > 1,
+            CanInsertSheet: !isStructureProtected,
+            CanRename: !isStructureProtected && !isTargetSheetProtected,
+            CanMoveOrCopy: !isStructureProtected);
     }
 
     private void AddSheetTabContextMenuItem(

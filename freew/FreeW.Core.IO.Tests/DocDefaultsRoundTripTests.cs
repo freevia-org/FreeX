@@ -231,6 +231,27 @@ public class DocDefaultsRoundTripTests
         reopened.DefaultRun.Rtl.Should().BeTrue();
     }
 
+    // Word's standard docDefaults w:lang carries three independent script tags (e.g. val="en-US"
+    // eastAsia="en-US" bidi="ar-SA" — its normal.dotm default for a non-Arabic, non-CJK document). All
+    // three must be modeled and round-tripped independently instead of collapsing to a single tag.
+    [Fact]
+    public void DocDefaults_LanguageEastAsiaAndBidi_RoundTripIndependently()
+    {
+        var doc = Read("<w:rPr><w:lang w:val=\"en-US\" w:eastAsia=\"ja-JP\" w:bidi=\"ar-SA\"/></w:rPr>");
+
+        doc.DefaultRun.LanguageTag.Should().Be("en-US");
+        doc.DefaultRun.EastAsiaLanguageTag.Should().Be("ja-JP");
+        doc.DefaultRun.BidiLanguageTag.Should().Be("ar-SA");
+
+        using var stream = new MemoryStream();
+        DocxWriter.Write(doc, stream);
+        stream.Position = 0;
+        var reopened = DocxReader.Read(stream);
+        reopened.DefaultRun.LanguageTag.Should().Be("en-US");
+        reopened.DefaultRun.EastAsiaLanguageTag.Should().Be("ja-JP");
+        reopened.DefaultRun.BidiLanguageTag.Should().Be("ar-SA");
+    }
+
     [Fact]
     public void DocDefaults_AdvancedTypography_RoundTripsInCoreThenExtensionOrder()
     {

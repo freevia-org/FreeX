@@ -628,6 +628,7 @@ public sealed class SetTableRowHeightCommand : IPresentationCommand
         if (row is null) return;
         _oldHeightEmu = row.HeightEmu;
         row.HeightEmu = Math.Max(0, _newHeightEmu);
+        SyncExtent(presentation);
     }
 
     public void Revert(Presentation presentation)
@@ -635,6 +636,7 @@ public sealed class SetTableRowHeightCommand : IPresentationCommand
         var row = GetRow(presentation);
         if (row is not null)
             row.HeightEmu = _oldHeightEmu;
+        SyncExtent(presentation);
     }
 
     private TableRow? GetRow(Presentation presentation)
@@ -643,6 +645,13 @@ public sealed class SetTableRowHeightCommand : IPresentationCommand
         return table is not null && _rowIndex >= 0 && _rowIndex < table.Rows.Count
             ? table.Rows[_rowIndex]
             : null;
+    }
+
+    private void SyncExtent(Presentation presentation)
+    {
+        var shape = PresentationModelCloneHelper.FindTableShape(presentation, _slideIndex, _shapeId);
+        if (shape is not null)
+            PresentationModelCloneHelper.SyncTableShapeExtent(shape);
     }
 }
 
@@ -680,21 +689,25 @@ public sealed class SetTableColumnWidthCommand : IPresentationCommand
 
     public void Apply(Presentation presentation)
     {
-        var table = PresentationModelCloneHelper.FindTable(presentation, _slideIndex, _shapeId);
+        var shape = PresentationModelCloneHelper.FindTableShape(presentation, _slideIndex, _shapeId);
+        var table = shape?.Table;
         if (table is null || _columnIndex < 0 || _columnIndex >= table.ColumnWidthsEmu.Count)
             return;
 
         _oldWidthEmu = table.ColumnWidthsEmu[_columnIndex];
         table.ColumnWidthsEmu[_columnIndex] = _newWidthEmu;
+        PresentationModelCloneHelper.SyncTableShapeExtent(shape!);
     }
 
     public void Revert(Presentation presentation)
     {
-        var table = PresentationModelCloneHelper.FindTable(presentation, _slideIndex, _shapeId);
+        var shape = PresentationModelCloneHelper.FindTableShape(presentation, _slideIndex, _shapeId);
+        var table = shape?.Table;
         if (table is null || _columnIndex < 0 || _columnIndex >= table.ColumnWidthsEmu.Count)
             return;
 
         table.ColumnWidthsEmu[_columnIndex] = _oldWidthEmu;
+        PresentationModelCloneHelper.SyncTableShapeExtent(shape!);
     }
 }
 
@@ -730,7 +743,8 @@ public sealed class DistributeTableRowsCommand : IPresentationCommand
 
     public void Apply(Presentation presentation)
     {
-        var table = PresentationModelCloneHelper.FindTable(presentation, _slideIndex, _shapeId);
+        var shape = PresentationModelCloneHelper.FindTableShape(presentation, _slideIndex, _shapeId);
+        var table = shape?.Table;
         if (table is null || table.Rows.Count < 2)
             return;
 
@@ -742,16 +756,21 @@ public sealed class DistributeTableRowsCommand : IPresentationCommand
 
         for (int index = 0; index < table.Rows.Count && index < _newHeights!.Length; index++)
             table.Rows[index].HeightEmu = _newHeights[index];
+
+        PresentationModelCloneHelper.SyncTableShapeExtent(shape!);
     }
 
     public void Revert(Presentation presentation)
     {
-        var table = PresentationModelCloneHelper.FindTable(presentation, _slideIndex, _shapeId);
+        var shape = PresentationModelCloneHelper.FindTableShape(presentation, _slideIndex, _shapeId);
+        var table = shape?.Table;
         if (table is null || _oldHeights is null)
             return;
 
         for (int index = 0; index < table.Rows.Count && index < _oldHeights.Length; index++)
             table.Rows[index].HeightEmu = _oldHeights[index];
+
+        PresentationModelCloneHelper.SyncTableShapeExtent(shape!);
     }
 
     private static long[] BuildDistribution(IReadOnlyList<long> values)
@@ -798,7 +817,8 @@ public sealed class DistributeTableColumnsCommand : IPresentationCommand
 
     public void Apply(Presentation presentation)
     {
-        var table = PresentationModelCloneHelper.FindTable(presentation, _slideIndex, _shapeId);
+        var shape = PresentationModelCloneHelper.FindTableShape(presentation, _slideIndex, _shapeId);
+        var table = shape?.Table;
         if (table is null || table.ColumnWidthsEmu.Count < 2)
             return;
 
@@ -810,16 +830,21 @@ public sealed class DistributeTableColumnsCommand : IPresentationCommand
 
         for (int index = 0; index < table.ColumnWidthsEmu.Count && index < _newWidths!.Length; index++)
             table.ColumnWidthsEmu[index] = _newWidths[index];
+
+        PresentationModelCloneHelper.SyncTableShapeExtent(shape!);
     }
 
     public void Revert(Presentation presentation)
     {
-        var table = PresentationModelCloneHelper.FindTable(presentation, _slideIndex, _shapeId);
+        var shape = PresentationModelCloneHelper.FindTableShape(presentation, _slideIndex, _shapeId);
+        var table = shape?.Table;
         if (table is null || _oldWidths is null)
             return;
 
         for (int index = 0; index < table.ColumnWidthsEmu.Count && index < _oldWidths.Length; index++)
             table.ColumnWidthsEmu[index] = _oldWidths[index];
+
+        PresentationModelCloneHelper.SyncTableShapeExtent(shape!);
     }
 
     private static long[] BuildDistribution(IReadOnlyList<long> values)
@@ -852,7 +877,8 @@ public sealed class InsertTableRowCommand : IPresentationCommand
 
     public void Apply(Presentation p)
     {
-        var table = PresentationModelCloneHelper.FindTable(p, _slideIndex, _shapeId);
+        var shape = PresentationModelCloneHelper.FindTableShape(p, _slideIndex, _shapeId);
+        var table = shape?.Table;
         if (table is null) return;
 
         // Snapshot before mutation.
@@ -865,11 +891,22 @@ public sealed class InsertTableRowCommand : IPresentationCommand
             ? table.Rows[idx - 1].HeightEmu
             : (table.Rows.Count > 0 ? table.Rows[0].HeightEmu : 457200L);
 
-        // W5: In FreeP, row.Cells[c] is the cell for grid column c.
+        // W5 / 2-D-merge fix: In FreeP, row.Cells[c] is the cell for grid column c.
         // For each grid column c, check if the insertion row falls STRICTLY INSIDE a vertical
         // span anchored in a row above (anchorRow < idx <= anchorRow + RowSpan - 1).
         // If so, insert a VMerge continuation for that column and widen the anchor's RowSpan.
         // Otherwise insert an independent blank cell.
+        //
+        // Inside a rectangular (row+col) merge, most columns of the span do NOT hold the
+        // anchor's RowSpan directly: column _c1 (the leftmost column) holds the real anchor
+        // cell (HMerge=false, VMerge=false, RowSpan>1); every other spanned column's own cell
+        // in the anchor's row is an HMerge continuation with RowSpan==1. Stopping at that
+        // HMerge cell (as if it were the anchor) always reports RowSpan==1 and misses the
+        // vertical span entirely, so any column right of the merge's first column is treated
+        // as ordinary and the insert splits the merged rectangle. Walk left across the HMerge
+        // chain to reach the true anchor cell before reading/widening RowSpan, and widen each
+        // anchor object only once even though multiple grid columns resolve to it.
+        var widenedAnchors = new HashSet<TableCell>();
         var newRow = new TableRow { HeightEmu = height };
         for (int c = 0; c < cols; c++)
         {
@@ -882,11 +919,24 @@ public sealed class InsertTableRowCommand : IPresentationCommand
                 var candidateCell = candidateRow.Cells[c];
                 if (candidateCell.VMerge)
                     continue; // this row is itself a continuation — keep scanning upward
-                // Found the anchor (or independent cell) for column c.
-                if (candidateCell.RowSpan > 1 && r + candidateCell.RowSpan - 1 >= idx)
+
+                // Found the row of the (possibly horizontally-merged) span for column c.
+                // If this cell is an HMerge continuation, walk left to the true anchor cell —
+                // the one that actually carries RowSpan for the whole rectangular region.
+                var anchorCell = candidateCell;
+                int anchorCol = c;
+                while (anchorCell.HMerge && anchorCol > 0)
                 {
-                    // Insertion is strictly inside this anchor's vertical span — widen it.
-                    candidateCell.RowSpan++;
+                    anchorCol--;
+                    anchorCell = candidateRow.Cells[anchorCol];
+                }
+
+                if (anchorCell.RowSpan > 1 && r + anchorCell.RowSpan - 1 >= idx)
+                {
+                    // Insertion is strictly inside this anchor's vertical span — widen it
+                    // (once per anchor object, regardless of how many columns it spans).
+                    if (widenedAnchors.Add(anchorCell))
+                        anchorCell.RowSpan++;
                     insideVSpan = true;
                 }
                 break;
@@ -898,13 +948,16 @@ public sealed class InsertTableRowCommand : IPresentationCommand
         }
 
         table.Rows.Insert(idx, newRow);
+        PresentationModelCloneHelper.SyncTableShapeExtent(shape!);
     }
 
     public void Revert(Presentation p)
     {
-        var table = PresentationModelCloneHelper.FindTable(p, _slideIndex, _shapeId);
+        var shape = PresentationModelCloneHelper.FindTableShape(p, _slideIndex, _shapeId);
+        var table = shape?.Table;
         if (table is null || _snapshot is null) return;
         PresentationModelCloneHelper.RestoreTableState(table, _snapshot);
+        PresentationModelCloneHelper.SyncTableShapeExtent(shape!);
     }
 }
 
@@ -934,7 +987,8 @@ public sealed class DeleteTableRowCommand : IPresentationCommand
 
     public void Apply(Presentation p)
     {
-        var table = PresentationModelCloneHelper.FindTable(p, _slideIndex, _shapeId);
+        var shape = PresentationModelCloneHelper.FindTableShape(p, _slideIndex, _shapeId);
+        var table = shape?.Table;
         if (table is null) return;
         if (table.Rows.Count <= 1) return; // keep at least one row
         if (_atRow < 0 || _atRow >= table.Rows.Count) return;
@@ -1010,13 +1064,16 @@ public sealed class DeleteTableRowCommand : IPresentationCommand
         }
 
         table.Rows.RemoveAt(_atRow);
+        PresentationModelCloneHelper.SyncTableShapeExtent(shape!);
     }
 
     public void Revert(Presentation p)
     {
-        var table = PresentationModelCloneHelper.FindTable(p, _slideIndex, _shapeId);
+        var shape = PresentationModelCloneHelper.FindTableShape(p, _slideIndex, _shapeId);
+        var table = shape?.Table;
         if (table is null || _snapshot is null) return;
         PresentationModelCloneHelper.RestoreTableState(table, _snapshot);
+        PresentationModelCloneHelper.SyncTableShapeExtent(shape!);
     }
 }
 
@@ -1047,7 +1104,8 @@ public sealed class InsertTableColumnCommand : IPresentationCommand
 
     public void Apply(Presentation p)
     {
-        var table = PresentationModelCloneHelper.FindTable(p, _slideIndex, _shapeId);
+        var shape = PresentationModelCloneHelper.FindTableShape(p, _slideIndex, _shapeId);
+        var table = shape?.Table;
         if (table is null) return;
 
         _snapshot = PresentationModelCloneHelper.CloneTable(table);
@@ -1095,13 +1153,17 @@ public sealed class InsertTableColumnCommand : IPresentationCommand
                 row.Cells.Insert(idx, new TableCell());
             }
         }
+
+        PresentationModelCloneHelper.SyncTableShapeExtent(shape!);
     }
 
     public void Revert(Presentation p)
     {
-        var table = PresentationModelCloneHelper.FindTable(p, _slideIndex, _shapeId);
+        var shape = PresentationModelCloneHelper.FindTableShape(p, _slideIndex, _shapeId);
+        var table = shape?.Table;
         if (table is null || _snapshot is null) return;
         PresentationModelCloneHelper.RestoreTableState(table, _snapshot);
+        PresentationModelCloneHelper.SyncTableShapeExtent(shape!);
     }
 }
 
@@ -1131,7 +1193,8 @@ public sealed class DeleteTableColumnCommand : IPresentationCommand
 
     public void Apply(Presentation p)
     {
-        var table = PresentationModelCloneHelper.FindTable(p, _slideIndex, _shapeId);
+        var shape = PresentationModelCloneHelper.FindTableShape(p, _slideIndex, _shapeId);
+        var table = shape?.Table;
         if (table is null) return;
         if (table.ColumnWidthsEmu.Count <= 1) return; // keep at least one column
         if (_atCol < 0 || _atCol >= table.ColumnWidthsEmu.Count) return;
@@ -1184,13 +1247,17 @@ public sealed class DeleteTableColumnCommand : IPresentationCommand
                 row.Cells.RemoveAt(_atCol);
             }
         }
+
+        PresentationModelCloneHelper.SyncTableShapeExtent(shape!);
     }
 
     public void Revert(Presentation p)
     {
-        var table = PresentationModelCloneHelper.FindTable(p, _slideIndex, _shapeId);
+        var shape = PresentationModelCloneHelper.FindTableShape(p, _slideIndex, _shapeId);
+        var table = shape?.Table;
         if (table is null || _snapshot is null) return;
         PresentationModelCloneHelper.RestoreTableState(table, _snapshot);
+        PresentationModelCloneHelper.SyncTableShapeExtent(shape!);
     }
 }
 

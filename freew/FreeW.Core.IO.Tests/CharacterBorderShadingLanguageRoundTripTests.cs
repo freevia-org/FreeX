@@ -291,6 +291,61 @@ public class CharacterBorderShadingLanguageRoundTripTests
         result.LanguageTag.Should().BeNull();
     }
 
+    // Word's standard three-script default (e.g. val="en-US" eastAsia="en-US" bidi="ar-SA") stores each
+    // w:lang attribute independently. The three fields must round-trip without any one script's tag
+    // clobbering another's -- this is the important regression coverage for the open-and-save case.
+    [Fact]
+    public void LanguageTag_EastAsiaAndBidi_RoundTripIndependently()
+    {
+        var result = RoundTrip(new RunFormatting
+        {
+            LanguageTag = "en-US",
+            EastAsiaLanguageTag = "ja-JP",
+            BidiLanguageTag = "ar-SA",
+        });
+
+        result.LanguageTag.Should().Be("en-US");
+        result.EastAsiaLanguageTag.Should().Be("ja-JP");
+        result.BidiLanguageTag.Should().Be("ar-SA");
+    }
+
+    [Fact]
+    public void LanguageTag_EastAsiaAndBidi_WriteIndependentAttributes()
+    {
+        var rPr = WriteRunProperties(new RunFormatting
+        {
+            LanguageTag = "en-US",
+            EastAsiaLanguageTag = "ja-JP",
+            BidiLanguageTag = "ar-SA",
+        });
+
+        var lang = rPr.Element(W + "lang");
+        lang.Should().NotBeNull();
+        lang!.Attribute(W + "val")?.Value.Should().Be("en-US");
+        lang.Attribute(W + "eastAsia")?.Value.Should().Be("ja-JP");
+        lang.Attribute(W + "bidi")?.Value.Should().Be("ar-SA");
+    }
+
+    // Sibling/no-regression coverage: a run that only ever set the general-script language (the common
+    // shape for a document authored/edited purely in FreeW) must not gain fabricated eastAsia/bidi
+    // attributes that were never set.
+    [Fact]
+    public void LanguageTag_OnlyValSet_DoesNotFabricateEastAsiaOrBidi()
+    {
+        var rPr = WriteRunProperties(new RunFormatting { LanguageTag = "en-US" });
+
+        var lang = rPr.Element(W + "lang");
+        lang.Should().NotBeNull();
+        lang!.Attribute(W + "val")?.Value.Should().Be("en-US");
+        lang.Attribute(W + "eastAsia").Should().BeNull();
+        lang.Attribute(W + "bidi").Should().BeNull();
+
+        var result = RoundTrip(new RunFormatting { LanguageTag = "en-US" });
+        result.LanguageTag.Should().Be("en-US");
+        result.EastAsiaLanguageTag.Should().BeNull();
+        result.BidiLanguageTag.Should().BeNull();
+    }
+
     // ---- Combined round-trip: border + shading + language all present ----
 
     [Fact]

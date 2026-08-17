@@ -76,14 +76,40 @@ internal static class PrintLayout
     public static FlowDocument BuildPaginatedDocument(DocumentView editor) =>
         BuildPaginatedDocument(editor, applyFragmentedFootnoteFlow: false, out _);
 
+    /// <summary>
+    /// Width, in DIP, reserved on the right of the printed/exported page for the Review &gt; Show Markup
+    /// &gt; Balloons strip when <see cref="DocumentView.ShowMarkupBalloons"/> is on and the document has
+    /// at least one comment or shown tracked-change revision. Word's own behaviour: the printed page
+    /// widens to include the same markup area shown on screen, rather than dropping it.
+    /// </summary>
+    internal const double BalloonStripWidthDip = 200.0;
+
+    /// <summary>
+    /// The balloon sources (comments + shown tracked-change revisions, in document order) that
+    /// Print/Print Preview/PDF/XPS export should draw in a right-margin strip, or empty when balloons
+    /// mode is off or the document has nothing to show. Mirrors what <c>BalloonOverlay</c> (WPF) /
+    /// <c>ReviewBalloonsPane</c> (Avalonia) already render on screen for Review &gt; Show Markup &gt;
+    /// Balloons — this is the family fix for that same on-screen content never reaching Print/PDF/XPS.
+    /// </summary>
+    internal static IReadOnlyList<ReviewBalloonSource> ResolvePrintBalloonSources(DocumentView editor) =>
+        editor.ShowMarkupBalloons
+            ? ReviewBalloonLayoutPlanner.BuildSources(editor.Model, editor.CurrentReviewDisplayPolicy)
+            : Array.Empty<ReviewBalloonSource>();
+
     private static FlowDocument BuildPaginatedDocument(
         DocumentView editor,
         bool applyFragmentedFootnoteFlow,
-        out FootnoteContinuationFlowComposition? footnoteComposition)
+        out FootnoteContinuationFlowComposition? footnoteComposition,
+        IReadOnlyList<ReviewBalloonSource>? balloonSources = null)
     {
         var page = editor.Model.Page;
         var (pageWidth, pageHeight) = PageLayout.PageSizeDip(page);
         var (left, top, right, bottom) = PageLayout.MarginsDip(page);
+        // Widen the page (not the body content width) to add the balloon strip purely as extra space
+        // on the right, matching Word's own "the page gets wider" behaviour instead of squeezing body
+        // text to make room.
+        if (balloonSources is { Count: > 0 })
+            pageWidth += BalloonStripWidthDip;
 
         var flow = new FlowDocument
         {
@@ -191,8 +217,11 @@ internal static class PrintLayout
 
         var page = editor.Model.Page;
         var (pageWidth, pageHeight) = PageLayout.PageSizeDip(page);
+        var balloonSources = ResolvePrintBalloonSources(editor);
+        if (balloonSources.Count > 0)
+            pageWidth += BalloonStripWidthDip;
 
-        var flow = BuildPaginatedDocument(editor, applyFragmentedFootnoteFlow: true, out var footnoteComposition);
+        var flow = BuildPaginatedDocument(editor, applyFragmentedFootnoteFlow: true, out var footnoteComposition, balloonSources);
         var paginator = ((IDocumentPaginatorSource)flow).DocumentPaginator;
         paginator.PageSize = new Size(pageWidth, pageHeight);
 
@@ -214,7 +243,8 @@ internal static class PrintLayout
             editor.Model,
             page,
             lineHeightDip,
-            fragmentedFootnotePages: fragmentedFootnotePages);
+            fragmentedFootnotePages: fragmentedFootnotePages,
+            balloonSources: balloonSources);
     }
 
     private static bool NeedsSectionAwareRendering(TextDocument document) =>
@@ -409,7 +439,8 @@ internal sealed class HeaderFooterPaginator(
     PageSettings page,
     double lineHeightDip = 0,
     IReadOnlyList<IReadOnlyList<int>>? footnoteIdsByPage = null,
-    IReadOnlyDictionary<int, DocumentFootnoteContinuationPagePlan>? fragmentedFootnotePages = null) : DocumentPaginator
+    IReadOnlyDictionary<int, DocumentFootnoteContinuationPagePlan>? fragmentedFootnotePages = null,
+    IReadOnlyList<ReviewBalloonSource>? balloonSources = null) : DocumentPaginator
 {
     private bool? _requiresDedicatedEndnotePage;
 
@@ -459,8 +490,16 @@ internal sealed class HeaderFooterPaginator(
             || hasMappedNotesAtFoot
             || hasFallbackNotesAtFoot
             || hasEndnotesAtFoot;
+        // Review > Show Markup > Balloons: assign each balloon to a page by its source paragraph's
+        // proportional position in the document. There is no block-to-page map available here (the
+        // same approximation BalloonOverlay already uses for the live, continuously-scrolled strip),
+        // but it keeps a single-page document's balloons on that page and spreads a long document's
+        // balloons roughly with the content they annotate.
+        var pageBalloons = ResolvePageBalloons(pageNumber);
+        var hasBalloons = pageBalloons.Count > 0;
         if (model.Header is not { IsEmpty: false } && model.Footer is not { IsEmpty: false }
-            && !hasWatermark && !hasBorder && !hasLineNumbers && !hasColumnRule && !hasNotesAtFoot)
+            && !hasWatermark && !hasBorder && !hasLineNumbers && !hasColumnRule && !hasNotesAtFoot
+            && !hasBalloons)
             return basePage;
 
         var size = basePage.Size;
@@ -471,6 +510,17 @@ internal sealed class HeaderFooterPaginator(
         if (hasBorder
             && PageBorderVisibilityPlanner.LayerFor(pageBorder!.ZOrder) == PageBorderRenderLayer.BehindText)
             visual.Children.Add(BuildPageBorder(pageBorder, size));
+        // PdfExport queries the same paginator twice per page (once to recover XPS text overlays, once
+        // to rasterize), and the inner FlowDocumentPaginator can hand back the identical cached
+        // DocumentPage/Visual for a repeat GetPage(pageNumber) call. Once this method has already wrapped
+        // that Visual into a page's ContainerVisual, re-adding it to a second wrapper without detaching
+        // first throws "Specified Visual is already a child of another Visual" -- this went unnoticed
+        // because only header/footer/watermark/border/notes ever reached this wrap branch before; a
+        // document whose only reason to wrap is the Review > Show Markup > Balloons strip (R139) hits it
+        // on the very first such print/PDF/XPS export. Detach from whatever wrapper produced it before.
+        if (basePage.Visual is not null
+            && VisualTreeHelper.GetParent(basePage.Visual) is ContainerVisual previousWrapper)
+            previousWrapper.Children.Remove(basePage.Visual);
         visual.Children.Add(basePage.Visual);
         if (hasBorder
             && PageBorderVisibilityPlanner.LayerFor(pageBorder!.ZOrder) == PageBorderRenderLayer.InFrontOfText)
@@ -515,7 +565,149 @@ internal sealed class HeaderFooterPaginator(
                     includeEndnotes: !RequiresDedicatedEndnotePage && pageNumber == inner.PageCount - 1));
         }
 
+        if (hasBalloons)
+            visual.Children.Add(BuildBalloonStrip(pageBalloons, size));
+
         return new DocumentPage(visual, size, basePage.BleedBox, basePage.ContentBox);
+    }
+
+    /// <summary>
+    /// The balloon sources (comments/tracked-change revisions) assigned to <paramref name="pageNumber"/>,
+    /// by proportionally mapping each source's paragraph index over the document's total paragraph
+    /// count onto <see cref="PageCount"/>. Empty when balloons mode is off or nothing was assigned.
+    /// </summary>
+    private IReadOnlyList<ReviewBalloonSource> ResolvePageBalloons(int pageNumber)
+    {
+        if (balloonSources is not { Count: > 0 })
+            return [];
+
+        var totalPages = Math.Max(1, PageCount);
+        var totalBlocks = Math.Max(1, model.Blocks.Count);
+        List<ReviewBalloonSource>? matches = null;
+        foreach (var source in balloonSources)
+        {
+            var targetPage = Math.Clamp(
+                (int)((double)source.BlockIndex / totalBlocks * totalPages),
+                0,
+                totalPages - 1);
+            if (targetPage != pageNumber)
+                continue;
+
+            matches ??= [];
+            matches.Add(source);
+        }
+
+        return matches is null ? [] : matches;
+    }
+
+    /// <summary>
+    /// Draws the right-margin balloon strip for one page: a shaded strip, a dashed leader line per
+    /// balloon back toward the body content, and a rounded card carrying author/kind, resolved/reply
+    /// metadata, and a truncated body preview — the same information <c>BalloonOverlay</c> shows on
+    /// screen for Review &gt; Show Markup &gt; Balloons, laid out via the shared
+    /// <see cref="ReviewBalloonLayoutPlanner"/> so print/PDF/XPS matches the interactive strip's rules.
+    /// </summary>
+    private static DrawingVisual BuildBalloonStrip(IReadOnlyList<ReviewBalloonSource> sources, Size size)
+    {
+        var visual = new DrawingVisual();
+        if (sources.Count == 0)
+            return visual;
+
+        var options = new ReviewBalloonLayoutOptions();
+        var stripLeft = Math.Max(0, size.Width - options.StripWidth);
+        var layouts = ReviewBalloonLayoutPlanner.BuildLayout(sources, size.Height, options);
+
+        using var dc = visual.RenderOpen();
+        dc.DrawRectangle(
+            ToBrush(ReviewBalloonStyleCatalog.PaneBackground),
+            null,
+            new Rect(stripLeft, 0, options.StripWidth, size.Height));
+
+        var leaderPen = new Pen(ToBrush(ReviewBalloonStyleCatalog.Leader), 0.75)
+        {
+            DashStyle = DashStyles.Dash
+        };
+        foreach (var layout in layouts)
+        {
+            dc.DrawLine(
+                leaderPen,
+                new Point(stripLeft + layout.LeaderStartX, layout.LeaderStartY),
+                new Point(stripLeft + layout.LeaderEndX, layout.LeaderEndY));
+
+            var style = ReviewBalloonStyleCatalog.Resolve(layout.Source.Kind, layout.Source.Resolved);
+            var rect = new Rect(stripLeft + layout.BalloonX, layout.BalloonY, layout.BalloonWidth, layout.BalloonHeight);
+            dc.DrawRoundedRectangle(
+                ToBrush(style.Fill),
+                new Pen(ToBrush(style.Stroke), 1.0),
+                rect,
+                options.BalloonCornerRadius,
+                options.BalloonCornerRadius);
+
+            DrawBalloonText(
+                dc,
+                $"{layout.Source.HeaderText} – {layout.Source.KindLabel}",
+                ReviewBalloonStyleCatalog.AuthorText,
+                bold: true,
+                new Point(rect.X + 4, rect.Y + 3),
+                rect.Width - 8);
+            DrawBalloonText(
+                dc,
+                layout.Source.MetadataText,
+                ReviewBalloonStyleCatalog.MetadataText,
+                bold: false,
+                new Point(rect.X + 4, rect.Y + 15),
+                rect.Width - 8);
+            var preview = ReviewBalloonLayoutPlanner.TruncatePreview(layout.Source.BodyText, 90, "…");
+            if (!string.IsNullOrEmpty(preview))
+            {
+                DrawBalloonText(
+                    dc,
+                    preview,
+                    ReviewBalloonStyleCatalog.BodyText,
+                    bold: false,
+                    new Point(rect.X + 4, rect.Y + 27),
+                    rect.Width - 8,
+                    maxLines: 2);
+            }
+        }
+
+        return visual;
+    }
+
+    private static void DrawBalloonText(
+        DrawingContext dc,
+        string text,
+        ReviewBalloonColor color,
+        bool bold,
+        Point origin,
+        double width,
+        int maxLines = 1)
+    {
+        if (string.IsNullOrEmpty(text) || width <= 0)
+            return;
+
+        var formatted = new FormattedText(
+            text,
+            System.Globalization.CultureInfo.CurrentCulture,
+            FlowDirection.LeftToRight,
+            new Typeface(new FontFamily("Calibri"), FontStyles.Normal, bold ? FontWeights.SemiBold : FontWeights.Normal, FontStretches.Normal),
+            PageLayout.PointsToDip(bold ? 7.5 : 7.0),
+            ToBrush(color),
+            1.0)
+        {
+            MaxTextWidth = width,
+            MaxLineCount = maxLines,
+            Trimming = TextTrimming.CharacterEllipsis
+        };
+
+        dc.DrawText(formatted, origin);
+    }
+
+    private static Brush ToBrush(ReviewBalloonColor color)
+    {
+        var brush = new SolidColorBrush(Color.FromRgb(color.Red, color.Green, color.Blue));
+        brush.Freeze();
+        return brush;
     }
 
     /// <summary>

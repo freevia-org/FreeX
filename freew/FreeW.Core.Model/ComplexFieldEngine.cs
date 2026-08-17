@@ -130,8 +130,8 @@ public static class ComplexFieldEngine
             "IF" => ResolveIf(document, FieldForIfEvaluation(field), run.Text),
             "DOCPROPERTY" => ResolveDocProperty(document, field, run.Text),
             "DOCVARIABLE" => ResolveDocVariable(document, field, run.Text),
-            "CREATEDATE" => ResolveDocumentDate(document.Properties.Created, field, run),
-            "SAVEDATE" => ResolveDocumentDate(document.Properties.Modified, field, run),
+            "CREATEDATE" => ResolveDocumentDate(document, blockIndex, document.Properties.Created, field, run),
+            "SAVEDATE" => ResolveDocumentDate(document, blockIndex, document.Properties.Modified, field, run),
             "LASTSAVEDBY" => document.Properties.LastModifiedBy is { } lastSavedBy
                 ? ApplyTextGeneralFormats(lastSavedBy, field.Instruction)
                 : run.Text,
@@ -141,6 +141,8 @@ public static class ComplexFieldEngine
             "REVNUM" => ResolveRevisionNumber(document, field, run.Text),
             "EDITTIME" => ResolveEditTime(document, field, run.Text),
             "PRINTDATE" => ResolveDocumentDate(
+                document,
+                blockIndex,
                 OpcPackageProperties.ParseW3CDtf(ResolveCoreProperty(document, "lastPrinted")),
                 field,
                 run),
@@ -387,12 +389,12 @@ public static class ComplexFieldEngine
         }
     }
 
-    private static string ResolveDocumentDate(DateTimeOffset? value, ComplexField field, Run run)
+    private static string ResolveDocumentDate(TextDocument document, int blockIndex, DateTimeOffset? value, ComplexField field, Run run)
     {
         if (value is null)
             return run.Text;
 
-        var culture = ResolveFieldCulture(run);
+        var culture = ResolveFieldCulture(document, blockIndex, run);
         var localValue = value.Value.LocalDateTime;
         return WordFieldDateTimeFormatter.TryFormat(
             localValue,
@@ -403,9 +405,23 @@ public static class ComplexFieldEngine
             : localValue.ToString("g", culture);
     }
 
-    private static CultureInfo ResolveFieldCulture(Run run)
+    // Resolves the effective proofing-language culture for a date field's run the same way Word does:
+    // the run's own direct w:lang wins, then the paragraph's based-on style chain, then the document
+    // default (docDefaults/w:rPrDefault/w:rPr/w:lang) -- only falling back to the host process culture
+    // when the document carries no language information at all. Word stores the language on individual
+    // runs only when it differs from what the run would otherwise inherit, so CREATEDATE/SAVEDATE/
+    // PRINTDATE fields whose language comes solely from the paragraph style or the document default
+    // (the common case) previously fell straight through to CultureInfo.CurrentCulture.
+    private static CultureInfo ResolveFieldCulture(TextDocument document, int blockIndex, Run run)
     {
-        if (run.Formatting.LanguageTag is { Length: > 0 } tag)
+        var tag = run.Formatting.LanguageTag;
+        if (string.IsNullOrEmpty(tag)
+            && FindOwningParagraph(document, blockIndex, run) is { } paragraph)
+            tag = ResolveStyleLanguageTag(document, paragraph.StyleId);
+        if (string.IsNullOrEmpty(tag))
+            tag = document.DefaultRun.LanguageTag;
+
+        if (!string.IsNullOrEmpty(tag))
         {
             try
             {
@@ -418,6 +434,44 @@ public static class ComplexFieldEngine
         }
 
         return CultureInfo.CurrentCulture;
+    }
+
+    // Locates the Paragraph that owns `run`, given the top-level block index the caller resolved it
+    // from. The block can be either the paragraph itself (the main-document case) or a Table containing
+    // it (a table-cell field), per Recompute's own contract; nested/synthetic field runs (which are never
+    // actually linked into any paragraph's Runs list) resolve to null and fall back to the document
+    // default only.
+    private static Paragraph? FindOwningParagraph(TextDocument document, int blockIndex, Run run)
+    {
+        if (blockIndex < 0 || blockIndex >= document.Blocks.Count)
+            return null;
+
+        return document.Blocks[blockIndex] switch
+        {
+            Paragraph paragraph => paragraph,
+            Table table => table.Rows
+                .SelectMany(row => row.Cells)
+                .SelectMany(cell => cell.Paragraphs)
+                .FirstOrDefault(paragraph => paragraph.Runs.Contains(run)),
+            _ => null
+        };
+    }
+
+    // Mirrors Proofing.cs's ResolveStyleNoProof: walks the paragraph style's based-on chain looking for
+    // the first style that carries an explicit run-level language tag.
+    private static string? ResolveStyleLanguageTag(TextDocument document, string? styleId)
+    {
+        var seen = new HashSet<string>(StringComparer.Ordinal);
+        while (!string.IsNullOrEmpty(styleId)
+            && seen.Add(styleId)
+            && document.Styles.TryGetValue(styleId, out var style))
+        {
+            if (!string.IsNullOrEmpty(style.Run.LanguageTag))
+                return style.Run.LanguageTag;
+            styleId = style.BasedOnStyleId;
+        }
+
+        return null;
     }
 
     private static string ResolveDocProperty(TextDocument document, ComplexField field, string cached)

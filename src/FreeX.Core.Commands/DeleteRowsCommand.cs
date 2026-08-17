@@ -39,6 +39,12 @@ public sealed class DeleteRowsCommand : IWorkbookCommand, IAffectedCellsCommand,
     private List<uint>? _hiddenRowsSnapshot;
     private List<uint>? _filterHiddenRowsSnapshot;
     private List<uint>? _valueFilterHiddenRowsSnapshot;
+    // subtotal-formula-prefix-false-positive-deletion: sheet.SubtotalRows is real state (not a
+    // formula-text guess) tracking which rows SubtotalCommand created; it must delete/shift the
+    // same way HiddenRows does so a row deleted anywhere in the sheet drops its own subtotal
+    // marker (if it had one) and every subtotal row below it keeps pointing at the right physical
+    // row afterward.
+    private List<uint>? _subtotalRowsSnapshot;
     private Dictionary<uint, HashSet<uint>>? _columnFilterOwnedRowsSnapshot;
     // R106-io-hyperlink-range-shift: see Sheet.RangeHyperlinks -- whole-column/row and oversized-
     // bounded hyperlink refs shift/delete independently of the CellAddress-keyed dictionaries above.
@@ -122,6 +128,9 @@ public sealed class DeleteRowsCommand : IWorkbookCommand, IAffectedCellsCommand,
         // may safely un-hide on the next recompute.
         _valueFilterHiddenRowsSnapshot = RowColumnShiftHelpers.CaptureSet(sheet.ValueFilterHiddenRows);
         RowColumnShiftHelpers.DeleteSetRangeAndShiftDown(sheet.ValueFilterHiddenRows, _startRow, _count);
+
+        _subtotalRowsSnapshot = RowColumnShiftHelpers.CaptureSet(sheet.SubtotalRows);
+        RowColumnShiftHelpers.DeleteSetRangeAndShiftDown(sheet.SubtotalRows, _startRow, _count);
 
         // R13-meta-1: sheet.ColumnFilterOwnedRows' HashSet row VALUES must delete/shift the same way
         // as FilterHiddenRows/ValueFilterHiddenRows above, or a column's condition/color/Top-Bottom/
@@ -398,6 +407,7 @@ public sealed class DeleteRowsCommand : IWorkbookCommand, IAffectedCellsCommand,
         RowColumnShiftHelpers.RestoreSet(sheet.HiddenRows, _hiddenRowsSnapshot);
         RowColumnShiftHelpers.RestoreSet(sheet.FilterHiddenRows, _filterHiddenRowsSnapshot);
         RowColumnShiftHelpers.RestoreSet(sheet.ValueFilterHiddenRows, _valueFilterHiddenRowsSnapshot);
+        RowColumnShiftHelpers.RestoreSet(sheet.SubtotalRows, _subtotalRowsSnapshot);
         RowColumnShiftHelpers.RestoreDictionary(sheet.ColumnFilterOwnedRows, _columnFilterOwnedRowsSnapshot);
         _mutationSnapshot.RestoreCommonState(ctx.Workbook, sheet, restoreRulesInPlace: false);
         sheet.SetPrintAreas(_printAreaSnapshot ?? []);

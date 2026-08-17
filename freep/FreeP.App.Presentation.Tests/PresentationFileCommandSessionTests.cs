@@ -229,6 +229,211 @@ public sealed class PresentationFileCommandSessionTests : IDisposable
         Directory.GetFiles(TempDirectory).Should().Equal(target);
     }
 
+    /// <summary>
+    /// r139 sweep78-1: FreeP.App.Host and FreeW.App.Host both invoke this whole chain with
+    /// `command.GetAwaiter().GetResult()` on the UI thread (see
+    /// FreeP.App.Host/MainWindow.cs:3792 RunFileCommand). AtomicExportExecutor opens the
+    /// temporary export file with real async I/O (FileOptions.Asynchronous); if that write
+    /// genuinely completes on a thread-pool/IOCP thread rather than synchronously, any
+    /// un-configured await in the chain above it tries to resume by posting its continuation
+    /// back to the SynchronizationContext captured on the (now permanently blocked) UI thread --
+    /// which never happens, hanging the app forever. This test reproduces exactly that shape: a
+    /// dedicated thread installs a SynchronizationContext that queues posted continuations but
+    /// never pumps them (standing in for a WPF Dispatcher thread parked in GetResult()), then
+    /// blocks on ExportPdfAsync() the same way RunFileCommand does. The injected
+    /// AtomicExportExecutor's temp-file write forces a genuine thread-pool hop via a
+    /// properly-ConfigureAwait(false)'d Task.Run before delegating to the real file write, so the
+    /// only await left that could need the blocked context is production code's own.
+    /// Before the sweep78-1 fix (missing .ConfigureAwait(false) on the awaits chaining
+    /// ExportPdfAsync -> ExportPdfArtifactAsync -> AtomicExportExecutor.ExecuteAsync -> the
+    /// render delegate's output.WriteAsync), this test times out (thread.Join returns false).
+    /// After the fix, the export completes promptly even though the pump context is never
+    /// serviced.
+    /// </summary>
+    [Fact]
+    public void ExportPdfAsync_DoesNotDeadlockUiThreadWhenTemporaryFileWriteCompletesOnThreadPool()
+    {
+        var target = Path.Combine(TempDirectory, "deadlock-repro.pdf");
+        var picker = new FakePickerPort { SaveResult = PresentationFilePickerResult.Selected(target) };
+        var render = new FakeRenderPort();
+        var session = new PresentationFileCommandSession(
+            Presentation.CreateEmpty,
+            _ => { },
+            new FakeLifecyclePort(),
+            picker,
+            render,
+            new FakePrintPort(),
+            new FakeVideoPort(),
+            atomicExportExecutor: CreateDeferredWriteAtomicExportExecutor());
+
+        PresentationFileCommandResult? result = null;
+        Exception? threadException = null;
+        var uiThread = new Thread(() =>
+        {
+            // Stands in for the WPF Dispatcher: continuations posted here are queued, never run --
+            // exactly like a real Dispatcher thread that is itself parked in GetResult() and so
+            // never pumps its own message queue.
+            SynchronizationContext.SetSynchronizationContext(new NeverPumpedSynchronizationContext());
+            try
+            {
+                // Mirrors RunFileCommand: `command.GetAwaiter().GetResult().Succeeded`.
+                result = session.ExportPdfAsync().GetAwaiter().GetResult();
+            }
+            catch (Exception ex)
+            {
+                threadException = ex;
+            }
+        })
+        {
+            IsBackground = true,
+        };
+        uiThread.Start();
+        var completedWithoutDeadlock = uiThread.Join(TimeSpan.FromSeconds(10));
+
+        completedWithoutDeadlock.Should().BeTrue(
+            "ExportPdfAsync must not require the blocked UI thread's SynchronizationContext to " +
+            "resume once the temporary file write completes off-thread -- see sweep78-1");
+        threadException.Should().BeNull();
+        result.Should().NotBeNull();
+        result!.Succeeded.Should().BeTrue();
+        File.ReadAllBytes(target).Should().Equal(FakeRenderPort.PdfBytes);
+    }
+
+    /// <summary>
+    /// Sibling of <see cref="ExportPdfAsync_DoesNotDeadlockUiThreadWhenTemporaryFileWriteCompletesOnThreadPool"/>:
+    /// proves the sweep78-1 fix did not stop ExportPdfAsync from working when called the ordinary
+    /// way (no blocked UI thread, default AtomicExportExecutor) -- the neighbouring behaviour the
+    /// happy-path tests above already exercise.
+    /// </summary>
+    [Fact]
+    public async Task ExportPdfAsync_StillSucceedsOnOrdinaryCall()
+    {
+        var target = Path.Combine(TempDirectory, "ordinary.pdf");
+        var picker = new FakePickerPort { SaveResult = PresentationFilePickerResult.Selected(target) };
+        var session = CreateSession(
+            Presentation.CreateEmpty,
+            _ => { },
+            new FakeLifecyclePort(),
+            picker,
+            new FakeRenderPort());
+
+        var result = await session.ExportPdfAsync();
+
+        result.Succeeded.Should().BeTrue();
+        File.ReadAllBytes(target).Should().Equal(FakeRenderPort.PdfBytes);
+    }
+
+    private static AtomicExportExecutor CreateDeferredWriteAtomicExportExecutor() =>
+        new(
+            createTemporaryFile: targetPath =>
+            {
+                var fullTargetPath = Path.GetFullPath(targetPath);
+                var directory = Path.GetDirectoryName(fullTargetPath);
+                var tempDirectory = string.IsNullOrEmpty(directory) ? "." : directory;
+                return TemporaryFileLease.Create(
+                    $".{Path.GetFileName(fullTargetPath)}.",
+                    ".tmp",
+                    tempDirectory,
+                    fileSystem: new DeferredWriteFileSystem());
+            },
+            replaceDestination: AtomicFileWriter.ReplaceTarget);
+
+    /// <summary>
+    /// Stands in for the WPF Dispatcher's SynchronizationContext for the sweep78-1 deadlock
+    /// repro: continuations posted to it are counted and dropped, never executed -- modeling a UI
+    /// thread that is itself synchronously blocked in GetAwaiter().GetResult() and therefore never
+    /// pumps its own message queue.
+    /// </summary>
+    private sealed class NeverPumpedSynchronizationContext : SynchronizationContext
+    {
+        public int PostCount { get; private set; }
+
+        public override void Post(SendOrPostCallback d, object? state) => PostCount++;
+
+        public override void Send(SendOrPostCallback d, object? state) => d(state);
+    }
+
+    /// <summary>
+    /// <see cref="ITemporaryResourceFileSystem"/> whose write stream forces a genuine thread-pool
+    /// hop (via a properly ConfigureAwait(false)'d Task.Run) before delegating to the real file
+    /// write, mimicking real overlapped file I/O whose completion arrives on an IOCP thread-pool
+    /// thread rather than synchronously. This isolates the PRODUCTION await chain under test --
+    /// not this helper's own timing -- as the thing that must tolerate a captured
+    /// SynchronizationContext that never resumes.
+    /// </summary>
+    private sealed class DeferredWriteFileSystem : ITemporaryResourceFileSystem
+    {
+        public string GetTemporaryDirectoryPath() => Path.GetTempPath();
+        public bool FileExists(string path) => File.Exists(path);
+        public bool DirectoryExists(string path) => Directory.Exists(path);
+        public Stream CreateNewFile(string path) =>
+            new FileStream(path, FileMode.CreateNew, FileAccess.Write, FileShare.None);
+
+        public Stream OpenFileForWrite(string path, bool useAsync, int bufferSize)
+        {
+            var real = new FileStream(path, FileMode.Truncate, FileAccess.Write, FileShare.None, bufferSize, useAsync);
+            return new DeferredAsyncStream(real);
+        }
+
+        public void CreateDirectory(string path) => Directory.CreateDirectory(path);
+        public void DeleteFile(string path) => File.Delete(path);
+        public void DeleteDirectory(string path, bool recursive) => Directory.Delete(path, recursive);
+    }
+
+    private sealed class DeferredAsyncStream : Stream
+    {
+        private readonly Stream _inner;
+
+        public DeferredAsyncStream(Stream inner) => _inner = inner;
+
+        public override bool CanRead => _inner.CanRead;
+        public override bool CanSeek => _inner.CanSeek;
+        public override bool CanWrite => _inner.CanWrite;
+        public override long Length => _inner.Length;
+
+        public override long Position
+        {
+            get => _inner.Position;
+            set => _inner.Position = value;
+        }
+
+        public override void Flush() => _inner.Flush();
+        public override int Read(byte[] buffer, int offset, int count) => _inner.Read(buffer, offset, count);
+        public override long Seek(long offset, SeekOrigin origin) => _inner.Seek(offset, origin);
+        public override void SetLength(long value) => _inner.SetLength(value);
+        public override void Write(byte[] buffer, int offset, int count) => _inner.Write(buffer, offset, count);
+
+        public override async ValueTask WriteAsync(
+            ReadOnlyMemory<byte> buffer,
+            CancellationToken cancellationToken = default)
+        {
+            // Genuine, properly-configured asynchrony: forces the continuation below onto a
+            // thread-pool thread (never via SynchronizationContext), exactly like a real overlapped
+            // write's IOCP completion callback.
+            await Task.Run(() => { }, cancellationToken).ConfigureAwait(false);
+            await _inner.WriteAsync(buffer, cancellationToken).ConfigureAwait(false);
+        }
+
+        public override async Task FlushAsync(CancellationToken cancellationToken)
+        {
+            await Task.Run(() => { }, cancellationToken).ConfigureAwait(false);
+            await _inner.FlushAsync(cancellationToken).ConfigureAwait(false);
+        }
+
+        protected override void Dispose(bool disposing)
+        {
+            if (disposing)
+                _inner.Dispose();
+            base.Dispose(disposing);
+        }
+
+        public override async ValueTask DisposeAsync()
+        {
+            await _inner.DisposeAsync().ConfigureAwait(false);
+            GC.SuppressFinalize(this);
+        }
+    }
+
     [Fact]
     public void BuildVideoFramePackage_InjectedArtifactRetainsPackageAndImageDiagnostics()
     {

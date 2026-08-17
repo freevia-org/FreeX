@@ -1138,6 +1138,64 @@ public sealed class PresentationCommandTests
     }
 
     [Fact]
+    public void UngroupShapeCommand_RemovesGroupsOwnAnimation_AndUndoRestoresIt()
+    {
+        // The group itself (not a child) carries an entrance animation. Ungrouping destroys the
+        // group's id, so PowerPoint drops the animation rather than leaving a p:bldP/timing
+        // entry that targets a shape id no longer present on the slide (see DeleteShapeCommand's
+        // identical handling of "the referenced shape id left the tree").
+        var (p, bus) = Make();
+        var group = new SlideShape { Id = 10, Kind = SlideShapeKind.Group };
+        var child = MakeShape(11);
+        group.Children.Add(child);
+        p.Slides[0].Shapes.Add(group);
+
+        var groupAnimation = new ShapeAnimation { ShapeId = group.Id };
+        p.Slides[0].Animations.Add(groupAnimation);
+        p.Slides[0].AnimationBuildListXml =
+            "<p:bldLst xmlns:p=\"http://schemas.openxmlformats.org/presentationml/2006/main\">" +
+            "<p:bldP spid=\"10\" grpId=\"0\" build=\"p\" />" +
+            "</p:bldLst>";
+        var originalBuildList = p.Slides[0].AnimationBuildListXml;
+
+        bus.Execute(new UngroupShapeCommand(0, group.Id));
+
+        p.Slides[0].Shapes.Should().ContainSingle().Which.Should().BeSameAs(child);
+        p.Slides[0].Animations.Should().BeEmpty();
+        p.Slides[0].AnimationBuildListXml.Should().NotContain("spid=\"10\"");
+
+        bus.Undo();
+
+        p.Slides[0].Shapes.Should().ContainSingle().Which.Should().BeSameAs(group);
+        p.Slides[0].Animations.Should().ContainSingle().Which.Should().BeSameAs(groupAnimation);
+        p.Slides[0].AnimationBuildListXml.Should().Be(originalBuildList);
+
+        bus.Redo();
+
+        p.Slides[0].Animations.Should().BeEmpty();
+    }
+
+    [Fact]
+    public void UngroupShapeCommand_LeavesChildsOwnAnimation_Untouched()
+    {
+        // Sibling of the test above: an animation that targets a CHILD (not the group) must
+        // survive ungrouping untouched, since the child's own id keeps existing on the slide.
+        var (p, bus) = Make();
+        var group = new SlideShape { Id = 10, Kind = SlideShapeKind.Group };
+        var child = MakeShape(11);
+        group.Children.Add(child);
+        p.Slides[0].Shapes.Add(group);
+
+        var childAnimation = new ShapeAnimation { ShapeId = child.Id };
+        p.Slides[0].Animations.Add(childAnimation);
+
+        bus.Execute(new UngroupShapeCommand(0, group.Id));
+
+        p.Slides[0].Animations.Should().ContainSingle().Which.Should().BeSameAs(childAnimation);
+        p.Slides[0].Animations[0].ShapeId.Should().Be(child.Id);
+    }
+
+    [Fact]
     public void DeleteShapeCommand_Revert_RestoresShapeAtOriginalIndex()
     {
         var (p, bus) = Make();

@@ -129,6 +129,9 @@ public sealed partial class MainWindow : Window,
     private readonly Func<PresentationVideoExportRequest?, PresentationVideoFramePackageArtifact>?
         _videoFramePackageArtifactFactory;
     private bool _nativeOutputDetectionStarted;
+#if FREEP_WINDOWS_CAPTURE
+    private bool _printerDiscoveryStarted;
+#endif
     private readonly PresentationVideoExportSession _videoExportSession;
 
     // ── Editing session ────────────────────────────────────────────────────────
@@ -833,6 +836,11 @@ public sealed partial class MainWindow : Window,
 
         if (_nativeOutputCapabilityDetector is not null)
             Opened += (_, _) => StartNativeOutputCapabilityDetection();
+
+#if FREEP_WINDOWS_CAPTURE
+        if (OperatingSystem.IsWindows())
+            Opened += (_, _) => StartPrinterDiscovery();
+#endif
     }
 
     /// <summary>
@@ -3476,13 +3484,65 @@ public sealed partial class MainWindow : Window,
     }
 
 #if FREEP_WINDOWS_CAPTURE
+    /// <summary>
+    /// Kicks off Windows printer discovery on a background thread at most once per window and caches the
+    /// result in <see cref="_latestPrinterDiscovery"/>. Printer enumeration goes through the spooler and can
+    /// stall for as long as the spooler/driver takes to answer (an unreachable network printer, a
+    /// misbehaving driver); previously <see cref="AddWindowsPrinterSelector"/> called
+    /// <c>_printService.DiscoverAsync().GetAwaiter().GetResult()</c> directly from the print-pane render
+    /// path, which ran that stall synchronously on the UI thread with no bound. This mirrors FreeW's and
+    /// FreeX's Avalonia shells, which always <c>await</c> <see cref="IPlatformPrintService.DiscoverAsync"/>
+    /// instead of blocking on it. The pane renders immediately with whatever is cached (nothing, on first
+    /// open) and re-renders itself once discovery completes, so a slow spooler degrades to a momentary
+    /// "no queues detected yet" row that fills in as soon as the background probe returns, rather than
+    /// freezing the whole window.
+    /// </summary>
+    private void StartPrinterDiscovery()
+    {
+        if (_printerDiscoveryStarted)
+            return;
+        _printerDiscoveryStarted = true;
+        _ = RefreshPrinterDiscoveryAsync();
+    }
+
+    private async Task RefreshPrinterDiscoveryAsync()
+    {
+        try
+        {
+            // WindowsPrintService.DiscoverAsync currently completes its spooler probe synchronously
+            // (wrapped in Task.FromResult), so a bare `await` here would still run that probe inline on
+            // whichever thread calls this method. Task.Run forces it onto a thread-pool worker so a slow
+            // spooler/driver never blocks the UI thread, matching what FreeW/FreeX intend by awaiting it.
+            _latestPrinterDiscovery = await Task.Run(() => _printService.DiscoverAsync());
+        }
+        catch (Exception ex) when (ex is not OutOfMemoryException)
+        {
+            _latestPrinterDiscovery = new PrinterDiscoveryResult(
+                PrinterDiscoveryStatus.Failed,
+                [],
+                null,
+                ex.Message);
+        }
+
+        if (_printOptionsPaneHost?.IsVisible == true)
+            RenderPrintOptionsPane(RefreshPrintBackstagePlan(_printOptionsPaneRequest));
+    }
+
     private void AddWindowsPrinterSelector(PresentationNativePrintSurfacePlan surface)
     {
         if (!OperatingSystem.IsWindows())
             return;
 
         AddPrintOptionsPaneSection(PresentationShellTextCatalog.Resolve(surface.SectionHeading));
-        _latestPrinterDiscovery = _printService.DiscoverAsync().GetAwaiter().GetResult();
+        StartPrinterDiscovery();
+        if (_latestPrinterDiscovery is null)
+        {
+            AddPrintOptionsPaneField(
+                PresentationShellTextCatalog.Resolve(surface.QueueLabel),
+                PresentationShellTextCatalog.Resolve(surface.NoQueuesStatus));
+            return;
+        }
+
         var printers = _latestPrinterDiscovery.Printers
             .Select(static printer => printer.Name)
             .ToArray();

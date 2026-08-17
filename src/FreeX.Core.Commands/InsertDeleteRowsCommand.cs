@@ -113,6 +113,12 @@ public sealed class InsertRowsCommand : IWorkbookCommand, IAffectedCellsCommand,
         // currently owns, and FilterCommand.RecomputeHiddenRows uses it to decide which rows it may
         // safely un-hide. Left unshifted, it would go stale the moment rows move.
         RowColumnShiftHelpers.ShiftSetUpFrom(sheet.ValueFilterHiddenRows, _beforeRow, _count);
+        // subtotal-formula-prefix-false-positive-deletion: sheet.SubtotalRows tracks (as real state,
+        // not a formula-text guess) which rows SubtotalCommand itself created. Any row insert must
+        // shift those markers the same way HiddenRows/FilterHiddenRows shift, so a subtotal row's
+        // tracked position stays correct even when the insert came from something unrelated to
+        // Subtotal (e.g. the user manually inserting a row above an existing subtotal block).
+        RowColumnShiftHelpers.ShiftSetUpFrom(sheet.SubtotalRows, _beforeRow, _count);
         // R13-meta-1: sheet.ColumnFilterOwnedRows' HashSet row VALUES must shift the same way, or a
         // column's condition/color/Top-Bottom/Average filter forgets which row it actually owns and
         // orphans a permanently-hidden row the next time that column's filter is cleared/recomputed.
@@ -437,6 +443,7 @@ public sealed class InsertRowsCommand : IWorkbookCommand, IAffectedCellsCommand,
         RowColumnShiftHelpers.ShiftSetDownFrom(sheet.HiddenRows, _beforeRow + _count, _count);
         RowColumnShiftHelpers.ShiftSetDownFrom(sheet.FilterHiddenRows, _beforeRow + _count, _count);
         RowColumnShiftHelpers.ShiftSetDownFrom(sheet.ValueFilterHiddenRows, _beforeRow + _count, _count);
+        RowColumnShiftHelpers.ShiftSetDownFrom(sheet.SubtotalRows, _beforeRow + _count, _count);
         // R13-meta-1: undo the ColumnFilterOwnedRows shift in lockstep with the sibling sets above.
         RowColumnShiftHelpers.ShiftRowSetDictionaryDownFrom(sheet.ColumnFilterOwnedRows, _beforeRow + _count, _count);
 

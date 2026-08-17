@@ -53,7 +53,13 @@ public sealed class App : Application
         AvaloniaAppLocalizationBootstrap.InstallSharedSeams(UiText.Get, UiText.Format, UiText.CreateAutomationName);
 
         Name = ApplicationTitle;
-        RequestedThemeVariant = ThemeVariant.Light;
+        // ThemeVariant.Default (not a hardcoded Light) lets Avalonia's FluentTheme resolve each
+        // control's actual variant from the platform's live color-scheme preference (OS-wide
+        // dark-mode/high-contrast) instead of ignoring it (r139 avalonia-hardcoded-light-theme).
+        // Mirrors the identical fix in the shared SisterAvaloniaAppBootstrap.Initialize used by
+        // FreeW/FreeP -- FreeX duplicates the theme-variant assignment here instead of routing
+        // through it.
+        RequestedThemeVariant = ThemeVariant.Default;
         Styles.Add(new FluentTheme());
 
         // App-wide compact dialog control styles: override Avalonia Fluent's oversized defaults for

@@ -10,7 +10,7 @@ public sealed partial class Sheet
     /// All model-layer properties are copied, including the previously missed fields:
     /// <c>BackgroundImage</c>, <c>RowOutlineLevels</c>, <c>ColOutlineLevels</c>,
     /// <c>GroupHiddenRows</c>, <c>GroupHiddenCols</c>, <c>CollapsedAnchorRows</c>,
-    /// <c>CollapsedAnchorCols</c>, <c>CommentAuthors</c>, <c>ShownComments</c>,
+    /// <c>CollapsedAnchorCols</c>, <c>SubtotalRows</c>, <c>CommentAuthors</c>, <c>ShownComments</c>,
     /// <c>CellWatchesMetadata</c>, and <c>IgnoredErrorsMetadata</c>.
     /// Drawing collections (Charts, TextBoxes, DrawingShapes, Pictures, Sparklines) are intentionally
     /// left empty; the caller (e.g. <c>DuplicateSheetCommand</c>) is responsible for copying those.
@@ -710,6 +710,9 @@ public sealed partial class Sheet
             copy.CollapsedAnchorRows.Add(row);
         foreach (var col in CollapsedAnchorCols)
             copy.CollapsedAnchorCols.Add(col);
+
+        foreach (var row in SubtotalRows)
+            copy.SubtotalRows.Add(row);
     }
 
     private static WorksheetPageBreaksMetadataModel? ClonePageBreaksMetadata(WorksheetPageBreaksMetadataModel? metadata)

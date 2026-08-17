@@ -7964,6 +7964,27 @@ public static class DocxWriter
             StringComparison.OrdinalIgnoreCase);
     }
 
+    // Builds w:lang from the three independent script-scoped language tags. Each attribute is emitted
+    // only when its own model field is set, so a run/docDefaults whose val/eastAsia/bidi differ (the
+    // normal shape for any document mixing scripts) round-trips without one script's tag overwriting
+    // another's. Returns null when none of the three tags is set, so untouched runs emit no w:lang at all.
+    private static XElement? BuildLanguageElement(RunFormatting f)
+    {
+        if (f.LanguageTag is not { Length: > 0 }
+            && f.EastAsiaLanguageTag is not { Length: > 0 }
+            && f.BidiLanguageTag is not { Length: > 0 })
+            return null;
+
+        var element = new XElement(W + "lang");
+        if (f.LanguageTag is { Length: > 0 } val)
+            element.Add(new XAttribute(W + "val", val));
+        if (f.EastAsiaLanguageTag is { Length: > 0 } eastAsia)
+            element.Add(new XAttribute(W + "eastAsia", eastAsia));
+        if (f.BidiLanguageTag is { Length: > 0 } bidi)
+            element.Add(new XAttribute(W + "bidi", bidi));
+        return element;
+    }
+
     private static XElement? BuildRunProperties(RunFormatting f)
     {
         // Children MUST follow the CT_RPr (EG_RPrBase) schema sequence, otherwise Word's strict
@@ -8078,14 +8099,14 @@ public static class DocxWriter
         // the w14 extension region. Emitted only when set so default runs round-trip byte-unchanged.
         if (f.Rtl)
             rPr.Add(new XElement(W + "rtl"));
-        // w:lang (proofing language) — a BCP-47 tag that sets the spell-check language for the run.
-        // Schema order: w:lang sits after w:rtl in EG_RPrBase, before the w14 extension region. Emitted
-        // only when set so existing runs round-trip byte-unchanged.
-        if (f.LanguageTag is { Length: > 0 } lang)
-            rPr.Add(new XElement(W + "lang",
-                new XAttribute(W + "val", lang),
-                new XAttribute(W + "eastAsia", lang),
-                new XAttribute(W + "bidi", lang)));
+        // w:lang (proofing language) — val/eastAsia/bidi are three independent BCP-47 tags (general/Latin,
+        // East Asian, complex-script/RTL). Emit each attribute only from its own model field so a document
+        // whose three scripts carry different languages (e.g. val="en-US" bidi="ar-SA") round-trips without
+        // any script's tag being clobbered by another's. Schema order: w:lang sits after w:rtl in
+        // EG_RPrBase, before the w14 extension region. Emitted only when at least one tag is set so
+        // existing runs round-trip byte-unchanged.
+        if (BuildLanguageElement(f) is { } langEl)
+            rPr.Add(langEl);
 
         // --- w14 OpenType extension region (after the core EG_RPrBase elements) ---
         // w14:ligatures
@@ -9777,11 +9798,8 @@ public static class DocxWriter
                 new XAttribute(W + "val", f.VerticalAlign == VerticalAlign.Superscript ? "superscript" : "subscript")));
         if (f.Rtl)
             rPr.Add(new XElement(W + "rtl"));
-        if (f.LanguageTag is { Length: > 0 } lang)
-            rPr.Add(new XElement(W + "lang",
-                new XAttribute(W + "val", lang),
-                new XAttribute(W + "eastAsia", lang),
-                new XAttribute(W + "bidi", lang)));
+        if (BuildLanguageElement(f) is { } langEl)
+            rPr.Add(langEl);
         if (LigaturesToken(f.Ligatures) is { } ligatures)
             rPr.Add(new XElement(W14 + "ligatures", new XAttribute(W14 + "val", ligatures)));
         if (NumberFormToken(f.NumberForm) is { } numForm)

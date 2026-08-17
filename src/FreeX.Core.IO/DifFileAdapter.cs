@@ -129,7 +129,13 @@ public sealed class DifFileAdapter : IFileAdapter
         var cellsByRow = new SortedDictionary<uint, SortedDictionary<uint, Cell>>();
         if (workbook.Sheets.Count > 0)
         {
-            foreach (var (key, cell) in workbook.Sheets[0].GetOccupiedCellMap())
+            // Real Excel's DIF Save-As exports the active (currently selected) sheet, not the
+            // first sheet in tab order — matching DelimitedTextWorkbookWriter/PrnFileAdapter's
+            // identical active-sheet rule for CSV/TXT/PRN.
+            var activeSheetIndex = workbook.ActiveSheetIndex is { } index && index >= 0 && index < workbook.Sheets.Count
+                ? index
+                : 0;
+            foreach (var (key, cell) in workbook.Sheets[activeSheetIndex].GetOccupiedCellMap())
             {
                 if (!IsValidPosition(key.Row, key.Col))
                     continue;

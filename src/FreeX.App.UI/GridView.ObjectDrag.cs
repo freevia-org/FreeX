@@ -66,6 +66,13 @@ public partial class GridView
         dragPenBrush.Freeze();
         DragPreviewPen = new Pen(dragPenBrush, 1.5) { DashStyle = DashStyles.Dash };
         DragPreviewPen.Freeze();
+
+        // Seed the grid's chrome (headers/gridlines/selection) with whatever High Contrast state
+        // is ALREADY active when GridView is first used, matching how App.xaml's SystemColors
+        // overrides are read once at XAML-parse time. Live toggles thereafter are handled per
+        // GridView instance via the SystemParameters.StaticPropertyChanged subscription set up in
+        // the instance constructor (GridView.cs). See ApplyHighContrastChromePalette.
+        RefreshHighContrastChromePalette();
     }
 
     // Returns the Rect of the selected object if it is currently selected, else Rect.Empty
