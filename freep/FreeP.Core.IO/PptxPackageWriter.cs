@@ -6736,12 +6736,28 @@ public static class PptxPackageWriter
                         var relsXml = OpcXml.TryLoadXml(relsBytes);
                         if (relsXml is not null)
                         {
+                            // A preserved chart's rels reference more than its embedded
+                            // workbook: the chartStyle/chartColorStyle relationships that
+                            // carry its PowerPoint-2013+ style and color-scheme sidecar
+                            // parts (ppt/charts/style1.xml, colors1.xml, …) live here too.
+                            // ppt/charts/ is a writer-owned prefix (see
+                            // WriterOwnedPackagePartPrefixes), so anything not explicitly
+                            // carved back into this set is silently dropped by
+                            // CopyPreservedPackageEntries below — carry every internal
+                            // target forward, not just the workbook, mirroring how
+                            // FindPreservedChartExSidecarPaths already treats ChartEx
+                            // sidecars generically.
                             foreach (var relationship in OpcRelationships.Load(relsXml))
                             {
-                                if (TryResolveChartWorkbookPath(chartPath, relationship, out var workbookPath) &&
-                                    packageSnapshot.TryGetEntry(workbookPath, out _))
+                                if (relationship.IsExternal || string.IsNullOrWhiteSpace(relationship.Target))
+                                    continue;
+
+                                var targetPath = ResolveRelativeZipPath(
+                                    GetDirectoryName(chartPath),
+                                    relationship.Target);
+                                if (packageSnapshot.TryGetEntry(targetPath, out _))
                                 {
-                                    paths.Add(ToZipEntryPath(workbookPath));
+                                    paths.Add(ToZipEntryPath(targetPath));
                                 }
                             }
                         }
@@ -6780,6 +6796,19 @@ public static class PptxPackageWriter
                     {
                         if (relationship.IsExternal || string.IsNullOrWhiteSpace(relationship.Target))
                             continue;
+
+                        // When this ChartEx chart's data was edited, PptxChartWriter
+                        // regenerates a fresh embedded workbook under a new part name and
+                        // repoints the relationship at it (see
+                        // PptxChartWriter.TryRegenerateChartExWorkbook) rather than reusing
+                        // this one. Carrying the STALE original workbook bytes forward here
+                        // too would leave them in the saved package as an orphaned,
+                        // unreferenced part.
+                        if (chart.RegenerateWorkbookOnSave &&
+                            TryResolveChartWorkbookPath(chartPath, relationship, out _))
+                        {
+                            continue;
+                        }
 
                         var targetPath = ResolveRelativeZipPath(GetDirectoryName(chartPath), relationship.Target);
                         if (packageSnapshot.TryGetEntry(targetPath, out var sidecarBytes) && sidecarBytes.Length > 0)

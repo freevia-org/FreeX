@@ -3794,13 +3794,18 @@ public sealed class SetCustomGeometryPointCommand : IPresentationCommand
         (kind == CustomSegmentKind.QuadBezTo && (slot is CustomGeometryPointSlot.Control1 or CustomGeometryPointSlot.Endpoint)) ||
         (kind == CustomSegmentKind.CubicBezTo && (slot is CustomGeometryPointSlot.Control1 or CustomGeometryPointSlot.Control2 or CustomGeometryPointSlot.Endpoint));
 
+    // Field layout must mirror ShapeGeometryAdjustmentPlanner.TryGetSegmentPoint's read side
+    // exactly, slot-for-slot: a CubicBezTo's Endpoint is stored in X2/Y2, not X/Y, so writing
+    // the wrong pair silently corrupts Control1 instead of moving the dragged vertex.
     private static CustomSegment ApplyPoint(CustomSegment segment, CustomGeometryPointSlot slot, double x, double y) =>
-        slot switch
+        (segment.Kind, slot) switch
         {
-            CustomGeometryPointSlot.Control1 => segment with { X = x, Y = y },
-            CustomGeometryPointSlot.Control2 => segment with { X1 = x, Y1 = y },
-            _ when segment.Kind is CustomSegmentKind.QuadBezTo => segment with { X1 = x, Y1 = y },
-            _ => segment with { X = x, Y = y },
+            (CustomSegmentKind.CubicBezTo, CustomGeometryPointSlot.Control1) => segment with { X = x, Y = y },
+            (CustomSegmentKind.CubicBezTo, CustomGeometryPointSlot.Control2) => segment with { X1 = x, Y1 = y },
+            (CustomSegmentKind.CubicBezTo, CustomGeometryPointSlot.Endpoint) => segment with { X2 = x, Y2 = y },
+            (CustomSegmentKind.QuadBezTo, CustomGeometryPointSlot.Control1) => segment with { X = x, Y = y },
+            (CustomSegmentKind.QuadBezTo, CustomGeometryPointSlot.Endpoint) => segment with { X1 = x, Y1 = y },
+            _ => segment with { X = x, Y = y }, // MoveTo/LineTo Endpoint
         };
 }
 

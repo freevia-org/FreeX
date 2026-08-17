@@ -110,6 +110,90 @@ public class DocumentInspectorTests
         after.Bookmarks.Should().Be(2);
     }
 
+    // A comment anchored in the default header, the default footer, a footnote, and an endnote — every
+    // paragraph store OUTSIDE the body that Word allows a review comment to anchor in.
+    private static TextDocument BuildDocumentWithCommentsOutsideBody()
+    {
+        var doc = new TextDocument();
+        doc.Blocks.Add(new Paragraph("Body text"));
+
+        doc.Comments[10] = new Comment(10, "Header note", "Ann", "A");
+        doc.Header = new HeaderFooter();
+        var headerParagraph = new Paragraph();
+        headerParagraph.Runs.Add(new Run("Header text") { CommentId = 10 });
+        headerParagraph.Runs.Add(Run.CommentReference(10));
+        doc.Header.Paragraphs.Add(headerParagraph);
+
+        doc.Comments[11] = new Comment(11, "Footer note", "Bob", "B");
+        doc.Footer = new HeaderFooter();
+        var footerParagraph = new Paragraph();
+        footerParagraph.Runs.Add(new Run("Footer text") { CommentId = 11 });
+        footerParagraph.Runs.Add(Run.CommentReference(11));
+        doc.Footer.Paragraphs.Add(footerParagraph);
+
+        doc.Comments[12] = new Comment(12, "Footnote note", "Cid", "C");
+        var footnote = new Footnote(1);
+        var footnoteParagraph = new Paragraph();
+        footnoteParagraph.Runs.Add(new Run("Footnote text") { CommentId = 12 });
+        footnoteParagraph.Runs.Add(Run.CommentReference(12));
+        footnote.Content.Add(footnoteParagraph);
+        doc.Footnotes[1] = footnote;
+
+        doc.Comments[13] = new Comment(13, "Endnote note", "Dan", "D");
+        var endnote = new Endnote(1);
+        var endnoteParagraph = new Paragraph();
+        endnoteParagraph.Runs.Add(new Run("Endnote text") { CommentId = 13 });
+        endnoteParagraph.Runs.Add(Run.CommentReference(13));
+        endnote.Content.Add(endnoteParagraph);
+        doc.Endnotes[1] = endnote;
+
+        return doc;
+    }
+
+    [Fact]
+    public void RemoveComments_StripsAnchorsInHeaderFooterFootnoteAndEndnote()
+    {
+        var doc = BuildDocumentWithCommentsOutsideBody();
+
+        DocumentInspector.RemoveComments(doc);
+
+        doc.Comments.Should().BeEmpty();
+
+        // No run in the header, footer, footnote, or endnote still carries a comment id or an
+        // unresolved comment-reference anchor. A stale mark here is exactly what the docx writer would
+        // otherwise still serialise as a dangling w:commentRangeStart/End/w:commentReference — a package
+        // Word would refuse to open cleanly and flag for repair.
+        var headerRuns = doc.Header!.Paragraphs.SelectMany(p => p.Runs).ToList();
+        headerRuns.Should().OnlyContain(r => r.CommentId == null && !r.IsCommentReference);
+        headerRuns.Should().Contain(r => r.Text == "Header text");
+
+        var footerRuns = doc.Footer!.Paragraphs.SelectMany(p => p.Runs).ToList();
+        footerRuns.Should().OnlyContain(r => r.CommentId == null && !r.IsCommentReference);
+        footerRuns.Should().Contain(r => r.Text == "Footer text");
+
+        var footnoteRuns = doc.Footnotes[1].Content.SelectMany(p => p.Runs).ToList();
+        footnoteRuns.Should().OnlyContain(r => r.CommentId == null && !r.IsCommentReference);
+        footnoteRuns.Should().Contain(r => r.Text == "Footnote text");
+
+        var endnoteRuns = doc.Endnotes[1].Content.SelectMany(p => p.Runs).ToList();
+        endnoteRuns.Should().OnlyContain(r => r.CommentId == null && !r.IsCommentReference);
+        endnoteRuns.Should().Contain(r => r.Text == "Endnote text");
+    }
+
+    [Fact]
+    public void RemoveComments_OnBodyOnlyDocument_StillWorks()
+    {
+        // Sibling no-regression check: a document with only a body comment (no header/footer/footnote/
+        // endnote at all — the common case) still has its comment fully removed by the widened walk.
+        var doc = BuildDocument();
+
+        DocumentInspector.RemoveComments(doc);
+
+        doc.Comments.Should().BeEmpty();
+        doc.Paragraphs.SelectMany(p => p.Runs)
+            .Should().OnlyContain(r => r.CommentId == null && !r.IsCommentReference);
+    }
+
     [Fact]
     public void RemoveComments_DropsAnchorRuns_ButKeepsText()
     {

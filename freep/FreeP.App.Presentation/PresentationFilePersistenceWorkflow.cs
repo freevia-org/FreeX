@@ -112,10 +112,47 @@ public static class PresentationFilePersistenceWorkflow
             throw new PresentationExternallyModifiedException(path);
         }
 
-        AtomicFileWriter.WriteAllBytes(path, SerializePresentation(path, presentation));
+        // r138-freep-persistence-modified-metadata: sibling of FreeW's DocumentPersistenceWorkflow.Save
+        // fix. PowerPoint refreshes docProps/core.xml's dcterms:modified and cp:lastModifiedBy on every
+        // save; PptxPackageWriter just serializes whatever Presentation.Properties already holds, so
+        // without a stamp here they stay frozen at creation/open time forever, and the Document
+        // Properties dialog / SAVEDATE-style consumers of this same model read the wrong value.
+        // Rolled back on any serialize/write failure so a failed save never leaves the in-memory model
+        // claiming a save that never reached disk.
+        var previousModified = presentation.Properties.Modified;
+        var previousLastModifiedBy = presentation.Properties.LastModifiedBy;
+        presentation.Properties.Modified = DateTimeOffset.Now;
+        presentation.Properties.LastModifiedBy = ResolveLastModifiedByAuthor(presentation.Properties.Author);
+
+        try
+        {
+            AtomicFileWriter.WriteAllBytes(path, SerializePresentation(path, presentation));
+        }
+        catch
+        {
+            presentation.Properties.Modified = previousModified;
+            presentation.Properties.LastModifiedBy = previousLastModifiedBy;
+            throw;
+        }
+
         return new PresentationFileSaveResult(
             SavedPath: path,
             SuppressRecentFiles: false);
+    }
+
+    // Mirrors FreeW's ReviewAuthorIdentityPlanner.ResolveAuthor fallback chain (the same "who is this"
+    // identity precedent used elsewhere for authorship in the sister apps): prefer the document's own
+    // recorded author, then the OS account name, then a generic default.
+    private static string ResolveLastModifiedByAuthor(string? documentAuthor)
+    {
+        if (!string.IsNullOrWhiteSpace(documentAuthor))
+            return documentAuthor.Trim();
+
+        var operatingSystemAuthor = Environment.UserName;
+        if (!string.IsNullOrWhiteSpace(operatingSystemAuthor))
+            return operatingSystemAuthor.Trim();
+
+        return "FreeP User";
     }
 
     private static byte[] SerializePresentation(string path, Presentation presentation)

@@ -141,7 +141,7 @@ public static class ShapeGeometryAdjustmentPlanner
                 DefaultCornerAdjustment,
                 MaxCornerAdjustment);
             var minDimension = Math.Min(boundsDip.Width, boundsDip.Height);
-            var radius = minDimension * adjustment / 100000.0;
+            var radius = ResolveRoundedRectangleCornerRadius(shape, minDimension);
             return new ShapeGeometryAdjustmentPlan(
                 shape.Id,
                 CanEdit: boundsDip.Width > 0 && boundsDip.Height > 0,
@@ -482,10 +482,27 @@ public static class ShapeGeometryAdjustmentPlanner
                 var arcHeight = PathHeight(arcPath, boundsDip);
                 var rawX = Math.Clamp((pointerDip.X - boundsDip.Left) / boundsDip.Width * arcWidth, 0, arcWidth);
                 var rawY = Math.Clamp((pointerDip.Y - boundsDip.Top) / boundsDip.Height * arcHeight, 0, arcHeight);
+
+                // The arc's start point is not one of its own parameters: the renderer always
+                // treats it as wherever the pen already sits (see TryGetArcStartTarget), so
+                // dragging "start" must move that predecessor point directly instead of writing
+                // StAng, which only relocates the centre/end while the rendered start stays put.
+                if (arcSlot == CustomGeometryArcPointSlot.StartAngle)
+                {
+                    if (!TryGetArcStartTarget(arcPath, arcSegmentIndex, out var targetSegmentIndex, out var targetSlot))
+                        return new(false, null, null, InvalidHandleMessage);
+
+                    return new(
+                        true,
+                        handleName,
+                        null,
+                        null,
+                        new ShapeGeometryCustomPointMutationPlan(arcPathIndex, targetSegmentIndex, rawX, rawY, targetSlot));
+                }
+
                 var segment = arcPath.Segments[arcSegmentIndex];
                 var value = arcSlot switch
                 {
-                    CustomGeometryArcPointSlot.StartAngle => AngleFromPoint(rawX - arcCenterX, rawY - arcCenterY),
                     CustomGeometryArcPointSlot.EndAngle => NearestEquivalentAngle(
                         AngleFromPoint(rawX - arcCenterX, rawY - arcCenterY), segment.StAng + segment.SwAng),
                     CustomGeometryArcPointSlot.RadiusX => Math.Max(1, Math.Abs(rawX - arcCenterX)),
@@ -832,6 +849,22 @@ public static class ShapeGeometryAdjustmentPlanner
             ? Math.Clamp(value, minimum, maximum)
             : fallback;
 
+    /// <summary>
+    /// Mirrors <c>ShapeGeometryBuilder</c>'s private RoundedRectangle corner-radius formula
+    /// exactly: an unauthored shape (no "adj" guide) renders with a fixed 2-18 DIP corner
+    /// regardless of size, while an authored "adj" guide scales freely with the shorter side.
+    /// Applying the unclamped scale-with-size formula to the no-adj default (as this used to)
+    /// let the handle float away from the actual rendered corner on any shape bigger than
+    /// ~100 DIP in its shorter dimension.
+    /// </summary>
+    private static double ResolveRoundedRectangleCornerRadius(SlideShape shape, double minDimension)
+    {
+        if (!shape.PresetGeometryAdjustments.TryGetValue("adj", out var adjustment))
+            return Math.Clamp(minDimension * 0.18, 2, 18);
+
+        return minDimension * Math.Clamp(adjustment, 0, MaxCornerAdjustment) / 100000.0;
+    }
+
     private static bool IsDirectionalArrow(DrawingShapeKind kind) =>
         kind is DrawingShapeKind.RightArrow or DrawingShapeKind.LeftArrow or
             DrawingShapeKind.UpArrow or DrawingShapeKind.DownArrow;
@@ -875,10 +908,17 @@ public static class ShapeGeometryAdjustmentPlanner
                     TryGetArcGeometry(path, segmentIndex, out var centerX, out var centerY,
                         out var startX, out var startY, out var endX, out var endY))
                 {
-                    handles.Add(BuildCustomHandle(
-                        CustomArcHandleName(pathIndex, segmentIndex, "start"),
-                        "Arc start",
-                        startX, startY, segment.StAng, 0, 360, pathWidth, pathHeight, boundsDip));
+                    // Only expose the "start" handle when it has somewhere to move: the rendered
+                    // start point is the predecessor segment's endpoint, not an ArcTo parameter of
+                    // its own (see TryGetArcStartTarget), so a malformed/unsupported predecessor
+                    // means dragging it could never move anything.
+                    if (TryGetArcStartTarget(path, segmentIndex, out _, out _))
+                    {
+                        handles.Add(BuildCustomHandle(
+                            CustomArcHandleName(pathIndex, segmentIndex, "start"),
+                            "Arc start",
+                            startX, startY, segment.StAng, 0, 360, pathWidth, pathHeight, boundsDip));
+                    }
                     handles.Add(BuildCustomHandle(
                         CustomArcHandleName(pathIndex, segmentIndex, "end"),
                         "Arc end",
@@ -1079,6 +1119,57 @@ public static class ShapeGeometryAdjustmentPlanner
         }
 
         return false;
+    }
+
+    /// <summary>
+    /// Finds the writable point that determines an ArcTo segment's rendered start position.
+    /// <see cref="CustomGeometryBuilder.BuildCustom"/> (the renderer) never reads this segment's
+    /// own StAng to place its start point -- the start is always wherever the pen already sits
+    /// when the ArcTo begins, i.e. the endpoint of the immediately preceding segment (or the
+    /// enclosing figure's MoveTo, if the pen was just reset by a Close). Only that coordinate can
+    /// move the rendered start point; StAng only relocates the ellipse's centre (and therefore the
+    /// end point) around a start that stays fixed.
+    /// </summary>
+    private static bool TryGetArcStartTarget(
+        CustomGeometryPath path,
+        int segmentIndex,
+        out int targetSegmentIndex,
+        out CustomGeometryPointSlot targetSlot)
+    {
+        targetSegmentIndex = -1;
+        targetSlot = CustomGeometryPointSlot.Endpoint;
+
+        var predecessorIndex = segmentIndex - 1;
+        if (predecessorIndex < 0 || predecessorIndex >= path.Segments.Count)
+            return false;
+
+        var predecessor = path.Segments[predecessorIndex];
+        if (predecessor.Kind == CustomSegmentKind.Close)
+        {
+            // The pen resets to the enclosing figure's start: walk back to that MoveTo.
+            var moveToIndex = -1;
+            for (var i = predecessorIndex - 1; i >= 0; i--)
+            {
+                if (path.Segments[i].Kind == CustomSegmentKind.MoveTo)
+                {
+                    moveToIndex = i;
+                    break;
+                }
+            }
+
+            if (moveToIndex < 0)
+                return false;
+
+            predecessorIndex = moveToIndex;
+            predecessor = path.Segments[moveToIndex];
+        }
+
+        if (!TryGetSegmentPoint(predecessor, CustomGeometryPointSlot.Endpoint, out _, out _))
+            return false;
+
+        targetSegmentIndex = predecessorIndex;
+        targetSlot = CustomGeometryPointSlot.Endpoint;
+        return true;
     }
 
     private static double AngleFromPoint(double x, double y)

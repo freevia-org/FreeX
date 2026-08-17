@@ -34,6 +34,7 @@ public static class Program
             Localization = new WpfApplicationLocalizationStartupSpec<FreeWOptions>(
                 SelectUiLanguage: options => options.UiLanguage,
                 ApplyUiLanguage: AppLocalization.Bootstrap.ApplyAppLanguage,
-                ApplyCurrentCultureToWpf: AppLocalization.Bootstrap.ApplyCurrentCultureToWpf)
+                ApplyCurrentCultureToWpf: AppLocalization.Bootstrap.ApplyCurrentCultureToWpf),
+            OnEmergencySnapshot = EmergencySnapshotCrashHandler.TryEmergencySnapshotAllWindows
         }, args);
 }

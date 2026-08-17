@@ -128,6 +128,44 @@ public sealed class CommentCommandTests
     }
 
     [Fact]
+    public void DeleteCommentCommand_StripsFooterAnchor_AndUndoRedoRestoresIt()
+    {
+        // Word allows anchoring a review comment in a header or footer, not just the body. Deleting it
+        // through the real Review-pane command path must strip the mark there too, not leave the footer
+        // run carrying a CommentId that no longer resolves to any entry in doc.Comments — which the docx
+        // writer would then still serialise as a dangling w:commentRangeStart/End/w:commentReference.
+        var doc = TextDocument.CreateEmpty();
+        doc.Blocks.Clear();
+        doc.Blocks.Add(new Paragraph("Body text"));
+        doc.Footer = new HeaderFooter();
+        var footerParagraph = new Paragraph();
+        footerParagraph.Runs.Add(new Run("Footer reviewed text") { CommentId = 9 });
+        footerParagraph.Runs.Add(Run.CommentReference(9));
+        doc.Footer.Paragraphs.Add(footerParagraph);
+        doc.Comments[9] = new Comment(9, "footer note", "F", "F");
+        var bus = new DocumentCommandBus(new TestContext(doc));
+
+        bus.Execute(new DeleteCommentCommand(9));
+
+        bus.NextUndoMutationKind.Should().Be(DocumentCommandMutationKind.Comment);
+        doc.Comments.Should().NotContainKey(9);
+        footerParagraph.Runs.Should().ContainSingle();
+        footerParagraph.Runs[0].CommentId.Should().BeNull();
+        footerParagraph.Runs[0].IsCommentReference.Should().BeFalse();
+        footerParagraph.Runs[0].Text.Should().Be("Footer reviewed text");
+
+        bus.Undo().Should().BeTrue();
+        doc.Comments.Should().ContainKey(9);
+        footerParagraph.Runs.Should().HaveCount(2);
+        footerParagraph.Runs[0].CommentId.Should().Be(9);
+        footerParagraph.Runs[1].IsCommentReference.Should().BeTrue();
+
+        bus.Redo().Should().BeTrue();
+        doc.Comments.Should().NotContainKey(9);
+        footerParagraph.Runs.Should().ContainSingle();
+    }
+
+    [Fact]
     public void ReplyAndResolveCommands_AreCommentHistory_AndUndoRedo()
     {
         var doc = TextDocument.CreateEmpty();

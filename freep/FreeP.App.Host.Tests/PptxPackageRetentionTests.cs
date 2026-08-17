@@ -117,6 +117,14 @@ public sealed class PptxPackageRetentionTests
         "application/vnd.openxmlformats-officedocument.drawingml.chart+xml";
     private const string SpreadsheetWorkbookContentType =
         "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
+    private const string ChartStyleRelType =
+        "http://schemas.microsoft.com/office/2011/relationships/chartStyle";
+    private const string ChartColorStyleRelType =
+        "http://schemas.microsoft.com/office/2011/relationships/chartColorStyle";
+    private const string ChartStyleContentType =
+        "application/vnd.ms-office.chartstyle+xml";
+    private const string ChartColorStyleContentType =
+        "application/vnd.ms-office.chartcolorstyle+xml";
 
     public static IEnumerable<object[]> CorpusDecks() =>
         ExpectedCorpusDeckNames.Select(name => new object[] { name });
@@ -812,6 +820,170 @@ public sealed class PptxPackageRetentionTests
         reloadedChart.Series.Should().ContainSingle();
         reloadedChart.Series[0].Name.Should().Be("Actual");
         reloadedChart.Series[0].Values.Should().Equal(42, 51);
+    }
+
+    [Fact]
+    public void ReadWriteRead_UnrelatedEditToDeckWithStyledChart_PreservesChartStyleAndColorSidecars()
+    {
+        // Reproduces the confirmed finding: a regular (non-ChartEx) chart's PowerPoint
+        // chart-style/chart-color-style sidecars must survive a save even when the chart
+        // itself is never touched — only some other, unrelated shape is edited.
+        using var source = BuildPptxWithStyledChartWorkbookAndUnrelatedPackageData();
+        var loaded = PptxPackageReader.Read(source);
+        loaded.PackageSnapshot.Should().NotBeNull();
+        var chartShape = loaded.Slides[0].Shapes.Single(shape => shape.Kind == SlideShapeKind.Chart);
+        chartShape.Chart.Should().NotBeNull();
+        chartShape.Chart!.RegenerateWorkbookOnSave.Should().BeFalse(
+            "this test never edits the chart's own data - only an unrelated shape is added");
+
+        AddModeledShapeEdit(loaded, "styled-chart-unrelated-edit.pptx");
+
+        using var saved = new MemoryStream();
+        PptxPackageWriter.Write(loaded, saved);
+        var savedBytes = saved.ToArray();
+
+        using var archive = new ZipArchive(new MemoryStream(savedBytes), ZipArchiveMode.Read);
+
+        archive.GetEntry("ppt/charts/style1.xml").Should().NotBeNull(
+            "an untouched chart's PowerPoint chart-style sidecar must survive a save that never edited the chart");
+        archive.GetEntry("ppt/charts/colors1.xml").Should().NotBeNull(
+            "an untouched chart's PowerPoint chart-color-style sidecar must survive a save that never edited the chart");
+        ReadText(archive, "ppt/charts/style1.xml").Should().Contain("must-survive-style");
+        ReadText(archive, "ppt/charts/colors1.xml").Should().Contain("must-survive-colors");
+
+        var chartRels = LoadXml(archive, "ppt/charts/_rels/chart1.xml.rels");
+        Relationship(chartRels, ChartStyleRelType, "style1.xml").Should().NotBeNull(
+            "the chart's own rels must still reference its style sidecar after an unrelated save");
+        Relationship(chartRels, ChartColorStyleRelType, "colors1.xml").Should().NotBeNull(
+            "the chart's own rels must still reference its color-style sidecar after an unrelated save");
+        Relationship(chartRels, PackageRelType, "../embeddings/sourceStyledWorkbook.xlsx").Should().NotBeNull(
+            "the pre-existing embedded-workbook relationship must still be preserved alongside the style sidecars");
+
+        var contentTypes = LoadXml(archive, "[Content_Types].xml");
+        Override(contentTypes, "/ppt/charts/style1.xml", ChartStyleContentType).Should().NotBeNull(
+            "the saved package must declare a content type for the preserved chart-style part");
+        Override(contentTypes, "/ppt/charts/colors1.xml", ChartColorStyleContentType).Should().NotBeNull(
+            "the saved package must declare a content type for the preserved chart-color-style part");
+    }
+
+    [Fact]
+    public void ReadWriteRead_ChartWorkbookOnlyNoStyleSidecars_StillPreservedAfterUnrelatedEdit()
+    {
+        // Sibling no-regression test: a chart that has ONLY an embedded-workbook relationship
+        // (the common case exercised by the pre-existing fixture/tests above, with no
+        // chartStyle/chartColorStyle sidecars at all) must keep working exactly as before once
+        // the preservation filter is broadened to also carry style/color sidecars forward.
+        using var source = BuildPptxWithChartWorkbookAndUnrelatedPackageData();
+        var loaded = PptxPackageReader.Read(source);
+        loaded.PackageSnapshot.Should().NotBeNull();
+        var chartShape = loaded.Slides[0].Shapes.Single(shape => shape.Kind == SlideShapeKind.Chart);
+        chartShape.Chart!.RegenerateWorkbookOnSave.Should().BeFalse();
+
+        AddModeledShapeEdit(loaded, "plain-chart-unrelated-edit.pptx");
+
+        using var saved = new MemoryStream();
+        PptxPackageWriter.Write(loaded, saved);
+        using var archive = new ZipArchive(new MemoryStream(saved.ToArray()), ZipArchiveMode.Read);
+
+        archive.GetEntry("ppt/embeddings/sourceWorkbook.xlsx").Should().NotBeNull(
+            "a chart with only a workbook relationship (no style sidecars) must keep preserving that workbook");
+        var chartRels = LoadXml(archive, "ppt/charts/_rels/chart1.xml.rels");
+        Relationship(chartRels, PackageRelType, "../embeddings/sourceWorkbook.xlsx").Should().NotBeNull();
+        // No style/color relationships existed in the source, so none should be invented.
+        chartRels.Root!.Elements(RelsNs + "Relationship").Should().ContainSingle();
+    }
+
+    [Fact]
+    public void ReadWriteRead_ChartExDataEdit_RegeneratesEmbeddedWorkbookSoItMatchesTheOnSlideCache()
+    {
+        // Reproduces the confirmed finding: editing a ChartEx chart's data through the real
+        // user-facing command (ReplaceChartDataCommand, the same command a chart-data-dialog
+        // edit dispatches) must refresh BOTH the on-slide cx:data cache AND the chart's own
+        // embedded "Edit Data in Excel" workbook — not just the cache — so the next Excel
+        // round trip doesn't start from stale numbers.
+        using var source = BuildPptxWithChartExWorkbookAndStyleSidecars();
+        var loaded = PptxPackageReader.Read(source);
+        loaded.PackageSnapshot.Should().NotBeNull();
+        var chartShape = loaded.Slides[0].Shapes.Single(shape => shape.Kind == SlideShapeKind.Chart);
+        chartShape.Chart.Should().NotBeNull();
+        chartShape.Chart!.IsChartEx.Should().BeTrue();
+        chartShape.Chart.RegenerateWorkbookOnSave.Should().BeFalse();
+
+        new ReplaceChartDataCommand(
+            slideIndex: 0,
+            shapeId: chartShape.Id,
+            categories: ["New East", "New West"],
+            seriesNames: ["New Actual"],
+            values: [new double?[] { 77, 88 }]).Apply(loaded);
+
+        chartShape.Chart.RegenerateWorkbookOnSave.Should().BeTrue();
+
+        using var saved = new MemoryStream();
+        PptxPackageWriter.Write(loaded, saved);
+        using var archive = new ZipArchive(new MemoryStream(saved.ToArray()), ZipArchiveMode.Read);
+
+        // The on-slide cache was already known to refresh correctly - confirm it still does.
+        var chartExXml = LoadXml(archive, "ppt/charts/chartEx1.xml").ToString(SaveOptions.DisableFormatting);
+        chartExXml.Should().Contain("New East");
+        chartExXml.Should().Contain("77");
+
+        // The chart's own embedded workbook - the one "Edit Data in Excel" opens - must be
+        // regenerated with the SAME new numbers, not left holding the pre-edit data.
+        var chartRels = LoadXml(archive, "ppt/charts/_rels/chartEx1.xml.rels");
+        var workbookRelationship = Relationship(chartRels, PackageRelType, "../embeddings/chartWorkbook1.xlsx");
+        workbookRelationship.Should().NotBeNull(
+            "the edited ChartEx chart must point its workbook relationship at a regenerated workbook");
+
+        archive.GetEntry("ppt/embeddings/sourceChartExWorkbook.xlsx").Should().BeNull(
+            "the pre-edit embedded workbook must not be carried forward once its data is stale");
+
+        using var workbookArchive = new ZipArchive(
+            new MemoryStream(ReadBytes(archive, "ppt/embeddings/chartWorkbook1.xlsx")),
+            ZipArchiveMode.Read);
+        var sheetXml = LoadXml(workbookArchive, "xl/worksheets/sheet1.xml").ToString(SaveOptions.DisableFormatting);
+        sheetXml.Should().Contain("New Actual");
+        sheetXml.Should().Contain("New East");
+        sheetXml.Should().Contain("77");
+        sheetXml.Should().Contain("88");
+
+        // The style/color sidecars are untouched by a data-only edit and must survive too.
+        Relationship(chartRels, ChartStyleRelType, "style1.xml").Should().NotBeNull();
+        Relationship(chartRels, ChartColorStyleRelType, "colors1.xml").Should().NotBeNull();
+        archive.GetEntry("ppt/charts/style1.xml").Should().NotBeNull();
+        archive.GetEntry("ppt/charts/colors1.xml").Should().NotBeNull();
+    }
+
+    [Fact]
+    public void ReadWriteRead_ChartExUntouched_PreservesEmbeddedWorkbookAndStyleSidecarsVerbatim()
+    {
+        // Sibling no-regression test: when a ChartEx chart's data is NOT edited, its embedded
+        // workbook and style/color sidecars must still be preserved byte-for-byte, exactly as
+        // before the fix that teaches the writer to regenerate the workbook on data edits.
+        using var source = BuildPptxWithChartExWorkbookAndStyleSidecars();
+        var loaded = PptxPackageReader.Read(source);
+        var chartShape = loaded.Slides[0].Shapes.Single(shape => shape.Kind == SlideShapeKind.Chart);
+        chartShape.Chart!.RegenerateWorkbookOnSave.Should().BeFalse();
+
+        AddModeledShapeEdit(loaded, "chartex-untouched-unrelated-edit.pptx");
+
+        using var sourceArchive = new ZipArchive(source, ZipArchiveMode.Read);
+        var originalWorkbookBytes = ReadBytes(sourceArchive, "ppt/embeddings/sourceChartExWorkbook.xlsx");
+        var originalStyleBytes = ReadBytes(sourceArchive, "ppt/charts/style1.xml");
+        var originalColorsBytes = ReadBytes(sourceArchive, "ppt/charts/colors1.xml");
+
+        using var saved = new MemoryStream();
+        PptxPackageWriter.Write(loaded, saved);
+        using var savedArchive = new ZipArchive(new MemoryStream(saved.ToArray()), ZipArchiveMode.Read);
+
+        ReadBytes(savedArchive, "ppt/embeddings/sourceChartExWorkbook.xlsx").Should().Equal(originalWorkbookBytes,
+            "an untouched ChartEx chart's embedded workbook must be preserved byte-for-byte");
+        ReadBytes(savedArchive, "ppt/charts/style1.xml").Should().Equal(originalStyleBytes);
+        ReadBytes(savedArchive, "ppt/charts/colors1.xml").Should().Equal(originalColorsBytes);
+
+        var chartRels = LoadXml(savedArchive, "ppt/charts/_rels/chartEx1.xml.rels");
+        Relationship(chartRels, PackageRelType, "../embeddings/sourceChartExWorkbook.xlsx").Should().NotBeNull();
+        Relationship(chartRels, ChartStyleRelType, "style1.xml").Should().NotBeNull();
+        Relationship(chartRels, ChartColorStyleRelType, "colors1.xml").Should().NotBeNull();
     }
 
     [Fact]
@@ -2042,6 +2214,187 @@ public sealed class PptxPackageRetentionTests
                 contentTypes,
                 "/customXml/chartWorkbookPayload.xml",
                 "application/vnd.example.freep.chart-workbook-payload+xml");
+            WriteXml(archive, "[Content_Types].xml", contentTypes);
+        }
+
+        package.Position = 0;
+        return package;
+    }
+
+    /// <summary>
+    /// A regular (non-ChartEx) chart whose own rels carry THREE relationships: its embedded
+    /// workbook plus a PowerPoint-2013+ chartStyle and chartColorStyle sidecar (the parts
+    /// PowerPoint writes for "Chart Styles"/"Chart Colors" gallery choices). Mirrors
+    /// <see cref="BuildPptxWithChartWorkbookAndUnrelatedPackageData"/> but adds the style
+    /// sidecars the confirmed finding says get silently dropped.
+    /// </summary>
+    private static MemoryStream BuildPptxWithStyledChartWorkbookAndUnrelatedPackageData()
+    {
+        var presentation = new Presentation();
+        var slide = new Slide();
+        var chart = new ChartShape { ChartType = ChartType.ColumnClustered };
+        chart.Categories.AddRange(["Old East", "Old West"]);
+        var series = new ChartSeries { Name = "Old Actual" };
+        series.Values.AddRange([10, 20]);
+        chart.Series.Add(series);
+        slide.Shapes.Add(new SlideShape
+        {
+            Id = 101,
+            Name = "Styled workbook chart",
+            Kind = SlideShapeKind.Chart,
+            OffsetXEmu = 914400,
+            OffsetYEmu = 914400,
+            ExtentCxEmu = 3657600,
+            ExtentCyEmu = 2743200,
+            Chart = chart,
+        });
+        presentation.Slides.Add(slide);
+
+        using var basePackage = new MemoryStream();
+        PptxPackageWriter.Write(presentation, basePackage);
+
+        var package = new MemoryStream();
+        package.Write(basePackage.ToArray());
+        package.Position = 0;
+        using (var archive = new ZipArchive(package, ZipArchiveMode.Update, leaveOpen: true))
+        {
+            var chartXml = LoadXml(archive, "ppt/charts/chart1.xml");
+            chartXml.Root!.Element(ChartNs + "externalData")?.Remove();
+            chartXml.Root.Add(new XElement(ChartNs + "externalData",
+                new XAttribute(RelsDocNs + "id", "rIdSourceWorkbook"),
+                new XElement(ChartNs + "autoUpdate", new XAttribute("val", "0"))));
+            WriteXml(archive, "ppt/charts/chart1.xml", chartXml);
+
+            var chartRels = new XDocument(
+                new XDeclaration("1.0", "UTF-8", "yes"),
+                new XElement(RelsNs + "Relationships"));
+            AddRelationship(chartRels, "rIdSourceWorkbook", PackageRelType, "../embeddings/sourceStyledWorkbook.xlsx");
+            AddRelationship(chartRels, "rIdStyle", ChartStyleRelType, "style1.xml");
+            AddRelationship(chartRels, "rIdColors", ChartColorStyleRelType, "colors1.xml");
+            WriteXml(archive, "ppt/charts/_rels/chart1.xml.rels", chartRels);
+
+            WriteBytes(archive, "ppt/embeddings/sourceStyledWorkbook.xlsx", Encoding.UTF8.GetBytes("stale styled workbook bytes"));
+            WriteText(
+                archive,
+                "ppt/charts/style1.xml",
+                """<cs:chartStyle xmlns:cs="http://schemas.microsoft.com/office/drawing/2012/chartStyle">must-survive-style</cs:chartStyle>""");
+            WriteText(
+                archive,
+                "ppt/charts/colors1.xml",
+                """<cs:colorStyle xmlns:cs="http://schemas.microsoft.com/office/drawing/2012/chartStyle">must-survive-colors</cs:colorStyle>""");
+
+            var contentTypes = LoadXml(archive, "[Content_Types].xml");
+            AddOverride(contentTypes, "/ppt/embeddings/sourceStyledWorkbook.xlsx", SpreadsheetWorkbookContentType);
+            AddOverride(contentTypes, "/ppt/charts/style1.xml", ChartStyleContentType);
+            AddOverride(contentTypes, "/ppt/charts/colors1.xml", ChartColorStyleContentType);
+            WriteXml(archive, "[Content_Types].xml", contentTypes);
+        }
+
+        package.Position = 0;
+        return package;
+    }
+
+    /// <summary>
+    /// A ChartEx (histogram) chart whose embedded "Edit Data in Excel" workbook and
+    /// chartStyle/chartColorStyle sidecars are all present, with the on-slide cx:data cache
+    /// deliberately holding different numbers than the (placeholder) embedded workbook bytes -
+    /// mirroring a real PowerPoint-authored ChartEx part. A data edit is expected to refresh
+    /// both the cache and a freshly regenerated workbook; an untouched save must preserve the
+    /// workbook and sidecars verbatim.
+    /// </summary>
+    private static MemoryStream BuildPptxWithChartExWorkbookAndStyleSidecars()
+    {
+        const string chartExUri = "http://schemas.microsoft.com/office/drawing/2014/chartex";
+        XNamespace cx = chartExUri;
+        var chart = new ChartShape
+        {
+            ChartType = ChartType.ColumnClustered,
+            IsChartEx = true,
+            ChartExLayoutId = "histogram",
+            PreservedChartExXml = new XDocument(
+                new XElement(cx + "chartSpace",
+                    new XAttribute(XNamespace.Xmlns + "cx", chartExUri),
+                    new XAttribute(XNamespace.Xmlns + "r", RelsDocNs.NamespaceName),
+                    new XElement(cx + "chartData",
+                        new XElement(cx + "data",
+                            new XAttribute("id", 0),
+                            new XElement(cx + "strDim",
+                                new XAttribute("type", "cat"),
+                                new XElement(cx + "lvl",
+                                    new XAttribute("ptCount", 2),
+                                    new XElement(cx + "pt", new XAttribute("idx", 0), "Old East"),
+                                    new XElement(cx + "pt", new XAttribute("idx", 1), "Old West"))),
+                            new XElement(cx + "numDim",
+                                new XAttribute("type", "val"),
+                                new XElement(cx + "lvl",
+                                    new XAttribute("ptCount", 2),
+                                    new XElement(cx + "pt", new XAttribute("idx", 0), "10"),
+                                    new XElement(cx + "pt", new XAttribute("idx", 1), "20"))))),
+                    new XElement(cx + "chart",
+                        new XElement(cx + "plotArea",
+                            new XElement(cx + "plotAreaRegion",
+                                new XElement(cx + "series",
+                                    new XAttribute("layoutId", "histogram"),
+                                    new XElement(cx + "tx",
+                                        new XElement(cx + "txData",
+                                            new XElement(cx + "v", "Old Actual"))),
+                                    new XElement(cx + "dataId", new XAttribute("val", 0)))))),
+                    new XElement(cx + "externalData", new XAttribute(RelsDocNs + "id", "rIdWorkbook"))))
+                .ToString(SaveOptions.DisableFormatting),
+        };
+        chart.Categories.AddRange(["Old East", "Old West"]);
+        var series = new ChartSeries { Name = "Old Actual" };
+        series.Values.AddRange([10, 20]);
+        chart.Series.Add(series);
+
+        var slide = new Slide();
+        slide.Shapes.Add(new SlideShape
+        {
+            Id = 201,
+            Name = "ChartEx workbook+style chart",
+            Kind = SlideShapeKind.Chart,
+            OffsetXEmu = 914400,
+            OffsetYEmu = 914400,
+            ExtentCxEmu = 3657600,
+            ExtentCyEmu = 2743200,
+            Chart = chart,
+        });
+        var presentation = new Presentation();
+        presentation.Slides.Add(slide);
+
+        using var basePackage = new MemoryStream();
+        PptxPackageWriter.Write(presentation, basePackage);
+
+        var package = new MemoryStream();
+        package.Write(basePackage.ToArray());
+        package.Position = 0;
+        using (var archive = new ZipArchive(package, ZipArchiveMode.Update, leaveOpen: true))
+        {
+            var chartRels = new XDocument(
+                new XDeclaration("1.0", "UTF-8", "yes"),
+                new XElement(RelsNs + "Relationships"));
+            AddRelationship(chartRels, "rIdWorkbook", PackageRelType, "../embeddings/sourceChartExWorkbook.xlsx");
+            AddRelationship(chartRels, "rIdStyle", ChartStyleRelType, "style1.xml");
+            AddRelationship(chartRels, "rIdColors", ChartColorStyleRelType, "colors1.xml");
+            WriteXml(archive, "ppt/charts/_rels/chartEx1.xml.rels", chartRels);
+
+            WriteBytes(
+                archive,
+                "ppt/embeddings/sourceChartExWorkbook.xlsx",
+                Encoding.UTF8.GetBytes("stale chartex workbook bytes"));
+            WriteText(
+                archive,
+                "ppt/charts/style1.xml",
+                """<cs:chartStyle xmlns:cs="http://schemas.microsoft.com/office/drawing/2012/chartStyle">must-survive-style</cs:chartStyle>""");
+            WriteText(
+                archive,
+                "ppt/charts/colors1.xml",
+                """<cs:colorStyle xmlns:cs="http://schemas.microsoft.com/office/drawing/2012/chartStyle">must-survive-colors</cs:colorStyle>""");
+
+            var contentTypes = LoadXml(archive, "[Content_Types].xml");
+            AddOverride(contentTypes, "/ppt/embeddings/sourceChartExWorkbook.xlsx", SpreadsheetWorkbookContentType);
+            AddOverride(contentTypes, "/ppt/charts/style1.xml", ChartStyleContentType);
+            AddOverride(contentTypes, "/ppt/charts/colors1.xml", ChartColorStyleContentType);
             WriteXml(archive, "[Content_Types].xml", contentTypes);
         }
 

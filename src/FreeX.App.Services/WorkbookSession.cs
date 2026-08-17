@@ -473,8 +473,34 @@ public sealed class WorkbookSession : IDisposable
     /// present in one of the override caches are touched; a sheet this view never diverged on keeps
     /// its already-correct shared value untouched.
     /// </summary>
+    /// <remarks>
+    /// R138: unlike zoom/gridlines/etc. above, <see cref="ActiveCell"/> is not shadowed behind a
+    /// per-view override cache -- <see cref="SelectCell"/> and its siblings write it straight onto
+    /// the shared <see cref="Sheet.ActiveRow"/>/<see cref="Sheet.ActiveCol"/> fields the instant the
+    /// selection changes. Those writes land on the same shared <see cref="Sheet"/> object every
+    /// "New Window" sibling views, so whichever view's selection changed MOST RECENTLY -- not
+    /// necessarily the view that is actually about to save -- owns the persisted active cell. Worse,
+    /// <see cref="InitializeSiblingView"/> seeds a brand-new sibling's own <see cref="ActiveCell"/>
+    /// to A1 locally without ever touching the shared fields, so a sibling that saves before making
+    /// its own selection would persist whatever a sibling last left there instead of its own
+    /// displayed A1. This reconciles the CURRENT sheet's active cell from this view's own live
+    /// state, plus every other sheet this view has visited and navigated away from (remembered in
+    /// <see cref="_worksheetSelections"/>, exactly like <see cref="WorksheetSelectionStore"/>'s
+    /// WPF-host counterpart), following the same "reconcile the saving view's own state" contract
+    /// used for zoom/freeze/split above.
+    /// </remarks>
     public void ReconcileViewStateForSave()
     {
+        RememberActiveWorksheetSelection();
+        foreach (var (sheetId, snapshot) in _worksheetSelections.Snapshots)
+        {
+            if (Workbook.GetSheet(sheetId) is not { } selectionSheet)
+                continue;
+
+            selectionSheet.ActiveRow = snapshot.Anchor.Row;
+            selectionSheet.ActiveCol = snapshot.Anchor.Col;
+        }
+
         var sheetIds = new HashSet<SheetId>();
         sheetIds.UnionWith(_viewZoomOverrides.Keys);
         sheetIds.UnionWith(_viewModeOverrides.Keys);

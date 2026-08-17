@@ -20,6 +20,9 @@ internal sealed class IconPickerDialog : Free.Shared.Ribbon.Wpf.DialogWindow
     // ── State ─────────────────────────────────────────────────────────────────────────────────────
     private InlineImage? _result;
     private readonly IconPickerDialogSession _session;
+    // Roving-tabindex keyboard focus: the flat index (into the current tile list, same order as
+    // _session's VisibleEntries) that arrow/Home/End keys move and Enter/Space selects.
+    private int _focusedIndex;
 
     // ── Controls ──────────────────────────────────────────────────────────────────────────────────
     private readonly ComboBox _categoryBox;
@@ -122,6 +125,11 @@ internal sealed class IconPickerDialog : Free.Shared.Ribbon.Wpf.DialogWindow
             HorizontalAlignment = HorizontalAlignment.Left
         };
         AutomationProperties.SetAutomationId(_grid, Surface.TilesAutomationId);
+        // Keyboard focus lands on one tile at a time (roving tab stop, set in ResetTileFocusState /
+        // MoveKeyboardFocus below); KeyDown bubbles up from that tile through this panel, so a
+        // single handler here drives arrow/Home/End navigation and Enter/Space selection for the
+        // whole grid.
+        _grid.KeyDown += OnGridKeyDown;
 
         var scroll = new ScrollViewer
         {
@@ -153,6 +161,8 @@ internal sealed class IconPickerDialog : Free.Shared.Ribbon.Wpf.DialogWindow
 
         foreach (var entry in state.VisibleEntries)
             _grid.Children.Add(MakeTile(entry));
+
+        ResetTileFocusState();
     }
 
     private Border MakeTile(IconPickerEntry entry)
@@ -195,7 +205,13 @@ internal sealed class IconPickerDialog : Free.Shared.Ribbon.Wpf.DialogWindow
             Background = Brushes.Transparent,
             Child = content,
             Cursor = Cursors.Hand,
-            Tag = entry
+            Tag = entry,
+            // Border is not a Control, but any UIElement can take keyboard focus once Focusable is
+            // set. Combined with the roving IsTabStop managed in ResetTileFocusState / MoveKeyboard-
+            // Focus, this lets Tab move into (and out of) the grid as a single stop, then arrows move
+            // within it -- Border itself has no default focus chrome, so ApplyFocusVisuals paints an
+            // explicit indicator instead of relying on WPF's default dotted adorner.
+            Focusable = true,
         };
         AutomationProperties.SetAutomationId(tile, IconPickerDialogPlanner.TileAutomationId(entry));
         AutomationProperties.SetName(tile, entry.Name);
@@ -235,16 +251,13 @@ internal sealed class IconPickerDialog : Free.Shared.Ribbon.Wpf.DialogWindow
     // ── Selection ─────────────────────────────────────────────────────────────────────────────────
     private void OnTileClick(object sender, MouseButtonEventArgs e)
     {
-        // Deselect any previously selected tile
-        foreach (Border existing in _grid.Children.OfType<Border>())
-            SetSelected(existing, false);
+        if (sender is not Border tile || tile.Tag is not IconPickerEntry entry)
+            return;
 
-        if (sender is Border tile)
-        {
-            SetSelected(tile, true);
-            if (tile.Tag is IconPickerEntry entry)
-                _session.Select(entry);
-        }
+        var tiles = _grid.Children.OfType<Border>().ToList();
+        var index = tiles.IndexOf(tile);
+        if (index >= 0)
+            SelectTile(tiles, index, entry);
     }
 
     private void OnTileDoubleClick(object sender, MouseButtonEventArgs e)
@@ -259,12 +272,106 @@ internal sealed class IconPickerDialog : Free.Shared.Ribbon.Wpf.DialogWindow
         }
     }
 
-    private static void SetSelected(Border tile, bool selected)
+    // ── Keyboard navigation ───────────────────────────────────────────────────────────────────────
+    // Arrows move the roving tab stop across the grid, Home/End jump to the first/last tile, and
+    // Enter/Space select the currently focused tile — a keyboard-only user can reach and pick any
+    // icon without ever touching the mouse. IconGridNavigation (FreeW.App.Presentation) owns the
+    // actual index math so both this shell and the Avalonia twin move identically.
+    private void OnGridKeyDown(object sender, KeyEventArgs e)
     {
-        tile.BorderBrush  = selected ? SystemColors.HighlightBrush : Brushes.Transparent;
-        tile.Background   = selected ? SystemColors.HighlightBrush.CloneCurrentValue() : Brushes.Transparent;
-        if (selected && tile.Background is SolidColorBrush bg)
-            bg.Opacity = 0.25;
+        var tiles = _grid.Children.OfType<Border>().ToList();
+        if (tiles.Count == 0)
+            return;
+
+        if (MapNavigationKey(e.Key) is { } navigationKey)
+        {
+            var nextIndex = IconGridNavigation.Move(_focusedIndex, navigationKey, tiles.Count, Surface.TilesPerRow);
+            MoveKeyboardFocus(tiles, nextIndex);
+            e.Handled = true;
+            return;
+        }
+
+        if (e.Key is Key.Enter or Key.Space)
+        {
+            var index = Math.Clamp(_focusedIndex, 0, tiles.Count - 1);
+            if (tiles[index].Tag is IconPickerEntry entry)
+                SelectTile(tiles, index, entry);
+            e.Handled = true;
+        }
+    }
+
+    private static IconGridNavigationKey? MapNavigationKey(Key key) => key switch
+    {
+        Key.Left => IconGridNavigationKey.Left,
+        Key.Right => IconGridNavigationKey.Right,
+        Key.Up => IconGridNavigationKey.Up,
+        Key.Down => IconGridNavigationKey.Down,
+        Key.Home => IconGridNavigationKey.Home,
+        Key.End => IconGridNavigationKey.End,
+        _ => null,
+    };
+
+    /// <summary>Resets the roving tab stop to the first tile after a filter/search change.</summary>
+    private void ResetTileFocusState()
+    {
+        var tiles = _grid.Children.OfType<Border>().ToList();
+        _focusedIndex = 0;
+        for (var i = 0; i < tiles.Count; i++)
+            KeyboardNavigation.SetIsTabStop(tiles[i], i == 0);
+        ApplyFocusVisuals(tiles);
+    }
+
+    /// <summary>Moves the roving tab stop and keyboard focus without changing the selection.</summary>
+    private void MoveKeyboardFocus(IReadOnlyList<Border> tiles, int index)
+    {
+        if (index < 0 || index >= tiles.Count)
+            return;
+
+        for (var i = 0; i < tiles.Count; i++)
+            KeyboardNavigation.SetIsTabStop(tiles[i], i == index);
+
+        _focusedIndex = index;
+        ApplyFocusVisuals(tiles);
+        tiles[index].Focus();
+    }
+
+    private void SelectTile(IReadOnlyList<Border> tiles, int index, IconPickerEntry entry)
+    {
+        _session.Select(entry);
+        MoveKeyboardFocus(tiles, index);
+    }
+
+    /// <summary>
+    /// Single source of truth for tile appearance: a black outline marks the keyboard-focused tile
+    /// (visible regardless of theme/system focus-adorner settings, and asserted directly by tests),
+    /// independent of the blue selection highlight so a user can see both at once.
+    /// </summary>
+    private void ApplyFocusVisuals(IReadOnlyList<Border> tiles)
+    {
+        var selected = _session.State.SelectedEntry;
+        for (var i = 0; i < tiles.Count; i++)
+        {
+            var tile = tiles[i];
+            var isFocused = i == _focusedIndex;
+            var isSelected = tile.Tag is IconPickerEntry entry && Equals(selected, entry);
+
+            tile.BorderThickness = new Thickness(isFocused ? Surface.TileBorderThickness + 1 : Surface.TileBorderThickness);
+            tile.BorderBrush = isFocused
+                ? Brushes.Black
+                : isSelected ? SystemColors.HighlightBrush : Brushes.Transparent;
+
+            if (isSelected)
+            {
+                var background = SystemColors.HighlightBrush.CloneCurrentValue();
+                if (background is SolidColorBrush solid)
+                    solid.Opacity = 0.25;
+                tile.Background = background;
+            }
+            else
+            {
+                tile.Background = Brushes.Transparent;
+            }
+        }
     }
 
     // ── Accept ────────────────────────────────────────────────────────────────────────────────────

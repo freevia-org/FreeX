@@ -76,7 +76,7 @@ public sealed class SisterAvaloniaStandardDesktopFactoryTests
     private static SisterAvaloniaProgramRuntime NoDiagnosticsRuntime() =>
         new()
         {
-            CreateDiagnostics = _ => new SisterAvaloniaProgramDiagnostics(() => { }, (_, _) => { }),
+            CreateDiagnostics = (_, _) => new SisterAvaloniaProgramDiagnostics(() => { }, (_, _) => { }),
             RegisterRibbonCommandFaultHandler = _ => { },
         };
 

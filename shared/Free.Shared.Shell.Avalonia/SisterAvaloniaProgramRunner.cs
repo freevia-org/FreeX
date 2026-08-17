@@ -35,6 +35,17 @@ public sealed record SisterAvaloniaProgramSpec(
     public Action<int>? AfterRun { get; init; }
 
     public int? CompletedExitCode { get; init; }
+
+    /// <summary>
+    /// Optional best-effort hook run immediately after a crash is recorded by the neutral
+    /// AppDomain/unobserved-task hooks this runner installs (R138: FreeW/FreeP's Avalonia shell had
+    /// no way to plug in an emergency document snapshot here at all, unlike FreeX's hand-rolled
+    /// Avalonia host -- a crash lost every edit since the last periodic autosave tick, the exact
+    /// scenario autosave exists to prevent). Ignored when the caller supplies a custom
+    /// <see cref="CreateDiagnostics"/> override (as FreeX's Program.cs does) -- those hosts own their
+    /// own diagnostics wiring and register this kind of hook themselves. Must never throw.
+    /// </summary>
+    public Action? OnEmergencySnapshot { get; init; }
 }
 
 /// <summary>
@@ -77,7 +88,7 @@ public static class SisterAvaloniaProgramRunner
 
         ArgumentNullException.ThrowIfNull(preparation.StartupArguments);
         var diagnostics = spec.CreateDiagnostics?.Invoke()
-            ?? runtime.CreateDiagnostics(runtime.ResolveVersion());
+            ?? runtime.CreateDiagnostics(runtime.ResolveVersion(), spec.OnEmergencySnapshot);
         ArgumentNullException.ThrowIfNull(diagnostics);
         ArgumentNullException.ThrowIfNull(diagnostics.RegisterCrashHandlers);
         ArgumentNullException.ThrowIfNull(diagnostics.RecordCrash);
@@ -103,12 +114,12 @@ internal sealed class SisterAvaloniaProgramRuntime
 
     public Func<string> ResolveVersion { get; init; } = EntryAssemblyVersion.Resolve;
 
-    public Func<string, SisterAvaloniaProgramDiagnostics> CreateDiagnostics { get; init; } =
-        version =>
+    public Func<string, Action?, SisterAvaloniaProgramDiagnostics> CreateDiagnostics { get; init; } =
+        (version, onEmergencySnapshot) =>
         {
             var diagnostics = LocalAppDiagnostics.CreateDefault(version);
             return new SisterAvaloniaProgramDiagnostics(
-                () => diagnostics.RegisterCrashHandlers(),
+                () => diagnostics.RegisterCrashHandlers(subscribeDispatcher: null, onAfterFault: onEmergencySnapshot),
                 (exception, source) => diagnostics.RecordCrash(exception, source));
         };
 

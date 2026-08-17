@@ -81,13 +81,15 @@ public sealed class SisterAvaloniaStandardDesktopProfile<TApplication, TWindow, 
         SisterAvaloniaLocalizationStartupDescriptor localization,
         ISisterAvaloniaThemeStartupDescriptor theme,
         SisterAvaloniaOptionsStartupDescriptor<TOptions> options,
-        SisterAvaloniaWindowStartupDescriptor<TWindow, TOptions> window)
+        SisterAvaloniaWindowStartupDescriptor<TWindow, TOptions> window,
+        Action? onEmergencySnapshot = null)
     {
         ProductIdentity = productIdentity ?? throw new ArgumentNullException(nameof(productIdentity));
         Localization = localization ?? throw new ArgumentNullException(nameof(localization));
         Theme = theme ?? throw new ArgumentNullException(nameof(theme));
         Options = options ?? throw new ArgumentNullException(nameof(options));
         Window = window ?? throw new ArgumentNullException(nameof(window));
+        OnEmergencySnapshot = onEmergencySnapshot;
     }
 
     public AppProductIdentity ProductIdentity { get; }
@@ -99,6 +101,14 @@ public sealed class SisterAvaloniaStandardDesktopProfile<TApplication, TWindow, 
     public SisterAvaloniaOptionsStartupDescriptor<TOptions> Options { get; }
 
     public SisterAvaloniaWindowStartupDescriptor<TWindow, TOptions> Window { get; }
+
+    /// <summary>
+    /// Optional best-effort hook run immediately after a crash is recorded, threaded through to
+    /// <see cref="SisterAvaloniaProgramSpec.OnEmergencySnapshot"/> (R138). A host with no autosave
+    /// snapshot to take (e.g. FreeP, which has no autosave feature at all yet) simply leaves this
+    /// null. Must never throw.
+    /// </summary>
+    public Action? OnEmergencySnapshot { get; }
 
     internal void SetPendingLaunch(SisterAvaloniaStandardDesktopLaunch<TWindow> launch)
     {
@@ -180,7 +190,10 @@ public static class SisterAvaloniaStandardDesktopFactory
                         profile.SetPendingLaunch(launch);
                         return SisterAvaloniaLaunchPreparation.Continue(preparedArguments);
                     },
-                    startApplication),
+                    startApplication)
+                {
+                    OnEmergencySnapshot = profile.OnEmergencySnapshot
+                },
                 runtime);
         }
         finally

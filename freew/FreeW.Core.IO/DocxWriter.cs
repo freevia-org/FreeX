@@ -60,6 +60,16 @@ public static class DocxWriter
 
     public static void Write(TextDocument document, Stream stream, DocxWriteOptions options)
     {
+        // Belt-and-braces guard against dangling comment markup: the writer never emits a
+        // w:commentRangeStart/End or w:commentReference for a comment id that isn't (or is no longer)
+        // present in document.Comments, regardless of which paragraph store (body, any section's
+        // header/footer, footnotes, endnotes, or shape/text-box text) the stale Run.CommentId lives in.
+        // Threaded through every RunDrawings instance below so a model-layer cleanup that misses one of
+        // those stores (see DocumentInspector.RemoveComments / DeleteCommentCommand) still cannot corrupt
+        // the saved package — it just silently drops the orphaned mark instead of writing an id that
+        // comments.xml does not contain.
+        var validCommentIds = (IReadOnlySet<int>)document.Comments.Keys.ToHashSet();
+
         // Preserve-pass-through parts are emitted later, but their names must be reserved before assigning
         // modelled media/chart names so a read-then-edited package cannot produce duplicate OPC entries.
         var preservedParts = options.IncludeMacroParts
@@ -324,7 +334,7 @@ public static class DocxWriter
         foreach (var part in headerFooterParts)
         {
             WritePersonalInformationPart("word/" + part.FileName,
-                BuildHeaderFooter(part.IsHeader ? W + "hdr" : W + "ftr", part, preservedNumbering, restartOverrides));
+                BuildHeaderFooter(part.IsHeader ? W + "hdr" : W + "ftr", part, preservedNumbering, restartOverrides, validCommentIds));
             if (part.Images.Count > 0 || part.PreservedDrawings.Count > 0 || part.Hyperlinks.Count > 0)
             {
                 WritePart(archive, "word/_rels/" + part.FileName + ".rels", BuildHeaderFooterRels(part));
@@ -1532,7 +1542,7 @@ public static class DocxWriter
             .ToDictionary(pair => pair.Part.PartName, pair => pair.RelId, StringComparer.Ordinal);
 
         var drawings = new RunDrawings(
-            imagesByRun, chartsByRun, embeddedByRun, smartArtsByRun, ids, preservedDrawingRelIds,
+            imagesByRun, chartsByRun, embeddedByRun, smartArtsByRun, ids, document.Comments.Keys.ToHashSet(), preservedDrawingRelIds,
             subDocuments, imagesByGroupChild, chartsByGroupChild, smartArtsByGroupChild);
 
         var body = new XElement(W + "body");
@@ -1745,18 +1755,28 @@ public static class DocxWriter
         IReadOnlyDictionary<Run, EmbeddedObjectPart> EmbeddedObjects,
         IReadOnlyDictionary<Run, SmartArtPart> SmartArts,
         IdAllocator Ids,
+        // Belt-and-braces guard: the comment ids that actually have a matching entry in
+        // TextDocument.Comments at the moment the package is written. BuildParagraph consults this
+        // (rather than trusting a run's Run.CommentId in isolation) before emitting any
+        // w:commentRangeStart/End or w:commentReference, so a run whose comment was removed — from
+        // ANY paragraph store the model-layer cleanup missed (header/footer/footnote/endnote/shape
+        // text) — never serialises a dangling reference to a comment id that comments.xml does not
+        // contain. Required (not defaulted) so every call site must decide it explicitly rather than
+        // silently inheriting an unfiltered "allow everything" default.
+        IReadOnlySet<int> ValidCommentIds,
         IReadOnlyDictionary<string, string>? PreservedDrawingRelIds = null,
         IReadOnlyDictionary<string, string>? SubDocuments = null,
         IReadOnlyDictionary<InlineImage, ImagePart>? GroupImages = null,
         IReadOnlyDictionary<Chart, ChartPart>? GroupCharts = null,
         IReadOnlyDictionary<SmartArt, SmartArtPart>? GroupSmartArts = null)
     {
-        public static RunDrawings Empty() => new(
+        public static RunDrawings Empty(IReadOnlySet<int> validCommentIds) => new(
             new Dictionary<Run, ImagePart>(),
             new Dictionary<Run, ChartPart>(),
             new Dictionary<Run, EmbeddedObjectPart>(),
             new Dictionary<Run, SmartArtPart>(),
             new IdAllocator(),
+            validCommentIds,
             null,
             null,
             new Dictionary<InlineImage, ImagePart>(),
@@ -1775,7 +1795,8 @@ public static class DocxWriter
         XName rootName,
         HeaderFooterPart part,
         PreservedNumberingPlan? preservedNumbering,
-        RestartNumbering restartOverrides)
+        RestartNumbering restartOverrides,
+        IReadOnlySet<int> validCommentIds)
     {
         // Each story numbers independently: start this one with no active restart-group numId.
         restartOverrides.BeginStory();
@@ -1804,7 +1825,7 @@ public static class DocxWriter
         var imagesByRun = hasImages ? BuildHeaderFooterImagesByRun(part) : new Dictionary<Run, ImagePart>();
         var preservedDrawingRelIds = part.PreservedDrawings
             .ToDictionary(drawing => drawing.PartName, drawing => drawing.RelationshipId, StringComparer.Ordinal);
-        var drawings = RunDrawings.Empty() with
+        var drawings = RunDrawings.Empty(validCommentIds) with
         {
             Images = imagesByRun,
             PreservedDrawingRelIds = preservedDrawingRelIds
@@ -2040,7 +2061,7 @@ public static class DocxWriter
         footnotes.Add(Separator(0, "continuationSeparator"));
 
         // Footnote chart references resolve against word/_rels/footnotes.xml.rels.
-        var noteDrawings = RunDrawings.Empty() with
+        var noteDrawings = RunDrawings.Empty(document.Comments.Keys.ToHashSet()) with
         {
             Images = BuildNoteImagesByRun(document.Footnotes.Values.OrderBy(note => note.Id).SelectMany(note => note.Content), images),
             PreservedDrawingRelIds = preservedDrawings
@@ -2102,7 +2123,7 @@ public static class DocxWriter
         endnotes.Add(Separator(0, "continuationSeparator"));
 
         // Endnote chart references resolve against word/_rels/endnotes.xml.rels.
-        var noteDrawings = RunDrawings.Empty() with
+        var noteDrawings = RunDrawings.Empty(document.Comments.Keys.ToHashSet()) with
         {
             Images = BuildNoteImagesByRun(document.Endnotes.Values.OrderBy(note => note.Id).SelectMany(note => note.Content), images),
             PreservedDrawingRelIds = preservedDrawings
@@ -2283,7 +2304,7 @@ public static class DocxWriter
         var imagesByRun = commentImages.Count > 0
             ? BuildCommentImagesByRun(document, commentImages)
             : new Dictionary<Run, ImagePart>();
-        var drawings = RunDrawings.Empty() with
+        var drawings = RunDrawings.Empty(document.Comments.Keys.ToHashSet()) with
         {
             Images = imagesByRun,
             PreservedDrawingRelIds = preservedDrawings
@@ -3220,6 +3241,16 @@ public static class DocxWriter
         var runs = paragraph.Runs;
         var openCommentId = (int?)null;
 
+        // Belt-and-braces guard: a run's CommentId only counts as covering a comment range when that id
+        // still has a matching entry in document.Comments (see RunDrawings.ValidCommentIds). A stale id —
+        // left behind because the comment was removed from a paragraph store the model-layer cleanup
+        // didn't walk (header/footer/footnote/endnote/shape text) — is treated exactly like "no comment",
+        // so no w:commentRangeStart/End or w:commentReference referencing it is ever written.
+        int? EffectiveCommentId(Run run) =>
+            !run.IsCommentReference && run.CommentId is { } cid && drawings.ValidCommentIds.Contains(cid)
+                ? cid
+                : null;
+
         // The current open revision wrapper (w:ins/w:del) and the run it was opened for; run-level
         // elements are added through Content(...) so they land inside the wrapper when one is open.
         XElement? revisionWrapper = null;
@@ -3312,7 +3343,7 @@ public static class DocxWriter
 
             // Update the open comment range to match this run before emitting it. The textless
             // reference run does not open/extend a range; it only emits the reference marker below.
-            var coveringId = runs[i].IsCommentReference ? null : runs[i].CommentId;
+            var coveringId = EffectiveCommentId(runs[i]);
             if (openCommentId != coveringId)
             {
                 // Comment range markers are paragraph-level siblings, not revision content.
@@ -3358,7 +3389,7 @@ public static class DocxWriter
                 var head = runs[i];
                 var content = new XElement(W + "sdtContent");
                 while (i < runs.Count && ReferenceEquals(runs[i].Control, control)
-                    && (runs[i].IsCommentReference ? null : runs[i].CommentId) == openCommentId
+                    && EffectiveCommentId(runs[i]) == openCommentId
                     && SameRevision(head, runs[i]))
                 {
                     EmitBookmarkBoundariesAt(i, content, control);
@@ -3497,7 +3528,7 @@ public static class DocxWriter
                     hyperlink.Add(new XAttribute(W + "tooltip", tooltip));
                 var head = runs[i];
                 var firstHyperlinkRun = i;
-                while (i < runs.Count && runs[i].HyperlinkUrl == url && runs[i].HyperlinkTooltip == tooltip && (runs[i].IsCommentReference ? null : runs[i].CommentId) == openCommentId && SameRevision(head, runs[i])
+                while (i < runs.Count && runs[i].HyperlinkUrl == url && runs[i].HyperlinkTooltip == tooltip && EffectiveCommentId(runs[i]) == openCommentId && SameRevision(head, runs[i])
                     && (i == firstHyperlinkRun || !HasParagraphBookmarkBoundaryAt(i)))
                     hyperlink.Add(BuildRun(runs[i++], drawings, hyperlinks, preservedNumbering, restartOverrides));
                 Content(head, hyperlink);
@@ -3509,7 +3540,7 @@ public static class DocxWriter
                     hyperlink.Add(new XAttribute(W + "tooltip", tooltip));
                 var head = runs[i];
                 var firstHyperlinkRun = i;
-                while (i < runs.Count && runs[i].HyperlinkAnchor == anchor && runs[i].HyperlinkTooltip == tooltip && (runs[i].IsCommentReference ? null : runs[i].CommentId) == openCommentId && SameRevision(head, runs[i])
+                while (i < runs.Count && runs[i].HyperlinkAnchor == anchor && runs[i].HyperlinkTooltip == tooltip && EffectiveCommentId(runs[i]) == openCommentId && SameRevision(head, runs[i])
                     && (i == firstHyperlinkRun || !HasParagraphBookmarkBoundaryAt(i)))
                     hyperlink.Add(BuildRun(runs[i++], drawings, hyperlinks, preservedNumbering, restartOverrides));
                 Content(head, hyperlink);
@@ -3948,7 +3979,7 @@ public static class DocxWriter
             var rPr = BuildRunProperties(run.Formatting);
             if (rPr is not null)
                 sr.Add(rPr);
-            sr.Add(BuildShapeDrawing(shape, drawings.Ids, hyperlinks, preservedNumbering, restartOverrides));
+            sr.Add(BuildShapeDrawing(shape, drawings.Ids, hyperlinks, drawings.ValidCommentIds, preservedNumbering, restartOverrides));
             return sr;
         }
 
@@ -4007,7 +4038,10 @@ public static class DocxWriter
             return MarkerRun(run, new XElement(W + "endnoteReference", new XAttribute(W + "id", endnoteId)));
 
         // The textless comment anchor run carries the w:commentReference for its id (no literal text).
-        if (run is { IsCommentReference: true, CommentId: { } commentRefId })
+        // Guarded against document.Comments (drawings.ValidCommentIds): a reference run whose comment was
+        // removed from a paragraph store the model-layer cleanup didn't reach becomes an ordinary empty
+        // run below instead of re-emitting a w:commentReference to an id comments.xml no longer contains.
+        if (run is { IsCommentReference: true, CommentId: { } commentRefId } && drawings.ValidCommentIds.Contains(commentRefId))
             return new XElement(W + "r",
                 new XElement(W + "commentReference", new XAttribute(W + "id", commentRefId)));
 
@@ -4892,6 +4926,7 @@ public static class DocxWriter
         Shape shape,
         IdAllocator ids,
         IReadOnlyDictionary<string, string> hyperlinks,
+        IReadOnlySet<int> validCommentIds,
         PreservedNumberingPlan? preservedNumbering = null,
         RestartNumbering? restartOverrides = null)
     {
@@ -5009,7 +5044,7 @@ public static class DocxWriter
         if (shape.HasText)
         {
             var txbxContent = new XElement(W + "txbxContent");
-            var nested = RunDrawings.Empty() with { Ids = ids };
+            var nested = RunDrawings.Empty(validCommentIds) with { Ids = ids };
             foreach (var paragraph in shape.TextParagraphs)
                 txbxContent.Add(BuildParagraph(paragraph, nested, hyperlinks, preservedNumbering: preservedNumbering, restartOverrides: restartOverrides));
             wsp.Add(new XElement(Wps + "txbx", txbxContent));
@@ -5722,7 +5757,7 @@ public static class DocxWriter
 
             children.Add(child switch
             {
-                Shape shape => BuildDrawingGroupShapeChild(shape, xfrm, childName, ids, hyperlinks, preservedNumbering, restartOverrides),
+                Shape shape => BuildDrawingGroupShapeChild(shape, xfrm, childName, ids, hyperlinks, drawings.ValidCommentIds, preservedNumbering, restartOverrides),
                 WordArt wordArt => BuildDrawingGroupWordArtChild(wordArt, xfrm, childName, ids),
                 InlineImage image when drawings.GroupImages?.TryGetValue(image, out var imagePart) == true
                     => BuildDrawingGroupImageChild(imagePart, xfrm, childName),
@@ -5834,10 +5869,11 @@ public static class DocxWriter
         string childName,
         IdAllocator ids,
         IReadOnlyDictionary<string, string> hyperlinks,
+        IReadOnlySet<int> validCommentIds,
         PreservedNumberingPlan? preservedNumbering,
         RestartNumbering? restartOverrides)
     {
-        var drawing = BuildShapeDrawing(shape, ids, hyperlinks, preservedNumbering, restartOverrides);
+        var drawing = BuildShapeDrawing(shape, ids, hyperlinks, validCommentIds, preservedNumbering, restartOverrides);
         return BuildDrawingGroupRichWspChild(drawing, xfrm, childName);
     }
 

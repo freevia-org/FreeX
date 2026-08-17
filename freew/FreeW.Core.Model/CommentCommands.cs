@@ -158,20 +158,24 @@ public sealed class DeleteCommentCommand(int commentId) : IDocumentCommand
         _savedComment = comment;
         _savedOrdinal = doc.Comments.Keys.ToList().IndexOf(commentId);
 
-        for (var bi = 0; bi < doc.Blocks.Count; bi++)
+        // Comments legitimately anchor outside the body too (Word allows one in a header, footer,
+        // footnote, or endnote), so both the save and the strip below walk every such paragraph store via
+        // EnumerateCommentAnchorParagraphs — not just the body/table paragraphs ParagraphsInBlock(doc.Blocks)
+        // reaches. Without this, deleting a comment anchored in e.g. a footer would remove it from
+        // doc.Comments while leaving the footer run still carrying a CommentId that no longer resolves to
+        // anything, which the docx writer would then still serialise as a dangling
+        // w:commentRangeStart/End/w:commentReference.
+        foreach (var paragraph in EnumerateCommentAnchorParagraphs(doc))
         {
-            foreach (var paragraph in ParagraphsInBlock(doc.Blocks[bi]))
+            if (paragraph.Runs.Any(r => r.CommentId is { } cid && ResolveTopLevel(doc, cid) == commentId))
             {
-                if (paragraph.Runs.Any(r => r.CommentId is { } cid && ResolveTopLevel(doc, cid) == commentId))
-                {
-                    var key = BlockParagraphKey(doc, bi, paragraph);
-                    _savedRuns[key] = paragraph.Runs.Select(CloneRun).ToList();
-                    _savedBookmarkBoundaries[key] = [.. paragraph.BookmarkBoundaries];
-                }
+                var key = ParagraphKey(doc, paragraph);
+                _savedRuns[key] = paragraph.Runs.Select(CloneRun).ToList();
+                _savedBookmarkBoundaries[key] = [.. paragraph.BookmarkBoundaries];
             }
         }
 
-        foreach (var paragraph in doc.Blocks.SelectMany(ParagraphsInBlock))
+        foreach (var paragraph in EnumerateCommentAnchorParagraphs(doc))
         {
             var bookmarkPositions = BookmarkBoundaryMapper.Capture(paragraph);
             for (var i = paragraph.Runs.Count - 1; i >= 0; i--)
@@ -227,10 +231,10 @@ public sealed class DeleteCommentCommand(int commentId) : IDocumentCommand
         }
     }
 
-    private static int BlockParagraphKey(TextDocument doc, int blockIndex, Paragraph target)
+    private static int ParagraphKey(TextDocument doc, Paragraph target)
     {
         var ordinal = 0;
-        foreach (var paragraph in doc.Blocks.SelectMany(ParagraphsInBlock))
+        foreach (var paragraph in EnumerateCommentAnchorParagraphs(doc))
         {
             if (ReferenceEquals(paragraph, target))
                 return ordinal;
@@ -242,7 +246,53 @@ public sealed class DeleteCommentCommand(int commentId) : IDocumentCommand
     }
 
     private static Paragraph? ParagraphForKey(TextDocument doc, int key) =>
-        doc.Blocks.SelectMany(ParagraphsInBlock).ElementAtOrDefault(key);
+        EnumerateCommentAnchorParagraphs(doc).ElementAtOrDefault(key);
+
+    /// <summary>
+    /// Every paragraph that can carry a comment anchor: the body/table paragraphs (via
+    /// <see cref="ParagraphsInBlock"/>), plus every header/footer of every document section (default,
+    /// even, and first-page slots), plus every footnote's and endnote's own content paragraphs. Word
+    /// allows anchoring a review comment in any of these, not just the body, so <see cref="Apply"/> must
+    /// save/strip/restore across all of them — mirrors
+    /// <see cref="DocumentInspector.RemoveComments"/>'s identical fix for the same class of dangling-anchor
+    /// bug. Ordinal position within this sequence is stable across Apply/Revert within one command's
+    /// lifetime (the document's paragraph structure does not change between them), so it doubles as the
+    /// undo/redo lookup key in <see cref="_savedRuns"/>/<see cref="_savedBookmarkBoundaries"/>.
+    /// </summary>
+    private static IEnumerable<Paragraph> EnumerateCommentAnchorParagraphs(TextDocument doc)
+    {
+        foreach (var paragraph in doc.Blocks.SelectMany(ParagraphsInBlock))
+            yield return paragraph;
+
+        foreach (var section in doc.Sections)
+        {
+            var headersFooters = section.HeadersFooters;
+            foreach (var headerFooter in new[]
+                     {
+                         headersFooters.Header,
+                         headersFooters.Footer,
+                         headersFooters.EvenHeader,
+                         headersFooters.EvenFooter,
+                         headersFooters.FirstHeader,
+                         headersFooters.FirstFooter,
+                     })
+            {
+                if (headerFooter is null)
+                    continue;
+
+                foreach (var paragraph in headerFooter.Paragraphs)
+                    yield return paragraph;
+            }
+        }
+
+        foreach (var footnote in doc.Footnotes.Values)
+            foreach (var paragraph in footnote.Content)
+                yield return paragraph;
+
+        foreach (var endnote in doc.Endnotes.Values)
+            foreach (var paragraph in endnote.Content)
+                yield return paragraph;
+    }
 
     private static Run CloneRun(Run source) => new(source.Text, source.Formatting)
     {

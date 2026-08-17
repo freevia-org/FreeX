@@ -92,12 +92,81 @@ internal static class PptxChartWriter
         var destinationRelsPath = OpcPathHelper.GetRelationshipPartPath(chartPath);
         if (packageSnapshot?.TryGetEntry(sourceRelsPath, out var relBytes) == true)
         {
+            // A ChartEx data edit (chart.RegenerateWorkbookOnSave) already refreshed the
+            // on-slide cx:data cache above via BuildChartExDoc/UpdateChartExData, but that
+            // cache is a separate OPC part from the chart's own embedded "Edit Data in
+            // Excel" workbook (ppt/embeddings/...xlsx), which this verbatim rels copy would
+            // otherwise carry forward untouched. Left alone, the embedded workbook keeps
+            // serving pre-edit numbers, so the next Excel round trip starts from stale data
+            // (finding: ChartEx edits desync the chart from its own backing data). Rewrite
+            // just that one relationship's target to a freshly regenerated workbook built
+            // from the same chart.Categories/chart.Series the cache was just refreshed
+            // from, reusing the chart-type-agnostic workbook writer regular charts already
+            // use; every other relationship (chartStyle, chartColorStyle, …) is left as-is.
+            if (chart.RegenerateWorkbookOnSave &&
+                TryRegenerateChartExWorkbook(archive, chart, chartIndex, sourcePath, relBytes, out var mergedRelBytes))
+            {
+                relBytes = mergedRelBytes;
+            }
+
             var relEntry = archive.CreateEntry(destinationRelsPath, CompressionLevel.Optimal);
             using var stream = relEntry.Open();
             stream.Write(relBytes, 0, relBytes.Length);
         }
 
         return chartPath;
+    }
+
+    /// <summary>
+    /// Rewrites the single "package" (embedded-workbook) relationship in a ChartEx chart's
+    /// preserved <c>.rels</c> so it points at a freshly regenerated workbook containing the
+    /// current <paramref name="chart"/> data, leaving every other relationship untouched.
+    /// Returns false (leaving <paramref name="mergedRelBytes"/> unset) when the source rels
+    /// don't parse or contain no embedded-workbook relationship to begin with — there is
+    /// nothing to desync in that case, so the original bytes should be used unchanged.
+    /// </summary>
+    private static bool TryRegenerateChartExWorkbook(
+        ZipArchive archive,
+        ChartShape chart,
+        int chartIndex,
+        string sourceChartPath,
+        byte[] sourceRelBytes,
+        out byte[] mergedRelBytes)
+    {
+        mergedRelBytes = [];
+        var sourceRelsXml = OpcXml.TryLoadXml(sourceRelBytes);
+        if (sourceRelsXml is null)
+            return false;
+
+        var sourceDirectory = OpcPathHelper.GetDirectoryName(sourceChartPath);
+        var relationships = OpcRelationships.Load(sourceRelsXml);
+        var workbookRelationshipId = relationships
+            .Where(relationship =>
+                !relationship.IsExternal &&
+                !string.IsNullOrWhiteSpace(relationship.Target) &&
+                string.Equals(relationship.Type, PackageRelType, StringComparison.OrdinalIgnoreCase) &&
+                OpcPathHelper
+                    .ResolveRelativeZipPath(sourceDirectory, relationship.Target)
+                    .StartsWith("ppt/embeddings/", StringComparison.OrdinalIgnoreCase))
+            .Select(relationship => relationship.Id)
+            .FirstOrDefault();
+        if (workbookRelationshipId is null)
+            return false;
+
+        var regeneratedWorkbookPath = GetRegeneratedWorkbookPath(chartIndex);
+        WriteRegeneratedWorkbook(archive, chart, regeneratedWorkbookPath);
+
+        var newTarget = $"../embeddings/{regeneratedWorkbookPath.Split('/').Last()}";
+        using var mergedStream = new MemoryStream();
+        OpcRelationships.CreateDocument(relationships.Select(relationship =>
+                OpcRelationships.CreateRelationship(
+                    relationship.Id,
+                    relationship.Type,
+                    relationship.Id == workbookRelationshipId ? newTarget : relationship.Target,
+                    relationship.IsExternal)))
+            .Save(mergedStream);
+        mergedRelBytes = mergedStream.ToArray();
+        return true;
     }
 
     internal static string GetWrittenChartPath(ChartShape chart, int chartIndex) =>
@@ -3212,18 +3281,30 @@ internal static class PptxChartWriter
         if (sourceRels is null)
             return;
 
-        var workbookRelationships = OpcRelationships.Load(sourceRels)
+        // A preserved (untouched) chart's own rels can reference more than its embedded
+        // workbook: the chartStyle/chartColorStyle relationships that carry the chart's
+        // PowerPoint-2013+ style and color-scheme sidecars live here too. Keep every
+        // relationship whose internal target part still exists in the snapshot (or that is
+        // external, which never resolves against the package and is preserved as-is) —
+        // not just the workbook one — so those sidecars stay wired up after a save that
+        // never touched this chart. (Mirrors the wholesale-preserve approach
+        // WriteChartExPart already uses for ChartEx sidecars.)
+        var sourceDirectory = OpcPathHelper.GetDirectoryName(sourceChartPath);
+        var preservedRelationships = OpcRelationships.Load(sourceRels)
             .Where(relationship =>
-                PptxPackageWriter.TryResolveChartWorkbookPath(sourceChartPath, relationship, out var workbookPath) &&
-                packageSnapshot?.TryGetEntry(workbookPath, out _) == true)
+                relationship.IsExternal ||
+                (!string.IsNullOrWhiteSpace(relationship.Target) &&
+                 packageSnapshot?.TryGetEntry(
+                     OpcPathHelper.ResolveRelativeZipPath(sourceDirectory, relationship.Target),
+                     out _) == true))
             .ToArray();
-        if (workbookRelationships.Length == 0)
+        if (preservedRelationships.Length == 0)
             return;
 
         WriteEntry(
             archive,
             outputRelsPath,
-            OpcRelationships.CreateDocument(workbookRelationships.Select(relationship =>
+            OpcRelationships.CreateDocument(preservedRelationships.Select(relationship =>
                 OpcRelationships.CreateRelationship(
                     relationship.Id,
                     relationship.Type,

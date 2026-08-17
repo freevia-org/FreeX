@@ -31,7 +31,8 @@ public sealed partial class App : Application
                     PlatformApplicationDataPathProvider.LocalInstance)),
             new SisterAvaloniaWindowStartupDescriptor<MainWindow, FreeWOptions>(
                 (startupArguments, options, optionsStore) =>
-                    new MainWindow(startupArguments, options, optionsStore)));
+                    new MainWindow(startupArguments, options, optionsStore)),
+            onEmergencySnapshot: AutosaveAdapter.TryEmergencySnapshots);
 
     public override void OnFrameworkInitializationCompleted()
     {

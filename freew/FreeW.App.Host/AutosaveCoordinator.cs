@@ -43,6 +43,13 @@ internal sealed partial class AutosaveCoordinator
 
     public void Start() => _timer.Start();
 
+    /// <summary>
+    /// Best-effort emergency snapshot for the crash handler (see Program.cs's
+    /// TryEmergencySnapshotAllWindows). Must never throw -- delegates to
+    /// <see cref="FreeWAutosaveSession.TryEmergencySnapshot"/>, which is never-throw by design.
+    /// </summary>
+    public void TryEmergencySnapshot() => _session.TryEmergencySnapshot();
+
     public void Stop()
     {
         _timer.Stop();

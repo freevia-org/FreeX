@@ -35,6 +35,18 @@ public sealed record WpfApplicationStartupSpec<TOptions>(
     public string OptionsFileName { get; init; } = ApplicationOptionsStore<TOptions>.DefaultFileName;
 
     public IAppDiagnosticsPathProvider? DiagnosticsPathProvider { get; init; }
+
+    /// <summary>
+    /// Optional best-effort hook run immediately after a dispatcher- or appdomain-sourced crash is
+    /// recorded (R138: FreeW/FreeP previously had no way to plug in an emergency document snapshot
+    /// here at all, unlike FreeX's hand-rolled WPF host -- a crash lost every edit since the last
+    /// periodic autosave tick, the exact scenario autosave exists to prevent). The host supplies a
+    /// callback that snapshots whatever documents are currently open (e.g. fanning out to every live
+    /// window's autosave session) -- mirrors FreeX's App.xaml.cs TryEmergencySaveAllWindows. Must
+    /// never throw: it runs from a crash handler, and an exception escaping it would replace the
+    /// original fault with a new unhandled exception during process teardown.
+    /// </summary>
+    public Action? OnEmergencySnapshot { get; init; }
 }
 
 public interface IWpfApplicationThemeStartupSpec
@@ -127,7 +139,8 @@ public static class WpfApplicationStartupRunner
         app.ShutdownMode = ShutdownMode.OnMainWindowClose;
 
         diagnostics.RegisterCrashHandlers(
-            handler => app.DispatcherUnhandledException += (_, args) => handler(args.Exception));
+            handler => app.DispatcherUnhandledException += (_, args) => handler(args.Exception),
+            spec.OnEmergencySnapshot);
 
         // The handler above records a dispatcher fault but does not mark it handled, so an exception
         // escaping a ribbon Click handler would still terminate the app. The shared ribbon renderer
@@ -165,7 +178,7 @@ internal sealed class WpfApplicationStartupRuntime
 
 internal interface IWpfApplicationStartupDiagnostics
 {
-    void RegisterCrashHandlers(Action<Action<Exception>> subscribeDispatcher);
+    void RegisterCrashHandlers(Action<Action<Exception>> subscribeDispatcher, Action? onAfterFault = null);
 
     void RecordCrash(Exception exception, string source);
 
@@ -175,8 +188,8 @@ internal interface IWpfApplicationStartupDiagnostics
 internal sealed class LocalWpfApplicationStartupDiagnostics(LocalAppDiagnostics diagnostics)
     : IWpfApplicationStartupDiagnostics
 {
-    public void RegisterCrashHandlers(Action<Action<Exception>> subscribeDispatcher) =>
-        diagnostics.RegisterCrashHandlers(subscribeDispatcher);
+    public void RegisterCrashHandlers(Action<Action<Exception>> subscribeDispatcher, Action? onAfterFault = null) =>
+        diagnostics.RegisterCrashHandlers(subscribeDispatcher, onAfterFault);
 
     public void RecordCrash(Exception exception, string source) =>
         diagnostics.RecordCrash(exception, source);

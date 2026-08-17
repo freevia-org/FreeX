@@ -42,6 +42,9 @@ public sealed partial class MainWindow : Window
 {
     private FileCommands _file = null!;
     private AutosaveCoordinator _autosave = null!;
+
+    /// <summary>Exposed for Program.cs's crash handler to attempt a best-effort emergency snapshot.</summary>
+    internal AutosaveCoordinator? AutosaveCoordinatorForCrashHandler => _autosave;
     private DocumentView _editor = null!;
     private DocumentView? _lastFocusedDocumentEditor;
     private Ruler _hRuler = null!;

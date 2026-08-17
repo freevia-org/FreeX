@@ -385,24 +385,81 @@ public sealed class OdtFileAdapter : IDocumentFileAdapter
                     result.ColumnWidthsPt.Add(w);
         }
 
-        foreach (var rowEl in table.Descendants(TableNs + "table-row"))
+        // Vertical merges (table:number-rows-spanned on the top cell) leave a table:covered-table-cell
+        // placeholder in each row below, one per grid column the merge occupies. Track them keyed by the
+        // column they started at so those placeholders can be told apart from a covered-table-cell that
+        // merely covers a cell spanned horizontally earlier in the SAME row (which carries no state here
+        // and is dropped, same as before — GridSpan on the real cell already accounts for it).
+        var activeVerticalSpans = new Dictionary<int, (int Width, int RemainingRows)>();
+
+        // Only direct table-row children: table.Descendants would also walk into the rows of any table
+        // NESTED inside a cell, splicing the inner table's rows into this outer table as bogus rows.
+        foreach (var rowEl in table.Elements(TableNs + "table-row"))
         {
             var row = new TableRow();
-            foreach (var cellEl in rowEl.Elements(TableNs + "table-cell"))
+            var col = 0;
+            var pendingGroupCols = 0;
+            foreach (var cellEl in rowEl.Elements())
             {
-                var cell = new TableCell();
-                var span = (int?)cellEl.Attribute(TableNs + "number-columns-spanned") ?? 1;
-                if (span > 1)
-                    cell.GridSpan = span;
+                if (cellEl.Name == TableNs + "table-cell")
+                {
+                    var cell = new TableCell();
+                    var span = (int?)cellEl.Attribute(TableNs + "number-columns-spanned") ?? 1;
+                    if (span > 1)
+                        cell.GridSpan = span;
 
-                foreach (var block in ReadBlocks(cellEl, ctx))
-                    if (block is Paragraph p)
-                        cell.Paragraphs.Add(p);
-                if (cell.Paragraphs.Count == 0)
-                    cell.Paragraphs.Add(new Paragraph());
-                row.Cells.Add(cell);
+                    foreach (var block in ReadBlocks(cellEl, ctx))
+                    {
+                        if (block is Paragraph p)
+                            cell.Paragraphs.Add(p);
+                        else if (block is Table nested)
+                            cell.NestedTables.Add(nested);
+                    }
+                    if (cell.Paragraphs.Count == 0)
+                        cell.Paragraphs.Add(new Paragraph());
+                    row.Cells.Add(cell);
 
-                // A covered-table-cell follows a horizontally spanned cell; it has no content of its own.
+                    var rowSpan = (int?)cellEl.Attribute(TableNs + "number-rows-spanned") ?? 1;
+                    if (rowSpan > 1)
+                    {
+                        cell.VerticalMerge = VerticalMergeState.Restart;
+                        activeVerticalSpans[col] = (span, rowSpan - 1);
+                    }
+
+                    col += span;
+                }
+                else if (cellEl.Name == TableNs + "covered-table-cell")
+                {
+                    if (pendingGroupCols > 0)
+                    {
+                        // Additional column of a vertical-merge group already materialised below.
+                        pendingGroupCols--;
+                    }
+                    else if (activeVerticalSpans.TryGetValue(col, out var vspan))
+                    {
+                        // The first covered column of a vertical merge continuing from a row above:
+                        // materialise one TableCell (spanning the same width as the restart cell) so this
+                        // row keeps a slot per merge region and later real cells don't shift left,
+                        // mirroring how DocxReader models w:vMerge continue cells.
+                        var continued = new TableCell();
+                        continued.Paragraphs.Add(new Paragraph());
+                        if (vspan.Width > 1)
+                            continued.GridSpan = vspan.Width;
+                        continued.VerticalMerge = VerticalMergeState.Continue;
+                        row.Cells.Add(continued);
+
+                        pendingGroupCols = vspan.Width - 1;
+                        var remaining = vspan.RemainingRows - 1;
+                        if (remaining > 0)
+                            activeVerticalSpans[col] = (vspan.Width, remaining);
+                        else
+                            activeVerticalSpans.Remove(col);
+                    }
+                    // Otherwise this covers a horizontally spanned cell earlier in this same row; GridSpan
+                    // on that cell already accounts for it, so no separate TableCell slot is needed here.
+
+                    col += 1;
+                }
             }
             result.Rows.Add(row);
         }
@@ -844,15 +901,41 @@ public sealed class OdtFileAdapter : IDocumentFileAdapter
         for (var c = 0; c < columns; c++)
             el.Add(new XElement(TableNs + "table-column"));
 
-        foreach (var row in table.Rows)
+        for (var rowIndex = 0; rowIndex < table.Rows.Count; rowIndex++)
         {
+            var row = table.Rows[rowIndex];
             var rowEl = new XElement(TableNs + "table-row");
-            foreach (var cell in row.Cells)
+            for (var cellIndex = 0; cellIndex < row.Cells.Count; cellIndex++)
             {
+                var cell = row.Cells[cellIndex];
+
+                if (cell.VerticalMerge == VerticalMergeState.Continue)
+                {
+                    // Covered by a vertically merged cell above; that cell's own number-rows-spanned
+                    // already accounts for this row, so just emit one covered-table-cell placeholder per
+                    // grid column it occupies so the row keeps the same column count as its siblings.
+                    for (var s = 0; s < Math.Max(1, cell.GridSpan); s++)
+                        rowEl.Add(new XElement(TableNs + "covered-table-cell"));
+                    continue;
+                }
+
                 var cellEl = new XElement(TableNs + "table-cell",
                     new XAttribute(Office + "value-type", "string"));
                 if (cell.GridSpan > 1)
                     cellEl.Add(new XAttribute(TableNs + "number-columns-spanned", cell.GridSpan));
+
+                if (cell.VerticalMerge == VerticalMergeState.Restart)
+                {
+                    var rowSpan = CountVerticalMergeRows(table, rowIndex, cellIndex);
+                    if (rowSpan > 1)
+                        cellEl.Add(new XAttribute(TableNs + "number-rows-spanned", rowSpan));
+                }
+
+                // Nested tables are written before the cell's own paragraphs, mirroring DocxWriter: a
+                // table cell must always end with a paragraph (cell.Paragraphs guarantees at least one
+                // entry below, even when empty), so this ordering keeps the output schema-valid.
+                foreach (var nested in cell.NestedTables)
+                    WriteTable(nested, cellEl, document, styles, pictures);
 
                 WriteParagraphRun(cell.Paragraphs, cellEl, document, styles, pictures);
                 if (cell.Paragraphs.Count == 0)
@@ -867,6 +950,30 @@ public sealed class OdtFileAdapter : IDocumentFileAdapter
         }
 
         parent.Add(el);
+    }
+
+    /// <summary>
+    /// How many consecutive rows (including <paramref name="rowIndex"/> itself) the vertically-merged
+    /// cell at <paramref name="cellIndex"/> spans, found by walking down the grid column it starts at
+    /// (via <see cref="TableGridProjection"/>, so horizontal merges elsewhere in the table don't throw
+    /// off the column alignment) while the same column keeps producing a <see cref="VerticalMergeState.Continue"/>
+    /// cell.
+    /// </summary>
+    private static int CountVerticalMergeRows(Table table, int rowIndex, int cellIndex)
+    {
+        var startColumn = TableGridProjection.StartColumn(table.Rows[rowIndex], cellIndex);
+        if (startColumn < 0)
+            return 1;
+
+        var count = 1;
+        for (var r = rowIndex + 1; r < table.Rows.Count; r++)
+        {
+            var projected = TableGridProjection.StartingAt(table.Rows[r], startColumn);
+            if (projected is not { Cell.VerticalMerge: VerticalMergeState.Continue })
+                break;
+            count++;
+        }
+        return count;
     }
 
     private XDocument BuildContentXml(XElement bodyText, OdtStyleWriter styles)

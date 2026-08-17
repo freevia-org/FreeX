@@ -184,6 +184,61 @@ public sealed class ShapeGeometryAdjustmentPlannerTests
         plan.Handles[0].Maximum.Should().Be(50000);
     }
 
+    // Wave 137 finding C: the handle used to place itself at 18% of the shorter side
+    // unconditionally, but ShapeGeometryBuilder's RoundedRectangle clamps the *unauthored*
+    // default corner to a fixed 2-18 DIP band -- once the shorter side exceeds ~100 DIP the
+    // rendered corner stops growing while the old handle kept scaling with it. Assert against
+    // the actual rendered outline (the contour's start vertex), not a hard-coded number, across
+    // several sizes so a reintroduced unclamped formula is caught regardless of the exact bounds.
+    [Theory]
+    [InlineData(400d, 200d)]
+    [InlineData(200d, 400d)]
+    [InlineData(1000d, 1000d)]
+    public void Build_RoundedRectangle_DefaultCornerHandleMatchesRenderedOutlineOnLargeShapes(double width, double height)
+    {
+        var bounds = new LayoutRect(10, 20, width, height);
+        var shape = new SlideShape
+        {
+            Id = 7,
+            Kind = SlideShapeKind.AutoShape,
+            AutoShapeKind = DrawingShapeKind.RoundedRectangle,
+        };
+
+        var rendered = ShapeGeometryBuilder.Build(DrawingShapeKind.RoundedRectangle, bounds);
+        var renderedRadius = rendered.Contours[0].Start.X - bounds.Left;
+
+        var plan = ShapeGeometryAdjustmentPlanner.Build(shape, bounds);
+
+        plan.Handles.Should().ContainSingle();
+        plan.Handles[0].PositionDip.X.Should().BeApproximately(bounds.Left + renderedRadius, 0.001);
+        plan.Handles[0].PositionDip.Y.Should().Be(bounds.Top);
+    }
+
+    // Sibling no-regression guard: once an "adj" guide is authored, the renderer scales freely
+    // with the shorter side (no 2-18 DIP clamp) -- confirm the handle still tracks that
+    // unclamped formula and wasn't accidentally capped too.
+    [Fact]
+    public void Build_RoundedRectangle_AuthoredCornerHandleMatchesRenderedOutlineOnLargeShapes()
+    {
+        var bounds = new LayoutRect(10, 20, 400, 200);
+        var shape = new SlideShape
+        {
+            Id = 7,
+            Kind = SlideShapeKind.AutoShape,
+            AutoShapeKind = DrawingShapeKind.RoundedRectangle,
+        };
+        shape.PresetGeometryAdjustments["adj"] = 30000;
+
+        var rendered = ShapeGeometryBuilder.Build(
+            DrawingShapeKind.RoundedRectangle, bounds, shape.PresetGeometryAdjustments);
+        var renderedRadius = rendered.Contours[0].Start.X - bounds.Left;
+
+        var plan = ShapeGeometryAdjustmentPlanner.Build(shape, bounds);
+
+        plan.Handles[0].PositionDip.X.Should().BeApproximately(bounds.Left + renderedRadius, 0.001);
+        renderedRadius.Should().BeGreaterThan(18); // proves the clamp genuinely doesn't apply here
+    }
+
     [Theory]
     [InlineData(DrawingShapeKind.Cross)]
     [InlineData(DrawingShapeKind.PlusSign)]
@@ -370,6 +425,73 @@ public sealed class ShapeGeometryAdjustmentPlannerTests
             shape, Bounds, "arc:0:1:radius-x", new LayoutPoint(170, 20));
         radius.ArcPoint!.Slot.Should().Be(CustomGeometryArcPointSlot.RadiusX);
         radius.ArcPoint.Value.Should().BeApproximately(30, 0.001);
+    }
+
+    // Wave 137 finding B: CustomGeometryBuilder.BuildCustom never reads an ArcTo segment's own
+    // StAng to place its rendered start point -- the start is always wherever the pen already
+    // sits (the predecessor segment's endpoint). Dragging "Arc start" used to write StAng, which
+    // only relocates the centre/end while the rendered start stayed fixed. The fix must move the
+    // predecessor's own coordinate instead, and the render (reused via a fresh Build call, the
+    // same math a real redraw would use) must reflect that.
+    [Fact]
+    public void BuildMutationPlan_CustomArc_DraggingStartMovesThePredecessorPointNotTheAngle()
+    {
+        var path = new CustomGeometryPath { PathW = 100, PathH = 100 };
+        path.Segments.Add(new CustomSegment(CustomSegmentKind.MoveTo, X: 90, Y: 0));
+        path.Segments.Add(new CustomSegment(
+            CustomSegmentKind.ArcTo, WR: 40, HR: 30, StAng: 0, SwAng: 90));
+        var shape = MakeCustomShape(path);
+
+        var presentation = new Presentation();
+        presentation.Slides.Add(new Slide { Title = "S1" });
+        presentation.Slides[0].Shapes.Clear();
+        presentation.Slides[0].Shapes.Add(shape);
+        var bus = new PresentationCommandBus(presentation);
+
+        // Drag "Arc start" to path-space (20, 30): DIP = (Bounds.Left + 40, Bounds.Top + 30).
+        var target = new LayoutPoint(Bounds.Left + 40, Bounds.Top + 30);
+        var mutation = ShapeGeometryAdjustmentPlanner.BuildMutationPlan(shape, Bounds, "arc:0:1:start", target);
+
+        mutation.ShouldApply.Should().BeTrue();
+        mutation.ArcPoint.Should().BeNull(
+            "the rendered start point is the predecessor's own coordinate, not this segment's StAng");
+        mutation.CustomPoint.Should().NotBeNull();
+        mutation.CustomPoint!.PathIndex.Should().Be(0);
+        mutation.CustomPoint.SegmentIndex.Should().Be(0); // the MoveTo that actually renders as the start
+        mutation.CustomPoint.Slot.Should().Be(CustomGeometryPointSlot.Endpoint);
+        mutation.CustomPoint.X.Should().BeApproximately(20, 0.001);
+        mutation.CustomPoint.Y.Should().BeApproximately(30, 0.001);
+
+        // Dispatch exactly as EditingSession.SetCustomGeometryPoint -> CanvasGestureSession does
+        // on a real drag.
+        bus.Execute(new SetCustomGeometryPointCommand(
+            0, shape.Id, mutation.CustomPoint.PathIndex, mutation.CustomPoint.SegmentIndex,
+            mutation.CustomPoint.X, mutation.CustomPoint.Y, mutation.CustomPoint.Slot));
+
+        // The renderer's own outline math must now place the arc's rendered start exactly where
+        // the user dragged. Before the fix, StAng was written instead and this stayed at the
+        // original (90,0)-derived DIP spot regardless of where the pointer went.
+        var rebuilt = ShapeGeometryAdjustmentPlanner.Build(shape, Bounds);
+        var startHandle = rebuilt.Handles.Single(h => h.Name == "arc:0:1:start");
+        startHandle.PositionDip.X.Should().BeApproximately(target.X, 0.001);
+        startHandle.PositionDip.Y.Should().BeApproximately(target.Y, 0.001);
+    }
+
+    // Sibling no-regression guard: an ArcTo with no usable predecessor point (e.g. it is the
+    // path's first segment) must not offer a "start" handle at all -- there is nothing for it to
+    // move, so showing a draggable-but-inert handle would just resurrect the same class of bug.
+    [Fact]
+    public void Build_CustomGeometry_OmitsArcStartHandleWhenNoPredecessorPointExists()
+    {
+        var path = new CustomGeometryPath { PathW = 100, PathH = 100 };
+        path.Segments.Add(new CustomSegment(
+            CustomSegmentKind.ArcTo, WR: 40, HR: 30, StAng: 0, SwAng: 90));
+        var shape = MakeCustomShape(path);
+
+        var plan = ShapeGeometryAdjustmentPlanner.Build(shape, Bounds);
+
+        plan.Handles.Select(handle => handle.Name).Should().Equal(
+            "arc:0:0:end", "arc:0:0:radius-x", "arc:0:0:radius-y");
     }
 
     [Fact]

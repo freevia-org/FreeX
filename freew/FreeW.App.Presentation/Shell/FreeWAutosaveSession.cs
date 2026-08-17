@@ -73,6 +73,15 @@ public sealed class FreeWAutosaveSession : IDisposable
 
     public void Snapshot() => _coordinator.Snapshot(_source);
 
+    /// <summary>
+    /// Best-effort emergency snapshot for crash handlers. Bypasses the periodic-tick generation
+    /// gate (so it still captures the latest dirty state even when nothing has changed since the
+    /// last periodic tick) but still requires the document to be dirty. Must never throw --
+    /// delegates to <see cref="AutosaveSnapshotCoordinator.TryEmergencySnapshot"/>, which is
+    /// never-throw by design.
+    /// </summary>
+    public void TryEmergencySnapshot() => _coordinator.TryEmergencySnapshot(_source);
+
     public void CompleteCleanExit()
     {
         try

@@ -22,6 +22,12 @@ namespace FreeW.App.Avalonia;
 /// </summary>
 internal sealed partial class AutosaveAdapter : IDisposable
 {
+    // R138: process-wide registry of every live window's adapter, so a crash handler (which has no
+    // reference to any particular window) can fan an emergency snapshot out to all of them --
+    // mirrors FreeX's Avalonia AvaloniaAutosaveCoordinator.ActiveCoordinators (src/FreeX.App.Avalonia/App.cs).
+    private static readonly object ActiveAdaptersGate = new();
+    private static readonly List<AutosaveAdapter> ActiveAdapters = [];
+
     private readonly DocumentView _editor;
     private readonly FileCommandWorkflow _workflow;
     private readonly FreeWAutosaveSession _session;
@@ -50,6 +56,31 @@ internal sealed partial class AutosaveAdapter : IDisposable
                 .GetResult());
         _session = sessionFactory?.Invoke(ports) ?? new FreeWAutosaveSession(ports);
         _recoverInNewWindowAsync = recoverInNewWindowAsync;
+
+        lock (ActiveAdaptersGate)
+            ActiveAdapters.Add(this);
+    }
+
+    /// <summary>
+    /// Best-effort emergency snapshot for this window's document. Must never throw -- delegates to
+    /// <see cref="FreeWAutosaveSession.TryEmergencySnapshot"/>, which is never-throw by design.
+    /// </summary>
+    public void TryEmergencySnapshot() => _session.TryEmergencySnapshot();
+
+    /// <summary>
+    /// Attempts an emergency snapshot for every live window's document. Wired as the Avalonia
+    /// desktop profile's crash-handler hook (see FreeW.App.Avalonia/App.cs's DesktopProfile) so a
+    /// crash takes the same best-effort snapshot FreeX's Avalonia host does instead of losing every
+    /// edit since the last periodic autosave tick.
+    /// </summary>
+    public static void TryEmergencySnapshots()
+    {
+        AutosaveAdapter[] adapters;
+        lock (ActiveAdaptersGate)
+            adapters = ActiveAdapters.ToArray();
+
+        foreach (var adapter in adapters)
+            adapter.TryEmergencySnapshot();
     }
 
     /// <summary>
@@ -126,6 +157,9 @@ internal sealed partial class AutosaveAdapter : IDisposable
         _cts?.Dispose();
         _cts = null;
         _session.Dispose();
+
+        lock (ActiveAdaptersGate)
+            ActiveAdapters.Remove(this);
     }
 
     // ── Private ──────────────────────────────────────────────────────────────

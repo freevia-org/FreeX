@@ -1659,6 +1659,41 @@ public sealed class PresentationCommandTests
         path.Segments[1].Y1.Should().Be(70);
     }
 
+    // Discovered while fixing the "Arc start" handle (finding B): a CubicBezTo's Endpoint slot
+    // is read from X2/Y2 (see ShapeGeometryAdjustmentPlanner.TryGetSegmentPoint, which is what
+    // places the "Vertex" handle there), but the write side used to fall through to the X/Y
+    // fields -- the same storage as Control1 -- corrupting the curve's first control point while
+    // never touching the actual endpoint the user dragged.
+    [Fact]
+    public void SetCustomGeometryPointCommand_ApplyUndoAndRedoPreservesCubicEndpointWithoutCorruptingControl1()
+    {
+        var (p, bus) = Make();
+        var shape = MakeShape(1);
+        var path = new CustomGeometryPath { PathW = 100, PathH = 100 };
+        path.Segments.Add(new CustomSegment(CustomSegmentKind.MoveTo, X: 0, Y: 50));
+        path.Segments.Add(new CustomSegment(
+            CustomSegmentKind.CubicBezTo,
+            X: 20, Y: 0, X1: 80, Y1: 0, X2: 100, Y2: 50));
+        shape.CustomGeometry.Add(path);
+        p.Slides[0].Shapes.Add(shape);
+
+        bus.Execute(new SetCustomGeometryPointCommand(
+            0, 1, 0, 1, 60, 70, CustomGeometryPointSlot.Endpoint));
+
+        path.Segments[1].X2.Should().Be(60);
+        path.Segments[1].Y2.Should().Be(70);
+        path.Segments[1].X.Should().Be(20); // Control1 must be untouched
+        path.Segments[1].Y.Should().Be(0);
+
+        bus.Undo();
+        path.Segments[1].X2.Should().Be(100);
+        path.Segments[1].Y2.Should().Be(50);
+
+        bus.Redo();
+        path.Segments[1].X2.Should().Be(60);
+        path.Segments[1].Y2.Should().Be(70);
+    }
+
     [Fact]
     public void SetCustomGeometryArcPointCommand_ApplyUndoAndRedoPreservesArcFields()
     {

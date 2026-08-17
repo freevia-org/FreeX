@@ -25,6 +25,10 @@ internal sealed class IconPickerDialog : FreeWDialogWindow
     private readonly WrapPanel _tiles;
     private readonly TextBlock _status;
     private readonly Dictionary<string, DrawingImage?> _thumbnails = new(StringComparer.OrdinalIgnoreCase);
+    // Roving-tabindex keyboard focus: the flat index (into the current tile list, same order as
+    // _session's VisibleEntries) that arrow/Home/End keys move and Enter/Space selects. Mirrors the
+    // WPF twin's IconPickerDialog._focusedIndex so both shells navigate identically.
+    private int _focusedIndex;
 
     private IconPickerDialog()
     {
@@ -56,6 +60,11 @@ internal sealed class IconPickerDialog : FreeWDialogWindow
             HorizontalAlignment = HorizontalAlignment.Left,
         };
         AutomationProperties.SetAutomationId(_tiles, Surface.TilesAutomationId);
+        // Keyboard focus lands on one tile at a time (roving tab stop, set in ResetTileFocusState /
+        // MoveKeyboardFocus below); KeyDown bubbles up from that tile through this panel, so a
+        // single handler here drives arrow/Home/End navigation and Enter/Space selection for the
+        // whole grid.
+        _tiles.KeyDown += OnGridKeyDown;
         _status = new TextBlock
         {
             Foreground = Brushes.Gray,
@@ -152,6 +161,10 @@ internal sealed class IconPickerDialog : FreeWDialogWindow
                 Background = Brushes.Transparent,
                 Cursor = new Cursor(StandardCursorType.Hand),
                 Tag = entry,
+                // Border is a real Avalonia Control, so Focusable + the roving IsTabStop managed in
+                // ResetTileFocusState / MoveKeyboardFocus below let Tab move into (and out of) the
+                // grid as a single stop, then arrows move within it.
+                Focusable = true,
             };
             AutomationProperties.SetAutomationId(tile, IconPickerDialogPlanner.TileAutomationId(entry));
             AutomationProperties.SetName(tile, entry.Name);
@@ -174,6 +187,7 @@ internal sealed class IconPickerDialog : FreeWDialogWindow
             _tiles.Children.Add(tile);
         }
         _status.Text = state.StatusText;
+        ResetTileFocusState();
     }
 
     private Control CreateThumbnail(IconPickerEntry entry)
@@ -204,15 +218,104 @@ internal sealed class IconPickerDialog : FreeWDialogWindow
 
     private void Select(IconPickerEntry entry, Border tile)
     {
-        _session.Select(entry);
-        foreach (var existing in _tiles.Children.OfType<Border>())
+        var tiles = _tiles.Children.OfType<Border>().ToList();
+        var index = tiles.IndexOf(tile);
+        if (index >= 0)
+            SelectTile(tiles, index, entry);
+    }
+
+    // ── Keyboard navigation ───────────────────────────────────────────────────────────────────────
+    // Arrows move the roving tab stop across the grid, Home/End jump to the first/last tile, and
+    // Enter/Space select the currently focused tile — a keyboard-only user can reach and pick any
+    // icon without ever touching the mouse. IconGridNavigation (FreeW.App.Presentation) owns the
+    // actual index math so this shell and the WPF twin move identically.
+    private void OnGridKeyDown(object? sender, KeyEventArgs e)
+    {
+        var tiles = _tiles.Children.OfType<Border>().ToList();
+        if (tiles.Count == 0)
+            return;
+
+        if (MapNavigationKey(e.Key) is { } navigationKey)
         {
-            existing.BorderBrush = Brushes.Transparent;
-            existing.Background = Brushes.Transparent;
+            var nextIndex = IconGridNavigation.Move(_focusedIndex, navigationKey, tiles.Count, Surface.TilesPerRow);
+            MoveKeyboardFocus(tiles, nextIndex);
+            e.Handled = true;
+            return;
         }
+
+        if (e.Key is Key.Enter or Key.Space)
+        {
+            var index = Math.Clamp(_focusedIndex, 0, tiles.Count - 1);
+            if (tiles[index].Tag is IconPickerEntry entry)
+                SelectTile(tiles, index, entry);
+            e.Handled = true;
+        }
+    }
+
+    private static IconGridNavigationKey? MapNavigationKey(Key key) => key switch
+    {
+        Key.Left => IconGridNavigationKey.Left,
+        Key.Right => IconGridNavigationKey.Right,
+        Key.Up => IconGridNavigationKey.Up,
+        Key.Down => IconGridNavigationKey.Down,
+        Key.Home => IconGridNavigationKey.Home,
+        Key.End => IconGridNavigationKey.End,
+        _ => null,
+    };
+
+    /// <summary>Resets the roving tab stop to the first tile after a filter/search change.</summary>
+    private void ResetTileFocusState()
+    {
+        var tiles = _tiles.Children.OfType<Border>().ToList();
+        _focusedIndex = 0;
+        for (var i = 0; i < tiles.Count; i++)
+            tiles[i].IsTabStop = i == 0;
+        ApplyFocusVisuals(tiles);
+    }
+
+    /// <summary>Moves the roving tab stop and keyboard focus without changing the selection.</summary>
+    private void MoveKeyboardFocus(IReadOnlyList<Border> tiles, int index)
+    {
+        if (index < 0 || index >= tiles.Count)
+            return;
+
+        for (var i = 0; i < tiles.Count; i++)
+            tiles[i].IsTabStop = i == index;
+
+        _focusedIndex = index;
+        ApplyFocusVisuals(tiles);
+        tiles[index].Focus();
+    }
+
+    private void SelectTile(IReadOnlyList<Border> tiles, int index, IconPickerEntry entry)
+    {
+        _session.Select(entry);
+        MoveKeyboardFocus(tiles, index);
+    }
+
+    /// <summary>
+    /// Single source of truth for tile appearance: a black outline marks the keyboard-focused tile
+    /// (visible regardless of theme settings, and asserted directly by tests), independent of the
+    /// accent selection highlight so a user can see both at once.
+    /// </summary>
+    private void ApplyFocusVisuals(IReadOnlyList<Border> tiles)
+    {
+        var selected = _session.State.SelectedEntry;
         var highlight = Color.Parse(Surface.AvaloniaSelectionHighlightHex);
-        tile.BorderBrush = new SolidColorBrush(highlight);
-        tile.Background = new SolidColorBrush(highlight, Surface.SelectionHighlightOpacity);
+        for (var i = 0; i < tiles.Count; i++)
+        {
+            var tile = tiles[i];
+            var isFocused = i == _focusedIndex;
+            var isSelected = tile.Tag is IconPickerEntry entry && Equals(selected, entry);
+
+            tile.BorderThickness = new Thickness(isFocused ? Surface.TileBorderThickness + 1 : Surface.TileBorderThickness);
+            tile.BorderBrush = isFocused
+                ? Brushes.Black
+                : isSelected ? new SolidColorBrush(highlight) : Brushes.Transparent;
+            tile.Background = isSelected
+                ? new SolidColorBrush(highlight, Surface.SelectionHighlightOpacity)
+                : Brushes.Transparent;
+        }
     }
 
     private async void Accept()

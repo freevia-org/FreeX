@@ -367,9 +367,8 @@ public static class ConnectionSiteHelper
 
             case DrawingShapeKind.Chevron:
             {
-                var depth = ResolvePointDepth(shape, fallback: 0.24);
-                var x1 = (long)Math.Round(shape.ExtentCxEmu * depth);
-                var x2 = right - (long)Math.Round(shape.ExtentCxEmu * depth);
+                var x1 = ResolveNotchOffset(shape, fallbackFraction: 0.24);
+                var x2 = right - x1;
                 return siteIndex switch
                 {
                     0 => (left + x1, midY),
@@ -382,8 +381,7 @@ public static class ConnectionSiteHelper
 
             case DrawingShapeKind.HomePlate:
             {
-                var depth = ResolvePointDepth(shape, fallback: 0.24);
-                var x1 = right - (long)Math.Round(shape.ExtentCxEmu * depth);
+                var x1 = right - ResolveNotchOffset(shape, fallbackFraction: 0.24);
                 return siteIndex switch
                 {
                     0 => (left, midY),
@@ -541,14 +539,23 @@ public static class ConnectionSiteHelper
         return Math.Clamp((long)Math.Round(inset), 0, maximumInset);
     }
 
-    private static double ResolvePointDepth(SlideShape shape, double fallback)
+    /// <summary>
+    /// Resolves the Chevron/HomePlate notch as an absolute EMU offset from the shape's left edge,
+    /// matching <c>ShapeGeometryBuilder.Chevron</c>/<c>HomePlate</c> exactly: the unauthored default
+    /// outline is a fixed 24% of the shape WIDTH (its hard-coded fallback polygon), but once an
+    /// "adj" depth guide is authored the outline scales the notch off the SHORTER side, not the
+    /// width. Multiplying by width unconditionally (as this used to) put the site off the visible
+    /// outline for any non-square shape with an authored adj.
+    /// </summary>
+    private static long ResolveNotchOffset(SlideShape shape, double fallbackFraction)
     {
         if (!shape.PresetGeometryAdjustments.TryGetValue("adj", out var adjustment))
-            return fallback;
+            return (long)Math.Round(shape.ExtentCxEmu * fallbackFraction);
 
-        var maximum = 100000.0 * shape.ExtentCxEmu / Math.Max(1, Math.Min(shape.ExtentCxEmu, shape.ExtentCyEmu));
+        var minDimension = Math.Min(shape.ExtentCxEmu, shape.ExtentCyEmu);
+        var maximum = 100000.0 * shape.ExtentCxEmu / Math.Max(1, minDimension);
         var depth = Math.Clamp(adjustment, 0, maximum) / 100000.0;
-        return Math.Clamp(depth, 0, 1);
+        return (long)Math.Round(minDimension * Math.Clamp(depth, 0, 1));
     }
 
     private static double ResolveArrowHeadBase(SlideShape shape)

@@ -113,9 +113,16 @@ public static class DocumentInspector
 
     /// <summary>
     /// Remove every review comment: clears the document's <see cref="TextDocument.Comments"/> store and
-    /// strips the comment marks from every body run — both the <see cref="Run.CommentId"/> on covered
-    /// runs and the textless comment-reference anchor runs (see <see cref="Run.IsCommentReference"/>),
-    /// which are removed entirely. Mutates <paramref name="document"/> in place.
+    /// strips the comment marks from every run that can carry one — both the <see cref="Run.CommentId"/>
+    /// on covered runs and the textless comment-reference anchor runs (see
+    /// <see cref="Run.IsCommentReference"/>), which are removed entirely. Comments legitimately live
+    /// outside the body too (Word allows anchoring one in a header, footer, footnote, or endnote), so this
+    /// walks every such paragraph store via <see cref="EnumerateCommentAnchorParagraphs"/> — not just
+    /// <see cref="EnumerateParagraphs"/>'s body/table paragraphs — so no anchor is left dangling with a
+    /// <see cref="Run.CommentId"/> that no longer resolves to any entry in
+    /// <see cref="TextDocument.Comments"/> (the docx writer would otherwise still emit its
+    /// w:commentRangeStart/End/w:commentReference, producing a package Word must repair). Mutates
+    /// <paramref name="document"/> in place.
     /// </summary>
     public static void RemoveComments(TextDocument document)
     {
@@ -123,7 +130,7 @@ public static class DocumentInspector
 
         document.Comments.Clear();
 
-        foreach (var paragraph in EnumerateParagraphs(document))
+        foreach (var paragraph in EnumerateCommentAnchorParagraphs(document))
         {
             for (var i = paragraph.Runs.Count - 1; i >= 0; i--)
             {
@@ -219,5 +226,51 @@ public static class DocumentInspector
                         yield return nestedParagraph;
             }
         }
+    }
+
+    /// <summary>
+    /// Every paragraph that can carry a comment anchor (<see cref="Run.CommentId"/> /
+    /// <see cref="Run.IsCommentReference"/>): the body/table paragraphs from <see cref="EnumerateParagraphs"/>,
+    /// plus every header/footer of every document section (default, even, and first-page slots — mirroring
+    /// <see cref="NoteCommands.EnumerateHeaderFooterParagraphs"/>'s fix for the identical footnote/endnote
+    /// dangling-marker bug), plus every footnote's and endnote's own content paragraphs. Word allows anchoring
+    /// a review comment in any of these; without walking them too, <see cref="RemoveComments"/> would clear
+    /// <see cref="TextDocument.Comments"/> while leaving header/footer/footnote/endnote runs still carrying a
+    /// <see cref="Run.CommentId"/> that no longer resolves to anything, which the docx writer would then still
+    /// serialise as a dangling w:commentRangeStart/End/w:commentReference.
+    /// </summary>
+    private static IEnumerable<Paragraph> EnumerateCommentAnchorParagraphs(TextDocument document)
+    {
+        foreach (var paragraph in EnumerateParagraphs(document))
+            yield return paragraph;
+
+        foreach (var section in document.Sections)
+        {
+            var headersFooters = section.HeadersFooters;
+            foreach (var headerFooter in new[]
+                     {
+                         headersFooters.Header,
+                         headersFooters.Footer,
+                         headersFooters.EvenHeader,
+                         headersFooters.EvenFooter,
+                         headersFooters.FirstHeader,
+                         headersFooters.FirstFooter,
+                     })
+            {
+                if (headerFooter is null)
+                    continue;
+
+                foreach (var paragraph in headerFooter.Paragraphs)
+                    yield return paragraph;
+            }
+        }
+
+        foreach (var footnote in document.Footnotes.Values)
+            foreach (var paragraph in footnote.Content)
+                yield return paragraph;
+
+        foreach (var endnote in document.Endnotes.Values)
+            foreach (var paragraph in endnote.Content)
+                yield return paragraph;
     }
 }

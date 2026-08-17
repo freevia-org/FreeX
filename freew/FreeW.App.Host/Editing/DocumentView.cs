@@ -5013,6 +5013,7 @@ public sealed partial class DocumentView : RichTextBox
         else if (_formattingMarksAdorner is not null)
         {
             layer.Remove(_formattingMarksAdorner);
+            _formattingMarksAdorner.Dispose();
             _formattingMarksAdorner = null;
         }
     }
@@ -5361,6 +5362,7 @@ public sealed partial class DocumentView : RichTextBox
         else if (_pageBreakAdorner is not null)
         {
             layer.Remove(_pageBreakAdorner);
+            _pageBreakAdorner.Dispose();
             _pageBreakAdorner = null;
         }
     }
@@ -5397,6 +5399,7 @@ public sealed partial class DocumentView : RichTextBox
         else if (_columnRuleAdorner is not null)
         {
             layer.Remove(_columnRuleAdorner);
+            _columnRuleAdorner.Dispose();
             _columnRuleAdorner = null;
         }
     }
@@ -5436,6 +5439,7 @@ public sealed partial class DocumentView : RichTextBox
         else if (_pageBorderAdorner is not null)
         {
             layer.Remove(_pageBorderAdorner);
+            _pageBorderAdorner.Dispose();
             _pageBorderAdorner = null;
         }
     }
@@ -5536,6 +5540,7 @@ public sealed partial class DocumentView : RichTextBox
         else if (_lineNumberAdorner is not null)
         {
             layer.Remove(_lineNumberAdorner);
+            _lineNumberAdorner.Dispose();
             _lineNumberAdorner = null;
         }
     }
@@ -5579,6 +5584,7 @@ public sealed partial class DocumentView : RichTextBox
         else if (_changeBarAdorner is not null)
         {
             layer.Remove(_changeBarAdorner);
+            _changeBarAdorner.Dispose();
             _changeBarAdorner = null;
         }
     }
@@ -5639,6 +5645,7 @@ public sealed partial class DocumentView : RichTextBox
         else if (_pageGridlinesAdorner is not null)
         {
             layer.Remove(_pageGridlinesAdorner);
+            _pageGridlinesAdorner.Dispose();
             _pageGridlinesAdorner = null;
         }
     }
@@ -16795,7 +16802,7 @@ public sealed partial class DocumentView : RichTextBox
     /// transparent so it never intercepts clicks/selection, and it repaints as the surface scrolls or
     /// relayouts (see the LayoutUpdated subscription) so the marks stay aligned with the text.
     /// </summary>
-    private sealed class FormattingMarksAdorner : Adorner
+    private sealed class FormattingMarksAdorner : Adorner, IDisposable
     {
         // Faint grey so the marks read as light decorations rather than real text.
         private static readonly Brush MarkBrush = CreateMarkBrush();
@@ -16812,8 +16819,15 @@ public sealed partial class DocumentView : RichTextBox
             IsHitTestVisible = false;
             // Repaint when the surface scrolls or relayouts so the glyphs track the text. LayoutUpdated
             // fires after scrolling/resize; invalidating here keeps the overlay aligned.
-            _view.LayoutUpdated += (_, _) => InvalidateVisual();
+            _view.LayoutUpdated += OnViewLayoutUpdated;
         }
+
+        // Unsubscribe from the view's LayoutUpdated so a removed adorner doesn't linger — referenced
+        // forever by the view's event delegate and doing pointless layout work — for the life of the
+        // window (each formatting-marks toggle would otherwise leak one instance).
+        public void Dispose() => _view.LayoutUpdated -= OnViewLayoutUpdated;
+
+        private void OnViewLayoutUpdated(object? sender, EventArgs e) => InvalidateVisual();
 
         private static Brush CreateMarkBrush()
         {
@@ -17160,7 +17174,7 @@ public sealed partial class DocumentView : RichTextBox
     /// Owns front-of-text page-border paint above the RichTextBox content while leaving selection and
     /// editing chrome in the host's higher interaction layers.
     /// </summary>
-    private sealed class PageBorderAdorner : Adorner
+    private sealed class PageBorderAdorner : Adorner, IDisposable
     {
         private readonly DocumentView _view;
 
@@ -17168,8 +17182,12 @@ public sealed partial class DocumentView : RichTextBox
         {
             _view = view;
             IsHitTestVisible = false;
-            _view.LayoutUpdated += (_, _) => InvalidateVisual();
+            _view.LayoutUpdated += OnViewLayoutUpdated;
         }
+
+        public void Dispose() => _view.LayoutUpdated -= OnViewLayoutUpdated;
+
+        private void OnViewLayoutUpdated(object? sender, EventArgs e) => InvalidateVisual();
 
         protected override void OnRender(DrawingContext drawingContext)
         {
@@ -17193,7 +17211,7 @@ public sealed partial class DocumentView : RichTextBox
     /// Draws pixel-aligned inter-column rules over the continuous Print-Layout editor. The flow still
     /// owns text columns and pagination; this chrome replaces only WPF's half-pixel rule raster.
     /// </summary>
-    private sealed class ColumnRuleAdorner : Adorner
+    private sealed class ColumnRuleAdorner : Adorner, IDisposable
     {
         private readonly DocumentView _view;
         private DocumentPagination? _pagination;
@@ -17202,9 +17220,19 @@ public sealed partial class DocumentView : RichTextBox
         {
             _view = view;
             IsHitTestVisible = false;
-            _view.LayoutUpdated += (_, _) => InvalidateVisual();
-            _view.TextChanged += (_, _) => _pagination = null;
+            _view.LayoutUpdated += OnViewLayoutUpdated;
+            _view.TextChanged += OnViewTextChanged;
         }
+
+        public void Dispose()
+        {
+            _view.LayoutUpdated -= OnViewLayoutUpdated;
+            _view.TextChanged -= OnViewTextChanged;
+        }
+
+        private void OnViewLayoutUpdated(object? sender, EventArgs e) => InvalidateVisual();
+
+        private void OnViewTextChanged(object? sender, TextChangedEventArgs e) => _pagination = null;
 
         protected override void OnRender(DrawingContext drawingContext)
         {
@@ -17278,7 +17306,7 @@ public sealed partial class DocumentView : RichTextBox
     /// perceives where the single continuous flow would break across printed pages. This is a low-key
     /// visual cue rather than exact pagination; Print Preview remains authoritative.
     /// </summary>
-    private sealed class PageBreakAdorner : Adorner
+    private sealed class PageBreakAdorner : Adorner, IDisposable
     {
         private static readonly Pen BreakPen = CreateBreakPen();
         private static readonly Pen CollapsedBoundaryPen = CreateCollapsedBoundaryPen();
@@ -17298,11 +17326,24 @@ public sealed partial class DocumentView : RichTextBox
             _view = view;
             IsHitTestVisible = false;
             // Repaint when the surface scrolls or relayouts so the markers track the content.
-            _view.LayoutUpdated += (_, _) => InvalidateVisual();
+            _view.LayoutUpdated += OnViewLayoutUpdated;
             // Invalidate the pagination cache whenever the document content changes, so the next
             // OnRender gets fresh break positions. TextChanged fires for every edit operation.
-            _view.TextChanged += (_, _) => _pagination = null;
+            _view.TextChanged += OnViewTextChanged;
         }
+
+        // Unsubscribe from the view's events so a removed adorner doesn't linger — referenced forever by
+        // the view's event delegates and doing pointless layout work — for the life of the window (each
+        // Print-Layout toggle would otherwise leak one instance).
+        public void Dispose()
+        {
+            _view.LayoutUpdated -= OnViewLayoutUpdated;
+            _view.TextChanged -= OnViewTextChanged;
+        }
+
+        private void OnViewLayoutUpdated(object? sender, EventArgs e) => InvalidateVisual();
+
+        private void OnViewTextChanged(object? sender, TextChangedEventArgs e) => _pagination = null;
 
         private static Pen CreateBreakPen()
         {
@@ -17455,7 +17496,7 @@ public sealed partial class DocumentView : RichTextBox
     /// editor's content coordinate space and is scaled by its LayoutTransform, so numbers track the text
     /// under zoom. Painting is clipped to the visible surface.
     /// </summary>
-    private sealed class LineNumberAdorner : Adorner
+    private sealed class LineNumberAdorner : Adorner, IDisposable
     {
         private static readonly Brush NumberBrush = CreateNumberBrush();
 
@@ -17469,8 +17510,12 @@ public sealed partial class DocumentView : RichTextBox
         {
             _view = view;
             IsHitTestVisible = false;
-            _view.LayoutUpdated += (_, _) => InvalidateVisual();
+            _view.LayoutUpdated += OnViewLayoutUpdated;
         }
+
+        public void Dispose() => _view.LayoutUpdated -= OnViewLayoutUpdated;
+
+        private void OnViewLayoutUpdated(object? sender, EventArgs e) => InvalidateVisual();
 
         private static Brush CreateNumberBrush()
         {
@@ -17627,7 +17672,7 @@ public sealed partial class DocumentView : RichTextBox
     /// content area in continuous view. This matches the visual convention of Word's change bar,
     /// which appears in the left gutter without encroaching on the text column.</para>
     /// </summary>
-    internal sealed class ChangeBarAdorner : Adorner
+    internal sealed class ChangeBarAdorner : Adorner, IDisposable
     {
         // The bar colour matches Word's change-bar colour — a muted revision blue-grey.
         private static readonly Pen BarPen = CreateBarPen();
@@ -17650,8 +17695,12 @@ public sealed partial class DocumentView : RichTextBox
             _view = view;
             IsHitTestVisible = false;
             // Repaint when the surface scrolls or relayouts so the bars stay aligned with the text.
-            _view.LayoutUpdated += (_, _) => InvalidateVisual();
+            _view.LayoutUpdated += OnViewLayoutUpdated;
         }
+
+        public void Dispose() => _view.LayoutUpdated -= OnViewLayoutUpdated;
+
+        private void OnViewLayoutUpdated(object? sender, EventArgs e) => InvalidateVisual();
 
         private static Pen CreateBarPen()
         {
@@ -17788,7 +17837,7 @@ public sealed partial class DocumentView : RichTextBox
     /// stays aligned while the user scrolls. Mirrors the pattern of
     /// <see cref="FormattingMarksAdorner"/> and <see cref="ChangeBarAdorner"/>.
     /// </summary>
-    private sealed class PageGridlinesAdorner : Adorner
+    private sealed class PageGridlinesAdorner : Adorner, IDisposable
     {
         // Faint blue-grey — close to Word's gridline colour (roughly #C8D8E8).
         private static readonly Pen GridPen = CreateGridPen();
@@ -17803,8 +17852,12 @@ public sealed partial class DocumentView : RichTextBox
         {
             _view = view;
             IsHitTestVisible = false;
-            _view.LayoutUpdated += (_, _) => InvalidateVisual();
+            _view.LayoutUpdated += OnViewLayoutUpdated;
         }
+
+        public void Dispose() => _view.LayoutUpdated -= OnViewLayoutUpdated;
+
+        private void OnViewLayoutUpdated(object? sender, EventArgs e) => InvalidateVisual();
 
         private static Pen CreateGridPen()
         {

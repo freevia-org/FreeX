@@ -402,6 +402,18 @@ public static class SlideShowRecordingExecutionPlanner
         ArgumentNullException.ThrowIfNull(state);
         ArgumentNullException.ThrowIfNull(toolPlan);
 
+        // Presenter tool state (pointer mode, ink colour/thickness, ink retention)
+        // is independent of the recording lifecycle. When the recording-relevant
+        // portion of the plan (timing/media intent and capture readiness) hasn't
+        // actually changed, an in-progress capture must keep running uninterrupted
+        // for the current slide -- restarting it here would truncate or duplicate
+        // the saved narration every time the presenter switches pointer/ink tools
+        // mid-recording.
+        if (state.IsSessionActive && state.RecordingPlan == toolPlan.Recording)
+        {
+            return state with { LastActions = Array.Empty<SlideShowRecordingExecutionAction>() };
+        }
+
         var stopped = state.IsSessionActive
             ? EndSession(state, nowUtc)
             : state with { LastActions = Array.Empty<SlideShowRecordingExecutionAction>() };

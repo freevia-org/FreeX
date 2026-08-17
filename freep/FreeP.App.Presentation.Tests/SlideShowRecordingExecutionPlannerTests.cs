@@ -314,6 +314,41 @@ public sealed class SlideShowRecordingExecutionPlannerTests
     }
 
     [Fact]
+    public void ApplyToolPlan_DoesNotRestartSessionWhenOnlyPointerOrInkToolStateChanges()
+    {
+        var started = new DateTimeOffset(2026, 7, 4, 9, 0, 0, TimeSpan.Zero);
+        var arrowPlan = SlideShowPresenterToolPlanner.BuildPlan(
+            SlideShowTimingIntent.RecordTimings,
+            SlideShowRecordingMediaIntent.Narration,
+            SlideShowPresenterPointerMode.Arrow);
+        var penPlan = SlideShowPresenterToolPlanner.BuildPlan(
+            SlideShowTimingIntent.RecordTimings,
+            SlideShowRecordingMediaIntent.Narration,
+            SlideShowPresenterPointerMode.Pen,
+            inkColorHex: "#FF0000");
+        var state = SlideShowRecordingExecutionPlanner.CreateState(
+            arrowPlan,
+            currentSlideIndex: 0,
+            started);
+
+        var afterToolChange = SlideShowRecordingExecutionPlanner.ApplyToolPlan(
+            state,
+            penPlan,
+            currentSlideIndex: 0,
+            started.AddMilliseconds(900));
+
+        afterToolChange.IsSessionActive.Should().BeTrue();
+        afterToolChange.CurrentSlideIndex.Should().Be(0);
+        afterToolChange.CurrentSlideStartedAtUtc.Should().Be(
+            started,
+            "a pointer/ink-only tool change must not reset the in-progress slide's capture clock");
+        afterToolChange.Segments.Should().BeEmpty(
+            "no slide was left, so no narration segment should have been finalized yet");
+        afterToolChange.LastActions.Should().BeEmpty(
+            "no StartSession/StopSession/EnterSlide/LeaveSlide actions should fire for a tool-only change");
+    }
+
+    [Fact]
     public void EndSession_EmitsDeferredMediaArtifactDescriptorsWhenCaptureAdaptersAreMissing()
     {
         var started = new DateTimeOffset(2026, 7, 4, 9, 0, 0, TimeSpan.Zero);

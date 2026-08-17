@@ -2,7 +2,6 @@ using System.Globalization;
 using System.Windows;
 using System.Windows.Automation;
 using System.Windows.Controls;
-using System.Windows.Input;
 using System.Windows.Media;
 using FreeW.App.Presentation.Dialogs;
 
@@ -64,24 +63,31 @@ internal sealed class CellBordersDialog : Free.Shared.Ribbon.Wpf.DialogWindow
 
         outer.Children.Add(Label(text.ColorLabel));
         var colors = new WrapPanel { Margin = new Thickness(0, 0, 0, 8) };
-        Border? selectedSwatch = null;
+        // Swatches are focusable Buttons (not Borders with only a mouse handler) so a keyboard-only
+        // user can Tab to each color and pick it with Enter/Space -- the same fix already shipped for
+        // the Avalonia twin (FreeW.App.Avalonia/CellBordersDialog.cs) and for this dialog's WPF sibling
+        // CellShadingDialog.cs; ported here rather than inventing a second mouse-only pattern.
+        Button? selectedSwatch = null;
         for (var index = 0; index < CellBordersDialogPlanner.Palette.Count; index++)
         {
             var hex = CellBordersDialogPlanner.Palette[index];
-            var swatch = new Border
+            var swatch = new Button
             {
                 Width = 20,
                 Height = 20,
+                MinWidth = 0,
+                MinHeight = 0,
                 Margin = new Thickness(2),
+                Padding = new Thickness(0),
                 Background = new SolidColorBrush((Color)ColorConverter.ConvertFromString(hex)),
                 BorderBrush = Brushes.Gray,
                 BorderThickness = new Thickness(index == 0 ? 2 : 1),
                 ToolTip = hex,
-                Cursor = Cursors.Hand,
+                Focusable = true,
             };
             AutomationProperties.SetName(swatch, hex);
             var selectedIndex = index;
-            swatch.MouseLeftButtonUp += (_, _) =>
+            swatch.Click += (_, _) =>
             {
                 _colorIndex = selectedIndex;
                 if (selectedSwatch is not null)

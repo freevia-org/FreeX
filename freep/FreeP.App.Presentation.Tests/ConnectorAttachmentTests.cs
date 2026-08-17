@@ -301,6 +301,89 @@ public sealed class ConnectorAttachmentTests
         ConnectionSiteHelper.Resolve(homePlate, 2).Should().Be((100L, 50L));
     }
 
+    // Wave 137 finding A: the notch depth used to scale unconditionally by shape WIDTH, but
+    // ShapeGeometryBuilder.Chevron/HomePlate only does that for the *unauthored* fallback -- once
+    // an "adj" depth guide is authored, the rendered outline scales the notch off the SHORTER
+    // side. On a non-square shape those two bases disagree, so the old site drifted off the
+    // visible outline. Assert against the actual rendered polygon, not a hard-coded number, across
+    // several aspect ratios so a reintroduced width/min-dimension mismatch is caught regardless of
+    // which axis is shorter.
+    [Theory]
+    [InlineData(200, 100)]
+    [InlineData(240, 60)]
+    [InlineData(100, 200)]
+    public void ConnectionSiteHelper_ChevronNotchMatchesRenderedOutlineForAuthoredAdjustment(long width, long height)
+    {
+        var shape = MakeRect(1, 0, 0, width, height);
+        shape.AutoShapeKind = Free.Shared.Drawing.DrawingShapeKind.Chevron;
+        shape.PresetGeometryAdjustments["adj"] = 35000;
+
+        var rendered = Free.Shared.Drawing.ShapeGeometryBuilder.Build(
+            Free.Shared.Drawing.DrawingShapeKind.Chevron,
+            new Free.Shared.Drawing.LayoutRect(0, 0, width, height),
+            shape.PresetGeometryAdjustments);
+
+        // Vertex order is [(0,0),(x2,0),(1,0.5),(x2,1),(0,1),(x1,0.5)]; the inward notch tip
+        // (site 0, the west attachment) is the 5th LineTo -- segment index 4.
+        var notch = rendered.Contours[0].Segments[4].End;
+
+        var site = ConnectionSiteHelper.Resolve(shape, 0);
+        site.X.Should().Be((long)Math.Round(notch.X));
+        site.Y.Should().Be((long)Math.Round(notch.Y));
+    }
+
+    [Theory]
+    [InlineData(200, 100)]
+    [InlineData(240, 60)]
+    [InlineData(100, 200)]
+    public void ConnectionSiteHelper_HomePlateTopAndBottomSitesMatchRenderedOutlineForAuthoredAdjustment(long width, long height)
+    {
+        var shape = MakeRect(1, 0, 0, width, height);
+        shape.AutoShapeKind = Free.Shared.Drawing.DrawingShapeKind.HomePlate;
+        shape.PresetGeometryAdjustments["adj"] = 35000;
+
+        var rendered = Free.Shared.Drawing.ShapeGeometryBuilder.Build(
+            Free.Shared.Drawing.DrawingShapeKind.HomePlate,
+            new Free.Shared.Drawing.LayoutRect(0, 0, width, height),
+            shape.PresetGeometryAdjustments);
+
+        // Vertex order is [(0,0),(x1,0),(1,0.5),(x1,1),(0,1)]; the top-flat edge runs from the
+        // origin to x1 (segment index 0), so its midpoint is what site 1 (top-mid) should land on.
+        // ConnectionSiteHelper computes that midpoint with integer (truncating) division on a
+        // rounded-to-long x1 -- mirror that exactly rather than rounding the continuous midpoint,
+        // which disagrees by one DIP whenever x1 is odd (e.g. round-to-even turns 109.5 into 110,
+        // but long division truncates 219/2 to 109).
+        var x1 = (long)Math.Round(rendered.Contours[0].Segments[0].End.X);
+        var expectedTopMidX = x1 / 2;
+
+        var topMid = ConnectionSiteHelper.Resolve(shape, 1);
+        topMid.X.Should().Be(expectedTopMidX);
+        topMid.Y.Should().Be(0L);
+    }
+
+    // Sibling no-regression guard: the *unauthored* fallback outline is a fixed 24% of WIDTH
+    // (ShapeGeometryBuilder's hard-coded polygon), not of the shorter side -- unlike the
+    // authored-adj case above. A fix that switched to min-dimension unconditionally would break
+    // this case even though it never exhibited the original bug.
+    [Theory]
+    [InlineData(300, 120)]
+    [InlineData(120, 300)]
+    public void ConnectionSiteHelper_ChevronAndHomePlateDefaultNotchStaysWidthBasedWithoutAuthoredAdjustment(long width, long height)
+    {
+        var chevron = MakeRect(1, 0, 0, width, height);
+        chevron.AutoShapeKind = Free.Shared.Drawing.DrawingShapeKind.Chevron;
+        var chevronSite = ConnectionSiteHelper.Resolve(chevron, 0);
+        chevronSite.X.Should().Be((long)Math.Round(width * 0.24));
+        chevronSite.Y.Should().Be(height / 2);
+
+        var homePlate = MakeRect(2, 0, 0, width, height);
+        homePlate.AutoShapeKind = Free.Shared.Drawing.DrawingShapeKind.HomePlate;
+        var homePlateSite = ConnectionSiteHelper.Resolve(homePlate, 1);
+        var expectedTopEdgeEnd = width - (long)Math.Round(width * 0.24);
+        homePlateSite.X.Should().Be(expectedTopEdgeEnd / 2);
+        homePlateSite.Y.Should().Be(0L);
+    }
+
     [Theory]
     [InlineData(Free.Shared.Drawing.DrawingShapeKind.RectangularCallout, 3, 45, 100)]
     [InlineData(Free.Shared.Drawing.DrawingShapeKind.RoundedRectangularCallout, 3, 45, 100)]

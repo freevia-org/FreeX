@@ -39,6 +39,7 @@ public sealed class SharedWpfStartupRunnerTests : IDisposable
         var createdOwnApplication = false;
         Application? createdApplication = null;
         ShutdownMode? originalShutdownMode = null;
+        CapturingDiagnostics? lastDiagnostics = null;
 
         var runtime = new WpfApplicationStartupRuntime
         {
@@ -58,7 +59,11 @@ public sealed class SharedWpfStartupRunnerTests : IDisposable
             },
             ResolveVersion = () => "test-version",
             GetEnvironmentVariable = name => name == "DUMMY_THEME" ? "midnight" : null,
-            CreateDiagnostics = (_, _) => new CapturingDiagnostics(events, () => dispatcherCrashHookRegistered = true),
+            CreateDiagnostics = (_, _) =>
+            {
+                lastDiagnostics = new CapturingDiagnostics(events, () => dispatcherCrashHookRegistered = true);
+                return lastDiagnostics;
+            },
             RunApplication = (app, window) =>
             {
                 order.Add("run");
@@ -148,6 +153,52 @@ public sealed class SharedWpfStartupRunnerTests : IDisposable
                 runtime);
             receivedStartupArgsWithNoneSupplied.Should().NotBeNull();
             receivedStartupArgsWithNoneSupplied!.Should().BeEmpty();
+
+            // R138: FreeW/FreeP's WPF crash handler never took an emergency autosave snapshot,
+            // unlike FreeX's hand-rolled host -- a crash lost every edit since the last periodic
+            // autosave tick. The fix threads an optional spec.OnEmergencySnapshot hook through to
+            // the diagnostics RegisterCrashHandlers call's onAfterFault parameter.
+            //
+            // Sibling no-regression first: neither call above set OnEmergencySnapshot (mirrors
+            // FreeP, which has no autosave feature to snapshot at all yet) -- the runner must not
+            // fabricate a hook or throw, it forwards null straight through.
+            lastDiagnostics.Should().NotBeNull();
+            lastDiagnostics!.CapturedOnAfterFault.Should().BeNull(
+                "a spec with no OnEmergencySnapshot must forward null, not fabricate a hook");
+
+            // Reuses the SAME runtime/thread/Application as the two calls above, for the same
+            // cross-thread-safety reason documented above -- a third independent [StaFact] method
+            // would race Application.Current with whichever test runs next.
+            var emergencySnapshotCallCount = 0;
+            Action probe = () => emergencySnapshotCallCount++;
+            WpfApplicationStartupRunner.Run(
+                new WpfApplicationStartupSpec<DummyOptions>(
+                    new AppProductIdentity("FreeW", "FREEW_DIAGNOSTICS", "FreeW"),
+                    (_, _, _) =>
+                    {
+                        order.Add("window");
+                        return new Window();
+                    })
+                {
+                    OptionsOverridePath = optionsPath,
+                    OnEmergencySnapshot = probe
+                },
+                runtime);
+
+            // Before this fix, IWpfApplicationStartupDiagnostics.RegisterCrashHandlers took only a
+            // subscribeDispatcher parameter -- there was no onAfterFault to capture at all, and this
+            // would be null even with the shared-runner plumbing in place but Program.cs unwired.
+            lastDiagnostics!.CapturedOnAfterFault.Should().BeSameAs(probe,
+                "the runner must forward spec.OnEmergencySnapshot through unchanged so a real crash reaches it");
+            lastDiagnostics.DispatcherSubscribed.Should().BeTrue(
+                "the runner must still subscribe the dispatcher handler as before -- OnEmergencySnapshot must be additive");
+
+            // Production wiring (AppCrashHandlers.Register, exercised by FreeX's already-working
+            // Avalonia path) invokes onAfterFault after recording a dispatcher-sourced crash. Firing
+            // the captured delegate directly proves the runner handed through a live, invokable
+            // callback -- not a stale reference or a value swallowed somewhere in the plumbing.
+            lastDiagnostics.CapturedOnAfterFault!();
+            emergencySnapshotCallCount.Should().Be(1);
         }
         finally
         {
@@ -168,9 +219,12 @@ public sealed class SharedWpfStartupRunnerTests : IDisposable
             WpfApplicationStartupRunner.StartupEventName,
             WpfApplicationStartupRunner.ExitEventName,
             WpfApplicationStartupRunner.StartupEventName,
+            WpfApplicationStartupRunner.ExitEventName,
+            WpfApplicationStartupRunner.StartupEventName,
             WpfApplicationStartupRunner.ExitEventName);
         order.Should().Equal(
             "seams", "application", "theme", "language", "wpf-culture", "window", "run",
+            "application", "window", "run",
             "application", "window", "run");
         // R133-wpf-startup-file-args: the runner used to hand CreateWindow no way to see the process's
         // command-line/file-association arguments at all, so a host had no seam to open the requested
@@ -230,9 +284,15 @@ public sealed class SharedWpfStartupRunnerTests : IDisposable
         List<string> events,
         Action onRegisterCrashHandlers) : IWpfApplicationStartupDiagnostics
     {
-        public void RegisterCrashHandlers(Action<Action<Exception>> subscribeDispatcher)
+        public Action? CapturedOnAfterFault { get; private set; }
+
+        public bool DispatcherSubscribed { get; private set; }
+
+        public void RegisterCrashHandlers(Action<Action<Exception>> subscribeDispatcher, Action? onAfterFault = null)
         {
             subscribeDispatcher(_ => { });
+            DispatcherSubscribed = true;
+            CapturedOnAfterFault = onAfterFault;
             onRegisterCrashHandlers();
         }
 

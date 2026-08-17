@@ -341,6 +341,68 @@ public sealed class DocumentPersistenceWorkflowTests : IDisposable
         Directory.GetFiles(_tempDir, "*.tmp").Should().BeEmpty();
     }
 
+    // ── r138-freew-persistence-modified-metadata ────────────────────────────────────────────────
+    //
+    // Save never refreshed the document's Modified/LastModifiedBy core properties, so
+    // docProps/core.xml (and the Document Properties dialog, and SAVEDATE/LASTSAVEDBY fields, which
+    // all read the same TextDocument.Properties model) stayed frozen at whatever they were at
+    // document creation/open forever, even after real saves.
+
+    [Fact]
+    public void Save_RefreshesModifiedAndLastModifiedByOnSuccess()
+    {
+        // FAIL-BEFORE: before the fix, Save wrote the adapter's output but never touched
+        // document.Properties.Modified/LastModifiedBy, so both assertions below would fail (Modified
+        // would still equal the stale seeded value; LastModifiedBy would still be "Stale Author").
+        var path = WriteText("Existing.docx", "old");
+        var adapter = new FakeDocumentAdapter(
+            [new FileFormatDescriptor(".docx", "Word Document")]);
+        var workflow = new DocumentPersistenceWorkflow([adapter]);
+        workflow.TryResolveCurrentSaveTarget(path, out var target).Should().BeTrue();
+
+        var document = Document("new");
+        var staleModified = new DateTimeOffset(2000, 1, 1, 0, 0, 0, TimeSpan.Zero);
+        document.Properties.Modified = staleModified;
+        document.Properties.LastModifiedBy = "Stale Author";
+        document.Properties.Author = "Doc Author";
+        var beforeSave = DateTimeOffset.Now;
+
+        workflow.Save(document, target);
+
+        document.Properties.Modified.Should().NotBeNull();
+        document.Properties.Modified.Should().NotBe(staleModified);
+        document.Properties.Modified!.Value.Should().BeOnOrAfter(beforeSave.AddSeconds(-2));
+        document.Properties.LastModifiedBy.Should().Be(
+            "Doc Author",
+            "the resolved authorship falls back to the document's own author when it is set");
+    }
+
+    [Fact]
+    public void Save_LeavesModifiedAndLastModifiedByUnchangedWhenAdapterThrows()
+    {
+        // No-regression sibling: a save that fails partway through must not leave the in-memory
+        // model claiming a save that never actually reached disk.
+        var path = WriteText("Existing.docx", "original");
+        var adapter = new FakeDocumentAdapter(
+            [new FileFormatDescriptor(".docx", "Word Document")])
+        {
+            SaveAction = (_, _) => throw new IOException("simulated write failure"),
+        };
+        var workflow = new DocumentPersistenceWorkflow([adapter]);
+        workflow.TryResolveCurrentSaveTarget(path, out var target).Should().BeTrue();
+
+        var document = Document("updated");
+        var staleModified = new DateTimeOffset(2000, 1, 1, 0, 0, 0, TimeSpan.Zero);
+        document.Properties.Modified = staleModified;
+        document.Properties.LastModifiedBy = "Stale Author";
+
+        var act = () => workflow.Save(document, target);
+
+        act.Should().Throw<IOException>();
+        document.Properties.Modified.Should().Be(staleModified);
+        document.Properties.LastModifiedBy.Should().Be("Stale Author");
+    }
+
     private string WriteText(string name, string text)
     {
         var path = Path.Combine(_tempDir, name);

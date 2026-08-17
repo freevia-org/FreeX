@@ -44,6 +44,16 @@ public sealed class WorksheetSelectionStore
     public bool TryGet(SheetId sheetId, out WorksheetSelectionSnapshot snapshot)
         => _bySheet.TryGetValue(sheetId, out snapshot!);
 
+    /// <summary>
+    /// Every sheet this window has navigated away from (and therefore has its own remembered
+    /// selection snapshot for), keyed by sheet id. Used by each shell's save path to reconcile
+    /// this window's own active cell/selection onto the shared <see cref="Sheet"/> fields
+    /// immediately before serialization, so Ctrl+S from THIS window persists what THIS window is
+    /// actually showing rather than whatever a sibling "New Window" last left in the shared model
+    /// -- mirrors <see cref="WorksheetViewStateStore.Snapshots"/>.
+    /// </summary>
+    public IReadOnlyDictionary<SheetId, WorksheetSelectionSnapshot> Snapshots => _bySheet;
+
     /// <summary>Drops a sheet's remembered selection (e.g. when the sheet is deleted).</summary>
     public void Remove(SheetId sheetId) => _bySheet.Remove(sheetId);
 

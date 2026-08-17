@@ -38,7 +38,7 @@ public sealed class SisterAvaloniaProgramRunnerTests
                 new SisterAvaloniaProgramRuntime
                 {
                     ResolveVersion = () => "1.2.3",
-                    CreateDiagnostics = version =>
+                    CreateDiagnostics = (version, _) =>
                     {
                         order.Add("diagnostics");
                         resolvedVersion = version;
@@ -91,7 +91,7 @@ public sealed class SisterAvaloniaProgramRunnerTests
                     }),
                 new SisterAvaloniaProgramRuntime
                 {
-                    CreateDiagnostics = _ => throw new InvalidOperationException("Diagnostics should not be created.")
+                    CreateDiagnostics = (_, _) => throw new InvalidOperationException("Diagnostics should not be created.")
                 });
 
             exitCode.Should().Be(2);
@@ -122,7 +122,7 @@ public sealed class SisterAvaloniaProgramRunnerTests
                     _ => throw failure),
                 new SisterAvaloniaProgramRuntime
                 {
-                    CreateDiagnostics = _ => new SisterAvaloniaProgramDiagnostics(
+                    CreateDiagnostics = (_, _) => new SisterAvaloniaProgramDiagnostics(
                         diagnostics.RegisterCrashHandlers,
                         diagnostics.RecordCrash),
                     RegisterRibbonCommandFaultHandler = _ => { },
@@ -183,7 +183,7 @@ public sealed class SisterAvaloniaProgramRunnerTests
                 new SisterAvaloniaProgramRuntime
                 {
                     ResolveVersion = () => throw new InvalidOperationException("Default diagnostics were used."),
-                    CreateDiagnostics = _ => throw new InvalidOperationException("Default diagnostics were used."),
+                    CreateDiagnostics = (_, _) => throw new InvalidOperationException("Default diagnostics were used."),
                     RegisterRibbonCommandFaultHandler = _ => order.Add("ribbon"),
                 });
 

@@ -400,6 +400,20 @@ public partial class MainWindow
     /// view last touched them instead of this window's own. Call this once, right before handing
     /// the workbook to <c>WorkbookSaveService</c>.
     /// </para>
+    /// <para>
+    /// R138: <see cref="Sheet.ActiveRow"/>/<see cref="Sheet.ActiveCol"/> get the same treatment
+    /// here, for the same reason. Unlike the fields above, this window writes its active
+    /// cell/selection straight onto those shared fields the instant the selection changes
+    /// (<c>SetActiveCell</c>/<c>MoveActiveCellWithinSelection</c>/etc., MainWindow.Selection.cs) --
+    /// so a sibling "New Window" moving ITS OWN selection after this window's last move silently
+    /// overwrites what this window is displaying. <see cref="_selectionAnchor"/> is this window's
+    /// own live active cell for <see cref="_currentSheetId"/> (kept in sync with the grid, never
+    /// shared with a sibling window); <see cref="_worksheetSelections"/> remembers this window's own
+    /// active cell for every OTHER sheet it has visited and navigated away from, exactly like
+    /// <see cref="_worksheetViewStates"/> above. Reconciling both right before save means Ctrl+S from
+    /// THIS window persists what THIS window is actually showing, not whichever sibling window's
+    /// selection last mutated the shared fields.
+    /// </para>
     /// </summary>
     private void ReconcileViewStateForSave()
     {
@@ -418,6 +432,21 @@ public partial class MainWindow
             sheet.FrozenCols = snapshot.FrozenCols;
             sheet.SplitRow = snapshot.SplitRow;
             sheet.SplitColumn = snapshot.SplitColumn;
+        }
+
+        if (_workbook.GetSheet(_currentSheetId) is { } currentSheet && _selectionAnchor is { } activeCell)
+        {
+            currentSheet.ActiveRow = activeCell.Row;
+            currentSheet.ActiveCol = activeCell.Col;
+        }
+
+        foreach (var (sheetId, snapshot) in _worksheetSelections.Snapshots)
+        {
+            if (_workbook.GetSheet(sheetId) is not { } otherSheet)
+                continue;
+
+            otherSheet.ActiveRow = snapshot.Anchor.Row;
+            otherSheet.ActiveCol = snapshot.Anchor.Col;
         }
     }
 

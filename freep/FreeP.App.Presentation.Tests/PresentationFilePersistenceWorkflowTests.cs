@@ -91,6 +91,60 @@ public sealed class PresentationFilePersistenceWorkflowTests : IDisposable
         FxpFormat.Read(path).Properties.Title.Should().Be("Saved Legacy");
     }
 
+    // ── r138-freep-persistence-modified-metadata ────────────────────────────────────────────────
+    //
+    // Sibling of FreeW's DocumentPersistenceWorkflow.Save fix: Save never refreshed the
+    // presentation's Modified/LastModifiedBy core properties, so docProps/core.xml stayed frozen at
+    // whatever they were at creation/open time forever, even after real saves.
+
+    [Fact]
+    public void Save_RefreshesModifiedAndLastModifiedByOnSuccessAndPersistsToCoreXml()
+    {
+        // FAIL-BEFORE: before the fix, Save serialized the presentation as-is and never touched
+        // Properties.Modified/LastModifiedBy, so every assertion below (both the in-memory model and
+        // the round-tripped-from-disk core.xml values) would fail.
+        var path = Path.Combine(_tempDir, "Saved.pptx");
+        var presentation = CreatePresentation("Deck");
+        var staleModified = new DateTimeOffset(2000, 1, 1, 0, 0, 0, TimeSpan.Zero);
+        presentation.Properties.Modified = staleModified;
+        presentation.Properties.LastModifiedBy = "Stale Author";
+        presentation.Properties.Author = "Doc Author";
+        var beforeSave = DateTimeOffset.Now;
+
+        PresentationFilePersistenceWorkflow.Save(path, presentation);
+
+        presentation.Properties.Modified.Should().NotBe(staleModified);
+        presentation.Properties.Modified!.Value.Should().BeOnOrAfter(beforeSave.AddSeconds(-2));
+        presentation.Properties.LastModifiedBy.Should().Be(
+            "Doc Author",
+            "the resolved authorship falls back to the presentation's own author when it is set");
+
+        var reloaded = PptxPackageReader.Read(path).Properties;
+        reloaded.Modified.Should().NotBe(staleModified);
+        reloaded.LastModifiedBy.Should().Be("Doc Author");
+    }
+
+    [Fact]
+    public void Save_LeavesModifiedAndLastModifiedByUnchangedWhenWriteFails()
+    {
+        // No-regression sibling: a save that fails partway through must not leave the in-memory
+        // model claiming a save that never actually reached disk.
+        var blockerPath = Path.Combine(_tempDir, "blocker");
+        File.WriteAllText(blockerPath, "occupies the name so it cannot become a directory");
+        var path = Path.Combine(blockerPath, "Saved.pptx");
+
+        var presentation = CreatePresentation("Deck");
+        var staleModified = new DateTimeOffset(2000, 1, 1, 0, 0, 0, TimeSpan.Zero);
+        presentation.Properties.Modified = staleModified;
+        presentation.Properties.LastModifiedBy = "Stale Author";
+
+        var act = () => PresentationFilePersistenceWorkflow.Save(path, presentation);
+
+        act.Should().Throw<IOException>();
+        presentation.Properties.Modified.Should().Be(staleModified);
+        presentation.Properties.LastModifiedBy.Should().Be("Stale Author");
+    }
+
     [Theory]
     [InlineData("deck.pptx", PresentationPackageKind.Presentation)]
     [InlineData("deck.pptm", PresentationPackageKind.MacroEnabledPresentation)]
