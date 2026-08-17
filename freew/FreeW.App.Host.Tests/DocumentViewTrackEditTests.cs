@@ -230,12 +230,19 @@ public sealed class DocumentViewTrackEditTests
         formatted.Formatting.FontFamily.Should().Be("Arial");
         formatted.FormatRevision.Should().NotBeNull();
         formatted.FormatRevision!.Author.Should().Be("Type Reviewer");
-        formatted.FormatRevision.PreviousFormatting.FontFamily.Should().Be("Calibri");
+        // The run inherited its family from the document default, so nothing was explicitly set
+        // before -- which is exactly what Word's w:rPrChange/w:rPr records. Materializing "Calibri"
+        // here would bake direct formatting onto a run that had none and would survive a save.
+        formatted.FormatRevision.PreviousFormatting.FontFamily.Should().BeNull();
         RenderedRun(view, "world").FontFamily.Source.Should().Be("Arial");
 
         view.Undo();
         ((Paragraph)view.Model.Blocks[0]).Runs.Should().OnlyContain(run =>
-            run.Formatting.FontFamily == "Calibri" && run.FormatRevision == null);
+            run.Formatting.FontFamily == null && run.FormatRevision == null);
+        // Undo restores inheritance, not an explicit value: the text still renders at the document
+        // default even though the run carries no family of its own. The runs merge back into one
+        // once the differing format is gone, so this reads the merged run.
+        RenderedRun(view, "Hello world").FontFamily.Source.Should().Be("Calibri");
 
         view.Redo();
         ((Paragraph)view.Model.Blocks[0]).Runs.Single(run => run.Text == "world")
@@ -257,12 +264,14 @@ public sealed class DocumentViewTrackEditTests
         var formatted = ((Paragraph)view.Model.Blocks[0]).Runs.Single(run => run.Text == "world");
         formatted.Formatting.FontSizePt.Should().Be(16);
         formatted.FormatRevision.Should().NotBeNull();
-        formatted.FormatRevision!.PreviousFormatting.FontSizePt.Should().Be(11);
+        // Inherited, so nothing was explicitly set before -- see the family test above.
+        formatted.FormatRevision!.PreviousFormatting.FontSizePt.Should().BeNull();
         RenderedRun(view, "world").FontSize.Should().BeApproximately(16 * 96.0 / 72.0, 0.001);
 
         view.Undo();
         ((Paragraph)view.Model.Blocks[0]).Runs.Should().OnlyContain(run =>
-            run.Formatting.FontSizePt == 11 && run.FormatRevision == null);
+            run.Formatting.FontSizePt == null && run.FormatRevision == null);
+        RenderedRun(view, "Hello world").FontSize.Should().BeApproximately(11 * 96.0 / 72.0, 0.001);
 
         view.Redo();
         ((Paragraph)view.Model.Blocks[0]).Runs.Single(run => run.Text == "world")
@@ -404,16 +413,17 @@ public sealed class DocumentViewTrackEditTests
             new Dictionary<string, object?> { ["value"] = "#C00000" }));
 
         var paragraph = (Paragraph)view.Model.Blocks[0];
-        paragraph.Runs.Single(run => run.Text == "Hello ").Formatting.ColorHex.Should().Be("#000000");
+        // The untouched run keeps inheriting its colour rather than materializing the default.
+        paragraph.Runs.Single(run => run.Text == "Hello ").Formatting.ColorHex.Should().BeNull();
         var formatted = paragraph.Runs.Single(run => run.Text == "world");
         formatted.Formatting.ColorHex.Should().Be("#C00000");
         formatted.FormatRevision.Should().NotBeNull();
         formatted.FormatRevision!.Author.Should().Be("Color Reviewer");
-        formatted.FormatRevision.PreviousFormatting.ColorHex.Should().Be("#000000");
+        formatted.FormatRevision.PreviousFormatting.ColorHex.Should().BeNull();
 
         view.Undo();
         ((Paragraph)view.Model.Blocks[0]).Runs.Should().OnlyContain(run =>
-            run.Formatting.ColorHex == "#000000" && run.FormatRevision == null);
+            run.Formatting.ColorHex == null && run.FormatRevision == null);
     }
 
     [StaFact]
