@@ -356,7 +356,10 @@ public sealed class ParityCaptureTests
             await Session.Dispatch(async () =>
             {
                 var window = new MainWindow([]);
-                window.ParityLegacyDialogImageCount.Should().Be(93,
+                // 95, not the original 93: two dialogs that previously produced no image now render.
+                // The batches asserted PNG bytes under headless drawing, which does not rasterize, so those
+                // captures were silently empty until the Skia backend was enabled.
+                window.ParityLegacyDialogImageCount.Should().Be(95,
                     "the original 50 single-dialog and 43 default/tab captures must remain intact");
                 window.Show();
                 window.Measure(new global::Avalonia.Size(1120, 720));

@@ -91,11 +91,20 @@ public sealed class ChartFormatDialogLifecycleRegressionTests
                         string.Join(Environment.NewLine, results.Select(result =>
                             $"{result.Id}: {result.Evidence}")));
 
-                    foreach (var (surfaceId, expectedFocus) in ExpectedInitialFocus)
+                    // The keys above are catalog ids, which the capture filter wants; contracts are
+                    // keyed by surface id, which drops the "Dialog" suffix and sometimes renames
+                    // outright (ChartAreaLegendDialog records as dialog.FormatChartArea).
+                    foreach (var (catalogId, expectedFocus) in ExpectedInitialFocus)
                     {
+                        var surfaceId = MainWindow.ParityInteractionDialogRoutes
+                            .Concat(MainWindow.SupplementalInteractionDialogRoutes)
+                            .Concat(MainWindow.InteractiveValidationDialogRoutes)
+                            .FirstOrDefault(route => string.Equals(
+                                route.CatalogId, catalogId, StringComparison.Ordinal))
+                            ?.SurfaceId ?? catalogId;
                         var contract = window.DialogInteractionContracts[surfaceId];
-                        contract.InitialFocus.Should().Be("passed:" + expectedFocus, surfaceId);
-                        contract.TabForward.Should().StartWith("passed:", surfaceId);
+                        contract.InitialFocus.Should().Be("passed:" + expectedFocus, catalogId);
+                        contract.TabForward.Should().StartWith("passed:", catalogId);
                         contract.TabBackward.Should().StartWith("passed:", surfaceId);
                         contract.EscapeCancel.Should().Be("passed:closed-by-escape", surfaceId);
                     }
