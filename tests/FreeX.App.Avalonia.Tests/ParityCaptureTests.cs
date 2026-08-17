@@ -240,7 +240,7 @@ public sealed class ParityCaptureTests
                         "dialog.DataValidationDialog",
                         "dialog.ErrorCheckingDialog",
                         "dialog.FindReplaceDialog",
-                        "dialog.FormatCellsDialog",
+                        "dialog.FormatCells",
                         "dialog.FormatPictureDialog",
                         "dialog.HeaderFooterDialog",
                         "dialog.LegalNoticesDialog",
@@ -248,7 +248,7 @@ public sealed class ParityCaptureTests
                         "dialog.MoveChartDialog",
                         "dialog.MovePivotTableDialog",
                         "dialog.ObjectSizeDialog",
-                        "dialog.PageSetupDialog",
+                        "dialog.PageSetup",
                         "dialog.PictureCropDialog",
                         "dialog.PivotCalculatedFieldDialog",
                         "dialog.PivotCalculatedItemDialog",
@@ -519,7 +519,7 @@ public sealed class ParityCaptureTests
                     result => result.Captured,
                     string.Join(Environment.NewLine, results.Select(result => $"{result.Id}: {result.Note}")));
                 results.Select(result => result.Id).Should().Equal(
-                    "dialog.PageSetupDialog",
+                    "dialog.PageSetup",
                     "dialog.PageSetup.Page",
                     "dialog.PageSetup.Margins",
                     "dialog.PageSetup.HeaderFooter",
@@ -560,7 +560,7 @@ public sealed class ParityCaptureTests
                     result => result.Captured,
                     string.Join(Environment.NewLine, results.Select(result => $"{result.Id}: {result.Note}")));
                 results.Select(result => result.Id).Should().Equal(
-                    "dialog.FormatCellsDialog",
+                    "dialog.FormatCells",
                     "dialog.FormatCells.Number",
                     "dialog.FormatCells.Alignment",
                     "dialog.FormatCells.Font",
