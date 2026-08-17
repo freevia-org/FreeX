@@ -303,21 +303,37 @@ public sealed class OwnedDialogLifecycleRegressionTests
                             $"{result.Id}: {result.Evidence}")));
 
                     var contracts = window.DialogInteractionContracts;
+
+                    // batchIds are catalog ids, which keep the "Dialog" suffix; contracts are keyed
+                    // by surface id, which drops it. Resolve through the route table rather than
+                    // indexing by the catalog id, which threw KeyNotFoundException naming a dialog
+                    // that had in fact opened and been recorded.
+                    DialogInteractionContractEvidence Contract(string catalogId)
+                    {
+                        var surfaceId = MainWindow.ParityInteractionDialogRoutes
+                            .Concat(MainWindow.SupplementalInteractionDialogRoutes)
+                            .Concat(MainWindow.InteractiveValidationDialogRoutes)
+                            .FirstOrDefault(route => string.Equals(
+                                route.CatalogId, catalogId, StringComparison.Ordinal))
+                            ?.SurfaceId ?? catalogId;
+                        return contracts[surfaceId];
+                    }
+
                     foreach (var id in batchIds)
                     {
                         if (MissingFocusTabAndEscapeIds.Contains(id) || id == "dialog.AutoFilterDialog")
                         {
-                            contracts[id].InitialFocus.Should().StartWith("passed:", id);
-                            contracts[id].TabForward.Should().StartWith("passed:", id);
-                            contracts[id].TabBackward.Should().StartWith("passed:", id);
-                            contracts[id].EscapeCancel.Should().StartWith("passed:", id);
+                            Contract(id).InitialFocus.Should().StartWith("passed:", id);
+                            Contract(id).TabForward.Should().StartWith("passed:", id);
+                            Contract(id).TabBackward.Should().StartWith("passed:", id);
+                            Contract(id).EscapeCancel.Should().StartWith("passed:", id);
                         }
 
                         if (MissingInitialFocusIds.Contains(id))
-                            contracts[id].InitialFocus.Should().StartWith("passed:", id);
+                            Contract(id).InitialFocus.Should().StartWith("passed:", id);
 
                         if (id == "dialog.AdvancedFilterDialog")
-                            contracts[id].EscapeCancel.Should().StartWith("passed:");
+                            Contract(id).EscapeCancel.Should().StartWith("passed:");
                     }
                 }
                 finally
