@@ -103,6 +103,16 @@ public sealed class BatchCommand : IPresentationCommand
         _commands = commands.ToList();
     }
 
+    /// <summary>
+    /// The sum of every child command's own <see cref="IPresentationCommand.EstimatedBytes"/>,
+    /// read after <see cref="Apply"/> has run each child (so children like DeleteShapeCommand
+    /// have already captured what they retain). Without this, the bus only ever saw this batch's
+    /// own flat 256-byte default no matter how many image-heavy slides or shapes it deleted or
+    /// duplicated in one multi-select gesture.
+    /// </summary>
+    public int EstimatedBytes => PresentationCommandSizeEstimator.Combine(
+        _commands.Select(c => c.EstimatedBytes));
+
     public void Apply(Presentation p)
     {
         foreach (var cmd in _commands)
@@ -147,6 +157,8 @@ public sealed class GroupShapesCommand : IPresentationCommand
     }
 
     public string Label => "Group";
+
+    public int EstimatedBytes => PresentationCommandSizeEstimator.EstimateBytes(_group);
 
     public bool HasEffect(Presentation p)
     {
@@ -253,6 +265,8 @@ public sealed class UngroupShapeCommand : IPresentationCommand
     }
 
     public string Label => "Ungroup";
+
+    public int EstimatedBytes => PresentationCommandSizeEstimator.EstimateBytes(_group);
 
     public bool HasEffect(Presentation p)
     {

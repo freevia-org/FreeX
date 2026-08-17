@@ -160,6 +160,12 @@ public sealed class SetTableCellTextCommand : IPresentationCommand
 
     public string Label => "Edit Cell Text";
 
+    public int EstimatedBytes => PresentationCommandSizeEstimator.Combine(new[]
+    {
+        PresentationCommandSizeEstimator.EstimateBytes(_newBody),
+        PresentationCommandSizeEstimator.EstimateBytes(_oldBody),
+    });
+
     public void Apply(Presentation p)
     {
         var cell = GetCell(p);
@@ -268,6 +274,12 @@ public sealed class SetTableCellFillCommand : IPresentationCommand
     }
 
     public string Label => _newFill is null or ShapeFill.None ? "Clear Cell Fill" : "Set Cell Fill";
+
+    public int EstimatedBytes => PresentationCommandSizeEstimator.Combine(new[]
+    {
+        PresentationCommandSizeEstimator.EstimateBytes(_newFill),
+        PresentationCommandSizeEstimator.EstimateBytes(_oldFill),
+    });
 
     public bool HasEffect(Presentation presentation)
     {
@@ -875,6 +887,8 @@ public sealed class InsertTableRowCommand : IPresentationCommand
 
     public string Label => "Insert Row";
 
+    public int EstimatedBytes => PresentationCommandSizeEstimator.EstimateBytes(_snapshot);
+
     public void Apply(Presentation p)
     {
         var shape = PresentationModelCloneHelper.FindTableShape(p, _slideIndex, _shapeId);
@@ -984,6 +998,8 @@ public sealed class DeleteTableRowCommand : IPresentationCommand
     }
 
     public string Label => "Delete Row";
+
+    public int EstimatedBytes => PresentationCommandSizeEstimator.EstimateBytes(_snapshot);
 
     public void Apply(Presentation p)
     {
@@ -1101,6 +1117,8 @@ public sealed class InsertTableColumnCommand : IPresentationCommand
     }
 
     public string Label => "Insert Column";
+
+    public int EstimatedBytes => PresentationCommandSizeEstimator.EstimateBytes(_snapshot);
 
     public void Apply(Presentation p)
     {
@@ -1242,6 +1260,8 @@ public sealed class DeleteTableColumnCommand : IPresentationCommand
 
     public string Label => "Delete Column";
 
+    public int EstimatedBytes => PresentationCommandSizeEstimator.EstimateBytes(_snapshot);
+
     public void Apply(Presentation p)
     {
         var shape = PresentationModelCloneHelper.FindTableShape(p, _slideIndex, _shapeId);
@@ -1346,6 +1366,8 @@ public sealed class MergeTableCellsCommand : IPresentationCommand
     }
 
     public string Label => "Merge Cells";
+
+    public int EstimatedBytes => PresentationCommandSizeEstimator.EstimateBytes(_snapshot);
 
     public bool HasEffect(Presentation p)
     {
@@ -1465,6 +1487,8 @@ public sealed class SplitTableCellCommand : IPresentationCommand
     }
 
     public string Label => "Split Cell";
+
+    public int EstimatedBytes => PresentationCommandSizeEstimator.EstimateBytes(_snapshot);
 
     /// <summary>No effect unless the target cell exists and is actually merged.</summary>
     public bool HasEffect(Presentation p)

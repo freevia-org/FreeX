@@ -785,13 +785,16 @@ internal sealed class HeaderFooterPaginator(
                 .ToList();
         }
 
+        // DocumentNoteRegionPlanner.BuildRows already skips ids with no note at all -- every row that
+        // reaches here is a note that genuinely exists, even if its content is empty. Word still prints
+        // the separator plus a blank numbered line for an empty note, matching the interactive Page
+        // Layout view and the footnote-continuation path, so this must not filter rows out by text.
         var notes = noteRows
             .Select(row => (
                 Label: string.IsNullOrEmpty(row.Label)
                     ? row.NoteId.ToString(System.Globalization.CultureInfo.InvariantCulture)
                     : row.Label,
                 row.Text))
-            .Where(n => !string.IsNullOrEmpty(n.Text))
             .ToList();
         if (notes.Count == 0)
             return visual;

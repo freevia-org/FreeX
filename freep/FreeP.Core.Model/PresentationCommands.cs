@@ -54,6 +54,75 @@ internal static class PresentationCommandSizeEstimator
     /// <summary>Estimated retained bytes for a single captured shape (and its descendants).</summary>
     public static int EstimateBytes(SlideShape? shape) => Clamp(BaseOverheadBytes + EstimateShapeBytes(shape));
 
+    /// <summary>Estimated retained bytes for a captured fill (nonzero only for a picture fill).</summary>
+    public static int EstimateBytes(ShapeFill? fill) => Clamp(BaseOverheadBytes + EstimateFillBytes(fill));
+
+    /// <summary>Estimated retained bytes for a captured text body (sum of its run text lengths).</summary>
+    public static int EstimateBytes(TextBody? textBody) => Clamp(BaseOverheadBytes + EstimateTextBytes(textBody));
+
+    /// <summary>
+    /// Estimated retained bytes for a captured whole-table snapshot (row/column insert, delete,
+    /// merge, and split commands each clone the entire table before mutating it), summing every
+    /// cell's fill and text body the same way a shape's own <see cref="SlideShape.Table"/> does.
+    /// </summary>
+    public static int EstimateBytes(TableShape? table) => Clamp(BaseOverheadBytes + EstimateTableBytes(table));
+
+    /// <summary>
+    /// Estimated retained bytes for a captured SmartArt state, dominated by its dsp:drawing
+    /// fallback shapes (each a fully-resolved <see cref="SlideShape"/> that can itself carry a
+    /// picture fill or embedded image, same as any other captured shape).
+    /// </summary>
+    public static int EstimateBytes(SmartArtShape? smartArt)
+    {
+        if (smartArt is null)
+            return BaseOverheadBytes;
+
+        long total = BaseOverheadBytes;
+        foreach (var shape in smartArt.FallbackShapes)
+            total += EstimateShapeBytes(shape);
+        return Clamp(total);
+    }
+
+    /// <summary>
+    /// Estimated retained bytes for a captured set of package parts, e.g. a preserved Zoom
+    /// object's embedded image/media entries kept around so undo can restore the exact bytes.
+    /// </summary>
+    public static int EstimateBytes(IReadOnlyDictionary<string, byte[]>? parts)
+    {
+        if (parts is null || parts.Count == 0)
+            return BaseOverheadBytes;
+
+        long total = BaseOverheadBytes;
+        foreach (var bytes in parts.Values)
+            total += bytes.Length;
+        return Clamp(total);
+    }
+
+    /// <summary>Estimated retained bytes for a captured media caption-track set.</summary>
+    public static int EstimateBytes(IEnumerable<MediaCaptionTrackInfo>? tracks)
+    {
+        if (tracks is null)
+            return BaseOverheadBytes;
+
+        long total = BaseOverheadBytes;
+        foreach (var track in tracks)
+            total += track.Bytes.Length;
+        return Clamp(total);
+    }
+
+    /// <summary>
+    /// Sums several already-estimated byte counts for a command that captures more than one
+    /// independent payload (e.g. an old and a new fill), clamping the same way a single estimate
+    /// does so the combined total can never wrap negative.
+    /// </summary>
+    public static int Combine(IEnumerable<int> estimates)
+    {
+        long total = 0;
+        foreach (var estimate in estimates)
+            total += estimate;
+        return Clamp(total);
+    }
+
     private static long EstimateShapeBytes(SlideShape? shape)
     {
         if (shape is null)
@@ -70,19 +139,26 @@ internal static class PresentationCommandSizeEstimator
         }
         total += EstimateFillBytes(shape.Fill);
         total += EstimateTextBytes(shape.TextBody);
-
-        if (shape.Table is { } table)
-        {
-            foreach (var row in table.Rows)
-            foreach (var cell in row.Cells)
-            {
-                total += EstimateFillBytes(cell.Fill);
-                total += EstimateTextBytes(cell.TextBody);
-            }
-        }
+        total += EstimateTableBytes(shape.Table);
 
         foreach (var child in shape.Children)
             total += EstimateShapeBytes(child);
+
+        return total;
+    }
+
+    private static long EstimateTableBytes(TableShape? table)
+    {
+        if (table is null)
+            return 0;
+
+        long total = 0;
+        foreach (var row in table.Rows)
+        foreach (var cell in row.Cells)
+        {
+            total += EstimateFillBytes(cell.Fill);
+            total += EstimateTextBytes(cell.TextBody);
+        }
 
         return total;
     }
@@ -182,6 +258,12 @@ public sealed class ReplaceSmartArtCommand : IPresentationCommand
     }
 
     public string Label => "Edit SmartArt";
+
+    public int EstimatedBytes => PresentationCommandSizeEstimator.Combine(new[]
+    {
+        PresentationCommandSizeEstimator.EstimateBytes(_before),
+        PresentationCommandSizeEstimator.EstimateBytes(_after),
+    });
 
     public void Apply(Presentation presentation) => CopyState(presentation, _after);
 
@@ -1361,6 +1443,12 @@ public sealed class SetMediaCaptionTracksCommand : IPresentationCommand
 
     public string Label => "Edit Media Captions";
 
+    public int EstimatedBytes => PresentationCommandSizeEstimator.Combine(new[]
+    {
+        PresentationCommandSizeEstimator.EstimateBytes(_before),
+        PresentationCommandSizeEstimator.EstimateBytes(_after),
+    });
+
     public bool HasEffect(Presentation presentation)
     {
         var media = FindMedia(presentation);
@@ -2270,6 +2358,13 @@ public sealed class SetZoomCoverImageCommand : IPresentationCommand
         ? "Set Zoom Cover Image"
         : "Restore Zoom Preview";
 
+    public int EstimatedBytes => PresentationCommandSizeEstimator.Combine(new[]
+    {
+        _imageBytes.Length,
+        _oldPicture is null ? 0 : _oldPicture.Bytes.Length,
+        PresentationCommandSizeEstimator.EstimateBytes(_oldParts),
+    });
+
     public bool HasEffect(Presentation presentation)
     {
         if (!TryGetZoom(presentation, out _, out var info)
@@ -3010,6 +3105,9 @@ public sealed class AddShapeCommand : IPresentationCommand
     }
 
     public string Label => "Add Shape";
+
+    public int EstimatedBytes => PresentationCommandSizeEstimator.EstimateBytes(_shape);
+
     public void Apply(Presentation p)  => ShapeHelper.Shapes(p, _slideIndex)?.Add(_shape);
     public void Revert(Presentation p) => ShapeHelper.Shapes(p, _slideIndex)?.Remove(_shape);
 }
@@ -3132,6 +3230,10 @@ public sealed class ConvertSmartArtToShapesCommand : IPresentationCommand
     }
 
     public string Label => "Convert SmartArt to Shapes";
+
+    public int EstimatedBytes => PresentationCommandSizeEstimator.Combine(
+        new[] { PresentationCommandSizeEstimator.EstimateBytes(_original) }
+            .Concat(_converted.Select(PresentationCommandSizeEstimator.EstimateBytes)));
 
     public bool HasEffect(Presentation presentation) =>
         ShapeHelper.Find(presentation, _slideIndex, _smartArtId) is { Kind: SlideShapeKind.SmartArt } &&
@@ -4324,6 +4426,12 @@ public sealed class SetShapeFillCommand : IPresentationCommand
 
     public string Label => "Set Fill";
 
+    public int EstimatedBytes => PresentationCommandSizeEstimator.Combine(new[]
+    {
+        PresentationCommandSizeEstimator.EstimateBytes(_newFill),
+        PresentationCommandSizeEstimator.EstimateBytes(_oldFill),
+    });
+
     public void Apply(Presentation p)
     {
         var s = ShapeHelper.Find(p, _slideIndex, _shapeId);
@@ -4443,6 +4551,12 @@ public sealed class SetShapeTextCommand : IPresentationCommand
     }
 
     public string Label => "Set Text";
+
+    public int EstimatedBytes => PresentationCommandSizeEstimator.Combine(new[]
+    {
+        PresentationCommandSizeEstimator.EstimateBytes(_newBody),
+        PresentationCommandSizeEstimator.EstimateBytes(_oldBody),
+    });
 
     public void Apply(Presentation p)
     {
@@ -5149,6 +5263,12 @@ public sealed class SetSlideNotesCommand : IPresentationCommand
     }
 
     public string Label => "Set Notes";
+
+    public int EstimatedBytes => PresentationCommandSizeEstimator.Combine(new[]
+    {
+        PresentationCommandSizeEstimator.EstimateBytes(_newNotes),
+        PresentationCommandSizeEstimator.EstimateBytes(_oldNotes),
+    });
 
     public void Apply(Presentation p)
     {

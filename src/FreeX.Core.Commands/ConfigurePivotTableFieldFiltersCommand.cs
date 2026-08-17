@@ -55,7 +55,18 @@ public sealed class ConfigurePivotTableFieldFiltersCommand : IWorkbookCommand
         PivotTableCommandCollections.Replace(pivotTable.LabelFilters, _labelFilters);
         PivotTableCommandCollections.Replace(pivotTable.ValueFilters, _valueFilters);
         PivotTableCommandCollections.Replace(pivotTable.Sorts, _sorts);
-        PivotTableRefreshService.Refresh(ctx.Workbook, sheet, pivotTable);
+
+        // R140-remediation-pivot-refresh-growth-guard-completeness: a filter/sort change can change
+        // which distinct row/column items are visible, which can grow the pivot's footprint past its
+        // previous render -- see PivotTableRefreshService.GrowthGuard.cs.
+        var snapshot = _snapshot;
+        var baseline = PivotTableRefreshService.CaptureGrowthGuardBaseline(sheet, pivotTable);
+        if (PivotTableRefreshService.RefreshGuarded(ctx.Workbook, sheet, pivotTable, baseline, () => snapshot!.Restore(pivotTable)) is { } failure)
+        {
+            _snapshot = null;
+            _targetSnapshot = null;
+            return failure;
+        }
         UpdateBoundPivotChartRanges(ctx.Workbook, sheet, pivotTable);
 
         return new CommandOutcome(true, AffectedCells: [pivotTable.TargetRange.Start]);

@@ -161,7 +161,19 @@ public sealed class SetTimelineRangeCommand : IWorkbookCommand
             PivotTableSlicerTimelineCommandHelpers.ReplaceSelectedItems(pivotTable.ColumnFields, sourceFieldIndex, selectedItems);
             PivotTableSlicerTimelineCommandHelpers.ReplaceSelectedItems(pivotTable.PageFields, sourceFieldIndex, selectedItems);
 
-            PivotTableRefreshService.Refresh(ctx.Workbook, targetSheet, pivotTable);
+            // R140-remediation-pivot-refresh-growth-guard-completeness: identical fix as
+            // SetSlicerSelectionCommand -- a timeline range change can bring previously-filtered-out
+            // row/column items back into view, which can grow ANY connected pivot's footprint past its
+            // previous render. A timeline can drive several pivot tables at once (R133x), so a conflict
+            // on ANY one of them must fail the whole command atomically -- see RestoreAllTimelineTargets
+            // below and PivotTableRefreshService.GrowthGuard.cs.
+            var baseline = PivotTableRefreshService.CaptureGrowthGuardBaseline(targetSheet, pivotTable);
+            if (PivotTableRefreshService.RefreshGuarded(ctx.Workbook, targetSheet, pivotTable, baseline, RestoreAllTimelineTargets) is { } failure)
+            {
+                _snapshot = null;
+                _targetSnapshots = null;
+                return failure;
+            }
             // R134-commands-pivotchart-stale-datarange: identical fix as SetSlicerSelectionCommand -- a
             // timeline range change re-filters the pivot's rows (Refresh above), which moves/shrinks/
             // grows its materialized output range; without this, a PivotChart bound to this pivot table
@@ -170,6 +182,19 @@ public sealed class SetTimelineRangeCommand : IWorkbookCommand
         }
 
         return new CommandOutcome(true, AffectedCells: resolvedTargets.Select(t => t.PivotTable.TargetRange.Start).ToArray());
+
+        void RestoreAllTimelineTargets()
+        {
+            if (_snapshot is not { } snap)
+                return;
+
+            foreach (var pts in snap.PivotTables)
+                PivotTableRefreshService.ClearRenderedRange(pts.Sheet, pts.PivotTable.LastRenderedRange);
+            snap.Restore(timeline);
+            if (_targetSnapshots is not null)
+                foreach (var (targetCellSheet, _, cellSnapshot) in _targetSnapshots)
+                    AddPivotTableCommand.Restore(targetCellSheet, cellSnapshot);
+        }
     }
 
     public void Revert(ICommandContext ctx)

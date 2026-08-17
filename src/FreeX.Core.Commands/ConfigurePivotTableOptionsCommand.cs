@@ -227,7 +227,18 @@ public sealed class ConfigurePivotTableOptionsCommand : IWorkbookCommand
                 cache.MissingItemsLimit = _missingItemsLimit;
         }
 
-        PivotTableRefreshService.Refresh(ctx.Workbook, sheet, pivotTable);
+        // R140-remediation-pivot-refresh-growth-guard-completeness: ReportLayout/ShowSubtotals/
+        // grand-total/header options can all change the pivot's row/column geometry on refresh, which
+        // can grow the pivot's footprint past its previous render -- see
+        // PivotTableRefreshService.GrowthGuard.cs.
+        var snapshot = _snapshot;
+        var baseline = PivotTableRefreshService.CaptureGrowthGuardBaseline(sheet, pivotTable);
+        if (PivotTableRefreshService.RefreshGuarded(ctx.Workbook, sheet, pivotTable, baseline, () => snapshot!.Restore(pivotTable, cache)) is { } failure)
+        {
+            _snapshot = null;
+            _targetSnapshot = null;
+            return failure;
+        }
         // R134-commands-pivotchart-stale-datarange: ReportLayout/ShowSubtotals/grand-total/header
         // options can all change the pivot's row/column geometry on refresh -- without this, a
         // PivotChart bound to this pivot table keeps rendering the cells the pivot occupied under the
