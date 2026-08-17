@@ -48,11 +48,7 @@ internal sealed class ScreenTipDialog : Free.Shared.Ribbon.Wpf.DialogWindow
             cancelContent: InsertDialogTextResources.CancelButton));
         Content = outer;
 
-        Loaded += (_, _) =>
-        {
-            _screenTip.Focus();
-            _screenTip.SelectAll();
-        };
+        Loaded += (_, _) => DialogFocus.FocusAndSelect(_screenTip);
     }
 
     public string? Result { get; private set; }

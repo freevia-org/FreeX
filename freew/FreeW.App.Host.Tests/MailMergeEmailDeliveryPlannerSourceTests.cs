@@ -7,19 +7,26 @@ public sealed class MailMergeEmailDeliveryPlannerSourceTests
     [Fact]
     public void FreeWRibbonCommands_DelegatesEmailMergeDialogPolicyToSharedPlanner()
     {
+        var root = TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeW.slnx");
         var source = File.ReadAllText(
-            Path.Combine(TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeW.slnx"), "freew", "FreeW.App.Host", "Ribbon", "FreeWRibbonCommands.cs"));
+            Path.Combine(root, "freew", "FreeW.App.Host", "Ribbon", "FreeWRibbonCommands.cs"));
+        var planner = File.ReadAllText(
+            Path.Combine(root, "freew", "FreeW.App.Presentation", "Ribbon", "MailMergeEmailDeliveryPlanner.cs"));
 
-        source.Should().Contain("MailMergeEmailDeliveryPlanner.CreateDialogPlan(");
-        source.Should().Contain("MailMergeEmailDeliveryPlanner.CreateIntent(");
-        source.Should().Contain("MailMergeEmailDeliveryPlanner.GetValidationMessages(");
+        // The dialog plan / intent / validation policy moved from the ribbon into the shared
+        // MailMergeEmailDeliveryDialogSession, which is a stronger form of the same guarantee: the
+        // host now drives the session and the workflow and owns none of the policy itself.
+        source.Should().Contain("new MailMergeEmailDeliveryDialogSession(data, currentRecordIndex, selectedRecordIndexes)");
         source.Should().Contain("workflow.ExecuteEmailDrafts(");
         source.Should().Contain("ExternalUriLauncher.Open(");
         source.Should().Contain("launch.Message");
+        source.Should().NotContain("MailMergeEmailDeliveryPlanner.");
         source.Should().NotContain("var plan = MailMerge.CreateEmailDeliveryPlan(data, intent)");
-        source.Should().NotContain("MailMergeEmailDeliveryPlanner.CreateClientDraftPlan(");
-        source.Should().NotContain("MailMergeEmailDeliveryPlanner.FormatStatus(plan)");
         source.Should().NotContain("drafts.Drafts.Count(draft =>");
+
+        planner.Should().Contain("MailMergeEmailDeliveryPlanner.CreateDialogPlan(");
+        planner.Should().Contain("MailMergeEmailDeliveryPlanner.CreateIntent(");
+        planner.Should().Contain("MailMergeEmailDeliveryPlanner.GetValidationMessages(");
     }
 
 }
