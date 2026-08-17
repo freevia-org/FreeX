@@ -7,6 +7,7 @@ using Free.Shared.AppServices;
 using Free.Shared.Shell.Avalonia;
 using FreeW.App.Avalonia.Editing;
 using FreeW.App.Presentation.Shell;
+using FreeW.Core.Model;
 
 namespace FreeW.App.Avalonia;
 
@@ -50,10 +51,7 @@ internal sealed partial class AutosaveAdapter : IDisposable
             GetDisplayName: () => workflow.DisplayName,
             GetIsDirty: () => workflow.IsDirty,
             GetDirtyGeneration: () => workflow.DirtyGeneration,
-            ExecuteWithDocument: writeDocument => Dispatcher.UIThread.InvokeAsync(() =>
-                writeDocument(editor.Document))
-                .GetAwaiter()
-                .GetResult());
+            ExecuteWithDocument: writeDocument => ExecuteOnUiThreadBounded(editor, writeDocument));
         _session = sessionFactory?.Invoke(ports) ?? new FreeWAutosaveSession(ports);
         _recoverInNewWindowAsync = recoverInNewWindowAsync;
 
@@ -163,6 +161,73 @@ internal sealed partial class AutosaveAdapter : IDisposable
     }
 
     // ── Private ──────────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// R138 REMEDIATION timeout bound for <see cref="ExecuteOnUiThreadBounded"/>'s off-thread
+    /// marshal below -- mirrors the WPF sibling's bounded <c>Dispatcher.Invoke(..., 8s)</c>
+    /// (see <c>FreeW.App.Host/EmergencySnapshotCrashHandler.cs</c>).
+    /// </summary>
+    private static readonly TimeSpan EmergencySnapshotDispatcherTimeout = TimeSpan.FromSeconds(8);
+
+    /// <summary>
+    /// Runs <paramref name="writeDocument"/> against <paramref name="editor"/>'s document on the
+    /// Avalonia UI thread, bounded so a wedged dispatcher pump degrades to "no snapshot" instead
+    /// of hanging the process.
+    ///
+    /// <para>
+    /// R138 REMEDIATION: this used to be an unconditional
+    /// <c>Dispatcher.UIThread.InvokeAsync(...).GetAwaiter().GetResult()</c>. A crash handler
+    /// (<see cref="TryEmergencySnapshot"/>/<see cref="TryEmergencySnapshots"/>) is reached from
+    /// <c>AppDomain.UnhandledException</c>, which fires synchronously on the faulting thread and
+    /// is very often the UI thread itself, reentrant partway through whatever it was doing --
+    /// i.e. NOT inside an active dispatcher loop iteration that could ever come back around and
+    /// service a queued continuation. Calling <c>InvokeAsync(...).GetAwaiter().GetResult()</c>
+    /// from that same pump-less thread queues work that can only run once this very call
+    /// returns, then blocks waiting for it: a permanent, single-thread deadlock. The process
+    /// hangs forever instead of exiting having lost recent edits, which is strictly worse than
+    /// the data loss the emergency snapshot exists to avoid. A crash handler must always
+    /// terminate. We therefore (a) skip the marshal entirely when already on the UI thread --
+    /// <c>Dispatcher.UIThread.CheckAccess()</c> is true for exactly the reentrant case above, so
+    /// the write just runs inline -- mirroring the WPF sibling's
+    /// <c>dispatcher.CheckAccess()</c> shortcut in
+    /// <c>FreeW.App.Host/EmergencySnapshotCrashHandler.cs</c>; and (b) bound the wait when we do
+    /// have to marshal from a genuinely different thread, so a UI thread wedged for some other
+    /// reason still lets the crash handler return within
+    /// <see cref="EmergencySnapshotDispatcherTimeout"/> instead of blocking indefinitely. The
+    /// bound is implemented with <see cref="ManualResetEventSlim"/> rather than
+    /// <c>DispatcherOperation.Wait(TimeSpan)</c>/<c>InvokeAsync(...).GetAwaiter()</c> so a
+    /// timeout simply stops waiting -- it does not depend on the posted work being cancellable.
+    /// </para>
+    ///
+    /// <para>
+    /// NOTE for future readers: FreeP has no autosave machinery yet. If one is ever added by
+    /// copying this Avalonia adapter's shape, keep this bounded-marshal pattern -- do not
+    /// reintroduce the naive unconditional <c>InvokeAsync(...).GetAwaiter().GetResult()</c> this
+    /// replaced; it deadlocks FreeP's crash handler exactly the way it deadlocked FreeW's.
+    /// </para>
+    /// </summary>
+    private static void ExecuteOnUiThreadBounded(DocumentView editor, Action<TextDocument> writeDocument)
+    {
+        if (Dispatcher.UIThread.CheckAccess())
+        {
+            writeDocument(editor.Document);
+            return;
+        }
+
+        using var completed = new ManualResetEventSlim(initialState: false);
+        Dispatcher.UIThread.Post(
+            () =>
+            {
+                try { writeDocument(editor.Document); }
+                finally { completed.Set(); }
+            },
+            DispatcherPriority.Send);
+
+        // Timeout => the UI thread's pump is wedged. The posted write may still run later and is
+        // harmless if it does, but the crash handler does not wait on it any further -- "no
+        // snapshot" is the correct best-effort outcome here, not "process never exits".
+        completed.Wait(EmergencySnapshotDispatcherTimeout);
+    }
 
     private async Task RunLoopAsync(CancellationToken ct)
     {

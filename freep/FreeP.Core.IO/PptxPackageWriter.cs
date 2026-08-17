@@ -6727,38 +6727,51 @@ public static class PptxPackageWriter
                 if (shape.Kind != SlideShapeKind.Chart || shape.Chart is null)
                     continue;
 
-                if (!shape.Chart.RegenerateWorkbookOnSave)
+                var chart = shape.Chart;
+                var chartPath = SourceChartPath(chart, chartIndex);
+                var relsPath = GetRelationshipPartPath(chartPath);
+                if (packageSnapshot.TryGetEntry(relsPath, out var relsBytes))
                 {
-                    var chartPath = SourceChartPath(shape.Chart, chartIndex);
-                    var relsPath = GetRelationshipPartPath(chartPath);
-                    if (packageSnapshot.TryGetEntry(relsPath, out var relsBytes))
+                    var relsXml = OpcXml.TryLoadXml(relsBytes);
+                    if (relsXml is not null)
                     {
-                        var relsXml = OpcXml.TryLoadXml(relsBytes);
-                        if (relsXml is not null)
+                        // A chart's rels reference more than its embedded workbook: the
+                        // chartStyle/chartColorStyle relationships that carry its
+                        // PowerPoint-2013+ style and color-scheme sidecar parts
+                        // (ppt/charts/style1.xml, colors1.xml, …) live here too. ppt/charts/
+                        // is a writer-owned prefix (see WriterOwnedPackagePartPrefixes), so
+                        // anything not explicitly carved back into this set is silently
+                        // dropped by CopyPreservedPackageEntries below — carry every internal
+                        // target forward, not just the workbook, mirroring how
+                        // FindPreservedChartExSidecarPaths already treats ChartEx sidecars
+                        // generically. This applies whether or not the chart's OWN data was
+                        // just edited (RegenerateWorkbookOnSave): a chart-data-dialog edit
+                        // (ReplaceChartDataCommand) must not drop the style/color sidecars
+                        // either, it only invalidates the pre-edit embedded workbook itself.
+                        foreach (var relationship in OpcRelationships.Load(relsXml))
                         {
-                            // A preserved chart's rels reference more than its embedded
-                            // workbook: the chartStyle/chartColorStyle relationships that
-                            // carry its PowerPoint-2013+ style and color-scheme sidecar
-                            // parts (ppt/charts/style1.xml, colors1.xml, …) live here too.
-                            // ppt/charts/ is a writer-owned prefix (see
-                            // WriterOwnedPackagePartPrefixes), so anything not explicitly
-                            // carved back into this set is silently dropped by
-                            // CopyPreservedPackageEntries below — carry every internal
-                            // target forward, not just the workbook, mirroring how
-                            // FindPreservedChartExSidecarPaths already treats ChartEx
-                            // sidecars generically.
-                            foreach (var relationship in OpcRelationships.Load(relsXml))
-                            {
-                                if (relationship.IsExternal || string.IsNullOrWhiteSpace(relationship.Target))
-                                    continue;
+                            if (relationship.IsExternal || string.IsNullOrWhiteSpace(relationship.Target))
+                                continue;
 
-                                var targetPath = ResolveRelativeZipPath(
-                                    GetDirectoryName(chartPath),
-                                    relationship.Target);
-                                if (packageSnapshot.TryGetEntry(targetPath, out _))
-                                {
-                                    paths.Add(ToZipEntryPath(targetPath));
-                                }
+                            // When the chart's own data was just edited, PptxChartWriter
+                            // regenerates the embedded workbook under a brand-new part name
+                            // and merges a repointed relationship in (see
+                            // PptxChartWriter.TryMergeRegeneratedWorkbookRelationship) rather
+                            // than reusing this one. Carrying the STALE original workbook
+                            // bytes forward here too would leave them in the saved package as
+                            // an orphaned, unreferenced part.
+                            if (chart.RegenerateWorkbookOnSave &&
+                                TryResolveChartWorkbookPath(chartPath, relationship, out _))
+                            {
+                                continue;
+                            }
+
+                            var targetPath = ResolveRelativeZipPath(
+                                GetDirectoryName(chartPath),
+                                relationship.Target);
+                            if (packageSnapshot.TryGetEntry(targetPath, out _))
+                            {
+                                paths.Add(ToZipEntryPath(targetPath));
                             }
                         }
                     }

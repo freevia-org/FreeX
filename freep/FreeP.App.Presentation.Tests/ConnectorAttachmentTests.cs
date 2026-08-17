@@ -308,15 +308,24 @@ public sealed class ConnectorAttachmentTests
     // visible outline. Assert against the actual rendered polygon, not a hard-coded number, across
     // several aspect ratios so a reintroduced width/min-dimension mismatch is caught regardless of
     // which axis is shorter.
+    // Wave 138 remediation: adj values above 100000 are legitimate and UI-reachable for wide
+    // shapes -- ShapeGeometryAdjustmentPlanner.BuildMutationPlan permits adj up to
+    // 100000*width/min(width,height) (its GuideMaximum), which exceeds 100000 whenever
+    // width > height. ResolveNotchOffset used to additionally clamp depth to [0,1] where the
+    // renderer never does, so on a 240x60 Chevron at adj=250000 the notch drifted 180 DIP off
+    // the rendered outline. Cover both an authored adj above 100000 and the planner's own
+    // GuideMaximum (400000 for 240x60) so a reintroduced depth-clamp is caught.
     [Theory]
-    [InlineData(200, 100)]
-    [InlineData(240, 60)]
-    [InlineData(100, 200)]
-    public void ConnectionSiteHelper_ChevronNotchMatchesRenderedOutlineForAuthoredAdjustment(long width, long height)
+    [InlineData(200, 100, 35000)]
+    [InlineData(240, 60, 35000)]
+    [InlineData(100, 200, 35000)]
+    [InlineData(240, 60, 250000)]
+    [InlineData(240, 60, 400000)]
+    public void ConnectionSiteHelper_ChevronNotchMatchesRenderedOutlineForAuthoredAdjustment(long width, long height, double adj)
     {
         var shape = MakeRect(1, 0, 0, width, height);
         shape.AutoShapeKind = Free.Shared.Drawing.DrawingShapeKind.Chevron;
-        shape.PresetGeometryAdjustments["adj"] = 35000;
+        shape.PresetGeometryAdjustments["adj"] = adj;
 
         var rendered = Free.Shared.Drawing.ShapeGeometryBuilder.Build(
             Free.Shared.Drawing.DrawingShapeKind.Chevron,
@@ -332,15 +341,19 @@ public sealed class ConnectorAttachmentTests
         site.Y.Should().Be((long)Math.Round(notch.Y));
     }
 
+    // Wave 138 remediation: same above-100000 coverage as the Chevron theory above, for the
+    // HomePlate half of ResolveNotchOffset's shared code path.
     [Theory]
-    [InlineData(200, 100)]
-    [InlineData(240, 60)]
-    [InlineData(100, 200)]
-    public void ConnectionSiteHelper_HomePlateTopAndBottomSitesMatchRenderedOutlineForAuthoredAdjustment(long width, long height)
+    [InlineData(200, 100, 35000)]
+    [InlineData(240, 60, 35000)]
+    [InlineData(100, 200, 35000)]
+    [InlineData(240, 60, 250000)]
+    [InlineData(240, 60, 400000)]
+    public void ConnectionSiteHelper_HomePlateTopAndBottomSitesMatchRenderedOutlineForAuthoredAdjustment(long width, long height, double adj)
     {
         var shape = MakeRect(1, 0, 0, width, height);
         shape.AutoShapeKind = Free.Shared.Drawing.DrawingShapeKind.HomePlate;
-        shape.PresetGeometryAdjustments["adj"] = 35000;
+        shape.PresetGeometryAdjustments["adj"] = adj;
 
         var rendered = Free.Shared.Drawing.ShapeGeometryBuilder.Build(
             Free.Shared.Drawing.DrawingShapeKind.HomePlate,

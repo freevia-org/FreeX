@@ -1,4 +1,5 @@
 using System;
+using System.Diagnostics;
 using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
@@ -162,4 +163,81 @@ public sealed class R138_AutosaveAdapterEmergencySnapshotTests
 
         appSource.Should().Contain("onEmergencySnapshot: AutosaveAdapter.TryEmergencySnapshots");
     }
+
+    /// <summary>
+    /// R138 REMEDIATION regression test. Unlike <see cref="TryEmergencySnapshots_WritesASnapshotForADirtyWindow"/>
+    /// above (which deliberately substitutes a synchronous <c>ExecuteWithDocument</c> stub because the
+    /// real one was known to hang the headless dispatcher), this test drives the REAL production
+    /// <c>FreeWAutosavePorts.ExecuteWithDocument</c> marshal -- only the <see cref="AutosaveSnapshotStore"/>
+    /// is swapped out, exactly like <see cref="TryEmergencySnapshots_SkipsACleanWindow"/> does.
+    ///
+    /// <para>
+    /// This reproduces the auditor's exact deadlock shape: <c>AppDomain.UnhandledException</c> fires
+    /// synchronously on the faulting thread, which is very often the UI thread itself, reentrant
+    /// partway through whatever it was doing (not inside an active dispatcher-loop iteration that
+    /// could later come back around and service a queued continuation). Calling
+    /// <see cref="AutosaveAdapter.TryEmergencySnapshot"/> from *inside* the UI-thread-dispatched action
+    /// below reproduces exactly that reentrancy. Before this fix, the port's
+    /// <c>Dispatcher.UIThread.InvokeAsync(...).GetAwaiter().GetResult()</c> would queue a continuation
+    /// that could only run once this very call returned, then block on it -- a permanent deadlock, not
+    /// merely a slow path. The <c>[Fact(Timeout=...)]</c> backstop guarantees this test fails (rather
+    /// than hanging the whole run) if that regresses; the wall-clock assertion below additionally pins
+    /// that the fix takes the fast, non-marshaling path for this case rather than merely happening to
+    /// finish under the timeout.
+    /// </para>
+    /// </summary>
+    [Fact(Timeout = 20_000)]
+    public async Task TryEmergencySnapshot_UsingRealPorts_DoesNotDeadlockWhenReentrantOnTheUiThread()
+    {
+        var dir = Path.Combine(Path.GetTempPath(), Path.GetRandomFileName());
+        Directory.CreateDirectory(dir);
+        AutosaveAdapter? adapter = null;
+        try
+        {
+            var store = new AutosaveSnapshotStore(dir);
+            var elapsed = TimeSpan.Zero;
+
+            var ran = await OnUiThread(() =>
+            {
+                var (editor, wf) = NewWindowParts();
+                // REAL ports: only the store is overridden (sessionFactory receives the production
+                // `ports`, unmodified), so ExecuteWithDocument is the fixed
+                // Dispatcher.UIThread.CheckAccess()-then-bounded-marshal lambda under test.
+                adapter = new AutosaveAdapter(editor, wf, ports => new FreeWAutosaveSession(ports, store));
+                wf.MarkDirty();
+
+                // Reentrant call: we are already executing on the UI thread (inside the dispatched
+                // action), exactly like AppDomain.UnhandledException firing mid-execution there.
+                var sw = Stopwatch.StartNew();
+                adapter.TryEmergencySnapshot();
+                elapsed = sw.Elapsed;
+            });
+
+            if (!ran || adapter is null)
+                return; // no headless drawing backend in this environment
+
+            elapsed.Should().BeLessThan(TimeSpan.FromSeconds(2),
+                "a reentrant emergency snapshot on the UI thread must take the Dispatcher.UIThread.CheckAccess() " +
+                "fast path and run inline, not marshal to itself and wait");
+
+            File.Exists(store.GetSnapshotPath(adapter.SnapshotIdForTests)).Should().BeTrue(
+                "the real (non-stubbed) marshal path must still produce a snapshot for a dirty document");
+        }
+        finally
+        {
+            adapter?.Dispose();
+            try { Directory.Delete(dir, recursive: true); } catch { /* best-effort */ }
+        }
+    }
+
+    // NOTE: the fix's OTHER branch -- Dispatcher.UIThread.CheckAccess() == false, bounding the wait
+    // when a genuinely different thread posts to a wedged UI-thread pump -- is not covered by an
+    // automated test here. Avalonia.Headless's Dispatcher.UIThread.CheckAccess() was confirmed (by
+    // instrumenting ExecuteOnUiThreadBounded during development of this fix) to return true
+    // regardless of which OS thread calls it in this test harness -- including a bare, freshly
+    // started System.Threading.Thread with no flowed ExecutionContext -- so that branch cannot be
+    // reached through HeadlessUnitTestSession. The branch is still exercised in real desktop use
+    // (Avalonia's non-headless Dispatcher does enforce real thread affinity) and mirrors the WPF
+    // sibling's already-covered dispatcher.CheckAccess() shape 1:1; it is implemented defensively
+    // for a case this harness happens not to be able to simulate, not left unverified by choice.
 }

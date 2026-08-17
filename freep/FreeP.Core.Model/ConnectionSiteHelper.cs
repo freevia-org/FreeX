@@ -555,7 +555,7 @@ public static class ConnectionSiteHelper
         var minDimension = Math.Min(shape.ExtentCxEmu, shape.ExtentCyEmu);
         var maximum = 100000.0 * shape.ExtentCxEmu / Math.Max(1, minDimension);
         var depth = Math.Clamp(adjustment, 0, maximum) / 100000.0;
-        return (long)Math.Round(minDimension * Math.Clamp(depth, 0, 1));
+        return (long)Math.Round(minDimension * depth);
     }
 
     private static double ResolveArrowHeadBase(SlideShape shape)

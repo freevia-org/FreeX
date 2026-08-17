@@ -59,11 +59,37 @@ internal static class PptxChartWriter
         var chartDoc = BuildChartDoc(chart);
         if (chart.RegenerateWorkbookOnSave)
         {
-            const string workbookRelId = "rIdWorkbook1";
+            // A chart-own data edit (ReplaceChartDataCommand, dispatched by the chart-data
+            // dialog) must not silently drop this chart's PowerPoint-2013+ chartStyle/
+            // chartColorStyle sidecars (style1.xml, colors1.xml, …). Those live as sibling
+            // relationships in the SAME .rels document as the embedded workbook, so
+            // regenerating the workbook relationship wholesale (as this branch used to)
+            // replaced the entire rels document with just the one new relationship,
+            // orphaning the sidecars. Merge the new relationship INTO the preserved rels
+            // instead, mirroring TryRegenerateChartExWorkbook's fix for the ChartEx path.
+            var sourceChartPathForMerge = PptxPackageWriter.SourceChartPath(chart, chartIndex);
+            var workbookRelId = "rIdWorkbook1";
+            byte[]? mergedRelBytes = null;
+            var sourceRelsPathForMerge = OpcPathHelper.GetRelationshipPartPath(sourceChartPathForMerge);
+            if (packageSnapshot?.TryGetEntry(sourceRelsPathForMerge, out var sourceRelBytesForMerge) == true &&
+                TryMergeRegeneratedWorkbookRelationship(
+                    chartIndex,
+                    sourceChartPathForMerge,
+                    sourceRelBytesForMerge,
+                    out var mergedWorkbookRelId,
+                    out var mergedRelDocBytes))
+            {
+                workbookRelId = mergedWorkbookRelId;
+                mergedRelBytes = mergedRelDocBytes;
+            }
+
             AddExternalData(chartDoc, workbookRelId);
             WriteEntry(archive, chartPath, chartDoc);
             WriteRegeneratedWorkbook(archive, chart, GetRegeneratedWorkbookPath(chartIndex));
-            WriteRegeneratedWorkbookRelationship(archive, chartPath, workbookRelId, chartIndex);
+            if (mergedRelBytes is not null)
+                WriteBytes(archive, OpcPathHelper.GetRelationshipPartPath(chartPath), mergedRelBytes);
+            else
+                WriteRegeneratedWorkbookRelationship(archive, chartPath, workbookRelId, chartIndex);
             return chartPath;
         }
 
@@ -165,6 +191,75 @@ internal static class PptxChartWriter
                     relationship.Id == workbookRelationshipId ? newTarget : relationship.Target,
                     relationship.IsExternal)))
             .Save(mergedStream);
+        mergedRelBytes = mergedStream.ToArray();
+        return true;
+    }
+
+    /// <summary>
+    /// Merges a freshly regenerated embedded-workbook relationship into a regular (non-ChartEx)
+    /// chart's preserved <c>.rels</c>, leaving every other relationship — notably the
+    /// PowerPoint-2013+ chartStyle/chartColorStyle sidecar relationships — untouched. This is
+    /// the WriteChartPart counterpart of <see cref="TryRegenerateChartExWorkbook"/>: without it,
+    /// editing a chart's own data through the chart-data dialog (ReplaceChartDataCommand, which
+    /// sets <c>RegenerateWorkbookOnSave</c>) replaced the chart's ENTIRE rels document with just
+    /// the one new workbook relationship, silently dropping style1.xml/colors1.xml. Returns false
+    /// (leaving the out parameters unset/default) when the source rels don't parse, in which case
+    /// the caller falls back to writing a rels document containing only the new relationship.
+    /// </summary>
+    private static bool TryMergeRegeneratedWorkbookRelationship(
+        int chartIndex,
+        string sourceChartPath,
+        byte[] sourceRelBytes,
+        out string workbookRelId,
+        out byte[] mergedRelBytes)
+    {
+        workbookRelId = "rIdWorkbook1";
+        mergedRelBytes = [];
+        var sourceRelsXml = OpcXml.TryLoadXml(sourceRelBytes);
+        if (sourceRelsXml is null)
+            return false;
+
+        var sourceDirectory = OpcPathHelper.GetDirectoryName(sourceChartPath);
+        var relationships = OpcRelationships.Load(sourceRelsXml).ToArray();
+        var existingWorkbookRelationshipId = relationships
+            .Where(relationship =>
+                !relationship.IsExternal &&
+                !string.IsNullOrWhiteSpace(relationship.Target) &&
+                string.Equals(relationship.Type, PackageRelType, StringComparison.OrdinalIgnoreCase) &&
+                OpcPathHelper
+                    .ResolveRelativeZipPath(sourceDirectory, relationship.Target)
+                    .StartsWith("ppt/embeddings/", StringComparison.OrdinalIgnoreCase))
+            .Select(relationship => relationship.Id)
+            .FirstOrDefault();
+
+        var regeneratedWorkbookPath = GetRegeneratedWorkbookPath(chartIndex);
+        var newTarget = $"../embeddings/{regeneratedWorkbookPath.Split('/').Last()}";
+
+        // Drop the pre-edit embedded-workbook relationship (if any) and every other kept
+        // relationship's Id stays exactly as it was preserved — chartStyle, chartColorStyle,
+        // and anything else survive untouched. The new workbook relationship is always minted
+        // with the same fixed Id ("rIdWorkbook1", collision-avoided) that AddExternalData
+        // already writes into the freshly built chart XML's <c:externalData r:id="...">, so
+        // callers don't need to thread a variable Id back into BuildChartDoc's output.
+        var otherRelationships = relationships
+            .Where(relationship => relationship.Id != existingWorkbookRelationshipId)
+            .ToArray();
+        var usedIds = new HashSet<string>(
+            otherRelationships.Select(relationship => relationship.Id),
+            StringComparer.OrdinalIgnoreCase);
+        var candidateId = workbookRelId;
+        var suffix = 2;
+        while (usedIds.Contains(candidateId))
+            candidateId = $"{workbookRelId}_{suffix++}";
+        workbookRelId = candidateId;
+
+        var mergedRelationships = otherRelationships
+            .Select(relationship => OpcRelationships.CreateRelationship(
+                relationship.Id, relationship.Type, relationship.Target, relationship.IsExternal))
+            .Append(OpcRelationships.CreateRelationship(workbookRelId, PackageRelType, newTarget, false));
+
+        using var mergedStream = new MemoryStream();
+        OpcRelationships.CreateDocument(mergedRelationships).Save(mergedStream);
         mergedRelBytes = mergedStream.ToArray();
         return true;
     }

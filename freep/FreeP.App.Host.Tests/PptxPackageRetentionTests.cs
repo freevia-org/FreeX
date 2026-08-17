@@ -867,6 +867,76 @@ public sealed class PptxPackageRetentionTests
     }
 
     [Fact]
+    public void ReadWriteRead_StyledChartOwnDataEdit_PreservesChartStyleAndColorSidecars()
+    {
+        // Reproduces the R138 remediation finding: editing a REGULAR (non-ChartEx) chart's OWN
+        // data through the real user-facing command (ReplaceChartDataCommand, the same command
+        // the chart-data dialog dispatches) must regenerate the chart's embedded workbook
+        // WITHOUT dropping its PowerPoint-2013+ chartStyle/chartColorStyle sidecars. The r137 fix
+        // wave only preserved those sidecars for the "chart untouched, something else edited"
+        // case (see ReadWriteRead_UnrelatedEditToDeckWithStyledChart_PreservesChartStyleAndColorSidecars
+        // above) - it never touched WriteChartPart's RegenerateWorkbookOnSave branch, which
+        // replaced the chart's entire .rels document with just the new workbook relationship.
+        using var source = BuildPptxWithStyledChartWorkbookAndUnrelatedPackageData();
+        var loaded = PptxPackageReader.Read(source);
+        loaded.PackageSnapshot.Should().NotBeNull();
+        var chartShape = loaded.Slides[0].Shapes.Single(shape => shape.Kind == SlideShapeKind.Chart);
+        chartShape.Chart.Should().NotBeNull();
+        chartShape.Chart!.IsChartEx.Should().BeFalse();
+        chartShape.Chart.RegenerateWorkbookOnSave.Should().BeFalse(
+            "this test edits the chart's own data via the command below, not before it");
+
+        new ReplaceChartDataCommand(
+            slideIndex: 0,
+            shapeId: chartShape.Id,
+            categories: ["New East", "New West"],
+            seriesNames: ["New Actual"],
+            values: [new double?[] { 77, 88 }]).Apply(loaded);
+
+        chartShape.Chart.RegenerateWorkbookOnSave.Should().BeTrue();
+
+        using var saved = new MemoryStream();
+        PptxPackageWriter.Write(loaded, saved);
+        using var archive = new ZipArchive(new MemoryStream(saved.ToArray()), ZipArchiveMode.Read);
+
+        // The style/color sidecars are untouched by a data-only edit and must survive the save.
+        archive.GetEntry("ppt/charts/style1.xml").Should().NotBeNull(
+            "a chart-own data edit must not drop the chart's PowerPoint chart-style sidecar");
+        archive.GetEntry("ppt/charts/colors1.xml").Should().NotBeNull(
+            "a chart-own data edit must not drop the chart's PowerPoint chart-color-style sidecar");
+        ReadText(archive, "ppt/charts/style1.xml").Should().Contain("must-survive-style");
+        ReadText(archive, "ppt/charts/colors1.xml").Should().Contain("must-survive-colors");
+
+        var chartRels = LoadXml(archive, "ppt/charts/_rels/chart1.xml.rels");
+        Relationship(chartRels, ChartStyleRelType, "style1.xml").Should().NotBeNull(
+            "the edited chart's own rels must still reference its style sidecar");
+        Relationship(chartRels, ChartColorStyleRelType, "colors1.xml").Should().NotBeNull(
+            "the edited chart's own rels must still reference its color-style sidecar");
+
+        var workbookRelationship = Relationship(chartRels, PackageRelType, "../embeddings/chartWorkbook1.xlsx");
+        workbookRelationship.Should().NotBeNull(
+            "the edited chart must point its workbook relationship at a regenerated workbook");
+
+        archive.GetEntry("ppt/embeddings/sourceStyledWorkbook.xlsx").Should().BeNull(
+            "the pre-edit embedded workbook must not be carried forward once its data is stale");
+
+        using var workbookArchive = new ZipArchive(
+            new MemoryStream(ReadBytes(archive, "ppt/embeddings/chartWorkbook1.xlsx")),
+            ZipArchiveMode.Read);
+        var sheetXml = LoadXml(workbookArchive, "xl/worksheets/sheet1.xml").ToString(SaveOptions.DisableFormatting);
+        sheetXml.Should().Contain("New Actual");
+        sheetXml.Should().Contain("New East");
+        sheetXml.Should().Contain("77");
+        sheetXml.Should().Contain("88");
+
+        var contentTypes = LoadXml(archive, "[Content_Types].xml");
+        Override(contentTypes, "/ppt/charts/style1.xml", ChartStyleContentType).Should().NotBeNull(
+            "the saved package must declare a content type for the preserved chart-style part");
+        Override(contentTypes, "/ppt/charts/colors1.xml", ChartColorStyleContentType).Should().NotBeNull(
+            "the saved package must declare a content type for the preserved chart-color-style part");
+    }
+
+    [Fact]
     public void ReadWriteRead_ChartWorkbookOnlyNoStyleSidecars_StillPreservedAfterUnrelatedEdit()
     {
         // Sibling no-regression test: a chart that has ONLY an embedded-workbook relationship
