@@ -59,6 +59,105 @@ public sealed class WindowsPrintServiceTests : IDisposable
     }
 
     [Fact]
+    public async Task SubmitAsync_RefusesUncollatedMultipleCopiesInsteadOfSilentlyCollating()
+    {
+        var pdfPath = await CreatePdfAsync();
+        try
+        {
+            var handoff = new FakeHandoff();
+            var service = new WindowsPrintService(
+                new FakeCatalog(["Office"], "Office"),
+                handoff,
+                isSupportedOverride: true);
+
+            var result = await service.SubmitAsync(
+                pdfPath,
+                new PrintSelection("Office", Copies: 3, Collate: false));
+
+            result.Status.Should().Be(PrintSubmissionStatus.Failed);
+            result.Message.Should().ContainEquivalentOf("collat");
+            handoff.Submissions.Should().BeEmpty(
+                "an uncollated request the shell verb cannot express must be refused up front, " +
+                "not silently handed off as collated output");
+        }
+        finally
+        {
+            File.Delete(pdfPath);
+        }
+    }
+
+    [Fact]
+    public async Task SubmitAsync_AllowsUncollatedSingleCopyBecauseCollationIsMoot()
+    {
+        var pdfPath = await CreatePdfAsync();
+        try
+        {
+            var handoff = new FakeHandoff();
+            var service = new WindowsPrintService(
+                new FakeCatalog(["Office"], "Office"),
+                handoff,
+                isSupportedOverride: true);
+
+            var result = await service.SubmitAsync(
+                pdfPath,
+                new PrintSelection("Office", Copies: 1, Collate: false));
+
+            result.Status.Should().Be(PrintSubmissionStatus.Submitted);
+            handoff.Submissions.Should().Equal((pdfPath, "Office"));
+        }
+        finally
+        {
+            File.Delete(pdfPath);
+        }
+    }
+
+    [Fact]
+    public async Task SubmitAsync_ReportsSourceFileMayStillBeInUseWhenHandlerNeverConfirmsExit()
+    {
+        var pdfPath = await CreatePdfAsync();
+        try
+        {
+            var service = new WindowsPrintService(
+                new FakeCatalog(["Office"], "Office"),
+                new FakeHandoff(WindowsShellPdfPrintHandoffResult.Accepted()),
+                isSupportedOverride: true);
+
+            var result = await service.SubmitAsync(pdfPath, new PrintSelection("Office"));
+
+            result.Status.Should().Be(PrintSubmissionStatus.Submitted);
+            result.SourceFileMayStillBeInUse.Should().BeTrue(
+                "the shell verb was only accepted, not confirmed finished, so callers must not " +
+                "delete the source PDF out from under the still-running handler");
+        }
+        finally
+        {
+            File.Delete(pdfPath);
+        }
+    }
+
+    [Fact]
+    public async Task SubmitAsync_ReportsSourceFileNotInUseWhenHandlerConfirmsExit()
+    {
+        var pdfPath = await CreatePdfAsync();
+        try
+        {
+            var service = new WindowsPrintService(
+                new FakeCatalog(["Office"], "Office"),
+                new FakeHandoff(WindowsShellPdfPrintHandoffResult.HandlerExited(0)),
+                isSupportedOverride: true);
+
+            var result = await service.SubmitAsync(pdfPath, new PrintSelection("Office"));
+
+            result.Status.Should().Be(PrintSubmissionStatus.Submitted);
+            result.SourceFileMayStillBeInUse.Should().BeFalse();
+        }
+        finally
+        {
+            File.Delete(pdfPath);
+        }
+    }
+
+    [Fact]
     public async Task SubmitAsync_RejectsUnsupportedRangeWithoutStartingShellHandoff()
     {
         var pdfPath = await CreatePdfAsync();

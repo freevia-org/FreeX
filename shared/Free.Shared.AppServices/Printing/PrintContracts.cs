@@ -112,7 +112,8 @@ public sealed record PrintSubmissionResult(
     string? JobDescription = null,
     string? Message = null,
     int? NativeExitCode = null,
-    int? NativeErrorCode = null)
+    int? NativeErrorCode = null,
+    bool SourceFileMayStillBeInUse = false)
 {
     public bool Succeeded => Status == PrintSubmissionStatus.Submitted;
 }

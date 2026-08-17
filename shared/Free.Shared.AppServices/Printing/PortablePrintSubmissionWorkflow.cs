@@ -168,6 +168,15 @@ public sealed class PortablePrintSubmissionWorkflow
                 temporaryPdf.Path,
                 handoff.SubmissionSelection,
                 cancellationToken).ConfigureAwait(false);
+            if (submission.SourceFileMayStillBeInUse)
+            {
+                // The platform backend accepted the handoff but could not confirm the external
+                // reader finished consuming the file (e.g. the Windows shell "printto" verb was
+                // accepted but the handler process never exited within the acceptance window).
+                // Deleting the temp PDF here would race that still-reading process, so relinquish
+                // cleanup ownership instead of guessing at a safe deletion time with a delay.
+                temporaryPdf.Keep();
+            }
             return FromSubmission(submission, discovery, selection, handoff);
         }
         catch (OperationCanceledException ex)

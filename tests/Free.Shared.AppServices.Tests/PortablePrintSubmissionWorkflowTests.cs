@@ -1,4 +1,5 @@
 using Free.Shared.AppServices.Printing;
+using Free.Shared.AppServices.Windows;
 using System.Text;
 
 namespace Free.Shared.AppServices.Tests;
@@ -229,6 +230,81 @@ public sealed class PortablePrintSubmissionWorkflowTests : IDisposable
             result.Operation.Error!.Detail.Stage.Should().Be(PortablePrintFailureStage.Submission);
     }
 
+    [Fact]
+    public async Task ExecuteAsync_KeepsTemporaryPdfWhenSubmissionCannotConfirmHandlerFinishedReading()
+    {
+        var service = new RecordingPrintService
+        {
+            Discovery = AvailableDiscovery(),
+            Submission = new PrintSubmissionResult(
+                PrintSubmissionStatus.Submitted,
+                "Office",
+                SourceFileMayStillBeInUse: true),
+        };
+        string? renderedPath = null;
+        var workflow = CreateWorkflow(service, path => renderedPath = path);
+
+        var result = await workflow.ExecuteAsync(
+            (_, _) => Task.FromResult<PrintSelection?>(new("Office")),
+            async (output, _, token) => await output.WriteAsync(new byte[] { 1, 2, 3 }, token));
+
+        result.Status.Should().Be(OperationStatus.Completed);
+        renderedPath.Should().NotBeNull();
+        File.Exists(renderedPath!).Should().BeTrue(
+            "the platform backend could not confirm the external reader finished consuming the " +
+            "file, so the workflow must not delete it out from under a still-reading process");
+    }
+
+    [Fact]
+    public async Task ExecuteAsync_DeletesTemporaryPdfWhenSubmissionConfirmsHandlerFinishedReading()
+    {
+        var service = new RecordingPrintService
+        {
+            Discovery = AvailableDiscovery(),
+            Submission = new PrintSubmissionResult(
+                PrintSubmissionStatus.Submitted,
+                "Office",
+                SourceFileMayStillBeInUse: false),
+        };
+        string? renderedPath = null;
+        var workflow = CreateWorkflow(service, path => renderedPath = path);
+
+        var result = await workflow.ExecuteAsync(
+            (_, _) => Task.FromResult<PrintSelection?>(new("Office")),
+            async (output, _, token) => await output.WriteAsync(new byte[] { 1, 2, 3 }, token));
+
+        result.Status.Should().Be(OperationStatus.Completed);
+        renderedPath.Should().NotBeNull();
+        File.Exists(renderedPath!).Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task ExecuteAsync_WindowsHandoffAcceptedWithoutConfirmedExitLeavesTemporaryPdfOnDisk()
+    {
+        // Mirrors the real FreeW/FreeP Avalonia wiring on Windows: PortablePrintSubmissionWorkflow
+        // driving the actual WindowsPrintService (not a stand-in for it), so this proves the flag
+        // WindowsPrintService.SubmitAsync sets on an unconfirmed handoff actually reaches the
+        // workflow that owns temp-file cleanup, end to end.
+        var handoff = new AcceptingOnlyHandoff();
+        var windowsPrintService = new WindowsPrintService(
+            new StaticWindowsPrinterCatalog(["Office"], "Office"),
+            handoff,
+            isSupportedOverride: true);
+        string? renderedPath = null;
+        var workflow = CreateWorkflow(windowsPrintService, path => renderedPath = path);
+
+        var result = await workflow.ExecuteAsync(
+            (_, _) => Task.FromResult<PrintSelection?>(new("Office")),
+            async (output, _, token) => await output.WriteAsync(new byte[] { 1, 2, 3 }, token));
+
+        result.Submission!.Status.Should().Be(PrintSubmissionStatus.Submitted);
+        handoff.Calls.Should().Be(1);
+        renderedPath.Should().NotBeNull();
+        File.Exists(renderedPath!).Should().BeTrue(
+            "the shell 'printto' verb was accepted but the PDF handler never confirmed it exited, " +
+            "so the workflow must not have deleted the file the handler may still be reading");
+    }
+
     [Theory]
     [InlineData(PortablePrintFailureStage.Discovery)]
     [InlineData(PortablePrintFailureStage.Selection)]
@@ -302,7 +378,7 @@ public sealed class PortablePrintSubmissionWorkflowTests : IDisposable
     }
 
     private PortablePrintSubmissionWorkflow CreateWorkflow(
-        RecordingPrintService service,
+        IPlatformPrintService service,
         Action<string>? created = null) =>
         new(
             service,
@@ -369,5 +445,27 @@ public sealed class PortablePrintSubmissionWorkflowTests : IDisposable
             SubmittedBytes = File.ReadAllBytes(pdfPath);
             return Task.FromResult(Submission);
         }
+    }
+
+    private sealed class AcceptingOnlyHandoff : IWindowsPdfPrintHandoff
+    {
+        public int Calls { get; private set; }
+
+        public Task<WindowsShellPdfPrintHandoffResult> SubmitAsync(
+            string pdfPath,
+            string printerName,
+            CancellationToken cancellationToken = default)
+        {
+            Calls++;
+            return Task.FromResult(WindowsShellPdfPrintHandoffResult.Accepted());
+        }
+    }
+
+    private sealed class StaticWindowsPrinterCatalog(
+        IReadOnlyList<string> printers,
+        string? defaultPrinter) : IWindowsPrinterCatalog
+    {
+        public WindowsPrinterCatalogResult Discover() =>
+            WindowsPrinterCatalogResult.FromQueues(printers, defaultPrinter);
     }
 }

@@ -140,6 +140,16 @@ public sealed class WindowsPrintService : IPlatformPrintService
                 selection.PrinterName,
                 Message: "The Windows PDF handoff supports all pages in document orientation. Use Create PDF for custom page ranges or orientation.");
         }
+        if (!selection.Collate && selection.Copies > 1)
+        {
+            // The shell "printto" verb has no way to request uncollated output: each copy is handed
+            // off as a separate full-document print job, which always yields collated ordering
+            // (1,2,3,1,2,3,...). Refuse rather than silently ignoring the request.
+            return new PrintSubmissionResult(
+                PrintSubmissionStatus.Failed,
+                selection.PrinterName,
+                Message: "The Windows PDF handoff can only produce collated copies. Print one copy at a time, or use Create PDF and print from a PDF viewer, for uncollated output.");
+        }
 
         var printer = selection.PrinterName;
         if (_options.RequirePrinterDiscoveryBeforeSubmission || string.IsNullOrWhiteSpace(printer))
@@ -173,6 +183,11 @@ public sealed class WindowsPrintService : IPlatformPrintService
             printer = printer!.Trim();
         }
 
+        // Tracks whether any accepted copy could not be confirmed to have finished being read by the
+        // external PDF handler (the shell verb was accepted but the handler process never exited
+        // within the acceptance window). When true, the caller must not delete the source PDF the
+        // moment this method returns -- the handler may still be reading it.
+        var sourceMayStillBeInUse = false;
         try
         {
             int? lastExitCode = null;
@@ -180,8 +195,10 @@ public sealed class WindowsPrintService : IPlatformPrintService
             {
                 var result = await _handoff.SubmitAsync(pdfPath, printer, cancellationToken)
                     .ConfigureAwait(false);
+                if (result.Status == WindowsShellPdfPrintHandoffStatus.Accepted)
+                    sourceMayStillBeInUse = true;
                 if (result.Status == WindowsShellPdfPrintHandoffStatus.Canceled)
-                    return CancelledSubmission(printer);
+                    return CancelledSubmission(printer, sourceMayStillBeInUse);
                 if (!result.Started ||
                     (_options.RejectNonZeroHandlerExitCode && result.ExitCode is not null and not 0))
                 {
@@ -190,7 +207,8 @@ public sealed class WindowsPrintService : IPlatformPrintService
                         printer,
                         Message: result.FailureReason ?? "Windows could not start the PDF print handoff.",
                         NativeExitCode: result.ExitCode,
-                        NativeErrorCode: result.NativeErrorCode);
+                        NativeErrorCode: result.NativeErrorCode,
+                        SourceFileMayStillBeInUse: sourceMayStillBeInUse);
                 }
 
                 lastExitCode = result.ExitCode;
@@ -200,18 +218,20 @@ public sealed class WindowsPrintService : IPlatformPrintService
                 PrintSubmissionStatus.Submitted,
                 printer,
                 $"{selection.Copies} print job{(selection.Copies == 1 ? string.Empty : "s")} handed to Windows.",
-                NativeExitCode: lastExitCode);
+                NativeExitCode: lastExitCode,
+                SourceFileMayStillBeInUse: sourceMayStillBeInUse);
         }
         catch (OperationCanceledException)
         {
-            return CancelledSubmission(printer);
+            return CancelledSubmission(printer, sourceMayStillBeInUse);
         }
         catch (Exception ex) when (ex is not OutOfMemoryException)
         {
             return new PrintSubmissionResult(
                 PrintSubmissionStatus.Failed,
                 printer,
-                Message: $"Windows PDF print handoff failed: {ex.Message}");
+                Message: $"Windows PDF print handoff failed: {ex.Message}",
+                SourceFileMayStillBeInUse: sourceMayStillBeInUse);
         }
     }
 
@@ -229,6 +249,12 @@ public sealed class WindowsPrintService : IPlatformPrintService
     private static PrinterDiscoveryResult CancelledDiscovery() =>
         new(PrinterDiscoveryStatus.Cancelled, [], null, "Printer discovery was cancelled.");
 
-    private static PrintSubmissionResult CancelledSubmission(string? printerName) =>
-        new(PrintSubmissionStatus.Cancelled, printerName, Message: "Print submission was cancelled.");
+    private static PrintSubmissionResult CancelledSubmission(
+        string? printerName,
+        bool sourceMayStillBeInUse = false) =>
+        new(
+            PrintSubmissionStatus.Cancelled,
+            printerName,
+            Message: "Print submission was cancelled.",
+            SourceFileMayStillBeInUse: sourceMayStillBeInUse);
 }
