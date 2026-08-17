@@ -23,7 +23,7 @@ public sealed class ShapeEffectsDialogLifecycleRegressionTests
                     window.Show();
                     var selectedIds = new HashSet<string>(StringComparer.Ordinal)
                     {
-                        "dialog.ShapeEffects",
+                        "dialog.ShapeEffectsDialog",
                     };
 
                     await window.CaptureParitySurfacesAsync(

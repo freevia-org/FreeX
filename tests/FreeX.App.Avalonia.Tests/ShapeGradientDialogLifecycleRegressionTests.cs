@@ -23,7 +23,7 @@ public sealed class ShapeGradientDialogLifecycleRegressionTests
                     window.Show();
                     var selectedIds = new HashSet<string>(StringComparer.Ordinal)
                     {
-                        "dialog.ShapeGradient",
+                        "dialog.ShapeGradientDialog",
                     };
 
                     await window.CaptureParitySurfacesAsync(

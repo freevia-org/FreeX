@@ -26,7 +26,7 @@ public sealed class ConsolidateDialogLifecycleRegressionTests
                     window.Show();
                     var selectedIds = new HashSet<string>(StringComparer.Ordinal)
                     {
-                        "dialog.Consolidate",
+                        "dialog.ConsolidateDialog",
                     };
 
                     await window.CaptureParitySurfacesAsync(

@@ -516,7 +516,7 @@ public sealed class ParityCaptureTests
                     result => result.Captured,
                     string.Join(Environment.NewLine, results.Select(result => $"{result.Id}: {result.Note}")));
                 results.Select(result => result.Id).Should().Equal(
-                    "dialog.PageSetup",
+                    "dialog.PageSetupDialog",
                     "dialog.PageSetup.Page",
                     "dialog.PageSetup.Margins",
                     "dialog.PageSetup.HeaderFooter",
@@ -557,7 +557,7 @@ public sealed class ParityCaptureTests
                     result => result.Captured,
                     string.Join(Environment.NewLine, results.Select(result => $"{result.Id}: {result.Note}")));
                 results.Select(result => result.Id).Should().Equal(
-                    "dialog.FormatCells",
+                    "dialog.FormatCellsDialog",
                     "dialog.FormatCells.Number",
                     "dialog.FormatCells.Alignment",
                     "dialog.FormatCells.Font",
