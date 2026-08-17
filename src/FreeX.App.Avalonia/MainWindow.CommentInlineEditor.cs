@@ -464,6 +464,8 @@ public sealed partial class MainWindow
             IsCancel = isCancel,
         };
         AvaloniaCompactDialogChrome.ApplyButton(button, CommentDialogChromeStyle, width, isDefault);
+        // Deliberately shorter than a dialog button: this is the anchored inline editor, a compact
+        // popup surface rather than a dialog, and AvaloniaReviewCommentInlineRuntimeTests pins it.
         button.Height = 24;
         button.MinHeight = 24;
         button.MaxHeight = 24;

@@ -19620,9 +19620,10 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
 
     private static void ApplySortDialogButtonChrome(Button button, bool isDefault = false)
     {
-        button.Height = 24;
-        button.MinHeight = 24;
-        button.MaxHeight = 24;
+        // Shared token, not a local number: see ApplyDialogButtonChrome.
+        button.Height = global::Free.Shared.Shell.CompactDialogVisualTokens.ButtonHeight;
+        button.MinHeight = global::Free.Shared.Shell.CompactDialogVisualTokens.ButtonHeight;
+        button.MaxHeight = global::Free.Shared.Shell.CompactDialogVisualTokens.ButtonHeight;
         button.Padding = new Thickness(8, 1);
         button.Background = Brushes.White;
         button.BorderBrush = isDefault ? Brush(0, 120, 215) : Brush(112, 112, 112);
