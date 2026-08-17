@@ -4,6 +4,7 @@ using Free.Shared.AppServices;
 using Free.Shared.IO;
 using Free.Shared.Pdf;
 using Free.Shared.Shell;
+using FreeP.Core.IO;
 using FreeP.Core.Model;
 
 namespace FreeP.App.Compositor;
@@ -291,6 +292,15 @@ public interface IPresentationFileLifecyclePort
     IReadOnlyList<RecentFileEntry> RecentEntries { get; }
 
     void MarkDirty();
+
+    /// <summary>
+    /// Marks the presentation dirty while retargeting it at <paramref name="path"/>. Used by
+    /// autosave recovery: a recovered snapshot is unsaved work that belongs to the original file,
+    /// so it must reopen as dirty-with-that-path rather than as a clean document at the snapshot's
+    /// own throwaway location. Mirrors the shared <c>FileCommandWorkflow.MarkDirtyWithPath</c>.
+    /// </summary>
+    void MarkDirtyWithPath(string? path);
+
     void MarkSavedWithoutPath();
     void MarkSavedWithPath(string path, bool suppressRecentFiles);
 
@@ -530,6 +540,32 @@ public sealed class PresentationFileCommandSession
     private int _videoExportInProgress;
 
     public void MarkDirty() => _lifecycle.MarkDirty();
+
+    /// <summary>
+    /// Loads a recovered autosave snapshot, retargeting the presentation at
+    /// <paramref name="originalPath"/> and marking it dirty. Returns <c>false</c> (never throws)
+    /// when the snapshot cannot be read -- e.g. truncated by the crash that produced it. The caller
+    /// must NOT delete the snapshot on <c>false</c>: it may be the user's only copy of the unsaved
+    /// presentation. Mirrors FreeW's <c>FileCommands.OpenSnapshot</c>.
+    /// </summary>
+    public bool RestoreAutosaveSnapshot(string snapshotPath, string? originalPath)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(snapshotPath);
+
+        Presentation recovered;
+        try
+        {
+            recovered = PptxPackageReader.Read(snapshotPath);
+        }
+        catch
+        {
+            return false;
+        }
+
+        _loadPresentation(recovered);
+        _lifecycle.MarkDirtyWithPath(originalPath);
+        return true;
+    }
 
     public async Task<PresentationFileCommandResult> NewAsync(CancellationToken cancellationToken = default)
     {

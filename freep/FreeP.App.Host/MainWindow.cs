@@ -82,6 +82,17 @@ public sealed partial class MainWindow : Window,
     // ── Shell chrome ──────────────────────────────────────────────────────────────
 
     private PresentationFileCommandSession _fileSession = null!;
+
+    // ── Autosave / crash recovery ─────────────────────────────────────────────────
+
+    private AutosaveCoordinator _autosave = null!;
+
+    /// <summary>
+    /// Read by <see cref="EmergencySnapshotCrashHandler"/> only. Nullable because the crash handler
+    /// can run before the constructor finished building this window.
+    /// </summary>
+    internal AutosaveCoordinator? AutosaveCoordinatorForCrashHandler => _autosave;
+
     private BackstageView _backstage = null!;
     private Border _titleBar = null!;
     private SisterWpfWindowTitleBinder _titleBinder = null!;
@@ -286,7 +297,8 @@ public sealed partial class MainWindow : Window,
         IApplicationOptionsStore<FreePOptions>? optionsStore = null,
         IUserMessageService? messageService = null,
         PresentationNativePrintHandoffHostCapabilities? nativePrintCapability = null,
-        IReadOnlyList<string>? startupFilePaths = null)
+        IReadOnlyList<string>? startupFilePaths = null,
+        bool suppressStartupRecoveryOffer = false)
     {
         _options = options ?? new FreePOptions();
         _optionsRuntime = new FreePOptionsRuntimeSession(_options);
@@ -415,6 +427,14 @@ public sealed partial class MainWindow : Window,
             getPrintCurrentSlideNumber: () => Editor.CurrentSlideIndex + 1,
             nativePrintCapability: nativePrintCapability);
 
+        // Autosave / crash recovery. Before this, a FreeP crash lost every edit back to the last
+        // manual save: there was no periodic snapshot, no emergency snapshot, and no startup
+        // recovery offer at all. Mirrors FreeW's AutosaveCoordinator wiring.
+        _autosave = new AutosaveCoordinator(
+            () => _presentation,
+            _fileSession,
+            recoverInNewWindow: OpenNewWindowWithRecoveredSnapshot);
+
         // Title bar.
         var titleBar = ShellChrome.BuildTitleBar(this, chromeOptions);
         _titleBar = titleBar.Root;
@@ -460,7 +480,23 @@ public sealed partial class MainWindow : Window,
         Closing += (_, e) =>
         {
             if (!_fileSession.ConfirmCloseAllowedAsync().GetAwaiter().GetResult())
+            {
                 e.Cancel = true;
+                return;
+            }
+
+            // Only stop autosave (which deletes this window's recovery snapshot) once we have
+            // committed to closing -- a cancelled close must keep its snapshot.
+            _autosave.Stop();
+        };
+
+        Loaded += (_, _) =>
+        {
+            // Windows opened BY the recovery loop pass suppressStartupRecoveryOffer:true so they do
+            // not re-prompt for the very candidates the opening window is already working through.
+            if (!suppressStartupRecoveryOffer)
+                _autosave.OfferRecovery(this);
+            _autosave.Start();
         };
 
         // Backstage.
@@ -3757,6 +3793,29 @@ public sealed partial class MainWindow : Window,
 
     private static bool RunOptionalFileCommand(Task<PresentationFileCommandResult?> command) =>
         command.GetAwaiter().GetResult()?.Succeeded == true;
+
+    /// <summary>
+    /// Opens a recovered snapshot in its own new window. <see cref="AutosaveCoordinator"/> calls
+    /// this for every accepted candidate beyond the first (the first restores into the window that
+    /// is already open), so each pending snapshot from a multi-window crash gets a window instead
+    /// of being silently left on disk. <c>suppressStartupRecoveryOffer: true</c> stops the new
+    /// window's own Loaded handler from re-prompting for the candidates the caller's loop is still
+    /// working through.
+    /// </summary>
+    private bool OpenNewWindowWithRecoveredSnapshot(AutosaveRecoveryCandidate candidate)
+    {
+        var window = new MainWindow(
+            _options,
+            _optionsStore,
+            _messageService,
+            suppressStartupRecoveryOffer: true);
+        var loaded = window._fileSession.RestoreAutosaveSnapshot(
+            candidate.SnapshotPath,
+            candidate.Sidecar.OriginalFilePath);
+        window.Show();
+        window.Activate();
+        return loaded;
+    }
 
     private void OpenAdditionalStartupPresentations(IReadOnlyList<StartupFileOpenEntry> entries)
     {

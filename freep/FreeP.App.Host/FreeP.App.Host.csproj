@@ -34,6 +34,8 @@
              Link="MainWindow.ExtendedTestAccess.cs" />
     <Compile Include="..\TestSupport\HostAccess.Wpf\MainWindow.AccessibilityTestAccess.cs"
              Link="MainWindow.AccessibilityTestAccess.cs" />
+    <Compile Include="..\TestSupport\HostAccess.Wpf\AutosaveCoordinator.TestAccess.cs"
+             Link="AutosaveCoordinator.TestAccess.cs" />
   </ItemGroup>
 
   <ItemGroup Condition="'$(FreePVisualEvidenceHost)' == 'true'">

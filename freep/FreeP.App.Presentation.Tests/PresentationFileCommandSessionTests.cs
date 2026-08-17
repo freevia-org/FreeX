@@ -576,6 +576,12 @@ public sealed class PresentationFileCommandSessionTests : IDisposable
             DirtyGeneration++;
         }
 
+        public void MarkDirtyWithPath(string? path)
+        {
+            CurrentPath = path;
+            MarkDirty();
+        }
+
         public void MarkSavedWithoutPath()
         {
             CurrentPath = null;

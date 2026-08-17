@@ -69,6 +69,8 @@
              Link="MainWindow.FeaturesTestAccess.cs" />
     <Compile Include="..\TestSupport\HostAccess.Avalonia\MainWindow.TailTestAccess.cs"
              Link="MainWindow.TailTestAccess.cs" />
+    <Compile Include="..\TestSupport\HostAccess.Avalonia\AutosaveAdapter.TestAccess.cs"
+             Link="AutosaveAdapter.TestAccess.cs" />
   </ItemGroup>
 
   <ItemGroup Condition="'$(FreePHostAccess)' == 'true' Or '$(FreePValidationHost)' == 'true'">

@@ -27,7 +27,8 @@ public sealed partial class App : Application
                         AvaloniaThemeApplier.BuildResources(theme, resourceKeyPrefix))),
             new SisterAvaloniaOptionsStartupDescriptor<FreePOptions>(
                 () => ApplicationOptionsStore<FreePOptions>.Create()),
-            new SisterAvaloniaWindowStartupDescriptor<MainWindow, FreePOptions>(CreateMainWindow));
+            new SisterAvaloniaWindowStartupDescriptor<MainWindow, FreePOptions>(CreateMainWindow),
+            onEmergencySnapshot: AutosaveAdapter.TryEmergencySnapshots);
 
     public override void OnFrameworkInitializationCompleted()
     {

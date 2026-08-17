@@ -106,6 +106,7 @@ public sealed partial class MainWindow : Window,
     private readonly SisterAvaloniaFileCommandWorkflow _fileWorkflow;
     private readonly PresentationFileCommandSession _fileSession;
     private readonly SisterAvaloniaAsyncWindowCloseCoordinator _closeCoordinator;
+    private readonly AutosaveAdapter _autosave;
     private readonly PresentationPlatformClipboardSession _clipboardService;
     private int _ownerFocusRestoreCount;
     private readonly PresentationClipboardOperationQueue _clipboardOperationQueue = new();
@@ -411,7 +412,8 @@ public sealed partial class MainWindow : Window,
         Func<Window, PrinterDiscoveryResult, PrintSelection?, CancellationToken, Task<PrintSelection?>>?
             showPrintSelectionDialog = null,
         IApplicationOptionsStore<FreePOptions>? optionsStore = null,
-        IUserMessageService? messageService = null)
+        IUserMessageService? messageService = null,
+        bool suppressStartupRecoveryOffer = false)
     {
         InitializeConditionalHost();
         Title = FreePApplicationFrameDescriptor.Title.ApplicationName;
@@ -543,8 +545,21 @@ public sealed partial class MainWindow : Window,
                 ConfirmExternallyModifiedOverwriteAsync: (path, ct) =>
                     _fileWorkflow.ConfirmExternallyModifiedOverwriteAsync(path, ct).AsTask()));
         RecordStartupObservation("file-workflow-created");
+
+        // Autosave / crash recovery. Before this, a FreeP crash lost every edit back to the last
+        // manual save: there was no periodic snapshot, no emergency snapshot, and no startup
+        // recovery offer at all. Mirrors FreeW's AutosaveAdapter wiring.
+        _autosave = new AutosaveAdapter(
+            () => _presentation,
+            _fileWorkflow.Workflow,
+            applyRecoveredPresentation: (presentation, originalPath) =>
+            {
+                LoadPresentationContent(presentation);
+                _fileWorkflow.Workflow.MarkDirtyWithPath(originalPath);
+            },
+            recoverInNewWindowAsync: OpenNewWindowWithRecoveredSnapshotAsync);
         _closeCoordinator = new SisterAvaloniaAsyncWindowCloseCoordinator(
-            confirmCloseAllowedAsync: () => _fileSession.ConfirmCloseAllowedAsync(),
+            confirmCloseAllowedAsync: ConfirmCloseAllowedAndStopAutosaveAsync,
             requestClose: Close,
             restoreOwnerFocus: RestoreOwnerFocus);
 
@@ -736,6 +751,10 @@ public sealed partial class MainWindow : Window,
         };
         Closed += (_, _) =>
         {
+            // Deregisters this window from AutosaveAdapter's process-wide crash-handler registry.
+            // The snapshot itself was already deleted by ConfirmCloseAllowedAndStopAutosaveAsync;
+            // this is idempotent.
+            _autosave.Dispose();
             _workareaSession.Dispose();
             CloseActiveOleHost();
             _findReplaceDialog?.Close();
@@ -802,8 +821,53 @@ public sealed partial class MainWindow : Window,
             };
         }
 
+        // Start autosave once the window is shown; offer recovery on first open. Windows opened BY
+        // the recovery loop pass suppressStartupRecoveryOffer:true so they do not re-prompt for the
+        // very candidates the opening window is already working through.
+        Opened += async (_, _) =>
+        {
+            _autosave.Start();
+            if (!suppressStartupRecoveryOffer)
+                await _autosave.OfferRecoveryAsync(this);
+        };
+
         if (_nativeOutputCapabilityDetector is not null)
             Opened += (_, _) => StartNativeOutputCapabilityDetection();
+    }
+
+    /// <summary>
+    /// Close gate: only stop autosave (which deletes this window's recovery snapshot) once the
+    /// dirty prompt has settled in favour of closing. A cancelled close must keep its snapshot.
+    /// </summary>
+    private async Task<bool> ConfirmCloseAllowedAndStopAutosaveAsync()
+    {
+        if (!await _fileSession.ConfirmCloseAllowedAsync())
+            return false;
+
+        await _autosave.StopAsync();
+        return true;
+    }
+
+    /// <summary>
+    /// Opens a recovered snapshot in its own new window. <see cref="AutosaveAdapter"/> calls this
+    /// for every accepted candidate beyond the first (the first restores into the window that is
+    /// already open), so each pending snapshot from a multi-window crash gets a window instead of
+    /// being silently left on disk.
+    /// </summary>
+    private Task<bool> OpenNewWindowWithRecoveredSnapshotAsync(AutosaveRecoveryCandidate candidate)
+    {
+        var window = new MainWindow(
+            [],
+            loadRecentFilesStore: null,
+            options: _options,
+            optionsStore: _optionsStore,
+            suppressStartupRecoveryOffer: true);
+        var loaded = window._fileSession.RestoreAutosaveSnapshot(
+            candidate.SnapshotPath,
+            candidate.Sidecar.OriginalFilePath);
+        window.Show();
+        window.Activate();
+        return Task.FromResult(loaded);
     }
 
     private void RestoreOwnerFocus()

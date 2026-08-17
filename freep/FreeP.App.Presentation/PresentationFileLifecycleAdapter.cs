@@ -35,6 +35,8 @@ public sealed class PresentationFileLifecycleAdapter : IPresentationFileLifecycl
 
     public void MarkDirty() => _workflow.MarkDirty();
 
+    public void MarkDirtyWithPath(string? path) => _workflow.MarkDirtyWithPath(path);
+
     public void MarkSavedWithoutPath() => _workflow.MarkSavedWithoutPath();
 
     public void MarkSavedWithPath(string path, bool suppressRecentFiles) =>

@@ -3798,4 +3798,9 @@
   <data name="FreeP_FindReplace_Status_ReplacedOccurrencesFormat" xml:space="preserve"><value>Replaced {0} occurrence{1}.</value></data>
   <data name="FreeP_FindReplace_Status_ReplacementsMadeFormat" xml:space="preserve"><value>{0} replacement(s) made.</value></data>
   <data name="Renderer_InlineOleObjectFallback" xml:space="preserve"><value>OLE object</value></data>
+  <data name="Autosave_Recovery_Title" xml:space="preserve"><value>FreeP - Recover</value></data>
+  <data name="Autosave_Recovery_Recover_Button" xml:space="preserve"><value>Recover</value></data>
+  <data name="Autosave_Recovery_Skip_Button" xml:space="preserve"><value>Skip</value></data>
+  <data name="Autosave_Recovery_None_Message" xml:space="preserve"><value>No unsaved presentations were found.</value></data>
+  <data name="Autosave_Recovery_Failure_Message_Format" xml:space="preserve"><value>Could not recover the presentation.&#xA;&#xA;{0}</value></data>
 </root>
