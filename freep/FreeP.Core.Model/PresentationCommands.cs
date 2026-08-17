@@ -34,7 +34,12 @@ public interface IPresentationCommand
 /// bytes chiefly; text runs are added too since they're free to walk and can matter for text-heavy
 /// decks) so the 50MB budget evicts image/media-heavy history instead of treating it as free.
 /// </summary>
-internal static class PresentationCommandSizeEstimator
+// Public, not internal: IPresentationCommand and its EstimatedBytes are public, and commands live in
+// other assemblies too -- SetShapeTextBodyCommand in FreeP.App.Presentation is the one that carries the
+// largest payloads of all, since pasting a picture into an open text box routes through it. An external
+// command that cannot reach this helper has no way to report its cost except the interface default,
+// which is exactly how large payloads stayed invisible to the byte budget.
+public static class PresentationCommandSizeEstimator
 {
     private const int BaseOverheadBytes = 256;
 
@@ -208,7 +213,18 @@ internal static class PresentationCommandSizeEstimator
         long total = 0;
         foreach (var paragraph in textBody.Paragraphs)
         foreach (var run in paragraph.Runs)
+        {
+            // Run.Text is a poor proxy for what a run retains. A pasted picture, embedded object or
+            // table arrives as a SINGLE object-replacement character with the real payload hanging off
+            // the run, so sizing by text alone counts a multi-megabyte inline image as one byte and the
+            // undo budget never evicts it. Inline tables recurse, since their cells hold text bodies
+            // that can carry inline payloads of their own.
             total += run.Text.Length;
+            total += run.InlineImage?.Bytes.Length ?? 0;
+            total += run.InlineOleObject?.EmbeddedBytes.Length ?? 0;
+            if (run.InlineTable is { } inlineTable)
+                total += EstimateTableBytes(inlineTable.Table);
+        }
         return total;
     }
 

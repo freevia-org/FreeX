@@ -3042,4 +3042,56 @@ public sealed class PresentationCommandTests
             "the estimate should reflect both the old 4MB picture fill captured for undo and the new " +
             "3MB picture fill");
     }
+
+    /// <summary>
+    /// A run carrying a pasted picture holds ONE character of text — the object-replacement char — with
+    /// the image hanging off <c>Run.InlineImage</c>. Sizing a text body by its characters therefore
+    /// valued a multi-megabyte paste at a byte, which is how an inline image stayed invisible to the
+    /// 50MB undo budget even after the estimator started costing shape-level pictures.
+    /// </summary>
+    [Fact]
+    public void EstimateBytes_TextBody_CountsAnInlinePastedImageRatherThanItsOneCharacter()
+    {
+        var body = MakeTextBodyWithInlineImage(6 * 1024 * 1024);
+
+        PresentationCommandSizeEstimator.EstimateBytes(body).Should().BeGreaterThan(6 * 1024 * 1024,
+            "the estimate must follow Run.InlineImage, not the single object-replacement character");
+    }
+
+    /// <summary>
+    /// The command the in-canvas rich-text editors actually commit through. Pasting a picture while
+    /// editing a shape's text routes here rather than through the canvas-level paste command, so this
+    /// is the real entry point for a large payload entering the undo stack via text editing.
+    /// </summary>
+    [Fact]
+    public void SetShapeTextBodyCommand_EstimatedBytes_ReflectsAnInlinePastedImage()
+    {
+        var presentation = new Presentation();
+        var slide = new Slide { Title = "S" };
+        slide.Shapes.Clear();
+        slide.Shapes.Add(new SlideShape { Id = 7, Name = "Body", Kind = SlideShapeKind.AutoShape });
+        presentation.Slides.Add(slide);
+
+        // Typed as the interface deliberately: PresentationCommandBus.Execute reads the cost through
+        // IPresentationCommand, and it reads it AFTER Apply, once the undo copy has been captured.
+        IPresentationCommand command =
+            new SetShapeTextBodyCommand(0, 7, MakeTextBodyWithInlineImage(5 * 1024 * 1024));
+        command.Apply(presentation);
+
+        command.EstimatedBytes.Should().BeGreaterThan(5 * 1024 * 1024,
+            "the estimate should reflect the 5MB inline image, not the 256-byte interface default");
+    }
+
+    private static TextBody MakeTextBodyWithInlineImage(int imageBytes)
+    {
+        var body = new TextBody();
+        var paragraph = new Paragraph();
+        paragraph.Runs.Add(new Run
+        {
+            Text = "￼",   // the object-replacement character a pasted inline object occupies
+            InlineImage = new ImagePart { Bytes = new byte[imageBytes], ContentType = "image/png" },
+        });
+        body.Paragraphs.Add(paragraph);
+        return body;
+    }
 }
