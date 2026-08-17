@@ -7,10 +7,27 @@ namespace FreeW.App.Presentation.Tests;
 public sealed class DocumentParagraphPaginationPlannerTests
 {
     [Fact]
-    public void OmittedWidowControl_UsesWordDefaultKeepTogetherPolicy()
+    public void OmittedWidowControl_BehavesLikeExplicitOff()
     {
+        // Word's widow control guards a stranded line, not the whole paragraph, so the omitted
+        // default must not reach keep-together -- otherwise a long ordinary paragraph jumps to the
+        // next page instead of splitting. It therefore matches the explicit-off case below.
         DocumentParagraphPaginationPlanner
             .ShouldKeepParagraphTogether(ParagraphFormatting.Default)
+            .Should().BeFalse();
+    }
+
+    [Fact]
+    public void ExplicitWidowControlOn_StillKeepsOrdinaryParagraphTogether()
+    {
+        var formatting = ParagraphFormatting.Default with
+        {
+            WidowControl = true,
+            WidowControlIsSet = true,
+        };
+
+        DocumentParagraphPaginationPlanner
+            .ShouldKeepParagraphTogether(formatting)
             .Should().BeTrue();
     }
 

@@ -6362,7 +6362,16 @@ public sealed partial class DocumentView : Control
 
     private int CalculateBodyPageCount()
     {
-        var lastSlot = _layoutContentY > 0 ? (int)(_layoutContentY / _layoutTextAreaHeight) : 0;
+        // _layoutContentY is the next insertion point -- the cursor AFTER the last block, including
+        // its trailing space-after -- not the last occupied pixel. Treating it as an occupied
+        // position emitted a blank trailing page whenever content ended exactly on a page boundary,
+        // which is also what Word does not do: trailing space never spills a page of its own. The
+        // epsilon keeps a cursor that overshoots by a rounding hair on the page it really ended on.
+        const double SlotEpsilon = 1e-6;
+        var textAreaHeight = Math.Max(1.0, _layoutTextAreaHeight);
+        var lastSlot = _layoutContentY > 0
+            ? Math.Max(0, (int)Math.Ceiling(_layoutContentY / textAreaHeight - SlotEpsilon) - 1)
+            : 0;
         return Math.Max(1, (int)Math.Ceiling((double)(lastSlot + 1) / Math.Max(1, _colCount)));
     }
 

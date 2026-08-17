@@ -466,7 +466,14 @@ public sealed class DocumentViewColumnLayoutTests
             var bodyIndex = doc.Blocks.Count;
             doc.Blocks.Add(new Paragraph(
                 "A wrapped paragraph that has enough words to span several measured lines and must " +
-                "move as one unit when Word's default widow control is active at a page boundary."));
+                "move as one unit at a page boundary.")
+            {
+                // Stated explicitly rather than leaning on the widow-control default: Word's widow
+                // control guards a stranded line, it does not hold a paragraph together, so an
+                // omitted token lets this paragraph split and the pair would stop isolating
+                // KeepWithNext. Keep-lines-together is the setting that actually means "one unit".
+                Formatting = ParagraphFormatting.Default with { KeepLinesTogether = true }
+            });
 
             var view = new DocumentView();
             view.LoadDocument(doc);
@@ -511,7 +518,14 @@ public sealed class DocumentViewColumnLayoutTests
             var bodyIndex = doc.Blocks.Count;
             doc.Blocks.Add(new Paragraph(
                 "A wrapped paragraph that has enough words to span several measured lines and must " +
-                "move as one unit when Word's default widow control is active at a page boundary."));
+                "move as one unit at a page boundary.")
+            {
+                // Stated explicitly rather than leaning on the widow-control default: Word's widow
+                // control guards a stranded line, it does not hold a paragraph together, so an
+                // omitted token lets this paragraph split and the pair would stop isolating
+                // KeepWithNext. Keep-lines-together is the setting that actually means "one unit".
+                Formatting = ParagraphFormatting.Default with { KeepLinesTogether = true }
+            });
 
             var view = new DocumentView();
             view.LoadDocument(doc);

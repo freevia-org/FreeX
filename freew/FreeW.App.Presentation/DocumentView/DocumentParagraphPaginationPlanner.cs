@@ -11,7 +11,11 @@ public static class DocumentParagraphPaginationPlanner
 {
     /// <summary>
     /// Returns whether an ordinary body paragraph should enter the renderer's keep-together path.
-    /// Word treats an omitted widow-control token as enabled; an explicit off token is different.
+    /// Word's widow control only guards a single stranded first/last LINE; it never holds a whole
+    /// paragraph together as one page-break-proof unit. An omitted (default) w:widowControl token
+    /// must therefore behave like an explicit off token here, or long default-formatted paragraphs
+    /// get pushed wholesale to the next page instead of splitting the way Word splits them. Only an
+    /// EXPLICIT widow-control token, or an explicit keep-lines-together, reaches keep-together.
     /// Table cells and paragraphs containing non-text layout objects remain caller-owned because
     /// their pagination has separate table/drawing contracts.
     /// </summary>
@@ -26,7 +30,6 @@ public static class DocumentParagraphPaginationPlanner
             return formatting.KeepLinesTogether || formatting.WidowControl;
 
         return formatting.KeepLinesTogether
-            || !formatting.WidowControlIsSet
-            || formatting.WidowControl;
+            || (formatting.WidowControlIsSet && formatting.WidowControl);
     }
 }
