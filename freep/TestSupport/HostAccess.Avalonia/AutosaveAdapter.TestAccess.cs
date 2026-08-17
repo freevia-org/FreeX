@@ -10,6 +10,13 @@ internal sealed partial class AutosaveAdapter
 {
     internal string SnapshotIdForTests => _session.SnapshotId;
     internal void SnapshotNowForTests() => _session.Snapshot();
+
+    /// <summary>
+    /// Releases this adapter's snapshot ownership lock without deleting the snapshot -- exactly what
+    /// an actual process crash does. Without this, a snapshot written earlier in the same test
+    /// process stays "live owned" and is filtered out of recovery.
+    /// </summary>
+    internal void SimulateCrashForTests() => _session.Dispose();
 }
 
 internal sealed partial class RecoveryPromptDialog

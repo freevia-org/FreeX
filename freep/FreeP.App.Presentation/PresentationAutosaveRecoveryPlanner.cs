@@ -11,7 +11,8 @@ public sealed record AutosaveRecoveryText(
     string RecoverButton,
     string SkipButton,
     string NoDocumentsMessage,
-    string FailureMessageFormat);
+    string FailureMessageFormat,
+    string BackstageLabel);
 
 public static class AutosaveRecoveryTextCatalog
 {
@@ -22,6 +23,7 @@ public static class AutosaveRecoveryTextCatalog
         new("Autosave_Recovery_Skip_Button", "Skip"),
         new("Autosave_Recovery_None_Message", "No unsaved presentations were found."),
         new("Autosave_Recovery_Failure_Message_Format", "Could not recover the presentation.\n\n{0}"),
+        new("Autosave_Recovery_Backstage_Label", "Recover Unsaved Presentations"),
     ];
 
     public static IReadOnlyList<string> RequiredResourceKeys =>
@@ -33,7 +35,8 @@ public static class AutosaveRecoveryTextCatalog
             Texts[1].Resolve(getText),
             Texts[2].Resolve(getText),
             Texts[3].Resolve(getText),
-            Texts[4].Resolve(getText));
+            Texts[4].Resolve(getText),
+            Texts[5].Resolve(getText));
 }
 
 public static class AutosaveRecoveryPlanner

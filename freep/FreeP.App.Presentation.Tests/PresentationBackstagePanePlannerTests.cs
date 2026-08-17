@@ -193,6 +193,63 @@ public sealed class PresentationBackstagePanePlannerTests
     }
 
     [Fact]
+    public void BuildOpenPane_ExposesTheManualRecoverUnsavedPresentationsCommand()
+    {
+        var invoked = false;
+        var planner = new PresentationBackstagePanePlanner();
+
+        var surface = planner.BuildOpenPane(() => invoked = true);
+
+        surface.Groups.Should().ContainSingle();
+        var recovery = surface.Groups.Single().Actions.Should().ContainSingle().Subject;
+        recovery.Label.Should().Be("Recover Unsaved Presentations");
+
+        recovery.Invoke();
+
+        invoked.Should().BeTrue();
+    }
+
+    [Fact]
+    public void BuildOpenPane_ResolvesTheLocalizedRecoveryLabel()
+    {
+        var planner = new PresentationBackstagePanePlanner(key =>
+            key == "Autosave_Recovery_Backstage_Label" ? "Recuperer les presentations non enregistrees" : null);
+
+        var surface = planner.BuildOpenPane(static () => { });
+
+        surface.Groups.Single().Actions.Single().Label
+            .Should().Be("Recuperer les presentations non enregistrees");
+    }
+
+    [Fact]
+    public void BuildOpenPane_ThrowsWhenRecoverUnsavedIsNull()
+    {
+        var planner = new PresentationBackstagePanePlanner();
+
+        var act = () => planner.BuildOpenPane(null!);
+
+        act.Should().Throw<ArgumentNullException>();
+    }
+
+    /// <summary>
+    /// Sibling of <see cref="BuildOpenPane_ExposesTheManualRecoverUnsavedPresentationsCommand"/>:
+    /// pins the pane's heading and the group/automation identity the WPF and Avalonia renderers key
+    /// off of, mirroring FreeW's "Recovery" group in its own Open pane.
+    /// </summary>
+    [Fact]
+    public void BuildOpenPane_UsesTheRecoveryGroupHeadingAndStableAutomationId()
+    {
+        var planner = new PresentationBackstagePanePlanner();
+
+        var surface = planner.BuildOpenPane(static () => { });
+
+        surface.Heading.Should().Be("Open");
+        surface.Groups.Single().Heading.Should().Be("Recovery");
+        surface.Groups.Single().Actions.Single().AutomationId
+            .Should().Be("BackstageOpen_RecoverUnsavedPresentations");
+    }
+
+    [Fact]
     public void BuildAccountPane_UsesSharedSafeEnvironmentPolicy()
     {
         var planner = new PresentationBackstagePanePlanner();

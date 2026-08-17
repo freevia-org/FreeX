@@ -95,10 +95,51 @@ internal sealed partial class AutosaveCoordinator
         }
     }
 
-    // NOTE: FreeW also exposes a manual "Recover Unsaved Documents" Backstage command
-    // (FreeW's AutosaveCoordinator.RecoverUnsavedDocuments). FreeP's
-    // PresentationBackstageEndpoints has no slot for it yet, so wiring one is a separate
-    // change to the portable backstage surface -- deliberately not folded into this round.
-    // AutosaveRecoveryTextCatalog already carries the NoDocumentsMessage /
-    // FailureMessageFormat strings that entry point needs.
+    /// <summary>
+    /// Manual "Recover Unsaved Presentations" Backstage command. Unlike <see cref="OfferRecovery"/>
+    /// (best-effort, silent on failure, used only at startup), this is user-invoked: it must tell the
+    /// user when there is nothing to recover, and it must surface failures instead of swallowing
+    /// them. Ported from FreeW's <c>AutosaveCoordinator.RecoverUnsavedDocuments</c>.
+    /// </summary>
+    public bool RecoverUnsavedPresentations(Window owner)
+    {
+        var text = AutosaveRecoveryTextCatalog.Resolve(UiText.Get);
+        try
+        {
+            var recoveries = _session.PlanRecoveries();
+            if (recoveries.Count == 0)
+            {
+                DialogMessageHelper.ShowInfo(owner,
+                    text.NoDocumentsMessage,
+                    text.Title);
+                return false;
+            }
+
+            return FreePRecoveryWorkflow.RunAsync(
+                    recoveries,
+                    FreePRecoveryPromptMode.Manual,
+                    offer => new ValueTask<bool>(DialogMessageHelper.ShowMessage(
+                        owner,
+                        offer.Prompt,
+                        text.Title,
+                        UserMessageButtons.OkCancel,
+                        UserMessageIcon.Question) == UserMessageResult.Ok),
+                    (recovery, useCurrentWindow) => new ValueTask<bool>(_session.CompleteRecovery(
+                        recovery,
+                        accepted: true,
+                        useCurrentWindow
+                            ? _file.RestoreAutosaveSnapshot
+                            : (_, _) => _recoverInNewWindow?.Invoke(recovery.Candidate) ?? false)))
+                .GetAwaiter()
+                .GetResult()
+                .AnyRecovered;
+        }
+        catch (Exception ex)
+        {
+            DialogMessageHelper.ShowError(owner,
+                string.Format(System.Globalization.CultureInfo.CurrentCulture, text.FailureMessageFormat, ex.Message),
+                text.Title);
+            return false;
+        }
+    }
 }

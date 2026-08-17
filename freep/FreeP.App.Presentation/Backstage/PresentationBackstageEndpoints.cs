@@ -18,6 +18,7 @@ public sealed record PresentationBackstageEndpoints(
     Action New,
     Action Open,
     Action<string> OpenPath,
+    Action RecoverUnsaved,
     Action Save,
     Action SaveAs,
     Action ExportPdf,

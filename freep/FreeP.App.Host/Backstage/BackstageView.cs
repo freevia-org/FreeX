@@ -89,10 +89,17 @@ internal sealed partial class BackstageView : UserControl
             BuildOptionsPane)
         {
             Print = backstage.FrameCommand(() => _printSession.Refresh()),
+            BuildOpenPane = BuildOpenPane,
             BuildPrintPane = BuildPrintPane,
             BuildExportPane = BuildExportPane,
             BuildAccountPane = BuildAccountPane,
         };
+    }
+
+    private UIElement BuildOpenPane()
+    {
+        return Panes.BuildActionPane(PanePlans.BuildOpenPane(
+            _backstage.HideThen(_endpoints.RecoverUnsaved)));
     }
 
     private UIElement BuildPrintPane()

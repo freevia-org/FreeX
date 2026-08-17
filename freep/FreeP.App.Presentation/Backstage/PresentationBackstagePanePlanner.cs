@@ -15,7 +15,19 @@ public sealed record PresentationBackstageExportActions(
 /// </summary>
 public sealed class PresentationBackstagePanePlanner
 {
+    // Not resx-backed -- mirrors FreeW's own Open pane, which keeps its heading/description/group
+    // text as plain constants in BackstageOpenPanePlanner rather than routing them through its
+    // localization catalog. Only the recoverable command's own label (AutosaveRecoveryText.
+    // BackstageLabel) is localized, per FreeP's resx conventions for user-invokable command text.
+    private const string OpenPaneHeading = "Open";
+    private const string OpenPaneDescription =
+        "Open an existing presentation, or recover one FreeP didn't get to save.";
+    private const string OpenPaneRecoveryGroupHeading = "Recovery";
+    private const string OpenPaneRecoveryRowDescription =
+        "Open the latest autosave recovery snapshot saved by FreeP.";
+
     private readonly SisterBackstagePaneSpecPlanner _paneSpecs;
+    private readonly Func<string, string?>? _getText;
     private readonly bool _usePresentationExportPlannerText;
 
     public PresentationBackstagePanePlanner(
@@ -24,6 +36,7 @@ public sealed class PresentationBackstagePanePlanner
     {
         _paneSpecs = new SisterBackstagePaneSpecPlanner(
             FreePBackstagePaneTextCatalog.BuildTextSpec(getText));
+        _getText = getText;
         _usePresentationExportPlannerText = usePresentationExportPlannerText;
     }
 
@@ -66,6 +79,35 @@ public sealed class PresentationBackstagePanePlanner
 
     public BackstageTemplatePaneSpec BuildNewPane(Action create) =>
         _paneSpecs.BuildNewPaneSpec(create);
+
+    /// <summary>
+    /// The "Open" Backstage pane's sole purpose today is surfacing the manual
+    /// "Recover Unsaved Presentations" command (FreeP's autosave/crash-recovery feature).
+    /// Mirrors the "Recovery" group in FreeW's <c>BackstageOpenPanePlanner</c>, simplified to
+    /// FreeP's existing single-group action-pane shape (see <see cref="BuildExportPane"/>)
+    /// rather than FreeW's full recent-documents/places/search open surface.
+    /// </summary>
+    public BackstageActionPaneSpec BuildOpenPane(Action recoverUnsaved)
+    {
+        ArgumentNullException.ThrowIfNull(recoverUnsaved);
+
+        var text = AutosaveRecoveryTextCatalog.Resolve(_getText);
+        return new BackstageActionPaneSpec(
+            OpenPaneHeading,
+            OpenPaneDescription,
+            [
+                new BackstageActionGroup(OpenPaneRecoveryGroupHeading,
+                [
+                    new BackstageActionRow(
+                        text.BackstageLabel,
+                        OpenPaneRecoveryRowDescription,
+                        recoverUnsaved)
+                    {
+                        AutomationId = "BackstageOpen_RecoverUnsavedPresentations",
+                    },
+                ]),
+            ]);
+    }
 
     public BackstageOptionsPaneSpec BuildOptionsPane(
         FreePOptions options,

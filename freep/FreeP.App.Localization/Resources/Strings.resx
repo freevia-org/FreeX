@@ -3803,4 +3803,5 @@
   <data name="Autosave_Recovery_Skip_Button" xml:space="preserve"><value>Skip</value></data>
   <data name="Autosave_Recovery_None_Message" xml:space="preserve"><value>No unsaved presentations were found.</value></data>
   <data name="Autosave_Recovery_Failure_Message_Format" xml:space="preserve"><value>Could not recover the presentation.&#xA;&#xA;{0}</value></data>
+  <data name="Autosave_Recovery_Backstage_Label" xml:space="preserve"><value>Recover Unsaved Presentations</value></data>
 </root>

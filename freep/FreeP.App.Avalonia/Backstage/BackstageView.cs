@@ -59,6 +59,7 @@ internal sealed partial class BackstageView : UserControl
             BuildNewPane,
             BuildOptionsPane)
         {
+            BuildOpenPane = BuildOpenPane,
             BuildPrintPane = BuildPrintPane,
             BuildExportPane = BuildExportPane,
             BuildAccountPane = BuildAccountPane,
@@ -191,6 +192,13 @@ internal sealed partial class BackstageView : UserControl
             panel.Children.Add(printButton);
         }
         return panel;
+    }
+
+    private Control BuildOpenPane()
+    {
+        return Panes.BuildActionPane(
+            PanePlans.BuildOpenPane(_dismissBeforeDispatch.Bind(_endpoints.RecoverUnsaved)),
+            "BackstageOpen");
     }
 
     private Control BuildExportPane()

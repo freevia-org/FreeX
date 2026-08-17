@@ -562,8 +562,10 @@ public sealed class MainWindowHeadlessTests : IDisposable
                 "Info", "New", "Open", "|", "Save", "Save As", "Print", "Export",
                 "Recent", "New from template", "Account", "Options", "Close");
         entries.Should().HaveCount(13);
-        entries.Count(entry => entry.Kind == SisterBackstageEntryKind.Pane).Should().Be(7);
-        entries.Count(entry => entry.Kind == SisterBackstageEntryKind.Command).Should().Be(5);
+        // R139: "Open" became a Pane entry (its manual "Recover Unsaved Presentations" command lives
+        // inside it) instead of a direct Command entry, so Pane gains one and Command loses one.
+        entries.Count(entry => entry.Kind == SisterBackstageEntryKind.Pane).Should().Be(8);
+        entries.Count(entry => entry.Kind == SisterBackstageEntryKind.Command).Should().Be(4);
         entries.Count(entry => entry.Kind == SisterBackstageEntryKind.Divider).Should().Be(1);
         entries.Where(entry => entry.DockBottom).Select(entry => entry.Label)
             .Should().Equal("Account", "Options", "Close");
