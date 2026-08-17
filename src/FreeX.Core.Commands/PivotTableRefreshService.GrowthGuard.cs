@@ -19,22 +19,40 @@ public static partial class PivotTableRefreshService
     // Performance: <see cref="CloneOccupiedCells"/> below still clones every occupied cell on the
     // WHOLE sheet before every guarded refresh, even when the refresh doesn't grow at all (the common
     // case). This was already true of the original RefreshPivotTableCommand-only fix and is NOT made
-    // worse by fanning it out to the other 12 call sites (each one now pays the same cost
-    // RefreshPivotTableCommand already paid, not a new one). A tighter bound was deliberately not
-    // attempted here: the only way to know a refresh's actual new footprint is to run Refresh and look
-    // at what it wrote (WriteRowPivot/WriteMatrixPivot/WriteColumnOnlyPivot/WriteValuesOnlyPivot
-    // compute row/column geometry WHILE writing, with no separate "compute extent only" mode), so any
-    // pre-refresh snapshot region narrower than "everything currently occupied" has to be justified by
-    // an upper bound on how far the render can grow -- and that bound depends on report layout
-    // (compact/outline/tabular), subtotal placement, grand totals, and matrix cross-tabs, all of which
-    // affect row/column counts differently. Getting that bound even slightly too small would silently
-    // reopen the exact data-loss bug this guard exists to close, for the sake of skipping a
-    // Dictionary-clone whose cost is proportional to the sheet's OCCUPIED cell count (a sparse map),
-    // not its declared row/column extent -- i.e. it already scales with how much real data is on the
-    // sheet, not with the sheet's nominal size. A real fix would need Refresh's writers to expose a
-    // non-writing "compute the footprint" pass so the snapshot can be scoped to old-footprint ∪
+    // worse by fanning it out to the 11 other SINGLE-target call sites (each one now pays the same cost
+    // RefreshPivotTableCommand already paid, not a new one -- one clone per Apply). A tighter bound was
+    // deliberately not attempted here: the only way to know a refresh's actual new footprint is to run
+    // Refresh and look at what it wrote (WriteRowPivot/WriteMatrixPivot/WriteColumnOnlyPivot/
+    // WriteValuesOnlyPivot compute row/column geometry WHILE writing, with no separate "compute extent
+    // only" mode), so any pre-refresh snapshot region narrower than "everything currently occupied" has
+    // to be justified by an upper bound on how far the render can grow -- and that bound depends on
+    // report layout (compact/outline/tabular), subtotal placement, grand totals, and matrix cross-tabs,
+    // all of which affect row/column counts differently. Getting that bound even slightly too small
+    // would silently reopen the exact data-loss bug this guard exists to close, for the sake of
+    // skipping a Dictionary-clone whose cost is proportional to the sheet's OCCUPIED cell count (a
+    // sparse map), not its declared row/column extent -- i.e. it already scales with how much real data
+    // is on the sheet, not with the sheet's nominal size. A real fix would need Refresh's writers to
+    // expose a non-writing "compute the footprint" pass so the snapshot can be scoped to old-footprint ∪
     // prospective-new-footprint before anything is written; that's a separate, larger change to the
     // Writers.* internals, not a safe bolt-on for a completeness-focused remediation pass.
+    //
+    // R140-remediation2-growth-guard-multipivot-baseline-cost: the TWO MULTI-target call sites
+    // (SetSlicerSelectionCommand.Apply / SetTimelineRangeCommand.Apply) loop over every pivot table a
+    // single slicer/timeline is connected to (Excel "Report Connections") and each used to call the
+    // no-cache <see cref="CaptureGrowthGuardBaseline(Sheet, PivotTableModel)"/> overload once PER
+    // connected pivot -- unlike the 11 single-target sites above, this genuinely DID multiply the
+    // whole-sheet clone cost by the number of connected pivots, which the paragraph above never
+    // disclosed. A slicer wired to N pivots that all live on the SAME (typically large, dashboard)
+    // sheet paid N whole-sheet clones per click instead of 1. Fixed via <see cref="GrowthGuardSheetCache"/>
+    // + the <see cref="CaptureGrowthGuardBaseline(Sheet, PivotTableModel, GrowthGuardSheetCache)"/>
+    // overload: the whole-sheet clone now happens at most ONCE per DISTINCT sheet touched in a single
+    // Apply call (typically once total, since Report Connections usually share one dashboard sheet),
+    // with <see cref="GrowthGuardSheetCache.SyncAfterRefresh"/> cheaply patching just the
+    // just-refreshed pivot's own affected region into the cache afterward (bounded by that ONE pivot's
+    // footprint, not the whole sheet) so a later target sharing the same sheet still sees an accurate,
+    // fully up-to-date occupied-cell picture -- including cells an earlier target in the SAME Apply call
+    // just wrote -- with the exact same conflict-detection behavior the old per-target fresh clone gave,
+    // just without re-scanning cells nothing touched.
 
     /// <summary>
     /// Pre-refresh state <see cref="RefreshGuarded"/> needs to detect and roll back a growth conflict.
@@ -66,6 +84,22 @@ public static partial class PivotTableRefreshService
             pivotTable.LastRenderedRange ?? pivotTable.TargetRange,
             pivotTable.LastRenderedRange,
             CloneOccupiedCells(sheet),
+            sheet.MergedRegions.ToList());
+
+    /// <summary>
+    /// Same as <see cref="CaptureGrowthGuardBaseline(Sheet, PivotTableModel)"/>, but for a MULTI-target
+    /// caller (a slicer/timeline driving several connected pivot tables in one Apply loop): the
+    /// whole-sheet occupied-cell clone is served from <paramref name="cache"/> instead of being redone
+    /// for every target, so N connected pivots on the same sheet pay ONE clone, not N. Callers MUST call
+    /// <see cref="GrowthGuardSheetCache.SyncAfterRefresh"/> after each successful (non-conflicting)
+    /// <see cref="RefreshGuarded"/> that used this baseline, before capturing the NEXT target's baseline
+    /// -- otherwise a later target sharing the same sheet won't see cells this one just wrote.
+    /// </summary>
+    internal static GrowthGuardBaseline CaptureGrowthGuardBaseline(Sheet sheet, PivotTableModel pivotTable, GrowthGuardSheetCache cache) =>
+        new(
+            pivotTable.LastRenderedRange ?? pivotTable.TargetRange,
+            pivotTable.LastRenderedRange,
+            cache.GetOrCloneOccupied(sheet),
             sheet.MergedRegions.ToList());
 
     /// <summary>
@@ -168,6 +202,62 @@ public static partial class PivotTableRefreshService
                 sheet.SetCell(address, cell.Clone());
             else
                 sheet.ClearCell(address);
+        }
+    }
+
+    /// <summary>
+    /// Per-Apply-call cache so a MULTI-target caller (a slicer/timeline connected to several pivot
+    /// tables) pays the whole-sheet occupied-cell clone at most ONCE per distinct <see cref="Sheet"/>
+    /// instead of once per connected pivot table -- see the R140-remediation2 note at the top of this
+    /// file. Construct one fresh instance per Apply() call (never share across calls/commands: it holds
+    /// live mutable clones that only stay valid for the duration of the one loop that owns it) and call
+    /// <see cref="SyncAfterRefresh"/> after every successful target before moving to the next one.
+    /// </summary>
+    internal sealed class GrowthGuardSheetCache
+    {
+        private readonly Dictionary<Sheet, Dictionary<(uint Row, uint Col), Cell>> _occupiedBySheet = new();
+
+        /// <summary>Returns the cached whole-sheet occupied-cell clone for <paramref name="sheet"/>, creating it (one full clone) on first use.</summary>
+        internal Dictionary<(uint Row, uint Col), Cell> GetOrCloneOccupied(Sheet sheet)
+        {
+            if (!_occupiedBySheet.TryGetValue(sheet, out var occupied))
+            {
+                occupied = CloneOccupiedCells(sheet);
+                _occupiedBySheet[sheet] = occupied;
+            }
+
+            return occupied;
+        }
+
+        /// <summary>
+        /// Patches the cached occupied-cell snapshot for <paramref name="sheet"/> to reflect a target's
+        /// just-completed, non-conflicting refresh, so the NEXT target sharing this sheet sees this
+        /// pivot's freshly-written cells as occupied (matching what a fresh <see cref="CloneOccupiedCells"/>
+        /// would show) -- without re-scanning the whole sheet. Rescans exactly the region Refresh could
+        /// have touched for THIS pivot (old footprint ∪ TargetRange ∪ new footprint, the same "affected"
+        /// region <see cref="RefreshGuarded"/> itself uses for rollback), so the cost is bounded by that
+        /// one pivot's own footprint, not the sheet's total occupied count. Call ONLY after a successful
+        /// (non-conflicting) <see cref="RefreshGuarded"/> -- on conflict, RefreshGuarded already rolled
+        /// the sheet back to exactly what this cache already holds, so no sync is needed (or safe: this
+        /// method assumes <paramref name="pivotTable"/>'s LastRenderedRange reflects a committed refresh).
+        /// A no-op if <paramref name="sheet"/> was never passed to <see cref="GetOrCloneOccupied"/> (should
+        /// not happen given the calling contract, but keeps this defensive rather than throwing).
+        /// </summary>
+        internal void SyncAfterRefresh(Sheet sheet, GrowthGuardBaseline baseline, PivotTableModel pivotTable)
+        {
+            if (!_occupiedBySheet.TryGetValue(sheet, out var occupied))
+                return;
+
+            var newFootprint = pivotTable.LastRenderedRange ?? baseline.OldFootprint;
+            var affected = Union(Union(baseline.OldFootprint, pivotTable.TargetRange), newFootprint);
+            foreach (var address in affected.AllCells())
+            {
+                var cell = sheet.GetCell(address);
+                if (cell is null)
+                    occupied.Remove((address.Row, address.Col));
+                else
+                    occupied[(address.Row, address.Col)] = cell.Clone();
+            }
         }
     }
 }

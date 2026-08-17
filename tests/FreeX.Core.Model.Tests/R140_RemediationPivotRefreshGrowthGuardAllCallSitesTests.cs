@@ -17,6 +17,14 @@ namespace FreeX.Core.Model.Tests;
 /// ConfigurePivotTableCalculatedItemsCommand, ChangePivotTableSourceCommand,
 /// ClearPivotTableViewCommand, MovePivotTableCommand, SetSlicerSelectionCommand,
 /// SetTimelineRangeCommand, AddPivotChartCommand.
+///
+/// R140-remediation2-growth-guard-multipivot-baseline-cost / gap (b): the two MULTI-target sites
+/// (SetSlicerSelectionCommand, SetTimelineRangeCommand) additionally each get a dedicated
+/// "...MultiPivotEarlierGrowthRolledBackWhenLaterPivotConflicts..." test driving 2 connected pivots
+/// (Excel "Report Connections") through the real command, where the EARLIER pivot's growth would, on
+/// its own, succeed, but the LATER connected pivot's growth conflicts -- proving RestoreAllSlicerTargets/
+/// RestoreAllTimelineTargets roll back the earlier pivot's already-committed growth too, atomically,
+/// not just reject the later one.
 /// </summary>
 public sealed class R140_RemediationPivotRefreshGrowthGuardAllCallSitesTests
 {
@@ -40,11 +48,15 @@ public sealed class R140_RemediationPivotRefreshGrowthGuardAllCallSitesTests
         sheet.SetCell(Addr(sheet, "B4"), new NumberValue(30));
     }
 
-    private static PivotTableModel CreateTwoCategoryPivot(Sheet sheet, GridRange targetRange, IReadOnlyList<string>? selectedRowItems = null)
+    private static PivotTableModel CreateTwoCategoryPivot(Sheet sheet, GridRange targetRange, IReadOnlyList<string>? selectedRowItems = null) =>
+        CreateNamedTwoCategoryPivot(sheet, "PivotTable1", targetRange, selectedRowItems);
+
+    /// <summary>Same shape as <see cref="CreateTwoCategoryPivot"/> but with a caller-chosen name, so a test can put TWO independent pivots on one sheet (both reading the same source data) to exercise a multi-pivot Report Connection.</summary>
+    private static PivotTableModel CreateNamedTwoCategoryPivot(Sheet sheet, string name, GridRange targetRange, IReadOnlyList<string>? selectedRowItems = null)
     {
         var pivot = new PivotTableModel
         {
-            Name = "PivotTable1",
+            Name = name,
             CacheId = 1,
             SourceRange = Range(sheet, "A1", "B4"),
             TargetRange = targetRange,
@@ -443,6 +455,90 @@ public sealed class R140_RemediationPivotRefreshGrowthGuardAllCallSitesTests
         sheet.GetCell(noteAddress)!.Value.Should().Be(new TextValue("Notes: verify Q3"));
     }
 
+    /// <summary>
+    /// GAP (b) of the R140-remediation2 audit: none of the 13 growth-guard tests drove a slicer/timeline
+    /// connected to 2+ pivot tables (Excel "Report Connections") through a path where an EARLIER pivot
+    /// succeeds and GROWS before a LATER one hits a conflict -- the exact shape that requires
+    /// RestoreAllSlicerTargets to roll back the earlier pivot's already-committed growth too, not just
+    /// reject the later one. Two pivots, same slicer, same sheet (also exercises the R140-remediation2
+    /// per-sheet growth-guard cache: both targets share one cached whole-sheet clone). PivotTable1 is the
+    /// primary connection (resolved first); PivotTable2 is a secondary connection (resolved second) --
+    /// see PivotTableSlicerTimelineCommandHelpers.ResolveConnectedPivotTableNames.
+    /// </summary>
+    [Fact]
+    public void SetSlicerSelectionCommand_MultiPivotEarlierGrowthRolledBackWhenLaterPivotConflicts_RestoresBothPivots()
+    {
+        var workbook = new Workbook("SlicerMultiPivotGrowthGuardTest");
+        var sheet = workbook.AddSheet("Data");
+        SeedThreeCategoryData(sheet);
+        var ctx = new TestCommandContext(workbook);
+
+        // Both pivots read the SAME A/B source data (one slicer driving two Report Connections to
+        // pivots built off the same table), rendered in two separate areas of the same sheet.
+        var pivot1 = CreateNamedTwoCategoryPivot(sheet, "PivotTable1", Range(sheet, "D3", "F6"), selectedRowItems: ["A", "B"]);
+        var pivot2 = CreateNamedTwoCategoryPivot(sheet, "PivotTable2", Range(sheet, "H3", "J6"), selectedRowItems: ["A", "B"]);
+        sheet.PivotTables.Add(pivot1);
+        sheet.PivotTables.Add(pivot2);
+        PivotTableRefreshService.Refresh(workbook, sheet, pivot1);
+        PivotTableRefreshService.Refresh(workbook, sheet, pivot2);
+        pivot1.LastRenderedRange.Should().Be(Range(sheet, "D3", "E6"));
+        pivot2.LastRenderedRange.Should().Be(Range(sheet, "H3", "I6"));
+
+        workbook.Slicers.Add(new SlicerModel
+        {
+            Name = "Category Slicer",
+            CacheName = "Slicer_Category",
+            SourcePivotTableName = "PivotTable1",
+            ConnectedPivotTableNames = { "PivotTable2" },
+            SourceFieldName = "Category",
+            SelectedItems = { "A", "B" },
+            SelectionCaptured = true
+        });
+
+        // PivotTable1's growth path (D7) is genuinely blank -- its own refresh will succeed and commit.
+        // PivotTable2's growth path (H7) already holds unrelated content -- its refresh will conflict.
+        sheet.GetCell(Addr(sheet, "D7")).Should().BeNull();
+        var conflictNote = Addr(sheet, "H7");
+        sheet.SetCell(conflictNote, new TextValue("Notes: Q4 budget"));
+
+        // Clearing the slicer's filter (Excel's "Clear Filter" button) reveals "C" for BOTH connected
+        // pivots at once.
+        var command = new SetSlicerSelectionCommand("Category Slicer", []);
+        var outcome = command.Apply(ctx);
+
+        outcome.Success.Should().BeFalse();
+        outcome.ErrorMessage.Should().Contain("overwrite");
+
+        // The whole command failed atomically: PivotTable1's growth (which, on its own, would have
+        // succeeded) must be rolled back along with PivotTable2's rejected one.
+        sheet.GetCell(Addr(sheet, "D7")).Should().BeNull("PivotTable1's committed growth must be undone when a LATER connected pivot conflicts");
+        pivot1.LastRenderedRange.Should().Be(Range(sheet, "D3", "E6"));
+        pivot1.RowFields.Single().SelectedItems.Should().BeEquivalentTo(["A", "B"]);
+        // PivotTable1's OWN pre-Apply rendered content (not just "the growth cell is blank") must come
+        // back too -- RestoreAllSlicerTargets first clears the pivot's CURRENT (post-growth) rendered
+        // range wholesale, so without the _targetSnapshots cell restore this would stay blank forever,
+        // not just fail to shrink back.
+        sheet.GetCell(Addr(sheet, "D4"))!.Value.Should().Be(new TextValue("A"), "PivotTable1's pre-Apply row content must be restored, not merely cleared");
+        sheet.GetCell(Addr(sheet, "D5"))!.Value.Should().Be(new TextValue("B"));
+        sheet.GetCell(Addr(sheet, "D6"))!.Value.Should().Be(new TextValue("Grand Total"));
+
+        // PivotTable2's own conflicting growth was never allowed to stick either.
+        sheet.GetCell(conflictNote)!.Value.Should().Be(new TextValue("Notes: Q4 budget"));
+        pivot2.LastRenderedRange.Should().Be(Range(sheet, "H3", "I6"));
+        pivot2.RowFields.Single().SelectedItems.Should().BeEquivalentTo(["A", "B"]);
+        sheet.GetCell(Addr(sheet, "H4"))!.Value.Should().Be(new TextValue("A"));
+        sheet.GetCell(Addr(sheet, "H5"))!.Value.Should().Be(new TextValue("B"));
+        sheet.GetCell(Addr(sheet, "H6"))!.Value.Should().Be(new TextValue("Grand Total"));
+
+        var slicer = workbook.Slicers.Single();
+        slicer.SelectedItems.Should().BeEquivalentTo(["A", "B"]);
+        slicer.SelectionCaptured.Should().BeTrue();
+
+        command.Revert(ctx);
+        sheet.GetCell(Addr(sheet, "D7")).Should().BeNull();
+        sheet.GetCell(conflictNote)!.Value.Should().Be(new TextValue("Notes: Q4 budget"));
+    }
+
     // ── SetTimelineRangeCommand ──────────────────────────────────────────────────────────────────
 
     [Fact]
@@ -512,6 +608,119 @@ public sealed class R140_RemediationPivotRefreshGrowthGuardAllCallSitesTests
 
         widen.Revert(ctx);
         sheet.GetCell(noteAddress)!.Value.Should().Be(new TextValue("Notes: verify Q3"));
+    }
+
+    /// <summary>
+    /// GAP (b) of the R140-remediation2 audit -- timeline counterpart of
+    /// <see cref="SetSlicerSelectionCommand_MultiPivotEarlierGrowthRolledBackWhenLaterPivotConflicts_RestoresBothPivots"/>.
+    /// A timeline drives two connected pivots (Report Connections) off the same source data; the EARLIER
+    /// (primary) pivot's growth would, on its own, succeed into blank space, but the LATER connected
+    /// pivot's growth conflicts -- the whole command must fail atomically and RestoreAllTimelineTargets
+    /// must undo the earlier pivot's already-committed growth as well as the later one's rejected write.
+    /// </summary>
+    [Fact]
+    public void SetTimelineRangeCommand_MultiPivotEarlierGrowthRolledBackWhenLaterPivotConflicts_RestoresBothPivots()
+    {
+        var workbook = new Workbook("TimelineMultiPivotGrowthGuardTest");
+        var sheet = workbook.AddSheet("Data");
+        sheet.SetCell(Addr(sheet, "A1"), new TextValue("Category"));
+        sheet.SetCell(Addr(sheet, "B1"), new TextValue("Date"));
+        sheet.SetCell(Addr(sheet, "C1"), new TextValue("Amount"));
+        sheet.SetCell(Addr(sheet, "A2"), new TextValue("A"));
+        sheet.SetCell(Addr(sheet, "B2"), DateTimeValue.FromDateTime(new DateTime(2026, 1, 5)));
+        sheet.SetCell(Addr(sheet, "C2"), new NumberValue(10));
+        sheet.SetCell(Addr(sheet, "A3"), new TextValue("B"));
+        sheet.SetCell(Addr(sheet, "B3"), DateTimeValue.FromDateTime(new DateTime(2026, 1, 10)));
+        sheet.SetCell(Addr(sheet, "C3"), new NumberValue(20));
+        // "C" only shows up in February -- outside the timeline's initial January-only range.
+        sheet.SetCell(Addr(sheet, "A4"), new TextValue("C"));
+        sheet.SetCell(Addr(sheet, "B4"), DateTimeValue.FromDateTime(new DateTime(2026, 2, 2)));
+        sheet.SetCell(Addr(sheet, "C4"), new NumberValue(30));
+        var ctx = new TestCommandContext(workbook);
+
+        static PivotTableModel CreateDatePivot(Sheet sheet, string name, GridRange targetRange)
+        {
+            var pivot = new PivotTableModel
+            {
+                Name = name,
+                CacheId = 1,
+                SourceRange = new GridRange(CellAddress.Parse("A1", sheet.Id), CellAddress.Parse("C4", sheet.Id)),
+                TargetRange = targetRange,
+                ReportLayout = PivotReportLayout.Tabular
+            };
+            // Category (index 0) is the row field; Date (index 1) is NOT in Row/Column/PageFields --
+            // the H10 "unplaced filter field" shape SetTimelineRangeCommand handles.
+            pivot.RowFields.Add(new PivotFieldModel(0));
+            pivot.DataFields.Add(new PivotDataFieldModel(2, "Sum of Amount", "sum"));
+            return pivot;
+        }
+
+        // Both pivots read the SAME Category/Date/Amount source data (one timeline driving two Report
+        // Connections), rendered in two separate areas of the same sheet.
+        var pivot1 = CreateDatePivot(sheet, "PivotTable1", Range(sheet, "E3", "G6"));
+        var pivot2 = CreateDatePivot(sheet, "PivotTable2", Range(sheet, "K3", "M6"));
+        sheet.PivotTables.Add(pivot1);
+        sheet.PivotTables.Add(pivot2);
+        PivotTableRefreshService.Refresh(workbook, sheet, pivot1);
+        PivotTableRefreshService.Refresh(workbook, sheet, pivot2);
+        pivot1.LastRenderedRange.Should().Be(Range(sheet, "E3", "F7"));
+        pivot2.LastRenderedRange.Should().Be(Range(sheet, "K3", "L7"));
+
+        workbook.Timelines.Add(new TimelineModel
+        {
+            Name = "Date Timeline",
+            CacheName = "Timeline_Date",
+            SourcePivotTableName = "PivotTable1",
+            ConnectedPivotTableNames = { "PivotTable2" },
+            SourceFieldName = "Date"
+        });
+
+        // Narrow to January only for BOTH connected pivots -- succeeds, shrinks each footprint by one
+        // row, freeing up E7 and K7.
+        var narrow = new SetTimelineRangeCommand("Date Timeline", "2026-01-01", "2026-01-31");
+        narrow.Apply(ctx).Success.Should().BeTrue();
+        pivot1.LastRenderedRange.Should().Be(Range(sheet, "E3", "F6"));
+        pivot2.LastRenderedRange.Should().Be(Range(sheet, "K3", "L6"));
+
+        // PivotTable1's growth path (E7) is genuinely blank -- its own refresh will succeed and commit.
+        // PivotTable2's growth path (K7) already holds unrelated content -- its refresh will conflict.
+        sheet.GetCell(Addr(sheet, "E7")).Should().BeNull();
+        var conflictNote = Addr(sheet, "K7");
+        sheet.SetCell(conflictNote, new TextValue("Notes: Q4 budget"));
+
+        // Widening back to include February brings "C" back into view for BOTH connected pivots at once.
+        var widen = new SetTimelineRangeCommand("Date Timeline", "2026-01-01", "2026-02-28");
+        var outcome = widen.Apply(ctx);
+
+        outcome.Success.Should().BeFalse();
+        outcome.ErrorMessage.Should().Contain("overwrite");
+
+        // The whole command failed atomically: PivotTable1's growth (which, on its own, would have
+        // succeeded) must be rolled back along with PivotTable2's rejected one.
+        sheet.GetCell(Addr(sheet, "E7")).Should().BeNull("PivotTable1's committed growth must be undone when a LATER connected pivot conflicts");
+        pivot1.LastRenderedRange.Should().Be(Range(sheet, "E3", "F6"));
+        // PivotTable1's OWN pre-widen rendered content (not just "the growth cell is blank") must come
+        // back too -- RestoreAllTimelineTargets first clears the pivot's CURRENT (post-growth) rendered
+        // range wholesale, so without the _targetSnapshots cell restore this would stay blank forever,
+        // not just fail to shrink back.
+        sheet.GetCell(Addr(sheet, "E4"))!.Value.Should().Be(new TextValue("A"), "PivotTable1's pre-widen row content must be restored, not merely cleared");
+        sheet.GetCell(Addr(sheet, "E5"))!.Value.Should().Be(new TextValue("B"));
+        sheet.GetCell(Addr(sheet, "E6"))!.Value.Should().Be(new TextValue("Grand Total"));
+
+        // PivotTable2's own conflicting growth was never allowed to stick either.
+        sheet.GetCell(conflictNote)!.Value.Should().Be(new TextValue("Notes: Q4 budget"));
+        pivot2.LastRenderedRange.Should().Be(Range(sheet, "K3", "L6"));
+        sheet.GetCell(Addr(sheet, "K4"))!.Value.Should().Be(new TextValue("A"));
+        sheet.GetCell(Addr(sheet, "K5"))!.Value.Should().Be(new TextValue("B"));
+        sheet.GetCell(Addr(sheet, "K6"))!.Value.Should().Be(new TextValue("Grand Total"));
+
+        var timeline = workbook.Timelines.Single();
+        timeline.SelectedStartDate.Should().Be("2026-01-01");
+        timeline.SelectedEndDate.Should().Be("2026-01-31");
+
+        widen.Revert(ctx);
+        sheet.GetCell(Addr(sheet, "E7")).Should().BeNull();
+        sheet.GetCell(conflictNote)!.Value.Should().Be(new TextValue("Notes: Q4 budget"));
     }
 
     // ── AddPivotChartCommand ─────────────────────────────────────────────────────────────────────

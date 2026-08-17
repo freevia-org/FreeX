@@ -157,6 +157,12 @@ public sealed class SetSlicerSelectionCommand : IWorkbookCommand
         // empty SelectedItems from here on means "user cleared to select-all", not "never touched".
         slicer.SelectionCaptured = true;
 
+        // R140-remediation2-growth-guard-multipivot-baseline-cost: shared across every target in this
+        // loop so N connected pivots on the SAME sheet (the common Report-Connections case) pay ONE
+        // whole-sheet occupied-cell clone, not N -- see PivotTableRefreshService.GrowthGuard.cs. Scoped
+        // to this single Apply() call only; never reused across commands.
+        var growthGuardCache = new PivotTableRefreshService.GrowthGuardSheetCache();
+
         foreach (var (targetSheet, pivotTable, sourceFieldIndex) in resolvedTargets)
         {
             // H10: a slicer can be connected to a field that was never dragged into Row/Column/PageFields.
@@ -177,13 +183,17 @@ public sealed class SetSlicerSelectionCommand : IWorkbookCommand
             // -- safe to run even for the pivot the guard itself just finished rolling back, since that
             // pivot's OWN pre-loop cell snapshot covers precisely the same footprint the guard just
             // restored, so this is a same-value no-op for it.
-            var baseline = PivotTableRefreshService.CaptureGrowthGuardBaseline(targetSheet, pivotTable);
+            var baseline = PivotTableRefreshService.CaptureGrowthGuardBaseline(targetSheet, pivotTable, growthGuardCache);
             if (PivotTableRefreshService.RefreshGuarded(ctx.Workbook, targetSheet, pivotTable, baseline, RestoreAllSlicerTargets) is { } failure)
             {
                 _snapshot = null;
                 _targetSnapshots = null;
                 return failure;
             }
+            // R140-remediation2-growth-guard-multipivot-baseline-cost: patch the shared cache with what
+            // THIS pivot just rendered, bounded to its own footprint, so the NEXT target on the same
+            // sheet sees it as occupied instead of re-cloning the whole sheet to find out.
+            growthGuardCache.SyncAfterRefresh(targetSheet, baseline, pivotTable);
             // R134-commands-pivotchart-stale-datarange: a slicer selection change re-filters the pivot's
             // rows (Refresh above), which moves/shrinks/grows its materialized output range -- without
             // this, a PivotChart bound to this pivot table keeps rendering the cells the pivot occupied
