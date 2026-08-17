@@ -83,6 +83,14 @@ public static class ShapeHitTester
         for (var i = slide.Shapes.Count - 1; i >= 0; i--)
         {
             var shape = slide.Shapes[i];
+            // A hidden shape (Selection Pane eye-icon toggle) is never drawn - see
+            // SlideCompositor.ComposeShape's `if (shape.IsHidden) return;` guard, which also
+            // skips composing the shape's children. Hit-testing must skip it (and its subtree)
+            // the same way, or an invisible shape silently steals clicks meant for whatever is
+            // actually visible underneath it.
+            if (shape.IsHidden)
+                continue;
+
             var childHit = HitTestChildren(shape.Children, slide, presentation, point);
             if (childHit.HasValue)
                 return childHit;
@@ -121,6 +129,11 @@ public static class ShapeHitTester
         var result = new List<uint>();
         foreach (var shape in slide.Shapes)
         {
+            // Same rationale as HitTest: a hidden shape is never rendered, so a drag-select
+            // marquee must not pick it up either.
+            if (shape.IsHidden)
+                continue;
+
             if (DrawingObjectInteractionPlanner.Intersects(
                 GetShapeBoundsDip(shape, slide, presentation).ToLayoutRect(),
                 marquee))
@@ -166,6 +179,9 @@ public static class ShapeHitTester
         for (var i = children.Count - 1; i >= 0; i--)
         {
             var child = children[i];
+            if (child.IsHidden)
+                continue;
+
             var descendantHit = HitTestChildren(child.Children, slide, presentation, point);
             if (descendantHit.HasValue)
                 return descendantHit;

@@ -1,3 +1,4 @@
+using Free.Shared.AppServices;
 using FreeX.App.Presentation.DrawingUI;
 using FreeX.Core.Model;
 
@@ -7,7 +8,22 @@ public sealed partial class MainWindow
 {
     private readonly DrawingObjectClipboardSession _drawingObjectClipboard = new();
 
-    private bool TryCopySelectedDrawingObject(bool isCut = false)
+    /// <summary>
+    /// R139-shared-clipboard-images (clipboard-drawing-object-no-os-clipboard-write): the internal
+    /// <see cref="_drawingObjectClipboard"/> capture below only ever served FreeX-to-FreeX paste
+    /// (<see cref="PasteClipboardObject"/>) -- it never touched the real OS clipboard, so Ctrl+C on a
+    /// chart/shape/picture/text box followed by Alt-Tab to another app (or even a second FreeX
+    /// window) and Ctrl+V pasted nothing at all. Once an object is genuinely captured, also render it
+    /// to a PNG-backed <see cref="PlatformClipboardImage"/> (best effort -- never throws) and place
+    /// that on the OS clipboard, matching the WPF host's identical fix and the plain cell-range copy
+    /// below, which always offers a picture flavor. Async (instead of a synchronous
+    /// GetAwaiter().GetResult() block, as the WPF host uses) because Avalonia's IPlatformClipboard
+    /// write can genuinely go async, and the r139 "sweep-must-not-block" lens specifically flagged
+    /// blocking the UI thread on that exact call shape elsewhere in this round -- this method's own
+    /// callers (CutSelectedRangeToClipboardAsync/CopySelectedRangeToClipboardAsync) already await.
+    /// The internal <see cref="_drawingObjectClipboard"/> capture/paste path is unaffected either way.
+    /// </summary>
+    private async Task<bool> TryCopySelectedDrawingObjectAsync(bool isCut = false)
     {
         if (_selectedDrawingObjectKind is not { } kind ||
             _selectedDrawingObjectId is not { } objectId ||
@@ -19,6 +35,10 @@ public sealed partial class MainWindow
         {
             return false;
         }
+
+        if (DrawingObjectClipboardImageRenderer.TryRender(
+                _session.ActiveSheet, _session.Workbook.Theme, kind, objectId) is { } clipboardImage)
+            _ = await _platformClipboard.WriteAsync(new PlatformClipboardContent(Image: clipboardImage));
 
         SetClipboardMarquee(null, isCut);
         return true;

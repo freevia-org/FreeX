@@ -37,6 +37,34 @@ public partial class GridView : FrameworkElement
         TextOptions.SetTextHintingMode(this, TextHintingMode.Fixed);
         Unloaded += (_, _) => StopMarchTimer();
         Unloaded += (_, _) => DismissCommentPreview();
+
+        // Keep the grid's own chrome (headers/gridlines/selection -- see
+        // ApplyHighContrastChromePalette) in sync with a LIVE toggle of Windows High Contrast
+        // while this GridView is on screen, mirroring App.xaml.cs's identical
+        // SystemParameters.StaticPropertyChanged subscription for standard WPF-templated chrome.
+        // Subscribed/unsubscribed per-instance on Loaded/Unloaded so multiple open GridViews
+        // (e.g. split windows) all repaint, and so an unloaded instance does not leak a handler
+        // registration on the static SystemParameters event.
+        Loaded += (_, _) => SystemParameters.StaticPropertyChanged += OnSystemParametersChangedForHighContrastChrome;
+        Unloaded += (_, _) => SystemParameters.StaticPropertyChanged -= OnSystemParametersChangedForHighContrastChrome;
+    }
+
+    /// <summary>
+    /// Fires for every SystemParameters/SystemColors change WPF tracks, including HighContrast --
+    /// re-resolving unconditionally (rather than special-casing which property changed) keeps this
+    /// simple and matches App.xaml.cs's RefreshSystemColorsBrushOverrides. Also clears the
+    /// instance-level header render caches (they bake HeaderBackgroundBrush/GridPen/HeaderTextBrush
+    /// into cached Drawing/FormattedText objects) so the new palette actually shows up on the next
+    /// paint instead of the toggle being silently absorbed by a stale cache.
+    /// </summary>
+    private void OnSystemParametersChangedForHighContrastChrome(object? sender, EventArgs e)
+    {
+        RefreshHighContrastChromePalette();
+        _headerBaseLayerCache = null;
+        ClearSelectedHeaderLayerCache();
+        _headerTextDrawingCache.Clear();
+        _defaultHeaderTextLayoutCache.Clear();
+        InvalidateVisual();
     }
 
     /// <summary>
@@ -707,18 +735,30 @@ public partial class GridView : FrameworkElement
     private const int MarchingAntsPhaseCount = 16;
 
     private static readonly Typeface DefaultTypeface = new("Calibri");
-    private static readonly Brush GridLineBrush = MakeBrush(220, 220, 220);
+    // Chrome brushes for the grid's OWN drawn surface: row/column headers, gridlines, and the
+    // selection marquee. These are mutable (not readonly) so ApplyHighContrastChromePalette
+    // below can swap them for OS SystemColors brushes when Windows High Contrast is active --
+    // see that method for why. TextBrush is deliberately excluded: it is the DOCUMENT's default
+    // cell font color (CellStyle.ResolveFontColor falls back to it when a cell has no explicit
+    // FontColor), and per the accessibility contract cell fills/font colors are workbook data
+    // that must render exactly as authored regardless of the OS contrast theme, so it stays a
+    // plain readonly constant, never touched by the HC palette.
+    private static Brush GridLineBrush = MakeBrush(220, 220, 220);
     private static readonly Brush TextBrush = Brushes.Black;
-    private static readonly Brush HeaderBackgroundBrush = MakeBrush(242, 242, 242);
-    private static readonly Brush HeaderHighlightBrush = MakeBrush(218, 232, 218);
+    private static Brush HeaderBackgroundBrush = MakeBrush(242, 242, 242);
+    private static Brush HeaderHighlightBrush = MakeBrush(218, 232, 218);
+    // Text color for header labels (column letters, row numbers, outline level buttons) -- these
+    // are chrome, not cell content, so unlike TextBrush they DO react to High Contrast (see
+    // GetDefaultHeaderFormattedText in GridView.TextLayoutCache.cs).
+    private static Brush HeaderTextBrush = Brushes.Black;
     private static readonly Brush OutlineGlyphBrush = MakeBrush(84, 130, 53);
     private static readonly Brush OutlineButtonBrush = MakeBrush(255, 255, 255);
     private static readonly Pen OutlineGlyphPen = MakePen(MakeBrush(84, 130, 53), 1);
     private static readonly Pen OutlineButtonPen = MakePen(MakeBrush(117, 117, 117), 1);
-    private static readonly Pen GridPen = MakeGridPen();
-    private static readonly Brush SelectionBrush = MakeBrushAlpha(32, 33, 115, 70);
-    private static readonly Pen SelectionPen = MakePen(MakeBrush(33, 115, 70), 2);
-    private static readonly Brush SelectionHandleBrush = MakeBrush(33, 115, 70);
+    private static Pen GridPen = MakeGridPen();
+    private static Brush SelectionBrush = MakeBrushAlpha(32, 33, 115, 70);
+    private static Pen SelectionPen = MakePen(MakeBrush(33, 115, 70), 2);
+    private static Brush SelectionHandleBrush = MakeBrush(33, 115, 70);
     private static readonly Brush QuickAnalysisPreviewBrush = MakeBrushAlpha(38, 91, 155, 213);
     private static readonly Pen QuickAnalysisPreviewPen = MakePen(MakeBrush(47, 117, 181), 2);
     private static readonly Brush QuickAnalysisDataBarPreviewBrush = MakeBrushAlpha(156, 91, 155, 213);
@@ -819,6 +859,9 @@ public partial class GridView : FrameworkElement
     private readonly Dictionary<CellTypefaceKey, Typeface> _typefaceCache = new();
     private readonly Dictionary<Brush, Pen> _underlinePenCache = new();
     private readonly Dictionary<DefaultTextLayoutKey, FormattedText> _defaultTextLayoutCache = new();
+    // Separate from _defaultTextLayoutCache because header labels are keyed/colored by
+    // HeaderTextBrush (chrome, HC-reactive) rather than TextBrush (document cell text, fixed).
+    private readonly Dictionary<DefaultTextLayoutKey, FormattedText> _defaultHeaderTextLayoutCache = new();
     private readonly Dictionary<DefaultWrappedTextLayoutKey, FormattedText> _defaultWrappedTextLayoutCache = new();
     private readonly Dictionary<CellStyle, bool> _defaultTextLayoutStyleCache = new(CellStyleReferenceComparer.Instance);
     private readonly Dictionary<TextWidthLayoutKey, double> _textWidthLayoutCache = new();
@@ -918,6 +961,91 @@ public partial class GridView : FrameworkElement
         pen.Freeze();
         return pen;
     }
+
+    /// <summary>
+    /// Bundles the grid's own drawn-chrome colors (headers/gridlines/selection) so they can be
+    /// resolved as a single unit for a given High Contrast state. Deliberately has NO members for
+    /// cell fills or cell font color -- those resolve from CellStyle (workbook document data) via
+    /// DrawCellSurface/ResolveFontColor and are never part of this palette.
+    /// </summary>
+    internal readonly record struct HighContrastChromePalette(
+        Brush GridLine,
+        Brush HeaderBackground,
+        Brush HeaderHighlight,
+        Brush ActiveHeaderHighlight,
+        Brush HeaderText,
+        Brush Selection,
+        Pen SelectionPen,
+        Brush SelectionHandle);
+
+    /// <summary>
+    /// Pure (no static-field writes) resolution of the grid's chrome palette for a given High
+    /// Contrast state. Split out from <see cref="ApplyHighContrastChromePalette"/> so the
+    /// branching logic itself -- HC on means "pull colors from the OS SystemColors palette",
+    /// HC off means "use FreeX's normal light-mode literals" -- is directly unit-testable without
+    /// needing to flip the real OS setting or mutate the shared static fields other rendering code
+    /// reads concurrently.
+    /// </summary>
+    internal static HighContrastChromePalette ResolveHighContrastChromePalette(bool highContrastEnabled)
+    {
+        if (!highContrastEnabled)
+        {
+            return new HighContrastChromePalette(
+                MakeBrush(220, 220, 220),
+                MakeBrush(242, 242, 242),
+                MakeBrush(218, 232, 218),
+                MakeBrush(151, 181, 135),
+                Brushes.Black,
+                MakeBrushAlpha(32, 33, 115, 70),
+                MakePen(MakeBrush(33, 115, 70), 2),
+                MakeBrush(33, 115, 70));
+        }
+
+        // Windows High Contrast: pull chrome colors from the live OS palette so headers,
+        // gridlines, and the selection marquee stay legible under whatever HC theme (Black/White/
+        // custom) the user picked, instead of the fixed light-mode literals above -- which read as
+        // a barely-there light-gray tint against an HC Black background. SystemColors.*Brush
+        // properties read the CURRENT system value on every access (they are not cached), so this
+        // always reflects whatever HC theme is active at the moment it's called.
+        var windowText = SystemColors.WindowTextBrush;
+        var controlBrush = SystemColors.ControlBrush;
+        var highlightBrush = SystemColors.HighlightBrush;
+        var highlightColor = highlightBrush.Color;
+
+        return new HighContrastChromePalette(
+            windowText,
+            controlBrush,
+            highlightBrush,
+            highlightBrush,
+            windowText,
+            MakeBrushAlpha(96, highlightColor.R, highlightColor.G, highlightColor.B),
+            MakePen(highlightBrush, 2),
+            highlightBrush);
+    }
+
+    /// <summary>
+    /// Applies <see cref="ResolveHighContrastChromePalette"/> to the grid's mutable static chrome
+    /// fields. This only affects chrome (row/column headers, gridlines, the selection marquee) --
+    /// it never touches <see cref="TextBrush"/> or any CellStyle-derived fill/font brush, so cell
+    /// content keeps rendering exactly as authored in the workbook regardless of HC state.
+    /// </summary>
+    internal static void ApplyHighContrastChromePalette(bool highContrastEnabled)
+    {
+        var palette = ResolveHighContrastChromePalette(highContrastEnabled);
+        GridLineBrush = palette.GridLine;
+        HeaderBackgroundBrush = palette.HeaderBackground;
+        HeaderHighlightBrush = palette.HeaderHighlight;
+        ActiveHeaderHighlightBrush = palette.ActiveHeaderHighlight;
+        HeaderTextBrush = palette.HeaderText;
+        SelectionBrush = palette.Selection;
+        SelectionPen = palette.SelectionPen;
+        SelectionHandleBrush = palette.SelectionHandle;
+        GridPen = MakePen(GridLineBrush, 1);
+    }
+
+    /// <summary>Reads the OS's current setting and applies it. See ApplyHighContrastChromePalette.</summary>
+    internal static void RefreshHighContrastChromePalette() =>
+        ApplyHighContrastChromePalette(SystemParameters.HighContrast);
 
     private static Pen MakeFreezePen()
     {

@@ -1,5 +1,8 @@
+using System.Collections.Concurrent;
+using System.Diagnostics;
 using System.IO;
 using System.Text.Json;
+using System.Threading;
 using FluentAssertions;
 using FreeX.App.Host;
 using FreeX.App.Services;
@@ -214,6 +217,134 @@ public sealed class BackstageRecentFileListPlannerTests
         var limited = RecentFilesStore.LimitForPersistence(entries, maxRecentEntries: 1);
 
         limited.Select(entry => entry.Path).Should().Equal(@"C:\Work\New.xlsx", @"C:\Work\Pinned.xlsx");
+    }
+
+    // --- R139 recent-files-1 (HIGH, shared/Free.Shared.Shell/BackstageRecentFileListPlanner.cs):
+    // the Recent-files search box re-runs BackstageRecentFileListPlanner.Build's existence probe on
+    // every keystroke. A raw File.Exists against an unreachable UNC/network recent entry blocks for
+    // the SMB/TCP connect timeout (20+ seconds) on the UI thread, per character typed. Fixed by
+    // routing existence checks through RecentFilePathExistenceCache, which never runs the underlying
+    // probe on the calling thread. ---
+
+    [Fact]
+    public void RecentFilePathExistenceCache_Exists_NeverBlocksCallerOnSlowProbe()
+    {
+        using var probeStarted = new ManualResetEventSlim(false);
+        using var releaseProbe = new ManualResetEventSlim(false);
+        var cache = new RecentFilePathExistenceCache(probe: _ =>
+        {
+            probeStarted.Set();
+            // Simulate an unreachable UNC path: a File.Exists probe that takes a long time to
+            // resolve. If RecentFilePathExistenceCache.Exists ran this synchronously (the pre-fix
+            // shape when a raw File.Exists was passed as pathExists), this call would block the
+            // stopwatch below for the full wait.
+            releaseProbe.Wait(TimeSpan.FromSeconds(10));
+            return true;
+        });
+
+        var stopwatch = Stopwatch.StartNew();
+        var result = cache.Exists(@"\\unreachable-nas\share\Budget.xlsx");
+        stopwatch.Stop();
+
+        result.Should().BeTrue("an unresolved path must be optimistically treated as existing, never hidden just because it hasn't been checked yet");
+        stopwatch.Elapsed.Should().BeLessThan(TimeSpan.FromSeconds(2), "Exists must return immediately instead of blocking on the underlying filesystem probe");
+
+        probeStarted.Wait(TimeSpan.FromSeconds(5)).Should().BeTrue("the probe should still run, just off the calling thread");
+        releaseProbe.Set();
+    }
+
+    [Fact]
+    public void RecentFilePathExistenceCache_Exists_CachesResolvedResultAndProbesEachPathOnlyOnce()
+    {
+        var probeCallCounts = new ConcurrentDictionary<string, int>();
+        var probeCompleted = new ManualResetEventSlim(false);
+        var cache = new RecentFilePathExistenceCache(
+            probe: path =>
+            {
+                probeCallCounts.AddOrUpdate(path, 1, (_, count) => count + 1);
+                return path != @"C:\Work\Missing.xlsx";
+            },
+            onProbed: _ => probeCompleted.Set());
+
+        // First call: optimistic default before the background probe resolves.
+        cache.Exists(@"C:\Work\Missing.xlsx").Should().BeTrue();
+
+        probeCompleted.Wait(TimeSpan.FromSeconds(5)).Should().BeTrue("the background probe should complete quickly for a fast in-test probe");
+
+        // Simulate repeated keystrokes re-checking the same path: none of these should re-invoke
+        // the underlying probe, and all should now report the real (missing) result.
+        for (var i = 0; i < 5; i++)
+            cache.Exists(@"C:\Work\Missing.xlsx").Should().BeFalse();
+
+        probeCallCounts[@"C:\Work\Missing.xlsx"].Should().Be(1, "the filesystem probe must run at most once per path, not once per keystroke");
+    }
+
+    [Fact]
+    public void RecentFilePathExistenceCache_UsedAsPathExists_StillFiltersMissingFilesOnceResolved()
+    {
+        // Sibling/neighbour test: proves the cache-backed pathExists delegate still produces
+        // correct BackstageRecentFileListPlanner filtering once probes resolve — the fix for
+        // recent-files-1 must not silently make every entry "exist forever".
+        var probeCompleted = new CountdownEvent(2);
+        var cache = new RecentFilePathExistenceCache(
+            probe: path => !path.Contains("Missing", StringComparison.OrdinalIgnoreCase),
+            onProbed: _ => probeCompleted.Signal());
+
+        var entries = new[]
+        {
+            new RecentFileEntry { Path = @"C:\Work\ExistingRecent.xlsx", LastOpened = DateTimeOffset.UtcNow, IsPinned = false },
+            new RecentFileEntry { Path = @"C:\Work\MissingRecent.xlsx", LastOpened = DateTimeOffset.UtcNow, IsPinned = false }
+        };
+
+        // Prime the cache (first pass uses the optimistic default and kicks off both probes).
+        BackstageRecentFileListPlanner.Build(entries, filter: null, cache.Exists);
+        probeCompleted.Wait(TimeSpan.FromSeconds(5)).Should().BeTrue();
+
+        var plan = BackstageRecentFileListPlanner.Build(entries, filter: null, cache.Exists);
+
+        plan.AllItems.Select(item => item.FileName).Should().Equal("ExistingRecent.xlsx");
+    }
+
+    [Fact]
+    public void MainWindow_Backstage_RoutesRecentFileExistenceThroughNonBlockingCache()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find(
+            "src", "FreeX.App.Host", "MainWindow.Backstage.cs"));
+        var method = SourceMethodExtractor.ExtractMethodSource(
+            source,
+            "private void UpdateSsRecentList(string filter = \"\")");
+
+        method.Should().NotContain(
+            "System.IO.File.Exists);",
+            "UpdateSsRecentList re-runs on every Recent-files search-box keystroke; passing a raw " +
+            "File.Exists as BackstageRecentFileListPlanner.Build's pathExists delegate there blocks " +
+            "the UI thread for the SMB/TCP timeout on an unreachable UNC/network recent entry, once " +
+            "per character typed");
+        method.Should().Contain(
+            "_recentFilePathExistenceCache.Exists);",
+            "existence checks must be passed to Build via the non-blocking cache instead");
+    }
+
+    // --- R139 recent-files-2 (MED, src/FreeX.App.Avalonia/MainWindow.LiveBackstage.cs): the
+    // Avalonia in-app Home pane's Recent list never filtered out moved/deleted files at all,
+    // unlike WPF's backstage and this app's own native Open-Recent menu. Fixed by passing the
+    // (non-blocking, cached) existence probe into BackstageRecentFileListPlanner.Build. ---
+
+    [Fact]
+    public void AvaloniaLiveBackstage_HomePane_FiltersRecentFilesByExistenceLikeWpfAndNativeMenu()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find(
+            "src", "FreeX.App.Avalonia", "MainWindow.LiveBackstage.cs"));
+        var method = SourceMethodExtractor.ExtractMethodSource(
+            source,
+            "private Control BuildLiveBackstageHomePane()");
+
+        method.Should().Contain(
+            "_recentFilePathExistenceCache.Exists",
+            "the Home pane's Recent list must filter out moved/deleted entries the same way " +
+            "the WPF backstage (UpdateSsRecentList) and this app's own native Open-Recent menu " +
+            "(OpenRecentWorkbookMenuPlanner.Create with File.Exists) already do, instead of " +
+            "silently listing entries that will fail to open");
     }
 
     [Fact]

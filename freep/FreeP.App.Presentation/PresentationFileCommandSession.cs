@@ -448,7 +448,7 @@ public sealed class PresentationFileCommandSession
     private readonly IPresentationFileRenderPort _render;
     private readonly IPresentationPrintPort _print;
     private readonly IPresentationVideoPort _video;
-    private readonly AtomicExportExecutor _atomicExportExecutor = new();
+    private readonly AtomicExportExecutor _atomicExportExecutor;
     private readonly IPresentationFileCommandFeedbackPort? _feedback;
     private readonly Func<PresentationSlideRangeRequest?> _getImageExportRange;
     private readonly Func<int?> _getPrintCurrentSlideNumber;
@@ -486,7 +486,13 @@ public sealed class PresentationFileCommandSession
         // r137-remediation2: asks whether to overwrite a save target that another program changed
         // since it was opened/last saved. Null (the default) means the host wired nothing, which
         // SavePathCoreAsync treats as "always decline" -- never silently overwrite.
-        Func<string, CancellationToken, Task<bool>>? confirmExternallyModifiedOverwriteAsync = null)
+        Func<string, CancellationToken, Task<bool>>? confirmExternallyModifiedOverwriteAsync = null,
+        // r139: test-only seam so a deadlock-repro test can drive ExportPdfAsync/
+        // ExportNotesPagePdfAsync through an AtomicExportExecutor whose temporary file genuinely
+        // completes its write asynchronously (see sweep78-1). No production caller passes this --
+        // PresentationFileCommandSessionFactory.Create never supplies it, so every real host still
+        // gets its own private `new AtomicExportExecutor()`.
+        AtomicExportExecutor? atomicExportExecutor = null)
     {
         ArgumentNullException.ThrowIfNull(getPresentation);
         ArgumentNullException.ThrowIfNull(loadPresentation);
@@ -510,6 +516,7 @@ public sealed class PresentationFileCommandSession
         _printPackageFactory = printPackageFactory;
         _videoPackageArtifactFactory = videoPackageArtifactFactory;
         _confirmExternallyModifiedOverwriteAsync = confirmExternallyModifiedOverwriteAsync;
+        _atomicExportExecutor = atomicExportExecutor ?? new AtomicExportExecutor();
     }
 
     public bool IsDirty => _lifecycle.IsDirty;
@@ -716,7 +723,7 @@ public sealed class PresentationFileCommandSession
                 _getPresentation(),
                 request: null,
                 _render),
-            cancellationToken);
+            cancellationToken).ConfigureAwait(false);
     }
 
     public async Task<PresentationFileCommandResult> ExportNotesPagePdfAsync(
@@ -761,7 +768,7 @@ public sealed class PresentationFileCommandSession
                 presentation,
                 request,
                 _render),
-            cancellationToken);
+            cancellationToken).ConfigureAwait(false);
     }
 
     private async Task<PresentationFileCommandResult> ExportPdfArtifactAsync(
@@ -770,16 +777,25 @@ public sealed class PresentationFileCommandSession
         Func<PresentationPdfExportArtifact> render,
         CancellationToken cancellationToken)
     {
+        // ConfigureAwait(false) is required on every await in this method (and in the render
+        // delegate below): both WPF hosts (FreeP.App.Host, FreeW.App.Host) invoke this whole
+        // chain by blocking on the returned Task from the UI thread. AtomicExportExecutor
+        // opens the temp file with real async I/O (FileOptions.Asynchronous); if that write
+        // genuinely completes asynchronously, an un-configured await here would try to resume
+        // by posting its continuation back to the captured WPF DispatcherSynchronizationContext
+        // -- but that dispatcher is the very UI thread blocked in GetResult(), so the app hangs
+        // forever. AtomicExportExecutor's own internals already ConfigureAwait(false)
+        // throughout; this call site and the render delegate were the missing links.
         var execution = await _atomicExportExecutor.ExecuteAsync<PresentationPdfExportArtifact>(
             path,
             async (output, token) =>
             {
                 token.ThrowIfCancellationRequested();
                 var artifact = render();
-                await output.WriteAsync(artifact.Bytes, token);
+                await output.WriteAsync(artifact.Bytes, token).ConfigureAwait(false);
                 return artifact;
             },
-            cancellationToken);
+            cancellationToken).ConfigureAwait(false);
 
         PresentationFileCommandResult result;
         if (execution.Succeeded)
@@ -808,7 +824,7 @@ public sealed class PresentationFileCommandSession
                 execution.Path ?? path);
         }
 
-        return await CompleteAsync(result, cancellationToken);
+        return await CompleteAsync(result, cancellationToken).ConfigureAwait(false);
     }
 
     public async Task<PresentationFileCommandResult> ExportImagesAsync(CancellationToken cancellationToken = default)

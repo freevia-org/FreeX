@@ -3503,9 +3503,30 @@ public sealed partial class DocumentView : Control
         if (pagesOps.Count == 0)
             pagesOps.Add(new List<Free.Shared.Pdf.PdfDrawOp>());
 
+        // Review > Show Markup > Balloons: the same right-margin comment/tracked-change strip
+        // ReviewBalloonsPane shows on screen must also reach PDF export -- and, since printing goes
+        // through this same content document (FreeWAvaloniaPdfExport.Save -> CUPS), Print too. Word's
+        // own behaviour: the printed page widens to include the markup area rather than dropping it.
+        var balloonSources = ShowMarkupBalloons
+            ? ReviewBalloonLayoutPlanner.BuildSources(_doc, CurrentReviewDisplayPolicy)
+            : Array.Empty<ReviewBalloonSource>();
+        var outputPageWidthPt = pageWidthPt;
+        if (balloonSources.Count > 0)
+        {
+            outputPageWidthPt += BalloonStripWidthPt;
+            var balloonPageCount = Math.Max(1, Math.Max(_pageCount, pagesOps.Count));
+            EnsurePage(balloonPageCount - 1);
+            foreach (var (pageIndex, balloonOps) in BuildPdfBalloonOps(
+                balloonSources, pageWidthPt, pageHeightPt, balloonPageCount))
+            {
+                EnsurePage(pageIndex);
+                pagesOps[pageIndex].AddRange(balloonOps);
+            }
+        }
+
         var pages = pagesOps
             .Select((ops, pageIndex) => new Free.Shared.Pdf.PdfContentPage(
-                pageWidthPt,
+                outputPageWidthPt,
                 pageHeightPt,
                 ops,
                 pageIndex < pageLinkOverlays.Count && pageLinkOverlays[pageIndex].Count > 0
@@ -3520,6 +3541,118 @@ public sealed partial class DocumentView : Control
             Author: string.IsNullOrWhiteSpace(_doc.Properties.Author) ? null : _doc.Properties.Author,
             Creator: "FreeW");
         return new Free.Shared.Pdf.PdfContentDocument(pages, properties);
+    }
+
+    /// <summary>Width, in PDF points, reserved for the Review &gt; Show Markup &gt; Balloons strip.</summary>
+    private const double BalloonStripWidthPt = 150.0;
+
+    /// <summary>
+    /// Builds the right-margin balloon strip content (background, leader lines, boxes, header/metadata/
+    /// preview text) for each page that owns at least one comment/tracked-change balloon, mirroring the
+    /// on-screen <c>ReviewBalloonsPane</c> strip via the same shared <see cref="ReviewBalloonLayoutPlanner"/>.
+    /// Balloons are assigned to a page by their source paragraph's proportional position in the document
+    /// (<see cref="ReviewBalloonSource.BlockIndex"/> over <c>_doc.Blocks.Count</c>) since this content
+    /// builder does not track a block-to-page map -- the same "ordinal approximation" the interactive
+    /// pane already uses for its own continuously-scrolled strip.
+    /// </summary>
+    private IReadOnlyList<(int PageIndex, IReadOnlyList<Free.Shared.Pdf.PdfDrawOp> Ops)> BuildPdfBalloonOps(
+        IReadOnlyList<ReviewBalloonSource> sources,
+        double pageWidthPt,
+        double pageHeightPt,
+        int pageCount)
+    {
+        if (sources.Count == 0 || pageCount <= 0)
+            return [];
+
+        var totalBlocks = Math.Max(1, _doc.Blocks.Count);
+        var byPage = new Dictionary<int, List<ReviewBalloonSource>>();
+        foreach (var source in sources)
+        {
+            var pageIndex = Math.Clamp(
+                (int)((double)source.BlockIndex / totalBlocks * pageCount),
+                0,
+                pageCount - 1);
+            if (!byPage.TryGetValue(pageIndex, out var list))
+                byPage[pageIndex] = list = new List<ReviewBalloonSource>();
+            list.Add(source);
+        }
+
+        var options = new ReviewBalloonLayoutOptions(
+            StripWidth: BalloonStripWidthPt,
+            BalloonWidth: BalloonStripWidthPt - 18,
+            BalloonHeight: 42,
+            BalloonGap: 6,
+            BalloonX: 9);
+        var stripLeftPt = pageWidthPt;
+
+        var result = new List<(int, IReadOnlyList<Free.Shared.Pdf.PdfDrawOp>)>();
+        foreach (var (pageIndex, pageSources) in byPage.OrderBy(kv => kv.Key))
+        {
+            var layouts = ReviewBalloonLayoutPlanner.BuildLayout(pageSources, pageHeightPt, options);
+            var ops = new List<Free.Shared.Pdf.PdfDrawOp>
+            {
+                new Free.Shared.Pdf.PdfFillRect(
+                    stripLeftPt,
+                    0,
+                    options.StripWidth,
+                    pageHeightPt,
+                    new Free.Shared.Pdf.PdfColor(0xF5, 0xF5, 0xF8)),
+            };
+
+            foreach (var layout in layouts)
+            {
+                var style = ReviewBalloonStyleCatalog.Resolve(layout.Source.Kind, layout.Source.Resolved);
+                var boxX = stripLeftPt + layout.BalloonX;
+                // ReviewBalloonLayoutPlanner lays out top-down (0 = top of strip); PDF user space is
+                // bottom-left origin, y-up, so every Y here is pageHeightPt minus the screen-space Y.
+                var boxBottomYPt = pageHeightPt - (layout.BalloonY + layout.BalloonHeight);
+
+                ops.Add(new Free.Shared.Pdf.PdfLine(
+                    stripLeftPt + layout.LeaderStartX,
+                    pageHeightPt - layout.LeaderStartY,
+                    stripLeftPt + layout.LeaderEndX,
+                    pageHeightPt - layout.LeaderEndY,
+                    new Free.Shared.Pdf.PdfColor(0xA0, 0xA0, 0xA0),
+                    0.5));
+                ops.Add(new Free.Shared.Pdf.PdfFillRect(
+                    boxX,
+                    boxBottomYPt,
+                    layout.BalloonWidth,
+                    layout.BalloonHeight,
+                    new Free.Shared.Pdf.PdfColor(style.Fill.Red, style.Fill.Green, style.Fill.Blue)));
+                ops.Add(new Free.Shared.Pdf.PdfStrokeRect(
+                    boxX,
+                    boxBottomYPt,
+                    layout.BalloonWidth,
+                    layout.BalloonHeight,
+                    new Free.Shared.Pdf.PdfColor(style.Stroke.Red, style.Stroke.Green, style.Stroke.Blue),
+                    0.75));
+
+                ops.Add(new Free.Shared.Pdf.PdfText(
+                    boxX + 3,
+                    pageHeightPt - (layout.BalloonY + 9),
+                    6.5,
+                    Free.Shared.Pdf.PdfFontFace.Bold,
+                    new Free.Shared.Pdf.PdfColor(0x17, 0x32, 0x4D),
+                    $"{layout.Source.HeaderText} - {layout.Source.KindLabel}"));
+
+                var preview = ReviewBalloonLayoutPlanner.TruncatePreview(layout.Source.BodyText, 46, "...");
+                if (!string.IsNullOrEmpty(preview))
+                {
+                    ops.Add(new Free.Shared.Pdf.PdfText(
+                        boxX + 3,
+                        pageHeightPt - (layout.BalloonY + 20),
+                        6.5,
+                        Free.Shared.Pdf.PdfFontFace.Regular,
+                        new Free.Shared.Pdf.PdfColor(0x30, 0x30, 0x30),
+                        preview));
+                }
+            }
+
+            result.Add((pageIndex, ops));
+        }
+
+        return result;
     }
 
     private IReadOnlyList<Free.Shared.Pdf.PdfDrawOp> BuildPdfPageBorderOps(
@@ -18873,7 +19006,7 @@ public sealed partial class DocumentView : Control
             return [];
 
         return _placed
-            .Where(p => !p.Sentinel && p.Revision != RevisionKind.None)
+            .Where(p => !p.Sentinel && (p.Revision != RevisionKind.None || p.HasFormatRevision))
             .GroupBy(p => p.Block)
             .Select(g =>
             {

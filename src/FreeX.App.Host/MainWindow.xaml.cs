@@ -153,6 +153,12 @@ public partial class MainWindow : Window, IWorkbookWindow, IFormulaPointModeWork
     private readonly Dictionary<SheetId, SplitPaneViewportOffsets> _splitPaneViewportOffsets = [];
     private readonly List<FormulaTraceArrow> _formulaTraceArrows = [];
     private readonly RecentFilesStore _recentFiles;
+    // File.Exists on a recent entry can block for the SMB/TCP connect timeout when the path is an
+    // unreachable UNC/network share; UpdateSsRecentList (MainWindow.Backstage.cs) re-runs the
+    // existence check for every recent entry on every Recent-files search-box keystroke, so a raw
+    // File.Exists there would freeze the UI per character typed. This cache probes off the UI
+    // thread and reuses the cached result across keystrokes. See MainWindow.Backstage.cs.
+    private readonly RecentFilePathExistenceCache _recentFilePathExistenceCache;
     private readonly WorkbookFileWorkflow _fileWorkflow;
     private readonly IWorkbookShareService _shareService = new WindowsWorkbookShareService();
     private List<RecentFileViewModel> _allRecentItems = [];
@@ -368,6 +374,16 @@ public partial class MainWindow : Window, IWorkbookWindow, IFormulaPointModeWork
         _adoptSharedWorkbookOnLoad = windowRegistry?.HasWindowForDocument(
             _documentContext.CurrentWorkbook.Id) == true;
         _recentFiles = RecentFilesStore.Load();
+        // Refresh the Recent-files search box once a background probe resolves a path this window
+        // hasn't checked yet, so a UNC/network entry that was optimistically shown as existing gets
+        // dropped from view once we actually learn it's unreachable, without ever blocking the
+        // keystroke that triggered the probe.
+        _recentFilePathExistenceCache = new RecentFilePathExistenceCache(onProbed: _ =>
+            Dispatcher.BeginInvoke(() =>
+            {
+                if (SsSearchBox is not null)
+                    UpdateSsRecentList(SsSearchBox.Text);
+            }));
         _fileWorkflow = CreateWorkbookFileWorkflow();
 
         InitializeComponent();

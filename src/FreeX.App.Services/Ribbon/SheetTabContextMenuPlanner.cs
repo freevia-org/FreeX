@@ -29,10 +29,10 @@ public static class SheetTabContextMenuPlanner
         state ??= SheetTabContextMenuState.Default;
 
         return Freeze([
-            new("MainWindow_Header_InsertSheet", SheetTabContextMenuAction.InsertSheet, KeyTip: "I", CommandName: "Insert Sheet"),
+            new("MainWindow_Header_InsertSheet", SheetTabContextMenuAction.InsertSheet, KeyTip: "I", CommandName: "Insert Sheet", IsEnabled: state.CanInsertSheet),
             new("MainWindow_Header_DeleteSheet", SheetTabContextMenuAction.DeleteSheet, KeyTip: "E", CommandName: "Delete Sheet", IsEnabled: state.CanDeleteSheet),
-            new("MainWindow_Header_Rename", SheetTabContextMenuAction.Rename, KeyTip: "R", CommandName: "Rename"),
-            new("MainWindow_Header_MoveOrCopy", SheetTabContextMenuAction.MoveOrCopy, KeyTip: "M", CommandName: "Move or Copy"),
+            new("MainWindow_Header_Rename", SheetTabContextMenuAction.Rename, KeyTip: "R", CommandName: "Rename", IsEnabled: state.CanRename),
+            new("MainWindow_Header_MoveOrCopy", SheetTabContextMenuAction.MoveOrCopy, KeyTip: "M", CommandName: "Move or Copy", IsEnabled: state.CanMoveOrCopy),
             SheetTabContextMenuCommand.Separator,
             new("MainWindow_Header_ViewCode", SheetTabContextMenuAction.ViewCode, KeyTip: "V", CommandName: "View Code", IsEnabled: false),
             new("MainWindow_Header_ProtectSheet", SheetTabContextMenuAction.ProtectSheet, KeyTip: "P", CommandName: "Protect Sheet"),
@@ -71,7 +71,13 @@ public sealed record SheetTabContextMenuState(
     bool CanHideSheet = true,
     bool CanUnhideSheet = true,
     bool CanSelectAllSheets = true,
-    bool CanUngroupSheets = true)
+    bool CanUngroupSheets = true,
+    // R139-workbook-protection: these three commands previously had no enablement wiring at all
+    // (always rendered enabled) so neither workbook-structure protection nor an individually-
+    // protected target sheet ever grayed them out, unlike CanDeleteSheet/CanHideSheet above.
+    bool CanInsertSheet = true,
+    bool CanRename = true,
+    bool CanMoveOrCopy = true)
 {
     public static SheetTabContextMenuState Default { get; } = new();
 }

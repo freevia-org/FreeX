@@ -13,6 +13,11 @@ public sealed class SubtotalCommand : IWorkbookCommand, IEstimatesMemory
     private readonly bool _summaryBelowData;
     private readonly List<IWorkbookCommand> _appliedCommands = [];
     private List<uint>? _previousRowPageBreaks;
+    // subtotal-formula-prefix-false-positive-deletion: snapshot of sheet.SubtotalRows taken before
+    // this command mutates anything, so Revert can wholesale-restore the exact pre-Apply set once
+    // every sub-command (InsertRowsCommand/EditCellsCommand) has already reverted the sheet back to
+    // its pre-Apply row layout -- mirrors _previousRowPageBreaks immediately above.
+    private List<uint>? _previousSubtotalRows;
     private bool? _previousOutlineSummaryBelow;
     private bool _outlineSummaryBelowChanged;
 
@@ -103,6 +108,7 @@ public sealed class SubtotalCommand : IWorkbookCommand, IEstimatesMemory
 
         _appliedCommands.Clear();
         _previousRowPageBreaks = sheet.RowPageBreaks.ToList();
+        _previousSubtotalRows = sheet.SubtotalRows.ToList();
 
         // Data > Subtotal's "Summary below data" checkbox must drive Sheet.OutlineSummaryBelow,
         // the same setting Data > Outline > Settings writes and Group/Ungroup/Collapse read (see
@@ -139,6 +145,19 @@ public sealed class SubtotalCommand : IWorkbookCommand, IEstimatesMemory
                 sheet.RowPageBreaks.Add(rowBreak);
             _previousRowPageBreaks = null;
         }
+        if (_previousSubtotalRows is not null)
+        {
+            // Every InsertRowsCommand.Revert call above has already removed the exact rows this
+            // pass inserted and shifted the sheet's row numbering back to its pre-Apply state, so a
+            // wholesale replace here is correct regardless of how many times sheet.SubtotalRows'
+            // entries shifted mid-Apply (each group insertion shifts every already-inserted subtotal
+            // row above it -- see ApplyGroupOutline's remarks).
+            var sheet = ctx.GetSheet(_sheetId);
+            sheet.SubtotalRows.Clear();
+            foreach (var row in _previousSubtotalRows)
+                sheet.SubtotalRows.Add(row);
+            _previousSubtotalRows = null;
+        }
         if (_outlineSummaryBelowChanged)
         {
             ctx.GetSheet(_sheetId).OutlineSummaryBelow = _previousOutlineSummaryBelow;
@@ -156,6 +175,14 @@ public sealed class SubtotalCommand : IWorkbookCommand, IEstimatesMemory
         if (!insertOutcome.Success)
             return false;
         _appliedCommands.Add(insert);
+
+        // subtotal-formula-prefix-false-positive-deletion: mark the row this command JUST inserted
+        // as real, authored subtotal-row state -- not something later re-derived by guessing from
+        // formula text. This must happen immediately after each insert (not once at the end), so a
+        // subsequent group's insert (which shifts every already-marked row below it) shifts this
+        // marker forward in lockstep via InsertRowsCommand's own SubtotalRows shift (see
+        // ApplyGroupOutline's remarks on why insertions applied later shift earlier subtotal rows).
+        ctx.GetSheet(_sheetId).SubtotalRows.Add(subtotalRow.InsertRow);
 
         var labelAddress = new CellAddress(_sheetId, subtotalRow.InsertRow, _range.Start.Col + _groupByColumnOffset);
         var edits = new List<(CellAddress Address, Cell Cell)>

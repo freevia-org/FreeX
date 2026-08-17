@@ -250,6 +250,18 @@ public partial class MainWindow
     /// clipboards untouched) for any other selection kind, which keeps falling through to the
     /// pre-existing cell-range copy behavior unchanged.
     /// </summary>
+    /// <remarks>
+    /// R139-shared-clipboard-images (clipboard-drawing-object-no-os-clipboard-write): the
+    /// in-process <see cref="_drawingObjectClipboard"/> capture above only ever served
+    /// FreeX-to-FreeX paste (<see cref="PasteClipboardObject"/>) -- it never touched the real OS
+    /// clipboard, so Ctrl+C on a chart/shape/picture/text box followed by Alt-Tab to Paint, Word, a
+    /// browser, or even a SECOND FreeX window and Ctrl+V pasted nothing at all. Once an object is
+    /// genuinely captured, also render it to a PNG-backed <see cref="PlatformClipboardImage"/> (best
+    /// effort -- <see cref="TryRenderDrawingObjectClipboardImage"/> never throws) and place that on
+    /// the OS clipboard, so external/cross-instance paste gets at least a picture, matching how the
+    /// plain cell-range copy above always offers a Bitmap flavor. The internal
+    /// <see cref="_drawingObjectClipboard"/> capture/paste path is completely unaffected either way.
+    /// </remarks>
     private bool TryCopySelectedDrawingObject(bool isCut = false)
     {
         SelectionPaneObjectKind? kind = SheetGrid.SelectedObjectKind switch
@@ -260,16 +272,177 @@ public partial class MainWindow
             FreeX.App.UI.ObjectKind.TextBox => SelectionPaneObjectKind.TextBox,
             _ => null
         };
+        var objectId = SheetGrid.SelectedObjectId;
         if (!_drawingObjectClipboard.TryCapture(
                 _currentSheetId,
                 kind,
-                SheetGrid.SelectedObjectId,
+                objectId,
                 isCut))
             return false;
 
         _workbookClipboardSession.Clear();
         ClearClipboardVisualState();
+
+        if (TryRenderDrawingObjectClipboardImage(kind!.Value, objectId) is { } clipboardImage)
+            SetClipboardDataWithRetry(new PlatformClipboardContent(Image: clipboardImage));
+
         return true;
+    }
+
+    /// <summary>
+    /// R139-shared-clipboard-images: renders the just-captured drawing object into a PNG-backed
+    /// <see cref="PlatformClipboardImage"/> for the OS clipboard. Chart and Picture reuse the app's
+    /// own existing chart-render (<see cref="FreeX.App.UI.ChartRenderer"/>) and image-decode
+    /// (<see cref="FreeX.App.UI.WpfBitmapImageLoader"/>) pipelines for full fidelity, including
+    /// whatever alpha channel the source picture bytes carry. Shape/TextBox have no isolated
+    /// off-screen renderer of their own (GridView's shape painter is tied to a live on-screen paint
+    /// pass), so they get a simple filled-rectangle-plus-text stand-in on an otherwise transparent
+    /// background -- the same "smallest correct stand-in" precedent already used above for the plain
+    /// cell-range picture flavor (<see cref="TryRenderClipboardRangeBitmap"/>). Returns null (never
+    /// throws) when the object can no longer be found or nothing sensible can be rendered.
+    /// </summary>
+    private PlatformClipboardImage? TryRenderDrawingObjectClipboardImage(SelectionPaneObjectKind kind, Guid objectId)
+    {
+        try
+        {
+            var sheet = _workbook.GetSheet(_currentSheetId);
+            if (sheet is null)
+                return null;
+
+            System.Windows.Media.Imaging.BitmapSource? bitmap = kind switch
+            {
+                SelectionPaneObjectKind.Chart => RenderChartClipboardBitmap(sheet, objectId),
+                SelectionPaneObjectKind.Picture => RenderPictureClipboardBitmap(sheet, objectId),
+                SelectionPaneObjectKind.Shape => RenderShapeClipboardBitmap(sheet, objectId),
+                SelectionPaneObjectKind.TextBox => RenderTextBoxClipboardBitmap(sheet, objectId),
+                _ => null,
+            };
+            if (bitmap is null)
+                return null;
+
+            return new PlatformClipboardImage(
+                EncodeBitmapSourceToPng(bitmap),
+                bitmap.PixelWidth,
+                bitmap.PixelHeight);
+        }
+        catch
+        {
+            // Best-effort extra clipboard flavor -- never let a rendering hiccup fail the copy itself.
+            return null;
+        }
+    }
+
+    private System.Windows.Media.Imaging.BitmapSource? RenderChartClipboardBitmap(Sheet sheet, Guid objectId)
+    {
+        var chart = sheet.Charts.Find(c => c.Id == objectId);
+        if (chart is null)
+            return null;
+        var viewport = SheetGrid.Viewport;
+        if (viewport is null)
+            return null;
+        return FreeX.App.UI.ChartRenderer.Render(chart, viewport, _workbook.Theme)
+            as System.Windows.Media.Imaging.BitmapSource;
+    }
+
+    private static System.Windows.Media.Imaging.BitmapSource? RenderPictureClipboardBitmap(Sheet sheet, Guid objectId)
+    {
+        var picture = sheet.Pictures.Find(p => p.Id == objectId);
+        if (picture?.ImageBytes is not { Length: > 0 } imageBytes)
+            return null;
+        return FreeX.App.UI.WpfBitmapImageLoader.TryLoad(imageBytes, out var image)
+            ? image as System.Windows.Media.Imaging.BitmapSource
+            : null;
+    }
+
+    private System.Windows.Media.Imaging.BitmapSource? RenderShapeClipboardBitmap(Sheet sheet, Guid objectId)
+    {
+        var shape = sheet.DrawingShapes.Find(s => s.Id == objectId);
+        if (shape is null)
+            return null;
+
+        var fill = shape.ResolveFillColor(_workbook.Theme, DrawingShapeModel.DefaultFillColor);
+        var outline = shape.OutlineHasNoFill
+            ? null
+            : (CellColor?)shape.GetEffectiveOutlineColor(_workbook.Theme, DrawingShapeModel.DefaultOutlineColor);
+        return RenderSimpleDrawingObjectBitmap(shape.Width, shape.Height, fill, outline, shape.ShapeText);
+    }
+
+    private System.Windows.Media.Imaging.BitmapSource? RenderTextBoxClipboardBitmap(Sheet sheet, Guid objectId)
+    {
+        var textBox = TextBoxModel.FindById(sheet.TextBoxes, objectId);
+        if (textBox is null)
+            return null;
+
+        var fill = textBox.ResolveFillColor(_workbook.Theme, new CellColor(255, 255, 255));
+        var outline = textBox.OutlineHasNoFill
+            ? null
+            : (CellColor?)textBox.GetEffectiveOutlineColor(_workbook.Theme, new CellColor(0, 0, 0));
+        return RenderSimpleDrawingObjectBitmap(textBox.Width, textBox.Height, fill, outline, textBox.Text);
+    }
+
+    /// <summary>
+    /// Smallest correct stand-in for a shape/text box's OS-clipboard picture flavor: a
+    /// <see cref="System.Windows.Media.PixelFormats.Pbgra32"/> render target left fully transparent
+    /// except where <paramref name="fill"/>/<paramref name="outline"/> actually paint, so a shape
+    /// authored with no fill (or a text box's default "No Fill, No Line") pastes as a transparent
+    /// picture rather than an opaque box -- matching how these objects render on screen.
+    /// </summary>
+    private static System.Windows.Media.Imaging.BitmapSource RenderSimpleDrawingObjectBitmap(
+        double widthDip, double heightDip, CellColor? fill, CellColor? outline, string? text)
+    {
+        var width = Math.Max(1, (int)Math.Round(widthDip));
+        var height = Math.Max(1, (int)Math.Round(heightDip));
+
+        var visual = new System.Windows.Media.DrawingVisual();
+        using (var dc = visual.RenderOpen())
+        {
+            var rect = new Rect(0, 0, width, height);
+            System.Windows.Media.SolidColorBrush? fillBrush = null;
+            if (fill is { } f)
+            {
+                fillBrush = new System.Windows.Media.SolidColorBrush(
+                    System.Windows.Media.Color.FromRgb(f.R, f.G, f.B));
+                fillBrush.Freeze();
+            }
+
+            System.Windows.Media.Pen? outlinePen = null;
+            if (outline is { } o)
+            {
+                var outlineBrush = new System.Windows.Media.SolidColorBrush(
+                    System.Windows.Media.Color.FromRgb(o.R, o.G, o.B));
+                outlineBrush.Freeze();
+                outlinePen = new System.Windows.Media.Pen(outlineBrush, 1.5);
+                outlinePen.Freeze();
+            }
+
+            if (fillBrush is not null || outlinePen is not null)
+                dc.DrawRectangle(fillBrush, outlinePen, rect);
+
+            if (!string.IsNullOrEmpty(text))
+            {
+                var typeface = new System.Windows.Media.Typeface("Segoe UI");
+                var formatted = new System.Windows.Media.FormattedText(
+                    text,
+                    System.Globalization.CultureInfo.CurrentCulture,
+                    FlowDirection.LeftToRight,
+                    typeface,
+                    12,
+                    System.Windows.Media.Brushes.Black,
+                    1.0)
+                {
+                    MaxTextWidth = Math.Max(1, width - 8),
+                    MaxTextHeight = Math.Max(1, height - 8),
+                    Trimming = TextTrimming.CharacterEllipsis,
+                };
+                dc.DrawText(formatted, new Point(4, 4));
+            }
+        }
+
+        var bitmap = new System.Windows.Media.Imaging.RenderTargetBitmap(
+            width, height, 96, 96, System.Windows.Media.PixelFormats.Pbgra32);
+        bitmap.Render(visual);
+        bitmap.Freeze();
+        return bitmap;
     }
 
     /// <summary>

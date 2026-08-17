@@ -231,8 +231,16 @@ public sealed partial class MainWindow
             Margin = new Thickness(0, 28, 0, 8),
         });
 
+        // Filter out moved/deleted recent files the same way the WPF backstage and this app's own
+        // native Open-Recent menu already do (see MainWindow.cs's OpenRecentWorkbookMenuPlanner.Create
+        // call), rather than silently listing entries that will fail to open. Routed through the
+        // cache (not a raw File.Exists) so an unreachable UNC/network entry never blocks the UI
+        // thread while the Home pane is built.
         var entries = BackstageRecentFileListPlanner.SelectPinnedFirst(
-            BackstageRecentFileListPlanner.Build(_recentFiles.Snapshot(), filter: null),
+            BackstageRecentFileListPlanner.Build(
+                _recentFiles.Snapshot(),
+                filter: null,
+                _recentFilePathExistenceCache.Exists),
             maximumCount: 12);
         if (entries.Count == 0)
         {

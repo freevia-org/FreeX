@@ -620,6 +620,25 @@ public sealed class DocumentViewReviewTests
     }
 
     [Fact]
+    public async Task DisplayForReview_SimpleMarkup_shows_change_bar_for_format_only_revision()
+    {
+        // A paragraph whose ONLY tracked change is a formatting change (Revision stays None on the run,
+        // only FormatRevision is set) must still get a Simple Markup change bar, matching Word and
+        // matching how an insertion/deletion revision already behaves (the sibling assertion below).
+        int changeBarsFormatOnly = 0;
+        var ran = await OnUiThread(() =>
+        {
+            var view = Build(DocWithFormatRevision());
+            view.ApplyDisplayForReview(ReviewDisplayMode.SimpleMarkup);
+            changeBarsFormatOnly = view.SimpleMarkupChangeBarsForTest.Count;
+        });
+        if (!ran) return;
+
+        changeBarsFormatOnly.Should().BeGreaterThan(0,
+            "Simple Markup must show a change bar for a paragraph whose only tracked change is formatting");
+    }
+
+    [Fact]
     public async Task ShowMarkup_toggles_hide_visual_chrome_but_preserve_model_data()
     {
         bool revisionStyled = true, commentHighlighted = true, commentAnchorPreserved = false;

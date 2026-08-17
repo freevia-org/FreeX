@@ -14,7 +14,16 @@
     <DefineConstants>$(DefineConstants);FREEP_AVALONIA_RENDERER</DefineConstants>
   </PropertyGroup>
 
-  <PropertyGroup Condition="'$(TargetPlatformIdentifier)' == 'Windows'">
+  <!--
+    NOTE: Do not condition this on $(TargetPlatformIdentifier) here. In an SDK-style project the
+    body between the implicit Sdk.props (top) and Sdk.targets (bottom) imports is evaluated in a
+    properties-pass that follows document/import order; $(TargetPlatformIdentifier) is only
+    derived later, inside Sdk.targets (Microsoft.NET.TargetFrameworkInference.targets), so a
+    PropertyGroup here that conditions on it always sees it empty and this constant never gets
+    defined. $(FreePWindowsBuild) above is self-contained ($(OS)/$(RuntimeIdentifier)) and is the
+    same signal already used to pick the net10.0-windows TargetFramework, so it is reliable here.
+  -->
+  <PropertyGroup Condition="'$(FreePWindowsBuild)' == 'true'">
     <DefineConstants>$(DefineConstants);FREEP_WINDOWS_CAPTURE</DefineConstants>
   </PropertyGroup>
 

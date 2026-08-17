@@ -419,10 +419,15 @@ public partial class MainWindow
         // multiple windows sharing this process (View > New Window), a sibling window may have
         // registered/pinned/removed an entry since this window loaded, and this window's cached
         // instance would never observe it otherwise.
+        // Route existence checks through _recentFilePathExistenceCache rather than a raw
+        // System.IO.File.Exists: this method re-runs on every Recent-files search-box keystroke
+        // (SsSearchBox_TextChanged below), and a raw File.Exists against an unreachable UNC/network
+        // recent entry blocks for the SMB/TCP connect timeout (20+ seconds) on the UI thread, per
+        // character typed. The cache probes off-thread and reuses the cached result instead.
         var plan = BackstageRecentFileListPlanner.Build(
             ReloadRecentFilesStore().Snapshot(),
             filter,
-            System.IO.File.Exists);
+            _recentFilePathExistenceCache.Exists);
         _allRecentItems = plan.AllItems.ToList();
         SsRecentList.ItemsSource = plan.RecentItems;
         SsPinnedList.ItemsSource = plan.PinnedItems;

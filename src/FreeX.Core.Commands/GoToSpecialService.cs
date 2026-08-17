@@ -100,13 +100,19 @@ public static class GoToSpecialService
             return FindConditionalFormats(sheet.ConditionalFormats, range, options.MatchActiveCellRuleOnly ? activeCell : null);
 
         var scanRange = range;
-        if (scanRange.CellCount > MaximumDirectScanCells)
+        // Only an explicit whole-row/whole-column/whole-sheet selection (e.g. Ctrl+A twice, then
+        // Go To Special) reaches all the way to the sheet's nominal boundary on at least one axis
+        // -- that selection nominally spans up to ~17 billion cells. Real Excel always intersects
+        // Go To Special's search with the sheet's actual used range in that case rather than
+        // scanning the full nominal grid, so do the same here -- otherwise this becomes an
+        // effectively unbounded per-cell scan regardless of how little data the sheet has. A fully
+        // bounded selection the user explicitly drew (e.g. A1:D300000) never hits the sheet's
+        // boundary and must be scanned in full, however large, so it is not clamped to the used
+        // range -- clamping it would silently drop legitimate matches (e.g. blanks) outside the
+        // used range but still inside the user's own selection.
+        var isUnboundedSelection = scanRange.End.Row == CellAddress.MaxRow || scanRange.End.Col == CellAddress.MaxCol;
+        if (isUnboundedSelection && scanRange.CellCount > MaximumDirectScanCells)
         {
-            // An explicit whole-sheet/whole-row/whole-column selection (e.g. Ctrl+A twice,
-            // then Go To Special) nominally spans up to ~17 billion cells. Real Excel always
-            // intersects Go To Special's search with the sheet's actual used range rather than
-            // scanning the full nominal grid, so do the same here -- otherwise this becomes an
-            // effectively unbounded per-cell scan regardless of how little data the sheet has.
             if (sheet.GetUsedRange() is not { } usedRange || !GridRange.TryIntersect(scanRange, usedRange, out scanRange))
                 return result;
         }
@@ -471,7 +477,7 @@ public static class GoToSpecialService
     {
         var result = new List<CellAddress>();
         foreach (var chart in sheet.Charts)
-            AddIfInRange(result, range, chart.DataRange.Start);
+            AddIfInRange(result, range, ResolveChartAnchor(sheet, chart));
         foreach (var shape in sheet.DrawingShapes)
             AddIfInRange(result, range, shape.Anchor);
         foreach (var picture in sheet.Pictures)
@@ -490,6 +496,58 @@ public static class GoToSpecialService
         }
 
         return result;
+    }
+
+    /// <summary>
+    /// Resolves a chart's actual on-screen anchor cell from its stored pixel position
+    /// (<see cref="ChartModel.Left"/>/<see cref="ChartModel.Top"/>), NOT its data-source range
+    /// (<see cref="ChartModel.DataRange"/>) -- a chart built from one range can be freely dragged
+    /// anywhere on the sheet, and Go To Special > Objects must select/omit it by where it visually
+    /// sits, matching Excel. This walks cumulative column widths/row heights from the sheet origin,
+    /// the same pixel model <see cref="FreeX.Core.IO.XlsxDrawingAnchorApplier"/> uses to compute
+    /// Left/Top when loading a chart's anchor off disk, just inverted.
+    /// </summary>
+    private static CellAddress ResolveChartAnchor(Sheet sheet, ChartModel chart)
+    {
+        var col = FindColumnAtPixel(sheet, chart.Left);
+        var row = FindRowAtPixel(sheet, chart.Top);
+        return new CellAddress(chart.DataRange.Start.Sheet, row, col);
+    }
+
+    private static uint FindColumnAtPixel(Sheet sheet, double targetPixel)
+    {
+        var cumulative = 0.0;
+        for (var col = 1u; col < CellAddress.MaxCol; col++)
+        {
+            if (sheet.IsColEffectivelyHidden(col))
+                continue;
+
+            var width = sheet.ColumnWidths.GetValueOrDefault(col, sheet.DefaultColumnWidth) * 8;
+            if (cumulative + width > targetPixel)
+                return col;
+
+            cumulative += width;
+        }
+
+        return CellAddress.MaxCol;
+    }
+
+    private static uint FindRowAtPixel(Sheet sheet, double targetPixel)
+    {
+        var cumulative = 0.0;
+        for (var row = 1u; row < CellAddress.MaxRow; row++)
+        {
+            if (sheet.IsRowEffectivelyHidden(row))
+                continue;
+
+            var height = sheet.RowHeights.GetValueOrDefault(row, sheet.DefaultRowHeight);
+            if (cumulative + height > targetPixel)
+                return row;
+
+            cumulative += height;
+        }
+
+        return CellAddress.MaxRow;
     }
 
     /// <summary>

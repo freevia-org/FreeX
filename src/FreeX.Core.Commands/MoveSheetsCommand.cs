@@ -35,6 +35,18 @@ public sealed class MoveSheetsCommand : IWorkbookCommand, IWholeWorkbookRecalcCo
         if (selectedIds.Count == 0)
             return new CommandOutcome(false, "Source sheet was not found.");
 
+        // R139-workbook-protection: an individually-protected sheet must refuse Move even as part
+        // of a grouped multi-sheet move -- mirrors MoveSheetCommand's single-sheet guard, but this
+        // command reorders sheets directly rather than delegating to MoveSheetCommand per sheet.
+        foreach (var id in selectedIds)
+        {
+            if (ctx.Workbook.Sheets.FirstOrDefault(sheet => sheet.Id == id) is { } candidate &&
+                CommandGuards.RejectIfProtected(candidate) is { } sheetProtectedOutcome)
+            {
+                return sheetProtectedOutcome;
+            }
+        }
+
         _previousOrder = currentOrder;
         var selectedSet = selectedIds.ToHashSet();
         var remaining = currentOrder.Where(id => !selectedSet.Contains(id)).ToList();

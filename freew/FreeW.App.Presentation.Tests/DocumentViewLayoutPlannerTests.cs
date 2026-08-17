@@ -813,6 +813,109 @@ public sealed class DocumentViewLayoutPlannerTests
     }
 
     [Fact]
+    public void BuildFloatingObjectPlacement_TwoColumnSection_MapsColumnSlotToPhysicalPage()
+    {
+        // Default 8.5x11in / 1in-margin page => PageHeightDip 1056, TextAreaHeightDip 864 (see
+        // BuildSurfacePlan_PrintLayout_UsesPageMarginsAndDeskGeometry above for the same geometry).
+        var surface = DocumentViewLayoutPlanner.BuildSurfacePlan(
+            new PageSettings(),
+            DocumentViewLayoutKind.PrintLayout,
+            availableWidthDip: 816);
+
+        // A two-column section packs two column-slots into each physical page. Content at raw slot
+        // index 1 (anchorContentYDip in [864, 1728)) is the *second column* of the *first* physical
+        // page, not the first column of a second page -- the anchor index must divide the raw slot
+        // number by the column count, exactly like the sibling BuildFloatingTablePlacement and
+        // DocumentViewSurfacePlan.ContentYToPageSpaceY already do.
+        var secondColumnStillOnFirstPage = DocumentViewLayoutPlanner.BuildFloatingObjectPlacement(
+            surface,
+            anchorContentYDip: 900,
+            columnCount: 2,
+            HorizontalAnchor.Page,
+            horizontalOffsetPt: 0,
+            VerticalAnchor.Page,
+            verticalOffsetPt: 0);
+
+        secondColumnStillOnFirstPage.AnchorPageIndex.Should().Be(0);
+        secondColumnStillOnFirstPage.YDip.Should().BeApproximately(surface.PageTopDip(0), 0.01);
+
+        // Raw slot index 2 (anchorContentYDip in [1728, 2592)) is the *first column* of the *second*
+        // physical page in a two-column section (slot 2 / 2 columns == page 1) and must land there.
+        var firstColumnOfSecondPage = DocumentViewLayoutPlanner.BuildFloatingObjectPlacement(
+            surface,
+            anchorContentYDip: 1738,
+            columnCount: 2,
+            HorizontalAnchor.Page,
+            horizontalOffsetPt: 0,
+            VerticalAnchor.Page,
+            verticalOffsetPt: 0);
+
+        firstColumnOfSecondPage.AnchorPageIndex.Should().Be(1);
+        firstColumnOfSecondPage.YDip.Should().BeApproximately(surface.PageTopDip(1), 0.01);
+    }
+
+    [Fact]
+    public void BuildFloatingObjectPlacement_ThreeColumnSection_MapsColumnSlotToPhysicalPage()
+    {
+        var surface = DocumentViewLayoutPlanner.BuildSurfacePlan(
+            new PageSettings(),
+            DocumentViewLayoutKind.PrintLayout,
+            availableWidthDip: 816);
+
+        // Raw slot index 2 (anchorContentYDip in [1728, 2592)) is still the third column of the
+        // first physical page in a three-column section (slot 2 / 3 columns == page 0).
+        var thirdColumnStillOnFirstPage = DocumentViewLayoutPlanner.BuildFloatingObjectPlacement(
+            surface,
+            anchorContentYDip: 1738,
+            columnCount: 3,
+            HorizontalAnchor.Page,
+            horizontalOffsetPt: 0,
+            VerticalAnchor.Page,
+            verticalOffsetPt: 0);
+
+        thirdColumnStillOnFirstPage.AnchorPageIndex.Should().Be(0);
+        thirdColumnStillOnFirstPage.YDip.Should().BeApproximately(surface.PageTopDip(0), 0.01);
+
+        // Raw slot index 3 (anchorContentYDip in [2592, 3456)) is the first column of the *second*
+        // physical page in a three-column section (slot 3 / 3 columns == page 1).
+        var firstColumnOfSecondPage = DocumentViewLayoutPlanner.BuildFloatingObjectPlacement(
+            surface,
+            anchorContentYDip: 2602,
+            columnCount: 3,
+            HorizontalAnchor.Page,
+            horizontalOffsetPt: 0,
+            VerticalAnchor.Page,
+            verticalOffsetPt: 0);
+
+        firstColumnOfSecondPage.AnchorPageIndex.Should().Be(1);
+        firstColumnOfSecondPage.YDip.Should().BeApproximately(surface.PageTopDip(1), 0.01);
+    }
+
+    [Fact]
+    public void BuildFloatingObjectPlacement_SingleColumnSection_IsUnaffectedByColumnAwareMapping()
+    {
+        var surface = DocumentViewLayoutPlanner.BuildSurfacePlan(
+            new PageSettings(),
+            DocumentViewLayoutKind.PrintLayout,
+            availableWidthDip: 816);
+
+        // With columnCount == 1, dividing the raw slot by the column count is a no-op (slot / 1 ==
+        // slot), so a single-column document's floating objects must keep landing on the page that
+        // matches the raw slot number one-for-one, exactly as before this fix.
+        var secondPage = DocumentViewLayoutPlanner.BuildFloatingObjectPlacement(
+            surface,
+            anchorContentYDip: 1738,
+            columnCount: 1,
+            HorizontalAnchor.Page,
+            horizontalOffsetPt: 0,
+            VerticalAnchor.Page,
+            verticalOffsetPt: 0);
+
+        secondPage.AnchorPageIndex.Should().Be(2);
+        secondPage.YDip.Should().BeApproximately(surface.PageTopDip(2), 0.01);
+    }
+
+    [Fact]
     public void BuildFloatingOverlaySurfacePlan_PreservesWpfOverlayAnchorCoordinates()
     {
         var page = new PageSettings

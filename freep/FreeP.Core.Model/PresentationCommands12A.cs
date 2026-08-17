@@ -243,6 +243,8 @@ public sealed class UngroupShapeCommand : IPresentationCommand
     private List<SlideShape>?  _parentShapes;
     private List<(SlideShape Connector, ConnectorAttachment? Start, ConnectorAttachment? End)>?
         _capturedConnectorAttachments;
+    private List<ShapeAnimation>? _capturedAnimations;
+    private string?            _capturedBuildListXml;
 
     public UngroupShapeCommand(int slideIndex, uint groupId)
     {
@@ -278,6 +280,11 @@ public sealed class UngroupShapeCommand : IPresentationCommand
             .Select(connector =>
                 (connector, connector.ConnectionStart, connector.ConnectionEnd))
             .ToList();
+
+        var slide = p.Slides[_slideIndex];
+        _capturedAnimations = slide.Animations.ToList();
+        _capturedBuildListXml = slide.AnimationBuildListXml;
+
         shapes.RemoveAt(_groupZIdx);
 
         // Insert children at the group's former z-position (in order).
@@ -286,6 +293,20 @@ public sealed class UngroupShapeCommand : IPresentationCommand
             int idx = Math.Clamp(_groupZIdx + i, 0, shapes.Count);
             shapes.Insert(idx, _children[i]);
         }
+
+        // The group's own shape id is destroyed by ungrouping (its children keep their own,
+        // already-independent ids - they never carried the group's id). PowerPoint does not
+        // hand a group's animation down to its former children when you ungroup; it simply
+        // drops it. Leaving the stale entry instead would point a build-list/timing node at a
+        // shape id absent from the slide's tree, and (like DeleteShapeCommand's identical
+        // handling below) a dangling TriggerShapeId could later rebind to whatever unrelated
+        // shape NextShapeId hands out that freed id to next.
+        slide.Animations.RemoveAll(animation =>
+            animation.ShapeId == _groupId ||
+            (animation.TriggerShapeId is { } triggerShapeId && triggerShapeId == _groupId));
+        slide.AnimationBuildListXml = DeleteShapeCommand.RemoveBuildListEntriesForShapes(
+            slide.AnimationBuildListXml,
+            new HashSet<uint> { _groupId });
 
         if (_capturedConnectorAttachments is not null)
         {
@@ -312,6 +333,14 @@ public sealed class UngroupShapeCommand : IPresentationCommand
         int idx = Math.Clamp(_groupZIdx, 0, shapes.Count);
         shapes.Insert(idx, _group);
 
+        if (_slideIndex >= 0 && _slideIndex < p.Slides.Count && _capturedAnimations is not null)
+        {
+            var slide = p.Slides[_slideIndex];
+            slide.Animations.Clear();
+            slide.Animations.AddRange(_capturedAnimations);
+            slide.AnimationBuildListXml = _capturedBuildListXml;
+        }
+
         if (_capturedConnectorAttachments is not null)
         {
             foreach (var (connector, start, end) in _capturedConnectorAttachments)
@@ -324,6 +353,8 @@ public sealed class UngroupShapeCommand : IPresentationCommand
         _group    = null;
         _children = null;
         _parentShapes = null;
+        _capturedAnimations = null;
+        _capturedBuildListXml = null;
     }
 }
 

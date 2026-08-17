@@ -15740,6 +15740,17 @@ public sealed partial class DocumentView : RichTextBox
         set => _reviewDisplayState = _reviewDisplayState.WithShowFormatting(value);
     }
 
+    /// <summary>
+    /// Whether Review > Show Markup > Balloons is enabled for this editor. Unlike the other
+    /// ShowMarkup* flags, balloons never change in-document highlighting: they render in a separate
+    /// right-margin strip owned by the host shell (<c>BalloonOverlay</c> on WPF, mirrored by
+    /// <c>ReviewBalloonsPane</c> on Avalonia), so toggling this does not require a re-render here.
+    /// Print/Print Preview/PDF/XPS export (<see cref="FreeW.App.Host.PrintLayout"/>) reads this flag to
+    /// decide whether to reserve a matching balloon strip on the printed page, mirroring Word (which
+    /// widens the printed page to include the on-screen markup area). Defaults to false.
+    /// </summary>
+    public bool ShowMarkupBalloons { get; set; }
+
     public ReviewDisplayPolicy CurrentReviewDisplayPolicy =>
         _reviewDisplayState.ToPolicy();
 
@@ -17838,7 +17849,7 @@ public sealed partial class DocumentView : RichTextBox
         private static bool InlineHasRevision(System.Windows.Documents.Inline inline) =>
             inline switch
             {
-                WpfRun run => run.Tag is RunMarkers { Revision: not null },
+                WpfRun run => run.Tag is RunMarkers { Revision: not null } or RunMarkers { FormatRevision: not null },
                 System.Windows.Documents.Span span => span.Inlines.Any(InlineHasRevision),
                 _ => false
             };

@@ -649,7 +649,15 @@ public sealed partial class GridViewRenderPerformanceTests
         rendering.Should().Contain("CanUseDefaultWrappedFormattedText(style)");
         rendering.Should().Contain("GetDefaultFormattedText(renderText, fontSize, pixelsPerDip)");
         rendering.Should().Contain("GetDefaultWrappedFormattedText(renderText, fontSize, wrapMaxTextWidth, wrapTextAlignment, pixelsPerDip)");
-        headers.Should().Contain("GetDefaultFormattedText(");
+        // Header labels (column letters/row numbers/outline glyphs) use their own cached
+        // FormattedText helper -- GetDefaultHeaderFormattedText, colored with HeaderTextBrush --
+        // rather than sharing GetDefaultFormattedText/TextBrush with cell content, so that header
+        // text (chrome) can react to Windows High Contrast independently of cell text (document
+        // data). See GridView.TextLayoutCache.cs and ApplyHighContrastChromePalette in GridView.cs.
+        headers.Should().Contain("GetDefaultHeaderFormattedText(");
+        cacheSource.Should().Contain("private FormattedText GetDefaultHeaderFormattedText");
+        cacheSource.Should().Contain("_defaultHeaderTextLayoutCache.TryGetValue");
+        cacheSource.Should().Contain("_defaultHeaderTextLayoutCache.Count >= DefaultTextLayoutCacheLimit");
     }
 
     [Fact]

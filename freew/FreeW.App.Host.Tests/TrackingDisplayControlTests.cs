@@ -540,6 +540,34 @@ public sealed class TrackingDisplayControlTests
             "the paragraph with an insertion should receive a change bar");
     }
 
+    [StaFact]
+    public void ParagraphHasRevision_ReturnsTrue_WhenParagraphContainsOnlyAFormatRevision()
+    {
+        // Arrange: a paragraph whose only tracked change is a formatting change (no insertion/deletion —
+        // Revision stays RevisionKind.None on the run, only FormatRevision is set).
+        var doc = TextDocument.CreateEmpty();
+        doc.Blocks.Clear();
+        var para = new Paragraph();
+        para.Runs.Add(new Run("bolded")
+        {
+            FormatRevision = new FormatRevision(new RunFormatting(), "A", null)
+        });
+        doc.Blocks.Add(para);
+
+        var view = new DocumentView();
+        view.ApplyDisplayForReview(ReviewDisplayMode.SimpleMarkup);
+        view.LoadModel(doc);
+
+        var wpfDoc = view.Document!;
+        var wpfPara = wpfDoc.Blocks.OfType<System.Windows.Documents.Paragraph>().First();
+
+        // Act & Assert: a format-only revision must still surface a Simple Markup change bar, matching
+        // Word's behaviour and the method's own doc comment ("... or a FormatRevisionMarker (tracked
+        // formatting change)").
+        DocumentView.ChangeBarAdorner.ParagraphHasRevision(wpfPara).Should().BeTrue(
+            "a paragraph whose only tracked change is a formatting change should still receive a change bar");
+    }
+
     // ── Combined: all flags default to ON means existing tests still pass ─────────────────────
 
     [StaFact]

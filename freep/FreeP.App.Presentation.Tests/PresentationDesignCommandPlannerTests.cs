@@ -405,6 +405,126 @@ public sealed class PresentationDesignCommandPlannerTests
     }
 
     [Fact]
+    public void TryApplyLayoutChoice_MaterializesXfrmlessPlaceholderUsingMasterGeometry()
+    {
+        var editor = MakeSession(out var presentation);
+
+        // The master defines the baseline geometry for the title placeholder (idx 0) -- per
+        // ECMA-376 19.3.1.53, a layout placeholder with no <a:xfrm> of its own inherits from
+        // here. Real decks routinely leave the layout's title xfrm-less this way.
+        presentation.Masters[0].Placeholders.Add(new SlideShape
+        {
+            Id = 1,
+            Name = "Master Title",
+            Placeholder = new Placeholder { Type = PlaceholderType.Title, Idx = 0 },
+            OffsetXEmu = 457_200,
+            OffsetYEmu = 274_638,
+            ExtentCxEmu = 8_229_600,
+            ExtentCyEmu = 1_143_000,
+        });
+
+        presentation.Layouts.Add(new SlideLayout
+        {
+            Id = "rId2",
+            Name = "Title and Content",
+            LayoutType = SlideLayoutType.TitleContent,
+            MasterId = presentation.Masters[0].Id,
+            Placeholders =
+            {
+                new SlideShape
+                {
+                    Id = 10,
+                    Name = "Title Placeholder",
+                    Placeholder = new Placeholder { Type = PlaceholderType.Title, Idx = 0 },
+                    // Deliberately no OffsetXEmu/ExtentCxEmu -- simulates a layout <p:sp> with
+                    // no <a:xfrm> child at all.
+                },
+            }
+        });
+
+        // A freshly inserted / blank slide has no shapes of its own yet, matching
+        // EditingSession.InsertSlide's bare Slide -- there is nothing on the slide to already
+        // satisfy the title placeholder slot.
+        editor.CurrentSlide!.Shapes.Clear();
+
+        PresentationDesignCommandPlanner.TryApplyLayoutChoice(editor, "rId2", out _)
+            .Should().BeTrue();
+
+        var title = editor.CurrentSlide.Shapes.SingleOrDefault(shape =>
+            shape.Placeholder?.Type == PlaceholderType.Title);
+
+        title.Should().NotBeNull(
+            "a layout placeholder with no explicit xfrm must still be materialized -- a missing " +
+            "xfrm means inherit geometry, not skip the placeholder entirely");
+        title!.OffsetXEmu.Should().Be(457_200);
+        title.OffsetYEmu.Should().Be(274_638);
+        title.ExtentCxEmu.Should().Be(8_229_600);
+        title.ExtentCyEmu.Should().Be(1_143_000);
+
+        editor.Undo();
+        editor.CurrentSlide.Shapes.Count(shape => shape.Placeholder?.Type == PlaceholderType.Title)
+            .Should().Be(0);
+
+        editor.Redo();
+        editor.CurrentSlide.Shapes.Single(shape => shape.Placeholder?.Type == PlaceholderType.Title)
+            .ExtentCxEmu.Should().Be(8_229_600);
+    }
+
+    [Fact]
+    public void TryApplyLayoutChoice_PrefersLayoutsOwnGeometryOverMasterWhenBothPresent()
+    {
+        var editor = MakeSession(out var presentation);
+
+        // Master geometry differs from the layout's own explicit geometry -- the layout's own
+        // xfrm must win; master inheritance only applies when the layout placeholder itself
+        // carries no geometry.
+        presentation.Masters[0].Placeholders.Add(new SlideShape
+        {
+            Id = 1,
+            Name = "Master Title",
+            Placeholder = new Placeholder { Type = PlaceholderType.Title, Idx = 0 },
+            OffsetXEmu = 999_000,
+            OffsetYEmu = 999_000,
+            ExtentCxEmu = 999_000,
+            ExtentCyEmu = 999_000,
+        });
+
+        presentation.Layouts.Add(new SlideLayout
+        {
+            Id = "rId2",
+            Name = "Title and Content",
+            LayoutType = SlideLayoutType.TitleContent,
+            MasterId = presentation.Masters[0].Id,
+            Placeholders =
+            {
+                new SlideShape
+                {
+                    Id = 10,
+                    Name = "Title Placeholder",
+                    Placeholder = new Placeholder { Type = PlaceholderType.Title, Idx = 0 },
+                    OffsetXEmu = 1_000,
+                    OffsetYEmu = 2_000,
+                    ExtentCxEmu = 3_000,
+                    ExtentCyEmu = 4_000,
+                },
+            }
+        });
+
+        editor.CurrentSlide!.Shapes.Clear();
+
+        PresentationDesignCommandPlanner.TryApplyLayoutChoice(editor, "rId2", out _)
+            .Should().BeTrue();
+
+        var title = editor.CurrentSlide.Shapes.Single(shape =>
+            shape.Placeholder?.Type == PlaceholderType.Title);
+
+        title.OffsetXEmu.Should().Be(1_000);
+        title.OffsetYEmu.Should().Be(2_000);
+        title.ExtentCxEmu.Should().Be(3_000);
+        title.ExtentCyEmu.Should().Be(4_000);
+    }
+
+    [Fact]
     public void TryApplyLayoutChoice_RejectsMissingLayout()
     {
         var editor = MakeSession(out _);

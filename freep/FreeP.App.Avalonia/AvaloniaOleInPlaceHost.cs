@@ -4,6 +4,7 @@ using Avalonia.Controls;
 using Avalonia.Platform;
 using FreeP.App.Compositor;
 using FreeP.App.Ole.Windows;
+using FreeP.App.Rendering.Avalonia;
 using FreeP.Core.Model;
 
 namespace FreeP.App.Avalonia;

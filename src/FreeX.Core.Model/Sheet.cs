@@ -748,6 +748,20 @@ public sealed partial class Sheet
     /// <summary>Columns that are the visible anchor of a collapsed outline group. See <see cref="CollapsedAnchorRows"/>.</summary>
     public HashSet<uint> CollapsedAnchorCols { get; } = [];
 
+    /// <summary>
+    /// Rows that <see cref="FreeX.Core.Commands.SubtotalCommand"/> itself inserted (each group's
+    /// own subtotal row and the grand-total row), tracked as real state authored by that command --
+    /// NOT re-derived by scanning cell formula text for a "SUBTOTAL(" prefix. A hand-authored
+    /// formula that happens to start with SUBTOTAL( (e.g. a user's own running total) must never be
+    /// mistaken for a row the Subtotal command created, or Data &gt; Subtotal &gt; Remove All /
+    /// Replace deletes that user's own row and its data (see the review finding that introduced this
+    /// set). This is intentionally NOT persisted to any file format (XLSX/JSON/legacy adapters): a
+    /// freshly-loaded workbook simply has an empty set, so after a save/reload, Remove/Replace
+    /// Subtotals degrades safely to finding nothing (a no-op) rather than ever falling back to the
+    /// old text-matching heuristic and risking deleting unrelated rows.
+    /// </summary>
+    public HashSet<uint> SubtotalRows { get; } = [];
+
     /// <summary>True if the row is hidden by any mechanism (filter, manual, or group collapse).</summary>
     public bool IsRowEffectivelyHidden(uint row) =>
         HiddenRows.Contains(row) || FilterHiddenRows.Contains(row) || GroupHiddenRows.Contains(row);

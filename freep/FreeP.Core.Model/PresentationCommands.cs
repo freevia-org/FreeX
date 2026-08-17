@@ -2615,7 +2615,31 @@ public sealed class SetSlideLayoutCommand : IPresentationCommand
         var nextShapeId = NextShapeId(slide);
         foreach (var target in layout.Placeholders)
         {
-            if (!HasGeometry(target) || target.Placeholder is null ||
+            // A layout placeholder with no explicit xfrm is not "nothing to place" — per
+            // ECMA-376 19.3.1.53, a missing xfrm means the placeholder inherits its geometry
+            // from the master. Only skip when the placeholder tag itself is missing, or a
+            // matching shape already exists on the slide; never skip solely for lack of geometry,
+            // or the placeholder becomes permanently unreachable (can never be shown or clicked).
+            //
+            // Header/DateTime/Footer/SlideNumber are deliberately excluded here (unlike
+            // Title/Body/content placeholders): their on-slide presence and visibility are
+            // owned by HeaderFooterCommandPlanner (Insert > Header & Footer), which toggles
+            // Slide.HfVisibility and lazily creates the shape via EnsureHeaderFooterShape only
+            // when the user turns a checkbox on. HeaderFooterCommandPlanner.BuildState treats a
+            // slide with HfVisibility == null (the default for any slide the user never ran
+            // Insert > Header & Footer on) as "checkbox state = whatever shapes already exist",
+            // and SlideCompositor's IsVisibleByHeaderFooterFlags does the same for rendering. If
+            // this loop materialized these placeholders too, merely picking a layout would plant
+            // a shape that both reads as "visible" under that null-flags default — silently
+            // turning on Date/Footer/Slide Number (and showing them as checked in the dialog) for
+            // a slide the user never touched. Real PowerPoint does not do this: switching a
+            // slide's layout never creates or reveals header/footer/date/page-number content:
+            // that stays governed solely by the Header and Footer dialog. Title/Body placeholders
+            // are different because their content is the slide's own subject matter, authored
+            // directly into the slide the moment the layout supplies them — not a global
+            // decoration gated by a separate on/off flow.
+            if (target.Placeholder is null ||
+                IsHeaderFooterPlaceholder(target.Placeholder.Type) ||
                 slide.Shapes.Any(shape => MatchesPlaceholder(target.Placeholder, shape.Placeholder)))
             {
                 continue;
@@ -2627,6 +2651,17 @@ public sealed class SetSlideLayoutCommand : IPresentationCommand
             placeholder.Name = string.IsNullOrWhiteSpace(target.Name)
                 ? $"Placeholder {placeholder.Id}"
                 : target.Name;
+
+            // Reuse the same layout/master inheritance chain the compositor and hit-tester
+            // already resolve placeholder geometry through (PlaceholderResolver.ResolveAnchor):
+            // when the cloned placeholder still carries no geometry of its own, pull the
+            // concrete offset/extent down from the matching master placeholder now, so the
+            // shape round-trips with real coordinates instead of staying an inheriting stub.
+            if (!HasGeometry(placeholder))
+            {
+                ApplyInheritedMasterGeometry(placeholder, layout, p);
+            }
+
             slide.Shapes.Add(placeholder);
             _addedPlaceholders.Add(placeholder);
         }
@@ -2680,8 +2715,47 @@ public sealed class SetSlideLayoutCommand : IPresentationCommand
         PlaceholderType.Table or PlaceholderType.ClipArt or PlaceholderType.Diagram or
         PlaceholderType.Media or PlaceholderType.Picture;
 
+    /// <summary>
+    /// Header/DateTime/Footer/SlideNumber: owned end-to-end by HeaderFooterCommandPlanner (see
+    /// the caller in <see cref="Apply"/> for why a layout switch must never materialize these).
+    /// </summary>
+    private static bool IsHeaderFooterPlaceholder(PlaceholderType type) => type is
+        PlaceholderType.Header or PlaceholderType.DateTime or
+        PlaceholderType.Footer or PlaceholderType.SlideNumber;
+
     private static bool HasGeometry(SlideShape shape) =>
         shape.ExtentCxEmu > 0 || shape.ExtentCyEmu > 0 || shape.HasExplicitZeroExtentTransform;
+
+    /// <summary>
+    /// Resolves a materialized-but-geometry-less placeholder's offset/extent from the matching
+    /// placeholder on the layout's master, using the same <see cref="MatchesPlaceholder"/>
+    /// idx/type-compatibility rule already applied one level up (slide-shape vs. layout
+    /// placeholder). Mirrors the layout-then-master walk that
+    /// FreeP.App.Presentation's PlaceholderResolver.ResolveAnchor performs at render/hit-test
+    /// time for any shape; a placeholder that still has no geometry after this call falls
+    /// back to that same resolver when composited, so leaving it at (0,0,0,0) here is safe.
+    /// </summary>
+    private static void ApplyInheritedMasterGeometry(SlideShape placeholder, SlideLayout layout, Presentation p)
+    {
+        if (placeholder.Placeholder is null)
+            return;
+
+        var master = p.Masters.FirstOrDefault(m => m.Id == layout.MasterId);
+        var masterPlaceholder = master?.Placeholders.FirstOrDefault(candidate =>
+            MatchesPlaceholder(candidate.Placeholder, placeholder.Placeholder));
+
+        if (masterPlaceholder is null || !HasGeometry(masterPlaceholder))
+            return;
+
+        placeholder.OffsetXEmu = masterPlaceholder.OffsetXEmu;
+        placeholder.OffsetYEmu = masterPlaceholder.OffsetYEmu;
+        placeholder.ExtentCxEmu = masterPlaceholder.ExtentCxEmu;
+        placeholder.ExtentCyEmu = masterPlaceholder.ExtentCyEmu;
+        placeholder.RotationDeg = masterPlaceholder.RotationDeg;
+        placeholder.FlipH = masterPlaceholder.FlipH;
+        placeholder.FlipV = masterPlaceholder.FlipV;
+        placeholder.HasExplicitZeroExtentTransform = masterPlaceholder.HasExplicitZeroExtentTransform;
+    }
 
     private static uint NextShapeId(Slide slide)
     {
@@ -3266,7 +3340,13 @@ public sealed class DeleteShapeCommand : IPresentationCommand
         }
     }
 
-    private static string? RemoveBuildListEntriesForShapes(
+    /// <summary>
+    /// Prunes any &lt;p:bldP&gt; entry in the slide's authored build-list XML that targets one of
+    /// <paramref name="shapeIds"/>. Internal (not private) so other commands that remove a shape
+    /// id from the slide - e.g. <see cref="UngroupShapeCommand"/> destroying a group's own id -
+    /// can reuse the exact same cleanup instead of re-implementing bldLst parsing.
+    /// </summary>
+    internal static string? RemoveBuildListEntriesForShapes(
         string? rawXml,
         IReadOnlySet<uint> shapeIds)
     {

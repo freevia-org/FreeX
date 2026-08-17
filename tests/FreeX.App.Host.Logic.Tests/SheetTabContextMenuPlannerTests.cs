@@ -136,6 +136,58 @@ public sealed class SheetTabContextMenuPlannerTests
     }
 
     [Fact]
+    public void BuildSheetTabCommands_GraysInsertRenameMoveOrCopyUnderWorkbookStructureProtection()
+    {
+        // R139-workbook-protection (finding F2): InsertSheet/Rename/MoveOrCopy previously had no
+        // enablement wiring at all (always rendered enabled, unlike Delete/Hide/Unhide), so
+        // workbook structure protection never grayed them out even though the command layer
+        // (SheetCommands.cs) already refused all three.
+        var commands = SheetTabContextMenuPlanner.BuildSheetTabCommands(
+                new SheetTabContextMenuState(
+                    CanInsertSheet: false,
+                    CanRename: false,
+                    CanMoveOrCopy: false))
+            .Where(command => !command.IsSeparator)
+            .ToList();
+
+        commands.Where(command => command.Action is
+                SheetTabContextMenuAction.InsertSheet or
+                SheetTabContextMenuAction.Rename or
+                SheetTabContextMenuAction.MoveOrCopy)
+            .Should()
+            .OnlyContain(command => !command.IsEnabled);
+
+        // Sibling: everything else defaults to enabled, so this state only grays the three
+        // targeted commands and does not collaterally disable unrelated rows.
+        commands.Where(command => command.Action is not (
+                SheetTabContextMenuAction.InsertSheet or
+                SheetTabContextMenuAction.Rename or
+                SheetTabContextMenuAction.MoveOrCopy or
+                SheetTabContextMenuAction.ViewCode))
+            .Should()
+            .OnlyContain(command => command.IsEnabled);
+    }
+
+    [Fact]
+    public void BuildSheetTabCommands_DefaultStateLeavesInsertRenameMoveOrCopyEnabled()
+    {
+        // Sibling to the gray-out test above: the new CanInsertSheet/CanRename/CanMoveOrCopy
+        // fields must default to true so every pre-existing caller that doesn't know about them
+        // (an unprotected sheet in an unprotected workbook) keeps the same enabled menu it had
+        // before this fix.
+        var commands = SheetTabContextMenuPlanner.BuildSheetTabCommands(SheetTabContextMenuState.Default)
+            .Where(command => !command.IsSeparator)
+            .ToList();
+
+        commands.Where(command => command.Action is
+                SheetTabContextMenuAction.InsertSheet or
+                SheetTabContextMenuAction.Rename or
+                SheetTabContextMenuAction.MoveOrCopy)
+            .Should()
+            .OnlyContain(command => command.IsEnabled);
+    }
+
+    [Fact]
     public void Separator_IsNeutralDisabledMarker()
     {
         var separator = SheetTabContextMenuCommand.Separator;

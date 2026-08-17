@@ -54,6 +54,7 @@ using FreeX.App.Services.Updates;
 using Free.Shared.AppServices;
 using Free.Shared.Ribbon.Avalonia;
 using Free.Shared.Ribbon;
+using Free.Shared.Shell;
 using Free.Shared.Shell.Avalonia;
 using Free.Shared.Theme;
 using Free.Shared.Theme.Avalonia;
@@ -349,6 +350,11 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
     private readonly IPlatformPrintService _printService;
     private readonly IPlatformClipboard _platformClipboard;
     private readonly RecentFilesStore _recentFiles = RecentFilesStore.Load();
+    // Backs the in-app Home pane's Recent list existence filter (BuildLiveBackstageHomePane) so a
+    // moved/deleted recent entry gets dropped like WPF's backstage and this app's own native
+    // Open-Recent menu already do, without a synchronous File.Exists blocking the UI thread if a
+    // recent entry points at an unreachable UNC/network path.
+    private readonly RecentFilePathExistenceCache _recentFilePathExistenceCache = new();
     private readonly ContentControl _sheetGridHost = new();
     // The active cell's Border from the most recent BuildSheetGrid pass. Cells are plain Borders
     // rebuilt on every RefreshShell (see CreateInteractiveCellBorder), so this is refreshed each
@@ -4478,13 +4484,24 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
 
     private IEnumerable<Control> CreateSheetTabContextMenuItems(WorkbookSheetTab tab, bool isIdle, int sheetTabIndex)
     {
+        // R139-workbook-protection: mirrors MainWindow.SheetTabs.cs (WPF)'s BuildSheetTabContextMenuState
+        // -- gray out structural tab commands under workbook structure protection (F2) and
+        // additionally gray Delete/Rename/Hide of the target tab specifically when that individual
+        // sheet is protected (matches the SheetCommands.cs command-layer guards).
+        var isStructureProtected = _session.Workbook.IsStructureProtected;
+        var isTargetSheetProtected =
+            _session.Workbook.Sheets.FirstOrDefault(sheet => sheet.Id == tab.Id)?.IsProtected == true;
+
         var commonCommands = SheetTabContextMenuPlanner.BuildSheetTabCommands(
                 new SheetTabContextMenuState(
-                    CanDeleteSheet: _session.SheetTabs.Count > 1,
-                    CanHideSheet: _session.SheetTabs.Count > 1,
-                    CanUnhideSheet: _session.HiddenSheets.Count > 0,
+                    CanDeleteSheet: _session.SheetTabs.Count > 1 && !isStructureProtected && !isTargetSheetProtected,
+                    CanHideSheet: _session.SheetTabs.Count > 1 && !isStructureProtected && !isTargetSheetProtected,
+                    CanUnhideSheet: _session.HiddenSheets.Count > 0 && !isStructureProtected,
                     CanSelectAllSheets: _session.SheetTabs.Count > 1,
-                    CanUngroupSheets: _session.IsWorkbookGrouped))
+                    CanUngroupSheets: _session.IsWorkbookGrouped,
+                    CanInsertSheet: !isStructureProtected,
+                    CanRename: !isStructureProtected && !isTargetSheetProtected,
+                    CanMoveOrCopy: !isStructureProtected))
             .Where(command => !command.IsSeparator)
             .ToDictionary(command => command.Action);
 
@@ -9180,9 +9197,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
                 _session.Workbook.GetSheet(address.Sheet),
                 address,
                 target);
-            var rowDelta = GetCellIndexDelta(address.Row, adjustedTarget.Row);
-            var colDelta = GetCellIndexDelta(address.Col, adjustedTarget.Col);
-            CommitInlineCellEdit(rowDelta, colDelta);
+            CommitInlineCellEdit(address, adjustedTarget, args.Key, args.KeyModifiers.HasFlag(KeyModifiers.Shift));
             args.Handled = true;
         }
         else if (intent.Action == ExcelEditKeyAction.CommitSelection)
@@ -9279,14 +9294,13 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             FocusInlineCellEditor(address, editor);
     }
 
-    private void CommitInlineCellEdit(int rowDelta, int colDelta)
+    private void CommitInlineCellEdit(CellAddress current, CellAddress adjustedTarget, Key key, bool shiftHeld)
     {
         _formulaBox.Text = _inlineCellEditor?.Text ?? _inlineCellEditText ?? "";
         ClearInlineCellEditorState();
         if (CommitFormulaBox())
         {
-            if (rowDelta != 0 || colDelta != 0)
-                _session.MoveActiveCell(rowDelta, colDelta);
+            MoveActiveCellAfterEditCommit(current, adjustedTarget, key, shiftHeld);
 
             RefreshShell(UiText.Get("MainLoc_Ready"));
             // The inline editor is detached by CommitFormulaBox before the next-cell refresh.
@@ -9295,6 +9309,53 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             // host after an Enter/Tab edit continuation.
             MoveFocusToActiveCellBorder();
         }
+    }
+
+    /// <summary>
+    /// R139-freex-cell-editing-edit-commit-collapses-range-selection: Enter/Tab (and their Shift
+    /// variants) that commit an in-cell/formula-bar edit must CYCLE the active cell within a
+    /// pre-existing multi-cell selection -- wrapping at the far end back to the start -- exactly
+    /// like Excel and like the ready-mode Enter/Tab handler in NavigateActiveCell (which routes
+    /// through the same <see cref="GridSelectionNavigationPlanner.PlanCycle"/> +
+    /// <see cref="WorkbookSession.MoveActiveCellWithinSelection"/> pair). It must NOT collapse
+    /// the selection via the plain delta-based <see cref="WorkbookSession.MoveActiveCell"/>,
+    /// which is what happened before this fix. Arrow-key commits (the inline editor's
+    /// inlineEditorCommitsOnArrow path, and the formula bar's Up/Down/PageUp/PageDown fallback)
+    /// are ordinary navigation, not range-cycling, so this only engages when the physical key
+    /// that triggered the commit was actually Enter or Tab; every other key -- and any Enter/Tab
+    /// where there is no eligible multi-cell selection to cycle within (a single selected cell,
+    /// or a single selected merged region) -- falls back unchanged to the pre-existing
+    /// delta-based MoveActiveCell behavior.
+    /// </summary>
+    private void MoveActiveCellAfterEditCommit(CellAddress current, CellAddress adjustedTarget, Key key, bool shiftHeld)
+    {
+        var cycleKey = key switch
+        {
+            Key.Enter => GridSelectionCycleKey.Enter,
+            Key.Tab => GridSelectionCycleKey.Tab,
+            _ => (GridSelectionCycleKey?)null
+        };
+
+        var cyclePlan = cycleKey is { } resolvedKey
+            ? GridSelectionNavigationPlanner.PlanCycle(
+                _session.Workbook.GetSheet(current.Sheet),
+                _session.SelectedRange,
+                _session.SelectedRanges,
+                current,
+                resolvedKey,
+                forward: !shiftHeld)
+            : null;
+
+        if (cyclePlan is { } cycle)
+        {
+            _session.MoveActiveCellWithinSelection(cycle.Target);
+            return;
+        }
+
+        var rowDelta = GetCellIndexDelta(current.Row, adjustedTarget.Row);
+        var colDelta = GetCellIndexDelta(current.Col, adjustedTarget.Col);
+        if (rowDelta != 0 || colDelta != 0)
+            _session.MoveActiveCell(rowDelta, colDelta);
     }
 
     private void CancelCellEditAndRestoreCommittedText()
@@ -18212,9 +18273,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
                     _session.Workbook.GetSheet(current.Sheet),
                     current,
                     target);
-                var rowDelta = GetCellIndexDelta(current.Row, adjustedTarget.Row);
-                var colDelta = GetCellIndexDelta(current.Col, adjustedTarget.Col);
-                _session.MoveActiveCell(rowDelta, colDelta);
+                MoveActiveCellAfterEditCommit(current, adjustedTarget, e.Key, e.KeyModifiers.HasFlag(KeyModifiers.Shift));
                 RefreshShell(UiText.Get("MainLoc_Ready"));
                 FocusShellRegion(ShellFocusTarget.Worksheet);
             }
@@ -23459,7 +23518,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         // shared move command after Paste has validated and added the destination object.
         _drawingObjectClipboard.Clear();
 
-        if (TryCopySelectedDrawingObject(isCut: true))
+        if (await TryCopySelectedDrawingObjectAsync(isCut: true))
             return;
 
         if (!TryCommitPendingFormulaEdit())
@@ -23494,7 +23553,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             return;
 
         _drawingObjectClipboard.Clear();
-        if (TryCopySelectedDrawingObject())
+        if (await TryCopySelectedDrawingObjectAsync())
             return;
 
         if (!TryCommitPendingFormulaEdit())

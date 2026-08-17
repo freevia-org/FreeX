@@ -1293,7 +1293,7 @@ public static class DocumentViewLayoutPlanner
         var horizontalOffsetDip = PageLayout.PointsToDip(horizontalOffsetPt);
         var verticalOffsetDip = PageLayout.PointsToDip(verticalOffsetPt);
         var anchorPageIndex = surface.IsPrintLayout && surface.TextAreaHeightDip > 0
-            ? Math.Max(0, (int)(anchorContentYDip / surface.TextAreaHeightDip))
+            ? Math.Max(0, (int)(anchorContentYDip / surface.TextAreaHeightDip) / Math.Max(1, columnCount))
             : 0;
         var anchorPageTopDip = surface.IsPrintLayout ? surface.PageTopDip(anchorPageIndex) : 0;
         var paragraphYDip = surface.ContentYToPageSpaceY(anchorContentYDip, columnCount);

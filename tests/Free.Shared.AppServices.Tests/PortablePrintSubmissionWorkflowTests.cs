@@ -279,6 +279,54 @@ public sealed class PortablePrintSubmissionWorkflowTests : IDisposable
     }
 
     [Fact]
+    public async Task ExecuteAsync_SweepsAStaleKeptTemporaryPdfBeforeReservingTheNextOneButLeavesAFreshOneAlone()
+    {
+        // Regression test for the r138 fix that turned "temp PDF deleted while the handler was
+        // still reading it" into a permanent leak by calling Keep() with nothing to ever release
+        // it again. This drives the real, unmodified entry point (ExecuteAsync) exactly the way
+        // FreeW/FreeP's Avalonia print flow does -- no test-only hook is supplied.
+        var service = new RecordingPrintService
+        {
+            Discovery = AvailableDiscovery(),
+            Submission = new PrintSubmissionResult(
+                PrintSubmissionStatus.Submitted,
+                "Office",
+                SourceFileMayStillBeInUse: true),
+        };
+        var workflow = new PortablePrintSubmissionWorkflow(
+            service,
+            staleTemporaryPdfDirectoryPath: _temporaryRoot,
+            staleTemporaryPdfAge: TimeSpan.FromMinutes(30));
+
+        var firstResult = await workflow.ExecuteAsync(
+            (_, _) => Task.FromResult<PrintSelection?>(new("Office")),
+            async (output, _, token) => await output.WriteAsync(new byte[] { 1, 2, 3 }, token));
+        var firstPath = service.SubmittedPath!;
+        firstResult.Status.Should().Be(OperationStatus.Completed);
+        File.Exists(firstPath).Should().BeTrue(
+            "the workflow must not delete a file the handler may still be reading");
+
+        // Simulate the passage of real time (a crash, or simply the user not printing again for a
+        // while) by backdating the kept file well past the configured stale-after window, instead
+        // of actually sleeping in the test.
+        File.SetLastWriteTimeUtc(firstPath, DateTime.UtcNow - TimeSpan.FromHours(2));
+
+        var secondResult = await workflow.ExecuteAsync(
+            (_, _) => Task.FromResult<PrintSelection?>(new("Office")),
+            async (output, _, token) => await output.WriteAsync(new byte[] { 4, 5, 6 }, token));
+        var secondPath = service.SubmittedPath!;
+
+        secondResult.Status.Should().Be(OperationStatus.Completed);
+        secondPath.Should().NotBe(firstPath);
+        File.Exists(firstPath).Should().BeFalse(
+            "a kept temporary PDF old enough that any reader has had ample time to finish must " +
+            "eventually be reaped so it does not leak forever");
+        File.Exists(secondPath).Should().BeTrue(
+            "the file this very call just produced (and might still be handed to an external " +
+            "reader) must not be swept out from under it");
+    }
+
+    [Fact]
     public async Task ExecuteAsync_WindowsHandoffAcceptedWithoutConfirmedExitLeavesTemporaryPdfOnDisk()
     {
         // Mirrors the real FreeW/FreeP Avalonia wiring on Windows: PortablePrintSubmissionWorkflow

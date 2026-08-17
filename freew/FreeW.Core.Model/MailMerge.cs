@@ -2037,14 +2037,14 @@ public static class MailMerge
         foreach (var (id, style) in template.Styles)
             doc.Styles[id] = style;
 
-        CopyDocumentState(template, doc, block => CloneBlockWithRules(block, row, state, recordIndex));
+        CopyDocumentState(template, doc, block => CloneBlockWithRules(template, block, row, state, recordIndex));
         doc.Preserved.CopyFrom(template.Preserved);
         CopyPageSettings(template.Page, doc.Page);
         CopySectionHeadersFooters(template.FinalSectionHeadersFooters, doc.FinalSectionHeadersFooters,
-            source => CloneHeaderFooterWithRules(source, row, state, recordIndex));
+            source => CloneHeaderFooterWithRules(template, source, row, state, recordIndex));
 
         foreach (var block in template.Blocks)
-            doc.Blocks.Add(CloneBlockWithRules(block, row, state, recordIndex));
+            doc.Blocks.Add(CloneBlockWithRules(template, block, row, state, recordIndex));
 
         return doc;
     }
@@ -2365,6 +2365,7 @@ public static class MailMerge
     }
 
     private static Block CloneBlockWithRules(
+        TextDocument template,
         Block block,
         IReadOnlyDictionary<string, string> row,
         MergeState state,
@@ -2388,7 +2389,7 @@ public static class MailMerge
             switch (run.ComplexField?.Keyword)
             {
                 case "MERGEFIELD" when TryGetMergeFieldName(run.ComplexField, out var fieldName):
-                    run.Text = ResolveMergeFieldResult(run, fieldName, row);
+                    run.Text = ResolveMergeFieldResult(template, clone, run, fieldName, row);
                     run.ComplexField = null;
                     return true;
                 case "ADDRESSBLOCK" when IsSupportedCompositeMergeField(run.ComplexField):
@@ -2475,7 +2476,7 @@ public static class MailMerge
                         run.ComplexField.Instruction,
                         out var bookmarkName)
                     && state.Bookmarks.TryGetValue(bookmarkName, out var bookmarkValue):
-                    run.Text = ResolveBookmarkFieldResult(run, bookmarkValue);
+                    run.Text = ResolveBookmarkFieldResult(template, clone, run, bookmarkValue);
                     run.ComplexField = null;
                     return true;
                 default:
@@ -2555,6 +2556,8 @@ public static class MailMerge
     }
 
     private static string ResolveMergeFieldResult(
+        TextDocument template,
+        Block ownerBlock,
         Run run,
         string fieldName,
         IReadOnlyDictionary<string, string> row)
@@ -2564,7 +2567,7 @@ public static class MailMerge
         if (value.Length == 0)
             return string.Empty;
 
-        var culture = MergeFieldCulture(run);
+        var culture = MergeFieldCulture(template, ownerBlock, run);
         value = ApplyMergeFieldDatePicture(value, field.Instruction, culture);
         value = ApplyMergeFieldNumericPicture(value, field.Instruction, culture);
         var before = ComplexFieldEngine.SwitchValue(field.Instruction, 'b') ?? string.Empty;
@@ -2572,21 +2575,39 @@ public static class MailMerge
         return ApplyMergeFieldGeneralFormats(value, before, after, field.Instruction);
     }
 
-    private static string ResolveBookmarkFieldResult(Run run, string value)
+    private static string ResolveBookmarkFieldResult(
+        TextDocument template,
+        Block ownerBlock,
+        Run run,
+        string value)
     {
         if (value.Length == 0)
             return string.Empty;
 
         var instruction = run.ComplexField!.Instruction;
-        var culture = MergeFieldCulture(run);
+        var culture = MergeFieldCulture(template, ownerBlock, run);
         value = ApplyMergeFieldDatePicture(value, instruction, culture);
         value = ApplyMergeFieldNumericPicture(value, instruction, culture);
         return ApplyMergeFieldGeneralFormats(value, string.Empty, string.Empty, instruction);
     }
 
-    private static CultureInfo MergeFieldCulture(Run run)
+    // Resolves the effective proofing-language culture for a merged field's run the same way Word does
+    // (and the same way ComplexFieldEngine.ResolveFieldCulture does for CREATEDATE/SAVEDATE/PRINTDATE):
+    // the run's own direct w:lang wins, then the paragraph's based-on style chain, then the document
+    // default (docDefaults/w:rPrDefault/w:rPr/w:lang) -- only falling back to the host process culture
+    // when the document carries no language information at all. Word stores the language on individual
+    // runs only when it differs from what the run would otherwise inherit, so MERGEFIELD/REF date and
+    // numeric pictures whose language comes solely from the paragraph style or the document default
+    // (the common case) previously fell straight through to CultureInfo.CurrentCulture.
+    private static CultureInfo MergeFieldCulture(TextDocument template, Block ownerBlock, Run run)
     {
-        if (run.Formatting.LanguageTag is { Length: > 0 } tag)
+        var tag = run.Formatting.LanguageTag;
+        if (string.IsNullOrEmpty(tag) && FindOwningParagraph(ownerBlock, run) is { } paragraph)
+            tag = ResolveStyleLanguageTag(template, paragraph.StyleId);
+        if (string.IsNullOrEmpty(tag))
+            tag = template.DefaultRun.LanguageTag;
+
+        if (!string.IsNullOrEmpty(tag))
         {
             try
             {
@@ -2598,6 +2619,40 @@ public static class MailMerge
             }
         }
         return CultureInfo.CurrentCulture;
+    }
+
+    // Locates the Paragraph that owns <paramref name="run"/> within the top-level block currently being
+    // cloned. The block is either the paragraph itself or a Table containing it, mirroring what
+    // TransformBlockText walks; runs nested inside shapes/SmartArt/charts (which are not linked into any
+    // of the block's own paragraphs) resolve to null and fall back to the document default only.
+    private static Paragraph? FindOwningParagraph(Block ownerBlock, Run run)
+    {
+        return ownerBlock switch
+        {
+            Paragraph paragraph when paragraph.Runs.Contains(run) => paragraph,
+            Table table => table.Rows
+                .SelectMany(row => row.Cells)
+                .SelectMany(cell => cell.Paragraphs)
+                .FirstOrDefault(paragraph => paragraph.Runs.Contains(run)),
+            _ => null
+        };
+    }
+
+    // Mirrors ComplexFieldEngine.ResolveStyleLanguageTag: walks the paragraph style's based-on chain
+    // looking for the first style that carries an explicit run-level language tag.
+    private static string? ResolveStyleLanguageTag(TextDocument template, string? styleId)
+    {
+        var seen = new HashSet<string>(StringComparer.Ordinal);
+        while (!string.IsNullOrEmpty(styleId)
+            && seen.Add(styleId)
+            && template.Styles.TryGetValue(styleId, out var style))
+        {
+            if (!string.IsNullOrEmpty(style.Run.LanguageTag))
+                return style.Run.LanguageTag;
+            styleId = style.BasedOnStyleId;
+        }
+
+        return null;
     }
 
     private static string ApplyMergeFieldDatePicture(
@@ -3089,13 +3144,13 @@ public static class MailMerge
         }
     }
 
-    private static HeaderFooter? CloneHeaderFooterWithRules(HeaderFooter? source, IReadOnlyDictionary<string, string> row, MergeState state, int recordIndex)
+    private static HeaderFooter? CloneHeaderFooterWithRules(TextDocument template, HeaderFooter? source, IReadOnlyDictionary<string, string> row, MergeState state, int recordIndex)
     {
         if (source is null)
             return null;
         var clone = new HeaderFooter();
         foreach (var p in source.Paragraphs)
-            clone.Paragraphs.Add((Paragraph)CloneBlockWithRules(p, row, state, recordIndex));
+            clone.Paragraphs.Add((Paragraph)CloneBlockWithRules(template, p, row, state, recordIndex));
         return clone;
     }
 

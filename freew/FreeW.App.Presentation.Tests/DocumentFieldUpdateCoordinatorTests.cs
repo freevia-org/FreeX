@@ -68,6 +68,42 @@ public sealed class DocumentFieldUpdateCoordinatorTests
         document.Header.Paragraphs[0].Runs[0].Text.Should().Be("current.docx");
     }
 
+    // DocumentFieldStories reports BodyBlockIndex = -1 for header/footer/footnote/endnote/comment
+    // stories, so a date field in a header must still climb the paragraph's style chain the same way
+    // a body CREATEDATE/SAVEDATE/PRINTDATE field does -- not fall straight through to the document
+    // default just because it lives outside document.Blocks.
+    [Fact]
+    public void Update_resolves_createdate_field_in_header_from_owning_paragraphs_style_language()
+    {
+        var document = TextDocument.CreateEmpty();
+        document.Properties.Created = new DateTimeOffset(new DateTime(2026, 1, 5), TimeSpan.Zero);
+        document.Styles["Journal"] = new DocumentStyle
+        {
+            Id = "Journal",
+            Name = "Journal",
+            Run = new RunFormatting { LanguageTag = "fr-FR" },
+        };
+        document.Header = new HeaderFooter();
+        var headerParagraph = new Paragraph { StyleId = "Journal" };
+        headerParagraph.Runs.Add(new Run("stale")
+        {
+            ComplexField = new ComplexField(" CREATEDATE \\@ \"d MMMM yyyy\" "),
+        });
+        document.Header.Paragraphs.Add(headerParagraph);
+
+        var updated = DocumentFieldUpdateCoordinator.Update(
+            document,
+            document,
+            "current.docx",
+            new DateTime(2026, 8, 12, 12, 0, 0),
+            CultureInfo.InvariantCulture,
+            pageNumberText: "1",
+            pageCount: 1);
+
+        updated.Should().Be(1);
+        headerParagraph.Runs[0].Text.Should().Be("5 janvier 2026");
+    }
+
     [Fact]
     public void RequiresPageResolver_detects_simple_and_complex_page_references()
     {

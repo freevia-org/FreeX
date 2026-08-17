@@ -394,6 +394,12 @@ public sealed class SubtotalCommandTests
         sheet.SetCell(new CellAddress(sheet.Id, 4, 2), new NumberValue(20));
         sheet.SetCell(new CellAddress(sheet.Id, 5, 1), new TextValue("Grand Total"));
         sheet.SetFormula(new CellAddress(sheet.Id, 5, 2), "SUBTOTAL(9,B2:B4)");
+        // subtotal-formula-prefix-false-positive-deletion: RemoveSubtotalRowsCommand identifies
+        // rows via sheet.SubtotalRows -- real state SubtotalCommand itself sets -- not by scanning
+        // formula text, so a test standing in for "these rows came from Data > Subtotal" must mark
+        // them the same way.
+        sheet.SubtotalRows.Add(3);
+        sheet.SubtotalRows.Add(5);
         var range = new GridRange(new CellAddress(sheet.Id, 1, 1), new CellAddress(sheet.Id, 5, 2));
 
         var command = new RemoveSubtotalRowsCommand(sheet.Id, range);
@@ -410,6 +416,39 @@ public sealed class SubtotalCommandTests
         sheet.GetCell(3, 2)!.FormulaText.Should().Be("SUBTOTAL(9,B2:B2)");
         sheet.GetValue(5, 1).Should().Be(new TextValue("Grand Total"));
         sheet.GetCell(5, 2)!.FormulaText.Should().Be("SUBTOTAL(9,B2:B4)");
+        sheet.SubtotalRows.Should().BeEquivalentTo([3u, 5u]);
+    }
+
+    [Fact]
+    public void RemoveSubtotalRowsCommand_DoesNotDeleteHandAuthoredSubtotalFormulaRow()
+    {
+        // subtotal-formula-prefix-false-positive-deletion: a user's OWN hand-written formula that
+        // happens to start with "SUBTOTAL(" (never created via Data > Subtotal, so never tracked
+        // in sheet.SubtotalRows) must survive Remove All Subtotals untouched -- Remove All must be
+        // a no-op here, not a whole-row delete of the user's real data.
+        var workbook = new Workbook("test");
+        var sheet = workbook.AddSheet("Sheet1");
+        var context = new TestCommandContext(workbook);
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("Region"));
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 2), new TextValue("Sales"));
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 3), new TextValue("Running"));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 1), new TextValue("East"));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 2), new NumberValue(10));
+        sheet.SetCell(new CellAddress(sheet.Id, 3, 1), new TextValue("West"));
+        sheet.SetCell(new CellAddress(sheet.Id, 3, 2), new NumberValue(20));
+        // The user's own running-total formula, hand-typed into an ordinary data row -- never
+        // produced by Data > Subtotal, so sheet.SubtotalRows never gained an entry for row 3.
+        sheet.SetFormula(new CellAddress(sheet.Id, 3, 3), "SUBTOTAL(9,B2:B3)");
+        var range = new GridRange(new CellAddress(sheet.Id, 1, 1), new CellAddress(sheet.Id, 3, 3));
+
+        var command = new RemoveSubtotalRowsCommand(sheet.Id, range);
+        var outcome = command.Apply(context);
+
+        outcome.Success.Should().BeTrue();
+        sheet.GetValue(2, 1).Should().Be(new TextValue("East"));
+        sheet.GetValue(3, 1).Should().Be(new TextValue("West"));
+        sheet.GetValue(3, 2).Should().Be(new NumberValue(20));
+        sheet.GetCell(3, 3)!.FormulaText.Should().Be("SUBTOTAL(9,B2:B3)");
     }
 
     [Fact]
@@ -507,6 +546,10 @@ public sealed class SubtotalCommandTests
         sheet.SetCell(new CellAddress(sheet.Id, 4, 2), new NumberValue(20));
         sheet.SetCell(new CellAddress(sheet.Id, 5, 1), new TextValue("Grand Total"));
         sheet.SetFormula(new CellAddress(sheet.Id, 5, 2), "SUBTOTAL(9,B2:B4)");
+        // subtotal-formula-prefix-false-positive-deletion: mark these two rows as real,
+        // command-authored subtotal-row state (see the sibling comment above).
+        sheet.SubtotalRows.Add(3);
+        sheet.SubtotalRows.Add(5);
     }
 
     [Fact]
@@ -541,6 +584,10 @@ public sealed class SubtotalCommandTests
         sheet.SetCell(new CellAddress(sheet.Id, 10_000, 1), new TextValue("West Total"));
         sheet.SetFormula(new CellAddress(sheet.Id, 10_000, 2), "SUBTOTAL(9,B5001:B9999)");
         sheet.SetCell(new CellAddress(sheet.Id, 10_001, 1), new TextValue("After West"));
+        // subtotal-formula-prefix-false-positive-deletion: mark the two rows as real,
+        // command-authored subtotal-row state (see the sibling comment above).
+        sheet.SubtotalRows.Add(5_000);
+        sheet.SubtotalRows.Add(10_000);
         var range = new GridRange(new CellAddress(sheet.Id, 1, 1), new CellAddress(sheet.Id, 20_000, 10));
 
         var command = new RemoveSubtotalRowsCommand(sheet.Id, range);
@@ -571,8 +618,16 @@ public sealed class SubtotalCommandTests
         var sheet = workbook.AddSheet("Sheet1");
         for (uint row = 500; row <= rows; row += 500)
             sheet.SetFormula(new CellAddress(sheet.Id, row, 3), "SUM(A1:A2)");
+        // subtotal-formula-prefix-false-positive-deletion: SubtotalRowFinder.Find now intersects
+        // sheet.SubtotalRows (real command-authored state) with the range instead of scanning
+        // formula text, so the "sparse subtotal rows" this benchmark measures must be seeded the
+        // same way -- these 100 rows also carry a SUBTOTAL formula (matching what SubtotalCommand
+        // itself would have written) purely so the benchmark still models a realistic sheet shape.
         for (uint row = 1_000; row <= rows; row += 1_000)
+        {
             sheet.SetFormula(new CellAddress(sheet.Id, row, 12), "SUBTOTAL(9,L1:L2)");
+            sheet.SubtotalRows.Add(row);
+        }
 
         var range = new GridRange(new CellAddress(sheet.Id, 1, 1), new CellAddress(sheet.Id, rows, cols));
         var find = typeof(SubtotalCommand).Assembly

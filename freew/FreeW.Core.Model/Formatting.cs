@@ -371,12 +371,28 @@ public sealed record RunFormatting
     public ShadingPattern CharacterShadingPattern { get; init; } = ShadingPattern.Clear;
 
     /// <summary>
-    /// BCP-47 proofing language tag for this run (rPr/w:lang), e.g. <c>"en-US"</c>, <c>"fr-FR"</c>.
-    /// Null means no explicit language (inherits from the paragraph/document default). Round-trips to
-    /// docx as <c>w:lang w:val</c>; also sets the WPF run's <c>xml:lang</c> so the built-in spell checker
-    /// uses the correct dictionary when one is available.
+    /// BCP-47 proofing language tag for this run (rPr/w:lang/@w:val), e.g. <c>"en-US"</c>, <c>"fr-FR"</c>.
+    /// Applies to Latin/general-script text. Null means no explicit language (inherits from the
+    /// paragraph/document default). Round-trips to docx as <c>w:lang/@w:val</c>; also sets the WPF run's
+    /// <c>xml:lang</c> so the built-in spell checker uses the correct dictionary when one is available.
     /// </summary>
     public string? LanguageTag { get; init; }
+
+    /// <summary>
+    /// BCP-47 proofing language tag for East Asian script text in this run (rPr/w:lang/@w:eastAsia), e.g.
+    /// <c>"ja-JP"</c>, <c>"zh-CN"</c>. Independent of <see cref="LanguageTag"/> — Word stores the three
+    /// <c>w:lang</c> attributes (val/eastAsia/bidi) separately because a single run can carry distinct
+    /// proofing languages per script. Null means no explicit East Asian language tag was set.
+    /// </summary>
+    public string? EastAsiaLanguageTag { get; init; }
+
+    /// <summary>
+    /// BCP-47 proofing language tag for complex-script (right-to-left, e.g. Arabic/Hebrew) text in this
+    /// run (rPr/w:lang/@w:bidi), e.g. <c>"ar-SA"</c>, <c>"he-IL"</c>. Independent of
+    /// <see cref="LanguageTag"/> and <see cref="EastAsiaLanguageTag"/>. Null means no explicit
+    /// complex-script language tag was set.
+    /// </summary>
+    public string? BidiLanguageTag { get; init; }
 
     public static readonly RunFormatting Default = new();
 }

@@ -161,6 +161,42 @@ public sealed class TemporaryResourceLeaseTests
     }
 
     [Fact]
+    public void SweepStale_DeletesOnlyMatchingFilesOlderThanTheThreshold()
+    {
+        using var root = new TestTemporaryDirectory(nameof(SweepStale_DeletesOnlyMatchingFilesOlderThanTheThreshold));
+        var stale = Path.Combine(root.Path, "portable-print-old.pdf");
+        var fresh = Path.Combine(root.Path, "portable-print-new.pdf");
+        var unrelated = Path.Combine(root.Path, "other-file.pdf");
+        File.WriteAllText(stale, "stale");
+        File.WriteAllText(fresh, "fresh");
+        File.WriteAllText(unrelated, "unrelated");
+        File.SetLastWriteTimeUtc(stale, DateTime.UtcNow - TimeSpan.FromHours(2));
+        File.SetLastWriteTimeUtc(fresh, DateTime.UtcNow);
+
+        var swept = TemporaryFileLease.SweepStale(root.Path, "portable-print-", ".pdf", TimeSpan.FromHours(1));
+
+        swept.Should().Be(1);
+        File.Exists(stale).Should().BeFalse("a file older than the threshold must be reaped");
+        File.Exists(fresh).Should().BeTrue("a file younger than the threshold might still be in use");
+        File.Exists(unrelated).Should().BeTrue("files outside the prefix/extension must never be touched");
+    }
+
+    [Fact]
+    public void SweepStale_MissingOrEmptyDirectoryIsANoOp()
+    {
+        var missing = Path.Combine(
+            Path.GetTempPath(),
+            "freex-sweep-missing-" + Guid.NewGuid().ToString("N"));
+
+        TemporaryFileLease.SweepStale(missing, "portable-print-", ".pdf", TimeSpan.FromHours(1))
+            .Should().Be(0);
+
+        using var root = new TestTemporaryDirectory(nameof(SweepStale_MissingOrEmptyDirectoryIsANoOp));
+        TemporaryFileLease.SweepStale(root.Path, "portable-print-", ".pdf", TimeSpan.FromHours(1))
+            .Should().Be(0);
+    }
+
+    [Fact]
     public void AtomicWriter_UsesLeaseCleanupWithoutChangingReplaceSemantics()
     {
         using var root = new TestTemporaryDirectory(nameof(AtomicWriter_UsesLeaseCleanupWithoutChangingReplaceSemantics));

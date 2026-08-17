@@ -2,79 +2,35 @@ using FreeX.Core.Model;
 
 namespace FreeX.Core.Commands;
 
+/// <summary>
+/// Finds the rows within a range that <see cref="SubtotalCommand"/> itself created (each group's
+/// own subtotal row plus the grand-total row).
+/// </summary>
+/// <remarks>
+/// This intersects <see cref="Sheet.SubtotalRows"/> -- real state the command sets when it inserts
+/// a row -- with the requested range. It intentionally does NOT scan cell formula text for a
+/// "SUBTOTAL(" prefix: a hand-authored formula that happens to start with SUBTOTAL( (e.g. a user's
+/// own running total the user typed into an ordinary data row) is not evidence that Data &gt;
+/// Subtotal created that row, and treating it as such made "Remove Subtotals"/"Replace current
+/// subtotals" whole-row-delete the user's own unrelated data. See the review finding
+/// subtotal-formula-prefix-false-positive-deletion.
+/// </remarks>
 internal static class SubtotalRowFinder
 {
-    private const string SubtotalPrefix = "SUBTOTAL(";
-
     public static List<uint> Find(Sheet sheet, SheetId sheetId, GridRange range)
     {
-        if (!sheet.HasFormulas)
+        _ = sheetId; // sheet.SubtotalRows is already scoped to this sheet.
+        if (sheet.SubtotalRows.Count == 0)
             return [];
 
-        return range.CellCount <= sheet.FormulaCellCount
-            ? FindByRangeScan(sheet, sheetId, range)
-            : FindByFormulaIndex(sheet, range);
-    }
-
-    private static List<uint> FindByRangeScan(Sheet sheet, SheetId sheetId, GridRange range)
-    {
         var rows = new List<uint>();
-        for (uint row = range.Start.Row; row <= range.End.Row; row++)
+        foreach (var row in sheet.SubtotalRows)
         {
-            for (uint col = range.Start.Col; col <= range.End.Col; col++)
-            {
-                var formula = sheet.GetCell(new CellAddress(sheetId, row, col))?.FormulaText;
-                if (formula is not null && IsSubtotalFormula(formula))
-                {
-                    rows.Add(row);
-                    break;
-                }
-            }
+            if (row >= range.Start.Row && row <= range.End.Row)
+                rows.Add(row);
         }
-
-        return rows;
-    }
-
-    private static List<uint> FindByFormulaIndex(Sheet sheet, GridRange range)
-    {
-        List<uint>? rows = null;
-        foreach (var address in sheet.EnumerateFormulaCells())
-        {
-            if (address.Row < range.Start.Row ||
-                address.Row > range.End.Row ||
-                address.Col < range.Start.Col ||
-                address.Col > range.End.Col)
-            {
-                continue;
-            }
-
-            var formula = sheet.GetCell(address.Row, address.Col)?.FormulaText;
-            if (formula is not null && IsSubtotalFormula(formula))
-            {
-                rows ??= [];
-                rows.Add(address.Row);
-            }
-        }
-
-        if (rows is null)
-            return [];
 
         rows.Sort();
-        var writeIndex = 1;
-        for (var readIndex = 1; readIndex < rows.Count; readIndex++)
-        {
-            if (rows[readIndex] == rows[writeIndex - 1])
-                continue;
-
-            rows[writeIndex++] = rows[readIndex];
-        }
-
-        if (writeIndex < rows.Count)
-            rows.RemoveRange(writeIndex, rows.Count - writeIndex);
-
         return rows;
     }
-
-    private static bool IsSubtotalFormula(string formula) =>
-        formula.AsSpan().TrimStart().StartsWith(SubtotalPrefix, StringComparison.OrdinalIgnoreCase);
 }

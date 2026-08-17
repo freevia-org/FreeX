@@ -3390,12 +3390,20 @@ public sealed class MainWindowHeadlessTests : IDisposable
         printPlan.PreviewPlan.Pages.Select(page => page.ThumbnailLabel)
             .Should()
             .Equal("Slide 1", "Slide 2", "Slide 3", "Slide 4");
-        printPlan.NativePrinterDialogDeferred.Should().BeTrue();
-        printPlan.NativePrintHandoff.Status.Should().Be(PresentationNativePrintHandoffStatus.HostPrinterUnavailableDeferredByHost);
+        // Round 139 remediation: FreeP.App.Avalonia.csproj's FREEP_WINDOWS_CAPTURE constant was never
+        // actually defined (MSBuild PropertyGroup-ordering bug -- see FreeP.App.Avalonia.csproj), so
+        // CreatePlatformPrintService() always fell back to CupsPrintService even on Windows, and
+        // Cups.IsSupported is false here, which is why this test used to see the printer host reported
+        // as unavailable/deferred. Now that the constant is defined, MainWindow's default (no
+        // `printService:` override, as here) uses the real WindowsPrintService, whose IsSupported is
+        // just OperatingSystem.IsWindows() -- true regardless of whether any printer is actually
+        // installed -- so the host is genuinely available and package-ready-for-handoff, not deferred.
+        printPlan.NativePrinterDialogDeferred.Should().BeFalse();
+        printPlan.NativePrintHandoff.Status.Should().Be(PresentationNativePrintHandoffStatus.PackageReadyHostHandoffRequired);
         printPlan.NativePrintHandoff.IsPackageReady.Should().BeTrue();
         printPlan.NativePrintHandoff.RequiresHostHandoff.Should().BeTrue();
-        printPlan.NativePrintHandoff.CanOpenNativePrintDialog.Should().BeFalse();
-        printPlan.NativePrintHandoff.Reason.Should().Contain("host printer adapter is unavailable");
+        printPlan.NativePrintHandoff.CanOpenNativePrintDialog.Should().BeTrue();
+        printPlan.NativePrintHandoff.Reason.Should().Contain("ready for native host printer handoff");
         printPlan.LayoutChoices.Select(choice => choice.Layout.SlidesPerPage).Should().Equal(1, 1, 1, 2, 3, 4, 6, 9);
         printPlan.RangeChoices.Select(choice => choice.Kind).Should().Contain(PresentationSlideRangeKind.CurrentSlide);
     }
@@ -3435,7 +3443,11 @@ public sealed class MainWindowHeadlessTests : IDisposable
         descriptor.CanMaterialize.Should().BeTrue();
         descriptor.SuggestedDocumentName.Should().Be("Presentation");
         descriptor.SuggestedPrintJobName.Should().Be("Presentation - Notes Pages - Slide 1, 1 page");
-        handoffPlan!.Status.Should().Be(PresentationNativePrintHandoffStatus.HostPrinterUnavailableDeferredByHost);
+        // See the comment on the same assertion in Print_command_records_shared_backstage_print_plan:
+        // with FREEP_WINDOWS_CAPTURE now actually defined, MainWindow's default print service is the
+        // real WindowsPrintService (IsSupported is unconditionally true on Windows), so the host is
+        // available and handoff is package-ready rather than deferred.
+        handoffPlan!.Status.Should().Be(PresentationNativePrintHandoffStatus.PackageReadyHostHandoffRequired);
         handoffPlan.SuggestedTempFileName.Should().Be("Presentation-print.pdf");
         handoffPlan.SuggestedPrintJobName.Should().Be(descriptor.SuggestedPrintJobName);
     }
@@ -3502,10 +3514,14 @@ public sealed class MainWindowHeadlessTests : IDisposable
         renderedRangeRows.Should().Contain(row => row.StartsWith("Selected: Selected Slides", StringComparison.Ordinal));
         renderedRangeRows.Should().Contain(row => row.Contains("Custom Range", StringComparison.Ordinal));
         renderedRowCount.Should().BeGreaterThan(renderedOptionLines.Count);
-        printPlan.NativePrinterDialogDeferred.Should().BeTrue();
-        printPlan.NativePrintHandoff.StatusText.Should().Be("Deferred by host");
+        // See the comment on the same assertions in Print_command_records_shared_backstage_print_plan:
+        // with FREEP_WINDOWS_CAPTURE now actually defined, MainWindow's default print service is the
+        // real WindowsPrintService (IsSupported is unconditionally true on Windows), so the host is
+        // available and handoff is package-ready rather than deferred.
+        printPlan.NativePrinterDialogDeferred.Should().BeFalse();
+        printPlan.NativePrintHandoff.StatusText.Should().Be("Ready for host handoff");
         printPlan.NativePrintHandoff.IsPackageReady.Should().BeTrue();
-        printPlan.NativePrintHandoff.CanOpenNativePrintDialog.Should().BeFalse();
+        printPlan.NativePrintHandoff.CanOpenNativePrintDialog.Should().BeTrue();
     }
 
     [Fact]

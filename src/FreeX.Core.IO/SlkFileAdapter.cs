@@ -102,7 +102,13 @@ public sealed class SlkFileAdapter : IFileAdapter
             return;
         }
 
-        var sheet = workbook.Sheets[0];
+        // Real Excel's SYLK Save-As exports the active (currently selected) sheet, not the
+        // first sheet in tab order — matching DelimitedTextWorkbookWriter/PrnFileAdapter's
+        // identical active-sheet rule for CSV/TXT/PRN.
+        var activeSheetIndex = workbook.ActiveSheetIndex is { } activeIndex && activeIndex >= 0 && activeIndex < workbook.Sheets.Count
+            ? activeIndex
+            : 0;
+        var sheet = workbook.Sheets[activeSheetIndex];
         var cells = sheet.GetOccupiedCellMap()
             .Where(kvp => IsValidPosition(kvp.Key.Row, kvp.Key.Col))
             .OrderBy(kvp => kvp.Key.Row).ThenBy(kvp => kvp.Key.Col)

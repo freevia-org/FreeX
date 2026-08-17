@@ -194,6 +194,62 @@ public sealed class TemporaryFileLease : TemporaryResourceLease
         return _fileSystem.OpenFileForWrite(Path, useAsync, bufferSize);
     }
 
+    /// <summary>
+    /// Best-effort reaper for files a caller previously <see cref="Keep"/>-ed because an external
+    /// process (e.g. a PDF viewer that accepted a "printto" handoff) might still have been reading
+    /// them at the time. A kept lease has no destructor and nothing else in the process re-acquires
+    /// ownership of the path, so without this sweep every kept file is a permanent leak. Called
+    /// opportunistically before reserving the next temporary file of the same kind, this survives an
+    /// app crash (it only looks at on-disk timestamps, not process state) without letting the
+    /// directory grow without bound: anything older than <paramref name="olderThan"/> is assumed
+    /// safe to remove, and a file still genuinely in use simply fails to delete and is retried on a
+    /// later sweep. Never throws; a failed or partial sweep must not block the caller's own work.
+    /// </summary>
+    /// <returns>The number of stale files actually deleted.</returns>
+    public static int SweepStale(
+        string directoryPath,
+        string prefix,
+        string extension,
+        TimeSpan olderThan)
+    {
+        if (string.IsNullOrEmpty(directoryPath))
+            return 0;
+
+        string[] candidates;
+        try
+        {
+            if (!Directory.Exists(directoryPath))
+                return 0;
+            candidates = Directory.GetFiles(directoryPath, prefix + "*" + extension);
+        }
+        catch
+        {
+            // The directory is inaccessible or racing with concurrent cleanup; skip this pass.
+            return 0;
+        }
+
+        var cutoffUtc = DateTime.UtcNow - olderThan;
+        var swept = 0;
+        foreach (var candidate in candidates)
+        {
+            try
+            {
+                if (File.GetLastWriteTimeUtc(candidate) > cutoffUtc)
+                    continue;
+
+                File.Delete(candidate);
+                swept++;
+            }
+            catch
+            {
+                // Still open in whatever process was reading it, or another sweep already won;
+                // either way it is safe to leave for a later pass.
+            }
+        }
+
+        return swept;
+    }
+
     public void WriteAllBytes(ReadOnlySpan<byte> bytes)
     {
         using var stream = OpenWrite();

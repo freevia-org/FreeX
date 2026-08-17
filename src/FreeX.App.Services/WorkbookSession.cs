@@ -17,8 +17,6 @@ public sealed class WorkbookSession : IDisposable
 {
     private sealed class ReplaceSubtotalRowsCommand : IWorkbookCommand
     {
-        private const string SubtotalFormulaPrefix = "SUBTOTAL(";
-
         private readonly SheetId _sheetId;
         private readonly GridRange _range;
         private readonly uint _groupColumnOffset;
@@ -92,34 +90,23 @@ public sealed class WorkbookSession : IDisposable
                     sheetRange.End.Col));
         }
 
+        // subtotal-formula-prefix-false-positive-deletion: count rows via sheet.SubtotalRows --
+        // real state SubtotalCommand itself set when it inserted a row -- rather than guessing from
+        // formula text. Scanning for a "SUBTOTAL(" formula prefix (the old approach) mistook a
+        // user's own hand-authored SUBTOTAL formula for a row this command created, which fed a
+        // wrong compacted range into the "Replace current subtotals" re-run and could make it
+        // silently swallow/duplicate real data rows.
         private static int CountSubtotalRows(Sheet sheet, GridRange range)
         {
-            if (!sheet.HasFormulas)
-                return 0;
-
-            var rows = new HashSet<uint>();
-            foreach (var address in sheet.EnumerateFormulaCells())
+            var count = 0;
+            foreach (var row in sheet.SubtotalRows)
             {
-                if (address.Row < range.Start.Row ||
-                    address.Row > range.End.Row ||
-                    address.Col < range.Start.Col ||
-                    address.Col > range.End.Col)
-                {
-                    continue;
-                }
-
-                if (IsSubtotalFormula(sheet.GetCell(address)?.FormulaText))
-                    rows.Add(address.Row);
+                if (row >= range.Start.Row && row <= range.End.Row)
+                    count++;
             }
 
-            return rows.Count;
+            return count;
         }
-
-        private static bool IsSubtotalFormula(string? formula) =>
-            formula is not null &&
-            formula.AsSpan().TrimStart().StartsWith(
-                SubtotalFormulaPrefix,
-                StringComparison.OrdinalIgnoreCase);
     }
 
     private const string MultiRangeClipboardErrorSuffix =
@@ -1056,6 +1043,18 @@ public sealed class WorkbookSession : IDisposable
 
     private void SetSingleSelectedRange(GridRange range) =>
         SetSelectedRanges(range, [range]);
+
+    /// <summary>
+    /// R139-freex-cell-editing-edit-commit-collapses-range-selection: true when
+    /// <paramref name="address"/> falls inside the CURRENT selection (any area of
+    /// <see cref="SelectedRanges"/>, or <see cref="SelectedRange"/> when there are no separate
+    /// areas). Used by <see cref="ApplySuccessfulEditResult"/> to decide whether committing an
+    /// edit may keep a pre-existing multi-cell selection intact instead of always collapsing it.
+    /// </summary>
+    private bool IsAddressWithinCurrentSelection(CellAddress address) =>
+        SelectedRanges.Count > 0
+            ? SelectedRanges.Any(range => range.Contains(address))
+            : SelectedRange.Contains(address);
 
     private void SetSelectedRanges(GridRange primaryRange, IReadOnlyList<GridRange> ranges)
     {
@@ -6578,7 +6577,16 @@ public sealed class WorkbookSession : IDisposable
         ActiveCell = address;
         ActiveSheet.ActiveRow = address.Row;
         ActiveSheet.ActiveCol = address.Col;
-        SetSingleSelectedRange(new GridRange(address, address));
+        // R139-freex-cell-editing-edit-commit-collapses-range-selection: only collapse to a
+        // single cell when the edited address falls OUTSIDE every currently selected area (e.g.
+        // the sheet-switch branch above, or a formula-point-mode edit elsewhere). When the
+        // committed cell is still part of a pre-existing multi-cell selection -- the standard
+        // "pre-select a range, type values, Enter/Tab through it" workflow -- Excel keeps the
+        // WHOLE selection intact through the commit; only the active cell later advances within
+        // it (MoveActiveCellWithinSelection / the host's own Enter/Tab CommitAndMove handling), so
+        // leave SelectedRange/SelectedRanges untouched here rather than always resetting them.
+        if (!IsAddressWithinCurrentSelection(address))
+            SetSingleSelectedRange(new GridRange(address, address));
         FormulaEditAddress = null;
         RefreshLinkedPicturesForEditedCells(result);
         MarkDirty();

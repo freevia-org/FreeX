@@ -86,10 +86,18 @@ public static class FreeWExportWorkflow
         ArgumentException.ThrowIfNullOrWhiteSpace(path);
         ArgumentNullException.ThrowIfNull(renderAsync);
 
+        // ConfigureAwait(false) is required here: both FreeW.App.Host (WPF) call sites invoke
+        // this whole chain via `.GetAwaiter().GetResult()` on the UI thread. AtomicExportExecutor
+        // opens the destination temp file with real async I/O (FileOptions.Asynchronous); if that
+        // write genuinely completes asynchronously, an un-configured await here would try to
+        // resume by posting its continuation back to the captured WPF
+        // DispatcherSynchronizationContext -- but that dispatcher is the very UI thread blocked
+        // in GetResult(), so the app hangs forever. AtomicExportExecutor's own internals already
+        // ConfigureAwait(false) throughout; this call site was the missing link.
         var execution = await new AtomicExportExecutor().ExecuteAsync<FreeWExportArtifact>(
             path,
             (output, token) => renderAsync(output, token),
-            cancellationToken);
+            cancellationToken).ConfigureAwait(false);
         if (execution.Succeeded)
         {
             var artifact = execution.Value!;

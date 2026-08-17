@@ -1,5 +1,6 @@
 using System.IO;
 using System.Windows;
+using System.Windows.Threading;
 using Free.Shared.AppServices;
 using Free.Shared.Pdf;
 using Free.Shared.Pdf.Skia;
@@ -270,11 +271,52 @@ internal sealed class WpfPresentationFileFeedbackPort : IPresentationFileCommand
 {
     private readonly SisterWpfFileCommandWorkflow _workflow;
 
-    public WpfPresentationFileFeedbackPort(SisterWpfFileCommandWorkflow workflow) => _workflow = workflow;
+    // r139-remediation: captured at construction time, which production always does on the UI
+    // thread (WpfPresentationFileCommandSessionFactory.Create runs inside MainWindow's
+    // constructor). This is the thread whose Window/MessageBox calls are legal -- see ReportAsync.
+    private readonly Dispatcher _dispatcher;
+
+    public WpfPresentationFileFeedbackPort(SisterWpfFileCommandWorkflow workflow)
+    {
+        _workflow = workflow;
+        _dispatcher = Dispatcher.CurrentDispatcher;
+    }
 
     public Task ReportAsync(PresentationFileCommandResult result, CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
+
+        // r139-remediation (sweep78-1 regression): ExportPdfArtifactAsync's ConfigureAwait(false)
+        // chain can resume this call on a thread-pool thread while the UI thread sits blocked
+        // inside RunFileCommand's `command.GetAwaiter().GetResult()` -- a plain synchronous wait
+        // that does NOT pump the Dispatcher queue. WPF Window/MessageBox access is thread-affine
+        // (DispatcherObject.VerifyAccess), so calling ReportOnUiThread from the wrong thread threw
+        // InvalidOperationException ("a different thread owns it") deep inside MessageBox.Show,
+        // turning a SUCCESSFUL export into a visible crash.
+        //
+        // Adding ConfigureAwait(false) here would NOT fix it -- that only controls where the
+        // *continuation* resumes, not which thread touches the Window. A *blocking* marshal
+        // (Dispatcher.Invoke) would not fix it either -- it would deadlock, because the blocked UI
+        // thread never pumps the queue Invoke waits on. So: queue the work with BeginInvoke (does
+        // not block) and return immediately; the feedback runs once the UI thread's message loop
+        // is free again, which is exactly when GetResult() unblocks. When this is called ON the UI
+        // thread already (the ordinary synchronous-completion case for New/Open/Save), run
+        // directly so behavior there is unchanged -- CheckAccess() makes both branches safe to
+        // call from either thread.
+        if (_dispatcher.CheckAccess())
+        {
+            ReportOnUiThread(result);
+        }
+        else
+        {
+            _dispatcher.BeginInvoke(() => ReportOnUiThread(result));
+        }
+
+        return Task.CompletedTask;
+    }
+
+    private void ReportOnUiThread(PresentationFileCommandResult result)
+    {
         var plan = PresentationNativeCommandOutcomePlanner.BuildFileFeedback(result);
         if (plan.Error is { } error)
         {
@@ -292,6 +334,5 @@ internal sealed class WpfPresentationFileFeedbackPort : IPresentationFileCommand
                 result.Message ?? PresentationNativeCommandOutcomePlanner.ExportCompletedStatus,
                 result.ImageDiagnostics);
         }
-        return Task.CompletedTask;
     }
 }

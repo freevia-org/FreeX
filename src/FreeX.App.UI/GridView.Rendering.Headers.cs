@@ -14,7 +14,9 @@ public partial class GridView
     private static readonly ConcurrentDictionary<uint, string> RowHeaderCache = new();
     // Stronger tint applied to the active cell's own row/column header within a
     // multi-cell selection, so the active cell stays visually locatable (matches Excel).
-    private static readonly Brush ActiveHeaderHighlightBrush = MakeBrush(151, 181, 135);
+    // Mutable (not readonly): part of the HC-reactive chrome palette -- see
+    // GridView.cs's ApplyHighContrastChromePalette.
+    private static Brush ActiveHeaderHighlightBrush = MakeBrush(151, 181, 135);
     private readonly Dictionary<HeaderTextDrawingKey, DrawingGroup> _headerTextDrawingCache = new();
     private DrawingGroup? _headerBaseLayerCache;
     private HeaderBaseLayerCacheKey _headerBaseLayerCacheKey;
@@ -481,7 +483,7 @@ public partial class GridView
             return;
 
         var textValue = FormatColumnHeader(col.Col, UseR1C1ReferenceStyle);
-        var text = GetDefaultFormattedText(textValue, 11, pixelsPerDip);
+        var text = GetDefaultHeaderFormattedText(textValue, 11, pixelsPerDip);
 
         DrawHeaderText(dc, textValue, text, 11, pixelsPerDip, new Point(
             rect.Left + (rect.Width - text.Width) / 2,
@@ -504,7 +506,7 @@ public partial class GridView
             return;
 
         var textValue = FormatRowHeader(row.Row);
-        var text = GetDefaultFormattedText(textValue, 11, pixelsPerDip);
+        var text = GetDefaultHeaderFormattedText(textValue, 11, pixelsPerDip);
 
         DrawHeaderText(dc, textValue, text, 11, pixelsPerDip, new Point(
             rect.Left + (rect.Width - text.Width) / 2,
@@ -662,7 +664,7 @@ public partial class GridView
         var rect = CreateOutlineButtonRect(center);
         dc.DrawRectangle(OutlineButtonBrush, OutlineButtonPen, rect);
         var textValue = level.ToString(CultureInfo.InvariantCulture);
-        var text = GetDefaultFormattedText(textValue, 9, pixelsPerDip);
+        var text = GetDefaultHeaderFormattedText(textValue, 9, pixelsPerDip);
         DrawHeaderText(dc, textValue, text, 9, pixelsPerDip, new Point(
             rect.Left + (rect.Width - text.Width) / 2,
             rect.Top + (rect.Height - text.Height) / 2));

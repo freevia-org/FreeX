@@ -11,6 +11,38 @@ internal static class PresentationModelCloneHelper
         return shape?.Table;
     }
 
+    /// <summary>
+    /// Resolves the owning <see cref="SlideShape"/> for a table shape (not just the
+    /// <see cref="TableShape"/> payload). Structural table-edit commands need the shape so
+    /// they can resync <see cref="SlideShape.ExtentCxEmu"/>/<see cref="SlideShape.ExtentCyEmu"/>
+    /// after mutating the grid. Returns null unless the shape exists and actually has a table.
+    /// </summary>
+    internal static SlideShape? FindTableShape(Presentation presentation, int slideIndex, uint shapeId)
+    {
+        if (slideIndex < 0 || slideIndex >= presentation.Slides.Count)
+            return null;
+
+        var shape = ShapeHelper.Find(presentation, slideIndex, shapeId);
+        return shape?.Table is not null ? shape : null;
+    }
+
+    /// <summary>
+    /// Resyncs a table shape's declared graphicFrame extent (<see cref="SlideShape.ExtentCxEmu"/>/
+    /// <see cref="SlideShape.ExtentCyEmu"/>) to match the actual content of its
+    /// <see cref="TableShape"/> grid — the sum of column widths and the sum of row heights.
+    /// Must be called after every command that inserts/deletes a row or column, or changes a
+    /// row height / column width (including on <c>Revert</c>, so undo restores the extent that
+    /// matched the pre-edit grid, not whatever the post-edit grid left behind).
+    /// </summary>
+    internal static void SyncTableShapeExtent(SlideShape shape)
+    {
+        var table = shape.Table;
+        if (table is null) return;
+
+        shape.ExtentCxEmu = table.ColumnWidthsEmu.Sum();
+        shape.ExtentCyEmu = table.Rows.Sum(row => row.HeightEmu);
+    }
+
     internal static int GridColumnToCellIndex(TableRow row, int targetGridCol)
     {
         int gridPos = 0;

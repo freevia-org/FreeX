@@ -10,24 +10,58 @@ namespace FreeP.App.Recording.Windows;
 /// <summary>
 /// Uses the Windows Runtime camera stack for local MP4 capture and the shared MCI path for narration.
 /// WinRT work is run on a thread-pool thread, which keeps its awaits off the dispatcher and avoids a
-/// SynchronizationContext deadlock. It does not make the calls non-blocking: the synchronous
-/// recording contract means <see cref="BeginCapture"/> and <see cref="CompleteCapture"/> block their
-/// caller until camera init and teardown finish, so a caller on the UI thread stays blocked for that
-/// long. Making them genuinely asynchronous would have to start at the recording contract itself.
+/// SynchronizationContext deadlock. The synchronous recording contract still means
+/// <see cref="BeginCapture"/> and <see cref="CompleteCapture"/> block their caller until camera init and
+/// teardown finish -- but that wait is bounded by <see cref="_deviceOperationTimeout"/>
+/// (<see cref="DefaultDeviceOperationTimeout"/> in production). A driver/device that never answers
+/// (claimed by another app, a wedged USB webcam driver, etc.) previously hung the caller -- typically the
+/// UI thread, since <see cref="Recording.WindowsRecordingCaptureBackend"/> is invoked synchronously from
+/// the slide-show recording UI -- forever, with no way to recover short of killing the process. Now the
+/// call unblocks after the timeout and the failure is reported through the same
+/// <see cref="_captureFailures"/> degrade path an outright device error already used: the user sees the
+/// affected slide's camera capture reported as failed/deferred (recording continues for narration and any
+/// other slides) instead of the whole app freezing.
 /// </summary>
 public class WindowsNativeRecordingCaptureEngine : IWindowsRecordingCaptureEngine
 {
+    internal static readonly TimeSpan DefaultDeviceOperationTimeout = TimeSpan.FromSeconds(15);
+
     private readonly WindowsRecordingCaptureEngine _narrationEngine;
     private readonly string _adapterName;
     private readonly Dictionary<(string DeviceId, int SlideIndex), ActiveCameraCapture> _activeCaptures = new();
     private readonly Dictionary<(string DeviceId, int SlideIndex), string> _captureFailures = new();
+    private readonly Func<WindowsRecordingCaptureStartRequest, Task<ActiveCameraCapture>> _startCamera;
+    private readonly Func<ActiveCameraCapture, Task<byte[]>> _stopCamera;
+    private readonly TimeSpan _deviceOperationTimeout;
 
     public WindowsNativeRecordingCaptureEngine(string adapterName)
+        : this(adapterName, StartCameraAsync, StopCameraAsync, DefaultDeviceOperationTimeout)
     {
+    }
+
+    /// <summary>
+    /// Test seam: lets tests stand in for the real WinRT camera calls (which cannot be made to hang
+    /// deterministically in CI) and shrink the timeout so the bound is exercised in milliseconds instead of
+    /// <see cref="DefaultDeviceOperationTimeout"/>'s 15 seconds. Production always uses the public
+    /// constructor above, which wires the real <see cref="StartCameraAsync"/>/<see cref="StopCameraAsync"/>
+    /// WinRT calls and the real timeout.
+    /// </summary>
+    internal WindowsNativeRecordingCaptureEngine(
+        string adapterName,
+        Func<WindowsRecordingCaptureStartRequest, Task<ActiveCameraCapture>> startCamera,
+        Func<ActiveCameraCapture, Task<byte[]>> stopCamera,
+        TimeSpan deviceOperationTimeout)
+    {
+        ArgumentNullException.ThrowIfNull(startCamera);
+        ArgumentNullException.ThrowIfNull(stopCamera);
+
         _adapterName = string.IsNullOrWhiteSpace(adapterName)
             ? "Windows recording capture adapter"
             : adapterName.Trim();
         _narrationEngine = new WindowsRecordingCaptureEngine(_adapterName);
+        _startCamera = startCamera;
+        _stopCamera = stopCamera;
+        _deviceOperationTimeout = deviceOperationTimeout;
     }
 
     public void BeginCapture(WindowsRecordingCaptureStartRequest request)
@@ -47,7 +81,7 @@ public class WindowsNativeRecordingCaptureEngine : IWindowsRecordingCaptureEngin
 
         try
         {
-            _activeCaptures[key] = RunAsync(() => StartCameraAsync(request));
+            _activeCaptures[key] = RunAsync(() => _startCamera(request));
         }
         catch (Exception ex) when (ex is not OutOfMemoryException)
         {
@@ -81,7 +115,7 @@ public class WindowsNativeRecordingCaptureEngine : IWindowsRecordingCaptureEngin
 
         try
         {
-            var payload = RunAsync(() => StopCameraAsync(capture));
+            var payload = RunAsync(() => _stopCamera(capture));
             if (payload.Length == 0)
             {
                 return WindowsRecordingCaptureResult.Deferred(
@@ -180,10 +214,40 @@ public class WindowsNativeRecordingCaptureEngine : IWindowsRecordingCaptureEngin
         int slideIndex) =>
         (device.DeviceId, slideIndex);
 
-    private static T RunAsync<T>(Func<Task<T>> operation) =>
-        Task.Run(operation).GetAwaiter().GetResult();
+    /// <summary>
+    /// Runs <paramref name="operation"/> on a thread-pool thread and blocks the caller for at most
+    /// <see cref="_deviceOperationTimeout"/>. Previously this waited on the antecedent task with no bound
+    /// at all, so a WinRT call that never completes (device claimed by another app, a wedged driver) hung
+    /// the caller -- typically the UI thread -- forever. The bound does not cancel the underlying WinRT
+    /// call (there is no cancellation token to thread through <see cref="MediaCapture"/>'s APIs), so a
+    /// genuinely wedged call keeps running orphaned in the background; what changes is that the caller is
+    /// no longer held hostage to it and the timeout is reported as a normal capture failure through the
+    /// existing <see cref="_captureFailures"/> degrade path.
+    /// </summary>
+    private T RunAsync<T>(Func<Task<T>> operation)
+    {
+        var task = Task.Run(operation);
 
-    private sealed class ActiveCameraCapture : IDisposable
+        // Task.WaitAny (unlike Task.Wait) does not itself throw when the task faults inside the
+        // timeout window -- it just reports that the task completed, so the exception can still be
+        // unwrapped normally via GetAwaiter().GetResult() below instead of surfacing as an
+        // AggregateException.
+        var completedIndex = Task.WaitAny([task], _deviceOperationTimeout);
+        if (completedIndex == -1)
+        {
+            throw new TimeoutException(
+                $"{_adapterName}: the Windows camera capture device did not respond within " +
+                $"{_deviceOperationTimeout.TotalSeconds:0.#}s.");
+        }
+
+        return task.GetAwaiter().GetResult();
+    }
+
+    /// <summary>
+    /// Internal (not private) so it can appear in the internal test-seam constructor's
+    /// <c>Func&lt;..., Task&lt;ActiveCameraCapture&gt;&gt;</c> parameter types above.
+    /// </summary>
+    internal sealed class ActiveCameraCapture : IDisposable
     {
         public ActiveCameraCapture(
             MediaCapture mediaCapture,
