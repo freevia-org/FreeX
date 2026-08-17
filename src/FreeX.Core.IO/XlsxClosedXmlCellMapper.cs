@@ -104,6 +104,15 @@ internal static class XlsxClosedXmlCellMapper
         return normalized;
     }
 
+    /// <summary>
+    /// True when a formula ClosedXML cannot evaluate should fall back to its cached value.
+    /// </summary>
+    /// <remarks>
+    /// The structural test leads deliberately: an external reference is spelled with brackets, which
+    /// is part of the formula grammar and cannot be localized away. The message check only widens
+    /// that to phrasings ClosedXML uses for the same condition, so a localized runtime degrades to
+    /// the grammar test rather than losing the fallback entirely.
+    /// </remarks>
     private static bool ShouldUseCachedExternalFormulaValue(IXLCell xlCell, NotImplementedException ex) =>
         xlCell.FormulaA1.Contains('[', StringComparison.Ordinal) ||
         ex.Message.Contains("References from other files", StringComparison.OrdinalIgnoreCase);

@@ -62,6 +62,16 @@ public static class WorkbookImportFailurePlanner
     {
         for (var current = exception; current is not null; current = current.InnerException)
         {
+            // Prefer where it came from. "XSLT" survives localization better than a sentence would,
+            // because it is a format name rather than prose, but the transform engine is the fact
+            // being tested and a message is not required to mention it at all.
+            var declaringType = current.TargetSite?.DeclaringType?.FullName;
+            if (declaringType is not null
+                && declaringType.StartsWith("System.Xml.Xsl", StringComparison.Ordinal))
+            {
+                return true;
+            }
+
             if (current.Message.Contains("XSLT", StringComparison.OrdinalIgnoreCase))
                 return true;
         }
