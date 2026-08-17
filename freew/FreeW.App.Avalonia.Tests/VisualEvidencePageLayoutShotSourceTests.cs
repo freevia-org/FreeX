@@ -211,7 +211,9 @@ public sealed class VisualEvidencePageLayoutShotSourceTests
     {
         var source = File.ReadAllText(RepositoryFile("freew", "FreeW.App.Avalonia", "Editing", "DocumentView.cs"));
 
-        source.Should().Contain("new Pen(new SolidColorBrush(Colors.Black), 1.0)");
+        // Immutable because the rule pen is a static field: a mutable Pen carries affinity to the
+        // thread that built it and the compositor reads it again on the render thread.
+        source.Should().Contain("new ImmutablePen(new ImmutableSolidColorBrush(Colors.Black), 1.0)");
         source.Should().Contain("var pixelCenteredX = Math.Floor(gapCentreX) - 0.5");
         source.Should().Contain("new Point(pixelCenteredX, ruleTop)");
     }

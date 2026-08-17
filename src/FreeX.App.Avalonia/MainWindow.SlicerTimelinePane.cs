@@ -5,6 +5,7 @@ using Avalonia.Controls.Primitives;
 using Avalonia.Input;
 using Avalonia.Layout;
 using Avalonia.Media;
+using Avalonia.Media.Immutable;
 using Avalonia.VisualTree;
 
 using FreeX.App.Presentation.PivotUI;
@@ -21,16 +22,16 @@ public sealed partial class MainWindow
 {
     private const double SlicerTimelinePaneWidth = 280;
 
-    private static readonly IBrush SlicerTimelinePaneBackground = new SolidColorBrush(Color.FromRgb(255, 255, 255));
-    private static readonly IBrush SlicerTimelinePaneBorder = new SolidColorBrush(Color.FromRgb(200, 200, 200));
-    private static readonly IBrush SlicerTimelineCardBorder = new SolidColorBrush(Color.FromRgb(208, 208, 208));
-    private static readonly IBrush SlicerTimelineActiveCardBorder = new SolidColorBrush(Color.FromRgb(91, 155, 213));
-    private static readonly IBrush SlicerTimelineActiveCardBackground = new SolidColorBrush(Color.FromRgb(247, 251, 255));
-    private static readonly IBrush SlicerTimelineSelectedTile = new SolidColorBrush(Color.FromRgb(91, 155, 213));
-    private static readonly IBrush SlicerTimelineSelectedTileBorder = new SolidColorBrush(Color.FromRgb(65, 120, 184));
-    private static readonly IBrush SlicerTimelineUnselectedTile = new SolidColorBrush(Color.FromRgb(242, 242, 242));
-    private static readonly IBrush SlicerTimelineUnselectedTileBorder = new SolidColorBrush(Color.FromRgb(200, 200, 200));
-    private static readonly IBrush SlicerTimelineMutedText = new SolidColorBrush(Color.FromRgb(102, 102, 102));
+    private static readonly IBrush SlicerTimelinePaneBackground = new ImmutableSolidColorBrush(Color.FromRgb(255, 255, 255));
+    private static readonly IBrush SlicerTimelinePaneBorder = new ImmutableSolidColorBrush(Color.FromRgb(200, 200, 200));
+    private static readonly IBrush SlicerTimelineCardBorder = new ImmutableSolidColorBrush(Color.FromRgb(208, 208, 208));
+    private static readonly IBrush SlicerTimelineActiveCardBorder = new ImmutableSolidColorBrush(Color.FromRgb(91, 155, 213));
+    private static readonly IBrush SlicerTimelineActiveCardBackground = new ImmutableSolidColorBrush(Color.FromRgb(247, 251, 255));
+    private static readonly IBrush SlicerTimelineSelectedTile = new ImmutableSolidColorBrush(Color.FromRgb(91, 155, 213));
+    private static readonly IBrush SlicerTimelineSelectedTileBorder = new ImmutableSolidColorBrush(Color.FromRgb(65, 120, 184));
+    private static readonly IBrush SlicerTimelineUnselectedTile = new ImmutableSolidColorBrush(Color.FromRgb(242, 242, 242));
+    private static readonly IBrush SlicerTimelineUnselectedTileBorder = new ImmutableSolidColorBrush(Color.FromRgb(200, 200, 200));
+    private static readonly IBrush SlicerTimelineMutedText = new ImmutableSolidColorBrush(Color.FromRgb(102, 102, 102));
 
     private readonly Border _slicerTimelinePaneHost = new();
     private readonly Button _slicerTimelinePaneCloseButton = new();

@@ -67,9 +67,21 @@ public static class AvaloniaRibbonIcons
     private static readonly string CommandIconsDirectory =
         Path.Combine(AppContext.BaseDirectory, "Resources", "CommandIconsSvg");
 
-    private static readonly object CommandIconCacheGate = new();
-    private static readonly Dictionary<string, DrawingImage?> CommandIconCache = new(StringComparer.OrdinalIgnoreCase);
-    private static readonly Dictionary<string, DrawingImage?> CommandIconMonochromeCache = new(StringComparer.OrdinalIgnoreCase);
+    // DrawingImage is an AvaloniaObject, so it carries affinity to the thread that built it. A
+    // process-wide cache therefore hands one UI thread's icons to another's visual tree, and the
+    // compositor throws "The calling thread cannot access this object because a different thread
+    // owns it" the moment that tree renders. Production has a single UI thread so this stayed
+    // invisible, but any process with more than one (the headless test sessions) hits it at random.
+    // Caching PER THREAD keeps the parse-once win, gives each thread objects it owns, and removes
+    // the need for a lock because the dictionaries are never shared.
+    [ThreadStatic] private static Dictionary<string, DrawingImage?>? _commandIconCache;
+    [ThreadStatic] private static Dictionary<string, DrawingImage?>? _commandIconMonochromeCache;
+
+    private static Dictionary<string, DrawingImage?> CommandIconCache =>
+        _commandIconCache ??= new(StringComparer.OrdinalIgnoreCase);
+
+    private static Dictionary<string, DrawingImage?> CommandIconMonochromeCache =>
+        _commandIconMonochromeCache ??= new(StringComparer.OrdinalIgnoreCase);
 
     /// <summary>Builds an icon control for the given kind at the requested pixel size.</summary>
     public static Control Build(RibbonCommandIconKind kind, double size) =>
@@ -158,38 +170,30 @@ public static class AvaloniaRibbonIcons
         if (monochromeForeground is { } foreground)
             return LoadMonochromeCommandSvg(fileSlug, foreground);
 
-        lock (CommandIconCacheGate)
-        {
-            if (CommandIconCache.TryGetValue(fileSlug, out var cached))
-                return cached;
-        }
+        if (CommandIconCache.TryGetValue(fileSlug, out var cached))
+            return cached;
 
         var filePath = Path.Combine(CommandIconsDirectory, fileSlug + ".svg");
         DrawingImage? image = null;
         if (File.Exists(filePath))
             image = SvgIconParser.TryParseFile(filePath);
 
-        lock (CommandIconCacheGate)
-            CommandIconCache[fileSlug] = image;
+        CommandIconCache[fileSlug] = image;
         return image;
     }
 
     private static DrawingImage? LoadMonochromeCommandSvg(string fileSlug, IBrush foreground)
     {
         var cacheKey = fileSlug + "|" + GetBrushCacheKey(foreground);
-        lock (CommandIconCacheGate)
-        {
-            if (CommandIconMonochromeCache.TryGetValue(cacheKey, out var cached))
-                return cached;
-        }
+        if (CommandIconMonochromeCache.TryGetValue(cacheKey, out var cached))
+            return cached;
 
         var filePath = Path.Combine(CommandIconsDirectory, fileSlug + ".svg");
         DrawingImage? image = null;
         if (File.Exists(filePath))
             image = SvgIconParser.TryParseFile(filePath, foreground);
 
-        lock (CommandIconCacheGate)
-            CommandIconMonochromeCache[cacheKey] = image;
+        CommandIconMonochromeCache[cacheKey] = image;
         return image;
     }
 

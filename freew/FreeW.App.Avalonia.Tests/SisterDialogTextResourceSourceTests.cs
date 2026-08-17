@@ -120,7 +120,7 @@ public sealed class SisterDialogTextResourceSourceTests
         source.Should().Contain("new AvaloniaBackstageFrame(");
         source.Should().Contain("AvaloniaSisterBackstageTheme.FreeW");
         source.Should().Contain("BackstageTheme.Accent");
-        source.Should().Contain("new SolidColorBrush(BackstageTheme.LinkColor)");
+        source.Should().Contain("new ImmutableSolidColorBrush(BackstageTheme.LinkColor)");
         source.Should().Contain("Width = BackstageTheme.TileWidth");
         source.Should().Contain("Height = BackstageTheme.TileHeight");
         source.Should().NotContain("SisterBackstagePalette.FreeW");

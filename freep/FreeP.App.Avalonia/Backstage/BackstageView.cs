@@ -5,6 +5,7 @@ using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.Layout;
 using Avalonia.Media;
+using Avalonia.Media.Immutable;
 using Free.Shared.AppServices;
 using Free.Shared.Ribbon;
 using Free.Shared.Ribbon.Avalonia;
@@ -20,10 +21,10 @@ namespace FreeP.App.Avalonia.Backstage;
 /// </summary>
 internal sealed partial class BackstageView : UserControl
 {
-    private static readonly IBrush PrimaryInk = new SolidColorBrush(Color.FromRgb(0x19, 0x1F, 0x28));
-    private static readonly IBrush SecondaryInk = new SolidColorBrush(Color.FromRgb(0x5E, 0x67, 0x74));
+    private static readonly IBrush PrimaryInk = new ImmutableSolidColorBrush(Color.FromRgb(0x19, 0x1F, 0x28));
+    private static readonly IBrush SecondaryInk = new ImmutableSolidColorBrush(Color.FromRgb(0x5E, 0x67, 0x74));
     private static readonly AvaloniaSisterBackstageTheme BackstageTheme = AvaloniaSisterBackstageTheme.FreeP;
-    private static readonly IBrush LinkInk = new SolidColorBrush(BackstageTheme.LinkColor);
+    private static readonly IBrush LinkInk = new ImmutableSolidColorBrush(BackstageTheme.LinkColor);
     private static readonly AvaloniaBackstageChromeStyle PaneStyle = new(PrimaryInk, SecondaryInk)
     {
         DetailLabelVerticalAlignment = VerticalAlignment.Top,

@@ -7,6 +7,7 @@ using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.Layout;
 using Avalonia.Media;
+using Avalonia.Media.Immutable;
 using Avalonia.Styling;
 using Avalonia.VisualTree;
 using Free.Shared.AppServices;
@@ -33,16 +34,16 @@ internal sealed partial class BackstageView : Window
     // Keep the pane typography and field metrics byte-for-byte aligned with the WPF
     // BackstageVisualKit. The shared Avalonia chrome is intentionally more generic and
     // uses padded action buttons, which changes the whole Backstage family at once.
-    internal static readonly IBrush PrimaryInk = new SolidColorBrush(Color.FromRgb(0x33, 0x33, 0x33));
-    internal static readonly IBrush SecondaryInk = new SolidColorBrush(Color.FromRgb(0x70, 0x70, 0x70));
+    internal static readonly IBrush PrimaryInk = new ImmutableSolidColorBrush(Color.FromRgb(0x33, 0x33, 0x33));
+    internal static readonly IBrush SecondaryInk = new ImmutableSolidColorBrush(Color.FromRgb(0x70, 0x70, 0x70));
     private static readonly FontFamily BackstageFontFamily = new("Segoe UI");
     private static readonly AvaloniaSisterBackstageTheme BackstageTheme = AvaloniaSisterBackstageTheme.FreeW;
-    private static readonly IBrush LinkBrush = new SolidColorBrush(BackstageTheme.LinkColor);
-    private static readonly IBrush TileBorderBrush = new SolidColorBrush(Color.FromRgb(0xD0, 0xD7, 0xE5));
-    private static readonly IBrush TileInnerBorderBrush = new SolidColorBrush(Color.FromRgb(0xE2, 0xE6, 0xEF));
-    private static readonly IBrush SeparatorBrush = new SolidColorBrush(Color.FromRgb(0xDD, 0xDD, 0xDD));
-    private static readonly IBrush WpfScrollTrackBrush = new SolidColorBrush(Color.FromRgb(0xF0, 0xF0, 0xF0));
-    private static readonly IBrush WpfScrollThumbBrush = new SolidColorBrush(Color.FromRgb(0xCD, 0xCD, 0xCD));
+    private static readonly IBrush LinkBrush = new ImmutableSolidColorBrush(BackstageTheme.LinkColor);
+    private static readonly IBrush TileBorderBrush = new ImmutableSolidColorBrush(Color.FromRgb(0xD0, 0xD7, 0xE5));
+    private static readonly IBrush TileInnerBorderBrush = new ImmutableSolidColorBrush(Color.FromRgb(0xE2, 0xE6, 0xEF));
+    private static readonly IBrush SeparatorBrush = new ImmutableSolidColorBrush(Color.FromRgb(0xDD, 0xDD, 0xDD));
+    private static readonly IBrush WpfScrollTrackBrush = new ImmutableSolidColorBrush(Color.FromRgb(0xF0, 0xF0, 0xF0));
+    private static readonly IBrush WpfScrollThumbBrush = new ImmutableSolidColorBrush(Color.FromRgb(0xCD, 0xCD, 0xCD));
     // Fluent's Home action footprint is one DIP taller than the WPF link row.
     private const double HomeActionRowBottomCompensation = 1;
     private static readonly AvaloniaBackstageChromeStyle BackstageChromeStyle = new(PrimaryInk, SecondaryInk)

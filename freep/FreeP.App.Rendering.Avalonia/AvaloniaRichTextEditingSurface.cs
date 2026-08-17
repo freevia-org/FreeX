@@ -1,6 +1,7 @@
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Media;
+using Avalonia.Media.Immutable;
 using Avalonia.Media.TextFormatting;
 using Avalonia.Media.Imaging;
 using Avalonia.Utilities;
@@ -22,17 +23,17 @@ internal sealed class AvaloniaRichTextEditingSurface : Control
     // Keep the horizontal inset, but do not add a vertical offset to the custom surface.
     private static readonly Thickness ContentPadding = new(4, 0, 4, 3);
     private static readonly IBrush DefaultForeground = Brushes.Black;
-    private static readonly IBrush SelectionBrush = new SolidColorBrush(Color.FromArgb(
+    private static readonly IBrush SelectionBrush = new ImmutableSolidColorBrush(Color.FromArgb(
         InCanvasRichTextSelectionVisualContract.RealizedBackgroundAlpha,
         InCanvasRichTextSelectionVisualContract.RealizedBackgroundRed,
         InCanvasRichTextSelectionVisualContract.RealizedBackgroundGreen,
         InCanvasRichTextSelectionVisualContract.RealizedBackgroundBlue));
-    private static readonly IBrush SelectionForeground = new SolidColorBrush(Color.FromArgb(
+    private static readonly IBrush SelectionForeground = new ImmutableSolidColorBrush(Color.FromArgb(
         InCanvasRichTextSelectionVisualContract.RealizedForegroundAlpha,
         InCanvasRichTextSelectionVisualContract.RealizedForegroundRed,
         InCanvasRichTextSelectionVisualContract.RealizedForegroundGreen,
         InCanvasRichTextSelectionVisualContract.RealizedForegroundBlue));
-    private static readonly IPen CaretPen = new Pen(Brushes.Black, CaretWidth);
+    private static readonly IPen CaretPen = new ImmutablePen(Brushes.Black, CaretWidth);
 
     private readonly List<ParagraphLayout> _layouts = [];
     private InCanvasRichTextVisualPlan _plan = InCanvasRichTextVisualPlanner.Create(null);

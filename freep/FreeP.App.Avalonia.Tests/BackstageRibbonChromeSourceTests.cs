@@ -37,7 +37,7 @@ public sealed class BackstageRibbonChromeSourceTests
 
         source.Should().Contain("AvaloniaSisterBackstageTheme.FreeP");
         source.Should().Contain("BackstageTheme.Accent");
-        source.Should().Contain("new SolidColorBrush(BackstageTheme.LinkColor)");
+        source.Should().Contain("new ImmutableSolidColorBrush(BackstageTheme.LinkColor)");
         source.Should().Contain("Width = BackstageTheme.TileWidth");
         source.Should().Contain("Height = BackstageTheme.TileHeight");
         source.Should().NotContain("Sidebar: Color.FromRgb(0xB7, 0x47, 0x2A)");

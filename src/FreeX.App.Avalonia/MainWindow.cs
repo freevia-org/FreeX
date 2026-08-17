@@ -9749,8 +9749,18 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
     // static/UI-thread-only exactly like their WPF counterparts.
     private const int TextWidthMeasurementCacheLimit = 32768;
     private const int ShrinkToFitFontSizeCacheLimit = 32768;
-    private static readonly Dictionary<TextWidthMeasurementKey, double> TextWidthMeasurementCache = new();
-    private static readonly Dictionary<ShrinkToFitFontSizeKey, double> ShrinkToFitFontSizeCache = new();
+    // Per THREAD, not per process: the "UI-thread-only" assumption above holds for the shipping app,
+    // which has one UI thread, but not for a process running several (the headless test sessions).
+    // A plain Dictionary written from two threads can corrupt its buckets, and these are written on
+    // every grid rebuild. Thread-static keeps the cache hit rate and makes that impossible.
+    [ThreadStatic] private static Dictionary<TextWidthMeasurementKey, double>? _textWidthMeasurementCache;
+    [ThreadStatic] private static Dictionary<ShrinkToFitFontSizeKey, double>? _shrinkToFitFontSizeCache;
+
+    private static Dictionary<TextWidthMeasurementKey, double> TextWidthMeasurementCache =>
+        _textWidthMeasurementCache ??= [];
+
+    private static Dictionary<ShrinkToFitFontSizeKey, double> ShrinkToFitFontSizeCache =>
+        _shrinkToFitFontSizeCache ??= [];
 
     private readonly record struct TextWidthMeasurementKey(
         string Text,

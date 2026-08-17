@@ -7,6 +7,7 @@ using Avalonia.Automation.Peers;
 using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Media;
+using Avalonia.Media.Immutable;
 using Avalonia.Media.Imaging;
 using Free.Shared.Drawing;
 using Free.Shared.Pdf;
@@ -10946,26 +10947,26 @@ public sealed partial class DocumentView : Control
         return bitmap;
     }
 
-    private static IBrush BandFill { get; } = new SolidColorBrush(Color.FromRgb(0xF2, 0xF2, 0xF2));
-    private static Pen TableBorderPen { get; } = new Pen(new SolidColorBrush(Color.FromRgb(0x9A, 0x9A, 0x9A)), 0.75);
-    private static IBrush PageDeskBrush   { get; } = new SolidColorBrush(Color.FromRgb(0xD0, 0xD0, 0xD0));
-    private static IBrush PageShadowBrush { get; } = new SolidColorBrush(Color.FromArgb(0x55, 0x00, 0x00, 0x00));
-    private static Pen    PageBorderPen   { get; } = new Pen(new SolidColorBrush(Color.FromRgb(0xBB, 0xBB, 0xBB)), 0.5);
+    private static ImmutableSolidColorBrush BandFill { get; } = new ImmutableSolidColorBrush(Color.FromRgb(0xF2, 0xF2, 0xF2));
+    private static IPen TableBorderPen { get; } = new ImmutablePen(new ImmutableSolidColorBrush(Color.FromRgb(0x9A, 0x9A, 0x9A)), 0.75);
+    private static ImmutableSolidColorBrush PageDeskBrush   { get; } = new ImmutableSolidColorBrush(Color.FromRgb(0xD0, 0xD0, 0xD0));
+    private static ImmutableSolidColorBrush PageShadowBrush { get; } = new ImmutableSolidColorBrush(Color.FromArgb(0x55, 0x00, 0x00, 0x00));
+    private static IPen    PageBorderPen   { get; } = new ImmutablePen(new ImmutableSolidColorBrush(Color.FromRgb(0xBB, 0xBB, 0xBB)), 0.5);
     // Word's column separator is an opaque one-pixel black rule at the gap's device-pixel centre.
-    private static Pen    ColumnRulePen   { get; } = new Pen(new SolidColorBrush(Colors.Black), 1.0);
+    private static IPen    ColumnRulePen   { get; } = new ImmutablePen(new ImmutableSolidColorBrush(Colors.Black), 1.0);
     // AV-NOTERENDER: thin separator rule above the footnote band / under the Endnotes heading.
-    private static Pen    NoteSeparatorPen { get; } = new Pen(new SolidColorBrush(Color.FromRgb(0x80, 0x80, 0x80)), 0.75);
+    private static IPen    NoteSeparatorPen { get; } = new ImmutablePen(new ImmutableSolidColorBrush(Color.FromRgb(0x80, 0x80, 0x80)), 0.75);
     // AV-VIEW: faint layout-gridlines drawn behind body text when ShowGridlines is set.
-    private static Pen    GridlinePen      { get; } = new Pen(new SolidColorBrush(Color.FromArgb(0x30, 0x60, 0x90, 0xC0)), 0.5);
+    private static IPen    GridlinePen      { get; } = new ImmutablePen(new ImmutableSolidColorBrush(Color.FromArgb(0x30, 0x60, 0x90, 0xC0)), 0.5);
     // AV-VIEW: ruler strip fill, border, and tick marks drawn at the page top/left when ShowRuler is set.
-    private static IBrush RulerFill        { get; } = new SolidColorBrush(Color.FromRgb(0xF4, 0xF6, 0xFA));
-    private static Pen    RulerBorderPen   { get; } = new Pen(new SolidColorBrush(Color.FromRgb(0xC0, 0xC8, 0xD4)), 0.75);
-    private static Pen    RulerTickPen     { get; } = new Pen(new SolidColorBrush(Color.FromRgb(0x70, 0x80, 0x98)), 0.75);
-    private static IBrush RulerMarkerBrush { get; } = new SolidColorBrush(Color.FromRgb(0x2B, 0x57, 0x9A));
-    private static Pen    RulerMarkerPen   { get; } = new Pen(RulerMarkerBrush, 1.0);
-    private static Pen    RulerPreviewPen  { get; } = new Pen(RulerMarkerBrush, 1.0, dashStyle: new DashStyle([4, 3], 0));
+    private static ImmutableSolidColorBrush RulerFill        { get; } = new ImmutableSolidColorBrush(Color.FromRgb(0xF4, 0xF6, 0xFA));
+    private static IPen    RulerBorderPen   { get; } = new ImmutablePen(new ImmutableSolidColorBrush(Color.FromRgb(0xC0, 0xC8, 0xD4)), 0.75);
+    private static IPen    RulerTickPen     { get; } = new ImmutablePen(new ImmutableSolidColorBrush(Color.FromRgb(0x70, 0x80, 0x98)), 0.75);
+    private static ImmutableSolidColorBrush RulerMarkerBrush { get; } = new ImmutableSolidColorBrush(Color.FromRgb(0x2B, 0x57, 0x9A));
+    private static IPen    RulerMarkerPen   { get; } = new ImmutablePen(RulerMarkerBrush, 1.0);
+    private static IPen    RulerPreviewPen  { get; } = new ImmutablePen(RulerMarkerBrush, 1.0, dashStyle: new ImmutableDashStyle([4, 3], 0));
     // AV-VIEW: darker tint marking the page margins on the ruler (the body text area is the lighter span).
-    private static IBrush RulerMarginFill  { get; } = new SolidColorBrush(Color.FromRgb(0xD8, 0xDE, 0xE8));
+    private static ImmutableSolidColorBrush RulerMarginFill  { get; } = new ImmutableSolidColorBrush(Color.FromRgb(0xD8, 0xDE, 0xE8));
     private static RunFormatting LineNumberFormatting { get; } = new() { FontSizePt = 8, ColorHex = "#606060" };
 
     // ---- Render ---------------------------------------------------------------------------------
@@ -11587,8 +11588,13 @@ public sealed partial class DocumentView : Control
     }
 
     private static readonly IPen HfRegionPen =
-        new Pen(new SolidColorBrush(Color.FromArgb(160, 90, 120, 200)), 1, DashStyle.Dash);
-    private static readonly IBrush HfRegionLabelBrush = new SolidColorBrush(Color.FromArgb(200, 90, 120, 200));
+        // DashStyle is an AvaloniaObject too, so the shared static cannot be handed to the
+        // compositor; copy its pattern into an immutable one.
+        new ImmutablePen(
+            new ImmutableSolidColorBrush(Color.FromArgb(160, 90, 120, 200)),
+            1,
+            new ImmutableDashStyle(DashStyle.Dash.Dashes, DashStyle.Dash.Offset));
+    private static readonly ImmutableSolidColorBrush HfRegionLabelBrush = new ImmutableSolidColorBrush(Color.FromArgb(200, 90, 120, 200));
 
     /// <summary>
     /// Draws a dashed outline around the line band of the currently-edited header/footer paragraph plus a
@@ -12269,21 +12275,21 @@ public sealed partial class DocumentView : Control
         return geo;
     }
 
-    private static IBrush FloatPlaceholderFill { get; } =
-        new SolidColorBrush(Color.FromArgb(0x44, 0x33, 0x99, 0xFF));
-    private static Pen FloatPlaceholderPen { get; } =
-        new Pen(new SolidColorBrush(Color.FromArgb(0xBB, 0x33, 0x99, 0xFF)), 1.0,
-            new DashStyle([4, 3], 0));
+    private static ImmutableSolidColorBrush FloatPlaceholderFill { get; } =
+        new ImmutableSolidColorBrush(Color.FromArgb(0x44, 0x33, 0x99, 0xFF));
+    private static IPen FloatPlaceholderPen { get; } =
+        new ImmutablePen(new ImmutableSolidColorBrush(Color.FromArgb(0xBB, 0x33, 0x99, 0xFF)), 1.0,
+            new ImmutableDashStyle([4, 3], 0));
 
     // ── AV-FLSEL: floating selection rendering + hit-test + edit methods ───────────────────────────
 
     // Selection outline pen: solid blue, 1.5px.
-    private static readonly Pen FloatSelectionPen =
-        new Pen(new SolidColorBrush(Color.FromRgb(0x00, 0x78, 0xD4)), 1.5);
+    private static readonly IPen FloatSelectionPen =
+        new ImmutablePen(new ImmutableSolidColorBrush(Color.FromRgb(0x00, 0x78, 0xD4)), 1.5);
     // Handle fill: white square with blue border.
     private static readonly IBrush FloatHandleFill   = Brushes.White;
-    private static readonly Pen    FloatHandlePen    =
-        new Pen(new SolidColorBrush(Color.FromRgb(0x00, 0x78, 0xD4)), 1.0);
+    private static readonly IPen    FloatHandlePen    =
+        new ImmutablePen(new ImmutableSolidColorBrush(Color.FromRgb(0x00, 0x78, 0xD4)), 1.0);
     private const double FloatHandleSize = 7; // handle square side length in px
 
     private static DocumentFloatRect ToPlannerRect(Rect rect) =>
@@ -12372,10 +12378,10 @@ public sealed partial class DocumentView : Control
         }
     }
 
-    private static readonly IBrush ShapeEditPointFill =
-        new SolidColorBrush(Color.FromRgb(0xFF, 0xF2, 0xB2));
-    private static readonly Pen ShapeEditPointPen =
-        new Pen(new SolidColorBrush(Color.FromRgb(0x00, 0x78, 0xD4)), 1.0);
+    private static readonly ImmutableSolidColorBrush ShapeEditPointFill =
+        new ImmutableSolidColorBrush(Color.FromRgb(0xFF, 0xF2, 0xB2));
+    private static readonly IPen ShapeEditPointPen =
+        new ImmutablePen(new ImmutableSolidColorBrush(Color.FromRgb(0x00, 0x78, 0xD4)), 1.0);
     private const double ShapeEditPointSize = 9;
 
     private bool IsCurrentShapeEditPointsTarget(
@@ -23750,7 +23756,7 @@ public sealed partial class DocumentView : Control
 
     // ---- Text shaping helpers -------------------------------------------------------------------
 
-    private static readonly IPen EquationLinePen = new Pen(Brushes.Black, 1);
+    private static readonly IPen EquationLinePen = new ImmutablePen(Brushes.Black, 1);
 
     private Size MeasureEquationVisualElement(EquationVisualElement element, RunFormatting baseFormatting)
     {
@@ -24192,26 +24198,26 @@ public sealed partial class DocumentView : Control
         return brush;
     }
 
-    private static IBrush SelectionBrush { get; } = new SolidColorBrush(Color.FromArgb(0x55, 0x33, 0x99, 0xFF));
+    private static ImmutableSolidColorBrush SelectionBrush { get; } = new ImmutableSolidColorBrush(Color.FromArgb(0x55, 0x33, 0x99, 0xFF));
 
     // ── AV-COMMENT: comment-anchor render assets ──────────────────────────────────────────────────
     // Light amber tint behind commented glyphs (active threads) and a muted grey tint for resolved ones.
-    private static IBrush CommentTintBrush { get; } = new SolidColorBrush(Color.FromArgb(0x33, 0xFF, 0xC1, 0x07));
-    private static IBrush ResolvedCommentTintBrush { get; } = new SolidColorBrush(Color.FromArgb(0x1F, 0x9E, 0x9E, 0x9E));
+    private static ImmutableSolidColorBrush CommentTintBrush { get; } = new ImmutableSolidColorBrush(Color.FromArgb(0x33, 0xFF, 0xC1, 0x07));
+    private static ImmutableSolidColorBrush ResolvedCommentTintBrush { get; } = new ImmutableSolidColorBrush(Color.FromArgb(0x1F, 0x9E, 0x9E, 0x9E));
     // Amber underline drawn under commented glyphs — the in-text anchor mark.
     private static readonly Pen CommentUnderlinePen =
         new(new SolidColorBrush(Color.FromRgb(0xF5, 0x9E, 0x0B)), 1.5);
     private static readonly Pen ResolvedCommentUnderlinePen =
         new(new SolidColorBrush(Color.FromRgb(0x9E, 0x9E, 0x9E)), 1.0);
     // Right-margin comment marker fill (balloon) — amber bracket aligned to the anchor line.
-    private static IBrush CommentMarkerBrush { get; } = new SolidColorBrush(Color.FromRgb(0xF5, 0x9E, 0x0B));
-    private static IBrush ResolvedCommentMarkerBrush { get; } = new SolidColorBrush(Color.FromRgb(0xBD, 0xBD, 0xBD));
+    private static ImmutableSolidColorBrush CommentMarkerBrush { get; } = new ImmutableSolidColorBrush(Color.FromRgb(0xF5, 0x9E, 0x0B));
+    private static ImmutableSolidColorBrush ResolvedCommentMarkerBrush { get; } = new ImmutableSolidColorBrush(Color.FromRgb(0xBD, 0xBD, 0xBD));
 
     // AV-TBL2: overlay brush for rectangular cross-cell block selection (slightly deeper than glyph selection).
-    private static IBrush CellBlockSelectionBrush { get; } = new SolidColorBrush(Color.FromArgb(0x66, 0x33, 0x99, 0xFF));
+    private static ImmutableSolidColorBrush CellBlockSelectionBrush { get; } = new ImmutableSolidColorBrush(Color.FromArgb(0x66, 0x33, 0x99, 0xFF));
 
     // ── AV-TRACKEDIT: tracked-change render assets ────────────────────────────────────────────────
-    private static IBrush RevisionFallbackBrush { get; } = new SolidColorBrush(Color.FromRgb(0xC0, 0x00, 0x40));
+    private static ImmutableSolidColorBrush RevisionFallbackBrush { get; } = new ImmutableSolidColorBrush(Color.FromRgb(0xC0, 0x00, 0x40));
     private static readonly Pen SimpleMarkupChangeBarPen = new(RevisionFallbackBrush, 2.0);
     private static readonly Pen ProofingSquigglePen = new(new SolidColorBrush(Color.FromRgb(0xD1, 0x34, 0x38)), 1.15);
 
@@ -24873,8 +24879,8 @@ public sealed partial class DocumentView : Control
     }
 
     // Colour palette for chart series — matches Word's default colorful1 scheme.
-    private static readonly IBrush ChartFrameFill    = new SolidColorBrush(Color.FromArgb(0xFF, 0xF9, 0xF9, 0xF9));
-    private static readonly Pen    ChartFramePen     = new Pen(new SolidColorBrush(Color.FromRgb(0xBB, 0xBB, 0xBB)), 1.0);
+    private static readonly ImmutableSolidColorBrush ChartFrameFill    = new ImmutableSolidColorBrush(Color.FromArgb(0xFF, 0xF9, 0xF9, 0xF9));
+    private static readonly IPen    ChartFramePen     = new ImmutablePen(new ImmutableSolidColorBrush(Color.FromRgb(0xBB, 0xBB, 0xBB)), 1.0);
 
     private static Color ToAvaloniaChartColor(string? hex) =>
         TryParseAvaloniaColor(hex, out var color) ? color : Color.FromRgb(0x44, 0x72, 0xC4);

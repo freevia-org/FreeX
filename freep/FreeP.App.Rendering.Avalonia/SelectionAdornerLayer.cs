@@ -1,6 +1,7 @@
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Media;
+using Avalonia.Media.Immutable;
 using FreeP.App.Compositor;
 
 namespace FreeP.App.Rendering.Avalonia;
@@ -39,23 +40,43 @@ public sealed partial class SelectionAdornerLayer : Control, ISelectionAdornerSu
     private static readonly IPen EditPointBorder;
     private static readonly IPen EditPointPreviewPen;
 
+    /// <summary>The PowerPoint-style selection accent, shared by the pens and the rotate-handle line.</summary>
+    private static readonly ImmutableSolidColorBrush AccentBrush =
+        new(Color.FromRgb(0x21, 0x96, 0xF3));
+
+    // Every one of these is IMMUTABLE on purpose. Pen, SolidColorBrush and DashStyle are all
+    // AvaloniaObjects, so they carry thread affinity to whichever thread first ran this static
+    // constructor -- and the compositor reads them again on the render thread. Holding mutable ones
+    // in static fields throws "The calling thread cannot access this object because a different
+    // thread owns it" out of the renderer, intermittently and depending on which test or window
+    // touched the class first. The Immutable* variants have no affinity.
     static SelectionAdornerLayer()
     {
-        SelectionPen       = new Pen(new SolidColorBrush(Color.FromRgb(0x21, 0x96, 0xF3)), 1.5);
-        PreviewPen         = new Pen(new SolidColorBrush(Color.FromArgb(0xCC, 0x21, 0x96, 0xF3)), 1.5)
-                             { DashStyle = new DashStyle([4.0, 2.0], 0) };
-        HandleFill         = new SolidColorBrush(Colors.White);
-        HandleBorder       = new Pen(new SolidColorBrush(Color.FromRgb(0x21, 0x96, 0xF3)), 1.5);
-        RotateHandleFill   = new SolidColorBrush(Color.FromRgb(0x21, 0x96, 0xF3));
-        RotateHandleBorder = new Pen(new SolidColorBrush(Colors.White), 1.0);
-        MarqueePen         = new Pen(new SolidColorBrush(Color.FromArgb(0xBB, 0x21, 0x96, 0xF3)), 1.0)
-                             { DashStyle = DashStyle.Dash };
-        MarqueeFill        = new SolidColorBrush(Color.FromArgb(0x22, 0x21, 0x96, 0xF3));
-        SnapGuidePen       = new Pen(new SolidColorBrush(Color.FromArgb(0xCC, 0xE9, 0x1E, 0x63)), 1.0);
-        EditPointFill      = new SolidColorBrush(Color.FromRgb(0xFF, 0xC1, 0x07));
-        EditPointBorder    = new Pen(new SolidColorBrush(Colors.White), 1.0);
-        EditPointPreviewPen = new Pen(new SolidColorBrush(Color.FromRgb(0xFF, 0x98, 0x00)), 1.5)
-                             { DashStyle = DashStyle.Dash };
+        // Copied from Avalonia's own DashStyle.Dash rather than hardcoded, so the marquee keeps its
+        // exact pattern; the copy is what reaches the compositor.
+        var dash = new ImmutableDashStyle(DashStyle.Dash.Dashes, DashStyle.Dash.Offset);
+
+        SelectionPen       = new ImmutablePen(new ImmutableSolidColorBrush(Color.FromRgb(0x21, 0x96, 0xF3)), 1.5);
+        PreviewPen         = new ImmutablePen(
+                                 new ImmutableSolidColorBrush(Color.FromArgb(0xCC, 0x21, 0x96, 0xF3)),
+                                 1.5,
+                                 new ImmutableDashStyle([4.0, 2.0], 0));
+        HandleFill         = new ImmutableSolidColorBrush(Colors.White);
+        HandleBorder       = new ImmutablePen(new ImmutableSolidColorBrush(Color.FromRgb(0x21, 0x96, 0xF3)), 1.5);
+        RotateHandleFill   = new ImmutableSolidColorBrush(Color.FromRgb(0x21, 0x96, 0xF3));
+        RotateHandleBorder = new ImmutablePen(new ImmutableSolidColorBrush(Colors.White), 1.0);
+        MarqueePen         = new ImmutablePen(
+                                 new ImmutableSolidColorBrush(Color.FromArgb(0xBB, 0x21, 0x96, 0xF3)),
+                                 1.0,
+                                 dash);
+        MarqueeFill        = new ImmutableSolidColorBrush(Color.FromArgb(0x22, 0x21, 0x96, 0xF3));
+        SnapGuidePen       = new ImmutablePen(new ImmutableSolidColorBrush(Color.FromArgb(0xCC, 0xE9, 0x1E, 0x63)), 1.0);
+        EditPointFill      = new ImmutableSolidColorBrush(Color.FromRgb(0xFF, 0xC1, 0x07));
+        EditPointBorder    = new ImmutablePen(new ImmutableSolidColorBrush(Colors.White), 1.0);
+        EditPointPreviewPen = new ImmutablePen(
+                                 new ImmutableSolidColorBrush(Color.FromRgb(0xFF, 0x98, 0x00)),
+                                 1.5,
+                                 dash);
     }
 
     // ── State owned / updated by AvaloniaCanvasGestureHandler ──────────────────
@@ -184,7 +205,9 @@ public sealed partial class SelectionAdornerLayer : Control, ISelectionAdornerSu
         var rotateCenter = GetRotateHandleCenter(rect);
         double topCenterX = rotateCenter.X;
         double rotY       = rotateCenter.Y;
-        dc.DrawLine(new Pen(((Pen)HandleBorder).Brush, 1.0),
+        // Built from the shared accent brush rather than casting HandleBorder to the concrete Pen:
+        // the shared pens are ImmutablePens so they can live in static fields without thread affinity.
+        dc.DrawLine(new ImmutablePen(AccentBrush, 1.0),
             new Point(topCenterX, rect.Top),
             new Point(topCenterX, rotY));
         dc.DrawEllipse(RotateHandleFill, RotateHandleBorder,
