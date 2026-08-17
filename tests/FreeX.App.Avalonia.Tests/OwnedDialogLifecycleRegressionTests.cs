@@ -107,7 +107,7 @@ public sealed class OwnedDialogLifecycleRegressionTests
                         interactionOnly: true,
                         interactionDialogCatalogIds: selectedIds);
 
-                    var contract = window.DialogInteractionContracts["dialog.AllowEditRangeDialog"];
+                    var contract = window.DialogInteractionContracts["dialog.AllowEditRanges"];
                     contract.InitialFocus.Should().Be("passed:TextBox#AllowEditRangeBox");
                     contract.TabForward.Should().StartWith("passed:");
                     contract.TabBackward.Should().StartWith("passed:");
@@ -159,7 +159,7 @@ public sealed class OwnedDialogLifecycleRegressionTests
                         interactionOnly: true,
                         interactionDialogCatalogIds: selectedIds);
 
-                    var contract = window.DialogInteractionContracts["dialog.ConfirmPasswordDialog"];
+                    var contract = window.DialogInteractionContracts["dialog.ProtectSheet"];
                     contract.InitialFocus.Should().Be("passed:TextBox#ProtectSheetPasswordBox");
                     contract.TabForward.Should().StartWith("passed:");
                     contract.TabBackward.Should().StartWith("passed:");

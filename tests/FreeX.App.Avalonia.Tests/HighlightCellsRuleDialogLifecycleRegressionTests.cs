@@ -32,7 +32,7 @@ public sealed class HighlightCellsRuleDialogLifecycleRegressionTests
                         interactionOnly: true,
                         interactionDialogCatalogIds: selectedIds);
 
-                    var contract = window.DialogInteractionContracts["dialog.HighlightCellsRuleDialog"];
+                    var contract = window.DialogInteractionContracts["dialog.HighlightCellsRule"];
                     contract.InitialFocus.Should().Be("passed:ComboBox#ConditionalFormatRuleTypeBox");
                     contract.TabForward.Should().StartWith("passed:full-cycle:");
                     contract.TabBackward.Should().StartWith("passed:full-cycle:");

@@ -31,7 +31,7 @@ public sealed class ShapeGradientDialogLifecycleRegressionTests
                         interactionOnly: true,
                         interactionDialogCatalogIds: selectedIds);
 
-                    var contract = window.DialogInteractionContracts["dialog.ShapeGradientDialog"];
+                    var contract = window.DialogInteractionContracts["dialog.ShapeGradient"];
                     contract.ActualModality.Should().Be("modal");
                     contract.Ownership.Should().StartWith("passed:");
                     contract.OpenerLifecycle.Should().Be("passed:modal-opener-blocked-while-open");

@@ -2,6 +2,13 @@
   <Import Project="CaptureTests.Shared.props" />
   <PropertyGroup>
     <AssemblyName>FreeX.App.Avalonia.CaptureTests.Batch5</AssemblyName>
+    <!-- Assert real PNG bytes: Avalonia's lightweight headless drawing does not rasterize, so
+         RenderTargetBitmap.Save writes no file and every capture reads back empty. -->
+    <DefineConstants>$(DefineConstants);AVALONIA_CAPTURE_PER_TEST</DefineConstants>
     <VSTestTestCaseFilter>FullyQualifiedName~ManageConditionalFormatsDialog_UsesWpfScopeSelectorAsInitialFocusAndTabOrigin|FullyQualifiedName~PivotDialogs_MatchWpfInitialFocusAndCompleteBothKeyboardCycles|FullyQualifiedName~ScenarioManager_CapturesCanonicalFrameWithWpfButtonSurfaceAndNoBottomClip|FullyQualifiedName~SelectionPaneDialog_MatchesWpfFocusTabAndEscapeLifecycle|FullyQualifiedName~ShapeEffectsDialog_UsesWpfFocusAndOwnedKeyboardLifecycle|FullyQualifiedName~WatchWindowDialog_MatchesWpfFocusTabAndEscapeLifecycle</VSTestTestCaseFilter>
   </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="Batch6HeadlessTestApp.cs" />
+    <PackageReference Include="Avalonia.Skia" />
+  </ItemGroup>
 </Project>

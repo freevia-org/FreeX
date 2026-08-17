@@ -125,7 +125,7 @@ public sealed class TextToColumnsDialogLifecycleRegressionTests
                         interactionOnly: true,
                         interactionDialogCatalogIds: selectedIds);
 
-                    var contract = window.DialogInteractionContracts["dialog.TextToColumnsDialog"];
+                    var contract = window.DialogInteractionContracts["dialog.TextToColumns"];
                     contract.InitialFocus.Should().Be("passed:RadioButton#TextToColumnsDelimitedButton");
                     contract.TabForward.Should().StartWith("passed:");
                     contract.TabBackward.Should().StartWith("passed:");

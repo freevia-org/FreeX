@@ -2,6 +2,14 @@
   <Import Project="CaptureTests.Shared.props" />
   <PropertyGroup>
     <AssemblyName>FreeX.App.Avalonia.CaptureTests.Batch2</AssemblyName>
+    <!-- These tests assert real PNG bytes. Avalonia's lightweight headless drawing does not
+         rasterize, so RenderTargetBitmap.Save writes no file at all and every capture reads back
+         empty. Render through Skia, as the desktop app and Batch6 already do. -->
+    <DefineConstants>$(DefineConstants);AVALONIA_CAPTURE_PER_TEST</DefineConstants>
     <VSTestTestCaseFilter>FullyQualifiedName~CaptureParitySurfaces_CapturesFormatCellsAlignmentTabWithoutRunningInteractionContract|FullyQualifiedName~CaptureParitySurfaces_CapturesGoToSpecialAtFixedSizeWithoutClipping|FullyQualifiedName~CaptureParitySurfaces_CapturesOnlyRequestedScenarioManagerDialog|FullyQualifiedName~CaptureParitySurfaces_CapturesPageSetupTabsWithoutRunningInteractionContract|FullyQualifiedName~CaptureParitySurfaces_CapturesSubtotalAtCanonicalFixedSize|FullyQualifiedName~ShapeGradientDialog_UsesWpfStartColorFocusAndOwnedEscapeLifecycle</VSTestTestCaseFilter>
   </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="Batch6HeadlessTestApp.cs" />
+    <PackageReference Include="Avalonia.Skia" />
+  </ItemGroup>
 </Project>

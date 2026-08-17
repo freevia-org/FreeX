@@ -32,7 +32,7 @@ public sealed class ManageConditionalFormatsDialogLifecycleRegressionTests
                         interactionOnly: true,
                         interactionDialogCatalogIds: selectedIds);
 
-                    var contract = window.DialogInteractionContracts["dialog.ManageConditionalFormatsDialog"];
+                    var contract = window.DialogInteractionContracts["dialog.ConditionalFormatManage"];
                     contract.InitialFocus.Should().Be("passed:ComboBox#ManageConditionalFormatsScopeBox");
                     contract.TabForward.Should().StartWith("passed:");
                     contract.TabBackward.Should().StartWith("passed:");

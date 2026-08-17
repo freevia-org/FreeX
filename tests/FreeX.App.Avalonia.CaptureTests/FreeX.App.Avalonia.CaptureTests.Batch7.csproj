@@ -2,6 +2,9 @@
   <Import Project="CaptureTests.Shared.props" />
   <PropertyGroup>
     <AssemblyName>FreeX.App.Avalonia.CaptureTests.Batch7</AssemblyName>
+    <!-- Assert real PNG bytes: Avalonia's lightweight headless drawing does not rasterize, so
+         RenderTargetBitmap.Save writes no file and every capture reads back empty. -->
+    <DefineConstants>$(DefineConstants);AVALONIA_CAPTURE_PER_TEST</DefineConstants>
     <!--
       R130: the four AssignedProductionDialogsBatch1-4 tests get their OWN process rather than
       joining the base project. Round 130 split a single 39-dialog mega-test into four methods,
@@ -20,4 +23,8 @@
     -->
     <VSTestTestCaseFilter>FullyQualifiedName~AssignedProductionDialogsBatch1_PassOwnedFocusTabAndEscapeContracts|FullyQualifiedName~AssignedProductionDialogsBatch2_PassOwnedFocusTabAndEscapeContracts|FullyQualifiedName~AssignedProductionDialogsBatch3_PassOwnedFocusTabAndEscapeContracts|FullyQualifiedName~AssignedProductionDialogsBatch4_PassOwnedFocusTabAndEscapeContracts</VSTestTestCaseFilter>
   </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="Batch6HeadlessTestApp.cs" />
+    <PackageReference Include="Avalonia.Skia" />
+  </ItemGroup>
 </Project>

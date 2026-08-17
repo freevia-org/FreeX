@@ -31,7 +31,7 @@ public sealed class ShapeEffectsDialogLifecycleRegressionTests
                         interactionOnly: true,
                         interactionDialogCatalogIds: selectedIds);
 
-                    var contract = window.DialogInteractionContracts["dialog.ShapeEffectsDialog"];
+                    var contract = window.DialogInteractionContracts["dialog.ShapeEffects"];
                     contract.ActualModality.Should().Be("modal");
                     contract.Ownership.Should().StartWith("passed:");
                     contract.OpenerLifecycle.Should().Be("passed:modal-opener-blocked-while-open");
