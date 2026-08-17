@@ -289,7 +289,11 @@ public sealed partial class MainWindow
             },
         };
         AvaloniaCompactDialogChrome.ApplyWindow(dialog, ChartDialogChromeStyle);
-        ConfigureChartDialogKeyboardLifecycle(dialog, subtypeGallery);
+        // Initial focus must be a control that actually accepts it. subtypeGallery is a ListBox, and
+        // an unrealized one is not a focus target, so the dialog opened with focus on the Window --
+        // reported as initial=Window#ChangeChartTypeDialog with tab=focus-did-not-move, because Tab
+        // has nowhere to go from a window. The sibling chart dialogs pass a real control here.
+        ConfigureChartDialogKeyboardLifecycle(dialog, okButton);
 
         return await dialog.ShowDialog<ChartType?>(this);
     }
