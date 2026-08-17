@@ -88,8 +88,11 @@ public sealed class DialogVisualHarnessSemanticTextTests
             "other-route.initial");
         merged.Rows.Should().NotContain(row => row.ScenarioId == "multilevel-list.validation-error");
         merged.InventoryScenarioCount.Should().Be(6);
-        merged.WpfCaptureCount.Should().Be(4);
-        merged.AvaloniaCaptureCount.Should().Be(5);
+        // The refresh drops multilevel-list.validation-error, so its captures no longer exist and
+        // both host counts fall by one. Carrying the baseline's totals forward unchanged would make
+        // the merged report claim more captures than it has capture-bearing rows.
+        merged.WpfCaptureCount.Should().Be(3);
+        merged.AvaloniaCaptureCount.Should().Be(4);
     }
 
     [Fact]

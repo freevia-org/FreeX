@@ -185,7 +185,13 @@ public sealed class HeaderFooterPaginatorTests
         var paginator = PrintLayout.BuildPaginator(view);
         paginator.ComputePageCount();
 
-        Assert.Equal(6, paginator.PageCount);
+        // The point of this fixture is that a 700-word footnote flows through a BOUNDED continuation
+        // rather than growing the document without limit, so assert the bound first -- that part does
+        // not move with layout metrics. The exact total does: it fell from 6 to 5 once an omitted
+        // widow-control token stopped making every paragraph atomic, which lets the filler split and
+        // pack the way Word packs it.
+        Assert.InRange(paginator.PageCount, 2, 12);
+        Assert.Equal(5, paginator.PageCount);
         for (var pageIndex = 0; pageIndex < 3; pageIndex++)
         {
             var page = paginator.GetPage(pageIndex);
