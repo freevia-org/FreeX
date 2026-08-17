@@ -19,9 +19,25 @@ public sealed class ImportedWordLineSpacingPlannerTests
     }
 
     [Fact]
-    public void ModelAuthoredDocumentDoesNotUseWordCalibration()
+    public void ModelAuthoredDocumentUsesWordCalibrationLikeAWordBlankDocument()
     {
+        // A document created in FreeW is Word's blank document, so it lays out at Word's cadence
+        // rather than the host text engine's natural single-line box. Only a package that carries
+        // authoritative docDefaults opts out, which is what the two tests below cover.
         var document = new TextDocument();
+
+        ImportedWordLineSpacingPlanner.UsesApplicationDefaultLineSpacing(
+            document,
+            ParagraphFormatting.Default).Should().BeTrue();
+        ImportedWordLineSpacingPlanner.UsesApplicationDefaultRunLineHeightCalibration(
+            document,
+            ParagraphFormatting.Default).Should().BeTrue();
+    }
+
+    [Fact]
+    public void PackageAuthoredParagraphDefaultsOptOutOfWordCalibration()
+    {
+        var document = new TextDocument { UseWordApplicationDefaultLineSpacing = false };
 
         ImportedWordLineSpacingPlanner.UsesApplicationDefaultLineSpacing(
             document,

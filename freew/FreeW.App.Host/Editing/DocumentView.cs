@@ -16709,7 +16709,22 @@ public sealed partial class DocumentView : RichTextBox
         var ratio = DefaultLineHeightRatio(document);
         if (double.IsNaN(lineHeight) || lineHeight <= 0 || fontPt <= 0 || ratio <= 0)
             return ParagraphFormatting.Default.LineSpacing;
-        return lineHeight / (fontPt * PxPerPoint * ratio);
+        var spacing = lineHeight / (fontPt * PxPerPoint * ratio);
+        // BuildParagraph also multiplies by the run-metric calibration, and its predicate applies that
+        // factor ONLY to the implicit default multiple (it requires the paragraph to carry no explicit
+        // spacing). Divide the same factor back out for exactly that case so the forward and inverse
+        // stay invertible as documented above -- otherwise Word's 1.15 reads back as 1.16 in the
+        // Home > Paragraph line-spacing box. A paragraph that explicitly set the calibrated value is
+        // indistinguishable here, but it is equally indistinguishable to the forward path.
+        if (ImportedWordLineSpacingPlanner.UsesApplicationDefaultRunLineHeightCalibration(
+                document,
+                ParagraphFormatting.Default)
+            && Math.Abs(spacing / ImportedWordApplicationLineHeightScale
+                - ParagraphFormatting.Default.LineSpacing) <= 1e-6)
+        {
+            return ParagraphFormatting.Default.LineSpacing;
+        }
+        return spacing;
     }
 
     // One "line" in Word's Multiple line rule is the font's natural line height (ascent+descent+line gap),

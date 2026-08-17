@@ -43,10 +43,15 @@ public sealed class LineHeightMultipleTests
     }
 
     [StaFact]
-    public void ImplicitDefaultMultiple_DoesNotForceWpfLineHeight()
+    public void PackageAuthoredParagraphDefaults_DoNotForceWpfLineHeight()
     {
         var doc = TextDocument.CreateEmpty();
         doc.DefaultRun = doc.DefaultRun with { FontFamily = "Calibri", FontSizePt = 11 };
+        // A package carrying an authoritative w:docDefaults/w:pPrDefault opts out of Word's
+        // application default, so the host keeps the font's natural single-line box. Every other
+        // document -- imported without those defaults, or authored here -- takes Word's cadence,
+        // which the sibling test below covers.
+        doc.UseWordApplicationDefaultLineSpacing = false;
         doc.Blocks.Clear();
         doc.Blocks.Add(new Paragraph("body text")
         {
@@ -67,6 +72,9 @@ public sealed class LineHeightMultipleTests
         var doc = TextDocument.CreateEmpty();
         doc.DefaultRun = doc.DefaultRun with { FontFamily = "Calibri", FontSizePt = 11 };
         doc.UseWordApplicationDefaultLineSpacing = true;
+        // A package that serialized its own w:rPrDefault supplies the run defaults, so only the
+        // paragraph-level application default applies and the run-metric calibration does not.
+        doc.UseWordApplicationDefaultRunFormatting = false;
         doc.Blocks.Clear();
         doc.Blocks.Add(new Paragraph("body text")
         {

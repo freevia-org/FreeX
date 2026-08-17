@@ -262,8 +262,11 @@ public sealed class PagedEditNoteRegionTests
             blocks.Select((block, index) =>
                 $"block={index} page={assignment.ElementAtOrDefault(index)} text={new System.Windows.Documents.TextRange(block.ContentStart, block.ContentEnd).Text.Trim()}"));
         Assert.True(panel.PageBoxes.Count == 2, diagnostics);
-        Assert.True(panel.PageBoxes[0].FootnoteIds.SequenceEqual([1, 2]), diagnostics);
-        Assert.Empty(panel.PageBoxes[1].FootnoteIds);
+        // Word renders a footnote at the foot of the page carrying its reference. The fixture puts
+        // reference 1 on page 1 and, after 22 filler paragraphs, reference 2 on page 2 -- which is
+        // what its own paragraph text and trailing filler say it is arranged to do.
+        Assert.True(panel.PageBoxes[0].FootnoteIds.SequenceEqual([1]), diagnostics);
+        Assert.True(panel.PageBoxes[1].FootnoteIds.SequenceEqual([2]), diagnostics);
     }
 
     /// <summary>

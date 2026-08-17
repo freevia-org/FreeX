@@ -3855,17 +3855,21 @@ public sealed class TextDocument
 
     /// <summary>
     /// Whether paragraphs with no serialized line-spacing rule should use Word's application default
-    /// multiple (1.15) instead of the host text engine's natural single-line box. Set by the DOCX reader;
-    /// false for documents authored directly in the model so their existing layout remains unchanged.
-    /// Direct paragraph/style line rules still take precedence.
+    /// multiple (1.15) instead of the host text engine's natural single-line box. Direct paragraph/style
+    /// line rules still take precedence. Defaults to true, because a document created in FreeW is
+    /// Word's blank document and must lay out at Word's cadence; the DOCX reader clears it for packages
+    /// that carry an authoritative <c>w:docDefaults/w:pPrDefault</c>.
     /// </summary>
-    public bool UseWordApplicationDefaultLineSpacing { get; set; }
+    public bool UseWordApplicationDefaultLineSpacing { get; set; } = true;
 
     /// <summary>
-    /// Whether the imported package omitted <c>w:docDefaults/w:rPrDefault</c> and therefore uses Word's
-    /// application run defaults. False for model-authored documents and packages with explicit run defaults.
+    /// Whether the document uses Word's application run defaults rather than a serialized
+    /// <c>w:docDefaults/w:rPrDefault</c>. Defaults to true for the same reason as
+    /// <see cref="UseWordApplicationDefaultLineSpacing"/>: a model-authored document is not a package
+    /// at all, so there is no serialized rPrDefault to override the application defaults. The DOCX
+    /// reader clears it for packages that carry explicit run defaults.
     /// </summary>
-    public bool UseWordApplicationDefaultRunFormatting { get; set; }
+    public bool UseWordApplicationDefaultRunFormatting { get; set; } = true;
 
     /// <summary>
     /// The single modelled FreeW multilevel-list definition. Its per-level number formats map to the
