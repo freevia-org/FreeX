@@ -583,6 +583,86 @@ public class MailMergeTests
         MailMerge.MergeRecord(template, row).PlainText.Should().Be("1,234");
     }
 
+    // Word stores a run's language on the run only when it diverges from what the run would otherwise
+    // inherit — the common case is the language living solely on the paragraph's style or the document
+    // default. A MERGEFIELD's \@ date and \# numeric pictures must resolve through that same cascade
+    // instead of falling straight to the host process culture whenever the run itself carries no direct
+    // w:lang, mirroring ComplexFieldEngine.ResolveFieldCulture.
+    [Fact]
+    public void MergeRecord_DatePictureWithNoDirectRunLanguage_ResolvesCultureFromParagraphStyle()
+    {
+        var template = new TextDocument();
+        template.Styles["Journal"] = new DocumentStyle
+        {
+            Id = "Journal",
+            Name = "Journal",
+            Run = new RunFormatting { LanguageTag = "fr-FR" },
+        };
+        template.Blocks.Add(new Paragraph
+        {
+            StyleId = "Journal",
+            Runs =
+            {
+                Run.ComplexFieldRun(" MERGEFIELD When \\@ \"d MMMM yyyy\" ", "«When»")
+            }
+        });
+        var row = new Dictionary<string, string> { ["When"] = "2026-01-05" };
+
+        MailMerge.MergeRecord(template, row).PlainText.Should().Be("5 janvier 2026");
+        MailMerge.MergeRecordWithRules(template, row, new MergeState(), recordIndex: 1)
+            .PlainText.Should().Be("5 janvier 2026");
+    }
+
+    [Fact]
+    public void MergeRecord_DatePictureWithNoDirectRunOrStyleLanguage_ResolvesCultureFromDocumentDefault()
+    {
+        var template = new TextDocument();
+        template.DefaultRun = template.DefaultRun with { LanguageTag = "fr-FR" };
+        template.Blocks.Add(new Paragraph
+        {
+            Runs =
+            {
+                Run.ComplexFieldRun(" MERGEFIELD When \\@ \"d MMMM yyyy\" ", "«When»")
+            }
+        });
+        var row = new Dictionary<string, string> { ["When"] = "2026-01-05" };
+
+        MailMerge.MergeRecord(template, row).PlainText.Should().Be("5 janvier 2026");
+        MailMerge.MergeRecordWithRules(template, row, new MergeState(), recordIndex: 1)
+            .PlainText.Should().Be("5 janvier 2026");
+    }
+
+    // Sibling/no-regression coverage: a run's own direct w:lang still wins over both the paragraph
+    // style's language and the document default, exactly as before this fix.
+    [Fact]
+    public void MergeRecord_DatePictureWithDirectRunLanguage_StillWinsOverStyleAndDocumentDefault()
+    {
+        var template = new TextDocument();
+        template.DefaultRun = template.DefaultRun with { LanguageTag = "es-ES" };
+        template.Styles["Journal"] = new DocumentStyle
+        {
+            Id = "Journal",
+            Name = "Journal",
+            Run = new RunFormatting { LanguageTag = "de-DE" },
+        };
+        template.Blocks.Add(new Paragraph
+        {
+            StyleId = "Journal",
+            Runs =
+            {
+                Run.ComplexFieldRun(
+                    " MERGEFIELD When \\@ \"d MMMM yyyy\" ",
+                    "«When»",
+                    formatting: new RunFormatting { LanguageTag = "fr-FR" })
+            }
+        });
+        var row = new Dictionary<string, string> { ["When"] = "2026-01-05" };
+
+        MailMerge.MergeRecord(template, row).PlainText.Should().Be("5 janvier 2026");
+        MailMerge.MergeRecordWithRules(template, row, new MergeState(), recordIndex: 1)
+            .PlainText.Should().Be("5 janvier 2026");
+    }
+
     [Fact]
     public void NativeCompositeFields_AutoMapAndResolveInBothMergePaths()
     {
