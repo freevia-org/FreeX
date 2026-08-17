@@ -254,6 +254,100 @@ public sealed class SlideShowRuntimeApplicationTests
         runtime.IsClosed.Should().BeTrue();
     }
 
+    [Fact]
+    public void HandlePointerInput_ClickWithAdvanceOnClickDisabled_DoesNotAdvance()
+    {
+        // The current slide unchecked "Advance Slide: On Mouse Click" (advClick="0") --
+        // e.g. paired with a timed advance, or to stop an audience click from skipping a
+        // video. A plain click on empty slide space must be a no-op, not click-to-advance.
+        var presentation = MakePresentation(2);
+        presentation.Slides[0].Transition = new SlideTransition { AdvanceOnClick = false };
+        var events = new List<string>();
+        var runtime = CreateRuntime(presentation);
+        runtime.BindRenderer(NoOpRenderer() with
+        {
+            NavigateToSlide = navigation => events.Add($"navigate:{navigation.SlideIndex}")
+        });
+
+        var pointer = new SlideShowCanvasPointer(900, 500, 960, 540, runtime.InitialSlideMetrics);
+        runtime.HandlePointerInput(pointer);
+
+        events.Should().BeEmpty("advClick=0 must suppress click-to-advance");
+        runtime.CurrentPresentationSlideIndex.Should().Be(0);
+    }
+
+    [Fact]
+    public void HandlePointerInput_ClickWithAdvanceOnClickTrueOrUnset_StillAdvances()
+    {
+        // Sibling coverage: the default (no transition, so AdvanceOnClick defaults true)
+        // must keep advancing on a plain click, unaffected by the guard above.
+        var presentation = MakePresentation(2);
+        var events = new List<string>();
+        var runtime = CreateRuntime(presentation);
+        runtime.BindRenderer(NoOpRenderer() with
+        {
+            NavigateToSlide = navigation => events.Add($"navigate:{navigation.SlideIndex}")
+        });
+
+        var pointer = new SlideShowCanvasPointer(900, 500, 960, 540, runtime.InitialSlideMetrics);
+        runtime.HandlePointerInput(pointer);
+
+        events.Should().Equal("navigate:1");
+        runtime.CurrentPresentationSlideIndex.Should().Be(1);
+    }
+
+    [Fact]
+    public void HandleKeyboardInput_TypedHiddenSlideNumber_RevealsThatSlideInsteadOfNoOp()
+    {
+        // Deck slide 2 (presentation.Slides[1]) is hidden, so the normal playback route
+        // (BuildFullPresentationRoute, used by CreateRuntime) skips it entirely. PowerPoint
+        // still lets a presenter type a hidden slide's own number and press Enter to jump
+        // straight to it -- typing a specific number is an explicit request, unlike
+        // sequential Advance/Back which deliberately skip hidden slides.
+        var presentation = MakePresentation(3);
+        presentation.Slides[1].IsHidden = true;
+        var displayed = new List<string>();
+        var runtime = CreateRuntime(presentation);
+        runtime.BindRenderer(NoOpRenderer() with
+        {
+            DisplayCurrentSlideWithoutAnimation = () => displayed.Add("display")
+        });
+
+        runtime.HandleKeyboardInput("D2").Should().BeTrue();
+        runtime.HandleKeyboardInput("Enter").Should().BeTrue();
+
+        runtime.DisplaySlide.Should().BeSameAs(
+            presentation.Slides[1],
+            "typing a hidden slide's own deck number must jump to it, not silently no-op");
+        displayed.Should().Contain("display");
+    }
+
+    [Fact]
+    public void HandleKeyboardInput_TypedVisibleSlideNumber_StillNavigatesTheOrdinaryRoute()
+    {
+        // Sibling coverage: the hidden-slide fallback above must not disturb an ordinary
+        // typed jump to a slide that IS on the visible playback route.
+        var presentation = MakePresentation(3);
+        presentation.Slides[1].IsHidden = true;
+        var events = new List<string>();
+        var runtime = CreateRuntime(presentation);
+        runtime.BindRenderer(NoOpRenderer() with
+        {
+            NavigateToSlide = navigation => events.Add($"navigate:{navigation.SlideIndex}")
+        });
+
+        runtime.HandleKeyboardInput("D3").Should().BeTrue();
+        runtime.HandleKeyboardInput("Enter").Should().BeTrue();
+
+        events.Should().Contain(
+            "navigate:1",
+            "deck slide 3 is route index 1 once hidden deck slide 2 is excluded from the route");
+        runtime.CurrentPresentationSlideIndex.Should().Be(
+            2,
+            "deck slide 3 is presentation.Slides[2]");
+        runtime.DisplaySlide.Should().BeSameAs(presentation.Slides[2]);
+    }
+
     private static SlideShowRuntimeApplication CreateRuntime(
         Presentation presentation,
         SlideShowRuntimeCaptionPreference? captionPreference = null,

@@ -792,6 +792,40 @@ public sealed class SlideShowHostPlannerTests
     }
 
     [Fact]
+    public void PlanPointerClick_AdvanceOnClickFalse_ReturnsNoOpInsteadOfAdvancing()
+    {
+        // Author unchecked "Advance Slide: On Mouse Click" (advClick="0") -- e.g. to pair
+        // the slide with a timed advance only, or to stop an audience click from skipping
+        // a video. A plain click on empty slide space must not advance the show.
+        var slide = new Slide
+        {
+            Transition = new SlideTransition { AdvanceOnClick = false }
+        };
+
+        var click = SlideShowHostPlanner.PlanPointerClick(slide, new SlideShowPoint(900, 500));
+
+        click.Kind.Should().Be(SlideShowPointerClickIntentKind.NoOp);
+        click.IsHandled.Should().BeFalse();
+    }
+
+    [Fact]
+    public void PlanPointerClick_AdvanceOnClickTrueOrUnset_StillAdvances()
+    {
+        // Sibling coverage: the default (no transition, or an explicit AdvanceOnClick =
+        // true) must keep advancing on a plain click, unaffected by the guard above.
+        var noTransitionSlide = new Slide();
+        SlideShowHostPlanner.PlanPointerClick(noTransitionSlide, new SlideShowPoint(900, 500))
+            .Kind.Should().Be(SlideShowPointerClickIntentKind.Advance);
+
+        var explicitTrueSlide = new Slide
+        {
+            Transition = new SlideTransition { AdvanceOnClick = true }
+        };
+        SlideShowHostPlanner.PlanPointerClick(explicitTrueSlide, new SlideShowPoint(900, 500))
+            .Kind.Should().Be(SlideShowPointerClickIntentKind.Advance);
+    }
+
+    [Fact]
     public void PlanPointerClick_WithoutCurrentSlidePreservesAdvanceAndLeavesEventUnhandled()
     {
         var intent = SlideShowHostPlanner.PlanPointerClick(null, new SlideShowPoint(0, 0));

@@ -395,7 +395,11 @@ internal static partial class ViewportConditionalFormatEvaluator
     /// evaluators so that a higher-priority Stop-If-True rule of ANY kind (style, icon set, or data
     /// bar) can suppress a lower-priority icon-set or data-bar rule exactly like Excel does.
     /// </summary>
-    private static bool MatchesRuleCondition(
+    // Internal (not private): shared with ConditionalFormatRenderEvaluator (FreeX.App.Presentation,
+    // granted access via InternalsVisibleTo) so print preview and PDF export evaluate Formula, Top10,
+    // Duplicate/Unique, text, DateOccurring, and Blanks/Errors rules through the same condition logic
+    // the screen renderer uses, instead of a second, drift-prone implementation.
+    internal static bool MatchesRuleCondition(
         ConditionalFormat cf,
         Sheet sheet,
         CellAddress addr,

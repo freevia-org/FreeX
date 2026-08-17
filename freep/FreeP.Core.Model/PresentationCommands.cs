@@ -26,6 +26,86 @@ public interface IPresentationCommand
 }
 
 /// <summary>
+/// Approximates how much memory an undo/redo command payload retains, so
+/// <see cref="PresentationCommandBus"/>'s byte budget actually reflects reality instead of every
+/// command reporting the <see cref="IPresentationCommand.EstimatedBytes"/> interface default. This is
+/// deliberately approximate, not exact — it only needs to be proportional to the large payloads a
+/// captured <see cref="Slide"/>/<see cref="SlideShape"/> snapshot can retain (embedded picture/media
+/// bytes chiefly; text runs are added too since they're free to walk and can matter for text-heavy
+/// decks) so the 50MB budget evicts image/media-heavy history instead of treating it as free.
+/// </summary>
+internal static class PresentationCommandSizeEstimator
+{
+    private const int BaseOverheadBytes = 256;
+
+    /// <summary>Estimated retained bytes for a captured slide, including every shape on it.</summary>
+    public static int EstimateBytes(Slide? slide)
+    {
+        if (slide is null)
+            return BaseOverheadBytes;
+
+        long total = BaseOverheadBytes + EstimateTextBytes(slide.Notes);
+        foreach (var shape in slide.Shapes)
+            total += EstimateShapeBytes(shape);
+        total += EstimateFillBytes(slide.Background);
+        return Clamp(total);
+    }
+
+    /// <summary>Estimated retained bytes for a single captured shape (and its descendants).</summary>
+    public static int EstimateBytes(SlideShape? shape) => Clamp(BaseOverheadBytes + EstimateShapeBytes(shape));
+
+    private static long EstimateShapeBytes(SlideShape? shape)
+    {
+        if (shape is null)
+            return 0;
+
+        long total = BaseOverheadBytes;
+        if (shape.Picture is { } picture)
+            total += picture.Bytes.Length;
+        if (shape.Media is { } media)
+        {
+            total += media.Bytes.Length;
+            foreach (var track in media.CaptionTracks)
+                total += track.Bytes.Length;
+        }
+        total += EstimateFillBytes(shape.Fill);
+        total += EstimateTextBytes(shape.TextBody);
+
+        if (shape.Table is { } table)
+        {
+            foreach (var row in table.Rows)
+            foreach (var cell in row.Cells)
+            {
+                total += EstimateFillBytes(cell.Fill);
+                total += EstimateTextBytes(cell.TextBody);
+            }
+        }
+
+        foreach (var child in shape.Children)
+            total += EstimateShapeBytes(child);
+
+        return total;
+    }
+
+    private static long EstimateFillBytes(ShapeFill? fill) =>
+        fill is ShapeFill.Picture picture ? picture.ImageBytes.Length : 0;
+
+    private static long EstimateTextBytes(TextBody? textBody)
+    {
+        if (textBody is null)
+            return 0;
+
+        long total = 0;
+        foreach (var paragraph in textBody.Paragraphs)
+        foreach (var run in paragraph.Runs)
+            total += run.Text.Length;
+        return total;
+    }
+
+    private static int Clamp(long value) => value > int.MaxValue ? int.MaxValue : (int)value;
+}
+
+/// <summary>
 /// FreeP's undo/redo command bus. As in FreeW, the mechanics — paired stacks, depth/byte budget, redo
 /// invalidation — are the shared <see cref="UndoRedoStack{TCommand,TPayload}"/>; this bus only adds the
 /// presentation-command apply/revert and a change notification.
@@ -140,6 +220,8 @@ public sealed class InsertSlideCommand : IPresentationCommand
 
     public string Label => "Insert Slide";
 
+    public int EstimatedBytes => PresentationCommandSizeEstimator.EstimateBytes(_slide);
+
     public void Apply(Presentation p)
     {
         var idx = Math.Clamp(_index, 0, p.Slides.Count);
@@ -173,6 +255,8 @@ public sealed class DeleteSlideCommand : IPresentationCommand
     public DeleteSlideCommand(int index) => _index = index;
 
     public string Label => "Delete Slide";
+
+    public int EstimatedBytes => PresentationCommandSizeEstimator.EstimateBytes(_captured);
 
     public void Apply(Presentation p)
     {
@@ -475,6 +559,8 @@ public sealed class DuplicateSlideCommand : IPresentationCommand
     public DuplicateSlideCommand(int sourceIndex) => _sourceIndex = sourceIndex;
 
     public string Label => "Duplicate Slide";
+
+    public int EstimatedBytes => PresentationCommandSizeEstimator.EstimateBytes(_duplicate);
 
     public void Apply(Presentation p)
     {
@@ -3147,6 +3233,8 @@ public sealed class DeleteShapeCommand : IPresentationCommand
     }
 
     public string Label => "Delete Shape";
+
+    public int EstimatedBytes => PresentationCommandSizeEstimator.EstimateBytes(_captured);
 
     public void Apply(Presentation p)
     {

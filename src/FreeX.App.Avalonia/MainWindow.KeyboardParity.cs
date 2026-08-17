@@ -39,6 +39,13 @@ public sealed partial class MainWindow
         R(Key.OemPlus, Ctrl, AvaloniaLocalShortcut.InsertCells),
         R(Key.OemPlus, CtrlShift, AvaloniaLocalShortcut.InsertCells),
         R(Key.OemMinus, Ctrl, AvaloniaLocalShortcut.DeleteCells),
+        // R140-avalonia-missing-ctrl-numpad-insert-delete-cells: the numeric-keypad rows of the same
+        // Excel shortcuts. WPF's KeyboardShortcutMatcher.IsCtrlPlus/IsCtrlMinus (src/FreeX.App.Host/
+        // KeyboardShortcutMatcher.cs) match Key.Add/Key.Subtract alongside Key.OemPlus/Key.OemMinus,
+        // but only for the plain-Ctrl chord -- WPF's Ctrl+Shift row is OemPlus-only (no Ctrl+Shift+Add
+        // alias), so this mirrors that exactly rather than adding a third rule here.
+        R(Key.Add, Ctrl, AvaloniaLocalShortcut.InsertCells),
+        R(Key.Subtract, Ctrl, AvaloniaLocalShortcut.DeleteCells),
     ];
 
     private ExcelSelectionMode _keyboardSelectionMode;

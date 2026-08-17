@@ -3732,10 +3732,14 @@ public sealed partial class MainWindow : Window,
     private static IPlatformPrintService CreatePlatformPrintService() =>
         PlatformPrintServiceSelector.Select(
 #if FREEP_WINDOWS_CAPTURE
-            windowsFactory: static () => new WindowsPrintService(
-                options: new WindowsPrintServiceOptions(
-                    RequirePrinterDiscoveryBeforeSubmission: false,
-                    RejectNonZeroHandlerExitCode: false)),
+            // round140 (freep-windows-print-silent-failure): this used to pass
+            // RequirePrinterDiscoveryBeforeSubmission:false and RejectNonZeroHandlerExitCode:false,
+            // which opted out of both safety checks WindowsPrintService exists to provide -- a
+            // stale/offline printer reported PrintSubmissionStatus.Submitted even when the shell PDF
+            // handler never actually printed anything. Match FreeW.App.Avalonia/MainWindow.cs, which
+            // uses `new WindowsPrintService()` with every default (both checks on); no FreeP-specific
+            // reason to deviate was found.
+            windowsFactory: static () => new WindowsPrintService(),
 #else
             windowsFactory: null,
 #endif

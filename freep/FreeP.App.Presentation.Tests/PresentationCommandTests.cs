@@ -2633,4 +2633,149 @@ public sealed class PresentationCommandTests
         clone.Children.Should().HaveCount(1);
         clone.Children[0].Should().NotBeSameAs(group.Children[0]);
     }
+
+    // ════════════════════════════════════════════════════════════════════════════
+    // UNDO BYTE-BUDGET (r140 freep-undo-bytebudget-dead)
+    // ════════════════════════════════════════════════════════════════════════════
+
+    private static SlideShape MakePictureShape(uint id, int imageBytes) => new()
+    {
+        Id          = id,
+        Name        = $"Picture{id}",
+        Kind        = SlideShapeKind.Picture,
+        OffsetXEmu  = 0,
+        OffsetYEmu  = 0,
+        ExtentCxEmu = 1_000_000,
+        ExtentCyEmu = 1_000_000,
+        Picture     = new ImagePart { Bytes = new byte[imageBytes], ContentType = "image/png" },
+    };
+
+    /// <summary>
+    /// A real user deleting a handful of image-heavy slides (real <see cref="PresentationCommandBus"/>
+    /// over the real shared <c>UndoRedoStack</c>, the actual collaborator the 50MB budget lives in —
+    /// not a stub) must eventually see the byte budget evict the oldest undo entries, the same way it
+    /// already evicts everything else once MaxBytes is exceeded. Before the fix, DeleteSlideCommand
+    /// reported the interface's flat 256-byte default regardless of the captured slide's picture
+    /// bytes, so 8 slides x 8MB of picture data (64MB retained) never tripped the 50MB budget and
+    /// every deletion stayed undoable.
+    /// </summary>
+    [Fact]
+    public void DeleteSlideCommand_LargeImagePayload_TriggersByteBudgetEviction()
+    {
+        const int slideCount = 8;
+        const int imageBytesPerSlide = 8 * 1024 * 1024; // 8MB picture per slide -> 64MB total.
+
+        var p = new Presentation();
+        for (var i = 0; i < slideCount; i++)
+        {
+            var slide = new Slide { Title = $"S{i + 1}" };
+            slide.Shapes.Clear();
+            slide.Shapes.Add(MakePictureShape((uint)(i + 1), imageBytesPerSlide));
+            p.Slides.Add(slide);
+        }
+
+        var bus = new PresentationCommandBus(p);
+
+        // Delete every slide (always index 0 -- the list shrinks under us), so each undo
+        // entry captures one image-heavy slide, the exact path Delete Slide reaches in the app.
+        for (var i = 0; i < slideCount; i++)
+            bus.Execute(new DeleteSlideCommand(0));
+
+        p.Slides.Should().BeEmpty();
+
+        var undone = 0;
+        while (bus.CanUndo)
+        {
+            bus.Undo();
+            undone++;
+        }
+
+        undone.Should().BeLessThan(slideCount,
+            "64MB of captured picture bytes should have tripped the 50MB undo byte budget and " +
+            "evicted the oldest deletions, so not every one of the 8 deletes should still be undoable");
+        p.Slides.Should().HaveCountLessThan(slideCount,
+            "the evicted deletions can no longer be undone, so some slides should stay missing");
+    }
+
+    /// <summary>
+    /// Sibling to <see cref="DeleteSlideCommand_LargeImagePayload_TriggersByteBudgetEviction"/>:
+    /// ordinary small edits (no embedded images/media) must NOT be evicted prematurely just because
+    /// commands now report a real, proportional byte cost instead of a flat 256. A run of 50 blank
+    /// slide deletions stays far under both the 200-entry depth cap and the 50MB byte budget, so
+    /// every single one should remain undoable.
+    /// </summary>
+    [Fact]
+    public void DeleteSlideCommand_SmallEdits_AreNotEvictedPrematurely()
+    {
+        const int slideCount = 50;
+
+        var p = new Presentation();
+        for (var i = 0; i < slideCount; i++)
+        {
+            var slide = new Slide { Title = $"S{i + 1}" };
+            slide.Shapes.Clear();
+            p.Slides.Add(slide);
+        }
+
+        var bus = new PresentationCommandBus(p);
+
+        for (var i = 0; i < slideCount; i++)
+            bus.Execute(new DeleteSlideCommand(0));
+
+        p.Slides.Should().BeEmpty();
+
+        var undone = 0;
+        while (bus.CanUndo)
+        {
+            bus.Undo();
+            undone++;
+        }
+
+        undone.Should().Be(slideCount,
+            "small, image-free deletions stay far under the byte budget and depth cap, so none " +
+            "of them should ever be evicted");
+        p.Slides.Should().HaveCount(slideCount);
+    }
+
+    [Fact]
+    public void InsertSlideCommand_EstimatedBytes_ReflectsCapturedPictureSize()
+    {
+        var slide = new Slide { Title = "New" };
+        slide.Shapes.Clear();
+        slide.Shapes.Add(MakePictureShape(1, 5 * 1024 * 1024));
+
+        // Typed as the interface deliberately: this is exactly how PresentationCommandBus.Execute
+        // reads the cost (`command.EstimatedBytes` where `command` is an IPresentationCommand
+        // parameter), so the test exercises the real call path rather than a concrete-type shortcut.
+        IPresentationCommand command = new InsertSlideCommand(0, slide);
+
+        command.EstimatedBytes.Should().BeGreaterThan(5 * 1024 * 1024,
+            "the estimate should reflect the 5MB embedded picture, not the 256-byte interface default");
+    }
+
+    [Fact]
+    public void DeleteShapeCommand_EstimatedBytes_ReflectsCapturedPictureSizeAfterApply()
+    {
+        var (p, bus) = Make();
+        p.Slides[0].Shapes.Add(MakePictureShape(7, 4 * 1024 * 1024));
+
+        IPresentationCommand command = new DeleteShapeCommand(0, 7);
+        bus.Execute(command);
+
+        command.EstimatedBytes.Should().BeGreaterThan(4 * 1024 * 1024,
+            "the estimate should reflect the 4MB embedded picture captured for undo");
+    }
+
+    [Fact]
+    public void PasteSlideCommand_EstimatedBytes_ReflectsCapturedPictureSize()
+    {
+        var slide = new Slide { Title = "Pasted" };
+        slide.Shapes.Clear();
+        slide.Shapes.Add(MakePictureShape(1, 3 * 1024 * 1024));
+
+        IPresentationCommand command = new PasteSlideCommand(0, slide);
+
+        command.EstimatedBytes.Should().BeGreaterThan(3 * 1024 * 1024,
+            "the estimate should reflect the 3MB embedded picture, not the 256-byte interface default");
+    }
 }

@@ -74,6 +74,98 @@ public sealed class SlideShowSessionControllerTests
     }
 
     [Fact]
+    public void RevealHiddenSlide_InkDrawnOnRevealedSlide_PersistsToThatSlideNotTheUnderlyingRouteSlide()
+    {
+        var presentation = MakePresentation(3);
+        presentation.Slides[1].IsHidden = true;
+        var route = SlideShowCustomShowPlanner.BuildFullPresentationRoute(presentation, startIndex: 0);
+        route.SourceSlideIndices.Should().Equal(new[] { 0, 2 });
+
+        var started = new DateTimeOffset(2026, 8, 17, 9, 0, 0, TimeSpan.Zero);
+        var session = new SlideShowSessionController(
+            presentation,
+            route,
+            started,
+            new SlideShowDeterministicRecordingCaptureBackend("focused test"));
+
+        session.ApplyPresenterToolIntent(
+            SlideShowTimingIntent.None,
+            SlideShowRecordingMediaIntent.None,
+            SlideShowPresenterPointerMode.Pen,
+            "#112233",
+            6,
+            SlideShowInkRetentionDecision.KeepInk,
+            currentRouteSlideIndex: 0,
+            nowUtc: started);
+
+        // Presenter is on route slide 0 (source slide 0, presentation.Slides[0]) and reveals the
+        // hidden slide (source slide 1, presentation.Slides[1]) via the 'H' key / a hyperlink.
+        var revealed = session.RevealNextHiddenSlide();
+        revealed.Should().BeSameAs(presentation.Slides[1]);
+        session.DisplaySourceSlideIndex.Should().Be(1);
+
+        // Draws a pen annotation on the revealed hidden slide, then advances back into the
+        // normal route and closes the show with ink retained.
+        session.BeginInkStroke(new SlideShowInkPoint(10, 20));
+        session.EndInkStroke(new SlideShowInkPoint(30, 40));
+        session.InkExecutionState.CommittedStrokes.Should().ContainSingle();
+        session.InkExecutionState.CommittedStrokes[0].SlideIndex.Should().Be(
+            SlideShowInkExecutionPlanner.EncodeHiddenSlideInkIndex(1));
+
+        session.Close(started.AddMilliseconds(500));
+
+        presentation.Slides[1].Shapes.Should().ContainSingle(
+            shape => shape.Kind == SlideShapeKind.Ink,
+            "the ink was drawn while the hidden slide was on screen, so it must land on that slide");
+        presentation.Slides[0].Shapes.Should().NotContain(
+            shape => shape.Kind == SlideShapeKind.Ink,
+            "the presenter never drew on the underlying route slide directly");
+        presentation.Slides[2].Shapes.Should().NotContain(shape => shape.Kind == SlideShapeKind.Ink);
+    }
+
+    [Fact]
+    public void RevealHiddenSlide_ThenAdvanceAndDraw_PersistsSecondStrokeToTheNewRouteSlide()
+    {
+        // Sibling coverage: ordinary (non-reveal) navigation and ink attribution must keep
+        // working after the hidden-slide reveal encoding is introduced.
+        var presentation = MakePresentation(3);
+        presentation.Slides[1].IsHidden = true;
+        var route = SlideShowCustomShowPlanner.BuildFullPresentationRoute(presentation, startIndex: 0);
+
+        var started = new DateTimeOffset(2026, 8, 17, 9, 30, 0, TimeSpan.Zero);
+        var session = new SlideShowSessionController(
+            presentation,
+            route,
+            started,
+            new SlideShowDeterministicRecordingCaptureBackend("focused test"));
+
+        session.ApplyPresenterToolIntent(
+            SlideShowTimingIntent.None,
+            SlideShowRecordingMediaIntent.None,
+            SlideShowPresenterPointerMode.Pen,
+            "#112233",
+            6,
+            SlideShowInkRetentionDecision.KeepInk,
+            currentRouteSlideIndex: 0,
+            nowUtc: started);
+
+        session.RevealNextHiddenSlide();
+        session.BeginInkStroke(new SlideShowInkPoint(10, 20));
+        session.EndInkStroke(new SlideShowInkPoint(30, 40));
+
+        // Advancing to the next route slide (source slide 2, route index 1) leaves the
+        // hidden-slide reveal and returns to ordinary route-indexed ink attribution.
+        session.MoveToSlide(1, started.AddMilliseconds(200));
+        session.BeginInkStroke(new SlideShowInkPoint(50, 60));
+        session.EndInkStroke(new SlideShowInkPoint(70, 80));
+        session.Close(started.AddMilliseconds(500));
+
+        presentation.Slides[1].Shapes.Should().ContainSingle(shape => shape.Kind == SlideShapeKind.Ink);
+        presentation.Slides[2].Shapes.Should().ContainSingle(shape => shape.Kind == SlideShapeKind.Ink);
+        presentation.Slides[0].Shapes.Should().NotContain(shape => shape.Kind == SlideShapeKind.Ink);
+    }
+
+    [Fact]
     public void SetPointerModeAndInkColor_DuringActiveNarrationRecording_DoNotRestartTheRecordingSegment()
     {
         var presentation = MakePresentation(2);

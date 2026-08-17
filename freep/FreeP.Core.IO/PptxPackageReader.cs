@@ -4910,6 +4910,14 @@ public static class PptxPackageReader
             Kind = SlideShapeKind.Picture
         };
 
+        // freep-media-3: a picture/media <p:pic> that fills a slide placeholder (inserted via
+        // the content placeholder's picture/media icon) carries <p:nvPr><p:ph .../></p:nvPr>
+        // exactly like ReadSp's autoshapes do. Preserve it the same way ReadSp does, so the
+        // shape keeps inheriting layout-driven placeholder geometry/behavior instead of
+        // becoming an ordinary free-floating shape.
+        var ph = nvPr?.Element(P + "ph");
+        if (ph is not null) shape.Placeholder = ReadPlaceholder(ph);
+
         var spPr = pic.Element(P + "spPr");
         ReadSpPr(spPr, shape, scheme);
         // P3: also carry the picture's outline (a:ln inside p:spPr) — already handled by ReadSpPr.
@@ -6788,7 +6796,28 @@ public static class PptxPackageReader
             var choice = altContent.Element(MC + "Choice");
             var choiceTrans = choice?.Element(P + "transition");
             if (choiceTrans is not null)
-                return ReadTransition(choiceTrans, preferP14Dur: true, archive, slideRels, slidePath);
+            {
+                var t = ReadTransition(choiceTrans, preferP14Dur: true, archive, slideRels, slidePath);
+
+                // F1: for an unrecognized (Other) transition, remember that the source wrapped
+                // it in mc:AlternateContent (and with what Requires token/fallback) so the writer
+                // can re-wrap RawXml the same way instead of emitting it as a bare, invalid
+                // p:transition child and discarding the original mc:Fallback degrade content.
+                if (t.Kind == TransitionKind.Other && choice is not null)
+                {
+                    t.WasAlternateContent = true;
+                    var requiresToken = choice.Attribute("Requires")?.Value;
+                    t.McRequiresToken = requiresToken;
+                    foreach (var kv in ResolveMcRequiresNsUris(choice, requiresToken))
+                        t.McRequiresNsUris[kv.Key] = kv.Value;
+
+                    var fallbackTransForOther = altContent.Element(MC + "Fallback")?.Element(P + "transition");
+                    if (fallbackTransForOther is not null)
+                        t.AlternateContentFallbackXml = fallbackTransForOther.ToString(SaveOptions.DisableFormatting);
+                }
+
+                return t;
+            }
 
             // Fallback inside mc:AlternateContent
             var fallback = altContent.Element(MC + "Fallback");

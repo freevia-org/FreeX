@@ -67,6 +67,8 @@ public sealed class PasteSlideCommand : IPresentationCommand
 
     public string Label => "Paste Slide";
 
+    public int EstimatedBytes => PresentationCommandSizeEstimator.EstimateBytes(_slide);
+
     public void Apply(Presentation p)
     {
         var idx = Math.Clamp(_insertAt, 0, p.Slides.Count);

@@ -799,6 +799,46 @@ public class MailMergeTests
     }
 
     [Fact]
+    public void MergeRecord_SubstitutesInsideATableNestedInATableCell()
+    {
+        // A 1x1 "layout" table nested inside the outer table's only cell -- the common real-world
+        // shape for an address/salutation block wrapped in its own sub-table -- must still have its
+        // MERGEFIELD placeholder substituted, not left as literal «Item» text in the merged output.
+        var template = new TextDocument();
+        var outerTable = Table.Create(1, 1);
+        var nestedTable = Table.Create(1, 1);
+        nestedTable.Rows[0].Cells[0].Paragraphs[0].Runs.Add(new Run("«Item»"));
+        outerTable.Rows[0].Cells[0].NestedTables.Add(nestedTable);
+        // Word requires a cell whose only real content is a table to still end with a paragraph.
+        outerTable.Rows[0].Cells[0].Paragraphs.Add(new Paragraph());
+        template.Blocks.Add(outerTable);
+
+        var merged = MailMerge.MergeRecord(template,
+            new Dictionary<string, string> { ["Item"] = "Widget" });
+
+        var mergedOuterCell = ((Table)merged.Blocks[0]).Rows[0].Cells[0];
+        var mergedNestedCell = mergedOuterCell.NestedTables[0].Rows[0].Cells[0];
+        mergedNestedCell.PlainText.Should().Be("Widget");
+    }
+
+    [Fact]
+    public void FieldNames_FromDocument_ScansATableNestedInATableCell()
+    {
+        // FieldNames backs Check for Errors and the Fill-in/Ask prompt planner (MailMerge.cs ScanBlock);
+        // it shares the exact same nested-table gap as TransformBlockText, so a field placed inside a
+        // table nested in a table cell must be visible to it too.
+        var doc = new TextDocument();
+        var outerTable = Table.Create(1, 1);
+        var nestedTable = Table.Create(1, 1);
+        nestedTable.Rows[0].Cells[0].Paragraphs[0].Runs.Add(new Run("«NestedField»"));
+        outerTable.Rows[0].Cells[0].NestedTables.Add(nestedTable);
+        outerTable.Rows[0].Cells[0].Paragraphs.Add(new Paragraph());
+        doc.Blocks.Add(outerTable);
+
+        MailMerge.FieldNames(doc).Should().Equal("NestedField");
+    }
+
+    [Fact]
     public void MergeRecord_SubstitutesAllSectionHeaderFooterStoriesAndPreservesPageSettings()
     {
         var template = new TextDocument();

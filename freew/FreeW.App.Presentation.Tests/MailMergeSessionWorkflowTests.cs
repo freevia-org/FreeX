@@ -45,6 +45,27 @@ public sealed class MailMergeSessionWorkflowTests
     }
 
     [Fact]
+    public void PreviewNavigation_MergeRecordAndSequenceReflectTheNavigatedRecord()
+    {
+        // MERGEREC/MERGESEQ must report the record actually being previewed, not always record 1/
+        // sequence 0 -- otherwise what the user proofs in Preview Results for those fields never
+        // matches what Finish & Merge prints for the same record.
+        var template = DocumentWith(
+            $"{MailMerge.FieldOpen}{MailMerge.MergeRecordNumberField}{MailMerge.FieldClose}" +
+            "/" +
+            $"{MailMerge.FieldOpen}{MailMerge.MergeSequenceNumberField}{MailMerge.FieldClose}");
+        var workflow = WorkflowWith("Name\nAda\nGrace\nAlan");
+
+        var next = workflow.NavigatePreview(template, MailMergePreviewNavigationAction.Next);
+        var next2 = workflow.NavigatePreview(next.DocumentToLoad!, MailMergePreviewNavigationAction.Next);
+
+        next.CurrentIndex.Should().Be(1);
+        next.DocumentToLoad!.PlainText.Should().Be("2/2");
+        next2.CurrentIndex.Should().Be(2);
+        next2.DocumentToLoad!.PlainText.Should().Be("3/3");
+    }
+
+    [Fact]
     public void FindRecipient_RefreshesVisiblePreviewWhenARecordIsFound()
     {
         var template = DocumentWith($"Hello {MailMerge.FieldOpen}Name{MailMerge.FieldClose}");

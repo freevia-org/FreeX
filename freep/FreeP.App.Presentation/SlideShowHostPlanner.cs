@@ -289,6 +289,32 @@ public static class SlideShowHostPlanner
         return null;
     }
 
+    /// <summary>
+    /// Resolves an explicitly typed one-based slide number (the deck's own slide
+    /// numbering, as seen in Normal/Slide Sorter view) to a hidden slide's id, so a
+    /// presenter typing a hidden slide's number and pressing Enter can jump straight
+    /// to it. PowerPoint allows this even though sequential Advance/Back deliberately
+    /// skip hidden slides, because typing a specific number is an explicit navigation
+    /// request rather than an ordinary sequential step -- the same distinction that
+    /// already lets an authored hyperlink reach a hidden slide via
+    /// <see cref="FindHiddenSlideById"/>. Returns null when the number is out of
+    /// range or names a visible slide, in which case the ordinary route-relative
+    /// jump in <see cref="PlanSlideNumberJump"/> is the correct handler instead.
+    /// </summary>
+    public static string? FindHiddenSlideIdForSlideNumber(
+        Presentation presentation,
+        int oneBasedSlideNumber)
+    {
+        ArgumentNullException.ThrowIfNull(presentation);
+
+        var sourceIndex = oneBasedSlideNumber - 1;
+        if (sourceIndex < 0 || sourceIndex >= presentation.Slides.Count)
+            return null;
+
+        var slide = presentation.Slides[sourceIndex];
+        return slide.IsHidden ? slide.Id : null;
+    }
+
     public static SlideShowHostIntent IntentFromKeyName(string? keyName) =>
         keyName?.Trim() switch
         {
@@ -425,11 +451,23 @@ public static class SlideShowHostPlanner
         }
 
         var hyperlink = HitTestHyperlink(slide, slidePoint);
-        return hyperlink is null
-            ? new SlideShowPointerClickIntent(SlideShowPointerClickIntentKind.Advance)
-            : new SlideShowPointerClickIntent(
+        if (hyperlink is not null)
+        {
+            return new SlideShowPointerClickIntent(
                 SlideShowPointerClickIntentKind.Hyperlink,
                 Hyperlink: hyperlink);
+        }
+
+        // PowerPoint's "Advance Slide: On Mouse Click" checkbox (advClick) governs only
+        // the mouse click here -- it does not gate keyboard advance (Space/Right/Enter)
+        // or the auto-advance-after-time transition, both of which are planned
+        // elsewhere. When the author unchecked it (e.g. to pair the slide with a timed
+        // advance, or to stop an audience click from skipping a video), a plain click
+        // on empty slide space must not advance.
+        var advanceOnClick = slide.Transition?.AdvanceOnClick ?? true;
+        return advanceOnClick
+            ? new SlideShowPointerClickIntent(SlideShowPointerClickIntentKind.Advance)
+            : new SlideShowPointerClickIntent(SlideShowPointerClickIntentKind.NoOp);
     }
 
     public static SlideShowHostCommand PlanZoomNavigation(

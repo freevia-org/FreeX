@@ -1,3 +1,4 @@
+using FreeX.Core.Calc;
 using FreeX.Core.Model;
 
 namespace FreeX.App.Presentation.ConditionalFormatting;
@@ -28,16 +29,27 @@ public sealed class ConditionalFormatRenderEvaluator
     private const long DenseScanLimit = 10_000;
 
     private readonly Sheet _sheet;
+    private readonly Workbook _workbook;
     private readonly IReadOnlyList<ConditionalFormat> _rulesByPriority;
     private readonly Dictionary<ConditionalFormat, ConditionalFormatStatistics> _statisticsCache =
         new(ReferenceEqualityComparer.Instance);
 
-    public ConditionalFormatRenderEvaluator(Sheet sheet)
+    // Backs Formula/Top10/Duplicate/Unique/text/date/blank/error rule evaluation: these delegate to
+    // ViewportConditionalFormatEvaluator.MatchesRuleCondition (the same condition logic the screen
+    // renderer uses via ViewportService) instead of a second, independently-maintained
+    // implementation. Built once per evaluator instance -- i.e. once per sheet render pass, matching
+    // this evaluator's existing per-sheet statistics cache lifetime.
+    private readonly CfEvaluationContext _cfContext;
+
+    public ConditionalFormatRenderEvaluator(Sheet sheet, Workbook workbook)
     {
         ArgumentNullException.ThrowIfNull(sheet);
+        ArgumentNullException.ThrowIfNull(workbook);
 
         _sheet = sheet;
+        _workbook = workbook;
         _rulesByPriority = OrderRulesByPriority(sheet.ConditionalFormats);
+        _cfContext = ViewportConditionalFormatEvaluator.BuildContext(sheet, workbook);
     }
 
     public bool HasRules => _rulesByPriority.Count > 0;
@@ -61,7 +73,7 @@ public sealed class ConditionalFormatRenderEvaluator
             if (!rule.AllRanges.Any(range => range.Contains(address)))
                 continue;
 
-            var conditionMet = EvaluateRule(rule, value, out var ruleStyle, out var ruleDataBar, out var ruleIconSet);
+            var conditionMet = EvaluateRule(rule, address, value, out var ruleStyle, out var ruleDataBar, out var ruleIconSet);
 
             if (ruleStyle is { } matchedStyle)
                 style = style is { } accumulated ? StackStyle(accumulated, matchedStyle) : matchedStyle;
@@ -79,6 +91,7 @@ public sealed class ConditionalFormatRenderEvaluator
 
     private bool EvaluateRule(
         ConditionalFormat rule,
+        CellAddress address,
         ScalarValue value,
         out ConditionalFormatStylePlan? style,
         out DataBarLayout? dataBar,
@@ -147,6 +160,37 @@ public sealed class ConditionalFormatRenderEvaluator
                     return false;
 
                 iconSet = ConditionalFormatEvaluator.EvaluateIconSet(rule, numeric, GetStatistics(rule));
+                return true;
+            }
+            // Formula, Top10, Duplicate/Unique Values, the four text rules, DateOccurring, and
+            // Blanks/Errors/NoBlanks/NoErrors are all style-only (never icon set or data bar) rule
+            // types. Rather than re-implementing their condition logic a second time here (which
+            // previously fell into the `default: return false` branch below and silently dropped
+            // these rule types from print/PDF), delegate the match to the same
+            // ViewportConditionalFormatEvaluator.MatchesRuleCondition the screen renderer uses --
+            // including its Formula-rule matcher (ViewportService.MatchesFormula) -- so print/PDF
+            // and the on-screen grid can never drift apart on what these rules match.
+            case CfRuleType.Formula:
+            case CfRuleType.Top10:
+            case CfRuleType.DuplicateValues:
+            case CfRuleType.UniqueValues:
+            case CfRuleType.ContainsText:
+            case CfRuleType.NotContainsText:
+            case CfRuleType.BeginsWith:
+            case CfRuleType.EndsWith:
+            case CfRuleType.DateOccurring:
+            case CfRuleType.Blanks:
+            case CfRuleType.NoBlanks:
+            case CfRuleType.Errors:
+            case CfRuleType.NoErrors:
+            {
+                var matched = ViewportConditionalFormatEvaluator.MatchesRuleCondition(
+                    rule, _sheet, address, value, _workbook, _cfContext, ViewportService.MatchesFormula, out _);
+                if (!matched)
+                    return false;
+
+                if (rule.FormatIfTrue is { } formatIfTrue)
+                    style = ExtractStyle(formatIfTrue);
                 return true;
             }
             default:

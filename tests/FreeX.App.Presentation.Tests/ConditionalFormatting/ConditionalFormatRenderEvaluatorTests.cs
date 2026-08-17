@@ -9,7 +9,7 @@ public sealed class ConditionalFormatRenderEvaluatorTests
     [Fact]
     public void Evaluate_OrdersApplicableRulesByPriorityThenInsertionOrder()
     {
-        var sheet = CreateSheet();
+        var sheet = CreateSheet(out var workbook);
         var target = At(sheet, 1, 1);
         sheet.SetCell(target, new NumberValue(10));
 
@@ -33,7 +33,7 @@ public sealed class ConditionalFormatRenderEvaluatorTests
             Underline = true,
         }));
 
-        var result = new ConditionalFormatRenderEvaluator(sheet).Evaluate(target, sheet.GetValue(target));
+        var result = new ConditionalFormatRenderEvaluator(sheet, workbook).Evaluate(target, sheet.GetValue(target));
 
         result.Style.Should().NotBeNull();
         result.Style!.Value.FillColor.Should().Be(new CellColor(0, 255, 0),
@@ -46,7 +46,7 @@ public sealed class ConditionalFormatRenderEvaluatorTests
     [Fact]
     public void Evaluate_MatchingStopIfTrueSuppressesLowerPriorityRules()
     {
-        var sheet = CreateSheet();
+        var sheet = CreateSheet(out var workbook);
         var target = At(sheet, 1, 1);
         sheet.SetCell(target, new NumberValue(10));
 
@@ -58,7 +58,7 @@ public sealed class ConditionalFormatRenderEvaluatorTests
             FillColor = new CellColor(255, 0, 0),
         }));
 
-        var result = new ConditionalFormatRenderEvaluator(sheet).Evaluate(target, sheet.GetValue(target));
+        var result = new ConditionalFormatRenderEvaluator(sheet, workbook).Evaluate(target, sheet.GetValue(target));
 
         result.Should().Be(default(ConditionalFormatCellPlan),
             "a matching rule stops evaluation even when it has no differential style of its own");
@@ -67,7 +67,7 @@ public sealed class ConditionalFormatRenderEvaluatorTests
     [Fact]
     public void Evaluate_NonMatchingStopIfTrueAllowsLowerPriorityRules()
     {
-        var sheet = CreateSheet();
+        var sheet = CreateSheet(out var workbook);
         var target = At(sheet, 1, 1);
         sheet.SetCell(target, new NumberValue(10));
 
@@ -79,7 +79,7 @@ public sealed class ConditionalFormatRenderEvaluatorTests
             FillColor = new CellColor(255, 0, 0),
         }));
 
-        var result = new ConditionalFormatRenderEvaluator(sheet).Evaluate(target, sheet.GetValue(target));
+        var result = new ConditionalFormatRenderEvaluator(sheet, workbook).Evaluate(target, sheet.GetValue(target));
 
         result.Style!.Value.FillColor.Should().Be(new CellColor(255, 0, 0));
     }
@@ -87,7 +87,7 @@ public sealed class ConditionalFormatRenderEvaluatorTests
     [Fact]
     public void Evaluate_StatisticsUseSparseNumericEnumerationAndDeduplicateOverlappingRanges()
     {
-        var sheet = CreateSheet();
+        var sheet = CreateSheet(out var workbook);
         var first = At(sheet, 1, 1);
         var duplicated = At(sheet, 2, 1);
         var target = At(sheet, 10_001, 1);
@@ -105,7 +105,7 @@ public sealed class ConditionalFormatRenderEvaluatorTests
         };
         sheet.ConditionalFormats.Add(rule);
 
-        var result = new ConditionalFormatRenderEvaluator(sheet).Evaluate(target, sheet.GetValue(target));
+        var result = new ConditionalFormatRenderEvaluator(sheet, workbook).Evaluate(target, sheet.GetValue(target));
 
         result.Style!.Value.FillColor.Should().Be(new CellColor(255, 192, 0),
             "the sparse scan should include date serials and count an overlapping cell only once");
@@ -114,7 +114,7 @@ public sealed class ConditionalFormatRenderEvaluatorTests
     [Fact]
     public void Evaluate_ProducesColorScaleDataBarAndIconSetPlans()
     {
-        var sheet = CreateSheet();
+        var sheet = CreateSheet(out var workbook);
         var first = At(sheet, 1, 1);
         var target = At(sheet, 2, 1);
         var last = At(sheet, 3, 1);
@@ -149,7 +149,7 @@ public sealed class ConditionalFormatRenderEvaluatorTests
             IconSetStyle = "3TrafficLights1",
         });
 
-        var result = new ConditionalFormatRenderEvaluator(sheet).Evaluate(target, sheet.GetValue(target));
+        var result = new ConditionalFormatRenderEvaluator(sheet, workbook).Evaluate(target, sheet.GetValue(target));
 
         result.Style!.Value.FillColor.Should().Be(new CellColor(128, 128, 128));
         result.DataBar.Should().NotBeNull();
@@ -176,9 +176,11 @@ public sealed class ConditionalFormatRenderEvaluatorTests
 
     private static CellAddress At(Sheet sheet, uint row, uint column) => new(sheet.Id, row, column);
 
-    private static Sheet CreateSheet()
+    private static Sheet CreateSheet() => CreateSheet(out _);
+
+    private static Sheet CreateSheet(out Workbook workbook)
     {
-        var workbook = new Workbook();
+        workbook = new Workbook();
         return workbook.AddSheet("Sheet1");
     }
 }

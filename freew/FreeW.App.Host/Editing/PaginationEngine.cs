@@ -402,7 +402,44 @@ internal static class PaginationEngine
         // than what print/preview actually reserve, so the WPF paginator packs more content per page
         // than the real (footnote-bearing) page box has room for — over-filling pages and pushing
         // content under the footnote region.
-        var footnoteReserveDip = ComputeFootnoteBodyReserveDip(document, segment.Page);
+        //
+        // The reserve itself must be sized per page, not for the whole document: reserving the
+        // combined height of every footnote the document owns on every single page (the round-140
+        // bug) shrinks the usable body area roughly (footnote count) times too much for any document
+        // whose footnotes are spread across more than one page. A reserve-free provisional pass over
+        // this segment's own blocks discovers which footnotes actually land on each page, and only
+        // the tallest single page's region is reserved.
+        var footnoteReserveDip = 0.0;
+        if (document.Footnotes.Count > 0)
+        {
+            var (_, contentWidthDip) = PageLayout.ContentAreaDip(segment.Page);
+            var provisionalFlow = new FlowDocument
+            {
+                PageWidth = pageWidth,
+                PageHeight = pageHeight,
+                PagePadding = new Thickness(left, top, right, bottom),
+                FontFamily = sourceFlow.FontFamily,
+                FontSize = sourceFlow.FontSize
+            };
+            DocumentView.ApplyColumnLayout(provisionalFlow, segment.Page, useNativeColumnRule: false);
+            for (var i = segment.Start; i < end; i++)
+                provisionalFlow.Blocks.Add(scratchBlocks[i]);
+            try
+            {
+                footnoteReserveDip = ComputeMaxPerPageFootnoteReserveDip(
+                    provisionalFlow,
+                    modelBlocks.Skip(segment.Start).Take(end - segment.Start).ToList(),
+                    document,
+                    segment.Page,
+                    contentWidthDip);
+            }
+            finally
+            {
+                // Detach so the same scratch blocks can be re-parented into the real segment flow
+                // below — a WPF element may belong to only one FlowDocument at a time.
+                provisionalFlow.Blocks.Clear();
+            }
+        }
 
         var segmentFlow = new FlowDocument
         {
@@ -456,29 +493,139 @@ internal static class PaginationEngine
     }
 
     /// <summary>
-    /// Reproduces <c>PrintLayout.BuildPaginatedDocument</c>'s footnote body-reserve for one page
-    /// geometry: when the model has any footnotes, the estimated rendered height of the footnote
-    /// region (plus a fixed frame clearance) is returned so the caller can shrink the page's usable
-    /// body height by the same amount PrintLayout reserves for print/preview/PDF. Returns 0 when the
-    /// model has no footnotes or the estimated region has no height, matching PrintLayout exactly.
+    /// Given a fully laid-out provisional <see cref="FlowDocument"/> (its real blocks already added,
+    /// page geometry and margins-only <see cref="FlowDocument.PagePadding"/> already set — no footnote
+    /// reserve applied yet), returns the reserve height needed at the foot of the tallest single page,
+    /// based on the footnotes that actually land on each of that flow's pages — the same per-page
+    /// reserve Print/Print Preview/PDF/XPS need. This is deliberately NOT the combined height of every
+    /// footnote the whole document owns: that would shrink every page's usable body area far more than
+    /// Word does whenever a document's footnotes are spread across more than one page.
+    /// <para>
+    /// <paramref name="modelBlocks"/> must line up 1:1, by index, with <paramref name="provisionalFlow"/>'s
+    /// top-level blocks (the invariant every clone built by <c>PrintLayout.BuildPaginatedDocument</c>
+    /// preserves). Footnote ids are read directly from each model block's <c>Run.FootnoteId</c> rather
+    /// than from the WPF clone's elements: <c>PrintLayout.CloneElement</c>'s XamlWriter/XamlReader round
+    /// trip never carries the non-public <c>Tag</c> a live editor surface stamps its <c>Run</c>s with
+    /// back onto the deserialized clone, so a Tag-based marker lookup (<see cref="DocumentView.CollectFootnoteMarkers"/>)
+    /// silently finds nothing on any print/preview/PDF/XPS or page-break-gutter clone flow.
+    /// </para>
     /// </summary>
-    private static double ComputeFootnoteBodyReserveDip(TextDocument document, PageSettings page)
+    internal static double ComputeMaxPerPageFootnoteReserveDip(
+        FlowDocument provisionalFlow,
+        IReadOnlyList<FreeW.Core.Model.Block> modelBlocks,
+        TextDocument document,
+        PageSettings page,
+        double contentWidthDip)
     {
+        ArgumentNullException.ThrowIfNull(provisionalFlow);
+        ArgumentNullException.ThrowIfNull(modelBlocks);
+        ArgumentNullException.ThrowIfNull(document);
+
         if (document.Footnotes.Count == 0)
             return 0;
 
-        var (_, contentWidthDip) = PageLayout.ContentAreaDip(page);
-        var noteIds = document.Footnotes.Keys.OrderBy(id => id).ToList();
-        var notePlan = DocumentNoteRegionPlanner.BuildFootnoteRegion(
-            document,
-            noteIds,
-            pageNumber: 1,
-            contentWidthDip);
-        if (notePlan.EstimatedHeightDip <= 0)
-            return 0;
-
         const double footnoteFrameClearanceDip = 24.0;
-        return ClampFootnoteReserveDip(notePlan.EstimatedHeightDip + footnoteFrameClearanceDip, page);
+
+        var provisionalPaginator = ((IDocumentPaginatorSource)provisionalFlow).DocumentPaginator;
+        provisionalPaginator.PageSize = new Size(provisionalFlow.PageWidth, provisionalFlow.PageHeight);
+        provisionalPaginator.ComputePageCount();
+
+        var footnoteIdsByPage = ComputeFootnoteIdsByPageFromModel(provisionalFlow, provisionalPaginator, modelBlocks);
+        var maxReserveDip = 0.0;
+        foreach (var pageFootnoteIds in footnoteIdsByPage.Values)
+        {
+            if (pageFootnoteIds.Count == 0)
+                continue;
+            var pagePlan = DocumentNoteRegionPlanner.BuildFootnoteRegion(
+                document, pageFootnoteIds, pageNumber: 1, contentWidthDip);
+            if (pagePlan.EstimatedHeightDip <= 0)
+                continue;
+            var pageReserveDip = ClampFootnoteReserveDip(
+                pagePlan.EstimatedHeightDip + footnoteFrameClearanceDip, page);
+            if (pageReserveDip > maxReserveDip)
+                maxReserveDip = pageReserveDip;
+        }
+
+        // No page in this flow resolved to carrying any footnote reference (e.g. the flow's paginator
+        // does not support the dynamic page-number query this needs): fall back to the whole-document
+        // estimate as a safe upper bound rather than silently reserving nothing.
+        if (footnoteIdsByPage.Count == 0)
+        {
+            var noteIds = document.Footnotes.Keys.OrderBy(id => id).ToList();
+            var wholeDocumentPlan = DocumentNoteRegionPlanner.BuildFootnoteRegion(
+                document, noteIds, pageNumber: 1, contentWidthDip);
+            if (wholeDocumentPlan.EstimatedHeightDip > 0)
+            {
+                maxReserveDip = ClampFootnoteReserveDip(
+                    wholeDocumentPlan.EstimatedHeightDip + footnoteFrameClearanceDip, page);
+            }
+        }
+
+        return maxReserveDip;
+    }
+
+    /// <summary>
+    /// Maps each physical page of <paramref name="paginator"/> to the distinct footnote ids referenced
+    /// by the model blocks that land on it, by pairing <paramref name="flow"/>'s top-level blocks 1:1
+    /// by index with <paramref name="modelBlocks"/> and reading each block's own footnote reference ids
+    /// (<c>Run.FootnoteId</c>) directly from the model — see <see cref="ComputeMaxPerPageFootnoteReserveDip"/>
+    /// for why this must not rely on a WPF clone's <c>Run.Tag</c>.
+    /// </summary>
+    private static IReadOnlyDictionary<int, IReadOnlyList<int>> ComputeFootnoteIdsByPageFromModel(
+        FlowDocument flow,
+        DocumentPaginator paginator,
+        IReadOnlyList<FreeW.Core.Model.Block> modelBlocks)
+    {
+        var result = new Dictionary<int, List<int>>();
+        if (paginator is not DynamicDocumentPaginator dynamicPaginator)
+            return result.ToDictionary(kv => kv.Key, kv => (IReadOnlyList<int>)kv.Value);
+
+        var flowBlocks = flow.Blocks.ToArray();
+        var pageCount = Math.Max(1, paginator.PageCount);
+        var currentPage = 0;
+
+        for (var i = 0; i < flowBlocks.Length && i < modelBlocks.Count; i++)
+        {
+            try
+            {
+                var pageNumber = dynamicPaginator.GetPageNumber(flowBlocks[i].ContentStart);
+                if (pageNumber >= 0)
+                    currentPage = Math.Clamp(pageNumber, 0, pageCount - 1);
+            }
+            catch (NotSupportedException) { }
+            catch (InvalidOperationException) { }
+
+            foreach (var footnoteId in FootnoteIdsInModelBlock(modelBlocks[i]))
+            {
+                if (!result.TryGetValue(currentPage, out var list))
+                    result[currentPage] = list = new List<int>();
+                if (!list.Contains(footnoteId))
+                    list.Add(footnoteId);
+            }
+        }
+
+        return result.ToDictionary(kv => kv.Key, kv => (IReadOnlyList<int>)kv.Value);
+    }
+
+    private static IEnumerable<int> FootnoteIdsInModelBlock(FreeW.Core.Model.Block block)
+    {
+        switch (block)
+        {
+            case FreeW.Core.Model.Paragraph paragraph:
+                foreach (var run in paragraph.Runs)
+                    if (run.FootnoteId is { } id)
+                        yield return id;
+                break;
+
+            case FreeW.Core.Model.Table table:
+                foreach (var row in table.Rows)
+                    foreach (var cell in row.Cells)
+                        foreach (var paragraph in cell.Paragraphs)
+                            foreach (var run in paragraph.Runs)
+                                if (run.FootnoteId is { } id)
+                                    yield return id;
+                break;
+        }
     }
 
     /// <summary>

@@ -286,7 +286,8 @@ public sealed class RefreshPivotTableCommand : IWorkbookCommand, IEstimatesMemor
         if (!CommandGuards.TryFindPivotTable(sheet, _pivotTableName, out var pivotTable))
             return CommandGuards.RejectPivotTableNotFound();
 
-        _targetSnapshot = AddPivotTableCommand.Snapshot(sheet, pivotTable.LastRenderedRange ?? pivotTable.TargetRange);
+        var oldFootprint = pivotTable.LastRenderedRange ?? pivotTable.TargetRange;
+        _targetSnapshot = AddPivotTableCommand.Snapshot(sheet, oldFootprint);
         _lastRenderedRangeSnapshot = pivotTable.LastRenderedRange;
         // R116-commands-pivot-refresh-revert: Refresh (below) prunes pivotTable.RowFields/ColumnFields/
         // PageFields/DataFields (RemoveAll) and rebuilds cache.Fields (Clear+AddRange) in place on the
@@ -300,13 +301,113 @@ public sealed class RefreshPivotTableCommand : IWorkbookCommand, IEstimatesMemor
         // captured here too.
         var cache = CommandGuards.FindPivotCache(ctx.Workbook, pivotTable);
         _fieldSnapshot = RefreshFieldSnapshot.Capture(ctx.Workbook, pivotTable, cache);
+
+        // R140-commands-pivot-refresh-growth-dataloss: a refresh whose source gained a new distinct
+        // row/column item can need MORE rows/columns than the pivot's previous render occupied. Refresh
+        // (below) only discovers the actual new footprint by writing it -- there is no way to know the
+        // growth area up front, so it can't be included in the `_targetSnapshot` capture above. Snapshot
+        // every currently-occupied cell on the whole sheet (plus the current merged regions) before
+        // Refresh touches anything, so that if the post-refresh footprint DID grow into a cell holding
+        // unrelated user content -- a cell `_targetSnapshot` never covered, because it sat outside the
+        // old footprint -- Apply can put the sheet back to exactly its pre-refresh state and refuse the
+        // refresh, the same way real Excel refuses this refresh with a warning instead of silently
+        // overwriting adjacent data. Without this, Undo could never repair the loss either: the destroyed
+        // cell was never part of any undo snapshot in the first place (see Revert below, which only ever
+        // knew about the OLD footprint).
+        var beforeOccupied = CloneOccupiedCells(sheet);
+        var mergedRegionsBeforeRefresh = sheet.MergedRegions.ToList();
+
         // R116-commands-pivot-refresh-scope: this command IS the F5 / "Refresh PivotTable" action --
         // the one genuine "source data may have changed" entry point -- so it is the only caller that
         // asks Refresh to re-derive cache.Fields' SharedItems from the live source (see
         // PivotTableRefreshService.Refresh's rescanCacheSharedItems parameter doc).
         PivotTableRefreshService.Refresh(ctx.Workbook, sheet, pivotTable, rescanCacheSharedItems: true);
+
+        var newFootprint = pivotTable.LastRenderedRange ?? oldFootprint;
+        if (FindGrowthConflict(oldFootprint, newFootprint, beforeOccupied) is not null)
+        {
+            var affected = Union(Union(oldFootprint, pivotTable.TargetRange), newFootprint);
+            RestoreRegion(sheet, affected, beforeOccupied);
+            sheet.ReplaceMergedRegions(mergedRegionsBeforeRefresh);
+            pivotTable.LastRenderedRange = _lastRenderedRangeSnapshot;
+            _fieldSnapshot.Restore(pivotTable, ctx.Workbook);
+
+            _targetSnapshot = null;
+            _lastRenderedRangeSnapshot = null;
+            _fieldSnapshot = null;
+            return CommandGuards.RejectPivotRefreshWouldOverwriteData();
+        }
+
         UpdateBoundPivotChartRanges(ctx.Workbook, sheet, pivotTable);
         return new CommandOutcome(true, AffectedCells: [pivotTable.TargetRange.Start]);
+    }
+
+    /// <summary>
+    /// Clones every currently-occupied cell on <paramref name="sheet"/>, keyed by raw (row, col) --
+    /// see the R140-commands-pivot-refresh-growth-dataloss comment above for why this whole-sheet
+    /// capture (rather than a single range snapshot) is what a growing refresh needs. <see
+    /// cref="Sheet.GetOccupiedCellMap"/> returns the LIVE backing dictionary, so every value must be
+    /// cloned here -- otherwise "restoring" from it would just hand the sheet back the very same
+    /// <see cref="Cell"/> instances Refresh may still go on to mutate in place.
+    /// </summary>
+    private static Dictionary<(uint Row, uint Col), Cell> CloneOccupiedCells(Sheet sheet)
+    {
+        var occupied = sheet.GetOccupiedCellMap();
+        var snapshot = new Dictionary<(uint Row, uint Col), Cell>(occupied.Count);
+        foreach (var (key, cell) in occupied)
+            snapshot[key] = cell.Clone();
+        return snapshot;
+    }
+
+    /// <summary>
+    /// Returns the address of the first cell inside <paramref name="newFootprint"/> that falls OUTSIDE
+    /// <paramref name="oldFootprint"/> (i.e. is part of the refresh's growth, not a re-render of the
+    /// pivot's own previous output) and already held content in <paramref name="beforeOccupied"/> before
+    /// the refresh ran -- <see langword="null"/> if the refresh didn't grow, or grew only into cells that
+    /// were genuinely blank. Growing into previously-blank space is exactly how a pivot is expected to
+    /// grow and is never a conflict; only landing on a cell someone else was already using is.
+    /// </summary>
+    private static CellAddress? FindGrowthConflict(
+        GridRange oldFootprint,
+        GridRange newFootprint,
+        IReadOnlyDictionary<(uint Row, uint Col), Cell> beforeOccupied)
+    {
+        if (oldFootprint.Contains(newFootprint))
+            return null;
+
+        foreach (var address in newFootprint.AllCells())
+        {
+            if (oldFootprint.Contains(address))
+                continue;
+            if (beforeOccupied.ContainsKey((address.Row, address.Col)))
+                return address;
+        }
+
+        return null;
+    }
+
+    /// <summary>Smallest range (on the shared sheet) that contains both <paramref name="a"/> and <paramref name="b"/>.</summary>
+    private static GridRange Union(GridRange a, GridRange b) =>
+        new(
+            new CellAddress(a.Start.Sheet, Math.Min(a.Start.Row, b.Start.Row), Math.Min(a.Start.Col, b.Start.Col)),
+            new CellAddress(a.Start.Sheet, Math.Max(a.End.Row, b.End.Row), Math.Max(a.End.Col, b.End.Col)));
+
+    /// <summary>
+    /// Puts every cell in <paramref name="region"/> back to its <paramref name="beforeOccupied"/> content
+    /// (or blank, for a cell absent from that capture) -- the rollback half of the growth-conflict guard
+    /// above. <paramref name="region"/> must cover everything Refresh could possibly have touched: the
+    /// old footprint, the pivot's TargetRange (ClearRefreshRanges always clears both), and the new
+    /// footprint Refresh actually rendered.
+    /// </summary>
+    private static void RestoreRegion(Sheet sheet, GridRange region, IReadOnlyDictionary<(uint Row, uint Col), Cell> beforeOccupied)
+    {
+        foreach (var address in region.AllCells())
+        {
+            if (beforeOccupied.TryGetValue((address.Row, address.Col), out var cell))
+                sheet.SetCell(address, cell.Clone());
+            else
+                sheet.ClearCell(address);
+        }
     }
 
     public void Revert(ICommandContext ctx)

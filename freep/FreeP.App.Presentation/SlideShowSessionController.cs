@@ -16,7 +16,8 @@ public sealed record SlideShowSessionKeyPlan(
     bool IsHandled,
     SlideShowSessionInputActionKind ActionKind,
     SlideShowScreenMode? ScreenMode,
-    SlideShowHostCommand HostCommand)
+    SlideShowHostCommand HostCommand,
+    string? RevealTargetSlideId = null)
 {
     public bool ShouldExecuteHostCommand =>
         ActionKind == SlideShowSessionInputActionKind.ExecuteHostCommand;
@@ -290,16 +291,40 @@ public sealed class SlideShowSessionController
         {
             var buffer = _slideNumberBuffer;
             _slideNumberBuffer = string.Empty;
-            var command = SlideShowSlideNumberPlanner.TryParseSlideNumber(buffer, out var slideNumber)
-                ? PlanSlideNumberJump(slideNumber)
-                : SlideShowHostCommand.Ignored;
+
+            if (SlideShowSlideNumberPlanner.TryParseSlideNumber(buffer, out var slideNumber))
+            {
+                // A typed number is an explicit navigation request, unlike sequential
+                // Advance/Back which deliberately skip hidden slides: PowerPoint still
+                // lets the presenter type a hidden slide's own number to jump to it.
+                var hiddenSlideId = SlideShowHostPlanner.FindHiddenSlideIdForSlideNumber(
+                    _presentation,
+                    slideNumber);
+                if (hiddenSlideId is not null)
+                {
+                    return new SlideShowSessionKeyPlan(
+                        true,
+                        SlideShowSessionInputActionKind.RevealHiddenSlide,
+                        null,
+                        SlideShowHostCommand.Ignored,
+                        hiddenSlideId);
+                }
+
+                var command = PlanSlideNumberJump(slideNumber);
+                return new SlideShowSessionKeyPlan(
+                    true,
+                    command.IsHandled
+                        ? SlideShowSessionInputActionKind.ExecuteHostCommand
+                        : SlideShowSessionInputActionKind.None,
+                    null,
+                    command);
+            }
+
             return new SlideShowSessionKeyPlan(
                 true,
-                command.IsHandled
-                    ? SlideShowSessionInputActionKind.ExecuteHostCommand
-                    : SlideShowSessionInputActionKind.None,
+                SlideShowSessionInputActionKind.None,
                 null,
-                command);
+                SlideShowHostCommand.Ignored);
         }
 
         _slideNumberBuffer = string.Empty;
@@ -334,7 +359,7 @@ public sealed class SlideShowSessionController
                 callbacks.TogglePresenterView();
                 break;
             case SlideShowSessionInputActionKind.RevealHiddenSlide:
-                callbacks.RevealHiddenSlide(null);
+                callbacks.RevealHiddenSlide(plan.RevealTargetSlideId);
                 break;
             case SlideShowSessionInputActionKind.SetScreenMode when plan.ScreenMode is { } screenMode:
                 callbacks.SetScreenMode(screenMode);
@@ -380,6 +405,15 @@ public sealed class SlideShowSessionController
 
         _revealedHiddenSlide = target.Slide;
         _revealedHiddenSlideSourceIndex = target.SourceSlideIndex;
+
+        // The revealed slide is hidden, so it has no index of its own in the playback route;
+        // stamp subsequent ink strokes with the encoded absolute slide index instead of leaving
+        // InkExecutionState.SlideIndex pointing at whatever route slide the presenter was really
+        // parked on, which would otherwise attribute ink drawn here to that (wrong) slide.
+        InkExecutionState = SlideShowInkExecutionPlanner.MoveToSlide(
+            InkExecutionState,
+            SlideShowInkExecutionPlanner.EncodeHiddenSlideInkIndex(target.SourceSlideIndex));
+
         return _revealedHiddenSlide;
     }
 

@@ -2,6 +2,8 @@ using Avalonia;
 using Avalonia.Automation;
 using Avalonia.Controls;
 using Avalonia.Controls.Primitives;
+using Avalonia.Input;
+using Avalonia.Interactivity;
 using Avalonia.Layout;
 using Avalonia.Media;
 using Free.Shared.Ribbon.Avalonia;
@@ -45,7 +47,29 @@ public sealed partial class MainWindow
             UiText.CreateAutomationName(UiText.Get("MainWindow_Header_File")));
         _backstageOverlay.Closed += RestoreFocusAfterBackstageDismissal;
 
+        // R140-backstage-shortcuts-leak-to-worksheet: AvaloniaBackstageFrame's own constructor
+        // already registers a Tunnel+Bubble KeyDown handler on itself (handledEventsToo: true) that
+        // claims Escape and rail navigation (Home/End/Up/Down) and marks those Handled -- but every
+        // other key (Ctrl+Z, Delete, arrow-cell-navigation, letters, ...) falls straight through it
+        // and used to keep tunnelling/bubbling past this overlay into MainWindow's worksheet
+        // keyboard-shortcut dispatch, silently editing the hidden sheet underneath while Backstage
+        // was open. Adding our own Tunnel handler here (registered after -- and so run after -- the
+        // frame's own handler on this same element) blocks everything the frame didn't already
+        // claim, before it can ever reach a focused rail control or bubble any further. Avalonia
+        // skips handlers registered without handledEventsToo once Handled is already true, so this
+        // is automatically a no-op for the nav keys the frame just handled.
+        _backstageOverlay.AddHandler(
+            InputElement.KeyDownEvent,
+            BlockWorksheetKeyboardShortcutsWhileBackstageVisible,
+            RoutingStrategies.Tunnel);
+
         return _backstageOverlay;
+    }
+
+    private void BlockWorksheetKeyboardShortcutsWhileBackstageVisible(object? sender, KeyEventArgs e)
+    {
+        if (_backstageOverlay.IsVisible)
+            e.Handled = true;
     }
 
     private SisterBackstageEntryPlan<Control> MapLiveBackstageEntry(

@@ -104,6 +104,36 @@ public static class SlideShowInkExecutionPlanner
             LaserOverlayPoint: null);
     }
 
+    /// <summary>
+    /// Encodes the presentation (absolute) slide index of a slide being displayed through the
+    /// slideshow's hidden-slide reveal (H key or a hyperlink jump) into the ink SlideIndex
+    /// namespace. A revealed hidden slide is excluded from the normal playback route (see
+    /// <c>SlideShowPlaybackRoute.SourceSlideIndices</c>), so it has no route index of its own to
+    /// stamp onto ink strokes drawn on it. Route indices are always non-negative, so the negative
+    /// sentinel produced here can never collide with a real route index; strokes tagged with it
+    /// stay correctly grouped to the revealed slide instead of being conflated with whatever
+    /// route slide the presenter was actually parked on. <see cref="TryDecodeHiddenSlideInkIndex"/>
+    /// inverts the encoding back to the presentation slide index at persistence time.
+    /// </summary>
+    public static int EncodeHiddenSlideInkIndex(int presentationSlideIndex) =>
+        -(presentationSlideIndex + 1);
+
+    /// <summary>
+    /// Inverts <see cref="EncodeHiddenSlideInkIndex"/>. Returns false (and -1) for any
+    /// non-negative value, i.e. an ordinary playback-route index.
+    /// </summary>
+    public static bool TryDecodeHiddenSlideInkIndex(int inkSlideIndex, out int presentationSlideIndex)
+    {
+        if (inkSlideIndex < 0)
+        {
+            presentationSlideIndex = -(inkSlideIndex + 1);
+            return true;
+        }
+
+        presentationSlideIndex = -1;
+        return false;
+    }
+
     public static SlideShowInkExecutionState MoveToSlide(
         SlideShowInkExecutionState state,
         int slideIndex)

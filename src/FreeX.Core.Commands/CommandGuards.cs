@@ -16,6 +16,8 @@ public static class CommandGuards
     private const string PivotTableSourceRangeRequiresHeadersMessage = "PivotTable source range must include headers and data.";
     private const string PivotTableFieldIndexOutsideSourceRangeMessage = "PivotTable field index is outside the source range.";
     private const string PivotTableRequiresDataFieldMessage = "PivotTable requires at least one data field.";
+    private const string PivotRefreshWouldOverwriteDataMessage =
+        "Cannot overwrite data. Existing data will be lost when you refresh the report. To refresh, move or delete the data next to the PivotTable, then refresh again.";
     private const string RowRangeOutsideWorksheetBoundsMessage = "Row range is outside the worksheet bounds.";
     private const string ColumnRangeOutsideWorksheetBoundsMessage = "Column range is outside the worksheet bounds.";
     private const string AllowedEditRangeOnTargetSheetMessage = "Allowed edit range must be on the target sheet.";
@@ -156,6 +158,17 @@ public static class CommandGuards
 
     public static CommandOutcome RejectPivotTableRequiresDataField() =>
         new(false, PivotTableRequiresDataFieldMessage);
+
+    /// <summary>
+    /// R140-commands-pivot-refresh-growth-dataloss: refused when a refresh's growth (the pivot needing
+    /// more rows/columns than its previous render used, because the source gained a new distinct
+    /// row/column item) would land on a cell that already held unrelated user content. Matches Excel,
+    /// which refuses this exact refresh with a warning rather than silently overwriting adjacent data --
+    /// see <c>RefreshPivotTableCommand.Apply</c> for the growth-conflict detection and the full rollback
+    /// that keeps the sheet untouched when this fires.
+    /// </summary>
+    public static CommandOutcome RejectPivotRefreshWouldOverwriteData() =>
+        new(false, PivotRefreshWouldOverwriteDataMessage);
 
     public static CommandOutcome RejectRowRangeOutsideWorksheetBounds() =>
         new(false, RowRangeOutsideWorksheetBoundsMessage);

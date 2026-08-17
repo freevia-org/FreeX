@@ -6421,7 +6421,8 @@ public sealed partial class XlsxFileAdapter
                                 cell.StyleId,
                                 sourceStyleIndex,
                                 cell.IgnoreFormulaError,
-                                sheet.RichTextRuns.GetValueOrDefault(new CellAddress(sheet.Id, row, col))));
+                                sheet.RichTextRuns.GetValueOrDefault(new CellAddress(sheet.Id, row, col)),
+                                GetLiveSpillMemberCount(sheet, sheet.Id, row, col)));
                     }
 
                     Array.Sort(cells, XlsxPatchCellEntry.Compare);
@@ -6497,7 +6498,8 @@ public sealed partial class XlsxFileAdapter
                             cell.StyleId,
                             sourceStyleIndex,
                             cell.IgnoreFormulaError,
-                            sheet.RichTextRuns.GetValueOrDefault(new CellAddress(sheet.Id, row, col))));
+                            sheet.RichTextRuns.GetValueOrDefault(new CellAddress(sheet.Id, row, col)),
+                            GetLiveSpillMemberCount(sheet, sheet.Id, row, col)));
                 }
 
                 Array.Sort(cells, XlsxPatchCellEntry.Compare);
@@ -6521,6 +6523,24 @@ public sealed partial class XlsxFileAdapter
                 _chartSourceRanges,
                 _pivotSourceRanges,
                 modelFingerprint);
+        }
+
+        // R140-io-dynamic-array-spill-growth-1: total cell count (rows * cols) of the live spill
+        // extent anchored at (row, col) on `sheet`, or 1 if that address is not currently the
+        // anchor of a live/provisional spill. Used both to capture a baseline snapshot of each
+        // formula cell's spill footprint and, at diff time, to detect that footprint changing
+        // (grown or shrunk) even when the anchor's own formula text/cached value/style/runs did
+        // not -- see the SpillMemberCount doc comment on XlsxPatchCell for why that case would
+        // otherwise be invisible to patch-save entirely.
+        private static uint GetLiveSpillMemberCount(Sheet sheet, SheetId sheetId, uint row, uint col)
+        {
+            if (sheet.TryGetArrayExtent(new CellAddress(sheetId, row, col), out var anchor, out var rows, out var cols) &&
+                anchor.Row == row && anchor.Col == col)
+            {
+                return Math.Max(1u, rows * cols);
+            }
+
+            return 1;
         }
 
         public bool TryGetPatchableValueChanges(
@@ -6790,6 +6810,23 @@ public sealed partial class XlsxFileAdapter
                         cell.ArrayMode != original.ArrayMode)
                     {
                         return Fail("change_formula_array_mode", out blockReason);
+                    }
+
+                    // R140-io-dynamic-array-spill-growth-1: a dynamic-array anchor's spill extent
+                    // can grow or shrink (its formula's result now covers more/fewer cells) while
+                    // the anchor's own formula text, cached top-left value, style, and rich runs
+                    // stay byte-for-byte identical -- e.g. B2=SEQUENCE(A1) spilling into just B2
+                    // growing to B2:B4 after A1 changes elsewhere. The new/removed member cells
+                    // live only in Sheet._spillValues, never Sheet._cells, so neither this loop nor
+                    // the deleted-cells loop below would otherwise see them at all, and the
+                    // "nothing changed" skip a few lines down would silently drop the growth. Bail
+                    // to the full-save fallback whenever the live extent disagrees with what this
+                    // baseline captured, before that skip can fire.
+                    if (cell.HasFormula && cell.ArrayMode == FormulaArrayMode.Dynamic)
+                    {
+                        var currentSpillMemberCount = GetLiveSpillMemberCount(sheet, baseline.SheetId, row, col);
+                        if (currentSpillMemberCount != original.SpillMemberCount)
+                            return Fail("change_spill_extent", out blockReason);
                     }
 
                     var styleChanged = cell.StyleId != original.StyleId;
@@ -11281,7 +11318,16 @@ public sealed partial class XlsxFileAdapter
         // unchanged (e.g. ApplyStyleCommand.ClearOverriddenRunProperties clearing stale run
         // overrides when a whole-cell style command supersedes them). Null/empty are equivalent
         // (no rich-run overrides) — see RichRunsEqual.
-        IReadOnlyList<CellTextRun>? RichRuns = null);
+        IReadOnlyList<CellTextRun>? RichRuns = null,
+        // R140-io-dynamic-array-spill-growth-1: for a live dynamic-array spill anchor, the total
+        // cell count (rows * cols) of its spill extent at the moment this baseline snapshot was
+        // captured; 1 for every other cell (including a non-spilling formula). Spill member cells
+        // beyond the anchor live only in Sheet._spillValues, never in Sheet._cells, so they are
+        // otherwise completely invisible to the occupied-cell diff in
+        // TryGetPatchableValueChanges -- without this, a spill that grows or shrinks while its
+        // anchor's own formula text/cached top-left value/style/runs stay identical would be
+        // skipped as "no change" and the new/removed member cells would never be written.
+        uint SpillMemberCount = 1);
 
     private sealed record XlsxCellValuePatch(
         XlsxCellValuePatchKind Kind,

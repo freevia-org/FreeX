@@ -1023,18 +1023,25 @@ internal static class XlsxNamedRangeMapper
         if (body.Contains("#REF!", StringComparison.OrdinalIgnoreCase))
             return true;
 
-        // External-workbook reference: '[<index>]SheetName!...' (optionally with the sheet name
-        // single-quoted, e.g. '[1]Sheet1'!$A$1). FreeX only models references into the current
-        // workbook, so any external-workbook marker is unmodelable regardless of what follows.
-        var externalRefOpen = body.IndexOf('[');
-        var externalRefClose = externalRefOpen >= 0 ? body.IndexOf(']', externalRefOpen + 1) : -1;
-        if (externalRefOpen >= 0 &&
-            externalRefClose > externalRefOpen &&
-            int.TryParse(
-                body.Substring(externalRefOpen + 1, externalRefClose - externalRefOpen - 1),
-                out _))
+        // External-workbook reference: '[<index>]SheetName!...' or the filename-bracket form
+        // '[Book1.xlsx]SheetName!...' (optionally with the sheet name single-quoted, e.g.
+        // '[1]Sheet1'!$A$1 or '[Budget.xlsx]Sheet1'!$A$1 -- the filename form is what a
+        // hand/tool-authored workbook carries, and it is also what FreeX's own external-link
+        // authoring writer leaves untouched inside <definedNames>, since that writer only rewrites
+        // <f> formula text in worksheet cells, never defined-name bodies). FreeX only models
+        // references into the current workbook, so any external-workbook bracket marker is
+        // unmodelable regardless of what follows -- the bracket content may be a numeric external-
+        // link index OR a literal workbook filename; neither ever resolves to a local worksheet.
+        // The distinguishing shape (vs. a structured table reference like Table1[Column1], where
+        // the identifier precedes the bracket) is that the external-reference bracket is the very
+        // first character of the body, or of the body's quoted sheet-name span when the sheet name
+        // is single-quoted -- so only a leading '[' (optionally after a leading quote) counts.
+        var externalRefScanStart = body.Length > 0 && body[0] == '\'' ? 1 : 0;
+        if (externalRefScanStart < body.Length && body[externalRefScanStart] == '[')
         {
-            return true;
+            var externalRefClose = body.IndexOf(']', externalRefScanStart + 1);
+            if (externalRefClose > externalRefScanStart)
+                return true;
         }
 
         // A plain range/cell reference always contains a '!' scope separator (SheetName!$A$1) or

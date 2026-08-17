@@ -247,8 +247,22 @@ public sealed class SlideShowRuntimeApplication
         return command.BackResult!;
     }
 
-    public void ExecuteSlideNumberJump(int oneBasedSlideNumber, DateTimeOffset? nowUtc = null) =>
+    public void ExecuteSlideNumberJump(int oneBasedSlideNumber, DateTimeOffset? nowUtc = null)
+    {
+        // A typed number is an explicit navigation request, unlike sequential
+        // Advance/Back which deliberately skip hidden slides: PowerPoint still lets
+        // the presenter type a hidden slide's own number to jump straight to it.
+        var hiddenSlideId = SlideShowHostPlanner.FindHiddenSlideIdForSlideNumber(
+            _presentation,
+            oneBasedSlideNumber);
+        if (hiddenSlideId is not null)
+        {
+            ExecuteHiddenSlideReveal(hiddenSlideId);
+            return;
+        }
+
         ExecuteHostCommand(_session.PlanSlideNumberJump(oneBasedSlideNumber), nowUtc);
+    }
 
     public Slide? ExecuteHiddenSlideReveal(string? targetSlideId = null)
     {
