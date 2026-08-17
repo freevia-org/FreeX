@@ -76,7 +76,12 @@ public sealed class FileLifecycleWorkflowSourceTests
         source.Should().NotContain("private bool _isDirty");
         source.Should().NotContain("private async Task<SaveChangesPrompt> ShowSaveChangesPromptAsync");
         source.Should().NotContain("PromptSaveChangesSync");
-        (ports + lifecycleAdapter + session).Should().NotContain("GetAwaiter().GetResult()");
+        (ports + lifecycleAdapter + session).Should().NotContain(
+            "GetAwaiter().GetResult()",
+            "the file-lifecycle chain must stay non-blocking -- these types are driven from the UI "
+            + "thread, so blocking on a Task here deadlocks when the awaited work needs that thread "
+            + "to pump. This is a plain substring match, so it also trips on the token appearing in "
+            + "a COMMENT: describe the pattern in prose rather than quoting the call.");
         source.Should().NotContain("AvaloniaSaveChangesDialog.ShowAsync(");
         source.Should().NotContain("Do you want to save changes to");
         source.Should().NotContain("Content = \"Don't save\"");

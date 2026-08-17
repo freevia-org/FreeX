@@ -779,7 +779,7 @@ public sealed class PresentationFileCommandSession
     {
         // ConfigureAwait(false) is required on every await in this method (and in the render
         // delegate below): both WPF hosts (FreeP.App.Host, FreeW.App.Host) invoke this whole
-        // chain via `command.GetAwaiter().GetResult()` on the UI thread. AtomicExportExecutor
+        // chain by blocking on the returned Task from the UI thread. AtomicExportExecutor
         // opens the temp file with real async I/O (FileOptions.Asynchronous); if that write
         // genuinely completes asynchronously, an un-configured await here would try to resume
         // by posting its continuation back to the captured WPF DispatcherSynchronizationContext
