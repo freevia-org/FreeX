@@ -65,7 +65,10 @@ public sealed class AvaloniaChartFormatDialogSourceTests
         combined.Should().Contain("Margin = new Thickness(0, 0, 0, 6),");
         combined.Should().Contain("Margin = new Thickness(0, 0, 0, 8),");
         combined.Should().Contain("AvaloniaCompactDialogChrome.ApplyWindow(dialog, ChartDialogChromeStyle);");
-        combined.Should().Contain("ConfigureChartDialogKeyboardLifecycle(dialog, subtypeGallery);");
+        // Initial focus is the OK button, not subtypeGallery: a ListBox does not accept focus
+        // before its items realize, so passing it left the dialog focused on the Window with Tab
+        // unable to move. See the interaction contract for dialog.PivotChartTypeDialog.
+        combined.Should().Contain("ConfigureChartDialogKeyboardLifecycle(dialog, okButton);");
         chartFormatDialogsSource.Should().Contain("AutomationProperties.SetName(okButton");
         chartFormatDialogsSource.Should().Contain("AutomationProperties.SetName(cancelButton");
         combined.Should().Contain("ChartWorkflowCommandCatalog.SelectDataSource");
