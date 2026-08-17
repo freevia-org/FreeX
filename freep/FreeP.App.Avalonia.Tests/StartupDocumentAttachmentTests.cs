@@ -58,6 +58,11 @@ public sealed class StartupDocumentAttachmentTests
 
                     window.Editor.InsertSlide();
                     window.IsDirty.Should().BeTrue();
+
+                    // Returning a value binds Dispatch's Func<Task<T>> overload. A valueless async
+                    // lambda binds the Action overload instead, making it async void: the test
+                    // returns before the body finishes and every assertion above is discarded.
+                    return true;
                 },
             CancellationToken.None);
     }

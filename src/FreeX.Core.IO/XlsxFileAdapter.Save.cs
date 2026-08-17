@@ -102,7 +102,7 @@ public sealed partial class XlsxFileAdapter
                     ref currentModelFingerprint,
                     out patchDiagnostics);
             }
-            catch (ArgumentException ex) when (ex.Message.Contains("invalid character", StringComparison.OrdinalIgnoreCase))
+            catch (ArgumentException ex) when (IsXmlSerializationCharacterFailure(ex))
             {
                 // Patch-path XML serialisation failed due to a character that cannot be represented
                 // in XML (e.g. a control character that slipped through escaping).  Fall back to
@@ -970,4 +970,28 @@ public sealed partial class XlsxFileAdapter
         _ => // Rgb
             XLColor.FromArgb(255, color.Rgb.R, color.Rgb.G, color.Rgb.B),
     };
+
+    /// <summary>
+    /// True when an <see cref="ArgumentException"/> reports a character that cannot be written to
+    /// XML, so the caller can fall back to a full save instead of losing the user's data.
+    /// </summary>
+    /// <remarks>
+    /// Recognized by where it was thrown as well as by wording. The message check alone reads a
+    /// framework resource: "invalid character" is the English text, and on a runtime with localized
+    /// satellite resources this filter would stop matching, the exception would escape, and the
+    /// fallback that exists so a save never fails would silently disappear.
+    /// </remarks>
+    private static bool IsXmlSerializationCharacterFailure(ArgumentException exception)
+    {
+        var assembly = exception.TargetSite?.DeclaringType?.Assembly.GetName().Name;
+        if (assembly is not null
+            && assembly.StartsWith("System.Xml", StringComparison.Ordinal)
+            || assembly == "System.Private.Xml")
+        {
+            return true;
+        }
+
+        return exception.Message.Contains("invalid character", StringComparison.OrdinalIgnoreCase);
+    }
+
 }
