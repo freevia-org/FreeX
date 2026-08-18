@@ -874,6 +874,13 @@ public sealed partial class DocumentView : RichTextBox
     private bool TryPrepareNativeFallback(out bool restoreReadOnly)
     {
         restoreReadOnly = false;
+        // freew-cc-6: the checks below judge the position the caret sits ON, which says nothing about a
+        // SELECTION that merely spans a control — native editing would replace the whole range and take
+        // the control with it. Word's sdtLocked exists to forbid exactly that, so a selection that would
+        // remove a delete-locked control declines the gesture outright.
+        if (SelectionRemovesDeleteLockedContentControl())
+            return false;
+
         if ((Selection.Start.Parent as WpfRun ?? CaretPosition?.Parent as WpfRun)
             is { Tag: RunMarkers { Control: { } marker } })
         {
@@ -911,6 +918,11 @@ public sealed partial class DocumentView : RichTextBox
     /// </summary>
     private bool IsCaretOnLockedContentControl()
     {
+        // freew-cc-6: Cut and Paste both REMOVE whatever the selection covers, so a selection spanning a
+        // delete-locked control is blocked even when the caret itself rests on ordinary text.
+        if (SelectionRemovesDeleteLockedContentControl())
+            return true;
+
         if ((Selection.Start.Parent as WpfRun ?? CaretPosition?.Parent as WpfRun)
             is { Tag: RunMarkers { Control: { } marker } })
         {
@@ -14752,50 +14764,10 @@ public sealed partial class DocumentView : RichTextBox
         }
     }
 
-    private static IEnumerable<WpfRun> NoteMarkers(System.Windows.Documents.Block block, bool footnote)
-    {
-        switch (block)
-        {
-            case WpfParagraph paragraph:
-                foreach (var marker in NoteMarkers(paragraph.Inlines, footnote))
-                    yield return marker;
-                break;
-            case WpfList list:
-                foreach (var item in list.ListItems)
-                    foreach (var itemBlock in item.Blocks)
-                        foreach (var marker in NoteMarkers(itemBlock, footnote))
-                            yield return marker;
-                break;
-            case WpfTable table:
-                foreach (var rowGroup in table.RowGroups)
-                    foreach (var row in rowGroup.Rows)
-                        foreach (var cell in row.Cells)
-                            foreach (var cellBlock in cell.Blocks)
-                                foreach (var marker in NoteMarkers(cellBlock, footnote))
-                                    yield return marker;
-                break;
-        }
-    }
-
-    private static IEnumerable<WpfRun> NoteMarkers(InlineCollection inlines, bool footnote)
-    {
-        foreach (var inline in inlines)
-        {
-            if (inline is WpfRun run
-                && (footnote
-                    ? run.Tag is FootnoteMarker
-                    : run.Tag is EndnoteMarker))
-            {
-                yield return run;
-            }
-
-            if (inline is Span span)
-            {
-                foreach (var marker in NoteMarkers(span.Inlines, footnote))
-                    yield return marker;
-            }
-        }
-    }
+    private static IEnumerable<WpfRun> NoteMarkers(System.Windows.Documents.Block block, bool footnote) =>
+        DescendantRuns(block).Where(run => footnote
+            ? run.Tag is FootnoteMarker
+            : run.Tag is EndnoteMarker);
 
     public bool ToggleContentControl(int blockIndex, int runIndex) =>
         ApplyContentControlInteraction(blockIndex, runIndex, ContentControlInteractionPlanner.ToggleCheckBox);
@@ -14890,6 +14862,88 @@ public sealed partial class DocumentView : RichTextBox
     /// <see cref="TryPrepareNativeFallback"/> already uses. A locked run-level control takes precedence
     /// over the paragraph's block-level control when both are present.
     /// </summary>
+    /// <summary>
+    /// Whether the current selection would REMOVE a content control whose lock forbids that — Word's
+    /// <c>sdtLocked</c> family, which protects the control's existence while (for plain <c>sdtLocked</c>)
+    /// still allowing its text to be edited. A run only disappears when the selection covers it whole, so
+    /// a partial selection inside a delete-locked field stays deletable; a paragraph covered whole is
+    /// removed by the surrounding merge, which takes its block-level region with it.
+    /// </summary>
+    private bool SelectionRemovesDeleteLockedContentControl()
+    {
+        if (Selection is not { IsEmpty: false })
+            return false;
+
+        var start = Selection.Start;
+        var end = Selection.End;
+
+        bool CoveredWhole(TextPointer contentStart, TextPointer contentEnd) =>
+            contentStart.CompareTo(start) >= 0 && contentEnd.CompareTo(end) <= 0;
+
+        foreach (var block in Document.Blocks)
+        {
+            if (block is WpfParagraph paragraph
+                && BlockContentControlAt(paragraph) is { } blockControl
+                && !ContentControlInteractionPlanner.CanDeleteBlockContentControl(blockControl)
+                && CoveredWhole(paragraph.ContentStart, paragraph.ContentEnd))
+            {
+                return true;
+            }
+
+            foreach (var run in DescendantRuns(block))
+            {
+                if (run.Tag is RunMarkers { Control: { } marker }
+                    && !ContentControlInteractionPlanner.CanDeleteContentControl(marker.Control)
+                    && CoveredWhole(run.ContentStart, run.ContentEnd))
+                {
+                    return true;
+                }
+            }
+        }
+
+        return false;
+    }
+
+    /// <summary>Every <see cref="WpfRun"/> inside a block, including those nested in spans, lists and tables.</summary>
+    private static IEnumerable<WpfRun> DescendantRuns(System.Windows.Documents.Block block)
+    {
+        switch (block)
+        {
+            case WpfParagraph paragraph:
+                foreach (var run in DescendantRuns(paragraph.Inlines))
+                    yield return run;
+                break;
+            case WpfList list:
+                foreach (var item in list.ListItems)
+                    foreach (var itemBlock in item.Blocks)
+                        foreach (var run in DescendantRuns(itemBlock))
+                            yield return run;
+                break;
+            case WpfTable table:
+                foreach (var rowGroup in table.RowGroups)
+                    foreach (var row in rowGroup.Rows)
+                        foreach (var cell in row.Cells)
+                            foreach (var cellBlock in cell.Blocks)
+                                foreach (var run in DescendantRuns(cellBlock))
+                                    yield return run;
+                break;
+        }
+    }
+
+    private static IEnumerable<WpfRun> DescendantRuns(InlineCollection inlines)
+    {
+        foreach (var inline in inlines)
+        {
+            if (inline is WpfRun run)
+                yield return run;
+            else if (inline is Span span)
+            {
+                foreach (var nested in DescendantRuns(span.Inlines))
+                    yield return nested;
+            }
+        }
+    }
+
     internal bool? TryEvaluateContentControlLock(TextPointer? position)
     {
         if ((position?.Parent as WpfRun) is { Tag: RunMarkers { Control: { } marker } })

@@ -448,6 +448,32 @@ public sealed partial class DocumentView
                 .ToList();
 
     /// <summary>
+    /// AV-CCEDIT: the placed glyphs of a block that render inside a content control — the shaded region
+    /// the chrome draws — with the character each one actually renders as.
+    /// </summary>
+    internal IReadOnlyList<(char Ch, ContentControlKind Kind, Rect Rect)> ContentControlGlyphsForTest(
+        int blockIndex)
+    {
+        if (_laidOutWidth < 0)
+            Relayout(FallbackWidth);
+
+        return _placed
+            .Where(p => p.Block == blockIndex && !p.Sentinel && p.Control is not null)
+            .Select(p => (p.Ch, p.Control!.Kind, new Rect(p.X, p.Y, Math.Max(1, p.W), p.LineHeight)))
+            .ToList();
+    }
+
+    /// <summary>Drives the pointer-hover affordances (tooltip + cursor) for a content control.</summary>
+    internal string? ContentControlHoverTipForTest(Point point)
+    {
+        if (_laidOutWidth < 0)
+            Relayout(FallbackWidth);
+
+        UpdateContentControlHover(point);
+        return ToolTip.GetTip(this) as string;
+    }
+
+    /// <summary>
     /// Returns the effective display formatting for a block's placed glyphs.
     /// </summary>
     internal IReadOnlyList<RunFormatting> GetPlacedFormattingForBlock(int blockIndex) =>

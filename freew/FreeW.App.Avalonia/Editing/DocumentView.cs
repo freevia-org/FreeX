@@ -196,6 +196,9 @@ public sealed partial class DocumentView : Control
     private (int TableBlock, int Row, int Col, int ParaIdx, int Offset)? _cellCaret;
     // Non-null when there is a selection anchor inside a cell (same encoding as _cellCaret).
     private (int TableBlock, int Row, int Col, int ParaIdx, int Offset)? _cellAnchor;
+    // AV-CCEDIT: the content control the pointer is currently over, so the hover tooltip is set once per
+    // field rather than on every pointer move.
+    private ModelContentControl? _hoveredContentControl;
 
     // ── AV-TBL2: cross-cell rectangular selection ─────────────────────────────────────────────────
     // When a drag spans more than one cell, we switch from single-cell text selection to a rectangular
@@ -8453,7 +8456,9 @@ public sealed partial class DocumentView : Control
                 IsColumnBreak: cell.IsColumnBreak)).ToList());
         // Resolve document defaults and named styles for display only; editing re-derives raw cells
         // from the model. Unstyled paragraphs still inherit DefaultRun, just as they do in Word.
-        var cells = rawCells.Select(c => c with { Fmt = ResolveRunFmt(c.Fmt, paragraph, c.StyleId) }).ToList();
+        var cells = rawCells
+            .Select(c => c with { Fmt = ResolveRunFmt(c.Fmt, paragraph, c.StyleId), Ch = DisplayGlyph(c) })
+            .ToList();
         var reviewPolicy = CurrentReviewDisplayPolicy;
         var pf = ResolveParagraphFmt(paragraph);
         var alignment = pf.Alignment;
@@ -9042,7 +9047,7 @@ public sealed partial class DocumentView : Control
 
             if (!reviewPolicy.IsRevisionTextVisible(cells[c].Revision))
             {
-                _placed.Add(new PlacedChar(blockIndex, SourceOffsetAt(c), x, pageSpaceY, 0, lineHeight, cells[c].Fmt, cells[c].Ch, Sentinel: false, CommentId: cells[c].CommentId, Revision: cells[c].Revision, RevisionAuthor: cells[c].RevisionAuthor, Link: cells[c].Link, HasFormatRevision: cells[c].FormatRevision is not null, FormatRevisionAuthor: cells[c].FormatRevision?.Author));
+                _placed.Add(new PlacedChar(blockIndex, SourceOffsetAt(c), x, pageSpaceY, 0, lineHeight, cells[c].Fmt, cells[c].Ch, Sentinel: false, CommentId: cells[c].CommentId, Revision: cells[c].Revision, RevisionAuthor: cells[c].RevisionAuthor, Link: cells[c].Link, HasFormatRevision: cells[c].FormatRevision is not null, FormatRevisionAuthor: cells[c].FormatRevision?.Author, Control: cells[c].Control));
                 continue;
             }
 
@@ -9084,12 +9089,12 @@ public sealed partial class DocumentView : Control
                     _tabLeaderSpans.Add((tabX, segmentStartX, pageSpaceY, lineHeight, plan.Leader, cells[c].Fmt));
 
                 // Place the tab character with its computed advance width (for caret hit-testing).
-                _placed.Add(new PlacedChar(blockIndex, SourceOffsetAt(c), tabX, pageSpaceY, tabAdvance, lineHeight, cells[c].Fmt, '\t', Sentinel: false, CommentId: cells[c].CommentId, Revision: cells[c].Revision, RevisionAuthor: cells[c].RevisionAuthor, Link: cells[c].Link, HasFormatRevision: cells[c].FormatRevision is not null, FormatRevisionAuthor: cells[c].FormatRevision?.Author));
+                _placed.Add(new PlacedChar(blockIndex, SourceOffsetAt(c), tabX, pageSpaceY, tabAdvance, lineHeight, cells[c].Fmt, '\t', Sentinel: false, CommentId: cells[c].CommentId, Revision: cells[c].Revision, RevisionAuthor: cells[c].RevisionAuthor, Link: cells[c].Link, HasFormatRevision: cells[c].FormatRevision is not null, FormatRevisionAuthor: cells[c].FormatRevision?.Author, Control: cells[c].Control));
                 x = segmentStartX;
                 continue;
             }
 
-            _placed.Add(new PlacedChar(blockIndex, SourceOffsetAt(c), x, pageSpaceY, measured[c], lineHeight, cells[c].Fmt, cells[c].Ch, Sentinel: false, CommentId: cells[c].CommentId, Revision: cells[c].Revision, RevisionAuthor: cells[c].RevisionAuthor, Link: cells[c].Link, HasFormatRevision: cells[c].FormatRevision is not null, EquationElement: cells[c].EquationElement, FormatRevisionAuthor: cells[c].FormatRevision?.Author));
+            _placed.Add(new PlacedChar(blockIndex, SourceOffsetAt(c), x, pageSpaceY, measured[c], lineHeight, cells[c].Fmt, cells[c].Ch, Sentinel: false, CommentId: cells[c].CommentId, Revision: cells[c].Revision, RevisionAuthor: cells[c].RevisionAuthor, Link: cells[c].Link, HasFormatRevision: cells[c].FormatRevision is not null, EquationElement: cells[c].EquationElement, FormatRevisionAuthor: cells[c].FormatRevision?.Author, Control: cells[c].Control));
             x += measured[c];
             // Extra inter-word gap for justify alignment: only for spaces before the last non-space cell.
             if (wordGap > 0 && cells[c].Ch == ' ' && c < lastNonSpaceIdx)
@@ -11322,6 +11327,14 @@ public sealed partial class DocumentView : Control
             if (IsTextHiddenInCurrentView(pc.Fmt))
                 continue;
             var decorationPlan = RunDecorationVisualPlanner.Build(pc.Fmt, PxPerPoint);
+
+            // AV-CCEDIT: the field's own shade goes down FIRST, so everything else the glyph carries —
+            // selection, character shading, comment tint — still reads on top of it. Same affordance the
+            // WPF host paints as the run's Background.
+            if (pc.Control is not null)
+                context.FillRectangle(
+                    ContentControlShadeBrush,
+                    new Rect(pc.X, pc.Y, Math.Max(1, pc.W), pc.LineHeight));
 
             if (selection is { } sel && IsWithin(sel, pc.Block, pc.Offset))
                 context.FillRectangle(SelectionBrush, new Rect(pc.X, pc.Y, Math.Max(2, pc.W), pc.LineHeight));
@@ -15949,6 +15962,67 @@ public sealed partial class DocumentView : Control
         return OpenContentControlMenu(target, run);
     }
 
+    /// <summary>
+    /// Updates the hover affordances for a content control under <paramref name="point"/>: the tooltip
+    /// the WPF host sets on the rendered run, and a hand cursor over a control a click operates (check
+    /// box, date picker, drop-down, combo box). Returns true while the pointer is over a field, so the
+    /// caller leaves the cursor alone. Clears both once the pointer leaves.
+    /// </summary>
+    private bool UpdateContentControlHover(Point point)
+    {
+        var control = ContentControlAtPoint(point);
+        if (control is null)
+        {
+            if (_hoveredContentControl is null)
+                return false;
+
+            _hoveredContentControl = null;
+            ToolTip.SetTip(this, null);
+            Cursor = Cursor.Default;
+            return false;
+        }
+
+        if (!ReferenceEquals(control, _hoveredContentControl))
+        {
+            _hoveredContentControl = control;
+            ToolTip.SetTip(this, ContentControlInteractionPlanner.Tooltip(control));
+        }
+
+        Cursor = control.Kind is ContentControlKind.CheckBox
+            or ContentControlKind.DatePicker
+            or ContentControlKind.DropDownList
+            or ContentControlKind.ComboBox
+            ? new Cursor(StandardCursorType.Hand)
+            : Cursor.Default;
+        return true;
+    }
+
+    /// <summary>
+    /// The content control whose rendered glyphs actually contain <paramref name="point"/> — a
+    /// containment test, not <see cref="TryHitTest"/>'s nearest-glyph snap, so hovering the empty space
+    /// past a line does not light up a field on it.
+    /// </summary>
+    private ModelContentControl? ContentControlAtPoint(Point point)
+    {
+        if (_laidOutWidth < 0)
+            return null;
+
+        foreach (var placed in _placed)
+        {
+            if (placed.Control is null || placed.Sentinel)
+                continue;
+            if (point.X >= placed.X
+                && point.X <= placed.X + Math.Max(1, placed.W)
+                && point.Y >= placed.Y
+                && point.Y <= placed.Y + placed.LineHeight)
+            {
+                return placed.Control;
+            }
+        }
+
+        return null;
+    }
+
     private bool TryOpenContentControlMenuAtCaret() =>
         TryGetContentControlAt(_caret, out var target, out var run)
         && OpenContentControlMenu(target, run);
@@ -16585,6 +16659,11 @@ public sealed partial class DocumentView : Control
         if (!e.GetCurrentPoint(this).Properties.IsLeftButtonPressed)
         {
             if (UpdateRulerHoverCursor(point))
+                return;
+
+            // AV-CCEDIT: a field advertises itself on hover — its description as a tooltip, and a hand
+            // cursor over the kinds a click acts on (check box, date picker, drop-down, combo box).
+            if (UpdateContentControlHover(point))
                 return;
 
             // AV-HANDLES: with the button up, update the hover cursor over the selection so handles
@@ -18699,10 +18778,12 @@ public sealed partial class DocumentView : Control
                 }
                 // Enter on a NON-EMPTY list item → split and continue the list on the new paragraph.
                 // The new paragraph inherits ListKind + ListLevel (not StyleId, same as Word).
-                var firstPara = new Paragraph { Formatting = listFmt, StyleId = paragraph.StyleId };
+                var firstPara = CarryBlockRegion(
+                    new Paragraph { Formatting = listFmt, StyleId = paragraph.StyleId },
+                    paragraph);
                 SetRuns(firstPara, bodyCells.Take(bodyOffset).ToList());
                 var contFmt = listFmt with { };   // same list kind + level; renumbering is render-time
-                var secondPara = new Paragraph { Formatting = contFmt };
+                var secondPara = CarryBlockRegion(new Paragraph { Formatting = contFmt }, paragraph);
                 SetRuns(secondPara, bodyCells.Skip(bodyOffset).ToList());
                 _bus.Execute(new ReplaceBlocksCommand(block, 1, new Block[] { firstPara, secondPara }));
                 _caret = new DocPosition(block + 1, 0);
@@ -18712,9 +18793,15 @@ public sealed partial class DocumentView : Control
                 return;
             }
 
-            var firstParaNL = new Paragraph { Formatting = paragraph.Formatting, StyleId = paragraph.StyleId };
+            // AV-CCEDIT: both halves stay inside the body-level region the split paragraph belonged to —
+            // consecutive blocks sharing the instance re-emit as the one w:sdt they came from.
+            var firstParaNL = CarryBlockRegion(
+                new Paragraph { Formatting = paragraph.Formatting, StyleId = paragraph.StyleId },
+                paragraph);
             SetRuns(firstParaNL, bodyCells.Take(bodyOffset).ToList());
-            var secondParaNL = new Paragraph { Formatting = paragraph.Formatting };
+            var secondParaNL = CarryBlockRegion(
+                new Paragraph { Formatting = paragraph.Formatting },
+                paragraph);
             SetRuns(secondParaNL, bodyCells.Skip(bodyOffset).ToList());
             _bus.Execute(new ReplaceBlocksCommand(block, 1, new Block[] { firstParaNL, secondParaNL }));
             _caret = new DocPosition(block + 1, 0);
@@ -18756,9 +18843,19 @@ public sealed partial class DocumentView : Control
         var prev = PreviousEditableBlock(block);
         if (prev < 0 || _doc.Blocks[prev] is not Paragraph prevPara || _doc.Blocks[block] is not Paragraph curPara)
             return;
+        // AV-CCEDIT: the merge removes the current block, so a body-level region that only wraps it (a
+        // w:sdt with Word's sdtLocked) would disappear with it.
+        if (!ReferenceEquals(curPara.BlockContentControl, prevPara.BlockContentControl)
+            && !ContentControlInteractionPlanner.CanDeleteBlockContentControl(curPara.BlockContentControl))
+        {
+            return;
+        }
+
         var prevCells = ParaCells(prevPara);
         var prevLen = prevCells.Count;
-        var merged = new Paragraph { Formatting = prevPara.Formatting, StyleId = prevPara.StyleId };
+        var merged = CarryBlockRegion(
+            new Paragraph { Formatting = prevPara.Formatting, StyleId = prevPara.StyleId },
+            prevPara);
         prevCells.AddRange(ParaCells(curPara));
         SetRuns(merged, prevCells);
         _bus.Execute(new ReplaceBlocksCommand(prev, block - prev + 1, new Block[] { merged }));
@@ -19145,7 +19242,9 @@ public sealed partial class DocumentView : Control
         {
             var head = ParaCells(startPara).Take(sel.Start.Offset).ToList();
             head.AddRange(ParaCells(endPara).Skip(sel.End.Offset));
-            var merged = new Paragraph { Formatting = startPara.Formatting, StyleId = startPara.StyleId };
+            var merged = CarryBlockRegion(
+                new Paragraph { Formatting = startPara.Formatting, StyleId = startPara.StyleId },
+                startPara);
             SetRuns(merged, head);
             _bus.Execute(new ReplaceBlocksCommand(sel.Start.Block, sel.End.Block - sel.Start.Block + 1, new Block[] { merged }));
             _caret = new DocPosition(sel.Start.Block, sel.Start.Offset);
@@ -24122,36 +24221,86 @@ public sealed partial class DocumentView : Control
             && !IsFloatingDrawingRun(r));
 
     /// <summary>
-    /// Whether a body selection overlaps the text of a content-locked field. Paragraphs fully inside the
-    /// selection count in whole; the first and last only over the selected part, so text next to a locked
-    /// field stays deletable.
+    /// Whether a content control's lock forbids this deletion. Two different locks apply: a
+    /// CONTENT-locked field refuses any deletion that touches its text, and a DELETE-locked
+    /// (Word's <c>sdtLocked</c>) field or block region refuses a deletion that would remove it outright —
+    /// its text stays editable, only its disappearance is forbidden. Word declines the whole gesture in
+    /// both cases rather than deleting part of it. Paragraphs fully inside the selection count in whole;
+    /// the first and last only over the selected part, so text next to a locked field stays deletable.
     /// </summary>
     private bool SelectionReachesLockedContentControl((DocPosition Start, DocPosition End) selection)
     {
         for (var block = selection.Start.Block; block <= selection.End.Block; block++)
         {
-            if (block < 0 || block >= _doc.Blocks.Count || _doc.Blocks[block] is not Paragraph paragraph)
+            if (block < 0 || block >= _doc.Blocks.Count)
+                continue;
+
+            // A cross-paragraph deletion rebuilds the covered blocks as one merged paragraph, so every
+            // block-level region it spans past its first block would be removed with them.
+            if (block > selection.Start.Block
+                && !ContentControlInteractionPlanner.CanDeleteBlockContentControl(
+                    _doc.Blocks[block].BlockContentControl))
+            {
+                return true;
+            }
+
+            if (_doc.Blocks[block] is not Paragraph paragraph)
                 continue;
 
             var lo = block == selection.Start.Block ? selection.Start.Offset : 0;
             var hi = block == selection.End.Block ? selection.End.Offset : int.MaxValue;
             foreach (var span in ContentControlSpans(paragraph))
             {
-                if (paragraph.Runs[span.FirstRunIndex].Control is not
+                var control = paragraph.Runs[span.FirstRunIndex].Control;
+                var spanEnd = span.Start + span.Length;
+                var touched = Math.Min(hi, spanEnd) > Math.Max(lo, span.Start);
+                if (!touched)
+                    continue;
+
+                if (control is
                     {
                         LockMode: ContentControlLockMode.ContentLocked
                             or ContentControlLockMode.ControlAndContentLocked
                     })
                 {
-                    continue;
+                    return true;
                 }
 
-                if (Math.Min(hi, span.Start + span.Length) > Math.Max(lo, span.Start))
+                // A field loses its last character — and with it the w:sdt — only when the deletion
+                // covers all of it. Deleting part of a delete-locked field is allowed; the rest survives.
+                if (!ContentControlInteractionPlanner.CanDeleteContentControl(control)
+                    && lo <= span.Start
+                    && hi >= spanEnd)
+                {
                     return true;
+                }
             }
         }
 
         return false;
+    }
+
+    /// <summary>
+    /// AV-CCEDIT: copies the body-level wrappers a rebuilt paragraph must stay inside — the block content
+    /// control (an outer w:sdt around whole paragraphs) and the custom-XML region. Both are grouped by
+    /// instance on save, so a paragraph that loses them silently drops out of its region.
+    /// </summary>
+    /// <summary>
+    /// AV-CCEDIT: the character a cell RENDERS as. A check box owns its glyph: Word stores it as a
+    /// symbol-font codepoint that means nothing in the body font, so — like the WPF host, which rewrites
+    /// the rendered run's text — the checked state drives the glyph instead. Display only: the edit paths
+    /// re-derive their cells from the model, so the stored text is untouched.
+    /// </summary>
+    private static char DisplayGlyph(Cell cell) =>
+        cell.Control is { Kind: ContentControlKind.CheckBox } control
+            ? (control.Checked ? ModelContentControl.CheckedGlyph : ModelContentControl.UncheckedGlyph)[0]
+            : cell.Ch;
+
+    private static Paragraph CarryBlockRegion(Paragraph rebuilt, Paragraph source)
+    {
+        rebuilt.BlockContentControl = source.BlockContentControl;
+        rebuilt.BlockCustomXml = source.BlockCustomXml;
+        return rebuilt;
     }
 
     private static bool HasLockedContentControl(Paragraph paragraph) =>
@@ -25073,6 +25222,12 @@ public sealed partial class DocumentView : Control
 
     private static ImmutableSolidColorBrush SelectionBrush { get; } = new ImmutableSolidColorBrush(Color.FromArgb(0x55, 0x33, 0x99, 0xFF));
 
+    // ── AV-CCEDIT: content-control chrome ─────────────────────────────────────────────────────────
+    // The same subtle shade the WPF host paints behind a w:sdt's text (ContentControlShade there), so a
+    // field reads as a field on Linux/macOS too instead of looking like ordinary body text.
+    private static ImmutableSolidColorBrush ContentControlShadeBrush { get; } =
+        new ImmutableSolidColorBrush(Color.FromRgb(0xEC, 0xEC, 0xF4));
+
     // ── AV-COMMENT: comment-anchor render assets ──────────────────────────────────────────────────
     // Light amber tint behind commented glyphs (active threads) and a muted grey tint for resolved ones.
     private static ImmutableSolidColorBrush CommentTintBrush { get; } = new ImmutableSolidColorBrush(Color.FromArgb(0x33, 0xFF, 0xC1, 0x07));
@@ -25228,7 +25383,10 @@ public sealed partial class DocumentView : Control
         LinkInfo? Link = null,
         bool HasFormatRevision = false,
         EquationVisualElement? EquationElement = null,
-        string? FormatRevisionAuthor = null)
+        string? FormatRevisionAuthor = null,
+        // AV-CCEDIT: the content control this glyph belongs to (null = ordinary text), so the render can
+        // shade the field's region and the pointer can offer its tooltip / click affordance.
+        ModelContentControl? Control = null)
     {
         /// <summary>True when this glyph is inside a table cell (as opposed to a body paragraph).</summary>
         public bool IsCell => CellRow >= 0;

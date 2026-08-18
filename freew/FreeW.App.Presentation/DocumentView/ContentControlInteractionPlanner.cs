@@ -61,6 +61,39 @@ public static class ContentControlInteractionPlanner
         && protectionPolicy.DecisionFor(RestrictEditingOperationKind.FormFieldEdit).IsAllowed;
 
     /// <summary>
+    /// Whether a content control may be REMOVED. Word's <c>w:lock</c> separates the two protections: the
+    /// <c>sdtLocked</c> family (<see cref="ContentControlLockMode.ControlLocked"/> and
+    /// <see cref="ContentControlLockMode.ControlAndContentLocked"/>) forbids deleting the control itself,
+    /// while <c>contentLocked</c> only freezes its text — so a plain <c>sdtLocked</c> field is still
+    /// typable, and an editing gesture that would delete such a field must decline instead. A null
+    /// control is ordinary content and always deletable.
+    /// </summary>
+    public static bool CanDeleteContentControl(ContentControl? control) =>
+        control is null
+        || control.LockMode is not (ContentControlLockMode.ControlLocked
+            or ContentControlLockMode.ControlAndContentLocked);
+
+    /// <summary>
+    /// The block-level counterpart of <see cref="CanDeleteContentControl"/>: a body <c>w:sdt</c> that
+    /// wraps whole paragraphs/tables. A delete lock anywhere in the nesting chain (see
+    /// <see cref="FreeW.Core.Model.BlockContentControl.Parent"/>) protects the blocks inside it, matching
+    /// Word's nested-w:sdt semantics.
+    /// </summary>
+    public static bool CanDeleteBlockContentControl(FreeW.Core.Model.BlockContentControl? control)
+    {
+        for (var current = control; current is not null; current = current.Parent)
+        {
+            if (current.LockMode is ContentControlLockMode.ControlLocked
+                or ContentControlLockMode.ControlAndContentLocked)
+            {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    /// <summary>
     /// The block-level (body <c>w:sdt</c>) counterpart of <see cref="CanEditExistingContentControl"/>.
     /// Word can lock a whole paragraph/table -- not just an inline field -- by wrapping it in a body-level
     /// structured document tag whose <c>w:sdtPr</c> carries <c>w:lock w:val="sdtContentLocked"</c> (or
