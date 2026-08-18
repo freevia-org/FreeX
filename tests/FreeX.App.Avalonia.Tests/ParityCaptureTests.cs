@@ -393,6 +393,25 @@ public sealed class ParityCaptureTests
                 File.ReadAllBytes(Path.Combine(outputDirectory, "contextual.PivotTableAnalyze.png"))
                     .Should().NotEqual(File.ReadAllBytes(Path.Combine(outputDirectory, "tab.Home.png")),
                         "PivotTable Analyze must render its contextual tab, not the Home fallback");
+
+                // Guard the whole set, not just this one pair. Selecting the File tab opens the
+                // backstage, which covered the shell and made sixteen of the seventeen ribbon PNGs
+                // byte-identical; only this single comparison happened to notice. Comparing every
+                // ribbon surface catches the next thing that blanks them wholesale.
+                var ribbonPngs = results
+                    .Where(r => r.Captured
+                        && (r.Id.StartsWith("tab.", StringComparison.Ordinal)
+                            || r.Id.StartsWith("contextual.", StringComparison.Ordinal)))
+                    .ToList();
+                ribbonPngs.Should().HaveCountGreaterThan(10, "the ribbon strip should capture every tab");
+                var ribbonDigests = ribbonPngs.ToDictionary(
+                    r => r.Id,
+                    r => Convert.ToHexString(
+                        System.Security.Cryptography.SHA256.HashData(
+                            File.ReadAllBytes(Path.Combine(outputDirectory, r.PngFileName)))));
+                ribbonDigests.Values.Distinct().Should().HaveCount(ribbonDigests.Count,
+                    "every ribbon tab should render its own content: "
+                    + string.Join(", ", ribbonDigests.Select(kv => kv.Key + "=" + kv.Value[..8])));
                 File.ReadAllBytes(Path.Combine(outputDirectory, "contextual.PivotTableDesign.png"))
                     .Should().NotEqual(File.ReadAllBytes(Path.Combine(outputDirectory, "tab.Home.png")),
                         "PivotTable Design must render its contextual tab, not the Home fallback");
