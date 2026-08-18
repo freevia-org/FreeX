@@ -158,6 +158,130 @@ public sealed class PageContentRenderModelBuilderConditionalFormattingTests
         block.Font.Color.Should().Be(new PresentationRgb(0, 0, 0), "the priority-1 Stop-If-True rule must suppress the lower-priority font-color rule entirely");
     }
 
+    // R140 cf-print-pdf-rule-type-gap: Formula, Top10, DuplicateValues, and Blanks previously fell
+    // into ConditionalFormatRenderEvaluator's `default: return false` branch, so print preview / PDF
+    // export silently dropped these rule types even though the screen grid applied them correctly.
+    // These tests go through the real production print/PDF planner entry point
+    // (PageContentRenderModelBuilder.Build, the same call PrintPreviewInstructionBuilder and PDF
+    // export use), not the evaluator in isolation, and all four would have failed before the fix
+    // (every matched cell's Fill would have stayed the raw/default color instead of the CF fill).
+    [Fact]
+    public void Build_FormulaRuleAppliesStyleAndStopIfTrueSuppressesLowerPriorityRule()
+    {
+        var (workbook, sheet) = CreateWorkbook();
+        var address = new CellAddress(sheet.Id, 1, 1);
+        sheet.SetCell(address, new NumberValue(150));
+
+        sheet.ConditionalFormats.Add(new ConditionalFormat
+        {
+            RuleType = CfRuleType.Formula,
+            FormulaText = "$A$1>100",
+            Priority = 1,
+            StopIfTrue = true,
+            AppliesTo = new GridRange(address, address),
+            FormatIfTrue = new CellStyle { FillColor = new CellColor(255, 0, 0) },
+        });
+        sheet.ConditionalFormats.Add(new ConditionalFormat
+        {
+            RuleType = CfRuleType.CellValue,
+            Operator = CfOperator.GreaterThan,
+            Value1 = "100",
+            Priority = 2,
+            AppliesTo = new GridRange(address, address),
+            FormatIfTrue = new CellStyle { FontColor = new CellColor(0, 0, 255) },
+        });
+
+        var layout = BuildFirstPage(workbook, sheet)!;
+
+        var block = layout.Cells.Single(c => c.Row == 1 && c.Column == 1);
+        block.Fill.Should().Be(new PresentationRgb(255, 0, 0), "the matched Formula rule's fill must reach print/PDF, not just the screen grid");
+        block.Font.Color.Should().Be(new PresentationRgb(0, 0, 0), "the priority-1 Stop-If-True Formula rule must suppress the lower-priority CellValue rule in print, exactly as on screen");
+    }
+
+    [Fact]
+    public void Build_Top10RuleAppliesStyleOnlyToTopRankedCell()
+    {
+        var (workbook, sheet) = CreateWorkbook();
+        var low = new CellAddress(sheet.Id, 1, 1);
+        var mid = new CellAddress(sheet.Id, 2, 1);
+        var top = new CellAddress(sheet.Id, 3, 1);
+        sheet.SetCell(low, new NumberValue(10));
+        sheet.SetCell(mid, new NumberValue(20));
+        sheet.SetCell(top, new NumberValue(30));
+        var range = new GridRange(low, top);
+
+        sheet.ConditionalFormats.Add(new ConditionalFormat
+        {
+            RuleType = CfRuleType.Top10,
+            TopBottomRank = 1,
+            TopBottomPercent = false,
+            AboveAverage = true, // top (not bottom) N
+            AppliesTo = range,
+            FormatIfTrue = new CellStyle { FillColor = new CellColor(255, 0, 0) },
+        });
+
+        var layout = BuildFirstPage(workbook, sheet)!;
+
+        layout.Cells.Single(c => c.Row == 3).Fill.Should().Be(new PresentationRgb(255, 0, 0),
+            "the single top-ranked cell must be highlighted in print/PDF");
+        layout.Cells.Single(c => c.Row == 1).Fill.Should().NotBe(new PresentationRgb(255, 0, 0),
+            "a cell outside the top-1 ranking must not be highlighted");
+    }
+
+    [Fact]
+    public void Build_DuplicateValuesRuleAppliesStyleOnlyToDuplicatedCells()
+    {
+        var (workbook, sheet) = CreateWorkbook();
+        var first = new CellAddress(sheet.Id, 1, 1);
+        var duplicate = new CellAddress(sheet.Id, 2, 1);
+        var unique = new CellAddress(sheet.Id, 3, 1);
+        sheet.SetCell(first, new NumberValue(5));
+        sheet.SetCell(duplicate, new NumberValue(5));
+        sheet.SetCell(unique, new NumberValue(7));
+        var range = new GridRange(first, unique);
+
+        sheet.ConditionalFormats.Add(new ConditionalFormat
+        {
+            RuleType = CfRuleType.DuplicateValues,
+            AppliesTo = range,
+            FormatIfTrue = new CellStyle { FillColor = new CellColor(255, 0, 0) },
+        });
+
+        var layout = BuildFirstPage(workbook, sheet)!;
+
+        layout.Cells.Single(c => c.Row == 1).Fill.Should().Be(new PresentationRgb(255, 0, 0));
+        layout.Cells.Single(c => c.Row == 2).Fill.Should().Be(new PresentationRgb(255, 0, 0));
+        layout.Cells.Single(c => c.Row == 3).Fill.Should().NotBe(new PresentationRgb(255, 0, 0),
+            "the unique (non-duplicated) value must not be highlighted");
+    }
+
+    [Fact]
+    public void Build_BlanksRuleAppliesStyleOnlyToBlankCells()
+    {
+        var (workbook, sheet) = CreateWorkbook();
+        var blank = new CellAddress(sheet.Id, 1, 1);
+        var filled = new CellAddress(sheet.Id, 2, 1);
+        sheet.SetCell(filled, new NumberValue(5)); // leave `blank` untouched
+        // The blank cell has no occupied-cell entry of its own, so it must be pulled into the
+        // print range explicitly -- GetUsedRange() alone would not include a row that holds
+        // nothing but an (unwritten) CF rule.
+        sheet.PrintArea = new GridRange(blank, filled);
+
+        sheet.ConditionalFormats.Add(new ConditionalFormat
+        {
+            RuleType = CfRuleType.Blanks,
+            AppliesTo = new GridRange(blank, filled),
+            FormatIfTrue = new CellStyle { FillColor = new CellColor(255, 0, 0) },
+        });
+
+        var layout = BuildFirstPage(workbook, sheet)!;
+
+        layout.Cells.Single(c => c.Row == 1).Fill.Should().Be(new PresentationRgb(255, 0, 0),
+            "the blank cell must be highlighted in print/PDF");
+        layout.Cells.Single(c => c.Row == 2).Fill.Should().NotBe(new PresentationRgb(255, 0, 0),
+            "a non-blank cell must not match the Blanks rule");
+    }
+
     [Fact]
     public void Build_NarrowColumnWithOverWideNumberShowsHashOverflowIndicator()
     {

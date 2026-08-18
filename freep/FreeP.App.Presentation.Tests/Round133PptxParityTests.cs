@@ -181,6 +181,107 @@ public sealed class Round133PptxParityTests
     }
 
     // ─────────────────────────────────────────────────────────────────────────
+    // freep-media-2 (r140): fully-unresolved media (no bytes, no LinkUrl) must not
+    // fall back to a hardcoded relationship id.
+    // ─────────────────────────────────────────────────────────────────────────
+
+    [Fact]
+    public void Writer_FullyUnresolvedVideo_OmitsMediaFileElementInsteadOfHardcodedRelId()
+    {
+        // freep-media-2: a media shape whose source could not be resolved on read (e.g. the
+        // referenced media part was missing from the zip) round-trips into MediaInfo with
+        // Bytes.Length == 0 AND LinkUrl null/empty -- neither embedded nor linked. Before the
+        // fix, BuildMediaPicEl fell back to a hardcoded "rIdVid1" for a:videoFile's r:link even
+        // though WriteSlideMediaFiles wrote NO relationship at all for this shape, producing a
+        // dangling reference (or aliasing another shape's real "rIdVid1", see the sibling test
+        // below). The honest fix is to omit a:videoFile entirely when nothing was resolved.
+        var pres = new PresentationModel();
+        var slide = new Slide();
+        slide.Shapes.Add(new SlideShape
+        {
+            Id = 1,
+            Name = "Unresolved video",
+            Kind = SlideShapeKind.Media,
+            OffsetXEmu = 0,
+            OffsetYEmu = 0,
+            ExtentCxEmu = 1000000,
+            ExtentCyEmu = 1000000,
+            Media = new MediaInfo { IsVideo = true, Bytes = Array.Empty<byte>() },
+        });
+        pres.Slides.Add(slide);
+
+        var bytes = WriteToBytes(pres);
+        var slideXml = ReadZipEntryXml(bytes, "ppt/slides/slide1.xml");
+        var relsEntry = new MemoryStream(bytes);
+        using var zip = new ZipArchive(relsEntry, ZipArchiveMode.Read);
+        var hasRels = zip.GetEntry("ppt/slides/_rels/slide1.xml.rels") is not null;
+
+        var videoFile = slideXml.Descendants(A + "videoFile").SingleOrDefault();
+        videoFile.Should().BeNull(
+            "with no resolvable media source, a:videoFile must be omitted rather than emit a fabricated r:link");
+
+        if (hasRels)
+        {
+            var relsXml = ReadZipEntryXml(bytes, "ppt/slides/_rels/slide1.xml.rels");
+            relsXml.Root!.Elements(Rel + "Relationship")
+                .Should().NotContain(e => e.Attribute("Id") != null && e.Attribute("Id")!.Value == "rIdVid1",
+                    "no relationship should exist for the hardcoded id that used to be fabricated");
+        }
+    }
+
+    [Fact]
+    public void Writer_FullyUnresolvedAudioAlongsideEmbeddedVideoOwningRIdVid1_DoesNotAliasIt()
+    {
+        // freep-media-2 sibling/no-regression: an embedded video that legitimately owns
+        // "rIdVid1" (WriteSlideMediaFiles's per-slide counter starts at 1) coexists with a
+        // fully-unresolved audio shape. Before the fix the unresolved shape's a:audioFile fell
+        // back to the SAME "rIdVid1" and silently played the embedded video's audio track in
+        // PowerPoint. After the fix the unresolved shape must emit no a:audioFile at all, and
+        // the embedded shape's own videoFile/relationship must be completely unaffected.
+        var pres = new PresentationModel();
+        var slide = new Slide();
+        slide.Shapes.Add(new SlideShape
+        {
+            Id = 1,
+            Name = "Embedded video",
+            Kind = SlideShapeKind.Media,
+            OffsetXEmu = 0,
+            OffsetYEmu = 0,
+            ExtentCxEmu = 1000000,
+            ExtentCyEmu = 1000000,
+            Media = new MediaInfo { IsVideo = true, Bytes = new byte[] { 1, 2, 3, 4 }, ContentType = "video/mp4" },
+        });
+        slide.Shapes.Add(new SlideShape
+        {
+            Id = 2,
+            Name = "Unresolved audio",
+            Kind = SlideShapeKind.Media,
+            OffsetXEmu = 2000000,
+            OffsetYEmu = 0,
+            ExtentCxEmu = 1000000,
+            ExtentCyEmu = 1000000,
+            Media = new MediaInfo { IsVideo = false, Bytes = Array.Empty<byte>() },
+        });
+        pres.Slides.Add(slide);
+
+        var bytes = WriteToBytes(pres);
+        var slideXml = ReadZipEntryXml(bytes, "ppt/slides/slide1.xml");
+        var relsXml = ReadZipEntryXml(bytes, "ppt/slides/_rels/slide1.xml.rels");
+
+        var videoFile = slideXml.Descendants(A + "videoFile").SingleOrDefault();
+        videoFile.Should().NotBeNull("the embedded video shape must keep its real media reference");
+        var videoRelId = videoFile!.Attribute(R + "link")?.Value;
+        videoRelId.Should().Be("rIdVid1", "the embedded shape legitimately owns the first per-slide media rel id");
+
+        var audioFile = slideXml.Descendants(A + "audioFile").SingleOrDefault();
+        audioFile.Should().BeNull(
+            "the unresolved audio shape must not alias the embedded video's rIdVid1 by fabricating its own a:audioFile");
+
+        var videoRel = relsXml.Root!.Elements(Rel + "Relationship").Single(e => e.Attribute("Id")?.Value == videoRelId);
+        videoRel.Attribute("Target")?.Value.Should().NotBeNullOrEmpty();
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
     // (b) MED: ppt/tableStyles.xml preservation
     // ─────────────────────────────────────────────────────────────────────────
 

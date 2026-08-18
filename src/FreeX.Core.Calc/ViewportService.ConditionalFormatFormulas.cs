@@ -7,7 +7,12 @@ public sealed partial class ViewportService
 {
     private static readonly FormulaEvaluator _cfEvaluator = new();
 
-    private static bool MatchesFormula(
+    // Internal (not private): passed as the matchesFormula delegate to
+    // ViewportConditionalFormatEvaluator.MatchesRuleCondition by ConditionalFormatRenderEvaluator
+    // (FreeX.App.Presentation, granted access via InternalsVisibleTo) so print preview and PDF
+    // export evaluate Formula-type conditional-format rules with the same logic the screen
+    // renderer uses.
+    internal static bool MatchesFormula(
         ConditionalFormat cf,
         Sheet sheet,
         CellAddress addr,

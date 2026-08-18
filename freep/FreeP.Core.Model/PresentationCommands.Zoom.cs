@@ -55,6 +55,12 @@ public sealed class SetZoomTargetCommand : IPresentationCommand
 
     public string Label => "Change Zoom Target";
 
+    public int EstimatedBytes => PresentationCommandSizeEstimator.Combine(new[]
+    {
+        _oldPicture is null ? 0 : _oldPicture.Bytes.Length,
+        PresentationCommandSizeEstimator.EstimateBytes(_oldParts),
+    });
+
     public bool HasEffect(Presentation presentation) =>
         TryGetZoom(presentation, out var shape)
         && shape.PreservedObject is { } info

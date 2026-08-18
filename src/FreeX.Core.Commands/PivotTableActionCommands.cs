@@ -178,7 +178,18 @@ public sealed class ClearPivotTableViewCommand : IWorkbookCommand
         pivotTable.ValueFilters.Clear();
         pivotTable.Sorts.Clear();
 
-        RefreshPivotTableAndCharts(ctx.Workbook, sheet, pivotTable);
+        // R140-remediation-pivot-refresh-growth-guard-completeness: clearing a filter/selection can
+        // grow the pivot's footprint (previously-hidden items reappear) past its previous render -- see
+        // PivotTableRefreshService.GrowthGuard.cs.
+        var snapshot = _snapshot;
+        var baseline = PivotTableRefreshService.CaptureGrowthGuardBaseline(sheet, pivotTable);
+        if (PivotTableRefreshService.RefreshGuarded(ctx.Workbook, sheet, pivotTable, baseline, () => snapshot!.Restore(pivotTable)) is { } failure)
+        {
+            _snapshot = null;
+            _targetSnapshot = null;
+            return failure;
+        }
+        UpdateBoundPivotChartRanges(ctx.Workbook, sheet, pivotTable);
         return new CommandOutcome(true, AffectedCells: [pivotTable.TargetRange.Start]);
     }
 
@@ -231,12 +242,6 @@ public sealed class ClearPivotTableViewCommand : IWorkbookCommand
             PivotTableCommandCollections.Replace(pivotTable.Sorts, Sorts);
             pivotTable.LastRenderedRange = LastRenderedRange;
         }
-    }
-
-    private static void RefreshPivotTableAndCharts(Workbook workbook, Sheet sheet, PivotTableModel pivotTable)
-    {
-        PivotTableRefreshService.Refresh(workbook, sheet, pivotTable);
-        UpdateBoundPivotChartRanges(workbook, sheet, pivotTable);
     }
 
     private static void UpdateBoundPivotChartRanges(Workbook workbook, Sheet sheet, PivotTableModel pivotTable)
@@ -293,10 +298,34 @@ public sealed class MovePivotTableCommand : IWorkbookCommand
 
         if (_oldTargetRange.Value != _newTargetRange.Value)
         {
+            // R140-remediation-pivot-refresh-growth-guard-completeness: the baseline MUST be captured
+            // before the manual clear below, or the very cells this guard exists to protect (the
+            // pivot's OWN old-location output, which the clear is about to erase) are already gone by
+            // the time a growth conflict elsewhere would need to restore them. Moving a pivot onto a
+            // new location is just as capable of landing on unrelated user content as any other growth
+            // -- the guard's oldFootprint/newFootprint (old location vs. new location) are disjoint
+            // here, so a conflict fires for ANY pre-existing content at the destination, not only actual
+            // growth -- which matches Excel refusing to move a PivotTable on top of existing data. See
+            // PivotTableRefreshService.GrowthGuard.cs.
+            var oldTargetRange = _oldTargetRange.Value;
+            var baseline = PivotTableRefreshService.CaptureGrowthGuardBaseline(sheet, pivotTable);
+
             PivotTableRefreshService.ClearRenderedRange(sheet, _oldLastRenderedRange);
             ClearRange(sheet, _oldTargetRange.Value);
             pivotTable.TargetRange = _newTargetRange.Value;
-            RefreshPivotTableAndCharts(ctx.Workbook, sheet, pivotTable);
+
+            if (PivotTableRefreshService.RefreshGuarded(
+                    ctx.Workbook, sheet, pivotTable, baseline,
+                    () => pivotTable.TargetRange = oldTargetRange) is { } failure)
+            {
+                _oldTargetRange = null;
+                _newTargetRange = null;
+                _oldLastRenderedRange = null;
+                _rangeSnapshot = null;
+                return failure;
+            }
+
+            UpdateBoundPivotChartRanges(ctx.Workbook, sheet, pivotTable);
         }
 
         return new CommandOutcome(true, AffectedCells: [_newTargetRange.Value.Start]);
@@ -368,12 +397,6 @@ public sealed class MovePivotTableCommand : IWorkbookCommand
         for (var row = range.Start.Row; row <= range.End.Row; row++)
         for (var col = range.Start.Col; col <= range.End.Col; col++)
             sheet.ClearCell(row, col);
-    }
-
-    private static void RefreshPivotTableAndCharts(Workbook workbook, Sheet sheet, PivotTableModel pivotTable)
-    {
-        PivotTableRefreshService.Refresh(workbook, sheet, pivotTable);
-        UpdateBoundPivotChartRanges(workbook, sheet, pivotTable);
     }
 
     private static void UpdateBoundPivotChartRanges(Workbook workbook, Sheet sheet, PivotTableModel pivotTable)

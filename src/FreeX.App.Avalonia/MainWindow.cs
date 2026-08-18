@@ -25986,8 +25986,23 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             ShellFocusTarget.SheetTabs => FocusActiveSheetTab(),
             ShellFocusTarget.TaskPane => FocusVisibleTaskPane(),
             ShellFocusTarget.StatusBar => FocusControl(_zoomText),
-            _ => FocusControl(_sheetGridHost)
+            _ => FocusActiveCellOrGridHost()
         };
+
+    /// <summary>
+    /// Targets real keyboard focus at the active cell's own Border (see
+    /// <see cref="MoveFocusToActiveCellBorder"/>'s doc comment for why that matters to a screen
+    /// reader) rather than the static "Worksheet"-named <see cref="_sheetGridHost"/>, for every
+    /// <see cref="FocusShellRegion"/> caller that means "put focus back on the worksheet" after a
+    /// selection-changing action -- e.g. Name Box (Go To) navigation and committing/cancelling an
+    /// inline cell edit. RefreshShell always runs before these callers reach this point, so
+    /// <see cref="_activeCellBorder"/> already reflects the new active cell by the time this runs.
+    /// Falls back to <see cref="_sheetGridHost"/> when no active cell Border exists yet (e.g. before
+    /// the first grid build) so this can never regress to focusing nothing at all.
+    /// </summary>
+    private bool FocusActiveCellOrGridHost() =>
+        (_activeCellBorder is { } activeCellBorder && FocusControl(activeCellBorder)) ||
+        FocusControl(_sheetGridHost);
 
     private bool FocusVisibleTaskPane() =>
         (_pivotFieldPaneSearchBox is { } searchBox && FocusControl(searchBox)) ||

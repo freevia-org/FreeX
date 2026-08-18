@@ -854,6 +854,14 @@ public sealed class SetShapeTextBodyCommand : IPresentationCommand
 
     public string Label => _label;
 
+    // This command holds two full TextBody clones, and rich-text editing is how inline pictures and
+    // embedded objects enter a shape in the first place -- pasting into an open text box routes here
+    // rather than through the canvas-level paste command. On the interface default of a few hundred
+    // bytes an inline image would be invisible to the undo budget, so size both bodies for real.
+    public int EstimatedBytes =>
+        PresentationCommandSizeEstimator.EstimateBytes(_newBody)
+        + PresentationCommandSizeEstimator.EstimateBytes(_previousBody);
+
     public void Apply(Presentation presentation)
     {
         var shape = GetShape(presentation);

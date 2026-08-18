@@ -19,6 +19,14 @@ public sealed class SetChartAreaOptionsCommand : IPresentationCommand
 
     public string Label => "Set Chart Area Options";
 
+    // The captured fill can be ShapeFill.Picture (image fill on the chart/plot area) holding raw
+    // bytes, the same risk class as SetChartSeriesOptionsCommand's fill.
+    public int EstimatedBytes => PresentationCommandSizeEstimator.Combine(new[]
+    {
+        PresentationCommandSizeEstimator.EstimateBytes(_newOptions.Fill),
+        PresentationCommandSizeEstimator.EstimateBytes(_oldOptions?.Fill),
+    });
+
     public void Apply(Presentation presentation)
     {
         if (!TryGetChart(presentation, out var chart)) return;

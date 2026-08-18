@@ -156,8 +156,9 @@ public sealed class AvaloniaWorksheetPhysicalEditingTests
                 FindByAutomationId<TextBox>(window, "FormulaBox").Focus().Should().BeTrue();
                 window.SelectClickedCell(beyondUsedRange, KeyModifiers.None);
                 await DrainInputAsync();
-                window.SheetGridHostForTest.IsFocused.Should().BeTrue(
-                    "a worksheet click must restore keyboard focus before F2 is dispatched");
+                window.SheetGridHostForTest.IsKeyboardFocusWithin.Should().BeTrue(
+                    "a worksheet click must restore keyboard focus before F2 is dispatched -- r140 " +
+                    "puts it on the active cell's Border inside the host rather than the host itself");
                 await EditActiveCellThroughPhysicalPath(window, "X11ContextClear");
                 sheet.GetValue(beyondUsedRange).Should().Be(new TextValue("X11ContextClear"));
 

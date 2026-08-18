@@ -52,7 +52,7 @@ public sealed class AvaloniaShortcutInteractionCoverageTests
             resolved.Should().Be(rule.Command);
         }
 
-        MainWindow.AvaloniaLocalShortcutRules.Should().HaveCount(6);
+        MainWindow.AvaloniaLocalShortcutRules.Should().HaveCount(8);
         var representedApplicationChords = scenarioChords
             .Select(item => item.Chord)
             .Distinct()
@@ -158,12 +158,12 @@ public sealed class AvaloniaShortcutInteractionCoverageTests
                             : "passed",
                     }))
                     .ToDictionary(row => row.Id, row => row.Status, StringComparer.Ordinal);
-                expectedStatuses.Should().HaveCount(276);
+                expectedStatuses.Should().HaveCount(278);
 
                 var scenarioResults = results
                     .Where(result => result.Category == "shortcut-scenario")
                     .ToArray();
-                scenarioResults.Should().HaveCount(276);
+                scenarioResults.Should().HaveCount(278);
                 scenarioResults.Select(result => result.Id)
                     .Should().BeEquivalentTo(expectedStatuses.Keys);
 

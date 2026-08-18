@@ -58,6 +58,133 @@ public sealed class MediaFieldsTests
         Assert.Equal("video/mp4", shape2.Media.ContentType);
     }
 
+    // ── freep-media-3: placeholder-filling media/picture round trip ────────────
+
+    /// <summary>
+    /// R140 finding freep-media-3 (MED): a video/audio shape inserted via a slide's content
+    /// placeholder icon carries &lt;p:nvPr&gt;&lt;p:ph .../&gt;&lt;/p:nvPr&gt; in real PowerPoint output,
+    /// exactly like a placeholder-filling autoshape does. ReadPic previously never looked at
+    /// nvPr's p:ph child (unlike ReadSp, which does), so the association was silently dropped
+    /// on load and the writer never had anything to re-emit -- the shape became an ordinary
+    /// free-floating shape after any load+save round trip, losing layout-driven placeholder
+    /// geometry/behavior (Reset Slide, layout swaps, Outline view) even though its on-screen
+    /// position/size was unchanged.
+    /// </summary>
+    [Fact]
+    public void Media_RoundTrip_PreservesPlaceholderAssociation()
+    {
+        var pres = new Presentation();
+        var slide = new Slide();
+
+        var videoBytes = new byte[] { 0x00, 0x00, 0x00, 0x18, 0x66, 0x74, 0x79, 0x70 }; // mp4 ftyp box
+
+        slide.Shapes.Add(new SlideShape
+        {
+            Id          = 1,
+            Name        = "Media Placeholder 1",
+            Kind        = SlideShapeKind.Media,
+            OffsetXEmu  = 914400,
+            OffsetYEmu  = 914400,
+            ExtentCxEmu = 4572000,
+            ExtentCyEmu = 2743200,
+            Placeholder = new Placeholder { Type = PlaceholderType.Media, Idx = 1 },
+            Media       = new MediaInfo { IsVideo = true, Bytes = videoBytes, ContentType = "video/mp4" },
+        });
+        pres.Slides.Add(slide);
+
+        using var ms = new MemoryStream();
+        PptxPackageWriter.Write(pres, ms);
+        ms.Position = 0;
+        var pres2 = PptxPackageReader.Read(ms);
+
+        var shape2 = pres2.Slides[0].Shapes[0];
+        Assert.Equal(SlideShapeKind.Media, shape2.Kind);
+        Assert.NotNull(shape2.Placeholder);
+        Assert.Equal(PlaceholderType.Media, shape2.Placeholder!.Type);
+        Assert.Equal(1, shape2.Placeholder.Idx);
+        // Media content itself must still round-trip alongside the placeholder association.
+        Assert.NotNull(shape2.Media);
+        Assert.Equal(videoBytes.Length, shape2.Media!.Bytes.Length);
+    }
+
+    /// <summary>
+    /// Same gap for a picture (not audio/video) inserted via a content placeholder's picture
+    /// icon -- ReadPic is shared by both the Picture and Media &lt;p:pic&gt; shapes, and BuildPicEl
+    /// (the Picture-kind writer) needed the identical p:ph fix.
+    /// </summary>
+    [Fact]
+    public void Picture_RoundTrip_PreservesPlaceholderAssociation()
+    {
+        var pres = new Presentation();
+        var slide = new Slide();
+
+        var pngBytes = CreateMinimal1x1Png();
+
+        slide.Shapes.Add(new SlideShape
+        {
+            Id          = 1,
+            Name        = "Picture Placeholder 1",
+            Kind        = SlideShapeKind.Picture,
+            OffsetXEmu  = 914400,
+            OffsetYEmu  = 914400,
+            ExtentCxEmu = 4572000,
+            ExtentCyEmu = 2743200,
+            Placeholder = new Placeholder { Type = PlaceholderType.Picture, Idx = 2 },
+            Picture     = new ImagePart { Bytes = pngBytes, ContentType = "image/png" },
+        });
+        pres.Slides.Add(slide);
+
+        using var ms = new MemoryStream();
+        PptxPackageWriter.Write(pres, ms);
+        ms.Position = 0;
+        var pres2 = PptxPackageReader.Read(ms);
+
+        var shape2 = pres2.Slides[0].Shapes[0];
+        Assert.Equal(SlideShapeKind.Picture, shape2.Kind);
+        Assert.NotNull(shape2.Placeholder);
+        Assert.Equal(PlaceholderType.Picture, shape2.Placeholder!.Type);
+        Assert.Equal(2, shape2.Placeholder.Idx);
+        Assert.NotNull(shape2.Picture);
+        Assert.Equal(pngBytes.Length, shape2.Picture!.Bytes.Length);
+    }
+
+    /// <summary>
+    /// Sibling/neighbour test: a media shape that was NOT inserted via a placeholder (the
+    /// ordinary free-floating case covered by Media_RoundTrip_PreservesKindAndBytes above) must
+    /// keep round-tripping with Placeholder == null -- the fix must not fabricate a placeholder
+    /// association for shapes that never had one.
+    /// </summary>
+    [Fact]
+    public void Media_RoundTrip_WithoutPlaceholder_StaysNull()
+    {
+        var pres = new Presentation();
+        var slide = new Slide();
+
+        var videoBytes = new byte[] { 0x00, 0x00, 0x00, 0x18, 0x66, 0x74, 0x79, 0x70 };
+
+        slide.Shapes.Add(new SlideShape
+        {
+            Id          = 1,
+            Name        = "Video 1",
+            Kind        = SlideShapeKind.Media,
+            OffsetXEmu  = 914400,
+            OffsetYEmu  = 914400,
+            ExtentCxEmu = 4572000,
+            ExtentCyEmu = 2743200,
+            Media       = new MediaInfo { IsVideo = true, Bytes = videoBytes, ContentType = "video/mp4" },
+        });
+        pres.Slides.Add(slide);
+
+        using var ms = new MemoryStream();
+        PptxPackageWriter.Write(pres, ms);
+        ms.Position = 0;
+        var pres2 = PptxPackageReader.Read(ms);
+
+        var shape2 = pres2.Slides[0].Shapes[0];
+        Assert.Equal(SlideShapeKind.Media, shape2.Kind);
+        Assert.Null(shape2.Placeholder);
+    }
+
     // ── Externally-linked (non-http) media: reader must not silently drop it ───────
 
     /// <summary>

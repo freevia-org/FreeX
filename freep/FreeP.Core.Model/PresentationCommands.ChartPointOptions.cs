@@ -20,6 +20,15 @@ public sealed class SetChartPointOptionsCommand : IPresentationCommand
 
     public string Label => "Set Chart Point Options";
 
+    // Both the new options and the previously-captured point style can carry a ShapeFill.Picture
+    // (including on the point's marker), the same risk class as SetChartSeriesOptionsCommand.
+    public int EstimatedBytes => PresentationCommandSizeEstimator.Combine(new[]
+    {
+        PresentationCommandSizeEstimator.EstimateBytes(_newOptions.Fill),
+        PresentationCommandSizeEstimator.EstimateBytes(_oldPointStyle?.Fill),
+        PresentationCommandSizeEstimator.EstimateBytes(_oldPointStyle?.Marker?.Fill),
+    });
+
     public void Apply(Presentation p)
     {
         var chart = ChartHelper.FindFormattingEditable(p, _slideIndex, _shapeId);

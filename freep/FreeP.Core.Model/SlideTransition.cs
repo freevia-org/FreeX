@@ -1,3 +1,6 @@
+using System;
+using System.Collections.Generic;
+
 namespace FreeP.Core.Model;
 
 /// <summary>
@@ -50,6 +53,35 @@ public sealed class SlideTransition
     /// For known kinds RawXml is null; the writer synthesizes the element from the structured fields.
     /// </summary>
     public string? RawXml { get; set; }
+
+    /// <summary>
+    /// Whether the original <c>p:transition</c> (captured in <see cref="RawXml"/>) was wrapped in an
+    /// <c>mc:AlternateContent</c>/<c>mc:Choice</c>/<c>mc:Fallback</c> block on read. When true, the
+    /// writer must re-wrap <see cref="RawXml"/> the same way instead of emitting it as a bare
+    /// <c>p:transition</c>, or an unrecognized extension effect ends up as an invalid direct child
+    /// of <c>p:transition</c> and the original <c>mc:Fallback</c> degrade-path content is lost.
+    /// </summary>
+    public bool WasAlternateContent { get; set; }
+
+    /// <summary>
+    /// The original <c>mc:Choice</c> <c>Requires</c> attribute value (possibly a space-separated
+    /// list of tokens, e.g. "p14 p159"). Null when <see cref="WasAlternateContent"/> is false.
+    /// </summary>
+    public string? McRequiresToken { get; set; }
+
+    /// <summary>
+    /// Namespace URI for each token in <see cref="McRequiresToken"/>, resolved from the source
+    /// document's xmlns scope at read time (e.g. "p188" -&gt; the PowerPoint 2018/8 namespace).
+    /// A token with no entry here had no resolvable xmlns binding in the source.
+    /// </summary>
+    public Dictionary<string, string> McRequiresNsUris { get; } = new(StringComparer.Ordinal);
+
+    /// <summary>
+    /// Verbatim XML of the original <c>mc:Fallback</c> <c>p:transition</c> element, when
+    /// <see cref="WasAlternateContent"/> is true and a Fallback was present. Null if there was
+    /// no Fallback (the writer synthesizes a fade fallback in that case).
+    /// </summary>
+    public string? AlternateContentFallbackXml { get; set; }
 
     /// <summary>
     /// Option for <see cref="TransitionKind.Morph"/>: "byWord", "byChar", or "byObject" (default null).

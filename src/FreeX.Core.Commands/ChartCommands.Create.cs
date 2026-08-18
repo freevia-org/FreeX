@@ -218,7 +218,21 @@ public sealed class AddPivotChartCommand : IWorkbookCommand
         // it, not just remove the chart.
         _targetSnapshot = AddPivotTableCommand.Snapshot(sheet, pivotTable.LastRenderedRange ?? pivotTable.TargetRange);
         _lastRenderedRangeSnapshot = pivotTable.LastRenderedRange;
-        PivotTableRefreshService.Refresh(ctx.Workbook, sheet, pivotTable);
+
+        // R140-remediation-pivot-refresh-growth-guard-completeness: this refresh can grow the pivot's
+        // footprint past its previous render (e.g. the source changed since the pivot's last refresh)
+        // just like any other refresh-triggering command -- see PivotTableRefreshService.GrowthGuard.cs.
+        // RefreshGuarded already restores every sheet cell/merged region/LastRenderedRange the guard
+        // itself needs to roll back on conflict; nothing on the PivotTableModel was mutated before this
+        // call, so there is no additional state for a restorePivotState callback to undo here.
+        var baseline = PivotTableRefreshService.CaptureGrowthGuardBaseline(sheet, pivotTable);
+        if (PivotTableRefreshService.RefreshGuarded(ctx.Workbook, sheet, pivotTable, baseline, static () => { }) is { } failure)
+        {
+            _targetSnapshot = null;
+            _lastRenderedRangeSnapshot = null;
+            return failure;
+        }
+
         var dataRange = PivotTableRefreshService.GetMaterializedOutputRange(sheet, pivotTable);
         var chart = new ChartModel
         {

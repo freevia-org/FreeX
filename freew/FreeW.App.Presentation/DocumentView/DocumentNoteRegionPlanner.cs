@@ -494,12 +494,20 @@ public static class DocumentNoteRegionPlanner
 
         foreach (var id in ids)
         {
-            var text = ResolvePlainText(document, id, isFootnote);
-            if (string.IsNullOrWhiteSpace(text))
+            // An empty (or whitespace-only) note still owns a reference mark in the body and Word
+            // still prints its separator plus a blank numbered line for it, so it must still produce
+            // a row here -- only an id with no note at all is skipped. Numbering for every surviving
+            // id is unaffected either way: sequenceById above is keyed by the full note set, not by
+            // which ids end up with visible text.
+            var exists = isFootnote
+                ? document.Footnotes.ContainsKey(id)
+                : document.Endnotes.ContainsKey(id);
+            if (!exists)
             {
                 continue;
             }
 
+            var text = ResolvePlainText(document, id, isFootnote);
             var sequence = sequenceById.TryGetValue(id, out var resolvedSequence)
                 ? resolvedSequence
                 : Math.Max(1, options.StartAt);

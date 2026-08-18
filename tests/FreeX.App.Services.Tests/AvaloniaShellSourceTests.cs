@@ -5210,7 +5210,11 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("ShellFocusTarget.TaskPane => FocusVisibleTaskPane()");
         source.Should().Contain("_pivotFieldPaneSearchBox is { } searchBox && FocusControl(searchBox)");
         source.Should().Contain("ShellFocusTarget.StatusBar => FocusControl(_zoomText)");
-        source.Should().Contain("_ => FocusControl(_sheetGridHost)");
+        // r140: the default arm now routes through FocusActiveCellOrGridHost so keyboard focus lands
+        // on the active cell's Border (which a screen reader announces) instead of the static
+        // "Worksheet"-named host; the host stays as the fallback when no cell Border exists yet.
+        source.Should().Contain("_ => FocusActiveCellOrGridHost()");
+        source.Should().Contain("FocusControl(_sheetGridHost)");
         source.Should().Contain("private bool FocusFirstEnabledToolbarControl()");
         source.Should().Contain("private IReadOnlyList<Control> GetToolbarFocusTargets()");
         source.Should().Contain("_openButton,");

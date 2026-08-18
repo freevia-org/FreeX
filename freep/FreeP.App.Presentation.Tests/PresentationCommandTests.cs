@@ -2633,4 +2633,465 @@ public sealed class PresentationCommandTests
         clone.Children.Should().HaveCount(1);
         clone.Children[0].Should().NotBeSameAs(group.Children[0]);
     }
+
+    // ════════════════════════════════════════════════════════════════════════════
+    // UNDO BYTE-BUDGET (r140 freep-undo-bytebudget-dead)
+    // ════════════════════════════════════════════════════════════════════════════
+
+    private static SlideShape MakePictureShape(uint id, int imageBytes) => new()
+    {
+        Id          = id,
+        Name        = $"Picture{id}",
+        Kind        = SlideShapeKind.Picture,
+        OffsetXEmu  = 0,
+        OffsetYEmu  = 0,
+        ExtentCxEmu = 1_000_000,
+        ExtentCyEmu = 1_000_000,
+        Picture     = new ImagePart { Bytes = new byte[imageBytes], ContentType = "image/png" },
+    };
+
+    /// <summary>
+    /// A real user deleting a handful of image-heavy slides (real <see cref="PresentationCommandBus"/>
+    /// over the real shared <c>UndoRedoStack</c>, the actual collaborator the 50MB budget lives in —
+    /// not a stub) must eventually see the byte budget evict the oldest undo entries, the same way it
+    /// already evicts everything else once MaxBytes is exceeded. Before the fix, DeleteSlideCommand
+    /// reported the interface's flat 256-byte default regardless of the captured slide's picture
+    /// bytes, so 8 slides x 8MB of picture data (64MB retained) never tripped the 50MB budget and
+    /// every deletion stayed undoable.
+    /// </summary>
+    [Fact]
+    public void DeleteSlideCommand_LargeImagePayload_TriggersByteBudgetEviction()
+    {
+        const int slideCount = 8;
+        const int imageBytesPerSlide = 8 * 1024 * 1024; // 8MB picture per slide -> 64MB total.
+
+        var p = new Presentation();
+        for (var i = 0; i < slideCount; i++)
+        {
+            var slide = new Slide { Title = $"S{i + 1}" };
+            slide.Shapes.Clear();
+            slide.Shapes.Add(MakePictureShape((uint)(i + 1), imageBytesPerSlide));
+            p.Slides.Add(slide);
+        }
+
+        var bus = new PresentationCommandBus(p);
+
+        // Delete every slide (always index 0 -- the list shrinks under us), so each undo
+        // entry captures one image-heavy slide, the exact path Delete Slide reaches in the app.
+        for (var i = 0; i < slideCount; i++)
+            bus.Execute(new DeleteSlideCommand(0));
+
+        p.Slides.Should().BeEmpty();
+
+        var undone = 0;
+        while (bus.CanUndo)
+        {
+            bus.Undo();
+            undone++;
+        }
+
+        undone.Should().BeLessThan(slideCount,
+            "64MB of captured picture bytes should have tripped the 50MB undo byte budget and " +
+            "evicted the oldest deletions, so not every one of the 8 deletes should still be undoable");
+        p.Slides.Should().HaveCountLessThan(slideCount,
+            "the evicted deletions can no longer be undone, so some slides should stay missing");
+    }
+
+    /// <summary>
+    /// Sibling to <see cref="DeleteSlideCommand_LargeImagePayload_TriggersByteBudgetEviction"/>:
+    /// ordinary small edits (no embedded images/media) must NOT be evicted prematurely just because
+    /// commands now report a real, proportional byte cost instead of a flat 256. A run of 50 blank
+    /// slide deletions stays far under both the 200-entry depth cap and the 50MB byte budget, so
+    /// every single one should remain undoable.
+    /// </summary>
+    [Fact]
+    public void DeleteSlideCommand_SmallEdits_AreNotEvictedPrematurely()
+    {
+        const int slideCount = 50;
+
+        var p = new Presentation();
+        for (var i = 0; i < slideCount; i++)
+        {
+            var slide = new Slide { Title = $"S{i + 1}" };
+            slide.Shapes.Clear();
+            p.Slides.Add(slide);
+        }
+
+        var bus = new PresentationCommandBus(p);
+
+        for (var i = 0; i < slideCount; i++)
+            bus.Execute(new DeleteSlideCommand(0));
+
+        p.Slides.Should().BeEmpty();
+
+        var undone = 0;
+        while (bus.CanUndo)
+        {
+            bus.Undo();
+            undone++;
+        }
+
+        undone.Should().Be(slideCount,
+            "small, image-free deletions stay far under the byte budget and depth cap, so none " +
+            "of them should ever be evicted");
+        p.Slides.Should().HaveCount(slideCount);
+    }
+
+    [Fact]
+    public void InsertSlideCommand_EstimatedBytes_ReflectsCapturedPictureSize()
+    {
+        var slide = new Slide { Title = "New" };
+        slide.Shapes.Clear();
+        slide.Shapes.Add(MakePictureShape(1, 5 * 1024 * 1024));
+
+        // Typed as the interface deliberately: this is exactly how PresentationCommandBus.Execute
+        // reads the cost (`command.EstimatedBytes` where `command` is an IPresentationCommand
+        // parameter), so the test exercises the real call path rather than a concrete-type shortcut.
+        IPresentationCommand command = new InsertSlideCommand(0, slide);
+
+        command.EstimatedBytes.Should().BeGreaterThan(5 * 1024 * 1024,
+            "the estimate should reflect the 5MB embedded picture, not the 256-byte interface default");
+    }
+
+    [Fact]
+    public void DeleteShapeCommand_EstimatedBytes_ReflectsCapturedPictureSizeAfterApply()
+    {
+        var (p, bus) = Make();
+        p.Slides[0].Shapes.Add(MakePictureShape(7, 4 * 1024 * 1024));
+
+        IPresentationCommand command = new DeleteShapeCommand(0, 7);
+        bus.Execute(command);
+
+        command.EstimatedBytes.Should().BeGreaterThan(4 * 1024 * 1024,
+            "the estimate should reflect the 4MB embedded picture captured for undo");
+    }
+
+    [Fact]
+    public void PasteSlideCommand_EstimatedBytes_ReflectsCapturedPictureSize()
+    {
+        var slide = new Slide { Title = "Pasted" };
+        slide.Shapes.Clear();
+        slide.Shapes.Add(MakePictureShape(1, 3 * 1024 * 1024));
+
+        IPresentationCommand command = new PasteSlideCommand(0, slide);
+
+        command.EstimatedBytes.Should().BeGreaterThan(3 * 1024 * 1024,
+            "the estimate should reflect the 3MB embedded picture, not the 256-byte interface default");
+    }
+
+    // ════════════════════════════════════════════════════════════════════════════
+    // UNDO BYTE-BUDGET REMEDIATION (r140 remediation: BatchCommand + AddShapeCommand,
+    // plus the GroupShapesCommand/UngroupShapeCommand/SetSlideBackgroundCommand/
+    // SetShapeFillCommand payload-retention gaps the follow-up audit found)
+    // ════════════════════════════════════════════════════════════════════════════
+
+    /// <summary>
+    /// Before the fix, <see cref="BatchCommand"/> had no <c>EstimatedBytes</c> override at all, so
+    /// it always fell back to the interface's flat 256-byte default no matter how large its
+    /// children's own (now-fixed) estimates were -- and <see cref="PresentationCommandBus.Execute"/>
+    /// pushes exactly one <see cref="BatchCommand"/> entry, never the individual children, for every
+    /// multi-select gesture (Delete Slides / Duplicate Slides / Delete Shapes). This is a direct
+    /// property test of the sum, independent of the bus.
+    /// </summary>
+    [Fact]
+    public void BatchCommand_EstimatedBytes_SumsChildCommands()
+    {
+        var slideA = new Slide { Title = "A" };
+        slideA.Shapes.Clear();
+        slideA.Shapes.Add(MakePictureShape(1, 3 * 1024 * 1024));
+
+        var slideB = new Slide { Title = "B" };
+        slideB.Shapes.Clear();
+        slideB.Shapes.Add(MakePictureShape(2, 2 * 1024 * 1024));
+
+        IPresentationCommand child1 = new InsertSlideCommand(0, slideA);
+        IPresentationCommand child2 = new InsertSlideCommand(1, slideB);
+        IPresentationCommand batch = new BatchCommand("Test Batch", new[] { child1, child2 });
+
+        batch.EstimatedBytes.Should().BeGreaterThan(5 * 1024 * 1024,
+            "the batch's cost should be the sum of its children's real costs (3MB + 2MB), not the " +
+            "256-byte interface default");
+    }
+
+    /// <summary>
+    /// The real reproduction from the gap report: selecting several image-heavy slides and deleting
+    /// them in one gesture goes through <see cref="PresentationSlidePaneSession"/>'s multi-select
+    /// delete path, which wraps one <see cref="DeleteSlideCommand"/> per selected slide in a single
+    /// <see cref="BatchCommand"/> and executes that as ONE undo entry -- exactly what this test
+    /// mirrors. Before the fix, six such multi-select-delete gestures totalling 60MB of captured
+    /// picture bytes never tripped the 50MB budget because every batch entry reported 256 bytes.
+    /// </summary>
+    [Fact]
+    public void BatchCommand_MultiSelectDeleteSlides_LargeImagePayload_TriggersByteBudgetEviction()
+    {
+        const int batchCount = 6;
+        const int slidesPerBatch = 2;
+        const int imageBytesPerSlide = 5 * 1024 * 1024; // 2 x 5MB = 10MB/batch; 6 batches = 60MB > 50MB.
+
+        var p = new Presentation();
+        for (var i = 0; i < batchCount * slidesPerBatch; i++)
+        {
+            var slide = new Slide { Title = $"S{i + 1}" };
+            slide.Shapes.Clear();
+            slide.Shapes.Add(MakePictureShape((uint)(i + 1), imageBytesPerSlide));
+            p.Slides.Add(slide);
+        }
+
+        var bus = new PresentationCommandBus(p);
+
+        for (var b = 0; b < batchCount; b++)
+        {
+            // Index 0 repeatedly: each child Apply() removes a slide, so the next child's index 0
+            // reaches the next still-selected slide -- the same shrinking-list pattern
+            // PresentationSlidePaneSession.ExecuteDelete relies on for its OrderDescending indices.
+            var commands = Enumerable.Range(0, slidesPerBatch)
+                .Select(_ => (IPresentationCommand)new DeleteSlideCommand(0))
+                .ToArray();
+            bus.Execute(new BatchCommand("Delete Slides", commands));
+        }
+
+        p.Slides.Should().BeEmpty();
+
+        var undone = 0;
+        while (bus.CanUndo)
+        {
+            bus.Undo();
+            undone++;
+        }
+
+        undone.Should().BeLessThan(batchCount,
+            "60MB of captured picture bytes spread across six multi-select-delete batches should " +
+            "have tripped the 50MB undo byte budget and evicted the oldest batch entries; before the " +
+            "fix BatchCommand always reported the flat 256-byte default no matter how many " +
+            "image-heavy slides its children captured, so every batch stayed undoable");
+    }
+
+    /// <summary>
+    /// Sibling non-regression check: ordinary multi-select deletes of blank slides (no embedded
+    /// images) must NOT be evicted early just because <see cref="BatchCommand"/> now reports a real
+    /// cost instead of a flat 256.
+    /// </summary>
+    [Fact]
+    public void BatchCommand_SmallEdits_AreNotEvictedPrematurely()
+    {
+        const int batchCount = 20;
+        const int slidesPerBatch = 2;
+
+        var p = new Presentation();
+        for (var i = 0; i < batchCount * slidesPerBatch; i++)
+        {
+            var slide = new Slide { Title = $"S{i + 1}" };
+            slide.Shapes.Clear();
+            p.Slides.Add(slide);
+        }
+
+        var bus = new PresentationCommandBus(p);
+
+        for (var b = 0; b < batchCount; b++)
+        {
+            var commands = Enumerable.Range(0, slidesPerBatch)
+                .Select(_ => (IPresentationCommand)new DeleteSlideCommand(0))
+                .ToArray();
+            bus.Execute(new BatchCommand("Delete Slides", commands));
+        }
+
+        p.Slides.Should().BeEmpty();
+
+        var undone = 0;
+        while (bus.CanUndo)
+        {
+            bus.Undo();
+            undone++;
+        }
+
+        undone.Should().Be(batchCount,
+            "small, image-free multi-select deletes stay far under the byte budget and depth cap, " +
+            "so none of the batches should ever be evicted");
+    }
+
+    /// <summary>
+    /// <see cref="AddShapeCommand"/> is what <c>EditingSession.InsertPicture</c>/<c>InsertMedia</c>
+    /// push for Insert &gt; Picture, Insert &gt; Audio/Video, and pasting an image. Before the fix it
+    /// had no <c>EstimatedBytes</c> override at all -- the primary way a large payload first enters
+    /// the undo stack reported the flat 256-byte default.
+    /// </summary>
+    [Fact]
+    public void AddShapeCommand_EstimatedBytes_ReflectsCapturedPictureSize()
+    {
+        IPresentationCommand command = new AddShapeCommand(0, MakePictureShape(1, 6 * 1024 * 1024));
+
+        command.EstimatedBytes.Should().BeGreaterThan(6 * 1024 * 1024,
+            "the estimate should reflect the 6MB embedded picture passed to Insert Picture / Insert " +
+            "Media, not the 256-byte interface default");
+    }
+
+    /// <summary>
+    /// Real reproduction: inserting several large pictures (the Insert &gt; Picture path, via
+    /// <c>EditingSession.InsertPicture</c> -&gt; <c>AddShape</c> -&gt; <c>Bus.Execute(new
+    /// AddShapeCommand(...))</c>) must eventually trip the byte budget the same way deletes do.
+    /// </summary>
+    [Fact]
+    public void AddShapeCommand_LargeImagePayload_TriggersByteBudgetEviction()
+    {
+        const int insertCount = 8;
+        const int imageBytesPerShape = 8 * 1024 * 1024; // 8 x 8MB = 64MB > 50MB budget.
+
+        var (p, bus) = Make();
+
+        for (var i = 0; i < insertCount; i++)
+            bus.Execute(new AddShapeCommand(0, MakePictureShape((uint)(i + 1), imageBytesPerShape)));
+
+        p.Slides[0].Shapes.Should().HaveCount(insertCount);
+
+        var undone = 0;
+        while (bus.CanUndo)
+        {
+            bus.Undo();
+            undone++;
+        }
+
+        undone.Should().BeLessThan(insertCount,
+            "64MB of inserted picture bytes across eight Insert Picture-style AddShapeCommand " +
+            "executions should have tripped the 50MB undo byte budget; before the fix AddShapeCommand " +
+            "always reported the flat 256-byte default regardless of the shape's embedded picture " +
+            "bytes, so every insert stayed undoable");
+    }
+
+    /// <summary>
+    /// The follow-up audit specifically flagged <see cref="GroupShapesCommand"/> as uninspected.
+    /// Grouping moves the selected shapes (including any embedded pictures) into a new Group shape
+    /// captured on <see cref="GroupShapesCommand.Apply"/>, so its estimate must reflect that picture,
+    /// not the flat 256-byte default.
+    /// </summary>
+    [Fact]
+    public void GroupShapesCommand_EstimatedBytes_ReflectsCapturedPictureSize()
+    {
+        var (p, bus) = Make();
+        p.Slides[0].Shapes.Add(MakeShape(1));
+        p.Slides[0].Shapes.Add(MakePictureShape(2, 6 * 1024 * 1024));
+
+        IPresentationCommand command = new GroupShapesCommand(0, new uint[] { 1, 2 });
+        bus.Execute(command);
+
+        command.EstimatedBytes.Should().BeGreaterThan(6 * 1024 * 1024,
+            "the estimate should reflect the 6MB embedded picture now nested inside the captured " +
+            "Group shape");
+    }
+
+    /// <summary>
+    /// The follow-up audit specifically flagged <see cref="UngroupShapeCommand"/> as uninspected.
+    /// Ungrouping captures the whole former group (and its children, including any embedded
+    /// pictures) for undo, so its estimate must reflect that picture.
+    /// </summary>
+    [Fact]
+    public void UngroupShapeCommand_EstimatedBytes_ReflectsCapturedPictureSizeAfterApply()
+    {
+        var (p, bus) = Make();
+        var group = new SlideShape { Id = 10, Name = "Group", Kind = SlideShapeKind.Group };
+        group.Children.Add(MakeShape(1));
+        group.Children.Add(MakePictureShape(2, 5 * 1024 * 1024));
+        p.Slides[0].Shapes.Add(group);
+
+        IPresentationCommand command = new UngroupShapeCommand(0, 10);
+        bus.Execute(command);
+
+        command.EstimatedBytes.Should().BeGreaterThan(5 * 1024 * 1024,
+            "the estimate should reflect the 5MB embedded picture captured inside the ungrouped " +
+            "group shape");
+    }
+
+    /// <summary>
+    /// The follow-up audit specifically flagged <see cref="SetSlideBackgroundCommand"/> ("picture
+    /// fills") as uninspected. A slide background can be a picture fill holding raw image bytes, and
+    /// the command captures both the old and the new fill for undo/redo.
+    /// </summary>
+    [Fact]
+    public void SetSlideBackgroundCommand_EstimatedBytes_ReflectsCapturedPictureFill()
+    {
+        var (p, bus) = Make();
+        p.Slides[0].Background = new ShapeFill.Picture(new byte[4 * 1024 * 1024], "image/png");
+
+        var newFill = new ShapeFill.Picture(new byte[3 * 1024 * 1024], "image/png");
+        IPresentationCommand command = new SetSlideBackgroundCommand(0, newFill);
+        bus.Execute(command);
+
+        command.EstimatedBytes.Should().BeGreaterThan(7 * 1024 * 1024,
+            "the estimate should reflect both the 4MB old background picture fill captured for undo " +
+            "and the 3MB new one");
+    }
+
+    /// <summary>
+    /// Discovered during the same audit as a direct counterpart to the flagged background-fill gap:
+    /// an ordinary shape's fill can equally be a picture fill (Shape Format &gt; Fill &gt; Picture),
+    /// and <see cref="SetShapeFillCommand"/> captures both old and new fill for undo/redo the same way
+    /// <see cref="SetSlideBackgroundCommand"/> does.
+    /// </summary>
+    [Fact]
+    public void SetShapeFillCommand_EstimatedBytes_ReflectsCapturedPictureFill()
+    {
+        var (p, bus) = Make();
+        var shape = MakeShape(1);
+        shape.Fill = new ShapeFill.Picture(new byte[4 * 1024 * 1024], "image/png");
+        p.Slides[0].Shapes.Add(shape);
+
+        var newFill = new ShapeFill.Picture(new byte[3 * 1024 * 1024], "image/png");
+        IPresentationCommand command = new SetShapeFillCommand(0, 1, newFill);
+        bus.Execute(command);
+
+        command.EstimatedBytes.Should().BeGreaterThan(7 * 1024 * 1024,
+            "the estimate should reflect both the old 4MB picture fill captured for undo and the new " +
+            "3MB picture fill");
+    }
+
+    /// <summary>
+    /// A run carrying a pasted picture holds ONE character of text — the object-replacement char — with
+    /// the image hanging off <c>Run.InlineImage</c>. Sizing a text body by its characters therefore
+    /// valued a multi-megabyte paste at a byte, which is how an inline image stayed invisible to the
+    /// 50MB undo budget even after the estimator started costing shape-level pictures.
+    /// </summary>
+    [Fact]
+    public void EstimateBytes_TextBody_CountsAnInlinePastedImageRatherThanItsOneCharacter()
+    {
+        var body = MakeTextBodyWithInlineImage(6 * 1024 * 1024);
+
+        PresentationCommandSizeEstimator.EstimateBytes(body).Should().BeGreaterThan(6 * 1024 * 1024,
+            "the estimate must follow Run.InlineImage, not the single object-replacement character");
+    }
+
+    /// <summary>
+    /// The command the in-canvas rich-text editors actually commit through. Pasting a picture while
+    /// editing a shape's text routes here rather than through the canvas-level paste command, so this
+    /// is the real entry point for a large payload entering the undo stack via text editing.
+    /// </summary>
+    [Fact]
+    public void SetShapeTextBodyCommand_EstimatedBytes_ReflectsAnInlinePastedImage()
+    {
+        var presentation = new Presentation();
+        var slide = new Slide { Title = "S" };
+        slide.Shapes.Clear();
+        slide.Shapes.Add(new SlideShape { Id = 7, Name = "Body", Kind = SlideShapeKind.AutoShape });
+        presentation.Slides.Add(slide);
+
+        // Typed as the interface deliberately: PresentationCommandBus.Execute reads the cost through
+        // IPresentationCommand, and it reads it AFTER Apply, once the undo copy has been captured.
+        IPresentationCommand command =
+            new SetShapeTextBodyCommand(0, 7, MakeTextBodyWithInlineImage(5 * 1024 * 1024));
+        command.Apply(presentation);
+
+        command.EstimatedBytes.Should().BeGreaterThan(5 * 1024 * 1024,
+            "the estimate should reflect the 5MB inline image, not the 256-byte interface default");
+    }
+
+    private static TextBody MakeTextBodyWithInlineImage(int imageBytes)
+    {
+        var body = new TextBody();
+        var paragraph = new Paragraph();
+        paragraph.Runs.Add(new Run
+        {
+            Text = "￼",   // the object-replacement character a pasted inline object occupies
+            InlineImage = new ImagePart { Bytes = new byte[imageBytes], ContentType = "image/png" },
+        });
+        body.Paragraphs.Add(paragraph);
+        return body;
+    }
 }

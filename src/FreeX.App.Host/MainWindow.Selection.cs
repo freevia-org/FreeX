@@ -741,6 +741,18 @@ public partial class MainWindow
                 return;
             }
 
+            // R140-backstage-shortcuts-leak-to-worksheet: everything below this point dispatches
+            // worksheet-mutating keyboard shortcuts (Undo/Redo/Delete/number-format/border/insert/
+            // delete shortcuts) or moves the cell cursor -- all of it must stay confined to the
+            // worksheet the user can actually see. While the File-menu Backstage overlay is up, the
+            // rail Button holding focus doesn't match the TextBox/ComboBox exclusion above it, so
+            // without this guard every one of those shortcuts silently ran against the hidden sheet
+            // underneath. BackstageFrame.OnKeyDown already claims Escape/Home/End/Up/Down for its own
+            // rail navigation before this handler ever sees them (and Alt-based ribbon/backstage key
+            // tips are handled above this guard), so nothing Backstage needs is lost by returning here.
+            if (IsStartScreenVisible())
+                return;
+
             if (ExcelSelectionModePlanner.TryToggle(e.Key, Keyboard.Modifiers, _selectionMode, out var nextSelectionMode))
             {
                 SetSelectionMode(nextSelectionMode);

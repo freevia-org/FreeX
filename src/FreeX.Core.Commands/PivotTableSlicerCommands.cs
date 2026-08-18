@@ -157,6 +157,12 @@ public sealed class SetSlicerSelectionCommand : IWorkbookCommand
         // empty SelectedItems from here on means "user cleared to select-all", not "never touched".
         slicer.SelectionCaptured = true;
 
+        // R140-remediation2-growth-guard-multipivot-baseline-cost: shared across every target in this
+        // loop so N connected pivots on the SAME sheet (the common Report-Connections case) pay ONE
+        // whole-sheet occupied-cell clone, not N -- see PivotTableRefreshService.GrowthGuard.cs. Scoped
+        // to this single Apply() call only; never reused across commands.
+        var growthGuardCache = new PivotTableRefreshService.GrowthGuardSheetCache();
+
         foreach (var (targetSheet, pivotTable, sourceFieldIndex) in resolvedTargets)
         {
             // H10: a slicer can be connected to a field that was never dragged into Row/Column/PageFields.
@@ -168,7 +174,26 @@ public sealed class SetSlicerSelectionCommand : IWorkbookCommand
             PivotTableSlicerTimelineCommandHelpers.ReplaceSelectedItems(pivotTable.ColumnFields, sourceFieldIndex, slicer.SelectedItems);
             PivotTableSlicerTimelineCommandHelpers.ReplaceSelectedItems(pivotTable.PageFields, sourceFieldIndex, slicer.SelectedItems);
 
-            PivotTableRefreshService.Refresh(ctx.Workbook, targetSheet, pivotTable);
+            // R140-remediation-pivot-refresh-growth-guard-completeness: a selection change can bring
+            // previously-filtered-out row/column items back into view, which can grow ANY connected
+            // pivot's footprint past its previous render -- see PivotTableRefreshService.GrowthGuard.cs.
+            // A slicer can drive several pivot tables at once (R133x), so a conflict on ANY one of them
+            // must fail the whole command atomically: RestoreAllSlicerTargets (below) rolls every
+            // connected pivot processed so far back to its pre-Apply state, mirroring Revert() exactly
+            // -- safe to run even for the pivot the guard itself just finished rolling back, since that
+            // pivot's OWN pre-loop cell snapshot covers precisely the same footprint the guard just
+            // restored, so this is a same-value no-op for it.
+            var baseline = PivotTableRefreshService.CaptureGrowthGuardBaseline(targetSheet, pivotTable, growthGuardCache);
+            if (PivotTableRefreshService.RefreshGuarded(ctx.Workbook, targetSheet, pivotTable, baseline, RestoreAllSlicerTargets) is { } failure)
+            {
+                _snapshot = null;
+                _targetSnapshots = null;
+                return failure;
+            }
+            // R140-remediation2-growth-guard-multipivot-baseline-cost: patch the shared cache with what
+            // THIS pivot just rendered, bounded to its own footprint, so the NEXT target on the same
+            // sheet sees it as occupied instead of re-cloning the whole sheet to find out.
+            growthGuardCache.SyncAfterRefresh(targetSheet, baseline, pivotTable);
             // R134-commands-pivotchart-stale-datarange: a slicer selection change re-filters the pivot's
             // rows (Refresh above), which moves/shrinks/grows its materialized output range -- without
             // this, a PivotChart bound to this pivot table keeps rendering the cells the pivot occupied
@@ -177,6 +202,19 @@ public sealed class SetSlicerSelectionCommand : IWorkbookCommand
         }
 
         return new CommandOutcome(true, AffectedCells: resolvedTargets.Select(t => t.PivotTable.TargetRange.Start).ToArray());
+
+        void RestoreAllSlicerTargets()
+        {
+            if (_snapshot is not { } snap)
+                return;
+
+            foreach (var pts in snap.PivotTables)
+                PivotTableRefreshService.ClearRenderedRange(pts.Sheet, pts.PivotTable.LastRenderedRange);
+            snap.Restore(slicer);
+            if (_targetSnapshots is not null)
+                foreach (var (targetCellSheet, _, cellSnapshot) in _targetSnapshots)
+                    AddPivotTableCommand.Restore(targetCellSheet, cellSnapshot);
+        }
     }
 
     private CommandOutcome ApplyTableSlicer(ICommandContext ctx, SlicerModel slicer, int tableId, int columnId)

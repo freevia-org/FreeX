@@ -379,64 +379,39 @@ public static partial class DataValidationService
         var rowCount = (ulong)(endRow - startRow) + 1;
         var colCount = (ulong)(endCol - startCol) + 1;
 
-        if (occupiedCells.Count > 0 &&
-            (ulong)occupiedCells.Count <= rowCount * colCount &&
+        // GetOccupiedCellMap() only covers Sheet._cells; a dynamic-array spill's non-anchor
+        // member cells live in the separate Sheet._spillValues overlay (Sheet.SetSpillRange),
+        // so they must be added into the sparse-scan bound too, or a source range overlapping a
+        // spill would report itself as sparse enough for the fast path while still being blind
+        // to the spilled values (R140-DV-1). EnumerateValueBearingCells is the sheet's existing
+        // union-of-both accessor, already used the same way by DataValidationCirclePlanner and
+        // WorkbookSelectionStatsCalculator.
+        var valueBearingCount = (ulong)occupiedCells.Count + (ulong)sheet.SpillValueCount;
+
+        if (valueBearingCount > 0 &&
+            valueBearingCount <= rowCount * colCount &&
             !CouldMatchMissingBlankCell(textValue))
         {
-            if (occupiedCells is Dictionary<(uint Row, uint Col), Cell> occupiedDictionary)
-                return OccupiedRangeContainsValue(occupiedDictionary, startRow, endRow, startCol, endCol, textValue);
+            foreach (var address in sheet.EnumerateValueBearingCells())
+            {
+                if (address.Row < startRow || address.Row > endRow || address.Col < startCol || address.Col > endCol)
+                    continue;
 
-            return OccupiedRangeContainsValue(occupiedCells, startRow, endRow, startCol, endCol, textValue);
+                if (string.Equals(ToValidationText(sheet.GetValue(address)), textValue, StringComparison.OrdinalIgnoreCase))
+                    return true;
+            }
+
+            return false;
         }
 
         for (var row = startRow; row <= endRow; row++)
         {
             for (var col = startCol; col <= endCol; col++)
             {
-                var cellValue = sheet.GetCell(row, col)?.Value ?? BlankValue.Instance;
+                var cellValue = sheet.GetValue(row, col);
                 if (string.Equals(ToValidationText(cellValue), textValue, StringComparison.OrdinalIgnoreCase))
                     return true;
             }
-        }
-
-        return false;
-    }
-
-    private static bool OccupiedRangeContainsValue(
-        Dictionary<(uint Row, uint Col), Cell> occupiedCells,
-        uint startRow,
-        uint endRow,
-        uint startCol,
-        uint endCol,
-        string textValue)
-    {
-        foreach (var ((row, col), cell) in occupiedCells)
-        {
-            if (row < startRow || row > endRow || col < startCol || col > endCol)
-                continue;
-
-            if (string.Equals(ToValidationText(cell.Value), textValue, StringComparison.OrdinalIgnoreCase))
-                return true;
-        }
-
-        return false;
-    }
-
-    private static bool OccupiedRangeContainsValue(
-        IReadOnlyDictionary<(uint Row, uint Col), Cell> occupiedCells,
-        uint startRow,
-        uint endRow,
-        uint startCol,
-        uint endCol,
-        string textValue)
-    {
-        foreach (var ((row, col), cell) in occupiedCells)
-        {
-            if (row < startRow || row > endRow || col < startCol || col > endCol)
-                continue;
-
-            if (string.Equals(ToValidationText(cell.Value), textValue, StringComparison.OrdinalIgnoreCase))
-                return true;
         }
 
         return false;
@@ -498,7 +473,11 @@ public static partial class DataValidationService
 
                 var row = _startRow + (uint)index / _columnCount;
                 var col = _startCol + (uint)index % _columnCount;
-                var value = _sheet.GetCell(row, col)?.Value ?? BlankValue.Instance;
+                // GetValue (not GetCell) so a source range/name that overlaps a dynamic-array
+                // spill's non-anchor member cells (which live only in Sheet._spillValues, never
+                // in Sheet._cells -- see Sheet.SetSpillRange) still reads its real value instead
+                // of BlankValue (R140-DV-1).
+                var value = _sheet.GetValue(row, col);
                 return ToValidationText(value);
             }
         }

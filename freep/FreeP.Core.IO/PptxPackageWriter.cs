@@ -2093,8 +2093,19 @@ public static class PptxPackageWriter
                 if (soundRelId is not null && rawEl.Element(P + "sndAc") is null)
                     rawEl.Add(BuildSndAcEl(soundRelId, transition.Sound));
 
-                // Wrap in mc:AlternateContent so modern readers benefit from p14:dur (if present).
-                // If the raw XML already has p14:dur we just re-emit as-is inside a wrapper.
+                // F1: if the source wrapped this transition in mc:AlternateContent, re-wrap it
+                // the same way instead of emitting the bare extension-namespace element as a
+                // direct child of p:transition (invalid outside markup-compatibility processing)
+                // and silently dropping the original mc:Fallback degrade-path content.
+                if (transition.WasAlternateContent)
+                {
+                    var wrapped = WrapOtherTransitionInAlternateContent(rawEl, transition, soundRelId);
+                    if (wrapped is not null)
+                        return wrapped;
+                    // No Requires token resolved to a usable namespace URI — fall through and
+                    // preserve the bare element rather than emit an unusable wrapper.
+                }
+
                 return rawEl;
             }
             catch
@@ -2246,6 +2257,76 @@ public static class PptxPackageWriter
                 new XElement(MC + "Fallback",
                     BuildTransEl(commonAttrs, classicEff is not null ? new XElement(classicEff) : null)));
         }
+    }
+
+    /// <summary>
+    /// F1: re-wraps a preserved, unrecognized (<see cref="TransitionKind.Other"/>) <c>p:transition</c>
+    /// element in the original <c>mc:AlternateContent</c>/<c>mc:Choice</c>/<c>mc:Fallback</c> block,
+    /// using the source's own Requires token(s) and namespace URI(s) — mirroring the preserved-shape
+    /// re-wrap pattern used elsewhere in this writer (see the EA3/FA2 shape preservation path).
+    /// Returns null if no Requires token resolved to a usable namespace URI, in which case the
+    /// caller should fall back to emitting the bare element rather than an unusable wrapper.
+    /// </summary>
+    private static XElement? WrapOtherTransitionInAlternateContent(
+        XElement choiceTransEl, SlideTransition transition, string? soundRelId)
+    {
+        var requiresToken = transition.McRequiresToken ?? "p14";
+        var tokens = requiresToken.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries);
+        if (tokens.Length == 0) tokens = new[] { requiresToken };
+
+        var choiceAttrs = new List<object> { new XAttribute("Requires", requiresToken) };
+        int resolvedCount = 0;
+        foreach (var token in tokens)
+        {
+            string? uri = null;
+            if (transition.McRequiresNsUris.TryGetValue(token, out var mappedUri))
+                uri = mappedUri;
+            if (uri is null && KnownMcPrefixNsUris.TryGetValue(token, out var knownUri))
+                uri = knownUri; // last resort: well-known MS prefix table
+
+            if (uri is not null)
+            {
+                choiceAttrs.Add(new XAttribute(XNamespace.Xmlns + token, uri));
+                resolvedCount++;
+            }
+            // else: omit this token's xmlns — do NOT force an unrelated URI onto it.
+        }
+
+        if (resolvedCount == 0)
+            return null;
+
+        XElement fallbackEl;
+        try
+        {
+            fallbackEl = string.IsNullOrWhiteSpace(transition.AlternateContentFallbackXml)
+                ? null!
+                : XElement.Parse(transition.AlternateContentFallbackXml, LoadOptions.PreserveWhitespace);
+        }
+        catch
+        {
+            fallbackEl = null!;
+        }
+        if (fallbackEl is null)
+        {
+            // No original mc:Fallback was captured — synthesize a plain fade fallback so old
+            // readers still see something valid, matching the synthesized-kinds fallback pattern.
+            var spdFallback = PptxAnimationMap.DurationToSpd(transition.DurationMs);
+            var fallbackAttrs = new List<object?> { new XAttribute("spd", spdFallback) };
+            if (!transition.AdvanceOnClick)
+                fallbackAttrs.Add(new XAttribute("advClick", "0"));
+            if (transition.AdvanceAfterMs.HasValue)
+                fallbackAttrs.Add(new XAttribute("advTm", transition.AdvanceAfterMs.Value));
+            fallbackAttrs.Add(new XElement(P + "fade"));
+            if (soundRelId is not null)
+                fallbackAttrs.Add(BuildSndAcEl(soundRelId, transition.Sound));
+            fallbackEl = new XElement(P + "transition", fallbackAttrs.Where(a => a is not null).Cast<object>().ToArray());
+        }
+
+        return new XElement(MC + "AlternateContent",
+            new XAttribute(XNamespace.Xmlns + "mc",
+                "http://schemas.openxmlformats.org/markup-compatibility/2006"),
+            new XElement(MC + "Choice", choiceAttrs.Cast<object>().ToArray<object>().Concat(new object[] { choiceTransEl }).ToArray()),
+            new XElement(MC + "Fallback", fallbackEl));
     }
 
     /// <summary>Builds a Fade mc:AlternateContent — used as last-resort fallback.</summary>
@@ -3556,11 +3637,15 @@ public static class PptxPackageWriter
             ? shape.PictureFrameGeometry
             : "rect";
 
+        // freep-media-3: round-trip the placeholder association (p:ph) the same way BuildSpEl
+        // does for autoshapes, so a picture that fills a slide placeholder keeps inheriting
+        // layout-driven geometry/behavior instead of becoming a free-floating shape on re-save.
         return new XElement(P + "pic",
             new XElement(P + "nvPicPr",
                 CnvPrWithHlink(shape, hlinkRelIds, allSlides),
                 new XElement(P + "cNvPicPr"),
-                new XElement(P + "nvPr")),
+                new XElement(P + "nvPr",
+                    shape.Placeholder is not null ? BuildPhEl(shape.Placeholder) : null)),
             blipFillEl,
             BuildSpPrEl(shape, PresentationColorScheme.CreateDefault(), forcePrst: framePrst));
     }
@@ -3643,15 +3728,25 @@ public static class PptxPackageWriter
 
         // Media file rel id (written by WriteSlideMediaFiles using shape.Id | 0x80000000 key)
         mediaById.TryGetValue(shape.Id | 0x80000000u, out var mediaFileRelId);
-        mediaFileRelId ??= "rIdVid1";
+        // freep-media-2: do NOT fall back to a hard-coded "rIdVid1" — no real relationship was
+        // written for this shape's media (its source could not be resolved, e.g. empty Bytes and
+        // no LinkUrl), so a hardcoded id would either alias another shape's media relationship
+        // (if some other shape on the slide legitimately owns "rIdVid1") or dangle (if none does).
+        // Either way PowerPoint plays the wrong file or reports the package needs repair. Instead,
+        // honestly omit the a:videoFile/a:audioFile element — the shape still round-trips as a
+        // picture, just without a (fabricated) playable media reference.
 
         bool isVideo = shape.Media?.IsVideo ?? true;
-        var mediaFileAttributes = new List<object>();
-        if (isVideo && shape.Media?.PlayFullScreen == true)
-            mediaFileAttributes.Add(new XAttribute("fullScrn", "1"));
-        var mediaFileEl = isVideo
-            ? new XElement(A + "videoFile", mediaFileAttributes.Concat(new object[] { new XAttribute(R + "link", mediaFileRelId) }))
-            : new XElement(A + "audioFile", new XAttribute(R + "link", mediaFileRelId));
+        XElement? mediaFileEl = null;
+        if (mediaFileRelId is not null)
+        {
+            var mediaFileAttributes = new List<object>();
+            if (isVideo && shape.Media?.PlayFullScreen == true)
+                mediaFileAttributes.Add(new XAttribute("fullScrn", "1"));
+            mediaFileEl = isVideo
+                ? new XElement(A + "videoFile", mediaFileAttributes.Concat(new object[] { new XAttribute(R + "link", mediaFileRelId) }))
+                : new XElement(A + "audioFile", new XAttribute(R + "link", mediaFileRelId));
+        }
 
         // KK1: a:blipFill is REQUIRED by CT_Picture (minOccurs=1). When no poster image
         // is available emit a minimal VALID blipFill — just a:stretch/a:fillRect, no a:blip —
@@ -3665,14 +3760,25 @@ public static class PptxPackageWriter
             : new XElement(P + "blipFill",
                 new XElement(A + "stretch", new XElement(A + "fillRect")));
 
-        var nvPrChildren = new List<object> { mediaFileEl };
+        // freep-media-3: p:ph must come first in CT_ApplicationNonVisualDrawingProps's sequence
+        // (before the audioFile/videoFile choice), so a media shape that fills a slide
+        // placeholder round-trips its placeholder association the same way BuildSpEl/BuildPicEl do.
+        var nvPrChildren = new List<object>();
+        if (shape.Placeholder is not null)
+            nvPrChildren.Add(BuildPhEl(shape.Placeholder));
+        if (mediaFileEl is not null)
+            nvPrChildren.Add(mediaFileEl);
         if (captionTracksByShape is not null
             && captionTracksByShape.TryGetValue(shape.Id, out var captionTracks)
             && captionTracks.Count > 0)
         {
             nvPrChildren.Add(BuildMediaCaptionExtList(captionTracks));
         }
-        if (shape.Media is { } media && HasMediaTiming(media))
+        // freep-media-2: the p14:media timing extension carries an r:embed/r:link attribute that
+        // must reference the same real media relationship as a:videoFile/a:audioFile above — when
+        // mediaFileRelId is unresolved there is no relationship to point at, so timing must be
+        // omitted too rather than referencing the same fabricated id.
+        if (mediaFileRelId is not null && shape.Media is { } media && HasMediaTiming(media))
             nvPrChildren.Add(BuildMediaTimingExtList(mediaFileRelId, media));
 
         return new XElement(P + "pic",

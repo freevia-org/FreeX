@@ -1869,16 +1869,25 @@ public static class MailMerge
     /// this method; previously it substituted only plain <c>«Field»</c> placeholders, so every rule
     /// field silently went blank in the preview and in the messages actually sent — different from what
     /// Finish &amp; Merge produced for the same template and row. The throwaway state's skip/advance/
-    /// cancel side effects are discarded (meaningless outside a full merge run over many records), and a
-    /// lone record reports itself as record 1 for MergeRec/MergeSeq (there is no larger run to number it
-    /// within).
+    /// cancel side effects are discarded (meaningless outside a full merge run over many records).
+    /// <paramref name="recordIndex"/> and <paramref name="sequenceNumber"/> let a caller that DOES know
+    /// the record's real position (e.g. Preview Results navigating to a specific row) report the true
+    /// value for MergeRec/MergeSeq instead of the record-1/sequence-0 default used when merging a single
+    /// row with no larger run to number it within.
     /// </remarks>
-    public static TextDocument MergeRecord(TextDocument template, IReadOnlyDictionary<string, string> row)
+    public static TextDocument MergeRecord(
+        TextDocument template,
+        IReadOnlyDictionary<string, string> row,
+        int recordIndex = 1,
+        int? sequenceNumber = null)
     {
         ArgumentNullException.ThrowIfNull(template);
         ArgumentNullException.ThrowIfNull(row);
 
-        return MergeRecordWithRules(template, row, new MergeState(), recordIndex: 1);
+        var state = new MergeState();
+        if (sequenceNumber.HasValue)
+            state.SequenceNumber = sequenceNumber.Value;
+        return MergeRecordWithRules(template, row, state, recordIndex);
     }
 
     /// <summary>
@@ -2253,8 +2262,14 @@ public static class MailMerge
             case Table t:
                 foreach (var row in t.Rows)
                     foreach (var cell in row.Cells)
+                    {
                         foreach (var p in cell.Paragraphs)
                             ScanParagraph(p, scan);
+                        // See the matching comment in TransformBlockText: a table nested inside a
+                        // table cell lives in TableCell.NestedTables, not cell.Paragraphs.
+                        foreach (var nestedTable in cell.NestedTables)
+                            ScanBlock(nestedTable, scan);
+                    }
                 break;
         }
     }
@@ -3003,8 +3018,17 @@ public static class MailMerge
             case Table table:
                 foreach (var row in table.Rows)
                     foreach (var cell in row.Cells)
+                    {
                         foreach (var paragraph in cell.Paragraphs)
                             TransformParagraphText(paragraph, transform, transformRun);
+                        // Tables nested directly inside a cell (TableCell.NestedTables) live outside
+                        // cell.Paragraphs, so recurse into them too -- otherwise a MERGEFIELD/IF/SKIPIF/
+                        // NEXTIF/ADDRESSBLOCK/GREETINGLINE/REF field placed inside a table nested in a
+                        // table cell is never substituted and its literal placeholder ships in every
+                        // merged record.
+                        foreach (var nestedTable in cell.NestedTables)
+                            TransformBlockText(nestedTable, transform, transformRun);
+                    }
                 break;
         }
     }

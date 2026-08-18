@@ -179,23 +179,53 @@ internal static class PrintLayout
             return;
 
         var (_, contentWidthDip) = PageLayout.ContentAreaDip(document.Page);
-        var noteIds = document.Footnotes.Keys.OrderBy(id => id).ToList();
-        var notePlan = DocumentNoteRegionPlanner.BuildFootnoteRegion(
-            document,
-            noteIds,
-            pageNumber: 1,
-            contentWidthDip);
-        if (notePlan.EstimatedHeightDip <= 0)
+
+        // Measure per-page footnote ownership (which footnotes actually land on which page) with a
+        // reserve-free provisional pass over the same blocks, then reserve only the tallest single
+        // page's footnote region — not the combined height of every footnote in the whole document,
+        // which shrinks every page's usable body area far more than Word does whenever a document's
+        // footnotes are spread across more than one page. A separate FlowDocument carries the blocks
+        // for the provisional pass and hands them straight back afterward, because a WPF element may
+        // belong to only one FlowDocument's visual tree at a time.
+        var blocks = flow.Blocks.ToList();
+        double reserveDip;
+        if (blocks.Count == 0)
+        {
+            reserveDip = 0;
+        }
+        else
+        {
+            var provisionalFlow = new FlowDocument
+            {
+                PageWidth = flow.PageWidth,
+                PageHeight = flow.PageHeight,
+                PagePadding = flow.PagePadding,
+                FontFamily = flow.FontFamily,
+                FontSize = flow.FontSize
+            };
+            flow.Blocks.Clear();
+            foreach (var block in blocks)
+                provisionalFlow.Blocks.Add(block);
+
+            try
+            {
+                // Cap the reserve against the page's content height: the estimate grows with the
+                // footnote text, so long enough footnotes would reserve the whole body and leave the
+                // WPF paginator a non-positive page box, which it rejects — failing print and print
+                // preview outright. ComputeMaxPerPageFootnoteReserveDip applies the same clamp.
+                reserveDip = PaginationEngine.ComputeMaxPerPageFootnoteReserveDip(
+                    provisionalFlow, document.Blocks, document, document.Page, contentWidthDip);
+            }
+            finally
+            {
+                provisionalFlow.Blocks.Clear();
+                foreach (var block in blocks)
+                    flow.Blocks.Add(block);
+            }
+        }
+
+        if (reserveDip <= 0)
             return;
-
-        const double footnoteFrameClearanceDip = 24.0;
-
-        // Cap the reserve against the page's content height: the estimate grows with the footnote
-        // text, so long enough footnotes would reserve the whole body and leave the WPF paginator a
-        // non-positive page box, which it rejects — failing print and print preview outright.
-        var reserveDip = PaginationEngine.ClampFootnoteReserveDip(
-            notePlan.EstimatedHeightDip + footnoteFrameClearanceDip,
-            document.Page);
 
         flow.PagePadding = new Thickness(
             flow.PagePadding.Left,
@@ -730,16 +760,41 @@ internal sealed class HeaderFooterPaginator(
         if (contentWidth <= 0)
             return visual;
 
-        var footnotes = includeAllNotes
-            ? model.Footnotes.OrderBy(kv => kv.Key)
-            : model.Footnotes
-                .Where(kv => pageFootnoteIds?.Contains(kv.Key) == true)
-                .OrderBy(kv => kv.Key);
-        var notes = footnotes.Select(kv => (kv.Key, kv.Value.PlainText))
-            .Concat(includeEndnotes
-                ? model.Endnotes.OrderBy(kv => kv.Key).Select(kv => (kv.Key, kv.Value.PlainText))
-                : [])
-            .Where(n => !string.IsNullOrEmpty(n.Item2))
+        // Print/Print Preview/PDF/XPS must show the same computed display sequence the body reference
+        // marks and the interactive page-box note region show — not the note's raw internal dictionary
+        // key, which stays fixed across deletions while the visible sequence shifts. Routing through
+        // DocumentNoteRegionPlanner also picks up NoteNumberingOptions (Roman/letter/Chicago-symbol
+        // formats, a non-1 Start At) and NumberRestart (EachSection/EachPage), which a bare id can
+        // never reflect.
+        var footnoteIds = includeAllNotes
+            ? model.Footnotes.Keys.OrderBy(id => id).ToList()
+            : model.Footnotes.Keys
+                .Where(id => pageFootnoteIds?.Contains(id) == true)
+                .OrderBy(id => id)
+                .ToList();
+        var noteRows = DocumentNoteRegionPlanner
+            .BuildFootnoteRegion(model, footnoteIds, pageNumber: 1, contentWidth)
+            .Rows;
+        if (includeEndnotes)
+        {
+            var endnoteIds = model.Endnotes.Keys.OrderBy(id => id).ToList();
+            noteRows = noteRows
+                .Concat(DocumentNoteRegionPlanner
+                    .BuildEndnoteRegion(model, endnoteIds, pageNumber: 1, contentWidth, isSyntheticPage: false)
+                    .Rows)
+                .ToList();
+        }
+
+        // DocumentNoteRegionPlanner.BuildRows already skips ids with no note at all -- every row that
+        // reaches here is a note that genuinely exists, even if its content is empty. Word still prints
+        // the separator plus a blank numbered line for an empty note, matching the interactive Page
+        // Layout view and the footnote-continuation path, so this must not filter rows out by text.
+        var notes = noteRows
+            .Select(row => (
+                Label: string.IsNullOrEmpty(row.Label)
+                    ? row.NoteId.ToString(System.Globalization.CultureInfo.InvariantCulture)
+                    : row.Label,
+                row.Text))
             .ToList();
         if (notes.Count == 0)
             return visual;
@@ -752,12 +807,12 @@ internal sealed class HeaderFooterPaginator(
 
         var y = sepY + PageLayout.PointsToDip(2);
         var maxY = maxYOverride ?? size.Height - PageLayout.PointsToDip(4); // stay on the sheet
-        foreach (var (id, text) in notes)
+        foreach (var (label, text) in notes)
         {
             if (y >= maxY)
                 break;
             var formatted = new FormattedText(
-                $"{id}. {text}",
+                $"{label}. {text}",
                 System.Globalization.CultureInfo.CurrentCulture,
                 FlowDirection.LeftToRight,
                 new Typeface("Calibri"),

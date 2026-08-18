@@ -331,7 +331,14 @@ public static class InteractiveValidationInventory
         "shortcut.editing.formula-bar" => [K("Ctrl+F2", Worksheet, "F2", Ctrl)],
         "shortcut.editing.clear-contents" => [K("Delete", WorksheetSelection, "Delete")],
         "shortcut.editing.clear-and-edit" => [K("Backspace", Worksheet, "Backspace"), K("Shift+Backspace", Worksheet, "Backspace", Shift)],
-        "shortcut.editing.insert-delete" => [K("Ctrl++", WorksheetSelection, "Plus", Ctrl), K("Ctrl+Shift+=", WorksheetSelection, "Equals", CtrlShift), K("Ctrl+-", WorksheetSelection, "Minus", Ctrl)],
+        "shortcut.editing.insert-delete" =>
+        [
+            K("Ctrl++", WorksheetSelection, "Plus", Ctrl),
+            K("Ctrl+Shift+=", WorksheetSelection, "Equals", CtrlShift),
+            K("Ctrl+Numpad +", WorksheetSelection, "NumpadPlus", Ctrl),
+            K("Ctrl+-", WorksheetSelection, "Minus", Ctrl),
+            K("Ctrl+Numpad -", WorksheetSelection, "NumpadMinus", Ctrl),
+        ],
 
         "shortcut.row-column.rows-hide-unhide" => [K("Ctrl+9", WorksheetSelection, "9", Ctrl), K("Ctrl+Shift+9", WorksheetSelection, "9", CtrlShift)],
         "shortcut.row-column.columns-hide-unhide" => [K("Ctrl+0", WorksheetSelection, "0", Ctrl), K("Ctrl+Shift+0", WorksheetSelection, "0", CtrlShift)],

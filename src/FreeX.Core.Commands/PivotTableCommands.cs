@@ -78,7 +78,28 @@ public sealed class AddPivotTableCommand : IWorkbookCommand
 
         ctx.Workbook.PivotCaches.Add(cache);
         sheet.PivotTables.Add(pivotTable);
-        PivotTableRefreshService.Refresh(ctx.Workbook, sheet, pivotTable);
+
+        // R140-remediation-pivot-refresh-growth-guard-completeness: the initial render of a brand new
+        // pivot is just as capable of "growing" past the TargetRange the user drew as any later
+        // refresh -- the user's initial rectangle is only ever a size ESTIMATE (Excel's own Insert
+        // PivotTable dialog defaults to a tiny placeholder range too), and the source can easily have
+        // more distinct row/column items than that estimate accounted for. Route the very first
+        // render through the same growth-conflict guard every other pivot-mutating command now uses,
+        // so this creation path can't silently clobber unrelated content sitting just past the chosen
+        // target range either.
+        var baseline = PivotTableRefreshService.CaptureGrowthGuardBaseline(sheet, pivotTable);
+        if (PivotTableRefreshService.RefreshGuarded(
+                ctx.Workbook, sheet, pivotTable, baseline,
+                () =>
+                {
+                    sheet.PivotTables.Remove(pivotTable);
+                    ctx.Workbook.PivotCaches.Remove(cache);
+                }) is { } failure)
+        {
+            _targetSnapshot = null;
+            return failure;
+        }
+
         _addedCache = cache;
         _addedPivotTable = pivotTable;
         return new CommandOutcome(true, AffectedCells: [_targetRange.Start]);
@@ -286,7 +307,8 @@ public sealed class RefreshPivotTableCommand : IWorkbookCommand, IEstimatesMemor
         if (!CommandGuards.TryFindPivotTable(sheet, _pivotTableName, out var pivotTable))
             return CommandGuards.RejectPivotTableNotFound();
 
-        _targetSnapshot = AddPivotTableCommand.Snapshot(sheet, pivotTable.LastRenderedRange ?? pivotTable.TargetRange);
+        var oldFootprint = pivotTable.LastRenderedRange ?? pivotTable.TargetRange;
+        _targetSnapshot = AddPivotTableCommand.Snapshot(sheet, oldFootprint);
         _lastRenderedRangeSnapshot = pivotTable.LastRenderedRange;
         // R116-commands-pivot-refresh-revert: Refresh (below) prunes pivotTable.RowFields/ColumnFields/
         // PageFields/DataFields (RemoveAll) and rebuilds cache.Fields (Clear+AddRange) in place on the
@@ -300,11 +322,38 @@ public sealed class RefreshPivotTableCommand : IWorkbookCommand, IEstimatesMemor
         // captured here too.
         var cache = CommandGuards.FindPivotCache(ctx.Workbook, pivotTable);
         _fieldSnapshot = RefreshFieldSnapshot.Capture(ctx.Workbook, pivotTable, cache);
+
+        // R140-commands-pivot-refresh-growth-dataloss (now shared, see
+        // PivotTableRefreshService.GrowthGuard.cs): a refresh whose source gained a new distinct
+        // row/column item can need MORE rows/columns than the pivot's previous render occupied.
+        // RefreshGuarded only discovers the actual new footprint by writing it -- there is no way to
+        // know the growth area up front, so it can't be included in the `_targetSnapshot` capture
+        // above. The baseline below snapshots every currently-occupied cell on the whole sheet (plus
+        // the current merged regions) before Refresh touches anything, so that if the post-refresh
+        // footprint DID grow into a cell holding unrelated user content -- a cell `_targetSnapshot`
+        // never covered, because it sat outside the old footprint -- RefreshGuarded puts the sheet back
+        // to exactly its pre-refresh state and refuses the refresh, the same way real Excel refuses
+        // this refresh with a warning instead of silently overwriting adjacent data. Without this, Undo
+        // could never repair the loss either: the destroyed cell was never part of any undo snapshot in
+        // the first place (see Revert below, which only ever knew about the OLD footprint).
+        var baseline = PivotTableRefreshService.CaptureGrowthGuardBaseline(sheet, pivotTable);
+        var fieldSnapshot = _fieldSnapshot;
+
         // R116-commands-pivot-refresh-scope: this command IS the F5 / "Refresh PivotTable" action --
         // the one genuine "source data may have changed" entry point -- so it is the only caller that
         // asks Refresh to re-derive cache.Fields' SharedItems from the live source (see
         // PivotTableRefreshService.Refresh's rescanCacheSharedItems parameter doc).
-        PivotTableRefreshService.Refresh(ctx.Workbook, sheet, pivotTable, rescanCacheSharedItems: true);
+        if (PivotTableRefreshService.RefreshGuarded(
+                ctx.Workbook, sheet, pivotTable, baseline,
+                () => fieldSnapshot!.Restore(pivotTable, ctx.Workbook),
+                rescanCacheSharedItems: true) is { } failure)
+        {
+            _targetSnapshot = null;
+            _lastRenderedRangeSnapshot = null;
+            _fieldSnapshot = null;
+            return failure;
+        }
+
         UpdateBoundPivotChartRanges(ctx.Workbook, sheet, pivotTable);
         return new CommandOutcome(true, AffectedCells: [pivotTable.TargetRange.Start]);
     }

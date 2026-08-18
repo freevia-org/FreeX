@@ -53,7 +53,21 @@ public sealed class ConfigurePivotTableLayoutCommand : IWorkbookCommand
         PivotTableCommandCollections.Replace(pivotTable.LabelFilters, viewState.LabelFilters);
         PivotTableCommandCollections.Replace(pivotTable.ValueFilters, viewState.ValueFilters);
         PivotTableCommandCollections.Replace(pivotTable.Sorts, viewState.Sorts);
-        PivotTableRefreshService.Refresh(ctx.Workbook, sheet, pivotTable);
+
+        // R140-remediation-pivot-refresh-growth-guard-completeness: dragging a field into Rows/Columns
+        // from the PivotTable Field List -- the single most common real-world way a pivot grows -- goes
+        // through this command. Without this guard a layout change that needs more rows/columns than
+        // the pivot's previous render occupied could silently overwrite adjacent user content with no
+        // way to recover it via Undo (the snapshot above is bounded to the OLD footprint).
+        var snapshot = _snapshot;
+        var baseline = PivotTableRefreshService.CaptureGrowthGuardBaseline(sheet, pivotTable);
+        if (PivotTableRefreshService.RefreshGuarded(ctx.Workbook, sheet, pivotTable, baseline, () => snapshot!.Restore(pivotTable)) is { } failure)
+        {
+            _snapshot = null;
+            _targetSnapshot = null;
+            return failure;
+        }
+
         var outputRange = PivotTableRefreshService.GetMaterializedOutputRange(sheet, pivotTable);
         foreach (var chart in sheet.Charts.Where(chart =>
                      chart.IsPivotChart &&

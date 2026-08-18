@@ -66,7 +66,17 @@ public sealed class ConfigurePivotTableCalculatedItemsCommand : IWorkbookCommand
         PivotTableCommandCollections.Replace(pivotTable.CalculatedFields, _calculatedFields);
         PivotTableCommandCollections.Replace(pivotTable.CalculatedItems, _calculatedItems);
 
-        PivotTableRefreshService.Refresh(ctx.Workbook, sheet, pivotTable);
+        // R140-remediation-pivot-refresh-growth-guard-completeness: a calculated item/field can add a
+        // new row/column item, which can grow the pivot's footprint past its previous render -- see
+        // PivotTableRefreshService.GrowthGuard.cs.
+        var snapshot = _snapshot;
+        var baseline = PivotTableRefreshService.CaptureGrowthGuardBaseline(sheet, pivotTable);
+        if (PivotTableRefreshService.RefreshGuarded(ctx.Workbook, sheet, pivotTable, baseline, () => snapshot!.Restore(pivotTable)) is { } failure)
+        {
+            _snapshot = null;
+            _targetSnapshot = null;
+            return failure;
+        }
         UpdateBoundPivotChartRanges(ctx.Workbook, sheet, pivotTable);
 
         return new CommandOutcome(true, AffectedCells: [pivotTable.TargetRange.Start]);
@@ -224,7 +234,21 @@ public sealed class ChangePivotTableSourceCommand : IWorkbookCommand
             }
         }
 
-        PivotTableRefreshService.Refresh(ctx.Workbook, sheet, pivotTable);
+        // R140-remediation-pivot-refresh-growth-guard-completeness: an explicit "Change Data Source" is
+        // the sibling this file's own RefreshPivotTableCommand comment (above, R116-commands-pivot-
+        // refresh-revert) already calls out as triggering the identical field-pruning mutation -- it is
+        // just as capable of needing more rows/columns than the pivot's previous render occupied (a
+        // wider/taller source range typically has MORE distinct row/column items, not fewer), so it
+        // gets the same growth-conflict guard -- see PivotTableRefreshService.GrowthGuard.cs.
+        var snapshot = _snapshot;
+        var workbook = ctx.Workbook;
+        var baseline = PivotTableRefreshService.CaptureGrowthGuardBaseline(sheet, pivotTable);
+        if (PivotTableRefreshService.RefreshGuarded(ctx.Workbook, sheet, pivotTable, baseline, () => snapshot!.Restore(pivotTable, workbook)) is { } failure)
+        {
+            _snapshot = null;
+            _targetSnapshot = null;
+            return failure;
+        }
         // R134-commands-pivotchart-stale-datarange: "Change Data Source" can grow/shrink/relocate the
         // pivot's materialized output just like every other refresh-triggering mutation -- without this,
         // a PivotChart bound to this pivot table keeps rendering the cells the pivot occupied against the

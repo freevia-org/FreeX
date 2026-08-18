@@ -7266,18 +7266,28 @@ public static class DocxReader
     }
 
     /// <summary>
-    /// Recognizes an outline/legal numbering definition: either it carries
-    /// w:multiLevelType="multilevel" (as a child element per OOXML spec, or as an attribute in FreeW's own
-    /// emitted format), or its level-1 lvlText accumulates the ancestor counters (it references both %1 and
-    /// %2, as in "%1.%2."), which distinguishes it from a flat decimal list whose level-1 text is just "%2.".
+    /// Recognizes an outline/legal numbering definition. Three independent signals, any one of which is
+    /// sufficient: (1) it carries w:multiLevelType="multilevel" (as a child element per OOXML spec, or as
+    /// an attribute in FreeW's own emitted format) — this value is only ever used by Word for a genuine
+    /// outline/legal list, so it is trusted unconditionally; (2) it carries
+    /// w:multiLevelType="hybridMultilevel" AND actually defines more than one level — this is the value
+    /// Word's own "Multilevel List" gallery templates use (e.g. the "1. / a. / i." or "Article 1 / Section
+    /// 1.01" built-ins), but Word also stamps hybridMultilevel on perfectly ordinary flat bullet/number
+    /// lists, so a single-level definition under this type is NOT treated as multi-level — that is the
+    /// common case and must stay Number/Bullet; or (3) its level-1 lvlText accumulates the ancestor
+    /// counters (it references both %1 and %2, as in "%1.%2."), which distinguishes it from a flat decimal
+    /// list whose level-1 text is just "%2." — this also catches outline templates whose declared type is
+    /// missing or something other than multilevel/hybridMultilevel.
     /// </summary>
     private static bool IsMultiLevel(XElement abstractNum, IReadOnlyList<XElement> levels)
     {
         // FreeW writes multiLevelType as an attribute on abstractNum; real Word XML emits it as a child
-        // element <w:multiLevelType w:val="multilevel"/>. Check both forms.
-        if (abstractNum.Attribute(W + "multiLevelType")?.Value == "multilevel")
+        // element <w:multiLevelType w:val="..."/>. Check both forms.
+        var declaredMultiLevelType = abstractNum.Attribute(W + "multiLevelType")?.Value
+            ?? abstractNum.Element(W + "multiLevelType")?.Attribute(W + "val")?.Value;
+        if (declaredMultiLevelType == "multilevel")
             return true;
-        if (abstractNum.Element(W + "multiLevelType")?.Attribute(W + "val")?.Value == "multilevel")
+        if (declaredMultiLevelType == "hybridMultilevel" && levels.Count > 1)
             return true;
 
         var level1Text = levels.ElementAtOrDefault(1)?.Element(W + "lvlText")?.Attribute(W + "val")?.Value;

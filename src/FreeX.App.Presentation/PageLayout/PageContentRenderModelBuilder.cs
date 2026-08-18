@@ -347,7 +347,7 @@ public static class PageContentRenderModelBuilder
         var theme = workbook.Theme;
         var cells = new List<PageCellBlock>();
 
-        var conditionalFormats = new ConditionalFormatRenderEvaluator(sheet);
+        var conditionalFormats = new ConditionalFormatRenderEvaluator(sheet, workbook);
         var validationCircleCells = sheet.ValidationCircleCells is { Count: > 0 } circled
             ? circled.Where(address => address.Sheet == sheet.Id).ToHashSet()
             : new HashSet<CellAddress>();

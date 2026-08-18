@@ -287,6 +287,172 @@ public class TransitionCompletenessTests
         Assert.Equal(TransitionKind.Prestige, reloaded.Slides[0].Transition?.Kind);
     }
 
+    // ── F1: unrecognized transition wrapped in mc:AlternateContent on read ──────────
+
+    [Fact]
+    public void RoundTrip_UnknownTransition_WrappedInAlternateContent_PreservesWrapperAndFallback()
+    {
+        // F1: an unrecognized transition originally wrapped in mc:AlternateContent (the shape
+        // real PowerPoint / a newer FreeP version uses so older readers degrade gracefully via
+        // mc:Fallback) must keep that wrapper -- and the Fallback content -- on save. Before the
+        // fix, BuildTransitionEl re-emitted only the bare inner p:transition (RawXml), which
+        // strips the wrapper (leaving the unknown extension element as an invalid direct child
+        // of p:transition outside markup-compatibility processing) and discards the Fallback.
+        var pptxBytes = BuildPptxWithTransitionEl(
+            "<mc:AlternateContent xmlns:mc=\"http://schemas.openxmlformats.org/markup-compatibility/2006\"" +
+            " xmlns:p14=\"http://schemas.microsoft.com/office/powerpoint/2010/main\">" +
+            "<mc:Choice Requires=\"p14\">" +
+            "<p:transition xmlns:p=\"http://schemas.openxmlformats.org/presentationml/2006/main\" spd=\"fast\" p14:dur=\"500\">" +
+            "<p14:futureEffectNotYetKnown/>" +
+            "</p:transition>" +
+            "</mc:Choice>" +
+            "<mc:Fallback>" +
+            "<p:transition xmlns:p=\"http://schemas.openxmlformats.org/presentationml/2006/main\" spd=\"fast\">" +
+            "<p:fade/>" +
+            "</p:transition>" +
+            "</mc:Fallback>" +
+            "</mc:AlternateContent>");
+
+        using var ms = new MemoryStream(pptxBytes);
+        var loaded = PptxPackageReader.Read(ms);
+        var t = loaded.Slides[0].Transition;
+        Assert.NotNull(t);
+        Assert.Equal(TransitionKind.Other, t!.Kind);
+        Assert.True(t.WasAlternateContent, "the source wrapping must be captured so the writer can re-wrap it");
+        Assert.Equal("p14", t.McRequiresToken);
+        Assert.NotNull(t.AlternateContentFallbackXml);
+        Assert.Contains("fade", t.AlternateContentFallbackXml);
+
+        var ms2 = new MemoryStream();
+        PptxPackageWriter.Write(loaded, ms2);
+        ms2.Position = 0;
+
+        using var zip = new ZipArchive(ms2, ZipArchiveMode.Read, leaveOpen: true);
+        var entry = zip.Entries.FirstOrDefault(e =>
+            e.FullName.StartsWith("ppt/slides/slide") && e.FullName.EndsWith(".xml"));
+        Assert.NotNull(entry);
+        XDocument doc;
+        using (var s = entry!.Open()) doc = XDocument.Load(s);
+
+        var altContent = doc.Root?.Element(MC + "AlternateContent");
+        Assert.NotNull(altContent); // F1 fix: must still be wrapped in mc:AlternateContent
+
+        var choice = altContent!.Element(MC + "Choice");
+        Assert.NotNull(choice);
+        Assert.Equal("p14", choice!.Attribute("Requires")?.Value); // original Requires token preserved
+
+        var choiceTrans = choice.Element(P + "transition");
+        Assert.NotNull(choiceTrans);
+        var unknownEffectEl = choiceTrans!.Elements()
+            .FirstOrDefault(e => e.Name.LocalName == "futureEffectNotYetKnown");
+        Assert.NotNull(unknownEffectEl); // the unknown effect must live inside mc:Choice, not bare
+
+        var fallback = altContent.Element(MC + "Fallback");
+        Assert.NotNull(fallback); // F1 fix: the original degrade-path Fallback must survive
+        var fallbackTrans = fallback!.Element(P + "transition");
+        Assert.NotNull(fallbackTrans);
+        Assert.NotNull(fallbackTrans!.Elements().FirstOrDefault(e => e.Name.LocalName == "fade"));
+
+        // The writer's own output must itself be readable and round-trip again.
+        ms2.Position = 0;
+        var reloaded = PptxPackageReader.Read(ms2);
+        var t2 = reloaded.Slides[0].Transition;
+        Assert.NotNull(t2);
+        Assert.Equal(TransitionKind.Other, t2!.Kind);
+        Assert.True(t2.WasAlternateContent);
+    }
+
+    [Fact]
+    public void RoundTrip_UnknownTransition_UnwrappedInSource_StaysBareOnSave()
+    {
+        // Sibling/no-regression: a legacy file where the unrecognized transition was NEVER
+        // wrapped in mc:AlternateContent (the pre-existing RoundTrip_UnknownTransition_*
+        // coverage) must keep being re-emitted bare -- the F1 fix must not start wrapping
+        // transitions that were never wrapped in the source.
+        var pptxBytes = BuildPptxWithTransitionEl(
+            "<p:transition xmlns:p=\"http://schemas.openxmlformats.org/presentationml/2006/main\" spd=\"fast\">" +
+            "<p:someExoticFutureTransition dir=\"l\"/>" +
+            "</p:transition>");
+
+        using var ms = new MemoryStream(pptxBytes);
+        var loaded = PptxPackageReader.Read(ms);
+        var t = loaded.Slides[0].Transition;
+        Assert.NotNull(t);
+        Assert.Equal(TransitionKind.Other, t!.Kind);
+        Assert.False(t.WasAlternateContent);
+
+        var ms2 = new MemoryStream();
+        PptxPackageWriter.Write(loaded, ms2);
+        ms2.Position = 0;
+
+        using var zip = new ZipArchive(ms2, ZipArchiveMode.Read, leaveOpen: true);
+        var entry = zip.Entries.FirstOrDefault(e =>
+            e.FullName.StartsWith("ppt/slides/slide") && e.FullName.EndsWith(".xml"));
+        Assert.NotNull(entry);
+        XDocument doc;
+        using (var s = entry!.Open()) doc = XDocument.Load(s);
+
+        Assert.Null(doc.Root?.Element(MC + "AlternateContent"));
+        var bareTrans = doc.Root?.Element(P + "transition");
+        Assert.NotNull(bareTrans);
+        Assert.NotNull(bareTrans!.Elements().FirstOrDefault(e => e.Name.LocalName == "someExoticFutureTransition"));
+    }
+
+    [Fact]
+    public void UnknownTransition_WrappedWithUnresolvableRequiresToken_FallsBackToBareElementWithoutCrashing()
+    {
+        // Sibling/edge-case: if the source's mc:Choice Requires token has no discoverable
+        // namespace binding anywhere in scope, and isn't one of the well-known MS prefixes
+        // either, re-wrapping would produce an mc:Choice whose Requires references an unbound
+        // prefix -- worse than not wrapping. WrapOtherTransitionInAlternateContent must decline
+        // to wrap in that case (mirrors the identical guard in the shape-preservation path) and
+        // the caller must fall back to the bare element rather than throw or drop the transition.
+        var pptxBytes = BuildPptxWithTransitionEl(
+            "<mc:AlternateContent xmlns:mc=\"http://schemas.openxmlformats.org/markup-compatibility/2006\">" +
+            "<mc:Choice Requires=\"zzzUnknownExt\">" +
+            "<p:transition xmlns:p=\"http://schemas.openxmlformats.org/presentationml/2006/main\"" +
+            " xmlns:p14=\"http://schemas.microsoft.com/office/powerpoint/2010/main\" spd=\"fast\">" +
+            "<p14:futureEffectNotYetKnown/>" +
+            "</p:transition>" +
+            "</mc:Choice>" +
+            "<mc:Fallback>" +
+            "<p:transition xmlns:p=\"http://schemas.openxmlformats.org/presentationml/2006/main\" spd=\"fast\">" +
+            "<p:fade/>" +
+            "</p:transition>" +
+            "</mc:Fallback>" +
+            "</mc:AlternateContent>");
+
+        using var ms = new MemoryStream(pptxBytes);
+        var loaded = PptxPackageReader.Read(ms);
+        var t = loaded.Slides[0].Transition;
+        Assert.NotNull(t);
+        Assert.Equal(TransitionKind.Other, t!.Kind);
+        Assert.True(t.WasAlternateContent);
+        Assert.Equal("zzzUnknownExt", t.McRequiresToken);
+        Assert.Empty(t.McRequiresNsUris); // no xmlns binding found for the token anywhere
+
+        var ms2 = new MemoryStream();
+        var ex = Record.Exception(() => PptxPackageWriter.Write(loaded, ms2));
+        Assert.Null(ex); // must not throw
+
+        ms2.Position = 0;
+        using var zip = new ZipArchive(ms2, ZipArchiveMode.Read, leaveOpen: true);
+        var entry = zip.Entries.FirstOrDefault(e =>
+            e.FullName.StartsWith("ppt/slides/slide") && e.FullName.EndsWith(".xml"));
+        Assert.NotNull(entry);
+        XDocument doc;
+        using (var s = entry!.Open()) doc = XDocument.Load(s);
+
+        // The transition must still be present somewhere (never silently dropped)...
+        var unknownEffectEl = doc.Root!.Descendants()
+            .FirstOrDefault(e => e.Name.LocalName == "futureEffectNotYetKnown");
+        Assert.NotNull(unknownEffectEl);
+        // ...but since no usable Requires namespace could be resolved, it must NOT be wrapped
+        // in a broken mc:AlternateContent (better to preserve the bare element than emit an
+        // unusable wrapper).
+        Assert.Null(doc.Root.Element(MC + "AlternateContent"));
+    }
+
     // ── Round-trip: Transition sound ─────────────────────────────────────────────
 
     [Fact]

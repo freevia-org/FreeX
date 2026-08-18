@@ -148,7 +148,15 @@ public static class SlideShowInkPersistencePlanner
 
         foreach (var routeGroup in routeGroups)
         {
-            var presentationSlideIndex = mapRouteSlideToPresentationSlide(routeGroup.Key);
+            // A negative key encodes a slide displayed via slideshow's hidden-slide reveal (see
+            // SlideShowInkExecutionPlanner.EncodeHiddenSlideInkIndex): it is not a playback-route
+            // index at all, since hidden slides are excluded from the route, so it must be
+            // decoded directly rather than passed through mapRouteSlideToPresentationSlide.
+            var presentationSlideIndex = SlideShowInkExecutionPlanner.TryDecodeHiddenSlideInkIndex(
+                routeGroup.Key,
+                out var revealedHiddenSlideIndex)
+                ? revealedHiddenSlideIndex
+                : mapRouteSlideToPresentationSlide(routeGroup.Key);
             if (presentationSlideIndex < 0 || presentationSlideIndex >= presentation.Slides.Count)
             {
                 continue;

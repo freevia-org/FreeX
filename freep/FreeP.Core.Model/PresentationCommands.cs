@@ -26,6 +26,212 @@ public interface IPresentationCommand
 }
 
 /// <summary>
+/// Approximates how much memory an undo/redo command payload retains, so
+/// <see cref="PresentationCommandBus"/>'s byte budget actually reflects reality instead of every
+/// command reporting the <see cref="IPresentationCommand.EstimatedBytes"/> interface default. This is
+/// deliberately approximate, not exact — it only needs to be proportional to the large payloads a
+/// captured <see cref="Slide"/>/<see cref="SlideShape"/> snapshot can retain (embedded picture/media
+/// bytes chiefly; text runs are added too since they're free to walk and can matter for text-heavy
+/// decks) so the 50MB budget evicts image/media-heavy history instead of treating it as free.
+/// </summary>
+// Public, not internal: IPresentationCommand and its EstimatedBytes are public, and commands live in
+// other assemblies too -- SetShapeTextBodyCommand in FreeP.App.Presentation is the one that carries the
+// largest payloads of all, since pasting a picture into an open text box routes through it. An external
+// command that cannot reach this helper has no way to report its cost except the interface default,
+// which is exactly how large payloads stayed invisible to the byte budget.
+public static class PresentationCommandSizeEstimator
+{
+    private const int BaseOverheadBytes = 256;
+
+    /// <summary>Estimated retained bytes for a captured slide, including every shape on it.</summary>
+    public static int EstimateBytes(Slide? slide)
+    {
+        if (slide is null)
+            return BaseOverheadBytes;
+
+        long total = BaseOverheadBytes + EstimateTextBytes(slide.Notes);
+        foreach (var shape in slide.Shapes)
+            total += EstimateShapeBytes(shape);
+        total += EstimateFillBytes(slide.Background);
+        return Clamp(total);
+    }
+
+    /// <summary>Estimated retained bytes for a single captured shape (and its descendants).</summary>
+    public static int EstimateBytes(SlideShape? shape) => Clamp(BaseOverheadBytes + EstimateShapeBytes(shape));
+
+    /// <summary>Estimated retained bytes for a captured fill (nonzero only for a picture fill).</summary>
+    public static int EstimateBytes(ShapeFill? fill) => Clamp(BaseOverheadBytes + EstimateFillBytes(fill));
+
+    /// <summary>Estimated retained bytes for a captured text body (sum of its run text lengths).</summary>
+    public static int EstimateBytes(TextBody? textBody) => Clamp(BaseOverheadBytes + EstimateTextBytes(textBody));
+
+    /// <summary>
+    /// Estimated retained bytes for a captured whole-table snapshot (row/column insert, delete,
+    /// merge, and split commands each clone the entire table before mutating it), summing every
+    /// cell's fill and text body the same way a shape's own <see cref="SlideShape.Table"/> does.
+    /// </summary>
+    public static int EstimateBytes(TableShape? table) => Clamp(BaseOverheadBytes + EstimateTableBytes(table));
+
+    /// <summary>
+    /// Estimated retained bytes for a captured SmartArt state, dominated by its dsp:drawing
+    /// fallback shapes (each a fully-resolved <see cref="SlideShape"/> that can itself carry a
+    /// picture fill or embedded image, same as any other captured shape).
+    /// </summary>
+    public static int EstimateBytes(SmartArtShape? smartArt) =>
+        Clamp(BaseOverheadBytes + EstimateSmartArtBytes(smartArt));
+
+    /// <summary>
+    /// Estimated retained bytes for a captured set of package parts, e.g. a preserved Zoom
+    /// object's embedded image/media entries kept around so undo can restore the exact bytes.
+    /// </summary>
+    public static int EstimateBytes(IReadOnlyDictionary<string, byte[]>? parts)
+    {
+        if (parts is null || parts.Count == 0)
+            return BaseOverheadBytes;
+
+        long total = BaseOverheadBytes;
+        foreach (var bytes in parts.Values)
+            total += bytes.Length;
+        return Clamp(total);
+    }
+
+    /// <summary>Estimated retained bytes for a captured media caption-track set.</summary>
+    public static int EstimateBytes(IEnumerable<MediaCaptionTrackInfo>? tracks)
+    {
+        if (tracks is null)
+            return BaseOverheadBytes;
+
+        long total = BaseOverheadBytes;
+        foreach (var track in tracks)
+            total += track.Bytes.Length;
+        return Clamp(total);
+    }
+
+    /// <summary>
+    /// Sums several already-estimated byte counts for a command that captures more than one
+    /// independent payload (e.g. an old and a new fill), clamping the same way a single estimate
+    /// does so the combined total can never wrap negative.
+    /// </summary>
+    public static int Combine(IEnumerable<int> estimates)
+    {
+        long total = 0;
+        foreach (var estimate in estimates)
+            total += estimate;
+        return Clamp(total);
+    }
+
+    private static long EstimateShapeBytes(SlideShape? shape)
+    {
+        if (shape is null)
+            return 0;
+
+        long total = BaseOverheadBytes;
+        if (shape.Picture is { } picture)
+            total += picture.Bytes.Length;
+        if (shape.Media is { } media)
+        {
+            total += media.Bytes.Length;
+            foreach (var track in media.CaptionTracks)
+                total += track.Bytes.Length;
+        }
+        total += EstimateFillBytes(shape.Fill);
+        total += EstimateTextBytes(shape.TextBody);
+        total += EstimateTableBytes(shape.Table);
+        total += shape.OleObject?.EmbeddedBytes.Length ?? 0;
+        total += EstimateSmartArtBytes(shape.SmartArt);
+        total += EstimatePreservedObjectBytes(shape.PreservedObject);
+
+        foreach (var child in shape.Children)
+            total += EstimateShapeBytes(child);
+
+        return total;
+    }
+
+    /// <summary>
+    /// Estimated retained bytes for a SmartArt payload: its dsp:drawing fallback shapes (each a
+    /// fully-resolved <see cref="SlideShape"/> that can carry a picture fill/embedded image, same
+    /// as any other captured shape) plus the raw OPC parts (data/layout/quickStyle/colors/drawing)
+    /// and their rels, all kept verbatim for lossless round-trip.
+    /// </summary>
+    private static long EstimateSmartArtBytes(SmartArtShape? smartArt)
+    {
+        if (smartArt is null)
+            return 0;
+
+        long total = 0;
+        foreach (var shape in smartArt.FallbackShapes)
+            total += EstimateShapeBytes(shape);
+        foreach (var part in smartArt.Parts.Values)
+            total += part.Bytes.Length;
+        foreach (var bytes in smartArt.PartRels.Values)
+            total += bytes.Length;
+        return total;
+    }
+
+    /// <summary>
+    /// Estimated retained bytes for a preserved modern-object payload (Zoom/Ink/3D-model/unknown):
+    /// every referenced OPC part (e.g. a .glb 3D model or an ink XML part) plus its rels, kept
+    /// verbatim so undo can restore the exact bytes.
+    /// </summary>
+    private static long EstimatePreservedObjectBytes(PreservedObjectInfo? preserved)
+    {
+        if (preserved is null)
+            return 0;
+
+        long total = 0;
+        foreach (var bytes in preserved.Parts.Values)
+            total += bytes.Length;
+        foreach (var bytes in preserved.PartRels.Values)
+            total += bytes.Length;
+        return total;
+    }
+
+    private static long EstimateTableBytes(TableShape? table)
+    {
+        if (table is null)
+            return 0;
+
+        long total = 0;
+        foreach (var row in table.Rows)
+        foreach (var cell in row.Cells)
+        {
+            total += EstimateFillBytes(cell.Fill);
+            total += EstimateTextBytes(cell.TextBody);
+        }
+
+        return total;
+    }
+
+    private static long EstimateFillBytes(ShapeFill? fill) =>
+        fill is ShapeFill.Picture picture ? picture.ImageBytes.Length : 0;
+
+    private static long EstimateTextBytes(TextBody? textBody)
+    {
+        if (textBody is null)
+            return 0;
+
+        long total = 0;
+        foreach (var paragraph in textBody.Paragraphs)
+        foreach (var run in paragraph.Runs)
+        {
+            // Run.Text is a poor proxy for what a run retains. A pasted picture, embedded object or
+            // table arrives as a SINGLE object-replacement character with the real payload hanging off
+            // the run, so sizing by text alone counts a multi-megabyte inline image as one byte and the
+            // undo budget never evicts it. Inline tables recurse, since their cells hold text bodies
+            // that can carry inline payloads of their own.
+            total += run.Text.Length;
+            total += run.InlineImage?.Bytes.Length ?? 0;
+            total += run.InlineOleObject?.EmbeddedBytes.Length ?? 0;
+            if (run.InlineTable is { } inlineTable)
+                total += EstimateTableBytes(inlineTable.Table);
+        }
+        return total;
+    }
+
+    private static int Clamp(long value) => value > int.MaxValue ? int.MaxValue : (int)value;
+}
+
+/// <summary>
 /// FreeP's undo/redo command bus. As in FreeW, the mechanics — paired stacks, depth/byte budget, redo
 /// invalidation — are the shared <see cref="UndoRedoStack{TCommand,TPayload}"/>; this bus only adds the
 /// presentation-command apply/revert and a change notification.
@@ -103,6 +309,12 @@ public sealed class ReplaceSmartArtCommand : IPresentationCommand
 
     public string Label => "Edit SmartArt";
 
+    public int EstimatedBytes => PresentationCommandSizeEstimator.Combine(new[]
+    {
+        PresentationCommandSizeEstimator.EstimateBytes(_before),
+        PresentationCommandSizeEstimator.EstimateBytes(_after),
+    });
+
     public void Apply(Presentation presentation) => CopyState(presentation, _after);
 
     public void Revert(Presentation presentation) => CopyState(presentation, _before);
@@ -140,6 +352,8 @@ public sealed class InsertSlideCommand : IPresentationCommand
 
     public string Label => "Insert Slide";
 
+    public int EstimatedBytes => PresentationCommandSizeEstimator.EstimateBytes(_slide);
+
     public void Apply(Presentation p)
     {
         var idx = Math.Clamp(_index, 0, p.Slides.Count);
@@ -173,6 +387,8 @@ public sealed class DeleteSlideCommand : IPresentationCommand
     public DeleteSlideCommand(int index) => _index = index;
 
     public string Label => "Delete Slide";
+
+    public int EstimatedBytes => PresentationCommandSizeEstimator.EstimateBytes(_captured);
 
     public void Apply(Presentation p)
     {
@@ -475,6 +691,8 @@ public sealed class DuplicateSlideCommand : IPresentationCommand
     public DuplicateSlideCommand(int sourceIndex) => _sourceIndex = sourceIndex;
 
     public string Label => "Duplicate Slide";
+
+    public int EstimatedBytes => PresentationCommandSizeEstimator.EstimateBytes(_duplicate);
 
     public void Apply(Presentation p)
     {
@@ -1274,6 +1492,12 @@ public sealed class SetMediaCaptionTracksCommand : IPresentationCommand
     }
 
     public string Label => "Edit Media Captions";
+
+    public int EstimatedBytes => PresentationCommandSizeEstimator.Combine(new[]
+    {
+        PresentationCommandSizeEstimator.EstimateBytes(_before),
+        PresentationCommandSizeEstimator.EstimateBytes(_after),
+    });
 
     public bool HasEffect(Presentation presentation)
     {
@@ -2184,6 +2408,13 @@ public sealed class SetZoomCoverImageCommand : IPresentationCommand
         ? "Set Zoom Cover Image"
         : "Restore Zoom Preview";
 
+    public int EstimatedBytes => PresentationCommandSizeEstimator.Combine(new[]
+    {
+        _imageBytes.Length,
+        _oldPicture is null ? 0 : _oldPicture.Bytes.Length,
+        PresentationCommandSizeEstimator.EstimateBytes(_oldParts),
+    });
+
     public bool HasEffect(Presentation presentation)
     {
         if (!TryGetZoom(presentation, out _, out var info)
@@ -2561,6 +2792,12 @@ public sealed class SetSlideLayoutCommand : IPresentationCommand
 
     public string Label => "Set Slide Layout";
 
+    // _addedPlaceholders are full clones of layout placeholder shapes, which can carry a picture
+    // fill or other large payload (found during enumeration: this command had no override at all
+    // and was silently defaulting to the interface's flat 256 bytes).
+    public int EstimatedBytes => PresentationCommandSizeEstimator.Combine(
+        _addedPlaceholders.Select(PresentationCommandSizeEstimator.EstimateBytes));
+
     public bool HasEffect(Presentation p) =>
         _slideIndex >= 0 &&
         _slideIndex < p.Slides.Count &&
@@ -2924,6 +3161,9 @@ public sealed class AddShapeCommand : IPresentationCommand
     }
 
     public string Label => "Add Shape";
+
+    public int EstimatedBytes => PresentationCommandSizeEstimator.EstimateBytes(_shape);
+
     public void Apply(Presentation p)  => ShapeHelper.Shapes(p, _slideIndex)?.Add(_shape);
     public void Revert(Presentation p) => ShapeHelper.Shapes(p, _slideIndex)?.Remove(_shape);
 }
@@ -3047,6 +3287,10 @@ public sealed class ConvertSmartArtToShapesCommand : IPresentationCommand
 
     public string Label => "Convert SmartArt to Shapes";
 
+    public int EstimatedBytes => PresentationCommandSizeEstimator.Combine(
+        new[] { PresentationCommandSizeEstimator.EstimateBytes(_original) }
+            .Concat(_converted.Select(PresentationCommandSizeEstimator.EstimateBytes)));
+
     public bool HasEffect(Presentation presentation) =>
         ShapeHelper.Find(presentation, _slideIndex, _smartArtId) is { Kind: SlideShapeKind.SmartArt } &&
         _converted.Count > 0;
@@ -3147,6 +3391,8 @@ public sealed class DeleteShapeCommand : IPresentationCommand
     }
 
     public string Label => "Delete Shape";
+
+    public int EstimatedBytes => PresentationCommandSizeEstimator.EstimateBytes(_captured);
 
     public void Apply(Presentation p)
     {
@@ -4236,6 +4482,12 @@ public sealed class SetShapeFillCommand : IPresentationCommand
 
     public string Label => "Set Fill";
 
+    public int EstimatedBytes => PresentationCommandSizeEstimator.Combine(new[]
+    {
+        PresentationCommandSizeEstimator.EstimateBytes(_newFill),
+        PresentationCommandSizeEstimator.EstimateBytes(_oldFill),
+    });
+
     public void Apply(Presentation p)
     {
         var s = ShapeHelper.Find(p, _slideIndex, _shapeId);
@@ -4355,6 +4607,12 @@ public sealed class SetShapeTextCommand : IPresentationCommand
     }
 
     public string Label => "Set Text";
+
+    public int EstimatedBytes => PresentationCommandSizeEstimator.Combine(new[]
+    {
+        PresentationCommandSizeEstimator.EstimateBytes(_newBody),
+        PresentationCommandSizeEstimator.EstimateBytes(_oldBody),
+    });
 
     public void Apply(Presentation p)
     {
@@ -5061,6 +5319,12 @@ public sealed class SetSlideNotesCommand : IPresentationCommand
     }
 
     public string Label => "Set Notes";
+
+    public int EstimatedBytes => PresentationCommandSizeEstimator.Combine(new[]
+    {
+        PresentationCommandSizeEstimator.EstimateBytes(_newNotes),
+        PresentationCommandSizeEstimator.EstimateBytes(_oldNotes),
+    });
 
     public void Apply(Presentation p)
     {

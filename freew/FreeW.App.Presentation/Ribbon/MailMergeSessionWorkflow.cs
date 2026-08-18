@@ -409,7 +409,15 @@ public sealed class MailMergeSessionWorkflow
         var template = Session.Template!;
         var index = Math.Clamp(Session.CurrentIndex, 0, data.Count - 1);
         Session.CurrentIndex = index;
-        var document = MailMerge.MergeRecord(template, Session.AugmentRow(data.Rows[index]));
+        // Report the record's real 1-based position for MERGEREC/MERGESEQ so a «Merge Record #»/
+        // «Merge Sequence #» field previewed here matches what Finish & Merge will actually print for
+        // this same record, instead of always showing record 1/sequence 0 regardless of which record
+        // is being navigated to.
+        var document = MailMerge.MergeRecord(
+            template,
+            Session.AugmentRow(data.Rows[index]),
+            recordIndex: index + 1,
+            sequenceNumber: index + 1);
         return new(true, document, index, true, string.Empty);
     }
 

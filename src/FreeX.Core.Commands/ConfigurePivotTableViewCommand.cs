@@ -43,7 +43,16 @@ public sealed class ConfigurePivotTableViewCommand : IWorkbookCommand
         PivotTableCommandCollections.Replace(pivotTable.LabelFilters, _labelFilters);
         PivotTableCommandCollections.Replace(pivotTable.ValueFilters, _valueFilters);
         PivotTableCommandCollections.Replace(pivotTable.Sorts, _sorts);
-        PivotTableRefreshService.Refresh(ctx.Workbook, sheet, pivotTable);
+
+        // R140-remediation-pivot-refresh-growth-guard-completeness: see PivotTableRefreshService.GrowthGuard.cs.
+        var snapshot = _snapshot;
+        var baseline = PivotTableRefreshService.CaptureGrowthGuardBaseline(sheet, pivotTable);
+        if (PivotTableRefreshService.RefreshGuarded(ctx.Workbook, sheet, pivotTable, baseline, () => snapshot!.Restore(pivotTable)) is { } failure)
+        {
+            _snapshot = null;
+            _targetSnapshot = null;
+            return failure;
+        }
         UpdateBoundPivotChartRanges(ctx.Workbook, sheet, pivotTable);
 
         return new CommandOutcome(true, AffectedCells: [pivotTable.TargetRange.Start]);

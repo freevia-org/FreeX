@@ -23,7 +23,11 @@ public sealed class PasteShapesCommand : IPresentationCommand
 
     public string Label => "Paste";
 
-    public int EstimatedBytes => 256 + _shapes.Count * 512;
+    // Real content estimate (pictures, OLE/SmartArt/preserved-object payloads, table cells, text)
+    // rather than a flat per-shape heuristic: this is the literal Ctrl+V path, so a pasted image
+    // or embedded object must actually count toward the 50MB undo budget.
+    public int EstimatedBytes => PresentationCommandSizeEstimator.Combine(
+        _shapes.Select(PresentationCommandSizeEstimator.EstimateBytes));
 
     public void Apply(Presentation p)
     {
@@ -66,6 +70,8 @@ public sealed class PasteSlideCommand : IPresentationCommand
     }
 
     public string Label => "Paste Slide";
+
+    public int EstimatedBytes => PresentationCommandSizeEstimator.EstimateBytes(_slide);
 
     public void Apply(Presentation p)
     {
@@ -165,6 +171,12 @@ public sealed class SetSlideBackgroundCommand : IPresentationCommand
 
     public string Label => _newFill is null ? "Reset Slide Background" : "Set Slide Background";
 
+    public int EstimatedBytes => PresentationCommandSizeEstimator.Combine(new[]
+    {
+        PresentationCommandSizeEstimator.EstimateBytes(_newFill),
+        PresentationCommandSizeEstimator.EstimateBytes(_oldFill),
+    });
+
     public bool HasEffect(Presentation p)
     {
         if (_slideIndex < 0 || _slideIndex >= p.Slides.Count)
@@ -227,6 +239,15 @@ public sealed class ApplyFormatPainterCommand : IPresentationCommand
     }
 
     public string Label => "Format Painter";
+
+    public int EstimatedBytes => PresentationCommandSizeEstimator.Combine(
+        new[] { PresentationCommandSizeEstimator.EstimateBytes(_fill) }
+            .Concat(_undo.Select(snap =>
+                PresentationCommandSizeEstimator.Combine(new[]
+                {
+                    PresentationCommandSizeEstimator.EstimateBytes(snap.Fill),
+                    PresentationCommandSizeEstimator.EstimateBytes(snap.OldBody),
+                }))));
 
     public void Apply(Presentation p)
     {

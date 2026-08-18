@@ -29,6 +29,13 @@ public sealed class SetChartSeriesOptionsCommand : IPresentationCommand
 
     public string Label => "Set Chart Series Options";
 
+    public int EstimatedBytes => PresentationCommandSizeEstimator.Combine(new[]
+    {
+        PresentationCommandSizeEstimator.EstimateBytes(_newOptions.Fill),
+        PresentationCommandSizeEstimator.EstimateBytes(_oldFill),
+        PresentationCommandSizeEstimator.EstimateBytes(_oldMarkerStyle?.Fill),
+    });
+
     public void Apply(Presentation p)
     {
         var chart = ChartHelper.FindFormattingEditable(p, _slideIndex, _shapeId);

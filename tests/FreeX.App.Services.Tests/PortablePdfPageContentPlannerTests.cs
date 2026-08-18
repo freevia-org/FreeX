@@ -203,6 +203,42 @@ public sealed class PortablePdfPageContentPlannerTests
             .Which.DisplayText.Should().Be("HelloWorld");
     }
 
+    // R140 cf-print-pdf-rule-type-gap: the PDF export path (this planner) previously shared
+    // ConditionalFormatRenderEvaluator's `default: return false` gap for Formula/Top10/Duplicate/
+    // text/date/blank/error rule types, so a matched Formula rule's fill silently never reached
+    // PortablePdfPageCell.ConditionalFillColor even though the same rule highlighted the cell on
+    // screen. This goes through the real PortablePdfPageContentPlanner.CreatePlan entry point that
+    // both WPF's PDF exporter (WorkbookPdfContentBuilder) and Avalonia's SkiaPdfDocumentExporter
+    // consume, not the evaluator in isolation.
+    [Fact]
+    public void CreatePlan_FormulaRuleAppliesConditionalFillColor()
+    {
+        var workbook = new Workbook("Budget");
+        var sheet = workbook.AddSheet("Summary");
+        var address = new CellAddress(sheet.Id, 1, 1);
+        sheet.SetCell(address, new NumberValue(150));
+
+        sheet.ConditionalFormats.Add(new ConditionalFormat
+        {
+            RuleType = CfRuleType.Formula,
+            FormulaText = "$A$1>100",
+            AppliesTo = new GridRange(address, address),
+            FormatIfTrue = new CellStyle { FillColor = new CellColor(255, 0, 0) },
+        });
+
+        var exportPlan = CreateExportPlan(
+            workbook,
+            sheet,
+            GridRange.Parse("A1:A1", sheet.Id),
+            new WorkbookExportPrintPageCapacity(RowsPerPage: 10, ColumnsPerPage: 10));
+
+        var plan = PortablePdfPageContentPlanner.CreatePlan(workbook, exportPlan.PageRequests.Single());
+
+        plan.Cells.Should().ContainSingle()
+            .Which.ConditionalFillColor.Should().Be(new CellColor(255, 0, 0),
+                "the matched Formula-type CF rule's fill must reach the PDF export cell plan, not just the screen grid");
+    }
+
     private static PortablePdfExportPlan CreateExportPlan(
         Workbook workbook,
         Sheet sheet,
