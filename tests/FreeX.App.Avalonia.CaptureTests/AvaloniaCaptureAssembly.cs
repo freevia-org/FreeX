@@ -34,7 +34,13 @@ public static class AvaloniaHeadlessCollectionOrderer
 public sealed class AvaloniaCaptureProcessLease : IDisposable
 {
     private const int MaximumConcurrentProcesses = 3;
-    private static readonly TimeSpan AcquisitionTimeout = TimeSpan.FromSeconds(75);
+    // A lease is held for a whole assembly run, not a single test, and a capture assembly can take
+    // well over a minute. The gate starts every FreeX.App.Avalonia.CaptureTests.Batch* assembly at
+    // once, so with three slots the later ones legitimately queue behind two full runs. At 75s they
+    // gave up and reported "Could not acquire one of 3 Avalonia capture process slots", which read
+    // as a pile of unrelated capture and dialog-contract failures -- every one of them passing when
+    // its project was run on its own. Wait long enough to outlast the queue instead.
+    private static readonly TimeSpan AcquisitionTimeout = TimeSpan.FromMinutes(10);
     private static readonly TimeSpan RetryDelay = TimeSpan.FromMilliseconds(100);
     private readonly FileStream _lease;
 
