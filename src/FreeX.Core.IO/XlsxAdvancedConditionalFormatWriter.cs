@@ -755,7 +755,7 @@ internal static partial class XlsxAdvancedConditionalFormatWriter
             x14Ns + "cfvo",
             new XAttribute("type", XlsxAdvancedConditionalFormatMetadata.ToCfvoType(threshold.Type)));
         if (!string.IsNullOrWhiteSpace(threshold.Value))
-            element.Add(new XElement(xmNs + "f", threshold.Value));
+            element.Add(new XElement(xmNs + "f", NormalizeNumericCfvoValueForSave(threshold.Type, threshold.Value)));
         if (threshold.GreaterThanOrEqual.HasValue)
             element.SetAttributeValue("gte", threshold.GreaterThanOrEqual.Value ? "1" : "0");
         return element;
@@ -839,6 +839,16 @@ internal static partial class XlsxAdvancedConditionalFormatWriter
     /// against -- so a value is only reformatted when it parses as an unambiguous plain number. Only
     /// Number/Percent/Percentile carry a locale-typed numeric value; Min/Max/AutoMin/AutoMax have no @val, and
     /// Formula carries a formula string that must never be run through a numeric parser.
+    ///
+    /// r145-remediation: this is the SOLE choke point for every cfvo threshold value FreeX writes, on
+    /// EITHER wire shape -- the legacy worksheet-namespace cfvo/@val attribute (<see cref="ToCfvoXml"/>,
+    /// used by ColorScale/DataBar/IconSet legacy blocks) and the x14-extension cfvo's &lt;xm:f&gt; CHILD
+    /// ELEMENT (<see cref="ToX14DataBarCfvoXml"/>, <see cref="ToX14IconSetCfvoXml"/>). The x14 block is
+    /// the AUTHORITATIVE representation real Excel prefers when both are present (see
+    /// RequiresGeneratedX14DataBar/RequiresGeneratedOrExistingX14IconSet), so any write path that bypasses
+    /// this method reintroduces the comma-decimal defect in the copy Excel actually reads even though the
+    /// legacy copy looks fixed. Do not format a threshold value inline at a new call site -- route it
+    /// through here instead.
     /// </summary>
     private static string NormalizeNumericCfvoValueForSave(CfThresholdType type, string value)
     {
@@ -1097,7 +1107,7 @@ internal static partial class XlsxAdvancedConditionalFormatWriter
         var x14Type = ToX14DataBarCfvoType(type, isMinimum);
         var element = new XElement(x14Ns + "cfvo", new XAttribute("type", x14Type));
         if (RequiresX14CfvoFormulaValue(x14Type) && !string.IsNullOrWhiteSpace(value))
-            element.Add(new XElement(xmNs + "f", value));
+            element.Add(new XElement(xmNs + "f", NormalizeNumericCfvoValueForSave(type, value)));
 
         return element;
     }

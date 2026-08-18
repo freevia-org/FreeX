@@ -1319,9 +1319,9 @@ public static class PptxPackageWriter
     /// </summary>
     private static string ResolveSldSzType(long cx, long cy)
     {
-        const long StandardCyEmu = DrawingMlCoordinateUnits.EmuPerInch * 15 / 2;      // 6858000 (7.5in)
-        const long Widescreen16x9CxEmu = DrawingMlCoordinateUnits.EmuPerInch * 40 / 3; // 12192000 (13.33in)
-        const long Standard4x3CxEmu = DrawingMlCoordinateUnits.EmuPerInch * 10;        // 9144000 (10in)
+        const long StandardCyEmu = DrawingMlCoordinateUnits.EmuPerInch * 15 / 2;      // 7.5in tall
+        const long Widescreen16x9CxEmu = DrawingMlCoordinateUnits.EmuPerInch * 40 / 3; // 13.33in wide
+        const long Standard4x3CxEmu = DrawingMlCoordinateUnits.EmuPerInch * 10;        // 10in wide
 
         if (cy == StandardCyEmu && cx == Widescreen16x9CxEmu) return "screen16x9";
         if (cy == StandardCyEmu && cx == Standard4x3CxEmu) return "screen4x3";

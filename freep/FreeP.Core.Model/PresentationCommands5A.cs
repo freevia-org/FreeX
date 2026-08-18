@@ -101,6 +101,11 @@ public sealed class SetThemeCommand : IPresentationCommand
     private readonly PresentationTheme _newTheme;
     private PresentationTheme?         _oldTheme;
 
+    // Masters whose ThemePartPath we cleared on Apply, paired with the path to restore on
+    // Revert. Only populated the first time Apply runs (Redo must not re-capture already-null
+    // values as the "old" state).
+    private List<(SlideMaster Master, string? OldThemePartPath)>? _clearedThemePartPaths;
+
     public SetThemeCommand(PresentationTheme newTheme) => _newTheme = newTheme;
 
     public string Label => "Set Theme";
@@ -109,12 +114,53 @@ public sealed class SetThemeCommand : IPresentationCommand
     {
         _oldTheme = p.Theme;
         p.Theme   = _newTheme;
+
+        // A master with Theme == null resolves its effective theme as
+        // (master.Theme ?? presentation.Theme) both for rendering (SlideCompositor) and for
+        // saving (PptxPackageWriter) — UNLESS the master also carries a ThemePartPath, in which
+        // case the writer's corrupted-theme-preservation guard re-emits the ORIGINAL theme part
+        // bytes verbatim instead of the resolved theme, to protect a damaged-but-untouched theme
+        // part across saves. That guard must not survive the user explicitly picking a new theme
+        // here, or the save would silently discard the pick and revert to the stale/damaged
+        // bytes. Clear ThemePartPath on every master that is currently falling back to
+        // Presentation.Theme so the preservation guard no longer matches this master and the
+        // newly chosen theme is what actually gets written. Capture the previous paths so Revert
+        // (undo) can restore preservation if the corrupted theme was never otherwise touched.
+        // First Apply: capture+clear. Later Apply calls are redos after an intervening Revert
+        // restored the paths — re-clear the SAME captured masters rather than recapturing (which
+        // would just re-read the already-restored old values, but skip any master whose
+        // ThemePartPath a since-undone/redone earlier command already nulled out).
+        if (_clearedThemePartPaths is null)
+            _clearedThemePartPaths = CaptureAndClearFallbackThemePartPaths(p);
+        else
+            foreach (var (master, _) in _clearedThemePartPaths)
+                master.ThemePartPath = null;
     }
 
     public void Revert(Presentation p)
     {
         if (_oldTheme is not null)
             p.Theme = _oldTheme;
+
+        if (_clearedThemePartPaths is not null)
+        {
+            foreach (var (master, oldPath) in _clearedThemePartPaths)
+                master.ThemePartPath = oldPath;
+        }
+    }
+
+    private static List<(SlideMaster Master, string? OldThemePartPath)> CaptureAndClearFallbackThemePartPaths(Presentation p)
+    {
+        var cleared = new List<(SlideMaster, string?)>();
+        foreach (var master in p.Masters)
+        {
+            if (master.Theme is null && master.ThemePartPath is not null)
+            {
+                cleared.Add((master, master.ThemePartPath));
+                master.ThemePartPath = null;
+            }
+        }
+        return cleared;
     }
 }
 

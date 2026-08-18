@@ -130,4 +130,93 @@ public sealed class CorruptedThemePreservationTests
         doc.Root.Should().NotBeNull();
         doc.Root!.Name.LocalName.Should().Be("theme");
     }
+
+    /// <summary>
+    /// r145 REMEDIATION: the corrupted-theme-preservation guard above must not survive an
+    /// explicit user theme choice. Reproduces the regression the fix wave introduced: open a
+    /// package whose theme1.xml is present-but-unparseable (so <c>Masters[0].Theme</c> is null
+    /// and <c>ThemePartPath</c> is set), call the SAME entry point the UI uses
+    /// (<see cref="EditingSession.SetTheme(PresentationTheme)"/> → <c>SetThemeCommand.Apply</c>),
+    /// save, and assert the saved theme1.xml reflects the user's new theme — not the original
+    /// corrupted bytes. Before the fix, <c>SetTheme</c> only ever touched
+    /// <see cref="FreeP.Core.Model.Presentation.Theme"/>; because it never cleared
+    /// <c>Masters[0].ThemePartPath</c>, the writer's preservation branch kept firing and silently
+    /// discarded the user's pick on every save — while the live canvas (which resolves theme via
+    /// the same <c>master.Theme ?? presentation.Theme</c> fallback) showed the new theme
+    /// correctly, so what-you-see was not what-got-saved.
+    /// </summary>
+    [Fact]
+    public void SetTheme_AfterOpeningPackageWithDamagedTheme_SavedThemeReflectsUserChoiceNotOriginalBytes()
+    {
+        // Arrange: same corrupted-theme package as the byte-preservation test above.
+        var original = PresentationModel.CreateEmpty();
+        var validBytes = WriteToBytes(original);
+        var corruptedThemeXml = System.Text.Encoding.UTF8.GetBytes(
+            "<a:theme xmlns:a=\"http://schemas.openxmlformats.org/drawingml/2006/main\" name=\"Custom Brand Theme\"><a:themeElements><a:clrScheme");
+        var corruptedPackageBytes = ReplaceZipEntryBytes(validBytes, "ppt/theme/theme1.xml", corruptedThemeXml);
+
+        var reopened = PptxPackageReader.Read(new MemoryStream(corruptedPackageBytes));
+        reopened.Masters[0].Theme.Should().BeNull("the corrupted theme1.xml cannot be parsed");
+        reopened.Masters[0].ThemePartPath.Should().Be("ppt/theme/theme1.xml",
+            "preserved-byte round-tripping depends on this path staying set until the user edits the theme");
+
+        // Act: go through the real, only theme-editing entry point — EditingSession.SetTheme —
+        // exactly as the UI does, then save.
+        var bus = new PresentationCommandBus(reopened);
+        var session = new EditingSession(reopened, bus);
+        var userTheme = new PresentationTheme { Name = "User Picked Theme" };
+
+        session.SetTheme(userTheme);
+        var resavedBytes = WriteToBytes(reopened);
+        var resavedThemeBytes = ReadZipEntryBytes(resavedBytes, "ppt/theme/theme1.xml");
+
+        // Assert: the saved theme1.xml must NOT be the original corrupted bytes verbatim...
+        resavedThemeBytes.Should().NotEqual(corruptedThemeXml,
+            "an explicit SetTheme call must win over the damaged-theme preservation guard, " +
+            "not be silently shadowed by it");
+
+        // ...and must actually contain the user's new theme.
+        using var themeStream = new MemoryStream(resavedThemeBytes);
+        var doc = System.Xml.Linq.XDocument.Load(themeStream);
+        doc.Root!.Attribute("name")!.Value.Should().Be("User Picked Theme",
+            "the saved theme part must reflect the theme the user just chose via SetTheme");
+
+        // Sanity: the guard's bookkeeping was actually cleared, not just coincidentally
+        // overridden — i.e. this master no longer looks like an untouched-corrupted-theme case.
+        reopened.Masters[0].ThemePartPath.Should().BeNull(
+            "SetTheme must clear ThemePartPath on masters falling back to Presentation.Theme " +
+            "so the writer's preservation branch cannot match this master again");
+    }
+
+    /// <summary>
+    /// Undo companion: if the user's SetTheme is undone, the damaged-theme-preservation
+    /// protection should come back — a save immediately after Undo must once again round-trip
+    /// the original corrupted bytes verbatim, not synthesize a fresh default theme.
+    /// </summary>
+    [Fact]
+    public void SetTheme_ThenUndo_RestoresDamagedThemePreservation()
+    {
+        var original = PresentationModel.CreateEmpty();
+        var validBytes = WriteToBytes(original);
+        var corruptedThemeXml = System.Text.Encoding.UTF8.GetBytes(
+            "<a:theme xmlns:a=\"http://schemas.openxmlformats.org/drawingml/2006/main\" name=\"Custom Brand Theme\"><a:themeElements><a:clrScheme");
+        var corruptedPackageBytes = ReplaceZipEntryBytes(validBytes, "ppt/theme/theme1.xml", corruptedThemeXml);
+
+        var reopened = PptxPackageReader.Read(new MemoryStream(corruptedPackageBytes));
+        var bus = new PresentationCommandBus(reopened);
+        var session = new EditingSession(reopened, bus);
+        var userTheme = new PresentationTheme { Name = "User Picked Theme" };
+
+        session.SetTheme(userTheme);
+        session.Undo();
+
+        reopened.Masters[0].ThemePartPath.Should().Be("ppt/theme/theme1.xml",
+            "undoing SetTheme must restore the preservation bookkeeping it cleared");
+        reopened.Masters[0].Theme.Should().BeNull();
+
+        var resavedBytes = WriteToBytes(reopened);
+        var resavedThemeBytes = ReadZipEntryBytes(resavedBytes, "ppt/theme/theme1.xml");
+        resavedThemeBytes.Should().Equal(corruptedThemeXml,
+            "after Undo, the original corrupted-but-intact theme bytes must be preserved again");
+    }
 }
