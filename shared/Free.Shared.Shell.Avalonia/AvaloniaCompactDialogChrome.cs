@@ -233,7 +233,14 @@ public static class AvaloniaCompactDialogChrome
                     ApplyListBox(listBox, style);
                     break;
                 case GroupBox groupBox:
-                    ApplyGroupBox(groupBox, style);
+                    // Same hazard as the Button case below: this pass runs over every descendant on
+                    // Window.Opened, so re-applying without the dialog's explicit border brush reset
+                    // it to the shared default and erased the WPF-parity group borders the dialog had
+                    // deliberately set -- the dialog's own chrome call was silently undone.
+                    ApplyGroupBox(
+                        groupBox,
+                        style,
+                        groupBox.IsSet(TemplatedControl.BorderBrushProperty) ? groupBox.BorderBrush : null);
                     break;
                 case Label label:
                     ApplyLabel(label, style);
