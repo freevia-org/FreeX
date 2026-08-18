@@ -22,7 +22,7 @@ namespace FreeX.App.Avalonia;
 public sealed partial class MainWindow
 {
     // ── Formulas ▸ Use in Formula entry point ──────────────────────────────────
-    private void PasteNames() => _ = ShowPasteNamesDialogAsync();
+    private void PasteNames() => RunGuarded(() => ShowPasteNamesDialogAsync());
 
     private async Task ShowPasteNamesDialogAsync()
     {

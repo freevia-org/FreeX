@@ -31,7 +31,7 @@ public sealed partial class MainWindow
         if (!TryBeginPivotOption(out var pivot))
             return;
 
-        _ = OpenPivotCalculatedItemDialogAsync(pivot!);
+        RunGuarded(() => OpenPivotCalculatedItemDialogAsync(pivot!));
     }
 
     private async Task OpenPivotCalculatedItemDialogAsync(PivotTableModel pivot)

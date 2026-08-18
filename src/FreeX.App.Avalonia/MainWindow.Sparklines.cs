@@ -49,9 +49,9 @@ public sealed partial class MainWindow
 
         var existing = FindSparklineAtActiveCell();
         if (existing is not null)
-            _ = ShowEditSparklineDialogAsync(existing);
+            RunGuarded(() => ShowEditSparklineDialogAsync(existing));
         else
-            _ = ShowInsertSparklineDialogAsync(kind);
+            RunGuarded(() => ShowInsertSparklineDialogAsync(kind));
     }
 
     /// <summary>The sparkline anchored at the active cell, or null when the cell has none.</summary>

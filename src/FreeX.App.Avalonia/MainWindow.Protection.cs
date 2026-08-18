@@ -31,9 +31,9 @@ public sealed partial class MainWindow
     private static AvaloniaCompactDialogChromeStyle ProtectionDialogChromeStyle => new(FormulaBarFontFamily);
 
     // ── Review ▸ Protect menu entry points ─────────────────────────────────────
-    private void ProtectSheet() => _ = ShowProtectSheetDialogAsync();
+    private void ProtectSheet() => RunGuarded(() => ShowProtectSheetDialogAsync());
 
-    private void ProtectWorkbook() => _ = ShowProtectWorkbookDialogAsync();
+    private void ProtectWorkbook() => RunGuarded(() => ShowProtectWorkbookDialogAsync());
 
     /// <summary>
     /// The Protect Sheet dialog. For an unprotected sheet it offers a password (with confirmation) and the

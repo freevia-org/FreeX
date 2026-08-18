@@ -54,10 +54,10 @@ public sealed partial class MainWindow
         {
             case PivotHeaderMenuAction.FieldSettings:
             case PivotHeaderMenuAction.ValueFieldSettings:
-                _ = OpenPivotValueFieldSettingsDialogAsync(pivot, headers, target);
+                RunGuarded(() => OpenPivotValueFieldSettingsDialogAsync(pivot, headers, target));
                 return true;
             case PivotHeaderMenuAction.MoreSortOptions:
-                _ = OpenPivotSortOptionsDialogAsync(pivot, headers, target);
+                RunGuarded(() => OpenPivotSortOptionsDialogAsync(pivot, headers, target));
                 return true;
             default:
                 return false;

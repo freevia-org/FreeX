@@ -27,11 +27,11 @@ public sealed partial class MainWindow
     private static AvaloniaCompactDialogChromeStyle NamesDialogChromeStyle => new(FormulaBarFontFamily);
 
     // ── Formulas ▸ Defined Names menu entry points ────────────────────────────
-    private void NameManager() => _ = ShowNameManagerDialogAsync();
+    private void NameManager() => RunGuarded(() => ShowNameManagerDialogAsync());
 
-    private void DefineName() => _ = ShowDefineNameDialogAsync(null);
+    private void DefineName() => RunGuarded(() => ShowDefineNameDialogAsync(null));
 
-    private void CreateNamesFromSelection() => _ = ShowCreateNamesFromSelectionDialogAsync();
+    private void CreateNamesFromSelection() => RunGuarded(() => ShowCreateNamesFromSelectionDialogAsync());
 
     /// <summary>
     /// The Name Manager dialog: a list of the workbook's defined names (Name | Scope | Refers To | Value)

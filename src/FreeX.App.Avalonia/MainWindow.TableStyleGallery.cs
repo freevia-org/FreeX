@@ -35,7 +35,7 @@ public sealed partial class MainWindow
             return;
         }
 
-        _ = OpenTableStyleGalleryDialogAsync(table);
+        RunGuarded(() => OpenTableStyleGalleryDialogAsync(table));
     }
 
     private async Task OpenTableStyleGalleryDialogAsync(StructuredTableModel table)

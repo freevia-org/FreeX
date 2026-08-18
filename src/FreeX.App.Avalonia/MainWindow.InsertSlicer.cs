@@ -22,10 +22,10 @@ namespace FreeX.App.Avalonia;
 public sealed partial class MainWindow
 {
     /// <summary>Opens the Insert Slicer field picker for the active PivotTable (Insert-tab ribbon button).</summary>
-    private void InsertSlicer() => _ = ShowInsertSlicerDialogAsync();
+    private void InsertSlicer() => RunGuarded(() => ShowInsertSlicerDialogAsync());
 
     /// <summary>Opens the Insert Timeline field picker for the active PivotTable (Insert-tab ribbon button).</summary>
-    private void InsertTimeline() => _ = ShowInsertTimelineDialogAsync();
+    private void InsertTimeline() => RunGuarded(() => ShowInsertTimelineDialogAsync());
 
     /// <summary>
     /// Resolves the active pivot for the current cell, falling back to the first pivot on the active sheet so the

@@ -34,7 +34,7 @@ public sealed partial class MainWindow
     };
 
     // ── File ▸ Info ────────────────────────────────────────────────────────────
-    private void ShowBackstageInfo() => _ = ShowBackstageInfoDialogAsync();
+    private void ShowBackstageInfo() => RunGuarded(() => ShowBackstageInfoDialogAsync());
 
     private async Task ShowBackstageInfoDialogAsync()
     {
@@ -146,12 +146,12 @@ public sealed partial class MainWindow
         {
             FreeXBackstageInfoActionId.ProtectSheet => ProtectSheet,
             FreeXBackstageInfoActionId.ProtectWorkbook => ProtectWorkbook,
-            FreeXBackstageInfoActionId.InspectWorkbook => () => _ = ShowReviewSummaryDialogAsync(),
+            FreeXBackstageInfoActionId.InspectWorkbook => () => RunGuarded(() => ShowReviewSummaryDialogAsync()),
             _ => throw new ArgumentOutOfRangeException(nameof(id), id, null)
         };
 
     // ── File ▸ Export ────────────────────────────────────────────────────────────
-    private void ShowBackstageExport() => _ = ShowBackstageExportDialogAsync();
+    private void ShowBackstageExport() => RunGuarded(() => ShowBackstageExportDialogAsync());
 
     private async Task ShowBackstageExportDialogAsync()
     {
@@ -289,7 +289,7 @@ public sealed partial class MainWindow
     }
 
     // ── File ▸ Account ────────────────────────────────────────────────────────────
-    private void ShowBackstageAccount() => _ = ShowBackstageAccountDialogAsync();
+    private void ShowBackstageAccount() => RunGuarded(() => ShowBackstageAccountDialogAsync());
 
     private async Task ShowBackstageAccountDialogAsync()
     {
@@ -432,7 +432,7 @@ public sealed partial class MainWindow
         id switch
         {
             FreeXBackstageAccountActionId.Options => ShowOptions,
-            FreeXBackstageAccountActionId.LegalNotices => () => _ = ShowLegalNoticesDialogAsync(),
+            FreeXBackstageAccountActionId.LegalNotices => () => RunGuarded(() => ShowLegalNoticesDialogAsync()),
             _ => throw new ArgumentOutOfRangeException(nameof(id), id, null)
         };
 

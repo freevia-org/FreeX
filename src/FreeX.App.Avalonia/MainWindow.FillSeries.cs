@@ -23,7 +23,7 @@ namespace FreeX.App.Avalonia;
 public sealed partial class MainWindow
 {
     // ── Home ▸ Fill ▸ Series entry point ───────────────────────────────────────
-    private void FillSeries() => _ = ShowFillSeriesDialogAsync();
+    private void FillSeries() => RunGuarded(() => ShowFillSeriesDialogAsync());
 
     private async Task ShowFillSeriesDialogAsync()
     {

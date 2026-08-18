@@ -931,8 +931,8 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("var result = _session.SetShowHeadings(showHeadings);");
         source.Should().Contain("RefreshViewportSizeForZoom();");
         source.Should().Contain("RefreshShell(showHeadings ? \"Showing headings\" : \"Hiding headings\");");
-        source.Should().Contain("[\"Zoom\"] = () => _ = ShowZoomDialogAsync(),");
-        source.Should().Contain("[FreeXRibbonCommandIds.ViewZoomCustom] = () => _ = ShowZoomDialogAsync(),");
+        source.Should().Contain("[\"Zoom\"] = () => RunGuarded(ShowZoomDialogAsync),");
+        source.Should().Contain("[FreeXRibbonCommandIds.ViewZoomCustom] = () => RunGuarded(ShowZoomDialogAsync),");
         source.Should().Contain("private void ZoomIn() =>");
         source.Should().Contain("ApplyZoomPercent(_session.ZoomPercent + StatusBarZoomSliderPlanner.ZoomStepPercent, \"Zoom In failed.\")");
         source.Should().Contain("private void ZoomOut() =>");
@@ -2820,7 +2820,7 @@ public sealed class AvaloniaShellSourceTests
         parityCaptureSource.Should().Contain("_session.ExecuteReviewCommand(new AllowEditRangeCommand(sheetId, existingRange));");
 
         pictureShapeSource.Should().Contain("DrawingObjectContextualRibbonPlanner.CreatePictureShapeCommandSpecs()");
-        pictureShapeSource.Should().Contain("DrawingObjectContextualCommandAction.ShapeEffectsDialog => () => RunGuarded(OpenShapeEffectsDialogAsync)");
+        pictureShapeSource.Should().Contain("DrawingObjectContextualCommandAction.ShapeEffectsDialog => () => RunGuarded(() => OpenShapeEffectsDialogAsync())");
         drawingFormatSource.Should().Contain("private async System.Threading.Tasks.Task OpenShapeEffectsDialogAsync()");
         drawingFormatSource.Should().Contain("ShapeEffectsPlanner.CreateResolvedPlan(shape.GetEffectiveEffectPreset(), UiText.Get)");
         drawingFormatSource.Should().Contain("AutomationProperties.SetAutomationId(dialog, \"ShapeEffectsDialog\");");
@@ -5109,7 +5109,7 @@ public sealed class AvaloniaShellSourceTests
         pointerSource.Should().Contain("private void BeginSheetTabPointer(SheetId sheetId, PointerPressedEventArgs args)");
         pointerSource.Should().Contain("if (args.ClickCount >= 2)");
         pointerSource.Should().Contain("if (SelectSheetForContextCommand(sheetId))");
-        pointerSource.Should().Contain("_ = RenameActiveSheetAsync();");
+        pointerSource.Should().Contain("RunGuarded(() => RenameActiveSheetAsync());");
         source.Should().Contain("private void HandleSheetTabKeyDown(SheetId sheetId, Button button, KeyEventArgs args)");
         source.Should().Contain("NavigateSheetTabFromKeyboard(sheetId, args);");
         source.Should().Contain("private void OpenSheetTabContextMenuFromKeyboard(SheetId sheetId, Button button, KeyEventArgs args)");
@@ -5922,12 +5922,12 @@ public sealed class AvaloniaShellSourceTests
 
         // The Data-tab Get Data button + Refresh route to the new file-based import, not the old stubs.
         windowSource.Should().Contain("[\"Get Data\"] = GetDataFromText,");
-        windowSource.Should().Contain("[\"Refresh All\"] = () => _ = RefreshImportedDataAsync(),");
+        windowSource.Should().Contain("[\"Refresh All\"] = () => RunGuarded(RefreshImportedDataAsync),");
         windowSource.Should().NotContain("GetDataNotSupported");
         windowSource.Should().NotContain("RefreshAllNotSupported");
 
         // The dialog gathers options and previews via the portable ImportDataPlanner.
-        getDataSource.Should().Contain("private void GetDataFromText() => _ = ShowGetDataDialogAsync();");
+        getDataSource.Should().Contain("private void GetDataFromText() => RunGuarded(() => ShowGetDataDialogAsync());");
         getDataSource.Should().Contain("ImportDataFilePickerPlanner.BuildTextOpenPickerPlan(UiText.Get(\"GetData_FileTypeName\"))");
         getDataSource.Should().Contain("AvaloniaFilePickerService.PickSingleOpenFileWithLocalPathAsync(");
         getDataSource.Should().Contain("AvaloniaFilePickerOpenRequest.FromDescriptors(");

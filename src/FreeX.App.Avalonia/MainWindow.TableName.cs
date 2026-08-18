@@ -34,7 +34,7 @@ public sealed partial class MainWindow
             return;
         }
 
-        _ = OpenTableNameDialogAsync(table);
+        RunGuarded(() => OpenTableNameDialogAsync(table));
     }
 
     private async Task OpenTableNameDialogAsync(StructuredTableModel table)

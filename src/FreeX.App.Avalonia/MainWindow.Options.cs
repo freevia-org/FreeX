@@ -46,7 +46,7 @@ public sealed partial class MainWindow
     private static AvaloniaCompactDialogChromeStyle OptionsDialogChromeStyle => new(FormulaBarFontFamily);
 
     // ── File ▸ Options entry point ──────────────────────────────────────────────
-    private void ShowOptions() => _ = ShowOptionsDialogAsync();
+    private void ShowOptions() => RunGuarded(() => ShowOptionsDialogAsync());
 
     private async Task ShowOptionsDialogAsync()
     {

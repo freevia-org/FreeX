@@ -22,12 +22,12 @@ public sealed partial class MainWindow
         var dict = new Dictionary<string, Action>(StringComparer.Ordinal)
         {
             // --- Help tab (always visible). ---
-            [FreeXRibbonCommandIds.HelpAbout] = () => RunGuarded(ShowAboutDialogAsync),
+            [FreeXRibbonCommandIds.HelpAbout] = () => RunGuarded(() => ShowAboutDialogAsync()),
             [FreeXRibbonCommandIds.HelpOnline] = () => RunGuarded(() => OpenExternalHelpLinkAsync(AppHelpInfo.HelpUrl, UiText.Get("MainWindow_Content_HelpOnline"))),
             [FreeXRibbonCommandIds.HelpFeedback] = () => RunGuarded(() => OpenExternalHelpLinkAsync(AppHelpInfo.FeedbackUrl, UiText.Get("MainWindow_Content_Feedback"))),
             [FreeXRibbonCommandIds.HelpCheckForUpdates] = () => RunGuarded(() => OpenExternalHelpLinkAsync(AppHelpInfo.LatestReleaseUrl, UiText.Get("MainWindow_Content_CheckForUpdates"))),
-            [FreeXRibbonCommandIds.HelpCopyDiagnostics] = () => RunGuarded(CopyDiagnosticsToClipboardAsync),
-            [FreeXRibbonCommandIds.HelpLegalNotices] = () => RunGuarded(ShowLegalNoticesDialogAsync),
+            [FreeXRibbonCommandIds.HelpCopyDiagnostics] = () => RunGuarded(() => CopyDiagnosticsToClipboardAsync()),
+            [FreeXRibbonCommandIds.HelpLegalNotices] = () => RunGuarded(() => ShowLegalNoticesDialogAsync()),
 
             // --- Chart Design (chart.selected) — real handlers via SetChartLayoutCommand /
             // ChangeChartTypeCommand / ChangeChartSourceCommand / SetChartStyleCommand (MainWindow.ChartTabs). ---
@@ -124,7 +124,7 @@ public sealed partial class MainWindow
             [FreeXRibbonCommandIds.TableBandedColumns] = ToggleActiveTableBandedColumns,
             ["Filter Button"] = ToggleActiveTableFilterButton,
             ["Convert to Range"] = ConvertActiveTableToRange,
-            [FreeXRibbonCommandIds.TableRemoveDuplicates] = () => RunGuarded(ShowRemoveDuplicatesDialogAsync),
+            [FreeXRibbonCommandIds.TableRemoveDuplicates] = () => RunGuarded(() => ShowRemoveDuplicatesDialogAsync()),
             // Table Name dialog — validates/renames the active table via TableNamePlanner +
             // RenameStructuredTableCommand (MainWindow.TableName).
             ["Table Name"] = OpenTableName,
@@ -191,14 +191,14 @@ public sealed partial class MainWindow
             // PivotChart inserts a PivotChart over the active pivot (MainWindow.PivotChart).
             ["PivotChart"] = InsertPivotChart,
             // Change Chart Type re-types the active pivot's chart (MainWindow.PivotChartCommands).
-            [FreeXRibbonCommandIds.PivotChartChangeType] = () => RunGuarded(ChangeActivePivotChartTypeAsync),
+            [FreeXRibbonCommandIds.PivotChartChangeType] = () => RunGuarded(() => ChangeActivePivotChartTypeAsync()),
             // PivotChart Options opens the field-button / data-table options dialog (MainWindow.PivotChartOptions).
-            ["PivotChart Options"] = () => RunGuarded(OpenPivotChartOptionsAsync),
+            ["PivotChart Options"] = () => RunGuarded(() => OpenPivotChartOptionsAsync()),
 
             // Shape Effects is a dropdown: clicking the parent opens its menu (No Effect / Shadow, wired via
             // BuildPictureShapeTabCommands). Register the parent id too so the renderer keeps it enabled
             // rather than disabling it for an unregistered command.
-            ["Shape Effects"] = () => RunGuarded(OpenShapeEffectsDialogAsync),
+            ["Shape Effects"] = () => RunGuarded(() => OpenShapeEffectsDialogAsync()),
         };
 
         // Merge the Picture/Shape Format handlers (Arrange / Shape Styles / Accessibility), which also

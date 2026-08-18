@@ -75,7 +75,7 @@ public sealed partial class MainWindow
     ];
 
     /// <summary>Opens the Get Data ▸ From Text/CSV import dialog (Data-tab Get Data button / menu).</summary>
-    private void GetDataFromText() => _ = ShowGetDataDialogAsync();
+    private void GetDataFromText() => RunGuarded(() => ShowGetDataDialogAsync());
 
     /// <summary>
     /// The Get Data / From Text-CSV import dialog: Browse to a CSV/TSV/text file, choose the delimiter
@@ -299,11 +299,11 @@ public sealed partial class MainWindow
             RefreshPreview();
         }
 
-        browseButton.Click += (_, _) => _ = BrowseAsync();
+        browseButton.Click += (_, _) => RunGuarded(() => BrowseAsync());
         delimiterBox.SelectionChanged += (_, _) => RefreshPreview();
         customDelimiterBox.TextChanged += (_, _) => RefreshPreview();
         treatConsecutiveBox.IsCheckedChanged += (_, _) => RefreshPreview();
-        encodingBox.SelectionChanged += (_, _) => _ = ReDecodeAsync();
+        encodingBox.SelectionChanged += (_, _) => RunGuarded(() => ReDecodeAsync());
 
         var loadButton = new Button { Content = UiText.Get("GetData_LoadButton"), IsDefault = true, MinWidth = 90 };
         ApplyGetDataButtonChrome(loadButton, minWidth: 90, isDefault: true);

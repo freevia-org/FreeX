@@ -569,15 +569,15 @@ public sealed partial class MainWindow
 
                 case PrintPreviewSettingsPanelActionKind.OpenCustomMargins:
                     if (interaction is not null)
-                        _ = ShowPrintPreviewPageSetupAsync(
+                        RunGuarded(() => ShowPrintPreviewPageSetupAsync(
                             PageLayoutPageSetupOpenSource.CustomMargins,
-                            interaction.Repaginate);
+                            interaction.Repaginate));
                     break;
                 case PrintPreviewSettingsPanelActionKind.OpenPageSetup:
                     if (interaction is not null)
-                        _ = ShowPrintPreviewPageSetupAsync(
+                        RunGuarded(() => ShowPrintPreviewPageSetupAsync(
                             PageLayoutPageSetupOpenSource.ScaleToFit,
-                            interaction.Repaginate);
+                            interaction.Repaginate));
                     break;
             }
         }
