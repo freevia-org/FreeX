@@ -62,11 +62,10 @@ public partial class MainWindow
     /// </summary>
     private void ClearClipboardMarqueeAfterStructuralEdit()
     {
-        if (_workbookClipboardSession.HasContent || SheetGrid.ClipboardRange is not null)
-        {
-            _workbookClipboardSession.Clear();
-            ClearClipboardVisualState();
-        }
+        // R143-remediation (clip-2-regression): a structural edit carries no clipboard intent, so
+        // this must only cancel a marquee/session THIS window owns -- see
+        // ClearClipboardMarqueeIfOwnedByThisWindow.
+        ClearClipboardMarqueeIfOwnedByThisWindow();
     }
 
     private void CompleteWorksheetStructureEdit(

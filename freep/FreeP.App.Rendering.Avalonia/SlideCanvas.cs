@@ -523,6 +523,59 @@ public sealed partial class SlideCanvas : Control
                 }
             }
         }
+
+        // Reflection: mirror the shape's own fill+outline below itself, faded via an opacity
+        // mask, then flip the whole masked result about a pivot below the shape -- the same
+        // shadow/fade/flip shape as the DrawOp.Picture reflection block in RenderPicture below,
+        // just painting the shape geometry instead of the decoded bitmap.
+        //
+        // Unlike RenderPicture, PushOpacityMask's bounds here are given in the SAME local
+        // coordinate frame the geometry is actually drawn in (the shape's own un-flipped
+        // BoundsDip) rather than the post-flip destination: Avalonia's opacity-mask bounds are
+        // resolved inside the currently active transform along with the content, so a bounds
+        // rect that does not overlap the geometry's own (pre-flip) position masks it to nothing.
+        if (plan.HasReflection)
+        {
+            var reflectionGeo = AvaloniaSlideGeometryFactory.ToGeometry(shape.Geometry);
+            var reflectionFillBrush = MakeBrush(shape.Fill, shape.BoundsDip);
+            var reflectionPen = MakePen(shape.Outline);
+            if (reflectionGeo is not null && (reflectionFillBrush is not null || reflectionPen is not null))
+            {
+                var bounds = shape.BoundsDip;
+                double centerX = bounds.X + bounds.Width / 2;
+                foreach (var pass in plan.ReflectionPasses)
+                {
+                    var reflectionStops = new GradientStops
+                    {
+                        new AvGradientStop(
+                            Color.FromArgb(plan.ReflectionAlpha, 255, 255, 255), 0),
+                        new AvGradientStop(
+                            Color.FromArgb(0, 255, 255, 255),
+                            plan.ReflectionEndPos),
+                    };
+                    if (plan.ReflectionNeedsTerminalTransparentStop)
+                        reflectionStops.Add(new AvGradientStop(Color.FromArgb(0, 255, 255, 255), 1));
+                    var reflectionMask = new LinearGradientBrush
+                    {
+                        StartPoint = new RelativePoint(0.5, 0, RelativeUnit.Relative),
+                        EndPoint = new RelativePoint(0.5, 1, RelativeUnit.Relative),
+                        GradientStops = reflectionStops,
+                    };
+                    // Blur-ring offset composes as the innermost (leftmost) factor so it applies
+                    // to the geometry's own coordinates before the pivot flip, matching the WPF
+                    // sibling's nested PushTransform(scale) + PushTransform(translate) order.
+                    using var transformScope = dc.PushTransform(
+                        Matrix.CreateTranslation(pass.OffsetXDip, pass.OffsetYDip)
+                        * Matrix.CreateTranslation(-centerX, -plan.ReflectionPivotYDip)
+                        * Matrix.CreateScale(1, plan.ReflectionScaleY)
+                        * Matrix.CreateTranslation(centerX, plan.ReflectionPivotYDip));
+                    using var maskScope = dc.PushOpacityMask(
+                        reflectionMask,
+                        new Rect(bounds.X, bounds.Y, bounds.Width, bounds.Height));
+                    dc.DrawGeometry(reflectionFillBrush, reflectionPen, reflectionGeo);
+                }
+            }
+        }
     }
 
     private static void RenderImportedShapeDepth(

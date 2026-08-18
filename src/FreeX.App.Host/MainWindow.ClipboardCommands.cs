@@ -23,8 +23,7 @@ public partial class MainWindow
 
     private void CancelCopyAndTransientModes()
     {
-        ClearClipboardVisualState();
-        _workbookClipboardSession.Clear();
+        ClearClipboardMarqueeIfOwnedByThisWindow();
         _drawingObjectClipboard.Clear();
         CancelFormatPainter();
         _borderPickerSession.CancelDrawMode();
@@ -37,6 +36,28 @@ public partial class MainWindow
         SheetGrid.ClipboardRange = null;
         SheetGrid.ClipboardRanges = null;
         SheetGrid.ClipboardIsCut = false;
+    }
+
+    /// <summary>
+    /// R143-remediation (clip-2-regression): the shared fix for every purely LOCAL, no-clipboard-
+    /// intent site (Escape, Delete/Clear Contents, Backspace, committing an ordinary cell edit, a
+    /// structural edit) that needs to cancel a stale marching-ants marquee. Always clears THIS
+    /// window's own marquee (<see cref="ClearClipboardVisualState"/> -- SheetGrid.ClipboardRange
+    /// is per-window UI state, so that is always correct and idempotent), but only clears the
+    /// SHARED <see cref="_workbookClipboardSession"/> when this window is the one that captured
+    /// its current content (<see cref="WorkbookClipboardSession.ClearIfOwnedBy"/>). Without the
+    /// ownership check, this same-process singleton (App.xaml.cs) meant one window's Escape/
+    /// Delete/Backspace silently destroyed a DIFFERENT window's still-pasteable copy while that
+    /// window kept showing marching ants around it, with no indication why the next Paste there
+    /// produced nothing. A genuine new Copy (<see cref="ExecuteCopy"/>/<see
+    /// cref="TryCopySelectedDrawingObject"/>) intentionally stays unconditional -- replacing the
+    /// clipboard is exactly what a real Copy gesture should do, in any window, matching the OS
+    /// clipboard.
+    /// </summary>
+    private void ClearClipboardMarqueeIfOwnedByThisWindow()
+    {
+        _workbookClipboardSession.ClearIfOwnedBy(this);
+        ClearClipboardVisualState();
     }
 
     // ── Ribbon clipboard ─────────────────────────────────────────────────────
@@ -236,6 +257,10 @@ public partial class MainWindow
             }
         }
         var pictureCells = CapturePictureCells(fullRangeViewport, sheet, copyRange);
+        // R143-remediation (clip-2-regression): pass `this` as the owner token so a later
+        // no-clipboard-intent gesture in a DIFFERENT window (Escape/Delete/Backspace/an
+        // unrelated edit) cannot clear what THIS window just copied -- see
+        // ClearClipboardMarqueeIfOwnedByThisWindow and WorkbookClipboardSession.Owner.
         _workbookClipboardSession.Capture(new WorkbookClipboardSnapshot(
             copyRange,
             clipCells,
@@ -243,7 +268,8 @@ public partial class MainWindow
             text,
             isCut,
             areas.Count > 1 ? areas : null,
-            clipboardMarker));
+            clipboardMarker),
+            owner: this);
     }
 
     /// <summary>
@@ -284,6 +310,12 @@ public partial class MainWindow
                 isCut))
             return false;
 
+        // R143-remediation (clip-2-regression): unlike the no-clipboard-intent sites gated by
+        // ClearClipboardMarqueeIfOwnedByThisWindow, this IS a genuine local Copy gesture (the
+        // TryCapture above just succeeded), so it intentionally clears the shared cell-range
+        // session UNCONDITIONALLY -- even if another window currently owns it -- exactly like
+        // ExecuteCopy's own Capture() unconditionally overwrites whatever was there before. A new
+        // Copy anywhere legitimately replaces "the clipboard", matching the real OS clipboard.
         _workbookClipboardSession.Clear();
         ClearClipboardVisualState();
 
@@ -1338,11 +1370,10 @@ public partial class MainWindow
         // R54-render-copy-cut-marquee-4-1: Delete/Clear Contents on a still-active Copy/Cut
         // marquee must cancel it, matching Excel -- otherwise a later Paste would silently
         // move/copy the source range using its now-cleared (not the originally copied) contents.
-        if (_workbookClipboardSession.HasContent || SheetGrid.ClipboardRange is not null)
-        {
-            _workbookClipboardSession.Clear();
-            ClearClipboardVisualState();
-        }
+        // R143-remediation (clip-2-regression): Delete carries no clipboard intent, so this must
+        // only cancel a marquee/session THIS window owns -- see
+        // ClearClipboardMarqueeIfOwnedByThisWindow.
+        ClearClipboardMarqueeIfOwnedByThisWindow();
 
         UpdateViewport();
         if (SheetGrid.SelectedRange is { } selectedRange)
@@ -1387,11 +1418,10 @@ public partial class MainWindow
                 out var outcome))
             return;
 
-        if (_workbookClipboardSession.HasContent || SheetGrid.ClipboardRange is not null)
-        {
-            _workbookClipboardSession.Clear();
-            ClearClipboardVisualState();
-        }
+        // R143-remediation (clip-2-regression): Backspace carries no clipboard intent, so this
+        // must only cancel a marquee/session THIS window owns -- see
+        // ClearClipboardMarqueeIfOwnedByThisWindow.
+        ClearClipboardMarqueeIfOwnedByThisWindow();
 
         UpdateViewport();
         if (SheetGrid.SelectedRange is { } selectedRange)

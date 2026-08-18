@@ -599,6 +599,45 @@ public sealed partial class SlideCanvas : FrameworkElement
             }
         }
 
+        // Reflection: mirror the shape's own fill+outline below itself, faded via an opacity
+        // mask, exactly like the DrawOp.Picture reflection block in RenderPicture below —
+        // just painting shapeGeometry instead of the decoded bitmap.
+        if (plan.HasReflection)
+        {
+            var reflectionFillBrush = MakeBrush(shape.Fill, shape.BoundsDip);
+            var reflectionPen = MakePen(shape.Outline);
+            if (reflectionFillBrush is not null || reflectionPen is not null)
+            {
+                double reflectionCenterX = shape.BoundsDip.X + shape.BoundsDip.Width / 2;
+                foreach (var pass in plan.ReflectionPasses)
+                {
+                    var reflectionMask = new LinearGradientBrush
+                    {
+                        StartPoint = new Point(0.5, 0),
+                        EndPoint = new Point(0.5, 1),
+                    };
+                    reflectionMask.GradientStops.Add(new System.Windows.Media.GradientStop(
+                        Color.FromArgb(plan.ReflectionAlpha, 255, 255, 255), 0));
+                    reflectionMask.GradientStops.Add(new System.Windows.Media.GradientStop(
+                        Color.FromArgb(0, 255, 255, 255), plan.ReflectionEndPos));
+                    if (plan.ReflectionNeedsTerminalTransparentStop)
+                        reflectionMask.GradientStops.Add(new System.Windows.Media.GradientStop(
+                            Color.FromArgb(0, 255, 255, 255), 1));
+
+                    dc.PushTransform(new ScaleTransform(
+                        1, plan.ReflectionScaleY, reflectionCenterX, plan.ReflectionPivotYDip));
+                    dc.PushTransform(new TranslateTransform(pass.OffsetXDip, pass.OffsetYDip));
+                    dc.PushOpacityMask(reflectionMask);
+                    dc.PushOpacity(pass.Opacity);
+                    dc.DrawGeometry(reflectionFillBrush, reflectionPen, shapeGeometry);
+                    dc.Pop();
+                    dc.Pop();
+                    dc.Pop();
+                    dc.Pop();
+                }
+            }
+        }
+
         // Bevel: overlay highlight + shade stripes on the inner edge of the shape bounds.
         // This runs AFTER the shape fill/outline are drawn (the caller RenderShape draws
         // geometry after calling this method for shadows — but bevel must paint ON TOP of

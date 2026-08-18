@@ -1588,11 +1588,10 @@ public partial class MainWindow
             return false;
         }
 
-        if (_workbookClipboardSession.HasContent || SheetGrid.ClipboardRange is not null)
-        {
-            _workbookClipboardSession.Clear();
-            ClearClipboardVisualState();
-        }
+        // R143-remediation (clip-2-regression): committing this cell edit carries no clipboard
+        // intent, so this must only cancel a marquee/session THIS window owns -- see
+        // ClearClipboardMarqueeIfOwnedByThisWindow.
+        ClearClipboardMarqueeIfOwnedByThisWindow();
 
         ApplyWorkbookSessionSelectionToRenderer();
         InvalidateNavigationCaches();

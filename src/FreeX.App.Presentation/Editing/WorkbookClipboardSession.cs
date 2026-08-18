@@ -43,7 +43,39 @@ public sealed class WorkbookClipboardSession
 
     public bool HasContent => Content is not null;
 
-    public WorkbookClipboardSnapshot Capture(WorkbookClipboardSnapshot snapshot)
+    /// <summary>
+    /// R143-remediation (clip-2-regression): opaque token identifying whoever last <see
+    /// cref="Capture"/>d the current <see cref="Content"/>. Set alongside <see cref="Content"/>
+    /// and cleared alongside it, so it is always meaningful only while <see cref="HasContent"/>
+    /// is true. This session became a DI-wide singleton shared by every open window in the
+    /// process (see App.xaml.cs), so a caller that wants to clear this session as a side effect
+    /// of a purely LOCAL, no-clipboard-intent gesture (Escape, Delete, Backspace, committing an
+    /// unrelated cell edit) must first check <see cref="IsOwnedBy"/>/use <see
+    /// cref="ClearIfOwnedBy"/> instead of the unconditional <see cref="Clear"/> -- otherwise that
+    /// gesture in window B silently destroys content window A copied and is still showing
+    /// marching ants around. A genuine new Copy (in any window) is a real "the clipboard changed"
+    /// event and should keep overwriting <see cref="Content"/>/<see cref="Owner"/> unconditionally
+    /// via <see cref="Capture"/>, exactly like the real OS clipboard.
+    /// </summary>
+    public object? Owner { get; private set; }
+
+    /// <summary>True when this session currently has content AND it was captured by <paramref name="owner"/>.</summary>
+    public bool IsOwnedBy(object? owner) =>
+        Content is not null && owner is not null && ReferenceEquals(Owner, owner);
+
+    /// <summary>
+    /// Clears <see cref="Content"/>/<see cref="Owner"/> only if <paramref name="owner"/> is the
+    /// one who captured the current content -- a no-op (and safe to call unconditionally) for a
+    /// window that never owned it, including one that owns nothing right now. See <see
+    /// cref="Owner"/> for why this exists.
+    /// </summary>
+    public void ClearIfOwnedBy(object? owner)
+    {
+        if (IsOwnedBy(owner))
+            Clear();
+    }
+
+    public WorkbookClipboardSnapshot Capture(WorkbookClipboardSnapshot snapshot, object? owner = null)
     {
         ArgumentNullException.ThrowIfNull(snapshot);
         ArgumentNullException.ThrowIfNull(snapshot.Cells);
@@ -61,10 +93,15 @@ public sealed class WorkbookClipboardSession
             snapshot.IsCut,
             snapshot.SourceAreas?.ToArray(),
             marker);
+        Owner = owner;
         return Content;
     }
 
-    public void Clear() => Content = null;
+    public void Clear()
+    {
+        Content = null;
+        Owner = null;
+    }
 
     public WorkbookClipboardPasteResolution ResolvePaste(WorkbookClipboardReadObservation observation)
     {
