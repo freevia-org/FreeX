@@ -6,9 +6,19 @@
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <UseWPF>true</UseWPF>
+    <UseWindowsForms>true</UseWindowsForms>
     <StartupObject>FreeP.App.Host.Program</StartupObject>
     <DefineConstants>$(DefineConstants);FREEP_WPF_RENDERER</DefineConstants>
   </PropertyGroup>
+
+  <ItemGroup>
+    <!-- UseWindowsForms is on only for System.Windows.Forms.Screen (multi-monitor Presenter
+         View placement, round 143 / finding F3); its implicit global usings otherwise collide
+         with WPF's identically-named controls (Button/TextBox/ComboBox/CheckBox/...) across
+         this project, exactly as already worked around in FreeX.App.Host.csproj. -->
+    <Using Remove="System.Drawing" />
+    <Using Remove="System.Windows.Forms" />
+  </ItemGroup>
 
   <Import Project="..\FreeP.RendererHostVariants.props" />
 

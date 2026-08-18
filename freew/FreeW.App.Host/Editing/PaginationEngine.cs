@@ -651,31 +651,109 @@ internal static class PaginationEngine
     }
 
     /// <summary>
-    /// Splits <paramref name="modelBlocks"/> into ordered ranges that each share exactly one
-    /// section's <see cref="PageSettings"/>: a new segment starts right after every page-type
+    /// Splits <paramref name="modelBlocks"/> into ordered ranges that each get measured against
+    /// exactly one section's own <see cref="PageSettings"/>.
+    ///
+    /// <para>
+    /// A new range starts at <em>every</em> section break — page-type
     /// (<see cref="SectionBreakKind.NextPage"/> / <see cref="SectionBreakKind.EvenPage"/> /
-    /// <see cref="SectionBreakKind.OddPage"/>) section break, mirroring the boundary
-    /// <see cref="ApplySectionBreakFlags"/> forces via <c>BreakPageBefore</c>. A <c>Continuous</c>
-    /// section break does not start a new physical page, so it does not start a new segment.
+    /// <see cref="SectionBreakKind.OddPage"/>) or <see cref="SectionBreakKind.Continuous"/> alike —
+    /// because a <c>Continuous</c> break can still change page width, margins, or column count, and
+    /// content on either side of it must be measured against its own section's box, not a
+    /// neighbouring section's. Folding a Continuous-broken section into whichever later segment
+    /// happens to close the range (the previous behaviour) measured that earlier section's content
+    /// with a foreign page box — wrong column widths at best, silently dropped/clipped overflow at
+    /// worst when the foreign box was larger than the section's real one.
+    /// </para>
+    ///
+    /// <para>
+    /// Ranges separated only by a Continuous break are then merged back together when their two
+    /// sections' layout geometry is identical (<see cref="SectionsShareLayoutGeometry"/>), so a
+    /// document that uses Continuous breaks purely to vary headers/footers (no geometry change)
+    /// keeps flowing as one uninterrupted run instead of gaining spurious page boundaries — mirroring
+    /// <see cref="ApplySectionBreakFlags"/>, which only forces <c>BreakPageBefore</c> for page-type
+    /// breaks. A page-type break always keeps its own segment, even when its geometry happens to
+    /// match its neighbour's, because it must force a fresh physical page regardless.
+    /// </para>
     /// </summary>
     private static List<PageSegment> BuildPageSegments(
         IReadOnlyList<FreeW.Core.Model.Block> modelBlocks,
         PageSettings finalPage)
     {
-        var segments = new List<PageSegment>();
+        // Pass 1: one raw range per section, tagging each with whether the break that STARTS it
+        // (i.e. the break ending the previous section) is page-type — the only kind that must force
+        // a fresh physical page regardless of geometry.
+        var raw = new List<(int Start, int End, PageSettings Page, bool StartsNewPage)>();
         var start = 0;
+        var startsNewPage = false; // the first range has no preceding break to force a new page.
         for (var i = 0; i < modelBlocks.Count; i++)
         {
-            if (modelBlocks[i] is FreeW.Core.Model.Paragraph { SectionBreak: { } sectionBreak }
-                && IsPageTypeSectionBreak(sectionBreak))
+            if (modelBlocks[i] is FreeW.Core.Model.Paragraph { SectionBreak: { } sectionBreak })
             {
-                segments.Add(new PageSegment(start, i + 1, sectionBreak.Page));
+                raw.Add((start, i + 1, sectionBreak.Page, startsNewPage));
                 start = i + 1;
+                startsNewPage = IsPageTypeSectionBreak(sectionBreak);
+            }
+        }
+        raw.Add((start, modelBlocks.Count, finalPage, startsNewPage));
+
+        // Pass 2: merge a Continuous-started range into the one before it when the two sections
+        // share identical page geometry, so same-geometry Continuous breaks don't fragment pagination.
+        var segments = new List<PageSegment>(raw.Count);
+        foreach (var range in raw)
+        {
+            if (!range.StartsNewPage
+                && segments.Count > 0
+                && SectionsShareLayoutGeometry(segments[^1].Page, range.Page))
+            {
+                segments[^1] = segments[^1] with { End = range.End };
+            }
+            else
+            {
+                segments.Add(new PageSegment(range.Start, range.End, range.Page));
             }
         }
 
-        segments.Add(new PageSegment(start, modelBlocks.Count, finalPage));
         return segments;
+    }
+
+    /// <summary>
+    /// Whether two sections' <see cref="PageSettings"/> would lay out content identically — same
+    /// page box, margins/gutter, and column plan — so a Continuous break between them can be treated
+    /// as a no-op for pagination purposes instead of forcing a separate measurement pass. Compares
+    /// exactly the fields <see cref="PageLayout.PageSizeDip"/>, <see cref="PageLayout.MarginsDip"/>,
+    /// and <see cref="DocumentView.ApplyColumnLayout"/> read.
+    /// </summary>
+    private static bool SectionsShareLayoutGeometry(PageSettings a, PageSettings b)
+    {
+        if (ReferenceEquals(a, b))
+            return true;
+
+        return a.WidthPt.Equals(b.WidthPt)
+            && a.HeightPt.Equals(b.HeightPt)
+            && a.MarginLeftPt.Equals(b.MarginLeftPt)
+            && a.MarginRightPt.Equals(b.MarginRightPt)
+            && a.MarginTopPt.Equals(b.MarginTopPt)
+            && a.MarginBottomPt.Equals(b.MarginBottomPt)
+            && a.GutterPt.Equals(b.GutterPt)
+            && a.GutterAtTop == b.GutterAtTop
+            && a.MirrorMargins == b.MirrorMargins
+            && a.ColumnCount == b.ColumnCount
+            && a.ColumnSpacingPt.Equals(b.ColumnSpacingPt)
+            && a.ColumnsLineBetween == b.ColumnsLineBetween
+            && ColumnWidthsEqual(a.ColumnWidthsPt, b.ColumnWidthsPt);
+    }
+
+    private static bool ColumnWidthsEqual(IReadOnlyList<double>? a, IReadOnlyList<double>? b)
+    {
+        if (a is null || b is null)
+            return a is null && b is null;
+        if (a.Count != b.Count)
+            return false;
+        for (var i = 0; i < a.Count; i++)
+            if (!a[i].Equals(b[i]))
+                return false;
+        return true;
     }
 
     private readonly record struct PageSegment(int Start, int End, PageSettings Page);

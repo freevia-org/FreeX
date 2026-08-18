@@ -30,6 +30,46 @@ public sealed class FreeWClipboardApplicationWorkflowTests
     }
 
     [Fact]
+    public async Task ReadPasteSpecialAsync_FallsBackToHtmlTableWhenNoRtfIsOnTheClipboard()
+    {
+        // R143 clip-1: FreeX never places "Rich Text Format" on the clipboard for a cell-range copy --
+        // it places plain text plus a CF_HTML table fragment (matching FreeX.Core.Commands
+        // ClipboardHtmlSerializer.Serialize/WrapAsCfHtml). Model that payload here (full CF_HTML header
+        // + <html> wrapper, exactly what the WPF host's "HTML Format" carries) and confirm the rich
+        // paste path recovers a formatted document from it instead of degrading to plain text.
+        const string cfHtml =
+            "Version:0.9\r\n" +
+            "StartHTML:0000000097\r\n" +
+            "EndHTML:0000000350\r\n" +
+            "StartFragment:0000000133\r\n" +
+            "EndFragment:0000000307\r\n" +
+            "<html><head><meta charset=\"utf-8\"></head><body>\r\n<!--StartFragment-->" +
+            "<table border=\"1\" cellspacing=\"0\" style=\"border-collapse:collapse\">" +
+            "<tr><td style=\"font-weight:bold\">Name</td><td>Score</td></tr>" +
+            "<tr><td>Ann</td><td>92</td></tr>" +
+            "</table>" +
+            "<!--EndFragment-->\r\n</body></html>";
+        var clipboard = new FakeClipboard
+        {
+            ReadResult = PlatformClipboardReadResult<PlatformClipboardContent>.Success(
+                new PlatformClipboardContent(
+                    Text: "Name\tScore\r\nAnn\t92",
+                    CustomData: [PlatformClipboardData.FromText("HTML Format", cfHtml)])),
+        };
+
+        var result = await FreeWClipboardApplicationWorkflow.ReadPasteSpecialAsync(clipboard);
+
+        result.IsSuccess.Should().BeTrue();
+        result.Payload!.RichDocument.Should().NotBeNull();
+        result.Payload.RichDocument!.PlainText.Should().Contain("Name").And.Contain("Ann");
+
+        var plan = FreeWClipboardApplicationWorkflow.PlanPaste(
+            result.Payload,
+            PasteSpecialOption.KeepSourceFormatting);
+        plan.PreferRichDocument.Should().BeTrue("a FreeX cell-range copy's formatting must survive Keep Source Formatting paste into FreeW");
+    }
+
+    [Fact]
     public async Task ReadTextAsync_ClassifiesEmptyAndFailureWithoutRendererExceptions()
     {
         var clipboard = new FakeClipboard

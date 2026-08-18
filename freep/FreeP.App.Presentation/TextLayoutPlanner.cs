@@ -487,7 +487,18 @@ public static class TextLayoutPlanner
         if (unscaledEffectiveHeight > textAreaHeightDip + 0.5)
         {
             double requiredScale = textAreaHeightDip / unscaledEffectiveHeight;
-            targetFontScale = Math.Clamp(requiredScale, RuntimeAutoFitMinimumFontScale, 1.0);
+
+            // The 60% floor below is FreeP's OWN sanity limit for when IT is the one inventing a
+            // shrink from scratch (see the no-cache path above). It is a different question from
+            // what to do with a fontScale PowerPoint (or an earlier FreeP session) already wrote
+            // into the file: that cached value is authoritative proof a smaller scale was needed
+            // for this text/box combination, so it must never be floored back UP past what the
+            // file itself cached. Use whichever floor is lower, so a cached scale under 60% (e.g.
+            // PowerPoint's own aggressive shrink-to-fit) is honoured for an unchanged box, while a
+            // cached scale at/above 60% still stops at the usual runtime floor if the box shrinks
+            // further still.
+            double minimumFontScale = Math.Min(RuntimeAutoFitMinimumFontScale, cachedScale);
+            targetFontScale = Math.Clamp(requiredScale, minimumFontScale, 1.0);
             double projectedHeight = unscaledEffectiveHeight * targetFontScale;
             if (projectedHeight > textAreaHeightDip + 0.5)
             {

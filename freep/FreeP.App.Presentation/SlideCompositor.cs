@@ -400,7 +400,7 @@ public static class SlideCompositor
         if (fx is null) return null;
 
         bool hasBevel = fx.BevelTop is not null || fx.BevelBottom is not null;
-        if (!fx.HasOuterShadow && !fx.HasGlow && !fx.HasSoftEdge
+        if (!fx.HasOuterShadow && !fx.HasGlow && !fx.HasSoftEdge && fx.Reflection is null
             && !hasBevel && fx.ExtrusionHeightEmu == 0 && fx.ContourWidthEmu == 0
             && string.IsNullOrEmpty(fx.PrstMaterial) && fx.Scene3d is null)
             return null;
@@ -421,6 +421,15 @@ public static class SlideCompositor
 
             HasSoftEdge       = fx.HasSoftEdge,
             SoftEdgeRadiusDip = fx.SoftEdgeRadEmu / EmuPerDip,
+
+            HasReflection     = fx.Reflection is not null,
+            ReflectionAlpha   = (byte)Math.Clamp(
+                (int)Math.Round((fx.Reflection?.StartAlpha ?? 0) * 255d / 100000d), 0, 255),
+            ReflectionBlurDip = (fx.Reflection?.BlurRadEmu ?? 0) / EmuPerDip,
+            ReflectionDistDip = (fx.Reflection?.DistEmu ?? 0) / EmuPerDip,
+            ReflectionDirDeg  = fx.Reflection?.DirDeg ?? 90,
+            ReflectionScaleY  = (fx.Reflection?.ScaleYPercent ?? -100) / 100.0,
+            ReflectionEndPos  = Math.Clamp((fx.Reflection?.EndPos ?? 100000) / 100000.0, 0, 1),
 
             // Bevel / 3-D
             BevelTop = fx.BevelTop is not null ? new ResolvedBevel

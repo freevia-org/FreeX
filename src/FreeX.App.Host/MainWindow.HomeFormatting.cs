@@ -1529,6 +1529,26 @@ public partial class MainWindow
         => ApplyCellStylePreset(CellStylePreset.Heading1);
     private void CellStyleH2MenuItem_Click(object sender, RoutedEventArgs e)
         => ApplyCellStylePreset(CellStylePreset.Heading2);
+    private void CellStyleH3MenuItem_Click(object sender, RoutedEventArgs e)
+        => ApplyCellStylePreset(CellStylePreset.Heading3);
+    private void CellStyleH4MenuItem_Click(object sender, RoutedEventArgs e)
+        => ApplyCellStylePreset(CellStylePreset.Heading4);
+    private void CellStyleTitleMenuItem_Click(object sender, RoutedEventArgs e)
+        => ApplyCellStylePreset(CellStylePreset.Title);
+    private void CellStyleCurrencyMenuItem_Click(object sender, RoutedEventArgs e)
+        => ApplyCellStylePreset(CellStylePreset.Currency);
+    private void CellStyleCurrency0MenuItem_Click(object sender, RoutedEventArgs e)
+        => ApplyCellStylePreset(CellStylePreset.Currency0);
+    private void CellStyleCommaMenuItem_Click(object sender, RoutedEventArgs e)
+        => ApplyCellStylePreset(CellStylePreset.Comma);
+    private void CellStyleComma0MenuItem_Click(object sender, RoutedEventArgs e)
+        => ApplyCellStylePreset(CellStylePreset.Comma0);
+    private void CellStylePercentMenuItem_Click(object sender, RoutedEventArgs e)
+        => ApplyCellStylePreset(CellStylePreset.Percent);
+    private void CellStyleHyperlinkMenuItem_Click(object sender, RoutedEventArgs e)
+        => ApplyCellStylePreset(CellStylePreset.Hyperlink);
+    private void CellStyleFollowedHyperlinkMenuItem_Click(object sender, RoutedEventArgs e)
+        => ApplyCellStylePreset(CellStylePreset.FollowedHyperlink);
     private void CellStyleNoteMenuItem_Click(object sender, RoutedEventArgs e)
         => ApplyCellStylePreset(CellStylePreset.Note);
     private void CellStyleWarningMenuItem_Click(object sender, RoutedEventArgs e)

@@ -6450,7 +6450,7 @@ public sealed partial class DocumentView : Control
         // The portable sequence planner owns per-level numbering, overrides, and continuation across
         // ordinary body paragraphs and interleaved bullets.
         var listMarkerSequence = new DocumentListMarkerSequencePlanner(
-            _doc.MultiLevelList.NumberFormats);
+            _doc.MultiLevelList.NumberFormats, _doc.MultiLevelList.LevelTexts);
         var preservedNumberingMarkers = PreservedNumberingMarkerPlanner.Build(_doc);
         var hiddenBlocks = _outlineCollapse.BuildHiddenBlockIndices(_doc.Blocks);
         for (var blockIndex = 0; blockIndex < _doc.Blocks.Count; blockIndex++)
@@ -16825,6 +16825,12 @@ public sealed partial class DocumentView : Control
             return true;
         }
 
+        // AV-UNDOGROUP: the auto-recognized hyperlink (Outcome == Hyperlink) is applied as a SEPARATE
+        // _bus.Execute below, deliberately outside any undo group, rather than folded into the
+        // `replacement` cells here. WPF/Word give an auto-link two undo steps -- one Ctrl+Z removes only
+        // the automatic hyperlink formatting and leaves the typed word in place, a second removes the
+        // word itself. Combining both edits into one command (as this used to do) collapsed that into a
+        // single undo step that deleted the whole word on the first Ctrl+Z.
         var replacement = new List<Cell>(result.Insert.Length);
         for (var index = 0; index < result.Insert.Length; index++)
         {
@@ -16837,18 +16843,11 @@ public sealed partial class DocumentView : Control
                 fmt = fmt with { VerticalAlign = VerticalAlign.Superscript };
             }
 
-            LinkInfo? link = null;
-            if (result.Outcome == AutoFormatOutcomeKind.Hyperlink
-                && result.LinkTarget is { Length: > 0 }
-                && index < result.Insert.Length - 1)
-            {
-                link = new LinkInfo(result.LinkTarget, null, null);
-            }
-
-            replacement.Add(new Cell(result.Insert[index], fmt, Link: link));
+            replacement.Add(new Cell(result.Insert[index], fmt));
         }
 
-        _bus.Execute(new ReplaceParagraphRunsCommand(_caret.Block, p =>
+        var block = _caret.Block;
+        _bus.Execute(new ReplaceParagraphRunsCommand(block, p =>
         {
             var live = ParaCells(p);
             live.RemoveRange(deleteStart, Math.Min(result.DeleteBefore, live.Count - deleteStart));
@@ -16856,8 +16855,26 @@ public sealed partial class DocumentView : Control
             SetRuns(p, live);
         }));
 
-        _caret = new DocPosition(_caret.Block, deleteStart + result.Insert.Length);
+        _caret = new DocPosition(block, deleteStart + result.Insert.Length);
         _selectionAnchor = _caret;
+
+        if (result.Outcome == AutoFormatOutcomeKind.Hyperlink
+            && result.LinkTarget is { Length: > 0 } linkTarget)
+        {
+            var link = new LinkInfo(linkTarget, null, null);
+            var linkStart = deleteStart;
+            var linkEnd = deleteStart + result.Insert.Length - 1; // exclude the trailing space
+            _bus.Execute(new ReplaceParagraphRunsCommand(block, p =>
+            {
+                var live = ParaCells(p);
+                var lo = Math.Clamp(linkStart, 0, live.Count);
+                var hi = Math.Clamp(linkEnd, lo, live.Count);
+                for (var i = lo; i < hi; i++)
+                    live[i] = live[i] with { Link = link };
+                SetRuns(p, live);
+            }));
+        }
+
         return true;
     }
 
@@ -17946,8 +17963,11 @@ public sealed partial class DocumentView : Control
                 DeleteSelection();
             if (CurrentParagraph() is not { } paragraph || !IsEditable(paragraph))
             {
+                // AV-UNDOGROUP: DeleteSelection() above may already have applied a delete into
+                // this undo group. Roll it back rather than abandoning it, or the deletion
+                // survives with no way to undo it as one step.
                 if (ownsUndoGroup)
-                    _bus.AbortUndoGroup();
+                    _bus.RollbackUndoGroup();
                 return;
             }
 
@@ -21608,7 +21628,10 @@ public sealed partial class DocumentView : Control
                     cellCaret.ParaIdx);
                 if (paragraph is null || !IsFieldInsertable(paragraph))
                 {
-                    _bus.AbortUndoGroup();
+                    // AV-UNDOGROUP: DeleteCellSelection() above may already have applied a
+                    // delete into this still-open undo group. Roll it back rather than
+                    // abandoning it, or the deletion survives with no way to undo it.
+                    _bus.RollbackUndoGroup();
                     return;
                 }
 
@@ -21628,7 +21651,10 @@ public sealed partial class DocumentView : Control
                     DeleteSelection();
                 if (CurrentParagraph() is not { } paragraph || !IsFieldInsertable(paragraph))
                 {
-                    _bus.AbortUndoGroup();
+                    // AV-UNDOGROUP: DeleteSelection() above may already have applied a delete
+                    // into this still-open undo group. Roll it back rather than abandoning it,
+                    // or the deletion survives with no way to undo it as one step.
+                    _bus.RollbackUndoGroup();
                     return;
                 }
 

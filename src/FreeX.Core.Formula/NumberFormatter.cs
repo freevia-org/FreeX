@@ -283,9 +283,16 @@ public static partial class NumberFormatter
             // ORIGINAL signed value instead, so its own (already correct/tested) sign-suppression
             // logic runs -- matching what the slower ParseSections/SelectPositionalSection path
             // (still used for multi-section formats) already does for FormatSimpleFraction.
-            if (IsSimpleFractionFormat(effectiveFormat))
+            // Strip "_x"/"*x" spacing/fill directives the same way the multi-section path does
+            // (ApplyNumericFormat's PreserveAccountingFillSpace + RemoveSpacingAndFillDirectives
+            // call, further below) before handing the format to FormatSimpleFraction -- otherwise
+            // FormatSimpleFraction's ExtractNumericAffixes treats '_'/'*' and the character they
+            // reserve/repeat as ordinary literal text and renders them visibly (e.g. "_(2 1/2_)"
+            // instead of the invisible padding Excel shows).
+            var fractionCheckFormat = RemoveSpacingAndFillDirectives(PreserveAccountingFillSpace(effectiveFormat));
+            if (IsSimpleFractionFormat(fractionCheckFormat))
             {
-                var fractionText = ApplyNativeDigitSubstitution(FormatSimpleFraction(value, effectiveFormat), effectiveFormat);
+                var fractionText = ApplyNativeDigitSubstitution(FormatSimpleFraction(value, fractionCheckFormat), effectiveFormat);
                 fractionText = ApplyAccountingTargetWidth(fractionText, effectiveFormat, targetWidthCharacters);
                 return new FormatResult(fractionText, colorHex);
             }

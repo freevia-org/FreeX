@@ -4595,13 +4595,23 @@ public static class DocxWriter
 
     /// <summary>
     /// Builds the wp:docPr for an image, carrying accessibility alt text on @descr when set (omitted
-    /// otherwise so images without alt text serialise exactly as before). Shared by both drawing paths.
+    /// otherwise so images without alt text serialise exactly as before) and the "Mark as decorative"
+    /// extension when <see cref="InlineImage.IsDecorative"/> is set. Shared by both drawing paths.
     /// </summary>
     private static XElement BuildDocPr(ImagePart part)
     {
         var docPr = new XElement(Wp + "docPr", new XAttribute("id", part.DrawingId), new XAttribute("name", part.FileName));
         if (!string.IsNullOrEmpty(part.Image.AltText))
             docPr.Add(new XAttribute("descr", part.Image.AltText));
+        if (part.Image.IsDecorative)
+        {
+            docPr.Add(new XElement(A + "extLst",
+                new XElement(A + "ext",
+                    new XAttribute("uri", DrawingMlDecorativeExtensionUri),
+                    new XElement(Adec + "decorative",
+                        new XAttribute(XNamespace.Xmlns + "adec", Adec.NamespaceName),
+                        new XAttribute("val", "1")))));
+        }
         return docPr;
     }
 

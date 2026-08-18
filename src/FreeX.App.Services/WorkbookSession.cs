@@ -4077,20 +4077,25 @@ public sealed class WorkbookSession : IDisposable
                     rule.CloneWithNewIdentity(candidate.AppliesTo, candidate.AdditionalRanges)))
                 .ToList();
 
-            if (matches.Count == 0)
-            {
-                // No existing range matched existingRule's settings, so fall back to the current
-                // selection itself — but the selection may be a Ctrl+click multi-area selection, so
-                // every area must be folded into one rule's AppliesTo+AdditionalRanges, mirroring
-                // CreateSetSelectedRangeDataValidationCommand's non-sweep apply path. Using only the
-                // single active SelectedRange here would silently drop the non-primary areas.
-                var sheetRanges = selectedRanges
-                    .Select(range => RemapRangeToSheet(range, sheetId))
-                    .ToArray();
-                matches.Add(new SetDataValidationCommand(
-                    sheetId,
-                    rule.CloneWithNewIdentity(sheetRanges[0], sheetRanges.Skip(1))));
-            }
+            // The current selection must always receive the new settings too -- the checkbox
+            // promises to cover "all cells with the same settings" IN ADDITION TO the selection the
+            // user just made, not instead of it (existingRule itself always satisfies
+            // HasSameSettings trivially, which used to make `matches` non-empty for the very sheet
+            // that owns it and silently skip this selection-derived command entirely). The selection
+            // may be a Ctrl+click multi-area selection, so every area is folded into one rule's
+            // AppliesTo+AdditionalRanges, mirroring CreateSetSelectedRangeDataValidationCommand's
+            // non-sweep apply path. This command runs LAST so SetDataValidationCommand's own
+            // overlap-clearing (which runs per-Apply, in command order) folds any already-retargeted
+            // match above whose range the selection now also covers into this one, instead of
+            // leaving a redundant duplicate entry behind; a match whose range the selection does NOT
+            // cover (e.g. a disjoint AdditionalRanges area the user didn't reselect) survives
+            // untouched under the new settings.
+            var sheetRanges = selectedRanges
+                .Select(range => RemapRangeToSheet(range, sheetId))
+                .ToArray();
+            matches.Add(new SetDataValidationCommand(
+                sheetId,
+                rule.CloneWithNewIdentity(sheetRanges[0], sheetRanges.Skip(1))));
 
             commands.AddRange(matches);
         }

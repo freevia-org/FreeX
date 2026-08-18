@@ -10,6 +10,7 @@ using System.ComponentModel;
 using FreeX.App.Presentation.GridInteraction;
 using FreeX.App.Presentation.FormulaBar;
 using FreeX.App.Presentation.Dialogs;
+using FreeX.App.Presentation.Editing;
 using FreeX.App.Presentation.Ribbon;
 using FreeX.App.Presentation.PivotUI;
 using FreeX.App.Presentation.Sparklines;
@@ -287,7 +288,8 @@ public partial class MainWindow : Window, IWorkbookWindow, IFormulaPointModeWork
         NewWorkbookNameSequence? newWorkbookNameSequence = null,
         WorkbookSession? workbookSession = null,
         IPlatformClipboard? platformClipboard = null,
-        FreeXOptionsRuntimeSession? optionsRuntimeSession = null)
+        FreeXOptionsRuntimeSession? optionsRuntimeSession = null,
+        WorkbookClipboardSession? workbookClipboardSession = null)
         : this(
             logger,
             viewportService,
@@ -304,7 +306,8 @@ public partial class MainWindow : Window, IWorkbookWindow, IFormulaPointModeWork
             newWorkbookNameSequence,
             workbookSession,
             platformClipboard,
-            optionsRuntimeSession)
+            optionsRuntimeSession,
+            workbookClipboardSession)
     {
     }
 
@@ -324,11 +327,21 @@ public partial class MainWindow : Window, IWorkbookWindow, IFormulaPointModeWork
         NewWorkbookNameSequence? newWorkbookNameSequence = null,
         WorkbookSession? workbookSession = null,
         IPlatformClipboard? platformClipboard = null,
-        FreeXOptionsRuntimeSession? optionsRuntimeSession = null)
+        FreeXOptionsRuntimeSession? optionsRuntimeSession = null,
+        WorkbookClipboardSession? workbookClipboardSession = null)
     {
         // The MainWindow DI factory supplies a fresh per-document WorkbookDocumentState. Sibling
         // windows receive a WorkbookSession that already shares the originating document state.
         _newWorkbookNameSequence = newWorkbookNameSequence ?? new NewWorkbookNameSequence();
+        // clip-2 (R143): the internal formula-preserving clipboard must be process-wide (matching
+        // real Excel: copying in one open workbook and pasting into another open in the SAME
+        // instance keeps the formula), not one fresh WorkbookClipboardSession per window. The DI
+        // factory (App.xaml.cs ConfigureServices) registers WorkbookClipboardSession as a singleton
+        // and ActivatorUtilities.CreateInstance<MainWindow> resolves this parameter from it, so
+        // every window opened through Services.GetRequiredService<MainWindow>() shares the same
+        // session. Callers that construct a MainWindow directly (every existing test) leave this
+        // null and get an isolated per-instance session exactly as before -- no test behavior change.
+        _workbookClipboardSession = workbookClipboardSession ?? new WorkbookClipboardSession();
         _logger = logger;
         _viewportService = viewportService;
         _documentContext = documentContext ?? throw new ArgumentNullException(nameof(documentContext));

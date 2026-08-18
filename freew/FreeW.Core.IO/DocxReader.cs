@@ -4605,11 +4605,13 @@ public static class DocxReader
         var format = ResolveImageFormat(formatTarget, bytes ?? []);
 
         // Restore accessibility alt text from wp:docPr/@descr; absent attribute leaves AltText null.
-        var descr = container.Element(Wp + "docPr")?.Attribute("descr")?.Value;
+        var docPrEl = container.Element(Wp + "docPr");
+        var descr = docPrEl?.Attribute("descr")?.Value;
         var image = new InlineImage(bytes ?? [], widthPt, heightPt, format)
         {
             AltText = string.IsNullOrEmpty(descr) ? null : descr,
             LinkedImageTarget = linkedTarget,
+            IsDecorative = ReadDecorativeFlag(docPrEl),
         };
 
         // A wp:anchor is a floating image: recover wrapping mode, offsets and anchors. A wp:inline reads
@@ -4631,6 +4633,25 @@ public static class DocxReader
         }
 
         return image;
+    }
+
+    /// <summary>
+    /// Reads Word's "Mark as decorative" flag from a <c>&lt;wp:docPr&gt;</c> element's
+    /// <c>&lt;a:extLst&gt;&lt;a:ext uri="{C183D7F6-B498-43B3-948B-1728B52AA6E4}"&gt;
+    /// &lt;adec:decorative val="1"/&gt;</c> extension (the same extension Excel/PowerPoint 2019+ use
+    /// for their shared "Alt Text -> Mark as decorative" checkbox). Returns false when
+    /// <paramref name="docPr"/> is null or the extension/attribute is absent or not truthy.
+    /// </summary>
+    private static bool ReadDecorativeFlag(XElement? docPr)
+    {
+        var val = docPr?
+            .Element(A + "extLst")?
+            .Elements(A + "ext")
+            .FirstOrDefault(ext => (string?)ext.Attribute("uri") == DrawingMlDecorativeExtensionUri)?
+            .Elements()
+            .FirstOrDefault(child => child.Name.LocalName == "decorative")?
+            .Attribute("val")?.Value;
+        return val is "1" or "true" or "on";
     }
 
     /// <summary>
@@ -7113,12 +7134,22 @@ public static class DocxReader
     /// Continuation across a non-list interruption (R132) is preserved: re-encountering the SAME numId
     /// (even after intervening body text) resolves to "continue" (null), same as before this fix.
     /// </para>
+    /// <para>
+    /// Returning to a numId AFTER an interleaving DIFFERENT numId of the same kind (e.g. list A, then an
+    /// unrelated list B, then list A again) is also a continuation, not a restart: Word numbers each
+    /// instance independently of whatever unrelated list interrupted it. <see cref="_instanceCounts"/>
+    /// mirrors the render layer's own per-level running counter for every numId this state has ever
+    /// resolved, so a returning numId can be handed an explicit override equal to its own next value —
+    /// the render layer's single shared counter cannot be trusted at that point, since it has since been
+    /// advanced by the interrupting list.
+    /// </para>
     /// </summary>
     internal sealed class NumberingRestartState
     {
         private readonly IReadOnlyDictionary<(int NumId, int Level), int> _explicitOverrides;
         private readonly IReadOnlyDictionary<(int NumId, int Level), int> _defaultStarts;
         private readonly HashSet<(int NumId, int Level)> _consumedOverrides = [];
+        private readonly Dictionary<(int NumId, int Level), int> _instanceCounts = [];
         private int? _lastNumberNumId;
         private int? _lastMultiLevelNumId;
 
@@ -7163,19 +7194,46 @@ public static class DocxReader
                     return explicitStart;  // no counter to track for bullets; pass the override through
             }
 
+            var key = (numId, level);
+
             // An explicit startOverride restarts its numbering INSTANCE once, at the run's first paragraph.
             // The paragraphs after it continue that run and must read back as "continue" (null) — the model
             // convention the render layer and the writer's RestartNumbering both rely on — so the override is
             // consumed on first use. Handing it to every paragraph on the numId would restart the counter on
             // each one (5, 5, 5 instead of 5, 6, 7) now that a restarted run's continuations correctly share
             // their anchor's numId.
-            if (explicitStart is { } start && _consumedOverrides.Add((numId, level)))
+            if (explicitStart is { } start && _consumedOverrides.Add(key))
+            {
+                _instanceCounts[key] = start;
                 return start;
+            }
 
             if (previousNumId is null || previousNumId == numId)
-                return null; // no prior instance to conflict with, or continuing the same one — don't restart
+            {
+                // No prior instance to conflict with, or continuing the same one uninterrupted — don't
+                // restart. Mirror the render layer's own running increment locally so a LATER interruption
+                // (by a different numId) followed by a return to this one can resume from the correct value.
+                _instanceCounts[key] = _instanceCounts.TryGetValue(key, out var running) ? running + 1 : 1;
+                return null;
+            }
 
-            return _defaultStarts.TryGetValue((numId, level), out var defaultStart) ? defaultStart : 1;
+            // previousNumId != numId: either a genuinely new list instance (this numId/level has never been
+            // resolved before) or a RETURN to a numId that was already running before an interleaving
+            // different numId took over. A brand-new numId restarts at its declared/default start, same as
+            // before this fix. A returning numId instead resumes its OWN counter — Word numbers each list
+            // instance independently of whatever unrelated list interrupted it — so it is handed an explicit
+            // override equal to its own next value; the render layer's single shared per-level counter
+            // cannot be trusted here, since it has since been advanced by the interrupting list.
+            if (_instanceCounts.TryGetValue(key, out var resumeValue))
+            {
+                var next = resumeValue + 1;
+                _instanceCounts[key] = next;
+                return next;
+            }
+
+            var defaultStart = _defaultStarts.TryGetValue(key, out var declaredStart) ? declaredStart : 1;
+            _instanceCounts[key] = defaultStart;
+            return defaultStart;
         }
     }
 
@@ -7198,6 +7256,10 @@ public static class DocxReader
         // abstractNumId -> ListKind, taken from the format of its lowest level.
         var abstractKinds = new Dictionary<int, ListKind>();
         var abstractMultiLevelFormats = new Dictionary<int, IReadOnlyList<ListNumberFormat>>();
+        // abstractNumId -> per-level lvlText pattern (e.g. "%1)", "%1.%2:"), captured alongside the number
+        // formats above so a document's actual outline separator/prefix/suffix survives instead of being
+        // discarded in favor of a hardcoded dotted "N.N.N." pattern (see MultiLevelListMarkerState).
+        var abstractMultiLevelLevelTexts = new Dictionary<int, IReadOnlyList<string?>>();
         // abstractNumId -> (level -> declared w:start). Every numId built on a given abstract inherits
         // these as its own per-level default start (see NumberingRestartState) unless overridden.
         var abstractLevelStarts = new Dictionary<int, Dictionary<int, int>>();
@@ -7214,7 +7276,10 @@ public static class DocxReader
             var numFmt = levels.FirstOrDefault()?.Element(W + "numFmt")?.Attribute(W + "val")?.Value;
             var isMultiLevel = IsMultiLevel(abstractNum, levels);
             if (isMultiLevel)
+            {
                 abstractMultiLevelFormats[abstractNumId] = ReadMultiLevelNumberFormats(levels);
+                abstractMultiLevelLevelTexts[abstractNumId] = ReadMultiLevelLevelTexts(levels);
+            }
             abstractKinds[abstractNumId] = isMultiLevel
                 ? ListKind.MultiLevel
                 : numFmt == "bullet" ? ListKind.Bullet : ListKind.Number;
@@ -7247,6 +7312,8 @@ public static class DocxReader
                     && abstractMultiLevelFormats.TryGetValue(abstractNumId, out var numberFormats))
                 {
                     document.MultiLevelList.SetNumberFormats(numberFormats);
+                    if (abstractMultiLevelLevelTexts.TryGetValue(abstractNumId, out var levelTexts))
+                        document.MultiLevelList.SetLevelTexts(levelTexts);
                     appliedMultiLevelFormats = true;
                 }
                 if (abstractLevelStarts.TryGetValue(abstractNumId, out var levelStarts))
@@ -7313,6 +7380,26 @@ public static class DocxReader
                 level.Element(W + "numFmt")?.Attribute(W + "val")?.Value);
         }
         return formats;
+    }
+
+    /// <summary>
+    /// Captures each level's raw <c>w:lvlText</c> pattern (e.g. "%1)", "%1.%2:", or literal outline text
+    /// like "Article %1") so <see cref="MultiLevelListMarkerState"/> can render the document's actual
+    /// separator/prefix/suffix instead of a hardcoded dotted "N.N.N." pattern. A level with no lvlText (or
+    /// an out-of-range ilvl) is left null, which falls back to the default dotted pattern.
+    /// </summary>
+    private static IReadOnlyList<string?> ReadMultiLevelLevelTexts(IReadOnlyList<XElement> levels)
+    {
+        var levelTexts = new string?[MultiLevelListFormat.LevelCount];
+        foreach (var level in levels)
+        {
+            var index = ParseInt(level.Attribute(W + "ilvl")?.Value);
+            if (index < 0 || index >= levelTexts.Length)
+                continue;
+
+            levelTexts[index] = level.Element(W + "lvlText")?.Attribute(W + "val")?.Value;
+        }
+        return levelTexts;
     }
 
     /// <summary>

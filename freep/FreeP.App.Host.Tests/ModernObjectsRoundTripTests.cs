@@ -2363,6 +2363,10 @@ public sealed class ModernObjectsRoundTripTests : IDisposable
             "a preserved object without a preview image should emit one DrawOp.Shape placeholder");
     }
 
+    // Shape-level a:reflection round-trip coverage (r143 freep-shape-reflection-unsupported)
+    // lives in FreeP.App.Presentation.Tests/ShapeReflectionRoundTripTests.cs — that project
+    // does not depend on FreeP.App.Host, so it stays buildable independently of the WPF host.
+
     // ── Fixture builders ──────────────────────────────────────────────────────
 
     /// <summary>

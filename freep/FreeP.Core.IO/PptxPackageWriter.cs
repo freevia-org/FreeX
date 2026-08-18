@@ -3590,7 +3590,9 @@ public static class PptxPackageWriter
                 new XElement(P + "nvPr",
                     shape.Placeholder is not null ? BuildPhEl(shape.Placeholder) : null)),
             BuildSpPrEl(shape, scheme, fillBlipRelId: fillBlipRelId),
-            shape.TextBody is not null ? BuildTxBodyEl(shape.TextBody, scheme, hlinkRelIds, allSlides, bulletImageRelIds) : null);
+            shape.TextBody is not null
+                ? BuildTxBodyEl(shape.TextBody, scheme, hlinkRelIds, allSlides, bulletImageRelIds, shape.ExtentCxEmu, shape.ExtentCyEmu)
+                : null);
     }
 
     private static XElement BuildCxnSpEl(SlideShape shape, PresentationColorScheme scheme,
@@ -3933,7 +3935,13 @@ public static class PptxPackageWriter
         xfrm.Add(new XElement(A + "chOff", new XAttribute("x",  chOffX),  new XAttribute("y",  chOffY)));
         xfrm.Add(new XElement(A + "chExt", new XAttribute("cx", chExtCx), new XAttribute("cy", chExtCy)));
 
-        return new XElement(P + "grpSpPr", xfrm);
+        // Group-level effects (shadow/glow/soft edge) round-trip: CT_GroupShapeProperties allows
+        // effectLst directly after xfrm (ECMA-376 §20.1.2.2.20), and the reader (ReadGrpSp ->
+        // ReadSpPr(grpSp.Element(P+"grpSpPr"), ...)) already populates shape.Effects from it — omit
+        // this and a group-level shadow/glow/soft edge is silently dropped on every save.
+        var effectLstEl = shape.Effects is not null ? BuildEffectLstEl(shape.Effects) : null;
+
+        return new XElement(P + "grpSpPr", xfrm, effectLstEl);
     }
 
     private static XElement BuildSpPrEl(
@@ -4096,6 +4104,25 @@ public static class PptxPackageWriter
 
         if (fx.HasSoftEdge)
             effectLst.Add(new XElement(A + "softEdge", new XAttribute("rad", fx.SoftEdgeRadEmu)));
+
+        if (fx.Reflection is { } refl)
+        {
+            effectLst.Add(new XElement(A + "reflection",
+                new XAttribute("blurRad", refl.BlurRadEmu),
+                new XAttribute("stA", refl.StartAlpha),
+                new XAttribute("stPos", refl.StartPos),
+                new XAttribute("endA", refl.EndAlpha),
+                new XAttribute("endPos", refl.EndPos),
+                new XAttribute("dist", refl.DistEmu),
+                new XAttribute("dir", (long)Math.Round(refl.DirDeg * 60000)),
+                new XAttribute("fadeDir", (long)Math.Round(refl.FadeDirDeg * 60000)),
+                new XAttribute("sx", (long)Math.Round(refl.ScaleXPercent * 1000)),
+                new XAttribute("sy", (long)Math.Round(refl.ScaleYPercent * 1000)),
+                new XAttribute("kx", (long)Math.Round(refl.SkewXDeg * 60000)),
+                new XAttribute("ky", (long)Math.Round(refl.SkewYDeg * 60000)),
+                new XAttribute("algn", refl.Align),
+                new XAttribute("rotWithShape", refl.RotWithShape ? "1" : "0")));
+        }
 
         return effectLst;
     }
@@ -4714,7 +4741,9 @@ public static class PptxPackageWriter
     private static XElement BuildTxBodyEl(TextBody body, PresentationColorScheme scheme,
         Dictionary<string, string>? hlinkRelIds = null,
         List<Slide>? allSlides = null,
-        Dictionary<Paragraph, string>? bulletImageRelIds = null)
+        Dictionary<Paragraph, string>? bulletImageRelIds = null,
+        long extentCxEmu = 0,
+        long extentCyEmu = 0)
     {
         // Write anchor only when explicitly set; omit when null (inherited from layout/master).
         var bodyPr = new XElement(A + "bodyPr");
@@ -4756,10 +4785,12 @@ public static class PptxPackageWriter
         {
             case TextAutoFitKind.Normal:
                 var nafEl = new XElement(A + "normAutofit");
-                if (body.FontScalePPT.HasValue && body.FontScalePPT.Value > 0)
-                    nafEl.Add(new XAttribute("fontScale", body.FontScalePPT.Value));
-                if (body.LnSpcReductionPPT.HasValue && body.LnSpcReductionPPT.Value > 0)
-                    nafEl.Add(new XAttribute("lnSpcReduction", body.LnSpcReductionPPT.Value));
+                var (naFontScalePpt, naLnSpcReductionPpt) =
+                    RecomputeNormalAutoFitScale(body, extentCxEmu, extentCyEmu);
+                if (naFontScalePpt.HasValue && naFontScalePpt.Value > 0)
+                    nafEl.Add(new XAttribute("fontScale", naFontScalePpt.Value));
+                if (naLnSpcReductionPpt.HasValue && naLnSpcReductionPpt.Value > 0)
+                    nafEl.Add(new XAttribute("lnSpcReduction", naLnSpcReductionPpt.Value));
                 bodyPr.Add(nafEl);
                 break;
             case TextAutoFitKind.Shape:
@@ -4809,6 +4840,101 @@ public static class PptxPackageWriter
             bodyPr,
             BuildLstStyleEl(body.LstStyle, body.DefaultParaRightToLeft),
             body.Paragraphs.Select(p => BuildParaEl(p, hlinkRelIds, allSlides, bulletImageRelIds)));
+    }
+
+    /// <summary>
+    /// r143 (freep-autofit-2): a cached <c>a:normAutofit</c> <c>fontScale</c>/<c>lnSpcReduction</c>
+    /// reflects the box/text state at import time (or whenever it was last cached) — nothing in
+    /// FreeP updates <see cref="TextBody.FontScalePPT"/>/<see cref="TextBody.LnSpcReductionPPT"/>
+    /// after a text edit or shape resize (<c>SetShapeTextAutoFitCommand.Apply</c> only flips
+    /// <see cref="TextAutoFitKind"/>). Re-emitting those fields verbatim therefore silently bakes a
+    /// stale scale into the saved file once either has changed since the value was cached, and
+    /// PowerPoint trusts a cached <c>fontScale</c> as authoritative on reopen — it will not
+    /// re-shrink the text itself.
+    /// <para>
+    /// The live renderer (<c>TextLayoutPlanner.PlanNormalAutoFitOverflow</c>, FreeP.App.Presentation)
+    /// recomputes an authoritative scale on every paint using real host glyph metrics (WPF/Avalonia
+    /// <c>FormattedText</c>), but that measurement path lives above Core.IO and is not reachable
+    /// from the writer without a circular project reference. Rather than keep re-serializing a
+    /// number we know may be stale, estimate whether the CURRENT box still fits the authored
+    /// (unscaled) text using data the writer already owns — run font sizes and paragraph spacing
+    /// versus the shape's current extent — with an average-glyph-width line-wrap estimate. This is
+    /// a text-metrics-free ESTIMATE, not a pixel-accurate remeasurement, so it only ever shrinks
+    /// FURTHER than what is already cached, and only when the estimate finds clear evidence
+    /// (more than half a point of overflow) that the current geometry needs it; it never grows the
+    /// scale back up, which avoids a wrong estimate ever making an already-fitting file look better
+    /// than it actually renders. It mirrors TextLayoutPlanner's own documented floor/clamp
+    /// semantics (60% minimum font scale, never floored back above an already-lower cached value,
+    /// up to a 20% line-spacing reduction) so the two computations stay in the same spirit even
+    /// though only one has real font metrics to work with.
+    /// </para>
+    /// </summary>
+    internal static (int? FontScalePpt, int? LnSpcReductionPpt) RecomputeNormalAutoFitScale(
+        TextBody body, long extentCxEmu, long extentCyEmu)
+    {
+        ArgumentNullException.ThrowIfNull(body);
+
+        var cachedFontScale = body.FontScalePPT is > 0 ? body.FontScalePPT.Value / 100000.0 : 1.0;
+        var unchanged = (body.FontScalePPT, body.LnSpcReductionPPT);
+
+        if (extentCxEmu <= 0 || extentCyEmu <= 0 || body.Paragraphs.Count == 0)
+            return unchanged;
+
+        const double AvgCharWidthEmFactor = 0.52; // coarse proportional-font average advance width
+        const double LineHeightFactor = 1.2;
+        const double DefaultFontSizePt = 18.0;
+        const double DefaultInsetLeftRightPt = 7.2; // OOXML default lIns/rIns (91440 EMU)
+        const double DefaultInsetTopBottomPt = 3.6; // OOXML default tIns/bIns (45720 EMU)
+        const double RuntimeAutoFitMinimumFontScale = 0.60; // mirrors TextLayoutPlanner's own floor
+        const double RuntimeAutoFitMaximumLineSpacingReduction = 0.20; // mirrors TextLayoutPlanner
+
+        double widthPt = DrawingMlCoordinateUnits.EmuToPoints(extentCxEmu)
+            - (body.InsetLeftPt ?? DefaultInsetLeftRightPt) - (body.InsetRightPt ?? DefaultInsetLeftRightPt);
+        double heightPt = DrawingMlCoordinateUnits.EmuToPoints(extentCyEmu)
+            - (body.InsetTopPt ?? DefaultInsetTopBottomPt) - (body.InsetBottomPt ?? DefaultInsetTopBottomPt);
+        if (widthPt <= 1 || heightPt <= 1)
+            return unchanged;
+
+        double unscaledHeightPt = 0;
+        foreach (var paragraph in body.Paragraphs)
+        {
+            double fontSizePt = paragraph.Runs.Count > 0
+                ? paragraph.Runs.Max(r => r.FontSizePt ?? DefaultFontSizePt)
+                : DefaultFontSizePt;
+            double textWidthPt = paragraph.Runs.Sum(r => (r.Text?.Length ?? 0) * fontSizePt * AvgCharWidthEmFactor);
+            int lines = body.Wrap
+                ? Math.Max(1, (int)Math.Ceiling(textWidthPt / widthPt))
+                : 1;
+            unscaledHeightPt += lines * fontSizePt * LineHeightFactor;
+            unscaledHeightPt += paragraph.SpaceBeforePt ?? 0;
+            unscaledHeightPt += paragraph.SpaceAfterPt ?? 0;
+        }
+
+        // Fits at authored size (or no clear evidence of overflow) — no basis to override the
+        // cached value.
+        if (unscaledHeightPt <= heightPt + 0.5)
+            return unchanged;
+
+        double requiredScale = heightPt / unscaledHeightPt;
+        double minimumFontScale = Math.Min(RuntimeAutoFitMinimumFontScale, cachedFontScale);
+        double targetFontScale = Math.Clamp(requiredScale, minimumFontScale, 1.0);
+
+        // Only move when the estimate shows the CURRENT geometry needs strictly more shrink than
+        // what is already cached — never grow the scale back based on this coarse estimate alone.
+        if (targetFontScale >= cachedFontScale - 0.001)
+            return unchanged;
+
+        double projectedHeightPt = unscaledHeightPt * targetFontScale;
+        double lineSpacingReduction = 0.0;
+        if (projectedHeightPt > heightPt + 0.5)
+        {
+            double requiredLineScale = heightPt / projectedHeightPt;
+            lineSpacingReduction = Math.Clamp(1.0 - requiredLineScale, 0.0, RuntimeAutoFitMaximumLineSpacingReduction);
+        }
+
+        return (
+            (int)Math.Round(targetFontScale * 100000.0),
+            lineSpacingReduction > 0 ? (int)Math.Round(lineSpacingReduction * 100000.0) : null);
     }
 
     private static XElement BuildParaEl(Paragraph para,

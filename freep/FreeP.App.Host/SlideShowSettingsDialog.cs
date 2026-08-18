@@ -111,6 +111,12 @@ internal sealed partial class SlideShowSettingsDialog : Free.Shared.Ribbon.Wpf.D
             _showMediaControlsCheck, _showMasterShapesCheck, _loopCheck,
             _showTypeCombo, _showScrollbarCheck, _kioskRestartText);
 
+        // PowerPoint forces "Loop until 'Esc'" whenever "Browsed at a kiosk" is
+        // selected and the user cannot turn it off in that mode: the checkbox shows
+        // checked and is disabled for as long as kiosk is the selected show type.
+        _showTypeCombo.SelectionChanged += (_, _) => SyncLoopCheckForShowType();
+        SyncLoopCheckForShowType();
+
         var panel = new StackPanel { Margin = new Thickness(14) };
         panel.Children.Add(_useTimingsCheck);
         panel.Children.Add(_showAnimationCheck);
@@ -169,6 +175,15 @@ internal sealed partial class SlideShowSettingsDialog : Free.Shared.Ribbon.Wpf.D
         if (applied && IsLoaded)
             DialogResult = true;
         return applied;
+    }
+
+    private void SyncLoopCheckForShowType()
+    {
+        var isKiosk = _showTypeCombo.SelectedItem is SlideShowSettingsShowTypeOption option
+            && option.ShowType == PresentationShowType.BrowsedAtKiosk;
+        if (isKiosk)
+            _loopCheck.IsChecked = true;
+        _loopCheck.IsEnabled = !isKiosk;
     }
 
 }

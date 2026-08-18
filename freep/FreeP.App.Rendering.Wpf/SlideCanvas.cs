@@ -683,11 +683,15 @@ public sealed partial class SlideCanvas : FrameworkElement
 
         var bounds = shape.BoundsDip;
 
-        if (hasBevel && fx.BevelTop is not null)
+        // A shape may declare only a:bevelB with no a:bevelT (independently settable via
+        // 3-D Format's Bottom bevel). Fall back to BevelBottom so that case still paints
+        // a bevel overlay instead of silently rendering flat.
+        var activeBevel = fx.BevelTop ?? fx.BevelBottom;
+        if (hasBevel && activeBevel is not null)
         {
-            var (highlight, shade) = BevelGeometryHelper.ComputeBevelRegions(bounds, fx.BevelTop, fx.LightDirDeg);
+            var (highlight, shade) = BevelGeometryHelper.ComputeBevelRegions(bounds, activeBevel, fx.LightDirDeg);
             DrawBevelOverlay(dc, shapeGeometry, bounds, highlight, shade,
-                fx.BevelTop.WidthDip, fx.BevelTop.HeightDip, fx.BevelTop.PresetName);
+                activeBevel.WidthDip, activeBevel.HeightDip, activeBevel.PresetName);
         }
 
         // Contour outline (thin ring in contourColor)

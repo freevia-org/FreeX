@@ -5496,9 +5496,9 @@ public static class PptxPackageReader
 
             // Only store if there's actually something
             bool hasSomething = fx.HasOuterShadow || fx.HasInnerShadow || fx.HasGlow
-                || fx.HasSoftEdge || fx.BevelTop is not null || fx.BevelBottom is not null
-                || fx.ExtrusionHeightEmu != 0 || fx.ContourWidthEmu != 0
-                || fx.Scene3d is not null;
+                || fx.HasSoftEdge || fx.Reflection is not null || fx.BevelTop is not null
+                || fx.BevelBottom is not null || fx.ExtrusionHeightEmu != 0
+                || fx.ContourWidthEmu != 0 || fx.Scene3d is not null;
             if (hasSomething)
                 shape.Effects = fx;
         }
@@ -5979,6 +5979,43 @@ public static class PptxPackageReader
         {
             fx.HasSoftEdge = true; any = true;
             fx.SoftEdgeRadEmu = ParseLong(softEdge.Attribute("rad")?.Value);
+        }
+
+        // a:reflection — stored for lossless round-trip; rendering not yet implemented.
+        var reflection = effectLst.Element(A + "reflection");
+        if (reflection is not null)
+        {
+            any = true;
+            var reflectionInfo = new ReflectionInfo();
+            var blurRad = reflection.Attribute("blurRad")?.Value;
+            if (blurRad is not null) reflectionInfo.BlurRadEmu = ParseLong(blurRad);
+            var stA = reflection.Attribute("stA")?.Value;
+            if (stA is not null) reflectionInfo.StartAlpha = ParseLong(stA);
+            var stPos = reflection.Attribute("stPos")?.Value;
+            if (stPos is not null) reflectionInfo.StartPos = ParseLong(stPos);
+            var endA = reflection.Attribute("endA")?.Value;
+            if (endA is not null) reflectionInfo.EndAlpha = ParseLong(endA);
+            var endPos = reflection.Attribute("endPos")?.Value;
+            if (endPos is not null) reflectionInfo.EndPos = ParseLong(endPos);
+            var dist = reflection.Attribute("dist")?.Value;
+            if (dist is not null) reflectionInfo.DistEmu = ParseLong(dist);
+            var dir = reflection.Attribute("dir")?.Value;
+            if (dir is not null) reflectionInfo.DirDeg = ParseDouble(dir) / 60000.0;
+            var fadeDir = reflection.Attribute("fadeDir")?.Value;
+            if (fadeDir is not null) reflectionInfo.FadeDirDeg = ParseDouble(fadeDir) / 60000.0;
+            var sx = reflection.Attribute("sx")?.Value;
+            if (sx is not null) reflectionInfo.ScaleXPercent = ParseDouble(sx) / 1000.0;
+            var sy = reflection.Attribute("sy")?.Value;
+            if (sy is not null) reflectionInfo.ScaleYPercent = ParseDouble(sy) / 1000.0;
+            var kx = reflection.Attribute("kx")?.Value;
+            if (kx is not null) reflectionInfo.SkewXDeg = ParseDouble(kx) / 60000.0;
+            var ky = reflection.Attribute("ky")?.Value;
+            if (ky is not null) reflectionInfo.SkewYDeg = ParseDouble(ky) / 60000.0;
+            var algn = reflection.Attribute("algn")?.Value;
+            if (!string.IsNullOrEmpty(algn)) reflectionInfo.Align = algn;
+            var rotWithShape = reflection.Attribute("rotWithShape")?.Value;
+            if (rotWithShape is not null) reflectionInfo.RotWithShape = ParseBoolean(rotWithShape);
+            fx.Reflection = reflectionInfo;
         }
 
         return any ? fx : null;

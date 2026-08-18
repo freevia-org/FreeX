@@ -76,24 +76,57 @@ public static class QuickSortRangePlanner
     }
 
     /// <summary>
-    /// Shrinks <paramref name="selectedRange"/>'s end corner to the sheet's actual used-range
-    /// extent when it reaches past real data (the case for a whole-column/whole-row selection,
-    /// whose End.Row/End.Col sit at <see cref="CellAddress.MaxRow"/>/<see cref="CellAddress.MaxCol"/>).
-    /// The start corner is left untouched -- it is always inside the real sheet for the selections
-    /// this planner is asked about. Returns <paramref name="selectedRange"/> unchanged when the
-    /// sheet has no used range at all, or when the selection is already within it.
+    /// Shrinks <paramref name="selectedRange"/>'s end corner to the used-range extent of the
+    /// columns (or rows) actually selected, when it reaches past real data -- the case for a
+    /// whole-column/whole-row selection, whose End.Row/End.Col sit at
+    /// <see cref="CellAddress.MaxRow"/>/<see cref="CellAddress.MaxCol"/>. The start corner is left
+    /// untouched -- it is always inside the real sheet for the selections this planner is asked
+    /// about. Returns <paramref name="selectedRange"/> unchanged when it isn't a whole-column/row
+    /// selection, when the sheet has no data in the selected band at all, or when the selection is
+    /// already within the band's real extent.
     /// </summary>
+    /// <remarks>
+    /// This is scoped to just the selected columns/rows deliberately: a whole-sheet
+    /// <see cref="Sheet.GetUsedRange"/> query would be inflated by a stray cell sitting in any OTHER,
+    /// unselected column (or row), which would falsely widen the clamp far past the selected data
+    /// and make the "region contains the whole selection" check below always fail -- silently
+    /// re-enabling the very Sort Warning bypass this clamp exists to close.
+    /// </remarks>
     private static GridRange ClampToUsedRange(Sheet sheet, GridRange selectedRange)
     {
-        if (sheet.GetUsedRange() is not { } usedRange)
+        if (SelectionRangeService.IsWholeColumnSelection(selectedRange))
+            return ClampEndRow(selectedRange, sheet.GetUsedRangeInColumns(selectedRange.Start.Col, selectedRange.End.Col));
+
+        if (SelectionRangeService.IsWholeRowSelection(selectedRange))
+            return ClampEndCol(selectedRange, sheet.GetUsedRangeInRows(selectedRange.Start.Row, selectedRange.End.Row));
+
+        // An ordinary (non-whole-column/row) selection already has real Start/End bounds supplied
+        // by the caller -- nothing to clamp.
+        return selectedRange;
+    }
+
+    private static GridRange ClampEndRow(GridRange selectedRange, GridRange? usedRange)
+    {
+        if (usedRange is not { } used)
             return selectedRange;
 
-        var endRow = Math.Min(selectedRange.End.Row, Math.Max(usedRange.End.Row, selectedRange.Start.Row));
-        var endCol = Math.Min(selectedRange.End.Col, Math.Max(usedRange.End.Col, selectedRange.Start.Col));
-        if (endRow == selectedRange.End.Row && endCol == selectedRange.End.Col)
+        var endRow = Math.Min(selectedRange.End.Row, Math.Max(used.End.Row, selectedRange.Start.Row));
+        if (endRow == selectedRange.End.Row)
             return selectedRange;
 
-        return new GridRange(selectedRange.Start, new CellAddress(selectedRange.Start.Sheet, endRow, endCol));
+        return new GridRange(selectedRange.Start, new CellAddress(selectedRange.Start.Sheet, endRow, selectedRange.End.Col));
+    }
+
+    private static GridRange ClampEndCol(GridRange selectedRange, GridRange? usedRange)
+    {
+        if (usedRange is not { } used)
+            return selectedRange;
+
+        var endCol = Math.Min(selectedRange.End.Col, Math.Max(used.End.Col, selectedRange.Start.Col));
+        if (endCol == selectedRange.End.Col)
+            return selectedRange;
+
+        return new GridRange(selectedRange.Start, new CellAddress(selectedRange.Start.Sheet, selectedRange.End.Row, endCol));
     }
 
     /// <summary>True when <paramref name="range"/> sits entirely inside one of the sheet's structured (ListObject) tables.</summary>

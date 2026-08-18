@@ -278,11 +278,19 @@ public sealed class SlideShowSettingsDialogSession
     {
         ArgumentNullException.ThrowIfNull(input);
 
+        var showType = ShowTypeFromIndex(input.ShowTypeIndex);
+
+        // PowerPoint forces "Loop until 'Esc'" whenever the show type is "Browsed at a
+        // kiosk" -- an unattended kiosk display must never fall through to the editor.
+        // The loop checkbox is independent UI state, so ignore an unchecked value here
+        // rather than let a kiosk show silently end.
+        var loopUntilStopped = input.LoopUntilStopped || showType == PresentationShowType.BrowsedAtKiosk;
+
         LastCommitPlan = new SlideShowSettingsDialogCommitPlan(new SlideShowSettingsState(
             input.UseSlideTimings,
             !input.ShowWithoutAnimation,
-            input.LoopUntilStopped,
-            ShowTypeFromIndex(input.ShowTypeIndex),
+            loopUntilStopped,
+            showType,
             input.ShowBrowseScrollbar,
             ParseRestartMilliseconds(input.KioskRestartMilliseconds),
             input.ShowWithNarration,

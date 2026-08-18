@@ -14,7 +14,11 @@ namespace FreeX.App.Host;
 
 public partial class MainWindow
 {
-    private readonly WorkbookClipboardSession _workbookClipboardSession = new();
+    // clip-2 (R143): assigned in the MainWindow.xaml.cs constructor (defaults to a fresh instance
+    // when no shared session is supplied, e.g. by every existing test's direct `new MainWindow(...)`)
+    // rather than `= new()` here, so the DI-resolved production path can hand every window the same
+    // process-wide WorkbookClipboardSession. See the constructor comment in MainWindow.xaml.cs.
+    private readonly WorkbookClipboardSession _workbookClipboardSession;
     private readonly DrawingObjectClipboardSession _drawingObjectClipboard = new();
 
     private void CancelCopyAndTransientModes()

@@ -290,6 +290,17 @@ public sealed class InlineImage(byte[] bytes, double widthPt, double heightPt, I
     public string? AltText { get; set; }
 
     /// <summary>
+    /// True when the user explicitly marked this picture "decorative" (Word's Alt Text pane "Mark as
+    /// decorative" checkbox), from the <c>&lt;wp:docPr&gt;&lt;a:extLst&gt;&lt;a:ext
+    /// uri="{C183D7F6-B498-43B3-948B-1728B52AA6E4}"&gt;&lt;adec:decorative val="1"/&gt;</c> extension
+    /// (the same extension Excel/PowerPoint use for the identical checkbox). A decorative picture is
+    /// intentionally content-free (e.g. a divider graphic) and is exempt from the Accessibility
+    /// Checker's "Missing alternative text" rule even when <see cref="AltText"/> is blank -- matching
+    /// real Word's own Accessibility Checker and FreeX's <c>PictureModel.IsDecorative</c>.
+    /// </summary>
+    public bool IsDecorative { get; set; }
+
+    /// <summary>
     /// How the image relates to the surrounding text. Defaults to <see cref="ImageWrapping.Inline"/> so
     /// existing images serialise as <c>wp:inline</c> unchanged; any other value makes the image floating
     /// (<c>wp:anchor</c>) with the matching wrap element.

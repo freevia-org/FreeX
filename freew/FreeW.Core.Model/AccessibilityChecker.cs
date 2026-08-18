@@ -175,8 +175,11 @@ public static class AccessibilityChecker
     {
         foreach (var run in paragraph.Runs)
         {
-            // Missing image alt text (Error).
-            if (run.Image is { } image && string.IsNullOrWhiteSpace(image.AltText))
+            // Missing image alt text (Error). A picture the user explicitly marked "decorative" (Word's
+            // Alt Text pane "Mark as decorative" checkbox, InlineImage.IsDecorative) is intentionally
+            // content-free and is exempt -- matching real Word's own Accessibility Checker and FreeX's
+            // identical-purpose PictureModel.IsDecorative exemption (AccessibilityCheckerService.cs).
+            if (run.Image is { IsDecorative: false } image && string.IsNullOrWhiteSpace(image.AltText))
             {
                 issues.Add(new AccessibilityIssue(
                     AccessibilityRule.MissingImageAltText,
@@ -321,6 +324,37 @@ public static class AccessibilityChecker
                 "A table contains one or more blank cells. Fill in empty cells or merge them so the " +
                 "table reads clearly.",
                 blockIndex, Paragraph: null, Run: null, Table: table));
+        }
+
+        // Walk every cell's own content with the same per-paragraph rules applied to top-level body
+        // paragraphs -- missing image alt text, uninformative link text, low-contrast text -- and recurse
+        // into any nested table (tc/w:tbl) so its own header-row/blank-cell/text rules run too. A table
+        // cell's content is itself paragraphs and nested tables, never reachable from Check()'s top-level
+        // document.Blocks walk, so without this a table was previously reported clean regardless of what
+        // its cells actually contained.
+        foreach (var row in table.Rows)
+        {
+            foreach (var cell in row.Cells)
+            {
+                CheckTableCell(document, cell, blockIndex, issues);
+            }
+        }
+    }
+
+    // A table cell's block content: its own paragraphs (checked with the ordinary per-paragraph rules)
+    // plus any nested tables, recursively checked with the full CheckTable ruleset (header row, blank
+    // cells, and this same cell walk again).
+    private static void CheckTableCell(
+        TextDocument document, TableCell cell, int blockIndex, List<AccessibilityIssue> issues)
+    {
+        foreach (var paragraph in cell.Paragraphs)
+        {
+            CheckParagraph(document, paragraph, blockIndex, issues);
+        }
+
+        foreach (var nestedTable in cell.NestedTables)
+        {
+            CheckTable(document, nestedTable, blockIndex, issues);
         }
     }
 

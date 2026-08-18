@@ -858,7 +858,7 @@ public sealed partial class DocumentView : RichTextBox
     /// "structural fallback" used for headers/footers/tables and other content the model-aware path can't
     /// resolve (see <see cref="InsertText"/>). A position outside any content control keeps the existing
     /// behavior unchanged: native editing proceeds exactly as before, gated only by the document-wide
-    /// <see cref="IsReadOnly"/> flag. A position inside a content control is instead judged directly
+    /// <see cref="IsReadOnly"/> flag. A position inside a RUN-level content control is judged directly
     /// against <see cref="ContentControlInteractionPlanner.CanEditExistingContentControl"/> -- the same
     /// check the mouse-driven checkbox/dropdown/date-picker interactions already use -- so a content-locked
     /// control (<see cref="ContentControlLockMode.ContentLocked"/>/<see cref="ContentControlLockMode.ControlAndContentLocked"/>)
@@ -866,31 +866,42 @@ public sealed partial class DocumentView : RichTextBox
     /// even while Filling-In-Forms protection has set <see cref="IsReadOnly"/> for ordinary body text. When
     /// the latter case requires transiently clearing <see cref="IsReadOnly"/> for the one native call,
     /// <paramref name="restoreReadOnly"/> reports true so the caller restores it immediately afterward.
+    /// A position with no run-level control is additionally checked against
+    /// <see cref="ContentControlInteractionPlanner.CanEditExistingBlockContentControl"/> for the enclosing
+    /// paragraph's BLOCK-level control (see <see cref="BlockContentControlAt"/>) -- the whole-paragraph
+    /// <c>w:sdt</c> Word produces for "lock whole paragraph", which carries no run.Control at all.
     /// </summary>
     private bool TryPrepareNativeFallback(out bool restoreReadOnly)
     {
         restoreReadOnly = false;
         if ((Selection.Start.Parent as WpfRun ?? CaretPosition?.Parent as WpfRun)
-            is not { Tag: RunMarkers { Control: { } marker } })
+            is { Tag: RunMarkers { Control: { } marker } })
         {
+            if (!AllowsContentControlInteraction(marker.Control))
+                return false;
+
+            if (IsReadOnly)
+            {
+                IsReadOnly = false;
+                restoreReadOnly = true;
+            }
             return true;
         }
 
-        if (!AllowsContentControlInteraction(marker.Control))
-            return false;
-
-        if (IsReadOnly)
+        if (BlockContentControlAt(Selection.Start.Paragraph ?? CaretPosition?.Paragraph) is { } blockControl
+            && !AllowsBlockContentControlInteraction(blockControl))
         {
-            IsReadOnly = false;
-            restoreReadOnly = true;
+            return false;
         }
+
         return true;
     }
 
     /// <summary>
-    /// Pure (side-effect-free) query: does the caret/selection sit on a content-control run whose lock
-    /// mode denies interaction right now (the same <see cref="AllowsContentControlInteraction"/> check
-    /// <see cref="TryPrepareNativeFallback"/> uses)? Deliberately does NOT reuse
+    /// Pure (side-effect-free) query: does the caret/selection sit on a content control (run-level or
+    /// block-level) whose lock mode denies interaction right now -- the same
+    /// <see cref="AllowsContentControlInteraction"/>/<see cref="AllowsBlockContentControlInteraction"/>
+    /// checks <see cref="TryPrepareNativeFallback"/> uses? Deliberately does NOT reuse
     /// <see cref="TryPrepareNativeFallback"/> directly: that method's "allowed" branch has the side effect
     /// of clearing <see cref="IsReadOnly"/> for one native call, and this predicate backs a CanExecute
     /// query (<see cref="OnPreviewCanExecuteClipboardMutation"/>) that WPF's CommandManager can re-run far
@@ -901,11 +912,13 @@ public sealed partial class DocumentView : RichTextBox
     private bool IsCaretOnLockedContentControl()
     {
         if ((Selection.Start.Parent as WpfRun ?? CaretPosition?.Parent as WpfRun)
-            is not { Tag: RunMarkers { Control: { } marker } })
+            is { Tag: RunMarkers { Control: { } marker } })
         {
-            return false;
+            return !AllowsContentControlInteraction(marker.Control);
         }
-        return !AllowsContentControlInteraction(marker.Control);
+
+        return BlockContentControlAt(Selection.Start.Paragraph ?? CaretPosition?.Paragraph) is { } blockControl
+            && !AllowsBlockContentControlInteraction(blockControl);
     }
 
     /// <summary>
@@ -4930,7 +4943,7 @@ public sealed partial class DocumentView : RichTextBox
         // paragraph carries an explicit w:lvlOverride/startOverride restart (ListStartOverride). Mirrors
         // the Avalonia renderer's use of the same portable sequence planner.
         var listMarkerSequence = new DocumentListMarkerSequencePlanner(
-            _model.MultiLevelList.NumberFormats);
+            _model.MultiLevelList.NumberFormats, _model.MultiLevelList.LevelTexts);
         var i = 0;
         while (i < blocks.Count)
         {
@@ -7905,7 +7918,18 @@ public sealed partial class DocumentView : RichTextBox
     /// list level round-trip through an edit/commit cycle, which keeps the accumulated outline markers
     /// (1.1.1) stable after editing. Defaults to 0 (the non-list / top-level case).
     /// </para>
-    private sealed record ParagraphTag(IReadOnlyList<TabStop> TabStops, IReadOnlyList<string> BookmarkNames, bool PageBreakBefore = false, bool WidowControl = false, bool WidowControlIsSet = false, string? StyleId = null, int ListLevel = 0, ParagraphBorder? Border = null, ShadingPattern ShadingPattern = ShadingPattern.Clear, bool SuppressAutoHyphens = false, bool SuppressAutoHyphensIsSet = false, bool SuppressLineNumbers = false, bool SuppressLineNumbersIsSet = false, FreeW.Core.Model.Section? SectionBreak = null, DropCapLayoutIntent? DropCap = null, ListKind? ListKind = null, bool KeepLinesTogether = false, int? ListStartOverride = null, ComplexField? SpanningFieldStart = null, ComplexField? SpanningFieldOwner = null, bool EndsSpanningField = false, RevisionKind MarkRevision = RevisionKind.None, string? MarkRevisionAuthor = null, string? MarkRevisionDateXml = null);
+    /// <para>
+    /// Also carries the paragraph's body-level content-control mark (<see cref="ModelParagraph.BlockContentControl"/>,
+    /// a body <c>w:sdt</c> spanning one or more whole paragraphs -- e.g. Word's "lock whole paragraph"
+    /// content control), for the same reason: a WPF <see cref="System.Windows.Documents.Paragraph"/> has no
+    /// structural slot for it, so without carrying it on the Tag it would be silently dropped the first
+    /// time an edit anywhere in the document forces a <see cref="CommitToModel"/>/<see cref="Render"/>
+    /// cycle. Restored verbatim on commit (see <see cref="ReadParagraph"/>) and consulted by
+    /// <see cref="TryPrepareNativeFallback"/>/<see cref="IsCaretOnLockedContentControl"/>/
+    /// <see cref="TryEvaluateContentControlLock"/> to enforce a block-level <c>w:lock="sdtContentLocked"</c>
+    /// the same way run-level <see cref="RunMarkers.Control"/> already is.
+    /// </para>
+    private sealed record ParagraphTag(IReadOnlyList<TabStop> TabStops, IReadOnlyList<string> BookmarkNames, bool PageBreakBefore = false, bool WidowControl = false, bool WidowControlIsSet = false, string? StyleId = null, int ListLevel = 0, ParagraphBorder? Border = null, ShadingPattern ShadingPattern = ShadingPattern.Clear, bool SuppressAutoHyphens = false, bool SuppressAutoHyphensIsSet = false, bool SuppressLineNumbers = false, bool SuppressLineNumbersIsSet = false, FreeW.Core.Model.Section? SectionBreak = null, DropCapLayoutIntent? DropCap = null, ListKind? ListKind = null, bool KeepLinesTogether = false, int? ListStartOverride = null, ComplexField? SpanningFieldStart = null, ComplexField? SpanningFieldOwner = null, bool EndsSpanningField = false, RevisionKind MarkRevision = RevisionKind.None, string? MarkRevisionAuthor = null, string? MarkRevisionDateXml = null, FreeW.Core.Model.BlockContentControl? BlockContentControl = null);
 
     private sealed record RenderedBookmarkBoundary(BookmarkBoundary Boundary);
 
@@ -8126,10 +8150,12 @@ public sealed partial class DocumentView : RichTextBox
                 ListStartOverride = tag?.ListStartOverride,
                 WidowControlIsSet = tag?.WidowControlIsSet ?? false
             },
-            // The bookmark names, style id, and section break (invisible markers with no FlowDocument slot)
-            // are preserved across edits via the paragraph Tag (see ParagraphTag).
+            // The bookmark names, style id, section break, and block-level content-control mark (invisible
+            // markers with no FlowDocument slot) are preserved across edits via the paragraph Tag (see
+            // ParagraphTag).
             StyleId = tag?.StyleId is { Length: > 0 } styleId ? styleId : null,
             SectionBreak = tag?.SectionBreak,
+            BlockContentControl = tag?.BlockContentControl,
             DropCap = tag?.DropCap,
             SpanningFieldStart = tag?.SpanningFieldStart,
             SpanningFieldOwner = tag?.SpanningFieldOwner,
@@ -10007,7 +10033,8 @@ public sealed partial class DocumentView : RichTextBox
             paragraph.EndsSpanningField,
             paragraph.MarkRevision,
             paragraph.MarkRevisionAuthor,
-            paragraph.MarkRevisionDateXml);
+            paragraph.MarkRevisionDateXml,
+            paragraph.BlockContentControl);
 
         var runs = paragraph.Runs;
         var dropCapPlan = !inTableCell
@@ -14808,24 +14835,49 @@ public sealed partial class DocumentView : RichTextBox
     }
 
     /// <summary>
+    /// Looks up the BLOCK-level content-control mark (a body <c>w:sdt</c> spanning the whole paragraph --
+    /// e.g. Word's "lock whole paragraph" content control, modeled as <see cref="ModelParagraph.BlockContentControl"/>)
+    /// carried on <paramref name="paragraph"/>'s Tag (see <see cref="ParagraphTag"/>). Unlike a run-level
+    /// control this has no per-run marker at all, so every keyboard/paste/Page-Edit lock choke point in
+    /// this file must consult the enclosing paragraph, not the run at the caret.
+    /// </summary>
+    private static FreeW.Core.Model.BlockContentControl? BlockContentControlAt(WpfParagraph? paragraph) =>
+        (paragraph?.Tag as ParagraphTag)?.BlockContentControl;
+
+    /// <summary>
+    /// The block-level counterpart of <see cref="AllowsContentControlInteraction"/>: is
+    /// <paramref name="control"/> (and every block-level control it is nested inside, see
+    /// <see cref="FreeW.Core.Model.BlockContentControl.Parent"/>) unlocked, and does Filling-In-Forms
+    /// protection currently permit editing it?
+    /// </summary>
+    private bool AllowsBlockContentControlInteraction(FreeW.Core.Model.BlockContentControl control) =>
+        ContentControlInteractionPlanner.CanEditExistingBlockContentControl(control, RestrictEditingPolicy);
+
+    /// <summary>
     /// freew-cc-3: lets the opt-in Page Edit surface (<see cref="Editing.PaginatedEditorPanel"/> /
-    /// <see cref="Editing.PageBox"/>) ask whether a text position sits on a content-control run this
-    /// editor's lock/protection state would refuse to edit. Those pages hold plain, un-subclassed
-    /// <see cref="System.Windows.Controls.RichTextBox"/> instances with none of this class's lock-aware
-    /// overrides, but their body <c>FlowDocument</c> blocks are MOVED (not cloned) from a scratch
-    /// <see cref="DocumentView"/>'s render (see <see cref="Editing.PaginatedEditorPanel"/>'s class doc on
-    /// "Tag preservation"), so the same Tag-borne <see cref="RunMarkers"/> this class writes are present
-    /// on those runs too -- callers just cannot pattern-match on the private marker types themselves.
-    /// Returns null when <paramref name="position"/> is not on a content-control run at all (nothing to
-    /// gate); otherwise true/false for allowed/blocked, using the same
-    /// <see cref="ContentControlInteractionPlanner.CanEditExistingContentControl"/> check
-    /// <see cref="TryPrepareNativeFallback"/> and <see cref="AllowsContentControlInteraction"/> already use.
+    /// <see cref="Editing.PageBox"/>) ask whether a text position sits on a content-control run or
+    /// paragraph this editor's lock/protection state would refuse to edit. Those pages hold plain,
+    /// un-subclassed <see cref="System.Windows.Controls.RichTextBox"/> instances with none of this class's
+    /// lock-aware overrides, but their body <c>FlowDocument</c> blocks are MOVED (not cloned) from a
+    /// scratch <see cref="DocumentView"/>'s render (see <see cref="Editing.PaginatedEditorPanel"/>'s class
+    /// doc on "Tag preservation"), so the same Tag-borne <see cref="RunMarkers"/>/<see cref="ParagraphTag"/>
+    /// this class writes are present on those runs/paragraphs too -- callers just cannot pattern-match on
+    /// the private marker types themselves.
+    /// Returns null when <paramref name="position"/> is not on a content-control run AND its enclosing
+    /// paragraph carries no block-level control either (nothing to gate); otherwise true/false for
+    /// allowed/blocked, using the same <see cref="ContentControlInteractionPlanner.CanEditExistingContentControl"/>/
+    /// <see cref="ContentControlInteractionPlanner.CanEditExistingBlockContentControl"/> checks
+    /// <see cref="TryPrepareNativeFallback"/> already uses. A locked run-level control takes precedence
+    /// over the paragraph's block-level control when both are present.
     /// </summary>
     internal bool? TryEvaluateContentControlLock(TextPointer? position)
     {
-        if ((position?.Parent as WpfRun) is not { Tag: RunMarkers { Control: { } marker } })
-            return null;
-        return AllowsContentControlInteraction(marker.Control);
+        if ((position?.Parent as WpfRun) is { Tag: RunMarkers { Control: { } marker } })
+            return AllowsContentControlInteraction(marker.Control);
+
+        return BlockContentControlAt(position?.Paragraph) is { } blockControl
+            ? AllowsBlockContentControlInteraction(blockControl)
+            : null;
     }
 
     /// <summary>

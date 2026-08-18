@@ -1349,4 +1349,95 @@ public sealed class SlideCanvasTests
         return pixels[o]; // B channel (== G == R for this neutral gray shadow blended with white)
     }
 
+    // ── r143 freep-bevel-bottom-not-rendered ──────────────────────────────────
+
+    /// <summary>
+    /// A shape with only a:bevelB (BevelBottom, no BevelTop) must still paint a bevel
+    /// highlight/shade overlay -- PowerPoint's 3-D Format lets the Bottom bevel be set
+    /// independently of Top, and FreeP's own SetShapeBevelCommand supports that
+    /// combination, so the renderer must not silently drop it.
+    /// </summary>
+    [StaFact]
+    public void SlideCanvas_BevelBottomOnly_RendersOverlay()
+    {
+        var flat = RenderBevelShape(effects: null);
+        var withBevel = RenderBevelShape(new ShapeEffects
+        {
+            BevelBottom = new BevelInfo { WidthEmu = 914400, HeightEmu = 914400, PresetName = "circle" }
+        });
+
+        CountPixelDifferences(flat, withBevel)
+            .Should().BeGreaterThan(0,
+                "a:bevelB with no a:bevelT must still paint the bevel highlight/shade overlay");
+    }
+
+    /// <summary>
+    /// Sibling coverage: the pre-existing BevelTop-only path (the common case) must still
+    /// render its overlay unchanged after the BevelBottom fallback was added.
+    /// </summary>
+    [StaFact]
+    public void SlideCanvas_BevelTopOnly_StillRendersOverlay()
+    {
+        var flat = RenderBevelShape(effects: null);
+        var withBevel = RenderBevelShape(new ShapeEffects
+        {
+            BevelTop = new BevelInfo { WidthEmu = 914400, HeightEmu = 914400, PresetName = "circle" }
+        });
+
+        CountPixelDifferences(flat, withBevel)
+            .Should().BeGreaterThan(0,
+                "BevelTop-only rendering must remain unaffected by the BevelBottom fallback");
+    }
+
+    /// <summary>
+    /// Renders a full-canvas rectangle with the given effects and returns its raw BGRA
+    /// pixel buffer. The slide size is pinned to the render surface (as in
+    /// RenderCornerShadowPixel above) so there is no uniform-fit letterbox scaling.
+    /// </summary>
+    private static byte[] RenderBevelShape(ShapeEffects? effects)
+    {
+        const int width = 100;
+        const int height = 60;
+
+        var p = Presentation.CreateEmpty();
+        p.SlideSizeCxEmu = (long)width * 9525L;
+        p.SlideSizeCyEmu = (long)height * 9525L;
+        var slide = p.Slides[0];
+        slide.Background = new ShapeFill.Solid(SrgbColor.White);
+        slide.Shapes.Clear();
+        slide.Shapes.Add(new SlideShape
+        {
+            Id = 1,
+            AutoShapeKind = Free.Shared.Drawing.DrawingShapeKind.Rectangle,
+            OffsetXEmu = 0,
+            OffsetYEmu = 0,
+            ExtentCxEmu = p.SlideSizeCxEmu,
+            ExtentCyEmu = p.SlideSizeCyEmu,
+            Fill = new ShapeFill.Solid(new SrgbColor(0x80, 0x80, 0x80)),
+            Outline = ShapeOutline.None.Instance,
+            Effects = effects
+        });
+
+        var canvas = new SlideCanvas { Presentation = p, Slide = slide };
+        canvas.Measure(new Size(width, height));
+        canvas.Arrange(new Rect(0, 0, width, height));
+        canvas.UpdateLayout();
+
+        var rtb = new RenderTargetBitmap(width, height, 96, 96, PixelFormats.Pbgra32);
+        rtb.Render(canvas);
+        var pixels = new byte[width * height * 4];
+        rtb.CopyPixels(pixels, width * 4, 0);
+        return pixels;
+    }
+
+    private static int CountPixelDifferences(byte[] first, byte[] second)
+    {
+        int differences = 0;
+        for (int i = 0; i < first.Length; i++)
+        {
+            if (first[i] != second[i]) differences++;
+        }
+        return differences;
+    }
+
 }

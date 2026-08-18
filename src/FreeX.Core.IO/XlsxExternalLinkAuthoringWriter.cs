@@ -567,12 +567,15 @@ internal static class XlsxExternalLinkAuthoringWriter
             .ToList();
     }
 
-    private static string NormalizeBookKey(string book)
-    {
-        var trimmed = book.Trim();
-        var separatorIndex = trimmed.LastIndexOfAny(['/', '\\']);
-        return separatorIndex >= 0 ? trimmed[(separatorIndex + 1)..] : trimmed;
-    }
+    // R143-io-external-link-authoring-path-collision-1: this key MUST distinguish two different
+    // external workbooks that happen to share only their filename (e.g. "C:\Data\2024\Budget.xlsx"
+    // vs "C:\Data\2025\Budget.xlsx") -- they are different source books with independently cached
+    // values, and must land in two separate <externalReference> ordinal slots backed by two separate
+    // externalLinkN.xml parts. Stripping down to the filename here previously collapsed them into
+    // one group/one part, silently repointing one book's formulas at the other book's cached data.
+    // Keep the FULL book text (case-insensitive, matching every dictionary/HashSet this key feeds
+    // into), only trimming incidental whitespace -- never trim away the directory.
+    private static string NormalizeBookKey(string book) => book.Trim();
 
     private readonly record struct ExternalReferenceGroup(string BookKey, string Book, List<string> SheetNames);
 }

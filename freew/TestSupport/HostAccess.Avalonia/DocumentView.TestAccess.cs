@@ -559,6 +559,13 @@ public sealed partial class DocumentView
     internal void DeleteForwardPublic() => DeleteForward();
 
     /// <summary>
+    /// Runs the shared AutoCorrect/AutoFormat-as-you-type evaluation for a just-typed character, exactly as
+    /// <see cref="OnTextInput"/> does. Exposed for R143 (shared-undo-boundaries) unit tests covering the
+    /// auto-recognized-hyperlink undo-step granularity.
+    /// </summary>
+    internal bool TryAutoCorrectPublic(char justTyped) => TryAutoCorrect(justTyped);
+
+    /// <summary>
     /// Invoke the list Tab/Shift-Tab handler and return whether it consumed the key.
     /// Exposed for AV-LIST unit tests.
     /// </summary>
@@ -594,7 +601,7 @@ public sealed partial class DocumentView
             Relayout(FallbackWidth);
 
         var listMarkerSequence = new DocumentListMarkerSequencePlanner(
-            _doc.MultiLevelList.NumberFormats);
+            _doc.MultiLevelList.NumberFormats, _doc.MultiLevelList.LevelTexts);
         var preservedNumberingMarkers = PreservedNumberingMarkerPlanner.Build(_doc);
         for (int i = 0; i < _doc.Blocks.Count; i++)
         {

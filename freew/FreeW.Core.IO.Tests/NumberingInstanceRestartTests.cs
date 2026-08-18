@@ -233,4 +233,106 @@ public sealed class NumberingInstanceRestartTests
         two.Formatting.ListStartOverride.Should().BeNull("Two continues the same numId 10 instance");
         three.Formatting.ListStartOverride.Should().BeNull("Three also continues the same numId 10 instance, across a second interruption");
     }
+
+    /// <summary>
+    /// R143 fix (freew-numbering-restart-forced-on-reencountered-numid): <c>NumberingRestartState</c> used
+    /// to track only a single scalar "last numId" per kind, so returning to numId A after an INTERLEAVING
+    /// different numId B (A, A, A, then B, B, then A again) was indistinguishable from a genuinely new
+    /// instance and forced a restart -- even though numId A had already been running its own counter.
+    /// Word numbers each instance independently of whatever unrelated list interrupted it: List A's fourth
+    /// item must read "4.", continuing from its own "1.","2.","3.", not restart at "1." because List B
+    /// (itself correctly restarting at "1.") happened to run in between.
+    /// </summary>
+    [Fact]
+    public void NumIdReturnsAfterInterleavingDifferentNumId_ResumesItsOwnCounterInsteadOfRestarting()
+    {
+        using var stream = new MemoryStream();
+        using (var zip = new ZipArchive(stream, ZipArchiveMode.Create, leaveOpen: true))
+        {
+            void Add(string path, string content)
+            {
+                var entry = zip.CreateEntry(path, CompressionLevel.Optimal);
+                using var s = entry.Open();
+                var bytes = Encoding.UTF8.GetBytes(content);
+                s.Write(bytes, 0, bytes.Length);
+            }
+
+            Add("[Content_Types].xml",
+                """
+                <?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+                <Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
+                  <Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
+                  <Default Extension="xml" ContentType="application/xml"/>
+                  <Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>
+                  <Override PartName="/word/numbering.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.numbering+xml"/>
+                </Types>
+                """);
+            Add("_rels/.rels",
+                """
+                <?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+                <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+                  <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/>
+                </Relationships>
+                """);
+            Add("word/_rels/document.xml.rels",
+                """
+                <?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+                <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+                  <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/numbering" Target="numbering.xml"/>
+                </Relationships>
+                """);
+            // List A (numId 10): items 1-3. Then List B (numId 20, a genuinely different instance) opens
+            // and runs two items -- it must restart at 1. Then List A resumes with a fourth item: it must
+            // continue List A's own counter (4.), not restart because B interrupted it.
+            Add("word/document.xml",
+                """
+                <?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+                <w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+                  <w:body>
+                    <w:p><w:pPr><w:numPr><w:ilvl w:val="0"/><w:numId w:val="10"/></w:numPr></w:pPr><w:r><w:t>A one</w:t></w:r></w:p>
+                    <w:p><w:pPr><w:numPr><w:ilvl w:val="0"/><w:numId w:val="10"/></w:numPr></w:pPr><w:r><w:t>A two</w:t></w:r></w:p>
+                    <w:p><w:pPr><w:numPr><w:ilvl w:val="0"/><w:numId w:val="10"/></w:numPr></w:pPr><w:r><w:t>A three</w:t></w:r></w:p>
+                    <w:p><w:pPr><w:numPr><w:ilvl w:val="0"/><w:numId w:val="20"/></w:numPr></w:pPr><w:r><w:t>B one</w:t></w:r></w:p>
+                    <w:p><w:pPr><w:numPr><w:ilvl w:val="0"/><w:numId w:val="20"/></w:numPr></w:pPr><w:r><w:t>B two</w:t></w:r></w:p>
+                    <w:p><w:pPr><w:numPr><w:ilvl w:val="0"/><w:numId w:val="10"/></w:numPr></w:pPr><w:r><w:t>A four</w:t></w:r></w:p>
+                    <w:sectPr/>
+                  </w:body>
+                </w:document>
+                """);
+            Add("word/numbering.xml",
+                """
+                <?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+                <w:numbering xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+                  <w:abstractNum w:abstractNumId="5">
+                    <w:multiLevelType w:val="hybridMultilevel"/>
+                    <w:lvl w:ilvl="0"><w:start w:val="1"/><w:numFmt w:val="decimal"/><w:lvlText w:val="%1."/><w:lvlJc w:val="left"/></w:lvl>
+                  </w:abstractNum>
+                  <w:num w:numId="10"><w:abstractNumId w:val="5"/></w:num>
+                  <w:num w:numId="20"><w:abstractNumId w:val="5"/></w:num>
+                </w:numbering>
+                """);
+        }
+
+        var doc = ReadDoc(stream.ToArray());
+        var paragraphs = doc.Blocks.OfType<Paragraph>().ToList();
+        var aOne = paragraphs.Single(p => p.Runs.Any(r => r.Text == "A one"));
+        var aTwo = paragraphs.Single(p => p.Runs.Any(r => r.Text == "A two"));
+        var aThree = paragraphs.Single(p => p.Runs.Any(r => r.Text == "A three"));
+        var bOne = paragraphs.Single(p => p.Runs.Any(r => r.Text == "B one"));
+        var bTwo = paragraphs.Single(p => p.Runs.Any(r => r.Text == "B two"));
+        var aFour = paragraphs.Single(p => p.Runs.Any(r => r.Text == "A four"));
+
+        aOne.Formatting.ListStartOverride.Should().BeNull();
+        aTwo.Formatting.ListStartOverride.Should().BeNull();
+        aThree.Formatting.ListStartOverride.Should().BeNull();
+        bOne.Formatting.ListStartOverride.Should().Be(1,
+            "numId 20 is a genuinely new instance and must restart at its declared start");
+        bTwo.Formatting.ListStartOverride.Should().BeNull("B two continues List B's own instance");
+
+        // THE FIX: List A resuming after List B must continue at 4, not restart at 1.
+        aFour.Formatting.ListStartOverride.Should().Be(4,
+            "numId 10 was already running at 3 before the interleaving numId 20 list; Word continues " +
+            "its own counter independently of whatever unrelated list interrupted it, so it must resume " +
+            "at 4 -- not restart at 1 the way a genuinely brand-new numId would");
+    }
 }

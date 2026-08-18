@@ -1632,6 +1632,58 @@ public class DocxRoundTripTests
     }
 
     [Fact]
+    public void InlineImage_IsDecorative_RoundTrips()
+    {
+        var png = MinimalPng();
+        var doc = new TextDocument();
+        var paragraph = new Paragraph();
+        paragraph.Runs.Add(Run.FromImage(new InlineImage(png, widthPt: 120, heightPt: 90)
+        {
+            IsDecorative = true,
+        }));
+        doc.Blocks.Add(paragraph);
+
+        var imageRun = RoundTrip(doc).Paragraphs.First().Runs.Single(r => r.Image is not null);
+
+        imageRun.Image!.IsDecorative.Should().BeTrue();
+    }
+
+    [Fact]
+    public void InlineImage_NotDecorative_RoundTripsFalse()
+    {
+        // Sibling of InlineImage_IsDecorative_RoundTrips: an ordinary (non-decorative) image must not
+        // pick up the flag from the read/write path.
+        var png = MinimalPng();
+        var doc = new TextDocument();
+        var paragraph = new Paragraph();
+        paragraph.Runs.Add(Run.FromImage(new InlineImage(png, widthPt: 120, heightPt: 90)));
+        doc.Blocks.Add(paragraph);
+
+        var imageRun = RoundTrip(doc).Paragraphs.First().Runs.Single(r => r.Image is not null);
+
+        imageRun.Image!.IsDecorative.Should().BeFalse();
+    }
+
+    [Fact]
+    public void InlineImage_IsDecorative_EmittedAsDecorativeExtension()
+    {
+        var doc = new TextDocument();
+        var paragraph = new Paragraph();
+        paragraph.Runs.Add(Run.FromImage(new InlineImage(MinimalPng(), 50, 50) { IsDecorative = true }));
+        doc.Blocks.Add(paragraph);
+
+        using var stream = new MemoryStream();
+        DocxWriter.Write(doc, stream);
+        stream.Position = 0;
+
+        using var zip = new ZipArchive(stream, ZipArchiveMode.Read);
+        using var docReader = new StreamReader(zip.GetEntry("word/document.xml")!.Open());
+        var xml = docReader.ReadToEnd();
+        xml.Should().Contain("{C183D7F6-B498-43B3-948B-1728B52AA6E4}");
+        xml.Should().Contain("decorative");
+    }
+
+    [Fact]
     public void InlineImage_AddsPngContentTypeAndMediaPart()
     {
         var doc = new TextDocument();

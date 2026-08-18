@@ -91,7 +91,13 @@ public sealed class SlideShowSessionController
             _playbackRoute.StartIndex,
             _playbackRoute.AnimationStartIndex,
             showWithAnimation: _presentation.ShowWithAnimation,
-            loopUntilStopped: _presentation.LoopUntilStopped);
+            // A kiosk show must loop until 'Esc' no matter what the persisted
+            // LoopUntilStopped flag says -- PowerPoint never lets a "Browsed at a
+            // kiosk" show fall through to the editor unattended (see
+            // SlideShowSettingsDialogSession.BuildCommitPlan, which enforces the same
+            // rule when the setting is edited).
+            loopUntilStopped: _presentation.LoopUntilStopped
+                || _presentation.ShowType == PresentationShowType.BrowsedAtKiosk);
         _currentRouteSlideIndex = _playbackRoute.StartIndex;
         var sourceSlideIndex = CurrentPresentationSlideIndex;
         TimingRecorderState = SlideShowTimingRecorderPlanner.CreateState(sourceSlideIndex, startedAtUtc);

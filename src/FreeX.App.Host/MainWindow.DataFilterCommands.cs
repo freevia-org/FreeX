@@ -337,16 +337,24 @@ public partial class MainWindow
         if (!applyToSameSettings || existingRule is null || _workbook.GetSheet(sheetId) is not { } sheet)
             return new SetDataValidationCommand(sheetId, rule);
 
+        // "Apply to all cells with the same settings" must still cover the selection the user just
+        // made -- rule.AppliesTo/rule.AdditionalRanges, set by the caller from the live selection --
+        // AND extend the new settings to every OTHER range on the sheet that shared the OLD rule's
+        // settings, keeping each of those ranges' own footprint (AppliesTo + AdditionalRanges)
+        // intact instead of collapsing every match onto the edited rule's single old AppliesTo with
+        // an empty AdditionalRanges. The retarget commands run FIRST so SetDataValidationCommand's
+        // own overlap-clearing (ClearOtherOverlappingRules) then correctly folds any of them the new
+        // selection now also covers into the primary command below, while leaving genuinely disjoint
+        // areas (e.g. an AdditionalRanges area the user didn't reselect) intact under the new
+        // settings instead of dropping them.
         var commands = sheet.DataValidations
             .Where(candidate => candidate.HasSameSettings(existingRule))
-            .Select(candidate => new SetDataValidationCommand(
+            .Select(candidate => (IWorkbookCommand)new SetDataValidationCommand(
                 sheetId,
-                rule.CloneForRanges(candidate.AppliesTo, [], candidate.Id)))
-            .Cast<IWorkbookCommand>()
+                rule.CloneForRanges(candidate.AppliesTo, candidate.AdditionalRanges, candidate.Id)))
             .ToList();
 
-        if (commands.Count == 0)
-            commands.Add(new SetDataValidationCommand(sheetId, rule));
+        commands.Add(new SetDataValidationCommand(sheetId, rule));
 
         return new CompositeWorkbookCommand("Data Validation", commands);
     }

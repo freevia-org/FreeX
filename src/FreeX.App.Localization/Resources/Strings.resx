@@ -10693,6 +10693,36 @@ Saved PDF file:&#xD;
   <data name="MainWindow_Header_Heading1" xml:space="preserve">
     <value>Heading 1</value>
   </data>
+  <data name="MainWindow_Header_Heading3" xml:space="preserve">
+    <value>Heading 3</value>
+  </data>
+  <data name="MainWindow_Header_Heading4" xml:space="preserve">
+    <value>Heading 4</value>
+  </data>
+  <data name="MainWindow_Header_Title" xml:space="preserve">
+    <value>Title</value>
+  </data>
+  <data name="MainWindow_Header_Currency" xml:space="preserve">
+    <value>Currency</value>
+  </data>
+  <data name="MainWindow_Header_Currency0" xml:space="preserve">
+    <value>Currency [0]</value>
+  </data>
+  <data name="MainWindow_Header_Comma" xml:space="preserve">
+    <value>Comma</value>
+  </data>
+  <data name="MainWindow_Header_Comma0" xml:space="preserve">
+    <value>Comma [0]</value>
+  </data>
+  <data name="MainWindow_Header_Percent" xml:space="preserve">
+    <value>Percent</value>
+  </data>
+  <data name="MainWindow_Header_Hyperlink" xml:space="preserve">
+    <value>Hyperlink</value>
+  </data>
+  <data name="MainWindow_Header_FollowedHyperlink" xml:space="preserve">
+    <value>Followed Hyperlink</value>
+  </data>
   <data name="PivotCalculated_AvailableFields" xml:space="preserve">
     <value>Available fields</value>
   </data>

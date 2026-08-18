@@ -38,7 +38,17 @@ public enum CellStylePreset
     Accent3_60,
     Accent4_60,
     Accent5_60,
-    Accent6_60
+    Accent6_60,
+    Heading3,
+    Heading4,
+    Title,
+    Currency,
+    Currency0,
+    Comma,
+    Comma0,
+    Percent,
+    Hyperlink,
+    FollowedHyperlink
 }
 
 public static class CellStyleDiffPlanner
@@ -111,6 +121,11 @@ public static class CellStyleDiffPlanner
             CellStylePreset.Accent4_60 => "60% - Accent 4",
             CellStylePreset.Accent5_60 => "60% - Accent 5",
             CellStylePreset.Accent6_60 => "60% - Accent 6",
+            CellStylePreset.Heading3 => "Heading 3",
+            CellStylePreset.Heading4 => "Heading 4",
+            CellStylePreset.Currency0 => "Currency [0]",
+            CellStylePreset.Comma0 => "Comma [0]",
+            CellStylePreset.FollowedHyperlink => "Followed Hyperlink",
             _ => preset.ToString()
         };
 
@@ -150,6 +165,16 @@ public static class CellStyleDiffPlanner
             CellStylePreset.Accent4_60 => "MainWindow_Header_60Accent4",
             CellStylePreset.Accent5_60 => "MainWindow_Header_60Accent5",
             CellStylePreset.Accent6_60 => "MainWindow_Header_60Accent6",
+            CellStylePreset.Heading3 => "MainWindow_Header_Heading3",
+            CellStylePreset.Heading4 => "MainWindow_Header_Heading4",
+            CellStylePreset.Title => "MainWindow_Header_Title",
+            CellStylePreset.Currency => "MainWindow_Header_Currency",
+            CellStylePreset.Currency0 => "MainWindow_Header_Currency0",
+            CellStylePreset.Comma => "MainWindow_Header_Comma",
+            CellStylePreset.Comma0 => "MainWindow_Header_Comma0",
+            CellStylePreset.Percent => "MainWindow_Header_Percent",
+            CellStylePreset.Hyperlink => "MainWindow_Header_Hyperlink",
+            CellStylePreset.FollowedHyperlink => "MainWindow_Header_FollowedHyperlink",
             _ => throw new ArgumentOutOfRangeException(nameof(preset), preset, null),
         };
 
@@ -243,6 +268,44 @@ public static class CellStyleDiffPlanner
             CellStylePreset.Accent4_60 => AccentDepth(theme, WorkbookThemeColorSlot.Accent4, 0.4),
             CellStylePreset.Accent5_60 => AccentDepth(theme, WorkbookThemeColorSlot.Accent5, 0.4),
             CellStylePreset.Accent6_60 => AccentDepth(theme, WorkbookThemeColorSlot.Accent6, 0.4),
+            CellStylePreset.Heading3 => new StyleDiff(
+                Bold: true,
+                FontSize: 12,
+                FontColor: CellColor.Black,
+                ClearFill: true,
+                BorderBottom: new CellBorder(BorderStyle.Thin, theme.GetColor(WorkbookThemeColorSlot.Accent1))),
+            CellStylePreset.Heading4 => new StyleDiff(
+                Bold: true,
+                FontColor: CellColor.Black,
+                ClearFill: true),
+            CellStylePreset.Title => new StyleDiff(
+                Bold: true,
+                FontSize: 18,
+                FontColor: CellColor.Black,
+                ClearFill: true),
+            // Number-format-only presets: Excel's Currency/Comma family style entries touch only the
+            // Number category (alignment, font, border, fill and protection are all left untouched),
+            // matching the built-in number format codes 44/42 (Currency/Currency[0], $ + accounting
+            // layout) and 43/41 (Comma/Comma[0], the same accounting layout without the $ symbol).
+            CellStylePreset.Currency => new StyleDiff(
+                NumberFormat: HomeNumberFormatDropdownPlanner.AccountingNumberFormatCode),
+            CellStylePreset.Currency0 => new StyleDiff(
+                NumberFormat: "_($* #,##0_);_($* (#,##0);_($* \"-\"_);_(@_)"),
+            CellStylePreset.Comma => new StyleDiff(
+                NumberFormat: HomeNumberFormatDropdownPlanner.CommaStyleNumberFormatCode),
+            CellStylePreset.Comma0 => new StyleDiff(
+                NumberFormat: "_(* #,##0_);_(* (#,##0);_(* \"-\"_);_(@_)"),
+            CellStylePreset.Percent => new StyleDiff(
+                NumberFormat: "0%"),
+            // Font-only presets: Excel links Hyperlink/Followed Hyperlink to the theme's dedicated
+            // hyperlink color slots (so they repaint if the theme changes) plus an underline; no
+            // number format, alignment, border, fill or protection change.
+            CellStylePreset.Hyperlink => new StyleDiff(
+                FontThemeColor: new WorkbookThemeColorReference(WorkbookThemeColorSlot.Hyperlink),
+                Underline: true),
+            CellStylePreset.FollowedHyperlink => new StyleDiff(
+                FontThemeColor: new WorkbookThemeColorReference(WorkbookThemeColorSlot.FollowedHyperlink),
+                Underline: true),
             _ => throw new ArgumentOutOfRangeException(nameof(preset), preset, null)
         };
 

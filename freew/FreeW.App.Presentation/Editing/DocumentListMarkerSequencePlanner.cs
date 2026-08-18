@@ -16,9 +16,11 @@ public sealed class DocumentListMarkerSequencePlanner
     private readonly int[] _numberCounters = new int[MaximumDepth];
     private readonly MultiLevelListMarkerState _multiLevelMarkers;
 
-    public DocumentListMarkerSequencePlanner(IReadOnlyList<ListNumberFormat>? numberFormats = null)
+    public DocumentListMarkerSequencePlanner(
+        IReadOnlyList<ListNumberFormat>? numberFormats = null,
+        IReadOnlyList<string?>? levelTexts = null)
     {
-        _multiLevelMarkers = new MultiLevelListMarkerState(numberFormats);
+        _multiLevelMarkers = new MultiLevelListMarkerState(numberFormats, levelTexts);
     }
 
     public DocumentListMarkerPlan Advance(Paragraph paragraph)

@@ -352,7 +352,15 @@ public sealed partial class FormulaEvaluator
             return false;
 
         var opaqueName = "[" + externalIndex.ToString(System.Globalization.CultureInfo.InvariantCulture) + "]!" + name;
-        if (!ExternalSheetReferenceResolver.TryResolveExternalDefinedName(workbook, opaqueName, out var formulaText))
+
+        // Pass the qualified sheet's own 0-based index through as the preferred-sheet tiebreaker
+        // (R143-extlink-2 fix): the qualifier explicitly named a sheet ("Sheet2" in
+        // "[1]Sheet2!Total"), so a same-named external defined name scoped to a DIFFERENT sheet
+        // must never be picked over the one actually scoped to that sheet. Without this, two
+        // external sheets sharing a same-named sheet-scoped defined name silently resolved to
+        // whichever happened to come first in ExternalLinkModel.DefinedNames file order,
+        // regardless of which sheet the formula actually qualified.
+        if (!ExternalSheetReferenceResolver.TryResolveExternalDefinedName(workbook, opaqueName, external.SheetIndex, out var formulaText))
             return false;
 
         result = EvaluateNamedFormulaText(name, formulaText, context, scopeSheetId: null);

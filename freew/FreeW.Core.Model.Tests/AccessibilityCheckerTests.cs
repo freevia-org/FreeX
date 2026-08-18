@@ -460,6 +460,115 @@ public class AccessibilityCheckerTests
         report.Issues.Should().NotContain(i => i.Rule == AccessibilityRule.BlankTableCell);
     }
 
+    // --- Table cell content is checked with the same per-paragraph rules as top-level body text ---
+
+    [Fact]
+    public void MissingImageAltText_FlaggedForImageInsideTableCell()
+    {
+        var doc = CleanDocument();
+        var table = Table.Create(1, 1);
+        var run = Run.FromImage(new InlineImage([1, 2, 3], 100, 100)); // no AltText
+        table.Rows[0].Cells[0].Paragraphs[0].Runs.Add(run);
+        doc.Blocks.Add(table);
+
+        var report = AccessibilityChecker.Check(doc);
+
+        report.Issues.Should().Contain(i => i.Rule == AccessibilityRule.MissingImageAltText && i.Run == run);
+    }
+
+    [Fact]
+    public void UninformativeLinkText_FlaggedInsideTableCell()
+    {
+        var doc = CleanDocument();
+        var table = Table.Create(1, 1);
+        var run = new Run("click here") { HyperlinkUrl = "https://example.com/page" };
+        table.Rows[0].Cells[0].Paragraphs[0].Runs.Add(run);
+        doc.Blocks.Add(table);
+
+        var report = AccessibilityChecker.Check(doc);
+
+        report.Issues.Should().Contain(i => i.Rule == AccessibilityRule.UninformativeLinkText && i.Run == run);
+    }
+
+    [Fact]
+    public void LowContrastText_FlaggedInsideTableCell()
+    {
+        var doc = CleanDocument();
+        var table = Table.Create(1, 1);
+        var run = new Run("hard to read", new RunFormatting { ColorHex = "#BBBBBB" });
+        table.Rows[0].Cells[0].Paragraphs[0].Runs.Add(run);
+        doc.Blocks.Add(table);
+
+        var report = AccessibilityChecker.Check(doc);
+
+        report.Issues.Should().Contain(i => i.Rule == AccessibilityRule.LowContrastText && i.Run == run);
+    }
+
+    [Fact]
+    public void UninformativeLinkText_FlaggedInsideNestedTableCell()
+    {
+        // A sub-table used for layout inside a larger table's cell (tc/w:tbl) must be walked too, not
+        // just the outer table's own direct cells.
+        var doc = CleanDocument();
+        var outerTable = Table.Create(1, 1);
+        var nestedTable = Table.Create(1, 1);
+        var run = new Run("click here") { HyperlinkUrl = "https://example.com/page" };
+        nestedTable.Rows[0].Cells[0].Paragraphs[0].Runs.Add(run);
+        outerTable.Rows[0].Cells[0].NestedTables.Add(nestedTable);
+        doc.Blocks.Add(outerTable);
+
+        var report = AccessibilityChecker.Check(doc);
+
+        report.Issues.Should().Contain(i => i.Rule == AccessibilityRule.UninformativeLinkText && i.Run == run);
+    }
+
+    [Fact]
+    public void TableMissingHeaderRow_NotFlagged_WhenHeaderRowStyled_TableCellContentClean()
+    {
+        // Sibling of the table-cell tests above: a table whose cells hold only plain, well-contrasted,
+        // non-link, non-image text must stay clean once cell content is actually inspected -- proving
+        // the new cell walk does not spuriously flag ordinary table text.
+        var doc = CleanDocument();
+        var table = Table.Create(1, 2);
+        table.Formatting = table.Formatting with { HeaderRow = true };
+        table.Rows[0].Cells[0].Paragraphs[0].Runs.Add(PlainRun("a"));
+        table.Rows[0].Cells[1].Paragraphs[0].Runs.Add(PlainRun("b"));
+        doc.Blocks.Add(table);
+
+        var report = AccessibilityChecker.Check(doc);
+
+        report.Issues.Should().BeEmpty();
+    }
+
+    // --- Decorative images are exempt from the missing-alt-text rule ---
+
+    [Fact]
+    public void MissingImageAltText_NotFlagged_WhenImageIsDecorative()
+    {
+        var doc = CleanDocument();
+        var image = new InlineImage([1, 2, 3], 100, 100) { IsDecorative = true }; // no AltText, but decorative
+        doc.Blocks.Add(new Paragraph { Runs = { Run.FromImage(image) } });
+
+        var report = AccessibilityChecker.Check(doc);
+
+        report.Issues.Should().NotContain(i => i.Rule == AccessibilityRule.MissingImageAltText);
+    }
+
+    [Fact]
+    public void MissingImageAltText_StillFlagged_WhenImageIsNotDecorativeAndAltEmpty()
+    {
+        // Sibling of MissingImageAltText_NotFlagged_WhenImageIsDecorative: an ordinary (non-decorative)
+        // image with no alt text must still be flagged -- the decorative exemption must not swallow the
+        // rule entirely.
+        var doc = CleanDocument();
+        var image = new InlineImage([1, 2, 3], 100, 100) { IsDecorative = false };
+        doc.Blocks.Add(new Paragraph { Runs = { Run.FromImage(image) } });
+
+        var report = AccessibilityChecker.Check(doc);
+
+        report.Issues.Should().Contain(i => i.Rule == AccessibilityRule.MissingImageAltText);
+    }
+
     // --- Missing document title (Tip) ---
 
     [Fact]

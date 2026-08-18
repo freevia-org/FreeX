@@ -111,6 +111,55 @@ public sealed class Scene3dInfo
 }
 
 /// <summary>
+/// Reflection effect (a:reflection). Stored for lossless round-trip; not yet rendered.
+/// Defaults mirror the ECMA-376 CT_ReflectionEffect attribute defaults.
+/// </summary>
+public sealed class ReflectionInfo
+{
+    /// <summary>Blur radius in EMU (blurRad= attribute). Default 0.</summary>
+    public long BlurRadEmu { get; set; }
+
+    /// <summary>Start alpha, 0-100000 (stA= attribute). Default 100000 (opaque).</summary>
+    public long StartAlpha { get; set; } = 100000;
+
+    /// <summary>Start position along the reflection, 0-100000 (stPos= attribute). Default 0.</summary>
+    public long StartPos { get; set; }
+
+    /// <summary>End alpha, 0-100000 (endA= attribute). Default 0 (fully transparent).</summary>
+    public long EndAlpha { get; set; }
+
+    /// <summary>End position along the reflection, 0-100000 (endPos= attribute). Default 100000.</summary>
+    public long EndPos { get; set; } = 100000;
+
+    /// <summary>Distance from the shape in EMU (dist= attribute). Default 0.</summary>
+    public long DistEmu { get; set; }
+
+    /// <summary>Direction in degrees (dir= attribute, stored in 60000ths of a degree in XML). Default 90 (straight down).</summary>
+    public double DirDeg { get; set; } = 90.0;
+
+    /// <summary>Fade direction in degrees (fadeDir= attribute). Default 90.</summary>
+    public double FadeDirDeg { get; set; } = 90.0;
+
+    /// <summary>Horizontal scaling percentage (sx= attribute). Default 100.</summary>
+    public double ScaleXPercent { get; set; } = 100.0;
+
+    /// <summary>Vertical scaling percentage (sy= attribute). Default 100.</summary>
+    public double ScaleYPercent { get; set; } = 100.0;
+
+    /// <summary>Horizontal skew in degrees (kx= attribute). Default 0.</summary>
+    public double SkewXDeg { get; set; }
+
+    /// <summary>Vertical skew in degrees (ky= attribute). Default 0.</summary>
+    public double SkewYDeg { get; set; }
+
+    /// <summary>Rectangle alignment (algn= attribute), e.g. "b", "bl", "br", "t", "tl", "tr". Default "b".</summary>
+    public string Align { get; set; } = "b";
+
+    /// <summary>Whether the reflection rotates with the shape (rotWithShape= attribute). Default true.</summary>
+    public bool RotWithShape { get; set; } = true;
+}
+
+/// <summary>
 /// Shape effects carried on a SlideShape. All distances/radii are in EMU.
 /// </summary>
 public sealed class ShapeEffects
@@ -140,6 +189,10 @@ public sealed class ShapeEffects
     // ── Soft edge ─────────────────────────────────────────────────────────────
     public bool HasSoftEdge { get; set; }
     public long SoftEdgeRadEmu { get; set; }
+
+    // ── Reflection (a:reflection) ────────────────────────────────────────────
+    /// <summary>Reflection effect data. Null = no reflection present.</summary>
+    public ReflectionInfo? Reflection { get; set; }
 
     // ── Bevel / 3-D (a:sp3d) ─────────────────────────────────────────────────
 

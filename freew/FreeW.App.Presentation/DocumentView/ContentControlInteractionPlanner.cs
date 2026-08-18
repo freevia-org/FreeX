@@ -60,6 +60,49 @@ public static class ContentControlInteractionPlanner
         && run.Control.LockMode is not (ContentControlLockMode.ContentLocked or ContentControlLockMode.ControlAndContentLocked)
         && protectionPolicy.DecisionFor(RestrictEditingOperationKind.FormFieldEdit).IsAllowed;
 
+    /// <summary>
+    /// The block-level (body <c>w:sdt</c>) counterpart of <see cref="CanEditExistingContentControl"/>.
+    /// Word can lock a whole paragraph/table -- not just an inline field -- by wrapping it in a body-level
+    /// structured document tag whose <c>w:sdtPr</c> carries <c>w:lock w:val="sdtContentLocked"</c> (or
+    /// <c>"contentLocked"</c>); that lock is modeled on
+    /// <see cref="FreeW.Core.Model.BlockContentControl.LockMode"/>, reached from a block via
+    /// <see cref="FreeW.Core.Model.Block.BlockContentControl"/> -- a completely separate slot from any
+    /// run's <see cref="ContentControl"/>. A block-level control can itself be nested inside another one (see
+    /// <see cref="FreeW.Core.Model.BlockContentControl.Parent"/>, set by the reader for a nested body
+    /// <c>w:sdt</c>); a lock anywhere in that ancestor chain blocks editing the whole nested content, matching
+    /// Word's own nested-w:sdt semantics, so this walks <c>Parent</c> rather than checking only
+    /// <paramref name="control"/> itself.
+    /// </summary>
+    public static bool CanEditExistingBlockContentControl(
+        FreeW.Core.Model.BlockContentControl control,
+        RestrictEditingEnforcementPolicy protectionPolicy) =>
+        !IsBlockContentControlLocked(control)
+        && protectionPolicy.DecisionFor(RestrictEditingOperationKind.FormFieldEdit).IsAllowed;
+
+    /// <summary>
+    /// Pure lock-mode check backing <see cref="CanEditExistingBlockContentControl"/>: is
+    /// <paramref name="control"/> (or any block-level ancestor it is nested inside, see
+    /// <see cref="FreeW.Core.Model.BlockContentControl.Parent"/>) locked --
+    /// <see cref="ContentControlLockMode.ContentLocked"/> or <see cref="ContentControlLockMode.ControlAndContentLocked"/>
+    /// anywhere in the chain? No Filling-In-Forms policy involved, so this is also the right check for a
+    /// purely structural "is this paragraph editable at all" query -- e.g.
+    /// <c>DocumentEditingSession.IsPortableBodyTextParagraph</c>, which must decline the portable body-edit
+    /// session's typing/Backspace/Delete/Enter paths for a locked block-level control the same way it
+    /// already declines for a locked run-level one (<c>run.Control</c>), without pulling in the
+    /// protection-policy dependency <see cref="CanEditExistingBlockContentControl"/> carries. A null
+    /// <paramref name="control"/> (no block-level content control at all) is never locked.
+    /// </summary>
+    public static bool IsBlockContentControlLocked(FreeW.Core.Model.BlockContentControl? control)
+    {
+        for (var current = control; current is not null; current = current.Parent)
+        {
+            if (current.LockMode is ContentControlLockMode.ContentLocked or ContentControlLockMode.ControlAndContentLocked)
+                return true;
+        }
+
+        return false;
+    }
+
     public static string Tooltip(ContentControl control)
     {
         var label = control.Alias is { Length: > 0 } alias ? alias : null;
