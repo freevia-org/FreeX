@@ -111,6 +111,37 @@ public static class ContentControlInteractionPlanner
         ];
     }
 
+    /// <summary>
+    /// Clones a content-control run with replaced text, preserving every other run mark (formatting,
+    /// hyperlink, revision, comment id, and the control itself). Returns null when the run carries no
+    /// control. The keyboard text-editing path uses this so typing inside a control replaces just that
+    /// run — rebuilding the paragraph's runs from cells would drop the w:sdt.
+    /// </summary>
+    public static Run? WithText(Run run, string text) =>
+        run.Control is { } control ? CloneWith(run, text, control) : null;
+
+    /// <summary>
+    /// Whether a content control holds free-form text the user may type into. A check box, date picker
+    /// and drop-down list own their text (glyph / formatted date / picked item), so their text only
+    /// changes through the control's own interaction; a combo box, like a plain-text or rich-text
+    /// control, accepts typed text in Word.
+    /// </summary>
+    public static bool IsTextEntryControl(ContentControl control) =>
+        control.Kind is ContentControlKind.PlainText
+            or ContentControlKind.RichText
+            or ContentControlKind.ComboBox;
+
+    /// <summary>
+    /// Whether the user may type into <paramref name="run"/>'s content control: it must be a text-entry
+    /// control that the document's protection state and the control's own lock leave editable.
+    /// </summary>
+    public static bool CanEditContentControlText(
+        Run run,
+        RestrictEditingEnforcementPolicy protectionPolicy) =>
+        run.Control is { } control
+        && IsTextEntryControl(control)
+        && CanEditExistingContentControl(run, protectionPolicy);
+
     public static Run? ToggleCheckBox(Run run)
     {
         if (run.Control is not { Kind: ContentControlKind.CheckBox } control)

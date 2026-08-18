@@ -16677,7 +16677,8 @@ public sealed partial class DocumentView : Control
     protected override void OnTextInput(TextInputEventArgs e)
     {
         base.OnTextInput(e);
-        if (IsEditingLocked)
+        // AV-CCEDIT: a locked body still lets the caret's form field take typed text.
+        if (IsEditingLocked && !CanEditContentControlTextAtCaret())
         {
             e.Handled = true;
             return;
@@ -16827,7 +16828,9 @@ public sealed partial class DocumentView : Control
             return;
         }
 
-        if (IsEditingLocked && input.IsEditingMutation)
+        // AV-CCEDIT: Backspace/Delete inside an editable form field survive the body lock; the
+        // per-gesture paths still refuse anything that would reach outside the control.
+        if (IsEditingLocked && input.IsEditingMutation && !CanEditContentControlTextAtCaret())
         {
             e.Handled = true;
             return;
@@ -17126,6 +17129,12 @@ public sealed partial class DocumentView : Control
 
     public void InsertText(string text)
     {
+        // AV-CCEDIT: typing inside a content control is a form-field edit — it runs before the body
+        // lock guard (that is what "Filling in Forms" protection allows) and before the body paths,
+        // which reject any paragraph holding a control run outright.
+        if (TryInsertContentControlText(text))
+            return;
+
         if (IsEditingLocked)
             return;
 
@@ -17648,6 +17657,228 @@ public sealed partial class DocumentView : Control
         return true;
     }
 
+    // ---- AV-CCEDIT: keyboard text editing INSIDE a content control -------------------------------
+    //
+    // A paragraph that holds a content-control run fails IsPlainTextEditable / IsTextReplaceable, so
+    // every body-text path rejects it wholesale — and this renderer, unlike the WPF host, has no native
+    // editor to fall back on. That made a Plain-Text / Rich-Text control untypable even in an
+    // unprotected document, and made "Filling in Forms" protection — whose entire purpose is to let the
+    // user fill those fields in — a dead end. The paths below edit the CONTROL RUN itself (never the
+    // surrounding body text), gated by the shared ContentControlInteractionPlanner policy, so they are
+    // allowed while body editing is locked.
+
+    /// <summary>
+    /// The caret (and any selection) resolved into a text-entry content-control run: which run, where it
+    /// starts in the paragraph's text, and the selected span relative to the run's own text.
+    /// </summary>
+    private readonly record struct ContentControlTextCaret(
+        ContentControlTarget Target,
+        Run Run,
+        int RunStart,
+        int Start,
+        int Length);
+
+    /// <summary>
+    /// Whether the caret sits in a content control the user may type into. The input handlers consult
+    /// this BEFORE their <see cref="IsEditingLocked"/> guards, because under "Filling in Forms" body
+    /// editing is locked exactly so that only form fields stay editable.
+    /// </summary>
+    private bool CanEditContentControlTextAtCaret() => TryResolveContentControlTextCaret(out _);
+
+    private bool TryResolveContentControlTextCaret(out ContentControlTextCaret caret)
+    {
+        caret = default;
+        if (_shapeCaret is not null || _hfCaret is not null || SelectedCellRange is not null)
+            return false;
+
+        Paragraph? paragraph;
+        int selectionStart;
+        int selectionEnd;
+        if (_cellCaret is { } cell)
+        {
+            // Only a collapsed in-cell caret: a cross-cell or cross-paragraph selection is a body-level
+            // gesture, not a form-field edit.
+            if (_cellAnchor is { } cellAnchor && !cellAnchor.Equals(cell))
+                return false;
+            paragraph = GetCellParagraph(cell.TableBlock, cell.Row, cell.Col, cell.ParaIdx);
+            selectionStart = cell.Offset;
+            selectionEnd = cell.Offset;
+        }
+        else
+        {
+            if (_caret.Block < 0
+                || _caret.Block >= _doc.Blocks.Count
+                || _doc.Blocks[_caret.Block] is not Paragraph bodyParagraph)
+            {
+                return false;
+            }
+
+            paragraph = bodyParagraph;
+            selectionStart = _caret.Offset;
+            selectionEnd = _caret.Offset;
+            if (NormalizedSelection() is { } selection)
+            {
+                if (selection.Start.Block != _caret.Block || selection.End.Block != _caret.Block)
+                    return false;
+                selectionStart = selection.Start.Offset;
+                selectionEnd = selection.End.Offset;
+            }
+        }
+
+        if (paragraph is null || !HasVerbatimRunText(paragraph))
+            return false;
+
+        var offset = 0;
+        for (var index = 0; index < paragraph.Runs.Count; index++)
+        {
+            var run = paragraph.Runs[index];
+            var end = offset + run.Text.Length;
+            // The whole caret/selection span must lie within this control's own text — an edit must
+            // never spill into the body text around the field.
+            if (ContentControlInteractionPlanner.CanEditContentControlText(run, RestrictEditingPolicy)
+                && selectionStart >= offset
+                && selectionEnd <= end)
+            {
+                caret = new ContentControlTextCaret(
+                    _cellCaret is { } target
+                        ? new ContentControlTarget(
+                            target.TableBlock, index, target.Row, target.Col, target.ParaIdx)
+                        : new ContentControlTarget(_caret.Block, index),
+                    run,
+                    offset,
+                    selectionStart - offset,
+                    selectionEnd - selectionStart);
+                return true;
+            }
+            offset = end;
+        }
+
+        return false;
+    }
+
+    /// <summary>
+    /// Whether every run renders its own text verbatim, so a caret offset in layout (display) space is
+    /// also an offset in model-text space. A field, equation or note mark displays something other than
+    /// its run text (see <see cref="DisplayCells"/>) and would shift that mapping.
+    /// </summary>
+    private static bool HasVerbatimRunText(Paragraph paragraph) =>
+        paragraph.Runs.All(r => r.Image is null && r.Equation is null && r.FieldKind == RunFieldKind.None
+            && r.ComplexField is null && r.FootnoteId is null && r.EndnoteId is null
+            && !IsFloatingDrawingRun(r));
+
+    private bool TryInsertContentControlText(string text)
+    {
+        if (string.IsNullOrEmpty(text) || !TryResolveContentControlTextCaret(out var caret))
+            return false;
+
+        var updated = caret.Run.Text.Remove(caret.Start, caret.Length).Insert(caret.Start, text);
+        return ApplyContentControlText(caret, updated, caret.Start + text.Length);
+    }
+
+    private bool TryBackspaceContentControlText()
+    {
+        if (!TryResolveContentControlTextCaret(out var caret))
+            return false;
+
+        var start = caret.Start;
+        var length = caret.Length;
+        if (length == 0)
+        {
+            // At the control's own start there is nothing of the FIELD left to delete; the character
+            // before it belongs to the (possibly protected) body text.
+            if (start == 0)
+                return false;
+            start--;
+            length = 1;
+        }
+
+        return ApplyContentControlText(caret, caret.Run.Text.Remove(start, length), start);
+    }
+
+    private bool TryDeleteForwardContentControlText()
+    {
+        if (!TryResolveContentControlTextCaret(out var caret))
+            return false;
+
+        var start = caret.Start;
+        var length = caret.Length;
+        if (length == 0)
+        {
+            if (start >= caret.Run.Text.Length)
+                return false;
+            length = 1;
+        }
+
+        return ApplyContentControlText(caret, caret.Run.Text.Remove(start, length), start);
+    }
+
+    /// <summary>
+    /// Replaces the control run's text through the command bus (a FormField mutation, so undo stays
+    /// permitted while forms protection is on) and re-places the caret inside the control.
+    /// </summary>
+    private bool ApplyContentControlText(ContentControlTextCaret caret, string text, int runCaretOffset)
+    {
+        if (ContentControlInteractionPlanner.WithText(caret.Run, text) is not { } updated)
+            return false;
+
+        var target = caret.Target;
+        var contentOffset = caret.RunStart + runCaretOffset;
+        if (target.Row is { } row
+            && target.Column is { } column
+            && target.ParagraphIndex is { } paragraphIndex)
+        {
+            _bus.Execute(new ReplaceCellContentControlRunCommand(
+                target.BlockIndex, row, column, paragraphIndex, target.RunIndex, updated));
+            _cellCaret = (target.BlockIndex, row, column, paragraphIndex, contentOffset);
+            _cellAnchor = _cellCaret;
+            _caret = new DocPosition(
+                target.BlockIndex,
+                FindCellGlyphOffset(target.BlockIndex, row, column, paragraphIndex, contentOffset));
+            _selectionAnchor = _caret;
+        }
+        else
+        {
+            if (!ReferenceEdits.ReplaceContentControlRun(target.BlockIndex, target.RunIndex, updated))
+                return false;
+            _caret = new DocPosition(target.BlockIndex, contentOffset);
+            _selectionAnchor = _caret;
+        }
+
+        InvalidateLayoutAndVisual();
+        CaretMoved?.Invoke();
+        return true;
+    }
+
+    /// <summary>
+    /// Left/Right inside a paragraph that holds a content control. The shared interaction session
+    /// reports such a paragraph as non-navigable body text (its BodyTextLength is 0), so without this
+    /// the caret would jump straight out of the control on the first arrow key.
+    /// </summary>
+    private bool TryMoveCaretWithinContentControlParagraph(int delta, bool extend)
+    {
+        if (_cellCaret is not null
+            || _hfCaret is not null
+            || _shapeCaret is not null
+            || CurrentParagraph() is not { } paragraph
+            || paragraph.Runs.All(run => run.Control is null)
+            || !HasVerbatimRunText(paragraph))
+        {
+            return false;
+        }
+
+        // Out-of-paragraph movement keeps the shared cross-block navigation.
+        var offset = _caret.Offset + delta;
+        if (offset < 0 || offset > paragraph.Runs.Sum(run => run.Text.Length))
+            return false;
+
+        _caret = _caret with { Offset = offset };
+        if (!extend)
+            _selectionAnchor = _caret;
+        InvalidateVisual();
+        CaretMoved?.Invoke();
+        return true;
+    }
+
     private void InsertBodyContentControlRun(Run run)
     {
         if (IsEditingLocked || _hfCaret is not null || _cellCaret is not null)
@@ -17688,6 +17919,10 @@ public sealed partial class DocumentView : Control
 
     private void Backspace()
     {
+        // AV-CCEDIT: deleting inside a content control is a form-field edit (see InsertText).
+        if (TryBackspaceContentControlText())
+            return;
+
         if (IsEditingLocked)
             return;
 
@@ -17779,6 +18014,13 @@ public sealed partial class DocumentView : Control
         // Structurally special paragraphs stay on the renderer-owned path.
         if (_caret.Offset > 0)
         {
+            // AV-CCEDIT: this path rebuilds the paragraph from ParaCells, which carries no content
+            // control, field, image or equation — running it over such a paragraph would delete the
+            // object outright. IsTextReplaceable (the guard InsertText's fallback uses; DeleteForward's
+            // fallback has always been guarded likewise) keeps note marks editable while refusing those.
+            if (CurrentParagraph() is not { } fallbackParagraph || !IsTextReplaceable(fallbackParagraph))
+                return;
+
             var block = _caret.Block;
             var offset = _caret.Offset;
             _bus.Execute(new ReplaceParagraphRunsCommand(block, p =>
@@ -17797,6 +18039,10 @@ public sealed partial class DocumentView : Control
 
     private void DeleteForward()
     {
+        // AV-CCEDIT: deleting inside a content control is a form-field edit (see InsertText).
+        if (TryDeleteForwardContentControlText())
+            return;
+
         if (IsEditingLocked)
             return;
 
@@ -23016,6 +23262,11 @@ public sealed partial class DocumentView : Control
                 extend);
             return;
         }
+
+        // AV-CCEDIT: walk a content-control paragraph's own text; the shared session reports it as
+        // non-navigable body text, which would eject the caret from the field on the first arrow key.
+        if (TryMoveCaretWithinContentControlParagraph(delta, extend))
+            return;
 
         ApplyCaretNavigation(
             _editingSession.Interaction.NavigateBodyHorizontal(
