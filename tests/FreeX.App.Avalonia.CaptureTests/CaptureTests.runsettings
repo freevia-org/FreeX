@@ -35,9 +35,21 @@
   (not just the OS killing the process) well before an in-flight leak can fully exhaust host memory,
   so a runaway run fails loudly with a clear "test session timeout" outcome instead of silently
   starving or crashing out a shared gate run.
+
+  2026 08 18: raised 90000 -> 300000. The session timeout also covers the time an assembly spends
+  waiting for one of the three capture leases, which is idle queueing, not leak time. In the full
+  gate all seven capture projects start together, so the last one legitimately waits about two
+  minutes before its first test runs; at 90 seconds those runs were aborted mid-flight and the
+  gate reported "Test Run Aborted" while every individual assembly passed on its own.
+
+  This does weaken the guard, and the trade-off is deliberate: a leaking run is OOM killed by the
+  OS within 30 to 40 seconds of the leak becoming visible, so in practice the process dies long
+  before either ceiling. The timeout is a backstop for the *session*, and 300000 still bounds it
+  well under the lease acquisition timeout (10 minutes) so a genuinely stuck lease still fails as
+  a lease timeout with its own explicit message rather than as an opaque session abort.
 -->
 <RunSettings>
   <RunConfiguration>
-    <TestSessionTimeout>90000</TestSessionTimeout>
+    <TestSessionTimeout>300000</TestSessionTimeout>
   </RunConfiguration>
 </RunSettings>
