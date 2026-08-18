@@ -17556,19 +17556,20 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         AvaloniaGrid.SetRow(buttonRow, 2);
         ConfigureDialogTabCycle(dialog, root);
         dialog.Content = root;
-        dialog.Opened += (_, _) =>
+        Control initialFocusTarget = tabStrip.SelectedIndex switch
         {
-            Control target = tabStrip.SelectedIndex switch
-            {
-                1 => horizontalAlignmentBox,
-                2 => fontNameBox,
-                3 => borderStyleBox,
-                4 => fillColorBox,
-                5 => lockedBox,
-                _ => numberCategoryList,
-            };
-            target.Focus();
+            1 => horizontalAlignmentBox,
+            2 => fontNameBox,
+            3 => borderStyleBox,
+            4 => fillColorBox,
+            5 => lockedBox,
+            _ => numberCategoryList,
         };
+        // Focusing once from Opened is not enough: the control is not always ready that early, the
+        // call silently fails, and the shared owned-dialog fallback then focuses the first focusable
+        // descendant -- the tab header. A TabItem is not part of the dialog's tab cycle, so Tab left
+        // it and never came back and the forward cycle never wrapped. Retry until the target takes.
+        ConfigureChartDialogKeyboardLifecycle(dialog, initialFocusTarget);
         AttachOptionalFormatCellsDialogObservation(
             dialog,
             tabStrip,
