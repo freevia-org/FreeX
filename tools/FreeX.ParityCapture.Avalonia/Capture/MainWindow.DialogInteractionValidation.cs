@@ -243,6 +243,7 @@ public sealed partial class MainWindow
             : IsEffectivelyEnabled
                 ? "passed:modeless-owner-enabled"
                 : "failed:modeless-owner-disabled";
+        await WaitForDialogInitialFocusAsync(dialog);
         var initial = dialog.FocusManager?.GetFocusedElement();
         // Describe initial focus at the same granularity the tab cycle uses. Focusing a list
         // delegates to its selected item, so the raw element is a ListBoxItem while the meaningful
@@ -494,6 +495,30 @@ public sealed partial class MainWindow
         {
             error = ex.GetType().Name + ":" + ex.Message;
             return false;
+        }
+    }
+
+    /// <summary>
+    /// Waits for a dialog to settle on its initial focus before the contract reads it.
+    /// </summary>
+    /// <remarks>
+    /// Dialogs choose an initial control and retry until it accepts focus, because the control is
+    /// not always ready on the first attempt. Sampling after one fixed settle was enough when a
+    /// dialog ran alone but not in a loaded full-suite run, where the read landed before focus had
+    /// arrived and reported no focus at all. A dialog that genuinely focuses nothing still reads as
+    /// unfocused once the wait expires.
+    /// </remarks>
+    private static async Task WaitForDialogInitialFocusAsync(Window dialog)
+    {
+        for (var attempt = 0; attempt < 12; attempt++)
+        {
+            if (!dialog.IsVisible ||
+                IsFocusInside(dialog, dialog.FocusManager?.GetFocusedElement()))
+            {
+                return;
+            }
+
+            await SettleDialogInteractionAsync();
         }
     }
 
