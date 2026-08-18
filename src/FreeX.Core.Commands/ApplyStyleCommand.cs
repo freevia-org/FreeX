@@ -288,12 +288,19 @@ public sealed class ApplyStyleCommand : IWorkbookCommand, IEstimatesMemory
     /// </summary>
     internal static StyleOnlySource? DetermineStyleOnlySource(GridRange range)
     {
-        var isUnboundedRows = range.End.Row >= CellAddress.MaxRow;
-        var isUnboundedCols = range.End.Col >= CellAddress.MaxCol;
+        // Must agree with SelectionRangeService.IsWholeColumnSelection/IsWholeRowSelection: a
+        // genuine column-header selection spans every row AND starts at row 1, and a genuine
+        // row-header selection spans every column AND starts at column 1. A range that merely
+        // reaches CellAddress.MaxRow/MaxCol at its End corner while starting mid-sheet (e.g. a
+        // Ctrl+Shift+Down selection from B5 to the bottom of the sheet) is NOT a whole-column
+        // selection and must not be tagged with row/column provenance -- only StyleOnlyCreateZone
+        // treats it specially, for its own perf-clamp reasons, not for row-beats-column precedence.
+        var isWholeColumn = SelectionRangeService.IsWholeColumnSelection(range);
+        var isWholeRow = SelectionRangeService.IsWholeRowSelection(range);
 
-        if (isUnboundedRows && !isUnboundedCols)
+        if (isWholeColumn && !isWholeRow)
             return StyleOnlySource.Column; // every row, bounded columns -- a column-header selection
-        if (isUnboundedCols && !isUnboundedRows)
+        if (isWholeRow && !isWholeColumn)
             return StyleOnlySource.Row; // every column, bounded rows -- a row-header selection
         return null;
     }
@@ -345,14 +352,22 @@ public sealed class ApplyStyleCommand : IWorkbookCommand, IEstimatesMemory
         // clamps columns to the used range.  Clamping the BOUNDED dimension would silently
         // produce an empty intersection when the selected column/row has no data of its own but the
         // rest of the sheet does — e.g. formatting column A when data lives only in B:D.
+        //
+        // The clamped start must never move ABOVE/LEFT-OF the selection's own Start: a range like
+        // B5:B1048576 (Start.Row=5, reaches MaxRow -- e.g. a Ctrl+Shift+Down selection, not a true
+        // column-header click) is still "unbounded" for perf-clamp purposes, but the zone must stay
+        // within row 5.. -- taking usedRange.Start.Row verbatim would pull the zone up into rows the
+        // user never selected (e.g. a header row at row 1) and silently style them. Math.Max keeps
+        // the true whole-column case (range.Start.Row == 1) unaffected, since usedRange.Start.Row is
+        // always >= 1.
         var startRow = isUnboundedRows
-            ? usedRange.Value.Start.Row
+            ? Math.Max(usedRange.Value.Start.Row, range.Start.Row)
             : range.Start.Row;
         var endRow = isUnboundedRows
             ? usedRange.Value.End.Row
             : range.End.Row;
         var startCol = isUnboundedCols
-            ? usedRange.Value.Start.Col
+            ? Math.Max(usedRange.Value.Start.Col, range.Start.Col)
             : range.Start.Col;
         var endCol = isUnboundedCols
             ? usedRange.Value.End.Col

@@ -1,6 +1,7 @@
 using FluentAssertions;
 using Free.Shared.Opc;
 using FreeX.Core.IO;
+using FreeX.Core.Model;
 
 namespace FreeX.Core.IO.Tests;
 
@@ -77,5 +78,47 @@ public sealed class XlsxFileAdapterIoRobustnessTests
         var act = () => adapter.Load(stream);
 
         act.Should().NotThrow<WorkbookPasswordProtectedException>();
+    }
+
+    // default-masks-missing F1: exercises the exact production call site named in the finding --
+    // XlsxFileAdapter.cs, "workbookTheme = packageParts.HasTheme ? XlsxWorkbookThemeReader.Load(packageArchive) : ...".
+    // A real workbook is saved (so xl/theme/theme1.xml legitimately exists), then that one entry's
+    // bytes are corrupted in place before reloading. Before the fix, the corrupt-but-present part
+    // was silently swapped for WorkbookTheme.Office and the file "opened successfully" with wrong
+    // colors -- setting up the next save to permanently overwrite the still-corrupt original
+    // theme1.xml with a synthesized default. The file must now fail to open instead, with a clear
+    // reason, so no subsequent save can clobber the original bytes.
+    [Fact]
+    public void Load_WorkbookWithCorruptedThemePart_ThrowsInsteadOfSilentlyDefaultingTheme()
+    {
+        var workbook = new Workbook("ThemeCorruption");
+        workbook.AddSheet("Sheet1");
+        var savingAdapter = new XlsxFileAdapter();
+
+        using var saved = new MemoryStream();
+        savingAdapter.Save(workbook, saved);
+        saved.Position = 0;
+
+        using var corrupted = new MemoryStream();
+        saved.CopyTo(corrupted);
+        saved.Position = 0;
+        corrupted.Position = 0;
+
+        using (var archive = new System.IO.Compression.ZipArchive(corrupted, System.IO.Compression.ZipArchiveMode.Update, leaveOpen: true))
+        {
+            var themeEntry = archive.GetEntry("xl/theme/theme1.xml");
+            themeEntry.Should().NotBeNull("a freshly saved workbook must carry a theme part for this test to be meaningful");
+            themeEntry!.Delete();
+            var replacement = archive.CreateEntry("xl/theme/theme1.xml");
+            using var writer = new StreamWriter(replacement.Open());
+            // Truncated/malformed XML -- simulates a corrupted or partially-written zip entry.
+            writer.Write("<a:theme xmlns:a=\"http://schemas.openxmlformats.org/drawingml/2006/main\">");
+        }
+
+        corrupted.Position = 0;
+        var loadingAdapter = new XlsxFileAdapter();
+        var act = () => loadingAdapter.Load(corrupted);
+
+        act.Should().Throw<XlsxThemePartCorruptException>();
     }
 }

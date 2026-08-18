@@ -1,6 +1,8 @@
 using Free.Shared.AppServices;
 using FreeW.App.Presentation.Dialogs;
+using FreeW.App.Presentation.DocumentView;
 using FreeW.App.Presentation.Editing;
+using FreeW.Core.Model;
 
 namespace FreeW.App.Presentation.Tests;
 
@@ -102,6 +104,79 @@ public sealed class FreeWClipboardApplicationWorkflowTests
         var empty = await FreeWClipboardApplicationWorkflow.WriteSelectionAsync(clipboard, string.Empty);
         empty.CanCommitCut.Should().BeFalse();
         empty.Status.Should().Be(FreeWClipboardTransferStatus.Empty);
+    }
+
+    // shell-clipboard F2: the Avalonia shell's editor is a custom control with no native rich-text
+    // clipboard behaviour (unlike WPF's RichTextBox, which places RTF/Xaml on Copy automatically), so
+    // WriteSelectionAsync must be given the resolved-formatting sub-document itself and place it as
+    // an HTML clipboard payload -- otherwise a Bold/Italic run copied and pasted degrades to plain
+    // text even within the same FreeW-Avalonia session. This is the failing-before-fix case.
+    [Fact]
+    public async Task WriteSelectionAsync_WritesHtmlCustomDataWhenRichDocumentIsProvided()
+    {
+        var clipboard = new FakeClipboard();
+        var paragraph = new Paragraph();
+        paragraph.Runs.Add(new Run("Bold", new RunFormatting { Bold = true }));
+        var richDocument = new TextDocument();
+        richDocument.Blocks.Add(paragraph);
+
+        var result = await FreeWClipboardApplicationWorkflow.WriteSelectionAsync(
+            clipboard,
+            "Bold",
+            richDocument);
+
+        result.IsSuccess.Should().BeTrue();
+        clipboard.LastWrittenContent!.Text.Should().Be("Bold");
+        var html = clipboard.LastWrittenContent.GetText("text/html");
+        html.Should().NotBeNull("a rich selection must carry an HTML clipboard payload so Paste can recover formatting");
+        html.Should().Contain("<strong>Bold</strong>");
+        clipboard.LastWrittenContent.GetText("HTML Format").Should().Be(html,
+            "the Windows-named HTML format mirrors the cross-platform one so either read path recovers formatting");
+    }
+
+    // Sibling no-regression case: a plain Copy (no rich document, e.g. from a plain-text-only
+    // selection context or a caller that never resolved one) must keep behaving exactly as before --
+    // text-only clipboard content, no HTML CustomData fabricated out of nothing.
+    [Fact]
+    public async Task WriteSelectionAsync_WritesPlainTextOnlyWhenNoRichDocumentIsProvided()
+    {
+        var clipboard = new FakeClipboard();
+
+        var result = await FreeWClipboardApplicationWorkflow.WriteSelectionAsync(clipboard, "plain only");
+
+        result.IsSuccess.Should().BeTrue();
+        clipboard.LastWrittenContent!.Text.Should().Be("plain only");
+        clipboard.LastWrittenContent.CustomData.Should().BeEmpty();
+    }
+
+    [Fact]
+    public void BuildSelectionRichDocument_SlicesRunsToTheSelectedOffsetsWithResolvedFormatting()
+    {
+        var paragraph = new Paragraph();
+        paragraph.Runs.Add(new Run("plain "));
+        paragraph.Runs.Add(new Run("bold", new RunFormatting { Bold = true }));
+        var source = new TextDocument();
+        source.Blocks.Add(paragraph);
+
+        // Selects only "bold" (offsets 6..10 of "plain bold").
+        var ranges = new[] { new DocumentFormattingTextRange(paragraph, 6, 10) };
+
+        var richDocument = FreeWClipboardApplicationWorkflow.BuildSelectionRichDocument(source, ranges);
+
+        richDocument.Should().NotBeNull();
+        var slicedParagraph = richDocument!.Blocks.Should().ContainSingle().Subject.Should().BeOfType<Paragraph>().Subject;
+        var run = slicedParagraph.Runs.Should().ContainSingle().Subject;
+        run.Text.Should().Be("bold");
+        run.Formatting.Bold.Should().BeTrue();
+    }
+
+    [Fact]
+    public void BuildSelectionRichDocument_ReturnsNullForAnEmptyRangeList()
+    {
+        var source = TextDocument.CreateEmpty();
+
+        FreeWClipboardApplicationWorkflow.BuildSelectionRichDocument(source, ranges: []).Should().BeNull();
+        FreeWClipboardApplicationWorkflow.BuildSelectionRichDocument(source, ranges: null).Should().BeNull();
     }
 
     [Theory]

@@ -987,10 +987,10 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
                 Backstage = ShowBackstageOverlay,
                 OpenTextToColumns = TextToColumns,
                 OpenConsolidate = Consolidate,
-                InsertTable = () => _ = InsertTableFromSelectionAsync(),
-                ConditionalFormatting = () => _ = ShowConditionalFormatNewRuleDialogAsync(),
-                InsertPivotTable = () => _ = ShowInsertPivotTableDialogAsync(),
-                InsertPicture = () => _ = InsertPictureFromFileAsync(),
+                InsertTable = () => RunGuarded(InsertTableFromSelectionAsync),
+                ConditionalFormatting = () => RunGuarded(ShowConditionalFormatNewRuleDialogAsync),
+                InsertPivotTable = () => RunGuarded(ShowInsertPivotTableDialogAsync),
+                InsertPicture = () => RunGuarded(InsertPictureFromFileAsync),
                 InsertShape = InsertShapeAtActiveCell,
                 InsertTextBox = InsertTextBoxAtActiveCell,
                 FormatPainter = () => CaptureFormatPainterSource(persistent: false),
@@ -1002,15 +1002,15 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
                 SortAscending = () => SortSelectedRange(ascending: true),
                 SortDescending = () => SortSelectedRange(ascending: false),
                 ToggleFilter = ToggleAutoFilter,
-                DataValidation = () => _ = ShowDataValidationDialogAsync(),
-                Cut = () => _ = CutSelectedRangeToClipboardAsync(),
-                Copy = () => _ = CopySelectedRangeToClipboardAsync(),
-                Paste = () => _ = PasteClipboardTextAsync(),
+                DataValidation = () => RunGuarded(ShowDataValidationDialogAsync),
+                Cut = () => RunGuarded(CutSelectedRangeToClipboardAsync),
+                Copy = () => RunGuarded(CopySelectedRangeToClipboardAsync),
+                Paste = () => RunGuarded(PasteClipboardTextAsync),
                 AlignLeft = () => ApplySelectedRangeHorizontalAlignment(CellHAlign.Left),
                 AlignCenter = () => ApplySelectedRangeHorizontalAlignment(CellHAlign.Center),
                 AlignRight = () => ApplySelectedRangeHorizontalAlignment(CellHAlign.Right),
                 WrapText = ToggleSelectedRangeWrapText,
-                MergeAndCenter = () => _ = MergeAndCenterSelectedRangeAsync(),
+                MergeAndCenter = () => RunGuarded(MergeAndCenterSelectedRangeAsync),
                 CurrencyFormat = ApplySelectedRangeCurrencyFormat,
                 PercentFormat = ApplySelectedRangePercentFormat,
                 CommaStyle = ApplySelectedRangeCommaStyle,
@@ -1022,8 +1022,8 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
                     ["Outside Borders"] = () => ApplySelectedRangeBorderPreset(CellBorderPreset.Outside),
                     ["No Border"] = () => ApplySelectedRangeBorderPreset(CellBorderPreset.NoBorder),
                     // Paste split-button menu items.
-                    ["Paste Values"] = () => _ = PasteSpecialClipboardTextAsync(PasteCellsMode.Values, default, "Values"),
-                    ["Paste Formatting"] = () => _ = PasteSpecialClipboardTextAsync(PasteCellsMode.Formats, default, "Formatting"),
+                    ["Paste Values"] = () => RunGuarded(() => PasteSpecialClipboardTextAsync(PasteCellsMode.Values, default, "Values")),
+                    ["Paste Formatting"] = () => RunGuarded(() => PasteSpecialClipboardTextAsync(PasteCellsMode.Formats, default, "Formatting")),
                     // Formulas tab.
                     [FreeXRibbonCommandIds.FormulasAutoSum] = () => InsertAutoSumFormula("SUM"),
                     ["Name Manager"] = NameManager,
@@ -1031,16 +1031,16 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
                     ["Create from Selection"] = CreateNamesFromSelection,
                     ["Use in Formula"] = PasteNames,
                     // Review tab.
-                    ["Spelling"] = () => _ = ShowSpellingDialogAsync(),
-                    ["Check Accessibility"] = () => _ = ShowAccessibilityCheckerDialogAsync(),
-                    [FreeXRibbonCommandIds.ReviewProtectSheet] = () => _ = ShowProtectSheetDialogAsync(),
-                    ["Protect Workbook"] = () => _ = ShowProtectWorkbookDialogAsync(),
+                    ["Spelling"] = () => RunGuarded(ShowSpellingDialogAsync),
+                    ["Check Accessibility"] = () => RunGuarded(ShowAccessibilityCheckerDialogAsync),
+                    [FreeXRibbonCommandIds.ReviewProtectSheet] = () => RunGuarded(ShowProtectSheetDialogAsync),
+                    ["Protect Workbook"] = () => RunGuarded(ShowProtectWorkbookDialogAsync),
                     ["Allow Users to Edit Ranges"] = AllowEditRanges,
                     // View tab.
                     ["Custom Views"] = () => RunGuarded(OpenCustomViewsDialogAsync),
                     ["Gridlines"] = ToggleShowGridlines,
                     ["Headings"] = ToggleShowHeadings,
-                    ["Zoom"] = () => _ = ShowZoomDialogAsync(),
+                    ["Zoom"] = () => RunGuarded(ShowZoomDialogAsync),
                     [FreeXRibbonCommandIds.ViewZoom100] = ZoomTo100Percent,
                     ["Zoom to Selection"] = ZoomToSelection,
                     [FreeXRibbonCommandIds.ViewFreezePanes] = FreezePanesAtActiveCell,
@@ -1048,10 +1048,10 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
                     ["Formula Bar"] = ToggleFormulaBarVisibility,
                     ["Page Layout"] = SetPageLayoutView,
                     // Home tab merge variants + Paste Special.
-                    ["Merge Cells"] = () => _ = MergeSelectedRangeAsync(),
-                    ["Merge Across"] = () => _ = MergeAcrossSelectedRangeAsync(),
+                    ["Merge Cells"] = () => RunGuarded(MergeSelectedRangeAsync),
+                    ["Merge Across"] = () => RunGuarded(MergeAcrossSelectedRangeAsync),
                     ["Unmerge Cells"] = UnmergeSelectedRange,
-                    ["Paste Special"] = () => _ = ShowPasteSpecialDialogAsync(),
+                    ["Paste Special"] = () => RunGuarded(ShowPasteSpecialDialogAsync),
                     // Data tab tools.
                     ["Reapply"] = ReapplyCurrentFilterSort,
                     [FreeXRibbonCommandIds.DataValidationCircleInvalid] = CircleInvalidData,
@@ -1059,7 +1059,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
                     ["Get Data"] = GetDataFromText,
                     // Data ▸ Connections ▸ Refresh All: re-import the remembered file source in place; with
                     // no remembered source there is nothing to refresh (no external DB/web connection engine).
-                    ["Refresh All"] = () => _ = RefreshImportedDataAsync(),
+                    ["Refresh All"] = () => RunGuarded(RefreshImportedDataAsync),
                     // Review ▸ Show Notes toggles all legacy note boxes, matching the WPF host.
                     // Insert ▸ PivotChart (charts the active pivot's result range).
                     // View ▸ Window group (multi-window).
@@ -1079,7 +1079,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
                     ["AutoSum"] = () => InsertAutoSumFormula("SUM"),
                     ["Fill"] = () => FillSelectedRange(FillCellsDirection.Down),
                     ["Clear"] = ClearSelectedRangeContents,
-                    ["Find & Select"] = () => _ = ShowFindDialogAsync(),
+                    ["Find & Select"] = () => RunGuarded(ShowFindDialogAsync),
                     // Home ▸ Editing ▸ Fill dropdown items (canonical menu ids from HomeRibbonMenus.Fill).
                     // The split-button face is wired above; these are its menu entries, which otherwise stay
                     // on the NoOp seed. "Flash Fill" shares its canonical id with the Data-tab command
@@ -1114,10 +1114,10 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
                     // Home ▸ Editing ▸ Find & Select dropdown items (canonical ids from HomeRibbonMenus.FindSelect).
                     // Split-button face is wired above (home.findSelect). "Conditional Formatting" is intentionally
                     // omitted: its canonical id is shared with the already-wired Home ▸ Conditional button.
-                    ["Find"] = () => _ = ShowFindDialogAsync(),
-                    ["Replace"] = () => _ = ShowReplaceDialogAsync(),
-                    ["Go To"] = () => _ = ShowGoToDialogAsync(),
-                    ["Go To Special"] = () => _ = ShowGoToSpecialDialogAsync(),
+                    ["Find"] = () => RunGuarded(ShowFindDialogAsync),
+                    ["Replace"] = () => RunGuarded(ShowReplaceDialogAsync),
+                    ["Go To"] = () => RunGuarded(ShowGoToDialogAsync),
+                    ["Go To Special"] = () => RunGuarded(ShowGoToSpecialDialogAsync),
                     ["Formulas"] = () => SelectGoToSpecial(GoToSpecialKind.Formulas),
                     ["Notes"] = () => SelectGoToSpecial(GoToSpecialKind.Comments),
                     ["Constants"] = () => SelectGoToSpecial(GoToSpecialKind.Constants),
@@ -1133,7 +1133,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
                     ["Bottom Border"] = () => ApplySelectedRangeBorderPreset(CellBorderPreset.Bottom),
                     ["Left Border"] = () => ApplySelectedRangeBorderPreset(CellBorderPreset.Left),
                     ["Right Border"] = () => ApplySelectedRangeBorderPreset(CellBorderPreset.Right),
-                    ["More Borders"] = () => _ = ShowFormatCellsDialogAsync(),
+                    ["More Borders"] = () => RunGuarded(() => ShowFormatCellsDialogAsync()),
                     // Home ▸ Font ▸ Orientation dropdown items (canonical ids from HomeRibbonMenus.Orientation).
                     // Same rotation values as the native Format ▸ Orientation flyout.
                     ["Horizontal"] = () => ApplySelectedRangeTextRotation(0, UiText.Get("TextRotation_HorizontalSuccessAction"), UiText.Get("MainLoc_AlignmentFailed")),
@@ -1145,15 +1145,15 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
                     // Home ▸ Cells ▸ Insert / Delete / Format dropdown items that map to existing handlers
                     // (canonical ids from HomeRibbonMenus.Insert/Delete/Format). The lock-cell item stays NoOp
                     // until that operation exists in the shell.
-                    ["Insert Cells"] = () => _ = ShowInsertCellsDialogAsync(),
+                    ["Insert Cells"] = () => RunGuarded(ShowInsertCellsDialogAsync),
                     ["Insert Sheet"] = AddNewSheet,
-                    ["Delete Cells"] = () => _ = ShowDeleteCellsDialogAsync(),
-                    ["Format Cells"] = () => _ = ShowFormatCellsDialogAsync(),
+                    ["Delete Cells"] = () => RunGuarded(ShowDeleteCellsDialogAsync),
+                    ["Format Cells"] = () => RunGuarded(() => ShowFormatCellsDialogAsync()),
                     // Home ▸ Cells ▸ Format ▸ Row Height / Column Width / AutoFit (ids from HomeRibbonMenus.Format)
                     // → shared Set{Row,Column} commands + AutoFitSizingService on the current selection.
-                    ["Row Height"] = () => _ = ShowRowHeightDialogAsync(),
+                    ["Row Height"] = () => RunGuarded(ShowRowHeightDialogAsync),
                     ["AutoFit Row Height"] = AutoFitSelectedRowHeight,
-                    ["Column Width"] = () => _ = ShowColumnWidthDialogAsync(),
+                    ["Column Width"] = () => RunGuarded(ShowColumnWidthDialogAsync),
                     ["AutoFit Column Width"] = AutoFitSelectedColumnWidth,
                     // Home ▸ Cells ▸ Format ▸ Hide & Unhide (ids from HomeRibbonMenus.Format) → shared
                     // Set{Rows,Columns}HiddenCommand on the current selection.
@@ -1161,19 +1161,19 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
                     ["Unhide Rows"] = UnhideSelectedRows,
                     ["Hide Columns"] = HideSelectedColumns,
                     ["Unhide Columns"] = UnhideSelectedColumns,
-                    ["Protect Sheet"] = () => _ = ShowProtectSheetDialogAsync(),
-                    ["Unhide Sheet"] = () => _ = UnhideSheetAsync(),
+                    ["Protect Sheet"] = () => RunGuarded(ShowProtectSheetDialogAsync),
+                    ["Unhide Sheet"] = () => RunGuarded(UnhideSheetAsync),
                     // Home ▸ Styles ▸ Conditional Formatting dropdown items backed by existing presets/handlers
                     // (canonical ids from HomeRibbonMenus.ConditionalFormatting). The remaining Highlight/Top-Bottom/
                     // Icon-Set variants stay NoOp until their presets exist.
-                    ["New Rule"] = () => _ = ShowConditionalFormatNewRuleDialogAsync(),
+                    ["New Rule"] = () => RunGuarded(ShowConditionalFormatNewRuleDialogAsync),
                     ["Clear Rules"] = ClearConditionalFormatsFromSelection,
                     ["Data Bars"] = () => ApplyConditionalFormatPreset(ConditionalFormatPreset.DataBar),
                     ["Color Scales"] = () => ApplyConditionalFormatPreset(ConditionalFormatPreset.ColorScale),
                     ["Greater Than"] = () => ApplyConditionalFormatPreset(ConditionalFormatPreset.HighlightGreaterThan),
                     ["Top 10 Items"] = () => ApplyConditionalFormatPreset(ConditionalFormatPreset.Top10),
                     // Insert tab (Links / Text groups).
-                    ["Insert Link"] = () => _ = ShowInsertHyperlinkDialogAsync(),
+                    ["Insert Link"] = () => RunGuarded(ShowInsertHyperlinkDialogAsync),
                     // Home Font group (added buttons).
                     ["Strikethrough"] = ToggleSelectedRangeStrikethrough,
                     ["Increase Font Size"] = IncreaseSelectedRangeFontSize,
@@ -1189,7 +1189,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
                     ["Decrease Decimal Places"] = DecreaseSelectedRangeDecimalPlaces,
                     // Home Alignment Orientation + Cells Format → existing handlers.
                     ["Orientation"] = () => ApplySelectedRangeTextRotation(45, UiText.Get("TextRotation_GenericSuccessAction"), UiText.Get("MainLoc_AlignmentFailed")),
-                    ["Format"] = () => _ = ShowFormatCellsDialogAsync(),
+                    ["Format"] = () => RunGuarded(() => ShowFormatCellsDialogAsync()),
                     // View tab (Window group) + Formulas tab.
                     ["Unhide"] = () => RunGuarded(ShowUnhideWindowDialogAsync),
                     ["Show Formulas"] = ToggleShowFormulas,
@@ -1199,12 +1199,12 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
                     [FreeXRibbonCommandIds.FormulasMoreFunctions] = InsertFunction,
                     ["Recently Used"] = InsertFunction,
                     // Data tab (Sort & Filter / Tools / Forecast / Outline groups).
-                    ["Advanced"] = () => _ = ShowAdvancedFilterDialogAsync(),
+                    ["Advanced"] = () => RunGuarded(ShowAdvancedFilterDialogAsync),
                     ["Flash Fill"] = FlashFillSelectedRange,
-                    [FreeXRibbonCommandIds.DataRemoveDuplicates] = () => _ = ShowRemoveDuplicatesDialogAsync(),
-                    ["What-If Analysis"] = () => _ = ShowGoalSeekDialogAsync(),
-                    ["Forecast Sheet"] = () => _ = ShowForecastSheetDialogAsync(),
-                    ["Subtotal"] = () => _ = ShowSubtotalDialogAsync(),
+                    [FreeXRibbonCommandIds.DataRemoveDuplicates] = () => RunGuarded(ShowRemoveDuplicatesDialogAsync),
+                    ["What-If Analysis"] = () => RunGuarded(ShowGoalSeekDialogAsync),
+                    ["Forecast Sheet"] = () => RunGuarded(ShowForecastSheetDialogAsync),
+                    ["Subtotal"] = () => RunGuarded(ShowSubtotalDialogAsync),
                     // --- Parity pass: wire remaining no-op ribbon buttons to existing handlers ---
                     // Formula Library category buttons open the function picker (like the others).
                     ["Financial"] = InsertFunction,
@@ -1221,8 +1221,8 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
                     ["Font Color"] = () => ApplySelectedRangeFontColor(new CellColor(0, 0, 0)),
                     ["Fill Color"] = () => ApplySelectedRangeFillColor(new CellColor(255, 235, 132)),
                     // Review: New Note / New Comment on the active cell.
-                    ["New Note"] = () => _ = ShowNewNoteDialogAsync(),
-                    ["New Comment"] = () => _ = ShowNewThreadedCommentDialogAsync(),
+                    ["New Note"] = () => RunGuarded(ShowNewNoteDialogAsync),
+                    ["New Comment"] = () => RunGuarded(ShowNewThreadedCommentDialogAsync),
                     // Insert: Sparklines — open the insert dialog (or edit, when the active cell already
                     // anchors a sparkline) with the chosen kind preselected.
                     ["Line Sparkline"] = () => InsertOrEditSparkline(SparklineKind.Line),
@@ -1232,29 +1232,29 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
                     [FreeXRibbonCommandIds.DataOutlineGroup] = GroupSelectedRows,
                     [FreeXRibbonCommandIds.DataOutlineUngroup] = UngroupSelection,
                     // Home ▸ Cells: Insert / Delete Cells (with shift-direction prompt).
-                    ["Insert"] = () => _ = ShowInsertCellsDialogAsync(),
-                    ["Delete"] = () => _ = ShowDeleteCellsDialogAsync(),
+                    ["Insert"] = () => RunGuarded(ShowInsertCellsDialogAsync),
+                    ["Delete"] = () => RunGuarded(ShowDeleteCellsDialogAsync),
                     // Home ▸ Styles: Cell Styles gallery.
-                    ["Cell Styles"] = () => _ = ShowCellStylesGalleryAsync(),
+                    ["Cell Styles"] = () => RunGuarded(ShowCellStylesGalleryAsync),
                     // Review ▸ Delete Comment; View ▸ Split / Normal.
                     ["Delete Comment"] = DeleteActiveCellThreadedComment,
                     ["Split"] = SplitPanesAtActiveCell,
                     [FreeXRibbonCommandIds.ViewNormal] = SetNormalView,
                     // Insert ▸ Comment (reuse New Comment); Insert ▸ Header & Footer (Page Setup).
-                    ["Comment"] = () => _ = ShowNewThreadedCommentDialogAsync(),
-                    ["Header & Footer"] = () => _ = ShowPageSetupDialogAsync(),
+                    ["Comment"] = () => RunGuarded(ShowNewThreadedCommentDialogAsync),
+                    ["Header & Footer"] = () => RunGuarded(() => ShowPageSetupDialogAsync()),
                     // Page Layout ▸ Themes (Office / Colorful / Grayscale picker).
-                    ["Themes"] = () => _ = ShowThemesGalleryAsync(),
-                    ["Theme Colors"] = () => _ = ShowThemeColorsGalleryAsync(),
-                    ["Theme Fonts"] = () => _ = ShowThemeFontsGalleryAsync(),
-                    ["Theme Effects"] = () => _ = ShowThemeEffectsGalleryAsync(),
+                    ["Themes"] = () => RunGuarded(ShowThemesGalleryAsync),
+                    ["Theme Colors"] = () => RunGuarded(ShowThemeColorsGalleryAsync),
+                    ["Theme Fonts"] = () => RunGuarded(ShowThemeFontsGalleryAsync),
+                    ["Theme Effects"] = () => RunGuarded(ShowThemeEffectsGalleryAsync),
                     // Insert ▸ Symbol.
-                    ["Symbol"] = () => _ = ShowSymbolPickerAsync(),
+                    ["Symbol"] = () => RunGuarded(ShowSymbolPickerAsync),
                     // Formulas ▸ Error Checking.
-                    ["Error Checking"] = () => _ = CheckFormulaErrorsAsync(),
-                    [FreeXRibbonCommandIds.FormulasErrorCheckingRun] = () => _ = CheckFormulaErrorsAsync(),
+                    ["Error Checking"] = () => RunGuarded(CheckFormulaErrorsAsync),
+                    [FreeXRibbonCommandIds.FormulasErrorCheckingRun] = () => RunGuarded(CheckFormulaErrorsAsync),
                     // Formulas ▸ Evaluate Formula (read-only diagnostics dialog).
-                    ["Evaluate Formula"] = () => _ = ShowEvaluateFormulaDialogAsync(),
+                    ["Evaluate Formula"] = () => RunGuarded(ShowEvaluateFormulaDialogAsync),
                     // Formulas ▸ Formula Auditing trace arrows.
                     ["Trace Precedents"] = TraceFormulaPrecedents,
                     ["Trace Dependents"] = TraceFormulaDependents,
@@ -1269,10 +1269,10 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
                     // ─────────────────────────────────────────────────────────────────────────────
 
                     // Home ▸ Clipboard ▸ Paste menu.
-                    ["Paste Formulas"] = () => _ = PasteSpecialClipboardTextAsync(PasteCellsMode.Formulas, default, "Formulas"),
-                    ["Transpose Paste"] = () => _ = PasteSpecialClipboardTextAsync(PasteCellsMode.All, new PasteSpecialOptions(Transpose: true), "Transpose"),
-                    ["Picture"] = () => _ = PastePictureFromClipboardAsync("Picture", linkedPicture: false),
-                    ["Linked Picture"] = () => _ = PastePictureFromClipboardAsync("Linked Picture", linkedPicture: true),
+                    ["Paste Formulas"] = () => RunGuarded(() => PasteSpecialClipboardTextAsync(PasteCellsMode.Formulas, default, "Formulas")),
+                    ["Transpose Paste"] = () => RunGuarded(() => PasteSpecialClipboardTextAsync(PasteCellsMode.All, new PasteSpecialOptions(Transpose: true), "Transpose")),
+                    ["Picture"] = () => RunGuarded(() => PastePictureFromClipboardAsync("Picture", linkedPicture: false)),
+                    ["Linked Picture"] = () => RunGuarded(() => PastePictureFromClipboardAsync("Linked Picture", linkedPicture: true)),
 
                     // Home ▸ Font ▸ Borders dropdown: compound / thick / double presets.
                     ["Thick Bottom Border"] = () => ApplySelectedRangeBorderPreset(CellBorderPreset.ThickBottom),
@@ -1287,7 +1287,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
                     ["Erase Border"] = () => BeginBorderDrawMode(BorderDrawMode.Erase),
 
                     // Home ▸ Number ▸ Accounting dropdown.
-                    ["More Accounting Formats"] = () => _ = ShowFormatCellsDialogAsync(),
+                    ["More Accounting Formats"] = () => RunGuarded(() => ShowFormatCellsDialogAsync()),
 
                     // Home ▸ Styles ▸ Conditional Formatting ▸ Highlight Cells Rules detail items.
                     ["Less Than"] = () => ApplyConditionalFormatPreset(ConditionalFormatPreset.HighlightLessThan),
@@ -1323,11 +1323,11 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
                     ["5 Ratings"] = () => ApplyConditionalFormatIconSet("5Rating"),
                     ["5 Quarters"] = () => ApplyConditionalFormatIconSet("5Quarters"),
                     ["5 Boxes"] = () => ApplyConditionalFormatIconSet("5Boxes"),
-                    ["More Rules"] = () => _ = ShowConditionalFormatNewRuleDialogAsync(),
+                    ["More Rules"] = () => RunGuarded(ShowConditionalFormatNewRuleDialogAsync),
 
                     // Home ▸ Styles ▸ Conditional Formatting ▸ New Formula Rule / Manage Rules.
-                    ["New Formula Rule"] = () => _ = ShowConditionalFormatNewRuleDialogAsync(CfRuleType.Formula),
-                    ["Manage Rules"] = () => _ = ShowManageConditionalFormatsDialogAsync(),
+                    ["New Formula Rule"] = () => RunGuarded(() => ShowConditionalFormatNewRuleDialogAsync(CfRuleType.Formula)),
+                    ["Manage Rules"] = () => RunGuarded(ShowManageConditionalFormatsDialogAsync),
 
                     // Home ▸ Cells ▸ Insert / Delete dropdowns.
                     ["Insert Sheet Rows"] = InsertSheetRows,
@@ -1337,24 +1337,24 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
                     ["Delete Sheet"] = DeleteActiveSheet,
 
                     // Home ▸ Cells ▸ Format dropdown.
-                    ["Rename Sheet"] = () => _ = RenameActiveSheetAsync(),
+                    ["Rename Sheet"] = () => RunGuarded(RenameActiveSheetAsync),
                     ["Hide Sheet"] = HideActiveSheet,
-                    ["Tab Color"] = () => _ = ShowSheetTabColorPickerAsync(),
+                    ["Tab Color"] = () => RunGuarded(ShowSheetTabColorPickerAsync),
                     ["Lock Cell"] = ToggleSelectedRangeLock,
 
                     // Home ▸ Editing ▸ Sort & Filter dropdown.
                     ["Sort A to Z"] = () => SortSelectedRange(ascending: true),
                     ["Sort Z to A"] = () => SortSelectedRange(ascending: false),
-                    ["Custom Sort"] = () => _ = ShowSortDialogAsync(),
+                    ["Custom Sort"] = () => RunGuarded(ShowSortDialogAsync),
                     ["Filter"] = ToggleAutoFilter,
 
                     // Formulas ▸ Formula Auditing ▸ Watch Window / Remove Arrows submenu.
-                    ["Watch Window"] = () => _ = ShowWatchWindowDialogAsync(),
+                    ["Watch Window"] = () => RunGuarded(ShowWatchWindowDialogAsync),
                     [FreeXRibbonCommandIds.FormulasRemovePrecedentArrows] = () => RemoveFormulaTraceArrowsOfKind(FormulaTraceArrowKind.Precedent),
                     [FreeXRibbonCommandIds.FormulasRemoveDependentArrows] = () => RemoveFormulaTraceArrowsOfKind(FormulaTraceArrowKind.Dependent),
 
                     // Formulas ▸ Error Checking ▸ Error Checking Options.
-                    [FreeXRibbonCommandIds.FormulasErrorCheckingOptions] = () => _ = ShowOptionsDialogAsync(),
+                    [FreeXRibbonCommandIds.FormulasErrorCheckingOptions] = () => RunGuarded(ShowOptionsDialogAsync),
 
                     // Formulas ▸ Calculation ▸ Calculate Sheet + Calculation Options menu items.
                     ["Calculate Sheet"] = CalculateSheet,
@@ -1363,12 +1363,12 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
                     [FreeXRibbonCommandIds.FormulasCalculationAutomaticExceptDataTables] = SetCalculationModeAutomaticExceptDataTables,
 
                     // Data ▸ Sort & Filter ▸ Sort button (canonical id "Sort", no dotted prefix).
-                    ["Sort"] = () => _ = ShowSortDialogAsync(),
+                    ["Sort"] = () => RunGuarded(ShowSortDialogAsync),
 
                     // Data ▸ Data Tools ▸ What-If Analysis dropdown.
-                    [FreeXRibbonCommandIds.DataWhatIfGoalSeek] = () => _ = ShowGoalSeekDialogAsync(),
-                    [FreeXRibbonCommandIds.DataWhatIfScenarioManager] = () => _ = ShowScenarioManagerDialogAsync(),
-                    [FreeXRibbonCommandIds.DataWhatIfDataTable] = () => _ = ShowDataTableDialogAsync(),
+                    [FreeXRibbonCommandIds.DataWhatIfGoalSeek] = () => RunGuarded(ShowGoalSeekDialogAsync),
+                    [FreeXRibbonCommandIds.DataWhatIfScenarioManager] = () => RunGuarded(ShowScenarioManagerDialogAsync),
+                    [FreeXRibbonCommandIds.DataWhatIfDataTable] = () => RunGuarded(ShowDataTableDialogAsync),
 
                     // Data ▸ Outline ▸ Show / Hide Detail, Clear Outline, Group / Ungroup submenu items.
                     ["Show Detail"] = ShowOutlineDetail,
@@ -1378,14 +1378,14 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
                     [FreeXRibbonCommandIds.DataOutlineUngroupRows] = UngroupSelection,
 
                     // Review ▸ Proofing / Comments / Notes / Share.
-                    ["Workbook Statistics"] = () => _ = ShowWorkbookStatisticsDialogAsync(),
+                    ["Workbook Statistics"] = () => RunGuarded(ShowWorkbookStatisticsDialogAsync),
                     ["Next Comment"] = () => NavigateReviewThreadedComment(previous: false),
                     ["Previous Comment"] = () => NavigateReviewThreadedComment(previous: true),
-                    ["Show Comments"] = () => _ = ShowCommentsListAsync(),
+                    ["Show Comments"] = () => RunGuarded(ShowCommentsListAsync),
                     ["Show Notes"] = ToggleAllNotesVisibility,
-                    ["Edit Note"] = () => _ = ShowEditNoteDialogAsync(),
+                    ["Edit Note"] = () => RunGuarded(ShowEditNoteDialogAsync),
                     ["Delete Note"] = DeleteActiveCellNote,
-                    ["Share"] = () => _ = ShareWorkbookAsync(),
+                    ["Share"] = () => RunGuarded(ShareWorkbookAsync),
 
                     // View ▸ Show ▸ Ruler.
                     ["Ruler"] = ToggleShowRulers,
@@ -1408,7 +1408,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
                     [FreeXRibbonCommandIds.ViewZoomPreset75] = () => ApplyZoomPercentPreset(75),
                     [FreeXRibbonCommandIds.ViewZoomPreset50] = () => ApplyZoomPercentPreset(50),
                     [FreeXRibbonCommandIds.ViewZoomPreset25] = () => ApplyZoomPercentPreset(25),
-                    [FreeXRibbonCommandIds.ViewZoomCustom] = () => _ = ShowZoomDialogAsync(),
+                    [FreeXRibbonCommandIds.ViewZoomCustom] = () => RunGuarded(ShowZoomDialogAsync),
 
                     // ─────────────────────────────────────────────────────────────────────────────
                     // Re-keyed from allowlist: formerly served via native menus / parent buttons only.
@@ -1416,22 +1416,22 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
                     // ─────────────────────────────────────────────────────────────────────────────
 
                     // Page Layout ▸ Themes preset submenu ids + customize entries.
-                    [FreeXRibbonCommandIds.PageLayoutThemeOffice] = () => _ = ShowThemesGalleryAsync(),
-                    [FreeXRibbonCommandIds.PageLayoutThemeColorsOffice] = () => _ = ShowThemeColorsGalleryAsync(),
-                    [FreeXRibbonCommandIds.PageLayoutThemeFontsOffice] = () => _ = ShowThemeFontsGalleryAsync(),
-                    [FreeXRibbonCommandIds.PageLayoutThemeEffectsOffice] = () => _ = ShowThemeEffectsGalleryAsync(),
-                    [FreeXRibbonCommandIds.PageLayoutThemeGrayscale] = () => _ = ShowThemesGalleryAsync(),
-                    [FreeXRibbonCommandIds.PageLayoutThemeColorsGrayscale] = () => _ = ShowThemeColorsGalleryAsync(),
-                    [FreeXRibbonCommandIds.PageLayoutThemeColorful] = () => _ = ShowThemesGalleryAsync(),
-                    [FreeXRibbonCommandIds.PageLayoutThemeColorsColorful] = () => _ = ShowThemeColorsGalleryAsync(),
-                    [FreeXRibbonCommandIds.PageLayoutThemeCustomize] = () => _ = ShowThemesGalleryAsync(),
-                    [FreeXRibbonCommandIds.PageLayoutThemeColorsCustomize] = () => _ = ShowThemeColorsGalleryAsync(),
-                    [FreeXRibbonCommandIds.PageLayoutThemeFontsCustomize] = () => _ = ShowThemeFontsGalleryAsync(),
-                    [FreeXRibbonCommandIds.PageLayoutThemeEffectsCustomize] = () => _ = ShowThemeEffectsGalleryAsync(),
-                    [FreeXRibbonCommandIds.PageLayoutThemeFontsArial] = () => _ = ShowThemeFontsGalleryAsync(),
-                    [FreeXRibbonCommandIds.PageLayoutThemeFontsTimesNewRoman] = () => _ = ShowThemeFontsGalleryAsync(),
-                    [FreeXRibbonCommandIds.PageLayoutThemeEffectsSubtle] = () => _ = ShowThemeEffectsGalleryAsync(),
-                    [FreeXRibbonCommandIds.PageLayoutThemeEffectsRefined] = () => _ = ShowThemeEffectsGalleryAsync(),
+                    [FreeXRibbonCommandIds.PageLayoutThemeOffice] = () => RunGuarded(ShowThemesGalleryAsync),
+                    [FreeXRibbonCommandIds.PageLayoutThemeColorsOffice] = () => RunGuarded(ShowThemeColorsGalleryAsync),
+                    [FreeXRibbonCommandIds.PageLayoutThemeFontsOffice] = () => RunGuarded(ShowThemeFontsGalleryAsync),
+                    [FreeXRibbonCommandIds.PageLayoutThemeEffectsOffice] = () => RunGuarded(ShowThemeEffectsGalleryAsync),
+                    [FreeXRibbonCommandIds.PageLayoutThemeGrayscale] = () => RunGuarded(ShowThemesGalleryAsync),
+                    [FreeXRibbonCommandIds.PageLayoutThemeColorsGrayscale] = () => RunGuarded(ShowThemeColorsGalleryAsync),
+                    [FreeXRibbonCommandIds.PageLayoutThemeColorful] = () => RunGuarded(ShowThemesGalleryAsync),
+                    [FreeXRibbonCommandIds.PageLayoutThemeColorsColorful] = () => RunGuarded(ShowThemeColorsGalleryAsync),
+                    [FreeXRibbonCommandIds.PageLayoutThemeCustomize] = () => RunGuarded(ShowThemesGalleryAsync),
+                    [FreeXRibbonCommandIds.PageLayoutThemeColorsCustomize] = () => RunGuarded(ShowThemeColorsGalleryAsync),
+                    [FreeXRibbonCommandIds.PageLayoutThemeFontsCustomize] = () => RunGuarded(ShowThemeFontsGalleryAsync),
+                    [FreeXRibbonCommandIds.PageLayoutThemeEffectsCustomize] = () => RunGuarded(ShowThemeEffectsGalleryAsync),
+                    [FreeXRibbonCommandIds.PageLayoutThemeFontsArial] = () => RunGuarded(ShowThemeFontsGalleryAsync),
+                    [FreeXRibbonCommandIds.PageLayoutThemeFontsTimesNewRoman] = () => RunGuarded(ShowThemeFontsGalleryAsync),
+                    [FreeXRibbonCommandIds.PageLayoutThemeEffectsSubtle] = () => RunGuarded(ShowThemeEffectsGalleryAsync),
+                    [FreeXRibbonCommandIds.PageLayoutThemeEffectsRefined] = () => RunGuarded(ShowThemeEffectsGalleryAsync),
 
                     // Shape Format ▸ Shape Effects submenu items (also wired via BuildPictureShapeTabCommands;
                     // declared here so the hygiene guard finds them in this file's ExtraCommands block).
@@ -1447,9 +1447,9 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
                     [FreeXRibbonCommandIds.DrawingResetCrop] = () => ResetSelectedPictureCrop(),
 
                     // Home ▸ Clipboard ▸ Paste menu items not previously wired by canonical id.
-                    ["Keep Source Column Widths"] = () => _ = PasteSpecialClipboardTextAsync(PasteCellsMode.All, default, "Keep Source Column Widths", keepSourceColumnWidths: true),
-                    ["Values & Source Formatting"] = () => _ = PasteSpecialClipboardTextAsync(PasteCellsMode.All, new PasteSpecialOptions(ContentKind: PasteSpecialContentKind.ValuesAndSourceFormatting), "Values & Source Formatting"),
-                    ["Paste Link"] = () => _ = PasteLinkFromClipboardAsync("Paste Link"),
+                    ["Keep Source Column Widths"] = () => RunGuarded(() => PasteSpecialClipboardTextAsync(PasteCellsMode.All, default, "Keep Source Column Widths", keepSourceColumnWidths: true)),
+                    ["Values & Source Formatting"] = () => RunGuarded(() => PasteSpecialClipboardTextAsync(PasteCellsMode.All, new PasteSpecialOptions(ContentKind: PasteSpecialContentKind.ValuesAndSourceFormatting), "Values & Source Formatting")),
+                    ["Paste Link"] = () => RunGuarded(() => PasteLinkFromClipboardAsync("Paste Link")),
 
                     // Home ▸ Editing ▸ Sort & Filter split-button face (the Home-tab picker id).
                     ["Sort & Filter"] = ToggleAutoFilter,
@@ -2197,7 +2197,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         _insertAreaChartMenuItem.Click += (_, _) => InsertChartFromSelection(ChartType.Area);
         _insertScatterChartMenuItem.Click += (_, _) => InsertChartFromSelection(ChartType.Scatter);
 
-        _insertTableMenuItem.Click += (_, _) => _ = InsertTableFromSelectionAsync();
+        _insertTableMenuItem.Click += (_, _) => RunGuarded(InsertTableFromSelectionAsync);
 
         _insertPivotTableMenuItem.Click += async (_, _) => await ShowInsertPivotTableDialogAsync();
 
@@ -8828,7 +8828,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
                 _session.TryGetHyperlinkPlan(address, out var _))
             {
                 args.Handled = true;
-                _ = OpenHyperlinkAsync(address);
+                RunGuarded(() => OpenHyperlinkAsync(address));
                 return;
             }
 
@@ -25048,7 +25048,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
 
         if (option.OpensFormatCellsDialog)
         {
-            _ = ShowFormatCellsDialogAsync();
+            RunGuarded(() => ShowFormatCellsDialogAsync());
             return;
         }
 

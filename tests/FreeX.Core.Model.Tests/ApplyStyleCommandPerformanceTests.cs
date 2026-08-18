@@ -121,6 +121,144 @@ public sealed class ApplyStyleCommandPerformanceTests
         zone!.Value.End.Col.Should().Be(3, "cols clamp to used-range end col");
     }
 
+    // ── F1: unbounded selection starting mid-sheet must not leak above/left of Start ──────────
+
+    [Fact]
+    public void StyleOnlyCreateZone_UnboundedRowsStartingMidSheet_DoesNotLeakAboveSelectionStart()
+    {
+        // Regression for range-arithmetic F1: a range like B5:B1048576 (a Ctrl+Shift+Down
+        // selection, NOT a column-header click -- Start.Row is 5, not 1) reaches MaxRow so it is
+        // still treated as "unbounded" for perf-clamp purposes, but the zone must never start
+        // above the selection's OWN Start.Row even when the sheet has used-range content above it
+        // (e.g. a header row at row 1).
+        var wb = new Workbook("test");
+        var sheet = wb.AddSheet("Sheet1");
+        // Data in column A, rows 1-20 (establishes a used range starting at row 1).
+        for (uint r = 1; r <= 20; r++)
+            sheet.SetCell(new CellAddress(sheet.Id, r, 1), new NumberValue(r));
+
+        // Selection: B5:B1048576 -- starts at row 5, mid-sheet, reaches MaxRow.
+        var midSheetToBottom = new GridRange(
+            new CellAddress(sheet.Id, 5, 2),
+            new CellAddress(sheet.Id, CellAddress.MaxRow, 2));
+
+        var zone = ApplyStyleCommand.StyleOnlyCreateZone(sheet, midSheetToBottom);
+
+        zone.Should().NotBeNull();
+        zone!.Value.Start.Row.Should().Be(5,
+            "the zone must start at the selection's own Start.Row, not the sheet's used-range start row");
+    }
+
+    [Fact]
+    public void StyleOnlyCreateZone_UnboundedColsStartingMidSheet_DoesNotLeakLeftOfSelectionStart()
+    {
+        // Symmetric sibling: a row-suffix selection like E5:XFD5 (bounded start column reaching
+        // MaxCol) must not leak formatting leftward into unselected columns.
+        var wb = new Workbook("test");
+        var sheet = wb.AddSheet("Sheet1");
+        // Data in row 1, columns A-T (establishes a used range starting at column 1).
+        for (uint c = 1; c <= 20; c++)
+            sheet.SetCell(new CellAddress(sheet.Id, 1, c), new NumberValue(c));
+
+        // Selection: E5:XFD5 -- starts at column 5, mid-sheet, reaches MaxCol.
+        var midSheetToRight = new GridRange(
+            new CellAddress(sheet.Id, 5, 5),
+            new CellAddress(sheet.Id, 5, CellAddress.MaxCol));
+
+        var zone = ApplyStyleCommand.StyleOnlyCreateZone(sheet, midSheetToRight);
+
+        zone.Should().NotBeNull();
+        zone!.Value.Start.Col.Should().Be(5,
+            "the zone must start at the selection's own Start.Col, not the sheet's used-range start col");
+    }
+
+    [Fact]
+    public void StyleOnlyCreateZone_TrueWholeColumn_UnaffectedByMidSheetStartFix()
+    {
+        // No-regression sibling: a GENUINE whole-column selection (Start.Row == 1, e.g. a real
+        // column-header click) must still clamp its start row to the used range's start row exactly
+        // as before -- Math.Max(usedRange.Start.Row, range.Start.Row) with range.Start.Row == 1
+        // reduces to usedRange.Start.Row when the used range starts below row 1... which it never
+        // does, so this must equal usedRange.Start.Row.
+        var wb = new Workbook("test");
+        var sheet = wb.AddSheet("Sheet1");
+        for (uint r = 50; r <= 150; r++)
+            sheet.SetCell(new CellAddress(sheet.Id, r, 3), new NumberValue(r));
+
+        var wholeCol = new GridRange(
+            new CellAddress(sheet.Id, 1, 3),
+            new CellAddress(sheet.Id, CellAddress.MaxRow, 3));
+
+        var zone = ApplyStyleCommand.StyleOnlyCreateZone(sheet, wholeCol);
+
+        zone.Should().NotBeNull();
+        zone!.Value.Start.Row.Should().Be(50, "a true whole-column selection still clamps to the used-range start row");
+        zone!.Value.End.Row.Should().Be(150, "a true whole-column selection still clamps to the used-range end row");
+    }
+
+    [Fact]
+    public void ApplyBold_UnboundedRowsStartingMidSheet_DoesNotStyleRowsAboveSelection()
+    {
+        // End-to-end reproduction of the reported user gesture: header row 1, then Bold applied to
+        // B5:B1048576 (Name-Box entry, or Ctrl+Shift+Down from B5 with no data below). Rows B1:B4
+        // must NOT become bold-styled -- they were never part of the selection.
+        var wb = new Workbook("test");
+        var sheet = wb.AddSheet("Sheet1");
+        for (uint r = 1; r <= 20; r++)
+            sheet.SetCell(new CellAddress(sheet.Id, r, 1), new NumberValue(r)); // header/data in col A
+
+        var ctx = new TestCommandContext(wb);
+        var midSheetToBottom = new GridRange(
+            new CellAddress(sheet.Id, 5, 2),
+            new CellAddress(sheet.Id, CellAddress.MaxRow, 2));
+
+        var cmd = new ApplyStyleCommand(sheet.Id, midSheetToBottom, new StyleDiff(Bold: true));
+        cmd.Apply(ctx).Success.Should().BeTrue();
+
+        sheet.GetStyleOnly(1, 2).Should().BeNull("row 1 col B was never part of the selection and must not be styled");
+        sheet.GetStyleOnly(2, 2).Should().BeNull("row 2 col B was never part of the selection and must not be styled");
+        sheet.GetStyleOnly(3, 2).Should().BeNull("row 3 col B was never part of the selection and must not be styled");
+        sheet.GetStyleOnly(4, 2).Should().BeNull("row 4 col B was never part of the selection and must not be styled");
+
+        var styleAtB5 = sheet.GetStyleOnly(5, 2);
+        styleAtB5.Should().NotBeNull("row 5 col B WAS part of the selection and must be styled");
+        wb.GetStyle(styleAtB5!.Value).Bold.Should().BeTrue();
+    }
+
+    [Fact]
+    public void DetermineStyleOnlySource_UnboundedRowsStartingMidSheet_IsNotColumnSourced()
+    {
+        // Regression for the classification half of F1: DetermineStyleOnlySource must agree with
+        // SelectionRangeService.IsWholeColumnSelection, which requires Start.Row == 1. A range that
+        // merely reaches MaxRow while starting mid-sheet is not a genuine column-header selection
+        // and must not carry StyleOnlySource.Column provenance.
+        var wb = new Workbook("test");
+        var sheet = wb.AddSheet("Sheet1");
+        var midSheetToBottom = new GridRange(
+            new CellAddress(sheet.Id, 5, 2),
+            new CellAddress(sheet.Id, CellAddress.MaxRow, 2));
+
+        var source = ApplyStyleCommand.DetermineStyleOnlySource(midSheetToBottom);
+
+        source.Should().BeNull("a selection that doesn't start at row 1 is not a genuine column-header selection");
+    }
+
+    [Fact]
+    public void DetermineStyleOnlySource_TrueWholeColumn_IsStillColumnSourced()
+    {
+        // No-regression sibling: a genuine whole-column selection (Start.Row == 1) must still be
+        // classified as StyleOnlySource.Column, preserving the row-beats-column precedence feature.
+        var wb = new Workbook("test");
+        var sheet = wb.AddSheet("Sheet1");
+        var wholeCol = new GridRange(
+            new CellAddress(sheet.Id, 1, 3),
+            new CellAddress(sheet.Id, CellAddress.MaxRow, 3));
+
+        var source = ApplyStyleCommand.DetermineStyleOnlySource(wholeCol);
+
+        source.Should().Be(StyleOnlySource.Column);
+    }
+
     // ── Empty-column / empty-row bold regression tests ───────────────────────
 
     [Fact]

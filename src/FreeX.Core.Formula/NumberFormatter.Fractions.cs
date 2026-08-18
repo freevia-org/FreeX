@@ -365,16 +365,45 @@ public static partial class NumberFormatter
             mantissa = absValue / Math.Pow(10, exponent);
         }
 
-        // Round the mantissa to the required decimal places.
-        mantissa = Math.Round(mantissa, decimalPlaces, MidpointRounding.AwayFromZero);
+        // Round the mantissa to the required decimal places. Do this via a decimal-first
+        // computation -- matching RoundWithExcelDigits (BuiltInFunctions.Coercion.cs) and the
+        // FLOOR/CEILING-to-multiple helpers (BuiltInFunctions.MathCore.Rounding.cs) -- rather
+        // than rounding the raw double `mantissa` computed above via Math.Round/"F". The raw
+        // division absValue / Math.Pow(10, exponent) can leave a binary-fraction remainder that
+        // makes Math.Round disagree with Excel at exact half-decimal boundaries: e.g. for
+        // absValue == 1005 and exponent == 3, the true mantissa 1.005 is actually stored as the
+        // double 1.0049999999999999..., so Math.Round rounds it DOWN to 1.00, whereas Excel (and
+        // this codebase's own "0.00E+00" plain-scientific path and "0.00"/ROUND() paths) round
+        // the value's shortest round-trippable decimal representation UP to 1.01. Re-derive the
+        // mantissa from a decimal parsed out of absValue's "G15" string (the same technique
+        // TryToExcelDecimal uses) so the division and rounding happen without that IEEE remainder.
+        decimal? mantissaDecimal = null;
+        if (absValue != 0 && TryComputeMantissaDecimal(absValue, exponent, decimalPlaces, out var roundedDecimal))
+        {
+            mantissaDecimal = roundedDecimal;
+            mantissa = (double)roundedDecimal;
+        }
+        else
+        {
+            mantissa = Math.Round(mantissa, decimalPlaces, MidpointRounding.AwayFromZero);
+        }
 
         // After rounding, the mantissa might overflow the integer width (e.g. 999.95 → 1000.0
         // when rounded to 1 decimal place). In that case bump the exponent.
         if (mantissa >= Math.Pow(10, exponentGroup))
         {
             exponent += exponentGroup;
-            mantissa /= Math.Pow(10, exponentGroup);
-            mantissa = Math.Round(mantissa, decimalPlaces, MidpointRounding.AwayFromZero);
+            if (mantissaDecimal is { } md)
+            {
+                md = Math.Round(md / 1000m, decimalPlaces, MidpointRounding.AwayFromZero);
+                mantissaDecimal = md;
+                mantissa = (double)md;
+            }
+            else
+            {
+                mantissa /= Math.Pow(10, exponentGroup);
+                mantissa = Math.Round(mantissa, decimalPlaces, MidpointRounding.AwayFromZero);
+            }
         }
 
         // Format the mantissa using the decimal-place count.
@@ -386,8 +415,10 @@ public static partial class NumberFormatter
             : "F" + decimalPlaces.ToString(CultureInfo.InvariantCulture);
         string mantissaStr = absValue == 0
             ? mantissa.ToString(mantissaFmtSpec, formatProvider)
-            : mantissa.ToString("F" + decimalPlaces.ToString(CultureInfo.InvariantCulture),
-                formatProvider);
+            : mantissaDecimal is { } finalDecimal
+                ? finalDecimal.ToString("F" + decimalPlaces.ToString(CultureInfo.InvariantCulture), formatProvider)
+                : mantissa.ToString("F" + decimalPlaces.ToString(CultureInfo.InvariantCulture),
+                    formatProvider);
 
         // Format the exponent part to match Excel's sign and padding.
         // Excel uses E+3, E-3 etc. (always sign, minimal digits unless padded).
@@ -401,5 +432,41 @@ public static partial class NumberFormatter
         char eLetter = exponentFmt[0]; // preserve original E or e
 
         return prefix + sign + mantissaStr + eLetter + expSign + expAbs + suffix;
+    }
+
+    /// <summary>
+    /// Computes absValue / 10^exponent, rounded to decimalPlaces via decimal arithmetic
+    /// (AwayFromZero), instead of raw double division + Math.Round. Mirrors the
+    /// "G15"-round-trip-then-decimal-round technique used by TryToExcelDecimal in
+    /// BuiltInFunctions.MathCore.Rounding.cs so this format path agrees with Excel (and with
+    /// FreeX's own ROUND()/"0.00" paths) at exact half-decimal boundaries. Returns false
+    /// (letting the caller fall back to double math) when absValue is non-finite, decimalPlaces
+    /// is out of decimal.Round's supported range, or the exponent is too large for a decimal
+    /// power-of-ten scale factor -- decimal can't represent those inputs anyway.
+    /// </summary>
+    private static bool TryComputeMantissaDecimal(double absValue, int exponent, int decimalPlaces, out decimal result)
+    {
+        result = 0m;
+        if (!double.IsFinite(absValue) || decimalPlaces is < 0 or > 28 || Math.Abs(exponent) > 28)
+            return false;
+
+        if (!decimal.TryParse(absValue.ToString("G15", CultureInfo.InvariantCulture),
+                NumberStyles.Float, CultureInfo.InvariantCulture, out var baseDecimal))
+            return false;
+
+        decimal pow = 1m;
+        for (int i = 0; i < Math.Abs(exponent); i++)
+            pow *= 10m;
+
+        try
+        {
+            decimal mantissaDecimal = exponent >= 0 ? baseDecimal / pow : baseDecimal * pow;
+            result = Math.Round(mantissaDecimal, decimalPlaces, MidpointRounding.AwayFromZero);
+            return true;
+        }
+        catch (OverflowException)
+        {
+            return false;
+        }
     }
 }

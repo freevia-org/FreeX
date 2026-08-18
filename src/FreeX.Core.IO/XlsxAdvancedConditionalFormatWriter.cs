@@ -817,10 +817,49 @@ internal static partial class XlsxAdvancedConditionalFormatWriter
     {
         var element = new XElement(worksheetNs + "cfvo", new XAttribute("type", XlsxAdvancedConditionalFormatMetadata.ToCfvoType(type)));
         if (!string.IsNullOrWhiteSpace(value))
-            element.SetAttributeValue("val", value);
+            element.SetAttributeValue("val", NormalizeNumericCfvoValueForSave(type, value));
         if (greaterThanOrEqual.HasValue)
             element.SetAttributeValue("gte", greaterThanOrEqual.Value ? "1" : "0");
         return element;
+    }
+
+    /// <summary>
+    /// culture-io F1: Number/Percent/Percentile threshold values (<see cref="ConditionalFormat.MinThresholdValue"/>
+    /// and friends) are captured verbatim from a plain WPF/Avalonia text box
+    /// (see ConditionalFormatDialog.Result.cs / ConditionalFormatRuleBuilder.cs) with no numeric mask, so on a
+    /// comma-decimal Windows locale (de-DE, fr-FR, es-ES, ...) a fractional value like "12,5" ends up in the
+    /// model exactly as the user typed it. OOXML's cfvo/@val is a locale-INVARIANT numeric literal ('.' decimal
+    /// point only) -- writing "12,5" straight through produces a file real Excel mis-parses/repairs, and FreeX's
+    /// own evaluator (ConditionalFormatEvaluationMath.TryParseInvariant, which uses NumberStyles.Any) silently
+    /// misreads it back as 125 (comma read as a thousands separator) rather than 12.5.
+    ///
+    /// Re-parse the captured text using the CURRENT UI culture first (so "12,5" on de-DE round-trips to 12.5)
+    /// and fall back to invariant (so a value already stored/typed as "12.5" is preserved). NumberStyles.Float
+    /// deliberately excludes AllowThousands -- unlike the evaluator's NumberStyles.Any pitfall this guards
+    /// against -- so a value is only reformatted when it parses as an unambiguous plain number. Only
+    /// Number/Percent/Percentile carry a locale-typed numeric value; Min/Max/AutoMin/AutoMax have no @val, and
+    /// Formula carries a formula string that must never be run through a numeric parser.
+    /// </summary>
+    private static string NormalizeNumericCfvoValueForSave(CfThresholdType type, string value)
+    {
+        if (type != CfThresholdType.Number && type != CfThresholdType.Percent && type != CfThresholdType.Percentile)
+            return value;
+
+        var trimmed = value.Trim();
+        const NumberStyles style = NumberStyles.Float;
+
+        if (!Equals(CultureInfo.CurrentCulture, CultureInfo.InvariantCulture) &&
+            double.TryParse(trimmed, style, CultureInfo.CurrentCulture, out var currentCultureValue))
+        {
+            return currentCultureValue.ToString(CultureInfo.InvariantCulture);
+        }
+
+        if (double.TryParse(trimmed, style, CultureInfo.InvariantCulture, out var invariantValue))
+            return invariantValue.ToString(CultureInfo.InvariantCulture);
+
+        // Not a plain number we recognize (unexpected/malformed input) -- write through untouched
+        // rather than risk corrupting a value we don't understand.
+        return value;
     }
 
     private static XElement ToColorXml(XNamespace worksheetNs, RgbColor color) =>

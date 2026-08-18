@@ -253,6 +253,22 @@ public sealed class FreeWRibbonAsyncStatefulPortCommand(
 
     public RibbonCommandState GetState() => getState();
 
-    private static async void CompleteAsync(ValueTask execution) =>
-        await execution;
+    // Runs as the continuation of a dialog ValueTask that did not complete synchronously (the
+    // normal case for a real modal dialog). This method is async void because there is nothing to
+    // await it from -- Execute() has already returned to the ribbon click handler by the time this
+    // resumes. An exception escaping here would therefore become an unhandled exception on the
+    // async void continuation, which tears the whole process down (Avalonia has no dispatcher-level
+    // unhandled-exception hook; see RibbonCommandFaultReporter). Catch and report instead, matching
+    // the synchronous Execute() path's own guard in AvaloniaRibbonRenderer.Execute.
+    private static async void CompleteAsync(ValueTask execution)
+    {
+        try
+        {
+            await execution;
+        }
+        catch (Exception ex)
+        {
+            RibbonCommandFaultReporter.Report(ex, nameof(FreeWRibbonAsyncStatefulPortCommand));
+        }
+    }
 }

@@ -176,4 +176,96 @@ public sealed class FreeWRibbonPortableCommandsTests
 
         activations.Should().Equal(false, true);
     }
+
+    // The dialog ValueTask completes asynchronously (the normal case for a real Avalonia modal),
+    // so Execute() fires the continuation and returns before the underlying Task settles. A custom
+    // SynchronizationContext stands in for the UI thread that would otherwise receive the posted
+    // continuation: its Post captures anything the continuation throws instead of letting it reach
+    // the runtime's unhandled-exception path, which is what would otherwise tear the process down.
+    private sealed class CapturingSynchronizationContext : SynchronizationContext
+    {
+        public Exception? Captured { get; private set; }
+
+        public override void Post(SendOrPostCallback d, object? state)
+        {
+            try
+            {
+                d(state);
+            }
+            catch (Exception ex)
+            {
+                Captured = ex;
+            }
+        }
+    }
+
+    [Fact]
+    public void Async_stateful_port_command_reports_a_deferred_dialog_fault_instead_of_crashing()
+    {
+        var originalContext = SynchronizationContext.Current;
+        var originalHandler = RibbonCommandFaultReporter.Handler;
+        (Exception ex, string commandId)? captured = null;
+        var tcs = new TaskCompletionSource();
+        var thrown = new InvalidOperationException("dialog apply-outcome rejected the edit");
+
+        try
+        {
+            var syncContext = new CapturingSynchronizationContext();
+            SynchronizationContext.SetSynchronizationContext(syncContext);
+            RibbonCommandFaultReporter.Handler = (ex, commandId) => captured = (ex, commandId);
+
+            var command = new FreeWRibbonAsyncStatefulPortCommand(
+                _ => new ValueTask(tcs.Task),
+                () => new RibbonCommandState(IsEnabled: true));
+
+            command.Execute(RibbonCommandContext.Empty);
+
+            // Settling the ValueTask after Execute() has already returned reproduces the real
+            // failure mode: the exception surfaces on the deferred continuation, not synchronously
+            // from Execute() where AvaloniaRibbonRenderer.Execute's own try/catch could see it.
+            tcs.SetException(thrown);
+
+            syncContext.Captured.Should().BeNull(
+                "the guarded continuation must not let the dialog fault escape as an unhandled exception");
+            captured.Should().NotBeNull("the fault must be reported instead of silently dropped");
+            captured!.Value.ex.Should().BeSameAs(thrown);
+            captured.Value.commandId.Should().Be(nameof(FreeWRibbonAsyncStatefulPortCommand));
+        }
+        finally
+        {
+            SynchronizationContext.SetSynchronizationContext(originalContext);
+            RibbonCommandFaultReporter.Handler = originalHandler;
+        }
+    }
+
+    [Fact]
+    public void Async_stateful_port_command_completing_successfully_reports_nothing()
+    {
+        var originalContext = SynchronizationContext.Current;
+        var originalHandler = RibbonCommandFaultReporter.Handler;
+        var reported = false;
+        var tcs = new TaskCompletionSource();
+
+        try
+        {
+            var syncContext = new CapturingSynchronizationContext();
+            SynchronizationContext.SetSynchronizationContext(syncContext);
+            RibbonCommandFaultReporter.Handler = (_, _) => reported = true;
+
+            var command = new FreeWRibbonAsyncStatefulPortCommand(
+                _ => new ValueTask(tcs.Task),
+                () => new RibbonCommandState(IsEnabled: true));
+
+            command.Execute(RibbonCommandContext.Empty);
+            tcs.SetResult();
+
+            syncContext.Captured.Should().BeNull();
+            reported.Should().BeFalse("a dialog that completes without error has nothing to report");
+        }
+        finally
+        {
+            SynchronizationContext.SetSynchronizationContext(originalContext);
+            RibbonCommandFaultReporter.Handler = originalHandler;
+        }
+    }
 }

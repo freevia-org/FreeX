@@ -522,7 +522,26 @@ public static class PptxPackageWriter
         for (int mi = 0; mi < masters.Count; mi++)
         {
             var themePath = $"ppt/theme/theme{mi + 1}.xml";
-            WriteEntry(archive, themePath, BuildThemeXml(masterThemes[mi]));
+            // default-masks-missing F2: a master whose theme part existed in the source package
+            // but failed to parse (corrupted/truncated theme XML) has Theme == null here even
+            // though ThemePartPath is set (see PptxPackageReader.ReadSlideMaster). Writing
+            // BuildThemeXml(masterThemes[mi]) in that case would silently replace the original,
+            // potentially-recoverable theme bytes with a synthesized generic Office theme on
+            // every save. Re-emit the original bytes verbatim instead whenever we still have
+            // them in the package snapshot; only fall back to synthesizing a theme when the
+            // part was genuinely absent (or the snapshot doesn't have it, e.g. a brand-new
+            // in-memory presentation).
+            if (masters[mi].Theme is null &&
+                masters[mi].ThemePartPath is { Length: > 0 } originalThemePartPath &&
+                packageSnapshot is not null &&
+                packageSnapshot.TryGetEntry(originalThemePartPath, out var originalThemeBytes))
+            {
+                WriteRawEntry(archive, themePath, originalThemeBytes);
+            }
+            else
+            {
+                WriteEntry(archive, themePath, BuildThemeXml(masterThemes[mi]));
+            }
         }
         if (hasSomeNotes)
             WriteEntry(archive, "ppt/theme/theme2.xml", BuildThemeXml(presentation.Theme));
@@ -1290,6 +1309,25 @@ public static class PptxPackageWriter
 
     // ── presentation.xml ─────────────────────────────────────────────────────────
 
+    /// <summary>
+    /// Derives the ST_SlideSize `type` hint from the actual slide dimensions rather than
+    /// hardcoding "screen16x9". PowerPoint and other OOXML consumers cross-check this enum
+    /// against cx/cy; declaring "screen16x9" for a 4:3 (or any custom) size is a
+    /// self-contradictory file. Only the two presets FreeP's own Slide Size dialog can produce
+    /// (SetSlideSize4x3 / SetSlideSize16x9 in EditingSession.cs) are matched exactly here;
+    /// anything else — including genuinely custom sizes — gets the always-valid "custom".
+    /// </summary>
+    private static string ResolveSldSzType(long cx, long cy)
+    {
+        const long StandardCyEmu = DrawingMlCoordinateUnits.EmuPerInch * 15 / 2;      // 6858000 (7.5in)
+        const long Widescreen16x9CxEmu = DrawingMlCoordinateUnits.EmuPerInch * 40 / 3; // 12192000 (13.33in)
+        const long Standard4x3CxEmu = DrawingMlCoordinateUnits.EmuPerInch * 10;        // 9144000 (10in)
+
+        if (cy == StandardCyEmu && cx == Widescreen16x9CxEmu) return "screen16x9";
+        if (cy == StandardCyEmu && cx == Standard4x3CxEmu) return "screen4x3";
+        return "custom";
+    }
+
     private static XDocument BuildPresentationXml(
         Presentation p,
         List<XElement> sldIdElements,
@@ -1333,7 +1371,7 @@ public static class PptxPackageWriter
             new XElement(P + "sldSz",
                 new XAttribute("cx", slideWidthEmu),
                 new XAttribute("cy", slideHeightEmu),
-                new XAttribute("type", "screen16x9")),
+                new XAttribute("type", ResolveSldSzType(slideWidthEmu, slideHeightEmu))),
             new XElement(P + "notesSz",
                 new XAttribute("cx", notesPageWidthEmu),
                 new XAttribute("cy", notesPageHeightEmu)),
@@ -3944,19 +3982,43 @@ public static class PptxPackageWriter
         return new XElement(P + "grpSpPr", xfrm, effectLstEl);
     }
 
+    /// <summary>
+    /// True when the shape actually carries explicit position/size information worth writing.
+    /// A shape read from a source spPr with no &lt;a:xfrm&gt; at all leaves OffsetX/Y and
+    /// ExtentCx/Cy at their model defaults (0) AND leaves HasExplicitZeroExtentTransform false
+    /// (ReadSpPr in PptxPackageReader.cs only ever sets that flag when an &lt;a:xfrm&gt; element
+    /// was present). That combination is the sole signal that the shape intends to inherit its
+    /// geometry from the layout/master placeholder chain — distinct from a source shape that
+    /// explicitly declared a zero-size xfrm (flag true), which PowerPoint treats as hidden.
+    /// </summary>
+    private static bool ShapeHasExplicitTransform(SlideShape shape) =>
+        shape.HasExplicitZeroExtentTransform ||
+        shape.OffsetXEmu != 0 || shape.OffsetYEmu != 0 ||
+        shape.ExtentCxEmu != 0 || shape.ExtentCyEmu != 0;
+
     private static XElement BuildSpPrEl(
         SlideShape shape,
         PresentationColorScheme scheme,
         string? forcePrst = null,
         string? fillBlipRelId = null)
     {
-        var xfrm = new XElement(A + "xfrm");
-        if (shape.RotationDeg != 0)
-            xfrm.Add(new XAttribute("rot", (long)Math.Round(shape.RotationDeg * 60000)));
-        if (shape.FlipH) xfrm.Add(new XAttribute("flipH", "1"));
-        if (shape.FlipV) xfrm.Add(new XAttribute("flipV", "1"));
-        xfrm.Add(new XElement(A + "off", new XAttribute("x", shape.OffsetXEmu), new XAttribute("y", shape.OffsetYEmu)));
-        xfrm.Add(new XElement(A + "ext", new XAttribute("cx", shape.ExtentCxEmu), new XAttribute("cy", shape.ExtentCyEmu)));
+        // Omit <a:xfrm> entirely for a shape that never had explicit geometry (typically a
+        // placeholder inheriting position/size from its layout/master). Emitting a synthesized
+        // <a:xfrm><a:off x="0" y="0"/><a:ext cx="0" cy="0"/></a:xfrm> here would be indistinguishable,
+        // on the next read, from a deliberately-hidden zero-extent placeholder — flipping
+        // HasExplicitZeroExtentTransform to true and making SlideCompositor.ComposeAutoShape skip
+        // the shape entirely (it and its text vanish on save+reload).
+        XElement? xfrm = null;
+        if (ShapeHasExplicitTransform(shape))
+        {
+            xfrm = new XElement(A + "xfrm");
+            if (shape.RotationDeg != 0)
+                xfrm.Add(new XAttribute("rot", (long)Math.Round(shape.RotationDeg * 60000)));
+            if (shape.FlipH) xfrm.Add(new XAttribute("flipH", "1"));
+            if (shape.FlipV) xfrm.Add(new XAttribute("flipV", "1"));
+            xfrm.Add(new XElement(A + "off", new XAttribute("x", shape.OffsetXEmu), new XAttribute("y", shape.OffsetYEmu)));
+            xfrm.Add(new XElement(A + "ext", new XAttribute("cx", shape.ExtentCxEmu), new XAttribute("cy", shape.ExtentCyEmu)));
+        }
 
         // Geometry: custom or preset
         XElement geomEl;

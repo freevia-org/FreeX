@@ -132,10 +132,22 @@ public sealed class SlideMaster
     /// The theme owned by this slide master (color + font schemes).
     /// Each master in a multi-master deck owns a distinct theme; resolving slide colors/fonts
     /// must use this theme rather than the shared <see cref="Presentation.Theme"/> singleton.
-    /// Null only when the master has no theme part (degenerate packages); callers fall back to
-    /// <see cref="Presentation.Theme"/> in that case.
+    /// Null when the master has no theme part (degenerate packages) OR when a theme part was
+    /// present but failed to parse (corrupted/truncated theme XML); callers fall back to
+    /// <see cref="Presentation.Theme"/> in that case. See <see cref="ThemePartPath"/> to tell
+    /// those two cases apart on save.
     /// </summary>
     public PresentationTheme? Theme { get; set; }
+
+    /// <summary>
+    /// The OPC zip path this master's theme part resolved to when the package was read (e.g.
+    /// "ppt/theme/theme1.xml"), set whenever a theme relationship/fallback path was found — even
+    /// if <see cref="Theme"/> ended up null because the part's XML failed to parse. The writer
+    /// uses this together with the original package snapshot to re-emit the original bytes
+    /// verbatim instead of silently replacing an unparseable-but-intact theme part with a
+    /// synthesized default theme on save.
+    /// </summary>
+    public string? ThemePartPath { get; set; }
 
     /// <summary>
     /// Placeholder shapes on this master, in z-order. These define default geometry and

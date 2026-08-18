@@ -3084,9 +3084,16 @@ public sealed partial class MainWindow : Window
 
     private async Task<FreeWClipboardTransferResult> CopyAsync()
     {
+        // shell-clipboard F2: unlike the WPF shell's native RichTextBox Copy/Cut (which places RTF
+        // and an HTML/Xaml payload on the clipboard automatically), this editor is a custom control
+        // with no such native behaviour, so it must build the rich payload itself -- otherwise every
+        // Copy+Paste round trip silently drops all character formatting, even within this document.
+        var (document, ranges) = _editor.GetSelectionRichSnapshot();
+        var richDocument = FreeWClipboardApplicationWorkflow.BuildSelectionRichDocument(document, ranges);
         var result = await FreeWClipboardApplicationWorkflow.WriteSelectionAsync(
             _platformClipboard,
-            _editor.SelectedText);
+            _editor.SelectedText,
+            richDocument);
         if (result.Status is FreeWClipboardTransferStatus.Unsupported or FreeWClipboardTransferStatus.Failed)
             ApplyClipboardFeedback(result);
         return result;

@@ -23178,6 +23178,15 @@ public sealed partial class DocumentView : Control
             SelectionFormattingRanges());
     }
 
+    /// <summary>
+    /// Exposes the current selection's model document and per-paragraph formatting ranges (body,
+    /// table-cell, header/footer, and shape text alike) so a renderer-neutral workflow can build a
+    /// rich clipboard payload for Copy/Cut without duplicating this editor's own selection-range
+    /// resolution. See <see cref="FreeW.App.Presentation.Editing.FreeWClipboardApplicationWorkflow"/>.
+    /// </summary>
+    public (TextDocument Document, IReadOnlyList<DocumentFormattingTextRange> Ranges) GetSelectionRichSnapshot() =>
+        (_doc, SelectionFormattingRanges());
+
     private IReadOnlyList<DocumentFormattingTextRange> SelectionFormattingRanges()
     {
         var ranges = new List<DocumentFormattingTextRange>();

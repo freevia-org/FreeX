@@ -1,3 +1,5 @@
+using System.Globalization;
+
 namespace FreeP.App.Compositor;
 
 public enum InCanvasTextNavigationKey
@@ -72,12 +74,59 @@ public static class InCanvasRichTextNavigationPlanner
 
         return key switch
         {
-            InCanvasTextNavigationKey.Left => Math.Max(0, position - 1),
-            InCanvasTextNavigationKey.Right => Math.Min(value.Length, position + 1),
+            InCanvasTextNavigationKey.Left => MoveGraphemeLeft(value, position),
+            InCanvasTextNavigationKey.Right => MoveGraphemeRight(value, position),
             InCanvasTextNavigationKey.Home => MoveParagraphBoundary(value, position, end: false),
             InCanvasTextNavigationKey.End => MoveParagraphBoundary(value, position, end: true),
             _ => position,
         };
+    }
+
+    /// <summary>
+    /// Moves one position left to the start of the preceding grapheme cluster (text element),
+    /// so a surrogate pair (e.g. an emoji) or a base character plus its combining marks is
+    /// crossed as a single step rather than splitting it -- matching native RichTextBox caret
+    /// semantics.
+    /// </summary>
+    private static int MoveGraphemeLeft(string text, int position)
+    {
+        if (position <= 0)
+            return 0;
+
+        int previousElementStart = 0;
+        var enumerator = StringInfo.GetTextElementEnumerator(text);
+        while (enumerator.MoveNext())
+        {
+            int elementStart = enumerator.ElementIndex;
+            if (elementStart >= position)
+                break;
+            previousElementStart = elementStart;
+        }
+
+        return previousElementStart;
+    }
+
+    /// <summary>
+    /// Moves one position right to the start of the following grapheme cluster (text element),
+    /// so a surrogate pair or a base character plus its combining marks is crossed as a single
+    /// step rather than leaving the caret mid-pair/mid-mark.
+    /// </summary>
+    private static int MoveGraphemeRight(string text, int position)
+    {
+        if (position >= text.Length)
+            return text.Length;
+
+        var enumerator = StringInfo.GetTextElementEnumerator(text);
+        while (enumerator.MoveNext())
+        {
+            int elementStart = enumerator.ElementIndex;
+            string element = (string)enumerator.Current;
+            int elementEnd = elementStart + element.Length;
+            if (position >= elementStart && position < elementEnd)
+                return elementEnd;
+        }
+
+        return text.Length;
     }
 
     public static int ResolveSelectionAnchor(int selectionStart, int selectionEnd, int caret)

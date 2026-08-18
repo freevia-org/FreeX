@@ -777,6 +777,19 @@ public sealed partial class DocumentView : RichTextBox
             return;
         }
 
+        // freew-cc-tab: while "Filling in Forms" protection is on, Tab is Word's field-to-field gesture
+        // -- it must move the caret to the next/previous editable field rather than fall through to
+        // AcceptsTab's literal tab-character insertion (which native RichTextBox handling would otherwise
+        // treat as a no-op anyway, since IsReadOnly is set for ordinary body text under this protection
+        // mode -- see ApplyProtection). Mirrors FreeW.App.Avalonia.Editing.DocumentView.OnKeyDown's
+        // isFormFieldTab handling.
+        if (input.Intent == DocumentEditorInputIntent.NavigateTab && RestrictEditingPolicy.IsFormFieldEditingOnly)
+        {
+            TabToContentControl(forward: !input.ExtendSelection);
+            e.Handled = true;
+            return;
+        }
+
         if (Keyboard.Modifiers == ModifierKeys.None
             && input.Intent == DocumentEditorInputIntent.InsertParagraphBreak)
         {
@@ -14952,6 +14965,94 @@ public sealed partial class DocumentView : RichTextBox
         return BlockContentControlAt(position?.Paragraph) is { } blockControl
             ? AllowsBlockContentControlInteraction(blockControl)
             : null;
+    }
+
+    /// <summary>
+    /// Word's form-filling Tab: moves the caret to the next (or previous, for Shift+Tab) editable
+    /// text-entry content control in the body and selects its content, ready to be typed over
+    /// immediately -- matching Word and <c>FreeW.App.Avalonia.Editing.DocumentView.TabToContentControl</c>.
+    /// Wraps around at the ends. A no-op (returns false) when the body has no eligible field, which
+    /// still leaves the keystroke consumed by the caller so it never falls through to a literal tab
+    /// character while Filling-In-Forms protection is active.
+    /// </summary>
+    private bool TabToContentControl(bool forward)
+    {
+        var stops = BodyContentControlTabRuns().ToList();
+        if (stops.Count == 0)
+            return false;
+
+        var ordered = forward ? stops : Enumerable.Reverse(stops).ToList();
+        var caret = Selection.Start;
+        var index = ordered.FindIndex(run => forward
+            ? run.ContentStart.CompareTo(caret) > 0
+            : run.ContentEnd.CompareTo(caret) < 0);
+        // Nothing further in this direction: wrap around, as Word does at the last/first field.
+        var target = ordered[index >= 0 ? index : 0];
+
+        Selection.Select(target.ContentStart, target.ContentEnd);
+        target.ContentStart.Paragraph?.BringIntoView();
+        Focus();
+        return true;
+    }
+
+    /// <summary>Every editable text-entry content-control run in the body, in document order (a Tab stop
+    /// for <see cref="TabToContentControl"/>). Mirrors the block/list/table/span walk in <c>NoteMarkers</c>.
+    /// A checkbox/drop-down/date-picker control is excluded -- like the Avalonia shell's tab-stop list, only
+    /// a control <see cref="ContentControlInteractionPlanner.CanEditContentControlText"/> would accept typed
+    /// text into is a stop.</summary>
+    private IEnumerable<WpfRun> BodyContentControlTabRuns()
+    {
+        foreach (var block in Document.Blocks)
+        {
+            foreach (var run in BodyContentControlTabRunsInBlock(block))
+                yield return run;
+        }
+    }
+
+    private IEnumerable<WpfRun> BodyContentControlTabRunsInBlock(System.Windows.Documents.Block block)
+    {
+        switch (block)
+        {
+            case WpfParagraph paragraph:
+                foreach (var run in BodyContentControlTabRunsInInlines(paragraph.Inlines))
+                    yield return run;
+                break;
+            case WpfList list:
+                foreach (var item in list.ListItems)
+                    foreach (var itemBlock in item.Blocks)
+                        foreach (var run in BodyContentControlTabRunsInBlock(itemBlock))
+                            yield return run;
+                break;
+            case WpfTable table:
+                foreach (var rowGroup in table.RowGroups)
+                    foreach (var row in rowGroup.Rows)
+                        foreach (var cell in row.Cells)
+                            foreach (var cellBlock in cell.Blocks)
+                                foreach (var run in BodyContentControlTabRunsInBlock(cellBlock))
+                                    yield return run;
+                break;
+        }
+    }
+
+    private IEnumerable<WpfRun> BodyContentControlTabRunsInInlines(InlineCollection inlines)
+    {
+        foreach (var inline in inlines)
+        {
+            if (inline is WpfRun run
+                && run.Tag is RunMarkers { Control: { } marker }
+                && ContentControlInteractionPlanner.CanEditContentControlText(
+                    new ModelRun(string.Empty) { Control = marker.Control },
+                    RestrictEditingPolicy))
+            {
+                yield return run;
+            }
+
+            if (inline is Span span)
+            {
+                foreach (var nested in BodyContentControlTabRunsInInlines(span.Inlines))
+                    yield return nested;
+            }
+        }
     }
 
     /// <summary>

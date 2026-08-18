@@ -10082,9 +10082,10 @@ public static partial class AccessibilityCheckerService
             if (text.Length == 0)
                 return FormulaTextScalarResult(string.Empty);
 
-            var textLength = FormulaTextScalarContainsSurrogatePair(text)
-                ? FormulaTextScalarCountTextElements(text)
-                : text.Length;
+            // UTF-16 code units, matching Excel and the real formula engine (Core.Formula
+            // BuiltInFunctions.TextSplit.cs TextBeforeAfterScalar) -- a surrogate pair counts
+            // as two code units here, not one indivisible "text element".
+            var textLength = text.Length;
             if (Math.Abs((long)options.InstanceNum) > textLength)
                 return ErrorValue.Value;
 
@@ -10921,17 +10922,15 @@ public static partial class AccessibilityCheckerService
 
         private static ScalarValue FormulaReplaceText(string text, int startNum, int numChars, string newText)
         {
-            var hasSurrogatePair = FormulaTextScalarContainsSurrogatePair(text);
-            var length = hasSurrogatePair ? FormulaTextScalarCountTextElements(text) : text.Length;
-            if (startNum > length + 1)
+            // Positions are UTF-16 code units, matching Excel and the real formula engine
+            // (Core.Formula BuiltInFunctions.TextCore.Replace.cs ReplaceText) -- a surrogate
+            // pair here is two code units, not one indivisible "text element", so REPLACE can
+            // split a pair exactly like it does in the real engine and in Excel itself.
+            if (startNum > text.Length + 1)
                 return ErrorValue.Value;
 
-            var start = hasSurrogatePair
-                ? FormulaTextElementIndexFromOneBasedPosition(text, startNum)
-                : Math.Min(startNum - 1, text.Length);
-            var end = hasSurrogatePair
-                ? FormulaAdvanceTextElements(text, start, numChars)
-                : start + Math.Min(numChars, text.Length - start);
+            var start = Math.Min(startNum - 1, text.Length);
+            var end = start + Math.Min(numChars, text.Length - start);
             return FormulaTextScalarResult(text[..start] + newText + text[end..]);
         }
 
@@ -11179,23 +11178,6 @@ public static partial class AccessibilityCheckerService
 
         private static bool FormulaTextScalarIsSurrogatePairAt(string text, int index) =>
             index + 1 < text.Length && char.IsHighSurrogate(text[index]) && char.IsLowSurrogate(text[index + 1]);
-
-        private static int FormulaTextElementIndexFromOneBasedPosition(string text, int position)
-        {
-            var index = 0;
-            for (var current = 1; current < position && index < text.Length; current++)
-                index += FormulaTextScalarIsSurrogatePairAt(text, index) ? 2 : 1;
-
-            return index;
-        }
-
-        private static int FormulaAdvanceTextElements(string text, int index, int count)
-        {
-            for (var taken = 0; taken < count && index < text.Length; taken++)
-                index += FormulaTextScalarIsSurrogatePairAt(text, index) ? 2 : 1;
-
-            return index;
-        }
 
         private static int FormulaCountDbcsBytes(string text)
         {

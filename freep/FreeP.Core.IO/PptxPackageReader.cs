@@ -1028,6 +1028,12 @@ public static class PptxPackageReader
         ZipArchive archive, string masterPath, string masterId)
     {
         var master = new SlideMaster { Id = masterId };
+        // Resolve the theme part's own zip path independent of whether it parses. This lets the
+        // writer distinguish "no theme part" (ThemePartPath null) from "theme part present but
+        // unparseable" (ThemePartPath set, Theme null) and re-emit the original bytes verbatim
+        // in the latter case instead of silently overwriting them with a synthesized default
+        // theme (see PptxPackageWriter's per-master theme-writing loop).
+        master.ThemePartPath = DrawingMlThemeReader.ResolveThemePartPath(archive, masterPath, "ppt/theme/theme1.xml");
         var theme = ReadTheme(archive, masterPath);
 
         var xml = OpcXml.TryLoadXml(archive, masterPath);
