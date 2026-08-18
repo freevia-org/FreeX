@@ -39,7 +39,11 @@ public sealed class R98_OversizedExternalHyperlinkBookmarkRangeTests
             return adapter.Load(source);
         });
 
-        var completedTask = await Task.WhenAny(task, Task.Delay(TimeSpan.FromSeconds(20)));
+        // Generous on purpose. The regression this guards against is effectively unbounded (~17.2
+        // billion iterations), so it never completes and any finite bound catches it. Twenty seconds
+        // was enough for this file alone but not in a loaded full-suite run, where a healthy load lost
+        // the race and the guard reported a hang that was not one.
+        var completedTask = await Task.WhenAny(task, Task.Delay(TimeSpan.FromMinutes(3)));
 
         completedTask.Should().BeSameAs(
             task,
