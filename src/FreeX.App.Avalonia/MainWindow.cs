@@ -8178,6 +8178,14 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
 
     private UserMessageResult ShowSynchronousPrompt(FreeXSynchronousPromptDescriptor descriptor)
     {
+        // Avalonia throws "Cannot show window with non-visible owner" rather than returning, so a
+        // prompt raised before this window is on screen would turn an ordinary command into an
+        // unhandled exception. Degrade to the descriptor's own dismissal result instead: that is
+        // the answer it already declares for a prompt the user never got to answer, so the command
+        // proceeds exactly as it did before the prompt existed.
+        if (!IsVisible)
+            return descriptor.DismissedResult;
+
         var request = descriptor.Resolve(UiText.Get, UiText.Format);
         return AvaloniaSynchronousUserMessageDialog.ShowMessage(
             this,
