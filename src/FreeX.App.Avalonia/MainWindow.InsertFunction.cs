@@ -26,7 +26,7 @@ public sealed partial class MainWindow
     // function is inserted (most recent first) and seeded from the catalog defaults.
     private IReadOnlyList<string> _insertFunctionMostRecentlyUsed = InsertFunctionCatalogPlanner.DefaultMostRecentlyUsed;
 
-    private void InsertFunction() => RunGuarded(() => ShowInsertFunctionDialogAsync());
+    private void InsertFunction() => RunGuarded(ShowInsertFunctionDialogAsync);
 
     private async Task ShowInsertFunctionDialogAsync()
     {

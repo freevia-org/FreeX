@@ -95,18 +95,18 @@ public sealed partial class MainWindow
             // Clipboard commands intentionally use the same shell entry points as keyboard,
             // ribbon, and native-menu activation. Object Cut remains pending until Paste succeeds.
             case WorksheetContextMenuAction.Cut:
-                RunGuarded(() => CutSelectedRangeToClipboardAsync());
+                RunGuarded(CutSelectedRangeToClipboardAsync);
                 break;
             case WorksheetContextMenuAction.Copy:
-                RunGuarded(() => CopySelectedRangeToClipboardAsync());
+                RunGuarded(CopySelectedRangeToClipboardAsync);
                 break;
             case WorksheetContextMenuAction.Paste:
-                RunGuarded(() => PasteClipboardTextAsync());
+                RunGuarded(PasteClipboardTextAsync);
                 break;
 
             // --- Picture ---
             case WorksheetContextMenuAction.FormatPicture:
-                RunGuarded(() => OpenFormatPictureDialogAsync());
+                RunGuarded(OpenFormatPictureDialogAsync);
                 break;
             case WorksheetContextMenuAction.CropPicture:
                 BeginSelectedPictureCropMode();
@@ -117,27 +117,27 @@ public sealed partial class MainWindow
 
             // --- Shape / Text box (the Format Picture dialog handles shapes via its isPicture branch) ---
             case WorksheetContextMenuAction.FormatDrawingObject:
-                RunGuarded(() => OpenFormatPictureDialogAsync());
+                RunGuarded(OpenFormatPictureDialogAsync);
                 break;
             case WorksheetContextMenuAction.ResizeDrawingObject:
-                RunGuarded(() => ResizeSelectedDrawingObjectAsync());
+                RunGuarded(ResizeSelectedDrawingObjectAsync);
                 break;
             case WorksheetContextMenuAction.RotateDrawingObject:
-                RunGuarded(() => RotateSelectedDrawingObjectAsync());
+                RunGuarded(RotateSelectedDrawingObjectAsync);
                 break;
             case WorksheetContextMenuAction.ShapeFill:
-                RunGuarded(() => SetSelectedShapeFillColorAsync());
+                RunGuarded(SetSelectedShapeFillColorAsync);
                 break;
             case WorksheetContextMenuAction.ShapeOutline:
-                RunGuarded(() => SetSelectedShapeOutlineColorAsync());
+                RunGuarded(SetSelectedShapeOutlineColorAsync);
                 break;
 
             // --- Shared Picture/Shape ---
             case WorksheetContextMenuAction.EditAltText:
-                RunGuarded(() => EditSelectedDrawingObjectAltTextAsync());
+                RunGuarded(EditSelectedDrawingObjectAltTextAsync);
                 break;
             case WorksheetContextMenuAction.SelectionPane:
-                RunGuarded(() => OpenSelectionPaneDialogAsync());
+                RunGuarded(OpenSelectionPaneDialogAsync);
                 break;
             case WorksheetContextMenuAction.BringForward:
                 BringSelectedDrawingObjectForward();
@@ -166,7 +166,7 @@ public sealed partial class MainWindow
                 RunGuarded(ShowMoveChartDialog);
                 break;
             case WorksheetContextMenuAction.ChartSizeAndProperties:
-                RunGuarded(() => ResizeSelectedChartObjectAsync());
+                RunGuarded(ResizeSelectedChartObjectAsync);
                 break;
 
             // --- Shared Picture/Shape/TextBox/Chart ---

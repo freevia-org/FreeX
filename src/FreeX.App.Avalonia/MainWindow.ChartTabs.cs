@@ -869,7 +869,7 @@ public sealed partial class MainWindow
 
     private void CycleChartStyle()
     {
-        RunGuarded(() => ShowChartStyleDialogAsync());
+        RunGuarded(ShowChartStyleDialogAsync);
     }
 
     private void CycleChartSecondaryAxis()

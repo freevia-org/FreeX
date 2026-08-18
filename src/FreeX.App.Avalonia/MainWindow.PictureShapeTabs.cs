@@ -44,20 +44,20 @@ public sealed partial class MainWindow
     private Action CreatePictureShapeTabCommand(DrawingObjectContextualCommandSpec spec) =>
         spec.Action switch
         {
-            DrawingObjectContextualCommandAction.FormatPicture => () => RunGuarded(() => OpenFormatPictureDialogAsync()),
+            DrawingObjectContextualCommandAction.FormatPicture => () => RunGuarded(OpenFormatPictureDialogAsync),
             DrawingObjectContextualCommandAction.PictureCropMenuHint => BeginSelectedPictureCropMode,
-            DrawingObjectContextualCommandAction.CropPicture => () => RunGuarded(() => OpenPictureCropDialogAsync()),
+            DrawingObjectContextualCommandAction.CropPicture => () => RunGuarded(OpenPictureCropDialogAsync),
             DrawingObjectContextualCommandAction.ResetPictureCrop => ResetSelectedPictureCrop,
             DrawingObjectContextualCommandAction.BringForward => () => ReorderSelectedDrawingObject(forward: true),
             DrawingObjectContextualCommandAction.SendBackward => () => ReorderSelectedDrawingObject(forward: false),
-            DrawingObjectContextualCommandAction.SelectionPane => () => RunGuarded(() => OpenSelectionPaneDialogAsync()),
-            DrawingObjectContextualCommandAction.RotateObject => () => RunGuarded(() => RotateSelectedDrawingObjectAsync()),
-            DrawingObjectContextualCommandAction.ResizeObject => () => RunGuarded(() => ResizeSelectedDrawingObjectAsync()),
-            DrawingObjectContextualCommandAction.EditAltText => () => RunGuarded(() => EditSelectedDrawingObjectAltTextAsync()),
-            DrawingObjectContextualCommandAction.ShapeFill => () => RunGuarded(() => SetSelectedShapeFillColorAsync()),
-            DrawingObjectContextualCommandAction.ShapeOutline => () => RunGuarded(() => SetSelectedShapeOutlineColorAsync()),
-            DrawingObjectContextualCommandAction.ShapeGradient => () => RunGuarded(() => OpenShapeGradientDialogAsync()),
-            DrawingObjectContextualCommandAction.ShapeEffectsDialog => () => RunGuarded(() => OpenShapeEffectsDialogAsync()),
+            DrawingObjectContextualCommandAction.SelectionPane => () => RunGuarded(OpenSelectionPaneDialogAsync),
+            DrawingObjectContextualCommandAction.RotateObject => () => RunGuarded(RotateSelectedDrawingObjectAsync),
+            DrawingObjectContextualCommandAction.ResizeObject => () => RunGuarded(ResizeSelectedDrawingObjectAsync),
+            DrawingObjectContextualCommandAction.EditAltText => () => RunGuarded(EditSelectedDrawingObjectAltTextAsync),
+            DrawingObjectContextualCommandAction.ShapeFill => () => RunGuarded(SetSelectedShapeFillColorAsync),
+            DrawingObjectContextualCommandAction.ShapeOutline => () => RunGuarded(SetSelectedShapeOutlineColorAsync),
+            DrawingObjectContextualCommandAction.ShapeGradient => () => RunGuarded(OpenShapeGradientDialogAsync),
+            DrawingObjectContextualCommandAction.ShapeEffectsDialog => () => RunGuarded(OpenShapeEffectsDialogAsync),
             DrawingObjectContextualCommandAction.ShapeEffectPreset => () => ApplySelectedShapeEffect(spec.EffectPreset ?? DrawingShapeEffectPreset.None),
             _ => throw new NotSupportedException($"Unsupported picture/shape contextual action: {spec.Action}")
         };

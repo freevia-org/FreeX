@@ -2820,7 +2820,7 @@ public sealed class AvaloniaShellSourceTests
         parityCaptureSource.Should().Contain("_session.ExecuteReviewCommand(new AllowEditRangeCommand(sheetId, existingRange));");
 
         pictureShapeSource.Should().Contain("DrawingObjectContextualRibbonPlanner.CreatePictureShapeCommandSpecs()");
-        pictureShapeSource.Should().Contain("DrawingObjectContextualCommandAction.ShapeEffectsDialog => () => RunGuarded(() => OpenShapeEffectsDialogAsync())");
+        pictureShapeSource.Should().Contain("DrawingObjectContextualCommandAction.ShapeEffectsDialog => () => RunGuarded(OpenShapeEffectsDialogAsync)");
         drawingFormatSource.Should().Contain("private async System.Threading.Tasks.Task OpenShapeEffectsDialogAsync()");
         drawingFormatSource.Should().Contain("ShapeEffectsPlanner.CreateResolvedPlan(shape.GetEffectiveEffectPreset(), UiText.Get)");
         drawingFormatSource.Should().Contain("AutomationProperties.SetAutomationId(dialog, \"ShapeEffectsDialog\");");
@@ -5109,7 +5109,7 @@ public sealed class AvaloniaShellSourceTests
         pointerSource.Should().Contain("private void BeginSheetTabPointer(SheetId sheetId, PointerPressedEventArgs args)");
         pointerSource.Should().Contain("if (args.ClickCount >= 2)");
         pointerSource.Should().Contain("if (SelectSheetForContextCommand(sheetId))");
-        pointerSource.Should().Contain("RunGuarded(() => RenameActiveSheetAsync());");
+        pointerSource.Should().Contain("RunGuarded(RenameActiveSheetAsync);");
         source.Should().Contain("private void HandleSheetTabKeyDown(SheetId sheetId, Button button, KeyEventArgs args)");
         source.Should().Contain("NavigateSheetTabFromKeyboard(sheetId, args);");
         source.Should().Contain("private void OpenSheetTabContextMenuFromKeyboard(SheetId sheetId, Button button, KeyEventArgs args)");
@@ -5927,7 +5927,7 @@ public sealed class AvaloniaShellSourceTests
         windowSource.Should().NotContain("RefreshAllNotSupported");
 
         // The dialog gathers options and previews via the portable ImportDataPlanner.
-        getDataSource.Should().Contain("private void GetDataFromText() => RunGuarded(() => ShowGetDataDialogAsync());");
+        getDataSource.Should().Contain("private void GetDataFromText() => RunGuarded(ShowGetDataDialogAsync);");
         getDataSource.Should().Contain("ImportDataFilePickerPlanner.BuildTextOpenPickerPlan(UiText.Get(\"GetData_FileTypeName\"))");
         getDataSource.Should().Contain("AvaloniaFilePickerService.PickSingleOpenFileWithLocalPathAsync(");
         getDataSource.Should().Contain("AvaloniaFilePickerOpenRequest.FromDescriptors(");

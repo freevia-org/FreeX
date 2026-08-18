@@ -34,7 +34,7 @@ public sealed partial class MainWindow
     };
 
     // ── File ▸ Info ────────────────────────────────────────────────────────────
-    private void ShowBackstageInfo() => RunGuarded(() => ShowBackstageInfoDialogAsync());
+    private void ShowBackstageInfo() => RunGuarded(ShowBackstageInfoDialogAsync);
 
     private async Task ShowBackstageInfoDialogAsync()
     {
@@ -151,7 +151,7 @@ public sealed partial class MainWindow
         };
 
     // ── File ▸ Export ────────────────────────────────────────────────────────────
-    private void ShowBackstageExport() => RunGuarded(() => ShowBackstageExportDialogAsync());
+    private void ShowBackstageExport() => RunGuarded(ShowBackstageExportDialogAsync);
 
     private async Task ShowBackstageExportDialogAsync()
     {
@@ -289,7 +289,7 @@ public sealed partial class MainWindow
     }
 
     // ── File ▸ Account ────────────────────────────────────────────────────────────
-    private void ShowBackstageAccount() => RunGuarded(() => ShowBackstageAccountDialogAsync());
+    private void ShowBackstageAccount() => RunGuarded(ShowBackstageAccountDialogAsync);
 
     private async Task ShowBackstageAccountDialogAsync()
     {
@@ -432,7 +432,7 @@ public sealed partial class MainWindow
         id switch
         {
             FreeXBackstageAccountActionId.Options => ShowOptions,
-            FreeXBackstageAccountActionId.LegalNotices => () => RunGuarded(() => ShowLegalNoticesDialogAsync()),
+            FreeXBackstageAccountActionId.LegalNotices => () => RunGuarded(ShowLegalNoticesDialogAsync),
             _ => throw new ArgumentOutOfRangeException(nameof(id), id, null)
         };
 

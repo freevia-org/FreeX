@@ -120,7 +120,7 @@ public sealed partial class MainWindow
     // the sheet-tab context menu.
 
     /// <summary>Opens the Outline Settings dialog for the active sheet.</summary>
-    private void ShowOutlineSettingsDialog() => RunGuarded(() => ShowOutlineSettingsDialogAsync());
+    private void ShowOutlineSettingsDialog() => RunGuarded(ShowOutlineSettingsDialogAsync);
 
     private async Task ShowOutlineSettingsDialogAsync()
     {

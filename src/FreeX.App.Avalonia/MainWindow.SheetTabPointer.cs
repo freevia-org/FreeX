@@ -46,7 +46,7 @@ public sealed partial class MainWindow
         {
             args.Handled = true;
             if (SelectSheetForContextCommand(sheetId))
-                RunGuarded(() => RenameActiveSheetAsync());
+                RunGuarded(RenameActiveSheetAsync);
             return;
         }
 
@@ -254,7 +254,7 @@ public sealed partial class MainWindow
             return;
 
         _activateSheetDialogOpenOrPending = true;
-        RunGuarded(() => ShowActivateSheetDialogFromSheetNavAsync());
+        RunGuarded(ShowActivateSheetDialogFromSheetNavAsync);
     }
 
     private async Task ShowActivateSheetDialogFromSheetNavAsync()

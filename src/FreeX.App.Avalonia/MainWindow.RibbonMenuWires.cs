@@ -54,7 +54,7 @@ public sealed partial class MainWindow
     // ── View ▸ Window ▸ Switch Windows ──────────────────────────────────────────
     // Builds a chooser of every visible top-level window and activates the picked one. Self-contained
     // (uses AllTopLevelWindows from MainWindow.WindowManagement.cs) — no shared multi-window service.
-    private void ShowSwitchWindowsDialog() => RunGuarded(() => ShowSwitchWindowsDialogAsync());
+    private void ShowSwitchWindowsDialog() => RunGuarded(ShowSwitchWindowsDialogAsync);
 
     private async Task ShowSwitchWindowsDialogAsync()
     {
@@ -334,7 +334,7 @@ public sealed partial class MainWindow
             CreatePageLayoutCommandSession().PlanClearPrintArea());
 
     // ── Page Layout ▸ Page Setup ▸ Background (Choose / Delete) ──────────────────
-    private void ChooseSheetBackground() => RunGuarded(() => ChooseSheetBackgroundAsync());
+    private void ChooseSheetBackground() => RunGuarded(ChooseSheetBackgroundAsync);
 
     private async Task ChooseSheetBackgroundAsync()
     {
