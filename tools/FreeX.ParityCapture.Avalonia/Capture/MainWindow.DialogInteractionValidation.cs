@@ -228,8 +228,12 @@ public sealed partial class MainWindow
                 ? "passed:modeless-owner-enabled"
                 : "failed:modeless-owner-disabled";
         var initial = dialog.FocusManager?.GetFocusedElement();
+        // Describe initial focus at the same granularity the tab cycle uses. Focusing a list
+        // delegates to its selected item, so the raw element is a ListBoxItem while the meaningful
+        // stop -- and what WPF reports -- is the list itself. Without this the two halves of the
+        // contract disagree about the same control.
         var initialFocus = IsFocusInside(dialog, initial)
-            ? "passed:" + DescribeInputElement(initial)
+            ? "passed:" + DescribeInputElement(NormalizeDialogTabStop(initial))
             : "failed:no-focus-inside-dialog";
 
         var tabStops = CountDialogTabStops(dialog);

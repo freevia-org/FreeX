@@ -26,8 +26,12 @@ public sealed partial class MainWindow
                 if (initialFocus.IsVisible && initialFocus.IsEffectivelyEnabled)
                 {
                     initialFocus.BringIntoView();
+                    // Focus may settle on a descendant rather than on the control itself: focusing a
+                    // ListBox delegates to its selected ListBoxItem. Requiring an exact match meant a
+                    // list target never counted as established, so the dialog was left focused on its
+                    // Window with nothing for Tab to move between.
                     if (FocusDialogControl(initialFocus) &&
-                        ReferenceEquals(dialog.FocusManager?.GetFocusedElement(), initialFocus))
+                        IsFocusWithin(dialog.FocusManager?.GetFocusedElement(), initialFocus))
                     {
                         initialFocusEstablished = true;
                         if (initialFocus is TextBox textBox)
@@ -100,4 +104,12 @@ public sealed partial class MainWindow
             RoutingStrategies.Tunnel,
             handledEventsToo: true);
     }
+
+    /// <summary>
+    /// True when <paramref name="focused"/> is <paramref name="target"/> or lies inside it.
+    /// </summary>
+    private static bool IsFocusWithin(IInputElement? focused, Control target) =>
+        ReferenceEquals(focused, target)
+        || (focused is Control control
+            && global::Avalonia.VisualTree.VisualExtensions.GetVisualAncestors(control).Any(ancestor => ReferenceEquals(ancestor, target)));
 }
