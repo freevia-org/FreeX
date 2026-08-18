@@ -253,6 +253,27 @@ public sealed class R143_SortWarningColumnScopedClampTests
         return (session, sheet);
     }
 
+    // r144: the multi-whole-column case. The block is exactly as WIDE as the selection, so the
+    // count-based early return that predated the axis-aware logic matched and returned "nothing to
+    // expand" -- while column A, whose pairing the sort would destroy, sat outside the selection.
+    // Containment, not size, is the question.
+    [Fact]
+    public void ResolveAdjacentDataExpansion_WholeColumnsBesideTheBlock_StillPrompts()
+    {
+        var (_, sheet) = CreateSalesTableSheet();
+
+        var wholeColumnsBToD = new GridRange(
+            Address(sheet, 1, 2),
+            new CellAddress(sheet.Id, CellAddress.MaxRow, 4));
+
+        var expansion = QuickSortRangePlanner.ResolveAdjacentDataExpansion(sheet, wholeColumnsBToD);
+
+        expansion.Should().NotBeNull(
+            "the block reaches into column A, which the user did not select, so sorting B:D alone " +
+            "would decouple each Name from its Score and Team");
+        expansion!.Value.Start.Col.Should().Be(1, "the offered expansion should reach back to column A");
+    }
+
     private static CellAddress Address(Sheet sheet, uint row, uint col) =>
         new(sheet.Id, row, col);
 }

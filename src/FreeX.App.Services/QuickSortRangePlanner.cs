@@ -45,8 +45,18 @@ public static class QuickSortRangePlanner
         if (SelectionRangeService.GetCurrentRegion(sheet, selectedRange.Start) is not { } region)
             return null;
 
-        if (region.ColCount <= selectedRange.ColCount && region.RowCount <= selectedRange.RowCount)
+        // "The selection already covers its whole block, so there is nothing to expand into."
+        // That is a question about POSITION, not size: a block can be exactly as wide as the
+        // selection and still sit beside it. Selecting whole columns B:D over a table in A1:C6
+        // matches on counts (3 and 3) while column A -- the Name column whose pairing the sort
+        // would destroy -- lies outside the selection entirely. Comparing counts here returned
+        // null before the axis-aware logic below ever ran, which is how the warning stayed broken
+        // for this gesture across several rounds of fixing the code underneath it.
+        if (region.Start.Row >= selectedRange.Start.Row && region.Start.Col >= selectedRange.Start.Col &&
+            region.End.Row <= selectedRange.End.Row && region.End.Col <= selectedRange.End.Col)
+        {
             return null;
+        }
 
         // A whole-column or whole-row selection (e.g. clicking a column header, then Sort A-Z --
         // the single most common way to trigger a sort) reaches CellAddress.MaxRow/MaxCol far past
