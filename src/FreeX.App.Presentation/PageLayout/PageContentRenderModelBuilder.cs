@@ -580,7 +580,8 @@ public static class PageContentRenderModelBuilder
                     bounds,
                     chartDataCells: null,
                     cellLookup,
-                    (text, fontSize) => MeasureChartOverlayText(textMeasurer, text, fontSize))
+                    (text, fontSize) => MeasureChartOverlayText(textMeasurer, text, fontSize),
+                    sheet)
                 : [];
 
             blocks.Add(new PageChartBlock(
@@ -645,9 +646,25 @@ public static class PageContentRenderModelBuilder
             if (range.Start.Sheet != sheet.Id || range.End.Sheet != sheet.Id)
                 continue;
 
+            // A chart with "Show data in hidden rows and columns" off must not read hidden cells at
+            // all -- matching ViewportService.BuildChartDataCells, which omits them from the on-screen
+            // chart's data cells. Skipping them here keeps this shared, per-sheet lookup a UNION over
+            // the sheet's charts (a sibling chart that DOES show hidden data still contributes them),
+            // and PrintChartTextOverlayPlanner.BuildCellLookup then re-applies the per-chart filter so
+            // a permissive sibling can never widen a strict chart's printed data labels.
             for (var row = range.Start.Row; row <= range.End.Row; row++)
+            {
+                if (!chart.ShowDataInHiddenRowsAndColumns && sheet.IsRowEffectivelyHidden(row))
+                    continue;
+
                 for (var column = range.Start.Col; column <= range.End.Col; column++)
+                {
+                    if (!chart.ShowDataInHiddenRowsAndColumns && sheet.IsColEffectivelyHidden(column))
+                        continue;
+
                     AddDisplayCell(lookup, workbook, sheet, row, column);
+                }
+            }
         }
 
         return lookup;

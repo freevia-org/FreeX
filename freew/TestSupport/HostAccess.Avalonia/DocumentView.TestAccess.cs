@@ -651,6 +651,19 @@ public sealed partial class DocumentView
     /// </summary>
     internal void TestMoveCaretVertical(int direction) => MoveCaretVertical(direction, extend: false);
 
+    /// <summary>Simulates pressing Left (-1) or Right (+1) arrow from the current caret position.</summary>
+    internal void MoveCaretHorizontalForTest(int delta, bool extend = false) => MoveCaret(delta, extend);
+
+    /// <summary>Selects a body text range without going through a pointer drag.</summary>
+    internal void SetBodySelectionForTest(int anchorBlock, int anchorOffset, int caretBlock, int caretOffset)
+    {
+        _hfCaret = null;
+        _cellCaret = null;
+        _cellAnchor = null;
+        _caret = new DocPosition(caretBlock, caretOffset);
+        _selectionAnchor = new DocPosition(anchorBlock, anchorOffset);
+    }
+
     /// <summary>
     /// Simulates a pointer click at <paramref name="point"/> and returns the resolved
     /// (Block, Offset) if TryHitTest finds a match, or null if not.

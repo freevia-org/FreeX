@@ -1,0 +1,305 @@
+using System.Threading;
+using Avalonia.Headless;
+using FreeW.App.Avalonia.Editing;
+using FreeW.Core.Model;
+
+namespace FreeW.App.Avalonia.Tests;
+
+/// <summary>
+/// AV-CCEDIT: keyboard text editing INSIDE a content control. The Avalonia DocumentView is a fully
+/// custom editor with no native-editor fallback, and its body-text paths reject any paragraph that
+/// holds a control run — so without a dedicated path a Plain-Text / Rich-Text field could not be typed
+/// into at all, least of all under "Filling in Forms" protection, whose whole purpose is to let the
+/// user fill exactly those fields in. These are the Avalonia counterpart of the WPF host's
+/// content-control keyboard-lock tests.
+/// </summary>
+public sealed class DocumentViewContentControlKeyboardTests
+{
+    private static readonly HeadlessUnitTestSession Session =
+        HeadlessUnitTestSession.GetOrStartForAssembly(typeof(FreeWHeadlessApp).Assembly);
+
+    private const string Prefix = "Name: ";   // offsets 0..6
+    private const string Suffix = " (staff)"; // offsets 9..17
+    private const int ControlStart = 6;       // "Bob" occupies 6..9
+    private const int ControlEnd = 9;
+
+    [Fact]
+    public void Typing_inside_a_plain_text_control_edits_only_that_control_run()
+    {
+        var (view, paragraph) = BuildView(Run.PlainTextControl("Bob"));
+
+        view.MoveCaretToBlockForTest(0, ControlEnd);
+        view.InsertText("by");
+
+        paragraph.Runs[0].Text.Should().Be(Prefix);
+        paragraph.Runs[1].Text.Should().Be("Bobby");
+        paragraph.Runs[1].Control!.Kind.Should().Be(ContentControlKind.PlainText);
+        paragraph.Runs[2].Text.Should().Be(Suffix);
+        view.CaretOffsetForTest.Should().Be(ControlEnd + 2);
+
+        // Typing at the control's start edits the control, not the body text before it.
+        view.MoveCaretToBlockForTest(0, ControlStart);
+        view.InsertText("X");
+        paragraph.Runs[0].Text.Should().Be(Prefix);
+        paragraph.Runs[1].Text.Should().Be("XBobby");
+    }
+
+    [Fact]
+    public void Typing_inside_a_rich_text_control_preserves_the_runs_other_marks()
+    {
+        var control = Run.RichTextControl("Bob", tag: "Applicant");
+        control.HyperlinkTooltip = "preserved";
+        control.Formatting = control.Formatting with { Bold = true };
+        var (view, paragraph) = BuildView(control);
+
+        view.MoveCaretToBlockForTest(0, ControlEnd);
+        view.InsertText("!");
+
+        paragraph.Runs[1].Text.Should().Be("Bob!");
+        paragraph.Runs[1].Control!.Kind.Should().Be(ContentControlKind.RichText);
+        paragraph.Runs[1].Control!.Tag.Should().Be("Applicant");
+        paragraph.Runs[1].HyperlinkTooltip.Should().Be("preserved");
+        paragraph.Runs[1].Formatting.Bold.Should().BeTrue();
+    }
+
+    [Fact]
+    public void FillingForms_protection_still_lets_the_user_type_and_delete_in_a_form_field()
+    {
+        var (view, paragraph) = BuildView(Run.PlainTextControl("Bob"));
+        view.SetProtection(ProtectionMode.FillingForms);
+        view.IsEditingLocked.Should().BeTrue("Filling in Forms locks body editing");
+
+        view.MoveCaretToBlockForTest(0, ControlEnd);
+        view.SimulateTextInputForTest("by");
+        paragraph.Runs[1].Text.Should().Be("Bobby");
+
+        view.BackspaceForTest();
+        paragraph.Runs[1].Text.Should().Be("Bobb");
+
+        view.MoveCaretToBlockForTest(0, ControlStart + 1);
+        view.DeleteForwardForTest();
+        paragraph.Runs[1].Text.Should().Be("Bbb");
+
+        // The edits are form-field mutations, so history stays available under forms protection.
+        view.CanUndo.Should().BeTrue();
+        view.Undo();
+        paragraph.Runs[1].Text.Should().Be("Bobb");
+        view.Redo();
+        paragraph.Runs[1].Text.Should().Be("Bbb");
+
+        // ...and the body text around the field is untouched throughout.
+        paragraph.Runs[0].Text.Should().Be(Prefix);
+        paragraph.Runs[2].Text.Should().Be(Suffix);
+    }
+
+    [Fact]
+    public void FillingForms_protection_still_blocks_typing_in_the_body_text_around_the_field()
+    {
+        var (view, paragraph) = BuildView(Run.PlainTextControl("Bob"));
+        view.SetProtection(ProtectionMode.FillingForms);
+
+        view.MoveCaretToBlockForTest(0, 2);
+        view.InsertText("Z");
+        view.SimulateTextInputForTest("Z");
+        view.BackspaceForTest();
+
+        paragraph.Runs[0].Text.Should().Be(Prefix);
+        paragraph.Runs[1].Text.Should().Be("Bob");
+        paragraph.Runs[2].Text.Should().Be(Suffix);
+    }
+
+    [Theory]
+    [InlineData(ProtectionMode.ReadOnly)]
+    [InlineData(ProtectionMode.CommentsOnly)]
+    public void Protection_modes_that_block_form_fields_block_typing_in_the_control(ProtectionMode mode)
+    {
+        var (view, paragraph) = BuildView(Run.PlainTextControl("Bob"));
+        view.SetProtection(mode);
+
+        view.MoveCaretToBlockForTest(0, ControlEnd);
+        view.InsertText("!");
+        view.SimulateTextInputForTest("!");
+        view.BackspaceForTest();
+        view.DeleteForwardForTest();
+
+        paragraph.Runs[1].Text.Should().Be("Bob");
+    }
+
+    [Fact]
+    public void MarkedAsFinal_blocks_typing_in_the_control()
+    {
+        var (view, paragraph) = BuildView(Run.PlainTextControl("Bob"));
+        view.SetMarkedAsFinal(true);
+
+        view.MoveCaretToBlockForTest(0, ControlEnd);
+        view.InsertText("!");
+        paragraph.Runs[1].Text.Should().Be("Bob");
+
+        view.SetMarkedAsFinal(false);
+        view.InsertText("!");
+        paragraph.Runs[1].Text.Should().Be("Bob!");
+    }
+
+    [Theory]
+    [InlineData(ContentControlLockMode.NotSpecified, true)]
+    [InlineData(ContentControlLockMode.Unlocked, true)]
+    [InlineData(ContentControlLockMode.ControlLocked, true)]
+    [InlineData(ContentControlLockMode.ContentLocked, false)]
+    [InlineData(ContentControlLockMode.ControlAndContentLocked, false)]
+    public void Typing_honors_the_controls_own_content_lock(ContentControlLockMode lockMode, bool editable)
+    {
+        var control = Run.PlainTextControl("Bob");
+        control.Control = control.Control! with { LockMode = lockMode };
+        var (view, paragraph) = BuildView(control);
+
+        view.MoveCaretToBlockForTest(0, ControlEnd);
+        view.InsertText("!");
+
+        paragraph.Runs[1].Text.Should().Be(editable ? "Bob!" : "Bob");
+    }
+
+    [Fact]
+    public void Controls_that_own_their_text_ignore_typing()
+    {
+        // A check box, date picker and drop-down list carry generated text (glyph / formatted date /
+        // picked item); Word only changes those through the control's own interaction.
+        AssertIgnoresTyping(Run.CheckBoxControl(@checked: false));
+        AssertIgnoresTyping(Run.DatePickerControl("2026-01-01", dateFormat: "yyyy-MM-dd"));
+        AssertIgnoresTyping(Run.DropDownListControl(
+            [new ContentControlListItem("Red", "R"), new ContentControlListItem("Green", "G")]));
+    }
+
+    [Fact]
+    public void A_combo_box_accepts_typed_text()
+    {
+        var combo = Run.ComboBoxControl(
+            [new ContentControlListItem("Red", "R")],
+            selectedText: "Red");
+        var (view, paragraph) = BuildView(combo);
+
+        view.MoveCaretToBlockForTest(0, ControlStart + 3);
+        view.InsertText("dish");
+
+        paragraph.Runs[1].Text.Should().Be("Reddish");
+        paragraph.Runs[1].Control!.Items.Should().HaveCount(1, "the control's item list survives typing");
+    }
+
+    [Fact]
+    public void Deleting_never_reaches_past_the_controls_own_boundaries()
+    {
+        var (view, paragraph) = BuildView(Run.PlainTextControl("Bob"));
+        view.SetProtection(ProtectionMode.FillingForms);
+
+        view.MoveCaretToBlockForTest(0, ControlStart);
+        view.BackspaceForTest();
+        paragraph.Runs[0].Text.Should().Be(Prefix, "Backspace at the field start must not eat body text");
+
+        view.MoveCaretToBlockForTest(0, ControlEnd);
+        view.DeleteForwardForTest();
+        paragraph.Runs[2].Text.Should().Be(Suffix, "Delete at the field end must not eat body text");
+        paragraph.Runs[1].Text.Should().Be("Bob");
+        paragraph.Runs.Should().HaveCount(3);
+    }
+
+    [Fact]
+    public void A_selection_inside_the_control_is_replaced_but_one_that_spills_out_is_refused()
+    {
+        var (view, paragraph) = BuildView(Run.PlainTextControl("Bob"));
+        view.SetProtection(ProtectionMode.FillingForms);
+
+        view.SetBodySelectionForTest(0, ControlStart + 1, 0, ControlEnd);
+        view.InsertText("ill");
+        paragraph.Runs[1].Text.Should().Be("Bill");
+        view.CaretOffsetForTest.Should().Be(ControlStart + 4);
+
+        // A selection that starts in the surrounding body text is not a form-field edit.
+        view.SetBodySelectionForTest(0, ControlStart - 2, 0, ControlEnd);
+        view.InsertText("nope");
+        paragraph.Runs[0].Text.Should().Be(Prefix);
+        paragraph.Runs[1].Text.Should().Be("Bill");
+    }
+
+    [Fact]
+    public void Arrow_keys_walk_the_caret_through_a_content_control_paragraph()
+    {
+        var (view, _) = BuildView(Run.PlainTextControl("Bob"));
+        view.SetProtection(ProtectionMode.FillingForms);
+
+        view.MoveCaretToBlockForTest(0, ControlStart);
+        view.MoveCaretHorizontalForTest(+1);
+        view.CaretOffsetForTest.Should().Be(ControlStart + 1);
+
+        view.MoveCaretHorizontalForTest(-1);
+        view.CaretOffsetForTest.Should().Be(ControlStart);
+
+        // Typing after the arrow keys lands where the caret is, inside the field.
+        view.MoveCaretHorizontalForTest(+2);
+        view.InsertText("-");
+        view.Document.Blocks.OfType<Paragraph>().Single().Runs[1].Text.Should().Be("Bo-b");
+    }
+
+    // Placing a caret in a cell forces a table layout, which needs the headless font manager.
+    [Fact]
+    public async Task A_content_control_in_a_table_cell_is_typable_under_forms_protection() =>
+        await Session.Dispatch(TypeInTableCellContentControl, CancellationToken.None);
+
+    private static void TypeInTableCellContentControl()
+    {
+        var document = TextDocument.CreateEmpty();
+        document.Blocks.Clear();
+        var table = new Table();
+        var row = new TableRow();
+        var cell = new TableCell();
+        cell.Paragraphs.Clear();
+        var cellParagraph = new Paragraph();
+        cellParagraph.Runs.Add(Run.PlainTextControl("Bob"));
+        cell.Paragraphs.Add(cellParagraph);
+        row.Cells.Add(cell);
+        table.Rows.Add(row);
+        document.Blocks.Add(table);
+
+        var view = new DocumentView();
+        view.LoadDocument(document);
+        view.SetProtection(ProtectionMode.FillingForms);
+
+        view.PlaceCaretInCell(0, 0, 0, 0, 3);
+        view.InsertText("by");
+        cellParagraph.Runs[0].Text.Should().Be("Bobby");
+        cellParagraph.Runs[0].Control!.Kind.Should().Be(ContentControlKind.PlainText);
+
+        view.BackspaceForTest();
+        cellParagraph.Runs[0].Text.Should().Be("Bobb");
+
+        view.CanUndo.Should().BeTrue();
+        view.Undo();
+        cellParagraph.Runs[0].Text.Should().Be("Bobby");
+    }
+
+    private static void AssertIgnoresTyping(Run control)
+    {
+        var original = control.Text;
+        var (view, paragraph) = BuildView(control);
+
+        view.MoveCaretToBlockForTest(0, ControlStart + original.Length);
+        view.InsertText("!");
+        view.BackspaceForTest();
+
+        paragraph.Runs[1].Text.Should().Be(original);
+    }
+
+    private static (DocumentView View, Paragraph Paragraph) BuildView(Run control)
+    {
+        var paragraph = new Paragraph();
+        paragraph.Runs.Add(new Run(Prefix));
+        paragraph.Runs.Add(control);
+        paragraph.Runs.Add(new Run(Suffix));
+
+        var document = TextDocument.CreateEmpty();
+        document.Blocks.Clear();
+        document.Blocks.Add(paragraph);
+
+        var view = new DocumentView();
+        view.LoadDocument(document);
+        return (view, paragraph);
+    }
+}

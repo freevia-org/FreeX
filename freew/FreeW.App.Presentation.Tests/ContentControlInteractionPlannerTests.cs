@@ -155,6 +155,65 @@ public sealed class ContentControlInteractionPlannerTests
             .Should().Be(expected);
     }
 
+    [Fact]
+    public void WithText_replaces_only_the_text_and_keeps_every_other_run_mark()
+    {
+        var run = Run.PlainTextControl("Bob", tag: "Applicant", alias: "Name");
+        run.HyperlinkTooltip = "preserved";
+        run.CommentId = 7;
+        run.Formatting = run.Formatting with { Bold = true };
+
+        var updated = ContentControlInteractionPlanner.WithText(run, "Bobby");
+
+        updated.Should().NotBeNull();
+        updated!.Text.Should().Be("Bobby");
+        updated.Control!.Kind.Should().Be(ContentControlKind.PlainText);
+        updated.Control!.Tag.Should().Be("Applicant");
+        updated.Control!.Alias.Should().Be("Name");
+        updated.HyperlinkTooltip.Should().Be("preserved");
+        updated.CommentId.Should().Be(7);
+        updated.Formatting.Bold.Should().BeTrue();
+
+        ContentControlInteractionPlanner.WithText(new Run("plain"), "x").Should().BeNull();
+    }
+
+    [Theory]
+    [InlineData(ContentControlKind.PlainText, true)]
+    [InlineData(ContentControlKind.RichText, true)]
+    [InlineData(ContentControlKind.ComboBox, true)]
+    [InlineData(ContentControlKind.CheckBox, false)]
+    [InlineData(ContentControlKind.DatePicker, false)]
+    [InlineData(ContentControlKind.DropDownList, false)]
+    public void IsTextEntryControl_only_accepts_controls_that_take_typed_text(
+        ContentControlKind kind,
+        bool expected) =>
+        ContentControlInteractionPlanner.IsTextEntryControl(new ContentControl(kind))
+            .Should().Be(expected);
+
+    [Fact]
+    public void CanEditContentControlText_combines_the_kind_with_the_protection_policy()
+    {
+        var text = Run.PlainTextControl("Bob");
+        var checkBox = Run.CheckBoxControl(@checked: false);
+
+        ContentControlInteractionPlanner.CanEditContentControlText(
+                text,
+                Policy(ProtectionMode.FillingForms, isMarkedAsFinal: false))
+            .Should().BeTrue("filling in forms exists to let the user type into fields");
+        ContentControlInteractionPlanner.CanEditContentControlText(
+                checkBox,
+                Policy(ProtectionMode.FillingForms, isMarkedAsFinal: false))
+            .Should().BeFalse("a check box owns its glyph");
+        ContentControlInteractionPlanner.CanEditContentControlText(
+                text,
+                Policy(ProtectionMode.ReadOnly, isMarkedAsFinal: false))
+            .Should().BeFalse();
+        ContentControlInteractionPlanner.CanEditContentControlText(
+                new Run("plain"),
+                Policy(ProtectionMode.None, isMarkedAsFinal: false))
+            .Should().BeFalse();
+    }
+
     private static RestrictEditingEnforcementPolicy Policy(ProtectionMode mode, bool isMarkedAsFinal) =>
         RestrictEditingEnforcementPolicy.From(new ProtectionSettings(mode), isMarkedAsFinal);
 }
