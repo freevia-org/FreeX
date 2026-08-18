@@ -63,9 +63,33 @@ public static class QuickSortRangePlanner
         if (IsFullyInsideStructuredTable(sheet, comparisonRange))
             return null;
 
-        // Only offer to expand when the current region actually contains the whole selection --
-        // GetCurrentRegion floods outward from a single anchor point, so a selection that reaches
-        // past the natural block boundary in some other direction would not be a subset of it.
+        // What Excel actually asks is "is there data next to your selection that you did not
+        // select?" -- so compare only on the axis the selection does NOT already span in full.
+        //
+        // For a whole-column selection the row axis is meaningless: the user selected every row, so
+        // any stray value anywhere in that column sits inside the selection and can never be the
+        // adjacent data we are warning about. Requiring the region to contain the selection on the
+        // row axis as well is what let a single leftover cell far below a table suppress the
+        // warning and silently scramble the records -- the defect this feature was written to
+        // prevent, reintroduced three rounds running by comparing the wrong axis. The only question
+        // for a whole-column selection is whether the block reaches into columns the user left out.
+        if (SelectionRangeService.IsWholeColumnSelection(selectedRange))
+        {
+            return region.Start.Col < comparisonRange.Start.Col || region.End.Col > comparisonRange.End.Col
+                ? region
+                : null;
+        }
+
+        if (SelectionRangeService.IsWholeRowSelection(selectedRange))
+        {
+            return region.Start.Row < comparisonRange.Start.Row || region.End.Row > comparisonRange.End.Row
+                ? region
+                : null;
+        }
+
+        // An ordinary bounded selection genuinely has to sit inside the block on BOTH axes before
+        // we can offer to expand to it -- GetCurrentRegion floods outward from a single anchor, so
+        // a selection reaching past the block in any direction is not a subset of it.
         if (region.Start.Row > comparisonRange.Start.Row || region.Start.Col > comparisonRange.Start.Col ||
             region.End.Row < comparisonRange.End.Row || region.End.Col < comparisonRange.End.Col)
         {
@@ -163,7 +187,13 @@ public static class QuickSortRangePlanner
             return currentRegion;
         }
 
-        return selectedRange;
+        // A whole-column/row selection reaches CellAddress.MaxRow/MaxCol, and SortCommand sizes its
+        // working lists from the range it is handed -- so passing the raw selection through made an
+        // ordinary column-header sort allocate and iterate over a million rows to move a handful of
+        // cells (measured at roughly 500x the clamped cost). The prompt path already clamps to the
+        // selected band's real data extent; the path taken when there is nothing to prompt about
+        // has to do the same, or the commonest sort gesture is the slowest one.
+        return ClampToUsedRange(sheet, selectedRange);
     }
 
     private static uint ResolveSortByColumnOffset(GridRange range, CellAddress sortCell)

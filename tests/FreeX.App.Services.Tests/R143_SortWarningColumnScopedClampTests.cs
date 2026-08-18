@@ -132,20 +132,21 @@ public sealed class R143_SortWarningColumnScopedClampTests
             "clamp at all -- selection is not whole-column/whole-row)");
     }
 
-    // (j) NO-REGRESSION: a stray cell in the SAME selected column (not an unrelated one) must still
-    // be picked up by the clamp -- our column-scoped fix must not filter out data that genuinely IS
-    // in the column being sorted. Because that stray value has no adjacent-column data to be
-    // scrambled against (nothing else exists at that row), no warning fires and the sort proceeds
-    // directly on the raw whole-column selection -- this mirrors the pre-fix AND post-fix behavior
-    // (the sheet-wide clamp used to also have picked this cell up, just for the wrong reason), so it
-    // is not itself the bug, but it proves the fix didn't overcorrect by excluding legitimate
-    // same-column data.
+    // (j) A stray value in the SAME column being sorted. What matters is whether the block around
+    // the active cell reaches into columns the user did NOT select -- here it does (B and C), so
+    // the warning fires and offers the whole table. A value elsewhere in the selected column is
+    // inside the selection by definition and cannot be the adjacent data being protected; treating
+    // it as a reason to stay silent is what let a leftover cell far below a table suppress the
+    // warning and scramble the records.
     [Fact]
-    public void ResolveAdjacentDataExpansion_WholeColumnSelection_StrayCellInSameColumn_NoAdjacentDataSoNoPrompt()
+    public void ResolveAdjacentDataExpansion_WholeColumnSelection_StrayCellInSameColumn_StillPrompts()
     {
         var (_, sheet) = CreateSalesTableSheet();
-        // Stray cell far below, but in column A itself (the column being sorted) -- no data in B/C
-        // at that row, so sorting the extended column A range can't scramble any pairing.
+        // A leftover value far below the table, in the column being sorted. r143's first attempt
+        // asserted this produced NO prompt, reasoning that a stray cell with nothing beside it has
+        // no pairing to protect. That reasoning looks at the wrong rows: the TABLE at A1:C6 still
+        // has Name/Score/Team pairings, and sorting the whole of column A on its own scrambles
+        // them. An audit reproduced exactly that through WorkbookSession.SortSelectedRange.
         sheet.SetCell(new CellAddress(sheet.Id, 5000, 1), new NumberValue(42));
 
         var wholeColumnA = new GridRange(
@@ -154,10 +155,11 @@ public sealed class R143_SortWarningColumnScopedClampTests
 
         var expansion = QuickSortRangePlanner.ResolveAdjacentDataExpansion(sheet, wholeColumnA);
 
-        expansion.Should().BeNull(
-            "a stray cell that is itself inside the sorted column, with nothing in the adjacent " +
-            "columns at that row, has no cross-column pairing to protect -- this is genuinely " +
-            "different from the (g) bug case, where the stray cell sits in a DIFFERENT column");
+        expansion.Should().NotBeNull(
+            "the block around the active cell reaches into columns B and C, which the user did not " +
+            "select -- that is the adjacent data Excel warns about, and no value elsewhere in the " +
+            "selected column changes it");
+        expansion!.Value.End.Col.Should().Be(3, "the offered expansion should cover the whole table");
     }
 
     // (k) Sparse sheet: scattered, non-contiguous cells across many columns, whole-column selection
