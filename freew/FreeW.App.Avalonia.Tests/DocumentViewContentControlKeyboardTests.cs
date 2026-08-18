@@ -1,5 +1,6 @@
 using System.Threading;
 using Avalonia.Headless;
+using Avalonia.Input;
 using FreeW.App.Avalonia.Editing;
 using FreeW.Core.Model;
 
@@ -48,7 +49,9 @@ public sealed class DocumentViewContentControlKeyboardTests
     public void Typing_inside_a_rich_text_control_preserves_the_runs_other_marks()
     {
         var control = Run.RichTextControl("Bob", tag: "Applicant");
+        control.HyperlinkUrl = "https://example.test/";
         control.HyperlinkTooltip = "preserved";
+        control.CommentId = 4;
         control.Formatting = control.Formatting with { Bold = true };
         var (view, paragraph) = BuildView(control);
 
@@ -58,7 +61,9 @@ public sealed class DocumentViewContentControlKeyboardTests
         paragraph.Runs[1].Text.Should().Be("Bob!");
         paragraph.Runs[1].Control!.Kind.Should().Be(ContentControlKind.RichText);
         paragraph.Runs[1].Control!.Tag.Should().Be("Applicant");
+        paragraph.Runs[1].HyperlinkUrl.Should().Be("https://example.test/");
         paragraph.Runs[1].HyperlinkTooltip.Should().Be("preserved");
+        paragraph.Runs[1].CommentId.Should().Be(4);
         paragraph.Runs[1].Formatting.Bold.Should().BeTrue();
     }
 
@@ -273,6 +278,44 @@ public sealed class DocumentViewContentControlKeyboardTests
         view.CanUndo.Should().BeTrue();
         view.Undo();
         cellParagraph.Runs[0].Text.Should().Be("Bobby");
+    }
+
+    [Fact]
+    public void Tab_moves_between_fields_under_forms_protection_instead_of_typing_a_tab()
+    {
+        var document = TextDocument.CreateEmpty();
+        document.Blocks.Clear();
+        var first = new Paragraph();
+        first.Runs.Add(new Run("A: "));
+        first.Runs.Add(Run.PlainTextControl("one", tag: "One"));
+        var second = new Paragraph();
+        second.Runs.Add(new Run("B: "));
+        second.Runs.Add(Run.PlainTextControl("two", tag: "Two"));
+        document.Blocks.Add(first);
+        document.Blocks.Add(second);
+
+        var view = new DocumentView();
+        view.LoadDocument(document);
+        view.SetProtection(ProtectionMode.FillingForms);
+
+        view.MoveCaretToBlockForTest(0, 0);
+        view.SimulateKeyForTest(Key.Tab);
+        // The whole field is selected, ready to be typed over.
+        view.CaretBlockForTest.Should().Be(0);
+        view.CaretOffsetForTest.Should().Be(6);
+        view.SelectedText.Should().Be("one");
+
+        view.SimulateKeyForTest(Key.Tab);
+        view.CaretBlockForTest.Should().Be(1);
+        view.SelectedText.Should().Be("two");
+
+        // Wrapping around at the last field, and back again with Shift+Tab.
+        view.SimulateKeyForTest(Key.Tab);
+        view.CaretBlockForTest.Should().Be(0);
+        view.SimulateKeyForTest(Key.Tab, shift: true);
+        view.CaretBlockForTest.Should().Be(1);
+
+        view.PlainText.Should().Be("A: one\nB: two", "Tab must not type a literal tab into a field");
     }
 
     private static void AssertIgnoresTyping(Run control)

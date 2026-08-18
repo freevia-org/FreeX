@@ -42,7 +42,10 @@ public sealed class InCanvasTextEditPlannerTests
 
         plan.IsReady.Should().BeTrue();
         plan.Placement!.Value.RotationDegrees.Should().Be(22);
-        plan.Placement.Value.FlipVertical.Should().BeTrue();
+        // The editor placement carries rotation but never the flip mirror -- PowerPoint keeps
+        // a flipped shape's text upright, matching the static-render fix. See
+        // ShapeTransformPlanner.PlanShapeTextRenderTransform for the render-path counterpart.
+        plan.Placement.Value.FlipVertical.Should().BeFalse();
         plan.Placement.Value.Left.Should().Be(202);
         plan.Placement.Value.Top.Should().Be(116);
 
@@ -157,7 +160,11 @@ public sealed class InCanvasTextEditPlannerTests
         plan.IsReady.Should().BeTrue();
         plan.Placement.Should().NotBeNull();
         plan.Placement!.Value.RotationDegrees.Should().Be(37.5);
-        plan.Placement.Value.FlipHorizontal.Should().BeTrue();
+        // Rotation still carries through to the editor placement, but the flip mirror must
+        // not: PowerPoint keeps a flipped shape's text upright and left-to-right readable, so
+        // the live text editor must render the same way as the static shape (r144 fix) --
+        // otherwise text flips the moment you start editing it and unflips when you stop.
+        plan.Placement.Value.FlipHorizontal.Should().BeFalse();
         plan.Placement.Value.FlipVertical.Should().BeFalse();
         plan.Placement.Value.EffectiveTransformOriginX.Should().Be(96);
         plan.Placement.Value.EffectiveTransformOriginY.Should().Be(48);

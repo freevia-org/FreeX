@@ -374,7 +374,7 @@ public static class ShapeGeometryAdjustmentPlanner
                     new ShapeGeometryAdjustmentHandlePlan(
                         "adj1",
                         "Ribbon fold depth",
-                        new LayoutPoint(boundsDip.Left + boundsDip.Width / 2, boundsDip.Top + boundsDip.Height * fold / 100000.0),
+                        new LayoutPoint(boundsDip.Left + boundsDip.Width / 2, boundsDip.Top + boundsDip.Height * ResolveRibbonBandTop(fold)),
                         fold,
                         0,
                         MaxRibbonFoldAdjustment),
@@ -864,6 +864,17 @@ public static class ShapeGeometryAdjustmentPlanner
 
         return minDimension * Math.Clamp(adjustment, 0, MaxCornerAdjustment) / 100000.0;
     }
+
+    /// <summary>
+    /// Mirrors <c>ShapeGeometryBuilder</c>'s private Ribbon "bandTop" formula exactly: the
+    /// renderer floors the top-band edge at 4% of the shape height (and caps it at 45%)
+    /// regardless of how small/large the authored adj1 fold-depth guide is. Using the raw,
+    /// unclamped fold value here let the "Ribbon fold depth" handle drift away to
+    /// boundsDip.Top for any adj1 under that 4% floor (e.g. adj1=0), detached from the fold
+    /// line the shape actually renders.
+    /// </summary>
+    private static double ResolveRibbonBandTop(double fold) =>
+        Math.Clamp(fold / 100000.0, 0.04, 0.45);
 
     private static bool IsDirectionalArrow(DrawingShapeKind kind) =>
         kind is DrawingShapeKind.RightArrow or DrawingShapeKind.LeftArrow or

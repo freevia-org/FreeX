@@ -1518,6 +1518,88 @@ public sealed partial class Sheet
     }
 
     /// <summary>
+    /// Get the bounding range of all non-empty (or style-only) cells whose column falls within
+    /// [<paramref name="startCol"/>, <paramref name="endCol"/>], or null if there are none. Unlike
+    /// <see cref="GetUsedRange"/> (the whole sheet's bounding box, across every column), this scopes
+    /// the scan to just the given column band -- used to clamp a whole-column selection to the real
+    /// data extent of the columns actually selected, so a stray cell sitting in some other, unselected
+    /// column can't inflate the result.
+    /// </summary>
+    public GridRange? GetUsedRangeInColumns(uint startCol, uint endCol) =>
+        ComputeUsedRangeWithinBand(inRows: false, startCol, endCol);
+
+    /// <summary>
+    /// Get the bounding range of all non-empty (or style-only) cells whose row falls within
+    /// [<paramref name="startRow"/>, <paramref name="endRow"/>], or null if there are none. The
+    /// row-scoped counterpart of <see cref="GetUsedRangeInColumns"/>, used to clamp a whole-row
+    /// selection to the real data extent of the rows actually selected.
+    /// </summary>
+    public GridRange? GetUsedRangeInRows(uint startRow, uint endRow) =>
+        ComputeUsedRangeWithinBand(inRows: true, startRow, endRow);
+
+    private GridRange? ComputeUsedRangeWithinBand(bool inRows, uint bandStart, uint bandEnd)
+    {
+        uint minRow = uint.MaxValue, maxRow = 0, minCol = uint.MaxValue, maxCol = 0;
+        var found = false;
+
+        void Consider(uint row, uint col)
+        {
+            var band = inRows ? row : col;
+            if (band < bandStart || band > bandEnd)
+                return;
+
+            found = true;
+            if (row < minRow) minRow = row;
+            if (row > maxRow) maxRow = row;
+            if (col < minCol) minCol = col;
+            if (col > maxCol) maxCol = col;
+        }
+
+        foreach (var (row, col) in _cells.Keys)
+            Consider(row, col);
+
+        foreach (var ((row, col), value) in _spillValues)
+        {
+            if (value is BlankValue || _cells.ContainsKey((row, col)))
+                continue;
+
+            Consider(row, col);
+        }
+
+        foreach (var (row, col) in _styleOnly.Keys)
+            Consider(row, col);
+
+        if (_styleOnlyRuns is { Count: > 0 } runs)
+        {
+            foreach (var run in runs)
+            {
+                if (inRows)
+                {
+                    Consider(run.Row, run.StartCol);
+                    Consider(run.Row, run.EndCol);
+                }
+                else
+                {
+                    var runStart = Math.Max(run.StartCol, bandStart);
+                    var runEnd = Math.Min(run.EndCol, bandEnd);
+                    if (runStart > runEnd)
+                        continue;
+
+                    Consider(run.Row, runStart);
+                    Consider(run.Row, runEnd);
+                }
+            }
+        }
+
+        if (!found)
+            return null;
+
+        return new GridRange(
+            new CellAddress(Id, minRow, minCol),
+            new CellAddress(Id, maxRow, maxCol));
+    }
+
+    /// <summary>
     /// Widens <paramref name="valueRange"/> (the cached value/spill bounding box) to also cover any
     /// style-only (formatting-only, empty) cells. Style-only writes don't flow through
     /// <see cref="TrackUsedRangeCellSet"/>/<see cref="TrackUsedRangeCellCleared"/>, so this is

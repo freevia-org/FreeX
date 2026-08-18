@@ -41,14 +41,19 @@ public static class GoalSeekStatusDialogPlanner
         bool converged,
         double targetValue,
         double actualResult,
-        double foundValue)
+        double foundValue,
+        string? actualResultError = null)
     {
         const string format = "G10";
         var culture = CultureInfo.InvariantCulture;
+        // When the set cell holds an error (e.g. the search's starting point was already
+        // "#DIV/0!"), report that error code verbatim instead of formatting actualResult, which
+        // is a meaningless NaN placeholder in that case — see GoalSeekResult.ActualResultError.
+        var actualResultText = actualResultError ?? actualResult.ToString(format, culture);
         return LocalizedTextDescriptor.Resource(
             converged ? "GoalSeekStatus_SuccessSummary" : "GoalSeekStatus_FailureSummary",
             targetValue.ToString(format, culture),
-            actualResult.ToString(format, culture),
+            actualResultText,
             foundValue.ToString(format, culture));
     }
 

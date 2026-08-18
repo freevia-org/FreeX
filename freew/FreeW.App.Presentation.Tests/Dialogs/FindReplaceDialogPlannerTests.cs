@@ -453,4 +453,117 @@ public sealed class FindReplaceDialogPlannerTests
         "match {0}/{1}",
         "changed {0} item{1}",
         "made {0} replacements");
+
+    // ---- shared-find-replace-crossapp / freew-avalonia-find-replace-skips-tables --------------------
+    // FreeW's Avalonia Find/Replace (via this planner, the only search engine DocumentView.FindNext/
+    // ReplaceAll call) used to only ever inspect document.Blocks for a Paragraph, silently skipping any
+    // Table block entirely -- table cell text was neither found nor counted. See
+    // freew/FreeW.App.Presentation/Dialogs/FindReplaceDialogPlanner.cs.
+
+    private static TextDocument BuildDocumentWithTable(string beforeText, string cellText, string afterText)
+    {
+        var doc = TextDocument.CreateEmpty();
+        doc.Blocks.Clear();
+        doc.Blocks.Add(new Paragraph(beforeText));
+
+        var table = new Table();
+        var row = new TableRow();
+        row.Cells.Add(new TableCell(cellText));
+        table.Rows.Add(row);
+        doc.Blocks.Add(table);
+
+        doc.Blocks.Add(new Paragraph(afterText));
+        return doc;
+    }
+
+    [Fact]
+    public void CountMatches_DescendsIntoTableCells()
+    {
+        var doc = BuildDocumentWithTable("intro", "Budget2026 total", "outro");
+
+        FindReplaceDialogPlanner.CountMatches(doc, "Budget2026", new FindReplaceSearchOptions())
+            .Should().Be(1);
+    }
+
+    [Fact]
+    public void DocumentContains_TrueForATermThatOnlyOccursInsideATableCell()
+    {
+        var doc = BuildDocumentWithTable("intro", "Budget2026 total", "outro");
+        var request = new FindReplaceSearchRequest("Budget2026", new FindReplaceSearchOptions());
+
+        FindReplaceDialogPlanner.DocumentContains(doc, request).Should().BeTrue();
+    }
+
+    [Fact]
+    public void FindNextMatch_LocatesATermThatOnlyOccursInsideATableCell()
+    {
+        var doc = BuildDocumentWithTable("intro", "Budget2026 total", "outro");
+
+        var match = FindReplaceDialogPlanner.FindNextMatch(
+            doc,
+            "Budget2026",
+            new FindReplaceSearchOptions(),
+            fromBlock: 0,
+            fromOffset: 0);
+
+        match.Should().NotBeNull();
+        match!.Value.Block.Should().Be(1); // the Table is document.Blocks[1]
+        match.Value.IsInTableCell.Should().BeTrue();
+        match.Value.TableRow.Should().Be(0);
+        match.Value.TableCol.Should().Be(0);
+        match.Value.TableParagraphIndex.Should().Be(0);
+        match.Value.Start.Should().Be(0);
+        match.Value.Length.Should().Be("Budget2026".Length);
+    }
+
+    [Fact]
+    public void FindNextMatch_ResumesFromAGivenTableCellPositionInsteadOfRestartingTheTable()
+    {
+        // Two matches in the same cell's paragraph text; resuming right after the first must find the
+        // second instead of returning the first match again (which is what a naive "always restart the
+        // table from its first cell" implementation would do on every subsequent Find Next click).
+        var doc = TextDocument.CreateEmpty();
+        doc.Blocks.Clear();
+        var table = new Table();
+        var row = new TableRow();
+        row.Cells.Add(new TableCell("cat cat"));
+        table.Rows.Add(row);
+        doc.Blocks.Add(table);
+
+        var second = FindReplaceDialogPlanner.FindNextMatch(
+            doc,
+            "cat",
+            new FindReplaceSearchOptions(),
+            fromBlock: 0,
+            fromOffset: 0,
+            fromTableCell: (Row: 0, Col: 0, ParagraphIndex: 0, Offset: 1)); // resume just past the first "cat"
+
+        second.Should().NotBeNull();
+        second!.Value.Start.Should().Be(4);
+    }
+
+    [Fact]
+    public void FindNextMatch_StillFindsBodyParagraphMatchesBeforeAndAfterATable()
+    {
+        // Sibling/non-regression coverage: adding table support must not disturb ordinary body-paragraph
+        // matching, including matches that sit before/after a table block in the same document.
+        var doc = BuildDocumentWithTable("find intro here", "unrelated cell text", "find outro here");
+
+        var first = FindReplaceDialogPlanner.FindNextMatch(
+            doc, "find", new FindReplaceSearchOptions(), fromBlock: 0, fromOffset: 0);
+        first.Should().Be(new FindReplaceMatch(0, 0, 4));
+
+        var second = FindReplaceDialogPlanner.FindNextMatch(
+            doc, "find", new FindReplaceSearchOptions(), fromBlock: 0, fromOffset: 4);
+        second.Should().Be(new FindReplaceMatch(2, 0, 4));
+    }
+
+    [Fact]
+    public void CountMatches_StillCountsOnlyParagraphsWhenDocumentHasNoTable()
+    {
+        // Sibling/non-regression coverage for CountMatches: the pre-existing paragraph-only path must
+        // keep returning exactly what it always did once the Table branch is added alongside it.
+        FindReplaceDialogPlanner.CountMatches(BuildTwoParagraphDocument(), "the", new FindReplaceSearchOptions())
+            .Should().Be(2);
+    }
 }

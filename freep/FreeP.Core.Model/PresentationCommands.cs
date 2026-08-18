@@ -3181,6 +3181,7 @@ public sealed class ChangeAutoShapeKindCommand : IPresentationCommand
     private Dictionary<string, double>? _oldAdjustments;
     private List<CustomGeometryPath>? _oldCustomGeometry;
     private List<CustomGeometryConnectionSite>? _oldCustomConnectionSites;
+    private string? _oldUnmodeledPresetGeometry;
 
     public ChangeAutoShapeKindCommand(int slideIndex, uint shapeId, DrawingShapeKind newKind)
     {
@@ -3207,10 +3208,15 @@ public sealed class ChangeAutoShapeKindCommand : IPresentationCommand
             StringComparer.OrdinalIgnoreCase);
         _oldCustomGeometry = CloneCustomGeometry(shape.CustomGeometry);
         _oldCustomConnectionSites = CloneCustomConnectionSites(shape.CustomConnectionSites);
+        _oldUnmodeledPresetGeometry = shape.UnmodeledPresetGeometry;
         shape.AutoShapeKind = _newKind;
         shape.PresetGeometryAdjustments.Clear();
         shape.CustomGeometry.Clear();
         shape.CustomConnectionSites.Clear();
+        // An explicit shape-kind change is deliberate intent, even when it lands back on
+        // Rectangle -- don't let a preserved-but-unmodeled original preset (see
+        // SlideShape.UnmodeledPresetGeometry) resurrect itself on the next save.
+        shape.UnmodeledPresetGeometry = null;
     }
 
     public void Revert(Presentation presentation)
@@ -3233,6 +3239,7 @@ public sealed class ChangeAutoShapeKindCommand : IPresentationCommand
         shape.CustomConnectionSites.Clear();
         if (_oldCustomConnectionSites is not null)
             shape.CustomConnectionSites.AddRange(CloneCustomConnectionSites(_oldCustomConnectionSites));
+        shape.UnmodeledPresetGeometry = _oldUnmodeledPresetGeometry;
     }
 
     private static List<CustomGeometryPath> CloneCustomGeometry(IEnumerable<CustomGeometryPath> paths) =>
@@ -3363,7 +3370,12 @@ public sealed class ConvertSmartArtToShapesCommand : IPresentationCommand
 /// </summary>
 public sealed class DeleteShapeCommand : IPresentationCommand
 {
-    private sealed record CommentAnchorSnapshot(
+    /// <summary>
+    /// Internal (not private) so other commands that destroy a shape id a modern comment thread
+    /// could be anchored to - e.g. <see cref="UngroupShapeCommand"/> destroying a group's own id -
+    /// can reuse the exact same capture/restore shape instead of re-implementing it.
+    /// </summary>
+    internal sealed record CommentAnchorSnapshot(
         string? NormalizedModernCommentId,
         int OriginalListIndex,
         string AnchorKind,
@@ -3513,7 +3525,7 @@ public sealed class DeleteShapeCommand : IPresentationCommand
         }
     }
 
-    private static SlideComment? ResolveCommentAnchorTarget(
+    internal static SlideComment? ResolveCommentAnchorTarget(
         IReadOnlyList<SlideComment> comments,
         CommentAnchorSnapshot snapshot)
     {
@@ -3534,7 +3546,7 @@ public sealed class DeleteShapeCommand : IPresentationCommand
             : null;
     }
 
-    private static string? NormalizeModernCommentId(string? modernCommentId)
+    internal static string? NormalizeModernCommentId(string? modernCommentId)
     {
         var normalized = modernCommentId?.Trim();
         return string.IsNullOrEmpty(normalized) ? null : normalized;
@@ -3547,7 +3559,7 @@ public sealed class DeleteShapeCommand : IPresentationCommand
     /// attribute on a descendant element (the two attribute names already used across this
     /// codebase — see p188:cm/id and p:spTgt/spid — for referencing a shape by its numeric id).
     /// </summary>
-    private static bool CommentAnchorReferencesShape(SlideComment comment, IReadOnlySet<uint> shapeIds)
+    internal static bool CommentAnchorReferencesShape(SlideComment comment, IReadOnlySet<uint> shapeIds)
     {
         if (comment.ModernAnchorKind is not ("deMkLst" or "txMkLst"))
             return false;

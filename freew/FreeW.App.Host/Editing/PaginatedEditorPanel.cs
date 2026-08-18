@@ -274,6 +274,9 @@ internal sealed class PaginatedEditorPanel : ScrollViewer
                 endnoteIds: hasEndnotes && !requiresDedicatedEndnotePage && bodyPageIndex == pageCount - 1
                     ? endnoteIds
                     : null);
+            // freew-cc-3: wire the content-control lock probe so this box's plain RichTextBox can refuse
+            // to mutate a locked control (see PageBox.ContentControlLockProbe's doc comment).
+            box.ContentControlLockProbe = sourceEditor.TryEvaluateContentControlLock;
             // W21: record which section OWNS each slot (nearest preceding definer, per slot, not
             // necessarily the section being viewed) so CommitHeaderFooterSlots writes edits back to
             // the real, retained model object that a subsequent Render pass actually reads -- not a
@@ -551,6 +554,13 @@ internal sealed class PaginatedEditorPanel : ScrollViewer
         if (focusedBox is null)
             return false;
 
+        // freew-cc-3: refuse to paste into a locked content control (this box's InsertTextInRun call
+        // below mutates the live FlowDocument directly with no lock awareness of its own -- see
+        // PageBox.ContentControlLockProbe's doc comment). The native RichTextBox Ctrl+V this method would
+        // otherwise defer to (returning false) is separately gated too, so returning false here is safe.
+        if (focusedBox.ContentControlLockProbe?.Invoke(focusedBox.Body.Selection.Start) == false)
+            return false;
+
         // Clear any cross-page selection first.
         if (_crossPageSelection.IsActive)
             DeleteCrossPageSelection();
@@ -795,6 +805,8 @@ internal sealed class PaginatedEditorPanel : ScrollViewer
                 endnoteIds: hasEndnotesRep && !requiresDedicatedEndnotePageRep && i == pageCount - 1
                     ? endnoteIdsRep
                     : null);
+            // freew-cc-3: see the matching comment in Build() above.
+            box.ContentControlLockProbe = _sourceEditor.TryEvaluateContentControlLock;
             // W21: section-aware commit -- owner resolved per slot (see Build's comment above).
             box.OwnerSectionHf = ResolveOwnerSectionHf(model, pageSection.SectionIndex, slots.HeaderSlot);
             box.FooterOwnerSectionHf = ResolveOwnerSectionHf(model, pageSection.SectionIndex, slots.FooterSlot);
@@ -940,6 +952,8 @@ internal sealed class PaginatedEditorPanel : ScrollViewer
                 endnoteIds: hasEndnotesReb && !requiresDedicatedEndnotePageReb && i == pageCount - 1
                     ? endnoteIdsReb
                     : null);
+            // freew-cc-3: see the matching comment in Build() above.
+            box.ContentControlLockProbe = _sourceEditor.TryEvaluateContentControlLock;
             // W21: section-aware commit -- owner resolved per slot (see Build's comment above).
             box.OwnerSectionHf = ResolveOwnerSectionHf(model, pageSection.SectionIndex, slots.HeaderSlot);
             box.FooterOwnerSectionHf = ResolveOwnerSectionHf(model, pageSection.SectionIndex, slots.FooterSlot);

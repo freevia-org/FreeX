@@ -283,11 +283,10 @@ public static partial class NumberFormatter
             // ORIGINAL signed value instead, so its own (already correct/tested) sign-suppression
             // logic runs -- matching what the slower ParseSections/SelectPositionalSection path
             // (still used for multi-section formats) already does for FormatSimpleFraction.
-            if (IsSimpleFractionFormat(effectiveFormat))
+            if (TryFormatSingleSectionFraction(
+                    value, effectiveFormat, colorHex, targetWidthCharacters, out var fractionResult))
             {
-                var fractionText = ApplyNativeDigitSubstitution(FormatSimpleFraction(value, effectiveFormat), effectiveFormat);
-                fractionText = ApplyAccountingTargetWidth(fractionText, effectiveFormat, targetWidthCharacters);
-                return new FormatResult(fractionText, colorHex);
+                return fractionResult;
             }
 
             // A single-section format applies to negatives by formatting the MAGNITUDE and prepending a

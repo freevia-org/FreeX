@@ -70,6 +70,124 @@ public sealed class SlidePanePlannerTests
     }
 
     [Fact]
+    public void BuildEntries_EmptySection_StaysVisibleAnchoredBeforeNextSectionHeader()
+    {
+        // Section B has been emptied (e.g. its only slide was dragged into A or C),
+        // exactly the state MoveSlideCommand deliberately leaves behind
+        // (PresentationCommandTests.MoveSlideCommand_IntoEmptySection_Undo_RestoresOriginalMembership).
+        // It must still render a header the user can see, rename and remove.
+        var slides = new[]
+        {
+            new Slide { Id = "rId2" },
+            new Slide { Id = "rId3" },
+            new Slide { Id = "rId4" },
+            new Slide { Id = "rId5" }
+        };
+        var sectionA = new PresentationSection { Id = "A", Name = "A" };
+        sectionA.SlideIds.AddRange(new[] { "rId2", "rId3" });
+        var sectionB = new PresentationSection { Id = "B", Name = "Q3 Review" };
+        var sectionC = new PresentationSection { Id = "C", Name = "C" };
+        sectionC.SlideIds.AddRange(new[] { "rId4", "rId5" });
+
+        var entries = SlidePanePlanner.BuildEntries(slides, new[] { sectionA, sectionB, sectionC });
+
+        entries.Select(entry => (entry.Kind, entry.SectionId, entry.SlideIndex)).Should().Equal(
+            (SlidePaneEntryKind.SectionHeader, "A", 0),
+            (SlidePaneEntryKind.Slide, "", 0),
+            (SlidePaneEntryKind.Slide, "", 1),
+            (SlidePaneEntryKind.SectionHeader, "B", 2),
+            (SlidePaneEntryKind.SectionHeader, "C", 2),
+            (SlidePaneEntryKind.Slide, "", 2),
+            (SlidePaneEntryKind.Slide, "", 3));
+
+        var emptyHeader = entries.Single(e => e.SectionId == "B");
+        emptyHeader.SectionSlideCount.Should().Be(0);
+        emptyHeader.SectionIndex.Should().Be(1);
+        emptyHeader.Text.Should().Be("Q3 Review");
+    }
+
+    [Fact]
+    public void BuildEntries_TrailingEmptySection_StaysVisibleAtEndOfPane()
+    {
+        var slides = new[]
+        {
+            new Slide { Id = "rId2" },
+            new Slide { Id = "rId3" }
+        };
+        var sectionA = new PresentationSection { Id = "A", Name = "A" };
+        sectionA.SlideIds.Add("rId2");
+        var sectionB = new PresentationSection { Id = "B", Name = "Empty" };
+
+        var entries = SlidePanePlanner.BuildEntries(slides, new[] { sectionA, sectionB });
+
+        entries.Select(entry => (entry.Kind, entry.SectionId)).Should().Equal(
+            (SlidePaneEntryKind.SectionHeader, "A"),
+            (SlidePaneEntryKind.Slide, ""),
+            (SlidePaneEntryKind.Slide, ""),
+            (SlidePaneEntryKind.SectionHeader, "B"));
+
+        var emptyHeader = entries.Last();
+        emptyHeader.Kind.Should().Be(SlidePaneEntryKind.SectionHeader);
+        emptyHeader.SectionIndex.Should().Be(1);
+        emptyHeader.SectionSlideCount.Should().Be(0);
+    }
+
+    [Fact]
+    public void BuildEntries_StaleSectionWithUnresolvableSlideIds_StaysHidden()
+    {
+        // Sibling/non-regression case: a section is only cascaded into visibility
+        // when it is genuinely EMPTY (SlideIds.Count == 0). A section whose ids are
+        // merely stale (non-empty but none resolve to a live slide) must keep the
+        // pre-existing behaviour of staying unrendered -- this is exactly the
+        // "Stale" section covered by
+        // RenameAndRemoveSection_UseHeaderOriginalIndexAfterPruningStaleSections below,
+        // which must keep seeing exactly one header.
+        var slides = new[]
+        {
+            new Slide { Id = "rId2" },
+            new Slide { Id = "rId3" }
+        };
+        var stale = new PresentationSection { Id = "stale", Name = "Stale" };
+        stale.SlideIds.Add("missing-slide");
+        var live = new PresentationSection { Id = "live", Name = "Live" };
+        live.SlideIds.AddRange(new[] { "rId2", "rId3" });
+
+        var entries = SlidePanePlanner.BuildEntries(slides, new[] { stale, live });
+
+        entries.Where(e => e.Kind == SlidePaneEntryKind.SectionHeader)
+            .Should().ContainSingle()
+            .Which.SectionId.Should().Be("live");
+    }
+
+    [Fact]
+    public void RemoveSection_OnEmptySection_RemovesItAndItsHeaderDisappears()
+    {
+        // End-to-end proof for the guidance: after the fix makes an empty section's
+        // header visible again, Remove Section (reached via that header) must still
+        // work and the ghost header must be gone from the next projection.
+        var editor = CreateEditingSession(4);
+        var slides = editor.Presentation.Slides;
+        var sectionA = new PresentationSection { Name = "A" };
+        sectionA.SlideIds.AddRange(new[] { slides[0].Id, slides[1].Id });
+        var sectionB = new PresentationSection { Name = "Empty" };
+        var sectionC = new PresentationSection { Name = "C" };
+        sectionC.SlideIds.AddRange(new[] { slides[2].Id, slides[3].Id });
+        editor.Presentation.Sections.Add(sectionA);
+        editor.Presentation.Sections.Add(sectionB);
+        editor.Presentation.Sections.Add(sectionC);
+
+        var beforeEntries = SlidePanePlanner.BuildEntries(editor.Presentation.Slides, editor.Presentation.Sections);
+        var emptyHeader = beforeEntries.Single(e => e.SectionId == sectionB.Id);
+
+        editor.RemoveSection(emptyHeader.SectionIndex).Should().BeTrue();
+
+        editor.Presentation.Sections.Select(s => s.Name).Should().Equal("A", "C");
+        var afterEntries = SlidePanePlanner.BuildEntries(editor.Presentation.Slides, editor.Presentation.Sections);
+        afterEntries.Should().NotContain(e => e.SectionId == sectionB.Id);
+        afterEntries.Count(e => e.Kind == SlidePaneEntryKind.SectionHeader).Should().Be(2);
+    }
+
+    [Fact]
     public void BuildEntries_CarriesSectionIndexForHeaderActions()
     {
         var slides = new[]

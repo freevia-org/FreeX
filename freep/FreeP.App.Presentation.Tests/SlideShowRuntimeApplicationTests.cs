@@ -255,6 +255,97 @@ public sealed class SlideShowRuntimeApplicationTests
     }
 
     [Fact]
+    public void SetScreenMode_BlankingPausesAutoAdvance_AndUnblankResumesSameSlideFullDuration()
+    {
+        // F1 (r143, freep-slideshow-presenter): blanking the screen (B/W) must pause the
+        // current slide's timed auto-advance -- otherwise the DispatcherTimer keeps
+        // ticking behind the black/white overlay and the show silently plays ahead while
+        // the presenter can't see it. Slide 1 is authored to auto-advance after 5s.
+        var presentation = MakePresentation(2);
+        presentation.UseSlideTimings = true;
+        presentation.Slides[0].Transition = new SlideTransition { AdvanceAfterMs = 5_000 };
+        var events = new List<string>();
+        var runtime = CreateRuntime(presentation);
+        var displayRenderer = new RecordingDisplayRenderer(events);
+        runtime.BindRenderer(NoOpRenderer(), displayRenderer);
+
+        runtime.DisplayCurrentSlide(animated: false);
+        events.Should().Contain(
+            "start-auto",
+            "the timed slide must arm its auto-advance timer on display");
+        events.Clear();
+
+        runtime.SetScreenMode(SlideShowScreenMode.Black);
+        events.Should().Equal(
+            new[] { "stop-auto" },
+            "blanking must stop the DispatcherTimer, not just paint an overlay over it");
+
+        events.Clear();
+        runtime.SetScreenMode(SlideShowScreenMode.Normal);
+        events.Should().Equal(
+            new[] { "start-auto" },
+            "unblanking must re-arm the auto-advance timer for the still-current slide");
+        runtime.CurrentPresentationSlideIndex.Should().Be(
+            0,
+            "no navigation may occur while blanked -- the same slide is still showing");
+    }
+
+    [Fact]
+    public void SetScreenMode_TogglingBetweenBlackAndWhite_DoesNotDoubleStopOrRestartTheTimer()
+    {
+        // Sibling coverage for the fix above: pressing W while already blanked on Black
+        // (or vice versa) switches the overlay color but the screen stays blank the whole
+        // time, so the paused timer must not be stopped/restarted again on that toggle --
+        // only true blank<->visible transitions touch the timer.
+        var presentation = MakePresentation(2);
+        presentation.UseSlideTimings = true;
+        presentation.Slides[0].Transition = new SlideTransition { AdvanceAfterMs = 5_000 };
+        var events = new List<string>();
+        var runtime = CreateRuntime(presentation);
+        var displayRenderer = new RecordingDisplayRenderer(events);
+        runtime.BindRenderer(NoOpRenderer(), displayRenderer);
+
+        runtime.DisplayCurrentSlide(animated: false);
+        events.Clear();
+
+        runtime.SetScreenMode(SlideShowScreenMode.Black);
+        runtime.SetScreenMode(SlideShowScreenMode.White);
+        events.Should().Equal(
+            new[] { "stop-auto" },
+            "Black->White is still blank the whole time, so only the initial blank stops the timer once");
+
+        events.Clear();
+        runtime.SetScreenMode(SlideShowScreenMode.Normal);
+        events.Should().Equal(
+            new[] { "start-auto" },
+            "returning to Normal from White must still resume the timer exactly once");
+    }
+
+    [Fact]
+    public void SetScreenMode_SlideWithNoTiming_NeverTouchesAutoAdvanceOnBlankOrUnblank()
+    {
+        // Sibling coverage: a slide with no authored auto-advance has nothing to pause,
+        // so blanking/unblanking it must not spuriously start a timer that was never armed.
+        var presentation = MakePresentation(2);
+        presentation.UseSlideTimings = true;
+        // Slide 0 has no Transition.AdvanceAfterMs -- manual-advance only.
+        var events = new List<string>();
+        var runtime = CreateRuntime(presentation);
+        var displayRenderer = new RecordingDisplayRenderer(events);
+        runtime.BindRenderer(NoOpRenderer(), displayRenderer);
+
+        runtime.DisplayCurrentSlide(animated: false);
+        events.Should().NotContain("start-auto");
+        events.Clear();
+
+        runtime.SetScreenMode(SlideShowScreenMode.Black);
+        runtime.SetScreenMode(SlideShowScreenMode.Normal);
+
+        events.Should().NotContain("stop-auto");
+        events.Should().NotContain("start-auto");
+    }
+
+    [Fact]
     public void HandlePointerInput_ClickWithAdvanceOnClickDisabled_DoesNotAdvance()
     {
         // The current slide unchecked "Advance Slide: On Mouse Click" (advClick="0") --

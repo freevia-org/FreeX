@@ -77,8 +77,9 @@ public readonly record struct AutoCorrectResult(int DeleteBefore, string Insert)
 /// <item>Smart quotes: a straight double (<c>"</c>) or single (<c>'</c>) quote becomes a curly quote.
 ///   It opens (<c>“</c>/<c>‘</c>) when preceded by the start of text, whitespace, or an opening
 ///   punctuation character; otherwise it closes (<c>”</c>/<c>’</c>).</item>
-/// <item><c>--</c> (two hyphens) becomes an en dash <c>–</c> (U+2013). We choose the en dash because it
-///   is the conventional AutoCorrect result for a double hyphen surrounded by text.</item>
+/// <item><c>--</c> (two hyphens) becomes a dash: hugging a word (<c>word--word</c>) yields an em dash
+///   <c>—</c> (U+2014), matching Word's "type -- for a dash" behaviour; a space-flanked double hyphen
+///   (<c>word -- word</c>) yields an en dash <c>–</c> (U+2013) in place of the hyphens, spaces retained.</item>
 /// <item><c>(c)</c> → <c>©</c>, <c>(r)</c> → <c>®</c>, <c>(tm)</c> → <c>™</c> (case-insensitive),
 ///   completed by typing the closing <c>)</c>.</item>
 /// <item>Ellipsis: <c>...</c> (three periods) becomes <c>…</c> (U+2026), completed by the third period.</item>
@@ -88,10 +89,10 @@ public readonly record struct AutoCorrectResult(int DeleteBefore, string Insert)
 /// </summary>
 public static class AutoCorrect
 {
-    /// <summary>En dash (U+2013); the replacement for a double hyphen between words with no surrounding spaces.</summary>
+    /// <summary>En dash (U+2013); the replacement for a space-flanked double hyphen (<c>word -- word</c>).</summary>
     public const char EnDash = '–';
 
-    /// <summary>Em dash (U+2014); the replacement for a space-flanked double hyphen (<c>word -- word</c>).</summary>
+    /// <summary>Em dash (U+2014); the replacement for a double hyphen between words with no surrounding spaces.</summary>
     public const char EmDash = '—';
 
     /// <summary>Horizontal ellipsis (U+2026).</summary>
@@ -198,16 +199,17 @@ public static class AutoCorrect
 
     /// <summary>
     /// Two consecutive hyphens collapse into a dash: delete the prior hyphen, insert the dash. As in Word,
-    /// <c>word--</c> (the dashes hug a word) yields an <see cref="EnDash"/>, while a space-flanked
-    /// <c>word --</c> yields an <see cref="EmDash"/>.
+    /// <c>word--</c> (the dashes hug a word, no surrounding spaces) yields an <see cref="EmDash"/>, while a
+    /// space-flanked <c>word --</c> yields an <see cref="EnDash"/> (the spaces themselves are left alone;
+    /// only the two hyphens are replaced).
     /// </summary>
     public static AutoCorrectResult DoubleHyphen(string textBefore)
     {
         if (!EndsWith(textBefore, '-'))
             return AutoCorrectResult.None;
-        // The character before the prior hyphen decides en vs. em: a space (or paragraph start) → em dash.
+        // The character before the prior hyphen decides en vs. em: a space (or paragraph start) → en dash.
         var beforeDash = textBefore.Length >= 2 ? textBefore[^2] : ' ';
-        var dash = char.IsWhiteSpace(beforeDash) ? EmDash : EnDash;
+        var dash = char.IsWhiteSpace(beforeDash) ? EnDash : EmDash;
         return new AutoCorrectResult(1, dash.ToString());
     }
 

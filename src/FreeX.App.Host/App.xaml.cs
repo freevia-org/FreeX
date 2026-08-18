@@ -334,6 +334,13 @@ public partial class App : Application
                 logger: sp.GetService<ILoggerFactory>()?.CreateLogger<FreeX.App.Services.Updates.VelopackUpdateService>());
         });
 
+        // R143 clip-2: the internal formula-preserving clipboard must be shared by every window in
+        // this process (real Excel keeps a formula when you copy in one open workbook and paste into
+        // another open in the same instance), not re-created fresh per MainWindow. A singleton here
+        // means every MainWindow resolved below via ActivatorUtilities.CreateInstance receives the
+        // SAME WorkbookClipboardSession for its optional constructor parameter.
+        services.AddSingleton<FreeX.App.Presentation.Editing.WorkbookClipboardSession>();
+
         // UI. Every MainWindow resolved from DI gets its own workbook document context and state,
         // so File > Open or File > New in
         // one window can never replace another window's document (H39). The only "same document,

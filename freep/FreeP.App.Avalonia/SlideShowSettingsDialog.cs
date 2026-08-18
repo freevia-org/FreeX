@@ -118,6 +118,12 @@ internal sealed partial class SlideShowSettingsDialog : FreePDialogWindow
             check.Padding = new Thickness(0);
         }
 
+        // PowerPoint forces "Loop until 'Esc'" whenever "Browsed at a kiosk" is
+        // selected and the user cannot turn it off in that mode: the checkbox shows
+        // checked and is disabled for as long as kiosk is the selected show type.
+        _showTypeCombo.SelectionChanged += (_, _) => SyncLoopCheckForShowType();
+        SyncLoopCheckForShowType();
+
         Content = BuildContent();
         KeyDown += (_, e) =>
         {
@@ -186,6 +192,15 @@ internal sealed partial class SlideShowSettingsDialog : FreePDialogWindow
         if (applied && IsVisible)
             Close(true);
         return applied;
+    }
+
+    private void SyncLoopCheckForShowType()
+    {
+        var isKiosk = _showTypeCombo.SelectedItem is SlideShowSettingsShowTypeOption option
+            && option.ShowType == PresentationShowType.BrowsedAtKiosk;
+        if (isKiosk)
+            _loopCheck.IsChecked = true;
+        _loopCheck.IsEnabled = !isKiosk;
     }
 
 }

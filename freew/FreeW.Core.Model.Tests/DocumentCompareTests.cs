@@ -921,4 +921,80 @@ public class DocumentCompareTests
         result.Header.Should().BeNull();
         result.Footer.Should().BeNull();
     }
+
+    // -----------------------------------------------------------------------
+    // A paragraph that exists only in the ORIGINAL document keeps its footnote/endnote reference run in
+    // the diff output (whole-paragraph deletion retains the original runs verbatim), but CopyDocumentShell
+    // only ever seeded the result's Footnotes/Endnotes from `revised` -- so the surviving reference pointed
+    // at nothing (r142 MED: compare-combine-dangling-footnote-on-deleted-paragraph).
+    // -----------------------------------------------------------------------
+
+    [Fact]
+    public void DeletedParagraph_CopiesOriginalOnlyFootnoteIntoResultInsteadOfLeavingADanglingReference()
+    {
+        var original = new TextDocument();
+        original.Blocks.Add(new Paragraph("Keep this paragraph"));
+
+        var deletedParagraph = new Paragraph();
+        deletedParagraph.Runs.Add(new Run("See removed note"));
+        deletedParagraph.Runs.Add(Run.FootnoteReference(1));
+        original.Blocks.Add(deletedParagraph);
+        original.Footnotes[1] = new Footnote(1, "Original explanation.");
+
+        var revised = DocWith("Keep this paragraph");
+
+        var result = DocumentCompare.Compare(original, revised, Author, DateXml);
+
+        var deletedRun = result.Paragraphs
+            .SelectMany(p => p.Runs)
+            .Where(run => run.Revision == RevisionKind.Deleted && run.FootnoteId != null)
+            .Should().ContainSingle()
+            .Which;
+
+        // Before the fix, result.Footnotes never contained this original-only note at all: the reference
+        // pointed at nothing.
+        result.Footnotes.Should().ContainKey(deletedRun.FootnoteId!.Value);
+        result.Footnotes[deletedRun.FootnoteId!.Value].PlainText.Should().Be("Original explanation.");
+    }
+
+    // Sibling: when original's and revised's independent footnote numbering collide on the same raw id,
+    // the deleted-side reference must be remapped to a fresh id rather than silently resolving to
+    // revised's unrelated footnote of the same number -- and the surviving revised-side reference (already
+    // handled correctly before this fix) must keep working exactly as before.
+    [Fact]
+    public void DeletedParagraph_RemapsOriginalFootnoteIdThatCollidesWithARevisedFootnoteId()
+    {
+        var original = new TextDocument();
+        original.Blocks.Add(new Paragraph("Keep this paragraph"));
+
+        var deletedParagraph = new Paragraph();
+        deletedParagraph.Runs.Add(new Run("See removed note"));
+        deletedParagraph.Runs.Add(Run.FootnoteReference(1));
+        original.Blocks.Add(deletedParagraph);
+        original.Footnotes[1] = new Footnote(1, "Original explanation.");
+
+        var revised = new TextDocument();
+        var revisedParagraph = new Paragraph();
+        revisedParagraph.Runs.Add(new Run("Keep this paragraph"));
+        revisedParagraph.Runs.Add(Run.FootnoteReference(1));
+        revised.Blocks.Add(revisedParagraph);
+        revised.Footnotes[1] = new Footnote(1, "Revised explanation.");
+
+        var result = DocumentCompare.Compare(original, revised, Author, DateXml);
+
+        // The non-deleted (revised-side) reference must still resolve to revised's own footnote content,
+        // unaffected by the fix.
+        var survivingRun = result.Paragraphs
+            .SelectMany(p => p.Runs)
+            .Single(run => run.Revision != RevisionKind.Deleted && run.FootnoteId != null);
+        result.Footnotes[survivingRun.FootnoteId!.Value].PlainText.Should().Be("Revised explanation.");
+
+        // The deleted-side reference must have been remapped to a DIFFERENT id and resolve to original's
+        // footnote content, never revised's.
+        var deletedRun = result.Paragraphs
+            .SelectMany(p => p.Runs)
+            .Single(run => run.Revision == RevisionKind.Deleted && run.FootnoteId != null);
+        deletedRun.FootnoteId.Should().NotBe(survivingRun.FootnoteId);
+        result.Footnotes[deletedRun.FootnoteId!.Value].PlainText.Should().Be("Original explanation.");
+    }
 }

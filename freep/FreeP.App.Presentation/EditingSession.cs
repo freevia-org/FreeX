@@ -3066,6 +3066,16 @@ public sealed class EditingSession
             ChartType = chartType,
             Title     = "Chart Title",
             Legend    = LegendPosition.Bottom,
+            // Brand-new charts have no SourcePartPath, so PptxPackageWriter.SourceChartPath
+            // falls back to a purely positional "ppt/charts/chart{index}.xml" name that can
+            // collide with an unrelated pre-existing chart's real part number. Without this
+            // flag, PptxChartWriter's non-regenerate branch would merge THAT chart's
+            // <c:externalData>/workbook relationship into this new chart on save (or, for a
+            // brand-new presentation with no package snapshot at all, write no external data
+            // whatsoever) — wiring "Edit Data in Excel" to the wrong workbook, or to nothing.
+            // Forcing regeneration makes the writer always mint a fresh embedded workbook and
+            // relationship for this chart, independent of any positional collision.
+            RegenerateWorkbookOnSave = true,
         };
         if (isCombo)
             chart.SecondaryValueAxis = new ChartAxis();

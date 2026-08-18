@@ -235,8 +235,11 @@ public partial class MainWindow
         // rooted for the life of the process and re-entered UpdateViewport on torn-down state.
         CancelPendingViewportResizeRefresh();
         ClearFormulaReferenceHighlights();
-        ClearClipboardVisualState();
-        _workbookClipboardSession.Clear();
+        // R143-remediation (clip-2-regression): this window closing carries no clipboard intent
+        // toward any OTHER window, so this must only cancel a marquee/session THIS window owns --
+        // see ClearClipboardMarqueeIfOwnedByThisWindow. Without the ownership check, closing
+        // window B could silently destroy window A's still-pasteable copy.
+        ClearClipboardMarqueeIfOwnedByThisWindow();
 
         if (_validationDropdown is not null)
         {

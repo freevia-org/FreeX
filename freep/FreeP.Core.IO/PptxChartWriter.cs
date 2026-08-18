@@ -67,20 +67,35 @@ internal static class PptxChartWriter
             // replaced the entire rels document with just the one new relationship,
             // orphaning the sidecars. Merge the new relationship INTO the preserved rels
             // instead, mirroring TryRegenerateChartExWorkbook's fix for the ChartEx path.
-            var sourceChartPathForMerge = PptxPackageWriter.SourceChartPath(chart, chartIndex);
+            //
+            // This merge/preserve step must only run when the chart has its own genuine
+            // prior on-disk identity (chart.SourcePartPath set) to regenerate from. A
+            // brand-new chart (InsertChart) has no SourcePartPath, so
+            // PptxPackageWriter.SourceChartPath falls back to the purely positional
+            // "ppt/charts/chart{chartIndex}.xml" name, which can collide with an unrelated
+            // pre-existing chart that happens to land at the same index. PowerPoint
+            // discovers chartStyle/chartColorStyle parts by relationship TYPE, not by any
+            // r:id the chart XML emits, so merging that unrelated chart's sidecar
+            // relationships into this new chart's .rels would make the new chart silently
+            // wear the other chart's visual style. For a chart with no prior identity,
+            // skip the merge and write only the new workbook relationship below.
             var workbookRelId = "rIdWorkbook1";
             byte[]? mergedRelBytes = null;
-            var sourceRelsPathForMerge = OpcPathHelper.GetRelationshipPartPath(sourceChartPathForMerge);
-            if (packageSnapshot?.TryGetEntry(sourceRelsPathForMerge, out var sourceRelBytesForMerge) == true &&
-                TryMergeRegeneratedWorkbookRelationship(
-                    chartIndex,
-                    sourceChartPathForMerge,
-                    sourceRelBytesForMerge,
-                    out var mergedWorkbookRelId,
-                    out var mergedRelDocBytes))
+            if (!string.IsNullOrWhiteSpace(chart.SourcePartPath))
             {
-                workbookRelId = mergedWorkbookRelId;
-                mergedRelBytes = mergedRelDocBytes;
+                var sourceChartPathForMerge = PptxPackageWriter.SourceChartPath(chart, chartIndex);
+                var sourceRelsPathForMerge = OpcPathHelper.GetRelationshipPartPath(sourceChartPathForMerge);
+                if (packageSnapshot?.TryGetEntry(sourceRelsPathForMerge, out var sourceRelBytesForMerge) == true &&
+                    TryMergeRegeneratedWorkbookRelationship(
+                        chartIndex,
+                        sourceChartPathForMerge,
+                        sourceRelBytesForMerge,
+                        out var mergedWorkbookRelId,
+                        out var mergedRelDocBytes))
+                {
+                    workbookRelId = mergedWorkbookRelId;
+                    mergedRelBytes = mergedRelDocBytes;
+                }
             }
 
             AddExternalData(chartDoc, workbookRelId);

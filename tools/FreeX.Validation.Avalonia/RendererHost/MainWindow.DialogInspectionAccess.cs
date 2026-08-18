@@ -216,7 +216,11 @@ public sealed partial class MainWindow
         _sortDialogInspectionCallback = inspectionCallback;
         try
         {
-            return await ShowSortInputDialogAsync();
+            // R142-services-sort-customdialog-1: ShowSortInputDialogAsync now takes the range to
+            // build its column/row/color/icon choices from (resolved by the caller against the
+            // Sort Warning up front). This inspection harness captures dialog state, not the
+            // warning flow, so it builds the dialog straight from the current selection.
+            return await ShowSortInputDialogAsync(_session.SelectedRange);
         }
         finally
         {

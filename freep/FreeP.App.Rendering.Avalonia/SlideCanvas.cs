@@ -399,6 +399,7 @@ public sealed partial class SlideCanvas : Control
         var autoFitPlan = ResolveShapeAutoFitPlan(shape);
         var bounds = autoFitPlan.Bounds;
         bool hasTransform = !autoFitPlan.RenderTransform.IsIdentity;
+        bool hasTextTransform = !autoFitPlan.TextRenderTransform.IsIdentity;
 
         IDisposable? transformScope = null;
         if (hasTransform)
@@ -462,10 +463,21 @@ public sealed partial class SlideCanvas : Control
 
         autoFitGeometryScope?.Dispose();
 
+        transformScope?.Dispose();
+
+        // Draw text overlay. Text gets its own transform (rotation only, never flipH/flipV) so
+        // that flipping a shape mirrors its outline/fill but keeps the text upright, matching
+        // PowerPoint -- see ShapeTransformPlanner.PlanShapeTextRenderTransform.
         if (!suppressText && shape.Text is not null)
+        {
+            IDisposable? textTransformScope = null;
+            if (hasTextTransform)
+                textTransformScope = dc.PushTransform(ToAvaloniaMatrix(autoFitPlan.TextRenderTransform));
+
             RenderText(dc, shape.Text, bounds);
 
-        transformScope?.Dispose();
+            textTransformScope?.Dispose();
+        }
     }
 
     private static ShapeAutoFitRenderPlan ResolveShapeAutoFitPlan(DrawOp.Shape shape)
@@ -520,6 +532,59 @@ public sealed partial class SlideCanvas : Control
                 {
                     using var opacityScope = dc.PushOpacity(pass.Alpha / 255.0);
                     dc.DrawGeometry(null, new Pen(fillBrush, pass.StrokeWidthDip), softEdgeGeo);
+                }
+            }
+        }
+
+        // Reflection: mirror the shape's own fill+outline below itself, faded via an opacity
+        // mask, then flip the whole masked result about a pivot below the shape -- the same
+        // shadow/fade/flip shape as the DrawOp.Picture reflection block in RenderPicture below,
+        // just painting the shape geometry instead of the decoded bitmap.
+        //
+        // Unlike RenderPicture, PushOpacityMask's bounds here are given in the SAME local
+        // coordinate frame the geometry is actually drawn in (the shape's own un-flipped
+        // BoundsDip) rather than the post-flip destination: Avalonia's opacity-mask bounds are
+        // resolved inside the currently active transform along with the content, so a bounds
+        // rect that does not overlap the geometry's own (pre-flip) position masks it to nothing.
+        if (plan.HasReflection)
+        {
+            var reflectionGeo = AvaloniaSlideGeometryFactory.ToGeometry(shape.Geometry);
+            var reflectionFillBrush = MakeBrush(shape.Fill, shape.BoundsDip);
+            var reflectionPen = MakePen(shape.Outline);
+            if (reflectionGeo is not null && (reflectionFillBrush is not null || reflectionPen is not null))
+            {
+                var bounds = shape.BoundsDip;
+                double centerX = bounds.X + bounds.Width / 2;
+                foreach (var pass in plan.ReflectionPasses)
+                {
+                    var reflectionStops = new GradientStops
+                    {
+                        new AvGradientStop(
+                            Color.FromArgb(plan.ReflectionAlpha, 255, 255, 255), 0),
+                        new AvGradientStop(
+                            Color.FromArgb(0, 255, 255, 255),
+                            plan.ReflectionEndPos),
+                    };
+                    if (plan.ReflectionNeedsTerminalTransparentStop)
+                        reflectionStops.Add(new AvGradientStop(Color.FromArgb(0, 255, 255, 255), 1));
+                    var reflectionMask = new LinearGradientBrush
+                    {
+                        StartPoint = new RelativePoint(0.5, 0, RelativeUnit.Relative),
+                        EndPoint = new RelativePoint(0.5, 1, RelativeUnit.Relative),
+                        GradientStops = reflectionStops,
+                    };
+                    // Blur-ring offset composes as the innermost (leftmost) factor so it applies
+                    // to the geometry's own coordinates before the pivot flip, matching the WPF
+                    // sibling's nested PushTransform(scale) + PushTransform(translate) order.
+                    using var transformScope = dc.PushTransform(
+                        Matrix.CreateTranslation(pass.OffsetXDip, pass.OffsetYDip)
+                        * Matrix.CreateTranslation(-centerX, -plan.ReflectionPivotYDip)
+                        * Matrix.CreateScale(1, plan.ReflectionScaleY)
+                        * Matrix.CreateTranslation(centerX, plan.ReflectionPivotYDip));
+                    using var maskScope = dc.PushOpacityMask(
+                        reflectionMask,
+                        new Rect(bounds.X, bounds.Y, bounds.Width, bounds.Height));
+                    dc.DrawGeometry(reflectionFillBrush, reflectionPen, reflectionGeo);
                 }
             }
         }
@@ -1159,12 +1224,6 @@ public sealed partial class SlideCanvas : Control
 
     // ── Table ────────────────────────────────────────────────────────────────
 
-    private static void RenderTable(DrawingContext dc, DrawOp.Table tableOp)
-    {
-        foreach (var cell in tableOp.Cells)
-            RenderTableCell(dc, cell);
-    }
-
     private static void RenderTableWithTransform(DrawingContext dc, DrawOp.Table tableOp)
     {
         var transform = ShapeTransformPlanner.PlanShapeTransform(
@@ -1172,17 +1231,53 @@ public sealed partial class SlideCanvas : Control
             tableOp.RotationDeg,
             tableOp.FlipH,
             tableOp.FlipV);
+
         if (!transform.IsIdentity)
         {
-            using var transformScope = dc.PushTransform(ToAvaloniaMatrix(transform));
-            RenderTable(dc, tableOp);
-            return;
+            using (dc.PushTransform(ToAvaloniaMatrix(transform)))
+            {
+                foreach (var cell in tableOp.Cells)
+                    RenderTableCellGeometry(dc, cell);
+            }
+        }
+        else
+        {
+            foreach (var cell in tableOp.Cells)
+                RenderTableCellGeometry(dc, cell);
         }
 
-        RenderTable(dc, tableOp);
+        // Text overlay. Text gets its own transform (rotation only, never flipH/flipV) so
+        // that flipping a table mirrors its cell fills/borders but keeps the cell text
+        // upright, matching PowerPoint and the shape-render fix -- see
+        // ShapeTransformPlanner.PlanShapeTextRenderTransform.
+        var textTransform = ShapeTransformPlanner.PlanShapeTransform(
+            tableOp.BoundsDip,
+            tableOp.RotationDeg,
+            flipH: false,
+            flipV: false);
+
+        IDisposable? textTransformScope = null;
+        if (!textTransform.IsIdentity)
+            textTransformScope = dc.PushTransform(ToAvaloniaMatrix(textTransform));
+
+        foreach (var cell in tableOp.Cells)
+        {
+            if (cell.Text is not null)
+            {
+                // See the WPF SlideCanvas twin for the full rationale: flipping the table
+                // swaps cell positions, so the text box is pre-mirrored to land where the
+                // flipped cell now sits, while the glyphs themselves stay upright under the
+                // rotation-only transform above.
+                var flippedBounds = ShapeTransformPlanner.FlipTableCellBounds(
+                    cell.BoundsDip, tableOp.BoundsDip, tableOp.FlipH, tableOp.FlipV);
+                RenderTableCellText(dc, cell.Text, flippedBounds, cell.Anchor);
+            }
+        }
+
+        textTransformScope?.Dispose();
     }
 
-    private static void RenderTableCell(DrawingContext dc, TableCellOp cell)
+    private static void RenderTableCellGeometry(DrawingContext dc, TableCellOp cell)
     {
         var rect = new Rect(cell.BoundsDip.X, cell.BoundsDip.Y, cell.BoundsDip.Width, cell.BoundsDip.Height);
 
@@ -1202,9 +1297,6 @@ public sealed partial class SlideCanvas : Control
             new Point(rect.Left, rect.Top), new Point(rect.Right, rect.Bottom));
         DrawCellBorder(dc, cell.BorderDiagonalUp,
             new Point(rect.Left, rect.Bottom), new Point(rect.Right, rect.Top));
-
-        if (cell.Text is not null)
-            RenderTableCellText(dc, cell.Text, cell.BoundsDip, cell.Anchor);
     }
 
     private static void DrawCellBorder(DrawingContext dc, ResolvedOutline outline, Point p1, Point p2)

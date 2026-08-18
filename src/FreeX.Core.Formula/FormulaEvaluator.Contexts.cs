@@ -117,12 +117,31 @@ internal static class ExternalSheetReferenceResolver
     /// recomputes its local half live instead of failing to parse at all, whether TaxRate is a
     /// cell reference or a plain constant.
     /// Returns <see langword="false"/> when <paramref name="name"/> isn't this shape, the external
-    /// index is out of range, or no defined name in that link matches (case-insensitively; a
-    /// workbook-scoped candidate -- <see cref="ExternalDefinedNameModel.SheetId"/> null -- is
-    /// preferred over a sheet-scoped one of the same name, matching Excel's own preference for the
-    /// workbook-global definition when a bare, unscoped reference could mean either).
+    /// index is out of range, or no defined name in that link matches. Candidate precedence
+    /// (case-insensitive name match) depends on <paramref name="preferredSheetId"/>:
+    /// <list type="bullet">
+    /// <item>When <see langword="null"/> (the ordinary sheet-LESS <c>[n]!Name</c> shape, which
+    /// names no sheet at all) a workbook-scoped candidate -- <see cref="ExternalDefinedNameModel.SheetId"/>
+    /// null -- is preferred over a sheet-scoped one of the same name, matching Excel's own
+    /// preference for the workbook-global definition when a bare, unscoped reference could mean
+    /// either.</item>
+    /// <item>When set (the caller resolved an explicit sheet qualifier, e.g. <c>[1]Sheet2!Total</c>
+    /// via <see cref="TryResolve"/>) a candidate scoped to exactly that sheet always wins --
+    /// mirroring the local-name precedence <c>FormulaEvaluator.TryResolveSheetQualifiedName</c>
+    /// uses (sheet-scoped tier before workbook-global) -- falling back to the workbook-global
+    /// candidate only when no candidate is scoped to that sheet, and NEVER falling back to a
+    /// candidate scoped to some other sheet: the qualifier named a specific sheet, so a same-named
+    /// definition on a different external sheet is not an acceptable match (R143-extlink-2 fix --
+    /// previously this overload had no way to know which sheet was asked for at all, so two
+    /// external sheets defining the identical name silently resolved to whichever came first in
+    /// <see cref="ExternalLinkModel.DefinedNames"/> file order, regardless of the qualifier).</item>
+    /// </list>
     /// </summary>
-    public static bool TryResolveExternalDefinedName(Workbook? workbook, string name, out string formulaText)
+    public static bool TryResolveExternalDefinedName(Workbook? workbook, string name, out string formulaText) =>
+        TryResolveExternalDefinedName(workbook, name, preferredSheetId: null, out formulaText);
+
+    /// <inheritdoc cref="TryResolveExternalDefinedName(Workbook?, string, out string)"/>
+    public static bool TryResolveExternalDefinedName(Workbook? workbook, string name, int? preferredSheetId, out string formulaText)
     {
         formulaText = "";
         if (workbook is null || !TrySplitExternalDefinedNameReference(name, out var externalIndex, out var definedName))
@@ -133,10 +152,29 @@ internal static class ExternalSheetReferenceResolver
 
         var link = workbook.ExternalLinks[externalIndex - 1];
         ExternalDefinedNameModel? match = null;
+        ExternalDefinedNameModel? globalMatch = null;
         foreach (var candidate in link.DefinedNames)
         {
             if (!string.Equals(candidate.Name, definedName, StringComparison.OrdinalIgnoreCase))
                 continue;
+
+            if (preferredSheetId is { } wantedSheetId)
+            {
+                if (candidate.SheetId == wantedSheetId)
+                {
+                    match = candidate;
+                    break;
+                }
+
+                if (candidate.SheetId is null)
+                {
+                    globalMatch ??= candidate;
+                }
+
+                // A candidate scoped to a DIFFERENT sheet than the one the qualifier named is
+                // never an acceptable match here, unlike the unqualified path below.
+                continue;
+            }
 
             if (candidate.SheetId is null)
             {
@@ -146,6 +184,8 @@ internal static class ExternalSheetReferenceResolver
 
             match ??= candidate;
         }
+
+        match ??= globalMatch;
 
         if (match?.RefersTo is not { Length: > 0 } refersTo)
         {

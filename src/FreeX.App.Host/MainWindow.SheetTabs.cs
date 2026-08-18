@@ -1938,7 +1938,7 @@ public partial class MainWindow
     private void ColorSheetTabs(SheetId sheetId, IReadOnlyCollection<SheetId> sheetIds)
     {
         var sheet = _workbook.GetSheet(sheetId);
-        if (!TryShowColorPicker("Tab Color", sheet?.TabColor ?? new CellColor(15, 109, 140), allowNoColor: true, out var tabColor))
+        if (!TryShowColorPicker("Tab Color", sheet?.TabColor ?? new CellColor(15, 109, 140), allowNoColor: true, out var tabColor, out _))
             return;
 
         SynchronizeWorkbookSessionSelection();

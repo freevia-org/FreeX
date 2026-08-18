@@ -86,6 +86,7 @@ public static class SlideCloner
             IsHidden       = shape.IsHidden,
             Kind           = shape.Kind,
             AutoShapeKind  = shape.AutoShapeKind,
+            UnmodeledPresetGeometry = shape.UnmodeledPresetGeometry,  // string is immutable
             OffsetXEmu     = shape.OffsetXEmu,
             OffsetYEmu     = shape.OffsetYEmu,
             ExtentCxEmu    = shape.ExtentCxEmu,

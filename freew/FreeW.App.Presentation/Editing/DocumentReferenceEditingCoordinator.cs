@@ -474,7 +474,7 @@ public sealed class DocumentReferenceEditingCoordinator
         Func<int, TableParagraphAddress?, string?>? pageTextResolver)
     {
         var normalizedLabel = Captions.NormalizeLabelText(labelText);
-        TableOfFigures.EnsureStyles(_session.Document);
+        TableOfFigures.EnsureStyles(_session.Document, normalizedLabel);
         var paragraphs = TableOfFigures.BuildWithTableAddresses(
             _session.Document,
             normalizedLabel,
@@ -493,8 +493,9 @@ public sealed class DocumentReferenceEditingCoordinator
         Func<int, TableParagraphAddress?, string?>? pageTextResolver)
     {
         var normalizedLabel = Captions.NormalizeLabelText(labelText);
-        TableOfFigures.EnsureStyles(_session.Document);
-        var deleteIndices = GeneratedRegionIndices(TableOfFigures.IsTableOfFiguresParagraph);
+        TableOfFigures.EnsureStyles(_session.Document, normalizedLabel);
+        var deleteIndices = GeneratedRegionIndices(
+            block => TableOfFigures.IsTableOfFiguresParagraph(block, normalizedLabel));
         var insertIndex = deleteIndices.Count > 0
             ? deleteIndices[0]
             : _session.Document.Blocks.Count;
@@ -1169,7 +1170,7 @@ public sealed class DocumentReferenceEditingCoordinator
         if (document.Blocks.Any(TableOfFigures.IsTableOfFiguresParagraph))
         {
             var labelText = TableOfFigures.ExistingLabelText(document) ?? Captions.FigureLabelText;
-            TableOfFigures.EnsureStyles(document);
+            TableOfFigures.EnsureStyles(document, labelText);
             var paragraphs = figurePageTextResolverFactory is null
                 ? TableOfFigures.Build(
                     document,
@@ -1180,7 +1181,7 @@ public sealed class DocumentReferenceEditingCoordinator
                     labelText,
                     figurePageTextResolverFactory());
             if (RefreshGeneratedRegion(
-                    TableOfFigures.IsTableOfFiguresParagraph,
+                    block => TableOfFigures.IsTableOfFiguresParagraph(block, labelText),
                     document.Blocks.Count,
                     paragraphs,
                     "Update Table of Figures").Applied)

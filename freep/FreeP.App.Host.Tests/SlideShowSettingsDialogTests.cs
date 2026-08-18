@@ -77,6 +77,56 @@ public sealed class SlideShowSettingsDialogTests
         act.Should().Throw<ArgumentNullException>();
     }
 
+    // r143 F2 (freep-slideshow-presenter): "Browsed at a kiosk" must force
+    // loop-until-stopped the way PowerPoint does, so an unattended kiosk show never
+    // ends and exposes the editor -- even if the user leaves the independent "Loop
+    // until stopped" checkbox unchecked.
+    [StaFact]
+    public void SetupDialog_KioskShowType_ForcesLoopUntilStoppedEvenWhenCheckboxUnchecked()
+    {
+        var editor = MakeSession();
+        var dialog = new SlideShowSettingsDialog(editor);
+
+        dialog.ApplyForTests(
+            useSlideTimings: true,
+            showWithAnimation: true,
+            loopUntilStopped: false,
+            showType: PresentationShowType.BrowsedAtKiosk).Should().BeTrue();
+
+        editor.Presentation.ShowType.Should().Be(PresentationShowType.BrowsedAtKiosk);
+        editor.Presentation.LoopUntilStopped.Should().BeTrue(
+            "PowerPoint always loops a kiosk show until 'Esc', regardless of the loop checkbox");
+        dialog.LastCommitPlan!.Settings.LoopUntilStopped.Should().BeTrue();
+
+        // The live loop checkbox itself must reflect and lock the forced state: it
+        // shows checked, and the user cannot uncheck it while kiosk is selected.
+        var loopCheck = GetField<CheckBox>(dialog, "_loopCheck");
+        loopCheck.IsChecked.Should().BeTrue();
+        loopCheck.IsEnabled.Should().BeFalse("the user cannot turn looping off in kiosk mode");
+    }
+
+    // Sibling test: non-kiosk show types must NOT be force-looped -- the checkbox
+    // keeps working normally for "Presented by a speaker" / "Browsed by an individual".
+    [StaFact]
+    public void SetupDialog_NonKioskShowType_LeavesLoopUntilStoppedUntouched()
+    {
+        var editor = MakeSession();
+        var dialog = new SlideShowSettingsDialog(editor);
+
+        dialog.ApplyForTests(
+            useSlideTimings: true,
+            showWithAnimation: true,
+            loopUntilStopped: false,
+            showType: PresentationShowType.BrowsedByIndividual).Should().BeTrue();
+
+        editor.Presentation.ShowType.Should().Be(PresentationShowType.BrowsedByIndividual);
+        editor.Presentation.LoopUntilStopped.Should().BeFalse();
+        dialog.LastCommitPlan!.Settings.LoopUntilStopped.Should().BeFalse();
+
+        var loopCheck = GetField<CheckBox>(dialog, "_loopCheck");
+        loopCheck.IsEnabled.Should().BeTrue("the loop checkbox stays user-editable outside kiosk mode");
+    }
+
     private static EditingSession MakeSession()
     {
         var presentation = Presentation.CreateEmpty();

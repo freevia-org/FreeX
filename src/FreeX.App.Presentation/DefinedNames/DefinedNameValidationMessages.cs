@@ -55,6 +55,11 @@ public static class DefinedNameValidationMessages
             new ResourceTextDescriptor(
                 "InsertLoc_NameErrorReserved",
                 "That name is reserved.")),
+        DefinedNameError.ReservedPrefix => new(
+            error,
+            new ResourceTextDescriptor(
+                "InsertLoc_NameErrorReserved",
+                "That name is reserved.")),
         DefinedNameError.Duplicate => new(
             error,
             new ResourceTextDescriptor(

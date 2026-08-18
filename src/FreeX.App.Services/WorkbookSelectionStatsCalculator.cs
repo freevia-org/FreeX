@@ -7,26 +7,41 @@ public static class WorkbookSelectionStatsCalculator
     private static readonly WorkbookSelectionStats EmptyStats = new(0, 0, 0, null, null, null);
     private const int ColumnKeyBits = 15;
 
-    public static WorkbookSelectionStats Calculate(Sheet sheet, GridRange range)
+    public static WorkbookSelectionStats Calculate(Sheet sheet, GridRange range) =>
+        CalculateWithErrorPosition(sheet, range).Stats;
+
+    /// <summary>
+    /// Same as <see cref="Calculate(Sheet, GridRange)"/>, but also reports the (row, col) of the
+    /// aggregate error cell (the first error encountered in row-major scan order), so a caller
+    /// that later needs to merge this result with another region's stats (see
+    /// <see cref="CombineWithErrorPosition"/>) can pick the truly-first error across both regions
+    /// instead of assuming one region unconditionally precedes the other.
+    /// </summary>
+    internal static (WorkbookSelectionStats Stats, uint? ErrorRow, uint? ErrorCol) CalculateWithErrorPosition(
+        Sheet sheet, GridRange range)
     {
         ArgumentNullException.ThrowIfNull(sheet);
 
         if (range.Start == range.End)
         {
             if (!IsVisibleCell(sheet, range.Start.Row))
-                return EmptyStats;
+                return (EmptyStats, null, null);
 
-            return CalculateSingleCell(sheet.GetValue(range.Start.Row, range.Start.Col));
+            var singleStats = CalculateSingleCell(sheet.GetValue(range.Start.Row, range.Start.Col));
+            return singleStats.AggregateErrorCode is null
+                ? (singleStats, null, null)
+                : (singleStats, range.Start.Row, range.Start.Col);
         }
 
         if (sheet.GetUsedRange() is not { } usedRange || !usedRange.Overlaps(range))
-            return EmptyStats;
+            return (EmptyStats, null, null);
 
         double sum = 0;
         int count = 0;
         int numericalCount = 0;
         double? min = null, max = null;
         string? aggregateError = null;
+        uint? errorRow = null, errorCol = null;
 
         var scanRange = Intersect(range, usedRange);
         long totalCells = scanRange.CellCount;
@@ -43,7 +58,7 @@ public static class WorkbookSelectionStatsCalculator
                 if (Contains(scanRange, row, col) &&
                     IsVisibleCell(sheet, row))
                 {
-                    Accumulate(sheet.GetValue(row, col), ref sum, ref count, ref numericalCount, ref min, ref max, ref aggregateError);
+                    Accumulate(sheet.GetValue(row, col), row, col, ref sum, ref count, ref numericalCount, ref min, ref max, ref aggregateError, ref errorRow, ref errorCol);
                 }
             }
         }
@@ -56,12 +71,12 @@ public static class WorkbookSelectionStatsCalculator
 
                 for (var col = scanRange.Start.Col; col <= scanRange.End.Col; col++)
                 {
-                    Accumulate(sheet.GetValue(row, col), ref sum, ref count, ref numericalCount, ref min, ref max, ref aggregateError);
+                    Accumulate(sheet.GetValue(row, col), row, col, ref sum, ref count, ref numericalCount, ref min, ref max, ref aggregateError, ref errorRow, ref errorCol);
                 }
             }
         }
 
-        return CreateStats(sum, count, numericalCount, min, max, aggregateError);
+        return (CreateStats(sum, count, numericalCount, min, max, aggregateError), errorRow, errorCol);
     }
 
     public static WorkbookSelectionStats Calculate(Sheet sheet, IReadOnlyList<GridRange> ranges)
@@ -97,6 +112,11 @@ public static class WorkbookSelectionStatsCalculator
         int numericalCount = 0;
         double? min = null, max = null;
         string? aggregateError = null;
+        // Position isn't consumed by this overload (multi-selection stats are never fed into
+        // WorkbookSelectionStatsCache's incremental single-range expansion), but Accumulate's
+        // signature always tracks it so the two scan paths stay in lockstep with the single-range
+        // overload above.
+        uint? errorRow = null, errorCol = null;
 
         if (sheet.CellCount + sheet.SpillValueCount < totalCells)
         {
@@ -109,7 +129,7 @@ public static class WorkbookSelectionStatsCalculator
                 if (ContainsAny(scanRanges, row, col) &&
                     IsVisibleCell(sheet, row))
                 {
-                    Accumulate(sheet.GetValue(row, col), ref sum, ref count, ref numericalCount, ref min, ref max, ref aggregateError);
+                    Accumulate(sheet.GetValue(row, col), row, col, ref sum, ref count, ref numericalCount, ref min, ref max, ref aggregateError, ref errorRow, ref errorCol);
                 }
             }
         }
@@ -127,7 +147,7 @@ public static class WorkbookSelectionStatsCalculator
                     for (var col = range.Start.Col; col <= range.End.Col; col++)
                     {
                         if (visited.Add(CreateAddressKey(row, col)))
-                            Accumulate(sheet.GetValue(row, col), ref sum, ref count, ref numericalCount, ref min, ref max, ref aggregateError);
+                            Accumulate(sheet.GetValue(row, col), row, col, ref sum, ref count, ref numericalCount, ref min, ref max, ref aggregateError, ref errorRow, ref errorCol);
                     }
                 }
             }
@@ -145,6 +165,70 @@ public static class WorkbookSelectionStatsCalculator
         var max = Max(left.Max, right.Max);
         var aggregateError = left.AggregateErrorCode ?? right.AggregateErrorCode;
         return CreateStats(sum, count, numericalCount, min, max, aggregateError);
+    }
+
+    /// <summary>
+    /// Combines two regions' stats the same way <see cref="Combine"/> does, except the aggregate
+    /// error is chosen by comparing each side's (row, col) position -- whichever side's error cell
+    /// comes first in row-major (top-to-bottom, then left-to-right) scan order wins -- instead of
+    /// unconditionally preferring <paramref name="left"/>. This is what
+    /// <see cref="WorkbookSelectionStatsCache"/> needs when it incrementally merges a
+    /// newly-revealed strip with previously-cached stats: the strip can precede, follow, or
+    /// interleave (row-band-wise) with the cached region depending on which edge of the selection
+    /// was extended, so "left wins" is only correct by coincidence, not by construction.
+    /// </summary>
+    internal static (WorkbookSelectionStats Stats, uint? ErrorRow, uint? ErrorCol) CombineWithErrorPosition(
+        (WorkbookSelectionStats Stats, uint? ErrorRow, uint? ErrorCol) left,
+        (WorkbookSelectionStats Stats, uint? ErrorRow, uint? ErrorCol) right)
+    {
+        var sum = left.Stats.Sum + right.Stats.Sum;
+        var count = left.Stats.Count + right.Stats.Count;
+        var numericalCount = left.Stats.NumericalCount + right.Stats.NumericalCount;
+        var min = Min(left.Stats.Min, right.Stats.Min);
+        var max = Max(left.Stats.Max, right.Stats.Max);
+
+        string? aggregateError;
+        uint? errorRow;
+        uint? errorCol;
+        if (left.Stats.AggregateErrorCode is null)
+        {
+            aggregateError = right.Stats.AggregateErrorCode;
+            errorRow = right.ErrorRow;
+            errorCol = right.ErrorCol;
+        }
+        else if (right.Stats.AggregateErrorCode is null)
+        {
+            aggregateError = left.Stats.AggregateErrorCode;
+            errorRow = left.ErrorRow;
+            errorCol = left.ErrorCol;
+        }
+        else if (IsEarlierOrEqualPosition(left.ErrorRow, left.ErrorCol, right.ErrorRow, right.ErrorCol))
+        {
+            aggregateError = left.Stats.AggregateErrorCode;
+            errorRow = left.ErrorRow;
+            errorCol = left.ErrorCol;
+        }
+        else
+        {
+            aggregateError = right.Stats.AggregateErrorCode;
+            errorRow = right.ErrorRow;
+            errorCol = right.ErrorCol;
+        }
+
+        return (CreateStats(sum, count, numericalCount, min, max, aggregateError), errorRow, errorCol);
+    }
+
+    // Row-major comparison: the smaller row wins; on the same row, the smaller column wins.
+    // A missing position on either side (should not happen once that side's AggregateErrorCode is
+    // non-null, but guarded defensively) keeps the left side, matching Combine's plain left-wins
+    // fallback so callers that never track positions see identical behavior.
+    private static bool IsEarlierOrEqualPosition(uint? leftRow, uint? leftCol, uint? rightRow, uint? rightCol)
+    {
+        if (leftRow is not { } lr || rightRow is not { } rr)
+            return true;
+        if (lr != rr)
+            return lr < rr;
+        return (leftCol ?? uint.MaxValue) <= (rightCol ?? uint.MaxValue);
     }
 
     private static WorkbookSelectionStats CalculateSingleCell(ScalarValue value) =>
@@ -231,12 +315,16 @@ public static class WorkbookSelectionStatsCalculator
 
     private static void Accumulate(
         ScalarValue value,
+        uint row,
+        uint col,
         ref double sum,
         ref int count,
         ref int numericalCount,
         ref double? min,
         ref double? max,
-        ref string? aggregateError)
+        ref string? aggregateError,
+        ref uint? errorRow,
+        ref uint? errorCol)
     {
         if (value is not BlankValue)
             count++;
@@ -245,9 +333,16 @@ public static class WorkbookSelectionStatsCalculator
         // selection instead of silently skipping it (matching SUM/AVERAGE/MIN/MAX's own
         // error-propagation over a plain range reference). Numerical Count still only counts
         // genuinely numeric cells below, so it is unaffected. Keep the first error encountered
-        // as the representative one, mirroring Excel's left-to-right/top-to-bottom scan order.
-        if (value is ErrorValue errorValue)
-            aggregateError ??= errorValue.Code;
+        // (and its position) as the representative one, mirroring Excel's left-to-right/
+        // top-to-bottom scan order. The position lets a caller that later merges this result with
+        // another region's stats (WorkbookSelectionStatsCache's incremental expansion) pick the
+        // truly-first error across both regions instead of assuming scan order from call order.
+        if (value is ErrorValue errorValue && aggregateError is null)
+        {
+            aggregateError = errorValue.Code;
+            errorRow = row;
+            errorCol = col;
+        }
 
         double? numericValue = value switch
         {

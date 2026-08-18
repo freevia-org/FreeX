@@ -23,13 +23,32 @@ public sealed class MultiLevelListFormat
     private readonly List<ListNumberFormat> _numberFormats =
         Enumerable.Repeat(ListNumberFormat.Decimal, LevelCount).ToList();
 
+    // Per-level DOCX w:lvlText pattern (e.g. "%1)" or "%1.%2:"), null when the level has no captured
+    // pattern of its own and falls back to the default dotted "%1." / "%1.%2." / ... outline text FreeW
+    // has always rendered (its own "Define new Multilevel list" styles, which only ever specify
+    // NumberFormats, rely on this default).
+    private readonly List<string?> _levelTexts =
+        Enumerable.Repeat((string?)null, LevelCount).ToList();
+
     public IReadOnlyList<ListNumberFormat> NumberFormats => _numberFormats;
+
+    /// <summary>
+    /// Per-level lvlText pattern captured from a DOCX abstractNum level, or null for a level that uses
+    /// the default dotted outline pattern. See <see cref="MultiLevelListMarkerState"/> for how a pattern's
+    /// %1..%9 placeholders and literal text are rendered into the on-screen marker.
+    /// </summary>
+    public IReadOnlyList<string?> LevelTexts => _levelTexts;
 
     public ListNumberFormat GetNumberFormat(int level) =>
         _numberFormats[Math.Clamp(level, 0, LevelCount - 1)];
 
     public void SetNumberFormat(int level, ListNumberFormat format) =>
         _numberFormats[Math.Clamp(level, 0, LevelCount - 1)] = format;
+
+    public string? GetLevelText(int level) => _levelTexts[Math.Clamp(level, 0, LevelCount - 1)];
+
+    public void SetLevelText(int level, string? lvlText) =>
+        _levelTexts[Math.Clamp(level, 0, LevelCount - 1)] = lvlText;
 
     public void SetNumberFormats(IEnumerable<ListNumberFormat> numberFormats)
     {
@@ -45,6 +64,27 @@ public sealed class MultiLevelListFormat
 
         for (; index < LevelCount; index++)
             _numberFormats[index] = ListNumberFormat.Decimal;
+    }
+
+    /// <summary>
+    /// Replaces the per-level lvlText patterns. A null entry (including every entry, when
+    /// <paramref name="levelTexts"/> is empty/all-null) leaves that level on the default dotted outline
+    /// pattern.
+    /// </summary>
+    public void SetLevelTexts(IEnumerable<string?> levelTexts)
+    {
+        ArgumentNullException.ThrowIfNull(levelTexts);
+
+        var index = 0;
+        foreach (var text in levelTexts)
+        {
+            if (index >= LevelCount)
+                break;
+            _levelTexts[index++] = text;
+        }
+
+        for (; index < LevelCount; index++)
+            _levelTexts[index] = null;
     }
 
     public static IReadOnlyList<ListNumberFormat> DecimalNumberFormats { get; } =
@@ -96,11 +136,12 @@ public static class MultiLevelListMarkerFormatter
 {
     public static IReadOnlyList<string> MarkerSequence(
         IEnumerable<int> levels,
-        IReadOnlyList<ListNumberFormat>? numberFormats = null)
+        IReadOnlyList<ListNumberFormat>? numberFormats = null,
+        IReadOnlyList<string?>? levelTexts = null)
     {
         ArgumentNullException.ThrowIfNull(levels);
 
-        var state = new MultiLevelListMarkerState(numberFormats);
+        var state = new MultiLevelListMarkerState(numberFormats, levelTexts);
         var markers = new List<string>();
         foreach (var level in levels)
             markers.Add(state.Advance(level));
@@ -181,11 +222,15 @@ public static class MultiLevelListMarkerFormatter
 public sealed class MultiLevelListMarkerState
 {
     private readonly IReadOnlyList<ListNumberFormat>? _numberFormats;
+    private readonly IReadOnlyList<string?>? _levelTexts;
     private readonly int[] _counters = new int[MultiLevelListFormat.LevelCount];
 
-    public MultiLevelListMarkerState(IReadOnlyList<ListNumberFormat>? numberFormats = null)
+    public MultiLevelListMarkerState(
+        IReadOnlyList<ListNumberFormat>? numberFormats = null,
+        IReadOnlyList<string?>? levelTexts = null)
     {
         _numberFormats = numberFormats;
+        _levelTexts = levelTexts;
     }
 
     public string Advance(int rawLevel, int? startAt = null)
@@ -196,16 +241,59 @@ public sealed class MultiLevelListMarkerState
         for (var deeper = level + 1; deeper < MultiLevelListFormat.LevelCount; deeper++)
             _counters[deeper] = 0;
 
+        var pattern = level < (_levelTexts?.Count ?? 0) ? _levelTexts![level] : null;
+        return pattern is not null ? FormatFromLevelText(pattern, level) : FormatDefaultDottedOutline(level);
+    }
+
+    /// <summary>
+    /// FreeW's own "Define new Multilevel list" styles (and any level whose source lvlText was not
+    /// captured) never had a real DOCX lvlText to honour -- they only ever specify a
+    /// <see cref="ListNumberFormat"/> per level -- so they keep rendering the classic accumulated
+    /// "1.", "1.1.", "1.1.1." dotted outline this class has always produced.
+    /// </summary>
+    private string FormatDefaultDottedOutline(int level)
+    {
         var builder = new System.Text.StringBuilder();
         for (var ancestor = 0; ancestor <= level; ancestor++)
+            builder.Append(FormatAncestorValue(ancestor)).Append('.');
+        return builder.ToString();
+    }
+
+    /// <summary>
+    /// Renders a captured DOCX <c>w:lvlText</c> pattern for <paramref name="level"/>: each "%N" token
+    /// (N = 1..9) is substituted with the formatted running value of ancestor level N-1 (clamped to
+    /// <paramref name="level"/> itself for a malformed pattern that references a deeper level); every
+    /// other character -- including any separator/prefix/suffix the source list actually used, e.g.
+    /// ")", ":", "Section " -- is copied through literally instead of the hardcoded "." this class used
+    /// to force onto every level.
+    /// </summary>
+    private string FormatFromLevelText(string pattern, int level)
+    {
+        var builder = new System.Text.StringBuilder(pattern.Length);
+        for (var i = 0; i < pattern.Length; i++)
         {
-            var value = _counters[ancestor] == 0 ? 1 : _counters[ancestor];
-            var format = ancestor < (_numberFormats?.Count ?? 0)
-                ? _numberFormats![ancestor]
-                : ListNumberFormat.Decimal;
-            builder.Append(MultiLevelListMarkerFormatter.FormatNumber(value, format)).Append('.');
+            var ch = pattern[i];
+            if (ch == '%' && i + 1 < pattern.Length && pattern[i + 1] is >= '1' and <= '9')
+            {
+                var placeholderLevel = Math.Clamp(pattern[i + 1] - '1', 0, level);
+                builder.Append(FormatAncestorValue(placeholderLevel));
+                i++;
+            }
+            else
+            {
+                builder.Append(ch);
+            }
         }
         return builder.ToString();
+    }
+
+    private string FormatAncestorValue(int ancestor)
+    {
+        var value = _counters[ancestor] == 0 ? 1 : _counters[ancestor];
+        var format = ancestor < (_numberFormats?.Count ?? 0)
+            ? _numberFormats![ancestor]
+            : ListNumberFormat.Decimal;
+        return MultiLevelListMarkerFormatter.FormatNumber(value, format);
     }
 
     public void Reset() => Array.Clear(_counters, 0, _counters.Length);

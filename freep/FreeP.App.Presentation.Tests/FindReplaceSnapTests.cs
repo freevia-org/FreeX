@@ -48,6 +48,22 @@ file static class Helpers
             ExtentCyEmu = extentCyEmu,
             TextBody    = MakeBody(runText),
         };
+
+    /// <summary>
+    /// Same as <see cref="MakeShape"/> but the paragraph is split into several runs (as a
+    /// real .pptx does at a formatting boundary -- e.g. one bold word mid-sentence), so
+    /// tests can exercise text that spans a run boundary.
+    /// </summary>
+    public static SlideShape MakeMultiRunShape(uint id, params string[] runTexts)
+        => new()
+        {
+            Id          = id,
+            Name        = $"S{id}",
+            Kind        = SlideShapeKind.AutoShape,
+            ExtentCxEmu = 914400,
+            ExtentCyEmu = 685800,
+            TextBody    = MakeBody(runTexts),
+        };
 }
 
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -346,6 +362,65 @@ public sealed class PresentationTextSearchTests
         results[1].CharStart.Should().Be(3);
         results[2].CharStart.Should().Be(6);
     }
+
+    // ── r142 MED regression: match spanning a run/formatting boundary ─────────
+
+    [Fact]
+    public void FindAll_QuerySpansRunBoundary_IsFound()
+    {
+        // "Quarterly Rev" (bold run) + "enue Report" (plain run) renders on the slide as the
+        // plainly visible, contiguous phrase "Quarterly Revenue Report" -- but "Revenue"
+        // straddles the run boundary ("Rev" | "enue"). Before the fix, run-by-run search made
+        // this match structurally invisible.
+        var p = Helpers.MakePresentation(1);
+        p.Slides[0].Shapes.Add(Helpers.MakeMultiRunShape(1, "Quarterly Rev", "enue Report"));
+
+        var results = PresentationTextSearch.FindAll(p, "Revenue");
+
+        results.Should().ContainSingle();
+        results[0].MatchedText.Should().Be("Revenue");
+        results[0].RunIndex.Should().Be(0);
+        results[0].CharStart.Should().Be(10);         // offset of "Rev" within run 0
+        results[0].ResolvedEndRunIndex.Should().Be(1);
+        results[0].ResolvedEndCharOffset.Should().Be(4); // "enue" is the first 4 chars of run 1
+    }
+
+    [Fact]
+    public void FindAll_QuerySpansThreeRuns_IsFound()
+    {
+        // Match starts mid-run-0, fully consumes run-1, ends mid-run-2.
+        var p = Helpers.MakePresentation(1);
+        p.Slides[0].Shapes.Add(Helpers.MakeMultiRunShape(1, "ab", "cd", "ef"));
+
+        var results = PresentationTextSearch.FindAll(p, "bcdef");
+
+        results.Should().ContainSingle();
+        results[0].MatchedText.Should().Be("bcdef");
+        results[0].RunIndex.Should().Be(0);
+        results[0].CharStart.Should().Be(1);
+        results[0].ResolvedEndRunIndex.Should().Be(2);
+        results[0].ResolvedEndCharOffset.Should().Be(2);
+    }
+
+    [Fact]
+    public void FindAll_QuerySpansRunBoundary_SiblingSingleRunMatchesStillWork()
+    {
+        // Sibling/neighbouring-behaviour check: a query that spans a run boundary AND a plain
+        // query fully contained in one run of the same paragraph must both still resolve
+        // correctly -- the boundary-spanning fix must not disturb ordinary single-run matches.
+        var p = Helpers.MakePresentation(1);
+        p.Slides[0].Shapes.Add(Helpers.MakeMultiRunShape(1, "Quarterly Rev", "enue Report"));
+
+        var spanning = PresentationTextSearch.FindAll(p, "Revenue");
+        var singleRun = PresentationTextSearch.FindAll(p, "Quarterly");
+
+        spanning.Should().ContainSingle();
+        singleRun.Should().ContainSingle();
+        singleRun[0].RunIndex.Should().Be(0);
+        singleRun[0].ResolvedEndRunIndex.Should().Be(0);
+        singleRun[0].CharStart.Should().Be(0);
+        singleRun[0].CharEnd.Should().Be(9);
+    }
 }
 
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -532,6 +607,119 @@ public sealed class FindReplaceCommandTests
         count.Should().Be(1);
         p.Slides[0].Shapes[0].TextBody!.Paragraphs[0].Runs[0].Text
             .Should().Be("Xa");
+    }
+
+    // ── r142 MED regression: replace across a run/formatting boundary ─────────
+
+    [Fact]
+    public void ReplaceOne_MatchSpansRunBoundary_ReplacesAcrossRunsAndKeepsFormattingSplit()
+    {
+        // "Quarterly Rev" (would-be-bold run 0) + "enue Report" (plain run 1). Replacing the
+        // boundary-spanning match "Revenue" -> "Sales" must NOT flatten the paragraph into one
+        // run: run 0 keeps its untouched prefix + the replacement, run 1 keeps only its
+        // untouched suffix. The two runs remain two separate Run objects (formatting-capable).
+        var p = Helpers.MakePresentation(1);
+        p.Slides[0].Shapes.Add(Helpers.MakeMultiRunShape(1, "Quarterly Rev", "enue Report"));
+        var bus  = new PresentationCommandBus(p);
+        var sess = new EditingSession(p, bus);
+
+        var match = sess.FindAll("Revenue").Should().ContainSingle().Subject;
+        sess.ReplaceOne(match, "Sales");
+
+        var runs = p.Slides[0].Shapes[0].TextBody!.Paragraphs[0].Runs;
+        runs.Should().HaveCount(2, "the two original runs must be preserved, not merged into one");
+        runs[0].Text.Should().Be("Quarterly Sales");
+        runs[1].Text.Should().Be(" Report");
+    }
+
+    [Fact]
+    public void ReplaceOne_MatchSpansRunBoundary_IsUndoable()
+    {
+        var p = Helpers.MakePresentation(1);
+        p.Slides[0].Shapes.Add(Helpers.MakeMultiRunShape(1, "Quarterly Rev", "enue Report"));
+        var bus  = new PresentationCommandBus(p);
+        var sess = new EditingSession(p, bus);
+
+        var match = sess.FindAll("Revenue").Should().ContainSingle().Subject;
+        sess.ReplaceOne(match, "Sales");
+        sess.Undo();
+
+        var runs = p.Slides[0].Shapes[0].TextBody!.Paragraphs[0].Runs;
+        runs.Should().HaveCount(2);
+        runs[0].Text.Should().Be("Quarterly Rev");
+        runs[1].Text.Should().Be("enue Report");
+    }
+
+    [Fact]
+    public void ReplaceAll_MatchSpansRunBoundary_ReplacesAndPreservesRunSplit()
+    {
+        var p = Helpers.MakePresentation(1);
+        p.Slides[0].Shapes.Add(Helpers.MakeMultiRunShape(1, "Quarterly Rev", "enue Report"));
+        var bus  = new PresentationCommandBus(p);
+        var sess = new EditingSession(p, bus);
+
+        int count = sess.ReplaceAll("Revenue", "Sales");
+
+        count.Should().Be(1);
+        var runs = p.Slides[0].Shapes[0].TextBody!.Paragraphs[0].Runs;
+        runs.Should().HaveCount(2);
+        runs[0].Text.Should().Be("Quarterly Sales");
+        runs[1].Text.Should().Be(" Report");
+    }
+
+    [Fact]
+    public void ReplaceAll_MatchSpansThreeRuns_MiddleRunFullyConsumedBecomesEmpty()
+    {
+        var p = Helpers.MakePresentation(1);
+        p.Slides[0].Shapes.Add(Helpers.MakeMultiRunShape(1, "ab", "cd", "ef"));
+        var bus  = new PresentationCommandBus(p);
+        var sess = new EditingSession(p, bus);
+
+        int count = sess.ReplaceAll("bcdef", "X");
+
+        count.Should().Be(1);
+        var runs = p.Slides[0].Shapes[0].TextBody!.Paragraphs[0].Runs;
+        runs.Should().HaveCount(3);
+        runs[0].Text.Should().Be("aX");
+        runs[1].Text.Should().Be(string.Empty);
+        runs[2].Text.Should().Be(string.Empty);
+    }
+
+    [Fact]
+    public void ReplaceAll_MatchSpansRunBoundary_IsUndoableInOneStep()
+    {
+        var p = Helpers.MakePresentation(1);
+        p.Slides[0].Shapes.Add(Helpers.MakeMultiRunShape(1, "Quarterly Rev", "enue Report"));
+        var bus  = new PresentationCommandBus(p);
+        var sess = new EditingSession(p, bus);
+
+        sess.ReplaceAll("Revenue", "Sales");
+        sess.Undo();
+
+        var runs = p.Slides[0].Shapes[0].TextBody!.Paragraphs[0].Runs;
+        runs.Should().HaveCount(2);
+        runs[0].Text.Should().Be("Quarterly Rev");
+        runs[1].Text.Should().Be("enue Report");
+    }
+
+    [Fact]
+    public void ReplaceAll_OneMatchSpansBoundary_OneMatchWithinSingleRun_BothReplacedCorrectly()
+    {
+        // Sibling/neighbouring-behaviour check within the SAME paragraph: a run-spanning match
+        // ("Revenue") and an ordinary single-run match ("Report", fully inside run 1) coexist.
+        // Both must be replaced correctly in one ReplaceAll pass.
+        var p = Helpers.MakePresentation(1);
+        p.Slides[0].Shapes.Add(Helpers.MakeMultiRunShape(1, "Quarterly Rev", "enue Report"));
+        var bus  = new PresentationCommandBus(p);
+        var sess = new EditingSession(p, bus);
+
+        int count = sess.ReplaceAll("Revenue Report", "Sales Summary");
+
+        count.Should().Be(1);
+        var runs = p.Slides[0].Shapes[0].TextBody!.Paragraphs[0].Runs;
+        runs.Should().HaveCount(2);
+        runs[0].Text.Should().Be("Quarterly Sales Summary");
+        runs[1].Text.Should().Be(string.Empty);
     }
 
     // ── NavigateTo ────────────────────────────────────────────────────────────

@@ -556,4 +556,122 @@ public class TrackChangesTests
         cell.Paragraphs.Should().ContainSingle();
         cell.Paragraphs[0].PlainText.Should().Be("Kept text");
     }
+
+    // --- Revisions living outside the body: header/footer, footnotes, endnotes ---
+    //
+    // DocxReader parses header/footer paragraphs and footnote/endnote content through the same
+    // ReadParagraph path as the body, so a tracked change can land in any of them (e.g. Word's Restrict
+    // Editing leaves a tracked deletion in a header paragraph). Before this, HasRevisions/AcceptAll/
+    // RejectAll only ever walked document.Blocks (the body) — a header/footer/footnote/endnote revision
+    // was invisible to "no revisions" checks and survived Accept All / Reject All / Document Inspector's
+    // "Remove Revisions" untouched.
+
+    [Fact]
+    public void HasRevisions_DetectsRevisionInHeaderOnly_WithNoBodyRevisions()
+    {
+        var doc = new TextDocument();
+        doc.Blocks.Add(new Paragraph("Plain body, no revisions"));
+        var headerParagraph = new Paragraph();
+        headerParagraph.Runs.Add(new Run("Confidential") { Revision = RevisionKind.Deleted, RevisionAuthor = "Alice" });
+        doc.Header = new HeaderFooter();
+        doc.Header.Paragraphs.Add(headerParagraph);
+
+        // Sibling check: the body-only walk would report false here — the bug this guards against.
+        TrackChanges.HasRevisions(doc).Should().BeTrue();
+    }
+
+    [Fact]
+    public void AcceptAll_ResolvesRevisionsInHeaderFooterFootnoteAndEndnote()
+    {
+        var doc = new TextDocument();
+        doc.Blocks.Add(new Paragraph("Plain body, no revisions"));
+
+        var headerParagraph = new Paragraph();
+        headerParagraph.Runs.Add(new Run("Kept "));
+        headerParagraph.Runs.Add(new Run("Confidential") { Revision = RevisionKind.Deleted, RevisionAuthor = "Alice" });
+        doc.Header = new HeaderFooter();
+        doc.Header.Paragraphs.Add(headerParagraph);
+
+        var footerParagraph = new Paragraph();
+        footerParagraph.Runs.Add(new Run("Draft") { Revision = RevisionKind.Inserted, RevisionAuthor = "Bob" });
+        doc.Footer = new HeaderFooter();
+        doc.Footer.Paragraphs.Add(footerParagraph);
+
+        var footnote = new Footnote(1);
+        var footnoteParagraph = new Paragraph();
+        footnoteParagraph.Runs.Add(new Run("gone") { Revision = RevisionKind.Deleted });
+        footnote.Content.Add(footnoteParagraph);
+        doc.Footnotes[1] = footnote;
+
+        var endnote = new Endnote(1);
+        var endnoteParagraph = new Paragraph();
+        endnoteParagraph.Runs.Add(new Run("kept end") { Revision = RevisionKind.Inserted });
+        endnote.Content.Add(endnoteParagraph);
+        doc.Endnotes[1] = endnote;
+
+        TrackChanges.AcceptAll(doc);
+
+        doc.Header!.Paragraphs[0].PlainText.Should().Be("Kept ");
+        doc.Header.Paragraphs[0].Runs.Should().OnlyContain(r => r.Revision == RevisionKind.None);
+        doc.Footer!.Paragraphs[0].PlainText.Should().Be("Draft");
+        doc.Footer.Paragraphs[0].Runs.Should().OnlyContain(r => r.Revision == RevisionKind.None);
+        footnote.Content[0].Runs.Should().BeEmpty();
+        endnote.Content[0].PlainText.Should().Be("kept end");
+        endnote.Content[0].Runs.Should().OnlyContain(r => r.Revision == RevisionKind.None);
+
+        // Sibling check: the unrelated body paragraph was never touched.
+        doc.Paragraphs.First().PlainText.Should().Be("Plain body, no revisions");
+        TrackChanges.HasRevisions(doc).Should().BeFalse();
+    }
+
+    [Fact]
+    public void RejectAll_ResolvesRevisionsInHeaderAndFooter()
+    {
+        var doc = new TextDocument();
+        var headerParagraph = new Paragraph();
+        headerParagraph.Runs.Add(new Run("Kept "));
+        headerParagraph.Runs.Add(new Run("Confidential") { Revision = RevisionKind.Deleted, RevisionAuthor = "Alice" });
+        doc.Header = new HeaderFooter();
+        doc.Header.Paragraphs.Add(headerParagraph);
+
+        var footerParagraph = new Paragraph();
+        footerParagraph.Runs.Add(new Run("Draft") { Revision = RevisionKind.Inserted, RevisionAuthor = "Bob" });
+        doc.Footer = new HeaderFooter();
+        doc.Footer.Paragraphs.Add(footerParagraph);
+
+        TrackChanges.RejectAll(doc);
+
+        doc.Header!.Paragraphs[0].PlainText.Should().Be("Kept Confidential");
+        doc.Header.Paragraphs[0].Runs.Should().OnlyContain(r => r.Revision == RevisionKind.None);
+        doc.Footer!.Paragraphs[0].Runs.Should().BeEmpty();
+        TrackChanges.HasRevisions(doc).Should().BeFalse();
+    }
+
+    [Fact]
+    public void AcceptAll_ResolvesRevisionsInSideBySideLayoutHeaderTable_KeepsFlatViewAliased()
+    {
+        // A minority of headers/footers preserve Word's classic side-by-side layout as a table whose cell
+        // paragraphs are ALSO the same instances flattened into HeaderFooter.Paragraphs
+        // (HeaderFooterTableParagraphMap). Resolving revisions here must keep that invariant intact.
+        var table = Table.Create(1, 2);
+        var leftParagraph = table.Rows[0].Cells[0].Paragraphs[0];
+        leftParagraph.Runs.Add(new Run("Left kept "));
+        leftParagraph.Runs.Add(new Run("Left gone") { Revision = RevisionKind.Deleted });
+        var rightParagraph = table.Rows[0].Cells[1].Paragraphs[0];
+        rightParagraph.Runs.Add(new Run("Right"));
+        var story = new HeaderFooter { Table = table };
+        story.Paragraphs.AddRange(table.Rows[0].Cells.SelectMany(cell => cell.Paragraphs));
+        var doc = new TextDocument { Header = story };
+
+        TrackChanges.HasRevisions(doc).Should().BeTrue();
+
+        TrackChanges.AcceptAll(doc);
+
+        doc.Header!.Paragraphs.Should().HaveCount(2);
+        doc.Header.Paragraphs[0].Should().BeSameAs(leftParagraph);
+        doc.Header.Paragraphs[1].Should().BeSameAs(rightParagraph);
+        leftParagraph.PlainText.Should().Be("Left kept ");
+        leftParagraph.Runs.Should().OnlyContain(r => r.Revision == RevisionKind.None);
+        TrackChanges.HasRevisions(doc).Should().BeFalse();
+    }
 }

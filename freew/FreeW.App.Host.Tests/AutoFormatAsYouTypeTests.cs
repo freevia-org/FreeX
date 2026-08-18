@@ -51,13 +51,23 @@ public sealed class AutoFormatAsYouTypeTests
     }
 
     [StaFact]
-    public void EmDash_AppliedForSpaceFlankedDoubleHyphen()
+    public void EnDash_AppliedForSpaceFlankedDoubleHyphen()
     {
         var view = NewEditor();
         view.SimulateTypeText("a -- b");
         view.CommitToModel();
 
-        view.Model.PlainText.Should().Contain("—"); // em dash
+        view.Model.PlainText.Should().Contain("–"); // en dash, matching real Word's AutoFormat
+    }
+
+    [StaFact]
+    public void EmDash_AppliedForWordHuggingDoubleHyphen()
+    {
+        var view = NewEditor();
+        view.SimulateTypeText("a--b");
+        view.CommitToModel();
+
+        view.Model.PlainText.Should().Contain("—"); // em dash, matching real Word's AutoFormat
     }
 
     [StaFact]

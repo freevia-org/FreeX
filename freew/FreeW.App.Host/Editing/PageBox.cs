@@ -93,6 +93,23 @@ internal sealed class PageBox : Border
     /// </summary>
     internal bool IsParitySyntheticPage { get; private set; }
 
+    /// <summary>
+    /// freew-cc-3: content-control lock probe wired by <see cref="PaginatedEditorPanel"/> right after
+    /// construction (see <see cref="DocumentView.TryEvaluateContentControlLock"/>). <see cref="Body"/> is
+    /// a plain, un-subclassed <see cref="RichTextBox"/> with none of <see cref="DocumentView"/>'s
+    /// lock-aware overrides, so every native editing gesture here (typing, Enter, Backspace/Delete,
+    /// Paste/Cut) is otherwise completely unaware of <see cref="ContentControlLockMode"/> even though the
+    /// same Tag-borne <c>RunMarkers</c> that gate the continuous editor are present on these runs too
+    /// (moved, not cloned -- see the class doc on Tag preservation). Returns null when a position is not
+    /// on a content-control run at all (nothing to gate); true/false for allowed/blocked otherwise. Left
+    /// null on a stray/test-constructed <see cref="PageBox"/> means every position is treated as
+    /// unlocked -- callers that need the lock enforced must wire this.
+    /// </summary>
+    internal Func<TextPointer?, bool?>? ContentControlLockProbe { get; set; }
+
+    /// <summary>True when <paramref name="position"/> sits on a content-control run the probe denies.</summary>
+    private bool IsLockedAt(TextPointer? position) => ContentControlLockProbe?.Invoke(position) == false;
+
     // ── Phase 4: in-page editable header/footer sub-editors ───────────────────────────────────────
 
     /// <summary>
@@ -303,6 +320,17 @@ internal sealed class PageBox : Border
 
         // ── Cross-page caret routing ──────────────────────────────────────────────────────────────
         Body.PreviewKeyDown += OnBodyPreviewKeyDown;
+
+        // freew-cc-3: block typed characters and native Enter/Backspace/Delete from reaching a locked
+        // content control (see ContentControlLockProbe's doc comment -- this box has none of
+        // DocumentView's lock-aware overrides on its own).
+        Body.PreviewTextInput += OnBodyPreviewTextInput;
+
+        // freew-cc-3: native Paste/Cut (keyboard Ctrl+V/Ctrl+X or any menu binding) bypasses
+        // OnBodyPreviewKeyDown/OnBodyPreviewTextInput entirely -- same reasoning as
+        // DocumentView.OnPreviewCanExecuteClipboardMutation, mirrored here for this plain RichTextBox.
+        CommandManager.AddPreviewCanExecuteHandler(Body, OnBodyPreviewCanExecuteClipboardMutation);
+        CommandManager.AddPreviewExecutedHandler(Body, OnBodyPreviewExecutedClipboardMutation);
 
         Grid.SetRow(Body, 1);
         stack.Children.Add(Body);
@@ -529,6 +557,16 @@ internal sealed class PageBox : Border
     /// </summary>
     private void OnBodyPreviewKeyDown(object sender, KeyEventArgs e)
     {
+        // freew-cc-3: block Enter/Backspace/Delete from mutating a locked content control. Typed
+        // characters are gated separately in OnBodyPreviewTextInput; navigation keys (arrows, Home/End,
+        // ...) stay unblocked below so the user can still move through and select a locked field, matching
+        // Word.
+        if (e.Key is Key.Enter or Key.Back or Key.Delete && IsLockedAt(Body.Selection.Start))
+        {
+            e.Handled = true;
+            return;
+        }
+
         bool shiftHeld = (Keyboard.Modifiers & ModifierKeys.Shift) != 0;
 
         switch (e.Key)
@@ -568,6 +606,37 @@ internal sealed class PageBox : Border
                     }
                 }
                 break;
+        }
+    }
+
+    /// <summary>freew-cc-3: block a typed character from mutating a locked content control.</summary>
+    private void OnBodyPreviewTextInput(object sender, TextCompositionEventArgs e)
+    {
+        if (IsLockedAt(Body.Selection.Start))
+            e.Handled = true;
+    }
+
+    /// <summary>
+    /// freew-cc-3: native Paste/Cut CanExecute gate, mirroring
+    /// <c>DocumentView.OnPreviewCanExecuteClipboardMutation</c> for this plain RichTextBox.
+    /// </summary>
+    private void OnBodyPreviewCanExecuteClipboardMutation(object sender, CanExecuteRoutedEventArgs e)
+    {
+        if ((ReferenceEquals(e.Command, ApplicationCommands.Paste) || ReferenceEquals(e.Command, ApplicationCommands.Cut))
+            && IsLockedAt(Body.Selection.Start))
+        {
+            e.CanExecute = false;
+            e.Handled = true;
+        }
+    }
+
+    /// <summary>Execute-boundary backstop for <see cref="OnBodyPreviewCanExecuteClipboardMutation"/>.</summary>
+    private void OnBodyPreviewExecutedClipboardMutation(object sender, ExecutedRoutedEventArgs e)
+    {
+        if ((ReferenceEquals(e.Command, ApplicationCommands.Paste) || ReferenceEquals(e.Command, ApplicationCommands.Cut))
+            && IsLockedAt(Body.Selection.Start))
+        {
+            e.Handled = true;
         }
     }
 

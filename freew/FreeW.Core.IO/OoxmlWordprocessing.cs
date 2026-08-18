@@ -68,6 +68,17 @@ internal static class Ooxml
     public const string ChartExRelType = "http://schemas.microsoft.com/office/2014/relationships/chartEx";
 
     /// <summary>
+    /// Extension-list URI for the "Mark as decorative" flag on a <c>&lt;wp:docPr&gt;</c>, used by
+    /// <c>DocxReader.ReadDecorativeFlag</c> and <c>DocxWriter.BuildDocPr</c>. The same extension URI
+    /// Excel/PowerPoint use for their identical "Alt Text -&gt; Mark as decorative" checkbox
+    /// (mirrors FreeX's <c>XlsxWorksheetDrawingPartReader.DrawingMlDecorativeExtensionUri</c>).
+    /// </summary>
+    public const string DrawingMlDecorativeExtensionUri = "{C183D7F6-B498-43B3-948B-1728B52AA6E4}";
+
+    /// <summary>The Office 2017 "decorative" extension namespace (adec), used by <see cref="DrawingMlDecorativeExtensionUri"/>.</summary>
+    public static readonly XNamespace Adec = "http://schemas.microsoft.com/office/drawing/2017/decorative";
+
+    /// <summary>
     /// The OPC content type + relationship type for a chart's embedded companion workbook (the editable-data
     /// xlsx referenced by c:externalData). The "package" relationship type is what Word's "Edit Data" follows
     /// from the chart part's own _rels to reopen the spreadsheet behind the chart.

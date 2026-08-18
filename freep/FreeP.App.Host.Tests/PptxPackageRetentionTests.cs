@@ -937,6 +937,90 @@ public sealed class PptxPackageRetentionTests
     }
 
     [Fact]
+    public void ReadWriteRead_NewChartCollidingWithStyledChartPosition_DoesNotInheritItsStyleSidecars()
+    {
+        // Reproduces the r144 remediation finding: PptxChartWriter.WriteChartPart's
+        // RegenerateWorkbookOnSave branch (the one every brand-new chart takes -
+        // EditingSession.InsertChartCore always sets RegenerateWorkbookOnSave = true) located
+        // "other relationships to preserve" via the purely positional
+        // PptxPackageWriter.SourceChartPath(chart, chartIndex) whenever chart.SourcePartPath was
+        // null, with no check that the landed-on path actually belonged to this chart. A
+        // brand-new chart that happens to land at the same chartIndex an unrelated pre-existing
+        // chart's part used to occupy would have that unrelated chart's chartStyle/
+        // chartColorStyle sidecar relationships merged into its own .rels - PowerPoint discovers
+        // those parts by relationship TYPE, not by any r:id the chart XML emits, so the new
+        // chart would silently render wearing the other chart's visual style.
+        using var source = BuildPptxWithStyledChartWorkbookAndUnrelatedPackageData();
+        var loaded = PptxPackageReader.Read(source);
+        loaded.PackageSnapshot.Should().NotBeNull();
+
+        var existingChartShape = loaded.Slides[0].Shapes.Single(shape => shape.Kind == SlideShapeKind.Chart);
+        existingChartShape.Chart!.SourcePartPath.Should().Be("ppt/charts/chart1.xml",
+            "the loaded chart must carry its own true identity forward, independent of this test's collision setup");
+
+        // Insert a brand-new chart on a NEW first slide so it is the first chart encountered
+        // during save (chartIndex 1), pushing the pre-existing styled chart (which keeps its own
+        // real SourcePartPath and is unaffected by the reshuffle) to chartIndex 2. The new
+        // chart mirrors EditingSession.InsertChartCore's production defaults for a fresh chart:
+        // no SourcePartPath, RegenerateWorkbookOnSave = true.
+        var newChart = new ChartShape
+        {
+            ChartType = ChartType.ColumnClustered,
+            Title = "Chart Title",
+            Legend = LegendPosition.Bottom,
+            RegenerateWorkbookOnSave = true,
+        };
+        newChart.Categories.AddRange(["New Cat 1", "New Cat 2"]);
+        var newSeries = new ChartSeries { Name = "New Series" };
+        newSeries.Values.AddRange([1, 2]);
+        newChart.Series.Add(newSeries);
+        newChart.SourcePartPath.Should().BeNull("a freshly inserted chart has no prior on-disk identity");
+
+        var newSlide = new Slide();
+        newSlide.Shapes.Add(new SlideShape
+        {
+            Id = 202,
+            Name = "Newly inserted chart",
+            Kind = SlideShapeKind.Chart,
+            OffsetXEmu = 914400,
+            OffsetYEmu = 914400,
+            ExtentCxEmu = 3657600,
+            ExtentCyEmu = 2743200,
+            Chart = newChart,
+        });
+        loaded.Slides.Insert(0, newSlide);
+
+        using var saved = new MemoryStream();
+        PptxPackageWriter.Write(loaded, saved);
+        using var archive = new ZipArchive(new MemoryStream(saved.ToArray()), ZipArchiveMode.Read);
+
+        // The new chart must land at chart1.xml (chartIndex 1, the position collision).
+        archive.GetEntry("ppt/charts/chart1.xml").Should().NotBeNull();
+        var newChartRels = LoadXml(archive, "ppt/charts/_rels/chart1.xml.rels");
+        var relationshipTypes = newChartRels.Root!
+            .Elements(RelsNs + "Relationship")
+            .Select(rel => rel.Attribute("Type")?.Value)
+            .ToArray();
+
+        relationshipTypes.Should().NotContain(ChartStyleRelType,
+            "the new chart must not inherit the unrelated chart's chartStyle sidecar merely because it landed at the same positional part path");
+        relationshipTypes.Should().NotContain(ChartColorStyleRelType,
+            "the new chart must not inherit the unrelated chart's chartColorStyle sidecar merely because it landed at the same positional part path");
+
+        // The new chart must still get its own freshly regenerated embedded workbook.
+        Relationship(newChartRels, PackageRelType, "../embeddings/chartWorkbook1.xlsx").Should().NotBeNull(
+            "the new chart must still get a freshly regenerated embedded workbook relationship");
+
+        // The pre-existing styled chart, now at chartIndex 2, must keep its own sidecars intact -
+        // this fix must not regress the chart that legitimately owns them.
+        var existingChartRels = LoadXml(archive, "ppt/charts/_rels/chart2.xml.rels");
+        Relationship(existingChartRels, ChartStyleRelType, "style1.xml").Should().NotBeNull(
+            "the pre-existing chart's own style sidecar relationship must survive the reshuffle");
+        Relationship(existingChartRels, ChartColorStyleRelType, "colors1.xml").Should().NotBeNull(
+            "the pre-existing chart's own color-style sidecar relationship must survive the reshuffle");
+    }
+
+    [Fact]
     public void ReadWriteRead_ChartWorkbookOnlyNoStyleSidecars_StillPreservedAfterUnrelatedEdit()
     {
         // Sibling no-regression test: a chart that has ONLY an embedded-workbook relationship
@@ -961,6 +1045,108 @@ public sealed class PptxPackageRetentionTests
         Relationship(chartRels, PackageRelType, "../embeddings/sourceWorkbook.xlsx").Should().NotBeNull();
         // No style/color relationships existed in the source, so none should be invented.
         chartRels.Root!.Elements(RelsNs + "Relationship").Should().ContainSingle();
+    }
+
+    [Fact]
+    public void InsertChart_PositionallyCollidesWithAnExistingChartsPartNumber_GetsItsOwnRegeneratedWorkbook()
+    {
+        // Reproduces the confirmed finding: EditingSession.InsertChart (the real production
+        // "Insert > Chart" call site) never set RegenerateWorkbookOnSave on the brand-new
+        // ChartShape it built. A new chart has no SourcePartPath, so on save
+        // PptxPackageWriter.SourceChartPath falls back to a purely positional
+        // "ppt/charts/chart{index}.xml" name. Inserting the new chart on a slide that is
+        // written BEFORE an existing chart's slide makes the new chart claim chartIndex=1 -
+        // exactly the pre-existing chart's own original part number - and, without the flag,
+        // PptxChartWriter's non-regenerate branch would merge THAT unrelated chart's
+        // <c:externalData>/workbook relationship onto the new chart, wiring its "Edit Data in
+        // Excel" command to somebody else's workbook instead of writing its own.
+        using var source = BuildPptxWithChartWorkbookAndUnrelatedPackageData();
+        var loaded = PptxPackageReader.Read(source);
+        loaded.PackageSnapshot.Should().NotBeNull();
+        var existingChartShape = loaded.Slides[0].Shapes.Single(shape => shape.Kind == SlideShapeKind.Chart);
+        existingChartShape.Chart!.SourcePartPath.Should().Be("ppt/charts/chart1.xml");
+        existingChartShape.Chart.RegenerateWorkbookOnSave.Should().BeFalse();
+
+        // Insert a fresh slide BEFORE the one carrying the existing chart, so the new chart
+        // (positionally first) claims chartIndex=1 on save - the same number as the existing
+        // chart's real, original part.
+        loaded.Slides.Insert(0, new Slide());
+        var bus = new PresentationCommandBus(loaded);
+        var session = new FreeP.App.Compositor.EditingSession(loaded, bus);
+        session.SelectSlide(0);
+        var newChartShape = session.InsertChart();
+        newChartShape.Chart.Should().NotBeNull();
+
+        // This is the production call site under test: EditingSession.InsertChartCore (via
+        // InsertChart) must mark the newly created chart for workbook regeneration.
+        newChartShape.Chart!.RegenerateWorkbookOnSave.Should().BeTrue(
+            "a brand-new chart has no preserved package data of its own to merge on save");
+
+        using var saved = new MemoryStream();
+        PptxPackageWriter.Write(loaded, saved);
+        using var archive = new ZipArchive(new MemoryStream(saved.ToArray()), ZipArchiveMode.Read);
+
+        // The new chart was written first (slide 0) and so occupies "chart1.xml" - the same
+        // positional name the existing chart originally had.
+        var newChartXml = LoadXml(archive, "ppt/charts/chart1.xml");
+        var newChartExternalData = newChartXml.Root!.Element(ChartNs + "externalData");
+        newChartExternalData.Should().NotBeNull("the new chart must still get its own Edit-Data wiring");
+        var newChartRelId = newChartExternalData!.Attribute(RelsDocNs + "id")!.Value;
+
+        var newChartRels = LoadXml(archive, "ppt/charts/_rels/chart1.xml.rels");
+        var newChartWorkbookRelationship = newChartRels.Root!.Elements(RelsNs + "Relationship")
+            .FirstOrDefault(r => r.Attribute("Id")?.Value == newChartRelId);
+        newChartWorkbookRelationship.Should().NotBeNull();
+        var newChartWorkbookTarget = newChartWorkbookRelationship!.Attribute("Target")!.Value;
+
+        // Must NOT be wired to the pre-existing chart's stale embedded workbook.
+        newChartWorkbookTarget.Should().NotBe("../embeddings/sourceWorkbook.xlsx",
+            "the new chart must get its own freshly regenerated workbook, not the unrelated " +
+            "chart's original one via the colliding positional part name");
+
+        var newChartWorkbookPath = "ppt/" + newChartWorkbookTarget.Replace("../", "");
+        var newChartWorkbookEntry = archive.GetEntry(newChartWorkbookPath);
+        newChartWorkbookEntry.Should().NotBeNull("the new chart's regenerated workbook must actually be written");
+        using (var workbookStream = newChartWorkbookEntry!.Open())
+        using (var reader = new StreamReader(workbookStream))
+        {
+            reader.ReadToEnd().Should().NotContain("stale workbook bytes",
+                "the new chart's workbook must be freshly generated, not a copy of the unrelated chart's data");
+        }
+    }
+
+    [Fact]
+    public void InsertChart_PositionallyCollidesWithAnExistingChartsPartNumber_ExistingChartKeepsItsOwnWorkbook()
+    {
+        // Sibling no-regression test for the fix above: the pre-existing chart that the new
+        // chart's part-number collides with must be completely unaffected - it keeps
+        // preserving its own original embedded workbook by SourcePartPath, regardless of
+        // where in the slide order (and therefore under what new positional chartN.xml name)
+        // it gets re-written.
+        using var source = BuildPptxWithChartWorkbookAndUnrelatedPackageData();
+        var loaded = PptxPackageReader.Read(source);
+        var existingChartShape = loaded.Slides[0].Shapes.Single(shape => shape.Kind == SlideShapeKind.Chart);
+
+        loaded.Slides.Insert(0, new Slide());
+        var bus = new PresentationCommandBus(loaded);
+        var session = new FreeP.App.Compositor.EditingSession(loaded, bus);
+        session.SelectSlide(0);
+        session.InsertChart();
+
+        // The existing chart is now on slide index 1 and will be written under the new
+        // positional name "chart2.xml" - but its SourcePartPath still says "chart1.xml", so
+        // it must still find and preserve its own original workbook relationship.
+        existingChartShape.Chart!.RegenerateWorkbookOnSave.Should().BeFalse();
+
+        using var saved = new MemoryStream();
+        PptxPackageWriter.Write(loaded, saved);
+        using var archive = new ZipArchive(new MemoryStream(saved.ToArray()), ZipArchiveMode.Read);
+
+        archive.GetEntry("ppt/embeddings/sourceWorkbook.xlsx").Should().NotBeNull(
+            "the pre-existing chart's own original workbook must still be carried forward");
+        var existingChartRels = LoadXml(archive, "ppt/charts/_rels/chart2.xml.rels");
+        Relationship(existingChartRels, PackageRelType, "../embeddings/sourceWorkbook.xlsx").Should().NotBeNull(
+            "the pre-existing chart must still be wired to its own original embedded workbook");
     }
 
     [Fact]

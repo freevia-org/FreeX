@@ -79,7 +79,7 @@ internal static class DuplicateSheetDrawingCloner
             copy.Sparklines.Add(CloneSparkline(sparkline, source.Id, copyId));
 
         foreach (var control in source.FormControls)
-            copy.FormControls.Add(CloneFormControl(control, copyId));
+            copy.FormControls.Add(CloneFormControl(control, copyId, source.Name, copy.Name));
     }
 
     /// <summary>
@@ -370,7 +370,8 @@ internal static class DuplicateSheetDrawingCloner
             : hyperlink with { Target = rewritten };
     }
 
-    private static FormControlModel CloneFormControl(FormControlModel control, SheetId copyId) =>
+    private static FormControlModel CloneFormControl(
+        FormControlModel control, SheetId copyId, string sourceSheetName, string copySheetName) =>
         new()
         {
             Kind = control.Kind,
@@ -379,14 +380,18 @@ internal static class DuplicateSheetDrawingCloner
             ShapeId = control.ShapeId,
             Anchor = RemapRange(control.Anchor, copyId),
             AnchorOffsets = control.AnchorOffsets,
-            // LinkedCell/ListFillRange are copied verbatim (not sheet-rewritten), mirroring how
-            // Sheet.Clone leaves cell formulas unrewritten (DuplicateSheetCommand's named-range
-            // copy): an unqualified reference (the common case, e.g. "$D$3") implicitly means
-            // "this control's own hosting sheet" — see RowColumnShiftHelpers.ShiftFormControlRef —
-            // so copying it verbatim onto the duplicate correctly follows the control to the copy,
-            // matching Excel's Duplicate Sheet behavior for linked form controls.
-            LinkedCell = control.LinkedCell,
-            ListFillRange = control.ListFillRange,
+            // R144-worksheet-lifecycle-F1: an UNQUALIFIED reference (the common case, e.g. "$D$3")
+            // implicitly means "this control's own hosting sheet" — see
+            // RowColumnShiftHelpers.ShiftFormControlRef — so copying it verbatim onto the duplicate
+            // correctly follows the control to the copy, matching Excel's Duplicate Sheet behavior
+            // for linked form controls. But a reference explicitly SHEET-QUALIFIED with the SOURCE
+            // sheet's own name (e.g. "Sheet1!$A$1:$A$3" on a control hosted on Sheet1 itself) must
+            // be rebased onto the copy sheet too, exactly like every other same-sheet-qualified
+            // reference kind on this path (cell formulas, CF/DV formulas, cell hyperlinks, and
+            // drawing-object "Place in This Document" hyperlinks via RewriteSameSheetHyperlinkTarget
+            // above) — otherwise the copy's control keeps reading/writing the ORIGINAL sheet's cells.
+            LinkedCell = RewriteSameSheetFormControlRef(control.LinkedCell, sourceSheetName, copySheetName),
+            ListFillRange = RewriteSameSheetFormControlRef(control.ListFillRange, sourceSheetName, copySheetName),
             IsChecked = control.IsChecked,
             Value = control.Value,
             Min = control.Min,
@@ -396,6 +401,56 @@ internal static class DuplicateSheetDrawingCloner
             SelectedIndex = control.SelectedIndex,
             SelectedText = control.SelectedText
         };
+
+    /// <summary>
+    /// R144-worksheet-lifecycle-F1: rewrites a form control's <see cref="FormControlModel.LinkedCell"/>/
+    /// <see cref="FormControlModel.ListFillRange"/> reference so a qualifier that names the SOURCE
+    /// sheet (the sheet being duplicated) instead names the DUPLICATE sheet, mirroring
+    /// <see cref="RewriteSameSheetHyperlinkTarget"/>'s identical same-sheet rebase for drawing-object
+    /// hyperlinks. An unqualified/bare token (no "Sheet1!" prefix at all) is left untouched — per
+    /// <c>RowColumnShiftHelpers.ShiftFormControlRef</c>'s own doc comment, a bare reference always
+    /// means "this control's own hosting sheet", and copying the control onto the duplicate already
+    /// makes it follow the copy correctly with no rewrite needed. A reference qualified with some
+    /// OTHER sheet's name (e.g. a control on Sheet1 linked to "Data!$A$1") is also left untouched:
+    /// only Excel's Duplicate Sheet convention of "same-sheet references travel with the copy"
+    /// applies here, matching <see cref="CloneChart"/>'s DataRange guard and
+    /// <see cref="CloneSparkline"/>'s DataRange guard above.
+    /// </summary>
+    private static string? RewriteSameSheetFormControlRef(
+        string? reference, string sourceSheetName, string copySheetName)
+    {
+        if (string.IsNullOrWhiteSpace(reference) ||
+            string.Equals(sourceSheetName, copySheetName, StringComparison.Ordinal))
+        {
+            return reference;
+        }
+
+        // Strip (and later restore) a leading '=' -- form control refs are normally stored bare
+        // (e.g. "Sheet1!$A$1:$A$3"), but defensively mirror ShiftFormControlRef's handling in case
+        // one was authored/loaded with a leading '='.
+        var raw = reference.TrimStart();
+        var hasEquals = raw.StartsWith('=');
+        if (hasEquals)
+            raw = raw[1..].Trim();
+
+        var newQualifier = SheetNameFormatter.QuoteIfNeeded(copySheetName) + "!";
+
+        // Already-quoted source qualifier, e.g. 'Sheet 1'!
+        var quotedOldQualifier = "'" + sourceSheetName.Replace("'", "''") + "'!";
+
+        // Bare (unquoted) source qualifier, e.g. Sheet1! -- guarded so it can't match a fragment of
+        // a longer identifier/qualifier (e.g. a source name of "Sheet1" must not match inside
+        // "OtherSheet1!").
+        var pattern = "(?<![A-Za-z0-9_.'])" + Regex.Escape(sourceSheetName) + "!";
+
+        var rewritten = raw.Replace(quotedOldQualifier, newQualifier, StringComparison.OrdinalIgnoreCase);
+        rewritten = Regex.Replace(rewritten, pattern, _ => newQualifier, RegexOptions.IgnoreCase);
+
+        if (hasEquals)
+            rewritten = "=" + rewritten;
+
+        return string.Equals(rewritten, reference, StringComparison.Ordinal) ? reference : rewritten;
+    }
 
     /// <summary>
     /// R107-cmd-duplicate-sheet-sparkline-cross-sheet-datarange: only remap DataRange/DateAxisRange

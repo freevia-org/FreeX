@@ -673,7 +673,12 @@ public static class DocxWriter
     private static List<ImagePart> CollectImages(TextDocument document, HashSet<string> usedPartNames)
     {
         var images = new List<ImagePart>();
-        foreach (var paragraph in EnumerateParagraphs(document))
+        // Walk the WIDER paragraph traversal (EnumerateHyperlinkParagraphs), not the plain body/table-cell
+        // one: it also descends into run.Shape.TextParagraphs (a text box's own paragraphs, recursively, and
+        // shapes nested inside a DrawingGroup) so a picture placed inside a text box is collected and given a
+        // media part/relationship id instead of being silently dropped on save. See BuildShapeDrawing, which
+        // must be handed the resulting image map so the txbxContent it emits can actually reference it.
+        foreach (var paragraph in EnumerateHyperlinkParagraphs(EnumerateParagraphs(document)))
             foreach (var run in paragraph.Runs)
             {
                 if (run.Image is { } image)
@@ -882,7 +887,11 @@ public static class DocxWriter
             ? partFileName[..^4]
             : partFileName;
         var images = new List<ImagePart>();
-        foreach (var paragraph in content.Paragraphs)
+        // Widened to EnumerateHyperlinkParagraphs (not content.Paragraphs directly) so a picture inside a
+        // text box anchored in this header/footer is collected too, matching the body-level fix in
+        // CollectImages: a text box's own paragraphs otherwise never get visited and their images are
+        // silently dropped on save. See BuildHeaderFooterImagesByRun, which replays the same walk order.
+        foreach (var paragraph in EnumerateHyperlinkParagraphs(content.Paragraphs))
             foreach (var run in paragraph.Runs)
                 if (run.Image is { } image)
                 {
@@ -906,7 +915,7 @@ public static class DocxWriter
     {
         var map = new Dictionary<Run, ImagePart>();
         var next = 0;
-        foreach (var paragraph in part.Content.Paragraphs)
+        foreach (var paragraph in EnumerateHyperlinkParagraphs(part.Content.Paragraphs))
             foreach (var run in paragraph.Runs)
                 if (run.Image is not null && next < part.Images.Count)
                     map[run] = part.Images[next++];
@@ -1508,15 +1517,12 @@ public static class DocxWriter
         var imagesByGroupChild = new Dictionary<InlineImage, ImagePart>();
         var chartsByGroupChild = new Dictionary<Chart, ChartPart>();
         var smartArtsByGroupChild = new Dictionary<SmartArt, SmartArtPart>();
-        var nextImage = 0;
         var nextChart = 0;
         var nextEmbedded = 0;
         var nextSmartArt = 0;
         foreach (var paragraph in EnumerateParagraphs(document))
             foreach (var run in paragraph.Runs)
             {
-                if (run.Image is not null)
-                    imagesByRun[run] = images[nextImage++];
                 if (run.Chart is not null)
                     chartsByRun[run] = charts[nextChart++];
                 if (run.EmbeddedObject is not null)
@@ -1526,13 +1532,27 @@ public static class DocxWriter
                 if (run.DrawingGroup is { } group)
                     foreach (var child in EnumerateDrawingGroupChildren(group))
                     {
-                        if (child is InlineImage image)
-                            imagesByGroupChild[image] = images[nextImage++];
-                        else if (child is Chart chart)
+                        if (child is Chart chart)
                             chartsByGroupChild[chart] = charts[nextChart++];
                         else if (child is SmartArt smartArt)
                             smartArtsByGroupChild[smartArt] = smartArts[nextSmartArt++];
                     }
+            }
+
+        // Images are walked separately over the WIDER traversal (see CollectImages) that also descends into
+        // run.Shape.TextParagraphs and shapes nested inside a DrawingGroup, so a picture inside a text box
+        // gets mapped to its ImagePart here too instead of only the top-level/body images. Order matches
+        // CollectImages exactly (same EnumerateHyperlinkParagraphs walk), so document.xml and the rels agree
+        // on which rId belongs to which run.
+        var nextImage = 0;
+        foreach (var paragraph in EnumerateHyperlinkParagraphs(EnumerateParagraphs(document)))
+            foreach (var run in paragraph.Runs)
+            {
+                if (run.Image is not null)
+                    imagesByRun[run] = images[nextImage++];
+                if (run.DrawingGroup is { } group)
+                    foreach (var groupedImage in EnumerateDrawingGroupChildren(group).OfType<InlineImage>())
+                        imagesByGroupChild[groupedImage] = images[nextImage++];
             }
 
         // Map each document-referenced preserved part to its assigned rIdPreserved{N} (same order/ids as
@@ -2666,9 +2686,17 @@ public static class DocxWriter
                 new XAttribute(W + "val", allowsOverlap ? "overlap" : "never")));
 
         // Preferred table width (w:tblW): a fixed dxa width when set, else automatic (the historical default).
-        tblPr.Add(table.PreferredWidthPt is { } widthPt
-            ? new XElement(W + "tblW", new XAttribute(W + "w", PointsToDxa(widthPt)), new XAttribute(W + "type", "dxa"))
-            : new XElement(W + "tblW", new XAttribute(W + "w", 0), new XAttribute(W + "type", "auto")));
+        // AutoFitMode.Window is the one exception: both Window and Contents write the same
+        // w:tblLayout/@type="autofit" (OOXML's ST_TblLayoutType only has fixed/autofit, so tblLayout alone
+        // cannot tell them apart), so Window instead writes a percentage-based tblW ("fit to the window"),
+        // exactly how Word's own Table Properties > Preferred width dialog encodes it. DocxReader reads this
+        // back: non-fixed layout + tblW type="pct" => Window, anything else non-fixed => Contents. See
+        // TableLayoutOperations.SetAutoFit for the model-layer distinction this preserves.
+        tblPr.Add(table.AutoFit == AutoFitMode.Window
+            ? new XElement(W + "tblW", new XAttribute(W + "w", 5000), new XAttribute(W + "type", "pct"))
+            : table.PreferredWidthPt is { } widthPt
+                ? new XElement(W + "tblW", new XAttribute(W + "w", PointsToDxa(widthPt)), new XAttribute(W + "type", "dxa"))
+                : new XElement(W + "tblW", new XAttribute(W + "w", 0), new XAttribute(W + "type", "auto")));
 
         // Table alignment (w:jc): emitted only when not Left (the default).
         if (table.Alignment != TableAlignment.Left)
@@ -3378,26 +3406,47 @@ public static class DocxWriter
             }
 
             // A content control (w:sdt) wraps the maximal span of consecutive runs sharing the same
-            // ContentControl instance. The wrapped run(s) keep their ordinary w:r form inside w:sdtContent;
-            // the sdt itself still routes through the revision wrapper so a control can sit inside a
-            // tracked change. Content controls are not also hyperlinks/comments in practice.
+            // ContentControl instance. The wrapped run(s) keep their ordinary w:r form inside w:sdtContent.
+            // Tracked changes nest INSIDE that sdtContent (w:sdt/w:sdtContent/w:ins/w:r), the way Word
+            // records an edit made inside a field: a per-run wrapper here, not one around the whole sdt.
+            // Splitting the span on a revision boundary instead would emit the same field twice, each copy
+            // claiming part of its text — the reader already threads control + revision independently, so
+            // the nested form round-trips. Content controls are not also hyperlinks/comments in practice.
             var control = runs[i].Control;
             if (control is not null
                 && (control.Kind != ContentControlKind.Citation || runs[i].ComplexField is null)
                 && runs[i].ComplexField is not { SimpleField: null })
             {
-                var head = runs[i];
                 var content = new XElement(W + "sdtContent");
+                XElement? controlRevisionWrapper = null;
+                Run? controlRevisionKey = null;
                 while (i < runs.Count && ReferenceEquals(runs[i].Control, control)
-                    && EffectiveCommentId(runs[i]) == openCommentId
-                    && SameRevision(head, runs[i]))
+                    && EffectiveCommentId(runs[i]) == openCommentId)
                 {
                     EmitBookmarkBoundariesAt(i, content, control);
-                    content.Add(BuildRun(runs[i++], drawings, hyperlinks, preservedNumbering, restartOverrides));
+                    var wrapped = runs[i];
+                    var runElement = BuildRun(wrapped, drawings, hyperlinks, preservedNumbering, restartOverrides);
+                    if (wrapped.Revision == RevisionKind.None)
+                    {
+                        controlRevisionWrapper = null;
+                        controlRevisionKey = null;
+                        content.Add(runElement);
+                    }
+                    else
+                    {
+                        if (controlRevisionKey is null || !SameRevision(controlRevisionKey, wrapped))
+                        {
+                            controlRevisionWrapper = NewRevisionWrapper(wrapped, drawings.Ids);
+                            controlRevisionKey = wrapped;
+                            content.Add(controlRevisionWrapper);
+                        }
+                        controlRevisionWrapper!.Add(runElement);
+                    }
+                    i++;
                 }
                 EmitBookmarkBoundariesAt(i, content, control);
-                var sdt = new XElement(W + "sdt", BuildSdtProperties(control), content);
-                Content(head, sdt);
+                FlushRevision();
+                p.Add(new XElement(W + "sdt", BuildSdtProperties(control), content));
                 continue;
             }
 
@@ -3979,7 +4028,7 @@ public static class DocxWriter
             var rPr = BuildRunProperties(run.Formatting);
             if (rPr is not null)
                 sr.Add(rPr);
-            sr.Add(BuildShapeDrawing(shape, drawings.Ids, hyperlinks, drawings.ValidCommentIds, preservedNumbering, restartOverrides));
+            sr.Add(BuildShapeDrawing(shape, drawings.Ids, hyperlinks, drawings.ValidCommentIds, preservedNumbering, restartOverrides, drawings.Images, drawings.GroupImages));
             return sr;
         }
 
@@ -4595,13 +4644,23 @@ public static class DocxWriter
 
     /// <summary>
     /// Builds the wp:docPr for an image, carrying accessibility alt text on @descr when set (omitted
-    /// otherwise so images without alt text serialise exactly as before). Shared by both drawing paths.
+    /// otherwise so images without alt text serialise exactly as before) and the "Mark as decorative"
+    /// extension when <see cref="InlineImage.IsDecorative"/> is set. Shared by both drawing paths.
     /// </summary>
     private static XElement BuildDocPr(ImagePart part)
     {
         var docPr = new XElement(Wp + "docPr", new XAttribute("id", part.DrawingId), new XAttribute("name", part.FileName));
         if (!string.IsNullOrEmpty(part.Image.AltText))
             docPr.Add(new XAttribute("descr", part.Image.AltText));
+        if (part.Image.IsDecorative)
+        {
+            docPr.Add(new XElement(A + "extLst",
+                new XElement(A + "ext",
+                    new XAttribute("uri", DrawingMlDecorativeExtensionUri),
+                    new XElement(Adec + "decorative",
+                        new XAttribute(XNamespace.Xmlns + "adec", Adec.NamespaceName),
+                        new XAttribute("val", "1")))));
+        }
         return docPr;
     }
 
@@ -4928,7 +4987,9 @@ public static class DocxWriter
         IReadOnlyDictionary<string, string> hyperlinks,
         IReadOnlySet<int> validCommentIds,
         PreservedNumberingPlan? preservedNumbering = null,
-        RestartNumbering? restartOverrides = null)
+        RestartNumbering? restartOverrides = null,
+        IReadOnlyDictionary<Run, ImagePart>? images = null,
+        IReadOnlyDictionary<InlineImage, ImagePart>? groupImages = null)
     {
         var cx = PointsToEmu(shape.WidthPt);
         var cy = PointsToEmu(shape.HeightPt);
@@ -5044,7 +5105,16 @@ public static class DocxWriter
         if (shape.HasText)
         {
             var txbxContent = new XElement(W + "txbxContent");
-            var nested = RunDrawings.Empty(validCommentIds) with { Ids = ids };
+            // Threading the caller's image map (not an empty one) through the nested RunDrawings is what
+            // lets a picture placed inside this text box actually resolve to the ImagePart CollectImages
+            // assigned it (see the widened walk there and in the imagesByRun/imagesByGroupChild builder in
+            // BuildDocument) instead of silently falling through to an empty <w:t/> in BuildTextRun.
+            var nested = RunDrawings.Empty(validCommentIds) with
+            {
+                Ids = ids,
+                Images = images ?? new Dictionary<Run, ImagePart>(),
+                GroupImages = groupImages ?? new Dictionary<InlineImage, ImagePart>()
+            };
             foreach (var paragraph in shape.TextParagraphs)
                 txbxContent.Add(BuildParagraph(paragraph, nested, hyperlinks, preservedNumbering: preservedNumbering, restartOverrides: restartOverrides));
             wsp.Add(new XElement(Wps + "txbx", txbxContent));
@@ -5757,7 +5827,7 @@ public static class DocxWriter
 
             children.Add(child switch
             {
-                Shape shape => BuildDrawingGroupShapeChild(shape, xfrm, childName, ids, hyperlinks, drawings.ValidCommentIds, preservedNumbering, restartOverrides),
+                Shape shape => BuildDrawingGroupShapeChild(shape, xfrm, childName, ids, hyperlinks, drawings.ValidCommentIds, preservedNumbering, restartOverrides, drawings.Images, drawings.GroupImages),
                 WordArt wordArt => BuildDrawingGroupWordArtChild(wordArt, xfrm, childName, ids),
                 InlineImage image when drawings.GroupImages?.TryGetValue(image, out var imagePart) == true
                     => BuildDrawingGroupImageChild(imagePart, xfrm, childName),
@@ -5871,9 +5941,11 @@ public static class DocxWriter
         IReadOnlyDictionary<string, string> hyperlinks,
         IReadOnlySet<int> validCommentIds,
         PreservedNumberingPlan? preservedNumbering,
-        RestartNumbering? restartOverrides)
+        RestartNumbering? restartOverrides,
+        IReadOnlyDictionary<Run, ImagePart>? images = null,
+        IReadOnlyDictionary<InlineImage, ImagePart>? groupImages = null)
     {
-        var drawing = BuildShapeDrawing(shape, ids, hyperlinks, validCommentIds, preservedNumbering, restartOverrides);
+        var drawing = BuildShapeDrawing(shape, ids, hyperlinks, validCommentIds, preservedNumbering, restartOverrides, images, groupImages);
         return BuildDrawingGroupRichWspChild(drawing, xfrm, childName);
     }
 
@@ -7964,6 +8036,31 @@ public static class DocxWriter
             StringComparison.OrdinalIgnoreCase);
     }
 
+    // Builds w:rFonts from the three independent script-scoped typeface names. Each attribute is emitted
+    // only when its own model field is set, so a run/docDefaults whose ascii/eastAsia/cs differ (the
+    // normal shape for any document mixing scripts, and the only shape for a pure-CJK run with no ascii
+    // typeface at all) round-trips without one script's font overwriting another's. Returns null when
+    // none of the three typefaces is set, so untouched runs emit no w:rFonts at all.
+    private static XElement? BuildRunFontsElement(RunFormatting f)
+    {
+        if (f.FontFamily is not { Length: > 0 }
+            && f.EastAsiaFontFamily is not { Length: > 0 }
+            && f.ComplexScriptFontFamily is not { Length: > 0 })
+            return null;
+
+        var element = new XElement(W + "rFonts");
+        if (f.FontFamily is { Length: > 0 } family)
+        {
+            element.Add(new XAttribute(W + "ascii", family));
+            element.Add(new XAttribute(W + "hAnsi", family));
+        }
+        if (f.EastAsiaFontFamily is { Length: > 0 } eastAsia)
+            element.Add(new XAttribute(W + "eastAsia", eastAsia));
+        if (f.ComplexScriptFontFamily is { Length: > 0 } complexScript)
+            element.Add(new XAttribute(W + "cs", complexScript));
+        return element;
+    }
+
     // Builds w:lang from the three independent script-scoped language tags. Each attribute is emitted
     // only when its own model field is set, so a run/docDefaults whose val/eastAsia/bidi differ (the
     // normal shape for any document mixing scripts) round-trips without one script's tag overwriting
@@ -8005,8 +8102,10 @@ public static class DocxWriter
         // only) run round-trips byte-unchanged.
         if (styleId is { Length: > 0 })
             rPr.Add(new XElement(W + "rStyle", new XAttribute(W + "val", styleId)));
-        if (f.FontFamily is { Length: > 0 } family)
-            rPr.Add(new XElement(W + "rFonts", new XAttribute(W + "ascii", family), new XAttribute(W + "hAnsi", family)));
+        // w:rFonts (run typefaces) — ascii/eastAsia/cs are three independent typeface names (general/Latin,
+        // East Asian, complex-script/RTL), the same shape as w:lang below. See BuildRunFontsElement.
+        if (BuildRunFontsElement(f) is { } rFontsEl)
+            rPr.Add(rFontsEl);
         if (f.Bold)
             rPr.Add(new XElement(W + "b"));
         if (f.Italic)
@@ -9744,12 +9843,19 @@ public static class DocxWriter
     private static XElement? BuildDocDefaultRunProperties(RunFormatting f)
     {
         var rPr = new XElement(W + "rPr");
+        // w:rFonts: when an explicit East Asian / complex-script typeface was read back (e.g. from a
+        // real document's w:docDefaults), round-trip it as-is. Otherwise fall back to the ascii family
+        // for eastAsia/cs too, so a plain new document still gets an explicit eastAsia typeface and
+        // Word does not substitute Times New Roman for it after a round-trip (see comment at the call
+        // site below).
         if (f.FontFamily is { Length: > 0 } family)
             rPr.Add(new XElement(W + "rFonts",
                 new XAttribute(W + "ascii", family),
                 new XAttribute(W + "hAnsi", family),
-                new XAttribute(W + "eastAsia", family),
-                new XAttribute(W + "cs", family)));
+                new XAttribute(W + "eastAsia", f.EastAsiaFontFamily is { Length: > 0 } ea ? ea : family),
+                new XAttribute(W + "cs", f.ComplexScriptFontFamily is { Length: > 0 } cs ? cs : family)));
+        else if (BuildRunFontsElement(f) is { } rFontsEl)
+            rPr.Add(rFontsEl);
         if (f.Bold)
             rPr.Add(new XElement(W + "b"));
         if (f.Italic)

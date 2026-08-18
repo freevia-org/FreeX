@@ -11958,8 +11958,8 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             includeClearFill ? "No Fill" : "Automatic",
             includeClearFill
                 ? ClearSelectedRangeFill
-                : () => ApplySelectedRangeFontColor(CellColor.Black),
-            color => ApplySelectedRangePaletteColor(color, target),
+                : () => ApplySelectedRangeFontColor(CellColor.Black, themeColor: null),
+            (color, themeColor) => ApplySelectedRangePaletteColor(color, themeColor, target),
             "More Colors...",
             () => ShowMoreColorsDialogAsync(
                 isFill ? "More Fill Colors" : "More Font Colors",
@@ -11985,7 +11985,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
     private NativeMenuItem CreateNativeColorSwatchMenuItem(CellColorSwatch swatch, ColorPaletteTarget target)
     {
         var menuItem = new NativeMenuItem { Header = swatch.Hex };
-        menuItem.Click += (_, _) => ApplySelectedRangePaletteColor(swatch.Color, target);
+        menuItem.Click += (_, _) => ApplySelectedRangePaletteColor(swatch.Color, swatch.ThemeColor, target);
         return menuItem;
     }
 
@@ -12009,15 +12009,15 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         return menuItem;
     }
 
-    private void ApplySelectedRangePaletteColor(CellColor color, ColorPaletteTarget target)
+    private void ApplySelectedRangePaletteColor(CellColor color, WorkbookThemeColorReference? themeColor, ColorPaletteTarget target)
     {
         switch (target)
         {
             case ColorPaletteTarget.Fill:
-                ApplySelectedRangeFillColor(color);
+                ApplySelectedRangeFillColor(color, themeColor);
                 break;
             case ColorPaletteTarget.Font:
-                ApplySelectedRangeFontColor(color);
+                ApplySelectedRangeFontColor(color, themeColor);
                 break;
             default:
                 throw new ArgumentOutOfRangeException(nameof(target), target, null);
@@ -18967,16 +18967,23 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             return;
         }
 
-        var selection = await ShowSortInputDialogAsync();
+        // R142-services-sort-customdialog-1: resolve Excel's Sort Warning (expand to the whole
+        // adjacent data block?) up front, exactly like Quick Sort/ribbon A-Z, so the dialog built
+        // below computes its column/row/color/icon choices from the range that will actually be
+        // sorted -- not the raw (possibly narrower) selection, which would silently misalign the
+        // dialog's column offsets against whatever wider range the warning later expanded into.
+        var range = _session.ResolveSortRangeAfterAdjacentDataPrompt(_session.SelectedRange);
+
+        var selection = await ShowSortInputDialogAsync(range);
         if (selection is null)
             return;
 
-        var rangeReference = FormatRangeReference(_session.SelectedRange);
+        var rangeReference = FormatRangeReference(range);
         var sortPlan = SortDialogPlanner.CreateCommandPlan(
             selection.Levels,
             selection.Options,
             selection.HasHeaders);
-        var result = _session.SortSelectedRange(sortPlan);
+        var result = _session.SortSelectedRange(sortPlan, range);
         if (!result.Success)
         {
             ShowEditIssue(result.ErrorMessage ?? UiText.Get("ShellLoc_SortFailed"));
@@ -18986,10 +18993,9 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         RefreshShell(UiText.Format("MainLoc_SortedX", rangeReference));
     }
 
-    private async Task<SortDialogResult?> ShowSortInputDialogAsync()
+    private async Task<SortDialogResult?> ShowSortInputDialogAsync(GridRange range)
     {
         SortDialogResult? result = null;
-        var range = _session.SelectedRange;
         var levels = SortDialogPlanner.NormalizeLevels(null).ToList();
         var optionsState = new SortDialogOptions();
         var selectedLevelIndex = 0;
@@ -20328,13 +20334,15 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
                     seekResult.Converged,
                     result.Request.TargetValue,
                     seekResult.ActualResult,
-                    seekResult.FoundValue).Resolve(UiText.Get, UiText.Format),
+                    seekResult.FoundValue,
+                    seekResult.ActualResultError).Resolve(UiText.Get, UiText.Format),
             WorkbookGoalSeekStatus.NotConverged when result.SeekResult is { } seekResult =>
                 GoalSeekStatusDialogPlanner.DescribeStatus(
                     false,
                     result.Request.TargetValue,
                     seekResult.ActualResult,
-                    seekResult.FoundValue).Resolve(UiText.Get, UiText.Format),
+                    seekResult.FoundValue,
+                    seekResult.ActualResultError).Resolve(UiText.Get, UiText.Format),
             _ => GoalSeekStatusDialogPlanner.DescribeExecutionFailure(
                 result.Status,
                 result.ErrorMessage,
@@ -20350,7 +20358,8 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             seekResult.Converged,
             proposal.Request.TargetValue,
             seekResult.ActualResult,
-            seekResult.FoundValue).Resolve(UiText.Get, UiText.Format);
+            seekResult.FoundValue,
+            seekResult.ActualResultError).Resolve(UiText.Get, UiText.Format);
     }
 
     private static void FocusGoalSeekErrorField(
@@ -24628,7 +24637,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         RefreshShell(UiText.Format("MainLoc_DecreasedFontSizeStatusFormat", rangeReference));
     }
 
-    private void ApplySelectedRangeFillColor(CellColor fillColor)
+    private void ApplySelectedRangeFillColor(CellColor fillColor, WorkbookThemeColorReference? themeColor = null)
     {
         if (_isOpening || _isSaving)
             return;
@@ -24637,7 +24646,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             return;
 
         var rangeReference = FormatRangeReference(_session.SelectedRange);
-        var result = _session.SetSelectedRangeFillColor(fillColor);
+        var result = _session.SetSelectedRangeFillColor(fillColor, themeColor);
         if (!result.Success)
         {
             RefreshShell(_statusText.Text ?? UiText.Get("MainLoc_Ready"));
@@ -24668,7 +24677,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         RefreshShell(UiText.Format("MainLoc_ClearedFillStatusFormat", rangeReference));
     }
 
-    private void ApplySelectedRangeFontColor(CellColor fontColor)
+    private void ApplySelectedRangeFontColor(CellColor fontColor, WorkbookThemeColorReference? themeColor = null)
     {
         if (_isOpening || _isSaving)
             return;
@@ -24677,7 +24686,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             return;
 
         var rangeReference = FormatRangeReference(_session.SelectedRange);
-        var result = _session.SetSelectedRangeFontColor(fontColor);
+        var result = _session.SetSelectedRangeFontColor(fontColor, themeColor);
         if (!result.Success)
         {
             RefreshShell(_statusText.Text ?? UiText.Get("MainLoc_Ready"));

@@ -249,6 +249,22 @@ public sealed record RunFormatting
     public bool NoProof { get; init; }
 
     public string? FontFamily { get; init; }
+
+    /// <summary>
+    /// East Asian script typeface for this run (<c>rPr/w:rFonts/@w:eastAsia</c>), e.g. <c>"MS Gothic"</c>.
+    /// Independent of <see cref="FontFamily"/> (which maps to <c>@w:ascii</c>/<c>@w:hAnsi</c>) — Word stores
+    /// the three <c>w:rFonts</c> typeface attributes (ascii/eastAsia/cs) separately because a single run
+    /// can render each script in a different font. Null means no explicit East Asian typeface was set.
+    /// </summary>
+    public string? EastAsiaFontFamily { get; init; }
+
+    /// <summary>
+    /// Complex-script (right-to-left, e.g. Arabic/Hebrew) typeface for this run
+    /// (<c>rPr/w:rFonts/@w:cs</c>), e.g. <c>"Arial"</c>. Independent of <see cref="FontFamily"/> and
+    /// <see cref="EastAsiaFontFamily"/>. Null means no explicit complex-script typeface was set.
+    /// </summary>
+    public string? ComplexScriptFontFamily { get; init; }
+
     public double? FontSizePt { get; init; }
     public string? ColorHex { get; init; }
 

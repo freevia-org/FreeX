@@ -71,7 +71,7 @@ public static class DocumentSelectionFormattingPlanner
             if (Math.Min(end, runEnd) <= Math.Max(start, runStart))
                 continue;
 
-            selected.Add(DocumentRunFormattingResolver.Resolve(document, paragraph, run.Formatting));
+            selected.Add(DocumentRunFormattingResolver.Resolve(document, paragraph, run));
         }
 
         if (range.IncludesParagraphMark)

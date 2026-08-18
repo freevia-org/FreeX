@@ -363,6 +363,85 @@ public sealed class WorkbookSelectionStatsCalculatorTests
     }
 
     [Fact]
+    public void Cache_ExpandingSelectionUpward_ReportsFirstErrorInRowMajorOrder_NotWhicheverWasCachedFirst()
+    {
+        // R142 status-bar-F1: B1=#DIV/0!, B2=#REF!. Select B2 alone (caches "#REF!" for B2:B2),
+        // then extend the selection upward to B1:B2 without an intervening revision bump -- the
+        // exact "Shift+Up" / drag-up gesture that hits WorkbookSelectionStatsCache's incremental
+        // expansion path. Excel scans B1 before B2 (row-major), so the status bar must report
+        // "#DIV/0!" (B1's error) for B1:B2, not "#REF!" just because B2 happened to be cached
+        // first. Before the fix, TryCalculateContainingExpansion's row-decrease branch passed the
+        // OLD (B2) stats as Combine's left/winning argument, so it kept "#REF!" regardless of
+        // which cell Excel would actually reach first.
+        var cache = new WorkbookSelectionStatsCache();
+        var sheet = new Sheet(SheetId.New(), "Sheet1");
+        var b1 = new CellAddress(sheet.Id, 1, 2);
+        var b2 = new CellAddress(sheet.Id, 2, 2);
+        sheet.SetCell(b1, Cell.FromValue(ErrorValue.DivByZero));
+        sheet.SetCell(b2, Cell.FromValue(ErrorValue.Ref));
+
+        var single = cache.GetOrCalculate(sheet, new GridRange(b2, b2), revision: 1);
+        var expandedUpward = cache.GetOrCalculate(sheet, new GridRange(b1, b2), revision: 1);
+        var fromScratch = WorkbookSelectionStatsCalculator.Calculate(sheet, new GridRange(b1, b2));
+
+        single.AggregateErrorCode.Should().Be("#REF!");
+        fromScratch.AggregateErrorCode.Should().Be("#DIV/0!", "B1 is scanned before B2 in row-major order");
+        expandedUpward.AggregateErrorCode.Should().Be(
+            "#DIV/0!",
+            "extending the selection upward must agree with a from-scratch calculation over the same range");
+        expandedUpward.Should().Be(fromScratch);
+    }
+
+    [Fact]
+    public void Cache_ExpandingSelectionLeftward_ReportsFirstErrorInRowMajorOrder_NotWhicheverWasCachedFirst()
+    {
+        // Symmetric case for the column-start-decrease branch: A2=#DIV/0!, B2=#REF!. Select B2
+        // alone, then extend left to A2:B2 (e.g. Shift+Left). Row-major order scans A2 before B2,
+        // so the aggregate error must become "#DIV/0!".
+        var cache = new WorkbookSelectionStatsCache();
+        var sheet = new Sheet(SheetId.New(), "Sheet1");
+        var a2 = new CellAddress(sheet.Id, 2, 1);
+        var b2 = new CellAddress(sheet.Id, 2, 2);
+        sheet.SetCell(a2, Cell.FromValue(ErrorValue.DivByZero));
+        sheet.SetCell(b2, Cell.FromValue(ErrorValue.Ref));
+
+        var single = cache.GetOrCalculate(sheet, new GridRange(b2, b2), revision: 1);
+        var expandedLeftward = cache.GetOrCalculate(sheet, new GridRange(a2, b2), revision: 1);
+        var fromScratch = WorkbookSelectionStatsCalculator.Calculate(sheet, new GridRange(a2, b2));
+
+        single.AggregateErrorCode.Should().Be("#REF!");
+        fromScratch.AggregateErrorCode.Should().Be("#DIV/0!", "A2 is scanned before B2 in row-major order");
+        expandedLeftward.AggregateErrorCode.Should().Be(
+            "#DIV/0!",
+            "extending the selection leftward must agree with a from-scratch calculation over the same range");
+        expandedLeftward.Should().Be(fromScratch);
+    }
+
+    [Fact]
+    public void Cache_ExpandingSelectionDownwardAndRightward_StillAgreesWithFromScratch_NoRegression()
+    {
+        // No-regression companion: the End.Row/End.Col-increase branches (downward/rightward
+        // expansion, the direction that was already correct) must still agree with a from-scratch
+        // calculation after the fix, including when the newly-revealed error is NOT the one
+        // encountered first.
+        var cache = new WorkbookSelectionStatsCache();
+        var sheet = new Sheet(SheetId.New(), "Sheet1");
+        var a1 = new CellAddress(sheet.Id, 1, 1);
+        var b2 = new CellAddress(sheet.Id, 2, 2);
+        sheet.SetCell(a1, Cell.FromValue(ErrorValue.DivByZero));
+        sheet.SetCell(b2, Cell.FromValue(ErrorValue.Ref));
+
+        var single = cache.GetOrCalculate(sheet, new GridRange(a1, a1), revision: 7);
+        var expandedDownRight = cache.GetOrCalculate(sheet, new GridRange(a1, b2), revision: 7);
+        var fromScratch = WorkbookSelectionStatsCalculator.Calculate(sheet, new GridRange(a1, b2));
+
+        single.AggregateErrorCode.Should().Be("#DIV/0!");
+        fromScratch.AggregateErrorCode.Should().Be("#DIV/0!", "A1 is scanned before B2 in row-major order");
+        expandedDownRight.AggregateErrorCode.Should().Be("#DIV/0!");
+        expandedDownRight.Should().Be(fromScratch);
+    }
+
+    [Fact]
     public void Format_UsesWpfStatusLabelOrder()
     {
         using var _ = TestCultureScope.CurrentCulture("en-US");

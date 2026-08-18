@@ -23,11 +23,21 @@ public sealed class HomeFontCommandSourceTests
             .Should().Contain("e.Handled = true;");
         SourceMethodExtractor.ExtractMethodSource(source, "private void FillColorPickerBtn_Click(")
             .Should().Contain("e.Handled = true;");
-        source.Should().Contain("TryShowColorPicker(\"Font Color\", _selectedFontColor, allowNoColor: false, out var color)");
+        // R142-services-theme-colors-1: a Theme Colors gallery pick's slot/tint travels alongside
+        // the resolved flat color (ColorPickerDialog.SelectedThemeColor) so the applied
+        // Font/Fill Color keeps tracking the workbook theme across a later theme change, mirroring
+        // the Cell Styles gallery's Accent presets (CellStyleDiffPlanner.AccentDepth).
+        source.Should().Contain("TryShowColorPicker(\"Font Color\", _selectedFontColor, allowNoColor: false, out var color, out var themeColor)");
         source.Should().Contain("_selectedFontColor = selected;");
-        source.Should().Contain("TryShowColorPicker(\"Fill Color\", _selectedFillColor, allowNoColor: true, out var color)");
+        source.Should().Contain("_selectedFontThemeColor = themeColor;");
+        source.Should().Contain("TryShowColorPicker(\"Fill Color\", _selectedFillColor, allowNoColor: true, out var color, out var themeColor)");
         source.Should().Contain("_selectedFillColor = color;");
+        source.Should().Contain("_selectedFillThemeColor = themeColor;");
         source.Should().Contain("new StyleDiff(FillColor: null, ClearFill: true)");
+        source.Should().Contain("_selectedFontThemeColor is { } themeColor");
+        source.Should().Contain("new StyleDiff(FontThemeColor: themeColor)");
+        source.Should().Contain("_selectedFillThemeColor is { } themeColor");
+        source.Should().Contain("new StyleDiff(FillThemeColor: themeColor)");
     }
 
     [Fact]

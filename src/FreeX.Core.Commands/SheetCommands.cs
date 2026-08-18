@@ -744,6 +744,21 @@ public sealed class RemoveSheetCommand : IWorkbookCommand, IWholeWorkbookRecalcC
     private List<(TextBoxModel TextBox, DrawingObjectHyperlink? OldValue)>? _textBoxHyperlinkDeleteSnapshot;
     private List<(PictureModel Picture, DrawingObjectHyperlink? OldValue)>? _pictureHyperlinkDeleteSnapshot;
     private List<(ChartModel Chart, DrawingObjectHyperlink? OldValue)>? _chartHyperlinkDeleteSnapshot;
+    // R142/GOALSEEK-WHATIF-1: unlike Excel (where a saved scenario's changing cells are always
+    // confined to a single worksheet), FreeX's Scenario Manager lets one scenario's changing
+    // cells span multiple sheets -- see SaveScenarioCommand.Apply, which has no same-sheet check.
+    // Every OTHER cross-sheet reference kind above (charts, pivots, sparklines, slicers,
+    // timelines, hyperlinks, form controls, CF/DV) is rewritten or remapped here on delete, but
+    // Workbook.Scenarios was never touched, leaving a scenario permanently referencing a sheet
+    // that no longer exists -- ApplyScenarioCommand would then reject the scenario outright
+    // forever ("Scenario changing cells must belong to this workbook."), with no cleanup and no
+    // undo entry recording that the scenario itself changed shape. Mirrors Excel's own behavior
+    // of deleting a worksheet's scenarios along with the worksheet: any changing cell on the
+    // deleted sheet is dropped from every scenario that referenced it, and a scenario left with
+    // zero changing cells is removed entirely. The whole pre-delete scenario list is snapshotted
+    // (rather than a per-field diff) since a scenario can be dropped outright, which per-field
+    // undo can't express -- Revert simply restores this exact list.
+    private List<WorkbookScenario>? _scenarioDeleteSnapshot;
 
     public string Label => "Delete Sheet";
 
@@ -1211,6 +1226,30 @@ public sealed class RemoveSheetCommand : IWorkbookCommand, IWholeWorkbookRecalcC
             }
         }
 
+        // R142/GOALSEEK-WHATIF-1: drop changing cells (and any now-empty scenario) that
+        // referenced the deleted sheet -- see the field doc comment above for why this can't
+        // reuse the "remap onto host sheet" or "clear the string ref" patterns used by the other
+        // cross-sheet reference kinds above (a WorkbookScenario has no single host sheet, and its
+        // ChangingCells list can legitimately span several).
+        if (ctx.Workbook.Scenarios.Count > 0)
+        {
+            _scenarioDeleteSnapshot = [.. ctx.Workbook.Scenarios];
+            var survivingScenarios = new List<WorkbookScenario>(ctx.Workbook.Scenarios.Count);
+            foreach (var scenario in ctx.Workbook.Scenarios)
+            {
+                var remainingCells = scenario.ChangingCells.Where(c => c.Address.Sheet != _sheetId).ToList();
+                if (remainingCells.Count == scenario.ChangingCells.Count)
+                    survivingScenarios.Add(scenario);
+                else if (remainingCells.Count > 0)
+                    survivingScenarios.Add(scenario with { ChangingCells = remainingCells });
+                // else: every changing cell was on the deleted sheet -- the scenario is dropped
+                // entirely, matching Excel deleting a worksheet's own scenarios with it.
+            }
+
+            ctx.Workbook.Scenarios.Clear();
+            ctx.Workbook.Scenarios.AddRange(survivingScenarios);
+        }
+
         return new CommandOutcome(true);
     }
 
@@ -1377,6 +1416,15 @@ public sealed class RemoveSheetCommand : IWorkbookCommand, IWholeWorkbookRecalcC
             if (_chartHyperlinkDeleteSnapshot is not null)
                 foreach (var (chart, savedDrawingObjectHyperlink) in _chartHyperlinkDeleteSnapshot)
                     chart.Hyperlink = savedDrawingObjectHyperlink;
+
+            // R142/GOALSEEK-WHATIF-1 restore: put back the exact pre-delete scenario list,
+            // including any scenario the Apply-side pass above dropped entirely and any changing
+            // cell it removed from a surviving scenario.
+            if (_scenarioDeleteSnapshot is not null)
+            {
+                ctx.Workbook.Scenarios.Clear();
+                ctx.Workbook.Scenarios.AddRange(_scenarioDeleteSnapshot);
+            }
         }
     }
 

@@ -31,6 +31,60 @@ public sealed class ShapeGeometryAdjustmentPlannerTests
         plan.Handles[1].PositionDip.Should().Be(new LayoutPoint(60, 20));
     }
 
+    // The renderer (ShapeGeometryBuilder.Ribbon) floors the top-band edge at 4% of the shape
+    // height regardless of how small the authored adj1 fold-depth guide is, so the "Ribbon fold
+    // depth" handle must track that same clamp instead of the raw adj1 value -- otherwise the
+    // handle drifts away from the fold line the shape actually renders for any adj1 under the
+    // 4% floor (e.g. the legal value adj1=0).
+    [Fact]
+    public void Build_Ribbon_FoldDepthHandleMatchesRenderedBandTopWhenAdj1IsBelowTheFloor()
+    {
+        var shape = new SlideShape
+        {
+            Id = 7,
+            Kind = SlideShapeKind.AutoShape,
+            AutoShapeKind = DrawingShapeKind.Ribbon,
+        };
+        shape.PresetGeometryAdjustments["adj1"] = 0;
+        shape.PresetGeometryAdjustments["adj2"] = 50000;
+
+        var rendered = ShapeGeometryBuilder.Build(
+            DrawingShapeKind.Ribbon, Bounds, shape.PresetGeometryAdjustments);
+
+        var plan = ShapeGeometryAdjustmentPlanner.Build(shape, Bounds);
+
+        plan.Handles[0].Value.Should().Be(0);
+        plan.Handles[0].PositionDip.Y.Should().BeApproximately(rendered.Contours[0].Start.Y, 0.001);
+        // Proves the clamp genuinely engaged: the rendered fold line sits below boundsDip.Top,
+        // so a handle that just used the raw adj1=0 value would be detached from it.
+        plan.Handles[0].PositionDip.Y.Should().BeGreaterThan(Bounds.Top);
+    }
+
+    // Sibling no-regression guard: once adj1 sits above the renderer's 4% floor, the handle must
+    // still track the raw, unclamped fold value -- confirming the fix didn't over-clamp values
+    // that never needed it.
+    [Fact]
+    public void Build_Ribbon_FoldDepthHandleMatchesRawAdjustmentWhenAboveTheFloor()
+    {
+        var shape = new SlideShape
+        {
+            Id = 7,
+            Kind = SlideShapeKind.AutoShape,
+            AutoShapeKind = DrawingShapeKind.Ribbon,
+        };
+        shape.PresetGeometryAdjustments["adj1"] = 25000;
+        shape.PresetGeometryAdjustments["adj2"] = 50000;
+
+        var rendered = ShapeGeometryBuilder.Build(
+            DrawingShapeKind.Ribbon, Bounds, shape.PresetGeometryAdjustments);
+
+        var plan = ShapeGeometryAdjustmentPlanner.Build(shape, Bounds);
+
+        plan.Handles[0].Value.Should().Be(25000);
+        plan.Handles[0].PositionDip.Y.Should().BeApproximately(rendered.Contours[0].Start.Y, 0.001);
+        plan.Handles[0].PositionDip.Y.Should().BeApproximately(Bounds.Top + Bounds.Height * 0.25, 0.001);
+    }
+
     [Fact]
     public void BuildMutationPlan_Ribbon_MapsFoldHandlesToDrawingMlCoordinateUnits()
     {

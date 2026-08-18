@@ -280,8 +280,8 @@ public static class SlidePanePlanner
 
         for (var i = 0; i < slides.Count; i++)
         {
-            if (sectionHeaders.TryGetValue(i, out var header))
-                entries.Add(header);
+            if (sectionHeaders.TryGetValue(i, out var headersAtIndex))
+                entries.AddRange(headersAtIndex);
 
             if (collapsedSlideIds.Contains(slides[i].Id))
                 continue;
@@ -291,6 +291,13 @@ public static class SlidePanePlanner
                 SlideIndex: i,
                 Text: FormatSlideNumber(i)));
         }
+
+        // Sections left with no member slide (e.g. its last slide was just
+        // dragged elsewhere) have nothing to anchor before -- render their
+        // header after the last slide so it stays visible/renameable/removable
+        // instead of vanishing from the pane (PowerPoint keeps it visible too).
+        if (sectionHeaders.TryGetValue(slides.Count, out var trailingHeaders))
+            entries.AddRange(trailingHeaders);
 
         return entries;
     }
@@ -820,12 +827,12 @@ public static class SlidePanePlanner
             description);
     }
 
-    private static Dictionary<int, SlidePaneEntry> BuildSectionHeaders(
+    private static Dictionary<int, List<SlidePaneEntry>> BuildSectionHeaders(
         IReadOnlyList<Slide> slides,
         IReadOnlyList<PresentationSection> sections,
         IReadOnlySet<string>? collapsedSectionIds)
     {
-        var headers = new Dictionary<int, SlidePaneEntry>();
+        var headers = new Dictionary<int, List<SlidePaneEntry>>();
         if (sections.Count == 0)
             return headers;
 
@@ -833,24 +840,69 @@ public static class SlidePanePlanner
         for (var i = 0; i < slides.Count; i++)
             slideIndexById[slides[i].Id] = i;
 
+        var rawAnchors = new int[sections.Count];
+        for (var sectionIndex = 0; sectionIndex < sections.Count; sectionIndex++)
+            rawAnchors[sectionIndex] = FindFirstSectionSlideIndex(sections[sectionIndex], slideIndexById);
+
+        // A genuinely empty section (SlideIds.Count == 0 -- e.g. its last
+        // slide was just dragged into another section) has no row of its own
+        // to anchor before, but it's still a live, user-manageable section
+        // (see MoveSlideCommand, which deliberately leaves it that way). Fall
+        // forward to the next section that resolves to a real slide -- or to
+        // the very end of the pane if every remaining section is also empty
+        // -- so its header still renders instead of disappearing. A section
+        // whose SlideIds are merely stale (non-empty but none of them match a
+        // live slide, e.g. left over from a corrupted/foreign file) keeps the
+        // prior behaviour of staying unrendered until it is pruned.
+        var nextRealAnchorFrom = new int[sections.Count + 1];
+        nextRealAnchorFrom[sections.Count] = slides.Count;
+        for (var sectionIndex = sections.Count - 1; sectionIndex >= 0; sectionIndex--)
+        {
+            nextRealAnchorFrom[sectionIndex] = rawAnchors[sectionIndex] >= 0
+                ? rawAnchors[sectionIndex]
+                : nextRealAnchorFrom[sectionIndex + 1];
+        }
+
+        var usedRealAnchors = new HashSet<int>();
         for (var sectionIndex = 0; sectionIndex < sections.Count; sectionIndex++)
         {
             var section = sections[sectionIndex];
-            var sectionId = GetSectionIdentity(section, sectionIndex);
-            var firstIndex = FindFirstSectionSlideIndex(section, slideIndexById);
-            if (firstIndex < 0 || headers.ContainsKey(firstIndex))
+            var isEmptySection = section.SlideIds.Count == 0;
+            if (rawAnchors[sectionIndex] < 0 && !isEmptySection)
                 continue;
 
+            var anchorIndex = rawAnchors[sectionIndex] >= 0
+                ? rawAnchors[sectionIndex]
+                : nextRealAnchorFrom[sectionIndex + 1];
+
+            // Preserve the pre-existing dedup rule for sections whose member
+            // slides genuinely resolve to the same first slide (corrupt/
+            // overlapping membership) -- only ever show one real header
+            // there. Empty sections cascading into this anchor are never
+            // deduped: each one still deserves its own visible/removable
+            // header.
+            if (rawAnchors[sectionIndex] >= 0 && !usedRealAnchors.Add(anchorIndex))
+                continue;
+
+            var sectionId = GetSectionIdentity(section, sectionIndex);
             var count = CountKnownSectionSlides(section, slideIndexById);
             var isCollapsed = IsSectionCollapsed(sectionId, collapsedSectionIds);
-            headers[firstIndex] = new SlidePaneEntry(
+            var entry = new SlidePaneEntry(
                 SlidePaneEntryKind.SectionHeader,
-                SlideIndex: firstIndex,
+                SlideIndex: anchorIndex,
                 Text: FormatSectionHeader(section.Name, count),
                 SectionSlideCount: count,
                 SectionIndex: sectionIndex,
                 SectionId: sectionId,
                 IsSectionCollapsed: isCollapsed);
+
+            if (!headers.TryGetValue(anchorIndex, out var list))
+            {
+                list = new List<SlidePaneEntry>();
+                headers[anchorIndex] = list;
+            }
+
+            list.Add(entry);
         }
 
         return headers;

@@ -158,10 +158,17 @@ public sealed class SortOptionsPolicyOwnershipTests
         policy.Should().Contain("CustomSortOrder.TryParse(firstKeySortOrder, out var customOrder)");
         session.Should().Contain("public WorkbookCellEditResult SortSelectedRange(SortDialogCommandPlan sortPlan)")
             .And.Contain("sortPlan.CreateCommand");
+        // R142-services-sort-customdialog-1: both hosts now resolve the Sort Warning (via
+        // ResolveSortRangeAfterAdjacentDataPrompt) BEFORE building the dialog's column/row/color/
+        // icon choices, then execute against that same already-resolved range -- via
+        // SortSelectedRange(sortPlan, range) -- rather than re-deriving/re-prompting from
+        // SelectedRange a second time inside the single-arg overload.
         wpf.Should().Contain("SortDialogPlanner.CreateCommandPlan(")
-            .And.Contain("_session.SortSelectedRange(sortPlan)");
+            .And.Contain("_session.SortSelectedRange(sortPlan, range)")
+            .And.Contain("_session.ResolveSortRangeAfterAdjacentDataPrompt(");
         avalonia.Should().Contain("SortDialogPlanner.CreateCommandPlan(")
-            .And.Contain("_session.SortSelectedRange(sortPlan)");
+            .And.Contain("_session.SortSelectedRange(sortPlan, range)")
+            .And.Contain("_session.ResolveSortRangeAfterAdjacentDataPrompt(");
         renderers.Should().NotContain("CustomSortOrder.TryParse(")
             .And.NotContain("ApplyCustomOrderToFirstKey(");
     }

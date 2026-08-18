@@ -132,19 +132,24 @@ internal static partial class XlsxWorksheetDiagnosticsMapper
 
             foreach (var run in ignoredErrorRuns)
             {
-                var ignoredError = new XElement(
-                    workbookNs + "ignoredError",
-                    new XAttribute("sqref", run.ToSqref()),
-                    new XAttribute("numberStoredAsText", "1"),
-                    new XAttribute("evalError", "1"),
-                    new XAttribute("formula", "1"),
-                    new XAttribute("emptyCellReference", "1"));
-                if (run.NativeAttributes is not null)
+                var ignoredError = new XElement(workbookNs + "ignoredError", new XAttribute("sqref", run.ToSqref()));
+                if (run.NativeAttributes is { Count: > 0 })
                 {
-                    XlsxWorksheetNativeMetadataHelpers.ApplyNativeAttributes(
-                        ignoredError,
-                        run.NativeAttributes,
-                        ["sqref", "numberStoredAsText", "evalError", "formula", "emptyCellReference"]);
+                    // Fidelity path: re-emit exactly the ignoredError flags that were present on the
+                    // originating cell(s) (captured in ReadIgnoredErrorsMetadata), instead of broadening
+                    // to every supported flag. A cell whose author ignored only e.g. unlockedFormula must
+                    // not come back out suppressing evalError/formula/numberStoredAsText/etc. too.
+                    XlsxWorksheetNativeMetadataHelpers.ApplyNativeAttributes(ignoredError, run.NativeAttributes, ["sqref"]);
+                }
+                else
+                {
+                    // No source flag fidelity available (e.g. a cell newly marked "Ignore Error" via the
+                    // UI, which does not yet track which specific rule was ignored) -- fall back to the
+                    // historical broad default so the ignore still takes effect.
+                    ignoredError.SetAttributeValue("numberStoredAsText", "1");
+                    ignoredError.SetAttributeValue("evalError", "1");
+                    ignoredError.SetAttributeValue("formula", "1");
+                    ignoredError.SetAttributeValue("emptyCellReference", "1");
                 }
 
                 ignoredErrors.Add(ignoredError);
@@ -411,11 +416,7 @@ internal static partial class XlsxWorksheetDiagnosticsMapper
 
     private static bool ShouldSkipIgnoredErrorNativeAttribute(string key) =>
         string.IsNullOrWhiteSpace(key) ||
-        string.Equals(key, "sqref", StringComparison.Ordinal) ||
-        string.Equals(key, "numberStoredAsText", StringComparison.Ordinal) ||
-        string.Equals(key, "evalError", StringComparison.Ordinal) ||
-        string.Equals(key, "formula", StringComparison.Ordinal) ||
-        string.Equals(key, "emptyCellReference", StringComparison.Ordinal);
+        string.Equals(key, "sqref", StringComparison.Ordinal);
 
     private static string[] SplitSqrefTokens(string sqref) =>
         sqref.Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);

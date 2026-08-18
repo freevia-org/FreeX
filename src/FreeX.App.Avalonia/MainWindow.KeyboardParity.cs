@@ -491,6 +491,19 @@ public sealed partial class MainWindow
             includeTransitive);
         if (plan is null)
         {
+            // GetDirectPrecedents (and therefore the planner built on it) can only report cells
+            // FreeX can point a CellAddress at, so a null plan here does NOT mean the formula has
+            // no precedents -- it may have one this service cannot represent (a reference into
+            // another workbook). Check that case before falling back to the generic "no direct/
+            // traceable precedents" status, which would otherwise be false, the same misreport
+            // Trace Precedents was fixed for
+            // (R142-core-commands-formula-auditing-trace-precedents-external-workbook-misreport).
+            if (!selectDependents && FormulaAuditingService.HasExternalPrecedentReference(_session.Workbook, activeCell))
+            {
+                RefreshShell("Selected cell references another workbook. FreeX cannot select precedents outside this workbook.");
+                return;
+            }
+
             var statusKey = (selectDependents, includeTransitive) switch
             {
                 (true, true) => "KeyboardLoc_NoTraceableDependents",

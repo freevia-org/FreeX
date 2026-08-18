@@ -32,9 +32,17 @@ public partial class MainWindow
         {
             StatusReadyText.Visibility = Visibility.Visible;
             var depth = includeTransitive ? "traceable" : "direct";
+            // GetDirectPrecedents (and therefore the planner built on it) can only report cells
+            // FreeX can point a CellAddress at, so a null plan here does NOT mean the formula has
+            // no precedents -- it may have one this service cannot represent (a reference into
+            // another workbook). Check that case before claiming "no direct/traceable precedents",
+            // which would otherwise be false, the same misreport Trace Precedents was fixed for
+            // (R142-core-commands-formula-auditing-trace-precedents-external-workbook-misreport).
             StatusReadyText.Text = selectDependents
                 ? $"No {depth} dependents"
-                : $"No {depth} precedents";
+                : FormulaAuditingService.HasExternalPrecedentReference(_workbook, activeCell)
+                    ? "Selected cell references another workbook. FreeX cannot select precedents outside this workbook."
+                    : $"No {depth} precedents";
             return;
         }
 
@@ -255,9 +263,26 @@ public partial class MainWindow
         var arrows = FormulaTraceArrowPlanner.GetNextPrecedentTraceArrows(_workbook, activeCell, _formulaTraceArrows);
         if (arrows.Count == 0)
         {
-            var message = FormulaAuditingService.GetDirectPrecedents(_workbook, activeCell).Count == 0
-                ? $"{FormulaAuditFormatter.FormatAddress(_workbook, activeCell)} has no direct precedents."
-                : $"{FormulaAuditFormatter.FormatAddress(_workbook, activeCell)} has no more precedent cells to trace.";
+            var addressText = FormulaAuditFormatter.FormatAddress(_workbook, activeCell);
+            // GetDirectPrecedents can only report cells FreeX can point a CellAddress at, so an
+            // empty list here does NOT mean the formula has no precedents -- it may have one this
+            // service cannot represent (a reference into another workbook). Check that case before
+            // claiming "no direct precedents", which would otherwise be false
+            // (R142-core-commands-formula-auditing-trace-precedents-external-workbook-misreport).
+            string message;
+            if (FormulaAuditingService.GetDirectPrecedents(_workbook, activeCell).Count > 0)
+            {
+                message = $"{addressText} has no more precedent cells to trace.";
+            }
+            else if (FormulaAuditingService.HasExternalPrecedentReference(_workbook, activeCell))
+            {
+                message = $"{addressText} references another workbook. FreeX cannot trace precedents outside this workbook.";
+            }
+            else
+            {
+                message = $"{addressText} has no direct precedents.";
+            }
+
             _messageService.ShowInfo(message, title);
             return;
         }

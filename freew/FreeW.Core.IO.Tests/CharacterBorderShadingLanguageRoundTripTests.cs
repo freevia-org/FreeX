@@ -346,6 +346,101 @@ public class CharacterBorderShadingLanguageRoundTripTests
         result.BidiLanguageTag.Should().BeNull();
     }
 
+    // ---- Run Typefaces (w:rFonts) ----
+
+    [Fact]
+    public void FontFamily_Ascii_RoundTrips()
+    {
+        var result = RoundTrip(new RunFormatting { FontFamily = "Calibri" });
+        result.FontFamily.Should().Be("Calibri");
+    }
+
+    [Fact]
+    public void FontFamily_Null_WritesNoRFonts()
+    {
+        var rPr = WriteRunProperties(new RunFormatting { Bold = true });
+        rPr.Element(W + "rFonts").Should().BeNull("no typeface set → no w:rFonts element");
+    }
+
+    // Word's normal mixed-script pattern (e.g. ascii="Calibri" eastAsia="MS Gothic" cs="Arial") stores
+    // each w:rFonts typeface attribute independently. The three fields must round-trip without any one
+    // script's font clobbering another's -- this is the important regression coverage for the
+    // open-and-save case (round 144 finding freew-run-eastasia-cs-font-lost).
+    [Fact]
+    public void FontFamily_EastAsiaAndComplexScript_RoundTripIndependently()
+    {
+        var result = RoundTrip(new RunFormatting
+        {
+            FontFamily = "Calibri",
+            EastAsiaFontFamily = "MS Gothic",
+            ComplexScriptFontFamily = "Arial",
+        });
+
+        result.FontFamily.Should().Be("Calibri");
+        result.EastAsiaFontFamily.Should().Be("MS Gothic");
+        result.ComplexScriptFontFamily.Should().Be("Arial");
+    }
+
+    [Fact]
+    public void FontFamily_EastAsiaAndComplexScript_WriteIndependentAttributes()
+    {
+        var rPr = WriteRunProperties(new RunFormatting
+        {
+            FontFamily = "Calibri",
+            EastAsiaFontFamily = "MS Gothic",
+            ComplexScriptFontFamily = "Arial",
+        });
+
+        var rFonts = rPr.Element(W + "rFonts");
+        rFonts.Should().NotBeNull();
+        rFonts!.Attribute(W + "ascii")?.Value.Should().Be("Calibri");
+        rFonts.Attribute(W + "hAnsi")?.Value.Should().Be("Calibri");
+        rFonts.Attribute(W + "eastAsia")?.Value.Should().Be("MS Gothic");
+        rFonts.Attribute(W + "cs")?.Value.Should().Be("Arial");
+    }
+
+    // A pure-CJK run written by Word can carry only @eastAsia with no @ascii at all. Must still round-trip
+    // (the earlier code read only @ascii, so this case came back as a completely blank FontFamily).
+    [Fact]
+    public void FontFamily_EastAsiaOnly_NoAscii_RoundTrips()
+    {
+        var result = RoundTrip(new RunFormatting { EastAsiaFontFamily = "MS Gothic" });
+
+        result.FontFamily.Should().BeNull();
+        result.EastAsiaFontFamily.Should().Be("MS Gothic");
+    }
+
+    [Fact]
+    public void FontFamily_EastAsiaOnly_NoAscii_WritesRFontsWithoutAscii()
+    {
+        var rPr = WriteRunProperties(new RunFormatting { EastAsiaFontFamily = "MS Gothic" });
+
+        var rFonts = rPr.Element(W + "rFonts");
+        rFonts.Should().NotBeNull("an East Asian-only typeface must still emit w:rFonts");
+        rFonts!.Attribute(W + "ascii").Should().BeNull();
+        rFonts.Attribute(W + "eastAsia")?.Value.Should().Be("MS Gothic");
+    }
+
+    // Sibling/no-regression coverage: a run that only ever set the ascii typeface (the common shape for a
+    // document authored/edited purely in FreeW) must not gain fabricated eastAsia/cs attributes.
+    [Fact]
+    public void FontFamily_OnlyAsciiSet_DoesNotFabricateEastAsiaOrComplexScript()
+    {
+        var rPr = WriteRunProperties(new RunFormatting { FontFamily = "Calibri" });
+
+        var rFonts = rPr.Element(W + "rFonts");
+        rFonts.Should().NotBeNull();
+        rFonts!.Attribute(W + "ascii")?.Value.Should().Be("Calibri");
+        rFonts.Attribute(W + "hAnsi")?.Value.Should().Be("Calibri");
+        rFonts.Attribute(W + "eastAsia").Should().BeNull();
+        rFonts.Attribute(W + "cs").Should().BeNull();
+
+        var result = RoundTrip(new RunFormatting { FontFamily = "Calibri" });
+        result.FontFamily.Should().Be("Calibri");
+        result.EastAsiaFontFamily.Should().BeNull();
+        result.ComplexScriptFontFamily.Should().BeNull();
+    }
+
     // ---- Combined round-trip: border + shading + language all present ----
 
     [Fact]

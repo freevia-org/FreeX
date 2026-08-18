@@ -95,7 +95,8 @@ public sealed class GoalSeekStatusDialog : Window
             result.Converged,
             targetValue,
             result.ActualResult,
-            result.FoundValue).Resolve(UiText.Get, UiText.Format);
+            result.FoundValue,
+            result.ActualResultError).Resolve(UiText.Get, UiText.Format);
 
     private void FocusInitialKeyboardTarget()
     {

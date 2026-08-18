@@ -1,3 +1,4 @@
+using FreeX.App.Services;
 using FreeX.Core.Model;
 using FluentAssertions;
 using System.Windows.Automation;
@@ -65,5 +66,5 @@ public sealed class TA11yColorPickerSwatchSelectionStatusTests
     private static Button FindSwatchButton(Panel panel, CellColor color) =>
         panel.Children
             .OfType<Button>()
-            .Single(button => button.Tag is CellColor swatchColor && swatchColor == color);
+            .Single(button => button.Tag is CellColorSwatch swatch && swatch.Color == color);
 }

@@ -83,6 +83,8 @@ public sealed class SlideShowDisplayCoordinator
 {
     private long _displayVersion;
     private long? _autoAdvanceDisplayVersion;
+    private TimeSpan? _autoAdvanceInterval;
+    private bool _autoAdvancePausedForBlank;
     private TimeSpan? _kioskRestartInterval;
     private bool _sessionStarted;
     private bool _presenterViewOpen;
@@ -101,6 +103,10 @@ public sealed class SlideShowDisplayCoordinator
 
         var displayVersion = ++_displayVersion;
         _autoAdvanceDisplayVersion = null;
+        _autoAdvanceInterval = null;
+        // A fresh slide display always supersedes any timer that was paused for a
+        // blanked screen -- there is nothing left to resume once the slide changes.
+        _autoAdvancePausedForBlank = false;
 
         var operations = new List<SlideShowDisplayRendererOperation>
         {
@@ -121,10 +127,12 @@ public sealed class SlideShowDisplayCoordinator
 
             if (display.AutoAdvanceAfterMs is int advanceAfterMs)
             {
+                var interval = TimeSpan.FromMilliseconds(advanceAfterMs);
                 _autoAdvanceDisplayVersion = displayVersion;
+                _autoAdvanceInterval = interval;
                 operations.Add(new(
                     SlideShowDisplayRendererOperationKind.StartAutoAdvanceTimer,
-                    TimeSpan.FromMilliseconds(advanceAfterMs),
+                    interval,
                     displayVersion));
             }
         }
@@ -177,12 +185,17 @@ public sealed class SlideShowDisplayCoordinator
 
     public SlideShowDisplayRendererPlan PlanAutoAdvanceElapsed(long displayVersion)
     {
-        if (_closed || _autoAdvanceDisplayVersion != displayVersion)
+        // Guard against a Tick that was already in flight when the screen was blanked --
+        // the host is asked to stop the timer on blank, but a race between that request
+        // and an already-queued dispatcher Tick must not be allowed to advance the slide
+        // behind the blank overlay.
+        if (_closed || _autoAdvancePausedForBlank || _autoAdvanceDisplayVersion != displayVersion)
         {
             return SlideShowDisplayRendererPlan.Empty(_displayVersion);
         }
 
         _autoAdvanceDisplayVersion = null;
+        _autoAdvanceInterval = null;
         return new SlideShowDisplayRendererPlan(
             _displayVersion,
             null,
@@ -198,6 +211,69 @@ public sealed class SlideShowDisplayCoordinator
         ISlideShowDisplayRenderer renderer)
     {
         var plan = PlanAutoAdvanceElapsed(displayVersion);
+        Execute(plan, renderer);
+        return plan;
+    }
+
+    /// <summary>
+    /// Pauses (screen blanked) or resumes (screen unblanked) the current slide's own
+    /// auto-advance timer. Blanking must not let the show silently play ahead behind the
+    /// overlay, so the timer is fully stopped while blank. This runtime keeps no
+    /// elapsed-time bookkeeping for slide dwell time anywhere else, so on unblank the
+    /// full authored duration is restarted for the still-current slide rather than
+    /// resuming a computed remaining time -- the slide itself cannot have changed while
+    /// blanked, since blanked input handling suppresses navigation.
+    /// </summary>
+    public SlideShowDisplayRendererPlan PlanScreenModeChanged(bool isBlank)
+    {
+        if (_closed)
+        {
+            return SlideShowDisplayRendererPlan.Empty(_displayVersion);
+        }
+
+        if (isBlank)
+        {
+            if (_autoAdvancePausedForBlank || _autoAdvanceDisplayVersion is null)
+            {
+                return SlideShowDisplayRendererPlan.Empty(_displayVersion);
+            }
+
+            _autoAdvancePausedForBlank = true;
+            return new SlideShowDisplayRendererPlan(
+                _displayVersion,
+                null,
+                new SlideShowDisplayRendererOperation[]
+                {
+                    new(SlideShowDisplayRendererOperationKind.StopAutoAdvanceTimer)
+                });
+        }
+
+        if (!_autoAdvancePausedForBlank ||
+            _autoAdvanceDisplayVersion is not { } resumeVersion ||
+            _autoAdvanceInterval is not { } resumeInterval)
+        {
+            _autoAdvancePausedForBlank = false;
+            return SlideShowDisplayRendererPlan.Empty(_displayVersion);
+        }
+
+        _autoAdvancePausedForBlank = false;
+        return new SlideShowDisplayRendererPlan(
+            _displayVersion,
+            null,
+            new SlideShowDisplayRendererOperation[]
+            {
+                new(
+                    SlideShowDisplayRendererOperationKind.StartAutoAdvanceTimer,
+                    resumeInterval,
+                    resumeVersion)
+            });
+    }
+
+    public SlideShowDisplayRendererPlan ScreenModeChanged(
+        bool isBlank,
+        ISlideShowDisplayRenderer renderer)
+    {
+        var plan = PlanScreenModeChanged(isBlank);
         Execute(plan, renderer);
         return plan;
     }
@@ -265,6 +341,8 @@ public sealed class SlideShowDisplayCoordinator
         _sessionStarted = false;
         _kioskRestartInterval = null;
         _autoAdvanceDisplayVersion = null;
+        _autoAdvanceInterval = null;
+        _autoAdvancePausedForBlank = false;
         _displayVersion++;
 
         var operations = new List<SlideShowDisplayRendererOperation>

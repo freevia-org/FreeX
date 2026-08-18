@@ -5,6 +5,7 @@ using System.Windows.Media;
 using System.Windows.Media.Animation;
 using System.Windows.Media.Imaging;
 using System.Windows.Shapes;
+using System.Windows.Interop;
 using System.Windows.Threading;
 using Free.Shared.AppServices;
 using Free.Shared.Drawing;
@@ -110,6 +111,7 @@ public sealed partial class SlideShowWindow : Window, ISlideShowTransitionPlayba
             window =>
             {
                 window.Owner = this;
+                PositionPresenterViewWindow(window);
                 window.Show();
             },
             window => window.Close(),
@@ -291,6 +293,57 @@ public sealed partial class SlideShowWindow : Window, ISlideShowTransitionPlayba
         };
         Closed               += (_, _) => Teardown();
     }
+
+    /// <summary>
+    /// Places the Presenter View window on a different display than this (audience-facing)
+    /// slideshow window whenever a second display exists, so the presenter's private
+    /// current/next-slide/notes/timer dashboard never lands on the screen the audience is
+    /// looking at (round 143 / finding F3). With only one display, this leaves the window's
+    /// own <see cref="WindowStartupLocation.CenterOwner"/> default in place, which is the only
+    /// sensible placement when no other screen exists. Recomputed fresh every time Presenter
+    /// View is opened (see <see cref="SlideShowNativePresenterWindowHost{TWindow}.Open"/>), so a
+    /// monitor plugged in or removed since the last time Presenter View was shown is picked up
+    /// on the next Ctrl+P; see <see cref="PresenterViewPlacementPlanner.SelectPresenterScreen"/>
+    /// for what happens if the arrangement changes while it is already open.
+    /// </summary>
+    private void PositionPresenterViewWindow(PresenterViewWindow window)
+    {
+        var allScreens = System.Windows.Forms.Screen.AllScreens;
+        if (allScreens is not { Length: >= 2 })
+            return;
+
+        var handle = new WindowInteropHelper(this).Handle;
+        var slideShowScreen = handle == IntPtr.Zero
+            ? System.Windows.Forms.Screen.PrimaryScreen
+            : System.Windows.Forms.Screen.FromHandle(handle);
+        if (slideShowScreen is null)
+            return;
+
+        var target = PresenterViewPlacementPlanner.SelectPresenterScreen(
+            ToScreenBounds(slideShowScreen),
+            Array.ConvertAll(allScreens, ToScreenBounds));
+        if (target is not { } presenterScreen)
+            return;
+
+        // System.Windows.Forms.Screen bounds are device pixels; convert to this window's DIP
+        // coordinate space via the live CompositionTarget transform (works whether the process
+        // is system-DPI-aware or per-monitor-DPI-aware).
+        var toDip = PresentationSource.FromVisual(this)?.CompositionTarget?.TransformFromDevice
+            ?? Matrix.Identity;
+        var topLeft = toDip.Transform(new Point(presenterScreen.Left, presenterScreen.Top));
+        var size = toDip.Transform(new Vector(presenterScreen.Width, presenterScreen.Height));
+
+        window.WindowStartupLocation = WindowStartupLocation.Manual;
+        window.Left = topLeft.X + Math.Max(0, (size.X - window.Width) / 2);
+        window.Top = topLeft.Y + Math.Max(0, (size.Y - window.Height) / 2);
+    }
+
+    private static SlideShowScreenBounds ToScreenBounds(System.Windows.Forms.Screen screen) => new(
+        screen.WorkingArea.Left,
+        screen.WorkingArea.Top,
+        screen.WorkingArea.Width,
+        screen.WorkingArea.Height,
+        screen.Primary);
 
     private void RenderScreenMode(SlideShowRuntimeScreenModePlan plan)
     {

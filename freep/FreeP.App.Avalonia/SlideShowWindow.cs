@@ -8,6 +8,8 @@ using Avalonia.Media.Imaging;
 using Avalonia.Threading;
 using Free.Shared.AppServices;
 using Free.Shared.Drawing;
+using Free.Shared.Shell;
+using Free.Shared.Shell.Avalonia;
 using FreeP.App.Compositor;
 using FreeP.App.Media;
 using FreeP.App.Recording;
@@ -120,7 +122,11 @@ public sealed partial class SlideShowWindow : Window, ISlideShowTransitionPlayba
         _presenterViewHost = new SlideShowNativePresenterWindowHost<PresenterViewWindow>(
             operations => new PresenterViewWindow(_presentation, operations),
             (window, onClosed) => window.Closed += (_, _) => onClosed(),
-            window => window.Show(this),
+            window =>
+            {
+                PositionPresenterViewWindow(window);
+                window.Show(this);
+            },
             window => window.Close(),
             window => window.RefreshFromState(),
             _runtime.NotifyPresenterViewClosed);
@@ -307,6 +313,60 @@ public sealed partial class SlideShowWindow : Window, ISlideShowTransitionPlayba
         };
         Closed              += (_, _) => Teardown();
     }
+
+    /// <summary>
+    /// Places the Presenter View window on a different display than this (audience-facing)
+    /// slideshow window whenever a second display exists, so the presenter's private
+    /// current/next-slide/notes/timer dashboard never lands on the screen the audience is
+    /// looking at (round 143 / finding F3; mirrors <c>FreeP.App.Host.SlideShowWindow</c>'s
+    /// WPF-side fix). With only one display, this leaves the window's own
+    /// <see cref="WindowStartupLocation.CenterOwner"/> default in place, which is the only
+    /// sensible placement when no other screen exists. Recomputed fresh every time Presenter
+    /// View is opened (see <see cref="SlideShowNativePresenterWindowHost{TWindow}.Open"/>), so a
+    /// monitor plugged in or removed since the last time Presenter View was shown is picked up
+    /// on the next Ctrl+P; see <see cref="PresenterViewPlacementPlanner.SelectPresenterScreen"/>
+    /// for what happens if the arrangement changes while it is already open.
+    /// </summary>
+    private void PositionPresenterViewWindow(PresenterViewWindow window)
+    {
+        var allScreens = Screens?.All;
+        if (allScreens is not { Count: >= 2 })
+            return;
+
+        var slideShowScreen = Screens!.ScreenFromWindow(this) ?? Screens.Primary;
+        if (slideShowScreen is null)
+            return;
+
+        var target = PresenterViewPlacementPlanner.SelectPresenterScreen(
+            ToScreenBounds(slideShowScreen),
+            allScreens.Select(ToScreenBounds).ToList());
+        if (target is not { } presenterBounds)
+            return;
+
+        var presenterScreen = allScreens.FirstOrDefault(s => ToScreenBounds(s) == presenterBounds);
+        if (presenterScreen is null)
+            return;
+
+        var scaling = presenterScreen.Scaling > 0 ? presenterScreen.Scaling : 1;
+        var dipWidth = presenterScreen.WorkingArea.Width / scaling;
+        var dipHeight = presenterScreen.WorkingArea.Height / scaling;
+        var centered = new ShellRect(
+            Math.Max(0, (dipWidth - window.Width) / 2),
+            Math.Max(0, (dipHeight - window.Height) / 2),
+            window.Width,
+            window.Height);
+        var tile = AvaloniaWindowBoundsTranslator.Translate(presenterScreen.WorkingArea, scaling, centered);
+
+        window.WindowStartupLocation = WindowStartupLocation.Manual;
+        window.Position = tile.Position;
+    }
+
+    private static SlideShowScreenBounds ToScreenBounds(global::Avalonia.Platform.Screen screen) => new(
+        screen.WorkingArea.X,
+        screen.WorkingArea.Y,
+        screen.WorkingArea.Width,
+        screen.WorkingArea.Height,
+        screen.IsPrimary);
 
     private void RenderScreenMode(SlideShowRuntimeScreenModePlan plan)
     {

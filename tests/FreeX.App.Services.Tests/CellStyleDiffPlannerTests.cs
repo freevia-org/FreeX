@@ -260,7 +260,17 @@ public sealed class CellStyleDiffPlannerTests
                 "60% - Accent 3",
                 "60% - Accent 4",
                 "60% - Accent 5",
-                "60% - Accent 6");
+                "60% - Accent 6",
+                "Heading 3",
+                "Heading 4",
+                "Title",
+                "Currency",
+                "Currency [0]",
+                "Comma",
+                "Comma [0]",
+                "Percent",
+                "Hyperlink",
+                "Followed Hyperlink");
     }
 
     [Fact]

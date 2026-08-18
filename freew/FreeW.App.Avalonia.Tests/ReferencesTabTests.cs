@@ -1533,10 +1533,18 @@ public sealed class ReferencesTabTests
             .Should()
             .Equal("Table of Equations", "Equation 1: Energy\t1");
 
+        // Refreshing a *different* label with no existing region of its own must insert a fresh
+        // "Table of Schemes" region without deleting the pre-existing Table of Equations region --
+        // Update Table on one caption-table region must never delete a sibling built for another label.
         view.RefreshTableOfFigures("Scheme");
 
         view.Document.Blocks.OfType<Paragraph>()
-            .Where(TableOfFigures.IsTableOfFiguresParagraph)
+            .Where(paragraph => TableOfFigures.IsTableOfFiguresParagraph(paragraph, Captions.EquationLabelText))
+            .Select(paragraph => paragraph.PlainText)
+            .Should()
+            .Equal("Table of Equations", "Equation 1: Energy\t1");
+        view.Document.Blocks.OfType<Paragraph>()
+            .Where(paragraph => TableOfFigures.IsTableOfFiguresParagraph(paragraph, "Scheme"))
             .Select(paragraph => paragraph.PlainText)
             .Should()
             .Equal("Table of Schemes", "Scheme 1: Flow\t1");

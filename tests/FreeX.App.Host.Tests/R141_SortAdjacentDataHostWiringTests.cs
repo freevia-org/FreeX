@@ -48,12 +48,30 @@ public sealed class R141_SortAdjacentDataHostWiringTests
     public void SortAscendingAndDescendingButtons_RouteThroughTheResolverConsultingSessionOverload()
     {
         // Guards against a future refactor that points the ribbon Sort buttons at a session
-        // overload other than SortSelectedRange(bool) -- the only overload that consults
-        // SortAdjacentDataPromptResolver (SortSelectedRange(SortDialogCommandPlan), used by the
-        // Custom Sort dialog, does not).
+        // overload other than SortSelectedRange(bool) -- the overload SortSelectedRange(bool)
+        // consults SortAdjacentDataPromptResolver directly; SortSelectedRange(SortDialogCommandPlan)
+        // (the single-arg overload) still does not and must not (see its own remarks) -- the Custom
+        // Sort dialog now resolves the same warning itself, up front, via
+        // ResolveSortRangeAfterAdjacentDataPrompt, before ever building the dialog (R142-services-
+        // sort-customdialog-1, verified below).
         var source = DialogSourceTestSupport.ReadHostSources("MainWindow.DataFilterCommands.cs");
 
         source.Should().Contain("_session.SortSelectedRange(ascending: true)");
         source.Should().Contain("_session.SortSelectedRange(ascending: false)");
+    }
+
+    [Fact]
+    public void SortCustomButton_ResolvesSortWarningBeforeBuildingDialogAndExecutesViaTwoArgOverload()
+    {
+        // R142-services-sort-customdialog-1: the Custom Sort dialog path previously never consulted
+        // SortAdjacentDataPromptResolver at all -- selecting a proper subset of a wider table and
+        // using Custom Sort silently sorted just the selected columns, scrambling records, exactly
+        // like the ribbon-button bug R141 fixed for Quick Sort. Fixed by resolving the same warning
+        // up front (before the dialog's column/row/color/icon choices are built from the winning
+        // range) and executing against that resolved range via the two-arg overload.
+        var source = DialogSourceTestSupport.ReadHostSources("MainWindow.DataFilterCommands.cs");
+
+        source.Should().Contain("var range = _session.ResolveSortRangeAfterAdjacentDataPrompt(rawRange);");
+        source.Should().Contain("_session.SortSelectedRange(sortPlan, range)");
     }
 }

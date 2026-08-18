@@ -83,7 +83,38 @@ public enum TextVerticalType
 }
 
 /// <summary>
-/// A hyperlink target.  Exactly one of <see cref="Url"/> or <see cref="TargetSlideId"/> is set.
+/// PowerPoint's built-in action-only click actions — no relationship/target is required
+/// for these; the whole action is carried by the <c>a:hlinkClick/@action</c> URI itself
+/// (no <c>r:id</c>). Used by the standard Action Buttons (Insert &gt; Shapes &gt; Action
+/// Buttons) and by manually-authored click actions on any shape.
+/// </summary>
+public enum HyperlinkActionKind
+{
+    /// <summary>Not an action-only hyperlink (Url or TargetSlideId carries the target instead).</summary>
+    None = 0,
+
+    /// <summary><c>ppaction://hlinknextslide</c> — advance to the next slide.</summary>
+    NextSlide,
+
+    /// <summary><c>ppaction://hlinkprevslide</c> — go back to the previous slide.</summary>
+    PreviousSlide,
+
+    /// <summary><c>ppaction://hlinkfirstslide</c> — jump to the first slide.</summary>
+    FirstSlide,
+
+    /// <summary><c>ppaction://hlinklastslide</c> — jump to the last slide.</summary>
+    LastSlide,
+
+    /// <summary><c>ppaction://hlinklastslideviewed</c> — return to the previously-viewed slide.</summary>
+    LastSlideViewed,
+
+    /// <summary><c>ppaction://hlinkendshow</c> — end the slide show.</summary>
+    EndShow,
+}
+
+/// <summary>
+/// A hyperlink target.  Exactly one of <see cref="Url"/>, <see cref="TargetSlideId"/>, or
+/// <see cref="Action"/> is set.
 /// </summary>
 public sealed class Hyperlink
 {
@@ -95,6 +126,15 @@ public sealed class Hyperlink
     /// Set for in-presentation jump links (<c>ppaction://hlinksldjump</c>).
     /// </summary>
     public string? TargetSlideId { get; set; }
+
+    /// <summary>
+    /// Built-in action-only click action (Next/Previous/First/Last Slide, End Show, etc.).
+    /// Set instead of <see cref="Url"/>/<see cref="TargetSlideId"/> when the authored
+    /// <c>a:hlinkClick</c> has no <c>r:id</c> and its <c>action</c> is one of the standard
+    /// PowerPoint navigation verbs (e.g. from an Action Button). <see cref="None"/> means
+    /// this hyperlink is not an action-only click.
+    /// </summary>
+    public HyperlinkActionKind Action { get; set; } = HyperlinkActionKind.None;
 
     /// <summary>Optional tooltip text shown on hover.</summary>
     public string? Tooltip { get; set; }
@@ -236,6 +276,12 @@ public sealed class FieldRun
 
     /// <summary>Font/formatting properties (same as Run). May be null → inherit.</summary>
     public string? FontFamily { get; set; }
+
+    /// <summary>East-Asian font family override, or null to inherit. Corresponds to <c>a:fld/a:rPr/a:ea/@typeface</c>.</summary>
+    public string? EastAsiaFontFamily { get; set; }
+
+    /// <summary>Complex-script font family override, or null to inherit. Corresponds to <c>a:fld/a:rPr/a:cs/@typeface</c>.</summary>
+    public string? ComplexScriptFontFamily { get; set; }
     public double? FontSizePt { get; set; }
     public bool Bold { get; set; }
     public bool Italic { get; set; }
@@ -276,6 +322,8 @@ public sealed class FieldRun
         Instruction = Instruction,
         CachedText = CachedText,
         FontFamily = FontFamily,
+        EastAsiaFontFamily = EastAsiaFontFamily,
+        ComplexScriptFontFamily = ComplexScriptFontFamily,
         FontSizePt = FontSizePt,
         Bold = Bold,
         Italic = Italic,
@@ -437,6 +485,20 @@ public sealed class Run
 
     /// <summary>Font family name, or null to inherit from paragraph/layout/master.</summary>
     public string? FontFamily { get; set; }
+
+    /// <summary>
+    /// East-Asian font family override, or null to inherit. Corresponds to
+    /// <c>a:rPr/a:ea/@typeface</c>. Distinct from <see cref="FontFamily"/> (the Latin
+    /// typeface) so CJK glyphs keep their authored font when Office writes separate
+    /// latin/ea/cs typefaces (the default for Asian-locale themes).
+    /// </summary>
+    public string? EastAsiaFontFamily { get; set; }
+
+    /// <summary>
+    /// Complex-script font family override, or null to inherit. Corresponds to
+    /// <c>a:rPr/a:cs/@typeface</c>.
+    /// </summary>
+    public string? ComplexScriptFontFamily { get; set; }
 
     /// <summary>Font size in points, or null to inherit.</summary>
     public double? FontSizePt { get; set; }

@@ -120,6 +120,115 @@ public class ShapeRoundTripTests
         roundTripped.TextParagraphs[1].PlainText.Should().Be("Second line");
     }
 
+    private static byte[] MinimalPng() =>
+    [
+        0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A,
+        0x00, 0x00, 0x00, 0x0D, 0x49, 0x48, 0x44, 0x52,
+        0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01,
+        0x08, 0x06, 0x00, 0x00, 0x00, 0x1F, 0x15, 0xC4,
+        0x89, 0x00, 0x00, 0x00, 0x0D, 0x49, 0x44, 0x41,
+        0x54, 0x78, 0x9C, 0x62, 0x00, 0x01, 0x00, 0x00,
+        0x05, 0x00, 0x01, 0x0D, 0x0A, 0x2D, 0xB4, 0x00,
+        0x00, 0x00, 0x00, 0x49, 0x45, 0x4E, 0x44, 0xAE,
+        0x42, 0x60, 0x82,
+    ];
+
+    [Fact]
+    public void TextBox_WithImage_SurvivesRoundTrip()
+    {
+        // Regression (r144, freew-textbox-image-loss): CollectImages/the imagesByRun map only walked
+        // top-level body paragraphs, never run.Shape.TextParagraphs, so a picture pasted into a text box
+        // never got a relationship id or a word/media part and BuildTextRun silently fell through to an
+        // empty <w:t/>. The picture must round-trip byte-for-byte, same as a top-level inline image.
+        var png = MinimalPng();
+        var shape = new Shape(ShapeKind.TextBox, 200, 120);
+        var paragraph = new Paragraph();
+        paragraph.Runs.Add(Run.FromImage(new InlineImage(png, widthPt: 60, heightPt: 40)));
+        shape.TextParagraphs.Add(paragraph);
+
+        var read = RoundTrip(DocumentWith(shape));
+
+        var roundTripped = read.Paragraphs.Single().Runs.Single(r => r.Shape is not null).Shape!;
+        var imageRun = roundTripped.TextParagraphs.Single().Runs.Single(r => r.Image is not null);
+        imageRun.Image!.PngBytes.Should().Equal(png);
+        imageRun.Image.WidthPt.Should().BeApproximately(60, 0.01);
+        imageRun.Image.HeightPt.Should().BeApproximately(40, 0.01);
+    }
+
+    [Fact]
+    public void TextBox_WithImageAlongsideTopLevelImage_BothSurviveWithDistinctBytes()
+    {
+        // Sibling/non-regression coverage for the same fix: a document mixing an ordinary top-level inline
+        // image with a text-box image exercises the split image-collection walk (the narrow chart/
+        // embedded-object/SmartArt loop plus the separately widened image loop in DocxWriter.BuildDocument)
+        // and must not let either image steal the other's relationship id / media bytes.
+        var topLevelPng = MinimalPng();
+        // A second, distinguishable 1x1 PNG (different IDAT payload) so a swapped assignment is detectable.
+        byte[] textBoxPng =
+        [
+            0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A,
+            0x00, 0x00, 0x00, 0x0D, 0x49, 0x48, 0x44, 0x52,
+            0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01,
+            0x08, 0x02, 0x00, 0x00, 0x00, 0x90, 0x77, 0x53,
+            0xDE, 0x00, 0x00, 0x00, 0x0C, 0x49, 0x44, 0x41,
+            0x54, 0x08, 0xD7, 0x63, 0xF8, 0xCF, 0xC0, 0x00,
+            0x00, 0x03, 0x01, 0x01, 0x00, 0x18, 0xDD, 0x8D,
+            0xB0, 0x00, 0x00, 0x00, 0x00, 0x49, 0x45, 0x4E,
+            0x44, 0xAE, 0x42, 0x60, 0x82,
+        ];
+
+        var doc = new TextDocument();
+        var topLevelParagraph = new Paragraph();
+        topLevelParagraph.Runs.Add(Run.FromImage(new InlineImage(topLevelPng, widthPt: 30, heightPt: 20)));
+        doc.Blocks.Add(topLevelParagraph);
+
+        var shape = new Shape(ShapeKind.TextBox, 200, 120);
+        var shapeParagraph = new Paragraph();
+        shapeParagraph.Runs.Add(Run.FromImage(new InlineImage(textBoxPng, widthPt: 60, heightPt: 40)));
+        shape.TextParagraphs.Add(shapeParagraph);
+        var shapeParagraphOwner = new Paragraph();
+        shapeParagraphOwner.Runs.Add(Run.FromShape(shape));
+        doc.Blocks.Add(shapeParagraphOwner);
+
+        var read = RoundTrip(doc);
+
+        var topLevelImage = read.Blocks.OfType<Paragraph>().First().Runs.Single(r => r.Image is not null).Image!;
+        var shapeImage = read.Blocks.OfType<Paragraph>().Skip(1).Single()
+            .Runs.Single(r => r.Shape is not null).Shape!
+            .TextParagraphs.Single().Runs.Single(r => r.Image is not null).Image!;
+
+        topLevelImage.PngBytes.Should().Equal(topLevelPng);
+        shapeImage.PngBytes.Should().Equal(textBoxPng);
+    }
+
+    [Fact]
+    public void HeaderTextBox_WithImage_SurvivesRoundTrip()
+    {
+        // Same fix, header-scoped path: CollectHeaderFooterImages/BuildHeaderFooterImagesByRun only walked
+        // content.Paragraphs directly, never a text box's own nested paragraphs, so a picture inside a
+        // header text box was dropped the same way a body one was.
+        var png = MinimalPng();
+        var document = new TextDocument();
+        document.Blocks.Add(new Paragraph("Body"));
+        var header = new HeaderFooter();
+        var headerParagraph = new Paragraph();
+        var shape = new Shape(ShapeKind.TextBox, 180, 72);
+        var shapeParagraph = new Paragraph();
+        shapeParagraph.Runs.Add(Run.FromImage(new InlineImage(png, widthPt: 50, heightPt: 35)));
+        shape.TextParagraphs.Add(shapeParagraph);
+        headerParagraph.Runs.Add(Run.FromShape(shape));
+        header.Paragraphs.Add(headerParagraph);
+        document.Header = header;
+
+        var read = RoundTrip(document);
+
+        var headerShape = read.Header!.Paragraphs.Single().Runs.Single(r => r.Shape is not null).Shape!;
+        var imageRun = headerShape.TextParagraphs.Single().Runs.Single(r => r.Image is not null);
+        imageRun.Image!.PngBytes.Should().Equal(png);
+        imageRun.Image.WidthPt.Should().BeApproximately(50, 0.01);
+        imageRun.Image.HeightPt.Should().BeApproximately(35, 0.01);
+    }
+
     [Fact]
     public void TextBoxHyperlinks_UseOwningStoryRelationships_AndRoundTrip()
     {

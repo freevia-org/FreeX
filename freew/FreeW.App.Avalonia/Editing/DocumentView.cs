@@ -25,6 +25,7 @@ using FreeW.Core.IO;
 using FreeW.Core.Model;
 using SkiaSharp;
 using TextAlignment = FreeW.Core.Model.TextAlignment;
+using ModelContentControl = FreeW.Core.Model.ContentControl;
 
 namespace FreeW.App.Avalonia.Editing;
 
@@ -702,42 +703,65 @@ public sealed partial class DocumentView : Control
     }
 
     /// <summary>Select the next occurrence of <paramref name="query"/> after the caret (wraps around).</summary>
-    public bool FindNext(string query)
+    public bool FindNext(string query) => FindNext(query, new FindReplaceSearchOptions());
+
+    public bool FindNext(string query, FindReplaceSearchOptions options)
     {
         if (string.IsNullOrEmpty(query))
             return false;
         if (FindReplaceDialogPlanner.FindNextMatch(
                 _doc,
                 query,
-                new FindReplaceSearchOptions(),
+                options,
                 _caret.Block,
-                _caret.Offset) is not { } hit)
+                _caret.Offset,
+                CurrentFindReplaceTableCellPosition()) is not { } hit)
             return false;
 
-        _selectionAnchor = new DocPosition(hit.Block, hit.Start);
-        _caret = new DocPosition(hit.Block, hit.Start + hit.Length);
+        SelectFindReplaceMatch(hit);
         Focus();
         InvalidateVisual();
         ScrollToCaretRequested?.Invoke();
         return true;
     }
 
-    public bool FindNext(string query, FindReplaceSearchOptions options)
-    {
-        if (FindReplaceDialogPlanner.FindNextMatch(
-                _doc,
-                query,
-                options,
-                _caret.Block,
-                _caret.Offset) is not { } hit)
-            return false;
+    /// <summary>
+    /// The table-cell position Find Next should resume from when the caret is currently sitting inside a
+    /// table cell (row/column/paragraph-in-cell index, and the real text offset within that paragraph --
+    /// distinct from <c>_caret.Offset</c>, which while in a cell holds a render glyph offset, not a plain-
+    /// text offset). Null when the caret is in body text, so the search starts from the block boundary.
+    /// </summary>
+    private (int Row, int Col, int ParagraphIndex, int Offset)? CurrentFindReplaceTableCellPosition() =>
+        _cellCaret is { } cc && cc.TableBlock == _caret.Block
+            ? (cc.Row, cc.Col, cc.ParaIdx, cc.Offset)
+            : null;
 
+    /// <summary>
+    /// Selects a Find/Replace hit: a plain body-text match moves the ordinary block/offset caret and
+    /// selection, while a table-cell match (<see cref="FindReplaceMatch.IsInTableCell"/>) additionally
+    /// sets <see cref="_cellCaret"/>/<see cref="_cellAnchor"/> so the rest of the editor (Replace,
+    /// <see cref="SelectedText"/>, typing) recognizes and acts on it as an ordinary in-cell selection.
+    /// </summary>
+    private void SelectFindReplaceMatch(FindReplaceMatch hit)
+    {
+        if (hit.IsInTableCell)
+        {
+            var anchor = (TableBlock: hit.Block, Row: hit.TableRow!.Value, Col: hit.TableCol!.Value,
+                ParaIdx: hit.TableParagraphIndex!.Value, Offset: hit.Start);
+            var caret = anchor with { Offset = hit.Start + hit.Length };
+            _cellAnchor = anchor;
+            _cellCaret = caret;
+            _selectionAnchor = new DocPosition(hit.Block, FindCellGlyphOffset(
+                anchor.TableBlock, anchor.Row, anchor.Col, anchor.ParaIdx, anchor.Offset));
+            _caret = new DocPosition(hit.Block, FindCellGlyphOffset(
+                caret.TableBlock, caret.Row, caret.Col, caret.ParaIdx, caret.Offset));
+            return;
+        }
+
+        _cellCaret = null;
+        _cellAnchor = null;
         _selectionAnchor = new DocPosition(hit.Block, hit.Start);
         _caret = new DocPosition(hit.Block, hit.Start + hit.Length);
-        Focus();
-        InvalidateVisual();
-        ScrollToCaretRequested?.Invoke();
-        return true;
     }
 
     /// <summary>
@@ -943,6 +967,12 @@ public sealed partial class DocumentView : Control
 
     private void ReplaceSelectionWith(string replacement)
     {
+        if (HasCellTextSelection())
+        {
+            ReplaceCellTextSelectionWith(replacement);
+            return;
+        }
+
         if (NormalizedSelection() is not { } sel || sel.Start.Block != sel.End.Block)
             return;
         if (_doc.Blocks[sel.Start.Block] is not Paragraph paragraph || !IsTextReplaceable(paragraph))
@@ -950,6 +980,27 @@ public sealed partial class DocumentView : Control
 
         _selectionAnchor = sel.Start;
         _caret = sel.End;
+        InsertText(replacement);
+    }
+
+    /// <summary>
+    /// Replaces the current in-cell text selection (as set by <see cref="SelectFindReplaceMatch"/> for a
+    /// table Find/Replace hit, or by ordinary shift-selection while typing in a cell) via the same
+    /// <see cref="InsertText"/> selection-replace path normal typing uses, so Track Changes/Restrict
+    /// Editing behave identically to a body-text replace.
+    /// </summary>
+    private void ReplaceCellTextSelectionWith(string replacement)
+    {
+        if (_cellAnchor is not { } anchor || _cellCaret is not { } caret)
+            return;
+
+        var (start, end) = CompareCellEndpoints(anchor, caret) <= 0 ? (anchor, caret) : (caret, anchor);
+        var para = GetCellParagraph(start.TableBlock, start.Row, start.Col, start.ParaIdx);
+        if (para is null || !IsTextReplaceable(para))
+            return;
+
+        _cellAnchor = start;
+        _cellCaret = end;
         InsertText(replacement);
     }
 
@@ -6400,7 +6451,7 @@ public sealed partial class DocumentView : Control
         // The portable sequence planner owns per-level numbering, overrides, and continuation across
         // ordinary body paragraphs and interleaved bullets.
         var listMarkerSequence = new DocumentListMarkerSequencePlanner(
-            _doc.MultiLevelList.NumberFormats);
+            _doc.MultiLevelList.NumberFormats, _doc.MultiLevelList.LevelTexts);
         var preservedNumberingMarkers = PreservedNumberingMarkerPlanner.Build(_doc);
         var hiddenBlocks = _outlineCollapse.BuildHiddenBlockIndices(_doc.Blocks);
         for (var blockIndex = 0; blockIndex < _doc.Blocks.Count; blockIndex++)
@@ -6905,7 +6956,7 @@ public sealed partial class DocumentView : Control
             for (var runIndex = 0; runIndex < para.Runs.Count; runIndex++)
             {
                 var run = para.Runs[runIndex];
-                var effectiveFormatting = ResolveRunFmt(run.Formatting, para);
+                var effectiveFormatting = ResolveRunFmt(run, para);
                 if (sb.Length > 0 && effectiveFormatting != segFmt)
                     FlushText();
                 segFmt = effectiveFormatting;
@@ -8155,7 +8206,7 @@ public sealed partial class DocumentView : Control
         var nextRawCells = IsEditable(nextParagraph)
             ? ParaCells(nextParagraph, includeFlowBreaks: true)
             : DisplayCells(blockIndex + 1, nextParagraph, includeFlowBreaks: true);
-        var nextCells = nextRawCells.Select(c => c with { Fmt = ResolveRunFmt(c.Fmt, nextParagraph) }).ToList();
+        var nextCells = nextRawCells.Select(c => c with { Fmt = ResolveRunFmt(c.Fmt, nextParagraph, c.StyleId) }).ToList();
         var nextSupportsCompleteParagraphPlanning = nextIndentFirst == 0
             && _wrapExclusions.Count == 0
             && nextCells.All(cell =>
@@ -8402,7 +8453,7 @@ public sealed partial class DocumentView : Control
                 IsColumnBreak: cell.IsColumnBreak)).ToList());
         // Resolve document defaults and named styles for display only; editing re-derives raw cells
         // from the model. Unstyled paragraphs still inherit DefaultRun, just as they do in Word.
-        var cells = rawCells.Select(c => c with { Fmt = ResolveRunFmt(c.Fmt, paragraph) }).ToList();
+        var cells = rawCells.Select(c => c with { Fmt = ResolveRunFmt(c.Fmt, paragraph, c.StyleId) }).ToList();
         var reviewPolicy = CurrentReviewDisplayPolicy;
         var pf = ResolveParagraphFmt(paragraph);
         var alignment = pf.Alignment;
@@ -8443,7 +8494,7 @@ public sealed partial class DocumentView : Control
         foreach (var run in paragraph.Runs)
         {
             if (run.Image is not null || run.Shape is not null) continue; // skip non-text
-            var effectiveFormatting = ResolveRunFmt(run.Formatting, paragraph);
+            var effectiveFormatting = ResolveRunFmt(run, paragraph);
             if (IsTextHiddenInCurrentView(effectiveFormatting)) continue;
             foreach (var ch in run.Text)
             {
@@ -9216,6 +9267,19 @@ public sealed partial class DocumentView : Control
         }
         colOffsets[cols] = running;
 
+        // AV-TBL-ALIGN: an inline (non-floating) table's authored w:jc/w:tblInd position -- WPF applies
+        // this via ResolveTableBlockMargin's Thickness(indent [+ slack], ...); this offset is the
+        // Avalonia equivalent, added to the column-band left edge below (row loop) so it composes with
+        // the existing floating-table placement, which already carries its own X and must not double it.
+        var tableIndentDip = Math.Max(0, table.IndentFromLeftPt ?? 0) * PxPerPoint;
+        var tableSlackDip = Math.Max(0, textWidth - running - tableIndentDip);
+        var tableInlineOffsetDip = table.Alignment switch
+        {
+            TableAlignment.Center => tableIndentDip + tableSlackDip / 2,
+            TableAlignment.Right => tableIndentDip + tableSlackDip,
+            _ => tableIndentDip
+        };
+
         const double pad = 5;
         // Word preserves the nominal table grid and treats tblCellSpacing as a gap around each
         // physical cell surface. Keep row measurement and pagination on the nominal grid; only
@@ -9309,7 +9373,7 @@ public sealed partial class DocumentView : Control
                     prCellWidth += colWidths[prCol + s];
 
                 var prFmt = cell.Paragraphs.Count > 0 && cell.Paragraphs[0].Runs.Count > 0
-                    ? ResolveRunFmt(cell.Paragraphs[0].Runs[0].Formatting, cell.Paragraphs[0])
+                    ? ResolveRunFmt(cell.Paragraphs[0].Runs[0], cell.Paragraphs[0])
                     : RunFormatting.Default;
                 if (EffectiveFillFor(pr, cellIndex).EffectiveBold)
                     prFmt = prFmt with { Bold = true };
@@ -9393,7 +9457,7 @@ public sealed partial class DocumentView : Control
                     cellWidth += colWidths[col + s];
 
                 var fmt = cell.Paragraphs.Count > 0 && cell.Paragraphs[0].Runs.Count > 0
-                    ? ResolveRunFmt(cell.Paragraphs[0].Runs[0].Formatting, cell.Paragraphs[0])
+                    ? ResolveRunFmt(cell.Paragraphs[0].Runs[0], cell.Paragraphs[0])
                     : RunFormatting.Default;
                 var cellAppearance = EffectiveFillFor(r, cellIndex);
                 if (cellAppearance.EffectiveBold)
@@ -9434,7 +9498,7 @@ public sealed partial class DocumentView : Control
             }
 
             // AV-COL-NONTXT AG1: use the column band that this row's content-Y falls in.
-            var rowColLeft = floatingPlacement?.XDip ?? ColumnLeftFor(rowContentY);
+            var rowColLeft = floatingPlacement?.XDip ?? (ColumnLeftFor(rowContentY) + tableInlineOffsetDip);
 
             foreach (var (cellModel, cellIndex, startCol, span, cellParas, paragraphSpacings, markerInsets, fmt) in measured)
             {
@@ -9749,7 +9813,7 @@ public sealed partial class DocumentView : Control
             // Plain text run: use text-line height as the Peek estimate.
             if (!string.IsNullOrEmpty(run.Text))
             {
-                var formatting = ResolveRunFmt(run.Formatting, paragraph);
+                var formatting = ResolveRunFmt(run, paragraph);
                 if (IsTextHiddenInCurrentView(formatting))
                     continue;
                 firstObjHeight = Build("Ag", formatting).Height;
@@ -9932,7 +9996,7 @@ public sealed partial class DocumentView : Control
             //  with text + inline objects still show the text.)
             if (!string.IsNullOrEmpty(run.Text))
             {
-                var fmt = ResolveRunFmt(run.Formatting, paragraph);
+                var fmt = ResolveRunFmt(run, paragraph);
                 if (IsTextHiddenInCurrentView(fmt))
                 {
                     var hiddenY = ContentYToPageSpaceY(_layoutContentY);
@@ -10384,7 +10448,7 @@ public sealed partial class DocumentView : Control
                 continue;
             }
 
-            var hidden = IsTextHiddenInCurrentView(ResolveRunFmt(run.Formatting, paragraph));
+            var hidden = IsTextHiddenInCurrentView(ResolveRunFmt(run, paragraph));
             var text = run.ComplexField is null
                 ? run.Text
                 : BuildBodyComplexFieldDisplayPlan(blockIndex, run).Text;
@@ -16719,7 +16783,17 @@ public sealed partial class DocumentView : Control
             || _cellCaret is not null
             || NormalizedSelection() is not null
             || CurrentParagraph() is not { } paragraph
-            || !IsEditable(paragraph))
+            || !IsEditable(paragraph)
+            // AV-CCEDIT: the replacement cells below are built from the caret's formatting alone and carry
+            // no content control, so autocorrecting a word that lies inside a field would strip that part
+            // of the field's text out of the w:sdt. Typing there stays on the field's own edit path.
+            || CanEditContentControlTextAtCaret()
+            // AV-CCLOCK: IsEditable only checks run-level markers -- a locked BLOCK-level content
+            // control (a body w:sdt wrapping the whole paragraph, no run-level w:sdt at all) is
+            // otherwise invisible to it. Ordinary typing is protected against this via
+            // DocumentEditingSession.IsPortableBodyTextParagraph, which consults the same planner
+            // check; AutoCorrect mutates the paragraph directly below, so it must consult it too.
+            || ContentControlInteractionPlanner.IsBlockContentControlLocked(paragraph.BlockContentControl))
             return false;
 
         var cells = ParaCells(paragraph);
@@ -16775,6 +16849,12 @@ public sealed partial class DocumentView : Control
             return true;
         }
 
+        // AV-UNDOGROUP: the auto-recognized hyperlink (Outcome == Hyperlink) is applied as a SEPARATE
+        // _bus.Execute below, deliberately outside any undo group, rather than folded into the
+        // `replacement` cells here. WPF/Word give an auto-link two undo steps -- one Ctrl+Z removes only
+        // the automatic hyperlink formatting and leaves the typed word in place, a second removes the
+        // word itself. Combining both edits into one command (as this used to do) collapsed that into a
+        // single undo step that deleted the whole word on the first Ctrl+Z.
         var replacement = new List<Cell>(result.Insert.Length);
         for (var index = 0; index < result.Insert.Length; index++)
         {
@@ -16787,18 +16867,11 @@ public sealed partial class DocumentView : Control
                 fmt = fmt with { VerticalAlign = VerticalAlign.Superscript };
             }
 
-            LinkInfo? link = null;
-            if (result.Outcome == AutoFormatOutcomeKind.Hyperlink
-                && result.LinkTarget is { Length: > 0 }
-                && index < result.Insert.Length - 1)
-            {
-                link = new LinkInfo(result.LinkTarget, null, null);
-            }
-
-            replacement.Add(new Cell(result.Insert[index], fmt, Link: link));
+            replacement.Add(new Cell(result.Insert[index], fmt));
         }
 
-        _bus.Execute(new ReplaceParagraphRunsCommand(_caret.Block, p =>
+        var block = _caret.Block;
+        _bus.Execute(new ReplaceParagraphRunsCommand(block, p =>
         {
             var live = ParaCells(p);
             live.RemoveRange(deleteStart, Math.Min(result.DeleteBefore, live.Count - deleteStart));
@@ -16806,8 +16879,26 @@ public sealed partial class DocumentView : Control
             SetRuns(p, live);
         }));
 
-        _caret = new DocPosition(_caret.Block, deleteStart + result.Insert.Length);
+        _caret = new DocPosition(block, deleteStart + result.Insert.Length);
         _selectionAnchor = _caret;
+
+        if (result.Outcome == AutoFormatOutcomeKind.Hyperlink
+            && result.LinkTarget is { Length: > 0 } linkTarget)
+        {
+            var link = new LinkInfo(linkTarget, null, null);
+            var linkStart = deleteStart;
+            var linkEnd = deleteStart + result.Insert.Length - 1; // exclude the trailing space
+            _bus.Execute(new ReplaceParagraphRunsCommand(block, p =>
+            {
+                var live = ParaCells(p);
+                var lo = Math.Clamp(linkStart, 0, live.Count);
+                var hi = Math.Clamp(linkEnd, lo, live.Count);
+                for (var i = lo; i < hi; i++)
+                    live[i] = live[i] with { Link = link };
+                SetRuns(p, live);
+            }));
+        }
+
         return true;
     }
 
@@ -16829,8 +16920,14 @@ public sealed partial class DocumentView : Control
         }
 
         // AV-CCEDIT: Backspace/Delete inside an editable form field survive the body lock; the
-        // per-gesture paths still refuse anything that would reach outside the control.
-        if (IsEditingLocked && input.IsEditingMutation && !CanEditContentControlTextAtCaret())
+        // per-gesture paths still refuse anything that would reach outside the control. Tab survives it
+        // too while forms protection is on, where it is a move between fields rather than an edit.
+        var isFormFieldTab = input.Intent == DocumentEditorInputIntent.NavigateTab
+            && RestrictEditingPolicy.IsFormFieldEditingOnly;
+        if (IsEditingLocked
+            && input.IsEditingMutation
+            && !isFormFieldTab
+            && !CanEditContentControlTextAtCaret())
         {
             e.Handled = true;
             return;
@@ -17074,7 +17171,14 @@ public sealed partial class DocumentView : Control
             // it handles list demote/promote at item start, or inserts a literal tab character
             // (body-paragraph behaviour, same as before).
             case DocumentEditorInputIntent.NavigateTab:
-                if (_cellCaret is not null)
+                // AV-CCEDIT: while "Filling in Forms" protection is on, Tab is Word's field-to-field
+                // gesture — it must not type a literal tab into the field the caret is sitting in.
+                if (RestrictEditingPolicy.IsFormFieldEditingOnly)
+                {
+                    TabToContentControl(forward: !input.ExtendSelection);
+                    e.Handled = true;
+                }
+                else if (_cellCaret is not null)
                 {
                     TabNavigateCell(forward: !input.ExtendSelection);
                     e.Handled = true;
@@ -17659,22 +17763,30 @@ public sealed partial class DocumentView : Control
 
     // ---- AV-CCEDIT: keyboard text editing INSIDE a content control -------------------------------
     //
-    // A paragraph that holds a content-control run fails IsPlainTextEditable / IsTextReplaceable, so
-    // every body-text path rejects it wholesale — and this renderer, unlike the WPF host, has no native
-    // editor to fall back on. That made a Plain-Text / Rich-Text control untypable even in an
-    // unprotected document, and made "Filling in Forms" protection — whose entire purpose is to let the
-    // user fill those fields in — a dead end. The paths below edit the CONTROL RUN itself (never the
-    // surrounding body text), gated by the shared ContentControlInteractionPlanner policy, so they are
-    // allowed while body editing is locked.
+    // A field's own text is not ordinary body text: it is editable only when the document's protection
+    // state AND the control's own lock allow it, and only for the kinds that take typed text (a check
+    // box, date picker and drop-down own their text). So the paths below run BEFORE the body paths and
+    // before their IsEditingLocked guards — that is exactly what "Filling in Forms" protection permits —
+    // and they rewrite the field's run span alone, never the body text around it. The body text around a
+    // field is handled by the ordinary paths; a <see cref="Cell"/> carries the control through their
+    // ParaCells → SetRuns round-trip so the w:sdt survives.
+    //
+    // A caret at the junction of two adjacent fields resolves to the first of them, which is also where
+    // typed text lands.
 
     /// <summary>
-    /// The caret (and any selection) resolved into a text-entry content-control run: which run, where it
-    /// starts in the paragraph's text, and the selected span relative to the run's own text.
+    /// The caret (and any selection) resolved onto one content control's run span: which paragraph runs
+    /// the field owns, where its text starts in the paragraph, and the selected range relative to the
+    /// field's own text. A field is a SPAN, not a single run — mixed formatting inside it is several runs
+    /// already, and a tracked edit adds an inserted/struck run beside the original.
     /// </summary>
     private readonly record struct ContentControlTextCaret(
         ContentControlTarget Target,
-        Run Run,
-        int RunStart,
+        int RunCount,
+        ModelContentControl Control,
+        RunFormatting Formatting,
+        int SpanStart,
+        int SpanLength,
         int Start,
         int Length);
 
@@ -17728,32 +17840,65 @@ public sealed partial class DocumentView : Control
         if (paragraph is null || !HasVerbatimRunText(paragraph))
             return false;
 
-        var offset = 0;
-        for (var index = 0; index < paragraph.Runs.Count; index++)
+        foreach (var span in ContentControlSpans(paragraph))
         {
-            var run = paragraph.Runs[index];
-            var end = offset + run.Text.Length;
-            // The whole caret/selection span must lie within this control's own text — an edit must
-            // never spill into the body text around the field.
-            if (ContentControlInteractionPlanner.CanEditContentControlText(run, RestrictEditingPolicy)
-                && selectionStart >= offset
-                && selectionEnd <= end)
+            // The whole caret/selection must lie within this field's own text — an edit must never spill
+            // into the body text around it.
+            if (selectionStart < span.Start || selectionEnd > span.Start + span.Length)
+                continue;
+            if (!ContentControlInteractionPlanner.CanEditContentControlText(
+                    paragraph.Runs[span.FirstRunIndex],
+                    RestrictEditingPolicy))
             {
-                caret = new ContentControlTextCaret(
-                    _cellCaret is { } target
-                        ? new ContentControlTarget(
-                            target.TableBlock, index, target.Row, target.Col, target.ParaIdx)
-                        : new ContentControlTarget(_caret.Block, index),
-                    run,
-                    offset,
-                    selectionStart - offset,
-                    selectionEnd - selectionStart);
-                return true;
+                continue;
             }
-            offset = end;
+
+            caret = new ContentControlTextCaret(
+                _cellCaret is { } target
+                    ? new ContentControlTarget(
+                        target.TableBlock, span.FirstRunIndex, target.Row, target.Col, target.ParaIdx)
+                    : new ContentControlTarget(_caret.Block, span.FirstRunIndex),
+                span.RunCount,
+                paragraph.Runs[span.FirstRunIndex].Control!,
+                paragraph.Runs[span.FirstRunIndex + span.RunCount - 1].Formatting,
+                span.Start,
+                span.Length,
+                selectionStart - span.Start,
+                selectionEnd - selectionStart);
+            return true;
         }
 
         return false;
+    }
+
+    /// <summary>
+    /// The paragraph's content-control run spans, in document order: each maximal run of consecutive runs
+    /// sharing one control instance — exactly the grouping the docx writer wraps in a single w:sdt.
+    /// </summary>
+    private static IEnumerable<(int FirstRunIndex, int RunCount, int Start, int Length)> ContentControlSpans(
+        Paragraph paragraph)
+    {
+        var offset = 0;
+        for (var index = 0; index < paragraph.Runs.Count;)
+        {
+            var control = paragraph.Runs[index].Control;
+            if (control is null)
+            {
+                offset += paragraph.Runs[index].Text.Length;
+                index++;
+                continue;
+            }
+
+            var start = offset;
+            var first = index;
+            while (index < paragraph.Runs.Count && ReferenceEquals(paragraph.Runs[index].Control, control))
+            {
+                offset += paragraph.Runs[index].Text.Length;
+                index++;
+            }
+
+            yield return (first, index - first, start, offset - start);
+        }
     }
 
     /// <summary>
@@ -17766,13 +17911,145 @@ public sealed partial class DocumentView : Control
             && r.ComplexField is null && r.FootnoteId is null && r.EndnoteId is null
             && !IsFloatingDrawingRun(r));
 
+    /// <summary>
+    /// Whether the caret sits strictly between the first and last character of a content control — the
+    /// positions where a structural split would tear one w:sdt in two. Boundary positions are not
+    /// "inside": a break or an insertion there keeps the field whole.
+    /// </summary>
+    private bool IsCaretStrictlyInsideContentControl()
+    {
+        Paragraph? paragraph;
+        int contentOffset;
+        if (_cellCaret is { } cell)
+        {
+            paragraph = GetCellParagraph(cell.TableBlock, cell.Row, cell.Col, cell.ParaIdx);
+            contentOffset = cell.Offset;
+        }
+        else if (_hfCaret is not null || _shapeCaret is not null)
+        {
+            return false;
+        }
+        else
+        {
+            paragraph = CurrentParagraph();
+            contentOffset = _caret.Offset;
+        }
+
+        if (paragraph is null || !HasVerbatimRunText(paragraph))
+            return false;
+
+        return ContentControlSpans(paragraph)
+            .Any(span => contentOffset > span.Start && contentOffset < span.Start + span.Length);
+    }
+
+    /// <summary>
+    /// Word's form-filling Tab: moves to the next (or previous) editable content control in the body and
+    /// selects its contents, so the field can be typed over straight away. Table cells are walked too,
+    /// because forms usually lay their fields out in a table. Wraps around at the ends, as Word does.
+    /// </summary>
+    private void TabToContentControl(bool forward)
+    {
+        var stops = BodyContentControlTabStops();
+        if (stops.Count == 0)
+            return;
+
+        // One comparable position for body and in-cell carets alike; a block is either a paragraph or a
+        // table, so the -1 placeholders never collide with real row/column/paragraph indices.
+        var caret = _cellCaret is { } cell
+            ? (cell.TableBlock, cell.Row, cell.Col, cell.ParaIdx, cell.Offset)
+            : (_caret.Block, -1, -1, -1, _caret.Offset);
+
+        var ordered = forward ? stops : Enumerable.Reverse(stops).ToList();
+        var index = ordered.FindIndex(stop => forward
+            ? (stop.Block, stop.Row, stop.Col, stop.ParaIdx, stop.Start).CompareTo(caret) > 0
+            : (stop.Block, stop.Row, stop.Col, stop.ParaIdx, stop.End).CompareTo(caret) < 0);
+        // Nothing further in this direction: wrap around, as Word does at the last/first field.
+        var target = ordered[index >= 0 ? index : 0];
+
+        if (target.Row >= 0)
+        {
+            PlaceCaretInCell(target.Block, target.Row, target.Col, target.ParaIdx, target.End);
+            _cellAnchor = (target.Block, target.Row, target.Col, target.ParaIdx, target.Start);
+            _selectionAnchor = new DocPosition(target.Block, target.Start);
+        }
+        else
+        {
+            _cellCaret = null;
+            _cellAnchor = null;
+            _hfCaret = null;
+            _caret = new DocPosition(target.Block, target.End);
+            _selectionAnchor = new DocPosition(target.Block, target.Start);
+        }
+
+        InvalidateVisual();
+        CaretMoved?.Invoke();
+    }
+
+    /// <summary>Every editable content control in the body, in document order, as a tab stop.</summary>
+    private List<(int Block, int Row, int Col, int ParaIdx, int Start, int End)> BodyContentControlTabStops()
+    {
+        var stops = new List<(int Block, int Row, int Col, int ParaIdx, int Start, int End)>();
+        for (var block = 0; block < _doc.Blocks.Count; block++)
+        {
+            switch (_doc.Blocks[block])
+            {
+                case Paragraph paragraph:
+                    AddStops(paragraph, block, -1, -1, -1);
+                    break;
+                case Table table:
+                    for (var row = 0; row < table.Rows.Count; row++)
+                    {
+                        // The caret addresses a cell by its STARTING grid column, so the tab stops must
+                        // use the same projection (a merged cell spans several columns).
+                        foreach (var projected in TableGridProjection.ProjectRow(table.Rows[row]))
+                        {
+                            for (var index = 0; index < projected.Cell.Paragraphs.Count; index++)
+                            {
+                                AddStops(
+                                    projected.Cell.Paragraphs[index],
+                                    block,
+                                    row,
+                                    projected.StartColumn,
+                                    index);
+                            }
+                        }
+                    }
+
+                    break;
+            }
+        }
+
+        return stops;
+
+        void AddStops(Paragraph paragraph, int block, int row, int column, int paragraphIndex)
+        {
+            foreach (var span in ContentControlSpans(paragraph))
+            {
+                if (ContentControlInteractionPlanner.CanEditContentControlText(
+                        paragraph.Runs[span.FirstRunIndex],
+                        RestrictEditingPolicy))
+                {
+                    stops.Add((block, row, column, paragraphIndex, span.Start, span.Start + span.Length));
+                }
+            }
+        }
+    }
+
     private bool TryInsertContentControlText(string text)
     {
         if (string.IsNullOrEmpty(text) || !TryResolveContentControlTextCaret(out var caret))
             return false;
 
-        var updated = caret.Run.Text.Remove(caret.Start, caret.Length).Insert(caret.Start, text);
-        return ApplyContentControlText(caret, updated, caret.Start + text.Length);
+        return ApplyContentControlTextEdit(caret, cells =>
+        {
+            var caretOffset = caret.Start;
+            if (caret.Length > 0)
+                caretOffset = DeleteContentControlCells(caret, cells, caret.Start, caret.Length);
+            var at = Math.Clamp(caretOffset, 0, cells.Count);
+            var inserted = TypedContentControlCells(caret, text, cells, at);
+            cells.InsertRange(at, inserted);
+            return at + inserted.Count;
+        });
     }
 
     private bool TryBackspaceContentControlText()
@@ -17784,15 +18061,17 @@ public sealed partial class DocumentView : Control
         var length = caret.Length;
         if (length == 0)
         {
-            // At the control's own start there is nothing of the FIELD left to delete; the character
-            // before it belongs to the (possibly protected) body text.
+            // At the field's own start there is nothing of the FIELD left to delete; the character before
+            // it belongs to the (possibly protected) body text.
             if (start == 0)
                 return false;
             start--;
             length = 1;
         }
 
-        return ApplyContentControlText(caret, caret.Run.Text.Remove(start, length), start);
+        return ApplyContentControlTextEdit(
+            caret,
+            cells => DeleteContentControlCells(caret, cells, start, length));
     }
 
     private bool TryDeleteForwardContentControlText()
@@ -17804,31 +18083,106 @@ public sealed partial class DocumentView : Control
         var length = caret.Length;
         if (length == 0)
         {
-            if (start >= caret.Run.Text.Length)
+            if (start >= caret.SpanLength)
                 return false;
             length = 1;
         }
 
-        return ApplyContentControlText(caret, caret.Run.Text.Remove(start, length), start);
+        return ApplyContentControlTextEdit(
+            caret,
+            cells => DeleteContentControlCells(caret, cells, start, length));
     }
 
     /// <summary>
-    /// Replaces the control run's text through the command bus (a FormField mutation, so undo stays
-    /// permitted while forms protection is on) and re-places the caret inside the control.
+    /// The cells for newly typed text inside a field. Like typing in body text, the new characters
+    /// inherit the marks of the character they follow (formatting, comment id, hyperlink) so they merge
+    /// into the neighbouring run instead of fragmenting the field; they always carry the field's own
+    /// control, and — when Track Changes is on — an insertion mark, so the edit round-trips as a w:ins
+    /// nested inside the w:sdt.
     /// </summary>
-    private bool ApplyContentControlText(ContentControlTextCaret caret, string text, int runCaretOffset)
+    private List<Cell> TypedContentControlCells(
+        ContentControlTextCaret caret,
+        string text,
+        List<Cell> cells,
+        int at)
     {
-        if (ContentControlInteractionPlanner.WithText(caret.Run, text) is not { } updated)
+        var neighbour = at > 0 && at - 1 < cells.Count
+            ? cells[at - 1]
+            : at < cells.Count
+                ? cells[at]
+                : new Cell('\0', caret.Formatting);
+        return text.Select(ch => new Cell(
+                ch,
+                neighbour.Fmt,
+                neighbour.CommentId,
+                Revision: TrackChangesEnabled ? RevisionKind.Inserted : RevisionKind.None,
+                RevisionAuthor: TrackChangesEnabled ? RevisionAuthor : null,
+                RevisionDateXml: TrackChangesEnabled ? _editingSession.RevisionDateXmlForEdit() : null,
+                Link: neighbour.Link,
+                Control: caret.Control))
+            .ToList();
+    }
+
+    /// <summary>
+    /// Removes <c>[start, start + length)</c> from a field's cells, or — with Track Changes on — marks it
+    /// deleted in place, and returns the new caret offset within the field.
+    /// </summary>
+    private int DeleteContentControlCells(
+        ContentControlTextCaret caret,
+        List<Cell> cells,
+        int start,
+        int length)
+    {
+        var lo = Math.Clamp(start, 0, cells.Count);
+        var hi = Math.Clamp(start + length, lo, cells.Count);
+        if (!TrackChangesEnabled)
+        {
+            cells.RemoveRange(lo, hi - lo);
+            return lo;
+        }
+
+        var (marked, caretOffset) = MarkCellsDeleted(cells, lo, hi);
+        cells.Clear();
+        // The strike re-segments the field's runs; every cell still belongs to this control.
+        cells.AddRange(marked.Select(cell => cell with { Control = caret.Control }));
+        return caretOffset;
+    }
+
+    /// <summary>
+    /// Applies <paramref name="edit"/> to the field's own cells and commits the resulting runs over the
+    /// field's run span through the command bus. The mutation is classified as a form-field edit, so
+    /// undo/redo stays permitted while "Filling in Forms" protection locks body editing. An emptied field
+    /// keeps one textless run so the w:sdt itself survives.
+    /// </summary>
+    private bool ApplyContentControlTextEdit(ContentControlTextCaret caret, Func<List<Cell>, int> edit)
+    {
+        if (!TryGetContentControlSpanRuns(caret, out var spanRuns))
             return false;
 
+        var source = new Paragraph();
+        source.Runs.AddRange(spanRuns.Select(run => RevisionEditPlanner.CloneRunWithText(run, run.Text)));
+
+        var cells = ParaCells(source);
+        var caretOffset = edit(cells);
+        var rebuilt = new Paragraph();
+        SetRuns(rebuilt, cells);
+        if (rebuilt.Runs.Count == 0)
+        {
+            // Every character is gone: keep the field as an empty w:sdt rather than deleting it, which is
+            // what Word does when the user clears a field.
+            rebuilt.Runs.Add(new Run(string.Empty, caret.Formatting) { Control = caret.Control });
+        }
+
+        var replacement = rebuilt.Runs.ToList();
+        var contentOffset = caret.SpanStart
+            + Math.Clamp(caretOffset, 0, replacement.Sum(run => run.Text.Length));
         var target = caret.Target;
-        var contentOffset = caret.RunStart + runCaretOffset;
         if (target.Row is { } row
             && target.Column is { } column
             && target.ParagraphIndex is { } paragraphIndex)
         {
-            _bus.Execute(new ReplaceCellContentControlRunCommand(
-                target.BlockIndex, row, column, paragraphIndex, target.RunIndex, updated));
+            _bus.Execute(new ReplaceCellContentControlRunSpanCommand(
+                target.BlockIndex, row, column, paragraphIndex, target.RunIndex, caret.RunCount, replacement));
             _cellCaret = (target.BlockIndex, row, column, paragraphIndex, contentOffset);
             _cellAnchor = _cellCaret;
             _caret = new DocPosition(
@@ -17838,8 +18192,8 @@ public sealed partial class DocumentView : Control
         }
         else
         {
-            if (!ReferenceEdits.ReplaceContentControlRun(target.BlockIndex, target.RunIndex, updated))
-                return false;
+            _bus.Execute(new ReplaceContentControlRunSpanCommand(
+                target.BlockIndex, target.RunIndex, caret.RunCount, replacement));
             _caret = new DocPosition(target.BlockIndex, contentOffset);
             _selectionAnchor = _caret;
         }
@@ -17849,33 +18203,26 @@ public sealed partial class DocumentView : Control
         return true;
     }
 
-    /// <summary>
-    /// Left/Right inside a paragraph that holds a content control. The shared interaction session
-    /// reports such a paragraph as non-navigable body text (its BodyTextLength is 0), so without this
-    /// the caret would jump straight out of the control on the first arrow key.
-    /// </summary>
-    private bool TryMoveCaretWithinContentControlParagraph(int delta, bool extend)
+    private bool TryGetContentControlSpanRuns(ContentControlTextCaret caret, out List<Run> runs)
     {
-        if (_cellCaret is not null
-            || _hfCaret is not null
-            || _shapeCaret is not null
-            || CurrentParagraph() is not { } paragraph
-            || paragraph.Runs.All(run => run.Control is null)
-            || !HasVerbatimRunText(paragraph))
+        runs = [];
+        var target = caret.Target;
+        var paragraph = target.Row is { } row
+            && target.Column is { } column
+            && target.ParagraphIndex is { } paragraphIndex
+            ? GetCellParagraph(target.BlockIndex, row, column, paragraphIndex)
+            : target.BlockIndex >= 0 && target.BlockIndex < _doc.Blocks.Count
+                ? _doc.Blocks[target.BlockIndex] as Paragraph
+                : null;
+        if (paragraph is null
+            || target.RunIndex < 0
+            || caret.RunCount <= 0
+            || target.RunIndex + caret.RunCount > paragraph.Runs.Count)
         {
             return false;
         }
 
-        // Out-of-paragraph movement keeps the shared cross-block navigation.
-        var offset = _caret.Offset + delta;
-        if (offset < 0 || offset > paragraph.Runs.Sum(run => run.Text.Length))
-            return false;
-
-        _caret = _caret with { Offset = offset };
-        if (!extend)
-            _selectionAnchor = _caret;
-        InvalidateVisual();
-        CaretMoved?.Invoke();
+        runs = paragraph.Runs.GetRange(target.RunIndex, caret.RunCount);
         return true;
     }
 
@@ -17896,8 +18243,11 @@ public sealed partial class DocumentView : Control
                 DeleteSelection();
             if (CurrentParagraph() is not { } paragraph || !IsEditable(paragraph))
             {
+                // AV-UNDOGROUP: DeleteSelection() above may already have applied a delete into
+                // this undo group. Roll it back rather than abandoning it, or the deletion
+                // survives with no way to undo it as one step.
                 if (ownsUndoGroup)
-                    _bus.AbortUndoGroup();
+                    _bus.RollbackUndoGroup();
                 return;
             }
 
@@ -18008,21 +18358,32 @@ public sealed partial class DocumentView : Control
         }
 
         if (NormalizedSelection() is not null) { DeleteSelection(); return; }
-        if (TrackChangesEnabled)
-            return;
 
         // Structurally special paragraphs stay on the renderer-owned path.
         if (_caret.Offset > 0)
         {
-            // AV-CCEDIT: this path rebuilds the paragraph from ParaCells, which carries no content
-            // control, field, image or equation — running it over such a paragraph would delete the
-            // object outright. IsTextReplaceable (the guard InsertText's fallback uses; DeleteForward's
-            // fallback has always been guarded likewise) keeps note marks editable while refusing those.
+            // AV-CCEDIT: this path rebuilds the paragraph from ParaCells, which carries no field, image
+            // or equation — running it over such a paragraph would delete the object outright.
+            // IsTextReplaceable (the guard InsertText's fallback uses; DeleteForward's fallback has
+            // always been guarded likewise) keeps note marks and content controls editable while
+            // refusing those.
             if (CurrentParagraph() is not { } fallbackParagraph || !IsTextReplaceable(fallbackParagraph))
                 return;
 
             var block = _caret.Block;
             var offset = _caret.Offset;
+            if (TrackChangesEnabled)
+            {
+                _bus.Execute(new ReplaceParagraphRunsCommand(block, p =>
+                {
+                    var (marked, _) = MarkCellsDeleted(ParaCells(p), offset - 1, offset);
+                    SetRuns(p, marked);
+                }));
+                _caret = new DocPosition(block, offset - 1);
+                _selectionAnchor = _caret;
+                return;
+            }
+
             _bus.Execute(new ReplaceParagraphRunsCommand(block, p =>
             {
                 var cells = ParaCells(p);
@@ -18033,7 +18394,7 @@ public sealed partial class DocumentView : Control
             _caret = new DocPosition(block, offset - 1);
             _selectionAnchor = _caret;
         }
-        else
+        else if (!TrackChangesEnabled)
             MergeWithPrevious();
     }
 
@@ -18155,8 +18516,6 @@ public sealed partial class DocumentView : Control
         }
 
         if (NormalizedSelection() is not null) { DeleteSelection(); return; }
-        if (TrackChangesEnabled)
-            return;
 
         // Structurally special paragraphs stay on the renderer-owned path.
         if (CurrentParagraph() is not { } paragraph || !IsEditable(paragraph))
@@ -18166,6 +18525,18 @@ public sealed partial class DocumentView : Control
         {
             var block = _caret.Block;
             var offset = _caret.Offset;
+            if (TrackChangesEnabled)
+            {
+                _bus.Execute(new ReplaceParagraphRunsCommand(block, p =>
+                {
+                    var (marked, _) = MarkCellsDeleted(ParaCells(p), offset, offset + 1);
+                    SetRuns(p, marked);
+                }));
+                _caret = new DocPosition(block, offset + 1);
+                _selectionAnchor = _caret;
+                return;
+            }
+
             _bus.Execute(new ReplaceParagraphRunsCommand(block, p =>
             {
                 var cells = ParaCells(p);
@@ -18179,6 +18550,13 @@ public sealed partial class DocumentView : Control
     private void InsertParagraphBreak()
     {
         if (IsEditingLocked)
+            return;
+
+        // AV-CCEDIT: splitting a paragraph rebuilds it as two paragraphs of cells, so a break struck
+        // INSIDE a content control would hand the same w:sdt to both halves — the field would be
+        // duplicated, each copy claiming part of the text. Word ignores Enter inside a (non-multiline)
+        // plain-text field, so refuse it here; a break at either boundary still splits normally.
+        if (IsCaretStrictlyInsideContentControl())
             return;
 
         // AV-HFEDIT: route into a header/footer region.
@@ -18711,6 +19089,11 @@ public sealed partial class DocumentView : Control
             return;
 
         if (NormalizedSelection() is not { } sel)
+            return;
+
+        // AV-CCEDIT: a content-locked field refuses to have its content removed, so a selection that
+        // reaches into one deletes nothing — Word likewise declines rather than deleting part of it.
+        if (SelectionReachesLockedContentControl(sel))
             return;
 
         var bodyRange = new DocumentTextRange(
@@ -21558,7 +21941,10 @@ public sealed partial class DocumentView : Control
                     cellCaret.ParaIdx);
                 if (paragraph is null || !IsFieldInsertable(paragraph))
                 {
-                    _bus.AbortUndoGroup();
+                    // AV-UNDOGROUP: DeleteCellSelection() above may already have applied a
+                    // delete into this still-open undo group. Roll it back rather than
+                    // abandoning it, or the deletion survives with no way to undo it.
+                    _bus.RollbackUndoGroup();
                     return;
                 }
 
@@ -21578,7 +21964,10 @@ public sealed partial class DocumentView : Control
                     DeleteSelection();
                 if (CurrentParagraph() is not { } paragraph || !IsFieldInsertable(paragraph))
                 {
-                    _bus.AbortUndoGroup();
+                    // AV-UNDOGROUP: DeleteSelection() above may already have applied a delete
+                    // into this still-open undo group. Roll it back rather than abandoning it,
+                    // or the deletion survives with no way to undo it as one step.
+                    _bus.RollbackUndoGroup();
                     return;
                 }
 
@@ -22847,10 +23236,37 @@ public sealed partial class DocumentView : Control
         {
             if (_hfCaret is not null)
                 return HeaderFooterSelectedText();
+            if (HasCellTextSelection())
+                return CellTextSelectionText();
             return NormalizedSelection() is null
                 ? string.Empty
                 : _editingSession.Interaction.ProjectSelectionText(CurrentBodyTextRange());
         }
+    }
+
+    /// <summary>
+    /// Plain text currently selected inside a table cell (see <see cref="_cellAnchor"/>/<see cref="_cellCaret"/>),
+    /// e.g. a match <see cref="SelectFindReplaceMatch"/> just located. Only handles a same-paragraph
+    /// selection -- the only shape Find/Replace ever produces; a cross-paragraph/cross-cell block
+    /// selection is a different concept surfaced separately via <see cref="SelectedCellRange"/>.
+    /// </summary>
+    private string CellTextSelectionText()
+    {
+        if (_cellAnchor is not { } anchor || _cellCaret is not { } caret)
+            return string.Empty;
+
+        var (start, end) = CompareCellEndpoints(anchor, caret) <= 0 ? (anchor, caret) : (caret, anchor);
+        if (start.Row != end.Row || start.Col != end.Col || start.ParaIdx != end.ParaIdx)
+            return string.Empty;
+
+        var para = GetCellParagraph(start.TableBlock, start.Row, start.Col, start.ParaIdx);
+        if (para is null)
+            return string.Empty;
+
+        var text = para.PlainText;
+        var from = Math.Clamp(start.Offset, 0, text.Length);
+        var to = Math.Clamp(end.Offset, 0, text.Length);
+        return to > from ? text[from..to] : string.Empty;
     }
 
     public bool TryDeleteSelection()
@@ -23262,11 +23678,6 @@ public sealed partial class DocumentView : Control
                 extend);
             return;
         }
-
-        // AV-CCEDIT: walk a content-control paragraph's own text; the shared session reports it as
-        // non-navigable body text, which would eject the caret from the field on the first arrow key.
-        if (TryMoveCaretWithinContentControlParagraph(delta, extend))
-            return;
 
         ApplyCaretNavigation(
             _editingSession.Interaction.NavigateBodyHorizontal(
@@ -23685,10 +24096,12 @@ public sealed partial class DocumentView : Control
     private bool IsEditable(Paragraph paragraph) =>
         !IsEditingLocked && IsPlainTextEditable(paragraph);
 
+    // AV-CCEDIT: a content control no longer blocks field insertion — InsertRunAtOffset places the new
+    // run beside the field rather than splitting it, so the w:sdt stays whole.
     private bool IsFieldInsertable(Paragraph paragraph) =>
         !IsEditingLocked
         && paragraph.Runs.All(r => r.Image is null && r.Equation is null
-            && r.FootnoteId is null && r.EndnoteId is null && r.Control is null
+            && r.FootnoteId is null && r.EndnoteId is null
             && !IsFloatingDrawingRun(r));
 
     private static bool IsPlainTextEditable(Paragraph paragraph) =>
@@ -23696,9 +24109,56 @@ public sealed partial class DocumentView : Control
         // non-editable, or its glyphs would fall back to FallbackCells (which drops the comment id and the
         // anchor render). Word keeps commented text fully editable. The textless comment-reference run has
         // empty text and contributes no cells, so it does not affect editability either.
-        paragraph.Runs.All(r => r.Image is null && r.Equation is null && r.FieldKind == RunFieldKind.None
-            && r.ComplexField is null && r.FootnoteId is null && r.EndnoteId is null && r.Control is null
+        // AV-CCEDIT: a content control is likewise a run mark that <see cref="Cell"/> now carries through
+        // the ParaCells → SetRuns round-trip, so the body text around a field is editable as in Word. The
+        // field's OWN text is additionally policy-gated (see TryResolveContentControlTextCaret). A
+        // CONTENT-LOCKED field is the exception: the range gestures that reach this predicate (replace,
+        // change case, list/format rebuilds) address character ranges rather than fields, and rewriting a
+        // locked field's characters is exactly what its lock forbids — so such a paragraph stays on the
+        // read-only path it was on before, while its unlocked neighbours became editable.
+        !HasLockedContentControl(paragraph)
+        && paragraph.Runs.All(r => r.Image is null && r.Equation is null && r.FieldKind == RunFieldKind.None
+            && r.ComplexField is null && r.FootnoteId is null && r.EndnoteId is null
             && !IsFloatingDrawingRun(r));
+
+    /// <summary>
+    /// Whether a body selection overlaps the text of a content-locked field. Paragraphs fully inside the
+    /// selection count in whole; the first and last only over the selected part, so text next to a locked
+    /// field stays deletable.
+    /// </summary>
+    private bool SelectionReachesLockedContentControl((DocPosition Start, DocPosition End) selection)
+    {
+        for (var block = selection.Start.Block; block <= selection.End.Block; block++)
+        {
+            if (block < 0 || block >= _doc.Blocks.Count || _doc.Blocks[block] is not Paragraph paragraph)
+                continue;
+
+            var lo = block == selection.Start.Block ? selection.Start.Offset : 0;
+            var hi = block == selection.End.Block ? selection.End.Offset : int.MaxValue;
+            foreach (var span in ContentControlSpans(paragraph))
+            {
+                if (paragraph.Runs[span.FirstRunIndex].Control is not
+                    {
+                        LockMode: ContentControlLockMode.ContentLocked
+                            or ContentControlLockMode.ControlAndContentLocked
+                    })
+                {
+                    continue;
+                }
+
+                if (Math.Min(hi, span.Start + span.Length) > Math.Max(lo, span.Start))
+                    return true;
+            }
+        }
+
+        return false;
+    }
+
+    private static bool HasLockedContentControl(Paragraph paragraph) =>
+        paragraph.Runs.Any(run => run.Control is
+        {
+            LockMode: ContentControlLockMode.ContentLocked or ContentControlLockMode.ControlAndContentLocked
+        });
 
     /// <summary>
     /// AV-NOTE: whether a paragraph's TEXT may be edited in place. Word keeps the text around a
@@ -23713,8 +24173,17 @@ public sealed partial class DocumentView : Control
     /// </summary>
     private bool IsTextReplaceable(Paragraph paragraph) =>
         !IsEditingLocked
+        // AV-CCEDIT: see IsPlainTextEditable — a content-locked field freezes its paragraph's text.
+        && !HasLockedContentControl(paragraph)
+        // AV-CCLOCK: a locked BLOCK-level content control has no run-level marker, so the run.Control
+        // check below never sees it. This predicate backs InsertText's/DeleteForward-Backspace's
+        // structural FALLBACK path -- the branch DocumentEditingSession.IsPortableBodyTextParagraph's
+        // identical check routes to precisely when it declines a locked block-level control -- so without
+        // this clause that fallback silently re-opens the exact hole the portable-session check exists to
+        // close (matching TryAutoCorrect's r144 fix for the same class of gap).
+        && !ContentControlInteractionPlanner.IsBlockContentControlLocked(paragraph.BlockContentControl)
         && paragraph.Runs.All(r => r.Image is null && r.Equation is null && r.FieldKind == RunFieldKind.None
-            && r.ComplexField is null && r.Control is null
+            && r.ComplexField is null
             && !IsFloatingDrawingRun(r));
 
     private static bool IsFloatingDrawingRun(Run run) =>
@@ -23758,7 +24227,11 @@ public sealed partial class DocumentView : Control
                     link,
                     run.FormatRevision,
                     FootnoteId: run.FootnoteId,
-                    EndnoteId: run.EndnoteId));
+                    EndnoteId: run.EndnoteId,
+                    StyleId: run.StyleId,
+                    // AV-CCEDIT: carry the run's content control so the field survives an edit to the
+                    // body text around it.
+                    Control: run.Control));
         }
         return cells;
     }
@@ -23810,7 +24283,7 @@ public sealed partial class DocumentView : Control
 
             foreach (var ch in displayText)
                 cells.Add(new Cell(ch, displayFormatting, run.CommentId, run.Revision, run.RevisionAuthor,
-                    run.RevisionDateXml, link, run.FormatRevision));
+                    run.RevisionDateXml, link, run.FormatRevision, StyleId: run.StyleId));
         }
         return cells;
     }
@@ -23827,7 +24300,8 @@ public sealed partial class DocumentView : Control
             '\0',
             run.Formatting,
             IsPageBreak: breakKind == InlineFlowBreakKind.Page,
-            IsColumnBreak: breakKind == InlineFlowBreakKind.Column));
+            IsColumnBreak: breakKind == InlineFlowBreakKind.Column,
+            StyleId: run.StyleId));
     }
 
     private ComplexFieldDisplayPlan BuildBodyComplexFieldDisplayPlan(int blockIndex, Run run)
@@ -23996,8 +24470,14 @@ public sealed partial class DocumentView : Control
 
     private static void SetRuns(Paragraph paragraph, IReadOnlyList<Cell> cells)
     {
+        // AV-CCEDIT: an empty content control (a field the user has cleared) contributes no cells, so it
+        // is preserved positionally like a citation or a break run — otherwise clearing a field's text
+        // and then typing elsewhere in the paragraph would delete the field itself.
         var preservedTextlessRuns = TextlessRunPositions(paragraph)
-            .Where(item => item.Run.Citation is not null || item.Run.IsPageBreak || item.Run.IsColumnBreak)
+            .Where(item => item.Run.Citation is not null
+                || item.Run.IsPageBreak
+                || item.Run.IsColumnBreak
+                || item.Run.Control is not null)
             .ToList();
 
         // AV-COMMENT: preserve which comment ids had a textless reference run (they carry no cells, so the
@@ -24032,6 +24512,10 @@ public sealed partial class DocumentView : Control
             // flattened into the surrounding text.
             var footnoteId = cells[i].FootnoteId;
             var endnoteId = cells[i].EndnoteId;
+            // AV-CCEDIT: a run is also one contiguous span of the same content-control instance, so a
+            // w:sdt keeps its exact character extent across an edit to the text around it instead of
+            // being flattened away (or swallowing its neighbours).
+            var control = cells[i].Control;
             var start = i;
             while (i < cells.Count
                    && cells[i].Fmt.Equals(fmt)
@@ -24042,7 +24526,8 @@ public sealed partial class DocumentView : Control
                    && cells[i].Link == link
                    && cells[i].FormatRevision == formatRevision
                    && cells[i].FootnoteId == footnoteId
-                   && cells[i].EndnoteId == endnoteId)
+                   && cells[i].EndnoteId == endnoteId
+                   && SameContentControl(cells[i].Control, control))
                 i++;
             var text = new string(cells.Skip(start).Take(i - start).Select(c => c.Ch).ToArray());
             paragraph.Runs.Add(new Run(text, fmt)
@@ -24057,6 +24542,7 @@ public sealed partial class DocumentView : Control
                 FormatRevision = formatRevision,
                 FootnoteId = footnoteId,
                 EndnoteId = endnoteId,
+                Control = control,
             });
             if (commentId is { } cid)
                 lastAnchorIndexFor[cid] = paragraph.Runs.Count - 1;
@@ -24107,8 +24593,11 @@ public sealed partial class DocumentView : Control
     private bool IsTextHiddenInCurrentView(RunFormatting formatting) =>
         formatting.Hidden || (formatting.WebHidden && _viewMode == DocumentViewMode.WebLayout);
 
-    private RunFormatting ResolveRunFmt(RunFormatting raw, Paragraph paragraph)
-        => DocumentRunFormattingResolver.Resolve(_doc, paragraph, raw);
+    private RunFormatting ResolveRunFmt(RunFormatting raw, Paragraph paragraph, string? runStyleId)
+        => DocumentRunFormattingResolver.Resolve(_doc, paragraph, raw, runStyleId);
+
+    private RunFormatting ResolveRunFmt(Run run, Paragraph paragraph)
+        => DocumentRunFormattingResolver.Resolve(_doc, paragraph, run);
 
     /// <summary>Cascade the paragraph's named-style paragraph formatting (alignment + spacing)
     /// under the paragraph's own values; the paragraph's explicit values win.</summary>
@@ -24635,7 +25124,26 @@ public sealed partial class DocumentView : Control
         // note boundary. Without it the round-trip stripped the reference and left the mark as ordinary
         // text, which is why note-bearing paragraphs used to be excluded from editing outright.
         int? FootnoteId = null,
-        int? EndnoteId = null);
+        int? EndnoteId = null,
+        // AV-CHARSTYLE: the source run's linked character style id (w:rPr/w:rStyle), carried per-character
+        // so ResolveRunFmt can still resolve it after the run has been flattened into per-glyph cells --
+        // otherwise a style applied purely via a linked character style (no direct formatting baked in)
+        // renders as plain text. Null means the glyph's look is entirely direct formatting.
+        string? StyleId = null,
+        // AV-CCEDIT: the run's content control, carried per-character so a w:sdt survives the cell
+        // round-trip (ParaCells → edit → SetRuns) and so SetRuns re-segments runs on a control boundary.
+        // Without it the round-trip flattened the field into ordinary text, which is why content-control
+        // paragraphs used to be excluded from editing outright. Grouped by REFERENCE (see
+        // SameContentControl): ContentControl is a record, so two distinct but identically-configured
+        // fields would otherwise merge into one on an unrelated edit.
+        ModelContentControl? Control = null);
+
+    /// <summary>
+    /// Whether two cells belong to the same content control instance. Reference identity, not record
+    /// equality: two adjacent fields with the same kind/tag/alias are still two separate w:sdt's.
+    /// </summary>
+    private static bool SameContentControl(ModelContentControl? left, ModelContentControl? right) =>
+        ReferenceEquals(left, right);
 
     private readonly record struct AutomaticHyphenGlyph(
         int Block,

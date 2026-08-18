@@ -393,6 +393,22 @@ public sealed partial class DocumentView
     internal void OpenEditorContextMenuForTests() => OpenEditorContextMenu();
     internal void RaiseKeyDownForContextMenuTests(KeyEventArgs args) => OnKeyDown(args);
 
+    /// <summary>Simulates a key press through the editor's own key handling.</summary>
+    internal void SimulateKeyForTest(Key key, bool shift = false, bool control = false)
+    {
+        var modifiers = KeyModifiers.None;
+        if (shift)
+            modifiers |= KeyModifiers.Shift;
+        if (control)
+            modifiers |= KeyModifiers.Control;
+        OnKeyDown(new KeyEventArgs
+        {
+            Key = key,
+            KeyModifiers = modifiers,
+            RoutedEvent = KeyDownEvent,
+        });
+    }
+
     internal void SimulateTextInputForTest(string text)
     {
         foreach (var character in text)
@@ -559,6 +575,13 @@ public sealed partial class DocumentView
     internal void DeleteForwardPublic() => DeleteForward();
 
     /// <summary>
+    /// Runs the shared AutoCorrect/AutoFormat-as-you-type evaluation for a just-typed character, exactly as
+    /// <see cref="OnTextInput"/> does. Exposed for R143 (shared-undo-boundaries) unit tests covering the
+    /// auto-recognized-hyperlink undo-step granularity.
+    /// </summary>
+    internal bool TryAutoCorrectPublic(char justTyped) => TryAutoCorrect(justTyped);
+
+    /// <summary>
     /// Invoke the list Tab/Shift-Tab handler and return whether it consumed the key.
     /// Exposed for AV-LIST unit tests.
     /// </summary>
@@ -594,7 +617,7 @@ public sealed partial class DocumentView
             Relayout(FallbackWidth);
 
         var listMarkerSequence = new DocumentListMarkerSequencePlanner(
-            _doc.MultiLevelList.NumberFormats);
+            _doc.MultiLevelList.NumberFormats, _doc.MultiLevelList.LevelTexts);
         var preservedNumberingMarkers = PreservedNumberingMarkerPlanner.Build(_doc);
         for (int i = 0; i < _doc.Blocks.Count; i++)
         {

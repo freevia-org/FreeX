@@ -561,6 +561,88 @@ public sealed class TextLayoutPlannerTests
     }
 
     /// <summary>
+    /// R143 fix: a cached normAutofit fontScale below FreeP's own 60% runtime floor (e.g. 25%,
+    /// an entirely ordinary outcome of PowerPoint's own aggressive shrink-to-fit on a small,
+    /// text-heavy placeholder) must be honoured, not forced back up to 60%, when the box has not
+    /// changed since the scale was cached. Before the fix, PlanStoredFontScaleOverflow clamped the
+    /// recomputed target to [0.60, 1.0] unconditionally, so an unchanged 25%-cached box produced a
+    /// 2.4x "correction" up to 60% -- rendering text far larger than the box PowerPoint itself fit
+    /// it into, and overflowing the shape.
+    /// </summary>
+    [Fact]
+    public void PlanNormalAutoFitOverflow_StoredFontScale_BelowRuntimeFloor_UnchangedBoxHonoursCachedScale()
+    {
+        const double cachedScale = 0.25;
+        var text = new ResolvedTextLayout
+        {
+            AutoFit = true,
+            HasStoredFontScale = true,
+            FontScale = cachedScale,
+            Paragraphs = new[]
+            {
+                new ResolvedParagraph
+                {
+                    Runs = new[] { new ResolvedRun { Text = "Cached", FontSizePt = 18.0 * cachedScale } }
+                }
+            }
+        };
+
+        // 25 DIP is exactly what a 100-DIP authored paragraph looks like once pre-scaled by the
+        // cached 25% fontScale, and the box (25 DIP) is exactly what that scale was computed for --
+        // i.e. nothing has changed since PowerPoint (or an earlier FreeP session) cached it.
+        var plan = TextLayoutPlanner.PlanNormalAutoFitOverflow(
+            text,
+            textAreaHeightDip: 25,
+            new[] { new TextParagraphMeasure(0, 25, 0, 0) });
+        var scaled = TextLayoutPlanner.ApplyAutoFitPlan(text, plan);
+
+        scaled.FontScale.Should().BeApproximately(cachedScale, 0.001,
+            "an unchanged box must keep the file's own cached scale, even when it sits below FreeP's 60% runtime floor");
+        scaled.Paragraphs[0].Runs[0].FontSizePt.Should().BeApproximately(18.0 * cachedScale, 0.001,
+            "text must render at PowerPoint's own cached size, not be forced up to the 60% floor and overflow the box");
+    }
+
+    /// <summary>
+    /// Sibling/no-regression: the R143 fix must not loosen FreeP's own 60% runtime floor for the
+    /// ordinary case where the cached scale is AT or ABOVE that floor and the box shrinks further
+    /// still -- this is the same guarantee <see cref="PlanNormalAutoFitOverflow_StoredFontScale_ShapeShrunkSinceCache_ShrinksFurther"/>
+    /// covers, exercised again here with a cached scale comfortably above 60% to pin the boundary
+    /// behaviour of the new two-floor logic (<c>Math.Min(RuntimeAutoFitMinimumFontScale, cachedScale)</c>).
+    /// </summary>
+    [Fact]
+    public void PlanNormalAutoFitOverflow_StoredFontScale_AtOrAboveRuntimeFloor_StillFloorsAtRuntimeMinimum()
+    {
+        const double cachedScale = 0.8;
+        var text = new ResolvedTextLayout
+        {
+            AutoFit = true,
+            HasStoredFontScale = true,
+            FontScale = cachedScale,
+            Paragraphs = new[]
+            {
+                new ResolvedParagraph
+                {
+                    Runs = new[] { new ResolvedRun { Text = "Cached", FontSizePt = 18.0 * cachedScale } }
+                }
+            }
+        };
+
+        // The box shrank to 50 DIP -- well below the 80 DIP the cached 0.8 scale was computed for
+        // (100-DIP authored paragraph pre-scaled by 0.8), so recomputing wants a scale of 0.5, which
+        // is still above FreeP's runtime floor's authority to relax: cachedScale (0.8) is >= the
+        // floor (0.6), so the floor must stay at 0.6, exactly as it did before the R143 fix.
+        var plan = TextLayoutPlanner.PlanNormalAutoFitOverflow(
+            text,
+            textAreaHeightDip: 50,
+            new[] { new TextParagraphMeasure(0, 80, 0, 0) });
+        var scaled = TextLayoutPlanner.ApplyAutoFitPlan(text, plan);
+
+        plan.Mode.Should().Be(TextAutoFitOverflowMode.RuntimeShrink);
+        scaled.FontScale.Should().BeApproximately(TextLayoutPlanner.RuntimeAutoFitMinimumFontScale, 0.001,
+            "a cached scale at/above the runtime floor must still bottom out at the 60% floor when the box shrinks further");
+    }
+
+    /// <summary>
     /// Sibling/no-regression: LA1's spAutoFit guard must still hold even when a text body happens
     /// to carry a stored (irrelevant) fontScale and the box has been resized. spAutoFit grows the
     /// SHAPE to fit text -- text itself is never runtime-shrunk or -grown for it, cache or no cache.

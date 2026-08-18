@@ -844,8 +844,8 @@ public sealed class DocumentEditingSession
             || blockIndex >= Document.Blocks.Count
             || Document.Blocks[blockIndex - 1] is not Paragraph previous
             || Document.Blocks[blockIndex] is not Paragraph current
-            || !CanRestructure(previous)
-            || !CanRestructure(current))
+            || !CanRestructureAllowingSectionBreak(previous)
+            || !CanRestructureAllowingSectionBreak(current))
         {
             return false;
         }
@@ -855,6 +855,10 @@ public sealed class DocumentEditingSession
         AppendClonedRuns(merged, previous, 0, previous.PlainText.Length);
         AppendClonedRuns(merged, current, 0, current.PlainText.Length);
         CoalesceEditableRuns(merged);
+        // Deleting Backspace at the start of `current` removes `previous`'s own paragraph mark, so
+        // `previous`'s section break (if any) is discarded and `current`'s (the surviving mark) carries
+        // forward -- see SurvivingSectionBreak.
+        merged.SectionBreak = SurvivingSectionBreak(earlier: previous, later: current);
         _commands.Execute(new ReplaceBlocksCommand(blockIndex - 1, 2, [merged]));
 
         result = new DocumentParagraphEditResult(
@@ -873,8 +877,8 @@ public sealed class DocumentEditingSession
             || blockIndex + 1 >= Document.Blocks.Count
             || Document.Blocks[blockIndex] is not Paragraph current
             || Document.Blocks[blockIndex + 1] is not Paragraph next
-            || !CanRestructure(current)
-            || !CanRestructure(next))
+            || !CanRestructureAllowingSectionBreak(current)
+            || !CanRestructureAllowingSectionBreak(next))
         {
             return false;
         }
@@ -884,6 +888,10 @@ public sealed class DocumentEditingSession
         AppendClonedRuns(merged, current, 0, current.PlainText.Length);
         AppendClonedRuns(merged, next, 0, next.PlainText.Length);
         CoalesceEditableRuns(merged);
+        // Deleting Delete-forward at the end of `current` removes `current`'s own paragraph mark, so
+        // `current`'s section break (if any) is discarded and `next`'s (the surviving mark) carries
+        // forward -- see SurvivingSectionBreak.
+        merged.SectionBreak = SurvivingSectionBreak(earlier: current, later: next);
         _commands.Execute(new ReplaceBlocksCommand(blockIndex, 2, [merged]));
 
         result = new DocumentParagraphEditResult(
@@ -1504,17 +1512,50 @@ public sealed class DocumentEditingSession
         && run.Revision == RevisionKind.None
         && run.FormatRevision is null;
 
+    // A locked BLOCK-level content control (a body w:sdt wrapping the whole paragraph -- e.g. Word's
+    // "lock whole paragraph", see Paragraph.BlockContentControl) has no run-level marker at all, so it
+    // must be checked separately from IsPortableBodyTextRun's run.Control-is-null check below: without
+    // this, the portable body-edit session would happily mutate a locked whole-paragraph content control's
+    // text directly (ReplaceParagraphRunsCommand et al.), bypassing every renderer-side lock choke point
+    // that only runs once this session DECLINES (e.g. DocumentView.TryPrepareNativeFallback in both
+    // shells). An UNLOCKED block-level control is left portable (unlike a run-level one, which is always
+    // excluded regardless of lock) because there is no dedicated interactive UI for it the way there is for
+    // a checkbox/date-picker/drop-down run -- ordinary typing inside an unlocked whole-paragraph control is
+    // just ordinary typing.
     private static bool IsPortableBodyTextParagraph(Paragraph paragraph) =>
         paragraph.BookmarkBoundaries.Count == 0
+        && !ContentControlInteractionPlanner.IsBlockContentControlLocked(paragraph.BlockContentControl)
         && paragraph.Runs.All(IsPortableBodyTextRun);
 
     private static bool CanRestructure(Paragraph paragraph) =>
+        CanRestructureAllowingSectionBreak(paragraph) && paragraph.SectionBreak is null;
+
+    /// <summary>
+    /// Same eligibility test as <see cref="CanRestructure"/> but permits the paragraph to own a
+    /// <see cref="Paragraph.SectionBreak"/> marker. Used only by the two section-break-aware merge
+    /// helpers (<see cref="TryMergeBodyParagraphWithPrevious"/>/<see cref="TryMergeBodyParagraphWithNext"/>),
+    /// which delete the section break themselves and must decide separately -- via
+    /// <see cref="SurvivingSectionBreak"/> -- which of the two paragraphs' section properties survive the
+    /// merge, matching Word's rule that deleting a section-break paragraph mark folds the deleted section
+    /// into the one that follows it.
+    /// </summary>
+    private static bool CanRestructureAllowingSectionBreak(Paragraph paragraph) =>
         IsPortableBodyTextParagraph(paragraph)
         && paragraph.BookmarkNames.Count == 0
         && paragraph.DropCap is null
-        && paragraph.SectionBreak is null
         && paragraph.PreservedNumbering is null
         && paragraph.ParagraphFormatRevision is null;
+
+    /// <summary>
+    /// Deleting the paragraph mark between <paramref name="earlier"/> and <paramref name="later"/> always
+    /// deletes <paramref name="earlier"/>'s own mark (whether the user pressed Delete at the end of
+    /// <paramref name="earlier"/> or Backspace at the start of <paramref name="later"/> -- both target the
+    /// same boundary). Per Word's section-break rule, the section that mark used to end is discarded and
+    /// the merged content is folded into the section that follows, so the merged paragraph must keep
+    /// <paramref name="later"/>'s <see cref="Paragraph.SectionBreak"/> (or lack of one) and never
+    /// <paramref name="earlier"/>'s.
+    /// </summary>
+    private static Section? SurvivingSectionBreak(Paragraph earlier, Paragraph later) => later.SectionBreak;
 
     private static bool IsPortableBodyTextRun(Run run) =>
         run.Image is null

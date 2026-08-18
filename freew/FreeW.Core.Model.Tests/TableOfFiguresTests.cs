@@ -102,8 +102,12 @@ public class TableOfFiguresTests
             "Table 1: Quarterly results\t1",
             "Table 2: Annual results\t1");
 
-        tof[0].StyleId.Should().Be(TableOfFigures.HeadingStyleId);
-        tof.Skip(1).Should().OnlyContain(p => p.StyleId == TableOfFigures.EntryStyleId);
+        // A non-Figure label gets its own scoped style ids (distinct from Figure's), so a Table of
+        // Tables region can be told apart from a Table of Figures region -- see
+        // TableOfFigures.IsTableOfFiguresParagraph(Block, string?) / r142 tof-refresh-cross-label-deletion.
+        tof[0].StyleId.Should().Be(TableOfFigures.HeadingStyleIdFor(Captions.TableLabelText));
+        tof[0].StyleId.Should().NotBe(TableOfFigures.HeadingStyleId);
+        tof.Skip(1).Should().OnlyContain(p => p.StyleId == TableOfFigures.EntryStyleIdFor(Captions.TableLabelText));
     }
 
     [Fact]
@@ -261,6 +265,35 @@ public class TableOfFiguresTests
             SpanningFieldOwner = new ComplexField(" TOC \\o \"1-3\" ")
         }).Should().BeFalse();
         TableOfFigures.IsTableOfFiguresParagraph(Table.Create(1, 1)).Should().BeFalse();
+    }
+
+    // r142 tof-refresh-cross-label-deletion: the label-scoped overload must distinguish a Table of
+    // Figures region from a Table of Tables region -- both a styled heading (no native field) and a
+    // native-TOC-field-owned entry -- so a refresh can be scoped to its own label only.
+    [Fact]
+    public void IsTableOfFiguresParagraphWithLabel_DistinguishesRegionsBuiltForDifferentLabels()
+    {
+        var figureHeading = new Paragraph("Table of Figures") { StyleId = TableOfFigures.HeadingStyleIdFor(Captions.FigureLabelText) };
+        var tableHeading = new Paragraph("Table of Tables") { StyleId = TableOfFigures.HeadingStyleIdFor(Captions.TableLabelText) };
+
+        TableOfFigures.IsTableOfFiguresParagraph(figureHeading, Captions.FigureLabelText).Should().BeTrue();
+        TableOfFigures.IsTableOfFiguresParagraph(figureHeading, Captions.TableLabelText).Should().BeFalse();
+        TableOfFigures.IsTableOfFiguresParagraph(tableHeading, Captions.TableLabelText).Should().BeTrue();
+        TableOfFigures.IsTableOfFiguresParagraph(tableHeading, Captions.FigureLabelText).Should().BeFalse();
+
+        // Both are still recognised as "some" caption-table region by the unscoped overload.
+        TableOfFigures.IsTableOfFiguresParagraph(figureHeading).Should().BeTrue();
+        TableOfFigures.IsTableOfFiguresParagraph(tableHeading).Should().BeTrue();
+
+        var figureField = new ComplexField(" TOC \\c \"Figure\" ");
+        var figureEntry = new Paragraph("Figure 1\t1") { SpanningFieldOwner = figureField };
+        var tableField = new ComplexField(" TOC \\c \"Table\" ");
+        var tableEntry = new Paragraph("Table 1\t1") { SpanningFieldOwner = tableField };
+
+        TableOfFigures.IsTableOfFiguresParagraph(figureEntry, Captions.FigureLabelText).Should().BeTrue();
+        TableOfFigures.IsTableOfFiguresParagraph(figureEntry, Captions.TableLabelText).Should().BeFalse();
+        TableOfFigures.IsTableOfFiguresParagraph(tableEntry, Captions.TableLabelText).Should().BeTrue();
+        TableOfFigures.IsTableOfFiguresParagraph(tableEntry, Captions.FigureLabelText).Should().BeFalse();
     }
 
     [Fact]

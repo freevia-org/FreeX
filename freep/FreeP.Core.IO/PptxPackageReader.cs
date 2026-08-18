@@ -78,9 +78,18 @@ public static class PptxPackageReader
     /// <summary>Reads a .pptx from any stream and returns a populated <see cref="Presentation"/>.</summary>
     public static Presentation Read(Stream stream)
     {
-        // Copy to MemoryStream so ZipArchive can seek
+        // Reject an oversized file before buffering it, the same way the xlsx loader does: check the
+        // declared length up front for a seekable stream, then bound the copy itself so a non-seekable
+        // (or lying-length) stream can never grow the in-memory buffer past the cap either.
+        if (stream.CanSeek)
+        {
+            var declaredLength = Math.Max(0, stream.Length - stream.Position);
+            WorkbookOpenSizeGuard.EnsureFileWithinLimit(declaredLength);
+        }
+
+        // Copy to MemoryStream so ZipArchive can seek.
         var ms = new MemoryStream();
-        stream.CopyTo(ms);
+        CopyToMemoryStreamWithLimit(stream, ms, WorkbookOpenSizeGuard.DefaultMaxFileBytes);
         ms.Position = 0;
 
         using var archive = new ZipArchive(ms, ZipArchiveMode.Read, leaveOpen: false);
@@ -91,6 +100,37 @@ public static class PptxPackageReader
         presentation.PackageSnapshot = snapshot;
         presentation.PackageKind = DetectPackageKind(snapshot);
         return presentation;
+    }
+
+    /// <summary>
+    /// Copies <paramref name="source"/> into <paramref name="destination"/> in bounded chunks, throwing
+    /// <see cref="WorkbookTooLargeException"/> the moment the copy would exceed <paramref name="maxFileBytes"/>
+    /// instead of first buffering the whole (possibly multi-gigabyte or unbounded) input. This is the same
+    /// bound-during-copy shape as <c>XlsxFileAdapter.CopyToMemoryStreamWithLimit</c>.
+    /// </summary>
+    private static void CopyToMemoryStreamWithLimit(Stream source, MemoryStream destination, long maxFileBytes)
+    {
+        var buffer = new byte[81920];
+        while (true)
+        {
+            var remainingAllowance = maxFileBytes - destination.Length;
+            var maxRead = remainingAllowance >= buffer.Length
+                ? buffer.Length
+                : (int)Math.Max(1, remainingAllowance + 1);
+            var read = source.Read(buffer, 0, maxRead);
+            if (read == 0)
+                return;
+
+            if (read > remainingAllowance)
+            {
+                throw new WorkbookTooLargeException(
+                    string.Create(
+                        CultureInfo.InvariantCulture,
+                        $"The file exceeds the {maxFileBytes:N0} byte open limit."));
+            }
+
+            destination.Write(buffer, 0, read);
+        }
     }
 
     private static PresentationPackageKind DetectPackageKind(PptxPackageSnapshot snapshot)
@@ -1512,14 +1552,47 @@ public static class PptxPackageReader
                 return new Hyperlink { TargetSlideId = rel.Target, Tooltip = tooltip };
             }
         }
-        else if (isSlideJumpAction)
+        else
         {
-            // action with no rId — some tools write slide jumps this way; can't resolve without rId.
-            // Return null; the hyperlink will be dropped rather than producing garbage.
-            return null;
+            // No r:id: either a standard action-only click (Next/Previous/First/Last Slide,
+            // End Show, etc. — these need no relationship at all, per the OOXML spec) or a
+            // hlinksldjump written without an r:id that we cannot resolve.
+            var actionKind = ParseActionOnlyKind(action);
+            if (actionKind != HyperlinkActionKind.None)
+                return new Hyperlink { Action = actionKind, Tooltip = tooltip };
+
+            if (isSlideJumpAction)
+            {
+                // action="ppaction://hlinksldjump" with no rId — some tools write slide jumps
+                // this way; can't resolve the destination slide without rId. Return null; the
+                // hyperlink will be dropped rather than producing garbage.
+                return null;
+            }
         }
 
         return null;
+    }
+
+    /// <summary>
+    /// Maps a <c>a:hlinkClick/@action</c> URI to its <see cref="HyperlinkActionKind"/> when it is
+    /// one of PowerPoint's standard action-only navigation verbs (the ones written by the built-in
+    /// Action Buttons and by manually-authored click actions). Returns <see cref="HyperlinkActionKind.None"/>
+    /// for anything else, including the slide-jump action (handled separately, since it needs an rId).
+    /// </summary>
+    private static HyperlinkActionKind ParseActionOnlyKind(string? action)
+    {
+        if (string.IsNullOrEmpty(action)) return HyperlinkActionKind.None;
+
+        return action.ToLowerInvariant() switch
+        {
+            "ppaction://hlinknextslide" => HyperlinkActionKind.NextSlide,
+            "ppaction://hlinkprevslide" => HyperlinkActionKind.PreviousSlide,
+            "ppaction://hlinkfirstslide" => HyperlinkActionKind.FirstSlide,
+            "ppaction://hlinklastslideviewed" => HyperlinkActionKind.LastSlideViewed,
+            "ppaction://hlinklastslide" => HyperlinkActionKind.LastSlide,
+            "ppaction://hlinkendshow" => HyperlinkActionKind.EndShow,
+            _ => HyperlinkActionKind.None,
+        };
     }
 
     // ── p:graphicFrame (table, chart, etc.) ───────────────────────────────────────
@@ -4879,7 +4952,8 @@ public static class PptxPackageReader
         ReadSpPr(spPr, shape, scheme, blipResolver);
 
         var prst = spPr?.Element(A + "prstGeom")?.Attribute("prst")?.Value;
-        shape.AutoShapeKind = PptxShapeKindMap.FromPreset(prst);
+        shape.AutoShapeKind = PptxShapeKindMap.FromPreset(prst, out var unmodeledPreset);
+        shape.UnmodeledPresetGeometry = unmodeledPreset;
         ReadPresetGeometryAdjustments(spPr, shape);
 
         var txBody = sp.Element(P + "txBody");
@@ -5336,7 +5410,8 @@ public static class PptxPackageReader
         ReadSpPr(spPr, shape, scheme, blipResolver);
 
         var prst = spPr?.Element(A + "prstGeom")?.Attribute("prst")?.Value;
-        shape.AutoShapeKind = PptxShapeKindMap.FromPreset(prst);
+        shape.AutoShapeKind = PptxShapeKindMap.FromPreset(prst, out var unmodeledPreset);
+        shape.UnmodeledPresetGeometry = unmodeledPreset;
 
         // Connectors carry the same p:style element as p:sp (CT_Connector shares CT_ShapeStyle),
         // so a connector styled from the gallery needs the same fillRef/lnRef/effectRef/fontRef
@@ -5456,9 +5531,9 @@ public static class PptxPackageReader
 
             // Only store if there's actually something
             bool hasSomething = fx.HasOuterShadow || fx.HasInnerShadow || fx.HasGlow
-                || fx.HasSoftEdge || fx.BevelTop is not null || fx.BevelBottom is not null
-                || fx.ExtrusionHeightEmu != 0 || fx.ContourWidthEmu != 0
-                || fx.Scene3d is not null;
+                || fx.HasSoftEdge || fx.Reflection is not null || fx.BevelTop is not null
+                || fx.BevelBottom is not null || fx.ExtrusionHeightEmu != 0
+                || fx.ContourWidthEmu != 0 || fx.Scene3d is not null;
             if (hasSomething)
                 shape.Effects = fx;
         }
@@ -5939,6 +6014,43 @@ public static class PptxPackageReader
         {
             fx.HasSoftEdge = true; any = true;
             fx.SoftEdgeRadEmu = ParseLong(softEdge.Attribute("rad")?.Value);
+        }
+
+        // a:reflection — stored for lossless round-trip; rendering not yet implemented.
+        var reflection = effectLst.Element(A + "reflection");
+        if (reflection is not null)
+        {
+            any = true;
+            var reflectionInfo = new ReflectionInfo();
+            var blurRad = reflection.Attribute("blurRad")?.Value;
+            if (blurRad is not null) reflectionInfo.BlurRadEmu = ParseLong(blurRad);
+            var stA = reflection.Attribute("stA")?.Value;
+            if (stA is not null) reflectionInfo.StartAlpha = ParseLong(stA);
+            var stPos = reflection.Attribute("stPos")?.Value;
+            if (stPos is not null) reflectionInfo.StartPos = ParseLong(stPos);
+            var endA = reflection.Attribute("endA")?.Value;
+            if (endA is not null) reflectionInfo.EndAlpha = ParseLong(endA);
+            var endPos = reflection.Attribute("endPos")?.Value;
+            if (endPos is not null) reflectionInfo.EndPos = ParseLong(endPos);
+            var dist = reflection.Attribute("dist")?.Value;
+            if (dist is not null) reflectionInfo.DistEmu = ParseLong(dist);
+            var dir = reflection.Attribute("dir")?.Value;
+            if (dir is not null) reflectionInfo.DirDeg = ParseDouble(dir) / 60000.0;
+            var fadeDir = reflection.Attribute("fadeDir")?.Value;
+            if (fadeDir is not null) reflectionInfo.FadeDirDeg = ParseDouble(fadeDir) / 60000.0;
+            var sx = reflection.Attribute("sx")?.Value;
+            if (sx is not null) reflectionInfo.ScaleXPercent = ParseDouble(sx) / 1000.0;
+            var sy = reflection.Attribute("sy")?.Value;
+            if (sy is not null) reflectionInfo.ScaleYPercent = ParseDouble(sy) / 1000.0;
+            var kx = reflection.Attribute("kx")?.Value;
+            if (kx is not null) reflectionInfo.SkewXDeg = ParseDouble(kx) / 60000.0;
+            var ky = reflection.Attribute("ky")?.Value;
+            if (ky is not null) reflectionInfo.SkewYDeg = ParseDouble(ky) / 60000.0;
+            var algn = reflection.Attribute("algn")?.Value;
+            if (!string.IsNullOrEmpty(algn)) reflectionInfo.Align = algn;
+            var rotWithShape = reflection.Attribute("rotWithShape")?.Value;
+            if (rotWithShape is not null) reflectionInfo.RotWithShape = ParseBoolean(rotWithShape);
+            fx.Reflection = reflectionInfo;
         }
 
         return any ? fx : null;
@@ -6539,6 +6651,8 @@ public static class PptxPackageReader
             if (int.TryParse(rPr.Attribute("sz")?.Value, out var sz) && sz > 0)
                 fld.FontSizePt = sz / 100.0;
             fld.FontFamily = rPr.Element(A + "latin")?.Attribute("typeface")?.Value;
+            fld.EastAsiaFontFamily = rPr.Element(A + "ea")?.Attribute("typeface")?.Value;
+            fld.ComplexScriptFontFamily = rPr.Element(A + "cs")?.Attribute("typeface")?.Value;
             fld.Language = rPr.Attribute("lang")?.Value;
             fld.AlternateLanguage = rPr.Attribute("altLang")?.Value;
             fld.RunDirty = ParseNullableBoolean(rPr.Attribute("dirty")?.Value);
@@ -6646,6 +6760,8 @@ public static class PptxPackageReader
             if (int.TryParse(rPr.Attribute("baseline")?.Value, out var baseline))
                 run.BaselineOffset = baseline;
             run.FontFamily = rPr.Element(A + "latin")?.Attribute("typeface")?.Value;
+            run.EastAsiaFontFamily = rPr.Element(A + "ea")?.Attribute("typeface")?.Value;
+            run.ComplexScriptFontFamily = rPr.Element(A + "cs")?.Attribute("typeface")?.Value;
 
             // Simple solid run color
             var solidFill = rPr.Element(A + "solidFill");

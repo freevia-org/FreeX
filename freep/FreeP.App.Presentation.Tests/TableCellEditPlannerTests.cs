@@ -1623,6 +1623,39 @@ public sealed class TableCellEditPlannerTests
         roundTripped.FlipV.Should().BeTrue();
     }
 
+    // r144: the third and last call site of "a flipped shape's text stays upright". The static
+    // render path and the shape text editor were corrected first, which briefly left a flipped
+    // TABLE reading correctly until you double-clicked a cell -- then backwards while typing,
+    // then correct again on exit. The placement carries rotation only.
+    [Fact]
+    public void PlanCellEditorPlacement_FlippedTable_LeavesCellTextUpright()
+    {
+        var table = new SlideShape
+        {
+            Id = 1,
+            Kind = SlideShapeKind.Table,
+            OffsetXEmu = 0,
+            OffsetYEmu = 0,
+            ExtentCxEmu = (long)(400 * EmuPerDip),
+            ExtentCyEmu = (long)(200 * EmuPerDip),
+            RotationDeg = 0,
+            FlipH = true,
+            FlipV = true,
+        };
+
+        var placement = TableCellEditPlanner.PlanCellEditorPlacement(
+            table,
+            new CellRectDip(0, 0, 100, 50),
+            SlideTransformCore.Identity,
+            minimumWidth: 10,
+            minimumHeight: 10);
+
+        placement.FlipHorizontal.Should().BeFalse(
+            "PowerPoint keeps a flipped shape's text left-to-right readable, and the live cell " +
+            "editor has to agree with the static render or the text flips as you enter edit mode");
+        placement.FlipVertical.Should().BeFalse();
+    }
+
     private static SlideShape MakeMergedTableShape()
     {
         var table = new TableShape();

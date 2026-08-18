@@ -28,6 +28,19 @@ public sealed partial class MainWindow
 
         if (added.Count == 0)
         {
+            // GetDirectPrecedents can only report cells FreeX can point a CellAddress at, so an
+            // empty list does NOT mean the formula has no precedents -- it may have one this
+            // service cannot represent (a reference into another workbook). Check that case before
+            // falling back to the generic "nothing to trace" message, which would otherwise be
+            // false (R142-core-commands-formula-auditing-trace-precedents-external-workbook-misreport).
+            if (FormulaAuditingService.GetDirectPrecedents(workbook, activeCell).Count == 0 &&
+                FormulaAuditingService.HasExternalPrecedentReference(workbook, activeCell))
+            {
+                RefreshShell(
+                    $"{FormulaAuditFormatter.FormatAddress(workbook, activeCell)} references another workbook. FreeX cannot trace precedents outside this workbook.");
+                return;
+            }
+
             RefreshShell(UiText.Get("TableLoc_NoPrecedentsToTrace"));
             return;
         }

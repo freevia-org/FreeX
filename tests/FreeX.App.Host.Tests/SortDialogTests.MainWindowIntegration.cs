@@ -14,7 +14,11 @@ public sealed partial class SortDialogTests
         source.Should().Contain("SortDialogPlanner.BuildRowChoices(range, SortDialog.PlannerText)");
         source.Should().Contain("SortDialogPlanner.BuildColorChoices(_workbook, sheet, range)");
         source.Should().Contain("SortDialogPlanner.CreateCommandPlan(");
-        source.Should().Contain("_session.SortSelectedRange(sortPlan)");
+        // R142-services-sort-customdialog-1: the dialog's column choices (asserted above) are now
+        // built from the range ResolveSortRangeAfterAdjacentDataPrompt resolved -- see that
+        // resolution feeding execution via the two-arg overload, not a bare re-read of SelectedRange.
+        source.Should().Contain("_session.SortSelectedRange(sortPlan, range)");
+        source.Should().Contain("_session.ResolveSortRangeAfterAdjacentDataPrompt(");
     }
 
     [Fact]

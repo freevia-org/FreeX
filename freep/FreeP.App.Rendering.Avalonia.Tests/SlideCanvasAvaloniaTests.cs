@@ -3987,6 +3987,93 @@ public sealed class SlideCanvasAvaloniaTests
         return pixels[o]; // B channel (== G == R for this neutral gray shadow blended with white)
     }
 
+    // ── REMEDIATION (round 143 gap): shape-level reflection was surfaced onto
+    // shapeOp.Effects.HasReflection but nothing painted it for an ordinary AutoShape/TextBox
+    // (only DrawOp.Picture had a paint path). These prove SlideCanvas actually PAINTS the
+    // mirrored band below the shape, not merely that the render plan carries reflection data.
+    // Sibling of the WPF SlideCanvas_ShapeReflection_PaintsMirroredBandBelowShape test. ──
+
+    /// <summary>
+    /// A rectangle with a:reflection must paint a mirrored copy of its own fill in a band
+    /// directly below the shape. This renders the real production SlideCanvas (not a stub of
+    /// the render plan) and inspects raw pixels, so it fails if the paint path regresses.
+    /// </summary>
+    [Fact]
+    public async Task SlideCanvas_ShapeReflection_PaintsMirroredBandBelowShape()
+    {
+        const int width = 300, height = 300;
+        byte[]? flat = null;
+        byte[]? reflected = null;
+
+        await Run(() =>
+        {
+            flat = RenderReflectionShapePixels(hasReflection: false, width, height);
+            reflected = RenderReflectionShapePixels(hasReflection: true, width, height);
+        });
+
+        flat.Should().NotBeNull();
+        reflected.Should().NotBeNull();
+
+        // The shape's own region (0,0)-(200,100) must be untouched: reflection only adds
+        // paint strictly below the shape, it must not alter the shape's own rendering.
+        CountPixelDifferences(flat!, reflected!, width, 0, 0, 200, 100)
+            .Should().Be(0, "a reflection effect must not repaint the shape itself");
+
+        // The mirrored band immediately below the shape (100..200 dip) must be painted with
+        // something other than the untouched white background -- this is the actual bug: the
+        // render plan carried HasReflection but nothing drew into this region.
+        CountPixelDifferences(flat!, reflected!, width, 20, 101, 180, 199)
+            .Should().BeGreaterThan(0,
+                "a shape-level a:reflection must paint pixels in the mirrored band below the " +
+                "shape, not just round-trip through the model/render-plan");
+    }
+
+    /// <summary>
+    /// Renders a plain white-background canvas with a single opaque-red 200x100 dip rectangle
+    /// at the origin, optionally carrying a strong, unblurred, undistanced reflection
+    /// (StartAlpha/EndPos both 100% so the entire mirrored band gets non-zero coverage). The
+    /// slide size is pinned to the render surface (as in RenderCornerShadowPixel above) so 1
+    /// slide-dip == 1 canvas pixel. Must be called on the headless dispatcher thread.
+    /// </summary>
+    private static byte[] RenderReflectionShapePixels(bool hasReflection, int width, int height)
+    {
+        var p = MakePresentation(pres =>
+        {
+            pres.SlideSizeCxEmu = (long)width * 9525L;
+            pres.SlideSizeCyEmu = (long)height * 9525L;
+            var slide = pres.Slides[0];
+            slide.Background = new ShapeFill.Solid(SrgbColor.White);
+            slide.Shapes.Clear();
+            slide.Shapes.Add(new SlideShape
+            {
+                Id = 1,
+                AutoShapeKind = Free.Shared.Drawing.DrawingShapeKind.Rectangle,
+                OffsetXEmu = 0,
+                OffsetYEmu = 0,
+                ExtentCxEmu = 1_905_000, // 200 dip
+                ExtentCyEmu = 952_500,   // 100 dip
+                Fill = new ShapeFill.Solid(new SrgbColor(0xFF, 0x00, 0x00)),
+                Outline = ShapeOutline.None.Instance,
+                Effects = hasReflection
+                    ? new ShapeEffects
+                    {
+                        Reflection = new ReflectionInfo
+                        {
+                            BlurRadEmu = 0,
+                            DistEmu = 0,
+                            StartAlpha = 100000,
+                            EndPos = 100000,
+                            ScaleYPercent = -100,
+                        },
+                    }
+                    : null,
+            });
+        });
+
+        var canvas = new SlideCanvas { Presentation = p, Slide = p.Slides[0] };
+        return RenderPixels(canvas, width, height);
+    }
+
     private static async Task DrainInputAsync()
     {
         await Dispatcher.UIThread.InvokeAsync(() => { }, DispatcherPriority.Input);

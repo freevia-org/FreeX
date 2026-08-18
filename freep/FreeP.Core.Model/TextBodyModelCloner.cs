@@ -117,6 +117,8 @@ public static class TextBodyModelCloner
             InlineOleObject = CloneInlineOleObject(source.InlineOleObject),
             InlineTable = source.InlineTable?.Clone(),
             FontFamily = source.FontFamily,
+            EastAsiaFontFamily = source.EastAsiaFontFamily,
+            ComplexScriptFontFamily = source.ComplexScriptFontFamily,
             FontSizePt = source.FontSizePt,
             BaselineOffset = source.BaselineOffset,
             Bold = source.Bold,
@@ -181,6 +183,7 @@ public static class TextBodyModelCloner
             {
                 Url = source.Url,
                 TargetSlideId = source.TargetSlideId,
+                Action = source.Action,
                 Tooltip = source.Tooltip,
             };
 

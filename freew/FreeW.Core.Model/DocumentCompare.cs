@@ -251,6 +251,7 @@ public static class DocumentCompare
         // If comment comparison is disabled, drop only the deleted-side markers; revised comments continue
         // to describe the resulting document.
         ReconcileDeletedCommentAnchors(original, result, settings.Comments);
+        ReconcileDeletedNoteAnchors(original, result);
         return result;
 
         // Resolve the currently-buffered revised gap paragraphs against the original paragraphs in
@@ -877,6 +878,80 @@ public static class DocumentCompare
         while (!usedIds.Add(id))
             id++;
         return id;
+    }
+
+    // Whole-paragraph deletions (MarkWholeParagraph) and word-level deletions (the original-only branch of
+    // DiffParagraph/AppendDiffUnit) retain the ORIGINAL document's footnote/endnote reference runs verbatim.
+    // Every RevisionKind.Deleted run emitted anywhere in the result is always cloned from `original`, never
+    // from `revised` (MarkWholeParagraph stamps Deleted only on runs cloned from its `source` when that
+    // source is an original-side paragraph; DiffParagraph's original-only diff units are the only ones ever
+    // marked Deleted). CopyDocumentShell only seeds result.Footnotes/Endnotes from `revised`, so a
+    // footnote/endnote that exists only in `original` -- referenced by one of those deleted runs -- would
+    // otherwise be a dangling reference: a Run.FootnoteId/EndnoteId with no matching entry in the result's
+    // note catalog. Copy in the specific original notes those deleted runs reference, allocating a fresh
+    // numeric id whenever the original's id collides with one `revised` already contributed, so the two
+    // documents' independent, unrelated numbering can never be confused for one another.
+    private static void ReconcileDeletedNoteAnchors(TextDocument original, TextDocument result)
+    {
+        var footnoteIdMap = new Dictionary<int, int>();
+        var endnoteIdMap = new Dictionary<int, int>();
+        var usedFootnoteIds = result.Footnotes.Keys.ToHashSet();
+        var usedEndnoteIds = result.Endnotes.Keys.ToHashSet();
+
+        foreach (var paragraph in EnumerateParagraphs(result.Blocks))
+        foreach (var run in paragraph.Runs)
+        {
+            if (run.Revision != RevisionKind.Deleted)
+                continue;
+
+            if (run.FootnoteId is { } footnoteId
+                && !footnoteIdMap.ContainsKey(footnoteId)
+                && original.Footnotes.TryGetValue(footnoteId, out var footnote))
+            {
+                var mappedId = AllocateNoteId(footnoteId, usedFootnoteIds);
+                footnoteIdMap[footnoteId] = mappedId;
+                var clone = new Footnote(mappedId) { HasAutomaticReferenceMark = footnote.HasAutomaticReferenceMark };
+                foreach (var content in footnote.Content)
+                    clone.Content.Add(ClonePlain(content));
+                result.Footnotes[mappedId] = clone;
+            }
+
+            if (run.EndnoteId is { } endnoteId
+                && !endnoteIdMap.ContainsKey(endnoteId)
+                && original.Endnotes.TryGetValue(endnoteId, out var endnote))
+            {
+                var mappedId = AllocateNoteId(endnoteId, usedEndnoteIds);
+                endnoteIdMap[endnoteId] = mappedId;
+                var clone = new Endnote(mappedId) { HasAutomaticReferenceMark = endnote.HasAutomaticReferenceMark };
+                foreach (var content in endnote.Content)
+                    clone.Content.Add(ClonePlain(content));
+                result.Endnotes[mappedId] = clone;
+            }
+        }
+
+        if (footnoteIdMap.Count == 0 && endnoteIdMap.Count == 0)
+            return;
+
+        foreach (var paragraph in EnumerateParagraphs(result.Blocks))
+        foreach (var run in paragraph.Runs)
+        {
+            if (run.Revision != RevisionKind.Deleted)
+                continue;
+            if (run.FootnoteId is { } footnoteId && footnoteIdMap.TryGetValue(footnoteId, out var mappedFootnote))
+                run.FootnoteId = mappedFootnote;
+            if (run.EndnoteId is { } endnoteId && endnoteIdMap.TryGetValue(endnoteId, out var mappedEndnote))
+                run.EndnoteId = mappedEndnote;
+        }
+    }
+
+    private static int AllocateNoteId(int sourceId, HashSet<int> usedIds)
+    {
+        if (usedIds.Add(sourceId))
+            return sourceId;
+        var candidate = usedIds.Count == 0 ? 1 : usedIds.Max() + 1;
+        while (!usedIds.Add(candidate))
+            candidate++;
+        return candidate;
     }
 
     private static void RemapDeletedCommentMarkers(TextDocument document, int oldId, int newId)

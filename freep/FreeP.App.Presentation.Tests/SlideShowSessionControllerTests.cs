@@ -226,6 +226,51 @@ public sealed class SlideShowSessionControllerTests
             "the tool changes must not produce duplicate narration artifacts for the same slide");
     }
 
+    // r143 F2 (freep-slideshow-presenter): "Browsed at a kiosk" must force
+    // loop-until-stopped at the point the show actually runs, not only when the
+    // Set Up Slide Show dialog resaves the presentation -- otherwise a document
+    // that already (or still) carries ShowType=BrowsedAtKiosk with a stale/false
+    // LoopUntilStopped flag would let an unattended kiosk show reach the last
+    // slide, close, and expose the editor.
+    [Fact]
+    public void SessionController_KioskShowType_LoopsPastLastSlideEvenWhenPersistedLoopFlagIsFalse()
+    {
+        var presentation = MakePresentation(2);
+        presentation.ShowType = PresentationShowType.BrowsedAtKiosk;
+        presentation.LoopUntilStopped = false;
+        var route = SlideShowCustomShowPlanner.BuildFullPresentationRoute(presentation, startIndex: 1);
+        var started = new DateTimeOffset(2026, 8, 18, 9, 0, 0, TimeSpan.Zero);
+        var session = new SlideShowSessionController(
+            presentation,
+            route,
+            started,
+            new SlideShowDeterministicRecordingCaptureBackend("kiosk loop test"));
+
+        // On the last slide with no pending steps: a real (non-kiosk) show would be
+        // "at end" here and close back to the editor. Kiosk must never do that.
+        session.Controller.IsAtEnd.Should().BeFalse(
+            "PowerPoint loops a kiosk show until 'Esc' regardless of the persisted loop flag");
+    }
+
+    // Sibling test: a non-kiosk show with the loop flag off must still end normally
+    // at the last slide -- the kiosk enforcement must not leak into ordinary shows.
+    [Fact]
+    public void SessionController_NonKioskShowType_EndsNormallyWhenLoopFlagIsFalse()
+    {
+        var presentation = MakePresentation(2);
+        presentation.ShowType = PresentationShowType.PresentedBySpeaker;
+        presentation.LoopUntilStopped = false;
+        var route = SlideShowCustomShowPlanner.BuildFullPresentationRoute(presentation, startIndex: 1);
+        var started = new DateTimeOffset(2026, 8, 18, 9, 0, 0, TimeSpan.Zero);
+        var session = new SlideShowSessionController(
+            presentation,
+            route,
+            started,
+            new SlideShowDeterministicRecordingCaptureBackend("non-kiosk end test"));
+
+        session.Controller.IsAtEnd.Should().BeTrue();
+    }
+
     private static Presentation MakePresentation(int slideCount)
     {
         var presentation = Presentation.CreateEmpty();

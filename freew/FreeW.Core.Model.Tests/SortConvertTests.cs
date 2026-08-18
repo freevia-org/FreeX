@@ -156,7 +156,7 @@ public class SortConvertTests
         table.Rows.Add(RowOf("1", "Apple"));
         table.Rows.Add(RowOf("2", "Banana"));
 
-        var sorted = ParagraphSort.SortRows(table.Rows, keyColumn: 1, ascending: true, caseSensitive: false);
+        var sorted = ParagraphSort.SortRows(table.Rows, gridColumn: 1, ascending: true, caseSensitive: false);
 
         sorted.Select(r => r.Cells[1].PlainText).Should().Equal("Apple", "Banana", "Cherry");
         // The companion (key) column travels with its row.
@@ -171,7 +171,7 @@ public class SortConvertTests
         table.Rows.Add(RowOf("Cherry"));
         table.Rows.Add(RowOf("Banana"));
 
-        var sorted = ParagraphSort.SortRows(table.Rows, keyColumn: 0, ascending: false, caseSensitive: false);
+        var sorted = ParagraphSort.SortRows(table.Rows, gridColumn: 0, ascending: false, caseSensitive: false);
 
         sorted.Select(r => r.Cells[0].PlainText).Should().Equal("Cherry", "Banana", "Apple");
     }
@@ -184,7 +184,7 @@ public class SortConvertTests
         table.Rows.Add(RowOf("a", "Banana"));
         table.Rows.Add(RowOf("b", "Apple"));
 
-        var sorted = ParagraphSort.SortRows(table.Rows, keyColumn: 1, ascending: true, caseSensitive: false);
+        var sorted = ParagraphSort.SortRows(table.Rows, gridColumn: 1, ascending: true, caseSensitive: false);
 
         sorted.Select(r => r.Cells[0].PlainText).Should().Equal("z", "b", "a");
     }
@@ -200,7 +200,7 @@ public class SortConvertTests
         table.Rows.Add(RowOf("2", "Banana"));
 
         var sorted = ParagraphSort.SortRows(
-            table.Rows, keyColumn: 0, SortKind.Number, ascending: true, caseSensitive: false, hasHeaderRow: true);
+            table.Rows, gridColumn: 0, SortKind.Number, ascending: true, caseSensitive: false, hasHeaderRow: true);
 
         sorted[0].Should().BeSameAs(header);
         sorted.Select(r => r.Cells[1].PlainText).Should().Equal("Fruit", "Apple", "Banana", "Cherry");
@@ -215,9 +215,51 @@ public class SortConvertTests
         table.Rows.Add(RowOf("1"));
 
         var sorted = ParagraphSort.SortRows(
-            table.Rows, keyColumn: 0, SortKind.Number, ascending: true, caseSensitive: false, hasHeaderRow: false);
+            table.Rows, gridColumn: 0, SortKind.Number, ascending: true, caseSensitive: false, hasHeaderRow: false);
 
         sorted.Select(r => r.Cells[0].PlainText).Should().Equal("1", "2", "10");
+    }
+
+    // Regression for sweep83-1: sorting must project every row through its own GridSpan layout, not reuse
+    // one row's raw cell-list index as the key column for every row. A row whose leading cell spans two
+    // grid columns has one fewer entry in Cells than a row with three plain cells, so a raw index taken
+    // from a uniform row reads the wrong cell (or none at all) in the merged row.
+    [Fact]
+    public void SortRows_RowWithLeadingGridSpanCell_UsesGridProjectedColumnNotRawCellIndex()
+    {
+        var table = Table.Create(0, 0);
+        // Grid column 2 is the sort key for all three rows. "Zulu" is deliberately the alphabetically
+        // LAST value (not the first) so this test can't pass by accident: an empty key (the pre-fix bug,
+        // reading row.Cells[2] out of range on the 2-cell merged row) sorts FIRST in ascending order,
+        // which would put the merged row in the wrong place relative to "Banana"/"Mango" -- a different,
+        // detectably wrong order from the correct grid-projected one.
+        table.Rows.Add(RowOf("Zebra", "Q", "Mango"));           // 3 plain cells: raw index 2 == grid col 2
+        table.Rows.Add(RowOfSpanned(("W", 2), ("Zulu", 1)));    // merged leading cell: raw index 2 is OOB
+        table.Rows.Add(RowOf("Kiwi", "R", "Banana"));           // 3 plain cells: raw index 2 == grid col 2
+
+        var sorted = ParagraphSort.SortRows(table.Rows, gridColumn: 2, ascending: true, caseSensitive: false);
+
+        // Correct grid-projected keys sort as Banana, Mango, Zulu. The pre-fix bug read row.Cells[2] on
+        // the merged row directly (out of range -> empty key, which sorts before everything), placing
+        // that row FIRST instead of last.
+        sorted.Select(r => TableGridProjection.At(r, 2)!.Value.Cell.PlainText)
+            .Should().Equal("Banana", "Mango", "Zulu");
+    }
+
+    // Sibling proof that ordinary uniform-layout tables (the common case, and what every other SortRows
+    // test above exercises) are unaffected by projecting per-row instead of indexing row.Cells directly.
+    [Fact]
+    public void SortRows_UniformRows_StillSortsByPlainCellIndex()
+    {
+        var table = Table.Create(0, 0);
+        table.Rows.Add(RowOf("3", "Cherry"));
+        table.Rows.Add(RowOf("1", "Apple"));
+        table.Rows.Add(RowOf("2", "Banana"));
+
+        var sorted = ParagraphSort.SortRows(table.Rows, gridColumn: 1, ascending: true, caseSensitive: false);
+
+        sorted.Select(r => r.Cells[1].PlainText).Should().Equal("Apple", "Banana", "Cherry");
+        sorted.Select(r => r.Cells[0].PlainText).Should().Equal("1", "2", "3");
     }
 
     // --- TextTableConvert.TextToTable ---
@@ -292,6 +334,17 @@ public class SortConvertTests
         var row = new TableRow();
         foreach (var text in cells)
             row.Cells.Add(new TableCell(text));
+        return row;
+    }
+
+    // Build a table row from (text, gridSpan) pairs, e.g. a leading merged cell spanning 2 grid columns
+    // followed by a plain cell -- fewer Cells entries than the grid is wide, exactly the layout a raw
+    // cell-list index misreads.
+    private static TableRow RowOfSpanned(params (string Text, int Span)[] cells)
+    {
+        var row = new TableRow();
+        foreach (var (text, span) in cells)
+            row.Cells.Add(new TableCell(text) { GridSpan = span });
         return row;
     }
 }

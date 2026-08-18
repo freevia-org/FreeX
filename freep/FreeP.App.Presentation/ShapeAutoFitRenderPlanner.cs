@@ -13,7 +13,8 @@ public readonly record struct ShapeAutoFitMeasurementRequest(
 public readonly record struct ShapeAutoFitRenderPlan(
     LayoutRect Bounds,
     ShapeAffineTransform RenderTransform,
-    ShapeAffineTransform GeometryTransform);
+    ShapeAffineTransform GeometryTransform,
+    ShapeAffineTransform TextRenderTransform);
 
 /// <summary>Coordinates shape auto-fit while leaving glyph measurement with the native host.</summary>
 public static class ShapeAutoFitRenderPlanner
@@ -68,6 +69,12 @@ public static class ShapeAutoFitRenderPlanner
             ? ShapeAffineTransform.Identity
             : ShapeTransformPlanner.PlanShapeRenderTransform(shape);
 
+        // Text never gets the flipH/flipV mirror -- only rotation (and any 3-D projection) --
+        // so a flipped shape's text stays upright, matching PowerPoint.
+        var textRenderTransform = grew
+            ? ShapeAffineTransform.Identity
+            : ShapeTransformPlanner.PlanShapeTextRenderTransform(shape);
+
         var geometryTransform = ShapeAffineTransform.Identity;
         if (grew && sourceBounds.Height > MinimumScalableHeight)
         {
@@ -81,7 +88,7 @@ public static class ShapeAutoFitRenderPlanner
                 bounds.Y - scaleY * sourceBounds.Y);
         }
 
-        return new ShapeAutoFitRenderPlan(bounds, renderTransform, geometryTransform);
+        return new ShapeAutoFitRenderPlan(bounds, renderTransform, geometryTransform, textRenderTransform);
     }
 
     public static bool IsEligible(DrawOp.Shape shape)

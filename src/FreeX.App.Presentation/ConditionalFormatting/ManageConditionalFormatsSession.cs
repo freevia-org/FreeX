@@ -58,21 +58,46 @@ public sealed class ManageConditionalFormatsSession
             .ToList();
 
     /// <summary>
-    /// Changes the displayed scope. Current-scope sessions reload their private snapshot from the
-    /// supplied live rules, matching the WPF dialog; full-sheet sessions retain all buffered edits
-    /// and only change their projection, matching the Avalonia dialog.
+    /// Changes the displayed scope. Matches Excel's Rules Manager: switching "Show formatting rules
+    /// for" never discards edits made earlier in the same dialog session -- only Cancel (or closing
+    /// the dialog without committing) does that. Current-scope sessions therefore fold any pending
+    /// (not-yet-applied) edits back into the accumulated snapshot -- using the same scope-merge logic
+    /// as <see cref="BuildResultRules"/> -- before re-deriving the working copy for the new scope, so
+    /// edits made under an earlier scope survive any number of further scope switches. Full-sheet
+    /// sessions already retain all buffered edits and only change their projection.
     /// </summary>
     public void SetScope(GridRange? scope, IReadOnlyList<ConditionalFormat>? currentSheetRules = null)
     {
+        if (WorkingCopyPolicy == ManageConditionalFormatsWorkingCopyPolicy.CurrentScope)
+            _sourceRules = BuildResultRules(ReconcileWithTrackedSnapshot(currentSheetRules)).ToList();
+
         Scope = scope;
 
         if (WorkingCopyPolicy != ManageConditionalFormatsWorkingCopyPolicy.CurrentScope)
             return;
 
-        if (currentSheetRules is not null)
-            _sourceRules = CloneInPriorityOrder(currentSheetRules);
-
         _workingRules = CreateWorkingCopy();
+    }
+
+    /// <summary>
+    /// Folding pending edits back into the tracked snapshot must never regress to the caller's raw
+    /// live-sheet rules -- the caller (e.g. the WPF dialog) supplies the *unedited* live sheet on
+    /// every scope change, so blindly using it as the merge base would silently discard edits made
+    /// under an earlier scope (the exact data-loss bug this fold-in exists to prevent). Only adopt
+    /// the caller's rules as the new baseline when the rule set actually changed underneath the
+    /// session (e.g. the live sheet gained/lost rules via the dialog's own Apply button, or an
+    /// external command) -- detected by comparing rule identity, not values -- otherwise keep
+    /// merging onto the session's own accumulated snapshot.
+    /// </summary>
+    private List<ConditionalFormat>? ReconcileWithTrackedSnapshot(IReadOnlyList<ConditionalFormat>? currentSheetRules)
+    {
+        if (currentSheetRules is null)
+            return null;
+
+        var trackedIds = new HashSet<Guid>(_sourceRules.Select(rule => rule.Id));
+        var unchanged = currentSheetRules.Count == trackedIds.Count
+            && currentSheetRules.All(rule => trackedIds.Contains(rule.Id));
+        return unchanged ? null : currentSheetRules.ToList();
     }
 
     public void Add(ConditionalFormat newRule)

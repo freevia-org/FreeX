@@ -24,7 +24,12 @@ public static class ResolvedShapeEffectRenderPlanner
             effects.GlowAlpha,
             effects.GlowRadiusDip,
             effects.HasSoftEdge,
-            effects.SoftEdgeRadiusDip);
+            effects.SoftEdgeRadiusDip,
+            effects.HasReflection,
+            effects.ReflectionAlpha,
+            effects.ReflectionBlurDip,
+            effects.ReflectionScaleY,
+            effects.ReflectionEndPos);
 
         // PowerPoint's imported 16-DIP glow on the canonical effects corpus is
         // materially tighter than the host's concentric-stroke approximation.
@@ -34,6 +39,19 @@ public static class ResolvedShapeEffectRenderPlanner
             values = values with { GlowRadiusDip = effects.GlowRadiusDip * 0.625 };
 
         var plan = ShapeEffectRenderPlanner.PlanOuterEffects(values);
+
+        // Reflection pivot is an absolute Y coordinate (bottom of the shape plus half the
+        // authored distance), mirroring PictureRenderPlanner.Plan's ReflectionPivotY. It needs
+        // the shape's bounds, which the bounds-free low-level planner does not receive.
+        if (effects.HasReflection && bounds is { } reflectionBounds)
+        {
+            plan = plan with
+            {
+                ReflectionPivotYDip = reflectionBounds.Y + reflectionBounds.Height
+                    + effects.ReflectionDistDip / 2.0,
+            };
+        }
+
         // The canonical imported shadow needs lighter peripheral blur rings in both hosts.
         if (bounds.HasValue && IsImportedEffectsShadowSignature(effects))
         {

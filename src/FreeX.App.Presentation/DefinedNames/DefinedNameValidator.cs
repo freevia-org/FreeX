@@ -28,6 +28,9 @@ public enum DefinedNameError
     /// <summary>The name is a reserved single-letter column macro token (C, c, R, r).</summary>
     Reserved,
 
+    /// <summary>The name starts with the "_xlnm." or "_xlchart." prefix Excel reserves for its own built-in defined names.</summary>
+    ReservedPrefix,
+
     /// <summary>Another name in the same scope already uses this text (case-insensitive).</summary>
     Duplicate
 }
@@ -51,7 +54,11 @@ public readonly record struct DefinedNameValidationResult(DefinedNameError Error
 /// (backslash is allowed because Excel uses it to start macro/XLM-sheet defined names);
 /// subsequent characters must be letters, digits, periods, or underscores (so spaces are rejected);
 /// the name may not look like an A1 or R1C1 cell reference; the single-letter macro tokens R and C are
-/// reserved; the length may not exceed 255; and, within a scope, names are unique case-insensitively.
+/// reserved; a name may not start with the "_xlnm." or "_xlchart." prefix Excel reserves for its own
+/// built-in defined names (matching Workbook.ValidateNamedRangeName's HasReservedExcelPrefix check —
+/// without this the live Name Manager/Define Name dialogs would accept a name like "_xlnm.Foo" only
+/// for the command layer to reject it on Save with no matching live feedback); the length may not
+/// exceed 255; and, within a scope, names are unique case-insensitively.
 /// Pure data in, pure data out — it touches no renderer or host types.
 /// </summary>
 public static class DefinedNameValidator
@@ -82,6 +89,9 @@ public static class DefinedNameValidator
 
         if (IsReservedToken(name))
             return DefinedNameValidationResult.Fail(DefinedNameError.Reserved);
+
+        if (HasReservedExcelPrefix(name))
+            return DefinedNameValidationResult.Fail(DefinedNameError.ReservedPrefix);
 
         if (LooksLikeReference(name))
             return DefinedNameValidationResult.Fail(DefinedNameError.LooksLikeReference);
@@ -127,6 +137,11 @@ public static class DefinedNameValidator
 
     private static bool IsReservedToken(string name) =>
         name.Length == 1 && (name[0] is 'R' or 'r' or 'C' or 'c');
+
+    /// <summary>Matches Workbook.ValidateNamedRangeName's HasReservedExcelPrefix check (Workbook.cs).</summary>
+    private static bool HasReservedExcelPrefix(string name) =>
+        name.StartsWith("_xlnm.", StringComparison.OrdinalIgnoreCase) ||
+        name.StartsWith("_xlchart.", StringComparison.OrdinalIgnoreCase);
 
     private static bool LooksLikeReference(string name) =>
         CellAddress.TryParse(name, SheetId.New(), out _) || IsR1C1Reference(name);

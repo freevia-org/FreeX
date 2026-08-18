@@ -8,21 +8,25 @@ namespace FreeX.Core.IO;
 
 internal static class XlsxNamedRangeMapper
 {
-    // R66-io-defined-names-scope-6-1: only the built-ins FreeX has DEDICATED handling for (via
-    // ClosedXML's PageSetup.PrintAreas/PrintTitleRows/PrintTitleColumns for the first two, and the
-    // AutoFilter-derived FilterDatabaseDefinedName const below for the third) belong in this bare
-    // (unprefixed) reserved set. "Criteria"/"Database"/"Extract"/"Consolidate_Area" are NOT Excel
-    // built-ins in their bare form — those are only reserved when Excel itself writes them with the
-    // "_xlnm." prefix (handled by IsExcelReservedDefinedName's prefix check below). A bare user-
-    // created name like "Database" (e.g. for a legacy Data > Consolidate/Advanced-Filter range) is a
-    // perfectly legitimate ordinary defined name and must be loaded/saved like any other — treating
-    // it as reserved silently dropped it on load and refused it on save.
-    private static readonly HashSet<string> ExcelReservedDefinedNames = new(StringComparer.OrdinalIgnoreCase)
-    {
-        "Print_Area",
-        "Print_Titles",
-        "_FilterDatabase",
-    };
+    // R144-io-defined-names-83-1: NOTHING belongs in a bare (unprefixed) reserved set. Excel's
+    // built-in defined names (Print_Area, Print_Titles, _FilterDatabase, Criteria, Database,
+    // Extract, Consolidate_Area, _xlchart.* — see ECMA-376 ST_DefinedNames) are ONLY ever written
+    // with the "_xlnm."/"_xlchart." prefix (handled by IsExcelReservedDefinedName's prefix check
+    // below); ClosedXML itself never surfaces the real, prefixed built-in through
+    // IXLDefinedNames — Print_Area/Print_Titles are consumed straight into
+    // XLWorksheet.PageSetup.PrintAreas/PrintTitleRows/PrintTitleColumns and never appear in
+    // DefinedNames at all, and _FilterDatabase appears (when it appears) still fully prefixed as
+    // "_xlnm._FilterDatabase", already caught below. So a bare-text entry actually reaching
+    // LoadDefinedNames/CreateDefinedNameEntries with a name like "Print_Area" or "_FilterDatabase"
+    // is — by construction — never the built-in; it can only be an ordinary user-created defined
+    // name that happens to reuse that exact text (Workbook.ValidateNamedRangeName has always
+    // allowed this — only the "_xlnm."/"_xlchart." prefix forms are rejected, see
+    // HasReservedExcelPrefix in Workbook.cs). A previous bare-word reserved set here (matching
+    // "Print_Area"/"Print_Titles"/"_FilterDatabase" by plain text) silently dropped exactly that
+    // legitimate user name on every save and refused to reload it, contradicting the validator
+    // that let the user create it in the first place. Do not reintroduce a bare-word set — the
+    // "_xlnm."/"_xlchart." prefix check alone is the correct and complete test, and it is the same
+    // test Workbook.ValidateNamedRangeName applies.
 
     /// <summary>
     /// The canonical OOXML built-in defined-name identifier for a sheet's AutoFilter database range
@@ -968,8 +972,7 @@ internal static class XlsxNamedRangeMapper
 
         var trimmedName = name.Trim();
         return trimmedName.StartsWith("_xlchart.", StringComparison.OrdinalIgnoreCase) ||
-               trimmedName.StartsWith("_xlnm.", StringComparison.OrdinalIgnoreCase) ||
-               ExcelReservedDefinedNames.Contains(trimmedName);
+               trimmedName.StartsWith("_xlnm.", StringComparison.OrdinalIgnoreCase);
     }
 
     // A defined name's refersTo body never makes it into the model (NamedRanges/

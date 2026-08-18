@@ -1082,6 +1082,35 @@ public class DocxRoundTripTests
     }
 
     [Fact]
+    public void Table_WindowAutoFit_EmitsDistinguishingPercentWidth_AndRoundTrips()
+    {
+        // Regression (r144, freew-table-autofit-window-collapses-to-contents): DocxWriter used to emit
+        // w:tblLayout w:type="autofit" for BOTH AutoFitMode.Window and AutoFitMode.Contents (OOXML's
+        // ST_TblLayoutType has no third value), and DocxReader resolved any non-"fixed" tblLayout straight
+        // to AutoFitMode.Contents, so a table set to "AutoFit to Window" silently became "AutoFit to
+        // Contents" on the very next reload. The writer now breaks the tie with a percentage-based tblW
+        // (w:type="pct"), the same way Word's own Table Properties > Preferred width dialog encodes it.
+        var doc = new TextDocument();
+        var table = Table.Create(1, 2);
+        table.AutoFit = AutoFitMode.Window;
+        // A previously-authored column split that must survive the round trip untouched (AutoFitMode.Window
+        // preserves ColumnWidthsPt; only AutoFitMode.Contents clears it — see TableLayoutOperations.SetAutoFit).
+        table.ColumnWidthsPt.AddRange([100.0, 300.0]);
+        doc.Blocks.Add(table);
+
+        var ns = XNamespace.Get("http://schemas.openxmlformats.org/wordprocessingml/2006/main");
+        var tableProperties = WriteDocumentXml(doc).Descendants(ns + "tblPr").Single();
+        tableProperties.Element(ns + "tblLayout")?.Attribute(ns + "type")?.Value.Should().Be("autofit");
+        var tblW = tableProperties.Element(ns + "tblW");
+        tblW?.Attribute(ns + "type")?.Value.Should().Be("pct", "Window autofit must be distinguishable from Contents");
+
+        var result = RoundTrip(doc);
+        var readTable = result.Blocks.OfType<Table>().Single();
+        readTable.AutoFit.Should().Be(AutoFitMode.Window);
+        readTable.ColumnWidthsPt.Should().Equal(100, 300);
+    }
+
+    [Fact]
     public void Table_OmittedLayout_UsesWordDefaultContentAutoFit()
     {
         var result = ReadHandAuthoredDocx(
@@ -1629,6 +1658,58 @@ public class DocxRoundTripTests
         using var zip = new ZipArchive(stream, ZipArchiveMode.Read);
         using var docReader = new StreamReader(zip.GetEntry("word/document.xml")!.Open());
         docReader.ReadToEnd().Should().Contain("descr=\"Accessible caption\"");
+    }
+
+    [Fact]
+    public void InlineImage_IsDecorative_RoundTrips()
+    {
+        var png = MinimalPng();
+        var doc = new TextDocument();
+        var paragraph = new Paragraph();
+        paragraph.Runs.Add(Run.FromImage(new InlineImage(png, widthPt: 120, heightPt: 90)
+        {
+            IsDecorative = true,
+        }));
+        doc.Blocks.Add(paragraph);
+
+        var imageRun = RoundTrip(doc).Paragraphs.First().Runs.Single(r => r.Image is not null);
+
+        imageRun.Image!.IsDecorative.Should().BeTrue();
+    }
+
+    [Fact]
+    public void InlineImage_NotDecorative_RoundTripsFalse()
+    {
+        // Sibling of InlineImage_IsDecorative_RoundTrips: an ordinary (non-decorative) image must not
+        // pick up the flag from the read/write path.
+        var png = MinimalPng();
+        var doc = new TextDocument();
+        var paragraph = new Paragraph();
+        paragraph.Runs.Add(Run.FromImage(new InlineImage(png, widthPt: 120, heightPt: 90)));
+        doc.Blocks.Add(paragraph);
+
+        var imageRun = RoundTrip(doc).Paragraphs.First().Runs.Single(r => r.Image is not null);
+
+        imageRun.Image!.IsDecorative.Should().BeFalse();
+    }
+
+    [Fact]
+    public void InlineImage_IsDecorative_EmittedAsDecorativeExtension()
+    {
+        var doc = new TextDocument();
+        var paragraph = new Paragraph();
+        paragraph.Runs.Add(Run.FromImage(new InlineImage(MinimalPng(), 50, 50) { IsDecorative = true }));
+        doc.Blocks.Add(paragraph);
+
+        using var stream = new MemoryStream();
+        DocxWriter.Write(doc, stream);
+        stream.Position = 0;
+
+        using var zip = new ZipArchive(stream, ZipArchiveMode.Read);
+        using var docReader = new StreamReader(zip.GetEntry("word/document.xml")!.Open());
+        var xml = docReader.ReadToEnd();
+        xml.Should().Contain("{C183D7F6-B498-43B3-948B-1728B52AA6E4}");
+        xml.Should().Contain("decorative");
     }
 
     [Fact]

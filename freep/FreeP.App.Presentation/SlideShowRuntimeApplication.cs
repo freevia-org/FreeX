@@ -278,7 +278,20 @@ public sealed class SlideShowRuntimeApplication
 
     public void SetScreenMode(SlideShowScreenMode mode)
     {
+        var wasBlank = _session.IsScreenBlank;
         _session.SetScreenMode(mode);
+        var isBlank = _session.IsScreenBlank;
+
+        // Blanking (B/W) must pause the current slide's auto-advance timer while hidden
+        // and resume it on unblank -- otherwise the timer keeps ticking behind the
+        // overlay and the presenter returns to a later slide than the one they blanked
+        // on. Only an actual blank<->visible transition needs this; toggling between
+        // Black and White (both blank) leaves the paused timer untouched.
+        if (isBlank != wasBlank && _displayRenderer is not null)
+        {
+            _displayCoordinator.ScreenModeChanged(isBlank, _displayRenderer);
+        }
+
         RequireRenderer().RenderScreenMode(new SlideShowRuntimeScreenModePlan(
             mode,
             _session.IsScreenBlank,

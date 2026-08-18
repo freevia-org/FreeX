@@ -18,28 +18,7 @@ public static class RevisionEditPlanner
         string? HyperlinkTooltip = null);
 
     public static RunFormatting FormattingAtOffset(Paragraph paragraph, int offset)
-    {
-        if (paragraph.Runs.Count == 0)
-            return RunFormatting.Default;
-
-        var textLength = paragraph.Runs.Sum(r => r.Text.Length);
-        if (textLength == 0)
-            return paragraph.Runs[^1].Formatting;
-
-        var target = Math.Clamp(offset - 1, 0, textLength - 1);
-        var position = 0;
-        foreach (var run in paragraph.Runs)
-        {
-            var length = run.Text.Length;
-            if (length == 0)
-                continue;
-            if (target < position + length)
-                return run.Formatting;
-            position += length;
-        }
-
-        return paragraph.Runs[^1].Formatting;
-    }
+        => RunAtOffset(paragraph, offset)?.Formatting ?? RunFormatting.Default;
 
     public static InsertOptions LinkAtOffset(Paragraph paragraph, int offset)
     {
@@ -332,7 +311,11 @@ public static class RevisionEditPlanner
         Ruby = text == source.Text ? source.Ruby : null
     };
 
-    private static Run? RunAtOffset(Paragraph paragraph, int offset)
+    /// <summary>Locates the run whose text contains <paramref name="offset"/> (clamped to the paragraph's
+    /// length), the same lookup <see cref="FormattingAtOffset"/> uses -- exposed publicly so callers that
+    /// also need the run's identity (e.g. <see cref="Run.StyleId"/> for a "formatting at the caret" probe)
+    /// don't have to duplicate the walk. Null only when the paragraph has no runs at all.</summary>
+    public static Run? RunAtOffset(Paragraph paragraph, int offset)
     {
         var textLength = paragraph.Runs.Sum(r => r.Text.Length);
         if (textLength == 0)
@@ -376,8 +359,11 @@ public static class RevisionEditPlanner
             {
                 paragraph.Runs.Insert(i + 1, insertedRun);
             }
-            else if (run.Ruby is not null)
+            else if (run.Ruby is not null || run.Control is not null)
             {
+                // A content control is one semantic run (a w:sdt): splitting its text in two would emit
+                // the field twice on save, each half claiming to be the whole control. Anything inserted
+                // mid-field goes after the intact run, which is also what the ruby case below needs.
                 // A ruby annotation is one semantic run: splitting its base text would either duplicate
                 // or discard the phonetic payload. XE fields are page anchors, so placing the hidden mark
                 // after the intact ruby run preserves both the annotation and the same page identity.

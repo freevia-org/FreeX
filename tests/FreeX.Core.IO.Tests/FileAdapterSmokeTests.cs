@@ -17287,8 +17287,14 @@ public partial class FileAdapterSmokeTests
     }
 
     [Fact]
-    public void XlsxAdapter_Load_IgnoredErrors_SkipsNativeMetadataForDefaultFlags()
+    public void XlsxAdapter_Load_IgnoredErrors_TracksNativeMetadataForSingleDefaultFlag()
     {
+        // R142 ignored-errors-flag-broadening: a cell whose author ignored ONLY numberStoredAsText
+        // (one of the four historically-hardcoded "default" flags) must round-trip with exactly that
+        // flag, not be silently broadened to also suppress evalError/formula/emptyCellReference.
+        // This supersedes the old "SkipsNativeMetadataForDefaultFlags" test, which asserted the bug
+        // itself (that default-flag-only cells carry no native metadata, so save always re-broadened
+        // them to all four flags) -- updated per the fix rather than left pinning broken behavior.
         var workbook = new Workbook("IgnoredErrorsDefaultMetadataTest");
         var sheet = workbook.AddSheet("Data");
         sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("00123"));
@@ -17303,8 +17309,10 @@ public partial class FileAdapterSmokeTests
         var loaded = adapter.Load(source);
         var loadedSheet = loaded.GetSheetAt(0);
         loadedSheet.GetCell(1, 1)!.IgnoreFormulaError.Should().BeTrue();
-        loadedSheet.IgnoredErrorsMetadata.Should().BeNull(
-            "default ignored-error flags are represented by the modeled IgnoreFormulaError flag");
+        loadedSheet.IgnoredErrorsMetadata.Should().NotBeNull(
+            "the exact originally-ignored flag(s) must be tracked so save does not broaden a single ignored rule to every rule");
+        loadedSheet.IgnoredErrorsMetadata!.ErrorNativeAttributes["A1"].Should().ContainSingle()
+            .Which.Should().Be(new KeyValuePair<string, string>("numberStoredAsText", "1"));
         loadedSheet.SetCell(new CellAddress(loadedSheet.Id, 2, 1), new TextValue("edited"));
 
         var saved = new MemoryStream();
@@ -17319,6 +17327,81 @@ public partial class FileAdapterSmokeTests
             .Element(worksheetNs + "ignoredError")!;
         ignoredError.Attribute("sqref")!.Value.Should().Be("A1");
         ignoredError.Attribute("numberStoredAsText")!.Value.Should().Be("1");
+        ignoredError.Attribute("evalError").Should().BeNull(
+            "the source cell never ignored evalError; save must not broaden the ignore to it");
+        ignoredError.Attribute("formula").Should().BeNull(
+            "the source cell never ignored formula; save must not broaden the ignore to it");
+        ignoredError.Attribute("emptyCellReference").Should().BeNull(
+            "the source cell never ignored emptyCellReference; save must not broaden the ignore to it");
+    }
+
+    [Fact]
+    public void XlsxAdapter_Load_IgnoredErrors_TracksNativeMetadataForSingleNonDefaultFlag()
+    {
+        // Sibling of the above for a non-"default" flag: a cell whose author ignored ONLY
+        // unlockedFormula must not come back out also carrying the four historically-hardcoded
+        // default flags (numberStoredAsText/evalError/formula/emptyCellReference).
+        var workbook = new Workbook("IgnoredErrorsUnlockedFormulaOnlyTest");
+        var sheet = workbook.AddSheet("Data");
+        sheet.SetFormula(new CellAddress(sheet.Id, 1, 1), "1+1");
+
+        var source = new MemoryStream();
+        var adapter = new XlsxFileAdapter();
+        adapter.Save(workbook, source);
+        source.Position = 0;
+        AddWorksheetIgnoredErrors(source, "A1", ("unlockedFormula", "1"));
+
+        source.Position = 0;
+        var loaded = adapter.Load(source);
+        var loadedSheet = loaded.GetSheetAt(0);
+        loadedSheet.GetCell(1, 1)!.IgnoreFormulaError.Should().BeTrue();
+        loadedSheet.SetCell(new CellAddress(loadedSheet.Id, 2, 1), new TextValue("edited"));
+
+        var saved = new MemoryStream();
+        adapter.Save(loaded, saved);
+        saved.Position = 0;
+
+        using var archive = new ZipArchive(saved, ZipArchiveMode.Read, leaveOpen: false);
+        var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
+        XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        var ignoredError = worksheetXml.Root!
+            .Element(worksheetNs + "ignoredErrors")!
+            .Element(worksheetNs + "ignoredError")!;
+        ignoredError.Attribute("sqref")!.Value.Should().Be("A1");
+        ignoredError.Attribute("unlockedFormula")!.Value.Should().Be("1");
+        ignoredError.Attribute("numberStoredAsText").Should().BeNull();
+        ignoredError.Attribute("evalError").Should().BeNull();
+        ignoredError.Attribute("formula").Should().BeNull();
+        ignoredError.Attribute("emptyCellReference").Should().BeNull();
+    }
+
+    [Fact]
+    public void XlsxAdapter_Save_FreshlyIgnoredCellWithoutSourceMetadata_UsesBroadDefaultFlags()
+    {
+        // Sibling proving the fix did not regress the "no fidelity information available" path: a
+        // cell newly marked IgnoreFormulaError via the app (e.g. Error Checking's "Ignore Error"
+        // button), which has no per-flag metadata at all, must still suppress error checking on
+        // reload -- it falls back to the historical broad four-flag default.
+        var workbook = new Workbook("IgnoredErrorsFreshIgnoreDefaultTest");
+        var sheet = workbook.AddSheet("Data");
+        sheet.SetFormula(new CellAddress(sheet.Id, 1, 1), "1/0");
+        sheet.GetCell(1, 1)!.IgnoreFormulaError = true;
+
+        var saved = new MemoryStream();
+        new XlsxFileAdapter().Save(workbook, saved);
+        saved.Position = 0;
+
+        using var archive = new ZipArchive(saved, ZipArchiveMode.Read, leaveOpen: false);
+        var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
+        XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        var ignoredError = worksheetXml.Root!
+            .Element(worksheetNs + "ignoredErrors")!
+            .Element(worksheetNs + "ignoredError")!;
+        ignoredError.Attribute("sqref")!.Value.Should().Be("A1");
+        ignoredError.Attribute("numberStoredAsText")!.Value.Should().Be("1");
+        ignoredError.Attribute("evalError")!.Value.Should().Be("1");
+        ignoredError.Attribute("formula")!.Value.Should().Be("1");
+        ignoredError.Attribute("emptyCellReference")!.Value.Should().Be("1");
     }
 
     [Fact]

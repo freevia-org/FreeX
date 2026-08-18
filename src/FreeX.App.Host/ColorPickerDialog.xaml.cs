@@ -19,6 +19,14 @@ public partial class ColorPickerDialog : Window
     private Button? _initialFocusButton;
     private Button? _selectedSwatchButton;
 
+    /// <summary>
+    /// R142-services-theme-colors-1: which theme slot/tint the currently-selected color came from,
+    /// if it was picked from a Theme Colors swatch and hasn't since been overridden by a manual
+    /// hex/RGB/luminosity edit (which -- like real Excel -- breaks the theme link). See
+    /// <see cref="SelectColor"/>.
+    /// </summary>
+    private WorkbookThemeColorReference? _selectedThemeColor;
+
     public ColorPickerDialog(
         CellColor? initialColor = null,
         bool allowNoColor = false,
@@ -47,6 +55,16 @@ public partial class ColorPickerDialog : Window
     }
 
     public CellColor? SelectedColor { get; private set; }
+
+    /// <summary>
+    /// R142-services-theme-colors-1: the theme slot/tint <see cref="SelectedColor"/> came from, if
+    /// the user's final choice was a Theme Colors swatch untouched by any subsequent manual
+    /// hex/RGB/luminosity edit. Null for a Standard/Custom Spectrum swatch, a manually-entered
+    /// color, or "No Fill". Callers that want a color applied to still track the workbook theme
+    /// (e.g. the ribbon Font/Fill Color commands) should attach this alongside
+    /// <see cref="SelectedColor"/> instead of only the resolved flat RGB.
+    /// </summary>
+    public WorkbookThemeColorReference? SelectedThemeColor { get; private set; }
 
     public bool AllowNoColor { get; }
 
@@ -97,6 +115,10 @@ public partial class ColorPickerDialog : Window
         }
 
         SelectedColor = color;
+        // Finalize the theme link SelectColor has been tracking as the user made their choice (the
+        // color just re-parsed above from CustomColorTextBox.Text is the same one SelectColor kept
+        // that textbox in sync with -- see its remarks).
+        SelectedThemeColor = _selectedThemeColor;
         SetPreview(NewForegroundPreview, NewBackgroundPreview, NewBackgroundText, color);
         DialogResult = true;
     }
@@ -113,6 +135,7 @@ public partial class ColorPickerDialog : Window
             return;
 
         SelectedColor = null;
+        SelectedThemeColor = null;
         DialogResult = true;
     }
 
@@ -144,7 +167,9 @@ public partial class ColorPickerDialog : Window
             BorderBrush = Brushes.Gray,
             BorderThickness = new Thickness(1),
             ToolTip = groupName is null ? swatch.Hex : UiText.Format("ColorPicker_GroupSwatchToolTip", groupName, swatch.Hex),
-            Tag = swatch.Color
+            // R142-services-theme-colors-1: the whole swatch (not just its resolved Color) so
+            // SwatchButton_Click can recover which theme slot/tint a Theme Colors swatch came from.
+            Tag = swatch
         };
         AutomationProperties.SetName(button, CreateSwatchAutomationName(swatch, groupName));
         AutomationProperties.SetHelpText(button, UiText.Get("ColorPicker_SwatchHelpText"));
@@ -173,13 +198,14 @@ public partial class ColorPickerDialog : Window
 
     private void SwatchButton_Click(object sender, RoutedEventArgs e)
     {
-        if (sender is Button { Tag: CellColor color } button)
+        if (sender is Button { Tag: CellColorSwatch swatch } button)
         {
             MarkSelectedSwatch(button);
             SelectColor(
-                color,
+                swatch.Color,
                 updateSpectrumBase: ReferenceEquals(((Button)sender).Parent, CustomSpectrumPanel),
-                updateSwatchSelection: false);
+                updateSwatchSelection: false,
+                themeColor: swatch.ThemeColor);
         }
     }
 
@@ -254,28 +280,41 @@ public partial class ColorPickerDialog : Window
     {
         foreach (var child in ThemeColorsPanel.Children)
         {
-            if (child is Button button && button.Tag is CellColor swatchColor && swatchColor == color)
+            if (child is Button button && button.Tag is CellColorSwatch swatch && swatch.Color == color)
                 return button;
         }
 
         foreach (var child in StandardColorsPanel.Children)
         {
-            if (child is Button button && button.Tag is CellColor swatchColor && swatchColor == color)
+            if (child is Button button && button.Tag is CellColorSwatch swatch && swatch.Color == color)
                 return button;
         }
 
         foreach (var child in CustomSpectrumPanel.Children)
         {
-            if (child is Button button && button.Tag is CellColor swatchColor && swatchColor == color)
+            if (child is Button button && button.Tag is CellColorSwatch swatch && swatch.Color == color)
                 return button;
         }
 
         return null;
     }
 
-    private void SelectColor(CellColor color, bool updateSpectrumBase = true, bool updateSwatchSelection = true)
+    /// <summary>
+    /// Records the dialog's current color choice. <paramref name="themeColor"/> defaults to null,
+    /// so every non-swatch caller (custom hex/RGB text edits, the luminosity slider) implicitly
+    /// clears any previously-tracked theme link -- matching Excel: editing the custom color breaks
+    /// the connection to the Theme Colors swatch that seeded it, even if the edit happens to land
+    /// back on the exact same RGB. Only <see cref="SwatchButton_Click"/> passes a non-null value,
+    /// and only for an actual Theme Colors swatch (R142-services-theme-colors-1).
+    /// </summary>
+    private void SelectColor(
+        CellColor color,
+        bool updateSpectrumBase = true,
+        bool updateSwatchSelection = true,
+        WorkbookThemeColorReference? themeColor = null)
     {
         SelectedColor = color;
+        _selectedThemeColor = themeColor;
         if (updateSwatchSelection)
             UpdateSwatchSelection(color);
 

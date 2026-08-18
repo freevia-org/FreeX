@@ -69,14 +69,42 @@ public sealed class TextSearchMatch
     /// <summary>Zero-based paragraph index within the TextBody.</summary>
     public int ParagraphIndex { get; init; }
 
-    /// <summary>Zero-based run index within the paragraph.</summary>
+    /// <summary>Zero-based run index the match starts in.</summary>
     public int RunIndex { get; init; }
 
-    /// <summary>Zero-based start character offset within the run's text.</summary>
+    /// <summary>Zero-based start character offset within the <see cref="RunIndex"/> run's text.</summary>
     public int CharStart { get; init; }
 
-    /// <summary>Exclusive end character offset within the run's text.</summary>
+    /// <summary>
+    /// Exclusive end character offset of the match. When the match is contained entirely
+    /// within <see cref="RunIndex"/> (the common case), this is the offset within that same
+    /// run. When the match spans a run boundary (<see cref="EndRunIndex"/> differs from
+    /// <see cref="RunIndex"/>), this instead equals the full length of the <see cref="RunIndex"/>
+    /// run's text -- i.e. the match runs to the end of the starting run -- and
+    /// <see cref="EndCharOffset"/> carries the offset within the ending run.
+    /// </summary>
     public int CharEnd { get; init; }
+
+    /// <summary>
+    /// Zero-based run index the match ends in. Equal to <see cref="RunIndex"/> unless the
+    /// match spans a formatting/run boundary (e.g. a query that straddles a bold word).
+    /// Defaults to -1, meaning "same as <see cref="RunIndex"/>" for matches constructed
+    /// without setting it (keeps older single-run call sites source-compatible).
+    /// </summary>
+    public int EndRunIndex { get; init; } = -1;
+
+    /// <summary>
+    /// Exclusive end character offset within the <see cref="EndRunIndex"/> run's text.
+    /// Only meaningful when <see cref="EndRunIndex"/> differs from <see cref="RunIndex"/>.
+    /// Defaults to -1, meaning "use <see cref="CharEnd"/>" (the single-run case).
+    /// </summary>
+    public int EndCharOffset { get; init; } = -1;
+
+    /// <summary>Resolved run index the match ends in (<see cref="EndRunIndex"/> if set, else <see cref="RunIndex"/>).</summary>
+    public int ResolvedEndRunIndex => EndRunIndex < 0 ? RunIndex : EndRunIndex;
+
+    /// <summary>Resolved exclusive end offset within <see cref="ResolvedEndRunIndex"/> (<see cref="EndCharOffset"/> if set, else <see cref="CharEnd"/>).</summary>
+    public int ResolvedEndCharOffset => EndCharOffset < 0 ? CharEnd : EndCharOffset;
 
     /// <summary>The exact text that was matched.</summary>
     public string MatchedText { get; init; } = string.Empty;
@@ -175,33 +203,81 @@ public static class PresentationTextSearch
         for (int pi = 0; pi < body.Paragraphs.Count; pi++)
         {
             var para = body.Paragraphs[pi];
+            if (para.Runs.Count == 0) continue;
+
+            // Search the paragraph's runs as one concatenated string rather than run-by-run:
+            // a run boundary is a formatting seam (e.g. one bold word mid-sentence) invisible
+            // to the user on the slide, so a query whose characters straddle that seam must
+            // still be found. Each run's start offset within the concatenated text is recorded
+            // so a match can be mapped back to the run(s) that actually contain it.
+            var runStarts = new int[para.Runs.Count];
+            var sb = new System.Text.StringBuilder();
             for (int ri = 0; ri < para.Runs.Count; ri++)
             {
-                var run = para.Runs[ri];
-                var text = run.Text;
-                if (string.IsNullOrEmpty(text)) continue;
+                runStarts[ri] = sb.Length;
+                var runText = para.Runs[ri].Text;
+                if (!string.IsNullOrEmpty(runText)) sb.Append(runText);
+            }
 
-                foreach (var (start, length) in PlainTextSearch.FindAll(
-                    text,
-                    query,
-                    opts.MatchCase,
-                    opts.WholeWord))
+            if (sb.Length == 0) continue;
+            var paragraphText = sb.ToString();
+
+            foreach (var (start, length) in PlainTextSearch.FindAll(
+                paragraphText,
+                query,
+                opts.MatchCase,
+                opts.WholeWord))
+            {
+                int end = start + length;
+                int startRunIndex = FindRunIndexForOffset(runStarts, start);
+                int endRunIndex   = FindRunIndexForOffset(runStarts, end - 1);
+
+                int charStart = start - runStarts[startRunIndex];
+                int charEnd, endCharOffset;
+                if (endRunIndex == startRunIndex)
                 {
-                    results.Add(new TextSearchMatch
-                    {
-                        SlideIndex     = slideIndex,
-                        ShapeId        = shapeId,
-                        Location       = location,
-                        TableRow       = tableRow,
-                        TableCol       = tableCol,
-                        ParagraphIndex = pi,
-                        RunIndex       = ri,
-                        CharStart      = start,
-                        CharEnd        = start + length,
-                        MatchedText    = text.Substring(start, length),
-                    });
+                    charEnd       = end - runStarts[startRunIndex];
+                    endCharOffset = charEnd;
                 }
+                else
+                {
+                    // Match spans a run boundary: CharEnd marks "runs to the end of the
+                    // starting run" and EndCharOffset carries the offset within the run
+                    // the match actually ends in.
+                    charEnd       = para.Runs[startRunIndex].Text.Length;
+                    endCharOffset = end - runStarts[endRunIndex];
+                }
+
+                results.Add(new TextSearchMatch
+                {
+                    SlideIndex     = slideIndex,
+                    ShapeId        = shapeId,
+                    Location       = location,
+                    TableRow       = tableRow,
+                    TableCol       = tableCol,
+                    ParagraphIndex = pi,
+                    RunIndex       = startRunIndex,
+                    CharStart      = charStart,
+                    CharEnd        = charEnd,
+                    EndRunIndex    = endRunIndex,
+                    EndCharOffset  = endCharOffset,
+                    MatchedText    = paragraphText.Substring(start, length),
+                });
             }
         }
+    }
+
+    /// <summary>
+    /// Returns the index of the run whose span (in the paragraph's concatenated text)
+    /// contains character offset <paramref name="offset"/>. Runs are laid out contiguously
+    /// with no gaps, so the last run whose start is at or before the offset is the answer.
+    /// </summary>
+    private static int FindRunIndexForOffset(int[] runStarts, int offset)
+    {
+        for (int ri = runStarts.Length - 1; ri >= 0; ri--)
+        {
+            if (offset >= runStarts[ri]) return ri;
+        }
+        return 0;
     }
 }

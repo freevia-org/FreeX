@@ -96,6 +96,103 @@ public sealed class DocumentRunFormattingResolverTests
     }
 
     [Fact]
+    public void Resolve_layers_the_runs_own_linked_character_style_between_the_paragraph_chain_and_direct_formatting()
+    {
+        // R142 fix: a run styled purely via w:rPr/w:rStyle (no baked-in direct formatting) must still
+        // pick up the linked character style's look -- Word's paragraph-style -> character-style ->
+        // direct-formatting cascade, mirroring how the paragraph chain already resolves.
+        var document = TextDocument.CreateEmpty();
+        document.DefaultRun = new RunFormatting { FontFamily = "Calibri", FontSizePt = 11 };
+        document.Styles["Heading1"] = new DocumentStyle
+        {
+            Id = "Heading1",
+            Name = "Heading 1",
+            Run = new RunFormatting { Bold = true, FontSizePt = 16 },
+        };
+        document.Styles["IntenseEmphasis"] = new DocumentStyle
+        {
+            Id = "IntenseEmphasis",
+            Name = "Intense Emphasis",
+            Run = new RunFormatting { Italic = true, ColorHex = "#4472C4" },
+        };
+        var paragraph = new Paragraph { StyleId = "Heading1" };
+        var run = new Run("styled via character style only") { StyleId = "IntenseEmphasis" };
+        paragraph.Runs.Add(run);
+
+        var resolved = DocumentRunFormattingResolver.Resolve(document, paragraph, run.Formatting, run.StyleId);
+
+        resolved.FontFamily.Should().Be("Calibri", "the document default still applies");
+        resolved.FontSizePt.Should().Be(16, "the paragraph style chain still applies");
+        resolved.Bold.Should().BeTrue("the paragraph style chain still applies");
+        resolved.Italic.Should().BeTrue("the run's linked character style must now be resolved");
+        resolved.ColorHex.Should().Be("#4472C4", "the run's linked character style must now be resolved");
+    }
+
+    [Fact]
+    public void Resolve_lets_the_runs_direct_formatting_win_over_its_linked_character_style()
+    {
+        var document = TextDocument.CreateEmpty();
+        document.Styles["IntenseEmphasis"] = new DocumentStyle
+        {
+            Id = "IntenseEmphasis",
+            Name = "Intense Emphasis",
+            Run = new RunFormatting { ColorHex = "#4472C4", FontSizePt = 11 },
+        };
+        var paragraph = new Paragraph();
+
+        var resolved = DocumentRunFormattingResolver.Resolve(
+            document,
+            paragraph,
+            new RunFormatting { ColorHex = "#FF0000", FontSizePt = 20 },
+            runStyleId: "IntenseEmphasis");
+
+        resolved.ColorHex.Should().Be("#FF0000", "direct formatting wins over the linked character style");
+        resolved.FontSizePt.Should().Be(20, "direct formatting wins over the linked character style");
+    }
+
+    [Fact]
+    public void Resolve_Run_overload_reads_StyleId_from_the_run_itself()
+    {
+        var document = TextDocument.CreateEmpty();
+        document.Styles["Emphasis"] = new DocumentStyle
+        {
+            Id = "Emphasis",
+            Name = "Emphasis",
+            Run = new RunFormatting { Italic = true },
+        };
+        var paragraph = new Paragraph();
+        var run = new Run("text") { StyleId = "Emphasis" };
+        paragraph.Runs.Add(run);
+
+        var resolved = DocumentRunFormattingResolver.Resolve(document, paragraph, run);
+
+        resolved.Italic.Should().BeTrue();
+    }
+
+    [Fact]
+    public void Resolve_leaves_a_run_with_no_StyleId_unaffected_by_unrelated_character_styles()
+    {
+        // Sibling/no-regression check: a run that carries no character style link must resolve exactly
+        // as it did before this fix -- direct formatting over the paragraph chain only.
+        var document = TextDocument.CreateEmpty();
+        document.DefaultRun = new RunFormatting { FontFamily = "Calibri" };
+        document.Styles["IntenseEmphasis"] = new DocumentStyle
+        {
+            Id = "IntenseEmphasis",
+            Name = "Intense Emphasis",
+            Run = new RunFormatting { Italic = true, ColorHex = "#4472C4" },
+        };
+        var paragraph = new Paragraph();
+        var run = new Run("plain text");
+
+        var resolved = DocumentRunFormattingResolver.Resolve(document, paragraph, run);
+
+        resolved.Italic.Should().BeFalse();
+        resolved.ColorHex.Should().BeNull();
+        resolved.FontFamily.Should().Be("Calibri");
+    }
+
+    [Fact]
     public void Accessibility_tree_exposes_effective_run_formatting_and_stable_text_ranges()
     {
         var document = TextDocument.CreateEmpty();

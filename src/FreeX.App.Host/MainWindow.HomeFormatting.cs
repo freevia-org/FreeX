@@ -460,20 +460,31 @@ public partial class MainWindow
     private void FontColorPickerBtn_Click(object sender, RoutedEventArgs e)
     {
         e.Handled = true;
-        if (!TryShowColorPicker("Font Color", _selectedFontColor, allowNoColor: false, out var color) ||
+        if (!TryShowColorPicker("Font Color", _selectedFontColor, allowNoColor: false, out var color, out var themeColor) ||
             color is not { } selected)
         {
             return;
         }
 
         _selectedFontColor = selected;
+        _selectedFontThemeColor = themeColor;
         UpdateFontColorButtonSwatch();
         ApplySelectedFontColor();
     }
 
+    /// <summary>
+    /// R142-services-theme-colors-1: when the last-picked font color came from the ribbon's Theme
+    /// Colors gallery (<see cref="_selectedFontThemeColor"/> set by <see cref="FontColorPickerBtn_Click"/>
+    /// from <see cref="ColorPickerDialog.SelectedThemeColor"/>), record the theme slot/tint on the
+    /// style instead of only the flat resolved RGB -- mirrors <see cref="CellStyleDiffPlanner"/>'s
+    /// Cell Styles gallery (<c>AccentDepth</c>) -- so the cell keeps tracking the workbook theme
+    /// across a later theme change instead of freezing at today's resolved color.
+    /// </summary>
     private void ApplySelectedFontColor()
     {
-        ApplyStyleDiff(new StyleDiff(FontColor: _selectedFontColor));
+        ApplyStyleDiff(_selectedFontThemeColor is { } themeColor
+            ? new StyleDiff(FontThemeColor: themeColor)
+            : new StyleDiff(FontColor: _selectedFontColor));
     }
 
     private void FillColorBtn_Click(object sender, RoutedEventArgs e) => ApplySelectedFillColor();
@@ -481,19 +492,23 @@ public partial class MainWindow
     private void FillColorPickerBtn_Click(object sender, RoutedEventArgs e)
     {
         e.Handled = true;
-        if (!TryShowColorPicker("Fill Color", _selectedFillColor, allowNoColor: true, out var color))
+        if (!TryShowColorPicker("Fill Color", _selectedFillColor, allowNoColor: true, out var color, out var themeColor))
             return;
 
         _selectedFillColor = color;
+        _selectedFillThemeColor = themeColor;
         UpdateFillColorButtonSwatch();
         ApplySelectedFillColor();
     }
 
+    /// <summary>Fill-color counterpart of <see cref="ApplySelectedFontColor"/> -- see its remarks.</summary>
     private void ApplySelectedFillColor()
     {
-        ApplyStyleDiff(_selectedFillColor is { } selected
-            ? new StyleDiff(FillColor: selected)
-            : new StyleDiff(FillColor: null, ClearFill: true));
+        ApplyStyleDiff(_selectedFillThemeColor is { } themeColor
+            ? new StyleDiff(FillThemeColor: themeColor)
+            : _selectedFillColor is { } selected
+                ? new StyleDiff(FillColor: selected)
+                : new StyleDiff(FillColor: null, ClearFill: true));
     }
 
     private void UpdateFontColorButtonSwatch()
@@ -518,9 +533,14 @@ public partial class MainWindow
         CellColor? initialColor,
         bool allowNoColor,
         out CellColor? color,
+        out WorkbookThemeColorReference? themeColor,
         string? noColorButtonText = null)
     {
-        var dialog = new ColorPickerDialog(initialColor, allowNoColor, noColorButtonText)
+        // Pass the live workbook theme (R142-services-theme-colors-1) so the dialog's Theme Colors
+        // gallery actually shows this workbook's Accent colors -- and hence its swatches' theme
+        // slot/tint identity resolves against the same theme SelectedThemeColor will later be
+        // applied to -- instead of always falling back to the default Office theme.
+        var dialog = new ColorPickerDialog(initialColor, allowNoColor, noColorButtonText, _workbook.Theme)
         {
             Owner = this,
             Title = title
@@ -529,10 +549,12 @@ public partial class MainWindow
         if (dialog.ShowDialog() == true)
         {
             color = dialog.SelectedColor;
+            themeColor = dialog.SelectedThemeColor;
             return true;
         }
 
         color = null;
+        themeColor = null;
         return false;
     }
 
@@ -1507,6 +1529,26 @@ public partial class MainWindow
         => ApplyCellStylePreset(CellStylePreset.Heading1);
     private void CellStyleH2MenuItem_Click(object sender, RoutedEventArgs e)
         => ApplyCellStylePreset(CellStylePreset.Heading2);
+    private void CellStyleH3MenuItem_Click(object sender, RoutedEventArgs e)
+        => ApplyCellStylePreset(CellStylePreset.Heading3);
+    private void CellStyleH4MenuItem_Click(object sender, RoutedEventArgs e)
+        => ApplyCellStylePreset(CellStylePreset.Heading4);
+    private void CellStyleTitleMenuItem_Click(object sender, RoutedEventArgs e)
+        => ApplyCellStylePreset(CellStylePreset.Title);
+    private void CellStyleCurrencyMenuItem_Click(object sender, RoutedEventArgs e)
+        => ApplyCellStylePreset(CellStylePreset.Currency);
+    private void CellStyleCurrency0MenuItem_Click(object sender, RoutedEventArgs e)
+        => ApplyCellStylePreset(CellStylePreset.Currency0);
+    private void CellStyleCommaMenuItem_Click(object sender, RoutedEventArgs e)
+        => ApplyCellStylePreset(CellStylePreset.Comma);
+    private void CellStyleComma0MenuItem_Click(object sender, RoutedEventArgs e)
+        => ApplyCellStylePreset(CellStylePreset.Comma0);
+    private void CellStylePercentMenuItem_Click(object sender, RoutedEventArgs e)
+        => ApplyCellStylePreset(CellStylePreset.Percent);
+    private void CellStyleHyperlinkMenuItem_Click(object sender, RoutedEventArgs e)
+        => ApplyCellStylePreset(CellStylePreset.Hyperlink);
+    private void CellStyleFollowedHyperlinkMenuItem_Click(object sender, RoutedEventArgs e)
+        => ApplyCellStylePreset(CellStylePreset.FollowedHyperlink);
     private void CellStyleNoteMenuItem_Click(object sender, RoutedEventArgs e)
         => ApplyCellStylePreset(CellStylePreset.Note);
     private void CellStyleWarningMenuItem_Click(object sender, RoutedEventArgs e)

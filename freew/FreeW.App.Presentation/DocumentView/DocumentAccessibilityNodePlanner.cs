@@ -102,7 +102,7 @@ public static class DocumentAccessibilityNodePlanner
         var children = new List<DocumentAccessibilityNode>(document.Blocks.Count);
         var tableNumber = 0;
         var listMarkerSequence = new DocumentListMarkerSequencePlanner(
-            document.MultiLevelList.NumberFormats);
+            document.MultiLevelList.NumberFormats, document.MultiLevelList.LevelTexts);
         var preservedNumberingMarkers = PreservedNumberingMarkerPlanner.Build(document);
 
         for (var blockIndex = 0; blockIndex < document.Blocks.Count; blockIndex++)
@@ -572,7 +572,7 @@ public static class DocumentAccessibilityNodePlanner
         int textStart,
         Run run)
     {
-        var effective = DocumentRunFormattingResolver.Resolve(document, paragraph, run.Formatting);
+        var effective = DocumentRunFormattingResolver.Resolve(document, paragraph, run);
         return new DocumentAccessibilityNode(
             $"{paragraphId}:run:{runIndex}:text",
             DocumentAccessibilityNodeKind.TextRun,

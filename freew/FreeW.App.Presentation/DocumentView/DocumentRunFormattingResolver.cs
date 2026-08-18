@@ -13,7 +13,8 @@ public static class DocumentRunFormattingResolver
     public static RunFormatting Resolve(
         TextDocument document,
         Paragraph paragraph,
-        RunFormatting directFormatting)
+        RunFormatting directFormatting,
+        string? runStyleId = null)
     {
         ArgumentNullException.ThrowIfNull(document);
         ArgumentNullException.ThrowIfNull(paragraph);
@@ -22,7 +23,20 @@ public static class DocumentRunFormattingResolver
         var resolved = document.DefaultRun;
         foreach (var style in StyleChain(document, paragraph.StyleId))
             resolved = Overlay(resolved, style.Run);
+        // The run's own linked character style (w:rPr/w:rStyle, e.g. "Intense Emphasis") layers on top
+        // of the paragraph's style chain and under the run's direct formatting -- the same three-tier
+        // cascade Word uses (paragraph style -> character style -> direct formatting).
+        foreach (var style in StyleChain(document, runStyleId))
+            resolved = Overlay(resolved, style.Run);
         return Overlay(resolved, directFormatting);
+    }
+
+    /// <summary>Convenience overload that resolves a run's own <see cref="Run.StyleId"/> alongside its
+    /// direct formatting, so callers holding the model <see cref="Run"/> don't have to unpack it.</summary>
+    public static RunFormatting Resolve(TextDocument document, Paragraph paragraph, Run run)
+    {
+        ArgumentNullException.ThrowIfNull(run);
+        return Resolve(document, paragraph, run.Formatting, run.StyleId);
     }
 
     private static IEnumerable<DocumentStyle> StyleChain(TextDocument document, string? styleId)

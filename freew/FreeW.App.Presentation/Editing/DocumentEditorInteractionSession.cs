@@ -546,16 +546,21 @@ public sealed class DocumentEditorInteractionSession
         return order;
     }
 
-    private bool IsBodyTextNavigable(Paragraph paragraph) =>
-        !_editing.Review.RestrictEditingPolicy.IsBodyEditingLocked
-        && paragraph.Runs.All(run =>
+    /// <summary>
+    /// Whether the caret may traverse a paragraph's text. This selects caret/selection extents only —
+    /// every mutation is gated separately — so it is deliberately independent of the protection lock:
+    /// Word lets the user move the caret through (and select in) a protected document, which is how the
+    /// keyboard reaches a form field under "Filling in Forms" in the first place. A content control is a
+    /// run mark, not a barrier, so its text is traversable too.
+    /// </summary>
+    private static bool IsBodyTextNavigable(Paragraph paragraph) =>
+        paragraph.Runs.All(run =>
             run.Image is null
             && run.Equation is null
             && run.FieldKind == RunFieldKind.None
             && run.ComplexField is null
             && run.FootnoteId is null
             && run.EndnoteId is null
-            && run.Control is null
             && !IsFloatingDrawingRun(run));
 
     private static bool IsFloatingDrawingRun(Run run) =>
