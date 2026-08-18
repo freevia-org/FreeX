@@ -691,12 +691,23 @@ public sealed partial class MainWindow
     /// <summary>Test-only seam driving the real <see cref="ShowEditIssue"/> production code path.</summary>
     internal void InvokeShowEditIssueForTest(string message) => ShowEditIssue(message);
 
+    /// <summary>
+    /// Test-only seam driving the real private <c>SortSelectedRange(bool)</c> handler that ribbon
+    /// Sort Ascending/Descending (and the Sort A-Z/Z-A context-menu items) call, so a test exercises
+    /// the exact code path a real click drives -- including the app's own
+    /// <see cref="SortAdjacentDataPromptResolver"/> wiring -- rather than calling
+    /// <c>Session.SortSelectedRange</c> directly. Not used by production code paths.
+    /// </summary>
+    internal void SortSelectedRangeForTest(bool ascending) => SortSelectedRange(ascending);
+
     /// <summary>Test-only seam exposing <see cref="_statusText"/> for accessibility assertions.</summary>
     internal TextBlock StatusTextForTest => _statusText;
 
     internal Func<Task<bool>>? ConfirmSelectionMoveOverwriteOverrideForTest;
 
     internal Func<DataValidationPromptRequest, UserMessageResult>? DataValidationPromptOverrideForTest;
+
+    internal Func<SortAdjacentDataPromptRequest, UserMessageResult>? SortAdjacentDataPromptOverrideForTest;
 
     internal Func<string, UserMessageResult>? ReadOnlyRecommendedPromptOverrideForTest;
 
@@ -714,6 +725,10 @@ public sealed partial class MainWindow
     partial void ResolveDataValidationPromptHandler(
         ref Func<DataValidationPromptRequest, UserMessageResult>? handler) =>
         handler = DataValidationPromptOverrideForTest;
+
+    partial void ResolveSortAdjacentDataPromptHandler(
+        ref Func<SortAdjacentDataPromptRequest, UserMessageResult>? handler) =>
+        handler = SortAdjacentDataPromptOverrideForTest;
 
     partial void ResolveReadOnlyRecommendedPromptHandler(
         ref Func<string, UserMessageResult>? handler) =>

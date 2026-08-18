@@ -518,10 +518,23 @@ public static class StructuredReferenceResolver
 
     private static int FindColumnIndex(Sheet sheet, StructuredTableModel table, string columnName)
     {
+        var liveMatch = -1;
         for (var index = 0; index < table.Columns.Count; index++)
         {
             if (string.Equals(ColumnHeaderText(sheet, table, index), columnName, StringComparison.OrdinalIgnoreCase))
-                return index;
+            {
+                liveMatch = index;
+                break;
+            }
+        }
+
+        // R141-fmlstructuredref-columnrename-reuse: a column whose live header text still equals
+        // its OWN stored model Name (i.e. it was never retyped) is the unambiguous, canonical
+        // owner of that name -- return it immediately, same as before this fix.
+        if (liveMatch >= 0 &&
+            string.Equals(table.Columns[liveMatch].Name, ColumnHeaderText(sheet, table, liveMatch), StringComparison.OrdinalIgnoreCase))
+        {
+            return liveMatch;
         }
 
         // R132-fmlstructuredref-columnrename-family: an ordinary header-cell edit (there is no
@@ -538,8 +551,16 @@ public static class StructuredReferenceResolver
         // (R50) rather than rewriting stored formula text, so the equivalent fix here is to let a
         // selector also match a column's stale-but-still-stored model Name as a fallback -- but
         // ONLY for a column whose header actually WAS renamed (live text differs from the stored
-        // name); an unrenamed column is already matched by the primary pass above and must not
-        // double-match here.
+        // name); an unrenamed column is already matched above and must not double-match here.
+        //
+        // R141-fmlstructuredref-columnrename-reuse: if the header text that got vacated by that
+        // rename is later retyped into a DIFFERENT column (a reused name), `liveMatch` above finds
+        // that other, unrelated column first -- silently redirecting every pre-existing formula
+        // that used to name the true former owner to the column that merely reused its old text.
+        // That reused-name column does not truly own this name (its own stored Name differs from
+        // what it currently shows, so it is itself a renamed column, not the canonical source of
+        // this text) -- so a genuine former owner found here must win over it. Only once no such
+        // former owner exists do we fall back to the reused-name liveMatch below.
         for (var index = 0; index < table.Columns.Count; index++)
         {
             var storedName = table.Columns[index].Name;
@@ -548,7 +569,7 @@ public static class StructuredReferenceResolver
                 return index;
         }
 
-        return -1;
+        return liveMatch;
     }
 
     // Resolves the column's EFFECTIVE name for structured-reference matching: the table's header

@@ -12,6 +12,7 @@ public enum FreeXSynchronousPromptKind
     ExternallyModifiedFile,
     LossyFormatFeatureLoss,
     UpdateReady,
+    SortAdjacentData,
 }
 
 /// <summary>Renderer-neutral text, buttons, severity, and dismissal policy for a synchronous prompt.</summary>
@@ -53,6 +54,8 @@ public static class FreeXSynchronousPromptCatalog
     public const string UpdateReadyTitleResourceKey = "MainWindowMessage_UpdateFreeXTitle";
     public const string UpdateReadyBodyResourceKey = "MainWindowMessage_UpdateReadyToInstallFormat";
     public const string UpdateApplyingStatusResourceKey = "MainLoc_RestartingToInstall";
+    public const string SortAdjacentDataTitleResourceKey = "MainWindowMessage_SortAdjacentDataTitle";
+    public const string SortAdjacentDataBodyResourceKey = "MainWindowMessage_SortAdjacentDataBody";
 
     public static FreeXSynchronousPromptDescriptor ForDataValidation(
         string title,
@@ -98,6 +101,22 @@ public static class FreeXSynchronousPromptCatalog
             LocalizedTextDescriptor.Resource(
                 LossyFormatFeatureLossBodyResourceKey,
                 FileFormatResolver.SafeFileTypeFromExtension(extension).ToUpperInvariant()),
+            UserMessageButtons.YesNo,
+            UserMessageIcon.Warning,
+            UserMessageResult.No);
+
+    /// <summary>
+    /// Excel's "Sort Warning": the sort selection is a proper subset of a larger contiguous data
+    /// block. Yes ("Expand the selection") re-sorts the whole block so every column/row of a
+    /// record travels together; No/dismiss ("Continue with the current selection") sorts exactly
+    /// what the user selected, matching WorkbookSession.SortSelectedRange(bool)'s pre-existing
+    /// behavior when nothing resolves the prompt.
+    /// </summary>
+    public static FreeXSynchronousPromptDescriptor ForSortAdjacentData() =>
+        new(
+            FreeXSynchronousPromptKind.SortAdjacentData,
+            LocalizedTextDescriptor.Resource(SortAdjacentDataTitleResourceKey),
+            LocalizedTextDescriptor.Resource(SortAdjacentDataBodyResourceKey),
             UserMessageButtons.YesNo,
             UserMessageIcon.Warning,
             UserMessageResult.No);

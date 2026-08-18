@@ -144,6 +144,39 @@ public static class DocumentModelCloner
         return CloneRunCore(source, ShouldPreserveRevisions(revisionPolicy));
     }
 
+    /// <summary>Deep-clones a footnote's content paragraphs.</summary>
+    public static Footnote CloneFootnote(Footnote source, RevisionClonePolicy revisionPolicy)
+    {
+        ArgumentNullException.ThrowIfNull(source);
+        var preserveRevisions = ShouldPreserveRevisions(revisionPolicy);
+        var clone = new Footnote(source.Id) { HasAutomaticReferenceMark = source.HasAutomaticReferenceMark };
+        foreach (var paragraph in source.Content)
+            clone.Content.Add(CloneParagraphCore(paragraph, preserveRevisions));
+        return clone;
+    }
+
+    /// <summary>Deep-clones an endnote's content paragraphs.</summary>
+    public static Endnote CloneEndnote(Endnote source, RevisionClonePolicy revisionPolicy)
+    {
+        ArgumentNullException.ThrowIfNull(source);
+        var preserveRevisions = ShouldPreserveRevisions(revisionPolicy);
+        var clone = new Endnote(source.Id) { HasAutomaticReferenceMark = source.HasAutomaticReferenceMark };
+        foreach (var paragraph in source.Content)
+            clone.Content.Add(CloneParagraphCore(paragraph, preserveRevisions));
+        return clone;
+    }
+
+    /// <summary>Deep-clones a header/footer's content paragraphs, or returns null when <paramref name="source"/> is null.</summary>
+    public static HeaderFooter? CloneHeaderFooter(HeaderFooter? source, RevisionClonePolicy revisionPolicy) =>
+        source is null ? null : CloneHeaderFooter(source, ShouldPreserveRevisions(revisionPolicy));
+
+    /// <summary>Deep-clones a section's default/even/first header and footer slots.</summary>
+    public static SectionHeadersFooters CloneSectionHeadersFooters(SectionHeadersFooters source, RevisionClonePolicy revisionPolicy)
+    {
+        ArgumentNullException.ThrowIfNull(source);
+        return CloneSectionHeadersFooters(source, ShouldPreserveRevisions(revisionPolicy));
+    }
+
     private static bool ShouldPreserveRevisions(RevisionClonePolicy revisionPolicy) => revisionPolicy switch
     {
         RevisionClonePolicy.Preserve => true,
@@ -222,6 +255,7 @@ public static class DocumentModelCloner
         Citation = source.Citation,
         CrossReference = source.CrossReference,
         ComplexField = source.ComplexField,
+        StyleId = source.StyleId,
         RevisionAuthor = preserveRevisions ? source.RevisionAuthor : null,
         RevisionDateXml = preserveRevisions ? source.RevisionDateXml : null,
         MoveRevisionId = preserveRevisions ? source.MoveRevisionId : null,

@@ -122,6 +122,9 @@ public sealed class SlideMaster
     /// <summary>Stable identifier (from the relationship id, e.g. "rId1").</summary>
     public string Id { get; set; } = string.Empty;
 
+    /// <summary>Human-readable master name (from <c>p:cSld name="..."</c>), e.g. renamed via PowerPoint's "Rename Master...".</summary>
+    public string Name { get; set; } = string.Empty;
+
     /// <summary>Reference to the theme used by this master (by theme name).</summary>
     public string? ThemeId { get; set; }
 

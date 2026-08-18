@@ -315,6 +315,10 @@ public sealed class SlideShowController
     ///   • AfterPrevious joins the current step but starts only after the preceding animation
     ///     has fully completed: StartDelayMs = accumulated prior durations + prior delays.
     ///     Multiple AfterPrevious animations chain: each waits for the previous to finish.
+    ///     A repeating predecessor's true on-screen completion time is its single-pass
+    ///     DurationMs multiplied by RepeatCount (see <see cref="ResolveChainEndMs"/>); an
+    ///     indefinitely-repeating predecessor never completes on its own, so the chain is
+    ///     frozen from that point on (see <see cref="NeverAutoStartsMs"/>).
     /// </summary>
     public static IReadOnlyList<AnimationStep> BuildSteps(Slide slide)
     {
@@ -322,7 +326,7 @@ public sealed class SlideShowController
         if (slide.Animations.Count == 0) return steps;
 
         List<AnimationEntry>? current = null;
-        // Tracks accumulated end-time (StartDelayMs + DurationMs) of the last
+        // Tracks accumulated end-time (StartDelayMs + total repeated duration) of the last
         // animation in the AfterPrevious chain within the current step.
         // When the next animation is AfterPrevious, it must start at this accumulated time.
         int accumulatedEndMs = 0;
@@ -339,8 +343,8 @@ public sealed class SlideShowController
                 current = new List<AnimationEntry> { new AnimationEntry(anim, startDelay) };
                 steps.Add(new AnimationStep(current));
                 // The AfterPrevious chain resets: any subsequent AfterPrevious waits for
-                // this animation to finish (startDelay + duration).
-                accumulatedEndMs = startDelay + Math.Max(0, anim.DurationMs);
+                // this animation to finish (startDelay + its full repeated duration).
+                accumulatedEndMs = ResolveChainEndMs(startDelay, anim);
             }
             else if (anim.Trigger == AnimationTrigger.WithPrevious)
             {
@@ -360,13 +364,60 @@ public sealed class SlideShowController
             {
                 // AfterPrevious: must start after the accumulated chain completes.
                 // StartDelayMs = accumulated end time of the prior animation + own DelayMs.
-                int startDelay = accumulatedEndMs + Math.Max(0, anim.DelayMs);
+                int startDelay = ResolveAfterPreviousStartDelay(accumulatedEndMs, anim);
                 current.Add(new AnimationEntry(anim, startDelay));
-                // Advance the chain end: this animation ends at startDelay + its duration.
-                accumulatedEndMs = startDelay + Math.Max(0, anim.DurationMs);
+                // Advance the chain end: this animation ends at startDelay + its full
+                // repeated duration (or never, if it repeats indefinitely itself).
+                accumulatedEndMs = ResolveChainEndMs(startDelay, anim);
             }
         }
         return steps;
+    }
+
+    /// <summary>
+    /// Sentinel StartDelayMs meaning "does not start automatically within this click-step".
+    /// Used for an AfterPrevious entry whose predecessor repeats indefinitely (PowerPoint
+    /// Timing "Repeat: Until Next Click" / "Until End of Slide"): such a predecessor's
+    /// timeline never completes on its own, so PowerPoint never fires a sibling chained
+    /// after it via "Start: After Previous" — only leaving the slide (or the predecessor's
+    /// own click/slide-end stop condition, which is not part of this chain) ends it. Rather
+    /// than guess a finite number, downstream entries inherit this sentinel so they, too,
+    /// stay dormant until the user manually advances past the frozen chain. A duration this
+    /// large (~24.8 days in milliseconds) is effectively "never" for any real slideshow, and
+    /// stays within <see cref="TimeSpan"/>'s range so callers can safely schedule against it.
+    /// </summary>
+    private const int NeverAutoStartsMs = int.MaxValue;
+
+    /// <summary>
+    /// Resolves the StartDelayMs for an AfterPrevious entry given the accumulated end-time
+    /// of the chain so far. Once the chain is frozen (<see cref="NeverAutoStartsMs"/>), every
+    /// subsequent AfterPrevious entry inherits the same frozen sentinel rather than adding its
+    /// own DelayMs on top (which could silently overflow back into a finite, wrong value).
+    /// </summary>
+    private static int ResolveAfterPreviousStartDelay(int accumulatedEndMs, ShapeAnimation anim)
+    {
+        if (accumulatedEndMs == NeverAutoStartsMs)
+            return NeverAutoStartsMs;
+
+        long startDelay = (long)accumulatedEndMs + Math.Max(0, anim.DelayMs);
+        return startDelay >= NeverAutoStartsMs ? NeverAutoStartsMs : (int)startDelay;
+    }
+
+    /// <summary>
+    /// Resolves the accumulated chain end-time after <paramref name="anim"/> plays, starting
+    /// at <paramref name="startDelayMs"/>. A finite <see cref="ShapeAnimation.RepeatCount"/>
+    /// multiplies the single-pass DurationMs (PowerPoint replays the whole pass that many
+    /// times before the effect is done); <see cref="ShapeAnimation.RepeatIndefinitely"/> — or
+    /// an already-frozen incoming chain — freezes the chain via <see cref="NeverAutoStartsMs"/>.
+    /// </summary>
+    private static int ResolveChainEndMs(int startDelayMs, ShapeAnimation anim)
+    {
+        if (anim.RepeatIndefinitely || startDelayMs == NeverAutoStartsMs)
+            return NeverAutoStartsMs;
+
+        int passCount = Math.Max(1, anim.RepeatCount ?? 1);
+        long endMs = startDelayMs + (long)Math.Max(0, anim.DurationMs) * passCount;
+        return endMs >= NeverAutoStartsMs ? NeverAutoStartsMs : (int)endMs;
     }
 
     /// <summary>
@@ -406,7 +457,8 @@ public sealed class SlideShowController
     }
 
     /// <summary>
-    /// Groups a flat list of trigger animations into click-steps (same rules as BuildSteps).
+    /// Groups a flat list of trigger animations into click-steps (same rules as BuildSteps,
+    /// including repeat-aware chain timing — see <see cref="ResolveChainEndMs"/>).
     /// AfterPrevious entries get accumulated start delays; WithPrevious entries are simultaneous.
     /// </summary>
     public static IReadOnlyList<AnimationStep> BuildTriggerSteps(IReadOnlyList<ShapeAnimation> anims)
@@ -424,7 +476,7 @@ public sealed class SlideShowController
                 int startDelay = Math.Max(0, anim.DelayMs);
                 current = new List<AnimationEntry> { new AnimationEntry(anim, startDelay) };
                 steps.Add(new AnimationStep(current));
-                accumulatedEndMs = startDelay + Math.Max(0, anim.DurationMs);
+                accumulatedEndMs = ResolveChainEndMs(startDelay, anim);
             }
             else if (anim.Trigger == AnimationTrigger.WithPrevious)
             {
@@ -435,9 +487,9 @@ public sealed class SlideShowController
             else
             {
                 // AfterPrevious
-                int startDelay = accumulatedEndMs + Math.Max(0, anim.DelayMs);
+                int startDelay = ResolveAfterPreviousStartDelay(accumulatedEndMs, anim);
                 current.Add(new AnimationEntry(anim, startDelay));
-                accumulatedEndMs = startDelay + Math.Max(0, anim.DurationMs);
+                accumulatedEndMs = ResolveChainEndMs(startDelay, anim);
             }
         }
         return steps;

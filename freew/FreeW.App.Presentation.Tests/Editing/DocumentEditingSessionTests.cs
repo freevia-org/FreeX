@@ -444,11 +444,117 @@ public sealed class DocumentEditingSessionTests
         document.Blocks.Cast<Paragraph>().Should().OnlyContain(item =>
             item.Formatting.ListKind == ListKind.Number && item.Formatting.ListLevel == 2);
         ((Paragraph)document.Blocks[0]).StyleId.Should().Be("List Paragraph");
-        ((Paragraph)document.Blocks[1]).StyleId.Should().BeNull();
+        // "List Paragraph" is not registered in this document's Styles catalog (and, per
+        // BuiltInStyles.cs, carries no NextStyleId even when it is), so per Word's "style for
+        // following paragraph" rule the new paragraph keeps the SAME style rather than losing it.
+        ((Paragraph)document.Blocks[1]).StyleId.Should().Be("List Paragraph");
 
         session.Commands.Undo().Should().BeTrue();
         document.Blocks.Should().ContainSingle();
         ((Paragraph)document.Blocks[0]).PlainText.Should().Be("abcdef");
+    }
+
+    [Fact]
+    public void InsertBodyParagraphBreak_AtHeadingEnd_AppliesTheHeadingsNextStyle()
+    {
+        // Heading1's NextStyleId is "Normal" (BuiltInStyles.cs) -- Word's "style for following
+        // paragraph" -- so pressing Enter at the end of a Heading1 paragraph must start the new
+        // paragraph in Normal, not with no style at all.
+        var document = TextDocument.CreateEmpty();
+        document.Blocks.Clear();
+        document.Blocks.Add(new Paragraph("Chapter One") { StyleId = "Heading1" });
+        var session = new DocumentEditingSession();
+        session.LoadDocument(document);
+
+        session.TryInsertBodyParagraphBreak(
+                new DocumentTextRange(
+                    new DocumentTextPosition(0, 11),
+                    new DocumentTextPosition(0, 11)),
+                out var result)
+            .Should().BeTrue();
+
+        document.Blocks.Cast<Paragraph>().Select(item => item.PlainText)
+            .Should().Equal("Chapter One", string.Empty);
+        ((Paragraph)document.Blocks[0]).StyleId.Should().Be("Heading1");
+        ((Paragraph)document.Blocks[1]).StyleId.Should().Be("Normal");
+        result.Caret.Should().Be(new DocumentTextPosition(1, 0));
+
+        session.Commands.Undo().Should().BeTrue();
+        document.Blocks.Should().ContainSingle();
+    }
+
+    [Fact]
+    public void InsertBodyParagraphBreak_MidHeadingText_AppliesTheHeadingsNextStyleToTheTail()
+    {
+        // Splitting a paragraph mid-text (not just at its end) must apply the same w:next rule to
+        // the newly created tail paragraph.
+        var document = TextDocument.CreateEmpty();
+        document.Blocks.Clear();
+        document.Blocks.Add(new Paragraph("HeadOne Tail") { StyleId = "Heading1" });
+        var session = new DocumentEditingSession();
+        session.LoadDocument(document);
+
+        session.TryInsertBodyParagraphBreak(
+                new DocumentTextRange(
+                    new DocumentTextPosition(0, 7),
+                    new DocumentTextPosition(0, 8)),
+                out _)
+            .Should().BeTrue();
+
+        document.Blocks.Cast<Paragraph>().Select(item => item.PlainText)
+            .Should().Equal("HeadOne", "Tail");
+        ((Paragraph)document.Blocks[0]).StyleId.Should().Be("Heading1");
+        ((Paragraph)document.Blocks[1]).StyleId.Should().Be("Normal");
+    }
+
+    [Fact]
+    public void InsertBodyParagraphBreak_StyleWithNoNextStyleId_KeepsTheSameStyle()
+    {
+        // A custom style with no w:next (e.g. a user-authored "Quote" style) means Word keeps the
+        // SAME style on the paragraph created by Enter -- it never blanks the style.
+        var document = TextDocument.CreateEmpty();
+        document.Blocks.Clear();
+        document.Styles["Quote2"] = new DocumentStyle { Id = "Quote2", Name = "My Quote" };
+        document.Blocks.Add(new Paragraph("quoted text") { StyleId = "Quote2" });
+        var session = new DocumentEditingSession();
+        session.LoadDocument(document);
+
+        session.TryInsertBodyParagraphBreak(
+                new DocumentTextRange(
+                    new DocumentTextPosition(0, 11),
+                    new DocumentTextPosition(0, 11)),
+                out _)
+            .Should().BeTrue();
+
+        ((Paragraph)document.Blocks[0]).StyleId.Should().Be("Quote2");
+        ((Paragraph)document.Blocks[1]).StyleId.Should().Be("Quote2");
+    }
+
+    [Fact]
+    public void InsertBodyParagraphBreak_NextStyleIdNamesAMissingStyle_KeepsTheSameStyle()
+    {
+        // A dangling NextStyleId (points at a style no longer in the catalog) must not blank the
+        // new paragraph's style either -- Word falls back to keeping the current style.
+        var document = TextDocument.CreateEmpty();
+        document.Blocks.Clear();
+        document.Styles["Dangling"] = new DocumentStyle
+        {
+            Id = "Dangling",
+            Name = "Dangling",
+            NextStyleId = "DoesNotExist",
+        };
+        document.Blocks.Add(new Paragraph("body text") { StyleId = "Dangling" });
+        var session = new DocumentEditingSession();
+        session.LoadDocument(document);
+
+        session.TryInsertBodyParagraphBreak(
+                new DocumentTextRange(
+                    new DocumentTextPosition(0, 9),
+                    new DocumentTextPosition(0, 9)),
+                out _)
+            .Should().BeTrue();
+
+        ((Paragraph)document.Blocks[1]).StyleId.Should().Be("Dangling");
     }
 
     [Fact]

@@ -526,6 +526,44 @@ public class CrossReferencesTests
     }
 
     [Fact]
+    public void ResolveText_ParagraphNumber_RestartsAtListStartOverrideInsteadOfCountingAcrossIt()
+    {
+        // Two adjacent numbered lists with no intervening non-list paragraph, the second one carrying a
+        // genuine "restart numbering at 1" (ListStartOverride, round-tripped from docx's
+        // w:lvlOverride/startOverride) -- exactly what DocumentListMarkerSequencePlanner renders as
+        // A=1), B=2), C=1), D=2) on screen. A "Paragraph Number" cross-reference must match those on-screen
+        // markers, not count straight through the restart boundary.
+        var doc = new TextDocument();
+        doc.Blocks.Add(new Paragraph("Step one") { Formatting = ParagraphFormatting.Default with { ListKind = ListKind.Number } });
+        doc.Blocks.Add(new Paragraph("Step two") { Formatting = ParagraphFormatting.Default with { ListKind = ListKind.Number } });
+        doc.Blocks.Add(new Paragraph("Restarted") { Formatting = ParagraphFormatting.Default with { ListKind = ListKind.Number, ListStartOverride = 1 } });
+        doc.Blocks.Add(new Paragraph("Continues") { Formatting = ParagraphFormatting.Default with { ListKind = ListKind.Number } });
+
+        CrossReferences.ResolveText(doc, CrossRefType.NumberedItem, new CrossRefTarget("Restarted", null, 2), CrossRefInsertAs.ParagraphNumber, 0)
+            .Should().Be("1)");
+        CrossReferences.ResolveText(doc, CrossRefType.NumberedItem, new CrossRefTarget("Continues", null, 3), CrossRefInsertAs.ParagraphNumber, 0)
+            .Should().Be("2)");
+    }
+
+    [Fact]
+    public void ResolveText_ParagraphNumber_HigherListStartOverrideJumpsForwardAndKeepsCountingFromThere()
+    {
+        // Sibling to the restart test above: an override that jumps the count FORWARD (not just back to 1)
+        // must still be honoured, and plain (non-overridden) items after it must keep counting on from the
+        // override rather than falling back to the old running total -- proving the fix didn't just special-
+        // case "restart to 1" but genuinely reuses ListRestartCounter's general rule.
+        var doc = new TextDocument();
+        doc.Blocks.Add(new Paragraph("Step one") { Formatting = ParagraphFormatting.Default with { ListKind = ListKind.Number } });
+        doc.Blocks.Add(new Paragraph("JumpsToFive") { Formatting = ParagraphFormatting.Default with { ListKind = ListKind.Number, ListStartOverride = 5 } });
+        doc.Blocks.Add(new Paragraph("Continues") { Formatting = ParagraphFormatting.Default with { ListKind = ListKind.Number } });
+
+        CrossReferences.ResolveText(doc, CrossRefType.NumberedItem, new CrossRefTarget("JumpsToFive", null, 1), CrossRefInsertAs.ParagraphNumber, 0)
+            .Should().Be("5)");
+        CrossReferences.ResolveText(doc, CrossRefType.NumberedItem, new CrossRefTarget("Continues", null, 2), CrossRefInsertAs.ParagraphNumber, 0)
+            .Should().Be("6)");
+    }
+
+    [Fact]
     public void ResolveField_RefText_UsesCurrentBookmarkedParagraphText()
     {
         var doc = new TextDocument();

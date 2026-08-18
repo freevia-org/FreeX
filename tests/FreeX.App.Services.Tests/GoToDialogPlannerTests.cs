@@ -1,6 +1,7 @@
 using FluentAssertions;
 using FreeX.App.Services;
 using FreeX.Core.Commands;
+using FreeX.Core.Model;
 
 namespace FreeX.App.Services.Tests;
 
@@ -132,5 +133,65 @@ public sealed class GoToDialogPlannerTests
             .Should().Be(selectedTypes);
         GoToSpecialDialogPlanner.BuildOptions(GoToSpecialKind.Blanks, selectedTypes).ValueTypes
             .Should().Be(GoToSpecialValueTypes.All);
+    }
+
+    [Fact]
+    public void BuildDefinedNamesForSheet_IncludesGlobalAndActiveSheetScopedNames()
+    {
+        var workbook = new Workbook("Book1");
+        var sheet1 = workbook.AddSheet("Sheet1");
+        var sheet2 = workbook.AddSheet("Sheet2");
+        var globalRange = new GridRange(new CellAddress(sheet1.Id, 1, 1), new CellAddress(sheet1.Id, 1, 1));
+        var scopedRange = new GridRange(new CellAddress(sheet1.Id, 4, 4), new CellAddress(sheet1.Id, 4, 4));
+        var otherSheetRange = new GridRange(new CellAddress(sheet2.Id, 5, 5), new CellAddress(sheet2.Id, 5, 5));
+        workbook.DefineNamedRange("GlobalName", globalRange);
+        workbook.DefineNamedRange("ScopedName", scopedRange, metadata: null, scopeSheetId: sheet1.Id);
+        workbook.DefineNamedRange("OtherSheetName", otherSheetRange, metadata: null, scopeSheetId: sheet2.Id);
+
+        var names = GoToDialogPlanner.BuildDefinedNamesForSheet(workbook, sheet1.Id);
+
+        names.Should().ContainKey("GlobalName").WhoseValue.Should().Be(globalRange);
+        names.Should().ContainKey("ScopedName").WhoseValue.Should().Be(scopedRange);
+        names.Should().NotContainKey("OtherSheetName");
+    }
+
+    [Fact]
+    public void BuildDefinedNamesForSheet_ScopedNameShadowsSameNamedGlobalName()
+    {
+        var workbook = new Workbook("Book1");
+        var sheet1 = workbook.AddSheet("Sheet1");
+        var globalRange = new GridRange(new CellAddress(sheet1.Id, 1, 1), new CellAddress(sheet1.Id, 1, 1));
+        var scopedRange = new GridRange(new CellAddress(sheet1.Id, 9, 9), new CellAddress(sheet1.Id, 9, 9));
+        workbook.DefineNamedRange("Shadowed", globalRange);
+        workbook.DefineNamedRange("Shadowed", scopedRange, metadata: null, scopeSheetId: sheet1.Id);
+
+        var names = GoToDialogPlanner.BuildDefinedNamesForSheet(workbook, sheet1.Id);
+
+        names["Shadowed"].Should().Be(scopedRange,
+            "a sheet-scoped name takes precedence over a same-named workbook-global name, matching Workbook.TryGetNamedRange");
+    }
+
+    [Fact]
+    public void TryParseReferenceRange_WithResolveScopedName_PrefersScopedRangeOverGlobalDictionary()
+    {
+        var sheetId = SheetId.New();
+        var globalRange = new GridRange(new CellAddress(sheetId, 1, 1), new CellAddress(sheetId, 1, 1));
+        var scopedRange = new GridRange(new CellAddress(sheetId, 9, 9), new CellAddress(sheetId, 9, 9));
+        var definedNames = new Dictionary<string, GridRange>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["Shadowed"] = globalRange
+        };
+
+        GoToDialogPlanner.TryParseReferenceRange(
+            "Shadowed",
+            sheetId,
+            resolveSheetId: static _ => null,
+            definedNames,
+            resolveScopedName: (name, id) => string.Equals(name, "Shadowed", StringComparison.OrdinalIgnoreCase) && id.Equals(sheetId)
+                ? scopedRange
+                : null,
+            out var range).Should().BeTrue();
+
+        range.Should().Be(scopedRange);
     }
 }

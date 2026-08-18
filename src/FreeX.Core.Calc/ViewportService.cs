@@ -933,10 +933,33 @@ public sealed partial class ViewportService : IViewportService
                     if (sampledCells++ >= MaxChartDataCellsPerViewport)
                         return chartCells;
 
-                    if (!chart.ShowDataInHiddenRowsAndColumns &&
-                        (sourceSheet.IsRowEffectivelyHidden(row) || sourceSheet.IsColEffectivelyHidden(col)))
+                    if (!chart.ShowDataInHiddenRowsAndColumns)
                     {
-                        continue;
+                        var hiddenRow = sourceSheet.IsRowEffectivelyHidden(row);
+                        var hiddenCol = sourceSheet.IsColEffectivelyHidden(col);
+                        if (hiddenRow || hiddenCol)
+                        {
+                            // A merge anchor whose own row/column is hidden but whose merged
+                            // region has a visible remainder is still exposed into the general
+                            // viewport (see IsExposedHiddenMergeAnchorCell / AddOccupiedViewportCells)
+                            // so the visible portion of the merge can render. Without an explicit
+                            // blank placeholder here, ChartViewportCellAccessorBuilder's fallback
+                            // over viewport.Cells (which has no way to know this cell was
+                            // deliberately hidden-filtered rather than merely unsampled) re-admits
+                            // the anchor's real value into the chart, defeating "Show data in
+                            // hidden rows and columns" = off whenever the data touches a merged
+                            // cell. Claiming the key here with a blank entry blocks that fallback
+                            // (ChartViewportCellAccessorBuilder.Resolve only TryAdd's from
+                            // viewport.Cells). Any other hidden, non-anchor cell is still skipped
+                            // outright, exactly as before.
+                            if (IsExposedHiddenMergeAnchorCell(sourceSheet, row, col, hiddenRow, hiddenCol) &&
+                                seen.Add((sourceSheet.Id, row, col)))
+                            {
+                                chartCells.Add(new ChartDataCell(sourceSheet.Id, row, col, "", BlankValue.Instance));
+                            }
+
+                            continue;
+                        }
                     }
 
                     if (!seen.Add((sourceSheet.Id, row, col)))

@@ -517,13 +517,19 @@ internal sealed class PaginatedEditorPanel : ScrollViewer
     /// Cuts the current cross-page selection: copies it to the clipboard, then deletes the
     /// selected content from all spanned boxes and triggers re-pagination.
     /// </summary>
-    internal void CutSelection()
+    /// <returns>
+    /// <see langword="true"/> when every spanned box's content was fully removed;
+    /// <see langword="false"/> when at least one spanned box's delete failed, in which case
+    /// callers that would otherwise re-insert the cut text (e.g. a drag-move) MUST NOT do so —
+    /// re-inserting text that was only partially removed from its source duplicates content.
+    /// </returns>
+    internal bool CutSelection()
     {
         if (!_crossPageSelection.IsActive)
-            return;
+            return false;
 
         CopySelection();
-        DeleteCrossPageSelection();
+        return DeleteCrossPageSelection();
     }
 
     /// <summary>
@@ -566,10 +572,17 @@ internal sealed class PaginatedEditorPanel : ScrollViewer
     /// Deletes the content spanned by the current cross-page selection from all boxes.
     /// After deletion, clears the selection and triggers re-pagination.
     /// </summary>
-    private void DeleteCrossPageSelection()
+    /// <returns>
+    /// <see langword="true"/> when every spanned box's range was successfully cleared;
+    /// <see langword="false"/> when at least one spanned box's delete threw and therefore still
+    /// holds some or all of its original content. A caller that re-inserts the pre-captured
+    /// selection text elsewhere (a move) MUST check this return value first — inserting the full
+    /// text while a source box's delete failed would duplicate that box's content.
+    /// </returns>
+    private bool DeleteCrossPageSelection()
     {
         if (!_crossPageSelection.IsActive)
-            return;
+            return false;
 
         // Get normalized range.
         var startBoxIdx = _crossPageSelection.AnchorBoxIndex < _crossPageSelection.ActiveBoxIndex
@@ -587,9 +600,14 @@ internal sealed class PaginatedEditorPanel : ScrollViewer
             : _crossPageSelection.AnchorPointer;
 
         if (startPtr is null || endPtr is null)
-            return;
+            return false;
 
-        // Delete from each spanned box.
+        // Delete from each spanned box. Track whether every box's delete actually succeeded —
+        // a per-box try/catch below is deliberately fail-open (a later box's position can become
+        // invalid once an earlier box's content changes), but the caller must still learn when a
+        // box was left un-deleted so it can refuse to re-insert the selection's captured text
+        // elsewhere and duplicate that box's surviving content.
+        bool allDeleted = true;
         for (int i = startBoxIdx; i <= endBoxIdx && i < _pageBoxes.Count; i++)
         {
             var box = _pageBoxes[i];
@@ -605,11 +623,17 @@ internal sealed class PaginatedEditorPanel : ScrollViewer
                 var range = new TextRange(from, to);
                 range.Text = string.Empty;
             }
-            catch { /* skip — position may be invalid after earlier deletions */ }
+            catch
+            {
+                // Skip — position may be invalid after earlier deletions, or this box's content
+                // (e.g. a table/field/anchored object at the range boundary) rejected the delete.
+                allDeleted = false;
+            }
         }
 
         _crossPageSelection.Clear(_pageBoxes);
         ScheduleRepaginate();
+        return allDeleted;
     }
 
     /// <summary>
@@ -1259,7 +1283,16 @@ internal sealed class PaginatedEditorPanel : ScrollViewer
             // The IsDropInsideSelection guard above ensures the drop target is outside the
             // selection, so dropPtrRef (pointing into a different box or past the selection end)
             // remains valid after the cut.
-            CutSelection();
+            //
+            // Atomicity: if any spanned box's delete failed (CutSelection returns false), that
+            // box still holds some or all of its original content, so re-inserting the full
+            // pre-captured selectedText at the drop target would duplicate it. Abort the move
+            // here instead — the selection is already cleared/re-paginated by CutSelection.
+            if (!CutSelection())
+            {
+                e.Handled = true;
+                return;
+            }
         }
 
         // Insert the text at the drop position.

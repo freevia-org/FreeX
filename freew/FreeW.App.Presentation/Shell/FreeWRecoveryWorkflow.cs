@@ -60,7 +60,16 @@ public static class FreeWRecoveryWorkflow
                 RemainingCount: recoveries.Count - index,
                 promptMode);
             if (!await promptAsync(offer))
+            {
+                // A startup offer is unprompted and repeats on every launch, so a decline here must
+                // stick -- otherwise the same stale snapshot nags forever (matches FreeX's own
+                // startup workflow, which discards a declined snapshot the same way). The manual
+                // "Recover Unsaved Documents" command is opt-in and browsable, so a decline there
+                // leaves the candidate for the user to revisit later.
+                if (promptMode != FreeWRecoveryPromptMode.Manual)
+                    AutosaveRecoveryCandidateProcessor.DiscardDeclined(recovery.Candidate);
                 continue;
+            }
 
             var useCurrentWindow = !anyAccepted;
             anyAccepted = true;

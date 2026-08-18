@@ -42,32 +42,43 @@ public static class DocumentCombine
         ArgumentNullException.ThrowIfNull(authorB);
 
         // Step 1: base→A blackline. This carries A's revisions attributed to authorA; accepting it would
-        // yield exactly revisedA's text, so its "A view" (what survives an accept) equals revisedA.
-        var blacklineA = DocumentCompare.Compare(original, revisedA, authorA, dateXml);
+        // yield exactly revisedA's text, so its "A view" (what survives an accept) equals revisedA. The
+        // alignment tells us, for every paragraph the comparison produced, which revisedA paragraph (if
+        // any) it corresponds to — the same LCS-based matcher DocumentCompare already runs internally.
+        var blacklineA = DocumentCompare.Compare(
+            original, revisedA, authorA, dateXml, CompareSettings.Default, out var alignmentA);
 
         // Step 2: layer B's edits on top. We compare A's surviving text (revisedA) against revisedB and walk
         // B's word-level changes paragraph by paragraph, re-marking only the runs B touched as authorB while
         // leaving A's existing marks intact. Because both comparisons are anchored on the same base text,
         // a paragraph A left unchanged but B changed gets B's marks; a paragraph both changed keeps A's
-        // deletion/insertion runs and additionally carries B's, each under its own author.
-        var blacklineB = DocumentCompare.Compare(revisedA, revisedB, authorB, dateXml);
+        // deletion/insertion runs and additionally carries B's, each under its own author. Here the
+        // alignment's OriginalIndex is the revisedA paragraph each blacklineB paragraph corresponds to.
+        var blacklineB = DocumentCompare.Compare(
+            revisedA, revisedB, authorB, dateXml, CompareSettings.Default, out var alignmentB);
 
-        // The two blacklines share the same anchor text (revisedA), so they have matching ordinary-run
-        // skeletons. Merge them paragraph-positionally: emit A's blackline paragraph, then splice in B's
-        // insertions/deletions for the same paragraph. To keep this deterministic and simple we rebuild the
-        // combined body from B's blackline (which already has the final structure: revisedA's surviving text
-        // plus B's marks) and then re-overlay A's revisions onto the runs that came from revisedA.
-        return MergeBlacklines(blacklineA, blacklineB, authorA, authorB, dateXml);
+        // Both blacklines were independently diffed against/from revisedA, so a paragraph from one only
+        // truly corresponds to a paragraph from the other when they share the same revisedA paragraph index
+        // — NOT when they merely land at the same position in their own Blocks list, which the alignment
+        // above lets us tell apart (see MergeBlacklines).
+        return MergeBlacklines(blacklineA, alignmentA, blacklineB, alignmentB, authorA, authorB, dateXml);
     }
 
-    // Merge two blacklines that share the same surviving text (revisedA): blacklineA is base→A (carries A's
-    // ins/del, accepts to revisedA) and blacklineB is A→B (carries B's ins/del, rejects to revisedA). We walk
-    // their paragraphs positionally — the comparison engine emits one result paragraph per surviving (and
-    // deleted) paragraph, so blacklineA and blacklineB have the same paragraph order for the revisedA spine —
-    // and merge each pair so the result carries BOTH authors' tracked changes (see MergeParagraph).
+    // Merge two blacklines that were both diffed against the same revisedA spine: blacklineA is base→A
+    // (carries A's ins/del; accepting it yields revisedA) and blacklineB is revisedA→B (carries B's ins/del;
+    // rejecting it yields revisedA). Naively zipping their paragraph lists by raw list position breaks the
+    // moment either side inserts or deletes a whole paragraph, because each comparison independently splices
+    // its own off-spine whole-paragraph deletions/insertions into its Blocks list — those extra entries
+    // shift every later paragraph's index out of step between the two lists (see the finding this fixes:
+    // freew-combine-positional-misalignment). Instead we align by the shared revisedA paragraph index that
+    // <paramref name="alignmentA"/>/<paramref name="alignmentB"/> attach to each produced paragraph — the
+    // very alignment DocumentCompare's own LCS-based matcher already computed while building each blackline,
+    // reused here rather than re-deriving a second, independent match from the output text/markup.
     private static TextDocument MergeBlacklines(
         TextDocument blacklineA,
+        IReadOnlyDictionary<Paragraph, DocumentCompare.ParagraphAlignment> alignmentA,
         TextDocument blacklineB,
+        IReadOnlyDictionary<Paragraph, DocumentCompare.ParagraphAlignment> alignmentB,
         string authorA,
         string authorB,
         string? dateXml)
@@ -76,11 +87,35 @@ public static class DocumentCombine
         CopyShell(blacklineB, result);
         var commentIdMapA = MergeComments(blacklineA, blacklineB, result);
 
-        var aParagraphs = blacklineA.Blocks.OfType<Paragraph>().ToList();
-        var bBlocks = blacklineB.Blocks;
-        var bParagraphIndex = 0;
+        // Bucket blacklineA's paragraphs by the revisedA spine index they align to. A paragraph with no
+        // spine index (RevisedIndex is null) is base-only content A deleted entirely — it never existed in
+        // revisedA, so B's comparison could never have produced (or touched) a counterpart for it; keep it
+        // as its own standalone off-spine deletion, tagged with the spine index it immediately follows, so
+        // it can be spliced back into the merged result at the right point instead of being fused onto
+        // whatever blacklineB paragraph happened to share its former list position.
+        var aBySpine = new Dictionary<int, Paragraph>();
+        var aStandalone = new List<(int PrecedingSpineIndex, Paragraph Paragraph)>();
+        var lastSpineSeen = -1;
+        foreach (var block in blacklineA.Blocks)
+        {
+            if (block is not Paragraph aParagraph)
+                continue;
 
-        foreach (var block in bBlocks)
+            var spineIndex = alignmentA.TryGetValue(aParagraph, out var entry) ? entry.RevisedIndex : null;
+            if (spineIndex is int idx)
+            {
+                aBySpine[idx] = aParagraph;
+                lastSpineSeen = idx;
+            }
+            else
+            {
+                aStandalone.Add((lastSpineSeen, aParagraph));
+            }
+        }
+
+        var standaloneCursor = 0;
+
+        foreach (var block in blacklineB.Blocks)
         {
             if (block is not Paragraph bParagraph)
             {
@@ -88,8 +123,13 @@ public static class DocumentCombine
                 continue;
             }
 
-            var aParagraph = bParagraphIndex < aParagraphs.Count ? aParagraphs[bParagraphIndex] : null;
-            bParagraphIndex++;
+            var spineIndex = alignmentB.TryGetValue(bParagraph, out var entry) ? entry.OriginalIndex : null;
+            if (spineIndex is int sIdx)
+                FlushStandaloneA(sIdx);
+
+            var aParagraph = spineIndex is int spine && aBySpine.TryGetValue(spine, out var matched)
+                ? matched
+                : null;
             result.Blocks.Add(MergeParagraph(
                 aParagraph,
                 bParagraph,
@@ -99,7 +139,25 @@ public static class DocumentCombine
                 commentIdMapA));
         }
 
+        FlushStandaloneA(int.MaxValue);
         return result;
+
+        // Emit every buffered A-only whole-paragraph deletion that precedes revisedA spine index
+        // `uptoSpineIndexExclusive`, in their original relative order.
+        void FlushStandaloneA(int uptoSpineIndexExclusive)
+        {
+            while (standaloneCursor < aStandalone.Count
+                   && aStandalone[standaloneCursor].PrecedingSpineIndex < uptoSpineIndexExclusive)
+            {
+                var clone = DocumentModelCloner.CloneParagraph(
+                    aStandalone[standaloneCursor].Paragraph,
+                    RevisionClonePolicy.Preserve);
+                foreach (var run in clone.Runs)
+                    RemapAComment(run, commentIdMapA);
+                result.Blocks.Add(clone);
+                standaloneCursor++;
+            }
+        }
     }
 
     private static Dictionary<int, int> MergeComments(
@@ -324,6 +382,26 @@ public static class DocumentCombine
         target.Page.AutoHyphenation = source.Page.AutoHyphenation;
         target.Page.VerticalAlignment = source.Page.VerticalAlignment;
         target.Page.DifferentFirstPage = source.Page.DifferentFirstPage;
+
+        // Mirrors DocumentCompare.CopyDocumentShell: footnotes/endnotes/final-section headers-footers live
+        // on the document, not on any Paragraph, so the merged body's surviving footnote/endnote references
+        // and page headers/footers would otherwise vanish (and dangle) even though blacklineB already
+        // carries them correctly from its own DocumentCompare.Compare call.
+        foreach (var (id, footnote) in source.Footnotes)
+            target.Footnotes[id] = DocumentModelCloner.CloneFootnote(footnote, RevisionClonePolicy.Strip);
+        foreach (var (id, endnote) in source.Endnotes)
+            target.Endnotes[id] = DocumentModelCloner.CloneEndnote(endnote, RevisionClonePolicy.Strip);
+
+        var finalHeadersFooters = DocumentModelCloner.CloneSectionHeadersFooters(
+            source.FinalSectionHeadersFooters,
+            RevisionClonePolicy.Strip);
+        target.FinalSectionHeadersFooters.Header = finalHeadersFooters.Header;
+        target.FinalSectionHeadersFooters.Footer = finalHeadersFooters.Footer;
+        target.FinalSectionHeadersFooters.EvenHeader = finalHeadersFooters.EvenHeader;
+        target.FinalSectionHeadersFooters.EvenFooter = finalHeadersFooters.EvenFooter;
+        target.FinalSectionHeadersFooters.FirstHeader = finalHeadersFooters.FirstHeader;
+        target.FinalSectionHeadersFooters.FirstFooter = finalHeadersFooters.FirstFooter;
+
         target.Preserved.CopyFrom(source.Preserved);
     }
 

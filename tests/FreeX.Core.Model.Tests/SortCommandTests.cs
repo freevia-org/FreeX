@@ -237,6 +237,103 @@ public sealed class SortCommandTests
         sheet.RowStyles.Should().NotContainKey(2);
     }
 
+    /// <summary>
+    /// R141: the mirror image of R136 above, but for a Left-to-Right (Sort Left to Right) sort,
+    /// which permutes COLUMNS instead of rows. A column's width, whole-column default style
+    /// (sheet.ColumnStyles) and hidden state belong to the column's content, so ApplyLeftToRight
+    /// must carry them to the column's new position exactly like RowHeights/RowStyles/HiddenRows
+    /// already travel with a top-to-bottom sort. Left pinned to the physical column, the width/
+    /// hidden state would stay with whichever column's data happens to land there after the sort.
+    /// </summary>
+    [Fact]
+    public void SortCommand_LeftToRight_ColumnFormattingFollowsItsColumnAndUndoRestoresIt()
+    {
+        var workbook = new Workbook("test");
+        var sheet = workbook.AddSheet("Sheet1");
+        var ctx = new TestCommandContext(workbook);
+        var sid = sheet.Id;
+        var range = new GridRange(new CellAddress(sid, 1, 1), new CellAddress(sid, 1, 3));
+
+        // Row 1 values across columns 1,2,3: 3, 1, 2 -- ascending Left-to-Right sort on that row
+        // moves column 3's value (2) into column 2, so column 3's formatting must follow it there.
+        sheet.SetCell(new CellAddress(sid, 1, 1), new NumberValue(3));
+        sheet.SetCell(new CellAddress(sid, 1, 2), new NumberValue(1));
+        sheet.SetCell(new CellAddress(sid, 1, 3), new NumberValue(2));
+
+        sheet.ColumnWidths[3] = 30.0;
+        sheet.HiddenCols.Add(3);
+        var columnStyle = new StyleId(9);
+        sheet.ColumnStyles[3] = columnStyle;
+
+        var command = new SortCommand(sid, range, [new SortKey(0, true)], new SortOptions(LeftToRight: true));
+        command.Apply(ctx).Success.Should().BeTrue();
+
+        // Sorted ascending: col1=1 (from old col2), col2=2 (from old col3), col3=3 (from old col1).
+        sheet.GetValue(1, 1).Should().Be(new NumberValue(1));
+        sheet.GetValue(1, 2).Should().Be(new NumberValue(2));
+        sheet.GetValue(1, 3).Should().Be(new NumberValue(3));
+
+        sheet.ColumnWidths.Should().ContainKey(2).WhoseValue.Should().Be(30.0,
+            "the formerly-30-wide column's value moved to column 2, so its width must move with it");
+        sheet.ColumnWidths.Should().NotContainKey(3,
+            "column 3 now holds a different column's value and must not keep the old width behind");
+        sheet.HiddenCols.Should().Contain(2);
+        sheet.HiddenCols.Should().NotContain(3);
+        sheet.ColumnStyles.Should().ContainKey(2).WhoseValue.Should().Be(columnStyle);
+        sheet.ColumnStyles.Should().NotContainKey(3);
+
+        command.Revert(ctx);
+
+        sheet.ColumnWidths.Should().ContainKey(3).WhoseValue.Should().Be(30.0);
+        sheet.ColumnWidths.Should().NotContainKey(2);
+        sheet.HiddenCols.Should().Contain(3);
+        sheet.HiddenCols.Should().NotContain(2);
+        sheet.ColumnStyles.Should().ContainKey(3).WhoseValue.Should().Be(columnStyle);
+        sheet.ColumnStyles.Should().NotContainKey(2);
+        sheet.GetValue(1, 1).Should().Be(new NumberValue(3));
+        sheet.GetValue(1, 2).Should().Be(new NumberValue(1));
+        sheet.GetValue(1, 3).Should().Be(new NumberValue(2));
+    }
+
+    /// <summary>
+    /// R141 sibling: a plain top-to-bottom sort must NOT touch column formatting at all -- the new
+    /// column snapshot/permute logic added for the left-to-right fix lives in the same class and
+    /// must stay confined to ApplyLeftToRight, or a vertical sort would start moving/erasing
+    /// column widths, hidden state, or column styles it was never meant to touch.
+    /// </summary>
+    [Fact]
+    public void SortCommand_TopToBottom_DoesNotTouchColumnFormatting()
+    {
+        var workbook = new Workbook("test");
+        var sheet = workbook.AddSheet("Sheet1");
+        var ctx = new TestCommandContext(workbook);
+        var sid = sheet.Id;
+        var range = new GridRange(new CellAddress(sid, 1, 1), new CellAddress(sid, 3, 1));
+
+        sheet.SetCell(new CellAddress(sid, 1, 1), new NumberValue(3));
+        sheet.SetCell(new CellAddress(sid, 2, 1), new NumberValue(1));
+        sheet.SetCell(new CellAddress(sid, 3, 1), new NumberValue(2));
+
+        sheet.ColumnWidths[1] = 42.0;
+        sheet.HiddenCols.Add(1);
+        var columnStyle = new StyleId(4);
+        sheet.ColumnStyles[1] = columnStyle;
+
+        var command = new SortCommand(sid, range, [new SortKey(0, true)]);
+        command.Apply(ctx).Success.Should().BeTrue();
+
+        sheet.ColumnWidths.Should().ContainKey(1).WhoseValue.Should().Be(42.0,
+            "a top-to-bottom sort never moves columns, so column 1's own formatting must be untouched");
+        sheet.HiddenCols.Should().Contain(1);
+        sheet.ColumnStyles.Should().ContainKey(1).WhoseValue.Should().Be(columnStyle);
+
+        command.Revert(ctx);
+
+        sheet.ColumnWidths.Should().ContainKey(1).WhoseValue.Should().Be(42.0);
+        sheet.HiddenCols.Should().Contain(1);
+        sheet.ColumnStyles.Should().ContainKey(1).WhoseValue.Should().Be(columnStyle);
+    }
+
     [Fact]
     public void SortCommand_WithActiveAutoFilter_FilterHiddenRowStaysPinnedAtItsOwnRowAndUndo()
     {

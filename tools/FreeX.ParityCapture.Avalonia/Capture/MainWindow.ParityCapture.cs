@@ -1,4 +1,4 @@
-using System.Globalization;
+﻿using System.Globalization;
 using Avalonia;
 using Avalonia.Automation;
 using Avalonia.Controls;
@@ -2301,6 +2301,34 @@ public sealed partial class MainWindow
             ? tab.Id[..^3]
             : tab.Id;
 
+    /// <summary>
+    /// Closes the backstage before rendering a ribbon tab.
+    /// </summary>
+    /// <remarks>
+    /// Selecting the File tab opens the backstage: <c>AvaloniaRibbonRenderer</c> invokes
+    /// <c>onFileTabSelected</c> from its SelectionChanged handler and then restores the previous
+    /// content tab. The overlay stays open, and it is a sibling of the shell DockPanel covering the
+    /// whole client area -- so every ribbon capture taken after <c>tab.File</c>, which is first in
+    /// the loop, photographed the backstage instead of the ribbon. That is why sixteen of the
+    /// seventeen ribbon PNGs came back byte-identical.
+    /// </remarks>
+    private void CloseBackstageBeforeRibbonCapture()
+    {
+        var closedAny = false;
+        foreach (var backstage in global::Avalonia.VisualTree.VisualExtensions
+                     .GetVisualDescendants(this)
+                     .OfType<global::Free.Shared.Shell.Avalonia.AvaloniaBackstageFrame>())
+        {
+            if (!backstage.IsVisible)
+                continue;
+
+            backstage.Hide();
+            closedAny = true;
+        }
+
+        if (closedAny)
+            LayoutWindow();
+    }
     private ParitySurfaceResult CaptureRibbonTab(
         string outputDirectory,
         TabControl? ribbonTabControl,
@@ -2314,6 +2342,7 @@ public sealed partial class MainWindow
         if (!SelectParityRibbonTab(ribbonTabControl, tabId))
             return new ParitySurfaceResult(surfaceId, kind, surfaceId + ".png", Captured: false, $"Ribbon tab '{tabId}' is not present in the strip.");
 
+        CloseBackstageBeforeRibbonCapture();
         return CaptureWindowSurface(outputDirectory, surfaceId, kind);
     }
 
@@ -2493,7 +2522,7 @@ public sealed partial class MainWindow
         try
         {
             // Fire-and-forget: schedule the modal opener after this method starts polling for its owned window.
-            openerTask = RunParityModalOpenerAsync(opener);
+            openerTask = RunParityModalOpenerAsync(opener, suppressInspectionAutoClose: !render);
         }
         catch (Exception ex)
         {
@@ -2633,7 +2662,7 @@ public sealed partial class MainWindow
         Task openerTask;
         try
         {
-            openerTask = RunParityModalOpenerAsync(opener);
+            openerTask = RunParityModalOpenerAsync(opener, suppressInspectionAutoClose: !render);
         }
         catch (Exception ex)
         {
@@ -2824,12 +2853,16 @@ public sealed partial class MainWindow
             .Select(control => control.Tag as Action<int>)
             .FirstOrDefault(selector => selector is not null);
 
-    private static Task RunParityModalOpenerAsync(Func<Task> opener)
+    private static Task RunParityModalOpenerAsync(
+        Func<Task> opener,
+        bool suppressInspectionAutoClose = false)
     {
         var completion = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         Dispatcher.UIThread.Post(
             async () =>
             {
+                var previousSuppression = SuppressDialogInspectionAutoClose;
+                SuppressDialogInspectionAutoClose = suppressInspectionAutoClose;
                 try
                 {
                     await opener();
@@ -2838,6 +2871,10 @@ public sealed partial class MainWindow
                 catch (Exception ex)
                 {
                     completion.TrySetException(ex);
+                }
+                finally
+                {
+                    SuppressDialogInspectionAutoClose = previousSuppression;
                 }
             },
             DispatcherPriority.Background);

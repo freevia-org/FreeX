@@ -86,4 +86,80 @@ public sealed class R80LegacyCseArrayFixedExtentTests
         sheet.GetValue(2, 4).Should().Be(new NumberValue(3), "D2");
         sheet.GetValue(2, 5).Should().Be(new NumberValue(4), "E2");
     }
+
+    /// <summary>
+    /// R141 cse-scalar-result-not-replicated: a legacy CSE array whose formula naturally returns a
+    /// plain SCALAR (e.g. {=SUM(A1:A5)} entered over a 2x1 block) must have that scalar replicated
+    /// into every declared cell, exactly like real Excel does, instead of leaving the non-anchor
+    /// cells blank. This is the reproduction of the bug: before the fix, only H1 got the sum
+    /// and H2 stayed BlankValue because the scalar branch of RecalcEngine never consulted
+    /// LegacyArrayRows/Cols.
+    /// </summary>
+    [Fact]
+    public void LegacyCseArray_ScalarResult_ReplicatesAcrossDeclaredBlock()
+    {
+        var (engine, wb) = MakeEngine();
+        var sheet = wb.Sheets.First();
+
+        // A1:A5 = 1..5, sum = 15.
+        for (uint row = 1; row <= 5; row++)
+            sheet.SetCell(new CellAddress(sheet.Id, row, 1), new NumberValue(row));
+
+        // H1:H2 (2 rows x 1 col) was CSE-entered as {=SUM(A1:A5)}: a formula whose natural
+        // result is a plain scalar. Excel fills BOTH H1 and H2 with the same sum.
+        var h1 = new CellAddress(sheet.Id, 1, 8);
+        var h2 = new CellAddress(sheet.Id, 2, 8);
+        var legacyCell = Cell.FromFormula("SUM(A1:A5)");
+        legacyCell.LegacyArrayRows = 2;
+        legacyCell.LegacyArrayCols = 1;
+        sheet.SetCell(h1, legacyCell);
+        engine.RebuildFormulaDependencies(wb);
+
+        engine.Recalculate(wb, [h1]);
+
+        sheet.GetValue(1, 8).Should().Be(new NumberValue(15), "H1 (anchor) gets the SUM result");
+        sheet.GetValue(2, 8).Should().Be(new NumberValue(15),
+            "H2 must be replicated with the SAME scalar result, matching real Excel's CSE " +
+            "fill-the-whole-selection behavior instead of staying blank");
+    }
+
+    /// <summary>
+    /// R141 cse-scalar-result-not-replicated (guard survival half): after a scalar-returning CSE
+    /// array recalculates, the array-membership guard (TryGetArrayExtent, which backs "You cannot
+    /// change part of an array") must still recognize every cell of the declared block. Before the
+    /// fix, the scalar branch called ClearSpillRange but never SetSpillRange, so
+    /// TryGetArrayExtent(H1) returned false the moment recalc ran -- silently dropping the guard.
+    /// </summary>
+    [Fact]
+    public void LegacyCseArray_ScalarResult_ArrayGuardSurvivesRecalculation()
+    {
+        var (engine, wb) = MakeEngine();
+        var sheet = wb.Sheets.First();
+
+        for (uint row = 1; row <= 5; row++)
+            sheet.SetCell(new CellAddress(sheet.Id, row, 1), new NumberValue(row));
+
+        var h1 = new CellAddress(sheet.Id, 1, 8);
+        var h2 = new CellAddress(sheet.Id, 2, 8);
+        var legacyCell = Cell.FromFormula("SUM(A1:A5)");
+        legacyCell.LegacyArrayRows = 2;
+        legacyCell.LegacyArrayCols = 1;
+        sheet.SetCell(h1, legacyCell);
+        engine.RebuildFormulaDependencies(wb);
+
+        engine.Recalculate(wb, [h1]);
+
+        sheet.TryGetArrayExtent(h1, out var anchor1, out var rows1, out var cols1).Should().BeTrue(
+            "the anchor cell must still be recognized as an array member after recalculation");
+        anchor1.Should().Be(h1);
+        rows1.Should().Be(2u);
+        cols1.Should().Be(1u);
+
+        sheet.TryGetArrayExtent(h2, out var anchor2, out var rows2, out var cols2).Should().BeTrue(
+            "H2 (a non-anchor declared member) must also still be recognized as part of the array " +
+            "after recalculation, so 'You cannot change part of an array' keeps guarding it");
+        anchor2.Should().Be(h1);
+        rows2.Should().Be(2u);
+        cols2.Should().Be(1u);
+    }
 }

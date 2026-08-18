@@ -772,6 +772,63 @@ public class ComplexFieldEngineTests
         ComplexFieldEngine.Recompute(doc, 2, 0).Should().Be("last value");
     }
 
+    // Word's Insert Caption > Numbering > "Include chapter number" writes exactly this instruction
+    // (" STYLEREF 1 \n }-{ SEQ Figure ... "), expecting the chapter's outline NUMBER ("2"), not its text.
+    [Fact]
+    public void StyleRef_NSwitch_ResolvesHeadingOutlineNumberInsteadOfText()
+    {
+        var doc = TextDocument.CreateEmpty();
+        doc.Blocks.Clear();
+        doc.Blocks.Add(new Paragraph("Chapter One Introduction") { StyleId = "Heading1" });
+        doc.Blocks.Add(new Paragraph("Body"));
+        doc.Blocks.Add(new Paragraph("Chapter Two Setup") { StyleId = "Heading1" });
+        AddField(doc, " STYLEREF 1 \\n ", cached: "stale");
+
+        ComplexFieldEngine.Recompute(doc, 3, 0).Should().Be("2");
+    }
+
+    // Multi-level outline: STYLEREF \n on a Heading2 must return the full dotted number ("1.1"), matching
+    // CrossReferences' REF \n/\w "Insert as Heading number" — the two features share HeadingNumberAt.
+    [Fact]
+    public void StyleRef_NSwitch_ResolvesMultiLevelDottedOutlineNumber()
+    {
+        var doc = TextDocument.CreateEmpty();
+        doc.Blocks.Clear();
+        doc.Blocks.Add(new Paragraph("Chapter One") { StyleId = "Heading1" });
+        doc.Blocks.Add(new Paragraph("Section Alpha") { StyleId = "Heading2" });
+        AddField(doc, " STYLEREF 2 \\n ", cached: "stale");
+
+        ComplexFieldEngine.Recompute(doc, 2, 0).Should().Be("1.1");
+    }
+
+    // Sibling: without the \n switch, STYLEREF must still resolve the matched paragraph's TEXT (the
+    // pre-existing, unaffected behavior) rather than accidentally switching to a number.
+    [Fact]
+    public void StyleRef_WithoutNSwitch_StillResolvesHeadingTextNotNumber()
+    {
+        var doc = TextDocument.CreateEmpty();
+        doc.Blocks.Clear();
+        doc.Blocks.Add(new Paragraph("Chapter One Introduction") { StyleId = "Heading1" });
+        doc.Blocks.Add(new Paragraph("Body"));
+        doc.Blocks.Add(new Paragraph("Chapter Two Setup") { StyleId = "Heading1" });
+        AddField(doc, " STYLEREF 1 ", cached: "stale");
+
+        ComplexFieldEngine.Recompute(doc, 3, 0).Should().Be("Chapter Two Setup");
+    }
+
+    // Sibling: \n on a matched paragraph that carries no outline number (a non-heading style) must fall
+    // back to the paragraph's text rather than silently producing an empty result.
+    [Fact]
+    public void StyleRef_NSwitch_FallsBackToTextWhenParagraphHasNoOutlineNumber()
+    {
+        var doc = TextDocument.CreateEmpty();
+        doc.Blocks.Clear();
+        doc.Blocks.Add(new Paragraph("Pulled quote") { StyleId = "Quote" });
+        AddField(doc, " STYLEREF Quote \\n ", cached: "stale");
+
+        ComplexFieldEngine.Recompute(doc, 1, 0).Should().Be("Pulled quote");
+    }
+
     [Fact]
     public void Seq_NumbersRunningCountPerName()
     {

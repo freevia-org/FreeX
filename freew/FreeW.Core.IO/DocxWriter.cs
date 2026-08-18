@@ -4049,7 +4049,7 @@ public static class DocxWriter
         if (run.IsPageBreak)
         {
             var br = new XElement(W + "r");
-            var brPr = BuildRunProperties(run.Formatting);
+            var brPr = BuildRunProperties(run.Formatting, run.StyleId);
             if (brPr is not null)
                 br.Add(brPr);
             br.Add(new XElement(W + "br", new XAttribute(W + "type", "page")));
@@ -4060,7 +4060,7 @@ public static class DocxWriter
         if (run.IsColumnBreak)
         {
             var br = new XElement(W + "r");
-            var brPr = BuildRunProperties(run.Formatting);
+            var brPr = BuildRunProperties(run.Formatting, run.StyleId);
             if (brPr is not null)
                 br.Add(brPr);
             br.Add(new XElement(W + "br", new XAttribute(W + "type", "column")));
@@ -4117,7 +4117,7 @@ public static class DocxWriter
     private static XElement MarkerRun(Run run, XElement marker)
     {
         var r = new XElement(W + "r");
-        var rPr = BuildRunProperties(run.Formatting with { VerticalAlign = VerticalAlign.Superscript });
+        var rPr = BuildRunProperties(run.Formatting with { VerticalAlign = VerticalAlign.Superscript }, run.StyleId);
         if (rPr is not null)
             r.Add(rPr);
         r.Add(marker);
@@ -4132,7 +4132,7 @@ public static class DocxWriter
         RestartNumbering? restartOverrides = null)
     {
         var r = new XElement(W + "r");
-        var rPr = BuildRunProperties(run.Formatting);
+        var rPr = BuildRunProperties(run.Formatting, run.StyleId);
         // A tracked formatting change (w:rPrChange) is the LAST child of the run's run-properties and
         // carries a nested w:rPr of the run's *previous* formatting (what reject restores). When the run
         // has a format revision but no other run properties, an empty w:rPr must still be created to host
@@ -7985,11 +7985,11 @@ public static class DocxWriter
         return element;
     }
 
-    private static XElement? BuildRunProperties(RunFormatting f)
+    private static XElement? BuildRunProperties(RunFormatting f, string? styleId = null)
     {
         // Children MUST follow the CT_RPr (EG_RPrBase) schema sequence, otherwise Word's strict
         // validator rejects the run. The relevant slots, in order, are:
-        //   rFonts, b, i, caps, smallCaps, strike, dstrike, noProof, vanish, webHidden, color, spacing, kern, position, sz,
+        //   rStyle, rFonts, b, i, caps, smallCaps, strike, dstrike, noProof, vanish, webHidden, color, spacing, kern, position, sz,
         //   szCs, u, shd,
         //   vertAlign, <w14 extension region>.
         // The advanced-typography elements added for Z1 occupy these slots:
@@ -8000,6 +8000,11 @@ public static class DocxWriter
         //     properties (after the core elements above). We follow that placement, emitting them last.
         // (FreeW's own reader is order-independent, so order bugs only surface in Word's strict validator.)
         var rPr = new XElement(W + "rPr");
+        // w:rStyle (character-style reference) is the FIRST child of rPr per the CT_RPr schema sequence.
+        // Emitted only when the run actually carries a character-style link, so a plain (direct-formatting-
+        // only) run round-trips byte-unchanged.
+        if (styleId is { Length: > 0 })
+            rPr.Add(new XElement(W + "rStyle", new XAttribute(W + "val", styleId)));
         if (f.FontFamily is { Length: > 0 } family)
             rPr.Add(new XElement(W + "rFonts", new XAttribute(W + "ascii", family), new XAttribute(W + "hAnsi", family)));
         if (f.Bold)

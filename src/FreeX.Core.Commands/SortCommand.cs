@@ -61,6 +61,16 @@ public sealed class SortCommand : IWorkbookCommand, IAffectedCellsCommand, IEsti
     // color filter is hiding (sheet.ColumnFilterOwnedRows) must be permuted in lockstep with
     // FilterHiddenRows/ValueFilterHiddenRows, or it keeps naming the pre-sort row positions.
     private Dictionary<uint, HashSet<uint>>? _columnFilterOwnedRowsSnapshot;
+    // R141: mirrors _rowStyleSnapshot/_hiddenRowsSnapshot above, but for a Left-to-Right sort,
+    // which permutes COLUMNS instead of rows. A column's width, whole-column default style
+    // (sheet.ColumnStyles) and hidden state belong to the column's CONTENT the same way a row's
+    // height/style/hidden state belong to its content -- so they must follow the column to its
+    // new position exactly like RowHeights/RowStyles/HiddenRows already do for a top-to-bottom
+    // sort. Left unpermuted, the formatting stays pinned to the physical column and after the
+    // sort paints whichever column's content happens to land there.
+    private Dictionary<uint, double>? _columnWidthSnapshot;
+    private Dictionary<uint, StyleId>? _columnStyleSnapshot;
+    private HashSet<uint>? _hiddenColsSnapshot;
     // R94-commands-sort-partial-reband-1: see RebandOwningTableIfAny -- a table-scoped sort whose
     // _range is only a proper subset of the table's data body (reachable via the quick ribbon Sort
     // buttons on an arbitrary row selection) still calls RebandTable on the table's WHOLE data
@@ -281,6 +291,12 @@ public sealed class SortCommand : IWorkbookCommand, IAffectedCellsCommand, IEsti
         _filterHiddenRowsSnapshot = CaptureFilterHiddenRows(sheet, startRow, rowCount);
         _valueFilterHiddenRowsSnapshot = CaptureValueFilterHiddenRows(sheet, startRow, rowCount);
         _columnFilterOwnedRowsSnapshot = CaptureColumnFilterOwnedRows(sheet, startRow, rowCount);
+        // R141: a top-to-bottom sort permutes ROWS, so per-COLUMN state (widths, banner styles,
+        // hidden flags) is untouched by it -- null here means Revert skips restoring what Apply
+        // never moved, mirroring the row-snapshot nulling ApplyLeftToRight does below.
+        _columnWidthSnapshot = null;
+        _columnStyleSnapshot = null;
+        _hiddenColsSnapshot = null;
         var payloadCapture = CapturePayloads(sheet, _sheetId, startRow, startCol, rowCount, colCount);
         _snapshot = payloadCapture.CellSnapshot;
         _commentSnapshot = payloadCapture.CommentSnapshot;
@@ -554,6 +570,12 @@ public sealed class SortCommand : IWorkbookCommand, IAffectedCellsCommand, IEsti
         _filterHiddenRowsSnapshot = null;
         _valueFilterHiddenRowsSnapshot = null;
         _columnFilterOwnedRowsSnapshot = null;
+        // R141: capture the column-level analogs of RowHeights/RowStyles/HiddenRows so they can
+        // be permuted onto each column's new position below, the mirror image of what Apply's
+        // top-to-bottom path does for rows.
+        _columnWidthSnapshot = CaptureColumnWidths(sheet, startCol, colCount);
+        _columnStyleSnapshot = CaptureColumnStyles(sheet, startCol, colCount);
+        _hiddenColsSnapshot = CaptureHiddenCols(sheet, startCol, colCount);
         var payloadCapture = CapturePayloads(sheet, _sheetId, startRow, startCol, rowCount, colCount);
         _snapshot = payloadCapture.CellSnapshot;
         _commentSnapshot = payloadCapture.CommentSnapshot;
@@ -656,6 +678,25 @@ public sealed class SortCommand : IWorkbookCommand, IAffectedCellsCommand, IEsti
             // rewrite each moved formula's relative references by the column delta it moved,
             // mirroring the row-delta rewrite the top-to-bottom sort applies below.
             int colDelta = ci - columns[ci].OriginalIndex;
+
+            // R141: permute the column's own width/banner-style/hidden state from the pre-sort
+            // snapshot (keyed by the column's ORIGINAL physical position) onto its new position
+            // -- the same "content owns its formatting" treatment RowHeights/RowStyles/HiddenRows
+            // already get in the top-to-bottom Apply() above. _columnWidthSnapshot/_columnStyleSnapshot/
+            // _hiddenColsSnapshot are read-only here (they are also the Revert baseline), so they
+            // stay correct across the loop even as sheet.ColumnWidths/ColumnStyles/HiddenCols are
+            // being rewritten.
+            uint originalCol = startCol + (uint)columns[ci].OriginalIndex;
+            sheet.ColumnWidths.Remove(col);
+            if (_columnWidthSnapshot is { } columnWidths && columnWidths.TryGetValue(originalCol, out var movedWidth))
+                sheet.ColumnWidths[col] = movedWidth;
+            sheet.ColumnStyles.Remove(col);
+            if (_columnStyleSnapshot is { } columnStyles && columnStyles.TryGetValue(originalCol, out var movedColumnStyle))
+                sheet.ColumnStyles[col] = movedColumnStyle;
+            sheet.HiddenCols.Remove(col);
+            if (_hiddenColsSnapshot is { } hiddenCols && hiddenCols.Contains(originalCol))
+                sheet.HiddenCols.Add(col);
+
             for (int ri = 0; ri < rowCount; ri++)
             {
                 uint row = startRow + (uint)ri;
@@ -879,6 +920,9 @@ public sealed class SortCommand : IWorkbookCommand, IAffectedCellsCommand, IEsti
         RestoreFilterHiddenRows(sheet);
         RestoreValueFilterHiddenRows(sheet);
         RestoreColumnFilterOwnedRows(sheet);
+        RestoreColumnWidths(sheet);
+        RestoreColumnStyles(sheet);
+        RestoreHiddenCols(sheet);
         if (_sortStateCaptured)
             sheet.SortState = _priorSortState;
         // R84-io-tables-listobject-5-1: undo a table-scoped sort's NativeSortStateXml change by
@@ -993,6 +1037,47 @@ public sealed class SortCommand : IWorkbookCommand, IAffectedCellsCommand, IEsti
             var row = startRow + (uint)ri;
             if (sheet.ValueFilterHiddenRows.Contains(row))
                 snapshot.Add(row);
+        }
+
+        return snapshot;
+    }
+
+    // R141: mirrors CaptureRowStyles/CaptureRowHeights/CaptureHiddenRows above, but keyed by
+    // column for ApplyLeftToRight's column-permutation treatment.
+    private static Dictionary<uint, double> CaptureColumnWidths(Sheet sheet, uint startCol, int colCount)
+    {
+        var snapshot = new Dictionary<uint, double>();
+        for (int ci = 0; ci < colCount; ci++)
+        {
+            var col = startCol + (uint)ci;
+            if (sheet.ColumnWidths.TryGetValue(col, out var width))
+                snapshot[col] = width;
+        }
+
+        return snapshot;
+    }
+
+    private static Dictionary<uint, StyleId> CaptureColumnStyles(Sheet sheet, uint startCol, int colCount)
+    {
+        var snapshot = new Dictionary<uint, StyleId>();
+        for (int ci = 0; ci < colCount; ci++)
+        {
+            var col = startCol + (uint)ci;
+            if (sheet.ColumnStyles.TryGetValue(col, out var styleId))
+                snapshot[col] = styleId;
+        }
+
+        return snapshot;
+    }
+
+    private static HashSet<uint> CaptureHiddenCols(Sheet sheet, uint startCol, int colCount)
+    {
+        var snapshot = new HashSet<uint>();
+        for (int ci = 0; ci < colCount; ci++)
+        {
+            var col = startCol + (uint)ci;
+            if (sheet.HiddenCols.Contains(col))
+                snapshot.Add(col);
         }
 
         return snapshot;
@@ -1278,6 +1363,44 @@ public sealed class SortCommand : IWorkbookCommand, IAffectedCellsCommand, IEsti
             foreach (var row in ownedRows)
                 targetSet.Add(row);
         }
+    }
+
+    // R141: mirrors RestoreRowHeights/RestoreRowStyles/RestoreHiddenRows above, but for the
+    // column-level state a Left-to-Right sort permutes.
+    private void RestoreColumnWidths(Sheet sheet)
+    {
+        if (_columnWidthSnapshot is null)
+            return;
+
+        for (var col = _range.Start.Col; col <= _range.End.Col; col++)
+            sheet.ColumnWidths.Remove(col);
+
+        foreach (var (col, width) in _columnWidthSnapshot)
+            sheet.ColumnWidths[col] = width;
+    }
+
+    private void RestoreColumnStyles(Sheet sheet)
+    {
+        if (_columnStyleSnapshot is null)
+            return;
+
+        for (var col = _range.Start.Col; col <= _range.End.Col; col++)
+            sheet.ColumnStyles.Remove(col);
+
+        foreach (var (col, styleId) in _columnStyleSnapshot)
+            sheet.ColumnStyles[col] = styleId;
+    }
+
+    private void RestoreHiddenCols(Sheet sheet)
+    {
+        if (_hiddenColsSnapshot is null)
+            return;
+
+        for (var col = _range.Start.Col; col <= _range.End.Col; col++)
+            sheet.HiddenCols.Remove(col);
+
+        foreach (var col in _hiddenColsSnapshot)
+            sheet.HiddenCols.Add(col);
     }
 
     private static int CompareKey(Workbook workbook, Sheet sheet, CellAddress addressA, Cell? a, CellAddress addressB, Cell? b, SortOn sortOn, CellColor? targetColor, CfIconOverride? targetIcon, CustomSortOrder? customOrder, bool caseSensitive)

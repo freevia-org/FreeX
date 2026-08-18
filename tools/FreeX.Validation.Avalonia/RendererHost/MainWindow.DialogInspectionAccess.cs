@@ -615,6 +615,14 @@ public sealed partial class MainWindow
             CompleteDialogInspection(dialog, () => inspectionCallback(createInspection()));
     }
 
+    /// <summary>
+    /// Set while the interaction-contract harness drives a dialog. Inspection routes normally close
+    /// the dialog as soon as the callback has run, which leaves the contract probe sampling a closed
+    /// window -- it reported no focus because there was no dialog left to focus. The contract pass
+    /// closes the dialog itself once it has recorded, so the auto-close is suppressed for it.
+    /// </summary>
+    internal static bool SuppressDialogInspectionAutoClose { get; set; }
+
     private static void CompleteDialogInspection(Window dialog, Action inspect)
     {
         try
@@ -623,7 +631,8 @@ public sealed partial class MainWindow
         }
         finally
         {
-            Dispatcher.UIThread.Post(() => dialog.Close());
+            if (!SuppressDialogInspectionAutoClose)
+                Dispatcher.UIThread.Post(() => dialog.Close());
         }
     }
 }

@@ -85,4 +85,74 @@ public class LegacyArrayFormulaTests
         sheet.GetValue(2, 8).Should().Be(new NumberValue(33)); // H2
         sheet.GetValue(2, 9).Should().Be(new NumberValue(44)); // I2
     }
+
+    private static MemoryStream BuildWorkbookWithScalarResultArrayFormula()
+    {
+        var ms = new MemoryStream();
+        using (var xl = new XLWorkbook())
+        {
+            var ws = xl.AddWorksheet("S");
+            // A1:A5 = 1..5.
+            for (var r = 1; r <= 5; r++)
+                ws.Cell(r, 1).Value = r;
+            // H1:H2 (2 rows x 1 col) CSE-entered as {=SUM(A1:A5)}: a formula whose natural
+            // result is a plain scalar, not a range -- writes <f t="array" ref="H1:H2">.
+            ws.Range("H1:H2").FormulaArrayA1 = "SUM(A1:A5)";
+            xl.SaveAs(ms);
+        }
+        ms.Position = 0;
+        return ms;
+    }
+
+    // R141 cse-scalar-result-not-replicated: a real .xlsx authored the way Excel itself would
+    // (Ctrl+Shift+Enter over a multi-cell block with a formula that naturally returns a scalar)
+    // must, on load + recalc through the real production XlsxFileAdapter + RecalcEngine, fill
+    // every declared cell with the same scalar value -- exactly like MultiCellArrayFormula_*
+    // above proves for a naturally-range-shaped formula. Before the fix, only H1 (the anchor)
+    // got the SUM result; H2 stayed blank because the scalar branch of RecalcEngine never
+    // consulted LegacyArrayRows/Cols.
+    [Fact]
+    public void ScalarResultArrayFormula_FillsDeclaredRange_OnLoadAndRecalc()
+    {
+        using var ms = BuildWorkbookWithScalarResultArrayFormula();
+        var wb = new XlsxFileAdapter().Load(ms);
+        var sheet = wb.GetSheetAt(0);
+
+        new RecalcEngine(new DependencyGraph(), new FormulaEvaluator()).RecalculateAllFormulas(wb);
+
+        sheet.GetValue(1, 8).Should().Be(new NumberValue(15), "H1 (anchor) gets the SUM result");
+        sheet.GetValue(2, 8).Should().Be(new NumberValue(15),
+            "H2 must be replicated with the same scalar result, matching real Excel's CSE " +
+            "fill-the-whole-selection behavior instead of staying blank");
+    }
+
+    // R141 cse-scalar-result-not-replicated (guard-survival half): after a freshly loaded
+    // workbook's scalar-returning CSE array recalculates for the first time, the array-membership
+    // guard (TryGetArrayExtent, which backs "You cannot change part of an array") must still
+    // recognize every cell of the declared block. Before the fix, the scalar branch called
+    // ClearSpillRange but never SetSpillRange, so the provisional load-time membership was torn
+    // down and TryGetArrayExtent(H1) returned false the moment recalc ran once.
+    [Fact]
+    public void ScalarResultArrayFormula_ArrayGuardSurvives_OnLoadAndRecalc()
+    {
+        using var ms = BuildWorkbookWithScalarResultArrayFormula();
+        var wb = new XlsxFileAdapter().Load(ms);
+        var sheet = wb.GetSheetAt(0);
+        var h1 = new CellAddress(sheet.Id, 1, 8);
+        var h2 = new CellAddress(sheet.Id, 2, 8);
+
+        new RecalcEngine(new DependencyGraph(), new FormulaEvaluator()).RecalculateAllFormulas(wb);
+
+        sheet.TryGetArrayExtent(h1, out var anchor1, out var rows1, out var cols1).Should().BeTrue(
+            "the anchor cell must still be recognized as an array member after the first recalc " +
+            "following load");
+        anchor1.Should().Be(h1);
+        rows1.Should().Be(2u);
+        cols1.Should().Be(1u);
+
+        sheet.TryGetArrayExtent(h2, out var anchor2, out _, out _).Should().BeTrue(
+            "H2 (a non-anchor declared member) must also still be recognized as part of the " +
+            "array after the first recalc, so 'You cannot change part of an array' keeps guarding it");
+        anchor2.Should().Be(h1);
+    }
 }

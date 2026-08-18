@@ -1005,6 +1005,19 @@ public sealed class Run(string text, RunFormatting? formatting = null)
     /// </summary>
     public FormatRevision? FormatRevision { get; set; }
 
+    /// <summary>
+    /// Optional character-style reference (w:rPr/w:rStyle), the run-level analog of
+    /// <see cref="Paragraph.StyleId"/> (w:pPr/w:pStyle). When set, the run's look comes (at least in
+    /// part) from the referenced character style in <see cref="TextDocument.Styles"/> rather than being
+    /// fully baked into <see cref="Formatting"/> — e.g. a phrase styled via the Styles gallery's "Intense
+    /// Emphasis", or a Word-inserted hyperlink run carrying the built-in "Hyperlink" character style.
+    /// <see cref="Formatting"/> still carries any direct (on-top-of-the-style) formatting the user applied
+    /// to this specific run; the two layer together the same way Word layers direct formatting over a
+    /// linked style. Null means the run's look is entirely direct formatting, matching how an absent
+    /// w:pStyle leaves <see cref="Paragraph.StyleId"/> null.
+    /// </summary>
+    public string? StyleId { get; set; }
+
     /// <summary>Creates a run that carries an inline image instead of text.</summary>
     public static Run FromImage(InlineImage image) => new(string.Empty) { Image = image };
 

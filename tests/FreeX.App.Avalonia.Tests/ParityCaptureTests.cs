@@ -393,6 +393,25 @@ public sealed class ParityCaptureTests
                 File.ReadAllBytes(Path.Combine(outputDirectory, "contextual.PivotTableAnalyze.png"))
                     .Should().NotEqual(File.ReadAllBytes(Path.Combine(outputDirectory, "tab.Home.png")),
                         "PivotTable Analyze must render its contextual tab, not the Home fallback");
+
+                // Guard the whole set, not just this one pair. Selecting the File tab opens the
+                // backstage, which covered the shell and made sixteen of the seventeen ribbon PNGs
+                // byte-identical; only this single comparison happened to notice. Comparing every
+                // ribbon surface catches the next thing that blanks them wholesale.
+                var ribbonPngs = results
+                    .Where(r => r.Captured
+                        && (r.Id.StartsWith("tab.", StringComparison.Ordinal)
+                            || r.Id.StartsWith("contextual.", StringComparison.Ordinal)))
+                    .ToList();
+                ribbonPngs.Should().HaveCountGreaterThan(10, "the ribbon strip should capture every tab");
+                var ribbonDigests = ribbonPngs.ToDictionary(
+                    r => r.Id,
+                    r => Convert.ToHexString(
+                        System.Security.Cryptography.SHA256.HashData(
+                            File.ReadAllBytes(Path.Combine(outputDirectory, r.PngFileName)))));
+                ribbonDigests.Values.Distinct().Should().HaveCount(ribbonDigests.Count,
+                    "every ribbon tab should render its own content: "
+                    + string.Join(", ", ribbonDigests.Select(kv => kv.Key + "=" + kv.Value[..8])));
                 File.ReadAllBytes(Path.Combine(outputDirectory, "contextual.PivotTableDesign.png"))
                     .Should().NotEqual(File.ReadAllBytes(Path.Combine(outputDirectory, "tab.Home.png")),
                         "PivotTable Design must render its contextual tab, not the Home fallback");
@@ -612,20 +631,44 @@ public sealed class ParityCaptureTests
                     "the fixed-size dialog client area should be captured without edge clipping");
 
                 var image = PngCodec.DecodeFile(pngPath);
-                FindExactColorBounds(image, red: 213, green: 223, blue: 229)
-                    .Should().Be((13, 43, 400, 274),
-                        "the Go To Special and value-type group borders should retain the WPF logical bounds");
-                CountExactColorOnRow(image, 43, red: 213, green: 223, blue: 229)
+                // Vertical positions here are font-dependent. They were authored under the old headless
+                // harness, which did not rasterize text, and each moved by 3px once real glyph metrics
+                // arrived with Skia -- the layout itself did not change. Assert what actually encodes WPF
+                // parity (exact horizontal bounds, full-width borders, button height, checkbox columns)
+                // and leave the absolute rows slack, so which fonts happen to be installed on the
+                // running machine cannot break the suite.
+                var (borderLeft, borderTop, borderRight, borderBottom) =
+                    FindExactColorBounds(image, red: 213, green: 223, blue: 229);
+                borderLeft.Should().Be(13, "the group borders should retain the WPF logical left edge");
+                borderRight.Should().Be(400, "the group borders should retain the WPF logical right edge");
+                borderTop.Should().BeInRange(40, 50,
+                    "the first group should open just below the Select label");
+                borderBottom.Should().BeInRange(268, 286,
+                    "the value-type group should close above the action row");
+                CountExactColorOnRow(image, borderTop, red: 213, green: 223, blue: 229)
                     .Should().BeGreaterThan(250,
                         "the top group border should span the full WPF-aligned content width");
-                CountExactColorOnRow(image, 274, red: 213, green: 223, blue: 229)
+                CountExactColorOnRow(image, borderBottom, red: 213, green: 223, blue: 229)
                     .Should().BeGreaterThan(300,
                         "the bottom value-type border should remain at the WPF-aligned action-row separation");
-                FindAccentRows(image, minimumY: 350, maximumY: 400, minimumPixels: 20)
-                    .Should().Equal([369, 388],
-                        "the default action button border should align with the WPF capture rows");
-                var checkboxAnchors = FindDarkRunStartsOnRow(image, 248, minimumLength: 12);
-                checkboxAnchors.Should().Equal([27, 113, 173, 255]);
+                var accentRows = FindAccentRows(image, minimumY: 350, maximumY: 405, minimumPixels: 20);
+                accentRows.Should().HaveCount(2,
+                    "the default action button should render its top and bottom accent borders");
+                (accentRows[1] - accentRows[0]).Should().Be(19,
+                    "the default action button height should match the WPF capture");
+                var checkboxRow = Enumerable.Range(244, 14)
+                    .First(y => FindDarkRunStartsOnRow(image, y, minimumLength: 12).Count == 4);
+                var checkboxAnchors = FindDarkRunStartsOnRow(image, checkboxRow, minimumLength: 12);
+                var expectedCheckboxAnchors = new[] { 27, 113, 173, 255 };
+                checkboxAnchors.Should().HaveCount(expectedCheckboxAnchors.Length,
+                    "the value-type row should show one run per checkbox");
+                for (var anchor = 0; anchor < expectedCheckboxAnchors.Length; anchor++)
+                {
+                    // Glyph widths nudge these columns by a pixel under real text rendering, so hold the
+                    // WPF alignment to within a pixel or two rather than exactly.
+                    checkboxAnchors[anchor].Should().BeCloseTo(expectedCheckboxAnchors[anchor], 2,
+                        "the value-type checkboxes should keep their WPF column alignment");
+                }
 
                 window.AllowCloseWithoutDirtyPromptForParityCapture();
 

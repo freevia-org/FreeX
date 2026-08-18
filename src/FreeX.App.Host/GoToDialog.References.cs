@@ -27,4 +27,13 @@ public sealed partial class GoToDialog
         IReadOnlyDictionary<string, GridRange>? definedNames,
         out GridRange range)
         => GoToDialogPlanner.TryParseReferenceRange(text, sheetId, definedNames, out range);
+
+    public static bool TryParseReferenceRange(
+        string text,
+        SheetId sheetId,
+        Func<string, SheetId?> resolveSheetId,
+        IReadOnlyDictionary<string, GridRange>? definedNames,
+        Func<string, SheetId, GridRange?>? resolveScopedName,
+        out GridRange range)
+        => GoToDialogPlanner.TryParseReferenceRange(text, sheetId, resolveSheetId, definedNames, resolveScopedName, out range);
 }

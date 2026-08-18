@@ -113,4 +113,28 @@ internal static class PivotTableSlicerTimelineCommandHelpers
         var sanitized = new string(chars).Trim('_');
         return string.IsNullOrWhiteSpace(sanitized) ? fallback : sanitized;
     }
+
+    /// <summary>
+    /// R141-commands-slicer-timeline-multipivot-merge-loss: captures each DISTINCT target sheet's
+    /// FULL <see cref="Sheet.MergedRegions"/> list before a multi-pivot-target Apply begins mutating
+    /// anything, so a later full-command rollback (the growth-guard's mid-loop failure path, or an
+    /// ordinary undo) can put merges back exactly as they were. Neither AddPivotTableCommand.Snapshot/
+    /// Restore (cell VALUES only) nor PivotTableRefreshService.ClearRenderedRange (which unmerges every
+    /// region overlapping a pivot's rendered footprint and never re-adds any of them) preserves merge
+    /// formatting on its own -- without this, a rollback that clears every target's rendered range,
+    /// including targets that already refreshed successfully, permanently destroys their merged-cell
+    /// formatting.
+    /// </summary>
+    internal static List<(Sheet Sheet, List<GridRange> MergedRegions)> SnapshotMergedRegions(IEnumerable<Sheet> sheets) =>
+        sheets.Distinct().Select(sheet => (sheet, sheet.MergedRegions.ToList())).ToList();
+
+    /// <summary>Companion to <see cref="SnapshotMergedRegions"/>: replays a captured snapshot back onto each sheet.</summary>
+    internal static void RestoreMergedRegions(IReadOnlyList<(Sheet Sheet, List<GridRange> MergedRegions)>? snapshot)
+    {
+        if (snapshot is null)
+            return;
+
+        foreach (var (sheet, regions) in snapshot)
+            sheet.ReplaceMergedRegions(regions);
+    }
 }

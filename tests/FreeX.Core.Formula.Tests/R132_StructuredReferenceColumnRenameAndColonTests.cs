@@ -83,6 +83,49 @@ public sealed class R132_StructuredReferenceColumnRenameAndColonTests
         ((ErrorValue)result).Code.Should().Be("#NAME?");
     }
 
+    // ── R141-fmlstructuredref-columnrename-reuse: MED, name-reuse hijack ───────────────────
+
+    [Fact]
+    public void HeaderRename_OldNameReusedByAnotherColumn_OldFormulaStaysOnTrueFormerOwner()
+    {
+        // Table SalesTable: Region(A), Sales(B), Cost(C). B is renamed Sales -> Revenue (stale
+        // stored Name "Sales" left behind, per the (a) fixture above). C is THEN renamed
+        // Cost -> Sales, reusing the exact text B used to hold. A pre-existing formula that still
+        // literally says [Sales] must keep resolving to B (the true former owner, values 10+20),
+        // NOT get silently hijacked to C (values 100+200) just because C's LIVE header now reads
+        // "Sales" too.
+        var (workbook, dataSheet, otherSheet) = BuildRenameReuseFixture();
+
+        dataSheet.SetCell(new CellAddress(dataSheet.Id, 1, 2), new TextValue("Revenue")); // B: Sales -> Revenue
+        dataSheet.SetCell(new CellAddress(dataSheet.Id, 1, 3), new TextValue("Sales"));   // C: Cost -> Sales (reuse)
+
+        var evaluator = new FormulaEvaluator();
+
+        var oldFormulaResult = evaluator.Evaluate("=SUM(SalesTable[Sales])", otherSheet, workbook);
+        oldFormulaResult.Should().Be(new NumberValue(30), "the pre-existing formula named column B (Revenue) before the rename and must not be hijacked to column C");
+
+        // Sibling: a formula naming C's OWN stale stored name ("Cost", never reused by anyone
+        // else) is unaffected by the fix -- it still resolves to C via the ordinary, unambiguous
+        // stale-name fallback (no other column contests "Cost").
+        var costResult = evaluator.Evaluate("=SUM(SalesTable[Cost])", otherSheet, workbook);
+        costResult.Should().Be(new NumberValue(300), "Cost's stale stored name is uncontested and must still resolve to its true owner, column C");
+    }
+
+    [Fact]
+    public void HeaderRename_ReuseFixture_FormulaUsingReusedLiveName_StillResolves_NoRegression()
+    {
+        // Sibling: once no genuine former owner of "Sales" is left (e.g. B is renamed to a name
+        // that was never anyone else's, not reused), a formula naming C's OWN never-renamed
+        // stored text still resolves normally via the canonical-owner fast path.
+        var (workbook, dataSheet, otherSheet) = BuildRenameReuseFixture();
+        dataSheet.SetCell(new CellAddress(dataSheet.Id, 1, 2), new TextValue("Revenue")); // B: Sales -> Revenue only
+
+        var evaluator = new FormulaEvaluator();
+        var result = evaluator.Evaluate("=SUM(SalesTable[Cost])", otherSheet, workbook);
+
+        result.Should().Be(new NumberValue(300));
+    }
+
     private static (Workbook Workbook, Sheet DataSheet, Sheet OtherSheet) BuildRenameFixture()
     {
         var workbook = new Workbook("Test");
@@ -105,6 +148,37 @@ public sealed class R132_StructuredReferenceColumnRenameAndColonTests
         };
         table.Columns.Add(new StructuredTableColumnModel(1, "Region"));
         table.Columns.Add(new StructuredTableColumnModel(2, "Sales"));
+        dataSheet.StructuredTables.Add(table);
+
+        return (workbook, dataSheet, otherSheet);
+    }
+
+    private static (Workbook Workbook, Sheet DataSheet, Sheet OtherSheet) BuildRenameReuseFixture()
+    {
+        var workbook = new Workbook("Test");
+        var dataSheet = workbook.AddSheet("Data");
+        var otherSheet = workbook.AddSheet("Report");
+
+        dataSheet.SetCell(new CellAddress(dataSheet.Id, 1, 1), new TextValue("Region"));
+        dataSheet.SetCell(new CellAddress(dataSheet.Id, 1, 2), new TextValue("Sales"));
+        dataSheet.SetCell(new CellAddress(dataSheet.Id, 1, 3), new TextValue("Cost"));
+        dataSheet.SetCell(new CellAddress(dataSheet.Id, 2, 1), new TextValue("North"));
+        dataSheet.SetCell(new CellAddress(dataSheet.Id, 2, 2), new NumberValue(10));
+        dataSheet.SetCell(new CellAddress(dataSheet.Id, 2, 3), new NumberValue(100));
+        dataSheet.SetCell(new CellAddress(dataSheet.Id, 3, 1), new TextValue("South"));
+        dataSheet.SetCell(new CellAddress(dataSheet.Id, 3, 2), new NumberValue(20));
+        dataSheet.SetCell(new CellAddress(dataSheet.Id, 3, 3), new NumberValue(200));
+
+        var table = new StructuredTableModel
+        {
+            Id = 1,
+            Name = "SalesTable",
+            DisplayName = "SalesTable",
+            Range = new GridRange(new CellAddress(dataSheet.Id, 1, 1), new CellAddress(dataSheet.Id, 3, 3))
+        };
+        table.Columns.Add(new StructuredTableColumnModel(1, "Region"));
+        table.Columns.Add(new StructuredTableColumnModel(2, "Sales"));
+        table.Columns.Add(new StructuredTableColumnModel(3, "Cost"));
         dataSheet.StructuredTables.Add(table);
 
         return (workbook, dataSheet, otherSheet);

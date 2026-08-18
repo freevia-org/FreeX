@@ -50,7 +50,7 @@ public sealed class HomeEditingCommandSourceTests
         source.Should().Contain("private void FilterReapplyMenuItem_Click(object sender, RoutedEventArgs e) => ReapplyAutoFilter();");
         source.Should().Contain("private void FindFindMenuItem_Click(object sender, RoutedEventArgs e)       => FindButton_Click(sender, e);");
         source.Should().Contain("private void FindReplaceMenuItem_Click(object sender, RoutedEventArgs e)    => ReplaceButton_Click(sender, e);");
-        source.Should().Contain("new GoToDialog(_currentSheetId, defaultAddress, _workbook.NamedRanges)");
+        source.Should().Contain("var goToDefinedNames = GoToDialogPlanner.BuildDefinedNamesForSheet(_workbook, _currentSheetId);");
         source.Should().Contain("new GoToSpecialDialog { Owner = this }");
         source.Should().Contain("new ClearContentsCommand(sheetId, currentRange)");
         source.Should().Contain("CellStyleDiffPlanner.ClearFormatsDiff()");

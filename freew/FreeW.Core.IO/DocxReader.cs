@@ -4015,6 +4015,7 @@ public static class DocxReader
         if (footnoteRef is not null && int.TryParse(footnoteRef.Attribute(W + "id")?.Value, out var footnoteId))
         {
             var footnoteRun = Run.FootnoteReference(footnoteId, ReadRunFormatting(r.Element(W + "rPr")));
+            footnoteRun.StyleId = ReadRunStyleId(r.Element(W + "rPr"));
             ApplyRevision(footnoteRun);
             paragraph.Runs.Add(footnoteRun);
             return;
@@ -4025,6 +4026,7 @@ public static class DocxReader
         if (endnoteRef is not null && int.TryParse(endnoteRef.Attribute(W + "id")?.Value, out var endnoteId))
         {
             var endnoteRun = Run.EndnoteReference(endnoteId, ReadRunFormatting(r.Element(W + "rPr")));
+            endnoteRun.StyleId = ReadRunStyleId(r.Element(W + "rPr"));
             ApplyRevision(endnoteRun);
             paragraph.Runs.Add(endnoteRun);
             return;
@@ -4045,6 +4047,7 @@ public static class DocxReader
             var name = r.Element(W + "fldChar")?.Element(W + "ffData")?.Element(W + "name")?.Attribute(W + "val")?.Value;
             var checkboxRun = Run.CheckBoxControl(isChecked, name);
             checkboxRun.Formatting = ReadRunFormatting(r.Element(W + "rPr"));
+            checkboxRun.StyleId = ReadRunStyleId(r.Element(W + "rPr"));
             checkboxRun.HyperlinkUrl = hyperlinkUrl;
             checkboxRun.HyperlinkAnchor = hyperlinkAnchor;
             checkboxRun.CommentId = commentId;
@@ -4058,6 +4061,7 @@ public static class DocxReader
         // become "break, beforeafter" during import. Text wrapping breaks remain embedded newlines.
         var rPr = r.Element(W + "rPr");
         var formatting = ReadRunFormatting(rPr);
+        var runStyleId = ReadRunStyleId(rPr);
         var text = new StringBuilder();
 
         void AddTextFragment()
@@ -4072,6 +4076,7 @@ public static class DocxReader
                 HyperlinkTooltip = hyperlinkTooltip,
                 CommentId = commentId,
                 Control = control,
+                StyleId = runStyleId,
             };
             ApplyRevision(textRun);
             ApplyFormatRevision(textRun, rPr);
@@ -4089,6 +4094,7 @@ public static class DocxReader
             breakRun.HyperlinkTooltip = hyperlinkTooltip;
             breakRun.CommentId = commentId;
             breakRun.Control = control;
+            breakRun.StyleId = runStyleId;
             ApplyRevision(breakRun);
             paragraph.Runs.Add(breakRun);
         }
@@ -7378,6 +7384,15 @@ public static class DocxReader
             paragraph.MarkRevisionDateXml = delEl.Attribute(W + "date")?.Value;
         }
     }
+
+    /// <summary>
+    /// Reads a run's character-style reference (<c>w:rPr/w:rStyle/@w:val</c>) — the run-level analog of
+    /// how <c>w:pPr/w:pStyle</c> becomes <see cref="Paragraph.StyleId"/>. Returns null when the run
+    /// carries no character style (no <c>rPr</c>, or no <c>w:rStyle</c> child), so a run whose look is
+    /// entirely direct formatting round-trips with <see cref="Run.StyleId"/> left null.
+    /// </summary>
+    private static string? ReadRunStyleId(XElement? rPr) =>
+        rPr?.Element(W + "rStyle")?.Attribute(W + "val")?.Value;
 
     internal static RunFormatting ReadRunFormatting(XElement? rPr)
     {

@@ -74,6 +74,45 @@ public static class GoToDialogPlanner
         IReadOnlyDictionary<string, GridRange>? definedNames,
         out GridRange range) =>
         WorkbookReferenceNavigator.TryParseReferenceRange(text, sheetId, definedNames, out range);
+
+    /// <summary>
+    /// Sheet-scope-aware overload for the Go To dialog, matching the precedence
+    /// <see cref="Workbook.TryGetNamedRange(string,SheetId,out GridRange)"/> and
+    /// <c>WorkbookSession.GoToReference</c> already use: a name scoped to the dialog's sheet beats a
+    /// same-named workbook-global name, and <paramref name="resolveSheetId"/> lets a sheet-qualified
+    /// reference (e.g. "Sheet2!A1" or "Sheet2!Rate") resolve against the qualifier's own sheet.
+    /// </summary>
+    public static bool TryParseReferenceRange(
+        string text,
+        SheetId sheetId,
+        Func<string, SheetId?> resolveSheetId,
+        IReadOnlyDictionary<string, GridRange>? definedNames,
+        Func<string, SheetId, GridRange?>? resolveScopedName,
+        out GridRange range) =>
+        WorkbookReferenceNavigator.TryParseReferenceRange(text, sheetId, resolveSheetId, definedNames, resolveScopedName, out range);
+
+    /// <summary>
+    /// Builds the defined-name set the Go To dialog should offer/resolve for <paramref name="sheetId"/>:
+    /// every workbook-global name plus every name scoped to <paramref name="sheetId"/> itself (a
+    /// scoped name shadows a same-named global one, matching <see cref="Workbook.TryGetNamedRange(string,SheetId,out GridRange)"/>'s
+    /// precedence). Names scoped to a DIFFERENT sheet are excluded -- this mirrors Excel: the Name
+    /// Box / Go To list only ever shows names visible from the active sheet (see also
+    /// <c>NameBoxDropdownPlanner.Build</c>, which applies the identical <c>sheetId.Equals(activeSheetId)</c>
+    /// filter for the formula bar's Name Box dropdown).
+    /// </summary>
+    public static IReadOnlyDictionary<string, GridRange> BuildDefinedNamesForSheet(Workbook workbook, SheetId sheetId)
+    {
+        ArgumentNullException.ThrowIfNull(workbook);
+
+        var combined = new Dictionary<string, GridRange>(workbook.NamedRanges, StringComparer.OrdinalIgnoreCase);
+        foreach (var ((name, scopeSheetId), range) in workbook.ScopedNamedRanges)
+        {
+            if (scopeSheetId.Equals(sheetId))
+                combined[name] = range;
+        }
+
+        return combined;
+    }
 }
 
 public static class GoToSpecialDialogPlanner

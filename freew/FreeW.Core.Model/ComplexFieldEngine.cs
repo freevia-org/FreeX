@@ -22,7 +22,8 @@ namespace FreeW.Core.Model;
 /// support for the <c>\c</c> (repeat current), <c>\r N</c> (reset to N), <c>\s N</c> (restart after
 /// a heading), <c>\n</c> (next number), <c>\h</c> (hide) and numeric result-picture switches.</item>
 /// <item><c>STYLEREF 1</c> / <c>STYLEREF "Heading 1"</c> — the nearest preceding body paragraph using the
-/// requested heading style, or the next matching paragraph when none precedes the field.</item>
+/// requested heading style, or the next matching paragraph when none precedes the field; with the
+/// <c>\n</c> switch, that paragraph's outline number (e.g. "1.2") instead of its text.</item>
 /// </list>
 /// <para>
 /// Lives in the model project so it is fully unit-testable without any UI. Recomputing a nested field also
@@ -1192,7 +1193,9 @@ public static class ComplexFieldEngine
     }
 
     // STYLEREF: nearest preceding body paragraph matching the requested style, then the first following
-    // match when none precedes it. Page-aware/header-footer behavior and switches remain cached.
+    // match when none precedes it. The \n switch returns that paragraph's outline number (e.g. "1.2")
+    // instead of its text (e.g. Word's "Include chapter number" caption numbering, "{ STYLEREF 1 \n }").
+    // Page-aware/header-footer behavior and other switches remain cached.
     private static string ResolveStyleRef(TextDocument document, ComplexField field, int blockIndex, string cached)
     {
         var argument = Argument(field.Instruction);
@@ -1202,6 +1205,7 @@ public static class ComplexFieldEngine
         var headingStyleId = argument.Length == 1 && argument[0] is >= '1' and <= '9'
             ? "Heading" + argument
             : null;
+        var wantsNumber = HasSwitch(field.Instruction, 'n');
 
         for (var b = Math.Min(blockIndex - 1, document.Blocks.Count - 1); b >= 0; b--)
         {
@@ -1209,8 +1213,7 @@ public static class ComplexFieldEngine
                 || !StyleRefMatches(document, paragraph, argument, headingStyleId))
                 continue;
 
-            var text = paragraph.PlainText.TrimEnd();
-            return text.Length > 0 ? text : cached;
+            return StyleRefResult(document, paragraph, b, wantsNumber, cached);
         }
 
         for (var b = Math.Max(0, blockIndex + 1); b < document.Blocks.Count; b++)
@@ -1219,11 +1222,27 @@ public static class ComplexFieldEngine
                 || !StyleRefMatches(document, paragraph, argument, headingStyleId))
                 continue;
 
-            var text = paragraph.PlainText.TrimEnd();
-            return text.Length > 0 ? text : cached;
+            return StyleRefResult(document, paragraph, b, wantsNumber, cached);
         }
 
         return cached;
+    }
+
+    // The STYLEREF result for a matched paragraph: its outline number when \n was requested and the
+    // paragraph carries one (reusing CrossReferences' heading-number computation, the same one that
+    // backs REF's \n/\w "Insert as Heading number" switch), otherwise falling back to its plain text.
+    private static string StyleRefResult(
+        TextDocument document, Paragraph paragraph, int blockIndex, bool wantsNumber, string cached)
+    {
+        if (wantsNumber)
+        {
+            var number = CrossReferences.HeadingNumberAt(document, blockIndex);
+            if (number.Length > 0)
+                return number;
+        }
+
+        var text = paragraph.PlainText.TrimEnd();
+        return text.Length > 0 ? text : cached;
     }
 
     private static bool StyleRefMatches(
