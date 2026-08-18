@@ -251,6 +251,50 @@ public sealed class DocumentViewContentControlBodyEditingTests
         view.PlainText.Should().Be("Body teh ");
     }
 
+    [Fact]
+    public void A_content_locked_field_freezes_its_paragraphs_text()
+    {
+        var control = Run.PlainTextControl("Bob", tag: "Applicant");
+        control.Control = control.Control! with { LockMode = ContentControlLockMode.ContentLocked };
+        var paragraph = new Paragraph();
+        paragraph.Runs.Add(new Run(Prefix));
+        paragraph.Runs.Add(control);
+        paragraph.Runs.Add(new Run(Suffix));
+        var view = LoadParagraph(paragraph);
+
+        // Typing, deleting and case changes around the field are all refused while its content is locked
+        // — the range gestures address characters, and rewriting the locked ones is what the lock forbids.
+        view.MoveCaretToBlockForTest(0, 0);
+        view.InsertText("X");
+        view.MoveCaretToBlockForTest(0, 3);
+        view.BackspaceForTest();
+        view.DeleteForwardForTest();
+        view.SetBodySelectionForTest(0, 0, 0, paragraph.PlainText.Length);
+        view.BackspaceForTest();
+
+        view.PlainText.Should().Be("Name: Bob (staff)");
+        Fields(paragraph).Should().ContainSingle();
+        Field(paragraph).Text.Should().Be("Bob");
+    }
+
+    [Fact]
+    public void A_selection_reaching_a_locked_field_deletes_nothing()
+    {
+        var control = Run.PlainTextControl("Bob", tag: "Applicant");
+        control.Control = control.Control! with { LockMode = ContentControlLockMode.ControlAndContentLocked };
+        var paragraph = new Paragraph();
+        paragraph.Runs.Add(new Run(Prefix));
+        paragraph.Runs.Add(control);
+        paragraph.Runs.Add(new Run(Suffix));
+        var view = LoadParagraph(paragraph);
+
+        view.SetBodySelectionForTest(0, ControlStart - 2, 0, ControlStart + 1);
+        view.BackspaceForTest();
+
+        view.PlainText.Should().Be("Name: Bob (staff)");
+        Field(paragraph).Text.Should().Be("Bob");
+    }
+
     // Placing a caret in a cell forces a table layout, which needs the headless font manager.
     [Fact]
     public async Task Body_text_around_a_field_in_a_table_cell_is_editable_too() =>

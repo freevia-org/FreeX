@@ -17744,13 +17744,16 @@ public sealed partial class DocumentView : Control
 
     // ---- AV-CCEDIT: keyboard text editing INSIDE a content control -------------------------------
     //
-    // A paragraph that holds a content-control run fails IsPlainTextEditable / IsTextReplaceable, so
-    // every body-text path rejects it wholesale — and this renderer, unlike the WPF host, has no native
-    // editor to fall back on. That made a Plain-Text / Rich-Text control untypable even in an
-    // unprotected document, and made "Filling in Forms" protection — whose entire purpose is to let the
-    // user fill those fields in — a dead end. The paths below edit the CONTROL RUN itself (never the
-    // surrounding body text), gated by the shared ContentControlInteractionPlanner policy, so they are
-    // allowed while body editing is locked.
+    // A field's own text is not ordinary body text: it is editable only when the document's protection
+    // state AND the control's own lock allow it, and only for the kinds that take typed text (a check
+    // box, date picker and drop-down own their text). So the paths below run BEFORE the body paths and
+    // before their IsEditingLocked guards — that is exactly what "Filling in Forms" protection permits —
+    // and they rewrite the field's run span alone, never the body text around it. The body text around a
+    // field is handled by the ordinary paths; a <see cref="Cell"/> carries the control through their
+    // ParaCells → SetRuns round-trip so the w:sdt survives.
+    //
+    // A caret at the junction of two adjacent fields resolves to the first of them, which is also where
+    // typed text lands.
 
     /// <summary>
     /// The caret (and any selection) resolved onto one content control's run span: which paragraph runs
@@ -19067,6 +19070,11 @@ public sealed partial class DocumentView : Control
             return;
 
         if (NormalizedSelection() is not { } sel)
+            return;
+
+        // AV-CCEDIT: a content-locked field refuses to have its content removed, so a selection that
+        // reaches into one deletes nothing — Word likewise declines rather than deleting part of it.
+        if (SelectionReachesLockedContentControl(sel))
             return;
 
         var bodyRange = new DocumentTextRange(
@@ -24084,10 +24092,54 @@ public sealed partial class DocumentView : Control
         // empty text and contributes no cells, so it does not affect editability either.
         // AV-CCEDIT: a content control is likewise a run mark that <see cref="Cell"/> now carries through
         // the ParaCells → SetRuns round-trip, so the body text around a field is editable as in Word. The
-        // field's OWN text is additionally policy-gated (see TryResolveContentControlTextCaret).
-        paragraph.Runs.All(r => r.Image is null && r.Equation is null && r.FieldKind == RunFieldKind.None
+        // field's OWN text is additionally policy-gated (see TryResolveContentControlTextCaret). A
+        // CONTENT-LOCKED field is the exception: the range gestures that reach this predicate (replace,
+        // change case, list/format rebuilds) address character ranges rather than fields, and rewriting a
+        // locked field's characters is exactly what its lock forbids — so such a paragraph stays on the
+        // read-only path it was on before, while its unlocked neighbours became editable.
+        !HasLockedContentControl(paragraph)
+        && paragraph.Runs.All(r => r.Image is null && r.Equation is null && r.FieldKind == RunFieldKind.None
             && r.ComplexField is null && r.FootnoteId is null && r.EndnoteId is null
             && !IsFloatingDrawingRun(r));
+
+    /// <summary>
+    /// Whether a body selection overlaps the text of a content-locked field. Paragraphs fully inside the
+    /// selection count in whole; the first and last only over the selected part, so text next to a locked
+    /// field stays deletable.
+    /// </summary>
+    private bool SelectionReachesLockedContentControl((DocPosition Start, DocPosition End) selection)
+    {
+        for (var block = selection.Start.Block; block <= selection.End.Block; block++)
+        {
+            if (block < 0 || block >= _doc.Blocks.Count || _doc.Blocks[block] is not Paragraph paragraph)
+                continue;
+
+            var lo = block == selection.Start.Block ? selection.Start.Offset : 0;
+            var hi = block == selection.End.Block ? selection.End.Offset : int.MaxValue;
+            foreach (var span in ContentControlSpans(paragraph))
+            {
+                if (paragraph.Runs[span.FirstRunIndex].Control is not
+                    {
+                        LockMode: ContentControlLockMode.ContentLocked
+                            or ContentControlLockMode.ControlAndContentLocked
+                    })
+                {
+                    continue;
+                }
+
+                if (Math.Min(hi, span.Start + span.Length) > Math.Max(lo, span.Start))
+                    return true;
+            }
+        }
+
+        return false;
+    }
+
+    private static bool HasLockedContentControl(Paragraph paragraph) =>
+        paragraph.Runs.Any(run => run.Control is
+        {
+            LockMode: ContentControlLockMode.ContentLocked or ContentControlLockMode.ControlAndContentLocked
+        });
 
     /// <summary>
     /// AV-NOTE: whether a paragraph's TEXT may be edited in place. Word keeps the text around a
@@ -24102,6 +24154,8 @@ public sealed partial class DocumentView : Control
     /// </summary>
     private bool IsTextReplaceable(Paragraph paragraph) =>
         !IsEditingLocked
+        // AV-CCEDIT: see IsPlainTextEditable — a content-locked field freezes its paragraph's text.
+        && !HasLockedContentControl(paragraph)
         && paragraph.Runs.All(r => r.Image is null && r.Equation is null && r.FieldKind == RunFieldKind.None
             && r.ComplexField is null
             && !IsFloatingDrawingRun(r));
