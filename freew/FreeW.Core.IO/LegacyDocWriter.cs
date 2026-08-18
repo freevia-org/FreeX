@@ -36,13 +36,25 @@ namespace FreeW.Core.IO;
 ///   [chpBteEnd .. sedEnd)    PlcfSed (section plex)
 /// </para>
 /// </summary>
-internal static class LegacyDocWriter
+internal sealed class LegacyDocWriter
 {
     // -----------------------------------------------------------------------
     // Public entry point
     // -----------------------------------------------------------------------
 
-    public static void Write(TextDocument document, Stream destination)
+    /// <summary>
+    /// Writes <paramref name="document"/> to <paramref name="destination"/> as a Word 97-2003 (.doc) file.
+    /// </summary>
+    /// <remarks>
+    /// Each call gets its OWN writer instance. The offsets below are handed between the build
+    /// steps as instance state, so two documents saved at the same time cannot overwrite each
+    /// other's stream positions -- when they could, the loser wrote a FIB whose fcMac sat before
+    /// its fcMin and the resulting file would not open at all.
+    /// </remarks>
+    public static void Write(TextDocument document, Stream destination) =>
+        new LegacyDocWriter().WriteDocument(document, destination);
+
+    private void WriteDocument(TextDocument document, Stream destination)
     {
         ArgumentNullException.ThrowIfNull(document);
         ArgumentNullException.ThrowIfNull(destination);
@@ -53,9 +65,10 @@ internal static class LegacyDocWriter
         byte[] wordDocBytes = BuildWordDocumentStream(text);
         byte[] tableBytes   = BuildTableStream(text, wordDocBytes.Length);
 
-        // Pad to >= 4096 so they live in regular FAT sectors
-        byte[] wordDocStream = PadTo(wordDocBytes, MiniStreamCutoff);
-        byte[] tableStream   = PadTo(tableBytes,   MiniStreamCutoff);
+        // Pad to >= 4096 so they live in regular FAT sectors rather than the mini stream, and
+        // round up to a whole number of sectors so the declared size and the FAT chain agree.
+        byte[] wordDocStream = PadToSector(wordDocBytes, MiniStreamCutoff);
+        byte[] tableStream   = PadToSector(tableBytes,   MiniStreamCutoff);
 
         // Patch FIB FibRgFcLcb97 with the table-stream offsets computed during Build:
         PatchFibFcLcb(wordDocStream, StshfFcLcbIdx,      s_stshOffset,    s_stshSize);
@@ -65,8 +78,14 @@ internal static class LegacyDocWriter
         PatchFibFcLcb(wordDocStream, PlcfBteChpxFcLcbIdx,s_chpBteOffset,  s_chpBteSize);
         PatchFibFcLcb(wordDocStream, PlcfSedFcLcbIdx,    s_sedOffset,     s_sedSize);
 
+        // Declare each stream's REAL size. This used to hardcode MiniStreamCutoff, so every
+        // document whose WordDocument stream exceeded 4096 bytes -- roughly anything past 500
+        // characters, i.e. nearly every real document -- shipped a directory entry claiming 8
+        // sectors while the FAT chain ran the full length. Word and every other reader rejects
+        // that outright, so .doc export produced unopenable files and only the tiny documents
+        // in the test suite padded up to exactly 4096 and stayed self-consistent.
         WriteCfb(destination, wordDocStream, tableStream,
-            (uint)MiniStreamCutoff, (uint)MiniStreamCutoff);
+            (uint)wordDocStream.Length, (uint)tableStream.Length);
     }
 
     // -----------------------------------------------------------------------
@@ -75,6 +94,8 @@ internal static class LegacyDocWriter
 
     private const int SectorSize       = 512;
     private const int MiniStreamCutoff = 4096;
+    private const int FatEntriesPerSector = SectorSize / 4;
+    private const int HeaderDifatEntries  = 109;
 
     private const uint FREESECT   = 0xFFFFFFFF;
     private const uint ENDOFCHAIN = 0xFFFFFFFE;
@@ -99,23 +120,24 @@ internal static class LegacyDocWriter
     private const int ClxFcLcbIdx         = 33;  // fcClx / lcbClx
 
     // -----------------------------------------------------------------------
-    // State for inter-method coordination (single-threaded)
+    // Per-document state handed between the build steps below. INSTANCE, not static: a static
+    // here made two concurrent saves interleave and overwrite each other's offsets.
     // -----------------------------------------------------------------------
 
     // Table stream offsets (set by BuildTableStream, used by Write to patch FIB)
-    private static uint s_stshOffset,   s_stshSize;
-    private static uint s_ffnOffset,    s_ffnSize;
-    private static uint s_clxOffset,    s_clxSize;
-    private static uint s_papBteOffset, s_papBteSize;
-    private static uint s_chpBteOffset, s_chpBteSize;
-    private static uint s_sedOffset,    s_sedSize;
+    private uint s_stshOffset,   s_stshSize;
+    private uint s_ffnOffset,    s_ffnSize;
+    private uint s_clxOffset,    s_clxSize;
+    private uint s_papBteOffset, s_papBteSize;
+    private uint s_chpBteOffset, s_chpBteSize;
+    private uint s_sedOffset,    s_sedSize;
 
     // WordDocument stream positions (set by BuildWordDocumentStream, read by BuildTableStream)
-    private static int s_fcMin;     // byte offset of text start
-    private static int s_fcMac;     // byte offset past last text char
-    private static int s_sepxFc;    // byte offset of SEPX in WordDocument stream
-    private static int s_papFkpPn;  // FKP page number for PAPX (page * 512 = byte offset)
-    private static int s_chpFkpPn;  // FKP page number for CHPX
+    private int s_fcMin;     // byte offset of text start
+    private int s_fcMac;     // byte offset past last text char
+    private int s_sepxFc;    // byte offset of SEPX in WordDocument stream
+    private int s_papFkpPn;  // FKP page number for PAPX (page * 512 = byte offset)
+    private int s_chpFkpPn;  // FKP page number for CHPX
 
     // -----------------------------------------------------------------------
     // Text collection
@@ -145,7 +167,7 @@ internal static class LegacyDocWriter
     //   [PapFkpPage*512..+511] PAPX FKP (512 bytes)
     //   [ChpFkpPage*512..+511] CHPX FKP (512 bytes)
 
-    private static byte[] BuildWordDocumentStream(string text)
+    private byte[] BuildWordDocumentStream(string text)
     {
         byte[] textBytes = Encoding.Unicode.GetBytes(text);
         int fcMin = FibSize;
@@ -228,7 +250,7 @@ internal static class LegacyDocWriter
     // 1Table stream: STSH + STTBF/FFN + CLX + PlcBtePapx + PlcBteChpx + PlcfSed
     // -----------------------------------------------------------------------
 
-    private static byte[] BuildTableStream(string text, int wdStreamLength)
+    private byte[] BuildTableStream(string text, int wdStreamLength)
     {
         using var ms = new MemoryStream();
         using var w  = new BinaryWriter(ms, Encoding.Unicode, leaveOpen: true);
@@ -402,10 +424,17 @@ internal static class LegacyDocWriter
     // Helpers
     // -----------------------------------------------------------------------
 
-    private static byte[] PadTo(byte[] src, int minSize)
+    /// <summary>
+    /// Grows <paramref name="src"/> to at least <paramref name="minSize"/> bytes AND to a whole
+    /// number of <see cref="SectorSize"/> sectors, so the length written into the CFB directory
+    /// entry is exactly the length the FAT chain covers.
+    /// </summary>
+    private static byte[] PadToSector(byte[] src, int minSize)
     {
-        if (src.Length >= minSize) return src;
-        var r = new byte[minSize];
+        int target = Math.Max(src.Length, minSize);
+        target = CeilDiv(target, SectorSize) * SectorSize;
+        if (src.Length == target) return src;
+        var r = new byte[target];
         Buffer.BlockCopy(src, 0, r, 0, src.Length);
         return r;
     }
@@ -420,17 +449,40 @@ internal static class LegacyDocWriter
         byte[] wordDocStream, byte[] tableStream,
         uint wdLogicalSize, uint tblLogicalSize)
     {
-        int fatSector  = 0;
-        int dirSector  = 1;
-        int wdFirst    = 2;
         int wdSectors  = CeilDiv(wordDocStream.Length, SectorSize);
-        int tblFirst   = wdFirst + wdSectors;
         int tblSectors = CeilDiv(tableStream.Length, SectorSize);
 
-        uint[] fat = new uint[128];
-        for (int i = 0; i < 128; i++) fat[i] = FREESECT;
+        // How many sectors the FAT itself needs. Each FAT sector is also a sector the FAT has to
+        // describe, so adding one can push the total past another 128-entry boundary -- iterate to
+        // a fixed point. This used to be hardcoded to a single FAT sector, which caps a file at
+        // 128 sectors (64 KB): past that the writer indexed off the end of the array and threw,
+        // so saving any document over roughly 30,000 characters crashed instead of producing a file.
+        int fatSectors = 1;
+        while (true)
+        {
+            int total  = fatSectors + 1 + wdSectors + tblSectors;
+            int needed = Math.Max(1, CeilDiv(total, FatEntriesPerSector));
+            if (needed == fatSectors) break;
+            fatSectors = needed;
+        }
 
-        fat[fatSector] = FATSECT;
+        // Beyond 109 FAT sectors the header's DIFAT array is full and the format requires a DIFAT
+        // chain, which this writer does not emit. Refuse loudly rather than write a file whose FAT
+        // silently stops describing the tail of the document.
+        if (fatSectors > HeaderDifatEntries)
+        {
+            throw new NotSupportedException(
+                "This document is too large to save as Word 97-2003 (.doc). Save it as .docx instead.");
+        }
+
+        int dirSector = fatSectors;
+        int wdFirst   = dirSector + 1;
+        int tblFirst  = wdFirst + wdSectors;
+
+        uint[] fat = new uint[fatSectors * FatEntriesPerSector];
+        for (int i = 0; i < fat.Length; i++) fat[i] = FREESECT;
+
+        for (int i = 0; i < fatSectors; i++) fat[i] = FATSECT;
         fat[dirSector] = ENDOFCHAIN;
 
         for (int i = 0; i < wdSectors - 1; i++) fat[wdFirst + i] = (uint)(wdFirst + i + 1);
@@ -444,14 +496,14 @@ internal static class LegacyDocWriter
             tblFirst: (uint)tblFirst, tblSize: tblLogicalSize);
 
         using var bw = new BinaryWriter(dest, Encoding.Unicode, leaveOpen: true);
-        WriteCfbHeader(bw, fatSector, dirSector);
+        WriteCfbHeader(bw, fatSectors, dirSector);
         WriteFatSector(bw, fat);
         bw.Write(dirBytes);
         WritePadded(bw, wordDocStream);
         WritePadded(bw, tableStream);
     }
 
-    private static void WriteCfbHeader(BinaryWriter bw, int fatSector, int dirSector)
+    private static void WriteCfbHeader(BinaryWriter bw, int fatSectors, int dirSector)
     {
         bw.Write(new byte[] { 0xD0, 0xCF, 0x11, 0xE0, 0xA1, 0xB1, 0x1A, 0xE1 });
         bw.Write(new byte[16]);
@@ -462,7 +514,7 @@ internal static class LegacyDocWriter
         bw.Write((ushort)6);
         bw.Write(new byte[6]);
         bw.Write((uint)0);
-        bw.Write((uint)1);
+        bw.Write((uint)fatSectors);
         bw.Write((uint)dirSector);
         bw.Write((uint)0);
         bw.Write((uint)MiniStreamCutoff);
@@ -470,14 +522,17 @@ internal static class LegacyDocWriter
         bw.Write((uint)0);
         bw.Write(ENDOFCHAIN);
         bw.Write((uint)0);
-        bw.Write((uint)fatSector);
-        for (int i = 1; i < 109; i++) bw.Write(FREESECT);
+
+        // DIFAT: the FAT sectors occupy sectors 0..fatSectors-1, in order.
+        for (int i = 0; i < HeaderDifatEntries; i++)
+            bw.Write(i < fatSectors ? (uint)i : FREESECT);
     }
 
     private static void WriteFatSector(BinaryWriter bw, uint[] fat)
     {
         foreach (uint v in fat) bw.Write(v);
     }
+
 
     private static byte[] BuildDirectory(uint wdFirst, uint wdSize, uint tblFirst, uint tblSize)
     {
