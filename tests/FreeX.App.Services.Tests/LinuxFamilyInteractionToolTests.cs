@@ -604,7 +604,11 @@ public sealed class LinuxFamilyInteractionToolTests
                     UseShellExecute = false,
                     CreateNoWindow = true
                 });
-                if (process is not null && process.WaitForExit(5000) && process.HasExited)
+                // Generous: this only asks whether PowerShell starts at all. Five seconds was
+                // enough alone (the probe takes well under a second) but not in a loaded full-suite
+                // run, where the timeout expired and the test concluded PowerShell was missing on a
+                // machine that plainly has it.
+                if (process is not null && process.WaitForExit(60_000) && process.HasExited)
                     return candidate;
             }
             catch (Win32Exception)
