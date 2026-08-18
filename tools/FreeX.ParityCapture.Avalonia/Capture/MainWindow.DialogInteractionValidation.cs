@@ -364,7 +364,8 @@ public sealed partial class MainWindow
     private async Task<string> ExerciseSafeDefaultEnterAsync(string surfaceId, Func<Task> opener)
     {
         var preexisting = OwnedWindows.ToHashSet();
-        var openerTask = RunParityModalOpenerAsync(opener);
+        // Contract probe: keep the dialog alive past the inspection callback so Enter can reach it.
+        var openerTask = RunParityModalOpenerAsync(opener, suppressInspectionAutoClose: true);
         var dialog = await WaitForOwnedDialogAsync(preexisting);
         if (dialog is null)
         {

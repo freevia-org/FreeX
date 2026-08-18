@@ -1,4 +1,4 @@
-using System.Globalization;
+﻿using System.Globalization;
 using Avalonia;
 using Avalonia.Automation;
 using Avalonia.Controls;
@@ -2493,7 +2493,7 @@ public sealed partial class MainWindow
         try
         {
             // Fire-and-forget: schedule the modal opener after this method starts polling for its owned window.
-            openerTask = RunParityModalOpenerAsync(opener);
+            openerTask = RunParityModalOpenerAsync(opener, suppressInspectionAutoClose: !render);
         }
         catch (Exception ex)
         {
@@ -2633,7 +2633,7 @@ public sealed partial class MainWindow
         Task openerTask;
         try
         {
-            openerTask = RunParityModalOpenerAsync(opener);
+            openerTask = RunParityModalOpenerAsync(opener, suppressInspectionAutoClose: !render);
         }
         catch (Exception ex)
         {
@@ -2824,12 +2824,16 @@ public sealed partial class MainWindow
             .Select(control => control.Tag as Action<int>)
             .FirstOrDefault(selector => selector is not null);
 
-    private static Task RunParityModalOpenerAsync(Func<Task> opener)
+    private static Task RunParityModalOpenerAsync(
+        Func<Task> opener,
+        bool suppressInspectionAutoClose = false)
     {
         var completion = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         Dispatcher.UIThread.Post(
             async () =>
             {
+                var previousSuppression = SuppressDialogInspectionAutoClose;
+                SuppressDialogInspectionAutoClose = suppressInspectionAutoClose;
                 try
                 {
                     await opener();
@@ -2838,6 +2842,10 @@ public sealed partial class MainWindow
                 catch (Exception ex)
                 {
                     completion.TrySetException(ex);
+                }
+                finally
+                {
+                    SuppressDialogInspectionAutoClose = previousSuppression;
                 }
             },
             DispatcherPriority.Background);
