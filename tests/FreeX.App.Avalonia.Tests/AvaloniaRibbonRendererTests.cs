@@ -339,9 +339,15 @@ public sealed class AvaloniaRibbonRendererTests
         var ribbon = AvaloniaRibbonRenderer.BuildRibbon(definition, registry);
 
         var tabControl = Assert.IsType<TabControl>(ribbon);
-        Assert.Equal(definition.VisibleTabs.Count() + 1, tabControl.Items.Count);
+        // The renderer supplies the File tab itself (it is the backstage trigger) and drops the
+        // definition's own File tab, so the strip holds one File tab plus every non-File visible
+        // tab -- the same total as VisibleTabs. The previous "+ 1" encoded a duplicate: two items
+        // tagged "FileTab", with index 1 landing on the empty copy rather than Home.
+        Assert.Equal(definition.VisibleTabs.Count(), tabControl.Items.Count);
         Assert.Equal("FileTab", ((TabItem)tabControl.Items[0]!).Tag);
+        Assert.Single(tabControl.Items.OfType<TabItem>(), item => (item.Tag as string) == "FileTab");
         Assert.Equal(1, tabControl.SelectedIndex);
+        Assert.Equal("HomeTab", ((TabItem)tabControl.Items[1]!).Tag);
         Assert.All(tabControl.Items, item => Assert.IsType<TabItem>(item));
     });
 

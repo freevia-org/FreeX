@@ -621,7 +621,7 @@ public static class AvaloniaRibbonRenderer
         tabControl.Items.Add(BuildFileTabItem(resolvedPalette));
 
         var initialTabs = contextSource is null
-            ? (IReadOnlyList<RibbonTab>)definition.VisibleTabs.ToArray()
+            ? (IReadOnlyList<RibbonTab>)WithoutDefinitionFileTab(definition.VisibleTabs).ToArray()
             : ResolveTabStripTabs(definition, contextSource.Current);
 
         foreach (var tab in initialTabs)
@@ -1173,13 +1173,25 @@ public static class AvaloniaRibbonRenderer
         return -1;
     }
 
+    /// <summary>
+    /// Drops the definition's own File tab from the strip.
+    /// </summary>
+    /// <remarks>
+    /// The renderer always prepends its own File tab (<see cref="BuildFileTabItem"/>), which is the
+    /// one wired to open the backstage. Definitions also declare a File tab -- the WPF host renders
+    /// that one -- so leaving it in produced two tabs tagged "FileTab": a working File tab followed
+    /// by an empty duplicate, and the initial selection landed on the duplicate rather than Home.
+    /// </remarks>
+    private static IEnumerable<RibbonTab> WithoutDefinitionFileTab(IEnumerable<RibbonTab> tabs) =>
+        tabs.Where(tab => !string.Equals(tab.Id, FileRibbonTabId, StringComparison.Ordinal));
+
     private static IReadOnlyList<RibbonTab> ResolveTabStripTabs(RibbonDefinition definition, RibbonContextState state)
     {
-        var resolved = RibbonContextResolver.Resolve(definition, state);
+        var resolved = WithoutDefinitionFileTab(RibbonContextResolver.Resolve(definition, state)).ToArray();
         if (!resolved.Any(tab => tab.IsContextual))
             return resolved;
 
-        var ordered = new List<RibbonTab>(resolved.Count);
+        var ordered = new List<RibbonTab>(resolved.Length);
         var contextual = resolved.Where(tab => tab.IsContextual)
             .OrderBy(tab => tab.Context?.DisplayOrder ?? int.MaxValue)
             .ToArray();

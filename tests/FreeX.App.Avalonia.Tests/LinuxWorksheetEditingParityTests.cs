@@ -47,10 +47,15 @@ public sealed class LinuxWorksheetEditingParityTests
             window.Measure(new Size(1120, 720));
             window.Arrange(new Rect(0, 0, 1120, 720));
 
+            // Group rather than ToDictionary: the ribbon's adaptive panel keeps more than one realized
+            // layout variant for a laid-out tab, so a command can appear more than once in the logical
+            // tree. That stayed hidden while the strip carried a duplicate File tab and startup
+            // selection landed on the empty copy, leaving Home never laid out.
             var buttons = window.RibbonControlForTest!.GetLogicalDescendants()
                 .OfType<Button>()
                 .Where(button => button.Tag is "Fill Color" or "Font Color")
-                .ToDictionary(button => (string)button.Tag!);
+                .GroupBy(button => (string)button.Tag!)
+                .ToDictionary(group => group.Key, group => group.First());
 
             buttons.Keys.Should().Contain(["Fill Color", "Font Color"]);
             var fillPalette = buttons["Fill Color"].Flyout.Should().BeOfType<Flyout>().Subject;

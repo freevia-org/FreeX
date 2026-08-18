@@ -2287,6 +2287,11 @@ public sealed partial class MainWindow
     {
         var definition = AvaloniaRibbonComposition.BuildDefinition();
         return definition.VisibleTabs
+            // The File tab is a backstage trigger, not a renderable ribbon surface: selecting it
+            // opens the backstage and the renderer bounces the strip back to the last content tab,
+            // so "tab.File" could only ever photograph whichever tab was showing before. The
+            // backstage has its own backstage.* surfaces.
+            .Where(tab => !string.Equals(tab.Id, global::FreeX.Ribbon.Definitions.FreeXRibbonTabIds.File, StringComparison.Ordinal))
             .Select(tab => ("tab." + SurfaceName(tab), tab.Id))
             .ToArray();
     }
