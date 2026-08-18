@@ -500,7 +500,7 @@ public sealed class SlideShowWindowHeadlessTests
         var ran = await OnUiThread(() =>
         {
             var pres = MakePresentation(2);
-            var window = new SlideShowWindow(pres, 0);
+            var window = new SlideShowWindow(pres, 0, CreateDeferredRecordingCaptureBackend());
             window.ApplyPresenterToolIntent(
                 SlideShowTimingIntent.RecordTimings,
                 SlideShowRecordingMediaIntent.NarrationAndMedia,
