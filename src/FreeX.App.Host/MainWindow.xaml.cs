@@ -189,6 +189,13 @@ public partial class MainWindow : Window, IWorkbookWindow, IFormulaPointModeWork
     private static readonly CellColor RibbonDefaultFontColor = new(255, 0, 0);
     private CellColor? _selectedFillColor = RibbonDefaultFillColor;
     private CellColor _selectedFontColor = RibbonDefaultFontColor;
+    // R142-services-theme-colors-1: the theme slot/tint of the last color picked from the ribbon's
+    // Font/Fill Color gallery, when it came from a Theme Colors swatch (see
+    // MainWindow.HomeFormatting.cs FontColorPickerBtn_Click/FillColorPickerBtn_Click/
+    // ApplySelectedFontColor/ApplySelectedFillColor). Null whenever the swatch/color/default in use
+    // is not theme-linked.
+    private WorkbookThemeColorReference? _selectedFontThemeColor;
+    private WorkbookThemeColorReference? _selectedFillThemeColor;
     private bool _currentShapeHasFill = true;
     private CellColor? _currentShapeFillColor;
     private CellColor? _currentShapeOutlineColor;

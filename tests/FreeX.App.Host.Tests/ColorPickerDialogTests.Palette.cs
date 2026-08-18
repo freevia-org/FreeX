@@ -92,7 +92,7 @@ public sealed partial class ColorPickerDialogTests
                 var firstRow = panel.Children
                     .OfType<Button>()
                     .Take(10)
-                    .Select(button => (CellColor)button.Tag)
+                    .Select(button => ((CellColorSwatch)button.Tag).Color)
                     .ToArray();
 
                 firstRow.Should().Equal(

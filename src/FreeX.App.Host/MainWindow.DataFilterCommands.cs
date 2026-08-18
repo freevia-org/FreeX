@@ -81,8 +81,15 @@ public partial class MainWindow
 
     private void SortCustomButton_Click(object sender, RoutedEventArgs e)
     {
-        if (SheetGrid.SelectedRange is not { } range) return;
+        if (SheetGrid.SelectedRange is not { } rawRange) return;
         if (TryRejectInvalidSortSelection()) return;
+
+        // R142-services-sort-customdialog-1: resolve Excel's Sort Warning (expand to the whole
+        // adjacent data block?) up front, exactly like Quick Sort/ribbon A-Z, so the dialog's
+        // column/row/color/icon choices below are built from the range that will actually be
+        // sorted -- not the raw (possibly narrower) selection, which would silently misalign the
+        // dialog's column offsets against whatever wider range the warning later expanded into.
+        var range = _session.ResolveSortRangeAfterAdjacentDataPrompt(rawRange);
         var sheet = _workbook.GetSheet(_currentSheetId);
         var hasHeaders = DetectSortDialogHasHeaders(range);
         var dialog = new SortDialog(
@@ -109,7 +116,7 @@ public partial class MainWindow
             SortDialog.PlannerText);
 
         if (!TryExecuteWorksheetLayout(
-                () => _session.SortSelectedRange(sortPlan),
+                () => _session.SortSelectedRange(sortPlan, range),
                 "Sort"))
             return;
         RecalculateAfterFilterOrSort();
@@ -177,8 +184,11 @@ public partial class MainWindow
 
     private bool ApplyAutoFilterDialogResult(GridRange range, uint filterColOffset, AutoFilterDialogResult result, string title)
     {
+        if (_workbook.GetSheet(_currentSheetId) is not { } sheet)
+            return false;
+
         var plan = _filterWorkflowSession.PlanDialogResult(
-            _currentSheetId,
+            sheet,
             range,
             filterColOffset,
             result);

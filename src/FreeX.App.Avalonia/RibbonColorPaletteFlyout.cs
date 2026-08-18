@@ -26,7 +26,7 @@ internal static class RibbonColorPaletteFlyout
         RecentColorsStore recentColors,
         string topActionLabel,
         Action topAction,
-        Action<CellColor> applyColor,
+        Action<CellColor, WorkbookThemeColorReference?> applyColor,
         string moreColorsLabel,
         Func<Task<CellColor?>> showMoreColorsAsync)
     {
@@ -40,10 +40,13 @@ internal static class RibbonColorPaletteFlyout
 
         Flyout? flyout = null;
 
-        void Apply(CellColor color)
+        // R142-services-theme-colors-1: themeColor is non-null only for an Accent1-6 theme swatch
+        // (see CellColorPalettePlanner.ThemeAccentColumn) -- Standard/Recent/Custom swatches and
+        // "More Colors..." always pass null, so they keep applying a flat color exactly as before.
+        void Apply(CellColor color, WorkbookThemeColorReference? themeColor)
         {
             recentColors.Remember(color);
-            applyColor(color);
+            applyColor(color, themeColor);
             flyout?.Hide();
         }
 
@@ -84,7 +87,7 @@ internal static class RibbonColorPaletteFlyout
         {
             flyout?.Hide();
             if (await showMoreColorsAsync() is { } selected)
-                Apply(selected);
+                Apply(selected, themeColor: null);
         }, "RibbonColorPaletteMoreColors");
         root.Children.Add(moreColors);
 
@@ -105,7 +108,7 @@ internal static class RibbonColorPaletteFlyout
 
     private static Grid CreateThemeGrid(
         IReadOnlyList<CellColorThemeColumn> columns,
-        Action<CellColor> applyColor)
+        Action<CellColor, WorkbookThemeColorReference?> applyColor)
     {
         var grid = new Grid
         {
@@ -140,7 +143,7 @@ internal static class RibbonColorPaletteFlyout
 
     private static Grid CreateSwatchRow(
         IReadOnlyList<CellColorSwatch> swatches,
-        Action<CellColor> applyColor,
+        Action<CellColor, WorkbookThemeColorReference?> applyColor,
         string automationIdPrefix)
     {
         var grid = new Grid
@@ -161,11 +164,12 @@ internal static class RibbonColorPaletteFlyout
 
     private static Button CreateSwatchButton(
         CellColorSwatch swatch,
-        Action<CellColor> applyColor,
+        Action<CellColor, WorkbookThemeColorReference?> applyColor,
         string automationId,
         string accessibleName)
     {
         var color = swatch.Color;
+        var themeColor = swatch.ThemeColor;
         var button = new Button
         {
             Width = SwatchSize,
@@ -181,7 +185,7 @@ internal static class RibbonColorPaletteFlyout
         AutomationProperties.SetAutomationId(button, automationId);
         AutomationProperties.SetName(button, accessibleName);
         ToolTip.SetTip(button, accessibleName);
-        button.Click += (_, _) => applyColor(color);
+        button.Click += (_, _) => applyColor(color, themeColor);
         return button;
     }
 

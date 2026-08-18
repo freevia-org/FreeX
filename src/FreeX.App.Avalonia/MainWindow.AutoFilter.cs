@@ -641,7 +641,7 @@ public sealed partial class MainWindow
     private void RunAutoFilterResult(GridRange range, uint columnOffset, AutoFilterDialogResult result)
     {
         var plan = _filterWorkflowSession.PlanDialogResult(
-            _session.ActiveSheet.Id,
+            _session.ActiveSheet,
             range,
             columnOffset,
             result);

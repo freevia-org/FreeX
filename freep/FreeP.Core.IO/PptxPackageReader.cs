@@ -78,9 +78,18 @@ public static class PptxPackageReader
     /// <summary>Reads a .pptx from any stream and returns a populated <see cref="Presentation"/>.</summary>
     public static Presentation Read(Stream stream)
     {
-        // Copy to MemoryStream so ZipArchive can seek
+        // Reject an oversized file before buffering it, the same way the xlsx loader does: check the
+        // declared length up front for a seekable stream, then bound the copy itself so a non-seekable
+        // (or lying-length) stream can never grow the in-memory buffer past the cap either.
+        if (stream.CanSeek)
+        {
+            var declaredLength = Math.Max(0, stream.Length - stream.Position);
+            WorkbookOpenSizeGuard.EnsureFileWithinLimit(declaredLength);
+        }
+
+        // Copy to MemoryStream so ZipArchive can seek.
         var ms = new MemoryStream();
-        stream.CopyTo(ms);
+        CopyToMemoryStreamWithLimit(stream, ms, WorkbookOpenSizeGuard.DefaultMaxFileBytes);
         ms.Position = 0;
 
         using var archive = new ZipArchive(ms, ZipArchiveMode.Read, leaveOpen: false);
@@ -91,6 +100,37 @@ public static class PptxPackageReader
         presentation.PackageSnapshot = snapshot;
         presentation.PackageKind = DetectPackageKind(snapshot);
         return presentation;
+    }
+
+    /// <summary>
+    /// Copies <paramref name="source"/> into <paramref name="destination"/> in bounded chunks, throwing
+    /// <see cref="WorkbookTooLargeException"/> the moment the copy would exceed <paramref name="maxFileBytes"/>
+    /// instead of first buffering the whole (possibly multi-gigabyte or unbounded) input. This is the same
+    /// bound-during-copy shape as <c>XlsxFileAdapter.CopyToMemoryStreamWithLimit</c>.
+    /// </summary>
+    private static void CopyToMemoryStreamWithLimit(Stream source, MemoryStream destination, long maxFileBytes)
+    {
+        var buffer = new byte[81920];
+        while (true)
+        {
+            var remainingAllowance = maxFileBytes - destination.Length;
+            var maxRead = remainingAllowance >= buffer.Length
+                ? buffer.Length
+                : (int)Math.Max(1, remainingAllowance + 1);
+            var read = source.Read(buffer, 0, maxRead);
+            if (read == 0)
+                return;
+
+            if (read > remainingAllowance)
+            {
+                throw new WorkbookTooLargeException(
+                    string.Create(
+                        CultureInfo.InvariantCulture,
+                        $"The file exceeds the {maxFileBytes:N0} byte open limit."));
+            }
+
+            destination.Write(buffer, 0, read);
+        }
     }
 
     private static PresentationPackageKind DetectPackageKind(PptxPackageSnapshot snapshot)

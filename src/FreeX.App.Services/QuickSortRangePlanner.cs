@@ -48,16 +48,64 @@ public static class QuickSortRangePlanner
         if (region.ColCount <= selectedRange.ColCount && region.RowCount <= selectedRange.RowCount)
             return null;
 
+        // A whole-column or whole-row selection (e.g. clicking a column header, then Sort A-Z --
+        // the single most common way to trigger a sort) reaches CellAddress.MaxRow/MaxCol far past
+        // any real data. Comparing that raw against a real-data region below would always fail the
+        // "region contains the whole selection" check, so the warning would never fire for exactly
+        // the gesture it exists to protect. Clamp the selection to the sheet's real data extent
+        // before comparing so this reads the same as an ordinary partial-column/row selection.
+        var comparisonRange = ClampToUsedRange(sheet, selectedRange);
+
+        // Real Excel never shows the Sort Warning inside a genuine structured Table (ListObject) --
+        // the table itself already defines the record boundary, so a Table sort silently operates
+        // on the whole table for the chosen column with no prompt. Suppress the warning whenever
+        // the (data-clamped) selection sits entirely inside one of the sheet's tables.
+        if (IsFullyInsideStructuredTable(sheet, comparisonRange))
+            return null;
+
         // Only offer to expand when the current region actually contains the whole selection --
         // GetCurrentRegion floods outward from a single anchor point, so a selection that reaches
         // past the natural block boundary in some other direction would not be a subset of it.
-        if (region.Start.Row > selectedRange.Start.Row || region.Start.Col > selectedRange.Start.Col ||
-            region.End.Row < selectedRange.End.Row || region.End.Col < selectedRange.End.Col)
+        if (region.Start.Row > comparisonRange.Start.Row || region.Start.Col > comparisonRange.Start.Col ||
+            region.End.Row < comparisonRange.End.Row || region.End.Col < comparisonRange.End.Col)
         {
             return null;
         }
 
         return region;
+    }
+
+    /// <summary>
+    /// Shrinks <paramref name="selectedRange"/>'s end corner to the sheet's actual used-range
+    /// extent when it reaches past real data (the case for a whole-column/whole-row selection,
+    /// whose End.Row/End.Col sit at <see cref="CellAddress.MaxRow"/>/<see cref="CellAddress.MaxCol"/>).
+    /// The start corner is left untouched -- it is always inside the real sheet for the selections
+    /// this planner is asked about. Returns <paramref name="selectedRange"/> unchanged when the
+    /// sheet has no used range at all, or when the selection is already within it.
+    /// </summary>
+    private static GridRange ClampToUsedRange(Sheet sheet, GridRange selectedRange)
+    {
+        if (sheet.GetUsedRange() is not { } usedRange)
+            return selectedRange;
+
+        var endRow = Math.Min(selectedRange.End.Row, Math.Max(usedRange.End.Row, selectedRange.Start.Row));
+        var endCol = Math.Min(selectedRange.End.Col, Math.Max(usedRange.End.Col, selectedRange.Start.Col));
+        if (endRow == selectedRange.End.Row && endCol == selectedRange.End.Col)
+            return selectedRange;
+
+        return new GridRange(selectedRange.Start, new CellAddress(selectedRange.Start.Sheet, endRow, endCol));
+    }
+
+    /// <summary>True when <paramref name="range"/> sits entirely inside one of the sheet's structured (ListObject) tables.</summary>
+    private static bool IsFullyInsideStructuredTable(Sheet sheet, GridRange range)
+    {
+        foreach (var table in sheet.StructuredTables)
+        {
+            if (table.Range.Contains(range))
+                return true;
+        }
+
+        return false;
     }
 
     private static CellAddress ResolveActiveCell(GridRange selectedRange, CellAddress? activeCell)

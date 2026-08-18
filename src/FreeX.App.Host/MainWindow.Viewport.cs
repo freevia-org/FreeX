@@ -339,6 +339,25 @@ public partial class MainWindow
             : _worksheetViewStates.GetOrSeed(sheet);
 
     /// <summary>
+    /// R142-services-freeze-split-newwindow-1: seeds THIS (brand-new secondary) window's own
+    /// <see cref="_worksheetViewStates"/> for <paramref name="source"/>'s current sheet from
+    /// <paramref name="source"/>'s own effective view state, before this window has rendered that
+    /// sheet at all. Called from <see cref="ViewNewWindowBtn_Click"/> right after
+    /// <see cref="SetNewWindowSourceHint"/>, so <see cref="GetEffectiveViewState"/>'s lazy
+    /// <see cref="WorksheetViewStateStore.GetOrSeed"/> finds an already-seeded snapshot here
+    /// instead of falling back to the shared <see cref="Sheet"/> fields (which may have been last
+    /// written by an unrelated third window).
+    /// </summary>
+    internal void SeedWorksheetViewStateFromSourceWindow(MainWindow source)
+    {
+        ArgumentNullException.ThrowIfNull(source);
+        if (source._workbook.GetSheet(source._currentSheetId) is not { } sourceSheet)
+            return;
+
+        _worksheetViewStates.Set(sourceSheet.Id, source.GetEffectiveViewState(sourceSheet));
+    }
+
+    /// <summary>
     /// Records this window's own just-applied view-mode/zoom/display-toggle/Freeze-Panes/Split
     /// change so it survives a sibling window later mutating the shared <see cref="Sheet"/>'s
     /// corresponding fields. Call once, right after successfully executing a

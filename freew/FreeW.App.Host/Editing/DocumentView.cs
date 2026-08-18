@@ -723,6 +723,34 @@ public sealed partial class DocumentView : RichTextBox
             e.Handled = true;
             return;
         }
+
+        if (!TryPrepareNativeFallback(out var restoreReadOnly))
+        {
+            // The portable body-edit session declined (TryApplyBodyTextInput above) AND the caret/selection
+            // sits inside a content control this shell must not let typing bypass: either the control itself
+            // is locked (w:lock="contentLocked"/"sdtContentLocked"), or Filling-In-Forms protection does not
+            // grant FormFieldEdit here. Block outright instead of falling to base.OnPreviewTextInput, which
+            // would mutate the live FlowDocument with no knowledge of the lock at all (freew-cc-2).
+            e.Handled = true;
+            return;
+        }
+
+        if (restoreReadOnly)
+        {
+            // An editable content-control field under Filling-In-Forms protection: IsReadOnly is set for
+            // ordinary body text (freew-cc-1), so it must be cleared for just this one native edit and
+            // restored immediately after, rather than never letting native editing reach the field at all.
+            try
+            {
+                base.OnPreviewTextInput(e);
+            }
+            finally
+            {
+                IsReadOnly = true;
+            }
+            return;
+        }
+
         base.OnPreviewTextInput(e);
     }
 
@@ -763,9 +791,67 @@ public sealed partial class DocumentView : RichTextBox
                 e.Handled = true;
                 return;
             }
+
+            // Same choke point as OnPreviewTextInput: a Backspace/Delete the portable body-edit session
+            // declined must not silently fall through to native deletion when it lands on a locked content
+            // control (freew-cc-2), and must not stay blocked by the document-wide IsReadOnly flag when it
+            // lands on a content-control field Filling-In-Forms protection does permit editing (freew-cc-1).
+            if (!TryPrepareNativeFallback(out var restoreReadOnly))
+            {
+                e.Handled = true;
+                return;
+            }
+
+            if (restoreReadOnly)
+            {
+                try
+                {
+                    base.OnPreviewKeyDown(e);
+                }
+                finally
+                {
+                    IsReadOnly = true;
+                }
+                return;
+            }
         }
 
         base.OnPreviewKeyDown(e);
+    }
+
+    /// <summary>
+    /// The single choke point that decides whether a keystroke the portable body-edit session declined
+    /// (typing or Backspace/Delete) may still reach native RichTextBox editing -- the WPF host's
+    /// "structural fallback" used for headers/footers/tables and other content the model-aware path can't
+    /// resolve (see <see cref="InsertText"/>). A position outside any content control keeps the existing
+    /// behavior unchanged: native editing proceeds exactly as before, gated only by the document-wide
+    /// <see cref="IsReadOnly"/> flag. A position inside a content control is instead judged directly
+    /// against <see cref="ContentControlInteractionPlanner.CanEditExistingContentControl"/> -- the same
+    /// check the mouse-driven checkbox/dropdown/date-picker interactions already use -- so a content-locked
+    /// control (<see cref="ContentControlLockMode.ContentLocked"/>/<see cref="ContentControlLockMode.ControlAndContentLocked"/>)
+    /// can never be bypassed by keyboard editing, and an unlocked Plain-Text/Rich-Text field stays editable
+    /// even while Filling-In-Forms protection has set <see cref="IsReadOnly"/> for ordinary body text. When
+    /// the latter case requires transiently clearing <see cref="IsReadOnly"/> for the one native call,
+    /// <paramref name="restoreReadOnly"/> reports true so the caller restores it immediately afterward.
+    /// </summary>
+    private bool TryPrepareNativeFallback(out bool restoreReadOnly)
+    {
+        restoreReadOnly = false;
+        if ((Selection.Start.Parent as WpfRun ?? CaretPosition?.Parent as WpfRun)
+            is not { Tag: RunMarkers { Control: { } marker } })
+        {
+            return true;
+        }
+
+        if (!AllowsContentControlInteraction(marker.Control))
+            return false;
+
+        if (IsReadOnly)
+        {
+            IsReadOnly = false;
+            restoreReadOnly = true;
+        }
+        return true;
     }
 
     private static DocumentEditorInputKey ToEditorInputKey(Key key) => key switch
@@ -16765,7 +16851,7 @@ public sealed partial class DocumentView : RichTextBox
     // --- formatting resolution (run/paragraph -> style -> document default) ---
 
     private static RunFormatting Resolve(ModelRun run, ModelParagraph paragraph, TextDocument document)
-        => DocumentRunFormattingResolver.Resolve(document, paragraph, run.Formatting);
+        => DocumentRunFormattingResolver.Resolve(document, paragraph, run.Formatting, run.StyleId);
 
     private static ParagraphFormatting Resolve(ModelParagraph paragraph, TextDocument document) =>
         DocumentParagraphFormattingResolver.Resolve(document, paragraph);

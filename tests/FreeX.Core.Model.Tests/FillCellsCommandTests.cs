@@ -280,4 +280,87 @@ public sealed class FillCellsCommandTests
             .WhoseValue.Should().Be(sourceGuide);
     }
 
+    // R142-comments-notes-1: Ctrl+D/Fill Down (FillCellsCommand) must carry a source cell's
+    // legacy note (Comments/CommentAuthors/ShownComments) and threaded comment to every fill
+    // target, exactly like it already does for Hyperlinks, and undo must restore precisely what
+    // was at the target beforehand rather than leaving the fill's comment behind or wiping a
+    // pre-existing target comment outright.
+    [Fact]
+    public void FillDown_CopiesLegacyNoteAndThreadedCommentAndUndoRestoresTargetOriginals()
+    {
+        var workbook = new Workbook("test");
+        var sheet = workbook.AddSheet("Sheet1");
+        var source = new CellAddress(sheet.Id, 1, 1);
+        var target = new CellAddress(sheet.Id, 2, 1);
+        sheet.SetCell(source, Cell.FromValue(new TextValue("Example")));
+        sheet.Comments[source] = "Source note";
+        sheet.CommentAuthors[source] = "Alice";
+        sheet.ShownComments.Add(source);
+        sheet.ThreadedComments[source] = new ThreadedComment("Source thread") { Id = "{SRC-ID}" };
+
+        // The fill target already has its OWN pre-existing note before the fill overwrites it --
+        // undo must restore exactly this, not just blank the target out.
+        sheet.SetCell(target, Cell.FromValue(new TextValue("Old")));
+        sheet.Comments[target] = "Original target note";
+        sheet.CommentAuthors[target] = "Bob";
+        sheet.ThreadedComments[target] = new ThreadedComment("Original target thread") { Id = "{DST-ID}" };
+        var context = new TestCommandContext(workbook);
+
+        var command = new FillCellsCommand(
+            sheet.Id,
+            new GridRange(source, target),
+            FillCellsDirection.Down);
+
+        command.Apply(context).Success.Should().BeTrue();
+
+        sheet.GetCell(target)!.Value.Should().Be(new TextValue("Example"));
+        sheet.Comments[target].Should().Be("Source note");
+        sheet.CommentAuthors[target].Should().Be("Alice");
+        sheet.ShownComments.Should().Contain(target);
+        sheet.ThreadedComments[target].Text.Should().Be("Source thread");
+        // The copy must mint its own thread id rather than duplicating the source's persisted id
+        // (mirrors CopyRangeCommand.ClonedThreadedCommentForNewAddress).
+        sheet.ThreadedComments[target].Id.Should().BeNull();
+
+        command.Revert(context);
+
+        sheet.Comments[target].Should().Be("Original target note");
+        sheet.CommentAuthors[target].Should().Be("Bob");
+        sheet.ShownComments.Should().NotContain(target);
+        sheet.ThreadedComments[target].Text.Should().Be("Original target thread");
+        sheet.ThreadedComments[target].Id.Should().Be("{DST-ID}");
+    }
+
+    // Sibling test: an unrelated cell outside the fill range keeps its own note completely
+    // untouched by a fill (and by that fill's undo), proving the new comment-carry logic is
+    // scoped to the actual fill targets and doesn't leak into neighbouring cells.
+    [Fact]
+    public void FillDown_LeavesUnrelatedCellsNoteUntouched()
+    {
+        var workbook = new Workbook("test");
+        var sheet = workbook.AddSheet("Sheet1");
+        var source = new CellAddress(sheet.Id, 1, 1);
+        var target = new CellAddress(sheet.Id, 2, 1);
+        var unrelated = new CellAddress(sheet.Id, 1, 3);
+        sheet.SetCell(source, Cell.FromValue(new TextValue("Example")));
+        sheet.Comments[source] = "Source note";
+        sheet.SetCell(unrelated, Cell.FromValue(new TextValue("Untouched")));
+        sheet.Comments[unrelated] = "Unrelated note";
+        sheet.CommentAuthors[unrelated] = "Carol";
+        var context = new TestCommandContext(workbook);
+
+        var command = new FillCellsCommand(
+            sheet.Id,
+            new GridRange(source, target),
+            FillCellsDirection.Down);
+
+        command.Apply(context).Success.Should().BeTrue();
+        sheet.Comments[unrelated].Should().Be("Unrelated note");
+        sheet.CommentAuthors[unrelated].Should().Be("Carol");
+
+        command.Revert(context);
+        sheet.Comments[unrelated].Should().Be("Unrelated note");
+        sheet.CommentAuthors[unrelated].Should().Be("Carol");
+    }
+
 }

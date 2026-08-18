@@ -3,7 +3,16 @@ using FreeX.Core.Model;
 
 namespace FreeX.App.Services;
 
-public sealed record CellColorSwatch(string Hex, CellColor Color);
+/// <summary>
+/// A single color-picker swatch. <paramref name="ThemeColor"/> is non-null only for a swatch drawn
+/// from an Accent1-6 theme column (see <see cref="CellColorPalettePlanner.ThemeAccentColumn"/>) --
+/// it records which theme slot/tint the swatch resolves to, so a caller that applies it can attach
+/// that same <see cref="WorkbookThemeColorReference"/> to the target style (R142-services-theme-
+/// colors-1) instead of only the resolved flat RGB, keeping the link to the workbook theme alive
+/// across a later theme change. Standard/Recent/Custom-spectrum swatches always carry a null
+/// ThemeColor -- they are plain colors with no theme identity to preserve.
+/// </summary>
+public sealed record CellColorSwatch(string Hex, CellColor Color, WorkbookThemeColorReference? ThemeColor = null);
 
 public sealed record CellColorThemeColumn(string Name, IReadOnlyList<CellColorSwatch> Shades);
 
@@ -96,11 +105,11 @@ public static class CellColorPalettePlanner
         new(
             name,
             ThemeAccentShadeTints
-                .Select(tint => ThemeSwatch(theme.ResolveColor(slot, tint)))
+                .Select(tint => ThemeSwatch(theme.ResolveColor(slot, tint), new WorkbookThemeColorReference(slot, tint)))
                 .ToList());
 
-    private static CellColorSwatch ThemeSwatch(CellColor color) =>
-        new(FormatHexColor(color), color);
+    private static CellColorSwatch ThemeSwatch(CellColor color, WorkbookThemeColorReference themeColor) =>
+        new(FormatHexColor(color), color, themeColor);
 
     public static IReadOnlyList<CellColorSwatch> BuildStandardSwatches() =>
         new[]

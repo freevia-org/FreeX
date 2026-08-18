@@ -702,42 +702,65 @@ public sealed partial class DocumentView : Control
     }
 
     /// <summary>Select the next occurrence of <paramref name="query"/> after the caret (wraps around).</summary>
-    public bool FindNext(string query)
+    public bool FindNext(string query) => FindNext(query, new FindReplaceSearchOptions());
+
+    public bool FindNext(string query, FindReplaceSearchOptions options)
     {
         if (string.IsNullOrEmpty(query))
             return false;
         if (FindReplaceDialogPlanner.FindNextMatch(
                 _doc,
                 query,
-                new FindReplaceSearchOptions(),
+                options,
                 _caret.Block,
-                _caret.Offset) is not { } hit)
+                _caret.Offset,
+                CurrentFindReplaceTableCellPosition()) is not { } hit)
             return false;
 
-        _selectionAnchor = new DocPosition(hit.Block, hit.Start);
-        _caret = new DocPosition(hit.Block, hit.Start + hit.Length);
+        SelectFindReplaceMatch(hit);
         Focus();
         InvalidateVisual();
         ScrollToCaretRequested?.Invoke();
         return true;
     }
 
-    public bool FindNext(string query, FindReplaceSearchOptions options)
-    {
-        if (FindReplaceDialogPlanner.FindNextMatch(
-                _doc,
-                query,
-                options,
-                _caret.Block,
-                _caret.Offset) is not { } hit)
-            return false;
+    /// <summary>
+    /// The table-cell position Find Next should resume from when the caret is currently sitting inside a
+    /// table cell (row/column/paragraph-in-cell index, and the real text offset within that paragraph --
+    /// distinct from <c>_caret.Offset</c>, which while in a cell holds a render glyph offset, not a plain-
+    /// text offset). Null when the caret is in body text, so the search starts from the block boundary.
+    /// </summary>
+    private (int Row, int Col, int ParagraphIndex, int Offset)? CurrentFindReplaceTableCellPosition() =>
+        _cellCaret is { } cc && cc.TableBlock == _caret.Block
+            ? (cc.Row, cc.Col, cc.ParaIdx, cc.Offset)
+            : null;
 
+    /// <summary>
+    /// Selects a Find/Replace hit: a plain body-text match moves the ordinary block/offset caret and
+    /// selection, while a table-cell match (<see cref="FindReplaceMatch.IsInTableCell"/>) additionally
+    /// sets <see cref="_cellCaret"/>/<see cref="_cellAnchor"/> so the rest of the editor (Replace,
+    /// <see cref="SelectedText"/>, typing) recognizes and acts on it as an ordinary in-cell selection.
+    /// </summary>
+    private void SelectFindReplaceMatch(FindReplaceMatch hit)
+    {
+        if (hit.IsInTableCell)
+        {
+            var anchor = (TableBlock: hit.Block, Row: hit.TableRow!.Value, Col: hit.TableCol!.Value,
+                ParaIdx: hit.TableParagraphIndex!.Value, Offset: hit.Start);
+            var caret = anchor with { Offset = hit.Start + hit.Length };
+            _cellAnchor = anchor;
+            _cellCaret = caret;
+            _selectionAnchor = new DocPosition(hit.Block, FindCellGlyphOffset(
+                anchor.TableBlock, anchor.Row, anchor.Col, anchor.ParaIdx, anchor.Offset));
+            _caret = new DocPosition(hit.Block, FindCellGlyphOffset(
+                caret.TableBlock, caret.Row, caret.Col, caret.ParaIdx, caret.Offset));
+            return;
+        }
+
+        _cellCaret = null;
+        _cellAnchor = null;
         _selectionAnchor = new DocPosition(hit.Block, hit.Start);
         _caret = new DocPosition(hit.Block, hit.Start + hit.Length);
-        Focus();
-        InvalidateVisual();
-        ScrollToCaretRequested?.Invoke();
-        return true;
     }
 
     /// <summary>
@@ -943,6 +966,12 @@ public sealed partial class DocumentView : Control
 
     private void ReplaceSelectionWith(string replacement)
     {
+        if (HasCellTextSelection())
+        {
+            ReplaceCellTextSelectionWith(replacement);
+            return;
+        }
+
         if (NormalizedSelection() is not { } sel || sel.Start.Block != sel.End.Block)
             return;
         if (_doc.Blocks[sel.Start.Block] is not Paragraph paragraph || !IsTextReplaceable(paragraph))
@@ -950,6 +979,27 @@ public sealed partial class DocumentView : Control
 
         _selectionAnchor = sel.Start;
         _caret = sel.End;
+        InsertText(replacement);
+    }
+
+    /// <summary>
+    /// Replaces the current in-cell text selection (as set by <see cref="SelectFindReplaceMatch"/> for a
+    /// table Find/Replace hit, or by ordinary shift-selection while typing in a cell) via the same
+    /// <see cref="InsertText"/> selection-replace path normal typing uses, so Track Changes/Restrict
+    /// Editing behave identically to a body-text replace.
+    /// </summary>
+    private void ReplaceCellTextSelectionWith(string replacement)
+    {
+        if (_cellAnchor is not { } anchor || _cellCaret is not { } caret)
+            return;
+
+        var (start, end) = CompareCellEndpoints(anchor, caret) <= 0 ? (anchor, caret) : (caret, anchor);
+        var para = GetCellParagraph(start.TableBlock, start.Row, start.Col, start.ParaIdx);
+        if (para is null || !IsTextReplaceable(para))
+            return;
+
+        _cellAnchor = start;
+        _cellCaret = end;
         InsertText(replacement);
     }
 
@@ -6905,7 +6955,7 @@ public sealed partial class DocumentView : Control
             for (var runIndex = 0; runIndex < para.Runs.Count; runIndex++)
             {
                 var run = para.Runs[runIndex];
-                var effectiveFormatting = ResolveRunFmt(run.Formatting, para);
+                var effectiveFormatting = ResolveRunFmt(run, para);
                 if (sb.Length > 0 && effectiveFormatting != segFmt)
                     FlushText();
                 segFmt = effectiveFormatting;
@@ -8155,7 +8205,7 @@ public sealed partial class DocumentView : Control
         var nextRawCells = IsEditable(nextParagraph)
             ? ParaCells(nextParagraph, includeFlowBreaks: true)
             : DisplayCells(blockIndex + 1, nextParagraph, includeFlowBreaks: true);
-        var nextCells = nextRawCells.Select(c => c with { Fmt = ResolveRunFmt(c.Fmt, nextParagraph) }).ToList();
+        var nextCells = nextRawCells.Select(c => c with { Fmt = ResolveRunFmt(c.Fmt, nextParagraph, c.StyleId) }).ToList();
         var nextSupportsCompleteParagraphPlanning = nextIndentFirst == 0
             && _wrapExclusions.Count == 0
             && nextCells.All(cell =>
@@ -8402,7 +8452,7 @@ public sealed partial class DocumentView : Control
                 IsColumnBreak: cell.IsColumnBreak)).ToList());
         // Resolve document defaults and named styles for display only; editing re-derives raw cells
         // from the model. Unstyled paragraphs still inherit DefaultRun, just as they do in Word.
-        var cells = rawCells.Select(c => c with { Fmt = ResolveRunFmt(c.Fmt, paragraph) }).ToList();
+        var cells = rawCells.Select(c => c with { Fmt = ResolveRunFmt(c.Fmt, paragraph, c.StyleId) }).ToList();
         var reviewPolicy = CurrentReviewDisplayPolicy;
         var pf = ResolveParagraphFmt(paragraph);
         var alignment = pf.Alignment;
@@ -8443,7 +8493,7 @@ public sealed partial class DocumentView : Control
         foreach (var run in paragraph.Runs)
         {
             if (run.Image is not null || run.Shape is not null) continue; // skip non-text
-            var effectiveFormatting = ResolveRunFmt(run.Formatting, paragraph);
+            var effectiveFormatting = ResolveRunFmt(run, paragraph);
             if (IsTextHiddenInCurrentView(effectiveFormatting)) continue;
             foreach (var ch in run.Text)
             {
@@ -9309,7 +9359,7 @@ public sealed partial class DocumentView : Control
                     prCellWidth += colWidths[prCol + s];
 
                 var prFmt = cell.Paragraphs.Count > 0 && cell.Paragraphs[0].Runs.Count > 0
-                    ? ResolveRunFmt(cell.Paragraphs[0].Runs[0].Formatting, cell.Paragraphs[0])
+                    ? ResolveRunFmt(cell.Paragraphs[0].Runs[0], cell.Paragraphs[0])
                     : RunFormatting.Default;
                 if (EffectiveFillFor(pr, cellIndex).EffectiveBold)
                     prFmt = prFmt with { Bold = true };
@@ -9393,7 +9443,7 @@ public sealed partial class DocumentView : Control
                     cellWidth += colWidths[col + s];
 
                 var fmt = cell.Paragraphs.Count > 0 && cell.Paragraphs[0].Runs.Count > 0
-                    ? ResolveRunFmt(cell.Paragraphs[0].Runs[0].Formatting, cell.Paragraphs[0])
+                    ? ResolveRunFmt(cell.Paragraphs[0].Runs[0], cell.Paragraphs[0])
                     : RunFormatting.Default;
                 var cellAppearance = EffectiveFillFor(r, cellIndex);
                 if (cellAppearance.EffectiveBold)
@@ -9749,7 +9799,7 @@ public sealed partial class DocumentView : Control
             // Plain text run: use text-line height as the Peek estimate.
             if (!string.IsNullOrEmpty(run.Text))
             {
-                var formatting = ResolveRunFmt(run.Formatting, paragraph);
+                var formatting = ResolveRunFmt(run, paragraph);
                 if (IsTextHiddenInCurrentView(formatting))
                     continue;
                 firstObjHeight = Build("Ag", formatting).Height;
@@ -9932,7 +9982,7 @@ public sealed partial class DocumentView : Control
             //  with text + inline objects still show the text.)
             if (!string.IsNullOrEmpty(run.Text))
             {
-                var fmt = ResolveRunFmt(run.Formatting, paragraph);
+                var fmt = ResolveRunFmt(run, paragraph);
                 if (IsTextHiddenInCurrentView(fmt))
                 {
                     var hiddenY = ContentYToPageSpaceY(_layoutContentY);
@@ -10384,7 +10434,7 @@ public sealed partial class DocumentView : Control
                 continue;
             }
 
-            var hidden = IsTextHiddenInCurrentView(ResolveRunFmt(run.Formatting, paragraph));
+            var hidden = IsTextHiddenInCurrentView(ResolveRunFmt(run, paragraph));
             var text = run.ComplexField is null
                 ? run.Text
                 : BuildBodyComplexFieldDisplayPlan(blockIndex, run).Text;
@@ -22847,10 +22897,37 @@ public sealed partial class DocumentView : Control
         {
             if (_hfCaret is not null)
                 return HeaderFooterSelectedText();
+            if (HasCellTextSelection())
+                return CellTextSelectionText();
             return NormalizedSelection() is null
                 ? string.Empty
                 : _editingSession.Interaction.ProjectSelectionText(CurrentBodyTextRange());
         }
+    }
+
+    /// <summary>
+    /// Plain text currently selected inside a table cell (see <see cref="_cellAnchor"/>/<see cref="_cellCaret"/>),
+    /// e.g. a match <see cref="SelectFindReplaceMatch"/> just located. Only handles a same-paragraph
+    /// selection -- the only shape Find/Replace ever produces; a cross-paragraph/cross-cell block
+    /// selection is a different concept surfaced separately via <see cref="SelectedCellRange"/>.
+    /// </summary>
+    private string CellTextSelectionText()
+    {
+        if (_cellAnchor is not { } anchor || _cellCaret is not { } caret)
+            return string.Empty;
+
+        var (start, end) = CompareCellEndpoints(anchor, caret) <= 0 ? (anchor, caret) : (caret, anchor);
+        if (start.Row != end.Row || start.Col != end.Col || start.ParaIdx != end.ParaIdx)
+            return string.Empty;
+
+        var para = GetCellParagraph(start.TableBlock, start.Row, start.Col, start.ParaIdx);
+        if (para is null)
+            return string.Empty;
+
+        var text = para.PlainText;
+        var from = Math.Clamp(start.Offset, 0, text.Length);
+        var to = Math.Clamp(end.Offset, 0, text.Length);
+        return to > from ? text[from..to] : string.Empty;
     }
 
     public bool TryDeleteSelection()
@@ -23758,7 +23835,8 @@ public sealed partial class DocumentView : Control
                     link,
                     run.FormatRevision,
                     FootnoteId: run.FootnoteId,
-                    EndnoteId: run.EndnoteId));
+                    EndnoteId: run.EndnoteId,
+                    StyleId: run.StyleId));
         }
         return cells;
     }
@@ -23810,7 +23888,7 @@ public sealed partial class DocumentView : Control
 
             foreach (var ch in displayText)
                 cells.Add(new Cell(ch, displayFormatting, run.CommentId, run.Revision, run.RevisionAuthor,
-                    run.RevisionDateXml, link, run.FormatRevision));
+                    run.RevisionDateXml, link, run.FormatRevision, StyleId: run.StyleId));
         }
         return cells;
     }
@@ -23827,7 +23905,8 @@ public sealed partial class DocumentView : Control
             '\0',
             run.Formatting,
             IsPageBreak: breakKind == InlineFlowBreakKind.Page,
-            IsColumnBreak: breakKind == InlineFlowBreakKind.Column));
+            IsColumnBreak: breakKind == InlineFlowBreakKind.Column,
+            StyleId: run.StyleId));
     }
 
     private ComplexFieldDisplayPlan BuildBodyComplexFieldDisplayPlan(int blockIndex, Run run)
@@ -24107,8 +24186,11 @@ public sealed partial class DocumentView : Control
     private bool IsTextHiddenInCurrentView(RunFormatting formatting) =>
         formatting.Hidden || (formatting.WebHidden && _viewMode == DocumentViewMode.WebLayout);
 
-    private RunFormatting ResolveRunFmt(RunFormatting raw, Paragraph paragraph)
-        => DocumentRunFormattingResolver.Resolve(_doc, paragraph, raw);
+    private RunFormatting ResolveRunFmt(RunFormatting raw, Paragraph paragraph, string? runStyleId)
+        => DocumentRunFormattingResolver.Resolve(_doc, paragraph, raw, runStyleId);
+
+    private RunFormatting ResolveRunFmt(Run run, Paragraph paragraph)
+        => DocumentRunFormattingResolver.Resolve(_doc, paragraph, run);
 
     /// <summary>Cascade the paragraph's named-style paragraph formatting (alignment + spacing)
     /// under the paragraph's own values; the paragraph's explicit values win.</summary>
@@ -24635,7 +24717,12 @@ public sealed partial class DocumentView : Control
         // note boundary. Without it the round-trip stripped the reference and left the mark as ordinary
         // text, which is why note-bearing paragraphs used to be excluded from editing outright.
         int? FootnoteId = null,
-        int? EndnoteId = null);
+        int? EndnoteId = null,
+        // AV-CHARSTYLE: the source run's linked character style id (w:rPr/w:rStyle), carried per-character
+        // so ResolveRunFmt can still resolve it after the run has been flattened into per-glyph cells --
+        // otherwise a style applied purely via a linked character style (no direct formatting baked in)
+        // renders as plain text. Null means the glyph's look is entirely direct formatting.
+        string? StyleId = null);
 
     private readonly record struct AutomaticHyphenGlyph(
         int Block,

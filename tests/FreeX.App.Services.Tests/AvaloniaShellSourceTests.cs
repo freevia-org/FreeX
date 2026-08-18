@@ -2116,15 +2116,21 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("UiText.Get(ascending ? \"Sort_AtoZ\" : \"Sort_ZtoA\")");
         source.Should().Contain("private async Task ShowSortDialogAsync()");
         source.Should().Contain("_session.GetSelectedRangeSortError()");
-        source.Should().Contain("var selection = await ShowSortInputDialogAsync();");
+        // R142-services-sort-customdialog-1: the Sort Warning is resolved up front (against the
+        // current selection) before the dialog is even built, and the dialog + execution both use
+        // that same resolved range -- see ResolveSortRangeAfterAdjacentDataPrompt/
+        // ShowSortInputDialogAsync(range)/SortSelectedRange(sortPlan, range).
+        source.Should().Contain("_session.ResolveSortRangeAfterAdjacentDataPrompt(_session.SelectedRange)");
+        source.Should().Contain("var selection = await ShowSortInputDialogAsync(range);");
         source.Should().Contain("var sortPlan = SortDialogPlanner.CreateCommandPlan(");
-        source.Should().Contain("var result = _session.SortSelectedRange(sortPlan);");
+        source.Should().Contain("var result = _session.SortSelectedRange(sortPlan, range);");
         wpfSource.Should().Contain("() => _session.SortSelectedRange(ascending: true)");
         wpfSource.Should().Contain("() => _session.SortSelectedRange(ascending: false)");
-        wpfSource.Should().Contain("() => _session.SortSelectedRange(sortPlan)");
+        wpfSource.Should().Contain("() => _session.SortSelectedRange(sortPlan, range)");
+        wpfSource.Should().Contain("_session.ResolveSortRangeAfterAdjacentDataPrompt(");
         wpfSource.Should().Contain("_session.GetSelectedRangeSortError()");
         wpfSource.Should().NotContain("CreateQuickSortCommand(");
-        source.Should().Contain("private async Task<SortDialogResult?> ShowSortInputDialogAsync()");
+        source.Should().Contain("private async Task<SortDialogResult?> ShowSortInputDialogAsync(GridRange range)");
         source.Should().Contain("AutomationProperties.SetAutomationId(dialog, \"SortCompactDialog\");");
         source.Should().Contain("AutomationProperties.SetAutomationId(headersCheck, \"SortHeadersCheckBox\");");
         source.Should().Contain("AutomationProperties.SetAutomationId(levelsGrid, \"SortLevelsGrid\");");
@@ -4308,24 +4314,32 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("private NativeMenu CreateNativeColorPaletteMenu(ColorPaletteTarget target, bool includeClearFill)");
         source.Should().Contain("menu.Items.Add(CreateNativeColorSwatchMenuItem(swatch, target));");
         source.Should().Contain("private NativeMenuItem CreateNativeColorSwatchMenuItem(CellColorSwatch swatch, ColorPaletteTarget target)");
-        source.Should().Contain("private void ApplySelectedRangePaletteColor(CellColor color, ColorPaletteTarget target)");
+        // R142-services-theme-colors-1: a Theme Colors swatch's slot/tint now travels alongside the
+        // resolved flat color end-to-end (RibbonColorPaletteFlyout's Apply/applyColor callback,
+        // ApplySelectedRangePaletteColor, ApplySelectedRange{Fill,Font}Color, and finally
+        // WorkbookSession.SetSelectedRange{Fill,Font}Color) so a color applied from that gallery
+        // keeps tracking the workbook theme across a later theme change instead of freezing at
+        // today's resolved RGB.
+        source.Should().Contain("private void ApplySelectedRangePaletteColor(CellColor color, WorkbookThemeColorReference? themeColor, ColorPaletteTarget target)");
         source.Should().Contain("case ColorPaletteTarget.Fill:");
-        source.Should().Contain("ApplySelectedRangeFillColor(color);");
+        source.Should().Contain("ApplySelectedRangeFillColor(color, themeColor);");
         source.Should().Contain("case ColorPaletteTarget.Font:");
-        source.Should().Contain("ApplySelectedRangeFontColor(color);");
+        source.Should().Contain("ApplySelectedRangeFontColor(color, themeColor);");
         source.Should().Contain("private static Border CreateColorSwatchIcon(CellColor color)");
-        source.Should().Contain("private void ApplySelectedRangeFillColor(CellColor fillColor)");
-        source.Should().Contain("var result = _session.SetSelectedRangeFillColor(fillColor);");
+        source.Should().Contain("private void ApplySelectedRangeFillColor(CellColor fillColor, WorkbookThemeColorReference? themeColor = null)");
+        source.Should().Contain("var result = _session.SetSelectedRangeFillColor(fillColor, themeColor);");
         source.Should().Contain("ShowEditIssue(result.ErrorMessage ?? UiText.Get(\"MainLoc_FillColorFailed\"));");
         source.Should().Contain("RefreshShell(UiText.Format(\"MainLoc_AppliedFillColorStatusFormat\", rangeReference));");
         source.Should().Contain("private void ClearSelectedRangeFill()");
         source.Should().Contain("var result = _session.ClearSelectedRangeFill();");
         source.Should().Contain("ShowEditIssue(result.ErrorMessage ?? UiText.Get(\"MainLoc_NoFillFailed\"));");
         source.Should().Contain("RefreshShell(UiText.Format(\"MainLoc_ClearedFillStatusFormat\", rangeReference));");
-        source.Should().Contain("private void ApplySelectedRangeFontColor(CellColor fontColor)");
-        source.Should().Contain("var result = _session.SetSelectedRangeFontColor(fontColor);");
+        source.Should().Contain("private void ApplySelectedRangeFontColor(CellColor fontColor, WorkbookThemeColorReference? themeColor = null)");
+        source.Should().Contain("var result = _session.SetSelectedRangeFontColor(fontColor, themeColor);");
         source.Should().Contain("ShowEditIssue(result.ErrorMessage ?? UiText.Get(\"MainLoc_FontColorFailed\"));");
         source.Should().Contain("RefreshShell(UiText.Format(\"MainLoc_AppliedFontColorStatusFormat\", rangeReference));");
+        paletteSource.Should().Contain("Action<CellColor, WorkbookThemeColorReference?> applyColor");
+        paletteSource.Should().Contain("applyColor(color, themeColor);");
         smokeSource.Should().Contain("var nativeFillColorSwatchCount = CountNativeColorPaletteSwatches(_fillColorMenuItem.Menu);");
         smokeSource.Should().Contain("var nativeFontColorSwatchCount = CountNativeColorPaletteSwatches(_fontColorMenuItem.Menu);");
         smokeSource.Should().Contain("private static int CountNativeColorPaletteSwatches(NativeMenu? menu)");

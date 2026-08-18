@@ -330,6 +330,14 @@ public partial class MainWindow
         // -freeze-ui-5-2).
         newWindow.SetNewWindowSourceHint(this);
 
+        // R142-services-freeze-split-newwindow-1: seed the new window's OWN per-window
+        // Freeze/Split/Zoom/ViewMode cache (_worksheetViewStates) from THIS window's effective
+        // (already-resolved) state for the sheet it is opening on, before the new window ever
+        // renders. Without this, _worksheetViewStates.GetOrSeed lazily seeds itself from the
+        // shared Sheet.FrozenRows/SplitRow/etc. fields on first render -- whichever sibling last
+        // wrote them -- instead of matching the window it was actually spawned from.
+        newWindow.SeedWorksheetViewStateFromSourceWindow(this);
+
         // Give the secondary window its own autosave timer + recovery snapshot (same wiring
         // App.xaml.cs performs for the primary window and for crash-recovery windows). Autosave
         // ownership is per-window, not per-workbook: as long as ANY window over the shared

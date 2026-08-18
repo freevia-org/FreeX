@@ -334,7 +334,7 @@ public sealed class WorkbookSession : IDisposable
                 _includeObjects,
                 sharedDocumentStateOwner: documentOwner,
                 findReplacePolicyText: _findReplacePolicyText);
-            sibling.InitializeSiblingView(ActiveSheet.Id);
+            sibling.InitializeSiblingView(this);
             return sibling;
         }
         catch
@@ -396,14 +396,24 @@ public sealed class WorkbookSession : IDisposable
             throw new ObjectDisposedException(nameof(WorkbookSession));
     }
 
-    private void InitializeSiblingView(SheetId sheetId)
+    /// <summary>
+    /// R142-services-freeze-split-newwindow-1: seeds a brand-new sibling from the INVITING view's
+    /// own per-window Freeze/Split/Zoom/ViewMode -- not the shared <see cref="Sheet"/> fields --
+    /// so a new window opened via View ▸ New Window matches what the invoking window is actually
+    /// showing, exactly like Excel's own New Window. Previously this always seeded from
+    /// <paramref name="sourceView"/>'s <see cref="ActiveSheet"/> object directly (whichever sibling
+    /// last wrote those shared fields), so a new window could silently open with a DIFFERENT
+    /// window's freeze/split/zoom than the one it was spawned from.
+    /// </summary>
+    private void InitializeSiblingView(WorkbookSession sourceView)
     {
+        var sheetId = sourceView.ActiveSheet.Id;
         ActiveSheet = Workbook.GetSheet(sheetId) ?? ActiveSheet;
         RefreshSheetTabsForActiveSheet();
         ActiveCell = new CellAddress(ActiveSheet.Id, 1, 1);
         SetSingleSelectedRange(new GridRange(ActiveCell, ActiveCell));
         FormulaEditAddress = null;
-        SeedViewSplitAndFrozenOverrides();
+        SeedViewSplitAndFrozenOverridesFrom(sourceView);
         _viewViewportOrigins[ActiveSheet.Id] = (
             GetScrollableRowStart(),
             GetScrollableColumnStart());
@@ -440,6 +450,33 @@ public sealed class WorkbookSession : IDisposable
         _viewSplitColOverrides[ActiveSheet.Id] = ActiveSheet.SplitColumn;
         _viewFrozenRowsOverrides[ActiveSheet.Id] = ActiveSheet.FrozenRows;
         _viewFrozenColsOverrides[ActiveSheet.Id] = ActiveSheet.FrozenCols;
+    }
+
+    /// <summary>
+    /// Sibling-view counterpart of <see cref="SeedViewSplitAndFrozenOverrides"/>: seeds this view's
+    /// own per-window overrides from <paramref name="sourceView"/>'s EFFECTIVE (already-resolved,
+    /// per-window) Split/Freeze/Zoom/ViewMode/gridlines/headings/rulers/show-formulas state for the
+    /// sheet this sibling is opening on, instead of the shared <see cref="Sheet"/> fields. Used only
+    /// by <see cref="InitializeSiblingView(WorkbookSession)"/>, in place of
+    /// <see cref="SeedViewSplitAndFrozenOverrides"/>, so a new window matches the window it was
+    /// spawned from rather than whichever sibling last wrote the shared fields (R142-services-
+    /// freeze-split-newwindow-1). <paramref name="sourceView"/>'s ActiveSheet is always the sheet
+    /// this sibling is being initialized onto (see the caller), so every parameterless
+    /// GetEffective*/no-arg accessor below reads the same sheet as the sheetId-taking ones.
+    /// </summary>
+    private void SeedViewSplitAndFrozenOverridesFrom(WorkbookSession sourceView)
+    {
+        var sheetId = ActiveSheet.Id;
+        _viewModeOverrides[sheetId] = sourceView.GetEffectiveViewMode(sheetId);
+        _viewZoomOverrides[sheetId] = sourceView.GetEffectiveZoomPercent(sheetId);
+        _viewShowGridlinesOverrides[sheetId] = sourceView.GetEffectiveShowGridlines(sheetId);
+        _viewShowHeadingsOverrides[sheetId] = sourceView.GetEffectiveShowHeadings(sheetId);
+        _viewShowRulersOverrides[sheetId] = sourceView.GetEffectiveShowRulers(sheetId);
+        _viewShowFormulasOverrides[sheetId] = sourceView.GetEffectiveShowFormulas(sheetId);
+        _viewSplitRowOverrides[sheetId] = sourceView.GetEffectiveSplitRow();
+        _viewSplitColOverrides[sheetId] = sourceView.GetEffectiveSplitCol();
+        _viewFrozenRowsOverrides[sheetId] = sourceView.GetEffectiveFrozenRows();
+        _viewFrozenColsOverrides[sheetId] = sourceView.GetEffectiveFrozenCols();
     }
 
     /// <summary>
@@ -4671,9 +4708,14 @@ public sealed class WorkbookSession : IDisposable
     /// contiguous data block (e.g. only one column of a multi-column table selected), asks
     /// <see cref="SortAdjacentDataPromptResolver"/> whether to expand the sort to the whole block.
     /// Returns <paramref name="selectedRange"/> unchanged when there is nothing to warn about, no
-    /// resolver is wired, or the resolver declines the expansion.
+    /// resolver is wired, or the resolver declines the expansion. Public (R142-services-sort-
+    /// customdialog-1) so a host can resolve the same warning up front, before it builds a Custom
+    /// Sort dialog's column/row/color/icon choices from the (possibly-expanded) range -- unlike
+    /// Quick Sort, the Custom Sort dialog lets the user pick specific columns by position, so the
+    /// warning must be resolved (and the dialog built from the winning range) before those column
+    /// offsets are chosen, not silently re-mapped onto a wider range afterwards.
     /// </summary>
-    private GridRange ResolveSortRangeAfterAdjacentDataPrompt(GridRange selectedRange)
+    public GridRange ResolveSortRangeAfterAdjacentDataPrompt(GridRange selectedRange)
     {
         if (QuickSortRangePlanner.ResolveAdjacentDataExpansion(ActiveSheet, selectedRange) is not { } expandedRange)
             return selectedRange;
@@ -4693,6 +4735,17 @@ public sealed class WorkbookSession : IDisposable
         return SortSelectedRange(SortDialogPlanner.CreateCommandPlan(sortKeys, options, hasHeaders));
     }
 
+    /// <summary>
+    /// Custom Sort dialog path for a caller (macro/automation/the 3-arg
+    /// <see cref="SortSelectedRange(IReadOnlyList{CoreSortKey},SortOptions,bool)"/> convenience
+    /// above) whose <paramref name="sortPlan"/> column offsets were chosen against the CURRENT
+    /// selection itself, not a dialog built from a wider resolved range -- sorts exactly
+    /// <see cref="SelectedRange"/>, unchanged from this method's original pre-R142 behavior. A host
+    /// that builds a Custom Sort dialog (whose column choices depend on which range is finally
+    /// sorted) must resolve Excel's Sort Warning BEFORE constructing that dialog and use the
+    /// <see cref="SortSelectedRange(SortDialogCommandPlan,GridRange)"/> overload instead -- see its
+    /// remarks for why (R142-services-sort-customdialog-1).
+    /// </summary>
     public WorkbookCellEditResult SortSelectedRange(SortDialogCommandPlan sortPlan)
     {
         ArgumentNullException.ThrowIfNull(sortPlan);
@@ -4711,6 +4764,45 @@ public sealed class WorkbookSession : IDisposable
             return result;
 
         ApplySuccessfulRangeEditResult(result, range);
+        return result;
+    }
+
+    /// <summary>
+    /// Custom Sort dialog path for a host that already resolved Excel's Sort Warning up front (via
+    /// <see cref="ResolveSortRangeAfterAdjacentDataPrompt"/>, BEFORE building the dialog's
+    /// column/row/color/icon choices from the winning <paramref name="range"/> -- R142-services-
+    /// sort-customdialog-1) so <paramref name="sortPlan"/>'s column offsets are meaningful against
+    /// it. Sorts <paramref name="range"/> without asking the warning again -- unlike the single-arg
+    /// overload above, which is unaware any resolution already happened and would otherwise
+    /// re-prompt (or, worse, apply the ALREADY-resolved offsets to a second, independently
+    /// re-expanded range that can start at a different column, silently sorting the wrong data).
+    /// <para>
+    /// Mirrors <see cref="SortSelectedRange(bool)"/>'s F4/Repeat Last Action semantics: if the
+    /// selection has moved since this call (a later replay against a different area), the fresh
+    /// <see cref="SelectedRange"/> is used instead of the now-stale resolved <paramref name="range"/>,
+    /// so Repeat re-targets wherever the user is now selecting rather than the original dialog's
+    /// range.
+    /// </para>
+    /// </summary>
+    public WorkbookCellEditResult SortSelectedRange(SortDialogCommandPlan sortPlan, GridRange range)
+    {
+        ArgumentNullException.ThrowIfNull(sortPlan);
+
+        if (TryCreateSortRejection(out var rejection))
+            return rejection;
+
+        var initialRange = SelectedRange;
+        var result = _cellEditService.ExecuteRepeatableEditCommand(
+            Workbook,
+            () =>
+            {
+                var effectiveRange = SelectedRange == initialRange ? range : SelectedRange;
+                return CreateRangeCommand(effectiveRange, "Sort", sortPlan.CreateCommand);
+            });
+        if (!result.Success)
+            return result;
+
+        ApplySuccessfulRangeEditResult(result, initialRange);
         return result;
     }
 
@@ -5234,6 +5326,21 @@ public sealed class WorkbookSession : IDisposable
     public WorkbookCellEditResult SetSelectedRangeFontColor(CellColor fontColor) =>
         ApplySelectedRangeStyle(new StyleDiff(FontColor: fontColor));
 
+    /// <summary>
+    /// Applies a font color picked from the ribbon's Theme Colors gallery (R142-services-theme-
+    /// colors-1). When <paramref name="themeColor"/> is supplied, the style records the theme
+    /// slot/tint reference instead of the flat resolved RGB -- mirroring
+    /// <see cref="CellStyleDiffPlanner"/>'s Cell Styles gallery (<c>AccentDepth</c>) -- so the cell
+    /// keeps tracking the workbook theme across a later theme change rather than freezing at
+    /// whatever color the slot happened to resolve to when it was picked. A null
+    /// <paramref name="themeColor"/> (Standard/Recent/Custom colors) behaves exactly like the
+    /// flat-color overload above.
+    /// </summary>
+    public WorkbookCellEditResult SetSelectedRangeFontColor(CellColor fontColor, WorkbookThemeColorReference? themeColor) =>
+        themeColor is { } theme
+            ? ApplySelectedRangeStyle(new StyleDiff(FontThemeColor: theme))
+            : SetSelectedRangeFontColor(fontColor);
+
     /// <summary>Applies a font family (typeface) to the selection. A blank name is a no-op success.</summary>
     public WorkbookCellEditResult SetSelectedRangeFontName(string fontName) =>
         string.IsNullOrWhiteSpace(fontName)
@@ -5242,6 +5349,15 @@ public sealed class WorkbookSession : IDisposable
 
     public WorkbookCellEditResult SetSelectedRangeFillColor(CellColor fillColor) =>
         ApplySelectedRangeStyle(new StyleDiff(FillColor: fillColor));
+
+    /// <summary>
+    /// Fill-color counterpart of <see cref="SetSelectedRangeFontColor(CellColor,WorkbookThemeColorReference?)"/>
+    /// -- see its remarks.
+    /// </summary>
+    public WorkbookCellEditResult SetSelectedRangeFillColor(CellColor fillColor, WorkbookThemeColorReference? themeColor) =>
+        themeColor is { } theme
+            ? ApplySelectedRangeStyle(new StyleDiff(FillThemeColor: theme))
+            : SetSelectedRangeFillColor(fillColor);
 
     public WorkbookCellEditResult ClearSelectedRangeFill() =>
         ApplySelectedRangeStyle(new StyleDiff(ClearFill: true));

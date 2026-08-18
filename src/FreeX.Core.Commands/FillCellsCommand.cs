@@ -28,6 +28,10 @@ public sealed class FillCellsCommand : IWorkbookCommand, IEstimatesMemory
     private List<(CellAddress Address, bool HadTarget, string? Target, bool HadMetadata, HyperlinkMetadata? Metadata)>? _hyperlinkSnapshot;
     private List<(CellAddress Address, bool HadRuns, IReadOnlyList<CellTextRun>? Runs)>? _richTextRunsSnapshot;
     private List<(CellAddress Address, bool HadPhoneticGuide, CellPhoneticGuide? PhoneticGuide)>? _phoneticGuideSnapshot;
+    // R142-comments-notes-1: mirrors AutofillCommand -- Ctrl+D/Ctrl+R/Fill Down/Right/Up/Left must
+    // carry a source cell's legacy note (Comments/CommentAuthors/ShownComments) and threaded
+    // comment to each fill target, and undo must restore exactly what was there before.
+    private List<(CellAddress Address, bool HadComment, string? Comment, bool HadCommentAuthor, string? CommentAuthor, bool HadShown, bool HadThreadedComment, ThreadedComment? ThreadedComment)>? _commentSnapshot;
 
     public string Label => _direction switch
     {
@@ -81,6 +85,7 @@ public sealed class FillCellsCommand : IWorkbookCommand, IEstimatesMemory
         _hyperlinkSnapshot = [];
         _richTextRunsSnapshot = [];
         _phoneticGuideSnapshot = [];
+        _commentSnapshot = [];
         foreach (var target in targets)
         {
             _snapshot.Add((target, sheet.GetCell(target)?.Clone(), sheet.GetStyleOnly(target.Row, target.Col)));
@@ -98,6 +103,7 @@ public sealed class FillCellsCommand : IWorkbookCommand, IEstimatesMemory
                 target,
                 sheet.CellPhoneticGuides.TryGetValue(target, out var oldPhoneticGuide),
                 oldPhoneticGuide));
+            SnapshotComments(sheet, target);
 
             var source = GetSourceAddress(target);
             var sourceCell = sheet.GetCell(source);
@@ -112,6 +118,7 @@ public sealed class FillCellsCommand : IWorkbookCommand, IEstimatesMemory
                 sheet.HyperlinkMetadata.Remove(target);
                 sheet.RichTextRuns.Remove(target);
                 sheet.CellPhoneticGuides.Remove(target);
+                ClearComments(sheet, target);
                 continue;
             }
 
@@ -135,6 +142,8 @@ public sealed class FillCellsCommand : IWorkbookCommand, IEstimatesMemory
                 sheet.CellPhoneticGuides[target] = sourcePhoneticGuide;
             else
                 sheet.CellPhoneticGuides.Remove(target);
+
+            CopyComments(sheet, source, target);
         }
 
         return new CommandOutcome(true, AffectedCells: targets);
@@ -186,17 +195,114 @@ public sealed class FillCellsCommand : IWorkbookCommand, IEstimatesMemory
                 sheet.RichTextRuns.Remove(address);
         }
 
-        if (_phoneticGuideSnapshot is null)
+        if (_phoneticGuideSnapshot is not null)
+        {
+            foreach (var (address, hadPhoneticGuide, phoneticGuide) in _phoneticGuideSnapshot)
+            {
+                if (hadPhoneticGuide && phoneticGuide is not null)
+                    sheet.CellPhoneticGuides[address] = phoneticGuide;
+                else
+                    sheet.CellPhoneticGuides.Remove(address);
+            }
+        }
+
+        if (_commentSnapshot is null)
             return;
 
-        foreach (var (address, hadPhoneticGuide, phoneticGuide) in _phoneticGuideSnapshot)
+        foreach (var (address, hadComment, comment, hadCommentAuthor, commentAuthor, hadShown, hadThreadedComment, threadedComment) in _commentSnapshot)
         {
-            if (hadPhoneticGuide && phoneticGuide is not null)
-                sheet.CellPhoneticGuides[address] = phoneticGuide;
+            if (hadComment && comment is not null)
+                sheet.Comments[address] = comment;
             else
-                sheet.CellPhoneticGuides.Remove(address);
+                sheet.Comments.Remove(address);
+
+            if (hadCommentAuthor && commentAuthor is not null)
+                sheet.CommentAuthors[address] = commentAuthor;
+            else
+                sheet.CommentAuthors.Remove(address);
+
+            if (hadShown)
+                sheet.ShownComments.Add(address);
+            else
+                sheet.ShownComments.Remove(address);
+
+            if (hadThreadedComment && threadedComment is not null)
+                sheet.ThreadedComments[address] = CloneThreadedComment(threadedComment);
+            else
+                sheet.ThreadedComments.Remove(address);
         }
     }
+
+    /// <summary>Snapshots a fill target's legacy note (Comments/CommentAuthors/ShownComments) and threaded comment before overwriting it, for undo.</summary>
+    private void SnapshotComments(Sheet sheet, CellAddress addr)
+    {
+        _commentSnapshot!.Add((
+            addr,
+            sheet.Comments.TryGetValue(addr, out var oldComment),
+            oldComment,
+            sheet.CommentAuthors.TryGetValue(addr, out var oldCommentAuthor),
+            oldCommentAuthor,
+            sheet.ShownComments.Contains(addr),
+            sheet.ThreadedComments.TryGetValue(addr, out var oldThreadedComment),
+            oldThreadedComment is null ? null : CloneThreadedComment(oldThreadedComment)));
+    }
+
+    /// <summary>
+    /// Copies (or removes) a fill target's legacy note/threaded comment to match the source cell
+    /// (R142-comments-notes-1) -- Excel carries a cell's note/comment along with Ctrl+D/Ctrl+R/
+    /// Fill Down/Right/Up/Left exactly like it does the hyperlink/rich-text runs already handled
+    /// here. A fresh, independent threaded-comment thread is minted for the target (Id cleared) so
+    /// multiple fill targets sharing one source note don't collide on the same persisted thread id
+    /// on save (mirrors CopyRangeCommand.ClonedThreadedCommentForNewAddress).
+    /// </summary>
+    private static void CopyComments(Sheet sheet, CellAddress source, CellAddress target)
+    {
+        if (sheet.Comments.TryGetValue(source, out var sourceComment))
+            sheet.Comments[target] = sourceComment;
+        else
+            sheet.Comments.Remove(target);
+
+        if (sheet.CommentAuthors.TryGetValue(source, out var sourceCommentAuthor))
+            sheet.CommentAuthors[target] = sourceCommentAuthor;
+        else
+            sheet.CommentAuthors.Remove(target);
+
+        if (sheet.ShownComments.Contains(source))
+            sheet.ShownComments.Add(target);
+        else
+            sheet.ShownComments.Remove(target);
+
+        if (sheet.ThreadedComments.TryGetValue(source, out var sourceThreadedComment))
+            sheet.ThreadedComments[target] = ClonedThreadedCommentForNewAddress(sourceThreadedComment);
+        else
+            sheet.ThreadedComments.Remove(target);
+    }
+
+    /// <summary>Drops a fill target's legacy note/threaded comment (used when the fill's source cell is empty).</summary>
+    private static void ClearComments(Sheet sheet, CellAddress addr)
+    {
+        sheet.Comments.Remove(addr);
+        sheet.CommentAuthors.Remove(addr);
+        sheet.ShownComments.Remove(addr);
+        sheet.ThreadedComments.Remove(addr);
+    }
+
+    /// <summary>Deep-clones a threaded comment (including its reply list) for a snapshot, preserving its Id. Mirrors CopyRangeCommand.CloneThreadedComment.</summary>
+    private static ThreadedComment CloneThreadedComment(ThreadedComment comment) =>
+        comment with { Replies = comment.Replies.Select(reply => reply with { }).ToList() };
+
+    /// <summary>
+    /// Clones a threaded comment for a NEW destination address, clearing its Id (and each reply's
+    /// Id) so the copy mints its own independent, address-derived thread id on save instead of
+    /// colliding with the source's persisted <c>&lt;threadedComment id="..."&gt;</c>. Mirrors
+    /// CopyRangeCommand.ClonedThreadedCommentForNewAddress.
+    /// </summary>
+    private static ThreadedComment ClonedThreadedCommentForNewAddress(ThreadedComment comment) =>
+        comment with
+        {
+            Id = null,
+            Replies = comment.Replies.Select(reply => reply with { Id = null }).ToList(),
+        };
 
     private IEnumerable<CellAddress> GetTargetAddresses()
     {
@@ -331,6 +437,7 @@ public sealed class FillCellsCommand : IWorkbookCommand, IEstimatesMemory
         _hyperlinkSnapshot = [];
         _richTextRunsSnapshot = [];
         _phoneticGuideSnapshot = [];
+        _commentSnapshot = [];
         var writtenCells = new List<CellAddress>(targetAnchors.Count);
 
         foreach (var target in targetAnchors)
@@ -351,6 +458,7 @@ public sealed class FillCellsCommand : IWorkbookCommand, IEstimatesMemory
                 target,
                 sheet.CellPhoneticGuides.TryGetValue(target, out var oldPhoneticGuide),
                 oldPhoneticGuide));
+            SnapshotComments(sheet, target);
 
             var sourceCell = sheet.GetCell(source);
             if (sourceCell is null)
@@ -364,6 +472,7 @@ public sealed class FillCellsCommand : IWorkbookCommand, IEstimatesMemory
                 sheet.HyperlinkMetadata.Remove(target);
                 sheet.RichTextRuns.Remove(target);
                 sheet.CellPhoneticGuides.Remove(target);
+                ClearComments(sheet, target);
                 writtenCells.Add(target);
                 continue;
             }
@@ -388,6 +497,8 @@ public sealed class FillCellsCommand : IWorkbookCommand, IEstimatesMemory
                 sheet.CellPhoneticGuides[target] = sourcePhoneticGuide;
             else
                 sheet.CellPhoneticGuides.Remove(target);
+
+            CopyComments(sheet, source, target);
 
             writtenCells.Add(target);
         }

@@ -554,7 +554,7 @@ public partial class MainWindow
 
         var title = UiText.Get("MainWindowMessage_ObjectFillTitle");
         var initial = ResolveDrawingObjectFillColor(target);
-        if (!TryShowColorPicker(title, initial, allowNoColor: true, out var selectedColor, UiText.Get("FormatCells_NoFill")))
+        if (!TryShowColorPicker(title, initial, allowNoColor: true, out var selectedColor, out _, UiText.Get("FormatCells_NoFill")))
             return;
 
         RememberCurrentShapeFill(target.Kind, selectedColor);
@@ -595,7 +595,7 @@ public partial class MainWindow
             ? ResolveDrawingObjectFillColor(target)
             : ResolveDrawingObjectOutlineColor(target);
         var title = UiText.Get(isFill ? "MainWindowMessage_ObjectFillTitle" : "MainWindowMessage_ObjectOutlineTitle");
-        if (!TryShowColorPicker(title, initial, allowNoColor: false, out var selectedColor)
+        if (!TryShowColorPicker(title, initial, allowNoColor: false, out var selectedColor, out _)
             || selectedColor is not { } color)
             return;
 

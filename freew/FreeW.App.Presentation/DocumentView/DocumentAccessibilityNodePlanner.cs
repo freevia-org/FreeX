@@ -572,7 +572,7 @@ public static class DocumentAccessibilityNodePlanner
         int textStart,
         Run run)
     {
-        var effective = DocumentRunFormattingResolver.Resolve(document, paragraph, run.Formatting);
+        var effective = DocumentRunFormattingResolver.Resolve(document, paragraph, run);
         return new DocumentAccessibilityNode(
             $"{paragraphId}:run:{runIndex}:text",
             DocumentAccessibilityNodeKind.TextRun,

@@ -221,9 +221,10 @@ public static class DocumentFormattingProbePlanner
         ArgumentNullException.ThrowIfNull(document);
         ArgumentNullException.ThrowIfNull(paragraph);
 
-        var rawRun = RevisionEditPlanner.FormattingAtOffset(paragraph, offset);
+        var run = RevisionEditPlanner.RunAtOffset(paragraph, offset);
+        var rawRun = run?.Formatting ?? RunFormatting.Default;
         return new DocumentEffectiveFormatting(
-            DocumentRunFormattingResolver.Resolve(document, paragraph, rawRun),
+            DocumentRunFormattingResolver.Resolve(document, paragraph, rawRun, run?.StyleId),
             DocumentParagraphFormattingResolver.Resolve(document, paragraph));
     }
 }

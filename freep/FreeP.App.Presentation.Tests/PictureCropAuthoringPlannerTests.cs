@@ -95,4 +95,93 @@ public sealed class PictureCropAuthoringPlannerTests
         PictureCropAuthoringPlanner.Build(shape, new LayoutRect(0, 0, 100, 100))
             .CanEdit.Should().BeFalse();
     }
+
+    // freep-picture-crop-clamp-crash: a legally-authored srcRect can crop 100% from one edge
+    // (CropLeft/Top/Right/Bottom = 1.0). Dragging the OPPOSITE handle must clamp gracefully
+    // instead of throwing, because Math.Clamp throws ArgumentException when min > max and
+    // "1 - 1.0 - MinimumVisibleFraction" is negative. PowerPoint stops the dragged edge at its
+    // minimum (0, fully open) rather than inverting the crop rectangle.
+    [Theory]
+    [InlineData(nameof(PictureCropAuthoringPlanner.RightHandleName))]
+    [InlineData(nameof(PictureCropAuthoringPlanner.LeftHandleName))]
+    [InlineData(nameof(PictureCropAuthoringPlanner.TopHandleName))]
+    [InlineData(nameof(PictureCropAuthoringPlanner.BottomHandleName))]
+    public void BuildMutationPlan_DoesNotThrow_WhenOppositeEdgeIsFullyCropped(string handleNameProperty)
+    {
+        var handleName = handleNameProperty switch
+        {
+            nameof(PictureCropAuthoringPlanner.RightHandleName) => PictureCropAuthoringPlanner.RightHandleName,
+            nameof(PictureCropAuthoringPlanner.LeftHandleName) => PictureCropAuthoringPlanner.LeftHandleName,
+            nameof(PictureCropAuthoringPlanner.TopHandleName) => PictureCropAuthoringPlanner.TopHandleName,
+            nameof(PictureCropAuthoringPlanner.BottomHandleName) => PictureCropAuthoringPlanner.BottomHandleName,
+            _ => throw new ArgumentOutOfRangeException(nameof(handleNameProperty)),
+        };
+
+        // The opposite edge of whichever handle we're dragging is pinned at 100% cropped,
+        // exactly as a real srcRect l="100000" (or t/r/b) would load.
+        var format = handleName switch
+        {
+            PictureCropAuthoringPlanner.RightHandleName => new PictureFormat { CropLeft = 1.0 },
+            PictureCropAuthoringPlanner.LeftHandleName => new PictureFormat { CropRight = 1.0 },
+            PictureCropAuthoringPlanner.BottomHandleName => new PictureFormat { CropTop = 1.0 },
+            PictureCropAuthoringPlanner.TopHandleName => new PictureFormat { CropBottom = 1.0 },
+            _ => new PictureFormat(),
+        };
+
+        var picture = new SlideShape
+        {
+            Id = 7,
+            Kind = SlideShapeKind.Picture,
+            Picture = new ImagePart { Bytes = [1] },
+            PictureFormat = format,
+        };
+
+        var bounds = new LayoutRect(10, 20, 100, 80);
+
+        // Drag the handle inward, an entirely ordinary pointer-move mid-gesture.
+        var act = () => PictureCropAuthoringPlanner.BuildMutationPlan(
+            picture,
+            bounds,
+            handleName,
+            new LayoutPoint(bounds.Left + bounds.Width / 2, bounds.Top + bounds.Height / 2));
+
+        var mutation = act.Should().NotThrow().Subject;
+
+        // The dragged edge must clamp to its minimum (0 = fully open) rather than invert past
+        // the opposite edge.
+        var draggedFraction = handleName switch
+        {
+            PictureCropAuthoringPlanner.LeftHandleName => mutation.Values!.Value.Left,
+            PictureCropAuthoringPlanner.TopHandleName => mutation.Values!.Value.Top,
+            PictureCropAuthoringPlanner.RightHandleName => mutation.Values!.Value.Right,
+            PictureCropAuthoringPlanner.BottomHandleName => mutation.Values!.Value.Bottom,
+            _ => throw new ArgumentOutOfRangeException(nameof(handleName)),
+        };
+        draggedFraction.Should().Be(0);
+    }
+
+    [Fact]
+    public void BuildMutationPlan_RightHandle_StillTracksPointer_WhenOppositeEdgeIsNotFullyCropped()
+    {
+        // Sibling coverage: the clamp-floor fix must not disturb ordinary in-range dragging.
+        var picture = new SlideShape
+        {
+            Id = 7,
+            Kind = SlideShapeKind.Picture,
+            Picture = new ImagePart { Bytes = [1] },
+            PictureFormat = new PictureFormat { CropLeft = 0.1 },
+        };
+
+        var bounds = new LayoutRect(0, 0, 100, 100);
+
+        var mutation = PictureCropAuthoringPlanner.BuildMutationPlan(
+            picture,
+            bounds,
+            PictureCropAuthoringPlanner.RightHandleName,
+            new LayoutPoint(70, 50));
+
+        mutation.ShouldApply.Should().BeTrue();
+        mutation.Values!.Value.Right.Should().BeApproximately(0.3, 1e-9);
+        mutation.Values.Value.Left.Should().Be(0.1);
+    }
 }

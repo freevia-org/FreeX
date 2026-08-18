@@ -257,6 +257,7 @@ public sealed class UngroupShapeCommand : IPresentationCommand
         _capturedConnectorAttachments;
     private List<ShapeAnimation>? _capturedAnimations;
     private string?            _capturedBuildListXml;
+    private List<DeleteShapeCommand.CommentAnchorSnapshot>? _capturedOrphanedCommentAnchors;
 
     public UngroupShapeCommand(int slideIndex, uint groupId)
     {
@@ -298,6 +299,31 @@ public sealed class UngroupShapeCommand : IPresentationCommand
         var slide = p.Slides[_slideIndex];
         _capturedAnimations = slide.Animations.ToList();
         _capturedBuildListXml = slide.AnimationBuildListXml;
+
+        // A modern (p188) comment thread can be anchored directly to the group shape (deMkLst/
+        // txMkLst carrying the group's id). Ungrouping destroys that id the same way deleting the
+        // shape would (see the comment below), so give it the identical treatment DeleteShapeCommand
+        // already gives a deleted shape's comment anchors: clear the anchor rather than silently
+        // leaving it pointing at an id nothing in the slide's tree carries anymore. Reusing
+        // ModernAnchorKind/ModernAnchorXml = "" makes the writer fall back to <p188:unknownAnchor/>
+        // (BuildModernAnchorElement) instead of inventing a second "orphaned" representation, and
+        // undo restores the original anchor exactly like DeleteShapeCommand's Revert does.
+        var groupIdSet = new HashSet<uint> { _groupId };
+        _capturedOrphanedCommentAnchors = new List<DeleteShapeCommand.CommentAnchorSnapshot>();
+        for (var commentIndex = 0; commentIndex < slide.Comments.Count; commentIndex++)
+        {
+            var comment = slide.Comments[commentIndex];
+            if (!DeleteShapeCommand.CommentAnchorReferencesShape(comment, groupIdSet))
+                continue;
+
+            _capturedOrphanedCommentAnchors.Add(new DeleteShapeCommand.CommentAnchorSnapshot(
+                DeleteShapeCommand.NormalizeModernCommentId(comment.ModernCommentId),
+                commentIndex,
+                comment.ModernAnchorKind,
+                comment.ModernAnchorXml));
+            comment.ModernAnchorKind = string.Empty;
+            comment.ModernAnchorXml = string.Empty;
+        }
 
         shapes.RemoveAt(_groupZIdx);
 
@@ -355,6 +381,20 @@ public sealed class UngroupShapeCommand : IPresentationCommand
             slide.AnimationBuildListXml = _capturedBuildListXml;
         }
 
+        if (_slideIndex >= 0 && _slideIndex < p.Slides.Count && _capturedOrphanedCommentAnchors is not null)
+        {
+            var slide = p.Slides[_slideIndex];
+            foreach (var snapshot in _capturedOrphanedCommentAnchors)
+            {
+                var comment = DeleteShapeCommand.ResolveCommentAnchorTarget(slide.Comments, snapshot);
+                if (comment is null)
+                    continue;
+
+                comment.ModernAnchorKind = snapshot.AnchorKind;
+                comment.ModernAnchorXml = snapshot.AnchorXml;
+            }
+        }
+
         if (_capturedConnectorAttachments is not null)
         {
             foreach (var (connector, start, end) in _capturedConnectorAttachments)
@@ -369,6 +409,7 @@ public sealed class UngroupShapeCommand : IPresentationCommand
         _parentShapes = null;
         _capturedAnimations = null;
         _capturedBuildListXml = null;
+        _capturedOrphanedCommentAnchors = null;
     }
 }
 

@@ -249,6 +249,47 @@ public sealed class ScenarioManagerCommandTests
     }
 
     [Fact]
+    public void ApplyScenarioCommand_LaterChangingCellSheetMissing_DoesNotPartiallyMutateEarlierCellsAndAllowsUndo()
+    {
+        // R142/GOALSEEK-WHATIF-1: a scenario's changing cells can span multiple sheets (FreeX
+        // does not restrict a scenario to a single sheet the way Excel's own UI does -- see
+        // SaveScenarioCommand, which has no same-sheet check). If a LATER changing cell's sheet
+        // no longer exists in the workbook (e.g. it was deleted out from under a stale scenario),
+        // Apply must reject the whole operation WITHOUT having already written the earlier,
+        // still-valid changing cells -- otherwise the user is left with a silently mutated cell,
+        // an error message claiming the operation failed outright, and (since CommandBus only
+        // pushes to the undo stack on CommandOutcome.Success) no undo entry to recover it.
+        var workbook = new Workbook("test");
+        var sheet1 = workbook.AddSheet("Sheet1");
+        var ctx = new TestCommandContext(workbook);
+        var first = new CellAddress(sheet1.Id, 1, 1);
+        sheet1.SetCell(first, new NumberValue(10));
+
+        // Simulate the second changing cell's sheet having been removed from the workbook: a
+        // SheetId that resolves to no live Sheet, exactly what ctx.Workbook.GetSheet(...) sees
+        // for a changing cell left dangling by a sheet deletion.
+        var missingSheet = new SheetId(Guid.NewGuid());
+        var second = new CellAddress(missingSheet, 1, 1);
+        workbook.Scenarios.Add(new WorkbookScenario(
+            "Best Case",
+            [
+                new ScenarioCellValue(first, new NumberValue(100)),
+                new ScenarioCellValue(second, new NumberValue(200))
+            ]));
+
+        var command = new ApplyScenarioCommand("Best Case");
+        var outcome = command.Apply(ctx);
+
+        outcome.Success.Should().BeFalse();
+        sheet1.GetValue(1, 1).Should().Be(new NumberValue(10), "the first changing cell must not be mutated when a later one fails validation");
+
+        // Revert must also be a safe no-op: since Apply failed, CommandBus never pushes this
+        // command to the undo stack, so nothing should change if Revert is called anyway.
+        command.Revert(ctx);
+        sheet1.GetValue(1, 1).Should().Be(new NumberValue(10));
+    }
+
+    [Fact]
     public void DeleteScenarioCommand_RemovesScenarioAndUndoRestoresIt()
     {
         var workbook = new Workbook("test");

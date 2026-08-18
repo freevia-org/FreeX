@@ -101,7 +101,23 @@ public sealed record FindReplaceReplaceRequest(
     string Replacement,
     FindReplaceSearchOptions Options);
 
-public readonly record struct FindReplaceMatch(int Block, int Start, int Length);
+/// <summary>
+/// A located Find/Replace hit. <see cref="Block"/> is always a top-level <c>document.Blocks</c> index
+/// (of a <see cref="Paragraph"/> or, for a table hit, the owning <see cref="Table"/>). When the hit is
+/// inside a table cell, <see cref="TableRow"/>/<see cref="TableCol"/>/<see cref="TableParagraphIndex"/>
+/// locate the cell and the paragraph within it (row/col are direct <see cref="TableRow.Cells"/> indices,
+/// not grid-projected columns); for a body paragraph hit all three are null.
+/// </summary>
+public readonly record struct FindReplaceMatch(
+    int Block,
+    int Start,
+    int Length,
+    int? TableRow = null,
+    int? TableCol = null,
+    int? TableParagraphIndex = null)
+{
+    public bool IsInTableCell => TableRow is not null;
+}
 
 public enum FindReplaceGoToTargetKind
 {
@@ -373,12 +389,21 @@ public static class FindReplaceDialogPlanner
         && FindAll(text, term, options)
             .Any(match => match.Start == 0 && match.Length == text.Length);
 
+    /// <summary>
+    /// Locates the next Find/Replace match at or after <paramref name="fromBlock"/>/<paramref name="fromOffset"/>,
+    /// wrapping back to the start of the document (and, within the starting block, to any match before
+    /// the start offset) when nothing later is found. When the search resumes inside a table cell -- i.e.
+    /// the caret is currently positioned in one -- pass <paramref name="fromTableCell"/> (row, column,
+    /// paragraph-in-cell index, and text offset within that paragraph) so the walk continues from that
+    /// exact cell position instead of restarting the owning table from its first cell every call.
+    /// </summary>
     public static FindReplaceMatch? FindNextMatch(
         TextDocument document,
         string? term,
         FindReplaceSearchOptions options,
         int fromBlock,
-        int fromOffset)
+        int fromOffset,
+        (int Row, int Col, int ParagraphIndex, int Offset)? fromTableCell = null)
     {
         ArgumentNullException.ThrowIfNull(document);
         if (string.IsNullOrEmpty(term) || document.Blocks.Count == 0)
@@ -388,14 +413,28 @@ public static class FindReplaceDialogPlanner
         for (var step = 0; step < document.Blocks.Count; step++)
         {
             var blockIndex = (startBlock + step) % document.Blocks.Count;
-            if (document.Blocks[blockIndex] is not Paragraph paragraph)
-                continue;
+            var block = document.Blocks[blockIndex];
 
-            var startAt = step == 0 ? Math.Clamp(fromOffset, 0, paragraph.PlainText.Length) : 0;
-            var match = FindAll(paragraph.PlainText, term, options)
-                .FirstOrDefault(item => item.Start >= startAt);
-            if (match.Length > 0)
-                return new FindReplaceMatch(blockIndex, match.Start, match.Length);
+            if (block is Paragraph paragraph)
+            {
+                var startAt = step == 0 ? Math.Clamp(fromOffset, 0, paragraph.PlainText.Length) : 0;
+                var match = FindAll(paragraph.PlainText, term, options)
+                    .FirstOrDefault(item => item.Start >= startAt);
+                if (match.Length > 0)
+                    return new FindReplaceMatch(blockIndex, match.Start, match.Length);
+                continue;
+            }
+
+            if (block is Table table)
+            {
+                var startCell = step == 0 ? fromTableCell : null;
+                var tableMatch = EnumerateTableMatches(table, term, options)
+                    .FirstOrDefault(item => IsTableMatchAtOrAfter(item, startCell));
+                if (tableMatch.Length > 0)
+                    return new FindReplaceMatch(
+                        blockIndex, tableMatch.Start, tableMatch.Length,
+                        tableMatch.Row, tableMatch.Col, tableMatch.ParagraphIndex);
+            }
         }
 
         if (startBlock >= 0 && document.Blocks[startBlock] is Paragraph startParagraph)
@@ -405,6 +444,15 @@ public static class FindReplaceDialogPlanner
                 .FirstOrDefault(item => item.Start < startAt);
             if (match.Length > 0)
                 return new FindReplaceMatch(startBlock, match.Start, match.Length);
+        }
+        else if (startBlock >= 0 && document.Blocks[startBlock] is Table startTable && fromTableCell is not null)
+        {
+            var wrapMatch = EnumerateTableMatches(startTable, term, options)
+                .FirstOrDefault(item => IsTableMatchBefore(item, fromTableCell.Value));
+            if (wrapMatch.Length > 0)
+                return new FindReplaceMatch(
+                    startBlock, wrapMatch.Start, wrapMatch.Length,
+                    wrapMatch.Row, wrapMatch.Col, wrapMatch.ParagraphIndex);
         }
 
         return null;
@@ -423,13 +471,70 @@ public static class FindReplaceDialogPlanner
         var count = 0;
         foreach (var block in document.Blocks)
         {
-            if (block is not Paragraph paragraph)
-                continue;
-
-            count += FindAll(paragraph.PlainText, term, effective).Count;
+            switch (block)
+            {
+                case Paragraph paragraph:
+                    count += FindAll(paragraph.PlainText, term, effective).Count;
+                    break;
+                case Table table:
+                    count += EnumerateTableMatches(table, term, effective).Count();
+                    break;
+            }
         }
 
         return count;
+    }
+
+    private readonly record struct TableTextMatch(int Row, int Col, int ParagraphIndex, int Start, int Length);
+
+    /// <summary>
+    /// Walks a table's cells in row-major, then-column order (matching how a reader/Find Next would
+    /// encounter them) and yields every match in every cell paragraph. Deliberately does NOT descend into
+    /// <see cref="TableCell.NestedTables"/> -- FreeW's Avalonia editor has no caret/selection model for
+    /// placing a cursor inside a nested table cell at all yet, so a match reported there could never be
+    /// selected or replaced; that is a separate, larger gap than this one (see FindReplaceDialogPlanner
+    /// remarks / the calling shell's Find &amp; Replace notes).
+    /// </summary>
+    private static IEnumerable<TableTextMatch> EnumerateTableMatches(
+        Table table,
+        string term,
+        FindReplaceSearchOptions options)
+    {
+        for (var row = 0; row < table.Rows.Count; row++)
+        {
+            var cells = table.Rows[row].Cells;
+            for (var col = 0; col < cells.Count; col++)
+            {
+                var paragraphs = cells[col].Paragraphs;
+                for (var paraIdx = 0; paraIdx < paragraphs.Count; paraIdx++)
+                {
+                    foreach (var (start, length) in FindAll(paragraphs[paraIdx].PlainText, term, options))
+                        yield return new TableTextMatch(row, col, paraIdx, start, length);
+                }
+            }
+        }
+    }
+
+    private static bool IsTableMatchAtOrAfter(
+        TableTextMatch match,
+        (int Row, int Col, int ParagraphIndex, int Offset)? from)
+    {
+        if (from is not { } f)
+            return true;
+        if (match.Row != f.Row) return match.Row > f.Row;
+        if (match.Col != f.Col) return match.Col > f.Col;
+        if (match.ParagraphIndex != f.ParagraphIndex) return match.ParagraphIndex > f.ParagraphIndex;
+        return match.Start >= f.Offset;
+    }
+
+    private static bool IsTableMatchBefore(
+        TableTextMatch match,
+        (int Row, int Col, int ParagraphIndex, int Offset) from)
+    {
+        if (match.Row != from.Row) return match.Row < from.Row;
+        if (match.Col != from.Col) return match.Col < from.Col;
+        if (match.ParagraphIndex != from.ParagraphIndex) return match.ParagraphIndex < from.ParagraphIndex;
+        return match.Start < from.Offset;
     }
 
     private static bool TryValidateSearchTerm(

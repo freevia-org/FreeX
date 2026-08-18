@@ -110,33 +110,40 @@ public static class PictureCropAuthoringPlanner
         var current = ReadValues(shape);
         var next = handleName switch
         {
+            // The opposite edge's stored fraction can legally already be as high as 1.0 (a
+            // file-authored srcRect can crop 100% from one side). Without the Math.Max(0, ...)
+            // floor, "1 - opposite - MinimumVisibleFraction" would go negative and Math.Clamp's
+            // min(0) > max would throw ArgumentException on the very first pointer move.
+            // PowerPoint's own crop handles stop dead at that minimum instead of letting the
+            // rectangle invert, so this edge is pinned to 0 (fully open) rather than crossing
+            // the opposite edge.
             LeftHandleName => current with
             {
                 Left = Math.Clamp(
                     (pointerDip.X - boundsDip.Left) / boundsDip.Width,
                     0,
-                    1 - current.Right - MinimumVisibleFraction)
+                    Math.Max(0, 1 - current.Right - MinimumVisibleFraction))
             },
             TopHandleName => current with
             {
                 Top = Math.Clamp(
                     (pointerDip.Y - boundsDip.Top) / boundsDip.Height,
                     0,
-                    1 - current.Bottom - MinimumVisibleFraction)
+                    Math.Max(0, 1 - current.Bottom - MinimumVisibleFraction))
             },
             RightHandleName => current with
             {
                 Right = Math.Clamp(
                     (boundsDip.Right - pointerDip.X) / boundsDip.Width,
                     0,
-                    1 - current.Left - MinimumVisibleFraction)
+                    Math.Max(0, 1 - current.Left - MinimumVisibleFraction))
             },
             BottomHandleName => current with
             {
                 Bottom = Math.Clamp(
                     (boundsDip.Bottom - pointerDip.Y) / boundsDip.Height,
                     0,
-                    1 - current.Top - MinimumVisibleFraction)
+                    Math.Max(0, 1 - current.Top - MinimumVisibleFraction))
             },
             _ => current,
         };

@@ -101,6 +101,35 @@ public class GoalSeekServiceTests
     }
 
     [Fact]
+    public void GoalSeek_SetCellAlreadyErroringAtStart_ReportsRealErrorNotFabricatedValue()
+    {
+        // R142-GOALSEEK-WHATIF-2: A1=0 (changing), B1=10/A1 (already #DIV/0! before the search
+        // even starts), target=5. The old code fabricated ActualResult = x0 + targetValue = 5,
+        // making it look like Goal Seek got exactly to the target when the formula never produced
+        // a valid number. The fix must surface the real error instead.
+        var (engine, wb) = MakeEngine();
+        var sheet = wb.Sheets.First();
+        var a1 = new CellAddress(sheet.Id, 1, 1);
+        var b1 = new CellAddress(sheet.Id, 1, 2);
+
+        sheet.SetCell(a1, new NumberValue(0));
+        sheet.SetFormula(b1, "10/A1");
+        engine.RebuildFormulaDependencies(wb);
+        engine.Recalculate(wb, [a1]);
+
+        // Sanity: confirm the set cell is genuinely erroring before Goal Seek runs at all.
+        sheet.GetValue(b1).Should().Be(ErrorValue.DivByZero);
+
+        var result = GoalSeekService.Seek(wb, engine, b1, 5.0, a1);
+
+        result.Converged.Should().BeFalse();
+        result.ActualResultError.Should().Be("#DIV/0!");
+        // The fabricated value from the old buggy branch (x0 + targetValue == 0 + 5 == 5) must
+        // NOT be reported as a number now that the real value is an error.
+        double.IsNaN(result.ActualResult).Should().BeTrue();
+    }
+
+    [Fact]
     public void GoalSeek_FlatFunction_ReturnsNotConverged()
     {
         // A1=1, B1=5 (constant literal, not dependent on A1), target=10 → can't converge
@@ -118,5 +147,11 @@ public class GoalSeekServiceTests
         var result = GoalSeekService.Seek(wb, engine, b1, 10.0, a1);
 
         result.Converged.Should().BeFalse();
+        // Sibling to GoalSeek_SetCellAlreadyErroringAtStart_ReportsRealErrorNotFabricatedValue:
+        // a normal (non-error) not-converged result must keep reporting the real numeric value
+        // with no error code — the fix must not affect this already-correct path.
+        result.ActualResultError.Should().BeNull();
+        double.IsNaN(result.ActualResult).Should().BeFalse();
+        result.ActualResult.Should().BeApproximately(5.0, 1e-9);
     }
 }

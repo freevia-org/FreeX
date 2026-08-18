@@ -3363,7 +3363,12 @@ public sealed class ConvertSmartArtToShapesCommand : IPresentationCommand
 /// </summary>
 public sealed class DeleteShapeCommand : IPresentationCommand
 {
-    private sealed record CommentAnchorSnapshot(
+    /// <summary>
+    /// Internal (not private) so other commands that destroy a shape id a modern comment thread
+    /// could be anchored to - e.g. <see cref="UngroupShapeCommand"/> destroying a group's own id -
+    /// can reuse the exact same capture/restore shape instead of re-implementing it.
+    /// </summary>
+    internal sealed record CommentAnchorSnapshot(
         string? NormalizedModernCommentId,
         int OriginalListIndex,
         string AnchorKind,
@@ -3513,7 +3518,7 @@ public sealed class DeleteShapeCommand : IPresentationCommand
         }
     }
 
-    private static SlideComment? ResolveCommentAnchorTarget(
+    internal static SlideComment? ResolveCommentAnchorTarget(
         IReadOnlyList<SlideComment> comments,
         CommentAnchorSnapshot snapshot)
     {
@@ -3534,7 +3539,7 @@ public sealed class DeleteShapeCommand : IPresentationCommand
             : null;
     }
 
-    private static string? NormalizeModernCommentId(string? modernCommentId)
+    internal static string? NormalizeModernCommentId(string? modernCommentId)
     {
         var normalized = modernCommentId?.Trim();
         return string.IsNullOrEmpty(normalized) ? null : normalized;
@@ -3547,7 +3552,7 @@ public sealed class DeleteShapeCommand : IPresentationCommand
     /// attribute on a descendant element (the two attribute names already used across this
     /// codebase — see p188:cm/id and p:spTgt/spid — for referencing a shape by its numeric id).
     /// </summary>
-    private static bool CommentAnchorReferencesShape(SlideComment comment, IReadOnlySet<uint> shapeIds)
+    internal static bool CommentAnchorReferencesShape(SlideComment comment, IReadOnlySet<uint> shapeIds)
     {
         if (comment.ModernAnchorKind is not ("deMkLst" or "txMkLst"))
             return false;

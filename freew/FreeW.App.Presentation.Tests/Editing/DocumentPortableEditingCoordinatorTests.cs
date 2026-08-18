@@ -1314,6 +1314,82 @@ public sealed class DocumentReferenceEditingCoordinatorTests
             .Should().Contain("Figure 1: First\t2");
     }
 
+    // r142 tof-refresh-cross-label-deletion: RefreshTableOfFigures for one caption label (e.g. "Table",
+    // via References > Update Table on a Table of Tables) must not delete a *different* label's own
+    // caption-table region (e.g. a pre-existing Table of Figures). Before the fix,
+    // TableOfFigures.IsTableOfFiguresParagraph had no label parameter, so
+    // DocumentReferenceEditingCoordinator.RefreshTableOfFigures's `GeneratedRegionIndices` call matched
+    // -- and deleted -- every caption-table region in the document regardless of label.
+    [Fact]
+    public void RefreshTableOfFiguresDoesNotDeleteADifferentlyLabelledCaptionTable()
+    {
+        var figureCaption = Captions.BuildCaption(CaptionLabel.Figure, 1, "Diagram");
+        var tableCaption = Captions.BuildCaption(CaptionLabel.Table, 1, "Budget");
+        var document = new TextDocument { Blocks = { figureCaption, tableCaption } };
+        var session = new DocumentEditingSession();
+        session.LoadDocument(document);
+
+        // Insert a Table of Figures near the top, then a separate Table of Tables further down --
+        // mirroring the failure scenario (two distinct caption-table regions in one document).
+        var insertedFigures = session.References.InsertTableOfFigures(
+            new DocumentTextPosition(0, 0),
+            Captions.FigureLabelText,
+            (_, _) => "1");
+        var insertedTables = session.References.InsertTableOfFigures(
+            insertedFigures.Caret,
+            Captions.TableLabelText,
+            (_, _) => "1");
+
+        document.Blocks.Where(block => TableOfFigures.IsTableOfFiguresParagraph(block, Captions.FigureLabelText))
+            .Cast<Paragraph>().Select(p => p.PlainText)
+            .Should().Equal("Table of Figures", "Figure 1: Diagram\t1");
+        document.Blocks.Where(block => TableOfFigures.IsTableOfFiguresParagraph(block, Captions.TableLabelText))
+            .Cast<Paragraph>().Select(p => p.PlainText)
+            .Should().Equal("Table of Tables", "Table 1: Budget\t1");
+
+        // Now edit the Table caption and refresh only the Table of Tables (e.g. ribbon "Update Table"
+        // invoked on that region) -- the Table of Figures region must survive untouched.
+        tableCaption.Runs[^1].Text = ": Updated";
+        session.References.RefreshTableOfFigures(
+            insertedTables.Caret,
+            Captions.TableLabelText,
+            (_, _) => "2");
+
+        document.Blocks.Where(block => TableOfFigures.IsTableOfFiguresParagraph(block, Captions.FigureLabelText))
+            .Cast<Paragraph>().Select(p => p.PlainText)
+            .Should().Equal("Table of Figures", "Figure 1: Diagram\t1");
+        document.Blocks.Where(block => TableOfFigures.IsTableOfFiguresParagraph(block, Captions.TableLabelText))
+            .Cast<Paragraph>().Select(p => p.PlainText)
+            .Should().Equal("Table of Tables", "Table 1: Updated\t2");
+    }
+
+    // Sibling/neighbouring-behaviour check: refreshing a label that already has its own region must
+    // still replace only that region in place (the pre-fix, single-label behaviour must be unchanged).
+    [Fact]
+    public void RefreshTableOfFiguresStillReplacesItsOwnRegionInPlaceWhenNoOtherLabelExists()
+    {
+        var figureCaption = Captions.BuildCaption(CaptionLabel.Figure, 1, "Diagram");
+        var document = new TextDocument { Blocks = { figureCaption } };
+        var session = new DocumentEditingSession();
+        session.LoadDocument(document);
+
+        var inserted = session.References.InsertTableOfFigures(
+            new DocumentTextPosition(0, 0),
+            Captions.FigureLabelText,
+            (_, _) => "1");
+        figureCaption.Runs[^1].Text = ": Updated";
+
+        var refreshed = session.References.RefreshTableOfFigures(
+            inserted.Caret,
+            Captions.FigureLabelText,
+            (_, _) => "2");
+
+        refreshed.Region.InsertIndex.Should().Be(0);
+        document.Blocks.Where(TableOfFigures.IsTableOfFiguresParagraph)
+            .Cast<Paragraph>().Select(p => p.PlainText)
+            .Should().Equal("Table of Figures", "Figure 1: Updated\t2");
+    }
+
     [Fact]
     public void TableOfAuthoritiesInsertAndRefreshOwnPlansCaretAndStabilization()
     {

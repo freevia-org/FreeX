@@ -19,7 +19,7 @@ public sealed class WorksheetFilterWorkflowSessionTests
         var session = new WorksheetFilterWorkflowSession();
 
         var plan = session.PlanDialogResult(
-            sheet.Id,
+            sheet,
             range,
             0,
             new AutoFilterDialogResult(
@@ -36,6 +36,91 @@ public sealed class WorksheetFilterWorkflowSessionTests
     }
 
     [Fact]
+    public void PlanDialogResult_AutoFilterSortOnTableWithTotalsRowKeepsTotalsRowOutsideCommandRange()
+    {
+        // R142-app-presentation-autofilter-totalsrow-sort-1: sorting from a structured table's
+        // AutoFilter dropdown must exclude BOTH the header row and the Totals Row from the sorted
+        // range -- otherwise the row holding the table's SUBTOTAL gets shuffled into the data body.
+        var workbook = new Workbook("Book");
+        var sheet = workbook.AddSheet("Sheet1");
+        SetText(sheet, 1, 1, "Name");
+        SetText(sheet, 2, 1, "Zulu");
+        SetText(sheet, 3, 1, "Alpha");
+        SetText(sheet, 4, 1, "Mike");
+        SetText(sheet, 5, 1, "Total");
+        var range = Range(sheet, 1, 1, 5, 1);
+        sheet.StructuredTables.Add(new StructuredTableModel
+        {
+            Id = 1,
+            Name = "Table1",
+            DisplayName = "Table1",
+            Range = range,
+            HasAutoFilter = true,
+            TotalsRowShown = true
+        });
+        var session = new WorksheetFilterWorkflowSession();
+
+        var plan = session.PlanDialogResult(
+            sheet,
+            range,
+            0,
+            new AutoFilterDialogResult(
+                AutoFilterSortDirection.Ascending,
+                [],
+                string.Empty,
+                string.Empty));
+        var outcome = plan.CreateCommand().Apply(new TestCommandContext(workbook));
+
+        outcome.Success.Should().BeTrue();
+        sheet.GetValue(1, 1).Should().Be(new TextValue("Name"), "the header row must stay out of the sort");
+        sheet.GetValue(5, 1).Should().Be(new TextValue("Total"), "the Totals Row must never be shuffled into the sorted data body");
+        sheet.GetValue(2, 1).Should().Be(new TextValue("Alpha"));
+        sheet.GetValue(3, 1).Should().Be(new TextValue("Mike"));
+        sheet.GetValue(4, 1).Should().Be(new TextValue("Zulu"));
+    }
+
+    [Fact]
+    public void PlanDialogResult_AutoFilterSortOnTableWithoutTotalsRowSortsFullDataBody()
+    {
+        // Sibling of the totals-row test above: a table with NO Totals Row shown must still sort
+        // every data row (nothing gets over-excluded just because the range came from a table).
+        var workbook = new Workbook("Book");
+        var sheet = workbook.AddSheet("Sheet1");
+        SetText(sheet, 1, 1, "Name");
+        SetText(sheet, 2, 1, "Zulu");
+        SetText(sheet, 3, 1, "Alpha");
+        SetText(sheet, 4, 1, "Mike");
+        var range = Range(sheet, 1, 1, 4, 1);
+        sheet.StructuredTables.Add(new StructuredTableModel
+        {
+            Id = 1,
+            Name = "Table1",
+            DisplayName = "Table1",
+            Range = range,
+            HasAutoFilter = true,
+            TotalsRowShown = false
+        });
+        var session = new WorksheetFilterWorkflowSession();
+
+        var plan = session.PlanDialogResult(
+            sheet,
+            range,
+            0,
+            new AutoFilterDialogResult(
+                AutoFilterSortDirection.Ascending,
+                [],
+                string.Empty,
+                string.Empty));
+        var outcome = plan.CreateCommand().Apply(new TestCommandContext(workbook));
+
+        outcome.Success.Should().BeTrue();
+        sheet.GetValue(1, 1).Should().Be(new TextValue("Name"));
+        sheet.GetValue(2, 1).Should().Be(new TextValue("Alpha"));
+        sheet.GetValue(3, 1).Should().Be(new TextValue("Mike"));
+        sheet.GetValue(4, 1).Should().Be(new TextValue("Zulu"));
+    }
+
+    [Fact]
     public void PlanDialogResult_InvalidCriteriaReturnsPortableError()
     {
         var sheet = new Workbook("Book").AddSheet("Sheet1");
@@ -43,7 +128,7 @@ public sealed class WorksheetFilterWorkflowSessionTests
         var session = new WorksheetFilterWorkflowSession();
 
         var plan = session.PlanDialogResult(
-            sheet.Id,
+            sheet,
             range,
             0,
             new AutoFilterDialogResult(
@@ -128,7 +213,7 @@ public sealed class WorksheetFilterWorkflowSessionTests
         var context = new TestCommandContext(workbook);
         var session = new WorksheetFilterWorkflowSession();
         var mutation = session.PlanDialogResult(
-            sheet.Id,
+            sheet,
             range,
             0,
             new AutoFilterDialogResult(

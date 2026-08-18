@@ -118,12 +118,15 @@ public sealed class WorksheetFilterWorkflowSession
     private AdvancedFilterReapplyState? _lastInPlaceAdvancedFilter;
 
     public WorksheetFilterMutationPlan PlanDialogResult(
-        SheetId sheetId,
+        Sheet sheet,
         GridRange range,
         uint columnOffset,
         AutoFilterDialogResult result)
     {
+        ArgumentNullException.ThrowIfNull(sheet);
         ArgumentNullException.ThrowIfNull(result);
+
+        var sheetId = sheet.Id;
 
         if (result.Action == AutoFilterDialogAction.ClearFilter)
         {
@@ -149,7 +152,7 @@ public sealed class WorksheetFilterWorkflowSession
                 "Sort",
                 currentRange => new SortCommand(
                     sheetId,
-                    ExcludeAutoFilterHeader(currentRange),
+                    ExcludeAutoFilterHeaderAndTotalsRow(sheet, currentRange),
                     columnOffset,
                     ascending));
         }
@@ -167,7 +170,7 @@ public sealed class WorksheetFilterWorkflowSession
                 "Sort by Color",
                 currentRange => AutoFilterDropdownMenuPlanner.CreateSortByColorCommand(
                     sheetId,
-                    ExcludeAutoFilterHeader(currentRange),
+                    ExcludeAutoFilterHeaderAndTotalsRow(sheet, currentRange),
                     columnOffset,
                     new AutoFilterColorOption(string.Empty, sortByColor.Kind, color)));
         }
@@ -373,12 +376,32 @@ public sealed class WorksheetFilterWorkflowSession
             _ => null
         };
 
-    private static GridRange ExcludeAutoFilterHeader(GridRange range) =>
-        range.RowCount > 1
-            ? new GridRange(
-                new CellAddress(range.Start.Sheet, range.Start.Row + 1, range.Start.Col),
-                range.End)
-            : range;
+    /// <summary>
+    /// Trims the header row from the front of an AutoFilter dropdown's Sort/Sort-by-Color range, and
+    /// -- when <paramref name="range"/> is exactly a structured table's own <c>Range</c> with its
+    /// Totals Row shown -- trims the Totals Row from the back too, via the same
+    /// <see cref="AutoFilterRangeResolver.GetFilterableLastRow"/> bound the interactive filter
+    /// commands (FilterCommand, TopBottomFilterCommand, AverageFilterCommand, FilterConditionCommand)
+    /// already use. Without this, range.End.Row IS the Totals Row for such a table (see
+    /// SetStructuredTableTotalsRowCommand), and sorting from the dropdown would shuffle the row
+    /// holding the table's SUBTOTAL formula into the data body while sorting a normal row's content
+    /// into the Totals Row position.
+    /// </summary>
+    private static GridRange ExcludeAutoFilterHeaderAndTotalsRow(Sheet sheet, GridRange range)
+    {
+        if (range.RowCount <= 1)
+            return range;
+
+        // Resolve the last filterable row against the ORIGINAL range -- GetFilterableLastRow only
+        // recognizes a table's Totals Row when the range passed in still equals that table's own
+        // Range exactly, which stops being true the moment the header row is trimmed off the front.
+        var lastDataRow = AutoFilterRangeResolver.GetFilterableLastRow(sheet, range);
+        var endRow = lastDataRow < range.Start.Row + 1 ? range.Start.Row + 1 : lastDataRow;
+
+        return new GridRange(
+            new CellAddress(range.Start.Sheet, range.Start.Row + 1, range.Start.Col),
+            new CellAddress(range.Start.Sheet, endRow, range.End.Col));
+    }
 
     private static List<uint> CollectActiveColumnOffsets(Sheet sheet, GridRange range)
     {

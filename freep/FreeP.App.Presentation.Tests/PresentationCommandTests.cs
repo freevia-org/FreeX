@@ -1196,6 +1196,84 @@ public sealed class PresentationCommandTests
     }
 
     [Fact]
+    public void UngroupShapeCommand_OrphansModernCommentAnchor_AndUndoRestoresIt()
+    {
+        // Mirrors DeleteShapeCommand_OrphansModernCommentAnchor_AndUndoRestoresIt: a modern (p188)
+        // comment thread anchored directly to the GROUP shape (not a child) must have its anchor
+        // cleared when Ungroup destroys the group's own id, the same treatment r140 already gave
+        // the group's own animation in this exact command - and undo must restore the anchor.
+        var (p, bus) = Make();
+        var group = new SlideShape { Id = 10, Kind = SlideShapeKind.Group };
+        var child = MakeShape(11);
+        group.Children.Add(child);
+        p.Slides[0].Shapes.Add(group);
+
+        var anchoredComment = new SlideComment
+        {
+            UsesModernCommentSchema = true,
+            ModernCommentId = "{22222222-2222-2222-2222-222222222222}",
+            Author = "Reviewer",
+            Text = "Check this group",
+            ModernAnchorKind = "deMkLst",
+            ModernAnchorXml =
+                "<p188:deMkLst xmlns:p188=\"http://schemas.microsoft.com/office/powerpoint/2018/8/main\">" +
+                "<p188:sp id=\"10\"/></p188:deMkLst>",
+        };
+        p.Slides[0].Comments.Add(anchoredComment);
+
+        bus.Execute(new UngroupShapeCommand(0, group.Id));
+
+        // The comment thread survives ungrouping (comments are independent review data) but its
+        // anchor no longer names the now-destroyed group id.
+        p.Slides[0].Comments.Should().ContainSingle().Which.Should().BeSameAs(anchoredComment);
+        anchoredComment.ModernAnchorXml.Should().NotContain("id=\"10\"");
+        anchoredComment.Text.Should().Be("Check this group");
+
+        bus.Undo();
+
+        p.Slides[0].Shapes.Should().ContainSingle().Which.Should().BeSameAs(group);
+        anchoredComment.ModernAnchorKind.Should().Be("deMkLst");
+        anchoredComment.ModernAnchorXml.Should().Contain("id=\"10\"");
+
+        bus.Redo();
+
+        anchoredComment.ModernAnchorKind.Should().BeEmpty();
+        anchoredComment.ModernAnchorXml.Should().BeEmpty();
+    }
+
+    [Fact]
+    public void UngroupShapeCommand_LeavesCommentAnchoredToChild_Untouched()
+    {
+        // Sibling of the test above: a comment anchored to a CHILD (not the group) must survive
+        // ungrouping with its anchor untouched, since the child's own id keeps existing on the
+        // slide after the group wrapper is removed.
+        var (p, bus) = Make();
+        var group = new SlideShape { Id = 10, Kind = SlideShapeKind.Group };
+        var child = MakeShape(11);
+        group.Children.Add(child);
+        p.Slides[0].Shapes.Add(group);
+
+        var childComment = new SlideComment
+        {
+            UsesModernCommentSchema = true,
+            ModernCommentId = "{33333333-3333-3333-3333-333333333333}",
+            Author = "Reviewer",
+            Text = "Check this child shape",
+            ModernAnchorKind = "deMkLst",
+            ModernAnchorXml =
+                "<p188:deMkLst xmlns:p188=\"http://schemas.microsoft.com/office/powerpoint/2018/8/main\">" +
+                "<p188:sp id=\"11\"/></p188:deMkLst>",
+        };
+        p.Slides[0].Comments.Add(childComment);
+
+        bus.Execute(new UngroupShapeCommand(0, group.Id));
+
+        p.Slides[0].Comments.Should().ContainSingle().Which.Should().BeSameAs(childComment);
+        childComment.ModernAnchorKind.Should().Be("deMkLst");
+        childComment.ModernAnchorXml.Should().Contain("id=\"11\"");
+    }
+
+    [Fact]
     public void DeleteShapeCommand_Revert_RestoresShapeAtOriginalIndex()
     {
         var (p, bus) = Make();

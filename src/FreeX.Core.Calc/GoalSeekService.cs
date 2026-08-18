@@ -33,7 +33,15 @@ public static class GoalSeekService
             // Evaluate f(x) = formula(x) - target
             double fx0 = EvaluateF(workbook, engine, changingCell, setCell, x0, targetValue);
             if (IsInvalidNumber(fx0))
-                return new GoalSeekResult(false, x0, x0 + targetValue, 0);
+            {
+                // No valid prior point exists yet to fall back to (unlike the branches below,
+                // which reuse fx0/fx1 once those are known finite). Report what the set cell
+                // actually holds right now — including its error code when it holds one —
+                // instead of synthesizing x0 + targetValue, which has no relationship to the
+                // real (invalid) result and would misrepresent how close the search got.
+                var (actualValue, actualError) = ReadActualSetCellValue(workbook, setCell);
+                return new GoalSeekResult(false, x0, actualValue, 0, actualError);
+            }
 
             // Already at solution?
             if (Math.Abs(fx0) < tolerance)
@@ -108,6 +116,24 @@ public static class GoalSeekService
     private static bool IsInvalidNumber(double value) =>
         double.IsNaN(value) || double.IsInfinity(value);
 
+    /// <summary>
+    /// Reads the set cell's real current value (as of the caller's most recent
+    /// <c>EvaluateF</c> call) for reporting in a failed <see cref="GoalSeekResult"/>. Returns the
+    /// numeric value when the cell holds a number, or the cell's error code (e.g. "#DIV/0!") when
+    /// it holds an <see cref="ErrorValue"/>, so the failure report reflects reality instead of a
+    /// fabricated number.
+    /// </summary>
+    private static (double Value, string? ErrorCode) ReadActualSetCellValue(Workbook workbook, CellAddress setCell)
+    {
+        var value = workbook.GetSheet(setCell.Sheet)?.GetValue(setCell);
+        return value switch
+        {
+            NumberValue nv => (nv.Value, null),
+            ErrorValue ev => (double.NaN, ev.Code),
+            _ => (double.NaN, null)
+        };
+    }
+
     private static double EvaluateF(
         Workbook workbook,
         RecalcEngine engine,
@@ -133,4 +159,16 @@ public static class GoalSeekService
 }
 
 /// <summary>Result of a Goal Seek operation.</summary>
-public record GoalSeekResult(bool Converged, double FoundValue, double ActualResult, int Iterations);
+/// <param name="ActualResultError">
+/// When the set cell holds an error at the point <see cref="ActualResult"/> was captured (e.g. the
+/// starting point was already invalid, such as "#DIV/0!"), this carries that error code and
+/// <see cref="ActualResult"/> is <see cref="double.NaN"/>. Null whenever <see cref="ActualResult"/>
+/// is a genuine number. Presenters must check this before formatting <see cref="ActualResult"/> as
+/// a number.
+/// </param>
+public record GoalSeekResult(
+    bool Converged,
+    double FoundValue,
+    double ActualResult,
+    int Iterations,
+    string? ActualResultError = null);

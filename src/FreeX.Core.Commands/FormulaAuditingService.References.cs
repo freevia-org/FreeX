@@ -330,6 +330,81 @@ public static partial class FormulaAuditingService
         return workbook.GetSheet(hostSheetId);
     }
 
+    /// <summary>
+    /// True when <paramref name="formulaAddress"/>'s formula references at least one cell/range in
+    /// ANOTHER workbook (the bracketed <c>[Book.xlsx]Sheet</c> / <c>'[Book.xlsx]Sheet'</c>
+    /// external-reference syntax; see <see cref="ExternalSheetReferenceResolver"/>).
+    /// <see cref="ResolveSheet"/> can only resolve a sheet name against THIS workbook's own sheet
+    /// list, so <see cref="CollectReferences"/>/<see cref="CollectReferenceRegions"/> silently
+    /// SKIP an external reference -- there is no in-workbook <see cref="Sheet"/>/
+    /// <see cref="CellAddress"/> to represent it as. That means <see cref="GetDirectPrecedents"/>
+    /// and <see cref="GetDirectPrecedentRegions"/> can return an EMPTY list for a formula that
+    /// genuinely has a precedent, just not one FreeX can point a <see cref="CellAddress"/> at, and
+    /// a caller that reads an empty list as "no direct precedents" is reporting something false
+    /// (R142-core-commands-formula-auditing-trace-precedents-external-workbook-misreport). Callers
+    /// use this flag to distinguish that case and say so explicitly instead.
+    ///
+    /// What the UI should draw for one: Excel itself never draws a navigable arrow to an external
+    /// reference either -- since the source workbook isn't open there is nothing in the local grid
+    /// to point at -- it draws a small worksheet icon at the traced cell with no line to anywhere.
+    /// FreeX's nearest existing analogue is <c>FormulaTraceOverlayPlanner.CrossSheetMarker</c> (see
+    /// FreeX.App.Presentation/FormulaAuditing/FormulaTraceOverlayPlanner.cs), but that marker's
+    /// contract is "click to navigate to a real CellAddress on another LOCAL sheet" -- it cannot
+    /// represent a workbook that was never opened, so it must not be reused unmodified for this.
+    /// Until the trace-arrow overlay contract grows a distinct, non-navigable external-reference
+    /// marker kind, the accurate status-bar/message-box notice this flag drives (see
+    /// FreeX.App.Host/MainWindow.FormulaCommands.cs TracePrecedentsForCell and
+    /// FreeX.App.Avalonia/MainWindow.FormulaAuditing.cs TraceFormulaPrecedents) is what stands in
+    /// for it, so the user is told the truth instead of "no direct precedents".
+    /// </summary>
+    public static bool HasExternalPrecedentReference(Workbook workbook, CellAddress formulaAddress)
+    {
+        var sheet = workbook.GetSheet(formulaAddress.Sheet);
+        var cell = sheet?.GetCell(formulaAddress);
+        if (cell?.HasFormula != true || string.IsNullOrWhiteSpace(cell.FormulaText))
+            return false;
+
+        try
+        {
+            var ast = new Parser(new Lexer(cell.FormulaText).Tokenize()).Parse();
+            return ReferencesExternalWorkbook(ast);
+        }
+        catch (FormulaParseException)
+        {
+            return false;
+        }
+    }
+
+    private static bool ReferencesExternalWorkbook(FormulaNode node)
+    {
+        switch (node)
+        {
+            case CellRefNode cellRef:
+                return cellRef.SheetName is { } cellSheetName &&
+                       ExternalSheetReferenceResolver.IsExternalReferenceSyntax(cellSheetName);
+
+            case RangeRefNode rangeRef:
+                return (rangeRef.SheetName ?? rangeRef.Start.SheetName) is { } rangeSheetName &&
+                       ExternalSheetReferenceResolver.IsExternalReferenceSyntax(rangeSheetName);
+
+            case BinaryOpNode binary:
+                return ReferencesExternalWorkbook(binary.Left) || ReferencesExternalWorkbook(binary.Right);
+
+            case UnaryOpNode unary:
+                return ReferencesExternalWorkbook(unary.Operand);
+
+            case FunctionCallNode function:
+                foreach (var arg in function.Arguments)
+                    if (ReferencesExternalWorkbook(arg))
+                        return true;
+
+                return false;
+
+            default:
+                return false;
+        }
+    }
+
     private static void AddRange(HashSet<CellAddress> result, SheetId sheetId, RangeRefNode range)
     {
         var startRow = Math.Min(range.Start.Row, range.End.Row);

@@ -404,4 +404,83 @@ public class AutofillCommandTests
         outcome.AffectedCells.Should().Contain(new CellAddress(sheet.Id, 4, 1));
     }
 
+    // R142-comments-notes-1: the fill handle (AutofillCommand) must carry a source cell's legacy
+    // note (Comments/CommentAuthors/ShownComments) and threaded comment to every destination cell
+    // it fills, exactly like it already does for Hyperlinks, and undo must restore precisely what
+    // was at the destination beforehand rather than leaving the fill's comment behind or wiping a
+    // pre-existing destination comment outright.
+    [Fact]
+    public void FillDown_CopiesLegacyNoteAndThreadedCommentAndUndoRestoresDestinationOriginals()
+    {
+        var (_, sheet, ctx) = Setup();
+        var source = new CellAddress(sheet.Id, 1, 1);
+        var target = new CellAddress(sheet.Id, 2, 1);
+        sheet.SetCell(source, new NumberValue(42));
+        sheet.Comments[source] = "Source note";
+        sheet.CommentAuthors[source] = "Alice";
+        sheet.ShownComments.Add(source);
+        sheet.ThreadedComments[source] = new ThreadedComment("Source thread") { Id = "{SRC-ID}" };
+
+        // The destination already has its OWN pre-existing note before the fill overwrites it --
+        // undo must restore exactly this, not just blank the destination out.
+        sheet.SetCell(target, new NumberValue(0));
+        sheet.Comments[target] = "Original destination note";
+        sheet.CommentAuthors[target] = "Bob";
+        sheet.ThreadedComments[target] = new ThreadedComment("Original destination thread") { Id = "{DST-ID}" };
+
+        var command = new AutofillCommand(
+            sheet.Id,
+            new GridRange(source, source),
+            new GridRange(target, target));
+
+        command.Apply(ctx).Success.Should().BeTrue();
+
+        sheet.GetValue(2, 1).Should().Be(new NumberValue(42));
+        sheet.Comments[target].Should().Be("Source note");
+        sheet.CommentAuthors[target].Should().Be("Alice");
+        sheet.ShownComments.Should().Contain(target);
+        sheet.ThreadedComments[target].Text.Should().Be("Source thread");
+        // The copy must mint its own thread id rather than duplicating the source's persisted id
+        // (mirrors CopyRangeCommand.ClonedThreadedCommentForNewAddress -- otherwise two threads
+        // sharing one id collide on reload).
+        sheet.ThreadedComments[target].Id.Should().BeNull();
+
+        command.Revert(ctx);
+
+        sheet.Comments[target].Should().Be("Original destination note");
+        sheet.CommentAuthors[target].Should().Be("Bob");
+        sheet.ShownComments.Should().NotContain(target);
+        sheet.ThreadedComments[target].Text.Should().Be("Original destination thread");
+        sheet.ThreadedComments[target].Id.Should().Be("{DST-ID}");
+    }
+
+    // Sibling test: an unrelated cell outside the fill range keeps its own note completely
+    // untouched by a fill (and by that fill's undo), proving the new comment-carry logic is
+    // scoped to the actual fill destination and doesn't leak into neighbouring cells.
+    [Fact]
+    public void FillDown_LeavesUnrelatedCellsNoteUntouched()
+    {
+        var (_, sheet, ctx) = Setup();
+        var source = new CellAddress(sheet.Id, 1, 1);
+        var target = new CellAddress(sheet.Id, 2, 1);
+        var unrelated = new CellAddress(sheet.Id, 1, 3);
+        sheet.SetCell(source, new NumberValue(7));
+        sheet.Comments[source] = "Source note";
+        sheet.SetCell(unrelated, new NumberValue(99));
+        sheet.Comments[unrelated] = "Unrelated note";
+        sheet.CommentAuthors[unrelated] = "Carol";
+
+        var command = new AutofillCommand(
+            sheet.Id,
+            new GridRange(source, source),
+            new GridRange(target, target));
+
+        command.Apply(ctx).Success.Should().BeTrue();
+        sheet.Comments[unrelated].Should().Be("Unrelated note");
+        sheet.CommentAuthors[unrelated].Should().Be("Carol");
+
+        command.Revert(ctx);
+        sheet.Comments[unrelated].Should().Be("Unrelated note");
+        sheet.CommentAuthors[unrelated].Should().Be("Carol");
+    }
 }

@@ -361,7 +361,12 @@ public static class SlideSectionPlanner
             foreach (var slideId in slideIds.Where(memberSet.Contains))
                 clone.SlideIds.Add(slideId);
 
-            if (clone.SlideIds.Count > 0)
+            // Keep a section that resolved at least one member slide, and also keep
+            // a section that was genuinely empty to begin with (e.g. MoveSlideCommand
+            // deliberately leaves an emptied section behind) so Rename/Remove Section
+            // can still find and act on it. Only drop sections whose ids are merely
+            // stale -- non-empty but none of them match a live slide.
+            if (clone.SlideIds.Count > 0 || section.SlideIds.Count == 0)
                 pruned.Add(clone);
         }
 

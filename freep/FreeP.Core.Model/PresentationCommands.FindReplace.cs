@@ -17,9 +17,9 @@ public sealed class ReplaceOneCommand : IPresentationCommand
     private readonly TextSearchMatch _match;
     private readonly string _replacement;
 
-    // Captured on Apply for Revert
-    private string? _capturedOriginalRunText;
-    private int     _capturedRunIndex;
+    // Captured on Apply for Revert: one entry per run the match touched (more than one when
+    // the match spanned a run/formatting boundary), in ascending run-index order.
+    private readonly List<(int RunIndex, string OriginalText)> _capturedRuns = new();
 
     public ReplaceOneCommand(TextSearchMatch match, string replacement)
     {
@@ -31,6 +31,8 @@ public sealed class ReplaceOneCommand : IPresentationCommand
 
     public void Apply(Presentation p)
     {
+        _capturedRuns.Clear();
+
         var body = ResolveTextBody(p, _match);
         if (body is null) return;
 
@@ -39,20 +41,18 @@ public sealed class ReplaceOneCommand : IPresentationCommand
         // shape still resolves (it is found by its stable id) while the paragraph/run structure
         // underneath it may have shifted, so every offset here has to be re-checked. A stale match
         // is a no-op, not a crash.
-        if (!FindReplaceMatchResolver.TryResolveRun(body, _match, out var run))
+        if (!FindReplaceMatchResolver.TryResolveSpan(body, _match, out var paragraph, out int endRunIndex))
             return;
 
-        _capturedOriginalRunText = run.Text;
-        _capturedRunIndex        = _match.RunIndex;
+        for (int ri = _match.RunIndex; ri <= endRunIndex; ri++)
+            _capturedRuns.Add((ri, paragraph.Runs[ri].Text));
 
-        // Replace the matched substring in the run.
-        run.Text = run.Text.Remove(_match.CharStart, _match.CharEnd - _match.CharStart)
-                           .Insert(_match.CharStart, _replacement);
+        FindReplaceRunSpanWriter.ApplyReplacement(paragraph, _match, endRunIndex, _replacement);
     }
 
     public void Revert(Presentation p)
     {
-        if (_capturedOriginalRunText is null) return;
+        if (_capturedRuns.Count == 0) return;
 
         var body = ResolveTextBody(p, _match);
         if (body is null) return;
@@ -62,8 +62,11 @@ public sealed class ReplaceOneCommand : IPresentationCommand
             return;
 
         var para = body.Paragraphs[_match.ParagraphIndex];
-        if (_capturedRunIndex >= 0 && _capturedRunIndex < para.Runs.Count)
-            para.Runs[_capturedRunIndex].Text = _capturedOriginalRunText;
+        foreach (var (runIndex, originalText) in _capturedRuns)
+        {
+            if (runIndex >= 0 && runIndex < para.Runs.Count)
+                para.Runs[runIndex].Text = originalText;
+        }
     }
 
     // ── helpers ──────────────────────────────────────────────────────────────
@@ -114,8 +117,12 @@ public sealed class ReplaceAllCommand : IPresentationCommand
     private readonly string _replacement;
     private readonly TextSearchOptions _opts;
 
-    // Captured on Apply
-    private readonly List<(TextSearchMatch match, string originalText)> _applied = new();
+    // Captured on Apply: one entry per (paragraph, run) touched, holding that run's
+    // pristine pre-replacement text so Revert can restore it. A match that spans a
+    // run/formatting boundary touches more than one run, so this is keyed per run, not
+    // per match.
+    private readonly List<(int SlideIndex, uint ShapeId, TextMatchLocation Location,
+        int TableRow, int TableCol, int ParagraphIndex, int RunIndex, string OriginalText)> _applied = new();
 
     public ReplaceAllCommand(string query, string replacement, TextSearchOptions opts)
     {
@@ -132,52 +139,62 @@ public sealed class ReplaceAllCommand : IPresentationCommand
 
         var matches = PresentationTextSearch.FindAll(p, _query, _opts);
 
-        // Process matches in REVERSE order within each run so that earlier char-offsets
-        // within the same run are not shifted by earlier replacements.  Group by
-        // (slideIndex, shapeId, location, row, col, paragraphIndex, runIndex) so the
-        // multi-match-in-one-run case is handled correctly.
+        // Group by the paragraph the matches live in -- not by run, because a match may now
+        // span more than one run (a query that straddles a formatting boundary).  Within a
+        // paragraph, process matches in REVERSE position order (highest starting run/offset
+        // first) so replacing one match cannot shift the char-offsets of matches that precede
+        // it in the same paragraph; run index only ever increases left-to-right, so ordering
+        // by (RunIndex desc, CharStart desc) reproduces reverse paragraph-position order.
         var grouped = matches
-            .GroupBy(m => (m.SlideIndex, m.ShapeId, m.Location, m.TableRow, m.TableCol, m.ParagraphIndex, m.RunIndex))
+            .GroupBy(m => (m.SlideIndex, m.ShapeId, m.Location, m.TableRow, m.TableCol, m.ParagraphIndex))
             .ToList();
 
         foreach (var group in grouped)
         {
-            var first = group.First();
-            var body  = ResolveTextBody(p, first);
+            var key  = group.Key;
+            var body = ResolveTextBody(p, key.SlideIndex, key.ShapeId, key.Location, key.TableRow, key.TableCol);
             if (body is null) continue;
+            if (key.ParagraphIndex < 0 || key.ParagraphIndex >= body.Paragraphs.Count) continue;
+            var paragraph = body.Paragraphs[key.ParagraphIndex];
 
-            if (!FindReplaceMatchResolver.TryResolveRun(body, first, out var run))
-                continue;
+            var touchedRuns = new HashSet<int>();
 
-            // Capture original text once per run.
-            string originalText = run.Text;
-
-            // Apply all replacements for this run in descending char-start order.
-            string current = originalText;
-            foreach (var m in group.OrderByDescending(m => m.CharStart))
+            foreach (var m in group.OrderByDescending(m => m.RunIndex).ThenByDescending(m => m.CharStart))
             {
-                if (m.CharStart < 0 || m.CharEnd < m.CharStart || m.CharEnd > current.Length)
+                int endRunIndex = m.ResolvedEndRunIndex;
+                if (m.RunIndex < 0 || endRunIndex < m.RunIndex || endRunIndex >= paragraph.Runs.Count)
                     continue;
-                current = current.Remove(m.CharStart, m.CharEnd - m.CharStart)
-                                 .Insert(m.CharStart, _replacement);
-            }
+                if (m.CharStart < 0 || m.CharStart > paragraph.Runs[m.RunIndex].Text.Length)
+                    continue;
 
-            run.Text = current;
-            _applied.Add((first, originalText));
+                // Capture each touched run's ORIGINAL text exactly once, before the first
+                // edit touches it (matches are processed right-to-left, so the first touch
+                // is always the pristine text).
+                for (int ri = m.RunIndex; ri <= endRunIndex; ri++)
+                {
+                    if (touchedRuns.Add(ri))
+                    {
+                        _applied.Add((key.SlideIndex, key.ShapeId, key.Location, key.TableRow, key.TableCol,
+                            key.ParagraphIndex, ri, paragraph.Runs[ri].Text));
+                    }
+                }
+
+                FindReplaceRunSpanWriter.ApplyReplacement(paragraph, m, endRunIndex, _replacement);
+            }
         }
     }
 
     public void Revert(Presentation p)
     {
-        foreach (var (match, originalText) in _applied)
+        foreach (var entry in _applied)
         {
-            var body = ResolveTextBody(p, match);
+            var body = ResolveTextBody(p, entry.SlideIndex, entry.ShapeId, entry.Location, entry.TableRow, entry.TableCol);
             if (body is null) continue;
-            if (match.ParagraphIndex < 0 || match.ParagraphIndex >= body.Paragraphs.Count)
+            if (entry.ParagraphIndex < 0 || entry.ParagraphIndex >= body.Paragraphs.Count)
                 continue;
-            var para = body.Paragraphs[match.ParagraphIndex];
-            if (match.RunIndex >= 0 && match.RunIndex < para.Runs.Count)
-                para.Runs[match.RunIndex].Text = originalText;
+            var para = body.Paragraphs[entry.ParagraphIndex];
+            if (entry.RunIndex >= 0 && entry.RunIndex < para.Runs.Count)
+                para.Runs[entry.RunIndex].Text = entry.OriginalText;
         }
         _applied.Clear();
     }
@@ -187,30 +204,31 @@ public sealed class ReplaceAllCommand : IPresentationCommand
 
     // ── helpers ──────────────────────────────────────────────────────────────
 
-    private static TextBody? ResolveTextBody(Presentation p, TextSearchMatch m)
+    private static TextBody? ResolveTextBody(
+        Presentation p, int slideIndex, uint shapeId, TextMatchLocation location, int tableRow, int tableCol)
     {
-        if (m.SlideIndex < 0 || m.SlideIndex >= p.Slides.Count) return null;
-        var slide = p.Slides[m.SlideIndex];
+        if (slideIndex < 0 || slideIndex >= p.Slides.Count) return null;
+        var slide = p.Slides[slideIndex];
 
-        return m.Location switch
+        return location switch
         {
             TextMatchLocation.Notes     => slide.Notes,
-            TextMatchLocation.TableCell => ResolveTableCell(slide, m),
-            _                           => ResolveShapeBody(slide, m),
+            TextMatchLocation.TableCell => ResolveTableCell(slide, shapeId, tableRow, tableCol),
+            _                           => ResolveShapeBody(slide, shapeId),
         };
     }
 
-    private static TextBody? ResolveShapeBody(Slide slide, TextSearchMatch m)
-        => FindShape(slide, m.ShapeId)?.TextBody;
+    private static TextBody? ResolveShapeBody(Slide slide, uint shapeId)
+        => FindShape(slide, shapeId)?.TextBody;
 
-    private static TextBody? ResolveTableCell(Slide slide, TextSearchMatch m)
+    private static TextBody? ResolveTableCell(Slide slide, uint shapeId, int tableRow, int tableCol)
     {
-        var shape = FindShape(slide, m.ShapeId);
+        var shape = FindShape(slide, shapeId);
         if (shape?.Table is null) return null;
-        if (m.TableRow < 0 || m.TableRow >= shape.Table.Rows.Count) return null;
-        var row = shape.Table.Rows[m.TableRow];
-        if (m.TableCol < 0 || m.TableCol >= row.Cells.Count) return null;
-        return row.Cells[m.TableCol].TextBody;
+        if (tableRow < 0 || tableRow >= shape.Table.Rows.Count) return null;
+        var row = shape.Table.Rows[tableRow];
+        if (tableCol < 0 || tableCol >= row.Cells.Count) return null;
+        return row.Cells[tableCol].TextBody;
     }
 
     private static SlideShape? FindShape(Slide slide, uint shapeId) =>
@@ -247,5 +265,80 @@ internal static class FindReplaceMatchResolver
 
         run = candidate;
         return true;
+    }
+
+    /// <summary>
+    /// Validates and resolves a (possibly run-spanning) match against the live model,
+    /// returning the owning paragraph and the resolved ending run index. Handles both the
+    /// single-run case and matches whose <see cref="TextSearchMatch.ResolvedEndRunIndex"/>
+    /// differs from <see cref="TextSearchMatch.RunIndex"/>.
+    /// </summary>
+    public static bool TryResolveSpan(TextBody body, TextSearchMatch match, out Paragraph paragraph, out int endRunIndex)
+    {
+        paragraph   = null!;
+        endRunIndex = -1;
+
+        if (match.ParagraphIndex < 0 || match.ParagraphIndex >= body.Paragraphs.Count)
+            return false;
+
+        var candidateParagraph = body.Paragraphs[match.ParagraphIndex];
+        int end = match.ResolvedEndRunIndex;
+        if (match.RunIndex < 0 || end < match.RunIndex || end >= candidateParagraph.Runs.Count)
+            return false;
+
+        var startRun = candidateParagraph.Runs[match.RunIndex];
+        if (match.CharStart < 0 || match.CharStart > startRun.Text.Length)
+            return false;
+
+        if (end == match.RunIndex)
+        {
+            if (match.CharEnd < match.CharStart || match.CharEnd > startRun.Text.Length)
+                return false;
+        }
+        else
+        {
+            var endRun = candidateParagraph.Runs[end];
+            int endOffset = match.ResolvedEndCharOffset;
+            if (endOffset < 0 || endOffset > endRun.Text.Length)
+                return false;
+        }
+
+        paragraph   = candidateParagraph;
+        endRunIndex = end;
+        return true;
+    }
+}
+
+/// <summary>
+/// Applies a single (possibly run-spanning) match's replacement text directly onto the model,
+/// reconstructing the touched runs rather than flattening the paragraph into one run. The
+/// replacement text always adopts the formatting of the run the match STARTED in: that run
+/// keeps its untouched prefix followed by the replacement text, any runs fully swallowed by
+/// the match in between are emptied (their formatting becomes moot -- they contain no text),
+/// and the run the match ENDED in keeps only its untouched suffix. Formatting on every run
+/// outside the matched span is left completely untouched.
+/// </summary>
+internal static class FindReplaceRunSpanWriter
+{
+    public static void ApplyReplacement(Paragraph paragraph, TextSearchMatch match, int endRunIndex, string replacement)
+    {
+        var startRun = paragraph.Runs[match.RunIndex];
+
+        if (endRunIndex == match.RunIndex)
+        {
+            startRun.Text = startRun.Text.Remove(match.CharStart, match.CharEnd - match.CharStart)
+                                          .Insert(match.CharStart, replacement);
+            return;
+        }
+
+        var endRun = paragraph.Runs[endRunIndex];
+        int endOffset = match.ResolvedEndCharOffset;
+
+        // Runs strictly between the start and end run are entirely consumed by the match.
+        for (int ri = match.RunIndex + 1; ri < endRunIndex; ri++)
+            paragraph.Runs[ri].Text = string.Empty;
+
+        endRun.Text   = endRun.Text.Substring(endOffset);
+        startRun.Text = startRun.Text.Substring(0, match.CharStart) + replacement;
     }
 }
