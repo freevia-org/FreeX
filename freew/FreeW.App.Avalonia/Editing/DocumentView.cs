@@ -16901,8 +16901,14 @@ public sealed partial class DocumentView : Control
         }
 
         // AV-CCEDIT: Backspace/Delete inside an editable form field survive the body lock; the
-        // per-gesture paths still refuse anything that would reach outside the control.
-        if (IsEditingLocked && input.IsEditingMutation && !CanEditContentControlTextAtCaret())
+        // per-gesture paths still refuse anything that would reach outside the control. Tab survives it
+        // too while forms protection is on, where it is a move between fields rather than an edit.
+        var isFormFieldTab = input.Intent == DocumentEditorInputIntent.NavigateTab
+            && RestrictEditingPolicy.IsFormFieldEditingOnly;
+        if (IsEditingLocked
+            && input.IsEditingMutation
+            && !isFormFieldTab
+            && !CanEditContentControlTextAtCaret())
         {
             e.Handled = true;
             return;
@@ -17146,7 +17152,14 @@ public sealed partial class DocumentView : Control
             // it handles list demote/promote at item start, or inserts a literal tab character
             // (body-paragraph behaviour, same as before).
             case DocumentEditorInputIntent.NavigateTab:
-                if (_cellCaret is not null)
+                // AV-CCEDIT: while "Filling in Forms" protection is on, Tab is Word's field-to-field
+                // gesture — it must not type a literal tab into the field the caret is sitting in.
+                if (RestrictEditingPolicy.IsFormFieldEditingOnly)
+                {
+                    TabToContentControl(forward: !input.ExtendSelection);
+                    e.Handled = true;
+                }
+                else if (_cellCaret is not null)
                 {
                     TabNavigateCell(forward: !input.ExtendSelection);
                     e.Handled = true;
@@ -17905,6 +17918,99 @@ public sealed partial class DocumentView : Control
 
         return ContentControlSpans(paragraph)
             .Any(span => contentOffset > span.Start && contentOffset < span.Start + span.Length);
+    }
+
+    /// <summary>
+    /// Word's form-filling Tab: moves to the next (or previous) editable content control in the body and
+    /// selects its contents, so the field can be typed over straight away. Table cells are walked too,
+    /// because forms usually lay their fields out in a table. Wraps around at the ends, as Word does.
+    /// </summary>
+    private void TabToContentControl(bool forward)
+    {
+        var stops = BodyContentControlTabStops();
+        if (stops.Count == 0)
+            return;
+
+        // One comparable position for body and in-cell carets alike; a block is either a paragraph or a
+        // table, so the -1 placeholders never collide with real row/column/paragraph indices.
+        var caret = _cellCaret is { } cell
+            ? (cell.TableBlock, cell.Row, cell.Col, cell.ParaIdx, cell.Offset)
+            : (_caret.Block, -1, -1, -1, _caret.Offset);
+
+        var ordered = forward ? stops : Enumerable.Reverse(stops).ToList();
+        var index = ordered.FindIndex(stop => forward
+            ? (stop.Block, stop.Row, stop.Col, stop.ParaIdx, stop.Start).CompareTo(caret) > 0
+            : (stop.Block, stop.Row, stop.Col, stop.ParaIdx, stop.End).CompareTo(caret) < 0);
+        // Nothing further in this direction: wrap around, as Word does at the last/first field.
+        var target = ordered[index >= 0 ? index : 0];
+
+        if (target.Row >= 0)
+        {
+            PlaceCaretInCell(target.Block, target.Row, target.Col, target.ParaIdx, target.End);
+            _cellAnchor = (target.Block, target.Row, target.Col, target.ParaIdx, target.Start);
+            _selectionAnchor = new DocPosition(target.Block, target.Start);
+        }
+        else
+        {
+            _cellCaret = null;
+            _cellAnchor = null;
+            _hfCaret = null;
+            _caret = new DocPosition(target.Block, target.End);
+            _selectionAnchor = new DocPosition(target.Block, target.Start);
+        }
+
+        InvalidateVisual();
+        CaretMoved?.Invoke();
+    }
+
+    /// <summary>Every editable content control in the body, in document order, as a tab stop.</summary>
+    private List<(int Block, int Row, int Col, int ParaIdx, int Start, int End)> BodyContentControlTabStops()
+    {
+        var stops = new List<(int Block, int Row, int Col, int ParaIdx, int Start, int End)>();
+        for (var block = 0; block < _doc.Blocks.Count; block++)
+        {
+            switch (_doc.Blocks[block])
+            {
+                case Paragraph paragraph:
+                    AddStops(paragraph, block, -1, -1, -1);
+                    break;
+                case Table table:
+                    for (var row = 0; row < table.Rows.Count; row++)
+                    {
+                        // The caret addresses a cell by its STARTING grid column, so the tab stops must
+                        // use the same projection (a merged cell spans several columns).
+                        foreach (var projected in TableGridProjection.ProjectRow(table.Rows[row]))
+                        {
+                            for (var index = 0; index < projected.Cell.Paragraphs.Count; index++)
+                            {
+                                AddStops(
+                                    projected.Cell.Paragraphs[index],
+                                    block,
+                                    row,
+                                    projected.StartColumn,
+                                    index);
+                            }
+                        }
+                    }
+
+                    break;
+            }
+        }
+
+        return stops;
+
+        void AddStops(Paragraph paragraph, int block, int row, int column, int paragraphIndex)
+        {
+            foreach (var span in ContentControlSpans(paragraph))
+            {
+                if (ContentControlInteractionPlanner.CanEditContentControlText(
+                        paragraph.Runs[span.FirstRunIndex],
+                        RestrictEditingPolicy))
+                {
+                    stops.Add((block, row, column, paragraphIndex, span.Start, span.Start + span.Length));
+                }
+            }
+        }
     }
 
     private bool TryInsertContentControlText(string text)
@@ -23963,10 +24069,12 @@ public sealed partial class DocumentView : Control
     private bool IsEditable(Paragraph paragraph) =>
         !IsEditingLocked && IsPlainTextEditable(paragraph);
 
+    // AV-CCEDIT: a content control no longer blocks field insertion — InsertRunAtOffset places the new
+    // run beside the field rather than splitting it, so the w:sdt stays whole.
     private bool IsFieldInsertable(Paragraph paragraph) =>
         !IsEditingLocked
         && paragraph.Runs.All(r => r.Image is null && r.Equation is null
-            && r.FootnoteId is null && r.EndnoteId is null && r.Control is null
+            && r.FootnoteId is null && r.EndnoteId is null
             && !IsFloatingDrawingRun(r));
 
     private static bool IsPlainTextEditable(Paragraph paragraph) =>

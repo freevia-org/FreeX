@@ -1,4 +1,10 @@
+using System.IO;
+using System.Threading;
+using Avalonia.Headless;
+using System.IO.Compression;
+using System.Xml.Linq;
 using FreeW.App.Avalonia.Editing;
+using FreeW.Core.IO;
 using FreeW.Core.Model;
 
 namespace FreeW.App.Avalonia.Tests;
@@ -11,6 +17,9 @@ namespace FreeW.App.Avalonia.Tests;
 /// </summary>
 public sealed class DocumentViewContentControlBodyEditingTests
 {
+    private static readonly HeadlessUnitTestSession Session =
+        HeadlessUnitTestSession.GetOrStartForAssembly(typeof(FreeWHeadlessApp).Assembly);
+
     private const string Prefix = "Name: ";   // offsets 0..6
     private const string Suffix = " (staff)"; // offsets 9..17
     private const int ControlStart = 6;       // "Bob" occupies 6..9
@@ -240,6 +249,77 @@ public sealed class DocumentViewContentControlBodyEditingTests
         Fields(paragraph).Should().ContainSingle();
         Field(paragraph).Text.Should().Be("teh ");
         view.PlainText.Should().Be("Body teh ");
+    }
+
+    // Placing a caret in a cell forces a table layout, which needs the headless font manager.
+    [Fact]
+    public async Task Body_text_around_a_field_in_a_table_cell_is_editable_too() =>
+        await Session.Dispatch(EditBodyTextAroundFieldInTableCell, CancellationToken.None);
+
+    private static void EditBodyTextAroundFieldInTableCell()
+    {
+        var document = TextDocument.CreateEmpty();
+        document.Blocks.Clear();
+        var table = new Table();
+        var row = new TableRow();
+        var cell = new TableCell();
+        cell.Paragraphs.Clear();
+        var cellParagraph = new Paragraph();
+        cellParagraph.Runs.Add(new Run("Name: "));
+        cellParagraph.Runs.Add(Run.PlainTextControl("Bob", tag: "Applicant"));
+        cell.Paragraphs.Add(cellParagraph);
+        row.Cells.Add(cell);
+        table.Rows.Add(row);
+        document.Blocks.Add(table);
+
+        var view = new DocumentView();
+        view.LoadDocument(document);
+
+        view.PlaceCaretInCell(0, 0, 0, 0, 0);
+        view.InsertText("Dr. ");
+        cellParagraph.PlainText.Should().Be("Dr. Name: Bob");
+
+        view.PlaceCaretInCell(0, 0, 0, 0, 4);
+        view.BackspaceForTest();
+        cellParagraph.PlainText.Should().Be("Dr.Name: Bob");
+        Fields(cellParagraph).Should().ContainSingle();
+        Field(cellParagraph).Text.Should().Be("Bob");
+    }
+
+    [Fact]
+    public void An_edited_paragraph_saves_the_field_as_one_content_control()
+    {
+        var (view, _) = BuildView();
+
+        view.MoveCaretToBlockForTest(0, 0);
+        view.InsertText("Dr. ");
+        // The field moved right by the body insert; type at its end.
+        view.MoveCaretToBlockForTest(0, ControlEnd + 4);
+        view.InsertText("by");
+
+        using var saved = new MemoryStream();
+        DocxWriter.Write(view.Document, saved);
+        var bytes = saved.ToArray();
+
+        var sdts = ContentControls(bytes);
+        sdts.Should().ContainSingle();
+        string.Concat(sdts[0].Descendants(W + "t").Select(text => text.Value)).Should().Be("Bobby");
+
+        var reopened = DocxReader.Read(new MemoryStream(bytes));
+        reopened.PlainText.Should().Be("Dr. Name: Bobby (staff)");
+        var reopenedFields = Fields(reopened.Paragraphs.Single());
+        reopenedFields.Should().ContainSingle();
+        reopenedFields[0].Text.Should().Be("Bobby");
+        reopenedFields[0].Control!.Tag.Should().Be("Applicant");
+    }
+
+    private static readonly XNamespace W = "http://schemas.openxmlformats.org/wordprocessingml/2006/main";
+
+    private static List<XElement> ContentControls(byte[] bytes)
+    {
+        using var zip = new ZipArchive(new MemoryStream(bytes), ZipArchiveMode.Read);
+        using var entry = zip.GetEntry("word/document.xml")!.Open();
+        return XDocument.Load(entry).Descendants(W + "sdt").ToList();
     }
 
     private static Run Field(Paragraph paragraph) => Fields(paragraph)[0];

@@ -393,6 +393,22 @@ public sealed partial class DocumentView
     internal void OpenEditorContextMenuForTests() => OpenEditorContextMenu();
     internal void RaiseKeyDownForContextMenuTests(KeyEventArgs args) => OnKeyDown(args);
 
+    /// <summary>Simulates a key press through the editor's own key handling.</summary>
+    internal void SimulateKeyForTest(Key key, bool shift = false, bool control = false)
+    {
+        var modifiers = KeyModifiers.None;
+        if (shift)
+            modifiers |= KeyModifiers.Shift;
+        if (control)
+            modifiers |= KeyModifiers.Control;
+        OnKeyDown(new KeyEventArgs
+        {
+            Key = key,
+            KeyModifiers = modifiers,
+            RoutedEvent = KeyDownEvent,
+        });
+    }
+
     internal void SimulateTextInputForTest(string text)
     {
         foreach (var character in text)
