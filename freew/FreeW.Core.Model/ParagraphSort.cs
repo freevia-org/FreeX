@@ -59,32 +59,40 @@ public static class ParagraphSort
         SortPinningHeader(paragraphs, hasHeaderRow, p => p.PlainText, kind, ascending, caseSensitive);
 
     /// <summary>
-    /// Return <paramref name="rows"/> reordered by the text of each row's cell in column
-    /// <paramref name="keyColumn"/> (the cell's <see cref="TableCell.PlainText"/>). Rows too short to
-    /// have that column sort as if the key were empty. Direction/case follow
-    /// <paramref name="ascending"/>/<paramref name="caseSensitive"/>; comparison is plain text. The same
-    /// <see cref="TableRow"/> instances are returned, the input is left untouched, and the sort is stable.
+    /// Return <paramref name="rows"/> reordered by the text of each row's cell at logical grid column
+    /// <paramref name="gridColumn"/> (the cell's <see cref="TableCell.PlainText"/>), the same coordinate
+    /// space callers resolve the caret/selection into via <see cref="TableGridProjection"/> — NOT a raw
+    /// <see cref="TableRow.Cells"/> index, which is meaningless across rows whose merged cells (GridSpan)
+    /// differ. Rows with no cell covering that grid column sort as if the key were empty. Direction/case
+    /// follow <paramref name="ascending"/>/<paramref name="caseSensitive"/>; comparison is plain text. The
+    /// same <see cref="TableRow"/> instances are returned, the input is left untouched, and the sort is
+    /// stable.
     /// </summary>
     public static IReadOnlyList<TableRow> SortRows(
-        IReadOnlyList<TableRow> rows, int keyColumn, bool ascending, bool caseSensitive) =>
-        SortRows(rows, keyColumn, SortKind.Text, ascending, caseSensitive, hasHeaderRow: false);
+        IReadOnlyList<TableRow> rows, int gridColumn, bool ascending, bool caseSensitive) =>
+        SortRows(rows, gridColumn, SortKind.Text, ascending, caseSensitive, hasHeaderRow: false);
 
     /// <summary>
-    /// Return <paramref name="rows"/> reordered by the text of each row's cell in column
-    /// <paramref name="keyColumn"/>, interpreting each key as <paramref name="kind"/>. When
+    /// Return <paramref name="rows"/> reordered by the text of each row's cell at logical grid column
+    /// <paramref name="gridColumn"/>, interpreting each key as <paramref name="kind"/>. When
     /// <paramref name="hasHeaderRow"/> is true the first row is left in place and only the body rows are
-    /// reordered (Word's "Header row" option). Rows too short to have the key column sort as if the key
-    /// were empty. Direction/case follow <paramref name="ascending"/>/<paramref name="caseSensitive"/>.
-    /// The same instances are returned, the input is left untouched, and the sort is stable.
+    /// reordered (Word's "Header row" option). <paramref name="gridColumn"/> is a logical grid column, the
+    /// same coordinate space callers resolve the caret/selection into via <see cref="TableGridProjection"/>
+    /// — each row is independently projected onto the grid so a row whose merged-cell layout (GridSpan)
+    /// differs from the row the caller resolved the column from still reads the correct cell, matching
+    /// Word: a cell whose span covers <paramref name="gridColumn"/> supplies the key for that row, and a
+    /// row with no cell reaching that column (narrower than the grid) sorts as if the key were empty.
+    /// Direction/case follow <paramref name="ascending"/>/<paramref name="caseSensitive"/>. The same
+    /// instances are returned, the input is left untouched, and the sort is stable.
     /// </summary>
     public static IReadOnlyList<TableRow> SortRows(
         IReadOnlyList<TableRow> rows,
-        int keyColumn,
+        int gridColumn,
         SortKind kind,
         bool ascending,
         bool caseSensitive,
         bool hasHeaderRow) =>
-        SortPinningHeader(rows, hasHeaderRow, r => CellKey(r, keyColumn), kind, ascending, caseSensitive);
+        SortPinningHeader(rows, hasHeaderRow, r => CellKey(r, gridColumn), kind, ascending, caseSensitive);
 
     // Sort a list with an optional pinned header: when hasHeaderRow is true (and there is more than one
     // item) the first item stays put and only items[1..] are reordered; otherwise the whole list sorts.
@@ -122,10 +130,15 @@ public static class ParagraphSort
             : [.. items.OrderByDescending(keyOf, comparer)];
     }
 
-    // The key text for a row: the plain text of its cell in keyColumn, or empty when the row has no
-    // such column (a negative index or a ragged short row both fall back to the empty key).
-    private static string CellKey(TableRow row, int keyColumn) =>
-        keyColumn >= 0 && keyColumn < row.Cells.Count ? row.Cells[keyColumn].PlainText : string.Empty;
+    // The key text for a row: the plain text of the cell that covers gridColumn once the row's own
+    // GridSpans are projected onto the grid (TableGridProjection.At), not a raw Cells[] index -- a raw
+    // index resolved against one row (typically the caret's row) is meaningless for any other row whose
+    // merged-cell layout differs. A cell whose span covers gridColumn supplies the key for its whole span
+    // (matching Word: sorting by a column a merged cell spans reads that merged cell). A row with no cell
+    // reaching gridColumn at all (narrower than the grid, or a negative column) sorts as if the key were
+    // empty.
+    private static string CellKey(TableRow row, int gridColumn) =>
+        TableGridProjection.At(row, gridColumn)?.Cell.PlainText ?? string.Empty;
 
     // Compares string keys interpreted as text, numbers, or dates. Numeric/date keys that fail to parse
     // sort after all parseable ones (and tie-break on text) so the result stays total and deterministic.

@@ -12,6 +12,7 @@ public sealed class DefinedNameValidatorTests
     [InlineData(DefinedNameError.InvalidCharacter, "InsertLoc_NameErrorInvalidChar", "A name may contain only letters, digits, periods, and underscores (no spaces).")]
     [InlineData(DefinedNameError.LooksLikeReference, "InsertLoc_NameErrorLooksLikeReference", "A name cannot look like a cell reference.")]
     [InlineData(DefinedNameError.Reserved, "InsertLoc_NameErrorReserved", "That name is reserved.")]
+    [InlineData(DefinedNameError.ReservedPrefix, "InsertLoc_NameErrorReserved", "That name is reserved.")]
     [InlineData(DefinedNameError.Duplicate, "InsertLoc_NameErrorDuplicate", "A name with that text already exists in this scope.")]
     [InlineData(DefinedNameError.None, "InsertLoc_NameErrorGeneric", "Enter a valid name.")]
     public void DescribeValidationMessage_MapsErrorToResourceAndFallback(

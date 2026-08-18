@@ -113,6 +113,74 @@ public sealed class WorkbookCellEditServiceTests
             .Which.Value.Should().Be(6, "C1 must stay stale at its previously computed result until the user recalculates (F9)");
     }
 
+    // R144-calc-manual-mode-structural-commands: Add/Delete/Rename/Move/Duplicate Sheet all
+    // implement IWholeWorkbookRecalcCommand, which used to force RecalculateAll unconditionally --
+    // even in Manual calculation mode, freezing the app on a heavy workbook exactly when the user
+    // set Manual mode to avoid that. A structural sheet command must defer, like any other
+    // Manual-mode edit: leave dependents stale and mark the workbook dirty instead.
+    [Fact]
+    public void ExecuteEditCommand_StructuralSheetCommand_DefersRecalcWhenCalculationModeIsManual()
+    {
+        var (workbook, sheet, _, service, recalcEngine) = CreateEditService();
+        var a1 = new CellAddress(sheet.Id, 1, 1);
+        var b1 = new CellAddress(sheet.Id, 1, 2);
+        sheet.SetCell(a1, new NumberValue(1));
+        sheet.SetFormula(b1, "A1+1");
+        recalcEngine.RecalculateAllFormulas(workbook);
+        workbook.CalculationMode = WorkbookCalculationMode.Manual;
+
+        // Make A1 stale first, exactly like the failure scenario: an ordinary Manual-mode edit
+        // defers recalculation and sets the pending flag.
+        service.CommitCellText(workbook, sheet.Id, a1, "4");
+        workbook.HasPendingManualRecalculation.Should().BeTrue();
+        sheet.GetCell(b1)!.Value.Should().BeOfType<NumberValue>().Which.Value.Should().Be(2,
+            "B1 must stay stale after the precedent edit, since Manual mode defers dependent recalculation");
+
+        // An unrelated structural command (Add Sheet) must not force a full recalculation while
+        // Manual mode is set -- it should leave B1 stale and keep the workbook flagged dirty for
+        // the next explicit F9, exactly like Excel.
+        var result = service.ExecuteEditCommand(workbook, new AddSheetCommand("Sheet2"));
+
+        result.Success.Should().BeTrue();
+        result.RecalcReport.Should().BeNull(
+            "a structural sheet command must not force an eager recalculation in Manual calculation mode");
+        workbook.HasPendingManualRecalculation.Should().BeTrue(
+            "the 'Calculate' status-bar indicator must stay lit until the user explicitly recalculates");
+        sheet.GetCell(b1)!.Value.Should().BeOfType<NumberValue>().Which.Value.Should().Be(2,
+            "B1 must remain stale -- adding a sheet is unrelated and must not ripple a Manual-mode recalculation");
+
+        // The next explicit F9 (RecalculateDirty) must still fully catch up, proving the deferred
+        // dirty state survived and is honored correctly.
+        var f9Report = service.RecalculateDirty(workbook);
+
+        f9Report.Should().NotBeNull();
+        workbook.HasPendingManualRecalculation.Should().BeFalse();
+        sheet.GetCell(b1)!.Value.Should().BeOfType<NumberValue>().Which.Value.Should().Be(5,
+            "F9 must fully recalculate every formula, including B1, once the user explicitly asks for it");
+    }
+
+    // Sibling no-regression: in Automatic mode (the default), a structural sheet command must
+    // still force an immediate full recalculation, exactly as before this round's fix -- only
+    // Manual mode should defer.
+    [Fact]
+    public void ExecuteEditCommand_StructuralSheetCommand_StillRecalculatesImmediatelyWhenAutomatic()
+    {
+        var (workbook, sheet, _, service, recalcEngine) = CreateEditService();
+        var a1 = new CellAddress(sheet.Id, 1, 1);
+        var b1 = new CellAddress(sheet.Id, 1, 2);
+        sheet.SetCell(a1, new NumberValue(1));
+        sheet.SetFormula(b1, "A1+1");
+        recalcEngine.RecalculateAllFormulas(workbook);
+        workbook.CalculationMode.Should().Be(WorkbookCalculationMode.Automatic);
+
+        var result = service.ExecuteEditCommand(workbook, new AddSheetCommand("Sheet2"));
+
+        result.Success.Should().BeTrue();
+        result.RecalcReport.Should().NotBeNull(
+            "Automatic mode must still force the full recalculation a structural sheet command requires");
+        workbook.HasPendingManualRecalculation.Should().BeFalse();
+    }
+
     [Fact]
     public void CommitCellText_ReturnsCommandFailureForProtectedSheet()
     {

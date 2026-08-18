@@ -85,6 +85,16 @@ public static class ShapeTransformPlanner
         PlanShapeTransform(shape).Append(
             Scene3dProjectionPlanner.Plan(shape.BoundsDip, shape.Effects?.Scene3dCameraPreset));
 
+    /// <summary>
+    /// Produces the transform used to render a shape's TEXT: the same rotation (and any
+    /// 3-D scene-camera projection) as <see cref="PlanShapeRenderTransform"/>, but never the
+    /// flipH/flipV mirror. PowerPoint mirrors a flipped shape's outline/fill but always keeps
+    /// its text upright and left-to-right readable -- flipping a shape must not flip its text.
+    /// </summary>
+    public static ShapeAffineTransform PlanShapeTextRenderTransform(DrawOp.Shape shape) =>
+        PlanShapeTransform(shape.BoundsDip, shape.RotationDeg, flipH: false, flipV: false).Append(
+            Scene3dProjectionPlanner.Plan(shape.BoundsDip, shape.Effects?.Scene3dCameraPreset));
+
     public static ShapeAffineTransform PlanShapeTransform(
         LayoutRect bounds,
         double rotationDeg,

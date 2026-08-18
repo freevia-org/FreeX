@@ -1907,6 +1907,61 @@ public sealed class DocumentViewRoundTripTests
     }
 
     [StaFact]
+    public void ContentAutoFitFlowTable_WithIndent_DoesNotOverflowPastTheRightMargin()
+    {
+        // freew-wpf-contents-autofit-ignores-table-indent: an indented Contents-autofit table must be
+        // sized into (content width - indent), not the full content width, or its right edge overflows
+        // past the page's right margin. The authored column widths (400pt total) are deliberately wider
+        // than (content width - indent) but narrower than the full (un-indented) content width, so this
+        // test only passes if the indent was actually subtracted before the columns were scaled.
+        var doc = TextDocument.CreateEmpty();
+        doc.Blocks.Clear();
+        var table = Table.Create(1, 2);
+        table.AutoFit = AutoFitMode.Contents;
+        table.IndentFromLeftPt = 144; // 2in
+        table.ColumnWidthsPt.AddRange([200.0, 200.0]); // 400pt authored total
+        table.Rows[0].Cells[0] = new FreeW.Core.Model.TableCell("A");
+        table.Rows[0].Cells[1] = new FreeW.Core.Model.TableCell("B");
+        doc.Blocks.Add(table);
+
+        var view = new DocumentView();
+        view.LoadModel(doc);
+
+        var rendered = RenderedTables(view.Document).Single();
+        var contentWidth = DocumentViewLayoutPlanner.BuildPageMetrics(doc.Page).ContentWidthDip;
+        var indentDip = table.IndentFromLeftPt.Value * (96.0 / 72.0);
+
+        rendered.Margin.Left.Should().BeApproximately(indentDip, 0.01);
+        var tableWidth = rendered.Columns.Sum(column => column.Width.Value);
+        (rendered.Margin.Left + tableWidth).Should().BeLessThanOrEqualTo(contentWidth + 0.01,
+            "an indented Contents-autofit table must not be sized to overflow past the page's right margin");
+    }
+
+    [StaFact]
+    public void ContentAutoFitFlowTable_WithoutIndent_StillUsesTheFullContentWidthAsTarget()
+    {
+        // Sibling/regression check for the fix above: with no indent, the exact same authored column
+        // widths (400pt, narrower than the full content width) must still reach their full authored
+        // target -- the indent-aware change must not shrink an un-indented table's target width too.
+        var doc = TextDocument.CreateEmpty();
+        doc.Blocks.Clear();
+        var table = Table.Create(1, 2);
+        table.AutoFit = AutoFitMode.Contents;
+        table.ColumnWidthsPt.AddRange([200.0, 200.0]); // 400pt authored total
+        table.Rows[0].Cells[0] = new FreeW.Core.Model.TableCell("A");
+        table.Rows[0].Cells[1] = new FreeW.Core.Model.TableCell("B");
+        doc.Blocks.Add(table);
+
+        var view = new DocumentView();
+        view.LoadModel(doc);
+
+        var rendered = RenderedTables(view.Document).Single();
+        rendered.Margin.Left.Should().Be(0);
+        rendered.Columns.Sum(column => column.Width.Value)
+            .Should().BeApproximately(400 * (96.0 / 72.0), 0.01);
+    }
+
+    [StaFact]
     public void TablePagination_WithoutRepeatHeader_RendersPlannedPageBreakSegments()
     {
         var doc = FreeWVisualEvidenceDocumentFactory.BuildTablePaginationRepeatHeaderDocument();

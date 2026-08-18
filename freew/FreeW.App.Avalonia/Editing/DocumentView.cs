@@ -9267,6 +9267,19 @@ public sealed partial class DocumentView : Control
         }
         colOffsets[cols] = running;
 
+        // AV-TBL-ALIGN: an inline (non-floating) table's authored w:jc/w:tblInd position -- WPF applies
+        // this via ResolveTableBlockMargin's Thickness(indent [+ slack], ...); this offset is the
+        // Avalonia equivalent, added to the column-band left edge below (row loop) so it composes with
+        // the existing floating-table placement, which already carries its own X and must not double it.
+        var tableIndentDip = Math.Max(0, table.IndentFromLeftPt ?? 0) * PxPerPoint;
+        var tableSlackDip = Math.Max(0, textWidth - running - tableIndentDip);
+        var tableInlineOffsetDip = table.Alignment switch
+        {
+            TableAlignment.Center => tableIndentDip + tableSlackDip / 2,
+            TableAlignment.Right => tableIndentDip + tableSlackDip,
+            _ => tableIndentDip
+        };
+
         const double pad = 5;
         // Word preserves the nominal table grid and treats tblCellSpacing as a gap around each
         // physical cell surface. Keep row measurement and pagination on the nominal grid; only
@@ -9485,7 +9498,7 @@ public sealed partial class DocumentView : Control
             }
 
             // AV-COL-NONTXT AG1: use the column band that this row's content-Y falls in.
-            var rowColLeft = floatingPlacement?.XDip ?? ColumnLeftFor(rowContentY);
+            var rowColLeft = floatingPlacement?.XDip ?? (ColumnLeftFor(rowContentY) + tableInlineOffsetDip);
 
             foreach (var (cellModel, cellIndex, startCol, span, cellParas, paragraphSpacings, markerInsets, fmt) in measured)
             {
@@ -16774,7 +16787,13 @@ public sealed partial class DocumentView : Control
             // AV-CCEDIT: the replacement cells below are built from the caret's formatting alone and carry
             // no content control, so autocorrecting a word that lies inside a field would strip that part
             // of the field's text out of the w:sdt. Typing there stays on the field's own edit path.
-            || CanEditContentControlTextAtCaret())
+            || CanEditContentControlTextAtCaret()
+            // AV-CCLOCK: IsEditable only checks run-level markers -- a locked BLOCK-level content
+            // control (a body w:sdt wrapping the whole paragraph, no run-level w:sdt at all) is
+            // otherwise invisible to it. Ordinary typing is protected against this via
+            // DocumentEditingSession.IsPortableBodyTextParagraph, which consults the same planner
+            // check; AutoCorrect mutates the paragraph directly below, so it must consult it too.
+            || ContentControlInteractionPlanner.IsBlockContentControlLocked(paragraph.BlockContentControl))
             return false;
 
         var cells = ParaCells(paragraph);
@@ -24156,6 +24175,13 @@ public sealed partial class DocumentView : Control
         !IsEditingLocked
         // AV-CCEDIT: see IsPlainTextEditable — a content-locked field freezes its paragraph's text.
         && !HasLockedContentControl(paragraph)
+        // AV-CCLOCK: a locked BLOCK-level content control has no run-level marker, so the run.Control
+        // check below never sees it. This predicate backs InsertText's/DeleteForward-Backspace's
+        // structural FALLBACK path -- the branch DocumentEditingSession.IsPortableBodyTextParagraph's
+        // identical check routes to precisely when it declines a locked block-level control -- so without
+        // this clause that fallback silently re-opens the exact hole the portable-session check exists to
+        // close (matching TryAutoCorrect's r144 fix for the same class of gap).
+        && !ContentControlInteractionPlanner.IsBlockContentControlLocked(paragraph.BlockContentControl)
         && paragraph.Runs.All(r => r.Image is null && r.Equation is null && r.FieldKind == RunFieldKind.None
             && r.ComplexField is null
             && !IsFloatingDrawingRun(r));

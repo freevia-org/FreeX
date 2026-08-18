@@ -480,6 +480,7 @@ public sealed partial class SlideCanvas : FrameworkElement
         var materialPlan = ShapeMaterialRenderPlanner.Plan(shape);
         var shapeGeometry = GetShapeRenderGeometry(shape, materialPlan);
         bool hasTransform = !autoFitPlan.RenderTransform.IsIdentity;
+        bool hasTextTransform = !autoFitPlan.TextRenderTransform.IsIdentity;
         bool hasAutoFitGeometryScale = !autoFitPlan.GeometryTransform.IsIdentity;
 
         if (hasTransform)
@@ -535,12 +536,22 @@ public sealed partial class SlideCanvas : FrameworkElement
         if (hasAutoFitGeometryScale)
             dc.Pop();
 
-        // Draw text overlay
-        if (!suppressText && shape.Text is not null)
-            RenderText(dc, shape.Text, bounds);
-
         if (hasTransform)
             dc.Pop();
+
+        // Draw text overlay. Text gets its own transform (rotation only, never flipH/flipV) so
+        // that flipping a shape mirrors its outline/fill but keeps the text upright, matching
+        // PowerPoint -- see ShapeTransformPlanner.PlanShapeTextRenderTransform.
+        if (!suppressText && shape.Text is not null)
+        {
+            if (hasTextTransform)
+                dc.PushTransform(ToWpfTransform(autoFitPlan.TextRenderTransform));
+
+            RenderText(dc, shape.Text, bounds);
+
+            if (hasTextTransform)
+                dc.Pop();
+        }
     }
 
     private static ShapeAutoFitRenderPlan ResolveShapeAutoFitPlan(DrawOp.Shape shape)

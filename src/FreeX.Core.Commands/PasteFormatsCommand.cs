@@ -42,6 +42,15 @@ public sealed class PasteFormatsCommand : IWorkbookCommand, IEstimatesMemory
             var oldCell = sheet.GetCell(addr)?.Clone();
             _snapshot.Add((addr, oldCell, sheet.GetStyleOnly(addr.Row, addr.Col)));
 
+            // A destination cell that is a non-anchor (hidden/covered) member of an existing
+            // merged region must keep its own pre-merge style hidden, matching the guard
+            // PasteCellsCommand/PasteSpecialCellsCommand already apply: only the merge's
+            // top-left anchor cell is ever visibly/actually restyled. Writing a pasted style
+            // into a covered cell would silently corrupt the formatting Unmerge later reveals.
+            var mergeRegion = sheet.GetMergeRegion(addr);
+            if (mergeRegion is { } region && !region.Start.Equals(addr))
+                continue;
+
             var newCell = oldCell?.Clone() ?? Cell.FromValue(BlankValue.Instance);
             newCell.StyleId = styleId;
             sheet.SetCell(addr, newCell);

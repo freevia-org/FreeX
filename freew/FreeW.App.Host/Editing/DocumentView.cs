@@ -996,6 +996,19 @@ public sealed partial class DocumentView : RichTextBox
     // Returns true when a correction was applied (the raw keystroke should be suppressed).
     private bool TryAutoCorrect(char justTyped)
     {
+        // freew-autocorrect-bypasses-restrict-editing-wpf: this mutates the live FlowDocument directly
+        // (TextRange.Text assignment below), so — unlike ordinary typing, which is gated by
+        // TryApplyBodyTextInput's AllowsRestrictEditingOperation(BodyTextEdit) check and by
+        // TryPrepareNativeFallback's content-control lock check — it must perform both of those same
+        // checks itself before ever reaching that mutation. Reuses the existing predicates rather than
+        // duplicating their logic (IsCaretOnLockedContentControl is the side-effect-free query built for
+        // exactly this kind of reuse; see its doc comment).
+        if (!AllowsRestrictEditingOperation(RestrictEditingOperationKind.BodyTextEdit)
+            || IsCaretOnLockedContentControl())
+        {
+            return false;
+        }
+
         var caret = CaretPosition?.GetInsertionPosition(LogicalDirection.Backward);
         if (caret?.Paragraph is null)
             return false;
@@ -9663,12 +9676,19 @@ public sealed partial class DocumentView : RichTextBox
         }
 
         var metrics = DocumentViewLayoutPlanner.BuildPageMetrics(document.Page);
-        var availableWidth = document.Page.ColumnCount > 1
+        var pageContentWidth = document.Page.ColumnCount > 1
             ? DocumentViewLayoutPlanner.BuildColumnPlan(
                 document.Page,
                 metrics.ContentWidthDip,
                 usePageColumns: true).WidthDip
             : metrics.ContentWidthDip;
+
+        // freew-wpf-contents-autofit-ignores-table-indent: the table is positioned with a left margin of
+        // table.IndentFromLeftPt (see ResolveTableBlockMargin), so the width Contents-autofit is allowed to
+        // grow into must be reduced by that same indent -- otherwise an indented table can be sized up to
+        // the FULL content width and overflow past the page's right margin.
+        var indent = Math.Max(0, table.IndentFromLeftPt ?? 0) * PxPerPoint;
+        var availableWidth = Math.Max(0, pageContentWidth - indent);
         return TableColumnLayoutPlanner.BuildContentAutoFitWidths(table, availableWidth, measurements);
     }
 

@@ -481,6 +481,18 @@ public sealed class SlideShape
     public Dictionary<string, double> PresetGeometryAdjustments { get; } =
         new(StringComparer.OrdinalIgnoreCase);
 
+    /// <summary>
+    /// The raw <c>a:prstGeom/@prst</c> preset name when it does not match any
+    /// <see cref="DrawingShapeKind"/> FreeP models, so <see cref="AutoShapeKind"/> was set to
+    /// the <see cref="DrawingShapeKind.Rectangle"/> fallback purely for editing/rendering
+    /// purposes. Preserved so the writer can re-emit the shape's true original preset (and its
+    /// adjustments, in <see cref="PresetGeometryAdjustments"/>) on save instead of permanently
+    /// replacing the outline with a plain rectangle. Null for shapes whose preset FreeP
+    /// recognizes natively, and cleared whenever the shape's kind is explicitly changed (see
+    /// ChangeAutoShapeKindCommand).
+    /// </summary>
+    public string? UnmodeledPresetGeometry { get; set; }
+
     // ── Anchor (absolute EMU positions) ─────────────────────────────────────────
 
     /// <summary>Horizontal offset from the slide left edge, in EMU.</summary>

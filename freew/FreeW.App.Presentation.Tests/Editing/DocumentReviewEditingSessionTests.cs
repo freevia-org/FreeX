@@ -325,6 +325,158 @@ public sealed class DocumentReviewEditingSessionTests
         cellParagraph.Runs.Should().Contain(run => run.Revision == RevisionKind.Deleted);
     }
 
+    [Fact]
+    public void AcceptAll_UndoRestoresParagraphMergedAwayByTrackedParagraphMark_ByteIdenticalToBeforeAccept()
+    {
+        // Regression for: Accept All merging a tracked-deleted paragraph mark into the next paragraph
+        // (TrackChanges.cs: nextParagraph.Runs.InsertRange + blocks.RemoveAt) permanently lost the merged
+        // paragraph on Undo — the base command only restored field values on paragraphs still present in
+        // document.Blocks, never re-inserted the one that vanished.
+        var document = new TextDocument();
+        var first = new Paragraph();
+        first.Runs.Add(new Run("Draft note"));
+        first.MarkRevision = RevisionKind.Deleted;
+        first.MarkRevisionAuthor = "Alice";
+        first.MarkRevisionDateXml = "2026-08-05T09:00:00Z";
+        var second = new Paragraph();
+        second.Runs.Add(new Run("Final text"));
+        document.Blocks.Add(first);
+        document.Blocks.Add(second);
+
+        var session = DeterministicSession();
+        session.LoadDocument(document);
+        var before = Dump(document);
+
+        session.Review.TryResolveAllRevisions(RevisionResolutionAction.Accept).Should().BeTrue();
+
+        // The merge really happened — this is what Accept All is supposed to do.
+        document.Blocks.OfType<Paragraph>().Should().ContainSingle();
+        document.Blocks.OfType<Paragraph>().Single().PlainText.Should().Be("Draft noteFinal text");
+
+        session.Commands.Undo().Should().BeTrue();
+
+        Dump(document).Should().Be(before, "undoing Accept All must restore the document exactly");
+        document.Blocks.Should().HaveCount(2);
+        document.Blocks[0].Should().BeSameAs(first);
+        document.Blocks[1].Should().BeSameAs(second);
+        first.PlainText.Should().Be("Draft note");
+        first.MarkRevision.Should().Be(RevisionKind.Deleted);
+        first.MarkRevisionAuthor.Should().Be("Alice");
+        second.PlainText.Should().Be("Final text");
+        second.MarkRevision.Should().Be(RevisionKind.None);
+    }
+
+    [Fact]
+    public void AcceptAll_UndoRestoresTableRowDroppedByTrackedRowRevision_ByteIdenticalToBeforeAccept()
+    {
+        // Sibling of the paragraph-merge fix: a table row dropped by Accept All (RowRevision resolves to
+        // "removed") is a second, distinct way the base command's original snapshot lost structure on
+        // Undo — the row was never captured at all (only cell paragraphs' own field values were).
+        var document = new TextDocument();
+        var table = Table.Create(2, 1);
+        table.Rows[0].Cells[0].Paragraphs[0] = new Paragraph("Row0");
+        table.Rows[1].Cells[0].Paragraphs[0] = new Paragraph("Row1");
+        table.Rows[1].RowRevision = RevisionKind.Deleted;
+        table.Rows[1].RowRevisionAuthor = "Bob";
+        document.Blocks.Add(table);
+
+        var session = DeterministicSession();
+        session.LoadDocument(document);
+        var before = Dump(document);
+
+        session.Review.TryResolveAllRevisions(RevisionResolutionAction.Accept).Should().BeTrue();
+        table.Rows.Should().ContainSingle();
+
+        session.Commands.Undo().Should().BeTrue();
+
+        Dump(document).Should().Be(before, "undoing Accept All must restore the dropped row exactly");
+        table.Rows.Should().HaveCount(2);
+        table.Rows[1].RowRevision.Should().Be(RevisionKind.Deleted);
+        table.Rows[1].RowRevisionAuthor.Should().Be("Bob");
+        table.Rows[1].Cells[0].Paragraphs[0].PlainText.Should().Be("Row1");
+    }
+
+    // Canonical textual dump of everything TrackChanges.AcceptAll/RejectAll can touch: paragraph text,
+    // paragraph-mark revision, run revisions, table row membership/revision, headers/footers, footnotes
+    // and endnotes. Used to assert a document is restored exactly (not merely "looks the same" on the
+    // few fields the caller happened to check).
+    private static string Dump(TextDocument document)
+    {
+        var sb = new System.Text.StringBuilder();
+        DumpBlocks(sb, document.Blocks, 0);
+        foreach (var section in document.Sections)
+        {
+            var hf = section.HeadersFooters;
+            DumpHeaderFooter(sb, "Header", hf.Header);
+            DumpHeaderFooter(sb, "Footer", hf.Footer);
+            DumpHeaderFooter(sb, "EvenHeader", hf.EvenHeader);
+            DumpHeaderFooter(sb, "EvenFooter", hf.EvenFooter);
+            DumpHeaderFooter(sb, "FirstHeader", hf.FirstHeader);
+            DumpHeaderFooter(sb, "FirstFooter", hf.FirstFooter);
+        }
+        foreach (var footnote in document.Footnotes.OrderBy(kv => kv.Key))
+        {
+            sb.Append("FOOTNOTE ").Append(footnote.Key).Append(':').AppendLine();
+            DumpParagraphs(sb, footnote.Value.Content, 1);
+        }
+        foreach (var endnote in document.Endnotes.OrderBy(kv => kv.Key))
+        {
+            sb.Append("ENDNOTE ").Append(endnote.Key).Append(':').AppendLine();
+            DumpParagraphs(sb, endnote.Value.Content, 1);
+        }
+        return sb.ToString();
+    }
+
+    private static void DumpHeaderFooter(System.Text.StringBuilder sb, string label, HeaderFooter? headerFooter)
+    {
+        if (headerFooter is null)
+            return;
+        sb.Append(label).Append(':').AppendLine();
+        DumpParagraphs(sb, headerFooter.Paragraphs, 1);
+    }
+
+    private static void DumpBlocks(System.Text.StringBuilder sb, IEnumerable<Block> blocks, int depth)
+    {
+        foreach (var block in blocks)
+        {
+            if (block is Paragraph paragraph)
+                DumpParagraph(sb, paragraph, depth);
+            else if (block is Table table)
+                DumpTable(sb, table, depth);
+        }
+    }
+
+    private static void DumpParagraphs(System.Text.StringBuilder sb, IEnumerable<Paragraph> paragraphs, int depth)
+    {
+        foreach (var paragraph in paragraphs)
+            DumpParagraph(sb, paragraph, depth);
+    }
+
+    private static void DumpParagraph(System.Text.StringBuilder sb, Paragraph paragraph, int depth)
+    {
+        sb.Append(' ', depth * 2).Append("P[mark=").Append(paragraph.MarkRevision)
+            .Append(",author=").Append(paragraph.MarkRevisionAuthor ?? "<null>").Append("]: ");
+        foreach (var run in paragraph.Runs)
+            sb.Append('<').Append(run.Revision).Append('>').Append(run.Text);
+        sb.AppendLine();
+    }
+
+    private static void DumpTable(System.Text.StringBuilder sb, Table table, int depth)
+    {
+        sb.Append(' ', depth * 2).Append("TABLE").AppendLine();
+        foreach (var row in table.Rows)
+        {
+            sb.Append(' ', depth * 2 + 1).Append("ROW[rev=").Append(row.RowRevision)
+                .Append(",author=").Append(row.RowRevisionAuthor ?? "<null>").Append(']').AppendLine();
+            foreach (var cell in row.Cells)
+            {
+                DumpParagraphs(sb, cell.Paragraphs, depth + 2);
+                foreach (var nested in cell.NestedTables)
+                    DumpTable(sb, nested, depth + 2);
+            }
+        }
+    }
+
     private static DocumentEditingSession DeterministicSession() =>
         new(revisionAuthor: null, revisionDateXml: () => "2026-08-05T10:20:30Z");
 

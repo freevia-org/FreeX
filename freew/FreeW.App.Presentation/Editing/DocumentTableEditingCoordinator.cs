@@ -608,15 +608,19 @@ public sealed class DocumentTableEditingCoordinator
         bool caseSensitive,
         bool hasHeaderRow)
     {
-        if (!TryResolveCell(address, out var table, out var cellIndex)
+        if (!TryResolveCell(address, out var table, out _)
             || table.Rows.Count < 2)
         {
             return DocumentTableEditResult.NoChange(address);
         }
 
+        // Sort by the caret's logical grid column, not its raw cell-list index in the caret's own row:
+        // ParagraphSort.SortRows re-projects that grid column through TableGridProjection independently
+        // for every row, so rows whose merge layout (GridSpan) differs from the caret's row still read the
+        // correct cell instead of an unrelated one (or none, sorting as blank).
         var sorted = ParagraphSort.SortRows(
             table.Rows,
-            cellIndex,
+            address.GridColumn,
             kind,
             ascending,
             caseSensitive,

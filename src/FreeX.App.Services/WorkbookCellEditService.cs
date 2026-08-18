@@ -404,9 +404,32 @@ public sealed class WorkbookCellEditService
         // would short-circuit to an empty recalc for an empty cell list, leaving those span
         // aggregates stale until the next F9 -- force a full recalculation instead, mirroring the
         // same command marker on the forward Execute path and on Undo/Redo.
-        var recalcReport = outcome.RequiresFullRecalc
-            ? RecalculateAll(workbook)
-            : RecalculateAfterChanges(workbook, affectedCells);
+        //
+        // R144-calc-manual-mode-structural-commands: but "force a full recalculation" must still
+        // respect Manual calculation mode. Excel never recalculates on a purely structural sheet
+        // operation (Add/Delete/Rename/Move/Duplicate Sheet, or their Undo/Redo) while Manual mode
+        // is set -- it just leaves the "Calculate" status-bar indicator lit, same as any other
+        // Manual-mode edit, until the user explicitly presses F9/Shift+F9. Mark the workbook dirty
+        // instead of recalculating here; RecalculateDirty (F9's entry point) already forces
+        // RecalculateAll when CalculationMode is Manual, so the deferred full recalc still happens
+        // correctly the next time the user asks for it.
+        RecalcReport? recalcReport;
+        if (outcome.RequiresFullRecalc)
+        {
+            if (workbook.CalculationMode == WorkbookCalculationMode.Manual)
+            {
+                workbook.HasPendingManualRecalculation = true;
+                recalcReport = null;
+            }
+            else
+            {
+                recalcReport = RecalculateAll(workbook);
+            }
+        }
+        else
+        {
+            recalcReport = RecalculateAfterChanges(workbook, affectedCells);
+        }
 
         if (!outcome.RequiresFullRecalc &&
             workbook.CalculationMode == WorkbookCalculationMode.Manual &&

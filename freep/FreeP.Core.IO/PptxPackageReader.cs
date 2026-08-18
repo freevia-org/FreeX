@@ -1552,14 +1552,47 @@ public static class PptxPackageReader
                 return new Hyperlink { TargetSlideId = rel.Target, Tooltip = tooltip };
             }
         }
-        else if (isSlideJumpAction)
+        else
         {
-            // action with no rId — some tools write slide jumps this way; can't resolve without rId.
-            // Return null; the hyperlink will be dropped rather than producing garbage.
-            return null;
+            // No r:id: either a standard action-only click (Next/Previous/First/Last Slide,
+            // End Show, etc. — these need no relationship at all, per the OOXML spec) or a
+            // hlinksldjump written without an r:id that we cannot resolve.
+            var actionKind = ParseActionOnlyKind(action);
+            if (actionKind != HyperlinkActionKind.None)
+                return new Hyperlink { Action = actionKind, Tooltip = tooltip };
+
+            if (isSlideJumpAction)
+            {
+                // action="ppaction://hlinksldjump" with no rId — some tools write slide jumps
+                // this way; can't resolve the destination slide without rId. Return null; the
+                // hyperlink will be dropped rather than producing garbage.
+                return null;
+            }
         }
 
         return null;
+    }
+
+    /// <summary>
+    /// Maps a <c>a:hlinkClick/@action</c> URI to its <see cref="HyperlinkActionKind"/> when it is
+    /// one of PowerPoint's standard action-only navigation verbs (the ones written by the built-in
+    /// Action Buttons and by manually-authored click actions). Returns <see cref="HyperlinkActionKind.None"/>
+    /// for anything else, including the slide-jump action (handled separately, since it needs an rId).
+    /// </summary>
+    private static HyperlinkActionKind ParseActionOnlyKind(string? action)
+    {
+        if (string.IsNullOrEmpty(action)) return HyperlinkActionKind.None;
+
+        return action.ToLowerInvariant() switch
+        {
+            "ppaction://hlinknextslide" => HyperlinkActionKind.NextSlide,
+            "ppaction://hlinkprevslide" => HyperlinkActionKind.PreviousSlide,
+            "ppaction://hlinkfirstslide" => HyperlinkActionKind.FirstSlide,
+            "ppaction://hlinklastslideviewed" => HyperlinkActionKind.LastSlideViewed,
+            "ppaction://hlinklastslide" => HyperlinkActionKind.LastSlide,
+            "ppaction://hlinkendshow" => HyperlinkActionKind.EndShow,
+            _ => HyperlinkActionKind.None,
+        };
     }
 
     // ── p:graphicFrame (table, chart, etc.) ───────────────────────────────────────
@@ -4919,7 +4952,8 @@ public static class PptxPackageReader
         ReadSpPr(spPr, shape, scheme, blipResolver);
 
         var prst = spPr?.Element(A + "prstGeom")?.Attribute("prst")?.Value;
-        shape.AutoShapeKind = PptxShapeKindMap.FromPreset(prst);
+        shape.AutoShapeKind = PptxShapeKindMap.FromPreset(prst, out var unmodeledPreset);
+        shape.UnmodeledPresetGeometry = unmodeledPreset;
         ReadPresetGeometryAdjustments(spPr, shape);
 
         var txBody = sp.Element(P + "txBody");
@@ -5376,7 +5410,8 @@ public static class PptxPackageReader
         ReadSpPr(spPr, shape, scheme, blipResolver);
 
         var prst = spPr?.Element(A + "prstGeom")?.Attribute("prst")?.Value;
-        shape.AutoShapeKind = PptxShapeKindMap.FromPreset(prst);
+        shape.AutoShapeKind = PptxShapeKindMap.FromPreset(prst, out var unmodeledPreset);
+        shape.UnmodeledPresetGeometry = unmodeledPreset;
 
         // Connectors carry the same p:style element as p:sp (CT_Connector shares CT_ShapeStyle),
         // so a connector styled from the gallery needs the same fillRef/lnRef/effectRef/fontRef
@@ -6616,6 +6651,8 @@ public static class PptxPackageReader
             if (int.TryParse(rPr.Attribute("sz")?.Value, out var sz) && sz > 0)
                 fld.FontSizePt = sz / 100.0;
             fld.FontFamily = rPr.Element(A + "latin")?.Attribute("typeface")?.Value;
+            fld.EastAsiaFontFamily = rPr.Element(A + "ea")?.Attribute("typeface")?.Value;
+            fld.ComplexScriptFontFamily = rPr.Element(A + "cs")?.Attribute("typeface")?.Value;
             fld.Language = rPr.Attribute("lang")?.Value;
             fld.AlternateLanguage = rPr.Attribute("altLang")?.Value;
             fld.RunDirty = ParseNullableBoolean(rPr.Attribute("dirty")?.Value);
@@ -6723,6 +6760,8 @@ public static class PptxPackageReader
             if (int.TryParse(rPr.Attribute("baseline")?.Value, out var baseline))
                 run.BaselineOffset = baseline;
             run.FontFamily = rPr.Element(A + "latin")?.Attribute("typeface")?.Value;
+            run.EastAsiaFontFamily = rPr.Element(A + "ea")?.Attribute("typeface")?.Value;
+            run.ComplexScriptFontFamily = rPr.Element(A + "cs")?.Attribute("typeface")?.Value;
 
             // Simple solid run color
             var solidFill = rPr.Element(A + "solidFill");

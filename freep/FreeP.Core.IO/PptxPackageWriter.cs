@@ -3965,7 +3965,7 @@ public static class PptxPackageWriter
             geomEl = BuildCustGeomEl(shape.CustomGeometry, shape.CustomConnectionSites);
         else
             geomEl = new XElement(A + "prstGeom",
-                new XAttribute("prst", forcePrst ?? PptxShapeKindMap.ToPreset(shape.AutoShapeKind)),
+                new XAttribute("prst", forcePrst ?? ResolvePrstGeometry(shape)),
                 BuildPresetGeometryAdjustmentsEl(shape.PresetGeometryAdjustments));
 
         return new XElement(P + "spPr",
@@ -3977,6 +3977,20 @@ public static class PptxPackageWriter
             shape.Effects is not null ? BuildScene3dEl(shape.Effects) : null,
             shape.Effects is not null ? BuildSp3dEl(shape.Effects) : null);
     }
+
+    /// <summary>
+    /// Resolves the <c>a:prstGeom/@prst</c> value to emit for a shape. When the shape's preset
+    /// on load was not one FreeP models (AutoShapeKind fell back to Rectangle and the original
+    /// text was captured in UnmodeledPresetGeometry), re-emit that original preset so the
+    /// shape's outline round-trips instead of being permanently replaced by a plain rectangle.
+    /// The stored preset is only trusted while AutoShapeKind is still Rectangle: any explicit
+    /// shape-kind change (ChangeAutoShapeKindCommand) clears UnmodeledPresetGeometry, so a
+    /// deliberate "make it a rectangle" edit is never overridden by a stale preserved preset.
+    /// </summary>
+    private static string ResolvePrstGeometry(SlideShape shape) =>
+        shape.AutoShapeKind == DrawingShapeKind.Rectangle && !string.IsNullOrEmpty(shape.UnmodeledPresetGeometry)
+            ? shape.UnmodeledPresetGeometry
+            : PptxShapeKindMap.ToPreset(shape.AutoShapeKind);
 
     private static XElement BuildPresetGeometryAdjustmentsEl(IReadOnlyDictionary<string, double> adjustments)
     {
@@ -5257,9 +5271,13 @@ public static class PptxPackageWriter
             rPr.Add(effectLst);
         }
 
-        // a:latin AFTER a:effectLst
+        // a:latin/a:ea/a:cs AFTER a:effectLst (CT_TextCharacterProperties child order)
         if (run.FontFamily is not null)
             rPr.Add(new XElement(A + "latin", new XAttribute("typeface", run.FontFamily)));
+        if (run.EastAsiaFontFamily is not null)
+            rPr.Add(new XElement(A + "ea", new XAttribute("typeface", run.EastAsiaFontFamily)));
+        if (run.ComplexScriptFontFamily is not null)
+            rPr.Add(new XElement(A + "cs", new XAttribute("typeface", run.ComplexScriptFontFamily)));
 
         // Run-level hyperlink — last
         if (run.Hyperlink is not null)
@@ -5324,6 +5342,10 @@ public static class PptxPackageWriter
             rPr.Add(new XElement(A + "solidFill", BuildColorEl(new ThemeAwareColor(color))));
         if (!string.IsNullOrWhiteSpace(fld.FontFamily))
             rPr.Add(new XElement(A + "latin", new XAttribute("typeface", fld.FontFamily)));
+        if (!string.IsNullOrWhiteSpace(fld.EastAsiaFontFamily))
+            rPr.Add(new XElement(A + "ea", new XAttribute("typeface", fld.EastAsiaFontFamily)));
+        if (!string.IsNullOrWhiteSpace(fld.ComplexScriptFontFamily))
+            rPr.Add(new XElement(A + "cs", new XAttribute("typeface", fld.ComplexScriptFontFamily)));
         return rPr.HasAttributes || rPr.HasElements ? rPr : null;
     }
 
@@ -7238,6 +7260,16 @@ public static class PptxPackageWriter
     private static XElement? BuildHlinkClickEl(Hyperlink hlink,
         Dictionary<string, string>? hlinkRelIds, List<Slide>? allSlides)
     {
+        // Action-only click (Next/Previous/First/Last Slide, End Show, etc.) needs no
+        // relationship at all — the whole target is the action attribute, per the OOXML spec.
+        if (hlink.Action != HyperlinkActionKind.None)
+        {
+            var actionEl = new XElement(A + "hlinkClick", new XAttribute("action", ActionUri(hlink.Action)));
+            if (!string.IsNullOrEmpty(hlink.Tooltip))
+                actionEl.Add(new XAttribute("tooltip", hlink.Tooltip));
+            return actionEl;
+        }
+
         if (hlinkRelIds is null) return null;
 
         string key = HlinkKey(hlink, allSlides);
@@ -7253,6 +7285,18 @@ public static class PptxPackageWriter
 
         return el;
     }
+
+    /// <summary>Maps a <see cref="HyperlinkActionKind"/> back to its <c>ppaction://</c> URI (inverse of the reader's ParseActionOnlyKind).</summary>
+    private static string ActionUri(HyperlinkActionKind kind) => kind switch
+    {
+        HyperlinkActionKind.NextSlide => "ppaction://hlinknextslide",
+        HyperlinkActionKind.PreviousSlide => "ppaction://hlinkprevslide",
+        HyperlinkActionKind.FirstSlide => "ppaction://hlinkfirstslide",
+        HyperlinkActionKind.LastSlide => "ppaction://hlinklastslide",
+        HyperlinkActionKind.LastSlideViewed => "ppaction://hlinklastslideviewed",
+        HyperlinkActionKind.EndShow => "ppaction://hlinkendshow",
+        _ => throw new ArgumentOutOfRangeException(nameof(kind), kind, "Not an action-only hyperlink kind."),
+    };
 
     /// <summary>Compute the canonical key used in the hlinkRelIds dictionary for a Hyperlink.</summary>
     private static string HlinkKey(Hyperlink h, List<Slide>? allSlides)

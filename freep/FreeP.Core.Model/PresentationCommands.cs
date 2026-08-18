@@ -3181,6 +3181,7 @@ public sealed class ChangeAutoShapeKindCommand : IPresentationCommand
     private Dictionary<string, double>? _oldAdjustments;
     private List<CustomGeometryPath>? _oldCustomGeometry;
     private List<CustomGeometryConnectionSite>? _oldCustomConnectionSites;
+    private string? _oldUnmodeledPresetGeometry;
 
     public ChangeAutoShapeKindCommand(int slideIndex, uint shapeId, DrawingShapeKind newKind)
     {
@@ -3207,10 +3208,15 @@ public sealed class ChangeAutoShapeKindCommand : IPresentationCommand
             StringComparer.OrdinalIgnoreCase);
         _oldCustomGeometry = CloneCustomGeometry(shape.CustomGeometry);
         _oldCustomConnectionSites = CloneCustomConnectionSites(shape.CustomConnectionSites);
+        _oldUnmodeledPresetGeometry = shape.UnmodeledPresetGeometry;
         shape.AutoShapeKind = _newKind;
         shape.PresetGeometryAdjustments.Clear();
         shape.CustomGeometry.Clear();
         shape.CustomConnectionSites.Clear();
+        // An explicit shape-kind change is deliberate intent, even when it lands back on
+        // Rectangle -- don't let a preserved-but-unmodeled original preset (see
+        // SlideShape.UnmodeledPresetGeometry) resurrect itself on the next save.
+        shape.UnmodeledPresetGeometry = null;
     }
 
     public void Revert(Presentation presentation)
@@ -3233,6 +3239,7 @@ public sealed class ChangeAutoShapeKindCommand : IPresentationCommand
         shape.CustomConnectionSites.Clear();
         if (_oldCustomConnectionSites is not null)
             shape.CustomConnectionSites.AddRange(CloneCustomConnectionSites(_oldCustomConnectionSites));
+        shape.UnmodeledPresetGeometry = _oldUnmodeledPresetGeometry;
     }
 
     private static List<CustomGeometryPath> CloneCustomGeometry(IEnumerable<CustomGeometryPath> paths) =>

@@ -1082,6 +1082,35 @@ public class DocxRoundTripTests
     }
 
     [Fact]
+    public void Table_WindowAutoFit_EmitsDistinguishingPercentWidth_AndRoundTrips()
+    {
+        // Regression (r144, freew-table-autofit-window-collapses-to-contents): DocxWriter used to emit
+        // w:tblLayout w:type="autofit" for BOTH AutoFitMode.Window and AutoFitMode.Contents (OOXML's
+        // ST_TblLayoutType has no third value), and DocxReader resolved any non-"fixed" tblLayout straight
+        // to AutoFitMode.Contents, so a table set to "AutoFit to Window" silently became "AutoFit to
+        // Contents" on the very next reload. The writer now breaks the tie with a percentage-based tblW
+        // (w:type="pct"), the same way Word's own Table Properties > Preferred width dialog encodes it.
+        var doc = new TextDocument();
+        var table = Table.Create(1, 2);
+        table.AutoFit = AutoFitMode.Window;
+        // A previously-authored column split that must survive the round trip untouched (AutoFitMode.Window
+        // preserves ColumnWidthsPt; only AutoFitMode.Contents clears it — see TableLayoutOperations.SetAutoFit).
+        table.ColumnWidthsPt.AddRange([100.0, 300.0]);
+        doc.Blocks.Add(table);
+
+        var ns = XNamespace.Get("http://schemas.openxmlformats.org/wordprocessingml/2006/main");
+        var tableProperties = WriteDocumentXml(doc).Descendants(ns + "tblPr").Single();
+        tableProperties.Element(ns + "tblLayout")?.Attribute(ns + "type")?.Value.Should().Be("autofit");
+        var tblW = tableProperties.Element(ns + "tblW");
+        tblW?.Attribute(ns + "type")?.Value.Should().Be("pct", "Window autofit must be distinguishable from Contents");
+
+        var result = RoundTrip(doc);
+        var readTable = result.Blocks.OfType<Table>().Single();
+        readTable.AutoFit.Should().Be(AutoFitMode.Window);
+        readTable.ColumnWidthsPt.Should().Equal(100, 300);
+    }
+
+    [Fact]
     public void Table_OmittedLayout_UsesWordDefaultContentAutoFit()
     {
         var result = ReadHandAuthoredDocx(

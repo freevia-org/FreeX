@@ -43,16 +43,18 @@ public class AutoCorrectTests
         result.Insert.Should().Be("‘");
     }
 
-    // --- Double hyphen -> en dash ---
+    // --- Double hyphen -> dash ---
 
     [Fact]
-    public void DoubleHyphen_AfterHyphen_BecomesEnDash()
+    public void DoubleHyphen_AfterHyphen_BecomesEmDash()
     {
+        // "word--" (the dashes hug the word, no surrounding spaces) matches Word's classic
+        // "type -- for a dash" shortcut, which produces an em dash.
         var result = AutoCorrect.Evaluate("word-", '-');
 
         result.Applies.Should().BeTrue();
         result.DeleteBefore.Should().Be(1);
-        result.Insert.Should().Be("–"); // en dash U+2013
+        result.Insert.Should().Be("—"); // em dash U+2014
     }
 
     [Fact]
@@ -180,19 +182,20 @@ public class AutoCorrectTests
     // ── AutoFormat-As-You-Type: dashes en vs. em ───────────────────────────────────────────────────────
 
     [Fact]
-    public void DoubleHyphen_BetweenWords_IsEnDash()
+    public void DoubleHyphen_BetweenWords_IsEmDash()
     {
-        // "word--" (the dashes hug the word) → en dash, matching the original behaviour.
-        AutoCorrect.Evaluate("word-", '-').Insert.Should().Be("–");
+        // "word--" (the dashes hug the word, no spaces) → em dash, matching real Word's AutoFormat.
+        AutoCorrect.Evaluate("word-", '-').Insert.Should().Be("—");
     }
 
     [Fact]
-    public void DoubleHyphen_SpaceFlanked_IsEmDash()
+    public void DoubleHyphen_SpaceFlanked_IsEnDash()
     {
-        // "word --" (a space precedes the double hyphen) → em dash.
+        // "word --" (a space precedes the double hyphen) → en dash, matching real Word's AutoFormat.
+        // Only the two hyphens are replaced; the surrounding spaces are untouched.
         var result = AutoCorrect.Evaluate("word -", '-');
         result.DeleteBefore.Should().Be(1);
-        result.Insert.Should().Be("—");
+        result.Insert.Should().Be("–");
     }
 
     // ── Automatic bulleted lists ───────────────────────────────────────────────────────────────────────

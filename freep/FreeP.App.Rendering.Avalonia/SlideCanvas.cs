@@ -399,6 +399,7 @@ public sealed partial class SlideCanvas : Control
         var autoFitPlan = ResolveShapeAutoFitPlan(shape);
         var bounds = autoFitPlan.Bounds;
         bool hasTransform = !autoFitPlan.RenderTransform.IsIdentity;
+        bool hasTextTransform = !autoFitPlan.TextRenderTransform.IsIdentity;
 
         IDisposable? transformScope = null;
         if (hasTransform)
@@ -462,10 +463,21 @@ public sealed partial class SlideCanvas : Control
 
         autoFitGeometryScope?.Dispose();
 
+        transformScope?.Dispose();
+
+        // Draw text overlay. Text gets its own transform (rotation only, never flipH/flipV) so
+        // that flipping a shape mirrors its outline/fill but keeps the text upright, matching
+        // PowerPoint -- see ShapeTransformPlanner.PlanShapeTextRenderTransform.
         if (!suppressText && shape.Text is not null)
+        {
+            IDisposable? textTransformScope = null;
+            if (hasTextTransform)
+                textTransformScope = dc.PushTransform(ToAvaloniaMatrix(autoFitPlan.TextRenderTransform));
+
             RenderText(dc, shape.Text, bounds);
 
-        transformScope?.Dispose();
+            textTransformScope?.Dispose();
+        }
     }
 
     private static ShapeAutoFitRenderPlan ResolveShapeAutoFitPlan(DrawOp.Shape shape)

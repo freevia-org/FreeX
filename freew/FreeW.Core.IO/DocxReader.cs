@@ -2417,6 +2417,8 @@ public static class DocxReader
         Rtl = direct.Rtl || inherited.Rtl,
         VerticalAlign = direct.VerticalAlign != VerticalAlign.Baseline ? direct.VerticalAlign : inherited.VerticalAlign,
         FontFamily = direct.FontFamily ?? inherited.FontFamily,
+        EastAsiaFontFamily = direct.EastAsiaFontFamily ?? inherited.EastAsiaFontFamily,
+        ComplexScriptFontFamily = direct.ComplexScriptFontFamily ?? inherited.ComplexScriptFontFamily,
         FontSizePt = direct.FontSizePt ?? inherited.FontSizePt,
         ColorHex = direct.ColorHex ?? inherited.ColorHex,
         ThemeColor = direct.ColorHex is not null || direct.ThemeColor is not null
@@ -4209,9 +4211,19 @@ public static class DocxReader
             table.PreferredWidthPt = DxaToPoints(tblW.Attribute(W + "w")?.Value);
 
         // Word uses auto-fit when tblLayout is absent. Only an explicit fixed payload disables it.
+        // A non-fixed layout is ambiguous between AutoFitMode.Contents and AutoFitMode.Window (OOXML's
+        // ST_TblLayoutType has only fixed/autofit) — DocxWriter breaks the tie with a percentage-based
+        // tblW for Window (see BuildTable), matching how Word's own "Preferred width" dialog encodes
+        // "fit to window". A percentage width alongside non-fixed layout means Window; anything else
+        // (auto/dxa/absent) means Contents, same as before this distinction existed.
         var tableLayoutType = tblPr?.Element(W + "tblLayout")?.Attribute(W + "type")?.Value;
         if (!string.Equals(tableLayoutType, "fixed", StringComparison.OrdinalIgnoreCase))
-            table.AutoFit = AutoFitMode.Contents;
+        {
+            var isWindowAutoFit = string.Equals(tblW?.Attribute(W + "type")?.Value, "pct", StringComparison.OrdinalIgnoreCase);
+            table.AutoFit = isWindowAutoFit ? AutoFitMode.Window : AutoFitMode.Contents;
+            if (isWindowAutoFit)
+                table.PreferredWidthPt = TableLayoutOperations.DefaultAutoFitWindowWidthPt;
+        }
 
         // Table alignment (w:jc); absent → Left.
         table.Alignment = (tblPr?.Element(W + "jc")?.Attribute(W + "val")?.Value) switch
@@ -4566,6 +4578,28 @@ public static class DocxReader
     /// a picture is identified by an a:blip whose r:embed resolves to a media part and/or whose r:link
     /// resolves to an external image relationship.
     /// </summary>
+    /// <summary>
+    /// Depth-first search for the first descendant named <paramref name="name"/>, but never descending past a
+    /// NESTED drawing boundary (another <c>wp:inline</c>/<c>wp:anchor</c>). Plain <see cref="XContainer.Descendants"/>
+    /// crosses those boundaries, so on a run whose own drawing is a shape/text box (<c>wps:wsp</c>) it can walk
+    /// straight into that text box's own nested picture run and return ITS <c>a:blip</c>/<c>pic:pic</c> instead
+    /// of finding nothing — misclassifying the whole outer run as a plain image (see ReadImage, which is tried
+    /// before ReadShape) and silently discarding the shape wrapper and any other text-box content.
+    /// </summary>
+    private static XElement? FindOwnOne(XElement container, XName name)
+    {
+        foreach (var child in container.Elements())
+        {
+            if (child.Name == name)
+                return child;
+            if (child.Name == Wp + "inline" || child.Name == Wp + "anchor")
+                continue;
+            if (FindOwnOne(child, name) is { } found)
+                return found;
+        }
+        return null;
+    }
+
     private static InlineImage? ReadImage(XElement run, ZipArchive archive, IReadOnlyDictionary<string, string> imageRelationships)
     {
         var drawing = run.Element(W + "drawing");
@@ -4575,7 +4609,7 @@ public static class DocxReader
             // Word documents. Returns null when the run carries neither.
             return ReadVmlImage(run, archive, imageRelationships);
 
-        var blip = container.Descendants(A + "blip").FirstOrDefault();
+        var blip = FindOwnOne(container, A + "blip");
         var embeddedRelationshipId = blip?.Attribute(R + "embed")?.Value;
         var linkedRelationshipId = blip?.Attribute(R + "link")?.Value;
 
@@ -4620,7 +4654,7 @@ public static class DocxReader
             ApplyFloatingPosition(container, image);
 
         // Recover rotation/flip, crop, and picture border from the pic:pic payload.
-        var picPic = container.Descendants(Pic + "pic").FirstOrDefault();
+        var picPic = FindOwnOne(container, Pic + "pic");
         if (picPic is not null)
         {
             ApplyPictureFormat(picPic, image);
@@ -7538,6 +7572,17 @@ public static class DocxReader
         var langEastAsiaTag = langElement?.Attribute(W + "eastAsia")?.Value;
         var langBidiTag = langElement?.Attribute(W + "bidi")?.Value;
 
+        // w:rFonts (run typefaces) — the ascii/eastAsia/cs attributes are three independent typeface
+        // names (one per script: general/Latin, East Asian, complex-script/RTL), the same shape as
+        // w:lang above. Word commonly writes distinct values for each (e.g. ascii="Calibri"
+        // eastAsia="MS Gothic" cs="Arial"), and a pure-CJK run may carry only @eastAsia with no @ascii
+        // at all, so each must be modeled and round-tripped separately instead of collapsing to a
+        // single typeface.
+        var rFontsElement = rPr.Element(W + "rFonts");
+        var asciiFont = rFontsElement?.Attribute(W + "ascii")?.Value;
+        var eastAsiaFont = rFontsElement?.Attribute(W + "eastAsia")?.Value;
+        var complexScriptFont = rFontsElement?.Attribute(W + "cs")?.Value;
+
         return new RunFormatting
         {
             Bold = ReadToggle(rPr, "b"),
@@ -7551,7 +7596,9 @@ public static class DocxReader
             SmallCaps = ReadToggle(rPr, "smallCaps"),
             AllCaps = ReadToggle(rPr, "caps"),
             Rtl = ReadToggle(rPr, "rtl"),
-            FontFamily = rPr.Element(W + "rFonts")?.Attribute(W + "ascii")?.Value,
+            FontFamily = asciiFont,
+            EastAsiaFontFamily = string.IsNullOrEmpty(eastAsiaFont) ? null : eastAsiaFont,
+            ComplexScriptFontFamily = string.IsNullOrEmpty(complexScriptFont) ? null : complexScriptFont,
             FontSizePt = HalfPointsToPoints(rPr.Element(W + "sz")?.Attribute(W + "val")?.Value),
             ColorHex = color is null or "auto" ? null : "#" + color.TrimStart('#'),
             ThemeColor = string.IsNullOrWhiteSpace(themeColorToken)
@@ -7942,6 +7989,8 @@ public static class DocxReader
             document.DefaultRun = document.DefaultRun with
             {
                 FontFamily = defaultRun.FontFamily ?? document.DefaultRun.FontFamily,
+                EastAsiaFontFamily = defaultRun.EastAsiaFontFamily ?? document.DefaultRun.EastAsiaFontFamily,
+                ComplexScriptFontFamily = defaultRun.ComplexScriptFontFamily ?? document.DefaultRun.ComplexScriptFontFamily,
                 FontSizePt = defaultRun.FontSizePt ?? document.DefaultRun.FontSizePt,
                 ColorHex = defaultRun.ColorHex ?? document.DefaultRun.ColorHex,
                 ThemeColor = defaultRun.ColorHex is not null || defaultRun.ThemeColor is not null

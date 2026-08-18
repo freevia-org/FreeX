@@ -150,7 +150,7 @@ public sealed class ManageConditionalFormatsSessionTests
     }
 
     [Fact]
-    public void CurrentScopeWorkingCopy_SetScopeReloadsFromCurrentSheetSnapshot()
+    public void CurrentScopeWorkingCopy_SetScopeAppliesNewScopeFilterAfterMergingPendingEdits()
     {
         var sheetId = SheetId.New();
         var first = RuleAt(sheetId, 1, 0, 1);
@@ -161,8 +161,68 @@ public sealed class ManageConditionalFormatsSessionTests
 
         session.SetScope(RangeAt(sheetId, 8, 0, 8, 0), source);
 
+        // The deletion made under the old scope is merged into the snapshot before the new
+        // scope's filter is applied, so it does not resurface -- and the untouched live
+        // `source` list passed in for reconciliation is never mutated.
         session.WorkingRules.Should().ContainSingle().Which.Id.Should().Be(second.Id);
+        session.BuildResultRules().Select(rule => rule.Id).Should().Equal(second.Id);
         source.Should().HaveCount(2);
+    }
+
+    [Fact]
+    public void CurrentScopeWorkingCopy_SetScopeKeepsUnappliedEditWhenScopeWidensToStillShowTheRule()
+    {
+        // Regression test for the Manage Rules "scope switch discards unsaved edits" bug: Excel's
+        // Rules Manager never discards edits made earlier in the same dialog session when the
+        // "Show formatting rules for" scope changes -- only Cancel does. Before the fix, SetScope
+        // reloaded the current-scope working copy straight from the live (unedited) sheet rules,
+        // silently reverting any Edit-Rule change the user had not yet clicked OK/Apply for.
+        var sheetId = SheetId.New();
+        var rule = RuleAt(sheetId, 3, 0, 1);
+        var source = new List<ConditionalFormat> { rule };
+        var selectionScope = RangeAt(sheetId, 3, 0, 3, 0);
+        var session = CurrentScope(source, selectionScope);
+
+        var edited = rule.Clone();
+        edited.StopIfTrue = true;
+        session.Replace(edited).Should().BeTrue();
+
+        var worksheetScope = RangeAt(sheetId, 0, 0, 50, 0);
+        session.SetScope(worksheetScope, source);
+
+        session.WorkingRules.Should().ContainSingle().Which.StopIfTrue.Should()
+            .BeTrue("the un-applied edit made under the old scope must survive a scope switch");
+        source.Single().StopIfTrue.Should()
+            .BeFalse("the live sheet rule must not be mutated before Apply/OK");
+    }
+
+    [Fact]
+    public void CurrentScopeWorkingCopy_SetScopeKeepsEditAfterRoundTripThroughUnrelatedScope()
+    {
+        // Sibling of the fix above: proves ordinary scope filtering (hiding/showing rules as the
+        // scope changes) still behaves correctly, and that an unrelated rule is left untouched
+        // while the edited rule's change survives being hidden and shown again.
+        var sheetId = SheetId.New();
+        var edited = RuleAt(sheetId, 1, 0, 1);
+        var untouched = RuleAt(sheetId, 8, 0, 2);
+        var source = new List<ConditionalFormat> { edited, untouched };
+        var selectionScope = RangeAt(sheetId, 1, 0, 1, 0);
+        var session = CurrentScope(source, selectionScope);
+
+        var editedClone = edited.Clone();
+        editedClone.Value1 = "changed";
+        session.Replace(editedClone).Should().BeTrue();
+
+        // Switch to a scope that hides the edited rule entirely.
+        session.SetScope(RangeAt(sheetId, 8, 0, 8, 0), source);
+        session.WorkingRules.Should().ContainSingle().Which.Id.Should().Be(untouched.Id);
+
+        // Switch back to the scope that shows the edited rule.
+        session.SetScope(selectionScope, source);
+
+        session.WorkingRules.Should().ContainSingle().Which.Value1.Should().Be("changed");
+        untouched.Value1.Should().BeNull("the unrelated rule must be untouched throughout");
+        source.Select(rule => rule.Id).Should().Equal(edited.Id, untouched.Id);
     }
 
     [Fact]

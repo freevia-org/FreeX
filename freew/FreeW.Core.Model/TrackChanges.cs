@@ -18,7 +18,37 @@ public static class TrackChanges
     /// (<see cref="Run.FormatRevision"/>), or a tracked paragraph-formatting change
     /// (<see cref="Paragraph.ParagraphFormatRevision"/>).
     /// </summary>
-    public static bool HasRevisions(TextDocument document) => BlocksHaveRevisions(document.Blocks);
+    public static bool HasRevisions(TextDocument document)
+    {
+        if (BlocksHaveRevisions(document.Blocks))
+            return true;
+
+        foreach (var section in document.Sections)
+        {
+            var headersFooters = section.HeadersFooters;
+            if (HeaderFooterHasRevisions(headersFooters.Header) ||
+                HeaderFooterHasRevisions(headersFooters.Footer) ||
+                HeaderFooterHasRevisions(headersFooters.EvenHeader) ||
+                HeaderFooterHasRevisions(headersFooters.EvenFooter) ||
+                HeaderFooterHasRevisions(headersFooters.FirstHeader) ||
+                HeaderFooterHasRevisions(headersFooters.FirstFooter))
+            {
+                return true;
+            }
+        }
+
+        if (document.Footnotes.Values.Any(footnote => footnote.Content.Any(ParagraphHasRevisions)))
+            return true;
+        if (document.Endnotes.Values.Any(endnote => endnote.Content.Any(ParagraphHasRevisions)))
+            return true;
+
+        return false;
+    }
+
+    private static bool HeaderFooterHasRevisions(HeaderFooter? headerFooter) =>
+        headerFooter is not null &&
+        (headerFooter.Paragraphs.Any(ParagraphHasRevisions) ||
+         (headerFooter.Table is { } table && TableHasRevisions(table)));
 
     /// <summary>
     /// Accept every tracked change: inserted runs/rows/paragraph marks become ordinary content (their
@@ -64,7 +94,57 @@ public static class TrackChanges
 
     // --- Accept/Reject resolution ---
 
-    private static void Resolve(TextDocument document, bool accept) => ResolveBlockList(document.Blocks, accept);
+    // Resolves the document body plus every header/footer slot of every section, every footnote and
+    // every endnote — anywhere DocxReader can attach a Run.Revision/Paragraph.MarkRevision/
+    // TableRow.RowRevision mark. Headers/footers and footnotes/endnotes are parsed through the same
+    // ReadParagraph path as the body (DocxReader), so a tracked change can land in any of them; before
+    // this, Accept All / Reject All (and Document Inspector's "Remove Revisions", which is this same
+    // AcceptAll) silently left those revisions in the saved document while reporting "no revisions".
+    private static void Resolve(TextDocument document, bool accept)
+    {
+        ResolveBlockList(document.Blocks, accept);
+
+        foreach (var section in document.Sections)
+        {
+            var headersFooters = section.HeadersFooters;
+            ResolveHeaderFooter(headersFooters.Header, accept);
+            ResolveHeaderFooter(headersFooters.Footer, accept);
+            ResolveHeaderFooter(headersFooters.EvenHeader, accept);
+            ResolveHeaderFooter(headersFooters.EvenFooter, accept);
+            ResolveHeaderFooter(headersFooters.FirstHeader, accept);
+            ResolveHeaderFooter(headersFooters.FirstFooter, accept);
+        }
+
+        foreach (var footnote in document.Footnotes.Values)
+            ResolveParagraphContainer(footnote.Content, accept);
+        foreach (var endnote in document.Endnotes.Values)
+            ResolveParagraphContainer(endnote.Content, accept);
+    }
+
+    // Resolves one header/footer slot. Most headers/footers are plain paragraph content
+    // (HeaderFooter.Table is null), resolved exactly like a table cell's paragraph list. A minority carry
+    // a preserved side-by-side layout table (HeaderFooter.Table set), whose cells hold the SAME Paragraph
+    // instances flattened into HeaderFooter.Paragraphs (see HeaderFooterTableParagraphMap) — resolving the
+    // table (which may merge/drop paragraphs within a cell, or drop a whole row) and then re-flattening
+    // Paragraphs from it keeps that "same instances, same order" invariant intact for every other
+    // header/footer editing command that relies on it.
+    private static void ResolveHeaderFooter(HeaderFooter? headerFooter, bool accept)
+    {
+        if (headerFooter is null)
+            return;
+
+        if (headerFooter.Table is { } table)
+        {
+            ResolveTable(table, accept, accept ? RevisionKind.Deleted : RevisionKind.Inserted);
+            headerFooter.Paragraphs.Clear();
+            foreach (var row in table.Rows)
+                foreach (var cell in row.Cells)
+                    headerFooter.Paragraphs.AddRange(cell.Paragraphs);
+            return;
+        }
+
+        ResolveParagraphContainer(headerFooter.Paragraphs, accept);
+    }
 
     // Walk a body's block list (top-level document blocks). Tables are resolved row-by-row (rows may be
     // removed); paragraphs are resolved for their runs/formatting and their paragraph-mark revision. A
