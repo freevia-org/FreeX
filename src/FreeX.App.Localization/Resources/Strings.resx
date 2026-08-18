@@ -7759,6 +7759,14 @@ Changing cell value: {2}</value>
   <data name="MainWindowMessage_LossyFormatFeatureLossBodyFormat" xml:space="preserve">
     <value>{0} files don't support workbook features such as multiple worksheets or charts. If you continue, only the current worksheet's data will be saved, and other worksheets, charts, and formatting will be lost. Keep this format?</value>
   </data>
+  <data name="MainWindowMessage_SortAdjacentDataTitle" xml:space="preserve">
+    <value>Sort Warning</value>
+  </data>
+  <data name="MainWindowMessage_SortAdjacentDataBody" xml:space="preserve">
+    <value>Microsoft Excel found data next to your selection. Since you have not selected this data, it will not be sorted.
+
+Do you want to expand the selection to include the adjacent data, or continue with only the currently selected range?</value>
+  </data>
   <data name="MainWindow_TooltipTitle_BringForward" xml:space="preserve">
     <value>Bring Forward</value>
   </data>

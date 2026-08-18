@@ -110,6 +110,7 @@ public sealed partial class MainWindow : Window
         // OpenWorkbookFromTargetAsync re-populates it immediately afterward for a real file open.
         _currentFileSourceLastWriteTimeUtc = null;
         _session.DataValidationPromptResolver = ResolveDataValidationPrompt;
+        _session.SortAdjacentDataPromptResolver = ResolveSortAdjacentDataPrompt;
         _session.WorkbookChanged += Session_WorkbookChanged;
         // R126-avalonia-watch-window-stale-after-open: matches CloseFindReplaceDialogIfOpen above --
         // the modeless Watch Window's RefreshList closure reads _session.Workbook at call time (see

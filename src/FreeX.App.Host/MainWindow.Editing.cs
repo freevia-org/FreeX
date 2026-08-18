@@ -1508,8 +1508,11 @@ public partial class MainWindow
         return selectionCommitted;
     }
 
-    private void ConfigureWorkbookSessionRendererAdapters() =>
+    private void ConfigureWorkbookSessionRendererAdapters()
+    {
         _session.DataValidationPromptResolver = ResolveDataValidationPrompt;
+        _session.SortAdjacentDataPromptResolver = ResolveSortAdjacentDataPrompt;
+    }
 
     private UserMessageResult ResolveDataValidationPrompt(DataValidationPromptRequest request)
     {
@@ -1518,6 +1521,16 @@ public partial class MainWindow
             request.Message,
             request.AlertStyle));
     }
+
+    /// <summary>
+    /// Wired to <see cref="WorkbookSession.SortAdjacentDataPromptResolver"/> so ribbon Sort
+    /// Ascending/Descending (SortAscButton_Click/SortDescButton_Click above, both of which call
+    /// the shared <c>_session.SortSelectedRange(bool)</c>) surface Excel's "Sort Warning" instead
+    /// of silently sorting a selection that is a proper subset of a wider table
+    /// (R141-services-sort-adjacent-data-1 built the seam; this connects it in the WPF shell).
+    /// </summary>
+    private UserMessageResult ResolveSortAdjacentDataPrompt(SortAdjacentDataPromptRequest request) =>
+        ShowOwnedSynchronousPrompt(FreeXSynchronousPromptCatalog.ForSortAdjacentData());
 
     private UserMessageResult ShowOwnedSynchronousPrompt(FreeXSynchronousPromptDescriptor descriptor)
     {

@@ -939,6 +939,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
                 _session.CurrentXlsxFeatureReport));
 
         _session.DataValidationPromptResolver = ResolveDataValidationPrompt;
+        _session.SortAdjacentDataPromptResolver = ResolveSortAdjacentDataPrompt;
         _session.WorkbookChanged += Session_WorkbookChanged;
 
         PrepareOptionalStartupState(startupArguments);
@@ -8156,6 +8157,25 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
     partial void ResolveDataValidationPromptHandler(
         ref Func<DataValidationPromptRequest, UserMessageResult>? handler);
 
+    /// <summary>
+    /// Wired to <see cref="WorkbookSession.SortAdjacentDataPromptResolver"/> alongside
+    /// <see cref="ResolveDataValidationPrompt"/> so ribbon Sort Ascending/Descending
+    /// (<see cref="SortSelectedRange(bool)"/>, which calls the shared
+    /// <c>_session.SortSelectedRange(bool)</c>) surface Excel's "Sort Warning" instead of silently
+    /// sorting a selection that is a proper subset of a wider table
+    /// (R141-services-sort-adjacent-data-1 built the seam; this connects it in the Avalonia shell).
+    /// </summary>
+    private UserMessageResult ResolveSortAdjacentDataPrompt(SortAdjacentDataPromptRequest request)
+    {
+        Func<SortAdjacentDataPromptRequest, UserMessageResult>? handler = null;
+        ResolveSortAdjacentDataPromptHandler(ref handler);
+        return handler?.Invoke(request)
+            ?? ShowSynchronousPrompt(FreeXSynchronousPromptCatalog.ForSortAdjacentData());
+    }
+
+    partial void ResolveSortAdjacentDataPromptHandler(
+        ref Func<SortAdjacentDataPromptRequest, UserMessageResult>? handler);
+
     private UserMessageResult ShowSynchronousPrompt(FreeXSynchronousPromptDescriptor descriptor)
     {
         var request = descriptor.Resolve(UiText.Get, UiText.Format);
@@ -12555,6 +12575,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         ClearSelectedDrawingObject();
         RefreshShell(_session.StartupStatus);
         _session.DataValidationPromptResolver = ResolveDataValidationPrompt;
+        _session.SortAdjacentDataPromptResolver = ResolveSortAdjacentDataPrompt;
     }
 
     private async Task CloseWorkbookAsync()
@@ -12581,6 +12602,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         ClearSelectedDrawingObject();
         RefreshShell(status);
         _session.DataValidationPromptResolver = ResolveDataValidationPrompt;
+        _session.SortAdjacentDataPromptResolver = ResolveSortAdjacentDataPrompt;
     }
 
     private async Task RenameActiveSheetAsync()
@@ -14443,11 +14465,13 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         RefreshShell(UiText.Format("MainLoc_SelectedX", FormatRangeReference(result.SelectedRange!.Value)));
     }
 
+    // Includes names scoped to the active sheet (not just workbook-global ones), matching Excel's
+    // Name Box / Go To list and the WPF host's GoToDialogPlanner.BuildDefinedNamesForSheet call.
     private IReadOnlyList<string> BuildGoToReferenceChoices(string defaultReference) =>
         GoToDialogPlanner.BuildReferenceChoices(
             defaultReference,
             recentReferences: null,
-            definedNames: _session.Workbook.NamedRanges.Keys);
+            definedNames: GoToDialogPlanner.BuildDefinedNamesForSheet(_session.Workbook, _session.ActiveSheet.Id).Keys);
 
     private async Task<GoToDialogResult?> ShowGoToInputDialogAsync()
     {
@@ -26823,6 +26847,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             ClearSelectedDrawingObject();
             RefreshShell(_session.StartupStatus);
             _session.DataValidationPromptResolver = ResolveDataValidationPrompt;
+            _session.SortAdjacentDataPromptResolver = ResolveSortAdjacentDataPrompt;
             // A workbook saved with "Read-Only Recommended" or a write-reservation password used
             // to open fully editable on this shell with no prompt at all until this fix
             // (R75-services-protection-security-4-2); mirrors the WPF host's
@@ -26881,6 +26906,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             var (viewportHeight, viewportWidth) = GetCurrentSheetViewportSize();
             ReplaceSession(_sessionFactory.Create(source, viewportHeight, viewportWidth, includeObjects: true));
             _session.DataValidationPromptResolver = ResolveDataValidationPrompt;
+            _session.SortAdjacentDataPromptResolver = ResolveSortAdjacentDataPrompt;
             // Mark the recovered session dirty so the user sees the modified indicator and is
             // prompted to save rather than risk silently losing the recovered data — mirrors the
             // WPF host's MarkWorkbookDirtyForRecovery call after a successful recovery load.

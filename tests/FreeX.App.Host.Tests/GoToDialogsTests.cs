@@ -215,7 +215,9 @@ public sealed class GoToDialogsTests
     {
         var source = DialogSourceTestSupport.ReadHostSources("MainWindow.HomeEditing.cs");
 
-        source.Should().Contain("new GoToDialog(_currentSheetId, defaultAddress, _workbook.NamedRanges)");
+        source.Should().Contain("var goToDefinedNames = GoToDialogPlanner.BuildDefinedNamesForSheet(_workbook, _currentSheetId);");
+        source.Should().Contain("resolveSheetId: ResolveSheetIdByName,");
+        source.Should().Contain("resolveScopedName: (name, sheetId) => _workbook.TryGetNamedRange(name, sheetId, out var scoped) ? scoped : null");
         source.Should().Contain("dialog.SelectedSpecialKind is { } specialKind");
         source.Should().Contain("SelectGoToSpecialMatches(specialKind, dialog.SelectedSpecialOptions, showEmptyMessage: true)");
         source.Should().Contain("dialog.SelectedRange is { } selectedRange");

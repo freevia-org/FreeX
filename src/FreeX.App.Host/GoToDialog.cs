@@ -11,6 +11,8 @@ public sealed partial class GoToDialog : Window
 {
     private readonly SheetId _sheetId;
     private readonly IReadOnlyDictionary<string, GridRange> _definedNames;
+    private readonly Func<string, SheetId?> _resolveSheetId;
+    private readonly Func<string, SheetId, GridRange?>? _resolveScopedName;
     private readonly TextBox _addressBox = new();
     private readonly ListBox _historyList = new();
 
@@ -23,12 +25,16 @@ public sealed partial class GoToDialog : Window
         SheetId sheetId,
         string defaultAddress = "A1",
         IReadOnlyDictionary<string, GridRange>? definedNames = null,
-        IEnumerable<string>? recentReferences = null)
+        IEnumerable<string>? recentReferences = null,
+        Func<string, SheetId?>? resolveSheetId = null,
+        Func<string, SheetId, GridRange?>? resolveScopedName = null)
     {
         _sheetId = sheetId;
         _definedNames = definedNames is null
             ? new Dictionary<string, GridRange>(StringComparer.OrdinalIgnoreCase)
             : new Dictionary<string, GridRange>(definedNames, StringComparer.OrdinalIgnoreCase);
+        _resolveSheetId = resolveSheetId ?? (static _ => null);
+        _resolveScopedName = resolveScopedName;
 
         Title = UiText.Get("GoTo_GoTo");
         Width = 420;
@@ -149,7 +155,7 @@ public sealed partial class GoToDialog : Window
 
     private void Accept()
     {
-        if (!TryParseReferenceRange(_addressBox.Text, _sheetId, _definedNames, out var range))
+        if (!TryParseReferenceRange(_addressBox.Text, _sheetId, _resolveSheetId, _definedNames, _resolveScopedName, out var range))
         {
             DialogMessageHelper.ShowWarning(this, UiText.Get("GoTo_ReferenceIsNotValid"), UiText.Get("GoTo_GoTo"));
             FocusReferenceInput();

@@ -236,7 +236,19 @@ public partial class MainWindow
         var defaultAddress = SheetGrid.SelectedRange is { } selectionForDefault
             ? FormatCellReference(selectionForDefault.Start)
             : FormatCellReference(new CellAddress(_currentSheetId, 1, 1));
-        var dialog = new GoToDialog(_currentSheetId, defaultAddress, _workbook.NamedRanges) { Owner = this };
+        // Sheet-scope-aware defined names (global + names local to the active sheet, matching the Name
+        // Box's own list) and resolution (resolveScopedName lets a sheet-scoped name beat a same-named
+        // workbook-global name here, matching WorkbookSession.GoToReference/TryResolveReferenceRange and
+        // the Name Box's TryParseNameBoxReferenceRange -- without these the F5 Go To dialog silently
+        // rejected a valid sheet-scoped name as "Reference is not valid").
+        var goToDefinedNames = GoToDialogPlanner.BuildDefinedNamesForSheet(_workbook, _currentSheetId);
+        var dialog = new GoToDialog(
+            _currentSheetId,
+            defaultAddress,
+            goToDefinedNames,
+            resolveSheetId: ResolveSheetIdByName,
+            resolveScopedName: (name, sheetId) => _workbook.TryGetNamedRange(name, sheetId, out var scoped) ? scoped : null)
+        { Owner = this };
         if (dialog.ShowDialog() != true) return;
 
         if (dialog.SelectedSpecialKind is { } specialKind)
