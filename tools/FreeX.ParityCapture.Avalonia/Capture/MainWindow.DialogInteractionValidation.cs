@@ -35,6 +35,9 @@ public sealed partial class MainWindow
     {
         public MainWindow Owner { get; } = owner;
         public IInputElement? OwnerFocusBeforeOpen { get; } = ownerFocusBeforeOpen;
+
+        /// <summary>How many times the last-resort focus fallback has looked at this dialog.</summary>
+        public int FallbackChecks { get; set; }
     }
 
     private static readonly ConditionalWeakTable<Window, OwnedDialogKeyboardFocusState>
@@ -110,6 +113,19 @@ public sealed partial class MainWindow
         if (IsFocusInside(dialog, focused))
         {
             dialog.LayoutUpdated -= OwnedDialogLayoutUpdated;
+            return;
+        }
+
+        // Last resort, and only after the dialog has had a pass to focus its own target. A
+        // dialog that picks a specific initial control can fail on its first attempt -- the
+        // control is not always ready that early -- and retries on the next layout. Grabbing the
+        // first focusable control on the very first check beat that retry under load and recorded
+        // the wrong initial focus (typically a button), which also broke the tab cycle when the
+        // winner sat outside it. Dialogs that never focus anything still get the fallback, one
+        // pass later.
+        if (ConfiguredOwnedDialogKeyboardFocus.TryGetValue(dialog, out var state) &&
+            ++state.FallbackChecks < 2)
+        {
             return;
         }
 
