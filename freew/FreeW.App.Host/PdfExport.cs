@@ -135,7 +135,20 @@ internal static class PdfExport
             {
                 using var xpsDocument = new XpsDocument(package, CompressionOption.NotCompressed, documentUri.ToString());
                 var writer = XpsDocument.CreateXpsDocumentWriter(xpsDocument);
-                writer.Write(paginator);
+
+                // The text layer is an enhancement, not the export. WPF subsets every font it
+                // serializes, and MS.Internal.TrueTypeSubsetter throws FileFormatException on a
+                // font it cannot parse -- observed on a stock Windows Calibri. Letting that escape
+                // failed the whole PDF export over a selectable-text layer, so a user with one bad
+                // system font could not export at all. Degrade to a raster-only PDF instead.
+                try
+                {
+                    writer.Write(paginator);
+                }
+                catch (FileFormatException)
+                {
+                    return overlaysPerPage;
+                }
 
                 var sequence = xpsDocument.GetFixedDocumentSequence();
                 if (sequence is null)
