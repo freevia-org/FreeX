@@ -391,7 +391,7 @@ public sealed partial class MainWindow
         // Match the WPF wizard's keyboard entry point on every step. The generic owned-dialog
         // policy is intentionally a fallback; this wizard changes its visible focus scope as the
         // user moves between steps, so the production route owns the exact target.
-        void FocusCurrentWizardStepTarget()
+        bool FocusCurrentWizardStepTarget()
         {
             Control target = currentStep switch
             {
@@ -402,6 +402,7 @@ public sealed partial class MainWindow
             };
 
             target.Focus();
+            return ReferenceEquals(dialog.FocusManager?.GetFocusedElement(), target);
         }
 
         void ApplyWizardStep()
@@ -735,7 +736,38 @@ public sealed partial class MainWindow
         dialog.Opened += (_, _) =>
         {
             dialog.UpdateLayout();
-            Dispatcher.UIThread.Post(FocusCurrentWizardStepTarget, DispatcherPriority.Input);
+            // One post is not enough: if the step target is not focusable yet the call silently
+            // fails, and the shared owned-dialog fallback then focuses the first focusable control
+            // -- the Next button -- instead of the step's own target. Keep retrying on layout until
+            // the target accepts focus.
+            // Stop after the first success. Retrying past that re-focuses the step target on every
+            // later layout pass, and since Tab itself triggers one, the first Tab was immediately
+            // undone and forward navigation looked stuck on the radio.
+            var initialFocusEstablished = false;
+            EventHandler? retryFocus = null;
+            retryFocus = (_, _) =>
+            {
+                if (initialFocusEstablished || !dialog.IsVisible)
+                {
+                    dialog.LayoutUpdated -= retryFocus;
+                    return;
+                }
+
+                if (FocusCurrentWizardStepTarget())
+                {
+                    initialFocusEstablished = true;
+                    dialog.LayoutUpdated -= retryFocus;
+                }
+            };
+            dialog.LayoutUpdated += retryFocus;
+            dialog.Closed += (_, _) => dialog.LayoutUpdated -= retryFocus;
+            Dispatcher.UIThread.Post(
+                () =>
+                {
+                    if (!initialFocusEstablished && FocusCurrentWizardStepTarget())
+                        initialFocusEstablished = true;
+                },
+                DispatcherPriority.Input);
         };
         ConfigureDeferredDialogCancel(dialog, cancelButton);
 
