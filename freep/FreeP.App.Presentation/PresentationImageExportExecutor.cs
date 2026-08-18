@@ -74,7 +74,7 @@ public static class PresentationImageExportExecutor
         var heightPx = Math.Max(1, request.HeightPx);
         var plan = PresentationExportPlanner.BuildImageExportPlan(
             request.SlideRange,
-            presentation.Slides.Count,
+            presentation,
             widthPx,
             heightPx);
 

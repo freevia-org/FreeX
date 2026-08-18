@@ -547,4 +547,90 @@ public sealed class MasterLayoutRoundTripTests : IDisposable
             "master2 accent1 must be red after round-trip");
     }
 
+    // ─────────────────────────────────────────────────────────────────────────────
+    // r141 MED freep-master-rename-lost: SlideMaster.Name (p:cSld/@name) round-trip
+    // ─────────────────────────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// A slide master renamed in PowerPoint (p:cSld name="Corporate Master" on slideMaster*.xml)
+    /// must survive a FreeP write→read cycle instead of being silently dropped, the same way
+    /// SlideLayout.Name already round-trips.
+    /// </summary>
+    [Fact]
+    public void Synthetic_MasterName_RoundTrips()
+    {
+        var pres = new Presentation();
+        var master = new SlideMaster { Id = "rId1", Name = "Corporate Master" };
+        pres.Masters.Add(master);
+
+        var layout = new SlideLayout { Id = "rIdL1", MasterId = "rId1", Name = "Blank", LayoutType = SlideLayoutType.Blank };
+        pres.Layouts.Add(layout);
+
+        var slide = new Slide { LayoutId = "rIdL1" };
+        pres.Slides.Add(slide);
+
+        var path = Path.Combine(_tempDir, "master-name-roundtrip.pptx");
+        PptxPackageWriter.Write(pres, path);
+
+        // The written slideMaster1.xml's p:cSld must actually carry the name attribute.
+        using (var zip = System.IO.Compression.ZipFile.OpenRead(path))
+        {
+            var masterEntry = zip.GetEntry("ppt/slideMasters/slideMaster1.xml");
+            masterEntry.Should().NotBeNull("slideMaster1.xml must exist in the package");
+            using var stream = masterEntry!.Open();
+            var doc = System.Xml.Linq.XDocument.Load(stream);
+            System.Xml.Linq.XNamespace p = "http://schemas.openxmlformats.org/presentationml/2006/main";
+            var cSld = doc.Root!.Element(p + "cSld");
+            cSld.Should().NotBeNull();
+            var nameAttr = cSld!.Attribute("name");
+            nameAttr.Should().NotBeNull("p:cSld must carry a name attribute for a renamed master");
+            nameAttr!.Value.Should().Be("Corporate Master",
+                "p:cSld must carry the authored master name attribute");
+        }
+
+        var rt = PptxPackageReader.Read(path);
+        rt.Masters.Should().HaveCount(1);
+        rt.Masters[0].Name.Should().Be("Corporate Master",
+            "a renamed slide master's name must survive a write->read round-trip");
+    }
+
+    /// <summary>
+    /// Sibling of <see cref="Synthetic_MasterName_RoundTrips"/>: a master with no authored name
+    /// (the common case — most masters are never renamed) must round-trip as an empty name and
+    /// must NOT emit a stray name="" attribute, exactly mirroring SlideLayout's existing behavior
+    /// for an unnamed layout.
+    /// </summary>
+    [Fact]
+    public void Synthetic_MasterName_Unset_RoundTripsAsEmpty_NoStrayAttribute()
+    {
+        var pres = new Presentation();
+        var master = new SlideMaster { Id = "rId1" }; // Name left at default (string.Empty)
+        pres.Masters.Add(master);
+
+        var layout = new SlideLayout { Id = "rIdL1", MasterId = "rId1", Name = "Blank", LayoutType = SlideLayoutType.Blank };
+        pres.Layouts.Add(layout);
+
+        var slide = new Slide { LayoutId = "rIdL1" };
+        pres.Slides.Add(slide);
+
+        var path = Path.Combine(_tempDir, "master-name-unset-roundtrip.pptx");
+        PptxPackageWriter.Write(pres, path);
+
+        using (var zip = System.IO.Compression.ZipFile.OpenRead(path))
+        {
+            var masterEntry = zip.GetEntry("ppt/slideMasters/slideMaster1.xml");
+            masterEntry.Should().NotBeNull();
+            using var stream = masterEntry!.Open();
+            var doc = System.Xml.Linq.XDocument.Load(stream);
+            System.Xml.Linq.XNamespace p = "http://schemas.openxmlformats.org/presentationml/2006/main";
+            var cSld = doc.Root!.Element(p + "cSld");
+            cSld.Should().NotBeNull();
+            cSld!.Attribute("name").Should().BeNull(
+                "an unnamed master's p:cSld must not carry a stray name attribute");
+        }
+
+        var rt = PptxPackageReader.Read(path);
+        rt.Masters.Should().HaveCount(1);
+        rt.Masters[0].Name.Should().BeEmpty("an unrenamed master must round-trip with an empty name, not null or garbage");
+    }
 }

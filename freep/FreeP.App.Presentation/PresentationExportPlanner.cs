@@ -370,7 +370,7 @@ public static class PresentationExportPlanner
         if (plan.PrintHiddenSlides)
             return plan;
 
-        return plan with { SlideRange = FilterHiddenSlides(plan.SlideRange, presentation) };
+        return plan with { SlideRange = FilterHiddenSlides(plan.SlideRange, presentation.Slides) };
     }
 
     /// <summary>
@@ -393,12 +393,17 @@ public static class PresentationExportPlanner
         ArgumentNullException.ThrowIfNull(presentation);
 
         var range = BuildSlideRangePlan(request, presentation.Slides.Count);
-        return includeHiddenSlides ? range : FilterHiddenSlides(range, presentation);
+        return includeHiddenSlides ? range : FilterHiddenSlides(range, presentation.Slides);
     }
 
+    /// <summary>
+    /// Drops any hidden slide from a resolved slide-range plan, matching PowerPoint's default
+    /// behavior of excluding hidden slides from Print, Export Images, and Export Video alike
+    /// (unless the caller has explicitly opted back in, e.g. Print's "Print Hidden Slides").
+    /// </summary>
     private static PresentationSlideRangePlan FilterHiddenSlides(
         PresentationSlideRangePlan range,
-        Presentation presentation)
+        IReadOnlyList<Slide> slides)
     {
         if (range.SlideNumbers.Count == 0)
             return range;
@@ -406,8 +411,8 @@ public static class PresentationExportPlanner
         var visibleNumbers = range.SlideNumbers
             .Where(slideNumber =>
                 slideNumber >= 1 &&
-                slideNumber <= presentation.Slides.Count &&
-                !presentation.Slides[slideNumber - 1].IsHidden)
+                slideNumber <= slides.Count &&
+                !slides[slideNumber - 1].IsHidden)
             .ToArray();
         if (visibleNumbers.Length == range.SlideNumbers.Count)
             return range;
@@ -415,7 +420,7 @@ public static class PresentationExportPlanner
         return new PresentationSlideRangePlan(
             range.Kind,
             visibleNumbers,
-            FormatRangeDisplayName(range.Kind, visibleNumbers, presentation.Slides.Count),
+            FormatRangeDisplayName(range.Kind, visibleNumbers, slides.Count),
             range.CustomRangeText,
             range.ValidationMessage);
     }
@@ -512,6 +517,23 @@ public static class PresentationExportPlanner
             descriptor.IsImplemented);
     }
 
+    /// <summary>
+    /// Builds an image-export plan with the presentation's hidden-slide policy applied, matching
+    /// PowerPoint's default behavior (and this planner's own Print path) of excluding hidden slides
+    /// from Export Images.
+    /// </summary>
+    public static PresentationImageExportPlan BuildImageExportPlan(
+        PresentationSlideRangeRequest? range,
+        Presentation presentation,
+        int widthPx = PresentationImageExportExecutor.DefaultWidthPx,
+        int heightPx = PresentationImageExportExecutor.DefaultHeightPx)
+    {
+        ArgumentNullException.ThrowIfNull(presentation);
+
+        var plan = BuildImageExportPlan(range, presentation.Slides.Count, widthPx, heightPx);
+        return plan with { SlideRange = FilterHiddenSlides(plan.SlideRange, presentation.Slides) };
+    }
+
     public static PresentationNotesPagePdfExportPlan BuildNotesPagePdfExportPlan(
         PresentationSlideRangeRequest? range,
         int slideCount)
@@ -563,7 +585,8 @@ public static class PresentationExportPlanner
             request,
             presentation.Slides.Count,
             presentation.Slides,
-            hostCapabilities);
+            hostCapabilities,
+            presentation.UseSlideTimings);
     }
 
     public static PresentationVideoStoryboardPlan BuildVideoStoryboardPlan(
@@ -584,26 +607,45 @@ public static class PresentationExportPlanner
     {
         ArgumentNullException.ThrowIfNull(presentation);
         request ??= new PresentationVideoExportRequest();
-        var range = BuildSlideRangePlan(request.SlideRange, presentation.Slides.Count);
+        var range = FilterHiddenSlides(
+            BuildSlideRangePlan(request.SlideRange, presentation.Slides.Count),
+            presentation.Slides);
         var quality = ResolveVideoQuality(request.Quality);
         var secondsPerSlide = NormalizeSecondsPerSlide(request.SecondsPerSlide);
 
-        return BuildVideoStoryboardPlan(request, range, quality, secondsPerSlide, presentation.Slides);
+        return BuildVideoStoryboardPlan(
+            request,
+            range,
+            quality,
+            secondsPerSlide,
+            presentation.Slides,
+            presentation.UseSlideTimings);
     }
 
     private static PresentationVideoExportPlan BuildVideoExportPlanCore(
         PresentationVideoExportRequest? request,
         int slideCount,
         IReadOnlyList<Slide>? slides,
-        PresentationVideoExportHandoffHostCapabilities? hostCapabilities)
+        PresentationVideoExportHandoffHostCapabilities? hostCapabilities,
+        bool presentationUsesSlideTimings = true)
     {
         request ??= new PresentationVideoExportRequest();
         var descriptor = BuildFormatDescriptors().Single(d => d.Format == PresentationExportFormat.Video);
         var range = BuildSlideRangePlan(request.SlideRange, slideCount);
+        // Export Video, like Print, excludes hidden slides by default -- there is no
+        // opt-back-in equivalent to Print's "Print Hidden Slides" for video export.
+        if (slides is not null)
+            range = FilterHiddenSlides(range, slides);
         var qualityOptions = BuildVideoQualityDescriptors();
         var quality = ResolveVideoQuality(request.Quality, qualityOptions);
         var secondsPerSlide = NormalizeSecondsPerSlide(request.SecondsPerSlide);
-        var storyboard = BuildVideoStoryboardPlan(request, range, quality, secondsPerSlide, slides);
+        var storyboard = BuildVideoStoryboardPlan(
+            request,
+            range,
+            quality,
+            secondsPerSlide,
+            slides,
+            presentationUsesSlideTimings);
         var isImplemented = hostCapabilities?.CanEncodeMp4 == true;
         var disabledReason = range.SlideNumbers.Count == 0
             ? "Video export requires at least one slide."
@@ -653,7 +695,8 @@ public static class PresentationExportPlanner
         PresentationSlideRangePlan range,
         PresentationVideoQualityDescriptor quality,
         double secondsPerSlide,
-        IReadOnlyList<Slide>? slides)
+        IReadOnlyList<Slide>? slides,
+        bool presentationUsesSlideTimings = true)
     {
         var segments = new List<PresentationVideoStoryboardSlideSegment>(range.SlideNumbers.Count);
         var cursor = TimeSpan.Zero;
@@ -665,7 +708,7 @@ public static class PresentationExportPlanner
                 : null;
             var (duration, timingSource) = ResolveVideoSegmentDuration(
                 slide,
-                request.UseRecordedTimings,
+                request.UseRecordedTimings && presentationUsesSlideTimings,
                 secondsPerSlide);
 
             segments.Add(new PresentationVideoStoryboardSlideSegment(

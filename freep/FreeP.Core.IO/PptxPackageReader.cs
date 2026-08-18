@@ -995,6 +995,8 @@ public static class PptxPackageReader
 
         var scheme = theme?.ColorScheme ?? PresentationColorScheme.CreateDefault();
 
+        master.Name = xml.Root.Element(P + "cSld")?.Attribute("name")?.Value ?? string.Empty;
+
         var bg = xml.Root.Element(P + "cSld")?.Element(P + "bg");
         if (bg is not null) master.Background = ReadBackground(bg, scheme);
 

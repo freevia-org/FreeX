@@ -319,4 +319,159 @@ public sealed class SlideShowControllerDA4Tests
         entry.Animation.Should().BeSameAs(anim);
         entry.StartDelayMs.Should().Be(123);
     }
+
+    // ── DA4 repeat-aware chain timing (RepeatCount / RepeatIndefinitely) ───────────
+    //
+    // PowerPoint semantics for a repeating predecessor in an AfterPrevious chain:
+    //   • A finite Repeat (e.g. "3") means the effect replays its whole single-pass
+    //     DurationMs that many times before it is done — the true on-screen completion
+    //     time is DurationMs * RepeatCount, not a single pass.
+    //   • An indefinite Repeat ("Until Next Click" / "Until End of Slide") never
+    //     completes on its own — a sibling chained "After Previous" behind it NEVER
+    //     starts automatically, because there is no completion event to chain from.
+    //     We model "never automatically" with a fixed sentinel (int.MaxValue ms).
+
+    /// <summary>
+    /// Regression for the bug this file's F1 finding describes: AfterPrevious must wait for
+    /// the predecessor's FULL repeated playback (DurationMs * RepeatCount), not just one pass.
+    /// </summary>
+    [Fact]
+    public void DA4_AfterPrevious_PredecessorRepeatCount_MultipliesDurationIntoChainEnd()
+    {
+        var slide = new Slide();
+        slide.Animations.Add(new ShapeAnimation
+        {
+            ShapeId = 1, Trigger = AnimationTrigger.OnClick,
+            DurationMs = 500, DelayMs = 0, RepeatCount = 3,   // 3 full pulses = 1500ms on screen
+        });
+        slide.Animations.Add(new ShapeAnimation
+        {
+            ShapeId = 2, Trigger = AnimationTrigger.AfterPrevious,
+            DurationMs = 800, DelayMs = 0,
+        });
+
+        var steps = SlideShowController.BuildSteps(slide);
+
+        steps.Should().HaveCount(1);
+        var entries = steps[0].Entries;
+        entries[0].StartDelayMs.Should().Be(0, "the repeating OnClick animation starts at t=0");
+        entries[1].StartDelayMs.Should().Be(1500,
+            "AfterPrevious must wait for all 3 repeats of the 500ms predecessor (3*500=1500), " +
+            "not just a single 500ms pass");
+    }
+
+    /// <summary>
+    /// Sibling/neighbour proof: an explicit RepeatCount of 1 (or the RepeatCount-null default)
+    /// behaves exactly like the pre-fix, no-repeat math — this fix must not change ordinary
+    /// non-repeating chains.
+    /// </summary>
+    [Fact]
+    public void DA4_AfterPrevious_PredecessorRepeatCountOne_BehavesLikeNoRepeat()
+    {
+        var slide = new Slide();
+        slide.Animations.Add(new ShapeAnimation
+        {
+            ShapeId = 1, Trigger = AnimationTrigger.OnClick,
+            DurationMs = 500, DelayMs = 0, RepeatCount = 1,
+        });
+        slide.Animations.Add(new ShapeAnimation
+        {
+            ShapeId = 2, Trigger = AnimationTrigger.AfterPrevious,
+            DurationMs = 300, DelayMs = 0,
+        });
+
+        var steps = SlideShowController.BuildSteps(slide);
+
+        steps[0].Entries[1].StartDelayMs.Should().Be(500,
+            "RepeatCount=1 is a single pass, identical to the no-repeat (null) case");
+    }
+
+    /// <summary>
+    /// When the predecessor repeats INDEFINITELY (PowerPoint's "Until Next Click" / "Until
+    /// End of Slide"), an AfterPrevious sibling never gets an automatic start time — the
+    /// predecessor's timeline has no natural completion to chain from. This is the specific,
+    /// checked (not guessed) PowerPoint behavior: such a follower simply never auto-plays.
+    /// We assert against the documented sentinel rather than any small/guessed finite number.
+    /// </summary>
+    [Fact]
+    public void DA4_AfterPrevious_PredecessorRepeatsIndefinitely_NeverAutoStarts()
+    {
+        var slide = new Slide();
+        slide.Animations.Add(new ShapeAnimation
+        {
+            ShapeId = 1, Trigger = AnimationTrigger.OnClick,
+            DurationMs = 500, DelayMs = 0, RepeatIndefinitely = true,
+        });
+        slide.Animations.Add(new ShapeAnimation
+        {
+            ShapeId = 2, Trigger = AnimationTrigger.AfterPrevious,
+            DurationMs = 800, DelayMs = 0,
+        });
+
+        var steps = SlideShowController.BuildSteps(slide);
+
+        var entries = steps[0].Entries;
+        entries[0].StartDelayMs.Should().Be(0);
+        entries[1].StartDelayMs.Should().Be(int.MaxValue,
+            "an AfterPrevious sibling of an indefinitely-repeating predecessor must never " +
+            "receive a finite automatic start time — PowerPoint never fires it automatically " +
+            "because the repeating predecessor's timeline never completes on its own");
+        entries[1].StartDelayMs.Should().NotBe(500,
+            "the pre-fix bug used only the single-pass DurationMs (500) as the chain end, " +
+            "starting the follower while the indefinite repeat was still running");
+    }
+
+    /// <summary>
+    /// The "never auto-starts" freeze must propagate through further AfterPrevious links in
+    /// the same chain — a third entry chained after the frozen one must not silently regain a
+    /// finite start time (e.g. via delay-addition overflow wrapping back into a small number).
+    /// </summary>
+    [Fact]
+    public void DA4_AfterPrevious_ChainFreezePropagatesToLaterLinks()
+    {
+        var slide = new Slide();
+        slide.Animations.Add(new ShapeAnimation
+        {
+            ShapeId = 1, Trigger = AnimationTrigger.OnClick,
+            DurationMs = 500, DelayMs = 0, RepeatIndefinitely = true,
+        });
+        slide.Animations.Add(new ShapeAnimation
+        {
+            ShapeId = 2, Trigger = AnimationTrigger.AfterPrevious,
+            DurationMs = 300, DelayMs = 0,
+        });
+        slide.Animations.Add(new ShapeAnimation
+        {
+            ShapeId = 3, Trigger = AnimationTrigger.AfterPrevious,
+            DurationMs = 200, DelayMs = 50,
+        });
+
+        var steps = SlideShowController.BuildSteps(slide);
+
+        var entries = steps[0].Entries;
+        entries.Should().HaveCount(3);
+        entries[1].StartDelayMs.Should().Be(int.MaxValue, "frozen by the indefinite predecessor");
+        entries[2].StartDelayMs.Should().Be(int.MaxValue,
+            "the freeze must propagate — adding a further DelayMs=50 on top of the sentinel " +
+            "must not overflow back into a small, wrong, finite start time");
+    }
+
+    /// <summary>
+    /// BuildTriggerSteps (used for interactive trigger sequences) must apply the same
+    /// repeat-aware chain math as the main-sequence BuildSteps.
+    /// </summary>
+    [Fact]
+    public void DA4_BuildTriggerSteps_PredecessorRepeatCount_MultipliesDurationIntoChainEnd()
+    {
+        var anims = new List<ShapeAnimation>
+        {
+            new() { ShapeId = 1, Trigger = AnimationTrigger.OnClick,       DurationMs = 400, DelayMs = 0, RepeatCount = 2 },
+            new() { ShapeId = 2, Trigger = AnimationTrigger.AfterPrevious, DurationMs = 200, DelayMs = 0 },
+        };
+
+        var steps = SlideShowController.BuildTriggerSteps(anims);
+
+        steps[0].Entries[1].StartDelayMs.Should().Be(800,
+            "trigger AfterPrevious must wait for both repeats of the 400ms predecessor (2*400=800)");
+    }
 }

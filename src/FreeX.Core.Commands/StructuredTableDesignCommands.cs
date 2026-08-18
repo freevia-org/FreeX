@@ -768,6 +768,18 @@ public sealed class ConvertStructuredTableToRangeCommand : IWorkbookCommand
     private Dictionary<uint, IReadOnlyList<string>>? _previousActiveValueFilterColumns;
     private readonly Dictionary<CellAddress, string> _formulaSnapshot = [];
     private readonly List<PivotCacheModel> _orphanedPivotCaches = [];
+    // A structured reference to this table can also be embedded in a conditional-format rule's
+    // FormulaText/threshold values, a data-validation rule's Formula1/Formula2, or a chart's
+    // series/data-label/error-bar formula -- on THIS table's own sheet or any other sheet in the
+    // workbook. None of those are cell formulas, so LowerAllFormulas above never touches them; left
+    // unlowered they would keep referencing a table that no longer exists and permanently break
+    // (CF/DV formulas evaluate to #NAME?/#REF!, chart series lose their data). Mirrors
+    // RenameStructuredTableCommand's identical R100 CF/DV/chart handling, except lowering to an
+    // absolute A1 reference instead of substituting a renamed table name.
+    private readonly Dictionary<Guid, string?> _cfFormulaSnapshot = [];
+    private readonly Dictionary<(Guid Id, int Slot), string?> _cfThresholdSnapshot = [];
+    private readonly Dictionary<(Guid Id, int Slot), string?> _dvFormulaSnapshot = [];
+    private List<RowColumnShiftHelpers.ChartVerbatimWorkbookSnapshot>? _chartVerbatimSnapshot;
 
     public string Label => "Convert to Range";
 
@@ -786,6 +798,10 @@ public sealed class ConvertStructuredTableToRangeCommand : IWorkbookCommand
         _previousActiveValueFilterColumns = null;
         _formulaSnapshot.Clear();
         _orphanedPivotCaches.Clear();
+        _cfFormulaSnapshot.Clear();
+        _cfThresholdSnapshot.Clear();
+        _dvFormulaSnapshot.Clear();
+        _chartVerbatimSnapshot = null;
         var sheet = ctx.GetSheet(_sheetId);
         if (CommandGuards.RejectIfProtected(sheet) is { } protectedOutcome)
             return protectedOutcome;
@@ -802,6 +818,15 @@ public sealed class ConvertStructuredTableToRangeCommand : IWorkbookCommand
         // evaluate to #NAME?/#REF! the instant the table model is gone. Must run while the table
         // is still in sheet.StructuredTables, since resolution needs its live column layout.
         ConvertToRangeStructuredReferenceLowering.LowerAllFormulas(ctx.Workbook, sheet, _removedTable, _formulaSnapshot);
+
+        // Same lowering, extended to the non-cell-formula surfaces that can also hold a structured
+        // reference into this table -- see the field doc comments above for why each is needed. Must
+        // run before the table is removed from sheet.StructuredTables (same reason as LowerAllFormulas).
+        ConvertToRangeStructuredReferenceLowering.LowerRuleFormulas(
+            ctx.Workbook, sheet, _removedTable, _cfFormulaSnapshot, _cfThresholdSnapshot, _dvFormulaSnapshot);
+
+        _chartVerbatimSnapshot = RowColumnShiftHelpers.CaptureChartVerbatimFormulas(ctx.Workbook);
+        ConvertToRangeStructuredReferenceLowering.LowerChartFormulas(ctx.Workbook, sheet, _removedTable);
 
         sheet.StructuredTables.RemoveAt(tableIndex);
 
@@ -838,6 +863,30 @@ public sealed class ConvertStructuredTableToRangeCommand : IWorkbookCommand
 
         var sheet = ctx.GetSheet(_sheetId);
         RowColumnShiftHelpers.RestoreFormulas(ctx.Workbook, _formulaSnapshot);
+
+        // Mirrors RenameStructuredTableCommand.Revert's CF/DV/chart restore.
+        var cfSheetsToNotify = _cfFormulaSnapshot.Count > 0 || _cfThresholdSnapshot.Count > 0
+            ? new HashSet<SheetId>()
+            : null;
+        foreach (var s in ctx.Workbook.Sheets)
+        {
+            if (cfSheetsToNotify is not null &&
+                s.ConditionalFormats.Any(cf =>
+                    _cfFormulaSnapshot.ContainsKey(cf.Id) ||
+                    _cfThresholdSnapshot.Keys.Any(k => k.Id == cf.Id)))
+            {
+                cfSheetsToNotify.Add(s.Id);
+            }
+        }
+        RowColumnShiftHelpers.RestoreRuleFormulas(ctx.Workbook, _cfFormulaSnapshot, _cfThresholdSnapshot, _dvFormulaSnapshot);
+        if (cfSheetsToNotify is not null)
+        {
+            foreach (var sheetId in cfSheetsToNotify)
+                ctx.Workbook.GetSheet(sheetId)?.ConditionalFormats.NotifyRulesChanged();
+        }
+
+        RowColumnShiftHelpers.RestoreChartVerbatimFormulas(ctx.Workbook, _chartVerbatimSnapshot);
+        _chartVerbatimSnapshot = null;
 
         CommandGuards.UnpinOrphanedPivotCacheSourceTableIds(_orphanedPivotCaches);
         _orphanedPivotCaches.Clear();

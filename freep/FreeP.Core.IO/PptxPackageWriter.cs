@@ -3116,6 +3116,7 @@ public static class PptxPackageWriter
             new XElement(P + "sldMaster",
                 NsAttr("p", P), NsAttr("a", A), NsAttr("r", R),
                 new XElement(P + "cSld",
+                    master.Name is { Length: > 0 } ? new XAttribute("name", master.Name) : null,
                     master.Background is not null
                         ? new XElement(P + "bg",
                             new XElement(P + "bgPr",

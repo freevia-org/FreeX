@@ -7,9 +7,12 @@ using FreeW.App.Presentation.Shell;
 namespace FreeW.App.Host.Tests;
 
 /// <summary>
-/// Regression tests for F26: AutosaveCoordinator.OfferRecovery must NOT delete non-offered
-/// candidates, and must NOT delete the offered candidate on decline. Only a successful recovery
-/// (user accepted AND file loaded) may delete the offered snapshot.
+/// Regression tests for F26 (AutosaveCoordinator.OfferRecovery must NOT delete non-offered
+/// candidates) and its r141 revision (a declined STARTUP offer must be discarded, matching FreeX's
+/// own startup recovery workflow, so the same stale snapshot does not nag on every later launch --
+/// see <see cref="DeclinedOffer_AtStartup_DeletesOnlyTheDeclinedCandidate"/>). The manual "Recover
+/// Unsaved Documents" command stays F26-safe: a decline there leaves the candidate in place for the
+/// user to revisit (<see cref="DeclinedOffer_ViaManualCommand_LeavesTheCandidateInPlace"/>).
 /// </summary>
 public class AutosaveRecoveryDeletionTests : IDisposable
 {
@@ -107,23 +110,68 @@ public class AutosaveRecoveryDeletionTests : IDisposable
         store.EnumerateCandidates().Should().HaveCount(1);
     }
 
+    /// <summary>
+    /// r141: declining the unprompted STARTUP offer must discard the offered snapshot -- through the
+    /// real <see cref="FreeWRecoveryWorkflow.RunAsync"/> production path, not a hand-simulated
+    /// stand-in -- so the same stale document does not keep nagging on every later launch (matches
+    /// FreeX's <c>StartupRecoveryWorkflow</c>, which discards a declined snapshot the same way). A
+    /// non-offered candidate sitting in the same recovery directory must survive untouched.
+    /// </summary>
     [Fact]
-    public void DeclinedOffer_DoesNotDeleteAnyCandidate()
+    public async Task DeclinedOffer_AtStartup_DeletesOnlyTheDeclinedCandidate()
     {
-        // Arrange: two candidates
+        // Arrange: two candidates in the same recovery directory; only the newer one is offered
+        // (mirrors AutosaveCoordinator.OfferRecovery, which offers the whole PlanAll list -- here we
+        // use PlanLatest to model offering just the single most-recent one, leaving the older
+        // candidate un-offered, exactly like the pre-existing "non-offered survives" tests below).
         var older = CreateCandidate("snap-a", "2026-06-20T08:00:00Z");
         var newer = CreateCandidate("snap-b", "2026-06-20T09:00:00Z");
 
         var store = new AutosaveSnapshotStore(_recoveryDir);
-        var candidates = store.EnumerateCandidates();
+        var offered = AutosaveRecoveryPlanner.PlanLatest(store)!;
+        offered.Candidate.SnapshotPath.Should().Be(newer.SnapshotPath);
 
-        // Act: simulate the fixed OfferRecovery — user declines ("No"), no deletion occurs
-        _ = AutosaveRecoveryPolicy.SelectLatest(candidates)!;
-        // On decline the fixed code does NOT call DeleteCandidate — nothing is deleted here.
+        // Act: run the real startup workflow and decline the one offer.
+        var result = await FreeWRecoveryWorkflow.RunAsync(
+            [offered],
+            FreeWRecoveryPromptMode.Startup,
+            _ => new ValueTask<bool>(false),
+            (_, _) => new ValueTask<bool>(false));
 
-        // Assert: both candidates still exist
-        File.Exists(newer.SnapshotPath).Should().BeTrue("declined snapshot must not be deleted");
-        File.Exists(older.SnapshotPath).Should().BeTrue("non-offered snapshot must not be deleted");
+        // Assert: the offer was declined, the declined snapshot is gone, the other one survives.
+        result.AnyAccepted.Should().BeFalse();
+        File.Exists(newer.SnapshotPath).Should().BeFalse(
+            "a declined startup offer must be discarded so it does not nag on the next launch");
+        File.Exists(newer.SidecarPath).Should().BeFalse();
+        File.Exists(older.SnapshotPath).Should().BeTrue("a candidate that was never offered must survive");
+        File.Exists(older.SidecarPath).Should().BeTrue();
+    }
+
+    /// <summary>
+    /// Sibling of <see cref="DeclinedOffer_AtStartup_DeletesOnlyTheDeclinedCandidate"/>: the
+    /// user-invoked "Recover Unsaved Documents" command is opt-in and browsable, so declining one
+    /// candidate there must NOT delete it -- the user can still reach it again later (F26's original
+    /// intent, preserved for the manual entry point).
+    /// </summary>
+    [Fact]
+    public async Task DeclinedOffer_ViaManualCommand_LeavesTheCandidateInPlace()
+    {
+        var older = CreateCandidate("snap-a", "2026-06-20T08:00:00Z");
+        var newer = CreateCandidate("snap-b", "2026-06-20T09:00:00Z");
+
+        var store = new AutosaveSnapshotStore(_recoveryDir);
+        var recoveries = AutosaveRecoveryPlanner.PlanAll(store);
+
+        var result = await FreeWRecoveryWorkflow.RunAsync(
+            recoveries,
+            FreeWRecoveryPromptMode.Manual,
+            _ => new ValueTask<bool>(false),
+            (_, _) => new ValueTask<bool>(false));
+
+        result.AnyAccepted.Should().BeFalse();
+        File.Exists(newer.SnapshotPath).Should().BeTrue(
+            "declining the manual recovery command must leave the candidate for the user to revisit");
+        File.Exists(older.SnapshotPath).Should().BeTrue();
         store.EnumerateCandidates().Should().HaveCount(2);
     }
 

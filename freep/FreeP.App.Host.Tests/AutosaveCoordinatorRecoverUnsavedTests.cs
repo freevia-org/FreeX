@@ -146,6 +146,42 @@ public sealed class AutosaveCoordinatorRecoverUnsavedTests : IDisposable
     }
 
     /// <summary>
+    /// r141: unlike the manual command above, <see cref="AutosaveCoordinator.OfferRecovery"/> is the
+    /// unprompted STARTUP offer that would otherwise repeat on every relaunch. Declining it must
+    /// discard the snapshot so the same stale presentation does not keep nagging (matches FreeX's own
+    /// <c>StartupRecoveryWorkflow</c>, which discards a declined snapshot the same way).
+    /// </summary>
+    [StaFact]
+    public void OfferRecovery_DeletesTheSnapshotWhenTheUserDeclines()
+    {
+        var store = new AutosaveSnapshotStore(TempDir);
+        var (crashed, crashedFile, _) = NewWindowHarness(store);
+        crashedFile.MarkDirty();
+        crashed.TryEmergencySnapshot();
+        var snapshotPath = store.GetSnapshotPath(crashed.SnapshotIdForTests);
+        File.Exists(snapshotPath).Should().BeTrue("the crashed window must have left a snapshot behind");
+        crashed.SimulateCrashForTests();
+
+        var (recovering, recoveringFile, owner) = NewWindowHarness(store);
+
+        HeadlessMessageBox.Handler = (_, _) => UserMessageResult.No;
+        try
+        {
+            var anyAccepted = recovering.OfferRecovery(owner);
+
+            anyAccepted.Should().BeFalse();
+            recoveringFile.IsDirty.Should().BeFalse();
+            File.Exists(snapshotPath).Should().BeFalse(
+                "a declined startup offer must be discarded so it does not nag on the next launch");
+            store.EnumerateCandidates().Should().BeEmpty();
+        }
+        finally
+        {
+            HeadlessMessageBox.Handler = null;
+        }
+    }
+
+    /// <summary>
     /// Pins the Backstage wiring end-to-end: without this, the portable endpoint and pane exist but
     /// nothing in the real host ever reaches <see cref="AutosaveCoordinator.RecoverUnsavedPresentations"/>.
     /// </summary>

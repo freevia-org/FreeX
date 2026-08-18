@@ -2497,6 +2497,98 @@ public sealed class PresentationExportPlannerTests : IDisposable
     }
 
     [Fact]
+    public void VideoStoryboardPlan_IgnoresRecordedTimingsWhenPresentationUseSlideTimingsIsFalse()
+    {
+        // The presentation's own "Use Timings" Slide Show Setup checkbox must gate recorded
+        // slide-advance timings for video export, the same way SlideShowHostPlanner already
+        // gates them for live presenting -- even when the export request itself still asks for
+        // recorded timings (UseRecordedTimings: true, the default).
+        var presentation = Presentation.CreateEmpty();
+        presentation.Slides.Clear();
+        presentation.Slides.Add(new Slide
+        {
+            Title = "Timed",
+            Transition = new SlideTransition { AdvanceAfterMs = 9000 },
+        });
+        presentation.UseSlideTimings = false;
+
+        var plan = PresentationExportPlanner.BuildVideoExportPlan(
+            new PresentationVideoExportRequest(SecondsPerSlide: 3, UseRecordedTimings: true),
+            presentation);
+
+        plan.Storyboard.Segments.Should().ContainSingle();
+        plan.Storyboard.Segments[0].Duration.Should().Be(TimeSpan.FromSeconds(3));
+        plan.Storyboard.Segments[0].TimingSource.Should().Be(PresentationVideoTimingSource.DefaultDuration);
+        plan.EstimatedDuration.Should().Be(TimeSpan.FromSeconds(3));
+    }
+
+    [Fact]
+    public void VideoStoryboardPlan_HonoursRecordedTimingsWhenPresentationUseSlideTimingsIsTrue()
+    {
+        // Sibling of the IsFalse test above: proves the presentation.UseSlideTimings gate does
+        // not over-trigger and suppress recorded timings when the setting is actually enabled
+        // (the model default -- see Presentation.UseSlideTimings).
+        var presentation = Presentation.CreateEmpty();
+        presentation.Slides.Clear();
+        presentation.Slides.Add(new Slide
+        {
+            Title = "Timed",
+            Transition = new SlideTransition { AdvanceAfterMs = 9000 },
+        });
+        presentation.UseSlideTimings = true;
+
+        var plan = PresentationExportPlanner.BuildVideoExportPlan(
+            new PresentationVideoExportRequest(SecondsPerSlide: 3, UseRecordedTimings: true),
+            presentation);
+
+        plan.Storyboard.Segments.Should().ContainSingle();
+        plan.Storyboard.Segments[0].Duration.Should().Be(TimeSpan.FromMilliseconds(9000));
+        plan.Storyboard.Segments[0].TimingSource.Should().Be(PresentationVideoTimingSource.RecordedTransitionAdvance);
+        plan.EstimatedDuration.Should().Be(TimeSpan.FromMilliseconds(9000));
+    }
+
+    [Fact]
+    public void VideoExportPlan_ExcludesHiddenSlidesLikePrint()
+    {
+        // Matches PowerPoint's behavior of excluding hidden slides from Export Video by
+        // default, the same way BuildPrintPlan(request, presentation) already does for Print.
+        var presentation = Presentation.CreateEmpty();
+        presentation.Slides.Clear();
+        presentation.Slides.Add(new Slide { Title = "One" });
+        presentation.Slides.Add(new Slide { Title = "Two", IsHidden = true });
+        presentation.Slides.Add(new Slide { Title = "Three" });
+
+        var plan = PresentationExportPlanner.BuildVideoExportPlan(
+            new PresentationVideoExportRequest(SecondsPerSlide: 2),
+            presentation);
+
+        plan.SlideRange.SlideNumbers.Should().Equal(1, 3);
+        plan.SlideRange.DisplayName.Should().Be("Slides 1, 3");
+        plan.Storyboard.SlideRange.SlideNumbers.Should().Equal(1, 3);
+        plan.Storyboard.Segments.Select(segment => segment.SlideNumber).Should().Equal(1, 3);
+        plan.Storyboard.Segments.Select(segment => segment.SlideTitle).Should().Equal("One", "Three");
+    }
+
+    [Fact]
+    public void VideoExportPlan_KeepsAllSlidesWhenNoneAreHidden()
+    {
+        // Sibling of VideoExportPlan_ExcludesHiddenSlidesLikePrint: proves the hidden-slide
+        // filter added for that fix does not over-trigger and drop ordinary visible slides.
+        var presentation = Presentation.CreateEmpty();
+        presentation.Slides.Clear();
+        presentation.Slides.Add(new Slide { Title = "One" });
+        presentation.Slides.Add(new Slide { Title = "Two" });
+        presentation.Slides.Add(new Slide { Title = "Three" });
+
+        var plan = PresentationExportPlanner.BuildVideoExportPlan(
+            new PresentationVideoExportRequest(SecondsPerSlide: 2),
+            presentation);
+
+        plan.SlideRange.SlideNumbers.Should().Equal(1, 2, 3);
+        plan.Storyboard.Segments.Select(segment => segment.SlideNumber).Should().Equal(1, 2, 3);
+    }
+
+    [Fact]
     public void VideoFramePackageExecutor_RendersStoryboardFramesAndManifest()
     {
         var presentation = Presentation.CreateEmpty();
@@ -2887,6 +2979,59 @@ public sealed class PresentationExportPlannerTests : IDisposable
             result.ExportedSlides.Should().BeEmpty();
             Directory.EnumerateFiles(outputDirectory).Should().BeEmpty();
         }
+    }
+
+    [Fact]
+    public void ImageExportExecutor_ExcludesHiddenSlidesLikePrint()
+    {
+        // Matches PowerPoint's behavior of excluding hidden slides from Export Images by
+        // default, the same way BuildPrintPlan(request, presentation) already does for Print.
+        var outputDirectory = Path.Combine(_temporaryDirectory.Path, "image-export-hidden");
+        var presentation = Presentation.CreateEmpty();
+        presentation.Slides.Clear();
+        presentation.Slides.Add(new Slide { Title = "One" });
+        presentation.Slides.Add(new Slide { Title = "Two", IsHidden = true });
+        presentation.Slides.Add(new Slide { Title = "Three" });
+        var calls = new List<int>();
+
+        var result = PresentationImageExportExecutor.Export(
+            presentation,
+            new PresentationImageExportRequest(outputDirectory),
+            (_, slideIndex, _, _) =>
+            {
+                calls.Add(slideIndex);
+                return [0x89, 0x50, 0x4E, 0x47, (byte)slideIndex];
+            });
+
+        result.Succeeded.Should().BeTrue();
+        result.Plan.SlideRange.SlideNumbers.Should().Equal(1, 3);
+        result.Plan.SlideRange.DisplayName.Should().Be("Slides 1, 3");
+        result.ExportedSlides.Select(s => s.SlideNumber).Should().Equal(1, 3);
+        calls.Should().Equal(0, 2);
+        Directory.EnumerateFiles(outputDirectory).Should()
+            .HaveCount(2, "the hidden slide must not produce an exported image file");
+    }
+
+    [Fact]
+    public void ImageExportExecutor_KeepsAllSlidesWhenNoneAreHidden()
+    {
+        // Sibling of ImageExportExecutor_ExcludesHiddenSlidesLikePrint: proves the hidden-slide
+        // filter added for that fix does not over-trigger and drop ordinary visible slides.
+        var outputDirectory = Path.Combine(_temporaryDirectory.Path, "image-export-none-hidden");
+        var presentation = Presentation.CreateEmpty();
+        presentation.Slides.Clear();
+        presentation.Slides.Add(new Slide { Title = "One" });
+        presentation.Slides.Add(new Slide { Title = "Two" });
+        presentation.Slides.Add(new Slide { Title = "Three" });
+
+        var result = PresentationImageExportExecutor.Export(
+            presentation,
+            new PresentationImageExportRequest(outputDirectory),
+            (_, slideIndex, _, _) => [0x89, 0x50, 0x4E, 0x47, (byte)slideIndex]);
+
+        result.Succeeded.Should().BeTrue();
+        result.Plan.SlideRange.SlideNumbers.Should().Equal(1, 2, 3);
+        result.ExportedSlides.Select(s => s.SlideNumber).Should().Equal(1, 2, 3);
     }
 
     private static SlideShape MakeHeaderFooterPlaceholder(

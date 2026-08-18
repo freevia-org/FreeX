@@ -381,7 +381,8 @@ public static class PresentationDesignCommandPlanner
         {
             if (StringComparer.Ordinal.Equals(presentation.Masters[i].Id, masterId))
             {
-                return $"Master {i + 1}";
+                var name = presentation.Masters[i].Name;
+                return string.IsNullOrWhiteSpace(name) ? $"Master {i + 1}" : name;
             }
         }
 

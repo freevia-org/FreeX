@@ -121,12 +121,53 @@ public static class DocumentCompare
         TextDocument revised,
         string author,
         string? dateXml,
-        CompareSettings settings)
+        CompareSettings settings) => Compare(original, revised, author, dateXml, settings, out _);
+
+    /// <summary>
+    /// Same as <see cref="Compare(TextDocument,TextDocument,string,string?,CompareSettings)"/>, but also hands
+    /// back the paragraph-level alignment the engine computed while building the result: for every result
+    /// <see cref="Paragraph"/>, which index (if any) it corresponds to in <paramref name="original"/> and/or
+    /// <paramref name="revised"/>. A result paragraph that is a whole-paragraph deletion has only an
+    /// <see cref="ParagraphAlignment.OriginalIndex"/>; a whole-paragraph insertion has only a
+    /// <see cref="ParagraphAlignment.RevisedIndex"/>; every other result paragraph (an unchanged anchor or a
+    /// word-diffed pair) has both. <see cref="DocumentCombine"/> reuses this so it can align two independent
+    /// blacklines by the shared spine paragraph they both derive from, instead of by raw list position.
+    /// </summary>
+    internal static TextDocument Compare(
+        TextDocument original,
+        TextDocument revised,
+        string author,
+        string? dateXml,
+        CompareSettings settings,
+        out IReadOnlyDictionary<Paragraph, ParagraphAlignment> alignment)
+    {
+        var alignmentSink = new Dictionary<Paragraph, ParagraphAlignment>();
+        var result = CompareCore(original, revised, author, dateXml, settings, alignmentSink);
+        alignment = alignmentSink;
+        return result;
+    }
+
+    /// <summary>Which source-paragraph index(es) a produced comparison-result paragraph corresponds to.</summary>
+    internal readonly record struct ParagraphAlignment(int? OriginalIndex, int? RevisedIndex);
+
+    private static TextDocument CompareCore(
+        TextDocument original,
+        TextDocument revised,
+        string author,
+        string? dateXml,
+        CompareSettings settings,
+        Dictionary<Paragraph, ParagraphAlignment>? alignmentSink)
     {
         ArgumentNullException.ThrowIfNull(original);
         ArgumentNullException.ThrowIfNull(revised);
         ArgumentNullException.ThrowIfNull(author);
         ArgumentNullException.ThrowIfNull(settings);
+
+        // Records a produced result paragraph's source index(es) for the caller-supplied alignment sink.
+        // TryAdd guards against a paragraph object being tracked twice (it never legitimately is, but a
+        // silent overwrite would be worse than a no-op if some future branch ever re-adds one).
+        void Track(Paragraph paragraph, int? originalIndex, int? revisedIndex) =>
+            alignmentSink?.TryAdd(paragraph, new ParagraphAlignment(originalIndex, revisedIndex));
 
         var result = new TextDocument();
         // Carry over the revised document's defaults, styles and page setup so the result renders like it.
@@ -186,12 +227,14 @@ public static class DocumentCompare
                 // Resolve the gap that precedes this anchor against the original paragraphs sitting between
                 // the previous anchor and this one, then copy the anchor (identical text) through unchanged.
                 ResolveGap(anchorOriginalIndex);
-                result.Blocks.Add(ClonePlainWithFormatRevisions(
+                var anchor = ClonePlainWithFormatRevisions(
                     originalParagraphs[anchorOriginalIndex],
                     revisedParagraph,
                     author,
                     dateXml,
-                    settings.Formatting && !revised.DoNotTrackFormatting));
+                    settings.Formatting && !revised.DoNotTrackFormatting);
+                result.Blocks.Add(anchor);
+                Track(anchor, anchorOriginalIndex, revisedIndex);
                 prevOriginalAnchor = anchorOriginalIndex;
             }
             else
@@ -231,54 +274,76 @@ public static class DocumentCompare
                 var revisedMoveId = moveIds.GetRevisedId(revisedEntry.Index);
                 if (originalMoveId is null && revisedMoveId is null)
                 {
-                    result.Blocks.Add(DiffParagraph(
+                    var diffed = DiffParagraph(
                         originalEntry.Paragraph,
                         revisedEntry.Paragraph,
                         author,
                         dateXml,
-                        settings));
+                        settings);
+                    result.Blocks.Add(diffed);
+                    Track(diffed, originalEntry.Index, revisedEntry.Index);
                     continue;
                 }
 
                 if (settings.Deletions)
-                    result.Blocks.Add(MarkWholeParagraph(
+                {
+                    var deleted = MarkWholeParagraph(
                         originalEntry.Paragraph,
                         RevisionKind.Deleted,
                         author,
                         dateXml,
-                        originalMoveId));
+                        originalMoveId);
+                    result.Blocks.Add(deleted);
+                    Track(deleted, originalEntry.Index, null);
+                }
                 if (settings.Insertions)
-                    result.Blocks.Add(MarkWholeParagraph(
+                {
+                    var inserted = MarkWholeParagraph(
                         revisedEntry.Paragraph,
                         RevisionKind.Inserted,
                         author,
                         dateXml,
-                        revisedMoveId));
+                        revisedMoveId);
+                    result.Blocks.Add(inserted);
+                    Track(inserted, null, revisedEntry.Index);
+                }
             }
 
             for (var i = pairCount; i < gapOriginal.Count; i++)
             {
                 if (settings.Deletions)
-                    result.Blocks.Add(MarkWholeParagraph(
+                {
+                    var deleted = MarkWholeParagraph(
                         gapOriginal[i].Paragraph,
                         RevisionKind.Deleted,
                         author,
                         dateXml,
-                        moveIds.GetOriginalId(gapOriginal[i].Index)));
+                        moveIds.GetOriginalId(gapOriginal[i].Index));
+                    result.Blocks.Add(deleted);
+                    Track(deleted, gapOriginal[i].Index, null);
+                }
                 // When deletions are suppressed, the original-only paragraph is simply dropped.
             }
 
             for (var i = pairCount; i < gapRevised.Count; i++)
             {
                 if (settings.Insertions)
-                    result.Blocks.Add(MarkWholeParagraph(
+                {
+                    var inserted = MarkWholeParagraph(
                         gapRevised[i].Paragraph,
                         RevisionKind.Inserted,
                         author,
                         dateXml,
-                        moveIds.GetRevisedId(gapRevised[i].Index)));
+                        moveIds.GetRevisedId(gapRevised[i].Index));
+                    result.Blocks.Add(inserted);
+                    Track(inserted, null, gapRevised[i].Index);
+                }
                 else
-                    result.Blocks.Add(ClonePlain(gapRevised[i].Paragraph)); // carry through unmarked
+                {
+                    var plain = ClonePlain(gapRevised[i].Paragraph); // carry through unmarked
+                    result.Blocks.Add(plain);
+                    Track(plain, null, gapRevised[i].Index);
+                }
             }
 
             prevOriginalAnchor = originalLimit - 1;
@@ -289,7 +354,12 @@ public static class DocumentCompare
     // Word-level diff of two paragraphs whose text differs. Runs an LCS over whitespace-delimited tokens:
     // common tokens become ordinary runs, revised-only tokens become inserted runs, original-only tokens
     // become deleted runs. Tokens keep their trailing spacing so the reconstructed text reads naturally.
-    // settings.Insertions/Deletions gate whether those revision kinds appear in the output.
+    // settings.Insertions/Deletions gate whether those revision kinds appear in the output. Runs that carry
+    // non-text content (inline images/charts/SmartArt/embedded objects/shapes/WordArt/equations/drawing
+    // groups, footnote/endnote references, comment-reference/page-break/column-break markers and field runs)
+    // are never tokenized: BuildDiffUnits keeps each such run as one atomic, un-splittable unit so it is
+    // cloned through with its special content intact rather than flattened into a plain-text run that would
+    // silently discard it (see IsCompareAtomicRun).
     private static Paragraph DiffParagraph(Paragraph original, Paragraph revised, string author, string? dateXml, CompareSettings settings)
     {
         // Text that differs only in disabled comparison categories copies through verbatim.
@@ -304,15 +374,18 @@ public static class DocumentCompare
         result.BookmarkBoundaries.Clear();
 
         var useExactTokens = settings.CaseChanges && settings.Whitespace;
-        var originalTokens = useExactTokens
-            ? Tokenize(original.PlainText)
-            : TokenizeComparisonSegments(original.PlainText);
-        var revisedTokens = useExactTokens
-            ? Tokenize(revised.PlainText)
-            : TokenizeComparisonSegments(revised.PlainText);
+        var originalUnits = BuildDiffUnits(original, useExactTokens);
+        var revisedUnits = BuildDiffUnits(revised, useExactTokens);
+
+        // Atomic (object-run) units are given a comparison key that can never equal any other unit's key
+        // (a fresh Guid per unit), so the LCS never treats two object runs as "common" — every object run
+        // is always emitted through the deletion/insertion branches below, which clone it (with its special
+        // content) rather than discarding it. This is deliberately conservative: an unmodified inline object
+        // sitting in an edited paragraph is emitted as a delete+insert pair instead of matching through as
+        // unchanged, but the content itself is never lost.
         var common = LongestCommonSubsequence(
-            originalTokens.Select(token => ComparisonKey(token, settings)).ToList(),
-            revisedTokens.Select(token => ComparisonKey(token, settings)).ToList());
+            originalUnits.Select(unit => DiffUnitKey(unit, settings)).ToList(),
+            revisedUnits.Select(unit => DiffUnitKey(unit, settings)).ToList());
 
         var commonOriginal = new HashSet<int>(common.Select(m => m.OriginalIndex));
         var commonRevised = new HashSet<int>(common.Select(m => m.RevisedIndex));
@@ -320,14 +393,14 @@ public static class DocumentCompare
         var oi = 0;
         var ri = 0;
         var nextMatch = 0;
-        while (oi < originalTokens.Count || ri < revisedTokens.Count)
+        while (oi < originalUnits.Count || ri < revisedUnits.Count)
         {
             // At the next aligned common token, both cursors are on a match: emit it as ordinary text.
             if (nextMatch < common.Count
                 && oi == common[nextMatch].OriginalIndex
                 && ri == common[nextMatch].RevisedIndex)
             {
-                AppendRun(result, revisedTokens[ri], RevisionKind.None, author, dateXml);
+                AppendDiffUnit(result, revisedUnits[ri], RevisionKind.None, author, dateXml);
                 oi++;
                 ri++;
                 nextMatch++;
@@ -335,30 +408,30 @@ public static class DocumentCompare
             }
 
             // Emit original-only tokens (deletions) until we reach the next common original token.
-            if (oi < originalTokens.Count && !commonOriginal.Contains(oi))
+            if (oi < originalUnits.Count && !commonOriginal.Contains(oi))
             {
                 // When deletions are suppressed, skip (do not emit the deleted token at all).
                 if (settings.Deletions)
-                    AppendRun(result, originalTokens[oi], RevisionKind.Deleted, author, dateXml);
+                    AppendDiffUnit(result, originalUnits[oi], RevisionKind.Deleted, author, dateXml);
                 oi++;
                 continue;
             }
 
             // Then emit revised-only tokens (insertions) until we reach the next common revised token.
-            if (ri < revisedTokens.Count && !commonRevised.Contains(ri))
+            if (ri < revisedUnits.Count && !commonRevised.Contains(ri))
             {
                 // When insertions are suppressed, emit the token as plain text (no revision mark).
                 var kind = settings.Insertions ? RevisionKind.Inserted : RevisionKind.None;
-                AppendRun(result, revisedTokens[ri], kind, author, dateXml);
+                AppendDiffUnit(result, revisedUnits[ri], kind, author, dateXml);
                 ri++;
                 continue;
             }
 
             // Defensive: if one side is exhausted but the other still has a "common" token not yet aligned
             // (can't normally happen), advance the lagging cursor so the loop always terminates.
-            if (oi < originalTokens.Count)
+            if (oi < originalUnits.Count)
                 oi++;
-            else if (ri < revisedTokens.Count)
+            else if (ri < revisedUnits.Count)
                 ri++;
         }
 
@@ -367,6 +440,98 @@ public static class DocumentCompare
             result,
             static run => run.Revision != RevisionKind.Deleted);
         return result;
+    }
+
+    // One word-diff unit: either a plain-text token (ObjectRun is null) or a single non-text run carried
+    // through atomically (ObjectRun is the source run; Text is only its literal text, used for offsetting).
+    private readonly record struct DiffUnit(string Text, Run? ObjectRun);
+
+    // Splits a paragraph's runs into diff units. Consecutive plain-text runs are concatenated and tokenized
+    // together (so a word split across two runs by a formatting change, e.g. bold "Hel" + "lo", still
+    // tokenizes as one word "Hello" exactly as whole-paragraph tokenization did before this method existed);
+    // a run flagged by IsCompareAtomicRun becomes its own single unit and is never handed to the tokenizer,
+    // so its special content survives the diff instead of being silently dropped.
+    private static List<DiffUnit> BuildDiffUnits(Paragraph paragraph, bool useExactTokens)
+    {
+        var units = new List<DiffUnit>();
+        var plainBuffer = new System.Text.StringBuilder();
+
+        void FlushPlain()
+        {
+            if (plainBuffer.Length == 0)
+                return;
+            var text = plainBuffer.ToString();
+            plainBuffer.Clear();
+            var tokens = useExactTokens ? Tokenize(text) : TokenizeComparisonSegments(text);
+            foreach (var token in tokens)
+                units.Add(new DiffUnit(token, null));
+        }
+
+        foreach (var run in paragraph.Runs)
+        {
+            if (IsCompareAtomicRun(run))
+            {
+                FlushPlain();
+                units.Add(new DiffUnit(run.Text, run));
+                continue;
+            }
+
+            plainBuffer.Append(run.Text);
+        }
+        FlushPlain();
+        return units;
+    }
+
+    // True for a run whose content cannot be represented as plain text: cloning just its literal Text into
+    // a new Run (as the word-diff's text-token path does) would silently discard the run's actual payload.
+    // Covers the run kinds DocxReader/DocxWriter serialize as something other than a bare w:t: inline
+    // pictures, equations, shapes, WordArt, SmartArt, charts, embedded OLE objects, drawing groups, footnote
+    // and endnote reference markers, comment-reference/page-break/column-break markers, and field runs.
+    private static bool IsCompareAtomicRun(Run run) =>
+        run.Image is not null
+        || run.Equation is not null
+        || run.Shape is not null
+        || run.WordArt is not null
+        || run.SmartArt is not null
+        || run.Chart is not null
+        || run.EmbeddedObject is not null
+        || run.PreservedDrawing is not null
+        || run.DrawingGroup is not null
+        || run.FootnoteId is not null
+        || run.EndnoteId is not null
+        || run.IsCommentReference
+        || run.IsPageBreak
+        || run.IsColumnBreak
+        || run.FieldKind != RunFieldKind.None;
+
+    // Comparison key for one diff unit. Plain-text units use the same settings-aware key as before; object
+    // units get a globally-unique key so the LCS never folds two distinct object runs together (see the
+    // remark on the call site in DiffParagraph).
+    private static string DiffUnitKey(DiffUnit unit, CompareSettings settings) =>
+        unit.ObjectRun is null
+            ? ComparisonKey(unit.Text, settings)
+            : "OBJ:" + Guid.NewGuid().ToString("N");
+
+    // Emit one diff unit as a run with the given revision kind. A plain-text unit becomes a new text run
+    // (as before); an object unit is cloned in full (via DocumentModelCloner, which preserves Image/Chart/
+    // SmartArt/EmbeddedObject/Shape/WordArt/Equation/DrawingGroup/FootnoteId/EndnoteId/etc.) so its special
+    // content survives instead of being replaced by a plain-text run holding only its literal text.
+    private static void AppendDiffUnit(Paragraph paragraph, DiffUnit unit, RevisionKind kind, string author, string? dateXml)
+    {
+        if (unit.ObjectRun is { } sourceRun)
+        {
+            var clone = DocumentModelCloner.CloneRun(sourceRun, RevisionClonePolicy.Strip);
+            if (kind != RevisionKind.None)
+            {
+                clone.Revision = kind;
+                clone.RevisionAuthor = author;
+                clone.RevisionDateXml = dateXml;
+            }
+            paragraph.Runs.Add(clone);
+            return;
+        }
+
+        AppendRun(paragraph, unit.Text, kind, author, dateXml);
     }
 
     // Append one token as a run with the given revision kind. None-kind runs carry no revision metadata.
@@ -612,6 +777,27 @@ public static class DocumentCompare
         target.Page.DifferentFirstPage = source.Page.DifferentFirstPage;
         foreach (var (id, comment) in source.Comments)
             target.Comments[id] = CloneComment(comment);
+
+        // Body runs compared/carried through below can reference footnotes/endnotes (Run.FootnoteId/
+        // EndnoteId) and the final section's headers/footers are otherwise-unreferenced document state; none
+        // of that lives on a Paragraph, so it must be copied here alongside the rest of the shell or the
+        // comparison result silently loses every footnote/endnote and header/footer while still emitting
+        // dangling footnote/endnote references for any that survive in the compared body.
+        foreach (var (id, footnote) in source.Footnotes)
+            target.Footnotes[id] = DocumentModelCloner.CloneFootnote(footnote, RevisionClonePolicy.Strip);
+        foreach (var (id, endnote) in source.Endnotes)
+            target.Endnotes[id] = DocumentModelCloner.CloneEndnote(endnote, RevisionClonePolicy.Strip);
+
+        var finalHeadersFooters = DocumentModelCloner.CloneSectionHeadersFooters(
+            source.FinalSectionHeadersFooters,
+            RevisionClonePolicy.Strip);
+        target.FinalSectionHeadersFooters.Header = finalHeadersFooters.Header;
+        target.FinalSectionHeadersFooters.Footer = finalHeadersFooters.Footer;
+        target.FinalSectionHeadersFooters.EvenHeader = finalHeadersFooters.EvenHeader;
+        target.FinalSectionHeadersFooters.EvenFooter = finalHeadersFooters.EvenFooter;
+        target.FinalSectionHeadersFooters.FirstHeader = finalHeadersFooters.FirstHeader;
+        target.FinalSectionHeadersFooters.FirstFooter = finalHeadersFooters.FirstFooter;
+
         target.Preserved.CopyFrom(source.Preserved);
     }
 

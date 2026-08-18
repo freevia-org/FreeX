@@ -390,6 +390,93 @@ public class DocumentCombineTests
         allRuns.Should().Contain(r => r.Revision == RevisionKind.Inserted);
     }
 
+    [Fact]
+    public void AEarlyDeletion_DoesNotDesyncLaterParagraphPairing()
+    {
+        // Regression test for freew-combine-positional-misalignment: A deletes an early paragraph
+        // ("BaseOnly") that B never touched. Because DocumentCompare splices A's whole-paragraph deletion
+        // into blacklineA's own Blocks list, blacklineA has one MORE paragraph entry than blacklineB from
+        // that point on. Zipping the two blacklines by raw list position (the bug) pairs blacklineA's
+        // "BaseOnly" deletion against blacklineB's real "Base2" paragraph, fusing A's deletion onto Base2's
+        // text — and shifts every paragraph after that by one, so B's own "Bnew" insertion ends up paired
+        // with (and gains a duplicated copy of) A's untouched "Base2" paragraph instead of standing alone.
+        var original = DocWith("Base1", "BaseOnly", "Base2");
+        var revisedA = DocWith("Base1", "Base2"); // A deletes "BaseOnly"
+        var revisedB = DocWith("Base1", "Base2", "Bnew"); // B appends "Bnew"; never sees "BaseOnly"
+
+        var result = DocumentCombine.Combine(original, revisedA, AuthorA, revisedB, AuthorB, DateXml);
+        var paragraphs = result.Paragraphs.ToList();
+
+        // "BaseOnly" must survive as its own tracked A-deletion, attributed to Alice.
+        var baseOnlyRun = paragraphs
+            .SelectMany(p => p.Runs)
+            .SingleOrDefault(r => r.Text.Contains("BaseOnly"));
+        baseOnlyRun.Should().NotBeNull("A's whole-paragraph deletion must be preserved somewhere");
+        baseOnlyRun!.Revision.Should().Be(RevisionKind.Deleted);
+        baseOnlyRun.RevisionAuthor.Should().Be(AuthorA);
+
+        // The paragraph carrying the deleted "BaseOnly" text must NOT also carry "Base2" — that fusion is
+        // exactly the corruption the finding describes (a fabricated deletion glued to unrelated content).
+        var baseOnlyParagraph = paragraphs.Single(p => p.Runs.Any(r => r.Text.Contains("BaseOnly")));
+        baseOnlyParagraph.PlainText.Should().NotContain("Base2");
+
+        // "Base2" itself must appear untouched (no revision marks) in its own paragraph — it was never
+        // edited by either reviewer, and must not have been silently duplicated or merged with anything.
+        var base2Runs = paragraphs
+            .SelectMany(p => p.Runs)
+            .Where(r => r.Text.Contains("Base2"))
+            .ToList();
+        base2Runs.Should().HaveCount(1, "Base2 must appear exactly once, not duplicated by misalignment");
+        base2Runs[0].Revision.Should().Be(RevisionKind.None);
+
+        // "Bnew" must appear as B's own clean insertion, not fused with Base2's text.
+        var bnewParagraph = paragraphs.Single(p => p.Runs.Any(r => r.Text.Contains("Bnew")));
+        bnewParagraph.PlainText.Should().NotContain("Base2");
+        var bnewRun = bnewParagraph.Runs.Single(r => r.Text.Contains("Bnew"));
+        bnewRun.Revision.Should().Be(RevisionKind.Inserted);
+        bnewRun.RevisionAuthor.Should().Be(AuthorB);
+    }
+
+    [Fact]
+    public void BEarlyDeletion_MirrorsAEarlyDeletion_AndStaysCorrectlyPaired()
+    {
+        // Sibling of AEarlyDeletion_DoesNotDesyncLaterParagraphPairing with the roles swapped: this time B
+        // is the one whose edits shift blacklineB's paragraph list out of raw positional sync with
+        // blacklineA (A leaves everything alone). This exercises the other half of the fix — aligning by
+        // the shared revisedA spine index still has to work when blacklineB (not blacklineA) is the side
+        // carrying the extra spliced-in whole-paragraph deletion/insertion entries.
+        var original = DocWith("Base1", "BaseOnly", "Base2");
+        var revisedA = DocWith("Base1", "BaseOnly", "Base2"); // A leaves everything untouched
+        var revisedB = DocWith("Base1", "Base2", "Bnew"); // B deletes "BaseOnly" and appends "Bnew"
+
+        var result = DocumentCombine.Combine(original, revisedA, AuthorA, revisedB, AuthorB, DateXml);
+        var paragraphs = result.Paragraphs.ToList();
+
+        // "Base1" was untouched by both reviewers and must remain a single plain, unmarked paragraph.
+        var base1Paragraph = paragraphs.Single(p => p.PlainText.Contains("Base1"));
+        base1Paragraph.Runs.Should().OnlyContain(r => r.Revision == RevisionKind.None);
+
+        // "BaseOnly" must be struck through and attributed to Bob (the one who actually deleted it) — not
+        // Alice, and not fused with "Base2".
+        var baseOnlyParagraph = paragraphs.Single(p => p.PlainText.Contains("BaseOnly"));
+        baseOnlyParagraph.PlainText.Should().NotContain("Base2");
+        var baseOnlyRun = baseOnlyParagraph.Runs.Single(r => r.Text.Contains("BaseOnly"));
+        baseOnlyRun.Revision.Should().Be(RevisionKind.Deleted);
+        baseOnlyRun.RevisionAuthor.Should().Be(AuthorB);
+
+        // "Base2" is untouched by both reviewers and must appear exactly once, unmarked.
+        var base2Runs = paragraphs.SelectMany(p => p.Runs).Where(r => r.Text.Contains("Base2")).ToList();
+        base2Runs.Should().HaveCount(1);
+        base2Runs[0].Revision.Should().Be(RevisionKind.None);
+
+        // "Bnew" is B's own clean insertion, standalone.
+        var bnewParagraph = paragraphs.Single(p => p.PlainText.Contains("Bnew"));
+        bnewParagraph.PlainText.Should().NotContain("Base2");
+        var bnewRun = bnewParagraph.Runs.Single(r => r.Text.Contains("Bnew"));
+        bnewRun.Revision.Should().Be(RevisionKind.Inserted);
+        bnewRun.RevisionAuthor.Should().Be(AuthorB);
+    }
+
     // -----------------------------------------------------------------------
     // RevisionList / per-revision accept/reject
     // -----------------------------------------------------------------------

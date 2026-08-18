@@ -768,4 +768,157 @@ public class DocumentCompareTests
 
         result.Styles["Quote"].Name.Should().Be("Revised Quote Name");
     }
+
+    // -----------------------------------------------------------------------
+    // Word-level diff must not drop inline objects sharing an edited paragraph (r141 HIGH:
+    // freew-compare-word-diff-drops-inline-objects)
+    // -----------------------------------------------------------------------
+
+    [Fact]
+    public void WordLevelChange_PreservesInlineImageSharingTheEditedParagraph()
+    {
+        // The image contributes the empty string to PlainText (Run.FromImage), so the paragraph's text
+        // still differs ("Hello world" vs "Hello there") and the word-level diff path is taken.
+        var original = new TextDocument();
+        var originalParagraph = new Paragraph();
+        originalParagraph.Runs.Add(new Run("Hello "));
+        originalParagraph.Runs.Add(Run.FromImage(new InlineImage([9, 9, 9], 100, 50)));
+        originalParagraph.Runs.Add(new Run("world"));
+        original.Blocks.Add(originalParagraph);
+
+        var revised = new TextDocument();
+        var revisedParagraph = new Paragraph();
+        revisedParagraph.Runs.Add(new Run("Hello "));
+        var revisedImage = new InlineImage([1, 2, 3], 100, 50);
+        revisedParagraph.Runs.Add(Run.FromImage(revisedImage));
+        revisedParagraph.Runs.Add(new Run("there"));
+        revised.Blocks.Add(revisedParagraph);
+
+        var result = DocumentCompare.Compare(original, revised, Author, DateXml);
+
+        // The revised image must survive the diff instead of being silently dropped by the token rebuild.
+        var paragraph = result.Paragraphs.Single();
+        paragraph.Runs.Should().Contain(run => run.Image != null && run.Image.Bytes.SequenceEqual(revisedImage.Bytes));
+
+        var deletedWords = paragraph.Runs.Where(r => r.Revision == RevisionKind.Deleted).Select(r => r.Text.Trim());
+        var insertedWords = paragraph.Runs.Where(r => r.Revision == RevisionKind.Inserted).Select(r => r.Text.Trim());
+        deletedWords.Should().Contain("world");
+        insertedWords.Should().Contain("there");
+
+        // Accepting the comparison keeps exactly the revised image and the revised text.
+        TrackChanges.AcceptAll(result);
+        var accepted = result.Paragraphs.Single();
+        accepted.Runs.Where(r => r.Image != null).Should().ContainSingle()
+            .Which.Image!.Bytes.Should().Equal(revisedImage.Bytes);
+        accepted.PlainText.Should().Be("Hello there");
+    }
+
+    [Fact]
+    public void WordLevelChange_PreservesFootnoteReferenceSharingTheEditedParagraph()
+    {
+        // A footnote reference's Text mirrors its numeric id (Run.FootnoteReference), so naively rebuilding
+        // the paragraph from plain-text tokens would flatten it into an ordinary literal digit and drop the
+        // FootnoteId link entirely.
+        var original = DocWith("See note here");
+        original.Footnotes[1] = new Footnote(1, "Original note");
+
+        var revised = new TextDocument();
+        var revisedParagraph = new Paragraph();
+        revisedParagraph.Runs.Add(new Run("See note"));
+        revisedParagraph.Runs.Add(Run.FootnoteReference(1));
+        revisedParagraph.Runs.Add(new Run(" there"));
+        revised.Blocks.Add(revisedParagraph);
+        revised.Footnotes[1] = new Footnote(1, "Revised note");
+
+        var result = DocumentCompare.Compare(original, revised, Author, DateXml);
+
+        var paragraph = result.Paragraphs.Single();
+        paragraph.Runs.Should().Contain(run => run.FootnoteId == 1);
+        result.Footnotes[1].PlainText.Should().Be("Revised note");
+    }
+
+    // Sibling: word-level diffing across a mid-word formatting boundary (two adjacent plain-text runs, no
+    // object between them) must still treat the split word as one token, exactly as before this change.
+    [Fact]
+    public void WordLevelChange_StillTokenizesAWordSplitAcrossTwoPlainRunsAsOneWord()
+    {
+        var original = DocWith("the quick brown fox");
+
+        var revised = new TextDocument();
+        var revisedParagraph = new Paragraph();
+        revisedParagraph.Runs.Add(new Run("the quick "));
+        // "brown" survives unedited but is split across two runs by a formatting boundary (e.g. bold),
+        // and "fox" is edited to "foxes" so the paragraph still routes through the word-level diff path.
+        revisedParagraph.Runs.Add(new Run("bro") { Formatting = new RunFormatting { Bold = true } });
+        revisedParagraph.Runs.Add(new Run("wn "));
+        revisedParagraph.Runs.Add(new Run("foxes"));
+        revised.Blocks.Add(revisedParagraph);
+
+        var result = DocumentCompare.Compare(original, revised, Author, DateXml);
+
+        var paragraph = result.Paragraphs.Single();
+        // "brown" round-trips as the same word (just split across a formatting boundary), so it must still
+        // be recognized as unchanged text, not as a spurious delete/insert of "bro"/"wn" fragments; only the
+        // actual edit ("fox" -> "foxes") should carry revision marks.
+        var deletedWords = paragraph.Runs.Where(r => r.Revision == RevisionKind.Deleted).Select(r => r.Text.Trim());
+        var insertedWords = paragraph.Runs.Where(r => r.Revision == RevisionKind.Inserted).Select(r => r.Text.Trim());
+        deletedWords.Should().Equal("fox");
+        insertedWords.Should().Equal("foxes");
+        paragraph.Runs.Should().NotContain(r => r.Revision != RevisionKind.None && (r.Text.Trim() == "bro" || r.Text.Trim() == "wn"));
+
+        TrackChanges.AcceptAll(result);
+        result.Paragraphs.Single().PlainText.Should().Be("the quick brown foxes");
+    }
+
+    // -----------------------------------------------------------------------
+    // Compare must copy footnotes/endnotes and the final section's header/footer into the result (r141
+    // HIGH: freew-compare-drops-footnotes-headers-footers)
+    // -----------------------------------------------------------------------
+
+    [Fact]
+    public void Compare_CopiesRevisedFootnotesEndnotesAndHeaderFooterIntoResult()
+    {
+        var original = DocWith("Base text");
+
+        var revised = new TextDocument();
+        var revisedParagraph = new Paragraph();
+        revisedParagraph.Runs.Add(new Run("Base text "));
+        revisedParagraph.Runs.Add(Run.FootnoteReference(1));
+        revised.Blocks.Add(revisedParagraph);
+        revised.Footnotes[1] = new Footnote(1, "See appendix.");
+        revised.Endnotes[7] = new Endnote(7, "End note text");
+        revised.Header = new HeaderFooter { Paragraphs = { new Paragraph("Page header") } };
+        revised.Footer = new HeaderFooter { Paragraphs = { new Paragraph("Page footer") } };
+
+        var result = DocumentCompare.Compare(original, revised, Author, DateXml);
+
+        result.Footnotes.Should().ContainKey(1);
+        result.Footnotes[1].PlainText.Should().Be("See appendix.");
+        result.Endnotes.Should().ContainKey(7);
+        result.Endnotes[7].PlainText.Should().Be("End note text");
+        result.Header.Should().NotBeNull();
+        result.Header!.Paragraphs.Single().PlainText.Should().Be("Page header");
+        result.Footer.Should().NotBeNull();
+        result.Footer!.Paragraphs.Single().PlainText.Should().Be("Page footer");
+
+        // The footnote reference surviving in the compared body must resolve against a footnote that
+        // actually exists in the result, not a dangling id.
+        result.Paragraphs.Single().Runs.Should().Contain(run => run.FootnoteId == 1);
+    }
+
+    // Sibling: a document with no footnotes/endnotes/header/footer at all must not regress — the result
+    // stays empty rather than throwing or fabricating content.
+    [Fact]
+    public void Compare_NoFootnotesEndnotesOrHeaderFooter_ResultStaysEmpty()
+    {
+        var original = DocWith("Same text");
+        var revised = DocWith("Same text");
+
+        var result = DocumentCompare.Compare(original, revised, Author, DateXml);
+
+        result.Footnotes.Should().BeEmpty();
+        result.Endnotes.Should().BeEmpty();
+        result.Header.Should().BeNull();
+        result.Footer.Should().BeNull();
+    }
 }

@@ -47,7 +47,7 @@ public static class AutosaveRecoveryPlanner
     {
         ArgumentNullException.ThrowIfNull(store);
 
-        return PlanLatest(store.ExcludeLiveOwned(store.EnumerateCandidates()));
+        return PlanLatest(PrepareCandidates(store));
     }
 
     public static AutosaveRecoveryPlan? PlanLatest(
@@ -62,10 +62,19 @@ public static class AutosaveRecoveryPlanner
         ArgumentNullException.ThrowIfNull(store);
 
         return AutosaveRecoveryPolicy
-            .OrderNewestFirst(store.ExcludeLiveOwned(store.EnumerateCandidates()))
+            .OrderNewestFirst(PrepareCandidates(store))
             .Select(CreatePlan)
             .ToList();
     }
+
+    /// <summary>
+    /// Applies the shared candidate-preparation policy (same one FreeX's
+    /// <c>AutosaveRecoveryOfferPlanner</c> uses) before a candidate is ever offered: it drops any
+    /// snapshot whose original file was saved more recently than the snapshot itself, so recovery is
+    /// never offered for a snapshot that is now staler than what the user already has on disk.
+    /// </summary>
+    private static IReadOnlyList<AutosaveRecoveryCandidate> PrepareCandidates(AutosaveSnapshotStore store) =>
+        AutosaveRecoveryCandidateProcessor.PrepareForRecovery(store.ExcludeLiveOwned(store.EnumerateCandidates()));
 
     public static AutosaveRecoveryDisposition Complete(
         AutosaveRecoveryPlan plan,

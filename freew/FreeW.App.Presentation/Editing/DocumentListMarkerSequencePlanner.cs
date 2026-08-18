@@ -35,9 +35,7 @@ public sealed class DocumentListMarkerSequencePlanner
         switch (kind)
         {
             case ListKind.Number:
-                _numberCounters[level] = formatting.ListStartOverride is { } overrideStart
-                    ? Math.Max(1, overrideStart)
-                    : _numberCounters[level] + 1;
+                _numberCounters[level] = ListRestartCounter.NextCount(_numberCounters[level], formatting.ListStartOverride);
                 Array.Clear(_numberCounters, level + 1, MaximumDepth - level - 1);
                 return new DocumentListMarkerPlan(
                     kind,

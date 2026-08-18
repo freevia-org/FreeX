@@ -96,6 +96,14 @@ public static class AutosaveRecoveryCandidateProcessor
         return kept ?? candidates;
     }
 
+    /// <summary>
+    /// Best-effort deletes a candidate the user explicitly declined to recover, so a startup offer
+    /// is not re-shown for the same stale snapshot on every later launch. Mirrors how FreeX's own
+    /// startup workflow discards a declined snapshot inline.
+    /// </summary>
+    public static void DiscardDeclined(AutosaveRecoveryCandidate candidate) =>
+        TryDeleteCandidate(candidate, AutosaveSnapshotStore.DeleteCandidate);
+
     private static void TryDeleteCandidate(
         AutosaveRecoveryCandidate candidate,
         Action<AutosaveRecoveryCandidate> deleteCandidate)

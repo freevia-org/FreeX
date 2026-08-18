@@ -34,6 +34,12 @@ public sealed class SetTimelineRangeCommand : IWorkbookCommand
     private readonly string? _selectedEndDate;
     private TimelineRangeSnapshot? _snapshot;
     private List<(Sheet Sheet, PivotTableModel PivotTable, List<(CellAddress Address, Cell? Cell)> Snapshot)>? _targetSnapshots;
+    // R141-commands-slicer-timeline-multipivot-merge-loss: see PivotTableSlicerTimelineCommandHelpers.
+    // SnapshotMergedRegions's doc comment -- ClearRenderedRange (called for EVERY target, including ones
+    // that already refreshed successfully) unmerges any merged region overlapping the cleared footprint,
+    // and nothing else ever re-adds them, so both the growth-guard rollback and ordinary undo need this
+    // to avoid permanently destroying merged-cell formatting.
+    private List<(Sheet Sheet, List<GridRange> MergedRegions)>? _mergedRegionsSnapshot;
 
     public SetTimelineRangeCommand(string timelineName, string? selectedStartDate, string? selectedEndDate)
     {
@@ -131,6 +137,7 @@ public sealed class SetTimelineRangeCommand : IWorkbookCommand
         _targetSnapshots = resolvedTargets
             .Select(t => (t.Sheet, t.PivotTable, AddPivotTableCommand.Snapshot(t.Sheet, t.PivotTable.LastRenderedRange ?? t.PivotTable.TargetRange)))
             .ToList();
+        _mergedRegionsSnapshot = PivotTableSlicerTimelineCommandHelpers.SnapshotMergedRegions(resolvedTargets.Select(t => t.Sheet));
 
         timeline.SelectedStartDate = NormalizeSelectedDate(_selectedStartDate);
         timeline.SelectedEndDate = NormalizeSelectedDate(_selectedEndDate);
@@ -178,6 +185,7 @@ public sealed class SetTimelineRangeCommand : IWorkbookCommand
             {
                 _snapshot = null;
                 _targetSnapshots = null;
+                _mergedRegionsSnapshot = null;
                 return failure;
             }
             // R140-remediation2-growth-guard-multipivot-baseline-cost: patch the shared cache with what
@@ -204,6 +212,14 @@ public sealed class SetTimelineRangeCommand : IWorkbookCommand
             if (_targetSnapshots is not null)
                 foreach (var (targetCellSheet, _, cellSnapshot) in _targetSnapshots)
                     AddPivotTableCommand.Restore(targetCellSheet, cellSnapshot);
+            // R141-commands-slicer-timeline-multipivot-merge-loss: the ClearRenderedRange loop above
+            // unmerges every merged region overlapping EACH target's rendered footprint -- including
+            // targets that already refreshed successfully before a LATER target's growth-guard conflict
+            // forced this whole-command rollback -- and AddPivotTableCommand.Restore only replays cell
+            // VALUES, never merges. Put every affected sheet's pre-Apply merged regions back, or a
+            // rejected multi-pivot timeline-range change permanently destroys merge formatting that was
+            // never supposed to change.
+            PivotTableSlicerTimelineCommandHelpers.RestoreMergedRegions(_mergedRegionsSnapshot);
         }
     }
 
@@ -230,6 +246,13 @@ public sealed class SetTimelineRangeCommand : IWorkbookCommand
                     AddPivotTableCommand.Restore(sheet, cellSnapshot);
             }
 
+            // R141-commands-slicer-timeline-multipivot-merge-loss: identical fix as the Apply-side
+            // RestoreAllTimelineTargets rollback -- the ClearRenderedRange loop above unmerges every
+            // merged region overlapping each pivot's rendered footprint, and AddPivotTableCommand.Restore
+            // only replays cell VALUES, so Undo needs this too or undoing a timeline range change would
+            // permanently destroy merge formatting on every connected pivot.
+            PivotTableSlicerTimelineCommandHelpers.RestoreMergedRegions(_mergedRegionsSnapshot);
+
             // R134-commands-pivotchart-stale-datarange: point every affected pivot's bound PivotChart(s)
             // back at the just-restored (pre-Apply) output range, mirroring the Apply-side sync above.
             foreach (var snapshot in _snapshot.PivotTables)
@@ -238,6 +261,7 @@ public sealed class SetTimelineRangeCommand : IWorkbookCommand
 
         _snapshot = null;
         _targetSnapshots = null;
+        _mergedRegionsSnapshot = null;
     }
 
     private static string? NormalizeSelectedDate(string? value) =>

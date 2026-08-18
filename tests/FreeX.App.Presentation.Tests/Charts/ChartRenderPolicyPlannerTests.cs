@@ -1,6 +1,7 @@
 using FluentAssertions;
 
 using FreeX.App.Presentation.Charts;
+using FreeX.Core.Calc;
 using FreeX.Core.Model;
 
 namespace FreeX.App.Presentation.Tests.Charts;
@@ -101,6 +102,94 @@ public sealed class ChartRenderPolicyPlannerTests
         accessor(2, 3, out var rawBoolean, out var boolean, out _).Should().BeTrue();
         rawBoolean.Should().Be(new BoolValue(true));
         boolean.Should().Be(1);
+    }
+
+    /// <summary>
+    /// R141 (MED, chart-hidden-merge-anchor-leak): a merged region's anchor cell can be exposed
+    /// into the general viewport (<see cref="ViewportModel.Cells"/>) even while its own row is
+    /// hidden, because the visible remainder of the merge still needs to render. When a chart has
+    /// "Show data in hidden rows and columns" OFF, that exposure must not let the anchor's value
+    /// leak back into the chart through <see cref="ChartViewportCellAccessorBuilder"/>'s
+    /// viewport.Cells fallback -- the real <see cref="ViewportService"/> is used here (not a
+    /// hand-built ViewportModel) because the fix lives in how it populates
+    /// <see cref="ViewportModel.ChartDataCells"/> for exactly this case.
+    /// </summary>
+    [Fact]
+    public void HiddenMergeAnchor_ExcludedFromChartLookupWhenShowHiddenDataIsOff()
+    {
+        var workbook = new Workbook("test");
+        var sheet = workbook.AddSheet("Sheet1");
+
+        // B3:B4 merged, with B3 (the anchor, holding the real value) hidden and B4 visible --
+        // exactly the "hidden anchor, visible remainder" shape that keeps the anchor exposed in
+        // the general viewport for grid rendering.
+        sheet.SetCell(new CellAddress(sheet.Id, 3, 2), new NumberValue(42));
+        sheet.AddMergedRegion(new GridRange(
+            new CellAddress(sheet.Id, 3, 2),
+            new CellAddress(sheet.Id, 4, 2)));
+        sheet.HiddenRows.Add(3);
+
+        var chart = new ChartModel
+        {
+            DataRange = new GridRange(new CellAddress(sheet.Id, 3, 2), new CellAddress(sheet.Id, 4, 2)),
+            ShowDataInHiddenRowsAndColumns = false,
+        };
+        sheet.Charts.Add(chart);
+
+        var viewport = new ViewportService().GetViewport(
+            workbook,
+            sheet.Id,
+            new ViewportRequest(1, 1, 200, 300));
+
+        var lookup = ChartViewportCellAccessorBuilder.Resolve(viewport, sheet.Id, chart.DataRange);
+
+        // The anchor cell must not resolve to its real, hidden value: either the key is absent, or
+        // it resolves to a blank placeholder -- never the leaked NumberValue(42).
+        if (lookup.TryGetValue((3, 2), out var anchorCell))
+        {
+            anchorCell.RawValue.Should().NotBe(new NumberValue(42));
+        }
+
+        var accessor = ChartViewportCellAccessorBuilder.BuildValueAccessor(lookup);
+        accessor(3, 2, out _, out var anchorValue, out _).Should().BeFalse();
+        anchorValue.Should().Be(0);
+    }
+
+    /// <summary>
+    /// Sibling of <see cref="HiddenMergeAnchor_ExcludedFromChartLookupWhenShowHiddenDataIsOff"/>:
+    /// with "Show data in hidden rows and columns" ON, the same hidden merge anchor's value must
+    /// still reach the chart -- the fix must not touch this case.
+    /// </summary>
+    [Fact]
+    public void HiddenMergeAnchor_IncludedInChartLookupWhenShowHiddenDataIsOn()
+    {
+        var workbook = new Workbook("test");
+        var sheet = workbook.AddSheet("Sheet1");
+
+        sheet.SetCell(new CellAddress(sheet.Id, 3, 2), new NumberValue(42));
+        sheet.AddMergedRegion(new GridRange(
+            new CellAddress(sheet.Id, 3, 2),
+            new CellAddress(sheet.Id, 4, 2)));
+        sheet.HiddenRows.Add(3);
+
+        var chart = new ChartModel
+        {
+            DataRange = new GridRange(new CellAddress(sheet.Id, 3, 2), new CellAddress(sheet.Id, 4, 2)),
+            ShowDataInHiddenRowsAndColumns = true,
+        };
+        sheet.Charts.Add(chart);
+
+        var viewport = new ViewportService().GetViewport(
+            workbook,
+            sheet.Id,
+            new ViewportRequest(1, 1, 200, 300));
+
+        var lookup = ChartViewportCellAccessorBuilder.Resolve(viewport, sheet.Id, chart.DataRange);
+
+        var accessor = ChartViewportCellAccessorBuilder.BuildValueAccessor(lookup);
+        accessor(3, 2, out var rawValue, out var anchorValue, out _).Should().BeTrue();
+        rawValue.Should().Be(new NumberValue(42));
+        anchorValue.Should().Be(42);
     }
 
     [Fact]

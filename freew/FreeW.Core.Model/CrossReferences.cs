@@ -563,7 +563,8 @@ public static class CrossReferences
 
     // The outline number of the heading at blockIndex (e.g. "2.1"): one segment per outline level, each
     // counting same-or-deeper-level resets among the preceding headings. Empty when not a heading.
-    private static string HeadingNumberAt(TextDocument doc, int? blockIndex)
+    // Internal so ComplexFieldEngine's STYLEREF \n switch can reuse the same outline-number computation.
+    internal static string HeadingNumberAt(TextDocument doc, int? blockIndex)
     {
         if (blockIndex is not { } target)
             return string.Empty;
@@ -585,8 +586,10 @@ public static class CrossReferences
     }
 
     // The 1-based ordinal of the numbered-list paragraph at blockIndex among the run of numbered items it
-    // belongs to, formatted as "N)". A break in numbered-list paragraphs restarts the count. Empty when the
-    // paragraph is not a numbered item.
+    // belongs to, formatted as "N)". A break in numbered-list paragraphs restarts the count, and so does a
+    // paragraph carrying ListStartOverride (docx's w:lvlOverride/startOverride) -- the same restart rule
+    // DocumentListMarkerSequencePlanner uses for the on-screen list markers, shared here via
+    // ListRestartCounter so the two never diverge. Empty when the paragraph is not a numbered item.
     private static string ParagraphNumberAt(TextDocument doc, int? blockIndex)
     {
         if (blockIndex is not { } target)
@@ -596,9 +599,9 @@ public static class CrossReferences
         var count = 0;
         for (var i = 0; i < blocks.Count; i++)
         {
-            var numbered = blocks[i] is Paragraph p
-                && p.Formatting.ListKind is ListKind.Number or ListKind.MultiLevel;
-            count = numbered ? count + 1 : 0;
+            var paragraph = blocks[i] as Paragraph;
+            var numbered = paragraph?.Formatting.ListKind is ListKind.Number or ListKind.MultiLevel;
+            count = numbered ? ListRestartCounter.NextCount(count, paragraph!.Formatting.ListStartOverride) : 0;
             if (i == target)
                 return numbered ? count.ToString(CultureInfo.InvariantCulture) + ")" : string.Empty;
         }

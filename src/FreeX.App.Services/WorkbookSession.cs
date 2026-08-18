@@ -574,6 +574,18 @@ public sealed class WorkbookSession : IDisposable
     /// </summary>
     public Func<DataValidationPromptRequest, UserMessageResult>? DataValidationPromptResolver { get; set; }
 
+    /// <summary>
+    /// Optional host hook that resolves Excel's "Sort Warning" (the ribbon Sort Ascending/Descending
+    /// commands' selection is a proper subset of a larger contiguous data block, e.g. only one
+    /// column of a multi-column table) -- mirrors real Excel's "Microsoft Excel found data next to
+    /// your selection... Expand the selection / Continue with the current selection" prompt.
+    /// <see cref="UserMessageResult.Yes"/> expands the sort to the surrounding block; anything else
+    /// sorts only the current selection. Left null (the default), this session's prior pass-through
+    /// behavior is unchanged -- the selection sorts as-is with no prompt -- so a host that hasn't
+    /// wired a prompt is unaffected. See <see cref="QuickSortRangePlanner.ResolveAdjacentDataExpansion"/>.
+    /// </summary>
+    public Func<SortAdjacentDataPromptRequest, UserMessageResult>? SortAdjacentDataPromptResolver { get; set; }
+
     public IReadOnlyList<WorkbookSheetTab> SheetTabs { get; private set; }
 
     public bool IsWorkbookGrouped =>
@@ -1145,6 +1157,7 @@ public sealed class WorkbookSession : IDisposable
                 ActiveSheet.Id,
                 ResolveSheetIdByName,
                 Workbook.NamedRanges,
+                ResolveScopedNamedRange,
                 out var range))
             return WorkbookNavigationResult.Failed("Reference is not valid.");
 
@@ -1167,8 +1180,21 @@ public sealed class WorkbookSession : IDisposable
             ActiveSheet.Id,
             ResolveSheetIdByName,
             Workbook.NamedRanges,
+            ResolveScopedNamedRange,
             out range);
     }
+
+    /// <summary>
+    /// Sheet-scope-aware name lookup for <see cref="GoToReference"/>/<see cref="TryResolveReferenceRange"/>
+    /// (F5 Go To and Avalonia hyperlink navigation), matching the precedence formula evaluation and
+    /// the WPF host's Name Box / hyperlink navigation (<c>TryNavigateToWorkbookReference</c>) already
+    /// use: <see cref="Workbook.TryGetNamedRange(string,SheetId,out GridRange)"/> prefers a name
+    /// scoped to <paramref name="sheetId"/> over a same-named workbook-global name. Before this,
+    /// GoToReference passed only <see cref="Workbook.NamedRanges"/> (the global dictionary), so a
+    /// sheet-scoped defined name could never resolve here even though the Name Box resolved it fine.
+    /// </summary>
+    private GridRange? ResolveScopedNamedRange(string name, SheetId sheetId) =>
+        Workbook.TryGetNamedRange(name, sheetId, out var scoped) ? scoped : null;
 
     // R112-model-active-cell-vs-selection-1-1 sibling fix: read ActiveCell, NOT SelectedRange.Start.
     // A selection made upward/leftward (e.g. drag from D4 up to A1) pins ActiveCell to D4 while
@@ -4613,11 +4639,16 @@ public sealed class WorkbookSession : IDisposable
             return rejection;
 
         var initialRange = SelectedRange;
+        var promptedRange = ResolveSortRangeAfterAdjacentDataPrompt(initialRange);
         var result = _cellEditService.ExecuteRepeatableEditCommand(
             Workbook,
             () =>
             {
-                var range = SelectedRange;
+                // Re-resolve live state on every invocation (this factory is replayed verbatim by
+                // F4/Repeat Last Action) -- only reuse the just-resolved prompt decision when the
+                // selection has not moved since we asked; otherwise fall back to the fresh selection
+                // untouched, matching this method's prior no-prompt behavior for a replay.
+                var range = SelectedRange == initialRange ? promptedRange : SelectedRange;
                 var sortPlan = QuickSortRangePlanner.Create(ActiveSheet, range, ActiveCell);
                 return CreateRangeCommand(
                     sortPlan.Range,
@@ -4633,6 +4664,25 @@ public sealed class WorkbookSession : IDisposable
 
         ApplySuccessfulRangeEditResult(result, initialRange);
         return result;
+    }
+
+    /// <summary>
+    /// Excel's "Sort Warning": when <paramref name="selectedRange"/> is a proper subset of a larger
+    /// contiguous data block (e.g. only one column of a multi-column table selected), asks
+    /// <see cref="SortAdjacentDataPromptResolver"/> whether to expand the sort to the whole block.
+    /// Returns <paramref name="selectedRange"/> unchanged when there is nothing to warn about, no
+    /// resolver is wired, or the resolver declines the expansion.
+    /// </summary>
+    private GridRange ResolveSortRangeAfterAdjacentDataPrompt(GridRange selectedRange)
+    {
+        if (QuickSortRangePlanner.ResolveAdjacentDataExpansion(ActiveSheet, selectedRange) is not { } expandedRange)
+            return selectedRange;
+
+        if (SortAdjacentDataPromptResolver is not { } resolvePrompt)
+            return selectedRange;
+
+        var decision = resolvePrompt(new SortAdjacentDataPromptRequest(selectedRange, expandedRange));
+        return decision == UserMessageResult.Yes ? expandedRange : selectedRange;
     }
 
     public WorkbookCellEditResult SortSelectedRange(IReadOnlyList<CoreSortKey> sortKeys, SortOptions options, bool hasHeaders)

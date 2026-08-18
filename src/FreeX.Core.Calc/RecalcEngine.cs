@@ -500,6 +500,35 @@ public sealed class RecalcEngine
                         AddRecalculatedCell(ref recalculatedCount, ref singleRecalculated, ref recalculated, addr);
                     }
                 }
+                else if (cell.LegacyArrayRows > 0 && !ReferenceEquals(result, ErrorValue.RuntimeCircularSelfReference))
+                {
+                    // Legacy multi-cell CSE array formula (Ctrl+Shift+Enter; <f t="array" ref="...">)
+                    // whose natural result is a plain SCALAR (e.g. {=SUM(A1:A5)} entered over a
+                    // declared 2x1 block). Excel fills every cell of the declared block with this
+                    // same scalar value, and the whole block keeps behaving as one CSE array for
+                    // editing purposes. Replicate the scalar across the declared extent and route it
+                    // through SetSpillRange -- exactly like the natural-RangeValue branch above --
+                    // so every member cell is written and TryGetArrayExtent keeps recognizing the
+                    // whole declared block after this recalc (its provisional load-time membership
+                    // is torn down the moment ClearSpillRange runs below). See R80-formula-array-cse-5-2
+                    // and R141 cse-scalar-result-not-replicated.
+                    var declaredRows = (int)cell.LegacyArrayRows;
+                    var declaredCols = (int)cell.LegacyArrayCols;
+                    var replicated = new ScalarValue[declaredRows, declaredCols];
+                    for (var r = 0; r < declaredRows; r++)
+                        for (var c = 0; c < declaredCols; c++)
+                            replicated[r, c] = result;
+                    var replicatedRv = new RangeValue(replicated);
+                    sheet.ClearSpillRange(addr);
+                    cell.Value = replicatedRv.Cells[0, 0];
+                    RoundPrecisionAsDisplayed(workbook, cell);
+                    sheet.SetSpillRange(addr, replicatedRv);
+                    spillTargetsMayHaveChanged = true;
+                    if (hadSpill)
+                        CaptureVacatedSpillCells(addr, priorSpillRows, priorSpillCols, replicatedRv.RowCount, replicatedRv.ColCount, ref vacatedSpillCells);
+                    _spillBlockedAnchors.Remove(addr);
+                    AddRecalculatedCell(ref recalculatedCount, ref singleRecalculated, ref recalculated, addr);
+                }
                 else
                 {
                     sheet.ClearSpillRange(addr);

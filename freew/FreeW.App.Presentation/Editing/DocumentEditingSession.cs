@@ -944,7 +944,8 @@ public sealed class DocumentEditingSession
 
         var first = CreateParagraph(remaining, keepStyle: true);
         AppendClonedRuns(first, remaining, 0, splitOffset);
-        var second = CreateParagraph(remaining, keepStyle: false);
+        var second = CreateParagraph(remaining, keepStyle: true);
+        second.StyleId = ResolveNextParagraphStyleId(remaining.StyleId);
         AppendClonedRuns(second, remaining, splitOffset, remaining.PlainText.Length);
         _commands.Execute(new ReplaceBlocksCommand(span.Start.BlockIndex, replaceCount, [first, second]));
 
@@ -1418,6 +1419,25 @@ public sealed class DocumentEditingSession
         Formatting = source.Formatting,
         StyleId = keepStyle ? source.StyleId : null,
     };
+
+    /// <summary>
+    /// Resolves the style id for the paragraph created when the user presses Enter, per Word's
+    /// "style for following paragraph" chain (<c>w:next</c>). Follows <paramref name="currentStyleId"/>'s
+    /// <see cref="DocumentStyle.NextStyleId"/> when it names a style that exists in the document;
+    /// otherwise keeps the current style, matching Word's behavior when no next style is set (or the
+    /// referenced style is missing).
+    /// </summary>
+    private string? ResolveNextParagraphStyleId(string? currentStyleId)
+    {
+        if (currentStyleId is not null
+            && Document.Styles.TryGetValue(currentStyleId, out var style)
+            && style.NextStyleId is { } nextStyleId
+            && Document.Styles.ContainsKey(nextStyleId))
+        {
+            return nextStyleId;
+        }
+        return currentStyleId;
+    }
 
     private static void AppendClonedRuns(
         Paragraph target,
