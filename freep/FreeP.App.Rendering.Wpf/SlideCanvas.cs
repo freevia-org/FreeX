@@ -1118,12 +1118,6 @@ public sealed partial class SlideCanvas : FrameworkElement
 
     // ── Table ──────────────────────────────────────────────────────────────────
 
-    private static void RenderTable(DrawingContext dc, DrawOp.Table tableOp)
-    {
-        foreach (var cell in tableOp.Cells)
-            RenderTableCell(dc, cell);
-    }
-
     private static void RenderTableWithTransform(DrawingContext dc, DrawOp.Table tableOp)
     {
         var transform = ShapeTransformPlanner.PlanShapeTransform(
@@ -1131,16 +1125,49 @@ public sealed partial class SlideCanvas : FrameworkElement
             tableOp.RotationDeg,
             tableOp.FlipH,
             tableOp.FlipV);
+
         if (!transform.IsIdentity)
             dc.PushTransform(ToWpfTransform(transform));
 
-        RenderTable(dc, tableOp);
+        foreach (var cell in tableOp.Cells)
+            RenderTableCellGeometry(dc, cell);
 
         if (!transform.IsIdentity)
             dc.Pop();
+
+        // Text overlay. Text gets its own transform (rotation only, never flipH/flipV) so
+        // that flipping a table mirrors its cell fills/borders but keeps the cell text
+        // upright, matching PowerPoint and the shape-render fix -- see
+        // ShapeTransformPlanner.PlanShapeTextRenderTransform.
+        var textTransform = ShapeTransformPlanner.PlanShapeTransform(
+            tableOp.BoundsDip,
+            tableOp.RotationDeg,
+            flipH: false,
+            flipV: false);
+        if (!textTransform.IsIdentity)
+            dc.PushTransform(ToWpfTransform(textTransform));
+
+        foreach (var cell in tableOp.Cells)
+        {
+            if (cell.Text is not null)
+            {
+                // Flipping the table swaps cell positions (a flipped column layout), which
+                // the geometry pass above achieves by drawing the cell's own bounds under the
+                // full flip+rotate transform. The text pass instead pre-mirrors the cell's
+                // position (so its box still lands where the flipped cell now sits) and then
+                // relies on the rotation-only pushed transform above, so the glyphs themselves
+                // are never mirrored.
+                var flippedBounds = ShapeTransformPlanner.FlipTableCellBounds(
+                    cell.BoundsDip, tableOp.BoundsDip, tableOp.FlipH, tableOp.FlipV);
+                RenderTableCellText(dc, cell.Text, flippedBounds, cell.Anchor);
+            }
+        }
+
+        if (!textTransform.IsIdentity)
+            dc.Pop();
     }
 
-    private static void RenderTableCell(DrawingContext dc, TableCellOp cell)
+    private static void RenderTableCellGeometry(DrawingContext dc, TableCellOp cell)
     {
         var rect = new Rect(cell.BoundsDip.X, cell.BoundsDip.Y, cell.BoundsDip.Width, cell.BoundsDip.Height);
 
@@ -1162,10 +1189,6 @@ public sealed partial class SlideCanvas : FrameworkElement
             new Point(rect.Left, rect.Top), new Point(rect.Right, rect.Bottom));
         DrawCellBorder(dc, cell.BorderDiagonalUp,
             new Point(rect.Left, rect.Bottom), new Point(rect.Right, rect.Top));
-
-        // Text (respecting cell vertical anchor + insets).
-        if (cell.Text is not null)
-            RenderTableCellText(dc, cell.Text, cell.BoundsDip, cell.Anchor);
     }
 
     private static void DrawCellBorder(DrawingContext dc, ResolvedOutline outline, Point p1, Point p2)

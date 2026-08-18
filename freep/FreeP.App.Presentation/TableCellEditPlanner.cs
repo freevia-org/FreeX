@@ -495,6 +495,12 @@ public static class TableCellEditPlanner
             tableShape.OffsetYEmu / DrawingMlCoordinateUnits.EmuPerPixel,
             tableShape.ExtentCxEmu / DrawingMlCoordinateUnits.EmuPerPixel,
             tableShape.ExtentCyEmu / DrawingMlCoordinateUnits.EmuPerPixel);
+        // Third and last call site of the same rule: a flipped shape's TEXT stays upright in
+        // PowerPoint, so a placement transform carries rotation only. The static render path and
+        // the shape text editor were corrected first, which left this one mirroring cell text and
+        // produced something worse than the original bug -- a flipped table read correctly until
+        // you double-clicked a cell, then read backwards while you typed, then corrected itself
+        // when you left. See InCanvasTextEditPlanner.BeginShapeEdit for the sibling.
         return SlideCanvasGeometryPlanner.PlanTableCellEditorPlacement(
             cellRect,
             tableBounds,
@@ -502,8 +508,8 @@ public static class TableCellEditPlanner
             minimumWidth,
             minimumHeight,
             tableShape.RotationDeg,
-            tableShape.FlipH,
-            tableShape.FlipV);
+            flipHorizontal: false,
+            flipVertical: false);
     }
 
     public static TableCellEditState PlanSelectedCell(

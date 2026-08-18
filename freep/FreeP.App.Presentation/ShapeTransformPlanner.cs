@@ -95,6 +95,32 @@ public static class ShapeTransformPlanner
         PlanShapeTransform(shape.BoundsDip, shape.RotationDeg, flipH: false, flipV: false).Append(
             Scene3dProjectionPlanner.Plan(shape.BoundsDip, shape.Effects?.Scene3dCameraPreset));
 
+    /// <summary>
+    /// Mirrors a table cell's bounds about the table frame's center on whichever axes are
+    /// flipped, leaving the other axis untouched. Flipping a table (unlike flipping a single
+    /// shape) moves individual cells to different screen positions -- e.g. a left column ends
+    /// up on the right -- because the flip mirrors around the whole table's center, not each
+    /// cell's own center. The renderers use this to find where a flipped table places a cell's
+    /// text box, then draw the text upright (no mirror) at that position, exactly as
+    /// <see cref="PlanShapeTextRenderTransform"/> keeps a flipped shape's text upright.
+    /// </summary>
+    public static LayoutRect FlipTableCellBounds(LayoutRect cellBounds, LayoutRect tableBounds, bool flipH, bool flipV)
+    {
+        double x = cellBounds.X;
+        double y = cellBounds.Y;
+        if (flipH)
+        {
+            double cx = tableBounds.X + tableBounds.Width / 2;
+            x = 2 * cx - cellBounds.X - cellBounds.Width;
+        }
+        if (flipV)
+        {
+            double cy = tableBounds.Y + tableBounds.Height / 2;
+            y = 2 * cy - cellBounds.Y - cellBounds.Height;
+        }
+        return new LayoutRect(x, y, cellBounds.Width, cellBounds.Height);
+    }
+
     public static ShapeAffineTransform PlanShapeTransform(
         LayoutRect bounds,
         double rotationDeg,

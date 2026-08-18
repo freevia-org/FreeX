@@ -137,13 +137,17 @@ public sealed class InCanvasTextEditPlanner
             return NotReady(InCanvasTextEditStartStatus.MissingTextBody, shapeId, kind);
 
         var screenRect = SlideCanvasGeometryPlanner.ShapeBoundsToScreen(shape, slide, presentation, transform);
+        // The live text editor mirrors the static-render fix: PowerPoint keeps a flipped
+        // shape's text upright and left-to-right readable, so the editor placement carries
+        // rotation only, never the flipH/flipV mirror. See
+        // ShapeTransformPlanner.PlanShapeTextRenderTransform for the render-path counterpart.
         var placement = SlideCanvasGeometryPlanner.PlanEditorPlacement(
             screenRect,
             minimumWidth,
             minimumHeight,
             shape.RotationDeg,
-            shape.FlipH,
-            shape.FlipV);
+            flipHorizontal: false,
+            flipVertical: false);
         var originalBody = TextBodyModelCloner.CloneTextBody(shape.TextBody);
         var initialSelection = TableCellEditPlanner.PlanInitialSelection(originalBody);
         var richTextPlan = TableCellEditPlanner.PlanRichTextEdit(originalBody, initialSelection);
