@@ -84,7 +84,7 @@ public static partial class PrintRenderer
                 chartGridHeight);
             dc.DrawImage(image, chartRect);
             if (bodyGridRect.Contains(chartRect))
-                AddPrintedChartTextOverlays(textOverlays, chart, workbookTheme, chartRect, viewport, pageCellLookup);
+                AddPrintedChartTextOverlays(textOverlays, chart, workbookTheme, chartRect, viewport, pageCellLookup, sheet);
         }
         dc.Pop();
     }

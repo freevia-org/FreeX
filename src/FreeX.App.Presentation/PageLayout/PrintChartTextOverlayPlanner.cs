@@ -62,7 +62,8 @@ public static class PrintChartTextOverlayPlanner
         LayoutRect chartRect,
         IReadOnlyList<ChartDataCell>? chartDataCells,
         IReadOnlyDictionary<(uint Row, uint Col), DisplayCell> pageCellLookup,
-        PrintChartTextMeasure measureText)
+        PrintChartTextMeasure measureText,
+        Sheet? dataSheet)
     {
         ArgumentNullException.ThrowIfNull(chart);
         ArgumentNullException.ThrowIfNull(workbookTheme);
@@ -71,7 +72,7 @@ public static class PrintChartTextOverlayPlanner
 
         var overlays = new List<PrintChartTextOverlayPlan>();
         AddTitleAndAxisOverlays(overlays, chart, workbookTheme, chartRect, measureText);
-        AddNonTitleOverlays(overlays, chart, workbookTheme, chartRect, chartDataCells, pageCellLookup, measureText);
+        AddNonTitleOverlays(overlays, chart, workbookTheme, chartRect, chartDataCells, pageCellLookup, measureText, dataSheet);
         return overlays;
     }
 
@@ -137,18 +138,19 @@ public static class PrintChartTextOverlayPlanner
         LayoutRect chartRect,
         IReadOnlyList<ChartDataCell>? chartDataCells,
         IReadOnlyDictionary<(uint Row, uint Col), DisplayCell> pageCellLookup,
-        PrintChartTextMeasure measureText)
+        PrintChartTextMeasure measureText,
+        Sheet? dataSheet)
     {
         if (IsPieFamily(chart.Type))
         {
-            AddPieFamilyTextOverlays(overlays, chart, workbookTheme, chartRect, chartDataCells, pageCellLookup, measureText);
+            AddPieFamilyTextOverlays(overlays, chart, workbookTheme, chartRect, chartDataCells, pageCellLookup, measureText, dataSheet);
             return;
         }
 
         if (!SupportsNonTitleTextOverlays(chart.Type))
             return;
 
-        var cellLookup = BuildCellLookup(chart, chartDataCells, pageCellLookup);
+        var cellLookup = BuildCellLookup(chart, chartDataCells, pageCellLookup, dataSheet);
         var categories = BuildCategories(chart, cellLookup);
         var series = BuildSeries(chart, cellLookup, categories);
         if (series.Count == 0)
@@ -189,9 +191,10 @@ public static class PrintChartTextOverlayPlanner
         LayoutRect chartRect,
         IReadOnlyList<ChartDataCell>? chartDataCells,
         IReadOnlyDictionary<(uint Row, uint Col), DisplayCell> pageCellLookup,
-        PrintChartTextMeasure measureText)
+        PrintChartTextMeasure measureText,
+        Sheet? dataSheet)
     {
-        var cellLookup = BuildCellLookup(chart, chartDataCells, pageCellLookup);
+        var cellLookup = BuildCellLookup(chart, chartDataCells, pageCellLookup, dataSheet);
         var categories = BuildCategories(chart, cellLookup);
         if (BuildPieSeries(chart, cellLookup, categories) is not { } pieSeries)
             return;
@@ -239,16 +242,49 @@ public static class PrintChartTextOverlayPlanner
             : new PrintedChartSeries(GetSeriesName(chart, cellLookup, valueColumn, 0), 0, points);
     }
 
+    /// <summary>
+    /// Seeds the overlay lookup from the printed page's own cells, then overlays the viewport's
+    /// authoritative <see cref="ChartDataCell"/> values on top.
+    ///
+    /// <paramref name="pageCellLookup"/> is built for the PAGE, not for the chart, so it carries real
+    /// values for cells the chart itself must not read: the printed page's hidden merge-anchor rows
+    /// (<c>ViewportService.BuildRowMetrics</c> deliberately keeps those in <c>ViewportModel.Cells</c>,
+    /// the WPF <c>PrintRenderer</c> seed) and -- in the portable page-model path -- every cell of the
+    /// chart's DataRange, hidden or not (<c>PageContentRenderModelBuilder.BuildChartCellLookup</c>).
+    /// <paramref name="chartDataCells"/> already honors <see cref="ChartModel.ShowDataInHiddenRowsAndColumns"/>,
+    /// but it does so by OMITTING hidden cells (<c>ViewportService.BuildChartDataCells</c>), and an
+    /// omission silently falls through to the un-filtered page value rather than suppressing it -- so
+    /// without the filter below, printed/exported data labels, tick labels and legend entries can show
+    /// hidden-row/column data that the on-screen chart suppresses. Filtering the page seed with the same
+    /// predicate <c>BuildChartDataCells</c> uses closes that for every seed source at once.
+    /// </summary>
     private static Dictionary<(uint Row, uint Col), DisplayCell> BuildCellLookup(
         ChartModel chart,
         IReadOnlyList<ChartDataCell>? chartDataCells,
-        IReadOnlyDictionary<(uint Row, uint Col), DisplayCell> pageCellLookup)
+        IReadOnlyDictionary<(uint Row, uint Col), DisplayCell> pageCellLookup,
+        Sheet? dataSheet)
     {
-        var lookup = new Dictionary<(uint Row, uint Col), DisplayCell>(pageCellLookup);
+        var sheetId = chart.DataRange.Start.Sheet;
+        Dictionary<(uint Row, uint Col), DisplayCell> lookup;
+        if (!chart.ShowDataInHiddenRowsAndColumns && dataSheet is not null && dataSheet.Id == sheetId)
+        {
+            lookup = new Dictionary<(uint Row, uint Col), DisplayCell>(pageCellLookup.Count);
+            foreach (var entry in pageCellLookup)
+            {
+                if (dataSheet.IsRowEffectivelyHidden(entry.Key.Row) || dataSheet.IsColEffectivelyHidden(entry.Key.Col))
+                    continue;
+
+                lookup[entry.Key] = entry.Value;
+            }
+        }
+        else
+        {
+            lookup = new Dictionary<(uint Row, uint Col), DisplayCell>(pageCellLookup);
+        }
+
         if (chartDataCells is not { Count: > 0 })
             return lookup;
 
-        var sheetId = chart.DataRange.Start.Sheet;
         foreach (var cell in chartDataCells)
         {
             if (cell.SheetId != sheetId)

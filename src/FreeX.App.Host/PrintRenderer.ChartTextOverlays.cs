@@ -16,15 +16,21 @@ public static partial class PrintRenderer
         WorkbookTheme workbookTheme,
         Rect chartRect,
         ViewportModel viewport,
-        IReadOnlyDictionary<(uint Row, uint Col), DisplayCell> pageCellLookup)
+        IReadOnlyDictionary<(uint Row, uint Col), DisplayCell> pageCellLookup,
+        Sheet sheet)
     {
+        // `sheet` lets the planner drop hidden-row/column cells that reach it through pageCellLookup
+        // (built from ViewportModel.Cells, which deliberately retains hidden merge-anchor rows) when the
+        // chart has "Show data in hidden rows and columns" off -- viewport.ChartDataCells suppresses
+        // those by omission, which on its own just falls through to the un-filtered page value.
         var overlayPlans = PrintChartTextOverlayPlanner.Build(
             chart,
             workbookTheme,
             ToLayoutRect(chartRect),
             viewport.ChartDataCells,
             pageCellLookup,
-            MeasurePrintedChartOverlayText);
+            MeasurePrintedChartOverlayText,
+            sheet);
 
         foreach (var overlay in overlayPlans)
             textOverlays.Add(CreatePrintedChartTextOverlay(overlay));
