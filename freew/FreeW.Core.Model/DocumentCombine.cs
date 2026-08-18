@@ -86,6 +86,7 @@ public static class DocumentCombine
         var result = new TextDocument();
         CopyShell(blacklineB, result);
         var commentIdMapA = MergeComments(blacklineA, blacklineB, result);
+        var (footnoteIdMapA, endnoteIdMapA) = MergeNotes(blacklineA, result);
 
         // Bucket blacklineA's paragraphs by the revisedA spine index they align to. A paragraph with no
         // spine index (RevisedIndex is null) is base-only content A deleted entirely — it never existed in
@@ -136,7 +137,9 @@ public static class DocumentCombine
                 authorA,
                 authorB,
                 dateXml,
-                commentIdMapA));
+                commentIdMapA,
+                footnoteIdMapA,
+                endnoteIdMapA));
         }
 
         FlushStandaloneA(int.MaxValue);
@@ -153,7 +156,10 @@ public static class DocumentCombine
                     aStandalone[standaloneCursor].Paragraph,
                     RevisionClonePolicy.Preserve);
                 foreach (var run in clone.Runs)
+                {
                     RemapAComment(run, commentIdMapA);
+                    RemapANotes(run, footnoteIdMapA, endnoteIdMapA);
+                }
                 result.Blocks.Add(clone);
                 standaloneCursor++;
             }
@@ -228,6 +234,66 @@ public static class DocumentCombine
         return run;
     }
 
+    // Merges blacklineA's footnote/endnote catalog into `result` (already seeded from blacklineB by
+    // CopyShell), keyed so ids independently allocated by the two DocumentCompare.Compare calls can never
+    // collide. blacklineA is base→revisedA: when revisedA deletes a paragraph whose footnote/endnote exists
+    // only in `original`, blacklineA's own DocumentCompare.ReconcileDeletedNoteAnchors already reconciled
+    // that note into blacklineA.Footnotes/Endnotes under blacklineA-local numbering. CopyShell only ever
+    // saw blacklineB's catalog, so that note — and any other note reachable only through an A-authored run
+    // (an off-spine A-deletion, or A-only tail content) — would otherwise be a dangling reference in the
+    // merged result. Returns the id maps RemapANotes needs to keep A-sourced runs pointing at the right
+    // (possibly renumbered) entry.
+    private static (Dictionary<int, int> FootnoteIdMapA, Dictionary<int, int> EndnoteIdMapA) MergeNotes(
+        TextDocument blacklineA,
+        TextDocument result)
+    {
+        var footnoteIdMapA = new Dictionary<int, int>();
+        var usedFootnoteIds = result.Footnotes.Keys.ToHashSet();
+        foreach (var (id, footnote) in blacklineA.Footnotes)
+        {
+            var mappedId = usedFootnoteIds.Add(id) ? id : NextUnusedNoteId(usedFootnoteIds);
+            footnoteIdMapA[id] = mappedId;
+            var clone = new Footnote(mappedId) { HasAutomaticReferenceMark = footnote.HasAutomaticReferenceMark };
+            foreach (var paragraph in footnote.Content)
+                clone.Content.Add(DocumentModelCloner.CloneParagraph(paragraph, RevisionClonePolicy.Strip));
+            result.Footnotes[mappedId] = clone;
+        }
+
+        var endnoteIdMapA = new Dictionary<int, int>();
+        var usedEndnoteIds = result.Endnotes.Keys.ToHashSet();
+        foreach (var (id, endnote) in blacklineA.Endnotes)
+        {
+            var mappedId = usedEndnoteIds.Add(id) ? id : NextUnusedNoteId(usedEndnoteIds);
+            endnoteIdMapA[id] = mappedId;
+            var clone = new Endnote(mappedId) { HasAutomaticReferenceMark = endnote.HasAutomaticReferenceMark };
+            foreach (var paragraph in endnote.Content)
+                clone.Content.Add(DocumentModelCloner.CloneParagraph(paragraph, RevisionClonePolicy.Strip));
+            result.Endnotes[mappedId] = clone;
+        }
+
+        return (footnoteIdMapA, endnoteIdMapA);
+    }
+
+    private static int NextUnusedNoteId(HashSet<int> usedIds)
+    {
+        var id = usedIds.Count == 0 ? 1 : usedIds.Max() + 1;
+        while (!usedIds.Add(id))
+            id++;
+        return id;
+    }
+
+    private static Run RemapANotes(
+        Run run,
+        IReadOnlyDictionary<int, int> footnoteIdMapA,
+        IReadOnlyDictionary<int, int> endnoteIdMapA)
+    {
+        if (run.FootnoteId is int footnoteId && footnoteIdMapA.TryGetValue(footnoteId, out var mappedFootnote))
+            run.FootnoteId = mappedFootnote;
+        if (run.EndnoteId is int endnoteId && endnoteIdMapA.TryGetValue(endnoteId, out var mappedEndnote))
+            run.EndnoteId = mappedEndnote;
+        return run;
+    }
+
     // Merge one paragraph from A's blackline and the positionally-matching paragraph from B's blackline into
     // a single paragraph carrying both authors' tracked changes.
     //
@@ -244,7 +310,9 @@ public static class DocumentCombine
         string authorA,
         string authorB,
         string? dateXml,
-        IReadOnlyDictionary<int, int> commentIdMapA)
+        IReadOnlyDictionary<int, int> commentIdMapA,
+        IReadOnlyDictionary<int, int> footnoteIdMapA,
+        IReadOnlyDictionary<int, int> endnoteIdMapA)
     {
         var merged = DocumentModelCloner.CloneParagraph(bParagraph, RevisionClonePolicy.Preserve);
         merged.BlockContentControl = bParagraph.BlockContentControl ?? aParagraph?.BlockContentControl;
@@ -267,9 +335,12 @@ public static class DocumentCombine
             // A's deletions (base-only text struck by A) are off-spine: emit them, attributed to authorA.
             if (ai < aRuns.Count && aRuns[ai].Revision == RevisionKind.Deleted)
             {
-                merged.Runs.Add(RemapAComment(
-                    Stamp(aRuns[ai], RevisionKind.Deleted, authorA, dateXml),
-                    commentIdMapA));
+                merged.Runs.Add(RemapANotes(
+                    RemapAComment(
+                        Stamp(aRuns[ai], RevisionKind.Deleted, authorA, dateXml),
+                        commentIdMapA),
+                    footnoteIdMapA,
+                    endnoteIdMapA));
                 ai++;
                 continue;
             }
@@ -299,15 +370,21 @@ public static class DocumentCombine
                 {
                     if (aRun.Revision == RevisionKind.Inserted)
                     {
-                        merged.Runs.Add(RemapAComment(
-                            Stamp(aRun, RevisionKind.Inserted, authorA, dateXml),
-                            commentIdMapA));
+                        merged.Runs.Add(RemapANotes(
+                            RemapAComment(
+                                Stamp(aRun, RevisionKind.Inserted, authorA, dateXml),
+                                commentIdMapA),
+                            footnoteIdMapA,
+                            endnoteIdMapA));
                     }
                     else
                     {
-                        merged.Runs.Add(RemapAComment(
-                            Stamp(aRun, RevisionKind.None, null, null),
-                            commentIdMapA));
+                        merged.Runs.Add(RemapANotes(
+                            RemapAComment(
+                                Stamp(aRun, RevisionKind.None, null, null),
+                                commentIdMapA),
+                            footnoteIdMapA,
+                            endnoteIdMapA));
                     }
                     ai++;
                 }

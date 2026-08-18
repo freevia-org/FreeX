@@ -105,8 +105,11 @@ public sealed record FindReplaceReplaceRequest(
 /// A located Find/Replace hit. <see cref="Block"/> is always a top-level <c>document.Blocks</c> index
 /// (of a <see cref="Paragraph"/> or, for a table hit, the owning <see cref="Table"/>). When the hit is
 /// inside a table cell, <see cref="TableRow"/>/<see cref="TableCol"/>/<see cref="TableParagraphIndex"/>
-/// locate the cell and the paragraph within it (row/col are direct <see cref="TableRow.Cells"/> indices,
-/// not grid-projected columns); for a body paragraph hit all three are null.
+/// locate the cell and the paragraph within it -- <see cref="TableCol"/> is the GRID-PROJECTED column
+/// (<see cref="TableGridProjection.StartColumn"/>), not a raw <see cref="TableRow.Cells"/> index, matching
+/// the convention every consumer (DocumentView.GetCellParagraph via TableGridProjection.StartingAt, the
+/// PlacedChar.CellCol placed-glyph lookup, the _cellCaret/_cellAnchor tuples) already uses; for a body
+/// paragraph hit all three are null.
 /// </summary>
 public readonly record struct FindReplaceMatch(
     int Block,
@@ -502,14 +505,23 @@ public static class FindReplaceDialogPlanner
     {
         for (var row = 0; row < table.Rows.Count; row++)
         {
-            var cells = table.Rows[row].Cells;
-            for (var col = 0; col < cells.Count; col++)
+            // Yield the GRID-PROJECTED column (TableGridProjection.StartColumn), not the raw
+            // TableRow.Cells index -- every consumer (DocumentView.GetCellParagraph via
+            // TableGridProjection.StartingAt, FindCellGlyphOffset's PlacedChar.CellCol match, the
+            // _cellCaret/_cellAnchor tuple SelectFindReplaceMatch builds) addresses cells by grid
+            // column. The two conventions coincide only when every cell in the row has GridSpan == 1;
+            // with any horizontally merged cell they diverge, so a raw index here either resolves to
+            // the wrong cell (TableGridProjection.StartingAt returns the merged cell that starts
+            // earlier) or to no cell at all (a raw index that lands mid-span has no StartColumn match),
+            // corrupting or silently dropping the replacement. See TableGridProjectionTests /
+            // TableGridProjection.ProjectRow for the projection this must match.
+            foreach (var projected in TableGridProjection.ProjectRow(table.Rows[row]))
             {
-                var paragraphs = cells[col].Paragraphs;
+                var paragraphs = projected.Cell.Paragraphs;
                 for (var paraIdx = 0; paraIdx < paragraphs.Count; paraIdx++)
                 {
                     foreach (var (start, length) in FindAll(paragraphs[paraIdx].PlainText, term, options))
-                        yield return new TableTextMatch(row, col, paraIdx, start, length);
+                        yield return new TableTextMatch(row, projected.StartColumn, paraIdx, start, length);
                 }
             }
         }

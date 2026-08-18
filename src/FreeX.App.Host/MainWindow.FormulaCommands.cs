@@ -32,9 +32,17 @@ public partial class MainWindow
         {
             StatusReadyText.Visibility = Visibility.Visible;
             var depth = includeTransitive ? "traceable" : "direct";
+            // GetDirectPrecedents (and therefore the planner built on it) can only report cells
+            // FreeX can point a CellAddress at, so a null plan here does NOT mean the formula has
+            // no precedents -- it may have one this service cannot represent (a reference into
+            // another workbook). Check that case before claiming "no direct/traceable precedents",
+            // which would otherwise be false, the same misreport Trace Precedents was fixed for
+            // (R142-core-commands-formula-auditing-trace-precedents-external-workbook-misreport).
             StatusReadyText.Text = selectDependents
                 ? $"No {depth} dependents"
-                : $"No {depth} precedents";
+                : FormulaAuditingService.HasExternalPrecedentReference(_workbook, activeCell)
+                    ? "Selected cell references another workbook. FreeX cannot select precedents outside this workbook."
+                    : $"No {depth} precedents";
             return;
         }
 

@@ -738,4 +738,77 @@ public class DocumentCombineTests
 
         deletedAlpha.MoveRevisionId.Should().BeNull();
     }
+
+    // -----------------------------------------------------------------------
+    // Footnotes/endnotes (r142 remediation: Combine copied Footnotes/Endnotes only from blacklineB,
+    // dropping a note that exists only in `original` when revisedA deletes the paragraph that referenced
+    // it, leaving the dangling reference the round set out to remove -- reachable through Combine instead
+    // of Compare.)
+    // -----------------------------------------------------------------------
+
+    [Fact]
+    public void Combine_ReviewerADeletesParagraphWithOriginalOnlyFootnote_NoteSurvivesAndReferenceResolves()
+    {
+        var original = DocWith("Keep this paragraph");
+        var doomed = new Paragraph();
+        doomed.Runs.Add(new Run("See removed note"));
+        doomed.Runs.Add(Run.FootnoteReference(1));
+        original.Blocks.Add(doomed);
+        original.Footnotes[1] = new Footnote(1, "Original explanation.");
+
+        var revisedA = DocWith("Keep this paragraph"); // A deletes the footnoted paragraph entirely
+        var revisedB = DocWith("Keep this paragraph"); // B makes no further changes
+
+        var result = DocumentCombine.Combine(original, revisedA, AuthorA, revisedB, AuthorB, DateXml);
+
+        var deletedRun = result.Paragraphs
+            .SelectMany(p => p.Runs)
+            .Where(run => run.Revision == RevisionKind.Deleted && run.FootnoteId != null)
+            .Should().ContainSingle()
+            .Which;
+
+        // Before the fix, CopyShell seeded result.Footnotes only from blacklineB (revisedA vs revisedB),
+        // which never saw this original-only note, so the reference pointed at nothing.
+        result.Footnotes.Should().ContainKey(deletedRun.FootnoteId!.Value);
+        result.Footnotes[deletedRun.FootnoteId!.Value].PlainText.Should().Be("Original explanation.");
+    }
+
+    [Fact]
+    public void Combine_DeletedOriginalFootnoteIdCollidesWithSurvivingFootnoteId_RemapsToDistinctIds()
+    {
+        // Reviewer A deletes a footnoted paragraph from `original`. Reviewer B keeps a DIFFERENT paragraph
+        // that also carries a footnote numbered 1 in revisedA/revisedB's own (unrelated) numbering -- a
+        // realistic collision since blacklineA and blacklineB number their notes independently.
+        var original = DocWith("Keep this paragraph");
+        var doomed = new Paragraph();
+        doomed.Runs.Add(new Run("See removed note"));
+        doomed.Runs.Add(Run.FootnoteReference(1));
+        original.Blocks.Add(doomed);
+        original.Footnotes[1] = new Footnote(1, "Original explanation.");
+
+        var revisedA = DocWith("Keep this paragraph"); // A deletes the footnoted paragraph entirely
+
+        var revisedB = new TextDocument();
+        var keptParagraph = new Paragraph();
+        keptParagraph.Runs.Add(new Run("Keep this paragraph"));
+        keptParagraph.Runs.Add(Run.FootnoteReference(1));
+        revisedB.Blocks.Add(keptParagraph);
+        revisedB.Footnotes[1] = new Footnote(1, "Reviewer B's own note.");
+
+        var result = DocumentCombine.Combine(original, revisedA, AuthorA, revisedB, AuthorB, DateXml);
+
+        var survivingRun = result.Paragraphs
+            .SelectMany(p => p.Runs)
+            .Single(run => run.Revision != RevisionKind.Deleted && run.FootnoteId != null);
+        result.Footnotes[survivingRun.FootnoteId!.Value].PlainText.Should().Be("Reviewer B's own note.");
+
+        var deletedRun = result.Paragraphs
+            .SelectMany(p => p.Runs)
+            .Single(run => run.Revision == RevisionKind.Deleted && run.FootnoteId != null);
+
+        // The two notes must never collapse onto the same id/entry -- each reference must resolve to its
+        // OWN note's content, never the other reviewer's unrelated one.
+        deletedRun.FootnoteId.Should().NotBe(survivingRun.FootnoteId);
+        result.Footnotes[deletedRun.FootnoteId!.Value].PlainText.Should().Be("Original explanation.");
+    }
 }

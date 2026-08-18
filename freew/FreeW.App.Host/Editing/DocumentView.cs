@@ -331,6 +331,12 @@ public sealed partial class DocumentView : RichTextBox
         // Clear the floating-image selection when the user clicks within the text body so the inline
         // selection takes priority and the floating selection does not persist unexpectedly.
         PreviewMouseLeftButtonDown += (_, _) => { _selectedFloatingImage = null; };
+
+        // freew-cc-5: gate native Paste/Cut against the content-control lock -- see
+        // OnPreviewCanExecuteClipboardMutation's doc comment for why keyboard Ctrl+V/Ctrl+X and the
+        // ribbon's Paste/Cut buttons need this (they bypass every other choke point in this file).
+        CommandManager.AddPreviewCanExecuteHandler(this, OnPreviewCanExecuteClipboardMutation);
+        CommandManager.AddPreviewExecutedHandler(this, OnPreviewExecutedClipboardMutation);
     }
 
     public TextDocument Model => _model;
@@ -772,11 +778,38 @@ public sealed partial class DocumentView : RichTextBox
         }
 
         if (Keyboard.Modifiers == ModifierKeys.None
-            && input.Intent == DocumentEditorInputIntent.InsertParagraphBreak
-            && TryApplyBodyParagraphBreak())
+            && input.Intent == DocumentEditorInputIntent.InsertParagraphBreak)
         {
-            e.Handled = true;
-            return;
+            if (TryApplyBodyParagraphBreak())
+            {
+                e.Handled = true;
+                return;
+            }
+
+            // Same choke point as the Backspace/Delete/typing paths below: Enter the portable body-edit
+            // session declined (e.g. TryApplyBodyParagraphBreak always declines inside a content control,
+            // see DocumentEditingSession.IsPortableBodyTextParagraph) must not silently fall through to
+            // native paragraph insertion when it lands on a locked content control (freew-cc-4), and must
+            // not stay blocked by the document-wide IsReadOnly flag when it lands on a content-control
+            // field Filling-In-Forms protection does permit editing (freew-cc-1).
+            if (!TryPrepareNativeFallback(out var restoreEnterReadOnly))
+            {
+                e.Handled = true;
+                return;
+            }
+
+            if (restoreEnterReadOnly)
+            {
+                try
+                {
+                    base.OnPreviewKeyDown(e);
+                }
+                finally
+                {
+                    IsReadOnly = true;
+                }
+                return;
+            }
         }
 
         if (Keyboard.Modifiers == ModifierKeys.None
@@ -852,6 +885,65 @@ public sealed partial class DocumentView : RichTextBox
             restoreReadOnly = true;
         }
         return true;
+    }
+
+    /// <summary>
+    /// Pure (side-effect-free) query: does the caret/selection sit on a content-control run whose lock
+    /// mode denies interaction right now (the same <see cref="AllowsContentControlInteraction"/> check
+    /// <see cref="TryPrepareNativeFallback"/> uses)? Deliberately does NOT reuse
+    /// <see cref="TryPrepareNativeFallback"/> directly: that method's "allowed" branch has the side effect
+    /// of clearing <see cref="IsReadOnly"/> for one native call, and this predicate backs a CanExecute
+    /// query (<see cref="OnPreviewCanExecuteClipboardMutation"/>) that WPF's CommandManager can re-run far
+    /// more often than a matching Execute ever follows (e.g. on every focus/selection change while the
+    /// ribbon repaints) -- toggling IsReadOnly with no paired restore there would leave Filling-In-Forms
+    /// protection permanently open the first time the caret happens to rest in an editable field.
+    /// </summary>
+    private bool IsCaretOnLockedContentControl()
+    {
+        if ((Selection.Start.Parent as WpfRun ?? CaretPosition?.Parent as WpfRun)
+            is not { Tag: RunMarkers { Control: { } marker } })
+        {
+            return false;
+        }
+        return !AllowsContentControlInteraction(marker.Control);
+    }
+
+    /// <summary>
+    /// freew-cc-5: Paste and Cut are <see cref="RoutedCommand"/>s with no CommandBinding of their own on
+    /// this control, so native RichTextBox handling (registered on the <see cref="System.Windows.Controls.Primitives.TextBoxBase"/>
+    /// base type) answers CanExecute/Executed directly -- the keyboard gesture (Ctrl+V/Ctrl+X), the ribbon
+    /// (<see cref="Free.Shared.Ribbon"/> commands route through an explicit CanExecute check before
+    /// Execute, see FreeWRibbonCommands.RoutedEditCommand), and any future context-menu item bound to the
+    /// command all bypass every other choke point in this file. Blocking CanExecute here (tunneling,
+    /// raised before the bubbling CanExecute that finds the native binding) makes <c>command.CanExecute</c>
+    /// report false to every one of those callers, so Execute is never reached through a standard
+    /// invocation path -- see <see cref="OnPreviewExecutedClipboardMutation"/> for the Execute-boundary
+    /// backstop.
+    /// </summary>
+    private void OnPreviewCanExecuteClipboardMutation(object sender, CanExecuteRoutedEventArgs e)
+    {
+        if ((ReferenceEquals(e.Command, ApplicationCommands.Paste) || ReferenceEquals(e.Command, ApplicationCommands.Cut))
+            && IsCaretOnLockedContentControl())
+        {
+            e.CanExecute = false;
+            e.Handled = true;
+        }
+    }
+
+    /// <summary>
+    /// Execute-boundary backstop for <see cref="OnPreviewCanExecuteClipboardMutation"/>: blocks Paste/Cut
+    /// even if a caller invoked <c>RoutedCommand.Execute</c> directly without checking CanExecute first.
+    /// Marking the tunneling PreviewExecuted event handled here prevents the paired bubbling Executed event
+    /// from being raised at all, so the native RichTextBox paste/cut handler (found via the bubble phase)
+    /// never runs.
+    /// </summary>
+    private void OnPreviewExecutedClipboardMutation(object sender, ExecutedRoutedEventArgs e)
+    {
+        if ((ReferenceEquals(e.Command, ApplicationCommands.Paste) || ReferenceEquals(e.Command, ApplicationCommands.Cut))
+            && IsCaretOnLockedContentControl())
+        {
+            e.Handled = true;
+        }
     }
 
     private static DocumentEditorInputKey ToEditorInputKey(Key key) => key switch
@@ -14062,36 +14154,54 @@ public sealed partial class DocumentView : RichTextBox
         if (TryApplyBodyTextInput(text))
             return;
 
-        // Structural fallback (TryApplyBodyTextInput declined, e.g. the caret/selection sits somewhere
-        // the portable body-edit session can't resolve to model coordinates). This mutates the live
-        // FlowDocument directly, so it must be captured as ONE command-bus edit (see InsertInlineAtCaret's
-        // doc comment on ReplaceAllBlocksCommand): a single TextRange.Text assignment already makes the
-        // clear-then-insert one WPF-native undo unit (the same proven idiom as TryAutoCorrect), but the
-        // CommitToModel()+Render() below still discards WPF-native undo entirely by reassigning Document,
-        // so the real undo path is the bus.
-        CommitToModel();
-        var before = _model.Blocks.ToList();
+        // Same choke point as OnPreviewTextInput/OnPreviewKeyDown: the structural fallback below mutates
+        // the live FlowDocument directly with no knowledge of the content-control lock, so a caret/selection
+        // TryApplyBodyTextInput declined because it sits inside a locked content control (freew-cc-3, e.g.
+        // Insert > Symbol / Insert > Date & Time, or the plain-text clipboard path in
+        // ApplyClipboardPastePlan) must not reach it, and must not stay blocked by the document-wide
+        // IsReadOnly flag when it lands on a content-control field Filling-In-Forms protection does permit
+        // editing (freew-cc-1).
+        if (!TryPrepareNativeFallback(out var restoreReadOnly))
+            return;
 
-        var selection = Selection;
-        var rangeStart = selection.IsEmpty
-            ? (CaretPosition.GetInsertionPosition(LogicalDirection.Forward) ?? CaretPosition)
-            : selection.Start;
-        var rangeEnd = selection.IsEmpty ? rangeStart : selection.End;
-        var range = new TextRange(rangeStart, rangeEnd) { Text = text };
-        var caretAfterInsert = range.End;
-        CaretPosition = caretAfterInsert;
+        try
+        {
+            // Structural fallback (TryApplyBodyTextInput declined, e.g. the caret/selection sits somewhere
+            // the portable body-edit session can't resolve to model coordinates). This mutates the live
+            // FlowDocument directly, so it must be captured as ONE command-bus edit (see InsertInlineAtCaret's
+            // doc comment on ReplaceAllBlocksCommand): a single TextRange.Text assignment already makes the
+            // clear-then-insert one WPF-native undo unit (the same proven idiom as TryAutoCorrect), but the
+            // CommitToModel()+Render() below still discards WPF-native undo entirely by reassigning Document,
+            // so the real undo path is the bus.
+            CommitToModel();
+            var before = _model.Blocks.ToList();
 
-        // Capture the post-insert caret in model coordinates before CommitToModel/Execute rebuild the
-        // FlowDocument (Render() reassigns Document, invalidating caretAfterInsert).
-        var hasModelCaret = TryGetModelTextOffset(caretAfterInsert, out var modelCaret);
+            var selection = Selection;
+            var rangeStart = selection.IsEmpty
+                ? (CaretPosition.GetInsertionPosition(LogicalDirection.Forward) ?? CaretPosition)
+                : selection.Start;
+            var rangeEnd = selection.IsEmpty ? rangeStart : selection.End;
+            var range = new TextRange(rangeStart, rangeEnd) { Text = text };
+            var caretAfterInsert = range.End;
+            CaretPosition = caretAfterInsert;
 
-        CommitToModel();
-        var after = _model.Blocks.ToList();
+            // Capture the post-insert caret in model coordinates before CommitToModel/Execute rebuild the
+            // FlowDocument (Render() reassigns Document, invalidating caretAfterInsert).
+            var hasModelCaret = TryGetModelTextOffset(caretAfterInsert, out var modelCaret);
 
-        _commands.Execute(new ReplaceAllBlocksCommand(before, after, "Typing"));
+            CommitToModel();
+            var after = _model.Blocks.ToList();
 
-        if (hasModelCaret)
-            PlaceCaretAtModelTextOffset(modelCaret.BlockIndex, modelCaret.Offset);
+            _commands.Execute(new ReplaceAllBlocksCommand(before, after, "Typing"));
+
+            if (hasModelCaret)
+                PlaceCaretAtModelTextOffset(modelCaret.BlockIndex, modelCaret.Offset);
+        }
+        finally
+        {
+            if (restoreReadOnly)
+                IsReadOnly = true;
+        }
     }
 
     private bool TryApplyBodyTextInput(string text)
@@ -14695,6 +14805,27 @@ public sealed partial class DocumentView : RichTextBox
     {
         var probe = new ModelRun(string.Empty) { Control = control };
         return ContentControlInteractionPlanner.CanEditExistingContentControl(probe, RestrictEditingPolicy);
+    }
+
+    /// <summary>
+    /// freew-cc-3: lets the opt-in Page Edit surface (<see cref="Editing.PaginatedEditorPanel"/> /
+    /// <see cref="Editing.PageBox"/>) ask whether a text position sits on a content-control run this
+    /// editor's lock/protection state would refuse to edit. Those pages hold plain, un-subclassed
+    /// <see cref="System.Windows.Controls.RichTextBox"/> instances with none of this class's lock-aware
+    /// overrides, but their body <c>FlowDocument</c> blocks are MOVED (not cloned) from a scratch
+    /// <see cref="DocumentView"/>'s render (see <see cref="Editing.PaginatedEditorPanel"/>'s class doc on
+    /// "Tag preservation"), so the same Tag-borne <see cref="RunMarkers"/> this class writes are present
+    /// on those runs too -- callers just cannot pattern-match on the private marker types themselves.
+    /// Returns null when <paramref name="position"/> is not on a content-control run at all (nothing to
+    /// gate); otherwise true/false for allowed/blocked, using the same
+    /// <see cref="ContentControlInteractionPlanner.CanEditExistingContentControl"/> check
+    /// <see cref="TryPrepareNativeFallback"/> and <see cref="AllowsContentControlInteraction"/> already use.
+    /// </summary>
+    internal bool? TryEvaluateContentControlLock(TextPointer? position)
+    {
+        if ((position?.Parent as WpfRun) is not { Tag: RunMarkers { Control: { } marker } })
+            return null;
+        return AllowsContentControlInteraction(marker.Control);
     }
 
     /// <summary>

@@ -217,4 +217,302 @@ public sealed class ContentControlKeyboardLockTests
         view.CommitToModel();
         ((Paragraph)view.Model.Blocks[0]).Runs.Single().Text.Should().Be("Body");
     }
+
+    // ─────────────────────────────────────────────────────────────────────────────────────────────
+    // Round 142 remediation (freew-cc-4/5): Enter, Paste, Cut, and InsertText (Insert > Symbol /
+    // Insert > Date & Time / the plain-text clipboard path) each had their own bypass of the
+    // content-control lock. These exercise the real production call sites -- DocumentView.OnPreviewKeyDown
+    // via a real routed PreviewKeyDownEvent, the real ApplicationCommands.Paste/Cut RoutedCommand, and the
+    // real public InsertText method -- not a reflection shortcut, wherever a real keystroke/command
+    // dispatch does not depend on flaky OS window-focus timing (see this file's class doc on why a typed
+    // *character* keystroke is NOT used for the definitive proof).
+    // ─────────────────────────────────────────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// Selects the text range [<paramref name="startOffset"/>, <paramref name="endOffset"/>) of the
+    /// (single) paragraph's rendered text -- same run-walking approach as
+    /// <see cref="PlaceCaretAfterText"/>, but producing a NON-collapsed selection. Needed for the Cut
+    /// tests below: native <c>TextBoxBase.Cut</c>'s own CanExecute already requires a non-empty selection,
+    /// so a collapsed caret would make Cut report <c>false</c> for that unrelated reason regardless of the
+    /// content-control lock, silently defeating the proof.
+    /// </summary>
+    private static void SelectTextRange(DocumentView view, int startOffset, int endOffset)
+    {
+        TextPointer AtOffset(int offset)
+        {
+            var paragraph = view.Document.Blocks.OfType<System.Windows.Documents.Paragraph>().Single();
+            var remaining = offset;
+            var pointer = paragraph.ContentStart;
+            while (pointer is not null && pointer.CompareTo(paragraph.ContentEnd) < 0)
+            {
+                if (pointer.GetPointerContext(LogicalDirection.Forward) == TextPointerContext.Text)
+                {
+                    var runText = pointer.GetTextInRun(LogicalDirection.Forward);
+                    if (remaining <= runText.Length)
+                        return pointer.GetPositionAtOffset(remaining)!;
+                    remaining -= runText.Length;
+                }
+                pointer = pointer.GetNextContextPosition(LogicalDirection.Forward);
+            }
+            throw new InvalidOperationException($"Offset {offset} was not found in the paragraph.");
+        }
+
+        var start = AtOffset(startOffset);
+        var end = AtOffset(endOffset);
+        view.CaretPosition = end;
+        view.Selection.Select(start, end);
+    }
+
+    private static readonly MethodInfo OnPreviewKeyDownMethod =
+        typeof(DocumentView).GetMethod("OnPreviewKeyDown", BindingFlags.NonPublic | BindingFlags.Instance)
+        ?? throw new InvalidOperationException(
+            "DocumentView.OnPreviewKeyDown not found -- it was renamed or removed.");
+
+    /// <summary>
+    /// Constructs a real <see cref="KeyEventArgs"/> for Enter and invokes the real (protected)
+    /// <c>DocumentView.OnPreviewKeyDown</c> override directly via reflection -- NOT via
+    /// <c>UIElement.RaiseEvent</c>. A shown window is still required (the <see cref="KeyEventArgs"/>
+    /// constructor rejects a null <see cref="PresentationSource"/>), but routing the call directly avoids
+    /// two independently-confirmed sources of false negatives in this headless host: (1) whether
+    /// <c>RaiseEvent</c> even reaches the override depends on window/dispatcher plumbing this suite does
+    /// not otherwise need, and (2) even when it does, whether the SUBSEQUENT native
+    /// <c>base.OnPreviewKeyDown</c> call actually performs the native paragraph split -- what an
+    /// assertion on the resulting model content would have to depend on -- requires real OS keyboard focus
+    /// that a headless STA test cannot reliably obtain (the same "native RichTextBox editing quietly never
+    /// engages without real focus" finding this class's doc comment describes for typed characters).
+    /// Asserting on <c>KeyEventArgs.Handled</c> immediately after the direct call sidesteps both: it
+    /// reflects exactly what <c>OnPreviewKeyDown</c>'s own logic decided, independent of whatever native
+    /// engagement would or would not follow.
+    /// </summary>
+    private static bool InvokeOnPreviewKeyDownForEnter(DocumentView view)
+    {
+        var source = PresentationSource.FromVisual(view)
+            ?? throw new InvalidOperationException("A shown window is required to construct a KeyEventArgs.");
+        var args = new KeyEventArgs(Keyboard.PrimaryDevice, source, 0, Key.Enter)
+        {
+            RoutedEvent = Keyboard.PreviewKeyDownEvent
+        };
+        OnPreviewKeyDownMethod.Invoke(view, [args]);
+        return args.Handled;
+    }
+
+    [StaFact]
+    public void OnPreviewKeyDown_MarksEnterHandled_WhenCaretInsideContentLockedControl()
+    {
+        // freew-cc-4: before the fix, OnPreviewKeyDown's InsertParagraphBreak branch fell through to
+        // base.OnPreviewKeyDown(e) unconditionally once TryApplyBodyParagraphBreak() declined (which it
+        // always does inside a content control -- DocumentEditingSession.IsPortableBodyTextParagraph
+        // requires run.Control is null) -- reproducing the original defect via Enter instead of
+        // Backspace/Delete. After the fix, the same TryPrepareNativeFallback choke point Backspace/Delete
+        // use marks the event handled and returns before base.OnPreviewKeyDown(e) is ever reached.
+        var view = LoadWithPlainTextControl("Alice", ContentControlLockMode.ContentLocked);
+        var window = new Window
+        {
+            WindowStyle = WindowStyle.None,
+            ShowInTaskbar = false,
+            Left = -10000,
+            Top = -10000,
+            Width = 200,
+            Height = 200,
+            Content = view,
+        };
+        try
+        {
+            window.Show();
+            PlaceCaretAfterText(view, "Al");
+
+            InvokeOnPreviewKeyDownForEnter(view).Should().BeTrue(
+                "Enter inside a content-locked control must be marked handled before it can reach native paragraph insertion");
+        }
+        finally
+        {
+            window.Close();
+        }
+    }
+
+    [StaFact]
+    public void Enter_StillWorks_ForUnlockedControl_UnderFillingForms_ViaRealKeystroke()
+    {
+        // Positive control for the test above (and for the restoreReadOnly branch): Filling-In-Forms sets
+        // IsReadOnly for ordinary body text, but an unlocked field must stay fillable, and the transiently
+        // cleared IsReadOnly must be restored once the native Enter call returns -- this assertion does not
+        // depend on whether native Enter processing actually engages (see
+        // InvokeOnPreviewKeyDownForEnter's doc comment), only on the finally block around it running.
+        var view = LoadWithPlainTextControl("Alice", ContentControlLockMode.NotSpecified);
+        view.SetProtection(ProtectionMode.FillingForms);
+        var window = new Window
+        {
+            WindowStyle = WindowStyle.None,
+            ShowInTaskbar = false,
+            Left = -10000,
+            Top = -10000,
+            Width = 200,
+            Height = 200,
+            Content = view,
+        };
+        try
+        {
+            window.Show();
+            PlaceCaretAfterText(view, "Al");
+
+            InvokeOnPreviewKeyDownForEnter(view);
+
+            view.IsReadOnly.Should().BeTrue("restored after the one permitted native Enter dispatch");
+        }
+        finally
+        {
+            window.Close();
+        }
+    }
+
+    /// <summary>
+    /// Best-effort clipboard seed so the Paste tests below are deterministic REGARDLESS of ambient
+    /// clipboard state: without guaranteed clipboard text, native Paste's own CanExecute (and Execute's
+    /// mutation) could ALREADY be a no-op for an unrelated reason (empty clipboard), which would make
+    /// "paste is blocked" pass even without the fix -- confirmed empirically while proving this suite
+    /// fails-before-the-fix (the assertion below passed on reverted code in a run where the ambient
+    /// clipboard happened to be empty). Mirrors <c>PaginatedEditorPanel.SetClipboardTextWithRetry</c>'s
+    /// tolerance for the transient CLIPBRD_E_CANT_OPEN contention this heavily-parallel dev environment
+    /// can produce.
+    /// </summary>
+    private static void SeedClipboardText(string text)
+    {
+        const int MaxAttempts = 3;
+        for (var attempt = 0; attempt < MaxAttempts; attempt++)
+        {
+            try
+            {
+                Clipboard.SetText(text);
+                return;
+            }
+            catch when (attempt < MaxAttempts - 1)
+            {
+                Thread.Sleep(10);
+            }
+            catch
+            {
+                // Final attempt failed -- clipboard contention. The Paste tests below stay best-effort in
+                // that case, same as production's own SetClipboardTextWithRetry.
+            }
+        }
+    }
+
+    [StaFact]
+    public void Paste_CanExecute_False_WhenCaretInsideContentLockedControl()
+    {
+        // End-to-end check via the real ApplicationCommands.Paste.CanExecute call -- MainWindow's
+        // ExecuteEditingCommand (used by the ribbon's Paste/Cut buttons) makes exactly this call before
+        // Execute. Deterministic in this direction regardless of clipboard content: WPF's
+        // CanExecuteRoutedEventArgs/ExecutedRoutedEventArgs constructors are internal (only the framework
+        // can construct them), so the gate's own OnPreviewCanExecuteClipboardMutation/
+        // OnPreviewExecutedClipboardMutation methods cannot be unit-tested directly with hand-built args --
+        // this real RoutedCommand.CanExecute call is the way to exercise them. Once the gate marks the
+        // tunneling event Handled, CanExecute never reaches the native (clipboard-dependent) binding at
+        // all, so the result is always false when locked, regardless of ambient clipboard state.
+        SeedClipboardText("freew-cc-5 paste probe");
+        var view = LoadWithPlainTextControl("Alice", ContentControlLockMode.ContentLocked);
+        PlaceCaretAfterText(view, "Al");
+
+        ApplicationCommands.Paste.CanExecute(null, view).Should().BeFalse(
+            "pasting into a content-locked control must be refused before Execute is ever reached");
+    }
+
+    [StaFact]
+    public void Paste_Execute_DoesNotMutateModel_WhenCalledDirectly_BypassingCanExecute()
+    {
+        // Execute-boundary backstop: calling Execute directly (as a hypothetical future call site might,
+        // without checking CanExecute first) must still be refused -- proves
+        // OnPreviewExecutedClipboardMutation, not just the CanExecute gate above.
+        SeedClipboardText("freew-cc-5 paste probe");
+        var view = LoadWithPlainTextControl("Alice", ContentControlLockMode.ContentLocked);
+        PlaceCaretAfterText(view, "Al");
+
+        ApplicationCommands.Paste.Execute(null, view);
+
+        view.CommitToModel();
+        ((Paragraph)view.Model.Blocks[0]).Runs.Single().Text.Should().Be("Alice",
+            "native paste must never reach a content-locked control, even via a direct Execute call");
+    }
+
+    [StaFact]
+    public void Cut_CanExecute_False_WhenSelectionInsideControlAndContentLockedControl()
+    {
+        // Uses a real (non-collapsed) selection spanning the locked control's text: native
+        // TextBoxBase.Cut's own CanExecute already requires Selection.IsEmpty == false, so a collapsed
+        // caret (as PlaceCaretAfterText produces) would make this pass even without the fix.
+        var view = LoadWithPlainTextControl("Alice", ContentControlLockMode.ControlAndContentLocked);
+        SelectTextRange(view, 0, 5);
+
+        ApplicationCommands.Cut.CanExecute(null, view).Should().BeFalse();
+    }
+
+    [StaFact]
+    public void Paste_CanExecute_NotForcedFalse_OutsideAnyContentControl()
+    {
+        // Regression guard: the new CanExecute gate must be scoped to content-control positions -- outside
+        // one it must not intervene at all (IsCaretOnLockedContentControl, the pure predicate backing the
+        // gate, must report false).
+        var document = TextDocument.CreateEmpty();
+        document.Blocks.Clear();
+        document.Blocks.Add(new Paragraph("Body"));
+        var view = new DocumentView();
+        view.LoadModel(document);
+        var paragraph = view.Document.Blocks.OfType<System.Windows.Documents.Paragraph>().Single();
+        view.CaretPosition = paragraph.ContentStart.GetPositionAtOffset(2, LogicalDirection.Forward);
+
+        IsCaretOnLockedContentControl(view).Should().BeFalse();
+    }
+
+    [StaFact]
+    public void IsCaretOnLockedContentControl_FalseForUnlockedControl()
+    {
+        var view = LoadWithPlainTextControl("Alice", ContentControlLockMode.NotSpecified);
+        PlaceCaretAfterText(view, "Al");
+
+        IsCaretOnLockedContentControl(view).Should().BeFalse();
+    }
+
+    [StaFact]
+    public void InsertText_Blocked_WhenCaretInsideContentLockedControl()
+    {
+        // freew-cc-3: InsertText's structural fallback (`new TextRange(...) { Text = text }`) is used by
+        // Insert > Symbol, Insert > Date & Time, and the plain-text clipboard path in
+        // ApplyClipboardPastePlan -- before the fix it never consulted TryPrepareNativeFallback at all.
+        var view = LoadWithPlainTextControl("Alice", ContentControlLockMode.ContentLocked);
+        PlaceCaretAfterText(view, "Al");
+
+        view.InsertText("X");
+
+        view.CommitToModel();
+        ((Paragraph)view.Model.Blocks[0]).Runs.Single().Text.Should().Be("Alice");
+    }
+
+    [StaFact]
+    public void InsertText_StillWorks_ForUnlockedControl_WithNoProtection()
+    {
+        // Positive control / regression guard: InsertText's own top-of-method gate
+        // (`AllowsRestrictEditingOperation(RestrictEditingOperationKind.BodyTextEdit)`, which is exactly
+        // `!IsReadOnly` -- see RestrictEditingEnforcementPolicy.IsBodyEditingLocked) already blocks the
+        // whole method under Filling-In-Forms regardless of content-control lock, both before and after
+        // this fix, so a FillingForms scenario cannot exercise the new TryPrepareNativeFallback call here
+        // (its restoreReadOnly branch can only fire when IsReadOnly was already true, which InsertText's
+        // own top gate never lets it reach). This proves instead that the new gating does not regress the
+        // ordinary case: an unlocked content control with no protection active must still accept the
+        // fallback insertion exactly as before the fix.
+        var view = LoadWithPlainTextControl("Alice", ContentControlLockMode.NotSpecified);
+        PlaceCaretAfterText(view, "Al");
+
+        view.InsertText("X");
+
+        view.CommitToModel();
+        ((Paragraph)view.Model.Blocks[0]).Runs.Single().Text.Should().Be("AlXice");
+    }
+
+    private static readonly MethodInfo IsCaretOnLockedContentControlMethod =
+        typeof(DocumentView).GetMethod("IsCaretOnLockedContentControl", BindingFlags.NonPublic | BindingFlags.Instance)
+        ?? throw new InvalidOperationException(
+            "DocumentView.IsCaretOnLockedContentControl not found -- the predicate backing the Paste/Cut gate was renamed or removed.");
+
+    private static bool IsCaretOnLockedContentControl(DocumentView view) =>
+        (bool)IsCaretOnLockedContentControlMethod.Invoke(view, null)!;
 }
