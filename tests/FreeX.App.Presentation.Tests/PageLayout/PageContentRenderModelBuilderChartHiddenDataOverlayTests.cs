@@ -80,7 +80,15 @@ public sealed class PageContentRenderModelBuilderChartHiddenDataOverlayTests
         // The WPF print renderer seeds PrintChartTextOverlayPlanner from ViewportModel.Cells and
         // ViewportModel.ChartDataCells. A hidden merge-ANCHOR row with a still-visible remainder is
         // deliberately kept in ViewportModel.Cells (ViewportService.BuildRowMetrics), so it reaches
-        // the planner as a real page cell even though the chart data cells correctly omit it.
+        // the planner as a real page cell.
+        //
+        // Two independent mechanisms now keep it out of the printed overlays, and this test guards
+        // both ends of that: ViewportService.BuildChartDataCells claims the anchor's key with a BLANK
+        // placeholder (the r141 fix, which exists precisely so a page-cell fallback cannot re-admit
+        // the value), and BuildCellLookup filters hidden cells out of the page seed. The placeholder
+        // alone covers merge anchors only -- the plain hidden row/column cases above are the ones that
+        // fail without the seed filter -- so this case is defense in depth against either mechanism
+        // regressing on its own.
         var (workbook, sheet) = CreateChartWorkbook(showDataInHiddenRowsAndColumns: false);
         sheet.HiddenRows.Add(3);
         sheet.ReplaceMergedRegions(
@@ -97,8 +105,11 @@ public sealed class PageContentRenderModelBuilderChartHiddenDataOverlayTests
         // Precondition: the leak source really is present in the page-scoped seed.
         var pageCellLookup = viewport.Cells.ToDictionary(cell => (cell.Row, cell.Col));
         pageCellLookup.Should().ContainKey((3u, 1u), "the hidden merge-anchor row stays in ViewportModel.Cells");
-        viewport.ChartDataCells.Should().NotContain(cell => cell.Row == 3,
-            "ViewportService already excludes hidden rows from the chart's own data cells");
+        pageCellLookup[(3u, 1u)].DisplayText.Should().Be(HiddenCategory,
+            "the page seed carries the hidden anchor's REAL text -- that is the leak source");
+        viewport.ChartDataCells.Where(cell => cell.Row == 3)
+            .Should().OnlyContain(cell => cell.DisplayText == "",
+                "ViewportService exposes hidden merge anchors only as blank placeholders, never as their real value");
 
         var texts = PrintChartTextOverlayPlanner.Build(
                 sheet.Charts[0],
