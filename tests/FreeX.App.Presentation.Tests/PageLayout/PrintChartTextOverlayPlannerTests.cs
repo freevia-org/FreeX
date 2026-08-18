@@ -144,7 +144,8 @@ public sealed class PrintChartTextOverlayPlannerTests
             new LayoutRect(24, 24, 380, 210),
             ChartDataCellsFor(chart.Type),
             new Dictionary<(uint Row, uint Col), DisplayCell>(),
-            MeasureByCharacterCount);
+            MeasureByCharacterCount,
+            dataSheet: null);
 
     private static IReadOnlyList<ChartDataCell> ChartDataCellsFor(ChartType chartType)
     {
