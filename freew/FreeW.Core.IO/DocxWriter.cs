@@ -3378,26 +3378,47 @@ public static class DocxWriter
             }
 
             // A content control (w:sdt) wraps the maximal span of consecutive runs sharing the same
-            // ContentControl instance. The wrapped run(s) keep their ordinary w:r form inside w:sdtContent;
-            // the sdt itself still routes through the revision wrapper so a control can sit inside a
-            // tracked change. Content controls are not also hyperlinks/comments in practice.
+            // ContentControl instance. The wrapped run(s) keep their ordinary w:r form inside w:sdtContent.
+            // Tracked changes nest INSIDE that sdtContent (w:sdt/w:sdtContent/w:ins/w:r), the way Word
+            // records an edit made inside a field: a per-run wrapper here, not one around the whole sdt.
+            // Splitting the span on a revision boundary instead would emit the same field twice, each copy
+            // claiming part of its text — the reader already threads control + revision independently, so
+            // the nested form round-trips. Content controls are not also hyperlinks/comments in practice.
             var control = runs[i].Control;
             if (control is not null
                 && (control.Kind != ContentControlKind.Citation || runs[i].ComplexField is null)
                 && runs[i].ComplexField is not { SimpleField: null })
             {
-                var head = runs[i];
                 var content = new XElement(W + "sdtContent");
+                XElement? controlRevisionWrapper = null;
+                Run? controlRevisionKey = null;
                 while (i < runs.Count && ReferenceEquals(runs[i].Control, control)
-                    && EffectiveCommentId(runs[i]) == openCommentId
-                    && SameRevision(head, runs[i]))
+                    && EffectiveCommentId(runs[i]) == openCommentId)
                 {
                     EmitBookmarkBoundariesAt(i, content, control);
-                    content.Add(BuildRun(runs[i++], drawings, hyperlinks, preservedNumbering, restartOverrides));
+                    var wrapped = runs[i];
+                    var runElement = BuildRun(wrapped, drawings, hyperlinks, preservedNumbering, restartOverrides);
+                    if (wrapped.Revision == RevisionKind.None)
+                    {
+                        controlRevisionWrapper = null;
+                        controlRevisionKey = null;
+                        content.Add(runElement);
+                    }
+                    else
+                    {
+                        if (controlRevisionKey is null || !SameRevision(controlRevisionKey, wrapped))
+                        {
+                            controlRevisionWrapper = NewRevisionWrapper(wrapped, drawings.Ids);
+                            controlRevisionKey = wrapped;
+                            content.Add(controlRevisionWrapper);
+                        }
+                        controlRevisionWrapper!.Add(runElement);
+                    }
+                    i++;
                 }
                 EmitBookmarkBoundariesAt(i, content, control);
-                var sdt = new XElement(W + "sdt", BuildSdtProperties(control), content);
-                Content(head, sdt);
+                FlushRevision();
+                p.Add(new XElement(W + "sdt", BuildSdtProperties(control), content));
                 continue;
             }
 

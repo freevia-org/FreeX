@@ -48,7 +48,9 @@ public sealed class DocumentViewContentControlKeyboardTests
     public void Typing_inside_a_rich_text_control_preserves_the_runs_other_marks()
     {
         var control = Run.RichTextControl("Bob", tag: "Applicant");
+        control.HyperlinkUrl = "https://example.test/";
         control.HyperlinkTooltip = "preserved";
+        control.CommentId = 4;
         control.Formatting = control.Formatting with { Bold = true };
         var (view, paragraph) = BuildView(control);
 
@@ -58,7 +60,9 @@ public sealed class DocumentViewContentControlKeyboardTests
         paragraph.Runs[1].Text.Should().Be("Bob!");
         paragraph.Runs[1].Control!.Kind.Should().Be(ContentControlKind.RichText);
         paragraph.Runs[1].Control!.Tag.Should().Be("Applicant");
+        paragraph.Runs[1].HyperlinkUrl.Should().Be("https://example.test/");
         paragraph.Runs[1].HyperlinkTooltip.Should().Be("preserved");
+        paragraph.Runs[1].CommentId.Should().Be(4);
         paragraph.Runs[1].Formatting.Bold.Should().BeTrue();
     }
 
