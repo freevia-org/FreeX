@@ -222,7 +222,10 @@ public sealed class AvaloniaWorksheetKeyboardEditingTests
                 window.FormulaPointModeForTest.Should().BeFalse();
                 window.FormulaRangeEntrySelectionModeForTest.Should().Be(FreeX.App.Presentation.ExcelSelectionMode.Normal);
                 window.Session.SelectedRange.Should().Be(new GridRange(formulaCell, formulaCell));
-                window.SheetGridHostForTest.IsFocused.Should().BeTrue();
+                // r140: focus now lands on the active cell's own Border inside the grid host so a
+                // screen reader announces the destination cell, which makes the host itself no
+                // longer the focused element. Focus being WITHIN the worksheet is the real contract.
+                window.SheetGridHostForTest.IsKeyboardFocusWithin.Should().BeTrue();
             }
             finally
             {

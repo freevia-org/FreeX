@@ -35,9 +35,13 @@ public sealed class PlatformPrintServiceSelectionOwnershipSourceTests
             "private static IPlatformPrintService CreatePlatformPrintService()",
             "private static Task<PrintSelection?> ShowPlatformPrintSelectionDialogAsync(");
         freePSelection.Should().NotContain("OperatingSystem.IsWindows()");
-        freePSelection.Should().Contain("RequirePrinterDiscoveryBeforeSubmission: false")
-            .And.Contain("RejectNonZeroHandlerExitCode: false")
-            .And.Contain("cupsFactory: static () => new CupsPrintService()");
+        // r140: this used to REQUIRE the two opt-outs, pinning the defect that made a failed print
+        // report success. FreeP now takes WindowsPrintService's defaults like FreeW, so the contract
+        // guards the safe wiring and forbids the opt-outs coming back.
+        freePSelection.Should().Contain("windowsFactory: static () => new WindowsPrintService()")
+            .And.Contain("cupsFactory: static () => new CupsPrintService()")
+            .And.NotContain("RequirePrinterDiscoveryBeforeSubmission")
+            .And.NotContain("RejectNonZeroHandlerExitCode");
 
         var freeXSelection = Slice(
             freeX,

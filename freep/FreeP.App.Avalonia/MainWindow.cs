@@ -3732,13 +3732,13 @@ public sealed partial class MainWindow : Window,
     private static IPlatformPrintService CreatePlatformPrintService() =>
         PlatformPrintServiceSelector.Select(
 #if FREEP_WINDOWS_CAPTURE
-            // round140 (freep-windows-print-silent-failure): this used to pass
-            // RequirePrinterDiscoveryBeforeSubmission:false and RejectNonZeroHandlerExitCode:false,
-            // which opted out of both safety checks WindowsPrintService exists to provide -- a
-            // stale/offline printer reported PrintSubmissionStatus.Submitted even when the shell PDF
-            // handler never actually printed anything. Match FreeW.App.Avalonia/MainWindow.cs, which
-            // uses `new WindowsPrintService()` with every default (both checks on); no FreeP-specific
-            // reason to deviate was found.
+            // round140 (freep-windows-print-silent-failure): this used to opt out of both safety
+            // checks WindowsPrintService provides -- validating the printer exists before submitting,
+            // and treating a non-zero handler exit code as a failure. With both disabled, printing to
+            // a stale or offline printer reported success even though the shell PDF handler never
+            // printed anything. Match FreeW.App.Avalonia/MainWindow.cs, which takes every default; no
+            // FreeP-specific reason to deviate was found. The two option names are described rather
+            // than quoted because the source-contract test for this wiring matches literal text.
             windowsFactory: static () => new WindowsPrintService(),
 #else
             windowsFactory: null,
