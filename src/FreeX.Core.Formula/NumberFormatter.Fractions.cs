@@ -13,6 +13,41 @@ public static partial class NumberFormatter
     private static readonly Regex FixedDenominatorFractionFormatRegex = new(@"\?+/\d+");
     private static readonly Regex ScientificFormatRegex = new(@"E[+-]0+", RegexOptions.IgnoreCase);
 
+    /// <summary>
+    /// Formats a single-section fraction format, or returns false so the caller falls through to
+    /// the ordinary numeric path.
+    /// </summary>
+    /// <remarks>
+    /// Lives here, behind a one-character gate, deliberately. Fraction formats have to have their
+    /// "_x"/"*x" spacing and fill directives stripped before <see cref="FormatSimpleFraction"/>
+    /// sees them -- otherwise ExtractNumericAffixes treats the directive and the character it
+    /// reserves as ordinary literal text and renders them visibly, e.g. "_(2 1/2_)" where Excel
+    /// shows invisible padding. Doing that stripping inline in FormatNumber meant every plain
+    /// numeric cell -- the hot path, and the overwhelming majority of cells -- paid for two string
+    /// transforms before reaching its own fast path. A fraction format must contain '?', so the
+    /// IndexOf below rejects the hot case without allocating anything.
+    /// </remarks>
+    private static bool TryFormatSingleSectionFraction(
+        double value,
+        string effectiveFormat,
+        string? colorHex,
+        int? targetWidthCharacters,
+        out FormatResult result)
+    {
+        result = default;
+
+        if (effectiveFormat.IndexOf('?') < 0)
+            return false;
+
+        var fractionFormat = RemoveSpacingAndFillDirectives(PreserveAccountingFillSpace(effectiveFormat));
+        if (!IsSimpleFractionFormat(fractionFormat))
+            return false;
+
+        var text = ApplyNativeDigitSubstitution(FormatSimpleFraction(value, fractionFormat), effectiveFormat);
+        result = new FormatResult(ApplyAccountingTargetWidth(text, effectiveFormat, targetWidthCharacters), colorHex);
+        return true;
+    }
+
     private static bool IsSimpleFractionFormat(string format)
     {
         if (format.IndexOf('?') < 0)
