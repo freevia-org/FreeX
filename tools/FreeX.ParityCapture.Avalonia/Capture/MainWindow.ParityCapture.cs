@@ -108,7 +108,11 @@ public sealed partial class MainWindow
     private const int ParityCaptureWindowWidth = 1120;
     private const int ParityCaptureWindowHeight = 720;
     private const int ParityCaptureTitleBarHeight = 30;
-    private const int ParityCaptureDialogWaitMilliseconds = 8000;
+    // Only bounds how long a dialog may take to appear; the wait returns as soon as it does, so a
+    // healthy run never spends it. Eight seconds held when a capture project ran alone but not in
+    // the full gate, where two dialogs missed the window and their contracts went unrecorded --
+    // surfacing as a cohort count short by two rather than as anything resembling a timeout.
+    private const int ParityCaptureDialogWaitMilliseconds = 30000;
     private const int ParityCaptureDialogPollMilliseconds = 50;
     private static readonly FontFamily ParityNarrowUiFontFamily =
         new("Segoe UI, Arial Narrow, Aptos Narrow, Liberation Sans Narrow, Nimbus Sans Narrow, DejaVu Sans Condensed, Arial, Liberation Sans, sans-serif");
