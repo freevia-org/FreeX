@@ -18126,10 +18126,10 @@ public sealed partial class DocumentView : Control
             }
         }
 
-        if (paragraph is null || !HasVerbatimRunText(paragraph))
+        if (paragraph is null)
             return false;
 
-        foreach (var span in ContentControlSpans(paragraph))
+        foreach (var span in ContentControlCaretSpans(paragraph))
         {
             // The whole caret/selection must lie within this field's own text — an edit must never spill
             // into the body text around it.
@@ -18158,6 +18158,61 @@ public sealed partial class DocumentView : Control
         }
 
         return false;
+    }
+
+    /// <summary>
+    /// The paragraph's content-control spans expressed in the CARET's offset space, which is not always
+    /// the model's: a paragraph holding a page-number field, a note mark or an equation lays out from
+    /// <see cref="DisplayCells"/>, where a run occupies its RESOLVED text rather than its stored text, so
+    /// model offsets would address the wrong characters. When every run renders verbatim the two spaces
+    /// coincide and the model walk answers directly (it also sees an emptied field, which has no glyphs
+    /// at all); otherwise the placed glyphs — whose offsets ARE the caret space, and which now carry
+    /// their control — give the field's extent without re-deriving any of the layout's transformations.
+    /// A field's own text is identical in both spaces (a check box's substituted glyph is one char for
+    /// one char), so an offset within the field needs no translation either way.
+    /// </summary>
+    private IEnumerable<(int FirstRunIndex, int RunCount, int Start, int Length)> ContentControlCaretSpans(
+        Paragraph paragraph)
+    {
+        if (_cellCaret is not null || HasVerbatimRunText(paragraph))
+            return ContentControlSpans(paragraph);
+
+        return PlacedContentControlSpans(paragraph);
+    }
+
+    private List<(int FirstRunIndex, int RunCount, int Start, int Length)> PlacedContentControlSpans(
+        Paragraph paragraph)
+    {
+        var spans = new List<(int FirstRunIndex, int RunCount, int Start, int Length)>();
+        if (_laidOutWidth < 0)
+            Relayout(FallbackWidth);
+
+        foreach (var span in ContentControlSpans(paragraph))
+        {
+            var control = paragraph.Runs[span.FirstRunIndex].Control;
+            var start = int.MaxValue;
+            var end = int.MinValue;
+            foreach (var placed in _placed)
+            {
+                if (placed.Sentinel
+                    || placed.Block != _caret.Block
+                    || placed.IsCell
+                    || !ReferenceEquals(placed.Control, control))
+                {
+                    continue;
+                }
+
+                start = Math.Min(start, placed.Offset);
+                end = Math.Max(end, placed.Offset + 1);
+            }
+
+            // A field with no glyphs on this layout (empty, or hidden by the review view) cannot be
+            // addressed by the caret, so it is not offered as an edit target.
+            if (start <= end && start != int.MaxValue)
+                spans.Add((span.FirstRunIndex, span.RunCount, start, end - start));
+        }
+
+        return spans;
     }
 
     /// <summary>
@@ -18224,10 +18279,10 @@ public sealed partial class DocumentView : Control
             contentOffset = _caret.Offset;
         }
 
-        if (paragraph is null || !HasVerbatimRunText(paragraph))
+        if (paragraph is null)
             return false;
 
-        return ContentControlSpans(paragraph)
+        return ContentControlCaretSpans(paragraph)
             .Any(span => contentOffset > span.Start && contentOffset < span.Start + span.Length);
     }
 

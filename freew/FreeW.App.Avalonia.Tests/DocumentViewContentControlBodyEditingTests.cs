@@ -1,5 +1,6 @@
 using System.IO;
 using System.Threading;
+using Avalonia;
 using Avalonia.Headless;
 using System.IO.Compression;
 using System.Xml.Linq;
@@ -339,6 +340,51 @@ public sealed class DocumentViewContentControlBodyEditingTests
         view.BackspaceForTest();
         view.Document.Blocks.Should().HaveCount(2);
         view.PlainText.Should().Be("Head\nRegion");
+    }
+
+    // Laying out a note mark needs the headless font manager.
+    [Fact]
+    public async Task A_field_is_typable_in_a_paragraph_whose_offsets_are_display_offsets() =>
+        await Session.Dispatch(EditFieldBesideANoteMark, CancellationToken.None);
+
+    private static void EditFieldBesideANoteMark()
+    {
+        // A note mark renders its COMPUTED number ("1") rather than its stored text, so every caret
+        // offset after it in this paragraph is a display offset that no longer matches the model. The
+        // field's edit path has to speak that space, or it addresses the wrong characters.
+        var paragraph = new Paragraph();
+        paragraph.Runs.Add(new Run("Note"));
+        paragraph.Runs.Add(new Run("STORED-MARK-TEXT") { FootnoteId = 1 });
+        paragraph.Runs.Add(new Run(" for "));
+        paragraph.Runs.Add(Run.PlainTextControl("Bob", tag: "Applicant"));
+
+        var document = TextDocument.CreateEmpty();
+        document.Blocks.Clear();
+        document.Blocks.Add(paragraph);
+        document.Footnotes[1] = new Footnote(1, "The note body.");
+        var view = new DocumentView();
+        view.LoadDocument(document);
+        view.Measure(new Size(816, 2000));
+
+        var glyphs = view.ContentControlGlyphsForTest(0);
+        new string(glyphs.Select(glyph => glyph.Ch).ToArray()).Should().Be("Bob");
+
+        // Address the caret the way the layout does — the placed glyphs' own offsets — rather than by
+        // counting model characters, which is exactly the mismatch this case is about.
+        var modelStart = paragraph.PlainText.LastIndexOf("Bob", StringComparison.Ordinal);
+        glyphs[0].Offset.Should().NotBe(modelStart, "the note mark makes the two offset spaces diverge");
+
+        view.MoveCaretToBlockForTest(0, glyphs[^1].Offset + 1);
+        view.InsertText("by");
+
+        Field(paragraph).Text.Should().Be("Bobby");
+        Fields(paragraph).Should().ContainSingle();
+        paragraph.Runs[1].Text.Should().Be("STORED-MARK-TEXT", "the note mark is untouched");
+
+        // The structural guard speaks the same space: Enter inside the field is still refused.
+        view.MoveCaretToBlockForTest(0, view.ContentControlGlyphsForTest(0)[1].Offset);
+        view.InsertParagraphBreakForTest();
+        view.Document.Blocks.Should().HaveCount(1);
     }
 
     [Fact]
