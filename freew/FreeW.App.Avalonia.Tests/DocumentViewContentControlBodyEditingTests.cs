@@ -278,6 +278,90 @@ public sealed class DocumentViewContentControlBodyEditingTests
     }
 
     [Fact]
+    public void A_delete_locked_field_survives_a_selection_that_would_remove_it()
+    {
+        var control = Run.PlainTextControl("Bob", tag: "Applicant");
+        // Word's sdtLocked: the control may not be deleted, but its text is still editable.
+        control.Control = control.Control! with { LockMode = ContentControlLockMode.ControlLocked };
+        var paragraph = new Paragraph();
+        paragraph.Runs.Add(new Run(Prefix));
+        paragraph.Runs.Add(control);
+        paragraph.Runs.Add(new Run(Suffix));
+        var view = LoadParagraph(paragraph);
+
+        // A selection that covers the whole field would delete it → the gesture is declined outright.
+        view.SetBodySelectionForTest(0, ControlStart - 2, 0, ControlEnd + 2);
+        view.BackspaceForTest();
+        view.PlainText.Should().Be("Name: Bob (staff)");
+        Fields(paragraph).Should().ContainSingle();
+
+        // Its text stays editable: a partial selection, and typing, both still work.
+        view.SetBodySelectionForTest(0, ControlStart + 1, 0, ControlEnd);
+        view.BackspaceForTest();
+        Field(paragraph).Text.Should().Be("B");
+
+        view.MoveCaretToBlockForTest(0, ControlStart + 1);
+        view.InsertText("en");
+        Field(paragraph).Text.Should().Be("Ben");
+
+        // ...and body text away from the field deletes as usual.
+        view.SetBodySelectionForTest(0, 0, 0, 2);
+        view.BackspaceForTest();
+        view.PlainText.Should().Be("me: Ben (staff)");
+    }
+
+    [Fact]
+    public void A_delete_locked_body_region_survives_a_paragraph_merge()
+    {
+        var region = new BlockContentControl(
+            BlockContentControlKind.Group,
+            Tag: "Locked",
+            LockMode: ContentControlLockMode.ControlLocked);
+        var document = TextDocument.CreateEmpty();
+        document.Blocks.Clear();
+        var first = new Paragraph();
+        first.Runs.Add(new Run("Head"));
+        var second = new Paragraph { BlockContentControl = region };
+        second.Runs.Add(new Run("Region"));
+        document.Blocks.Add(first);
+        document.Blocks.Add(second);
+        var view = new DocumentView();
+        view.LoadDocument(document);
+
+        // Backspace at the region's start would merge it away with the paragraph that carries it.
+        view.MoveCaretToBlockForTest(1, 0);
+        view.BackspaceForTest();
+        view.Document.Blocks.Should().HaveCount(2);
+        ((Paragraph)view.Document.Blocks[1]).BlockContentControl.Should().BeSameAs(region);
+
+        // A selection spanning into it is declined for the same reason.
+        view.SetBodySelectionForTest(0, 2, 1, 3);
+        view.BackspaceForTest();
+        view.Document.Blocks.Should().HaveCount(2);
+        view.PlainText.Should().Be("Head\nRegion");
+    }
+
+    [Fact]
+    public void Splitting_a_paragraph_keeps_both_halves_inside_their_body_region()
+    {
+        var region = new BlockContentControl(BlockContentControlKind.Group, Tag: "Region");
+        var document = TextDocument.CreateEmpty();
+        document.Blocks.Clear();
+        var paragraph = new Paragraph { BlockContentControl = region };
+        paragraph.Runs.Add(new Run("HeadTail"));
+        document.Blocks.Add(paragraph);
+        var view = new DocumentView();
+        view.LoadDocument(document);
+
+        view.MoveCaretToBlockForTest(0, 4);
+        view.InsertParagraphBreakForTest();
+
+        view.Document.Blocks.Should().HaveCount(2);
+        view.Document.Blocks.Should().OnlyContain(block => ReferenceEquals(block.BlockContentControl, region),
+            "consecutive blocks sharing the instance re-emit as the one w:sdt they came from");
+    }
+
+    [Fact]
     public void A_selection_reaching_a_locked_field_deletes_nothing()
     {
         var control = Run.PlainTextControl("Bob", tag: "Applicant");

@@ -850,6 +850,11 @@ public sealed class DocumentEditingSession
             return false;
         }
 
+        // freew-cc-6: the merge removes `current`'s block, so a body-level region that wraps only it —
+        // Word's sdtLocked w:sdt — would be deleted along with it.
+        if (!CanMergeAcrossBlockRegions(previous, current))
+            return false;
+
         var caretOffset = previous.PlainText.Length;
         var merged = CreateParagraph(previous, keepStyle: true);
         AppendClonedRuns(merged, previous, 0, previous.PlainText.Length);
@@ -882,6 +887,10 @@ public sealed class DocumentEditingSession
         {
             return false;
         }
+
+        // freew-cc-6: the merge removes `next`'s block along with any body-level region wrapping it.
+        if (!CanMergeAcrossBlockRegions(current, next))
+            return false;
 
         var caretOffset = current.PlainText.Length;
         var merged = CreateParagraph(current, keepStyle: true);
@@ -1370,9 +1379,15 @@ public sealed class DocumentEditingSession
 
     private bool CanRestructure(DocumentTextRange span)
     {
+        var survivor = Document.Blocks[span.Start.BlockIndex] as Paragraph;
         for (var blockIndex = span.Start.BlockIndex; blockIndex <= span.End.BlockIndex; blockIndex++)
         {
             if (Document.Blocks[blockIndex] is not Paragraph paragraph || !CanRestructure(paragraph))
+                return false;
+
+            // freew-cc-6: everything past the first block is replaced by the merged paragraph, so a
+            // body-level region wrapping one of them is deleted — which Word's sdtLocked forbids.
+            if (blockIndex > span.Start.BlockIndex && (survivor is null || !CanMergeAcrossBlockRegions(survivor, paragraph)))
                 return false;
         }
         return true;
@@ -1422,10 +1437,19 @@ public sealed class DocumentEditingSession
         CoalesceEditableRuns(paragraph);
     }
 
+    /// <summary>
+    /// The factory every restructuring path here builds its replacement paragraph with. Besides the
+    /// formatting, it carries the BODY-LEVEL wrappers the source paragraph sits inside: the block content
+    /// control (an outer w:sdt around whole paragraphs) and the custom-XML region. Both are grouped by
+    /// instance when written, so a rebuilt paragraph that dropped them would silently fall out of its
+    /// region — and on a split, both halves belong to the region the original was in.
+    /// </summary>
     private static Paragraph CreateParagraph(Paragraph source, bool keepStyle) => new()
     {
         Formatting = source.Formatting,
         StyleId = keepStyle ? source.StyleId : null,
+        BlockContentControl = source.BlockContentControl,
+        BlockCustomXml = source.BlockCustomXml,
     };
 
     /// <summary>
@@ -1526,6 +1550,16 @@ public sealed class DocumentEditingSession
         paragraph.BookmarkBoundaries.Count == 0
         && !ContentControlInteractionPlanner.IsBlockContentControlLocked(paragraph.BlockContentControl)
         && paragraph.Runs.All(IsPortableBodyTextRun);
+
+    /// <summary>
+    /// Whether two adjacent paragraphs may be merged into one given the body-level regions they sit in.
+    /// The merge keeps <paramref name="survivor"/>'s region and discards <paramref name="absorbed"/>'s
+    /// block, so a differing region on the absorbed paragraph disappears — which Word's <c>sdtLocked</c>
+    /// forbids. Paragraphs inside the SAME region merge freely; the region simply keeps the merged block.
+    /// </summary>
+    private static bool CanMergeAcrossBlockRegions(Paragraph survivor, Paragraph absorbed) =>
+        ReferenceEquals(survivor.BlockContentControl, absorbed.BlockContentControl)
+        || ContentControlInteractionPlanner.CanDeleteBlockContentControl(absorbed.BlockContentControl);
 
     private static bool CanRestructure(Paragraph paragraph) =>
         CanRestructureAllowingSectionBreak(paragraph) && paragraph.SectionBreak is null;

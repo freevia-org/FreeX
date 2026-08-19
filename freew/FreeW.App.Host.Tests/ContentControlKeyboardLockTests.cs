@@ -515,4 +515,81 @@ public sealed class ContentControlKeyboardLockTests
 
     private static bool IsCaretOnLockedContentControl(DocumentView view) =>
         (bool)IsCaretOnLockedContentControlMethod.Invoke(view, null)!;
+
+    /// <summary>
+    /// freew-cc-6: Word's <c>sdtLocked</c> protects a control's EXISTENCE (its text may still be edited
+    /// under the plain lock). The choke point judged only the position the caret sits on, so a SELECTION
+    /// that merely spanned a locked field fell through to native editing, which replaced the whole range
+    /// and took the control with it — Delete, Backspace, typing over the selection, and Cut alike.
+    /// </summary>
+    private static DocumentView LoadWithSurroundedControl(ContentControlLockMode lockMode)
+    {
+        var control = Run.PlainTextControl("Alice", tag: "Name");
+        control.Control = control.Control! with { LockMode = lockMode };
+        var paragraph = new Paragraph();
+        paragraph.Runs.Add(new Run("Name: "));
+        paragraph.Runs.Add(control);
+        paragraph.Runs.Add(new Run(" (staff)"));
+        var document = TextDocument.CreateEmpty();
+        document.Blocks.Clear();
+        document.Blocks.Add(paragraph);
+
+        var view = new DocumentView();
+        view.LoadModel(document);
+        return view;
+    }
+
+    /// <summary>Selects the whole paragraph — a range that covers the content control's run entirely.</summary>
+    private static void SelectWholeParagraph(DocumentView view)
+    {
+        var paragraph = view.Document.Blocks.OfType<System.Windows.Documents.Paragraph>().Single();
+        view.Selection.Select(paragraph.ContentStart, paragraph.ContentEnd);
+    }
+
+    /// <summary>Selects part of the control's own text, so the run (and its control) survives the delete.</summary>
+    private static void SelectInsideControl(DocumentView view)
+    {
+        var run = view.Document.Blocks.OfType<System.Windows.Documents.Paragraph>()
+            .SelectMany(paragraph => paragraph.Inlines)
+            .OfType<System.Windows.Documents.Run>()
+            .Single(candidate => candidate.Text == "Alice");
+        view.Selection.Select(run.ContentStart.GetPositionAtOffset(1)!, run.ContentEnd);
+    }
+
+    [StaFact]
+    public void TryPrepareNativeFallback_BlocksASelectionThatWouldDeleteADeleteLockedControl()
+    {
+        var view = LoadWithSurroundedControl(ContentControlLockMode.ControlLocked);
+
+        // "Name: Alice (staff)" — a selection from inside the leading text through the whole field.
+        SelectWholeParagraph(view);
+
+        TryPrepareNativeFallback(view).Allowed
+            .Should().BeFalse("deleting the selection would remove a control Word's sdtLocked protects");
+        IsCaretOnLockedContentControl(view)
+            .Should().BeTrue("Cut and Paste remove the selection too");
+    }
+
+    [StaFact]
+    public void TryPrepareNativeFallback_AllowsASelectionThatOnlyClipsADeleteLockedControl()
+    {
+        var view = LoadWithSurroundedControl(ContentControlLockMode.ControlLocked);
+
+        // Only part of the field is selected, so the control survives the deletion — and under
+        // sdtLocked (unlike contentLocked) its text is editable.
+        SelectInsideControl(view);
+
+        TryPrepareNativeFallback(view).Allowed.Should().BeTrue();
+    }
+
+    [StaFact]
+    public void TryPrepareNativeFallback_AllowsASelectionCoveringAnUnlockedControl()
+    {
+        var view = LoadWithSurroundedControl(ContentControlLockMode.NotSpecified);
+
+        SelectWholeParagraph(view);
+
+        TryPrepareNativeFallback(view).Allowed
+            .Should().BeTrue("an unlocked field is ordinary content and may be deleted with the text");
+    }
 }
