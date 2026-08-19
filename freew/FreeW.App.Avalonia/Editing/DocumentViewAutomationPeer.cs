@@ -206,6 +206,14 @@ internal sealed class DocumentViewAutomationPeer : ControlAutomationPeer, IValue
     internal void RemoveNodeFromSelection(DocumentAccessibilityNode node) =>
         _owner.AutomationRemoveNodeFromSelection(node);
 
+    /// <summary>
+    /// Toggles the check-box field a node describes, through the editor's own interaction path — the
+    /// same one a mouse click takes, so the document's protection and the control's lock still decide,
+    /// and the change lands on the undo stack. Returns false when the field refuses.
+    /// </summary>
+    internal bool ToggleContentControlNode(DocumentAccessibilityNode node) =>
+        _owner.AutomationToggleContentControl(node);
+
     internal void NotifyObjectSelectionChanged()
     {
         var current = SelectedObjectNodes().Select(node => node.Id).ToArray();
@@ -464,20 +472,45 @@ internal class DocumentValueAutomationPeer(
 /// reports whether it is genuinely editable, so a screen reader announces a locked field as read-only
 /// rather than inviting the user to fill in something the document forbids changing.
 /// </summary>
-internal sealed class DocumentContentControlAutomationPeer(
-    DocumentViewAutomationPeer root,
-    string nodeId) : DocumentValueAutomationPeer(root, nodeId), IToggleProvider
+internal sealed class DocumentContentControlAutomationPeer : DocumentValueAutomationPeer, IToggleProvider
 {
+    private readonly DocumentViewAutomationPeer _root;
+
+    public DocumentContentControlAutomationPeer(DocumentViewAutomationPeer root, string nodeId)
+        : base(root, nodeId)
+    {
+        _root = root;
+    }
+
+    private bool IsCheckBox => Node.ContentControlKind == FreeW.Core.Model.ContentControlKind.CheckBox;
+
     public override bool IsReadOnly => Node.IsReadOnly;
 
-    public ToggleState ToggleState => Node.ContentControlKind == FreeW.Core.Model.ContentControlKind.CheckBox
+    public ToggleState ToggleState =>
+        IsCheckBox
         && string.Equals(Node.Value, FreeW.Core.Model.ContentControl.CheckedGlyph, StringComparison.Ordinal)
             ? ToggleState.On
             : ToggleState.Off;
 
-    public void Toggle() =>
-        throw new NotSupportedException(
-            "A content control is toggled through the editor's own interaction, not UI Automation.");
+    /// <summary>
+    /// Ticking the box is the whole interaction of a check-box field, so automation performs it for real
+    /// rather than reporting a state the user cannot change. It routes through the editor, which still
+    /// applies the control's lock and the document's protection.
+    /// </summary>
+    public void Toggle()
+    {
+        if (!IsCheckBox || !_root.ToggleContentControlNode(Node))
+            throw new NotSupportedException("This content control cannot be toggled.");
+    }
+
+    /// <summary>
+    /// Only a check box offers the Toggle pattern; advertising it on a text field would tell a screen
+    /// reader the field has an on/off state it does not have.
+    /// </summary>
+    protected override object? GetProviderCore(Type providerType) =>
+        providerType == typeof(IToggleProvider) && !IsCheckBox
+            ? null
+            : base.GetProviderCore(providerType);
 }
 
 internal sealed class DocumentDrawingObjectAutomationPeer : DocumentValueAutomationPeer, ISelectionItemProvider

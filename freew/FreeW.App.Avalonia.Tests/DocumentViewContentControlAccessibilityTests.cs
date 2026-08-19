@@ -52,6 +52,45 @@ public sealed class DocumentViewContentControlAccessibilityTests
             CancellationToken.None);
 
     [Fact]
+    public async Task Toggling_a_check_box_field_through_automation_actually_ticks_it() =>
+        await Session.Dispatch(
+            () =>
+            {
+                var view = LoadFieldDocument(Run.CheckBoxControl(@checked: false, alias: "Reviewed"));
+
+                FindContentControlPeer(view)!.GetProvider<IToggleProvider>()!.Toggle();
+
+                // The editor replaces the run through its command bus, so read the live document.
+                LiveField(view).Control!.Checked.Should().BeTrue(
+                    "ticking the box is the whole interaction of a check-box field");
+                view.CanUndo.Should().BeTrue("it goes through the editor, so it is undoable");
+                FindContentControlPeer(view)!.GetProvider<IToggleProvider>()!.ToggleState
+                    .Should().Be(ToggleState.On);
+            },
+            CancellationToken.None);
+
+    [Fact]
+    public async Task A_text_field_offers_no_toggle_pattern_and_a_locked_check_box_refuses() =>
+        await Session.Dispatch(
+            () =>
+            {
+                var text = LoadFieldDocument(Run.PlainTextControl("Bob", alias: "Applicant"));
+                FindContentControlPeer(text)!.GetProvider<IToggleProvider>()
+                    .Should().BeNull("a text field has no on/off state to advertise");
+
+                var locked = Run.CheckBoxControl(@checked: false, alias: "Reviewed");
+                locked.Control = locked.Control! with { LockMode = ContentControlLockMode.ContentLocked };
+                var lockedView = LoadFieldDocument(locked);
+
+                var toggle = () => FindContentControlPeer(lockedView)!.GetProvider<IToggleProvider>()!.Toggle();
+
+                toggle.Should().Throw<NotSupportedException>(
+                    "automation must not bypass the lock the editor enforces");
+                LiveField(lockedView).Control!.Checked.Should().BeFalse();
+            },
+            CancellationToken.None);
+
+    [Fact]
     public async Task A_drop_down_field_reports_as_a_combo_box() =>
         await Session.Dispatch(
             () =>
@@ -103,6 +142,9 @@ public sealed class DocumentViewContentControlAccessibilityTests
                 insideStatus.Should().Contain("paragraph 1 of 1", "the positional status still follows");
             },
             CancellationToken.None);
+
+    private static Run LiveField(DocumentView view) =>
+        view.Document.Paragraphs.SelectMany(paragraph => paragraph.Runs).Single(run => run.Control is not null);
 
     private static AutomationPeer? FindContentControlPeer(DocumentView view)
     {

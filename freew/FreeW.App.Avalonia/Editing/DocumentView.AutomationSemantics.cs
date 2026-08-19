@@ -242,6 +242,30 @@ public sealed partial class DocumentView
             || AutomationCaretWithinTextRange(node, _caret.Offset);
     }
 
+    /// <summary>
+    /// AV-A11Y: ticks/unticks the check-box field a semantic node describes, through the same public
+    /// interaction the mouse uses — so the control's lock and the document's protection still decide,
+    /// and the change is undoable. Table cells address their own paragraph; a header/footer field is not
+    /// reachable from the body semantic tree and is not offered.
+    /// </summary>
+    internal bool AutomationToggleContentControl(DocumentAccessibilityNode node)
+    {
+        if (node.Kind != DocumentAccessibilityNodeKind.ContentControl
+            || node.ContentControlKind != FreeW.Core.Model.ContentControlKind.CheckBox
+            || node.BlockIndex < 0
+            || node.RunIndex < 0)
+        {
+            return false;
+        }
+
+        return node.RowIndex >= 0 && node.ColumnIndex >= 0 && node.ParagraphIndex >= 0
+            ? ApplyContentControlInteraction(
+                new ContentControlTarget(
+                    node.BlockIndex, node.RunIndex, node.RowIndex, node.ColumnIndex, node.ParagraphIndex),
+                ContentControlInteractionPlanner.ToggleCheckBox)
+            : ToggleContentControl(node.BlockIndex, node.RunIndex);
+    }
+
     internal bool AutomationNodeIsSelected(DocumentAccessibilityNode node)
     {
         if (!node.IsFloatingObject)
