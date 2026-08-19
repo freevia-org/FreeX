@@ -6918,6 +6918,11 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         var header = CreateHeaderCell(CellAddress.NumberToColumnName(col), selected, IsActiveHeaderColumn(col), zoomFactor);
         header.Padding = new Thickness(0, GetColumnOutlineGutterHeight(_session.Viewport, zoomFactor), 0, 0);
         header.Cursor = new Cursor(StandardCursorType.Hand);
+        // sweep86 F1 remediation: gives real-PointerPressed regression tests a stable hook to
+        // resolve the on-screen header Border the same way a user's click would (hit-test the
+        // visual tree), mirroring the per-cell "Cell_{col}{row}" id set below in the cell-Border
+        // builder.
+        AutomationProperties.SetAutomationId(header, $"ColumnHeader_{CellAddress.NumberToColumnName(col)}");
         header.PointerPressed += (_, args) =>
         {
             var point = args.GetCurrentPoint(header);
@@ -6972,6 +6977,8 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         var header = CreateHeaderCell(row.ToString(), selected, IsActiveHeaderRow(row), zoomFactor);
         header.Padding = new Thickness(GetRowOutlineGutterWidth(_session.Viewport, zoomFactor), 0, 0, 0);
         header.Cursor = new Cursor(StandardCursorType.Hand);
+        // sweep86 F1 remediation: same testability hook as the column header above.
+        AutomationProperties.SetAutomationId(header, $"RowHeader_{row}");
         var resizeRow = ResolveRowResizeHandleTarget(row);
         var resizeHeight = resizeRow == row ? GetDisplayedRowHeight(metric, zoomFactor) : 0;
         header.PointerPressed += (_, args) =>

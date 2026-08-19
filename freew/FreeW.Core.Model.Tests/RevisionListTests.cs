@@ -206,6 +206,58 @@ public class RevisionListTests
         RevisionList.Enumerate(doc).Should().BeEmpty();
     }
 
+    // A shape (text box) carries its own paragraph list (Run.Shape.TextParagraphs); a tracked change
+    // anchored there must reach the Reviewing Pane exactly as one anchored in the body/a table cell does
+    // (this is the real user path: ReviewingPaneSession.Refresh -> RevisionList.Enumerate -> the pane's
+    // list). Mirrors TrackChangesTests.BuildDocumentWithRevisionInsideShape.
+    private static TextDocument BuildDocumentWithRevisionInsideShape()
+    {
+        var shape = new Shape(ShapeKind.TextBox, 100, 50);
+        var shapeParagraph = new Paragraph();
+        shapeParagraph.Runs.Add(new Run("Box keep "));
+        shapeParagraph.Runs.Add(new Run("box added") { Revision = RevisionKind.Inserted, RevisionAuthor = "Ada" });
+        shape.TextParagraphs.Add(shapeParagraph);
+
+        var doc = new TextDocument();
+        var hostParagraph = new Paragraph();
+        hostParagraph.Runs.Add(Run.FromShape(shape));
+        doc.Blocks.Add(hostParagraph);
+        return doc;
+    }
+
+    [Fact]
+    public void Enumerate_ListsRevisionInsideShapeTextBox()
+    {
+        // Before the fix, RevisionList had its own body/table-only paragraph walk, so a text-box-only
+        // revision produced an empty Reviewing Pane even though TrackChanges.HasRevisions saw it.
+        var doc = BuildDocumentWithRevisionInsideShape();
+
+        var entries = RevisionList.Enumerate(doc);
+
+        entries.Should().ContainSingle();
+        entries[0].Kind.Should().Be(RevisionEntryKind.Insertion);
+        entries[0].Author.Should().Be("Ada");
+        entries[0].Text.Should().Be("box added");
+    }
+
+    [Fact]
+    public void Accept_RevisionInsideShapeTextBox_ResolvesItAndAgreesWithTrackChanges()
+    {
+        var doc = BuildDocumentWithRevisionInsideShape();
+        var entry = RevisionList.Enumerate(doc)[0];
+
+        RevisionList.Accept(doc, entry).Should().BeTrue();
+
+        var shape = doc.Paragraphs.First().Runs[0].Shape!;
+        var shapeParagraph = shape.TextParagraphs.Single();
+        shapeParagraph.PlainText.Should().Be("Box keep box added");
+        shapeParagraph.Runs.Should().OnlyContain(r => r.Revision == RevisionKind.None);
+        RevisionList.Enumerate(doc).Should().BeEmpty();
+        // Independent oracle: TrackChanges walks shapes too (r147), so the two must agree rather than
+        // RevisionList's own (now-empty) list being taken on faith.
+        TrackChanges.HasRevisions(doc).Should().BeFalse();
+    }
+
     [Fact]
     public void Accept_StaleEntry_IsNoOp()
     {

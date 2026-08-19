@@ -243,34 +243,11 @@ public static class DocumentInspector
         properties.CountNonEmptyCoreProperties();
 
     // Every paragraph reachable in the document body — top-level paragraphs and those nested in table
-    // cells, including tables nested inside table cells to any depth (the same walk TrackChanges uses),
-    // so inspection/removal cover all body runs and bookmarks.
+    // cells, including tables nested inside table cells to any depth, plus the text-box content of any
+    // Run.Shape a run carries (see BodyParagraphWalk) — the same walk TrackChanges uses, so inspection/
+    // removal cover all body runs and bookmarks, including those living in a text box.
     private static IEnumerable<Paragraph> EnumerateParagraphs(TextDocument document) =>
-        document.Blocks.SelectMany(ParagraphsInBlock);
-
-    private static IEnumerable<Paragraph> ParagraphsInBlock(Block block)
-    {
-        if (block is Paragraph paragraph)
-        {
-            yield return paragraph;
-            yield break;
-        }
-
-        if (block is not Table table)
-            yield break;
-
-        foreach (var row in table.Rows)
-        {
-            foreach (var cell in row.Cells)
-            {
-                foreach (var cellParagraph in cell.Paragraphs)
-                    yield return cellParagraph;
-                foreach (var nestedTable in cell.NestedTables)
-                    foreach (var nestedParagraph in ParagraphsInBlock(nestedTable))
-                        yield return nestedParagraph;
-            }
-        }
-    }
+        BodyParagraphWalk.Enumerate(document);
 
     /// <summary>
     /// Every paragraph that can carry a comment anchor (<see cref="Run.CommentId"/> /

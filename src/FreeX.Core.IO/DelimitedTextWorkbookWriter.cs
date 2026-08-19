@@ -122,34 +122,40 @@ internal static class DelimitedTextWorkbookWriter
 
         private sealed class Buffer(LossTrackingEncoderFallback owner) : EncoderFallbackBuffer
         {
-            private bool _hasPending;
+            private int _pendingCount;
 
             public override bool Fallback(char charUnknown, int index)
             {
                 owner.LossDetected = true;
-                _hasPending = true;
+                _pendingCount = 1;
                 return true;
             }
 
             public override bool Fallback(char charUnknownHigh, char charUnknownLow, int index)
             {
                 owner.LossDetected = true;
-                _hasPending = true;
+                // Matches the real System.Text.EncoderReplacementFallback that plain Save() uses
+                // (confirmed by direct measurement against Encoding.GetEncoding(1252)): an
+                // unmappable surrogate PAIR is replaced with one '?' per UTF-16 code unit -- two
+                // '?' bytes for one astral character (e.g. most emoji) -- not one '?' for the whole
+                // Unicode codepoint. Queuing only one here would make SaveWithWarnings write one
+                // fewer byte than Save for the same input, silently diverging the two entry points.
+                _pendingCount = 2;
                 return true;
             }
 
             public override char GetNextChar()
             {
-                if (!_hasPending)
+                if (_pendingCount <= 0)
                     return '\0';
 
-                _hasPending = false;
+                _pendingCount--;
                 return '?';
             }
 
             public override bool MovePrevious() => false;
 
-            public override int Remaining => _hasPending ? 1 : 0;
+            public override int Remaining => _pendingCount;
         }
     }
 
