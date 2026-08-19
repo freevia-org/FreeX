@@ -82,9 +82,22 @@ public sealed class R138_SavePersistsSavingWindowsOwnActiveCellTests
                 WaitForSaveResult(saveTask).Should().BeTrue();
 
                 captured.Should().NotBeNull("the writer must have been invoked");
+
+                // This assertion has failed intermittently under full-gate load and passes every
+                // time in isolation, so the message carries the two pieces of window state that
+                // decide it. ReconcileViewStateForSave writes the live anchor only when
+                // _currentSheetId resolves to a sheet AND _selectionAnchor is set; if either is
+                // off, the shared Sheet keeps whatever window2 wrote last and the row comes back
+                // as 26. Printing both here means the next gate failure says which one it was
+                // instead of only that the number was wrong.
+                var reconcileState =
+                    "window1._currentSheetId=" + GetCurrentSheetId(window1)
+                    + " (test sheetId=" + sheetId + "), window1._selectionAnchor="
+                    + DescribeSelectionAnchor(window1);
+
                 captured!.Value.Row.Should().Be(5u,
                     "Ctrl+S from window1 must persist window1's OWN active cell, not window2's " +
-                    "later overwrite of the shared Sheet fields");
+                    "later overwrite of the shared Sheet fields [" + reconcileState + "]");
                 captured.Value.Col.Should().Be(2u);
             }
             finally
@@ -209,6 +222,23 @@ public sealed class R138_SavePersistsSavingWindowsOwnActiveCellTests
     private static SheetId GetCurrentSheetId(MainWindow window) =>
         (SheetId)typeof(MainWindow).GetField("_currentSheetId", BindingFlags.Instance | BindingFlags.NonPublic)!
             .GetValue(window)!;
+
+    /// <summary>Renders window's private _selectionAnchor for a failure message, or "null".</summary>
+    private static string DescribeSelectionAnchor(MainWindow window)
+    {
+        // _selectionAnchor is a PROPERTY (MainWindow.xaml.cs:120) whose setter also mirrors onto
+        // SheetGrid.ActiveCell; the storage is _selectionAnchorField. Reading the property name as
+        // a field returns null and throws here, which is how this helper failed the first time.
+        var field = typeof(MainWindow)
+            .GetField("_selectionAnchorField", BindingFlags.Instance | BindingFlags.NonPublic);
+        if (field is null)
+            return "<no _selectionAnchorField on MainWindow>";
+
+        var value = field.GetValue(window);
+        return value is CellAddress cell
+            ? "(" + cell.Row + "," + cell.Col + ") on sheet " + cell.Sheet
+            : "null";
+    }
 
     private static void InvokeSetActiveCell(MainWindow window, CellAddress address) =>
         R49MainWindowTestHarness.Invoke(window, "SetActiveCell", address);

@@ -233,6 +233,31 @@ public sealed class WorkbookSession : IDisposable
     private readonly Dictionary<SheetId, uint?> _viewSplitRowOverrides = [];
     private readonly Dictionary<SheetId, uint?> _viewSplitColOverrides = [];
     /// <summary>
+    /// R147-panes-and-scroll-F1/F2: per-sheet revision counter for whole-row/whole-column insert or
+    /// delete, the one class of edit that re-anchors the SHARED <see cref="Sheet.FrozenRows"/>/
+    /// <see cref="Sheet.FrozenCols"/>/<see cref="Sheet.SplitRow"/>/<see cref="Sheet.SplitColumn"/>
+    /// fields out from under every window (via <c>RowColumnShiftHelpers.ShiftFreezeAndSplitPanes</c>)
+    /// rather than only under the window that made the edit. Owned by the ROOT session and shared by
+    /// reference with every <see cref="CreateSiblingView"/> sibling exactly like
+    /// <see cref="_documentState"/> (see <see cref="SharedStructureRevisionsBySheet"/>): a plain
+    /// per-instance field would leave siblings unable to see the acting window's bump at all, which
+    /// is the F1/F2 defect. Bumped by <see cref="BumpSharedStructureRevision"/> only from the
+    /// worksheet-structure operation call sites whose operation kind can actually move a frozen/split
+    /// boundary (<see cref="OperationCanShiftFreezeAndSplitBoundaries"/>) -- deliberately NOT from the
+    /// generic <see cref="ApplySuccessfulPreservedSelectionCommandResult"/> choke point itself, so an
+    /// unrelated preserved-selection command (sort, AutoFilter toggle, row/column resize, ...) in one
+    /// window can never blow away a sibling's independently-set Freeze/Split override -- only a real
+    /// row/column count change does, matching the R86/R87 per-view-independence contract.
+    /// </summary>
+    private readonly Dictionary<SheetId, int> _sharedStructureRevisionsBySheet = [];
+    /// <summary>
+    /// The shared structure-revision this view's own <see cref="_viewFrozenRowsOverrides"/>/
+    /// <see cref="_viewFrozenColsOverrides"/>/<see cref="_viewSplitRowOverrides"/>/
+    /// <see cref="_viewSplitColOverrides"/> entries were last confirmed current against, per sheet.
+    /// See <see cref="EnsureFreezeAndSplitOverridesCurrent"/>.
+    /// </summary>
+    private readonly Dictionary<SheetId, int> _viewStructureRevisionSeen = [];
+    /// <summary>
     /// This view's own worksheet-view-mode snapshot per sheet (R86: view-window independence for
     /// View Mode, mirroring <see cref="_viewZoomOverrides"/> for Zoom). Excel treats view mode
     /// (Normal/Page Layout/Page Break Preview) as a per-window setting, but <see cref="Sheet.ViewMode"/>
@@ -450,6 +475,10 @@ public sealed class WorkbookSession : IDisposable
         _viewSplitColOverrides[ActiveSheet.Id] = ActiveSheet.SplitColumn;
         _viewFrozenRowsOverrides[ActiveSheet.Id] = ActiveSheet.FrozenRows;
         _viewFrozenColsOverrides[ActiveSheet.Id] = ActiveSheet.FrozenCols;
+        // R147-panes-and-scroll-F1: just read the live shared fields above, so this view's snapshot
+        // is current as of the shared structure revision right now -- record that so a later read
+        // doesn't immediately (and needlessly) treat this fresh snapshot as stale.
+        _viewStructureRevisionSeen[ActiveSheet.Id] = SharedStructureRevisionsBySheet.TryGetValue(ActiveSheet.Id, out var revision) ? revision : 0;
     }
 
     /// <summary>
@@ -477,6 +506,11 @@ public sealed class WorkbookSession : IDisposable
         _viewSplitColOverrides[sheetId] = sourceView.GetEffectiveSplitCol();
         _viewFrozenRowsOverrides[sheetId] = sourceView.GetEffectiveFrozenRows();
         _viewFrozenColsOverrides[sheetId] = sourceView.GetEffectiveFrozenCols();
+        // R147-panes-and-scroll-F1: the GetEffective* calls above already resolved sourceView's
+        // Freeze/Split against the current shared structure revision, so this brand-new sibling's own
+        // snapshot is current as of that same revision -- record that so its own very next read
+        // doesn't treat what was just seeded as already stale.
+        _viewStructureRevisionSeen[sheetId] = SharedStructureRevisionsBySheet.TryGetValue(sheetId, out var revision) ? revision : 0;
     }
 
     /// <summary>
@@ -541,6 +575,14 @@ public sealed class WorkbookSession : IDisposable
         {
             if (Workbook.GetSheet(sheetId) is not { } sheet)
                 continue;
+
+            // R147-panes-and-scroll-F2: drop this view's own Freeze/Split overrides for this sheet
+            // before persisting them if a sibling window's whole-row/whole-column insert or delete
+            // has re-anchored the shared boundary since this view last synced (see
+            // EnsureFreezeAndSplitOverridesCurrent) -- otherwise this save would overwrite the
+            // already-correct, just-shifted sheet.FrozenRows/FrozenCols/SplitRow/SplitColumn with
+            // this view's stale pre-shift snapshot.
+            EnsureFreezeAndSplitOverridesCurrent(sheetId);
 
             if (_viewZoomOverrides.TryGetValue(sheetId, out var zoom))
                 sheet.ZoomPercent = zoom;
@@ -1532,15 +1574,47 @@ public sealed class WorkbookSession : IDisposable
     /// Executes and records a repeatable workbook command while preserving the current selection.
     /// The factory is re-evaluated by Repeat Last Action, so it may resolve live renderer state.
     /// </summary>
+    /// <summary>
+    /// Applies Excel's "Show Outline Level N" to the ROW axis: expand everything back to level 1
+    /// first, then collapse from level N+1 down, so a row hidden by a shallower display level is
+    /// visible again before the deeper levels are re-hidden.
+    /// </summary>
+    /// <remarks>
+    /// Lives here rather than in a shell because AvaloniaWorksheetStructureOwnershipSourceTests
+    /// requires the outline/pane adapters to delegate portable ownership to the session instead of
+    /// constructing workbook commands themselves -- a deliberate contract that keeps the two shells
+    /// from growing their own copies of this sequence and drifting apart.
+    /// </remarks>
+    public WorkbookCellEditResult ShowRowOutlineLevel(int level) =>
+        ExecuteRepeatableCommandPreservingSelection(() =>
+            new CompositeWorkbookCommand(
+                "Show Outline Level",
+                [
+                    new ExpandRowGroupCommand(ActiveSheet.Id, 1),
+                    new CollapseRowGroupCommand(ActiveSheet.Id, level + 1),
+                ]));
+
+    /// <summary>Column-axis counterpart of <see cref="ShowRowOutlineLevel"/>.</summary>
+    public WorkbookCellEditResult ShowColumnOutlineLevel(int level) =>
+        ExecuteRepeatableCommandPreservingSelection(() =>
+            new CompositeWorkbookCommand(
+                "Show Outline Level",
+                [
+                    new ExpandColGroupCommand(ActiveSheet.Id, 1),
+                    new CollapseColGroupCommand(ActiveSheet.Id, level + 1),
+                ]));
+
     public WorkbookCellEditResult ExecuteRepeatableCommandPreservingSelection(
-        Func<IWorkbookCommand> commandFactory)
+        Func<IWorkbookCommand> commandFactory,
+        bool mayShiftStructuralBoundaries = false)
     {
         ArgumentNullException.ThrowIfNull(commandFactory);
 
         var sheetIdsBefore = CaptureSheetIds();
         var hiddenStatesBefore = CaptureSheetHiddenStates();
         var result = _cellEditService.ExecuteRepeatableEditCommand(Workbook, commandFactory);
-        ApplySuccessfulPreservedSelectionCommandResult(result, sheetIdsBefore, hiddenStatesBefore);
+        ApplySuccessfulPreservedSelectionCommandResult(
+            result, sheetIdsBefore, hiddenStatesBefore, mayShiftStructuralBoundaries);
         return result;
     }
 
@@ -1657,7 +1731,8 @@ public sealed class WorkbookSession : IDisposable
             () => CreateGroupedSelectionRangeCommand(
                 title,
                 OrderStructuralRanges(operation, GetSelectionSizingRanges()),
-                (sheetId, range) => CreateWorksheetStructureCommand(operation, range, sheetId)));
+                (sheetId, range) => CreateWorksheetStructureCommand(operation, range, sheetId)),
+            OperationCanShiftFreezeAndSplitBoundaries(operation));
         RestoreViewportOriginAfterStructuralEdit(originBeforeEdit);
         return new WorkbookWorksheetStructureResult(result, operation, targetRange);
     }
@@ -1684,7 +1759,8 @@ public sealed class WorkbookSession : IDisposable
         var result = ExecuteRepeatableCommandPreservingSelection(
             () => CreateWorksheetStructureCommand(
                 operation,
-                RemapRangeToSheet(targetRange, ActiveSheet.Id)));
+                RemapRangeToSheet(targetRange, ActiveSheet.Id)),
+            OperationCanShiftFreezeAndSplitBoundaries(operation));
         RestoreViewportOriginAfterStructuralEdit(originBeforeEdit);
         return new WorkbookWorksheetStructureResult(result, operation, targetRange);
     }
@@ -2242,14 +2318,20 @@ public sealed class WorkbookSession : IDisposable
     /// this (e.g. from <see cref="BuildViewport"/> during an unrelated <see cref="RefreshViewport"/>)
     /// never itself freezes in a stale value.
     /// </summary>
-    public uint? GetEffectiveSplitRow() =>
-        _viewSplitRowOverrides.TryGetValue(ActiveSheet.Id, out var splitRow) ? splitRow : ActiveSheet.SplitRow;
+    public uint? GetEffectiveSplitRow()
+    {
+        EnsureFreezeAndSplitOverridesCurrent(ActiveSheet.Id);
+        return _viewSplitRowOverrides.TryGetValue(ActiveSheet.Id, out var splitRow) ? splitRow : ActiveSheet.SplitRow;
+    }
 
     /// <summary>
     /// This view's effective Window ▸ Split column boundary. See <see cref="GetEffectiveSplitRow"/>.
     /// </summary>
-    public uint? GetEffectiveSplitCol() =>
-        _viewSplitColOverrides.TryGetValue(ActiveSheet.Id, out var splitCol) ? splitCol : ActiveSheet.SplitColumn;
+    public uint? GetEffectiveSplitCol()
+    {
+        EnsureFreezeAndSplitOverridesCurrent(ActiveSheet.Id);
+        return _viewSplitColOverrides.TryGetValue(ActiveSheet.Id, out var splitCol) ? splitCol : ActiveSheet.SplitColumn;
+    }
 
     /// <summary>
     /// Scrolls the TopRight split-pane quadrant's columns independently of the main (BottomRight)
@@ -3636,9 +3718,49 @@ public sealed class WorkbookSession : IDisposable
         if (!AutoSumFormulaPlanner.TryCreatePlan(ActiveSheet, functionName, SelectedRange, out var plan))
             return new WorkbookCellEditResult(false, "AutoSum target is outside the worksheet bounds.", [], null);
 
+        // R147-data-validation-F2: AutoSum writes straight to the target cell without ever running it
+        // past Data Validation, unlike every other cell-entry path (CommitCellText/
+        // CommitCellTextAcrossSelection, via TryBuildValidatedCellEntryEdits). Reuse the same
+        // Blocked/NeedsConfirmation handling here so a Stop-alert rule on the AutoSum target (a very
+        // ordinary setup for a totals cell) actually blocks the insert, and a Warning/Information rule
+        // still goes through DataValidationPromptResolver instead of being silently written past.
+        var autoSumCell = Cell.FromFormula(plan.Formula);
+        var check = EvaluateDataValidationForEntry(autoSumCell, plan.Target);
+        if (check.Outcome == DataValidationEntryOutcome.Blocked)
+        {
+            return new WorkbookCellEditResult(
+                false,
+                check.Message,
+                [],
+                RecalcReport: null,
+                new WorkbookCellEditFailure(
+                    WorkbookCellEditFailureKind.DataValidationBlocked,
+                    check.Title,
+                    check.AlertStyle));
+        }
+
+        if (check.Outcome == DataValidationEntryOutcome.NeedsConfirmation &&
+            DataValidationPromptResolver is { } resolvePrompt)
+        {
+            var decision = resolvePrompt(new DataValidationPromptRequest(check.Message!, check.Title!, check.AlertStyle));
+            if (decision is not (UserMessageResult.Yes or UserMessageResult.Ok))
+            {
+                return new WorkbookCellEditResult(
+                    false,
+                    check.Message,
+                    [],
+                    RecalcReport: null,
+                    new WorkbookCellEditFailure(
+                        WorkbookCellEditFailureKind.DataValidationDeclined,
+                        check.Title,
+                        check.AlertStyle,
+                        decision));
+            }
+        }
+
         var result = _cellEditService.ExecuteEditCommand(
             Workbook,
-            CreateEditCellsCommand([(plan.Target, Cell.FromFormula(plan.Formula))]));
+            CreateEditCellsCommand([(plan.Target, autoSumCell)]));
         if (!result.Success)
             return result;
 
@@ -6123,10 +6245,42 @@ public sealed class WorkbookSession : IDisposable
         {
             var sheetRange = RemapRangeToSheet(range, sheetId);
             commands.Add(new ApplyStyleCommand(sheetId, sheetRange, new StyleDiff(FontSize: fontSize)));
-            commands.Add(new SetRowHeightCommand(sheetId, sheetRange.Start.Row, sheetRange.End.Row, rowHeight));
+            commands.AddRange(CreateFontSizeRowGrowthCommands(sheetId, sheetRange, rowHeight));
         }
 
         return ToCommand("Set Font Size", commands);
+    }
+
+    /// <summary>
+    /// R148-rowcol-sizing-F3: growing rows to fit a larger font size must never shrink a row
+    /// that's already taller than the newly computed flat height (e.g. a wrapped-text row or a
+    /// manually-sized banner row unrelated to the font change) and must never un-hide a row caught
+    /// inside the selection's row span -- both of which a single flat
+    /// <c>new SetRowHeightCommand(sheetId, sheetRange.Start.Row, sheetRange.End.Row, rowHeight)</c>
+    /// spanning the whole selection did unconditionally, since that command overwrites every row's
+    /// height and clears every row's hidden flag across its span regardless of each row's current
+    /// state. Mirrors <see cref="CreateWrapTextGrowthCommands"/>'s "only ever grows a row, skips
+    /// hidden rows" contract by emitting one per-row command only for rows that actually need to
+    /// grow.
+    /// </summary>
+    private IReadOnlyList<IWorkbookCommand> CreateFontSizeRowGrowthCommands(SheetId sheetId, GridRange range, double rowHeight)
+    {
+        var sheet = Workbook.GetSheet(sheetId);
+        if (sheet is null)
+            return [];
+
+        var commands = new List<IWorkbookCommand>();
+        for (var row = range.Start.Row; row <= range.End.Row; row++)
+        {
+            if (sheet.IsRowEffectivelyHidden(row))
+                continue;
+
+            var currentHeight = sheet.RowHeights.TryGetValue(row, out var height) ? height : sheet.DefaultRowHeight;
+            if (rowHeight > currentHeight)
+                commands.Add(new SetRowHeightCommand(sheetId, row, row, rowHeight));
+        }
+
+        return commands;
     }
 
     private IWorkbookCommand CreateExternalTextPasteCommand(
@@ -6623,6 +6777,80 @@ public sealed class WorkbookSession : IDisposable
         _viewSplitColOverrides.Remove(sheetId);
     }
 
+    /// <summary>
+    /// R147-panes-and-scroll-F1/F2: resolves the single shared <see cref="_sharedStructureRevisionsBySheet"/>
+    /// dictionary for this view's whole document, exactly like <see cref="_documentState"/> is
+    /// resolved -- <see cref="_sharedDocumentStateOwner"/> is null on the root session and always
+    /// points directly at the root on every sibling (see <see cref="CreateSiblingView"/>), so this
+    /// never chains through more than one hop regardless of which sibling a further sibling was
+    /// spawned from.
+    /// </summary>
+    private Dictionary<SheetId, int> SharedStructureRevisionsBySheet =>
+        (_sharedDocumentStateOwner ?? this)._sharedStructureRevisionsBySheet;
+
+    /// <summary>
+    /// True only for the whole-row/whole-column insert-or-delete operation kinds that
+    /// <c>RowColumnShiftHelpers.ShiftFreezeAndSplitPanes</c> actually re-anchors Freeze/Split
+    /// boundaries for (see <c>InsertDeleteRowsCommand</c>/<c>InsertDeleteColumnsCommand</c>/
+    /// <c>DeleteRowsCommand</c>, the only callers of <c>RowColumnShiftHelpers.ShiftAddressBearingRows/
+    /// ColumnsUp/Down</c>). Deliberately excludes the cell-shift kinds
+    /// (InsertCellsShiftDown/Right, DeleteCellsShiftUp/Left): those move only the cells inside the
+    /// targeted range, never the sheet's row/column count, so they never touch
+    /// <see cref="Sheet.FrozenRows"/>/<see cref="Sheet.FrozenCols"/>/<see cref="Sheet.SplitRow"/>/
+    /// <see cref="Sheet.SplitColumn"/> and must not bump the shared structure revision (doing so
+    /// would needlessly -- and, worse, incorrectly for a sibling with its own independent Freeze/Split
+    /// -- invalidate every sibling's cache for a command that never actually moved the boundary).
+    /// </summary>
+    private static bool OperationCanShiftFreezeAndSplitBoundaries(WorkbookWorksheetStructureOperation operation) =>
+        operation is WorkbookWorksheetStructureOperation.InsertRows or
+            WorkbookWorksheetStructureOperation.DeleteRows or
+            WorkbookWorksheetStructureOperation.InsertColumns or
+            WorkbookWorksheetStructureOperation.DeleteColumns;
+
+    /// <summary>
+    /// R147-panes-and-scroll-F1: bumps the shared per-sheet structure revision (see
+    /// <see cref="_sharedStructureRevisionsBySheet"/>) so every sibling view's next
+    /// <see cref="EnsureFreezeAndSplitOverridesCurrent"/> call drops its now-possibly-stale
+    /// Freeze/Split override and re-reads the just-corrected shared <see cref="Sheet"/> field. Also
+    /// marks THIS session's own view current at the new revision immediately, since
+    /// <see cref="ApplySuccessfulPreservedSelectionCommandResult"/> already dropped this session's own
+    /// entries via <see cref="InvalidateAllPerViewOverridesForSheet"/> in the same call.
+    /// </summary>
+    private void BumpSharedStructureRevision(SheetId sheetId)
+    {
+        var revisions = SharedStructureRevisionsBySheet;
+        var next = (revisions.TryGetValue(sheetId, out var revision) ? revision : 0) + 1;
+        revisions[sheetId] = next;
+        _viewStructureRevisionSeen[sheetId] = next;
+    }
+
+    /// <summary>
+    /// R147-panes-and-scroll-F1/F2: single choke point every Freeze/Split accessor
+    /// (<see cref="GetEffectiveFrozenRows"/>/<see cref="GetEffectiveFrozenCols"/>/
+    /// <see cref="GetEffectiveSplitRow"/>/<see cref="GetEffectiveSplitCol"/>) and
+    /// <see cref="ReconcileViewStateForSave"/> call before touching
+    /// <see cref="_viewFrozenRowsOverrides"/>/<see cref="_viewFrozenColsOverrides"/>/
+    /// <see cref="_viewSplitRowOverrides"/>/<see cref="_viewSplitColOverrides"/>. If this view's own
+    /// snapshot for <paramref name="sheetId"/> predates the shared structure revision (a sibling
+    /// window inserted/deleted whole rows/columns since this view last synced), the four entries for
+    /// this sheet are dropped so the read falls through to the shared <see cref="Sheet"/> field --
+    /// which <c>RowColumnShiftHelpers.ShiftFreezeAndSplitPanes</c> already re-anchored correctly --
+    /// instead of returning/persisting this view's stale cached boundary. A no-op when this view is
+    /// already current (the overwhelmingly common case: no sibling touched row/column counts since).
+    /// </summary>
+    private void EnsureFreezeAndSplitOverridesCurrent(SheetId sheetId)
+    {
+        var currentRevision = SharedStructureRevisionsBySheet.TryGetValue(sheetId, out var revision) ? revision : 0;
+        if (_viewStructureRevisionSeen.TryGetValue(sheetId, out var seenRevision) && seenRevision == currentRevision)
+            return;
+
+        _viewFrozenRowsOverrides.Remove(sheetId);
+        _viewFrozenColsOverrides.Remove(sheetId);
+        _viewSplitRowOverrides.Remove(sheetId);
+        _viewSplitColOverrides.Remove(sheetId);
+        _viewStructureRevisionSeen[sheetId] = currentRevision;
+    }
+
     private void MarkDirty()
     {
         _documentState.MarkDirty();
@@ -6899,7 +7127,8 @@ public sealed class WorkbookSession : IDisposable
     private void ApplySuccessfulPreservedSelectionCommandResult(
         WorkbookCellEditResult result,
         IReadOnlySet<SheetId> sheetIdsBefore,
-        IReadOnlyDictionary<SheetId, bool> hiddenStatesBefore)
+        IReadOnlyDictionary<SheetId, bool> hiddenStatesBefore,
+        bool mayShiftStructuralBoundaries = false)
     {
         if (!result.Success || result.IsNoOp)
             return;
@@ -6920,6 +7149,13 @@ public sealed class WorkbookSession : IDisposable
         MarkDirty();
         _selectionStatsRevision++;
         InvalidateAllPerViewOverridesForSheet(ActiveSheet.Id);
+        // R147-panes-and-scroll-F1: a whole-row/whole-column insert or delete just re-anchored the
+        // SHARED Freeze/Split boundary (RowColumnShiftHelpers.ShiftFreezeAndSplitPanes) on THIS
+        // session's ActiveSheet -- bump the shared revision so every sibling CreateSiblingView window
+        // drops its now-possibly-stale cached boundary on its next read instead of continuing to show
+        // the pre-shift one.
+        if (mayShiftStructuralBoundaries)
+            BumpSharedStructureRevision(ActiveSheet.Id);
         RefreshViewport();
         EnsureActiveCellVisible();
     }
@@ -7792,14 +8028,20 @@ public sealed class WorkbookSession : IDisposable
     /// the Avalonia shell, the Core.Calc viewport pipeline) can read this view's own per-window
     /// frozen-row count instead of falling back to the shared <see cref="Sheet.FrozenRows"/> field directly.
     /// </summary>
-    public uint GetEffectiveFrozenRows() =>
-        _viewFrozenRowsOverrides.TryGetValue(ActiveSheet.Id, out var frozenRows) ? frozenRows : ActiveSheet.FrozenRows;
+    public uint GetEffectiveFrozenRows()
+    {
+        EnsureFreezeAndSplitOverridesCurrent(ActiveSheet.Id);
+        return _viewFrozenRowsOverrides.TryGetValue(ActiveSheet.Id, out var frozenRows) ? frozenRows : ActiveSheet.FrozenRows;
+    }
 
     /// <summary>
     /// This view's effective frozen-column count. See <see cref="GetEffectiveFrozenRows"/>.
     /// </summary>
-    public uint GetEffectiveFrozenCols() =>
-        _viewFrozenColsOverrides.TryGetValue(ActiveSheet.Id, out var frozenCols) ? frozenCols : ActiveSheet.FrozenCols;
+    public uint GetEffectiveFrozenCols()
+    {
+        EnsureFreezeAndSplitOverridesCurrent(ActiveSheet.Id);
+        return _viewFrozenColsOverrides.TryGetValue(ActiveSheet.Id, out var frozenCols) ? frozenCols : ActiveSheet.FrozenCols;
+    }
 
     private static uint CalculateScrollOrigin(
         uint active,

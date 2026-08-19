@@ -270,4 +270,37 @@ public sealed class MultiLevelMarkerTests
         view.CommitToModel();
         view.Model.Blocks.OfType<Table>().Single().Rows.Single().Cells.Single().PlainText.Should().Be("Inside");
     }
+
+    // R146 remediation: the WPF host rebuilds every paragraph from the rendered FlowDocument on each
+    // commit (ReadParagraph, fed by ParagraphTag on the WPF Paragraph.Tag). PreservedNumbering was
+    // absent from that Tag, so it was silently dropped from EVERY paragraph on EVERY commit cycle -
+    // including paragraphs the user never touched - which defeated the r146 fix at this second
+    // enforcement point. Assert the field itself survives, not just PlainText/rendered text (the
+    // sibling test above only checks PlainText, which is why this went unnoticed).
+    [StaFact]
+    public void PreservedNumbering_SurvivesCommitToModelOnUntouchedOrdinaryParagraph()
+    {
+        var doc = TextDocument.CreateEmpty();
+        doc.Blocks.Clear();
+        doc.Preserved.OriginalNumbering = XElement.Parse(
+            """
+            <w:numbering xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+              <w:abstractNum w:abstractNumId="10">
+                <w:lvl w:ilvl="0"><w:start w:val="1"/><w:numFmt w:val="upperRoman"/><w:lvlText w:val="Section %1."/></w:lvl>
+              </w:abstractNum>
+              <w:num w:numId="2"><w:abstractNumId w:val="10"/></w:num>
+            </w:numbering>
+            """);
+        doc.Blocks.Add(new Paragraph("Untouched") { PreservedNumbering = new PreservedNumbering(2, 0) });
+
+        var view = new DocumentView();
+        view.LoadModel(doc);
+
+        // Zero edits between load and commit - just the render/re-parse cycle every commit performs.
+        view.CommitToModel();
+
+        var committed = view.Model.Blocks.OfType<Paragraph>().Single();
+        committed.PlainText.Should().Be("Untouched");
+        committed.PreservedNumbering.Should().Be(new PreservedNumbering(2, 0));
+    }
 }

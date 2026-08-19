@@ -396,10 +396,15 @@ public sealed class WorksheetFilterWorkflowSession
         // recognizes a table's Totals Row when the range passed in still equals that table's own
         // Range exactly, which stops being true the moment the header row is trimmed off the front.
         var lastDataRow = AutoFilterRangeResolver.GetFilterableLastRow(sheet, range);
-        var endRow = lastDataRow < range.Start.Row + 1 ? range.Start.Row + 1 : lastDataRow;
+
+        // Same resolve-against-the-ORIGINAL-range reasoning for the start bound, and the same reason
+        // it must be table-aware: a headerless table has no header row to trim, so cutting one off
+        // anyway would leave its first row sitting still while every other row sorted around it.
+        var firstDataRow = AutoFilterRangeResolver.GetFilterableFirstRow(sheet, range);
+        var endRow = lastDataRow < firstDataRow ? firstDataRow : lastDataRow;
 
         return new GridRange(
-            new CellAddress(range.Start.Sheet, range.Start.Row + 1, range.Start.Col),
+            new CellAddress(range.Start.Sheet, firstDataRow, range.Start.Col),
             new CellAddress(range.Start.Sheet, endRow, range.End.Col));
     }
 

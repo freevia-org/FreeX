@@ -54,7 +54,7 @@ public sealed partial class MainWindow
     // ── View ▸ Window ▸ Switch Windows ──────────────────────────────────────────
     // Builds a chooser of every visible top-level window and activates the picked one. Self-contained
     // (uses AllTopLevelWindows from MainWindow.WindowManagement.cs) — no shared multi-window service.
-    private void ShowSwitchWindowsDialog() => _ = ShowSwitchWindowsDialogAsync();
+    private void ShowSwitchWindowsDialog() => RunGuarded(ShowSwitchWindowsDialogAsync);
 
     private async Task ShowSwitchWindowsDialogAsync()
     {
@@ -296,7 +296,7 @@ public sealed partial class MainWindow
     private Action CreatePageLayoutRibbonAction(PageLayoutRibbonActionDescriptor descriptor) =>
         descriptor.Kind switch
         {
-            PageLayoutRibbonActionKind.OpenPageSetupDialog => () => _ = ShowPageSetupDialogAsync(descriptor.PageSetupOpenSource),
+            PageLayoutRibbonActionKind.OpenPageSetupDialog => () => RunGuarded(() => ShowPageSetupDialogAsync(descriptor.PageSetupOpenSource)),
             PageLayoutRibbonActionKind.ShowPageBreaksMenu => ShowPageBreaksMenu,
             PageLayoutRibbonActionKind.ToggleViewGridlines => ToggleShowGridlines,
             PageLayoutRibbonActionKind.TogglePrintGridlines => TogglePrintGridlines,
@@ -334,7 +334,7 @@ public sealed partial class MainWindow
             CreatePageLayoutCommandSession().PlanClearPrintArea());
 
     // ── Page Layout ▸ Page Setup ▸ Background (Choose / Delete) ──────────────────
-    private void ChooseSheetBackground() => _ = ChooseSheetBackgroundAsync();
+    private void ChooseSheetBackground() => RunGuarded(ChooseSheetBackgroundAsync);
 
     private async Task ChooseSheetBackgroundAsync()
     {

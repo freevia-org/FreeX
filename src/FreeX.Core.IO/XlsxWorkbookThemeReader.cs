@@ -15,31 +15,61 @@ public static class XlsxWorkbookThemeReader
 
     public static WorkbookTheme Load(Stream xlsxStream)
     {
+        ZipArchive archive;
         try
         {
-            using var archive = new ZipArchive(xlsxStream, ZipArchiveMode.Read, leaveOpen: true);
-            return Load(archive);
+            archive = new ZipArchive(xlsxStream, ZipArchiveMode.Read, leaveOpen: true);
         }
         catch
         {
+            // The stream isn't even a readable zip container, so there is no theme part to speak
+            // of -- this is the same as "workbook has no custom theme".
             return WorkbookTheme.Office;
+        }
+
+        using (archive)
+        {
+            return Load(archive);
         }
     }
 
+    // R145-io-theme-corrupt-fallback (default-masks-missing F1): a theme part that is PRESENT but
+    // fails to resolve/read/parse (truncated zip entry, malformed XML, unreadable relationships,
+    // ...) must never be treated the same as "workbook legitimately has no custom theme". The two
+    // used to collapse onto the identical WorkbookTheme.Office fallback here, and
+    // XlsxWorkbookThemeWriter.Save then permanently overwrote the still-present, still-corrupt
+    // xl/theme/theme1.xml with a synthesized default on the very next save -- silently destroying
+    // the workbook's real theme (Accent1-6/Dark/Light colors etc.) with no warning to the user.
+    // Only "themePath is null" (no theme relationship AND no xl/theme/theme1.xml entry at all) is
+    // the legitimate empty case below; any exception encountered while a part is actually being
+    // resolved/read is surfaced via XlsxThemePartCorruptException instead of swallowed, so it
+    // propagates out of the load pipeline (production callers already fail the whole file open
+    // with a clear message on an unexpected exception here -- see WorkbookFileWorkflow.OpenAsync)
+    // rather than silently continuing on to a save that clobbers the original bytes.
     internal static WorkbookTheme Load(ZipArchive archive)
     {
+        string? themePath;
+        XDocument themeXml;
         try
         {
-            var themePath = DrawingMlThemeReader.ResolveThemePartPath(archive, "xl/workbook.xml", "xl/theme/theme1.xml");
+            themePath = DrawingMlThemeReader.ResolveThemePartPath(archive, "xl/workbook.xml", "xl/theme/theme1.xml");
             if (themePath is null)
                 return WorkbookTheme.Office;
 
-            var themeXml = XlsxPackageXmlEditor.LoadXml(archive.GetEntry(themePath)!);
+            themeXml = XlsxPackageXmlEditor.LoadXml(archive.GetEntry(themePath)!);
+        }
+        catch (Exception ex)
+        {
+            throw new XlsxThemePartCorruptException(ex);
+        }
+
+        try
+        {
             return Read(themeXml);
         }
-        catch
+        catch (Exception ex)
         {
-            return WorkbookTheme.Office;
+            throw new XlsxThemePartCorruptException(ex);
         }
     }
 
@@ -310,4 +340,26 @@ public static class XlsxWorkbookThemeReader
 
     private static CellColor ToCellColor(DrawingMlRgbColor color) =>
         new(color.R, color.G, color.B);
+}
+
+/// <summary>
+/// Thrown by <see cref="XlsxWorkbookThemeReader"/> when an xlsx package's theme part
+/// (xl/theme/theme1.xml, or whatever xl/workbook.xml's theme relationship points at) is PRESENT
+/// but could not be resolved, read, or parsed. This is deliberately a distinct failure mode from
+/// "the workbook has no custom theme" (which resolves cleanly to <see cref="WorkbookTheme.Office"/>
+/// with no exception): collapsing the two let a corrupted-but-present theme part be silently
+/// replaced with the stock Office theme, after which <c>XlsxWorkbookThemeWriter.Save</c> would
+/// permanently overwrite the original, still-corrupt part with a synthesized default on the very
+/// next save -- destroying the workbook's real theme colors/fonts with no warning. Callers that
+/// want the file to still open in a degraded state must catch this exception explicitly and decide
+/// how to warn the user and/or avoid re-saving over the original part; letting it propagate (the
+/// default for every current production caller) fails the whole file open instead of silently
+/// corrupting it.
+/// </summary>
+public sealed class XlsxThemePartCorruptException : Exception
+{
+    public XlsxThemePartCorruptException(Exception innerException)
+        : base("The workbook's theme part (xl/theme/theme1.xml) is present but could not be read.", innerException)
+    {
+    }
 }

@@ -70,10 +70,10 @@ public sealed partial class MainWindow
         switch (action)
         {
             case PivotHeaderMenuAction.LabelFilter:
-                _ = OpenPivotLabelFilterDialogAsync(pivot, target);
+                RunGuarded(() => OpenPivotLabelFilterDialogAsync(pivot, target));
                 return true;
             case PivotHeaderMenuAction.ValueFilter:
-                _ = OpenPivotValueFilterDialogAsync(pivot, target);
+                RunGuarded(() => OpenPivotValueFilterDialogAsync(pivot, target));
                 return true;
             default:
                 return false;
@@ -90,7 +90,7 @@ public sealed partial class MainWindow
         IReadOnlyList<string> headers,
         PivotHeaderDropdownTargetModel target)
     {
-        _ = OpenPivotItemFilterDialogAsync(pivot, headers, target);
+        RunGuarded(() => OpenPivotItemFilterDialogAsync(pivot, headers, target));
     }
 
     // ── Manual item (checkbox) filter ─────────────────────────────────────────

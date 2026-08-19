@@ -34,7 +34,7 @@ public sealed partial class MainWindow
         };
 
     // ── Review ▸ Protect entry point ───────────────────────────────────────────
-    private void AllowEditRanges() => _ = ShowAllowEditRangeDialogAsync();
+    private void AllowEditRanges() => RunGuarded(() => ShowAllowEditRangeDialogAsync());
 
     private async Task ShowAllowEditRangeDialogAsync(string? initialRangeText = null)
     {

@@ -128,7 +128,7 @@ public sealed partial class MainWindow
                 return true;
             case FreeXRibbonKeyTipInputIntent.InvokeLegacyEditPasteSpecial:
                 ResetRibbonKeyTipSequence();
-                _ = ShowPasteSpecialDialogAsync();
+                RunGuarded(ShowPasteSpecialDialogAsync);
                 args.Handled = true;
                 return true;
             case FreeXRibbonKeyTipInputIntent.Cancel:

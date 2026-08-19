@@ -33,6 +33,12 @@ public sealed class AutofillCommand : IWorkbookCommand, IEstimatesMemory
     // here to match this command's existing per-annotation-kind snapshot shape.
     private List<(CellAddress Address, bool HadComment, string? Comment, bool HadCommentAuthor, string? CommentAuthor, bool HadShown, bool HadThreadedComment, ThreadedComment? ThreadedComment)>? _commentSnapshot;
     private List<GridRange>? _createdMergedRegions;
+    // autofill-series-F1: dragging the fill handle one row below (or one column right of) a
+    // Structured Table's current Range must auto-expand the table and propagate a calculated
+    // column's formula into the newly grown row(s), exactly like a typed edit does via
+    // EditCellsCommand -> StructuredTableEditEffects.Apply (Commands.cs). Populated by Apply()
+    // below and unwound (in reverse order) before the base fill snapshot is reverted.
+    private readonly List<IWorkbookCommand> _appliedTableEffects = [];
 
     public string Label => "Autofill";
 
@@ -128,6 +134,11 @@ public sealed class AutofillCommand : IWorkbookCommand, IEstimatesMemory
         _phoneticGuideSnapshot = new List<(CellAddress Address, bool HadPhoneticGuide, CellPhoneticGuide? PhoneticGuide)>(capacity);
         _commentSnapshot = new List<(CellAddress Address, bool HadComment, string? Comment, bool HadCommentAuthor, string? CommentAuthor, bool HadShown, bool HadThreadedComment, ThreadedComment? ThreadedComment)>(capacity);
         var writtenCells = new List<CellAddress>(capacity);
+        // Fed to StructuredTableEditEffects.Apply below, in the same row/column order the fill
+        // itself writes -- required so a multi-row drag past a table's last row grows the table
+        // cumulatively (each successive address sees the table range already grown by the
+        // previous one), matching how EditCellsCommand feeds it a multi-cell edit batch.
+        var tableEffectEdits = new List<(CellAddress Address, Cell NewCell)>(capacity);
 
         for (var row = _fillRange.Start.Row; row <= _fillRange.End.Row; row++)
         {
@@ -201,6 +212,7 @@ public sealed class AutofillCommand : IWorkbookCommand, IEstimatesMemory
                 }
 
                 sheet.SetCell(addr, newCell);
+                tableEffectEdits.Add((addr, newCell));
                 // A detected trend/list series computes a brand-new value for this cell that
                 // differs from annotationSourceAddr's own text (e.g. "Item1" -> "Item2"), so any
                 // character-position rich-text run formatting copied verbatim from the source
@@ -213,6 +225,17 @@ public sealed class AutofillCommand : IWorkbookCommand, IEstimatesMemory
                 CopyAnnotations(sheet, annotationSourceAddr, addr, copyRichTextRuns);
             }
         }
+
+        // autofill-series-F1: replay the same table auto-expand (N33) / calculated-column
+        // propagation (N34) effects a typed edit gets, for every cell this fill actually wrote a
+        // value/formula into (sourceCell-null clears and pattern-source-null clears never reach
+        // tableEffectEdits, matching EditCellsCommand's isRealContentEdit gate upstream in
+        // StructuredTableEditEffects.Apply). Extra cells the effects wrote (e.g. propagated
+        // calculated-column formulas in sibling columns) are folded into AffectedCells so they
+        // get recalculated, same as EditCellsCommand does.
+        var tableEffectCells = StructuredTableEditEffects.Apply(ctx, tableEffectEdits, _appliedTableEffects);
+        if (tableEffectCells.Count > 0)
+            writtenCells.AddRange(tableEffectCells);
 
         return new CommandOutcome(true, AffectedCells: writtenCells);
     }
@@ -431,6 +454,13 @@ public sealed class AutofillCommand : IWorkbookCommand, IEstimatesMemory
     public void Revert(ICommandContext ctx)
     {
         if (_snapshot is null) return;
+
+        // Unwind table auto-expand / calculated-column propagation before the base fill
+        // snapshot below, mirroring EditCellsCommand.Revert's ordering: those sub-commands may
+        // have grown the table's Range or written into sibling calculated-column rows this
+        // command's own _snapshot never touched, so they must come off first.
+        StructuredTableEditEffects.Revert(ctx, _appliedTableEffects);
+
         var sheet = ctx.GetSheet(_sheetId);
 
         if (_createdMergedRegions is not null)

@@ -522,7 +522,26 @@ public static class PptxPackageWriter
         for (int mi = 0; mi < masters.Count; mi++)
         {
             var themePath = $"ppt/theme/theme{mi + 1}.xml";
-            WriteEntry(archive, themePath, BuildThemeXml(masterThemes[mi]));
+            // default-masks-missing F2: a master whose theme part existed in the source package
+            // but failed to parse (corrupted/truncated theme XML) has Theme == null here even
+            // though ThemePartPath is set (see PptxPackageReader.ReadSlideMaster). Writing
+            // BuildThemeXml(masterThemes[mi]) in that case would silently replace the original,
+            // potentially-recoverable theme bytes with a synthesized generic Office theme on
+            // every save. Re-emit the original bytes verbatim instead whenever we still have
+            // them in the package snapshot; only fall back to synthesizing a theme when the
+            // part was genuinely absent (or the snapshot doesn't have it, e.g. a brand-new
+            // in-memory presentation).
+            if (masters[mi].Theme is null &&
+                masters[mi].ThemePartPath is { Length: > 0 } originalThemePartPath &&
+                packageSnapshot is not null &&
+                packageSnapshot.TryGetEntry(originalThemePartPath, out var originalThemeBytes))
+            {
+                WriteRawEntry(archive, themePath, originalThemeBytes);
+            }
+            else
+            {
+                WriteEntry(archive, themePath, BuildThemeXml(masterThemes[mi]));
+            }
         }
         if (hasSomeNotes)
             WriteEntry(archive, "ppt/theme/theme2.xml", BuildThemeXml(presentation.Theme));
@@ -1290,6 +1309,25 @@ public static class PptxPackageWriter
 
     // ── presentation.xml ─────────────────────────────────────────────────────────
 
+    /// <summary>
+    /// Derives the ST_SlideSize `type` hint from the actual slide dimensions rather than
+    /// hardcoding "screen16x9". PowerPoint and other OOXML consumers cross-check this enum
+    /// against cx/cy; declaring "screen16x9" for a 4:3 (or any custom) size is a
+    /// self-contradictory file. Only the two presets FreeP's own Slide Size dialog can produce
+    /// (SetSlideSize4x3 / SetSlideSize16x9 in EditingSession.cs) are matched exactly here;
+    /// anything else — including genuinely custom sizes — gets the always-valid "custom".
+    /// </summary>
+    private static string ResolveSldSzType(long cx, long cy)
+    {
+        const long StandardCyEmu = DrawingMlCoordinateUnits.EmuPerInch * 15 / 2;      // 7.5in tall
+        const long Widescreen16x9CxEmu = DrawingMlCoordinateUnits.EmuPerInch * 40 / 3; // 13.33in wide
+        const long Standard4x3CxEmu = DrawingMlCoordinateUnits.EmuPerInch * 10;        // 10in wide
+
+        if (cy == StandardCyEmu && cx == Widescreen16x9CxEmu) return "screen16x9";
+        if (cy == StandardCyEmu && cx == Standard4x3CxEmu) return "screen4x3";
+        return "custom";
+    }
+
     private static XDocument BuildPresentationXml(
         Presentation p,
         List<XElement> sldIdElements,
@@ -1333,7 +1371,7 @@ public static class PptxPackageWriter
             new XElement(P + "sldSz",
                 new XAttribute("cx", slideWidthEmu),
                 new XAttribute("cy", slideHeightEmu),
-                new XAttribute("type", "screen16x9")),
+                new XAttribute("type", ResolveSldSzType(slideWidthEmu, slideHeightEmu))),
             new XElement(P + "notesSz",
                 new XAttribute("cx", notesPageWidthEmu),
                 new XAttribute("cy", notesPageHeightEmu)),
@@ -3944,19 +3982,43 @@ public static class PptxPackageWriter
         return new XElement(P + "grpSpPr", xfrm, effectLstEl);
     }
 
+    /// <summary>
+    /// True when the shape actually carries explicit position/size information worth writing.
+    /// A shape read from a source spPr with no &lt;a:xfrm&gt; at all leaves OffsetX/Y and
+    /// ExtentCx/Cy at their model defaults (0) AND leaves HasExplicitZeroExtentTransform false
+    /// (ReadSpPr in PptxPackageReader.cs only ever sets that flag when an &lt;a:xfrm&gt; element
+    /// was present). That combination is the sole signal that the shape intends to inherit its
+    /// geometry from the layout/master placeholder chain — distinct from a source shape that
+    /// explicitly declared a zero-size xfrm (flag true), which PowerPoint treats as hidden.
+    /// </summary>
+    private static bool ShapeHasExplicitTransform(SlideShape shape) =>
+        shape.HasExplicitZeroExtentTransform ||
+        shape.OffsetXEmu != 0 || shape.OffsetYEmu != 0 ||
+        shape.ExtentCxEmu != 0 || shape.ExtentCyEmu != 0;
+
     private static XElement BuildSpPrEl(
         SlideShape shape,
         PresentationColorScheme scheme,
         string? forcePrst = null,
         string? fillBlipRelId = null)
     {
-        var xfrm = new XElement(A + "xfrm");
-        if (shape.RotationDeg != 0)
-            xfrm.Add(new XAttribute("rot", (long)Math.Round(shape.RotationDeg * 60000)));
-        if (shape.FlipH) xfrm.Add(new XAttribute("flipH", "1"));
-        if (shape.FlipV) xfrm.Add(new XAttribute("flipV", "1"));
-        xfrm.Add(new XElement(A + "off", new XAttribute("x", shape.OffsetXEmu), new XAttribute("y", shape.OffsetYEmu)));
-        xfrm.Add(new XElement(A + "ext", new XAttribute("cx", shape.ExtentCxEmu), new XAttribute("cy", shape.ExtentCyEmu)));
+        // Omit <a:xfrm> entirely for a shape that never had explicit geometry (typically a
+        // placeholder inheriting position/size from its layout/master). Emitting a synthesized
+        // <a:xfrm><a:off x="0" y="0"/><a:ext cx="0" cy="0"/></a:xfrm> here would be indistinguishable,
+        // on the next read, from a deliberately-hidden zero-extent placeholder — flipping
+        // HasExplicitZeroExtentTransform to true and making SlideCompositor.ComposeAutoShape skip
+        // the shape entirely (it and its text vanish on save+reload).
+        XElement? xfrm = null;
+        if (ShapeHasExplicitTransform(shape))
+        {
+            xfrm = new XElement(A + "xfrm");
+            if (shape.RotationDeg != 0)
+                xfrm.Add(new XAttribute("rot", (long)Math.Round(shape.RotationDeg * 60000)));
+            if (shape.FlipH) xfrm.Add(new XAttribute("flipH", "1"));
+            if (shape.FlipV) xfrm.Add(new XAttribute("flipV", "1"));
+            xfrm.Add(new XElement(A + "off", new XAttribute("x", shape.OffsetXEmu), new XAttribute("y", shape.OffsetYEmu)));
+            xfrm.Add(new XElement(A + "ext", new XAttribute("cx", shape.ExtentCxEmu), new XAttribute("cy", shape.ExtentCyEmu)));
+        }
 
         // Geometry: custom or preset
         XElement geomEl;
@@ -4895,6 +4957,7 @@ public static class PptxPackageWriter
             return unchanged;
 
         const double AvgCharWidthEmFactor = 0.52; // coarse proportional-font average advance width
+        const double WideCharWidthEmFactor = 1.0; // CJK/fullwidth glyphs render close to a full em wide
         const double LineHeightFactor = 1.2;
         const double DefaultFontSizePt = 18.0;
         const double DefaultInsetLeftRightPt = 7.2; // OOXML default lIns/rIns (91440 EMU)
@@ -4915,7 +4978,15 @@ public static class PptxPackageWriter
             double fontSizePt = paragraph.Runs.Count > 0
                 ? paragraph.Runs.Max(r => r.FontSizePt ?? DefaultFontSizePt)
                 : DefaultFontSizePt;
-            double textWidthPt = paragraph.Runs.Sum(r => (r.Text?.Length ?? 0) * fontSizePt * AvgCharWidthEmFactor);
+            double textWidthPt = 0;
+            foreach (var run in paragraph.Runs)
+            {
+                if (string.IsNullOrEmpty(run.Text)) continue;
+                foreach (var rune in run.Text.EnumerateRunes())
+                {
+                    textWidthPt += fontSizePt * (IsWideEstimateCharacter(rune) ? WideCharWidthEmFactor : AvgCharWidthEmFactor);
+                }
+            }
             int lines = body.Wrap
                 ? Math.Max(1, (int)Math.Ceiling(textWidthPt / widthPt))
                 : 1;
@@ -4949,6 +5020,32 @@ public static class PptxPackageWriter
         return (
             (int)Math.Round(targetFontScale * 100000.0),
             lineSpacingReduction > 0 ? (int)Math.Round(lineSpacingReduction * 100000.0) : null);
+    }
+
+    /// <summary>
+    /// r148 (freep-autofit F2): <see cref="RecomputeNormalAutoFitScale"/>'s line-wrap width estimate
+    /// used a single Latin-proportional average advance width (~0.52em) for every character. CJK,
+    /// Hangul and other full-width glyphs render close to a full em wide — roughly double that
+    /// estimate — so text in those scripts was estimated as wrapping to far fewer lines than it
+    /// actually will, letting clearly-overflowing text be judged as "fits" and skip getting a
+    /// cached fontScale written at all. This is a coarse block-range check (not a full East-Asian-
+    /// Width table), covering the common CJK/Hangul/fullwidth-forms ranges that dominate real
+    /// documents in those scripts.
+    /// </summary>
+    private static bool IsWideEstimateCharacter(System.Text.Rune rune)
+    {
+        int cp = rune.Value;
+        return (cp is >= 0x1100 and <= 0x115F)   // Hangul Jamo
+            || (cp is >= 0x2E80 and <= 0x303E)   // CJK Radicals, Kangxi, CJK Symbols/Punctuation
+            || (cp is >= 0x3041 and <= 0x33FF)   // Hiragana, Katakana, Hangul Compat Jamo, CJK Compat
+            || (cp is >= 0x3400 and <= 0x4DBF)   // CJK Unified Ideographs Extension A
+            || (cp is >= 0x4E00 and <= 0x9FFF)   // CJK Unified Ideographs
+            || (cp is >= 0xA960 and <= 0xA97F)   // Hangul Jamo Extended-A
+            || (cp is >= 0xAC00 and <= 0xD7A3)   // Hangul Syllables
+            || (cp is >= 0xF900 and <= 0xFAFF)   // CJK Compatibility Ideographs
+            || (cp is >= 0xFF00 and <= 0xFF60)   // Fullwidth Forms
+            || (cp is >= 0xFFE0 and <= 0xFFE6)   // Fullwidth Signs
+            || (cp is >= 0x20000 and <= 0x3FFFD); // CJK Unified Ideographs Extension B and beyond
     }
 
     private static XElement BuildParaEl(Paragraph para,

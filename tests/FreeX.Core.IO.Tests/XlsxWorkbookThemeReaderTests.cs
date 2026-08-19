@@ -18,6 +18,84 @@ public sealed class XlsxWorkbookThemeReaderTests
         theme.Should().Be(WorkbookTheme.Office);
     }
 
+    // default-masks-missing F1: a theme part that IS present but fails to parse (truncated,
+    // corrupted, malformed XML) must never be silently collapsed onto the same
+    // WorkbookTheme.Office fallback as "workbook legitimately has no custom theme" -- doing so let
+    // XlsxWorkbookThemeWriter.Save permanently overwrite the original, still-present, still-broken
+    // xl/theme/theme1.xml with a synthesized default on the very next save with no warning. The
+    // reader must surface this as a distinct, typed failure instead of swallowing it.
+    [Fact]
+    public void Load_ThrowsThemePartCorruptExceptionWhenThemePartIsMalformedXml()
+    {
+        using var package = XlsxPackageTestFixtures.CreatePackage(
+            ("xl/theme/theme1.xml", """
+                <?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+                <a:theme xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" name="Broken Theme">
+                  <a:themeElements>
+                    <a:clrScheme name="Broken Colors">
+                      <a:dk1><a:srgbClr val="010203"/></a:dk1>
+                """));
+
+        var act = () => XlsxWorkbookThemeReader.Load(package);
+
+        act.Should().Throw<XlsxThemePartCorruptException>();
+    }
+
+    // Sibling regression check for the same call site via the internal ZipArchive overload, which
+    // is what the production XlsxFileAdapter load path actually calls
+    // (XlsxFileAdapter.cs, "workbookTheme = packageParts.HasTheme ? XlsxWorkbookThemeReader.Load(packageArchive) : ...").
+    [Fact]
+    public void Load_Archive_ThrowsThemePartCorruptExceptionWhenThemePartIsMalformedXml()
+    {
+        using var package = XlsxPackageTestFixtures.CreatePackage(
+            ("xl/theme/theme1.xml", "<a:theme xmlns:a=\"http://schemas.openxmlformats.org/drawingml/2006/main\">"));
+        using var archive = new ZipArchive(package, ZipArchiveMode.Read, leaveOpen: true);
+
+        var act = () => XlsxWorkbookThemeReader.Load(archive);
+
+        act.Should().Throw<XlsxThemePartCorruptException>()
+            .WithInnerException<System.Xml.XmlException>();
+    }
+
+    // No-regression sibling: a theme part that resolves and parses cleanly must still round-trip
+    // to a WorkbookTheme with no exception, exactly as before this fix -- only the corrupt-part
+    // case above changed.
+    [Fact]
+    public void Load_StillReturnsParsedThemeWhenThemePartIsWellFormed()
+    {
+        using var package = XlsxPackageTestFixtures.CreatePackage(("xl/theme/theme1.xml", """
+            <?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+            <a:theme xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" name="Healthy Theme">
+              <a:themeElements>
+                <a:clrScheme name="Healthy Colors">
+                  <a:dk1><a:srgbClr val="010203"/></a:dk1>
+                  <a:lt1><a:srgbClr val="FFFFFF"/></a:lt1>
+                  <a:dk2><a:srgbClr val="111213"/></a:dk2>
+                  <a:lt2><a:srgbClr val="E0E1E2"/></a:lt2>
+                  <a:accent1><a:srgbClr val="0C2238"/></a:accent1>
+                  <a:accent2><a:srgbClr val="456789"/></a:accent2>
+                  <a:accent3><a:srgbClr val="ABCDEF"/></a:accent3>
+                  <a:accent4><a:srgbClr val="102030"/></a:accent4>
+                  <a:accent5><a:srgbClr val="405060"/></a:accent5>
+                  <a:accent6><a:srgbClr val="708090"/></a:accent6>
+                  <a:hlink><a:srgbClr val="0563C1"/></a:hlink>
+                  <a:folHlink><a:srgbClr val="954F72"/></a:folHlink>
+                </a:clrScheme>
+                <a:fontScheme name="Healthy Fonts">
+                  <a:majorFont><a:latin typeface="Major Test"/></a:majorFont>
+                  <a:minorFont><a:latin typeface="Minor Test"/></a:minorFont>
+                </a:fontScheme>
+                <a:fmtScheme name="Effects Test"/>
+              </a:themeElements>
+            </a:theme>
+            """));
+
+        var theme = XlsxWorkbookThemeReader.Load(package);
+
+        theme.Name.Should().Be("Healthy Theme");
+        theme.GetColor(WorkbookThemeColorSlot.Accent1).Should().Be(new CellColor(12, 34, 56));
+    }
+
     [Fact]
     public void XlsxFileAdapter_SaveDefaultTheme_RoundTripsOfficeTheme()
     {

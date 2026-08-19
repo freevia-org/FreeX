@@ -730,4 +730,119 @@ public class PreservedNumberingRoundTripTests
         numIds[3].Should().Be(numIds[2]);
         numIds[4].Should().Be(numIds[2]);
     }
+
+    // --- sweep85 F1: an explicit list toggle must discard stale preserved numbering -----------------
+
+    /// <summary>Minimal <see cref="IDocumentCommandContext"/> so production commands (e.g.
+    /// <see cref="SetParagraphFormattingCommand"/>) can be exercised directly against a document that was
+    /// never wired to a full <see cref="DocumentCommandBus"/>/editing session.</summary>
+    private sealed class TestCommandContext(TextDocument document) : IDocumentCommandContext
+    {
+        public TextDocument Document => document;
+    }
+
+    /// <summary>
+    /// Reproduces the sweep85 F1 finding: a paragraph imported with foreign numbering FreeW cannot model
+    /// (ListKind.None + Paragraph.PreservedNumbering set) has FreeW's own list turned ON then OFF again —
+    /// exactly the transforms <c>DocumentParagraphFormattingCoordinator.ToggleListKind</c>'s enable/disable
+    /// branches apply, via the same <see cref="SetParagraphFormattingCommand"/> the ribbon's Bullets/Numbering
+    /// toggle drives. Before the fix, PreservedNumbering survived the round trip untouched (it lives on
+    /// <see cref="Paragraph"/>, not <see cref="ParagraphFormatting"/>), so DocxWriter's ListKind==None fallback
+    /// re-emitted the paragraph's OLD foreign numPr — the user's explicit "remove this list" action came back
+    /// after save/reopen.
+    /// </summary>
+    [Fact]
+    public void ForeignNumbering_ToggleListKindOnThenOff_ClearsPreservedNumbering_DoesNotReturnOnSave()
+    {
+        var read = ReadDoc(AuthorForeignNumberingPackage());
+        var paragraph = read.Blocks.OfType<Paragraph>().First();
+        paragraph.Formatting.ListKind.Should().Be(ListKind.None);
+        paragraph.PreservedNumbering.Should().NotBeNull("the reader captured the foreign numId=12 it could not model");
+
+        var context = new TestCommandContext(read);
+
+        // Ribbon Bullets toggle, enable branch: ToggleListKind sets ListKind to the requested kind.
+        var enable = new SetParagraphFormattingCommand(0, paragraph.Formatting with { ListKind = ListKind.Bullet });
+        enable.Apply(context);
+        paragraph.Formatting.ListKind.Should().Be(ListKind.Bullet);
+
+        // Ribbon Bullets toggle, disable branch: ToggleListKind resets ListKind/ListLevel/ListStartOverride.
+        var disable = new SetParagraphFormattingCommand(0, paragraph.Formatting with
+        {
+            ListKind = ListKind.None,
+            ListLevel = 0,
+            ListStartOverride = null,
+        });
+        disable.Apply(context);
+        paragraph.Formatting.ListKind.Should().Be(ListKind.None);
+
+        // The fix under test: the explicit ListKind round trip must have discarded the stale foreign
+        // numbering, or the writer's ListKind==None fallback will re-emit it below.
+        paragraph.PreservedNumbering.Should().BeNull(
+            "the user explicitly decided this paragraph's list state; the foreign numbering it replaced must not survive");
+
+        var rewritten = WriteBytes(read);
+        var p0 = EntryXml(rewritten, "word/document.xml").Root!.Element(W + "body")!.Elements(W + "p").First();
+        p0.Element(W + "pPr")?.Element(W + "numPr").Should().BeNull(
+            "the disabled list must not come back as a numPr pointing at the old foreign numbering");
+
+        // Reopening confirms the paragraph reads back as a plain paragraph, not a list item.
+        var reread = ReadDoc(rewritten);
+        var reParagraph = reread.Blocks.OfType<Paragraph>().First();
+        reParagraph.Formatting.ListKind.Should().Be(ListKind.None);
+        reParagraph.PreservedNumbering.Should().BeNull();
+    }
+
+    /// <summary>
+    /// Sibling no-regression case: a paragraph-formatting edit that does NOT touch ListKind (a "Keep With
+    /// Next" toggle here, standing in for any of the many other <c>DocumentParagraphFormattingCoordinator</c>
+    /// commands that route through the same <see cref="SetParagraphFormattingCommand"/>) must leave an
+    /// untouched paragraph's foreign numbering alone — the fix must not overreach into formatting edits that
+    /// never decided the paragraph's list state.
+    /// </summary>
+    [Fact]
+    public void ForeignNumbering_UnrelatedFormattingEdit_KeepsPreservedNumbering_StillRoundTrips()
+    {
+        var read = ReadDoc(AuthorForeignNumberingPackage());
+        var paragraph = read.Blocks.OfType<Paragraph>().First();
+        paragraph.PreservedNumbering.Should().NotBeNull();
+
+        var context = new TestCommandContext(read);
+        var command = new SetParagraphFormattingCommand(0, paragraph.Formatting with { KeepWithNext = true });
+        command.Apply(context);
+
+        paragraph.Formatting.ListKind.Should().Be(ListKind.None);
+        paragraph.Formatting.KeepWithNext.Should().BeTrue();
+        paragraph.PreservedNumbering.Should().NotBeNull("an edit that never changed ListKind is not a list decision");
+        paragraph.PreservedNumbering!.Value.NumId.Should().Be(12);
+
+        var rewritten = WriteBytes(read);
+        var p0 = EntryXml(rewritten, "word/document.xml").Root!.Element(W + "body")!.Elements(W + "p").First();
+        p0.Element(W + "pPr")!.Element(W + "numPr").Should().NotBeNull(
+            "the foreign numbering is still untouched by any list decision and must keep round-tripping");
+    }
+
+    /// <summary>
+    /// Adjacent-case check for the fix: undoing the "turn list on" step must restore the ORIGINAL foreign
+    /// numbering along with the formatting, not leave the paragraph permanently stripped of it. A fix that
+    /// cleared PreservedNumbering without snapshotting it for undo would make Ctrl+Z on this action strictly
+    /// worse than before the fix (silent data loss on undo, instead of only on redundant save).
+    /// </summary>
+    [Fact]
+    public void ForeignNumbering_UndoAfterListToggle_RestoresOriginalPreservedNumbering()
+    {
+        var read = ReadDoc(AuthorForeignNumberingPackage());
+        var paragraph = read.Blocks.OfType<Paragraph>().First();
+        var original = paragraph.PreservedNumbering;
+        original.Should().NotBeNull();
+
+        var context = new TestCommandContext(read);
+        var enable = new SetParagraphFormattingCommand(0, paragraph.Formatting with { ListKind = ListKind.Bullet });
+        enable.Apply(context);
+        paragraph.PreservedNumbering.Should().BeNull();
+
+        enable.Revert(context);
+        paragraph.Formatting.ListKind.Should().Be(ListKind.None);
+        paragraph.PreservedNumbering.Should().Be(original, "undo must restore the paragraph exactly, foreign numbering included");
+    }
 }

@@ -807,6 +807,57 @@ public sealed class DocumentReferenceEditingCoordinatorTests
         liveResolutionCount.Should().Be(1);
     }
 
+    // F3: a freshly inserted position-sensitive field (STYLEREF) must resolve against the caller-supplied
+    // insertion block index -- the caret's real position -- not always against block 0 (the document top).
+    // With three "Heading1" paragraphs, inserting STYLEREF after the third heading must show "Chapter
+    // Three" (the nearest preceding match), not "Chapter One" (the first match from the top).
+    [Fact]
+    public void ComplexFieldInsertionResolvesStyleRefAgainstTheSuppliedInsertionBlockIndexNotDocumentTop()
+    {
+        var document = new TextDocument();
+        document.Blocks.Add(new Paragraph("Chapter One") { StyleId = "Heading1" });
+        document.Blocks.Add(new Paragraph("Some body text"));
+        document.Blocks.Add(new Paragraph("Chapter Two") { StyleId = "Heading1" });
+        document.Blocks.Add(new Paragraph("More body text"));
+        document.Blocks.Add(new Paragraph("Chapter Three") { StyleId = "Heading1" });
+        // Caret sits in a new, still-empty paragraph placed right after "Chapter Three".
+        var insertionBlockIndex = document.Blocks.Count;
+        document.Blocks.Add(new Paragraph());
+        var session = new DocumentEditingSession();
+        session.LoadDocument(document);
+
+        var field = session.References.BuildComplexFieldInsertionRun(
+            new ComplexField(" STYLEREF 1 "),
+            cachedResult: null,
+            _ => "live",
+            evaluationDocument: null,
+            insertionBlockIndex: insertionBlockIndex);
+
+        field.Text.Should().Be("Chapter Three");
+    }
+
+    // Sibling/no-regression: inserting the same STYLEREF field at the very top of the document (before any
+    // heading exists yet) must still fall forward to the first following heading, exactly as it did before
+    // this change -- the insertion-block-index plumbing must not disturb the existing forward-fallback path.
+    [Fact]
+    public void ComplexFieldInsertionStyleRefStillFallsForwardWhenNoHeadingPrecedesInsertionPoint()
+    {
+        var document = new TextDocument();
+        document.Blocks.Add(new Paragraph()); // caret paragraph, to be inserted into at index 0
+        document.Blocks.Add(new Paragraph("Chapter One") { StyleId = "Heading1" });
+        var session = new DocumentEditingSession();
+        session.LoadDocument(document);
+
+        var field = session.References.BuildComplexFieldInsertionRun(
+            new ComplexField(" STYLEREF 1 "),
+            cachedResult: null,
+            _ => "live",
+            evaluationDocument: null,
+            insertionBlockIndex: 0);
+
+        field.Text.Should().Be("Chapter One");
+    }
+
     [Fact]
     public void FieldUpdateOwnsLiveReferenceLockAndPageResultPolicy()
     {

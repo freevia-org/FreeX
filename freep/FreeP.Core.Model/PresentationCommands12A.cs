@@ -344,6 +344,11 @@ public sealed class UngroupShapeCommand : IPresentationCommand
         slide.Animations.RemoveAll(animation =>
             animation.ShapeId == _groupId ||
             (animation.TriggerShapeId is { } triggerShapeId && triggerShapeId == _groupId));
+        // If the group's own animation was the main-sequence head, whatever animation is now
+        // first needs its stored trigger corrected to On Click (see ShapeAnimationAnchorFix) --
+        // otherwise the Animation Pane keeps showing a stale With/After Previous label. Revert
+        // below restores the whole captured list wholesale, so no undo bookkeeping is needed here.
+        ShapeAnimationAnchorFix.NormalizeMainSequenceHead(slide.Animations);
         slide.AnimationBuildListXml = DeleteShapeCommand.RemoveBuildListEntriesForShapes(
             slide.AnimationBuildListXml,
             new HashSet<uint> { _groupId });

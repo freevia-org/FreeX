@@ -82,7 +82,11 @@ public sealed class ApplyStructuredTableFiltersCommand : IWorkbookCommand
             return;
 
         var lastDataRow = LastDataRow(range, totalsRowShown);
-        for (var row = range.Start.Row + 1; row <= lastDataRow; row++)
+        // table-semantics-F1: see FilterHiddenRowUpdater.GetFilterableFirstRow -- a headerless
+        // table's first row is itself a data row and must be evaluated against the table's own
+        // value-list filters.
+        var firstDataRow = FilterHiddenRowUpdater.GetFilterableFirstRow(sheet, range);
+        for (var row = firstDataRow; row <= lastDataRow; row++)
         {
             if (!RowMatchesAllFilters(sheet, row, filters))
                 sheet.FilterHiddenRows.Add(row);
@@ -142,7 +146,9 @@ public sealed class ApplyStructuredTableFiltersCommand : IWorkbookCommand
     private static void RemoveExistingFilterRows(Sheet sheet, GridRange range, bool totalsRowShown)
     {
         var filterHiddenRows = sheet.FilterHiddenRows;
-        var firstDataRow = range.Start.Row + 1;
+        // table-semantics-F1: see FilterHiddenRowUpdater.GetFilterableFirstRow -- a headerless
+        // table's first row is itself a data row and must be eligible for un-hiding here too.
+        var firstDataRow = FilterHiddenRowUpdater.GetFilterableFirstRow(sheet, range);
         var lastDataRow = LastDataRow(range, totalsRowShown);
         if (filterHiddenRows.Count < range.RowCount)
         {
@@ -177,7 +183,10 @@ public sealed class ApplyStructuredTableFiltersCommand : IWorkbookCommand
     private static bool FilterHiddenRowsAlreadyMatch(Sheet sheet, GridRange range, bool totalsRowShown, IReadOnlyList<TableFilterState> filters)
     {
         var lastDataRow = LastDataRow(range, totalsRowShown);
-        for (var row = range.Start.Row + 1; row <= lastDataRow; row++)
+        // table-semantics-F1: see FilterHiddenRowUpdater.GetFilterableFirstRow -- a headerless
+        // table's first row is itself a data row and must be included in this comparison.
+        var firstDataRow = FilterHiddenRowUpdater.GetFilterableFirstRow(sheet, range);
+        for (var row = firstDataRow; row <= lastDataRow; row++)
         {
             var shouldBeHidden = filters.Count > 0 && !RowMatchesAllFilters(sheet, row, filters);
             if (sheet.FilterHiddenRows.Contains(row) != shouldBeHidden)

@@ -47,7 +47,9 @@ public sealed class AccessibilityCheckerSourceTests
         var parityCaptureSource = File.ReadAllText(RepoFile("tools", "FreeX.ParityCapture.Avalonia", "Capture", "MainWindow.ParityCapture.cs"));
 
         mainSource.Should().Contain("_checkAccessibilityMenuItem.Click += async (_, _) => await ShowAccessibilityCheckerDialogAsync();");
-        mainSource.Should().Contain("[\"Check Accessibility\"] = () => _ = ShowAccessibilityCheckerDialogAsync(),");
+        // R145 (finding async-hazards F2): routed through RunGuarded so a thrown exception surfaces
+        // on the status bar instead of becoming a silently-swallowed unobserved Task exception.
+        mainSource.Should().Contain("[\"Check Accessibility\"] = () => RunGuarded(ShowAccessibilityCheckerDialogAsync),");
         routingSource.Should().Contain("CheckAccessibility = Handled<WorkbookApplicationCommandInvocation>");
         parityCaptureSource.Should().Contain("(\"dialog.AccessibilityChecker\", () => ShowAccessibilityCheckerParityDialogAsync()),");
     }

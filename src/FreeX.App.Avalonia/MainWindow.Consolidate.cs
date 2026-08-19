@@ -30,7 +30,7 @@ public sealed partial class MainWindow
         ConsolidateDialogChromeStyle with { ControlHeight = 22 };
 
     /// <summary>Opens the Consolidate dialog (invoked from the Data menu and the Data-tab ribbon button).</summary>
-    private void Consolidate() => _ = ShowConsolidateDialogAsync();
+    private void Consolidate() => RunGuarded(() => ShowConsolidateDialogAsync());
 
     /// <summary>
     /// The compact Consolidate dialog: pick an aggregation function, add one or more source ranges (typed as

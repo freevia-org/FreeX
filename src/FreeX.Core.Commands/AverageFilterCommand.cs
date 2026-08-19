@@ -73,7 +73,10 @@ public sealed class AverageFilterCommand : IWorkbookCommand
                 NativeFilterXmls: []));
 
         var filterCol = _range.Start.Col + _filterColOffset;
-        var firstDataRow = _range.Start.Row + 1;
+        // table-semantics-F1: see FilterHiddenRowUpdater.GetFilterableFirstRow -- a headerless
+        // table's first row is itself a data row and must participate in the Above/Below-Average
+        // statistic and hiding.
+        var firstDataRow = FilterHiddenRowUpdater.GetFilterableFirstRow(sheet, _range);
         // R100-commands-filter-totalsrow-1: see FilterCommand.RecomputeHiddenRows -- exclude a
         // structured table's shown Totals Row from the Above/Below-Average data set and statistic.
         var lastDataRow = StructuredTableEditEffects.GetFilterableLastRow(sheet, _range);

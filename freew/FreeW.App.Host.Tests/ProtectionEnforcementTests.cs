@@ -315,6 +315,54 @@ public sealed class ProtectionEnforcementTests
         view.Model.Comments.Should().BeEmpty();
     }
 
+    /// <summary>
+    /// Covers the Insert-tab family of methods that previously bypassed Restrict Editing entirely
+    /// (InsertTable/InsertHyperlink/InsertPageBreak and siblings all reach <c>_editingSession.InsertBlockAfter</c>
+    /// or mutate the FlowDocument directly with no <c>AllowsRestrictEditingOperation</c> check, unlike
+    /// InsertText/ApplyFontFormatting right above). "No changes (Read only)" must block all three
+    /// representative shapes of insert: a new block (table/page break) and an inline edit (hyperlink).
+    /// </summary>
+    [StaFact]
+    public void ReadOnlyProtection_BlocksInsertOperationsFromTheInsertRibbonFamily()
+    {
+        var view = Load();
+        view.SetProtection(ProtectionMode.ReadOnly);
+
+        view.InsertTable(2, 2).Should().Be(-1, "a read-only document must not gain a new table");
+        view.Model.Blocks.Should().ContainSingle().Which.Should().BeOfType<Paragraph>();
+
+        view.InsertHyperlink("Example", "https://example.com");
+        PlainText(view).Should().Be("Body", "read-only protection must block hyperlink insertion");
+
+        view.InsertPageBreak();
+        view.Model.Blocks.Should().HaveCount(1, "read-only protection must block page-break insertion");
+    }
+
+    /// <summary>
+    /// Sibling no-regression check for <see cref="ReadOnlyProtection_BlocksInsertOperationsFromTheInsertRibbonFamily"/>:
+    /// the same three operations must still work normally once no protection is active, so the new guard
+    /// only narrows the protected case and never breaks ordinary unprotected editing.
+    /// </summary>
+    [StaFact]
+    public void Unprotected_StillAllowsInsertOperationsFromTheInsertRibbonFamily()
+    {
+        var view = Load();
+
+        // Hyperlink first, while the caret still sits in the "Body" paragraph: InsertTable moves the
+        // caret into the new table's first cell (see InsertTable's doc comment), which would otherwise
+        // route the hyperlink into the table instead of the body paragraph PlainText(view) reads.
+        view.InsertHyperlink("Example", "https://example.com");
+        PlainText(view).Should().Contain("Example");
+
+        var tableIndex = view.InsertTable(2, 2);
+        tableIndex.Should().BeGreaterThanOrEqualTo(0);
+        view.Model.Blocks[tableIndex].Should().BeOfType<Table>();
+
+        var blocksBeforeBreak = view.Model.Blocks.Count;
+        view.InsertPageBreak();
+        view.Model.Blocks.Count.Should().Be(blocksBeforeBreak + 1, "an unprotected document must still accept a page break");
+    }
+
     [StaFact]
     public void MarkAsFinal_LocksEditing_AndEditAnywayRestoresIt()
     {

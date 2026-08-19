@@ -30,7 +30,7 @@ public sealed partial class MainWindow
     // the selected range into final break sets, then the shell runs the shared command through undo/redo.
 
     /// <summary>Opens the compact Breaks popup (Insert / Remove / Reset All page breaks).</summary>
-    private void ShowPageBreaksMenu() => _ = ShowPageBreaksMenuAsync();
+    private void ShowPageBreaksMenu() => RunGuarded(ShowPageBreaksMenuAsync);
 
     private async Task ShowPageBreaksMenuAsync()
     {

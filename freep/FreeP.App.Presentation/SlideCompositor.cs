@@ -293,16 +293,32 @@ public static class SlideCompositor
             ? CustomGeometryBuilder.BuildCustom(shape.CustomGeometry, boundsDip)
             : ShapeGeometryBuilder.Build(shape.AutoShapeKind, boundsDip, shape.PresetGeometryAdjustments);
 
-        // Resolve fill.
-        var fill = shape.Fill is not null
-            ? ResolveFill(shape.Fill, theme, effectiveClrMap)
+        // Placeholder inheritance source (layout, then master) -- shared by fill/outline/text
+        // resolution below. A shape that is itself a placeholder and omits Fill/Outline/TextBody
+        // is the normal "inherit from layout/master" authoring pattern (PowerPoint itself omits
+        // spPr fill/line on slide placeholders that inherit), so those lookups must happen
+        // regardless of which of the three properties are missing.
+        var placeholderLayoutPh = shape.Placeholder is not null
+            ? PlaceholderResolver.FindLayoutPlaceholder(shape.Placeholder, slide, presentation)
+            : null;
+        var placeholderMasterPh = shape.Placeholder is not null
+            ? PlaceholderResolver.FindMasterPlaceholder(shape.Placeholder, slide, presentation)
+            : null;
+
+        // Resolve fill: shape's own fill, else layout placeholder's, else master placeholder's,
+        // else the transparent default.
+        var effectiveFillSource = shape.Fill ?? placeholderLayoutPh?.Fill ?? placeholderMasterPh?.Fill;
+        var fill = effectiveFillSource is not null
+            ? ResolveFill(effectiveFillSource, theme, effectiveClrMap)
             : InferDefaultFill(shape, theme);
         if (shape.Effects?.Scene3d is not null)
             fill = ResolveScene3dMaterialFill(fill);
 
-        // Resolve outline.
-        var outline = shape.Outline is not null
-            ? ResolveOutline(shape.Outline, theme, effectiveClrMap)
+        // Resolve outline: shape's own outline, else layout placeholder's, else master
+        // placeholder's, else no outline.
+        var effectiveOutlineSource = shape.Outline ?? placeholderLayoutPh?.Outline ?? placeholderMasterPh?.Outline;
+        var outline = effectiveOutlineSource is not null
+            ? ResolveOutline(effectiveOutlineSource, theme, effectiveClrMap)
             : ResolvedOutline.None.Instance;
 
         // Resolve text.
@@ -311,12 +327,8 @@ public static class SlideCompositor
         {
             // P0: Walk shape -> layout placeholder -> master placeholder to resolve
             // the effective vertical anchor and default paragraph alignment.
-            var layoutPh = shape.Placeholder is not null
-                ? PlaceholderResolver.FindLayoutPlaceholder(shape.Placeholder, slide, presentation)
-                : null;
-            var masterPh = shape.Placeholder is not null
-                ? PlaceholderResolver.FindMasterPlaceholder(shape.Placeholder, slide, presentation)
-                : null;
+            var layoutPh = placeholderLayoutPh;
+            var masterPh = placeholderMasterPh;
 
             var effectiveAnchor = ResolveVerticalAnchor(shape.TextBody, layoutPh?.TextBody, masterPh?.TextBody, shape.Placeholder);
             var effectiveDefaultAlign = ResolveDefaultParaAlign(shape.TextBody, layoutPh?.TextBody, masterPh?.TextBody);
@@ -509,6 +521,23 @@ public static class SlideCompositor
             PlaceholderType.CenteredTitle => VerticalAnchor.Middle,
             _ => VerticalAnchor.Top
         };
+    }
+
+    /// <summary>
+    /// Resolves the effective autofit kind by walking the inheritance chain: shape -> layout
+    /// placeholder -> master placeholder. <see cref="TextAutoFitKind"/> is a non-nullable enum
+    /// whose default (<see cref="TextAutoFitKind.None"/>) is also what the reader produces for a
+    /// bodyPr with no explicit autofit child, so <c>None</c> is treated as "not specified here"
+    /// and the chain falls through, same as the <see cref="ResolveVerticalAnchor"/> chain above.
+    /// </summary>
+    private static TextAutoFitKind ResolveAutoFitKind(
+        TextBody body,
+        TextBody? layoutBody,
+        TextBody? masterBody)
+    {
+        if (body.AutoFitKind != TextAutoFitKind.None) return body.AutoFitKind;
+        if (layoutBody is not null && layoutBody.AutoFitKind != TextAutoFitKind.None) return layoutBody.AutoFitKind;
+        return masterBody?.AutoFitKind ?? TextAutoFitKind.None;
     }
 
     /// <summary>
@@ -2527,7 +2556,13 @@ public static class SlideCompositor
             WarpAdjusts = body.WarpAdjusts.ToArray(),
             Text3dEffects = ResolveEffects(body.Text3dEffects),
             VerticalType = body.VerticalType,  // Wave 18B
-            AutoFitKind = body.AutoFitKind,
+            // r148 (freep-autofit F1): fall back to the layout/master placeholder's autofit
+            // kind when the slide shape's own bodyPr has none — mirrors the shape -> layout ->
+            // master chain already used above for Anchor/DefaultParaAlign/Insets. A spec-legal
+            // slide bodyPr with no <a:normAutofit>/<a:spAutoFit> child reads back as
+            // TextAutoFitKind.None (see PptxPackageReader.ReadTxBody), which is indistinguishable
+            // from "not specified" in this non-nullable enum, so treat None as unset here too.
+            AutoFitKind = ResolveAutoFitKind(body, layoutBody, masterBody),
             HasStoredFontScale = hasStoredFontScale,
             FontScale = fontScale,            // Wave 19A
             LnSpcReduction = lnSpcReduc,      // Wave 19A

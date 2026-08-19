@@ -1945,6 +1945,109 @@ public sealed class SlideCompositorTests
             "vertical anchor is inherited from layout placeholder bodyPr");
     }
 
+    [Fact]
+    public void Compose_BodyPlaceholder_AutoFitKind_InheritedFromLayout_WhenSlideBodyPrOmitsIt()
+    {
+        // Arrange: layout placeholder declares Shrink-text-on-overflow (a:normAutofit), and the
+        // slide's own placeholder instance doesn't repeat it — spec-legal, routine OOXML (see
+        // PptxPackageReader.ReadTxBody, which sets AutoFitKind = None whenever the slide-level
+        // bodyPr has no <a:normAutofit>/<a:spAutoFit> child).
+        var p = new PresentationModel();
+        p.Theme = PresentationTheme.CreateDefault();
+
+        var master = new SlideMaster { Id = "m1" };
+        p.Masters.Add(master);
+
+        var layout = new SlideLayout { Id = "l1", MasterId = "m1" };
+        var layoutBody = new TextBody { AutoFitKind = TextAutoFitKind.Normal };
+        var layoutPara = new Paragraph();
+        layoutPara.Runs.Add(new Run { Text = "ph" });
+        layoutBody.Paragraphs.Add(layoutPara);
+        var layoutBodyPh = new SlideShape
+        {
+            Placeholder = new Placeholder { Type = PlaceholderType.Body, Idx = 1 },
+            OffsetXEmu = 1524000, OffsetYEmu = 1122363,
+            ExtentCxEmu = 9144000, ExtentCyEmu = 2387600,
+            TextBody = layoutBody
+        };
+        layout.Placeholders.Add(layoutBodyPh);
+        p.Layouts.Add(layout);
+
+        var slide = new Slide { LayoutId = "l1" };
+        var bodyShape = new SlideShape
+        {
+            Id = 1,
+            Placeholder = new Placeholder { Type = PlaceholderType.Body, Idx = 1 },
+        };
+        var slideBody = new TextBody(); // AutoFitKind unset (None) → should inherit Normal.
+        var slidePara = new Paragraph();
+        slidePara.Runs.Add(new Run { Text = "Body text" });
+        slideBody.Paragraphs.Add(slidePara);
+        bodyShape.TextBody = slideBody;
+        slide.Shapes.Add(bodyShape);
+        p.Slides.Add(slide);
+
+        // Act
+        var ops = SlideCompositor.Compose(p, slide);
+        var shapeOp = ops.OfType<DrawOp.Shape>().Single();
+
+        // Assert: the resolved autofit kind comes from the layout placeholder, matching
+        // PowerPoint, instead of silently collapsing to None.
+        shapeOp.Text!.AutoFitKind.Should().Be(TextAutoFitKind.Normal,
+            "a slide placeholder instance with no autofit of its own inherits the layout's Shrink-text-on-overflow");
+    }
+
+    [Fact]
+    public void Compose_BodyPlaceholder_AutoFitKind_ShapeOwnValueWinsOverLayout()
+    {
+        // Sibling/no-regression case: when the slide shape's own bodyPr DOES specify an autofit
+        // kind, that explicit value must still win over the layout placeholder's — the shape's
+        // own value must never be silently overridden by inheritance.
+        var p = new PresentationModel();
+        p.Theme = PresentationTheme.CreateDefault();
+
+        var master = new SlideMaster { Id = "m1" };
+        p.Masters.Add(master);
+
+        var layout = new SlideLayout { Id = "l1", MasterId = "m1" };
+        var layoutBody = new TextBody { AutoFitKind = TextAutoFitKind.Normal };
+        var layoutPara = new Paragraph();
+        layoutPara.Runs.Add(new Run { Text = "ph" });
+        layoutBody.Paragraphs.Add(layoutPara);
+        var layoutBodyPh = new SlideShape
+        {
+            Placeholder = new Placeholder { Type = PlaceholderType.Body, Idx = 1 },
+            OffsetXEmu = 1524000, OffsetYEmu = 1122363,
+            ExtentCxEmu = 9144000, ExtentCyEmu = 2387600,
+            TextBody = layoutBody
+        };
+        layout.Placeholders.Add(layoutBodyPh);
+        p.Layouts.Add(layout);
+
+        var slide = new Slide { LayoutId = "l1" };
+        var bodyShape = new SlideShape
+        {
+            Id = 1,
+            Placeholder = new Placeholder { Type = PlaceholderType.Body, Idx = 1 },
+        };
+        // Explicit Shape (grow-shape-to-fit) on the slide instance — must win over layout's Normal.
+        var slideBody = new TextBody { AutoFitKind = TextAutoFitKind.Shape };
+        var slidePara = new Paragraph();
+        slidePara.Runs.Add(new Run { Text = "Body text" });
+        slideBody.Paragraphs.Add(slidePara);
+        bodyShape.TextBody = slideBody;
+        slide.Shapes.Add(bodyShape);
+        p.Slides.Add(slide);
+
+        // Act
+        var ops = SlideCompositor.Compose(p, slide);
+        var shapeOp = ops.OfType<DrawOp.Shape>().Single();
+
+        // Assert: explicit Shape autofit on the slide shape is not overridden by the layout's Normal.
+        shapeOp.Text!.AutoFitKind.Should().Be(TextAutoFitKind.Shape,
+            "the slide shape's own explicit autofit kind must win over the layout placeholder's");
+    }
+
     // --- Table compositor tests -------------------------------------------
 
     private static (PresentationModel pres, Slide slide, SlideShape shape)
@@ -3453,6 +3556,86 @@ public sealed class SlideCompositorTests
         text.InsetTopDip.Should().BeApproximately(4.0, 0.001);
         text.InsetRightDip.Should().BeApproximately(20.0, 0.001);
         text.InsetBottomDip.Should().BeApproximately(8.0, 0.001);
+    }
+
+    /// <summary>
+    /// master-layout-inheritance F1: a slide placeholder that omits Fill/Outline (the normal
+    /// "inherit from layout" authoring pattern -- PowerPoint itself omits spPr fill/line on slide
+    /// placeholders that inherit) must pick up the matching LAYOUT placeholder's fill and outline,
+    /// not render as a transparent, borderless box.
+    /// </summary>
+    [Fact]
+    public void Compose_TitlePlaceholder_InheritsLayoutPlaceholderFillAndOutline()
+    {
+        var p = new PresentationModel { Theme = PresentationTheme.CreateDefault() };
+        var master = new SlideMaster { Id = "m1" };
+        var layout = new SlideLayout { Id = "l1", MasterId = "m1" };
+        var layoutBlue = new ThemeAwareColor(new SrgbColor(0x11, 0x22, 0xCC));
+        var layoutRed = new ThemeAwareColor(new SrgbColor(0xCC, 0x11, 0x22));
+        layout.Placeholders.Add(new SlideShape
+        {
+            Id = 10,
+            Placeholder = new Placeholder { Type = PlaceholderType.Title, Idx = 0 },
+            Fill = new ShapeFill.Solid(layoutBlue),
+            Outline = new ShapeOutline.Visible(layoutRed, widthPt: 3.0, dash: OutlineDash.Solid)
+        });
+        p.Masters.Add(master);
+        p.Layouts.Add(layout);
+
+        var slide = new Slide { LayoutId = "l1" };
+        // Slide's own placeholder omits Fill/Outline entirely -- the normal "inherit" state.
+        slide.Shapes.Add(CreateTextPlaceholder(1, PlaceholderType.Title, 0, "Inherited fill/outline"));
+        p.Slides.Add(slide);
+
+        var shapeOp = SlideCompositor.Compose(p, slide).OfType<DrawOp.Shape>().Single();
+
+        var fill = shapeOp.Fill.Should().BeOfType<ResolvedFill.Solid>(
+            "the layout placeholder's blue fill should be inherited").Subject;
+        fill.Color.Should().Be(new SrgbColor(0x11, 0x22, 0xCC));
+
+        var outline = shapeOp.Outline.Should().BeOfType<ResolvedOutline.Visible>(
+            "the layout placeholder's red outline should be inherited").Subject;
+        outline.Color.Should().Be(new SrgbColor(0xCC, 0x11, 0x22));
+        outline.WidthDip.Should().BeApproximately(4.0, 0.05); // 3pt -> DIP = 3 * 96/72 = 4.0
+    }
+
+    /// <summary>
+    /// Sibling no-regression case: when the SLIDE'S OWN placeholder shape does specify its own
+    /// Fill/Outline, that explicit authoring must still win over the layout placeholder's -- the
+    /// inheritance fallback must never override an explicit slide-level value.
+    /// </summary>
+    [Fact]
+    public void Compose_TitlePlaceholder_OwnFillAndOutlineOverrideLayoutPlaceholder_Regression()
+    {
+        var p = new PresentationModel { Theme = PresentationTheme.CreateDefault() };
+        var master = new SlideMaster { Id = "m1" };
+        var layout = new SlideLayout { Id = "l1", MasterId = "m1" };
+        layout.Placeholders.Add(new SlideShape
+        {
+            Id = 10,
+            Placeholder = new Placeholder { Type = PlaceholderType.Title, Idx = 0 },
+            Fill = new ShapeFill.Solid(new ThemeAwareColor(new SrgbColor(0x11, 0x22, 0xCC))),
+            Outline = new ShapeOutline.Visible(
+                new ThemeAwareColor(new SrgbColor(0xCC, 0x11, 0x22)), widthPt: 3.0, dash: OutlineDash.Solid)
+        });
+        p.Masters.Add(master);
+        p.Layouts.Add(layout);
+
+        var slide = new Slide { LayoutId = "l1" };
+        var ownShape = CreateTextPlaceholder(1, PlaceholderType.Title, 0, "Own fill/outline");
+        ownShape.Fill = new ShapeFill.Solid(new ThemeAwareColor(new SrgbColor(0x00, 0xAA, 0x00)));
+        ownShape.Outline = new ShapeOutline.Visible(
+            new ThemeAwareColor(new SrgbColor(0x00, 0x00, 0x00)), widthPt: 1.0, dash: OutlineDash.Solid);
+        slide.Shapes.Add(ownShape);
+        p.Slides.Add(slide);
+
+        var shapeOp = SlideCompositor.Compose(p, slide).OfType<DrawOp.Shape>().Single();
+
+        var fill = shapeOp.Fill.Should().BeOfType<ResolvedFill.Solid>().Subject;
+        fill.Color.Should().Be(new SrgbColor(0x00, 0xAA, 0x00), "the slide's own explicit fill must win over the layout's");
+
+        var outline = shapeOp.Outline.Should().BeOfType<ResolvedOutline.Visible>().Subject;
+        outline.Color.Should().Be(new SrgbColor(0x00, 0x00, 0x00), "the slide's own explicit outline must win over the layout's");
     }
 
     /// <summary>

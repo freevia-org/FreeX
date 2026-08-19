@@ -3463,6 +3463,11 @@ public sealed class DeleteShapeCommand : IPresentationCommand
         slide.Animations.RemoveAll(animation =>
             deletedShapeIds.Contains(animation.ShapeId) ||
             (animation.TriggerShapeId is { } triggerShapeId && deletedShapeIds.Contains(triggerShapeId)));
+        // If the deleted shape's animation was the main-sequence head, whatever animation is now
+        // first needs its stored trigger corrected to On Click (see ShapeAnimationAnchorFix) --
+        // otherwise the Animation Pane keeps showing a stale With/After Previous label. Revert
+        // below restores the whole captured list wholesale, so no undo bookkeeping is needed here.
+        ShapeAnimationAnchorFix.NormalizeMainSequenceHead(slide.Animations);
         slide.AnimationBuildListXml = RemoveBuildListEntriesForShapes(
             slide.AnimationBuildListXml,
             deletedShapeIds);
@@ -5202,6 +5207,46 @@ public sealed class AddShapeAnimationCommand : IPresentationCommand
 }
 
 /// <summary>
+/// A <see cref="ShapeAnimation.Trigger"/> of WithPrevious/AfterPrevious is only meaningful relative
+/// to a preceding animation in the same main-sequence click-group. The very first main-sequence
+/// animation (the one with <see cref="ShapeAnimation.TriggerShapeId"/> null) is always started by a
+/// click regardless of its stored trigger -- both live playback
+/// (SlideShowController.BuildSteps: "anim.Trigger == OnClick || current is null") and the package
+/// writer (PptxPackageWriter.BuildTimingEl/BuildClickGroupEl: "clickGroups.Count == 0" starts a new
+/// group unconditionally) treat it as On Click. When a command promotes a different animation into
+/// that leading slot, its stored Trigger must be corrected to On Click too, or the Animation Pane
+/// (which reads Trigger verbatim) keeps showing a stale With/After Previous label that silently
+/// flips to On Click the next time the file round-trips through save/reload.
+/// </summary>
+internal static class ShapeAnimationAnchorFix
+{
+    /// <summary>
+    /// If the first main-sequence animation in <paramref name="anims"/> has a stored trigger other
+    /// than On Click, corrects it to On Click and returns the animation plus its previous trigger so
+    /// the caller can restore it on undo. Returns null when no correction was needed.
+    /// </summary>
+    public static (ShapeAnimation Animation, AnimationTrigger OldTrigger)? NormalizeMainSequenceHead(
+        IList<ShapeAnimation> anims)
+    {
+        ShapeAnimation? head = null;
+        foreach (var a in anims)
+        {
+            if (a.TriggerShapeId is null)
+            {
+                head = a;
+                break;
+            }
+        }
+
+        if (head is null || head.Trigger == AnimationTrigger.OnClick) return null;
+
+        var oldTrigger = head.Trigger;
+        head.Trigger = AnimationTrigger.OnClick;
+        return (head, oldTrigger);
+    }
+}
+
+/// <summary>
 /// Removes the animation at <paramref name="animationIndex"/> from the slide at <paramref name="slideIndex"/>.
 /// Captures the entry and its index for undo.
 /// </summary>
@@ -5210,6 +5255,8 @@ public sealed class RemoveShapeAnimationCommand : IPresentationCommand
     private readonly int _slideIndex;
     private readonly int _animationIndex;
     private ShapeAnimation? _captured;
+    private ShapeAnimation? _promotedHead;
+    private AnimationTrigger _promotedHeadOldTrigger;
 
     public RemoveShapeAnimationCommand(int slideIndex, int animationIndex)
     {
@@ -5226,6 +5273,10 @@ public sealed class RemoveShapeAnimationCommand : IPresentationCommand
         if (_animationIndex < 0 || _animationIndex >= anims.Count) return;
         _captured = anims[_animationIndex];
         anims.RemoveAt(_animationIndex);
+
+        var fix = ShapeAnimationAnchorFix.NormalizeMainSequenceHead(anims);
+        _promotedHead           = fix?.Animation;
+        _promotedHeadOldTrigger = fix?.OldTrigger ?? default;
     }
 
     public void Revert(Presentation p)
@@ -5235,6 +5286,12 @@ public sealed class RemoveShapeAnimationCommand : IPresentationCommand
         var anims = p.Slides[_slideIndex].Animations;
         var idx = Math.Clamp(_animationIndex, 0, anims.Count);
         anims.Insert(idx, _captured);
+
+        if (_promotedHead is not null)
+        {
+            _promotedHead.Trigger = _promotedHeadOldTrigger;
+            _promotedHead = null;
+        }
     }
 }
 
@@ -5246,6 +5303,8 @@ public sealed class ReorderShapeAnimationCommand : IPresentationCommand
     private readonly int _slideIndex;
     private readonly int _from;
     private readonly int _to;
+    private ShapeAnimation? _promotedHead;
+    private AnimationTrigger _promotedHeadOldTrigger;
 
     public ReorderShapeAnimationCommand(int slideIndex, int fromIndex, int toIndex)
     {
@@ -5256,18 +5315,35 @@ public sealed class ReorderShapeAnimationCommand : IPresentationCommand
 
     public string Label => "Reorder Animation";
 
-    public void Apply(Presentation p)  => MoveInList(p, _from, _to);
-    public void Revert(Presentation p) => MoveInList(p, _to, _from);
-
-    private void MoveInList(Presentation p, int from, int to)
+    public void Apply(Presentation p)
     {
-        if (_slideIndex < 0 || _slideIndex >= p.Slides.Count) return;
+        if (!MoveInList(p, _from, _to)) return;
         var anims = p.Slides[_slideIndex].Animations;
-        if (from == to || from < 0 || from >= anims.Count) return;
+        var fix = ShapeAnimationAnchorFix.NormalizeMainSequenceHead(anims);
+        _promotedHead           = fix?.Animation;
+        _promotedHeadOldTrigger = fix?.OldTrigger ?? default;
+    }
+
+    public void Revert(Presentation p)
+    {
+        MoveInList(p, _to, _from);
+        if (_promotedHead is not null)
+        {
+            _promotedHead.Trigger = _promotedHeadOldTrigger;
+            _promotedHead = null;
+        }
+    }
+
+    private bool MoveInList(Presentation p, int from, int to)
+    {
+        if (_slideIndex < 0 || _slideIndex >= p.Slides.Count) return false;
+        var anims = p.Slides[_slideIndex].Animations;
+        if (from == to || from < 0 || from >= anims.Count) return false;
         var item = anims[from];
         anims.RemoveAt(from);
         var dest = Math.Clamp(to, 0, anims.Count);
         anims.Insert(dest, item);
+        return true;
     }
 }
 

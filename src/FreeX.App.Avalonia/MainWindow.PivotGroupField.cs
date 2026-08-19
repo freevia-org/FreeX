@@ -29,7 +29,7 @@ public sealed partial class MainWindow
         if (!TryBeginPivotOption(out var pivot))
             return;
 
-        _ = OpenPivotGroupFieldDialogAsync(pivot!);
+        RunGuarded(() => OpenPivotGroupFieldDialogAsync(pivot!));
     }
 
     /// <summary>

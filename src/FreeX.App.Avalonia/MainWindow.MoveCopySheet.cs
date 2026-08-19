@@ -29,7 +29,7 @@ public sealed partial class MainWindow
     // MoveSheetCommand to reposition), both undo/redo aware via the shared session command path.
 
     /// <summary>Opens the Move-or-Copy dialog for the active sheet.</summary>
-    private void ShowMoveOrCopySheetDialog() => _ = ShowMoveOrCopySheetDialogAsync();
+    private void ShowMoveOrCopySheetDialog() => RunGuarded(ShowMoveOrCopySheetDialogAsync);
 
     private async Task ShowMoveOrCopySheetDialogAsync()
     {

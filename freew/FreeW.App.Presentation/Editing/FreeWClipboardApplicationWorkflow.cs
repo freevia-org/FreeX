@@ -1,6 +1,7 @@
 using System.Text;
 using Free.Shared.AppServices;
 using FreeW.App.Presentation.Dialogs;
+using FreeW.App.Presentation.DocumentView;
 using FreeW.Core.IO;
 using FreeW.Core.Model;
 
@@ -88,17 +89,144 @@ public static class FreeWClipboardApplicationWorkflow
         CustomFormats: [RichTextClipboardFormat, HtmlClipboardFormat, HtmlWindowsClipboardFormat]);
 
     public static PlatformClipboardContent? CreateWriteContent(string? selectedText) =>
-        string.IsNullOrEmpty(selectedText)
-            ? null
-            : new PlatformClipboardContent(Text: selectedText);
+        CreateWriteContent(selectedText, richDocument: null);
+
+    // shell-clipboard F2: a native rich-text control (WPF's RichTextBox, which the WPF shell's
+    // Copy/Cut fall through to natively -- see DocumentView.cs's "freew-cc-5" comment) places RTF
+    // and an HTML/Xaml payload on the clipboard alongside plain text automatically. The Avalonia
+    // shell's editor has no such native control, so its Copy/Cut must build that rich payload
+    // itself or every Copy+Paste round trip -- even within the same document -- silently drops all
+    // character formatting. <paramref name="richDocument"/> is a (typically small, selection-only)
+    // document a caller builds via <see cref="BuildSelectionRichDocument"/>; serializing it to HTML
+    // reuses the same <see cref="HtmlFileAdapter"/> this class already reads HTML clipboard payloads
+    // with (see clip-1 above), so the format this method WRITES is exactly the format ReadAsync
+    // below already knows how to read back -- including from FreeW itself.
+    /// <summary>
+    /// Builds clipboard content from a selection already serialized to <paramref name="rtf"/>: parses
+    /// it into a document for the structured payload AND attaches the original RTF string, so a
+    /// receiving application gets both.
+    /// </summary>
+    /// <remarks>
+    /// Exists so the renderers never touch RtfClipboardDocumentParser themselves.
+    /// RichClipboardDocumentPlannerTests forbids RTF parsing in DocumentView/MainWindow precisely so
+    /// this policy lives in one place -- the WPF host was doing its own parse-and-attach on the COPY
+    /// side, which is the same rule the paste side already routes through here.
+    /// </remarks>
+    public static PlatformClipboardContent? CreateWriteContentFromRtf(string? selectedText, string? rtf)
+    {
+        TextDocument? richDocument = null;
+        if (rtf is not null)
+            RtfClipboardDocumentParser.TryParse(rtf, out richDocument);
+
+        if (CreateWriteContent(selectedText, richDocument) is not { } content)
+            return null;
+
+        if (rtf is null)
+            return content;
+
+        var customData = content.CustomData.ToList();
+        customData.Add(PlatformClipboardData.FromText(RichTextFormat, rtf));
+        return new PlatformClipboardContent(content.Text, content.FilePaths, content.Image, customData);
+    }
+
+    public static PlatformClipboardContent? CreateWriteContent(string? selectedText, TextDocument? richDocument)
+    {
+        if (string.IsNullOrEmpty(selectedText))
+            return null;
+
+        List<PlatformClipboardData>? customData = null;
+        if (richDocument is not null && TryRenderHtml(richDocument) is { } html)
+        {
+            customData =
+            [
+                PlatformClipboardData.FromText(HtmlFormat, html),
+                PlatformClipboardData.FromText(HtmlWindowsFormat, html),
+            ];
+        }
+
+        return new PlatformClipboardContent(Text: selectedText, CustomData: customData);
+    }
+
+    /// <summary>
+    /// Builds a small standalone <see cref="TextDocument"/> covering only <paramref name="ranges"/>
+    /// (as resolved by a renderer, e.g. <c>DocumentView.GetSelectionRichSnapshot</c>), with each
+    /// run's character formatting fully resolved through <paramref name="source"/>'s default-run and
+    /// paragraph/character style cascade (<see cref="DocumentRunFormattingResolver"/>) into direct
+    /// formatting on the copied run. Flattening the cascade this way means the returned document
+    /// renders correctly through <see cref="HtmlFileAdapter"/> standalone, without needing to carry
+    /// a copy of <paramref name="source"/>'s style dictionary. Returns null when the ranges contain
+    /// no actual run content (e.g. an empty or collapsed selection).
+    /// </summary>
+    public static TextDocument? BuildSelectionRichDocument(
+        TextDocument source,
+        IReadOnlyList<DocumentFormattingTextRange>? ranges)
+    {
+        ArgumentNullException.ThrowIfNull(source);
+        if (ranges is null || ranges.Count == 0)
+            return null;
+
+        var document = new TextDocument();
+        var wroteAnyRun = false;
+        foreach (var range in ranges)
+        {
+            var paragraph = range.Paragraph;
+            var textLength = paragraph.PlainText.Length;
+            var start = Math.Clamp(Math.Min(range.StartOffset, range.EndOffset), 0, textLength);
+            var end = Math.Clamp(Math.Max(range.StartOffset, range.EndOffset), 0, textLength);
+
+            var sliced = new Paragraph { Formatting = paragraph.Formatting };
+            var position = 0;
+            foreach (var run in paragraph.Runs)
+            {
+                var runStart = position;
+                var runText = run.Text;
+                position = runStart + runText.Length;
+
+                var overlapStart = Math.Max(start, runStart);
+                var overlapEnd = Math.Min(end, position);
+                if (overlapEnd <= overlapStart)
+                    continue;
+
+                var sliceText = runText.Substring(overlapStart - runStart, overlapEnd - overlapStart);
+                if (sliceText.Length == 0)
+                    continue;
+
+                var resolved = DocumentRunFormattingResolver.Resolve(source, paragraph, run);
+                sliced.Runs.Add(new Run(sliceText, resolved));
+                wroteAnyRun = true;
+            }
+
+            if (sliced.Runs.Count > 0)
+                document.Blocks.Add(sliced);
+        }
+
+        return wroteAnyRun ? document : null;
+    }
+
+    private static string? TryRenderHtml(TextDocument richDocument)
+    {
+        try
+        {
+            using var stream = new MemoryStream();
+            new HtmlFileAdapter().Save(richDocument, stream);
+            return Encoding.UTF8.GetString(stream.ToArray());
+        }
+        catch
+        {
+            // A clipboard write must never crash the editor over an HTML-serialization edge case --
+            // the plain-text payload written alongside this one is always a safe fallback.
+            return null;
+        }
+    }
 
     public static async ValueTask<FreeWClipboardTransferResult> WriteSelectionAsync(
         IPlatformClipboard clipboard,
         string? selectedText,
+        TextDocument? richDocument = null,
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(clipboard);
-        if (CreateWriteContent(selectedText) is not { } content)
+        if (CreateWriteContent(selectedText, richDocument) is not { } content)
             return Empty();
 
         var result = await clipboard.WriteAsync(content, cancellationToken);

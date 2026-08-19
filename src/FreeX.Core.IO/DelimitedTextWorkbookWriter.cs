@@ -58,11 +58,104 @@ internal static class DelimitedTextWorkbookWriter
         Encoding.RegisterProvider(CodePagesEncodingProvider.Instance);
         try
         {
-            return Encoding.GetEncoding(CultureInfo.CurrentCulture.TextInfo.ANSICodePage);
+            return Encoding.GetEncoding(ResolveAnsiCodePage());
         }
         catch (Exception ex) when (ex is ArgumentException or NotSupportedException)
         {
             return Encoding.GetEncoding(1252);
+        }
+    }
+
+    private static int ResolveAnsiCodePage() => CultureInfo.CurrentCulture.TextInfo.ANSICodePage;
+
+    /// <summary>
+    /// Saves using <see cref="ResolveAnsiEncoding"/> (the plain, non-"UTF-8" CSV/TXT/TSV/TAB
+    /// Save-As default) while tracking whether that legacy ANSI code page could represent every
+    /// character written. csv-edge-cases-F1: the plain ANSI encoding has no way to represent
+    /// characters outside its code page (CJK, Cyrillic on an en-US machine, emoji, many accented
+    /// letters) — <see cref="EncoderReplacementFallback"/> silently swaps each one for a literal
+    /// '?' byte instead of raising any signal, which is permanent data loss once the source
+    /// workbook is closed. This keeps that exact on-disk byte output (still '?' — the file format
+    /// itself has no escape for a character its code page can't hold, so replacement is
+    /// unavoidable) but surfaces a warning the caller can show the user, mirroring how
+    /// <see cref="XlsxFileAdapter"/> reports other non-fatal, partial-data-loss save outcomes via
+    /// <see cref="IWarningCollectingFileAdapter"/>.
+    /// </summary>
+    public static XlsxSaveResult SaveWithWarnings(Workbook workbook, Stream stream, char delimiter)
+    {
+        var fallback = new LossTrackingEncoderFallback();
+        Encoding.RegisterProvider(CodePagesEncodingProvider.Instance);
+        Encoding encoding;
+        try
+        {
+            encoding = Encoding.GetEncoding(ResolveAnsiCodePage(), fallback, DecoderFallback.ReplacementFallback);
+        }
+        catch (Exception ex) when (ex is ArgumentException or NotSupportedException)
+        {
+            encoding = Encoding.GetEncoding(1252, fallback, DecoderFallback.ReplacementFallback);
+        }
+
+        Save(workbook, stream, delimiter, encoding);
+
+        if (!fallback.LossDetected)
+            return XlsxSaveResult.Clean;
+
+        return new XlsxSaveResult(
+        [
+            $"Some text could not be represented in the {encoding.EncodingName} encoding used for this file " +
+            "type and was replaced with '?'. Save as \"CSV UTF-8 (Comma delimited)\" or \"Unicode Text\" instead to preserve it exactly."
+        ]);
+    }
+
+    /// <summary>
+    /// <see cref="EncoderFallback"/> that preserves the existing '?'-replacement byte output (so
+    /// the saved file is unchanged) while recording whether any character actually needed it, for
+    /// <see cref="SaveWithWarnings"/>.
+    /// </summary>
+    private sealed class LossTrackingEncoderFallback : EncoderFallback
+    {
+        public bool LossDetected { get; private set; }
+
+        public override int MaxCharCount => 1;
+
+        public override EncoderFallbackBuffer CreateFallbackBuffer() => new Buffer(this);
+
+        private sealed class Buffer(LossTrackingEncoderFallback owner) : EncoderFallbackBuffer
+        {
+            private int _pendingCount;
+
+            public override bool Fallback(char charUnknown, int index)
+            {
+                owner.LossDetected = true;
+                _pendingCount = 1;
+                return true;
+            }
+
+            public override bool Fallback(char charUnknownHigh, char charUnknownLow, int index)
+            {
+                owner.LossDetected = true;
+                // Matches the real System.Text.EncoderReplacementFallback that plain Save() uses
+                // (confirmed by direct measurement against Encoding.GetEncoding(1252)): an
+                // unmappable surrogate PAIR is replaced with one '?' per UTF-16 code unit -- two
+                // '?' bytes for one astral character (e.g. most emoji) -- not one '?' for the whole
+                // Unicode codepoint. Queuing only one here would make SaveWithWarnings write one
+                // fewer byte than Save for the same input, silently diverging the two entry points.
+                _pendingCount = 2;
+                return true;
+            }
+
+            public override char GetNextChar()
+            {
+                if (_pendingCount <= 0)
+                    return '\0';
+
+                _pendingCount--;
+                return '?';
+            }
+
+            public override bool MovePrevious() => false;
+
+            public override int Remaining => _pendingCount;
         }
     }
 

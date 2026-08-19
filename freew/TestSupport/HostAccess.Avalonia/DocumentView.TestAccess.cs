@@ -463,6 +463,35 @@ public sealed partial class DocumentView
             .ToList();
     }
 
+    /// <summary>
+    /// AV-CCEDIT: the rectangle a content control occupies in the header/footer band, which renders from
+    /// its own item list rather than the placed body glyphs.
+    /// </summary>
+    internal Rect? ContentControlHeaderFooterRegionForTest()
+    {
+        if (_laidOutWidth < 0)
+            Relayout(FallbackWidth);
+
+        foreach (var item in _headerFooterItems)
+        {
+            if (item.Control is null || string.IsNullOrEmpty(item.Text))
+                continue;
+            var text = Build(item.Text, item.Fmt);
+            var left = item.X + AlignmentOffset(
+                item.Alignment,
+                item.AvailableWidth,
+                text.WidthIncludingTrailingWhitespace,
+                isLast: true);
+            return new Rect(
+                left,
+                item.Y,
+                Math.Max(1, text.WidthIncludingTrailingWhitespace),
+                item.LineHeight > 0 ? item.LineHeight : text.Height);
+        }
+
+        return null;
+    }
+
     /// <summary>Drives the pointer-hover affordances (tooltip + cursor) for a content control.</summary>
     internal string? ContentControlHoverTipForTest(Point point)
     {

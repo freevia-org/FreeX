@@ -261,6 +261,10 @@ public partial class MainWindow
         // no-clipboard-intent gesture in a DIFFERENT window (Escape/Delete/Backspace/an
         // unrelated edit) cannot clear what THIS window just copied -- see
         // ClearClipboardMarqueeIfOwnedByThisWindow and WorkbookClipboardSession.Owner.
+        // external-refs-F1: capture the live source Sheet alongside the disconnected Cell clones
+        // above, so a paste that lands in a DIFFERENT open window's workbook can still resolve
+        // this range's hyperlinks/metadata (PasteCommandFactory can no longer look them up from
+        // the destination workbook in that case -- see WorkbookClipboardSnapshot.SourceSheet).
         _workbookClipboardSession.Capture(new WorkbookClipboardSnapshot(
             copyRange,
             clipCells,
@@ -268,7 +272,8 @@ public partial class MainWindow
             text,
             isCut,
             areas.Count > 1 ? areas : null,
-            clipboardMarker),
+            clipboardMarker,
+            SourceSheet: sheet),
             owner: this);
     }
 
@@ -806,7 +811,13 @@ public partial class MainWindow
                             sheetDestinationRange,
                             ClipboardPastePlanner.ToCorePasteMode(mode),
                             options,
-                            clip.SourceAreas);
+                            clip.SourceAreas,
+                            // external-refs-F1: clip.SourceSheet is the live Sheet captured at
+                            // Copy time in the (possibly different) window that owned it -- pass
+                            // it through so hyperlinks/rich-text/merged-regions/comments/CF still
+                            // resolve for a cross-window paste, where _workbook.GetSheet(clip.
+                            // SourceRange.Start.Sheet) below would otherwise always miss.
+                            sourceSheetOverride: clip.SourceSheet);
                         if (keepColumnWidths)
                         {
                             sheetPasteCommand = new CompositeWorkbookCommand(
@@ -1155,6 +1166,10 @@ public partial class MainWindow
             // the ACTUAL copied areas of a multi-area (Ctrl+click) source selection instead of
             // treating its whole bounding box -- including the untouched gap between disjoint
             // areas -- as copied.
+            // R146-insert-copied-cells-hyperlink-1: forward clip.SourceSheet (mirrors the identical
+            // sourceSheetOverride forward at ExecutePaste's CreatePasteCommand above) so a
+            // cross-window "Insert Copied Cells"/"Insert Cut Cells" still carries the copied cells'
+            // hyperlinks instead of silently dropping them.
             return InsertCopiedCellsPlanner.CreateCommand(
                 _workbook,
                 _currentSheetId,
@@ -1163,7 +1178,8 @@ public partial class MainWindow
                 currentRange,
                 choice,
                 isCut: clip.IsCut,
-                sourceAreas: clip.SourceAreas);
+                sourceAreas: clip.SourceAreas,
+                sourceSheetOverride: clip.SourceSheet);
         }
 
         if (!TryExecuteRepeatableCommand(CreateCommand, "Insert Copied Cells", out _))

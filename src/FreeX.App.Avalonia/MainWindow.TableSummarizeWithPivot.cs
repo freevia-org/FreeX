@@ -35,6 +35,6 @@ public sealed partial class MainWindow
             new CellAddress(sheetId, table.Range.End.Row, table.Range.End.Col));
         _session.SelectRange(range);
 
-        _ = ShowInsertPivotTableDialogAsync();
+        RunGuarded(ShowInsertPivotTableDialogAsync);
     }
 }

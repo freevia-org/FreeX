@@ -7,7 +7,7 @@ public sealed class DelimitedTextFileAdapter(
     string formatName,
     char formatDelimiter,
     bool allowSeparatorDirective = true,
-    bool collapseConsecutiveDelimiters = false) : IFileAdapter
+    bool collapseConsecutiveDelimiters = false) : IFileAdapter, IWarningCollectingFileAdapter
 {
     private readonly char delimiter = ValidateDelimiter(formatDelimiter);
 
@@ -30,6 +30,15 @@ public sealed class DelimitedTextFileAdapter(
 
     public void Save(Workbook workbook, Stream stream) =>
         DelimitedTextWorkbookWriter.Save(workbook, stream, delimiter);
+
+    // csv-edge-cases-F1: this adapter's registered instances (.txt/.tsv/.tab, see
+    // WorkbookFileAdapterCatalog) all write the OS ANSI code page (see
+    // DelimitedTextWorkbookWriter.ResolveAnsiEncoding), which cannot represent every character —
+    // WorkbookSaveService checks for IWarningCollectingFileAdapter (not any concrete adapter type)
+    // so this reuses the same "file saved with warnings" pipeline XlsxFileAdapter already surfaces
+    // to the user for its own non-fatal, partial-data-loss save outcomes.
+    public XlsxSaveResult SaveWithWarnings(Workbook workbook, Stream stream) =>
+        DelimitedTextWorkbookWriter.SaveWithWarnings(workbook, stream, delimiter);
 
     private static char ValidateDelimiter(char delimiter)
     {

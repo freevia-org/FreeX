@@ -931,8 +931,8 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("var result = _session.SetShowHeadings(showHeadings);");
         source.Should().Contain("RefreshViewportSizeForZoom();");
         source.Should().Contain("RefreshShell(showHeadings ? \"Showing headings\" : \"Hiding headings\");");
-        source.Should().Contain("[\"Zoom\"] = () => _ = ShowZoomDialogAsync(),");
-        source.Should().Contain("[FreeXRibbonCommandIds.ViewZoomCustom] = () => _ = ShowZoomDialogAsync(),");
+        source.Should().Contain("[\"Zoom\"] = () => RunGuarded(ShowZoomDialogAsync),");
+        source.Should().Contain("[FreeXRibbonCommandIds.ViewZoomCustom] = () => RunGuarded(ShowZoomDialogAsync),");
         source.Should().Contain("private void ZoomIn() =>");
         source.Should().Contain("ApplyZoomPercent(_session.ZoomPercent + StatusBarZoomSliderPlanner.ZoomStepPercent, \"Zoom In failed.\")");
         source.Should().Contain("private void ZoomOut() =>");
@@ -1667,7 +1667,7 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("DrawingObjectRenderPrimitiveKind.Shape => CreateDrawingShapeVisual(drawingObject, width, height)");
         source.Should().Contain("DrawingObjectRenderPrimitiveKind.Image or DrawingObjectRenderPrimitiveKind.CroppedImage");
         source.Should().Contain("CreateDrawingImageVisual(renderPlan, width, height)");
-        source.Should().Contain("DrawingObjectRenderPrimitiveKind.CellRangeSnapshot => CreateDrawingCellRangeSnapshotVisual(renderPlan, width, height, theme)");
+        source.Should().Contain("DrawingObjectRenderPrimitiveKind.CellRangeSnapshot => CreateDrawingCellRangeSnapshotVisual(renderPlan, width, height, theme, isSheetRightToLeft)");
         source.Should().Contain("DrawingObjectRenderPrimitiveKind.TextBox => CreateDrawingTextBoxVisual(drawingObject, width, height)");
         source.Should().Contain("private static Control CreateDrawingShapeVisual(");
         source.Should().Contain("using AvaloniaEllipse = Avalonia.Controls.Shapes.Ellipse;");
@@ -2002,7 +2002,13 @@ public sealed class AvaloniaShellSourceTests
 
         sessionSource.Should().Contain("public WorkbookCellEditResult InsertAutoSumFormula(string functionName)");
         sessionSource.Should().Contain("AutoSumFormulaPlanner.TryCreatePlan(ActiveSheet, functionName, SelectedRange, out var plan)");
-        sessionSource.Should().Contain("CreateEditCellsCommand([(plan.Target, Cell.FromFormula(plan.Formula))])");
+        // R147-data-validation-F2: InsertAutoSumFormula now runs the planned cell past Data
+        // Validation (EvaluateDataValidationForEntry) before committing it, so the formula cell is
+        // built once into a local and reused for both the DV check and the actual edit command
+        // instead of being constructed inline at the call site.
+        sessionSource.Should().Contain("var autoSumCell = Cell.FromFormula(plan.Formula);");
+        sessionSource.Should().Contain("EvaluateDataValidationForEntry(autoSumCell, plan.Target)");
+        sessionSource.Should().Contain("CreateEditCellsCommand([(plan.Target, autoSumCell)])");
         sessionSource.Should().Contain("ApplySuccessfulEditResult(result, plan.Target);");
         sessionSource.Should().NotContain("GetNextAutoSumCell");
 
@@ -5109,7 +5115,7 @@ public sealed class AvaloniaShellSourceTests
         pointerSource.Should().Contain("private void BeginSheetTabPointer(SheetId sheetId, PointerPressedEventArgs args)");
         pointerSource.Should().Contain("if (args.ClickCount >= 2)");
         pointerSource.Should().Contain("if (SelectSheetForContextCommand(sheetId))");
-        pointerSource.Should().Contain("_ = RenameActiveSheetAsync();");
+        pointerSource.Should().Contain("RunGuarded(RenameActiveSheetAsync);");
         source.Should().Contain("private void HandleSheetTabKeyDown(SheetId sheetId, Button button, KeyEventArgs args)");
         source.Should().Contain("NavigateSheetTabFromKeyboard(sheetId, args);");
         source.Should().Contain("private void OpenSheetTabContextMenuFromKeyboard(SheetId sheetId, Button button, KeyEventArgs args)");
@@ -5922,12 +5928,12 @@ public sealed class AvaloniaShellSourceTests
 
         // The Data-tab Get Data button + Refresh route to the new file-based import, not the old stubs.
         windowSource.Should().Contain("[\"Get Data\"] = GetDataFromText,");
-        windowSource.Should().Contain("[\"Refresh All\"] = () => _ = RefreshImportedDataAsync(),");
+        windowSource.Should().Contain("[\"Refresh All\"] = () => RunGuarded(RefreshImportedDataAsync),");
         windowSource.Should().NotContain("GetDataNotSupported");
         windowSource.Should().NotContain("RefreshAllNotSupported");
 
         // The dialog gathers options and previews via the portable ImportDataPlanner.
-        getDataSource.Should().Contain("private void GetDataFromText() => _ = ShowGetDataDialogAsync();");
+        getDataSource.Should().Contain("private void GetDataFromText() => RunGuarded(ShowGetDataDialogAsync);");
         getDataSource.Should().Contain("ImportDataFilePickerPlanner.BuildTextOpenPickerPlan(UiText.Get(\"GetData_FileTypeName\"))");
         getDataSource.Should().Contain("AvaloniaFilePickerService.PickSingleOpenFileWithLocalPathAsync(");
         getDataSource.Should().Contain("AvaloniaFilePickerOpenRequest.FromDescriptors(");

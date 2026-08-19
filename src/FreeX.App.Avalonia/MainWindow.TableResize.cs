@@ -29,7 +29,7 @@ public sealed partial class MainWindow
             return;
         }
 
-        _ = OpenTableResizeDialogAsync(table);
+        RunGuarded(() => OpenTableResizeDialogAsync(table));
     }
 
     private async Task OpenTableResizeDialogAsync(StructuredTableModel table)

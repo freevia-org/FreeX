@@ -342,6 +342,35 @@ public sealed class DocumentViewContentControlBodyEditingTests
     }
 
     [Fact]
+    public void A_content_locked_body_region_freezes_every_gesture_in_its_paragraph()
+    {
+        var region = new BlockContentControl(
+            BlockContentControlKind.Group,
+            Tag: "Frozen",
+            LockMode: ContentControlLockMode.ContentLocked);
+        var document = TextDocument.CreateEmpty();
+        document.Blocks.Clear();
+        var paragraph = new Paragraph { BlockContentControl = region };
+        paragraph.Runs.Add(new Run("Frozen text"));
+        document.Blocks.Add(paragraph);
+        var view = new DocumentView();
+        view.LoadDocument(document);
+
+        // A block-level w:sdt carries no run-level marker, so only the block-lock check catches it — the
+        // structural fallback paths (Delete-forward, Enter, change case) each go through IsEditable.
+        view.MoveCaretToBlockForTest(0, 3);
+        view.InsertText("X");
+        view.BackspaceForTest();
+        view.DeleteForwardForTest();
+        view.InsertParagraphBreakForTest();
+        view.SetBodySelectionForTest(0, 0, 0, 11);
+        view.ChangeSelectionCase(CaseKind.Upper);
+
+        view.Document.Blocks.Should().HaveCount(1);
+        view.PlainText.Should().Be("Frozen text");
+    }
+
+    [Fact]
     public void Splitting_a_paragraph_keeps_both_halves_inside_their_body_region()
     {
         var region = new BlockContentControl(BlockContentControlKind.Group, Tag: "Region");

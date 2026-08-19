@@ -82,6 +82,22 @@ public static class AutoFilterRangeResolver
     public static uint GetFilterableLastRow(Sheet sheet, GridRange range) =>
         StructuredTableEditEffects.GetFilterableLastRow(sheet, range);
 
+    /// <summary>
+    /// table-semantics-F1: the START-bound counterpart to <see cref="GetFilterableLastRow"/>, exposing
+    /// <see cref="FilterHiddenRowUpdater.GetFilterableFirstRow"/> to the same UI-facing dropdown
+    /// planners. A structured table loaded with <c>headerRowCount="0"</c> has no header row at all, so
+    /// <c>range.Start.Row</c> is itself a data row.
+    /// </summary>
+    /// <remarks>
+    /// The two bounds have to move together. Using the header-aware end with a header-naive start is
+    /// the asymmetry that produced this whole defect family: every member already called
+    /// GetFilterableLastRow while still hardcoding <c>Start.Row + 1</c>, so a headerless table lost its
+    /// first row -- from the applied filter, and here from the dropdown checklist itself, where the
+    /// value cannot even be seen to be selected.
+    /// </remarks>
+    public static uint GetFilterableFirstRow(Sheet sheet, GridRange range) =>
+        FilterHiddenRowUpdater.GetFilterableFirstRow(sheet, range);
+
     private static bool TryParseRange(string reference, SheetId sheetId, out GridRange range)
     {
         try

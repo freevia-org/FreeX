@@ -32,7 +32,7 @@ public sealed partial class MainWindow
         if (!TryResolvePivotApplicationTarget(out var target))
             return;
 
-        _ = OpenPivotDataSourceDialogAsync(target);
+        RunGuarded(() => OpenPivotDataSourceDialogAsync(target));
     }
 
     private async Task OpenPivotDataSourceDialogAsync(PivotApplicationTarget target)

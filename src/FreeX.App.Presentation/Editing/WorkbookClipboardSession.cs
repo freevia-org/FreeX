@@ -10,7 +10,18 @@ public sealed record WorkbookClipboardSnapshot(
     string Text,
     bool IsCut,
     IReadOnlyList<GridRange>? SourceAreas = null,
-    string? Marker = null);
+    string? Marker = null,
+    // external-refs-F1: the live source Sheet captured at COPY time, independent of which
+    // workbook eventually receives the paste -- the same way Cells above are already independent
+    // Cell clones. This session is a DI-wide singleton shared by every open window (R143), so a
+    // paste that lands in a DIFFERENT window's Workbook than the one that was copied from cannot
+    // resolve SourceRange's SheetId against the destination Workbook (it belongs to the source
+    // window's own, independently GUID'd Workbook). Without this, PasteCommandFactory's
+    // `workbook.GetSheet(sourceRange.Start.Sheet)` lookup always misses for a cross-window paste,
+    // silently dropping the source range's hyperlinks/hyperlink metadata (and everything else
+    // gated on that lookup). Null for any caller that doesn't supply it, which keeps every
+    // pre-existing snapshot construction (including in tests) behaving exactly as before.
+    Sheet? SourceSheet = null);
 
 public readonly record struct WorkbookClipboardReadObservation(
     bool Available,
@@ -92,7 +103,8 @@ public sealed class WorkbookClipboardSession
             snapshot.Text,
             snapshot.IsCut,
             snapshot.SourceAreas?.ToArray(),
-            marker);
+            marker,
+            snapshot.SourceSheet);
         Owner = owner;
         return Content;
     }

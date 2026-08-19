@@ -63,7 +63,7 @@ public sealed partial class MainWindow
     }
 
     /// <summary>Opens the Text-to-Columns dialog (invoked from the Data menu and the Data-tab ribbon button).</summary>
-    private void TextToColumns() => _ = ShowTextToColumnsDialogAsync();
+    private void TextToColumns() => RunGuarded(ShowTextToColumnsDialogAsync);
 
     /// <summary>
     /// The compact Text-to-Columns dialog: pick Delimited vs Fixed-width; for delimited choose the

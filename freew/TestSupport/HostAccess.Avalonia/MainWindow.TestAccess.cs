@@ -96,4 +96,10 @@ public sealed partial class MainWindow
     internal bool IsCloseDecisionPendingForTests => _closeCoordinator.IsClosePending;
     internal NotesPane NotesPaneForTest => _notesPane;
     internal ThesaurusPane ThesaurusPaneForTest => _thesaurusPane;
+
+    // r148-startup-fileopen: exercises the exact production entry point Opened invokes, bypassing the
+    // Opened/Show() event-timing headless tests avoid elsewhere in this suite (see
+    // AutosaveAdapterWindowIsolationTests' OfferRecoveryAsync tests for the same pattern).
+    internal bool StartupOpenFailedForTests => _startupOpenFailed;
+    internal Task ShowStartupOpenFailureForTests() => ShowStartupOpenFailureIfAnyAsync();
 }

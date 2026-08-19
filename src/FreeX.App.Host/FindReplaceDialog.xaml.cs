@@ -273,7 +273,8 @@ public sealed partial class FindReplaceDialog : Window
     private void ReplaceOne()
     {
         var search = SearchText;
-        if (string.IsNullOrEmpty(search) && ShowBlankSearchWarning()) return;
+        // See FindNext: a blank search is allowed when a Format criterion narrows the results.
+        if (string.IsNullOrEmpty(search) && _findFormatDiff is null && ShowBlankSearchWarning()) return;
 
         var result = _workflow.ReplaceNext(
             search,

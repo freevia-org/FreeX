@@ -60,11 +60,23 @@ internal sealed partial class AutosaveCoordinator
     /// Offers every prior-session snapshot on startup. The first accepted document uses this window;
     /// subsequent documents open through the new-window callback.
     /// </summary>
+    /// <remarks>
+    /// startup-fileopen F2 (WPF host): mirrors the fix already applied to FreeP's Avalonia
+    /// <c>AutosaveAdapter.OfferRecoveryAsync</c>. A command-line/file-association document may
+    /// already be loaded into this window before this offer runs, not yet dirty, so routing the
+    /// first accepted candidate into "the current window" unconditionally would silently replace it.
+    /// We snapshot whether the window already holds an explicitly opened document (<see
+    /// cref="_file"/>.<c>CurrentPath</c> non-null) BEFORE any candidate is applied, and if so force
+    /// every accepted candidate through the new-window path instead, same as every candidate beyond
+    /// the first. A genuinely fresh window (no startup file) keeps the prior unconditional behaviour.
+    /// </remarks>
     public bool OfferRecovery(Window owner)
     {
         var text = AutosaveRecoveryTextCatalog.Resolve(UiText.Get);
         try
         {
+            var currentWindowHasExplicitDocument = _file.CurrentPath is not null;
+
             return FreeWRecoveryWorkflow.RunAsync(
                     _session.PlanRecoveries(),
                     FreeWRecoveryPromptMode.Startup,
@@ -77,7 +89,7 @@ internal sealed partial class AutosaveCoordinator
                         var recovered = _session.CompleteRecovery(
                             recovery,
                             accepted: true,
-                            useCurrentWindow
+                            useCurrentWindow && !currentWindowHasExplicitDocument
                                 ? _file.OpenSnapshot
                                 : (_, _) => _recoverInNewWindow?.Invoke(recovery.Candidate) ?? false,
                             FreeWRecoveryRestoreExceptionPolicy.QuarantineCandidate);

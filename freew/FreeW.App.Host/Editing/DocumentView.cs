@@ -337,6 +337,19 @@ public sealed partial class DocumentView : RichTextBox
         // ribbon's Paste/Cut buttons need this (they bypass every other choke point in this file).
         CommandManager.AddPreviewCanExecuteHandler(this, OnPreviewCanExecuteClipboardMutation);
         CommandManager.AddPreviewExecutedHandler(this, OnPreviewExecutedClipboardMutation);
+
+        // clipboard-interop F1/F2: give Copy/Cut/Paste real instance CommandBindings so this control's
+        // clipboard traffic goes through FreeWClipboardApplicationWorkflow instead of falling through to
+        // native RichTextBox handling -- see OnPasteExecuted/OnCopyOrCutExecuted's doc comments. An
+        // instance CommandBinding for a command that also has a class-level binding (as TextBoxBase
+        // registers for Copy/Cut/Paste) takes precedence over the class binding for this element, so
+        // these fully replace -- not merely observe -- the native behavior. The freew-cc-5 preview gate
+        // above still runs first (tunneling) and, when it blocks a locked content control, suppresses
+        // the paired bubbling CanExecute/Executed entirely, so these handlers are never reached in that
+        // case -- unaffected by this addition.
+        CommandBindings.Add(new CommandBinding(ApplicationCommands.Copy, OnCopyExecuted, OnCopyCanExecute));
+        CommandBindings.Add(new CommandBinding(ApplicationCommands.Cut, OnCutExecuted, OnCutCanExecute));
+        CommandBindings.Add(new CommandBinding(ApplicationCommands.Paste, OnPasteExecuted, OnPasteCanExecute));
     }
 
     public TextDocument Model => _model;
@@ -777,6 +790,19 @@ public sealed partial class DocumentView : RichTextBox
             return;
         }
 
+        // freew-cc-tab: while "Filling in Forms" protection is on, Tab is Word's field-to-field gesture
+        // -- it must move the caret to the next/previous editable field rather than fall through to
+        // AcceptsTab's literal tab-character insertion (which native RichTextBox handling would otherwise
+        // treat as a no-op anyway, since IsReadOnly is set for ordinary body text under this protection
+        // mode -- see ApplyProtection). Mirrors FreeW.App.Avalonia.Editing.DocumentView.OnKeyDown's
+        // isFormFieldTab handling.
+        if (input.Intent == DocumentEditorInputIntent.NavigateTab && RestrictEditingPolicy.IsFormFieldEditingOnly)
+        {
+            TabToContentControl(forward: !input.ExtendSelection);
+            e.Handled = true;
+            return;
+        }
+
         if (Keyboard.Modifiers == ModifierKeys.None
             && input.Intent == DocumentEditorInputIntent.InsertParagraphBreak)
         {
@@ -835,21 +861,56 @@ public sealed partial class DocumentView : RichTextBox
                 return;
             }
 
-            if (restoreReadOnly)
-            {
-                try
-                {
-                    base.OnPreviewKeyDown(e);
-                }
-                finally
-                {
-                    IsReadOnly = true;
-                }
-                return;
-            }
+            ApplyNativeFallbackDeleteAndPruneOrphanedAnchors(e, restoreReadOnly);
+            return;
         }
 
         base.OnPreviewKeyDown(e);
+    }
+
+    /// <summary>
+    /// Runs the native RichTextBox Backspace/Delete <see cref="TryPrepareNativeFallback"/> just allowed
+    /// through -- the structural fallback the portable body-edit session declined (e.g. the selection spans
+    /// a footnote/endnote/comment-reference run, which <c>DocumentEditingSession.IsPortableBodyTextRun</c>
+    /// always declines; see <c>IsPortableBodyTextParagraph</c>'s whole-paragraph gate). That native edit
+    /// mutates the live FlowDocument directly with zero knowledge of <see cref="TextDocument.Footnotes"/>/
+    /// <see cref="TextDocument.Endnotes"/>/<see cref="TextDocument.Comments"/>, so deleting a marker/anchor
+    /// run this way can otherwise leave its dictionary entry orphaned -- still serialized into the saved
+    /// docx with no run left to point at it. Resync the model and prune any entry that lost its last anchor
+    /// right after this specific native edit (not from <see cref="CommitToModel"/> generally): scoping it
+    /// here means a note/comment dictionary entry that simply has no anchor for an unrelated reason --
+    /// mid-edit workflows that manage <see cref="TextDocument.Footnotes"/>/<see cref="TextDocument.Comments"/>
+    /// directly (e.g. <see cref="ReplaceNoteContent"/>), or a paginated page's body not currently reflecting
+    /// a marker that lives on another page -- is never touched by a keystroke that had nothing to do with it.
+    /// </summary>
+    private void ApplyNativeFallbackDeleteAndPruneOrphanedAnchors(KeyEventArgs e, bool restoreReadOnly)
+    {
+        try
+        {
+            base.OnPreviewKeyDown(e);
+        }
+        finally
+        {
+            if (restoreReadOnly)
+                IsReadOnly = true;
+        }
+
+        PruneOrphanedNoteAndCommentAnchorsAfterNativeEdit();
+    }
+
+    /// <summary>
+    /// Resyncs the model from the live FlowDocument and prunes any footnote/endnote/comment entry that
+    /// lost its last anchor -- the second half of <see cref="ApplyNativeFallbackDeleteAndPruneOrphanedAnchors"/>,
+    /// split out so it can be exercised directly (bypassing the native keystroke dispatch, which real WPF
+    /// window-activation/focus timing makes unreliable to raise synthetically in a headless test host).
+    /// </summary>
+    private void PruneOrphanedNoteAndCommentAnchorsAfterNativeEdit()
+    {
+        if (_model.Footnotes.Count == 0 && _model.Endnotes.Count == 0 && _model.Comments.Count == 0)
+            return;
+
+        CommitToModel();
+        DocumentInspector.PruneOrphanedNoteAndCommentAnchors(_model);
     }
 
     /// <summary>
@@ -969,6 +1030,124 @@ public sealed partial class DocumentView : RichTextBox
         {
             e.Handled = true;
         }
+    }
+
+    /// <summary>
+    /// clipboard-interop F1: ordinary Paste (Ctrl+V, and the plain ribbon Paste button -- see
+    /// FreeWRibbonCommands' <c>Routed(FreeWRibbonCommandAction.Paste, ApplicationCommands.Paste)</c>)
+    /// used to fall through unconditionally to native RichTextBox paste, which recognizes only
+    /// Xaml/Rtf/Text on the clipboard -- so content copied from FreeX, a browser, or any other
+    /// HTML-only source always degraded to unformatted plain text, even though the IDENTICAL clipboard
+    /// content pastes with formatting intact via Home &gt; Paste &gt; Paste Special &gt; Keep Source
+    /// Formatting (<see cref="PasteKeepSourceFormatting()"/>, which already reads RTF and both HTML
+    /// clipboard format names through <see cref="FreeWClipboardApplicationWorkflow.ReadPasteSpecialAsync"/>).
+    /// This CommandBinding (see the constructor) routes ordinary Paste through that SAME already-working
+    /// path instead of native handling, so Ctrl+V and the plain ribbon button recover formatting exactly
+    /// like Paste Special's "Keep Source Formatting" choice does. A plain-text-only clipboard (no
+    /// RTF/HTML) degrades gracefully to the same plain-text insertion native paste would have produced.
+    /// </summary>
+    private void OnPasteExecuted(object sender, ExecutedRoutedEventArgs e)
+    {
+        e.Handled = true;
+        PasteKeepSourceFormatting();
+    }
+
+    private void OnPasteCanExecute(object sender, CanExecuteRoutedEventArgs e)
+    {
+        e.CanExecute = !IsReadOnly;
+        e.Handled = true;
+    }
+
+    /// <summary>
+    /// clipboard-interop F2: native RichTextBox Copy/Cut place Text/"Rich Text Format"/Xaml on the
+    /// clipboard but never an HTML flavor, so rich text copied here arrived unstyled in any destination
+    /// that reads text/html instead of RTF -- a browser's rich-text field, Gmail or Slack compose -- even
+    /// though the Avalonia shell's own editor already closes this exact gap for itself (see
+    /// FreeWClipboardApplicationWorkflow's "shell-clipboard F2" comment and MainWindow.cs). This exports
+    /// the selection to RTF via the same <see cref="System.Windows.Documents.TextRange.Save"/> native
+    /// Copy would have used, reparses it into the portable <see cref="TextDocument"/> model with the SAME
+    /// <see cref="RtfClipboardDocumentParser"/> Paste Special already reads pasted-in RTF with, and asks
+    /// the shared workflow to also render it to HTML. The RTF stays on the clipboard alongside the
+    /// workflow's Text+HTML payload, so RTF-only consumers (and a paste into this app itself, which reads
+    /// RTF first) keep working exactly as before -- only the missing HTML flavor is new.
+    /// </summary>
+    private void OnCopyExecuted(object sender, ExecutedRoutedEventArgs e)
+    {
+        e.Handled = true;
+        CopySelectionRichContent();
+    }
+
+    private void OnCopyCanExecute(object sender, CanExecuteRoutedEventArgs e)
+    {
+        e.CanExecute = !Selection.IsEmpty;
+        e.Handled = true;
+    }
+
+    /// <summary>
+    /// clipboard-interop F2 (Cut side): same clipboard enrichment as <see cref="OnCopyExecuted"/>, then
+    /// deletes the selection the same way native Cut (and the sibling content-control insert helpers
+    /// elsewhere in this file, e.g. <see cref="InsertPlainTextControl"/>) already do via
+    /// <c>Selection.Text = string.Empty</c>. Gated on <see cref="RestrictEditingOperationKind.BodyTextEdit"/>
+    /// (kept in sync with <see cref="IsReadOnly"/>, see the policy assignment in <see cref="ApplyProtection"/>)
+    /// so a read-only/Filling-In-Forms document cannot have its body text cut -- mirroring native Cut's own
+    /// CanExecute, which likewise refuses when <see cref="IsReadOnly"/> is set.
+    /// </summary>
+    private void OnCutExecuted(object sender, ExecutedRoutedEventArgs e)
+    {
+        e.Handled = true;
+        if (!AllowsRestrictEditingOperation(RestrictEditingOperationKind.BodyTextEdit) || Selection.IsEmpty)
+            return;
+
+        CopySelectionRichContent();
+        CommitToModel();
+        Selection.Text = string.Empty;
+    }
+
+    private void OnCutCanExecute(object sender, CanExecuteRoutedEventArgs e)
+    {
+        e.CanExecute = !IsReadOnly && !Selection.IsEmpty;
+        e.Handled = true;
+    }
+
+    /// <summary>
+    /// Shared Copy/Cut clipboard write for <see cref="OnCopyExecuted"/>/<see cref="OnCutExecuted"/> --
+    /// see <see cref="OnCopyExecuted"/>'s doc comment for the RTF-to-TextDocument-to-HTML pipeline this
+    /// builds on. A selection that fails to export as RTF (caught, never crashes the editor -- mirrors
+    /// <see cref="FreeWClipboardApplicationWorkflow"/>'s own HTML-render try/catch) degrades to a
+    /// plain-text-only clipboard write, the same degrade native Copy would have produced for content it
+    /// could not serialize either.
+    /// </summary>
+    private void CopySelectionRichContent()
+    {
+        var selection = Selection;
+        if (selection.IsEmpty)
+            return;
+
+        var text = selection.Text;
+        if (string.IsNullOrEmpty(text))
+            return;
+
+        string? rtf = null;
+        try
+        {
+            using var stream = new MemoryStream();
+            selection.Save(stream, DataFormats.Rtf);
+            // RTF control syntax is ASCII; Latin-1 preserves every emitted byte, mirroring
+            // RtfClipboardDocumentParser's own encoding assumption for the reverse (paste) direction.
+            rtf = Encoding.Latin1.GetString(stream.ToArray());
+        }
+        catch
+        {
+            // Falls through to a plain-text-only clipboard write below.
+        }
+
+        // Parsing and re-attaching the RTF lives in the workflow, not here:
+        // RichClipboardDocumentPlannerTests forbids a renderer from touching the RTF parser, so that
+        // the policy has exactly one home for both the copy and the paste direction.
+        if (FreeWClipboardApplicationWorkflow.CreateWriteContentFromRtf(text, rtf) is not { } content)
+            return;
+
+        _platformClipboard.WriteAsync(content).AsTask().GetAwaiter().GetResult();
     }
 
     private static DocumentEditorInputKey ToEditorInputKey(Key key) => key switch
@@ -1488,6 +1667,9 @@ public sealed partial class DocumentView : RichTextBox
     /// <returns>The model block index of the inserted table.</returns>
     public int InsertTable(int rows, int columns)
     {
+        if (!AllowsRestrictEditingOperation(RestrictEditingOperationKind.BodyTextEdit))
+            return -1;
+
         // Capture the user's in-progress edits before mutating the model out from under the view.
         CommitToModel();
         var index = _editingSession.InsertBlockAfter(
@@ -1602,6 +1784,9 @@ public sealed partial class DocumentView : RichTextBox
     /// </summary>
     public void InsertTableOfContents()
     {
+        if (!AllowsRestrictEditingOperation(RestrictEditingOperationKind.BodyTextEdit))
+            return;
+
         CommitToModel();
         var index = CaretBlockIndex();
         if (index < 0 || index > _model.Blocks.Count)
@@ -1634,6 +1819,9 @@ public sealed partial class DocumentView : RichTextBox
     /// </summary>
     public void InsertCoverPage()
     {
+        if (!AllowsRestrictEditingOperation(RestrictEditingOperationKind.BodyTextEdit))
+            return;
+
         CommitToModel();
         var blocks = DocumentOps.BuildCoverPage(_model);
         _editingSession.InsertBlocksAfter(-1, blocks, "Insert Cover Page");
@@ -1646,6 +1834,9 @@ public sealed partial class DocumentView : RichTextBox
     /// </summary>
     public void InsertCoverPage(CoverPagePreset preset)
     {
+        if (!AllowsRestrictEditingOperation(RestrictEditingOperationKind.BodyTextEdit))
+            return;
+
         CommitToModel();
         var blocks = DocumentOps.BuildCoverPage(_model, preset);
         _editingSession.InsertBlocksAfter(-1, blocks, "Insert Cover Page");
@@ -1657,6 +1848,9 @@ public sealed partial class DocumentView : RichTextBox
     /// </summary>
     public void InsertBlankPage()
     {
+        if (!AllowsRestrictEditingOperation(RestrictEditingOperationKind.BodyTextEdit))
+            return;
+
         CommitToModel();
         _editingSession.InsertBlocksAfter(
             CaretBlockIndex(),
@@ -1670,6 +1864,9 @@ public sealed partial class DocumentView : RichTextBox
     /// </summary>
     public void InsertHorizontalRule()
     {
+        if (!AllowsRestrictEditingOperation(RestrictEditingOperationKind.BodyTextEdit))
+            return;
+
         CommitToModel();
         _editingSession.InsertBlockAfter(CaretBlockIndex(), DocumentOps.CreateHorizontalRule());
     }
@@ -1680,6 +1877,9 @@ public sealed partial class DocumentView : RichTextBox
     /// </summary>
     public void InsertPageBreak()
     {
+        if (!AllowsRestrictEditingOperation(RestrictEditingOperationKind.BodyTextEdit))
+            return;
+
         CommitToModel();
         _editingSession.InsertBlockAfter(CaretBlockIndex(), DocumentOps.CreatePageBreak());
     }
@@ -1710,6 +1910,9 @@ public sealed partial class DocumentView : RichTextBox
     /// </summary>
     public void InsertSectionBreak(SectionBreakKind breakKind)
     {
+        if (!AllowsRestrictEditingOperation(RestrictEditingOperationKind.BodyTextEdit))
+            return;
+
         CommitToModel();
         _editingSession.InsertBlockAfter(
             CaretBlockIndex(),
@@ -1721,6 +1924,9 @@ public sealed partial class DocumentView : RichTextBox
     /// </summary>
     public void InsertColumnBreak()
     {
+        if (!AllowsRestrictEditingOperation(RestrictEditingOperationKind.BodyTextEdit))
+            return;
+
         CommitToModel();
         _editingSession.InsertBlockAfter(CaretBlockIndex(), DocumentOps.CreateColumnBreak());
     }
@@ -7954,7 +8160,7 @@ public sealed partial class DocumentView : RichTextBox
     /// <see cref="TryEvaluateContentControlLock"/> to enforce a block-level <c>w:lock="sdtContentLocked"</c>
     /// the same way run-level <see cref="RunMarkers.Control"/> already is.
     /// </para>
-    private sealed record ParagraphTag(IReadOnlyList<TabStop> TabStops, IReadOnlyList<string> BookmarkNames, bool PageBreakBefore = false, bool WidowControl = false, bool WidowControlIsSet = false, string? StyleId = null, int ListLevel = 0, ParagraphBorder? Border = null, ShadingPattern ShadingPattern = ShadingPattern.Clear, bool SuppressAutoHyphens = false, bool SuppressAutoHyphensIsSet = false, bool SuppressLineNumbers = false, bool SuppressLineNumbersIsSet = false, FreeW.Core.Model.Section? SectionBreak = null, DropCapLayoutIntent? DropCap = null, ListKind? ListKind = null, bool KeepLinesTogether = false, int? ListStartOverride = null, ComplexField? SpanningFieldStart = null, ComplexField? SpanningFieldOwner = null, bool EndsSpanningField = false, RevisionKind MarkRevision = RevisionKind.None, string? MarkRevisionAuthor = null, string? MarkRevisionDateXml = null, FreeW.Core.Model.BlockContentControl? BlockContentControl = null);
+    private sealed record ParagraphTag(IReadOnlyList<TabStop> TabStops, IReadOnlyList<string> BookmarkNames, bool PageBreakBefore = false, bool WidowControl = false, bool WidowControlIsSet = false, string? StyleId = null, int ListLevel = 0, ParagraphBorder? Border = null, ShadingPattern ShadingPattern = ShadingPattern.Clear, bool SuppressAutoHyphens = false, bool SuppressAutoHyphensIsSet = false, bool SuppressLineNumbers = false, bool SuppressLineNumbersIsSet = false, FreeW.Core.Model.Section? SectionBreak = null, DropCapLayoutIntent? DropCap = null, ListKind? ListKind = null, bool KeepLinesTogether = false, int? ListStartOverride = null, ComplexField? SpanningFieldStart = null, ComplexField? SpanningFieldOwner = null, bool EndsSpanningField = false, RevisionKind MarkRevision = RevisionKind.None, string? MarkRevisionAuthor = null, string? MarkRevisionDateXml = null, FreeW.Core.Model.BlockContentControl? BlockContentControl = null, FreeW.Core.Model.PreservedNumbering? PreservedNumbering = null);
 
     private sealed record RenderedBookmarkBoundary(BookmarkBoundary Boundary);
 
@@ -8187,7 +8393,8 @@ public sealed partial class DocumentView : RichTextBox
             EndsSpanningField = tag?.EndsSpanningField ?? false,
             MarkRevision = tag?.MarkRevision ?? RevisionKind.None,
             MarkRevisionAuthor = tag?.MarkRevisionAuthor,
-            MarkRevisionDateXml = tag?.MarkRevisionDateXml
+            MarkRevisionDateXml = tag?.MarkRevisionDateXml,
+            PreservedNumbering = tag?.PreservedNumbering
         };
         if (tag?.BookmarkNames is { Count: > 0 } bookmarkNames)
             modelParagraph.BookmarkNames.AddRange(bookmarkNames);
@@ -10066,7 +10273,8 @@ public sealed partial class DocumentView : RichTextBox
             paragraph.MarkRevision,
             paragraph.MarkRevisionAuthor,
             paragraph.MarkRevisionDateXml,
-            paragraph.BlockContentControl);
+            paragraph.BlockContentControl,
+            paragraph.PreservedNumbering);
 
         var runs = paragraph.Runs;
         var dropCapPlan = !inTableCell
@@ -12150,7 +12358,8 @@ public sealed partial class DocumentView : RichTextBox
             instruction,
             cachedResult,
             fieldRun => ResolveComplexFieldText(fieldRun, fieldDocument, fieldFileName),
-            fieldDocument);
+            fieldDocument,
+            CaretBlockIndex());
         InsertInlineAtCaret(BuildComplexFieldRun(run, _model, fieldDocument, fieldFileName));
     }
 
@@ -12164,7 +12373,8 @@ public sealed partial class DocumentView : RichTextBox
             field,
             cachedResult,
             fieldRun => ResolveComplexFieldText(fieldRun, fieldDocument, fieldFileName),
-            fieldDocument);
+            fieldDocument,
+            CaretBlockIndex());
         InsertInlineAtCaret(BuildComplexFieldRun(run, _model, fieldDocument, fieldFileName));
     }
 
@@ -13993,6 +14203,9 @@ public sealed partial class DocumentView : RichTextBox
     /// <summary>Inserts an inline shape / text box at the caret. Size in points; preserved on save.</summary>
     public void InsertShape(Shape shape)
     {
+        if (!AllowsRestrictEditingOperation(RestrictEditingOperationKind.BodyTextEdit))
+            return;
+
         CommitToModel();
         var container = BuildShapeRun(shape, DocumentEffectSet.FromTheme(_model.Theme));
         var caret = CaretPosition.GetInsertionPosition(LogicalDirection.Forward) ?? CaretPosition;
@@ -14012,6 +14225,9 @@ public sealed partial class DocumentView : RichTextBox
     /// <summary>Inserts an inline image at the caret. Width/height in points; preserved on save.</summary>
     public void InsertImage(InlineImage image)
     {
+        if (!AllowsRestrictEditingOperation(RestrictEditingOperationKind.BodyTextEdit))
+            return;
+
         CommitToModel();
         var container = BuildImageRun(image);
         var caret = CaretPosition.GetInsertionPosition(LogicalDirection.Forward) ?? CaretPosition;
@@ -14152,6 +14368,9 @@ public sealed partial class DocumentView : RichTextBox
     // commit pending edits, drop the container at the caret's paragraph (or the last block), commit + render.
     private void InsertInlineContainer(InlineUIContainer container)
     {
+        if (!AllowsRestrictEditingOperation(RestrictEditingOperationKind.BodyTextEdit))
+            return;
+
         CommitToModel();
         var caret = CaretPosition.GetInsertionPosition(LogicalDirection.Forward) ?? CaretPosition;
         if (caret.Paragraph is { } paragraph)
@@ -14467,6 +14686,9 @@ public sealed partial class DocumentView : RichTextBox
     /// </summary>
     public void InsertFootnote(string text)
     {
+        if (!AllowsRestrictEditingOperation(RestrictEditingOperationKind.BodyTextEdit))
+            return;
+
         if (TryInsertNoteThroughCommand(text, footnote: true))
             return;
 
@@ -14499,6 +14721,9 @@ public sealed partial class DocumentView : RichTextBox
     /// </summary>
     public void InsertEndnote(string text)
     {
+        if (!AllowsRestrictEditingOperation(RestrictEditingOperationKind.BodyTextEdit))
+            return;
+
         if (TryInsertNoteThroughCommand(text, footnote: false))
             return;
 
@@ -14952,6 +15177,94 @@ public sealed partial class DocumentView : RichTextBox
         return BlockContentControlAt(position?.Paragraph) is { } blockControl
             ? AllowsBlockContentControlInteraction(blockControl)
             : null;
+    }
+
+    /// <summary>
+    /// Word's form-filling Tab: moves the caret to the next (or previous, for Shift+Tab) editable
+    /// text-entry content control in the body and selects its content, ready to be typed over
+    /// immediately -- matching Word and <c>FreeW.App.Avalonia.Editing.DocumentView.TabToContentControl</c>.
+    /// Wraps around at the ends. A no-op (returns false) when the body has no eligible field, which
+    /// still leaves the keystroke consumed by the caller so it never falls through to a literal tab
+    /// character while Filling-In-Forms protection is active.
+    /// </summary>
+    private bool TabToContentControl(bool forward)
+    {
+        var stops = BodyContentControlTabRuns().ToList();
+        if (stops.Count == 0)
+            return false;
+
+        var ordered = forward ? stops : Enumerable.Reverse(stops).ToList();
+        var caret = Selection.Start;
+        var index = ordered.FindIndex(run => forward
+            ? run.ContentStart.CompareTo(caret) > 0
+            : run.ContentEnd.CompareTo(caret) < 0);
+        // Nothing further in this direction: wrap around, as Word does at the last/first field.
+        var target = ordered[index >= 0 ? index : 0];
+
+        Selection.Select(target.ContentStart, target.ContentEnd);
+        target.ContentStart.Paragraph?.BringIntoView();
+        Focus();
+        return true;
+    }
+
+    /// <summary>Every editable text-entry content-control run in the body, in document order (a Tab stop
+    /// for <see cref="TabToContentControl"/>). Mirrors the block/list/table/span walk in <c>NoteMarkers</c>.
+    /// A checkbox/drop-down/date-picker control is excluded -- like the Avalonia shell's tab-stop list, only
+    /// a control <see cref="ContentControlInteractionPlanner.CanEditContentControlText"/> would accept typed
+    /// text into is a stop.</summary>
+    private IEnumerable<WpfRun> BodyContentControlTabRuns()
+    {
+        foreach (var block in Document.Blocks)
+        {
+            foreach (var run in BodyContentControlTabRunsInBlock(block))
+                yield return run;
+        }
+    }
+
+    private IEnumerable<WpfRun> BodyContentControlTabRunsInBlock(System.Windows.Documents.Block block)
+    {
+        switch (block)
+        {
+            case WpfParagraph paragraph:
+                foreach (var run in BodyContentControlTabRunsInInlines(paragraph.Inlines))
+                    yield return run;
+                break;
+            case WpfList list:
+                foreach (var item in list.ListItems)
+                    foreach (var itemBlock in item.Blocks)
+                        foreach (var run in BodyContentControlTabRunsInBlock(itemBlock))
+                            yield return run;
+                break;
+            case WpfTable table:
+                foreach (var rowGroup in table.RowGroups)
+                    foreach (var row in rowGroup.Rows)
+                        foreach (var cell in row.Cells)
+                            foreach (var cellBlock in cell.Blocks)
+                                foreach (var run in BodyContentControlTabRunsInBlock(cellBlock))
+                                    yield return run;
+                break;
+        }
+    }
+
+    private IEnumerable<WpfRun> BodyContentControlTabRunsInInlines(InlineCollection inlines)
+    {
+        foreach (var inline in inlines)
+        {
+            if (inline is WpfRun run
+                && run.Tag is RunMarkers { Control: { } marker }
+                && ContentControlInteractionPlanner.CanEditContentControlText(
+                    new ModelRun(string.Empty) { Control = marker.Control },
+                    RestrictEditingPolicy))
+            {
+                yield return run;
+            }
+
+            if (inline is Span span)
+            {
+                foreach (var nested in BodyContentControlTabRunsInInlines(span.Inlines))
+                    yield return nested;
+            }
+        }
     }
 
     /// <summary>
@@ -15584,6 +15897,9 @@ public sealed partial class DocumentView : RichTextBox
     public void InsertCitation(Source source)
     {
         ArgumentNullException.ThrowIfNull(source);
+        if (!AllowsRestrictEditingOperation(RestrictEditingOperationKind.BodyTextEdit))
+            return;
+
         if (Citations.TryCreateCitationFieldRun(_model, source, ActiveCitationStyle, out var run))
             InsertInlineAtCaret(BuildComplexFieldRun(run, _model));
         else
@@ -15599,6 +15915,9 @@ public sealed partial class DocumentView : RichTextBox
     /// </summary>
     public void InsertBibliography()
     {
+        if (!AllowsRestrictEditingOperation(RestrictEditingOperationKind.BodyTextEdit))
+            return;
+
         CommitToModel();
         RealizeGeneratedReferenceEdit(ReferenceEdits.InsertBibliography(GeneratedReferenceCaret()));
     }
@@ -15657,6 +15976,9 @@ public sealed partial class DocumentView : RichTextBox
 
     public void InsertIndex(string? identifier)
     {
+        if (!AllowsRestrictEditingOperation(RestrictEditingOperationKind.BodyTextEdit))
+            return;
+
         CommitToModel();
         RealizeGeneratedReferenceEdit(ReferenceEdits.InsertIndex(
             GeneratedReferenceCaret(),
@@ -15739,6 +16061,9 @@ public sealed partial class DocumentView : RichTextBox
     public void InsertTableOfAuthorities(ToaOptions options)
     {
         ArgumentNullException.ThrowIfNull(options);
+        if (!AllowsRestrictEditingOperation(RestrictEditingOperationKind.BodyTextEdit))
+            return;
+
         CommitToModel();
         RealizeGeneratedReferenceEdit(ReferenceEdits.InsertTableOfAuthorities(
             GeneratedReferenceCaret(),
@@ -15844,6 +16169,9 @@ public sealed partial class DocumentView : RichTextBox
 
     public void InsertTableOfFigures(string labelText)
     {
+        if (!AllowsRestrictEditingOperation(RestrictEditingOperationKind.BodyTextEdit))
+            return;
+
         CommitToModel();
         RealizeGeneratedReferenceEdit(ReferenceEdits.InsertTableOfFigures(
             GeneratedReferenceCaret(),
@@ -15942,6 +16270,9 @@ public sealed partial class DocumentView : RichTextBox
 
     public void InsertCaption(string labelText, string text)
     {
+        if (!AllowsRestrictEditingOperation(RestrictEditingOperationKind.BodyTextEdit))
+            return;
+
         CommitToModel();
         var result = ReferenceEdits.InsertCaption(CaretBlockIndex(), labelText, text);
         if (result.Applied)
@@ -15960,6 +16291,9 @@ public sealed partial class DocumentView : RichTextBox
     /// </summary>
     public void InsertCrossReference(CrossRefType type, CrossRefTarget target, CrossRefInsertAs insertAs, bool hyperlink)
     {
+        if (!AllowsRestrictEditingOperation(RestrictEditingOperationKind.BodyTextEdit))
+            return;
+
         Focus();
         CommitToModel();
 
@@ -16316,6 +16650,9 @@ public sealed partial class DocumentView : RichTextBox
     /// </summary>
     public void InsertHyperlink(string displayText, string target)
     {
+        if (!AllowsRestrictEditingOperation(RestrictEditingOperationKind.BodyTextEdit))
+            return;
+
         if (!HyperlinkTarget.TryParse(target, out var parsedTarget))
             return;
 

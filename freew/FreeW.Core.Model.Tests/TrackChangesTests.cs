@@ -674,4 +674,81 @@ public class TrackChangesTests
         leftParagraph.Runs.Should().OnlyContain(r => r.Revision == RevisionKind.None);
         TrackChanges.HasRevisions(doc).Should().BeFalse();
     }
+
+    // A shape (text box) carries its own paragraph list (Run.Shape.TextParagraphs) that DocxReader parses
+    // through the same ReadParagraph path as body text, so a tracked insertion/deletion can land inside a
+    // text box exactly as it does in the body. HasRevisions/AcceptAll/RejectAll must see and resolve it,
+    // not just the body/table/header-footer/footnote/endnote paths.
+    private static TextDocument BuildDocumentWithRevisionInsideShape()
+    {
+        var shape = new Shape(ShapeKind.TextBox, 100, 50);
+        var shapeParagraph = new Paragraph();
+        shapeParagraph.Runs.Add(new Run("Box keep "));
+        shapeParagraph.Runs.Add(new Run("box added ") { Revision = RevisionKind.Inserted, RevisionAuthor = "Ada" });
+        shapeParagraph.Runs.Add(new Run("box removed") { Revision = RevisionKind.Deleted, RevisionAuthor = "Ada" });
+        shape.TextParagraphs.Add(shapeParagraph);
+
+        var doc = new TextDocument();
+        var hostParagraph = new Paragraph();
+        hostParagraph.Runs.Add(Run.FromShape(shape));
+        doc.Blocks.Add(hostParagraph);
+        return doc;
+    }
+
+    [Fact]
+    public void HasRevisions_DetectsTrackedChangesInsideShapeTextBox()
+    {
+        TrackChanges.HasRevisions(BuildDocumentWithRevisionInsideShape()).Should().BeTrue();
+    }
+
+    [Fact]
+    public void AcceptAll_ResolvesRevisionsInsideShapeTextBox()
+    {
+        var doc = BuildDocumentWithRevisionInsideShape();
+        var shape = doc.Paragraphs.First().Runs[0].Shape!;
+
+        TrackChanges.AcceptAll(doc);
+
+        var shapeParagraph = shape.TextParagraphs.Single();
+        shapeParagraph.PlainText.Should().Be("Box keep box added ");
+        shapeParagraph.Runs.Should().OnlyContain(r => r.Revision == RevisionKind.None);
+        TrackChanges.HasRevisions(doc).Should().BeFalse();
+    }
+
+    [Fact]
+    public void RejectAll_ResolvesRevisionsInsideShapeTextBox()
+    {
+        var doc = BuildDocumentWithRevisionInsideShape();
+        var shape = doc.Paragraphs.First().Runs[0].Shape!;
+
+        TrackChanges.RejectAll(doc);
+
+        var shapeParagraph = shape.TextParagraphs.Single();
+        shapeParagraph.PlainText.Should().Be("Box keep box removed");
+        shapeParagraph.Runs.Should().OnlyContain(r => r.Revision == RevisionKind.None);
+        TrackChanges.HasRevisions(doc).Should().BeFalse();
+    }
+
+    // Sibling no-regression case: a shape whose text box has no tracked changes at all must round-trip
+    // through HasRevisions/AcceptAll completely untouched (no false positive, no accidental mutation).
+    [Fact]
+    public void AcceptAll_LeavesPlainShapeTextBoxUntouched()
+    {
+        var shape = new Shape(ShapeKind.TextBox, 100, 50);
+        var shapeParagraph = new Paragraph();
+        shapeParagraph.Runs.Add(new Run("Just a caption"));
+        shape.TextParagraphs.Add(shapeParagraph);
+
+        var doc = new TextDocument();
+        var hostParagraph = new Paragraph();
+        hostParagraph.Runs.Add(Run.FromShape(shape));
+        doc.Blocks.Add(hostParagraph);
+
+        TrackChanges.HasRevisions(doc).Should().BeFalse();
+
+        TrackChanges.AcceptAll(doc);
+
+        shape.TextParagraphs.Single().PlainText.Should().Be("Just a caption");
+        TrackChanges.HasRevisions(doc).Should().BeFalse();
+    }
 }

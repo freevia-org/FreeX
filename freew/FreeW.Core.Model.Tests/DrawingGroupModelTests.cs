@@ -73,6 +73,34 @@ public sealed class DrawingGroupModelTests
         return (doc, bus);
     }
 
+    /// <summary>
+    /// Build a 3-member document A(z=0, back)/B(z=1, middle)/C(z=2, front) in three separate
+    /// paragraphs. A and C are InlineImages distinguishable by <c>HorizontalOffsetPt</c> (10 vs
+    /// 300); B is a Shape that every test using this fixture leaves unselected. Used to prove
+    /// group-zorder findings F1/F2: grouping A+C while skipping B must not let the group (or its
+    /// later-ungrouped members) drop behind B, which never moved.
+    /// </summary>
+    private static (TextDocument doc, DocumentCommandBus bus) ThreeMemberDoc_ABC_StraddlingB()
+    {
+        var doc = new TextDocument();
+        doc.Blocks.Clear();
+
+        var pA = new Paragraph();
+        pA.Runs.Add(Run.FromImage(FloatingImage(10, 10, z: 0)));    // A: back
+        doc.Blocks.Add(pA);
+
+        var pB = new Paragraph();
+        pB.Runs.Add(Run.FromShape(FloatingShape(150, 10, z: 1)));   // B: middle, stays ungrouped
+        doc.Blocks.Add(pB);
+
+        var pC = new Paragraph();
+        pC.Runs.Add(Run.FromImage(FloatingImage(300, 10, z: 2)));   // C: front
+        doc.Blocks.Add(pC);
+
+        var bus = new DocumentCommandBus(new TestCtx(doc));
+        return (doc, bus);
+    }
+
     // ── DrawingGroup model ───────────────────────────────────────────────────────────────────────
 
     [Fact]
@@ -489,6 +517,47 @@ public sealed class DrawingGroupModelTests
         nested.Placement.HorizontalOffsetPt.Should().BeApproximately(36, 0.5);
     }
 
+    [Fact]
+    public void Group_UsesFrontmostSelectedMemberZOrder_NotFirstMemberInDocumentOrder()
+    {
+        // group-zorder F1: grouping A (z=0, first in document order) and C (z=2, frontmost) while
+        // leaving B (z=1) unselected must NOT collapse the group's z-order down to A's. Otherwise C
+        // -- which used to render in front of B -- silently renders behind B purely as a side effect
+        // of having been grouped with A.
+        var (doc, bus) = ThreeMemberDoc_ABC_StraddlingB();
+        bus.Execute(new GroupFloatingObjectsCommand([(0, 0), (2, 0)])); // group A + C, skip B
+
+        var grp = ((Paragraph)doc.Blocks[0]).Runs[0].DrawingGroup!;
+        var unselectedB = ((Paragraph)doc.Blocks[1]).Runs[0].Shape!;
+
+        grp.Placement.ZOrderIndex.Should().Be(2,
+            "the group must inherit C's (the frontmost selected member's) z-order, not A's");
+        grp.Placement.ZOrderIndex.Should().BeGreaterThan(unselectedB.Placement!.ZOrderIndex,
+            "C used to render in front of B; the group must still render in front of B");
+    }
+
+    [Fact]
+    public void Group_TwoMembers_FirstMemberAlreadyFrontmost_UsesItsZOrder()
+    {
+        // Sibling/no-regression case for F1: when the first selected member (in document order)
+        // already happens to be the frontmost one, taking the MAX across members must still land on
+        // that same z-order -- proving the fix doesn't disturb the already-correct case.
+        var doc = new TextDocument();
+        doc.Blocks.Clear();
+        var p0 = new Paragraph();
+        p0.Runs.Add(Run.FromImage(FloatingImage(36, 18, z: 5))); // first AND frontmost
+        doc.Blocks.Add(p0);
+        var p1 = new Paragraph();
+        p1.Runs.Add(Run.FromShape(FloatingShape(108, 54, z: 1))); // second, behind
+        doc.Blocks.Add(p1);
+        var bus = new DocumentCommandBus(new TestCtx(doc));
+
+        bus.Execute(new GroupFloatingObjectsCommand([(0, 0), (1, 0)]));
+
+        var grp = ((Paragraph)doc.Blocks[0]).Runs[0].DrawingGroup!;
+        grp.Placement.ZOrderIndex.Should().Be(5);
+    }
+
     // ── GroupFloatingObjectsCommand.Revert ───────────────────────────────────────────────────────
 
     [Fact]
@@ -552,6 +621,53 @@ public sealed class DrawingGroupModelTests
         img.VerticalOffsetPt.Should().BeApproximately(18, 0.5);
         shp.Placement!.HorizontalOffsetPt.Should().BeApproximately(108, 0.5);
         shp.Placement.VerticalOffsetPt.Should().BeApproximately(54, 0.5);
+    }
+
+    [Fact]
+    public void Ungroup_RestoresOriginalPerMemberZOrder_NotDenseRunFromGroupZ()
+    {
+        // group-zorder F2: after grouping A(z=0)+C(z=2) (skipping B, z=1) and then ungrouping, each
+        // restored member must get back ITS OWN original ZOrderIndex, not a dense run starting at
+        // the group's z-order (group.Z + i) -- which would collide with B's untouched z=1 and
+        // reintroduce the F1 mis-ordering, this time surviving a full group/ungroup round trip.
+        var (doc, bus) = ThreeMemberDoc_ABC_StraddlingB();
+        bus.Execute(new GroupFloatingObjectsCommand([(0, 0), (2, 0)]));
+        bus.Execute(new UngroupFloatingObjectsCommand(0, 0));
+
+        var restoredImages = ((Paragraph)doc.Blocks[0]).Runs
+            .Where(r => r.Image is not null)
+            .Select(r => r.Image!)
+            .OrderBy(img => img.HorizontalOffsetPt)
+            .ToList();
+        restoredImages.Should().HaveCount(2);
+
+        var restoredA = restoredImages[0]; // HorizontalOffsetPt ~10
+        var restoredC = restoredImages[1]; // HorizontalOffsetPt ~300
+        restoredA.HorizontalOffsetPt.Should().BeApproximately(10, 0.5);
+        restoredC.HorizontalOffsetPt.Should().BeApproximately(300, 0.5);
+
+        restoredA.ZOrderIndex.Should().Be(0, "A's original z-order must be restored exactly");
+        restoredC.ZOrderIndex.Should().Be(2, "C's original z-order must be restored exactly");
+
+        var unselectedB = ((Paragraph)doc.Blocks[1]).Runs[0].Shape!;
+        restoredC.ZOrderIndex.Should().BeGreaterThan(unselectedB.Placement!.ZOrderIndex,
+            "restored C must still render in front of untouched B");
+    }
+
+    [Fact]
+    public void Ungroup_TwoMembers_RestoresExactOriginalZOrderValues()
+    {
+        // Sibling/no-regression case for F2: the plain two-member group/ungroup round trip (no
+        // straddled unselected object) must still restore the exact original per-member z-order.
+        var (doc, bus) = TwoMemberDoc(); // image z=1, shape z=2
+        bus.Execute(new GroupFloatingObjectsCommand([(0, 0), (1, 0)]));
+        bus.Execute(new UngroupFloatingObjectsCommand(0, 0));
+
+        var p0 = (Paragraph)doc.Blocks[0];
+        var img = p0.Runs.First(r => r.Image is not null).Image!;
+        var shp = p0.Runs.First(r => r.Shape is not null).Shape!;
+        img.ZOrderIndex.Should().Be(1);
+        shp.Placement!.ZOrderIndex.Should().Be(2);
     }
 
     [Fact]

@@ -16,7 +16,7 @@ public sealed class HomeAlignmentCommandSourceTests
         source.Should().Contain("ApplyStyleDiff(new StyleDiff(VAlign: CellVAlign.Top))");
         source.Should().Contain("ApplyStyleDiff(new StyleDiff(VAlign: CellVAlign.Center))");
         source.Should().Contain("ApplyStyleDiff(new StyleDiff(VAlign: CellVAlign.Bottom))");
-        source.Should().Contain("ApplyStyleDiffWithWrapGrowth(new StyleDiff(WrapText: IsRibbonCommandChecked(\"Wrap Text\")))");
+        source.Should().Contain("ApplyStyleDiffWithRowGrowth(new StyleDiff(WrapText: IsRibbonCommandChecked(\"Wrap Text\")))");
         source.Should().Contain("ApplyStyleDiff(new StyleDiff(IndentLevel: Math.Min(15, style.IndentLevel + 1)))");
         source.Should().Contain("ApplyStyleDiff(new StyleDiff(IndentLevel: Math.Max(0, style.IndentLevel - 1)))");
         // Merge & Center delegates to the multi-area-aware workbook session; the other merge

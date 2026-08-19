@@ -27,6 +27,17 @@ public static class InsertCopiedCellsPlanner
     /// <c>null</c> (single contiguous area, matching the pre-existing behavior) for callers that
     /// don't yet distinguish multi-area from single-area selections.
     /// </param>
+    /// <param name="sourceSheetOverride">
+    /// R146-insert-copied-cells-hyperlink-1: mirrors the identical parameter on
+    /// <see cref="PasteCommandFactory.CreateInternalPasteCommand"/> (external-refs-F1) -- forwarded
+    /// into that factory call below so a cross-window "Insert Copied Cells"/"Insert Cut Cells" (the
+    /// copy happened in a different open FreeX window than the one receiving the insert) still
+    /// resolves the source Sheet for hyperlink/rich-text-run/merged-region/comment/CF carry instead
+    /// of silently missing via <c>workbook.GetSheet(sourceRange.Start.Sheet)</c>, which can only ever
+    /// resolve against the DESTINATION workbook. Callers that don't have one (or know source and
+    /// destination share one workbook, the common case) pass null/omit it, which preserves the prior
+    /// lookup behavior exactly.
+    /// </param>
     public static IWorkbookCommand CreateCommand(
         Workbook workbook,
         SheetId sheetId,
@@ -35,7 +46,8 @@ public static class InsertCopiedCellsPlanner
         GridRange destinationRange,
         KeyboardInsertDeleteDialogChoice choice,
         bool isCut = false,
-        IReadOnlyList<GridRange>? sourceAreas = null)
+        IReadOnlyList<GridRange>? sourceAreas = null,
+        Sheet? sourceSheetOverride = null)
     {
         var insertRange = CreateInsertRange(sheetId, destinationRange.Start, sourceRange);
         IWorkbookCommand insertCommand = choice switch
@@ -79,15 +91,22 @@ public static class InsertCopiedCellsPlanner
                 BandStart: insertRange.Start.Row, BandEnd: insertRange.End.Row),
         };
 
+        // R146-insert-copied-cells-hyperlink-1: call the GridRange-destination overload directly
+        // (rather than the CellAddress-destination convenience overload used before) because only
+        // the GridRange overload exposes sourceSheetOverride -- new GridRange(destination, destination)
+        // below is exactly what the CellAddress overload builds internally, so the destination passed
+        // to the paste is unchanged.
         var pasteCommand = PasteCommandFactory.CreateInternalPasteCommand(
             workbook,
             sheetId,
             sourceRange,
             cells,
-            destinationRange.Start,
+            new GridRange(destinationRange.Start, destinationRange.Start),
             PasteCellsMode.All,
             default,
-            sourceAreas);
+            sourceAreas,
+            mergeConditionalFormats: false,
+            sourceSheetOverride: sourceSheetOverride);
 
         // Unlike the ordinary Ctrl+V-after-Cut path (ClipboardPastePlanner.ShouldClearCutSourceAfterPaste),
         // this composite always clears the source when isCut is true, with no overlap guard: the clear

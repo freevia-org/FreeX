@@ -1,15 +1,22 @@
 namespace FreeP.App.Avalonia.Tests;
 
 /// <summary>
-/// The manual "Recover Unsaved Presentations" Backstage command on the Avalonia shell. Unlike the
-/// WPF shell (whose Backstage command drives a dedicated
-/// <c>AutosaveCoordinator.RecoverUnsavedPresentations</c> that shows an info message when there is
-/// nothing to recover and surfaces failures), FreeP's Avalonia shell mirrors FreeW's Avalonia
-/// sibling exactly: the manual command just re-runs the same best-effort
-/// <see cref="FreeP.App.Avalonia.AutosaveAdapter.OfferRecoveryAsync"/> flow already used at startup,
-/// rather than adding a second recovery method. This test pins that wiring at the source level --
-/// <see cref="AutosaveAdapterEmergencySnapshotTests"/> already covers
-/// <c>OfferRecoveryAsync</c>/<c>TryEmergencySnapshot</c> behavior itself.
+/// The manual "Recover Unsaved Presentations" Backstage command on the Avalonia shell.
+///
+/// <para>
+/// r146-remediation: this used to re-run the same best-effort, UNGATED
+/// <see cref="FreeP.App.Avalonia.AutosaveAdapter.OfferRecoveryAsync"/> flow used at silent STARTUP,
+/// so accepting an older crash snapshot for the CURRENT window silently overwrote the current
+/// presentation's unsaved edits with no save/discard prompt -- the WPF host's
+/// <c>AutosaveCoordinator.RecoverUnsavedPresentations</c> never had this bug, since it always routed
+/// the current-window restore through <c>PresentationFileCommandSession.ConfirmCloseAllowedAsync</c>.
+/// It now drives the dedicated, dirty-gated
+/// <see cref="FreeP.App.Avalonia.AutosaveAdapter.RecoverUnsavedPresentationsAsync"/>, matching the
+/// WPF host's behavior and mirroring FreeW's Avalonia
+/// <c>AutosaveAdapter.RecoverUnsavedDocumentsAsync</c> fix from the same round. This test pins that
+/// wiring at the source level -- <see cref="R146_ManualRecoveryDirtyGateTests"/> covers
+/// <c>RecoverUnsavedPresentationsAsync</c>'s dirty-gate behavior itself.
+/// </para>
 /// </summary>
 public sealed class BackstageViewRecoverUnsavedTests
 {
@@ -18,7 +25,9 @@ public sealed class BackstageViewRecoverUnsavedTests
     {
         var source = TestWorkspaceFileLocator.ReadAllText("freep", "FreeP.App.Avalonia", "MainWindow.cs");
 
-        source.Should().Contain("RecoverUnsaved: () => _ = _autosave.OfferRecoveryAsync(this),");
+        source.Should().Contain("RecoverUnsaved: () => _ = _autosave.RecoverUnsavedPresentationsAsync(this),");
+        source.Should().NotContain("RecoverUnsaved: () => _ = _autosave.OfferRecoveryAsync(this),",
+            "the manual command must no longer reuse the ungated startup offer");
     }
 
     [Fact]

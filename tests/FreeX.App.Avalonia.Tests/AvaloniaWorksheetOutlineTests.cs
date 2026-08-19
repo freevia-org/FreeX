@@ -33,6 +33,7 @@ public sealed class AvaloniaWorksheetOutlineTests
 
         Assert.All(new uint[] { 2, 3, 4 }, row => Assert.Contains(row, sheet.GroupHiddenRows));
         Assert.Contains(5u, sheet.CollapsedAnchorRows);
+        AssertStatus(window, "Outline_RowGroupCollapsedStatus");
 
         var expandToggle = FindByAutomationId<Button>(
             window.RebuildSheetGridForTest(),
@@ -42,6 +43,7 @@ public sealed class AvaloniaWorksheetOutlineTests
         expandToggle!.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
         Assert.DoesNotContain(new uint[] { 2, 3, 4 }, row => sheet.GroupHiddenRows.Contains(row));
         Assert.DoesNotContain(5u, sheet.CollapsedAnchorRows);
+        AssertStatus(window, "Outline_RowGroupExpandedStatus");
 
         window.AllowCloseWithoutDirtyPromptForParityCapture();
 
@@ -65,6 +67,7 @@ public sealed class AvaloniaWorksheetOutlineTests
 
         Assert.All(new uint[] { 2, 3, 4 }, column => Assert.Contains(column, sheet.GroupHiddenCols));
         Assert.Contains(5u, sheet.CollapsedAnchorCols);
+        AssertStatus(window, "Outline_ColumnGroupCollapsedStatus");
 
         var expandToggle = FindByAutomationId<Button>(
             window.RebuildSheetGridForTest(),
@@ -74,6 +77,7 @@ public sealed class AvaloniaWorksheetOutlineTests
         expandToggle!.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
         Assert.DoesNotContain(new uint[] { 2, 3, 4 }, column => sheet.GroupHiddenCols.Contains(column));
         Assert.DoesNotContain(5u, sheet.CollapsedAnchorCols);
+        AssertStatus(window, "Outline_ColumnGroupExpandedStatus");
 
         window.AllowCloseWithoutDirtyPromptForParityCapture();
 
@@ -128,6 +132,18 @@ public sealed class AvaloniaWorksheetOutlineTests
         window.Session.SelectSheet(sheet.Id);
         window.Session.UpdateViewportSize(880, 1440);
         return window;
+    }
+
+    // The status bar must carry a real sentence, not Loc's "[[Key]]" missing marker: the four
+    // outline collapse/expand keys were absent from the neutral resx, so every toggle used to
+    // paint the marker into the status bar.
+    private static void AssertStatus(MainWindow window, string resourceKey)
+    {
+        var expected = UiText.Get(resourceKey);
+        Assert.False(
+            expected == $"[[{resourceKey}]]",
+            $"{resourceKey} is missing from Strings.resx, so the outline toggle shows a missing-key marker.");
+        Assert.Equal(expected, window.StatusTextForTest.Text);
     }
 
     private static T? FindByAutomationId<T>(Control root, string automationId)

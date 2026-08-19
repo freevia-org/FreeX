@@ -1,5 +1,6 @@
 using System.Globalization;
 using System.IO.Compression;
+using System.Runtime.CompilerServices;
 using System.Xml.Linq;
 using FreeX.Core.Model;
 
@@ -10,6 +11,51 @@ internal static class XlsxWorksheetDrawingObjectWriter
     // R95-io-drawing-hyperlink-2-2: mirrors XlsxWorksheetChartWriter's HyperlinkRelationshipType --
     // the OOXML package relationship type for an a:hlinkClick's r:id target.
     private const string HyperlinkRelationshipType = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/hyperlink";
+
+    // media-lifecycle-F1: a picture is emitted here on EVERY full-rebuild save for as long as it
+    // isn't IsSourceLoaded -- true for every picture inserted this session, and (critically) never
+    // re-marked IsSourceLoaded after a save, only after a fresh Load. Without this table, an
+    // unedited picture therefore gets rewritten to a BRAND NEW xl/media/freexPictureN file on every
+    // single save (see AddPictureAnchor below), while the prior save's freexPictureN file is left
+    // behind: nothing deletes it, and XlsxPackageMetadataMerger.CopyUnknownPackageParts carries it
+    // forward from the previous save's now-stale source-package snapshot as an "unknown" part simply
+    // because the freshly generated package doesn't already have an entry at that name. Repeated
+    // saves (e.g. one per unrelated cell edit / autosave) accumulate one full duplicate copy of the
+    // same image bytes forever.
+    // <para>
+    // Keyed by PictureModel identity (not by any persisted id) and scoped to this process's lifetime:
+    // a fresh Load() always constructs brand-new PictureModel instances, so reopening a file starts
+    // this table empty for it, matching the intentional "growth stops on reload" behaviour that was
+    // already true before this fix. ConditionalWeakTable evicts an entry automatically once its
+    // PictureModel key is garbage-collected (picture deleted, workbook closed), so this never
+    // accumulates unbounded state of its own.
+    // </para>
+    // <para>
+    // AddPictureAnchor consults this immediately before allocating a media path: when the picture's
+    // ImageBytes/ContentType/SvgImageBytes are unchanged (by reference) since the last time THIS
+    // exact PictureModel was written, it reuses the SAME xl/media path instead of allocating
+    // <c>currentPictureIndex</c>'s fresh one. Because the freshly generated package then already
+    // claims that name, CopyUnknownPackageParts's "not already present" check correctly skips
+    // re-copying the stale duplicate from the prior save's source snapshot -- there is nothing left
+    // to orphan. A genuine edit (ImageBytes/ContentType/SvgImageBytes actually changes) still falls
+    // through to a fresh path, exactly like before this fix -- this only stops the growth that comes
+    // from resaving an UNCHANGED picture, not from editing one.
+    // </para>
+    private static readonly ConditionalWeakTable<PictureModel, PictureEmbeddedMediaRecord> LastWrittenPictureMedia = new();
+
+    private sealed class PictureEmbeddedMediaRecord(
+        string mediaPath,
+        string? svgMediaPath,
+        byte[]? imageBytes,
+        string? contentType,
+        byte[]? svgImageBytes)
+    {
+        public string MediaPath { get; } = mediaPath;
+        public string? SvgMediaPath { get; } = svgMediaPath;
+        public byte[]? ImageBytes { get; } = imageBytes;
+        public string? ContentType { get; } = contentType;
+        public byte[]? SvgImageBytes { get; } = svgImageBytes;
+    }
 
     public static bool HasSupportedObjects(Workbook workbook)
     {
@@ -477,7 +523,25 @@ internal static class XlsxWorksheetDrawingObjectWriter
 
             var contentType = string.IsNullOrWhiteSpace(picture.ContentType) ? "image/png" : picture.ContentType;
             var extension = XlsxPackagePath.GetImageExtension(contentType).TrimStart('.');
-            var mediaPath = $"xl/media/freexPicture{currentPictureIndex}.{extension}";
+
+            // media-lifecycle-F1: reuse the exact xl/media path this SAME picture was embedded under
+            // on a previous save (see LastWrittenPictureMedia above) when its ImageBytes/ContentType/
+            // SvgImageBytes are unchanged since then -- comparing by reference is deliberate and
+            // sufficient: nothing in the codebase mutates a PictureModel's ImageBytes array in place,
+            // every genuine edit (crop is metadata-only; "Change Picture" et al.) either leaves the
+            // array untouched or assigns a wholly new one. Reusing the path means the freshly
+            // generated package already has an entry at that name, so CopyUnknownPackageParts's
+            // "not already present" check skips re-copying the prior save's now-stale duplicate
+            // instead of carrying it forward as a permanent orphan.
+            var reuseExistingMedia =
+                LastWrittenPictureMedia.TryGetValue(picture, out var previousMedia) &&
+                ReferenceEquals(previousMedia.ImageBytes, picture.ImageBytes) &&
+                string.Equals(previousMedia.ContentType, contentType, StringComparison.Ordinal) &&
+                ReferenceEquals(previousMedia.SvgImageBytes, picture.SvgImageBytes);
+
+            var mediaPath = reuseExistingMedia
+                ? previousMedia!.MediaPath
+                : $"xl/media/freexPicture{currentPictureIndex}.{extension}";
             archive.GetEntry(mediaPath)?.Delete();
             var mediaEntry = archive.CreateEntry(mediaPath);
             using (var mediaStream = mediaEntry.Open())
@@ -497,9 +561,12 @@ internal static class XlsxWorksheetDrawingObjectWriter
             // raster the moment it is edited (crop/rotate/recolor/resize all clear IsSourceLoaded and
             // route the picture through this fresh-emission path).
             string? svgRelId = null;
+            string? svgMediaPath = null;
             if (picture.SvgImageBytes is { Length: > 0 })
             {
-                var svgMediaPath = $"xl/media/freexPictureSvg{currentPictureIndex}.svg";
+                svgMediaPath = reuseExistingMedia && previousMedia!.SvgMediaPath is { } reusedSvgPath
+                    ? reusedSvgPath
+                    : $"xl/media/freexPictureSvg{currentPictureIndex}.svg";
                 archive.GetEntry(svgMediaPath)?.Delete();
                 var svgMediaEntry = archive.CreateEntry(svgMediaPath);
                 using (var svgMediaStream = svgMediaEntry.Open())
@@ -513,6 +580,10 @@ internal static class XlsxWorksheetDrawingObjectWriter
                     new XAttribute("Type", "http://schemas.openxmlformats.org/officeDocument/2006/relationships/image"),
                     new XAttribute("Target", XlsxPackagePath.GetRelationshipTarget(drawingPath, svgMediaPath))));
             }
+
+            LastWrittenPictureMedia.AddOrUpdate(
+                picture,
+                new PictureEmbeddedMediaRecord(mediaPath, svgMediaPath, picture.ImageBytes, contentType, picture.SvgImageBytes));
 
             anchors.Add(ToOneCellPictureAnchor(
                 picture,

@@ -192,4 +192,132 @@ public sealed class AutosaveCoordinatorRecoverUnsavedTests : IDisposable
 
         source.Should().Contain("RecoverUnsaved: () => _autosave.RecoverUnsavedPresentations(this),");
     }
+
+    /// <summary>
+    /// Like <see cref="NewWindowHarness"/>, but also counts how many times the presentation model
+    /// was replaced (<c>loadPresentation</c> invocations), so tests can prove the CURRENT window's
+    /// in-memory content was never touched when recovery is declined.
+    /// </summary>
+    private (AutosaveCoordinator Coordinator, PresentationFileCommandSession File, Window Owner, Func<int> LoadCount)
+        NewWindowHarnessWithLoadTracking(AutosaveSnapshotStore store)
+    {
+        var window = new Window { Width = 100, Height = 100, ShowInTaskbar = false, Left = -10000, Top = -10000 };
+        var model = Presentation.CreateEmpty();
+        var loadCount = 0;
+        var file = WpfPresentationFileCommandSessionFactory.Create(
+            window,
+            () => model,
+            loaded =>
+            {
+                loadCount++;
+                model = loaded;
+            },
+            onChanged: () => { },
+            loadRecentFilesStore: () => RecentFilesStore.Load(
+                Path.Combine(TempDir, Guid.NewGuid().ToString("N") + ".json")),
+            videoEncoderCapability: LinuxVideoEncoderCapability.Unavailable("Test encoder handoff deferred."),
+            nativePrintCapability: PresentationNativePrintHandoffHostCapabilities.Deferred(
+                "WPF print host",
+                "Test printer handoff deferred."));
+        var coordinator = new AutosaveCoordinator(
+            () => model,
+            file,
+            ports => new FreePAutosaveSession(ports, store));
+        return (coordinator, file, window, () => loadCount);
+    }
+
+    /// <summary>
+    /// r146 F1: the manual Backstage command is reachable at any time, not just on a fresh startup
+    /// window. If the CURRENT window already holds unsaved edits, accepting an old crash snapshot
+    /// must not silently overwrite them -- the user must be asked to save/discard/cancel first, the
+    /// same way New/Open/Close already gate destructive replacement. Before the fix,
+    /// <c>RestoreAutosaveSnapshot</c> was invoked unconditionally and this test fails: the current
+    /// presentation is replaced (LoadCount reaches 1), the method reports success, and the snapshot
+    /// is deleted out from under the user's declined choice.
+    /// </summary>
+    [StaFact]
+    public void RecoverUnsavedPresentations_DoesNotOverwriteTheCurrentWindowWhenTheUserDeclinesToDiscardItsUnsavedEdits()
+    {
+        var store = new AutosaveSnapshotStore(TempDir);
+        var (crashed, crashedFile, _) = NewWindowHarness(store);
+        crashedFile.MarkDirty();
+        crashed.TryEmergencySnapshot();
+        var snapshotPath = store.GetSnapshotPath(crashed.SnapshotIdForTests);
+        File.Exists(snapshotPath).Should().BeTrue("the crashed window must have left a snapshot behind");
+        crashed.SimulateCrashForTests();
+
+        var (recovering, recoveringFile, owner, loadCount) = NewWindowHarnessWithLoadTracking(store);
+        // Simulate the user having made their OWN unsaved edits in the current window before ever
+        // touching the recovery command.
+        recoveringFile.MarkDirty();
+
+        HeadlessMessageBox.Handler = (_, buttons) => buttons switch
+        {
+            // "Recover unsaved changes to X?" -- accept the OLD candidate.
+            UserMessageButtons.OkCancel => UserMessageResult.Ok,
+            // "Save changes to <current> before recovering an unsaved presentation?" -- decline
+            // (Cancel), protecting the current window's own unsaved work.
+            UserMessageButtons.YesNoCancel => UserMessageResult.Cancel,
+            _ => UserMessageResult.Cancel,
+        };
+        try
+        {
+            var recovered = recovering.RecoverUnsavedPresentations(owner);
+
+            recovered.Should().BeFalse(
+                "the current window's unsaved edits must not be silently discarded");
+            loadCount().Should().Be(0,
+                "declining the discard prompt must leave the current in-memory presentation untouched");
+            recoveringFile.IsDirty.Should().BeTrue(
+                "the current window's own unsaved edits must survive a declined recovery");
+            File.Exists(snapshotPath).Should().BeTrue(
+                "the recovery candidate must be preserved on disk so the user can revisit it later");
+        }
+        finally
+        {
+            HeadlessMessageBox.Handler = null;
+        }
+    }
+
+    /// <summary>
+    /// Sibling no-regression case: when the user affirmatively agrees to discard the current window's
+    /// unsaved edits (answers "Don't Save" to the new prompt), recovery must still proceed into the
+    /// current window exactly as it always has.
+    /// </summary>
+    [StaFact]
+    public void RecoverUnsavedPresentations_ProceedsIntoTheCurrentWindowWhenTheUserApprovesDiscardingItsUnsavedEdits()
+    {
+        var store = new AutosaveSnapshotStore(TempDir);
+        var (crashed, crashedFile, _) = NewWindowHarness(store);
+        crashedFile.MarkDirty();
+        crashed.TryEmergencySnapshot();
+        var snapshotPath = store.GetSnapshotPath(crashed.SnapshotIdForTests);
+        crashed.SimulateCrashForTests();
+
+        var (recovering, recoveringFile, owner, loadCount) = NewWindowHarnessWithLoadTracking(store);
+        recoveringFile.MarkDirty();
+
+        HeadlessMessageBox.Handler = (_, buttons) => buttons switch
+        {
+            UserMessageButtons.OkCancel => UserMessageResult.Ok,
+            // "Don't Save" -- the user explicitly agrees to discard their current unsaved edits.
+            UserMessageButtons.YesNoCancel => UserMessageResult.No,
+            _ => UserMessageResult.Cancel,
+        };
+        try
+        {
+            var recovered = recovering.RecoverUnsavedPresentations(owner);
+
+            recovered.Should().BeTrue();
+            loadCount().Should().Be(1);
+            recoveringFile.IsDirty.Should().BeTrue(
+                "a recovered presentation is unsaved work and must stay dirty");
+            File.Exists(snapshotPath).Should().BeFalse(
+                "a successfully recovered snapshot must be cleaned up so it is not offered again");
+        }
+        finally
+        {
+            HeadlessMessageBox.Handler = null;
+        }
+    }
 }

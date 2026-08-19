@@ -28,7 +28,7 @@ public sealed partial class MainWindow
         if (!TryResolvePivotApplicationTarget(out var target))
             return;
 
-        _ = OpenPivotMoveDialogAsync(target);
+        RunGuarded(() => OpenPivotMoveDialogAsync(target));
     }
 
     private async Task OpenPivotMoveDialogAsync(PivotApplicationTarget target)

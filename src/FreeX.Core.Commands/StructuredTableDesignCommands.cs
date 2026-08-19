@@ -828,6 +828,12 @@ public sealed class ConvertStructuredTableToRangeCommand : IWorkbookCommand
         _chartVerbatimSnapshot = RowColumnShiftHelpers.CaptureChartVerbatimFormulas(ctx.Workbook);
         ConvertToRangeStructuredReferenceLowering.LowerChartFormulas(ctx.Workbook, sheet, _removedTable);
 
+        // Capture the table-aware first filterable row BEFORE the table leaves the sheet: the helper
+        // locates the table by range, so once RemoveAt runs it can only return the header-skipping
+        // default, and a HEADERLESS table's row 1 would stay hidden forever after this command.
+        var removedTableFirstFilterableRow =
+            FilterHiddenRowUpdater.GetFilterableFirstRow(sheet, _removedTable.Range);
+
         sheet.StructuredTables.RemoveAt(tableIndex);
 
         // R106 (consolidated R107-round2 into CommandGuards.PinOrphanedPivotCacheSourceTableIds, the
@@ -839,7 +845,8 @@ public sealed class ConvertStructuredTableToRangeCommand : IWorkbookCommand
         // the table's per-column dropdown UI (and its filter bookkeeping) is gone once the table
         // model is removed above, so any rows it hid would otherwise stay stranded hidden forever.
         _previousFilterHiddenRows = [.. sheet.FilterHiddenRows];
-        FilterHiddenRowUpdater.ClearRange(sheet.FilterHiddenRows, _removedTable.Range);
+        FilterHiddenRowUpdater.ClearRange(
+            sheet.FilterHiddenRows, _removedTable.Range, removedTableFirstFilterableRow);
 
         _previousValueFilterHiddenRows = [.. sheet.ValueFilterHiddenRows];
         sheet.ValueFilterHiddenRows.RemoveWhere(row =>

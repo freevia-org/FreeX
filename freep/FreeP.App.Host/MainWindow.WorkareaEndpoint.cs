@@ -51,8 +51,16 @@ public sealed partial class MainWindow
                 PrintPresentation = ShowPrintBackstage,
                 StartSlideShowFromBeginning = () => StartSlideShow(true),
                 StartSlideShowFromCurrentSlide = () => StartSlideShow(false),
-                Copy = () => _osClipboard.Copy(Editor),
-                Cut = () => _osClipboard.Cut(Editor),
+                Copy = () => _osClipboard.Copy(
+                    Editor,
+                    error => ReportClipboardWriteFailure(
+                        PresentationShellTextCatalog.Resolve(PresentationShellTextCatalog.EditCopyCommand),
+                        error)),
+                Cut = () => _osClipboard.Cut(
+                    Editor,
+                    error => ReportClipboardWriteFailure(
+                        PresentationShellTextCatalog.Resolve(PresentationShellTextCatalog.EditCutCommand),
+                        error)),
                 Paste = () => _osClipboard.Paste(Editor, preferOsClipboard: true),
                 Find = OpenFindDialog,
                 Replace = OpenFindReplaceDialog,

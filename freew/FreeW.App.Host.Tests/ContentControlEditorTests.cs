@@ -191,4 +191,36 @@ public sealed class ContentControlEditorTests
 
         throw new InvalidOperationException($"Text '{text}' was not found in the paragraph.");
     }
+
+    /// <summary>
+    /// Cross-host parity guard for the Avalonia work: editing the body text AROUND a field must keep the
+    /// field, and clearing the field's own text must keep the (empty) control. The WPF host reaches the
+    /// model through a native-editor commit rather than a cell round-trip, so it needs its own proof.
+    /// </summary>
+    [StaFact]
+    public void EditingBodyTextAroundAControl_KeepsTheControl()
+    {
+        var control = Run.PlainTextControl("Bob", tag: "Applicant");
+        var paragraph = new Paragraph();
+        paragraph.Runs.Add(new Run("Name: "));
+        paragraph.Runs.Add(control);
+        paragraph.Runs.Add(new Run(" (staff)"));
+        var model = new TextDocument();
+        model.Blocks.Clear();
+        model.Blocks.Add(paragraph);
+        var view = new DocumentView();
+        view.LoadModel(model);
+
+        var rendered = view.Document.Blocks.OfType<System.Windows.Documents.Paragraph>().Single();
+        view.CaretPosition = PositionAfterText(rendered, "Name");
+        view.InsertText("!");
+
+        view.CommitToModel();
+        var committed = view.Model.Blocks.OfType<Paragraph>().Single();
+        committed.PlainText.Should().Be("Name!: Bob (staff)");
+        var fields = committed.Runs.Where(run => run.Control is not null).ToList();
+        fields.Should().ContainSingle("the field survives an edit to the text around it");
+        fields[0].Text.Should().Be("Bob");
+        fields[0].Control!.Tag.Should().Be("Applicant");
+    }
 }

@@ -62,10 +62,23 @@ public sealed class ToggleWorksheetAutoFilterCommand : IWorkbookCommand, IEstima
             return new CommandOutcome(true);
         }
 
+        // Pass the table-aware first row for the same reason every other member of this family now
+        // does. For a worksheet-level AutoFilter the helper returns Start.Row + 1 unchanged -- it only
+        // differs when the range is exactly a headerless table's -- so this is a no-op today. It is
+        // here so that grepping the filter code for a bare "Start.Row + 1" finds nothing: this bound
+        // has now been copied naively into a new sibling three rounds running.
         if (AutoFilterRangeResolver.TryGetWorksheetAutoFilterRange(sheet, out var autoFilterRange))
-            FilterHiddenRowUpdater.ClearRange(sheet.FilterHiddenRows, autoFilterRange);
+        {
+            FilterHiddenRowUpdater.ClearRange(
+                sheet.FilterHiddenRows, autoFilterRange,
+                FilterHiddenRowUpdater.GetFilterableFirstRow(sheet, autoFilterRange));
+        }
         else
-            FilterHiddenRowUpdater.ClearRange(sheet.FilterHiddenRows, _range);
+        {
+            FilterHiddenRowUpdater.ClearRange(
+                sheet.FilterHiddenRows, _range,
+                FilterHiddenRowUpdater.GetFilterableFirstRow(sheet, _range));
+        }
         sheet.AutoFilter = null;
         sheet.ActiveValueFilterColumns.Clear();
         sheet.ValueFilterHiddenRows.Clear();

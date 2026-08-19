@@ -321,11 +321,13 @@ public static class StructuredTableStyleService
         var existing = cell is not null ? workbook.GetStyle(cell.StyleId) : CellStyle.Default;
         var visual = workbook.GetStyle(visualStyleId);
 
-        // Do not overwrite a fill the user (or the source file) explicitly set on a body cell; Excel's
-        // dynamic banding yields to an explicit cell fill.  Header/totals rows always take the style
-        // fill so they read as a styled band like in Excel.
+        // Do not overwrite a fill the user (or the source file) explicitly set on a cell; Excel's
+        // dynamic banding/header style yields to an explicit cell fill for header and totals cells
+        // exactly the same as it does for body cells — direct formatting always wins over a computed
+        // table style, per Excel's own precedence (mirrors PivotTableRefreshService's preserveExisting
+        // VisualStyles handling of a pivot header's existing fill).
         // forceFill bypasses this guard — used by the column-stripe pass so it wins over the row-fill pass.
-        var keepExistingFill = !isHeaderOrTotals && !forceFill && existing.FillColor is not null;
+        var keepExistingFill = !forceFill && existing.FillColor is not null;
 
         var merged = existing.Clone();
         if (!keepExistingFill)
@@ -336,9 +338,20 @@ public static class StructuredTableStyleService
 
         if (isHeaderOrTotals)
         {
-            merged.Bold = visual.Bold;
-            merged.FontColor = visual.FontColor;
-            merged.FontThemeColor = null;
+            // Same precedence for the header/totals font: a cell whose bold/font-color was never
+            // explicitly set carries the model's own default (Bold=false, FontColor=CellColor.Black,
+            // FontThemeColor=null — see CellStyle), so any deviation from that default means the user
+            // (or the source file) set it directly, and direct formatting wins over the table-style
+            // banding font just like it does for fill.
+            if (!existing.Bold)
+                merged.Bold = visual.Bold;
+
+            var keepExistingFontColor = existing.FontColor != CellColor.Black || existing.FontThemeColor is not null;
+            if (!keepExistingFontColor)
+            {
+                merged.FontColor = visual.FontColor;
+                merged.FontThemeColor = null;
+            }
         }
 
         // Apply table borders when the style provides them (banding.Border is not null).

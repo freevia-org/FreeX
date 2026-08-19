@@ -55,7 +55,7 @@ public sealed class PresentationWorkareaOwnershipSourceTests
                 "OpenChartDialog(PresentationDomainDialogKind.ChartData, () => new ChartDataDialog(Editor))")
             .And.Contain("ShowDomainDialog(createDialog())")
             .And.Contain("_workareaSession.CanOpenDomainDialog(kind)");
-        wpfEndpoint.Should().Contain("Copy = () => _osClipboard.Copy(Editor)")
+        wpfEndpoint.Should().Contain("Copy = () => _osClipboard.Copy(")
             .And.Contain("RefreshSlidePane = RefreshSlidePane")
             .And.Contain("RefreshCurrentSlideStatus = UpdateSlideCount")
             .And.NotContain("SlidePaneHost.Child = new SlidePane(context.Snapshot.Editor)");

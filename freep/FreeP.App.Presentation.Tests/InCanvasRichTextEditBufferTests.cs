@@ -147,6 +147,83 @@ public sealed class InCanvasRichTextEditBufferTests
     }
 
     [Fact]
+    public void LogicalNavigation_RightArrowCrossesSurrogatePairAsOneStep()
+    {
+        // "Hi \U0001F600 there" -- the emoji is a UTF-16 surrogate pair at positions 3-4.
+        string text = "Hi 😀 there";
+
+        int afterEmoji = InCanvasRichTextNavigationPlanner.MoveCaret(
+            text,
+            caret: 3,
+            InCanvasTextNavigationKey.Right);
+
+        // Must land past both surrogate halves (position 5), never mid-pair (position 4).
+        afterEmoji.Should().Be(5);
+    }
+
+    [Fact]
+    public void LogicalNavigation_LeftArrowCrossesSurrogatePairAsOneStep()
+    {
+        string text = "Hi 😀 there";
+
+        int beforeEmoji = InCanvasRichTextNavigationPlanner.MoveCaret(
+            text,
+            caret: 5,
+            InCanvasTextNavigationKey.Left);
+
+        // Must land before both surrogate halves (position 3), never mid-pair (position 4).
+        beforeEmoji.Should().Be(3);
+    }
+
+    [Fact]
+    public void LogicalNavigation_RightArrowCrossesCombiningMarkAsOneStep()
+    {
+        // "caf" + "e" (U+0065) + a combining acute accent (U+0301) + " au lait": an
+        // NFD-decomposed base-character-plus-mark grapheme cluster that must be crossed
+        // as a single caret step, not split so the caret sticks between base and mark.
+        string text = "caf" + "e\u0301" + " au lait";
+        int baseIndex = text.IndexOf('e');
+
+        int afterCluster = InCanvasRichTextNavigationPlanner.MoveCaret(
+            text,
+            caret: baseIndex,
+            InCanvasTextNavigationKey.Right);
+
+        afterCluster.Should().Be(baseIndex + 2);
+    }
+
+    [Fact]
+    public void LogicalNavigation_LeftArrowCrossesCombiningMarkAsOneStep()
+    {
+        string text = "caf" + "e\u0301" + " au lait";
+        int baseIndex = text.IndexOf('e');
+
+        int beforeCluster = InCanvasRichTextNavigationPlanner.MoveCaret(
+            text,
+            caret: baseIndex + 2,
+            InCanvasTextNavigationKey.Left);
+
+        beforeCluster.Should().Be(baseIndex);
+    }
+
+    [Theory]
+    [InlineData("plain ascii text", 3, 4)]
+    [InlineData("plain ascii text", 3, 2)]
+    public void LogicalNavigation_PlainAsciiStepsByOneCodeUnitAsBefore(
+        string text,
+        int caret,
+        int expected)
+    {
+        // No-regression sibling: ordinary ASCII text (no surrogate pairs, no combining
+        // marks) must still move exactly one position per arrow press, as it always has.
+        var key = expected > caret
+            ? InCanvasTextNavigationKey.Right
+            : InCanvasTextNavigationKey.Left;
+
+        InCanvasRichTextNavigationPlanner.MoveCaret(text, caret, key).Should().Be(expected);
+    }
+
+    [Fact]
     public void LogicalNavigation_SelectionAnchorSurvivesRepeatedShiftMovement()
     {
         InCanvasRichTextNavigationPlanner.ResolveSelectionAnchor(2, 8, 8).Should().Be(2);
