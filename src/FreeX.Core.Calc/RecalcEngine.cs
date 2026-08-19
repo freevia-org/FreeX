@@ -2320,6 +2320,18 @@ public sealed class RecalcEngine
             // matching restriction checks throughout Recalculate/AddCyclicCell/RunIterativeCalc/
             // ResolveSpillTargetDependentsFixpoint.
             var report = Recalculate(workbook, formulaCells, resolveSpillDependents: true, restrictWritesToSheet: sheetId);
+
+            // Shift+F9 "Calculate Sheet" is a genuine "Calculate Now"-shaped gesture for sheetId --
+            // see NotifyAllSheetsRecalculated's doc comment for why a real recalc pass must
+            // unconditionally let the target sheet's cached volatile CF results re-roll even when
+            // Recalculate's own report is empty (e.g. a sheet holding only literal data plus a
+            // volatile Formula-type CF rule like "=RAND()>0.5", with zero formula cells of its own).
+            // Unlike NotifyAllSheetsRecalculated, this must stay scoped to sheetId alone: Shift+F9
+            // deliberately restricts every write to the target sheet (see the restrictWritesToSheet
+            // comment above and RecalculateSheetFormulasVolatileScopeTests), so bumping any other
+            // sheet's ContentVersion here would contradict that same "only this sheet" contract.
+            sheet.NotifyContentRecalculated();
+
             return FilterReportForSheet(report, sheetId);
         }
         finally

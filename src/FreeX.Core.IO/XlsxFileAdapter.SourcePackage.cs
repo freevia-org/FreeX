@@ -56,6 +56,7 @@ public sealed partial class XlsxFileAdapter
             .Concat(XlsxDigitalSignaturePackagePolicy.GetEditedSaveExclusions(sourceArchive))
             .Concat(preserveVbaProject ? Array.Empty<string>() : VbaProjectPackagePartPaths)
             .Concat(GetExcludedDeletedChartPartPaths(sourceArchive, context, workbook))
+            .Concat(GetExcludedDeletedPicturePartPaths(sourceArchive, context, workbook))
             .ToHashSet(StringComparer.OrdinalIgnoreCase);
         var generatedEntriesBeforeMerge = XlsxPackageMetadataMerger.CopyUnknownPackageParts(
             sourceArchive,
@@ -473,6 +474,135 @@ public sealed partial class XlsxFileAdapter
                 var relId = chartElement.Attribute(relNs + "id")?.Value;
                 if (!string.IsNullOrWhiteSpace(relId) && drawingRels.TryGetValue(relId, out var chartPartPath))
                     yield return chartPartPath;
+            }
+        }
+    }
+
+    // R147-io-drawing-media-orphan-1: the sibling gap left by R127-io-drawing-relationship-orphan-1
+    // above. That fix excludes a deleted CHART's own part set (xl/charts/chartN.xml) from
+    // CopyUnknownPackageParts; it never touched a deleted PICTURE's own binary
+    // (xl/media/freexPictureN.<ext> or, for a real Excel-authored source package, imageN.<ext>).
+    // XlsxWorksheetDrawingPartMerger correctly drops the deleted picture's <xdr:pic> anchor
+    // (supersededSourceNames) and prunes the now-dangling image relationship from the drawing part's
+    // own .rels (PruneUnreferencedDrawingRelationships), but the underlying media part itself was never
+    // excluded, so CopyUnknownPackageParts (which runs BEFORE the drawing merge, over the untouched
+    // SOURCE package) copies it forward as an "unknown" part regardless -- and since every save
+    // re-captures the written package as the next save's source, the orphan persists across every
+    // subsequent save indefinitely. Resolve each sheet's DeletedSourceDrawingObjectNames against the
+    // SOURCE drawing part to find the media target(s) a deleted picture anchor referenced, exactly the
+    // way GetExcludedDeletedChartPartPaths already does for a deleted chart's own part.
+    // <para>
+    // Unlike a chart part (never shared between anchors), the SAME xl/media/* file can legitimately be
+    // referenced by more than one surviving picture anchor -- e.g. the same image inserted twice, or
+    // present on two different sheets -- so a candidate media target is only ever excluded if no
+    // SURVIVING (non-tombstoned) picture anchor anywhere else in the source package still resolves to
+    // it. Excluding a still-referenced media part would trade the original orphan-file bug for a worse
+    // one: a broken image on a picture the user never touched.
+    // </para>
+    private static IReadOnlySet<string> GetExcludedDeletedPicturePartPaths(
+        ZipArchive sourceArchive,
+        XlsxSourcePackagePreservationContext? context,
+        Workbook workbook)
+    {
+        var excluded = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        if (context is null)
+            return excluded;
+
+        // First pass: every media target still reachable from a SURVIVING (non-deleted) picture
+        // anchor anywhere in the source package. A sheet that was itself deleted this session
+        // contributes nothing here -- its entire drawing (and any media only it used) is already
+        // excluded wholesale via removedWorksheetPackageParts, and none of its anchors can keep a
+        // media part "alive" for some other, still-live sheet either.
+        var aliveMediaTargets = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var sheetsWithDeletions = new List<(string SourceDrawingPath, HashSet<string> DeletedNames)>();
+        foreach (var (sheetName, sourceWorksheetPath) in context.SourceSheets)
+        {
+            if (!IsWorksheetPartPath(sourceWorksheetPath))
+                continue;
+            if (!XlsxRenamedSourceSheetResolver.TryResolveCurrentSheet(
+                    context, sheetName, sourceWorksheetPath, out var currentSheetName, out _))
+            {
+                continue; // Sheet genuinely deleted -- see the doc comment above.
+            }
+
+            var sheet = workbook.GetSheet(currentSheetName);
+            if (sheet is null)
+                continue;
+
+            var sourceDrawingPath = XlsxWorksheetDrawingPartMerger.GetWorksheetDrawingPath(
+                sourceArchive, sourceWorksheetPath, context.WorkbookNs, context.RelNs, context.PackageRelNs, context);
+            if (string.IsNullOrWhiteSpace(sourceDrawingPath))
+                continue;
+
+            var deletedNames = sheet.DeletedSourceDrawingObjectNames;
+            foreach (var (anchorName, mediaTarget) in GetPictureAnchorMediaTargets(sourceArchive, sourceDrawingPath, context.RelNs, context.PackageRelNs))
+            {
+                if (deletedNames.Count == 0 || !deletedNames.Contains(anchorName))
+                    aliveMediaTargets.Add(mediaTarget);
+            }
+
+            if (deletedNames.Count > 0)
+                sheetsWithDeletions.Add((sourceDrawingPath, deletedNames.ToHashSet(StringComparer.Ordinal)));
+        }
+
+        if (sheetsWithDeletions.Count == 0)
+            return excluded;
+
+        foreach (var (sourceDrawingPath, deletedNames) in sheetsWithDeletions)
+        {
+            foreach (var (anchorName, mediaTarget) in GetPictureAnchorMediaTargets(sourceArchive, sourceDrawingPath, context.RelNs, context.PackageRelNs))
+            {
+                if (!deletedNames.Contains(anchorName) || aliveMediaTargets.Contains(mediaTarget))
+                    continue;
+
+                excluded.Add(mediaTarget);
+                excluded.Add(XlsxPackagePath.GetRelationshipPartPath(mediaTarget));
+                foreach (var dependencyPath in GetRelationshipDependencyPaths(sourceArchive, mediaTarget, context.PackageRelNs))
+                    excluded.Add(dependencyPath);
+            }
+        }
+
+        return excluded;
+    }
+
+    // Resolved (anchor cNvPr@name, media target path) pairs for every picture anchor's <a:blip r:embed>
+    // in the SOURCE drawing part. Mirrors GetDeletedChartPartPaths's own resolution shape but yields
+    // every picture anchor (not just tombstoned ones) so GetExcludedDeletedPicturePartPaths above can
+    // reuse this single scan both to find deleted anchors' media targets and to know which media
+    // targets a SURVIVING anchor still needs.
+    private static IEnumerable<(string AnchorName, string MediaTarget)> GetPictureAnchorMediaTargets(
+        ZipArchive sourceArchive,
+        string sourceDrawingPath,
+        XNamespace relNs,
+        XNamespace packageRelNs)
+    {
+        var drawingEntry = sourceArchive.GetEntry(sourceDrawingPath);
+        if (drawingEntry is null)
+            yield break;
+
+        var drawingXml = XlsxPackageXmlEditor.LoadXml(drawingEntry);
+        if (drawingXml.Root is null)
+            yield break;
+
+        XNamespace spreadsheetDrawingNs = "http://schemas.openxmlformats.org/drawingml/2006/spreadsheetDrawing";
+        XNamespace drawingMlNs = "http://schemas.openxmlformats.org/drawingml/2006/main";
+
+        var drawingRels = XlsxRelationshipReader.LoadTargets(
+            sourceArchive, XlsxPackagePath.GetRelationshipPartPath(sourceDrawingPath), sourceDrawingPath, packageRelNs);
+
+        foreach (var anchor in drawingXml.Root.Elements())
+        {
+            var name = anchor.Descendants(spreadsheetDrawingNs + "cNvPr")
+                .Select(element => element.Attribute("name")?.Value)
+                .FirstOrDefault(value => !string.IsNullOrWhiteSpace(value));
+            if (name is null)
+                continue;
+
+            foreach (var blip in anchor.Descendants(drawingMlNs + "blip"))
+            {
+                var relId = blip.Attribute(relNs + "embed")?.Value;
+                if (!string.IsNullOrWhiteSpace(relId) && drawingRels.TryGetValue(relId, out var mediaTarget))
+                    yield return (name, mediaTarget);
             }
         }
     }

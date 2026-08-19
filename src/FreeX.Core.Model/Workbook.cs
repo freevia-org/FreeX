@@ -470,11 +470,39 @@ public sealed class Workbook
     /// is provided, a sheet-scoped name for that sheet takes priority over the workbook-global name.
     /// Returns false if neither a scoped nor a global name is found.
     /// </summary>
+    /// <remarks>
+    /// Excel's scope precedence is per-NAME, not per-kind (§18.2.6): a sheet-scoped named FORMULA
+    /// shadows a same-named workbook-global named RANGE on that sheet, exactly like a sheet-scoped
+    /// named RANGE would. Every internal caller that walks the formula AST already knows this and
+    /// guards for it explicitly before ever calling this method (see
+    /// <c>NamedRangeNodeScopeResolver.TryResolveNamedRange</c>, <c>RecalcEngine.CollectReferences</c>,
+    /// <c>FormControlListResolver.HasSheetScopedNamedFormula</c>, <c>DefineNamedRangeCommand</c>'s
+    /// transitive-reference walk). But the UI-facing surfaces that resolve a typed-in reference
+    /// text -- F5 Go To, the Name Box, "Place in This Document" hyperlink navigation, and
+    /// conditional-format "applies to" editing (see <c>WorkbookReferenceNavigator.TryParseReferenceRange</c>'s
+    /// <c>resolveScopedName</c> callback, wired up in MainWindow.HomeEditing.cs/MainWindow.Editing.cs/
+    /// MainWindow.InsertCommands.cs/Avalonia MainWindow.cs/WorkbookSession.cs) call this method
+    /// directly with no such guard, so the check belongs here too: without it, this method would
+    /// silently fall through to the shadowed workbook-global range instead of reporting "no range
+    /// available here" for a name this sheet has locally redefined as a formula/expression, and
+    /// every one of those UI surfaces would silently navigate to (or resolve edits against) the
+    /// wrong location with no error, no #NAME?, nothing to indicate the mistake.
+    /// </remarks>
     public bool TryGetNamedRange(string name, SheetId contextSheetId, out GridRange range)
     {
         if (_scopedNamedRanges is not null &&
             _scopedNamedRanges.TryGetValue((name, contextSheetId), out range))
             return true;
+
+        if (_scopedNamedFormulas is not null &&
+            _scopedNamedFormulas.ContainsKey((name, contextSheetId)))
+        {
+            // Shadowed: this sheet defines "name" as a formula, not a range, so the workbook-
+            // global range (if any) must not be returned here -- callers that want the formula
+            // text should use TryGetNamedFormulaText instead.
+            range = default;
+            return false;
+        }
 
         return NamedRanges.TryGetValue(name, out range);
     }

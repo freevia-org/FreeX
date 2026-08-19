@@ -2002,7 +2002,13 @@ public sealed class AvaloniaShellSourceTests
 
         sessionSource.Should().Contain("public WorkbookCellEditResult InsertAutoSumFormula(string functionName)");
         sessionSource.Should().Contain("AutoSumFormulaPlanner.TryCreatePlan(ActiveSheet, functionName, SelectedRange, out var plan)");
-        sessionSource.Should().Contain("CreateEditCellsCommand([(plan.Target, Cell.FromFormula(plan.Formula))])");
+        // R147-data-validation-F2: InsertAutoSumFormula now runs the planned cell past Data
+        // Validation (EvaluateDataValidationForEntry) before committing it, so the formula cell is
+        // built once into a local and reused for both the DV check and the actual edit command
+        // instead of being constructed inline at the call site.
+        sessionSource.Should().Contain("var autoSumCell = Cell.FromFormula(plan.Formula);");
+        sessionSource.Should().Contain("EvaluateDataValidationForEntry(autoSumCell, plan.Target)");
+        sessionSource.Should().Contain("CreateEditCellsCommand([(plan.Target, autoSumCell)])");
         sessionSource.Should().Contain("ApplySuccessfulEditResult(result, plan.Target);");
         sessionSource.Should().NotContain("GetNextAutoSumCell");
 

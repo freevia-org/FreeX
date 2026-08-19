@@ -123,7 +123,7 @@ public static class GridAutofillPlanner
     {
         ArgumentNullException.ThrowIfNull(sheet);
 
-        var seedRow = source.Start.Row;
+        var seedRow = source.End.Row;
         if (source.Start.Col > 1 &&
             ResolveColumnLastPopulatedRow(sheet, source.Start.Col - 1, seedRow) is { } leftRow)
         {

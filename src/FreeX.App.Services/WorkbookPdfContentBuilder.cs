@@ -357,7 +357,8 @@ public static class WorkbookPdfContentBuilder
                     fontSize,
                     fontFace,
                     fontColor,
-                    displayText));
+                    displayText,
+                    style.ResolveEffectiveFontName(workbook.Theme)));
             }
         }
 
@@ -620,7 +621,8 @@ public static class WorkbookPdfContentBuilder
                 fontSize,
                 fontFace,
                 fontColor,
-                PdfWinAnsiTextCapability.Truncate(cell.DisplayText, options.MaximumCellTextLength)));
+                PdfWinAnsiTextCapability.Truncate(cell.DisplayText, options.MaximumCellTextLength),
+                style.ResolveEffectiveFontName(workbook.Theme)));
         }
 
         foreach (var cellBounds in validationCircleCellBounds)
@@ -931,7 +933,8 @@ public static class WorkbookPdfContentBuilder
                     fontSize,
                     ToPdfFontFace(textBox.Font.Bold, textBox.Font.Italic),
                     ToPdfColor(textBox.Font.Color),
-                    PdfWinAnsiTextCapability.Truncate(textBox.Text, 128)));
+                    PdfWinAnsiTextCapability.Truncate(textBox.Text, 128),
+                    textBox.Font.FontFamily));
             }
         }
     }
@@ -1967,7 +1970,7 @@ public static class WorkbookPdfContentBuilder
             var runFontSize = (run.FontSize ?? fontSize) * headerFooterFontScale;
             var runColor = run.Color is { } rgb ? new PdfColor(rgb.R, rgb.G, rgb.B) : color;
             var face = ToPdfFontFace(run.Bold, run.Italic);
-            ops.Add(new PdfText(cursorX, baselineY, runFontSize, face, runColor, run.Text));
+            ops.Add(new PdfText(cursorX, baselineY, runFontSize, face, runColor, run.Text, run.FontName));
 
             if (run.Underline || run.DoubleUnderline)
             {

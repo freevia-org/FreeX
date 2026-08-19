@@ -84,6 +84,19 @@ public sealed class PasteCommentsCommand : IWorkbookCommand
             foreach (var (source, comment, author, shown) in sourceComments)
             {
                 var destination = MapDestination(source, _sourceRange, tileAnchor, _transpose);
+
+                // R124-paste-note-vs-thread-parity: real Excel (and every direct-authoring path
+                // here -- SetCommentCommand/SetThreadedCommentCommand via CommentCommandGuards)
+                // never lets a cell carry both a legacy Note and a threaded Comment. A paste is
+                // not "add another annotation kind", it is "make the destination match the
+                // copied source", so pasting a Note here must first clear whatever threaded
+                // comment thread already sits at the destination rather than unioning with it.
+                if (targetSheet.ThreadedComments.TryGetValue(destination, out var oldThreaded))
+                {
+                    _previousThreaded[destination] = CloneThreadedComment(oldThreaded);
+                    targetSheet.ThreadedComments.Remove(destination);
+                }
+
                 _previous[destination] = targetSheet.Comments.TryGetValue(destination, out var oldComment)
                     ? oldComment
                     : null;
@@ -109,6 +122,24 @@ public sealed class PasteCommentsCommand : IWorkbookCommand
             foreach (var (source, comment) in sourceThreadedComments)
             {
                 var destination = MapDestination(source, _sourceRange, tileAnchor, _transpose);
+
+                // R124-paste-note-vs-thread-parity: symmetric to the Note loop above -- pasting a
+                // threaded comment must first clear any legacy Note (and its author/pinned state)
+                // already at the destination, so the two annotation kinds never coexist here.
+                if (targetSheet.Comments.TryGetValue(destination, out var oldNote))
+                {
+                    _previous[destination] = oldNote;
+                    targetSheet.Comments.Remove(destination);
+
+                    _previousAuthors[destination] = targetSheet.CommentAuthors.TryGetValue(destination, out var oldAuthor)
+                        ? oldAuthor
+                        : null;
+                    targetSheet.CommentAuthors.Remove(destination);
+
+                    _previousShown[destination] = targetSheet.ShownComments.Contains(destination);
+                    targetSheet.ShownComments.Remove(destination);
+                }
+
                 _previousThreaded[destination] = targetSheet.ThreadedComments.TryGetValue(destination, out var oldComment)
                     ? CloneThreadedComment(oldComment)
                     : null;

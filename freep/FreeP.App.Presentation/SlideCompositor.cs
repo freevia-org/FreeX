@@ -293,16 +293,32 @@ public static class SlideCompositor
             ? CustomGeometryBuilder.BuildCustom(shape.CustomGeometry, boundsDip)
             : ShapeGeometryBuilder.Build(shape.AutoShapeKind, boundsDip, shape.PresetGeometryAdjustments);
 
-        // Resolve fill.
-        var fill = shape.Fill is not null
-            ? ResolveFill(shape.Fill, theme, effectiveClrMap)
+        // Placeholder inheritance source (layout, then master) -- shared by fill/outline/text
+        // resolution below. A shape that is itself a placeholder and omits Fill/Outline/TextBody
+        // is the normal "inherit from layout/master" authoring pattern (PowerPoint itself omits
+        // spPr fill/line on slide placeholders that inherit), so those lookups must happen
+        // regardless of which of the three properties are missing.
+        var placeholderLayoutPh = shape.Placeholder is not null
+            ? PlaceholderResolver.FindLayoutPlaceholder(shape.Placeholder, slide, presentation)
+            : null;
+        var placeholderMasterPh = shape.Placeholder is not null
+            ? PlaceholderResolver.FindMasterPlaceholder(shape.Placeholder, slide, presentation)
+            : null;
+
+        // Resolve fill: shape's own fill, else layout placeholder's, else master placeholder's,
+        // else the transparent default.
+        var effectiveFillSource = shape.Fill ?? placeholderLayoutPh?.Fill ?? placeholderMasterPh?.Fill;
+        var fill = effectiveFillSource is not null
+            ? ResolveFill(effectiveFillSource, theme, effectiveClrMap)
             : InferDefaultFill(shape, theme);
         if (shape.Effects?.Scene3d is not null)
             fill = ResolveScene3dMaterialFill(fill);
 
-        // Resolve outline.
-        var outline = shape.Outline is not null
-            ? ResolveOutline(shape.Outline, theme, effectiveClrMap)
+        // Resolve outline: shape's own outline, else layout placeholder's, else master
+        // placeholder's, else no outline.
+        var effectiveOutlineSource = shape.Outline ?? placeholderLayoutPh?.Outline ?? placeholderMasterPh?.Outline;
+        var outline = effectiveOutlineSource is not null
+            ? ResolveOutline(effectiveOutlineSource, theme, effectiveClrMap)
             : ResolvedOutline.None.Instance;
 
         // Resolve text.
@@ -311,12 +327,8 @@ public static class SlideCompositor
         {
             // P0: Walk shape -> layout placeholder -> master placeholder to resolve
             // the effective vertical anchor and default paragraph alignment.
-            var layoutPh = shape.Placeholder is not null
-                ? PlaceholderResolver.FindLayoutPlaceholder(shape.Placeholder, slide, presentation)
-                : null;
-            var masterPh = shape.Placeholder is not null
-                ? PlaceholderResolver.FindMasterPlaceholder(shape.Placeholder, slide, presentation)
-                : null;
+            var layoutPh = placeholderLayoutPh;
+            var masterPh = placeholderMasterPh;
 
             var effectiveAnchor = ResolveVerticalAnchor(shape.TextBody, layoutPh?.TextBody, masterPh?.TextBody, shape.Placeholder);
             var effectiveDefaultAlign = ResolveDefaultParaAlign(shape.TextBody, layoutPh?.TextBody, masterPh?.TextBody);

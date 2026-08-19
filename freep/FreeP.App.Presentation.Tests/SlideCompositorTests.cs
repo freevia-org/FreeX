@@ -3456,6 +3456,86 @@ public sealed class SlideCompositorTests
     }
 
     /// <summary>
+    /// master-layout-inheritance F1: a slide placeholder that omits Fill/Outline (the normal
+    /// "inherit from layout" authoring pattern -- PowerPoint itself omits spPr fill/line on slide
+    /// placeholders that inherit) must pick up the matching LAYOUT placeholder's fill and outline,
+    /// not render as a transparent, borderless box.
+    /// </summary>
+    [Fact]
+    public void Compose_TitlePlaceholder_InheritsLayoutPlaceholderFillAndOutline()
+    {
+        var p = new PresentationModel { Theme = PresentationTheme.CreateDefault() };
+        var master = new SlideMaster { Id = "m1" };
+        var layout = new SlideLayout { Id = "l1", MasterId = "m1" };
+        var layoutBlue = new ThemeAwareColor(new SrgbColor(0x11, 0x22, 0xCC));
+        var layoutRed = new ThemeAwareColor(new SrgbColor(0xCC, 0x11, 0x22));
+        layout.Placeholders.Add(new SlideShape
+        {
+            Id = 10,
+            Placeholder = new Placeholder { Type = PlaceholderType.Title, Idx = 0 },
+            Fill = new ShapeFill.Solid(layoutBlue),
+            Outline = new ShapeOutline.Visible(layoutRed, widthPt: 3.0, dash: OutlineDash.Solid)
+        });
+        p.Masters.Add(master);
+        p.Layouts.Add(layout);
+
+        var slide = new Slide { LayoutId = "l1" };
+        // Slide's own placeholder omits Fill/Outline entirely -- the normal "inherit" state.
+        slide.Shapes.Add(CreateTextPlaceholder(1, PlaceholderType.Title, 0, "Inherited fill/outline"));
+        p.Slides.Add(slide);
+
+        var shapeOp = SlideCompositor.Compose(p, slide).OfType<DrawOp.Shape>().Single();
+
+        var fill = shapeOp.Fill.Should().BeOfType<ResolvedFill.Solid>(
+            "the layout placeholder's blue fill should be inherited").Subject;
+        fill.Color.Should().Be(new SrgbColor(0x11, 0x22, 0xCC));
+
+        var outline = shapeOp.Outline.Should().BeOfType<ResolvedOutline.Visible>(
+            "the layout placeholder's red outline should be inherited").Subject;
+        outline.Color.Should().Be(new SrgbColor(0xCC, 0x11, 0x22));
+        outline.WidthDip.Should().BeApproximately(4.0, 0.05); // 3pt -> DIP = 3 * 96/72 = 4.0
+    }
+
+    /// <summary>
+    /// Sibling no-regression case: when the SLIDE'S OWN placeholder shape does specify its own
+    /// Fill/Outline, that explicit authoring must still win over the layout placeholder's -- the
+    /// inheritance fallback must never override an explicit slide-level value.
+    /// </summary>
+    [Fact]
+    public void Compose_TitlePlaceholder_OwnFillAndOutlineOverrideLayoutPlaceholder_Regression()
+    {
+        var p = new PresentationModel { Theme = PresentationTheme.CreateDefault() };
+        var master = new SlideMaster { Id = "m1" };
+        var layout = new SlideLayout { Id = "l1", MasterId = "m1" };
+        layout.Placeholders.Add(new SlideShape
+        {
+            Id = 10,
+            Placeholder = new Placeholder { Type = PlaceholderType.Title, Idx = 0 },
+            Fill = new ShapeFill.Solid(new ThemeAwareColor(new SrgbColor(0x11, 0x22, 0xCC))),
+            Outline = new ShapeOutline.Visible(
+                new ThemeAwareColor(new SrgbColor(0xCC, 0x11, 0x22)), widthPt: 3.0, dash: OutlineDash.Solid)
+        });
+        p.Masters.Add(master);
+        p.Layouts.Add(layout);
+
+        var slide = new Slide { LayoutId = "l1" };
+        var ownShape = CreateTextPlaceholder(1, PlaceholderType.Title, 0, "Own fill/outline");
+        ownShape.Fill = new ShapeFill.Solid(new ThemeAwareColor(new SrgbColor(0x00, 0xAA, 0x00)));
+        ownShape.Outline = new ShapeOutline.Visible(
+            new ThemeAwareColor(new SrgbColor(0x00, 0x00, 0x00)), widthPt: 1.0, dash: OutlineDash.Solid);
+        slide.Shapes.Add(ownShape);
+        p.Slides.Add(slide);
+
+        var shapeOp = SlideCompositor.Compose(p, slide).OfType<DrawOp.Shape>().Single();
+
+        var fill = shapeOp.Fill.Should().BeOfType<ResolvedFill.Solid>().Subject;
+        fill.Color.Should().Be(new SrgbColor(0x00, 0xAA, 0x00), "the slide's own explicit fill must win over the layout's");
+
+        var outline = shapeOp.Outline.Should().BeOfType<ResolvedOutline.Visible>().Subject;
+        outline.Color.Should().Be(new SrgbColor(0x00, 0x00, 0x00), "the slide's own explicit outline must win over the layout's");
+    }
+
+    /// <summary>
     /// BV1 regression: pie chart still gets per-point colors (not regressed by the fix).
     /// </summary>
     [Fact]

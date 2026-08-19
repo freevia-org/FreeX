@@ -3238,6 +3238,7 @@ public sealed class GroupFloatingObjectsCommand : IDocumentCommand
         var group = new DrawingGroup();
         double minH = double.MaxValue, minV = double.MaxValue;
         double maxH = double.MinValue, maxV = double.MinValue;
+        int? maxZ = null;
 
         foreach (var (bi, ri) in _members)
         {
@@ -3252,6 +3253,11 @@ public sealed class GroupFloatingObjectsCommand : IDocumentCommand
             if (placement.VerticalOffsetPt < minV) minV = placement.VerticalOffsetPt;
             if (placement.HorizontalOffsetPt + widthPt > maxH) maxH = placement.HorizontalOffsetPt + widthPt;
             if (placement.VerticalOffsetPt + heightPt > maxV) maxV = placement.VerticalOffsetPt + heightPt;
+            // Take the FRONT-most (max) ZOrderIndex among all selected members, not just the
+            // first one in document order. Collapsing to the first member's z-order would let an
+            // unselected object that used to sit BEHIND a selected member now render in FRONT of
+            // the whole group, silently reordering objects the user never touched.
+            if (maxZ is null || placement.ZOrderIndex > maxZ.Value) maxZ = placement.ZOrderIndex;
         }
 
         if (group.Children.Count < 2) return;
@@ -3279,7 +3285,7 @@ public sealed class GroupFloatingObjectsCommand : IDocumentCommand
             VerticalOffsetPt = minV,
             HorizontalAnchor = firstPlacement?.HorizontalAnchor ?? HorizontalAnchor.Column,
             VerticalAnchor = firstPlacement?.VerticalAnchor ?? VerticalAnchor.Paragraph,
-            ZOrderIndex = firstPlacement?.ZOrderIndex ?? 0
+            ZOrderIndex = maxZ ?? firstPlacement?.ZOrderIndex ?? 0
         };
 
         _snapshot = [];
@@ -3363,7 +3369,13 @@ public sealed class UngroupFloatingObjectsCommand(int paragraphIndex, int runInd
             var (ox, oy) = i < group.ChildOffsets.Count ? group.ChildOffsets[i] : (0.0, 0.0);
             var absH = group.Placement.HorizontalOffsetPt + ox;
             var absV = group.Placement.VerticalOffsetPt + oy;
-            var z = group.Placement.ZOrderIndex + i;
+            // Restore each child's own ZOrderIndex, which GroupFloatingObjectsCommand.Apply never
+            // touched (it only reads it to compute the group-level z-order) -- not a value derived
+            // from the group's z-order. Deriving z from group.Placement.ZOrderIndex + i instead would
+            // hand out a dense run of z-values starting at the group's slot, which can collide with
+            // -- and mis-order the ungrouped members against -- any unselected object that happens to
+            // occupy the same z range.
+            var z = GetChildZOrderIndex(child) ?? group.Placement.ZOrderIndex + i;
 
             Run? memberRun = child switch
             {
@@ -3393,6 +3405,21 @@ public sealed class UngroupFloatingObjectsCommand(int paragraphIndex, int runInd
         _applied = false;
         _group = null;
     }
+
+    /// <summary>
+    /// Reads a group child's own (pre-grouping) ZOrderIndex, which GroupFloatingObjectsCommand.Apply
+    /// leaves untouched on the child object itself. Returns null only for an unrecognised child type.
+    /// </summary>
+    private static int? GetChildZOrderIndex(object child) => child switch
+    {
+        InlineImage img => img.ZOrderIndex,
+        Shape shape => shape.Placement?.ZOrderIndex,
+        Chart chart => chart.Placement?.ZOrderIndex,
+        SmartArt sa => sa.Placement?.ZOrderIndex,
+        WordArt wa => wa.Placement?.ZOrderIndex,
+        DrawingGroup nested => nested.Placement.ZOrderIndex,
+        _ => null
+    };
 
     private static Run RestoreImagePlacement(InlineImage img, FloatingPlacement gp, double h, double v, int z)
     {

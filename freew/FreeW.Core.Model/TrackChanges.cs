@@ -6,7 +6,8 @@ namespace FreeW.Core.Model;
 /// Accept turns insertions into ordinary content and drops deletions; Reject does the inverse (drops
 /// insertions, restores deletions to ordinary content). Both walk every paragraph and table row in the
 /// document body (including paragraphs nested in table cells, and tables nested inside table cells to
-/// any depth) and clear the revision marks they resolve.
+/// any depth), plus the text-box content of any <see cref="Run.Shape"/> a run carries (recursively, for a
+/// shape nested inside another shape's text box), and clear the revision marks they resolve.
 /// The document is mutated in place; nothing here touches the editor or docx layers.
 /// </summary>
 public static class TrackChanges
@@ -83,7 +84,10 @@ public static class TrackChanges
     private static bool ParagraphHasRevisions(Paragraph paragraph) =>
         paragraph.ParagraphFormatRevision is not null ||
         paragraph.MarkRevision != RevisionKind.None ||
-        paragraph.Runs.Any(r => r.Revision != RevisionKind.None || r.FormatRevision is not null);
+        paragraph.Runs.Any(r =>
+            r.Revision != RevisionKind.None ||
+            r.FormatRevision is not null ||
+            (r.Shape is { } shape && shape.TextParagraphs.Any(ParagraphHasRevisions)));
 
     private static bool TableHasRevisions(Table table) =>
         table.Rows.Any(row =>
@@ -325,7 +329,15 @@ public static class TrackChanges
             }
 
             if (run.Revision == RevisionKind.None)
+            {
+                // The run itself carries no insert/delete mark, but it may still carry a text-box
+                // (Run.Shape) whose own txbxContent paragraphs have independent tracked changes
+                // (DocxReader parses w:txbxContent through the same ReadParagraph path as body text) —
+                // resolve those recursively so Accept/Reject All reach revisions nested in shapes.
+                if (run.Shape is { } unmarkedShape)
+                    ResolveParagraphContainer(unmarkedShape.TextParagraphs, accept);
                 continue;
+            }
             if (run.Revision == dropKind)
             {
                 paragraph.Runs.RemoveAt(i);
@@ -335,6 +347,8 @@ public static class TrackChanges
                 run.Revision = RevisionKind.None;
                 run.RevisionAuthor = null;
                 run.RevisionDateXml = null;
+                if (run.Shape is { } keptShape)
+                    ResolveParagraphContainer(keptShape.TextParagraphs, accept);
             }
         }
     }
