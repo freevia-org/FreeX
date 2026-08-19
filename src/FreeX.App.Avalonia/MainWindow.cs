@@ -19041,10 +19041,17 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             dialog,
             UiText.Get("Sort_CustomSortHelpText"));
 
+        // R148-sort-dialog-header-autodetect: auto-detect whether the range looks like it has a
+        // header row using the same heuristic as the shared quick-sort planner and the WPF host's
+        // DetectSortDialogHasHeaders/SortCustomButton_Click, instead of always defaulting to
+        // checked -- an unchecked-but-header-bearing range is comparatively harmless (the header
+        // row just gets sorted in with the data, which the user notices immediately), whereas an
+        // always-checked box on headerless data silently pins the real first data row in place.
+        var likelyHasHeaders = QuickSortRangePlanner.HasLikelyHeaderRow(_session.ActiveSheet, range);
         var headersCheck = new CheckBox
         {
             Content = UiText.Get("RemoveDuplicates_MyDataHasHeadersAutomationName"),
-            IsChecked = true,
+            IsChecked = likelyHasHeaders,
             HorizontalAlignment = AvaloniaHorizontalAlignment.Right,
             FontSize = 12,
             MinHeight = 18,
@@ -23587,16 +23594,32 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
 
         var rangeReference = FormatRangeReference(_session.SelectedRange);
         var cutResult = _session.TryCutSelectedRangeText();
-        if (!cutResult.Success)
+        if (!cutResult.Success || cutResult.Text is not { } cutText)
         {
             ShowEditIssue(cutResult.ErrorMessage ?? UiText.Get("MainLoc_CutFailed"));
             return;
         }
 
+        // R148-clipboard-cut-format-parity: match CopySelectedRangeToClipboardAsync and the WPF
+        // host's shared ExecuteCopy(isCut) path -- Cut must place the same HTML/CSV/picture
+        // flavors on the OS clipboard as Copy, not flattened plain text only. TryCutSelectedRangeText
+        // already rejects multi-range selections outright (unlike Copy's fallback), so reaching here
+        // guarantees a single range and cutResult.Viewport is populated exactly like copyResult's.
+        var clipboardContent = BuildClipboardTextAndHtmlContent(
+            cutText,
+            cutResult.Viewport ?? _session.Viewport,
+            _session.ActiveSheet,
+            _session.SelectedRange,
+            _session.Workbook.Theme);
+
+        var picturePlan = ClipboardRangePicturePlanner.TryBuild(ClipboardSerializer.Deserialize(cutText));
+        clipboardContent = clipboardContent with
+        {
+            Image = SkiaClipboardRangePictureRenderer.TryRender(picturePlan),
+        };
+
         var write = await _platformClipboard.WriteAsync(
-            WorkbookClipboardSession.AttachMarker(
-                new PlatformClipboardContent(Text: cutResult.Text),
-                cutResult.ClipboardMarker));
+            WorkbookClipboardSession.AttachMarker(clipboardContent, cutResult.ClipboardMarker));
         if (write.Status == PlatformClipboardWriteStatus.Unavailable)
         {
             ShowEditIssue(UiText.Get("Clipboard_UnavailableOnPlatform"));

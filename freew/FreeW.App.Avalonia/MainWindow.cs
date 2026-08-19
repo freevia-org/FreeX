@@ -92,6 +92,11 @@ public sealed partial class MainWindow : Window
     private ToggleButton _pagedEditSwitch = null!;
     private readonly SisterAvaloniaFileCommandWorkflow _fileWorkflow;
     private readonly SisterAvaloniaAsyncWindowCloseCoordinator _closeCoordinator;
+    // r148-startup-fileopen: set once in the constructor when a startup argument was supplied but
+    // could not be opened (missing, locked, corrupt, or unsupported), so Opened can surface it --
+    // see ShowStartupOpenFailureIfAnyAsync.
+    private readonly bool _startupOpenFailed;
+    private readonly string? _startupOpenFailurePath;
     private readonly Border _titleBar;
     private Border? _ribbonHost;
     private Border? _statusBar;
@@ -413,6 +418,13 @@ public sealed partial class MainWindow : Window
         var startupDocument = FreeWApplicationStartup.TryOpenStartupDocument(
             startupArguments,
             _documentPersistence);
+        // r148-startup-fileopen: TryOpenStartupDocument returns null both when nothing was asked for
+        // (no startup arguments -- silently show the blank sample document, unchanged) and when a
+        // requested file could not be opened (missing/locked/corrupt/unsupported -- WPF's equivalent
+        // OpenPath already pops ShowError for this; Avalonia previously showed nothing at all). Only
+        // the second case should alert, so gate on there having been an actual argument to try.
+        _startupOpenFailed = startupDocument is null && startupArguments.Count > 0;
+        _startupOpenFailurePath = startupArguments.Count > 0 ? startupArguments[0] : null;
         if (startupDocument is null)
             LoadDocumentAsSaved(SampleDocument.Create(), path: null);
         else
@@ -434,6 +446,10 @@ public sealed partial class MainWindow : Window
         Opened += async (_, _) =>
         {
             _autosave.Start();
+            // r148-startup-fileopen: deferred to Opened (not shown synchronously in the constructor)
+            // for the same reason the recovery offer below is -- AvaloniaUserMessageDialog.ShowDialog
+            // needs an owner window that is already shown.
+            await ShowStartupOpenFailureIfAnyAsync();
             if (!suppressStartupRecoveryOffer)
                 await _autosave.OfferRecoveryAsync(this);
             await RefreshPrinterDiscoveryAsync();
@@ -3287,6 +3303,14 @@ public sealed partial class MainWindow : Window
     private bool ApplyFileFeedback(FreeWDocumentFileFeedback feedback)
     {
         _status.Text = feedback.Message;
+        // r148: a real Save/Open/Import failure (disk full, locked file, permission denied, ...)
+        // must reach a modal alert -- the WPF host already routes ShouldShowError to ShowError; this
+        // status-bar-only line was the Avalonia gap (a user mid-typing or looking away would never
+        // see it). PresentFeedback is a synchronous Action port shared with the WPF host's signature,
+        // so this is necessarily fire-and-forget; ShowFileCommandErrorAsync still serializes behind
+        // its own owner-window dialog machinery like every other Avalonia alert in this shell.
+        if (feedback.ShouldShowError)
+            _ = _fileWorkflow.ShowFileCommandErrorAsync(feedback.ErrorSummary!, feedback.Exception!);
         return feedback.Succeeded;
     }
 
@@ -3782,6 +3806,25 @@ public sealed partial class MainWindow : Window
         if (!execution.Succeeded)
             throw execution.Exception ?? new InvalidOperationException("The startup document could not be opened.");
     }
+
+    /// <summary>
+    /// r148-startup-fileopen: a command-line/file-association startup path that could not be opened
+    /// used to fall back to the blank sample document with no feedback anywhere -- the WPF host's
+    /// equivalent (<c>FileCommands.OpenPath</c>, see the R133-wpf-startup-file-args constructor
+    /// comment) already shows a modal ShowError for the identical gesture.
+    /// <see cref="FreeWApplicationStartup.TryOpenStartupDocument"/> returns null uniformly for "no
+    /// startup arguments" and "the argument couldn't be opened", so <see cref="_startupOpenFailed"/>
+    /// (computed in the constructor, before it is known which case this is) is what distinguishes
+    /// them -- a plain launch with no file must stay silent.
+    /// </summary>
+    private Task ShowStartupOpenFailureIfAnyAsync() =>
+        _startupOpenFailed
+            ? _fileWorkflow.ShowFileCommandErrorAsync(
+                "Could not open the document",
+                new InvalidOperationException(
+                    $"'{Path.GetFileName(_startupOpenFailurePath)}' could not be opened. " +
+                    "It may be missing, in use by another program, or in an unsupported format."))
+            : Task.CompletedTask;
 
     private void LoadDocumentAsSaved(TextDocument document, string? path)
     {

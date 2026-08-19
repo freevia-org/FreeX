@@ -431,6 +431,110 @@ public class TransitionAnimationTests
         Assert.Equal(AnimationPreset.Fade,   pres.Slides[0].Animations[1].Preset);
     }
 
+    // ── Click-group anchor trigger correction (freep-animation F1) ─────────────────
+
+    [Fact]
+    public void RemoveShapeAnimationCommand_PromotedHeadTriggerIsCorrectedToOnClick_AndRevertRestoresIt()
+    {
+        var pres = Presentation.CreateEmpty();
+        var a0 = new ShapeAnimation { ShapeId = 10, Trigger = AnimationTrigger.OnClick };
+        var a1 = new ShapeAnimation { ShapeId = 11, Trigger = AnimationTrigger.WithPrevious };
+        pres.Slides[0].Animations.Add(a0);
+        pres.Slides[0].Animations.Add(a1);
+
+        // Removing the anchor (index 0) promotes a1 to be the new first main-sequence item.
+        var cmd = new RemoveShapeAnimationCommand(0, 0);
+        cmd.Apply(pres);
+
+        var anims = pres.Slides[0].Animations;
+        Assert.Single(anims);
+        Assert.Equal(11u, anims[0].ShapeId);
+        Assert.Equal(AnimationTrigger.OnClick, anims[0].Trigger);
+        // The promoted animation instance itself was mutated (pane/writer read this field directly).
+        Assert.Equal(AnimationTrigger.OnClick, a1.Trigger);
+
+        cmd.Revert(pres);
+        Assert.Equal(2, anims.Count);
+        Assert.Equal(AnimationTrigger.OnClick,     anims[0].Trigger);
+        Assert.Equal(AnimationTrigger.WithPrevious, anims[1].Trigger);
+        Assert.Same(a1, anims[1]);
+    }
+
+    [Fact]
+    public void RemoveShapeAnimationCommand_RemovingNonHeadItem_LeavesHeadTriggerUntouched()
+    {
+        var pres = Presentation.CreateEmpty();
+        var a0 = new ShapeAnimation { ShapeId = 10, Trigger = AnimationTrigger.OnClick };
+        var a1 = new ShapeAnimation { ShapeId = 11, Trigger = AnimationTrigger.WithPrevious };
+        var a2 = new ShapeAnimation { ShapeId = 12, Trigger = AnimationTrigger.OnClick };
+        pres.Slides[0].Animations.Add(a0);
+        pres.Slides[0].Animations.Add(a1);
+        pres.Slides[0].Animations.Add(a2);
+
+        // Removing a2 (not the anchor) must not touch a0's or a1's stored trigger.
+        var cmd = new RemoveShapeAnimationCommand(0, 2);
+        cmd.Apply(pres);
+
+        var anims = pres.Slides[0].Animations;
+        Assert.Equal(2, anims.Count);
+        Assert.Equal(AnimationTrigger.OnClick,      anims[0].Trigger);
+        Assert.Equal(AnimationTrigger.WithPrevious, anims[1].Trigger);
+
+        cmd.Revert(pres);
+        Assert.Equal(3, anims.Count);
+        Assert.Equal(AnimationTrigger.OnClick, anims[2].Trigger);
+    }
+
+    [Fact]
+    public void ReorderShapeAnimationCommand_PromotedHeadTriggerIsCorrectedToOnClick_AndRevertRestoresIt()
+    {
+        var pres = Presentation.CreateEmpty();
+        var a0 = new ShapeAnimation { ShapeId = 10, Trigger = AnimationTrigger.OnClick };
+        var a1 = new ShapeAnimation { ShapeId = 11, Trigger = AnimationTrigger.AfterPrevious };
+        pres.Slides[0].Animations.Add(a0);
+        pres.Slides[0].Animations.Add(a1);
+
+        // Dragging a1 above a0 promotes it to the new first main-sequence item.
+        var cmd = new ReorderShapeAnimationCommand(0, 1, 0);
+        cmd.Apply(pres);
+
+        var anims = pres.Slides[0].Animations;
+        Assert.Equal(11u, anims[0].ShapeId);
+        Assert.Equal(AnimationTrigger.OnClick, anims[0].Trigger);
+        Assert.Equal(10u, anims[1].ShapeId);
+        Assert.Equal(AnimationTrigger.OnClick, anims[1].Trigger);
+
+        cmd.Revert(pres);
+        Assert.Equal(10u, anims[0].ShapeId);
+        Assert.Equal(AnimationTrigger.OnClick, anims[0].Trigger);
+        Assert.Equal(11u, anims[1].ShapeId);
+        Assert.Equal(AnimationTrigger.AfterPrevious, anims[1].Trigger);
+    }
+
+    [Fact]
+    public void ReorderShapeAnimationCommand_ReorderingAwayFromHead_LeavesTriggersUntouched()
+    {
+        var pres = Presentation.CreateEmpty();
+        var a0 = new ShapeAnimation { ShapeId = 10, Trigger = AnimationTrigger.OnClick };
+        var a1 = new ShapeAnimation { ShapeId = 11, Trigger = AnimationTrigger.WithPrevious };
+        var a2 = new ShapeAnimation { ShapeId = 12, Trigger = AnimationTrigger.OnClick };
+        pres.Slides[0].Animations.Add(a0);
+        pres.Slides[0].Animations.Add(a1);
+        pres.Slides[0].Animations.Add(a2);
+
+        // Swap the two non-head items; the anchor at index 0 never moves.
+        var cmd = new ReorderShapeAnimationCommand(0, 2, 1);
+        cmd.Apply(pres);
+
+        var anims = pres.Slides[0].Animations;
+        Assert.Equal(10u, anims[0].ShapeId);
+        Assert.Equal(AnimationTrigger.OnClick, anims[0].Trigger);
+        Assert.Equal(12u, anims[1].ShapeId);
+        Assert.Equal(AnimationTrigger.OnClick, anims[1].Trigger);
+        Assert.Equal(11u, anims[2].ShapeId);
+        Assert.Equal(AnimationTrigger.WithPrevious, anims[2].Trigger);
+    }
+
     [Fact]
     public void SetShapeAnimationCommand_ApplyRevert()
     {

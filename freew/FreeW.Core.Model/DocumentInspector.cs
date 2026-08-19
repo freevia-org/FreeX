@@ -77,8 +77,7 @@ public static class DocumentInspector
 
         var comments = document.Comments.Count;
 
-        var revisions = EnumerateParagraphs(document)
-            .Sum(p => p.Runs.Count(r => r.Revision != RevisionKind.None));
+        var revisions = CountRevisions(document);
 
         var properties = CountNonEmptyProperties(document.Properties);
 
@@ -241,6 +240,82 @@ public static class DocumentInspector
     // Count the populated (non-null, non-whitespace for strings) core document properties.
     private static int CountNonEmptyProperties(DocumentProperties properties) =>
         properties.CountNonEmptyCoreProperties();
+
+    /// <summary>
+    /// Counts every tracked insertion/deletion mark (<see cref="Run.Revision"/>,
+    /// <see cref="Paragraph.MarkRevision"/>, <see cref="TableRow.RowRevision"/>) that
+    /// <see cref="RemoveRevisions"/> (i.e. <see cref="TrackChanges.AcceptAll"/>) actually resolves —
+    /// mirroring <see cref="TrackChanges.HasRevisions"/>'s reach: the body (including table rows, table
+    /// cells, nested tables, and text-box shape content, via <see cref="EnumerateParagraphs"/>), every
+    /// header/footer slot of every section (including a side-by-side header/footer layout table's own
+    /// rows), and every footnote's/endnote's own content. Before this, <see cref="Inspect"/> only summed
+    /// <see cref="Run.Revision"/> across the body — a document whose only tracked change was a table-row
+    /// insertion/deletion, a tracked paragraph-mark (Enter-key) split, or lived in a header, footer,
+    /// footnote, or endnote reported zero revisions and a permanently disabled "Revisions" checkbox even
+    /// though <see cref="TrackChanges.HasRevisions"/> — and hence <see cref="RemoveRevisions"/> — still
+    /// found and resolved it.
+    /// </summary>
+    private static int CountRevisions(TextDocument document)
+    {
+        var count = EnumerateParagraphs(document).Sum(CountParagraphRevisionMarks)
+            + CountTableRowRevisionMarks(document.Blocks.OfType<Table>());
+
+        foreach (var section in document.Sections)
+        {
+            var headersFooters = section.HeadersFooters;
+            foreach (var headerFooter in new[]
+                     {
+                         headersFooters.Header,
+                         headersFooters.Footer,
+                         headersFooters.EvenHeader,
+                         headersFooters.EvenFooter,
+                         headersFooters.FirstHeader,
+                         headersFooters.FirstFooter,
+                     })
+            {
+                if (headerFooter is null)
+                    continue;
+
+                count += headerFooter.Paragraphs.Sum(CountParagraphRevisionMarks);
+                if (headerFooter.Table is { } headerFooterTable)
+                    count += CountTableRowRevisionMarks([headerFooterTable]);
+            }
+        }
+
+        foreach (var footnote in document.Footnotes.Values)
+            count += footnote.Content.Sum(CountParagraphRevisionMarks);
+        foreach (var endnote in document.Endnotes.Values)
+            count += endnote.Content.Sum(CountParagraphRevisionMarks);
+
+        return count;
+    }
+
+    // One paragraph's own tracked-change marks: its paragraph-mark revision plus each run's revision.
+    // Does not walk into a run's text-box (Run.Shape) content — callers needing that reach use
+    // EnumerateParagraphs (BodyParagraphWalk), which already yields shape paragraphs as separate entries.
+    private static int CountParagraphRevisionMarks(Paragraph paragraph) =>
+        (paragraph.MarkRevision != RevisionKind.None ? 1 : 0) +
+        paragraph.Runs.Count(r => r.Revision != RevisionKind.None);
+
+    // Table-row tracked-change marks (TableRow.RowRevision) for every row in every given table,
+    // recursing into any table nested inside a cell to any depth — mirrors TrackChanges.ResolveTable's
+    // reach.
+    private static int CountTableRowRevisionMarks(IEnumerable<Table> tables)
+    {
+        var count = 0;
+        foreach (var table in tables)
+        {
+            foreach (var row in table.Rows)
+            {
+                if (row.RowRevision != RevisionKind.None)
+                    count++;
+
+                foreach (var cell in row.Cells)
+                    count += CountTableRowRevisionMarks(cell.NestedTables);
+            }
+        }
+        return count;
+    }
 
     // Every paragraph reachable in the document body — top-level paragraphs and those nested in table
     // cells, including tables nested inside table cells to any depth, plus the text-box content of any

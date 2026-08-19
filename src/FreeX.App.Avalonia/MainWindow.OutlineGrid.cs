@@ -69,7 +69,7 @@ public sealed partial class MainWindow
         return overlay;
     }
 
-    private static void AddRowOutlineLevelButtons(
+    private void AddRowOutlineLevelButtons(
         Canvas overlay,
         IReadOnlyList<OutlineGroupRange>? groups,
         double rowOutlineWidth,
@@ -88,11 +88,19 @@ public sealed partial class MainWindow
         for (var level = 1; level <= maxLevel; level++)
         {
             var centerX = GetOutlineLevelCenter(level, zoomFactor);
-            AddOutlineLevelButton(overlay, centerX, top + buttonSize / 2, level, zoomFactor, $"WorksheetRowOutlineLevel-{level}");
+            var capturedLevel = level;
+            AddOutlineLevelButton(
+                overlay,
+                centerX,
+                top + buttonSize / 2,
+                level,
+                zoomFactor,
+                $"WorksheetRowOutlineLevel-{level}",
+                () => ShowRowOutlineLevel(capturedLevel));
         }
     }
 
-    private static void AddColumnOutlineLevelButtons(
+    private void AddColumnOutlineLevelButtons(
         Canvas overlay,
         IReadOnlyList<OutlineGroupRange>? groups,
         double rowHeaderWidth,
@@ -111,7 +119,15 @@ public sealed partial class MainWindow
         for (var level = 1; level <= maxLevel; level++)
         {
             var centerY = GetOutlineLevelCenter(level, zoomFactor);
-            AddOutlineLevelButton(overlay, left + buttonSize / 2, centerY, level, zoomFactor, $"WorksheetColumnOutlineLevel-{level}");
+            var capturedLevel = level;
+            AddOutlineLevelButton(
+                overlay,
+                left + buttonSize / 2,
+                centerY,
+                level,
+                zoomFactor,
+                $"WorksheetColumnOutlineLevel-{level}",
+                () => ShowColumnOutlineLevel(capturedLevel));
         }
     }
 
@@ -121,27 +137,39 @@ public sealed partial class MainWindow
         double centerY,
         int level,
         double zoomFactor,
-        string automationId)
+        string automationId,
+        Action onClick)
     {
         var size = OutlineButtonSize * zoomFactor;
-        var levelButton = new Border
+        var levelButton = new Button
         {
             Width = size,
             Height = size,
+            MinWidth = size,
+            MinHeight = size,
+            Padding = new Thickness(0),
             Background = Brushes.White,
             BorderBrush = OutlineButtonBorderBrush,
             BorderThickness = new Thickness(Math.Max(1, zoomFactor)),
-            Child = new TextBlock
+            HorizontalContentAlignment = global::Avalonia.Layout.HorizontalAlignment.Center,
+            VerticalContentAlignment = global::Avalonia.Layout.VerticalAlignment.Center,
+            Content = new TextBlock
             {
                 Text = level.ToString(System.Globalization.CultureInfo.InvariantCulture),
                 FontSize = 9 * zoomFactor,
                 Foreground = Brushes.Black,
                 TextAlignment = TextAlignment.Center,
-                VerticalAlignment = global::Avalonia.Layout.VerticalAlignment.Center,
             },
-            IsHitTestVisible = false,
+            Focusable = false,
+            CornerRadius = new CornerRadius(0),
         };
         AutomationProperties.SetAutomationId(levelButton, automationId);
+        AutomationProperties.SetName(levelButton, UiText.Format("Outline_ShowLevelButtonName", level));
+        levelButton.Click += (_, args) =>
+        {
+            onClick();
+            args.Handled = true;
+        };
         Canvas.SetLeft(levelButton, centerX - size / 2);
         Canvas.SetTop(levelButton, centerY - size / 2);
         overlay.Children.Add(levelButton);
@@ -277,6 +305,43 @@ public sealed partial class MainWindow
             !group.IsCollapsed);
         RefreshShell(result.Success
             ? UiText.Get(!group.IsCollapsed ? "Outline_ColumnGroupCollapsedStatus" : "Outline_ColumnGroupExpandedStatus")
+            : result.ErrorMessage ?? UiText.Get("Outline_UpdateColumnGroupFailed"));
+    }
+
+    /// <summary>
+    /// Handles a click on a row-gutter outline level button (the numbered "1 2 3..." boxes above
+    /// the outline brackets). Matches Excel: shows every summary row through the clicked depth and
+    /// collapses (hides) every row nested deeper than it, sheet-wide. Implemented as expand-all
+    /// (level 1, the sheet-wide threshold overload's shallowest bound) followed by a re-collapse at
+    /// level+1 so any row previously hidden by a shallower display level becomes visible again
+    /// before the deeper levels are re-hidden.
+    /// </summary>
+    private void ShowRowOutlineLevel(int level)
+    {
+        var result = _session.ExecuteRepeatableCommandPreservingSelection(() =>
+            new CompositeWorkbookCommand(
+                "Show Outline Level",
+                [
+                    new ExpandRowGroupCommand(_session.ActiveSheet.Id, 1),
+                    new CollapseRowGroupCommand(_session.ActiveSheet.Id, level + 1),
+                ]));
+        RefreshShell(result.Success
+            ? UiText.Format("Outline_RowLevelShownStatus", level)
+            : result.ErrorMessage ?? UiText.Get("Outline_UpdateRowGroupFailed"));
+    }
+
+    /// <summary>Column-axis counterpart of <see cref="ShowRowOutlineLevel"/>.</summary>
+    private void ShowColumnOutlineLevel(int level)
+    {
+        var result = _session.ExecuteRepeatableCommandPreservingSelection(() =>
+            new CompositeWorkbookCommand(
+                "Show Outline Level",
+                [
+                    new ExpandColGroupCommand(_session.ActiveSheet.Id, 1),
+                    new CollapseColGroupCommand(_session.ActiveSheet.Id, level + 1),
+                ]));
+        RefreshShell(result.Success
+            ? UiText.Format("Outline_ColumnLevelShownStatus", level)
             : result.ErrorMessage ?? UiText.Get("Outline_UpdateColumnGroupFailed"));
     }
 

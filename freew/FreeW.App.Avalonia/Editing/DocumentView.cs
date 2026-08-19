@@ -22197,7 +22197,8 @@ public sealed partial class DocumentView : Control
             instruction,
             cachedResult,
             fieldRun => ResolveComplexField(fieldRun, string.Empty),
-            _doc);
+            _doc,
+            _caret.Block);
         InsertFieldRunAtActiveCaret(run);
     }
 
@@ -22211,7 +22212,8 @@ public sealed partial class DocumentView : Control
             field,
             cachedResult,
             fieldRun => ResolveComplexField(fieldRun, string.Empty),
-            _doc);
+            _doc,
+            _caret.Block);
         InsertFieldRunAtActiveCaret(run);
     }
 

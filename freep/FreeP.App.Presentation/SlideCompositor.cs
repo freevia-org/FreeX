@@ -524,6 +524,23 @@ public static class SlideCompositor
     }
 
     /// <summary>
+    /// Resolves the effective autofit kind by walking the inheritance chain: shape -> layout
+    /// placeholder -> master placeholder. <see cref="TextAutoFitKind"/> is a non-nullable enum
+    /// whose default (<see cref="TextAutoFitKind.None"/>) is also what the reader produces for a
+    /// bodyPr with no explicit autofit child, so <c>None</c> is treated as "not specified here"
+    /// and the chain falls through, same as the <see cref="ResolveVerticalAnchor"/> chain above.
+    /// </summary>
+    private static TextAutoFitKind ResolveAutoFitKind(
+        TextBody body,
+        TextBody? layoutBody,
+        TextBody? masterBody)
+    {
+        if (body.AutoFitKind != TextAutoFitKind.None) return body.AutoFitKind;
+        if (layoutBody is not null && layoutBody.AutoFitKind != TextAutoFitKind.None) return layoutBody.AutoFitKind;
+        return masterBody?.AutoFitKind ?? TextAutoFitKind.None;
+    }
+
+    /// <summary>
     /// Resolves the effective default paragraph alignment from the lstStyle inheritance chain:
     /// shape -> layout placeholder -> master placeholder.
     /// </summary>
@@ -2539,7 +2556,13 @@ public static class SlideCompositor
             WarpAdjusts = body.WarpAdjusts.ToArray(),
             Text3dEffects = ResolveEffects(body.Text3dEffects),
             VerticalType = body.VerticalType,  // Wave 18B
-            AutoFitKind = body.AutoFitKind,
+            // r148 (freep-autofit F1): fall back to the layout/master placeholder's autofit
+            // kind when the slide shape's own bodyPr has none — mirrors the shape -> layout ->
+            // master chain already used above for Anchor/DefaultParaAlign/Insets. A spec-legal
+            // slide bodyPr with no <a:normAutofit>/<a:spAutoFit> child reads back as
+            // TextAutoFitKind.None (see PptxPackageReader.ReadTxBody), which is indistinguishable
+            // from "not specified" in this non-nullable enum, so treat None as unset here too.
+            AutoFitKind = ResolveAutoFitKind(body, layoutBody, masterBody),
             HasStoredFontScale = hasStoredFontScale,
             FontScale = fontScale,            // Wave 19A
             LnSpcReduction = lnSpcReduc,      // Wave 19A

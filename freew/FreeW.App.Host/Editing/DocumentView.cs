@@ -337,6 +337,19 @@ public sealed partial class DocumentView : RichTextBox
         // ribbon's Paste/Cut buttons need this (they bypass every other choke point in this file).
         CommandManager.AddPreviewCanExecuteHandler(this, OnPreviewCanExecuteClipboardMutation);
         CommandManager.AddPreviewExecutedHandler(this, OnPreviewExecutedClipboardMutation);
+
+        // clipboard-interop F1/F2: give Copy/Cut/Paste real instance CommandBindings so this control's
+        // clipboard traffic goes through FreeWClipboardApplicationWorkflow instead of falling through to
+        // native RichTextBox handling -- see OnPasteExecuted/OnCopyOrCutExecuted's doc comments. An
+        // instance CommandBinding for a command that also has a class-level binding (as TextBoxBase
+        // registers for Copy/Cut/Paste) takes precedence over the class binding for this element, so
+        // these fully replace -- not merely observe -- the native behavior. The freew-cc-5 preview gate
+        // above still runs first (tunneling) and, when it blocks a locked content control, suppresses
+        // the paired bubbling CanExecute/Executed entirely, so these handlers are never reached in that
+        // case -- unaffected by this addition.
+        CommandBindings.Add(new CommandBinding(ApplicationCommands.Copy, OnCopyExecuted, OnCopyCanExecute));
+        CommandBindings.Add(new CommandBinding(ApplicationCommands.Cut, OnCutExecuted, OnCutCanExecute));
+        CommandBindings.Add(new CommandBinding(ApplicationCommands.Paste, OnPasteExecuted, OnPasteCanExecute));
     }
 
     public TextDocument Model => _model;
@@ -1017,6 +1030,132 @@ public sealed partial class DocumentView : RichTextBox
         {
             e.Handled = true;
         }
+    }
+
+    /// <summary>
+    /// clipboard-interop F1: ordinary Paste (Ctrl+V, and the plain ribbon Paste button -- see
+    /// FreeWRibbonCommands' <c>Routed(FreeWRibbonCommandAction.Paste, ApplicationCommands.Paste)</c>)
+    /// used to fall through unconditionally to native RichTextBox paste, which recognizes only
+    /// Xaml/Rtf/Text on the clipboard -- so content copied from FreeX, a browser, or any other
+    /// HTML-only source always degraded to unformatted plain text, even though the IDENTICAL clipboard
+    /// content pastes with formatting intact via Home &gt; Paste &gt; Paste Special &gt; Keep Source
+    /// Formatting (<see cref="PasteKeepSourceFormatting()"/>, which already reads RTF and both HTML
+    /// clipboard format names through <see cref="FreeWClipboardApplicationWorkflow.ReadPasteSpecialAsync"/>).
+    /// This CommandBinding (see the constructor) routes ordinary Paste through that SAME already-working
+    /// path instead of native handling, so Ctrl+V and the plain ribbon button recover formatting exactly
+    /// like Paste Special's "Keep Source Formatting" choice does. A plain-text-only clipboard (no
+    /// RTF/HTML) degrades gracefully to the same plain-text insertion native paste would have produced.
+    /// </summary>
+    private void OnPasteExecuted(object sender, ExecutedRoutedEventArgs e)
+    {
+        e.Handled = true;
+        PasteKeepSourceFormatting();
+    }
+
+    private void OnPasteCanExecute(object sender, CanExecuteRoutedEventArgs e)
+    {
+        e.CanExecute = !IsReadOnly;
+        e.Handled = true;
+    }
+
+    /// <summary>
+    /// clipboard-interop F2: native RichTextBox Copy/Cut place Text/"Rich Text Format"/Xaml on the
+    /// clipboard but never an HTML flavor, so rich text copied here arrived unstyled in any destination
+    /// that reads text/html instead of RTF -- a browser's rich-text field, Gmail or Slack compose -- even
+    /// though the Avalonia shell's own editor already closes this exact gap for itself (see
+    /// FreeWClipboardApplicationWorkflow's "shell-clipboard F2" comment and MainWindow.cs). This exports
+    /// the selection to RTF via the same <see cref="System.Windows.Documents.TextRange.Save"/> native
+    /// Copy would have used, reparses it into the portable <see cref="TextDocument"/> model with the SAME
+    /// <see cref="RtfClipboardDocumentParser"/> Paste Special already reads pasted-in RTF with, and asks
+    /// the shared workflow to also render it to HTML. The RTF stays on the clipboard alongside the
+    /// workflow's Text+HTML payload, so RTF-only consumers (and a paste into this app itself, which reads
+    /// RTF first) keep working exactly as before -- only the missing HTML flavor is new.
+    /// </summary>
+    private void OnCopyExecuted(object sender, ExecutedRoutedEventArgs e)
+    {
+        e.Handled = true;
+        CopySelectionRichContent();
+    }
+
+    private void OnCopyCanExecute(object sender, CanExecuteRoutedEventArgs e)
+    {
+        e.CanExecute = !Selection.IsEmpty;
+        e.Handled = true;
+    }
+
+    /// <summary>
+    /// clipboard-interop F2 (Cut side): same clipboard enrichment as <see cref="OnCopyExecuted"/>, then
+    /// deletes the selection the same way native Cut (and the sibling content-control insert helpers
+    /// elsewhere in this file, e.g. <see cref="InsertPlainTextControl"/>) already do via
+    /// <c>Selection.Text = string.Empty</c>. Gated on <see cref="RestrictEditingOperationKind.BodyTextEdit"/>
+    /// (kept in sync with <see cref="IsReadOnly"/>, see the policy assignment in <see cref="ApplyProtection"/>)
+    /// so a read-only/Filling-In-Forms document cannot have its body text cut -- mirroring native Cut's own
+    /// CanExecute, which likewise refuses when <see cref="IsReadOnly"/> is set.
+    /// </summary>
+    private void OnCutExecuted(object sender, ExecutedRoutedEventArgs e)
+    {
+        e.Handled = true;
+        if (!AllowsRestrictEditingOperation(RestrictEditingOperationKind.BodyTextEdit) || Selection.IsEmpty)
+            return;
+
+        CopySelectionRichContent();
+        CommitToModel();
+        Selection.Text = string.Empty;
+    }
+
+    private void OnCutCanExecute(object sender, CanExecuteRoutedEventArgs e)
+    {
+        e.CanExecute = !IsReadOnly && !Selection.IsEmpty;
+        e.Handled = true;
+    }
+
+    /// <summary>
+    /// Shared Copy/Cut clipboard write for <see cref="OnCopyExecuted"/>/<see cref="OnCutExecuted"/> --
+    /// see <see cref="OnCopyExecuted"/>'s doc comment for the RTF-to-TextDocument-to-HTML pipeline this
+    /// builds on. A selection that fails to export as RTF (caught, never crashes the editor -- mirrors
+    /// <see cref="FreeWClipboardApplicationWorkflow"/>'s own HTML-render try/catch) degrades to a
+    /// plain-text-only clipboard write, the same degrade native Copy would have produced for content it
+    /// could not serialize either.
+    /// </summary>
+    private void CopySelectionRichContent()
+    {
+        var selection = Selection;
+        if (selection.IsEmpty)
+            return;
+
+        var text = selection.Text;
+        if (string.IsNullOrEmpty(text))
+            return;
+
+        string? rtf = null;
+        try
+        {
+            using var stream = new MemoryStream();
+            selection.Save(stream, DataFormats.Rtf);
+            // RTF control syntax is ASCII; Latin-1 preserves every emitted byte, mirroring
+            // RtfClipboardDocumentParser's own encoding assumption for the reverse (paste) direction.
+            rtf = Encoding.Latin1.GetString(stream.ToArray());
+        }
+        catch
+        {
+            // Falls through to a plain-text-only clipboard write below.
+        }
+
+        TextDocument? richDocument = null;
+        if (rtf is not null)
+            RtfClipboardDocumentParser.TryParse(rtf, out richDocument);
+
+        if (FreeWClipboardApplicationWorkflow.CreateWriteContent(text, richDocument) is not { } content)
+            return;
+
+        if (rtf is not null)
+        {
+            var customData = content.CustomData.ToList();
+            customData.Add(PlatformClipboardData.FromText(FreeWClipboardApplicationWorkflow.RichTextFormat, rtf));
+            content = new PlatformClipboardContent(content.Text, content.FilePaths, content.Image, customData);
+        }
+
+        _platformClipboard.WriteAsync(content).AsTask().GetAwaiter().GetResult();
     }
 
     private static DocumentEditorInputKey ToEditorInputKey(Key key) => key switch
@@ -12227,7 +12366,8 @@ public sealed partial class DocumentView : RichTextBox
             instruction,
             cachedResult,
             fieldRun => ResolveComplexFieldText(fieldRun, fieldDocument, fieldFileName),
-            fieldDocument);
+            fieldDocument,
+            CaretBlockIndex());
         InsertInlineAtCaret(BuildComplexFieldRun(run, _model, fieldDocument, fieldFileName));
     }
 
@@ -12241,7 +12381,8 @@ public sealed partial class DocumentView : RichTextBox
             field,
             cachedResult,
             fieldRun => ResolveComplexFieldText(fieldRun, fieldDocument, fieldFileName),
-            fieldDocument);
+            fieldDocument,
+            CaretBlockIndex());
         InsertInlineAtCaret(BuildComplexFieldRun(run, _model, fieldDocument, fieldFileName));
     }
 

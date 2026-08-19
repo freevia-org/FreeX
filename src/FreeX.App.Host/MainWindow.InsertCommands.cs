@@ -101,12 +101,34 @@ public partial class MainWindow
                     members.Count == 1 ? currentRange.Start : null);
             }
 
-            return SparklinePlanner.BuildInsertCommand(
+            var insertCommand = SparklinePlanner.BuildInsertCommand(
                 _currentSheetId,
                 members,
                 kind,
                 sheet.Sparklines,
                 currentRange.Start);
+
+            // WPF has no separate edit/clear affordance for an existing sparkline (unlike the
+            // Avalonia shell, which routes a re-insert at an occupied cell to an edit dialog), so
+            // clicking Insert Sparkline again over a cell that already carries one is the only
+            // way a WPF user can change its type or range. Without this, AddSparklineCommand would
+            // stack a second SparklineModel on the same cell instead of replacing the first, which
+            // both shells then render on top of each other and round-trip as two overlapping
+            // <x14:sparklineGroup> entries naming the same cell. Clear any sparkline already
+            // anchored at one of this insert's target locations as part of the same undoable
+            // operation before adding the new one.
+            var targetLocations = members.Count == 1
+                ? (IReadOnlyCollection<CellAddress>)[currentRange.Start]
+                : members.Select(m => m.Location).ToArray();
+            var replacedCommands = sheet.Sparklines
+                .Where(existing => targetLocations.Contains(existing.Location))
+                .Select(existing => (IWorkbookCommand)new ClearSparklineCommand(_currentSheetId, existing.Id))
+                .ToList();
+            if (replacedCommands.Count == 0)
+                return insertCommand;
+
+            replacedCommands.Add(insertCommand);
+            return new CompositeWorkbookCommand("Insert Sparkline", replacedCommands);
         }
 
         var executed = TryExecuteRepeatableCommand(CreateCommand, "Insert Sparkline", out _);

@@ -6215,10 +6215,42 @@ public sealed class WorkbookSession : IDisposable
         {
             var sheetRange = RemapRangeToSheet(range, sheetId);
             commands.Add(new ApplyStyleCommand(sheetId, sheetRange, new StyleDiff(FontSize: fontSize)));
-            commands.Add(new SetRowHeightCommand(sheetId, sheetRange.Start.Row, sheetRange.End.Row, rowHeight));
+            commands.AddRange(CreateFontSizeRowGrowthCommands(sheetId, sheetRange, rowHeight));
         }
 
         return ToCommand("Set Font Size", commands);
+    }
+
+    /// <summary>
+    /// R148-rowcol-sizing-F3: growing rows to fit a larger font size must never shrink a row
+    /// that's already taller than the newly computed flat height (e.g. a wrapped-text row or a
+    /// manually-sized banner row unrelated to the font change) and must never un-hide a row caught
+    /// inside the selection's row span -- both of which a single flat
+    /// <c>new SetRowHeightCommand(sheetId, sheetRange.Start.Row, sheetRange.End.Row, rowHeight)</c>
+    /// spanning the whole selection did unconditionally, since that command overwrites every row's
+    /// height and clears every row's hidden flag across its span regardless of each row's current
+    /// state. Mirrors <see cref="CreateWrapTextGrowthCommands"/>'s "only ever grows a row, skips
+    /// hidden rows" contract by emitting one per-row command only for rows that actually need to
+    /// grow.
+    /// </summary>
+    private IReadOnlyList<IWorkbookCommand> CreateFontSizeRowGrowthCommands(SheetId sheetId, GridRange range, double rowHeight)
+    {
+        var sheet = Workbook.GetSheet(sheetId);
+        if (sheet is null)
+            return [];
+
+        var commands = new List<IWorkbookCommand>();
+        for (var row = range.Start.Row; row <= range.End.Row; row++)
+        {
+            if (sheet.IsRowEffectivelyHidden(row))
+                continue;
+
+            var currentHeight = sheet.RowHeights.TryGetValue(row, out var height) ? height : sheet.DefaultRowHeight;
+            if (rowHeight > currentHeight)
+                commands.Add(new SetRowHeightCommand(sheetId, row, row, rowHeight));
+        }
+
+        return commands;
     }
 
     private IWorkbookCommand CreateExternalTextPasteCommand(

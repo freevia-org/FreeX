@@ -31,6 +31,7 @@ internal sealed partial class AutosaveAdapter : IDisposable
     private readonly FreePAutosaveSession _session;
     private readonly Func<AutosaveRecoveryCandidate, Task<bool>>? _recoverInNewWindowAsync;
     private readonly Func<Task<bool>>? _confirmDiscardOrSaveAsync;
+    private readonly Func<string?> _getCurrentPath;
     private CancellationTokenSource? _cts;
 
     /// <summary>
@@ -63,6 +64,7 @@ internal sealed partial class AutosaveAdapter : IDisposable
         _session = sessionFactory?.Invoke(ports) ?? new FreePAutosaveSession(ports);
         _recoverInNewWindowAsync = recoverInNewWindowAsync;
         _confirmDiscardOrSaveAsync = confirmDiscardOrSaveAsync;
+        _getCurrentPath = () => workflow.CurrentPath;
 
         lock (ActiveAdaptersGate)
             ActiveAdapters.Add(this);
@@ -124,19 +126,37 @@ internal sealed partial class AutosaveAdapter : IDisposable
     /// Must be called from the UI thread (it may show an Avalonia dialog).
     /// Errors are swallowed — recovery is best-effort and never blocks startup.
     /// </summary>
+    /// <remarks>
+    /// startup-fileopen F2: this used to restore an accepted candidate straight into <paramref
+    /// name="owner"/> whenever it was the first accepted candidate (<c>useCurrentWindow</c>),
+    /// reasoning that "a fresh window has nothing unsaved to lose". That precondition breaks once
+    /// the caller's window has already loaded a command-line/file-association document before this
+    /// runs (see <c>MainWindow</c>'s constructor, which opens the startup file into <c>this</c>
+    /// synchronously, then fires this from the <c>Opened</c> handler): the just-opened document is
+    /// not dirty, so the manual command's <see cref="_confirmDiscardOrSaveAsync"/> dirty gate would
+    /// not protect it either -- it would pass silently. So instead we snapshot whether the window
+    /// already has an explicitly opened document (<see cref="_getCurrentPath"/> non-null: a blank
+    /// new presentation has no path, an opened one does) BEFORE any candidate is applied, and if so
+    /// force every accepted candidate through <see cref="_recoverInNewWindowAsync"/> -- the same
+    /// "recover into its own window" path already used for every candidate beyond the first -- so
+    /// the just-opened document is never silently replaced. A genuinely fresh window (no startup
+    /// file) keeps the prior unconditional, ungated behaviour.
+    /// </remarks>
     public async Task OfferRecoveryAsync(Window owner)
     {
         ArgumentNullException.ThrowIfNull(owner);
 
         try
         {
+            var currentWindowHasExplicitDocument = _getCurrentPath() is not null;
+
             await FreePRecoveryWorkflow.RunAsync(
                 _session.PlanRecoveries(),
                 FreePRecoveryPromptMode.StartupQuotedDisplayName,
                 offer => new ValueTask<bool>(RecoveryPromptDialog.ShowAsync(owner, offer.Prompt)),
                 async (recovery, useCurrentWindow) =>
                 {
-                    if (useCurrentWindow)
+                    if (useCurrentWindow && !currentWindowHasExplicitDocument)
                     {
                         return _session.CompletePresentationRecovery(
                             recovery,

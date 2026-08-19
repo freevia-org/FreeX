@@ -1823,4 +1823,177 @@ public sealed class EditingSessionTests
         var act  = () => sess.ToggleBoldOnSelection();
         act.Should().NotThrow();
     }
+
+    // ── undo-transactions F1: font family/size/color on a multi-shape selection ────
+
+    private static SlideShape MakeTwoRunTextShape(uint id)
+    {
+        var shape = MakeShape(id);
+        var tb = new TextBody();
+        var para = new Paragraph();
+        para.Runs.Add(new Run { Text = "a" });
+        para.Runs.Add(new Run { Text = "b" });
+        tb.Paragraphs.Add(para);
+        shape.TextBody = tb;
+        return shape;
+    }
+
+    [Fact]
+    public void SetFontOnSelection_MultiShapeSelection_IsOneUndoStep()
+    {
+        var sess = Make();
+        var first = MakeTwoRunTextShape(1);
+        var second = MakeTwoRunTextShape(2);
+        sess.CurrentSlide!.Shapes.Add(first);
+        sess.CurrentSlide.Shapes.Add(second);
+        sess.Select(first.Id);
+        sess.Select(second.Id, addToSelection: true);
+
+        sess.SetFontOnSelection("Arial");
+
+        first.TextBody!.Paragraphs[0].Runs.Select(r => r.FontFamily).Should().Equal("Arial", "Arial");
+        second.TextBody!.Paragraphs[0].Runs.Select(r => r.FontFamily).Should().Equal("Arial", "Arial");
+
+        sess.Undo();
+
+        first.TextBody!.Paragraphs[0].Runs.Select(r => r.FontFamily).Should().AllBeEquivalentTo((string?)null);
+        second.TextBody!.Paragraphs[0].Runs.Select(r => r.FontFamily).Should().AllBeEquivalentTo((string?)null);
+        sess.CanUndo.Should().BeFalse();
+    }
+
+    [Fact]
+    public void SetFontSizeOnSelection_MultiShapeSelection_IsOneUndoStep()
+    {
+        var sess = Make();
+        var first = MakeTwoRunTextShape(1);
+        var second = MakeTwoRunTextShape(2);
+        sess.CurrentSlide!.Shapes.Add(first);
+        sess.CurrentSlide.Shapes.Add(second);
+        sess.Select(first.Id);
+        sess.Select(second.Id, addToSelection: true);
+
+        sess.SetFontSizeOnSelection(18);
+
+        first.TextBody!.Paragraphs[0].Runs.Select(r => r.FontSizePt).Should().Equal(18, 18);
+        second.TextBody!.Paragraphs[0].Runs.Select(r => r.FontSizePt).Should().Equal(18, 18);
+
+        sess.Undo();
+
+        first.TextBody!.Paragraphs[0].Runs.Select(r => r.FontSizePt).Should().AllBeEquivalentTo((double?)null);
+        second.TextBody!.Paragraphs[0].Runs.Select(r => r.FontSizePt).Should().AllBeEquivalentTo((double?)null);
+        sess.CanUndo.Should().BeFalse();
+    }
+
+    [Fact]
+    public void SetColorOnSelection_MultiShapeSelection_IsOneUndoStep()
+    {
+        var sess = Make();
+        var first = MakeTwoRunTextShape(1);
+        var second = MakeTwoRunTextShape(2);
+        sess.CurrentSlide!.Shapes.Add(first);
+        sess.CurrentSlide.Shapes.Add(second);
+        sess.Select(first.Id);
+        sess.Select(second.Id, addToSelection: true);
+        var color = new ThemeAwareColor(new SrgbColor(0x12, 0x34, 0x56));
+
+        sess.SetColorOnSelection(color);
+
+        first.TextBody!.Paragraphs[0].Runs.Should().OnlyContain(r => r.Color!.Resolved == color.Resolved);
+        second.TextBody!.Paragraphs[0].Runs.Should().OnlyContain(r => r.Color!.Resolved == color.Resolved);
+
+        sess.Undo();
+
+        first.TextBody!.Paragraphs[0].Runs.Should().OnlyContain(r => r.Color == null);
+        second.TextBody!.Paragraphs[0].Runs.Should().OnlyContain(r => r.Color == null);
+        sess.CanUndo.Should().BeFalse();
+    }
+
+    /// <summary>Sibling no-regression case: a single-shape, single-run selection still undoes
+    /// cleanly in exactly one step (the pre-fix per-run loop already worked correctly here since
+    /// there was only ever one command).</summary>
+    [Fact]
+    public void SetFontOnSelection_SingleRunSelection_StillOneUndoStep()
+    {
+        var sess = Make();
+        var shape = MakeShape(1);
+        var tb = new TextBody();
+        var para = new Paragraph();
+        para.Runs.Add(new Run { Text = "hi" });
+        tb.Paragraphs.Add(para);
+        shape.TextBody = tb;
+        sess.CurrentSlide!.Shapes.Add(shape);
+        sess.Select(shape.Id);
+
+        sess.SetFontOnSelection("Calibri");
+        shape.TextBody.Paragraphs[0].Runs[0].FontFamily.Should().Be("Calibri");
+
+        sess.Undo();
+        shape.TextBody.Paragraphs[0].Runs[0].FontFamily.Should().BeNull();
+        sess.CanUndo.Should().BeFalse();
+    }
+
+    // ── undo-transactions F2: shape effects / transparency on a multi-shape selection ──
+
+    [Fact]
+    public void SetSelectedShapeShadow_MultiShapeSelection_IsOneUndoStep()
+    {
+        var sess = Make();
+        var shapes = new[] { MakeShape(1), MakeShape(2), MakeShape(3) };
+        foreach (var s in shapes) sess.CurrentSlide!.Shapes.Add(s);
+        sess.Select(shapes[0].Id);
+        sess.Select(shapes[1].Id, addToSelection: true);
+        sess.Select(shapes[2].Id, addToSelection: true);
+
+        var applied = sess.SetSelectedShapeShadow(ShapeEffectAuthoringPlanner.Subtle());
+        applied.Should().Be(3);
+        shapes.Should().OnlyContain(s => s.Effects != null && s.Effects.HasOuterShadow);
+
+        sess.Undo();
+
+        shapes.Should().OnlyContain(s => s.Effects == null || !s.Effects.HasOuterShadow);
+        sess.CanUndo.Should().BeFalse();
+    }
+
+    [Fact]
+    public void SetSelectedFillTransparency_MultiShapeSelection_IsOneUndoStep()
+    {
+        var sess = Make();
+        var first = MakeShape(1);
+        first.Fill = new ShapeFill.Solid(SrgbColor.Black);
+        var second = MakeShape(2);
+        second.Fill = new ShapeFill.Solid(SrgbColor.Black);
+        sess.CurrentSlide!.Shapes.Add(first);
+        sess.CurrentSlide.Shapes.Add(second);
+        sess.Select(first.Id);
+        sess.Select(second.Id, addToSelection: true);
+
+        sess.SetSelectedFillTransparency(50);
+
+        ((ShapeFill.Solid)first.Fill!).Color.Alpha.Should().Be(ShapeTransparencyPlanner.ToAlpha(50));
+        ((ShapeFill.Solid)second.Fill!).Color.Alpha.Should().Be(ShapeTransparencyPlanner.ToAlpha(50));
+
+        sess.Undo();
+
+        ((ShapeFill.Solid)first.Fill!).Color.Alpha.Should().Be((byte)255);
+        ((ShapeFill.Solid)second.Fill!).Color.Alpha.Should().Be((byte)255);
+        sess.CanUndo.Should().BeFalse();
+    }
+
+    /// <summary>Sibling no-regression case: a single selected shape still undoes cleanly in one
+    /// step (the pre-fix per-shape loop already worked correctly when only one shape qualified).</summary>
+    [Fact]
+    public void SetSelectedShapeShadow_SingleShapeSelection_StillOneUndoStep()
+    {
+        var sess = Make();
+        var shape = MakeShape(1);
+        sess.CurrentSlide!.Shapes.Add(shape);
+        sess.Select(shape.Id);
+
+        sess.SetSelectedShapeShadow(ShapeEffectAuthoringPlanner.Subtle()).Should().Be(1);
+        shape.Effects!.HasOuterShadow.Should().BeTrue();
+
+        sess.Undo();
+        (shape.Effects == null || !shape.Effects.HasOuterShadow).Should().BeTrue();
+        sess.CanUndo.Should().BeFalse();
+    }
 }

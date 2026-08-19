@@ -52,10 +52,19 @@ public sealed class RenamePivotTableCommand : IWorkbookCommand
             }
         }
 
+        // slicer-timeline-wiring F1: match on EITHER the primary connection (SourcePivotTableName) OR a
+        // SECONDARY "Report Connection" entry in ConnectedPivotTableNames -- a slicer/timeline can drive
+        // several pivot tables at once, and the renamed pivot table need not be the primary one. Matching
+        // primary-only left every secondary connection's stale old name in ConnectedPivotTableNames
+        // forever, which SetSlicerSelectionCommand/SetTimelineRangeCommand's connected-pivot lookup then
+        // silently treats the same as a deleted pivot table (skipped, no error) -- the renamed table just
+        // stops being filtered.
         _updatedSlicers.AddRange(ctx.Workbook.Slicers.Where(slicer =>
-            string.Equals(slicer.SourcePivotTableName, _oldName, StringComparison.OrdinalIgnoreCase)));
+            string.Equals(slicer.SourcePivotTableName, _oldName, StringComparison.OrdinalIgnoreCase) ||
+            slicer.ConnectedPivotTableNames.Any(name => string.Equals(name, _oldName, StringComparison.OrdinalIgnoreCase))));
         _updatedTimelines.AddRange(ctx.Workbook.Timelines.Where(timeline =>
-            string.Equals(timeline.SourcePivotTableName, _oldName, StringComparison.OrdinalIgnoreCase)));
+            string.Equals(timeline.SourcePivotTableName, _oldName, StringComparison.OrdinalIgnoreCase) ||
+            timeline.ConnectedPivotTableNames.Any(name => string.Equals(name, _oldName, StringComparison.OrdinalIgnoreCase))));
 
         pivotTable.Name = _newName;
         foreach (var (chartSheetId, chartId) in _updatedCharts)
@@ -66,7 +75,11 @@ public sealed class RenamePivotTableCommand : IWorkbookCommand
 
         foreach (var slicer in _updatedSlicers)
         {
-            slicer.SourcePivotTableName = _newName;
+            // Only rewrite the primary name when this slicer's primary connection is the one being
+            // renamed -- a slicer picked up here solely because the renamed table is a SECONDARY
+            // connection must keep its existing (different) primary untouched.
+            if (string.Equals(slicer.SourcePivotTableName, _oldName, StringComparison.OrdinalIgnoreCase))
+                slicer.SourcePivotTableName = _newName;
             // R133-io-slicer-timeline-multipivot: keep the full connections list in agreement with the
             // primary name -- a slicer bound to several pivot tables lists every one of them here (see
             // SlicerModel.ConnectedPivotTableNames), and XlsxSlicerTimelineStateRewriter reconciles the
@@ -76,7 +89,8 @@ public sealed class RenamePivotTableCommand : IWorkbookCommand
         }
         foreach (var timeline in _updatedTimelines)
         {
-            timeline.SourcePivotTableName = _newName;
+            if (string.Equals(timeline.SourcePivotTableName, _oldName, StringComparison.OrdinalIgnoreCase))
+                timeline.SourcePivotTableName = _newName;
             RenamePivotTableConnection(timeline.ConnectedPivotTableNames, _oldName, _newName);
         }
 
@@ -100,12 +114,17 @@ public sealed class RenamePivotTableCommand : IWorkbookCommand
 
         foreach (var slicer in _updatedSlicers)
         {
-            slicer.SourcePivotTableName = _oldName;
+            // Mirror the Apply-side condition: only a slicer whose primary connection was actually
+            // renamed (now equal to _newName) had its primary changed and needs it reverted -- a
+            // secondary-only match never touched SourcePivotTableName in the first place.
+            if (string.Equals(slicer.SourcePivotTableName, _newName, StringComparison.OrdinalIgnoreCase))
+                slicer.SourcePivotTableName = _oldName;
             RenamePivotTableConnection(slicer.ConnectedPivotTableNames, _newName, _oldName);
         }
         foreach (var timeline in _updatedTimelines)
         {
-            timeline.SourcePivotTableName = _oldName;
+            if (string.Equals(timeline.SourcePivotTableName, _newName, StringComparison.OrdinalIgnoreCase))
+                timeline.SourcePivotTableName = _oldName;
             RenamePivotTableConnection(timeline.ConnectedPivotTableNames, _newName, _oldName);
         }
 

@@ -1469,103 +1469,76 @@ public sealed class EditingSession
         return count;
     }
 
-    /// <summary>Applies one outer-shadow preset to every selected shape.</summary>
-    public int SetSelectedShapeShadow(ShapeShadowValues values)
-    {
-        var count = 0;
-        foreach (var id in _selectedShapeIds)
-        {
-            Bus.Execute(new SetShapeShadowCommand(_currentSlideIndex, id, values));
-            count++;
-        }
+    /// <summary>Applies one outer-shadow preset to every selected shape as one undo step.</summary>
+    public int SetSelectedShapeShadow(ShapeShadowValues values) =>
+        ExecuteBatchOnSelection("Set Shadow", id => new SetShapeShadowCommand(_currentSlideIndex, id, values));
 
-        return count;
+    /// <summary>Applies one glow preset to every selected shape as one undo step.</summary>
+    public int SetSelectedShapeGlow(ShapeGlowValues values) =>
+        ExecuteBatchOnSelection("Set Glow", id => new SetShapeGlowCommand(_currentSlideIndex, id, values));
+
+    /// <summary>Applies one soft-edge preset to every selected shape as one undo step.</summary>
+    public int SetSelectedShapeSoftEdge(ShapeSoftEdgeValues values) =>
+        ExecuteBatchOnSelection("Set Soft Edges", id => new SetShapeSoftEdgeCommand(_currentSlideIndex, id, values));
+
+    /// <summary>Applies one bevel preset to every selected shape as one undo step.</summary>
+    public int SetSelectedShapeBevel(ShapeBevelValues values) =>
+        ExecuteBatchOnSelection("Set Bevel", id => new SetShapeBevelCommand(_currentSlideIndex, id, values));
+
+    /// <summary>Applies one 3-D styling preset to every selected shape as one undo step.</summary>
+    public int SetSelectedShape3d(Shape3dValues values) =>
+        ExecuteBatchOnSelection("Set 3-D Format", id => new SetShape3dCommand(_currentSlideIndex, id, values));
+
+    /// <summary>Applies <paramref name="makeCommand"/> to every selected shape as one undo step.</summary>
+    private int ExecuteBatchOnSelection(string label, Func<uint, IPresentationCommand> makeCommand)
+    {
+        var commands = _selectedShapeIds.Select(makeCommand).ToList();
+        if (commands.Count == 0)
+            return 0;
+
+        Bus.Execute(commands.Count == 1 ? commands[0] : new BatchCommand(label, commands));
+        return commands.Count;
     }
 
-    /// <summary>Applies one glow preset to every selected shape.</summary>
-    public int SetSelectedShapeGlow(ShapeGlowValues values)
-    {
-        var count = 0;
-        foreach (var id in _selectedShapeIds)
-        {
-            Bus.Execute(new SetShapeGlowCommand(_currentSlideIndex, id, values));
-            count++;
-        }
-
-        return count;
-    }
-
-    /// <summary>Applies one soft-edge preset to every selected shape.</summary>
-    public int SetSelectedShapeSoftEdge(ShapeSoftEdgeValues values)
-    {
-        var count = 0;
-        foreach (var id in _selectedShapeIds)
-        {
-            Bus.Execute(new SetShapeSoftEdgeCommand(_currentSlideIndex, id, values));
-            count++;
-        }
-
-        return count;
-    }
-
-    /// <summary>Applies one bevel preset to every selected shape.</summary>
-    public int SetSelectedShapeBevel(ShapeBevelValues values)
-    {
-        var count = 0;
-        foreach (var id in _selectedShapeIds)
-        {
-            Bus.Execute(new SetShapeBevelCommand(_currentSlideIndex, id, values));
-            count++;
-        }
-
-        return count;
-    }
-
-    /// <summary>Applies one 3-D styling preset to every selected shape.</summary>
-    public int SetSelectedShape3d(Shape3dValues values)
-    {
-        var count = 0;
-        foreach (var id in _selectedShapeIds)
-        {
-            Bus.Execute(new SetShape3dCommand(_currentSlideIndex, id, values));
-            count++;
-        }
-
-        return count;
-    }
-
-    /// <summary>Sets fill on all selected shapes.</summary>
+    /// <summary>Sets fill on all selected shapes as one undo step.</summary>
     public void SetSelectedFill(ShapeFill? fill)
     {
         if (CurrentSlide is null) return;
-        foreach (var id in _selectedShapeIds)
-            Bus.Execute(new SetShapeFillCommand(_currentSlideIndex, id, fill));
+        ExecuteBatchOnSelection("Set Fill", id => new SetShapeFillCommand(_currentSlideIndex, id, fill));
     }
 
-    /// <summary>Sets fill transparency on all selected shapes while preserving fill kind, theme, and stops.</summary>
+    /// <summary>Sets fill transparency on all selected shapes while preserving fill kind, theme, and stops, as one undo step.</summary>
     public void SetSelectedFillTransparency(double transparencyPercent)
     {
         if (CurrentSlide is null) return;
+        var commands = new List<IPresentationCommand>();
         foreach (var id in _selectedShapeIds)
         {
             var shape = FindShape(CurrentSlide.Shapes, id);
             var fill = ShapeTransparencyPlanner.ApplyFill(shape?.Fill, transparencyPercent);
             if (shape?.Fill is not null && !ReferenceEquals(fill, shape.Fill))
-                Bus.Execute(new SetShapeFillCommand(_currentSlideIndex, id, fill));
+                commands.Add(new SetShapeFillCommand(_currentSlideIndex, id, fill));
         }
+
+        if (commands.Count == 0) return;
+        Bus.Execute(commands.Count == 1 ? commands[0] : new BatchCommand("Set Fill Transparency", commands));
     }
 
-    /// <summary>Sets outline transparency on all selected shapes while preserving stroke geometry.</summary>
+    /// <summary>Sets outline transparency on all selected shapes while preserving stroke geometry, as one undo step.</summary>
     public void SetSelectedOutlineTransparency(double transparencyPercent)
     {
         if (CurrentSlide is null) return;
+        var commands = new List<IPresentationCommand>();
         foreach (var id in _selectedShapeIds)
         {
             var shape = FindShape(CurrentSlide.Shapes, id);
             var outline = ShapeTransparencyPlanner.ApplyOutline(shape?.Outline, transparencyPercent);
             if (shape?.Outline is not null && !ReferenceEquals(outline, shape.Outline))
-                Bus.Execute(new SetShapeOutlineCommand(_currentSlideIndex, id, outline));
+                commands.Add(new SetShapeOutlineCommand(_currentSlideIndex, id, outline));
         }
+
+        if (commands.Count == 0) return;
+        Bus.Execute(commands.Count == 1 ? commands[0] : new BatchCommand("Set Outline Transparency", commands));
     }
 
     /// <summary>
@@ -1754,47 +1727,59 @@ public sealed class EditingSession
     public void ToggleSubscriptOnSelection()   => TogglePropOnSelection(RunToggleKind.Subscript);
 
     /// <summary>
-    /// Sets font family on every run in all selected shapes.
+    /// Sets font family on every run in all selected shapes as one undo step.
     /// </summary>
     public void SetFontOnSelection(string? fontFamily)
     {
         if (CurrentSlide is null) return;
+        var commands = new List<IPresentationCommand>();
         foreach (var id in _selectedShapeIds)
         {
             var s = FindShape(CurrentSlide.Shapes, id);
             if (s?.TextBody is null) continue;
             for (int pi = 0; pi < s.TextBody.Paragraphs.Count; pi++)
             for (int ri = 0; ri < s.TextBody.Paragraphs[pi].Runs.Count; ri++)
-                Bus.Execute(new SetRunFontCommand(_currentSlideIndex, id, pi, ri, fontFamily));
+                commands.Add(new SetRunFontCommand(_currentSlideIndex, id, pi, ri, fontFamily));
         }
+
+        if (commands.Count == 0) return;
+        Bus.Execute(commands.Count == 1 ? commands[0] : new BatchCommand("Set Font", commands));
     }
 
-    /// <summary>Sets font size (pt) on every run in all selected shapes.</summary>
+    /// <summary>Sets font size (pt) on every run in all selected shapes as one undo step.</summary>
     public void SetFontSizeOnSelection(double? sizePt)
     {
         if (CurrentSlide is null) return;
+        var commands = new List<IPresentationCommand>();
         foreach (var id in _selectedShapeIds)
         {
             var s = FindShape(CurrentSlide.Shapes, id);
             if (s?.TextBody is null) continue;
             for (int pi = 0; pi < s.TextBody.Paragraphs.Count; pi++)
             for (int ri = 0; ri < s.TextBody.Paragraphs[pi].Runs.Count; ri++)
-                Bus.Execute(new SetRunFontSizeCommand(_currentSlideIndex, id, pi, ri, sizePt));
+                commands.Add(new SetRunFontSizeCommand(_currentSlideIndex, id, pi, ri, sizePt));
         }
+
+        if (commands.Count == 0) return;
+        Bus.Execute(commands.Count == 1 ? commands[0] : new BatchCommand("Set Font Size", commands));
     }
 
-    /// <summary>Sets text color on every run in all selected shapes.</summary>
+    /// <summary>Sets text color on every run in all selected shapes as one undo step.</summary>
     public void SetColorOnSelection(ThemeAwareColor? color)
     {
         if (CurrentSlide is null) return;
+        var commands = new List<IPresentationCommand>();
         foreach (var id in _selectedShapeIds)
         {
             var s = FindShape(CurrentSlide.Shapes, id);
             if (s?.TextBody is null) continue;
             for (int pi = 0; pi < s.TextBody.Paragraphs.Count; pi++)
             for (int ri = 0; ri < s.TextBody.Paragraphs[pi].Runs.Count; ri++)
-                Bus.Execute(new SetRunColorCommand(_currentSlideIndex, id, pi, ri, color));
+                commands.Add(new SetRunColorCommand(_currentSlideIndex, id, pi, ri, color));
         }
+
+        if (commands.Count == 0) return;
+        Bus.Execute(commands.Count == 1 ? commands[0] : new BatchCommand("Set Color", commands));
     }
 
     /// <summary>Sets the DrawingML text-frame autofit mode on all selected text shapes as one undo step.</summary>

@@ -93,21 +93,30 @@ public sealed class DocumentReferenceEditingCoordinator
         string instruction,
         string? cachedResult,
         Func<Run, string> liveDisplayResolver,
-        TextDocument? evaluationDocument = null)
+        TextDocument? evaluationDocument = null,
+        int insertionBlockIndex = 0)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(instruction);
         return BuildComplexFieldInsertionRun(
             new ComplexField($" {instruction.Trim()} "),
             cachedResult,
             liveDisplayResolver,
-            evaluationDocument);
+            evaluationDocument,
+            insertionBlockIndex);
     }
 
+    /// <summary>
+    /// Builds the run for a freshly inserted complex field. <paramref name="insertionBlockIndex"/> should
+    /// be the caret's current body-block index so position-sensitive keywords (e.g. STYLEREF, which walks
+    /// backward from the insertion point for the nearest preceding matching heading) resolve against where
+    /// the field is actually being inserted rather than always against the top of the document.
+    /// </summary>
     public Run BuildComplexFieldInsertionRun(
         ComplexField field,
         string? cachedResult,
         Func<Run, string> liveDisplayResolver,
-        TextDocument? evaluationDocument = null)
+        TextDocument? evaluationDocument = null,
+        int insertionBlockIndex = 0)
     {
         ArgumentNullException.ThrowIfNull(field);
         ArgumentNullException.ThrowIfNull(liveDisplayResolver);
@@ -119,7 +128,7 @@ public sealed class DocumentReferenceEditingCoordinator
         run.Text = ComplexFieldDisplayPlanner.IsPageSectionField(field.Keyword)
             ? ComplexFieldDisplayPlanner.ResolvePageSectionField(field, string.Empty, 1, 1)
             : ComplexFieldEngine.CanRecompute(field)
-                ? ComplexFieldEngine.Recompute(evaluationDocument ?? _session.Document, 0, run)
+                ? ComplexFieldEngine.Recompute(evaluationDocument ?? _session.Document, insertionBlockIndex, run)
                 : liveDisplayResolver(run);
         return run;
     }

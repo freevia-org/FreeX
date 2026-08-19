@@ -1945,6 +1945,109 @@ public sealed class SlideCompositorTests
             "vertical anchor is inherited from layout placeholder bodyPr");
     }
 
+    [Fact]
+    public void Compose_BodyPlaceholder_AutoFitKind_InheritedFromLayout_WhenSlideBodyPrOmitsIt()
+    {
+        // Arrange: layout placeholder declares Shrink-text-on-overflow (a:normAutofit), and the
+        // slide's own placeholder instance doesn't repeat it — spec-legal, routine OOXML (see
+        // PptxPackageReader.ReadTxBody, which sets AutoFitKind = None whenever the slide-level
+        // bodyPr has no <a:normAutofit>/<a:spAutoFit> child).
+        var p = new PresentationModel();
+        p.Theme = PresentationTheme.CreateDefault();
+
+        var master = new SlideMaster { Id = "m1" };
+        p.Masters.Add(master);
+
+        var layout = new SlideLayout { Id = "l1", MasterId = "m1" };
+        var layoutBody = new TextBody { AutoFitKind = TextAutoFitKind.Normal };
+        var layoutPara = new Paragraph();
+        layoutPara.Runs.Add(new Run { Text = "ph" });
+        layoutBody.Paragraphs.Add(layoutPara);
+        var layoutBodyPh = new SlideShape
+        {
+            Placeholder = new Placeholder { Type = PlaceholderType.Body, Idx = 1 },
+            OffsetXEmu = 1524000, OffsetYEmu = 1122363,
+            ExtentCxEmu = 9144000, ExtentCyEmu = 2387600,
+            TextBody = layoutBody
+        };
+        layout.Placeholders.Add(layoutBodyPh);
+        p.Layouts.Add(layout);
+
+        var slide = new Slide { LayoutId = "l1" };
+        var bodyShape = new SlideShape
+        {
+            Id = 1,
+            Placeholder = new Placeholder { Type = PlaceholderType.Body, Idx = 1 },
+        };
+        var slideBody = new TextBody(); // AutoFitKind unset (None) → should inherit Normal.
+        var slidePara = new Paragraph();
+        slidePara.Runs.Add(new Run { Text = "Body text" });
+        slideBody.Paragraphs.Add(slidePara);
+        bodyShape.TextBody = slideBody;
+        slide.Shapes.Add(bodyShape);
+        p.Slides.Add(slide);
+
+        // Act
+        var ops = SlideCompositor.Compose(p, slide);
+        var shapeOp = ops.OfType<DrawOp.Shape>().Single();
+
+        // Assert: the resolved autofit kind comes from the layout placeholder, matching
+        // PowerPoint, instead of silently collapsing to None.
+        shapeOp.Text!.AutoFitKind.Should().Be(TextAutoFitKind.Normal,
+            "a slide placeholder instance with no autofit of its own inherits the layout's Shrink-text-on-overflow");
+    }
+
+    [Fact]
+    public void Compose_BodyPlaceholder_AutoFitKind_ShapeOwnValueWinsOverLayout()
+    {
+        // Sibling/no-regression case: when the slide shape's own bodyPr DOES specify an autofit
+        // kind, that explicit value must still win over the layout placeholder's — the shape's
+        // own value must never be silently overridden by inheritance.
+        var p = new PresentationModel();
+        p.Theme = PresentationTheme.CreateDefault();
+
+        var master = new SlideMaster { Id = "m1" };
+        p.Masters.Add(master);
+
+        var layout = new SlideLayout { Id = "l1", MasterId = "m1" };
+        var layoutBody = new TextBody { AutoFitKind = TextAutoFitKind.Normal };
+        var layoutPara = new Paragraph();
+        layoutPara.Runs.Add(new Run { Text = "ph" });
+        layoutBody.Paragraphs.Add(layoutPara);
+        var layoutBodyPh = new SlideShape
+        {
+            Placeholder = new Placeholder { Type = PlaceholderType.Body, Idx = 1 },
+            OffsetXEmu = 1524000, OffsetYEmu = 1122363,
+            ExtentCxEmu = 9144000, ExtentCyEmu = 2387600,
+            TextBody = layoutBody
+        };
+        layout.Placeholders.Add(layoutBodyPh);
+        p.Layouts.Add(layout);
+
+        var slide = new Slide { LayoutId = "l1" };
+        var bodyShape = new SlideShape
+        {
+            Id = 1,
+            Placeholder = new Placeholder { Type = PlaceholderType.Body, Idx = 1 },
+        };
+        // Explicit Shape (grow-shape-to-fit) on the slide instance — must win over layout's Normal.
+        var slideBody = new TextBody { AutoFitKind = TextAutoFitKind.Shape };
+        var slidePara = new Paragraph();
+        slidePara.Runs.Add(new Run { Text = "Body text" });
+        slideBody.Paragraphs.Add(slidePara);
+        bodyShape.TextBody = slideBody;
+        slide.Shapes.Add(bodyShape);
+        p.Slides.Add(slide);
+
+        // Act
+        var ops = SlideCompositor.Compose(p, slide);
+        var shapeOp = ops.OfType<DrawOp.Shape>().Single();
+
+        // Assert: explicit Shape autofit on the slide shape is not overridden by the layout's Normal.
+        shapeOp.Text!.AutoFitKind.Should().Be(TextAutoFitKind.Shape,
+            "the slide shape's own explicit autofit kind must win over the layout placeholder's");
+    }
+
     // --- Table compositor tests -------------------------------------------
 
     private static (PresentationModel pres, Slide slide, SlideShape shape)

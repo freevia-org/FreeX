@@ -293,6 +293,133 @@ public class DocumentInspectorTests
         result.Removed.Revisions.Should().Be(1);
     }
 
+    // --- Round-148 F1/sweep87: Revisions must count everywhere RemoveRevisions (TrackChanges.AcceptAll)
+    // actually resolves a mark, not just Run.Revision in the body — footnotes/endnotes, headers/footers,
+    // table-row revisions (TableRow.RowRevision), and paragraph-mark revisions (Paragraph.MarkRevision).
+
+    [Fact]
+    public void Inspect_CountsRevisionInsideFootnoteOnly_SoTheRemoveCheckboxCanBeEnabled()
+    {
+        var doc = new TextDocument();
+        doc.Blocks.Add(new Paragraph("Clean body"));
+
+        var footnote = new Footnote(1);
+        var footnoteParagraph = new Paragraph();
+        footnoteParagraph.Runs.Add(new Run("deleted text") { Revision = RevisionKind.Deleted, RevisionAuthor = "Ada" });
+        footnote.Content.Add(footnoteParagraph);
+        doc.Footnotes[1] = footnote;
+
+        var result = DocumentInspector.Inspect(doc);
+
+        // This is exactly the count both DocumentInspectorDialog (WPF) and SafetyDialogs (Avalonia) use
+        // to compute the checkbox's IsEnabled (count > 0) — asserting the count IS asserting enablement.
+        result.Revisions.Should().Be(1);
+        result.HasRevisions.Should().BeTrue();
+        result.IsClean.Should().BeFalse();
+        TrackChanges.HasRevisions(doc).Should().BeTrue();
+    }
+
+    [Fact]
+    public void RemoveRevisions_ClearsFootnoteRevisionAndAgreesWithTrackChanges()
+    {
+        var doc = new TextDocument();
+        doc.Blocks.Add(new Paragraph("Clean body"));
+
+        var footnote = new Footnote(1);
+        var footnoteParagraph = new Paragraph();
+        footnoteParagraph.Runs.Add(new Run("deleted text") { Revision = RevisionKind.Deleted, RevisionAuthor = "Ada" });
+        footnote.Content.Add(footnoteParagraph);
+        doc.Footnotes[1] = footnote;
+
+        DocumentInspector.RemoveRevisions(doc);
+
+        doc.Footnotes[1].Content.Single().Runs.Should().BeEmpty(); // deleted run dropped by AcceptAll
+        var after = DocumentInspector.Inspect(doc);
+        after.Revisions.Should().Be(0);
+        after.HasRevisions.Should().BeFalse();
+        TrackChanges.HasRevisions(doc).Should().BeFalse();
+    }
+
+    [Fact]
+    public void Inspect_CountsRevisionInsideHeaderOnly_SoTheRemoveCheckboxCanBeEnabled()
+    {
+        var doc = new TextDocument();
+        doc.Blocks.Add(new Paragraph("Clean body"));
+
+        doc.Header = new HeaderFooter();
+        var headerParagraph = new Paragraph();
+        headerParagraph.Runs.Add(new Run("header change") { Revision = RevisionKind.Inserted, RevisionAuthor = "Ann" });
+        doc.Header.Paragraphs.Add(headerParagraph);
+
+        var result = DocumentInspector.Inspect(doc);
+
+        result.Revisions.Should().Be(1);
+        result.HasRevisions.Should().BeTrue();
+        result.IsClean.Should().BeFalse();
+        TrackChanges.HasRevisions(doc).Should().BeTrue();
+    }
+
+    [Fact]
+    public void Inspect_CountsTableRowRevisionOnly_WithNoRunLevelRevision()
+    {
+        var doc = new TextDocument();
+        var table = Table.Create(1, 1);
+        table.Rows[0].RowRevision = RevisionKind.Deleted; // no run in the row carries Run.Revision
+        doc.Blocks.Add(table);
+
+        var result = DocumentInspector.Inspect(doc);
+
+        result.Revisions.Should().Be(1);
+        result.HasRevisions.Should().BeTrue();
+        TrackChanges.HasRevisions(doc).Should().BeTrue();
+
+        DocumentInspector.RemoveRevisions(doc);
+        table.Rows.Should().BeEmpty(); // AcceptAll drops a tracked-deleted row entirely
+        DocumentInspector.Inspect(doc).Revisions.Should().Be(0);
+    }
+
+    [Fact]
+    public void Inspect_CountsParagraphMarkRevisionOnly_WithAnOtherwisePlainRun()
+    {
+        var doc = new TextDocument();
+        var paragraph = new Paragraph { MarkRevision = RevisionKind.Inserted };
+        paragraph.Runs.Add(new Run("plain text"));
+        doc.Blocks.Add(paragraph);
+        // A following paragraph so the paragraph-mark resolution has somewhere to merge into.
+        doc.Blocks.Add(new Paragraph("next"));
+
+        var result = DocumentInspector.Inspect(doc);
+
+        result.Revisions.Should().Be(1);
+        result.HasRevisions.Should().BeTrue();
+        TrackChanges.HasRevisions(doc).Should().BeTrue();
+
+        DocumentInspector.RemoveRevisions(doc);
+        DocumentInspector.Inspect(doc).Revisions.Should().Be(0);
+        TrackChanges.HasRevisions(doc).Should().BeFalse();
+    }
+
+    [Fact]
+    public void Inspect_OnDocumentWithHeaderFooterFootnoteEndnoteTablePresentButClean_StaysZero()
+    {
+        // Sibling no-regression check: merely HAVING headers/footers/footnotes/endnotes/tables must not
+        // by itself inflate the count — only an actual RevisionKind mark should.
+        var doc = new TextDocument();
+        doc.Blocks.Add(new Paragraph("Clean body"));
+        doc.Blocks.Add(Table.Create(1, 1));
+
+        doc.Header = new HeaderFooter("Clean header");
+        doc.Footer = new HeaderFooter("Clean footer");
+        doc.Footnotes[1] = new Footnote(1, "Clean footnote");
+        doc.Endnotes[1] = new Endnote(1, "Clean endnote");
+
+        var result = DocumentInspector.Inspect(doc);
+
+        result.Revisions.Should().Be(0);
+        result.HasRevisions.Should().BeFalse();
+        TrackChanges.HasRevisions(doc).Should().BeFalse();
+    }
+
     [Fact]
     public void RemoveProperties_ClearsPropertiesOnly()
     {

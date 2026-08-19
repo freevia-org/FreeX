@@ -4957,6 +4957,7 @@ public static class PptxPackageWriter
             return unchanged;
 
         const double AvgCharWidthEmFactor = 0.52; // coarse proportional-font average advance width
+        const double WideCharWidthEmFactor = 1.0; // CJK/fullwidth glyphs render close to a full em wide
         const double LineHeightFactor = 1.2;
         const double DefaultFontSizePt = 18.0;
         const double DefaultInsetLeftRightPt = 7.2; // OOXML default lIns/rIns (91440 EMU)
@@ -4977,7 +4978,15 @@ public static class PptxPackageWriter
             double fontSizePt = paragraph.Runs.Count > 0
                 ? paragraph.Runs.Max(r => r.FontSizePt ?? DefaultFontSizePt)
                 : DefaultFontSizePt;
-            double textWidthPt = paragraph.Runs.Sum(r => (r.Text?.Length ?? 0) * fontSizePt * AvgCharWidthEmFactor);
+            double textWidthPt = 0;
+            foreach (var run in paragraph.Runs)
+            {
+                if (string.IsNullOrEmpty(run.Text)) continue;
+                foreach (var rune in run.Text.EnumerateRunes())
+                {
+                    textWidthPt += fontSizePt * (IsWideEstimateCharacter(rune) ? WideCharWidthEmFactor : AvgCharWidthEmFactor);
+                }
+            }
             int lines = body.Wrap
                 ? Math.Max(1, (int)Math.Ceiling(textWidthPt / widthPt))
                 : 1;
@@ -5011,6 +5020,32 @@ public static class PptxPackageWriter
         return (
             (int)Math.Round(targetFontScale * 100000.0),
             lineSpacingReduction > 0 ? (int)Math.Round(lineSpacingReduction * 100000.0) : null);
+    }
+
+    /// <summary>
+    /// r148 (freep-autofit F2): <see cref="RecomputeNormalAutoFitScale"/>'s line-wrap width estimate
+    /// used a single Latin-proportional average advance width (~0.52em) for every character. CJK,
+    /// Hangul and other full-width glyphs render close to a full em wide — roughly double that
+    /// estimate — so text in those scripts was estimated as wrapping to far fewer lines than it
+    /// actually will, letting clearly-overflowing text be judged as "fits" and skip getting a
+    /// cached fontScale written at all. This is a coarse block-range check (not a full East-Asian-
+    /// Width table), covering the common CJK/Hangul/fullwidth-forms ranges that dominate real
+    /// documents in those scripts.
+    /// </summary>
+    private static bool IsWideEstimateCharacter(System.Text.Rune rune)
+    {
+        int cp = rune.Value;
+        return (cp is >= 0x1100 and <= 0x115F)   // Hangul Jamo
+            || (cp is >= 0x2E80 and <= 0x303E)   // CJK Radicals, Kangxi, CJK Symbols/Punctuation
+            || (cp is >= 0x3041 and <= 0x33FF)   // Hiragana, Katakana, Hangul Compat Jamo, CJK Compat
+            || (cp is >= 0x3400 and <= 0x4DBF)   // CJK Unified Ideographs Extension A
+            || (cp is >= 0x4E00 and <= 0x9FFF)   // CJK Unified Ideographs
+            || (cp is >= 0xA960 and <= 0xA97F)   // Hangul Jamo Extended-A
+            || (cp is >= 0xAC00 and <= 0xD7A3)   // Hangul Syllables
+            || (cp is >= 0xF900 and <= 0xFAFF)   // CJK Compatibility Ideographs
+            || (cp is >= 0xFF00 and <= 0xFF60)   // Fullwidth Forms
+            || (cp is >= 0xFFE0 and <= 0xFFE6)   // Fullwidth Signs
+            || (cp is >= 0x20000 and <= 0x3FFFD); // CJK Unified Ideographs Extension B and beyond
     }
 
     private static XElement BuildParaEl(Paragraph para,
