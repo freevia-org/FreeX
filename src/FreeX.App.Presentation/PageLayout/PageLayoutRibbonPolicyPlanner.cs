@@ -135,8 +135,16 @@ public static class PageLayoutRibbonPolicyPlanner
         WorksheetScaleToFit current,
         string text)
     {
-        return PageLayoutInputParser.TryParseScalePercent(text, out var percent)
-            ? PageLayoutScaleCommitPlan.Apply(PageLayoutRibbonCommandPlanner.ResolveScalePercent(percent))
-            : PageLayoutScaleCommitPlan.Revert(current);
+        if (!PageLayoutInputParser.TryParseScalePercent(text, out var percent))
+            return PageLayoutScaleCommitPlan.Revert(current);
+
+        // "Automatic" is what this box *displays* while fit-to-pages drives the scaling -- it is
+        // not a request to leave that mode. Applying it resolves to (100, null, null) and wipes
+        // FitToPagesWide/Tall, so a combo echo of its own displayed value silently reverted a
+        // fit-to-pages the user had just set. Committing the displayed state is a no-op.
+        if (percent is null && (current.FitToPagesWide is not null || current.FitToPagesTall is not null))
+            return PageLayoutScaleCommitPlan.Revert(current);
+
+        return PageLayoutScaleCommitPlan.Apply(PageLayoutRibbonCommandPlanner.ResolveScalePercent(percent));
     }
 }

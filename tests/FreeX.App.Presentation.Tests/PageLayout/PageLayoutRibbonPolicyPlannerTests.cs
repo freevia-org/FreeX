@@ -85,6 +85,33 @@ public sealed class PageLayoutRibbonPolicyPlannerTests
     }
 
     [Fact]
+    public void PlanScalePercentCommit_AutomaticLeavesFitToPagesAlone()
+    {
+        // "Automatic" is what the Percent combo displays while fit-to-pages drives the scaling,
+        // so committing it is the combo echoing its own state, not a request to leave that mode.
+        // Applying it resolves to (100, null, null) and would wipe the fit-to-pages the user just
+        // set -- which is exactly how a just-applied "1 page" reverted to Automatic.
+        var current = new WorksheetScaleToFit(100, 1, null);
+
+        var plan = PageLayoutRibbonPolicyPlanner.PlanScalePercentCommit(current, "Automatic");
+
+        plan.ShouldApply.Should().BeFalse();
+        plan.ScaleToFit.Should().Be(current);
+    }
+
+    [Fact]
+    public void PlanScalePercentCommit_AutomaticStillAppliesWhenNoFitToPagesIsSet()
+    {
+        // With no fit-to-pages in play, Automatic genuinely means "back to 100%".
+        var current = new WorksheetScaleToFit(125, null, null);
+
+        var plan = PageLayoutRibbonPolicyPlanner.PlanScalePercentCommit(current, "Automatic");
+
+        plan.ShouldApply.Should().BeTrue();
+        plan.ScaleToFit.Should().Be(new WorksheetScaleToFit(100, null, null));
+    }
+
+    [Fact]
     public void PlanScalePercentCommit_InvalidInputRequestsRevert()
     {
         var current = new WorksheetScaleToFit(125, null, null);
