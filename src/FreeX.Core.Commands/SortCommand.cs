@@ -412,8 +412,8 @@ public sealed class SortCommand : IWorkbookCommand, IAffectedCellsCommand, IEsti
                     // as "no fill".
                     var addrA = new CellAddress(_sheetId, startRow + (uint)a.OriginalIndex, startCol + (uint)index);
                     var addrB = new CellAddress(_sheetId, startRow + (uint)b.OriginalIndex, startCol + (uint)index);
-                    var aColor = GetEffectiveColor(ctx.Workbook, sheet, addrA, a.Payloads[index].Cell, wantFill: sortOn == SortOn.CellColor);
-                    var bColor = GetEffectiveColor(ctx.Workbook, sheet, addrB, b.Payloads[index].Cell, wantFill: sortOn == SortOn.CellColor);
+                    var aColor = GetEffectiveColor(ctx.Workbook, sheet, addrA, a.Payloads[index].Cell, wantFill: sortOn == SortOn.CellColor, effectiveValue: a.Payloads[index].EffectiveValue);
+                    var bColor = GetEffectiveColor(ctx.Workbook, sheet, addrB, b.Payloads[index].Cell, wantFill: sortOn == SortOn.CellColor, effectiveValue: b.Payloads[index].EffectiveValue);
                     bool aNoFill = aColor is null;
                     bool bNoFill = bColor is null;
                     if (aNoFill != bNoFill)
@@ -430,8 +430,8 @@ public sealed class SortCommand : IWorkbookCommand, IAffectedCellsCommand, IEsti
                     // same rationale as R65-commands-sort-6-2 for color.
                     var addrA = new CellAddress(_sheetId, startRow + (uint)a.OriginalIndex, startCol + (uint)index);
                     var addrB = new CellAddress(_sheetId, startRow + (uint)b.OriginalIndex, startCol + (uint)index);
-                    var aIcon = GetEffectiveIcon(ctx.Workbook, sheet, addrA, a.Payloads[index].Cell);
-                    var bIcon = GetEffectiveIcon(ctx.Workbook, sheet, addrB, b.Payloads[index].Cell);
+                    var aIcon = GetEffectiveIcon(ctx.Workbook, sheet, addrA, a.Payloads[index].Cell, effectiveValue: a.Payloads[index].EffectiveValue);
+                    var bIcon = GetEffectiveIcon(ctx.Workbook, sheet, addrB, b.Payloads[index].Cell, effectiveValue: b.Payloads[index].EffectiveValue);
                     bool aNoIcon = aIcon is null;
                     bool bNoIcon = bIcon is null;
                     if (aNoIcon != bNoIcon)
@@ -647,8 +647,8 @@ public sealed class SortCommand : IWorkbookCommand, IAffectedCellsCommand, IEsti
                     // overlaid with any matching conditional-formatting rule's color) here too.
                     var addrA = new CellAddress(_sheetId, startRow + (uint)index, startCol + (uint)a.OriginalIndex);
                     var addrB = new CellAddress(_sheetId, startRow + (uint)index, startCol + (uint)b.OriginalIndex);
-                    var aColor = GetEffectiveColor(workbook, sheet, addrA, a.Payloads[index].Cell, wantFill: sortOn == SortOn.CellColor);
-                    var bColor = GetEffectiveColor(workbook, sheet, addrB, b.Payloads[index].Cell, wantFill: sortOn == SortOn.CellColor);
+                    var aColor = GetEffectiveColor(workbook, sheet, addrA, a.Payloads[index].Cell, wantFill: sortOn == SortOn.CellColor, effectiveValue: a.Payloads[index].EffectiveValue);
+                    var bColor = GetEffectiveColor(workbook, sheet, addrB, b.Payloads[index].Cell, wantFill: sortOn == SortOn.CellColor, effectiveValue: b.Payloads[index].EffectiveValue);
                     bool aNoFill = aColor is null;
                     bool bNoFill = bColor is null;
                     if (aNoFill != bNoFill)
@@ -662,8 +662,8 @@ public sealed class SortCommand : IWorkbookCommand, IAffectedCellsCommand, IEsti
                     // and the top-to-bottom no-target-icon guard in Apply's comparator.
                     var addrA = new CellAddress(_sheetId, startRow + (uint)index, startCol + (uint)a.OriginalIndex);
                     var addrB = new CellAddress(_sheetId, startRow + (uint)index, startCol + (uint)b.OriginalIndex);
-                    var aIcon = GetEffectiveIcon(workbook, sheet, addrA, a.Payloads[index].Cell);
-                    var bIcon = GetEffectiveIcon(workbook, sheet, addrB, b.Payloads[index].Cell);
+                    var aIcon = GetEffectiveIcon(workbook, sheet, addrA, a.Payloads[index].Cell, effectiveValue: a.Payloads[index].EffectiveValue);
+                    var bIcon = GetEffectiveIcon(workbook, sheet, addrB, b.Payloads[index].Cell, effectiveValue: b.Payloads[index].EffectiveValue);
                     bool aNoIcon = aIcon is null;
                     bool bNoIcon = bIcon is null;
                     if (aNoIcon != bNoIcon)
@@ -1427,8 +1427,14 @@ public sealed class SortCommand : IWorkbookCommand, IAffectedCellsCommand, IEsti
     {
         if (targetColor is not null && sortOn is SortOn.CellColor or SortOn.FontColor)
         {
-            var aColor = GetEffectiveColor(workbook, sheet, addressA, a, wantFill: sortOn == SortOn.CellColor);
-            var bColor = GetEffectiveColor(workbook, sheet, addressB, b, wantFill: sortOn == SortOn.CellColor);
+            // R149-remediation-sort-color-icon-spill: aValue/bValue are the already-resolved
+            // effective values for this address (a spill member's live value when addressA/B fall
+            // inside a dynamic-array spill and has no stored Cell -- see the caller's
+            // Payloads[index].EffectiveValue) -- thread them through so CF rules keyed on the
+            // cell's value are judged correctly here too, not just in the no-target-chosen branches
+            // above that call GetEffectiveColor/GetEffectiveIcon directly.
+            var aColor = GetEffectiveColor(workbook, sheet, addressA, a, wantFill: sortOn == SortOn.CellColor, effectiveValue: aValue);
+            var bColor = GetEffectiveColor(workbook, sheet, addressB, b, wantFill: sortOn == SortOn.CellColor, effectiveValue: bValue);
             return CompareTargetColor(aColor, bColor, targetColor.Value);
         }
 
@@ -1437,8 +1443,8 @@ public sealed class SortCommand : IWorkbookCommand, IAffectedCellsCommand, IEsti
         // (or back, via the caller's ascending/descending negation), same as a target color.
         if (targetIcon is not null && sortOn == SortOn.CellIcon)
         {
-            var aIcon = GetEffectiveIcon(workbook, sheet, addressA, a);
-            var bIcon = GetEffectiveIcon(workbook, sheet, addressB, b);
+            var aIcon = GetEffectiveIcon(workbook, sheet, addressA, a, effectiveValue: aValue);
+            var bIcon = GetEffectiveIcon(workbook, sheet, addressB, b, effectiveValue: bValue);
             return CompareTargetIcon(aIcon, bIcon, targetIcon);
         }
 
@@ -1478,7 +1484,7 @@ public sealed class SortCommand : IWorkbookCommand, IAffectedCellsCommand, IEsti
     /// FreeX.Core.Commands, so reusing it here is out of scope for this fix.
     /// </para>
     /// </summary>
-    public static CellColor? GetEffectiveColor(Workbook workbook, Sheet sheet, CellAddress address, Cell? cell, bool wantFill)
+    public static CellColor? GetEffectiveColor(Workbook workbook, Sheet sheet, CellAddress address, Cell? cell, bool wantFill, ScalarValue? effectiveValue = null)
     {
         // Resolve the cell's static style the same way callers used to before this helper was
         // shared: prefer the live Cell's own StyleId, then fall back to a style-only (no Cell
@@ -1488,6 +1494,15 @@ public sealed class SortCommand : IWorkbookCommand, IAffectedCellsCommand, IEsti
         CellColor? effective = wantFill ? style.FillColor : style.FontColor;
         if (sheet.ConditionalFormats.Count == 0)
             return effective;
+
+        // R149-remediation-sort-color-icon-spill: callers that already resolved the LIVE value for
+        // this address (e.g. a dynamic-array spill member, which has no stored Cell of its own —
+        // see SpillEngine) pass it explicitly via effectiveValue so CF rules keyed on the cell's
+        // value (CellValue, ContainsText/BeginsWith/EndsWith, Blanks/Errors) are judged against the
+        // spilled value instead of always reading BlankValue for a null cell. Callers with an
+        // ordinary stored Cell (Filter/AutoFilter dropdown color scans) omit it and keep the
+        // previous cell?.Value ?? BlankValue.Instance behavior unchanged.
+        var value = effectiveValue ?? cell?.Value ?? BlankValue.Instance;
 
         foreach (var rule in sheet.ConditionalFormats.OrderBy(r => r.Priority))
         {
@@ -1503,7 +1518,7 @@ public sealed class SortCommand : IWorkbookCommand, IAffectedCellsCommand, IEsti
             if (!applies)
                 continue;
 
-            if (!TryEvaluateSimpleConditionalFormatRule(rule, cell, out var matches) || !matches)
+            if (!TryEvaluateSimpleConditionalFormatRule(rule, value, out var matches) || !matches)
                 continue;
 
             // FontColor is a non-nullable CellStyle member defaulting to Black, so a plain
@@ -1544,12 +1559,14 @@ public sealed class SortCommand : IWorkbookCommand, IAffectedCellsCommand, IEsti
     /// ViewportConditionalFormatEvaluator, but that project is not referenced by
     /// FreeX.Core.Commands.
     /// </summary>
-    public static CfIconOverride? GetEffectiveIcon(Workbook workbook, Sheet sheet, CellAddress address, Cell? cell)
+    public static CfIconOverride? GetEffectiveIcon(Workbook workbook, Sheet sheet, CellAddress address, Cell? cell, ScalarValue? effectiveValue = null)
     {
         if (sheet.ConditionalFormats.Count == 0)
             return null;
 
-        var value = cell?.Value ?? BlankValue.Instance;
+        // R149-remediation-sort-color-icon-spill: same reasoning as GetEffectiveColor above —
+        // callers that already resolved a spill member's LIVE value pass it explicitly.
+        var value = effectiveValue ?? cell?.Value ?? BlankValue.Instance;
         if (!TryGetNumber(value, out var cellNumber))
             return null;
 
@@ -1691,10 +1708,9 @@ public sealed class SortCommand : IWorkbookCommand, IAffectedCellsCommand, IEsti
     /// own value alone. Returns false (rule not evaluated, treated as non-matching for color
     /// resolution purposes) for rule types this minimal resolver does not support.
     /// </summary>
-    private static bool TryEvaluateSimpleConditionalFormatRule(ConditionalFormat rule, Cell? cell, out bool matches)
+    private static bool TryEvaluateSimpleConditionalFormatRule(ConditionalFormat rule, ScalarValue value, out bool matches)
     {
         matches = false;
-        var value = cell?.Value ?? BlankValue.Instance;
         switch (rule.RuleType)
         {
             case CfRuleType.Blanks:

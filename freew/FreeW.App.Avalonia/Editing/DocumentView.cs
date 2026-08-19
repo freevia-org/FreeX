@@ -20910,16 +20910,20 @@ public sealed partial class DocumentView : Control
     }
 
     /// <summary>
-    /// Insert a section break after the caret block, inheriting the current page settings.
+    /// Insert a section break after the caret block, inheriting the page settings of the section the
+    /// caret is actually in (resolved via <see cref="PageSettingsSectionResolver"/>), not necessarily the
+    /// document's final section, so the new section starts with the same layout as the text it was split
+    /// out of. Mirrors <c>FreeW.App.Host.Editing.DocumentView.InsertSectionBreak</c>.
     /// </summary>
     public void InsertSectionBreak(SectionBreakKind breakKind)
     {
         if (IsEditingLocked)
             return;
 
+        var inheritedPage = PageSettingsSectionResolver.Resolve(_doc, CurrentPageSettingsSectionIndex());
         _editingSession.InsertBlockAfter(
             _caret.Block,
-            DocumentOps.CreateSectionBreak(breakKind, _doc.Page));
+            DocumentOps.CreateSectionBreak(breakKind, inheritedPage));
     }
 
     /// <summary>

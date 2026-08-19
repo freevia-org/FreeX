@@ -28,16 +28,28 @@ public static class DocumentBlockInsertionMutationPlanner
     public static DocumentBlockReplacementPlan PlanColumnBreak(TextDocument document, int caretBlockIndex) =>
         PlanAfterCaret(document, caretBlockIndex, [DocumentOps.CreateColumnBreak()]);
 
+    /// <summary>
+    /// The new section-break paragraph inherits the <see cref="PageSettings"/> of the section
+    /// <paramref name="caretBlockIndex"/> is actually in (resolved via
+    /// <see cref="PageSettingsSectionResolver"/>), not unconditionally the document's final section
+    /// (<see cref="TextDocument.Page"/>). Mirrors
+    /// <c>FreeW.App.Host.Editing.DocumentView.InsertSectionBreak</c> and
+    /// <c>FreeW.App.Avalonia.Editing.DocumentView.InsertSectionBreak</c>, the WPF- and Avalonia-hosted
+    /// equivalents of this same gesture.
+    /// </summary>
     public static DocumentBlockReplacementPlan PlanSectionBreak(
         TextDocument document,
         int caretBlockIndex,
         SectionBreakKind breakKind)
     {
         ArgumentNullException.ThrowIfNull(document);
+        var inheritedPage = PageSettingsSectionResolver.Resolve(
+            document,
+            PageSettingsSectionResolver.ResolveSectionIndex(document, caretBlockIndex));
         return PlanAfterCaret(
             document,
             caretBlockIndex,
-            [DocumentOps.CreateSectionBreak(breakKind, document.Page)]);
+            [DocumentOps.CreateSectionBreak(breakKind, inheritedPage)]);
     }
 
     private static DocumentBlockReplacementPlan PlanAfterCaret(
