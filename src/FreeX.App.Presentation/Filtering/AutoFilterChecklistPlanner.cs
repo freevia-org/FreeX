@@ -22,7 +22,7 @@ public static class AutoFilterChecklistPlanner
         // Range and its Totals Row is shown, range.End.Row IS the Totals Row -- exclude it from the
         // distinct-values scan the same way the interactive filter-apply commands already do.
         var lastRow = AutoFilterRangeResolver.GetFilterableLastRow(sheet, range);
-        for (var row = range.Start.Row + 1; row <= lastRow; row++)
+        for (var row = AutoFilterRangeResolver.GetFilterableFirstRow(sheet, range); row <= lastRow; row++)
         {
             var text = ToFilterText(sheet.GetValue(row, col));
             if (seen.Add(text))
@@ -90,7 +90,7 @@ public static class AutoFilterChecklistPlanner
         // the interactive filter-apply commands (FilterCommand/TopBottomFilterCommand/
         // AverageFilterCommand/FilterConditionCommand) already do via GetFilterableLastRow.
         var lastRow = AutoFilterRangeResolver.GetFilterableLastRow(sheet, range);
-        for (var row = range.Start.Row + 1; row <= lastRow; row++)
+        for (var row = AutoFilterRangeResolver.GetFilterableFirstRow(sheet, range); row <= lastRow; row++)
         {
             var value = sheet.GetValue(row, col);
             var normalized = ToFilterText(value);

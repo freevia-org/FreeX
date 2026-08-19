@@ -952,21 +952,32 @@ internal static class FilterHiddenRowUpdater
         SetHidden(filterHiddenRows, row, !visible);
     }
 
-    public static void ClearRange(HashSet<uint> filterHiddenRows, GridRange range)
+    /// <summary>
+    /// Un-hides every filter-hidden row in <paramref name="range"/>.
+    /// </summary>
+    /// <param name="firstDataRow">
+    /// First row to clear. Defaults to <c>range.Start.Row + 1</c>, which skips a header row. Pass
+    /// <see cref="GetFilterableFirstRow"/> for a range that may be a HEADERLESS structured table --
+    /// and compute it BEFORE the table is removed from the sheet, since that helper finds the table
+    /// by range and can no longer see it afterwards. Convert Table to Range does exactly that, and
+    /// without it row 1 of a headerless table stays hidden forever: the mirror image of the bug where
+    /// the same naive bound left row 1 permanently un-filterable.
+    /// </param>
+    public static void ClearRange(HashSet<uint> filterHiddenRows, GridRange range, uint? firstDataRow = null)
     {
-        var firstDataRow = range.Start.Row + 1;
+        var firstDataRowValue = firstDataRow ?? range.Start.Row + 1;
         var lastDataRow = range.End.Row;
-        if (filterHiddenRows.Count == 0 || firstDataRow > lastDataRow)
+        if (filterHiddenRows.Count == 0 || firstDataRowValue > lastDataRow)
             return;
 
-        var dataRowCount = lastDataRow - firstDataRow + 1;
+        var dataRowCount = lastDataRow - firstDataRowValue + 1;
         if ((uint)filterHiddenRows.Count < dataRowCount)
         {
-            filterHiddenRows.RemoveWhere(row => row >= firstDataRow && row <= lastDataRow);
+            filterHiddenRows.RemoveWhere(row => row >= firstDataRowValue && row <= lastDataRow);
             return;
         }
 
-        for (var row = firstDataRow; row <= lastDataRow; row++)
+        for (var row = firstDataRowValue; row <= lastDataRow; row++)
             filterHiddenRows.Remove(row);
     }
 
@@ -1122,26 +1133,31 @@ internal static class FilterHiddenRowUpdater
         owned.Clear();
     }
 
-    public static bool ContainsAnyInRange(HashSet<uint> filterHiddenRows, GridRange range)
+    /// <summary>
+    /// Whether any row in <paramref name="range"/> is filter-hidden. <paramref name="firstDataRow"/>
+    /// follows the same contract as <see cref="ClearRange"/>: pass
+    /// <see cref="GetFilterableFirstRow"/> when the range may be a headerless structured table.
+    /// </summary>
+    public static bool ContainsAnyInRange(HashSet<uint> filterHiddenRows, GridRange range, uint? firstDataRow = null)
     {
-        var firstDataRow = range.Start.Row + 1;
+        var firstDataRowValue = firstDataRow ?? range.Start.Row + 1;
         var lastDataRow = range.End.Row;
-        if (filterHiddenRows.Count == 0 || firstDataRow > lastDataRow)
+        if (filterHiddenRows.Count == 0 || firstDataRowValue > lastDataRow)
             return false;
 
-        var dataRowCount = lastDataRow - firstDataRow + 1;
+        var dataRowCount = lastDataRow - firstDataRowValue + 1;
         if ((uint)filterHiddenRows.Count < dataRowCount)
         {
             foreach (var row in filterHiddenRows)
             {
-                if (row >= firstDataRow && row <= lastDataRow)
+                if (row >= firstDataRowValue && row <= lastDataRow)
                     return true;
             }
 
             return false;
         }
 
-        for (var row = firstDataRow; row <= lastDataRow; row++)
+        for (var row = firstDataRowValue; row <= lastDataRow; row++)
         {
             if (filterHiddenRows.Contains(row))
                 return true;
