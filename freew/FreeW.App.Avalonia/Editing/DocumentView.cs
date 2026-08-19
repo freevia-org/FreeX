@@ -1511,6 +1511,25 @@ public sealed partial class DocumentView : Control
     }
 
     /// <summary>
+    /// AV-CCEDIT: whether characters typed at <paramref name="offset"/> may join the field they would be
+    /// inherited into. Nothing to allow when the caret is not in a field at all.
+    /// </summary>
+    private bool HfTypingIsAllowed(HfTarget target, int offset)
+    {
+        if (GetHfParagraph(target) is not { } paragraph)
+            return true;
+
+        var atoms = HfAtoms(paragraph);
+        var (index, _) = HfAtomIndexForOffset(atoms, offset);
+        if (HfActiveContentControl(atoms, index) is not { } control)
+            return true;
+
+        return paragraph.Runs
+            .Where(run => ReferenceEquals(run.Control, control))
+            .All(run => ContentControlInteractionPlanner.CanEditContentControlText(run, RestrictEditingPolicy));
+    }
+
+    /// <summary>
     /// AV-CCEDIT: whether a header/footer edit over the model range <c>[from, to]</c> is permitted by the
     /// content-control locks in that story — the same two protections the body enforces: a CONTENT-locked
     /// field refuses any edit touching its text, and a DELETE-locked field refuses one that would remove
@@ -1586,8 +1605,11 @@ public sealed partial class DocumentView : Control
             return;
         var target = activeCaret.Target;
         var offset = activeCaret.Offset;
-        // AV-CCEDIT: typing must not rewrite a locked field's text, exactly as in the body.
-        if (!HfEditIsAllowed(target, offset, offset))
+        // AV-CCEDIT: typing must not extend a locked field. The characters join whichever field they are
+        // typed into (see HfActiveContentControl), so the lock to consult is that field's — a strict
+        // "is the caret inside the run" test would miss typing at the field's END boundary, which
+        // inheritance still routes into the field.
+        if (!HfTypingIsAllowed(target, offset))
         {
             if (ownsUndoGroup)
                 _bus.RollbackUndoGroup();
@@ -5910,7 +5932,8 @@ public sealed partial class DocumentView : Control
         ApplyPageVerticalAlignment();
 
         // AV-CCEDIT: one scan per layout instead of one per pointer move — the hover affordances only
-        // have to search the placed glyphs in a document that actually holds a field.
+        // have to search the rendered glyphs in a document that actually holds a field. The header/footer
+        // band is built after this point, so its own flag is set there.
         _hasContentControlGlyphs = _placed.Any(placed => placed.Control is not null);
 
         _laidOutWidth = width;
@@ -5918,7 +5941,13 @@ public sealed partial class DocumentView : Control
         if (_viewMode == DocumentViewMode.PrintLayout)
         {
             if (!_doc.DoNotDisplayPageBoundaries)
+            {
                 BuildHeaderFooterItems();
+                // AV-CCEDIT: a field can live in the header/footer band alone, so its hover affordances
+                // must survive the "does this layout hold a field at all" short-circuit.
+                _hasContentControlGlyphs |= _headerFooterItems.Any(item => item.Control is not null);
+            }
+
             // AV-NOTERENDER: footnotes render in the bottom margin band of the page hosting their
             // reference; endnotes render in a synthetic section after the last body page. Endnotes
             // extend the scrollable content height, so add their measured extent afterwards.
@@ -16153,6 +16182,28 @@ public sealed partial class DocumentView : Control
                 && point.Y <= placed.Y + placed.LineHeight)
             {
                 return placed.Control;
+            }
+        }
+
+        // The header/footer band renders from its own item list rather than placed glyphs, so a field up
+        // there needs its own pass to advertise itself.
+        foreach (var item in _headerFooterItems)
+        {
+            if (item.Control is null || string.IsNullOrEmpty(item.Text))
+                continue;
+            var text = Build(item.Text, item.Fmt);
+            var left = item.X + AlignmentOffset(
+                item.Alignment,
+                item.AvailableWidth,
+                text.WidthIncludingTrailingWhitespace,
+                isLast: true);
+            var height = item.LineHeight > 0 ? item.LineHeight : text.Height;
+            if (point.X >= left
+                && point.X <= left + Math.Max(1, text.WidthIncludingTrailingWhitespace)
+                && point.Y >= item.Y
+                && point.Y <= item.Y + height)
+            {
+                return item.Control;
             }
         }
 

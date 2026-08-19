@@ -95,6 +95,39 @@ public sealed class DocumentViewHeaderFooterContentControlTests
             },
             CancellationToken.None);
 
+    [Fact]
+    public async Task Typing_at_a_locked_header_fields_end_boundary_is_refused() =>
+        await Session.Dispatch(
+            () =>
+            {
+                var (document, view) = MakeViewWithHeaderControl(ContentControlLockMode.ContentLocked);
+
+                // The field ends the paragraph, so its end boundary is also the line end: typed text
+                // would be inherited INTO the field, which its content lock forbids.
+                view.PlaceCaretInHeaderFooter(footer: false, paraIdx: 0, offset: 13);
+                view.InsertText("!");
+
+                HeaderText(document).Should().Be("Title: Report");
+                HeaderFields(document)[0].Text.Should().Be("Report");
+            },
+            CancellationToken.None);
+
+    [Fact]
+    public async Task Hovering_a_header_field_shows_its_description() =>
+        await Session.Dispatch(
+            () =>
+            {
+                var (_, view) = MakeViewWithHeaderControl(ContentControlLockMode.NotSpecified);
+                view.Measure(new Size(816, 4000));
+
+                var region = view.ContentControlHeaderFooterRegionForTest();
+                region.Should().NotBeNull("the header band must expose the field it renders");
+
+                view.ContentControlHoverTipForTest(region!.Value.Center)
+                    .Should().Be("Plain-text content control");
+            },
+            CancellationToken.None);
+
     private static (TextDocument Document, DocumentView View) MakeViewWithHeaderControl(
         ContentControlLockMode lockMode)
     {
