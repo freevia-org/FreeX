@@ -74,6 +74,46 @@ public sealed class DocumentViewContentControlChromeTests
             },
             CancellationToken.None);
 
+    [Fact]
+    public async Task A_field_inside_a_table_cell_gets_the_same_chrome() =>
+        await Session.Dispatch(
+            () =>
+            {
+                var document = TextDocument.CreateEmpty();
+                document.Blocks.Clear();
+                var table = new Table();
+                var row = new TableRow();
+                var cell = new TableCell();
+                cell.Paragraphs.Clear();
+                var cellParagraph = new Paragraph();
+                cellParagraph.Runs.Add(new Run("Name: "));
+                cellParagraph.Runs.Add(Run.PlainTextControl("Bob", alias: "Applicant"));
+                cellParagraph.Runs.Add(Run.CheckBoxControl(@checked: true));
+                cell.Paragraphs.Add(cellParagraph);
+                row.Cells.Add(cell);
+                table.Rows.Add(row);
+                document.Blocks.Add(table);
+
+                var view = new DocumentView();
+                view.LoadDocument(document);
+                view.Measure(new Size(800, 2000));
+
+                var glyphs = view.ContentControlGlyphsForTest(0);
+
+                // Forms usually lay their fields out in a table, so the cell path must carry the control
+                // through to the placed glyphs exactly as the body path does.
+                new string(glyphs.Select(glyph => glyph.Ch).ToArray())
+                    .Should().Be("Bob" + FreeW.Core.Model.ContentControl.CheckedGlyph);
+                glyphs.Select(glyph => glyph.Kind).Distinct()
+                    .Should().Equal(ContentControlKind.PlainText, ContentControlKind.CheckBox);
+
+                var firstGlyph = glyphs[0].Rect;
+                view.ContentControlHoverTipForTest(
+                        new Point(firstGlyph.X + firstGlyph.Width / 2, firstGlyph.Y + firstGlyph.Height / 2))
+                    .Should().Be("Content control: Applicant");
+            },
+            CancellationToken.None);
+
     /// <summary>
     /// The paint itself cannot be sampled here: this suite runs Avalonia's headless drawing stub
     /// (<c>UseHeadlessDrawing = true</c>, see <see cref="FreeWHeadlessApp"/>), so

@@ -1396,7 +1396,14 @@ public sealed partial class DocumentView : Control
     /// page number are never split or corrupted). Literal atoms occupy one model offset each; a field
     /// atom occupies <see cref="FieldRun"/>.Text.Length model offsets (its cached resolved text length).
     /// </summary>
-    private readonly record struct HfAtom(char Ch, RunFormatting Fmt, Run? FieldRun)
+    private readonly record struct HfAtom(
+        char Ch,
+        RunFormatting Fmt,
+        Run? FieldRun,
+        // AV-CCEDIT: the content control this character belongs to, carried per-atom exactly as a body
+        // Cell carries it, so a w:sdt in a header/footer survives the atom round-trip. Without it the
+        // rebuild flattened the field into ordinary text on the first keystroke anywhere in the story.
+        ModelContentControl? Control = null)
     {
         public bool IsField => FieldRun is not null;
         public int ModelLength => FieldRun?.Text.Length ?? 1;
@@ -1416,7 +1423,7 @@ public sealed partial class DocumentView : Control
             else
             {
                 foreach (var ch in run.Text)
-                    atoms.Add(new HfAtom(ch, run.Formatting, null));
+                    atoms.Add(new HfAtom(ch, run.Formatting, null, run.Control));
             }
         }
         return atoms;
@@ -1439,11 +1446,17 @@ public sealed partial class DocumentView : Control
                 continue;
             }
             var fmt = atoms[i].Fmt;
+            // AV-CCEDIT: a run is also one contiguous span of the same content-control instance, so a
+            // field keeps its exact extent (and stays one w:sdt) across an edit to the text around it.
+            var control = atoms[i].Control;
             var start = i;
-            while (i < atoms.Count && !atoms[i].IsField && atoms[i].Fmt.Equals(fmt))
+            while (i < atoms.Count
+                   && !atoms[i].IsField
+                   && atoms[i].Fmt.Equals(fmt)
+                   && SameContentControl(atoms[i].Control, control))
                 i++;
             var text = new string(atoms.Skip(start).Take(i - start).Select(a => a.Ch).ToArray());
-            para.Runs.Add(new Run(text, fmt));
+            para.Runs.Add(new Run(text, fmt) { Control = control });
         }
     }
 
@@ -1479,6 +1492,57 @@ public sealed partial class DocumentView : Control
         // Fall back to the first literal atom's formatting, else default.
         var firstLiteral = atoms.FirstOrDefault(a => !a.IsField);
         return atoms.Any(a => !a.IsField) ? firstLiteral.Fmt : RunFormatting.Default;
+    }
+
+    /// <summary>
+    /// AV-CCEDIT: the content control a character typed at <paramref name="atomIndex"/> belongs to — the
+    /// atom before the caret, else the one after it. Mirrors <see cref="HfActiveFormatting"/>, and the
+    /// body's neighbour-inheritance rule for typed cells.
+    /// </summary>
+    private static ModelContentControl? HfActiveContentControl(List<HfAtom> atoms, int atomIndex)
+    {
+        if (atomIndex > 0 && atomIndex - 1 < atoms.Count && !atoms[atomIndex - 1].IsField)
+            return atoms[atomIndex - 1].Control;
+        if (atomIndex >= 0 && atomIndex < atoms.Count && !atoms[atomIndex].IsField)
+            return atoms[atomIndex].Control;
+        return null;
+    }
+
+    /// <summary>
+    /// AV-CCEDIT: whether a header/footer edit over the model range <c>[from, to]</c> is permitted by the
+    /// content-control locks in that story — the same two protections the body enforces: a CONTENT-locked
+    /// field refuses any edit touching its text, and a DELETE-locked field refuses one that would remove
+    /// it entirely. A collapsed range (typing) counts as touching the field it sits inside.
+    /// </summary>
+    private bool HfEditIsAllowed(HfTarget target, int from, int to)
+    {
+        if (GetHfParagraph(target) is not { } paragraph)
+            return true;
+
+        var lo = Math.Min(from, to);
+        var hi = Math.Max(from, to);
+        var offset = 0;
+        foreach (var run in paragraph.Runs)
+        {
+            var end = offset + run.Text.Length;
+            if (run.Control is { } control)
+            {
+                var touched = lo == hi
+                    ? lo > offset && lo < end
+                    : Math.Min(hi, end) > Math.Max(lo, offset);
+                if (touched
+                    && (!ContentControlInteractionPlanner.CanEditContentControlText(run, RestrictEditingPolicy)
+                        || (lo <= offset && hi >= end
+                            && !ContentControlInteractionPlanner.CanDeleteContentControl(control))))
+                {
+                    return false;
+                }
+            }
+
+            offset = end;
+        }
+
+        return true;
     }
 
     /// <summary>Runs an undoable edit on the H/F caret's paragraph, then refreshes layout + caret.</summary>
@@ -1520,13 +1584,25 @@ public sealed partial class DocumentView : Control
             return;
         var target = activeCaret.Target;
         var offset = activeCaret.Offset;
+        // AV-CCEDIT: typing must not rewrite a locked field's text, exactly as in the body.
+        if (!HfEditIsAllowed(target, offset, offset))
+        {
+            if (ownsUndoGroup)
+                _bus.RollbackUndoGroup();
+            return;
+        }
+
         HfEditParagraph(target, atoms =>
         {
             var (idx, _) = HfAtomIndexForOffset(atoms, offset);
             var fmt = HfActiveFormatting(atoms, offset);
+            // AV-CCEDIT: like body typing, the new characters inherit the field they are typed into (the
+            // atom before the caret, else the one after), so they extend that w:sdt instead of splitting
+            // it into "field / plain text / field" on save.
+            var control = HfActiveContentControl(atoms, idx);
             var at = idx;
             foreach (var ch in text)
-                atoms.Insert(at++, new HfAtom(ch, fmt, null));
+                atoms.Insert(at++, new HfAtom(ch, fmt, null, control));
         }, offset + text.Length);
         if (ownsUndoGroup)
             _bus.CommitUndoGroup("Replace header/footer selection");
@@ -1600,6 +1676,10 @@ public sealed partial class DocumentView : Control
         if (removeIdx < 0 || removeIdx >= atoms0.Count)
             return;
         var removedModelLen = atoms0[removeIdx].ModelLength;
+        // AV-CCEDIT: deleting the character before the caret must respect the field's locks.
+        if (!HfEditIsAllowed(target, offset - removedModelLen, offset))
+            return;
+
         HfEditParagraph(target, atoms =>
         {
             if (removeIdx >= 0 && removeIdx < atoms.Count)
@@ -1639,6 +1719,10 @@ public sealed partial class DocumentView : Control
             TryDeleteHfSelection();
             return;
         }
+        // AV-CCEDIT: forward-deleting the character at the caret must respect the field's locks.
+        if (!HfEditIsAllowed(target, offset, offset + atoms0[idx].ModelLength))
+            return;
+
         HfEditParagraph(target, atoms =>
         {
             if (idx >= 0 && idx < atoms.Count)
@@ -1709,6 +1793,19 @@ public sealed partial class DocumentView : Control
             || NormalizedHfSelection() is not { } selection)
         {
             return false;
+        }
+
+        // AV-CCEDIT: a selection delete in a header/footer respects the same field locks as the body.
+        for (var index = selection.Start.ParagraphIndex; index <= selection.End.ParagraphIndex; index++)
+        {
+            if (index < 0 || index >= story.Paragraphs.Count)
+                continue;
+            var from = index == selection.Start.ParagraphIndex ? selection.Start.Offset : 0;
+            var to = index == selection.End.ParagraphIndex
+                ? selection.End.Offset
+                : story.Paragraphs[index].PlainText.Length;
+            if (!HfEditIsAllowed(caret.Target with { ParaIdx = index }, from, to))
+                return false;
         }
 
         HeaderFooterTextPosition nextCaret;
@@ -9617,7 +9714,8 @@ public sealed partial class DocumentView : Control
                             var hidden = item.Hidden;
                             var placedFormatting = hidden ? fmt with { Hidden = true } : fmt;
                             _placed.Add(new PlacedChar(blockIndex, glyphOffset, tx, ty, w, lineHeight, placedFormatting, ch,
-                                Sentinel: false, CellRow: r, CellCol: startCol, CellParaIdx: pIdx, CellParaOffset: paraCharOffset));
+                                Sentinel: false, CellRow: r, CellCol: startCol, CellParaIdx: pIdx, CellParaOffset: paraCharOffset,
+                                Control: item.Control));
                             glyphOffset++;
                             paraCharOffset++;
                             tx += w;
@@ -10459,8 +10557,10 @@ public sealed partial class DocumentView : Control
                 : BuildBodyComplexFieldDisplayPlan(blockIndex, run).Text;
             foreach (var ch in text)
             {
-                var width = hidden ? 0 : Build(ch.ToString(), fmt).WidthIncludingTrailingWhitespace;
-                items.Add(new CellWrappedItem(ch, width, lineHeight, hidden, null, runIndex));
+                // AV-CCEDIT: a check box owns its glyph here too — see DisplayGlyph.
+                var glyph = DisplayGlyph(new Cell(ch, fmt, Control: run.Control));
+                var width = hidden ? 0 : Build(glyph.ToString(), fmt).WidthIncludingTrailingWhitespace;
+                items.Add(new CellWrappedItem(glyph, width, lineHeight, hidden, null, runIndex, run.Control));
             }
         }
 
@@ -17525,13 +17625,25 @@ public sealed partial class DocumentView : Control
         }
     }
 
+    /// <summary>
+    /// AV-CCEDIT: whether a shape-text run may be edited. A run inside a text box can carry a content
+    /// control just like a body run, and a content-locked one refuses edits wherever it lives.
+    /// </summary>
+    private bool IsShapeTextRunEditable(Run run) =>
+        run.Control is null
+        || ContentControlInteractionPlanner.CanEditContentControlText(run, RestrictEditingPolicy);
+
     private void InsertShapeText(
         (int BlockIndex, int RunIndex, int TextParagraphIndex, int TextRunIndex, int Offset) caret,
         string text)
     {
         if (string.IsNullOrEmpty(text)
-            || !TryGetShapeTextRun(caret.BlockIndex, caret.RunIndex, caret.TextParagraphIndex, caret.TextRunIndex, out var run))
+            || !TryGetShapeTextRun(caret.BlockIndex, caret.RunIndex, caret.TextParagraphIndex, caret.TextRunIndex, out var run)
+            // AV-CCEDIT: a w:sdt can wrap a run inside a text box too, and its lock applies there as well.
+            || !IsShapeTextRunEditable(run))
+        {
             return;
+        }
 
         var offset = Math.Clamp(caret.Offset, 0, run.Text.Length);
         _bus.Execute(new SetShapeTextRunCommand(
@@ -17579,8 +17691,11 @@ public sealed partial class DocumentView : Control
         }
 
         if (_shapeCaret is not { } caret
-            || !TryGetShapeTextRun(caret.BlockIndex, caret.RunIndex, caret.TextParagraphIndex, caret.TextRunIndex, out var run))
+            || !TryGetShapeTextRun(caret.BlockIndex, caret.RunIndex, caret.TextParagraphIndex, caret.TextRunIndex, out var run)
+            || !IsShapeTextRunEditable(run))
+        {
             return;
+        }
 
         var offset = Math.Clamp(caret.Offset, 0, run.Text.Length);
         if (backward && offset == 0 && caret.TextParagraphIndex > 0)
@@ -24200,9 +24315,18 @@ public sealed partial class DocumentView : Control
     private int PreviousEditableBlock(int from) =>
         _editingSession.Interaction.PreviousBodyTextBlock(from);
 
-    /// <summary>Char-level editing only on paragraphs whose runs are all plain text (no images/fields/controls).</summary>
+    /// <summary>
+    /// Char-level editing only on paragraphs whose runs are all plain text (no images/fields).
+    /// AV-CCEDIT: <see cref="IsPlainTextEditable"/> stays the LAYOUT cell-source selector and so only
+    /// judges run marks; a locked BLOCK-level content control (a body w:sdt wrapping whole paragraphs,
+    /// with no run-level marker at all) is invisible to it. The gestures gated by this predicate —
+    /// Delete-forward, Enter, list toggles, change case, cell edits — must honour it, the way
+    /// IsTextReplaceable and TryAutoCorrect already do.
+    /// </summary>
     private bool IsEditable(Paragraph paragraph) =>
-        !IsEditingLocked && IsPlainTextEditable(paragraph);
+        !IsEditingLocked
+        && !ContentControlInteractionPlanner.IsBlockContentControlLocked(paragraph.BlockContentControl)
+        && IsPlainTextEditable(paragraph);
 
     // AV-CCEDIT: a content control no longer blocks field insertion — InsertRunAtOffset places the new
     // run beside the field rather than splitting it, so the w:sdt stays whole.
@@ -24440,8 +24564,10 @@ public sealed partial class DocumentView : Control
             }
 
             foreach (var ch in displayText)
+                // AV-CCEDIT: carry the control on the display path too, so a field keeps its chrome in a
+                // paragraph that layout routes here (one holding a note mark, field or equation).
                 cells.Add(new Cell(ch, displayFormatting, run.CommentId, run.Revision, run.RevisionAuthor,
-                    run.RevisionDateXml, link, run.FormatRevision, StyleId: run.StyleId));
+                    run.RevisionDateXml, link, run.FormatRevision, StyleId: run.StyleId, Control: run.Control));
         }
         return cells;
     }
@@ -25329,7 +25455,10 @@ public sealed partial class DocumentView : Control
         double Height,
         bool Hidden,
         EmbeddedObjectVisualPlan? EmbeddedObject,
-        int RunIndex);
+        int RunIndex,
+        // AV-CCEDIT: the content control this cell glyph belongs to, so a field inside a table renders with
+        // the same chrome (shade, tooltip, check-box glyph) as one in the body.
+        ModelContentControl? Control = null);
 
     private readonly record struct CellWrappedLine(
         double Height,
