@@ -206,6 +206,14 @@ internal sealed class DocumentViewAutomationPeer : ControlAutomationPeer, IValue
     internal void RemoveNodeFromSelection(DocumentAccessibilityNode node) =>
         _owner.AutomationRemoveNodeFromSelection(node);
 
+    /// <summary>
+    /// Toggles the check-box field a node describes, through the editor's own interaction path — the
+    /// same one a mouse click takes, so the document's protection and the control's lock still decide,
+    /// and the change lands on the undo stack. Returns false when the field refuses.
+    /// </summary>
+    internal bool ToggleContentControlNode(DocumentAccessibilityNode node) =>
+        _owner.AutomationToggleContentControl(node);
+
     internal void NotifyObjectSelectionChanged()
     {
         var current = SelectedObjectNodes().Select(node => node.Id).ToArray();
@@ -249,6 +257,8 @@ internal sealed class DocumentViewAutomationPeer : ControlAutomationPeer, IValue
                 new DocumentValueAutomationPeer(this, node.Id),
             DocumentAccessibilityNodeKind.TableCell => new DocumentValueAutomationPeer(this, node.Id),
             DocumentAccessibilityNodeKind.Hyperlink => new DocumentHyperlinkAutomationPeer(this, node.Id),
+            DocumentAccessibilityNodeKind.ContentControl =>
+                new DocumentContentControlAutomationPeer(this, node.Id),
             DocumentAccessibilityNodeKind.Shape
                 or DocumentAccessibilityNodeKind.Chart
                 or DocumentAccessibilityNodeKind.WordArt
@@ -319,6 +329,19 @@ internal abstract class DocumentVirtualAutomationPeer(
         DocumentAccessibilityNodeKind.TableRow => AutomationControlType.Group,
         DocumentAccessibilityNodeKind.TableCell => AutomationControlType.DataItem,
         DocumentAccessibilityNodeKind.Hyperlink => AutomationControlType.Hyperlink,
+        // A form field announces itself as the control it behaves like, so a screen reader offers the
+        // right affordance: a check box toggles, a list picks, a text field is typed into.
+        DocumentAccessibilityNodeKind.ContentControl => Node.ContentControlKind switch
+        {
+            FreeW.Core.Model.ContentControlKind.CheckBox => AutomationControlType.CheckBox,
+            FreeW.Core.Model.ContentControlKind.DropDownList
+                or FreeW.Core.Model.ContentControlKind.ComboBox => AutomationControlType.ComboBox,
+            FreeW.Core.Model.ContentControlKind.Picture => AutomationControlType.Image,
+            FreeW.Core.Model.ContentControlKind.PlainText
+                or FreeW.Core.Model.ContentControlKind.RichText
+                or FreeW.Core.Model.ContentControlKind.DatePicker => AutomationControlType.Edit,
+            _ => AutomationControlType.Group,
+        },
         DocumentAccessibilityNodeKind.Image => AutomationControlType.Image,
         DocumentAccessibilityNodeKind.Shape
             or DocumentAccessibilityNodeKind.Chart
@@ -425,7 +448,10 @@ internal class DocumentValueAutomationPeer(
     DocumentViewAutomationPeer root,
     string nodeId) : DocumentVirtualAutomationPeer(root, nodeId), IValueProvider
 {
-    public bool IsReadOnly => true;
+    // Virtual, not hidden by a `new` member in the derived peer: UI Automation calls through
+    // IValueProvider, and an interface map built on the base class would keep answering "read-only"
+    // whatever a subclass declared.
+    public virtual bool IsReadOnly => true;
 
     public string? Value => Node.Value;
 
@@ -438,6 +464,53 @@ internal class DocumentValueAutomationPeer(
         if (!string.Equals(oldNode.Value, newNode.Value, StringComparison.Ordinal))
             RaisePropertyChangedEvent(ValuePatternIdentifiers.ValueProperty, oldNode.Value, newNode.Value);
     }
+}
+
+/// <summary>
+/// A content control (form field). Its text is exposed as the element's value, and — unlike ordinary
+/// document text, which is read-only through UI Automation because the caret drives editing — a field
+/// reports whether it is genuinely editable, so a screen reader announces a locked field as read-only
+/// rather than inviting the user to fill in something the document forbids changing.
+/// </summary>
+internal sealed class DocumentContentControlAutomationPeer : DocumentValueAutomationPeer, IToggleProvider
+{
+    private readonly DocumentViewAutomationPeer _root;
+
+    public DocumentContentControlAutomationPeer(DocumentViewAutomationPeer root, string nodeId)
+        : base(root, nodeId)
+    {
+        _root = root;
+    }
+
+    private bool IsCheckBox => Node.ContentControlKind == FreeW.Core.Model.ContentControlKind.CheckBox;
+
+    public override bool IsReadOnly => Node.IsReadOnly;
+
+    public ToggleState ToggleState =>
+        IsCheckBox
+        && string.Equals(Node.Value, FreeW.Core.Model.ContentControl.CheckedGlyph, StringComparison.Ordinal)
+            ? ToggleState.On
+            : ToggleState.Off;
+
+    /// <summary>
+    /// Ticking the box is the whole interaction of a check-box field, so automation performs it for real
+    /// rather than reporting a state the user cannot change. It routes through the editor, which still
+    /// applies the control's lock and the document's protection.
+    /// </summary>
+    public void Toggle()
+    {
+        if (!IsCheckBox || !_root.ToggleContentControlNode(Node))
+            throw new NotSupportedException("This content control cannot be toggled.");
+    }
+
+    /// <summary>
+    /// Only a check box offers the Toggle pattern; advertising it on a text field would tell a screen
+    /// reader the field has an on/off state it does not have.
+    /// </summary>
+    protected override object? GetProviderCore(Type providerType) =>
+        providerType == typeof(IToggleProvider) && !IsCheckBox
+            ? null
+            : base.GetProviderCore(providerType);
 }
 
 internal sealed class DocumentDrawingObjectAutomationPeer : DocumentValueAutomationPeer, ISelectionItemProvider

@@ -52,6 +52,13 @@ public enum AccessibilityRule
     /// <summary>A table that contains one or more completely blank cells (a Tip).</summary>
     BlankTableCell,
 
+    /// <summary>
+    /// A content control (form field) carrying neither a title nor a tag (a Warning). Assistive
+    /// technology announces a field by its title, so an untitled one reaches a screen-reader user as an
+    /// unlabelled box: they hear whatever it currently contains, with no way to know what to type.
+    /// </summary>
+    ContentControlMissingTitle,
+
     /// <summary>The document's core <see cref="DocumentProperties.Title"/> is empty (a Tip).</summary>
     MissingDocumentTitle
 }
@@ -185,6 +192,24 @@ public static class AccessibilityChecker
                     AccessibilityRule.MissingImageAltText,
                     AccessibilitySeverity.Error,
                     "An inline image has no alternative text. Add alt text describing the image.",
+                    blockIndex, paragraph, run));
+            }
+
+            // A form field with no title and no tag (Warning). Word announces a content control by its
+            // title, so without one assistive technology can only read the field's current contents —
+            // the user hears "Bob" with no clue that it is the applicant's name they are meant to fill
+            // in. Only the FIRST run of a field is reported, so a field split across runs (mixed
+            // formatting, a tracked edit) is one finding, not several.
+            if (run.Control is { } control
+                && string.IsNullOrWhiteSpace(control.Alias)
+                && string.IsNullOrWhiteSpace(control.Tag)
+                && IsFirstRunOfContentControl(paragraph, run))
+            {
+                issues.Add(new AccessibilityIssue(
+                    AccessibilityRule.ContentControlMissingTitle,
+                    AccessibilitySeverity.Warning,
+                    "A content control has no title. Give the field a title so assistive technology can " +
+                    "announce what it is for.",
                     blockIndex, paragraph, run));
             }
 
@@ -404,6 +429,14 @@ public static class AccessibilityChecker
         document.Paragraphs.Any(p =>
             !DocumentOutline.TryGetLevel(p.StyleId, out _) &&
             !string.IsNullOrWhiteSpace(p.PlainText));
+
+    // One content control spans every consecutive run sharing its instance (the grouping the docx writer
+    // wraps in a single w:sdt), so only its first run reports the finding.
+    private static bool IsFirstRunOfContentControl(Paragraph paragraph, Run run)
+    {
+        var index = paragraph.Runs.IndexOf(run);
+        return index <= 0 || !ReferenceEquals(paragraph.Runs[index - 1].Control, run.Control);
+    }
 
     // A run is a hyperlink when it carries either an external URL or an internal bookmark anchor.
     private static bool IsHyperlink(Run run) =>

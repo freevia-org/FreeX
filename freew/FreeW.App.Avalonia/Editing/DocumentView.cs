@@ -1093,7 +1093,42 @@ public sealed partial class DocumentView : Control
                     : candidate.ObjectPath is not null && candidate.ObjectPath.SequenceEqual(selectedPath)));
             return node is null ? $"Selected {selected.Kind}" : $"Selected {node.Kind}: {node.Name}";
         }
-        return AutomationSnapshot().Status;
+
+        // AV-A11Y: the caret being inside a form field is the single most useful thing to announce while
+        // filling one in — it is what a sighted user reads off the shaded region — so it leads the status
+        // rather than trailing the caret/paragraph/line counters.
+        var status = AutomationSnapshot().Status;
+        return ContentControlAtCaret() is { } control
+            ? $"{DocumentAccessibilityNodePlanner.ContentControlAccessibleName(control)}, "
+                + $"{DocumentAccessibilityNodePlanner.ContentControlAccessibleHelpText(_doc, control)}; {status}"
+            : status;
+    }
+
+    /// <summary>
+    /// The content control the caret sits in, locked or not — a locked field still has to announce
+    /// itself, which is precisely how the user learns not to try typing into it.
+    /// </summary>
+    private ModelContentControl? ContentControlAtCaret()
+    {
+        if (_shapeCaret is not null || _hfCaret is not null || SelectedCellRange is not null)
+            return null;
+
+        var paragraph = _cellCaret is { } cell
+            ? GetCellParagraph(cell.TableBlock, cell.Row, cell.Col, cell.ParaIdx)
+            : _caret.Block >= 0 && _caret.Block < _doc.Blocks.Count
+                ? _doc.Blocks[_caret.Block] as Paragraph
+                : null;
+        if (paragraph is null)
+            return null;
+
+        var offset = _cellCaret?.Offset ?? _caret.Offset;
+        foreach (var span in ContentControlCaretSpans(paragraph))
+        {
+            if (offset >= span.Start && offset <= span.Start + span.Length)
+                return paragraph.Runs[span.FirstRunIndex].Control;
+        }
+
+        return null;
     }
 
     private void RaiseAutomationValueChanged()

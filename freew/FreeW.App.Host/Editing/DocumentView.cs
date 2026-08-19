@@ -10929,7 +10929,7 @@ public sealed partial class DocumentView : RichTextBox
             var location = sourceBlockIndex is { } blockIndex && sourceRunIndex is { } runIndex
                 ? new ContentControlLocation(blockIndex, runIndex)
                 : (ContentControlLocation?)null;
-            ApplyContentControlMarker(wpf, control, location);
+            ApplyContentControlMarker(wpf, document, control, location);
         }
 
         if (IsTextHiddenInCurrentView(fmt))
@@ -11483,12 +11483,22 @@ public sealed partial class DocumentView : RichTextBox
     /// </summary>
     private static void ApplyContentControlMarker(
         WpfRun wpf,
+        TextDocument document,
         ModelContentControl control,
         ContentControlLocation? location = null)
     {
         AddMarker(wpf, m => m with { Control = new ContentControlMarker(control, location) });
         wpf.Background = new SolidColorBrush(ContentControlShade);
         wpf.ToolTip = ContentControlInteractionPlanner.Tooltip(control);
+        // The shade and tooltip only reach a sighted user. Name the run the same way the shared
+        // accessibility projection names the field, so assistive technology reading this document
+        // announces "Applicant, plain-text field" rather than treating a form field as ordinary prose.
+        System.Windows.Automation.AutomationProperties.SetName(
+            wpf,
+            DocumentAccessibilityNodePlanner.ContentControlAccessibleName(control));
+        System.Windows.Automation.AutomationProperties.SetHelpText(
+            wpf,
+            DocumentAccessibilityNodePlanner.ContentControlAccessibleHelpText(document, control));
 
         switch (control.Kind)
         {

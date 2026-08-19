@@ -665,4 +665,47 @@ public class AccessibilityCheckerTests
         AccessibilityChecker.Check(doc).Issues
             .Should().NotContain(i => i.Rule == AccessibilityRule.LowContrastText);
     }
+
+    // --- Content control without a title (Warning) ---
+
+    [Fact]
+    public void ContentControlMissingTitle_FlaggedWhenNeitherTitleNorTagIsSet()
+    {
+        var doc = CleanDocument();
+        var run = Run.PlainTextControl("Bob");
+        doc.Blocks.Add(new Paragraph { Runs = { run } });
+
+        var report = AccessibilityChecker.Check(doc);
+
+        report.Issues.Should().ContainSingle(i => i.Rule == AccessibilityRule.ContentControlMissingTitle)
+            .Which.Severity.Should().Be(AccessibilitySeverity.Warning);
+        report.Issues.Single(i => i.Rule == AccessibilityRule.ContentControlMissingTitle)
+            .Run.Should().BeSameAs(run);
+    }
+
+    [Theory]
+    [InlineData("Applicant", null)]
+    [InlineData(null, "NameField")]
+    public void ContentControlMissingTitle_NotFlaggedWhenTitleOrTagIsSet(string? alias, string? tag)
+    {
+        var doc = CleanDocument();
+        doc.Blocks.Add(new Paragraph { Runs = { Run.PlainTextControl("Bob", tag: tag, alias: alias) } });
+
+        AccessibilityChecker.Check(doc).Issues
+            .Should().NotContain(i => i.Rule == AccessibilityRule.ContentControlMissingTitle);
+    }
+
+    [Fact]
+    public void ContentControlMissingTitle_ReportsOneFindingForAFieldSplitAcrossRuns()
+    {
+        var doc = CleanDocument();
+        var first = Run.PlainTextControl("Bob");
+        // Mixed formatting or a tracked edit splits one field into several runs sharing its control.
+        var second = new Run("by") { Control = first.Control };
+        doc.Blocks.Add(new Paragraph { Runs = { first, second } });
+
+        AccessibilityChecker.Check(doc).Issues
+            .Count(i => i.Rule == AccessibilityRule.ContentControlMissingTitle)
+            .Should().Be(1);
+    }
 }

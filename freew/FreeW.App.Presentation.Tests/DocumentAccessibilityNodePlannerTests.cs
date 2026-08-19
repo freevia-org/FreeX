@@ -468,4 +468,165 @@ public sealed class DocumentAccessibilityNodePlannerTests
                 ListStartOverride = startAt
             }
         };
+
+    /// <summary>
+    /// A content control is a form field, and the projection is the only place a screen reader can learn
+    /// that: without a node of its own a filled-in field reaches the user as ordinary prose, with no name,
+    /// no kind and no hint that the document forbids changing it.
+    /// </summary>
+    [Fact]
+    public void Build_projects_a_content_control_as_a_named_form_field()
+    {
+        var document = TextDocument.CreateEmpty();
+        document.Blocks.Clear();
+        var paragraph = new Paragraph();
+        paragraph.Runs.Add(new Run("Name: "));
+        paragraph.Runs.Add(Run.PlainTextControl("Bob", tag: "NameField", alias: "Applicant"));
+        paragraph.Runs.Add(new Run(" (staff)"));
+        document.Blocks.Add(paragraph);
+
+        var field = DocumentAccessibilityNodePlanner.Build(document)
+            .ById.Values.Single(node => node.Kind == DocumentAccessibilityNodeKind.ContentControl);
+
+        field.Name.Should().Be("Applicant, plain-text field", "the title is what Word announces");
+        field.Value.Should().Be("Bob");
+        field.HelpText.Should().Be("Plain-text field");
+        field.ContentControlKind.Should().Be(ContentControlKind.PlainText);
+        field.IsReadOnly.Should().BeFalse();
+        field.TextStart.Should().Be(6, "the field starts after \"Name: \"");
+        field.TextLength.Should().Be(3);
+        field.SemanticChildren.Should().ContainSingle(child => child.Value == "Bob");
+    }
+
+    [Fact]
+    public void Build_names_an_untitled_field_by_its_kind_and_groups_its_split_runs()
+    {
+        var document = TextDocument.CreateEmpty();
+        document.Blocks.Clear();
+        var paragraph = new Paragraph();
+        var first = Run.CheckBoxControl(@checked: true);
+        // A field split across runs — mixed formatting, or a tracked edit — is still ONE field.
+        var second = new Run("!") { Control = first.Control };
+        paragraph.Runs.Add(first);
+        paragraph.Runs.Add(second);
+        document.Blocks.Add(paragraph);
+
+        var fields = DocumentAccessibilityNodePlanner.Build(document)
+            .ById.Values.Where(node => node.Kind == DocumentAccessibilityNodeKind.ContentControl).ToList();
+
+        fields.Should().ContainSingle();
+        fields[0].Name.Should().Be("Check box");
+        fields[0].ContentControlKind.Should().Be(ContentControlKind.CheckBox);
+        fields[0].Value.Should().Be(ContentControl.CheckedGlyph + "!");
+    }
+
+    [Theory]
+    [InlineData(ContentControlLockMode.NotSpecified, ProtectionMode.None, false)]
+    [InlineData(ContentControlLockMode.ContentLocked, ProtectionMode.None, true)]
+    [InlineData(ContentControlLockMode.ControlAndContentLocked, ProtectionMode.None, true)]
+    // Filling in Forms exists to let these very fields be filled in, so they stay editable...
+    [InlineData(ContentControlLockMode.NotSpecified, ProtectionMode.FillingForms, false)]
+    // ...while a read-only document makes every field untouchable, and saying otherwise misleads
+    // exactly the user who cannot see the greyed-out ribbon.
+    [InlineData(ContentControlLockMode.NotSpecified, ProtectionMode.ReadOnly, true)]
+    public void Build_reports_whether_a_field_can_actually_be_filled_in(
+        ContentControlLockMode lockMode,
+        ProtectionMode protection,
+        bool expectedReadOnly)
+    {
+        var document = TextDocument.CreateEmpty();
+        document.Blocks.Clear();
+        var control = Run.PlainTextControl("Bob", alias: "Applicant");
+        control.Control = control.Control! with { LockMode = lockMode };
+        var paragraph = new Paragraph();
+        paragraph.Runs.Add(control);
+        document.Blocks.Add(paragraph);
+        document.Protection = new ProtectionSettings(protection);
+
+        var field = DocumentAccessibilityNodePlanner.Build(document)
+            .ById.Values.Single(node => node.Kind == DocumentAccessibilityNodeKind.ContentControl);
+
+        field.IsReadOnly.Should().Be(expectedReadOnly);
+        field.HelpText.Should().Be(expectedReadOnly ? "Plain-text field, locked" : "Plain-text field");
+    }
+
+    [Fact]
+    public void Build_groups_the_blocks_a_body_region_owns_and_reports_its_lock()
+    {
+        var region = new BlockContentControl(
+            BlockContentControlKind.Group,
+            Tag: "Terms",
+            LockMode: ContentControlLockMode.ContentLocked);
+        var document = TextDocument.CreateEmpty();
+        document.Blocks.Clear();
+        document.Blocks.Add(new Paragraph("Before"));
+        document.Blocks.Add(new Paragraph("Inside one") { BlockContentControl = region });
+        document.Blocks.Add(new Paragraph("Inside two") { BlockContentControl = region });
+        document.Blocks.Add(new Paragraph("After"));
+
+        var tree = DocumentAccessibilityNodePlanner.Build(document);
+
+        var regionNode = tree.Children.Should()
+            .ContainSingle(node => node.Kind == DocumentAccessibilityNodeKind.ContentControl).Subject;
+        regionNode.Name.Should().Be("Terms, document region");
+        regionNode.HelpText.Should().Be("Document region, locked");
+        regionNode.IsReadOnly.Should().BeTrue();
+        regionNode.SemanticChildren.Select(child => child.Value)
+            .Should().Equal(["Inside one", "Inside two"]);
+        tree.Children.Select(node => node.Value)
+            .Should().Contain([null, "Before", "After"], "blocks outside the region are untouched");
+    }
+
+    [Fact]
+    public void Build_projects_fields_in_headers_and_table_cells_too()
+    {
+        var document = TextDocument.CreateEmpty();
+        document.Blocks.Clear();
+        var table = new Table();
+        var row = new TableRow();
+        var cell = new TableCell();
+        cell.Paragraphs.Clear();
+        var cellParagraph = new Paragraph();
+        cellParagraph.Runs.Add(Run.PlainTextControl("Bob", alias: "Applicant"));
+        cell.Paragraphs.Add(cellParagraph);
+        row.Cells.Add(cell);
+        table.Rows.Add(row);
+        document.Blocks.Add(table);
+
+        var header = new HeaderFooter();
+        header.Paragraphs.Clear();
+        var headerParagraph = new Paragraph();
+        headerParagraph.Runs.Add(Run.PlainTextControl("Report", alias: "Title"));
+        header.Paragraphs.Add(headerParagraph);
+        document.FinalSectionHeadersFooters.Header = header;
+
+        var fields = DocumentAccessibilityNodePlanner.Build(document)
+            .ById.Values
+            .Where(node => node.Kind == DocumentAccessibilityNodeKind.ContentControl)
+            .Select(node => node.Name)
+            .ToList();
+
+        fields.Should().Contain("Applicant, plain-text field");
+        fields.Should().Contain("Title, plain-text field",
+            "a document-property field in a header is exactly where Word puts one");
+    }
+
+    [Fact]
+    public void Build_keeps_a_hyperlinked_field_a_field()
+    {
+        var document = TextDocument.CreateEmpty();
+        document.Blocks.Clear();
+        var control = Run.PlainTextControl("Bob", alias: "Applicant");
+        control.HyperlinkUrl = "https://example.test/";
+        var paragraph = new Paragraph();
+        paragraph.Runs.Add(control);
+        document.Blocks.Add(paragraph);
+
+        var tree = DocumentAccessibilityNodePlanner.Build(document);
+
+        tree.ById.Values.Should().Contain(node => node.Kind == DocumentAccessibilityNodeKind.ContentControl);
+        tree.ById.Values.Should().NotContain(
+            node => node.Kind == DocumentAccessibilityNodeKind.Hyperlink,
+            "the field is the meaningful control; its link is a run mark inside it");
+    }
 }
