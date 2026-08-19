@@ -50,7 +50,10 @@ internal static class TextBodyFlowDocumentConverter
     /// </summary>
     public static FlowDocument ToFlowDocument(
         TextBody? body,
-        double fallbackFontSizePt = InCanvasRichTextEditorDefaults.ShapeFallbackFontSizePt)
+        double fallbackFontSizePt = InCanvasRichTextEditorDefaults.ShapeFallbackFontSizePt,
+        TextBody? layoutBody = null,
+        MasterTextStyles? masterTextStyles = null,
+        SlideCompositor.TextStyleCategory category = SlideCompositor.TextStyleCategory.Other)
     {
         // 100000 DIPs (~1041 feet) is large enough that the FlowDocument never paginates
         // inside a RichTextBox, while staying within WPF's accepted finite range.
@@ -72,7 +75,7 @@ internal static class TextBodyFlowDocumentConverter
             return doc;
         }
 
-        var visualPlan = InCanvasRichTextVisualPlanner.Create(body);
+        var visualPlan = InCanvasRichTextVisualPlanner.Create(body, layoutBody, masterTextStyles, category);
         for (int paragraphIndex = 0; paragraphIndex < body.Paragraphs.Count; paragraphIndex++)
         {
             var mp = body.Paragraphs[paragraphIndex];

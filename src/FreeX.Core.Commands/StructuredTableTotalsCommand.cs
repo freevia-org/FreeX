@@ -143,15 +143,32 @@ public sealed class RefreshStructuredTableTotalsCommand : IWorkbookCommand
         // matches a selector -- it has no way to know which column a given formula actually lives
         // under -- so an unqualified SUBTOTAL(n,[<name>]) regenerated for a LATER column whose
         // header now duplicates an EARLIER column's would silently resolve back to that earlier
-        // column and report its aggregate instead of this column's own. The earlier column itself
-        // is unaffected: FindColumnIndex's first-match-wins loop already resolves that same literal
-        // text back to it, exactly as before, so its formula must stay the plain structured
-        // reference (changing it would be an unrelated, unrequested formula-text change). Only a
-        // column preceded by an EARLIER column with the identical live header text needs to address
-        // its data body directly by cell range instead of by (ambiguous-for-it) name -- unambiguous
-        // regardless of the duplicate, and still fully live (SUBTOTAL recalculates from the range's
-        // current cell values exactly as it would from a structured reference).
-        if (HasEarlierDuplicateLiveHeaderText(sheet, table, columnIndex, liveColumnName) &&
+        // column and report its aggregate instead of this column's own.
+        //
+        // B4-fmlstructuredref-totals-formerowner-reclaim: FindColumnIndex is not a single
+        // first-match-wins pass -- its R141 second pass lets a column reclaim a selector by its
+        // STORED (pre-rename) Name even when no column's CURRENT live header text collides with
+        // this one at all. E.g. column A was "Sales", live-renamed to "Revenue" (stored Name still
+        // "Sales"); column B was "Region", live-renamed to reuse the text "Sales". No two columns'
+        // live header texts match each other right now (A shows "Revenue", B shows "Sales"), so a
+        // check that only compares live header text across columns sees nothing wrong. But
+        // FindColumnIndex("Sales") does NOT return B: B is the liveMatch, yet B's own stored Name
+        // ("Region") no longer equals its live text ("Sales"), so pass one's immediate-return
+        // shortcut does not apply to B; pass two then finds A first, because A's stored Name
+        // ("Sales") still equals the searched text while A's own live text differs from that stored
+        // Name (a "former owner" by R141's rule) -- so B's regenerated SUBTOTAL(n,[Sales]) would
+        // silently resolve to A's data at evaluation time. ResolvesToOwnColumn below mirrors BOTH
+        // of FindColumnIndex's passes (not just its first) so this check agrees with what the
+        // resolver will actually do, whether the collision comes from an earlier column's current
+        // live text (pass one) or from a former owner's stored Name (pass two). A column that
+        // FindColumnIndex would actually resolve back to itself is unaffected either way: its
+        // formula must stay the plain structured reference (changing it would be an unrelated,
+        // unrequested formula-text change). Only a column FindColumnIndex would NOT resolve back to
+        // itself needs to address its data body directly by cell range instead of by
+        // (ambiguous-for-it) name -- unambiguous regardless of the collision, and still fully live
+        // (SUBTOTAL recalculates from the range's current cell values exactly as it would from a
+        // structured reference).
+        if (!ResolvesToOwnColumn(sheet, table, columnIndex, liveColumnName) &&
             ColumnDataBodyRange(sheet, table, columnIndex) is { } dataBodyRange)
         {
             return Cell.FromFormula($"SUBTOTAL({subtotalNumber.ToString(CultureInfo.InvariantCulture)},{dataBodyRange})");
@@ -161,15 +178,44 @@ public sealed class RefreshStructuredTableTotalsCommand : IWorkbookCommand
         return Cell.FromFormula($"SUBTOTAL({subtotalNumber.ToString(CultureInfo.InvariantCulture)},[{escapedColumnName}])");
     }
 
-    private static bool HasEarlierDuplicateLiveHeaderText(Sheet sheet, StructuredTableModel table, int columnIndex, string liveColumnName)
+    // Mirrors StructuredReferenceResolver.FindColumnIndex's two passes exactly (see that method's
+    // own comments for the full rationale of each), so this predicate agrees with what the resolver
+    // will actually do when this column's own regenerated formula is later evaluated:
+    //   Pass 1 -- first column (in order) whose live header text equals liveColumnName wins
+    //             immediately IF that column's own stored Name still equals its own live text
+    //             (it was never renamed, so it is the unambiguous canonical owner).
+    //   Pass 2 -- otherwise, the first column (in order, regardless of position relative to
+    //             columnIndex) whose stored Name was renamed away from its own current live text
+    //             AND whose stored Name equals liveColumnName reclaims the selector as its
+    //             "former owner".
+    //   Fallback -- the pass-1 liveMatch (possibly columnIndex itself) if neither above applies.
+    private static bool ResolvesToOwnColumn(Sheet sheet, StructuredTableModel table, int columnIndex, string liveColumnName)
     {
-        for (var index = 0; index < columnIndex; index++)
+        var liveMatch = -1;
+        for (var index = 0; index < table.Columns.Count; index++)
         {
             if (string.Equals(ColumnHeaderText(sheet, table, index), liveColumnName, StringComparison.OrdinalIgnoreCase))
-                return true;
+            {
+                liveMatch = index;
+                break;
+            }
         }
 
-        return false;
+        if (liveMatch >= 0 &&
+            string.Equals(table.Columns[liveMatch].Name, ColumnHeaderText(sheet, table, liveMatch), StringComparison.OrdinalIgnoreCase))
+        {
+            return liveMatch == columnIndex;
+        }
+
+        for (var index = 0; index < table.Columns.Count; index++)
+        {
+            var storedName = table.Columns[index].Name;
+            if (!string.Equals(storedName, ColumnHeaderText(sheet, table, index), StringComparison.OrdinalIgnoreCase) &&
+                string.Equals(storedName, liveColumnName, StringComparison.OrdinalIgnoreCase))
+                return index == columnIndex;
+        }
+
+        return liveMatch == columnIndex;
     }
 
     // Mirrors StructuredReferenceResolver's private DataBodyRange, narrowed to a single column:

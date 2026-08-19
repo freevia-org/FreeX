@@ -38,6 +38,12 @@ internal sealed class AvaloniaRichTextEditor : Grid
     private readonly AvaloniaRichTextEditingSurface _richTextView;
     private readonly string _fallbackFontFamily;
     private readonly double _fallbackFontSizePt;
+    // Layout/master inherited-run-style context for the shape being edited, resolved once by
+    // the caller (same chain SlideCompositor uses for the static render) and reused for every
+    // RenderBody() re-render of this session, so the preview matches the eventual static render.
+    private readonly TextBody? _layoutBody;
+    private readonly MasterTextStyles? _masterTextStyles;
+    private readonly SlideCompositor.TextStyleCategory _styleCategory;
     private bool _synchronizing;
     private int _pointerSelectionAnchor;
     private int? _keyboardSelectionAnchor;
@@ -64,7 +70,10 @@ internal sealed class AvaloniaRichTextEditor : Grid
         double fallbackFontSizePt = InCanvasRichTextEditorDefaults.ShapeFallbackFontSizePt,
         Func<bool, bool>? navigateInlineTableCell = null,
         Action? cancelInlineTableCellEdit = null,
-        IPlatformClipboard? clipboard = null)
+        IPlatformClipboard? clipboard = null,
+        TextBody? layoutBody = null,
+        MasterTextStyles? masterTextStyles = null,
+        SlideCompositor.TextStyleCategory category = SlideCompositor.TextStyleCategory.Other)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(fallbackFontFamily);
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(fallbackFontSizePt);
@@ -72,6 +81,9 @@ internal sealed class AvaloniaRichTextEditor : Grid
         _session = InCanvasRichTextEditSession.Create(body);
         _fallbackFontFamily = fallbackFontFamily;
         _fallbackFontSizePt = fallbackFontSizePt;
+        _layoutBody = layoutBody;
+        _masterTextStyles = masterTextStyles;
+        _styleCategory = category;
         _navigateInlineTableCell = navigateInlineTableCell;
         _cancelInlineTableCellEdit = cancelInlineTableCellEdit;
         _richTextView = new AvaloniaRichTextEditingSurface();
@@ -557,7 +569,10 @@ internal sealed class AvaloniaRichTextEditor : Grid
             _richTextView.UpdateBody(
                 body,
                 _fallbackFontFamily,
-                _fallbackFontSizePt);
+                _fallbackFontSizePt,
+                _layoutBody,
+                _masterTextStyles,
+                _styleCategory);
             UpdateSurfaceSelection();
         }
         finally

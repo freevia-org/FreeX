@@ -594,7 +594,10 @@ public sealed class AvaloniaInCanvasTextEditor : IDisposable
         _textBox = new AvaloniaRichTextEditor(
             startPlan.OriginalBody,
             backgroundAlpha: 0xCC,
-            fallbackFontSizePt: shapeFallbackFontSizePt)
+            fallbackFontSizePt: shapeFallbackFontSizePt,
+            layoutBody: startPlan.InheritedLayoutBody,
+            masterTextStyles: startPlan.InheritedMasterTextStyles,
+            category: startPlan.InheritedStyleCategory)
         {
             MinWidth = placement.Width,
             MinHeight = placement.Height,

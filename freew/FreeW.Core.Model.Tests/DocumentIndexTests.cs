@@ -541,6 +541,118 @@ public class DocumentIndexTests
         entry.PlainText.Should().Be("Alpha, ii\u2013iv");
     }
 
+    // THE FAILING-BEFORE PROOF for this item: a plain \r bookmark on a table's later row must not
+    // collapse onto the table's own starting page just because the host's pageReferenceOf answers per
+    // top-level block (exactly how DocumentReferenceEditingCoordinator.InsertIndex wires it in production
+    // -- see DocumentReferenceEditingCoordinator.cs:445). Mirrors ComplexFieldEngineTests'
+    // PageRef_BookmarkOnTableRowPastAuthoredPageBreak_ResolvesItsOwnPage and CrossReferencesTests'
+    // ResolveField_PageRef_BookmarkOnTableRowPastAuthoredPageBreakUsesItsOwnPage for the same scenario.
+    [Fact]
+    public void Build_BookmarkOnTableRowPastAuthoredPageBreak_ResolvesItsOwnPage()
+    {
+        var doc = new TextDocument();
+        var table = new Table();
+        for (var rowIndex = 0; rowIndex < 3; rowIndex++)
+        {
+            var paragraph = new Paragraph("Cell " + rowIndex);
+            if (rowIndex == 2)
+            {
+                paragraph.BookmarkNames.Add("rowTwo");
+                paragraph.Formatting = ParagraphFormatting.Default with { PageBreakBefore = true };
+            }
+            var cell = new TableCell();
+            cell.Paragraphs.Add(paragraph);
+            var row = new TableRow();
+            row.Cells.Add(cell);
+            table.Rows.Add(row);
+        }
+        doc.Blocks.Add(table);
+        doc.Blocks.Add(new Paragraph
+        {
+            Runs = { DocumentIndex.MarkRun(new IndexMark("Alpha", BookmarkName: "rowTwo")) }
+        });
+
+        var entry = DocumentIndex.Build(
+                doc,
+                pageReferenceOf: blockIndex => blockIndex == 0 ? new IndexPageReferenceAddress(2, "3") : null)
+            .Single(paragraph => paragraph.StyleId == DocumentIndex.EntryStyleId);
+
+        entry.PlainText.Should().Be("Alpha, 4");
+    }
+
+    // Sibling no-regression: a table that does NOT span a page break still reports the host's own page for
+    // every row -- the row-offset correction must be a no-op when there is nothing to correct for.
+    [Fact]
+    public void Build_BookmarkOnTableRow_WithNoAuthoredPageBreak_SharesTablesOwnPage()
+    {
+        var doc = new TextDocument();
+        var table = new Table();
+        for (var rowIndex = 0; rowIndex < 3; rowIndex++)
+        {
+            var paragraph = new Paragraph("Cell " + rowIndex);
+            if (rowIndex == 2)
+                paragraph.BookmarkNames.Add("rowTwo");
+            var cell = new TableCell();
+            cell.Paragraphs.Add(paragraph);
+            var row = new TableRow();
+            row.Cells.Add(cell);
+            table.Rows.Add(row);
+        }
+        doc.Blocks.Add(table);
+        doc.Blocks.Add(new Paragraph
+        {
+            Runs = { DocumentIndex.MarkRun(new IndexMark("Alpha", BookmarkName: "rowTwo")) }
+        });
+
+        var entry = DocumentIndex.Build(
+                doc,
+                pageReferenceOf: blockIndex => blockIndex == 0 ? new IndexPageReferenceAddress(2, "3") : null)
+            .Single(paragraph => paragraph.StyleId == DocumentIndex.EntryStyleId);
+
+        entry.PlainText.Should().Be("Alpha, 3");
+    }
+
+    // Widened coverage: a bookmark that lives inside a footnote genuinely exists, so an INDEX \r entry
+    // pointing at it must not report "Bookmark not defined" -- ResolveBookmarkRange's fallback previously
+    // searched Bookmarks.List (body + table cells only) and never found it there. The footnote has no page
+    // of its own to attribute, so this falls back to the model's ordinary "unresolved" label ("1"), not an
+    // error.
+    [Fact]
+    public void Build_BookmarkInsideFootnote_IsFoundInsteadOfReportedBroken()
+    {
+        var doc = new TextDocument();
+        var notePara = new Paragraph("note text") { BookmarkName = "NoteMark" };
+        var footnote = new Footnote(1);
+        footnote.Content.Add(notePara);
+        doc.Footnotes[1] = footnote;
+        doc.Blocks.Add(new Paragraph
+        {
+            Runs = { DocumentIndex.MarkRun(new IndexMark("Alpha", BookmarkName: "NoteMark")) }
+        });
+
+        var entry = DocumentIndex.Build(doc)
+            .Single(paragraph => paragraph.StyleId == DocumentIndex.EntryStyleId);
+
+        entry.PlainText.Should().NotContain(DocumentIndex.BrokenBookmarkText);
+    }
+
+    // Sibling no-regression: a bookmark that truly does not exist anywhere in the document -- main body,
+    // table cell, header/footer, footnote/endnote, or text box -- must still be reported broken.
+    [Fact]
+    public void Build_BookmarkThatExistsNowhere_IsStillReportedBroken()
+    {
+        var doc = new TextDocument();
+        doc.Blocks.Add(new Paragraph
+        {
+            Runs = { DocumentIndex.MarkRun(new IndexMark("Alpha", BookmarkName: "NoSuchBookmark")) }
+        });
+
+        var entry = DocumentIndex.Build(doc)
+            .Single(paragraph => paragraph.StyleId == DocumentIndex.EntryStyleId);
+
+        entry.PlainText.Should().Be("Alpha, " + DocumentIndex.BrokenBookmarkText);
+    }
+
     [Fact]
     public void Build_IncludesXeFieldsInsideTableCells()
     {

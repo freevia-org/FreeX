@@ -77,7 +77,11 @@ public static class InCanvasRichTextVisualPlanner
 {
     private const double PtToDip = 96.0 / 72.0;
 
-    public static InCanvasRichTextVisualPlan Create(TextBody? body)
+    public static InCanvasRichTextVisualPlan Create(
+        TextBody? body,
+        TextBody? layoutBody = null,
+        MasterTextStyles? masterTextStyles = null,
+        SlideCompositor.TextStyleCategory category = SlideCompositor.TextStyleCategory.Other)
     {
         string plainText = InCanvasTextEditPlanner.ExtractPlainText(body);
         if (body is null || body.Paragraphs.Count == 0)
@@ -96,7 +100,12 @@ public static class InCanvasRichTextVisualPlanner
         for (int paragraphIndex = 0; paragraphIndex < body.Paragraphs.Count; paragraphIndex++)
         {
             var paragraph = body.Paragraphs[paragraphIndex];
-            var inheritedStyle = body.LstStyle?.Resolve(paragraph.Level);
+            // Merge the shape's own lstStyle with the layout placeholder's lstStyle and the
+            // master's txStyles, per property -- the same chain SlideCompositor resolves for
+            // the static render, so the live editing preview does not show a different color,
+            // font, weight, alignment, or indent than the text will have once editing ends.
+            var inheritedStyle = SlideCompositor.ResolveTextStyleInheritance(
+                paragraph.Level, category, body.LstStyle, layoutBody, masterTextStyles);
             string text = string.Concat(paragraph.Runs.Select(run => run.Text));
             var runs = new List<InCanvasRichTextVisualRun>(paragraph.Runs.Count);
             int runStart = 0;

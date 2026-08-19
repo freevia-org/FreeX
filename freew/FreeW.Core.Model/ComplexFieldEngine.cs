@@ -1004,8 +1004,13 @@ public static class ComplexFieldEngine
         return cached;
     }
 
-    // PAGEREF: the page number of the referenced bookmark's paragraph, via the page resolver; "1" when no
-    // page is known (the pure model has no pagination). Unresolvable bookmark falls back to cached text.
+    // PAGEREF: the page number of the referenced bookmark's paragraph, via the shared canonical walk in
+    // BookmarkPageResolution (row-aware for a table, and reaching headers/footers/footnotes/endnotes/text
+    // boxes too); "1" when no page is known (the pure model has no pagination). A bookmark that resolves
+    // to no target at all, or to one of those block-less stories where no page can be attributed, falls
+    // back to cached text -- headers/footers/footnotes/endnotes/comments have no page of their own to
+    // report, so treating "found there" the same as "not found" here preserves the field's last-known
+    // cached value instead of overwriting it with a misleading "1".
     private static string ResolvePageRef(
         TextDocument document,
         ComplexField field,
@@ -1016,71 +1021,11 @@ public static class ComplexFieldEngine
         var name = Argument(field.Instruction);
         if (name.Length == 0)
             return cached;
-        foreach (var location in Bookmarks.List(document))
-        {
-            if (string.Equals(location.Name, name, StringComparison.Ordinal))
-            {
-                if (pageTextOf?.Invoke(location.BlockIndex) is { Length: > 0 } pageText)
-                    return pageText;
 
-                var page = pageOf?.Invoke(location.BlockIndex);
-                if (page is null)
-                    return "1";
+        if (BookmarkPageResolution.Find(document, name) is not { BlockIndex: >= 0 } target)
+            return cached;
 
-                // pageOf is keyed to the top-level TextDocument.Blocks index, and every row of a table
-                // shares that one Table entry there (Bookmarks.List's own doc comment says so), so a
-                // bookmark on any row would otherwise resolve to the same page as row zero. Layer authored
-                // page breaks between the table's start and the bookmarked row on top of the host-resolved
-                // page so a row past a page break inside the table reports its own page instead of
-                // collapsing onto the table's starting page.
-                var rowOffset = location.TableRowIndex is { } rowIndex
-                    && document.Blocks[location.BlockIndex] is Table table
-                        ? PageBreaksBeforeTableRow(table, rowIndex)
-                        : 0;
-
-                return Math.Max(1, page.Value + rowOffset).ToString(CultureInfo.InvariantCulture);
-            }
-        }
-        return cached;
-    }
-
-    // Counts authored page breaks (manual breaks and page-break-before formatting) between the start of
-    // the table and rowIndex, inclusive of a page-break-before that starts rowIndex itself. This is a
-    // best-effort correction, not full pagination: it catches an explicit break the author placed inside
-    // the table, not a row that lands on a later page purely from natural row-height overflow (the model
-    // has no layout engine, so that page is unknowable here).
-    private static int PageBreaksBeforeTableRow(Table table, int rowIndex)
-    {
-        if (rowIndex <= 0 || rowIndex >= table.Rows.Count)
-            return 0;
-
-        var breaks = 0;
-        for (var row = 0; row <= rowIndex; row++)
-        {
-            foreach (var paragraph in ParagraphsInTableRow(table.Rows[row]))
-            {
-                if (paragraph.Formatting.PageBreakBefore)
-                    breaks++;
-                if (row < rowIndex)
-                    breaks += paragraph.Runs.Count(run => run.IsPageBreak);
-            }
-        }
-
-        return breaks;
-    }
-
-    // Every paragraph directly in a table row's cells, plus (recursively) each cell's nested tables.
-    private static IEnumerable<Paragraph> ParagraphsInTableRow(TableRow row)
-    {
-        foreach (var cell in row.Cells)
-        {
-            foreach (var cellParagraph in cell.Paragraphs)
-                yield return cellParagraph;
-            foreach (var nestedTable in cell.NestedTables)
-                foreach (var nestedRow in nestedTable.Rows)
-                    foreach (var nestedParagraph in ParagraphsInTableRow(nestedRow))
-                        yield return nestedParagraph;
-        }
+        return BookmarkPageResolution.ResolvePageText(document, target, pageOf, pageTextOf);
     }
 
     // SEQ: the running counter for this sequence name across the complete main-document story, including

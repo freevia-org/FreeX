@@ -2122,6 +2122,39 @@ public sealed class PresentationExportPlannerTests : IDisposable
             "1. Restarted");
     }
 
+    /// <summary>
+    /// The slide's own notes body has no lstStyle at all, so the speaker-notes bullet marker
+    /// must fall back to the notes master's body placeholder lstStyle (the only inheritance
+    /// layer above the slide's own notes body -- there is no separate "layout" tier for notes).
+    /// Before the fix, ExtractNoteParagraphs consulted only the slide's own notes body lstStyle
+    /// and never the notes master, so an inherited-only bullet silently vanished from the
+    /// preview and the exported PDF.
+    /// </summary>
+    [Fact]
+    public void NotesPagePdfRenderPlan_BulletInheritedFromNotesMaster_AppearsInPreview()
+    {
+        var presentation = Presentation.CreateEmpty();
+        presentation.NotesMasterPlaceholders.Add(new SlideShape
+        {
+            Placeholder = new Placeholder { Type = PlaceholderType.Body, Idx = 1 },
+            TextBody = new TextBody
+            {
+                LstStyle = new TextStyleLevels
+                {
+                    [0] = new TextStyleLevel { BulletKind = BulletKind.Char, BulletChar = "•" },
+                },
+            },
+        });
+        presentation.Slides.Clear();
+        presentation.Slides.Add(new Slide { Title = "Master bullet" });
+        // No LstStyle on the slide's own notes body -- the bullet can only come from the master.
+        presentation.Slides[0].Notes = MakeTextBody("Follow up with legal");
+
+        var preview = PresentationNotesPagePreviewPlanner.Build(presentation, currentSlideIndex: 0);
+
+        preview.NoteLines.Should().Equal("• Follow up with legal");
+    }
+
     [Fact]
     public void NotesPagePdfRenderPlan_RichSpeakerNoteRuns_PreserveStyledFacesAndColor()
     {

@@ -219,6 +219,20 @@ public static class CellEntryParser
 
     private static bool TryParseFiniteNumber(string text, out double number)
     {
+        // A culture whose thousands separator is itself a whitespace character (e.g. fr-FR's
+        // U+202F narrow no-break space) is typed/pasted using whatever whitespace code point the
+        // keyboard or source app actually produced -- an ordinary U+0020 or a plain non-breaking
+        // U+00A0 -- not necessarily CultureInfo's exact reported separator. double.TryParse alone
+        // accepts U+0020 as interchangeable with fr-FR's U+202F but rejects U+00A0, so without this
+        // normalization a typed "1<U+00A0>234,56" was misread as text while the visually identical
+        // Ctrl+V of the same string (PasteCommandFactory.TryParseCultureGroupedNumber) already
+        // parsed correctly. Shares ExcelTextNumberParser's normalizer -- the same rule the paste
+        // path and formula-text coercion already use -- rather than growing a fourth hand-written
+        // copy of it. No-op for any culture whose separator isn't a single whitespace character
+        // (en-US ',', de-DE '.'), so those cultures are untouched.
+        text = ExcelTextNumberParser.NormalizeGroupSeparatorSpaceVariants(
+            text, CultureInfo.CurrentCulture.NumberFormat.NumberGroupSeparator);
+
         if (double.TryParse(text, NumberEntryStyles, CultureInfo.CurrentCulture, out number) &&
             double.IsFinite(number))
         {

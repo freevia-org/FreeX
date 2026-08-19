@@ -1322,6 +1322,20 @@ public static class PasteCommandFactory
     // en-US. Most cultures group uniformly by 3 (NumberGroupSizes = {3}), but some (e.g. en-IN/hi-IN
     // Indian numbering) group the innermost 3 digits then repeat groups of 2 further left ({3,2}),
     // e.g. "1,23,456"; validating against a fixed \d{3} per group would wrongly reject that as text.
+    //
+    // r152: also recognizes the culture's own leading/trailing currency symbol (e.g. "1.234,56 €"
+    // for de-DE), read from culture.NumberFormat.CurrencySymbol -- the same source of truth
+    // ExcelTextNumberParser.GetValidGroupingRegex already uses for the formula-text-coercion path
+    // (see R151_TextNumberParserSpaceGroupingAndCurrencyTests.DeDeCulture_EuroCurrencySymbolWithSpace
+    // _PlusZero_CoercesToNumber). Before this, a Euro- (or any non-'$') suffixed amount pasted with
+    // Ctrl+V fell through this pass untouched (no currency-symbol allowance in either the shape
+    // regex or the NumberStyles below), then failed the separate en-US-only ValidGroupingRegex pass
+    // too (that pass only ever recognizes literal "$", by design -- see its own comment), and landed
+    // as literal text instead of a number, even though the same text already coerces correctly via
+    // "=text+0". Indian-grouping support means this can't simply delegate to
+    // ExcelTextNumberParser.GetValidGroupingRegex (which assumes a fixed group size of 3
+    // everywhere), so the symbol is threaded into this pass's own TryBuildCultureGroupingPattern
+    // instead of growing a third from-scratch currency regex.
     private static bool TryParseCultureGroupedNumber(string text, System.Globalization.CultureInfo culture, out double number)
     {
         number = 0;
@@ -1342,19 +1356,32 @@ public static class PasteCommandFactory
         var decimalSeparator = culture.NumberFormat.NumberDecimalSeparator;
         var groupPattern = System.Text.RegularExpressions.Regex.Escape(groupSeparator);
         var decimalPattern = System.Text.RegularExpressions.Regex.Escape(decimalSeparator);
-        if (!TryBuildCultureGroupingPattern(culture.NumberFormat.NumberGroupSizes, groupPattern, decimalPattern, out var pattern))
+        var currencyPattern = culture.NumberFormat.CurrencySymbol.Length > 0
+            ? System.Text.RegularExpressions.Regex.Escape(culture.NumberFormat.CurrencySymbol)
+            : "";
+        if (!TryBuildCultureGroupingPattern(culture.NumberFormat.NumberGroupSizes, groupPattern, decimalPattern, currencyPattern, out var pattern))
             return false;
 
         var groupingRegex = new System.Text.RegularExpressions.Regex(pattern);
         if (!groupingRegex.IsMatch(text))
             return false;
 
+        // AllowLeadingWhite/AllowTrailingWhite are needed alongside AllowCurrencySymbol even
+        // though the grouping-shape regex above already anchors the whole string end to end (so
+        // neither flag can admit stray whitespace this pass would otherwise reject): .NET's own
+        // currency-symbol parsing only tolerates the single space between the digits and the
+        // symbol (e.g. "1.234,56 €") when one of the whitespace-allow flags is present -- verified
+        // directly, double.TryParse rejects that exact text with AllowCurrencySymbol alone but
+        // accepts it once either whitespace flag is added.
         const System.Globalization.NumberStyles groupedStyles =
+            System.Globalization.NumberStyles.AllowLeadingWhite |
+            System.Globalization.NumberStyles.AllowTrailingWhite |
             System.Globalization.NumberStyles.AllowLeadingSign |
             System.Globalization.NumberStyles.AllowTrailingSign |
             System.Globalization.NumberStyles.AllowParentheses |
             System.Globalization.NumberStyles.AllowDecimalPoint |
-            System.Globalization.NumberStyles.AllowThousands;
+            System.Globalization.NumberStyles.AllowThousands |
+            System.Globalization.NumberStyles.AllowCurrencySymbol;
 
         return double.TryParse(text, groupedStyles, culture, out number) && double.IsFinite(number);
     }
@@ -1368,16 +1395,25 @@ public static class PasteCommandFactory
     // -> the group next to the decimal is fixed at size 3, then every group further left repeats at
     // size 2: "1,23,456". A group size of 0 signals "stop grouping" (rare); such cultures are not
     // supported by this shape check and fall through to the other parse paths instead.
+    //
+    // <paramref name="currencyPattern"/> is an already-Regex.Escape'd currency symbol (or "" for a
+    // culture with none), optionally present immediately before the leading digit or immediately
+    // after the trailing digit/decimal, with at most one whitespace character between the symbol
+    // and the digits -- mirroring ExcelTextNumberParser.GetValidGroupingRegex's identical allowance,
+    // since real-world text commonly writes e.g. "1.234,56 €" with a space before the symbol.
     private static bool TryBuildCultureGroupingPattern(
-        int[] groupSizes, string groupPattern, string decimalPattern, out string pattern)
+        int[] groupSizes, string groupPattern, string decimalPattern, string currencyPattern, out string pattern)
     {
         pattern = "";
         if (groupSizes.Length == 0 || Array.Exists(groupSizes, static s => s <= 0))
             return false;
 
+        var currencyToken = currencyPattern.Length > 0 ? "(?:" + currencyPattern + @"\s?)?" : "";
+        var trailingCurrencyToken = currencyPattern.Length > 0 ? "(?:" + @"\s?" + currencyPattern + ")?" : "";
+
         var lastSize = groupSizes[^1];
         var sb = new System.Text.StringBuilder();
-        sb.Append(@"^\(?[+-]?\d{1,").Append(lastSize).Append('}'); // partial leftmost group
+        sb.Append(@"^\(?[+-]?").Append(currencyToken).Append(@"\d{1,").Append(lastSize).Append('}'); // partial leftmost group
         sb.Append('(').Append(groupPattern).Append(@"\d{").Append(lastSize).Append("})*"); // repeating groups
         // Remaining distinct sizes (nearest-decimal first) each occur exactly once, closest to the
         // decimal point last, e.g. for {3,2} this appends the fixed size-3 group next to the decimal.
@@ -1386,7 +1422,7 @@ public static class PasteCommandFactory
             sb.Append(groupPattern).Append(@"\d{").Append(groupSizes[i]).Append('}');
         }
 
-        sb.Append('(').Append(decimalPattern).Append(@"\d*)?[+-]?\)?$");
+        sb.Append('(').Append(decimalPattern).Append(@"\d*)?").Append(trailingCurrencyToken).Append(@"[+-]?\)?$");
         pattern = sb.ToString();
         return true;
     }

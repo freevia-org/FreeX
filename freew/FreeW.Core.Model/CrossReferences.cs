@@ -626,6 +626,13 @@ public static class CrossReferences
         };
     }
 
+    // Routed through the shared canonical walk in BookmarkPageResolution (row-aware for a table, and
+    // reaching headers/footers/footnotes/endnotes/text boxes too) rather than this file's own
+    // FindBookmarkBlock, so an "As Page Number" cross-reference gets the same row-offset correction PAGEREF
+    // does. A bookmark that resolves to no target at all, or to one of the block-less stories where no page
+    // can be attributed (headers/footers/footnotes/endnotes/comments), falls back to cached text -- treating
+    // "found there" the same as "not found" preserves the field's last-known cached value instead of
+    // overwriting it with a misleading "1".
     private static string ResolveBookmarkedPageRef(
         TextDocument doc,
         CrossReferenceField field,
@@ -633,50 +640,10 @@ public static class CrossReferences
         Func<int, int?>? pageOf,
         Func<int, string?>? pageTextOf)
     {
-        if (FindBookmarkBlock(doc, field.Target) is not { } location)
+        if (BookmarkPageResolution.Find(doc, field.Target) is not { BlockIndex: >= 0 } target)
             return cached;
 
-        if (pageTextOf?.Invoke(location.BlockIndex) is { Length: > 0 } pageText)
-            return pageText;
-
-        var page = pageOf?.Invoke(location.BlockIndex);
-        if (page is null)
-            return "1";
-
-        // pageOf/pageTextOf are keyed to the top-level TextDocument.Blocks index, and every row of a
-        // table shares that one Table entry there, so a bookmark on any row would otherwise resolve to
-        // the same page as row zero. Layer authored page breaks between the table's start and the
-        // bookmarked row on top of the host-resolved page so a row past a page break inside the table
-        // reports its own page instead of collapsing onto the table's starting page.
-        var rowOffset = location.TableRowIndex is { } rowIndex && doc.Blocks[location.BlockIndex] is Table table
-            ? PageBreaksBeforeTableRow(table, rowIndex)
-            : 0;
-
-        return Math.Max(1, page.Value + rowOffset).ToString(CultureInfo.InvariantCulture);
-    }
-
-    // Counts authored page breaks (manual breaks and page-break-before formatting) between the start of
-    // the table and rowIndex, inclusive of a page-break-before that starts rowIndex itself -- mirroring
-    // ExplicitPageNumberAtBlock's own current-block-inclusive-for-break-before, earlier-only-for-run-
-    // breaks convention, just applied per row instead of per top-level block.
-    private static int PageBreaksBeforeTableRow(Table table, int rowIndex)
-    {
-        if (rowIndex <= 0 || rowIndex >= table.Rows.Count)
-            return 0;
-
-        var breaks = 0;
-        for (var row = 0; row <= rowIndex; row++)
-        {
-            foreach (var paragraph in ParagraphsInRow(table.Rows[row]))
-            {
-                if (paragraph.Formatting.PageBreakBefore)
-                    breaks++;
-                if (row < rowIndex)
-                    breaks += paragraph.Runs.Count(run => run.IsPageBreak);
-            }
-        }
-
-        return breaks;
+        return BookmarkPageResolution.ResolvePageText(doc, target, pageOf, pageTextOf);
     }
 
     private static string ResolveNoteRef(

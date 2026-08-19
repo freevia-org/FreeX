@@ -224,6 +224,70 @@ public sealed class InCanvasRichTextVisualPlannerTests
         paragraphs[1].TextIndentDip.Should().Be(0);
     }
 
+    /// <summary>
+    /// Create must merge the shape's own lstStyle with the layout placeholder's lstStyle and the
+    /// master's txStyles per property (SlideCompositor.ResolveTextStyleInheritance), not just
+    /// consult the shape's own lstStyle. Before the fix, Create had no layoutBody/masterTextStyles
+    /// parameters at all, so a paragraph whose shape lstStyle left size/color unset always
+    /// resolved InheritedRunStyle to Empty even when the layout or master defined them --
+    /// the WPF/Avalonia in-canvas editors would preview default text where the static render
+    /// (and the committed text, once editing ends) shows the inherited font size and color.
+    /// </summary>
+    [Fact]
+    public void Create_WithLayoutAndMasterContext_MergesInheritedRunStylePerProperty()
+    {
+        var body = new TextBody(); // No shape-level lstStyle at all.
+        body.Paragraphs.Add(new Paragraph
+        {
+            Runs = { new Run { Text = "Inherits from layout and master" } },
+        });
+
+        var layoutBody = new TextBody
+        {
+            LstStyle = new TextStyleLevels
+            {
+                // Layout overrides only the font size; color is left to the master.
+                [0] = new TextStyleLevel { FontSizePt = 32.0 },
+            },
+        };
+        var masterColor = new ThemeAwareColor(new SrgbColor(0x11, 0x22, 0x33));
+        var masterTextStyles = new MasterTextStyles();
+        masterTextStyles.BodyStyle[0] = new TextStyleLevel { FontSizePt = 24.0, Color = masterColor };
+
+        var plan = InCanvasRichTextVisualPlanner.Create(
+            body, layoutBody, masterTextStyles, SlideCompositor.TextStyleCategory.Body);
+
+        var inherited = plan.Paragraphs[0].InheritedRunStyle;
+        inherited.IsPresent.Should().BeTrue();
+        inherited.FontSizePt.Should().Be(32.0, "the layout's own lstStyle must beat the master's txStyles");
+        inherited.Color.Should().Be(masterColor,
+            "the layout did not set a color, so it must fall through to the master per property");
+    }
+
+    /// <summary>
+    /// Sibling no-regression guard: calling Create without a layout/master context (the previous
+    /// call shape) must resolve purely from the shape's own lstStyle, unchanged.
+    /// </summary>
+    [Fact]
+    public void Create_WithoutLayoutOrMasterContext_ResolvesFromShapeLstStyleOnly()
+    {
+        var body = new TextBody
+        {
+            LstStyle = new TextStyleLevels
+            {
+                [0] = new TextStyleLevel { FontSizePt = 40.0 },
+            },
+        };
+        body.Paragraphs.Add(new Paragraph
+        {
+            Runs = { new Run { Text = "Shape only" } },
+        });
+
+        var plan = InCanvasRichTextVisualPlanner.Create(body);
+
+        plan.Paragraphs[0].InheritedRunStyle.FontSizePt.Should().Be(40.0);
+    }
+
     [Fact]
     public void Create_ResolvesCharacterNumberAndImageMarkersIntoOnePlan()
     {

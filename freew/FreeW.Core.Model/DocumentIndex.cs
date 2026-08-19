@@ -550,8 +550,10 @@ public static class DocumentIndex
                     IsRange: true);
             }
 
-            var first = ResolveBlockPageReference(document, range.StartBlockIndex, pageTextOf, pageReferenceOf);
-            var last = ResolveBlockPageReference(document, range.EndBlockIndex, pageTextOf, pageReferenceOf);
+            var first = ResolveBlockPageReference(
+                document, range.StartBlockIndex, range.StartTableRowIndex, pageTextOf, pageReferenceOf);
+            var last = ResolveBlockPageReference(
+                document, range.EndBlockIndex, range.EndTableRowIndex, pageTextOf, pageReferenceOf);
             var samePage = first.PhysicalPageIndex >= 0 && last.PhysicalPageIndex >= 0
                 ? first.PhysicalPageIndex == last.PhysicalPageIndex
                 : string.Equals(first.DisplayText, last.DisplayText, StringComparison.Ordinal);
@@ -574,7 +576,7 @@ public static class DocumentIndex
                 "label:1", "1", StartIndex: -1, EndIndex: -1, FirstLabel: "1", LastLabel: "1", IsRange: false);
         }
 
-        var reference = ResolveBlockPageReference(document, index, pageTextOf, pageReferenceOf);
+        var reference = ResolveBlockPageReference(document, index, tableRowIndex: null, pageTextOf, pageReferenceOf);
         var identity = reference.PhysicalPageIndex >= 0
             ? $"page:{reference.PhysicalPageIndex}"
             : "label:" + reference.DisplayText;
@@ -588,25 +590,56 @@ public static class DocumentIndex
             IsRange: false);
     }
 
+    // tableRowIndex is null for a non-bookmark XE occurrence (which never carries row data) and for the
+    // block-less stories BookmarkPageResolution.Find can report (header/footer/footnote/endnote/comment);
+    // both fall straight through with rowOffset 0, unchanged from before this method took the parameter.
     private static IndexPageReferenceAddress ResolveBlockPageReference(
         TextDocument document,
         int blockIndex,
+        int? tableRowIndex,
         Func<int, string?>? pageTextOf,
         Func<int, IndexPageReferenceAddress?>? pageReferenceOf)
     {
+        // Every row of a table shares one Blocks entry, so a bookmark on a later row would otherwise
+        // resolve to the same page as row zero -- exactly the ComplexFieldEngine/CrossReferences finding,
+        // via the same canonical math, now applied here too.
+        var rowOffset = tableRowIndex is { } rowIndex
+            && blockIndex >= 0 && blockIndex < document.Blocks.Count
+            && document.Blocks[blockIndex] is Table table
+                ? BookmarkPageResolution.PageBreaksBeforeTableRow(table, rowIndex)
+                : 0;
+
         if (pageReferenceOf?.Invoke(blockIndex) is { PhysicalPageIndex: >= 0, DisplayText.Length: > 0 } reference)
-            return reference;
+            return rowOffset == 0 ? reference : OffsetPageReference(reference, rowOffset);
 
         var pageText = pageTextOf?.Invoke(blockIndex);
         var explicitPageNumber = CrossReferences.ExplicitPageNumberAtBlock(document, blockIndex);
         if (!string.IsNullOrEmpty(pageText))
             return new IndexPageReferenceAddress((explicitPageNumber ?? 0) - 1, pageText);
 
-        var pageNumber = explicitPageNumber ?? 1;
+        if (explicitPageNumber is not { } basePageNumber)
+            return new IndexPageReferenceAddress(-1, "1");
+
+        var pageNumber = basePageNumber + rowOffset;
         return new IndexPageReferenceAddress(
-            explicitPageNumber is null ? -1 : pageNumber - 1,
-            pageNumber.ToString(System.Globalization.CultureInfo.InvariantCulture));
+            pageNumber - 1, pageNumber.ToString(System.Globalization.CultureInfo.InvariantCulture));
     }
+
+    // Applies a table-row page-break correction to a host-supplied page/label pair. The physical page
+    // index (a pure sort/group key) always shifts by rowOffset; the display label only shifts when it is a
+    // plain decimal number -- a roman-numeral or chapter-prefixed label (a front-matter page-numbering
+    // format this model does not reconstruct here) is left exactly as the host supplied it, the same
+    // convention already used for an explicit pageTextOf override, which is never adjusted either.
+    private static IndexPageReferenceAddress OffsetPageReference(IndexPageReferenceAddress reference, int rowOffset) =>
+        int.TryParse(
+            reference.DisplayText,
+            System.Globalization.NumberStyles.Integer,
+            System.Globalization.CultureInfo.InvariantCulture,
+            out var numeric)
+            ? new IndexPageReferenceAddress(
+                reference.PhysicalPageIndex + rowOffset,
+                (numeric + rowOffset).ToString(System.Globalization.CultureInfo.InvariantCulture))
+            : new IndexPageReferenceAddress(reference.PhysicalPageIndex + rowOffset, reference.DisplayText);
 
     private static BookmarkBlockRange? ResolveBookmarkRange(TextDocument document, string bookmarkName)
     {
@@ -632,23 +665,39 @@ public static class DocumentIndex
                         boundary.Kind == BookmarkBoundaryKind.End
                         && string.Equals(boundary.PairKey, startBoundary.PairKey, StringComparison.Ordinal)))
                 {
-                    return new BookmarkBlockRange(startBlockIndex, endBlockIndex);
+                    return new BookmarkBlockRange(
+                        startBlockIndex,
+                        startLocation.TableParagraph?.RowIndex,
+                        endBlockIndex,
+                        endLocation.TableParagraph?.RowIndex);
                 }
             }
 
-            return new BookmarkBlockRange(startBlockIndex, startBlockIndex);
+            return new BookmarkBlockRange(
+                startBlockIndex,
+                startLocation.TableParagraph?.RowIndex,
+                startBlockIndex,
+                startLocation.TableParagraph?.RowIndex);
         }
 
-        var location = Bookmarks.List(document).FirstOrDefault(candidate =>
-            string.Equals(candidate.Name, bookmarkName, StringComparison.Ordinal));
-        return location.Name is { Length: > 0 }
-            ? new BookmarkBlockRange(location.BlockIndex, location.BlockIndex)
+        // Widened, via the shared canonical walk, beyond a plain body/table-cell point bookmark to also
+        // find one placed in a header, footer, footnote, endnote, or text box -- those previously fell
+        // through to "no such bookmark" (a broken-bookmark entry) even though the bookmark genuinely
+        // existed. A block-less story has no page ResolveBlockPageReference can attribute to it, so it
+        // reports that gracefully via its own explicitPageNumber-null branch ("1", unresolved) rather than
+        // as a broken-bookmark error -- the same "found but no page" outcome BookmarkPageResolution.
+        // ResolvePageText's own header/footer/footnote/endnote fallback documents for PAGEREF/cross-ref
+        // fields.
+        var target = BookmarkPageResolution.Find(document, bookmarkName);
+        return target is { } found
+            ? new BookmarkBlockRange(found.BlockIndex, found.TableRowIndex, found.BlockIndex, found.TableRowIndex)
             : null;
     }
 
     private sealed record IndexOccurrence(IndexMark Mark, int? BlockIndex);
 
-    private sealed record BookmarkBlockRange(int StartBlockIndex, int EndBlockIndex);
+    private sealed record BookmarkBlockRange(
+        int StartBlockIndex, int? StartTableRowIndex, int EndBlockIndex, int? EndTableRowIndex);
 
     private sealed record IndexPageReference(string Label, bool Bold, bool Italic);
 

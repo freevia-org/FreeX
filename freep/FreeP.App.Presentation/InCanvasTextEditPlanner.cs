@@ -73,7 +73,10 @@ public sealed record InCanvasTextEditStartPlan(
     InCanvasTableCellRichTextEditPlan? RichTextPlan,
     TextBody? OriginalBody,
     string OriginalPlainText,
-    InCanvasTextEditPlanner? EditPlanner)
+    InCanvasTextEditPlanner? EditPlanner,
+    TextBody? InheritedLayoutBody = null,
+    MasterTextStyles? InheritedMasterTextStyles = null,
+    SlideCompositor.TextStyleCategory InheritedStyleCategory = SlideCompositor.TextStyleCategory.Other)
 {
     public bool IsReady => Status == InCanvasTextEditStartStatus.Ready;
 }
@@ -155,6 +158,13 @@ public sealed class InCanvasTextEditPlanner
             ? BeginRichText(slideIndex, shapeId, shape.TextBody)
             : BeginPlainText(slideIndex, shapeId, shape.TextBody);
 
+        // The overlay must preview the same per-property layout/master inherited run style
+        // (color, font, weight, alignment, indent) that SlideCompositor uses for the static
+        // render, or text visibly changes appearance the moment editing ends. See
+        // SlideCompositor.ResolveInheritedTextStyleContext for the shared lookup.
+        var (inheritedLayoutBody, inheritedMasterTextStyles, inheritedCategory) =
+            SlideCompositor.ResolveInheritedTextStyleContext(shape, slide, presentation);
+
         return new InCanvasTextEditStartPlan(
             InCanvasTextEditStartStatus.Ready,
             shapeId,
@@ -164,7 +174,10 @@ public sealed class InCanvasTextEditPlanner
             richTextPlan,
             originalBody,
             ExtractPlainText(originalBody),
-            planner);
+            planner,
+            inheritedLayoutBody,
+            inheritedMasterTextStyles,
+            inheritedCategory);
     }
 
     public InCanvasTextEditDecision Cancel() =>

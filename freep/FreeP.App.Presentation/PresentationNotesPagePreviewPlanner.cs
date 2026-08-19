@@ -142,7 +142,13 @@ public static class PresentationNotesPagePreviewPlanner
         var slide = presentation.Slides[normalizedIndex];
         var notesText = ExtractPlainText(slide.Notes);
         var notesPlaceholder = BuildNotesPlaceholder(notesText, notesBounds);
-        var styledNoteLines = SplitStyledNoteLines(slide.Notes, notesBounds.Width);
+        // The speaker-notes bullet marker must fall back to the notes master's own body
+        // placeholder lstStyle when the slide's own notes body leaves a property unset, the
+        // same layout/master chain SlideCompositor merges for slide placeholders (there is no
+        // separate "layout" tier for notes -- the notes master placeholder is the only
+        // inheritance layer above the slide's own notes body).
+        var notesMasterBody = FindPlaceholderShape(presentation.NotesMasterPlaceholders, PlaceholderType.Body)?.TextBody;
+        var styledNoteLines = SplitStyledNoteLines(slide.Notes, notesBounds.Width, notesMasterBody: notesMasterBody);
         var noteLines = styledNoteLines.Select(line => line.Text).ToArray();
         var linesPerPage = usesEmptyNativeNotesMaster
             ? 1
@@ -503,7 +509,8 @@ public static class PresentationNotesPagePreviewPlanner
         public string Text => string.Concat(Segments.Select(segment => segment.Text));
     }
 
-    private static IReadOnlyList<NoteParagraph> ExtractNoteParagraphs(TextBody? body)
+    private static IReadOnlyList<NoteParagraph> ExtractNoteParagraphs(
+        TextBody? body, TextBody? notesMasterBody = null)
     {
         if (body is null || body.Paragraphs.Count == 0)
             return [];
@@ -512,9 +519,19 @@ public static class PresentationNotesPagePreviewPlanner
         var result = new List<NoteParagraph>(body.Paragraphs.Count);
         foreach (var paragraph in body.Paragraphs)
         {
+            // Per-property merge across the two available layers -- the slide's own notes body
+            // lstStyle, then the notes master's body placeholder lstStyle -- mirroring
+            // SlideCompositor.ResolveTextStyleInheritance for slide placeholders (there is no
+            // third "layout" tier for notes). Reuses SlideCompositor.MergeTextStyleLevels rather
+            // than re-implementing the per-property fallback.
+            var shapeLevelStyle = body.LstStyle?.Resolve(paragraph.Level);
+            var masterLevelStyle = notesMasterBody?.LstStyle?.Resolve(paragraph.Level);
+            var inheritedStyle = shapeLevelStyle is null && masterLevelStyle is null
+                ? null
+                : SlideCompositor.MergeTextStyleLevels(shapeLevelStyle, null, masterLevelStyle);
             var marker = PresentationListMarkerPlanner.Resolve(
                 paragraph,
-                body.LstStyle?.Resolve(paragraph.Level),
+                inheritedStyle,
                 markerState);
             string prefix = marker.Kind is BulletKind.Char or BulletKind.Auto
                 ? $"{marker.Text} "
@@ -563,9 +580,10 @@ public static class PresentationNotesPagePreviewPlanner
         TextBody? notes,
         double notesBoxWidth,
         double fontSize = PresentationNotesPagePdfExporter.NotesFontSize,
-        double inset = PresentationNotesPagePdfExporter.NotesInset)
+        double inset = PresentationNotesPagePdfExporter.NotesInset,
+        TextBody? notesMasterBody = null)
     {
-        var paragraphs = ExtractNoteParagraphs(notes);
+        var paragraphs = ExtractNoteParagraphs(notes, notesMasterBody);
         if (paragraphs.Count == 0 || paragraphs.All(paragraph => string.IsNullOrWhiteSpace(paragraph.Text)))
             return [];
 

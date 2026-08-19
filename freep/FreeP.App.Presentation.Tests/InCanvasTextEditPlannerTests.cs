@@ -544,6 +544,124 @@ public sealed class InCanvasTextEditPlannerTests
         TextBodyModelCloner.InlineTablesEqual(source, clone).Should().BeFalse();
     }
 
+    /// <summary>
+    /// Cross-path agreement guard: BeginShapeEdit's InheritedLayoutBody/InheritedMasterTextStyles
+    /// context, fed into InCanvasRichTextVisualPlanner.Create, must resolve the same per-property
+    /// inherited run style (SlideCompositor.ResolveTextStyleInheritance) as the static slide
+    /// renderer resolves for the identical shape/layout/master chain. Before the fix,
+    /// InCanvasRichTextVisualPlanner.Create consulted only the shape's own lstStyle, so a
+    /// placeholder run inheriting size/weight from the layout or master rendered correctly on the
+    /// static slide but previewed with the wrong style while being edited -- then visibly changed
+    /// the instant editing ended. This exercises both paths on one model and asserts they agree.
+    /// </summary>
+    [Fact]
+    public void BeginShapeEdit_InheritedRunStyle_MatchesSlideCompositorStaticRenderChain()
+    {
+        var presentation = new Presentation { Theme = PresentationTheme.CreateDefault() };
+
+        var master = new SlideMaster { Id = "m1" };
+        master.TextStyles = new MasterTextStyles();
+        // Master supplies Bold; the layout does not override it, so it must fall through.
+        master.TextStyles.BodyStyle[0] = new TextStyleLevel { FontSizePt = 24.0, Bold = true };
+        presentation.Masters.Add(master);
+
+        var layout = new SlideLayout { Id = "l1", MasterId = "m1" };
+        var layoutLstStyle = new TextStyleLevels();
+        // Layout overrides only the font size (32pt), beating the master's 24pt.
+        layoutLstStyle[0] = new TextStyleLevel { FontSizePt = 32.0 };
+        var layoutBodyPh = new SlideShape
+        {
+            Placeholder = new Placeholder { Type = PlaceholderType.Body, Idx = 1 },
+            OffsetXEmu = 457200, OffsetYEmu = 1371600,
+            ExtentCxEmu = 8229600, ExtentCyEmu = 4525963,
+            TextBody = new TextBody { LstStyle = layoutLstStyle },
+        };
+        layout.Placeholders.Add(layoutBodyPh);
+        presentation.Layouts.Add(layout);
+
+        var slide = new Slide { LayoutId = "l1" };
+        var shape = new SlideShape
+        {
+            Id = 1,
+            Placeholder = new Placeholder { Type = PlaceholderType.Body, Idx = 1 },
+            OffsetXEmu = 457200, OffsetYEmu = 1371600,
+            ExtentCxEmu = 8229600, ExtentCyEmu = 4525963,
+        };
+        var body = new TextBody();
+        var para = new Paragraph { Level = 0 };
+        // No local FontSizePt/Bold on the run -- both must come from the layout/master chain.
+        para.Runs.Add(new Run { Text = "Body run" });
+        body.Paragraphs.Add(para);
+        shape.TextBody = body;
+        slide.Shapes.Add(shape);
+        presentation.Slides.Add(slide);
+
+        // Path 1: the static slide renderer.
+        var ops = SlideCompositor.Compose(presentation, slide);
+        var renderedRun = ops.OfType<DrawOp.Shape>().Single().Text!.Paragraphs[0].Runs[0];
+        renderedRun.FontSizePt.Should().Be(32.0, "layout lstStyle must win over master bodyStyle");
+        renderedRun.Bold.Should().BeTrue("bold has no layout override so it falls through to master");
+
+        // Path 2: the in-canvas editing preview.
+        var startPlan = InCanvasTextEditPlanner.BeginShapeEdit(
+            0, presentation, slide, shape.Id, SlideTransformCore.Identity,
+            40, 20, InCanvasTextEditKind.RichText);
+        startPlan.IsReady.Should().BeTrue();
+        var editorPlan = InCanvasRichTextVisualPlanner.Create(
+            startPlan.OriginalBody,
+            startPlan.InheritedLayoutBody,
+            startPlan.InheritedMasterTextStyles,
+            startPlan.InheritedStyleCategory);
+        var inheritedRunStyle = editorPlan.Paragraphs[0].InheritedRunStyle;
+
+        inheritedRunStyle.FontSizePt.Should().Be(
+            renderedRun.FontSizePt,
+            "the in-canvas editing preview must agree with the static slide render's resolved size");
+        inheritedRunStyle.Bold.Should().Be(
+            renderedRun.Bold,
+            "the in-canvas editing preview must agree with the static slide render's resolved weight");
+    }
+
+    /// <summary>
+    /// Sibling no-regression guard: a non-placeholder shape (no layout/master to inherit from)
+    /// must keep resolving purely from its own lstStyle, exactly as before this change --
+    /// BeginShapeEdit's new InheritedLayoutBody/InheritedMasterTextStyles fields must stay null
+    /// rather than pulling in an unrelated layout or the presentation's first master.
+    /// </summary>
+    [Fact]
+    public void BeginShapeEdit_NonPlaceholderShape_InheritsNoLayoutOrMasterContext()
+    {
+        var presentation = Presentation.CreateEmpty();
+        var slide = presentation.Slides[0];
+        slide.Shapes.Clear();
+        var shapeLstStyle = new TextStyleLevels();
+        shapeLstStyle[0] = new TextStyleLevel { FontSizePt = 40.0 };
+        var shape = new SlideShape
+        {
+            Id = 1,
+            OffsetXEmu = 0,
+            OffsetYEmu = 0,
+            ExtentCxEmu = 914400L,
+            ExtentCyEmu = 457200L,
+            TextBody = new TextBody { LstStyle = shapeLstStyle },
+        };
+        shape.TextBody.Paragraphs.Add(new Paragraph { Runs = { new Run { Text = "Plain shape" } } });
+        slide.Shapes.Add(shape);
+
+        var startPlan = InCanvasTextEditPlanner.BeginShapeEdit(
+            0, presentation, slide, shape.Id, SlideTransformCore.Identity,
+            40, 20, InCanvasTextEditKind.RichText);
+
+        startPlan.IsReady.Should().BeTrue();
+        startPlan.InheritedLayoutBody.Should().BeNull();
+        var editorPlan = InCanvasRichTextVisualPlanner.Create(
+            startPlan.OriginalBody,
+            startPlan.InheritedLayoutBody,
+            startPlan.InheritedMasterTextStyles,
+            startPlan.InheritedStyleCategory);
+        editorPlan.Paragraphs[0].InheritedRunStyle.FontSizePt.Should().Be(40.0);
+    }
+
     private static TextBody MakeBody(string text, ThemeAwareColor? color = null)
     {
         var body = new TextBody { Wrap = true, Anchor = VerticalAnchor.Middle };

@@ -102,9 +102,12 @@ internal sealed class AvaloniaRichTextEditingSurface : Control
     internal void UpdateBody(
         TextBody body,
         string? fallbackFontFamily,
-        double? fallbackFontSizePt)
+        double? fallbackFontSizePt,
+        TextBody? layoutBody = null,
+        MasterTextStyles? masterTextStyles = null,
+        SlideCompositor.TextStyleCategory category = SlideCompositor.TextStyleCategory.Other)
     {
-        _plan = InCanvasRichTextVisualPlanner.Create(body);
+        _plan = InCanvasRichTextVisualPlanner.Create(body, layoutBody, masterTextStyles, category);
         if (!string.IsNullOrWhiteSpace(fallbackFontFamily))
             _fallbackFontFamily = fallbackFontFamily;
         if (fallbackFontSizePt is > 0)

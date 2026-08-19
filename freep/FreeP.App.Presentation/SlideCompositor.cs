@@ -2148,7 +2148,7 @@ public static class SlideCompositor
     /// Returns the placeholder category ("title", "body", or "other") for a given placeholder type.
     /// Used to look up the correct p:txStyles sub-element on the master.
     /// </summary>
-    private static TextStyleCategory GetTextStyleCategory(PlaceholderType? type) => type switch
+    internal static TextStyleCategory GetTextStyleCategory(PlaceholderType? type) => type switch
     {
         PlaceholderType.Title or PlaceholderType.CenteredTitle => TextStyleCategory.Title,
         PlaceholderType.Body or PlaceholderType.Object or PlaceholderType.SubTitle
@@ -2158,7 +2158,28 @@ public static class SlideCompositor
         _ => TextStyleCategory.Other
     };
 
-    private enum TextStyleCategory { Title, Body, Other }
+    public enum TextStyleCategory { Title, Body, Other }
+
+    /// <summary>
+    /// Resolves the layout-placeholder body and master txStyles/category context that
+    /// <see cref="ResolveTextStyleInheritance"/> needs for a shape, the same way
+    /// <see cref="ComposeAutoShape"/> derives it before rendering. Exposed so non-rendering
+    /// callers (the in-canvas rich-text editors) can preview a paragraph's inherited run style
+    /// using the identical layout/master chain the static slide renderer uses, instead of
+    /// re-deriving or approximating that merge themselves.
+    /// </summary>
+    internal static (TextBody? LayoutBody, MasterTextStyles? MasterTextStyles, TextStyleCategory Category)
+        ResolveInheritedTextStyleContext(SlideShape shape, Slide slide, PresentationModel presentation)
+    {
+        var layoutPh = shape.Placeholder is not null
+            ? PlaceholderResolver.FindLayoutPlaceholder(shape.Placeholder, slide, presentation)
+            : null;
+        var resolvedLayout = presentation.Layouts.Find(l => l.Id == slide.LayoutId);
+        var resolvedMaster = resolvedLayout is not null
+            ? presentation.Masters.Find(m => m.Id == resolvedLayout.MasterId)
+            : presentation.Masters.FirstOrDefault();
+        return (layoutPh?.TextBody, resolvedMaster?.TextStyles, GetTextStyleCategory(shape.Placeholder?.Type));
+    }
 
     /// <summary>
     /// Resolves the effective <see cref="TextStyleLevel"/> for a paragraph at a given indent
@@ -2172,7 +2193,7 @@ public static class SlideCompositor
     /// the next layer, so the result here is a per-property merge of every layer that has an
     /// entry at (or below, via each layer's own within-layer walk-up) this paragraph level.
     /// </summary>
-    private static TextStyleLevel? ResolveTextStyleInheritance(
+    internal static TextStyleLevel? ResolveTextStyleInheritance(
         int paraLevel,
         TextStyleCategory category,
         TextStyleLevels? shapeLstStyle,
@@ -2211,7 +2232,7 @@ public static class SlideCompositor
     /// color+colorFollowsText, size+sizeFollowsText, font+fontFollowsText) since those pairs
     /// are only meaningful together and the "FollowsText" flags have no null/unset state.
     /// </summary>
-    private static TextStyleLevel MergeTextStyleLevels(
+    internal static TextStyleLevel MergeTextStyleLevels(
         TextStyleLevel? shape, TextStyleLevel? layout, TextStyleLevel? master)
     {
         var kindLayer  = shape?.BulletKind is not null ? shape

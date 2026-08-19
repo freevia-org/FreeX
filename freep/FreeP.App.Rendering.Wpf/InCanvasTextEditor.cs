@@ -23,6 +23,13 @@ public sealed class InCanvasTextEditor : IDisposable
     private RichTextBox? _richBox;
     private InCanvasRichTextEditSession? _editSession;
     private TextBody? _shapeParagraphBody;
+    // Layout/master inherited-run-style context for the shape being edited, resolved once at
+    // BeginShapeEdit (same chain SlideCompositor uses for the static render) and reused for
+    // every re-render of this edit session, so the preview never drifts back to a shape-only
+    // resolution partway through a single edit (indent/bullet toggle, paste, ...).
+    private TextBody? _inheritedLayoutBody;
+    private MasterTextStyles? _inheritedMasterTextStyles;
+    private SlideCompositor.TextStyleCategory _inheritedStyleCategory;
     private uint _editingShapeId;
     private bool _active;
     private bool _canceling;
@@ -171,6 +178,9 @@ public sealed class InCanvasTextEditor : IDisposable
         _active = true;
         _editSession = InCanvasRichTextEditSession.BeginShape(startPlan);
         _shapeParagraphBody = startPlan.OriginalBody;
+        _inheritedLayoutBody = startPlan.InheritedLayoutBody;
+        _inheritedMasterTextStyles = startPlan.InheritedMasterTextStyles;
+        _inheritedStyleCategory = startPlan.InheritedStyleCategory;
 
         var placement = startPlan.Placement.Value;
 
@@ -178,7 +188,12 @@ public sealed class InCanvasTextEditor : IDisposable
             startPlan.OriginalBody,
             InCanvasRichTextEditorDefaults.ShapeFallbackFontSizePt);
 
-        var doc = TextBodyFlowDocumentConverter.ToFlowDocument(startPlan.OriginalBody, fallbackPt);
+        var doc = TextBodyFlowDocumentConverter.ToFlowDocument(
+            startPlan.OriginalBody,
+            fallbackPt,
+            _inheritedLayoutBody,
+            _inheritedMasterTextStyles,
+            _inheritedStyleCategory);
 
         _richBox = new RichTextBox(doc)
         {
@@ -258,6 +273,9 @@ public sealed class InCanvasTextEditor : IDisposable
             _editor.Bus.Execute(decision.Command);
 
         _shapeParagraphBody = null;
+        _inheritedLayoutBody = null;
+        _inheritedMasterTextStyles = null;
+        _inheritedStyleCategory = default;
     }
 
     /// <summary>Cancels the edit without committing.</summary>
@@ -280,6 +298,9 @@ public sealed class InCanvasTextEditor : IDisposable
             _ = _editSession?.Cancel();
             _editSession = null;
             _shapeParagraphBody = null;
+            _inheritedLayoutBody = null;
+            _inheritedMasterTextStyles = null;
+            _inheritedStyleCategory = default;
         }
         finally
         {
@@ -442,7 +463,12 @@ public sealed class InCanvasTextEditor : IDisposable
         double fallbackPt = InCanvasRichTextEditorDefaults.ResolveFallbackFontSize(
             updated,
             InCanvasRichTextEditorDefaults.ShapeFallbackFontSizePt);
-        _richBox.Document = TextBodyFlowDocumentConverter.ToFlowDocument(updated, fallbackPt);
+        _richBox.Document = TextBodyFlowDocumentConverter.ToFlowDocument(
+            updated,
+            fallbackPt,
+            _inheritedLayoutBody,
+            _inheritedMasterTextStyles,
+            _inheritedStyleCategory);
 
         var startPointer = TextBodyFlowDocumentConverter.TextPointerAtLogicalOffset(_richBox.Document, start);
         var endPointer = TextBodyFlowDocumentConverter.TextPointerAtLogicalOffset(_richBox.Document, end);
@@ -570,7 +596,12 @@ public sealed class InCanvasTextEditor : IDisposable
             var result = await WpfRichTextClipboardAdapter.HandlePreviewKeyDownAsync(
                 e,
                 _richBox!,
-                _shapeParagraphBody);
+                _shapeParagraphBody,
+                clipboard: null,
+                cancellationToken: default,
+                layoutBody: _inheritedLayoutBody,
+                masterTextStyles: _inheritedMasterTextStyles,
+                category: _inheritedStyleCategory);
             if (e.Key == Key.V && result.Handled)
                 _shapeParagraphBody = result.UpdatedBody;
             else if (e.Key is Key.C or Key.X &&
