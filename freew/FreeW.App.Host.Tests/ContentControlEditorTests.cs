@@ -223,4 +223,50 @@ public sealed class ContentControlEditorTests
         fields[0].Text.Should().Be("Bob");
         fields[0].Control!.Tag.Should().Be("Applicant");
     }
+
+    /// <summary>
+    /// The field's shade and tooltip only reach a sighted user. The rendered run carries the same
+    /// accessible name and description the shared projection gives the Avalonia peer, so assistive
+    /// technology reading this host announces a form field rather than ordinary prose — and says so when
+    /// the document will not let the user edit it.
+    /// </summary>
+    [StaFact]
+    public void ContentControlRun_CarriesTheSharedAccessibleNameAndDescription()
+    {
+        var view = NewView();
+        view.InsertPlainTextControl(tag: "NameField", alias: "Applicant");
+
+        var run = view.Document.Blocks.OfType<System.Windows.Documents.Paragraph>()
+            .SelectMany(paragraph => paragraph.Inlines)
+            .OfType<System.Windows.Documents.Run>()
+            .Single(candidate => candidate.Background is not null);
+
+        System.Windows.Automation.AutomationProperties.GetName(run)
+            .Should().Be("Applicant, plain-text field");
+        System.Windows.Automation.AutomationProperties.GetHelpText(run)
+            .Should().Be("Plain-text field");
+    }
+
+    [StaFact]
+    public void ContentControlRun_AnnouncesALockedFieldAsLocked()
+    {
+        var control = Run.PlainTextControl("Bob", alias: "Applicant");
+        control.Control = control.Control! with { LockMode = ContentControlLockMode.ContentLocked };
+        var paragraph = new Paragraph();
+        paragraph.Runs.Add(control);
+        var model = new TextDocument();
+        model.Blocks.Clear();
+        model.Blocks.Add(paragraph);
+
+        var view = new DocumentView();
+        view.LoadModel(model);
+
+        var run = view.Document.Blocks.OfType<System.Windows.Documents.Paragraph>()
+            .SelectMany(item => item.Inlines)
+            .OfType<System.Windows.Documents.Run>()
+            .Single(candidate => candidate.Background is not null);
+
+        System.Windows.Automation.AutomationProperties.GetHelpText(run)
+            .Should().Be("Plain-text field, locked");
+    }
 }

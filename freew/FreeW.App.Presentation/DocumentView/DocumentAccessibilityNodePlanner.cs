@@ -19,6 +19,8 @@ public enum DocumentAccessibilityNodeKind
     TableRow,
     TableCell,
     Hyperlink,
+    /// <summary>A content control (w:sdt) — a form field the user fills in.</summary>
+    ContentControl,
     Image,
     Shape,
     Chart,
@@ -65,6 +67,10 @@ public sealed record DocumentAccessibilityNode(
     int ColumnSpan = 1,
     int RowSpan = 1,
     bool IsHeader = false,
+    /// <summary>The kind of content control this node describes, when <see cref="Kind"/> is ContentControl.</summary>
+    ContentControlKind? ContentControlKind = null,
+    /// <summary>Whether a content control's own content is locked against editing.</summary>
+    bool IsReadOnly = false,
     bool IsFloatingObject = false,
     IReadOnlyList<int>? ObjectPath = null,
     int SectionIndex = -1,
@@ -202,6 +208,11 @@ public static class DocumentAccessibilityNodePlanner
             }
         }
 
+        // A body-level w:sdt wraps whole blocks rather than a run — Word's "lock this section", a
+        // repeating section, a bibliography region. Grouping the blocks it owns under one node is what
+        // tells a screen-reader user they have entered (and left) a region, and whether it is locked.
+        children = GroupBlockContentControlRegions(document, children);
+
         var sections = document.Sections;
         for (var sectionIndex = 0; sectionIndex < sections.Count; sectionIndex++)
             AddHeaderFooterStories(document, children, sections[sectionIndex].HeadersFooters, sectionIndex);
@@ -210,6 +221,65 @@ public static class DocumentAccessibilityNodePlanner
 
         return new DocumentAccessibilityTree(children);
     }
+
+    /// <summary>
+    /// Wraps each maximal run of consecutive body blocks sharing one <see cref="BlockContentControl"/>
+    /// instance — the same grouping the docx writer emits as one outer w:sdt — in a region node. Blocks
+    /// outside any region are passed through untouched, so an ordinary document's tree is unchanged.
+    /// </summary>
+    private static List<DocumentAccessibilityNode> GroupBlockContentControlRegions(
+        TextDocument document,
+        List<DocumentAccessibilityNode> nodes)
+    {
+        if (document.Blocks.All(block => block.BlockContentControl is null))
+            return nodes;
+
+        var grouped = new List<DocumentAccessibilityNode>(nodes.Count);
+        for (var index = 0; index < nodes.Count;)
+        {
+            var control = BlockControlFor(document, nodes[index]);
+            if (control is null)
+            {
+                grouped.Add(nodes[index++]);
+                continue;
+            }
+
+            var members = new List<DocumentAccessibilityNode>();
+            while (index < nodes.Count && ReferenceEquals(BlockControlFor(document, nodes[index]), control))
+                members.Add(nodes[index++]);
+
+            var label = FirstNonBlank(control.Alias, control.Tag);
+            var kind = BlockContentControlKindLabel(control.Kind);
+            var locked = ContentControlInteractionPlanner.IsBlockContentControlLocked(control);
+            grouped.Add(new DocumentAccessibilityNode(
+                $"block:{members[0].BlockIndex}:region",
+                DocumentAccessibilityNodeKind.ContentControl,
+                label is null ? kind : $"{label}, {kind.ToLowerInvariant()}",
+                null,
+                locked ? $"{kind}, locked" : kind,
+                members[0].BlockIndex,
+                IsReadOnly: locked,
+                Children: members));
+        }
+
+        return grouped;
+    }
+
+    private static BlockContentControl? BlockControlFor(TextDocument document, DocumentAccessibilityNode node) =>
+        node.BlockIndex >= 0 && node.BlockIndex < document.Blocks.Count
+            ? document.Blocks[node.BlockIndex].BlockContentControl
+            : null;
+
+    private static string BlockContentControlKindLabel(BlockContentControlKind kind) => kind switch
+    {
+        BlockContentControlKind.Bibliography => "Bibliography region",
+        BlockContentControlKind.RepeatingSection => "Repeating section",
+        BlockContentControlKind.RepeatingSectionItem => "Repeating section item",
+        BlockContentControlKind.Citation => "Citation region",
+        BlockContentControlKind.DocumentPart => "Document part region",
+        BlockContentControlKind.BuildingBlockGallery => "Building block region",
+        _ => "Document region"
+    };
 
     private static void AddNoteStories(
         ICollection<DocumentAccessibilityNode> children,
@@ -460,6 +530,63 @@ public static class DocumentAccessibilityNodePlanner
         {
             var run = paragraph.Runs[runIndex];
             var runId = $"{id}:run:{runIndex}";
+
+            // A content control is a form field, not decoration: a screen reader has to announce that the
+            // caret is in one, what it is called, what it currently holds, and whether it can be edited —
+            // otherwise a filled-in form reads as ordinary prose. Its runs are grouped exactly like a
+            // hyperlink's (a field can span several runs after a formatting or tracked-change split, all
+            // sharing one control instance).
+            if (run.Control is { } control)
+            {
+                var groupStart = runIndex;
+                var groupTextStart = textOffset;
+                var groupText = new System.Text.StringBuilder();
+                var controlChildren = new List<DocumentAccessibilityNode>();
+                while (runIndex < paragraph.Runs.Count
+                    && ReferenceEquals(paragraph.Runs[runIndex].Control, control))
+                {
+                    var candidate = paragraph.Runs[runIndex];
+                    groupText.Append(candidate.Text);
+                    if (HasAccessibleText(candidate))
+                    {
+                        controlChildren.Add(BuildTextRun(
+                            document,
+                            paragraph,
+                            id,
+                            blockIndex,
+                            rowIndex,
+                            columnIndex,
+                            paragraphIndex,
+                            runIndex,
+                            textOffset,
+                            candidate));
+                    }
+                    controlChildren.AddRange(BuildRunObjects(
+                        id, blockIndex, rowIndex, columnIndex, paragraphIndex, runIndex, candidate));
+                    textOffset += candidate.Text.Length;
+                    runIndex++;
+                }
+
+                var value = groupText.ToString();
+                children.Add(new DocumentAccessibilityNode(
+                    $"{id}:run:{groupStart}:contentcontrol",
+                    DocumentAccessibilityNodeKind.ContentControl,
+                    ContentControlAccessibleName(control),
+                    value,
+                    ContentControlAccessibleHelpText(document, control),
+                    blockIndex,
+                    rowIndex,
+                    columnIndex,
+                    paragraphIndex,
+                    groupStart,
+                    groupTextStart,
+                    value.Length,
+                    ContentControlKind: control.Kind,
+                    IsReadOnly: IsContentControlReadOnly(document, control),
+                    Children: controlChildren));
+                continue;
+            }
+
             var target = run.HyperlinkUrl ?? run.HyperlinkAnchor;
             if (!string.IsNullOrWhiteSpace(target))
             {
@@ -587,6 +714,49 @@ public static class DocumentAccessibilityNodePlanner
             textStart,
             run.Text.Length);
     }
+
+    /// <summary>
+    /// The name a screen reader announces for a form field: its Title (Word's own accessible label for a
+    /// content control), else its Tag, else the kind alone — "Plain-text field" reads better than silence
+    /// when the author set neither, and the Accessibility Checker flags that omission separately.
+    /// </summary>
+    public static string ContentControlAccessibleName(ContentControl control)
+    {
+        var label = FirstNonBlank(control.Alias, control.Tag);
+        return label is null
+            ? ContentControlKindLabel(control.Kind)
+            : $"{label}, {ContentControlKindLabel(control.Kind).ToLowerInvariant()}";
+    }
+
+    /// <summary>The field's kind plus, when it applies, that its content cannot be edited.</summary>
+    public static string ContentControlAccessibleHelpText(TextDocument document, ContentControl control)
+    {
+        var kind = ContentControlKindLabel(control.Kind);
+        return IsContentControlReadOnly(document, control) ? $"{kind}, locked" : kind;
+    }
+
+    /// <summary>
+    /// Whether the user is actually prevented from filling this field in — by its own content lock, or by
+    /// the document's protection (Read Only and Comments Only leave form fields untouchable, while the
+    /// point of Filling in Forms is that they stay editable). Announcing a field as editable when the
+    /// document refuses the keystrokes is exactly the mismatch a screen-reader user cannot see.
+    /// </summary>
+    private static bool IsContentControlReadOnly(TextDocument document, ContentControl control) =>
+        !ContentControlInteractionPlanner.CanEditExistingContentControl(
+            new Run(string.Empty) { Control = control },
+            RestrictEditingEnforcementPolicy.From(document.Protection, document.MarkedAsFinal));
+
+    private static string ContentControlKindLabel(ContentControlKind kind) => kind switch
+    {
+        FreeW.Core.Model.ContentControlKind.CheckBox => "Check box",
+        FreeW.Core.Model.ContentControlKind.RichText => "Rich-text field",
+        FreeW.Core.Model.ContentControlKind.DatePicker => "Date picker",
+        FreeW.Core.Model.ContentControlKind.DropDownList => "Drop-down list",
+        FreeW.Core.Model.ContentControlKind.ComboBox => "Combo box",
+        FreeW.Core.Model.ContentControlKind.Picture => "Picture field",
+        FreeW.Core.Model.ContentControlKind.Citation => "Citation field",
+        _ => "Plain-text field"
+    };
 
     private static bool HasAccessibleText(Run run) =>
         run.Text.Length > 0

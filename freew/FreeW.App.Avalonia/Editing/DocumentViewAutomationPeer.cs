@@ -249,6 +249,8 @@ internal sealed class DocumentViewAutomationPeer : ControlAutomationPeer, IValue
                 new DocumentValueAutomationPeer(this, node.Id),
             DocumentAccessibilityNodeKind.TableCell => new DocumentValueAutomationPeer(this, node.Id),
             DocumentAccessibilityNodeKind.Hyperlink => new DocumentHyperlinkAutomationPeer(this, node.Id),
+            DocumentAccessibilityNodeKind.ContentControl =>
+                new DocumentContentControlAutomationPeer(this, node.Id),
             DocumentAccessibilityNodeKind.Shape
                 or DocumentAccessibilityNodeKind.Chart
                 or DocumentAccessibilityNodeKind.WordArt
@@ -319,6 +321,19 @@ internal abstract class DocumentVirtualAutomationPeer(
         DocumentAccessibilityNodeKind.TableRow => AutomationControlType.Group,
         DocumentAccessibilityNodeKind.TableCell => AutomationControlType.DataItem,
         DocumentAccessibilityNodeKind.Hyperlink => AutomationControlType.Hyperlink,
+        // A form field announces itself as the control it behaves like, so a screen reader offers the
+        // right affordance: a check box toggles, a list picks, a text field is typed into.
+        DocumentAccessibilityNodeKind.ContentControl => Node.ContentControlKind switch
+        {
+            FreeW.Core.Model.ContentControlKind.CheckBox => AutomationControlType.CheckBox,
+            FreeW.Core.Model.ContentControlKind.DropDownList
+                or FreeW.Core.Model.ContentControlKind.ComboBox => AutomationControlType.ComboBox,
+            FreeW.Core.Model.ContentControlKind.Picture => AutomationControlType.Image,
+            FreeW.Core.Model.ContentControlKind.PlainText
+                or FreeW.Core.Model.ContentControlKind.RichText
+                or FreeW.Core.Model.ContentControlKind.DatePicker => AutomationControlType.Edit,
+            _ => AutomationControlType.Group,
+        },
         DocumentAccessibilityNodeKind.Image => AutomationControlType.Image,
         DocumentAccessibilityNodeKind.Shape
             or DocumentAccessibilityNodeKind.Chart
@@ -425,7 +440,10 @@ internal class DocumentValueAutomationPeer(
     DocumentViewAutomationPeer root,
     string nodeId) : DocumentVirtualAutomationPeer(root, nodeId), IValueProvider
 {
-    public bool IsReadOnly => true;
+    // Virtual, not hidden by a `new` member in the derived peer: UI Automation calls through
+    // IValueProvider, and an interface map built on the base class would keep answering "read-only"
+    // whatever a subclass declared.
+    public virtual bool IsReadOnly => true;
 
     public string? Value => Node.Value;
 
@@ -438,6 +456,28 @@ internal class DocumentValueAutomationPeer(
         if (!string.Equals(oldNode.Value, newNode.Value, StringComparison.Ordinal))
             RaisePropertyChangedEvent(ValuePatternIdentifiers.ValueProperty, oldNode.Value, newNode.Value);
     }
+}
+
+/// <summary>
+/// A content control (form field). Its text is exposed as the element's value, and — unlike ordinary
+/// document text, which is read-only through UI Automation because the caret drives editing — a field
+/// reports whether it is genuinely editable, so a screen reader announces a locked field as read-only
+/// rather than inviting the user to fill in something the document forbids changing.
+/// </summary>
+internal sealed class DocumentContentControlAutomationPeer(
+    DocumentViewAutomationPeer root,
+    string nodeId) : DocumentValueAutomationPeer(root, nodeId), IToggleProvider
+{
+    public override bool IsReadOnly => Node.IsReadOnly;
+
+    public ToggleState ToggleState => Node.ContentControlKind == FreeW.Core.Model.ContentControlKind.CheckBox
+        && string.Equals(Node.Value, FreeW.Core.Model.ContentControl.CheckedGlyph, StringComparison.Ordinal)
+            ? ToggleState.On
+            : ToggleState.Off;
+
+    public void Toggle() =>
+        throw new NotSupportedException(
+            "A content control is toggled through the editor's own interaction, not UI Automation.");
 }
 
 internal sealed class DocumentDrawingObjectAutomationPeer : DocumentValueAutomationPeer, ISelectionItemProvider
