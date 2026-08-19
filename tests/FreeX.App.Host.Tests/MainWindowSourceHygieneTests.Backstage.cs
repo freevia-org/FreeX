@@ -298,8 +298,11 @@ public sealed partial class MainWindowSourceHygieneTests
 
         var releaseUiMethod = ExtractMethodSource(lifecycleSource, "private void ReleaseWorkbookUiStateForClose()");
         releaseUiMethod.Should().Contain("ClearFormulaReferenceHighlights();");
-        releaseUiMethod.Should().Contain("ClearClipboardVisualState();");
-        releaseUiMethod.Should().Contain("_workbookClipboardSession.Clear();");
+        // Both of these now run behind an ownership check: ClearClipboardMarqueeIfOwnedByThisWindow
+        // calls _workbookClipboardSession.ClearIfOwnedBy(this) then ClearClipboardVisualState().
+        // Asserting the two calls directly would forbid that routing, which exists so closing one
+        // window cannot destroy another window's still-pasteable copy.
+        releaseUiMethod.Should().Contain("ClearClipboardMarqueeIfOwnedByThisWindow();");
         releaseUiMethod.Should().Contain("SheetGrid.Viewport = null;");
         releaseUiMethod.Should().Contain("SheetGrid.Charts = null;");
         releaseUiMethod.Should().Contain("SheetGrid.Pictures = null;");
