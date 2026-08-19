@@ -20588,6 +20588,18 @@ and {0} more.</value>
   <data name="Outline_ClearFailed" xml:space="preserve">
     <value>Could not clear the outline.</value>
   </data>
+  <data name="Outline_ColumnGroupCollapsedStatus" xml:space="preserve">
+    <value>Collapsed the column outline group.</value>
+  </data>
+  <data name="Outline_ColumnGroupExpandedStatus" xml:space="preserve">
+    <value>Expanded the column outline group.</value>
+  </data>
+  <data name="Outline_RowGroupCollapsedStatus" xml:space="preserve">
+    <value>Collapsed the row outline group.</value>
+  </data>
+  <data name="Outline_RowGroupExpandedStatus" xml:space="preserve">
+    <value>Expanded the row outline group.</value>
+  </data>
   <data name="Outline_UpdateColumnGroupFailed" xml:space="preserve">
     <value>Could not update the column outline group.</value>
   </data>
