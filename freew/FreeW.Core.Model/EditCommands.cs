@@ -123,6 +123,8 @@ public sealed class SetParagraphFormattingCommand(int index, ParagraphFormatting
 {
     private ParagraphFormatting? _previous;
     private ParagraphFormatRevision? _previousRevision;
+    private PreservedNumbering? _previousPreservedNumbering;
+    private bool _clearedPreservedNumbering;
 
     public string Label => "Paragraph Formatting";
 
@@ -131,6 +133,7 @@ public sealed class SetParagraphFormattingCommand(int index, ParagraphFormatting
         var paragraph = ParagraphAt(context, index);
         _previous = paragraph.Formatting;
         _previousRevision = paragraph.ParagraphFormatRevision;
+        _previousPreservedNumbering = paragraph.PreservedNumbering;
         paragraph.Formatting = formatting;
         if (TrackedFormattingRevisionFactory.ShouldTrack(context.Document)
             && formatting != _previous
@@ -138,14 +141,32 @@ public sealed class SetParagraphFormattingCommand(int index, ParagraphFormatting
         {
             paragraph.ParagraphFormatRevision = TrackedFormattingRevisionFactory.ForParagraph(_previous, context.RevisionAuthor);
         }
+
+        // An explicit paragraph-formatting edit that changes ListKind is the user deciding this
+        // paragraph's list state — on, off, or a different kind. Any foreign numbering captured on
+        // read (see Paragraph.PreservedNumbering) is only meant to survive while the paragraph's list
+        // state stays untouched by the user; once the user has acted, it is stale and must not be
+        // re-emitted on save, or an explicit "remove this list" toggle would silently come back after
+        // a save/reopen (the writer's PreservedNumbering fallback keys off ListKind == None, which is
+        // exactly the state a disabled toggle returns to).
+        if (_previousPreservedNumbering is not null
+            && formatting.ListKind != _previous.ListKind
+            && paragraph.PreservedNumbering is not null)
+        {
+            paragraph.PreservedNumbering = null;
+            _clearedPreservedNumbering = true;
+        }
     }
 
     public void Revert(IDocumentCommandContext context)
     {
         if (_previous is not null)
         {
-            ParagraphAt(context, index).Formatting = _previous;
-            ParagraphAt(context, index).ParagraphFormatRevision = _previousRevision;
+            var paragraph = ParagraphAt(context, index);
+            paragraph.Formatting = _previous;
+            paragraph.ParagraphFormatRevision = _previousRevision;
+            if (_clearedPreservedNumbering)
+                paragraph.PreservedNumbering = _previousPreservedNumbering;
         }
     }
 

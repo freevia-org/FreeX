@@ -2027,7 +2027,22 @@ public sealed class RecalcEngine
 
         // Recalculate runs the spill-target dependent follow-up pass itself (see the
         // spillTargetsMayHaveChanged path), so no separate second pass is needed here.
-        return Recalculate(workbook, formulaCells);
+        var report = Recalculate(workbook, formulaCells);
+
+        // F9 "Calculate Now" is an explicit, workbook-wide genuine-recalc gesture (unlike an
+        // ordinary edit, which only dirties the cells it actually touches). Recalculate/
+        // NotifySheetsRecalculated only bump Sheet.ContentVersion for sheets that had a
+        // RecalculatedCells/CyclicCells/Errors entry, so a sheet holding zero formula cells --
+        // e.g. plain data plus a volatile Formula-type conditional-format rule like "=RAND()>0.5"
+        // with no helper formula column -- never advances ContentVersion no matter how many times
+        // F9 is pressed. ContentVersion's only consumer is the CF viewport-context cache
+        // (ViewportService.BuildConditionalFormatContext), so unconditionally notifying every
+        // sheet here is safe: it does exactly what a real recalc pass should -- let every sheet's
+        // cached volatile CF results re-roll -- without affecting any other cache.
+        foreach (var sheet in workbook.Sheets)
+            sheet.NotifyContentRecalculated();
+
+        return report;
     }
 
     /// <summary>

@@ -331,7 +331,8 @@ public sealed partial class MainWindow : Window
         _autosave = new AutosaveAdapter(
             _editor,
             _fileWorkflow.Workflow,
-            recoverInNewWindowAsync: OpenNewWindowWithRecoveredSnapshotAsync);
+            recoverInNewWindowAsync: OpenNewWindowWithRecoveredSnapshotAsync,
+            confirmDiscardOrSaveAsync: () => _fileWorkflow.ConfirmCloseAllowedAsync("recovering an unsaved document"));
         _closeCoordinator = new SisterAvaloniaAsyncWindowCloseCoordinator(
             confirmCloseAllowedAsync: ConfirmCloseAllowedAndStopAutosaveAsync,
             requestClose: () =>
@@ -3971,7 +3972,7 @@ public sealed partial class MainWindow : Window
             OpenRecent: path => _ = OpenRecentPathAsync(path),
             OpenFolder: OpenFolderInShell,
             Browse: () => _applicationCommands.Execute(FreeWKeyboardCommand.OpenDocument),
-            RecoverUnsaved: () => _ = _autosave.OfferRecoveryAsync(this),
+            RecoverUnsaved: () => _ = _autosave.RecoverUnsavedDocumentsAsync(this),
             ImportPdfText: () => _ = ImportPdfTextAsync(),
             Save: () => _applicationCommands.Execute(FreeWKeyboardCommand.SaveDocument),
             SaveAs: () => _applicationCommands.Execute(FreeWKeyboardCommand.SaveDocumentAs),

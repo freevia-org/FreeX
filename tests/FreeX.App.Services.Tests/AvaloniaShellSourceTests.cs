@@ -1667,7 +1667,7 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("DrawingObjectRenderPrimitiveKind.Shape => CreateDrawingShapeVisual(drawingObject, width, height)");
         source.Should().Contain("DrawingObjectRenderPrimitiveKind.Image or DrawingObjectRenderPrimitiveKind.CroppedImage");
         source.Should().Contain("CreateDrawingImageVisual(renderPlan, width, height)");
-        source.Should().Contain("DrawingObjectRenderPrimitiveKind.CellRangeSnapshot => CreateDrawingCellRangeSnapshotVisual(renderPlan, width, height, theme)");
+        source.Should().Contain("DrawingObjectRenderPrimitiveKind.CellRangeSnapshot => CreateDrawingCellRangeSnapshotVisual(renderPlan, width, height, theme, isSheetRightToLeft)");
         source.Should().Contain("DrawingObjectRenderPrimitiveKind.TextBox => CreateDrawingTextBoxVisual(drawingObject, width, height)");
         source.Should().Contain("private static Control CreateDrawingShapeVisual(");
         source.Should().Contain("using AvaloniaEllipse = Avalonia.Controls.Shapes.Ellipse;");

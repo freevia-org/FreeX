@@ -150,6 +150,50 @@ public static class DocumentInspector
     }
 
     /// <summary>
+    /// Removes <see cref="TextDocument.Footnotes"/>/<see cref="TextDocument.Endnotes"/>/<see cref="TextDocument.Comments"/>
+    /// entries that no longer have any live reference/anchor run anywhere in the document (body, tables,
+    /// headers/footers, or footnote/endnote content). A host can delete a footnote/endnote/comment
+    /// reference-mark run directly out of its live editing surface (e.g. a native RichTextBox Backspace/
+    /// Delete that a model-aware edit path declined to handle) with no awareness of the note/comment
+    /// dictionaries; call this after such an edit is read back into the model so the dictionary entry is
+    /// pruned instead of lingering unreachable in the saved package — mirroring how Word drops a
+    /// footnote/endnote/comment when the text carrying its reference mark is deleted. Only entries with
+    /// NO surviving anchor anywhere are removed; an entry whose anchor still exists (even elsewhere, e.g.
+    /// a header/footer) is left untouched. Mutates <paramref name="document"/> in place.
+    /// </summary>
+    public static void PruneOrphanedNoteAndCommentAnchors(TextDocument document)
+    {
+        ArgumentNullException.ThrowIfNull(document);
+
+        if (document.Footnotes.Count == 0 && document.Endnotes.Count == 0 && document.Comments.Count == 0)
+            return;
+
+        var usedFootnoteIds = new HashSet<int>();
+        var usedEndnoteIds = new HashSet<int>();
+        var usedCommentIds = new HashSet<int>();
+
+        foreach (var paragraph in EnumerateCommentAnchorParagraphs(document))
+        {
+            foreach (var run in paragraph.Runs)
+            {
+                if (run.FootnoteId is { } footnoteId)
+                    usedFootnoteIds.Add(footnoteId);
+                if (run.EndnoteId is { } endnoteId)
+                    usedEndnoteIds.Add(endnoteId);
+                if (run.CommentId is { } commentId)
+                    usedCommentIds.Add(commentId);
+            }
+        }
+
+        foreach (var id in document.Footnotes.Keys.Where(id => !usedFootnoteIds.Contains(id)).ToList())
+            document.Footnotes.Remove(id);
+        foreach (var id in document.Endnotes.Keys.Where(id => !usedEndnoteIds.Contains(id)).ToList())
+            document.Endnotes.Remove(id);
+        foreach (var id in document.Comments.Keys.Where(id => !usedCommentIds.Contains(id)).ToList())
+            document.Comments.Remove(id);
+    }
+
+    /// <summary>
     /// Remove every tracked revision by <b>accepting</b> all tracked changes (reusing
     /// <see cref="TrackChanges.AcceptAll(TextDocument)"/>): insertions become ordinary text and deletions
     /// are dropped, so no revision marks remain. "Remove" here therefore means "accept" — the document's

@@ -78,6 +78,82 @@ public sealed class StructuredTableStyleServiceTests
         StyleAt(workbook, sheet, 2, 1).FillColor.Should().Be(userFill);
     }
 
+    // F1 (style-precedence, round 146): Excel's precedence is direct formatting > table style, for
+    // header/totals cells exactly the same as body cells. A header cell that carries an explicit
+    // direct fill (the user manually recolored it via Home > Fill Color on top of a built-in table
+    // style) must keep that fill after ApplyLoadedTableStyles, not have it overwritten by the
+    // generic table-style banding color.
+    [Fact]
+    public void ApplyLoadedTableStyles_PreservesAnExplicitUserFillOnAHeaderCell()
+    {
+        var workbook = new Workbook("LoadedTableStyleExplicitHeaderFill");
+        var sheet = workbook.AddSheet("Data");
+        SeedTable(sheet, rowCount: 2);
+
+        // The user manually recolored the header cell (Excel "Green", RGB 0,176,80) on top of the
+        // TableStyleMedium2 table style, whose own header fill is a different color entirely.
+        var userHeaderFill = new CellColor(0, 176, 80);
+        var explicitStyle = workbook.RegisterStyle(new CellStyle { FillColor = userHeaderFill });
+        sheet.GetCell(1, 1)!.StyleId = explicitStyle;
+
+        var table = new StructuredTableModel
+        {
+            Id = 1,
+            Name = "Table1",
+            DisplayName = "Table1",
+            Range = new GridRange(new CellAddress(sheet.Id, 1, 1), new CellAddress(sheet.Id, 3, 2)),
+            HeaderRowCount = 1,
+            StyleName = "TableStyleMedium2",
+            ShowRowStripes = true
+        };
+        sheet.StructuredTables.Add(table);
+
+        var banding = StructuredTableStyleBandingResolver.Resolve("TableStyleMedium2", workbook.Theme);
+        banding.HeaderFill.Should().NotBe(userHeaderFill, "the test must exercise a genuine style-vs-direct-format conflict");
+
+        StructuredTableStyleService.ApplyLoadedTableStyles(workbook);
+
+        // The user's explicit header fill must survive materialization, just like Excel: direct
+        // formatting wins over the computed table-style banding, for header cells same as body cells.
+        StyleAt(workbook, sheet, 1, 1).FillColor.Should().Be(userHeaderFill);
+
+        // The untouched header cell in the same row must still get the generic banding fill — this is
+        // not a case of the whole header row being skipped, only the explicitly-formatted cell.
+        StyleAt(workbook, sheet, 1, 2).FillColor.Should().Be(banding.HeaderFill);
+    }
+
+    // Sibling no-regression case: a header cell that carries NO direct formatting (the common case —
+    // a table freshly created in FreeX, or loaded from a file whose header was never manually
+    // recolored) must still receive the full table-style banding: fill, bold, and header font color.
+    [Fact]
+    public void ApplyLoadedTableStyles_UnformattedHeaderCellStillGetsFullBandingStyle()
+    {
+        var workbook = new Workbook("LoadedTableStyleUnformattedHeader");
+        var sheet = workbook.AddSheet("Data");
+        SeedTable(sheet, rowCount: 2);
+
+        var table = new StructuredTableModel
+        {
+            Id = 1,
+            Name = "Table1",
+            DisplayName = "Table1",
+            Range = new GridRange(new CellAddress(sheet.Id, 1, 1), new CellAddress(sheet.Id, 3, 2)),
+            HeaderRowCount = 1,
+            StyleName = "TableStyleMedium2",
+            ShowRowStripes = true
+        };
+        sheet.StructuredTables.Add(table);
+
+        var banding = StructuredTableStyleBandingResolver.Resolve("TableStyleMedium2", workbook.Theme);
+
+        StructuredTableStyleService.ApplyLoadedTableStyles(workbook);
+
+        var header = StyleAt(workbook, sheet, 1, 1);
+        header.FillColor.Should().Be(banding.HeaderFill);
+        header.FontColor.Should().Be(banding.HeaderFontColor);
+        header.Bold.Should().BeTrue();
+    }
+
     [Fact]
     public void ApplyLoadedTableStyles_NoTables_ReturnsFalse()
     {

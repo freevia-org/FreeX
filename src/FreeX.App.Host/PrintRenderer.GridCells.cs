@@ -244,10 +244,13 @@ public static partial class PrintRenderer
 
                 if (cell.ConditionalIcon is { } icon)
                 {
-                    // Reading-order/RTL mirroring is not threaded here for the same reason noted on
-                    // DrawPrintedCellText below: PrintRenderer.HeaderFooter.cs doesn't pass the
-                    // sheet's IsRightToLeft flag down to this method.
-                    var iconLayout = GridView.CalculateConditionalIconCellLayout(cellRect, icon, isRightToLeft: false);
+                    // Mirrors the interactive grid's own RTL resolution (GridView.Rendering.cs's
+                    // CalculateConditionalIconCellLayout(rect, icon, IsSheetRightToLeft) call) so a
+                    // right-to-left sheet's icon set prints on the same edge it renders on screen,
+                    // instead of always mirroring as if the sheet were left-to-right.
+                    var iconIsRightToLeft = CellTextOrientationLayoutPlanner.ResolveIsEffectivelyRightToLeft(
+                        style?.ReadingOrder ?? CellReadingOrder.Context, sheet?.IsRightToLeft ?? false);
+                    var iconLayout = GridView.CalculateConditionalIconCellLayout(cellRect, icon, iconIsRightToLeft);
                     GridView.DrawConditionalIcon(dc, icon, iconLayout.IconRect);
                     if (!iconLayout.ShouldDrawText || string.IsNullOrEmpty(cell.DisplayText))
                         continue;
@@ -443,6 +446,14 @@ public static partial class PrintRenderer
         }
         var wrapText = style?.WrapText == true;
 
+        // Mirrors the interactive grid's own reading-order resolution (GridView.Rendering.cs's
+        // isEffectivelyRightToLeft, fed by CellTextOrientationLayoutPlanner.ResolveIsEffectivelyRightToLeft)
+        // instead of hardcoding LTR: a General-aligned numeric/text cell on a right-to-left sheet
+        // must anchor to the opposite edge on the printed page/PDF, exactly as it does on screen.
+        var isEffectivelyRightToLeft = CellTextOrientationLayoutPlanner.ResolveIsEffectivelyRightToLeft(
+            style?.ReadingOrder ?? CellReadingOrder.Context, sheet?.IsRightToLeft ?? false);
+        var flowDirection = isEffectivelyRightToLeft ? FlowDirection.RightToLeft : FlowDirection.LeftToRight;
+
         // Read the cell's own font (size/name/bold/italic) instead of a fixed print font, so a
         // 24pt Bold title prints exactly as it displays on screen (GridView.Rendering.cs:305).
         var typeface = ResolvePrintedCellTypeface(style);
@@ -465,7 +476,7 @@ public static partial class PrintRenderer
         var ft = new FormattedText(
             renderText,
             CultureInfo.CurrentCulture,
-            FlowDirection.LeftToRight,
+            flowDirection,
             typeface,
             fontSize,
             textBrush,
@@ -480,11 +491,11 @@ public static partial class PrintRenderer
         // CalculateCellTextRenderLayout) for BOTH the rotated and non-rotated branches, so a printed
         // cell's Horizontal/VerticalAlignment and Indent match exactly what's on screen instead of
         // the non-rotated branch hardcoding a flush-left, vertically-centered position regardless of
-        // style. (Reading-order/RTL mirroring is not threaded here: DrawPrintedGridCells's caller,
-        // PrintRenderer.HeaderFooter.cs, is owned by a different fix bucket and doesn't pass the
-        // sheet's IsRightToLeft flag down to this method.) Resolved up-front (rather than only just
-        // before the layout call below) because the overflow-direction decision right below also
-        // needs it.
+        // style. isEffectivelyRightToLeft (resolved above) is threaded into both CalculateLayout
+        // calls below, so a General-aligned cell on a right-to-left sheet mirrors to the same edge
+        // it renders on screen instead of always resolving as if the sheet were left-to-right.
+        // Resolved up-front (rather than only just before the layout call below) because the
+        // overflow-direction decision right below also needs it.
         var isNumeric = cell.RawValue is NumberValue or DateTimeValue;
         var resolvedHAlign = ResolvePrintedGeneralAlignment(style?.HorizontalAlignment ?? CellHAlign.General, cell.RawValue);
         var indentPx = (style?.IndentLevel ?? 0) * 8.0;
@@ -515,6 +526,18 @@ public static partial class PrintRenderer
         }
 
         ft.MaxTextWidth = Math.Max(1, maxTextWidth);
+        // WPF's FormattedText.TextAlignment.Left (the implicit default -- left unset everywhere
+        // else in this method) is resolved relative to FlowDirection once MaxTextWidth constrains
+        // the layout to a box: for FlowDirection.RightToLeft it means "flush to the reading
+        // start," which is physically the RIGHT edge of the box, not the left edge that
+        // CalculateLayout below actually resolves textPoint.X to (CalculateLayout always hands
+        // back a physical LEFT-edge anchor meant to be drawn flush-left, extending rightward --
+        // exactly how the unconstrained LTR case already renders). Left unfixed, an RTL cell's
+        // text would silently flip to the box's opposite physical edge regardless of what
+        // textPoint.X says. Forcing TextAlignment.Right under RTL flow cancels out WPF's
+        // box-relative interpretation so the glyph run still starts flush at the resolved
+        // textPoint.X instead of mirroring to the far side of the MaxTextWidth box.
+        ft.TextAlignment = isEffectivelyRightToLeft ? TextAlignment.Right : TextAlignment.Left;
         if (wrapText)
         {
             // Allow full multi-line wrapping within the cell width instead of forcing a single
@@ -541,7 +564,8 @@ public static partial class PrintRenderer
                 style?.VerticalAlignment,
                 isNumeric,
                 indentPx,
-                textRotation);
+                textRotation,
+                isEffectivelyRightToLeft);
             textPoint = new Point(layout.TextPoint.X, layout.TextPoint.Y);
             rotationAngle = layout.TransformAngle;
         }
@@ -555,7 +579,8 @@ public static partial class PrintRenderer
                 style?.VerticalAlignment,
                 isNumeric,
                 indentPx,
-                textRotation: 0);
+                textRotation: 0,
+                isEffectivelyRightToLeft);
             textPoint = new Point(layout.TextPoint.X, layout.TextPoint.Y);
         }
 

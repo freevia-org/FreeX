@@ -82,6 +82,19 @@ public sealed class RemoveDuplicateRowsCommand : IWorkbookCommand, IEstimatesMem
         if (CommandGuards.RejectIfSplitsArray(sheet, InsertCellsCommand.ArrayMembersWithinShiftRegion(sheet, removeDuplicatesShiftRegion)) is { } splitsArrayRejection)
             return splitsArrayRejection;
 
+        // R146-merged-structural-F1: a merge that only PARTIALLY overlaps the operated range (some
+        // of the rows it covers fall inside the range, others outside) cannot be handled safely by
+        // this command: step 4 below rewrites the full row content of every row inside the range
+        // regardless of merge geometry, but step 5's remap only relocates merges FULLY CONTAINED in
+        // the range (see `!_range.Contains(merge)` below) and otherwise leaves the merge's geometry
+        // untouched. That combination let a surviving row's real value get written into a cell a
+        // straddling merge still marks as a covered, blank non-anchor cell -- an invisible, silently
+        // desynced value (merged-cell rendering only ever shows the anchor's content). Reject up
+        // front, mirroring FillCellsCommand's identical "cannot partially cover a merge" refusal,
+        // rather than letting Apply proceed and corrupt the merge/value invariant.
+        if (sheet.MergedRegions.Any(m => _range.Overlaps(m) && !_range.Contains(m)))
+            return new CommandOutcome(false, "Cannot remove duplicates in a range that partially overlaps a merged cell.");
+
         RemovedRowCount = 0;
         _previousStructuredTable = null;
 
@@ -215,8 +228,9 @@ public sealed class RemoveDuplicateRowsCommand : IWorkbookCommand, IEstimatesMem
         // ── 5. Adjust merged regions so merges travel with their compacted rows ────────────
         // A merge entirely inside the operated range must be remapped onto the new (compacted)
         // row positions of whichever of its rows survived, or dropped entirely if every row it
-        // covered was removed as a duplicate. Merges outside the range, or only partially
-        // overlapping it, are left untouched (their data was never moved by this command).
+        // covered was removed as a duplicate. Merges entirely outside the range are left untouched
+        // (their data was never moved by this command); merges that only partially overlap the
+        // range are rejected up front, above, before any mutation happens.
         _mergeSnapshot = sheet.MergedRegions.ToList();
         var survivorTargetRow = new Dictionary<uint, uint>();
         for (var i = 0; i < survivingRows.Count; i++)

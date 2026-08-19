@@ -160,7 +160,22 @@ public static class PasteCommandFactory
         // the correct `merge` value to PasteConditionalFormatsCommand. External callers must never
         // pass true here; the default (false) gives every ordinary paste the correct supersede
         // behavior automatically.
-        bool mergeConditionalFormats = false)
+        bool mergeConditionalFormats = false,
+        // external-refs-F1: workbook.GetSheet(sourceRange.Start.Sheet) below can only ever resolve
+        // sourceRange's SheetId against the DESTINATION workbook. That is correct for an ordinary
+        // same-window paste (source and destination share one Workbook), but sourceRange.Start.Sheet
+        // is a SheetId minted by the SOURCE window's own (independently GUID'd) Workbook when the
+        // copy and paste happen in two different open FreeX windows sharing one process-wide
+        // WorkbookClipboardSession (see WorkbookClipboardSession -- made a DI-wide singleton
+        // precisely so cross-window paste works) -- that lookup then always returns null, silently
+        // dropping every hyperlink/rich-text-run/merged-region/comment/CF/floating-object carry that
+        // is gated on sourceSheet being non-null. Callers that captured the live source Sheet
+        // reference at COPY time (independent of which workbook eventually receives the paste, the
+        // same way sourceCells' Cell clones already are) pass it here so it wins over the
+        // destination-workbook lookup; callers that don't have one (or that know source and
+        // destination are the same workbook) pass null/omit it, which preserves the prior lookup
+        // behavior exactly.
+        Sheet? sourceSheetOverride = null)
     {
         var destination = destinationRange.Start;
         var validationError = PasteCommandValidator.ValidateInternalPaste(
@@ -185,7 +200,22 @@ public static class PasteCommandFactory
 
         var targetSheet = workbook.GetSheet(targetSheetId);
         var activeSheetName = targetSheet?.Name ?? "";
+        // external-refs-F1: sourceSheet stays the ORDINARY destination-workbook lookup -- it also
+        // gates whether this method constructs a PasteMergedRegionsCommand/PasteCommentsCommand/
+        // PasteConditionalFormatsCommand/PasteDataValidationCommand/PastePicturesCommand, and every
+        // one of those commands independently re-resolves sourceRange.Start.Sheet via
+        // ctx.GetSheet(...) at its OWN Apply() time against whatever workbook the command bus is
+        // running against. Redirecting sourceSheet itself to sourceSheetOverride would flip those
+        // gates open for a cross-window paste (sourceSheetOverride is non-null) without also fixing
+        // those commands' own Apply()-time lookups -- turning today's silent "merged
+        // regions/comments/CF/validation/pictures are dropped" into an outright Apply() failure
+        // instead. richContentSourceSheet below is a NARROWER override used only for the rich-text-
+        // run/hyperlink/hyperlink-metadata/phonetic-guide extraction a few lines down: those are
+        // read once here and copied into plain dictionaries handed to PasteCellsCommand/
+        // PasteSpecialCellsCommand, which store them as data and never re-resolve the source sheet
+        // later -- so overriding just this narrower read is safe.
         var sourceSheet = workbook.GetSheet(sourceRange.Start.Sheet);
+        var richContentSourceSheet = sourceSheetOverride ?? sourceSheet;
 
         var shouldTileDestinationRange = targetRows > pasteRows || targetCols > pasteCols;
         if (shouldTileDestinationRange)
@@ -206,6 +236,7 @@ public static class PasteCommandFactory
                 targetSheetId,
                 targetSheet,
                 sourceSheet,
+                richContentSourceSheet,
                 activeSheetName,
                 sourceRange,
                 sourceCells,
@@ -242,7 +273,8 @@ public static class PasteCommandFactory
                 mode,
                 options with { ContentKind = PasteSpecialContentKind.Default },
                 sourceAreas,
-                mergeConditionalFormats: true);
+                mergeConditionalFormats: true,
+                sourceSheetOverride: sourceSheetOverride);
         }
 
         if (options.Transpose ||
@@ -383,10 +415,10 @@ public static class PasteCommandFactory
             // already applies (ContentKindCarriesRichTextRuns callsite for the plain/no-options case)
             // (R26-paste-special-operation-deep-1).
             var specialCarriesFormatting = mode == PasteCellsMode.All && options.Operation == PasteSpecialOperation.None && ContentKindCarriesRichTextRuns(options.ContentKind);
-            var specialRichTextRuns = specialCarriesFormatting ? sourceSheet?.RichTextRuns : null;
-            var specialHyperlinks = specialCarriesFormatting ? sourceSheet?.Hyperlinks : null;
-            var specialHyperlinkMetadata = specialCarriesFormatting ? sourceSheet?.HyperlinkMetadata : null;
-            var specialPhoneticGuides = specialCarriesFormatting ? sourceSheet?.CellPhoneticGuides : null;
+            var specialRichTextRuns = specialCarriesFormatting ? richContentSourceSheet?.RichTextRuns : null;
+            var specialHyperlinks = specialCarriesFormatting ? richContentSourceSheet?.Hyperlinks : null;
+            var specialHyperlinkMetadata = specialCarriesFormatting ? richContentSourceSheet?.HyperlinkMetadata : null;
+            var specialPhoneticGuides = specialCarriesFormatting ? richContentSourceSheet?.CellPhoneticGuides : null;
 
             var pasteSpecialCommand = new PasteSpecialCellsCommand(
                 targetSheetId,
@@ -549,22 +581,22 @@ public static class PasteCommandFactory
             edits.Add((destinationAddress, pastedCell));
 
             if (richTextRuns is not null &&
-                sourceSheet is not null &&
-                sourceSheet.RichTextRuns.TryGetValue(source, out var sourceRuns))
+                richContentSourceSheet is not null &&
+                richContentSourceSheet.RichTextRuns.TryGetValue(source, out var sourceRuns))
             {
                 richTextRuns[destinationAddress] = sourceRuns;
             }
 
             if (hyperlinks is not null &&
-                sourceSheet is not null &&
-                sourceSheet.Hyperlinks.TryGetValue(source, out var sourceHyperlink))
+                richContentSourceSheet is not null &&
+                richContentSourceSheet.Hyperlinks.TryGetValue(source, out var sourceHyperlink))
             {
                 hyperlinks[destinationAddress] = sourceHyperlink;
             }
 
             if (hyperlinkMetadata is not null &&
-                sourceSheet is not null &&
-                sourceSheet.HyperlinkMetadata.TryGetValue(source, out var sourceHyperlinkMetadata))
+                richContentSourceSheet is not null &&
+                richContentSourceSheet.HyperlinkMetadata.TryGetValue(source, out var sourceHyperlinkMetadata))
             {
                 hyperlinkMetadata[destinationAddress] = sourceHyperlinkMetadata;
             }
@@ -752,6 +784,14 @@ public static class PasteCommandFactory
         SheetId targetSheetId,
         Sheet? targetSheet,
         Sheet? sourceSheet,
+        // external-refs-F1: kept separate from sourceSheet (see the identical comment where the
+        // caller computes both) -- this one is only used for the rich-text-run/hyperlink/
+        // hyperlink-metadata read-once-into-a-dictionary extraction below, which is safe to
+        // redirect to a cross-window sourceSheetOverride. sourceSheet itself keeps gating the
+        // merged-region/comment/CF/data-validation/picture commands built further down, every one
+        // of which independently re-resolves the source sheet from sourceRange at its own Apply()
+        // time and would otherwise fail for a cross-window paste.
+        Sheet? richContentSourceSheet,
         string activeSheetName,
         GridRange sourceRange,
         IReadOnlyList<(CellAddress Source, Cell Cell)> sourceCells,
@@ -896,22 +936,22 @@ public static class PasteCommandFactory
             edits.Add((destinationAddress, pastedCell));
 
             if (richTextRuns is not null &&
-                sourceSheet is not null &&
-                sourceSheet.RichTextRuns.TryGetValue(sourceAddress, out var sourceRuns))
+                richContentSourceSheet is not null &&
+                richContentSourceSheet.RichTextRuns.TryGetValue(sourceAddress, out var sourceRuns))
             {
                 richTextRuns[destinationAddress] = sourceRuns;
             }
 
             if (hyperlinks is not null &&
-                sourceSheet is not null &&
-                sourceSheet.Hyperlinks.TryGetValue(sourceAddress, out var sourceHyperlink))
+                richContentSourceSheet is not null &&
+                richContentSourceSheet.Hyperlinks.TryGetValue(sourceAddress, out var sourceHyperlink))
             {
                 hyperlinks[destinationAddress] = sourceHyperlink;
             }
 
             if (hyperlinkMetadata is not null &&
-                sourceSheet is not null &&
-                sourceSheet.HyperlinkMetadata.TryGetValue(sourceAddress, out var sourceHyperlinkMetadata))
+                richContentSourceSheet is not null &&
+                richContentSourceSheet.HyperlinkMetadata.TryGetValue(sourceAddress, out var sourceHyperlinkMetadata))
             {
                 hyperlinkMetadata[destinationAddress] = sourceHyperlinkMetadata;
             }

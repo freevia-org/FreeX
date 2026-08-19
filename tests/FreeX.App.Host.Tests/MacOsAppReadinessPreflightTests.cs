@@ -781,8 +781,8 @@ public sealed class MacOsAppReadinessPreflightTests
         script.Should().Contain("DrawingObjectRenderPlanner.Plan(viewport)");
         script.Should().Contain("CreateSelectableDrawingObjectVisual(renderPlan, width, height)");
         script.Should().Contain("UiText.Get(selected ? `\"Automation_Selected`\" : `\"Automation_NotSelected`\"));");
-        script.Should().Contain("CreateDrawingObjectVisual(renderPlan, width, height, _session.Workbook.Theme)");
-        script.Should().Contain("CreateDrawingCellRangeSnapshotVisual(renderPlan, width, height, theme)");
+        script.Should().Contain("CreateDrawingObjectVisual(renderPlan, width, height, _session.Workbook.Theme, _session.ActiveSheet.IsRightToLeft)");
+        script.Should().Contain("CreateDrawingCellRangeSnapshotVisual(renderPlan, width, height, theme, isSheetRightToLeft)");
         script.Should().Contain("CreateDrawingImageSourceRect(crop)");
         script.Should().Contain("TryCreateDrawingBitmap(imageBytes, out var bitmap)");
         script.Should().Contain("private static bool HasVisibleCellBorder(CellStyle? style)");
@@ -2536,8 +2536,8 @@ public sealed class MacOsAppReadinessPreflightTests
                     if (args.Key is Key.Enter or Key.Space) { }
                     CreateDrawingObjectSelectionAdorner();
                     ClearSelectedDrawingObject();
-                    CreateDrawingObjectVisual(renderPlan, width, height, _session.Workbook.Theme);
-                    CreateDrawingCellRangeSnapshotVisual(renderPlan, width, height, theme);
+                    CreateDrawingObjectVisual(renderPlan, width, height, _session.Workbook.Theme, _session.ActiveSheet.IsRightToLeft);
+                    CreateDrawingCellRangeSnapshotVisual(renderPlan, width, height, theme, isSheetRightToLeft);
                     CreateDrawingImageSourceRect(crop);
                     TryCreateDrawingBitmap(imageBytes, out var bitmap);
                     AddStyledCellBorderOverlay(content, style, borderNeighbors, zoomFactor);

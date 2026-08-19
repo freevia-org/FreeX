@@ -848,21 +848,56 @@ public sealed partial class DocumentView : RichTextBox
                 return;
             }
 
-            if (restoreReadOnly)
-            {
-                try
-                {
-                    base.OnPreviewKeyDown(e);
-                }
-                finally
-                {
-                    IsReadOnly = true;
-                }
-                return;
-            }
+            ApplyNativeFallbackDeleteAndPruneOrphanedAnchors(e, restoreReadOnly);
+            return;
         }
 
         base.OnPreviewKeyDown(e);
+    }
+
+    /// <summary>
+    /// Runs the native RichTextBox Backspace/Delete <see cref="TryPrepareNativeFallback"/> just allowed
+    /// through -- the structural fallback the portable body-edit session declined (e.g. the selection spans
+    /// a footnote/endnote/comment-reference run, which <c>DocumentEditingSession.IsPortableBodyTextRun</c>
+    /// always declines; see <c>IsPortableBodyTextParagraph</c>'s whole-paragraph gate). That native edit
+    /// mutates the live FlowDocument directly with zero knowledge of <see cref="TextDocument.Footnotes"/>/
+    /// <see cref="TextDocument.Endnotes"/>/<see cref="TextDocument.Comments"/>, so deleting a marker/anchor
+    /// run this way can otherwise leave its dictionary entry orphaned -- still serialized into the saved
+    /// docx with no run left to point at it. Resync the model and prune any entry that lost its last anchor
+    /// right after this specific native edit (not from <see cref="CommitToModel"/> generally): scoping it
+    /// here means a note/comment dictionary entry that simply has no anchor for an unrelated reason --
+    /// mid-edit workflows that manage <see cref="TextDocument.Footnotes"/>/<see cref="TextDocument.Comments"/>
+    /// directly (e.g. <see cref="ReplaceNoteContent"/>), or a paginated page's body not currently reflecting
+    /// a marker that lives on another page -- is never touched by a keystroke that had nothing to do with it.
+    /// </summary>
+    private void ApplyNativeFallbackDeleteAndPruneOrphanedAnchors(KeyEventArgs e, bool restoreReadOnly)
+    {
+        try
+        {
+            base.OnPreviewKeyDown(e);
+        }
+        finally
+        {
+            if (restoreReadOnly)
+                IsReadOnly = true;
+        }
+
+        PruneOrphanedNoteAndCommentAnchorsAfterNativeEdit();
+    }
+
+    /// <summary>
+    /// Resyncs the model from the live FlowDocument and prunes any footnote/endnote/comment entry that
+    /// lost its last anchor -- the second half of <see cref="ApplyNativeFallbackDeleteAndPruneOrphanedAnchors"/>,
+    /// split out so it can be exercised directly (bypassing the native keystroke dispatch, which real WPF
+    /// window-activation/focus timing makes unreliable to raise synthetically in a headless test host).
+    /// </summary>
+    private void PruneOrphanedNoteAndCommentAnchorsAfterNativeEdit()
+    {
+        if (_model.Footnotes.Count == 0 && _model.Endnotes.Count == 0 && _model.Comments.Count == 0)
+            return;
+
+        CommitToModel();
+        DocumentInspector.PruneOrphanedNoteAndCommentAnchors(_model);
     }
 
     /// <summary>
@@ -1501,6 +1536,9 @@ public sealed partial class DocumentView : RichTextBox
     /// <returns>The model block index of the inserted table.</returns>
     public int InsertTable(int rows, int columns)
     {
+        if (!AllowsRestrictEditingOperation(RestrictEditingOperationKind.BodyTextEdit))
+            return -1;
+
         // Capture the user's in-progress edits before mutating the model out from under the view.
         CommitToModel();
         var index = _editingSession.InsertBlockAfter(
@@ -1615,6 +1653,9 @@ public sealed partial class DocumentView : RichTextBox
     /// </summary>
     public void InsertTableOfContents()
     {
+        if (!AllowsRestrictEditingOperation(RestrictEditingOperationKind.BodyTextEdit))
+            return;
+
         CommitToModel();
         var index = CaretBlockIndex();
         if (index < 0 || index > _model.Blocks.Count)
@@ -1647,6 +1688,9 @@ public sealed partial class DocumentView : RichTextBox
     /// </summary>
     public void InsertCoverPage()
     {
+        if (!AllowsRestrictEditingOperation(RestrictEditingOperationKind.BodyTextEdit))
+            return;
+
         CommitToModel();
         var blocks = DocumentOps.BuildCoverPage(_model);
         _editingSession.InsertBlocksAfter(-1, blocks, "Insert Cover Page");
@@ -1659,6 +1703,9 @@ public sealed partial class DocumentView : RichTextBox
     /// </summary>
     public void InsertCoverPage(CoverPagePreset preset)
     {
+        if (!AllowsRestrictEditingOperation(RestrictEditingOperationKind.BodyTextEdit))
+            return;
+
         CommitToModel();
         var blocks = DocumentOps.BuildCoverPage(_model, preset);
         _editingSession.InsertBlocksAfter(-1, blocks, "Insert Cover Page");
@@ -1670,6 +1717,9 @@ public sealed partial class DocumentView : RichTextBox
     /// </summary>
     public void InsertBlankPage()
     {
+        if (!AllowsRestrictEditingOperation(RestrictEditingOperationKind.BodyTextEdit))
+            return;
+
         CommitToModel();
         _editingSession.InsertBlocksAfter(
             CaretBlockIndex(),
@@ -1683,6 +1733,9 @@ public sealed partial class DocumentView : RichTextBox
     /// </summary>
     public void InsertHorizontalRule()
     {
+        if (!AllowsRestrictEditingOperation(RestrictEditingOperationKind.BodyTextEdit))
+            return;
+
         CommitToModel();
         _editingSession.InsertBlockAfter(CaretBlockIndex(), DocumentOps.CreateHorizontalRule());
     }
@@ -1693,6 +1746,9 @@ public sealed partial class DocumentView : RichTextBox
     /// </summary>
     public void InsertPageBreak()
     {
+        if (!AllowsRestrictEditingOperation(RestrictEditingOperationKind.BodyTextEdit))
+            return;
+
         CommitToModel();
         _editingSession.InsertBlockAfter(CaretBlockIndex(), DocumentOps.CreatePageBreak());
     }
@@ -1723,6 +1779,9 @@ public sealed partial class DocumentView : RichTextBox
     /// </summary>
     public void InsertSectionBreak(SectionBreakKind breakKind)
     {
+        if (!AllowsRestrictEditingOperation(RestrictEditingOperationKind.BodyTextEdit))
+            return;
+
         CommitToModel();
         _editingSession.InsertBlockAfter(
             CaretBlockIndex(),
@@ -1734,6 +1793,9 @@ public sealed partial class DocumentView : RichTextBox
     /// </summary>
     public void InsertColumnBreak()
     {
+        if (!AllowsRestrictEditingOperation(RestrictEditingOperationKind.BodyTextEdit))
+            return;
+
         CommitToModel();
         _editingSession.InsertBlockAfter(CaretBlockIndex(), DocumentOps.CreateColumnBreak());
     }
@@ -14006,6 +14068,9 @@ public sealed partial class DocumentView : RichTextBox
     /// <summary>Inserts an inline shape / text box at the caret. Size in points; preserved on save.</summary>
     public void InsertShape(Shape shape)
     {
+        if (!AllowsRestrictEditingOperation(RestrictEditingOperationKind.BodyTextEdit))
+            return;
+
         CommitToModel();
         var container = BuildShapeRun(shape, DocumentEffectSet.FromTheme(_model.Theme));
         var caret = CaretPosition.GetInsertionPosition(LogicalDirection.Forward) ?? CaretPosition;
@@ -14025,6 +14090,9 @@ public sealed partial class DocumentView : RichTextBox
     /// <summary>Inserts an inline image at the caret. Width/height in points; preserved on save.</summary>
     public void InsertImage(InlineImage image)
     {
+        if (!AllowsRestrictEditingOperation(RestrictEditingOperationKind.BodyTextEdit))
+            return;
+
         CommitToModel();
         var container = BuildImageRun(image);
         var caret = CaretPosition.GetInsertionPosition(LogicalDirection.Forward) ?? CaretPosition;
@@ -14165,6 +14233,9 @@ public sealed partial class DocumentView : RichTextBox
     // commit pending edits, drop the container at the caret's paragraph (or the last block), commit + render.
     private void InsertInlineContainer(InlineUIContainer container)
     {
+        if (!AllowsRestrictEditingOperation(RestrictEditingOperationKind.BodyTextEdit))
+            return;
+
         CommitToModel();
         var caret = CaretPosition.GetInsertionPosition(LogicalDirection.Forward) ?? CaretPosition;
         if (caret.Paragraph is { } paragraph)
@@ -14480,6 +14551,9 @@ public sealed partial class DocumentView : RichTextBox
     /// </summary>
     public void InsertFootnote(string text)
     {
+        if (!AllowsRestrictEditingOperation(RestrictEditingOperationKind.BodyTextEdit))
+            return;
+
         if (TryInsertNoteThroughCommand(text, footnote: true))
             return;
 
@@ -14512,6 +14586,9 @@ public sealed partial class DocumentView : RichTextBox
     /// </summary>
     public void InsertEndnote(string text)
     {
+        if (!AllowsRestrictEditingOperation(RestrictEditingOperationKind.BodyTextEdit))
+            return;
+
         if (TryInsertNoteThroughCommand(text, footnote: false))
             return;
 
@@ -15685,6 +15762,9 @@ public sealed partial class DocumentView : RichTextBox
     public void InsertCitation(Source source)
     {
         ArgumentNullException.ThrowIfNull(source);
+        if (!AllowsRestrictEditingOperation(RestrictEditingOperationKind.BodyTextEdit))
+            return;
+
         if (Citations.TryCreateCitationFieldRun(_model, source, ActiveCitationStyle, out var run))
             InsertInlineAtCaret(BuildComplexFieldRun(run, _model));
         else
@@ -15700,6 +15780,9 @@ public sealed partial class DocumentView : RichTextBox
     /// </summary>
     public void InsertBibliography()
     {
+        if (!AllowsRestrictEditingOperation(RestrictEditingOperationKind.BodyTextEdit))
+            return;
+
         CommitToModel();
         RealizeGeneratedReferenceEdit(ReferenceEdits.InsertBibliography(GeneratedReferenceCaret()));
     }
@@ -15758,6 +15841,9 @@ public sealed partial class DocumentView : RichTextBox
 
     public void InsertIndex(string? identifier)
     {
+        if (!AllowsRestrictEditingOperation(RestrictEditingOperationKind.BodyTextEdit))
+            return;
+
         CommitToModel();
         RealizeGeneratedReferenceEdit(ReferenceEdits.InsertIndex(
             GeneratedReferenceCaret(),
@@ -15840,6 +15926,9 @@ public sealed partial class DocumentView : RichTextBox
     public void InsertTableOfAuthorities(ToaOptions options)
     {
         ArgumentNullException.ThrowIfNull(options);
+        if (!AllowsRestrictEditingOperation(RestrictEditingOperationKind.BodyTextEdit))
+            return;
+
         CommitToModel();
         RealizeGeneratedReferenceEdit(ReferenceEdits.InsertTableOfAuthorities(
             GeneratedReferenceCaret(),
@@ -15945,6 +16034,9 @@ public sealed partial class DocumentView : RichTextBox
 
     public void InsertTableOfFigures(string labelText)
     {
+        if (!AllowsRestrictEditingOperation(RestrictEditingOperationKind.BodyTextEdit))
+            return;
+
         CommitToModel();
         RealizeGeneratedReferenceEdit(ReferenceEdits.InsertTableOfFigures(
             GeneratedReferenceCaret(),
@@ -16043,6 +16135,9 @@ public sealed partial class DocumentView : RichTextBox
 
     public void InsertCaption(string labelText, string text)
     {
+        if (!AllowsRestrictEditingOperation(RestrictEditingOperationKind.BodyTextEdit))
+            return;
+
         CommitToModel();
         var result = ReferenceEdits.InsertCaption(CaretBlockIndex(), labelText, text);
         if (result.Applied)
@@ -16061,6 +16156,9 @@ public sealed partial class DocumentView : RichTextBox
     /// </summary>
     public void InsertCrossReference(CrossRefType type, CrossRefTarget target, CrossRefInsertAs insertAs, bool hyperlink)
     {
+        if (!AllowsRestrictEditingOperation(RestrictEditingOperationKind.BodyTextEdit))
+            return;
+
         Focus();
         CommitToModel();
 
@@ -16417,6 +16515,9 @@ public sealed partial class DocumentView : RichTextBox
     /// </summary>
     public void InsertHyperlink(string displayText, string target)
     {
+        if (!AllowsRestrictEditingOperation(RestrictEditingOperationKind.BodyTextEdit))
+            return;
+
         if (!HyperlinkTarget.TryParse(target, out var parsedTarget))
             return;
 

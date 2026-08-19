@@ -171,7 +171,15 @@ public sealed class FilterCommand : IWorkbookCommand
 
     private static void RecomputeHiddenRows(Sheet sheet, GridRange range)
     {
-        uint startRow = range.Start.Row;
+        // table-semantics-F1: mirrors GetFilterableLastRow's header/totals-aware end bound below --
+        // when range is a structured table's own Range loaded with headerRowCount="0" (a genuine,
+        // round-tripped Excel feature; see StructuredReferenceResolver.HeaderRowCount() and
+        // XlsxStructuredTableModelMapper.MaterializeFilters' own header-count-aware load path),
+        // range.Start.Row IS ITSELF a data row, not a header, and must be evaluated against the
+        // active filters like every other data row -- unconditionally starting at range.Start.Row + 1
+        // permanently exempted that row from every filter recompute (and, via FilterHiddenRows
+        // feeding RecalcEngine's SUBTOTAL, from the table's Totals Row aggregate too).
+        uint firstRow = FilterHiddenRowUpdater.GetFilterableFirstRow(sheet, range);
         // R100-commands-filter-totalsrow-1: when range is a structured table's own Range with its
         // Totals Row shown, range.End.Row IS the Totals Row itself -- exclude it from the filterable
         // data set the same way GetDataBodyRowBounds already does for every other table-editing
@@ -204,7 +212,7 @@ public sealed class FilterCommand : IWorkbookCommand
             : new HashSet<uint>(sheet.ValueFilterHiddenRows);
         sheet.ValueFilterHiddenRows.Clear();
 
-        for (uint row = startRow + 1; row <= endRow; row++)
+        for (uint row = firstRow; row <= endRow; row++)
         {
             var shouldHide = false;
             foreach (var (col, matcher) in matchers)
@@ -314,7 +322,11 @@ public sealed class CellFillColorFilterCommand : IWorkbookCommand
         // R100-commands-filter-totalsrow-1: see FilterCommand.RecomputeHiddenRows -- exclude a
         // structured table's shown Totals Row from the filterable data set.
         var lastDataRow = StructuredTableEditEffects.GetFilterableLastRow(sheet, _range);
-        for (uint row = _range.Start.Row + 1; row <= lastDataRow; row++)
+        // table-semantics-F1: see FilterCommand.RecomputeHiddenRows -- a structured table loaded
+        // with headerRowCount="0" has NO header row, so its first row is itself a data row and must
+        // be evaluated here too.
+        var firstDataRow = FilterHiddenRowUpdater.GetFilterableFirstRow(sheet, _range);
+        for (uint row = firstDataRow; row <= lastDataRow; row++)
         {
             // filter-by-color-cf: resolve the color Excel would actually show for this cell,
             // including any conditional-formatting-driven fill, not just the cell's static stored
@@ -410,7 +422,11 @@ public sealed class CellNoFillColorFilterCommand : IWorkbookCommand
         // R100-commands-filter-totalsrow-1: see FilterCommand.RecomputeHiddenRows -- exclude a
         // structured table's shown Totals Row from the filterable data set.
         var lastDataRow = StructuredTableEditEffects.GetFilterableLastRow(sheet, _range);
-        for (uint row = _range.Start.Row + 1; row <= lastDataRow; row++)
+        // table-semantics-F1: see FilterCommand.RecomputeHiddenRows -- a structured table loaded
+        // with headerRowCount="0" has NO header row, so its first row is itself a data row and must
+        // be evaluated here too.
+        var firstDataRow = FilterHiddenRowUpdater.GetFilterableFirstRow(sheet, _range);
+        for (uint row = firstDataRow; row <= lastDataRow; row++)
         {
             // filter-by-color-cf: a CF-driven fill counts as "has a fill" here too, so a CF-red
             // cell must NOT wrongly match "No Fill".
@@ -509,7 +525,11 @@ public sealed class CellFontColorFilterCommand : IWorkbookCommand
         // R100-commands-filter-totalsrow-1: see FilterCommand.RecomputeHiddenRows -- exclude a
         // structured table's shown Totals Row from the filterable data set.
         var lastDataRow = StructuredTableEditEffects.GetFilterableLastRow(sheet, _range);
-        for (uint row = _range.Start.Row + 1; row <= lastDataRow; row++)
+        // table-semantics-F1: see FilterCommand.RecomputeHiddenRows -- a structured table loaded
+        // with headerRowCount="0" has NO header row, so its first row is itself a data row and must
+        // be evaluated here too.
+        var firstDataRow = FilterHiddenRowUpdater.GetFilterableFirstRow(sheet, _range);
+        for (uint row = firstDataRow; row <= lastDataRow; row++)
         {
             // filter-by-color-cf: resolve the color Excel would actually show for this cell,
             // including any conditional-formatting-driven font color, not just the cell's static
@@ -891,6 +911,34 @@ internal readonly struct FilterAllowedValueMatcher
 
 internal static class FilterHiddenRowUpdater
 {
+    /// <summary>
+    /// table-semantics-F1: returns the first row of <paramref name="range"/> that participates in
+    /// interactive AutoFilter/slicer matching -- the header-count-aware counterpart to
+    /// <see cref="StructuredTableEditEffects.GetFilterableLastRow"/>. When <paramref name="range"/>
+    /// is exactly a structured table's <c>Range</c> and that table was loaded with
+    /// <c>headerRowCount="0"</c> (<see cref="StructuredTableModel.HeaderRowCount"/> is <c>0</c> -- a
+    /// genuine, round-tripped Excel feature; see <c>StructuredReferenceResolver.HeaderRowCount()</c>
+    /// and <c>XlsxStructuredTableModelMapper.MaterializeFilters</c>' own header-count-aware load
+    /// path), <c>range.Start.Row</c> IS ITSELF a data row -- there is no header row to skip -- so it
+    /// is returned unchanged. Mirrors <see cref="StructuredTableEditEffects.GetDataBodyRowBounds"/>'s
+    /// <c>FirstDataRow</c> computation exactly. For a plain worksheet-level AutoFilter range (no
+    /// matching table) or a table with a header row (the default), returns
+    /// <c>range.Start.Row + 1</c> exactly as before.
+    /// </summary>
+    public static uint GetFilterableFirstRow(Sheet sheet, GridRange range)
+    {
+        foreach (var table in sheet.StructuredTables)
+        {
+            if (table.Range.Equals(range))
+            {
+                var hasHeaderRow = table.HeaderRowCount is null or > 0;
+                return table.Range.Start.Row + (hasHeaderRow ? 1u : 0u);
+            }
+        }
+
+        return range.Start.Row + 1;
+    }
+
     public static void SetHidden(HashSet<uint> filterHiddenRows, uint row, bool hidden)
     {
         if (hidden)
@@ -936,7 +984,9 @@ internal static class FilterHiddenRowUpdater
             return;
 
         var filterHiddenRows = sheet.FilterHiddenRows;
-        var firstDataRow = range.Start.Row + 1;
+        // table-semantics-F1: see GetFilterableFirstRow -- a headerless table's first row is a data
+        // row and must be eligible for relinquishment here too.
+        var firstDataRow = GetFilterableFirstRow(sheet, range);
         var lastDataRow = range.End.Row;
         if (filterHiddenRows.Count == 0 || firstDataRow > lastDataRow)
             return;
@@ -1057,7 +1107,9 @@ internal static class FilterHiddenRowUpdater
         if (!sheet.ColumnFilterOwnedRows.TryGetValue(filterCol, out var owned) || owned.Count == 0)
             return;
 
-        var firstDataRow = range.Start.Row + 1;
+        // table-semantics-F1: see GetFilterableFirstRow -- a headerless table's first row is a data
+        // row and must be eligible for relinquishment here too.
+        var firstDataRow = GetFilterableFirstRow(sheet, range);
         var lastDataRow = range.End.Row;
         foreach (var row in owned)
         {

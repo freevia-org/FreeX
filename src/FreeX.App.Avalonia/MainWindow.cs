@@ -5393,7 +5393,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             VerticalAlignment = global::Avalonia.Layout.VerticalAlignment.Top,
             IsHitTestVisible = false,
         };
-        surface.Children.Add(CreateDrawingObjectVisual(renderPlan, width, height, _session.Workbook.Theme));
+        surface.Children.Add(CreateDrawingObjectVisual(renderPlan, width, height, _session.Workbook.Theme, _session.ActiveSheet.IsRightToLeft));
         var container = new AvaloniaGrid
         {
             Width = Math.Max(1, width) + (horizontalPadding * 2),
@@ -5571,7 +5571,8 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         DrawingObjectRenderPlan renderPlan,
         double width,
         double height,
-        WorkbookTheme theme)
+        WorkbookTheme theme,
+        bool isSheetRightToLeft = false)
     {
         var drawingObject = renderPlan.Bounds;
         var visual = renderPlan.PrimitiveKind switch
@@ -5579,7 +5580,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             DrawingObjectRenderPrimitiveKind.Shape => CreateDrawingShapeVisual(drawingObject, width, height),
             DrawingObjectRenderPrimitiveKind.Image or DrawingObjectRenderPrimitiveKind.CroppedImage =>
                 CreateDrawingImageVisual(renderPlan, width, height),
-            DrawingObjectRenderPrimitiveKind.CellRangeSnapshot => CreateDrawingCellRangeSnapshotVisual(renderPlan, width, height, theme),
+            DrawingObjectRenderPrimitiveKind.CellRangeSnapshot => CreateDrawingCellRangeSnapshotVisual(renderPlan, width, height, theme, isSheetRightToLeft),
             DrawingObjectRenderPrimitiveKind.TextBox => CreateDrawingTextBoxVisual(drawingObject, width, height),
             _ => CreateDrawingObjectBoundsMarker(drawingObject, width, height)
         };
@@ -6030,7 +6031,8 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         DrawingObjectRenderPlan renderPlan,
         double width,
         double height,
-        WorkbookTheme theme)
+        WorkbookTheme theme,
+        bool isSheetRightToLeft = false)
     {
         var drawingObject = renderPlan.Bounds;
         if (renderPlan.PictureGrid is not { } pictureGrid)
@@ -6142,7 +6144,15 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             var style = cell.Style;
             var foreground = style is null ? Brushes.Black : Brush(style.ResolveFontColor(theme));
             var horizontalAlignment = style?.HorizontalAlignment ?? CellHAlign.General;
-            var textAlignment = MapCellTextAlignment(horizontalAlignment, cell.IsNumericOrDate, isEffectivelyRightToLeft: false);
+            // R146-render-rtl-camera-snapshot: resolve the cell's effective reading order the same
+            // way the live grid does (CellTextOrientationLayoutPlanner.ResolveIsEffectivelyRightToLeft)
+            // instead of hardcoding LTR -- mirrors the WPF fix in GridView.DrawPictureCellText
+            // (R88-render-rtl-bidi-5-2) so a Camera/Linked-Picture snapshot taken from, or displayed
+            // on, a right-to-left sheet mirrors General alignment and text flow on this shell too.
+            var isEffectivelyRightToLeft = CellTextOrientationLayoutPlanner.ResolveIsEffectivelyRightToLeft(
+                style?.ReadingOrder ?? CellReadingOrder.Context, isSheetRightToLeft);
+            var textAlignment = MapCellTextAlignment(horizontalAlignment, cell.IsNumericOrDate, isEffectivelyRightToLeft);
+            var flowDirection = MapCellFlowDirection(isEffectivelyRightToLeft);
             var weight = style?.Bold == true ? FontWeight.Bold : FontWeight.Normal;
             var fontStyle = style?.Italic == true ? FontStyle.Italic : FontStyle.Normal;
             var fontSize = Math.Max(1, (style?.FontSize ?? CellStyle.Default.FontSize) + WorksheetFontSizeDisplayOffset);
@@ -6163,6 +6173,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
                     FontStyle = fontStyle,
                     Foreground = foreground,
                     TextAlignment = textAlignment,
+                    FlowDirection = flowDirection,
                     TextDecorations = textDecorations,
                     TextTrimming = TextTrimming.CharacterEllipsis,
                     VerticalAlignment = AvaloniaVerticalAlignment.Center,

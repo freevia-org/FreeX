@@ -49,6 +49,11 @@ public sealed class InsertCellsCommand : IWorkbookCommand, IAffectedCellsCommand
     // Insert Cells path never touched sheet.Sparklines at all before this fix, the exact gap
     // R84-commands-clear-delete-5-1 fixed on the Delete side (see ShiftSparklinesInBandRight/Down).
     private List<SparklineBandSnapshot>? _sparklineSnapshot;
+    // chart-binding F1: mirrors InsertDeleteRowsCommand/InsertDeleteColumnsCommand's own
+    // _chartSnapshot field — this band-scoped Insert Cells path never touched chart.DataRange at
+    // all before this fix, so a chart plotting data inside the shifted band silently kept pointing
+    // at the old, now-wrong coordinate window. See ShiftChartDataRangesInBandRight/Down below.
+    private List<RowColumnShiftHelpers.ChartDataRangeWorkbookSnapshot>? _chartSnapshot;
 
     public string Label => "Insert Cells";
 
@@ -78,6 +83,10 @@ public sealed class InsertCellsCommand : IWorkbookCommand, IAffectedCellsCommand
             return protectedOutcome;
 
         _mutationSnapshot = RowColumnMutationSnapshot.Capture(ctx.Workbook, sheet);
+        // chart-binding F1: capture every chart's DataRange workbook-wide BEFORE any band shift
+        // below runs, mirroring InsertDeleteRowsCommand/InsertDeleteColumnsCommand's own
+        // CaptureChartDataRanges call so Revert can restore it via RestoreChartDataRanges.
+        _chartSnapshot = RowColumnShiftHelpers.CaptureChartDataRanges(ctx.Workbook);
 
         if (_direction == InsertCellsShiftDirection.Right)
         {
@@ -158,6 +167,12 @@ public sealed class InsertCellsCommand : IWorkbookCommand, IAffectedCellsCommand
             // whole-column insert already does via RowColumnShiftHelpers.ShiftNamedRangeRowsUp/Down/
             // ColumnsUp/Down — this band-scoped path never touched NamedRanges/ScopedNamedRanges at all.
             ShiftNamedRangesInBandRight(ctx.Workbook, _sheetId, _range.Start.Row, _range.End.Row, _range.Start.Col, width);
+
+            // chart-binding F1: a chart's plain-GridRange DataRange is address-bearing state just
+            // like a named range, but this band-scoped shift never touched it at all — see
+            // ShiftChartDataRangesInBandRight for the move/grow rationale (mirrors
+            // ShiftNamedRangesInBandRight immediately above, but for every chart's DataRange).
+            ShiftChartDataRangesInBandRight(ctx.Workbook, _sheetId, _range.Start.Row, _range.End.Row, _range.Start.Col, width);
 
             // R86-meta-3: see ShiftSparklinesInBandRight for the move/grow rationale (mirrors
             // ShiftNamedRangesInBandRight immediately above, but for sheet.Sparklines).
@@ -246,6 +261,10 @@ public sealed class InsertCellsCommand : IWorkbookCommand, IAffectedCellsCommand
 
             // R21-defined-name-management-1: see the Shift-Right branch above.
             ShiftNamedRangesInBandDown(ctx.Workbook, _sheetId, _range.Start.Col, _range.End.Col, _range.Start.Row, height);
+
+            // chart-binding F1: see the Shift-Right branch above — ShiftChartDataRangesInBandDown
+            // mirrors ShiftNamedRangesInBandDown immediately above, but for every chart's DataRange.
+            ShiftChartDataRangesInBandDown(ctx.Workbook, _sheetId, _range.Start.Col, _range.End.Col, _range.Start.Row, height);
 
             // R86-meta-3: see ShiftSparklinesInBandDown for the move/grow rationale (mirrors
             // ShiftNamedRangesInBandDown immediately above, but for sheet.Sparklines).
@@ -341,6 +360,9 @@ public sealed class InsertCellsCommand : IWorkbookCommand, IAffectedCellsCommand
         _mutationSnapshot.RestoreCommonState(ctx.Workbook, sheet, restoreRulesInPlace: true);
         RestoreStyleOnlyEntries(sheet, _styleOnlySnapshot);
         RestoreSparklines(sheet, _sparklineSnapshot);
+        // chart-binding F1: restore every chart's DataRange to its pre-Apply value, mirroring
+        // InsertDeleteRowsCommand/InsertDeleteColumnsCommand's own Revert-side RestoreChartDataRanges call.
+        RowColumnShiftHelpers.RestoreChartDataRanges(ctx.Workbook, _chartSnapshot);
 
         // R96-commands-undo-affected-cells-2: recompute AffectedCells to reflect where every
         // relocated formula cell ACTUALLY ended up after this Revert -- its original, pre-shift
@@ -1236,6 +1258,78 @@ public sealed class InsertCellsCommand : IWorkbookCommand, IAffectedCellsCommand
         }
     }
 
+    // ── Chart DataRange band-scoped shift/collapse helpers (chart-binding F1) ────────────────
+    // Mirrors ShiftNamedRangesInBandRight/Down and DeleteNamedRangesInBandLeft/Up immediately
+    // above/below, but for ChartModel.DataRange -- the plain GridRange most charts use to locate
+    // their plotted data (as opposed to VerbatimSeriesFormulas/SeriesColumnMappings, which
+    // RowColumnMutationSnapshot.RewriteReferences already rewrites via RewriteChartVerbatimFormulas
+    // for THOSE charts). Before this fix, this band-scoped Insert/Delete Cells path never touched
+    // DataRange at all -- unlike whole-row/whole-column insert/delete, which call
+    // RowColumnShiftHelpers.ShiftChartRowsUp/Down/ColumnsUp/Down for the identical scenario -- so a
+    // chart plotting data inside the shifted band silently kept pointing at the old, now-wrong
+    // coordinate window. Charts are looked up workbook-wide (not just the edited sheet's own
+    // Charts) because a chart hosted on one sheet can plot data on another sheet, mirroring
+    // RowColumnShiftHelpers.CaptureChartDataRanges's own workbook-wide walk. Unlike
+    // ShiftChartRowsUp/Down (used by the whole-row/column commands, which shift EVERY chart whose
+    // DataRange is on the edited sheet unconditionally, since an entire row/column always moves in
+    // full), this band-scoped variant additionally requires the DataRange to lie fully inside the
+    // shifted band's row/column span -- exactly the same containment check ShiftNamedRangesInBandRight/
+    // Down applies -- because a band-scoped shift only moves a bounded rectangle, not a whole axis.
+
+    /// <summary>
+    /// Insert Shift Right: a chart DataRange fully inside [bandStartRow..bandEndRow] that touches or
+    /// straddles the insert point is adjusted, mirroring <see cref="ShiftNamedRangesInBandRight"/>.
+    /// </summary>
+    internal static void ShiftChartDataRangesInBandRight(
+        Workbook workbook, SheetId sheetId,
+        uint bandStartRow, uint bandEndRow,
+        uint insertBeforeCol, uint count)
+    {
+        foreach (var hostSheet in workbook.Sheets)
+        {
+            foreach (var chart in hostSheet.Charts)
+            {
+                var range = chart.DataRange;
+                if (range.Start.Sheet != sheetId) continue;
+                if (range.Start.Row < bandStartRow || range.End.Row > bandEndRow) continue;
+                if (range.End.Col < insertBeforeCol) continue;
+                var newStartCol = range.Start.Col < insertBeforeCol
+                    ? range.Start.Col
+                    : Math.Min(range.Start.Col + count, CellAddress.MaxCol);
+                chart.DataRange = new GridRange(
+                    new CellAddress(range.Start.Sheet, range.Start.Row, newStartCol),
+                    new CellAddress(range.End.Sheet, range.End.Row, Math.Min(range.End.Col + count, CellAddress.MaxCol)));
+            }
+        }
+    }
+
+    /// <summary>
+    /// Insert Shift Down: a chart DataRange fully inside [bandStartCol..bandEndCol] that touches or
+    /// straddles the insert point is adjusted, mirroring <see cref="ShiftNamedRangesInBandDown"/>.
+    /// </summary>
+    internal static void ShiftChartDataRangesInBandDown(
+        Workbook workbook, SheetId sheetId,
+        uint bandStartCol, uint bandEndCol,
+        uint insertBeforeRow, uint count)
+    {
+        foreach (var hostSheet in workbook.Sheets)
+        {
+            foreach (var chart in hostSheet.Charts)
+            {
+                var range = chart.DataRange;
+                if (range.Start.Sheet != sheetId) continue;
+                if (range.Start.Col < bandStartCol || range.End.Col > bandEndCol) continue;
+                if (range.End.Row < insertBeforeRow) continue;
+                var newStartRow = range.Start.Row < insertBeforeRow
+                    ? range.Start.Row
+                    : Math.Min(range.Start.Row + count, CellAddress.MaxRow);
+                chart.DataRange = new GridRange(
+                    new CellAddress(range.Start.Sheet, newStartRow, range.Start.Col),
+                    new CellAddress(range.End.Sheet, Math.Min(range.End.Row + count, CellAddress.MaxRow), range.End.Col));
+            }
+        }
+    }
+
     /// <summary>
     /// Delete Shift Left: named ranges fully inside [bandStartRow..bandEndRow] are removed when
     /// entirely within the deleted columns — R21-defined-name-management-3: Excel would turn such a
@@ -1361,6 +1455,95 @@ public sealed class InsertCellsCommand : IWorkbookCommand, IAffectedCellsCommand
             workbook.DefineNamedRange(name, new GridRange(
                 new CellAddress(range.Start.Sheet, newStartRow, range.Start.Col),
                 new CellAddress(range.End.Sheet, newEndRow, range.End.Col)), metadata2, scopeSheet);
+        }
+    }
+
+    /// <summary>
+    /// Delete Shift Left: a chart DataRange fully inside [bandStartRow..bandEndRow] and fully within
+    /// the deleted columns collapses to a single column at the delete boundary -- unlike a named
+    /// range (dropped by <see cref="DeleteNamedRangesInBandLeft"/> above; Excel would turn such a
+    /// name into #REF!), <see cref="ChartModel.DataRange"/> is a non-nullable GridRange with no
+    /// sentinel to express "source is gone" (the exact rationale documented on
+    /// RowColumnShiftHelpers.CollapseDeletedChartRowRange for the whole-row/whole-column delete
+    /// sibling of this fix). A DataRange straddling the delete boundary shrinks to its surviving
+    /// portion, and one fully right of the deleted columns shifts left by <paramref name="count"/> --
+    /// otherwise mirrors <see cref="DeleteNamedRangesInBandLeft"/>.
+    /// </summary>
+    internal static void DeleteChartDataRangesInBandLeft(
+        Workbook workbook, SheetId sheetId,
+        uint bandStartRow, uint bandEndRow,
+        uint deletedStartCol, uint deletedEndCol, uint count)
+    {
+        foreach (var hostSheet in workbook.Sheets)
+        {
+            foreach (var chart in hostSheet.Charts)
+            {
+                var range = chart.DataRange;
+                if (range.Start.Sheet != sheetId) continue;
+                if (range.Start.Row < bandStartRow || range.End.Row > bandEndRow) continue;
+                if (range.End.Col < deletedStartCol) continue;
+                if (range.Start.Col >= deletedStartCol && range.End.Col <= deletedEndCol)
+                {
+                    var col = Math.Min(deletedStartCol, CellAddress.MaxCol);
+                    chart.DataRange = new GridRange(
+                        new CellAddress(range.Start.Sheet, range.Start.Row, col),
+                        new CellAddress(range.End.Sheet, range.End.Row, col));
+                    continue;
+                }
+                if (range.Start.Col > deletedEndCol)
+                {
+                    chart.DataRange = new GridRange(
+                        new CellAddress(range.Start.Sheet, range.Start.Row, range.Start.Col - count),
+                        new CellAddress(range.End.Sheet, range.End.Row, range.End.Col - count));
+                    continue;
+                }
+                // Straddles the delete boundary: shrink to the surviving portion.
+                var newStartCol = range.Start.Col < deletedStartCol ? range.Start.Col : deletedStartCol;
+                var newEndCol = range.End.Col > deletedEndCol ? range.End.Col - count : deletedStartCol - 1;
+                chart.DataRange = new GridRange(
+                    new CellAddress(range.Start.Sheet, range.Start.Row, newStartCol),
+                    new CellAddress(range.End.Sheet, range.End.Row, newEndCol));
+            }
+        }
+    }
+
+    /// <summary>Delete Shift Up: chart analogue of <see cref="DeleteChartDataRangesInBandLeft"/> for
+    /// rows, mirroring <see cref="DeleteNamedRangesInBandUp"/>.</summary>
+    internal static void DeleteChartDataRangesInBandUp(
+        Workbook workbook, SheetId sheetId,
+        uint bandStartCol, uint bandEndCol,
+        uint deletedStartRow, uint deletedEndRow, uint count)
+    {
+        foreach (var hostSheet in workbook.Sheets)
+        {
+            foreach (var chart in hostSheet.Charts)
+            {
+                var range = chart.DataRange;
+                if (range.Start.Sheet != sheetId) continue;
+                if (range.Start.Col < bandStartCol || range.End.Col > bandEndCol) continue;
+                if (range.End.Row < deletedStartRow) continue;
+                if (range.Start.Row >= deletedStartRow && range.End.Row <= deletedEndRow)
+                {
+                    var row = Math.Min(deletedStartRow, CellAddress.MaxRow);
+                    chart.DataRange = new GridRange(
+                        new CellAddress(range.Start.Sheet, row, range.Start.Col),
+                        new CellAddress(range.End.Sheet, row, range.End.Col));
+                    continue;
+                }
+                if (range.Start.Row > deletedEndRow)
+                {
+                    chart.DataRange = new GridRange(
+                        new CellAddress(range.Start.Sheet, range.Start.Row - count, range.Start.Col),
+                        new CellAddress(range.End.Sheet, range.End.Row - count, range.End.Col));
+                    continue;
+                }
+                // Straddles the delete boundary: shrink to the surviving portion.
+                var newStartRow = range.Start.Row < deletedStartRow ? range.Start.Row : deletedStartRow;
+                var newEndRow = range.End.Row > deletedEndRow ? range.End.Row - count : deletedStartRow - 1;
+                chart.DataRange = new GridRange(
+                    new CellAddress(range.Start.Sheet, newStartRow, range.Start.Col),
+                    new CellAddress(range.End.Sheet, newEndRow, range.End.Col));
+            }
         }
     }
 
@@ -1674,6 +1857,8 @@ public sealed class DeleteCellsCommand : IWorkbookCommand, IAffectedCellsCommand
     private List<(uint Row, uint Col, StyleId StyleId)>? _styleOnlySnapshot;
     // R84-commands-clear-delete-5-1: see InsertCellsCommand.CaptureSparklines/RestoreSparklines.
     private List<InsertCellsCommand.SparklineBandSnapshot>? _sparklineSnapshot;
+    // chart-binding F1: see InsertCellsCommand's field of the same name/rationale.
+    private List<RowColumnShiftHelpers.ChartDataRangeWorkbookSnapshot>? _chartSnapshot;
 
     public string Label => "Delete Cells";
 
@@ -1703,6 +1888,8 @@ public sealed class DeleteCellsCommand : IWorkbookCommand, IAffectedCellsCommand
             return protectedOutcome;
 
         _mutationSnapshot = RowColumnMutationSnapshot.Capture(ctx.Workbook, sheet);
+        // chart-binding F1: see InsertCellsCommand.Apply's capture of the same name/rationale.
+        _chartSnapshot = RowColumnShiftHelpers.CaptureChartDataRanges(ctx.Workbook);
 
         if (_direction == DeleteCellsShiftDirection.Left)
         {
@@ -1766,6 +1953,12 @@ public sealed class DeleteCellsCommand : IWorkbookCommand, IAffectedCellsCommand
             // shifted left (surviving portion) or removed (fully inside the deleted columns — see
             // InsertCellsCommand.DeleteNamedRangesInBandLeft for the #REF!-vs-drop rationale).
             InsertCellsCommand.DeleteNamedRangesInBandLeft(ctx.Workbook, _sheetId, _range.Start.Row, _range.End.Row, _range.Start.Col, _range.End.Col, width);
+
+            // chart-binding F1: a chart's plain-GridRange DataRange is address-bearing state just
+            // like a named range, but this band-scoped shift never touched it at all — see
+            // InsertCellsCommand.DeleteChartDataRangesInBandLeft for the collapse-vs-shrink rationale
+            // (mirrors DeleteNamedRangesInBandLeft immediately above, but for every chart's DataRange).
+            InsertCellsCommand.DeleteChartDataRangesInBandLeft(ctx.Workbook, _sheetId, _range.Start.Row, _range.End.Row, _range.Start.Col, _range.End.Col, width);
 
             // R84-commands-clear-delete-5-1: a sparkline's Location/DataRange (and optional
             // DateAxisRange) are address-bearing state just like named ranges/CF/DV rules, but this
@@ -1849,6 +2042,9 @@ public sealed class DeleteCellsCommand : IWorkbookCommand, IAffectedCellsCommand
             // R21-defined-name-management-1/-3: see the Delete-Shift-Left branch above.
             InsertCellsCommand.DeleteNamedRangesInBandUp(ctx.Workbook, _sheetId, _range.Start.Col, _range.End.Col, _range.Start.Row, _range.End.Row, height);
 
+            // chart-binding F1: see the Delete-Shift-Left branch above.
+            InsertCellsCommand.DeleteChartDataRangesInBandUp(ctx.Workbook, _sheetId, _range.Start.Col, _range.End.Col, _range.Start.Row, _range.End.Row, height);
+
             // R84-commands-clear-delete-5-1: see the Delete-Shift-Left branch above.
             _sparklineSnapshot = InsertCellsCommand.CaptureSparklines(sheet);
             InsertCellsCommand.ShiftSparklinesInBandUp(sheet, _range.Start.Col, _range.End.Col, _range.Start.Row, _range.End.Row, height);
@@ -1911,6 +2107,8 @@ public sealed class DeleteCellsCommand : IWorkbookCommand, IAffectedCellsCommand
         _mutationSnapshot.RestoreCommonState(ctx.Workbook, sheet, restoreRulesInPlace: false);
         InsertCellsCommand.RestoreStyleOnlyEntries(sheet, _styleOnlySnapshot);
         InsertCellsCommand.RestoreSparklines(sheet, _sparklineSnapshot);
+        // chart-binding F1: see InsertCellsCommand.Revert's RestoreChartDataRanges call above.
+        RowColumnShiftHelpers.RestoreChartDataRanges(ctx.Workbook, _chartSnapshot);
 
         // R96-commands-undo-affected-cells-2: recompute AffectedCells to reflect where every
         // formula cell ACTUALLY ended up after this Revert -- covers both the shifted-back

@@ -347,6 +347,21 @@ public static partial class NumberFormatter
             }
 
             section = parsedSections[selectedIndex];
+
+            // Mirror SelectPositionalSection's negative-section convention: when the SELECTED
+            // section's own text supplies the sign itself -- a leading literal '-' (e.g.
+            // "[<0]-0.00") or accounting parens (e.g. "[<0](0.00)") -- feed it the magnitude,
+            // not the signed value. Otherwise ApplyNumericFormat's ultimate .ToString(format,...)
+            // call (which sees no ';'-separated sections, since we already split on ';') auto-
+            // prepends its OWN '-' for a negative input on top of the author's literal one,
+            // doubling/misplacing the sign ("--5.25", "-(5.25)" instead of "-5.25"/"(5.25)").
+            // A section with NO literal sign of its own (e.g. "[<0]0.00") must keep the signed
+            // value so that .NET's auto-prepended '-' remains the ONLY sign shown -- flipping to
+            // magnitude there would silently drop the sign entirely, which is exactly what
+            // NumberFormatterTests' "[Red][<0]0.00;[Blue]0.00" on -2.5 => "-2.50" (and R94's
+            // "[<0]??.??" / "[<0]???" cases) pin as correct.
+            if (value < 0 && SectionHasLeadingLiteralSign(section.Format))
+                displayValue = Math.Abs(value);
         }
         else
         {
@@ -358,6 +373,29 @@ public static partial class NumberFormatter
             : ApplyNumericFormat(displayValue, section.Format, uses1904DateSystem: uses1904DateSystem, targetWidthCharacters: targetWidthCharacters);
         text = ApplyAccountingTargetWidth(text, section.Format, targetWidthCharacters);
         return new FormatResult(text, section.ColorHex);
+    }
+
+    // True when a [condition]-selected section's own (directive-stripped) text starts with a
+    // literal sign indicator -- '-' or '(' -- once any leading retained bracket directives
+    // (e.g. "[$-409]", "[DBNum1]", still present in ParsedSection.Format) are skipped. This is
+    // the same "author writes the sign" idiom SelectPositionalSection's second/negative section
+    // already relies on positionally; here it must be detected by content since [condition]
+    // sections aren't tied to sign position.
+    private static bool SectionHasLeadingLiteralSign(string format)
+    {
+        var index = 0;
+        while (index < format.Length && format[index] == '[')
+        {
+            var close = format.IndexOf(']', index + 1);
+            if (close < 0)
+                break;
+            index = close + 1;
+        }
+
+        while (index < format.Length && char.IsWhiteSpace(format[index]))
+            index++;
+
+        return index < format.Length && (format[index] == '-' || format[index] == '(');
     }
 
     private static int FindParsedSectionIndex(

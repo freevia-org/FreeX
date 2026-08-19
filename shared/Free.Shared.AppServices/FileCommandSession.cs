@@ -115,6 +115,45 @@ public sealed class FileCommandSession
 
     public void MarkDirty() => _state.MarkDirty();
 
+    /// <summary>
+    /// Records the undo-stack depth/version at the moment of a successful save, so a later
+    /// <see cref="TryMarkCleanIfAtSavePoint(int, long)"/> call can detect "the user undid back to
+    /// exactly what is on disk" and clear <see cref="IsDirty"/> without an explicit save. Mirrors
+    /// FreeX's <c>WorkbookSession.RecordUndoSavePoint</c> / <c>WorkbookDocumentState.MarkSavedAtUndoDepth</c>
+    /// wiring so hosts built on this shared session (FreeW, FreeP) can opt into the same behavior.
+    /// </summary>
+    /// <param name="undoDepthAtSave">The undo stack's depth at the time the save completed.</param>
+    /// <param name="undoStackVersionAtSave">The undo stack's monotonic version token at the time the save completed.</param>
+    public void MarkSavedAtUndoDepth(int undoDepthAtSave, long undoStackVersionAtSave) =>
+        _state.MarkSavedAtUndoDepth(undoDepthAtSave, undoStackVersionAtSave);
+
+    /// <summary>
+    /// If the undo stack has returned to the depth/version recorded by
+    /// <see cref="MarkSavedAtUndoDepth"/>, clears <see cref="IsDirty"/> and returns <c>true</c>.
+    /// Intended to be called after every Undo/Redo. Mirrors FreeX's
+    /// <c>WorkbookSession.TryMarkCleanIfAtSavePoint</c>.
+    /// </summary>
+    /// <param name="currentUndoDepth">The undo stack's depth right now.</param>
+    /// <param name="currentUndoStackVersion">The undo stack's monotonic version token right now.</param>
+    public bool TryMarkCleanIfAtSavePoint(int currentUndoDepth, long currentUndoStackVersion) =>
+        _state.TryMarkCleanIfAtSavePoint(currentUndoDepth, currentUndoStackVersion);
+
+    /// <summary>
+    /// <see cref="TryMarkCleanIfAtSavePoint(int, long)"/> plus a notification callback, invoked only
+    /// when the transition to clean actually happens -- mirrors the notify-on-change shape of
+    /// <see cref="MarkDirtyIfClean"/> so a host can refresh its dirty-marker UI in one call.
+    /// </summary>
+    public bool TryMarkCleanIfAtSavePoint(int currentUndoDepth, long currentUndoStackVersion, Action onChanged)
+    {
+        ArgumentNullException.ThrowIfNull(onChanged);
+
+        if (!_state.TryMarkCleanIfAtSavePoint(currentUndoDepth, currentUndoStackVersion))
+            return false;
+
+        onChanged();
+        return true;
+    }
+
     public bool MarkDirtyIfClean(Action onChanged)
     {
         ArgumentNullException.ThrowIfNull(onChanged);
