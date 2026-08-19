@@ -95,7 +95,11 @@ public sealed class SharedRibbonControlResourcesTests
             GetSetterValue(buttonStyle, Control.FontSizeProperty).Should().Be(12d);
             GetSetterValue(buttonStyle, UIElement.FocusableProperty).Should().Be(true);
             GetSetterValue(buttonStyle, KeyboardNavigation.IsTabStopProperty).Should().Be(true);
-            GetSetterValue(buttonStyle, FrameworkElement.CursorProperty).Should().Be(Cursors.Hand);
+            // Compare by name: Cursor has no value equality, and the XAML CursorConverter does not
+            // hand back the Cursors.Hand singleton, so Be(Cursors.Hand) compares two references that
+            // are both the Hand cursor and fails with "expected Hand, but found Hand".
+            GetSetterValue(buttonStyle, FrameworkElement.CursorProperty)
+                .Should().BeOfType<Cursor>().Which.ToString().Should().Be("Hand");
 
             AssertDynamicResource(
                 GetTriggerSetter(buttonStyle, UIElement.IsMouseOverProperty, true, Control.BackgroundProperty),
@@ -113,7 +117,7 @@ public sealed class SharedRibbonControlResourcesTests
                 GetTriggerSetter(buttonStyle, UIElement.IsEnabledProperty, false, Control.ForegroundProperty),
                 "ThemeNeutralMutedTextBrush");
             GetTriggerSetter(buttonStyle, UIElement.IsEnabledProperty, false, FrameworkElement.CursorProperty)
-                .Value.Should().Be(Cursors.Arrow);
+                .Value.Should().BeOfType<Cursor>().Which.ToString().Should().Be("Arrow");
 
             var buttonTemplate = GetSetterValue(buttonStyle, Control.TemplateProperty)
                 .Should().BeOfType<ControlTemplate>().Which;

@@ -141,6 +141,18 @@ public static class RibbonWpfRenderer
 
         menu.Opened += (_, _) => RefreshMenuCommandStates(menu, registry, stateStore);
 
+        // Opened is raised once the popup is actually shown, which needs a dispatcher turn. A
+        // caller that sets IsOpen and immediately reads the projections -- as the collapsed group
+        // button does -- would see the state the menu was built with rather than the current one.
+        // Refresh on the IsOpen transition too, which happens synchronously with the assignment.
+        System.ComponentModel.DependencyPropertyDescriptor
+            .FromProperty(ContextMenu.IsOpenProperty, typeof(ContextMenu))
+            .AddValueChanged(menu, (_, _) =>
+            {
+                if (menu.IsOpen)
+                    RefreshMenuCommandStates(menu, registry, stateStore);
+            });
+
         return menu;
     }
 
