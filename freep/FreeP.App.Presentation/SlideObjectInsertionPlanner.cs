@@ -1,3 +1,4 @@
+using System.Buffers.Binary;
 using Free.Shared.Drawing;
 using Free.Shared.IO;
 using Free.Shared.Opc;
@@ -19,7 +20,9 @@ public enum SlideObjectInsertionKind
 
 public sealed record SlideObjectPicturePayload(
     byte[] Bytes,
-    string ContentType);
+    string ContentType,
+    long? WidthEmu = null,
+    long? HeightEmu = null);
 
 public sealed record SlideObjectMediaPayload(
     byte[] Bytes,
@@ -281,7 +284,11 @@ public static class SlideObjectInsertionPlanner
             SlideObjectInsertionKind.Connector => ApplyConnector(editor, plan.AutoShapeKind),
             SlideObjectInsertionKind.Picture => picturePayload is null
                 ? null
-                : editor.InsertPicture(picturePayload.Bytes, picturePayload.ContentType),
+                : editor.InsertPicture(
+                    picturePayload.Bytes,
+                    picturePayload.ContentType,
+                    picturePayload.WidthEmu,
+                    picturePayload.HeightEmu),
             SlideObjectInsertionKind.Media => mediaPayload is null
                 ? null
                 : editor.InsertMedia(
@@ -304,9 +311,194 @@ public static class SlideObjectInsertionPlanner
         string? fileNameOrExtension)
     {
         ArgumentNullException.ThrowIfNull(imageBytes);
+
+        long? widthEmu = null;
+        long? heightEmu = null;
+        if (TryDecodeNativePixelSize(imageBytes, out var pixelWidth, out var pixelHeight) &&
+            TryComputeAspectFitEmuSize(pixelWidth, pixelHeight, out var fitCx, out var fitCy))
+        {
+            widthEmu = fitCx;
+            heightEmu = fitCy;
+        }
+
         return new SlideObjectPicturePayload(
             imageBytes,
-            InferPictureContentType(fileNameOrExtension));
+            InferPictureContentType(fileNameOrExtension),
+            widthEmu,
+            heightEmu);
+    }
+
+    /// <summary>
+    /// Computes an EMU width/height that preserves the picture's native pixel aspect ratio while
+    /// fitting within the same footprint <see cref="EditingSession"/>'s default shape box uses
+    /// (~3in x ~2in) -- so an inserted picture letterboxes into that box instead of being
+    /// stretched/squashed to a fixed 1.5:1 rectangle regardless of its real proportions.
+    /// </summary>
+    private static bool TryComputeAspectFitEmuSize(int pixelWidth, int pixelHeight, out long widthEmu, out long heightEmu)
+    {
+        widthEmu = 0;
+        heightEmu = 0;
+        if (pixelWidth <= 0 || pixelHeight <= 0)
+            return false;
+
+        const long boxCx = DrawingMlCoordinateUnits.EmuPerInch * 3;
+        const long boxCy = DrawingMlCoordinateUnits.EmuPerInch * 2;
+        var aspect = (double)pixelWidth / pixelHeight;
+        var boxAspect = (double)boxCx / boxCy;
+
+        if (aspect >= boxAspect)
+        {
+            widthEmu = boxCx;
+            heightEmu = Math.Max(1, (long)Math.Round(boxCx / aspect));
+        }
+        else
+        {
+            heightEmu = boxCy;
+            widthEmu = Math.Max(1, (long)Math.Round(boxCy * aspect));
+        }
+
+        return true;
+    }
+
+    /// <summary>
+    /// Best-effort native pixel size sniff from raw image bytes (PNG/GIF/BMP/JPEG headers).
+    /// Returns false (leaving the caller to fall back to the fixed default box) for formats this
+    /// does not recognize, such as SVG, or for malformed/truncated data.
+    /// </summary>
+    internal static bool TryDecodeNativePixelSize(byte[]? imageBytes, out int pixelWidth, out int pixelHeight)
+    {
+        pixelWidth = 0;
+        pixelHeight = 0;
+        if (imageBytes is not { Length: > 8 })
+            return false;
+
+        return TryDecodePngSize(imageBytes, out pixelWidth, out pixelHeight) ||
+               TryDecodeGifSize(imageBytes, out pixelWidth, out pixelHeight) ||
+               TryDecodeBmpSize(imageBytes, out pixelWidth, out pixelHeight) ||
+               TryDecodeJpegSize(imageBytes, out pixelWidth, out pixelHeight);
+    }
+
+    private static readonly byte[] PngSignature = [0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A];
+
+    private static bool TryDecodePngSize(byte[] bytes, out int width, out int height)
+    {
+        width = 0;
+        height = 0;
+        if (bytes.Length < 24 || !bytes.AsSpan(0, 8).SequenceEqual(PngSignature))
+            return false;
+
+        // IHDR is always the first chunk: length(4) "IHDR"(4) width(4, BE) height(4, BE) ...
+        if (bytes[12] != (byte)'I' || bytes[13] != (byte)'H' || bytes[14] != (byte)'D' || bytes[15] != (byte)'R')
+            return false;
+
+        width = (int)BinaryPrimitives.ReadUInt32BigEndian(bytes.AsSpan(16, 4));
+        height = (int)BinaryPrimitives.ReadUInt32BigEndian(bytes.AsSpan(20, 4));
+        return width > 0 && height > 0;
+    }
+
+    private static bool TryDecodeGifSize(byte[] bytes, out int width, out int height)
+    {
+        width = 0;
+        height = 0;
+        if (bytes.Length < 10 ||
+            bytes[0] != (byte)'G' || bytes[1] != (byte)'I' || bytes[2] != (byte)'F' ||
+            bytes[3] != (byte)'8' || (bytes[4] != (byte)'7' && bytes[4] != (byte)'9') || bytes[5] != (byte)'a')
+        {
+            return false;
+        }
+
+        width = BinaryPrimitives.ReadUInt16LittleEndian(bytes.AsSpan(6, 2));
+        height = BinaryPrimitives.ReadUInt16LittleEndian(bytes.AsSpan(8, 2));
+        return width > 0 && height > 0;
+    }
+
+    private static bool TryDecodeBmpSize(byte[] bytes, out int width, out int height)
+    {
+        width = 0;
+        height = 0;
+        if (bytes.Length < 26 || bytes[0] != (byte)'B' || bytes[1] != (byte)'M')
+            return false;
+
+        var headerSize = BinaryPrimitives.ReadUInt32LittleEndian(bytes.AsSpan(14, 4));
+        if (headerSize == 12)
+        {
+            // BITMAPCOREHEADER: 16-bit width/height.
+            width = BinaryPrimitives.ReadUInt16LittleEndian(bytes.AsSpan(18, 2));
+            height = BinaryPrimitives.ReadUInt16LittleEndian(bytes.AsSpan(20, 2));
+        }
+        else if (headerSize >= 40)
+        {
+            // BITMAPINFOHEADER (and newer variants): 32-bit signed width/height; a negative
+            // height denotes a top-down bitmap and carries no aspect-ratio meaning here.
+            width = BinaryPrimitives.ReadInt32LittleEndian(bytes.AsSpan(18, 4));
+            height = Math.Abs(BinaryPrimitives.ReadInt32LittleEndian(bytes.AsSpan(22, 4)));
+        }
+        else
+        {
+            return false;
+        }
+
+        return width > 0 && height > 0;
+    }
+
+    private static bool TryDecodeJpegSize(byte[] bytes, out int width, out int height)
+    {
+        width = 0;
+        height = 0;
+        if (bytes.Length < 4 || bytes[0] != 0xFF || bytes[1] != 0xD8)
+            return false;
+
+        var offset = 2;
+        while (offset + 3 < bytes.Length)
+        {
+            if (bytes[offset] != 0xFF)
+            {
+                offset++;
+                continue;
+            }
+
+            var marker = bytes[offset + 1];
+            if (marker == 0xFF)
+            {
+                offset++;
+                continue;
+            }
+
+            // Markers with no payload: TEM and the restart markers RST0-RST7.
+            if (marker == 0x01 || (marker >= 0xD0 && marker <= 0xD7))
+            {
+                offset += 2;
+                continue;
+            }
+
+            if (marker == 0xD8)
+            {
+                offset += 2;
+                continue;
+            }
+
+            if (marker == 0xD9 || offset + 3 >= bytes.Length)
+                break;
+
+            var segmentLength = BinaryPrimitives.ReadUInt16BigEndian(bytes.AsSpan(offset + 2, 2));
+            var isStartOfFrame = marker is >= 0xC0 and <= 0xCF && marker != 0xC4 && marker != 0xC8 && marker != 0xCC;
+            if (isStartOfFrame)
+            {
+                if (offset + 9 > bytes.Length)
+                    return false;
+
+                height = BinaryPrimitives.ReadUInt16BigEndian(bytes.AsSpan(offset + 5, 2));
+                width = BinaryPrimitives.ReadUInt16BigEndian(bytes.AsSpan(offset + 7, 2));
+                return width > 0 && height > 0;
+            }
+
+            if (segmentLength < 2)
+                return false;
+
+            offset += 2 + segmentLength;
+        }
+
+        return false;
     }
 
     public static SlideObjectMediaPayload CreateMediaPayload(

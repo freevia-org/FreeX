@@ -2165,6 +2165,12 @@ public static class SlideCompositor
     /// level by walking PowerPoint's inheritance chain: the shape's OWN txBody-level
     /// a:lstStyle → layout placeholder's lstStyle → master txStyles (by category) → null.
     /// The caller applies the hard-coded fallback when this returns null.
+    ///
+    /// Per ECMA-376, each individual run/paragraph default property (sz, b, i, solidFill,
+    /// latin, algn, ...) resolves independently up this chain — NOT the whole level object.
+    /// A layer that only overrides e.g. font size still lets color/font/etc. continue up to
+    /// the next layer, so the result here is a per-property merge of every layer that has an
+    /// entry at (or below, via each layer's own within-layer walk-up) this paragraph level.
     /// </summary>
     private static TextStyleLevel? ResolveTextStyleInheritance(
         int paraLevel,
@@ -2173,46 +2179,76 @@ public static class SlideCompositor
         TextBody? layoutBody,
         MasterTextStyles? masterTextStyles)
     {
-        // 1. The shape's own a:lstStyle (sits between direct paragraph properties and the
-        //    layout in PowerPoint's inheritance chain — must win over the layout/master).
-        if (shapeLstStyle is not null)
-        {
-            var lvl = shapeLstStyle[paraLevel];
-            if (lvl is not null) return lvl;
-            // Walk upward toward level 0 only if the shape's lstStyle has any entry defined.
-            for (int l = paraLevel - 1; l >= 0; l--)
-            {
-                lvl = shapeLstStyle[l];
-                if (lvl is not null) return lvl;
-            }
-        }
+        // Each layer does its own within-layer walk-up (level -> 0), same as before.
+        var shapeStyle = shapeLstStyle?.Resolve(paraLevel);
+        var layoutStyle = layoutBody?.LstStyle?.Resolve(paraLevel);
 
-        // 2. Layout placeholder's a:lstStyle for this paragraph level.
-        if (layoutBody?.LstStyle is { } layoutLst)
-        {
-            var lvl = layoutLst[paraLevel];
-            if (lvl is not null) return lvl;
-            // Walk upward toward level 0 only if the layout has any entry defined.
-            for (int l = paraLevel - 1; l >= 0; l--)
-            {
-                lvl = layoutLst[l];
-                if (lvl is not null) return lvl;
-            }
-        }
-
-        // 3. Master p:txStyles category at this paragraph level.
+        TextStyleLevel? masterStyle = null;
         if (masterTextStyles is not null)
         {
-            var masterStyle = category switch
+            var masterLevels = category switch
             {
                 TextStyleCategory.Title => masterTextStyles.TitleStyle,
                 TextStyleCategory.Body  => masterTextStyles.BodyStyle,
                 _                       => masterTextStyles.OtherStyle
             };
-            return masterStyle.Resolve(paraLevel);
+            masterStyle = masterLevels.Resolve(paraLevel);
         }
 
-        return null;
+        if (shapeStyle is null && layoutStyle is null && masterStyle is null)
+            return null;
+
+        return MergeTextStyleLevels(shapeStyle, layoutStyle, masterStyle);
+    }
+
+    /// <summary>
+    /// Merges up to three <see cref="TextStyleLevel"/> layers (most specific first: shape
+    /// lstStyle, layout lstStyle, master txStyles) property-by-property. Each nullable field
+    /// takes the most specific layer's value, falling through to the next layer independently
+    /// of every other field — this is what makes cross-layer inheritance work when one layer
+    /// only overrides a subset of properties (see ResolveTextStyleInheritance).
+    /// The bullet-related fields are resolved as small correlated groups (kind+char+autoNum,
+    /// color+colorFollowsText, size+sizeFollowsText, font+fontFollowsText) since those pairs
+    /// are only meaningful together and the "FollowsText" flags have no null/unset state.
+    /// </summary>
+    private static TextStyleLevel MergeTextStyleLevels(
+        TextStyleLevel? shape, TextStyleLevel? layout, TextStyleLevel? master)
+    {
+        var kindLayer  = shape?.BulletKind is not null ? shape
+            : layout?.BulletKind is not null ? layout
+            : master?.BulletKind is not null ? master : null;
+        var colorLayer = shape is { } s1 && (s1.BulletColor is not null || s1.BulletColorFollowsText) ? shape
+            : layout is { } l1 && (l1.BulletColor is not null || l1.BulletColorFollowsText) ? layout
+            : master is { } m1 && (m1.BulletColor is not null || m1.BulletColorFollowsText) ? master : null;
+        var sizeLayer  = shape is { } s2 && (s2.BulletSizePct is not null || s2.BulletSizePt is not null || s2.BulletSizeFollowsText) ? shape
+            : layout is { } l2 && (l2.BulletSizePct is not null || l2.BulletSizePt is not null || l2.BulletSizeFollowsText) ? layout
+            : master is { } m2 && (m2.BulletSizePct is not null || m2.BulletSizePt is not null || m2.BulletSizeFollowsText) ? master : null;
+        var fontLayer  = shape is { } s3 && (s3.BulletFontFamily is not null || s3.BulletFontFollowsText) ? shape
+            : layout is { } l3 && (l3.BulletFontFamily is not null || l3.BulletFontFollowsText) ? layout
+            : master is { } m3 && (m3.BulletFontFamily is not null || m3.BulletFontFollowsText) ? master : null;
+
+        return new TextStyleLevel
+        {
+            Align         = shape?.Align         ?? layout?.Align         ?? master?.Align,
+            RightToLeft   = shape?.RightToLeft    ?? layout?.RightToLeft    ?? master?.RightToLeft,
+            MarginLeftEmu = shape?.MarginLeftEmu  ?? layout?.MarginLeftEmu  ?? master?.MarginLeftEmu,
+            IndentEmu     = shape?.IndentEmu      ?? layout?.IndentEmu      ?? master?.IndentEmu,
+            FontSizePt    = shape?.FontSizePt     ?? layout?.FontSizePt     ?? master?.FontSizePt,
+            Bold          = shape?.Bold           ?? layout?.Bold           ?? master?.Bold,
+            Italic        = shape?.Italic         ?? layout?.Italic         ?? master?.Italic,
+            Color         = shape?.Color          ?? layout?.Color          ?? master?.Color,
+            LatinFont     = shape?.LatinFont      ?? layout?.LatinFont      ?? master?.LatinFont,
+            BulletKind               = kindLayer?.BulletKind,
+            BulletChar               = kindLayer?.BulletChar,
+            AutoNumType              = kindLayer?.AutoNumType ?? AutoNumType.ArabicPeriod,
+            BulletColor              = colorLayer?.BulletColor,
+            BulletColorFollowsText   = colorLayer?.BulletColorFollowsText ?? false,
+            BulletSizePct            = sizeLayer?.BulletSizePct,
+            BulletSizePt             = sizeLayer?.BulletSizePt,
+            BulletSizeFollowsText    = sizeLayer?.BulletSizeFollowsText ?? false,
+            BulletFontFamily         = fontLayer?.BulletFontFamily,
+            BulletFontFollowsText    = fontLayer?.BulletFontFollowsText ?? false,
+        };
     }
 
     /// <summary>

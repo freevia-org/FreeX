@@ -235,7 +235,15 @@ public static class AutoFilterDropdownMenuPlanner
             // "No Fill".
             var cell = sheet.GetCell(row, filterColumn);
             var address = new CellAddress(sheet.Id, row, filterColumn);
-            var fillColor = SortCommand.GetEffectiveColor(workbook, sheet, address, cell, wantFill: true);
+            // spill-overlay-root F5/F6: GetCell returns null for a non-anchor dynamic-array spill
+            // member (its value lives only in the sheet's spill overlay -- see Sheet.GetValue's
+            // remarks), so a value-keyed CF rule (CellValue, ContainsText/BeginsWith/EndsWith,
+            // Blanks/Errors) would otherwise always be judged against BlankValue.Instance for that
+            // row and never contribute its color to the swatch list. Pass GetValue's spill-aware
+            // result as effectiveValue, mirroring the R149 SortCommand fix, so a CF color that only
+            // fires on a spill member is offered here too.
+            var effectiveValue = sheet.GetValue(row, filterColumn);
+            var fillColor = SortCommand.GetEffectiveColor(workbook, sheet, address, cell, wantFill: true, effectiveValue: effectiveValue);
             if (fillColor is { } fill)
             {
                 if (seenFillColors.Add(fill))
@@ -246,7 +254,7 @@ public static class AutoFilterDropdownMenuPlanner
                 hasNoFill = true;
             }
 
-            var fontColor = SortCommand.GetEffectiveColor(workbook, sheet, address, cell, wantFill: false) ?? CellColor.Black;
+            var fontColor = SortCommand.GetEffectiveColor(workbook, sheet, address, cell, wantFill: false, effectiveValue: effectiveValue) ?? CellColor.Black;
             if (!fontColor.IsBlack && seenFontColors.Add(fontColor))
                 fontColors.Add(fontColor);
         }

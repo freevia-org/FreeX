@@ -618,4 +618,163 @@ public class DocumentInspectorTests
         nestedParagraph.BookmarkName.Should().BeNull();
         DocumentInspector.Inspect(doc).Bookmarks.Should().Be(0);
     }
+
+    // --- Round-150 meta F2: a tracked change inside a text box (Run.Shape) that itself lives in a
+    // header/footer/footnote/endnote. CountRevisions' header/footer/footnote/endnote branches used to call
+    // CountParagraphRevisionMarks directly on the paragraph list instead of routing it through
+    // BodyParagraphWalk.Enumerate first, so they never descended into Run.Shape.TextParagraphs the way the
+    // body branch (EnumerateParagraphs -> BodyParagraphWalk.Enumerate(TextDocument)) always has —
+    // TrackChanges.HasRevisions/AcceptAll (ParagraphHasRevisions/ResolveParagraphContainer, both of which
+    // do walk into Run.Shape) still reached these, so Accept All/Reject All silently resolved a revision
+    // Inspect() never counted and the Revisions checkbox never reported.
+
+    private static TextDocument BuildDocumentWithRevisionOnlyInsideHeaderShape()
+    {
+        var shape = new Shape(ShapeKind.TextBox, 100, 50);
+        var shapeParagraph = new Paragraph();
+        shapeParagraph.Runs.Add(new Run("Header box keep "));
+        shapeParagraph.Runs.Add(new Run("header box added") { Revision = RevisionKind.Inserted, RevisionAuthor = "Ada" });
+        shape.TextParagraphs.Add(shapeParagraph);
+
+        var doc = new TextDocument();
+        doc.Blocks.Add(new Paragraph("Clean body"));
+
+        doc.Header = new HeaderFooter();
+        var headerParagraph = new Paragraph();
+        headerParagraph.Runs.Add(Run.FromShape(shape));
+        doc.Header.Paragraphs.Add(headerParagraph);
+        return doc;
+    }
+
+    [Fact]
+    public void Inspect_CountsRevisionInsideShapeInHeaderOnly_SoTheRemoveCheckboxCanBeEnabled()
+    {
+        var doc = BuildDocumentWithRevisionOnlyInsideHeaderShape();
+
+        // Independent oracle first: TrackChanges.HasRevisions already reaches a shape nested in a header
+        // (HeaderFooterHasRevisions -> ParagraphHasRevisions, which recurses into Run.Shape).
+        TrackChanges.HasRevisions(doc).Should().BeTrue();
+
+        var result = DocumentInspector.Inspect(doc);
+
+        result.Revisions.Should().Be(1);
+        result.HasRevisions.Should().BeTrue();
+        result.IsClean.Should().BeFalse();
+    }
+
+    [Fact]
+    public void RemoveRevisions_ClearsRevisionInsideHeaderShapeTextBoxAndAgreesWithTrackChanges()
+    {
+        var doc = BuildDocumentWithRevisionOnlyInsideHeaderShape();
+
+        DocumentInspector.RemoveRevisions(doc);
+
+        var shape = doc.Header!.Paragraphs[0].Runs[0].Shape!;
+        shape.TextParagraphs.Single().PlainText.Should().Be("Header box keep header box added");
+
+        var after = DocumentInspector.Inspect(doc);
+        after.Revisions.Should().Be(0);
+        after.HasRevisions.Should().BeFalse();
+        TrackChanges.HasRevisions(doc).Should().BeFalse();
+    }
+
+    private static TextDocument BuildDocumentWithRevisionOnlyInsideFootnoteShape()
+    {
+        var shape = new Shape(ShapeKind.TextBox, 100, 50);
+        var shapeParagraph = new Paragraph();
+        shapeParagraph.Runs.Add(new Run("deleted in box") { Revision = RevisionKind.Deleted, RevisionAuthor = "Cid" });
+        shape.TextParagraphs.Add(shapeParagraph);
+
+        var doc = new TextDocument();
+        doc.Blocks.Add(new Paragraph("Clean body"));
+
+        var footnote = new Footnote(1);
+        var footnoteParagraph = new Paragraph();
+        footnoteParagraph.Runs.Add(Run.FromShape(shape));
+        footnote.Content.Add(footnoteParagraph);
+        doc.Footnotes[1] = footnote;
+        return doc;
+    }
+
+    [Fact]
+    public void Inspect_CountsRevisionInsideShapeInFootnoteOnly_SoTheRemoveCheckboxCanBeEnabled()
+    {
+        var doc = BuildDocumentWithRevisionOnlyInsideFootnoteShape();
+
+        TrackChanges.HasRevisions(doc).Should().BeTrue();
+
+        var result = DocumentInspector.Inspect(doc);
+
+        result.Revisions.Should().Be(1);
+        result.HasRevisions.Should().BeTrue();
+    }
+
+    [Fact]
+    public void RemoveRevisions_ClearsRevisionInsideFootnoteShapeTextBoxAndAgreesWithTrackChanges()
+    {
+        var doc = BuildDocumentWithRevisionOnlyInsideFootnoteShape();
+
+        DocumentInspector.RemoveRevisions(doc);
+
+        var shape = doc.Footnotes[1].Content[0].Runs[0].Shape!;
+        shape.TextParagraphs.Single().Runs.Should().BeEmpty(); // deleted run dropped by AcceptAll
+
+        var after = DocumentInspector.Inspect(doc);
+        after.Revisions.Should().Be(0);
+        TrackChanges.HasRevisions(doc).Should().BeFalse();
+    }
+
+    private static TextDocument BuildDocumentWithRevisionOnlyInsideEndnoteShape()
+    {
+        var shape = new Shape(ShapeKind.TextBox, 100, 50);
+        var shapeParagraph = new Paragraph();
+        shapeParagraph.Runs.Add(new Run("added in box") { Revision = RevisionKind.Inserted, RevisionAuthor = "Dan" });
+        shape.TextParagraphs.Add(shapeParagraph);
+
+        var doc = new TextDocument();
+        doc.Blocks.Add(new Paragraph("Clean body"));
+
+        var endnote = new Endnote(1);
+        var endnoteParagraph = new Paragraph();
+        endnoteParagraph.Runs.Add(Run.FromShape(shape));
+        endnote.Content.Add(endnoteParagraph);
+        doc.Endnotes[1] = endnote;
+        return doc;
+    }
+
+    [Fact]
+    public void Inspect_CountsRevisionInsideShapeInEndnoteOnly_SoTheRemoveCheckboxCanBeEnabled()
+    {
+        var doc = BuildDocumentWithRevisionOnlyInsideEndnoteShape();
+
+        TrackChanges.HasRevisions(doc).Should().BeTrue();
+
+        var result = DocumentInspector.Inspect(doc);
+
+        result.Revisions.Should().Be(1);
+        result.HasRevisions.Should().BeTrue();
+    }
+
+    // Sibling no-regression: a header carrying a text box with NO tracked change must not inflate the
+    // count, and the existing body-shape and header-plain-text revision coverage (r147/r148) must still be
+    // exactly 1 each after routing header/footer/footnote/endnote through BodyParagraphWalk.Enumerate too.
+    [Fact]
+    public void Inspect_OnHeaderWithCleanShape_StaysZero()
+    {
+        var shape = new Shape(ShapeKind.TextBox, 100, 50);
+        shape.TextParagraphs.Add(new Paragraph("Clean box text"));
+
+        var doc = new TextDocument();
+        doc.Blocks.Add(new Paragraph("Clean body"));
+        doc.Header = new HeaderFooter();
+        var headerParagraph = new Paragraph();
+        headerParagraph.Runs.Add(Run.FromShape(shape));
+        doc.Header.Paragraphs.Add(headerParagraph);
+
+        var result = DocumentInspector.Inspect(doc);
+
+        result.Revisions.Should().Be(0);
+        result.HasRevisions.Should().BeFalse();
+        TrackChanges.HasRevisions(doc).Should().BeFalse();
+    }
 }

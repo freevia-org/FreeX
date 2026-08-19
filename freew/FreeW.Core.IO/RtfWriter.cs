@@ -367,17 +367,6 @@ public static class RtfWriter
 
         sb.Append(@"\row");
         sb.Append('\n');
-
-        // A table nested inside one of this row's cells cannot be interleaved into the \trowd..\row group
-        // above without corrupting it (RTF row/cell groups aren't reentrant), so -- matching how DocxWriter
-        // and the shared BodyParagraphWalk reach the identical TableCell.NestedTables structure -- each
-        // nested table is emitted as its own \trowd..\row table immediately after the row whose cell holds
-        // it. WriteTable recurses, so tables nested to any depth are all still reached and none are dropped.
-        foreach (var cell in row.Cells)
-        {
-            foreach (var nestedTable in cell.NestedTables)
-                WriteTable(sb, nestedTable, fonts, colors);
-        }
     }
 
     private static int[] ComputeCellBoundaries(Table table, TableRow row)
@@ -406,15 +395,10 @@ public static class RtfWriter
 
     private static void WriteCellContent(StringBuilder sb, TableCell cell, FontTable fonts, ColorTable colors)
     {
-        if (cell.Paragraphs.Count == 0)
-            return;
-
         for (var i = 0; i < cell.Paragraphs.Count; i++)
         {
             var paragraph = cell.Paragraphs[i];
 
-            // Only this cell's own paragraphs are written here; any TableCell.NestedTables are emitted by
-            // the caller (WriteTableRow) as their own sibling \trowd..\row table(s) right after this row.
             sb.Append(@"\pard\intbl");
             WriteParagraphProperties(sb, paragraph.Formatting);
             sb.Append(' ');
@@ -422,6 +406,21 @@ public static class RtfWriter
             // Paragraphs inside a cell are separated by \par; the final one is terminated by \cell.
             if (i < cell.Paragraphs.Count - 1)
                 sb.Append(@"\par");
+        }
+
+        // A table nested inside this cell cannot be interleaved into the cell's own \trowd..\row group (RTF
+        // row/cell groups aren't reentrant), so it is written INLINE as part of this cell's own content,
+        // right before the \cell that closes it -- wrapped in its own brace-delimited {\nestedtbl ...} group.
+        // The braces give RtfReader (see BeginNestedTable/EndNestedTableGroup) an unambiguous, self-delimiting
+        // boundary for "this \trowd..\row table belongs INSIDE this cell", which a bare sibling \trowd..\row
+        // sequence right after the outer \row cannot express -- RTF has no positional nesting for tables, so
+        // any reader (including our own) would read a bare sibling sequence as more rows of the outer table.
+        // WriteTable recurses, so tables nested to any depth are all still reached and none are dropped.
+        foreach (var nestedTable in cell.NestedTables)
+        {
+            sb.Append(@"{\nestedtbl ");
+            WriteTable(sb, nestedTable, fonts, colors);
+            sb.Append('}');
         }
     }
 

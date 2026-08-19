@@ -148,6 +148,15 @@ public sealed class DocumentCommandBus(IDocumentCommandContext context)
     // instead of pushing directly onto the undo stack.
     private List<IDocumentCommand>? _batch;
 
+    // Set by BeginUndoGroup(notifyOnEachExecute: true). Most callers batch several commands that were
+    // each computed against the model directly (e.g. MultilevelListMutationCoordinator), so they neither
+    // need nor want a redraw between commands. Find & Replace's Replace All is different: each replacement
+    // is found by walking the *rendered* surface via TextPointer, and the WPF host's per-edit pipeline
+    // (TryApplyBodyTextInput -> CommitToModel/PlaceCaretAtModelTextOffset) only stays correct if Changed's
+    // Render() runs between edits -- otherwise the next edit's CommitToModel() re-reads the stale rendered
+    // surface and silently discards every replacement but the last (see FindReplaceDialog.cs ReplaceAll).
+    private bool _notifyOnEachBatchedExecute;
+
     /// <summary>Raised after any execute/undo/redo so the view can refresh.</summary>
     public event Action? Changed;
 
@@ -169,6 +178,8 @@ public sealed class DocumentCommandBus(IDocumentCommandContext context)
         if (_batch is not null)
         {
             _batch.Add(command);
+            if (_notifyOnEachBatchedExecute)
+                Changed?.Invoke();
         }
         else
         {
@@ -183,11 +194,19 @@ public sealed class DocumentCommandBus(IDocumentCommandContext context)
     /// <see cref="CompositeDocumentCommand"/> when <see cref="CommitUndoGroup"/> is called.
     /// Not reentrant — only one group may be open at a time.
     /// </summary>
-    public void BeginUndoGroup()
+    /// <param name="notifyOnEachExecute">
+    /// When true, <see cref="Changed"/> still fires after every batched <see cref="Execute"/> (only the
+    /// undo-stack push is deferred). Most batches compute every command against the model up front and
+    /// don't need this, but a caller whose commands are found by re-searching the *rendered* surface
+    /// between edits (e.g. Find &amp; Replace's Replace All) needs the redraw <see cref="Changed"/> would
+    /// normally trigger to happen before the next command is computed.
+    /// </param>
+    public void BeginUndoGroup(bool notifyOnEachExecute = false)
     {
         if (_batch is not null)
             throw new InvalidOperationException("An undo group is already open.");
         _batch = new List<IDocumentCommand>();
+        _notifyOnEachBatchedExecute = notifyOnEachExecute;
     }
 
     /// <summary>

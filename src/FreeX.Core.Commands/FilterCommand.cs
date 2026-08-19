@@ -333,7 +333,12 @@ public sealed class CellFillColorFilterCommand : IWorkbookCommand
             // style — otherwise a CF-red cell never matches a "red" filter.
             var cell = sheet.GetCell(row, filterCol);
             var address = new CellAddress(_sheetId, row, filterCol);
-            var fillColor = SortCommand.GetEffectiveColor(ctx.Workbook, sheet, address, cell, wantFill: true);
+            // spill-overlay-root F2: cell is null for a non-anchor spill member (its value lives
+            // only in Sheet's spill overlay, not in _cells -- see SortCommand.CaptureCellPayload's
+            // identical fallback), so GetEffectiveColor must be handed the LIVE value explicitly or
+            // it silently judges CF rules against BlankValue and a value-keyed CF fill never fires.
+            var effectiveValue = cell?.Value ?? sheet.GetValue(address);
+            var fillColor = SortCommand.GetEffectiveColor(ctx.Workbook, sheet, address, cell, wantFill: true, effectiveValue: effectiveValue);
             FilterHiddenRowUpdater.ApplyColumnOwnedVisibility(sheet, filterCol, row, fillColor == _fillColor);
         }
 
@@ -432,7 +437,11 @@ public sealed class CellNoFillColorFilterCommand : IWorkbookCommand
             // cell must NOT wrongly match "No Fill".
             var cell = sheet.GetCell(row, filterCol);
             var address = new CellAddress(_sheetId, row, filterCol);
-            var fillColor = SortCommand.GetEffectiveColor(ctx.Workbook, sheet, address, cell, wantFill: true);
+            // spill-overlay-root F3: same spill-value gap as CellFillColorFilterCommand.Apply above
+            // -- without the live value, a CF fill on a spill member is never detected and the row
+            // is wrongly treated as "No Fill".
+            var effectiveValue = cell?.Value ?? sheet.GetValue(address);
+            var fillColor = SortCommand.GetEffectiveColor(ctx.Workbook, sheet, address, cell, wantFill: true, effectiveValue: effectiveValue);
             FilterHiddenRowUpdater.ApplyColumnOwnedVisibility(sheet, filterCol, row, fillColor is null);
         }
 
@@ -536,7 +545,11 @@ public sealed class CellFontColorFilterCommand : IWorkbookCommand
             // stored style — otherwise a CF-red-font cell never matches a "red" font-color filter.
             var cell = sheet.GetCell(row, filterCol);
             var address = new CellAddress(_sheetId, row, filterCol);
-            var fontColor = SortCommand.GetEffectiveColor(ctx.Workbook, sheet, address, cell, wantFill: false);
+            // spill-overlay-root F4: same spill-value gap as CellFillColorFilterCommand.Apply above,
+            // for font color -- without the live value, a value-keyed CF font-color rule never fires
+            // for a spill member.
+            var effectiveValue = cell?.Value ?? sheet.GetValue(address);
+            var fontColor = SortCommand.GetEffectiveColor(ctx.Workbook, sheet, address, cell, wantFill: false, effectiveValue: effectiveValue);
             FilterHiddenRowUpdater.ApplyColumnOwnedVisibility(sheet, filterCol, row, fontColor == _fontColor);
         }
 

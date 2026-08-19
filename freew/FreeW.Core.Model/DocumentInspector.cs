@@ -276,16 +276,16 @@ public static class DocumentInspector
                 if (headerFooter is null)
                     continue;
 
-                count += headerFooter.Paragraphs.Sum(CountParagraphRevisionMarks);
+                count += BodyParagraphWalk.Enumerate(headerFooter.Paragraphs).Sum(CountParagraphRevisionMarks);
                 if (headerFooter.Table is { } headerFooterTable)
                     count += CountTableRowRevisionMarks([headerFooterTable]);
             }
         }
 
         foreach (var footnote in document.Footnotes.Values)
-            count += footnote.Content.Sum(CountParagraphRevisionMarks);
+            count += BodyParagraphWalk.Enumerate(footnote.Content).Sum(CountParagraphRevisionMarks);
         foreach (var endnote in document.Endnotes.Values)
-            count += endnote.Content.Sum(CountParagraphRevisionMarks);
+            count += BodyParagraphWalk.Enumerate(endnote.Content).Sum(CountParagraphRevisionMarks);
 
         return count;
     }
@@ -296,8 +296,10 @@ public static class DocumentInspector
     // TrackChanges.ParagraphHasRevisions's reach exactly, so a document whose only tracked change is a
     // formatting-only edit (bold/italic/color toggled with Track Changes on, no text inserted/deleted)
     // is still counted instead of reporting zero while RemoveRevisions (TrackChanges.AcceptAll) still
-    // clears it. Does not walk into a run's text-box (Run.Shape) content — callers needing that reach use
-    // EnumerateParagraphs (BodyParagraphWalk), which already yields shape paragraphs as separate entries.
+    // clears it. Does not walk into a run's text-box (Run.Shape) content itself — callers needing that
+    // reach route the paragraph list through BodyParagraphWalk.Enumerate first (EnumerateParagraphs for
+    // the body; the IEnumerable<Paragraph> overload for a header/footer/footnote/endnote's own list), which
+    // yields shape paragraphs as separate entries before this is applied to each.
     private static int CountParagraphRevisionMarks(Paragraph paragraph) =>
         (paragraph.MarkRevision != RevisionKind.None ? 1 : 0) +
         (paragraph.ParagraphFormatRevision is not null ? 1 : 0) +

@@ -48,6 +48,47 @@ public sealed class DefinedNamesSessionTests
     }
 
     [Fact]
+    public void BuildRows_ShowsValuePreviewForNamedSingleCellSpillMember()
+    {
+        var workbook = new Workbook("Book");
+        var sheet = workbook.AddSheet("Sheet1");
+        var anchor = new CellAddress(sheet.Id, 1, 1);
+        sheet.SetCell(anchor, new NumberValue(10));
+        sheet.SetSpillRange(anchor, new RangeValue(new ScalarValue[,]
+        {
+            { new NumberValue(10) },
+            { new NumberValue(20) }
+        }));
+        // Row 2 is a spill member (owned by the anchor's array formula), not a real cell.
+        workbook.DefineNamedRange("SpillMember", Cell(sheet, 2, 1));
+
+        var rows = new DefinedNamesSession(workbook, sheet.Id).BuildRows();
+
+        rows.Single(row => row.Name == "SpillMember").Value.Should().Be("20");
+    }
+
+    [Fact]
+    public void BuildRows_ShowsValuePreviewForNamedRangeCoveringSpillMembers()
+    {
+        var workbook = new Workbook("Book");
+        var sheet = workbook.AddSheet("Sheet1");
+        var anchor = new CellAddress(sheet.Id, 1, 1);
+        sheet.SetCell(anchor, new NumberValue(10));
+        sheet.SetSpillRange(anchor, new RangeValue(new ScalarValue[,]
+        {
+            { new NumberValue(10) },
+            { new NumberValue(20) },
+            { new NumberValue(30) }
+        }));
+        // Named range covers the anchor plus both spill members.
+        workbook.DefineNamedRange("SpillRange", Range(sheet, 1, 1, 3, 1));
+
+        var rows = new DefinedNamesSession(workbook, sheet.Id).BuildRows();
+
+        rows.Single(row => row.Name == "SpillRange").Value.Should().Be("{10;20;30}");
+    }
+
+    [Fact]
     public void ProjectRows_FiltersWorkbookAndSameLabelWorksheetByIdentity()
     {
         var workbook = new Workbook("Book");

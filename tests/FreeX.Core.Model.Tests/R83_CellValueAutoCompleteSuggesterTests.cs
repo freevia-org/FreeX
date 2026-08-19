@@ -137,6 +137,66 @@ public sealed class R83_CellValueAutoCompleteSuggesterTests
     }
 
     [Fact]
+    public void Collect_SpillMemberInColumn_DoesNotTruncateScan_AndIncludesSpillTextAsCandidate()
+    {
+        // spill-overlay-root F11: a spill member cell has no entry in Sheet's _cells dictionary
+        // (only in the spill overlay), so sheet.GetCell(row, col) returns null for it. Before the
+        // fix, the scan treated that null exactly like a real blank cell and stopped there,
+        // silently dropping every real entry beyond it (here, "Connecticut" past the spill) and
+        // never offering the spilled text ("Boston"/"Boulder") itself as a candidate.
+        var wb = new Workbook("test");
+        var sheet = wb.AddSheet("Sheet1");
+
+        // A1 = California: ordinary text entry above everything.
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("California"));
+
+        // A3 = spill anchor (e.g. a transposed TEXTSPLIT formula), spilling text down into A3:A4
+        // exactly like RecalcEngine does: the anchor's own cell.Value is the first spill slot,
+        // and SetSpillRange populates the remaining member(s) in the overlay only.
+        var anchor = new CellAddress(sheet.Id, 3, 1);
+        var anchorCell = Cell.FromFormula("TEXTSPLIT(\"Boston,Boulder\", \",\")");
+        anchorCell.Value = new TextValue("Boston");
+        sheet.SetCell(anchor, anchorCell);
+        var spillCells = new ScalarValue[2, 1]
+        {
+            { new TextValue("ignored-anchor-slot") }, // SetSpillRange ignores slot [0,0]
+            { new TextValue("Boulder") },
+        };
+        sheet.SetSpillRange(anchor, new RangeValue(spillCells)); // spills to A3:A4
+
+        // A5 = Connecticut: real text sitting past the spill member, in the same contiguous run.
+        sheet.SetCell(new CellAddress(sheet.Id, 5, 1), new TextValue("Connecticut"));
+
+        // User is editing A2, between A1 and the spill anchor.
+        var entries = CellValueAutoCompleteSuggester.CollectContiguousColumnTextEntries(
+            sheet, new CellAddress(sheet.Id, 2, 1));
+
+        entries.Should().BeEquivalentTo(["California", "Boston", "Boulder", "Connecticut"]);
+    }
+
+    [Fact]
+    public void Collect_RealBlankCellStillStopsTheScan_EvenNearASpill()
+    {
+        // No-regression sibling: switching the scan from GetCell to GetValue must not turn a
+        // genuinely empty cell into something that no longer stops the walk. GetValue returns
+        // BlankValue.Instance for an unset cell just as it does for a spill-vacated one, so the
+        // contiguous-run boundary behavior for ordinary blanks is unchanged.
+        var wb = new Workbook("test");
+        var sheet = wb.AddSheet("Sheet1");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("California"));
+        // A2 left genuinely blank (never set).
+        sheet.SetCell(new CellAddress(sheet.Id, 4, 1), new TextValue("Colorado"));
+
+        var entries = CellValueAutoCompleteSuggester.CollectContiguousColumnTextEntries(
+            sheet, new CellAddress(sheet.Id, 3, 1));
+
+        // Scanning up from row 3 hits the blank A2 immediately and stops -- "California" (row 1)
+        // is unreachable. The downward scan is unaffected and still finds "Colorado" at row 4,
+        // exactly as it did before the fix.
+        entries.Should().BeEquivalentTo(["Colorado"]);
+    }
+
+    [Fact]
     public void Collect_ThenSuggest_EndToEndMatchesFindingsScenario()
     {
         // End-to-end: A1 = "California", user editing A2 and has typed "Cal" -> suggests

@@ -795,7 +795,8 @@ internal static class FreeWRibbonCommands
                 ShowMarkupFormatting: () => editor.ShowMarkupFormatting,
                 ApplyShowMarkupFormatting: editor.ApplyShowMarkupFormatting,
                 AcceptAllRevisions: editor.AcceptAllRevisions,
-                RejectAllRevisions: editor.RejectAllRevisions));
+                RejectAllRevisions: editor.RejectAllRevisions,
+                IsTrackChangesLockedByProtection: () => editor.RestrictEditingPolicy.ShouldForceTrackChanges));
 
         // Review tab — Tracking display controls: Display for Review and Show Markup per-category toggles.
         //

@@ -924,13 +924,33 @@ public sealed partial class Sheet
             _cells.EnsureCapacity(capacity);
     }
 
-    /// <summary>Get the cell at the given address, or null if no cell exists there.</summary>
+    /// <summary>
+    /// Get the cell at the given address, or null if no cell exists there.
+    /// </summary>
+    /// <remarks>
+    /// <b>Does NOT see the dynamic-array spill overlay.</b> A non-anchor member of a spilled
+    /// array (e.g. the B1 in <c>=SEQUENCE(5)</c> anchored at A1) has no entry in <c>_cells</c> --
+    /// its value lives only in the separate spill overlay -- so this method returns null for it
+    /// even though the grid visibly shows a value there. See <see cref="GetValue(uint,uint)"/>,
+    /// which checks the overlay and is what the divergence is deliberately routed through.
+    /// Callers asking a VALUE question (is this blank? what type/value does this cell show?)
+    /// must call <see cref="GetValue(uint,uint)"/> instead of calling this and then inspecting
+    /// <see cref="Cell.Value"/> -- doing the latter silently mis-reads spill members as blank.
+    /// This method remains correct for callers that specifically want the backing <see cref="Cell"/>
+    /// object itself (its formula, style, comments, etc.) rather than its effective value.
+    /// </remarks>
     public Cell? GetCell(uint row, uint col)
     {
         return _cells.GetValueOrDefault((row, col));
     }
 
-    /// <summary>Get the cell at the given address, or null if no cell exists there.</summary>
+    /// <summary>
+    /// Get the cell at the given address, or null if no cell exists there.
+    /// </summary>
+    /// <remarks>
+    /// See the remarks on <see cref="GetCell(uint,uint)"/>: this overload has the same
+    /// spill-overlay blind spot. Use <see cref="GetValue(CellAddress)"/> for value questions.
+    /// </remarks>
     public Cell? GetCell(CellAddress address)
     {
         return _cells.GetValueOrDefault((address.Row, address.Col));
@@ -1311,7 +1331,15 @@ public sealed partial class Sheet
         return false;
     }
 
-    /// <summary>Get the value at a cell address, returning BlankValue if no cell exists.</summary>
+    /// <summary>
+    /// Get the value at a cell address, returning BlankValue if no cell exists.
+    /// </summary>
+    /// <remarks>
+    /// Unlike <see cref="GetCell(uint,uint)"/>, this DOES see the dynamic-array spill overlay:
+    /// a non-anchor spill member with no <c>_cells</c> entry still returns its spilled value here
+    /// (via the <c>_spillValues</c> fallback below). This is the correct method for any value
+    /// question -- blank test, type test, comparison, conditional-format input, etc.
+    /// </remarks>
     public ScalarValue GetValue(uint row, uint col)
     {
         if (_cells.TryGetValue((row, col), out var cell)) return cell.Value;
@@ -1319,7 +1347,10 @@ public sealed partial class Sheet
         return BlankValue.Instance;
     }
 
-    /// <summary>Get the value at a cell address, returning BlankValue if no cell exists.</summary>
+    /// <summary>
+    /// Get the value at a cell address, returning BlankValue if no cell exists.
+    /// </summary>
+    /// <remarks>See the remarks on <see cref="GetValue(uint,uint)"/>.</remarks>
     public ScalarValue GetValue(CellAddress address)
     {
         return GetValue(address.Row, address.Col);

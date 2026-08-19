@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using System.Globalization;
 using System.Text.RegularExpressions;
 
@@ -15,16 +16,30 @@ internal static class ExcelTextNumberParser
         @"\b(?:am|pm)\b",
         RegexOptions.IgnoreCase);
 
-    // Matches a number whose comma grouping is correct: each group to the left of the decimal (or end)
-    // is exactly 3 digits, except the first group which may be 1–3 digits.  Optional leading sign,
-    // optional leading/trailing currency symbol, optional decimal fraction, and an optional matched
-    // pair of parentheses (Excel's accounting-format negative wrapper) around the whole thing — a
-    // leading "(" requires a trailing ")" and vice versa, via the "paren" conditional group.
-    // Examples that pass: 1,234  $1,234.50  -1,234,567  1,234,567.5  (1,234.50)  ($1,234.50)
+    // Matches a number whose thousands grouping is correct: each group to the left of the decimal
+    // (or end) is exactly 3 digits, except the first group which may be 1–3 digits.  Optional leading
+    // sign, optional leading/trailing currency symbol, optional decimal fraction, and an optional
+    // matched pair of parentheses (Excel's accounting-format negative wrapper) around the whole thing
+    // — a leading "(" requires a trailing ")" and vice versa, via the "paren" conditional group.
+    // The grouping and decimal separators are the culture's (culture.NumberFormat.NumberGroupSeparator
+    // / NumberDecimalSeparator) rather than a hardcoded ',' / '.', because a culture such as de-DE
+    // groups with '.' and uses ',' as the decimal point — see GetValidGroupingRegex. Compiled regexes
+    // are cached per (group separator, decimal separator) pair since CultureInfo.CurrentCulture is
+    // typically stable across many calls on the same thread.
+    // Examples that pass (en-US: group=',' decimal='.'): 1,234  $1,234.50  -1,234,567  1,234,567.5
+    //   (1,234.50)  ($1,234.50)
     // Examples that fail: 1,2  12,34  1,2345  1,234,5  (1,234.50  1,234.50)
-    private static readonly Regex ValidGroupingRegex = new(
-        @"^(?<paren>\()?[+-]?\$?\d{1,3}(?:,\d{3})*(?:\.\d*)?\$?[+-]?(?(paren)\)|)$",
-        RegexOptions.None);
+    private static readonly ConcurrentDictionary<(string GroupSeparator, string DecimalSeparator), Regex> ValidGroupingRegexCache = new();
+
+    private static Regex GetValidGroupingRegex(CultureInfo culture)
+    {
+        string groupSeparator = culture.NumberFormat.NumberGroupSeparator;
+        string decimalSeparator = culture.NumberFormat.NumberDecimalSeparator;
+        return ValidGroupingRegexCache.GetOrAdd((groupSeparator, decimalSeparator), static key =>
+            new Regex(
+                $@"^(?<paren>\()?[+-]?\$?\d{{1,3}}(?:{Regex.Escape(key.GroupSeparator)}\d{{3}})*(?:{Regex.Escape(key.DecimalSeparator)}\d*)?\$?[+-]?(?(paren)\)|)$",
+                RegexOptions.None));
+    }
 
     // NumberStyles without AllowThousands — used for the first parse attempt so that
     // comma-separated inputs with bad grouping do not silently succeed.
@@ -121,33 +136,39 @@ internal static class ExcelTextNumberParser
     /// <summary>
     /// Parses a numeric string with strict thousands-grouping validation.
     /// Accepts the same styles as the old <c>NumberStyles.Any</c> except that when the input
-    /// contains commas (group separators), the grouping placement must be exactly correct:
-    /// groups of 3 digits, with the leading group containing 1–3 digits and no comma after
-    /// the decimal point.
+    /// contains the culture's group separator (e.g. ',' for en-US, '.' for de-DE), the grouping
+    /// placement must be exactly correct: groups of 3 digits, with the leading group containing
+    /// 1–3 digits and no group separator after the decimal point.
     /// <para>
     /// <paramref name="rejectedNumericComma"/> is set to <c>true</c> when the text contained
-    /// commas, looked numeric in structure, but failed grouping validation — the caller should
-    /// not then fall through to a date/time parse because "1,2" must not become January 2nd.
+    /// the group separator, looked numeric in structure, but failed grouping validation — the
+    /// caller should not then fall through to a date/time parse because "1,2" must not become
+    /// January 2nd (and, under a culture whose group separator isn't ',', the equivalent malformed
+    /// grouped text in that separator).
     /// </para>
     /// </summary>
     private static bool TryParseNumericStrict(string text, CultureInfo culture, out double number, out bool rejectedNumericComma)
     {
         rejectedNumericComma = false;
 
-        // Fast path: no comma → no grouping issue, parse without AllowThousands.
-        if (!text.Contains(','))
+        string groupSeparator = culture.NumberFormat.NumberGroupSeparator;
+        bool hasGroupSeparator = groupSeparator.Length > 0 && text.Contains(groupSeparator, StringComparison.Ordinal);
+
+        // Fast path: no group separator → no grouping issue, parse without AllowThousands.
+        if (!hasGroupSeparator)
             return double.TryParse(text, StylesWithoutThousands, culture, out number);
 
-        // Has commas: first try without AllowThousands.  StylesWithoutThousands rejects a comma
-        // that isn't the culture's decimal separator, so this succeeds directly for cultures
-        // (e.g. de-DE) whose decimal separator is a comma, and typically fails for cultures
-        // (e.g. en-US) where the comma is instead a group separator.
+        // Has the group separator: first try without AllowThousands.  StylesWithoutThousands
+        // rejects a character that isn't the culture's decimal separator, so this succeeds
+        // directly for cultures (e.g. de-DE) whose decimal separator is the same character as
+        // some other culture's group separator, and typically fails when that character really
+        // is being used for grouping (e.g. en-US's ',').
         if (double.TryParse(text, StylesWithoutThousands, culture, out number))
             return true;
 
-        // Commas present and didn't parse without AllowThousands.
+        // Group separator present and didn't parse without AllowThousands.
         // Validate grouping shape before allowing thousands parsing.
-        if (!ValidGroupingRegex.IsMatch(text))
+        if (!GetValidGroupingRegex(culture).IsMatch(text))
         {
             // Only mark as a rejected numeric attempt when the text starts with digit/sign/currency
             // so that date strings like "March 14, 2026" can still reach the DateTime path.

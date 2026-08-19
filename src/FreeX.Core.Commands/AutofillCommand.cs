@@ -39,6 +39,15 @@ public sealed class AutofillCommand : IWorkbookCommand, IEstimatesMemory
     // EditCellsCommand -> StructuredTableEditEffects.Apply (Commands.cs). Populated by Apply()
     // below and unwound (in reverse order) before the base fill snapshot is reverted.
     private readonly List<IWorkbookCommand> _appliedTableEffects = [];
+    // data-validation-F1: fill (drag the fill handle, or Home > Fill > Down/Right/Up/Left) is
+    // the sole cell-population path that dropped a source cell's Data Validation rule (List
+    // dropdown, number/date/text-length constraint) instead of extending it onto the newly
+    // filled cells -- Copy/Paste already carries it via PasteDataValidationCommand
+    // (PasteCommandFactory.cs) and cut/drag-move via MoveRangeCommand. Populated by whichever
+    // Apply*/ApplyMergeTiledFill branch actually wrote cells, and reverted before the base fill
+    // snapshot below (mirrors _appliedTableEffects's ordering; independent of it since neither
+    // touches the other's state).
+    private PasteDataValidationCommand? _dataValidationCommand;
 
     public string Label => "Autofill";
 
@@ -151,7 +160,15 @@ public sealed class AutofillCommand : IWorkbookCommand, IEstimatesMemory
                 SnapshotAnnotations(sheet, addr);
                 writtenCells.Add(addr);
 
-                if (sourceCell is null)
+                // spill-overlay-root-F12: sourceCell is only the fill EDGE cell (GetSourceEdgeAddress),
+                // which is null whenever that specific address is a non-anchor dynamic-array spill
+                // member (no _cells entry of its own) -- even though the source range it belongs to
+                // visibly holds values and TryCreateScalarSeries/TryCreateListSeries (which read via
+                // Sheet.GetValue, not GetCell) may have successfully fitted a series across it. Only
+                // bail out to a blank fill when there is NEITHER an edge cell NOR a detected series:
+                // the two series branches below don't dereference sourceCell for their value at all,
+                // and ResolvePatternSourceStyleId already tolerates a null fallback.
+                if (sourceCell is null && scalarSeries is null && listSeries is null)
                 {
                     sheet.ClearCell(addr);
                     ClearAnnotations(sheet, addr);
@@ -237,7 +254,28 @@ public sealed class AutofillCommand : IWorkbookCommand, IEstimatesMemory
         if (tableEffectCells.Count > 0)
             writtenCells.AddRange(tableEffectCells);
 
+        ApplyDataValidationCarry(ctx);
+
         return new CommandOutcome(true, AffectedCells: writtenCells);
+    }
+
+    /// <summary>
+    /// data-validation-F1: carries the source range's Data Validation rule(s) onto the fill
+    /// range exactly like an ordinary Ctrl+V does (PasteDataValidationCommand, wired into every
+    /// formatting-carrying paste by PasteCommandFactory). Runs unconditionally -- even when the
+    /// source has no rule at all -- so a pre-existing, unrelated rule on a destination cell is
+    /// also superseded, matching PasteDataValidationCommand's own R137 "clear even when source
+    /// has none" contract that mirrors what Ctrl+V does. Silently skipped (leaves destination
+    /// validation untouched) on the rare case the paste sub-command itself refuses (e.g. a
+    /// protected sheet whose stricter whole-sheet check does not know about the AllowEditRanges
+    /// exemption <see cref="CommandGuards.CanEditCell"/> already granted the value fill above) --
+    /// that must never fail the value fill this method's caller already committed.
+    /// </summary>
+    private void ApplyDataValidationCarry(ICommandContext ctx)
+    {
+        var command = new PasteDataValidationCommand(_sheetId, _sourceRange, _fillRange, transpose: false);
+        if (command.Apply(ctx).Success)
+            _dataValidationCommand = command;
     }
 
     /// <summary>
@@ -460,6 +498,11 @@ public sealed class AutofillCommand : IWorkbookCommand, IEstimatesMemory
         // have grown the table's Range or written into sibling calculated-column rows this
         // command's own _snapshot never touched, so they must come off first.
         StructuredTableEditEffects.Revert(ctx, _appliedTableEffects);
+
+        // data-validation-F1: undo the validation carry (restores the sheet's DataValidations
+        // list to exactly what it held before Apply). Independent of the cell-content snapshot
+        // below, so ordering relative to it does not matter.
+        _dataValidationCommand?.Revert(ctx);
 
         var sheet = ctx.GetSheet(_sheetId);
 
@@ -793,10 +836,16 @@ public sealed class AutofillCommand : IWorkbookCommand, IEstimatesMemory
     /// position <see cref="ResolvePatternSourceAddress"/> already computes for the plain
     /// pattern-copy path below.
     /// </summary>
-    private StyleId ResolvePatternSourceStyleId(Sheet sheet, FillPlan plan, CellAddress addr, int sourceLength, Cell fallback)
+    private StyleId ResolvePatternSourceStyleId(Sheet sheet, FillPlan plan, CellAddress addr, int sourceLength, Cell? fallback)
     {
         var patternSourceAddr = ResolvePatternSourceAddress(plan, addr, sourceLength);
-        return sheet.GetCell(patternSourceAddr)?.StyleId ?? fallback.StyleId;
+        // spill-overlay-root-F12: fallback can now legitimately be null -- a detected
+        // scalar/list series no longer requires the fill's edge cell to own a real Cell entry
+        // (see TryCreateScalarSeries's Sheet.GetValue read below), so a non-anchor spill member
+        // at the edge reaches here with no Cell to fall back to. Excel itself renders a spilled
+        // value with no cell-specific formatting until the user applies one, so StyleId.Default
+        // (the same "no formatting" a brand-new cell starts with) is the correct last resort.
+        return sheet.GetCell(patternSourceAddr)?.StyleId ?? fallback?.StyleId ?? StyleId.Default;
     }
 
     private int GetFillCellCapacity()
@@ -815,8 +864,15 @@ public sealed class AutofillCommand : IWorkbookCommand, IEstimatesMemory
         if (plan.Axis == FillAxis.Vertical ? _sourceRange.RowCount < 2 : _sourceRange.ColCount < 2)
             return null;
 
+        // Read via Sheet.GetValue rather than GetCell(...)?.Value: a non-anchor member of a
+        // dynamic-array spill (e.g. B3 inside a =SEQUENCE(4) spilling from B2) has no Cell of its
+        // own -- GetCell returns null for it even though it visibly holds a number/date -- while
+        // its value lives in the sheet's separate spill overlay. GetValue consults both storages
+        // and falls back to BlankValue.Instance (never null) for a genuinely empty cell, so the
+        // all-NumberValue/all-DateTimeValue checks below still correctly reject a source range
+        // that mixes real content with blanks.
         var values = _sourceRange.AllCells()
-            .Select(addr => sheet.GetCell(addr)?.Value)
+            .Select(addr => sheet.GetValue(addr))
             .ToList();
 
         Func<double, ScalarValue>? createValue;
@@ -836,7 +892,7 @@ public sealed class AutofillCommand : IWorkbookCommand, IEstimatesMemory
         var lines = new Dictionary<uint, (double Anchor, double Step)>();
         foreach (var (lineKey, cells) in EnumerateSeriesLines(plan))
         {
-            var numbers = cells.Select(addr => ToSeriesNumber(sheet.GetCell(addr)?.Value)).ToList();
+            var numbers = cells.Select(addr => ToSeriesNumber(sheet.GetValue(addr))).ToList();
             lines[lineKey] = FitScalarLine(numbers, plan);
         }
 

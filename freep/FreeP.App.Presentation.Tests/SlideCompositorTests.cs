@@ -3187,6 +3187,137 @@ public sealed class SlideCompositorTests
     }
 
     /// <summary>
+    /// F1 regression: text-style inheritance must merge PER PROPERTY across layers, not treat
+    /// whichever layer has ANY entry at a level as the final whole answer. Here the layout's
+    /// lstStyle overrides ONLY font size (32pt); it does not set a color. The master's bodyStyle
+    /// supplies a red color (and a different, losing, font size). Before the fix,
+    /// ResolveTextStyleInheritance returned the layout's TextStyleLevel object wholesale (since
+    /// it had ANY entry at level 0) and never consulted the master for the color field the
+    /// layout left null, so the run rendered black instead of red.
+    /// </summary>
+    [Fact]
+    public void Compose_BodyRun_LayoutSetsOnlySize_MasterColorStillAppliesForUnsetProperty()
+    {
+        var p = new PresentationModel();
+        p.Theme = PresentationTheme.CreateDefault();
+
+        var master = new SlideMaster { Id = "m1" };
+        master.TextStyles = new MasterTextStyles();
+        // Master bodyStyle lvl1 supplies a color (red) that the layout does NOT override.
+        master.TextStyles.BodyStyle[0] = new TextStyleLevel
+        {
+            Color = new ThemeAwareColor(new SrgbColor(0xFF, 0x00, 0x00)),
+            FontSizePt = 24.0
+        };
+        p.Masters.Add(master);
+
+        var layout = new SlideLayout { Id = "l1", MasterId = "m1" };
+        // Layout placeholder's lstStyle overrides ONLY font size — no Color set here.
+        var layoutLstStyle = new TextStyleLevels();
+        layoutLstStyle[0] = new TextStyleLevel { FontSizePt = 32.0 };
+        var layoutBodyPh = new SlideShape
+        {
+            Placeholder = new Placeholder { Type = PlaceholderType.Body, Idx = 1 },
+            OffsetXEmu = 457200, OffsetYEmu = 1371600,
+            ExtentCxEmu = 8229600, ExtentCyEmu = 4525963,
+            TextBody = new TextBody { LstStyle = layoutLstStyle }
+        };
+        layout.Placeholders.Add(layoutBodyPh);
+        p.Layouts.Add(layout);
+
+        var slide = new Slide { LayoutId = "l1" };
+        var shape = new SlideShape
+        {
+            Id = 1,
+            Placeholder = new Placeholder { Type = PlaceholderType.Body, Idx = 1 },
+            OffsetXEmu = 457200, OffsetYEmu = 1371600,
+            ExtentCxEmu = 8229600, ExtentCyEmu = 4525963
+        };
+        var body = new TextBody();
+        var para = new Paragraph { Level = 0 };
+        // Run with no explicit size/color.
+        para.Runs.Add(new Run { Text = "Body run" });
+        body.Paragraphs.Add(para);
+        shape.TextBody = body;
+        slide.Shapes.Add(shape);
+        p.Slides.Add(slide);
+
+        var ops = SlideCompositor.Compose(p, slide);
+        var run = ops.OfType<DrawOp.Shape>().Single().Text!.Paragraphs[0].Runs[0];
+
+        run.FontSizePt.Should().Be(32.0,
+            "the layout's own lstStyle sets font size and must win over the master's 24pt");
+        run.Color.R.Should().Be(0xFF,
+            "the layout's lstStyle left color unset, so the master's red bodyStyle color " +
+            "must still apply instead of falling straight to the hard-coded black default");
+        run.Color.G.Should().Be(0x00);
+        run.Color.B.Should().Be(0x00);
+    }
+
+    /// <summary>
+    /// Sibling no-regression guard for F1: when the SAME property is set at more than one
+    /// layer, the most specific layer must still win (shape > layout > master), exactly as
+    /// before the per-property merge fix. Pins that merging per-property did not change the
+    /// precedence order for properties that collide across layers.
+    /// </summary>
+    [Fact]
+    public void Compose_BodyRun_ColorSetAtBothLayoutAndMaster_LayoutColorWins()
+    {
+        var p = new PresentationModel();
+        p.Theme = PresentationTheme.CreateDefault();
+
+        var master = new SlideMaster { Id = "m1" };
+        master.TextStyles = new MasterTextStyles();
+        // Master supplies blue.
+        master.TextStyles.BodyStyle[0] = new TextStyleLevel
+        {
+            Color = new ThemeAwareColor(new SrgbColor(0x00, 0x00, 0xFF))
+        };
+        p.Masters.Add(master);
+
+        var layout = new SlideLayout { Id = "l1", MasterId = "m1" };
+        // Layout overrides to green — same property (Color) as the master.
+        var layoutLstStyle = new TextStyleLevels();
+        layoutLstStyle[0] = new TextStyleLevel
+        {
+            Color = new ThemeAwareColor(new SrgbColor(0x00, 0xFF, 0x00))
+        };
+        var layoutBodyPh = new SlideShape
+        {
+            Placeholder = new Placeholder { Type = PlaceholderType.Body, Idx = 1 },
+            OffsetXEmu = 457200, OffsetYEmu = 1371600,
+            ExtentCxEmu = 8229600, ExtentCyEmu = 4525963,
+            TextBody = new TextBody { LstStyle = layoutLstStyle }
+        };
+        layout.Placeholders.Add(layoutBodyPh);
+        p.Layouts.Add(layout);
+
+        var slide = new Slide { LayoutId = "l1" };
+        var shape = new SlideShape
+        {
+            Id = 1,
+            Placeholder = new Placeholder { Type = PlaceholderType.Body, Idx = 1 },
+            OffsetXEmu = 457200, OffsetYEmu = 1371600,
+            ExtentCxEmu = 8229600, ExtentCyEmu = 4525963
+        };
+        var body = new TextBody();
+        var para = new Paragraph { Level = 0 };
+        para.Runs.Add(new Run { Text = "Body run" });
+        body.Paragraphs.Add(para);
+        shape.TextBody = body;
+        slide.Shapes.Add(shape);
+        p.Slides.Add(slide);
+
+        var ops = SlideCompositor.Compose(p, slide);
+        var run = ops.OfType<DrawOp.Shape>().Single().Text!.Paragraphs[0].Runs[0];
+
+        run.Color.R.Should().Be(0x00);
+        run.Color.G.Should().Be(0xFF,
+            "when both layout and master set Color, the more specific layout layer must win");
+        run.Color.B.Should().Be(0x00);
+    }
+
+    /// <summary>
     /// Regression: a plain non-placeholder shape with no master TextStyles should still
     /// compose correctly — inheriting defaults by placeholder type (or hard-coded fallback).
     /// </summary>

@@ -81,6 +81,50 @@ public sealed class ReviewTrackingRibbonWorkflowTests
     }
 
     [Fact]
+    public void TrackChanges_locked_by_protection_cannot_be_toggled_off_and_ribbon_reports_disabled()
+    {
+        var registry = new RibbonCommandRegistry();
+        var trackChanges = true; // Restrict Editing > Tracked changes forced this on when protection was applied.
+        var locked = true;
+        var markedSelections = 0;
+
+        var commands = ReviewTrackingRibbonWorkflow.Register(
+            registry,
+            new ReviewTrackingCommandBindings(
+                PrepareExecution: () => { },
+                IsTrackChangesEnabled: () => trackChanges,
+                HasSelection: () => false,
+                ToggleTrackChanges: () => trackChanges = !trackChanges,
+                MarkSelectionAsInsertion: () => markedSelections++,
+                IsTrackFormattingEnabled: () => true,
+                ToggleTrackFormatting: () => { },
+                GetDisplayForReview: () => ReviewDisplayMode.AllMarkup,
+                ApplyDisplayForReview: _ => { },
+                ShowMarkupInsertionsAndDeletions: () => true,
+                ApplyShowMarkupInsertionsAndDeletions: _ => { },
+                ShowMarkupComments: () => true,
+                ApplyShowMarkupComments: _ => { },
+                ShowMarkupFormatting: () => true,
+                ApplyShowMarkupFormatting: _ => { },
+                AcceptAllRevisions: () => { },
+                RejectAllRevisions: () => { },
+                IsTrackChangesLockedByProtection: () => locked));
+
+        // Word greys the Track Changes toggle out while Restrict Editing > "Tracked changes" is active.
+        commands.TrackChanges.GetState().IsEnabled.Should().BeFalse();
+
+        // Even a direct Execute (e.g. a stale keyboard shortcut) must not defeat the protection.
+        Execute(registry, "freew.track-changes");
+        trackChanges.Should().BeTrue("toggling Track Changes off must be blocked while the document is restricted to tracked changes only");
+
+        // Once the restriction is lifted, the toggle behaves normally again.
+        locked = false;
+        commands.TrackChanges.GetState().IsEnabled.Should().BeTrue();
+        Execute(registry, "freew.track-changes");
+        trackChanges.Should().BeFalse("with no protection in force, Track Changes toggles normally");
+    }
+
+    [Fact]
     public void Wpf_and_avalonia_adapters_delegate_tracking_workflow_to_presentation()
     {
         var wpf = ReadSource("freew", "FreeW.App.Host", "Ribbon", "FreeWRibbonCommands.cs");

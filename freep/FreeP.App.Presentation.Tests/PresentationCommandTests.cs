@@ -1274,6 +1274,64 @@ public sealed class PresentationCommandTests
     }
 
     [Fact]
+    public void ConvertSmartArtToShapesCommand_RemovesSmartArtsOwnAnimation_AndUndoRestoresIt()
+    {
+        // The SmartArt graphic itself carries an entrance animation. Converting it to shapes
+        // destroys the SmartArt's id (the converted shapes get freshly-remapped ids), so - like
+        // DeleteShapeCommand and UngroupShapeCommand destroying the ids they own - the stale
+        // p:bldP/timing entry must not survive pointing at an id no longer in the slide's tree.
+        var (p, bus) = Make();
+        var smartArt = new SlideShape { Id = 5, Kind = SlideShapeKind.SmartArt };
+        p.Slides[0].Shapes.Add(smartArt);
+
+        var smartArtAnimation = new ShapeAnimation { ShapeId = smartArt.Id };
+        p.Slides[0].Animations.Add(smartArtAnimation);
+        p.Slides[0].AnimationBuildListXml =
+            "<p:bldLst xmlns:p=\"http://schemas.openxmlformats.org/presentationml/2006/main\">" +
+            "<p:bldP spid=\"5\" grpId=\"0\" build=\"p\" />" +
+            "</p:bldLst>";
+        var originalBuildList = p.Slides[0].AnimationBuildListXml;
+
+        var converted = new List<SlideShape> { MakeShape(6), MakeShape(7) };
+        bus.Execute(new ConvertSmartArtToShapesCommand(0, smartArt.Id, smartArt, converted));
+
+        p.Slides[0].Shapes.Should().NotContain(shape => shape.Id == 5);
+        p.Slides[0].Animations.Should().BeEmpty();
+        p.Slides[0].AnimationBuildListXml.Should().NotContain("spid=\"5\"");
+
+        bus.Undo();
+
+        p.Slides[0].Shapes.Should().ContainSingle().Which.Id.Should().Be(5u);
+        p.Slides[0].Animations.Should().ContainSingle().Which.Should().BeSameAs(smartArtAnimation);
+        p.Slides[0].AnimationBuildListXml.Should().Be(originalBuildList);
+
+        bus.Redo();
+
+        p.Slides[0].Animations.Should().BeEmpty();
+    }
+
+    [Fact]
+    public void ConvertSmartArtToShapesCommand_LeavesUnrelatedAnimation_Untouched()
+    {
+        // Sibling of the test above: an animation targeting a shape that is NOT the SmartArt
+        // being converted must survive the conversion untouched.
+        var (p, bus) = Make();
+        var smartArt = new SlideShape { Id = 5, Kind = SlideShapeKind.SmartArt };
+        var unrelated = MakeShape(20);
+        p.Slides[0].Shapes.Add(smartArt);
+        p.Slides[0].Shapes.Add(unrelated);
+
+        var unrelatedAnimation = new ShapeAnimation { ShapeId = unrelated.Id };
+        p.Slides[0].Animations.Add(unrelatedAnimation);
+
+        var converted = new List<SlideShape> { MakeShape(6) };
+        bus.Execute(new ConvertSmartArtToShapesCommand(0, smartArt.Id, smartArt, converted));
+
+        p.Slides[0].Animations.Should().ContainSingle().Which.Should().BeSameAs(unrelatedAnimation);
+        p.Slides[0].Animations[0].ShapeId.Should().Be(unrelated.Id);
+    }
+
+    [Fact]
     public void DeleteShapeCommand_Revert_RestoresShapeAtOriginalIndex()
     {
         var (p, bus) = Make();

@@ -230,6 +230,166 @@ public sealed class AutoFilterDropdownMenuPlannerTests
     }
 
     [Fact]
+    public void SpillOverlayRootF5_ColorOptions_ResolveConditionalFormatDrivenFillColor_OnSpillMember()
+    {
+        // spill-overlay-root F5: same CF-driven-fill scenario as
+        // CreateMenuPlan_ColorOptions_ResolveConditionalFormatDrivenFillColor above, but this time
+        // the row that satisfies the rule is a non-anchor dynamic-array spill member -- Sheet.GetCell
+        // returns null for it (its live value lives only in the sheet's spill overlay), so before the
+        // fix the color scan always judged it against BlankValue.Instance and the swatch was silently
+        // dropped. Row 2 (the real anchor Cell, value 50) does NOT match; row 3 (spill member, value
+        // 200) DOES match and must still surface its CF-driven red fill here.
+        var workbook = new Workbook("Book");
+        var sheet = workbook.AddSheet("Sheet1");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("Value"));
+
+        var anchor = new CellAddress(sheet.Id, 2, 1);
+        sheet.SetFormula(anchor, "{50;200}");
+        sheet.GetCell(anchor)!.Value = new NumberValue(50); // anchor: real Cell, no CF match
+        sheet.SetSpillRange(anchor, new RangeValue(new ScalarValue[2, 1]
+        {
+            { new NumberValue(50) },  // row 0 (anchor slot) -- SetSpillRange ignores this element
+            { new NumberValue(200) }, // row 3: spill member, no stored Cell -- CF match -> red fill
+        }));
+
+        var range = new GridRange(
+            new CellAddress(sheet.Id, 1, 1),
+            new CellAddress(sheet.Id, 3, 1));
+        sheet.ConditionalFormats.Add(new ConditionalFormat
+        {
+            AppliesTo = range,
+            RuleType = CfRuleType.CellValue,
+            Operator = CfOperator.GreaterThan,
+            Value1 = "100",
+            FormatIfTrue = new CellStyle { FillColor = new CellColor(255, 0, 0) }
+        });
+
+        var plan = new AutoFilterDropdownPlan(range, FilterColumnOffset: 0);
+
+        var menu = AutoFilterDropdownMenuPlanner.CreateMenuPlan(workbook, sheet, plan, Text, "(Blanks)");
+
+        menu.ColorOptions.Should().Contain(option =>
+            option.Kind == AutoFilterColorFilterKind.CellFillColor &&
+            option.Label == "#FF0000");
+    }
+
+    [Fact]
+    public void SpillOverlayRootF5_ColorOptions_NonMatchingSpillMember_StaysNoFill()
+    {
+        // Sibling/no-regression for F5: a spill member whose real value does NOT satisfy the CF
+        // rule must still be treated as uncolored (no phantom fill color offered) -- guarding
+        // against an over-broad fix that treats every spill member as colored regardless of its
+        // actual value. This behavior is unchanged by the fix (true both before and after).
+        var workbook = new Workbook("Book");
+        var sheet = workbook.AddSheet("Sheet1");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("Value"));
+
+        var anchor = new CellAddress(sheet.Id, 2, 1);
+        sheet.SetFormula(anchor, "{5;10}");
+        sheet.GetCell(anchor)!.Value = new NumberValue(5); // anchor: real Cell, no CF match
+        sheet.SetSpillRange(anchor, new RangeValue(new ScalarValue[2, 1]
+        {
+            { new NumberValue(5) },
+            { new NumberValue(10) }, // row 3: spill member, no CF match either
+        }));
+
+        var range = new GridRange(
+            new CellAddress(sheet.Id, 1, 1),
+            new CellAddress(sheet.Id, 3, 1));
+        sheet.ConditionalFormats.Add(new ConditionalFormat
+        {
+            AppliesTo = range,
+            RuleType = CfRuleType.CellValue,
+            Operator = CfOperator.GreaterThan,
+            Value1 = "100",
+            FormatIfTrue = new CellStyle { FillColor = new CellColor(255, 0, 0) }
+        });
+
+        var plan = new AutoFilterDropdownPlan(range, FilterColumnOffset: 0);
+
+        var menu = AutoFilterDropdownMenuPlanner.CreateMenuPlan(workbook, sheet, plan, Text, "(Blanks)");
+
+        menu.ColorOptions.Should().NotContain(option => option.Kind == AutoFilterColorFilterKind.CellFillColor);
+    }
+
+    [Fact]
+    public void SpillOverlayRootF6_ColorOptions_ResolveConditionalFormatDrivenFontColor_OnSpillMember()
+    {
+        // spill-overlay-root F6: same gap as F5 above, but for the font-color swatch pass -- a CF
+        // rule that sets DxfFontColor and matches only a non-anchor spill member's real value must
+        // still surface that font color here.
+        var workbook = new Workbook("Book");
+        var sheet = workbook.AddSheet("Sheet1");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("Value"));
+
+        var anchor = new CellAddress(sheet.Id, 2, 1);
+        sheet.SetFormula(anchor, "{50;200}");
+        sheet.GetCell(anchor)!.Value = new NumberValue(50); // anchor: real Cell, no CF match
+        sheet.SetSpillRange(anchor, new RangeValue(new ScalarValue[2, 1]
+        {
+            { new NumberValue(50) },
+            { new NumberValue(200) }, // row 3: spill member, no stored Cell -- CF match -> blue font
+        }));
+
+        var range = new GridRange(
+            new CellAddress(sheet.Id, 1, 1),
+            new CellAddress(sheet.Id, 3, 1));
+        sheet.ConditionalFormats.Add(new ConditionalFormat
+        {
+            AppliesTo = range,
+            RuleType = CfRuleType.CellValue,
+            Operator = CfOperator.GreaterThan,
+            Value1 = "100",
+            FormatIfTrue = new CellStyle { DxfFontColor = new CellColor(0, 0, 255) }
+        });
+
+        var plan = new AutoFilterDropdownPlan(range, FilterColumnOffset: 0);
+
+        var menu = AutoFilterDropdownMenuPlanner.CreateMenuPlan(workbook, sheet, plan, Text, "(Blanks)");
+
+        menu.ColorOptions.Should().Contain(option =>
+            option.Kind == AutoFilterColorFilterKind.FontColor &&
+            option.Label == "#0000FF");
+    }
+
+    [Fact]
+    public void SpillOverlayRootF6_ColorOptions_NonMatchingSpillMember_StaysDefaultFontColor()
+    {
+        // Sibling/no-regression for F6: a spill member whose real value does NOT satisfy the
+        // font-color CF rule must not contribute a phantom font-color swatch. Unchanged by the fix.
+        var workbook = new Workbook("Book");
+        var sheet = workbook.AddSheet("Sheet1");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("Value"));
+
+        var anchor = new CellAddress(sheet.Id, 2, 1);
+        sheet.SetFormula(anchor, "{5;10}");
+        sheet.GetCell(anchor)!.Value = new NumberValue(5); // anchor: real Cell, no CF match
+        sheet.SetSpillRange(anchor, new RangeValue(new ScalarValue[2, 1]
+        {
+            { new NumberValue(5) },
+            { new NumberValue(10) }, // row 3: spill member, no CF match either
+        }));
+
+        var range = new GridRange(
+            new CellAddress(sheet.Id, 1, 1),
+            new CellAddress(sheet.Id, 3, 1));
+        sheet.ConditionalFormats.Add(new ConditionalFormat
+        {
+            AppliesTo = range,
+            RuleType = CfRuleType.CellValue,
+            Operator = CfOperator.GreaterThan,
+            Value1 = "100",
+            FormatIfTrue = new CellStyle { DxfFontColor = new CellColor(0, 0, 255) }
+        });
+
+        var plan = new AutoFilterDropdownPlan(range, FilterColumnOffset: 0);
+
+        var menu = AutoFilterDropdownMenuPlanner.CreateMenuPlan(workbook, sheet, plan, Text, "(Blanks)");
+
+        menu.ColorOptions.Should().NotContain(option => option.Kind == AutoFilterColorFilterKind.FontColor);
+    }
+
+    [Fact]
     public void CreateMenuPlan_ReflectsFilteredRowsInChecklistAndSelectAllState()
     {
         var sheet = new Sheet(SheetId, "Sheet1");

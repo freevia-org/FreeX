@@ -404,7 +404,8 @@ internal static class FreeWAvaloniaRibbonCommands
                 ShowMarkupFormatting: () => editor.ShowMarkupFormatting,
                 ApplyShowMarkupFormatting: editor.ApplyShowMarkupFormatting,
                 AcceptAllRevisions: () => editor.AcceptAllRevisions(),
-                RejectAllRevisions: () => editor.RejectAllRevisions()));
+                RejectAllRevisions: () => editor.RejectAllRevisions(),
+                IsTrackChangesLockedByProtection: () => editor.RestrictEditingPolicy.ShouldForceTrackChanges));
         r.Bind(FreeWRibbonCommandAction.ShowMarkupBalloons, new ShowMarkupBalloonsCommand(editor, callbacks));
         // Comments — thread navigation/actions over the shared comment model.
         ReviewCommentRibbonWorkflow.Register(

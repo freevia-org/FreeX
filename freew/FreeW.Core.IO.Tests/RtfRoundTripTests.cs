@@ -179,14 +179,70 @@ public class RtfRoundTripTests
         nestedTable.Rows.Add(new TableRow { Cells = { new TableCell("NESTED_TABLE_SECRET_TEXT") } });
         outerCell.NestedTables.Add(nestedTable);
         var outerTable = new Table();
-        outerTable.Rows.Add(new TableRow { Cells = { outerCell } });
+        outerTable.Rows.Add(new TableRow { Cells = { outerCell, new TableCell("OTHER_CELL_TEXT") } });
         document.Blocks.Add(outerTable);
 
-        var rtf = Encoding.ASCII.GetString(Save(document));
+        var bytes = Save(document);
+        var rtf = Encoding.ASCII.GetString(bytes);
 
         rtf.Should().Contain("OUTER_CELL_TEXT");
         rtf.Should().Contain("NESTED_TABLE_SECRET_TEXT",
             because: "a table nested inside a cell must still reach the RTF output, not be silently dropped");
+
+        // r150 meta finding F1 — a substring check on the raw bytes is not enough: the earlier fix emitted
+        // the nested table as a bare sibling \trowd..\row group right after the outer row, which any RTF
+        // table reader (including RtfReader's own accrual: "if a table is already open continue it") reads
+        // as one more ROW of the SAME outer table, not as a table nested inside a cell. Round-trip through
+        // Load() and assert the STRUCTURE the writer and reader agree on, not just that the bytes exist.
+        var reloaded = Load(bytes);
+        var reloadedOuter = reloaded.Blocks.OfType<Table>().Should().ContainSingle(
+            because: "the nested table must not become a second top-level Table").Which;
+        var reloadedRow = reloadedOuter.Rows.Should().ContainSingle(
+            because: "the nested table's row must not be promoted into an extra row of the outer table").Which;
+        reloadedRow.Cells.Select(c => c.PlainText).Should().Equal("OUTER_CELL_TEXT", "OTHER_CELL_TEXT");
+
+        var reloadedOuterCell = reloadedRow.Cells[0];
+        reloadedOuterCell.NestedTables.Should().ContainSingle(
+            because: "the nested table must be reachable via TableCell.NestedTables after reload, not flattened away").Which
+            .Rows.Should().ContainSingle().Which.Cells.Select(c => c.PlainText).Should().Equal("NESTED_TABLE_SECRET_TEXT");
+    }
+
+    // Doubly-nested sibling case: a table nested inside a cell of a table that is itself nested inside a
+    // cell must survive round-trip at BOTH levels (not just one level deep). Exercises the reader's
+    // NestedFrame stack (BeginNestedTable/EndNestedTableGroup) across two levels.
+    [Fact]
+    public void Table_DoublyNestedTableInCell_SurvivesRoundTrip()
+    {
+        var document = TextDocument.CreateEmpty();
+        document.Blocks.Clear();
+
+        var innermost = new Table();
+        innermost.Rows.Add(new TableRow { Cells = { new TableCell("LEVEL2_TEXT") } });
+
+        var middleCell = new TableCell("LEVEL1_TEXT");
+        middleCell.NestedTables.Add(innermost);
+        var middle = new Table();
+        middle.Rows.Add(new TableRow { Cells = { middleCell } });
+
+        var outerCell = new TableCell("LEVEL0_TEXT");
+        outerCell.NestedTables.Add(middle);
+        var outer = new Table();
+        outer.Rows.Add(new TableRow { Cells = { outerCell } });
+        document.Blocks.Add(outer);
+
+        var reloaded = Load(Save(document));
+
+        var reloadedOuter = reloaded.Blocks.OfType<Table>().Should().ContainSingle().Which;
+        var reloadedOuterCell = reloadedOuter.Rows.Should().ContainSingle().Which.Cells.Should().ContainSingle().Which;
+        reloadedOuterCell.PlainText.Should().Be("LEVEL0_TEXT");
+
+        var reloadedMiddle = reloadedOuterCell.NestedTables.Should().ContainSingle().Which;
+        var reloadedMiddleCell = reloadedMiddle.Rows.Should().ContainSingle().Which.Cells.Should().ContainSingle().Which;
+        reloadedMiddleCell.PlainText.Should().Be("LEVEL1_TEXT");
+
+        var reloadedInnermost = reloadedMiddleCell.NestedTables.Should().ContainSingle().Which;
+        reloadedInnermost.Rows.Should().ContainSingle().Which.Cells.Should().ContainSingle()
+            .Which.PlainText.Should().Be("LEVEL2_TEXT");
     }
 
     // Sibling no-regression case for the fix above: an ordinary table with NO nested tables must still
