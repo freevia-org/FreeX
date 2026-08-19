@@ -197,8 +197,10 @@ public sealed partial class DocumentView : Control
     // Non-null when there is a selection anchor inside a cell (same encoding as _cellCaret).
     private (int TableBlock, int Row, int Col, int ParaIdx, int Offset)? _cellAnchor;
     // AV-CCEDIT: the content control the pointer is currently over, so the hover tooltip is set once per
-    // field rather than on every pointer move.
+    // field rather than on every pointer move, and whether the layout holds any field at all (the hover
+    // search is skipped entirely in the ordinary document).
     private ModelContentControl? _hoveredContentControl;
+    private bool _hasContentControlGlyphs;
 
     // ── AV-TBL2: cross-cell rectangular selection ─────────────────────────────────────────────────
     // When a drag spans more than one cell, we switch from single-cell text selection to a rectangular
@@ -5907,6 +5909,10 @@ public sealed partial class DocumentView : Control
 
         ApplyPageVerticalAlignment();
 
+        // AV-CCEDIT: one scan per layout instead of one per pointer move — the hover affordances only
+        // have to search the placed glyphs in a document that actually holds a field.
+        _hasContentControlGlyphs = _placed.Any(placed => placed.Control is not null);
+
         _laidOutWidth = width;
 
         if (_viewMode == DocumentViewMode.PrintLayout)
@@ -7025,6 +7031,9 @@ public sealed partial class DocumentView : Control
             var segments = new List<HfSegment>();
             var sb = new System.Text.StringBuilder();
             RunFormatting segFmt = para.Runs.Count > 0 ? para.Runs[0].Formatting : RunFormatting.Default;
+            // AV-CCEDIT: the content control the buffered text belongs to, so a field in a header renders
+            // as its own shaded segment instead of being coalesced into the text around it.
+            ModelContentControl? segControl = para.Runs.Count > 0 ? para.Runs[0].Control : null;
             var stopIndex = 0;
             var modelOffset = 0;       // running literal-model offset across all runs
             var segModelStart = 0;     // model offset at the start of the current (buffered) segment
@@ -7048,6 +7057,7 @@ public sealed partial class DocumentView : Control
                     Text = sb.ToString(),
                     Fmt = segFmt,
                     ModelStart = segModelStart,
+                    Control = segControl,
                 });
                 sb.Clear();
                 segModelStart = modelOffset;
@@ -7057,9 +7067,15 @@ public sealed partial class DocumentView : Control
             {
                 var run = para.Runs[runIndex];
                 var effectiveFormatting = ResolveRunFmt(run, para);
-                if (sb.Length > 0 && effectiveFormatting != segFmt)
+                // AV-CCEDIT: a control boundary ends the buffered segment, like a formatting change.
+                if (sb.Length > 0
+                    && (effectiveFormatting != segFmt || !SameContentControl(run.Control, segControl)))
+                {
                     FlushText();
+                }
+
                 segFmt = effectiveFormatting;
+                segControl = run.Control;
                 if (IsTextHiddenInCurrentView(effectiveFormatting))
                 {
                     FlushText();
@@ -7197,6 +7213,7 @@ public sealed partial class DocumentView : Control
                     EmbeddedObject   = segment.EmbeddedObject,
                     EmbeddedObjectIcon = segment.EmbeddedObjectIcon,
                     RunIndex         = segment.RunIndex,
+                    Control          = segment.Control,
                     Slot             = slot,
                     Width            = width,
                     Height           = segment.Image is not null || segment.EmbeddedObject is not null
@@ -7221,6 +7238,7 @@ public sealed partial class DocumentView : Control
                 _headerFooterItems.Add(new HfRenderItem
                 {
                     Text             = seg.Text,
+                    Control          = seg.Control,
                     Fmt              = seg.Fmt,
                     Slot             = slot,
                     X                = _contentLeft,
@@ -11684,6 +11702,18 @@ public sealed partial class DocumentView : Control
                 var alignOffset = AlignmentOffset(item.Alignment, item.AvailableWidth,
                     ft.WidthIncludingTrailingWhitespace, isLast: true);
                 var baselineOffsetDip = RunBaselinePositionPlanner.ResolveOffsetDip(item.Fmt, PxPerPoint);
+                // AV-CCEDIT: a field in a header/footer gets the same shade as one in the body.
+                if (item.Control is not null)
+                {
+                    context.FillRectangle(
+                        ContentControlShadeBrush,
+                        new Rect(
+                            item.X + alignOffset,
+                            item.Y,
+                            Math.Max(1, ft.WidthIncludingTrailingWhitespace),
+                            item.LineHeight > 0 ? item.LineHeight : ft.Height));
+                }
+
                 context.DrawText(ft, new Point(item.X + alignOffset, item.Y + baselineOffsetDip));
             }
 
@@ -16073,12 +16103,7 @@ public sealed partial class DocumentView : Control
         var control = ContentControlAtPoint(point);
         if (control is null)
         {
-            if (_hoveredContentControl is null)
-                return false;
-
-            _hoveredContentControl = null;
-            ToolTip.SetTip(this, null);
-            Cursor = Cursor.Default;
+            ClearContentControlHover();
             return false;
         }
 
@@ -16097,6 +16122,17 @@ public sealed partial class DocumentView : Control
         return true;
     }
 
+    /// <summary>Drops the field hover affordances — on leaving a field, and on leaving the editor.</summary>
+    private void ClearContentControlHover()
+    {
+        if (_hoveredContentControl is null)
+            return;
+
+        _hoveredContentControl = null;
+        ToolTip.SetTip(this, null);
+        Cursor = Cursor.Default;
+    }
+
     /// <summary>
     /// The content control whose rendered glyphs actually contain <paramref name="point"/> — a
     /// containment test, not <see cref="TryHitTest"/>'s nearest-glyph snap, so hovering the empty space
@@ -16104,7 +16140,7 @@ public sealed partial class DocumentView : Control
     /// </summary>
     private ModelContentControl? ContentControlAtPoint(Point point)
     {
-        if (_laidOutWidth < 0)
+        if (_laidOutWidth < 0 || !_hasContentControlGlyphs)
             return null;
 
         foreach (var placed in _placed)
@@ -16736,6 +16772,14 @@ public sealed partial class DocumentView : Control
             InvalidateVisual();
             CaretMoved?.Invoke();
         }
+    }
+
+    protected override void OnPointerExited(PointerEventArgs e)
+    {
+        base.OnPointerExited(e);
+        // AV-CCEDIT: the pointer can leave the editor without a move over ordinary text first, which
+        // would otherwise strand a field's tooltip and hand cursor.
+        ClearContentControlHover();
     }
 
     protected override void OnPointerMoved(PointerEventArgs e)
@@ -25595,6 +25639,8 @@ public sealed partial class DocumentView : Control
         public EmbeddedObjectVisualPlan? EmbeddedObject;
         public AvaloniaRenderedImage? EmbeddedObjectIcon;
         public int RunIndex = -1;
+        /// <summary>AV-CCEDIT: the content control this segment belongs to (null = ordinary text).</summary>
+        public ModelContentControl? Control;
         public double Width;
         public double Height;
     }
@@ -25619,6 +25665,8 @@ public sealed partial class DocumentView : Control
         public EmbeddedObjectVisualPlan? EmbeddedObject;
         public AvaloniaRenderedImage? EmbeddedObjectIcon;
         public int RunIndex = -1;
+        /// <summary>AV-CCEDIT: the content control this segment renders, so the band can shade it.</summary>
+        public ModelContentControl? Control;
         public HeaderFooterSlotKind Slot;
         public double Width;
         public double Height;
