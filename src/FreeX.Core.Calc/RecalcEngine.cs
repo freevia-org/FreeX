@@ -2029,20 +2029,36 @@ public sealed class RecalcEngine
         // spillTargetsMayHaveChanged path), so no separate second pass is needed here.
         var report = Recalculate(workbook, formulaCells);
 
-        // F9 "Calculate Now" is an explicit, workbook-wide genuine-recalc gesture (unlike an
-        // ordinary edit, which only dirties the cells it actually touches). Recalculate/
-        // NotifySheetsRecalculated only bump Sheet.ContentVersion for sheets that had a
-        // RecalculatedCells/CyclicCells/Errors entry, so a sheet holding zero formula cells --
-        // e.g. plain data plus a volatile Formula-type conditional-format rule like "=RAND()>0.5"
-        // with no helper formula column -- never advances ContentVersion no matter how many times
-        // F9 is pressed. ContentVersion's only consumer is the CF viewport-context cache
-        // (ViewportService.BuildConditionalFormatContext), so unconditionally notifying every
-        // sheet here is safe: it does exactly what a real recalc pass should -- let every sheet's
-        // cached volatile CF results re-roll -- without affecting any other cache.
-        foreach (var sheet in workbook.Sheets)
-            sheet.NotifyContentRecalculated();
+        NotifyAllSheetsRecalculated(workbook);
 
         return report;
+    }
+
+    /// <summary>
+    /// Marks every sheet in <paramref name="workbook"/> as having just been through a genuine,
+    /// workbook-wide recalculation pass (<see cref="Sheet.NotifyContentRecalculated"/>), regardless
+    /// of whether that pass actually touched any of a given sheet's cells.
+    ///
+    /// <para>
+    /// Call this from every choke point that implements a real "Calculate Now"-shaped user gesture
+    /// (unlike an ordinary edit, which only dirties the cells it actually touches): plain F9 in
+    /// Automatic mode (<see cref="RecalcEngine"/>'s caller in
+    /// <c>WorkbookCellEditService.RecalculateDirty</c>) and full recalculation
+    /// (<see cref="RecalculateAllFormulas"/>, i.e. Ctrl+Alt+F9 / plain F9 in Manual mode). Plain
+    /// <see cref="Recalculate"/> itself only bumps <see cref="Sheet.ContentVersion"/> for sheets
+    /// that had a RecalculatedCells/CyclicCells/Errors entry, so a sheet holding zero formula cells
+    /// -- e.g. plain data plus a volatile Formula-type conditional-format rule like "=RAND()>0.5"
+    /// with no helper formula column -- never advances ContentVersion no matter how many times a
+    /// genuine recalc gesture runs. ContentVersion's only consumer is the CF viewport-context cache
+    /// (ViewportService.BuildConditionalFormatContext), so unconditionally notifying every sheet
+    /// here is safe: it does exactly what a real recalc pass should -- let every sheet's cached
+    /// volatile CF results re-roll -- without affecting any other cache.
+    /// </para>
+    /// </summary>
+    public void NotifyAllSheetsRecalculated(Workbook workbook)
+    {
+        foreach (var sheet in workbook.Sheets)
+            sheet.NotifyContentRecalculated();
     }
 
     /// <summary>

@@ -8029,7 +8029,7 @@ public sealed partial class DocumentView : RichTextBox
     /// <see cref="TryEvaluateContentControlLock"/> to enforce a block-level <c>w:lock="sdtContentLocked"</c>
     /// the same way run-level <see cref="RunMarkers.Control"/> already is.
     /// </para>
-    private sealed record ParagraphTag(IReadOnlyList<TabStop> TabStops, IReadOnlyList<string> BookmarkNames, bool PageBreakBefore = false, bool WidowControl = false, bool WidowControlIsSet = false, string? StyleId = null, int ListLevel = 0, ParagraphBorder? Border = null, ShadingPattern ShadingPattern = ShadingPattern.Clear, bool SuppressAutoHyphens = false, bool SuppressAutoHyphensIsSet = false, bool SuppressLineNumbers = false, bool SuppressLineNumbersIsSet = false, FreeW.Core.Model.Section? SectionBreak = null, DropCapLayoutIntent? DropCap = null, ListKind? ListKind = null, bool KeepLinesTogether = false, int? ListStartOverride = null, ComplexField? SpanningFieldStart = null, ComplexField? SpanningFieldOwner = null, bool EndsSpanningField = false, RevisionKind MarkRevision = RevisionKind.None, string? MarkRevisionAuthor = null, string? MarkRevisionDateXml = null, FreeW.Core.Model.BlockContentControl? BlockContentControl = null);
+    private sealed record ParagraphTag(IReadOnlyList<TabStop> TabStops, IReadOnlyList<string> BookmarkNames, bool PageBreakBefore = false, bool WidowControl = false, bool WidowControlIsSet = false, string? StyleId = null, int ListLevel = 0, ParagraphBorder? Border = null, ShadingPattern ShadingPattern = ShadingPattern.Clear, bool SuppressAutoHyphens = false, bool SuppressAutoHyphensIsSet = false, bool SuppressLineNumbers = false, bool SuppressLineNumbersIsSet = false, FreeW.Core.Model.Section? SectionBreak = null, DropCapLayoutIntent? DropCap = null, ListKind? ListKind = null, bool KeepLinesTogether = false, int? ListStartOverride = null, ComplexField? SpanningFieldStart = null, ComplexField? SpanningFieldOwner = null, bool EndsSpanningField = false, RevisionKind MarkRevision = RevisionKind.None, string? MarkRevisionAuthor = null, string? MarkRevisionDateXml = null, FreeW.Core.Model.BlockContentControl? BlockContentControl = null, FreeW.Core.Model.PreservedNumbering? PreservedNumbering = null);
 
     private sealed record RenderedBookmarkBoundary(BookmarkBoundary Boundary);
 
@@ -8262,7 +8262,8 @@ public sealed partial class DocumentView : RichTextBox
             EndsSpanningField = tag?.EndsSpanningField ?? false,
             MarkRevision = tag?.MarkRevision ?? RevisionKind.None,
             MarkRevisionAuthor = tag?.MarkRevisionAuthor,
-            MarkRevisionDateXml = tag?.MarkRevisionDateXml
+            MarkRevisionDateXml = tag?.MarkRevisionDateXml,
+            PreservedNumbering = tag?.PreservedNumbering
         };
         if (tag?.BookmarkNames is { Count: > 0 } bookmarkNames)
             modelParagraph.BookmarkNames.AddRange(bookmarkNames);
@@ -10141,7 +10142,8 @@ public sealed partial class DocumentView : RichTextBox
             paragraph.MarkRevision,
             paragraph.MarkRevisionAuthor,
             paragraph.MarkRevisionDateXml,
-            paragraph.BlockContentControl);
+            paragraph.BlockContentControl,
+            paragraph.PreservedNumbering);
 
         var runs = paragraph.Runs;
         var dropCapPlan = !inTableCell

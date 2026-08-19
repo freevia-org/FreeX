@@ -1166,6 +1166,10 @@ public partial class MainWindow
             // the ACTUAL copied areas of a multi-area (Ctrl+click) source selection instead of
             // treating its whole bounding box -- including the untouched gap between disjoint
             // areas -- as copied.
+            // R146-insert-copied-cells-hyperlink-1: forward clip.SourceSheet (mirrors the identical
+            // sourceSheetOverride forward at ExecutePaste's CreatePasteCommand above) so a
+            // cross-window "Insert Copied Cells"/"Insert Cut Cells" still carries the copied cells'
+            // hyperlinks instead of silently dropping them.
             return InsertCopiedCellsPlanner.CreateCommand(
                 _workbook,
                 _currentSheetId,
@@ -1174,7 +1178,8 @@ public partial class MainWindow
                 currentRange,
                 choice,
                 isCut: clip.IsCut,
-                sourceAreas: clip.SourceAreas);
+                sourceAreas: clip.SourceAreas,
+                sourceSheetOverride: clip.SourceSheet);
         }
 
         if (!TryExecuteRepeatableCommand(CreateCommand, "Insert Copied Cells", out _))

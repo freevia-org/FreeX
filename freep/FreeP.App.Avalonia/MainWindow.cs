@@ -560,7 +560,17 @@ public sealed partial class MainWindow : Window,
                 LoadPresentationContent(presentation);
                 _fileWorkflow.Workflow.MarkDirtyWithPath(originalPath);
             },
-            recoverInNewWindowAsync: OpenNewWindowWithRecoveredSnapshotAsync);
+            recoverInNewWindowAsync: OpenNewWindowWithRecoveredSnapshotAsync,
+            // r146-remediation: the manual "Recover Unsaved Presentations" Backstage command can be
+            // invoked at any time, not just on a fresh startup window -- unlike the startup
+            // OfferRecoveryAsync offer, the "current window" it targets may already hold unsaved
+            // edits. Route the destructive replace through the same dirty gate every other
+            // destructive file command uses (New/Open/Close) so the user is asked to save/discard/
+            // cancel BEFORE their own unsaved work is overwritten by the recovered snapshot. Mirrors
+            // the WPF host's AutosaveCoordinator.RecoverUnsavedPresentations and FreeW's Avalonia
+            // AutosaveAdapter.RecoverUnsavedDocumentsAsync wiring.
+            confirmDiscardOrSaveAsync: () =>
+                _fileSession.ConfirmCloseAllowedAsync("recovering an unsaved presentation"));
         _closeCoordinator = new SisterAvaloniaAsyncWindowCloseCoordinator(
             confirmCloseAllowedAsync: ConfirmCloseAllowedAndStopAutosaveAsync,
             requestClose: Close,
@@ -3115,7 +3125,7 @@ public sealed partial class MainWindow : Window,
         New: FileNew,
         Open: () => _ = FileOpenAsync(),
         OpenPath: OpenRecentPath,
-        RecoverUnsaved: () => _ = _autosave.OfferRecoveryAsync(this),
+        RecoverUnsaved: () => _ = _autosave.RecoverUnsavedPresentationsAsync(this),
         Save: () => _ = FileSaveAsync(),
         SaveAs: () => _ = FileSaveAsAsync(),
         ExportPdf: () => _ = FileExportPdfAsync(),

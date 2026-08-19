@@ -167,6 +167,16 @@ public sealed class WorkbookCellEditService
         }
 
         var report = _recalcEngine.Recalculate(workbook, refreshedCells ?? []);
+
+        // Plain F9 (WPF's RecalculateDirtyCells / Avalonia's MainWindow.CalculateNow) reaches this
+        // Automatic-mode branch directly, without ever going through RecalculateAll ->
+        // RecalcEngine.RecalculateAllFormulas. It is still the same "Calculate Now" gesture as F9 in
+        // Manual mode (handled by the RecalculateAll branch above) or Ctrl+Alt+F9, so it must let
+        // every sheet's cached volatile conditional-format results re-roll the same way -- see
+        // RecalcEngine.NotifyAllSheetsRecalculated's doc comment for why this is safe to do
+        // unconditionally.
+        _recalcEngine.NotifyAllSheetsRecalculated(workbook);
+
         workbook.HasPendingManualRecalculation = false;
         return report;
     }

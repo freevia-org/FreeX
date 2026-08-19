@@ -30,6 +30,7 @@ internal sealed partial class AutosaveAdapter : IDisposable
     private readonly Action<Presentation, string?> _applyRecoveredPresentation;
     private readonly FreePAutosaveSession _session;
     private readonly Func<AutosaveRecoveryCandidate, Task<bool>>? _recoverInNewWindowAsync;
+    private readonly Func<Task<bool>>? _confirmDiscardOrSaveAsync;
     private CancellationTokenSource? _cts;
 
     /// <summary>
@@ -44,7 +45,8 @@ internal sealed partial class AutosaveAdapter : IDisposable
         FileCommandWorkflow workflow,
         Action<Presentation, string?> applyRecoveredPresentation,
         Func<FreePAutosavePorts, FreePAutosaveSession>? sessionFactory = null,
-        Func<AutosaveRecoveryCandidate, Task<bool>>? recoverInNewWindowAsync = null)
+        Func<AutosaveRecoveryCandidate, Task<bool>>? recoverInNewWindowAsync = null,
+        Func<Task<bool>>? confirmDiscardOrSaveAsync = null)
     {
         ArgumentNullException.ThrowIfNull(getPresentation);
         ArgumentNullException.ThrowIfNull(workflow);
@@ -60,6 +62,7 @@ internal sealed partial class AutosaveAdapter : IDisposable
                 ExecuteOnUiThreadBounded(getPresentation, writePresentation));
         _session = sessionFactory?.Invoke(ports) ?? new FreePAutosaveSession(ports);
         _recoverInNewWindowAsync = recoverInNewWindowAsync;
+        _confirmDiscardOrSaveAsync = confirmDiscardOrSaveAsync;
 
         lock (ActiveAdaptersGate)
             ActiveAdapters.Add(this);
@@ -152,6 +155,78 @@ internal sealed partial class AutosaveAdapter : IDisposable
         {
             // Recovery is best-effort; never block startup on it.
         }
+    }
+
+    /// <summary>
+    /// Manual Backstage "Recover Unsaved Presentations" command. Unlike <see cref="OfferRecoveryAsync"/>
+    /// (the best-effort, silent STARTUP offer -- a fresh window has nothing unsaved to lose), this is
+    /// reachable at any point mid-session, possibly against a dirty presentation. Restoring a
+    /// recovered snapshot into THIS window must therefore run the same save/discard dirty gate FreeP's
+    /// WPF host runs via <c>AutosaveCoordinator.RecoverUnsavedPresentations</c> (which routes the
+    /// current-window restore through <c>PresentationFileCommandSession.ConfirmCloseAllowedAsync</c>
+    /// before overwriting) -- otherwise the current unsaved edits are silently discarded. It must also
+    /// tell the user when there is nothing to recover, and surface failures instead of swallowing
+    /// them, unlike the silent startup offer. Mirrors FreeW's Avalonia
+    /// <c>AutosaveAdapter.RecoverUnsavedDocumentsAsync</c>.
+    /// </summary>
+    public async Task RecoverUnsavedPresentationsAsync(Window owner)
+    {
+        ArgumentNullException.ThrowIfNull(owner);
+
+        var text = AutosaveRecoveryTextCatalog.Resolve(UiText.Get);
+        try
+        {
+            var recoveries = _session.PlanRecoveries();
+            if (recoveries.Count == 0)
+            {
+                await AvaloniaUserMessageDialog.ShowAsync(owner, text.NoDocumentsMessage, text.Title, UserMessageIcon.Information);
+                return;
+            }
+
+            await FreePRecoveryWorkflow.RunAsync(
+                recoveries,
+                FreePRecoveryPromptMode.Manual,
+                offer => new ValueTask<bool>(RecoveryPromptDialog.ShowAsync(owner, offer.Prompt)),
+                async (recovery, useCurrentWindow) =>
+                {
+                    if (useCurrentWindow)
+                        return await RecoverIntoCurrentWindowGatedAsync(recovery);
+
+                    var recovered = _recoverInNewWindowAsync is not null &&
+                        await _recoverInNewWindowAsync(recovery.Candidate);
+                    _session.CompleteRecoveryResult(recovery, accepted: true, recovered);
+                    return recovered;
+                });
+        }
+        catch (Exception ex)
+        {
+            await AvaloniaUserMessageDialog.ShowErrorAsync(
+                owner,
+                string.Format(System.Globalization.CultureInfo.CurrentCulture, text.FailureMessageFormat, ex.Message),
+                text.Title);
+        }
+    }
+
+    /// <summary>
+    /// Restores an accepted recovery into THIS window, gated behind the current presentation's own
+    /// save/discard prompt. If the user cancels that prompt the candidate is left on disk --
+    /// "accepted but not recovered", mirroring <see cref="FreePAutosaveSession.CompleteRecovery"/>'s
+    /// own bookkeeping for a failed restore -- so it can be revisited from Backstage later instead of
+    /// vanishing.
+    /// </summary>
+    private async Task<bool> RecoverIntoCurrentWindowGatedAsync(AutosaveRecoveryPlan recovery)
+    {
+        if (_confirmDiscardOrSaveAsync is not null && !await _confirmDiscardOrSaveAsync())
+        {
+            _session.CompleteRecoveryResult(recovery, accepted: true, recovered: false);
+            return false;
+        }
+
+        return _session.CompletePresentationRecovery(
+            recovery,
+            accepted: true,
+            _applyRecoveredPresentation,
+            FreePRecoveryRestoreExceptionPolicy.QuarantineCandidate);
     }
 
     public void Dispose()
