@@ -789,7 +789,7 @@ public sealed class CommandRegistryTests
     }
 
     [Fact]
-    public void Default_paste_routes_through_grouped_plain_text_paste()
+    public void Default_paste_routes_through_the_shared_clipboard_workflow()
     {
         var sourcePath = FindRepositoryFile("freew", "FreeW.App.Avalonia", "MainWindow.cs");
         var source = File.ReadAllText(sourcePath);
@@ -802,8 +802,13 @@ public sealed class CommandRegistryTests
         methodEnd.Should().BeGreaterThan(methodStart);
         var method = source[methodStart..methodEnd];
 
-        method.Should().Contain("FreeWClipboardApplicationWorkflow.ReadTextAsync(_platformClipboard)");
-        method.Should().Contain("ApplyClipboardText(transfer, DocumentPasteTextKind.TextOnly)");
+        // This pinned ReadTextAsync + DocumentPasteTextKind.TextOnly, which described the old
+        // plain-text-only implementation rather than an intended behaviour: nothing asserted that
+        // Avalonia SHOULD differ from the WPF host, which has recovered source formatting on Ctrl+V
+        // for some time. PasteRichFormattingTests now asserts the behaviour through the real Ctrl+V
+        // gesture, so this test keeps only what it was actually protecting -- that paste goes through
+        // the shared clipboard workflow instead of poking the editor directly.
+        method.Should().Contain("FreeWClipboardApplicationWorkflow.");
         method.Should().NotContain("_editor.InsertText(");
     }
 

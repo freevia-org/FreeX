@@ -101,6 +101,34 @@ public static class FreeWClipboardApplicationWorkflow
     // reuses the same <see cref="HtmlFileAdapter"/> this class already reads HTML clipboard payloads
     // with (see clip-1 above), so the format this method WRITES is exactly the format ReadAsync
     // below already knows how to read back -- including from FreeW itself.
+    /// <summary>
+    /// Builds clipboard content from a selection already serialized to <paramref name="rtf"/>: parses
+    /// it into a document for the structured payload AND attaches the original RTF string, so a
+    /// receiving application gets both.
+    /// </summary>
+    /// <remarks>
+    /// Exists so the renderers never touch RtfClipboardDocumentParser themselves.
+    /// RichClipboardDocumentPlannerTests forbids RTF parsing in DocumentView/MainWindow precisely so
+    /// this policy lives in one place -- the WPF host was doing its own parse-and-attach on the COPY
+    /// side, which is the same rule the paste side already routes through here.
+    /// </remarks>
+    public static PlatformClipboardContent? CreateWriteContentFromRtf(string? selectedText, string? rtf)
+    {
+        TextDocument? richDocument = null;
+        if (rtf is not null)
+            RtfClipboardDocumentParser.TryParse(rtf, out richDocument);
+
+        if (CreateWriteContent(selectedText, richDocument) is not { } content)
+            return null;
+
+        if (rtf is null)
+            return content;
+
+        var customData = content.CustomData.ToList();
+        customData.Add(PlatformClipboardData.FromText(RichTextFormat, rtf));
+        return new PlatformClipboardContent(content.Text, content.FilePaths, content.Image, customData);
+    }
+
     public static PlatformClipboardContent? CreateWriteContent(string? selectedText, TextDocument? richDocument)
     {
         if (string.IsNullOrEmpty(selectedText))

@@ -1574,6 +1574,36 @@ public sealed class WorkbookSession : IDisposable
     /// Executes and records a repeatable workbook command while preserving the current selection.
     /// The factory is re-evaluated by Repeat Last Action, so it may resolve live renderer state.
     /// </summary>
+    /// <summary>
+    /// Applies Excel's "Show Outline Level N" to the ROW axis: expand everything back to level 1
+    /// first, then collapse from level N+1 down, so a row hidden by a shallower display level is
+    /// visible again before the deeper levels are re-hidden.
+    /// </summary>
+    /// <remarks>
+    /// Lives here rather than in a shell because AvaloniaWorksheetStructureOwnershipSourceTests
+    /// requires the outline/pane adapters to delegate portable ownership to the session instead of
+    /// constructing workbook commands themselves -- a deliberate contract that keeps the two shells
+    /// from growing their own copies of this sequence and drifting apart.
+    /// </remarks>
+    public WorkbookCellEditResult ShowRowOutlineLevel(int level) =>
+        ExecuteRepeatableCommandPreservingSelection(() =>
+            new CompositeWorkbookCommand(
+                "Show Outline Level",
+                [
+                    new ExpandRowGroupCommand(ActiveSheet.Id, 1),
+                    new CollapseRowGroupCommand(ActiveSheet.Id, level + 1),
+                ]));
+
+    /// <summary>Column-axis counterpart of <see cref="ShowRowOutlineLevel"/>.</summary>
+    public WorkbookCellEditResult ShowColumnOutlineLevel(int level) =>
+        ExecuteRepeatableCommandPreservingSelection(() =>
+            new CompositeWorkbookCommand(
+                "Show Outline Level",
+                [
+                    new ExpandColGroupCommand(ActiveSheet.Id, 1),
+                    new CollapseColGroupCommand(ActiveSheet.Id, level + 1),
+                ]));
+
     public WorkbookCellEditResult ExecuteRepeatableCommandPreservingSelection(
         Func<IWorkbookCommand> commandFactory,
         bool mayShiftStructuralBoundaries = false)

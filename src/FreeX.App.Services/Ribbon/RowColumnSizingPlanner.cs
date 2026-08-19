@@ -86,13 +86,6 @@ public static class RowColumnSizingPlanner
         var plans = new List<RowColumnSizePlan>();
         for (var row = bounds.Value.Start.Row; row <= bounds.Value.End.Row; row++)
         {
-            // A hidden row caught inside the selection must not be resized: Excel's AutoFit never
-            // un-hides a row/column the user explicitly hid (SetRowHeightCommand clears HiddenRows
-            // whenever it sets an explicit height, so emitting a plan for it here would silently
-            // reveal it).
-            if (sheet.IsRowEffectivelyHidden(row))
-                continue;
-
             var texts = CollectRowTexts(sheet, row, bounds.Value, getDisplayText);
             plans.Add(new RowColumnSizePlan(row, AutoFitSizingService.EstimateRowHeight(texts, defaultHeight)));
         }
@@ -114,11 +107,6 @@ public static class RowColumnSizingPlanner
         var plans = new List<RowColumnSizePlan>();
         for (var col = bounds.Value.Start.Col; col <= bounds.Value.End.Col; col++)
         {
-            // A hidden column caught inside the selection must not be resized: see the matching
-            // comment in PlanAutoFitRowHeights above.
-            if (sheet.IsColEffectivelyHidden(col))
-                continue;
-
             var texts = CollectColumnTexts(sheet, col, bounds.Value, getDisplayText);
             plans.Add(new RowColumnSizePlan(col, AutoFitSizingService.EstimateColumnWidth(texts, defaultWidth)));
         }

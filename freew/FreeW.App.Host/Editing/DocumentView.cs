@@ -1141,19 +1141,11 @@ public sealed partial class DocumentView : RichTextBox
             // Falls through to a plain-text-only clipboard write below.
         }
 
-        TextDocument? richDocument = null;
-        if (rtf is not null)
-            RtfClipboardDocumentParser.TryParse(rtf, out richDocument);
-
-        if (FreeWClipboardApplicationWorkflow.CreateWriteContent(text, richDocument) is not { } content)
+        // Parsing and re-attaching the RTF lives in the workflow, not here:
+        // RichClipboardDocumentPlannerTests forbids a renderer from touching the RTF parser, so that
+        // the policy has exactly one home for both the copy and the paste direction.
+        if (FreeWClipboardApplicationWorkflow.CreateWriteContentFromRtf(text, rtf) is not { } content)
             return;
-
-        if (rtf is not null)
-        {
-            var customData = content.CustomData.ToList();
-            customData.Add(PlatformClipboardData.FromText(FreeWClipboardApplicationWorkflow.RichTextFormat, rtf));
-            content = new PlatformClipboardContent(content.Text, content.FilePaths, content.Image, customData);
-        }
 
         _platformClipboard.WriteAsync(content).AsTask().GetAwaiter().GetResult();
     }

@@ -318,13 +318,7 @@ public sealed partial class MainWindow
     /// </summary>
     private void ShowRowOutlineLevel(int level)
     {
-        var result = _session.ExecuteRepeatableCommandPreservingSelection(() =>
-            new CompositeWorkbookCommand(
-                "Show Outline Level",
-                [
-                    new ExpandRowGroupCommand(_session.ActiveSheet.Id, 1),
-                    new CollapseRowGroupCommand(_session.ActiveSheet.Id, level + 1),
-                ]));
+        var result = _session.ShowRowOutlineLevel(level);
         RefreshShell(result.Success
             ? UiText.Format("Outline_RowLevelShownStatus", level)
             : result.ErrorMessage ?? UiText.Get("Outline_UpdateRowGroupFailed"));
@@ -333,13 +327,7 @@ public sealed partial class MainWindow
     /// <summary>Column-axis counterpart of <see cref="ShowRowOutlineLevel"/>.</summary>
     private void ShowColumnOutlineLevel(int level)
     {
-        var result = _session.ExecuteRepeatableCommandPreservingSelection(() =>
-            new CompositeWorkbookCommand(
-                "Show Outline Level",
-                [
-                    new ExpandColGroupCommand(_session.ActiveSheet.Id, 1),
-                    new CollapseColGroupCommand(_session.ActiveSheet.Id, level + 1),
-                ]));
+        var result = _session.ShowColumnOutlineLevel(level);
         RefreshShell(result.Success
             ? UiText.Format("Outline_ColumnLevelShownStatus", level)
             : result.ErrorMessage ?? UiText.Get("Outline_UpdateColumnGroupFailed"));
