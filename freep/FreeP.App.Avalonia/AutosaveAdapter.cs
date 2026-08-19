@@ -209,16 +209,23 @@ internal sealed partial class AutosaveAdapter : IDisposable
 
     /// <summary>
     /// Restores an accepted recovery into THIS window, gated behind the current presentation's own
-    /// save/discard prompt. If the user cancels that prompt the candidate is left on disk --
-    /// "accepted but not recovered", mirroring <see cref="FreePAutosaveSession.CompleteRecovery"/>'s
-    /// own bookkeeping for a failed restore -- so it can be revisited from Backstage later instead of
-    /// vanishing.
+    /// save/discard prompt. If the user cancels that prompt the candidate is left on disk
+    /// (accepted:false -> Keep disposition) so it can be revisited from Backstage later, matching the
+    /// WPF host and the behaviour of declining the initial "Recover unsaved changes?" offer.
     /// </summary>
+    /// <remarks>
+    /// Passing accepted:true here instead would resolve to Quarantine
+    /// (<see cref="Free.Shared.AppServices.AutosaveRecoveryPolicy.ResolveDisposition"/>: accepted and
+    /// not recovered =&gt; Quarantine), which moves the snapshot out of the directory EnumerateCandidates
+    /// scans -- so declining to discard the CURRENT presentation would permanently destroy access to
+    /// the OLDER unsaved work the user was trying to recover. Declining one thing must not throw away
+    /// the other.
+    /// </remarks>
     private async Task<bool> RecoverIntoCurrentWindowGatedAsync(AutosaveRecoveryPlan recovery)
     {
         if (_confirmDiscardOrSaveAsync is not null && !await _confirmDiscardOrSaveAsync())
         {
-            _session.CompleteRecoveryResult(recovery, accepted: true, recovered: false);
+            _session.CompleteRecoveryResult(recovery, accepted: false, recovered: false);
             return false;
         }
 
