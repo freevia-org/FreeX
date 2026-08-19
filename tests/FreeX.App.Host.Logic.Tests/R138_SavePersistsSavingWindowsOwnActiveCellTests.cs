@@ -78,6 +78,17 @@ public sealed class R138_SavePersistsSavingWindowsOwnActiveCellTests
                         captured = (savedSheet.ActiveRow!.Value, savedSheet.ActiveCol!.Value);
                     });
 
+                // #164 diagnostic: call the reconcile the save path calls, directly, and record
+                // what it leaves on the shared Sheet. The save path runs it synchronously right
+                // before handing the workbook to the writer (WorkbookSaveExecutionCoordinator.cs:153),
+                // so if it produces 5 here but the writer still sees 26, the reconcile is NOT the
+                // culprit and something rewrites the shared field between the two -- a different
+                // bug from "the reconcile never ran", which is what the previous instrumentation
+                // round left open. Running it twice is harmless: it only assigns fields, and the
+                // save path will assign the same values again a moment later.
+                R49MainWindowTestHarness.Invoke(window1, "ReconcileViewStateForSave");
+                var afterReconcile = (sheet.ActiveRow, sheet.ActiveCol);
+
                 var saveTask = InvokeSaveWorkbookToTargetAsync(window1, new FileSaveTarget(savePath, adapter));
                 WaitForSaveResult(saveTask).Should().BeTrue();
 
@@ -93,7 +104,9 @@ public sealed class R138_SavePersistsSavingWindowsOwnActiveCellTests
                 var reconcileState =
                     "window1._currentSheetId=" + GetCurrentSheetId(window1)
                     + " (test sheetId=" + sheetId + "), window1._selectionAnchor="
-                    + DescribeSelectionAnchor(window1);
+                    + DescribeSelectionAnchor(window1)
+                    + ", sheet.Active after a direct ReconcileViewStateForSave=("
+                    + afterReconcile.ActiveRow + "," + afterReconcile.ActiveCol + ")";
 
                 captured!.Value.Row.Should().Be(5u,
                     "Ctrl+S from window1 must persist window1's OWN active cell, not window2's " +
