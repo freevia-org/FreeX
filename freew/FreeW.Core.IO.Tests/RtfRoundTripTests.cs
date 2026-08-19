@@ -164,6 +164,124 @@ public class RtfRoundTripTests
         }
     }
 
+    // sweep88 F2 regression — a table nested inside another table's cell (TableCell.NestedTables) must not
+    // be silently dropped from RTF output. DocumentSaveCompatibilityPlanner tells the user RTF "keeps ...
+    // tables"; before the fix, RtfWriter.WriteCellContent walked only TableCell.Paragraphs and never read
+    // NestedTables, so the nested table's content never reached the .rtf bytes at all -- no error, no
+    // warning, just gone.
+    [Fact]
+    public void Table_NestedTableInCell_ContentIsNotDropped()
+    {
+        var document = TextDocument.CreateEmpty();
+        document.Blocks.Clear();
+        var outerCell = new TableCell("OUTER_CELL_TEXT");
+        var nestedTable = new Table();
+        nestedTable.Rows.Add(new TableRow { Cells = { new TableCell("NESTED_TABLE_SECRET_TEXT") } });
+        outerCell.NestedTables.Add(nestedTable);
+        var outerTable = new Table();
+        outerTable.Rows.Add(new TableRow { Cells = { outerCell, new TableCell("OTHER_CELL_TEXT") } });
+        document.Blocks.Add(outerTable);
+
+        var bytes = Save(document);
+        var rtf = Encoding.ASCII.GetString(bytes);
+
+        rtf.Should().Contain("OUTER_CELL_TEXT");
+        rtf.Should().Contain("NESTED_TABLE_SECRET_TEXT",
+            because: "a table nested inside a cell must still reach the RTF output, not be silently dropped");
+
+        // r150 meta finding F1 — a substring check on the raw bytes is not enough: the earlier fix emitted
+        // the nested table as a bare sibling \trowd..\row group right after the outer row, which any RTF
+        // table reader (including RtfReader's own accrual: "if a table is already open continue it") reads
+        // as one more ROW of the SAME outer table, not as a table nested inside a cell. Round-trip through
+        // Load() and assert the STRUCTURE the writer and reader agree on, not just that the bytes exist.
+        var reloaded = Load(bytes);
+        var reloadedOuter = reloaded.Blocks.OfType<Table>().Should().ContainSingle(
+            because: "the nested table must not become a second top-level Table").Which;
+        var reloadedRow = reloadedOuter.Rows.Should().ContainSingle(
+            because: "the nested table's row must not be promoted into an extra row of the outer table").Which;
+        reloadedRow.Cells.Select(c => c.PlainText).Should().Equal("OUTER_CELL_TEXT", "OTHER_CELL_TEXT");
+
+        var reloadedOuterCell = reloadedRow.Cells[0];
+        reloadedOuterCell.NestedTables.Should().ContainSingle(
+            because: "the nested table must be reachable via TableCell.NestedTables after reload, not flattened away").Which
+            .Rows.Should().ContainSingle().Which.Cells.Select(c => c.PlainText).Should().Equal("NESTED_TABLE_SECRET_TEXT");
+    }
+
+    // Doubly-nested sibling case: a table nested inside a cell of a table that is itself nested inside a
+    // cell must survive round-trip at BOTH levels (not just one level deep). Exercises the reader's
+    // NestedFrame stack (BeginNestedTable/EndNestedTableGroup) across two levels.
+    [Fact]
+    public void Table_DoublyNestedTableInCell_SurvivesRoundTrip()
+    {
+        var document = TextDocument.CreateEmpty();
+        document.Blocks.Clear();
+
+        var innermost = new Table();
+        innermost.Rows.Add(new TableRow { Cells = { new TableCell("LEVEL2_TEXT") } });
+
+        var middleCell = new TableCell("LEVEL1_TEXT");
+        middleCell.NestedTables.Add(innermost);
+        var middle = new Table();
+        middle.Rows.Add(new TableRow { Cells = { middleCell } });
+
+        var outerCell = new TableCell("LEVEL0_TEXT");
+        outerCell.NestedTables.Add(middle);
+        var outer = new Table();
+        outer.Rows.Add(new TableRow { Cells = { outerCell } });
+        document.Blocks.Add(outer);
+
+        var reloaded = Load(Save(document));
+
+        var reloadedOuter = reloaded.Blocks.OfType<Table>().Should().ContainSingle().Which;
+        var reloadedOuterCell = reloadedOuter.Rows.Should().ContainSingle().Which.Cells.Should().ContainSingle().Which;
+        reloadedOuterCell.PlainText.Should().Be("LEVEL0_TEXT");
+
+        var reloadedMiddle = reloadedOuterCell.NestedTables.Should().ContainSingle().Which;
+        var reloadedMiddleCell = reloadedMiddle.Rows.Should().ContainSingle().Which.Cells.Should().ContainSingle().Which;
+        reloadedMiddleCell.PlainText.Should().Be("LEVEL1_TEXT");
+
+        var reloadedInnermost = reloadedMiddleCell.NestedTables.Should().ContainSingle().Which;
+        reloadedInnermost.Rows.Should().ContainSingle().Which.Cells.Should().ContainSingle()
+            .Which.PlainText.Should().Be("LEVEL2_TEXT");
+    }
+
+    // Sibling no-regression case for the fix above: an ordinary table with NO nested tables must still
+    // write exactly the same single \trowd..\row group it always did (no duplicate rows, no extra tables
+    // accidentally introduced by the new post-\row nested-table emission loop).
+    [Fact]
+    public void Table_WithoutNestedTables_StillWritesExactlyOneRow()
+    {
+        var document = TextDocument.CreateEmpty();
+        document.Blocks.Clear();
+        var table = new Table();
+        table.Rows.Add(new TableRow
+        {
+            Cells = { new TableCell("A1"), new TableCell("B1") },
+        });
+        document.Blocks.Add(table);
+
+        var rtf = Encoding.ASCII.GetString(Save(document));
+
+        CountOccurrences(rtf, @"\trowd").Should().Be(1, because: "a table with no nested tables must still emit exactly one row group");
+        CountOccurrences(rtf, @"\row").Should().Be(1);
+
+        var reloaded = Load(Save(document));
+        var reloadedTable = reloaded.Blocks.OfType<Table>().Should().ContainSingle().Which;
+        reloadedTable.Rows.Should().ContainSingle().Which.Cells.Select(cell => cell.PlainText).Should().Equal("A1", "B1");
+    }
+
+    private static int CountOccurrences(string haystack, string needle)
+    {
+        var count = 0;
+        var index = 0;
+        while ((index = haystack.IndexOf(needle, index, StringComparison.Ordinal)) >= 0)
+        {
+            count++;
+            index += needle.Length;
+        }
+        return count;
+    }
+
     // P10 regression — \'XX hex-byte escapes inside \fonttbl font names must be decoded against the active
     // code page and stored in the font table, not discarded.  A font name containing \'e9 (= é in
     // Windows-1252) was previously truncated at the first escaped byte, so any run using that \fN got an

@@ -184,6 +184,48 @@ public class StyleManagerTests
     }
 
     [Fact]
+    public void ModifyStyle_PreservesLinkedStyleId_AndPreservedTableStyleXml()
+    {
+        // Mirrors what DocxReader produces for a real Word document: a paragraph style ("Heading1")
+        // linked to its character style ("Heading1Char") via w:style/w:link, and a table style carrying
+        // its exact imported XML payload. Editing either through Modify Style must not drop the pairing
+        // or the preserved XML on the next save (freew-styles-inheritance F1).
+        var doc = TextDocument.CreateEmpty();
+        doc.Styles["Heading1"] = new DocumentStyle
+        {
+            Id = "Heading1",
+            Name = "heading 1",
+            Type = StyleType.Paragraph,
+            LinkedStyleId = "Heading1Char",
+        };
+        doc.Styles["Heading1Char"] = new DocumentStyle
+        {
+            Id = "Heading1Char",
+            Name = "Heading 1 Char",
+            Type = StyleType.Character,
+            LinkedStyleId = "Heading1",
+        };
+        doc.Styles["TableStyle1"] = new DocumentStyle
+        {
+            Id = "TableStyle1",
+            Name = "Table Style 1",
+            Type = StyleType.Table,
+            PreservedTableStyleXml = "<w:style w:type=\"table\" w:styleId=\"TableStyle1\">...</w:style>",
+        };
+
+        // A simple color/formatting-only edit -- exactly what the Modify Style dialog does.
+        var updatedHeading = StyleManager.ModifyStyle(doc, "Heading1", run: new RunFormatting { Bold = true });
+        var updatedTable = StyleManager.ModifyStyle(doc, "TableStyle1", run: new RunFormatting { Bold = true });
+
+        updatedHeading!.LinkedStyleId.Should().Be("Heading1Char");
+        doc.Styles["Heading1"].LinkedStyleId.Should().Be("Heading1Char");
+        // The other half of the pair, untouched by this call, must still resolve back.
+        doc.Styles["Heading1Char"].LinkedStyleId.Should().Be("Heading1");
+
+        updatedTable!.PreservedTableStyleXml.Should().Be("<w:style w:type=\"table\" w:styleId=\"TableStyle1\">...</w:style>");
+    }
+
+    [Fact]
     public void ModifyStyle_ReturnsNull_ForUnknownStyle()
     {
         var doc = TextDocument.CreateEmpty();

@@ -2998,8 +2998,15 @@ internal static class PptxChartWriter
         XElement el;
         if (color.SchemeColor is { } sc)
         {
+            // Preserve the original OOXML role name (e.g. "tx1"/"bg1") when known, so a
+            // clrMapOvr's indirection survives the round trip; only fall back to the
+            // slot's canonical name (e.g. "dk1") when no role name was captured on read
+            // (programmatic/test construction).
+            var schemeVal = string.IsNullOrEmpty(sc.RoleName)
+                ? PptxColorReader.ToSchemeColorString(sc.Slot)
+                : sc.RoleName;
             el = new XElement(A + "schemeClr",
-                new XAttribute("val", PptxColorReader.ToSchemeColorString(sc.Slot)));
+                new XAttribute("val", schemeVal));
             if (Math.Abs(sc.LumMod - 1.0) > 1e-9)
                 el.Add(new XElement(A + "lumMod",
                     new XAttribute("val", (long)Math.Round(sc.LumMod * 100000))));

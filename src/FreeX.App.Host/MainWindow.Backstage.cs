@@ -745,7 +745,7 @@ public partial class MainWindow
             ShowOpenProgress(CreateOpenProgress("done", TimeSpan.Zero, 100));
             ShowUnsupportedXlsxFeatureOpenWarningIfNeeded();
             ShowXlsxLoadWarningsIfNeeded(result.LoadWarnings);
-            ApplyWorkbookReadOnlyOpenPolicy(_workbook);
+            ApplyWorkbookReadOnlyOpenPolicy(_workbook, target.Path);
             RecordDiagnosticEvent("workbook_opened", new Dictionary<string, string?>
             {
                 ["extension"] = ext,
@@ -1456,9 +1456,16 @@ public partial class MainWindow
     /// shared read-only state on every Save to force Save-over-original through the
     /// Save-As dialog instead of a silent overwrite (R83-services-doc-recovery-props-5-1). Individual
     /// edit commands are not yet blocked -- that remains out of scope (tracked separately).
+    /// <para>
+    /// <paramref name="filePath"/> is the on-disk path just opened (passed through to
+    /// <see cref="WorkbookReadOnlySession.RunOpen"/> so it can classify an OS-level read-only file
+    /// -- read-only attribute, read-only share/volume, or a denied ACL -- even when neither
+    /// embedded workbook flag above is set; previously that combination opened fully editable
+    /// with zero indication until the first Save failed, round 149).
+    /// </para>
     /// </summary>
-    private WorkbookReadOnlyOpenOutcome ApplyWorkbookReadOnlyOpenPolicy(Workbook workbook) =>
-        _workbookReadOnlySession.RunOpen(workbook, new WpfWorkbookReadOnlyOpenPromptPort(this));
+    private WorkbookReadOnlyOpenOutcome ApplyWorkbookReadOnlyOpenPolicy(Workbook workbook, string? filePath = null) =>
+        _workbookReadOnlySession.RunOpen(workbook, new WpfWorkbookReadOnlyOpenPromptPort(this), filePath);
 
     private sealed class WpfWorkbookReadOnlyOpenPromptPort(MainWindow owner) : IWorkbookReadOnlyOpenPromptPort
     {

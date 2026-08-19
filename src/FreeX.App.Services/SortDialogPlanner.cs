@@ -565,7 +565,14 @@ public static class SortDialogPlanner
         var icons = new SortedSet<string>(StringComparer.Ordinal);
         foreach (var address in dataRange.AllCells())
         {
-            var icon = SortCommand.GetEffectiveIcon(workbook, sheet, address, sheet.GetCell(address));
+            // R150-sort-dialog-icon-spill: a non-anchor spill member has no entry in Sheet's
+            // _cells dictionary (GetCell returns null for it), so its live value only lives in
+            // the separate spill overlay. Pass the resolved effective value explicitly -- same
+            // fallback SortCommand.CaptureCellPayload uses -- so GetEffectiveIcon evaluates the
+            // icon-set rule against the spilled number instead of falling back to BlankValue.
+            var cell = sheet.GetCell(address);
+            var effectiveValue = cell?.Value ?? sheet.GetValue(address);
+            var icon = SortCommand.GetEffectiveIcon(workbook, sheet, address, cell, effectiveValue);
             if (icon is { } resolvedIcon)
                 icons.Add(FormatIconToken(resolvedIcon));
         }

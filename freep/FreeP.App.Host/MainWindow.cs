@@ -499,8 +499,10 @@ public sealed partial class MainWindow : Window,
             _autosave.Start();
         };
 
-        // Backstage.
-        _backstage = new BackstageView(BuildBackstageEndpoints());
+        // Backstage. OnClosed restores keyboard focus to the slide canvas -- without it, Esc/back-arrow
+        // (or any Backstage action that dismisses the overlay) leaves focus on nothing, so arrow keys,
+        // Delete, and typed text stop reaching the slide until the user clicks a slide/shape manually.
+        _backstage = new BackstageView(BuildBackstageEndpoints(), onClosed: () => SlideCanvas.Focus());
 
         var frame = SisterAppWindowFrameBuilder.Build(new SisterAppWindowFrameSpec(_titleBar, root, _backstage));
         Content = frame.Root;

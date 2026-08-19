@@ -451,7 +451,7 @@ public sealed partial class DocumentView
     /// AV-CCEDIT: the placed glyphs of a block that render inside a content control — the shaded region
     /// the chrome draws — with the character each one actually renders as.
     /// </summary>
-    internal IReadOnlyList<(char Ch, ContentControlKind Kind, Rect Rect)> ContentControlGlyphsForTest(
+    internal IReadOnlyList<(char Ch, ContentControlKind Kind, int Offset, Rect Rect)> ContentControlGlyphsForTest(
         int blockIndex)
     {
         if (_laidOutWidth < 0)
@@ -459,7 +459,7 @@ public sealed partial class DocumentView
 
         return _placed
             .Where(p => p.Block == blockIndex && !p.Sentinel && p.Control is not null)
-            .Select(p => (p.Ch, p.Control!.Kind, new Rect(p.X, p.Y, Math.Max(1, p.W), p.LineHeight)))
+            .Select(p => (p.Ch, p.Control!.Kind, p.Offset, new Rect(p.X, p.Y, Math.Max(1, p.W), p.LineHeight)))
             .ToList();
     }
 

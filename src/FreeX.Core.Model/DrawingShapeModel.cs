@@ -151,6 +151,15 @@ public sealed class DrawingShapeModel
     public bool Locked { get; set; } = true;
     public string? Title { get; set; }
     public string? AltText { get; set; }
+
+    /// <summary>
+    /// R149-app-accessibility-checker-decorative-shapes: true when the user marked this shape
+    /// "decorative" via Excel's Format Shape &gt; Alt Text pane -- mirrors
+    /// <see cref="PictureModel.IsDecorative"/>. A decorative shape is intentionally content-free
+    /// and is exempt from the Accessibility Checker's Missing Alt Text rule even when it has no
+    /// alt text/title/name at all, matching real Excel's own Accessibility Checker.
+    /// </summary>
+    public bool IsDecorative { get; set; }
     public CellColor? FillColor { get; set; }
     public CellColor? OutlineColor { get; set; }
     public CellColor? GradientFillEndColor { get; set; }

@@ -183,20 +183,33 @@ public sealed partial class MainWindow
             DrawingObjectActionPlanner.InsertTextBoxSuccess(FormatCellReference(anchor))));
     }
 
-    /// <summary>Decodes the image's native pixel size via Avalonia, or null when decoding fails.</summary>
+    private const double PictureDecodeDefaultDpi = 96d;
+
+    /// <summary>
+    /// Decodes the image's native size via Avalonia and converts pixels to 96-DPI device-independent units
+    /// using the bitmap's own embedded DPI, or null when decoding fails. Mirrors the WPF host's
+    /// <c>ImageDimensionDecoder.PixelsToDeviceIndependentUnits</c> formula (pixels*96/dpi) so the same image
+    /// file inserts at the same physical size on both shells instead of Avalonia's raw pixel count being
+    /// mistaken for DIPs at 96 DPI.
+    /// </summary>
     private static PictureInsertionSize? DecodePictureSize(byte[] imageBytes)
     {
         try
         {
             using var stream = new MemoryStream(imageBytes);
             using var bitmap = new Bitmap(stream);
-            return PictureInsertionPlacementPlanner.NormalizeSize(bitmap.PixelSize.Width, bitmap.PixelSize.Height);
+            var width = PictureDecodePixelsToDip(bitmap.PixelSize.Width, bitmap.Dpi.X);
+            var height = PictureDecodePixelsToDip(bitmap.PixelSize.Height, bitmap.Dpi.Y);
+            return PictureInsertionPlacementPlanner.NormalizeSize(width, height);
         }
         catch (Exception)
         {
             return null;
         }
     }
+
+    private static double PictureDecodePixelsToDip(int pixels, double dpi) =>
+        pixels * PictureDecodeDefaultDpi / (double.IsFinite(dpi) && dpi > 0 ? dpi : PictureDecodeDefaultDpi);
 
     /// <summary>
     /// Converts the current selection into a structured table through the shared session command path,

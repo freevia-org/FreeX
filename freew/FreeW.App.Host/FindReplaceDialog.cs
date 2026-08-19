@@ -313,16 +313,35 @@ internal sealed partial class FindReplaceDialog : Free.Shared.Ribbon.Wpf.DialogW
             var count = 0;
             var pointer = from;
             var searchRequest = new FindReplaceSearchRequest(request.Term, request.Options);
-            while (count < 100_000 && TryFind(pointer, searchRequest, out var matchStart, out var matchEnd))
-            {
-                if (restrictToSelection && matchStart.CompareTo(limit) >= 0)
-                    break;
 
-                var originalMatchText = new TextRange(matchStart, matchEnd).Text;
-                editor.Selection.Select(matchStart, matchEnd);
-                editor.InsertText(request.Replacement);
-                pointer = SkipTrackedLeftoverMatch(editor.Selection.End, originalMatchText);
-                count++;
+            // Every InsertText below lands on editor.Commands as its own DocumentCommandBus entry; without
+            // this group, N replacements become N separate undo-stack entries and one Ctrl+Z only reverts
+            // the last match instead of the whole Replace All (matches the BeginUndoGroup/CommitUndoGroup
+            // idiom other multi-step coordinators already use, e.g. MultilevelListMutationCoordinator).
+            // notifyOnEachExecute: true -- unlike those coordinators, each replacement here is FOUND by
+            // walking the rendered surface (TryFind below), so the redraw between edits must still happen
+            // mid-batch or the next edit's CommitToModel() re-reads the stale surface and silently discards
+            // every replacement but the last (see DocumentCommandBus.BeginUndoGroup's doc comment).
+            editor.Commands.BeginUndoGroup(notifyOnEachExecute: true);
+            try
+            {
+                while (count < 100_000 && TryFind(pointer, searchRequest, out var matchStart, out var matchEnd))
+                {
+                    if (restrictToSelection && matchStart.CompareTo(limit) >= 0)
+                        break;
+
+                    var originalMatchText = new TextRange(matchStart, matchEnd).Text;
+                    editor.Selection.Select(matchStart, matchEnd);
+                    editor.InsertText(request.Replacement);
+                    pointer = SkipTrackedLeftoverMatch(editor.Selection.End, originalMatchText);
+                    count++;
+                }
+                editor.Commands.CommitUndoGroup("Replace All");
+            }
+            catch
+            {
+                editor.Commands.AbortUndoGroup();
+                throw;
             }
 
             return new FindReplaceAllExecutionResult(count, restrictToSelection);

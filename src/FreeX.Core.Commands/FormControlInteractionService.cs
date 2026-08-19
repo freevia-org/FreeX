@@ -98,8 +98,14 @@ public static class FormControlInteractionService
             switch (control.Kind)
             {
                 case FormControlKind.CheckBox:
+                    // Sheet.GetCell only returns physical cell entries; a non-anchor spill member
+                    // (e.g. a cell inside a live SEQUENCE()/array-formula result) has no entry of
+                    // its own and GetCell returns null there even though the cell has a real,
+                    // visible value. Sheet.GetValue is the overlay-aware accessor (it falls back to
+                    // the spill-value table) and matches what the grid actually renders in that
+                    // cell, so it must be used here instead of GetCell(...)?.Value.
                     if (TryResolveLinkedCell(control.LinkedCell, sheet.Id, workbook, out var checkBoxAddress))
-                        control.IsChecked = IsTruthy(workbook.GetSheet(checkBoxAddress.Sheet)?.GetCell(checkBoxAddress)?.Value);
+                        control.IsChecked = IsTruthy(workbook.GetSheet(checkBoxAddress.Sheet)?.GetValue(checkBoxAddress));
                     break;
 
                 case FormControlKind.OptionButton:
@@ -109,7 +115,7 @@ public static class FormControlInteractionService
                 case FormControlKind.Spinner:
                 case FormControlKind.ScrollBar:
                     if (TryResolveLinkedCell(control.LinkedCell, sheet.Id, workbook, out var stepAddress) &&
-                        workbook.GetSheet(stepAddress.Sheet)?.GetCell(stepAddress)?.Value is NumberValue stepValue)
+                        workbook.GetSheet(stepAddress.Sheet)?.GetValue(stepAddress) is NumberValue stepValue)
                     {
                         var min = control.Min ?? 0;
                         var max = control.Max ?? 30000;
@@ -120,7 +126,7 @@ public static class FormControlInteractionService
                 case FormControlKind.ListBox:
                 case FormControlKind.DropDown:
                     if (TryResolveLinkedCell(control.LinkedCell, sheet.Id, workbook, out var listAddress) &&
-                        workbook.GetSheet(listAddress.Sheet)?.GetCell(listAddress)?.Value is NumberValue selValue)
+                        workbook.GetSheet(listAddress.Sheet)?.GetValue(listAddress) is NumberValue selValue)
                     {
                         control.SelectedIndex = (int)Math.Round(selValue.Value);
                     }
@@ -139,7 +145,9 @@ public static class FormControlInteractionService
         if (!TryResolveLinkedCell(control.LinkedCell, sheet.Id, workbook, out var linkedAddress))
             return;
 
-        var cellValue = workbook.GetSheet(linkedAddress.Sheet)?.GetCell(linkedAddress)?.Value;
+        // See the CheckBox case in SyncControlsFromLinkedCells above: GetValue (not GetCell) is
+        // required so a linked cell that is a non-anchor spill member is still read correctly.
+        var cellValue = workbook.GetSheet(linkedAddress.Sheet)?.GetValue(linkedAddress);
         if (cellValue is not NumberValue numberValue)
             return;
 

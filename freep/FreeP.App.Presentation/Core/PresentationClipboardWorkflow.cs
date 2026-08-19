@@ -304,8 +304,19 @@ public static class PresentationClipboardWorkflow
         switch (source)
         {
             case PresentationClipboardPasteSource.Image:
-                editor.InsertPicture(content.PngBytes!, "image/png");
+            {
+                // r150-remediation: Ctrl+V of an OS-clipboard image is the THIRD gesture that
+                // inserts a picture, alongside Insert > Pictures and drag-and-drop. Those two go
+                // through SlideObjectInsertionPlanner.CreatePicturePayload, which sniffs the
+                // image's native pixel size and aspect-fits it into the default box; this one
+                // passed no size at all, so EditingSession.InsertPicture fell through to
+                // DefaultShapeBounds() and stretched every pasted image to a fixed 3in x 2in
+                // (1.5:1) rectangle regardless of its real proportions. Route it through the same
+                // payload builder so all three gestures agree.
+                var payload = SlideObjectInsertionPlanner.CreatePicturePayload(content.PngBytes!, ".png");
+                editor.InsertPicture(payload.Bytes, payload.ContentType, payload.WidthEmu, payload.HeightEmu);
                 break;
+            }
             case PresentationClipboardPasteSource.Text:
                 editor.InsertTextBox(content.Text!);
                 break;

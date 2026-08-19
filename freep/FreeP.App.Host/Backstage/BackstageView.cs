@@ -39,7 +39,7 @@ internal sealed partial class BackstageView : UserControl
     private TextBox? _customRangeInput;
     private Button? _customRangeApplyButton;
 
-    public BackstageView(PresentationBackstageEndpoints endpoints)
+    public BackstageView(PresentationBackstageEndpoints endpoints, Action? onClosed = null)
     {
         _endpoints = endpoints ?? throw new ArgumentNullException(nameof(endpoints));
         _printSession = new PresentationBackstagePrintSession(
@@ -51,7 +51,7 @@ internal sealed partial class BackstageView : UserControl
             new SisterBackstageHostSpec(
                 Theme,
                 BuildEntries,
-                () => { })
+                onClosed ?? (() => { }))
             {
                 Chrome = BackstageRibbonChrome.Create()
             });

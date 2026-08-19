@@ -350,6 +350,17 @@ public sealed class TableShape
                     border = (isBand1 ? styleData.Band1H?.BorderOutline : styleData.Band2H?.BorderOutline) ?? border;
                 }
             }
+            else if (Flags.BandCol)
+            {
+                int bandBase = Flags.FirstCol ? 1 : 0;
+                bool isFirstColRegion = Flags.FirstCol && colIndex == 0;
+                if (!isFirstColRegion)
+                {
+                    int adjustedCol = colIndex - bandBase;
+                    bool isBand1 = adjustedCol % 2 == 0;
+                    border = (isBand1 ? styleData.Band1V?.BorderOutline : styleData.Band2V?.BorderOutline) ?? border;
+                }
+            }
 
             if (Flags.FirstRow && rowIndex == 0)
                 border = styleData.FirstRow?.BorderOutline ?? border;
@@ -388,6 +399,17 @@ public sealed class TableShape
                     int adjustedRow = rowIndex - bandBase;
                     bool isBand1 = adjustedRow % 2 == 0;
                     color = (isBand1 ? styleData.Band1H?.TextColor : styleData.Band2H?.TextColor) ?? color;
+                }
+            }
+            else if (Flags.BandCol)
+            {
+                int bandBase = Flags.FirstCol ? 1 : 0;
+                bool isFirstColRegion = Flags.FirstCol && colIndex == 0;
+                if (!isFirstColRegion)
+                {
+                    int adjustedCol = colIndex - bandBase;
+                    bool isBand1 = adjustedCol % 2 == 0;
+                    color = (isBand1 ? styleData.Band1V?.TextColor : styleData.Band2V?.TextColor) ?? color;
                 }
             }
 

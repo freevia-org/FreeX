@@ -4046,7 +4046,9 @@ public sealed class EditingSession
     public void MergeTableCells(int r1, int c1, int r2, int c2)
         => ExecuteTableCommand((si, id) => new MergeTableCellsCommand(si, id, r1, c1, r2, c2));
 
-    /// <summary>Merge the active cell with its right neighbor, or the cell below at a row edge.</summary>
+    /// <summary>Merge the active cell with its right neighbor, or the cell below at a row edge.
+    /// If the active cell is already merged, extends the merge to the next cell beyond its
+    /// current GridSpan/RowSpan rather than re-merging with a cell already inside its own span.</summary>
     public bool TryMergeActiveTableCell()
     {
         if (ActiveTableCell is not { } active)
@@ -4055,10 +4057,17 @@ public sealed class EditingSession
         var (shapeId, table) = RequireSelectedTable();
         if (shapeId == 0 || table is null || active.Row < 0 || active.Row >= table.Rows.Count)
             return false;
+        if (active.Col < 0 || active.Col >= table.Rows[active.Row].Cells.Count)
+            return false;
 
-        int rightColumn = active.Col + 1 < table.ColumnWidthsEmu.Count ? active.Col + 1 : active.Col;
-        int belowRow = rightColumn == active.Col ? active.Row + 1 : active.Row;
-        if (rightColumn == active.Col && belowRow >= table.Rows.Count)
+        var anchorCell = table.Rows[active.Row].Cells[active.Col];
+        int colSpan = Math.Max(1, anchorCell.GridSpan);
+        int rowSpan = Math.Max(1, anchorCell.RowSpan);
+
+        bool canMergeRight = active.Col + colSpan < table.ColumnWidthsEmu.Count;
+        int rightColumn = canMergeRight ? active.Col + colSpan : active.Col + colSpan - 1;
+        int belowRow = canMergeRight ? active.Row + rowSpan - 1 : active.Row + rowSpan;
+        if (!canMergeRight && belowRow >= table.Rows.Count)
             return false;
 
         var command = new MergeTableCellsCommand(

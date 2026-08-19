@@ -121,7 +121,12 @@ internal sealed record XlsxTextBoxPackagePart(
     // text box always regained a gray border on load (and permanently baked it in on re-save).
     bool OutlineHasNoFill = false,
     // R97-model-drawing-hyperlink-2-2: see the matching field on XlsxPicturePackagePart.
-    DrawingObjectHyperlink? Hyperlink = null);
+    DrawingObjectHyperlink? Hyperlink = null,
+    // R149-app-accessibility-checker-decorative-shapes: true when this text box's <xdr:cNvPr>
+    // <a:extLst> carries the "Mark as decorative" extension (see
+    // XlsxWorksheetDrawingParts.ReadNonVisualDecorative) -- mirrors XlsxPicturePackagePart's
+    // IsDecorative field.
+    bool IsDecorative = false);
 
 internal sealed record XlsxShapePackagePart(
     DrawingShapeKind Kind,
@@ -205,7 +210,12 @@ internal sealed record XlsxShapePackagePart(
     /// <summary>Adjust-handle values from &lt;a:avLst&gt;&lt;a:gd .../&gt;; null/empty = geometry defaults.</summary>
     IReadOnlyList<DrawingShapeAdjustValue>? AdjustValues = null,
     // R97-model-drawing-hyperlink-2-2: see the matching field on XlsxPicturePackagePart.
-    DrawingObjectHyperlink? Hyperlink = null);
+    DrawingObjectHyperlink? Hyperlink = null,
+    // R149-app-accessibility-checker-decorative-shapes: true when this shape/connector's
+    // <xdr:cNvPr><a:extLst> carries the "Mark as decorative" extension (see
+    // XlsxWorksheetDrawingParts.ReadNonVisualDecorative) -- mirrors XlsxPicturePackagePart's
+    // IsDecorative field.
+    bool IsDecorative = false);
 
 internal sealed record XlsxWorksheetDrawingPackageParts(
     IReadOnlyList<XlsxChartPackagePart> ChartParts,
@@ -886,6 +896,10 @@ internal static partial class XlsxWorksheetDrawingPartReader
         var name = ReadNonVisualName(shapeElement);
         var title = ReadNonVisualTitle(shapeElement);
         var altText = ReadNonVisualDescription(shapeElement);
+        // R149-app-accessibility-checker-decorative-shapes: preserve Excel's "Mark as decorative"
+        // flag for shapes and text boxes so they stay exempt from the Missing-Alt-Text rule, the
+        // same as XlsxPicturePackagePart already does for pictures.
+        var isDecorative = ReadNonVisualDecorative(shapeElement);
         var hyperlink = ReadObjectHyperlink(shapeElement, spreadsheetDrawingNs, drawingNs, relNs, hyperlinkRelsById);
         var spPr = shapeElement.Element(spreadsheetDrawingNs + "spPr");
         var transform = spPr?.Element(drawingNs + "xfrm");
@@ -973,7 +987,8 @@ internal static partial class XlsxWorksheetDrawingPartReader
                 txBoxHAlign,
                 txBoxVAnchor,
                 outlineHasNoFill,
-                hyperlink));
+                hyperlink,
+                isDecorative));
             return;
         }
 
@@ -1044,7 +1059,8 @@ internal static partial class XlsxWorksheetDrawingPartReader
             textOutlineThemeColor,
             textOutlineWidthPt,
             ReadShapeAdjustValues(spPr, drawingNs),
-            hyperlink));
+            hyperlink,
+            isDecorative));
     }
 
     /// <summary>
@@ -1259,6 +1275,8 @@ internal static partial class XlsxWorksheetDrawingPartReader
         var name = ReadNonVisualName(cxnSpElement);
         var title = ReadNonVisualTitle(cxnSpElement);
         var altText = ReadNonVisualDescription(cxnSpElement);
+        // R149-app-accessibility-checker-decorative-shapes: see ReadSpElement's identical read.
+        var isDecorative = ReadNonVisualDecorative(cxnSpElement);
         var hyperlink = ReadObjectHyperlink(cxnSpElement, spreadsheetDrawingNs, drawingNs, relNs, hyperlinkRelsById);
         var spPr = cxnSpElement.Element(spreadsheetDrawingNs + "spPr");
         var transform = spPr?.Element(drawingNs + "xfrm");
@@ -1346,7 +1364,8 @@ internal static partial class XlsxWorksheetDrawingPartReader
             ShapeTextOutlineThemeColor: null,
             ShapeTextOutlineWidthPoints: 0,
             AdjustValues: ReadShapeAdjustValues(spPr, drawingNs),
-            Hyperlink: hyperlink));
+            Hyperlink: hyperlink,
+            IsDecorative: isDecorative));
     }
 
     private static bool ReadUsesThemeEffectStyle(

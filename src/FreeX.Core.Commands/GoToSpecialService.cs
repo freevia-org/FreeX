@@ -132,7 +132,13 @@ public static class GoToSpecialService
             var cell = sheet.GetCell(address);
             switch (kind)
             {
-                case GoToSpecialKind.Blanks when cell is null || cell.Value is BlankValue:
+                // Use Sheet.GetValue rather than cell?.Value: a non-anchor dynamic-array spill
+                // member has no _cells entry of its own (its value lives only in the spill
+                // overlay), so `cell is null` here would wrongly mark every visibly-populated
+                // spill member as blank. GetValue is the documented "value question" API that
+                // resolves the spill overlay; GetCell/cell.Value stays storage-only for the other
+                // cases below (HasFormula, etc.) which genuinely need the Cell object.
+                case GoToSpecialKind.Blanks when sheet.GetValue(address) is BlankValue:
                     result.Add(address);
                     break;
                 case GoToSpecialKind.Constants when cell is { HasFormula: false } &&
@@ -662,14 +668,16 @@ public static class GoToSpecialService
         var result = new List<CellAddress>();
         for (var row = range.Start.Row; row <= range.End.Row; row++)
         {
-            var baseValue = sheet.GetCell(row, baseCol)?.Value ?? BlankValue.Instance;
+            // GetValue (not GetCell?.Value) so a dynamic-array spill member's real displayed
+            // value participates in the comparison instead of silently reading back as blank.
+            var baseValue = sheet.GetValue(row, baseCol);
             for (var col = range.Start.Col; col <= range.End.Col; col++)
             {
                 if (col == baseCol)
                     continue;
 
                 var address = new CellAddress(range.Start.Sheet, row, col);
-                var value = sheet.GetCell(address)?.Value ?? BlankValue.Instance;
+                var value = sheet.GetValue(address);
                 if (!ScalarEquals(baseValue, value))
                     result.Add(address);
             }
@@ -688,14 +696,16 @@ public static class GoToSpecialService
         var result = new List<CellAddress>();
         for (var col = range.Start.Col; col <= range.End.Col; col++)
         {
-            var baseValue = sheet.GetCell(baseRow, col)?.Value ?? BlankValue.Instance;
+            // GetValue (not GetCell?.Value) so a dynamic-array spill member's real displayed
+            // value participates in the comparison instead of silently reading back as blank.
+            var baseValue = sheet.GetValue(baseRow, col);
             for (var row = range.Start.Row; row <= range.End.Row; row++)
             {
                 if (row == baseRow)
                     continue;
 
                 var address = new CellAddress(range.Start.Sheet, row, col);
-                var value = sheet.GetCell(address)?.Value ?? BlankValue.Instance;
+                var value = sheet.GetValue(address);
                 if (!ScalarEquals(baseValue, value))
                     result.Add(address);
             }

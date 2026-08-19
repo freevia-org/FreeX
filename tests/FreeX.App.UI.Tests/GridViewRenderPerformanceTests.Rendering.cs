@@ -451,6 +451,104 @@ public sealed partial class GridViewRenderPerformanceTests
         columnRequest.Should().Be(new GridOutlineGroupToggleRequest(GridOutlineGroupAxis.Columns, 1, 2, 3, Collapse: true));
     }
 
+    // Regression coverage for the WPF numbered "Show Outline Level N" gutter buttons
+    // (DrawRowOutlineLevelButtons/DrawColumnOutlineLevelButtons in GridView.Rendering.Headers.cs):
+    // those buttons render whenever a second outline level exists, but before this test/fix there
+    // was no hit-test for them anywhere in GridView.Input.cs/HitTesting.cs, so clicking one did
+    // nothing. Uses independent single-axis viewports (rather than both axes at once) so the
+    // corner-region row- and column-level button rects, which do overlap at level 1 in the shared
+    // top-left gutter box, cannot make the assertions ambiguous.
+    [Fact]
+    public void OutlineLevelButtonHitTest_ReturnsRowAndColumnRequests()
+    {
+        var rowOnlyViewport = new ViewportModel(
+            [],
+            [new RowMetric(1, 20, 0), new RowMetric(4, 20, 20)],
+            [new ColMetric(1, 64, 0)],
+            RowOutlineGroups: [new OutlineGroupRange(1, 2, 3, 4, IsCollapsed: true)]);
+        var rowOnlyRowHeaderWidth = GridView.CalculateRowHeaderWidth(rowOnlyViewport);
+        var rowOnlyColumnHeaderHeight = GridView.CalculateColumnHeaderHeight(rowOnlyViewport);
+
+        GridView.TryHitTestOutlineLevelButton(
+                rowOnlyViewport,
+                new Point(13, 9),
+                rowOnlyRowHeaderWidth,
+                rowOnlyColumnHeaderHeight,
+                out var rowRequest)
+            .Should().BeTrue();
+        rowRequest.Should().Be(new GridOutlineLevelButtonRequest(GridOutlineGroupAxis.Rows, 1));
+
+        // Well outside every button rect: neither axis should claim it.
+        GridView.TryHitTestOutlineLevelButton(
+                rowOnlyViewport,
+                new Point(100, 100),
+                rowOnlyRowHeaderWidth,
+                rowOnlyColumnHeaderHeight,
+                out _)
+            .Should().BeFalse();
+
+        var columnOnlyViewport = new ViewportModel(
+            [],
+            [new RowMetric(1, 20, 0)],
+            [new ColMetric(1, 64, 0), new ColMetric(4, 64, 64)],
+            ColumnOutlineGroups: [new OutlineGroupRange(1, 2, 3, 4, IsCollapsed: false)]);
+        var columnOnlyRowHeaderWidth = GridView.CalculateRowHeaderWidth(columnOnlyViewport);
+        var columnOnlyColumnHeaderHeight = GridView.CalculateColumnHeaderHeight(columnOnlyViewport);
+
+        GridView.TryHitTestOutlineLevelButton(
+                columnOnlyViewport,
+                new Point(15, 13),
+                columnOnlyRowHeaderWidth,
+                columnOnlyColumnHeaderHeight,
+                out var columnRequest)
+            .Should().BeTrue();
+        columnRequest.Should().Be(new GridOutlineLevelButtonRequest(GridOutlineGroupAxis.Columns, 1));
+    }
+
+    // Sibling no-regression check: the +/- toggle boxes sit at different positions than the
+    // numbered level buttons (per-group vs. one fixed row/column near the corner), so adding the
+    // level-button hit test must not change what the existing toggle hit test claims.
+    [Fact]
+    public void OutlineLevelButtonHitTest_DoesNotDisruptOutlineGroupToggleHitTest()
+    {
+        var viewport = new ViewportModel(
+            [],
+            [new RowMetric(1, 20, 0), new RowMetric(4, 20, 20)],
+            [new ColMetric(1, 64, 0), new ColMetric(4, 64, 64)],
+            RowOutlineGroups: [new OutlineGroupRange(1, 2, 3, 4, IsCollapsed: true)],
+            ColumnOutlineGroups: [new OutlineGroupRange(1, 2, 3, 4, IsCollapsed: false)]);
+        var rowHeaderWidth = GridView.CalculateRowHeaderWidth(viewport);
+        var columnHeaderHeight = GridView.CalculateColumnHeaderHeight(viewport);
+
+        GridView.TryHitTestOutlineGroupToggle(
+                viewport,
+                new Point(13, columnHeaderHeight + 30),
+                rowHeaderWidth,
+                columnHeaderHeight,
+                out var rowRequest)
+            .Should().BeTrue();
+        rowRequest.Should().Be(new GridOutlineGroupToggleRequest(GridOutlineGroupAxis.Rows, 1, 2, 3, Collapse: false));
+
+        GridView.TryHitTestOutlineGroupToggle(
+                viewport,
+                new Point(rowHeaderWidth + 96, 13),
+                rowHeaderWidth,
+                columnHeaderHeight,
+                out var columnRequest)
+            .Should().BeTrue();
+        columnRequest.Should().Be(new GridOutlineGroupToggleRequest(GridOutlineGroupAxis.Columns, 1, 2, 3, Collapse: true));
+
+        // The toggle-box click point is down the row/column body, far from the corner
+        // level-button boxes, so the new level-button hit test must not also claim it.
+        GridView.TryHitTestOutlineLevelButton(
+                viewport,
+                new Point(13, columnHeaderHeight + 30),
+                rowHeaderWidth,
+                columnHeaderHeight,
+                out _)
+            .Should().BeFalse();
+    }
+
     [Fact]
     public void RenderSparklines_AvoidsEmptyRenderAllocations()
     {

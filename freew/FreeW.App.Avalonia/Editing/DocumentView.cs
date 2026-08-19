@@ -912,49 +912,65 @@ public sealed partial class DocumentView : Control
         return FindNext(query, options);
     }
 
-    /// <summary>Replace every occurrence of <paramref name="query"/> from the document start. Returns the count.</summary>
-    public int ReplaceAll(string query, string replacement)
-    {
-        if (string.IsNullOrEmpty(query) || IsEditingLocked)
-            return 0;
-
-        _caret = new DocPosition(FirstEditableBlock(), 0);
-        _selectionAnchor = _caret;
-        var count = 0;
-        while (count < 10000)
-        {
-            var searchFrom = _caret;
-            if (!FindNext(query) || HasWrappedAround(searchFrom))
-                break;
-            var originalMatchText = SelectedText;
-            ReplaceSelectionWith(replacement);
-            SkipTrackedLeftoverMatch(originalMatchText);
-            count++;
-        }
-
-        InvalidateVisual();
-        return count;
-    }
+    /// <summary>
+    /// Replace every occurrence of <paramref name="query"/>, restricted to the current body-text selection
+    /// when one is active before the call (matching Word and the WPF shell's
+    /// WpfFindReplaceCommandHost.ReplaceAll); otherwise every occurrence from the document start. A cell-text
+    /// selection is not honored as a restriction here -- there is no scoped Replace All for table cells, so
+    /// that case keeps its historical whole-document behavior. Returns the count.
+    /// </summary>
+    public int ReplaceAll(string query, string replacement) =>
+        ReplaceAllCore(query, replacement, options: null);
 
     public int ReplaceAll(
         string query,
         string replacement,
-        FindReplaceSearchOptions options)
+        FindReplaceSearchOptions options) =>
+        ReplaceAllCore(query, replacement, options);
+
+    private int ReplaceAllCore(string query, string replacement, FindReplaceSearchOptions? options)
     {
         if (string.IsNullOrEmpty(query) || IsEditingLocked)
             return 0;
 
-        _caret = new DocPosition(FirstEditableBlock(), 0);
+        var priorSelection = NormalizedSelection();
+        var restrictToSelection = priorSelection is not null && !HasCellTextSelection();
+        var limit = restrictToSelection ? priorSelection!.Value.End : default;
+
+        _caret = restrictToSelection ? priorSelection!.Value.Start : new DocPosition(FirstEditableBlock(), 0);
         _selectionAnchor = _caret;
         var count = 0;
         while (count < 10000)
         {
             var searchFrom = _caret;
-            if (!FindNext(query, options) || HasWrappedAround(searchFrom))
+            var found = options is { } opts ? FindNext(query, opts) : FindNext(query);
+            if (!found || HasWrappedAround(searchFrom))
                 break;
+
+            var matchStart = _selectionAnchor!.Value;
+            if (restrictToSelection && Compare(matchStart, limit) >= 0)
+                break;
+
+            // The match's block never changes under ReplaceSelectionWith (it only rewrites text within a
+            // single paragraph), so a replacement before the selection's end offset, in that same block,
+            // shifts the end offset by however much the paragraph's character count actually changed --
+            // measured from the live model rather than assumed from replacement.Length - match.Length, so
+            // this stays correct even under Track Changes (where a "replace" leaves the struck-through
+            // original text in place and only inserts the replacement, a different length delta than a
+            // literal swap). Otherwise the selection boundary would drift out of sync with the edited text
+            // as later matches are located and replaced.
+            var lengthBefore = restrictToSelection && limit.Block == matchStart.Block
+                && _doc.Blocks[matchStart.Block] is Paragraph beforeParagraph
+                ? beforeParagraph.PlainText.Length
+                : (int?)null;
+
             var originalMatchText = SelectedText;
             ReplaceSelectionWith(replacement);
             SkipTrackedLeftoverMatch(originalMatchText);
+
+            if (lengthBefore is { } before && _doc.Blocks[matchStart.Block] is Paragraph afterParagraph)
+                limit = limit with { Offset = limit.Offset + (afterParagraph.PlainText.Length - before) };
+
             count++;
         }
 
@@ -18126,10 +18142,10 @@ public sealed partial class DocumentView : Control
             }
         }
 
-        if (paragraph is null || !HasVerbatimRunText(paragraph))
+        if (paragraph is null)
             return false;
 
-        foreach (var span in ContentControlSpans(paragraph))
+        foreach (var span in ContentControlCaretSpans(paragraph))
         {
             // The whole caret/selection must lie within this field's own text — an edit must never spill
             // into the body text around it.
@@ -18158,6 +18174,61 @@ public sealed partial class DocumentView : Control
         }
 
         return false;
+    }
+
+    /// <summary>
+    /// The paragraph's content-control spans expressed in the CARET's offset space, which is not always
+    /// the model's: a paragraph holding a page-number field, a note mark or an equation lays out from
+    /// <see cref="DisplayCells"/>, where a run occupies its RESOLVED text rather than its stored text, so
+    /// model offsets would address the wrong characters. When every run renders verbatim the two spaces
+    /// coincide and the model walk answers directly (it also sees an emptied field, which has no glyphs
+    /// at all); otherwise the placed glyphs — whose offsets ARE the caret space, and which now carry
+    /// their control — give the field's extent without re-deriving any of the layout's transformations.
+    /// A field's own text is identical in both spaces (a check box's substituted glyph is one char for
+    /// one char), so an offset within the field needs no translation either way.
+    /// </summary>
+    private IEnumerable<(int FirstRunIndex, int RunCount, int Start, int Length)> ContentControlCaretSpans(
+        Paragraph paragraph)
+    {
+        if (_cellCaret is not null || HasVerbatimRunText(paragraph))
+            return ContentControlSpans(paragraph);
+
+        return PlacedContentControlSpans(paragraph);
+    }
+
+    private List<(int FirstRunIndex, int RunCount, int Start, int Length)> PlacedContentControlSpans(
+        Paragraph paragraph)
+    {
+        var spans = new List<(int FirstRunIndex, int RunCount, int Start, int Length)>();
+        if (_laidOutWidth < 0)
+            Relayout(FallbackWidth);
+
+        foreach (var span in ContentControlSpans(paragraph))
+        {
+            var control = paragraph.Runs[span.FirstRunIndex].Control;
+            var start = int.MaxValue;
+            var end = int.MinValue;
+            foreach (var placed in _placed)
+            {
+                if (placed.Sentinel
+                    || placed.Block != _caret.Block
+                    || placed.IsCell
+                    || !ReferenceEquals(placed.Control, control))
+                {
+                    continue;
+                }
+
+                start = Math.Min(start, placed.Offset);
+                end = Math.Max(end, placed.Offset + 1);
+            }
+
+            // A field with no glyphs on this layout (empty, or hidden by the review view) cannot be
+            // addressed by the caret, so it is not offered as an edit target.
+            if (start <= end && start != int.MaxValue)
+                spans.Add((span.FirstRunIndex, span.RunCount, start, end - start));
+        }
+
+        return spans;
     }
 
     /// <summary>
@@ -18224,10 +18295,10 @@ public sealed partial class DocumentView : Control
             contentOffset = _caret.Offset;
         }
 
-        if (paragraph is null || !HasVerbatimRunText(paragraph))
+        if (paragraph is null)
             return false;
 
-        return ContentControlSpans(paragraph)
+        return ContentControlCaretSpans(paragraph)
             .Any(span => contentOffset > span.Start && contentOffset < span.Start + span.Length);
     }
 
@@ -18963,8 +19034,11 @@ public sealed partial class DocumentView : Control
                 DeleteSelection();
             if (CurrentParagraph() is not { } paragraph || !IsEditable(paragraph))
             {
+                // AV-UNDOGROUP: DeleteSelection() above may already have applied a delete into this
+                // still-open undo group. Roll it back rather than abandoning it, or the deletion
+                // survives with no way to undo it (see InsertFieldRunAtActiveCaret's identical guard).
                 if (ownsBodyUndoGroup)
-                    _bus.AbortUndoGroup();
+                    _bus.RollbackUndoGroup();
                 return;
             }
 
@@ -20910,16 +20984,20 @@ public sealed partial class DocumentView : Control
     }
 
     /// <summary>
-    /// Insert a section break after the caret block, inheriting the current page settings.
+    /// Insert a section break after the caret block, inheriting the page settings of the section the
+    /// caret is actually in (resolved via <see cref="PageSettingsSectionResolver"/>), not necessarily the
+    /// document's final section, so the new section starts with the same layout as the text it was split
+    /// out of. Mirrors <c>FreeW.App.Host.Editing.DocumentView.InsertSectionBreak</c>.
     /// </summary>
     public void InsertSectionBreak(SectionBreakKind breakKind)
     {
         if (IsEditingLocked)
             return;
 
+        var inheritedPage = PageSettingsSectionResolver.Resolve(_doc, CurrentPageSettingsSectionIndex());
         _editingSession.InsertBlockAfter(
             _caret.Block,
-            DocumentOps.CreateSectionBreak(breakKind, _doc.Page));
+            DocumentOps.CreateSectionBreak(breakKind, inheritedPage));
     }
 
     /// <summary>
@@ -21774,7 +21852,10 @@ public sealed partial class DocumentView : Control
                 DeleteSelection();
             if (CurrentParagraph() is not { } paragraph || !IsEditable(paragraph))
             {
-                _bus.AbortUndoGroup();
+                // AV-UNDOGROUP: DeleteSelection() above may already have applied a delete into this
+                // still-open undo group. Roll it back rather than abandoning it, or the deletion
+                // survives with no way to undo it (see InsertFieldRunAtActiveCaret's identical guard).
+                _bus.RollbackUndoGroup();
                 return;
             }
 

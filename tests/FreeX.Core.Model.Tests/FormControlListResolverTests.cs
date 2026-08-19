@@ -164,6 +164,58 @@ public sealed class FormControlListResolverTests
     }
 
     [Fact]
+    public void ResolveSelectedText_ItemCellIsSpillMember_ReturnsSpilledText()
+    {
+        // I6 is a dynamic-array anchor whose formula spills down into I7:I10. Only I6 lives in the
+        // sheet's cell dictionary; I7:I10 are live spill members that exist solely in the sheet's
+        // spill overlay (Sheet.SetSpillRange / _spillValues), exactly like a real SORT()/FILTER() spill.
+        var workbook = new Workbook("test");
+        var sheet = workbook.AddSheet("spill-options");
+        var anchor = new CellAddress(sheet.Id, 6, 9); // I6
+        sheet.SetFormula(anchor, "=SORT(H6:H10)");
+        sheet.SetCell(anchor, new TextValue("Due in next 7 days"));
+        sheet.SetSpillRange(anchor, new RangeValue(new ScalarValue[,]
+        {
+            { new TextValue("Due in next 7 days") },  // slot [0,0] — ignored by SetSpillRange (anchor's own cell)
+            { new TextValue("Due in next 14 days") },
+            { new TextValue("Last 7 days") },
+            { new TextValue("Last 14 days") },
+            { new TextValue("Custom date Range") },
+        }));
+
+        // Sanity: I8 (the 3rd item) really is spill-only, not a real cell.
+        sheet.GetCell(8, 9).Should().BeNull();
+
+        var control = new FormControlModel
+        {
+            Kind = FormControlKind.DropDown,
+            ListFillRange = "$I$6:$I$10",
+            SelectedIndex = 3, // -> I8, a spill member
+        };
+
+        FormControlListResolver.ResolveSelectedText(control, sheet, workbook)
+            .Should().Be("Last 7 days");
+    }
+
+    [Fact]
+    public void ResolveSelectedText_ItemCellIsOrdinaryCell_StillResolvesAfterSpillFix()
+    {
+        // Sibling/no-regression case: the ordinary (non-spill) plain-range lookup used by every
+        // other test in this file must keep working unchanged now that resolution goes through
+        // Sheet.GetValue instead of Sheet.GetCell.
+        var workbook = NewWorkbookWithChoices(out var sheet);
+        var control = new FormControlModel
+        {
+            Kind = FormControlKind.DropDown,
+            ListFillRange = "$I$6:$I$10",
+            SelectedIndex = 4,
+        };
+
+        FormControlListResolver.ResolveSelectedText(control, sheet, workbook)
+            .Should().Be("Last 14 days");
+    }
+
+    [Fact]
     public void PopulateSelectedText_FillsSelectedTextFieldForListControls()
     {
         var workbook = NewWorkbookWithChoices(out var sheet);

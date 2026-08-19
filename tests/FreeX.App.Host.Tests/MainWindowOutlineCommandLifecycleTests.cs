@@ -76,6 +76,33 @@ public sealed class MainWindowOutlineCommandLifecycleTests
         });
     }
 
+    // Production call site for the numbered "Show Outline Level N" gutter button click: GridView
+    // raises OutlineLevelButtonRequested (wired in MainWindow.xaml.cs), and MainWindow.OutlineCommands
+    // handles it via OnOutlineLevelButtonRequested. Before this fix the WPF host had no handler and
+    // no hit-test to reach it at all, so this test exercises the same
+    // WorkbookSession.ShowRowOutlineLevel command sequence the Avalonia shell already used.
+    [Fact]
+    public void OutlineLevelButtonRequested_UsesMutationLifecycle()
+    {
+        StaTestRunner.Run(() =>
+        {
+            using var harness = MainWindowHarness.Create();
+            harness.SeedRowGroups(collapse: false);
+            var before = harness.CaptureLifecycle();
+            var request = new GridOutlineLevelButtonRequest(GridOutlineGroupAxis.Rows, Level: 1);
+
+            harness.Invoke("OnOutlineLevelButtonRequested", request);
+
+            // Showing level 1 (the only level present) expands every group sheet-wide.
+            harness.CurrentSheet.GroupHiddenRows.Should().BeEmpty();
+            harness.AssertLifecycleAdvanced(before);
+
+            harness.Undo().Should().BeTrue();
+            harness.CurrentSheet.GroupHiddenRows.Should().BeEquivalentTo(new uint[] { 2, 3, 4, 7, 8, 9 });
+            harness.Sibling.RefreshCount.Should().Be(2);
+        });
+    }
+
     private readonly record struct LifecycleSnapshot(int DirtyGeneration, ulong NavigationRevision);
 
     private sealed class MainWindowHarness : IDisposable

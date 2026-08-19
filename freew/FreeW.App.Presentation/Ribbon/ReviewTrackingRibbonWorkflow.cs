@@ -20,7 +20,8 @@ public sealed record ReviewTrackingCommandBindings(
     Func<bool> ShowMarkupFormatting,
     Action<bool> ApplyShowMarkupFormatting,
     Action AcceptAllRevisions,
-    Action RejectAllRevisions);
+    Action RejectAllRevisions,
+    Func<bool>? IsTrackChangesLockedByProtection = null);
 
 public sealed record ReviewTrackingRibbonCommands(
     IRibbonStatefulCommand TrackChanges,
@@ -104,6 +105,13 @@ public static class ReviewTrackingRibbonWorkflow
     {
         public void Execute(RibbonCommandContext context)
         {
+            // Restrict Editing > "Tracked changes" (ProtectionMode.TrackChangesOnly) forces every
+            // future edit to be a tracked revision; Word greys this toggle out for the duration so a
+            // reviewer can't quietly disable tracking and slip in untracked edits. Re-check the lock
+            // in Execute too, not just GetState, so nothing that bypasses ribbon enablement can toggle it.
+            if (IsLockedByProtection())
+                return;
+
             bindings.PrepareExecution();
             var plan = TrackChangesTogglePlanner.Build(
                 bindings.IsTrackChangesEnabled(),
@@ -114,7 +122,10 @@ public static class ReviewTrackingRibbonWorkflow
         }
 
         public RibbonCommandState GetState() =>
-            new(IsEnabled: true, IsChecked: bindings.IsTrackChangesEnabled());
+            new(IsEnabled: !IsLockedByProtection(), IsChecked: bindings.IsTrackChangesEnabled());
+
+        private bool IsLockedByProtection() =>
+            bindings.IsTrackChangesLockedByProtection?.Invoke() ?? false;
     }
 
     private sealed class DisplayForReviewCommand(

@@ -4685,8 +4685,15 @@ public static class PptxPackageWriter
         XElement el;
         if (color.SchemeColor is { } sc)
         {
+            // Prefer the original XML role name (tx1/bg1/tx2/bg2/dk1/...) so clrMap indirection
+            // is preserved on round trip. sc.Slot is the DEFAULT-clrMap-resolved slot and is only
+            // a fallback for SchemeColorRef instances built without a role name (tests/programmatic
+            // construction) -- see the doc comment on SchemeColorRef.RoleName/Slot.
+            var val = string.IsNullOrWhiteSpace(sc.RoleName)
+                ? PptxColorReader.ToSchemeColorString(sc.Slot)
+                : sc.RoleName;
             el = new XElement(A + "schemeClr",
-                new XAttribute("val", PptxColorReader.ToSchemeColorString(sc.Slot)));
+                new XAttribute("val", val));
             if (Math.Abs(sc.LumMod - 1.0) > 1e-9)
                 el.Add(new XElement(A + "lumMod", new XAttribute("val", (long)Math.Round(sc.LumMod * 100000))));
             if (Math.Abs(sc.LumOff) > 1e-9)

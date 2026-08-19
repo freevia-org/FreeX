@@ -192,6 +192,9 @@ public sealed partial class XlsxFileAdapter
                 Name = textBoxPart.Name,
                 Title = textBoxPart.Title,
                 AltText = textBoxPart.AltText,
+                // R149-app-accessibility-checker-decorative-shapes: preserve Excel's "Mark as
+                // decorative" flag, mirroring the picture path above.
+                IsDecorative = textBoxPart.IsDecorative,
                 RotationDegrees = textBoxPart.RotationDegrees,
                 FlipHorizontal = textBoxPart.FlipHorizontal,
                 FlipVertical = textBoxPart.FlipVertical,
@@ -238,6 +241,9 @@ public sealed partial class XlsxFileAdapter
                 Name = shapePart.Name,
                 Title = shapePart.Title,
                 AltText = shapePart.AltText,
+                // R149-app-accessibility-checker-decorative-shapes: preserve Excel's "Mark as
+                // decorative" flag, mirroring the picture path above.
+                IsDecorative = shapePart.IsDecorative,
                 RotationDegrees = shapePart.RotationDegrees,
                 FlipHorizontal = shapePart.FlipHorizontal,
                 FlipVertical = shapePart.FlipVertical,

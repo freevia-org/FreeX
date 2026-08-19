@@ -672,8 +672,18 @@ public static class PagePaginationPlanner
         int? fitToPages,
         Func<uint, bool>? isHidden = null)
     {
-        if (scalePercent is { } percent and >= MinScalePercent and <= MaxScalePercent)
-            return Math.Max(1, (uint)Math.Floor(baseItemsPerPage * (100d / percent)));
+        // R150-presentation-pagination-scale-out-of-range-clamp: an explicit scale percent outside
+        // Excel's 10%-400% UI bound (reachable from a non-Excel-authored/hand-edited .xlsx whose
+        // <pageSetup scale="..."/> the loader does not range-check) must be clamped here exactly like
+        // CalculateEffectiveScalePercent clamps it for the VISUAL scale drawn on the page. Previously
+        // an out-of-range percent fell all the way through to the fit-to-pages branch below (a no-op,
+        // since FitToPagesWide/Tall are null when an explicit percent is set), which returned the
+        // UNSCALED, natural (100%) capacity while the sibling render/PDF-export path still drew every
+        // cell at the clamped scale -- e.g. ScalePercent=500 assigned each page the ~100%-scale row
+        // count but rendered it at the 400% cap, so roughly 4x too many rows were packed onto (and
+        // clipped off the bottom of) every page.
+        if (scalePercent is { } percent)
+            return Math.Max(1, (uint)Math.Floor(baseItemsPerPage * (100d / Math.Clamp(percent, MinScalePercent, MaxScalePercent))));
 
         if (fitToPages is not { } pageCount || pageCount < 1)
             return baseItemsPerPage;

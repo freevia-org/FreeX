@@ -888,6 +888,106 @@ public partial class GridView
         return false;
     }
 
+    /// <summary>
+    /// Hit-tests the numbered "Show Outline Level N" gutter buttons drawn by
+    /// <see cref="DrawRowOutlineLevelButtons"/>/<see cref="DrawColumnOutlineLevelButtons"/>. This
+    /// mirrors <see cref="TryHitTestOutlineGroupToggle"/> for the per-group +/- toggle boxes; the
+    /// two hit tests are deliberately separate because the level buttons live at fixed positions
+    /// per axis (one row/column of boxes near the corner) rather than one box per outline group.
+    /// </summary>
+    internal static bool TryHitTestOutlineLevelButton(
+        ViewportModel? viewport,
+        Point position,
+        double rowHeaderWidth,
+        double columnHeaderHeight,
+        out GridOutlineLevelButtonRequest request)
+    {
+        request = default;
+        if (viewport is null)
+            return false;
+
+        var rowOutlineWidth = CalculateRowOutlineGutterWidth(viewport);
+        var columnOutlineHeight = CalculateColumnOutlineGutterHeight(viewport);
+
+        if (rowOutlineWidth > 0 &&
+            position.X <= rowOutlineWidth &&
+            TryHitTestRowOutlineLevelButton(
+                viewport.RowOutlineGroups, position, rowOutlineWidth, columnHeaderHeight, columnOutlineHeight, out var rowLevel))
+        {
+            request = new GridOutlineLevelButtonRequest(GridOutlineGroupAxis.Rows, rowLevel);
+            return true;
+        }
+
+        if (columnOutlineHeight > 0 &&
+            position.Y <= columnOutlineHeight &&
+            TryHitTestColumnOutlineLevelButton(
+                viewport.ColumnOutlineGroups, position, rowHeaderWidth, rowOutlineWidth, columnOutlineHeight, out var columnLevel))
+        {
+            request = new GridOutlineLevelButtonRequest(GridOutlineGroupAxis.Columns, columnLevel);
+            return true;
+        }
+
+        return false;
+    }
+
+    private static bool TryHitTestRowOutlineLevelButton(
+        IReadOnlyList<OutlineGroupRange>? groups,
+        Point position,
+        double rowOutlineWidth,
+        double columnHeaderHeight,
+        double columnOutlineHeight,
+        out int level)
+    {
+        level = 0;
+        var maxLevel = GetMaxOutlineLevel(groups);
+        if (maxLevel <= 0)
+            return false;
+
+        var top = columnOutlineHeight > 0
+            ? Math.Max(1, columnOutlineHeight - OutlineButtonSize - 2)
+            : Math.Max(1, (columnHeaderHeight - OutlineButtonSize) / 2);
+        for (var candidateLevel = 1; candidateLevel <= maxLevel; candidateLevel++)
+        {
+            var center = new Point(GetRowOutlineLevelCenter(rowOutlineWidth, candidateLevel), top + OutlineButtonSize / 2);
+            if (!CreateOutlineButtonRect(center).Contains(position))
+                continue;
+
+            level = candidateLevel;
+            return true;
+        }
+
+        return false;
+    }
+
+    private static bool TryHitTestColumnOutlineLevelButton(
+        IReadOnlyList<OutlineGroupRange>? groups,
+        Point position,
+        double rowHeaderWidth,
+        double rowOutlineWidth,
+        double columnOutlineHeight,
+        out int level)
+    {
+        level = 0;
+        var maxLevel = GetMaxOutlineLevel(groups);
+        if (maxLevel <= 0)
+            return false;
+
+        var left = rowOutlineWidth > 0
+            ? Math.Max(1, rowOutlineWidth - OutlineButtonSize - 2)
+            : Math.Max(1, (rowHeaderWidth - OutlineButtonSize) / 2);
+        for (var candidateLevel = 1; candidateLevel <= maxLevel; candidateLevel++)
+        {
+            var center = new Point(left + OutlineButtonSize / 2, GetColumnOutlineLevelCenter(columnOutlineHeight, candidateLevel));
+            if (!CreateOutlineButtonRect(center).Contains(position))
+                continue;
+
+            level = candidateLevel;
+            return true;
+        }
+
+        return false;
+    }
+
     internal static bool ShouldDrawRowHeaderText(Rect rowHeaderRect, double visibleBottom) =>
         rowHeaderRect.Height > 0 && rowHeaderRect.Bottom <= visibleBottom;
 

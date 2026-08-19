@@ -964,4 +964,144 @@ public sealed class SlideObjectInsertionPlannerTests
 
         action.Should().Throw<ArgumentException>();
     }
+
+    // ── Picture insertion aspect-ratio (images-anchoring F2) ───────────────────────
+
+    private const long EmuPerInch = 914400;
+
+    private static byte[] MakePngHeader(int width, int height)
+    {
+        // A real decoder only needs the signature plus the IHDR chunk's length/tag/width/height
+        // to read the native pixel size -- it never inspects pixel data, so this 24-byte header
+        // (no IDAT/IEND) is sufficient to drive SlideObjectInsertionPlanner's PNG sniff.
+        var bytes = new byte[24];
+        byte[] sig = [0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A];
+        Array.Copy(sig, bytes, 8);
+        // bytes 8-11: chunk length (unused by the decoder)
+        bytes[12] = (byte)'I'; bytes[13] = (byte)'H'; bytes[14] = (byte)'D'; bytes[15] = (byte)'R';
+        WriteUInt32BigEndian(bytes, 16, (uint)width);
+        WriteUInt32BigEndian(bytes, 20, (uint)height);
+        return bytes;
+    }
+
+    private static byte[] MakeJpegHeader(int width, int height)
+    {
+        var bytes = new byte[11];
+        bytes[0] = 0xFF; bytes[1] = 0xD8; // SOI
+        bytes[2] = 0xFF; bytes[3] = 0xC0; // SOF0
+        bytes[4] = 0x00; bytes[5] = 0x0B; // segment length (unused precisely by the decoder)
+        bytes[6] = 0x08; // precision
+        bytes[7] = (byte)(height >> 8); bytes[8] = (byte)height;
+        bytes[9] = (byte)(width >> 8); bytes[10] = (byte)width;
+        return bytes;
+    }
+
+    private static void WriteUInt32BigEndian(byte[] buffer, int offset, uint value)
+    {
+        buffer[offset] = (byte)(value >> 24);
+        buffer[offset + 1] = (byte)(value >> 16);
+        buffer[offset + 2] = (byte)(value >> 8);
+        buffer[offset + 3] = (byte)value;
+    }
+
+    [Fact]
+    public void CreatePicturePayload_PortraitPng_ComputesAspectFitEmuSizeInsteadOfFixedBox()
+    {
+        // 300x400 = 3:4 portrait, clearly not the old hard-coded 3in x 2in (1.5:1) box.
+        var payload = SlideObjectInsertionPlanner.CreatePicturePayload(MakePngHeader(300, 400), "photo.png");
+
+        payload.WidthEmu.Should().NotBeNull();
+        payload.HeightEmu.Should().NotBeNull();
+
+        // Fit-within-box aspect ratio must match the native 3:4 aspect ratio, not the old 1.5:1 box.
+        var computedAspect = (double)payload.WidthEmu!.Value / payload.HeightEmu!.Value;
+        computedAspect.Should().BeApproximately(300.0 / 400.0, 0.01);
+
+        // Sanity: the fitted box must still fit within the legacy default-box footprint.
+        payload.WidthEmu.Value.Should().BeLessThanOrEqualTo(EmuPerInch * 3);
+        payload.HeightEmu.Value.Should().BeLessThanOrEqualTo(EmuPerInch * 2);
+    }
+
+    [Fact]
+    public void ApplyCommand_PortraitPicture_InsertsShapeWithNativeAspectRatioNotStretchedToFixedBox()
+    {
+        var editor = MakeSession();
+        var payload = SlideObjectInsertionPlanner.CreatePicturePayload(MakePngHeader(300, 400), "photo.png");
+
+        var added = SlideObjectInsertionPlanner.ApplyCommand(
+            editor,
+            SlideObjectInsertionPlanner.PictureCommandId,
+            payload);
+
+        added.Should().NotBeNull();
+        added!.Kind.Should().Be(SlideShapeKind.Picture);
+
+        var insertedAspect = (double)added.ExtentCxEmu / added.ExtentCyEmu;
+        insertedAspect.Should().BeApproximately(300.0 / 400.0, 0.01,
+            "a portrait photo must not be force-fit into the old fixed 1.5:1 default box");
+
+        // Before the fix this shape was always exactly EmuPerInch*3 x EmuPerInch*2 (1.5:1),
+        // regardless of the source image -- assert it is no longer that fixed box.
+        (added.ExtentCxEmu == EmuPerInch * 3 && added.ExtentCyEmu == EmuPerInch * 2).Should().BeFalse();
+    }
+
+    [Fact]
+    public void ApplyCommand_WideLandscapePicture_FitsByWidthPreservingAspectRatio()
+    {
+        var editor = MakeSession();
+        // 1920x1080 = 16:9, wider than the 1.5:1 box -- must be limited by width, not height.
+        var payload = SlideObjectInsertionPlanner.CreatePicturePayload(MakeJpegHeader(1920, 1080), "wide.jpg");
+
+        var added = SlideObjectInsertionPlanner.ApplyCommand(
+            editor,
+            SlideObjectInsertionPlanner.PictureCommandId,
+            payload);
+
+        added.Should().NotBeNull();
+        added!.ExtentCxEmu.Should().Be(EmuPerInch * 3);
+        var insertedAspect = (double)added.ExtentCxEmu / added.ExtentCyEmu;
+        insertedAspect.Should().BeApproximately(1920.0 / 1080.0, 0.01);
+    }
+
+    [Fact]
+    public void ApplyCommand_PictureWithUndecodableBytes_StillUsesLegacyDefaultBox()
+    {
+        // Sibling/no-regression case: bytes that aren't a recognizable raster format (e.g. SVG,
+        // or garbage) must fall back to exactly the pre-existing fixed default box, unchanged.
+        var editor = MakeSession();
+        var payload = SlideObjectInsertionPlanner.CreatePicturePayload(new byte[] { 1, 2, 3 }, "sample.jpg");
+
+        payload.WidthEmu.Should().BeNull();
+        payload.HeightEmu.Should().BeNull();
+
+        var added = SlideObjectInsertionPlanner.ApplyCommand(
+            editor,
+            SlideObjectInsertionPlanner.PictureCommandId,
+            payload);
+
+        added.Should().NotBeNull();
+        added!.ExtentCxEmu.Should().Be(EmuPerInch * 3);
+        added.ExtentCyEmu.Should().Be(EmuPerInch * 2);
+    }
+
+    [Theory]
+    [InlineData(300, 400)]
+    [InlineData(1920, 1080)]
+    [InlineData(500, 500)]
+    public void TryDecodeNativePixelSize_DecodesPngDimensionsCorrectly(int width, int height)
+    {
+        SlideObjectInsertionPlanner.TryDecodeNativePixelSize(MakePngHeader(width, height), out var w, out var h)
+            .Should().BeTrue();
+        w.Should().Be(width);
+        h.Should().Be(height);
+    }
+
+    [Fact]
+    public void TryDecodeNativePixelSize_DecodesJpegDimensionsCorrectly()
+    {
+        SlideObjectInsertionPlanner.TryDecodeNativePixelSize(MakeJpegHeader(640, 480), out var w, out var h)
+            .Should().BeTrue();
+        w.Should().Be(640);
+        h.Should().Be(480);
+    }
 }

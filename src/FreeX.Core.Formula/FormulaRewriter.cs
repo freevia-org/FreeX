@@ -383,22 +383,31 @@ public static class FormulaRewriter
     private static FormulaNode RewriteRange(
         RangeRefNode rr, RewriteOperation op, string hostSheetName, ref bool changed)
     {
-        // TODO(H28 3-D sheet-span refs): a span (EndSheetName set, e.g. Sheet1:Sheet3!A1) is passed
-        // through untouched for row/col structural ops — insert/delete rows or columns, cell moves.
-        // None of the row/col shift or delete-shrink math below understands "this reference spans
-        // multiple sheets", so blindly reusing that logic here would silently mis-rewrite (or wrongly
-        // #REF!) references to the *other* spanned sheets. Leaving the span untouched for those ops is
-        // conservative: the formula text is unchanged, so it still means exactly what it said before
-        // the structural edit (correct for edits on sheets outside the span; potentially stale — same
-        // as Excel would need to fully re-resolve — for edits on a spanned sheet whose row/col shift
-        // should have shown up in this reference). Full span-aware rewriting (per-sheet shift math) is
-        // intentionally out of scope for this change. RenameSheetOp, however, is purely textual — the
-        // span's endpoint sheet *names* live directly on rr.SheetName/rr.EndSheetName, so a rename can
-        // (and must) be applied without touching the per-cell shift math at all. DeleteSheetOp on a
-        // span endpoint is likewise handled below (freezing the whole span to #REF!, mirroring
-        // RewriteSheetQualifiedRefDeleteSheet) — see R94-Core.Formula-3dspan-deletesheet: leaving the
-        // stale sheet name in place let TryExpandSheetSpanAggregateRange silently re-resolve it against
-        // any future sheet that happened to reuse the deleted name.
+        // TODO(H28 3-D sheet-span refs, partially addressed — F1 defined-names-span-rowcol-shift):
+        // a span (EndSheetName set, e.g. Sheet1:Sheet3!A1) shares ONE cell address across every
+        // sheet from SheetName..EndSheetName inclusive (see FormulaNode.cs's RangeRefNode doc), so a
+        // row/col insert or delete on either NAMED endpoint sheet must shift that shared address —
+        // handled below via RewriteSpanInsertRows/RewriteSpanDeleteRows/RewriteSpanInsertCols/
+        // RewriteSpanDeleteCols, mirroring the plain-range math one-for-one. What remains
+        // deliberately unhandled is a structural edit on a sheet that lies STRICTLY BETWEEN the two
+        // named endpoints in workbook tab order (e.g. Sheet2 of a Sheet1:Sheet3 span): recognizing
+        // that requires knowing the workbook's sheet ORDER, and this rewriter receives only a bare
+        // op.SheetName string with no workbook/tab-order context (see FormulaRewriter.Matches) — so
+        // blindly reusing the shift math for an unverified "is this sheet inside the span" guess
+        // would risk mis-rewriting (or wrongly #REF!-ing) a span whose edited sheet is actually
+        // outside it. Leaving THAT case untouched is conservative: the formula text is unchanged, so
+        // it still means exactly what it said before the structural edit (correct for edits on
+        // sheets outside the span; potentially stale for edits on an un-named spanned sheet whose
+        // row/col shift should have shown up in this reference). Full tab-order-aware rewriting for
+        // interior sheets is intentionally out of scope for this change (would need the op to carry
+        // workbook sheet-order context, a change to every op call site, not just this rewriter).
+        // RenameSheetOp, however, is purely textual — the span's endpoint sheet *names* live directly
+        // on rr.SheetName/rr.EndSheetName, so a rename can (and must) be applied without touching the
+        // per-cell shift math at all. DeleteSheetOp on a span endpoint is likewise handled below
+        // (freezing the whole span to #REF!, mirroring RewriteSheetQualifiedRefDeleteSheet) — see
+        // R94-Core.Formula-3dspan-deletesheet: leaving the stale sheet name in place let
+        // TryExpandSheetSpanAggregateRange silently re-resolve it against any future sheet that
+        // happened to reuse the deleted name.
         if (rr.EndSheetName is not null)
         {
             // Paste offset / transpose is unambiguous standard Excel behaviour for a 3-D span: the
@@ -444,6 +453,32 @@ public static class FormulaRewriter
                 {
                     changed = true;
                     return rr with { SheetName = newStartSheet, EndSheetName = newEndSheet };
+                }
+            }
+
+            // F1 defined-names-span-rowcol-shift: a row/col insert or delete whose target sheet is
+            // one of the span's two NAMED endpoints (rr.SheetName or rr.EndSheetName) shifts the
+            // span's shared Start/End address exactly like the plain single-sheet path below does —
+            // see the TODO comment above for why only the two named endpoints (not sheets strictly
+            // between them in tab order) are handled here.
+            if (op is InsertRowsOp or DeleteRowsOp or InsertColsOp or DeleteColsOp)
+            {
+                var editedSheet = RewriteOperationTargetSheetName(op);
+                bool isSpanEndpoint = editedSheet is not null &&
+                    ((rr.SheetName is not null &&
+                      string.Equals(rr.SheetName, editedSheet, StringComparison.OrdinalIgnoreCase)) ||
+                     string.Equals(rr.EndSheetName, editedSheet, StringComparison.OrdinalIgnoreCase));
+
+                if (isSpanEndpoint)
+                {
+                    return op switch
+                    {
+                        InsertRowsOp insSpanRows => RewriteSpanInsertRows(rr, insSpanRows, ref changed),
+                        DeleteRowsOp delSpanRows => RewriteSpanDeleteRows(rr, delSpanRows, ref changed),
+                        InsertColsOp insSpanCols => RewriteSpanInsertCols(rr, insSpanCols, ref changed),
+                        DeleteColsOp delSpanCols => RewriteSpanDeleteCols(rr, delSpanCols, ref changed),
+                        _ => rr
+                    };
                 }
             }
 
@@ -513,6 +548,117 @@ public static class FormulaRewriter
 
         return rr with { Start = (CellRefNode)start, End = (CellRefNode)end, SheetName = sheetName };
     }
+
+    // ── 3-D sheet-span row/col structural ops (F1 defined-names-span-rowcol-shift) ─────────────
+    // The four helpers below apply row/col insert-delete shift math to a span's shared Start/End
+    // address once RewriteRange has already established the edited sheet is one of the span's two
+    // named endpoints. Insert reuses the existing per-cell insert helpers directly (row/col insert
+    // shift has no "does this collapse a range" complication — either endpoint shifts or overflows
+    // MaxRow/MaxCol into #REF!, same as any other reference). Delete cannot reuse the per-cell
+    // delete helpers (RewriteCellRefDeleteRows/Cols) because those turn a single in-band cell into
+    // #REF! outright, which is correct for a lone cell reference but wrong for a range endpoint —
+    // deleting the middle of a range must SHRINK it, not error it out just because one endpoint
+    // landed in the deleted band. So the delete helpers mirror RewriteRangeDeleteRows/
+    // RewriteRangeDeleteCols' band-shrink math (share the same ShiftOrClampForDelete primitive)
+    // instead, minus those functions' own Matches() sheet check, which the caller already performed.
+
+    private static FormulaNode RewriteSpanInsertRows(RangeRefNode rr, InsertRowsOp op, ref bool changed)
+    {
+        var newStart = RewriteCellRefInsertRows(rr.Start, op, ref changed);
+        var newEnd = RewriteCellRefInsertRows(rr.End, op, ref changed);
+
+        if (newStart is ErrorNode || newEnd is ErrorNode)
+        {
+            changed = true;
+            return new ErrorNode(ErrorValue.Ref);
+        }
+
+        return rr with { Start = (CellRefNode)newStart, End = (CellRefNode)newEnd };
+    }
+
+    private static FormulaNode RewriteSpanInsertCols(RangeRefNode rr, InsertColsOp op, ref bool changed)
+    {
+        var newStart = RewriteCellRefInsertCols(rr.Start, op, ref changed);
+        var newEnd = RewriteCellRefInsertCols(rr.End, op, ref changed);
+
+        if (newStart is ErrorNode || newEnd is ErrorNode)
+        {
+            changed = true;
+            return new ErrorNode(ErrorValue.Ref);
+        }
+
+        return rr with { Start = (CellRefNode)newStart, End = (CellRefNode)newEnd };
+    }
+
+    private static FormulaNode RewriteSpanDeleteRows(RangeRefNode rr, DeleteRowsOp op, ref bool changed)
+    {
+        // Excel treats A5:A1 identically to A1:A5 — normalize endpoint order before any band math,
+        // same as RewriteRangeDeleteRows does for a plain (non-span) range.
+        uint s = Math.Min(rr.Start.Row, rr.End.Row), e = Math.Max(rr.Start.Row, rr.End.Row);
+        uint bandStart = op.StartRow, bandEnd = op.StartRow + op.Count - 1;
+
+        // Whole range inside the deleted band → the reference is gone.
+        if (bandStart <= s && e <= bandEnd)
+        {
+            changed = true;
+            return new ErrorNode(ErrorValue.Ref);
+        }
+
+        var newStart = ShiftOrClampForDelete(s, bandStart, bandEnd, op.Count, isRangeStart: true);
+        var newEnd = ShiftOrClampForDelete(e, bandStart, bandEnd, op.Count, isRangeStart: false);
+        if (newStart == s && newEnd == e)
+            return rr; // band entirely below the range: no change
+
+        changed = true;
+        var (newStartRef, newEndRef) = rr.Start.Row <= rr.End.Row
+            ? (rr.Start with { Row = newStart }, rr.End with { Row = newEnd })
+            : (rr.Start with { Row = newEnd }, rr.End with { Row = newStart });
+        return rr with { Start = newStartRef, End = newEndRef };
+    }
+
+    private static FormulaNode RewriteSpanDeleteCols(RangeRefNode rr, DeleteColsOp op, ref bool changed)
+    {
+        // Excel treats B3:A1 identically to A1:B3 — normalize endpoint order before any band math,
+        // same as RewriteRangeDeleteCols does for a plain (non-span) range.
+        uint s = Math.Min(rr.Start.ColumnNumber, rr.End.ColumnNumber);
+        uint e = Math.Max(rr.Start.ColumnNumber, rr.End.ColumnNumber);
+        uint bandStart = op.StartCol, bandEnd = op.StartCol + op.Count - 1;
+
+        if (bandStart <= s && e <= bandEnd)
+        {
+            changed = true;
+            return new ErrorNode(ErrorValue.Ref);
+        }
+
+        var newStart = ShiftOrClampForDelete(s, bandStart, bandEnd, op.Count, isRangeStart: true);
+        var newEnd = ShiftOrClampForDelete(e, bandStart, bandEnd, op.Count, isRangeStart: false);
+        if (newStart == s && newEnd == e)
+            return rr; // band entirely below the range: no change
+
+        changed = true;
+        var (newStartRef, newEndRef) = rr.Start.ColumnNumber <= rr.End.ColumnNumber
+            ? (rr.Start with { ColumnName = CellAddress.NumberToColumnName(newStart) },
+               rr.End with { ColumnName = CellAddress.NumberToColumnName(newEnd) })
+            : (rr.Start with { ColumnName = CellAddress.NumberToColumnName(newEnd) },
+               rr.End with { ColumnName = CellAddress.NumberToColumnName(newStart) });
+        return rr with { Start = newStartRef, End = newEndRef };
+    }
+
+    /// <summary>
+    /// The sheet a row/col structural <see cref="RewriteOperation"/> targets. Used only by the
+    /// 3-D span endpoint check above; deliberately narrower than the general <see cref="Matches"/>
+    /// helper's op-sheet switch (no Move/Paste/Rename/Delete-sheet/cells-shift cases) since spans
+    /// only special-case whole-row/whole-column insert-delete here — see F1
+    /// defined-names-span-rowcol-shift.
+    /// </summary>
+    private static string? RewriteOperationTargetSheetName(RewriteOperation op) => op switch
+    {
+        InsertRowsOp ins => ins.SheetName,
+        DeleteRowsOp del => del.SheetName,
+        InsertColsOp ins => ins.SheetName,
+        DeleteColsOp del => del.SheetName,
+        _ => null
+    };
 
     private static FormulaNode RewriteRangeDeleteRows(
         RangeRefNode rr, CellRefNode endRef, DeleteRowsOp op, string hostSheetName, ref bool changed)

@@ -3279,6 +3279,8 @@ public sealed class ConvertSmartArtToShapesCommand : IPresentationCommand
     private int _index = -1;
     private List<(SlideShape Connector, ConnectorAttachment? Start, ConnectorAttachment? End)>?
         _capturedConnectorAttachments;
+    private List<ShapeAnimation>? _capturedAnimations;
+    private string? _capturedBuildListXml;
 
     public ConvertSmartArtToShapesCommand(
         int slideIndex,
@@ -3320,8 +3322,30 @@ public sealed class ConvertSmartArtToShapesCommand : IPresentationCommand
                 (connector, connector.ConnectionStart, connector.ConnectionEnd))
             .ToList();
 
+        var slide = presentation.Slides[_slideIndex];
+        _capturedAnimations = slide.Animations.ToList();
+        _capturedBuildListXml = slide.AnimationBuildListXml;
+
         shapes.RemoveAt(_index);
         shapes.InsertRange(_index, _converted);
+
+        // The SmartArt shape's own id is destroyed by conversion - the freshly-generated
+        // shapes get remapped ids (see EditingSession.RemapConvertedShapeIds) that never reuse
+        // it. PowerPoint does not carry a SmartArt's animation over to the converted shapes; it
+        // simply drops it. Leaving the stale entry would point a build-list/timing node at a
+        // shape id absent from the slide's tree, exactly like DeleteShapeCommand and
+        // UngroupShapeCommand already guard against for the ids they destroy.
+        slide.Animations.RemoveAll(animation =>
+            animation.ShapeId == _smartArtId ||
+            (animation.TriggerShapeId is { } triggerShapeId && triggerShapeId == _smartArtId));
+        // If the SmartArt's animation was the main-sequence head, whatever animation is now
+        // first needs its stored trigger corrected to On Click (see ShapeAnimationAnchorFix) --
+        // otherwise the Animation Pane keeps showing a stale With/After Previous label. Revert
+        // below restores the whole captured list wholesale, so no undo bookkeeping is needed here.
+        ShapeAnimationAnchorFix.NormalizeMainSequenceHead(slide.Animations);
+        slide.AnimationBuildListXml = DeleteShapeCommand.RemoveBuildListEntriesForShapes(
+            slide.AnimationBuildListXml,
+            new HashSet<uint> { _smartArtId });
 
         if (_capturedConnectorAttachments is not null)
         {
@@ -3352,6 +3376,14 @@ public sealed class ConvertSmartArtToShapesCommand : IPresentationCommand
         var count = Math.Min(_converted.Count, currentShapes.Count - currentIndex);
         currentShapes.RemoveRange(currentIndex, count);
         currentShapes.Insert(Math.Clamp(currentIndex, 0, currentShapes.Count), _original);
+
+        if (_slideIndex >= 0 && _slideIndex < presentation.Slides.Count && _capturedAnimations is not null)
+        {
+            var slide = presentation.Slides[_slideIndex];
+            slide.Animations.Clear();
+            slide.Animations.AddRange(_capturedAnimations);
+            slide.AnimationBuildListXml = _capturedBuildListXml;
+        }
 
         if (_capturedConnectorAttachments is not null)
         {

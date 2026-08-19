@@ -12,7 +12,8 @@ public enum WorkbookReadOnlyPromptKind
 
 public readonly record struct WorkbookReadOnlyOpenPlan(
     WorkbookReadOnlyPromptKind PromptKind,
-    string WorkbookName)
+    string WorkbookName,
+    bool IsFileSystemReadOnly = false)
 {
     public bool ShouldPrompt => PromptKind != WorkbookReadOnlyPromptKind.None;
 }
@@ -56,7 +57,8 @@ public enum WorkbookReadOnlyOpenOutcomeKind
     ReadOnlyRecommendedDeclined,
     ReservationPasswordAccepted,
     ReservationPasswordRejected,
-    ReservationPasswordCancelled
+    ReservationPasswordCancelled,
+    FileSystemReadOnly
 }
 
 public readonly record struct WorkbookReadOnlyOpenOutcome(
@@ -85,15 +87,31 @@ public sealed class WorkbookReadOnlySession
 
     public WorkbookReadOnlyOpenOutcome RunOpen(
         Workbook workbook,
-        IWorkbookReadOnlyOpenPromptPort promptPort)
+        IWorkbookReadOnlyOpenPromptPort promptPort,
+        string? filePath = null)
     {
         ArgumentNullException.ThrowIfNull(workbook);
         ArgumentNullException.ThrowIfNull(promptPort);
 
-        var plan = PlanOpen(workbook);
+        var plan = PlanOpen(workbook, filePath);
         switch (plan.PromptKind)
         {
             case WorkbookReadOnlyPromptKind.None:
+                // Neither embedded workbook flag (ReadOnlyRecommended / ReservationPassword)
+                // applies, but the file on disk itself cannot be written back to (OS read-only
+                // attribute, a read-only share/volume, or a denied ACL -- see PlanOpen). Unlike
+                // the embedded-flag cases, Excel does not interrupt the user with a prompt for
+                // this: it silently forces the document read-only. Apply that state directly
+                // without invoking promptPort.
+                if (plan.IsFileSystemReadOnly)
+                {
+                    IsReadOnly = true;
+                    return new WorkbookReadOnlyOpenOutcome(
+                        plan,
+                        WorkbookReadOnlyOpenOutcomeKind.FileSystemReadOnly,
+                        IsReadOnly);
+                }
+
                 return new WorkbookReadOnlyOpenOutcome(
                     plan,
                     WorkbookReadOnlyOpenOutcomeKind.Editable,
@@ -134,7 +152,7 @@ public sealed class WorkbookReadOnlySession
         }
     }
 
-    public WorkbookReadOnlyOpenPlan PlanOpen(Workbook workbook)
+    public WorkbookReadOnlyOpenPlan PlanOpen(Workbook workbook, string? filePath = null)
     {
         ArgumentNullException.ThrowIfNull(workbook);
         Reset();
@@ -148,11 +166,72 @@ public sealed class WorkbookReadOnlySession
                 workbook.Name);
         }
 
+        if (sharing?.ReadOnlyRecommended == true)
+        {
+            return new WorkbookReadOnlyOpenPlan(
+                WorkbookReadOnlyPromptKind.ReadOnlyRecommended,
+                workbook.Name);
+        }
+
+        // Neither embedded workbook flag applies. That used to mean "fully editable" even when
+        // the file itself cannot be written back to (OS read-only attribute, a read-only network
+        // share/mounted volume, or an ACL that denies Write) -- Save would then fail with a raw
+        // "Access to the path is denied" error only after the user had already invested editing
+        // effort, with no up-front indication. Classify that case here too, distinctly from the
+        // embedded-flag prompts: it does not go through the prompt port (see RunOpen).
         return new WorkbookReadOnlyOpenPlan(
-            sharing?.ReadOnlyRecommended == true
-                ? WorkbookReadOnlyPromptKind.ReadOnlyRecommended
-                : WorkbookReadOnlyPromptKind.None,
-            workbook.Name);
+            WorkbookReadOnlyPromptKind.None,
+            workbook.Name,
+            IsFileSystemReadOnly: IsFileWriteRestricted(filePath));
+    }
+
+    /// <summary>
+    /// Best-effort check of whether <paramref name="filePath"/> can currently be written back to.
+    /// Checks the OS read-only attribute first (the common case: Explorer's Read-only checkbox,
+    /// or <c>attrib +r</c>), then falls back to a lightweight open-for-write probe so a read-only
+    /// network share, a read-only-mounted volume, or a denied ACL are caught too -- none of those
+    /// necessarily set the DOS read-only attribute. A transient sharing violation (e.g. another
+    /// process briefly holding an exclusive handle) is deliberately NOT treated as read-only: it
+    /// says nothing about the file's durable write permission, and misclassifying it would force
+    /// an otherwise-editable file through Save As.
+    /// </summary>
+    private static bool IsFileWriteRestricted(string? filePath)
+    {
+        if (string.IsNullOrWhiteSpace(filePath))
+            return false;
+
+        try
+        {
+            if (!File.Exists(filePath))
+                return false;
+
+            if (File.GetAttributes(filePath).HasFlag(FileAttributes.ReadOnly))
+                return true;
+        }
+        catch (UnauthorizedAccessException)
+        {
+            return true;
+        }
+        catch (IOException)
+        {
+            return false;
+        }
+
+        try
+        {
+            using var probe = new FileStream(filePath, FileMode.Open, FileAccess.ReadWrite, FileShare.ReadWrite);
+            return false;
+        }
+        catch (UnauthorizedAccessException)
+        {
+            return true;
+        }
+        catch (IOException)
+        {
+            // Locked by another process, a network hiccup, etc. -- not necessarily a write
+            // restriction, so don't force the file read-only on a transient failure.
+            return false;
+        }
     }
 
     public void ApplyPromptDecision(bool openReadOnly) => IsReadOnly = openReadOnly;

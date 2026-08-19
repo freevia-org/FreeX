@@ -344,7 +344,7 @@ public sealed class DefinedNamesSession
         var colCount = checked((int)(range.End.Col - range.Start.Col + 1));
         if (rowCount == 1 && colCount == 1)
             return SpreadsheetDisplayFormatter.FormatScalarValue(
-                sheet.GetCell(range.Start)?.Value,
+                sheet.GetValue(range.Start),
                 SpreadsheetScalarFormatProfile.InvariantContent);
 
         if ((long)rowCount * colCount > MaxRangePreviewCells)
@@ -356,7 +356,7 @@ public sealed class DefinedNamesSession
             var cellTexts = new List<string>(colCount);
             for (var col = range.Start.Col; col <= range.End.Col; col++)
                 cellTexts.Add(SpreadsheetDisplayFormatter.FormatScalarValue(
-                    sheet.GetCell(row, col)?.Value,
+                    sheet.GetValue(row, col),
                     SpreadsheetScalarFormatProfile.InvariantContent));
             rowTexts.Add(string.Join(",", cellTexts));
         }

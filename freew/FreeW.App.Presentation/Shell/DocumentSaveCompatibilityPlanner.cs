@@ -84,7 +84,8 @@ public static class DocumentSaveCompatibilityPlanner
                 "Custom XML, web settings, glossary parts, preserved numbering, embedded font package data, and unmodelled drawing parts only round-trip through OOXML targets.");
         }
 
-        if (evidence.HasCommentsRevisionsOrProtection && !profile.PreservesReviewAndProtection)
+        if ((evidence.HasComments && !profile.PreservesComments) ||
+            (evidence.HasRevisionsOrProtection && !profile.PreservesReviewAndProtection))
         {
             yield return Warning(
                 DocumentSaveCompatibilityWarningKind.ReviewAndProtection,
@@ -207,6 +208,7 @@ public static class DocumentSaveCompatibilityPlanner
         bool PreservesMacros,
         bool PreservesOoxmlPackageParts,
         bool PreservesReviewAndProtection,
+        bool PreservesComments,
         bool PreservesFieldsAndReferences,
         bool PreservesFootnotesAndEndnotes,
         bool PreservesTables,
@@ -237,6 +239,7 @@ public static class DocumentSaveCompatibilityPlanner
                     PreservesMacros: IsMacroOoxml(),
                     PreservesOoxmlPackageParts: true,
                     PreservesReviewAndProtection: true,
+                    PreservesComments: true,
                     PreservesFieldsAndReferences: true,
                     PreservesFootnotesAndEndnotes: true,
                     PreservesTables: true,
@@ -253,6 +256,7 @@ public static class DocumentSaveCompatibilityPlanner
                     PreservesMacros: false,
                     PreservesOoxmlPackageParts: true,
                     PreservesReviewAndProtection: true,
+                    PreservesComments: true,
                     PreservesFieldsAndReferences: true,
                     PreservesFootnotesAndEndnotes: true,
                     PreservesTables: true,
@@ -269,6 +273,7 @@ public static class DocumentSaveCompatibilityPlanner
                     PreservesMacros: false,
                     PreservesOoxmlPackageParts: false,
                     PreservesReviewAndProtection: false,
+                    PreservesComments: true,
                     PreservesFieldsAndReferences: false,
                     PreservesFootnotesAndEndnotes: true,
                     PreservesTables: true,
@@ -285,6 +290,7 @@ public static class DocumentSaveCompatibilityPlanner
                     PreservesMacros: false,
                     PreservesOoxmlPackageParts: false,
                     PreservesReviewAndProtection: false,
+                    PreservesComments: false,
                     PreservesFieldsAndReferences: false,
                     PreservesFootnotesAndEndnotes: false,
                     PreservesTables: true,
@@ -301,8 +307,9 @@ public static class DocumentSaveCompatibilityPlanner
                     PreservesMacros: false,
                     PreservesOoxmlPackageParts: false,
                     PreservesReviewAndProtection: false,
+                    PreservesComments: false,
                     PreservesFieldsAndReferences: false,
-                    PreservesFootnotesAndEndnotes: false,
+                    PreservesFootnotesAndEndnotes: true,
                     PreservesTables: true,
                     PreservesDrawingsChartsSmartArtAndImages: true,
                     PreservesContentControls: false,
@@ -317,6 +324,7 @@ public static class DocumentSaveCompatibilityPlanner
                     PreservesMacros: false,
                     PreservesOoxmlPackageParts: false,
                     PreservesReviewAndProtection: false,
+                    PreservesComments: false,
                     PreservesFieldsAndReferences: false,
                     PreservesFootnotesAndEndnotes: false,
                     PreservesTables: true,
@@ -333,6 +341,7 @@ public static class DocumentSaveCompatibilityPlanner
                     PreservesMacros: false,
                     PreservesOoxmlPackageParts: false,
                     PreservesReviewAndProtection: false,
+                    PreservesComments: false,
                     PreservesFieldsAndReferences: false,
                     PreservesFootnotesAndEndnotes: false,
                     PreservesTables: false,
@@ -349,6 +358,7 @@ public static class DocumentSaveCompatibilityPlanner
                     PreservesMacros: false,
                     PreservesOoxmlPackageParts: false,
                     PreservesReviewAndProtection: false,
+                    PreservesComments: false,
                     PreservesFieldsAndReferences: false,
                     PreservesFootnotesAndEndnotes: false,
                     PreservesTables: false,
@@ -365,6 +375,7 @@ public static class DocumentSaveCompatibilityPlanner
                     PreservesMacros: false,
                     PreservesOoxmlPackageParts: false,
                     PreservesReviewAndProtection: false,
+                    PreservesComments: false,
                     PreservesFieldsAndReferences: false,
                     PreservesFootnotesAndEndnotes: false,
                     PreservesTables: false,
@@ -441,7 +452,8 @@ public static class DocumentSaveCompatibilityPlanner
     private sealed record DocumentSaveFeatureEvidence(
         bool HasMacroProject,
         bool HasPreservedPackageParts,
-        bool HasCommentsRevisionsOrProtection,
+        bool HasComments,
+        bool HasRevisionsOrProtection,
         bool HasFieldsCitationsBookmarksOrCrossReferences,
         bool HasFootnotesOrEndnotes,
         bool HasTables,
@@ -502,7 +514,8 @@ public static class DocumentSaveCompatibilityPlanner
             return new DocumentSaveFeatureEvidence(
                 hasMacroProject,
                 hasPreservedPackageParts,
-                hasComments || hasRevisions || hasProtection,
+                hasComments,
+                hasRevisions || hasProtection,
                 hasFieldsReferences,
                 hasNotes,
                 hasTables,

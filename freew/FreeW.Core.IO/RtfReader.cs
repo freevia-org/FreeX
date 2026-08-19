@@ -141,6 +141,23 @@ public static class RtfReader
         // Cumulative \cellxN boundary positions (twips) for the current row definition, cleared on \trowd.
         private readonly List<int> _cellxBoundaries = new();
 
+        // Nested-table building state: while parsing a {\nestedtbl ...} group (see BeginNestedTable), the
+        // fields above are repurposed to build the NESTED table instead of the outer one. Each frame saves
+        // exactly the state needed to resume the containing (outer) table/paragraph build once the group's
+        // matching '}' is reached.
+        private sealed class NestedFrame
+        {
+            public required int GroupDepth;
+            public required Table? OuterTable;
+            public required TableRow? OuterRow;
+            public required TableCell? OuterCell;
+            public required List<Paragraph> OuterCellParagraphs;
+            public required List<int> OuterCellxBoundaries;
+            public required List<Run> OuterRuns;
+            public required string OuterText;
+        }
+        private readonly Stack<NestedFrame> _nestedFrames = new();
+
         // Header tables resolved while parsing: \colortbl entries (the leading bare ';' defines index 0 =
         // auto/null) and \fonttbl names keyed by \fN id.
         private readonly List<string?> _colorTable = new();
@@ -170,6 +187,14 @@ public static class RtfReader
                         _pos++;
                         if (_stack.Count > 0)
                             _state = _stack.Pop();
+                        // If this brace closes a {\nestedtbl ...} group (RtfWriter's marker for "the table
+                        // just parsed belongs inside the cell being built"), finish that nested table and pop
+                        // back to the containing cell's own table-building state. GroupDepth was recorded as
+                        // _stack.Count right after the opening '{' was pushed, so the matching close is the
+                        // first point _stack.Count returns to GroupDepth-1 -- correct at any nesting depth
+                        // because RTF groups are always well-balanced.
+                        if (_nestedFrames.Count > 0 && _stack.Count == _nestedFrames.Peek().GroupDepth - 1)
+                            EndNestedTableGroup();
                         break;
                     case '\\':
                         ParseControl();
@@ -459,6 +484,10 @@ public static class RtfReader
                 case "row": EndRow(); break;
                 case "nestcell": EndCell(); break;
                 case "nestrow": EndRow(); break;
+                // \nestedtbl marks the start of a table nested inside the cell currently being built (see
+                // RtfWriter.WriteCellContent). It is always the first control word inside a dedicated
+                // {\nestedtbl ...} group; the matching '}' is handled in Parse()'s '}' case above.
+                case "nestedtbl": BeginNestedTable(); break;
 
                 default:
                     // Unknown control word — ignored. (Destinations are handled above / via \*.)
@@ -978,6 +1007,78 @@ public static class RtfReader
             _cellParagraphs.Clear();
             _currentCell = new TableCell();
             _cellxBoundaries.Clear();
+        }
+
+        /// <summary>
+        /// Enters a <c>{\nestedtbl ...}</c> group (see <see cref="RtfWriter"/>): the table about to be
+        /// parsed belongs inside the cell currently being built (<see cref="_currentCell"/>), not as a
+        /// sibling row of the outer table. Saves the outer table/paragraph-building state and switches all
+        /// the mutable fields those methods read/write over to a fresh, empty table so <see cref="BeginRow"/>
+        /// / <see cref="EndRow"/> / <see cref="EndCell"/> build the NESTED table without touching the outer
+        /// one. <see cref="EndNestedTableGroup"/> (invoked from the matching '}' in <c>Parse()</c>) attaches
+        /// the finished table to the outer cell and restores everything saved here.
+        /// </summary>
+        private void BeginNestedTable()
+        {
+            var ownerCell = _currentCell;
+
+            _nestedFrames.Push(new NestedFrame
+            {
+                GroupDepth = _stack.Count,
+                OuterTable = _currentTable,
+                OuterRow = _currentRow,
+                OuterCell = ownerCell,
+                OuterCellParagraphs = new List<Paragraph>(_cellParagraphs),
+                OuterCellxBoundaries = new List<int>(_cellxBoundaries),
+                // The outer cell's own text accumulated so far (e.g. "OUTER_CELL_TEXT" before this nested
+                // table appears) lives in these shared accumulators, NOT yet flushed into _cellParagraphs --
+                // it must be set aside so the nested table's own paragraphs don't get merged into it.
+                OuterRuns = new List<Run>(_currentRuns),
+                OuterText = _currentText.ToString(),
+            });
+
+            _currentTable = new Table();
+            _currentRow = null;
+            _currentCell = null;
+            _cellParagraphs.Clear();
+            _cellxBoundaries.Clear();
+            _currentRuns.Clear();
+            _currentText.Clear();
+        }
+
+        /// <summary>Leaves a <c>{\nestedtbl ...}</c> group: finishes and attaches the nested table, then
+        /// restores the containing (outer) table/paragraph-building state exactly as it stood before.</summary>
+        private void EndNestedTableGroup()
+        {
+            if (_nestedFrames.Count == 0)
+                return;
+            var frame = _nestedFrames.Pop();
+
+            // Finish any trailing cell/row the nested table's content left open (mirrors FinishTableIfOpen,
+            // scoped to the nested table's own building state rather than the outer one).
+            if (_cellParagraphs.Count > 0 || _currentText.Length > 0 || _currentRuns.Count > 0)
+                EndCell();
+            if (_currentRow is { Cells.Count: > 0 } trailingRow)
+            {
+                _currentTable?.Rows.Add(trailingRow);
+                _currentRow = null;
+            }
+            if (_currentTable is { Rows.Count: > 0 } nestedTable && frame.OuterCell is not null)
+                frame.OuterCell.NestedTables.Add(nestedTable);
+
+            // Restore the outer (containing) table/paragraph-building context exactly as it stood before
+            // this nested table's group began.
+            _currentTable = frame.OuterTable;
+            _currentRow = frame.OuterRow;
+            _currentCell = frame.OuterCell;
+            _cellParagraphs.Clear();
+            _cellParagraphs.AddRange(frame.OuterCellParagraphs);
+            _cellxBoundaries.Clear();
+            _cellxBoundaries.AddRange(frame.OuterCellxBoundaries);
+            _currentRuns.Clear();
+            _currentRuns.AddRange(frame.OuterRuns);
+            _currentText.Clear();
+            _currentText.Append(frame.OuterText);
         }
 
         private void EndCellParagraph()

@@ -102,9 +102,10 @@ public sealed class SortCommand : IWorkbookCommand, IAffectedCellsCommand, IEsti
 
     private readonly struct SortCellPayload
     {
-        public SortCellPayload(Cell? cell, StyleId? styleOnly, string? comment, string? commentAuthor, bool commentShown, ThreadedComment? threadedComment, string? hyperlink, HyperlinkMetadata? hyperlinkMetadata, IReadOnlyList<CellTextRun>? richTextRuns = null, CellPhoneticGuide? phoneticGuide = null)
+        public SortCellPayload(Cell? cell, ScalarValue effectiveValue, StyleId? styleOnly, string? comment, string? commentAuthor, bool commentShown, ThreadedComment? threadedComment, string? hyperlink, HyperlinkMetadata? hyperlinkMetadata, IReadOnlyList<CellTextRun>? richTextRuns = null, CellPhoneticGuide? phoneticGuide = null)
         {
             Cell = cell;
+            EffectiveValue = effectiveValue;
             StyleOnly = styleOnly;
             Comment = comment;
             CommentAuthor = commentAuthor;
@@ -117,6 +118,17 @@ public sealed class SortCommand : IWorkbookCommand, IAffectedCellsCommand, IEsti
         }
 
         public Cell? Cell { get; }
+
+        // F1 (array-spill fix): the value to use when SORTING BY VALUE, distinct from Cell above.
+        // Cell is null for a non-anchor member of a live dynamic-array spill (its content lives
+        // only in Sheet's _spillValues overlay, not in _cells) — Cell must stay exactly that way
+        // so WriteCellClone/WriteCellPayload keep clearing that slot on write-back exactly as
+        // before (the array's members are derived, not stored, so nothing should be materialized
+        // as a literal cell there). EffectiveValue instead captures the LIVE value (Cell.Value, or
+        // the sheet's spill overlay when Cell is null) purely for comparison purposes, so a spill
+        // member's real value participates in the sort instead of always being treated as blank.
+        public ScalarValue EffectiveValue { get; }
+
         public StyleId? StyleOnly { get; }
         public string? Comment { get; }
         public string? CommentAuthor { get; }
@@ -352,8 +364,8 @@ public sealed class SortCommand : IWorkbookCommand, IAffectedCellsCommand, IEsti
                 // is never inverted.
                 if (sortOn == SortOn.CellValues)
                 {
-                    bool aBlank = IsBlankOrError(a.Payloads[index].Cell);
-                    bool bBlank = IsBlankOrError(b.Payloads[index].Cell);
+                    bool aBlank = IsBlankOrError(a.Payloads[index].EffectiveValue);
+                    bool bBlank = IsBlankOrError(b.Payloads[index].EffectiveValue);
                     if (aBlank != bBlank)
                         return aBlank ? 1 : -1; // blank/error always goes last
                     if (aBlank)
@@ -361,8 +373,8 @@ public sealed class SortCommand : IWorkbookCommand, IAffectedCellsCommand, IEsti
                         // R27-sort-deep-2: within the "goes last" bucket, Excel's fixed
                         // precedence puts errors above blanks — independent of direction, same
                         // as the blank-last rule itself.
-                        bool aError = a.Payloads[index].Cell?.Value is ErrorValue;
-                        bool bError = b.Payloads[index].Cell?.Value is ErrorValue;
+                        bool aError = a.Payloads[index].EffectiveValue is ErrorValue;
+                        bool bError = b.Payloads[index].EffectiveValue is ErrorValue;
                         if (aError != bError)
                             return aError ? -1 : 1;
                         continue; // both blank, or both error — equal on this key, try next
@@ -379,8 +391,8 @@ public sealed class SortCommand : IWorkbookCommand, IAffectedCellsCommand, IEsti
                     // Mon) and never lets a non-member value jump ahead of every list member.
                     if (customOrder is not null)
                     {
-                        bool aMember = a.Payloads[index].Cell?.Value is TextValue taMember && customOrder.IndexOf(taMember.Value) >= 0;
-                        bool bMember = b.Payloads[index].Cell?.Value is TextValue tbMember && customOrder.IndexOf(tbMember.Value) >= 0;
+                        bool aMember = a.Payloads[index].EffectiveValue is TextValue taMember && customOrder.IndexOf(taMember.Value) >= 0;
+                        bool bMember = b.Payloads[index].EffectiveValue is TextValue tbMember && customOrder.IndexOf(tbMember.Value) >= 0;
                         if (aMember != bMember)
                             return aMember ? -1 : 1; // list members precede non-members, regardless of direction
                     }
@@ -400,8 +412,8 @@ public sealed class SortCommand : IWorkbookCommand, IAffectedCellsCommand, IEsti
                     // as "no fill".
                     var addrA = new CellAddress(_sheetId, startRow + (uint)a.OriginalIndex, startCol + (uint)index);
                     var addrB = new CellAddress(_sheetId, startRow + (uint)b.OriginalIndex, startCol + (uint)index);
-                    var aColor = GetEffectiveColor(ctx.Workbook, sheet, addrA, a.Payloads[index].Cell, wantFill: sortOn == SortOn.CellColor);
-                    var bColor = GetEffectiveColor(ctx.Workbook, sheet, addrB, b.Payloads[index].Cell, wantFill: sortOn == SortOn.CellColor);
+                    var aColor = GetEffectiveColor(ctx.Workbook, sheet, addrA, a.Payloads[index].Cell, wantFill: sortOn == SortOn.CellColor, effectiveValue: a.Payloads[index].EffectiveValue);
+                    var bColor = GetEffectiveColor(ctx.Workbook, sheet, addrB, b.Payloads[index].Cell, wantFill: sortOn == SortOn.CellColor, effectiveValue: b.Payloads[index].EffectiveValue);
                     bool aNoFill = aColor is null;
                     bool bNoFill = bColor is null;
                     if (aNoFill != bNoFill)
@@ -418,8 +430,8 @@ public sealed class SortCommand : IWorkbookCommand, IAffectedCellsCommand, IEsti
                     // same rationale as R65-commands-sort-6-2 for color.
                     var addrA = new CellAddress(_sheetId, startRow + (uint)a.OriginalIndex, startCol + (uint)index);
                     var addrB = new CellAddress(_sheetId, startRow + (uint)b.OriginalIndex, startCol + (uint)index);
-                    var aIcon = GetEffectiveIcon(ctx.Workbook, sheet, addrA, a.Payloads[index].Cell);
-                    var bIcon = GetEffectiveIcon(ctx.Workbook, sheet, addrB, b.Payloads[index].Cell);
+                    var aIcon = GetEffectiveIcon(ctx.Workbook, sheet, addrA, a.Payloads[index].Cell, effectiveValue: a.Payloads[index].EffectiveValue);
+                    var bIcon = GetEffectiveIcon(ctx.Workbook, sheet, addrB, b.Payloads[index].Cell, effectiveValue: b.Payloads[index].EffectiveValue);
                     bool aNoIcon = aIcon is null;
                     bool bNoIcon = bIcon is null;
                     if (aNoIcon != bNoIcon)
@@ -430,7 +442,7 @@ public sealed class SortCommand : IWorkbookCommand, IAffectedCellsCommand, IEsti
 
                 var keyAddrA = new CellAddress(_sheetId, startRow + (uint)a.OriginalIndex, startCol + (uint)index);
                 var keyAddrB = new CellAddress(_sheetId, startRow + (uint)b.OriginalIndex, startCol + (uint)index);
-                var cmp = CompareKey(ctx.Workbook, sheet, keyAddrA, a.Payloads[index].Cell, keyAddrB, b.Payloads[index].Cell, sortOn, targetColor, targetIcon, customOrder, _options.CaseSensitive);
+                var cmp = CompareKey(ctx.Workbook, sheet, keyAddrA, a.Payloads[index].Cell, a.Payloads[index].EffectiveValue, keyAddrB, b.Payloads[index].Cell, b.Payloads[index].EffectiveValue, sortOn, targetColor, targetIcon, customOrder, _options.CaseSensitive);
                 if (cmp != 0)
                     return ascending ? cmp : -cmp;
             }
@@ -599,8 +611,8 @@ public sealed class SortCommand : IWorkbookCommand, IAffectedCellsCommand, IEsti
                 // is never inverted.
                 if (sortOn == SortOn.CellValues)
                 {
-                    bool aBlank = IsBlankOrError(a.Payloads[index].Cell);
-                    bool bBlank = IsBlankOrError(b.Payloads[index].Cell);
+                    bool aBlank = IsBlankOrError(a.Payloads[index].EffectiveValue);
+                    bool bBlank = IsBlankOrError(b.Payloads[index].EffectiveValue);
                     if (aBlank != bBlank)
                         return aBlank ? 1 : -1; // blank/error always goes last
                     if (aBlank)
@@ -608,8 +620,8 @@ public sealed class SortCommand : IWorkbookCommand, IAffectedCellsCommand, IEsti
                         // R27-sort-deep-2: within the "goes last" bucket, Excel's fixed
                         // precedence puts errors above blanks — independent of direction, same
                         // as the blank-last rule itself.
-                        bool aError = a.Payloads[index].Cell?.Value is ErrorValue;
-                        bool bError = b.Payloads[index].Cell?.Value is ErrorValue;
+                        bool aError = a.Payloads[index].EffectiveValue is ErrorValue;
+                        bool bError = b.Payloads[index].EffectiveValue is ErrorValue;
                         if (aError != bError)
                             return aError ? -1 : 1;
                         continue; // both blank, or both error — equal on this key, try next
@@ -620,8 +632,8 @@ public sealed class SortCommand : IWorkbookCommand, IAffectedCellsCommand, IEsti
                     // must not be inverted by the Descending direction toggle.
                     if (customOrder is not null)
                     {
-                        bool aMember = a.Payloads[index].Cell?.Value is TextValue taMember && customOrder.IndexOf(taMember.Value) >= 0;
-                        bool bMember = b.Payloads[index].Cell?.Value is TextValue tbMember && customOrder.IndexOf(tbMember.Value) >= 0;
+                        bool aMember = a.Payloads[index].EffectiveValue is TextValue taMember && customOrder.IndexOf(taMember.Value) >= 0;
+                        bool bMember = b.Payloads[index].EffectiveValue is TextValue tbMember && customOrder.IndexOf(tbMember.Value) >= 0;
                         if (aMember != bMember)
                             return aMember ? -1 : 1; // list members precede non-members, regardless of direction
                     }
@@ -635,8 +647,8 @@ public sealed class SortCommand : IWorkbookCommand, IAffectedCellsCommand, IEsti
                     // overlaid with any matching conditional-formatting rule's color) here too.
                     var addrA = new CellAddress(_sheetId, startRow + (uint)index, startCol + (uint)a.OriginalIndex);
                     var addrB = new CellAddress(_sheetId, startRow + (uint)index, startCol + (uint)b.OriginalIndex);
-                    var aColor = GetEffectiveColor(workbook, sheet, addrA, a.Payloads[index].Cell, wantFill: sortOn == SortOn.CellColor);
-                    var bColor = GetEffectiveColor(workbook, sheet, addrB, b.Payloads[index].Cell, wantFill: sortOn == SortOn.CellColor);
+                    var aColor = GetEffectiveColor(workbook, sheet, addrA, a.Payloads[index].Cell, wantFill: sortOn == SortOn.CellColor, effectiveValue: a.Payloads[index].EffectiveValue);
+                    var bColor = GetEffectiveColor(workbook, sheet, addrB, b.Payloads[index].Cell, wantFill: sortOn == SortOn.CellColor, effectiveValue: b.Payloads[index].EffectiveValue);
                     bool aNoFill = aColor is null;
                     bool bNoFill = bColor is null;
                     if (aNoFill != bNoFill)
@@ -650,8 +662,8 @@ public sealed class SortCommand : IWorkbookCommand, IAffectedCellsCommand, IEsti
                     // and the top-to-bottom no-target-icon guard in Apply's comparator.
                     var addrA = new CellAddress(_sheetId, startRow + (uint)index, startCol + (uint)a.OriginalIndex);
                     var addrB = new CellAddress(_sheetId, startRow + (uint)index, startCol + (uint)b.OriginalIndex);
-                    var aIcon = GetEffectiveIcon(workbook, sheet, addrA, a.Payloads[index].Cell);
-                    var bIcon = GetEffectiveIcon(workbook, sheet, addrB, b.Payloads[index].Cell);
+                    var aIcon = GetEffectiveIcon(workbook, sheet, addrA, a.Payloads[index].Cell, effectiveValue: a.Payloads[index].EffectiveValue);
+                    var bIcon = GetEffectiveIcon(workbook, sheet, addrB, b.Payloads[index].Cell, effectiveValue: b.Payloads[index].EffectiveValue);
                     bool aNoIcon = aIcon is null;
                     bool bNoIcon = bIcon is null;
                     if (aNoIcon != bNoIcon)
@@ -662,7 +674,7 @@ public sealed class SortCommand : IWorkbookCommand, IAffectedCellsCommand, IEsti
 
                 var keyAddrA = new CellAddress(_sheetId, startRow + (uint)index, startCol + (uint)a.OriginalIndex);
                 var keyAddrB = new CellAddress(_sheetId, startRow + (uint)index, startCol + (uint)b.OriginalIndex);
-                var cmp = CompareKey(workbook, sheet, keyAddrA, a.Payloads[index].Cell, keyAddrB, b.Payloads[index].Cell, sortOn, targetColor, targetIcon, customOrder, _options.CaseSensitive);
+                var cmp = CompareKey(workbook, sheet, keyAddrA, a.Payloads[index].Cell, a.Payloads[index].EffectiveValue, keyAddrB, b.Payloads[index].Cell, b.Payloads[index].EffectiveValue, sortOn, targetColor, targetIcon, customOrder, _options.CaseSensitive);
                 if (cmp != 0)
                     return ascending ? cmp : -cmp;
             }
@@ -1128,6 +1140,14 @@ public sealed class SortCommand : IWorkbookCommand, IAffectedCellsCommand, IEsti
         sheet.CellPhoneticGuides.TryGetValue(address, out var phoneticGuide);
         var styleOnly = cell is null ? sheet.GetStyleOnly(address.Row, address.Col) : null;
 
+        // F1 (array-spill fix): a non-anchor member of a live dynamic-array spill has no entry in
+        // Sheet's _cells dictionary (GetCell returns null for it) -- its value lives only in the
+        // separate _spillValues overlay. sheet.GetValue already checks _cells first and falls back
+        // to that overlay (then BlankValue), so when cell is null this picks up the live spill
+        // value instead of leaving the sort key as an unconditional blank. Only used for sort
+        // comparisons below -- Cell itself stays null so write-back behavior is unchanged.
+        var effectiveValue = cell?.Value ?? sheet.GetValue(address);
+
         // The sortable payload and undo snapshot must not share mutable cell instances.
         snapshotCell = cell?.Clone();
         snapshotStyleOnly = styleOnly;
@@ -1135,7 +1155,7 @@ public sealed class SortCommand : IWorkbookCommand, IAffectedCellsCommand, IEsti
         snapshotHyperlinkMetadata = hyperlinkMetadata;
         snapshotRichTextRuns = richTextRuns;
         snapshotPhoneticGuide = phoneticGuide;
-        return new SortCellPayload(cell?.Clone(), styleOnly, comment, commentAuthor, commentShown, threadedComment, hyperlink, hyperlinkMetadata, richTextRuns, phoneticGuide);
+        return new SortCellPayload(cell?.Clone(), effectiveValue, styleOnly, comment, commentAuthor, commentShown, threadedComment, hyperlink, hyperlinkMetadata, richTextRuns, phoneticGuide);
     }
 
     private static SortCellPayload[] CopyColumnPayloads(SortCellPayload[][] rows, int columnIndex, int rowCount)
@@ -1403,12 +1423,18 @@ public sealed class SortCommand : IWorkbookCommand, IAffectedCellsCommand, IEsti
             sheet.HiddenCols.Add(col);
     }
 
-    private static int CompareKey(Workbook workbook, Sheet sheet, CellAddress addressA, Cell? a, CellAddress addressB, Cell? b, SortOn sortOn, CellColor? targetColor, CfIconOverride? targetIcon, CustomSortOrder? customOrder, bool caseSensitive)
+    private static int CompareKey(Workbook workbook, Sheet sheet, CellAddress addressA, Cell? a, ScalarValue aValue, CellAddress addressB, Cell? b, ScalarValue bValue, SortOn sortOn, CellColor? targetColor, CfIconOverride? targetIcon, CustomSortOrder? customOrder, bool caseSensitive)
     {
         if (targetColor is not null && sortOn is SortOn.CellColor or SortOn.FontColor)
         {
-            var aColor = GetEffectiveColor(workbook, sheet, addressA, a, wantFill: sortOn == SortOn.CellColor);
-            var bColor = GetEffectiveColor(workbook, sheet, addressB, b, wantFill: sortOn == SortOn.CellColor);
+            // R149-remediation-sort-color-icon-spill: aValue/bValue are the already-resolved
+            // effective values for this address (a spill member's live value when addressA/B fall
+            // inside a dynamic-array spill and has no stored Cell -- see the caller's
+            // Payloads[index].EffectiveValue) -- thread them through so CF rules keyed on the
+            // cell's value are judged correctly here too, not just in the no-target-chosen branches
+            // above that call GetEffectiveColor/GetEffectiveIcon directly.
+            var aColor = GetEffectiveColor(workbook, sheet, addressA, a, wantFill: sortOn == SortOn.CellColor, effectiveValue: aValue);
+            var bColor = GetEffectiveColor(workbook, sheet, addressB, b, wantFill: sortOn == SortOn.CellColor, effectiveValue: bValue);
             return CompareTargetColor(aColor, bColor, targetColor.Value);
         }
 
@@ -1417,8 +1443,8 @@ public sealed class SortCommand : IWorkbookCommand, IAffectedCellsCommand, IEsti
         // (or back, via the caller's ascending/descending negation), same as a target color.
         if (targetIcon is not null && sortOn == SortOn.CellIcon)
         {
-            var aIcon = GetEffectiveIcon(workbook, sheet, addressA, a);
-            var bIcon = GetEffectiveIcon(workbook, sheet, addressB, b);
+            var aIcon = GetEffectiveIcon(workbook, sheet, addressA, a, effectiveValue: aValue);
+            var bIcon = GetEffectiveIcon(workbook, sheet, addressB, b, effectiveValue: bValue);
             return CompareTargetIcon(aIcon, bIcon, targetIcon);
         }
 
@@ -1434,7 +1460,7 @@ public sealed class SortCommand : IWorkbookCommand, IAffectedCellsCommand, IEsti
             // R78-commands-sort-multikey-5-2: same reasoning applies to Cell Icon with no target
             // icon chosen — two different icons have no inherent ordering without a pinned icon.
             SortOn.CellColor or SortOn.FontColor or SortOn.CellIcon => 0,
-            _ => CompareScalar(a?.Value ?? BlankValue.Instance, b?.Value ?? BlankValue.Instance, customOrder, caseSensitive)
+            _ => CompareScalar(aValue, bValue, customOrder, caseSensitive)
         };
     }
 
@@ -1458,7 +1484,7 @@ public sealed class SortCommand : IWorkbookCommand, IAffectedCellsCommand, IEsti
     /// FreeX.Core.Commands, so reusing it here is out of scope for this fix.
     /// </para>
     /// </summary>
-    public static CellColor? GetEffectiveColor(Workbook workbook, Sheet sheet, CellAddress address, Cell? cell, bool wantFill)
+    public static CellColor? GetEffectiveColor(Workbook workbook, Sheet sheet, CellAddress address, Cell? cell, bool wantFill, ScalarValue? effectiveValue = null)
     {
         // Resolve the cell's static style the same way callers used to before this helper was
         // shared: prefer the live Cell's own StyleId, then fall back to a style-only (no Cell
@@ -1468,6 +1494,15 @@ public sealed class SortCommand : IWorkbookCommand, IAffectedCellsCommand, IEsti
         CellColor? effective = wantFill ? style.FillColor : style.FontColor;
         if (sheet.ConditionalFormats.Count == 0)
             return effective;
+
+        // R149-remediation-sort-color-icon-spill: callers that already resolved the LIVE value for
+        // this address (e.g. a dynamic-array spill member, which has no stored Cell of its own —
+        // see SpillEngine) pass it explicitly via effectiveValue so CF rules keyed on the cell's
+        // value (CellValue, ContainsText/BeginsWith/EndsWith, Blanks/Errors) are judged against the
+        // spilled value instead of always reading BlankValue for a null cell. Callers with an
+        // ordinary stored Cell (Filter/AutoFilter dropdown color scans) omit it and keep the
+        // previous cell?.Value ?? BlankValue.Instance behavior unchanged.
+        var value = effectiveValue ?? cell?.Value ?? BlankValue.Instance;
 
         foreach (var rule in sheet.ConditionalFormats.OrderBy(r => r.Priority))
         {
@@ -1483,7 +1518,7 @@ public sealed class SortCommand : IWorkbookCommand, IAffectedCellsCommand, IEsti
             if (!applies)
                 continue;
 
-            if (!TryEvaluateSimpleConditionalFormatRule(rule, cell, out var matches) || !matches)
+            if (!TryEvaluateSimpleConditionalFormatRule(rule, value, out var matches) || !matches)
                 continue;
 
             // FontColor is a non-nullable CellStyle member defaulting to Black, so a plain
@@ -1524,12 +1559,14 @@ public sealed class SortCommand : IWorkbookCommand, IAffectedCellsCommand, IEsti
     /// ViewportConditionalFormatEvaluator, but that project is not referenced by
     /// FreeX.Core.Commands.
     /// </summary>
-    public static CfIconOverride? GetEffectiveIcon(Workbook workbook, Sheet sheet, CellAddress address, Cell? cell)
+    public static CfIconOverride? GetEffectiveIcon(Workbook workbook, Sheet sheet, CellAddress address, Cell? cell, ScalarValue? effectiveValue = null)
     {
         if (sheet.ConditionalFormats.Count == 0)
             return null;
 
-        var value = cell?.Value ?? BlankValue.Instance;
+        // R149-remediation-sort-color-icon-spill: same reasoning as GetEffectiveColor above —
+        // callers that already resolved a spill member's LIVE value pass it explicitly.
+        var value = effectiveValue ?? cell?.Value ?? BlankValue.Instance;
         if (!TryGetNumber(value, out var cellNumber))
             return null;
 
@@ -1671,10 +1708,9 @@ public sealed class SortCommand : IWorkbookCommand, IAffectedCellsCommand, IEsti
     /// own value alone. Returns false (rule not evaluated, treated as non-matching for color
     /// resolution purposes) for rule types this minimal resolver does not support.
     /// </summary>
-    private static bool TryEvaluateSimpleConditionalFormatRule(ConditionalFormat rule, Cell? cell, out bool matches)
+    private static bool TryEvaluateSimpleConditionalFormatRule(ConditionalFormat rule, ScalarValue value, out bool matches)
     {
         matches = false;
-        var value = cell?.Value ?? BlankValue.Instance;
         switch (rule.RuleType)
         {
             case CfRuleType.Blanks:
@@ -1835,11 +1871,11 @@ public sealed class SortCommand : IWorkbookCommand, IAffectedCellsCommand, IEsti
     }
 
     /// <summary>
-    /// Returns true if the cell is blank (null or BlankValue) or contains an error.
+    /// Returns true if the value is blank or an error.
     /// Excel places both blank and error cells at the bottom regardless of sort direction.
     /// </summary>
-    private static bool IsBlankOrError(Cell? cell) =>
-        cell is null || cell.Value is BlankValue or ErrorValue;
+    private static bool IsBlankOrError(ScalarValue value) =>
+        value is BlankValue or ErrorValue;
 
     /// <summary>
     /// Sort comparison mirroring Excel's order: numbers/dates, text, booleans, blanks/errors last.

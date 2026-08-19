@@ -72,7 +72,11 @@ public static class FormControlListResolver
         var row = resolved.StartRow + (uint)zeroBased;
         var col = resolved.StartCol;
 
-        var value = resolved.Sheet.GetCell(row, col)?.Value ?? BlankValue.Instance;
+        // Use GetValue (not GetCell) so a selected item that falls on a spill member of another
+        // formula's dynamic array resolves correctly: spill members live only in the sheet's spill
+        // overlay, not in the cell dictionary GetCell reads, so GetCell would see a live spill member
+        // as "no cell" and blank it out.
+        var value = resolved.Sheet.GetValue(row, col);
         var text = ToDisplayText(value);
         return string.IsNullOrEmpty(text) ? null : text;
     }

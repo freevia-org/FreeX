@@ -514,17 +514,32 @@ internal static class DuplicateSheetDrawingCloner
             Text = textBox.Text,
             Title = textBox.Title,
             AltText = textBox.AltText,
+            // R91-print-twin-two-tier-synthetic-sweep-2 precedent (see ClonePicture.IsDecorative
+            // below): preserve the "Mark as decorative" flag on the clone -- without it, a
+            // duplicated decorative text box reverts to the default false and falsely fails
+            // AccessibilityCheckerService's missing-alt-text rule even though real Excel keeps the
+            // decorative marking across Move-or-Copy/Duplicate Sheet, Ctrl+C/Ctrl+V, and paste-carry.
+            IsDecorative = textBox.IsDecorative,
             Width = textBox.Width,
             Height = textBox.Height,
             RotationDegrees = textBox.RotationDegrees,
             FlipHorizontal = textBox.FlipHorizontal,
             FlipVertical = textBox.FlipVertical,
             IsVisible = textBox.IsVisible,
+            // R111-model-drawing-object-lock-1-1 precedent (mirrors CloneDrawingShape.Locked below):
+            // without this, an explicitly-unlocked text box (Format Shape > Properties > Locked
+            // unchecked) silently reverted to the locked default on every clone, re-locking it against
+            // move/resize under sheet protection even though the source stayed unlocked.
+            Locked = textBox.Locked,
             HasFill = textBox.HasFill,
             FillColor = textBox.FillColor,
             OutlineColor = textBox.OutlineColor,
             FillThemeColor = textBox.FillThemeColor,
             OutlineThemeColor = textBox.OutlineThemeColor,
+            // Mirrors CloneDrawingShape.OutlineHasNoFill below: without this, a "No Line" text box
+            // (OutlineHasNoFill=true, e.g. a freshly-inserted default text box per AddTextBoxCommand)
+            // silently regained its border on every clone.
+            OutlineHasNoFill = textBox.OutlineHasNoFill,
             // backlog textbox-6-2: copy the txBody text-formatting fields too -- without this
             // Duplicate Sheet silently stripped a text box's font size/bold/italic/color/alignment
             // even though TextBoxModel now carries them.
@@ -580,6 +595,12 @@ internal static class DuplicateSheetDrawingCloner
             Locked = shape.Locked,
             Title = shape.Title,
             AltText = shape.AltText,
+            // R91-print-twin-two-tier-synthetic-sweep-2 precedent (see ClonePicture.IsDecorative
+            // below): preserve the "Mark as decorative" flag on the clone -- without it, a
+            // duplicated decorative shape reverts to the default false and falsely fails
+            // AccessibilityCheckerService's missing-alt-text rule even though real Excel keeps the
+            // decorative marking across Move-or-Copy/Duplicate Sheet, Ctrl+C/Ctrl+V, and paste-carry.
+            IsDecorative = shape.IsDecorative,
             FillColor = shape.FillColor,
             OutlineColor = shape.OutlineColor,
             GradientFillEndColor = shape.GradientFillEndColor,
@@ -688,6 +709,11 @@ internal static class DuplicateSheetDrawingCloner
             IsDecorative = picture.IsDecorative,
             // R127B-clone-editas-parity: see the matching comment on CloneTextBox's DrawingAnchorKind copy.
             DrawingAnchorKind = picture.DrawingAnchorKind,
+            // R111-model-drawing-object-lock-1-1 precedent (mirrors CloneDrawingShape.Locked): without
+            // this, an explicitly-unlocked picture (Format Picture > Properties > Locked unchecked)
+            // silently reverted to the locked default on every clone, re-locking it against move/resize
+            // under sheet protection even though the source stayed unlocked.
+            Locked = picture.Locked,
             Width = picture.Width,
             Height = picture.Height,
             LockAspectRatio = picture.LockAspectRatio,
@@ -749,6 +775,11 @@ internal static class DuplicateSheetDrawingCloner
             // name both charts now share) either drops it or misattributes it. Mirrors ClonePicture/
             // CloneTextBox/CloneDrawingShape's identical Hyperlink = ... copy (R97-model-drawing-hyperlink-2-2).
             Hyperlink = chart.Hyperlink,
+            // R111-model-drawing-object-lock-1-1 precedent (mirrors CloneDrawingShape.Locked): without
+            // this, an explicitly-unlocked chart (Format Chart Area > Properties > Locked unchecked)
+            // silently reverted to the locked default on every clone, re-locking it against move/resize
+            // under sheet protection even though the source stayed unlocked.
+            Locked = chart.Locked,
             Type = chart.Type,
             Uses1904DateSystem = chart.Uses1904DateSystem,
             Language = chart.Language,

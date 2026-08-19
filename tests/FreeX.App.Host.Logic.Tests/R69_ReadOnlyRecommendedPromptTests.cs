@@ -190,7 +190,13 @@ public sealed class R69_ReadOnlyRecommendedPromptTests
             ((WorkbookReadOnlySession)_readOnlySessionField.GetValue(Window)!).IsReadOnly;
 
         public WorkbookReadOnlyOpenOutcome ApplyWorkbookReadOnlyOpenPolicy(Workbook workbook) =>
-            (WorkbookReadOnlyOpenOutcome)_applyMethod.Invoke(Window, [workbook])!;
+            // ApplyWorkbookReadOnlyOpenPolicy gained an optional trailing filePath parameter
+            // (round 149, OS-level read-only detection) -- MethodBase.Invoke does not apply
+            // parameter defaults for a reflected call, so the second argument must be supplied
+            // explicitly. null matches every existing call in this file: none of them exercise a
+            // real on-disk path, only the embedded-flag (ReadOnlyRecommended/ReservationPassword)
+            // classification this test class covers.
+            (WorkbookReadOnlyOpenOutcome)_applyMethod.Invoke(Window, [workbook, null])!;
 
         public static ReadOnlyPromptHarness Create(bool acceptReadOnly, Func<string, string?>? reservationPasswordEntry = null)
         {

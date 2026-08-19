@@ -18,6 +18,16 @@ internal static class BodyParagraphWalk
     public static IEnumerable<Paragraph> Enumerate(TextDocument document) =>
         document.Blocks.SelectMany(ParagraphsInBlock);
 
+    // Same shape (Run.Shape/text-box) descent as Enumerate(TextDocument), but starting from an
+    // already-selected paragraph list rather than the document body — for a header/footer slot, or a
+    // footnote's/endnote's own Content list, none of which are reachable through document.Blocks. Callers
+    // that walk one of those lists need the identical text-box reach TrackChanges.ParagraphHasRevisions/
+    // ResolveParagraphContainer already give them for headers/footers/footnotes/endnotes (TrackChanges.cs),
+    // or a tracked change/bookmark/comment anchor living in a text box embedded in one of those slots is
+    // silently missed by callers that iterate the paragraph list directly.
+    public static IEnumerable<Paragraph> Enumerate(IEnumerable<Paragraph> paragraphs) =>
+        paragraphs.SelectMany(WithShapeParagraphs);
+
     private static IEnumerable<Paragraph> ParagraphsInBlock(Block block) => block switch
     {
         Paragraph paragraph => WithShapeParagraphs(paragraph),

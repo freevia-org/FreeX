@@ -1134,7 +1134,10 @@ internal static class XlsxWorksheetDrawingObjectWriter
                         // R95/R97-io-drawing-hyperlink: re-attach the object-level hyperlink (model
                         // field, or -- for a plain source-loaded object -- the pre-rebuild drawing
                         // part; see BuildObjectHyperlinkElement).
-                        hlinkClick),
+                        hlinkClick,
+                        // R149-app-accessibility-checker-decorative-shapes: round-trip Excel's "Mark
+                        // as decorative" flag, mirroring the picture path's ToDecorativeExtLst call.
+                        ToDecorativeExtLst(drawingNs, textBox.IsDecorative)),
                     new XElement(spreadsheetDrawingNs + "cNvSpPr", new XAttribute("txBox", "1"))),
                 ToShapePropertiesForDrawingObject(
                     "rect",
@@ -1257,7 +1260,10 @@ internal static class XlsxWorksheetDrawingObjectWriter
                         new XAttribute("name", DrawingName(shape.Name, $"Shape {shapeIndex}")),
                         string.IsNullOrWhiteSpace(shape.Title) ? null : new XAttribute("title", shape.Title),
                         string.IsNullOrWhiteSpace(shape.AltText) ? null : new XAttribute("descr", shape.AltText),
-                        hlinkClick),
+                        hlinkClick,
+                        // R149-app-accessibility-checker-decorative-shapes: round-trip Excel's "Mark
+                        // as decorative" flag, mirroring the picture path's ToDecorativeExtLst call.
+                        ToDecorativeExtLst(drawingNs, shape.IsDecorative)),
                     new XElement(spreadsheetDrawingNs + "cNvCxnSpPr",
                         // R90-shape-5-3: preserve which shapes this connector's endpoints were glued
                         // to (stCxn/endCxn) so a connector loaded from a source file that goes through
@@ -1273,7 +1279,10 @@ internal static class XlsxWorksheetDrawingObjectWriter
                         new XAttribute("name", DrawingName(shape.Name, $"Shape {shapeIndex}")),
                         string.IsNullOrWhiteSpace(shape.Title) ? null : new XAttribute("title", shape.Title),
                         string.IsNullOrWhiteSpace(shape.AltText) ? null : new XAttribute("descr", shape.AltText),
-                        hlinkClick),
+                        hlinkClick,
+                        // R149-app-accessibility-checker-decorative-shapes: round-trip Excel's "Mark
+                        // as decorative" flag, mirroring the picture path's ToDecorativeExtLst call.
+                        ToDecorativeExtLst(drawingNs, shape.IsDecorative)),
                     new XElement(spreadsheetDrawingNs + "cNvSpPr")),
                 shapeProperties,
                 shape.HasShapeText ? ToShapeTxBody(shape, drawingNs, spreadsheetDrawingNs) : null);

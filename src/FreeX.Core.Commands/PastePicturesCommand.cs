@@ -182,6 +182,13 @@ public sealed class PastePicturesCommand : IWorkbookCommand
             // silently reverted to the PictureModel default of TwoCell, so the pasted copy would
             // then wrongly move AND resize on a later row/column insert or delete.
             DrawingAnchorKind = picture.DrawingAnchorKind,
+            // R150-model-drawing-object-lock-paste-1-1: mirrors DuplicateSheetDrawingCloner.ClonePicture's
+            // Locked copy (R111-model-drawing-object-lock-1-1 precedent) -- without this, an
+            // explicitly-unlocked picture (Format Picture > Properties > Locked unchecked) silently
+            // reverted to the PictureModel default of Locked = true on every copy/paste that routes
+            // through this command, re-locking the pasted copy against move/resize under sheet
+            // protection even though the source picture stayed unlocked.
+            Locked = picture.Locked,
             CropLeft = picture.CropLeft,
             CropTop = picture.CropTop,
             CropRight = picture.CropRight,

@@ -69,10 +69,14 @@ public static class CellValueAutoCompleteSuggester
             var row = activeCell.Row - 1;
             while (true)
             {
-                var cell = sheet.GetCell(row, activeCell.Col);
-                if (cell is null || cell.Value is BlankValue)
+                // GetValue (not GetCell) so a spill member -- which has no Cell of its own in
+                // the sheet's cell dictionary, only an entry in the spill overlay -- is seen as
+                // its actual text/blank value instead of unconditionally reading as null and
+                // truncating the scan (and dropping the spilled text as a candidate).
+                var value = sheet.GetValue(row, activeCell.Col);
+                if (value is BlankValue)
                     break;
-                if (cell.Value is TextValue text)
+                if (value is TextValue text)
                     entries.Add(text.Value);
 
                 if (row <= used.Start.Row)
@@ -83,10 +87,10 @@ public static class CellValueAutoCompleteSuggester
 
         for (var row = activeCell.Row + 1; row <= used.End.Row; row++)
         {
-            var cell = sheet.GetCell(row, activeCell.Col);
-            if (cell is null || cell.Value is BlankValue)
+            var value = sheet.GetValue(row, activeCell.Col);
+            if (value is BlankValue)
                 break;
-            if (cell.Value is TextValue text)
+            if (value is TextValue text)
                 entries.Add(text.Value);
         }
 

@@ -160,9 +160,12 @@ public static class StyleManager
             Run = run ?? existing.Run,
             Paragraph = para ?? existing.Paragraph,
             // Preserve read-only structural data the modify dialog does not edit, so modifying a style read
-            // from a docx does not silently drop its table borders or preserved numbering on the next save.
+            // from a docx does not silently drop its table borders, preserved numbering, linked
+            // character/paragraph style pairing (w:style/w:link), or preserved table style XML on the next save.
             TableBorders = existing.TableBorders,
             PreservedNumbering = existing.PreservedNumbering,
+            LinkedStyleId = existing.LinkedStyleId,
+            PreservedTableStyleXml = existing.PreservedTableStyleXml,
         };
         doc.Styles[styleId] = updated;
         return updated;
