@@ -1024,10 +1024,63 @@ public static class ComplexFieldEngine
                     return pageText;
 
                 var page = pageOf?.Invoke(location.BlockIndex);
-                return (page ?? 1).ToString(CultureInfo.InvariantCulture);
+                if (page is null)
+                    return "1";
+
+                // pageOf is keyed to the top-level TextDocument.Blocks index, and every row of a table
+                // shares that one Table entry there (Bookmarks.List's own doc comment says so), so a
+                // bookmark on any row would otherwise resolve to the same page as row zero. Layer authored
+                // page breaks between the table's start and the bookmarked row on top of the host-resolved
+                // page so a row past a page break inside the table reports its own page instead of
+                // collapsing onto the table's starting page.
+                var rowOffset = location.TableRowIndex is { } rowIndex
+                    && document.Blocks[location.BlockIndex] is Table table
+                        ? PageBreaksBeforeTableRow(table, rowIndex)
+                        : 0;
+
+                return Math.Max(1, page.Value + rowOffset).ToString(CultureInfo.InvariantCulture);
             }
         }
         return cached;
+    }
+
+    // Counts authored page breaks (manual breaks and page-break-before formatting) between the start of
+    // the table and rowIndex, inclusive of a page-break-before that starts rowIndex itself. This is a
+    // best-effort correction, not full pagination: it catches an explicit break the author placed inside
+    // the table, not a row that lands on a later page purely from natural row-height overflow (the model
+    // has no layout engine, so that page is unknowable here).
+    private static int PageBreaksBeforeTableRow(Table table, int rowIndex)
+    {
+        if (rowIndex <= 0 || rowIndex >= table.Rows.Count)
+            return 0;
+
+        var breaks = 0;
+        for (var row = 0; row <= rowIndex; row++)
+        {
+            foreach (var paragraph in ParagraphsInTableRow(table.Rows[row]))
+            {
+                if (paragraph.Formatting.PageBreakBefore)
+                    breaks++;
+                if (row < rowIndex)
+                    breaks += paragraph.Runs.Count(run => run.IsPageBreak);
+            }
+        }
+
+        return breaks;
+    }
+
+    // Every paragraph directly in a table row's cells, plus (recursively) each cell's nested tables.
+    private static IEnumerable<Paragraph> ParagraphsInTableRow(TableRow row)
+    {
+        foreach (var cell in row.Cells)
+        {
+            foreach (var cellParagraph in cell.Paragraphs)
+                yield return cellParagraph;
+            foreach (var nestedTable in cell.NestedTables)
+                foreach (var nestedRow in nestedTable.Rows)
+                    foreach (var nestedParagraph in ParagraphsInTableRow(nestedRow))
+                        yield return nestedParagraph;
+        }
     }
 
     // SEQ: the running counter for this sequence name across the complete main-document story, including

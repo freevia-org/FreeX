@@ -407,8 +407,10 @@ public static class PageContentRenderModelBuilder
                 // than an unscaled page, when Excel's proportional scaling never changes how much text
                 // visually fits.
                 var targetWidthCharacters = EstimateCharacterWidth(scaleRatio > 0 ? width / scaleRatio : width);
-                var text = cell is not null ? FormatCellText(workbook, sheet, cell, style, targetWidthCharacters) : "";
-                var borders = ResolveBorders(style);
+                var text = cell is not null
+                    ? FormatCellText(workbook, sheet, cell, style, targetWidthCharacters, cfResult.Style)
+                    : "";
+                var borders = ApplyConditionalBorderDelta(ResolveBorders(style), cfResult.Style);
                 var hasValidationCircle = validationCircleCells.Contains(address);
                 if (string.IsNullOrEmpty(text) && fill is null && !borders.HasAny &&
                     cfResult.DataBar is null && cfResult.IconSet is null && !hasValidationCircle)
@@ -882,18 +884,27 @@ public static class PageContentRenderModelBuilder
         Sheet sheet,
         Cell cell,
         CellStyle style,
-        int? targetWidthCharacters = null)
+        int? targetWidthCharacters = null,
+        ConditionalFormatStylePlan? cfStyle = null)
     {
+        // A matched conditional-format rule's own number format (e.g. Excel's "Format Cells > Number"
+        // panel inside New Formatting Rule) overrides the cell's raw/unconditional number format --
+        // mirrors ViewportConditionalFormatEvaluator.MergeStyles, which the on-screen grid consults via
+        // ViewportService, so print/PDF renders the same accounting/percentage/date format the grid
+        // shows instead of the cell's plain format.
+        var numberFormat = cfStyle?.NumberFormat ?? style.NumberFormat;
+
         // Excel's "Show a zero in cells that have zero value" sheet option (sheetView showZeros):
         // when off, a cell whose value is numeric zero prints/exports as blank, mirroring the
         // interactive grid's expected behavior. Formula-text display mode (ShowFormulas) is
         // unaffected since it shows the literal formula, not the computed value. UNLESS the
-        // cell's own number format defines an explicit third (zero) section (e.g.
-        // "0;-0;\"zero\""), in which case that section's own rendering governs and the
-        // sheet-level preference is not consulted -- mirrors ViewportService.GetDisplayText's
-        // NumberFormatHasExplicitZeroSection guard (same r51 fix, screen/print parity).
+        // effective number format (the CF rule's, when one is matched, else the cell's own) defines
+        // an explicit third (zero) section (e.g. "0;-0;\"zero\""), in which case that section's own
+        // rendering governs and the sheet-level preference is not consulted -- mirrors
+        // ViewportService.GetDisplayText's NumberFormatHasExplicitZeroSection guard (same r51 fix,
+        // screen/print parity).
         if (!sheet.ShowFormulas && !sheet.ShowZeros && cell.Value is NumberValue { Value: 0 } &&
-            !NumberFormatHasExplicitZeroSection(style.NumberFormat))
+            !NumberFormatHasExplicitZeroSection(numberFormat))
             return string.Empty;
 
         var raw = sheet.ShowFormulas && cell.FormulaText is not null
@@ -901,7 +912,7 @@ public static class PageContentRenderModelBuilder
             : targetWidthCharacters is { } width
                 ? NumberFormatter.FormatWithColor(
                     cell.Value,
-                    style.NumberFormat,
+                    numberFormat,
                     width,
                     workbook.IndexedColors,
                     workbook.Theme,
@@ -909,7 +920,7 @@ public static class PageContentRenderModelBuilder
                     suppressWidthOverflowIndicator: style.ShrinkToFit).Text
                 : NumberFormatter.FormatWithColor(
                     cell.Value,
-                    style.NumberFormat,
+                    numberFormat,
                     workbook.IndexedColors,
                     workbook.Theme,
                     workbook.Uses1904DateSystem).Text;
@@ -965,6 +976,25 @@ public static class PageContentRenderModelBuilder
                 Color = d.FontColor is { } color ? PresentationRgb.FromCellColor(color) : baseFont.Color
             }
             : baseFont;
+
+    /// <summary>
+    /// Applies a matched conditional-format rule's per-edge border override onto the cell's raw
+    /// resolved borders -- mirrors ViewportConditionalFormatEvaluator.MergeStyles's border handling
+    /// (each edge from the CF wins only when the CF actually specifies a visible border on that
+    /// edge), so print/PDF draws the same CF border the on-screen grid does instead of silently
+    /// falling back to the cell's raw/unconditional borders.
+    /// </summary>
+    private static PageCellBorders ApplyConditionalBorderDelta(PageCellBorders baseBorders, ConditionalFormatStylePlan? delta)
+    {
+        if (delta is not { } d)
+            return baseBorders;
+
+        return new PageCellBorders(
+            d.BorderTop.Style != BorderStyle.None ? ResolveEdge(d.BorderTop) : baseBorders.Top,
+            d.BorderRight.Style != BorderStyle.None ? ResolveEdge(d.BorderRight) : baseBorders.Right,
+            d.BorderBottom.Style != BorderStyle.None ? ResolveEdge(d.BorderBottom) : baseBorders.Bottom,
+            d.BorderLeft.Style != BorderStyle.None ? ResolveEdge(d.BorderLeft) : baseBorders.Left);
+    }
 
     private static PresentationRgb? ResolveFill(CellStyle style, WorkbookTheme theme)
     {

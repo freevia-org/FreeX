@@ -1348,6 +1348,22 @@ public static class PptxPackageWriter
             ? p.NotesPageSizeCyEmu
             : DrawingMlCoordinateUnits.EmuPerInch * 10;
 
+        // Pre-compute the custom-show elements before building presEl so that
+        // <p:custShowLst> can be placed in its required CT_Presentation schema
+        // position (after sldSz/notesSz, before defaultTextStyle) rather than
+        // appended after the fact.
+        var slideIdToRelId = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        for (int i = 0; i < p.Slides.Count && i < sldIdElements.Count; i++)
+        {
+            var relId = sldIdElements[i].Attribute(R + "id")?.Value;
+            if (!string.IsNullOrWhiteSpace(relId))
+            {
+                slideIdToRelId[p.Slides[i].Id] = relId;
+            }
+        }
+
+        var customShowElements = BuildCustomShowElements(p.CustomShows, slideIdToRelId).ToList();
+
         var presEl = new XElement(P + "presentation",
             NsAttr("p", P), NsAttr("a", A), NsAttr("r", R),
             new XAttribute("saveSubsetFonts", "1"),
@@ -1375,23 +1391,12 @@ public static class PptxPackageWriter
             new XElement(P + "notesSz",
                 new XAttribute("cx", notesPageWidthEmu),
                 new XAttribute("cy", notesPageHeightEmu)),
+            // CT_Presentation order: ... notesSz, smartTags, embeddedFontLst, custShowLst, ...
+            // defaultTextStyle. custShowLst must precede defaultTextStyle.
+            customShowElements.Count > 0
+                ? new XElement(P + "custShowLst", customShowElements)
+                : null,
             BuildDefaultTextStyleEl());
-
-        var slideIdToRelId = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
-        for (int i = 0; i < p.Slides.Count && i < sldIdElements.Count; i++)
-        {
-            var relId = sldIdElements[i].Attribute(R + "id")?.Value;
-            if (!string.IsNullOrWhiteSpace(relId))
-            {
-                slideIdToRelId[p.Slides[i].Id] = relId;
-            }
-        }
-
-        var customShowElements = BuildCustomShowElements(p.CustomShows, slideIdToRelId).ToList();
-        if (customShowElements.Count > 0)
-        {
-            presEl.Add(new XElement(P + "custShowLst", customShowElements));
-        }
 
         // Emit p14:sectionLst inside p:extLst when sections are present.
         if (p.Sections.Count > 0)

@@ -69,6 +69,68 @@ public class TableOfContentsTests
     }
 
     [Fact]
+    public void Build_HeadingStyledInsideTableCell_IsIncludedAsAnEntry()
+    {
+        // Reproduces freew-toc-index F1: a heading styled inside a table cell (a banner/divider row, or
+        // a comparison table's heading row) must not be silently dropped from the generated TOC.
+        var doc = new TextDocument();
+        doc.Blocks.Add(new Paragraph("Intro") { StyleId = "Heading1" });
+        var table = Table.Create(1, 1);
+        table.Rows[0].Cells[0].Paragraphs[0].Runs.Add(new Run("Heading Inside Table"));
+        table.Rows[0].Cells[0].Paragraphs[0].StyleId = "Heading1";
+        doc.Blocks.Add(table);
+        doc.Blocks.Add(new Paragraph("Conclusion") { StyleId = "Heading1" });
+
+        var toc = TableOfContents.Build(doc);
+
+        toc.Select(p => p.PlainText).Should().Equal(
+            TableOfContents.HeadingText,
+            "Intro\t1",
+            "Heading Inside Table\t1",
+            "Conclusion\t1");
+    }
+
+    [Fact]
+    public void Build_NonHeadingContentInsideTableCell_IsStillExcluded()
+    {
+        // Sibling no-regression case: only cell paragraphs styled as a heading/title are picked up --
+        // ordinary table content must not start appearing in the TOC.
+        var doc = new TextDocument();
+        doc.Blocks.Add(new Paragraph("Intro") { StyleId = "Heading1" });
+        var table = Table.Create(1, 1);
+        table.Rows[0].Cells[0].Paragraphs[0].Runs.Add(new Run("Just a cell"));
+        doc.Blocks.Add(table);
+
+        var toc = TableOfContents.Build(doc);
+
+        toc.Select(p => p.PlainText).Should().Equal(TableOfContents.HeadingText, "Intro\t1");
+    }
+
+    [Fact]
+    public void Build_PageBreakBeforeTableWithHeadingInsideCell_AdvancesThatEntrysPageNumber()
+    {
+        // Sibling no-regression case: the fallback page-reference computation must still honor an
+        // explicit page break that lands on a table containing a heading-styled cell.
+        var doc = new TextDocument();
+        doc.Blocks.Add(new Paragraph("Intro") { StyleId = "Heading1" });
+        var table = Table.Create(1, 1);
+        table.Rows[0].Cells[0].Paragraphs[0].Runs.Add(new Run("Heading Inside Table"));
+        table.Rows[0].Cells[0].Paragraphs[0].StyleId = "Heading1";
+        doc.Blocks.Add(table);
+        var pageTwoParagraph = new Paragraph("Page two text") { Formatting = new ParagraphFormatting { PageBreakBefore = true } };
+        doc.Blocks.Add(pageTwoParagraph);
+        doc.Blocks.Add(new Paragraph("Conclusion") { StyleId = "Heading1" });
+
+        var toc = TableOfContents.Build(doc);
+
+        toc.Select(p => p.PlainText).Should().Equal(
+            TableOfContents.HeadingText,
+            "Intro\t1",
+            "Heading Inside Table\t1",
+            "Conclusion\t2");
+    }
+
+    [Fact]
     public void Build_DefaultEntryParagraphsContainHeadingTabPageNumberAndDottedRightTabStop()
     {
         var doc = new TextDocument();

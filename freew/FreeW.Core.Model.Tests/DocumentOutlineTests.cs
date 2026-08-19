@@ -92,6 +92,60 @@ public class DocumentOutlineTests
         DocumentOutline.Of(doc).Should().BeEmpty();
     }
 
+    [Fact]
+    public void Of_HeadingStyledInsideTableCell_IsOmitted()
+    {
+        // Sibling no-regression case: DocumentOutline.Of is also the navigation pane's and outline
+        // view's block-index source for promote/demote/move/collapse, which only make sense against a
+        // top-level Paragraph block. It must keep excluding table-cell headings entirely (not just
+        // fail to find them) so those features are unaffected by OfIncludingTableCells below.
+        var doc = new TextDocument();
+        doc.Blocks.Add(new Paragraph("Intro") { StyleId = "Heading1" });
+        var table = Table.Create(1, 1);
+        table.Rows[0].Cells[0].Paragraphs[0].Runs.Add(new Run("Heading Inside Table"));
+        table.Rows[0].Cells[0].Paragraphs[0].StyleId = "Heading1";
+        doc.Blocks.Add(table);
+        doc.Blocks.Add(new Paragraph("Conclusion") { StyleId = "Heading1" });
+
+        var outline = DocumentOutline.Of(doc);
+
+        outline.Should().Equal(
+            new OutlineEntry(0, 1, "Intro", "Heading1"),
+            new OutlineEntry(2, 1, "Conclusion", "Heading1"));
+    }
+
+    [Fact]
+    public void OfIncludingTableCells_HeadingStyledInsideTableCell_IsIncluded()
+    {
+        var doc = new TextDocument();
+        doc.Blocks.Add(new Paragraph("Intro") { StyleId = "Heading1" });
+        var table = Table.Create(1, 1);
+        table.Rows[0].Cells[0].Paragraphs[0].Runs.Add(new Run("Heading Inside Table"));
+        table.Rows[0].Cells[0].Paragraphs[0].StyleId = "Heading1";
+        doc.Blocks.Add(table);
+        doc.Blocks.Add(new Paragraph("Conclusion") { StyleId = "Heading1" });
+
+        var outline = DocumentOutline.OfIncludingTableCells(doc);
+
+        outline.Select(entry => entry.Text).Should().Equal("Intro", "Heading Inside Table", "Conclusion");
+        // The table-cell heading is anchored to the table's own top-level block index (1), same as the
+        // convention DocumentBodyParagraphs already uses for the INDEX feature.
+        outline[1].Should().Be(new OutlineEntry(1, 1, "Heading Inside Table", "Heading1"));
+    }
+
+    [Fact]
+    public void OfIncludingTableCells_NoTables_MatchesOf()
+    {
+        // Sibling no-regression case: for a document with no tables, the table-aware walk must produce
+        // exactly what Of produces (same entries, same block indexes).
+        var doc = new TextDocument();
+        doc.Blocks.Add(new Paragraph("My Title") { StyleId = "Title" });
+        doc.Blocks.Add(new Paragraph("Intro body"));
+        doc.Blocks.Add(new Paragraph("Chapter One") { StyleId = "Heading1" });
+
+        DocumentOutline.OfIncludingTableCells(doc).Should().Equal(DocumentOutline.Of(doc));
+    }
+
     [Theory]
     [InlineData(null, false, 0)]
     [InlineData("", false, 0)]

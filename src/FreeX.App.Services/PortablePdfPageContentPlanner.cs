@@ -38,7 +38,14 @@ public sealed record PortablePdfPageCell(
     // mirrors for the PDF export path).
     DataBarLayout? DataBar = null,
     IconSetResult? IconSet = null,
-    bool HasValidationCircle = false)
+    bool HasValidationCircle = false,
+    // freex-conditional-format-F1: the matched CF rule's full differential style (font color, bold,
+    // italic, underline, per-edge border, number format) -- previously only ConditionalFillColor was
+    // carried, so WorkbookPdfContentBuilder had no way to render anything but the CF fill and fell
+    // back to the raw unconditional style for every other attribute (font/bold/italic/border), and
+    // this planner's own GetDisplayText fell back to the raw NumberFormat too. Mirrors how
+    // ConditionalFillColor/DataBar/IconSet above are already threaded from the same evaluator result.
+    ConditionalFormatStylePlan? ConditionalStyle = null)
 {
     public bool IsTitle => IsTitleRow || IsTitleColumn;
     public bool IsBody => !IsTitle;
@@ -173,14 +180,15 @@ public static class PortablePdfPageContentPlanner
                 cells.Add(new PortablePdfPageCell(
                     row.Row,
                     column.Column,
-                    GetDisplayText(workbook, sheet, cell, styleId, columnWidthChars[column.Column]),
+                    GetDisplayText(workbook, sheet, cell, styleId, columnWidthChars[column.Column], cfResult.Style?.NumberFormat),
                     styleId,
                     row.Role == PortablePdfPageAxisRole.Title,
                     column.Role == PortablePdfPageAxisRole.Title,
                     cfResult.Style?.FillColor,
                     cfResult.DataBar,
                     cfResult.IconSet,
-                    validationCircleCells.Contains(address)));
+                    validationCircleCells.Contains(address),
+                    cfResult.Style));
             }
         }
 
@@ -192,7 +200,8 @@ public static class PortablePdfPageContentPlanner
         Sheet sheet,
         Cell? cell,
         StyleId styleId,
-        int targetWidthCharacters)
+        int targetWidthCharacters,
+        string? conditionalNumberFormat)
     {
         if (cell is null)
             return "";
@@ -206,9 +215,15 @@ public static class PortablePdfPageContentPlanner
         // when the cell shrinks its font to fit instead) so an over-wide numeric/date value renders
         // Excel's '#' overflow indicator here too, instead of the raw digits silently overflowing
         // into the neighboring cell on the PDF page.
+        //
+        // freex-conditional-format-F1: a matched CF rule's number format (e.g. an accounting format
+        // imported from an Excel dxf) overrides the cell's raw style format here, matching
+        // ViewportConditionalFormatEvaluator.MergeStyles/StackDifferentialStyle (the on-screen grid) --
+        // previously this always read style.NumberFormat unconditionally, so a CF-driven format never
+        // affected the exported PDF's displayed digits even though the grid showed it correctly.
         var displayText = NumberFormatter.FormatWithColor(
             cell.Value,
-            style.NumberFormat,
+            conditionalNumberFormat ?? style.NumberFormat,
             targetWidthCharacters,
             workbook.IndexedColors,
             workbook.Theme,

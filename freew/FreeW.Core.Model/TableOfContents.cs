@@ -72,7 +72,7 @@ public static class TableOfContents
             new(HeadingText) { StyleId = HeadingStyleId }
         };
 
-        var outline = DocumentOutline.Of(document);
+        var outline = DocumentOutline.OfIncludingTableCells(document);
         var pageReferences = BuildPageReferences(document, outline);
         var entryRightTabStopPt = EntryRightTabStopPt(document.Page);
 
@@ -159,7 +159,16 @@ public static class TableOfContents
         for (var i = 0; i < document.Blocks.Count; i++)
         {
             if (document.Blocks[i] is not Paragraph paragraph)
+            {
+                // A non-paragraph block (a Table) can itself be a heading's OutlineEntry.BlockIndex when
+                // the heading is styled inside one of its cells (see DocumentOutline.OfIncludingTableCells)
+                // — anchor it to the page reached so far, since page breaks inside the table's own cells
+                // aren't tracked by this block-level walk (matching CrossReferences.ExplicitPageNumberAtBlock's
+                // same table-blind approximation).
+                if (headingBlockIndexes.Contains(i))
+                    pageReferences[i] = pageNumber;
                 continue;
+            }
 
             if (paragraph.Formatting.PageBreakBefore)
                 pageNumber++;

@@ -56,6 +56,38 @@ public static class DocumentOutline
     }
 
     /// <summary>
+    /// Builds the heading outline the same way as <see cref="Of"/>, but also descends into table cells
+    /// (and nested tables, and nested cells) via <see cref="DocumentBodyParagraphs"/> so a heading/title
+    /// styled inside a table cell is not silently omitted. For a table-cell heading, <see cref="OutlineEntry.BlockIndex"/>
+    /// is the index of the containing <see cref="Table"/> block in <see cref="TextDocument.Blocks"/> — the
+    /// same block-locating convention <see cref="DocumentBodyParagraphs"/> uses elsewhere (e.g. for the
+    /// INDEX feature) — since a cell paragraph has no index of its own in that top-level list. Two headings
+    /// in different cells of the same table therefore share a <see cref="OutlineEntry.BlockIndex"/>, which
+    /// makes this method unsuitable for anything that promotes/demotes/moves/collapses a heading by block
+    /// index (the navigation pane and outline view use <see cref="Of"/> for that); it is meant for
+    /// generators — such as <see cref="TableOfContents"/> — that only need every heading's text, level,
+    /// and an approximate document-order anchor.
+    /// </summary>
+    public static IReadOnlyList<OutlineEntry> OfIncludingTableCells(TextDocument document)
+    {
+        ArgumentNullException.ThrowIfNull(document);
+
+        var entries = new List<OutlineEntry>();
+        foreach (var location in DocumentBodyParagraphs.Enumerate(document))
+        {
+            if (TryGetLevel(location.Paragraph.StyleId, out var level))
+            {
+                entries.Add(new OutlineEntry(
+                    location.BlockIndex,
+                    level,
+                    location.Paragraph.PlainText,
+                    location.Paragraph.StyleId!));
+            }
+        }
+        return entries;
+    }
+
+    /// <summary>
     /// Returns true and the outline level when <paramref name="styleId"/> names a heading/title style:
     /// <c>Title</c> → 0, and <c>HeadingN</c> → N for a positive integer N. Any other (or null) style id
     /// is not an outline heading.

@@ -12,7 +12,12 @@ public readonly record struct ConditionalFormatStylePlan(
     CellColor? FontColor,
     bool Bold,
     bool Italic,
-    bool Underline);
+    bool Underline,
+    string? NumberFormat,
+    CellBorder BorderTop,
+    CellBorder BorderRight,
+    CellBorder BorderBottom,
+    CellBorder BorderLeft);
 
 /// <summary>Renderer-neutral conditional-format result for one worksheet cell.</summary>
 public readonly record struct ConditionalFormatCellPlan(
@@ -117,7 +122,12 @@ public sealed class ConditionalFormatRenderEvaluator
                     null,
                     false,
                     false,
-                    false);
+                    false,
+                    null,
+                    default,
+                    default,
+                    default,
+                    default);
                 return true;
             }
             case CfRuleType.CellValue:
@@ -267,7 +277,17 @@ public sealed class ConditionalFormatRenderEvaluator
             style.FontColor != CellColor.Black ? style.FontColor : null,
             style.Bold,
             style.Italic,
-            style.Underline);
+            style.Underline,
+            // Mirrors ViewportConditionalFormatEvaluator.MergeStyles: a dxf number format only counts
+            // as an override when it's explicitly set to something other than "General".
+            !string.IsNullOrEmpty(style.NumberFormat) &&
+            !string.Equals(style.NumberFormat, "General", StringComparison.OrdinalIgnoreCase)
+                ? style.NumberFormat
+                : null,
+            style.BorderTop,
+            style.BorderRight,
+            style.BorderBottom,
+            style.BorderLeft);
 
     private static ConditionalFormatStylePlan StackStyle(
         ConditionalFormatStylePlan accumulated,
@@ -277,7 +297,15 @@ public sealed class ConditionalFormatRenderEvaluator
             accumulated.FontColor ?? next.FontColor,
             accumulated.Bold || next.Bold,
             accumulated.Italic || next.Italic,
-            accumulated.Underline || next.Underline);
+            accumulated.Underline || next.Underline,
+            // First matching (highest-priority) rule that specifies a number format wins, matching
+            // ViewportConditionalFormatEvaluator.StackDifferentialStyle's "first matching rule wins"
+            // semantics for the on-screen grid.
+            accumulated.NumberFormat ?? next.NumberFormat,
+            accumulated.BorderTop.Style != BorderStyle.None ? accumulated.BorderTop : next.BorderTop,
+            accumulated.BorderRight.Style != BorderStyle.None ? accumulated.BorderRight : next.BorderRight,
+            accumulated.BorderBottom.Style != BorderStyle.None ? accumulated.BorderBottom : next.BorderBottom,
+            accumulated.BorderLeft.Style != BorderStyle.None ? accumulated.BorderLeft : next.BorderLeft);
 
     private static bool TryGetNumeric(ScalarValue value, out double result)
     {

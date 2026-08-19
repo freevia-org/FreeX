@@ -265,6 +265,13 @@ internal sealed class FileCommands
     public bool ConfirmCloseAllowed() => _workflow.ConfirmCloseAllowed();
 
     /// <summary>
+    /// Same dirty-gate as <see cref="ConfirmCloseAllowed()"/>, but for a caller that is about to
+    /// replace the current window's document for a reason other than closing (e.g. recovering a
+    /// different unsaved document into it) and wants the save-changes prompt worded for that action.
+    /// </summary>
+    public bool ConfirmCloseAllowed(string action) => _workflow.ConfirmCloseAllowed(action);
+
+    /// <summary>
     /// Save to the current path, resolving its format adapter. Falls back to Save-As when the current file is
     /// a read-only format (e.g. a legacy format opened for viewing), so the user is steered to a writable one.
     /// </summary>

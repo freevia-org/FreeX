@@ -665,10 +665,12 @@ td, th { border: 1px solid #777; padding: 3pt 5pt; vertical-align: top; }
                     pendingRowspans[column] = new PendingRowspan(rowspan - 1, Math.Max(1, cell.GridSpan));
                 }
 
-                var paragraphs = ReadCellParagraphs(cellElement.ChildNodes, imageResolver, msoStyleMap);
-                if (paragraphs.Count == 0)
+                var nestedTables = new List<Table>();
+                var paragraphs = ReadCellParagraphs(cellElement.ChildNodes, imageResolver, msoStyleMap, nestedTables);
+                if (paragraphs.Count == 0 && nestedTables.Count == 0)
                     paragraphs.Add(new Paragraph(NormalizeText(cellElement.TextContent)));
                 cell.Paragraphs.AddRange(paragraphs);
+                cell.NestedTables.AddRange(nestedTables);
 
                 if (cellElement.LocalName.Equals("th", StringComparison.OrdinalIgnoreCase))
                 {
@@ -697,7 +699,7 @@ td, th { border: 1px solid #777; padding: 3pt 5pt; vertical-align: top; }
         return table;
     }
 
-    private static List<Paragraph> ReadCellParagraphs(IEnumerable<INode> childNodes, Func<string, InlineImage?> imageResolver, IReadOnlyDictionary<string, string> msoStyleMap)
+    private static List<Paragraph> ReadCellParagraphs(IEnumerable<INode> childNodes, Func<string, InlineImage?> imageResolver, IReadOnlyDictionary<string, string> msoStyleMap, List<Table> nestedTables)
     {
         var paragraphs = new List<Paragraph>();
         var inlineNodes = new List<INode>();
@@ -726,15 +728,16 @@ td, th { border: 1px solid #777; padding: 3pt 5pt; vertical-align: top; }
             switch (element.LocalName.ToLowerInvariant())
             {
                 case "table":
-                    var nestedTable = ReadTable(element, imageResolver, msoStyleMap);
-                    if (TablePlainText(nestedTable) is { Length: > 0 } nestedText)
-                        paragraphs.Add(new Paragraph(nestedText));
+                    // Attach the nested table to the cell's own NestedTables (like DocxReader/OdtFileAdapter/
+                    // RtfReader do), instead of discarding the Table object and flattening its text into the
+                    // outer cell -- that used to destroy the nested table's row/cell structure entirely.
+                    nestedTables.Add(ReadTable(element, imageResolver, msoStyleMap));
                     break;
                 case "div":
                 case "section":
                 case "article":
                 case "main":
-                    paragraphs.AddRange(ReadCellParagraphs(element.ChildNodes, imageResolver, msoStyleMap));
+                    paragraphs.AddRange(ReadCellParagraphs(element.ChildNodes, imageResolver, msoStyleMap, nestedTables));
                     break;
                 default:
                     foreach (var block in ReadBlocks(new[] { element }, imageResolver, msoStyleMap))
@@ -1282,11 +1285,22 @@ td, th { border: 1px solid #777; padding: 3pt 5pt; vertical-align: top; }
                     sb.Append(" rowspan=\"").Append(rowspan.ToString(CultureInfo.InvariantCulture)).Append('"');
                 sb.Append('>');
 
-                if (cell.Paragraphs.Count == 1)
+                // A single-paragraph cell writes bare runs (no <p> wrapper) only when it has no
+                // nested table; with one, the paragraph and the table must stay distinguishable.
+                if (cell.Paragraphs.Count == 1 && cell.NestedTables.Count == 0)
                     WriteRuns(sb, cell.Paragraphs[0].Runs, imageMode, images, noteLabels);
                 else
                     foreach (var paragraph in cell.Paragraphs)
                         WriteParagraph(sb, paragraph, imageMode, images, noteLabels, saveMode);
+
+                // r151-remediation: the reader now attaches a <table> found inside a <td> to
+                // cell.NestedTables instead of flattening its text into the cell's paragraphs.
+                // Without writing them back here, Load-then-Save would drop the nested table's
+                // content ENTIRELY -- strictly worse than the flattening the reader fix replaced,
+                // which at least preserved the text. HTML nests natively, so this is just a
+                // recursive WriteTable inside the <td>.
+                foreach (var nestedTable in cell.NestedTables)
+                    WriteTable(sb, nestedTable, imageMode, images, noteLabels, saveMode);
 
                 sb.AppendLine("</td>");
             }

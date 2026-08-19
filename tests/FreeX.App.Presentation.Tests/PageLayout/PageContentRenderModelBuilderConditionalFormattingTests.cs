@@ -95,6 +95,128 @@ public sealed class PageContentRenderModelBuilderConditionalFormattingTests
         font.Bold.Should().BeTrue();
     }
 
+    // freex-conditional-format F2: cfResult.Style was consulted for fill and font color/bold/italic
+    // but the printed cell text was formatted from the raw base style's NumberFormat and the printed
+    // borders were resolved from the raw base style's border edges, never consulting the matched CF
+    // rule's own NumberFormat/BorderTop/Right/Bottom/Left -- so a CF rule that reformats numbers
+    // (accounting negatives, percentages, dates) or adds a border rendered correctly on screen but
+    // printed/exported as the cell's plain General format with no border.
+    [Fact]
+    public void Build_CellValueRuleAppliesNumberFormatAndBorder()
+    {
+        var (workbook, sheet) = CreateWorkbook();
+        var address = new CellAddress(sheet.Id, 1, 1);
+
+        // Raw (unconditional) style is General format with no border -- the CF rule below must win.
+        var rawStyle = new CellStyle { NumberFormat = "General" };
+        var cell = Cell.FromValue(new NumberValue(-150));
+        cell.StyleId = workbook.RegisterStyle(rawStyle);
+        sheet.SetCell(address, cell);
+
+        sheet.ConditionalFormats.Add(new ConditionalFormat
+        {
+            RuleType = CfRuleType.CellValue,
+            Operator = CfOperator.LessThan,
+            Value1 = "0",
+            AppliesTo = new GridRange(address, address),
+            FormatIfTrue = new CellStyle
+            {
+                NumberFormat = "#,##0.00;(#,##0.00)",
+                BorderTop = new CellBorder(BorderStyle.Thick, new CellColor(0, 0, 255)),
+                BorderRight = new CellBorder(BorderStyle.Thick, new CellColor(0, 0, 255)),
+                BorderBottom = new CellBorder(BorderStyle.Thick, new CellColor(0, 0, 255)),
+                BorderLeft = new CellBorder(BorderStyle.Thick, new CellColor(0, 0, 255)),
+            },
+        });
+
+        var layout = BuildFirstPage(workbook, sheet)!;
+
+        var block = layout.Cells.Single(c => c.Row == 1 && c.Column == 1);
+        block.Text.Should().Be("(150.00)",
+            "the matched CF rule's number format must reach print/PDF, not just the screen grid");
+        var expectedEdge = new PageBorderEdge(BorderStyle.Thick, new PresentationRgb(0, 0, 255));
+        block.Borders.Top.Should().Be(expectedEdge);
+        block.Borders.Right.Should().Be(expectedEdge);
+        block.Borders.Bottom.Should().Be(expectedEdge);
+        block.Borders.Left.Should().Be(expectedEdge);
+    }
+
+    // Exercises the per-edge "CF wins only where it actually sets a border" merge (matching
+    // ViewportConditionalFormatEvaluator.MergeStyles): an edge the CF rule does not set must fall
+    // back to the cell's own raw border instead of being cleared.
+    [Fact]
+    public void Build_CellValueRuleBorderOverridesOnlySpecifiedEdges()
+    {
+        var (workbook, sheet) = CreateWorkbook();
+        var address = new CellAddress(sheet.Id, 1, 1);
+
+        var rawStyle = new CellStyle
+        {
+            NumberFormat = "General",
+            BorderLeft = new CellBorder(BorderStyle.Thin, new CellColor(0, 0, 0)),
+        };
+        var cell = Cell.FromValue(new NumberValue(-150));
+        cell.StyleId = workbook.RegisterStyle(rawStyle);
+        sheet.SetCell(address, cell);
+
+        sheet.ConditionalFormats.Add(new ConditionalFormat
+        {
+            RuleType = CfRuleType.CellValue,
+            Operator = CfOperator.LessThan,
+            Value1 = "0",
+            AppliesTo = new GridRange(address, address),
+            FormatIfTrue = new CellStyle
+            {
+                BorderTop = new CellBorder(BorderStyle.Thick, new CellColor(0, 0, 255)),
+            },
+        });
+
+        var layout = BuildFirstPage(workbook, sheet)!;
+
+        var block = layout.Cells.Single(c => c.Row == 1 && c.Column == 1);
+        block.Borders.Top.Should().Be(new PageBorderEdge(BorderStyle.Thick, new PresentationRgb(0, 0, 255)),
+            "the CF rule's own top edge must win");
+        block.Borders.Left.Should().Be(new PageBorderEdge(BorderStyle.Thin, new PresentationRgb(0, 0, 0)),
+            "an edge the CF rule does not set must keep the cell's raw border, not be cleared");
+        block.Borders.Right.Should().Be(PageBorderEdge.None);
+        block.Borders.Bottom.Should().Be(PageBorderEdge.None);
+    }
+
+    // Sibling no-regression: a non-matching CF rule must leave the raw number format and (lack of)
+    // border completely untouched, matching Build_CellValueRuleDoesNotApplyWhenConditionNotMet's
+    // existing fill coverage above.
+    [Fact]
+    public void Build_CellValueRuleDoesNotApplyNumberFormatOrBorderWhenConditionNotMet()
+    {
+        var (workbook, sheet) = CreateWorkbook();
+        var address = new CellAddress(sheet.Id, 1, 1);
+
+        var rawStyle = new CellStyle { NumberFormat = "General" };
+        var cell = Cell.FromValue(new NumberValue(50)); // does not satisfy "<0"
+        cell.StyleId = workbook.RegisterStyle(rawStyle);
+        sheet.SetCell(address, cell);
+
+        sheet.ConditionalFormats.Add(new ConditionalFormat
+        {
+            RuleType = CfRuleType.CellValue,
+            Operator = CfOperator.LessThan,
+            Value1 = "0",
+            AppliesTo = new GridRange(address, address),
+            FormatIfTrue = new CellStyle
+            {
+                NumberFormat = "#,##0.00;(#,##0.00)",
+                BorderTop = new CellBorder(BorderStyle.Thick, new CellColor(0, 0, 255)),
+            },
+        });
+
+        var layout = BuildFirstPage(workbook, sheet)!;
+
+        var block = layout.Cells.Single(c => c.Row == 1 && c.Column == 1);
+        block.Text.Should().Be("50", "a non-matching CF rule must leave the cell's raw number format untouched");
+        block.Borders.HasAny.Should().BeFalse(
+            "a non-matching CF rule must leave the cell's raw (borderless) style untouched");
+    }
+
     [Fact]
     public void Build_ColorScaleFillIsInterpolatedFromRangeValues()
     {

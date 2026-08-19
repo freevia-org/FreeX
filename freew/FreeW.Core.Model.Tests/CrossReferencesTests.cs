@@ -689,6 +689,73 @@ public class CrossReferencesTests
             .Should().Be("iv");
     }
 
+    private static Table ThreeRowBookmarkedTable(int pageBreakBeforeRowIndex)
+    {
+        var table = new Table();
+        for (var rowIndex = 0; rowIndex < 3; rowIndex++)
+        {
+            var paragraph = new Paragraph();
+            paragraph.Runs.Add(new Run("Cell " + rowIndex));
+            if (rowIndex == 0)
+                paragraph.BookmarkNames.Add("rowZero");
+            else if (rowIndex == 2)
+                paragraph.BookmarkNames.Add("rowTwo");
+            if (rowIndex == pageBreakBeforeRowIndex)
+                paragraph.Formatting = ParagraphFormatting.Default with { PageBreakBefore = true };
+
+            var cell = new TableCell();
+            cell.Paragraphs.Add(paragraph);
+            var row = new TableRow();
+            row.Cells.Add(cell);
+            table.Rows.Add(row);
+        }
+
+        return table;
+    }
+
+    [Fact]
+    public void ResolveField_PageRef_BookmarkOnTableRowPastAuthoredPageBreakUsesItsOwnPage()
+    {
+        var doc = new TextDocument();
+        // Row 2 carries an authored page break, so the table spans two pages: rows 0-1 on the page the
+        // host resolves for the table's own block, row 2 one page later.
+        doc.Blocks.Add(ThreeRowBookmarkedTable(pageBreakBeforeRowIndex: 2));
+
+        var rowZero = new CrossReferenceField(
+            CrossRefFieldKind.PageRef, "rowZero", CrossRefInsertAs.PageNumber, Hyperlink: false);
+        var rowTwo = new CrossReferenceField(
+            CrossRefFieldKind.PageRef, "rowTwo", CrossRefInsertAs.PageNumber, Hyperlink: false);
+
+        // A single host resolver keyed to the table's own top-level block index, exactly as production
+        // wires it (DocumentReferenceBlockPageResolverPlanner.Resolve / DocumentFieldUpdateCoordinator).
+        int? PageOf(int blockIndex) => blockIndex == 0 ? 3 : null;
+
+        CrossReferences.ResolveField(doc, rowZero, "stale", sourceBlockIndex: 1, pageOf: PageOf)
+            .Should().Be("3");
+        CrossReferences.ResolveField(doc, rowTwo, "stale", sourceBlockIndex: 1, pageOf: PageOf)
+            .Should().Be("4");
+    }
+
+    [Fact]
+    public void ResolveField_PageRef_BookmarkOnTableRowWithNoInterveningBreakSharesTablePage()
+    {
+        // Sibling/no-regression case: a table that does NOT span a page break still reports the same,
+        // host-resolved page for every row -- the row-break adjustment must not invent a page bump.
+        var doc = new TextDocument();
+        doc.Blocks.Add(ThreeRowBookmarkedTable(pageBreakBeforeRowIndex: -1));
+
+        var rowZero = new CrossReferenceField(
+            CrossRefFieldKind.PageRef, "rowZero", CrossRefInsertAs.PageNumber, Hyperlink: false);
+        var rowTwo = new CrossReferenceField(
+            CrossRefFieldKind.PageRef, "rowTwo", CrossRefInsertAs.PageNumber, Hyperlink: false);
+        int? PageOf(int blockIndex) => blockIndex == 0 ? 3 : null;
+
+        CrossReferences.ResolveField(doc, rowZero, "stale", sourceBlockIndex: 1, pageOf: PageOf)
+            .Should().Be("3");
+        CrossReferences.ResolveField(doc, rowTwo, "stale", sourceBlockIndex: 1, pageOf: PageOf)
+            .Should().Be("3");
+    }
+
     [Fact]
     public void ResolveField_NoteRef_ReturnsCurrentNoteMarkerAndPreservesDanglingCache()
     {

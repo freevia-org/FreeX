@@ -1326,7 +1326,17 @@ public static class PasteCommandFactory
     {
         number = 0;
         var groupSeparator = culture.NumberFormat.NumberGroupSeparator;
-        if (string.IsNullOrEmpty(groupSeparator) || !text.Contains(groupSeparator, StringComparison.Ordinal))
+        if (string.IsNullOrEmpty(groupSeparator))
+            return false;
+
+        // r151-remediation: text copied from another application groups with whatever whitespace
+        // that application emitted -- an ordinary U+0020 or a plain U+00A0 -- not necessarily the
+        // exact code point CultureInfo reports for the culture (U+202F for fr-FR). Without this,
+        // an everyday Ctrl+V of "1 234,56" on a French machine landed as literal text instead of
+        // the number. Shares ExcelTextNumberParser's normalizer rather than restating the rule.
+        text = FreeX.Core.Formula.ExcelTextNumberParser.NormalizeGroupSeparatorSpaceVariants(text, groupSeparator);
+
+        if (!text.Contains(groupSeparator, StringComparison.Ordinal))
             return false;
 
         var decimalSeparator = culture.NumberFormat.NumberDecimalSeparator;

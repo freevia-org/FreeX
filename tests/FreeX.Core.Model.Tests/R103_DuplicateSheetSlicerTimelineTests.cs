@@ -63,7 +63,15 @@ public sealed class R103_DuplicateSheetSlicerTimelineTests
         var clone = wb.Slicers.Single(s => !ReferenceEquals(s, slicer));
 
         clone.SourceSheetName.Should().Be(copy.Name);
-        clone.SourcePivotTableName.Should().Be("PivotTable1");
+
+        // R151-model-pivot-clone-identity: the copy's own pivot table must get a workbook-unique
+        // Name (mirroring the pre-existing structured-table uniquify contract below), and the
+        // cloned slicer -- which already correctly followed its pivot table onto the copy sheet via
+        // SourceSheetName -- must follow the RENAMED name too, not keep pointing at the source
+        // sheet's still-"PivotTable1" identity (which XlsxSlicerTimelineWriter's name-keyed
+        // ResolvePivotHostTabId would otherwise resolve back to the source sheet's tabId).
+        copy.PivotTables.Should().ContainSingle().Which.Name.Should().NotBe("PivotTable1");
+        clone.SourcePivotTableName.Should().Be(copy.PivotTables[0].Name);
         clone.SourceFieldName.Should().Be("Region");
         clone.SelectedItems.Should().ContainSingle().Which.Should().Be("East");
         clone.DrawingAnchor.Should().Be(slicer.DrawingAnchor);
@@ -119,7 +127,11 @@ public sealed class R103_DuplicateSheetSlicerTimelineTests
         var clone = wb.Timelines.Single(t => !ReferenceEquals(t, timeline));
 
         clone.SourceSheetName.Should().Be(copy.Name);
-        clone.SourcePivotTableName.Should().Be("PivotTable1");
+
+        // R151-model-pivot-clone-identity: see the matching comment in the slicer test above -- the
+        // cloned timeline must follow the copy's renamed pivot table too.
+        copy.PivotTables.Should().ContainSingle().Which.Name.Should().NotBe("PivotTable1");
+        clone.SourcePivotTableName.Should().Be(copy.PivotTables[0].Name);
         clone.SelectedStartDate.Should().Be("2024-01-01T00:00:00");
         clone.SelectedEndDate.Should().Be("2024-03-31T00:00:00");
         clone.Level.Should().Be(2);

@@ -347,6 +347,7 @@ public static class TrackChanges
                 run.Revision = RevisionKind.None;
                 run.RevisionAuthor = null;
                 run.RevisionDateXml = null;
+                run.MoveRevisionId = null;
                 if (run.Shape is { } keptShape)
                     ResolveParagraphContainer(keptShape.TextParagraphs, accept);
             }

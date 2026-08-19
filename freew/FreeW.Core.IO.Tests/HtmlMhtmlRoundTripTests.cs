@@ -528,7 +528,7 @@ public class HtmlMhtmlRoundTripTests
   <tr>
     <td>Outer
       <table>
-        <tr><td>Inner</td></tr>
+        <tr><td>Inner-A</td><td>Inner-B</td></tr>
       </table>
     </td>
     <td>Right</td>
@@ -541,12 +541,53 @@ public class HtmlMhtmlRoundTripTests
         var loaded = HtmlFileAdapter.LoadHtml(html, static _ => null);
 
         var table = loaded.Blocks.Should().ContainSingle().Which.Should().BeOfType<Table>().Which;
+
+        // The outer table must still have exactly one row per <tr>: a nested table's own row must not
+        // splice in as a bogus extra outer row.
         table.Rows.Should().HaveCount(2);
         table.Rows[0].Cells.Should().HaveCount(2);
-        table.Rows[0].Cells[0].PlainText.Should().Contain("Outer");
-        table.Rows[0].Cells[0].PlainText.Should().Contain("Inner");
+
+        var outerCell = table.Rows[0].Cells[0];
+        outerCell.PlainText.Should().Contain("Outer");
+
+        // The nested table must survive as a real Table object in NestedTables -- not get read and then
+        // discarded in favour of tab/newline-flattened text glued into the outer cell's own paragraphs.
+        // (PlainText intentionally does NOT descend into NestedTables, so if this regresses back to the
+        // flattening bug, the inner text would land in outerCell.PlainText instead of here.)
+        var nestedTable = outerCell.NestedTables.Should().ContainSingle().Which;
+        nestedTable.Rows.Should().HaveCount(1);
+        nestedTable.Rows[0].Cells.Should().HaveCount(2);
+        nestedTable.Rows[0].Cells[0].PlainText.Should().Be("Inner-A");
+        nestedTable.Rows[0].Cells[1].PlainText.Should().Be("Inner-B");
+
         table.Rows[0].Cells[1].PlainText.Should().Be("Right");
         table.Rows[1].Cells[0].PlainText.Should().Be("Bottom");
+    }
+
+    [Fact]
+    public void Html_LoadKeepsPlainCellsUnaffectedByNestedTableTracking()
+    {
+        // Sibling no-regression check for the ReadCellParagraphs/NestedTables threading change: a table
+        // with no nesting at all -- including a cell whose only content is inline text (so the
+        // paragraphs.Count == 0 fallback to raw TextContent still has to fire) -- must still load exactly
+        // as before.
+        const string html = """
+<!doctype html><html><body>
+<table>
+  <tr><td>Plain</td><td>Second</td></tr>
+</table>
+</body></html>
+""";
+
+        var loaded = HtmlFileAdapter.LoadHtml(html, static _ => null);
+
+        var table = loaded.Blocks.Should().ContainSingle().Which.Should().BeOfType<Table>().Which;
+        table.Rows.Should().HaveCount(1);
+        table.Rows[0].Cells.Should().HaveCount(2);
+        table.Rows[0].Cells[0].NestedTables.Should().BeEmpty();
+        table.Rows[0].Cells[0].PlainText.Should().Be("Plain");
+        table.Rows[0].Cells[1].NestedTables.Should().BeEmpty();
+        table.Rows[0].Cells[1].PlainText.Should().Be("Second");
     }
 
     [Fact]
@@ -604,6 +645,93 @@ public class HtmlMhtmlRoundTripTests
         table.Rows.Add(row);
         document.Blocks.Add(table);
         return document;
+    }
+
+    /// <summary>
+    /// r151 remediation. The reader fix that populates <c>TableCell.NestedTables</c> made the HTML
+    /// SAVE path strictly worse until the writer was taught to match: the writer only ever emitted
+    /// <c>cell.Paragraphs</c>, so once the nested table stopped being flattened into those
+    /// paragraphs, Load-then-Save dropped its content entirely -- no text, no table, no warning.
+    /// Before the reader change the same gesture at least kept the text.
+    ///
+    /// This asserts the two halves AGREE by round-tripping, which is the only shape of test that
+    /// could have caught it: every assertion here passes on a reader-only change if you look at
+    /// the loaded model alone.
+    /// </summary>
+    [Fact]
+    public void Html_RoundTripsANestedTableInACellWithoutLosingIt()
+    {
+        const string html = """
+<!doctype html><html><body>
+<table>
+  <tr>
+    <td>Outer
+      <table>
+        <tr><td>Inner-A</td><td>Inner-B</td></tr>
+      </table>
+    </td>
+    <td>Right</td>
+  </tr>
+</table>
+</body></html>
+""";
+
+        var adapter = HtmlFileAdapter.Filtered();
+        var loaded = HtmlFileAdapter.LoadHtml(html, static _ => null);
+
+        using var stream = new MemoryStream();
+        adapter.Save(loaded, stream);
+        var written = Encoding.UTF8.GetString(stream.ToArray());
+
+        // The content must reach the file at all -- this is the half that regressed.
+        written.Should().Contain("Inner-A");
+        written.Should().Contain("Inner-B");
+
+        stream.Position = 0;
+        var reloaded = adapter.Load(stream);
+
+        var outer = reloaded.Blocks.OfType<Table>().Should().ContainSingle().Which;
+        outer.Rows.Should().HaveCount(1, "a nested table's row must not splice into the outer table");
+        outer.Rows[0].Cells.Should().HaveCount(2);
+
+        var nested = outer.Rows[0].Cells[0].NestedTables.Should().ContainSingle().Which;
+        nested.Rows.Should().HaveCount(1);
+        nested.Rows[0].Cells.Should().HaveCount(2);
+        nested.Rows[0].Cells[0].PlainText.Should().Be("Inner-A");
+        nested.Rows[0].Cells[1].PlainText.Should().Be("Inner-B");
+
+        outer.Rows[0].Cells[0].PlainText.Should().Contain("Outer");
+        outer.Rows[0].Cells[1].PlainText.Should().Be("Right");
+    }
+
+    /// <summary>
+    /// Sibling no-regression: a cell holding exactly one paragraph and NO nested table must keep
+    /// writing bare runs rather than gaining a paragraph wrapper, since the writer's single-
+    /// paragraph shortcut now also tests NestedTables.Count.
+    /// </summary>
+    [Fact]
+    public void Html_RoundTripsAPlainSingleParagraphCellUnchanged()
+    {
+        const string html = """
+<!doctype html><html><body>
+<table><tr><td>Solo</td><td>Second</td></tr></table>
+</body></html>
+""";
+
+        var adapter = HtmlFileAdapter.Filtered();
+        var loaded = HtmlFileAdapter.LoadHtml(html, static _ => null);
+
+        using var stream = new MemoryStream();
+        adapter.Save(loaded, stream);
+        stream.Position = 0;
+        var reloaded = adapter.Load(stream);
+
+        var table = reloaded.Blocks.OfType<Table>().Should().ContainSingle().Which;
+        table.Rows.Should().HaveCount(1);
+        table.Rows[0].Cells.Should().HaveCount(2);
+        table.Rows[0].Cells[0].PlainText.Should().Be("Solo");
+        table.Rows[0].Cells[0].NestedTables.Should().BeEmpty();
+        table.Rows[0].Cells[1].PlainText.Should().Be("Second");
     }
 
     private static TextDocument RoundTrip(IDocumentFileAdapter adapter, TextDocument document)

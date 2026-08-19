@@ -135,17 +135,19 @@ public sealed class R146_ManualRecoveryDirtyGateTests
                 if (!ran)
                     return; // no headless drawing backend in this environment
 
-                // A cancelled restore is treated the same as a failed one (there is no separate
-                // "user explicitly declined" disposition): AutosaveRecoveryPolicy quarantines it --
-                // moved aside into a Quarantine subfolder, not deleted -- rather than deleting it or
-                // re-offering it forever. This is the exact same disposition the shared
-                // FreeWAutosaveSession.CompleteRecovery applies on the WPF side for a failed
-                // restore, so this fix does not invent new candidate-lifecycle behavior.
-                store.EnumerateCandidates().Should().BeEmpty("the candidate must no longer be offered once quarantined");
-                Directory.Exists(Path.Combine(dir, "Quarantine")).Should().BeTrue(
-                    "the snapshot bytes must be preserved (moved aside), not silently deleted, when the user cancels");
-                Directory.GetFiles(Path.Combine(dir, "Quarantine"), "snap-dirty-decline.*").Should().NotBeEmpty(
-                    "the cancelled candidate's snapshot/sidecar files must survive under Quarantine");
+                // R151 remediation (finding shared-autosave-recovery F1): declining is NOT the same as
+                // a failed restore. There IS a separate disposition for it: AutosaveRecoveryPolicy
+                // .ResolveDisposition maps !accepted to Keep, which is what the WPF host does on this
+                // very branch and what FreeP's mirror of this method does. The user declined to
+                // discard the CURRENT document; they said nothing about the OLDER unsaved work they
+                // were trying to recover, so it has to stay on offer. Quarantining here moves it out
+                // of the directory EnumerateCandidates scans, and no normal recovery UI ever shows it
+                // again -- losing the very data the command exists to rescue.
+                store.EnumerateCandidates().Should().ContainSingle(
+                    "declining to discard the current document must leave the recovery candidate on offer")
+                    .Which.SnapshotPath.Should().Contain("snap-dirty-decline");
+                Directory.Exists(Path.Combine(dir, "Quarantine")).Should().BeFalse(
+                    "a declined candidate is kept in place, not moved aside");
             }
             finally
             {

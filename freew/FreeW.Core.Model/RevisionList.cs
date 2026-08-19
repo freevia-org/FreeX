@@ -75,7 +75,7 @@ public static class RevisionList
     /// new formatting and clears its mark. The document is mutated in place. A no-op if the entry's run is no
     /// longer in its paragraph (e.g. the list is stale). Returns true when something was resolved.
     /// </summary>
-    public static bool Accept(TextDocument document, RevisionEntry entry) => Resolve(entry, accept: true);
+    public static bool Accept(TextDocument document, RevisionEntry entry) => Resolve(document, entry, accept: true);
 
     /// <summary>
     /// Reject exactly the change described by <paramref name="entry"/>, leaving every other revision in
@@ -83,13 +83,22 @@ public static class RevisionList
     /// the previous formatting and clears its mark. The document is mutated in place. A no-op if the entry's
     /// run is no longer in its paragraph (stale list). Returns true when something was resolved.
     /// </summary>
-    public static bool Reject(TextDocument document, RevisionEntry entry) => Resolve(entry, accept: false);
+    public static bool Reject(TextDocument document, RevisionEntry entry) => Resolve(document, entry, accept: false);
 
     // Resolve one entry's mark only. For an insertion/deletion entry we touch the run's Revision mark; for a
     // formatting entry we touch only its FormatRevision (the two are independent, exactly as TrackChanges
     // treats them). This deliberately does NOT clear the other mark on a doubly-marked run, so accepting an
     // insertion on a run that is also format-changed leaves the format revision pending (and vice versa).
-    private static bool Resolve(RevisionEntry entry, bool accept)
+    //
+    // A Word move (w:moveFrom/w:moveTo) is modelled as two runs sharing Run.MoveRevisionId: the source run
+    // (RevisionKind.Deleted) and the destination run (RevisionKind.Inserted) -- see TextDocument.cs's
+    // MoveRevisionId doc comment. Resolving only one half independently corrupts the document (the moved
+    // text is duplicated or lost entirely), so when the entry's run carries a MoveRevisionId we look up its
+    // paired run anywhere in the document body and resolve it in the SAME accept/reject direction, right
+    // here, in the same call. This mirrors how TrackChanges.AcceptAll/RejectAll already behave -- they
+    // happen to be safe because every run in the document is resolved in one direction -- so a linked move
+    // now gets that same "both halves together" treatment from the single-entry Accept/Reject path too.
+    private static bool Resolve(TextDocument document, RevisionEntry entry, bool accept)
     {
         var paragraph = entry.Paragraph;
         var run = entry.Run;
@@ -107,8 +116,29 @@ public static class RevisionList
             return true;
         }
 
-        // Insertion/deletion. Drop the run when the change is being thrown away (insertion rejected or
-        // deletion accepted); otherwise keep the run as ordinary text and clear its revision metadata.
+        // Capture the paired move run (if any) before mutating -- removing entry's run must not disturb
+        // the search, and the pair must be resolved even though it lives in a different Run instance (and
+        // possibly a different paragraph).
+        var moveId = run.MoveRevisionId;
+        var pair = moveId is { } id ? FindMovePair(document, run, id) : null;
+
+        if (!ResolveInsertionOrDeletion(paragraph, run, index, accept))
+            return false;
+
+        if (pair is { } linked)
+        {
+            var pairIndex = linked.Paragraph.Runs.IndexOf(linked.Run);
+            if (pairIndex >= 0)
+                ResolveInsertionOrDeletion(linked.Paragraph, linked.Run, pairIndex, accept);
+        }
+
+        return true;
+    }
+
+    // Drop the run when the change is being thrown away (insertion rejected or deletion accepted);
+    // otherwise keep the run as ordinary text and clear its revision metadata.
+    private static bool ResolveInsertionOrDeletion(Paragraph paragraph, Run run, int index, bool accept)
+    {
         var dropKind = accept ? RevisionKind.Deleted : RevisionKind.Inserted;
         if (run.Revision == RevisionKind.None)
             return false;
@@ -125,6 +155,22 @@ public static class RevisionList
         }
 
         return true;
+    }
+
+    // The other half of a move: same MoveRevisionId, a different Run instance, anywhere in the document
+    // body (source and destination are usually in different paragraphs).
+    private static (Paragraph Paragraph, Run Run)? FindMovePair(TextDocument document, Run self, int moveId)
+    {
+        foreach (var paragraph in EnumerateParagraphs(document))
+        {
+            foreach (var candidate in paragraph.Runs)
+            {
+                if (!ReferenceEquals(candidate, self) && candidate.MoveRevisionId == moveId)
+                    return (paragraph, candidate);
+            }
+        }
+
+        return null;
     }
 
     // Every paragraph reachable in the document body — top-level paragraphs and those nested in table cells

@@ -37,8 +37,20 @@ public static class SkiaPdfDocumentExporter
         // Use the page-setup-aware builder when the export plan was produced by
         // CreatePlanFromPageSetup (page dimensions/gridlines/header-footer honored per sheet).
         // Fall back to the legacy options-driven builder when an explicit options object is passed.
+        //
+        // font-text-measurement-F1: SkiaPdfWriter below draws every PdfText op with real glyph
+        // advances (SKFont.MeasureText, SkiaPdfWriter.cs's FallbackTextRenderer) -- not the flat
+        // character-count guess WorkbookPdfContentBuilder falls back to by default -- so the
+        // Center/Right/Justify/Distributed text positions this builder precomputes must be measured
+        // the same way, or they disagree with what actually gets drawn. SkiaPdfTextMeasurer measures
+        // with the identical SkiaSharp API (SKFont.MeasureText) and typeface-resolution chain
+        // SkiaPdfWriter itself draws with, so the exported PDF's text positions agree with what
+        // actually gets drawn -- without adding a dependency on Avalonia's platform/font-manager
+        // services (unlike AvaloniaTextMeasurer/FormattedText), which this export path does not
+        // otherwise require and which is not initialized in every host that calls this method.
+        using var skiaTextMeasurer = new SkiaPdfTextMeasurer();
         var document = options is null
-            ? WorkbookPdfContentBuilder.BuildWithPageSetup(workbook, exportPlan, workbookDirectory)
+            ? WorkbookPdfContentBuilder.BuildWithPageSetup(workbook, exportPlan, workbookDirectory, skiaTextMeasurer)
             : WorkbookPdfContentBuilder.Build(workbook, exportPlan, options);
 
         // Populated by SkiaPdfWriter when an embedded picture's bytes cannot be decoded (corrupt or

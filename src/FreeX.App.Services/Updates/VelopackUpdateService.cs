@@ -69,9 +69,21 @@ public sealed class VelopackUpdateService : IUpdateService
         }
     }
 
-    public void ApplyAndRestart()
+    public bool ApplyAndRestart()
     {
-        try { _applyAndRestart?.Invoke(); }
-        catch (Exception ex) { _logger?.LogWarning(ex, "ApplyAndRestart failed."); }
+        try
+        {
+            _applyAndRestart?.Invoke();
+            return true;
+        }
+        catch (Exception ex)
+        {
+            // A genuine success never reaches here: Velopack replaces/restarts the process before
+            // this call returns. Reaching this catch means the app is still running the OLD
+            // version, so this is an error the caller must surface to the user -- not a routine,
+            // ignorable warning like the check/download best-effort failures above.
+            _logger?.LogError(ex, "ApplyAndRestart failed; the app is still running the previous version.");
+            return false;
+        }
     }
 }

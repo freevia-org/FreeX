@@ -271,6 +271,134 @@ public sealed class SlideShowSessionControllerTests
         session.Controller.IsAtEnd.Should().BeTrue();
     }
 
+    // r151 F1 (freep-slideshow): CreatePresenterState must follow DisplaySlide, not just
+    // the underlying route slide, once the presenter reveals a hidden slide mid-show --
+    // otherwise Presenter View's thumbnail/notes/next-slide facet disagree with what the
+    // audience screen (BuildDisplayPlan) is actually showing.
+    [Fact]
+    public void CreatePresenterState_AfterRevealingHiddenSlide_ShowsTheRevealedSlideNotTheRouteSlide()
+    {
+        var presentation = MakePresentation(3);
+        presentation.Slides[1].IsHidden = true;
+        presentation.Slides[1].Title = "HIDDEN-Slide";
+        presentation.Slides[1].Notes = MakeNotes("Notes for hidden slide");
+        presentation.Slides[0].Notes = MakeNotes("Notes for VisSlide1");
+        var route = SlideShowCustomShowPlanner.BuildFullPresentationRoute(presentation, startIndex: 0);
+        route.SourceSlideIndices.Should().Equal(new[] { 0, 2 });
+
+        var started = new DateTimeOffset(2026, 8, 19, 9, 0, 0, TimeSpan.Zero);
+        var session = new SlideShowSessionController(
+            presentation,
+            route,
+            started,
+            new SlideShowDeterministicRecordingCaptureBackend("presenter reveal test"));
+
+        // Before the reveal, Presenter View must show the underlying route slide.
+        var beforeState = session.CreatePresenterState(started);
+        beforeState.CurrentSlide!.Slide.Title.Should().Be("Slide 1");
+        beforeState.NotesText.Should().Be("Notes for VisSlide1");
+
+        var revealed = session.RevealNextHiddenSlide();
+        revealed.Should().BeSameAs(presentation.Slides[1]);
+
+        var afterState = session.CreatePresenterState(started.AddSeconds(1));
+
+        afterState.CurrentSlide.Should().NotBeNull();
+        afterState.CurrentSlide!.Slide.Should().BeSameAs(presentation.Slides[1]);
+        afterState.CurrentSlide.Title.Should().Be("HIDDEN-Slide");
+        afterState.CurrentSlide.PresentationSlideIndex.Should().Be(1);
+        afterState.CurrentSlide.SlideId.Should().Be(presentation.Slides[1].Id);
+        afterState.NotesText.Should().Be(
+            "Notes for hidden slide",
+            "the presenter must see the hidden slide's own notes, not the route slide's");
+    }
+
+    // Sibling coverage: an ordinary presenter-state build (no hidden slide revealed) must
+    // keep reporting the route-local current slide, unaffected by the reveal override.
+    [Fact]
+    public void CreatePresenterState_WithoutRevealingHiddenSlide_StillReportsTheRouteSlide()
+    {
+        var presentation = MakePresentation(3);
+        presentation.Slides[1].IsHidden = true;
+        presentation.Slides[0].Notes = MakeNotes("Notes for VisSlide1");
+        var route = SlideShowCustomShowPlanner.BuildFullPresentationRoute(presentation, startIndex: 0);
+
+        var started = new DateTimeOffset(2026, 8, 19, 9, 0, 0, TimeSpan.Zero);
+        var session = new SlideShowSessionController(
+            presentation,
+            route,
+            started,
+            new SlideShowDeterministicRecordingCaptureBackend("presenter no-reveal test"));
+
+        var state = session.CreatePresenterState(started);
+
+        state.CurrentSlide!.Slide.Should().BeSameAs(presentation.Slides[0]);
+        state.CurrentSlide.PresentationSlideIndex.Should().Be(0);
+        state.NotesText.Should().Be("Notes for VisSlide1");
+    }
+
+    // r151 F2 (freep-slideshow): ZoomNavigationService resolves a Zoom target to an
+    // absolute presentation.Slides index, but Controller/_playbackRoute.Slides is the
+    // hidden-slide-filtered route list, so PlanZoomNavigation must remap the absolute
+    // index to its route-local position before handing it to GoToSlide.
+    [Fact]
+    public void PlanZoomNavigation_WithAnEarlierHiddenSlide_LandsOnTheIntendedAbsoluteTarget()
+    {
+        var presentation = MakePresentation(4);
+        presentation.Slides[1].IsHidden = true; // S1 hidden, sits before the zoom target
+        presentation.Slides[2].Title = "S2-INTENDED-ZOOM-TARGET";
+        var route = SlideShowCustomShowPlanner.BuildFullPresentationRoute(presentation, startIndex: 0);
+        route.SourceSlideIndices.Should().Equal(new[] { 0, 2, 3 });
+
+        var started = new DateTimeOffset(2026, 8, 19, 9, 0, 0, TimeSpan.Zero);
+        var session = new SlideShowSessionController(
+            presentation,
+            route,
+            started,
+            new SlideShowDeterministicRecordingCaptureBackend("zoom remap test"));
+
+        // A Zoom click resolves its target via ZoomNavigationService against the full,
+        // unfiltered presentation.Slides list -- absolute index 2 is S2.
+        var command = session.PlanZoomNavigation(targetSlideIndex: 2);
+
+        command.Kind.Should().Be(SlideShowHostCommandKind.NavigateToSlide);
+        command.Slide!.Title.Should().Be(
+            "S2-INTENDED-ZOOM-TARGET",
+            "the zoom click must land on the slide the presenter actually clicked, not the slide after it");
+        command.SlideIndex.Should().Be(1, "route-local index 1 is where S2 lives after S1 was filtered out");
+    }
+
+    // Sibling coverage: with no hidden slides ahead of the target, the absolute and
+    // route-local indices coincide, so the ordinary (already-working) case must be
+    // unaffected by the new remap.
+    [Fact]
+    public void PlanZoomNavigation_WithNoHiddenSlides_StillLandsOnTheTargetSlide()
+    {
+        var presentation = MakePresentation(3);
+        var route = SlideShowCustomShowPlanner.BuildFullPresentationRoute(presentation, startIndex: 0);
+        var started = new DateTimeOffset(2026, 8, 19, 9, 0, 0, TimeSpan.Zero);
+        var session = new SlideShowSessionController(
+            presentation,
+            route,
+            started,
+            new SlideShowDeterministicRecordingCaptureBackend("zoom no-hidden test"));
+
+        var command = session.PlanZoomNavigation(targetSlideIndex: 2);
+
+        command.Kind.Should().Be(SlideShowHostCommandKind.NavigateToSlide);
+        command.Slide.Should().BeSameAs(presentation.Slides[2]);
+        command.SlideIndex.Should().Be(2);
+    }
+
+    private static TextBody MakeNotes(string text)
+    {
+        var body = new TextBody();
+        var paragraph = new Paragraph();
+        paragraph.Runs.Add(new Run { Text = text });
+        body.Paragraphs.Add(paragraph);
+        return body;
+    }
+
     private static Presentation MakePresentation(int slideCount)
     {
         var presentation = Presentation.CreateEmpty();

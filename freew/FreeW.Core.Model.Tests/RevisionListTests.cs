@@ -291,4 +291,99 @@ public class RevisionListTests
         nestedParagraph.PlainText.Should().Be("keep ");
         RevisionList.Enumerate(doc).Should().BeEmpty();
     }
+
+    // A Word move (w:moveFrom/w:moveTo) is two runs sharing MoveRevisionId: the source run is Deleted,
+    // the destination run is Inserted (TextDocument.cs's MoveRevisionId doc comment). Resolving the two
+    // halves independently and inconsistently must NOT be possible through the single-entry Accept/Reject
+    // path -- doing so used to duplicate or delete the moved text (freew-track-changes F2).
+    private static TextDocument BuildMoveDocument()
+    {
+        // Paragraph 0: "Before " + [deleted "old ", MoveRevisionId=7] (the move's source)
+        // Paragraph 1: "After " + [inserted "new", MoveRevisionId=7] (the move's destination)
+        var doc = new TextDocument();
+        var p0 = new Paragraph();
+        p0.Runs.Add(new Run("Before "));
+        p0.Runs.Add(new Run("old ") { Revision = RevisionKind.Deleted, RevisionAuthor = "Alice", MoveRevisionId = 7 });
+        doc.Blocks.Add(p0);
+
+        var p1 = new Paragraph();
+        p1.Runs.Add(new Run("After "));
+        p1.Runs.Add(new Run("new") { Revision = RevisionKind.Inserted, RevisionAuthor = "Alice", MoveRevisionId = 7 });
+        doc.Blocks.Add(p1);
+        return doc;
+    }
+
+    [Fact]
+    public void Reject_OneHalfOfAMove_RejectsBothHalves_TextStaysAtOriginalLocationOnly()
+    {
+        var doc = BuildMoveDocument();
+        var entries = RevisionList.Enumerate(doc);
+        var deletion = entries.Single(e => e.Kind == RevisionEntryKind.Deletion);
+
+        // Rejecting the source (moveFrom) half must also reject the destination (moveTo) half -- a
+        // rejected move restores the text at its original location and does NOT also leave it at the
+        // new location.
+        RevisionList.Reject(doc, deletion).Should().BeTrue();
+
+        var p0 = (Paragraph)doc.Blocks[0];
+        var p1 = (Paragraph)doc.Blocks[1];
+        p0.PlainText.Should().Be("Before old ");
+        p1.PlainText.Should().Be("After ");
+        RevisionList.Enumerate(doc).Should().BeEmpty();
+    }
+
+    [Fact]
+    public void Accept_OneHalfOfAMove_AcceptsBothHalves_TextEndsUpAtNewLocationOnly()
+    {
+        var doc = BuildMoveDocument();
+        var entries = RevisionList.Enumerate(doc);
+        var deletion = entries.Single(e => e.Kind == RevisionEntryKind.Deletion);
+
+        // Accepting the source (moveFrom) half must also accept the destination (moveTo) half -- an
+        // accepted move removes the text from its original location and keeps it only at the new one.
+        RevisionList.Accept(doc, deletion).Should().BeTrue();
+
+        var p0 = (Paragraph)doc.Blocks[0];
+        var p1 = (Paragraph)doc.Blocks[1];
+        p0.PlainText.Should().Be("Before ");
+        p1.PlainText.Should().Be("After new");
+        RevisionList.Enumerate(doc).Should().BeEmpty();
+    }
+
+    [Fact]
+    public void Accept_TheInsertedHalfOfAMove_AlsoResolvesTheDeletedHalfTheSameWay()
+    {
+        // Symmetric to the two tests above: whichever half the Reviewing Pane's Accept/Reject button was
+        // clicked on, the pair resolves together.
+        var doc = BuildMoveDocument();
+        var insertion = RevisionList.Enumerate(doc).Single(e => e.Kind == RevisionEntryKind.Insertion);
+
+        RevisionList.Accept(doc, insertion).Should().BeTrue();
+
+        var p0 = (Paragraph)doc.Blocks[0];
+        var p1 = (Paragraph)doc.Blocks[1];
+        p0.PlainText.Should().Be("Before ");
+        p1.PlainText.Should().Be("After new");
+        RevisionList.Enumerate(doc).Should().BeEmpty();
+    }
+
+    [Fact]
+    public void Resolve_UnrelatedOrdinaryDeletion_DoesNotDisturbAnUnrelatedMovePair()
+    {
+        // Sibling/no-regression case: a document with both an ordinary (unlinked) deletion and an
+        // independent move pair. Resolving the ordinary deletion must touch only itself -- the move pair,
+        // which does not share its MoveRevisionId, stays fully pending.
+        var doc = BuildMoveDocument();
+        var p0 = (Paragraph)doc.Blocks[0];
+        p0.Runs.Add(new Run("unrelated") { Revision = RevisionKind.Deleted, RevisionAuthor = "Bob" });
+
+        var ordinary = RevisionList.Enumerate(doc).Single(e => e.Text == "unrelated");
+        RevisionList.Accept(doc, ordinary).Should().BeTrue();
+
+        p0.PlainText.Should().Be("Before old ");
+        var remaining = RevisionList.Enumerate(doc);
+        remaining.Should().HaveCount(2);
+        remaining.Should().Contain(e => e.Kind == RevisionEntryKind.Deletion && e.Text == "old ");
+        remaining.Should().Contain(e => e.Kind == RevisionEntryKind.Insertion && e.Text == "new");
+    }
 }

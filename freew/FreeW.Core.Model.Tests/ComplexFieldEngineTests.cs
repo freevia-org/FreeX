@@ -672,6 +672,70 @@ public class ComplexFieldEngineTests
         ComplexFieldEngine.Recompute(doc, 1, 0).Should().Be("1");
     }
 
+    // Builds a 3-row, 1-column table whose row 0 carries bookmark "rowZero" and row 2 carries bookmark
+    // "rowTwo", with an authored page-break-before on the row at pageBreakBeforeRowIndex (-1 for none).
+    private static Table ThreeRowBookmarkedTable(int pageBreakBeforeRowIndex)
+    {
+        var table = new Table();
+        for (var rowIndex = 0; rowIndex < 3; rowIndex++)
+        {
+            var paragraph = new Paragraph();
+            paragraph.Runs.Add(new Run("Cell " + rowIndex));
+            if (rowIndex == 0)
+                paragraph.BookmarkNames.Add("rowZero");
+            else if (rowIndex == 2)
+                paragraph.BookmarkNames.Add("rowTwo");
+            if (rowIndex == pageBreakBeforeRowIndex)
+                paragraph.Formatting = ParagraphFormatting.Default with { PageBreakBefore = true };
+
+            var cell = new TableCell();
+            cell.Paragraphs.Add(paragraph);
+            var row = new TableRow();
+            row.Cells.Add(cell);
+            table.Rows.Add(row);
+        }
+
+        return table;
+    }
+
+    // The core finding: Bookmarks.List reports every row of the same table under one BlockIndex (the
+    // table's), so a plain block-indexed pageOf cannot tell rows apart on its own -- it answers "3" for
+    // both row 0 and row 2 here. Row 2 carries an authored page break, so ResolvePageRef must layer a
+    // same-file row-offset on top of that block answer, giving row 2 its own, later page instead of
+    // collapsing onto row 0's.
+    [Fact]
+    public void PageRef_BookmarkOnTableRowPastAuthoredPageBreak_ResolvesItsOwnPage()
+    {
+        var doc = new TextDocument();
+        doc.Blocks.Add(ThreeRowBookmarkedTable(pageBreakBeforeRowIndex: 2));      // 0: table
+        AddField(doc, " PAGEREF rowZero \\h ", cached: "1");                      // 1: targets row 0
+        AddField(doc, " PAGEREF rowTwo \\h ", cached: "1");                       // 2: targets row 2
+
+        // A single host resolver keyed to the table's own top-level block index -- the only kind of
+        // resolver the model has ever been given -- returns the same page, 3, for either bookmark.
+        int? PageOf(int blockIndex) => blockIndex == 0 ? 3 : null;
+
+        ComplexFieldEngine.Recompute(doc, 1, 0, pageOf: PageOf).Should().Be("3");
+        ComplexFieldEngine.Recompute(doc, 2, 0, pageOf: PageOf).Should().Be("4");
+    }
+
+    // Sibling no-regression case: without any authored page break inside the table, every row's bookmark
+    // must still resolve to the block's own page exactly as before -- the row-offset correction must be a
+    // no-op when there is nothing to correct for.
+    [Fact]
+    public void PageRef_TableRowBookmarks_WithNoAuthoredPageBreak_AllResolveToTheBlocksOwnPage()
+    {
+        var doc = new TextDocument();
+        doc.Blocks.Add(ThreeRowBookmarkedTable(pageBreakBeforeRowIndex: -1));     // 0: table
+        AddField(doc, " PAGEREF rowZero \\h ", cached: "1");                      // 1: targets row 0
+        AddField(doc, " PAGEREF rowTwo \\h ", cached: "1");                       // 2: targets row 2
+
+        int? PageOf(int blockIndex) => blockIndex == 0 ? 3 : null;
+
+        ComplexFieldEngine.Recompute(doc, 1, 0, pageOf: PageOf).Should().Be("3");
+        ComplexFieldEngine.Recompute(doc, 2, 0, pageOf: PageOf).Should().Be("3");
+    }
+
     [Fact]
     public void StyleRef_NumericLevel_ResolvesNearestPrecedingHeading1()
     {

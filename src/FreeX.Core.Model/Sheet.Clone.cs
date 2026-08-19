@@ -357,6 +357,21 @@ public sealed partial class Sheet
     }
 
     /// <summary>
+    /// R151-model-pivot-clone-identity: renames the pivot table at <paramref name="index"/> on this
+    /// sheet in place. Used by <c>DuplicateSheetCommand</c> to give a cloned sheet's pivot tables a
+    /// workbook-unique identity, mirroring <see cref="ReidentifyStructuredTable"/> below for
+    /// structured tables (R17) -- <see cref="ClonePivotTable"/> otherwise copies
+    /// <see cref="PivotTableModel.Name"/> verbatim from the source, leaving the duplicate's pivot
+    /// table sharing the exact same Name as the source's. That collision breaks every name-keyed
+    /// lookup of "which sheet hosts pivot table X" (e.g. XlsxSlicerTimelineWriter's and
+    /// XlsxSlicerTimelineStateRewriter's ResolvePivotHostTabId, both of which scan workbook.Sheets in
+    /// order for the first PivotTables[i].Name match): because the source sheet always precedes its
+    /// own copy in workbook order, the lookup for the COPY's own cloned slicer/timeline always
+    /// resolves back to the source sheet's tabId instead of the copy's.
+    /// </summary>
+    public void ReidentifyPivotTable(int index, string newName) => PivotTables[index].Name = newName;
+
+    /// <summary>
     /// R17-table-listobject-3: re-numbers and renames the structured table at <paramref name="index"/>
     /// on this sheet in place, preserving every other piece of table metadata (columns, filters,
     /// native XML, etc.). Used by <c>DuplicateSheetCommand</c> to give a cloned sheet's tables a

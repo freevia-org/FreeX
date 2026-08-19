@@ -751,4 +751,64 @@ public class TrackChangesTests
         shape.TextParagraphs.Single().PlainText.Should().Be("Just a caption");
         TrackChanges.HasRevisions(doc).Should().BeFalse();
     }
+
+    // A Word move (w:moveFrom/w:moveTo) is modelled as two runs sharing Run.MoveRevisionId (see
+    // TextDocument.cs's MoveRevisionId doc comment). Once AcceptAll/RejectAll resolves a run to "kept"
+    // (an accepted moveTo insertion or a rejected moveFrom deletion), the surviving run must go back to
+    // being an ordinary run -- MoveRevisionId included -- or it can never again satisfy the "portable
+    // body text run" checks that DocumentEditingSession/DocumentView use to merge/coalesce runs and pick
+    // the fast body-edit path (freew-track-changes F1).
+    [Fact]
+    public void AcceptAll_ResolvedMove_ClearsMoveRevisionIdOnSurvivingRun()
+    {
+        // "old " (Deleted, MoveRevisionId=1) + "new" (Inserted, MoveRevisionId=1); accepting the move
+        // drops the source half and keeps the destination half.
+        var doc = new TextDocument();
+        var paragraph = new Paragraph();
+        paragraph.Runs.Add(new Run("old ") { Revision = RevisionKind.Deleted, RevisionAuthor = "Alice", MoveRevisionId = 1 });
+        paragraph.Runs.Add(new Run("new") { Revision = RevisionKind.Inserted, RevisionAuthor = "Alice", MoveRevisionId = 1 });
+        doc.Blocks.Add(paragraph);
+
+        TrackChanges.AcceptAll(doc);
+
+        var kept = doc.Paragraphs.Single().Runs.Single();
+        kept.Text.Should().Be("new");
+        kept.Revision.Should().Be(RevisionKind.None);
+        kept.MoveRevisionId.Should().BeNull();
+    }
+
+    [Fact]
+    public void RejectAll_ResolvedMove_ClearsMoveRevisionIdOnSurvivingRun()
+    {
+        // Symmetric case: rejecting the move drops the destination (Inserted) half and keeps the source
+        // (Deleted) half, which must likewise come back as an ordinary, unmarked run.
+        var doc = new TextDocument();
+        var paragraph = new Paragraph();
+        paragraph.Runs.Add(new Run("old ") { Revision = RevisionKind.Deleted, RevisionAuthor = "Alice", MoveRevisionId = 2 });
+        paragraph.Runs.Add(new Run("new") { Revision = RevisionKind.Inserted, RevisionAuthor = "Alice", MoveRevisionId = 2 });
+        doc.Blocks.Add(paragraph);
+
+        TrackChanges.RejectAll(doc);
+
+        var kept = doc.Paragraphs.Single().Runs.Single();
+        kept.Text.Should().Be("old ");
+        kept.Revision.Should().Be(RevisionKind.None);
+        kept.MoveRevisionId.Should().BeNull();
+    }
+
+    // Sibling no-regression case: an ordinary (non-move) tracked insertion/deletion pair must keep
+    // resolving exactly as before -- MoveRevisionId is null on both runs already, and clearing it is a
+    // no-op, so this must not disturb the plain accept/reject path's existing behaviour.
+    [Fact]
+    public void AcceptAll_OrdinaryRevisions_StillClearAuthorAndDate_WithNoMoveRevisionId()
+    {
+        var doc = BuildDocument();
+
+        TrackChanges.AcceptAll(doc);
+
+        var paragraph = doc.Paragraphs.Single();
+        paragraph.Runs.Should().OnlyContain(r => r.MoveRevisionId == null);
+        paragraph.Runs.Should().OnlyContain(r => r.Revision == RevisionKind.None);
+        paragraph.Runs.Should().OnlyContain(r => r.RevisionAuthor == null && r.RevisionDateXml == null);
+    }
 }

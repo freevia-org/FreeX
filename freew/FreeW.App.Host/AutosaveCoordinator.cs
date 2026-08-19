@@ -129,12 +129,35 @@ internal sealed partial class AutosaveCoordinator
                         text.Title,
                         UserMessageButtons.OkCancel,
                         UserMessageIcon.Question) == UserMessageResult.Ok),
-                    (recovery, useCurrentWindow) => new ValueTask<bool>(_session.CompleteRecovery(
-                        recovery,
-                        accepted: true,
-                        useCurrentWindow
-                            ? _file.RecoverSnapshot
-                            : (_, _) => _recoverInNewWindow?.Invoke(recovery.Candidate) ?? false)))
+                    (recovery, useCurrentWindow) =>
+                    {
+                        // shared-autosave-recovery F2: this manual command can be invoked at any
+                        // time, not just into a fresh startup window -- the "current window" it
+                        // targets may already hold unsaved edits of a DIFFERENT document. Route the
+                        // destructive replace through the same dirty gate every other destructive
+                        // file command uses (New/Open/Close) BEFORE calling CompleteRecovery, so a
+                        // decline there is reported as accepted:false (Keep disposition) instead of
+                        // reaching CompleteRecovery with accepted:true and a restore callback that
+                        // returns false -- which would quarantine THIS candidate (the one the user
+                        // was trying to restore) as if its snapshot were unreadable. Mirrors FreeP's
+                        // WPF AutosaveCoordinator.RecoverUnsavedPresentations (r146). Once gated here,
+                        // use the ungated OpenSnapshot (not RecoverSnapshot, which would re-run the
+                        // same dirty gate a second time and could double-prompt).
+                        if (useCurrentWindow && !_file.ConfirmCloseAllowed("recovering an unsaved document"))
+                        {
+                            return new ValueTask<bool>(_session.CompleteRecovery(
+                                recovery,
+                                accepted: false,
+                                _file.OpenSnapshot));
+                        }
+
+                        return new ValueTask<bool>(_session.CompleteRecovery(
+                            recovery,
+                            accepted: true,
+                            useCurrentWindow
+                                ? _file.OpenSnapshot
+                                : (_, _) => _recoverInNewWindow?.Invoke(recovery.Candidate) ?? false));
+                    })
                 .GetAwaiter()
                 .GetResult()
                 .AnyRecovered;

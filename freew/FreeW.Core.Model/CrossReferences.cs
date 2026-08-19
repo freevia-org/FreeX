@@ -611,9 +611,10 @@ public static class CrossReferences
     private static string ResolveBookmarkedRef(
         TextDocument doc, CrossReferenceField field, string cached, int sourceBlockIndex)
     {
-        if (FindBookmarkBlock(doc, field.Target) is not { } targetBlock)
+        if (FindBookmarkBlock(doc, field.Target) is not { } location)
             return cached;
 
+        var targetBlock = location.BlockIndex;
         return field.InsertAs switch
         {
             CrossRefInsertAs.Text or CrossRefInsertAs.CaptionLabelAndNumber or CrossRefInsertAs.CaptionText
@@ -632,14 +633,50 @@ public static class CrossReferences
         Func<int, int?>? pageOf,
         Func<int, string?>? pageTextOf)
     {
-        if (FindBookmarkBlock(doc, field.Target) is not { } targetBlock)
+        if (FindBookmarkBlock(doc, field.Target) is not { } location)
             return cached;
 
-        if (pageTextOf?.Invoke(targetBlock) is { Length: > 0 } pageText)
+        if (pageTextOf?.Invoke(location.BlockIndex) is { Length: > 0 } pageText)
             return pageText;
 
-        var page = pageOf?.Invoke(targetBlock) ?? 1;
-        return Math.Max(1, page).ToString(CultureInfo.InvariantCulture);
+        var page = pageOf?.Invoke(location.BlockIndex);
+        if (page is null)
+            return "1";
+
+        // pageOf/pageTextOf are keyed to the top-level TextDocument.Blocks index, and every row of a
+        // table shares that one Table entry there, so a bookmark on any row would otherwise resolve to
+        // the same page as row zero. Layer authored page breaks between the table's start and the
+        // bookmarked row on top of the host-resolved page so a row past a page break inside the table
+        // reports its own page instead of collapsing onto the table's starting page.
+        var rowOffset = location.TableRowIndex is { } rowIndex && doc.Blocks[location.BlockIndex] is Table table
+            ? PageBreaksBeforeTableRow(table, rowIndex)
+            : 0;
+
+        return Math.Max(1, page.Value + rowOffset).ToString(CultureInfo.InvariantCulture);
+    }
+
+    // Counts authored page breaks (manual breaks and page-break-before formatting) between the start of
+    // the table and rowIndex, inclusive of a page-break-before that starts rowIndex itself -- mirroring
+    // ExplicitPageNumberAtBlock's own current-block-inclusive-for-break-before, earlier-only-for-run-
+    // breaks convention, just applied per row instead of per top-level block.
+    private static int PageBreaksBeforeTableRow(Table table, int rowIndex)
+    {
+        if (rowIndex <= 0 || rowIndex >= table.Rows.Count)
+            return 0;
+
+        var breaks = 0;
+        for (var row = 0; row <= rowIndex; row++)
+        {
+            foreach (var paragraph in ParagraphsInRow(table.Rows[row]))
+            {
+                if (paragraph.Formatting.PageBreakBefore)
+                    breaks++;
+                if (row < rowIndex)
+                    breaks += paragraph.Runs.Count(run => run.IsPageBreak);
+            }
+        }
+
+        return breaks;
     }
 
     private static string ResolveNoteRef(
@@ -803,28 +840,48 @@ public static class CrossReferences
             yield break;
 
         foreach (var row in table.Rows)
+            foreach (var rowParagraph in ParagraphsInRow(row))
+                yield return rowParagraph;
+    }
+
+    private static IEnumerable<Paragraph> ParagraphsInRow(TableRow row)
+    {
+        foreach (var cell in row.Cells)
         {
-            foreach (var cell in row.Cells)
-            {
-                foreach (var cellParagraph in cell.Paragraphs)
-                    yield return cellParagraph;
-                foreach (var nestedTable in cell.NestedTables)
-                    foreach (var nestedParagraph in ParagraphsIn(nestedTable))
-                        yield return nestedParagraph;
-            }
+            foreach (var cellParagraph in cell.Paragraphs)
+                yield return cellParagraph;
+            foreach (var nestedTable in cell.NestedTables)
+                foreach (var nestedParagraph in ParagraphsIn(nestedTable))
+                    yield return nestedParagraph;
         }
     }
 
-    private static int? FindBookmarkBlock(TextDocument doc, string name)
+    // TableRowIndex is the logical row inside the containing table when the bookmark was found in a
+    // table's own row (directly or in a row cell's nested table); null for a body paragraph bookmark.
+    private readonly record struct BookmarkBlockLocation(int BlockIndex, int? TableRowIndex);
+
+    private static BookmarkBlockLocation? FindBookmarkBlock(TextDocument doc, string name)
     {
         if (string.IsNullOrEmpty(name))
             return null;
 
         for (var blockIndex = 0; blockIndex < doc.Blocks.Count; blockIndex++)
         {
+            if (doc.Blocks[blockIndex] is Table table)
+            {
+                for (var rowIndex = 0; rowIndex < table.Rows.Count; rowIndex++)
+                {
+                    if (ParagraphsInRow(table.Rows[rowIndex]).Any(paragraph =>
+                            paragraph.BookmarkNames.Contains(name, StringComparer.Ordinal)))
+                        return new BookmarkBlockLocation(blockIndex, rowIndex);
+                }
+
+                continue;
+            }
+
             if (ParagraphsIn(doc.Blocks[blockIndex]).Any(paragraph =>
                     paragraph.BookmarkNames.Contains(name, StringComparer.Ordinal)))
-                return blockIndex;
+                return new BookmarkBlockLocation(blockIndex, null);
         }
 
         return null;

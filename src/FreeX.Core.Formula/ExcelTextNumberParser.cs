@@ -18,27 +18,75 @@ internal static class ExcelTextNumberParser
 
     // Matches a number whose thousands grouping is correct: each group to the left of the decimal
     // (or end) is exactly 3 digits, except the first group which may be 1–3 digits.  Optional leading
-    // sign, optional leading/trailing currency symbol, optional decimal fraction, and an optional
-    // matched pair of parentheses (Excel's accounting-format negative wrapper) around the whole thing
-    // — a leading "(" requires a trailing ")" and vice versa, via the "paren" conditional group.
-    // The grouping and decimal separators are the culture's (culture.NumberFormat.NumberGroupSeparator
-    // / NumberDecimalSeparator) rather than a hardcoded ',' / '.', because a culture such as de-DE
-    // groups with '.' and uses ',' as the decimal point — see GetValidGroupingRegex. Compiled regexes
-    // are cached per (group separator, decimal separator) pair since CultureInfo.CurrentCulture is
-    // typically stable across many calls on the same thread.
+    // sign, optional leading/trailing currency symbol (with an optional single whitespace character
+    // between the symbol and the digits, since real-world text commonly writes e.g. "1.234,56 €"
+    // with a space before the symbol), optional decimal fraction, and an optional matched pair of
+    // parentheses (Excel's accounting-format negative wrapper) around the whole thing — a leading "("
+    // requires a trailing ")" and vice versa, via the "paren" conditional group.
+    // The grouping/decimal separators and currency symbol are the culture's
+    // (culture.NumberFormat.NumberGroupSeparator / NumberDecimalSeparator / CurrencySymbol) rather
+    // than hardcoded ',' / '.' / '$', because a culture such as de-DE groups with '.' and uses ',' as
+    // the decimal point, and a culture such as fr-FR or de-DE uses a currency symbol other than '$'
+    // — see GetValidGroupingRegex. Compiled regexes are cached per (group separator, decimal
+    // separator, currency symbol) triple since CultureInfo.CurrentCulture is typically stable across
+    // many calls on the same thread.
     // Examples that pass (en-US: group=',' decimal='.'): 1,234  $1,234.50  -1,234,567  1,234,567.5
     //   (1,234.50)  ($1,234.50)
     // Examples that fail: 1,2  12,34  1,2345  1,234,5  (1,234.50  1,234.50)
-    private static readonly ConcurrentDictionary<(string GroupSeparator, string DecimalSeparator), Regex> ValidGroupingRegexCache = new();
+    private static readonly ConcurrentDictionary<(string GroupSeparator, string DecimalSeparator, string CurrencySymbol), Regex> ValidGroupingRegexCache = new();
 
     private static Regex GetValidGroupingRegex(CultureInfo culture)
     {
         string groupSeparator = culture.NumberFormat.NumberGroupSeparator;
         string decimalSeparator = culture.NumberFormat.NumberDecimalSeparator;
-        return ValidGroupingRegexCache.GetOrAdd((groupSeparator, decimalSeparator), static key =>
-            new Regex(
-                $@"^(?<paren>\()?[+-]?\$?\d{{1,3}}(?:{Regex.Escape(key.GroupSeparator)}\d{{3}})*(?:{Regex.Escape(key.DecimalSeparator)}\d*)?\$?[+-]?(?(paren)\)|)$",
-                RegexOptions.None));
+        string currencySymbol = culture.NumberFormat.CurrencySymbol;
+        return ValidGroupingRegexCache.GetOrAdd((groupSeparator, decimalSeparator, currencySymbol), static key =>
+        {
+            string currency = key.CurrencySymbol.Length > 0 ? Regex.Escape(key.CurrencySymbol) : string.Empty;
+            return new Regex(
+                $@"^(?<paren>\()?[+-]?(?:{currency}\s?)?\d{{1,3}}(?:{Regex.Escape(key.GroupSeparator)}\d{{3}})*(?:{Regex.Escape(key.DecimalSeparator)}\d*)?(?:\s?{currency})?[+-]?(?(paren)\)|)$",
+                RegexOptions.None);
+        });
+    }
+
+    /// <summary>
+    /// When the culture's group separator is itself a single whitespace character (e.g. U+202F
+    /// narrow no-break space for fr-FR, or U+00A0 non-breaking space for fi-FI), real-world text
+    /// commonly uses a different whitespace code point for the same visual grouping — an ordinary
+    /// space U+0020 (what a keyboard actually produces) or a plain non-breaking space U+00A0 (common
+    /// from other apps/websites), rather than the exact code point CultureInfo's current ICU data
+    /// happens to report. .NET's own <see cref="double.TryParse(string, NumberStyles, IFormatProvider, out double)"/>
+    /// does not treat these as interchangeable with the culture's exact separator (verified: it parses
+    /// the culture's own U+202F and an ordinary U+0020 for fr-FR, but rejects U+00A0), so normalize
+    /// every whitespace character in the text to the culture's canonical separator up front, before
+    /// grouping detection, regex validation, and the final numeric parse all run against it.
+    /// No-op (returns <paramref name="text"/> unchanged) when the group separator isn't a single
+    /// whitespace character, so non-space-separator cultures (en-US ',', de-DE '.') are untouched.
+    /// </summary>
+    /// <remarks>
+    /// r151-remediation: exposed as <c>internal</c> so the clipboard paste path
+    /// (FreeX.Core.Commands, PasteCommandFactory.TryParseCultureGroupedNumber) can share it
+    /// instead of growing a third hand-written copy of the same rule -- the exact class of defect
+    /// round 151 was sweeping for. FreeX.Core.Commands already has InternalsVisibleTo here.
+    /// </remarks>
+    internal static string NormalizeGroupSeparatorSpaceVariants(string text, string groupSeparator)
+    {
+        if (groupSeparator.Length != 1 || !char.IsWhiteSpace(groupSeparator[0]))
+            return text;
+
+        char canonical = groupSeparator[0];
+        char[]? buffer = null;
+        for (int i = 0; i < text.Length; i++)
+        {
+            char c = text[i];
+            if (c != canonical && char.IsWhiteSpace(c))
+            {
+                buffer ??= text.ToCharArray();
+                buffer[i] = canonical;
+            }
+        }
+
+        return buffer is null ? text : new string(buffer);
     }
 
     // NumberStyles without AllowThousands — used for the first parse attempt so that
@@ -152,6 +200,7 @@ internal static class ExcelTextNumberParser
         rejectedNumericComma = false;
 
         string groupSeparator = culture.NumberFormat.NumberGroupSeparator;
+        text = NormalizeGroupSeparatorSpaceVariants(text, groupSeparator);
         bool hasGroupSeparator = groupSeparator.Length > 0 && text.Contains(groupSeparator, StringComparison.Ordinal);
 
         // Fast path: no group separator → no grouping issue, parse without AllowThousands.
@@ -172,7 +221,7 @@ internal static class ExcelTextNumberParser
         {
             // Only mark as a rejected numeric attempt when the text starts with digit/sign/currency
             // so that date strings like "March 14, 2026" can still reach the DateTime path.
-            rejectedNumericComma = LooksNumeric(text);
+            rejectedNumericComma = LooksNumeric(text, culture);
             number = 0;
             return false;
         }
@@ -220,14 +269,21 @@ internal static class ExcelTextNumberParser
     /// <summary>
     /// Returns <c>true</c> when the text starts with characters typical of a numeric value
     /// (digit, sign, or currency symbol) — used to decide whether a comma-containing string
-    /// that failed grouping validation should block the DateTime fallback.
+    /// that failed grouping validation should block the DateTime fallback. The currency check
+    /// uses the culture's own <see cref="NumberFormatInfo.CurrencySymbol"/> (e.g. '€' for
+    /// fr-FR/de-DE) rather than a hardcoded '$', so a leading-symbol amount is recognized as
+    /// numeric-looking under any culture, not just those whose symbol happens to be '$'.
     /// "1,2" starts with '1' → true (block DateTime).
     /// "March 14, 2026" starts with 'M' → false (allow DateTime).
     /// </summary>
-    private static bool LooksNumeric(string text)
+    private static bool LooksNumeric(string text, CultureInfo culture)
     {
         if (text.Length == 0) return false;
         char first = text[0];
-        return first is (>= '0' and <= '9') or '+' or '-' or '$' or '(';
+        if (first is (>= '0' and <= '9') or '+' or '-' or '(')
+            return true;
+
+        string currencySymbol = culture.NumberFormat.CurrencySymbol;
+        return currencySymbol.Length > 0 && text.StartsWith(currencySymbol, StringComparison.Ordinal);
     }
 }

@@ -531,6 +531,74 @@ public sealed class PptxRepairCorpusValidityTests
             .OnlyContain(ids => ids.Distinct(StringComparer.Ordinal).Count() == ids.Length);
     }
 
+    [Fact]
+    public void PresentationWithCustomShow_WritesSchemaValidPresentationXml()
+    {
+        // Regression for freep-pptx-roundtrip F1: custShowLst must precede
+        // defaultTextStyle in ppt/presentation.xml per the CT_Presentation
+        // content model, or PowerPoint's schema validator rejects the part.
+        var presentation = new Presentation();
+        presentation.Slides.Add(new Slide { Id = "slide-a", Title = "Intro" });
+        presentation.Slides.Add(new Slide { Id = "slide-b", Title = "Deep dive" });
+        presentation.Slides.Add(new Slide { Id = "slide-c", Title = "Appendix" });
+
+        var customShow = new PresentationCustomShow { Id = 7, Name = "Executive review" };
+        customShow.SlideIds.Add("slide-a");
+        customShow.SlideIds.Add("slide-c");
+        presentation.CustomShows.Add(customShow);
+
+        using var stream = new MemoryStream();
+        PptxPackageWriter.Write(presentation, stream);
+        var bytes = stream.ToArray();
+
+        using (var archive = new ZipArchive(new MemoryStream(bytes), ZipArchiveMode.Read))
+        {
+            var presXml = LoadXml(archive, "ppt/presentation.xml");
+            XNamespace p = PresentationNamespace;
+            var childNames = presXml.Root!.Elements().Select(el => el.Name.LocalName).ToList();
+
+            var custShowLstIndex = childNames.IndexOf("custShowLst");
+            var defaultTextStyleIndex = childNames.IndexOf("defaultTextStyle");
+
+            custShowLstIndex.Should().BeGreaterThan(-1, "the custom show must be written to the part");
+            defaultTextStyleIndex.Should().BeGreaterThan(-1);
+            custShowLstIndex.Should().BeLessThan(
+                defaultTextStyleIndex,
+                "CT_Presentation requires custShowLst before defaultTextStyle");
+        }
+
+        ValidateSlideSchema(bytes).Should().BeEmpty(
+            "a presentation containing a custom show must remain Open XML schema-valid");
+    }
+
+    [Fact]
+    public void PresentationWithoutCustomShows_OmitsCustShowLst_AndRemainsSchemaValid()
+    {
+        // Sibling no-regression: the common case (no custom shows) must still
+        // omit custShowLst entirely and keep defaultTextStyle as the last
+        // element written by BuildPresentationXml's literal, not merely be
+        // schema-valid by accident.
+        var presentation = new Presentation();
+        presentation.Slides.Add(new Slide { Id = "slide-a", Title = "Intro" });
+        presentation.Slides.Add(new Slide { Id = "slide-b", Title = "Deep dive" });
+
+        using var stream = new MemoryStream();
+        PptxPackageWriter.Write(presentation, stream);
+        var bytes = stream.ToArray();
+
+        using (var archive = new ZipArchive(new MemoryStream(bytes), ZipArchiveMode.Read))
+        {
+            var presXml = LoadXml(archive, "ppt/presentation.xml");
+            var childNames = presXml.Root!.Elements().Select(el => el.Name.LocalName).ToList();
+
+            childNames.Should().NotContain("custShowLst", "no custom shows were defined");
+            childNames.Should().Contain("defaultTextStyle");
+        }
+
+        ValidateSlideSchema(bytes).Should().BeEmpty(
+            "a presentation without custom shows must remain Open XML schema-valid");
+    }
+
     private static XDocument LoadXml(ZipArchive archive, string entryName)
     {
         var entry = archive.GetEntry(entryName);

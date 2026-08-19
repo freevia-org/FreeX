@@ -115,6 +115,18 @@ public sealed class DuplicateSheetCommand : IWorkbookCommand, IWholeWorkbookReca
         // rebased onto the copy's own (already-renamed) structured table rather than the source's.
         _clonedPivotCaches = CloneOwnedPivotCaches(ctx.Workbook, source, copy);
 
+        // R151-commands-pivot-clone-identity: Sheet.Clone.ClonePivotTable copies PivotTableModel.Name
+        // verbatim from the source, mirroring the exact "two tables sharing an identity -> corrupt
+        // XLSX" hazard UniquifyClonedTables above exists to prevent, just for pivot tables. Give the
+        // copy's pivot tables a workbook-unique Name before the copy joins the workbook, and repoint
+        // every already-cloned slicer/timeline (built by CopySlicersAndTimelines above, before this
+        // renumbering ran) that referenced the OLD name onto the new one -- otherwise the CLONED
+        // slicer's own SourcePivotTableName keeps naming the source sheet's pivot table, which
+        // XlsxSlicerTimelineWriter/XlsxSlicerTimelineStateRewriter's name-keyed ResolvePivotHostTabId
+        // then resolves back to the SOURCE sheet's tabId (it always precedes its own copy in workbook
+        // order) instead of the copy's own tabId where the slicer and its pivot table actually live.
+        UniquifyClonedPivotTables(ctx.Workbook, copy, _clonedSlicers, _clonedTimelines);
+
         _insertIndex = sourceIndex + 1;
         _copySheetId = copyId;
         _copyOccupiedCellCount = copy.GetOccupiedCells().Count;
@@ -268,6 +280,93 @@ public sealed class DuplicateSheetCommand : IWorkbookCommand, IWholeWorkbookReca
         }
 
         return renames;
+    }
+
+    /// <summary>
+    /// R151-commands-pivot-clone-identity: gives every pivot table on the freshly cloned sheet a
+    /// workbook-unique Name, mirroring <see cref="UniquifyClonedTables"/> above for structured
+    /// tables (R17) -- <c>Sheet.Clone.ClonePivotTable</c> otherwise copies
+    /// <see cref="PivotTableModel.Name"/> verbatim from the source, leaving the duplicate's pivot
+    /// table sharing the source's exact identity. <paramref name="copy"/> must not yet be inserted
+    /// into <paramref name="workbook"/> when this runs, matching <see cref="UniquifyClonedTables"/>'s
+    /// identical constraint. Also repoints every already-cloned <paramref name="clonedSlicers"/>/
+    /// <paramref name="clonedTimelines"/> entry (built by
+    /// <c>DuplicateSheetDrawingCloner.CopySlicersAndTimelines</c> before this renumbering ran) whose
+    /// <c>SourcePivotTableName</c>/<c>ConnectedPivotTableNames</c> named the OLD pivot table name --
+    /// otherwise a slicer/timeline that correctly followed its pivot table onto the copy sheet (via
+    /// <c>SourceSheetName</c>) would keep referencing a pivot table name that no longer exists there.
+    /// </summary>
+    private static void UniquifyClonedPivotTables(
+        Workbook workbook,
+        Sheet copy,
+        IReadOnlyList<SlicerModel> clonedSlicers,
+        IReadOnlyList<TimelineModel> clonedTimelines)
+    {
+        if (copy.PivotTables.Count == 0)
+            return;
+
+        for (var i = 0; i < copy.PivotTables.Count; i++)
+        {
+            var oldName = copy.PivotTables[i].Name;
+            var newName = GenerateUniquePivotTableName(workbook, copy, oldName);
+            if (string.Equals(newName, oldName, StringComparison.Ordinal))
+                continue;
+
+            copy.ReidentifyPivotTable(i, newName);
+
+            foreach (var slicer in clonedSlicers)
+            {
+                if (string.Equals(slicer.SourcePivotTableName, oldName, StringComparison.OrdinalIgnoreCase))
+                    slicer.SourcePivotTableName = newName;
+
+                for (var j = 0; j < slicer.ConnectedPivotTableNames.Count; j++)
+                {
+                    if (string.Equals(slicer.ConnectedPivotTableNames[j], oldName, StringComparison.OrdinalIgnoreCase))
+                        slicer.ConnectedPivotTableNames[j] = newName;
+                }
+            }
+
+            foreach (var timeline in clonedTimelines)
+            {
+                if (string.Equals(timeline.SourcePivotTableName, oldName, StringComparison.OrdinalIgnoreCase))
+                    timeline.SourcePivotTableName = newName;
+
+                for (var j = 0; j < timeline.ConnectedPivotTableNames.Count; j++)
+                {
+                    if (string.Equals(timeline.ConnectedPivotTableNames[j], oldName, StringComparison.OrdinalIgnoreCase))
+                        timeline.ConnectedPivotTableNames[j] = newName;
+                }
+            }
+        }
+    }
+
+    /// <summary>
+    /// Generates a workbook-unique pivot table name derived from <paramref name="sourceName"/>,
+    /// mirroring <see cref="GenerateUniqueTableName"/>'s "_N" suffix scheme for structured tables.
+    /// </summary>
+    private static string GenerateUniquePivotTableName(Workbook workbook, Sheet copy, string sourceName)
+    {
+        for (var n = 2; n < 10_000; n++)
+        {
+            var suffix = $"_{n}";
+            var baseName = sourceName.Length + suffix.Length <= 255
+                ? sourceName
+                : sourceName[..(255 - suffix.Length)];
+            var candidate = baseName + suffix;
+
+            if (workbook.Sheets.Any(s => s.PivotTables.Any(p =>
+                    string.Equals(p.Name, candidate, StringComparison.OrdinalIgnoreCase))))
+                continue;
+
+            // Guard against colliding with a sibling pivot table in the SAME duplicated sheet:
+            // `copy` is not yet part of `workbook.Sheets`, so the scan above cannot see it (a source
+            // sheet with more than one pivot table would otherwise let two renamed copies land on
+            // the same generated name).
+            if (copy.PivotTables.All(p => !string.Equals(p.Name, candidate, StringComparison.OrdinalIgnoreCase)))
+                return candidate;
+        }
+
+        return $"PivotTable_{Guid.NewGuid():N}";
     }
 
     /// <summary>

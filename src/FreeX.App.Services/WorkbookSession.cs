@@ -133,7 +133,18 @@ public sealed class WorkbookSession : IDisposable
     private readonly WorksheetSelectionStore _worksheetSelections = new();
     private readonly HashSet<SheetId> _groupedSheetIds = [];
     private SheetId? _sheetGroupAnchor;
-    private readonly WorkbookClipboardSession _workbookClipboardSession = new();
+    /// <summary>
+    /// R151-clipboard-formats-F2: shared by reference with every <see cref="CreateSiblingView"/>
+    /// sibling, exactly like <see cref="_documentState"/> (see the constructor). A second Avalonia
+    /// window opened via View &gt; New Window on the SAME workbook is still showing the same
+    /// document, so Copy in one sibling and Paste in the other must behave like the WPF host's own
+    /// cross-window clipboard sharing (see MainWindow.xaml.cs's <c>_workbookClipboardSession</c>
+    /// DI-singleton comment) rather than silently degrading to a value-only external-text paste that
+    /// drops formulas, hyperlinks, comments, and conditional formatting. Before this fix each
+    /// sibling got its own brand-new <c>new()</c> instance here, so <see cref="HasPendingClipboardMarquee"/>
+    /// and every <c>_workbookClipboardSession.Content</c> read below could never see a sibling's Copy.
+    /// </summary>
+    private readonly WorkbookClipboardSession _workbookClipboardSession;
 
     /// <summary>
     /// True while a Copy/Cut snapshot is still live (i.e. a Paste right now would honor it).
@@ -306,6 +317,7 @@ public sealed class WorkbookSession : IDisposable
         _findReplacePolicyText = findReplacePolicyText;
         _sharedDocumentStateOwner = sharedDocumentStateOwner;
         _documentState = sharedDocumentStateOwner?._documentState ?? documentState ?? new WorkbookDocumentState();
+        _workbookClipboardSession = sharedDocumentStateOwner?._workbookClipboardSession ?? new WorkbookClipboardSession();
 
         Workbook = source.Workbook;
         if (sharedDocumentStateOwner is null)
@@ -338,8 +350,11 @@ public sealed class WorkbookSession : IDisposable
 
     /// <summary>
     /// Creates a view-local session over this session's document. Workbook, command history,
-    /// save/dirty metadata, and file identity remain shared; selection, viewport, formula-edit,
-    /// grouped-sheet, clipboard, and prompt state belong to the returned view.
+    /// save/dirty metadata, file identity, and clipboard state remain shared (R151-clipboard-formats-F2:
+    /// clipboard joined this list so a Copy in one sibling window can be Pasted in another with its
+    /// formula/hyperlink/comment/conditional-formatting metadata intact, matching the WPF host's own
+    /// cross-window clipboard sharing); selection, viewport, formula-edit, grouped-sheet, and prompt
+    /// state belong to the returned view.
     /// </summary>
     public WorkbookSession CreateSiblingView(double viewportHeight, double viewportWidth)
     {
@@ -3605,11 +3620,19 @@ public sealed class WorkbookSession : IDisposable
     /// Undo/Redo/edits on Avalonia (and FreeW/FreeP, which share this tier) even though the WPF
     /// sibling this comment claimed to mirror always cancelled both
     /// (R127-services-clipboard-formats-copy-cancel-1).
+    /// R151-clipboard-formats-F2: now that <see cref="CreateSiblingView"/> siblings share one
+    /// <see cref="_workbookClipboardSession"/> (see the constructor), this local "committed an
+    /// unrelated edit" gesture carries no clipboard intent, so it must only cancel a marquee THIS
+    /// view captured -- exactly the guard the WPF host's own <c>ClearClipboardMarqueeIfOwnedByThisWindow</c>
+    /// applies for the same reason (see <see cref="WorkbookClipboardSession.Owner"/>'s R143-remediation
+    /// "clip-2-regression" comment). Without <see cref="WorkbookClipboardSession.ClearIfOwnedBy"/>
+    /// here, an ordinary cell edit committed in sibling window B would silently wipe out sibling
+    /// window A's still-live Copy/Cut the instant this session became shared, trading the F2 bug for
+    /// a second cross-window data-loss bug.
     /// </summary>
     private void CancelPendingCutAfterMutatingEdit()
     {
-        if (_workbookClipboardSession.HasContent)
-            _workbookClipboardSession.Clear();
+        _workbookClipboardSession.ClearIfOwnedBy(this);
     }
 
     /// <summary>
@@ -3823,7 +3846,8 @@ public sealed class WorkbookSession : IDisposable
         var fullRangeViewport = BuildFullRangeViewportForClipboard(SelectedRange);
         var text = ClipboardSerializer.Serialize(fullRangeViewport, SelectedRange);
         var snapshot = _workbookClipboardSession.Capture(
-            CaptureInternalClipboard(SelectedRange, text, isCut: false, fullRangeViewport));
+            CaptureInternalClipboard(SelectedRange, text, isCut: false, fullRangeViewport),
+            owner: this);
         return WorkbookClipboardTextResult.Succeeded(text, fullRangeViewport, snapshot.Marker);
     }
 
@@ -3852,7 +3876,8 @@ public sealed class WorkbookSession : IDisposable
         var fullRangeViewport = BuildFullRangeViewportForClipboard(SelectedRange);
         var text = ClipboardSerializer.Serialize(fullRangeViewport, SelectedRange);
         var snapshot = _workbookClipboardSession.Capture(
-            CaptureInternalClipboard(SelectedRange, text, isCut: true, fullRangeViewport));
+            CaptureInternalClipboard(SelectedRange, text, isCut: true, fullRangeViewport),
+            owner: this);
         return WorkbookClipboardTextResult.Succeeded(text, fullRangeViewport, snapshot.Marker);
     }
 

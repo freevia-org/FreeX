@@ -535,7 +535,10 @@ internal static partial class RowColumnShiftHelpers
     {
         foreach (var s in workbook.Sheets)
             foreach (var chart in s.Charts)
+            {
                 RemapChartSeriesFormattingForColumnInsert(chart, sheetId, start, count);
+                RemapChartPointFormattingForColumnInsert(chart, sheetId, start, count);
+            }
     }
 
     private static void RemapChartSeriesFormattingForColumnInsert(ChartModel chart, SheetId sheetId, uint start, uint count)
@@ -628,7 +631,10 @@ internal static partial class RowColumnShiftHelpers
     {
         foreach (var s in workbook.Sheets)
             foreach (var chart in s.Charts)
+            {
                 RemapChartSeriesFormattingForColumnDelete(chart, sheetId, start, count);
+                RemapChartPointFormattingForColumnDelete(chart, sheetId, start, count);
+            }
     }
 
     private static void RemapChartSeriesFormattingForColumnDelete(ChartModel chart, SheetId sheetId, uint start, uint count)
@@ -774,7 +780,10 @@ internal static partial class RowColumnShiftHelpers
     {
         foreach (var s in workbook.Sheets)
             foreach (var chart in s.Charts)
+            {
                 RemapChartSeriesFormattingForRowInsert(chart, sheetId, start, count);
+                RemapChartPointFormattingForRowInsert(chart, sheetId, start, count);
+            }
     }
 
     private static void RemapChartSeriesFormattingForRowInsert(ChartModel chart, SheetId sheetId, uint start, uint count)
@@ -876,7 +885,10 @@ internal static partial class RowColumnShiftHelpers
     {
         foreach (var s in workbook.Sheets)
             foreach (var chart in s.Charts)
+            {
                 RemapChartSeriesFormattingForRowDelete(chart, sheetId, start, count);
+                RemapChartPointFormattingForRowDelete(chart, sheetId, start, count);
+            }
     }
 
     private static void RemapChartSeriesFormattingForRowDelete(ChartModel chart, SheetId sheetId, uint start, uint count)
@@ -967,6 +979,158 @@ internal static partial class RowColumnShiftHelpers
                 .Select(e => positionRemap.TryGetValue(e.Index, out var newPos) ? e with { Index = newPos } : e)
                 .ToList();
         }
+    }
+
+    // ── Per-POINT (PointIndex) chart formatting shifting ───────────────────────
+    // The functions above only ever touch SeriesIndex -- they remap the axis that carries
+    // *series* identity (columns by default, rows when SeriesInRows is set). PointIndex is
+    // the point's 0-based position along the ORTHOGONAL (category) axis: literally
+    // `row - dataStartRow` in the default orientation (see ChartRenderer.cs's
+    // `var row = dataStartRow + (uint)pointIndex;`) or `col - dataStartCol` once SeriesInRows
+    // transposes the plotted grid. A row insert/delete on a default (SeriesInRows == false)
+    // chart therefore edits the POINT axis, not the series axis -- and vice versa for a
+    // Switch-Row/Column (SeriesInRows == true) chart, where a COLUMN insert/delete is the point-
+    // axis edit. Without this, ChartPointFillFormat/ChartPointMarkerFormat/
+    // ChartPointDataLabelFormat/ChartPointExplosion/ChartRangeDataLabel/
+    // ChartSeriesRangeDataLabels.Points stay pinned to their old numeric PointIndex and silently
+    // reattach to the wrong data point after the shift.
+    private static void RemapChartPointIndexedCollectionsForInsert(ChartModel chart, int boundary, int delta)
+    {
+        chart.PointFillColors = chart.PointFillColors
+            .Select(p => p.PointIndex >= boundary ? p with { PointIndex = p.PointIndex + delta } : p).ToList();
+        chart.PointMarkerFormats = chart.PointMarkerFormats
+            .Select(f => f.PointIndex >= boundary ? f with { PointIndex = f.PointIndex + delta } : f).ToList();
+        chart.PointDataLabelFormats = chart.PointDataLabelFormats
+            .Select(f => f.PointIndex >= boundary ? f with { PointIndex = f.PointIndex + delta } : f).ToList();
+        chart.ExplodedSlices = chart.ExplodedSlices
+            .Select(s => s.PointIndex >= boundary ? s with { PointIndex = s.PointIndex + delta } : s).ToList();
+        chart.RangeDataLabels = chart.RangeDataLabels
+            .Select(l => l.PointIndex >= boundary ? l with { PointIndex = l.PointIndex + delta } : l).ToList();
+        chart.SeriesRangeDataLabels = chart.SeriesRangeDataLabels
+            .Select(entry => entry with
+            {
+                PointCount = entry.PointCount is int pc ? pc + delta : entry.PointCount,
+                Points = entry.Points
+                    .Select(p => p.PointIndex >= boundary ? p with { PointIndex = p.PointIndex + delta } : p)
+                    .ToList()
+            })
+            .ToList();
+    }
+
+    /// <summary>Delete counterpart of <see cref="RemapChartPointIndexedCollectionsForInsert"/>. Any
+    /// point-level override whose PointIndex falls inside the deleted band [posLo, posHi] is DROPPED
+    /// (that data point no longer exists); every surviving point after the deleted band has its
+    /// PointIndex shifted down by removedCount.</summary>
+    private static void RemapChartPointIndexedCollectionsForDelete(ChartModel chart, int posLo, int posHi, int removedCount)
+    {
+        chart.PointFillColors = RemapForColumnDelete(chart.PointFillColors, p => p.PointIndex, (p, v) => p with { PointIndex = v }, posLo, posHi, removedCount);
+        chart.PointMarkerFormats = RemapForColumnDelete(chart.PointMarkerFormats, f => f.PointIndex, (f, v) => f with { PointIndex = v }, posLo, posHi, removedCount);
+        chart.PointDataLabelFormats = RemapForColumnDelete(chart.PointDataLabelFormats, f => f.PointIndex, (f, v) => f with { PointIndex = v }, posLo, posHi, removedCount);
+        chart.ExplodedSlices = RemapForColumnDelete(chart.ExplodedSlices, s => s.PointIndex, (s, v) => s with { PointIndex = v }, posLo, posHi, removedCount);
+        chart.RangeDataLabels = RemapForColumnDelete(chart.RangeDataLabels, l => l.PointIndex, (l, v) => l with { PointIndex = v }, posLo, posHi, removedCount);
+        chart.SeriesRangeDataLabels = chart.SeriesRangeDataLabels
+            .Select(entry => entry with
+            {
+                PointCount = entry.PointCount is int pc ? Math.Max(0, pc - removedCount) : entry.PointCount,
+                Points = RemapForColumnDelete(entry.Points.ToList(), p => p.PointIndex, (p, v) => p with { PointIndex = v }, posLo, posHi, removedCount)
+            })
+            .ToList();
+    }
+
+    /// <summary>
+    /// Row insert on a DEFAULT-orientation chart (SeriesInRows == false): rows are the POINT axis,
+    /// so a row inserted strictly inside the plotted point span shifts every point-level override at
+    /// or after it. Mirrors <see cref="RemapChartSeriesFormattingForColumnInsert"/>'s dataStartCol
+    /// computation but off the row axis and gated on FirstRowIsHeader (the flag that gates the
+    /// category-header ROW in the un-transposed, default orientation -- see ChartRenderer.cs:116).
+    /// </summary>
+    private static void RemapChartPointFormattingForRowInsert(ChartModel chart, SheetId sheetId, uint start, uint count)
+    {
+        if (chart.DataRange.Start.Sheet != sheetId) return;
+        if (chart.SeriesInRows) return; // rows are the point axis only for the default orientation
+        if (chart.Type is ChartType.Bubble or ChartType.Scatter) return;
+
+        var startRow = chart.DataRange.Start.Row;
+        var endRow = chart.DataRange.End.Row;
+        var dataStartRow = chart.FirstRowIsHeader && endRow > startRow ? startRow + 1 : startRow;
+        if (dataStartRow > endRow) return; // no plotted points at all
+
+        if (start <= startRow || start > endRow) return; // not interior to the plotted point span
+
+        var boundary = (int)(start - dataStartRow);
+        RemapChartPointIndexedCollectionsForInsert(chart, boundary, (int)count);
+    }
+
+    /// <summary>Row delete counterpart of <see cref="RemapChartPointFormattingForRowInsert"/>.</summary>
+    private static void RemapChartPointFormattingForRowDelete(ChartModel chart, SheetId sheetId, uint start, uint count)
+    {
+        if (chart.DataRange.Start.Sheet != sheetId) return;
+        if (chart.SeriesInRows) return;
+        if (chart.Type is ChartType.Bubble or ChartType.Scatter) return;
+
+        var startRow = chart.DataRange.Start.Row;
+        var endRow = chart.DataRange.End.Row;
+        var dataStartRow = chart.FirstRowIsHeader && endRow > startRow ? startRow + 1 : startRow;
+        if (dataStartRow > endRow) return;
+
+        var deleteStart = start;
+        var deleteEnd = start + count - 1;
+        var overlapStart = Math.Max(deleteStart, dataStartRow);
+        var overlapEnd = Math.Min(deleteEnd, endRow);
+        if (overlapStart > overlapEnd) return; // deletion never touches a plotted point row
+
+        var posLo = (int)(overlapStart - dataStartRow);
+        var posHi = (int)(overlapEnd - dataStartRow);
+        RemapChartPointIndexedCollectionsForDelete(chart, posLo, posHi, posHi - posLo + 1);
+    }
+
+    /// <summary>
+    /// Column insert on a Switch-Row/Column chart (SeriesInRows == true): once
+    /// <see cref="ChartRenderer"/> transposes the plotted grid (TransposeCoordinate keeps the
+    /// DataRange corner anchored and swaps row/column offsets), columns become the POINT axis and
+    /// FirstRowIsHeader -- not FirstColIsCategories -- is the flag that ends up gating the first
+    /// COLUMN (symmetric to how <see cref="RemapChartSeriesFormattingForRowInsert"/> documents
+    /// FirstColIsCategories gating the first ROW for that function's series axis). Mirrors
+    /// <see cref="RemapChartPointFormattingForRowInsert"/> off the orthogonal axis.
+    /// </summary>
+    private static void RemapChartPointFormattingForColumnInsert(ChartModel chart, SheetId sheetId, uint start, uint count)
+    {
+        if (chart.DataRange.Start.Sheet != sheetId) return;
+        if (!chart.SeriesInRows) return; // columns are the point axis only for a Switch-Row/Column chart
+        if (chart.Type is ChartType.Bubble or ChartType.Scatter) return;
+
+        var startCol = chart.DataRange.Start.Col;
+        var endCol = chart.DataRange.End.Col;
+        var dataStartCol = chart.FirstRowIsHeader && endCol > startCol ? startCol + 1 : startCol;
+        if (dataStartCol > endCol) return;
+
+        if (start <= startCol || start > endCol) return;
+
+        var boundary = (int)(start - dataStartCol);
+        RemapChartPointIndexedCollectionsForInsert(chart, boundary, (int)count);
+    }
+
+    /// <summary>Column delete counterpart of <see cref="RemapChartPointFormattingForColumnInsert"/>.</summary>
+    private static void RemapChartPointFormattingForColumnDelete(ChartModel chart, SheetId sheetId, uint start, uint count)
+    {
+        if (chart.DataRange.Start.Sheet != sheetId) return;
+        if (!chart.SeriesInRows) return;
+        if (chart.Type is ChartType.Bubble or ChartType.Scatter) return;
+
+        var startCol = chart.DataRange.Start.Col;
+        var endCol = chart.DataRange.End.Col;
+        var dataStartCol = chart.FirstRowIsHeader && endCol > startCol ? startCol + 1 : startCol;
+        if (dataStartCol > endCol) return;
+
+        var deleteStart = start;
+        var deleteEnd = start + count - 1;
+        var overlapStart = Math.Max(deleteStart, dataStartCol);
+        var overlapEnd = Math.Min(deleteEnd, endCol);
+        if (overlapStart > overlapEnd) return; // deletion never touches a plotted point column
+
+        var posLo = (int)(overlapStart - dataStartCol);
+        var posHi = (int)(overlapEnd - dataStartCol);
+        RemapChartPointIndexedCollectionsForDelete(chart, posLo, posHi, posHi - posLo + 1);
     }
 
     // ── Verbatim series formula / data-label formula shifting ─────────────────

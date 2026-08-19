@@ -71,16 +71,28 @@ public static class WorkbookPdfContentBuilder
     /// over <see cref="Build(Workbook,PortablePdfExportPlan,PortablePdfDocumentOptions)"/> for
     /// the Avalonia/Skia PDF export.
     /// </summary>
+    /// <param name="textMeasurer">
+    /// font-text-measurement-F1: the text measurer used to position aligned cell/heading/chart/
+    /// header-footer text (see <see cref="BuildPageWithPageSetup"/>). Defaults to the dependency-free
+    /// <see cref="PortablePdfTextMeasurer"/> character-count heuristic when null, preserving every
+    /// existing caller's behavior unchanged. A caller whose PDF backend draws with real font glyphs
+    /// (e.g. the Skia writer, which measures every run's actual advance via SKFont.MeasureText) should
+    /// pass a matching real measurer here so the precomputed text position agrees with what that
+    /// backend actually draws -- otherwise the heuristic's up-to-~135% per-string width error (flat
+    /// per-character estimate vs. real glyph widths) leaves right/center/justify/distribute-aligned
+    /// text visibly offset from, or overflowing past, the cell/page edge Print Preview showed.
+    /// </param>
     public static PdfContentDocument BuildWithPageSetup(
         Workbook workbook,
         PortablePdfExportPlan exportPlan,
-        string workbookDirectory = "")
+        string workbookDirectory = "",
+        ITextMeasurer? textMeasurer = null)
     {
         ArgumentNullException.ThrowIfNull(workbook);
         ArgumentNullException.ThrowIfNull(exportPlan);
 
         var pages = exportPlan.PageRequests
-            .Select(request => BuildPageWithPageSetup(workbook, exportPlan, request, workbookDirectory))
+            .Select(request => BuildPageWithPageSetup(workbook, exportPlan, request, workbookDirectory, textMeasurer))
             .ToArray();
         return new PdfContentDocument(pages);
     }
@@ -93,12 +105,22 @@ public static class WorkbookPdfContentBuilder
     /// <c>C:\Docs\</c>). Substituted for <c>&amp;Z</c> / <c>&amp;[Path]</c>; pass an empty string
     /// when the workbook is unsaved.
     /// </param>
+    /// <param name="textMeasurer">
+    /// font-text-measurement-F1: see <see cref="BuildWithPageSetup"/>'s parameter of the same name.
+    /// Null (the default) keeps the existing <see cref="PortablePdfTextMeasurer"/> heuristic.
+    /// </param>
     public static PdfContentPage BuildPageWithPageSetup(
         Workbook workbook,
         PortablePdfExportPlan exportPlan,
         PortablePdfExportPageRequest request,
-        string workbookDirectory = "")
+        string workbookDirectory = "",
+        ITextMeasurer? textMeasurer = null)
     {
+        // font-text-measurement-F1: resolve once and thread through every downstream measurement call
+        // on this page (cell text, row/column headings, chart axis/label layout, header/footer runs)
+        // so they all agree with each other and with whichever backend actually draws the glyphs.
+        var measurer = textMeasurer ?? PortablePdfTextMeasurer.Instance;
+
         var contentPlan = PortablePdfPageContentPlanner.CreatePlan(workbook, request);
         if (!contentPlan.IsReady)
             throw new InvalidOperationException(contentPlan.StatusText);
@@ -252,7 +274,12 @@ public static class WorkbookPdfContentBuilder
             // widening -- neither of which this per-grid-cell PDF loop implements for fills either)
             // rather than the WPF path's more elaborate shared-edge-winner/merge-suppression model, so
             // the exported PDF matches what the user already sees in Print Preview.
-            DrawCellBorders(ops, style, x, y, w, h, bw);
+            //
+            // freex-conditional-format-F1: a matched CF rule's per-edge border (cell.ConditionalStyle)
+            // overrides the raw style's border on that edge, matching the CF fill override immediately
+            // above -- previously an Excel-authored dxf border (e.g. a CF-highlighted totals row) never
+            // drew here even though the raw R127 fix above already drew a plain, non-CF border.
+            DrawCellBorders(ops, style, cell.ConditionalStyle, x, y, w, h, bw);
 
             var isEffectivelyRightToLeft = CellTextOrientationLayoutPlanner.ResolveIsEffectivelyRightToLeft(
                 style.ReadingOrder, sheet.IsRightToLeft);
@@ -298,11 +325,22 @@ public static class WorkbookPdfContentBuilder
                 // reports ~100%) shrinks the cell grid geometry via the defensive correction but leaves
                 // text rendered at the unscaled size, producing oversized text that overflows its
                 // now-smaller cell.
+                // freex-conditional-format-F1: a matched CF rule's Bold/Italic/FontColor override the
+                // cell's raw style the same way the on-screen grid does (ViewportConditionalFormatEvaluator.
+                // MergeStyles) -- Bold/Italic OR-combine with the base style (a CF rule only ever turns
+                // these on here, matching this evaluator's existing print-preview consumer,
+                // PageContentRenderModelBuilder.ApplyConditionalFontDelta) and FontColor replaces the
+                // resolved base color outright when the CF rule set one.
+                var cfStyle = cell.ConditionalStyle;
+                var effectiveBold = cell.IsTitle || style.Bold || (cfStyle?.Bold ?? false);
+                var effectiveItalic = cfStyle?.Italic ?? false;
                 var textScale = effectiveScaleRatio;
                 var fontSize  = Math.Clamp(style.FontSize, 7, 10) * textScale;
-                var fontFace  = cell.IsTitle || style.Bold ? PdfFontFace.Bold : PdfFontFace.Regular;
+                var fontFace  = ToPdfFontFace(effectiveBold, effectiveItalic);
                 // B&W mode: force font colour to black regardless of style.
-                var fontColor = bw ? PdfColor.Black : ToPdfColor(style.ResolveFontColor(workbook.Theme));
+                var fontColor = bw
+                    ? PdfColor.Black
+                    : ToPdfColor(cfStyle?.FontColor ?? style.ResolveFontColor(workbook.Theme));
                 var displayText = PdfWinAnsiTextCapability.Truncate(cell.DisplayText, 64);
 
                 // Resolve the cell's effective horizontal alignment the same way the on-screen
@@ -322,8 +360,8 @@ public static class WorkbookPdfContentBuilder
                 // sheet's Scale%/Fit-to-pages ratio like everything else in this cell rect.
                 var indentPt = style.IndentLevel * 8.0 * (SheetPdfPageSetupResolver.PdfPointsPerInch / 96.0) * textScale;
 
-                var textWidth = PortablePdfTextMeasurer.Instance.Measure(
-                    displayText, null, fontSize, cell.IsTitle || style.Bold, italic: false).Width;
+                var textWidth = measurer.Measure(
+                    displayText, null, fontSize, effectiveBold, effectiveItalic).Width;
 
                 var textX = effectiveAlign switch
                 {
@@ -407,7 +445,7 @@ public static class WorkbookPdfContentBuilder
         if (sheet.PrintHeadings)
         {
             AddPrintHeadings(ops, offsetContentLeft, offsetContentTop, headingWidthPt, headingHeightPt,
-                colWidths, rowHeights, colXs, rowYs, contentPlan);
+                colWidths, rowHeights, colXs, rowYs, contentPlan, measurer);
         }
 
         // ── Header band ────────────────────────────────────────────────────────
@@ -417,7 +455,7 @@ public static class WorkbookPdfContentBuilder
         // same way WorksheetPrintRenderPlanner.TryBuild does for WPF: a single counter, seeded from
         // FirstPageNumber, running across every page that belongs to this sheet (all its print areas,
         // in export order).
-        AddVectorDrawingOps(workbook, sheet, exportPlan, request, ops, pageW, pageH);
+        AddVectorDrawingOps(workbook, sheet, exportPlan, request, ops, pageW, pageH, measurer);
 
         var pageNumber = ResolveEffectiveSheetPageNumber(exportPlan, request, sheet);
         var (header, footer) = ResolveHeaderFooterForPage(sheet, pageNumber);
@@ -484,7 +522,7 @@ public static class WorkbookPdfContentBuilder
         var headerBandHeightPt = Math.Max(headerFooterLineHeightPt * headerMaxLines, mT - headerEdgePt);
         RenderHeaderFooterBand(ops, header, headerPictures, pageW, mL, mR, headerY, headerBandHeightPt, 8,
             headerFooterFontScale, workbook.Name, workbookDirectory, sheet.Name, pageNumber, totalPages, HeaderTextColor,
-            lineIndex => headerY + ((headerMaxLines - 1 - lineIndex) * headerFooterLineHeightPt));
+            lineIndex => headerY + ((headerMaxLines - 1 - lineIndex) * headerFooterLineHeightPt), measurer);
 
         // Footer text: rendered just above the footer edge from the bottom. R99-services-header-band-2:
         // symmetric clamp -- never draw above (a larger y-up value than) contentBottom, the grid's own
@@ -500,7 +538,7 @@ public static class WorkbookPdfContentBuilder
         var footerBandHeightPt = Math.Max(headerFooterLineHeightPt * footerMaxLines, mB - footerEdgePt);
         RenderHeaderFooterBand(ops, footer, footerPictures, pageW, mL, mR, footerY, footerBandHeightPt, 8,
             headerFooterFontScale, workbook.Name, workbookDirectory, sheet.Name, pageNumber, totalPages, FooterTextColor,
-            lineIndex => footerY - (lineIndex * headerFooterLineHeightPt));
+            lineIndex => footerY - (lineIndex * headerFooterLineHeightPt), measurer);
 
         return new PdfContentPage(pageW, pageH, ops);
     }
@@ -598,7 +636,9 @@ public static class WorkbookPdfContentBuilder
             // PortablePdfDocumentOptions has no Black-and-White flag (this legacy path never modeled
             // Page Setup > Sheet > "Black and white" for fills either), so pass false to match this
             // path's existing behavior.
-            DrawCellBorders(ops, style, x, y, columnWidth, options.RowHeightPoints, blackAndWhite: false);
+            //
+            // freex-conditional-format-F1: same CF border override as the page-setup-aware path above.
+            DrawCellBorders(ops, style, cell.ConditionalStyle, x, y, columnWidth, options.RowHeightPoints, blackAndWhite: false);
 
             // R96-render-cf-databar-iconset-1: same data-bar/icon-set overlay as the page-setup-aware
             // path above -- this legacy fixed-geometry path shares the same PortablePdfPageCell fields,
@@ -612,9 +652,14 @@ public static class WorkbookPdfContentBuilder
             if (string.IsNullOrEmpty(cell.DisplayText))
                 continue;
 
+            // freex-conditional-format-F1: same CF Bold/Italic/FontColor override as the page-setup-aware
+            // path above.
+            var legacyCfStyle = cell.ConditionalStyle;
             var fontSize = Math.Clamp(style.FontSize, 7, 10);
-            var fontFace = cell.IsTitle || style.Bold ? PdfFontFace.Bold : PdfFontFace.Regular;
-            var fontColor = ToPdfColor(style.ResolveFontColor(workbook.Theme));
+            var fontFace = ToPdfFontFace(
+                cell.IsTitle || style.Bold || (legacyCfStyle?.Bold ?? false),
+                legacyCfStyle?.Italic ?? false);
+            var fontColor = ToPdfColor(legacyCfStyle?.FontColor ?? style.ResolveFontColor(workbook.Theme));
             ops.Add(new PdfText(
                 x + 4 + iconGutterPt,
                 y + Math.Max(7, options.RowHeightPoints - 14),
@@ -820,7 +865,8 @@ public static class WorkbookPdfContentBuilder
         double[] rowHeights,
         double[] colXs,
         double[] rowYs,
-        PortablePdfPageContentPlan contentPlan)
+        PortablePdfPageContentPlan contentPlan,
+        ITextMeasurer textMeasurer)
     {
         var bandTop = contentTop;
         var bandBottom = contentTop - headingHeightPt;
@@ -838,7 +884,7 @@ public static class WorkbookPdfContentBuilder
             ops.Add(new PdfStrokeRect(x, bandBottom, w, headingHeightPt, HeadingBorderColor, 0.4));
 
             var label = CellAddress.NumberToColumnName(contentPlan.Columns[colIndex].Column);
-            AddCenteredHeadingText(ops, label, x, w, bandBottom, headingHeightPt);
+            AddCenteredHeadingText(ops, label, x, w, bandBottom, headingHeightPt, textMeasurer);
         }
 
         // Row numbers, spanning the same row heights/offsets as the cell grid.
@@ -850,15 +896,16 @@ public static class WorkbookPdfContentBuilder
             ops.Add(new PdfStrokeRect(contentLeft, y, headingWidthPt, h, HeadingBorderColor, 0.4));
 
             var label = contentPlan.Rows[rowIndex].Row.ToString(CultureInfo.InvariantCulture);
-            AddCenteredHeadingText(ops, label, contentLeft, headingWidthPt, y, h);
+            AddCenteredHeadingText(ops, label, contentLeft, headingWidthPt, y, h, textMeasurer);
         }
     }
 
     /// <summary>Centers <paramref name="label"/> horizontally and vertically inside a heading cell rect.</summary>
     private static void AddCenteredHeadingText(
-        List<PdfDrawOp> ops, string label, double cellX, double cellWidth, double cellBottomY, double cellHeight)
+        List<PdfDrawOp> ops, string label, double cellX, double cellWidth, double cellBottomY, double cellHeight,
+        ITextMeasurer textMeasurer)
     {
-        var textWidth = PortablePdfTextMeasurer.Instance.Measure(
+        var textWidth = textMeasurer.Measure(
             label, null, HeadingFontSize, bold: false, italic: false).Width;
         var textX = cellX + Math.Max(0.0, (cellWidth - textWidth) / 2.0);
         var baseline = cellBottomY + Math.Max(0.0, (cellHeight - HeadingFontSize) / 2.0) + (HeadingFontSize * 0.3);
@@ -872,12 +919,13 @@ public static class WorkbookPdfContentBuilder
         PortablePdfExportPageRequest request,
         List<PdfDrawOp> ops,
         double pageWidthPoints,
-        double pageHeightPoints)
+        double pageHeightPoints,
+        ITextMeasurer textMeasurer)
     {
         if (request.IsCommentSummaryPage)
             return;
 
-        var layout = BuildPageContentLayout(workbook, sheet, exportPlan, request);
+        var layout = BuildPageContentLayout(workbook, sheet, exportPlan, request, textMeasurer);
         if (layout is null ||
             (layout.Charts.Count == 0 && layout.TextBoxes.Count == 0 && layout.Pictures.Count == 0))
         {
@@ -898,7 +946,7 @@ public static class WorkbookPdfContentBuilder
         {
             AddFillRect(ops, chart.Bounds, chart.Fill, pageHeightPoints, scaleX, scaleY);
             AddStrokeRect(ops, chart.Bounds, chart.Outline, chart.OutlineThickness, pageHeightPoints, scaleX, scaleY);
-            AddChartPlotOps(workbook, sheet, chart, ops, pageHeightPoints, scaleX, scaleY);
+            AddChartPlotOps(workbook, sheet, chart, ops, pageHeightPoints, scaleX, scaleY, textMeasurer);
 
             foreach (var overlay in chart.TextOverlays)
                 AddTextOverlay(ops, overlay, pageHeightPoints, scaleX, scaleY);
@@ -946,7 +994,8 @@ public static class WorkbookPdfContentBuilder
         List<PdfDrawOp> ops,
         double pageHeightPoints,
         double scaleX,
-        double scaleY)
+        double scaleY,
+        ITextMeasurer textMeasurer)
     {
         var chart = sheet.Charts.FirstOrDefault(candidate => candidate.Id == chartBlock.Id);
         if (chart is null || !ChartLayoutEngine.IsSupported(chart.Type))
@@ -962,7 +1011,7 @@ public static class WorkbookPdfContentBuilder
             chart,
             plotArea,
             BuildChartCellAccessor(workbook, sheet),
-            PortablePdfTextMeasurer.Instance);
+            textMeasurer);
         if (request is null)
             return;
 
@@ -1602,7 +1651,8 @@ public static class WorkbookPdfContentBuilder
         Workbook workbook,
         Sheet sheet,
         PortablePdfExportPlan exportPlan,
-        PortablePdfExportPageRequest request)
+        PortablePdfExportPageRequest request,
+        ITextMeasurer textMeasurer)
     {
         if (request.SheetIndex < 0 || request.SheetIndex >= exportPlan.ExportPrintPlan.SheetPlans.Count)
             return null;
@@ -1623,7 +1673,7 @@ public static class WorkbookPdfContentBuilder
                 sheet,
                 pagePlan,
                 pageIndex,
-                PortablePdfTextMeasurer.Instance);
+                textMeasurer);
     }
 
     private static int ResolvePageIndex(PortablePdfExportPageRequest request, PagePaginationResult pagePlan)
@@ -1794,7 +1844,8 @@ public static class WorkbookPdfContentBuilder
         int pageNumber,
         int totalPages,
         PdfColor color,
-        Func<int, double> lineBaselineY)
+        Func<int, double> lineBaselineY,
+        ITextMeasurer textMeasurer)
     {
         var now = DateTime.Now;
         var sectionWidth = Math.Max(1, (pageW - mL - mR) / 3.0);
@@ -1802,17 +1853,17 @@ public static class WorkbookPdfContentBuilder
         RenderHeaderFooterSection(
             ops, band.Left, pictures.Left, HeaderFooterSectionAlign.Left,
             mL, mL + sectionWidth, baselineY, bandHeightPt, fontSize, headerFooterFontScale,
-            workbookName, workbookDirectory, sheetName, pageNumber, totalPages, now, color, lineBaselineY);
+            workbookName, workbookDirectory, sheetName, pageNumber, totalPages, now, color, lineBaselineY, textMeasurer);
 
         RenderHeaderFooterSection(
             ops, band.Center, pictures.Center, HeaderFooterSectionAlign.Center,
             mL + sectionWidth, mL + (2 * sectionWidth), baselineY, bandHeightPt, fontSize, headerFooterFontScale,
-            workbookName, workbookDirectory, sheetName, pageNumber, totalPages, now, color, lineBaselineY);
+            workbookName, workbookDirectory, sheetName, pageNumber, totalPages, now, color, lineBaselineY, textMeasurer);
 
         RenderHeaderFooterSection(
             ops, band.Right, pictures.Right, HeaderFooterSectionAlign.Right,
             pageW - mR - sectionWidth, pageW - mR, baselineY, bandHeightPt, fontSize, headerFooterFontScale,
-            workbookName, workbookDirectory, sheetName, pageNumber, totalPages, now, color, lineBaselineY);
+            workbookName, workbookDirectory, sheetName, pageNumber, totalPages, now, color, lineBaselineY, textMeasurer);
     }
 
     private enum HeaderFooterSectionAlign { Left, Center, Right }
@@ -1855,7 +1906,8 @@ public static class WorkbookPdfContentBuilder
         int totalPages,
         DateTime now,
         PdfColor color,
-        Func<int, double> lineBaselineY)
+        Func<int, double> lineBaselineY,
+        ITextMeasurer textMeasurer)
     {
         if (string.IsNullOrEmpty(raw))
             return;
@@ -1914,7 +1966,8 @@ public static class WorkbookPdfContentBuilder
                 continue;
 
             RenderHeaderFooterSectionLine(
-                ops, lineRuns, align, textLeft, textRight, lineBaselineY(lineIndex), fontSize, headerFooterFontScale, color);
+                ops, lineRuns, align, textLeft, textRight, lineBaselineY(lineIndex), fontSize, headerFooterFontScale, color,
+                textMeasurer);
         }
     }
 
@@ -1940,14 +1993,15 @@ public static class WorkbookPdfContentBuilder
         double baselineY,
         double fontSize,
         double headerFooterFontScale,
-        PdfColor color)
+        PdfColor color,
+        ITextMeasurer textMeasurer)
     {
         var runWidths = new double[runs.Count];
         var totalWidth = 0.0;
         for (var i = 0; i < runs.Count; i++)
         {
             var run = runs[i];
-            var width = PortablePdfTextMeasurer.Instance
+            var width = textMeasurer
                 .Measure(run.Text, run.FontName, (run.FontSize ?? fontSize) * headerFooterFontScale, run.Bold, run.Italic).Width;
             runWidths[i] = width;
             totalWidth += width;
@@ -2440,18 +2494,33 @@ public static class WorkbookPdfContentBuilder
     /// bottom-left corner in PDF y-up space, matching every other per-cell draw call in this loop.
     /// </summary>
     private static void DrawCellBorders(
-        List<PdfDrawOp> ops, CellStyle style, double x, double y, double w, double h, bool blackAndWhite)
+        List<PdfDrawOp> ops,
+        CellStyle style,
+        ConditionalFormatStylePlan? cfStyle,
+        double x, double y, double w, double h, bool blackAndWhite)
     {
         var top = y + h;
         var bottom = y;
         var left = x;
         var right = x + w;
 
-        DrawBorderEdge(ops, style.BorderTop, left, top, right, top, blackAndWhite);
-        DrawBorderEdge(ops, style.BorderBottom, left, bottom, right, bottom, blackAndWhite);
-        DrawBorderEdge(ops, style.BorderLeft, left, bottom, left, top, blackAndWhite);
-        DrawBorderEdge(ops, style.BorderRight, right, bottom, right, top, blackAndWhite);
+        DrawBorderEdge(ops, ResolveConditionalBorder(style.BorderTop, cfStyle?.BorderTop), left, top, right, top, blackAndWhite);
+        DrawBorderEdge(ops, ResolveConditionalBorder(style.BorderBottom, cfStyle?.BorderBottom), left, bottom, right, bottom, blackAndWhite);
+        DrawBorderEdge(ops, ResolveConditionalBorder(style.BorderLeft, cfStyle?.BorderLeft), left, bottom, left, top, blackAndWhite);
+        DrawBorderEdge(ops, ResolveConditionalBorder(style.BorderRight, cfStyle?.BorderRight), right, bottom, right, top, blackAndWhite);
     }
+
+    /// <summary>
+    /// freex-conditional-format-F1: a matched CF rule's border on this edge overrides the raw style's
+    /// border, matching <c>ViewportConditionalFormatEvaluator.MergeStyles</c>'s "dxf borders: apply
+    /// each edge from the CF when the CF dxf has a visible border on that edge" rule for the on-screen
+    /// grid. <paramref name="conditionalBorder"/> is only ever non-null-and-visible here --
+    /// <c>ConditionalFormatRenderEvaluator.ExtractStyle/StackStyle</c> already resolve "no border on
+    /// this edge" down to <see cref="BorderStyle.None"/>/left untouched -- so a plain <c>??</c>-style
+    /// fallback would be wrong whenever the CF struct carries a present-but-None edge.
+    /// </summary>
+    private static CellBorder ResolveConditionalBorder(CellBorder rawBorder, CellBorder? conditionalBorder) =>
+        conditionalBorder is { Style: not BorderStyle.None } cfBorder ? cfBorder : rawBorder;
 
     /// <summary>
     /// Draws one border edge as a line (or, for <see cref="BorderStyle.Double"/>, two parallel lines),

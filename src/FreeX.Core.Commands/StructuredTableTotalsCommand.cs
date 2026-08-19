@@ -133,8 +133,59 @@ public sealed class RefreshStructuredTableTotalsCommand : IWorkbookCommand
         // resolver's live-header-first lookup so a freshly (re)generated totals formula always
         // spells the column exactly as it currently reads on the sheet.
         var liveColumnName = ColumnHeaderText(sheet, table, columnIndex);
+
+        // R151-fmlstructuredref-totals-duplicate-header: there is no dedicated "rename table
+        // column" command -- an ordinary EditCellsCommand edit to a header cell is enough, and
+        // nothing validates the new text against the table's other live header texts (unlike real
+        // Excel, which refuses to create a duplicate column name). So the sheet can genuinely end
+        // up with two columns sharing one live header. StructuredReferenceResolver.FindColumnIndex
+        // then walks table.Columns in order and returns the FIRST column whose live header text
+        // matches a selector -- it has no way to know which column a given formula actually lives
+        // under -- so an unqualified SUBTOTAL(n,[<name>]) regenerated for a LATER column whose
+        // header now duplicates an EARLIER column's would silently resolve back to that earlier
+        // column and report its aggregate instead of this column's own. The earlier column itself
+        // is unaffected: FindColumnIndex's first-match-wins loop already resolves that same literal
+        // text back to it, exactly as before, so its formula must stay the plain structured
+        // reference (changing it would be an unrelated, unrequested formula-text change). Only a
+        // column preceded by an EARLIER column with the identical live header text needs to address
+        // its data body directly by cell range instead of by (ambiguous-for-it) name -- unambiguous
+        // regardless of the duplicate, and still fully live (SUBTOTAL recalculates from the range's
+        // current cell values exactly as it would from a structured reference).
+        if (HasEarlierDuplicateLiveHeaderText(sheet, table, columnIndex, liveColumnName) &&
+            ColumnDataBodyRange(sheet, table, columnIndex) is { } dataBodyRange)
+        {
+            return Cell.FromFormula($"SUBTOTAL({subtotalNumber.ToString(CultureInfo.InvariantCulture)},{dataBodyRange})");
+        }
+
         var escapedColumnName = EscapeStructuredReferenceColumnName(liveColumnName);
         return Cell.FromFormula($"SUBTOTAL({subtotalNumber.ToString(CultureInfo.InvariantCulture)},[{escapedColumnName}])");
+    }
+
+    private static bool HasEarlierDuplicateLiveHeaderText(Sheet sheet, StructuredTableModel table, int columnIndex, string liveColumnName)
+    {
+        for (var index = 0; index < columnIndex; index++)
+        {
+            if (string.Equals(ColumnHeaderText(sheet, table, index), liveColumnName, StringComparison.OrdinalIgnoreCase))
+                return true;
+        }
+
+        return false;
+    }
+
+    // Mirrors StructuredReferenceResolver's private DataBodyRange, narrowed to a single column:
+    // the data-body rows run from just below the header row through the row immediately above the
+    // totals row. Callers only reach here when the totals row is shown (Apply already checked
+    // table.TotalsRowShown), so the totals row itself is always table.Range.End.Row.
+    private static GridRange? ColumnDataBodyRange(Sheet sheet, StructuredTableModel table, int columnIndex)
+    {
+        var headerRowCount = (uint)Math.Clamp(table.HeaderRowCount ?? 1, 0, checked((int)table.Range.RowCount));
+        var startRow = table.Range.Start.Row + headerRowCount;
+        var endRow = table.Range.End.Row - 1;
+        if (startRow > endRow)
+            return null;
+
+        var col = table.Range.Start.Col + (uint)columnIndex;
+        return new GridRange(new CellAddress(sheet.Id, startRow, col), new CellAddress(sheet.Id, endRow, col));
     }
 
     // Mirrors StructuredReferenceResolver.ColumnHeaderText: resolves the column's EFFECTIVE

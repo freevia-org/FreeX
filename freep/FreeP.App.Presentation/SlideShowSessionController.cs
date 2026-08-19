@@ -156,8 +156,9 @@ public sealed class SlideShowSessionController
 
     public SlideShowPresenterState CreatePresenterState(
         DateTimeOffset nowUtc,
-        SlideShowPresenterDisplayIntent? displayIntent = null) =>
-        SlideShowHostPlanner.BuildPresenterState(
+        SlideShowPresenterDisplayIntent? displayIntent = null)
+    {
+        var state = SlideShowHostPlanner.BuildPresenterState(
             _presentation,
             Controller,
             _playbackRoute.Slides,
@@ -166,6 +167,32 @@ public sealed class SlideShowSessionController
             displayIntent,
             ToolPlan,
             _playbackRoute.SourceSlideIndices);
+
+        if (_revealedHiddenSlide is null)
+        {
+            return state;
+        }
+
+        // A revealed hidden slide has no slot of its own in _playbackRoute.Slides, so
+        // BuildPresenterState above still reports the underlying route slide the
+        // presenter was really parked on. Override the current-slide facet (thumbnail,
+        // id, title, notes) with the hidden slide actually on screen -- matching what
+        // DisplaySlide/BuildDisplayPlan already show the audience. NextSlide is left
+        // alone: advancing away from a revealed hidden slide resumes the route at its
+        // unchanged position, so the route's "next slide" preview is still correct.
+        var hiddenSlideState = new SlideShowPresenterSlideState(
+            state.CurrentSlide?.SlideIndex ?? Controller.CurrentSlideIndex,
+            _revealedHiddenSlideSourceIndex,
+            _revealedHiddenSlide.Id,
+            _revealedHiddenSlide.Title,
+            _revealedHiddenSlide);
+
+        return state with
+        {
+            CurrentSlide = hiddenSlideState,
+            NotesText = InCanvasTextEditPlanner.ExtractPlainText(_revealedHiddenSlide.Notes),
+        };
+    }
 
     public SlideShowHostDisplayPlan BuildDisplayPlan(
         bool animated,
@@ -204,14 +231,42 @@ public sealed class SlideShowSessionController
         int targetSlideIndex,
         bool returnToParent = false,
         int? transitionDurationMs = null,
-        bool showBackground = true) =>
-        SlideShowHostPlanner.PlanZoomNavigation(
+        bool showBackground = true)
+    {
+        // ZoomNavigationService resolves a Zoom target to an absolute index into the
+        // full, unfiltered presentation.Slides list, but Controller was constructed
+        // against _playbackRoute.Slides -- the hidden-slide-filtered (or custom-show
+        // reordered/subsetted) route list -- so the absolute index must be remapped to
+        // its route-local position before it reaches GoToSlide. This mirrors how
+        // PlanSlideNumberJump above remaps a typed slide number via SourceSlideIndices.
+        var routeTargetIndex = FindRouteIndexForSourceSlideIndex(targetSlideIndex);
+        if (routeTargetIndex < 0)
+        {
+            return SlideShowHostCommand.HandledNoOp(stopAutoAdvance: true);
+        }
+
+        return SlideShowHostPlanner.PlanZoomNavigation(
             Controller,
-            _presentation.Slides,
-            targetSlideIndex,
+            _playbackRoute.Slides,
+            routeTargetIndex,
             returnToParent,
             transitionDurationMs,
             showBackground);
+    }
+
+    private int FindRouteIndexForSourceSlideIndex(int sourceSlideIndex)
+    {
+        var sourceIndices = _playbackRoute.SourceSlideIndices;
+        for (var routeIndex = 0; routeIndex < sourceIndices.Count; routeIndex++)
+        {
+            if (sourceIndices[routeIndex] == sourceSlideIndex)
+            {
+                return routeIndex;
+            }
+        }
+
+        return -1;
+    }
 
     public SlideShowHostCommand PlanInternalSlideJump(string? targetSlideId) =>
         SlideShowHostPlanner.PlanInternalSlideJump(
