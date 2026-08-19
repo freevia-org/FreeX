@@ -113,6 +113,39 @@ public sealed class WorkbookCellEditServiceTests
             .Which.Value.Should().Be(6, "C1 must stay stale at its previously computed result until the user recalculates (F9)");
     }
 
+    // R149-formula-volatility-manual-mode-fresh-formula-recalc: RecalculateFreshlyEnteredFormulasOnce
+    // must compute ONLY the just-typed formula cell(s) -- it must not sweep every pre-existing
+    // volatile cell (and its dependents) elsewhere in the workbook into the same pass. Before the
+    // fix, this call unconditionally folded the whole registered volatile-cell set into the
+    // traversal, so D1's RAND() silently re-rolled (and E1 recomputed from it) even though the
+    // user only typed an unrelated brand-new formula into C1.
+    [Fact]
+    public void CommitCellText_ManualCalculationMode_UnrelatedNewFormulaDoesNotRerollExistingVolatileCells()
+    {
+        var (workbook, sheet, _, service, recalcEngine) = CreateEditService();
+        var d1 = new CellAddress(sheet.Id, 1, 4);
+        var e1 = new CellAddress(sheet.Id, 1, 5);
+        var c1 = new CellAddress(sheet.Id, 1, 3);
+
+        sheet.SetFormula(d1, "RAND()");
+        sheet.SetFormula(e1, "D1+1");
+        recalcEngine.RecalculateAllFormulas(workbook);
+        var d1Baseline = sheet.GetCell(d1)!.Value;
+        var e1Baseline = sheet.GetCell(e1)!.Value;
+
+        workbook.CalculationMode = WorkbookCalculationMode.Manual;
+
+        var result = service.CommitCellText(workbook, sheet.Id, c1, "=1+1");
+
+        result.Success.Should().BeTrue();
+        sheet.GetCell(c1)!.Value.Should().BeOfType<NumberValue>()
+            .Which.Value.Should().Be(2, "the freshly entered formula still computes once immediately");
+        sheet.GetCell(d1)!.Value.Should().Be(d1Baseline,
+            "an unrelated brand-new formula entry must not re-roll a pre-existing volatile cell in Manual mode");
+        sheet.GetCell(e1)!.Value.Should().Be(e1Baseline,
+            "the volatile cell's dependent must stay stale too, matching D1 staying stale");
+    }
+
     [Fact]
     public void CommitCellText_ReturnsCommandFailureForProtectedSheet()
     {

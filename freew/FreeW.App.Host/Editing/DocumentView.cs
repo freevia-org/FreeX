@@ -1457,6 +1457,17 @@ public sealed partial class DocumentView : RichTextBox
         PageSettingsSectionResolver.ResolveSectionIndex(_model, CaretBlockIndex());
 
     /// <summary>
+    /// The <see cref="PageSettings"/> for the section the caret is currently in, resolved the same way
+    /// <see cref="ApplyPageSettings"/> resolves its write target (via <see cref="PageSettingsSectionResolver"/>).
+    /// Page-setup-family ribbon dialogs (Page Setup, Columns, Line Number Options, page border) call this to
+    /// seed themselves from the caret's actual section instead of always <see cref="TextDocument.Page"/> (the
+    /// document's final section), so what the dialog shows on open matches the section ApplyPageSettings will
+    /// overwrite on OK/Apply.
+    /// </summary>
+    public PageSettings CurrentSectionPageSettings() =>
+        PageSettingsSectionResolver.Resolve(_model, CurrentPageSettingsSectionIndex());
+
+    /// <summary>
     /// Apply a document theme (colour/font scheme) to the model's style catalog and re-render so the
     /// new heading colours/fonts and body face show immediately. Pending edits are committed first, then
     /// the shared catalog command snapshots the affected defaults, theme, and styles for one-step Undo.
@@ -1905,8 +1916,10 @@ public sealed partial class DocumentView : RichTextBox
 
     /// <summary>
     /// Insert a section break of the given <paramref name="breakKind"/> after the caret's block, routing
-    /// through the undo/redo bus. The new paragraph's SectionBreak inherits the current document's final
-    /// page settings so the new section starts with the same layout.
+    /// through the undo/redo bus. The new paragraph's SectionBreak inherits the page settings of the
+    /// section the caret is actually in (resolved via <see cref="PageSettingsSectionResolver"/>), not
+    /// necessarily the document's final section, so the new section starts with the same layout as the
+    /// text it was split out of.
     /// </summary>
     public void InsertSectionBreak(SectionBreakKind breakKind)
     {
@@ -1914,9 +1927,11 @@ public sealed partial class DocumentView : RichTextBox
             return;
 
         CommitToModel();
+        var caretBlockIndex = CaretBlockIndex();
+        var inheritedPage = PageSettingsSectionResolver.Resolve(_model, CurrentPageSettingsSectionIndex());
         _editingSession.InsertBlockAfter(
-            CaretBlockIndex(),
-            DocumentOps.CreateSectionBreak(breakKind, _model.Page));
+            caretBlockIndex,
+            DocumentOps.CreateSectionBreak(breakKind, inheritedPage));
     }
 
     /// <summary>

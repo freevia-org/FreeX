@@ -90,6 +90,68 @@ public class DocumentInspectorTests
         DocumentInspector.Inspect(doc).Should().Be(new InspectionResult(2, 2, 4, 2));
     }
 
+    // sweep88 F1: a document whose ONLY tracked change is a formatting-only revision (Track Changes was
+    // on, the user bolded some text but inserted/deleted no characters) — no Run.Revision/MarkRevision
+    // anywhere, only Run.FormatRevision. TrackChanges.HasRevisions(doc) is true for this document and
+    // TrackChanges.AcceptAll (== DocumentInspector.RemoveRevisions) resolves it, so Inspect must count it
+    // too instead of reporting 0/IsClean==true.
+    [Fact]
+    public void Inspect_CountsRunFormatRevision_EvenWithNoInsertDeleteMarks()
+    {
+        var doc = new TextDocument();
+        var paragraph = new Paragraph();
+        var run = new Run("Hello") { FormatRevision = new FormatRevision(new RunFormatting(), "Alice", null) };
+        paragraph.Runs.Add(run);
+        doc.Blocks.Add(paragraph);
+
+        var result = DocumentInspector.Inspect(doc);
+
+        result.Revisions.Should().Be(1);
+        result.HasRevisions.Should().BeTrue();
+        result.IsClean.Should().BeFalse();
+
+        // Sanity: this is exactly the case TrackChanges.HasRevisions/AcceptAll already treat as a revision.
+        TrackChanges.HasRevisions(doc).Should().BeTrue();
+        DocumentInspector.RemoveRevisions(doc);
+        run.FormatRevision.Should().BeNull();
+        DocumentInspector.Inspect(doc).Revisions.Should().Be(0);
+    }
+
+    // Sibling case: a tracked paragraph-formatting-only change (Paragraph.ParagraphFormatRevision), with
+    // no run carrying any revision at all.
+    [Fact]
+    public void Inspect_CountsParagraphFormatRevision_EvenWithNoInsertDeleteMarks()
+    {
+        var doc = new TextDocument();
+        var paragraph = new Paragraph
+        {
+            ParagraphFormatRevision = new ParagraphFormatRevision(new ParagraphFormatting(), "Alice", null),
+        };
+        paragraph.Runs.Add(new Run("Hello"));
+        doc.Blocks.Add(paragraph);
+
+        var result = DocumentInspector.Inspect(doc);
+
+        result.Revisions.Should().Be(1);
+        result.HasRevisions.Should().BeTrue();
+
+        TrackChanges.HasRevisions(doc).Should().BeTrue();
+        DocumentInspector.RemoveRevisions(doc);
+        paragraph.ParagraphFormatRevision.Should().BeNull();
+        DocumentInspector.Inspect(doc).Revisions.Should().Be(0);
+    }
+
+    // No-regression sibling: ordinary insert/delete revisions (the pre-existing behaviour) are still
+    // counted exactly as before — the fix adds a category, it does not change how insert/delete marks
+    // are tallied.
+    [Fact]
+    public void Inspect_StillCountsOrdinaryInsertDeleteRevisions()
+    {
+        var result = DocumentInspector.Inspect(BuildDocument());
+
+        result.Revisions.Should().Be(2); // one insertion + one deletion, unaffected by the fix
+    }
+
     [Fact]
     public void RemoveComments_ClearsCommentsOnly()
     {

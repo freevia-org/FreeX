@@ -51,6 +51,16 @@ internal abstract class RevisionResolveCommandBase : IDocumentCommand
 
     public abstract string Label { get; }
 
+    /// <summary>
+    /// Single-entry resolution (<see cref="ResolveOneRevisionCommand"/>) only ever mutates this one
+    /// paragraph's own Runs list -- <see cref="RevisionList"/>.Accept/Reject never merges paragraphs away
+    /// or drops table rows the way <see cref="TrackChanges"/>.AcceptAll/RejectAll can -- so undo only needs
+    /// this paragraph's fields snapshotted, not a full-document walk. Bulk commands (Accept All/Reject All)
+    /// leave this null and fall back to the full structural snapshot below, since those DO resolve via
+    /// <see cref="TrackChanges"/> and can merge/drop content anywhere in the document.
+    /// </summary>
+    protected virtual Paragraph? TargetParagraph => null;
+
     protected abstract bool Resolve(TextDocument document);
 
     public void Apply(IDocumentCommandContext context)
@@ -62,21 +72,28 @@ internal abstract class RevisionResolveCommandBase : IDocumentCommand
         _paragraphListSnapshots = [];
 
         var document = context.Document;
-        CaptureBlockList(document.Blocks);
-        foreach (var section in document.Sections)
+        if (TargetParagraph is { } targetParagraph)
         {
-            var headersFooters = section.HeadersFooters;
-            CaptureHeaderFooter(headersFooters.Header);
-            CaptureHeaderFooter(headersFooters.Footer);
-            CaptureHeaderFooter(headersFooters.EvenHeader);
-            CaptureHeaderFooter(headersFooters.EvenFooter);
-            CaptureHeaderFooter(headersFooters.FirstHeader);
-            CaptureHeaderFooter(headersFooters.FirstFooter);
+            CaptureParagraph(targetParagraph);
         }
-        foreach (var footnote in document.Footnotes.Values)
-            CaptureParagraphContainer(footnote.Content);
-        foreach (var endnote in document.Endnotes.Values)
-            CaptureParagraphContainer(endnote.Content);
+        else
+        {
+            CaptureBlockList(document.Blocks);
+            foreach (var section in document.Sections)
+            {
+                var headersFooters = section.HeadersFooters;
+                CaptureHeaderFooter(headersFooters.Header);
+                CaptureHeaderFooter(headersFooters.Footer);
+                CaptureHeaderFooter(headersFooters.EvenHeader);
+                CaptureHeaderFooter(headersFooters.EvenFooter);
+                CaptureHeaderFooter(headersFooters.FirstHeader);
+                CaptureHeaderFooter(headersFooters.FirstFooter);
+            }
+            foreach (var footnote in document.Footnotes.Values)
+                CaptureParagraphContainer(footnote.Content);
+            foreach (var endnote in document.Endnotes.Values)
+                CaptureParagraphContainer(endnote.Content);
+        }
 
         if (!Resolve(document))
             ClearSnapshots();
@@ -241,6 +258,8 @@ internal sealed class ResolveOneRevisionCommand(
     public override string Label => action == RevisionResolutionAction.Accept
         ? "Accept Change"
         : "Reject Change";
+
+    protected override Paragraph? TargetParagraph => target.Entry.Paragraph;
 
     protected override bool Resolve(TextDocument document) => target.TryApply(document, action);
 }

@@ -367,6 +367,17 @@ public static class RtfWriter
 
         sb.Append(@"\row");
         sb.Append('\n');
+
+        // A table nested inside one of this row's cells cannot be interleaved into the \trowd..\row group
+        // above without corrupting it (RTF row/cell groups aren't reentrant), so -- matching how DocxWriter
+        // and the shared BodyParagraphWalk reach the identical TableCell.NestedTables structure -- each
+        // nested table is emitted as its own \trowd..\row table immediately after the row whose cell holds
+        // it. WriteTable recurses, so tables nested to any depth are all still reached and none are dropped.
+        foreach (var cell in row.Cells)
+        {
+            foreach (var nestedTable in cell.NestedTables)
+                WriteTable(sb, nestedTable, fonts, colors);
+        }
     }
 
     private static int[] ComputeCellBoundaries(Table table, TableRow row)
@@ -402,8 +413,8 @@ public static class RtfWriter
         {
             var paragraph = cell.Paragraphs[i];
 
-            // A nested table inside a cell is modelled here as paragraphs only; FreeW's TableCell holds
-            // paragraphs (not blocks), so nested tables live in the body and are written as their own rows.
+            // Only this cell's own paragraphs are written here; any TableCell.NestedTables are emitted by
+            // the caller (WriteTableRow) as their own sibling \trowd..\row table(s) right after this row.
             sb.Append(@"\pard\intbl");
             WriteParagraphProperties(sb, paragraph.Formatting);
             sb.Append(' ');

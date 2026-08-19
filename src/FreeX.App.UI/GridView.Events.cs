@@ -23,6 +23,11 @@ public readonly record struct GridOutlineGroupToggleRequest(
     uint End,
     bool Collapse);
 
+/// <summary>A click on one of the numbered "Show Outline Level N" gutter buttons.</summary>
+public readonly record struct GridOutlineLevelButtonRequest(
+    GridOutlineGroupAxis Axis,
+    int Level);
+
 public sealed class GridNoteInlineEditSubmittedEventArgs(CellAddress address, string text) : EventArgs
 {
     public CellAddress Address { get; } = address;
@@ -109,6 +114,9 @@ public partial class GridView
 
     /// <summary>Fired when the user activates a rendered outline group collapse/expand button.</summary>
     public event Action<GridOutlineGroupToggleRequest>? OutlineGroupToggleRequested;
+
+    /// <summary>Fired when the user clicks a numbered "Show Outline Level N" gutter button.</summary>
+    public event Action<GridOutlineLevelButtonRequest>? OutlineLevelButtonRequested;
 
     /// <summary>Fired when the user activates a rendered PivotChart field button.</summary>
     public event Action<ChartModel, string, System.Windows.Point>? PivotChartFieldButtonRequested;

@@ -2338,7 +2338,7 @@ internal static class FreeWRibbonCommands
         {
             editor.Focus();
             var result = BordersAndShadingDialog.Prompt(
-                Window.GetWindow(editor), editor.CurrentParagraphFormatting, editor.Model.Page.PageBorder);
+                Window.GetWindow(editor), editor.CurrentParagraphFormatting, editor.CurrentSectionPageSettings().PageBorder);
             if (result is null)
                 return;
 
@@ -2357,7 +2357,7 @@ internal static class FreeWRibbonCommands
         public void Execute(RibbonCommandContext context)
         {
             editor.Focus();
-            var result = ColumnsDialog.Prompt(Window.GetWindow(editor), editor.Model.Page);
+            var result = ColumnsDialog.Prompt(Window.GetWindow(editor), editor.CurrentSectionPageSettings());
             if (result is null)
                 return;
 
@@ -2377,7 +2377,7 @@ internal static class FreeWRibbonCommands
         public void Execute(RibbonCommandContext context)
         {
             editor.Focus();
-            var outcome = PageSetupDialog.Prompt(Window.GetWindow(editor), editor.Model.Page, initialTab: initialTab);
+            var outcome = PageSetupDialog.Prompt(Window.GetWindow(editor), editor.CurrentSectionPageSettings(), initialTab: initialTab);
             if (outcome is not { } o)
                 return;
 
@@ -7623,7 +7623,7 @@ internal static class FreeWRibbonCommands
     {
         public void Execute(RibbonCommandContext context)
         {
-            var page = editor.Model.Page;
+            var page = editor.CurrentSectionPageSettings();
             var result = LineNumberOptionsDialog.Prompt(
                 Window.GetWindow(editor),
                 page.LineNumberStartAt,

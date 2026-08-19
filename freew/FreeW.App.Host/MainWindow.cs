@@ -734,7 +734,11 @@ public sealed partial class MainWindow : Window
             Print: () => _applicationCommands.Execute(FreeWKeyboardCommand.PrintDocument),
             PrintPreview: OpenPrintPreview,
             SaveAsSuggested: (fileName, extension) => _file.SaveAsSuggested(fileName, extension),
-            OnClosed: () => SetEditorAdornersVisible(true),
+            OnClosed: () =>
+            {
+                SetEditorAdornersVisible(true);
+                _editor.Focus();
+            },
             GetDisplayName: () => _file.DisplayName,
             GetCurrentPath: () => _file.CurrentPath));
 

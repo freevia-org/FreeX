@@ -519,6 +519,13 @@ public partial class GridView
             return;
         }
 
+        if (TryHitTestOutlineLevelButton(Viewport, pos, ActualRowHeaderWidth, EffectiveColHeaderHeight, out var outlineLevelButton))
+        {
+            OutlineLevelButtonRequested?.Invoke(outlineLevelButton);
+            e.Handled = true;
+            return;
+        }
+
         if (TryHitTestAutoFilterButton(pos, out var autoFilterHeaderCell))
         {
             AutoFilterDropdownRequested?.Invoke(autoFilterHeaderCell, pos);

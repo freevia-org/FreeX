@@ -445,6 +445,14 @@ public sealed class WorkbookCellEditService
     /// into a cell some other, untouched formula depends on -- correctly leaves that other formula
     /// stale instead of rippling through it. Returns null (matching RecalculateIfAutomatic's
     /// "nothing to do" contract) when none of the affected cells hold a formula.
+    ///
+    /// R149-formula-volatility-manual-mode-fresh-formula-recalc: passes
+    /// <c>includeVolatileCells: false</c> so this call evaluates ONLY <paramref name="affectedCells"/>
+    /// (and their downstream dependents) -- never every OTHER pre-existing volatile cell in the
+    /// workbook (NOW/TODAY/RAND/OFFSET/INDIRECT/...) plus everything downstream of one. Without
+    /// this, committing any brand-new/edited formula anywhere silently re-rolled every volatile
+    /// cell in the whole workbook even though Manual mode is active and none of them were touched
+    /// by the edit.
     /// </summary>
     private RecalcReport? RecalculateFreshlyEnteredFormulasOnce(Workbook workbook, IReadOnlyList<CellAddress> affectedCells)
     {
@@ -455,7 +463,9 @@ public sealed class WorkbookCellEditService
                 (enteredFormulaCells ??= []).Add(address);
         }
 
-        return enteredFormulaCells is null ? null : _recalcEngine.Recalculate(workbook, enteredFormulaCells);
+        return enteredFormulaCells is null
+            ? null
+            : _recalcEngine.Recalculate(workbook, enteredFormulaCells, includeVolatileCells: false);
     }
 
     private static bool TryValidateGoalSeekRequest(

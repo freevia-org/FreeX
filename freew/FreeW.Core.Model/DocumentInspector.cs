@@ -290,12 +290,18 @@ public static class DocumentInspector
         return count;
     }
 
-    // One paragraph's own tracked-change marks: its paragraph-mark revision plus each run's revision.
-    // Does not walk into a run's text-box (Run.Shape) content — callers needing that reach use
+    // One paragraph's own tracked-change marks: its paragraph-mark revision, its tracked
+    // paragraph-formatting change (Paragraph.ParagraphFormatRevision), plus each run's own
+    // insertion/deletion revision and tracked run-formatting change (Run.FormatRevision) — mirroring
+    // TrackChanges.ParagraphHasRevisions's reach exactly, so a document whose only tracked change is a
+    // formatting-only edit (bold/italic/color toggled with Track Changes on, no text inserted/deleted)
+    // is still counted instead of reporting zero while RemoveRevisions (TrackChanges.AcceptAll) still
+    // clears it. Does not walk into a run's text-box (Run.Shape) content — callers needing that reach use
     // EnumerateParagraphs (BodyParagraphWalk), which already yields shape paragraphs as separate entries.
     private static int CountParagraphRevisionMarks(Paragraph paragraph) =>
         (paragraph.MarkRevision != RevisionKind.None ? 1 : 0) +
-        paragraph.Runs.Count(r => r.Revision != RevisionKind.None);
+        (paragraph.ParagraphFormatRevision is not null ? 1 : 0) +
+        paragraph.Runs.Count(r => r.Revision != RevisionKind.None || r.FormatRevision is not null);
 
     // Table-row tracked-change marks (TableRow.RowRevision) for every row in every given table,
     // recursing into any table nested inside a cell to any depth — mirrors TrackChanges.ResolveTable's

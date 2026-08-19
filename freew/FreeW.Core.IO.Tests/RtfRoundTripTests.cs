@@ -164,6 +164,68 @@ public class RtfRoundTripTests
         }
     }
 
+    // sweep88 F2 regression — a table nested inside another table's cell (TableCell.NestedTables) must not
+    // be silently dropped from RTF output. DocumentSaveCompatibilityPlanner tells the user RTF "keeps ...
+    // tables"; before the fix, RtfWriter.WriteCellContent walked only TableCell.Paragraphs and never read
+    // NestedTables, so the nested table's content never reached the .rtf bytes at all -- no error, no
+    // warning, just gone.
+    [Fact]
+    public void Table_NestedTableInCell_ContentIsNotDropped()
+    {
+        var document = TextDocument.CreateEmpty();
+        document.Blocks.Clear();
+        var outerCell = new TableCell("OUTER_CELL_TEXT");
+        var nestedTable = new Table();
+        nestedTable.Rows.Add(new TableRow { Cells = { new TableCell("NESTED_TABLE_SECRET_TEXT") } });
+        outerCell.NestedTables.Add(nestedTable);
+        var outerTable = new Table();
+        outerTable.Rows.Add(new TableRow { Cells = { outerCell } });
+        document.Blocks.Add(outerTable);
+
+        var rtf = Encoding.ASCII.GetString(Save(document));
+
+        rtf.Should().Contain("OUTER_CELL_TEXT");
+        rtf.Should().Contain("NESTED_TABLE_SECRET_TEXT",
+            because: "a table nested inside a cell must still reach the RTF output, not be silently dropped");
+    }
+
+    // Sibling no-regression case for the fix above: an ordinary table with NO nested tables must still
+    // write exactly the same single \trowd..\row group it always did (no duplicate rows, no extra tables
+    // accidentally introduced by the new post-\row nested-table emission loop).
+    [Fact]
+    public void Table_WithoutNestedTables_StillWritesExactlyOneRow()
+    {
+        var document = TextDocument.CreateEmpty();
+        document.Blocks.Clear();
+        var table = new Table();
+        table.Rows.Add(new TableRow
+        {
+            Cells = { new TableCell("A1"), new TableCell("B1") },
+        });
+        document.Blocks.Add(table);
+
+        var rtf = Encoding.ASCII.GetString(Save(document));
+
+        CountOccurrences(rtf, @"\trowd").Should().Be(1, because: "a table with no nested tables must still emit exactly one row group");
+        CountOccurrences(rtf, @"\row").Should().Be(1);
+
+        var reloaded = Load(Save(document));
+        var reloadedTable = reloaded.Blocks.OfType<Table>().Should().ContainSingle().Which;
+        reloadedTable.Rows.Should().ContainSingle().Which.Cells.Select(cell => cell.PlainText).Should().Equal("A1", "B1");
+    }
+
+    private static int CountOccurrences(string haystack, string needle)
+    {
+        var count = 0;
+        var index = 0;
+        while ((index = haystack.IndexOf(needle, index, StringComparison.Ordinal)) >= 0)
+        {
+            count++;
+            index += needle.Length;
+        }
+        return count;
+    }
+
     // P10 regression — \'XX hex-byte escapes inside \fonttbl font names must be decoded against the active
     // code page and stored in the font table, not discarded.  A font name containing \'e9 (= é in
     // Windows-1252) was previously truncated at the first escaped byte, so any run using that \fN got an

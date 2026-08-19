@@ -463,26 +463,30 @@ public static partial class AccessibilityCheckerService
         Cell cell,
         ref Dictionary<StyleId, CellStyle>? workbookStyleCache)
     {
-        CellStyle? style = null;
         if (conditionalContrastRules is null)
             return GetCachedWorkbookStyle(workbook, ref workbookStyleCache, cell.StyleId);
+
+        var baseStyle = GetCachedWorkbookStyle(workbook, ref workbookStyleCache, cell.StyleId);
 
         if (conditionalContrastRules.HasSharedAppliesToRange)
         {
             if (!conditionalContrastRules.SharedAppliesToRange.Contains(address))
-                return GetCachedWorkbookStyle(workbook, ref workbookStyleCache, cell.StyleId);
+                return baseStyle;
 
             if (conditionalContrastRules.AlwaysTrueTextValueStyle is { } alwaysTrueTextValueStyle)
-                return alwaysTrueTextValueStyle;
+                return MergeConditionalFormatContrastStyle(baseStyle, alwaysTrueTextValueStyle);
 
-            return GetEffectiveContrastStyleForApplicableRules(
-                    conditionalContrastRules.Rules,
-                    address,
-                    cell,
-                    conditionalContrastRules.EvaluationCache) ??
-                GetCachedWorkbookStyle(workbook, ref workbookStyleCache, cell.StyleId);
+            var applicableStyle = GetEffectiveContrastStyleForApplicableRules(
+                conditionalContrastRules.Rules,
+                address,
+                cell,
+                conditionalContrastRules.EvaluationCache);
+            return applicableStyle is null
+                ? baseStyle
+                : MergeConditionalFormatContrastStyle(baseStyle, applicableStyle);
         }
 
+        CellStyle? style = null;
         foreach (var rule in conditionalContrastRules.Rules)
         {
             if (!rule.AppliesTo.Contains(address))
@@ -496,7 +500,62 @@ public static partial class AccessibilityCheckerService
                 break;
         }
 
-        return style ?? GetCachedWorkbookStyle(workbook, ref workbookStyleCache, cell.StyleId);
+        return style is null ? baseStyle : MergeConditionalFormatContrastStyle(baseStyle, style);
+    }
+
+    /// <summary>
+    /// Grades a matched conditional-format dxf against the cell it is painted over, not in isolation.
+    /// A dxf frequently sets only a handful of properties -- e.g. FreeX's own "highlight cells greater
+    /// than" quick rule (see MainWindow.DataFilterCommands.cs CfRuleButton_Click) builds a FormatIfTrue
+    /// with only FillColor set, and many of Excel's built-in Highlight-Cell-Rules presets (e.g. plain
+    /// "Yellow Fill") author a dxf with no &lt;font&gt; element at all. Grading directly against such a
+    /// FormatIfTrue silently substitutes CellStyle's hard defaults (FontColor=Black, Bold=false) for
+    /// whatever the base cell's own font actually is, hiding real low-contrast text (e.g. a themed
+    /// white heading) behind a fabricated black-on-fill contrast pass.
+    ///
+    /// This mirrors the sentinel conventions the real renderers already use to tell "the dxf explicitly
+    /// set this" apart from "this is just CellStyle's default": DxfFontColor/DxfBold, when populated by
+    /// the xlsx dxf reader, record an explicit decision (including a deliberate black or a deliberate
+    /// un-bold); otherwise a non-default plain value is treated as explicit, matching
+    /// ConditionalFormatRenderEvaluator.ExtractStyle's "FontColor != Black means overridden" heuristic
+    /// and ViewportConditionalFormatEvaluator.MergeStyles's EffectiveFontColor/EffectiveToggle helpers.
+    /// FontSize has no such sentinel anywhere in the dxf pipeline, so -- matching MergeStyles, which
+    /// never touches FontSize either -- the base cell's font size (and large-text WCAG threshold) is
+    /// always kept.
+    /// </summary>
+    private static CellStyle MergeConditionalFormatContrastStyle(CellStyle baseStyle, CellStyle cfStyle)
+    {
+        var fontColorOverride = cfStyle.DxfFontColor ??
+            (cfStyle.FontColor != CellColor.Black ? cfStyle.FontColor : (CellColor?)null);
+        var boldOverride = cfStyle.DxfBold ?? (cfStyle.Bold ? true : (bool?)null);
+        var hasFillOverride = cfStyle.FillColor.HasValue || cfStyle.FillPatternStyle != CellFillPatternStyle.None;
+
+        if (fontColorOverride is null && boldOverride is null && !hasFillOverride)
+            return baseStyle;
+
+        var merged = baseStyle.Clone();
+
+        if (fontColorOverride is { } explicitFontColor)
+        {
+            merged.FontColor = explicitFontColor;
+            merged.FontThemeColor = null;
+        }
+
+        if (boldOverride is { } explicitBold)
+            merged.Bold = explicitBold;
+
+        if (hasFillOverride)
+        {
+            merged.GradientFill = null;
+            merged.FillPatternStyle = cfStyle.FillPatternStyle;
+            merged.FillPatternColor = cfStyle.FillPatternColor;
+            merged.FillThemeColor = null;
+        }
+
+        if (cfStyle.FillColor.HasValue)
+            merged.FillColor = cfStyle.FillColor;
+
+        return merged;
     }
 
     private static CellStyle? GetEffectiveContrastStyleForApplicableRules(

@@ -81,7 +81,12 @@ public static partial class AccessibilityCheckerService
                 if (!shape.IsVisible)
                     continue;
 
-                AddAltTextIssue(issues, sheet, shape.Anchor, "Shape", shape.AltText, shape.Title, shape.Name);
+                // R149-app-accessibility-checker-decorative-shapes: a shape the user explicitly
+                // marked "decorative" in Excel's Alt Text pane is exempt from the Missing-Alt-Text
+                // rule, mirroring the picture loop above -- see DrawingShapeModel.IsDecorative.
+                AddAltTextIssue(
+                    issues, sheet, shape.Anchor, "Shape", shape.AltText, shape.Title, shape.Name,
+                    isDecorative: shape.IsDecorative);
                 AddLowContrastShapeTextIssue(issues, workbook, sheet, shape);
             }
 
@@ -90,7 +95,11 @@ public static partial class AccessibilityCheckerService
                 if (!textBox.IsVisible)
                     continue;
 
-                AddAltTextIssue(issues, sheet, textBox.Anchor, "Text box", textBox.AltText, textBox.Title, textBox.Name);
+                // R149-app-accessibility-checker-decorative-shapes: see the matching comment on the
+                // shape loop above -- see TextBoxModel.IsDecorative.
+                AddAltTextIssue(
+                    issues, sheet, textBox.Anchor, "Text box", textBox.AltText, textBox.Title, textBox.Name,
+                    isDecorative: textBox.IsDecorative);
                 AddLowContrastTextBoxTextIssue(issues, workbook, sheet, textBox);
             }
 

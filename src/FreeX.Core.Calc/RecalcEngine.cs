@@ -145,16 +145,38 @@ public sealed class RecalcEngine
     /// Shift+F9, Goal Seek, Scenario Summary, and ordinary plain-Automatic-mode recalculation) keeps
     /// computing Data Tables exactly as before.
     /// </param>
-    public RecalcReport Recalculate(Workbook workbook, IReadOnlyList<CellAddress> changedCells, bool skipDataTableBodyCells = false) =>
-        Recalculate(workbook, changedCells, resolveSpillDependents: true, skipDataTableBodyCells: skipDataTableBodyCells);
+    /// <param name="includeVolatileCells">
+    /// R149-formula-volatility-manual-mode-fresh-formula-recalc: when false, this pass excludes
+    /// every registered volatile cell (NOW/TODAY/RAND/OFFSET/INDIRECT/...) and their dependents
+    /// from the traversal entirely, evaluating ONLY <paramref name="changedCells"/> (and their
+    /// downstream dependents). Defaults to true so every ordinary caller (Automatic-mode edits,
+    /// F9, Shift+F9, Goal Seek, Undo/Redo) keeps re-rolling volatile cells exactly as before --
+    /// this exists solely for WorkbookCellEditService.RecalculateFreshlyEnteredFormulasOnce, whose
+    /// whole contract in Manual calculation mode is to compute ONLY the just-typed formula cell(s)
+    /// themselves and nothing else in the workbook (see that method's doc comment). Without this,
+    /// that single call unconditionally swept every pre-existing volatile cell (and everything
+    /// downstream of one) into the same pass, silently re-rolling e.g. a RAND()/NOW() cell the
+    /// instant the user typed an unrelated brand-new formula anywhere else on the sheet, even
+    /// though Manual mode defers all other recalculation until the next F9.
+    /// </param>
+    public RecalcReport Recalculate(Workbook workbook, IReadOnlyList<CellAddress> changedCells, bool skipDataTableBodyCells = false, bool includeVolatileCells = true) =>
+        Recalculate(workbook, changedCells, resolveSpillDependents: true, skipDataTableBodyCells: skipDataTableBodyCells, includeVolatileCells: includeVolatileCells);
 
     private RecalcReport Recalculate(
         Workbook workbook,
         IReadOnlyList<CellAddress> changedCells,
         bool resolveSpillDependents,
         SheetId? restrictWritesToSheet = null,
-        bool skipDataTableBodyCells = false)
+        bool skipDataTableBodyCells = false,
+        bool includeVolatileCells = true)
     {
+        // See the includeVolatileCells parameter doc above. Every reference to the workbook's
+        // registered volatile-cell set within this pass goes through this local instead of the
+        // raw _volatileCells field, so a caller that opts out (currently only
+        // RecalculateFreshlyEnteredFormulasOnce) sees an empty set everywhere in this method
+        // without permanently clearing (or otherwise disturbing) the real registration, which
+        // must survive for the NEXT ordinary (includeVolatileCells: true) recalculation pass.
+        var volatileCellsForPass = includeVolatileCells ? _volatileCells : EmptyDependencyCells;
         // R124-calc-spill-member-write-anchor-recalc: CommandGuards.RejectIfSplitsArray's
         // allowDynamicSpillMemberWrite branch (see its doc comment) lets EditCellsCommand/
         // ClearContentsCommand/the paste family/the fill family write a literal value directly
@@ -180,7 +202,7 @@ public sealed class RecalcEngine
         changedCells = ExpandChangedCellsWithSpillMemberAnchors(workbook, changedCells);
 
         if (changedCells.Count == 0 &&
-            _volatileCells.Count == 0 &&
+            volatileCellsForPass.Count == 0 &&
             // An active iterative circular-reference group must re-iterate every pass (see
             // _activeIterativeCyclicCells) even when nothing else in the workbook changed -- e.g.
             // a bare F9 with no other dirty cells (R92-calc-iterative-convergence-5-1).
@@ -207,11 +229,11 @@ public sealed class RecalcEngine
         ClearVacatedFormulaDependencies(workbook, changedCells);
 
         // Include volatile cells in the dependency traversal so their dependents appear in the plan
-        var changedForTraversal = BuildChangedSetForTraversal(changedCells);
+        var changedForTraversal = BuildChangedSetForTraversal(changedCells, includeVolatileCells);
         var plan = _graph.GetRecalcOrder(changedForTraversal);
         if (plan.OrderedCells.Count == 0 &&
             plan.CyclicCells.Count == 0 &&
-            _volatileCells.Count == 0 &&
+            volatileCellsForPass.Count == 0 &&
             changedFormulaCells is null &&
             // A cleared/edited cell that was blocking a #SPILL! anchor has no dependency-graph edge
             // back to that anchor (P73), so the traversal above is empty even though the anchor now
@@ -265,9 +287,9 @@ public sealed class RecalcEngine
 
         var evaluationPlan = plan;
         IReadOnlyCollection<CellAddress>? directFormulaRoots = null;
-        if (_volatileCells.Count > 0 || changedFormulaCells is not null)
+        if (volatileCellsForPass.Count > 0 || changedFormulaCells is not null)
         {
-            if (CanEvaluateChangedFormulaRootsDirectly(plan, changedFormulaCells, _volatileCells.Count))
+            if (CanEvaluateChangedFormulaRootsDirectly(plan, changedFormulaCells, volatileCellsForPass.Count))
             {
                 directFormulaRoots = changedFormulaCells!.Count == 1
                     ? changedFormulaCells
@@ -279,7 +301,7 @@ public sealed class RecalcEngine
                 // share one dirty set. Topologically order that set so changed formula roots
                 // do not run before dirty formula precedents.
                 var dirtyCells = new HashSet<CellAddress>(
-                    plan.OrderedCells.Count + _volatileCells.Count + (changedFormulaCells?.Count ?? 0));
+                    plan.OrderedCells.Count + volatileCellsForPass.Count + (changedFormulaCells?.Count ?? 0));
 
                 if (changedFormulaCells is not null)
                 {
@@ -287,7 +309,7 @@ public sealed class RecalcEngine
                         dirtyCells.Add(addr);
                 }
 
-                foreach (var addr in _volatileCells)
+                foreach (var addr in volatileCellsForPass)
                     dirtyCells.Add(addr);
 
                 foreach (var addr in plan.OrderedCells)
@@ -319,7 +341,7 @@ public sealed class RecalcEngine
                 // one is still correctly ordered after it) while making volatile cells lose every
                 // ready-queue tie against a non-volatile cell, so by the time a volatile cell
                 // evaluates, every unrelated same-pass dirty cell has already settled.
-                evaluationPlan = _graph.GetEvaluationOrder(dirtyCells, deprioritized: _volatileCells);
+                evaluationPlan = _graph.GetEvaluationOrder(dirtyCells, deprioritized: volatileCellsForPass);
 
                 if (evaluationPlan.CyclicCells.Count > 0)
                 {
@@ -937,17 +959,26 @@ public sealed class RecalcEngine
         }
     }
 
-    private IEnumerable<CellAddress> BuildChangedSetForTraversal(IReadOnlyList<CellAddress> changedCells)
+    // includeVolatileCells: see the Recalculate(..., includeVolatileCells) parameter doc. When
+    // false, this pass's traversal omits _volatileCells entirely -- _activeIterativeCyclicCells is
+    // untouched either way, since the opt-out exists only to stop an unrelated formula entry from
+    // re-rolling volatile functions, not to change active-iterative-circular-reference handling.
+    private IEnumerable<CellAddress> BuildChangedSetForTraversal(
+        IReadOnlyList<CellAddress> changedCells, bool includeVolatileCells = true)
     {
-        if (_volatileCells.Count == 0 && _activeIterativeCyclicCells.Count == 0)
+        var volatileCount = includeVolatileCells ? _volatileCells.Count : 0;
+        if (volatileCount == 0 && _activeIterativeCyclicCells.Count == 0)
             return changedCells;
 
         var allChanged = new List<CellAddress>(
-            changedCells.Count + _volatileCells.Count + _activeIterativeCyclicCells.Count);
+            changedCells.Count + volatileCount + _activeIterativeCyclicCells.Count);
         foreach (var addr in changedCells)
             allChanged.Add(addr);
-        foreach (var addr in _volatileCells)
-            allChanged.Add(addr);
+        if (includeVolatileCells)
+        {
+            foreach (var addr in _volatileCells)
+                allChanged.Add(addr);
+        }
         foreach (var addr in _activeIterativeCyclicCells)
             allChanged.Add(addr);
         return allChanged;

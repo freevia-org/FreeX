@@ -2251,6 +2251,57 @@ public sealed class SlideCompositorTests
         fill1.Should().Be(band1Fill, "second row (first data row) should use Band1H fill");
     }
 
+    /// <summary>
+    /// F2: BandCol (column banding) must drive ComputeEffectiveBorderOutline and
+    /// ComputeEffectiveTextColor the same way it already drives ComputeEffectiveFill --
+    /// alternating Band1V/Band2V per column, not the flat wholeTbl default. Mirrors
+    /// <see cref="TableStyleData_EffectiveFill_FirstRowWins"/> but for BandCol + the two
+    /// resolvers that previously had no "else if (Flags.BandCol)" branch at all.
+    /// </summary>
+    [Fact]
+    public void TableStyleData_EffectiveBorderAndTextColor_BandColAlternates()
+    {
+        var wholeBorder = new ShapeOutline.Visible(new SrgbColor(0x80, 0x80, 0x80), 0.75);
+        var band1Border  = new ShapeOutline.Visible(new SrgbColor(0x11, 0x22, 0x33), 1.0);
+        var band2Border  = new ShapeOutline.Visible(new SrgbColor(0x44, 0x55, 0x66), 1.0);
+
+        var wholeText = new ThemeAwareColor(new SrgbColor(0x00, 0x00, 0x00));
+        var band1Text = new ThemeAwareColor(new SrgbColor(0xFF, 0x00, 0x00));
+        var band2Text = new ThemeAwareColor(new SrgbColor(0x00, 0x00, 0xFF));
+
+        var styleData = new TableStyleData
+        {
+            StyleId  = "{test-bandcol}",
+            WholeTbl = new TableStyleEntry { BorderOutline = wholeBorder, TextColor = wholeText },
+            Band1V   = new TableStyleEntry { BorderOutline = band1Border, TextColor = band1Text },
+            Band2V   = new TableStyleEntry { BorderOutline = band2Border, TextColor = band2Text }
+        };
+
+        var table = new TableShape
+        {
+            TableStyleId = "{test-bandcol}",
+            StyleData    = styleData
+        };
+        table.Flags.BandRow = false;
+        table.Flags.BandCol = true;
+        table.ColumnWidthsEmu.Add(914400);
+        table.ColumnWidthsEmu.Add(914400);
+        var row = new TableRow { HeightEmu = 457200 };
+        row.Cells.Add(new TableCell());  // col 0 -> band1 (even column)
+        row.Cells.Add(new TableCell());  // col 1 -> band2 (odd column)
+        table.Rows.Add(row);
+
+        var border0 = table.ComputeEffectiveBorderOutline(0, 0, table.Rows[0].Cells[0]);
+        var border1 = table.ComputeEffectiveBorderOutline(0, 1, table.Rows[0].Cells[1]);
+        border0.Should().Be(band1Border, "column 0 under BandCol should resolve Band1V border, not the flat wholeTbl border");
+        border1.Should().Be(band2Border, "column 1 under BandCol should resolve Band2V border, not the flat wholeTbl border");
+
+        var color0 = table.ComputeEffectiveTextColor(0, 0);
+        var color1 = table.ComputeEffectiveTextColor(0, 1);
+        color0.Should().Be(band1Text, "column 0 under BandCol should resolve Band1V text color, not the flat wholeTbl color");
+        color1.Should().Be(band2Text, "column 1 under BandCol should resolve Band2V text color, not the flat wholeTbl color");
+    }
+
     // ─── R133: freshly inserted/pasted tables must render borders/fill/banding ────
 
     /// <summary>

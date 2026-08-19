@@ -107,6 +107,89 @@ public sealed class DocumentSaveCompatibilityPlannerTests
     }
 
     [Fact]
+    public void Build_WebTargetWithFootnote_DoesNotWarnAboutFootnotesAndEndnotes()
+    {
+        // HtmlFileAdapter.WriteNoteStore/WriteRuns writes the footnote reference AND body via
+        // data-freew-note-* attributes and reads them back losslessly (Filtered and Full modes
+        // alike), so the Web target must not claim notes are lost.
+        var document = TextDocument.CreateEmpty();
+        document.Blocks.Clear();
+        var paragraph = new Paragraph();
+        paragraph.Runs.Add(new Run("See note", RunFormatting.Default));
+        paragraph.Runs.Add(Run.FootnoteReference(1));
+        document.Blocks.Add(paragraph);
+        document.Footnotes[1] = new Footnote(1, "Footnote text");
+        var target = ResolveTarget("Compat.html");
+
+        var plan = DocumentSaveCompatibilityPlanner.Build(document, target);
+
+        plan.Warnings.Select(warning => warning.Kind)
+            .Should()
+            .NotContain(DocumentSaveCompatibilityWarningKind.FootnotesAndEndnotes);
+    }
+
+    [Fact]
+    public void Build_PlainTextTargetWithFootnote_StillWarnsAboutFootnotesAndEndnotes()
+    {
+        // Sibling no-regression: PlainText genuinely drops notes, so it must keep warning.
+        var document = TextDocument.CreateEmpty();
+        document.Blocks.Clear();
+        var paragraph = new Paragraph();
+        paragraph.Runs.Add(new Run("See note", RunFormatting.Default));
+        paragraph.Runs.Add(Run.FootnoteReference(1));
+        document.Blocks.Add(paragraph);
+        document.Footnotes[1] = new Footnote(1, "Footnote text");
+        var target = ResolveTarget("Plain.txt");
+
+        var plan = DocumentSaveCompatibilityPlanner.Build(document, target);
+
+        plan.Warnings.Select(warning => warning.Kind)
+            .Should()
+            .Contain(DocumentSaveCompatibilityWarningKind.FootnotesAndEndnotes);
+    }
+
+    [Fact]
+    public void Build_OpenDocumentTargetWithOnlyComment_DoesNotWarnAboutReviewAndProtection()
+    {
+        // OdtFileAdapter.WriteAnnotation/ReadAnnotation round-trips comments (author, text,
+        // anchor) losslessly, so a document whose only "risky" content is a comment must not
+        // be told comments may be removed when saving to ODT.
+        var document = TextDocument.CreateEmpty();
+        document.Blocks.Clear();
+        var paragraph = new Paragraph();
+        paragraph.Runs.Add(new Run("Reviewed text", RunFormatting.Default));
+        paragraph.Runs.Add(Run.CommentReference(0));
+        document.Blocks.Add(paragraph);
+        document.Comments[0] = new Comment(0, "This is a review comment.") { Author = "Reviewer" };
+        var target = ResolveTarget("Compat.odt");
+
+        var plan = DocumentSaveCompatibilityPlanner.Build(document, target);
+
+        plan.Warnings.Select(warning => warning.Kind)
+            .Should()
+            .NotContain(DocumentSaveCompatibilityWarningKind.ReviewAndProtection);
+    }
+
+    [Fact]
+    public void Build_OpenDocumentTargetWithTrackedChange_StillWarnsAboutReviewAndProtection()
+    {
+        // Sibling no-regression: OdtFileAdapter has no TrackChanges/Protection handling, so a
+        // revision (no comment involved) must still trigger the warning for ODT.
+        var document = TextDocument.CreateEmpty();
+        document.Blocks.Clear();
+        var paragraph = new Paragraph();
+        paragraph.Runs.Add(new Run("Inserted text", RunFormatting.Default) { Revision = RevisionKind.Inserted });
+        document.Blocks.Add(paragraph);
+        var target = ResolveTarget("Compat.odt");
+
+        var plan = DocumentSaveCompatibilityPlanner.Build(document, target);
+
+        plan.Warnings.Select(warning => warning.Kind)
+            .Should()
+            .Contain(DocumentSaveCompatibilityWarningKind.ReviewAndProtection);
+    }
+
+    [Fact]
     public void Build_PlainTextWithMixedContent_ListsFeatureLossWarningsDeterministically()
     {
         var document = TextDocument.CreateEmpty();

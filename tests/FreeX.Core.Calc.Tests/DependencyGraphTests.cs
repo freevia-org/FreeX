@@ -76,7 +76,11 @@ public class DependencyGraphTests
 
         afterPlan.Should().Contain("plan.OrderedCells.Count == 0");
         afterPlan.Should().Contain("plan.CyclicCells.Count == 0");
-        afterPlan.Should().Contain("_volatileCells.Count == 0");
+        // R149-formula-volatility-manual-mode-fresh-formula-recalc: this guard now reads the
+        // includeVolatileCells-gated local (see RecalcEngine.Recalculate's volatileCellsForPass)
+        // instead of the raw _volatileCells field directly, so a caller that opts out of volatile
+        // cells sees an empty set here too -- same short-circuit behaviour, renamed source.
+        afterPlan.Should().Contain("volatileCellsForPass.Count == 0");
         afterPlan.Should().Contain("changedFormulaCells is null");
         afterPlan.Should().Contain("return EmptyReport;");
         source.Should().Contain("private static IReadOnlyList<CellAddress>? CollectChangedFormulaCells");

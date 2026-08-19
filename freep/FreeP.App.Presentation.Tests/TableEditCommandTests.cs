@@ -1446,6 +1446,51 @@ public sealed class TableEditCommandTests
         shape.Table.Rows[0].Cells[0].GridSpan.Should().Be(1);
     }
 
+    /// <summary>
+    /// Regression for freep-table-graphics F1: clicking "Merge Cells" again on a cell that is
+    /// already merged must extend the merge past its own GridSpan, not silently re-merge the
+    /// anchor with a cell already inside its own span (a no-op that still pushes an undo entry).
+    /// </summary>
+    [Fact]
+    public void EditingSession_TryMergeActiveTableCell_OnAlreadyMergedCell_ExtendsPastOwnSpan()
+    {
+        var sess = MakeSession(out var shape, 1, 4);
+        sess.SetActiveTableCell(0, 0);
+
+        sess.TryMergeActiveTableCell().Should().BeTrue();
+        shape.Table!.Rows[0].Cells[0].GridSpan.Should().Be(2, "first merge should grow the anchor to span columns 0-1");
+
+        sess.TryMergeActiveTableCell().Should().BeTrue();
+        shape.Table.Rows[0].Cells[0].GridSpan.Should().Be(3, "second merge must extend to column 2, not re-merge columns 0-1");
+        shape.Table.Rows[0].Cells[2].HMerge.Should().BeTrue("column 2 must now be absorbed into the merge");
+
+        sess.Undo();
+        shape.Table.Rows[0].Cells[0].GridSpan.Should().Be(2, "undo of the second merge must restore the 2-wide state");
+
+        sess.Undo();
+        shape.Table.Rows[0].Cells[0].GridSpan.Should().Be(1, "undo of the first merge must restore the unmerged state");
+    }
+
+    /// <summary>
+    /// Sibling/no-regression case for freep-table-graphics F1: the pre-existing right-edge
+    /// fallback (merge below when there is no column to the right) on a plain, never-merged
+    /// cell must still work exactly as before -- the span-aware rewrite must not disturb the
+    /// colSpan==1/rowSpan==1 arithmetic.
+    /// </summary>
+    [Fact]
+    public void EditingSession_TryMergeActiveTableCell_AtRightEdge_FallsBackToMergingBelow()
+    {
+        var sess = MakeSession(out var shape, 2, 1); // 2 rows, 1 column: no right neighbor exists.
+        sess.SetActiveTableCell(0, 0);
+
+        sess.TryMergeActiveTableCell().Should().BeTrue();
+        shape.Table!.Rows[0].Cells[0].RowSpan.Should().Be(2, "single-column table has no right neighbor, so merge must fall back to the cell below");
+        shape.Table.Rows[0].Cells[0].GridSpan.Should().Be(1);
+
+        sess.Undo();
+        shape.Table.Rows[0].Cells[0].RowSpan.Should().Be(1);
+    }
+
     [Fact]
     public void EditingSession_TrySplitActiveTableCell_RejectsUnmergedCell()
     {

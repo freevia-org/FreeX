@@ -296,7 +296,10 @@ public class PerformanceBenchmarkTests
             // necessary change, not hot-path scaffolding. Only the marker needed updating here.
             source.IndexOf("private void AddCyclicCell", StringComparison.Ordinal)];
 
-        recalculate.Should().Contain("CanEvaluateChangedFormulaRootsDirectly(plan, changedFormulaCells, _volatileCells.Count)");
+        // R149-formula-volatility-manual-mode-fresh-formula-recalc: the call site now passes the
+        // includeVolatileCells-gated local (volatileCellsForPass) instead of the raw
+        // _volatileCells field, so an opted-out caller's fast-path check also sees zero.
+        recalculate.Should().Contain("CanEvaluateChangedFormulaRootsDirectly(plan, changedFormulaCells, volatileCellsForPass.Count)");
         recalculate.Should().Contain("directFormulaRoots = changedFormulaCells!.Count == 1");
         recalculate.Should().NotContain("var recalculated = new List<CellAddress>();");
         recalculate.IndexOf("CanEvaluateChangedFormulaRootsDirectly", StringComparison.Ordinal)

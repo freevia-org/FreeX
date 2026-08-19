@@ -197,6 +197,137 @@ public sealed class WorkbookReadOnlySessionTests
         session.IsReadOnly.Should().BeFalse();
     }
 
+    // R149-appservices-file-locking-1: an OS-level read-only file (Explorer's Read-only
+    // checkbox / `attrib +r`, a read-only share, or a denied-Write ACL) carries neither embedded
+    // workbook flag (ReadOnlyRecommended / ReservationPassword), so PlanOpen used to classify it
+    // as fully editable -- IsReadOnly stayed false, ResolveExistingSaveTarget handed back a
+    // writable path, and the very first Save failed with a raw "Access to the path is denied"
+    // with zero up-front indication. This must be caught from the actual on-disk attribute alone,
+    // without going through the (interactive) prompt port -- Excel does not prompt for this case,
+    // it just silently forces the document read-only.
+    [Fact]
+    public void PlanOpen_OsLevelReadOnlyFile_IsClassifiedReadOnlyWithoutPrompting()
+    {
+        var path = Path.GetTempFileName();
+        try
+        {
+            File.SetAttributes(path, File.GetAttributes(path) | FileAttributes.ReadOnly);
+            var session = new WorkbookReadOnlySession();
+
+            var plan = session.PlanOpen(new Workbook("Budget.xlsx"), path);
+
+            plan.ShouldPrompt.Should().BeFalse(
+                "an OS read-only file is not an embedded-flag prompt case");
+            plan.IsFileSystemReadOnly.Should().BeTrue();
+        }
+        finally
+        {
+            File.SetAttributes(path, File.GetAttributes(path) & ~FileAttributes.ReadOnly);
+            File.Delete(path);
+        }
+    }
+
+    [Fact]
+    public void RunOpen_OsLevelReadOnlyFile_SetsReadOnlyStateWithoutInvokingPromptPortAndWithholdsSaveTarget()
+    {
+        var path = Path.GetTempFileName();
+        try
+        {
+            File.SetAttributes(path, File.GetAttributes(path) | FileAttributes.ReadOnly);
+            var session = new WorkbookReadOnlySession();
+            var port = new RecordingPromptPort();
+
+            var outcome = session.RunOpen(CreateWorkbook(), port, path);
+
+            outcome.Kind.Should().Be(WorkbookReadOnlyOpenOutcomeKind.FileSystemReadOnly);
+            outcome.IsReadOnly.Should().BeTrue();
+            session.IsReadOnly.Should().BeTrue();
+            port.Calls.Should().BeEmpty("Excel does not interrupt the user for an OS-level read-only file");
+
+            // The consequence that actually protects the user: Save must no longer route
+            // straight back at the unwritable original path.
+            var resolverCalls = 0;
+            var target = session.ResolveExistingSaveTarget(() =>
+            {
+                resolverCalls++;
+                return new FileSaveTarget(path, new TestFileAdapter(extension: ".fxl"));
+            });
+            target.Should().BeNull();
+            resolverCalls.Should().Be(0);
+        }
+        finally
+        {
+            File.SetAttributes(path, File.GetAttributes(path) & ~FileAttributes.ReadOnly);
+            File.Delete(path);
+        }
+    }
+
+    // Sibling no-regression: a perfectly normal, writable on-disk file with no embedded flags
+    // must still open fully editable -- the new filesystem check must not misclassify the common
+    // case just because a real path is now being passed through.
+    [Fact]
+    public void RunOpen_WritableFileOnDisk_StaysFullyEditable()
+    {
+        var path = Path.GetTempFileName();
+        try
+        {
+            var session = new WorkbookReadOnlySession();
+            var port = new RecordingPromptPort();
+
+            var outcome = session.RunOpen(CreateWorkbook(), port, path);
+
+            outcome.Kind.Should().Be(WorkbookReadOnlyOpenOutcomeKind.Editable);
+            outcome.IsReadOnly.Should().BeFalse();
+            session.IsReadOnly.Should().BeFalse();
+            port.Calls.Should().BeEmpty();
+        }
+        finally
+        {
+            File.Delete(path);
+        }
+    }
+
+    // Sibling no-regression: a brand-new, never-saved workbook has no on-disk path at all --
+    // filePath is null, which must short-circuit before touching the filesystem rather than
+    // throwing or misclassifying.
+    [Fact]
+    public void PlanOpen_NullFilePath_DoesNotThrowAndStaysEditable()
+    {
+        var session = new WorkbookReadOnlySession();
+
+        var plan = session.PlanOpen(new Workbook("Book1.xlsx"), filePath: null);
+
+        plan.ShouldPrompt.Should().BeFalse();
+        plan.IsFileSystemReadOnly.Should().BeFalse();
+    }
+
+    // Sibling no-regression: when an embedded flag is present, it still takes precedence and
+    // still routes through the prompt port even when the file on disk happens to be writable --
+    // the new filesystem branch must only ever apply to the previously-unhandled None case.
+    [Fact]
+    public void RunOpen_ReadOnlyRecommendedWithWritableFile_StillPrompts()
+    {
+        var path = Path.GetTempFileName();
+        try
+        {
+            var workbook = CreateWorkbook(readOnlyRecommended: true);
+            var port = new RecordingPromptPort
+            {
+                RecommendationChoice = WorkbookReadOnlyRecommendationChoice.OpenEditable,
+            };
+            var session = new WorkbookReadOnlySession();
+
+            var outcome = session.RunOpen(workbook, port, path);
+
+            outcome.Kind.Should().Be(WorkbookReadOnlyOpenOutcomeKind.ReadOnlyRecommendedDeclined);
+            port.Calls.Should().Equal("recommendation:Budget.xlsx");
+        }
+        finally
+        {
+            File.Delete(path);
+        }
+    }
+
     [Fact]
     public void ResolveExistingSaveTarget_ReadOnlySessionWithholdsTargetWithoutResolvingIt()
     {

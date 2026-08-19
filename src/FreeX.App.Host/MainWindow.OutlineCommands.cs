@@ -70,4 +70,23 @@ public partial class MainWindow
             return;
         UpdateViewport();
     }
+
+    /// <summary>
+    /// Handles a click on a numbered "Show Outline Level N" gutter button (the boxed "1"/"2"/...
+    /// boxes above the outline brackets). Matches Excel and the Avalonia shell's
+    /// <c>MainWindow.OutlineGrid.ShowRowOutlineLevel</c>/<c>ShowColumnOutlineLevel</c>: shows every
+    /// summary row/column through the clicked depth and re-collapses anything nested deeper,
+    /// sheet-wide, via the shared <see cref="FreeX.App.Services.WorkbookSession.ShowRowOutlineLevel"/>/
+    /// <see cref="FreeX.App.Services.WorkbookSession.ShowColumnOutlineLevel"/> sequence.
+    /// </summary>
+    private void OnOutlineLevelButtonRequested(GridOutlineLevelButtonRequest request)
+    {
+        if (!TryExecuteWorksheetLayout(
+                () => request.Axis == GridOutlineGroupAxis.Columns
+                    ? _session.ShowColumnOutlineLevel(request.Level)
+                    : _session.ShowRowOutlineLevel(request.Level),
+                "Show Outline Level"))
+            return;
+        UpdateViewport();
+    }
 }

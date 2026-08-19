@@ -8240,9 +8240,16 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
     /// <see cref="SaveCurrentWorkbookAsync"/> reads the shared state on every Save to force Save-over
     /// through the Save-As dialog instead of a silent overwrite (R83-services-doc-recovery-props-5-1).
     /// Individual edit commands are not yet blocked -- that remains out of scope.
+    /// <para>
+    /// <paramref name="filePath"/> is the on-disk path just opened (passed through to
+    /// <see cref="WorkbookReadOnlySession.RunOpen"/> so it can classify an OS-level read-only file
+    /// -- read-only attribute, read-only share/volume, or a denied ACL -- even when neither
+    /// embedded workbook flag above is set; previously that combination opened fully editable
+    /// with zero indication until the first Save failed, round 149).
+    /// </para>
     /// </summary>
-    private WorkbookReadOnlyOpenOutcome ApplyWorkbookReadOnlyOpenPolicy(Workbook workbook) =>
-        _workbookReadOnlySession.RunOpen(workbook, new AvaloniaWorkbookReadOnlyOpenPromptPort(this));
+    private WorkbookReadOnlyOpenOutcome ApplyWorkbookReadOnlyOpenPolicy(Workbook workbook, string? filePath = null) =>
+        _workbookReadOnlySession.RunOpen(workbook, new AvaloniaWorkbookReadOnlyOpenPromptPort(this), filePath);
 
     private sealed class AvaloniaWorkbookReadOnlyOpenPromptPort(MainWindow owner) : IWorkbookReadOnlyOpenPromptPort
     {
@@ -26912,7 +26919,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             // (R75-services-protection-security-4-2); mirrors the WPF host's
             // ApplyWorkbookReadOnlyOpenPolicy (MainWindow.Backstage.cs), called at the same
             // point in the open sequence, right after the session/shell refresh.
-            ApplyWorkbookReadOnlyOpenPolicy(_session.Workbook);
+            ApplyWorkbookReadOnlyOpenPolicy(_session.Workbook, target.Path);
             return Task.CompletedTask;
             }
         }
