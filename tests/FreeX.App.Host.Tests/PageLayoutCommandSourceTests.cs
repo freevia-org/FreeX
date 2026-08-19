@@ -106,8 +106,13 @@ public sealed class PageLayoutCommandSourceTests
         source.Should().NotContain("TryBuildCompositeCommandForTargets(");
         source.Should().NotContain("PageSetupDialogModel.TryBuildCommandPlan(sheet, fields, sheetId).Plan!.ToComposite()");
         source.Should().Contain("NativePrintDialogService.ShowPrinterOptionsDialog(this)");
-        source.Should().Contain("new PageLayoutCommandSession([_currentSheetId]).PlanPrintGridlines(");
-        source.Should().Contain("new PageLayoutCommandSession([_currentSheetId]).PlanPrintHeadings(");
+        // Both handlers now build the session through CreatePageLayoutCommandSession(), which both
+        // hosts share. It composes from CurrentGroupedEditSheetIds() rather than the single
+        // _currentSheetId, so a grouped-sheet selection applies to every sheet in the group --
+        // asserting the old single-sheet construction would forbid that.
+        source.Should().Contain("CreatePageLayoutCommandSession().PlanPrintGridlines(");
+        source.Should().Contain("CreatePageLayoutCommandSession().PlanPrintHeadings(");
+        source.Should().Contain("new(CurrentGroupedEditSheetIds())");
         sessionSource.Should().Contain("PageLayoutRibbonActionPlanner.PrintGridlinesCommandLabel");
         sessionSource.Should().Contain("PageLayoutRibbonActionPlanner.PrintHeadingsCommandLabel");
         source.Should().NotContain("\"Print Gridlines\");");

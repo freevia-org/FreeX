@@ -609,15 +609,19 @@ public sealed partial class MainWindowSourceHygieneTests
         var source = DialogSourceTestSupport.ReadHostSources("MainWindow.WorkbookUiState.cs");
         var refreshToolbar = ExtractMethodSource(source, "private void RefreshToolbarVisualState()");
 
-        // Toolbar visual state now flows through the platform-neutral RibbonStateStore, which dedups
-        // no-op writes internally (so it never churns the renderer-bound controls). The Font combos are
-        // driven entirely through the rendered declarative combo (no hidden backplane combo), so
-        // SetRibbonComboValue only writes the store value and no longer mirrors onto a stub.
-        source.Should().Contain("private void SetRibbonComboValue(");
+        // Toolbar visual state flows through the platform-neutral RibbonStateStore, which dedups
+        // no-op writes internally so selection refreshes never churn the renderer-bound controls.
+        // The per-command writes now live in one shared publisher both renderers consume, rather
+        // than in this method, so assert the routing here and the writes where they moved to.
         source.Should().NotContain("private static void SetSelectedItemIfChanged(");
         source.Should().Contain("private void RefreshToolbarAfterSelectionChange()");
-        refreshToolbar.Should().Contain("_ribbonState.SetChecked(\"Bold\", state.Bold)");
-        refreshToolbar.Should().Contain("SetRibbonComboValue(\"Font\", state.FontName)");
+        refreshToolbar.Should().Contain("WorkbookHomeFormatRibbonStatePublisher.Publish(_ribbonState, state)");
+
+        var publisher = DialogSourceTestSupport.ReadPresentationSources(
+            "Ribbon",
+            "WorkbookHomeFormatRibbonStatePublisher.cs");
+        publisher.Should().Contain("stateStore.SetChecked(\"Bold\", state.Bold)");
+        publisher.Should().Contain("stateStore.SetValue(\"Font\", state.FontName)");
         refreshToolbar.Should().NotContain("BoldButton.IsChecked = state.Bold");
         refreshToolbar.Should().NotContain("FontNameBox.SelectedItem = state.FontName");
         refreshToolbar.Should().NotContain(", FontNameBox)");
@@ -852,7 +856,13 @@ public sealed partial class MainWindowSourceHygieneTests
         // Round 89 (26c4e92783, "R89-freeze-split-per-window-1") made Split state per-window rather
         // than reading the shared Sheet directly, so a "New Window" sibling's split doesn't leak
         // into this window's ribbon toggle; the check now reads the per-window viewState record.
-        source.Should().Contain("_ribbonState.SetChecked(\"Split\", viewState.SplitRow is not null || viewState.SplitColumn is not null)");
+        // The per-window split expression still reaches the ribbon, but through the shared
+        // WorkbookViewRibbonStatePlanner both renderers publish from rather than a direct SetChecked.
+        // What matters is unchanged: the value comes from viewState, never the shared Sheet.
+        source.Should().Contain("viewState.SplitRow is not null || viewState.SplitColumn is not null");
+        source.Should().Contain(".Publish(_ribbonState)");
+        DialogSourceTestSupport.ReadPresentationSources("Ribbon", "WorkbookViewRibbonStatePlanner.cs")
+            .Should().Contain("\"Split\" => new RibbonCommandState(IsChecked: SplitChecked)");
     }
 
     [Fact]
@@ -1103,7 +1113,11 @@ public sealed partial class MainWindowSourceHygieneTests
         declarativeSource.Should().Contain("fontBox.LostKeyboardFocus += FontNameBox_LostKeyboardFocus");
         formattingSource.Should().Contain("(sender as ComboBox)?.SelectedItem is string name");
         formattingSource.Should().Contain("ApplyStyleDiff(new StyleDiff(FontName: name))");
-        uiStateSource.Should().Contain("SetRibbonComboValue(\"Font\", state.FontName)");
+        // The Font value reaches the store through the shared publisher both renderers consume,
+        // not through a host-local helper.
+        uiStateSource.Should().Contain("WorkbookHomeFormatRibbonStatePublisher.Publish(_ribbonState, state)");
+        DialogSourceTestSupport.ReadPresentationSources("Ribbon", "WorkbookHomeFormatRibbonStatePublisher.cs")
+            .Should().Contain("stateStore.SetValue(\"Font\", state.FontName)");
         renderSource.Should().Contain("ResolveCellFontForDisplay(style?.FontName)");
         renderSource.Should().Contain("AvailableCellFontNames.Value.Contains");
         renderSource.Should().Contain("new CellTypefaceKey(fontName, stretch, style?.Italic == true, style?.Bold == true)");
