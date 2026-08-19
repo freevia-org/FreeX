@@ -147,10 +147,10 @@ public partial class MainWindow
     private void WrapTextBtn_Click(object sender, RoutedEventArgs e)
     {
         if (_suppressToolbarSync) return;
-        // Routed through ApplyStyleDiffWithWrapGrowth (not the generic ApplyStyleDiff) so that
+        // Routed through ApplyStyleDiffWithRowGrowth (not the generic ApplyStyleDiff) so that
         // enabling Wrap Text auto-grows an auto-height row to fit, matching Excel and the Avalonia
         // shell's WorkbookSession.SetSelectedRangeWrapText (see MainWindow.CellsCommands.cs).
-        ApplyStyleDiffWithWrapGrowth(new StyleDiff(WrapText: IsRibbonCommandChecked("Wrap Text")));
+        ApplyStyleDiffWithRowGrowth(new StyleDiff(WrapText: IsRibbonCommandChecked("Wrap Text")));
     }
 
     // R127-homeformatting-multiarea-merge-1: a Ctrl+click multi-area selection (SheetGrid.SelectedRanges)
@@ -633,23 +633,77 @@ public partial class MainWindow
         if (SheetGrid.SelectedRange is not { } range) return;
         ApplyStyleDiff(new StyleDiff(FontSize: fontSize));
 
-        var newHeight = Math.Min(AutoFitSizingService.MaximumRowHeight, FontSizePlanner.EstimateFittingRowHeight(fontSize));
+        var newHeight = GetFontSizeFittingRowHeight(fontSize);
         var ranges = GetCurrentSelectionRanges(range);
-        var command = SelectionStyleCommandPlanner.CreateRangeCommand(
-            CurrentGroupedEditSheetIds(),
-            ranges,
-            (sheetId, currentRange) => new SetRowHeightCommand(
-                sheetId,
-                currentRange.Start.Row,
-                currentRange.End.Row,
-                newHeight),
-            "Auto Fit Row Height");
+        var groupedSheetIds = CurrentGroupedEditSheetIds();
+        var growthCommands = new List<IWorkbookCommand>();
+        foreach (var sheetId in groupedSheetIds)
+            foreach (var currentRange in ranges)
+                growthCommands.AddRange(CreateFontSizeRowGrowthCommands(sheetId, currentRange, newHeight));
+
+        var command = growthCommands.Count == 1
+            ? growthCommands[0]
+            : new CompositeWorkbookCommand("Auto Fit Row Height", growthCommands);
         if (!TryExecuteCommand(command, "Auto Fit Row Height"))
             return;
 
         UpdateViewport();
         RefreshToolbar();
     }
+
+    /// <summary>
+    /// R148-remediation-wpf-fontsize-rowgrowth-1: mirrors
+    /// <c>WorkbookSession.CreateFontSizeRowGrowthCommands</c> (the shared-service font-size
+    /// row-growth fix, R148-rowcol-sizing-F3, which Avalonia already picks up via
+    /// <c>WorkbookSession.SetSelectedRangeFontSize</c>) and this same file's own
+    /// <c>PlanWrapTextRowGrowth</c> (MainWindow.CellsCommands.cs) "only ever grows a row,
+    /// skips hidden rows" contract. Growing rows to fit a larger font size must never shrink a row
+    /// that's already taller than the newly computed flat height (a wrapped-text row or a
+    /// manually-sized banner row unrelated to the font change) and must never un-hide a row caught
+    /// inside the selection's row span -- both of which the previous single flat
+    /// <c>new SetRowHeightCommand(sheetId, range.Start.Row, range.End.Row, newHeight)</c> spanning
+    /// the whole selection did unconditionally, since that command overwrites every row's height
+    /// and clears every row's hidden flag across its span regardless of each row's current state.
+    /// </summary>
+    private IReadOnlyList<IWorkbookCommand> CreateFontSizeRowGrowthCommands(SheetId sheetId, GridRange range, double rowHeight) =>
+        ToRowHeightCommands(sheetId, PlanFontSizeRowGrowth(sheetId, range, rowHeight));
+
+    /// <summary>
+    /// The per-row "(row, new height)" plan behind <see cref="CreateFontSizeRowGrowthCommands"/>,
+    /// kept separate from the commands themselves so the Format Cells dialog -- which can set Wrap
+    /// Text and Font Size in ONE apply -- can merge this plan with the wrap-text plan by taking the
+    /// taller height per row (<c>CreateFormatCellsRowGrowthCommands</c>, MainWindow.CellsCommands.cs)
+    /// rather than emitting two SetRowHeightCommands for the same row, where whichever ran second
+    /// would flatten the other's (possibly taller) height.
+    /// </summary>
+    private IReadOnlyList<(uint Row, double Height)> PlanFontSizeRowGrowth(SheetId sheetId, GridRange range, double rowHeight)
+    {
+        var sheet = _workbook.GetSheet(sheetId);
+        if (sheet is null)
+            return [];
+
+        var sheetRange = GroupedSheetRangePlanner.RemapRangeToSheet(range, sheetId);
+        var plans = new List<(uint Row, double Height)>();
+        for (var row = sheetRange.Start.Row; row <= sheetRange.End.Row; row++)
+        {
+            if (sheet.IsRowEffectivelyHidden(row))
+                continue;
+
+            var currentHeight = sheet.RowHeights.TryGetValue(row, out var height) ? height : sheet.DefaultRowHeight;
+            if (rowHeight > currentHeight)
+                plans.Add((row, rowHeight));
+        }
+
+        return plans;
+    }
+
+    /// <summary>
+    /// The flat row height a given font size wants, shared by the Home tab's font-size controls
+    /// (<see cref="ApplyFontSizeAndFitRows"/>) and the Format Cells dialog's Font tab so the two
+    /// agree on the grown height (mirrors <c>WorkbookSession.GetFittingRowHeight</c>).
+    /// </summary>
+    private static double GetFontSizeFittingRowHeight(double fontSize) =>
+        Math.Min(AutoFitSizingService.MaximumRowHeight, FontSizePlanner.EstimateFittingRowHeight(fontSize));
 
     // ── Border picker ────────────────────────────────────────────────────────
 

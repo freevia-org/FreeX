@@ -199,7 +199,8 @@ public partial class MainWindow
     }
 
     /// <summary>
-    /// Turning on Wrap Text auto-grows each affected row to fit the now-wrapped content, matching
+    /// The per-row "(row, new height)" growth plan for turning Wrap Text on, which auto-grows each
+    /// affected row to fit the now-wrapped content, matching
     /// Excel's "row grows unless you've manually resized it" behavior (mirrors
     /// WorkbookSession.CreateWrapTextGrowthCommands in the Avalonia shell). Reuses the same
     /// content-based estimate (RowColumnSizingPlanner/AutoFitSizingService) as the explicit "AutoFit
@@ -207,9 +208,11 @@ public partial class MainWindow
     /// applied, the display-text lookup is overridden to report WrapText=true for cells in
     /// <paramref name="range"/>. Only ever grows a row: any row whose estimate doesn't exceed its
     /// current height (including a row a user previously resized taller by hand) is left untouched,
-    /// matching Excel never shrinking a row just from toggling wrap on.
+    /// matching Excel never shrinking a row just from toggling wrap on. Returned as a plan rather
+    /// than as commands so that <see cref="CreateFormatCellsRowGrowthCommands"/> can merge it with
+    /// the font-size growth plan -- see <c>PlanFontSizeRowGrowth</c> (MainWindow.HomeFormatting.cs).
     /// </summary>
-    private IReadOnlyList<IWorkbookCommand> CreateWrapTextGrowthCommands(SheetId sheetId, GridRange range)
+    private IReadOnlyList<(uint Row, double Height)> PlanWrapTextRowGrowth(SheetId sheetId, GridRange range)
     {
         var sheet = _workbook.GetSheet(sheetId);
         if (sheet is null)
@@ -225,8 +228,48 @@ public partial class MainWindow
 
         return plans
             .Where(plan => plan.Size > (sheet.RowHeights.TryGetValue(plan.Index, out var currentHeight) ? currentHeight : sheet.DefaultRowHeight))
-            .Select(plan => (IWorkbookCommand)new SetRowHeightCommand(sheetId, plan.Index, plan.Index, plan.Size))
+            .Select(plan => (plan.Index, plan.Size))
             .ToList();
+    }
+
+    private static IReadOnlyList<IWorkbookCommand> ToRowHeightCommands(
+        SheetId sheetId,
+        IReadOnlyList<(uint Row, double Height)> plans) =>
+        plans
+            .Select(plan => (IWorkbookCommand)new SetRowHeightCommand(sheetId, plan.Row, plan.Row, plan.Height))
+            .ToList();
+
+    /// <summary>
+    /// R148-remediation-wpf-formatcells-fontsize-rowgrowth-1: the row-height growth a Format Cells
+    /// apply owes its selection. Wrap Text growth was already wired up here (R65-render-cell-overflow-6-1);
+    /// a Font Size change was NOT, so bumping the font size from the dialog left rows clipped in the
+    /// WPF host while the Avalonia shell auto-fitted them (WorkbookSession.ApplySelectedRangeCompactFormat
+    /// -> CreateSetFontSizeCommand -> CreateFontSizeRowGrowthCommands). Both plans only ever grow a
+    /// row and skip hidden rows; because the dialog can set both in one apply, and both plans are
+    /// computed against the same pre-apply row heights, they are merged per row by taking the taller
+    /// height -- emitting them as two commands would let whichever ran second flatten the other's
+    /// growth.
+    /// </summary>
+    private IReadOnlyList<IWorkbookCommand> CreateFormatCellsRowGrowthCommands(SheetId sheetId, GridRange range, StyleDiff diff)
+    {
+        var heights = new Dictionary<uint, double>();
+
+        void Merge(IReadOnlyList<(uint Row, double Height)> plans)
+        {
+            foreach (var (row, height) in plans)
+                if (!heights.TryGetValue(row, out var existing) || height > existing)
+                    heights[row] = height;
+        }
+
+        if (diff.WrapText == true)
+            Merge(PlanWrapTextRowGrowth(sheetId, range));
+
+        if (diff.FontSize is { } fontSize)
+            Merge(PlanFontSizeRowGrowth(sheetId, range, GetFontSizeFittingRowHeight(fontSize)));
+
+        return ToRowHeightCommands(
+            sheetId,
+            heights.OrderBy(entry => entry.Key).Select(entry => (entry.Key, entry.Value)).ToList());
     }
 
     private AutoFitCellText? GetAutoFitCellTextForPendingWrap(Sheet sheet, uint row, uint col, GridRange pendingWrapRange)
@@ -240,16 +283,16 @@ public partial class MainWindow
     }
 
     /// <summary>
-    /// Applies a style diff that may enable Wrap Text, folding the Excel-matching row-height
-    /// auto-grow (<see cref="CreateWrapTextGrowthCommands"/>) into the same undoable/repeatable
-    /// operation as the style change itself -- unlike the generic ApplyStyleDiff (WorkbookUiState.cs),
-    /// which has no notion of row growth. Used by the Wrap Text ribbon toggle and by the Format
-    /// Cells dialog's simple (no border/merge ops) apply path.
+    /// Applies a style diff that may enable Wrap Text or change the font size, folding the
+    /// Excel-matching row-height auto-grow (<see cref="CreateFormatCellsRowGrowthCommands"/>) into
+    /// the same undoable/repeatable operation as the style change itself -- unlike the generic
+    /// ApplyStyleDiff (WorkbookUiState.cs), which has no notion of row growth. Used by the Wrap Text
+    /// ribbon toggle and by the Format Cells dialog's simple (no border/merge ops) apply path.
     /// </summary>
-    private void ApplyStyleDiffWithWrapGrowth(StyleDiff diff)
+    private void ApplyStyleDiffWithRowGrowth(StyleDiff diff)
     {
         if (SheetGrid.SelectedRange is null) return;
-        if (!TryExecuteRepeatableApplyStyleWithWrapGrowth(diff, "Apply Style"))
+        if (!TryExecuteRepeatableApplyStyleWithRowGrowth(diff, "Apply Style"))
             return;
 
         UpdateViewport();
@@ -257,7 +300,7 @@ public partial class MainWindow
         RefreshStatusBar();
     }
 
-    private bool TryExecuteRepeatableApplyStyleWithWrapGrowth(StyleDiff diff, string title)
+    private bool TryExecuteRepeatableApplyStyleWithRowGrowth(StyleDiff diff, string title)
     {
         IWorkbookCommand CreateCommand()
         {
@@ -271,12 +314,9 @@ public partial class MainWindow
                 SelectionStyleCommandPlanner.CreateApplyStyleCommand(groupedSheetIds, ranges, diff, title)
             };
 
-            if (diff.WrapText == true)
-            {
-                foreach (var sheetId in groupedSheetIds)
-                foreach (var range in ranges)
-                    commands.AddRange(CreateWrapTextGrowthCommands(sheetId, range));
-            }
+            foreach (var sheetId in groupedSheetIds)
+            foreach (var range in ranges)
+                commands.AddRange(CreateFormatCellsRowGrowthCommands(sheetId, range, diff));
 
             return commands.Count == 1 ? commands[0] : new CompositeWorkbookCommand(title, commands);
         }
@@ -633,7 +673,7 @@ public partial class MainWindow
     {
         if (!borderSelection.HasRangeOperations && mergeCells is null)
         {
-            ApplyStyleDiffWithWrapGrowth(diff);
+            ApplyStyleDiffWithRowGrowth(diff);
             return;
         }
 
@@ -656,10 +696,7 @@ public partial class MainWindow
                     borderSelection.HasRangeOperations ? nonBorderDiff : diff)
             };
 
-            if (diff.WrapText == true)
-            {
-                commands.AddRange(CreateWrapTextGrowthCommands(sheetId, sheetRange));
-            }
+            commands.AddRange(CreateFormatCellsRowGrowthCommands(sheetId, sheetRange, diff));
 
             if (borderSelection.Clear)
             {

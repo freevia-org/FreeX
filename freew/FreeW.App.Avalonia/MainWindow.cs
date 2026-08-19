@@ -3174,10 +3174,37 @@ public sealed partial class MainWindow : Window
             _editor.TryDeleteSelection();
     }
 
+    /// <summary>
+    /// clipboard-interop F1 (Avalonia twin of the WPF fix in DocumentView.OnPasteExecuted): ordinary
+    /// Paste (Ctrl+V, the plain ribbon Paste button -- see callbacks.Paste above -- and the editor
+    /// context menu's Paste item) used to call <see cref="FreeWClipboardApplicationWorkflow.ReadTextAsync"/>
+    /// unconditionally, which reads with includeRichDocument:false and so can never recover formatting --
+    /// even though the IDENTICAL clipboard content pastes with formatting intact via Paste Special > Keep
+    /// Source Formatting (<see cref="OpenPasteSpecialAsync"/>, which already reads RTF and both HTML
+    /// clipboard flavors through <see cref="FreeWClipboardApplicationWorkflow.ReadPasteSpecialAsync"/>).
+    /// This routes ordinary Paste through that SAME already-working plan (skipping only the option-picker
+    /// dialog, since ordinary Paste always wants Keep Source Formatting), so Ctrl+V and the plain ribbon
+    /// button recover formatting exactly like Paste Special's "Keep Source Formatting" choice does. A
+    /// plain-text-only clipboard (no RTF/HTML) degrades gracefully to the same plain-text insertion the
+    /// old ReadTextAsync path would have produced.
+    /// </summary>
     private async Task PasteAsync()
     {
-        var transfer = await FreeWClipboardApplicationWorkflow.ReadTextAsync(_platformClipboard);
-        ApplyClipboardText(transfer, DocumentPasteTextKind.TextOnly);
+        var transfer = await FreeWClipboardApplicationWorkflow.ReadPasteSpecialAsync(_platformClipboard);
+        if (!transfer.IsSuccess || transfer.Payload is null)
+        {
+            ApplyClipboardFeedback(transfer);
+            return;
+        }
+
+        var plan = FreeWClipboardApplicationWorkflow.PlanPaste(transfer.Payload, PasteSpecialOption.KeepSourceFormatting);
+        var pasted = plan.RichDocument is not null
+            ? _editor.PasteKeepSourceFormatting(plan.RichDocument) || _editor.PasteMergeFormatting(plan.Text)
+            : plan.TextKind == DocumentPasteTextKind.TextOnly
+                ? _editor.PastePlainText(plan.Text)
+                : _editor.PasteMergeFormatting(plan.Text);
+        if (!pasted)
+            _status.Text = FreeWClipboardApplicationWorkflow.EmptyClipboardMessage;
     }
 
     private async Task PastePlainTextAsync()

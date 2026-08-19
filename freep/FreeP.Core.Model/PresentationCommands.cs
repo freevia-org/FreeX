@@ -3463,6 +3463,11 @@ public sealed class DeleteShapeCommand : IPresentationCommand
         slide.Animations.RemoveAll(animation =>
             deletedShapeIds.Contains(animation.ShapeId) ||
             (animation.TriggerShapeId is { } triggerShapeId && deletedShapeIds.Contains(triggerShapeId)));
+        // If the deleted shape's animation was the main-sequence head, whatever animation is now
+        // first needs its stored trigger corrected to On Click (see ShapeAnimationAnchorFix) --
+        // otherwise the Animation Pane keeps showing a stale With/After Previous label. Revert
+        // below restores the whole captured list wholesale, so no undo bookkeeping is needed here.
+        ShapeAnimationAnchorFix.NormalizeMainSequenceHead(slide.Animations);
         slide.AnimationBuildListXml = RemoveBuildListEntriesForShapes(
             slide.AnimationBuildListXml,
             deletedShapeIds);

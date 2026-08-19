@@ -1390,6 +1390,32 @@ public sealed class EditingSessionTests
     }
 
     [Fact]
+    public void DeleteSelected_PromotedAnimationHeadTriggerIsCorrectedToOnClick()
+    {
+        // freep-animation F1 sibling: the Delete key (EditingSession.DeleteSelected ->
+        // DeleteShapeCommand) removes ShapeAnimation entries the same way the Animation Pane's
+        // own Remove/Reorder buttons do, so it must apply the same main-sequence-head trigger
+        // correction they do.
+        var sess   = Make();
+        var shape1 = MakeShape(1);
+        var shape2 = MakeShape(2);
+        sess.CurrentSlide!.Shapes.AddRange([shape1, shape2]);
+        var head      = new ShapeAnimation { ShapeId = 1, Trigger = AnimationTrigger.OnClick };
+        var promotee  = new ShapeAnimation { ShapeId = 2, Trigger = AnimationTrigger.WithPrevious };
+        sess.CurrentSlide!.Animations.Add(head);
+        sess.CurrentSlide!.Animations.Add(promotee);
+
+        sess.Select(1u);
+        sess.DeleteSelected();
+
+        var anims = sess.CurrentSlide!.Animations;
+        anims.Should().ContainSingle();
+        anims[0].ShapeId.Should().Be(2u);
+        anims[0].Trigger.Should().Be(AnimationTrigger.OnClick);
+        promotee.Trigger.Should().Be(AnimationTrigger.OnClick);
+    }
+
+    [Fact]
     public void MoveSelected_TranslatesShape()
     {
         var sess  = Make();
@@ -1586,6 +1612,31 @@ public sealed class EditingSessionTests
         outer.Children.Should().NotContain(inner);
         sess.Undo();
         outer.Children.Should().ContainSingle(shape => shape.Id == inner.Id);
+    }
+
+    [Fact]
+    public void UngroupSelected_PromotedAnimationHeadTriggerIsCorrectedToOnClick()
+    {
+        // freep-animation F1 sibling: UngroupShapeCommand (reached from EditingSession.
+        // UngroupSelected) drops the group's own animation the same way DeleteShapeCommand
+        // drops a deleted shape's, so it must apply the same main-sequence-head correction.
+        var sess  = Make();
+        var group = new SlideShape { Id = 40, Kind = SlideShapeKind.Group };
+        group.Children.Add(MakeShape(41));
+        sess.CurrentSlide!.Shapes.Add(group);
+        var head     = new ShapeAnimation { ShapeId = 40, Trigger = AnimationTrigger.OnClick };
+        var promotee = new ShapeAnimation { ShapeId = 42, Trigger = AnimationTrigger.AfterPrevious };
+        sess.CurrentSlide!.Animations.Add(head);
+        sess.CurrentSlide!.Animations.Add(promotee);
+
+        sess.Select(40u);
+        sess.UngroupSelected();
+
+        var anims = sess.CurrentSlide!.Animations;
+        anims.Should().ContainSingle();
+        anims[0].ShapeId.Should().Be(42u);
+        anims[0].Trigger.Should().Be(AnimationTrigger.OnClick);
+        promotee.Trigger.Should().Be(AnimationTrigger.OnClick);
     }
 
     [Fact]

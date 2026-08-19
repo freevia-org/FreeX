@@ -118,19 +118,33 @@ internal sealed partial class AutosaveAdapter : IDisposable
     /// Must be called from the UI thread (it may show an Avalonia dialog).
     /// Errors are swallowed — recovery is best-effort and never blocks startup.
     /// </summary>
+    /// <remarks>
+    /// startup-fileopen F2: mirrors the fix already applied to FreeP's Avalonia
+    /// <c>AutosaveAdapter.OfferRecoveryAsync</c>. The caller's window may already have loaded a
+    /// command-line/file-association document before this runs (see <c>MainWindow</c>, which opens
+    /// the startup file into <c>this</c> synchronously, then fires this from the <c>Opened</c>
+    /// handler): the just-opened document is not dirty, so routing the first accepted candidate
+    /// straight into "the current window" would silently replace it. We snapshot whether the window
+    /// already has an explicitly opened document (<see cref="FileCommandWorkflow.CurrentPath"/>
+    /// non-null) BEFORE any candidate is applied, and if so force every accepted candidate through
+    /// the new-window path instead -- the same path already used for every candidate beyond the
+    /// first. A genuinely fresh window (no startup file) keeps the prior unconditional behaviour.
+    /// </remarks>
     public async Task OfferRecoveryAsync(Window owner)
     {
         ArgumentNullException.ThrowIfNull(owner);
 
         try
         {
+            var currentWindowHasExplicitDocument = _workflow.CurrentPath is not null;
+
             await FreeWRecoveryWorkflow.RunAsync(
                 _session.PlanRecoveries(),
                 FreeWRecoveryPromptMode.StartupQuotedDisplayName,
                 offer => new ValueTask<bool>(RecoveryPromptDialog.ShowAsync(owner, offer.Prompt)),
                 async (recovery, useCurrentWindow) =>
                 {
-                    if (useCurrentWindow)
+                    if (useCurrentWindow && !currentWindowHasExplicitDocument)
                     {
                         var recoveredInCurrentWindow = _session.CompleteDocumentRecovery(recovery, accepted: true, (document, originalPath) =>
                         {

@@ -61,11 +61,25 @@ internal sealed partial class AutosaveCoordinator
     /// Offers every prior-session snapshot on startup. The first accepted presentation uses this
     /// window; subsequent presentations open through the new-window callback.
     /// </summary>
+    /// <remarks>
+    /// startup-fileopen F2 (WPF host): mirrors the fix already applied to FreeP's Avalonia
+    /// <c>AutosaveAdapter.OfferRecoveryAsync</c>. <c>MainWindow</c> opens a command-line/file-
+    /// association document into this window synchronously before this offer runs, so routing the
+    /// first accepted candidate into "the current window" unconditionally would silently replace
+    /// that just-opened, not-yet-dirty presentation -- the dirty-based save/discard gate never fires
+    /// because the document isn't dirty. We snapshot whether the window already holds an explicitly
+    /// opened document (<see cref="_file"/>.<c>CurrentPath</c> non-null) BEFORE any candidate is
+    /// applied, and if so force every accepted candidate through the new-window path instead, same
+    /// as every candidate beyond the first. A genuinely fresh window (no startup file) keeps the
+    /// prior unconditional behaviour.
+    /// </remarks>
     public bool OfferRecovery(Window owner)
     {
         var text = AutosaveRecoveryTextCatalog.Resolve(UiText.Get);
         try
         {
+            var currentWindowHasExplicitDocument = _file.CurrentPath is not null;
+
             return FreePRecoveryWorkflow.RunAsync(
                     _session.PlanRecoveries(),
                     FreePRecoveryPromptMode.Startup,
@@ -78,7 +92,7 @@ internal sealed partial class AutosaveCoordinator
                         var recovered = _session.CompleteRecovery(
                             recovery,
                             accepted: true,
-                            useCurrentWindow
+                            useCurrentWindow && !currentWindowHasExplicitDocument
                                 ? _file.RestoreAutosaveSnapshot
                                 : (_, _) => _recoverInNewWindow?.Invoke(recovery.Candidate) ?? false,
                             FreePRecoveryRestoreExceptionPolicy.QuarantineCandidate);
