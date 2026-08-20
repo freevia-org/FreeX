@@ -163,7 +163,10 @@ public static partial class ChartRenderer
             {
                 StrokeThickness = 1.0,
                 InnerDiameter = chart.Type == ChartType.Doughnut ? chart.DoughnutHoleSize : 0,
-                StartAngle = chart.FirstSliceAngle,
+                // DrawingML measures the first slice clockwise from 12 o'clock, while OxyPlot's
+                // PieSeries starts at 3 o'clock. Keep authored rotations intact after the fixed
+                // coordinate-system adaptation (0° -> -90°, 90° -> 0°).
+                StartAngle = chart.FirstSliceAngle - 90.0,
                 ExplodedDistance = chart.ExplodedSliceDistance,
                 InsideLabelPosition = ChartRenderPolicyPlanner.ResolvePieLabelRadiusFraction(
                     chart.DataLabelPosition,

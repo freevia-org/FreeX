@@ -14,6 +14,36 @@ namespace FreeX.App.UI.Tests;
 
 public sealed partial class ChartRendererTests
 {
+    [Theory]
+    [InlineData(0, -90)]
+    [InlineData(90, 0)]
+    public void PieRenderer_AdaptsDrawingMlFirstSliceAngleForOxyPlot(
+        double drawingMlAngle,
+        double expectedOxyPlotAngle)
+    {
+        var sheetId = SheetId.New();
+        var chart = new ChartModel
+        {
+            Type = ChartType.Pie,
+            FirstSliceAngle = drawingMlAngle,
+            FirstRowIsHeader = true,
+            FirstColIsCategories = true,
+            DataRange = new GridRange(new CellAddress(sheetId, 1, 1), new CellAddress(sheetId, 3, 2)),
+        };
+
+        var model = BuildPlotModel(chart, new ViewportModel(
+            [
+                Cell(1, 1, "Category"), Cell(1, 2, "Share"),
+                Cell(2, 1, "North"), Cell(2, 2, "60"),
+                Cell(3, 1, "South"), Cell(3, 2, "40"),
+            ],
+            [],
+            []));
+
+        model.Series.Should().ContainSingle().Which.Should().BeOfType<PieSeries>()
+            .Subject.StartAngle.Should().Be(expectedOxyPlotAngle);
+    }
+
     [Fact]
     public void ColumnRenderer_AppliesLegendOverlayPlacement()
     {
