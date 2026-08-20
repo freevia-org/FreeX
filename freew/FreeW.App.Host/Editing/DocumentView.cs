@@ -1144,10 +1144,43 @@ public sealed partial class DocumentView : RichTextBox
         // Parsing and re-attaching the RTF lives in the workflow, not here:
         // RichClipboardDocumentPlannerTests forbids a renderer from touching the RTF parser, so that
         // the policy has exactly one home for both the copy and the paste direction.
-        if (FreeWClipboardApplicationWorkflow.CreateWriteContentFromRtf(text, rtf) is not { } content)
+        if (FreeWClipboardApplicationWorkflow.CreateWriteContentFromRtf(text, rtf, BuildNativeSelectionDocument())
+            is not { } content)
+        {
             return;
+        }
 
         _platformClipboard.WriteAsync(content).AsTask().GetAwaiter().GetResult();
+    }
+
+    /// <summary>
+    /// The FreeW-flavour copy of the current selection, resolved against the MODEL rather than the
+    /// FlowDocument: RTF is what other applications read, and it cannot express a content control, a
+    /// tracked change's author, or a comment anchor, so a FreeW-to-FreeW paste would lose them. Null
+    /// when the selection cannot be mapped onto model ranges (a header/footer or shape-text selection),
+    /// which simply leaves the clipboard with its RTF/HTML/plain-text flavours as before.
+    /// </summary>
+    private TextDocument? BuildNativeSelectionDocument()
+    {
+        CommitToModel();
+        if (!TryGetCurrentBodyTextRange(out var range) || range.IsCollapsed)
+            return null;
+
+        var normalized = range.Normalize();
+        var ranges = new List<DocumentFormattingTextRange>();
+        for (var blockIndex = normalized.Start.BlockIndex; blockIndex <= normalized.End.BlockIndex; blockIndex++)
+        {
+            if (blockIndex < 0 || blockIndex >= _model.Blocks.Count || _model.Blocks[blockIndex] is not ModelParagraph paragraph)
+                continue;
+
+            var start = blockIndex == normalized.Start.BlockIndex ? normalized.Start.Offset : 0;
+            var end = blockIndex == normalized.End.BlockIndex
+                ? normalized.End.Offset
+                : paragraph.PlainText.Length;
+            ranges.Add(new DocumentFormattingTextRange(paragraph, start, end));
+        }
+
+        return FreeWClipboardApplicationWorkflow.BuildSelectionNativeDocument(_model, ranges);
     }
 
     private static DocumentEditorInputKey ToEditorInputKey(Key key) => key switch
@@ -1765,8 +1798,11 @@ public sealed partial class DocumentView : RichTextBox
     }
 
     /// <summary>
-    /// Testable rich-paste model operation. It deliberately accepts only a collapsed caret in an empty body
-    /// paragraph, because source blocks cannot be spliced losslessly into a partial destination paragraph.
+    /// Testable rich-paste model operation: inserts the clipboard document AT the caret through the
+    /// shared session, which splices the source's first and last paragraphs into the destination one
+    /// (see <see cref="DocumentEditingSession.TryInsertDocumentAtBodyCaret"/>) and clones runs rather
+    /// than rebuilding them, so content controls, tracked-change identity and comment anchors survive.
+    /// It used to accept only an empty destination paragraph, which limited a rich paste to a blank line.
     /// </summary>
     internal bool PasteKeepSourceFormatting(TextDocument source)
     {
@@ -1779,11 +1815,15 @@ public sealed partial class DocumentView : RichTextBox
         }
 
         CommitToModel();
-        var index = CaretBlockIndex();
-        if (index < 0 || index >= _model.Blocks.Count || _model.Blocks[index] is not ModelParagraph { PlainText.Length: 0 })
+        if (!TryGetCurrentBodyTextRange(out var range) || !range.IsCollapsed)
             return false;
 
-        return _editingSession.ReplaceEmptyParagraphWithDocument(index, source);
+        if (!_editingSession.TryInsertDocumentAtBodyCaret(range.Normalize().Start, source, out var insertion))
+            return false;
+
+        Render();
+        PlaceCaretAtModelTextOffset(insertion.Caret.BlockIndex, insertion.Caret.Offset);
+        return true;
     }
 
     /// <summary>

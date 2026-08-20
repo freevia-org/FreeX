@@ -194,7 +194,7 @@ public sealed class DocumentEditingSession
         if (source is null || source.Blocks.Count == 0)
             return -1;
 
-        var clones = DocumentMerge.CloneBlocksForInsertion(Document, source);
+        var clones = DocumentMerge.CloneBlocksForInsertion(Document, source).ToList();
         if (clones.Count == 0)
             return -1;
 
@@ -216,13 +216,113 @@ public sealed class DocumentEditingSession
             return false;
         }
 
-        var clones = DocumentMerge.CloneBlocksForInsertion(Document, source);
+        var clones = DocumentMerge.CloneBlocksForInsertion(Document, source).ToList();
         if (clones.Count == 0)
             return false;
         foreach (var (id, style) in source.Styles)
             Document.Styles.TryAdd(id, style);
         _commands.Execute(new ReplaceBlocksCommand(blockIndex, 1, clones));
         return true;
+    }
+
+    /// <summary>
+    /// Inserts a clipboard document at a body caret, splicing its first and last paragraphs into the
+    /// destination paragraph the way Word's paste does: the text before the caret keeps the destination's
+    /// own paragraph properties and gains the source's first paragraph's runs, any middle blocks (further
+    /// paragraphs, tables) land between, and the text after the caret follows the source's last
+    /// paragraph. Runs are CLONED, not rebuilt from characters, so every mark the source carries — a
+    /// content control, a tracked change's author, a comment id, a linked character style — survives the
+    /// paste; the source's styles and package parts come across through <see cref="DocumentMerge"/>.
+    /// Declines when the caret sits strictly inside a content control (splitting the destination run
+    /// there would emit that one w:sdt twice) or when the destination paragraph cannot be restructured.
+    /// </summary>
+    public bool TryInsertDocumentAtBodyCaret(
+        DocumentTextPosition caret,
+        TextDocument? source,
+        out DocumentParagraphEditResult result)
+    {
+        result = default;
+        if (source is null
+            || source.Blocks.Count == 0
+            || caret.BlockIndex < 0
+            || caret.BlockIndex >= Document.Blocks.Count
+            || Document.Blocks[caret.BlockIndex] is not Paragraph destination
+            || !CanRestructure(destination)
+            || IsOffsetInsideContentControl(destination, caret.Offset))
+        {
+            return false;
+        }
+
+        var clones = DocumentMerge.CloneBlocksForInsertion(Document, source).ToList();
+        if (clones.Count == 0)
+            return false;
+        foreach (var (id, style) in source.Styles)
+            Document.Styles.TryAdd(id, style);
+
+        var offset = Math.Clamp(caret.Offset, 0, destination.PlainText.Length);
+        var head = CreateParagraph(destination, keepStyle: true);
+        AppendClonedRuns(head, destination, 0, offset);
+        var tail = CreateParagraph(destination, keepStyle: true);
+        AppendClonedRuns(tail, destination, offset, destination.PlainText.Length);
+
+        var blocks = new List<Block>();
+        var caretBlockOffset = 0;
+        var caretBlock = 0;
+
+        // The source's first paragraph continues the line the caret was on...
+        if (clones[0] is Paragraph first)
+        {
+            foreach (var run in first.Runs)
+                head.Runs.Add(run);
+            CoalesceEditableRuns(head);
+            clones.RemoveAt(0);
+        }
+
+        blocks.Add(head);
+        caretBlockOffset = head.PlainText.Length;
+
+        // ...the rest arrive as their own blocks...
+        foreach (var block in clones)
+        {
+            caretBlock = blocks.Count;
+            blocks.Add(block);
+            caretBlockOffset = block is Paragraph paragraph ? paragraph.PlainText.Length : 0;
+        }
+
+        // ...and whatever followed the caret trails the last of them, on the same line — a paste ends
+        // mid-paragraph unless the source's own last block was a table, which needs its own paragraph.
+        if (blocks[^1] is Paragraph lastParagraph)
+        {
+            foreach (var run in tail.Runs)
+                lastParagraph.Runs.Add(run);
+            CoalesceEditableRuns(lastParagraph);
+        }
+        else if (tail.Runs.Count > 0)
+        {
+            caretBlock = blocks.Count;
+            blocks.Add(tail);
+            caretBlockOffset = 0;
+        }
+
+        _commands.Execute(new ReplaceBlocksCommand(caret.BlockIndex, 1, blocks));
+        result = new DocumentParagraphEditResult(
+            new DocumentTextPosition(caret.BlockIndex + caretBlock, caretBlockOffset),
+            ReplacedBlockCount: 1);
+        return true;
+    }
+
+    private static bool IsOffsetInsideContentControl(Paragraph paragraph, int offset)
+    {
+        var position = 0;
+        foreach (var run in paragraph.Runs)
+        {
+            var end = position + run.Text.Length;
+            if (run.Control is not null && offset > position && offset < end)
+                return true;
+            position = end;
+        }
+
+        return false;
     }
 
     /// <summary>Sorts paragraph slots in a body span while preserving interleaved non-paragraph blocks.</summary>

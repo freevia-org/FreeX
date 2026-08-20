@@ -23852,16 +23852,23 @@ public sealed partial class DocumentView : Control
             || _cellCaret is not null
             || NormalizedSelection() is not null
             || CurrentParagraph() is not { } paragraph
-            || !IsEditable(paragraph)
-            || ParaCells(paragraph).Count != 0)
+            || !IsEditable(paragraph))
         {
             return false;
         }
 
-        var blockIndex = _caret.Block;
-        if (!_editingSession.ReplaceEmptyParagraphWithDocument(blockIndex, source))
+        // AV-CLIP: the paste lands AT the caret, splicing the clipboard's first and last paragraphs into
+        // this one — it used to require an empty destination paragraph, which meant a rich paste
+        // anywhere in real text silently degraded to plain text.
+        if (!_editingSession.TryInsertDocumentAtBodyCaret(
+                new DocumentTextPosition(_caret.Block, _caret.Offset),
+                source,
+                out var insertion))
+        {
             return false;
-        _caret = new DocPosition(blockIndex, 0);
+        }
+
+        _caret = new DocPosition(insertion.Caret.BlockIndex, insertion.Caret.Offset);
         _selectionAnchor = _caret;
         _pendingRunFmt = null;
         InvalidateLayoutAndVisual();

@@ -3107,10 +3107,14 @@ public sealed partial class MainWindow : Window
         // Copy+Paste round trip silently drops all character formatting, even within this document.
         var (document, ranges) = _editor.GetSelectionRichSnapshot();
         var richDocument = FreeWClipboardApplicationWorkflow.BuildSelectionRichDocument(document, ranges);
+        // ...and alongside it FreeW's own flavour, which keeps what RTF/HTML cannot express — a content
+        // control, a tracked change's author, a comment anchor — for a paste back into FreeW.
+        var nativeDocument = FreeWClipboardApplicationWorkflow.BuildSelectionNativeDocument(document, ranges);
         var result = await FreeWClipboardApplicationWorkflow.WriteSelectionAsync(
             _platformClipboard,
             _editor.SelectedText,
-            richDocument);
+            richDocument,
+            nativeDocument);
         if (result.Status is FreeWClipboardTransferStatus.Unsupported or FreeWClipboardTransferStatus.Failed)
             ApplyClipboardFeedback(result);
         return result;

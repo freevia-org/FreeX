@@ -84,9 +84,32 @@ public static class FreeWClipboardApplicationWorkflow
         HtmlWindowsFormat,
         PlatformClipboardDataKind.Text);
 
+    /// <summary>
+    /// FreeW's own clipboard flavour: the copied selection as a .docx package. RTF and HTML are lingua
+    /// francas — they carry what other applications understand, which is formatting and structure, and
+    /// silently drop everything FreeW knows that they cannot express: a content control (there is no
+    /// w:sdt in HTML), a tracked change's author and date, a comment anchor, a bookmark. Copying a form
+    /// field and pasting it back into the same document therefore produced ordinary text. Writing the
+    /// selection in the format the document itself is saved in means a FreeW-to-FreeW paste keeps
+    /// whatever the model holds, while the RTF/HTML flavours stay on the clipboard untouched for
+    /// everyone else.
+    /// </summary>
+    public const string NativeDocumentFormat = "FreeW.Document";
+
+    private static readonly PlatformClipboardFormat NativeDocumentClipboardFormat = new(
+        NativeDocumentFormat,
+        PlatformClipboardDataKind.Bytes,
+        PlatformClipboardFormatScope.Application);
+
     public static PlatformClipboardReadRequest PasteSpecialReadRequest { get; } = new(
         IncludeText: true,
-        CustomFormats: [RichTextClipboardFormat, HtmlClipboardFormat, HtmlWindowsClipboardFormat]);
+        CustomFormats:
+        [
+            NativeDocumentClipboardFormat,
+            RichTextClipboardFormat,
+            HtmlClipboardFormat,
+            HtmlWindowsClipboardFormat
+        ]);
 
     public static PlatformClipboardContent? CreateWriteContent(string? selectedText) =>
         CreateWriteContent(selectedText, richDocument: null);
@@ -112,13 +135,24 @@ public static class FreeWClipboardApplicationWorkflow
     /// this policy lives in one place -- the WPF host was doing its own parse-and-attach on the COPY
     /// side, which is the same rule the paste side already routes through here.
     /// </remarks>
-    public static PlatformClipboardContent? CreateWriteContentFromRtf(string? selectedText, string? rtf)
+    public static PlatformClipboardContent? CreateWriteContentFromRtf(string? selectedText, string? rtf) =>
+        CreateWriteContentFromRtf(selectedText, rtf, nativeDocument: null);
+
+    /// <summary>
+    /// As <see cref="CreateWriteContentFromRtf(string?, string?)"/>, plus FreeW's own flavour — see
+    /// <see cref="CreateWriteContent(string?, TextDocument?, TextDocument?)"/>. The RTF a native editor
+    /// produced is still attached verbatim for every other application.
+    /// </summary>
+    public static PlatformClipboardContent? CreateWriteContentFromRtf(
+        string? selectedText,
+        string? rtf,
+        TextDocument? nativeDocument)
     {
         TextDocument? richDocument = null;
         if (rtf is not null)
             RtfClipboardDocumentParser.TryParse(rtf, out richDocument);
 
-        if (CreateWriteContent(selectedText, richDocument) is not { } content)
+        if (CreateWriteContent(selectedText, richDocument, nativeDocument) is not { } content)
             return null;
 
         if (rtf is null)
@@ -129,7 +163,21 @@ public static class FreeWClipboardApplicationWorkflow
         return new PlatformClipboardContent(content.Text, content.FilePaths, content.Image, customData);
     }
 
-    public static PlatformClipboardContent? CreateWriteContent(string? selectedText, TextDocument? richDocument)
+    public static PlatformClipboardContent? CreateWriteContent(string? selectedText, TextDocument? richDocument) =>
+        CreateWriteContent(selectedText, richDocument, nativeDocument: null);
+
+    /// <summary>
+    /// As <see cref="CreateWriteContent(string?, TextDocument?)"/>, plus FreeW's own flavour:
+    /// <paramref name="nativeDocument"/> (a faithful copy of the selection, see
+    /// <see cref="BuildSelectionNativeDocument"/>) is written as a .docx package under
+    /// <see cref="NativeDocumentFormat"/>, so a paste back into FreeW keeps what RTF and HTML cannot
+    /// express. The lingua-franca flavours are still written from <paramref name="richDocument"/>, so
+    /// nothing changes for any other application reading the clipboard.
+    /// </summary>
+    public static PlatformClipboardContent? CreateWriteContent(
+        string? selectedText,
+        TextDocument? richDocument,
+        TextDocument? nativeDocument)
     {
         if (string.IsNullOrEmpty(selectedText))
             return null;
@@ -144,7 +192,51 @@ public static class FreeWClipboardApplicationWorkflow
             ];
         }
 
+        if (nativeDocument is not null && TryRenderNativeDocument(nativeDocument) is { } package)
+        {
+            customData ??= [];
+            customData.Add(PlatformClipboardData.FromBytes(
+                NativeDocumentFormat,
+                package,
+                PlatformClipboardFormatScope.Application));
+        }
+
         return new PlatformClipboardContent(Text: selectedText, CustomData: customData);
+    }
+
+    /// <summary>
+    /// Serializes a selection document as a .docx package — the same writer a save uses, so whatever the
+    /// model carries survives. A failure degrades to the other flavours rather than failing the copy,
+    /// mirroring <see cref="TryRenderHtml"/>.
+    /// </summary>
+    private static byte[]? TryRenderNativeDocument(TextDocument document)
+    {
+        try
+        {
+            using var stream = new MemoryStream();
+            DocxWriter.Write(document, stream);
+            return stream.ToArray();
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    private static TextDocument? TryReadNativeDocument(byte[]? package)
+    {
+        if (package is null || package.Length == 0)
+            return null;
+
+        try
+        {
+            using var stream = new MemoryStream(package, writable: false);
+            return DocxReader.Read(stream);
+        }
+        catch
+        {
+            return null;
+        }
     }
 
     /// <summary>
@@ -203,6 +295,72 @@ public static class FreeWClipboardApplicationWorkflow
         return wroteAnyRun ? document : null;
     }
 
+    /// <summary>
+    /// Builds the FreeW-flavour copy of <paramref name="ranges"/>: the selected runs CLONED rather than
+    /// flattened, so every run mark travels — the content control a run belongs to, its tracked-change
+    /// author and date, its comment id, its hyperlink, its linked character style. The paragraph's own
+    /// formatting, style id and body-level region come too, and the source's style dictionary rides
+    /// along so a paste into a document that has never seen those styles still resolves them (the
+    /// insertion path merges what is missing). This is what
+    /// <see cref="BuildSelectionRichDocument"/> deliberately does NOT do: that one resolves the cascade
+    /// into direct formatting because HTML has no styles, and drops the marks HTML cannot carry.
+    /// </summary>
+    public static TextDocument? BuildSelectionNativeDocument(
+        TextDocument source,
+        IReadOnlyList<DocumentFormattingTextRange>? ranges)
+    {
+        ArgumentNullException.ThrowIfNull(source);
+        if (ranges is null || ranges.Count == 0)
+            return null;
+
+        var document = new TextDocument();
+        document.Blocks.Clear();
+        var wroteAnyRun = false;
+        foreach (var range in ranges)
+        {
+            var paragraph = range.Paragraph;
+            var textLength = paragraph.PlainText.Length;
+            var start = Math.Clamp(Math.Min(range.StartOffset, range.EndOffset), 0, textLength);
+            var end = Math.Clamp(Math.Max(range.StartOffset, range.EndOffset), 0, textLength);
+
+            var sliced = new Paragraph
+            {
+                Formatting = paragraph.Formatting,
+                StyleId = paragraph.StyleId,
+                BlockContentControl = paragraph.BlockContentControl,
+            };
+
+            var position = 0;
+            foreach (var run in paragraph.Runs)
+            {
+                var runStart = position;
+                position = runStart + run.Text.Length;
+
+                var overlapStart = Math.Max(start, runStart);
+                var overlapEnd = Math.Min(end, position);
+                if (overlapEnd <= overlapStart)
+                    continue;
+
+                sliced.Runs.Add(RevisionEditPlanner.CloneRunWithText(
+                    run,
+                    run.Text.Substring(overlapStart - runStart, overlapEnd - overlapStart)));
+                wroteAnyRun = true;
+            }
+
+            if (sliced.Runs.Count > 0)
+                document.Blocks.Add(sliced);
+        }
+
+        if (!wroteAnyRun)
+            return null;
+
+        foreach (var (styleId, style) in source.Styles)
+            document.Styles[styleId] = style;
+        document.DefaultRun = source.DefaultRun;
+        document.Theme = source.Theme;
+        return document;
+    }
+
     private static string? TryRenderHtml(TextDocument richDocument)
     {
         try
@@ -223,10 +381,11 @@ public static class FreeWClipboardApplicationWorkflow
         IPlatformClipboard clipboard,
         string? selectedText,
         TextDocument? richDocument = null,
+        TextDocument? nativeDocument = null,
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(clipboard);
-        if (CreateWriteContent(selectedText, richDocument) is not { } content)
+        if (CreateWriteContent(selectedText, richDocument, nativeDocument) is not { } content)
             return Empty();
 
         var result = await clipboard.WriteAsync(content, cancellationToken);
@@ -291,8 +450,14 @@ public static class FreeWClipboardApplicationWorkflow
         TextDocument? richDocument = null;
         if (includeRichDocument)
         {
-            var rtf = result.Value.GetText(RichTextFormat);
-            if (RtfClipboardDocumentParser.TryParse(rtf, out var parsed))
+            // FreeW's own flavour first: it is the only one that carries content controls, tracked-change
+            // identity, comment anchors and style links, so a FreeW-to-FreeW paste never has to settle
+            // for what RTF or HTML could express.
+            richDocument = TryReadNativeDocument(
+                result.Value.GetBytes(NativeDocumentFormat, PlatformClipboardFormatScope.Application));
+
+            var rtf = richDocument is null ? result.Value.GetText(RichTextFormat) : null;
+            if (rtf is not null && RtfClipboardDocumentParser.TryParse(rtf, out var parsed))
                 richDocument = parsed;
 
             // clip-1 (R143): no RTF on the clipboard (FreeX and other HTML-only sources never write

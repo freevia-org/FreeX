@@ -197,6 +197,118 @@ public sealed class FreeWClipboardApplicationWorkflowTests
         plan.PreferRichDocument.Should().Be(expectsRichDocument);
     }
 
+    /// <summary>
+    /// FreeW's own clipboard flavour: RTF and HTML are what other applications read, and neither can
+    /// express a content control, a tracked change's author, or a comment anchor — so a copy/paste
+    /// within FreeW used to hand back plain formatted text. The native payload is the selection written
+    /// in the format the document itself is saved in.
+    /// </summary>
+    [Fact]
+    public async Task WriteSelectionAsync_AlsoWritesTheNativeFlavourAlongsideHtml()
+    {
+        var document = SelectionSource();
+        var ranges = AllRanges(document);
+        var clipboard = new FakeClipboard();
+
+        await FreeWClipboardApplicationWorkflow.WriteSelectionAsync(
+            clipboard,
+            document.PlainText,
+            FreeWClipboardApplicationWorkflow.BuildSelectionRichDocument(document, ranges),
+            FreeWClipboardApplicationWorkflow.BuildSelectionNativeDocument(document, ranges));
+
+        var written = clipboard.LastWrittenContent.Should().NotBeNull().And.Subject.As<PlatformClipboardContent>();
+        written.Text.Should().Be(document.PlainText);
+        written.GetText("text/html").Should().NotBeNullOrEmpty("other applications still get HTML");
+        written.GetBytes(
+                FreeWClipboardApplicationWorkflow.NativeDocumentFormat,
+                PlatformClipboardFormatScope.Application)
+            .Should().NotBeNullOrEmpty();
+    }
+
+    [Fact]
+    public async Task ReadPasteSpecialAsync_PrefersTheNativeFlavourAndKeepsWhatHtmlCannotCarry()
+    {
+        var document = SelectionSource();
+        var ranges = AllRanges(document);
+        var content = FreeWClipboardApplicationWorkflow.CreateWriteContent(
+            document.PlainText,
+            FreeWClipboardApplicationWorkflow.BuildSelectionRichDocument(document, ranges),
+            FreeWClipboardApplicationWorkflow.BuildSelectionNativeDocument(document, ranges))!;
+        var clipboard = new FakeClipboard
+        {
+            ReadResult = PlatformClipboardReadResult<PlatformClipboardContent>.Success(content),
+        };
+
+        var payload = (await FreeWClipboardApplicationWorkflow.ReadPasteSpecialAsync(clipboard)).Payload!;
+
+        var pastedRuns = payload.RichDocument.Should().NotBeNull().And.Subject
+            .As<TextDocument>().Paragraphs.SelectMany(paragraph => paragraph.Runs).ToList();
+        pastedRuns.Should().Contain(run => run.Control != null, "the form field survives the round trip");
+        var field = pastedRuns.Single(run => run.Control != null);
+        field.Text.Should().Be("Bob");
+        field.Control!.Tag.Should().Be("Applicant");
+        pastedRuns.Should().Contain(run => run.Revision == RevisionKind.Inserted,
+            "a tracked insertion keeps its revision mark");
+        pastedRuns.Single(run => run.Revision == RevisionKind.Inserted).RevisionAuthor.Should().Be("Ada");
+    }
+
+    [Fact]
+    public async Task ReadPasteSpecialAsync_StillFallsBackToHtmlForAForeignClipboard()
+    {
+        // A payload from any other application has no FreeW flavour; the existing paths must still run.
+        var document = SelectionSource();
+        var clipboard = new FakeClipboard
+        {
+            ReadResult = PlatformClipboardReadResult<PlatformClipboardContent>.Success(
+                FreeWClipboardApplicationWorkflow.CreateWriteContent(
+                    document.PlainText,
+                    FreeWClipboardApplicationWorkflow.BuildSelectionRichDocument(document, AllRanges(document)))!),
+        };
+
+        var payload = (await FreeWClipboardApplicationWorkflow.ReadPasteSpecialAsync(clipboard)).Payload!;
+
+        payload.RichDocument.Should().NotBeNull();
+        payload.RichDocument!.PlainText.Should().Contain("Bob");
+    }
+
+    [Fact]
+    public void BuildSelectionNativeDocument_ClonesRunMarksAndCarriesTheSourceStyles()
+    {
+        var document = SelectionSource();
+
+        var native = FreeWClipboardApplicationWorkflow.BuildSelectionNativeDocument(
+            document,
+            [new DocumentFormattingTextRange(document.Paragraphs.First(), 6, 9)])!;
+
+        var run = native.Paragraphs.Single().Runs.Should().ContainSingle().Subject;
+        run.Text.Should().Be("Bob", "the slice is exactly the selected range");
+        run.Control!.Tag.Should().Be("Applicant");
+        native.Styles.Should().ContainKey("Quote", "the source's styles ride along for a cross-document paste");
+        FreeWClipboardApplicationWorkflow.BuildSelectionNativeDocument(document, ranges: []).Should().BeNull();
+    }
+
+    private static TextDocument SelectionSource()
+    {
+        var document = TextDocument.CreateEmpty();
+        document.Blocks.Clear();
+        document.Styles["Quote"] = new DocumentStyle { Id = "Quote", Name = "Quote" };
+        var paragraph = new Paragraph { StyleId = "Quote" };
+        paragraph.Runs.Add(new Run("Name: "));
+        paragraph.Runs.Add(Run.PlainTextControl("Bob", tag: "Applicant"));
+        paragraph.Runs.Add(new Run(" added")
+        {
+            Revision = RevisionKind.Inserted,
+            RevisionAuthor = "Ada",
+        });
+        document.Blocks.Add(paragraph);
+        return document;
+    }
+
+    private static IReadOnlyList<DocumentFormattingTextRange> AllRanges(TextDocument document) =>
+        document.Paragraphs
+            .Select(paragraph => new DocumentFormattingTextRange(paragraph, 0, paragraph.PlainText.Length))
+            .ToList();
+
     private sealed class FakeClipboard : IPlatformClipboard
     {
         public PlatformClipboardReadResult<PlatformClipboardContent> ReadResult { get; set; } =
