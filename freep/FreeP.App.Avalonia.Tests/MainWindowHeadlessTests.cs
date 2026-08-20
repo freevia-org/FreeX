@@ -6364,6 +6364,12 @@ public sealed class MainWindowHeadlessTests : IDisposable
         var ran = await OnUiThread(() =>
         {
             var window = new MainWindow(Array.Empty<string>());
+            // r154: the ribbon Reply command used to stamp the "FreeP User" placeholder because it
+            // omitted the author argument; the session now resolves it, so pin a known document
+            // author rather than letting this fall through to Environment.UserName, which differs
+            // per machine. This test is about the command routing through the shared mutation
+            // plan -- the identity is scaffolding, but it must be deterministic scaffolding.
+            window.Editor.Presentation.Properties.Author = "Dana Reviewer";
             window.Editor.CurrentSlide!.Comments.Add(new SlideComment
             {
                 Author = "Reviewer",
@@ -6387,15 +6393,15 @@ public sealed class MainWindowHeadlessTests : IDisposable
         repliedComment.Should().NotBeNull();
         repliedComment!.Replies.Should().ContainSingle();
         repliedComment.Replies.Single().Should().Match<SlideCommentReply>(reply =>
-            reply.Author == "FreeP User" &&
-            reply.Initials == "FU" &&
+            reply.Author == "Dana Reviewer" &&
+            reply.Initials == "DR" &&
             reply.Text == "New reply");
         replyPanePlan.Should().NotBeNull();
         replyPanePlan!.SelectedComment!.Replies.Single().TextPreview.Should().Be("New reply");
         replyPanePlan.SelectedComment.ThreadStatusSummary.Should().Be("Open - 1 reply");
-        replyPanePlan.SelectedComment.Replies.Single().AuthorDisplayName.Should().Be("FreeP User");
-        replyPanePlan.SelectedComment.Replies.Single().InitialsBadgeText.Should().Be("FU");
-        replyPanePlan.SelectedComment.Replies.Single().AuthorIdentityKey.Should().Be("FREEP USER|FU");
+        replyPanePlan.SelectedComment.Replies.Single().AuthorDisplayName.Should().Be("Dana Reviewer");
+        replyPanePlan.SelectedComment.Replies.Single().InitialsBadgeText.Should().Be("DR");
+        replyPanePlan.SelectedComment.Replies.Single().AuthorIdentityKey.Should().Be("DANA REVIEWER|DR");
         replyPanePlan.SelectedComment.ReplyCount.Should().Be(1);
         dirtyAfterReply.Should().BeTrue();
     }

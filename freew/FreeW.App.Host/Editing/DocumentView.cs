@@ -3855,6 +3855,15 @@ public sealed partial class DocumentView : RichTextBox
         var family = selection.GetPropertyValue(TextElement.FontFamilyProperty);
         var size = selection.GetPropertyValue(TextElement.FontSizeProperty);
 
+        // Typography.Capitals alone reports FontCapitals.AllSmallCaps -- not UnsetValue -- for a selection
+        // where every run is at least AllCaps, even when the runs disagree on SmallCaps underneath (see
+        // ResolveSelectionSmallCaps). Fold that multi-run disagreement into the indeterminate flag too, so
+        // it does not look like a uniform selection to callers (e.g. the ribbon's mixed-state display).
+        var caretRun = CaretPosition?.Parent as WpfRun ?? selection.Start.Parent as WpfRun;
+        var retained = (caretRun?.Tag as RunMarkers)?.CharacterFormat?.RenderedFormatting ?? RunFormatting.Default;
+        var smallCapsMultiRunIndeterminate =
+            capitals is FontCapitals.AllSmallCaps && ResolveSelectionSmallCaps(retained).Indeterminate;
+
         return new FontDialogSelectionState(
             CaptureSelectionRunFormatting(),
             BoldIndeterminate: weight == DependencyProperty.UnsetValue,
@@ -3863,7 +3872,7 @@ public sealed partial class DocumentView : RichTextBox
             StrikethroughIndeterminate: decorations == DependencyProperty.UnsetValue,
             FamilyIndeterminate: family == DependencyProperty.UnsetValue,
             SizeIndeterminate: size == DependencyProperty.UnsetValue,
-            SmallCapsIndeterminate: capitals == DependencyProperty.UnsetValue,
+            SmallCapsIndeterminate: capitals == DependencyProperty.UnsetValue || smallCapsMultiRunIndeterminate,
             AllCapsIndeterminate: capitals == DependencyProperty.UnsetValue,
             SuperscriptIndeterminate: baseline == DependencyProperty.UnsetValue,
             SubscriptIndeterminate: baseline == DependencyProperty.UnsetValue);
@@ -4441,14 +4450,17 @@ public sealed partial class DocumentView : RichTextBox
             // ReadRunFormatting round-trip (see their doc comment) cannot be read through the selection API
             // here. Typography.Capitals alone cannot distinguish "AllCaps only" from "AllCaps + SmallCaps
             // together" (both render as FontCapitals.AllSmallCaps) -- when it collapses to AllSmallCaps, fall
-            // back to SmallCaps from the model snapshot already retained above (stamped from the same
-            // RunFormatting BuildRun wrote onto the attached properties), so a run with both flags true
-            // reports both here too, instead of only AllCaps. This still can't separate a genuinely mixed
-            // multi-run selection (GetSelectionFormatting's *Indeterminate flags cover that case); it is
-            // exact for the common single-run-formatting case the Font dialog reads before a real OK click
-            // reapplies it whole via ApplyFontFormatting/TrySetSelectedRunFormatting -- which is what used to
-            // silently strip a correctly-saved SmallCaps flag on the next unrelated dialog edit.
-            SmallCaps = capitals is FontCapitals.SmallCaps || (capitals is FontCapitals.AllSmallCaps && retained.SmallCaps),
+            // back to SmallCaps agreed across every run the selection actually touches (not just the caret
+            // run -- for a multi-run selection the caret can land on either end depending on drag direction,
+            // and reading only that run let an OK click SET SmallCaps on a run that never had it; see
+            // ResolveSelectionSmallCaps). A run with both flags true reports both here too, instead of only
+            // AllCaps. A genuinely mixed multi-run selection resolves to false here (GetSelectionFormatting's
+            // SmallCapsIndeterminate flags that case for callers that care) -- reapplying that false via a
+            // real OK click through ApplyFontFormatting/TrySetSelectedRunFormatting can still clear an
+            // already-true run, same one-directional limitation the pre-fix code always had, but it can no
+            // longer spuriously set the flag on a run that never carried it.
+            SmallCaps = capitals is FontCapitals.SmallCaps
+                || (capitals is FontCapitals.AllSmallCaps && ResolveSelectionSmallCaps(retained).Value),
             AllCaps = capitals is FontCapitals.AllSmallCaps,
             VerticalAlign = verticalAlign,
             FontFamily = selection.GetPropertyValue(TextElement.FontFamilyProperty) is FontFamily family ? family.Source : null,
@@ -4460,6 +4472,49 @@ public sealed partial class DocumentView : RichTextBox
                     ? ToHex(bg.Color)
                     : null,
         };
+    }
+
+    // Whether every run the live selection actually intersects agrees on SmallCaps, and what value to use
+    // when reading it back. Only meaningful (and only called) when Typography.Capitals has collapsed the
+    // selection to AllSmallCaps, which cannot itself distinguish a uniform "AllCaps + SmallCaps" selection
+    // from a mixed one where some runs are AllCaps-only. Walks the same TextPointer path
+    // SelectedComplexFieldMarkers uses to enumerate runs an arbitrary (possibly multi-paragraph) selection
+    // touches, comparing each run's retained CharacterFormatMarker snapshot rather than trusting whichever
+    // run the caret happens to be on. <paramref name="caretRetained"/> is the fallback for a selection that
+    // (defensively) turns up no tagged runs at all, e.g. an empty selection.
+    private (bool Indeterminate, bool Value) ResolveSelectionSmallCaps(RunFormatting caretRetained)
+    {
+        var start = Selection.Start;
+        var end = Selection.End;
+        var seen = new HashSet<WpfRun>(ReferenceEqualityComparer.Instance);
+        bool? agreed = null;
+        var indeterminate = false;
+
+        void Consider(WpfRun? run)
+        {
+            if (run is not { Tag: RunMarkers { CharacterFormat: { } characterFormat } }
+                || run.ContentEnd.CompareTo(start) <= 0
+                || run.ContentStart.CompareTo(end) >= 0
+                || !seen.Add(run))
+            {
+                return;
+            }
+
+            var runSmallCaps = characterFormat.RenderedFormatting.SmallCaps;
+            if (agreed is bool existing && existing != runSmallCaps)
+                indeterminate = true;
+            agreed ??= runSmallCaps;
+        }
+
+        for (var pointer = start; pointer is not null && pointer.CompareTo(end) < 0;
+             pointer = pointer.GetNextContextPosition(LogicalDirection.Forward))
+        {
+            Consider(pointer.Parent as WpfRun);
+            if (pointer.GetPointerContext(LogicalDirection.Forward) == TextPointerContext.ElementStart)
+                Consider(pointer.GetAdjacentElement(LogicalDirection.Forward) as WpfRun);
+        }
+
+        return (indeterminate, indeterminate ? false : agreed ?? caretRetained.SmallCaps);
     }
 
     // Read the paragraph formatting of the caret's paragraph (or the selection start) from the model,

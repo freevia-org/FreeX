@@ -105,6 +105,48 @@ public sealed class CommentAuthorIdentityStampingTests
     }
 
     /// <summary>
+    /// r154 remediation (N2): the mention button's ("@") own single-candidate auto-apply route --
+    /// BuildCommentMentionButton's click handler calling DispatchCommentMentionPicker with no
+    /// currentAuthor -- was an undisclosed fourth path that still fell through to
+    /// ApplyCommentMention's un-stamped ReplyToSelectedComment call, even after the direct
+    /// Reply button (above) was fixed. Drives the real mention button.Click handler, not the
+    /// DispatchCommentMentionPicker wrapper directly, so a regression in the handler's argument
+    /// wiring is caught even if the session/planner underneath it stay correct.
+    /// </summary>
+    [StaFact]
+    public void MentionButtonReplyAutoApply_StampsRealDocumentAuthor_NotTheFreePUserDefault()
+    {
+        var window = new MainWindow(new FreePOptions(), messageService: TestUserMessageService.DiscardUnsavedChanges);
+        try
+        {
+            window.Editor.CurrentSlide!.Comments.Add(new SlideComment
+            {
+                Author = "Nora Reviewer",
+                Initials = "NR",
+                Text = "Original text.",
+                Idx = 1
+            });
+            window.Editor.Presentation.Properties.Author = "Dana Reviewer";
+            window.SetSelectedReviewCommentIndexForTests(0);
+            window.ShowReviewCommentsPane();
+
+            window.ClickCommentMentionButtonForTests(
+                PresentationSemanticIdentityCatalog.CommentMentionReplyTag,
+                "cc @Nora").Should().BeTrue();
+
+            var comment = window.Editor.CurrentSlide.Comments.Single();
+            comment.Replies.Should().ContainSingle();
+            var reply = comment.Replies.Single();
+            reply.Author.Should().Be("Dana Reviewer");
+            reply.Author.Should().NotBe("FreeP User");
+        }
+        finally
+        {
+            window.Close();
+        }
+    }
+
+    /// <summary>
     /// Sibling/no-regression case: this finding is scoped to AddComment and ReplyToSelectedComment
     /// (and, in the coordinator file, ResolveSelectedComment) -- EditSelectedComment's call site
     /// (AddEditCommentInput's `EditSelectedComment(input.Text)`) is deliberately left untouched

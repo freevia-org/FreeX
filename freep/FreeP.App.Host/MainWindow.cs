@@ -2040,7 +2040,10 @@ public sealed partial class MainWindow : Window,
             var dispatch = _reviewWorkflowSession.DispatchCommentMentionPicker(
                 intent,
                 getText(),
-                getCaretIndex());
+                getCaretIndex(),
+                currentAuthor: intent == PresentationReviewWorkflowIntentKind.ReplyComment
+                    ? ResolveCommentAuthor()
+                    : null);
             if (dispatch.ApplicationResult is not null)
                 return;
 

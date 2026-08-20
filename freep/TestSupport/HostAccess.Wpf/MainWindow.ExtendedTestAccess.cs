@@ -141,6 +141,27 @@ public sealed partial class MainWindow
     internal bool ClickReplyButtonForTests(string text) =>
         ClickCommentPaneButtonForTests(PresentationPaneTextResources.ReplyCommand, text);
 
+    // r154 remediation (N2): drives the real "@" mention button.Click handler built by
+    // BuildCommentMentionButton (rather than calling DispatchCommentMentionPicker directly) so a
+    // test can prove the button's own currentAuthor wiring on the single-candidate auto-apply
+    // route -- not just that the session/planner stamp the author correctly when given one.
+    internal bool ClickCommentMentionButtonForTests(string tag, string text)
+    {
+        var button = EnumerateCommentPaneButtons(_commentListPanel)
+            .FirstOrDefault(candidate => string.Equals(candidate.Tag as string, tag, StringComparison.Ordinal));
+        if (button?.Parent is not Panel row)
+            return false;
+
+        var input = row.Children.OfType<TextBox>().FirstOrDefault();
+        if (input is null)
+            return false;
+
+        input.Text = text;
+        input.CaretIndex = text.Length;
+        button.RaiseEvent(new RoutedEventArgs(ButtonBase.ClickEvent));
+        return true;
+    }
+
     private bool ClickCommentPaneButtonForTests(string caption, string text)
     {
         var button = EnumerateCommentPaneButtons(_commentListPanel)

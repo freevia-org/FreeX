@@ -135,6 +135,44 @@ public sealed class CommentAuthorIdentityStampingTests : IDisposable
     }
 
     /// <summary>
+    /// r154 remediation (N2): mirrors FreeP.App.Host.Tests's
+    /// MentionButtonReplyAutoApply_StampsRealDocumentAuthor_NotTheFreePUserDefault -- the mention
+    /// button's ("@") own single-candidate auto-apply route was an undisclosed fourth path that
+    /// still fell through to ApplyCommentMention's un-stamped ReplyToSelectedComment call on the
+    /// Avalonia shell too. Drives the real mention button.Click handler, not
+    /// DispatchCommentMentionPicker directly.
+    /// </summary>
+    [Fact]
+    public async Task MentionButtonReplyAutoApply_StampsRealDocumentAuthor_NotTheFreePUserDefault()
+    {
+        SlideCommentReply? reply = null;
+        var ran = await OnUiThread(() =>
+        {
+            var window = new MainWindow(Array.Empty<string>());
+            window.Editor.CurrentSlide!.Comments.Add(new SlideComment
+            {
+                Author = "Nora Reviewer",
+                Initials = "NR",
+                Text = "Original text.",
+                Idx = 1
+            });
+            window.Editor.Presentation.Properties.Author = "Dana Reviewer";
+            window.SetSelectedReviewCommentIndexForTests(0);
+            window.ShowReviewCommentsPane();
+
+            window.ClickCommentMentionButtonForTests(
+                PresentationSemanticIdentityCatalog.CommentMentionReplyTag,
+                "cc @Nora").Should().BeTrue();
+
+            reply = window.Editor.CurrentSlide.Comments.Single().Replies.Single();
+        });
+
+        if (!ran) return;
+        reply!.Author.Should().Be("Dana Reviewer");
+        reply.Author.Should().NotBe("FreeP User");
+    }
+
+    /// <summary>
     /// Sibling/no-regression case: this finding is scoped to AddComment and ReplyToSelectedComment
     /// (and, in the coordinator file, ResolveSelectedComment) -- EditSelectedComment's call site is
     /// deliberately left untouched because BuildEditCommentPlan already preserves the comment's
