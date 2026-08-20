@@ -12,6 +12,11 @@
 
   <ItemGroup>
     <InternalsVisibleTo Include="FreeP.App.Presentation.Tests" />
+    <!-- Shell end-to-end tests drive OleActivationService.ExternalActivationOverrideForTests so
+         external OLE activation can be exercised without launching a real application, the same
+         way both shells already reach WindowsOleInPlaceEngine.PayloadCreatedObserver. -->
+    <InternalsVisibleTo Include="FreeP.App.Host.Tests" />
+    <InternalsVisibleTo Include="FreeP.App.Avalonia.Tests" />
   </ItemGroup>
 
   <ItemGroup>

@@ -135,6 +135,33 @@ public sealed class EditingSession
     }
 
     /// <summary>
+    /// Commits bytes a native in-place OLE server wrote for an inline embedded object onto the
+    /// live shape model. In-place hosts render from an edit-session copy of the text body, so
+    /// without this the server's work only reaches the model if the surrounding text edit happens
+    /// to commit afterwards -- it is lost on Escape, and on a commit that already snapshotted the
+    /// document. Mirrors what <see cref="TryActivateInlineOleObject"/> gets for free by activating
+    /// the live payload directly.
+    /// </summary>
+    public bool TryCommitInlineOlePayload(
+        uint shapeId,
+        int logicalPosition,
+        IReadOnlyList<byte> embeddedBytes,
+        InlineOleObjectInfo? expected = null)
+    {
+        var shape = CurrentSlide is { } slide
+            ? FindShape(slide.Shapes, shapeId)
+            : null;
+        if (shape?.TextBody is null)
+            return false;
+
+        return InCanvasRichTextEditBuffer.TryCommitInlineOlePayload(
+            shape.TextBody,
+            logicalPosition,
+            embeddedBytes,
+            expected);
+    }
+
+    /// <summary>
     /// Prepares and commits one SmartArt edit through the shared undo bus. The callback receives
     /// an isolated payload, so callers can run planner mutations and regenerate its package/cache
     /// state without exposing a partially edited model to the canvas.

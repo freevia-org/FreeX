@@ -125,8 +125,26 @@ public static class OleActivationService
         }
     }
 
-    private static bool TryActivate(OleActivationPlan? plan, Action<byte[]> updatePayload) =>
-        TryActivate(plan, updatePayload, new DefaultTempFileStore(), new DefaultLauncher());
+    /// <summary>
+    /// Test-only override for the OS boundary of external activation: the temp-file store and the
+    /// process launcher. End-to-end tests use it to drive the real editor/host activation path --
+    /// including the payload-commit notification callers hang dirty-tracking off -- without
+    /// launching a real application from a test process. Always null in shipping code.
+    /// </summary>
+    internal static Func<(IOleActivationTempFileStore Store, IOleActivationLauncher Launcher)>?
+        ExternalActivationOverrideForTests
+    { get; set; }
+
+    private static bool TryActivate(OleActivationPlan? plan, Action<byte[]> updatePayload)
+    {
+        if (ExternalActivationOverrideForTests is { } createOverride)
+        {
+            var (store, launcher) = createOverride();
+            return TryActivate(plan, updatePayload, store, launcher);
+        }
+
+        return TryActivate(plan, updatePayload, new DefaultTempFileStore(), new DefaultLauncher());
+    }
 
     internal static bool TryCommitEditedPayload(OleObjectInfo oleObject, string path, IReadOnlyList<byte> originalBytes) =>
         TryCommitEditedPayload(path, originalBytes, bytes => oleObject.EmbeddedBytes = bytes);

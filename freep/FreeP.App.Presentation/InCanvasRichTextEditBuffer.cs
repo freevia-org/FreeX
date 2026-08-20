@@ -76,6 +76,69 @@ public class InCanvasRichTextEditBuffer
         return false;
     }
 
+    /// <summary>
+    /// Locates the logical text position of one inline OLE payload inside <paramref name="body"/>.
+    /// The scan mirrors <see cref="FindInlineOleObjectAt"/> exactly, so a position reported here
+    /// resolves back to the same run when looked up in a structurally identical body -- which is
+    /// how an in-place host, holding only the payload it was handed, addresses the matching
+    /// payload in the live shape model.
+    /// </summary>
+    public static bool TryFindInlineOleObjectPosition(
+        TextBody? body,
+        InlineOleObjectInfo? inlineObject,
+        out int logicalPosition)
+    {
+        logicalPosition = -1;
+        if (body is null || inlineObject is null)
+            return false;
+
+        int position = 0;
+        foreach (var paragraph in body.Paragraphs)
+        {
+            foreach (var run in paragraph.Runs)
+            {
+                if (ReferenceEquals(run.InlineOleObject, inlineObject))
+                {
+                    logicalPosition = position;
+                    return true;
+                }
+
+                position += run.Text?.Length ?? 0;
+            }
+
+            position++;
+        }
+
+        return false;
+    }
+
+    /// <summary>
+    /// Writes bytes an OLE server produced onto the inline payload at a logical position.
+    /// When <paramref name="expected"/> is supplied the write only happens if the payload found
+    /// there is still the same embedded object (same file name and class), so a commit that
+    /// arrives after the text around it changed can never overwrite an unrelated object.
+    /// </summary>
+    public static bool TryCommitInlineOlePayload(
+        TextBody? body,
+        int logicalPosition,
+        IReadOnlyList<byte> embeddedBytes,
+        InlineOleObjectInfo? expected = null)
+    {
+        ArgumentNullException.ThrowIfNull(embeddedBytes);
+        if (embeddedBytes.Count == 0
+            || !FindInlineOleObjectAt(body, logicalPosition, out var target)
+            || target is null)
+            return false;
+
+        if (expected is not null
+            && (!string.Equals(target.FileName, expected.FileName, StringComparison.Ordinal)
+                || !string.Equals(target.ClassName, expected.ClassName, StringComparison.Ordinal)))
+            return false;
+
+        target.EmbeddedBytes = embeddedBytes.ToArray();
+        return true;
+    }
+
     /// <summary>Refreshes one local inline OLE snapshot after external activation saves it.</summary>
     public bool UpdateInlineOleObjectAt(
         int logicalPosition,
