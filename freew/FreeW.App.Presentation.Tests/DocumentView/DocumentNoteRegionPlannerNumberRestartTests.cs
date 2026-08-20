@@ -367,6 +367,65 @@ public sealed class DocumentNoteRegionPlannerNumberRestartTests
             "id 2's reference is in a table cell in the second section, so it must restart there, unchanged by this fix");
     }
 
+    [Fact]
+    public void BuildEndnoteRegion_OrdersRowsByReadingPosition_NotByCallerSuppliedIdOrder()
+    {
+        // r152 remediation G1: BuildEndnoteRegion's own display numbers already follow reading order
+        // (via ComputeSequenceById), but before this fix BuildRows laid ROWS out in whatever order the
+        // caller's id list used -- every real call site (PaginatedEditorPanel.cs, PrintPreviewWindow.cs,
+        // DocumentView.cs) sorts ascending by raw internal id, so a note that was inserted after an
+        // earlier one (giving it a higher id) but reads BEFORE it in the text would show its higher
+        // display number above the lower one in the endnote list at the end of the document.
+        var document = TextDocument.CreateEmpty();
+        document.Blocks.Clear();
+
+        var firstSentence = new Paragraph();
+        firstSentence.Runs.Add(new Run("First sentence."));
+        firstSentence.Runs.Add(Run.EndnoteReference(2));
+        document.Blocks.Add(firstSentence);
+
+        var secondSentence = new Paragraph();
+        secondSentence.Runs.Add(new Run("Second sentence."));
+        secondSentence.Runs.Add(Run.EndnoteReference(1));
+        document.Blocks.Add(secondSentence);
+
+        document.Endnotes[1] = new Endnote(1, "inserted second, reads second");
+        document.Endnotes[2] = new Endnote(2, "inserted last, reads first");
+
+        // Every real call site sorts ascending by raw id before calling BuildEndnoteRegion.
+        var plan = DocumentNoteRegionPlanner.BuildEndnoteRegion(
+            document, [1, 2], pageNumber: 1, contentWidthDip: 400, isSyntheticPage: false);
+
+        plan.Rows.Select(r => r.SequenceIndex).Should().BeInAscendingOrder(
+            "the endnote region must lay rows out in reading/display order regardless of the order the caller's id list used");
+        plan.Rows.Select(r => r.NoteId).Should().Equal(new[] { 2, 1 },
+            "id 2 reads first (and displays as \"1\"), so its row must come before id 1's row (which displays as \"2\")");
+        plan.Rows.Select(r => r.Label).Should().Equal("1", "2");
+    }
+
+    [Fact]
+    public void BuildEndnoteRegion_WithIdsAlreadyInReadingOrder_RowOrderUnaffected()
+    {
+        // Sibling no-regression check: the ordinary, un-edited-document case, where id order and
+        // reading-order position already agree, must keep row order exactly as before this fix.
+        var document = TextDocument.CreateEmpty();
+        document.Blocks.Clear();
+        var paragraph = new Paragraph();
+        foreach (var id in new[] { 1, 2, 3 })
+        {
+            paragraph.Runs.Add(new Run($"text{id} "));
+            paragraph.Runs.Add(Run.EndnoteReference(id));
+            document.Endnotes[id] = new Endnote(id, $"note {id}");
+        }
+        document.Blocks.Add(paragraph);
+
+        var plan = DocumentNoteRegionPlanner.BuildEndnoteRegion(
+            document, [1, 2, 3], pageNumber: 1, contentWidthDip: 400, isSyntheticPage: false);
+
+        plan.Rows.Select(r => r.NoteId).Should().Equal(1, 2, 3);
+        plan.Rows.Select(r => r.Label).Should().Equal("1", "2", "3");
+    }
+
     private static TextDocument BuildDocumentWithFootnotes(params int[] ids)
     {
         var document = TextDocument.CreateEmpty();

@@ -127,6 +127,85 @@ public sealed class FreePRibbonCommandWorkflowTests
     }
 
     [Fact]
+    public void BoldToggleChecked_TracksClicksWhileNativeInCanvasEditorIsActive()
+    {
+        var editor = MakeEditor();
+        var shape = MakeShape(10);
+        var run = new Run { Text = "hi", Bold = true };
+        shape.TextBody = new TextBody { Paragraphs = { new Paragraph { Runs = { run } } } };
+        editor.CurrentSlide!.Shapes.Add(shape);
+        editor.Select(shape.Id);
+
+        // A host adapter whose TryHandleTextAction returns true models the native in-canvas text
+        // editor being active (TextEditor.IsActive on WPF, _active on Avalonia): the click is
+        // applied to the editor's own live buffer, and -- as in production -- the model's run is
+        // never touched, so it stays stuck at its pre-edit value for the whole edit session.
+        var result = FreePRibbonCommandWorkflow.Build(
+            editor,
+            new RibbonStateStore(),
+            new FreePRibbonCommandHostAdapter { TryHandleTextAction = _ => true });
+        var command = Stateful(result.Registry, "freep.bold");
+
+        var initial = command.GetState().IsChecked;
+        initial.Should().BeTrue("the selected shape's committed run is bold before editing starts");
+
+        // Clicking Bold while the native editor owns the edit must still move the button -- a
+        // shape/cell already in EditingSession.SelectedShapeIds with stale committed runs must not
+        // freeze GetState() for the rest of the live-edit session (round 152's G3 regression).
+        command.Execute(RibbonCommandContext.Empty);
+        command.GetState().IsChecked.Should().Be(!initial, "the first click during live editing must flip the button");
+
+        command.Execute(RibbonCommandContext.Empty);
+        command.GetState().IsChecked.Should().Be(initial, "a second click during the same edit session must flip it back");
+
+        command.Execute(RibbonCommandContext.Empty);
+        command.GetState().IsChecked.Should().Be(!initial, "toggling keeps responding for as long as editing stays live");
+    }
+
+    [Fact]
+    public void BoldToggleChecked_ResumesLiveQueryOnceANonNativeClickEndsTheEditSession()
+    {
+        var editor = MakeEditor();
+        var shape = MakeShape(12);
+        var run = new Run { Text = "hi", Bold = true };
+        shape.TextBody = new TextBody { Paragraphs = { new Paragraph { Runs = { run } } } };
+        var otherBoldShape = MakeShape(13);
+        otherBoldShape.TextBody = new TextBody
+        {
+            Paragraphs = { new Paragraph { Runs = { new Run { Text = "also bold", Bold = true } } } },
+        };
+        editor.CurrentSlide!.Shapes.Add(shape);
+        editor.CurrentSlide!.Shapes.Add(otherBoldShape);
+        editor.Select(shape.Id);
+
+        var handleNatively = true;
+        var result = FreePRibbonCommandWorkflow.Build(
+            editor,
+            new RibbonStateStore(),
+            new FreePRibbonCommandHostAdapter { TryHandleTextAction = _ => handleNatively });
+        var command = Stateful(result.Registry, "freep.bold");
+
+        // First click: the native in-canvas editor handles it live, so (matching production) the
+        // model's run is left untouched and the button relies on click-parity for this session.
+        command.Execute(RibbonCommandContext.Empty);
+        command.GetState().IsChecked.Should().BeFalse("the native click flipped Bold off");
+
+        // The edit session ends (e.g. the user clicks away): the next click is no longer reported
+        // as native-handled, so it falls through to the real EditingSession mutation, which
+        // un-bolds the still-bold run.
+        handleNatively = false;
+        command.Execute(RibbonCommandContext.Empty);
+        run.Bold.Should().BeFalse();
+
+        // No-regression half: leaving the native-edit fallback must not leak the stale
+        // click-parity flag into ordinary selection-driven state -- selecting a different,
+        // genuinely bold shape must report checked immediately, with no further click.
+        editor.Select(otherBoldShape.Id);
+        command.GetState().IsChecked.Should().BeTrue(
+            "the edit session ended, so GetState must resume tracking the live selection");
+    }
+
+    [Fact]
     public void TransitionSoundLoop_IsStatefulAndTracksCurrentSlideSound()
     {
         var editor = MakeEditor();

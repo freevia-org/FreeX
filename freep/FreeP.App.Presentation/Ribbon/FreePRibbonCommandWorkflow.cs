@@ -802,8 +802,13 @@ public static class FreePRibbonCommandWorkflow
                 () => QuerySelectedTextFormatState(editor, kind),
                 () =>
             {
+                // A true return means a native in-canvas text editor applied the toggle to its own
+                // live (uncommitted) buffer -- the selected shape/cell keeps its stale pre-edit
+                // TextBody for the rest of the edit session, so QuerySelectedTextFormatState cannot
+                // see the change. LocalToggleCommand falls back to click-parity tracking whenever
+                // this returns true; see its remarks.
                 if (host.TryHandle(FreePRibbonTextActionKind.ToggleFormat, kind))
-                    return;
+                    return true;
 
                 var applied = kind switch
                 {
@@ -816,7 +821,7 @@ public static class FreePRibbonCommandWorkflow
                     _ => false,
                 };
                 if (applied)
-                    return;
+                    return false;
 
                 switch (kind)
                 {
@@ -827,6 +832,7 @@ public static class FreePRibbonCommandWorkflow
                     case TableCellTextFormatKind.Superscript: editor.ToggleSuperscriptOnSelection(); break;
                     case TableCellTextFormatKind.Subscript: editor.ToggleSubscriptOnSelection(); break;
                 }
+                return false;
             }));
     }
 
@@ -1200,23 +1206,32 @@ public static class FreePRibbonCommandWorkflow
     /// subscript). <paramref name="queryChecked"/> is the real ground truth -- e.g.
     /// <see cref="QuerySelectedTextFormatState"/> -- consulted on every <see cref="GetState"/> call
     /// so the button reflects the selection's actual formatting rather than a click-parity guess.
-    /// When the query is indeterminate (nothing selected carries the property, e.g. a native host
-    /// adapter owns the edit and the editor has no visibility into it), this falls back to tracking
-    /// whether the last click flipped the property on or off.
+    /// <paramref name="execute"/> applies the toggle and reports whether a native in-canvas text
+    /// editor handled it live: when it did, the selected shape/cell keeps its stale pre-edit
+    /// <c>TextBody</c> for the rest of that edit session (nothing commits until editing ends), so
+    /// <paramref name="queryChecked"/> would read the same frozen answer on every call and the
+    /// button would never move no matter how many times it is clicked. For that case this class
+    /// stops trusting the query for the duration of the edit session and instead tracks whether
+    /// each click flipped the property on or off, exactly like it did before that query existed;
+    /// it re-seeds from the query the moment a native-handled click starts a new edit session, and
+    /// resumes trusting the query the moment a click is <em>not</em> reported as native-handled
+    /// (selection change, non-native table-cell/selection path, etc.). The same fallback also
+    /// covers the indeterminate case (nothing selected carries the property).
     /// </summary>
     private sealed class LocalToggleCommand : IRibbonStatefulCommand
     {
         private readonly RibbonStateStore _stateStore;
         private readonly RibbonCommandId _commandId;
         private readonly Func<bool?> _queryChecked;
-        private readonly Action _execute;
+        private readonly Func<bool> _execute;
         private bool _isChecked;
+        private bool _liveEditSessionActive;
 
         public LocalToggleCommand(
             RibbonStateStore stateStore,
             RibbonCommandId commandId,
             Func<bool?> queryChecked,
-            Action execute)
+            Func<bool> execute)
         {
             _stateStore = stateStore;
             _commandId = commandId;
@@ -1226,12 +1241,24 @@ public static class FreePRibbonCommandWorkflow
 
         public void Execute(RibbonCommandContext context)
         {
-            _execute();
-            _isChecked = _queryChecked() ?? !_isChecked;
+            var nativeEditorHandledIt = _execute();
+            if (nativeEditorHandledIt)
+            {
+                if (!_liveEditSessionActive)
+                    _isChecked = _queryChecked() ?? _isChecked;
+                _isChecked = !_isChecked;
+            }
+            else
+            {
+                _isChecked = _queryChecked() ?? !_isChecked;
+            }
+
+            _liveEditSessionActive = nativeEditorHandledIt;
             _stateStore.SetChecked(_commandId, _isChecked);
         }
 
-        public RibbonCommandState GetState() => new(IsChecked: _queryChecked() ?? _isChecked);
+        public RibbonCommandState GetState() => new(
+            IsChecked: _liveEditSessionActive ? _isChecked : (_queryChecked() ?? _isChecked));
     }
 
     private sealed class HostStatefulActionCommand(

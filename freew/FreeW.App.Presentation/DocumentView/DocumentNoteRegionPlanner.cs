@@ -558,8 +558,18 @@ public static class DocumentNoteRegionPlanner
         var rows = new List<DocumentNoteRegionRow>();
         var options = isFootnote ? document.FootnoteNumbering : document.EndnoteNumbering;
         var sequenceById = ComputeSequenceById(document, isFootnote, ids);
+        // Lay rows out in the same reading-order sequence used for their display numbers, not in
+        // whatever order the caller happened to supply ids. Callers pass ids sorted by raw internal
+        // id, which drifts from reading order as soon as a note is inserted earlier in the text
+        // after a later one -- without this sort the note list would show a higher display number
+        // above a lower one. An id with no resolved sequence (should not normally happen) sorts
+        // after every located id, falling back to id order among itself for determinism.
+        var orderedIds = ids
+            .OrderBy(id => sequenceById.TryGetValue(id, out var seq) ? seq : int.MaxValue)
+            .ThenBy(id => id)
+            .ToList();
 
-        foreach (var id in ids)
+        foreach (var id in orderedIds)
         {
             // An empty (or whitespace-only) note still owns a reference mark in the body and Word
             // still prints its separator plus a blank numbered line for it, so it must still produce

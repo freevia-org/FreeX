@@ -227,6 +227,92 @@ public sealed class EditingSession5ATests
     }
 
     [Fact]
+    public void PasteShapes_TranslatesGroupChildOffsetsWithTheGroup()
+    {
+        var sess = Make();
+        var group = new SlideShape
+        {
+            Id          = 1,
+            Kind        = SlideShapeKind.Group,
+            OffsetXEmu  = 200_000,
+            OffsetYEmu  = 300_000,
+            ExtentCxEmu = 800_000,
+            ExtentCyEmu = 600_000,
+        };
+        var child = MakeShape(2);
+        child.OffsetXEmu = 250_000;
+        child.OffsetYEmu = 350_000;
+        group.Children.Add(child);
+        sess.CurrentSlide!.Shapes.Add(group);
+        sess.Select(group.Id);
+
+        sess.CopySelectedShapes();
+        sess.PasteShapes();
+
+        var pastedGroup = sess.CurrentSlide.Shapes[1];
+        var pastedChild = pastedGroup.Children[0];
+
+        var groupDeltaX = pastedGroup.OffsetXEmu - group.OffsetXEmu;
+        var groupDeltaY = pastedGroup.OffsetYEmu - group.OffsetYEmu;
+
+        groupDeltaX.Should().BeGreaterThan(0, "paste must offset the group");
+        (pastedChild.OffsetXEmu - child.OffsetXEmu).Should().Be(groupDeltaX,
+            "a group's child stores absolute slide-space coordinates, so pasting must move it by the " +
+            "same delta as the group itself -- otherwise the child renders at the copied-from position");
+        (pastedChild.OffsetYEmu - child.OffsetYEmu).Should().Be(groupDeltaY);
+    }
+
+    [Fact]
+    public void PasteShapes_GroupChildTranslation_OriginalUnmovedAndNestedDescendantsIncluded()
+    {
+        var sess = Make();
+        var outerGroup = new SlideShape
+        {
+            Id = 1, Kind = SlideShapeKind.Group,
+            OffsetXEmu = 100_000, OffsetYEmu = 100_000, ExtentCxEmu = 900_000, ExtentCyEmu = 900_000,
+        };
+        var innerGroup = new SlideShape
+        {
+            Id = 2, Kind = SlideShapeKind.Group,
+            OffsetXEmu = 150_000, OffsetYEmu = 150_000, ExtentCxEmu = 400_000, ExtentCyEmu = 400_000,
+        };
+        var leaf = MakeShape(3);
+        leaf.OffsetXEmu = 175_000;
+        leaf.OffsetYEmu = 175_000;
+        innerGroup.Children.Add(leaf);
+        outerGroup.Children.Add(innerGroup);
+        sess.CurrentSlide!.Shapes.Add(outerGroup);
+        sess.Select(outerGroup.Id);
+
+        long origOuterX = outerGroup.OffsetXEmu;
+        long origInnerX = innerGroup.OffsetXEmu;
+        long origLeafX  = leaf.OffsetXEmu;
+
+        sess.CopySelectedShapes();
+        sess.PasteShapes();
+
+        // The clipboard source tree must stay untouched by the paste (mirrors
+        // PasteShapes_OriginalIsUntouched, extended to a nested group's descendants).
+        outerGroup.OffsetXEmu.Should().Be(origOuterX);
+        innerGroup.OffsetXEmu.Should().Be(origInnerX);
+        leaf.OffsetXEmu.Should().Be(origLeafX);
+
+        var pastedOuter = sess.CurrentSlide.Shapes[1];
+        var pastedInner = pastedOuter.Children[0];
+        var pastedLeaf  = pastedInner.Children[0];
+
+        var delta = pastedOuter.OffsetXEmu - outerGroup.OffsetXEmu;
+        delta.Should().BeGreaterThan(0);
+        (pastedInner.OffsetXEmu - innerGroup.OffsetXEmu).Should().Be(delta,
+            "a grandchild at any depth must move with the group, not just the immediate children");
+        (pastedLeaf.OffsetXEmu - leaf.OffsetXEmu).Should().Be(delta);
+
+        // Paste translates position only -- it must never resize the pasted shapes.
+        pastedOuter.ExtentCxEmu.Should().Be(outerGroup.ExtentCxEmu);
+        pastedInner.ExtentCxEmu.Should().Be(innerGroup.ExtentCxEmu);
+    }
+
+    [Fact]
     public void CopyCurrentSlide_CanPasteBecomesTrue()
     {
         var sess = Make();

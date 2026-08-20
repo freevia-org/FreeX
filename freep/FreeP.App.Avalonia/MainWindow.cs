@@ -2182,7 +2182,8 @@ public sealed partial class MainWindow : Window,
                 CloseActiveOleHost();
                 OleActivationService.TryActivate(plan.OleObject, onPayloadUpdated: _ => _fileWorkflow.MarkDirty());
             },
-            out _activeOleHost);
+            out _activeOleHost,
+            onPayloadUpdated: _ => _fileWorkflow.MarkDirty());
 #else
         return false;
 #endif

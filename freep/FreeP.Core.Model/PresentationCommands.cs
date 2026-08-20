@@ -3717,18 +3717,12 @@ public sealed class MoveShapeCommand : IPresentationCommand
     {
         var s = ShapeHelper.Find(p, _slideIndex, _shapeId);
         if (s is null || !ChartHelper.IsObjectEditable(s)) return;
-        s.OffsetXEmu += _dx;
-        s.OffsetYEmu += _dy;
 
         // A group's children store absolute (slide-space) coordinates, not coordinates
         // relative to the group (see GroupShapesCommand.Apply). Translate every descendant
         // by the same delta so the shapes actually move with the group instead of leaving
         // only the invisible group record -- used for the selection outline -- in sync.
-        foreach (var descendant in ShapeHelper.Descendants(s))
-        {
-            descendant.OffsetXEmu += _dx;
-            descendant.OffsetYEmu += _dy;
-        }
+        SlideShapeTraversal.TranslateWithDescendants(s, _dx, _dy);
         _applied = true;
 
         // Reroute attached connectors after the shape has moved.
@@ -3740,14 +3734,7 @@ public sealed class MoveShapeCommand : IPresentationCommand
         if (!_applied) return;
         var s = ShapeHelper.Find(p, _slideIndex, _shapeId);
         if (s is null) return;
-        s.OffsetXEmu -= _dx;
-        s.OffsetYEmu -= _dy;
-
-        foreach (var descendant in ShapeHelper.Descendants(s))
-        {
-            descendant.OffsetXEmu -= _dx;
-            descendant.OffsetYEmu -= _dy;
-        }
+        SlideShapeTraversal.TranslateWithDescendants(s, -_dx, -_dy);
 
         // Restore connector bounds captured during Apply.
         RevertReroute(p, _slideIndex, _rerouteCapture);

@@ -33,7 +33,8 @@ internal sealed class AvaloniaOleInPlaceHost : NativeControlHost, IDisposable
         OleObjectInfo? oleObject,
         Rect bounds,
         Action? onActivationFailed,
-        out AvaloniaOleInPlaceHost? host)
+        out AvaloniaOleInPlaceHost? host,
+        Action<byte[]>? onPayloadUpdated = null)
     {
         host = null;
         if (overlay is null || oleObject is null || oleObject.EmbeddedBytes.Length == 0)
@@ -57,7 +58,7 @@ internal sealed class AvaloniaOleInPlaceHost : NativeControlHost, IDisposable
                     "inplace",
                     extension,
                     oleObject.EmbeddedBytes,
-                    bytes => oleObject.EmbeddedBytes = bytes,
+                    BuildCommitCallback(oleObject, onPayloadUpdated),
                     out engine)
                 || engine is null)
                 return false;
@@ -102,6 +103,22 @@ internal sealed class AvaloniaOleInPlaceHost : NativeControlHost, IDisposable
             return false;
         }
     }
+
+    /// <summary>
+    /// Builds the payload-commit callback for the native in-place route: writes the edited bytes
+    /// onto the model and then reports the commit via <paramref name="onPayloadUpdated"/>, mirroring
+    /// <see cref="OleActivationService.BuildOleObjectUpdateCallback"/> for the external-activation
+    /// route. Extracted so tests can verify the notification fires without driving real native OLE
+    /// activation through the public <see cref="TryShow"/> entry point.
+    /// </summary>
+    internal static Action<byte[]> BuildCommitCallback(
+        OleObjectInfo oleObject,
+        Action<byte[]>? onPayloadUpdated) =>
+        bytes =>
+        {
+            oleObject.EmbeddedBytes = bytes;
+            onPayloadUpdated?.Invoke(bytes);
+        };
 
     internal static Control? TryCreate(
         AvaloniaInlineOleHostRequest request,

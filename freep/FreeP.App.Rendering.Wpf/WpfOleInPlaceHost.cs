@@ -32,7 +32,8 @@ public sealed class WpfOleInPlaceHost : HwndHost
         Canvas overlay,
         OleObjectInfo? oleObject,
         Rect bounds,
-        out WpfOleInPlaceHost? host)
+        out WpfOleInPlaceHost? host,
+        Action<byte[]>? onPayloadUpdated = null)
     {
         host = null;
         if (overlay is null || oleObject is null || oleObject.EmbeddedBytes.Length == 0)
@@ -47,7 +48,7 @@ public sealed class WpfOleInPlaceHost : HwndHost
                     "inplace",
                     extension,
                     oleObject.EmbeddedBytes,
-                    bytes => oleObject.EmbeddedBytes = bytes,
+                    BuildCommitCallback(oleObject, onPayloadUpdated),
                     out engine)
                 || engine is null)
                 return false;
@@ -83,11 +84,28 @@ public sealed class WpfOleInPlaceHost : HwndHost
         }
     }
 
+    /// <summary>
+    /// Builds the payload-commit callback for the native in-place route: writes the edited bytes
+    /// onto the model and then reports the commit via <paramref name="onPayloadUpdated"/>, mirroring
+    /// <see cref="OleActivationService.BuildOleObjectUpdateCallback"/> for the external-activation
+    /// route. Extracted so tests can verify the notification fires without driving real native OLE
+    /// activation through the public <see cref="TryShow"/> entry point.
+    /// </summary>
+    internal static Action<byte[]> BuildCommitCallback(
+        OleObjectInfo oleObject,
+        Action<byte[]>? onPayloadUpdated) =>
+        bytes =>
+        {
+            oleObject.EmbeddedBytes = bytes;
+            onPayloadUpdated?.Invoke(bytes);
+        };
+
     private static bool TryCreateInline(
         InlineOleObjectInfo inlineObject,
         double width,
         double height,
-        out WpfOleInPlaceHost? host)
+        out WpfOleInPlaceHost? host,
+        Action<byte[]>? onPayloadUpdated = null)
     {
         host = null;
         string extension = OleActivationService.ResolveExtension(inlineObject);
@@ -95,7 +113,11 @@ public sealed class WpfOleInPlaceHost : HwndHost
                 "inline",
                 extension,
                 inlineObject.EmbeddedBytes,
-                bytes => inlineObject.EmbeddedBytes = bytes,
+                bytes =>
+                {
+                    inlineObject.EmbeddedBytes = bytes;
+                    onPayloadUpdated?.Invoke(bytes);
+                },
                 out var engine)
             || engine is null)
             return false;
@@ -123,7 +145,8 @@ public sealed class WpfOleInPlaceHost : HwndHost
         Border container,
         InlineOleObjectInfo? inlineObject,
         double width,
-        double height)
+        double height,
+        Action<byte[]>? onPayloadUpdated = null)
     {
         if (container is null
             || inlineObject is null
@@ -142,7 +165,7 @@ public sealed class WpfOleInPlaceHost : HwndHost
         void TryAttachHost(object? sender, RoutedEventArgs args)
         {
             if (host is not null
-                || !TryCreateInline(inlineObject, width, height, out host)
+                || !TryCreateInline(inlineObject, width, height, out host, onPayloadUpdated)
                 || host is null)
                 return;
 

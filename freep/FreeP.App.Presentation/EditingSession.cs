@@ -2822,8 +2822,13 @@ public sealed class EditingSession
         foreach (var clone in clones)
         {
             AssignShapeIds(clone, usedIds, remap, ref nextId);
-            clone.OffsetXEmu += PasteOffset.Emu;
-            clone.OffsetYEmu += PasteOffset.Emu;
+
+            // Applying the offset to only the top-level clone would leave a pasted group's
+            // children rendering at their original (copied-from) coordinates, since group
+            // children store absolute slide-space offsets rather than offsets relative to the
+            // group -- see SlideShapeTraversal.TranslateWithDescendants, the same helper
+            // MoveShapeCommand uses to keep a moved group's members in sync with its bounds.
+            SlideShapeTraversal.TranslateWithDescendants(clone, PasteOffset.Emu, PasteOffset.Emu);
         }
 
         foreach (var clone in clones)

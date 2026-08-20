@@ -582,7 +582,8 @@ public sealed partial class MainWindow : Window,
             _oleOverlay,
             plan.OleObject,
             bounds,
-            out _activeOleHost);
+            out _activeOleHost,
+            onPayloadUpdated: _ => _fileSession.MarkDirty());
     }
 
     private void CloseActiveOleHost()
