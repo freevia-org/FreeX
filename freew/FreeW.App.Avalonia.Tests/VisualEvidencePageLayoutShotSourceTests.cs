@@ -5,6 +5,17 @@ namespace FreeW.App.Avalonia.Tests;
 public sealed class VisualEvidencePageLayoutShotSourceTests
 {
     [Fact]
+    public void PageLayoutShot_NormalizesSectionPageSurfacesToTheWordBaselineRasterBounds()
+    {
+        var source = File.ReadAllText(RepositoryFile("freew", "tools", "FreeW.PageLayoutShot", "Program.cs"));
+
+        source.Should().MatchRegex("ShouldCaptureWordComparablePageSurface\\([\\s\\S]*?string.Equals\\(scenarioId, \"f2-section-landscape\", StringComparison.OrdinalIgnoreCase\\)");
+        source.Should().Contain("static bool ShouldNormalizeSectionPageSurfaceToWordBaseline(string scenarioId) =>");
+        source.Should().Contain("NormalizeToWordBaselineRasterSurface(");
+        source.Should().Contain("WordBaselineRasterSurfacePlanner.Build(source.Width, source.Height)");
+    }
+
+    [Fact]
     public void PageLayoutShot_EmitsSharedVisualEvidenceManifestAndTrustChecks()
     {
         var source = File.ReadAllText(RepositoryFile("freew", "tools", "FreeW.PageLayoutShot", "Program.cs"));

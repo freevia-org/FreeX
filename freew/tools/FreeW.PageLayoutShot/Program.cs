@@ -916,6 +916,13 @@ static int RenderMode(
             viewportOffsetY,
             WordComparableContentOffsetY(scenarioId, pageNumber));
     }
+    if (ShouldNormalizeSectionPageSurfaceToWordBaseline(scenarioId))
+    {
+        (bytes, captureWidth, captureHeight) = NormalizeToWordBaselineRasterSurface(
+            bytes,
+            captureWidth,
+            captureHeight);
+    }
     if (bytes.Length > 0)
     {
         File.WriteAllBytes(outPath, bytes);
@@ -976,6 +983,13 @@ static int RenderMode(
                 cropPageNumber,
                 viewportOffsetY,
                 WordComparableContentOffsetY(scenarioId, pageNumber));
+        }
+        if (ShouldNormalizeSectionPageSurfaceToWordBaseline(scenarioId))
+        {
+            (pngBytes, fallbackWidth, fallbackHeight) = NormalizeToWordBaselineRasterSurface(
+                pngBytes,
+                fallbackWidth,
+                fallbackHeight);
         }
         pngBytes = AddNoteRegionOverlayIfNeeded(
             pngBytes,
@@ -1235,7 +1249,11 @@ static bool ShouldCaptureWordComparablePageSurface(string scenarioId) =>
     string.Equals(scenarioId, "table-pagination-repeat-header", StringComparison.OrdinalIgnoreCase) ||
     string.Equals(scenarioId, "table-page-composition-stress", StringComparison.OrdinalIgnoreCase) ||
     string.Equals(scenarioId, "wordart-watermark-stress", StringComparison.OrdinalIgnoreCase) ||
-    string.Equals(scenarioId, "wordart-picture-watermark-layout", StringComparison.OrdinalIgnoreCase);
+    string.Equals(scenarioId, "wordart-picture-watermark-layout", StringComparison.OrdinalIgnoreCase) ||
+    string.Equals(scenarioId, "f2-section-landscape", StringComparison.OrdinalIgnoreCase);
+
+static bool ShouldNormalizeSectionPageSurfaceToWordBaseline(string scenarioId) =>
+    string.Equals(scenarioId, "f2-section-landscape", StringComparison.OrdinalIgnoreCase);
 
 static int WordComparableContentOffsetY(string scenarioId, int pageNumber)
 {
@@ -1299,6 +1317,44 @@ static (byte[] PngBytes, int PixelWidth, int PixelHeight) CropToDocumentPageSurf
     return data is null
         ? (pngBytes, source.Width, source.Height)
         : (data.ToArray(), pixelWidth, pixelHeight);
+}
+
+static (byte[] PngBytes, int PixelWidth, int PixelHeight) NormalizeToWordBaselineRasterSurface(
+    byte[] pngBytes,
+    int fallbackWidth,
+    int fallbackHeight)
+{
+    using var source = SKBitmap.Decode(pngBytes);
+    if (source is null)
+        return (pngBytes, fallbackWidth, fallbackHeight);
+
+    var plan = WordBaselineRasterSurfacePlanner.Build(source.Width, source.Height);
+    if (plan.IsIdentity)
+        return (pngBytes, source.Width, source.Height);
+
+    using var surface = SKSurface.Create(new SKImageInfo(
+        plan.PixelWidth,
+        plan.PixelHeight,
+        SKColorType.Bgra8888,
+        SKAlphaType.Premul));
+    if (surface is null)
+        return (pngBytes, source.Width, source.Height);
+
+    surface.Canvas.Clear(SKColors.White);
+    using (var paint = new SKPaint { IsAntialias = true })
+    {
+        surface.Canvas.DrawBitmap(
+            source,
+            new SKRect(0, 0, source.Width, source.Height),
+            new SKRect(0, 0, plan.PixelWidth, plan.PixelHeight),
+            paint);
+    }
+
+    using var image = surface.Snapshot();
+    using var data = image.Encode(SKEncodedImageFormat.Png, 95);
+    return data is null
+        ? (pngBytes, source.Width, source.Height)
+        : (data.ToArray(), plan.PixelWidth, plan.PixelHeight);
 }
 
 static byte[] AddNoteRegionOverlayIfNeeded(
