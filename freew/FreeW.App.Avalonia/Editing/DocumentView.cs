@@ -7223,6 +7223,8 @@ public sealed partial class DocumentView : Control
                     FlushText();
                     var width = Math.Max(1, PageLayout.PointsToDip(Math.Max(0, image.WidthPt)));
                     var height = Math.Max(1, PageLayout.PointsToDip(Math.Max(0, image.HeightPt)));
+                    if (!HeaderFooterDialogPlanner.IsFooterSlot(slot))
+                        height = HeaderFooterVisualPlanner.ResolveInlineHeaderImageRasterHeightDip(height);
                     segments.Add(new HfSegment
                     {
                         StopIndex = stopIndex,
