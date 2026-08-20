@@ -40,7 +40,7 @@ internal sealed partial class SlideSizeDialog : FreePDialogWindow
         Title = surface.Title;
         AutomationProperties.SetName(this, surface.Schema.AccessibleName);
         AutomationProperties.SetAutomationId(this, surface.Schema.AutomationId);
-        Width = 365.3333333333333;
+        Width = 366;
         Height = 222.66666666666666;
         CanResize = false;
         ShowInTaskbar = false;
