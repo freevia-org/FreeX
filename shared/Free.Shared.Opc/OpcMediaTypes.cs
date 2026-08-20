@@ -538,6 +538,7 @@ public static class OpcMediaTypes
             "image/bmp" => "bmp",
             "image/tiff" => "tiff",
             "image/svg+xml" => "svg",
+            "image/webp" => "webp",
             "image/x-wmf" or "image/wmf" => "wmf",
             "image/x-emf" or "image/emf" => "emf",
             _ => "png"

@@ -274,7 +274,7 @@ public static class SelectionAdornerGeometry
             var cropPlan = PictureCropAuthoringPlanner.Build(shape, bounds);
             return cropPlan.CanEdit
                 ? cropPlan.Handles
-                    .Select(handle => ProjectHandle(handle.Name, handle.PositionDip, transform))
+                    .Select(handle => ProjectHandle(handle.Name, handle.PositionDip, bounds, shape.RotationDeg, transform))
                     .ToArray()
                 : Array.Empty<SelectionAdornerGeometryHandlePlan>();
         }
@@ -282,20 +282,44 @@ public static class SelectionAdornerGeometry
         var adjustmentPlan = ShapeGeometryAdjustmentPlanner.Build(shape, bounds);
         return adjustmentPlan.CanEdit
             ? adjustmentPlan.Handles
-                .Select(handle => ProjectHandle(handle.Name, handle.PositionDip, transform))
+                .Select(handle => ProjectHandle(handle.Name, handle.PositionDip, bounds, shape.RotationDeg, transform))
                 .ToArray()
             : Array.Empty<SelectionAdornerGeometryHandlePlan>();
     }
 
+    /// <summary>
+    /// Projects one un-rotated local-frame handle position into screen space, rotating it
+    /// about the shape's un-rotated bounds center first so it lands on the same rotated edge
+    /// the compositor actually paints (matching SlideCanvasGeometryPlanner.OrientedBoundsToScreen's
+    /// corner rotation for the selection outline of the same shape).
+    /// </summary>
     private static SelectionAdornerGeometryHandlePlan ProjectHandle(
         string name,
         LayoutPoint positionDip,
+        LayoutRect boundsDip,
+        double rotationDeg,
         SlideTransformCore transform)
     {
-        var screenPosition = transform.SlideToScreen(positionDip.X, positionDip.Y);
+        var rotatedDip = RotateAroundCenter(positionDip, boundsDip.Center, rotationDeg);
+        var screenPosition = transform.SlideToScreen(rotatedDip.X, rotatedDip.Y);
         return new SelectionAdornerGeometryHandlePlan(
             name,
             new CanvasGesturePoint(screenPosition.X, screenPosition.Y));
+    }
+
+    private static LayoutPoint RotateAroundCenter(LayoutPoint point, LayoutPoint center, double rotationDeg)
+    {
+        if (rotationDeg % 360.0 == 0.0)
+            return point;
+
+        double radians = rotationDeg * Math.PI / 180.0;
+        double cos = Math.Cos(radians);
+        double sin = Math.Sin(radians);
+        double dx = point.X - center.X;
+        double dy = point.Y - center.Y;
+        return new LayoutPoint(
+            center.X + dx * cos - dy * sin,
+            center.Y + dx * sin + dy * cos);
     }
 
     private static SelectionAdornerRect ToSelectionRect(SlideScreenRect rect) =>

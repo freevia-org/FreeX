@@ -22,11 +22,13 @@ internal sealed class SectionAwareDocumentPaginator : DocumentPaginator
 
     private readonly IReadOnlyList<PageBox> _pageBoxes;
     private readonly IDocumentPaginatorSource _source;
+    private readonly TextDocument _model;
     private Size _pageSize;
 
     private SectionAwareDocumentPaginator(DocumentView sourceEditor, PaginatedEditorPanel panel)
     {
         _pageBoxes = panel.PageBoxes.ToArray();
+        _model = sourceEditor.Model;
         var (width, height) = PageLayout.PageSizeDip(sourceEditor.Model.Page);
         _pageSize = new Size(width, height);
         _source = new PaginatorSource(this);
@@ -96,6 +98,8 @@ internal sealed class SectionAwareDocumentPaginator : DocumentPaginator
                 contentWidth,
                 pageHeight - marginBottom));
 
+        AddNoteRegionVisual(visual, box, marginLeft, marginTop, contentWidth, contentHeight, pageHeight);
+
         AddHeaderFooterVisual(
             visual,
             box.HeaderSubEditor,
@@ -141,6 +145,93 @@ internal sealed class SectionAwareDocumentPaginator : DocumentPaginator
         paginator.PageSize = new Size(Math.Max(1, width), Math.Max(1, height));
         paginator.ComputePageCount();
         return paginator.PageCount > 0 ? paginator.GetPage(0) : null;
+    }
+
+    /// <summary>
+    /// Paints this page box's footnote/endnote text into the bottom margin, mirroring the note band
+    /// the ordinary single-geometry print path draws (see
+    /// <c>PrintPreviewWindow.BuildNotesAtFoot</c>). <see cref="GetPage"/> otherwise only ever painted
+    /// the body, header, and footer sub-visuals, so a footnote/endnote reference mark printed with no
+    /// note text anywhere on the page for any document routed to this paginator
+    /// (<c>NeedsSectionAwareRendering</c> / <c>HasParitySectionStarts</c>).
+    /// </summary>
+    private void AddNoteRegionVisual(
+        ContainerVisual container,
+        PageBox box,
+        double marginLeft,
+        double marginTop,
+        double contentWidth,
+        double contentHeight,
+        double pageHeight)
+    {
+        if (contentWidth <= 0)
+            return;
+
+        var footnoteIds = box.FootnoteIds;
+        var endnoteIds = box.EndnoteIds;
+        if (footnoteIds.Count == 0 && endnoteIds.Count == 0)
+            return;
+
+        var plan = footnoteIds.Count > 0
+            ? DocumentNoteRegionPlanner.BuildFootnoteRegion(_model, footnoteIds, box.PageNumber, contentWidth)
+            : DocumentNoteRegionPlanner.BuildEndnoteRegion(
+                _model, endnoteIds, box.PageNumber, contentWidth, box.IsEndnoteSyntheticPage);
+        if (plan.Rows.Count == 0)
+            return;
+
+        var visual = new DrawingVisual();
+        using (var dc = visual.RenderOpen())
+        {
+            var y = marginTop + contentHeight + PageLayout.PointsToDip(3);
+            var maxY = pageHeight - PageLayout.PointsToDip(4);
+
+            if (plan.Kind == DocumentNoteRegionKind.Endnotes && box.IsEndnoteSyntheticPage
+                && plan.Heading is { Length: > 0 } heading && y < maxY)
+            {
+                var headingText = new FormattedText(
+                    heading,
+                    System.Globalization.CultureInfo.CurrentCulture,
+                    FlowDirection.LeftToRight,
+                    new Typeface(new FontFamily("Calibri"), FontStyles.Normal, FontWeights.Bold, FontStretches.Normal),
+                    PageLayout.PointsToDip(plan.TextFontSizePt + 2),
+                    Brushes.Black,
+                    1.0)
+                { MaxTextWidth = contentWidth };
+                dc.DrawText(headingText, new Point(marginLeft, y));
+                y += headingText.Height + PageLayout.PointsToDip(2);
+            }
+
+            if (y < maxY)
+            {
+                var pen = new Pen(new SolidColorBrush(Color.FromRgb(0x80, 0x80, 0x80)), 0.5);
+                dc.DrawLine(
+                    pen,
+                    new Point(marginLeft + plan.SeparatorXOffsetDip, y),
+                    new Point(marginLeft + plan.SeparatorXOffsetDip + plan.SeparatorWidthDip, y));
+                y += PageLayout.PointsToDip(2);
+            }
+
+            foreach (var row in plan.Rows)
+            {
+                if (y >= maxY)
+                    break;
+
+                var label = string.IsNullOrEmpty(row.Label) ? string.Empty : $"{row.Label}. ";
+                var formatted = new FormattedText(
+                    label + row.Text,
+                    System.Globalization.CultureInfo.CurrentCulture,
+                    FlowDirection.LeftToRight,
+                    new Typeface("Calibri"),
+                    PageLayout.PointsToDip(plan.TextFontSizePt),
+                    Brushes.Black,
+                    1.0)
+                { MaxTextWidth = contentWidth, Trimming = TextTrimming.None };
+                dc.DrawText(formatted, new Point(marginLeft, y));
+                y += Math.Max(row.EstimatedHeightDip, formatted.Height) + PageLayout.PointsToDip(1);
+            }
+        }
+
+        container.Children.Add(visual);
     }
 
     private static void AddHeaderFooterVisual(

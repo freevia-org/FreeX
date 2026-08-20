@@ -170,12 +170,27 @@ public sealed class SetThemeCommand : IPresentationCommand
 /// Sets the slide dimensions (<see cref="Presentation.SlideSizeCxEmu"/> /
 /// <see cref="Presentation.SlideSizeCyEmu"/>). Captures old values for undo.
 /// </summary>
+/// <remarks>
+/// Also rescales every shape's position/size ("Ensure Fit" semantics: a single uniform factor —
+/// the smaller of the new-width/old-width and new-height/old-height ratios — applied to every
+/// shape's OffsetX/Y and ExtentCx/Cy from the slide origin). Without this, shrinking the slide
+/// (e.g. 16:9 -&gt; 4:3) leaves shapes at their old absolute EMU coordinates, so anything beyond the
+/// new, narrower canvas is cropped/off-slide in the editor, Slide Show, and PDF/print export; a
+/// uniform min-ratio scale guarantees any shape that fit inside the old canvas still fits inside
+/// the new one. Group children store absolute slide-space offsets that SlideCompositor's
+/// <c>TransformGroupChild</c> reconciles against the group's own ChildOffset/ChildExtent (when
+/// present), so descendants and those Child* fields are scaled by the same factor to keep that
+/// reconciliation consistent -- see <see cref="ScaleShapeTree"/>.
+/// </remarks>
 public sealed class SetSlideSizeCommand : IPresentationCommand
 {
     private readonly long _newCx;
     private readonly long _newCy;
     private long          _oldCx;
     private long          _oldCy;
+
+    private List<(SlideShape Shape, long OldOffX, long OldOffY, long OldExtCx, long OldExtCy,
+        long? OldChOffX, long? OldChOffY, long? OldChExtCx, long? OldChExtCy)>? _scaled;
 
     public SetSlideSizeCommand(long cxEmu, long cyEmu)
     {
@@ -189,6 +204,19 @@ public sealed class SetSlideSizeCommand : IPresentationCommand
     {
         _oldCx = p.SlideSizeCxEmu;
         _oldCy = p.SlideSizeCyEmu;
+
+        if (_oldCx > 0 && _oldCy > 0 && (_newCx != _oldCx || _newCy != _oldCy))
+        {
+            double scale = Math.Min((double)_newCx / _oldCx, (double)_newCy / _oldCy);
+            if (scale > 0 && scale != 1.0)
+            {
+                _scaled = new List<(SlideShape, long, long, long, long, long?, long?, long?, long?)>();
+                foreach (var slide in p.Slides)
+                    foreach (var shape in slide.Shapes)
+                        ScaleShapeTree(shape, scale, _scaled);
+            }
+        }
+
         p.SlideSizeCxEmu = _newCx;
         p.SlideSizeCyEmu = _newCy;
     }
@@ -197,6 +225,55 @@ public sealed class SetSlideSizeCommand : IPresentationCommand
     {
         p.SlideSizeCxEmu = _oldCx;
         p.SlideSizeCyEmu = _oldCy;
+
+        if (_scaled is not null)
+        {
+            foreach (var s in _scaled)
+            {
+                s.Shape.OffsetXEmu = s.OldOffX;
+                s.Shape.OffsetYEmu = s.OldOffY;
+                s.Shape.ExtentCxEmu = s.OldExtCx;
+                s.Shape.ExtentCyEmu = s.OldExtCy;
+                s.Shape.ChildOffsetXEmu = s.OldChOffX;
+                s.Shape.ChildOffsetYEmu = s.OldChOffY;
+                s.Shape.ChildExtentCxEmu = s.OldChExtCx;
+                s.Shape.ChildExtentCyEmu = s.OldChExtCy;
+            }
+            _scaled = null;
+        }
+    }
+
+    /// <summary>
+    /// Records <paramref name="shape"/>'s pre-scale geometry into <paramref name="saved"/>, scales
+    /// its own Offset/Extent (and Child* fields, when present, for a Group) by
+    /// <paramref name="scale"/>, then recurses into <see cref="SlideShape.Children"/>. All fields
+    /// scale by the same factor so the group-child reconciliation in
+    /// <c>SlideCompositor.TransformGroupChild</c> (absolute = groupOff + (raw - chOff) *
+    /// (groupExt / chExt)) stays numerically consistent -- scaling numerator and denominator of
+    /// that ratio by the same factor leaves the ratio, and therefore every descendant's resolved
+    /// absolute position, correctly scaled too.
+    /// </summary>
+    private static void ScaleShapeTree(
+        SlideShape shape,
+        double scale,
+        List<(SlideShape Shape, long OldOffX, long OldOffY, long OldExtCx, long OldExtCy,
+            long? OldChOffX, long? OldChOffY, long? OldChExtCx, long? OldChExtCy)> saved)
+    {
+        saved.Add((shape, shape.OffsetXEmu, shape.OffsetYEmu, shape.ExtentCxEmu, shape.ExtentCyEmu,
+            shape.ChildOffsetXEmu, shape.ChildOffsetYEmu, shape.ChildExtentCxEmu, shape.ChildExtentCyEmu));
+
+        shape.OffsetXEmu  = (long)Math.Round(shape.OffsetXEmu  * scale);
+        shape.OffsetYEmu  = (long)Math.Round(shape.OffsetYEmu  * scale);
+        shape.ExtentCxEmu = (long)Math.Round(shape.ExtentCxEmu * scale);
+        shape.ExtentCyEmu = (long)Math.Round(shape.ExtentCyEmu * scale);
+
+        if (shape.ChildOffsetXEmu is { } chOffX) shape.ChildOffsetXEmu = (long)Math.Round(chOffX * scale);
+        if (shape.ChildOffsetYEmu is { } chOffY) shape.ChildOffsetYEmu = (long)Math.Round(chOffY * scale);
+        if (shape.ChildExtentCxEmu is { } chExtCx) shape.ChildExtentCxEmu = (long)Math.Round(chExtCx * scale);
+        if (shape.ChildExtentCyEmu is { } chExtCy) shape.ChildExtentCyEmu = (long)Math.Round(chExtCy * scale);
+
+        foreach (var child in shape.Children)
+            ScaleShapeTree(child, scale, saved);
     }
 }
 

@@ -1,5 +1,7 @@
 using System.Windows;
+using System.Windows.Controls;
 using System.Windows.Input;
+using System.Windows.Media;
 using FreeX.App.Presentation.DrawingInteraction;
 using FreeX.App.Presentation.GridInteraction;
 using FreeX.Core.Model;
@@ -29,9 +31,15 @@ public partial class GridView
 
         var pos = e.GetPosition(this);
         if (HasActiveCapturedGridDrag())
+        {
             DismissCommentPreview();
+            DismissHyperlinkScreenTip();
+        }
         else
+        {
             UpdateCommentPreviewForPointer(pos);
+            UpdateHyperlinkScreenTip(pos);
+        }
 
         if (_shapePlacementDragging)
         {
@@ -378,6 +386,89 @@ public partial class GridView
 
     private static bool IsCtrlModifierDown() =>
         (Keyboard.Modifiers & ModifierKeys.Control) == ModifierKeys.Control;
+
+    private Border? _hyperlinkScreenTipBorder;
+    private TextBlock? _hyperlinkScreenTipTextBlock;
+    private CellAddress? _hyperlinkScreenTipCell;
+
+    /// <summary>
+    /// F1: shows the hover ScreenTip for a hyperlinked cell (the custom ScreenTip if one was set,
+    /// otherwise the raw target, per <see cref="HyperlinkTooltips"/>) on plain mouse hover -- no
+    /// Ctrl needed, matching Excel and FreeX's own Avalonia shell (MainWindow.cs's
+    /// FormatHyperlinkTooltip/ToolTip.SetTip, R88-app-hyperlink-navigation-5-4). The Ctrl+hover
+    /// hand cursor in <see cref="UpdateHoverCursor"/> is a separate, independent check. Rendered as
+    /// a small Border dropped into <see cref="CommentOverlayHost"/> (the same overlay Canvas the
+    /// comment-hover preview already uses) rather than a native WPF ToolTip/Popup, matching
+    /// GridView.CommentPreview.cs's own choice to position hover chrome by hand in grid-local
+    /// coordinates instead of PlacementMode.
+    /// </summary>
+    private void UpdateHyperlinkScreenTip(Point pos)
+    {
+        if (HyperlinkTooltips is { Count: > 0 } tooltips &&
+            TryHitTestHyperlinkCell(pos, out var address) &&
+            tooltips.TryGetValue(address, out var text) &&
+            !string.IsNullOrWhiteSpace(text))
+        {
+            if (_hyperlinkScreenTipCell == address && _hyperlinkScreenTipBorder is { Visibility: Visibility.Visible })
+                return;
+
+            _hyperlinkScreenTipCell = address;
+            ShowHyperlinkScreenTip(pos, text);
+            return;
+        }
+
+        DismissHyperlinkScreenTip();
+    }
+
+    private void ShowHyperlinkScreenTip(Point pos, string text)
+    {
+        var border = EnsureHyperlinkScreenTipBorder();
+        if (CommentOverlayHost is null)
+            return;
+
+        _hyperlinkScreenTipTextBlock!.Text = text;
+        Canvas.SetLeft(border, pos.X + 12);
+        Canvas.SetTop(border, pos.Y + 20);
+        border.Visibility = Visibility.Visible;
+    }
+
+    private Border EnsureHyperlinkScreenTipBorder()
+    {
+        if (_hyperlinkScreenTipBorder is { } existing)
+        {
+            if (CommentOverlayHost is not null && !CommentOverlayHost.Children.Contains(existing))
+                CommentOverlayHost.Children.Add(existing);
+            return existing;
+        }
+
+        _hyperlinkScreenTipTextBlock = new TextBlock
+        {
+            Foreground = Brushes.Black,
+            FontSize = 12
+        };
+        _hyperlinkScreenTipBorder = new Border
+        {
+            Background = new SolidColorBrush(Color.FromRgb(255, 255, 225)),
+            BorderBrush = Brushes.Black,
+            BorderThickness = new Thickness(1),
+            Padding = new Thickness(4, 2, 4, 2),
+            Child = _hyperlinkScreenTipTextBlock,
+            Visibility = Visibility.Collapsed,
+            IsHitTestVisible = false
+        };
+
+        if (CommentOverlayHost is not null)
+            CommentOverlayHost.Children.Add(_hyperlinkScreenTipBorder);
+
+        return _hyperlinkScreenTipBorder;
+    }
+
+    private void DismissHyperlinkScreenTip()
+    {
+        if (_hyperlinkScreenTipBorder is { Visibility: Visibility.Visible } border)
+            border.Visibility = Visibility.Collapsed;
+        _hyperlinkScreenTipCell = null;
+    }
 
     public static GridAutoScrollRequest CalculateAutofillEdgeScrollIntent(
         double pointerX,
@@ -1212,6 +1303,7 @@ public partial class GridView
             Cursor = null;
             RestoreSelectedCommentPreview();
         }
+        DismissHyperlinkScreenTip();
         base.OnMouseLeave(e);
     }
 

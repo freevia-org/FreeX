@@ -1296,7 +1296,80 @@ public sealed partial class DocumentView : RichTextBox
             ApplyAutoHyperlink(range.End, result.Insert.Length - 1, target);
         }
 
+        // freew-autocorrect-F1: mark the correction as a tracked insertion when Track Changes is on, the
+        // same way ordinary typed text is marked (DocumentBodyTextInput/TryApplyBodyTextInput thread
+        // TrackChangesEnabled through the model path -- see CurrentRevisionAuthor's caller at line ~14965).
+        // This whole method stays off that model path on purpose (it edits the live FlowDocument via
+        // TextRange so the correction merges into the same WPF-native undo unit as the keystroke that
+        // triggered it), so nothing else marks the inserted text; without this call it would silently commit
+        // as untracked text and survive Reject All Changes. Runs after the superscript/hyperlink styling
+        // above because ApplyAutoHyperlink wraps the word in a Hyperlink/Span, splitting the run(s) that
+        // carry the inserted text -- MarkAutoCorrectInsertionAsRevision walks into that wrapper so every
+        // piece still gets tagged.
+        if (TrackChangesEnabled)
+        {
+            MarkAutoCorrectInsertionAsRevision(deleteStart, range.End);
+        }
+
         return true;
+    }
+
+    // Tags every WPF run spanning [start, end) -- including runs nested inside a Hyperlink/Span such as the
+    // one ApplyAutoHyperlink wraps the corrected word in -- with a RevisionMarker, so CommitToModel
+    // round-trips the correction as RevisionKind.Inserted exactly like an ordinary typed character (compare
+    // the render-side tagging at "A tracked-change run carries a RevisionMarker tag unconditionally" above).
+    // Also applies the live insertion chrome (colour + underline) when the current review display mode shows
+    // it, so the correction looks marked immediately instead of only after the next full re-render.
+    private void MarkAutoCorrectInsertionAsRevision(TextPointer start, TextPointer end)
+    {
+        if (start.Paragraph is not { } paragraph)
+            return;
+
+        var author = CurrentRevisionAuthor();
+        var dateXml = DateTimeOffset.UtcNow.ToString(
+            "yyyy-MM-ddTHH:mm:ssZ",
+            System.Globalization.CultureInfo.InvariantCulture);
+        var colorHex = ReviewRevisionColorPlanner.ResolveColorHex(_model, author);
+        var marker = new RevisionMarker(RevisionKind.Inserted, author, dateXml, colorHex);
+        var applyStyling = _renderReviewDisplayPolicy.RevisionDecision(RevisionKind.Inserted).IsRevisionStylingApplied;
+
+        MarkRunsAsRevision(paragraph.Inlines, start, end, marker, applyStyling, colorHex);
+    }
+
+    private static void MarkRunsAsRevision(
+        InlineCollection inlines,
+        TextPointer start,
+        TextPointer end,
+        RevisionMarker marker,
+        bool applyStyling,
+        string colorHex)
+    {
+        foreach (var inline in inlines)
+        {
+            // Recurse into a Hyperlink/Span wrapper so the run(s) it wraps still get tagged.
+            if (inline is Span span)
+            {
+                MarkRunsAsRevision(span.Inlines, start, end, marker, applyStyling, colorHex);
+                continue;
+            }
+            if (inline is not WpfRun run || run.Text.Length == 0)
+                continue;
+            // Only tag runs that fall fully inside [start, end) -- e.g. not the trailing-space run AutoFormat
+            // outcomes like the ordinal/hyperlink correction leave outside the styled/linked span.
+            if (run.ContentStart.CompareTo(start) < 0 || run.ContentEnd.CompareTo(end) > 0)
+                continue;
+
+            AddMarker(run, m => m with { Revision = marker });
+            if (!applyStyling)
+                continue;
+
+            run.Foreground = new SolidColorBrush(ParseRevisionColor(colorHex));
+            var decorations = run.TextDecorations is { } existing
+                ? new TextDecorationCollection(existing)
+                : new TextDecorationCollection();
+            decorations.Add(TextDecorations.Underline[0]);
+            run.TextDecorations = decorations;
+        }
     }
 
     // Super-script the last <suffixLength> characters ending one position before <afterInsert> (the trailing

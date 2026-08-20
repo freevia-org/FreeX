@@ -7,6 +7,16 @@ namespace FreeX.App.Services;
 public sealed class WorkbookSaveService
 {
     private const int BufferSize = 1024 * 128;
+
+    // r158-appservices-save-orphaned-temp-cleanup: how old an unclaimed `.tmp` sibling has to be
+    // before CleanupOrphanedTemporaryFiles will remove it. Must comfortably exceed how long a
+    // real save can stay in the Writing stage (see EstimateWorkbookByteSize/RunStageAsync --
+    // even the largest workbooks observed in practice finish in low minutes) so the sweep can
+    // never mistake a slow, still-in-flight save (this process's own upcoming one, or a second
+    // instance/colleague saving the same path concurrently) for an orphan; it only exists to
+    // eventually reclaim files a crash genuinely abandoned.
+    private static readonly TimeSpan OrphanedTemporaryFileMaxAge = TimeSpan.FromHours(1);
+
     private readonly IWorkbookSaveFileOperations _fileOperations;
 
     public WorkbookSaveService()
@@ -37,6 +47,13 @@ public sealed class WorkbookSaveService
         // ReplaceExistingFileWithFallback's vacate-then-place window -- see the recovery method
         // for why this must run before anything else in this call.
         RecoverOrphanedFallbackBackup(path);
+
+        // r158-appservices-save-orphaned-temp-cleanup: sweep any `.tmp` siblings left by a
+        // previous save of this same path that never reached the `finally` below (killed mid-
+        // Writing by a crash, forced task-kill, or power loss) -- see the method for why this is
+        // safe. Must run before CreateTemporaryPath below allocates THIS call's own tempPath, so
+        // it can never see (and therefore can never race) its own in-flight file.
+        CleanupOrphanedTemporaryFiles(path);
 
         // Detect a concurrent second writer: if the caller captured the file's write time at open
         // (WorkbookOpenResult.SourceLastWriteTimeUtc) and the file on disk has a different write
@@ -254,6 +271,61 @@ public sealed class WorkbookSaveService
         }
     }
 
+    // r158-appservices-save-orphaned-temp-cleanup: the `finally` block in SaveAsync deletes
+    // `tempPath` once the save it belongs to completes, but that only runs if this process is
+    // still alive to reach it. If the process is killed (crash, forced task-kill, power loss)
+    // while the Writing stage is in flight, the `.tmp` sibling is left on disk forever -- nothing
+    // else in FreeX ever looks for it again; RecoverOrphanedFallbackBackup above only scans for
+    // `.bak`. This sweeps `.tmp` siblings of `path` left by a previous, no-longer-running save of
+    // the SAME path before this call allocates its own tempPath.
+    //
+    // Deleting a file that is genuinely still open elsewhere (a real concurrent save of the same
+    // path, still mid-Writing) is guarded two ways: the age check below skips anything younger
+    // than OrphanedTemporaryFileMaxAge, and CreateTemporaryFileStream always opens with
+    // FileShare.None, so on Windows an attempt to delete a file another live process still has
+    // open throws and is swallowed here, leaving that file for a later sweep. Never throws or
+    // blocks the save on a failed sweep -- this is best-effort cleanup, not correctness-critical.
+    private void CleanupOrphanedTemporaryFiles(string path)
+    {
+        var directory = GetBackupSearchDirectory(path);
+        var pattern = GetTemporarySearchPattern(path);
+
+        List<string> candidates;
+        try
+        {
+            candidates = _fileOperations.EnumerateFiles(directory, pattern).ToList();
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            // Best-effort sweep: if the directory can't be enumerated right now (e.g. a transient
+            // cloud-sync/network hiccup) just proceed with the save unchanged.
+            return;
+        }
+
+        if (candidates.Count == 0)
+            return;
+
+        var cutoffUtc = DateTime.UtcNow - OrphanedTemporaryFileMaxAge;
+        foreach (var candidate in candidates)
+        {
+            try
+            {
+                if (!_fileOperations.FileExists(candidate))
+                    continue;
+
+                if (_fileOperations.GetLastWriteTimeUtc(candidate) > cutoffUtc)
+                    continue;
+
+                _fileOperations.DeleteFile(candidate);
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+                // Still open by whatever process created it, or another sweep already won;
+                // either way it's safe to leave for a later pass.
+            }
+        }
+    }
+
     private DateTime SafeGetLastWriteTimeUtc(string path)
     {
         try
@@ -274,6 +346,9 @@ public sealed class WorkbookSaveService
 
     private static string GetBackupSearchPattern(string path) =>
         $".{Path.GetFileName(path)}.*.bak";
+
+    private static string GetTemporarySearchPattern(string path) =>
+        $".{Path.GetFileName(path)}.*.tmp";
 
     private void RestoreFallbackBackup(string path, string backupPath)
     {

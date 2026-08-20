@@ -262,6 +262,7 @@ public partial class MainWindow
             SheetGrid.FormulaTraceArrows = null;
             SheetGrid.FormulaTraceSheetId = default;
             SheetGrid.HyperlinkCells = null;
+            SheetGrid.HyperlinkTooltips = null;
             SheetGrid.Charts = null;
             SheetGrid.TextBoxes = null;
             SheetGrid.DrawingShapes = null;

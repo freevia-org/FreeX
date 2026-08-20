@@ -342,6 +342,67 @@ public sealed class WorkbookSaveServiceTests
     }
 
     [Fact]
+    public async Task R158_SaveAsync_OrphanedTemporaryFileFromInterruptedSave_IsSweptOnNextSave()
+    {
+        // r158-appservices-save-orphaned-temp-cleanup: SaveAsync's `finally` block only deletes
+        // `tempPath` if THIS process is still alive to reach it. If the process is killed mid-
+        // Writing (crash, forced task-kill, power loss) the `.tmp` sibling survives forever --
+        // nothing else in FreeX ever scans for `.tmp` (RecoverOrphanedFallbackBackup only scans
+        // for `.bak`). This test seeds exactly that post-crash disk state (an old, unclaimed
+        // `.{name}.{guid}.tmp` sibling -- no code path in this codebase can interrupt itself
+        // mid-save to produce it directly) and exercises the very next SaveAsync call for the
+        // same path, which must sweep the orphan away instead of leaving it as permanent,
+        // OneDrive-synced clutter.
+        using var temp = new TestTemporaryDirectory();
+        var path = Path.Combine(temp.Path, "saved.fxjson");
+        await File.WriteAllTextAsync(path, "current content");
+        var orphanedTempPath = Path.Combine(temp.Path, $".{Path.GetFileName(path)}.{Guid.NewGuid():N}.tmp");
+        await File.WriteAllTextAsync(orphanedTempPath, "orphaned partial write from a killed save");
+        File.SetLastWriteTimeUtc(orphanedTempPath, DateTime.UtcNow - TimeSpan.FromHours(2));
+        var workbook = new Workbook("Saved");
+        workbook.AddSheet("Sheet1");
+        var adapter = new TestFileAdapter(save: (_, stream) =>
+        {
+            using var writer = new StreamWriter(stream, leaveOpen: true);
+            writer.Write("updated content");
+        });
+
+        await new WorkbookSaveService().SaveAsync(path, adapter, workbook);
+
+        (await File.ReadAllTextAsync(path)).Should().Be("updated content");
+        Directory.GetFiles(temp.Path, "*.tmp").Should().BeEmpty(
+            "an orphaned .tmp left by a previous interrupted save must be swept by the next save, not left behind forever as undiscoverable clutter");
+    }
+
+    [Fact]
+    public async Task R158_SaveAsync_RecentTemporaryFile_IsNotSweptAsOrphan()
+    {
+        // Sibling no-regression case for the same sweep: a `.tmp` sibling that is merely recent
+        // (well within OrphanedTemporaryFileMaxAge) must NOT be touched by the new cleanup pass.
+        // This is the file most likely to be a second instance/colleague's save of the SAME path
+        // still genuinely in flight right now -- the age gate is exactly what keeps the orphan
+        // sweep from racing a legitimate concurrent writer.
+        using var temp = new TestTemporaryDirectory();
+        var path = Path.Combine(temp.Path, "saved.fxjson");
+        await File.WriteAllTextAsync(path, "current content");
+        var recentTempPath = Path.Combine(temp.Path, $".{Path.GetFileName(path)}.{Guid.NewGuid():N}.tmp");
+        await File.WriteAllTextAsync(recentTempPath, "still being written by another live save");
+        var workbook = new Workbook("Saved");
+        workbook.AddSheet("Sheet1");
+        var adapter = new TestFileAdapter(save: (_, stream) =>
+        {
+            using var writer = new StreamWriter(stream, leaveOpen: true);
+            writer.Write("updated content");
+        });
+
+        await new WorkbookSaveService().SaveAsync(path, adapter, workbook);
+
+        (await File.ReadAllTextAsync(path)).Should().Be("updated content");
+        File.Exists(recentTempPath).Should().BeTrue(
+            "a recent .tmp sibling must be left alone -- it could be a genuinely concurrent save of the same path still in flight");
+    }
+
+    [Fact]
     public async Task SaveAsync_DoesNotFallbackForOrdinaryFileReplaceFailures()
     {
         using var temp = new TestTemporaryDirectory();

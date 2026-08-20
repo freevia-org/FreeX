@@ -17,6 +17,24 @@ public sealed class MergeCellsCommand : IWorkbookCommand, IAffectedCellsCommand,
     private List<GridRange>? _absorbedRegions;
     private IReadOnlyList<CellAddress> _affectedCells = [];
 
+    // R158-merge-comment-orphan: legacy Comments/CommentAuthors/ShownComments and ThreadedComments
+    // are address-keyed dictionaries independent of Cell, so blanking a non-anchor cell's Cell value
+    // (further below) does nothing to any comment that lives at that same address. Every other
+    // comment-aware code path (GridView.Rendering's indicator pass, GridView.CommentPreview's hit
+    // testing, CommentNavigationPlanner's Next Note/Comment) assumes a merged range's comments only
+    // ever live at the anchor address -- see the invariant documented at
+    // GridView.CommentPreview.cs's TryGetCommentPreviewForCell ("Comments/notes are only ever keyed
+    // on a merged range's anchor cell"). Left alone, a comment surviving at a covered address becomes
+    // both mis-rendered and permanently unreachable through every comment UI. These snapshots capture
+    // the pre-merge state of all four collections across the whole range so Apply can relocate a
+    // covered cell's comment to the anchor (first-covered-cell-wins if more than one covered cell
+    // carries one, mirroring the "upper-left value survives" rule already applied to cell values
+    // below) and Revert can put everything back exactly where it started.
+    private Dictionary<CellAddress, string>? _commentSnapshot;
+    private Dictionary<CellAddress, string>? _commentAuthorSnapshot;
+    private HashSet<CellAddress>? _shownCommentSnapshot;
+    private Dictionary<CellAddress, ThreadedComment>? _threadedCommentSnapshot;
+
     public string Label => "Merge Cells";
 
     public int EstimatedBytes => (int)Math.Min((long)(_snapshot?.Count ?? _range.CellCount) * BytesPerCell, int.MaxValue);
@@ -105,8 +123,22 @@ public sealed class MergeCellsCommand : IWorkbookCommand, IAffectedCellsCommand,
         }
 
         _snapshot = [];
+        _commentSnapshot = [];
+        _commentAuthorSnapshot = [];
+        _shownCommentSnapshot = [];
+        _threadedCommentSnapshot = [];
         foreach (var addr in _range.AllCells())
+        {
             _snapshot.Add((addr, sheet.GetCell(addr)?.Clone()));
+            if (sheet.Comments.TryGetValue(addr, out var existingComment))
+                _commentSnapshot[addr] = existingComment;
+            if (sheet.CommentAuthors.TryGetValue(addr, out var existingAuthor))
+                _commentAuthorSnapshot[addr] = existingAuthor;
+            if (sheet.ShownComments.Contains(addr))
+                _shownCommentSnapshot.Add(addr);
+            if (sheet.ThreadedComments.TryGetValue(addr, out var existingThreaded))
+                _threadedCommentSnapshot[addr] = existingThreaded;
+        }
 
         foreach (var region in absorbed)
             sheet.RemoveMergedRegion(region);
@@ -121,6 +153,49 @@ public sealed class MergeCellsCommand : IWorkbookCommand, IAffectedCellsCommand,
         // preserved-style blanking pattern ClearContentsCommand.Apply already uses); a plain,
         // unstyled value cell has nothing to preserve, so it is still fully removed as before.
         var topLeft = _range.Start;
+
+        // Relocate (or, if the anchor is already occupied, discard) any comment/note left behind on
+        // a covered cell -- see the field comments on the snapshot dictionaries above for why this
+        // must happen. "First covered cell wins" the anchor slot when more than one covered cell has
+        // a comment of the same kind, matching the value-loss rule Excel itself applies when merging
+        // a selection with data in more than one cell.
+        var anchorHasLegacyComment = _commentSnapshot.ContainsKey(topLeft);
+        var anchorHasThreadedComment = _threadedCommentSnapshot.ContainsKey(topLeft);
+        var legacyCommentMigrated = false;
+        var threadedCommentMigrated = false;
+        foreach (var addr in _range.AllCells())
+        {
+            if (addr == topLeft) continue;
+
+            if (_commentSnapshot.TryGetValue(addr, out var coveredComment))
+            {
+                if (!anchorHasLegacyComment && !legacyCommentMigrated)
+                {
+                    sheet.Comments[topLeft] = coveredComment;
+                    if (_commentAuthorSnapshot.TryGetValue(addr, out var coveredAuthor))
+                        sheet.CommentAuthors[topLeft] = coveredAuthor;
+                    if (_shownCommentSnapshot.Contains(addr))
+                        sheet.ShownComments.Add(topLeft);
+                    legacyCommentMigrated = true;
+                }
+
+                sheet.Comments.Remove(addr);
+                sheet.CommentAuthors.Remove(addr);
+                sheet.ShownComments.Remove(addr);
+            }
+
+            if (_threadedCommentSnapshot.TryGetValue(addr, out var coveredThreaded))
+            {
+                if (!anchorHasThreadedComment && !threadedCommentMigrated)
+                {
+                    sheet.ThreadedComments[topLeft] = coveredThreaded;
+                    threadedCommentMigrated = true;
+                }
+
+                sheet.ThreadedComments.Remove(addr);
+            }
+        }
+
         var affected = new List<CellAddress>();
         foreach (var addr in _range.AllCells())
         {
@@ -164,6 +239,28 @@ public sealed class MergeCellsCommand : IWorkbookCommand, IAffectedCellsCommand,
                 sheet.ClearCell(addr);
             else
                 sheet.SetCell(addr, oldCell.Clone());
+        }
+
+        // Undo the comment/note relocation performed in Apply -- put every one of the four
+        // collections back to exactly its pre-merge, per-address state (including putting a
+        // migrated comment back on its original covered cell and clearing it back off the anchor).
+        foreach (var addr in _range.AllCells())
+        {
+            sheet.Comments.Remove(addr);
+            if (_commentSnapshot is not null && _commentSnapshot.TryGetValue(addr, out var comment))
+                sheet.Comments[addr] = comment;
+
+            sheet.CommentAuthors.Remove(addr);
+            if (_commentAuthorSnapshot is not null && _commentAuthorSnapshot.TryGetValue(addr, out var author))
+                sheet.CommentAuthors[addr] = author;
+
+            sheet.ShownComments.Remove(addr);
+            if (_shownCommentSnapshot is not null && _shownCommentSnapshot.Contains(addr))
+                sheet.ShownComments.Add(addr);
+
+            sheet.ThreadedComments.Remove(addr);
+            if (_threadedCommentSnapshot is not null && _threadedCommentSnapshot.TryGetValue(addr, out var threaded))
+                sheet.ThreadedComments[addr] = threaded;
         }
     }
 
