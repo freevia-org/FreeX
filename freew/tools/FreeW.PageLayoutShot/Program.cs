@@ -111,6 +111,8 @@ static int RenderAll(string outDir)
     var equationStructuresPath = VisualEvidenceOutputPath(outDir, "equation-structures", 1);
     var headerFooterImagesP1Path = VisualEvidenceOutputPath(outDir, "f2-hf-images", 1);
     var headerFooterImagesP2Path = VisualEvidenceOutputPath(outDir, "f2-hf-images", 2);
+    var oddEvenHeadersP1Path = VisualEvidenceOutputPath(outDir, "f2-hf-oddeven", 1);
+    var oddEvenHeadersP2Path = VisualEvidenceOutputPath(outDir, "f2-hf-oddeven", 2);
     var sectionLandscapeP1Path = VisualEvidenceOutputPath(outDir, "f2-section-landscape", 1);
     var sectionLandscapeP2Path = VisualEvidenceOutputPath(outDir, "f2-section-landscape", 2);
     var trackedChangesPath = VisualEvidenceOutputPath(outDir, "f2-tracked-changes", 1);
@@ -281,6 +283,27 @@ static int RenderAll(string outDir)
         pageNumber: 2,
         pageCount: 2,
         viewportOffsetY: 1100);
+    if (rc != 0) return rc;
+
+    rc = RenderMode(DocumentViewMode.PrintLayout, oddEvenHeadersP1Path,
+        width: 960, height: 1200,
+        label: "Odd/Even Headers p1",
+        scenarioId: "f2-hf-oddeven",
+        evidence: evidence,
+        documentFactory: BuildOddEvenHeadersDocument,
+        pageNumber: 1,
+        pageCount: 2);
+    if (rc != 0) return rc;
+
+    rc = RenderMode(DocumentViewMode.PrintLayout, oddEvenHeadersP2Path,
+        width: 960, height: 1200,
+        label: "Odd/Even Headers p2",
+        scenarioId: "f2-hf-oddeven",
+        evidence: evidence,
+        documentFactory: BuildOddEvenHeadersDocument,
+        pageNumber: 2,
+        pageCount: 2,
+        alignViewportToRequestedPage: true);
     if (rc != 0) return rc;
 
     rc = RenderMode(DocumentViewMode.PrintLayout, referencesHeavyP1Path,
@@ -639,6 +662,23 @@ static TextDocument BuildBorderWatermarkDocument()
     AddPara("This capture verifies page background composition, a visible page border, and a diagonal text watermark.");
     for (var i = 1; i <= 12; i++)
         AddPara($"Watermark paragraph {i}: body text should remain visible above the watermark and inside the border.");
+
+    return doc;
+}
+
+static TextDocument BuildOddEvenHeadersDocument()
+{
+    var doc = TextDocument.CreateEmpty();
+    doc.Page.DifferentOddEvenPages = true;
+    doc.FinalSectionHeadersFooters.Header = new HeaderFooter("=== ODD PAGE HEADER (pages 1, 3, ...) ===");
+    doc.FinalSectionHeadersFooters.EvenHeader = new HeaderFooter("=== EVEN PAGE HEADER (pages 2, 4, ...) ===");
+    doc.FinalSectionHeadersFooters.Footer = new HeaderFooter("=== ODD PAGE FOOTER ===");
+    doc.FinalSectionHeadersFooters.EvenFooter = new HeaderFooter("=== EVEN PAGE FOOTER ===");
+    doc.Blocks.Clear();
+    doc.Blocks.Add(new Paragraph("Odd/Even Headers Demo") { StyleId = "Heading1" });
+    doc.Blocks.Add(new Paragraph("Page 1 (odd) → ODD PAGE HEADER. Page 2 (even) → EVEN PAGE HEADER. Page 3 (odd) → ODD PAGE HEADER."));
+    for (var i = 1; i <= 50; i++)
+        doc.Blocks.Add(new Paragraph($"Paragraph {i}: Mirror-margin headers alternate on odd/even pages."));
 
     return doc;
 }
@@ -1190,6 +1230,7 @@ static bool ShouldCaptureWordComparablePageSurface(string scenarioId) =>
     string.Equals(scenarioId, "object-format-position-size-style", StringComparison.OrdinalIgnoreCase) ||
     string.Equals(scenarioId, "field-page-number-variants", StringComparison.OrdinalIgnoreCase) ||
     string.Equals(scenarioId, "f2-hf-images", StringComparison.OrdinalIgnoreCase) ||
+    string.Equals(scenarioId, "f2-hf-oddeven", StringComparison.OrdinalIgnoreCase) ||
     string.Equals(scenarioId, "table-layout-complex", StringComparison.OrdinalIgnoreCase) ||
     string.Equals(scenarioId, "table-pagination-repeat-header", StringComparison.OrdinalIgnoreCase) ||
     string.Equals(scenarioId, "table-page-composition-stress", StringComparison.OrdinalIgnoreCase) ||

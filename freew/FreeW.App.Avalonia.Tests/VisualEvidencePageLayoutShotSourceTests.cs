@@ -128,6 +128,10 @@ public sealed class VisualEvidencePageLayoutShotSourceTests
         source.Should().Contain("VisualEvidenceOutputPath(outDir, \"f2-hf-images\", 1)");
         source.Should().Contain("VisualEvidenceOutputPath(outDir, \"f2-hf-images\", 2)");
         source.Should().Contain("FreeWVisualEvidenceDocumentFactory.BuildMultiSectionHeaderFooterImageDocument");
+        source.Should().Contain("VisualEvidenceOutputPath(outDir, \"f2-hf-oddeven\", 1)");
+        source.Should().Contain("VisualEvidenceOutputPath(outDir, \"f2-hf-oddeven\", 2)");
+        source.Should().Contain("BuildOddEvenHeadersDocument");
+        source.Should().Contain("string.Equals(scenarioId, \"f2-hf-oddeven\", StringComparison.OrdinalIgnoreCase)");
         source.Should().Contain("ResolveSectionPageSurfacePlan(scenarioId, sourceDocument, pageNumber, pageCount)");
         source.Should().Contain("SectionPageSurfaceRendererScenarioIds");
         source.Should().Contain("\"avalonia-section-page-surface\"");
