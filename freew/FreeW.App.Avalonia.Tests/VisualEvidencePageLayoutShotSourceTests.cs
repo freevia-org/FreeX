@@ -412,7 +412,7 @@ public sealed class VisualEvidencePageLayoutShotSourceTests
         source.Should().NotContain("$\"~{wd.Warp}\"");
         source.Should().Contain("Text: \"FreeW CONFIDENTIAL\"");
         source.Should().Contain("Style: WordArtStyle.GlowBlue");
-        source.Should().Contain("new Rect(wd.Rect.X - 1, wd.Rect.Y - 1, wd.Rect.Width + 1, wd.Rect.Height + 1)");
+        source.Should().Contain("wd.Rect.Y - (isPrimaryGlowBlueStress ? 3 : 1)");
         source.Should().Contain("Warp: WordArtWarp.Wave1");
         source.Should().Contain("? new Vector(-1, 3)");
         source.Should().Contain("isPrimaryGlowBlueStress ? 1.125 : 1.0");
