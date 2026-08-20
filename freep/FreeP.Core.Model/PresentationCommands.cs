@@ -5308,16 +5308,25 @@ public sealed class AddShapeAnimationCommand : IPresentationCommand
 internal static class ShapeAnimationAnchorFix
 {
     /// <summary>
-    /// If the first animation of the main sequence, or the first animation of any trigger group, in
-    /// <paramref name="anims"/> has a stored trigger other than On Click, corrects it to On Click and
-    /// returns the animation plus its previous trigger so the caller can restore it on undo. At most
-    /// one group can be out of sync after a single remove/reorder (every other group's head was
-    /// already normalized by a prior call), so the first violation found is the only one there is.
-    /// Returns null when no correction was needed.
+    /// For the first animation of the main sequence, and for the first animation of every distinct
+    /// trigger group, in <paramref name="anims"/>: if its stored trigger is other than On Click,
+    /// corrects it to On Click and records the animation plus its previous trigger so the caller can
+    /// restore it on undo. A single mutation (delete/ungroup/reorder/edit) can perturb more than one
+    /// group's head at once -- e.g. a deleted shape can simultaneously have been the main-sequence
+    /// head AND the head of an unrelated trigger group it was wired into, promoting a new head in
+    /// each -- so every group is checked and repaired, not just the first one found out of sync.
+    /// This only needs a single pass over the groups: which entry counts as a given group's "head"
+    /// is a purely structural property (its <see cref="ShapeAnimation.TriggerShapeId"/> and its
+    /// position), and correcting a head's Trigger value here never changes that structure, so fixing
+    /// one group's head cannot un-fix or re-target another group's -- there is nothing for a second
+    /// pass to find that the first pass would have missed. Returns an empty list when no correction
+    /// was needed.
     /// </summary>
-    public static (ShapeAnimation Animation, AnimationTrigger OldTrigger)? NormalizeMainSequenceHead(
+    public static IReadOnlyList<(ShapeAnimation Animation, AnimationTrigger OldTrigger)> NormalizeMainSequenceHead(
         IList<ShapeAnimation> anims)
     {
+        List<(ShapeAnimation Animation, AnimationTrigger OldTrigger)>? fixes = null;
+
         ShapeAnimation? mainHead = null;
         foreach (var a in anims)
         {
@@ -5328,20 +5337,21 @@ internal static class ShapeAnimationAnchorFix
             }
         }
 
-        var fix = TryFixHead(mainHead);
-        if (fix is not null) return fix;
+        var mainFix = TryFixHead(mainHead);
+        if (mainFix is not null) (fixes ??= new()).Add(mainFix.Value);
 
         var seenTriggerShapeIds = new HashSet<uint>();
         foreach (var a in anims)
         {
             if (a.TriggerShapeId is { } triggerShapeId && seenTriggerShapeIds.Add(triggerShapeId))
             {
-                fix = TryFixHead(a);
-                if (fix is not null) return fix;
+                var fix = TryFixHead(a);
+                if (fix is not null) (fixes ??= new()).Add(fix.Value);
             }
         }
 
-        return null;
+        return (IReadOnlyList<(ShapeAnimation Animation, AnimationTrigger OldTrigger)>?)fixes
+            ?? Array.Empty<(ShapeAnimation Animation, AnimationTrigger OldTrigger)>();
     }
 
     private static (ShapeAnimation Animation, AnimationTrigger OldTrigger)? TryFixHead(ShapeAnimation? head)
@@ -5363,8 +5373,8 @@ public sealed class RemoveShapeAnimationCommand : IPresentationCommand
     private readonly int _slideIndex;
     private readonly int _animationIndex;
     private ShapeAnimation? _captured;
-    private ShapeAnimation? _promotedHead;
-    private AnimationTrigger _promotedHeadOldTrigger;
+    private IReadOnlyList<(ShapeAnimation Animation, AnimationTrigger OldTrigger)> _promotedHeads =
+        Array.Empty<(ShapeAnimation Animation, AnimationTrigger OldTrigger)>();
 
     public RemoveShapeAnimationCommand(int slideIndex, int animationIndex)
     {
@@ -5382,9 +5392,7 @@ public sealed class RemoveShapeAnimationCommand : IPresentationCommand
         _captured = anims[_animationIndex];
         anims.RemoveAt(_animationIndex);
 
-        var fix = ShapeAnimationAnchorFix.NormalizeMainSequenceHead(anims);
-        _promotedHead           = fix?.Animation;
-        _promotedHeadOldTrigger = fix?.OldTrigger ?? default;
+        _promotedHeads = ShapeAnimationAnchorFix.NormalizeMainSequenceHead(anims);
     }
 
     public void Revert(Presentation p)
@@ -5395,11 +5403,9 @@ public sealed class RemoveShapeAnimationCommand : IPresentationCommand
         var idx = Math.Clamp(_animationIndex, 0, anims.Count);
         anims.Insert(idx, _captured);
 
-        if (_promotedHead is not null)
-        {
-            _promotedHead.Trigger = _promotedHeadOldTrigger;
-            _promotedHead = null;
-        }
+        foreach (var (animation, oldTrigger) in _promotedHeads)
+            animation.Trigger = oldTrigger;
+        _promotedHeads = Array.Empty<(ShapeAnimation Animation, AnimationTrigger OldTrigger)>();
     }
 }
 
@@ -5411,8 +5417,8 @@ public sealed class ReorderShapeAnimationCommand : IPresentationCommand
     private readonly int _slideIndex;
     private readonly int _from;
     private readonly int _to;
-    private ShapeAnimation? _promotedHead;
-    private AnimationTrigger _promotedHeadOldTrigger;
+    private IReadOnlyList<(ShapeAnimation Animation, AnimationTrigger OldTrigger)> _promotedHeads =
+        Array.Empty<(ShapeAnimation Animation, AnimationTrigger OldTrigger)>();
 
     public ReorderShapeAnimationCommand(int slideIndex, int fromIndex, int toIndex)
     {
@@ -5427,19 +5433,15 @@ public sealed class ReorderShapeAnimationCommand : IPresentationCommand
     {
         if (!MoveInList(p, _from, _to)) return;
         var anims = p.Slides[_slideIndex].Animations;
-        var fix = ShapeAnimationAnchorFix.NormalizeMainSequenceHead(anims);
-        _promotedHead           = fix?.Animation;
-        _promotedHeadOldTrigger = fix?.OldTrigger ?? default;
+        _promotedHeads = ShapeAnimationAnchorFix.NormalizeMainSequenceHead(anims);
     }
 
     public void Revert(Presentation p)
     {
         MoveInList(p, _to, _from);
-        if (_promotedHead is not null)
-        {
-            _promotedHead.Trigger = _promotedHeadOldTrigger;
-            _promotedHead = null;
-        }
+        foreach (var (animation, oldTrigger) in _promotedHeads)
+            animation.Trigger = oldTrigger;
+        _promotedHeads = Array.Empty<(ShapeAnimation Animation, AnimationTrigger OldTrigger)>();
     }
 
     private bool MoveInList(Presentation p, int from, int to)
@@ -5465,8 +5467,8 @@ public sealed class SetShapeAnimationCommand : IPresentationCommand
     private readonly int            _animationIndex;
     private readonly ShapeAnimation _newAnimation;
     private ShapeAnimation?         _oldAnimation;
-    private ShapeAnimation?         _promotedHead;
-    private AnimationTrigger        _promotedHeadOldTrigger;
+    private IReadOnlyList<(ShapeAnimation Animation, AnimationTrigger OldTrigger)> _promotedHeads =
+        Array.Empty<(ShapeAnimation Animation, AnimationTrigger OldTrigger)>();
 
     public SetShapeAnimationCommand(int slideIndex, int animationIndex, ShapeAnimation newAnimation)
     {
@@ -5489,9 +5491,10 @@ public sealed class SetShapeAnimationCommand : IPresentationCommand
         // meaningful relative to a preceding animation in the same group; a user-set With/After
         // Previous on an anchor slot is unplayable and gets silently discarded on save. Correct it
         // back to On Click here so the model, the Animation Pane, and the saved file all agree.
-        var fix = ShapeAnimationAnchorFix.NormalizeMainSequenceHead(anims);
-        _promotedHead           = fix?.Animation;
-        _promotedHeadOldTrigger = fix?.OldTrigger ?? default;
+        // A single replacement can move the edited entry into a leading slot of one group while
+        // vacating a leading slot of another (e.g. replacing the main-sequence head with an entry
+        // that now belongs to a trigger group), so every promoted head is captured, not just one.
+        _promotedHeads = ShapeAnimationAnchorFix.NormalizeMainSequenceHead(anims);
     }
 
     public void Revert(Presentation p)
@@ -5502,11 +5505,9 @@ public sealed class SetShapeAnimationCommand : IPresentationCommand
         if (_animationIndex < 0 || _animationIndex >= anims.Count) return;
         anims[_animationIndex] = _oldAnimation;
 
-        if (_promotedHead is not null)
-        {
-            _promotedHead.Trigger = _promotedHeadOldTrigger;
-            _promotedHead = null;
-        }
+        foreach (var (animation, oldTrigger) in _promotedHeads)
+            animation.Trigger = oldTrigger;
+        _promotedHeads = Array.Empty<(ShapeAnimation Animation, AnimationTrigger OldTrigger)>();
     }
 }
 

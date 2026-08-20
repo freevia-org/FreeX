@@ -1913,7 +1913,24 @@ public sealed partial class DocumentView : RichTextBox
     {
         ArgumentNullException.ThrowIfNull(plan);
         if (plan.RichDocument is { } source && PasteKeepSourceFormatting(source))
+        {
+            // freew-clip-image-text (R159): a synthesized image RichDocument (freew-paste-formats F1)
+            // does not fold the clipboard's independent Text into itself the way an HTML/RTF
+            // RichDocument does, so a clipboard carrying both a bitmap and unrelated plain text (a
+            // screenshot tool that also copies the saved file path, say) must not have the text
+            // silently discarded just because the image pasted successfully. Insert it too, after the
+            // image, at the caret PasteKeepSourceFormatting just left there. An HTML/RTF RichDocument
+            // already contains its Text, so this never runs for that case -- doing so there would
+            // duplicate the paste.
+            if (plan.RichDocumentIsSynthesizedImage)
+            {
+                var imageTextPlan = _editingSession.Interaction.PlanPasteText(plan.Text, plan.TextKind);
+                if (imageTextPlan.HasText)
+                    InsertText(imageTextPlan.Text);
+            }
+
             return true;
+        }
 
         var textPlan = _editingSession.Interaction.PlanPasteText(plan.Text, plan.TextKind);
         if (!textPlan.HasText)

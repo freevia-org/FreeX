@@ -19,7 +19,12 @@ public enum FreeWClipboardTransferStatus
 
 public sealed record FreeWClipboardPayload(
     string? Text,
-    TextDocument? RichDocument)
+    TextDocument? RichDocument,
+    // freew-clip-image-text (R159): true only when RichDocument was synthesised from a clipboard
+    // bitmap (see TryBuildImageDocument) rather than parsed from HTML/RTF. An HTML/RTF RichDocument
+    // already folds the clipboard's Text into itself, so the two are redundant; a synthesised image
+    // document carries none of Text, so the two are independent content and neither may be dropped.
+    bool RichDocumentIsSynthesizedImage = false)
 {
     public bool HasText => PasteText.Normalize(Text).Length > 0;
 
@@ -40,7 +45,10 @@ public sealed record FreeWClipboardTransferResult(
 public sealed record FreeWClipboardPastePlan(
     DocumentPasteTextKind TextKind,
     string? Text,
-    TextDocument? RichDocument)
+    TextDocument? RichDocument,
+    // freew-clip-image-text (R159): carried through from FreeWClipboardPayload -- see that type for why
+    // this, and only this, case must also apply Text after a successful RichDocument paste.
+    bool RichDocumentIsSynthesizedImage = false)
 {
     public bool PreferRichDocument => RichDocument is not null;
 }
@@ -512,7 +520,11 @@ public static class FreeWClipboardApplicationWorkflow
             PasteSpecialOption.KeepTextOnly =>
                 new(DocumentPasteTextKind.TextOnly, payload.Text, RichDocument: null),
             PasteSpecialOption.KeepSourceFormatting when payload.RichDocument is not null =>
-                new(DocumentPasteTextKind.MergeFormatting, payload.Text, payload.RichDocument),
+                new(
+                    DocumentPasteTextKind.MergeFormatting,
+                    payload.Text,
+                    payload.RichDocument,
+                    payload.RichDocumentIsSynthesizedImage),
             _ => new(DocumentPasteTextKind.MergeFormatting, payload.Text, RichDocument: null),
         };
     }
@@ -540,6 +552,7 @@ public static class FreeWClipboardApplicationWorkflow
         }
 
         TextDocument? richDocument = null;
+        var richDocumentIsSynthesizedImage = false;
         if (includeRichDocument)
         {
             // FreeW's own flavour first: it is the only one that carries content controls, tracked-change
@@ -566,10 +579,13 @@ public static class FreeWClipboardApplicationWorkflow
             // freew-paste-formats F1: nothing text-shaped was on the clipboard at all -- if there is a
             // bitmap, wrap it as an inline picture rather than reporting "no text".
             if (richDocument is null && result.Value.Image is { } clipboardImage)
+            {
                 richDocument = TryBuildImageDocument(clipboardImage);
+                richDocumentIsSynthesizedImage = richDocument is not null;
+            }
         }
 
-        var payload = new FreeWClipboardPayload(result.Value.Text, richDocument);
+        var payload = new FreeWClipboardPayload(result.Value.Text, richDocument, richDocumentIsSynthesizedImage);
         return payload.HasContent ? Succeeded(payload) : Empty();
     }
 

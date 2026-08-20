@@ -3231,13 +3231,37 @@ public sealed partial class MainWindow : Window
         }
 
         var plan = FreeWClipboardApplicationWorkflow.PlanPaste(transfer.Payload, PasteSpecialOption.KeepSourceFormatting);
-        var pasted = plan.RichDocument is not null
-            ? _editor.PasteKeepSourceFormatting(plan.RichDocument) || _editor.PasteMergeFormatting(plan.Text)
-            : plan.TextKind == DocumentPasteTextKind.TextOnly
+        if (!ApplyClipboardPastePlan(plan))
+            _status.Text = FreeWClipboardApplicationWorkflow.EmptyClipboardMessage;
+    }
+
+    /// <summary>
+    /// clipboard-interop F1 twin's shared apply step (PasteAsync and OpenPasteSpecialAsync both route
+    /// through here so they cannot disagree). A RichDocument insert is tried first; if it fails, Text is
+    /// the fallback.
+    ///
+    /// freew-clip-image-text (R159): a synthesized image RichDocument (freew-paste-formats F1) does not
+    /// fold the clipboard's independent Text into itself the way an HTML/RTF RichDocument does -- an
+    /// HTML/RTF paste already contains its Text, so pasting Text too would duplicate it, but a
+    /// synthesized image paste does not, so a clipboard carrying both a bitmap and unrelated plain text
+    /// (a screenshot tool that also copies the saved file path, say) must still get the text inserted
+    /// after the image rather than silently dropped.
+    /// </summary>
+    private bool ApplyClipboardPastePlan(FreeWClipboardPastePlan plan)
+    {
+        if (plan.RichDocument is not { } richDocument)
+        {
+            return plan.TextKind == DocumentPasteTextKind.TextOnly
                 ? _editor.PastePlainText(plan.Text)
                 : _editor.PasteMergeFormatting(plan.Text);
-        if (!pasted)
-            _status.Text = FreeWClipboardApplicationWorkflow.EmptyClipboardMessage;
+        }
+
+        if (!_editor.PasteKeepSourceFormatting(richDocument))
+            return _editor.PasteMergeFormatting(plan.Text);
+
+        if (plan.RichDocumentIsSynthesizedImage)
+            _editor.PasteMergeFormatting(plan.Text);
+        return true;
     }
 
     private async Task PastePlainTextAsync()
@@ -3266,12 +3290,7 @@ public sealed partial class MainWindow : Window
             return;
 
         var plan = FreeWClipboardApplicationWorkflow.PlanPaste(transfer.Payload, option.Value);
-        var pasted = plan.RichDocument is not null
-            ? _editor.PasteKeepSourceFormatting(plan.RichDocument) || _editor.PasteMergeFormatting(plan.Text)
-            : plan.TextKind == DocumentPasteTextKind.TextOnly
-                ? _editor.PastePlainText(plan.Text)
-                : _editor.PasteMergeFormatting(plan.Text);
-        if (!pasted)
+        if (!ApplyClipboardPastePlan(plan))
             _status.Text = FreeWClipboardApplicationWorkflow.EmptyClipboardMessage;
     }
 

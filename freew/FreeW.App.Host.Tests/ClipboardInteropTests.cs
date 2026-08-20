@@ -90,6 +90,77 @@ public sealed class ClipboardInteropTests
         ((Paragraph)view.Model.Blocks[0]).PlainText.Should().Be("Plain only");
     }
 
+    // R159 remediation: a clipboard carrying BOTH a bitmap and independent plain text (a screenshot
+    // tool that also copies the saved file path, say) used to lose the text. PlanPaste(KeepSourceFormatting)
+    // prefers RichDocument unconditionally over Text, and the synthesized image RichDocument
+    // (freew-paste-formats F1's TryBuildImageDocument) carries none of the clipboard's Text the way an
+    // HTML/RTF RichDocument does. ApplyClipboardPastePlan only fell back to Text when the rich insert
+    // FAILED -- never when it succeeded -- so a successful image paste silently discarded the
+    // accompanying text. Before this fix, the same clipboard pasted the text (there was no image branch
+    // yet); this proves the text is not lost now that the image branch exists.
+    [StaFact]
+    public void Paste_ImageWithAccompanyingText_KeepsBothTheImageAndTheText()
+    {
+        var clipboard = new FakeClipboard
+        {
+            ReadResult = PlatformClipboardReadResult<PlatformClipboardContent>.Success(
+                new PlatformClipboardContent(
+                    Text: "C:\\Users\\ann\\Pictures\\screenshot.png",
+                    Image: new PlatformClipboardImage(OnePixelPngBytes, PixelWidth: 1, PixelHeight: 1))),
+        };
+
+        var document = TextDocument.CreateEmpty();
+        document.Blocks.Clear();
+        document.Blocks.Add(new Paragraph());
+        var view = new DocumentView(clipboard);
+        view.LoadModel(document);
+        var wpfParagraph = view.Document.Blocks.OfType<System.Windows.Documents.Paragraph>().Single();
+        view.CaretPosition = wpfParagraph.ContentStart;
+
+        ApplicationCommands.Paste.Execute(null, view);
+
+        view.CommitToModel();
+        view.Model.Paragraphs.SelectMany(p => p.Runs).Should().Contain(
+            run => run.Image != null,
+            "the pasted bitmap must still land as an inline picture");
+        view.Model.Paragraphs.Any(p => p.PlainText.Contains("screenshot.png")).Should().BeTrue(
+            "the clipboard's independent plain text must survive alongside the image, not be silently discarded");
+    }
+
+    // Sibling no-regression: an HTML/RTF-derived RichDocument already contains the clipboard's Text
+    // (RTF/HTML rendering IS the text plus formatting), so the extra text-insert this fix adds must not
+    // fire for it -- otherwise pasting "Bold plain" would land as "Bold plainBold plain".
+    [StaFact]
+    public void Paste_RtfWithAccompanyingText_DoesNotDuplicateTheText()
+    {
+        const string rtf = @"{\rtf1\ansi\b Bold\b0  plain}";
+        var clipboard = new FakeClipboard
+        {
+            ReadResult = PlatformClipboardReadResult<PlatformClipboardContent>.Success(
+                new PlatformClipboardContent(
+                    Text: "Bold plain",
+                    CustomData: [PlatformClipboardData.FromText(
+                        FreeWClipboardApplicationWorkflow.RichTextFormat,
+                        rtf)])),
+        };
+
+        var document = TextDocument.CreateEmpty();
+        document.Blocks.Clear();
+        document.Blocks.Add(new Paragraph());
+        var view = new DocumentView(clipboard);
+        view.LoadModel(document);
+        var wpfParagraph = view.Document.Blocks.OfType<System.Windows.Documents.Paragraph>().Single();
+        view.CaretPosition = wpfParagraph.ContentStart;
+
+        ApplicationCommands.Paste.Execute(null, view);
+
+        view.CommitToModel();
+        var plainText = string.Concat(view.Model.Paragraphs.Select(p => p.PlainText));
+        plainText.Should().Be(
+            "Bold plain",
+            "an HTML/RTF RichDocument already contains the clipboard's Text, so it must not be inserted a second time");
+    }
+
     [StaFact]
     public void Paste_CanExecute_False_WhenReadOnly()
     {
@@ -182,6 +253,9 @@ public sealed class ClipboardInteropTests
 
         ApplicationCommands.Copy.CanExecute(null, view).Should().BeFalse();
     }
+
+    private static readonly byte[] OnePixelPngBytes = Convert.FromBase64String(
+        "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==");
 
     private static void SeedSystemClipboardText(string text)
     {
