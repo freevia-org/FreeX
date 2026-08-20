@@ -21,7 +21,20 @@ public sealed record WorkbookClipboardSnapshot(
     // silently dropping the source range's hyperlinks/hyperlink metadata (and everything else
     // gated on that lookup). Null for any caller that doesn't supply it, which keeps every
     // pre-existing snapshot construction (including in tests) behaving exactly as before.
-    Sheet? SourceSheet = null);
+    Sheet? SourceSheet = null,
+    // freex-cell-styles-F1: the live source Workbook captured at COPY time, mirroring SourceSheet
+    // immediately above for the identical reason -- but for StyleId instead of SheetId. A pasted
+    // Cell's StyleId (see Cells above) is a raw index into the SOURCE workbook's own private style
+    // table; PasteCommandFactory needs the SOURCE workbook itself (not just its Sheet) to resolve
+    // that index back to an actual CellStyle so it can be re-registered into the DESTINATION
+    // workbook's style table instead of being trusted as an index into it. Without this, a
+    // cross-window paste (copy in one open FreeX window, paste in another -- this session is a
+    // DI-wide singleton shared by every window, see the class doc comment above) silently renders
+    // the pasted cell with whatever unrelated CellStyle happens to occupy that same numeric slot in
+    // the destination workbook's own, independently-built style table. Null for any caller that
+    // doesn't supply it, which keeps every pre-existing snapshot construction (including in tests)
+    // behaving exactly as before.
+    Workbook? SourceWorkbook = null);
 
 public readonly record struct WorkbookClipboardReadObservation(
     bool Available,
@@ -104,7 +117,8 @@ public sealed class WorkbookClipboardSession
             snapshot.IsCut,
             snapshot.SourceAreas?.ToArray(),
             marker,
-            snapshot.SourceSheet);
+            snapshot.SourceSheet,
+            snapshot.SourceWorkbook);
         Owner = owner;
         return Content;
     }

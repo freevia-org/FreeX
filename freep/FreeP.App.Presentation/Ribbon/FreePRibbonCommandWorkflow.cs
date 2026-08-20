@@ -833,7 +833,8 @@ public static class FreePRibbonCommandWorkflow
                     case TableCellTextFormatKind.Subscript: editor.ToggleSubscriptOnSelection(); break;
                 }
                 return false;
-            }));
+            },
+                () => editor.SelectedShapeIds));
     }
 
     /// <summary>
@@ -1217,6 +1218,18 @@ public static class FreePRibbonCommandWorkflow
     /// resumes trusting the query the moment a click is <em>not</em> reported as native-handled
     /// (selection change, non-native table-cell/selection path, etc.). The same fallback also
     /// covers the indeterminate case (nothing selected carries the property).
+    ///
+    /// A native-handled edit session also ends without any further click at all -- the user
+    /// presses Escape or clicks away, then selects a different shape, and never touches this
+    /// button again. <paramref name="selectedShapeIds"/> lets <see cref="GetState"/> notice that:
+    /// it snapshots the selection the moment a live session starts, and if the current selection no
+    /// longer matches on a later <see cref="GetState"/> call, the session is treated as over and the
+    /// query resumes. This only catches session-end-by-selection-change; a session that ends by the
+    /// native editor simply deactivating on the SAME still-selected shape (no selection change)
+    /// leaves no signal in this class today -- that would need a new host query (e.g. an "is a
+    /// native text edit session currently active" entry on <c>FreePRibbonHostQueryEndpoints</c>,
+    /// wired from the WPF/Avalonia in-canvas editors' own deactivation events) rather than a
+    /// heuristic bolted on here.
     /// </summary>
     private sealed class LocalToggleCommand : IRibbonStatefulCommand
     {
@@ -1224,19 +1237,23 @@ public static class FreePRibbonCommandWorkflow
         private readonly RibbonCommandId _commandId;
         private readonly Func<bool?> _queryChecked;
         private readonly Func<bool> _execute;
+        private readonly Func<IReadOnlyList<uint>> _selectedShapeIds;
         private bool _isChecked;
         private bool _liveEditSessionActive;
+        private IReadOnlyList<uint> _liveEditSessionSelection = [];
 
         public LocalToggleCommand(
             RibbonStateStore stateStore,
             RibbonCommandId commandId,
             Func<bool?> queryChecked,
-            Func<bool> execute)
+            Func<bool> execute,
+            Func<IReadOnlyList<uint>> selectedShapeIds)
         {
             _stateStore = stateStore;
             _commandId = commandId;
             _queryChecked = queryChecked;
             _execute = execute;
+            _selectedShapeIds = selectedShapeIds;
         }
 
         public void Execute(RibbonCommandContext context)
@@ -1247,6 +1264,11 @@ public static class FreePRibbonCommandWorkflow
                 if (!_liveEditSessionActive)
                     _isChecked = _queryChecked() ?? _isChecked;
                 _isChecked = !_isChecked;
+                // Snapshot defensively: EditingSession.SelectedShapeIds exposes its live, mutable
+                // backing list directly (no copy), so capturing the reference itself would compare
+                // as equal to every later selection -- the list object never changes identity, only
+                // its contents do.
+                _liveEditSessionSelection = _selectedShapeIds().ToArray();
             }
             else
             {
@@ -1257,8 +1279,13 @@ public static class FreePRibbonCommandWorkflow
             _stateStore.SetChecked(_commandId, _isChecked);
         }
 
-        public RibbonCommandState GetState() => new(
-            IsChecked: _liveEditSessionActive ? _isChecked : (_queryChecked() ?? _isChecked));
+        public RibbonCommandState GetState()
+        {
+            if (_liveEditSessionActive && !_liveEditSessionSelection.SequenceEqual(_selectedShapeIds()))
+                _liveEditSessionActive = false;
+
+            return new(IsChecked: _liveEditSessionActive ? _isChecked : (_queryChecked() ?? _isChecked));
+        }
     }
 
     private sealed class HostStatefulActionCommand(

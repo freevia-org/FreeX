@@ -298,7 +298,8 @@ public sealed partial class MainWindow : Window,
         IUserMessageService? messageService = null,
         PresentationNativePrintHandoffHostCapabilities? nativePrintCapability = null,
         IReadOnlyList<string>? startupFilePaths = null,
-        bool suppressStartupRecoveryOffer = false)
+        bool suppressStartupRecoveryOffer = false,
+        PresentationCustomDictionaryStore? proofingDictionaryStore = null)
     {
         _options = options ?? new FreePOptions();
         _optionsRuntime = new FreePOptionsRuntimeSession(_options);
@@ -363,7 +364,8 @@ public sealed partial class MainWindow : Window,
                 PresentProofingPane: plan => _reviewPaneHostCoordinator.PresentProofingPane(plan),
                 UpdateAfterCommentMutation: UpdateTitle,
                 UpdateAfterCommentNavigation: UpdateSlideCount,
-                UpdateAfterProofingCorrection: UpdateTitle));
+                UpdateAfterProofingCorrection: UpdateTitle),
+            proofingDictionaryStore ?? PresentationCustomDictionaryStore.Load());
         _reviewPaneHostCoordinator = new(
             _reviewWorkflowSession,
             _workareaSession.Panes,

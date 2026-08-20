@@ -175,7 +175,18 @@ public static class PasteCommandFactory
         // destination-workbook lookup; callers that don't have one (or that know source and
         // destination are the same workbook) pass null/omit it, which preserves the prior lookup
         // behavior exactly.
-        Sheet? sourceSheetOverride = null)
+        Sheet? sourceSheetOverride = null,
+        // freex-cell-styles-F1: the live source Workbook captured at COPY time, mirroring
+        // sourceSheetOverride immediately above for the identical reason but for StyleId instead
+        // of SheetId. sourceCells' Cell.StyleId (see the Cells doc on WorkbookClipboardSnapshot)
+        // is a raw index into the SOURCE workbook's own private style table -- meaningless as an
+        // index into `workbook` (the DESTINATION) whenever they are two different Workbook
+        // instances. Used below only to translate the StyleId this method hands to
+        // PasteCellsCommand back into real CellStyle content that command can re-register into
+        // the destination workbook itself; null (the default, same as sourceSheetOverride) keeps
+        // every pre-existing caller's behavior unchanged -- including same-window paste, where
+        // source and destination are the same workbook and this is simply never needed.
+        Workbook? sourceWorkbookOverride = null)
     {
         var destination = destinationRange.Start;
         var validationError = PasteCommandValidator.ValidateInternalPaste(
@@ -216,6 +227,12 @@ public static class PasteCommandFactory
         // later -- so overriding just this narrower read is safe.
         var sourceSheet = workbook.GetSheet(sourceRange.Start.Sheet);
         var richContentSourceSheet = sourceSheetOverride ?? sourceSheet;
+        // freex-cell-styles-F1: mirrors richContentSourceSheet immediately above, but for
+        // resolving StyleId -> CellStyle content instead of sheet-scoped rich content. Null for an
+        // ordinary same-window paste (workbook IS the source workbook already, so PasteCellsCommand
+        // below is left with no sourceStyles override and keeps its prior untranslated behavior,
+        // which is already correct in that case).
+        var styleSourceWorkbook = sourceWorkbookOverride;
 
         var shouldTileDestinationRange = targetRows > pasteRows || targetCols > pasteCols;
         if (shouldTileDestinationRange)
@@ -245,7 +262,8 @@ public static class PasteCommandFactory
                 targetCols,
                 mode,
                 options,
-                sourceAreas);
+                sourceAreas,
+                styleSourceWorkbook);
         }
 
         if (options.ContentKind == PasteSpecialContentKind.AllMergingConditionalFormats)
@@ -274,7 +292,8 @@ public static class PasteCommandFactory
                 options with { ContentKind = PasteSpecialContentKind.Default },
                 sourceAreas,
                 mergeConditionalFormats: true,
-                sourceSheetOverride: sourceSheetOverride);
+                sourceSheetOverride: sourceSheetOverride,
+                sourceWorkbookOverride: sourceWorkbookOverride);
         }
 
         if (options.Transpose ||
@@ -561,6 +580,15 @@ public static class PasteCommandFactory
         Dictionary<CellAddress, IReadOnlyList<CellTextRun>>? richTextRuns = carriesFormatting ? [] : null;
         Dictionary<CellAddress, string>? hyperlinks = carriesFormatting ? [] : null;
         Dictionary<CellAddress, HyperlinkMetadata>? hyperlinkMetadata = carriesFormatting ? [] : null;
+        // freex-cell-styles-F1: same carriesFormatting/mode==All gate as richTextRuns above -- this
+        // branch's pastedCell.StyleId (set by BuildAllCell inside BuildPastedCell just below, since
+        // options.ContentKind is always Default here) is the source cell's RAW StyleId, an index
+        // into styleSourceWorkbook's (not `workbook`'s) style table whenever they differ. Populated
+        // only when styleSourceWorkbook is known (a cross-window paste); PasteCellsCommand uses it
+        // to re-register the real style content into the destination workbook instead of trusting
+        // the raw index. Null for the ordinary same-window case, where workbook IS already the
+        // source workbook and the untranslated StyleId is already correct.
+        Dictionary<CellAddress, CellStyle>? sourceStyles = carriesFormatting && styleSourceWorkbook is not null ? [] : null;
         foreach (var (source, sourceCell) in sourceCells)
         {
             if (options.SkipBlanks && IsBlank(sourceCell))
@@ -579,6 +607,9 @@ public static class PasteCommandFactory
                 colDelta,
                 destinationStyle);
             edits.Add((destinationAddress, pastedCell));
+
+            if (sourceStyles is not null)
+                sourceStyles[destinationAddress] = styleSourceWorkbook!.GetStyle(sourceCell.StyleId);
 
             if (richTextRuns is not null &&
                 richContentSourceSheet is not null &&
@@ -605,7 +636,7 @@ public static class PasteCommandFactory
         if (mode != PasteCellsMode.All)
             return new EditCellsCommand(targetSheetId, edits);
 
-        var pasteAllCommand = new PasteCellsCommand(targetSheetId, edits, richTextRuns, hyperlinks, hyperlinkMetadata);
+        var pasteAllCommand = new PasteCellsCommand(targetSheetId, edits, richTextRuns, hyperlinks, hyperlinkMetadata, sourceStyles: sourceStyles);
         var pasteFootprint = new GridRange(
             destination,
             new CellAddress(targetSheetId, destination.Row + pasteRows - 1, destination.Col + pasteCols - 1));
@@ -800,7 +831,12 @@ public static class PasteCommandFactory
         uint targetCols,
         PasteCellsMode mode,
         PasteSpecialOptions options,
-        IReadOnlyList<GridRange>? sourceAreas)
+        IReadOnlyList<GridRange>? sourceAreas,
+        // freex-cell-styles-F1: mirrors richContentSourceSheet's cross-window override just above,
+        // but for resolving a source cell's StyleId back to real CellStyle content instead of
+        // sheet-scoped rich content. See the identical parameter on the non-tiled
+        // CreateInternalPasteCommand for the full rationale.
+        Workbook? styleSourceWorkbook = null)
     {
         var sourceLookup = sourceCells.ToDictionary(c => c.Source, c => c.Cell);
         // An arithmetic Operation paste only combines the destination cell's numeric value (see
@@ -892,6 +928,8 @@ public static class PasteCommandFactory
         Dictionary<CellAddress, IReadOnlyList<CellTextRun>>? richTextRuns = carriesFormatting ? [] : null;
         Dictionary<CellAddress, string>? hyperlinks = carriesFormatting ? [] : null;
         Dictionary<CellAddress, HyperlinkMetadata>? hyperlinkMetadata = carriesFormatting ? [] : null;
+        // freex-cell-styles-F1: same rationale as the identical block in the non-tiled path above.
+        Dictionary<CellAddress, CellStyle>? sourceStyles = carriesFormatting && styleSourceWorkbook is not null ? [] : null;
         // A tiled transpose paste (destination an exact multiple of the transposed block's size)
         // replicates the source block once per tile; each replica tile must transpose its formulas
         // against its OWN destination-block origin, not the overall (tile-1) destination start,
@@ -935,6 +973,9 @@ public static class PasteCommandFactory
                 destinationStyle);
             edits.Add((destinationAddress, pastedCell));
 
+            if (sourceStyles is not null)
+                sourceStyles[destinationAddress] = styleSourceWorkbook!.GetStyle(sourceCell.StyleId);
+
             if (richTextRuns is not null &&
                 richContentSourceSheet is not null &&
                 richContentSourceSheet.RichTextRuns.TryGetValue(sourceAddress, out var sourceRuns))
@@ -958,7 +999,7 @@ public static class PasteCommandFactory
         }
 
         IWorkbookCommand tiledCommand = mode == PasteCellsMode.All
-            ? new PasteCellsCommand(targetSheetId, edits, richTextRuns, hyperlinks, hyperlinkMetadata)
+            ? new PasteCellsCommand(targetSheetId, edits, richTextRuns, hyperlinks, hyperlinkMetadata, sourceStyles: sourceStyles)
             : new EditCellsCommand(targetSheetId, edits);
 
         var tiledExtraCommands = new List<IWorkbookCommand>();

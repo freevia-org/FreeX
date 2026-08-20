@@ -1182,6 +1182,7 @@ internal sealed class PaginatedEditorPanel : ScrollViewer
         box.Body.PreviewMouseLeftButtonDown += OnBodyMouseDown;
         box.Body.PreviewMouseMove           += OnBodyMouseMove;
         box.Body.PreviewMouseLeftButtonUp   += OnBodyMouseUp;
+        box.Body.LostMouseCapture           += OnBodyLostMouseCapture;
     }
 
     private void UnhookDragDrop(PageBox box)
@@ -1189,6 +1190,16 @@ internal sealed class PaginatedEditorPanel : ScrollViewer
         box.Body.PreviewMouseLeftButtonDown -= OnBodyMouseDown;
         box.Body.PreviewMouseMove           -= OnBodyMouseMove;
         box.Body.PreviewMouseLeftButtonUp   -= OnBodyMouseUp;
+        box.Body.LostMouseCapture           -= OnBodyLostMouseCapture;
+
+        // Defensive: page boxes are about to be discarded (repagination). If this box's Body
+        // still holds mouse capture from an in-flight drag, release it now -- otherwise capture
+        // would remain pinned to a Body that's leaving the visual tree, which can swallow ALL
+        // future mouse input app-wide, not just text selection.
+        if (ReferenceEquals(Mouse.Captured, box.Body))
+        {
+            box.Body.ReleaseMouseCapture();
+        }
     }
 
     private void OnBodyMouseDown(object sender, MouseButtonEventArgs e)
@@ -1235,11 +1246,47 @@ internal sealed class PaginatedEditorPanel : ScrollViewer
             return;
 
         // Threshold exceeded — start drag.
-        _dragPending = false;
-        _dragActive = true;
+        BeginActiveDrag();
 
         // Suppress the native RichTextBox mouse-move so it doesn't change the selection.
         e.Handled = true;
+    }
+
+    /// <summary>
+    /// Transitions from a pending drag (mouse-down detected inside the cross-page selection) to
+    /// an active one (drag threshold exceeded).
+    ///
+    /// <para>
+    /// Captures the mouse to the drag's source Body so every subsequent Preview mouse event for
+    /// this gesture keeps reaching this panel's handlers even once the pointer leaves the source
+    /// box's bounds -- e.g. crossing the gray inter-page gap on its way to a different page, or
+    /// straying over the scrollbar. Without this capture, none of the Preview handlers (including
+    /// <see cref="OnBodyMouseUp"/>) fire again for this gesture once the pointer leaves the
+    /// source Body, so releasing the mouse there leaves <c>_dragActive</c> stuck true and native
+    /// click-and-drag text selection permanently suppressed until the next repagination.
+    /// </para>
+    /// </summary>
+    private void BeginActiveDrag()
+    {
+        _dragPending = false;
+        _dragActive = true;
+        _dragSourceBox?.Body.CaptureMouse();
+    }
+
+    /// <summary>
+    /// Fires if mouse capture is lost mid-drag for any reason other than the normal MouseUp path
+    /// (e.g. the window is deactivated, or another control forcibly steals capture). Defensive
+    /// reset so <c>_dragActive</c> can never get stuck true — the same failure mode this whole
+    /// capture mechanism exists to prevent.
+    /// </summary>
+    private void OnBodyLostMouseCapture(object sender, MouseEventArgs e)
+    {
+        if (_dragActive || _dragPending)
+        {
+            _dragActive = false;
+            _dragPending = false;
+            _dragSourceBox = null;
+        }
     }
 
     private void OnBodyMouseUp(object sender, MouseButtonEventArgs e)
@@ -1251,39 +1298,90 @@ internal sealed class PaginatedEditorPanel : ScrollViewer
             return;
         }
 
-        _dragActive = false;
-        _dragPending = false;
+        EndActiveDrag();
 
         // Determine whether this is a copy (Ctrl held) or move.
         bool isCopy = (Keyboard.Modifiers & ModifierKeys.Control) != 0;
 
+        // Resolve the drop target and perform the move/copy. Because the mouse is captured to the
+        // drag's source Body for the whole gesture, "sender" here is ALWAYS that source Body --
+        // even when the pointer is physically over a different page -- so the drop target must be
+        // found by hit-testing the real pointer position against every page box's bounds, not by
+        // trusting sender.
+        if (CompleteDrag(e.GetPosition(_pageHost), isCopy))
+        {
+            e.Handled = true;
+        }
+    }
+
+    /// <summary>
+    /// Terminates the active drag's state machine unconditionally, before the drop target is even
+    /// resolved -- so the drag can never be left stuck active regardless of where (or whether) it
+    /// actually drops. Releases the mouse capture <see cref="BeginActiveDrag"/> took, restoring
+    /// ordinary click-and-drag text selection everywhere.
+    /// </summary>
+    private void EndActiveDrag()
+    {
+        _dragActive = false;
+        _dragPending = false;
+        _dragSourceBox?.Body.ReleaseMouseCapture();
+        _dragSourceBox = null;
+    }
+
+    /// <summary>
+    /// Finishes an in-flight cross-page drag once the mouse button is released: resolves the page
+    /// box under <paramref name="panelPoint"/> (in <c>_pageHost</c> coordinates), and performs the
+    /// move/copy. Returns true when the caller's routed event should be marked handled.
+    ///
+    /// <para>
+    /// Deliberately takes a plain <see cref="Point"/> rather than the routed
+    /// <see cref="MouseButtonEventArgs"/> so the drop-target resolution and move/copy logic can be
+    /// unit-tested with a real point in panel coordinates, without needing a live WPF mouse device
+    /// to synthesize <c>MouseButtonEventArgs.GetPosition</c> — the same headless-test constraint
+    /// documented on <c>PagedEditCrossPageDragMoveAtomicityTests</c>.
+    /// </para>
+    /// </summary>
+    private bool CompleteDrag(Point panelPoint, bool isCopy)
+    {
         // Find the box under the mouse for the drop target.
-        var dropBox = _pageBoxes.FirstOrDefault(b => ReferenceEquals(b.Body, sender));
+        var dropBox = FindPageBoxAtPoint(panelPoint);
         if (dropBox is null)
         {
-            // Mouse up outside a known box — cancel.
-            return;
+            // Released outside every page box (e.g. the inter-page gap, a scrollbar, or the
+            // margin) — cancel the drop, same as the pre-existing "outside a known box" behaviour.
+            return false;
         }
 
-        // Compute the drop TextPointer at the mouse-up position.
-        var dropPoint = e.GetPosition(dropBox.Body);
+        // Compute the drop TextPointer at the mouse-up position, translated into the drop box's
+        // own Body-local coordinate space.
+        Point dropPoint;
+        try
+        {
+            var bodyOrigin = dropBox.Body.TranslatePoint(new Point(0, 0), _pageHost);
+            dropPoint = new Point(panelPoint.X - bodyOrigin.X, panelPoint.Y - bodyOrigin.Y);
+        }
+        catch
+        {
+            return false;
+        }
+
         TextPointer? dropPtr = GetTextPointerAtPoint(dropBox, dropPoint);
         if (dropPtr is null)
-            return;
+            return false;
 
         // Determine the drop box index.
         int dropBoxIdx = CrossPageSelection.IndexOfBox(_pageBoxes, dropBox);
         if (dropBoxIdx < 0)
-            return;
+            return false;
 
         // No-op: drop inside the selection range.
         if (IsDropInsideSelection(dropBoxIdx, dropPtr))
-            return;
+            return false;
 
         // Obtain the text content of the cross-page selection.
         var selectedText = _crossPageSelection.GetSelectedText(_pageBoxes);
         if (selectedText.Length == 0)
-            return;
+            return false;
 
         // Snapshot the drop pointer before a move-cut so the TextPointer remains valid.
         // WPF TextPointer objects track the document tree; after DeleteCrossPageSelection
@@ -1304,8 +1402,7 @@ internal sealed class PaginatedEditorPanel : ScrollViewer
             // here instead — the selection is already cleared/re-paginated by CutSelection.
             if (!CutSelection())
             {
-                e.Handled = true;
-                return;
+                return true;
             }
         }
 
@@ -1326,7 +1423,36 @@ internal sealed class PaginatedEditorPanel : ScrollViewer
         }
 
         ScheduleRepaginate();
-        e.Handled = true;
+        return true;
+    }
+
+    /// <summary>
+    /// Returns the page box whose Body contains <paramref name="panelPoint"/> (in
+    /// <c>_pageHost</c> coordinates), or null when the point falls outside every page's Body —
+    /// e.g. in the inter-page gap, a margin, or the scrollbar. Used to resolve the real drop
+    /// target for a cross-page drag release, since mouse capture makes the routed event's
+    /// "sender" always the drag's source box regardless of where the pointer actually is.
+    /// </summary>
+    private PageBox? FindPageBoxAtPoint(Point panelPoint)
+    {
+        foreach (var box in _pageBoxes)
+        {
+            try
+            {
+                var origin = box.Body.TranslatePoint(new Point(0, 0), _pageHost);
+                if (panelPoint.X >= origin.X && panelPoint.X <= origin.X + box.Body.ActualWidth &&
+                    panelPoint.Y >= origin.Y && panelPoint.Y <= origin.Y + box.Body.ActualHeight)
+                {
+                    return box;
+                }
+            }
+            catch
+            {
+                // Not connected to the panel's visual tree right now (e.g. mid-repagination) —
+                // skip it.
+            }
+        }
+        return null;
     }
 
     /// <summary>

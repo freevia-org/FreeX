@@ -13,5 +13,9 @@ public sealed partial class MainWindow : IAutosaveWorkbookSource
     string IAutosaveWorkbookSource.DisplayName => _session.DisplayName;
     bool IAutosaveWorkbookSource.IsWorkbookDirty => _session.IsDirty;
     int IAutosaveWorkbookSource.WorkbookDirtyGeneration => _session.DirtyGeneration;
+    // Reuse the same reconciliation Ctrl+S uses (WorkbookSession.ReconcileViewStateForSave) so an
+    // autosave/crash snapshot persists THIS window's own zoom/freeze/split/scroll/active-cell
+    // instead of whichever "New Window" sibling last touched the shared Sheet view fields.
+    void IAutosaveWorkbookSource.ReconcileViewStateForSnapshot() => _session.ReconcileViewStateForSave();
     string IAutosaveWorkbookSource.DocumentId => _session.Workbook.Id.Value.ToString();
 }

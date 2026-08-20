@@ -72,8 +72,8 @@ public static class PresentationHandoutPdfExporter
         var layout = PresentationExportPlanner.BuildHandoutLayoutPlan(
             request.PrintRequest,
             presentation,
-            PresentationPdfExporter.DefaultSlideWidthPoints,
-            PresentationPdfExporter.DefaultSlideHeightPoints,
+            presentation.SlideSizeCxEmu,
+            presentation.SlideSizeCyEmu,
             pageWidth,
             pageHeight);
 

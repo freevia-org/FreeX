@@ -5038,7 +5038,13 @@ public sealed class MainWindowHeadlessTests : IDisposable
 
         var ran = await OnUiThread(() =>
         {
-            var window = new MainWindow(Array.Empty<string>());
+            // An in-memory (null-path) dictionary store keeps this test deterministic across runs --
+            // the real PresentationCustomDictionaryStore.Load() default persists to disk, which would
+            // otherwise let a word added by an earlier run suppress the very issue this test expects.
+            var window = new MainWindow(
+                Array.Empty<string>(),
+                loadRecentFilesStore: null,
+                proofingDictionaryStore: new PresentationCustomDictionaryStore(storePath: null));
             window.Editor.CurrentSlide!.Title = "Title eror";
             window.Editor.CurrentSlide.Shapes.Add(new SlideShape
             {

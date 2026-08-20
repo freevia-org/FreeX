@@ -13,6 +13,23 @@ public sealed class PasteCellsCommand : IWorkbookCommand, IEstimatesMemory
     private readonly IReadOnlyDictionary<CellAddress, string>? _hyperlinks;
     private readonly IReadOnlyDictionary<CellAddress, HyperlinkMetadata>? _hyperlinkMetadata;
     private readonly IReadOnlyDictionary<CellAddress, CellPhoneticGuide>? _phoneticGuides;
+    // freex-cell-styles-F1: each pasted Cell's StyleId (set by PasteCommandFactory from the SOURCE
+    // sheet's Cell.StyleId) is a raw index into the SOURCE workbook's private style table. For an
+    // ordinary same-window paste that index is also valid in ctx.Workbook (they're the same
+    // workbook), so leaving it untranslated has always looked correct. But when copy and paste
+    // happen in two different open FreeX windows (WorkbookClipboardSession is a DI-wide singleton
+    // shared by every window, see its own doc comment), ctx.Workbook is a DIFFERENT, independently
+    // built Workbook whose own style table has whatever CellStyle happens to occupy that same
+    // numeric slot -- writing the raw index in silently swaps in an unrelated style. When the
+    // caller can supply the ACTUAL source CellStyle content per pasted address (PasteCommandFactory
+    // resolves it from the source sheet's owning workbook), Apply() re-registers that content into
+    // ctx.Workbook via RegisterStyle -- which is workbook-relative dedup-by-structural-equality, so
+    // for the ordinary same-workbook case this simply resolves back to the identical index the old
+    // code used, and for the cross-workbook case it resolves (or creates) the correct index in the
+    // DESTINATION workbook instead of trusting the source's. Null (the default) preserves the prior
+    // untranslated behavior exactly, which every pre-existing caller that doesn't supply this still
+    // gets.
+    private readonly IReadOnlyDictionary<CellAddress, CellStyle>? _sourceStyles;
     private List<(CellAddress Address, Cell? OldCell, StyleId? OldStyleOnly, bool HadRichTextRuns, IReadOnlyList<CellTextRun>? OldRichTextRuns, bool HadHyperlink, string? OldHyperlink, bool HadHyperlinkMetadata, HyperlinkMetadata? OldHyperlinkMetadata, bool HadPhoneticGuide, CellPhoneticGuide? OldPhoneticGuide)>? _snapshot;
 
     // R119-commands-undo-byte-budget-1: the undo snapshot holds a full Cell clone plus style,
@@ -34,7 +51,8 @@ public sealed class PasteCellsCommand : IWorkbookCommand, IEstimatesMemory
         IReadOnlyDictionary<CellAddress, IReadOnlyList<CellTextRun>>? richTextRuns = null,
         IReadOnlyDictionary<CellAddress, string>? hyperlinks = null,
         IReadOnlyDictionary<CellAddress, HyperlinkMetadata>? hyperlinkMetadata = null,
-        IReadOnlyDictionary<CellAddress, CellPhoneticGuide>? phoneticGuides = null)
+        IReadOnlyDictionary<CellAddress, CellPhoneticGuide>? phoneticGuides = null,
+        IReadOnlyDictionary<CellAddress, CellStyle>? sourceStyles = null)
     {
         _sheetId = sheetId;
         _cells = cells;
@@ -42,6 +60,7 @@ public sealed class PasteCellsCommand : IWorkbookCommand, IEstimatesMemory
         _hyperlinks = hyperlinks;
         _hyperlinkMetadata = hyperlinkMetadata;
         _phoneticGuides = phoneticGuides;
+        _sourceStyles = sourceStyles;
     }
 
     public CommandOutcome Apply(ICommandContext ctx)
@@ -101,7 +120,13 @@ public sealed class PasteCellsCommand : IWorkbookCommand, IEstimatesMemory
             if (mergeRegion is { } region && !region.Start.Equals(addr))
                 continue;
 
-            sheet.SetCell(addr, cell.Clone());
+            var pastedCell = cell.Clone();
+            // freex-cell-styles-F1: translate the source's raw StyleId into a valid destination
+            // index when the caller supplied the actual source style content (cross-workbook
+            // paste). See the field doc comment on _sourceStyles above.
+            if (_sourceStyles is not null && _sourceStyles.TryGetValue(addr, out var sourceStyle))
+                pastedCell.StyleId = ctx.Workbook.RegisterStyle(sourceStyle);
+            sheet.SetCell(addr, pastedCell);
 
             if (_richTextRuns is not null && _richTextRuns.TryGetValue(addr, out var newRuns))
                 sheet.RichTextRuns[addr] = newRuns;

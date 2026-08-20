@@ -286,6 +286,12 @@ public sealed class MovePivotTableCommand : IWorkbookCommand
     private GridRange? _newTargetRange;
     private GridRange? _oldLastRenderedRange;
     private List<(CellAddress Address, Cell? Cell)>? _rangeSnapshot;
+    // sweep92-F1: merged regions (e.g. from MergeAndCenterLabels) that overlapped the pivot's OLD
+    // footprint, captured immediately before the clear below deletes them via
+    // sheet.ReplaceMergedRegions(...Where(!Overlaps)). _rangeSnapshot only carries (CellAddress,
+    // Cell?) pairs -- AddPivotTableCommand.Restore never touches MergedRegions -- so without this,
+    // Revert put the old location's cell VALUES back but left it permanently un-merged.
+    private List<GridRange>? _oldMergedRegions;
 
     public MovePivotTableCommand(SheetId sheetId, string pivotTableName, CellAddress targetStart)
     {
@@ -329,6 +335,15 @@ public sealed class MovePivotTableCommand : IWorkbookCommand
             var oldTargetRange = _oldTargetRange.Value;
             var baseline = PivotTableRefreshService.CaptureGrowthGuardBaseline(sheet, pivotTable);
 
+            // sweep92-F1: capture the old footprint's merged regions before the clear below strips
+            // them, so Revert can put them back. Scoped to the old TargetRange/LastRenderedRange --
+            // exactly what ClearRenderedRange+ClearRange are about to remove -- not the whole sheet,
+            // so an unrelated merge elsewhere is never touched.
+            _oldMergedRegions = sheet.MergedRegions
+                .Where(region => region.Overlaps(oldTargetRange) ||
+                                  (_oldLastRenderedRange is { } renderedRange && region.Overlaps(renderedRange)))
+                .ToList();
+
             PivotTableRefreshService.ClearRenderedRange(sheet, _oldLastRenderedRange);
             ClearRange(sheet, _oldTargetRange.Value);
             pivotTable.TargetRange = _newTargetRange.Value;
@@ -341,6 +356,7 @@ public sealed class MovePivotTableCommand : IWorkbookCommand
                 _newTargetRange = null;
                 _oldLastRenderedRange = null;
                 _rangeSnapshot = null;
+                _oldMergedRegions = null;
                 return failure;
             }
 
@@ -364,12 +380,22 @@ public sealed class MovePivotTableCommand : IWorkbookCommand
         }
 
         AddPivotTableCommand.Restore(sheet, _rangeSnapshot);
+        // sweep92-F1: put back the old footprint's merged regions Apply's clear step removed --
+        // AddPivotTableCommand.Restore above only replays cell values, never MergedRegions. The old
+        // location was left untouched since Apply cleared it (ClearRenderedRange above only touches
+        // the NEW location), so there is nothing here to overlap or clobber.
+        if (_oldMergedRegions is { Count: > 0 })
+        {
+            foreach (var region in _oldMergedRegions)
+                sheet.AddMergedRegion(region);
+        }
         if (pivotTable is not null)
             UpdateBoundPivotChartRanges(ctx.Workbook, sheet, pivotTable);
         _oldTargetRange = null;
         _newTargetRange = null;
         _oldLastRenderedRange = null;
         _rangeSnapshot = null;
+        _oldMergedRegions = null;
     }
 
     private static bool TryCreateMovedTargetRange(GridRange currentRange, CellAddress targetStart, out GridRange targetRange)

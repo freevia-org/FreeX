@@ -206,6 +206,80 @@ public sealed class FreePRibbonCommandWorkflowTests
     }
 
     [Fact]
+    public void BoldToggleChecked_ResumesLiveQueryWhenSelectionChangesWithoutAnotherClick()
+    {
+        // Round 153, finding F1: a native in-canvas edit session must not freeze GetState() forever
+        // when it ends the way a real user ends it -- by moving the selection -- rather than by the
+        // user clicking the same ribbon button again (which is all the round-152 regression test,
+        // BoldToggleChecked_ResumesLiveQueryOnceANonNativeClickEndsTheEditSession above, exercises).
+        var editor = MakeEditor();
+        var plainShape = MakeShape(20);
+        plainShape.TextBody = new TextBody
+        {
+            Paragraphs = { new Paragraph { Runs = { new Run { Text = "hi", Bold = false } } } },
+        };
+        var otherPlainShape = MakeShape(21);
+        otherPlainShape.TextBody = new TextBody
+        {
+            Paragraphs = { new Paragraph { Runs = { new Run { Text = "also plain", Bold = false } } } },
+        };
+        editor.CurrentSlide!.Shapes.Add(plainShape);
+        editor.CurrentSlide!.Shapes.Add(otherPlainShape);
+        editor.Select(plainShape.Id);
+
+        var result = FreePRibbonCommandWorkflow.Build(
+            editor,
+            new RibbonStateStore(),
+            new FreePRibbonCommandHostAdapter { TryHandleTextAction = _ => true });
+        var command = Stateful(result.Registry, "freep.bold");
+
+        // The native in-canvas editor handles the click live: the committed run is untouched, and
+        // click-parity tracking takes over for the rest of this edit session.
+        command.Execute(RibbonCommandContext.Empty);
+        command.GetState().IsChecked.Should().BeTrue("the native click bolded the live (uncommitted) buffer");
+
+        // The edit session ends the way a user actually ends it -- e.g. Escape, or clicking away --
+        // and the user selects a different, genuinely non-bold shape. No further ribbon click
+        // happens at all.
+        editor.Select(otherPlainShape.Id);
+
+        command.GetState().IsChecked.Should().BeFalse(
+            "the edit session ended via selection change alone, so GetState must stop trusting the " +
+            "frozen click-parity flag and report the newly selected (non-bold) shape's real state");
+    }
+
+    [Fact]
+    public void BoldToggleChecked_LiveSessionSurvivesGetStatePollsForTheSameSelection()
+    {
+        // Sibling no-regression case: polling GetState() repeatedly for the SAME selection during a
+        // live native edit session must keep returning the click-parity value -- selection-change
+        // detection must not spuriously end the session just because GetState() was called again.
+        var editor = MakeEditor();
+        var shape = MakeShape(22);
+        shape.TextBody = new TextBody
+        {
+            Paragraphs = { new Paragraph { Runs = { new Run { Text = "hi", Bold = true } } } },
+        };
+        editor.CurrentSlide!.Shapes.Add(shape);
+        editor.Select(shape.Id);
+
+        var result = FreePRibbonCommandWorkflow.Build(
+            editor,
+            new RibbonStateStore(),
+            new FreePRibbonCommandHostAdapter { TryHandleTextAction = _ => true });
+        var command = Stateful(result.Registry, "freep.bold");
+
+        command.Execute(RibbonCommandContext.Empty);
+        var duringSession = command.GetState().IsChecked;
+        duringSession.Should().BeFalse("the native click un-bolded the live buffer");
+
+        // Repeated polls with no selection change and no further click must not resume the (still
+        // stale) committed-model query.
+        command.GetState().IsChecked.Should().Be(duringSession);
+        command.GetState().IsChecked.Should().Be(duringSession);
+    }
+
+    [Fact]
     public void TransitionSoundLoop_IsStatefulAndTracksCurrentSlideSound()
     {
         var editor = MakeEditor();

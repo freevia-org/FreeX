@@ -25304,10 +25304,25 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
 
     private void MainWindow_DragOver(object? sender, DragEventArgs e)
     {
-        e.DragEffects = TrySelectDroppedWorkbookPath(e, out _, out _)
+        // R153-shared-drag-drop-F1: DragOver fires continuously while an OS drag merely hovers
+        // over the window, before any drop occurs -- it must only preview whether the hovered
+        // file would be openable. It must NEVER force-commit or force-cancel an in-progress
+        // formula-bar edit as a side effect of the pointer passing over the window (unlike an
+        // actual Drop, which legitimately must finish the pending edit before opening). See
+        // TryPreviewDroppedWorkbookPath.
+        e.DragEffects = TryPreviewDroppedWorkbookPath(e)
             ? DragDropEffects.Copy
             : DragDropEffects.None;
         e.Handled = true;
+    }
+
+    private bool TryPreviewDroppedWorkbookPath(DragEventArgs e)
+    {
+        if (_isOpening || _isSaving)
+            return false;
+
+        var files = e.DataTransfer.TryGetFiles();
+        return files is not null && TryResolveOpenableLocalWorkbookPath(files, out _, out _, out _);
     }
 
     private async void MainWindow_Drop(object? sender, DragEventArgs e)
@@ -26822,6 +26837,19 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             return false;
         }
 
+        return TryResolveOpenableLocalWorkbookPath(files, out path, out storageItem, out message);
+    }
+
+    // Shared by TrySelectOpenableLocalWorkbookPath (a real Open/Drop, which first commits any
+    // pending formula edit above) and TryPreviewDroppedWorkbookPath (the DragOver preview, which
+    // must NOT touch formula-edit state -- see R153-shared-drag-drop-F1). This half only resolves
+    // file-openability; it has no side effects on session/editor state.
+    private bool TryResolveOpenableLocalWorkbookPath(
+        IEnumerable<IStorageItem> files,
+        out string? path,
+        out IStorageItem? storageItem,
+        out string message)
+    {
         var candidates = files
             .Select(file => new
             {
@@ -26837,6 +26865,8 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
                     : WorkbookOpenIngressResolution.Failed(unsupportedMessage));
         if (!plan.Success)
         {
+            path = null;
+            storageItem = null;
             message = plan.Message;
             return false;
         }

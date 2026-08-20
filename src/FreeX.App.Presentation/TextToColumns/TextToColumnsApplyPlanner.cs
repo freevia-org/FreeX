@@ -238,11 +238,34 @@ public static class TextToColumnsApplyPlanner
         var edits = new List<(CellAddress Address, Cell NewCell)>();
         for (var row = range.Start.Row; row <= range.End.Row; row++)
         {
-            if (sheet.GetValue(row, range.Start.Col) is not TextValue cellValue)
+            var sourceAddress = new CellAddress(sheet.Id, row, range.Start.Col);
+            var cellValue = sheet.GetValue(sourceAddress);
+            if (cellValue is BlankValue)
                 continue;
 
-            var parts = split(cellValue.Value);
             var targetRow = destination.Row + (row - range.Start.Row);
+
+            string text;
+            if (cellValue is TextValue textValue)
+            {
+                text = textValue.Value;
+            }
+            else if (new CellAddress(sheet.Id, targetRow, destination.Col) == sourceAddress)
+            {
+                // Destination is the source cell itself: leaving a non-text value untouched
+                // is equivalent to rewriting it, so skip it exactly as before rather than churn it.
+                continue;
+            }
+            else
+            {
+                // Destination differs from the source cell: a non-text row (e.g. a genuine
+                // Number/DateTime/Bool typed directly into the cell) must still carry its value
+                // across, or the destination row is silently left blank. Mirrors the Avalonia
+                // shell's ReadTextToColumnsSources, which stringifies every scalar type up front.
+                text = SpreadsheetDisplayFormatter.FormatScalarValue(cellValue);
+            }
+
+            var parts = split(text);
             AddFieldEdits(
                 edits,
                 sheet.Id,

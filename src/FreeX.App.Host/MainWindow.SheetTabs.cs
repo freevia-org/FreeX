@@ -1450,8 +1450,38 @@ public partial class MainWindow
     {
         menu.Items.Clear();
         var state = BuildSheetTabContextMenuState(tab);
+        var outlineSettingsInserted = false;
         foreach (var command in SheetTabContextMenuPlanner.BuildSheetTabCommands(state))
+        {
+            // freex-subtotals-outline-F2: the shared SheetTabContextMenuPlanner has no entry for
+            // Data > Outline > Settings, so splice it in ourselves right where the Avalonia shell's
+            // own hand-built sheet-tab menu places it (FreeX.App.Avalonia/MainWindow.cs) -- between
+            // the Tab Color/Hide/Unhide block and Select All Sheets/Ungroup Sheets. The separator the
+            // planner already emits before SelectAllSheets becomes the separator before this item; we
+            // only need to add the item itself plus a trailing separator.
+            if (!outlineSettingsInserted && command.Action == SheetTabContextMenuAction.SelectAllSheets)
+            {
+                AddOutlineSettingsContextMenuItem(menu.Items);
+                outlineSettingsInserted = true;
+            }
             AddSheetTabContextMenuItem(menu.Items, command);
+        }
+    }
+
+    // freex-subtotals-outline-F2: WPF host mirror of the Avalonia shell's "Outline Settings..." sheet-tab
+    // context menu item (FreeX.App.Avalonia/MainWindow.cs:4523,
+    // FreeX.App.Avalonia/MainWindow.Outline.cs:ShowOutlineSettingsDialogAsync). Reuses the same neutral
+    // "OutlineSettings_MenuItem" resx key Avalonia already localizes, so this adds no new resource.
+    private void AddOutlineSettingsContextMenuItem(ItemCollection target)
+    {
+        var menuItem = new MenuItem
+        {
+            Header = UiText.Get("OutlineSettings_MenuItem"),
+            IsEnabled = true
+        };
+        menuItem.Click += (clickSender, clickArgs) => SheetCtxOutlineSettings_Click(clickSender, clickArgs);
+        target.Add(menuItem);
+        target.Add(new Separator());
     }
 
     private SheetTabContextMenuState BuildSheetTabContextMenuState(SheetTabViewModel? tab)
@@ -1926,6 +1956,145 @@ public partial class MainWindow
 
     private void SheetCtxProtectSheet_Click(object sender, RoutedEventArgs e) =>
         ProtectSheetBtn_Click(sender, e);
+
+    private void SheetCtxOutlineSettings_Click(object sender, RoutedEventArgs e)
+    {
+        var tab = GetContextMenuTab(sender);
+        if (tab == null) return;
+
+        ShowOutlineSettingsDialog(tab.Id);
+    }
+
+    // freex-subtotals-outline-F2: opens Excel's Outline "Settings" dialog for a specific sheet --
+    // the right-clicked tab, matching how every other handler in this file (Hide/TabColor/Delete/...)
+    // targets tab.Id rather than always the currently-active sheet. Mirrors
+    // FreeX.App.Avalonia/MainWindow.Outline.cs's ShowOutlineSettingsDialogAsync: the same portable
+    // OutlineSettingsPlanner resolves the initial checkbox state and diffs the accepted state so a
+    // no-op dialog dismissal never issues an (otherwise undoable) command, and the same
+    // SetWorksheetOutlineSettingsCommand persists the three toggles.
+    private void ShowOutlineSettingsDialog(SheetId sheetId)
+    {
+        var sheet = _workbook.GetSheet(sheetId);
+        if (sheet is null) return;
+
+        var current = OutlineSettingsPlanner.FromStored(
+            sheet.OutlineSummaryBelow,
+            sheet.OutlineSummaryRight,
+            sheet.ApplyOutlineStyles);
+
+        var summaryBelowBox = new CheckBox
+        {
+            Content = UiText.Get("OutlineSettings_SummaryRowsBelow"),
+            IsChecked = current.SummaryBelow,
+            Margin = new Thickness(0, 0, 0, 6)
+        };
+        System.Windows.Automation.AutomationProperties.SetAutomationId(summaryBelowBox, "OutlineSettingsSummaryBelowCheckBox");
+
+        var summaryRightBox = new CheckBox
+        {
+            Content = UiText.Get("OutlineSettings_SummaryColumnsRight"),
+            IsChecked = current.SummaryRight,
+            Margin = new Thickness(0, 0, 0, 6)
+        };
+        System.Windows.Automation.AutomationProperties.SetAutomationId(summaryRightBox, "OutlineSettingsSummaryRightCheckBox");
+
+        var autoStylesBox = new CheckBox
+        {
+            Content = UiText.Get("OutlineSettings_AutomaticStyles"),
+            IsChecked = current.ApplyStyles,
+            Margin = new Thickness(0, 0, 0, 6)
+        };
+        System.Windows.Automation.AutomationProperties.SetAutomationId(autoStylesBox, "OutlineSettingsAutomaticStylesCheckBox");
+
+        var okButton = new Button
+        {
+            Content = UiText.Get("OutlineSettings_Ok"),
+            IsDefault = true,
+            MinWidth = 84,
+            Margin = new Thickness(0, 0, 8, 0)
+        };
+        System.Windows.Automation.AutomationProperties.SetAutomationId(okButton, "OutlineSettingsOkButton");
+
+        var cancelButton = new Button
+        {
+            Content = UiText.Get("OutlineSettings_Cancel"),
+            IsCancel = true,
+            MinWidth = 84
+        };
+        System.Windows.Automation.AutomationProperties.SetAutomationId(cancelButton, "OutlineSettingsCancelButton");
+
+        var dialog = new Window
+        {
+            Title = UiText.Get("OutlineSettings_Title"),
+            Width = 320,
+            SizeToContent = SizeToContent.Height,
+            WindowStartupLocation = WindowStartupLocation.CenterOwner,
+            ResizeMode = ResizeMode.NoResize,
+            ShowInTaskbar = false,
+            Owner = this
+        };
+        System.Windows.Automation.AutomationProperties.SetAutomationId(dialog, "OutlineSettingsDialog");
+
+        okButton.Click += (_, _) => dialog.DialogResult = true;
+        cancelButton.Click += (_, _) => dialog.DialogResult = false;
+
+        var buttonRow = new StackPanel
+        {
+            Orientation = Orientation.Horizontal,
+            HorizontalAlignment = System.Windows.HorizontalAlignment.Right,
+            Margin = new Thickness(0, 12, 0, 0)
+        };
+        buttonRow.Children.Add(okButton);
+        buttonRow.Children.Add(cancelButton);
+
+        dialog.Content = new StackPanel
+        {
+            Margin = new Thickness(16),
+            Children =
+            {
+                new TextBlock
+                {
+                    Text = UiText.Get("OutlineSettings_Direction"),
+                    FontWeight = FontWeights.SemiBold,
+                    Margin = new Thickness(0, 0, 0, 8)
+                },
+                summaryBelowBox,
+                summaryRightBox,
+                autoStylesBox,
+                buttonRow
+            }
+        };
+
+        if (dialog.ShowDialog() != true)
+            return;
+
+        var resolvedSheet = _workbook.GetSheet(sheetId);
+        if (resolvedSheet is null) return;
+
+        var acceptedState = new OutlineSettingsState(
+            summaryBelowBox.IsChecked == true,
+            summaryRightBox.IsChecked == true,
+            autoStylesBox.IsChecked == true);
+
+        if (!OutlineSettingsPlanner.HasChanges(
+                acceptedState,
+                resolvedSheet.OutlineSummaryBelow,
+                resolvedSheet.OutlineSummaryRight,
+                resolvedSheet.ApplyOutlineStyles))
+            return;
+
+        if (!CompleteWorksheetSessionCommand(
+                _session.ExecuteReviewCommand(new SetWorksheetOutlineSettingsCommand(
+                    sheetId,
+                    acceptedState.SummaryBelow,
+                    acceptedState.SummaryRight,
+                    acceptedState.ApplyStyles)),
+                "Outline Settings"))
+            return;
+
+        if (sheetId == _currentSheetId)
+            UpdateViewport();
+    }
 
     private void ColorCurrentSheetTab()
     {

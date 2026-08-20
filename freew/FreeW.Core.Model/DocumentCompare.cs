@@ -94,8 +94,11 @@ public static class DocumentCompare
     /// that is <paramref name="revised"/> with the differences expressed as tracked changes attributed to
     /// <paramref name="author"/>. <paramref name="dateXml"/> is the W3CDTF revision timestamp to stamp on
     /// every produced revision (pass null to leave the date unset); it is never auto-generated here.
-    /// Only paragraph blocks are compared at word granularity; non-paragraph blocks (e.g. tables) in
-    /// <paramref name="revised"/> are carried through unchanged.
+    /// Paragraph blocks are compared at word granularity. A table block is compared cell-by-cell against a
+    /// same-shaped table sitting at the same ordinal position in <paramref name="original"/> (see
+    /// <see cref="DiffTableIfMatched"/>); a table with no such counterpart, or one whose row/cell counts
+    /// don't match, is carried through unchanged, like any other non-paragraph block in
+    /// <paramref name="revised"/>.
     /// </summary>
     public static TextDocument Compare(
         TextDocument original,
@@ -171,7 +174,7 @@ public static class DocumentCompare
 
         var result = new TextDocument();
         // Carry over the revised document's defaults, styles and page setup so the result renders like it.
-        CopyDocumentShell(revised, result);
+        CopyDocumentShell(original, revised, result, author, dateXml, settings);
 
         // Whole-paragraph deletions below copy the original document's runs (and their StyleId) verbatim.
         // If original defines a style revised no longer has (renamed/removed), the deleted paragraph would
@@ -183,6 +186,13 @@ public static class DocumentCompare
         var originalParagraphs = original.Blocks.OfType<Paragraph>().ToList();
         var revisedBlocks = revised.Blocks;
         var revisedParagraphs = revisedBlocks.OfType<Paragraph>().ToList();
+
+        // Tables are matched by ordinal position among Table blocks only (the Nth table in revised pairs
+        // with the Nth table in original, when one exists) -- a much narrower correspondence than the
+        // paragraph-level LCS above, but sufficient to diff the common case (a table edited in place) while
+        // never guessing at a structural table insertion/move. See DiffTableIfMatched.
+        var originalTables = original.Blocks.OfType<Table>().ToList();
+        var tableOrdinal = 0;
 
         // Paragraph-level LCS over plain text picks the "anchors": revised paragraphs whose text is exactly
         // an original paragraph's. Anchors copy through unchanged; the unmatched paragraphs that fall in the
@@ -215,9 +225,19 @@ public static class DocumentCompare
             if (block is not Paragraph revisedParagraph)
             {
                 // A non-paragraph block ends the current gap region: resolve buffered paragraphs up to the
-                // end of the original list, then clone the block through in place.
+                // end of the original list, then clone (or, for a matched table, diff) the block through in
+                // place.
                 ResolveGap(originalParagraphs.Count);
-                result.Blocks.Add(CloneBlock(block));
+                if (block is Table revisedTable)
+                {
+                    var matchedOriginalTable = tableOrdinal < originalTables.Count ? originalTables[tableOrdinal] : null;
+                    tableOrdinal++;
+                    result.Blocks.Add(DiffTableIfMatched(matchedOriginalTable, revisedTable, author, dateXml, settings));
+                }
+                else
+                {
+                    result.Blocks.Add(CloneBlock(block));
+                }
                 continue;
             }
 
@@ -252,6 +272,7 @@ public static class DocumentCompare
         // to describe the resulting document.
         ReconcileDeletedCommentAnchors(original, result, settings.Comments);
         ReconcileDeletedNoteAnchors(original, result);
+        ReconcileMatchedNoteContent(original, result, originalParagraphs, revisedParagraphs, matches, author, dateXml, settings);
         return result;
 
         // Resolve the currently-buffered revised gap paragraphs against the original paragraphs in
@@ -488,6 +509,12 @@ public static class DocumentCompare
     // Covers the run kinds DocxReader/DocxWriter serialize as something other than a bare w:t: inline
     // pictures, equations, shapes, WordArt, SmartArt, charts, embedded OLE objects, drawing groups, footnote
     // and endnote reference markers, comment-reference/page-break/column-break markers, and field runs.
+    // Also true for a run that already carries a revision mark from BEFORE this compare ran (an
+    // unaccepted tracked change left over from a prior review pass): merging its text into the plain-text
+    // token buffer would erase which run it came from, so AppendDiffUnit could no longer tell "this text
+    // already has its own revision" from "this text is new to this compare" and would silently overwrite
+    // the pre-existing author/kind with whatever this compare's own classification produced (see the
+    // remark on AppendDiffUnit's object-run branch).
     private static bool IsCompareAtomicRun(Run run) =>
         run.Image is not null
         || run.Equation is not null
@@ -503,7 +530,8 @@ public static class DocumentCompare
         || run.IsCommentReference
         || run.IsPageBreak
         || run.IsColumnBreak
-        || run.FieldKind != RunFieldKind.None;
+        || run.FieldKind != RunFieldKind.None
+        || run.Revision != RevisionKind.None;
 
     // Comparison key for one diff unit. Plain-text units use the same settings-aware key as before; object
     // units get a globally-unique key so the LCS never folds two distinct object runs together (see the
@@ -521,8 +549,18 @@ public static class DocumentCompare
     {
         if (unit.ObjectRun is { } sourceRun)
         {
-            var clone = DocumentModelCloner.CloneRun(sourceRun, RevisionClonePolicy.Strip);
-            if (kind != RevisionKind.None)
+            // A run that already carries a revision mark predates this compare (see IsCompareAtomicRun);
+            // that mark belongs to whoever/whenever produced it and must survive untouched, so preserve it
+            // and ignore `kind` -- this compare's own del/insert classification of the unit (which is only
+            // ever "unmatched" for an atomic unit, since its key can never equal another unit's) must not
+            // overwrite a PriorReviewer's still-pending deletion with a fabricated insertion under the
+            // current author, or vice versa. An ordinary atomic run with no pre-existing revision keeps the
+            // previous behaviour exactly: stripped, then stamped with this compare's classification.
+            var hasExistingRevision = sourceRun.Revision != RevisionKind.None;
+            var clone = DocumentModelCloner.CloneRun(
+                sourceRun,
+                hasExistingRevision ? RevisionClonePolicy.Preserve : RevisionClonePolicy.Strip);
+            if (!hasExistingRevision && kind != RevisionKind.None)
             {
                 clone.Revision = kind;
                 clone.RevisionAuthor = author;
@@ -742,8 +780,16 @@ public static class DocumentCompare
     }
 
     // Copy a document's defaults, style catalog and page geometry so the comparison result renders like
-    // the revised document. Body blocks are added by the caller; this only seeds the surrounding shell.
-    private static void CopyDocumentShell(TextDocument source, TextDocument target)
+    // the revised (`source`) document. Body blocks are added by the caller; this only seeds the
+    // surrounding shell. `original` is used only to diff the final section's header/footer content against
+    // `source`'s (see DiffHeaderFooterSlot) -- everything else here is still seeded from `source` alone.
+    private static void CopyDocumentShell(
+        TextDocument original,
+        TextDocument source,
+        TextDocument target,
+        string author,
+        string? dateXml,
+        CompareSettings settings)
     {
         target.DefaultRun = source.DefaultRun;
         target.DefaultParagraph = source.DefaultParagraph;
@@ -789,17 +835,50 @@ public static class DocumentCompare
         foreach (var (id, endnote) in source.Endnotes)
             target.Endnotes[id] = DocumentModelCloner.CloneEndnote(endnote, RevisionClonePolicy.Strip);
 
-        var finalHeadersFooters = DocumentModelCloner.CloneSectionHeadersFooters(
-            source.FinalSectionHeadersFooters,
-            RevisionClonePolicy.Strip);
-        target.FinalSectionHeadersFooters.Header = finalHeadersFooters.Header;
-        target.FinalSectionHeadersFooters.Footer = finalHeadersFooters.Footer;
-        target.FinalSectionHeadersFooters.EvenHeader = finalHeadersFooters.EvenHeader;
-        target.FinalSectionHeadersFooters.EvenFooter = finalHeadersFooters.EvenFooter;
-        target.FinalSectionHeadersFooters.FirstHeader = finalHeadersFooters.FirstHeader;
-        target.FinalSectionHeadersFooters.FirstFooter = finalHeadersFooters.FirstFooter;
+        // Each header/footer slot is diffed against original's corresponding slot (an unambiguous 1:1
+        // correspondence, unlike footnotes/endnotes, which need the anchor-paragraph correlation in
+        // ReconcileMatchedNoteContent to avoid confusing two documents' independently numbered notes).
+        var originalHeadersFooters = original.FinalSectionHeadersFooters;
+        var sourceHeadersFooters = source.FinalSectionHeadersFooters;
+        target.FinalSectionHeadersFooters.Header = DiffHeaderFooterSlot(
+            originalHeadersFooters.Header, sourceHeadersFooters.Header, author, dateXml, settings);
+        target.FinalSectionHeadersFooters.Footer = DiffHeaderFooterSlot(
+            originalHeadersFooters.Footer, sourceHeadersFooters.Footer, author, dateXml, settings);
+        target.FinalSectionHeadersFooters.EvenHeader = DiffHeaderFooterSlot(
+            originalHeadersFooters.EvenHeader, sourceHeadersFooters.EvenHeader, author, dateXml, settings);
+        target.FinalSectionHeadersFooters.EvenFooter = DiffHeaderFooterSlot(
+            originalHeadersFooters.EvenFooter, sourceHeadersFooters.EvenFooter, author, dateXml, settings);
+        target.FinalSectionHeadersFooters.FirstHeader = DiffHeaderFooterSlot(
+            originalHeadersFooters.FirstHeader, sourceHeadersFooters.FirstHeader, author, dateXml, settings);
+        target.FinalSectionHeadersFooters.FirstFooter = DiffHeaderFooterSlot(
+            originalHeadersFooters.FirstFooter, sourceHeadersFooters.FirstFooter, author, dateXml, settings);
 
         target.Preserved.CopyFrom(source.Preserved);
+    }
+
+    // Diffs one header/footer slot (F3 fix). A slot revised doesn't populate stays null; a slot only
+    // revised populates (no original counterpart) is cloned through unmarked exactly as before. When BOTH
+    // sides populate the slot with plain paragraph content, diff their paragraphs with the same engine used
+    // for table cells and footnotes/endnotes (DiffParagraphList) so an edit confined to a header/footer
+    // carries real revision marks instead of silently showing revised's text with none. A side-by-side
+    // layout header/footer (HeaderFooter.Table set) is left cloned-through unmarked on either side: its
+    // Paragraphs are required to be the SAME instances flattened from Table's cells, an invariant a fresh
+    // word-diffed paragraph list would break.
+    private static HeaderFooter? DiffHeaderFooterSlot(
+        HeaderFooter? original,
+        HeaderFooter? revised,
+        string author,
+        string? dateXml,
+        CompareSettings settings)
+    {
+        if (revised is null)
+            return null;
+        if (original is null || original.Table is not null || revised.Table is not null)
+            return DocumentModelCloner.CloneHeaderFooter(revised, RevisionClonePolicy.Strip);
+
+        var diffed = new HeaderFooter();
+        diffed.Paragraphs.AddRange(DiffParagraphList(original.Paragraphs, revised.Paragraphs, author, dateXml, settings));
+        return diffed;
     }
 
     // Compared body runs retain their comment ids. Carry the revised document's comment graph as owned
@@ -954,6 +1033,222 @@ public static class DocumentCompare
         return candidate;
     }
 
+    // Diffs footnote/endnote CONTENT for ids confirmed to name the SAME logical note on both sides (F3
+    // fix). CopyDocumentShell already seeded result.Footnotes/Endnotes wholesale from `revised` with no
+    // comparison against `original` at all; this overwrites just the confirmed ones' content with a real
+    // word-level diff, so an edit confined to a footnote/endnote carries revision marks instead of silently
+    // showing only revised's text.
+    //
+    // A footnote id is confirmed ONLY when its reference run appears on BOTH sides of the SAME anchor
+    // paragraph pair -- an original paragraph and a revised paragraph whose plain text matched exactly in
+    // the body-level LCS above. That is deliberately narrower than "the same raw numeric id exists in both
+    // documents' Footnotes catalogs": footnote/endnote numbering is local to each document, so two
+    // documents can each have an unrelated "footnote 1" that just happens to share a number -- exactly the
+    // case DeletedParagraph_RemapsOriginalFootnoteIdThatCollidesWithARevisedFootnoteId locks in (a footnote
+    // reference that exists only in a paragraph original deletes entirely, with no counterpart anywhere in
+    // revised, must never be treated as "the same note" as an unrelated revised-side footnote of the same
+    // number). Requiring the reference to sit inside a paragraph that matched byte-for-byte on both sides is
+    // strong evidence the two ids really do name one note that was merely edited, not two coincidentally
+    // co-numbered ones.
+    private static void ReconcileMatchedNoteContent(
+        TextDocument original,
+        TextDocument result,
+        IReadOnlyList<Paragraph> originalParagraphs,
+        IReadOnlyList<Paragraph> revisedParagraphs,
+        IReadOnlyList<(int OriginalIndex, int RevisedIndex)> matches,
+        string author,
+        string? dateXml,
+        CompareSettings settings)
+    {
+        var confirmedFootnoteIds = new HashSet<int>();
+        var confirmedEndnoteIds = new HashSet<int>();
+        foreach (var (originalIndex, revisedIndex) in matches)
+        {
+            var originalRuns = originalParagraphs[originalIndex].Runs;
+            var revisedRuns = revisedParagraphs[revisedIndex].Runs;
+            confirmedFootnoteIds.UnionWith(
+                originalRuns.Where(r => r.FootnoteId is not null).Select(r => r.FootnoteId!.Value)
+                    .Intersect(revisedRuns.Where(r => r.FootnoteId is not null).Select(r => r.FootnoteId!.Value)));
+            confirmedEndnoteIds.UnionWith(
+                originalRuns.Where(r => r.EndnoteId is not null).Select(r => r.EndnoteId!.Value)
+                    .Intersect(revisedRuns.Where(r => r.EndnoteId is not null).Select(r => r.EndnoteId!.Value)));
+        }
+
+        foreach (var id in confirmedFootnoteIds)
+        {
+            if (!original.Footnotes.TryGetValue(id, out var originalFootnote)
+                || !result.Footnotes.TryGetValue(id, out var resultFootnote))
+                continue;
+            var diffedContent = DiffParagraphList(originalFootnote.Content, resultFootnote.Content, author, dateXml, settings);
+            resultFootnote.Content.Clear();
+            resultFootnote.Content.AddRange(diffedContent);
+        }
+
+        foreach (var id in confirmedEndnoteIds)
+        {
+            if (!original.Endnotes.TryGetValue(id, out var originalEndnote)
+                || !result.Endnotes.TryGetValue(id, out var resultEndnote))
+                continue;
+            var diffedContent = DiffParagraphList(originalEndnote.Content, resultEndnote.Content, author, dateXml, settings);
+            resultEndnote.Content.Clear();
+            resultEndnote.Content.AddRange(diffedContent);
+        }
+    }
+
+    // Diffs two flat paragraph lists that have no interleaved non-paragraph content and no whole-list move
+    // tracking: table cells, header/footer slots, and footnote/endnote content -- everywhere the main body
+    // walk above (CompareCore's foreach over revisedBlocks) does not reach. Shares the same paragraph-level
+    // LCS anchor matching and word-level diff (DiffParagraph/MarkWholeParagraph/ClonePlainWithFormatRevisions)
+    // as that walk; what it deliberately omits is move-tracking (FindWholeParagraphMoves) and the alignment
+    // sink (Track), neither of which is meaningful for content that isn't the document body.
+    private static List<Paragraph> DiffParagraphList(
+        IReadOnlyList<Paragraph> originalParagraphs,
+        IReadOnlyList<Paragraph> revisedParagraphs,
+        string author,
+        string? dateXml,
+        CompareSettings settings)
+    {
+        var matches = LongestCommonSubsequence(
+            originalParagraphs.Select(p => ComparisonKey(p.PlainText, settings)).ToList(),
+            revisedParagraphs.Select(p => ComparisonKey(p.PlainText, settings)).ToList());
+
+        var revisedAnchorToOriginal = new Dictionary<int, int>();
+        foreach (var (originalIndex, revisedIndex) in matches)
+            revisedAnchorToOriginal[revisedIndex] = originalIndex;
+
+        var result = new List<Paragraph>();
+        var prevOriginalAnchor = -1;
+        var gapRevised = new List<(Paragraph Paragraph, int Index)>();
+
+        void ResolveGap(int originalLimit)
+        {
+            var gapOriginal = new List<(Paragraph Paragraph, int Index)>();
+            for (var i = prevOriginalAnchor + 1; i < originalLimit && i < originalParagraphs.Count; i++)
+                gapOriginal.Add((originalParagraphs[i], i));
+
+            var pairCount = Math.Min(gapOriginal.Count, gapRevised.Count);
+            for (var i = 0; i < pairCount; i++)
+                result.Add(DiffParagraph(gapOriginal[i].Paragraph, gapRevised[i].Paragraph, author, dateXml, settings));
+
+            for (var i = pairCount; i < gapOriginal.Count; i++)
+            {
+                if (settings.Deletions)
+                    result.Add(MarkWholeParagraph(gapOriginal[i].Paragraph, RevisionKind.Deleted, author, dateXml));
+            }
+
+            for (var i = pairCount; i < gapRevised.Count; i++)
+            {
+                if (settings.Insertions)
+                    result.Add(MarkWholeParagraph(gapRevised[i].Paragraph, RevisionKind.Inserted, author, dateXml));
+                else
+                    result.Add(ClonePlain(gapRevised[i].Paragraph));
+            }
+
+            prevOriginalAnchor = originalLimit - 1;
+            gapRevised.Clear();
+        }
+
+        for (var revisedIndex = 0; revisedIndex < revisedParagraphs.Count; revisedIndex++)
+        {
+            if (revisedAnchorToOriginal.TryGetValue(revisedIndex, out var anchorOriginalIndex))
+            {
+                ResolveGap(anchorOriginalIndex);
+                result.Add(ClonePlainWithFormatRevisions(
+                    originalParagraphs[anchorOriginalIndex],
+                    revisedParagraphs[revisedIndex],
+                    author,
+                    dateXml,
+                    settings.Formatting));
+                prevOriginalAnchor = anchorOriginalIndex;
+            }
+            else
+            {
+                gapRevised.Add((revisedParagraphs[revisedIndex], revisedIndex));
+            }
+        }
+
+        ResolveGap(originalParagraphs.Count);
+        return result;
+    }
+
+    // Diffs a table pair (F2 fix). When `original` is null (no table sits at the matching ordinal position
+    // -- see the comment on CompareCore's `originalTables`) the whole table is new to this comparison and
+    // is cloned through unmarked, exactly as before this fix. When `original` is non-null but the two
+    // tables' shapes differ (a different row count, or any row pair with a different cell count), diffing
+    // cell-by-cell would require guessing which row/column was added or removed, so this also falls back to
+    // cloning revised through unmarked rather than risking a wrong structural alignment. Only when both
+    // tables have identical row/column shape does this diff each cell's paragraph content against its
+    // positional counterpart, using the same engine as table cells everywhere else (DiffParagraphList).
+    // Nested tables inside a cell are not diffed either way (out of scope for this fix): they are always
+    // cloned through unmarked.
+    private static Table DiffTableIfMatched(Table? original, Table revised, string author, string? dateXml, CompareSettings settings)
+    {
+        if (original is null
+            || original.Rows.Count != revised.Rows.Count
+            || original.Rows.Zip(revised.Rows, (o, r) => o.Cells.Count == r.Cells.Count).Any(sameShape => !sameShape))
+            return (Table)CloneBlock(revised);
+
+        var clone = new Table
+        {
+            BlockContentControl = revised.BlockContentControl,
+            BlockCustomXml = revised.BlockCustomXml,
+            Formatting = revised.Formatting,
+            TableStyleId = revised.TableStyleId,
+            Borders = revised.Borders,
+            PreferredWidthPt = revised.PreferredWidthPt,
+            Alignment = revised.Alignment,
+            IndentFromLeftPt = revised.IndentFromLeftPt,
+            FloatingPosition = revised.FloatingPosition,
+            FloatingTableAllowsOverlap = revised.FloatingTableAllowsOverlap,
+            DefaultCellMargins = revised.DefaultCellMargins,
+            CellSpacingPt = revised.CellSpacingPt,
+            AutoFit = revised.AutoFit
+        };
+        clone.ColumnWidthsPt.AddRange(revised.ColumnWidthsPt);
+
+        for (var r = 0; r < revised.Rows.Count; r++)
+        {
+            var originalRow = original.Rows[r];
+            var revisedRow = revised.Rows[r];
+            var rowClone = new TableRow
+            {
+                HeightPt = revisedRow.HeightPt,
+                HeightRule = revisedRow.HeightRule,
+                AllowBreakAcrossPages = revisedRow.AllowBreakAcrossPages,
+                RowRevision = revisedRow.RowRevision,
+                RowRevisionAuthor = revisedRow.RowRevisionAuthor,
+                RowRevisionDateXml = revisedRow.RowRevisionDateXml,
+                IsRepeatingHeader = revisedRow.IsRepeatingHeader
+            };
+            for (var c = 0; c < revisedRow.Cells.Count; c++)
+                rowClone.Cells.Add(DiffTableCell(originalRow.Cells[c], revisedRow.Cells[c], author, dateXml, settings));
+            clone.Rows.Add(rowClone);
+        }
+        return clone;
+    }
+
+    private static TableCell DiffTableCell(TableCell original, TableCell revised, string author, string? dateXml, CompareSettings settings)
+    {
+        var clone = new TableCell
+        {
+            ShadingColorHex = revised.ShadingColorHex,
+            WidthPt = revised.WidthPt,
+            GridSpan = revised.GridSpan,
+            VerticalMerge = revised.VerticalMerge,
+            VerticalAlignment = revised.VerticalAlignment,
+            Margins = revised.Margins,
+            Borders = revised.Borders,
+            TextDirection = revised.TextDirection,
+            WrapText = revised.WrapText,
+            FitText = revised.FitText
+        };
+        clone.Paragraphs.AddRange(DiffParagraphList(original.Paragraphs, revised.Paragraphs, author, dateXml, settings));
+        // Nested tables are out of scope for this fix (see DiffTableIfMatched); carried through unmarked.
+        foreach (var nestedTable in revised.NestedTables)
+            clone.NestedTables.Add((Table)CloneBlock(nestedTable));
+        return clone;
+    }
+
     private static void RemapDeletedCommentMarkers(TextDocument document, int oldId, int newId)
     {
         foreach (var paragraph in EnumerateParagraphs(document.Blocks))
@@ -999,9 +1294,15 @@ public static class DocumentCompare
         }
     }
 
-    // Clone a paragraph with its runs verbatim and no revision marks (used for unchanged paragraphs).
+    // Clone a paragraph with its runs verbatim, preserving whatever revision marks the source paragraph
+    // already carried (used for content this compare is passing through unchanged/unmarked, e.g. an
+    // anchor paragraph or a whole-inserted paragraph's base clone). This does NOT stamp any NEW revision
+    // -- callers that need to mark the whole thing inserted/deleted (MarkWholeParagraph) do that themselves
+    // on the returned runs. Using Preserve rather than Strip here is deliberate: a run can already carry a
+    // revision mark from BEFORE this compare ran (an unaccepted tracked change left over from a prior
+    // review pass), and silently clearing it would misrepresent that pending change as already accepted.
     private static Paragraph ClonePlain(Paragraph source)
-        => DocumentModelCloner.CloneParagraph(source, RevisionClonePolicy.Strip);
+        => DocumentModelCloner.CloneParagraph(source, RevisionClonePolicy.Preserve);
 
     // A paragraph-level LCS anchor has matching comparison text. When the source text and run boundaries
     // are also exact, preserve the revised appearance and mark only format differences with w:rPrChange.

@@ -17,7 +17,7 @@ internal static partial class RowColumnShiftHelpers
                 var rewritten = FormulaRewriter.Rewrite(cell.FormulaText, op, sheet.Name);
                 if (rewritten is null) continue;
                 snapshot[addr] = cell.FormulaText;
-                cell.FormulaText = rewritten;
+                SetFormulaTextPreservingArrayIdentity(cell, rewritten);
             }
         }
     }
@@ -30,9 +30,29 @@ internal static partial class RowColumnShiftHelpers
             var s = workbook.GetSheet(addr.Sheet);
             var cell = s?.GetCell(addr.Row, addr.Col);
             if (cell is not null)
-                cell.FormulaText = original;
+                SetFormulaTextPreservingArrayIdentity(cell, original);
         }
         snapshot.Clear();
+    }
+
+    // The FormulaText setter (Cell.cs) unconditionally resets ArrayMode/LegacyArrayRows/
+    // LegacyArrayCols to "freshly authored modern formula" defaults on every assignment, on the
+    // assumption that assigning FormulaText always means a user edit. RewriteAllFormulas/
+    // RestoreFormulas instead reassign the SAME cell's FormulaText to adjust reference text after a
+    // structural edit elsewhere (row/column/cell insert-delete, move/cut, sheet rename, table
+    // rename) -- the cell itself is not being re-authored and its legacy CSE array identity (and the
+    // "can't split the array" protection that depends on LegacyArrayRows/Cols being non-zero) must
+    // survive unchanged. Mirrors the identical save/assign/restore done for the same reason in
+    // Sheet.Clone.cs's CopyCellContentTo and in CellStateSnapshot.ToCell.
+    private static void SetFormulaTextPreservingArrayIdentity(Cell cell, string? formulaText)
+    {
+        var arrayMode = cell.ArrayMode;
+        var legacyArrayRows = cell.LegacyArrayRows;
+        var legacyArrayCols = cell.LegacyArrayCols;
+        cell.FormulaText = formulaText;
+        cell.ArrayMode = arrayMode;
+        cell.LegacyArrayRows = legacyArrayRows;
+        cell.LegacyArrayCols = legacyArrayCols;
     }
 
     internal static IReadOnlyList<CellAddress> BuildAffectedCellsForFormulaRewrite(

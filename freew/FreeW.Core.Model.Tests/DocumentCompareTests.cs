@@ -997,4 +997,202 @@ public class DocumentCompareTests
         deletedRun.FootnoteId.Should().NotBe(survivingRun.FootnoteId);
         result.Footnotes[deletedRun.FootnoteId!.Value].PlainText.Should().Be("Original explanation.");
     }
+
+    // -----------------------------------------------------------------------
+    // r153 HIGH freew-compare-combine F1: a run that already carries a revision mark from BEFORE this
+    // compare ran (an unaccepted tracked change left over from a prior review pass) must keep that mark --
+    // not be silently accepted (dropped) or misattributed to this compare's own author/kind.
+    // -----------------------------------------------------------------------
+
+    [Fact]
+    public void WordLevelChange_PreservesPreExistingPendingDeletionInsteadOfFabricatingAnInsertion()
+    {
+        var original = DocWith("The quick fox jumps.");
+
+        var revised = new TextDocument();
+        var revisedParagraph = new Paragraph();
+        revisedParagraph.Runs.Add(new Run("The quick "));
+        revisedParagraph.Runs.Add(new Run("brown ")
+        {
+            Revision = RevisionKind.Deleted,
+            RevisionAuthor = "PriorReviewer",
+            RevisionDateXml = "2020-01-01T00:00:00Z"
+        });
+        revisedParagraph.Runs.Add(new Run("fox jumps."));
+        revised.Blocks.Add(revisedParagraph);
+
+        var result = DocumentCompare.Compare(original, revised, Author, DateXml);
+
+        var brownRun = result.Paragraphs.Single().Runs.Single(r => r.Text.Trim() == "brown");
+        brownRun.Revision.Should().Be(RevisionKind.Deleted);
+        brownRun.RevisionAuthor.Should().Be("PriorReviewer");
+        brownRun.RevisionDateXml.Should().Be("2020-01-01T00:00:00Z");
+    }
+
+    [Fact]
+    public void IdenticalDocumentsWithSharedPendingDeletion_KeepsTheDeletionInsteadOfSilentlyAcceptingIt()
+    {
+        static TextDocument BuildWithPendingDeletion()
+        {
+            var doc = new TextDocument();
+            var paragraph = new Paragraph();
+            paragraph.Runs.Add(new Run("The quick "));
+            paragraph.Runs.Add(new Run("brown ")
+            {
+                Revision = RevisionKind.Deleted,
+                RevisionAuthor = "PriorReviewer",
+                RevisionDateXml = "2020-01-01T00:00:00Z"
+            });
+            paragraph.Runs.Add(new Run("fox jumps."));
+            doc.Blocks.Add(paragraph);
+            return doc;
+        }
+
+        var result = DocumentCompare.Compare(BuildWithPendingDeletion(), BuildWithPendingDeletion(), Author, DateXml);
+
+        var brownRun = result.Paragraphs.Single().Runs.Single(r => r.Text.Trim() == "brown");
+        brownRun.Revision.Should().Be(RevisionKind.Deleted);
+        brownRun.RevisionAuthor.Should().Be("PriorReviewer");
+    }
+
+    // Sibling: ordinary text with NO pre-existing revision must still be attributed to THIS compare's own
+    // author/kind exactly as before -- the preservation above must not leak onto genuinely new edits.
+    [Fact]
+    public void WordLevelChange_OrdinaryInsertionWithNoPriorRevision_StillAttributedToCurrentCompareAuthor()
+    {
+        var original = DocWith("The quick fox jumps.");
+        var revised = DocWith("The quick brown fox jumps.");
+
+        var result = DocumentCompare.Compare(original, revised, Author, DateXml);
+
+        var brownRun = result.Paragraphs.Single().Runs.Single(r => r.Text.Trim() == "brown");
+        brownRun.Revision.Should().Be(RevisionKind.Inserted);
+        brownRun.RevisionAuthor.Should().Be(Author);
+        brownRun.RevisionDateXml.Should().Be(DateXml);
+    }
+
+    // -----------------------------------------------------------------------
+    // r153 HIGH freew-compare-combine F2: a table cell whose text changed must produce word-level revision
+    // marks, not silently show revised's text with no markup at all.
+    // -----------------------------------------------------------------------
+
+    [Fact]
+    public void Compare_TableCellTextChanged_ProducesWordLevelRevisionMarksInsteadOfSilentlyShowingRevisedText()
+    {
+        var original = new TextDocument();
+        var originalTable = Table.Create(1, 1);
+        originalTable.Rows[0].Cells[0] = new TableCell("Old amount: $100");
+        original.Blocks.Add(originalTable);
+
+        var revised = new TextDocument();
+        var revisedTable = Table.Create(1, 1);
+        revisedTable.Rows[0].Cells[0] = new TableCell("New amount: $999");
+        revised.Blocks.Add(revisedTable);
+
+        var result = DocumentCompare.Compare(original, revised, Author, DateXml);
+
+        var cellRuns = result.Blocks.OfType<Table>().Single().Rows[0].Cells[0].Paragraphs
+            .SelectMany(p => p.Runs).ToList();
+        cellRuns.Should().Contain(r => r.Revision == RevisionKind.Deleted);
+        cellRuns.Should().Contain(r => r.Revision == RevisionKind.Inserted);
+        cellRuns.Should().Contain(r => r.Revision == RevisionKind.None); // "amount: $" is common to both
+    }
+
+    // Sibling: when the two tables' shapes don't match (here, an extra revised row), diffing cell-by-cell
+    // would require guessing which row was added -- must fall back to cloning revised through unmarked
+    // exactly as when there is no original counterpart at all, not fabricate a wrong alignment.
+    [Fact]
+    public void Compare_TableDimensionMismatch_FallsBackToUnmarkedCloneInsteadOfGuessingAlignment()
+    {
+        var original = new TextDocument();
+        var originalTable = Table.Create(1, 1);
+        originalTable.Rows[0].Cells[0] = new TableCell("Row one");
+        original.Blocks.Add(originalTable);
+
+        var revised = new TextDocument();
+        var revisedTable = Table.Create(2, 1);
+        revisedTable.Rows[0].Cells[0] = new TableCell("Row one");
+        revisedTable.Rows[1].Cells[0] = new TableCell("Row two (new)");
+        revised.Blocks.Add(revisedTable);
+
+        var result = DocumentCompare.Compare(original, revised, Author, DateXml);
+
+        var cellRuns = result.Blocks.OfType<Table>().Single().Rows.SelectMany(r => r.Cells)
+            .SelectMany(c => c.Paragraphs).SelectMany(p => p.Runs).ToList();
+        cellRuns.Should().OnlyContain(r => r.Revision == RevisionKind.None);
+    }
+
+    // -----------------------------------------------------------------------
+    // r153 HIGH freew-compare-combine F3: an edit confined to a header/footer or footnote/endnote must
+    // produce word-level revision marks, not silently show revised's content with no markup at all.
+    // -----------------------------------------------------------------------
+
+    [Fact]
+    public void Compare_HeaderTextChanged_ProducesWordLevelRevisionMarksInsteadOfSilentlyShowingRevisedText()
+    {
+        var original = DocWith("Body text unchanged");
+        original.Header = new HeaderFooter();
+        original.Header.Paragraphs.Add(new Paragraph("Old Header Text"));
+
+        var revised = DocWith("Body text unchanged");
+        revised.Header = new HeaderFooter();
+        revised.Header.Paragraphs.Add(new Paragraph("New Header Text — totally different"));
+
+        var result = DocumentCompare.Compare(original, revised, Author, DateXml);
+
+        var headerRuns = result.Header!.Paragraphs.SelectMany(p => p.Runs).ToList();
+        headerRuns.Should().Contain(r => r.Revision == RevisionKind.Deleted);
+        headerRuns.Should().Contain(r => r.Revision == RevisionKind.Inserted);
+    }
+
+    [Fact]
+    public void Compare_FootnoteTextChanged_ProducesWordLevelRevisionMarksInsteadOfSilentlyShowingRevisedText()
+    {
+        var original = new TextDocument();
+        var originalParagraph = new Paragraph();
+        originalParagraph.Runs.Add(new Run("See note"));
+        originalParagraph.Runs.Add(Run.FootnoteReference(1));
+        original.Blocks.Add(originalParagraph);
+        original.Footnotes[1] = new Footnote(1, "Old footnote text.");
+
+        var revised = new TextDocument();
+        var revisedParagraph = new Paragraph();
+        revisedParagraph.Runs.Add(new Run("See note"));
+        revisedParagraph.Runs.Add(Run.FootnoteReference(1));
+        revised.Blocks.Add(revisedParagraph);
+        revised.Footnotes[1] = new Footnote(1, "New footnote text — completely rewritten.");
+
+        var result = DocumentCompare.Compare(original, revised, Author, DateXml);
+
+        var footnoteRuns = result.Footnotes[1].Content.SelectMany(p => p.Runs).ToList();
+        footnoteRuns.Should().Contain(r => r.Revision == RevisionKind.Deleted);
+        footnoteRuns.Should().Contain(r => r.Revision == RevisionKind.Inserted);
+    }
+
+    // Sibling: the footnote reference here sits in a paragraph that ALSO carries an unrelated word-level
+    // edit, so the paragraph is word-diffed rather than matched as a full anchor. The correlation the fix
+    // above relies on (see DocumentCompare.ReconcileMatchedNoteContent) only fires for a full anchor match,
+    // so footnote content here must stay exactly as CopyDocumentShell seeded it from revised, unmarked --
+    // confirming the fix doesn't over-reach into a paragraph where the correspondence isn't confirmed.
+    [Fact]
+    public void Compare_FootnoteReferenceInAWordDiffedParagraph_DoesNotTriggerFootnoteContentDiffing()
+    {
+        var original = new TextDocument();
+        var originalParagraph = new Paragraph();
+        originalParagraph.Runs.Add(new Run("See old note"));
+        originalParagraph.Runs.Add(Run.FootnoteReference(1));
+        original.Blocks.Add(originalParagraph);
+        original.Footnotes[1] = new Footnote(1, "Old footnote text.");
+
+        var revised = new TextDocument();
+        var revisedParagraph = new Paragraph();
+        revisedParagraph.Runs.Add(new Run("See new note"));
+        revisedParagraph.Runs.Add(Run.FootnoteReference(1));
+        revised.Blocks.Add(revisedParagraph);
+        revised.Footnotes[1] = new Footnote(1, "New footnote text.");
+
+        var result = DocumentCompare.Compare(original, revised, Author, DateXml);
+
+        result.Footnotes[1].PlainText.Should().Be("New footnote text.");
+    }
 }

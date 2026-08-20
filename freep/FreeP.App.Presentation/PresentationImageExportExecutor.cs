@@ -17,7 +17,11 @@ public sealed record PresentationImageExportRequest(
     string? BaseFileName = null,
     PresentationSlideRangeRequest? SlideRange = null,
     int WidthPx = PresentationImageExportExecutor.DefaultWidthPx,
-    int HeightPx = PresentationImageExportExecutor.DefaultHeightPx);
+    // R153: nullable so the default omits an explicit height and lets Export derive it from the
+    // presentation's real SlideSizeCxEmu/CyEmu aspect ratio (PresentationPdfScenePlanner.ResolveRasterSize),
+    // the same contract PresentationRasterPdfExportRequest.HeightPx already uses for the sibling raster-PDF
+    // path. A caller that still wants a fixed height (e.g. a thumbnail grid) can pass one explicitly.
+    int? HeightPx = null);
 
 public sealed record PresentationImageExportedSlide(
     int SlideNumber,
@@ -70,8 +74,17 @@ public static class PresentationImageExportExecutor
         ArgumentNullException.ThrowIfNull(renderSlideToPng);
         ArgumentException.ThrowIfNullOrWhiteSpace(request.OutputDirectory);
 
-        var widthPx = Math.Max(1, request.WidthPx);
-        var heightPx = Math.Max(1, request.HeightPx);
+        // R153: mirror PresentationRasterPdfExporter.BuildRenderPlan, which resolves height from the
+        // deck's real SlideSizeCxEmu/CyEmu aspect ratio instead of a hardcoded 16:9 box -- otherwise a
+        // non-16:9 deck (e.g. legacy 4:3) gets exported at a fixed 1280x720 with the slide content
+        // pillarboxed/letterboxed into transparent bars, because request.HeightPx defaulted to a literal.
+        var rasterSize = PresentationPdfScenePlanner.ResolveRasterSize(
+            presentation.SlideSizeCxEmu,
+            presentation.SlideSizeCyEmu,
+            request.WidthPx,
+            request.HeightPx);
+        var widthPx = rasterSize.WidthPx;
+        var heightPx = rasterSize.HeightPx;
         var plan = PresentationExportPlanner.BuildImageExportPlan(
             request.SlideRange,
             presentation,

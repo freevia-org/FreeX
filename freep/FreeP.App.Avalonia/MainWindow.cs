@@ -416,7 +416,8 @@ public sealed partial class MainWindow : Window,
             showPrintSelectionDialog = null,
         IApplicationOptionsStore<FreePOptions>? optionsStore = null,
         IUserMessageService? messageService = null,
-        bool suppressStartupRecoveryOffer = false)
+        bool suppressStartupRecoveryOffer = false,
+        PresentationCustomDictionaryStore? proofingDictionaryStore = null)
     {
         InitializeConditionalHost();
         Title = FreePApplicationFrameDescriptor.Title.ApplicationName;
@@ -623,7 +624,8 @@ public sealed partial class MainWindow : Window,
                 PresentProofingPane: plan => _reviewPaneHostCoordinator.PresentProofingPane(plan),
                 UpdateAfterCommentMutation: UpdateStatus,
                 UpdateAfterCommentNavigation: UpdateStatus,
-                UpdateAfterProofingCorrection: UpdateStatus));
+                UpdateAfterProofingCorrection: UpdateStatus),
+            proofingDictionaryStore ?? PresentationCustomDictionaryStore.Load());
         _reviewPaneHostCoordinator = new(
             _reviewWorkflowSession,
             _workareaSession.Panes,

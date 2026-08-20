@@ -1,4 +1,5 @@
 using System.Globalization;
+using System.Text;
 using FreeW.Core.Model;
 
 namespace FreeW.App.Presentation.DocumentView;
@@ -224,7 +225,7 @@ public static class ContentControlInteractionPlanner
             return null;
 
         var updated = control with { Checked = !control.Checked };
-        return CloneWith(run, CheckBoxGlyph(updated.Checked), updated);
+        return CloneWith(run, ResolveCheckBoxGlyph(updated), updated);
     }
 
     public static Run? SelectItem(Run run, int itemIndex)
@@ -275,6 +276,30 @@ public static class ContentControlInteractionPlanner
 
     private static string CheckBoxGlyph(bool isChecked) =>
         isChecked ? ContentControl.CheckedGlyph : ContentControl.UncheckedGlyph;
+
+    /// <summary>
+    /// The glyph to write into a checkbox run's text for <paramref name="control"/>'s current
+    /// <see cref="ContentControl.Checked"/> state: the document's own authored symbol from
+    /// <see cref="ContentControl.CheckBoxMetadata"/> (w14:checkedState/uncheckedState) when present and
+    /// a valid Unicode code point, falling back to the app's fixed <see cref="ContentControl.CheckedGlyph"/>
+    /// / <see cref="ContentControl.UncheckedGlyph"/> otherwise -- mirroring
+    /// <c>CustomXmlDataBindingResolver.ResolveCheckBoxGlyph</c>'s glyph resolution so a toggle never
+    /// overwrites a custom checkbox symbol with the generic ballot-box character.
+    /// </summary>
+    private static string ResolveCheckBoxGlyph(ContentControl control)
+    {
+        var state = control.Checked
+            ? control.CheckBoxMetadata?.CheckedState
+            : control.CheckBoxMetadata?.UncheckedState;
+        if (state?.GlyphCodePoint is { Length: > 0 } code
+            && int.TryParse(code, NumberStyles.HexNumber, CultureInfo.InvariantCulture, out var codePoint)
+            && Rune.IsValid(codePoint))
+        {
+            return char.ConvertFromUtf32(codePoint);
+        }
+
+        return CheckBoxGlyph(control.Checked);
+    }
 
     private static Run CloneWith(Run source, string text, ContentControl control) => new(text, source.Formatting)
     {

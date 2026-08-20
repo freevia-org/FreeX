@@ -311,24 +311,11 @@ public partial class MainWindow
 
         var settings = _backstagePrintPreviewSettings;
 
+        if (!TryResolveBackstagePrintPaginator(_backstagePrintPreviewDocument, settings, out var paginator))
+            return;
+
         // A missing saved queue falls through to null so the native dialog uses Windows' default.
         var printQueue = Free.Shared.Shell.Wpf.WpfPrintQueueCatalog.Resolve(settings.PrinterName);
-
-        // Apply page range if one was requested.
-        System.Windows.Documents.DocumentPaginator paginator = _backstagePrintPreviewDocument.DocumentPaginator;
-        if (settings.PageFrom.HasValue || settings.PageTo.HasValue)
-        {
-            var totalPages = paginator.PageCount;
-            if (PrintSettingsPlanner.TryValidatePageRange(
-                    settings.PageFrom, settings.PageTo, totalPages,
-                    out var from, out var to))
-            {
-                paginator = WpfPageRangeDocumentPaginator.CreateValidatedInclusive(
-                    _backstagePrintPreviewDocument.DocumentPaginator,
-                    from,
-                    to);
-            }
-        }
 
         NativePrintDialogService.ShowPrintDialogAndPrint(
             paginator,
@@ -337,6 +324,35 @@ public partial class MainWindow
             settings.Collated,
             settings.Sides,
             this);
+    }
+
+    /// <summary>
+    /// Resolves the paginator to send to the printer for the Backstage Print pane's "Print Now"
+    /// button, applying the requested Pages From/To range when one was typed. An out-of-bounds or
+    /// reversed range (From&gt;To, either bound outside 1..totalPages) must not silently fall through
+    /// to printing the full, unranged document with zero feedback -- warn and abort instead, mirroring
+    /// the separate Print Preview dialog's ShowInvalidPageRangeWarning behavior for the same input.
+    /// </summary>
+    private bool TryResolveBackstagePrintPaginator(
+        FixedDocument document,
+        PrintPreviewSettings settings,
+        out DocumentPaginator paginator)
+    {
+        paginator = document.DocumentPaginator;
+        if (!settings.PageFrom.HasValue && !settings.PageTo.HasValue)
+            return true;
+
+        var totalPages = paginator.PageCount;
+        if (!PrintSettingsPlanner.TryValidatePageRange(
+                settings.PageFrom, settings.PageTo, totalPages,
+                out var from, out var to))
+        {
+            DialogMessageHelper.ShowWarning(this, UiText.Get("PrintPreview_InvalidPageRangeMessage"), Title);
+            return false;
+        }
+
+        paginator = WpfPageRangeDocumentPaginator.CreateValidatedInclusive(document.DocumentPaginator, from, to);
+        return true;
     }
 
     private void UpdateInfoView()

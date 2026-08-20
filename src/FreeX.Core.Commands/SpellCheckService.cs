@@ -9,7 +9,8 @@ public enum SpellingIssueSource
     CellText,
     Note,
     ThreadedComment,
-    ThreadedCommentReply
+    ThreadedCommentReply,
+    TextBox
 }
 
 public sealed record SpellingIssue(
@@ -20,7 +21,8 @@ public sealed record SpellingIssue(
     int StartIndex = -1,
     int Length = 0,
     SpellingIssueSource Source = SpellingIssueSource.CellText,
-    int ReplyIndex = -1);
+    int ReplyIndex = -1,
+    Guid? TextBoxId = null);
 
 public sealed record SpellingCorrectionEdit(
     CellAddress Address,
@@ -88,6 +90,17 @@ public static partial class SpellCheckService
                 }
             }
 
+            foreach (var textBox in sheet.TextBoxes)
+            {
+                AddIssuesForText(
+                    ref sheetIssues,
+                    textBox.Anchor,
+                    textBox.Text,
+                    customDictionary,
+                    SpellingIssueSource.TextBox,
+                    textBoxId: textBox.Id);
+            }
+
             if (sheetIssues is null)
                 continue;
 
@@ -114,7 +127,8 @@ public static partial class SpellCheckService
         string text,
         IReadOnlySet<string>? customDictionary,
         SpellingIssueSource source,
-        int replyIndex = -1)
+        int replyIndex = -1,
+        Guid? textBoxId = null)
     {
         List<SpellingIssue>? issues = null;
         var ignoredSpans = FindIgnoredSpans(text);
@@ -143,7 +157,8 @@ public static partial class SpellCheckService
                     word.Start,
                     word.Length,
                     source,
-                    replyIndex));
+                    replyIndex,
+                    textBoxId));
             }
 
             if (previousWord is { } previous &&
@@ -163,7 +178,8 @@ public static partial class SpellCheckService
                     previous.Start,
                     word.End - previous.Start,
                     source,
-                    replyIndex));
+                    replyIndex,
+                    textBoxId));
             }
 
             previousWord = word;
@@ -178,12 +194,13 @@ public static partial class SpellCheckService
         string text,
         IReadOnlySet<string>? customDictionary,
         SpellingIssueSource source,
-        int replyIndex = -1)
+        int replyIndex = -1,
+        Guid? textBoxId = null)
     {
         if (!HasSpellCheckIssueCandidate(text, customDictionary))
             return;
 
-        var textIssues = FindIssuesInText(address, text, customDictionary, source, replyIndex);
+        var textIssues = FindIssuesInText(address, text, customDictionary, source, replyIndex, textBoxId);
         if (textIssues.Count == 0)
             return;
 
@@ -489,7 +506,8 @@ public static partial class SpellCheckService
             SpellingIssueSource.Note => 1,
             SpellingIssueSource.ThreadedComment => 2,
             SpellingIssueSource.ThreadedCommentReply => 3,
-            _ => 4
+            SpellingIssueSource.TextBox => 4,
+            _ => 5
         };
 
     private static string MatchCapitalization(string original, string replacement) =>

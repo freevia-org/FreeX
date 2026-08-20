@@ -26,6 +26,10 @@ public partial class MainWindow : IAutosaveWorkbookSource
     string IAutosaveWorkbookSource.DisplayName => _workbook.Name;
     bool IAutosaveWorkbookSource.IsWorkbookDirty => _workbookDirty;
     int IAutosaveWorkbookSource.WorkbookDirtyGeneration => _workbookDirtyGeneration;
+    // Reuse the same reconciliation Ctrl+S uses (MainWindow.Viewport.cs) so an autosave/crash
+    // snapshot persists THIS window's own zoom/freeze/split/scroll/active-cell instead of
+    // whichever "New Window" sibling last touched the shared Sheet view fields.
+    void IAutosaveWorkbookSource.ReconcileViewStateForSnapshot() => ReconcileViewStateForSave();
     // Workbook.Id is per-instance (assigned fresh in the Workbook constructor), so windows that
     // share the SAME Workbook instance (View > New Window siblings — see AdoptSharedWorkbook in
     // MainWindow.MultiWindow.cs) report the same DocumentId, while independent windows opened on

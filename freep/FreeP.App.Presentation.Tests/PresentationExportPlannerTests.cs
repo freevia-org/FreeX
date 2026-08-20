@@ -3067,6 +3067,69 @@ public sealed class PresentationExportPlannerTests : IDisposable
         result.ExportedSlides.Select(s => s.SlideNumber).Should().Equal(1, 2, 3);
     }
 
+    [Fact]
+    public void ImageExportExecutor_DerivesHeightFromDeckAspectRatioFor4x3Slides()
+    {
+        // R153 F1: Export Images used to always rasterize at a fixed 1280x720 (16:9) box, so a
+        // legacy 4:3 deck came out with the slide content pillarboxed into 960x720 with transparent
+        // bars on both sides, still labeled 1280x720. The requested width must stay honored, but the
+        // height (when not explicitly overridden) should follow the deck's real
+        // SlideSizeCxEmu/CyEmu ratio, matching PresentationRasterPdfExporter's raster-PDF path.
+        var outputDirectory = Path.Combine(_temporaryDirectory.Path, "image-export-4x3");
+        var presentation = Presentation.CreateEmpty();
+        presentation.SlideSizeCxEmu = 9_144_000; // 10 in
+        presentation.SlideSizeCyEmu = 6_858_000; // 7.5 in -> 4:3
+        presentation.Slides.Clear();
+        presentation.Slides.Add(new Slide { Title = "One" });
+        var calls = new List<(int Width, int Height)>();
+
+        var result = PresentationImageExportExecutor.Export(
+            presentation,
+            new PresentationImageExportRequest(outputDirectory),
+            (_, _, width, height) =>
+            {
+                calls.Add((width, height));
+                return TinyPng;
+            });
+
+        result.Succeeded.Should().BeTrue();
+        calls.Should().ContainSingle();
+        calls[0].Width.Should().Be(PresentationImageExportExecutor.DefaultWidthPx);
+        calls[0].Height.Should().Be(960, "1280 width at a 4:3 aspect ratio should rasterize at 960 tall, not a fixed 720");
+        result.Plan.WidthPx.Should().Be(1280);
+        result.Plan.HeightPx.Should().Be(960);
+    }
+
+    [Fact]
+    public void ImageExportExecutor_HonorsExplicitHeightOverrideRegardlessOfDeckAspectRatio()
+    {
+        // Sibling of ImageExportExecutor_DerivesHeightFromDeckAspectRatioFor4x3Slides: proves the
+        // aspect-ratio derivation only fills in an *omitted* height and does not clobber a caller
+        // that deliberately asks for a specific width/height box (e.g. a fixed-size thumbnail grid).
+        var outputDirectory = Path.Combine(_temporaryDirectory.Path, "image-export-4x3-explicit");
+        var presentation = Presentation.CreateEmpty();
+        presentation.SlideSizeCxEmu = 9_144_000;
+        presentation.SlideSizeCyEmu = 6_858_000;
+        presentation.Slides.Clear();
+        presentation.Slides.Add(new Slide { Title = "One" });
+        var calls = new List<(int Width, int Height)>();
+
+        var result = PresentationImageExportExecutor.Export(
+            presentation,
+            new PresentationImageExportRequest(outputDirectory, WidthPx: 320, HeightPx: 180),
+            (_, _, width, height) =>
+            {
+                calls.Add((width, height));
+                return TinyPng;
+            });
+
+        result.Succeeded.Should().BeTrue();
+        calls.Should().ContainSingle();
+        calls[0].Should().Be((320, 180));
+        result.Plan.WidthPx.Should().Be(320);
+        result.Plan.HeightPx.Should().Be(180);
+    }
+
     private static SlideShape MakeHeaderFooterPlaceholder(
         PlaceholderType type,
         string text,

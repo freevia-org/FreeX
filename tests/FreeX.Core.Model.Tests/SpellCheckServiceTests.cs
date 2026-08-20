@@ -150,6 +150,69 @@ public sealed class SpellCheckServiceTests
             (b1, "adn", SpellingIssueSource.ThreadedCommentReply, 0));
     }
 
+    // shared-proofing-F1: Insert > Text Box content was never scanned by Review > Spelling, so a
+    // misspelled word typed into a text box was silently never flagged even though real Excel's
+    // Spelling command checks text boxes. FindIssues now walks sheet.TextBoxes the same way it
+    // already walks Comments/ThreadedComments, tagging each hit with the owning TextBoxModel.Id so
+    // SpellCheckWorkflowPlanner can route a correction back into that exact text box.
+    [Fact]
+    public void FindIssues_DetectsKnownMisspellingsInTextBoxes()
+    {
+        var wb = new Workbook("test");
+        var sheet = wb.AddSheet("Sheet1");
+        var anchor = new CellAddress(sheet.Id, 3, 2);
+        var textBox = new TextBoxModel
+        {
+            Anchor = anchor,
+            Text = "Please recieve teh shipment"
+        };
+        sheet.TextBoxes.Add(textBox);
+
+        var issues = SpellCheckService.FindIssues(wb, sheet.Id);
+
+        issues.Select(issue => (issue.Address, issue.Word, issue.Suggestion, issue.Source, issue.TextBoxId))
+            .Should().Equal(
+                (anchor, "recieve", "receive", SpellingIssueSource.TextBox, textBox.Id),
+                (anchor, "teh", "the", SpellingIssueSource.TextBox, textBox.Id));
+    }
+
+    [Fact]
+    public void FindIssues_ReturnsEmptyForCleanTextBoxText()
+    {
+        var wb = new Workbook("test");
+        var sheet = wb.AddSheet("Sheet1");
+        sheet.TextBoxes.Add(new TextBoxModel
+        {
+            Anchor = new CellAddress(sheet.Id, 1, 1),
+            Text = "A clean text box heading."
+        });
+
+        SpellCheckService.FindIssues(wb, sheet.Id).Should().BeEmpty();
+    }
+
+    // Sibling no-regression: cell text, notes, and threaded comments at the SAME address keep their
+    // existing detection order/behavior once a text box is also present on the sheet -- the new
+    // TextBoxes walk must not disturb the three pre-existing sources.
+    [Fact]
+    public void FindIssues_OrdersTextBoxIssuesAlongsideExistingSourcesAtTheSameAddress()
+    {
+        var wb = new Workbook("test");
+        var sheet = wb.AddSheet("Sheet1");
+        var address = new CellAddress(sheet.Id, 1, 1);
+        sheet.SetCell(address, new TextValue("adn cell"));
+        sheet.Comments[address] = "teh note";
+        sheet.ThreadedComments[address] = new ThreadedComment("recieve root");
+        sheet.TextBoxes.Add(new TextBoxModel { Anchor = address, Text = "occured in box" });
+
+        var issues = SpellCheckService.FindIssues(wb, sheet.Id);
+
+        issues.Select(issue => (issue.Word, issue.Source)).Should().Equal(
+            ("adn", SpellingIssueSource.CellText),
+            ("teh", SpellingIssueSource.Note),
+            ("recieve", SpellingIssueSource.ThreadedComment),
+            ("occured", SpellingIssueSource.TextBox));
+    }
+
     [Fact]
     public void FindIssues_ReturnsFormulaReportingTyposInTextNotesAndThreadedComments()
     {

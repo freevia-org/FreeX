@@ -16,6 +16,27 @@ public interface IAutosaveWorkbookSource
     int WorkbookDirtyGeneration { get; }
 
     /// <summary>
+    /// Reconciles this window's own per-window view-state overrides (zoom, freeze panes, split,
+    /// active cell, scroll position) onto the shared <see cref="Model.Workbook"/>'s per-<c>Sheet</c>
+    /// view fields, immediately before <see cref="Workbook"/> is serialized into an autosave or
+    /// crash-recovery snapshot. Those fields (Sheet.ZoomPercent, ViewMode, ShowGridlines,
+    /// ShowHeadings, ShowFormulas, FrozenRows/Cols, SplitRow/Column, ActiveRow/Col, ViewTopRow/
+    /// LeftCol) are shared by every "New Window" sibling over the same document and are mutated in
+    /// place by whichever sibling's command last ran; each window keeps its OWN effective value in
+    /// a per-window override cache (see WorkbookSession's <c>_view*Overrides</c> on Avalonia,
+    /// MainWindow's <c>_worksheetViewStates</c>/<c>_worksheetSelections</c> on WPF) and only
+    /// projects that cache back onto the shared fields on demand. The explicit Ctrl+S path already
+    /// does this via <c>WorkbookSaveWorkflowRequest.ProjectViewStateForSave</c>
+    /// (WorkbookSession.ReconcileViewStateForSave / MainWindow.ReconcileViewStateForSave) so a save
+    /// persists the saving window's own view rather than a sibling's. Without the same call here, a
+    /// periodic autosave tick or an emergency crash snapshot serializes whichever sibling window's
+    /// view last happened to touch the shared fields, not the view of the window whose timer fired
+    /// or whose crash triggered the snapshot. Default no-op: a host with no per-window view-state
+    /// overrides to reconcile (or one that has not wired this in) keeps its current behavior.
+    /// </summary>
+    void ReconcileViewStateForSnapshot() { }
+
+    /// <summary>
     /// Stable identity of the in-memory <see cref="Model.Workbook"/> instance this source wraps
     /// (i.e. <c>Workbook.Id</c>). Two windows sharing the SAME identity are genuine Excel
     /// "New Window" siblings over one shared document (see MainWindow.MultiWindow.cs's
@@ -163,6 +184,12 @@ public sealed class AutosaveService : IDisposable
 
         public void WriteSnapshot(string snapshotPath)
         {
+            // Reconcile this window's own view-state overrides onto the shared Sheet fields
+            // before serializing, mirroring the explicit-save path's ProjectViewStateForSave --
+            // otherwise the snapshot reflects whichever sibling window last touched those shared
+            // fields instead of the window this autosave/crash snapshot is actually for.
+            _source.ReconcileViewStateForSnapshot();
+
             using var fs = AutosaveSnapshotCoordinator.OpenSnapshotStream(snapshotPath);
             _adapter.Save(_source.Workbook, fs);
         }

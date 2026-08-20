@@ -1,5 +1,6 @@
 using FluentAssertions;
 using FreeX.App.Services;
+using FreeX.Core.IO;
 using FreeX.Core.Model;
 
 namespace FreeX.App.Services.Tests;
@@ -24,6 +25,22 @@ public sealed class AutosaveServiceTests
         public bool IsWorkbookDirty { get; set; }
         public int WorkbookDirtyGeneration { get; set; }
         public string DocumentId => Workbook.Id.Value.ToString();
+
+        /// <summary>
+        /// R153-shared-window-state-F1: simulates a host's per-window view-state reconciliation
+        /// (WorkbookSession.ReconcileViewStateForSave / MainWindow.ReconcileViewStateForSave) --
+        /// projecting this window's own remembered view onto the shared Sheet fields right before
+        /// the workbook is serialized. Left null, the interface's default no-op keeps existing
+        /// hosts/tests that never set it behaving exactly as before.
+        /// </summary>
+        public Action? OnReconcileViewStateForSnapshot { get; set; }
+        public int ReconcileViewStateForSnapshotCallCount { get; private set; }
+
+        void IAutosaveWorkbookSource.ReconcileViewStateForSnapshot()
+        {
+            ReconcileViewStateForSnapshotCallCount++;
+            OnReconcileViewStateForSnapshot?.Invoke();
+        }
     }
 
     [Fact]
@@ -263,5 +280,94 @@ public sealed class AutosaveServiceTests
 
         File.Exists(store.GetSnapshotPath("test-dispose-emergency")).Should().BeFalse();
         File.Exists(store.GetSidecarPath("test-dispose-emergency")).Should().BeFalse();
+    }
+
+    // R153-shared-window-state-F1 -----------------------------------------------------------
+    //
+    // Periodic autosave and emergency crash snapshots wrote _source.Workbook straight to disk
+    // with no reconciliation step, unlike the explicit Ctrl+S path (WorkbookSaveWorkflowRequest.
+    // ProjectViewStateForSave). That meant a snapshot always reflected whichever "New Window"
+    // sibling most recently mutated the shared per-Sheet view fields (zoom/freeze/split/active
+    // cell/scroll), not the view of the window whose timer fired or whose crash triggered the
+    // snapshot. AutosaveService now calls IAutosaveWorkbookSource.ReconcileViewStateForSnapshot()
+    // right before serializing, mirroring ProjectViewStateForSave.
+
+    [Fact]
+    public void OnTimerTick_ReconcilesViewStateBeforeSerializing()
+    {
+        // Fails before the fix: WriteSnapshot never invoked ReconcileViewStateForSnapshot, so the
+        // stub's callback never ran, the sheet's ZoomPercent stayed at its unreconciled value
+        // (100), and the snapshot on disk reflected that stale value instead of "this window's"
+        // reconciled 250 -- exactly the bug: a sibling window's (or this window's own stale) view
+        // wins over the view the snapshot was actually supposed to capture.
+        using var dir = new TestTemporaryDirectory();
+        var store = new AutosaveSnapshotStore(dir.Path);
+        using var service = new AutosaveService(store);
+
+        var source = new StubSource(dirty: true, generation: 1);
+        var sheet = source.Workbook.AddSheet("Sheet1");
+        sheet.ZoomPercent.Should().Be(100, "the sheet has not been reconciled yet");
+
+        // Simulates the host's real reconciliation (WorkbookSession.ReconcileViewStateForSave /
+        // MainWindow.ReconcileViewStateForSave) projecting this window's own remembered zoom onto
+        // the shared Sheet field immediately before the workbook is handed off for serialization.
+        source.OnReconcileViewStateForSnapshot = () => sheet.ZoomPercent = 250;
+
+        service.Attach(source, "test-reconcile-w0");
+        service.OnTimerTick();
+
+        source.ReconcileViewStateForSnapshotCallCount.Should().Be(
+            1, "AutosaveService must reconcile this window's own view state before every snapshot write");
+
+        using var fs = File.OpenRead(store.GetSnapshotPath("test-reconcile-w0"));
+        var loaded = new NativeJsonAdapter().Load(fs);
+        loaded.GetSheet("Sheet1")!.ZoomPercent.Should().Be(
+            250, "the snapshot must persist this window's reconciled view state, not the stale shared value");
+    }
+
+    [Fact]
+    public void TryEmergencySnapshot_ReconcilesViewStateBeforeSerializing()
+    {
+        // Sibling gesture to the timer-tick test above: the crash-handler path must get the same
+        // treatment, since App.xaml.cs / AvaloniaAutosaveCoordinator route crash snapshots through
+        // TryEmergencySnapshot rather than OnTimerTick.
+        using var dir = new TestTemporaryDirectory();
+        var store = new AutosaveSnapshotStore(dir.Path);
+        using var service = new AutosaveService(store);
+        service.Attach(new StubSource(), "emergency-reconcile-placeholder");
+
+        var source = new StubSource(dirty: true, generation: 7, filePath: @"C:\work.xlsx", name: "work");
+        var sheet = source.Workbook.AddSheet("Sheet1");
+        source.OnReconcileViewStateForSnapshot = () => sheet.ZoomPercent = 400;
+
+        service.TryEmergencySnapshot(source);
+
+        source.ReconcileViewStateForSnapshotCallCount.Should().Be(1);
+
+        using var fs = File.OpenRead(store.GetSnapshotPath("emergency-reconcile-placeholder"));
+        var loaded = new NativeJsonAdapter().Load(fs);
+        loaded.GetSheet("Sheet1")!.ZoomPercent.Should().Be(400);
+    }
+
+    [Fact]
+    public void OnTimerTick_WithSourceThatDoesNotOverrideReconcile_StillWritesSnapshot()
+    {
+        // Sibling no-regression case: the interface member has a default no-op body specifically
+        // so a source that never implements it (every other StubSource use in this file, plus any
+        // host not yet wired) keeps behaving exactly as before -- the call must not throw and must
+        // not change the ordinary dirty/generation-gated snapshot behavior.
+        using var dir = new TestTemporaryDirectory();
+        var store = new AutosaveSnapshotStore(dir.Path);
+        using var service = new AutosaveService(store);
+        var source = new StubSource(dirty: true, generation: 1);
+        source.Workbook.AddSheet("Sheet1");
+
+        service.Attach(source, "test-no-override-w0");
+        var act = () => service.OnTimerTick();
+
+        act.Should().NotThrow();
+        File.Exists(store.GetSnapshotPath("test-no-override-w0")).Should().BeTrue();
+        source.ReconcileViewStateForSnapshotCallCount.Should().Be(
+            1, "the AutosaveService call site still runs; only the stub's own callback is unset");
     }
 }

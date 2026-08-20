@@ -76,6 +76,43 @@ public sealed class ContentControlInteractionPlannerTests
     }
 
     [Fact]
+    public void ToggleCheckBox_WithCustomGlyphMetadata_WritesTheDocumentsOwnGlyphNotTheAppDefault()
+    {
+        // Document author customized both states away from Word's default 2612/2610 glyphs.
+        var metadata = new ContentControlCheckBoxMetadata(
+            CheckedState: new ContentControlCheckBoxStateMetadata("2714", "Segoe UI Symbol"),
+            UncheckedState: new ContentControlCheckBoxStateMetadata("2716", "Segoe UI Symbol"));
+        var run = Run.CheckBoxControl(@checked: false, tag: "Approval", checkBoxMetadata: metadata);
+
+        var toggledOn = ContentControlInteractionPlanner.ToggleCheckBox(run);
+
+        toggledOn.Should().NotBeNull();
+        toggledOn!.Text.Should().Be("✔");
+        toggledOn.Control!.Checked.Should().BeTrue();
+        toggledOn.Control.CheckBoxMetadata.Should().Be(metadata);
+
+        var toggledBackOff = ContentControlInteractionPlanner.ToggleCheckBox(toggledOn);
+
+        toggledBackOff.Should().NotBeNull();
+        toggledBackOff!.Text.Should().Be("✖");
+        toggledBackOff.Control!.Checked.Should().BeFalse();
+    }
+
+    [Fact]
+    public void ToggleCheckBox_WithoutCheckBoxMetadata_StillUsesTheAppDefaultGlyphs()
+    {
+        // Sibling / no-regression case: a checkbox with no custom w14 state metadata (the common
+        // case) must keep writing the app's own default glyphs, unchanged from before this fix.
+        var run = Run.CheckBoxControl(@checked: false, tag: "Approval");
+
+        var updated = ContentControlInteractionPlanner.ToggleCheckBox(run);
+
+        updated.Should().NotBeNull();
+        updated!.Text.Should().Be(ContentControl.CheckedGlyph);
+        updated.Control!.Checked.Should().BeTrue();
+    }
+
+    [Fact]
     public void SelectItem_UpdatesDropDownAndComboText()
     {
         var items = new[]

@@ -265,6 +265,10 @@ public partial class MainWindow
         // above, so a paste that lands in a DIFFERENT open window's workbook can still resolve
         // this range's hyperlinks/metadata (PasteCommandFactory can no longer look them up from
         // the destination workbook in that case -- see WorkbookClipboardSnapshot.SourceSheet).
+        // freex-cell-styles-F1: capture the live source Workbook (_workbook) alongside the source
+        // Sheet just above -- PasteCommandFactory needs it to translate a pasted cell's StyleId
+        // (a raw index into THIS workbook's style table) into the correct index in whichever
+        // workbook ends up receiving the paste. See WorkbookClipboardSnapshot.SourceWorkbook.
         _workbookClipboardSession.Capture(new WorkbookClipboardSnapshot(
             copyRange,
             clipCells,
@@ -273,7 +277,8 @@ public partial class MainWindow
             isCut,
             areas.Count > 1 ? areas : null,
             clipboardMarker,
-            SourceSheet: sheet),
+            SourceSheet: sheet,
+            SourceWorkbook: _workbook),
             owner: this);
     }
 
@@ -817,7 +822,13 @@ public partial class MainWindow
                             // it through so hyperlinks/rich-text/merged-regions/comments/CF still
                             // resolve for a cross-window paste, where _workbook.GetSheet(clip.
                             // SourceRange.Start.Sheet) below would otherwise always miss.
-                            sourceSheetOverride: clip.SourceSheet);
+                            sourceSheetOverride: clip.SourceSheet,
+                            // freex-cell-styles-F1: clip.SourceWorkbook is the live Workbook
+                            // captured at Copy time alongside SourceSheet above -- pass it through
+                            // so a pasted cell's StyleId (a raw index into THAT workbook's style
+                            // table) is translated into this (destination) workbook's own style
+                            // table instead of being trusted as an index into it.
+                            sourceWorkbookOverride: clip.SourceWorkbook);
                         if (keepColumnWidths)
                         {
                             sheetPasteCommand = new CompositeWorkbookCommand(

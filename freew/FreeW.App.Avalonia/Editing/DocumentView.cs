@@ -332,6 +332,19 @@ public sealed partial class DocumentView : Control
     }
     private DocPosition _caret;
     private DocPosition? _selectionAnchor;
+
+    // AV-DRAGMOVE: a left-button press that lands inside the existing body-text selection arms a
+    // pending drag-to-move (Ctrl held ⇒ drag-to-copy) instead of collapsing the selection immediately,
+    // mirroring the WPF host's OnBodyMouseDown/IsPointInsideCrossPageSelection. _bodyDragOriginalAnchor
+    // /_bodyDragOriginalCaret capture the pre-drag selection so a sub-threshold release (a plain click)
+    // or an out-of-scope drop can restore it verbatim.
+    private bool _bodyDragPending;
+    private bool _bodyDragActive;
+    private Point _bodyDragOrigin;
+    private DocPosition _bodyDragPressPos;
+    private (DocPosition Start, DocPosition End)? _bodyDragSourceSelection;
+    private DocPosition _bodyDragOriginalAnchor;
+    private DocPosition _bodyDragOriginalCaret;
     private DocumentViewAutomationPeer? _automationPeer;
     private string? _lastAutomationValue;
     private string? _lastAutomationSelectionStatus;
@@ -16872,6 +16885,18 @@ public sealed partial class DocumentView : Control
                 _cellBlockFocus  = null;
             }
 
+            // AV-DRAGMOVE: a plain press landing inside the current selection arms a pending drag
+            // instead of collapsing it — see OnPointerMoved/OnPointerReleased for the rest of the
+            // gesture.
+            if (!shift && !ctrlOrMeta && TryArmBodyTextDrag(point, pos))
+            {
+                e.Handled = true;
+                return;
+            }
+            _bodyDragPending = false;
+            _bodyDragActive = false;
+            _bodyDragSourceSelection = null;
+
             // AV-TBL: When entering a cell, _cellCaret was set by TryHitTest.
             // When leaving a cell (hitting body text), _cellCaret is cleared.
             if (!shift)
@@ -16937,6 +16962,17 @@ public sealed partial class DocumentView : Control
                 else
                     Cursor = hover == FloatHandle.None ? Cursor.Default : CursorForHandle(hover);
             }
+            return;
+        }
+
+        // AV-DRAGMOVE: a body-text drag was armed on press. Below the platform drag threshold it is
+        // still just a click-in-progress (no model change, no live selection change — the original
+        // selection stays exactly as it was); past it, show the move/copy cursor and defer the actual
+        // text move to OnPointerReleased once the drop point is known.
+        if (_bodyDragPending || _bodyDragActive)
+        {
+            UpdateBodyTextDrag(point, (e.KeyModifiers & (KeyModifiers.Control | KeyModifiers.Meta)) != 0);
+            e.Handled = true;
             return;
         }
 
@@ -17014,6 +17050,19 @@ public sealed partial class DocumentView : Control
         base.OnPointerCaptureLost(e);
         if (_rulerDrag is not null)
             CancelRulerInteraction();
+        if (_bodyDragPending || _bodyDragActive)
+        {
+            // AV-DRAGMOVE: a platform/window teardown can revoke capture without a matching
+            // PointerReleased — abandon the drag and restore the selection it started from rather
+            // than leaving stale armed state (or a half-applied move) behind.
+            _selectionAnchor = _bodyDragOriginalAnchor;
+            _caret = _bodyDragOriginalCaret;
+            _bodyDragPending = false;
+            _bodyDragActive = false;
+            _bodyDragSourceSelection = null;
+            Cursor = Cursor.Default;
+            InvalidateVisual();
+        }
         _hfSelectionDragActive = false;
         _hfSelectionDragPointer = null;
         if (_shapeTextSelectionDragState is not null)
@@ -17044,6 +17093,12 @@ public sealed partial class DocumentView : Control
             _hfSelectionDragActive = false;
             _hfSelectionDragPointer?.Capture(null);
             _hfSelectionDragPointer = null;
+            e.Handled = true;
+            return;
+        }
+        if (_bodyDragPending || _bodyDragActive)
+        {
+            CommitBodyTextDrag(e.GetPosition(this), (e.KeyModifiers & (KeyModifiers.Control | KeyModifiers.Meta)) != 0);
             e.Handled = true;
             return;
         }
@@ -24467,6 +24522,156 @@ public sealed partial class DocumentView : Control
 
     private static int Compare(DocPosition a, DocPosition b) =>
         a.Block != b.Block ? a.Block.CompareTo(b.Block) : a.Offset.CompareTo(b.Offset);
+
+    /// <summary>
+    /// AV-DRAGMOVE: arms a pending body-text drag when a plain (non-shift, non-Ctrl) press at
+    /// <paramref name="pos"/> falls inside the current selection, instead of letting the caller
+    /// collapse that selection to a fresh anchor at the click point. Returns false — and leaves all
+    /// drag state untouched — for every other press, so the caller's ordinary click/selection-start
+    /// behaviour runs unchanged.
+    /// </summary>
+    private bool TryArmBodyTextDrag(Point point, DocPosition pos)
+    {
+        // A cell drag-move is a separate, unimplemented gesture — leaving _cellCaret null here (i.e.
+        // declining to arm) keeps the existing cross-cell selection path untouched.
+        if (_cellCaret is not null)
+            return false;
+        if (NormalizedSelection() is not { } existingSelection)
+            return false;
+        if (!IsWithin(existingSelection, pos.Block, pos.Offset))
+            return false;
+
+        _bodyDragPending = true;
+        _bodyDragActive = false;
+        _bodyDragOrigin = point;
+        _bodyDragPressPos = pos;
+        _bodyDragSourceSelection = existingSelection;
+        _bodyDragOriginalAnchor = _selectionAnchor!.Value;
+        _bodyDragOriginalCaret = _caret;
+        return true;
+    }
+
+    /// <summary>
+    /// AV-DRAGMOVE: advances a pending/active body-text drag on pointer move. Below the platform drag
+    /// threshold this is still just a click-in-progress — no cursor change, no model change. Past it,
+    /// the drag is live and shows the move/copy cursor; the actual text move is deferred to
+    /// <see cref="CommitBodyTextDrag"/> once the drop point is known on release.
+    /// </summary>
+    private void UpdateBodyTextDrag(Point point, bool ctrlHeld)
+    {
+        if (_bodyDragPending && !_bodyDragActive)
+        {
+            var dx = point.X - _bodyDragOrigin.X;
+            var dy = point.Y - _bodyDragOrigin.Y;
+            const double DragThresholdDip = 4.0;
+            if (dx * dx + dy * dy < DragThresholdDip * DragThresholdDip)
+                return;
+            _bodyDragActive = true;
+        }
+
+        Cursor = new Cursor(ctrlHeld ? StandardCursorType.Hand : StandardCursorType.SizeAll);
+    }
+
+    /// <summary>
+    /// AV-DRAGMOVE: completes a body-text drag armed by <c>OnPointerPressed</c>. Mirrors the WPF
+    /// host's <c>OnBodyMouseUp</c>: a drop back inside the source selection is a no-op, a real drop
+    /// moves the text, and Ctrl held at release copies it instead.
+    /// </summary>
+    /// <remarks>
+    /// Only a same-paragraph, untracked, unlocked source selection dropped elsewhere in the SAME
+    /// paragraph is actually repositioned — that is the one case a simple offset shift proves
+    /// correct (mirrors the same-block splice <see cref="DeleteSelection"/> itself performs). A
+    /// cross-paragraph source, a locked/tracked selection, or a drop outside plain body text falls
+    /// back to restoring the pre-drag selection unchanged: still a fix for the reported defect (the
+    /// selection is no longer destroyed by the press-drag), just not a reposition this method can
+    /// prove safe.
+    /// </remarks>
+    private void CommitBodyTextDrag(Point releasePoint, bool ctrlHeld)
+    {
+        var wasActive = _bodyDragActive;
+        var source = _bodyDragSourceSelection;
+        var pressPos = _bodyDragPressPos;
+        var originalAnchor = _bodyDragOriginalAnchor;
+        var originalCaret = _bodyDragOriginalCaret;
+        _bodyDragPending = false;
+        _bodyDragActive = false;
+        _bodyDragSourceSelection = null;
+        Cursor = Cursor.Default;
+
+        // Sub-threshold release: this was always just a click, never a drag — collapse to the press
+        // point exactly like an ordinary (non-drag-aware) body click would.
+        if (!wasActive || source is not { } src)
+        {
+            _selectionAnchor = pressPos;
+            _caret = pressPos;
+            InvalidateVisual();
+            CaretMoved?.Invoke();
+            return;
+        }
+
+        if (TryCommitBodyTextDragMove(src, releasePoint, ctrlHeld))
+            return;
+
+        // Out of the scope this method can safely reposition, or the drop landed back inside the
+        // source range — restore the pre-drag selection rather than leaving it collapsed wherever
+        // the pointer happened to release.
+        _selectionAnchor = originalAnchor;
+        _caret = originalCaret;
+        InvalidateVisual();
+        CaretMoved?.Invoke();
+    }
+
+    private bool TryCommitBodyTextDragMove((DocPosition Start, DocPosition End) source, Point releasePoint, bool ctrlHeld)
+    {
+        if (IsEditingLocked || TrackChangesEnabled)
+            return false;
+        if (source.Start.Block != source.End.Block)
+            return false;
+        if (_doc.Blocks[source.Start.Block] is not Paragraph sourceParagraph || !IsEditable(sourceParagraph))
+            return false;
+        if (SelectionReachesLockedContentControl(source))
+            return false;
+        if (!TryHitTest(releasePoint, out var drop) || _cellCaret is not null)
+            return false;
+        if (drop.Block != source.Start.Block)
+            return false;
+        if (Compare(drop, source.Start) >= 0 && Compare(drop, source.End) <= 0)
+            return false; // drop inside (or right at the edge of) the source range — a documented no-op.
+
+        _selectionAnchor = source.Start;
+        _caret = source.End;
+        var text = SelectedText;
+        if (string.IsNullOrEmpty(text))
+            return false;
+
+        if (ctrlHeld)
+        {
+            _selectionAnchor = drop;
+            _caret = drop;
+            InsertText(text);
+            return true;
+        }
+
+        // Move: delete the source range first, shifting a drop point that sat after it back by the
+        // removed length (a drop before the source range is unaffected — DeleteSelection() is a plain
+        // same-paragraph splice, so nothing before the removed span moves). The delete and the
+        // re-insert are two separate bus commands (AV-UNDOGROUP, same reasoning as InsertText's own
+        // selection-replace fallback) — grouped so one Ctrl+Z restores the pre-drag text, matching
+        // Word's own drag-move.
+        var removedLength = source.End.Offset - source.Start.Offset;
+        var adjustedOffset = drop.Offset >= source.End.Offset ? drop.Offset - removedLength : drop.Offset;
+        var ownsUndoGroup = !_bus.IsUndoGroupOpen;
+        if (ownsUndoGroup)
+            _bus.BeginUndoGroup();
+        DeleteSelection();
+        var adjustedDrop = new DocPosition(source.Start.Block, adjustedOffset);
+        _selectionAnchor = adjustedDrop;
+        _caret = adjustedDrop;
+        InsertText(text);
+        if (ownsUndoGroup)
+            _bus.CommitUndoGroup("Move Text");
+        return true;
+    }
 
     // ---- Model helpers --------------------------------------------------------------------------
 

@@ -110,8 +110,11 @@ public sealed record PrintDialogSubmission(
 /// </summary>
 public sealed class PrintDialogSession
 {
-    private PrintDialogSession(PrintDialogPlan plan, bool collate)
+    private readonly string? _jobTitle;
+
+    private PrintDialogSession(PrintDialogPlan plan, bool collate, string? jobTitle)
     {
+        _jobTitle = jobTitle;
         var printerNames = plan.Printers.Select(printer => printer.Name).ToArray();
         var selectedPrinterIndex = Array.FindIndex(
             printerNames,
@@ -138,7 +141,10 @@ public sealed class PrintDialogSession
     {
         ArgumentNullException.ThrowIfNull(discovery);
         requested ??= new PrintSelection();
-        return new PrintDialogSession(PrintSelectionPlanner.Build(discovery, requested), requested.Collate);
+        return new PrintDialogSession(
+            PrintSelectionPlanner.Build(discovery, requested),
+            requested.Collate,
+            requested.JobTitle);
     }
 
     public static PrintDialogRangeVisibility RangeVisibility(int pageRangeIndex) =>
@@ -183,7 +189,8 @@ public sealed class PrintDialogSession
             copies,
             pageRange,
             (PrintOrientation)Math.Clamp(orientationIndex, 0, 2),
-            collate));
+            collate,
+            _jobTitle));
     }
 
     private static PrintDialogSubmission Invalid(PrintDialogValidationIssue issue) => new(null, issue);

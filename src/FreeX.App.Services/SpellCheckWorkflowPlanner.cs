@@ -8,7 +8,8 @@ public readonly record struct SpellingIssueKey(
     string Word,
     SpellingIssueSource Source,
     int ReplyIndex,
-    int StartIndex);
+    int StartIndex,
+    Guid? TextBoxId = null);
 
 public sealed record SpellCheckScanResult(IReadOnlyList<SpellingIssue> Issues)
 {
@@ -133,7 +134,7 @@ public static class SpellCheckWorkflowPlanner
             ignoredIssues));
 
     public static SpellingIssueKey CreateIssueKey(SpellingIssue issue) =>
-        new(issue.Address, issue.Word, issue.Source, issue.ReplyIndex, issue.StartIndex);
+        new(issue.Address, issue.Word, issue.Source, issue.ReplyIndex, issue.StartIndex, issue.TextBoxId);
 
     private static bool ContainsIgnoredWord(IEnumerable<string>? ignoredWords, string word)
     {
@@ -242,14 +243,19 @@ public static class SpellCheckWorkflowPlanner
                 issue.Address,
                 issue.ReplyIndex,
                 correctedText),
+            SpellingIssueSource.TextBox when issue.TextBoxId is { } textBoxId => new SetTextBoxTextCommand(
+                issue.Address.Sheet,
+                textBoxId,
+                correctedText),
             _ => throw new ArgumentOutOfRangeException(nameof(issue), issue.Source, "Unknown spelling issue source.")
         };
 
     private static SpellingIssueTargetKey CreateTargetKey(SpellingIssue issue) =>
-        new(issue.Address, issue.Source, issue.ReplyIndex);
+        new(issue.Address, issue.Source, issue.ReplyIndex, issue.TextBoxId);
 
     private readonly record struct SpellingIssueTargetKey(
         CellAddress Address,
         SpellingIssueSource Source,
-        int ReplyIndex);
+        int ReplyIndex,
+        Guid? TextBoxId);
 }

@@ -51,6 +51,34 @@ public sealed class TextToColumnsApplyPlannerTests
     }
 
     [Fact]
+    public void BuildEdits_CarriesNonTextSourceRowsThroughWhenDestinationDiffersFromSource()
+    {
+        var sheet = new Sheet(SheetId.New(), "Sheet1");
+        var range = new GridRange(new CellAddress(sheet.Id, 1, 1), new CellAddress(sheet.Id, 3, 1));
+        var destination = new CellAddress(sheet.Id, 1, 5);
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("East,42"));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 1), new NumberValue(500));
+        sheet.SetCell(new CellAddress(sheet.Id, 3, 1), new TextValue("West,7"));
+
+        var edits = TextToColumnsApplyPlanner.BuildEdits(sheet, range, destination, ',');
+
+        // Row 2 (a genuine Number, not delimited text) must still land at its destination row
+        // instead of vanishing -- it just has nothing to split on, so it carries through whole.
+        edits.Select(edit => edit.Address).Should().Equal(
+            new CellAddress(sheet.Id, 1, 5),
+            new CellAddress(sheet.Id, 1, 6),
+            new CellAddress(sheet.Id, 2, 5),
+            new CellAddress(sheet.Id, 3, 5),
+            new CellAddress(sheet.Id, 3, 6));
+        edits.Select(edit => edit.NewCell.Value).Should().Equal(
+            new TextValue("East"),
+            new NumberValue(42),
+            new NumberValue(500),
+            new TextValue("West"),
+            new NumberValue(7));
+    }
+
+    [Fact]
     public void BuildEdits_CanWriteSplitOutputToExplicitDestination()
     {
         var sheet = new Sheet(SheetId.New(), "Sheet1");

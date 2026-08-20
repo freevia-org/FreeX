@@ -41,13 +41,21 @@ public sealed class PresentationReviewWorkflowSession
 {
     private readonly Func<EditingSession> _getEditor;
     private readonly PresentationReviewWorkflowSessionCallbacks _callbacks;
+    private readonly PresentationCustomDictionaryStore _dictionaryStore;
 
     public PresentationReviewWorkflowSession(
         Func<EditingSession> getEditor,
-        PresentationReviewWorkflowSessionCallbacks callbacks)
+        PresentationReviewWorkflowSessionCallbacks callbacks,
+        PresentationCustomDictionaryStore? dictionaryStore = null)
     {
         _getEditor = getEditor ?? throw new ArgumentNullException(nameof(getEditor));
         _callbacks = callbacks ?? throw new ArgumentNullException(nameof(callbacks));
+        // Defaults to an in-memory, non-persisting store so constructing a session in a unit test
+        // never touches the real user data folder; production hosts opt into persistence by passing
+        // PresentationCustomDictionaryStore.Load().
+        _dictionaryStore = dictionaryStore ?? new PresentationCustomDictionaryStore(storePath: null);
+        if (_dictionaryStore.Words.Count > 0)
+            ProofingDictionaryState = new PresentationProofingDictionaryState([.. _dictionaryStore.Words]);
     }
 
     public int? SelectedCommentIndex { get; set; }
@@ -673,9 +681,12 @@ public sealed class PresentationReviewWorkflowSession
             ShowProofingPane();
 
         var previousSelection = LastProofingPanePlan!.SelectedRowIndex;
+        var previousWords = ProofingDictionaryState.NormalizedWords;
         ProofingDictionaryState = PresentationReviewWorkflowPlanner.AddProofingDictionaryWord(
             ProofingDictionaryState,
             LastProofingPanePlan.SelectedRow);
+        if (ProofingDictionaryState.NormalizedWords.Count > previousWords.Count)
+            _dictionaryStore.Add(ProofingDictionaryState.NormalizedWords[^1]);
         return RefreshProofingPaneAfterIgnore(previousSelection);
     }
 

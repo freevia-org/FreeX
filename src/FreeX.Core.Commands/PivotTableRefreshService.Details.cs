@@ -18,6 +18,7 @@ public static partial class PivotTableRefreshService
             return new PivotDetailRows([], []);
 
         var headers = ReadHeaders(sourceSheet, pivotTable.SourceRange);
+        var sourceRows = ReadSourceRows(sourceSheet, pivotTable.SourceRange, headers.Count).ToList();
         var outputRow = pivotCell.Row;
         var columnFields = pivotTable.ColumnFields.ToList();
         var firstDataRow = pivotTable.TargetRange.Start.Row + (uint)Math.Max(1, columnFields.Count);
@@ -29,7 +30,7 @@ public static partial class PivotTableRefreshService
         if (pivotCell.Col < firstValueColumn)
             return new PivotDetailRows(headers, []);
 
-        var rowSelection = ReadDetailRowSelection(targetSheet, pivotTable, outputRow, firstDataRow, rowFields);
+        var rowSelection = ReadDetailRowSelection(targetSheet, pivotTable, outputRow, firstDataRow, rowFields, sourceRows);
         if (rowSelection is null)
             return new PivotDetailRows(headers, []);
 
@@ -37,7 +38,7 @@ public static partial class PivotTableRefreshService
         if (columnKeys is null)
             return new PivotDetailRows(headers, []);
 
-        var rows = ReadSourceRows(sourceSheet, pivotTable.SourceRange, headers.Count)
+        var rows = sourceRows
             .Where(row => MatchesFieldSelections(row, pivotTable.PageFields))
             .Where(row => MatchesFieldSelections(row, rowFields))
             .Where(row => MatchesFieldSelections(row, columnFields))
@@ -52,13 +53,14 @@ public static partial class PivotTableRefreshService
         PivotTableModel pivotTable,
         uint outputRow,
         uint firstDataRow,
-        IReadOnlyList<PivotFieldModel> rowFields)
+        IReadOnlyList<PivotFieldModel> rowFields,
+        IReadOnlyList<IReadOnlyList<ScalarValue>> sourceRows)
     {
         if (rowFields.Count == 0)
             return new DetailRowSelection([], IsRowGrandTotal: false, IsSubtotal: false);
 
         if (pivotTable.ReportLayout == PivotReportLayout.Compact && rowFields.Count > 1)
-            return ReadCompactDetailRowSelection(sheet, pivotTable, outputRow, firstDataRow, rowFields.Count);
+            return ReadCompactDetailRowSelection(sheet, pivotTable, outputRow, firstDataRow, rowFields, sourceRows);
 
         // A real subtotal row can only exist when WriteSubtotalRow's own gate
         // (pivotTable.ShowSubtotals && rowFields.Count > 1) is satisfied, and even then a genuine
@@ -108,8 +110,10 @@ public static partial class PivotTableRefreshService
         PivotTableModel pivotTable,
         uint outputRow,
         uint firstDataRow,
-        int rowFieldCount)
+        IReadOnlyList<PivotFieldModel> rowFields,
+        IReadOnlyList<IReadOnlyList<ScalarValue>> sourceRows)
     {
+        var rowFieldCount = rowFields.Count;
         var labelColumn = pivotTable.TargetRange.Start.Col;
         var labelValue = sheet.GetCell(outputRow, labelColumn)?.Value;
         if (labelValue is null)
@@ -143,10 +147,46 @@ public static partial class PivotTableRefreshService
         if (keys.Count == rowFieldCount)
             return new DetailRowSelection(keys, IsRowGrandTotal: false, IsSubtotal: false);
 
-        var combined = SplitCompactCombinedLabel(label, rowFieldCount);
+        // The upward walk above only ever finds separate per-level header rows -- which the compact
+        // MATRIX writer never emits (PivotTableRefreshService.MatrixWriter.cs writes the entire leaf
+        // row as ONE cell: string.Join(" ", rowGroup.Key.Values)). Reconstruct the individual
+        // row-field values by finding which combination of actual row-field values -- joined the
+        // same way the writer joined them -- reproduces this exact label text, instead of naively
+        // splitting on spaces (which breaks as soon as a field's own text contains a space, and can
+        // otherwise coincidentally match the wrong field boundaries; see freex-pivot F1).
+        var combined = ResolveMatrixCombinedLabel(label, rowFields, sourceRows)
+            ?? SplitCompactCombinedLabel(label, rowFieldCount);
         return combined is null
             ? null
             : new DetailRowSelection(combined, IsRowGrandTotal: false, IsSubtotal: false);
+    }
+
+    private static IReadOnlyList<string>? ResolveMatrixCombinedLabel(
+        string label,
+        IReadOnlyList<PivotFieldModel> rowFields,
+        IReadOnlyList<IReadOnlyList<ScalarValue>> sourceRows)
+    {
+        List<string>? match = null;
+        foreach (var row in sourceRows)
+        {
+            var combo = rowFields.Select(field => GroupKeyText(row[field.SourceFieldIndex], field)).ToList();
+            if (!string.Equals(string.Join(" ", combo), label, StringComparison.Ordinal))
+                continue;
+
+            if (match is null)
+            {
+                match = combo;
+            }
+            else if (!match.SequenceEqual(combo, StringComparer.Ordinal))
+            {
+                // Two distinct field-value combinations join to the identical compact label text
+                // (e.g. Region="New York", Extra="Y" vs Region="New", Extra="York Y") -- ambiguous,
+                // bail out rather than risk matching the wrong field boundaries.
+                return null;
+            }
+        }
+
+        return match;
     }
 
     private static IReadOnlyList<string>? SplitCompactCombinedLabel(string label, int rowFieldCount)

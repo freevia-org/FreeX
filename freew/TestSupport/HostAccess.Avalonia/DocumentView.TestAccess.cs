@@ -742,6 +742,42 @@ public sealed partial class DocumentView
         _selectionAnchor = new DocPosition(anchorBlock, anchorOffset);
     }
 
+    // ── AV-DRAGMOVE test hooks ──────────────────────────────────────────────────────────────────
+    // Drive the exact private press/move/release helpers OnPointerPressed/OnPointerMoved/
+    // OnPointerReleased call for a body-text drag, the same way BeginFloatDrag/SimulateDragTo/
+    // EndFloatDrag drive the floating-object drag helpers — no logic is duplicated for the test.
+
+    /// <summary>
+    /// Simulates a plain (non-shift, non-Ctrl) left-button press at <paramref name="point"/> in the
+    /// document body, mirroring OnPointerPressed's own decision exactly: hit-tests the point, arms a
+    /// pending drag when it falls inside the current selection (returns true), otherwise collapses the
+    /// selection to the press point (returns false) the same way an ordinary click always has.
+    /// </summary>
+    internal bool TryArmBodyTextDragForTest(Point point)
+    {
+        if (_laidOutWidth < 0)
+            Relayout(FallbackWidth);
+        if (!TryHitTest(point, out var pos))
+            return false;
+        if (TryArmBodyTextDrag(point, pos))
+            return true;
+        _selectionAnchor = pos;
+        _cellAnchor = _cellCaret;
+        _caret = pos;
+        return false;
+    }
+
+    /// <summary>Simulates a pointer move while a body-text drag is pending/active.</summary>
+    internal void UpdateBodyTextDragForTest(Point point, bool ctrlHeld = false) =>
+        UpdateBodyTextDrag(point, ctrlHeld);
+
+    /// <summary>Simulates the release that completes (or abandons) a body-text drag.</summary>
+    internal void CommitBodyTextDragForTest(Point point, bool ctrlHeld = false) =>
+        CommitBodyTextDrag(point, ctrlHeld);
+
+    internal bool BodyTextDragPendingForTest => _bodyDragPending;
+    internal bool BodyTextDragActiveForTest => _bodyDragActive;
+
     /// <summary>
     /// Simulates a pointer click at <paramref name="point"/> and returns the resolved
     /// (Block, Offset) if TryHitTest finds a match, or null if not.

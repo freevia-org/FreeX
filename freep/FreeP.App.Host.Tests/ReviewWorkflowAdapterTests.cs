@@ -278,7 +278,13 @@ public sealed class ReviewWorkflowAdapterTests
     [StaFact]
     public void MainWindow_ProofingAddToDictionary_UsesSharedSessionState()
     {
-        var window = new MainWindow(new FreePOptions(), messageService: TestUserMessageService.DiscardUnsavedChanges);
+        // An in-memory (null-path) dictionary store keeps this test deterministic across runs -- the
+        // real PresentationCustomDictionaryStore.Load() default persists to disk, which would otherwise
+        // let a word added by an earlier run suppress the very issue this test expects.
+        var window = new MainWindow(
+            new FreePOptions(),
+            messageService: TestUserMessageService.DiscardUnsavedChanges,
+            proofingDictionaryStore: new PresentationCustomDictionaryStore(storePath: null));
         try
         {
             window.Editor.CurrentSlide!.Title = "Title eror";

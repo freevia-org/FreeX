@@ -148,9 +148,11 @@ public sealed partial class MainWindow
 
     private void SheetTabDragPointerCaptureLost(object? sender, PointerCaptureLostEventArgs args)
     {
-        // Detach before Capture(null); Avalonia can synchronously raise PointerCaptureLost while
-        // releasing capture, and re-entering this method would leave the drag state half-cleared.
-        CommitSheetTabDragDrop();
+        // A normal drop already commits and detaches via CompleteSheetTabPointerRelease before
+        // Capture(null) can re-raise this event, so reaching here always means capture was
+        // revoked out from under an in-progress drag (Alt-Tab, a system dialog/context menu
+        // stealing capture, etc.) -- not a completed drop. Abort without committing, mirroring
+        // CellSelectionCapturePointerCaptureLost and the pivot-field drag's capture-lost cleanup.
         _sheetTabModifierClickSuppressionId = null;
         ClearSheetTabDragState(releasePointer: false);
     }

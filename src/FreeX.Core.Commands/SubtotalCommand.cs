@@ -335,7 +335,25 @@ public sealed class SubtotalCommand : IWorkbookCommand, IEstimatesMemory
                 // subtotal row need to move off level 0: it sits one level shallower than the
                 // freshly-marked detail rows, so it can still be collapsed to on its own via the
                 // outline pane before collapsing all the way to the grand total.
-                sheet.RowOutlineLevels[row] = isNestedPass ? intermediateLevel : 0;
+                //
+                // R153-subtotal-nested-outline-sibling-merge: that "move off level 0" must apply
+                // only to totals THIS pass itself just inserted/rewrote -- never to a total row a
+                // PRIOR pass already placed here. A prior pass's own group-total row (e.g. "East
+                // Total") always carries an existing RowOutlineLevels entry of exactly 0 at this
+                // point (first-pass totals are pinned at 0 above, and no later pass has touched it
+                // since -- this very branch is the only thing that ever promotes a total row off
+                // 0). Re-stamping it to intermediateLevel would erase the level-0 gap that used to
+                // separate it from its sibling group (e.g. "West Total"'s block), so
+                // RowOutlineGroupScope.Resolve's "walk while level >= anchor" scan can no longer
+                // tell one outer group from the next and merges the whole run. A brand-new total
+                // row from this pass has no such entry (or, if InsertRowsCommand's
+                // ExtendOutlineGroupIntoInsertedIndexes happened to seed it from a surrounding
+                // detail run, a nonzero one) -- either way it is not 0, so it correctly falls
+                // through to intermediateLevel.
+                var isPriorPassTotalRow = sheet.RowOutlineLevels.TryGetValue(row, out var existingTotalRowLevel)
+                    && existingTotalRowLevel == 0;
+                if (!isPriorPassTotalRow)
+                    sheet.RowOutlineLevels[row] = isNestedPass ? intermediateLevel : 0;
             }
             else
             {

@@ -126,6 +126,93 @@ public sealed partial class PivotTableCommandTests
         pivot.TargetRange.Start.ToA1().Should().Be("D3");
     }
 
+    // ── sweep92-F1: MovePivotTableCommand.Revert must restore merged row labels ─
+
+    [Fact]
+    public void MovePivotTableCommand_Revert_RestoresMergedRowLabelsAtOldLocation()
+    {
+        // Pivot with >=2 row fields and Merge and Center Cells With Labels turned on renders
+        // merged label cells (PivotTableRefreshService.MergedLabels.cs). Apply's clear step
+        // (ClearRange) strips every merged region overlapping the old footprint; Revert must put
+        // them back, not just the cell text/values.
+        var workbook = new Workbook("MovePivotMergedLabelsUndoTest");
+        var sheet = workbook.AddSheet("Data");
+        sheet.SetCell(Addr(sheet, "A1"), new TextValue("Region"));
+        sheet.SetCell(Addr(sheet, "B1"), new TextValue("Product"));
+        sheet.SetCell(Addr(sheet, "C1"), new TextValue("Amount"));
+        sheet.SetCell(Addr(sheet, "A2"), new TextValue("East"));
+        sheet.SetCell(Addr(sheet, "B2"), new TextValue("Widgets"));
+        sheet.SetCell(Addr(sheet, "C2"), new NumberValue(10));
+        sheet.SetCell(Addr(sheet, "A3"), new TextValue("East"));
+        sheet.SetCell(Addr(sheet, "B3"), new TextValue("Gadgets"));
+        sheet.SetCell(Addr(sheet, "C3"), new NumberValue(20));
+        sheet.SetCell(Addr(sheet, "A4"), new TextValue("West"));
+        sheet.SetCell(Addr(sheet, "B4"), new TextValue("Widgets"));
+        sheet.SetCell(Addr(sheet, "C4"), new NumberValue(5));
+        var ctx = new TestCommandContext(workbook);
+
+        var pivot = new PivotTableModel
+        {
+            Name = "PivotTable1",
+            CacheId = 1,
+            SourceRange = Range(sheet, "A1", "C4"),
+            TargetRange = Range(sheet, "E3", "G10"),
+            ReportLayout = PivotReportLayout.Tabular,
+            MergeAndCenterLabels = true
+        };
+        pivot.RowFields.Add(new PivotFieldModel(0));
+        pivot.RowFields.Add(new PivotFieldModel(1));
+        pivot.DataFields.Add(new PivotDataFieldModel(2, "Sum of Amount", "sum"));
+        sheet.PivotTables.Add(pivot);
+        PivotTableRefreshService.Refresh(workbook, sheet, pivot);
+
+        var mergedBefore = sheet.MergedRegions.ToList();
+        mergedBefore.Should().NotBeEmpty("the repeated 'East' region label should merge across its two rows");
+
+        var moveCommand = new MovePivotTableCommand(sheet.Id, "PivotTable1", Addr(sheet, "K10"));
+        moveCommand.Apply(ctx).Success.Should().BeTrue();
+
+        // Apply's own re-render at the new location must reproduce the same merge shape.
+        sheet.MergedRegions.Should().NotBeEmpty("the moved pivot must re-render its merged labels at the new location");
+
+        moveCommand.Revert(ctx);
+
+        pivot.TargetRange.Start.ToA1().Should().Be("E3");
+        sheet.MergedRegions.Should().BeEquivalentTo(mergedBefore,
+            "undo must restore the merged row-label cells the move's clear step removed, not just the cell text");
+    }
+
+    [Fact]
+    public void MovePivotTableCommand_Revert_LeavesUnrelatedMergedRegionsUntouched()
+    {
+        // Sibling/no-regression case: a merged region that sits entirely outside the pivot's old
+        // and new footprints (a manual merge the user made elsewhere on the sheet) must survive a
+        // Move + Undo cycle unchanged -- the fix must not blindly re-add or reshuffle every merge
+        // on the sheet, only the ones the move's own clear step actually removed.
+        var workbook = new Workbook("MovePivotUnrelatedMergeUntouchedTest");
+        var sheet = workbook.AddSheet("Data");
+        SeedData(sheet);
+        sheet.SetCell(Addr(sheet, "Z1"), new TextValue("Unrelated"));
+        var unrelatedMerge = Range(sheet, "Z1", "AA1");
+        sheet.AddMergedRegion(unrelatedMerge);
+        var ctx = new TestCommandContext(workbook);
+
+        var source = Range(sheet, "A1", "B3");
+        var target = Range(sheet, "D3", "E3");
+        var addCmd = new AddPivotTableCommand(
+            sheet.Id, source, target, "PivotTable1",
+            rowFieldIndexes: [0], dataFieldIndexes: [1]);
+        addCmd.Apply(ctx).Success.Should().BeTrue();
+
+        var moveCommand = new MovePivotTableCommand(sheet.Id, "PivotTable1", Addr(sheet, "H10"));
+        moveCommand.Apply(ctx).Success.Should().BeTrue();
+        sheet.MergedRegions.Should().Contain(unrelatedMerge, "the move must never touch a merge outside its own footprint");
+
+        moveCommand.Revert(ctx);
+        sheet.MergedRegions.Should().Contain(unrelatedMerge, "undo must never touch a merge outside its own footprint either");
+        sheet.MergedRegions.Count(region => region == unrelatedMerge).Should().Be(1, "the unrelated merge must not be duplicated by the restore step");
+    }
+
     // ── R4: ConfigurePivotTableLayoutCommand.Revert must update chart bindings ─
 
     [Fact]

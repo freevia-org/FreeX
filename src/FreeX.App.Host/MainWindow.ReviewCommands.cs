@@ -39,8 +39,16 @@ public partial class MainWindow
             },
             () => MutateRuntimeOptions(options =>
             {
-                options.SpellCheckCustomDictionaryWords =
-                    _options.SpellCheckCustomDictionaryWords.ToList();
+                // MutateFresh hands us a snapshot it just reloaded from disk (so it can carry
+                // words another FreeX process persisted since this window's own snapshot was
+                // taken -- FreeX has no single-instance guard, so two windows over the same
+                // options store is ordinary). Union that fresh list with this window's in-memory
+                // words instead of overwriting it wholesale with the (possibly stale) in-memory
+                // list, or the other process's newly-added word gets silently dropped from disk.
+                // AppOptions.Normalize() (run right after this mutation) dedupes and sorts.
+                options.SpellCheckCustomDictionaryWords = options.SpellCheckCustomDictionaryWords
+                    .Concat(_options.SpellCheckCustomDictionaryWords)
+                    .ToList();
             })));
         var transition = controller.Start();
 
