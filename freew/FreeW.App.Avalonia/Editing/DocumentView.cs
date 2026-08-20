@@ -26722,11 +26722,20 @@ public sealed partial class DocumentView : Control
 
     private void DrawSceneText(DrawingContext context, ChartSceneText text)
     {
-        var formatted = Build(text.Text, new RunFormatting { FontSizePt = text.FontSize, ColorHex = text.ColorHex });
+        // ChartScene coordinates and font sizes are already expressed in device-independent pixels.
+        // Do not route them through the document-run formatter: that formatter converts points to
+        // pixels, making Avalonia chart labels 4/3 too large compared with the WPF host and Word.
+        // Chart titles use the Office display face; all other chart text follows Word's Calibri
+        // fallback, matching the WPF scene renderer.
+        var formatted = BuildChartSceneText(text);
         if (text.RotationDegrees != 0)
         {
-            using var rotation = context.PushTransform(Matrix.CreateTranslation(text.X, text.Y) *
-                Matrix.CreateRotation(text.RotationDegrees * Math.PI / 180));
+            // Avalonia composes this matrix left-to-right.  Translating before rotating rotates the
+            // intended chart-local anchor around the page origin, which puts vertical value-axis
+            // titles above the chart.  Rotate around the local origin, then translate to the scene
+            // anchor so the glyph centre stays at (text.X, text.Y).
+            using var rotation = context.PushTransform(Matrix.CreateRotation(text.RotationDegrees * Math.PI / 180) *
+                Matrix.CreateTranslation(text.X, text.Y));
             context.DrawText(formatted, new Point(-formatted.WidthIncludingTrailingWhitespace / 2, -formatted.Height / 2));
             return;
         }
@@ -26744,6 +26753,21 @@ public sealed partial class DocumentView : Control
             _ => text.Y
         };
         context.DrawText(formatted, new Point(x, y));
+    }
+
+    private FormattedText BuildChartSceneText(ChartSceneText text)
+    {
+        var typeface = new Typeface(
+            new FontFamily(text.Kind == ChartSceneTextKind.Title ? "Aptos" : "Calibri"),
+            FontStyle.Normal,
+            FontWeight.Normal);
+        return new FormattedText(
+            text.Text,
+            CultureInfo.CurrentCulture,
+            FlowDirection.LeftToRight,
+            typeface,
+            Math.Max(1, text.FontSize),
+            BrushFor(text.ColorHex));
     }
 
     private static void DrawSceneMarker(DrawingContext context, ChartSceneMarker marker)

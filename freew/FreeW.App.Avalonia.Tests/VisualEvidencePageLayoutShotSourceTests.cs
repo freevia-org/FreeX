@@ -207,6 +207,19 @@ public sealed class VisualEvidencePageLayoutShotSourceTests
     }
 
     [Fact]
+    public void AvaloniaDocumentView_RendersChartSceneTextInScenePixelsAndAroundItsAnchor()
+    {
+        var source = File.ReadAllText(RepositoryFile("freew", "FreeW.App.Avalonia", "Editing", "DocumentView.cs"));
+
+        source.Should().Contain("var formatted = BuildChartSceneText(text);");
+        source.Should().Contain("private FormattedText BuildChartSceneText(ChartSceneText text)");
+        source.Should().Contain("text.Kind == ChartSceneTextKind.Title ? \"Aptos\" : \"Calibri\"");
+        source.Should().Contain("Math.Max(1, text.FontSize)");
+        source.Should().Contain("Matrix.CreateRotation(text.RotationDegrees * Math.PI / 180) *");
+        source.Should().Contain("Matrix.CreateTranslation(text.X, text.Y)");
+    }
+
+    [Fact]
     public void AvaloniaDocumentView_UsesPixelCenteredOpaqueColumnRules()
     {
         var source = File.ReadAllText(RepositoryFile("freew", "FreeW.App.Avalonia", "Editing", "DocumentView.cs"));
