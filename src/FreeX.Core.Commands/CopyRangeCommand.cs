@@ -176,8 +176,9 @@ public sealed class CopyRangeCommand : IWorkbookCommand, IAffectedCellsCommand, 
             var cell = sheet.GetCell(source)?.Clone();
             if (cell?.FormulaText is { } formulaText)
             {
-                cell.FormulaText = FormulaRewriter.Rewrite(formulaText, pasteOp, activeSheetName)
-                    ?? formulaText;
+                RowColumnShiftHelpers.SetFormulaTextPreservingArrayIdentity(
+                    cell,
+                    FormulaRewriter.Rewrite(formulaText, pasteOp, activeSheetName) ?? formulaText);
             }
 
             payloads.Add(new CopyPayload(

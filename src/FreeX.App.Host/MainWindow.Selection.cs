@@ -668,6 +668,19 @@ public partial class MainWindow
         return true;
     }
 
+    // R154-shared-keyboard-customization-F1: Escape must first be offered to THIS window's own
+    // local UI state (ribbon key-tip dismissal, F8 sticky-selection-mode exit, Start-screen/
+    // backstage dismissal) before it is allowed to fall through to TryRouteFormulaPointModeKey,
+    // which -- when this window has no formula edit of its own active -- routes the Cancel to
+    // some OTHER open workbook window's in-progress formula edit and silently discards it.
+    // Mirrors Avalonia's ShouldHandleEscapeLocallyBeforeFormulaPointMode
+    // (src/FreeX.App.Avalonia/MainWindow.KeyboardParity.cs), added there for the identical bug.
+    private bool ShouldHandleEscapeLocallyBeforeFormulaPointMode(Key key) =>
+        key == Key.Escape &&
+        (_selectionMode != ExcelSelectionMode.Normal ||
+         _ribbonKeyTipSession.IsActive ||
+         IsStartScreenVisible());
+
     private void MainWindow_KeyDown(object sender, System.Windows.Input.KeyEventArgs e)
     {
         if (IsControlModifierKey(e))
@@ -676,7 +689,9 @@ public partial class MainWindow
         if (e.Key is System.Windows.Input.Key.CapsLock or System.Windows.Input.Key.NumLock)
             RefreshKeyLockIndicators();
 
-        if (Keyboard.Modifiers == ModifierKeys.None && TryRouteFormulaPointModeKey(e.Key))
+        if (Keyboard.Modifiers == ModifierKeys.None &&
+            !ShouldHandleEscapeLocallyBeforeFormulaPointMode(e.Key) &&
+            TryRouteFormulaPointModeKey(e.Key))
         {
             e.Handled = true;
             return;

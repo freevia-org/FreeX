@@ -109,4 +109,33 @@ public sealed class R15_formula_audit_Tests
 
         session.CurrentHighlight.Should().Be(new FormulaEvaluationHighlight("=", "A1", "+A1"));
     }
+
+    [Fact]
+    public void FormulaEvaluationSession_CurrentHighlight_MovesToSecondOccurrenceOnSecondStep()
+    {
+        // freex-formula-auditing F1: stepping past the first "A1" in "=A1+A1" must move the
+        // highlight to the SECOND "A1", not keep re-highlighting the first one. Before the fix,
+        // FindExpressionTokenIndex always returned the first textual match for a given expression
+        // string, so both steps highlighted the same leading span.
+        var summary = new FormulaEvaluationSummary(
+            new SheetId(Guid.NewGuid()),
+            "Sheet1",
+            new CellAddress(new SheetId(Guid.NewGuid()), 1, 1),
+            "=A1+A1",
+            "value",
+            [
+                new FormulaEvaluationStep("A1", "..."),
+                new FormulaEvaluationStep("A1", "..."),
+                new FormulaEvaluationStep("A1+A1", "...")
+            ]);
+
+        var session = FormulaEvaluationSession.Start(summary);
+
+        session.CurrentHighlight.Should().Be(new FormulaEvaluationHighlight("=", "A1", "+A1"));
+
+        session.MoveNext();
+
+        session.CurrentStep.Should().Be(summary.Steps[1]);
+        session.CurrentHighlight.Should().Be(new FormulaEvaluationHighlight("=A1+", "A1", ""));
+    }
 }

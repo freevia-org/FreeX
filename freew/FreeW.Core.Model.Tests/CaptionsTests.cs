@@ -134,6 +134,46 @@ public class CaptionsTests
     }
 
     [Fact]
+    public void NextCaptionNumber_WithInsertionIndex_NumbersForInsertionPointNotTotalCount()
+    {
+        var doc = new TextDocument();
+        doc.Blocks.Add(Captions.BuildCaption(CaptionLabel.Figure, 1, "First diagram"));
+        doc.Blocks.Add(Captions.BuildCaption(CaptionLabel.Figure, 2, "Second diagram"));
+
+        // Inserting BETWEEN "Figure 1" (block 0) and "Figure 2" (block 1), i.e. at block index 1,
+        // must number the new caption 2 (there is exactly one Figure caption before the insertion
+        // point), not 3 (the total count of Figure captions already in the document).
+        var numberBetween = Captions.NextCaptionNumber(doc, CaptionLabel.Figure, insertionBlockIndex: 1);
+        numberBetween.Should().Be(2);
+
+        var caption = Captions.BuildCaption(CaptionLabel.Figure, numberBetween, "Inserted in the middle");
+        doc.Blocks.Insert(1, caption);
+
+        doc.Blocks.OfType<Paragraph>().Select(p => p.PlainText).Should().Equal(
+            "Figure 1: First diagram",
+            "Figure 2: Inserted in the middle",
+            "Figure 2: Second diagram");
+    }
+
+    [Fact]
+    public void NextCaptionNumber_WithInsertionIndex_AtDocumentEndMatchesTotalCountOverload()
+    {
+        var doc = new TextDocument();
+        doc.Blocks.Add(Captions.BuildCaption(CaptionLabel.Figure, 1, "First diagram"));
+        doc.Blocks.Add(new Paragraph("Some body text"));
+        doc.Blocks.Add(Captions.BuildCaption(CaptionLabel.Figure, 2, "Second diagram"));
+
+        // Sibling/no-regression case: inserting a caption after everything else in the document (the
+        // common case -- appending a new figure at the end) must still agree with the position-agnostic
+        // overload, i.e. behave exactly as it did before this fix.
+        var appendNumber = Captions.NextCaptionNumber(doc, CaptionLabel.Figure, insertionBlockIndex: doc.Blocks.Count);
+        var totalCountNumber = Captions.NextCaptionNumber(doc, CaptionLabel.Figure);
+
+        appendNumber.Should().Be(totalCountNumber);
+        appendNumber.Should().Be(3);
+    }
+
+    [Fact]
     public void CreateEmpty_RegistersCaptionStyle()
     {
         var doc = TextDocument.CreateEmpty();

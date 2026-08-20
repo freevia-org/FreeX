@@ -40,9 +40,11 @@ namespace FreeW.App.Host.Editing;
 /// </para>
 ///
 /// <para>
-/// <strong>Undo/Redo:</strong> <see cref="Undo"/> pops the top snapshot, rebuilds the
-/// panel from it, and suppresses the next TextChanged capture.  <see cref="Redo"/> re-applies
-/// the snapshot that was just undone.
+/// <strong>Undo/Redo:</strong> <see cref="Undo"/> pops the top snapshot and rebuilds the
+/// panel from it.  <see cref="PaginatedEditorPanel.Rebuild"/> discards the old boxes and
+/// constructs new ones with the restored content already set, so it never raises a TextChanged
+/// of its own -- only the burst flag needs resetting so the next real edit captures a fresh
+/// pre-edit snapshot.  <see cref="Redo"/> re-applies the snapshot that was just undone.
 /// </para>
 ///
 /// <para>Must be called on the UI/STA thread.</para>
@@ -58,11 +60,6 @@ internal sealed class CrossPageUndoCoordinator
     private readonly Stack<ModelSnapshot> _redoStack = new();
 
     // ── state ─────────────────────────────────────────────────────────────────────────────────────
-
-    /// <summary>
-    /// When true, the next TextChanged must not push a snapshot (undo or redo is in progress).
-    /// </summary>
-    private bool _suppressNextCapture;
 
     /// <summary>
     /// Whether a pre-edit snapshot for the current burst has already been captured (so we don't
@@ -131,7 +128,10 @@ internal sealed class CrossPageUndoCoordinator
         // Push the current state for redo.
         _redoStack.Push(CaptureCurrentSnapshot());
 
-        _suppressNextCapture = true;
+        // Reset the burst flag so the next real edit captures a fresh pre-edit snapshot from the
+        // just-restored state.  Rebuild() below discards and reconstructs every PageBox with its
+        // restored content already set at construction time, so it never raises a TextChanged of
+        // its own -- there is nothing here that needs suppressing.
         _pendingBurstCaptured = false;
 
         RestoreSnapshot(snapshot);
@@ -149,7 +149,8 @@ internal sealed class CrossPageUndoCoordinator
         // Push the current state back onto the undo stack.
         _undoStack.Push(CaptureCurrentSnapshot());
 
-        _suppressNextCapture = true;
+        // See the matching comment in Undo(): Rebuild() never raises a synthetic TextChanged, so
+        // only the burst flag needs resetting here.
         _pendingBurstCaptured = false;
 
         RestoreSnapshot(snapshot);
@@ -171,12 +172,6 @@ internal sealed class CrossPageUndoCoordinator
 
     private void OnBodyTextChanged(object? sender, TextChangedEventArgs e)
     {
-        if (_suppressNextCapture)
-        {
-            _suppressNextCapture = false;
-            return;
-        }
-
         // Capture the pre-edit snapshot only once per burst.
         if (!_pendingBurstCaptured)
         {

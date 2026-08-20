@@ -106,9 +106,10 @@ internal static class PasteCommandCellFactory
         // PasteOffsetOp, where a zero delta means every reference in the formula is untouched too.
         if (pastedCell.FormulaText is not null && (pasteOp is PasteTransposeOp || rowDelta != 0 || colDelta != 0))
         {
-            pastedCell.FormulaText =
+            RowColumnShiftHelpers.SetFormulaTextPreservingArrayIdentity(
+                pastedCell,
                 FormulaRewriter.Rewrite(pastedCell.FormulaText, pasteOp, activeSheetName)
-                ?? pastedCell.FormulaText;
+                    ?? pastedCell.FormulaText);
         }
 
         if (!pastedCell.HasFormula)
@@ -135,9 +136,10 @@ internal static class PasteCommandCellFactory
         // when this particular host cell's own delta is zero.
         if (pastedCell.FormulaText is not null && (pasteOp is PasteTransposeOp || rowDelta != 0 || colDelta != 0))
         {
-            pastedCell.FormulaText =
+            RowColumnShiftHelpers.SetFormulaTextPreservingArrayIdentity(
+                pastedCell,
                 FormulaRewriter.Rewrite(pastedCell.FormulaText, pasteOp, activeSheetName)
-                ?? pastedCell.FormulaText;
+                    ?? pastedCell.FormulaText);
         }
 
         return pastedCell;

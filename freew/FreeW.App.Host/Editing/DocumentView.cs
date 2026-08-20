@@ -3855,6 +3855,15 @@ public sealed partial class DocumentView : RichTextBox
         var family = selection.GetPropertyValue(TextElement.FontFamilyProperty);
         var size = selection.GetPropertyValue(TextElement.FontSizeProperty);
 
+        // Typography.Capitals alone reports FontCapitals.AllSmallCaps -- not UnsetValue -- for a selection
+        // where every run is at least AllCaps, even when the runs disagree on SmallCaps underneath (see
+        // ResolveSelectionSmallCaps). Fold that multi-run disagreement into the indeterminate flag too, so
+        // it does not look like a uniform selection to callers (e.g. the ribbon's mixed-state display).
+        var caretRun = CaretPosition?.Parent as WpfRun ?? selection.Start.Parent as WpfRun;
+        var retained = (caretRun?.Tag as RunMarkers)?.CharacterFormat?.RenderedFormatting ?? RunFormatting.Default;
+        var smallCapsMultiRunIndeterminate =
+            capitals is FontCapitals.AllSmallCaps && ResolveSelectionSmallCaps(retained).Indeterminate;
+
         return new FontDialogSelectionState(
             CaptureSelectionRunFormatting(),
             BoldIndeterminate: weight == DependencyProperty.UnsetValue,
@@ -3863,7 +3872,7 @@ public sealed partial class DocumentView : RichTextBox
             StrikethroughIndeterminate: decorations == DependencyProperty.UnsetValue,
             FamilyIndeterminate: family == DependencyProperty.UnsetValue,
             SizeIndeterminate: size == DependencyProperty.UnsetValue,
-            SmallCapsIndeterminate: capitals == DependencyProperty.UnsetValue,
+            SmallCapsIndeterminate: capitals == DependencyProperty.UnsetValue || smallCapsMultiRunIndeterminate,
             AllCapsIndeterminate: capitals == DependencyProperty.UnsetValue,
             SuperscriptIndeterminate: baseline == DependencyProperty.UnsetValue,
             SubscriptIndeterminate: baseline == DependencyProperty.UnsetValue);
@@ -4436,7 +4445,22 @@ public sealed partial class DocumentView : RichTextBox
             Strikethrough = retained.DoubleStrikethrough
                 ? retained.Strikethrough
                 : decorations?.Contains(TextDecorations.Strikethrough[0]) == true,
-            SmallCaps = capitals is FontCapitals.SmallCaps,
+            // NOTE: TextRange.GetPropertyValue only accepts WPF's built-in text-formatting property set, so
+            // the SmallCapsFlagProperty/AllCapsFlagProperty attached properties added for the BuildRun /
+            // ReadRunFormatting round-trip (see their doc comment) cannot be read through the selection API
+            // here. Typography.Capitals alone cannot distinguish "AllCaps only" from "AllCaps + SmallCaps
+            // together" (both render as FontCapitals.AllSmallCaps) -- when it collapses to AllSmallCaps, fall
+            // back to SmallCaps agreed across every run the selection actually touches (not just the caret
+            // run -- for a multi-run selection the caret can land on either end depending on drag direction,
+            // and reading only that run let an OK click SET SmallCaps on a run that never had it; see
+            // ResolveSelectionSmallCaps). A run with both flags true reports both here too, instead of only
+            // AllCaps. A genuinely mixed multi-run selection resolves to false here (GetSelectionFormatting's
+            // SmallCapsIndeterminate flags that case for callers that care) -- reapplying that false via a
+            // real OK click through ApplyFontFormatting/TrySetSelectedRunFormatting can still clear an
+            // already-true run, same one-directional limitation the pre-fix code always had, but it can no
+            // longer spuriously set the flag on a run that never carried it.
+            SmallCaps = capitals is FontCapitals.SmallCaps
+                || (capitals is FontCapitals.AllSmallCaps && ResolveSelectionSmallCaps(retained).Value),
             AllCaps = capitals is FontCapitals.AllSmallCaps,
             VerticalAlign = verticalAlign,
             FontFamily = selection.GetPropertyValue(TextElement.FontFamilyProperty) is FontFamily family ? family.Source : null,
@@ -4448,6 +4472,49 @@ public sealed partial class DocumentView : RichTextBox
                     ? ToHex(bg.Color)
                     : null,
         };
+    }
+
+    // Whether every run the live selection actually intersects agrees on SmallCaps, and what value to use
+    // when reading it back. Only meaningful (and only called) when Typography.Capitals has collapsed the
+    // selection to AllSmallCaps, which cannot itself distinguish a uniform "AllCaps + SmallCaps" selection
+    // from a mixed one where some runs are AllCaps-only. Walks the same TextPointer path
+    // SelectedComplexFieldMarkers uses to enumerate runs an arbitrary (possibly multi-paragraph) selection
+    // touches, comparing each run's retained CharacterFormatMarker snapshot rather than trusting whichever
+    // run the caret happens to be on. <paramref name="caretRetained"/> is the fallback for a selection that
+    // (defensively) turns up no tagged runs at all, e.g. an empty selection.
+    private (bool Indeterminate, bool Value) ResolveSelectionSmallCaps(RunFormatting caretRetained)
+    {
+        var start = Selection.Start;
+        var end = Selection.End;
+        var seen = new HashSet<WpfRun>(ReferenceEqualityComparer.Instance);
+        bool? agreed = null;
+        var indeterminate = false;
+
+        void Consider(WpfRun? run)
+        {
+            if (run is not { Tag: RunMarkers { CharacterFormat: { } characterFormat } }
+                || run.ContentEnd.CompareTo(start) <= 0
+                || run.ContentStart.CompareTo(end) >= 0
+                || !seen.Add(run))
+            {
+                return;
+            }
+
+            var runSmallCaps = characterFormat.RenderedFormatting.SmallCaps;
+            if (agreed is bool existing && existing != runSmallCaps)
+                indeterminate = true;
+            agreed ??= runSmallCaps;
+        }
+
+        for (var pointer = start; pointer is not null && pointer.CompareTo(end) < 0;
+             pointer = pointer.GetNextContextPosition(LogicalDirection.Forward))
+        {
+            Consider(pointer.Parent as WpfRun);
+            if (pointer.GetPointerContext(LogicalDirection.Forward) == TextPointerContext.ElementStart)
+                Consider(pointer.GetAdjacentElement(LogicalDirection.Forward) as WpfRun);
+        }
+
+        return (indeterminate, indeterminate ? false : agreed ?? caretRetained.SmallCaps);
     }
 
     // Read the paragraph formatting of the caret's paragraph (or the selection start) from the model,
@@ -4490,6 +4557,14 @@ public sealed partial class DocumentView : RichTextBox
         selection.ApplyPropertyValue(TextElement.BackgroundProperty,
             TryParseColor(fmt.HighlightColorHex, out var highlight) ? new SolidColorBrush(highlight) : null!);
 
+        // NOTE: TextRange.ApplyPropertyValue only accepts WPF's built-in text-formatting property set, so
+        // SmallCapsFlagProperty/AllCapsFlagProperty (see their doc comment) cannot be stamped through the
+        // selection API here the way they are in BuildRun -- a Font-dialog edit applied to a collapsed
+        // caret's pending formatting can still only carry one of the two flags through Typography.Capitals.
+        // The common path (an actual text selection) does not go through this method: ApplyFontFormatting
+        // applies the full RunFormatting to the model directly via TrySetSelectedRunFormatting, and the
+        // next render calls BuildRun -- which does preserve both flags -- so this limitation only affects
+        // the narrower "nothing selected, set the pending format for the next typed character" case.
         var capitals = fmt.AllCaps ? FontCapitals.AllSmallCaps : fmt.SmallCaps ? FontCapitals.SmallCaps : FontCapitals.Normal;
         selection.ApplyPropertyValue(Typography.CapitalsProperty, capitals);
 
@@ -10224,6 +10299,15 @@ public sealed partial class DocumentView : RichTextBox
             run.SmartArt is { IsFloating: false } ||
             run.WordArt is { IsFloating: false } ||
             run.Image is { IsFloating: false });
+        // Word's "Professional"/display-math layout (m:oMathPara, recovered as Equation.IsDisplayMath)
+        // centres its equation on a standalone line, distinct from an inline m:oMath that runs with the
+        // surrounding text. A paragraph the reader built from an oMathPara holds nothing but its display
+        // equation run(s) (see DocxReader's m:oMathPara branch), so that structural shape is the only
+        // signal available -- the model has no m:oMathParaPr/m:jc field to read the exact justification
+        // from. Only apply it when the paragraph's own alignment is still the unset default (Left); an
+        // explicit non-default alignment on that paragraph is a real authored signal and wins.
+        var isDisplayMathOnlyParagraph = paragraph.Runs.Count > 0 &&
+            paragraph.Runs.All(run => run.Equation is { IsDisplayMath: true });
         // Imported WordprocessingML uses Word's application default multiple when the package cascade
         // omits w:spacing/@w:line. Model-authored FreeW documents keep the host's natural single-line box.
         // Explicit paragraph/style rules and non-default model values remain authoritative.
@@ -10244,7 +10328,9 @@ public sealed partial class DocumentView : RichTextBox
             // output — which previously honoured neither, leaving FreeW badly under-paginated vs Word.
             BreakPageBefore = paraFmt.PageBreakBefore || paragraph.Runs.Any(r => r.IsPageBreak),
             BreakColumnBefore = paragraph.Runs.Any(r => r.IsColumnBreak),
-            TextAlignment = ToWpfAlignment(paraFmt.Alignment),
+            TextAlignment = isDisplayMathOnlyParagraph && paraFmt.Alignment == ModelTextAlignment.Left
+                ? WpfTextAlignment.Center
+                : ToWpfAlignment(paraFmt.Alignment),
             // WPF's Block.Margin (unlike FrameworkElement.Margin) rejects negative components with an
             // ArgumentException, so clamp at >= 0. Real docs do carry negative indents/spacing (e.g. a
             // negative right indent pulling into the margin); WPF cannot represent that as a block margin,
@@ -10715,6 +10801,18 @@ public sealed partial class DocumentView : RichTextBox
     internal static string StripSoftHyphens(string text) =>
         text.IndexOf(Hyphenator.SoftHyphen) < 0 ? text : text.Replace(Hyphenator.SoftHyphen.ToString(), string.Empty);
 
+    // Word's w:smallCaps and w:caps are two independent run flags, but WPF's Typography.Capitals is a
+    // single value that can show at most one "caps mode" at a time -- BuildRun below maps AllCaps=true to
+    // FontCapitals.AllSmallCaps regardless of SmallCaps, so a run carrying both visually renders as
+    // All Caps only. Stamping both flags independently on these two attached properties (set/read
+    // wherever Typography.Capitals is, mirroring every other RunFormatting field's 1:1 native-property
+    // round-trip) is what lets ReadRunFormatting recover the exact original combination on commit instead
+    // of reconstructing it from the single collapsed Typography value.
+    private static readonly DependencyProperty SmallCapsFlagProperty = DependencyProperty.RegisterAttached(
+        "SmallCapsFlag", typeof(bool), typeof(DocumentView), new FrameworkPropertyMetadata(false));
+    private static readonly DependencyProperty AllCapsFlagProperty = DependencyProperty.RegisterAttached(
+        "AllCapsFlag", typeof(bool), typeof(DocumentView), new FrameworkPropertyMetadata(false));
+
     private static Inline BuildRun(
         ModelRun run,
         ModelParagraph paragraph,
@@ -10905,8 +11003,11 @@ public sealed partial class DocumentView : RichTextBox
             catch (InvalidOperationException) { /* unknown language tag — skip */ }
         }
 
-        // Small caps / all caps. AllCaps wins visually but both flags are preserved on commit by
-        // mapping each to a distinct FontCapitals value that ReadRunFormatting decodes back.
+        // Small caps / all caps. AllCaps wins visually (Typography.Capitals can only show one caps mode),
+        // but both independent flags are stamped on the dedicated attached properties above so
+        // ReadRunFormatting recovers the exact combination -- see the SmallCapsFlagProperty doc comment.
+        wpf.SetValue(SmallCapsFlagProperty, fmt.SmallCaps);
+        wpf.SetValue(AllCapsFlagProperty, fmt.AllCaps);
         if (fmt.AllCaps)
             Typography.SetCapitals(wpf, FontCapitals.AllSmallCaps);
         else if (fmt.SmallCaps)
@@ -15733,6 +15834,12 @@ public sealed partial class DocumentView : RichTextBox
             ToolTip = source.ToolTip
         };
         Typography.SetCapitals(clone, Typography.GetCapitals(source));
+        // Carry the two independent caps flags too (see SmallCapsFlagProperty's doc comment) -- they are
+        // separate attached properties, not part of the FontWeight/FontStyle/... list copied above, so a
+        // split that didn't also copy them would silently reset a both-true run's SmallCaps to false on
+        // the clone.
+        clone.SetValue(SmallCapsFlagProperty, source.GetValue(SmallCapsFlagProperty));
+        clone.SetValue(AllCapsFlagProperty, source.GetValue(AllCapsFlagProperty));
         return clone;
     }
 
@@ -17355,7 +17462,6 @@ public sealed partial class DocumentView : RichTextBox
             BaselineAlignment.Subscript => VerticalAlign.Subscript,
             _ => VerticalAlign.Baseline
         };
-        var capitals = Typography.GetCapitals(run);
 
         // Recover the complete model snapshot set by BuildRun. Live WPF properties are overlaid below;
         // model-only Word properties remain authoritative through an edit/commit round-trip.
@@ -17407,8 +17513,13 @@ public sealed partial class DocumentView : RichTextBox
             Strikethrough = charBorder is null && !rendered.DoubleStrikethrough
                 ? run.TextDecorations?.Contains(TextDecorations.Strikethrough[0]) == true
                 : rendered.Strikethrough,
-            SmallCaps = capitals == FontCapitals.SmallCaps,
-            AllCaps = capitals == FontCapitals.AllSmallCaps,
+            // Read off the two independent attached properties BuildRun stamps alongside Typography.Capitals
+            // (see SmallCapsFlagProperty's doc comment), rather than decoding the single collapsed
+            // Typography value -- Typography.Capitals alone cannot tell "AllCaps only" from "AllCaps +
+            // SmallCaps together" (both render as FontCapitals.AllSmallCaps), which used to make a run's
+            // SmallCaps flag look "changed" (true -> false) on every commit even with no edit, discarding it.
+            SmallCaps = (bool)run.GetValue(SmallCapsFlagProperty),
+            AllCaps = (bool)run.GetValue(AllCapsFlagProperty),
             VerticalAlign = verticalAlign,
             // Right-to-left run direction reads back off the WPF run's FlowDirection (set in BuildRun).
             Rtl = run.FlowDirection == System.Windows.FlowDirection.RightToLeft,

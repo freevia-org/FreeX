@@ -366,9 +366,9 @@ public sealed class DocumentReferenceEditingCoordinator
     {
         var normalizedLabel = Captions.NormalizeLabelText(labelText);
         Captions.EnsureStyles(_session.Document);
-        var number = Captions.NextCaptionNumber(_session.Document, normalizedLabel);
-        var caption = Captions.BuildCaption(normalizedLabel, number, text);
         var insertAt = Math.Clamp(caretBlockIndex + 1, 0, _session.Document.Blocks.Count);
+        var number = Captions.NextCaptionNumber(_session.Document, normalizedLabel, insertAt);
+        var caption = Captions.BuildCaption(normalizedLabel, number, text);
         _session.Commands.Execute(new InsertParagraphCommand(insertAt, caption));
         return new DocumentReferenceEditResult(true, -1, insertAt);
     }

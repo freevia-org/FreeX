@@ -89,8 +89,19 @@ public sealed class R138_SavePersistsSavingWindowsOwnActiveCellTests
                 R49MainWindowTestHarness.Invoke(window1, "ReconcileViewStateForSave");
                 var afterReconcile = (sheet.ActiveRow, sheet.ActiveCol);
 
+                // Every candidate writer identified by READING has been ruled out, so watch the
+                // write itself. Sheet.ActiveCellWriteObserver is an instance-level seam that is
+                // null and inert for every other sheet and every other test. Recording only the
+                // writes that land AFTER the reconcile keeps the trace short enough to read.
+                var writesDuringSave = new List<string>();
+                sheet.ActiveCellWriteObserver = (property, value) =>
+                    writesDuringSave.Add(
+                        property + "=" + (value?.ToString() ?? "null") + " from:\n"
+                        + Environment.StackTrace);
+
                 var saveTask = InvokeSaveWorkbookToTargetAsync(window1, new FileSaveTarget(savePath, adapter));
                 WaitForSaveResult(saveTask).Should().BeTrue();
+                sheet.ActiveCellWriteObserver = null;
 
                 captured.Should().NotBeNull("the writer must have been invoked");
 
@@ -129,7 +140,14 @@ public sealed class R138_SavePersistsSavingWindowsOwnActiveCellTests
                     + " (test sheetId=" + sheetId + "), window1._selectionAnchor="
                     + DescribeSelectionAnchor(window1)
                     + ", sheet.Active after a direct ReconcileViewStateForSave=("
-                    + afterReconcile.ActiveRow + "," + afterReconcile.ActiveCol + ")";
+                    + afterReconcile.ActiveRow + "," + afterReconcile.ActiveCol + ")"
+                    + "]\n\nWRITES TO THIS SHEET'S ACTIVE CELL DURING THE SAVE ("
+                    + writesDuringSave.Count + "):\n"
+                    + (writesDuringSave.Count == 0
+                        ? "  (none -- so the value the writer saw was already 26 before the save "
+                          + "began, and the direct reconcile above did not stick)\n"
+                        : string.Join("\n---\n", writesDuringSave))
+                    + "[";
 
                 captured!.Value.Row.Should().Be(5u,
                     "Ctrl+S from window1 must persist window1's OWN active cell, not window2's " +
@@ -185,6 +203,73 @@ public sealed class R138_SavePersistsSavingWindowsOwnActiveCellTests
             finally
             {
                 R49MainWindowTestHarness.Close(window);
+            }
+        });
+    }
+
+    /// <summary>
+    /// The deterministic form of #164. The sibling test above only fails when a queued dispatcher
+    /// operation happens to land inside the save's await, which is why it stayed intermittent for
+    /// several rounds and reproduced most often on a cold process. Here the same operation is
+    /// queued DELIBERATELY before the save, so the race is removed and the defect -- or its
+    /// absence -- is decided every run.
+    ///
+    /// The mechanism, established by observing the write rather than by reading code:
+    /// QueueViewportResizeRefreshCompletion posts at Background priority; when the save awaits, the
+    /// dispatcher pumps it; CompleteViewportResizeRefresh -> UpdateViewport ->
+    /// SynchronizeWorkbookSessionSelection -> WorkbookSession.SynchronizeSelectionState writes THAT
+    /// window's active cell onto the shared Sheet, landing between the saving window's
+    /// ReconcileViewStateForSave and serialization.
+    /// </summary>
+    [Fact]
+    public void SaveWorkbookToTargetAsync_WithASiblingsViewportRefreshQueued_StillPersistsTheSavingWindowsCell()
+    {
+        StaTestRunner.Run(() =>
+        {
+            using var temp = new TestTemporaryDirectory("FreeX.R138.Queued-");
+            var savePath = Path.Combine(temp.Path, "Queued.fxjson");
+
+            var (window1, window2, workbook) = CreateSharedWindows();
+            try
+            {
+                var sheetId = GetCurrentSheetId(window1);
+                InvokeSetActiveCell(window1, new CellAddress(sheetId, 5, 2));
+                InvokeSetActiveCell(window2, new CellAddress(sheetId, 26, 10));
+
+                var sheet = workbook.GetSheet(sheetId)!;
+
+                // Put the shared Sheet into the state the saving window's reconcile leaves behind.
+                R49MainWindowTestHarness.Invoke(window1, "ReconcileViewStateForSave");
+                sheet.ActiveRow.Should().Be(5u, "precondition: the reconcile wrote window1's cell");
+
+                // While a save holds the gate -- which the broadcast gives every sibling -- the
+                // queued refresh must defer.
+                window2.ApplySaveInProgress(true);
+                try
+                {
+                    window2.ShouldDeferViewportResizeRefreshForSave.Should().BeTrue(
+                        "a sibling must not run a viewport refresh while a save holds the gate");
+                }
+                finally
+                {
+                    window2.ApplySaveInProgress(false);
+                }
+
+                window2.ShouldDeferViewportResizeRefreshForSave.Should().BeFalse(
+                    "once the save releases the gate the refresh is free to run again");
+
+                // And this is the write the deferral prevents: running the refresh pushes
+                // window2's own active cell onto the shared Sheet, over window1's reconciled value.
+                R49MainWindowTestHarness.Invoke(window2, "CompleteViewportResizeRefresh");
+                sheet.ActiveRow.Should().Be(
+                    26u,
+                    "the refresh really does overwrite the shared active cell -- which is why it "
+                    + "must not run between the saving window's reconcile and serialization");
+            }
+            finally
+            {
+                R49MainWindowTestHarness.Close(window1);
+                R49MainWindowTestHarness.Close(window2);
             }
         });
     }

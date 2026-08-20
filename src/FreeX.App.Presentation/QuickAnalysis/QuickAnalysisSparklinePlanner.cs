@@ -17,19 +17,20 @@ public static class QuickAnalysisSparklinePlanner
     /// at least two points and a target column inside the sheet.
     /// </summary>
     /// <remarks>
-    /// KNOWN GAP: every command built here constructs an independent <see cref="FreeX.Core.Model.SparklineModel"/>
-    /// whose <see cref="FreeX.Core.Model.SparklineModel.GroupId"/> defaults to 0, so on save
-    /// (<c>XlsxSparklineMapper.Save</c>, which groups by <c>GroupId == 0 ? Id : GroupId</c>) each row becomes its
-    /// own singleton sparkline group instead of one shared group spanning the whole selection, unlike Excel's
-    /// Quick Analysis gesture. <see cref="AddSparklineCommand"/> (src/FreeX.Core.Commands/SparklineCommands.cs)
-    /// has no constructor parameter or public surface to assign a shared <c>GroupId</c> to the sparklines it
-    /// creates; giving this planner's rows a real shared group requires adding that there first.
+    /// When more than one row produces a sparkline, every command shares one nonzero
+    /// <see cref="FreeX.Core.Model.SparklineModel.GroupId"/> (allocated via
+    /// <see cref="FreeX.Core.Model.SparklineGroupIdAllocator"/> against <paramref name="existingSparklines"/>),
+    /// matching how Excel's own Quick Analysis Sparklines gesture inserts one shared group across the
+    /// selection -- and how <see cref="FreeX.App.Presentation.SparklineUI.SparklinePlanner.BuildInsertCommand"/>
+    /// groups a multi-cell "Insert Sparklines" Location Range. A lone sparkline (single data row) stays
+    /// ungrouped (<c>GroupId == 0</c>), matching Excel and <c>BuildInsertCommand</c>'s single-member case.
     /// </remarks>
     public static IReadOnlyList<AddSparklineCommand> BuildCommands(
         SheetId sheetId,
         GridRange range,
         bool hasHeaderRow,
-        SparklineKind kind)
+        SparklineKind kind,
+        IEnumerable<SparklineModel>? existingSparklines = null)
     {
         if (range.ColCount < 2)
             return [];
@@ -42,14 +43,21 @@ public static class QuickAnalysisSparklinePlanner
         if (firstDataRow > range.End.Row)
             return [];
 
-        var commands = new List<AddSparklineCommand>((int)(range.End.Row - firstDataRow + 1));
+        var rowCount = (int)(range.End.Row - firstDataRow + 1);
+        var groupId = rowCount > 1
+            ? SparklineGroupIdAllocator.NextGroupId(existingSparklines ?? [])
+            : 0;
+
+        var commands = new List<AddSparklineCommand>(rowCount);
         for (var row = firstDataRow; row <= range.End.Row; row++)
         {
             var dataRange = new GridRange(
                 new CellAddress(sheetId, row, range.Start.Col),
                 new CellAddress(sheetId, row, range.End.Col));
             var location = new CellAddress(sheetId, row, targetCol);
-            commands.Add(new AddSparklineCommand(sheetId, dataRange, location, kind));
+            commands.Add(groupId == 0
+                ? new AddSparklineCommand(sheetId, dataRange, location, kind)
+                : new AddSparklineCommand(sheetId, dataRange, location, kind, groupId));
         }
 
         return commands;

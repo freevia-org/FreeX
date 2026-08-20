@@ -115,6 +115,53 @@ public sealed class RecentColorsStoreTests
         store.Colors.Should().Equal(new CellColor(0x12, 0x34, 0x56));
     }
 
+    [Fact]
+    public void Remember_ReloadsFromDiskFirst_SoASecondWindowsColorSurvives()
+    {
+        // Simulates two FreeX windows (e.g. Avalonia "View > New Window"), each owning its own
+        // RecentColorsStore instance loaded from the same file at construction time.
+        using var temp = new TestTemporaryDirectory();
+        var path = StorePath(temp);
+        var windowA = new RecentColorsStore(path);
+        var windowB = new RecentColorsStore(path);
+
+        // Window A picks a custom color and persists it.
+        windowA.Remember(new CellColor(0x10, 0x20, 0x30));
+
+        // Window B, still holding its stale in-memory (empty) list from construction time, picks a
+        // different custom color.
+        windowB.Remember(new CellColor(0xAA, 0xBB, 0xCC));
+
+        // Window A's color must not be silently discarded by window B's write.
+        var reloaded = new RecentColorsStore(path);
+        reloaded.Colors.Should().Equal(
+            new CellColor(0xAA, 0xBB, 0xCC),
+            new CellColor(0x10, 0x20, 0x30));
+    }
+
+    [Fact]
+    public void Remember_SameInstanceCalledTwice_StillDedupesAndOrdersCorrectly()
+    {
+        // Sibling/no-regression case: a single window remembering colors in sequence (the common,
+        // non-multi-window path) must keep behaving exactly as before the reload-before-write fix.
+        using var temp = new TestTemporaryDirectory();
+        var path = StorePath(temp);
+        var store = new RecentColorsStore(path);
+
+        store.Remember(new CellColor(0x10, 0x20, 0x30));
+        store.Remember(new CellColor(0xAA, 0xBB, 0xCC));
+        store.Remember(new CellColor(0x10, 0x20, 0x30));
+
+        store.Colors.Should().Equal(
+            new CellColor(0x10, 0x20, 0x30),
+            new CellColor(0xAA, 0xBB, 0xCC));
+
+        var reloaded = new RecentColorsStore(path);
+        reloaded.Colors.Should().Equal(
+            new CellColor(0x10, 0x20, 0x30),
+            new CellColor(0xAA, 0xBB, 0xCC));
+    }
+
     private static string StorePath(TestTemporaryDirectory temp) =>
         Path.Combine(temp.Path, "recent-colors.json");
 }

@@ -77,7 +77,14 @@ public sealed partial class NativeJsonAdapter
             SmartTags = FromWorkbookSmartTags(workbook.SmartTags),
             AdditionalViews = FromWorkbookAdditionalViews(workbook.AdditionalViews),
             IsStructureProtected = workbook.IsStructureProtected,
-            StructureProtectionPassword = workbook.IsStructureProtected && workbook.StructureProtectionPassword is { } swp
+            // Not gated on IsStructureProtected: a password can legitimately be set while only
+            // Windows (layout) protection is active and Structure protection is not -- Excel's
+            // <workbookProtection lockWindows="1" workbookPassword="..."/> shape (lockStructure
+            // absent). XlsxWorkbookMetadataReader/Writer already treat the two independently; this
+            // adapter must too, or a round trip through the native .fxl format (autosave, crash
+            // recovery, Save As to .fxl) silently strips the password while leaving Windows
+            // protection nominally active -- a security downgrade, not just data loss.
+            StructureProtectionPassword = workbook.StructureProtectionPassword is { } swp
                 ? StoreProtectionPassword(swp)
                 : null,
             ProtectionMetadata = FromWorkbookProtectionMetadata(workbook.ProtectionMetadata),

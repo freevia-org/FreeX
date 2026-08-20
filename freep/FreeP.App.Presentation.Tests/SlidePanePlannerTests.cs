@@ -967,6 +967,45 @@ public sealed class SlidePanePlannerTests
     }
 
     [Fact]
+    public void AddSectionAtSlide_OnSectionsOwnFirstSlide_PreservesSectionIdentity()
+    {
+        var editor = CreateEditingSession(4);
+        var intro = new PresentationSection { Id = "intro-guid", Name = "Introduction" };
+        intro.SlideIds.AddRange(new[] { "slide1", "slide2", "slide3", "slide4" });
+        editor.Presentation.Sections.Add(intro);
+
+        editor.AddSectionAtSlide(0, "New Section At Start").Should().BeTrue();
+
+        // Clicking "Add Section" on the slide that already begins "Introduction" must not
+        // delete that section out from under any Section Zoom shape targeting its Id -- the
+        // resulting section keeps the stable Id even though it now carries the new name.
+        editor.Presentation.Sections.Should().ContainSingle();
+        var resultingSection = editor.Presentation.Sections[0];
+        resultingSection.Id.Should().Be("intro-guid");
+        resultingSection.Name.Should().Be("New Section At Start");
+        resultingSection.SlideIds.Should().Equal("slide1", "slide2", "slide3", "slide4");
+    }
+
+    [Fact]
+    public void AddSectionAtSlide_MidSectionSplit_LeavesOriginalSectionIdInPlaceAndGivesNewSectionAFreshId()
+    {
+        var editor = CreateEditingSession(3);
+        var deck = new PresentationSection { Id = "deck-guid", Name = "Deck" };
+        deck.SlideIds.AddRange(new[] { "slide1", "slide2", "slide3" });
+        editor.Presentation.Sections.Add(deck);
+
+        editor.AddSectionAtSlide(1, "Part Two").Should().BeTrue();
+
+        // Sibling case: splitting mid-section (not at the section's own first slide) must
+        // keep behaving as a genuine split -- the original section keeps its own Id, and the
+        // brand-new section gets a fresh one, unaffected by the identity-preserving fix above.
+        editor.Presentation.Sections.Select(s => s.Name).Should().Equal("Deck", "Part Two");
+        editor.Presentation.Sections[0].Id.Should().Be("deck-guid");
+        editor.Presentation.Sections[1].Id.Should().NotBeNullOrWhiteSpace();
+        editor.Presentation.Sections[1].Id.Should().NotBe("deck-guid");
+    }
+
+    [Fact]
     public void RenameSection_BlankName_UsesUntitledSectionAndIsUndoable()
     {
         var editor = CreateEditingSession(2);

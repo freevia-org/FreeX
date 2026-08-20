@@ -221,6 +221,16 @@ public static class SlideSectionPlanner
         var planned = CloneAndPruneSections(slides, sections);
         var slideIdsInOrder = slides.Select(slide => slide.Id).ToArray();
         var slideIndexById = BuildSlideIndexById(slides);
+
+        // If slideIndex is already the first slide of an existing section, that section
+        // is the one being split (its own start can never count as the "next" boundary
+        // below), so it will end up with zero members left behind and get pruned. Carry
+        // its stable Id forward onto the replacement section instead of minting a new
+        // GUID, so any Section Zoom shape still targeting it keeps resolving.
+        var absorbedSectionId = planned
+            .FirstOrDefault(section => FirstKnownSlideIndex(section, slideIndexById) == slideIndex)
+            ?.Id;
+
         var nextSectionStart = planned
             .Select(section => FirstKnownSlideIndex(section, slideIndexById))
             .Where(index => index > slideIndex)
@@ -241,6 +251,8 @@ public static class SlideSectionPlanner
         {
             Name = NormalizeSectionName(name, BuildDefaultSectionName(planned)),
         };
+        if (absorbedSectionId is not null)
+            newSection.Id = absorbedSectionId;
         foreach (var slideId in slideIdsInOrder.Where(newMemberIds.Contains))
             newSection.SlideIds.Add(slideId);
 

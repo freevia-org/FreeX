@@ -1224,12 +1224,20 @@ public static class FreePRibbonCommandWorkflow
     /// button again. <paramref name="selectedShapeIds"/> lets <see cref="GetState"/> notice that:
     /// it snapshots the selection the moment a live session starts, and if the current selection no
     /// longer matches on a later <see cref="GetState"/> call, the session is treated as over and the
-    /// query resumes. This only catches session-end-by-selection-change; a session that ends by the
-    /// native editor simply deactivating on the SAME still-selected shape (no selection change)
-    /// leaves no signal in this class today -- that would need a new host query (e.g. an "is a
-    /// native text edit session currently active" entry on <c>FreePRibbonHostQueryEndpoints</c>,
-    /// wired from the WPF/Avalonia in-canvas editors' own deactivation events) rather than a
-    /// heuristic bolted on here.
+    /// query resumes. A session that ends by the native editor simply deactivating on the SAME
+    /// still-selected shape (no selection change) has no such signal, but <see cref="GetState"/>
+    /// also snapshots the query's own answer -- <c>_liveEditSessionBaselineChecked</c> -- from the
+    /// instant the session starts. The native editor only writes its live buffer back into the real
+    /// document at commit time, so while the session is genuinely still open, re-running the same
+    /// query keeps reproducing that frozen baseline; the moment a later poll sees the query's answer
+    /// move away from the baseline, the document must have just been committed (this session's own
+    /// commit, or an unrelated edit -- e.g. Format Painter or the Font dialog -- landing while this
+    /// session sat open), so the session is treated as over and the query resumes. This still cannot
+    /// distinguish "still open, unmoved" from "committed back to the exact same answer" -- a true
+    /// fix for that residual sliver would need a new host query (e.g. an "is a native text edit
+    /// session currently active" entry on <c>FreePRibbonHostQueryEndpoints</c>, wired from the
+    /// WPF/Avalonia in-canvas editors' own deactivation events) rather than a heuristic bolted on
+    /// here.
     /// </summary>
     private sealed class LocalToggleCommand : IRibbonStatefulCommand
     {
@@ -1241,6 +1249,7 @@ public static class FreePRibbonCommandWorkflow
         private bool _isChecked;
         private bool _liveEditSessionActive;
         private IReadOnlyList<uint> _liveEditSessionSelection = [];
+        private bool? _liveEditSessionBaselineChecked;
 
         public LocalToggleCommand(
             RibbonStateStore stateStore,
@@ -1262,7 +1271,11 @@ public static class FreePRibbonCommandWorkflow
             if (nativeEditorHandledIt)
             {
                 if (!_liveEditSessionActive)
-                    _isChecked = _queryChecked() ?? _isChecked;
+                {
+                    var baseline = _queryChecked();
+                    _liveEditSessionBaselineChecked = baseline;
+                    _isChecked = baseline ?? _isChecked;
+                }
                 _isChecked = !_isChecked;
                 // Snapshot defensively: EditingSession.SelectedShapeIds exposes its live, mutable
                 // backing list directly (no copy), so capturing the reference itself would compare
@@ -1281,8 +1294,25 @@ public static class FreePRibbonCommandWorkflow
 
         public RibbonCommandState GetState()
         {
-            if (_liveEditSessionActive && !_liveEditSessionSelection.SequenceEqual(_selectedShapeIds()))
-                _liveEditSessionActive = false;
+            if (_liveEditSessionActive)
+            {
+                if (!_liveEditSessionSelection.SequenceEqual(_selectedShapeIds()))
+                {
+                    _liveEditSessionActive = false;
+                }
+                else
+                {
+                    // No selection change, but the native editor may still have deactivated on this
+                    // same shape (Escape, click-away) and committed its live buffer -- see the class
+                    // remarks. The query is frozen at its session-start answer for as long as the
+                    // session is genuinely still open, so a poll that now sees it disagree with that
+                    // baseline means a commit already happened; stop trusting the stale click-parity
+                    // flag and resume trusting the query.
+                    var current = _queryChecked();
+                    if (current is not null && current != _liveEditSessionBaselineChecked)
+                        _liveEditSessionActive = false;
+                }
+            }
 
             return new(IsChecked: _liveEditSessionActive ? _isChecked : (_queryChecked() ?? _isChecked));
         }

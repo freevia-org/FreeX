@@ -75,6 +75,74 @@ public sealed class PresentationReviewWorkflowSessionTests
     }
 
     [Fact]
+    public void CommentMentionDispatch_ReplyAutoApplyRoute_StampsResolvedAuthorInsteadOfDefault()
+    {
+        var presentation = Presentation.CreateEmpty();
+        presentation.Slides[0].Comments.Add(new SlideComment
+        {
+            Author = "Nora Reviewer",
+            Initials = "NR",
+            Text = "Available for review.",
+            Idx = 1
+        });
+        var editor = new EditingSession(presentation, new PresentationCommandBus(presentation));
+        var session = CreateSession(editor, []);
+        session.SetSelectedReviewCommentIndex(0);
+
+        var replyText = "cc @Nora";
+        var dispatch = session.DispatchCommentMentionPicker(
+            PresentationReviewWorkflowIntentKind.ReplyComment,
+            replyText,
+            replyText.Length,
+            currentAuthor: "Dana Reviewer",
+            currentInitials: "DR");
+
+        dispatch.PickerPlan.Candidates.Should().ContainSingle();
+        dispatch.ApplicationResult.Should().NotBeNull();
+        dispatch.ApplicationResult!.MutationPlan!.ShouldApply.Should().BeTrue();
+        presentation.Slides[0].Comments[0].Replies.Should().ContainSingle()
+            .Which.Author.Should().Be("Dana Reviewer");
+    }
+
+    [Fact]
+    public void CommentMentionDispatch_EditAutoApplyRoute_LeavesOriginalCommentAuthorUnstamped()
+    {
+        // Sibling no-regression coverage for the reply-stamping fix above: the edit-mention
+        // auto-apply route must keep preserving the comment's existing author (via
+        // EditSelectedComment's current.Author fallback) rather than being overwritten by
+        // whatever currentAuthor the caller resolves for @-mention candidate purposes.
+        var presentation = Presentation.CreateEmpty();
+        presentation.Slides[0].Comments.Add(new SlideComment
+        {
+            Author = "Alice Writer",
+            Initials = "AW",
+            Text = "Please ask @No",
+            Idx = 1
+        });
+        presentation.Slides[0].Comments.Add(new SlideComment
+        {
+            Author = "Nora Reviewer",
+            Initials = "NR",
+            Text = "Available for review.",
+            Idx = 2
+        });
+        var editor = new EditingSession(presentation, new PresentationCommandBus(presentation));
+        var session = CreateSession(editor, []);
+        session.SetSelectedReviewCommentIndex(0);
+
+        var dispatch = session.DispatchCommentMentionPicker(
+            PresentationReviewWorkflowIntentKind.EditComment,
+            "Please ask @No",
+            0,
+            currentAuthor: "Dana Reviewer",
+            currentInitials: "DR");
+
+        dispatch.ApplicationResult.Should().NotBeNull();
+        dispatch.ApplicationResult!.MutationPlan!.ShouldApply.Should().BeTrue();
+        presentation.Slides[0].Comments[0].Author.Should().Be("Alice Writer");
+    }
+
+    [Fact]
     public void CommentMentionDispatch_LeavesMultipleCandidatesForTheNativePicker()
     {
         var presentation = Presentation.CreateEmpty();

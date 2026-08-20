@@ -8144,13 +8144,15 @@ public static class DocxWriter
             rPr.Add(new XElement(W + "sz", new XAttribute(W + "val", halfPoints)));
             rPr.Add(new XElement(W + "szCs", new XAttribute(W + "val", halfPoints)));
         }
-        // w:highlight (Word's highlighter) precedes w:u in CT_RPr (EG_RPrBase). Emitted only for a
-        // HighlightColorHex that maps to a named gallery token, and only when CharacterShadingHex (which
-        // owns the single w:shd slot) is not set — Word's highlight gallery only recognises named tokens.
-        // Keep this WordprocessingML color boundary local: named highlight tokens, w:shd fallback, "auto"
-        // attributes, and nullable model "#RRGGBB" fields are not strict DrawingML srgbClr normalization.
-        if (f.CharacterShadingHex is not { Length: > 0 }
-            && f.HighlightColorHex is { Length: > 0 } highlightToken
+        // w:highlight (Word's highlighter) precedes w:u in CT_RPr (EG_RPrBase). Emitted whenever
+        // HighlightColorHex maps to a named gallery token — independently of CharacterShadingHex, which
+        // only owns the single w:shd slot below. w:highlight and w:shd are two separate CT_RPr elements,
+        // so a run can carry both a highlight and a character shading at once; only the w:shd fallback for
+        // HighlightColorHex (below) needs to defer to CharacterShadingHex, not the w:highlight element
+        // itself. Keep this WordprocessingML color boundary local: named highlight tokens, w:shd fallback,
+        // "auto" attributes, and nullable model "#RRGGBB" fields are not strict DrawingML srgbClr
+        // normalization.
+        if (f.HighlightColorHex is { Length: > 0 } highlightToken
             && HexToHighlightToken(highlightToken) is { } namedHighlight)
             rPr.Add(new XElement(W + "highlight", new XAttribute(W + "val", namedHighlight)));
         if (f.Underline)
@@ -9888,8 +9890,8 @@ public static class DocxWriter
             rPr.Add(new XElement(W + "sz", new XAttribute(W + "val", halfPoints)));
             rPr.Add(new XElement(W + "szCs", new XAttribute(W + "val", halfPoints)));
         }
-        if (f.CharacterShadingHex is not { Length: > 0 }
-            && f.HighlightColorHex is { Length: > 0 } highlightToken
+        // See BuildRunProperties above: w:highlight is independent of the CharacterShadingHex/w:shd slot.
+        if (f.HighlightColorHex is { Length: > 0 } highlightToken
             && HexToHighlightToken(highlightToken) is { } namedHighlight)
             rPr.Add(new XElement(W + "highlight", new XAttribute(W + "val", namedHighlight)));
         if (f.Underline)

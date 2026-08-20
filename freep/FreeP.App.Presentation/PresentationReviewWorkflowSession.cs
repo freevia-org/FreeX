@@ -177,6 +177,16 @@ public sealed class PresentationReviewWorkflowSession
     public PresentationCommentMutationPlan DeleteSelectedComment()
         => ApplySelectedCommentMutation(PresentationReviewWorkflowIntentKind.DeleteComment, null, null);
 
+    /// <remarks>
+    /// r154: <paramref name="author"/> falls back to <see cref="ResolveCommentAuthor"/> rather than
+    /// to the planner's "FreeP User" placeholder. Comment authorship has now been fixed one UI
+    /// surface at a time -- the pane's Add and Reply buttons, then the same two in the other shell,
+    /// then resolvedBy, then the "@" mention auto-apply -- and each round an auditor found another
+    /// surface that simply omitted the argument (the Review ribbon's own Add and Reply commands,
+    /// and the pane action-toolbar dispatch). Defaulting here makes every caller correct without
+    /// having to find them all, so a surface added later cannot reintroduce the placeholder by
+    /// forgetting a parameter. A caller that genuinely means a different author still passes one.
+    /// </remarks>
     public PresentationCommentMutationPlan AddComment(
         string? text,
         DateTime? timestamp = null,
@@ -190,7 +200,7 @@ public sealed class PresentationReviewWorkflowSession
             null,
             addText: text,
             addTimestamp: timestamp,
-            addAuthor: author,
+            addAuthor: author ?? ResolveCommentAuthor(),
             addInitials: initials,
             addXemu: xemu,
             addYemu: yemu);
@@ -218,6 +228,25 @@ public sealed class PresentationReviewWorkflowSession
     public PresentationCommentMutationPlan ReopenSelectedComment()
         => ApplySelectedCommentMutation(PresentationReviewWorkflowIntentKind.ReopenComment, null, null);
 
+    /// <summary>
+    /// Resolves the real author identity to stamp on a new comment, a reply, or a resolution --
+    /// the presentation's Properties.Author, falling back to the OS account name. Shared by both
+    /// hosts (WPF and Avalonia) so neither shell carries its own copy of this resolution logic;
+    /// callers fall through to null (and from there to the planner's own "FreeP User" default)
+    /// only when neither source yields a usable name.
+    /// </summary>
+    public string? ResolveCommentAuthor()
+    {
+        var documentAuthor = _getEditor().Presentation.Properties.Author;
+        if (!string.IsNullOrWhiteSpace(documentAuthor))
+            return documentAuthor.Trim();
+
+        var osAuthor = Environment.UserName;
+        return string.IsNullOrWhiteSpace(osAuthor) ? null : osAuthor.Trim();
+    }
+
+    /// <remarks>See <see cref="AddComment"/>: the author defaults to the resolved document author
+    /// rather than the planner's placeholder, so a caller that omits it is correct by default.</remarks>
     public PresentationCommentMutationPlan ReplyToSelectedComment(
         string? text,
         DateTime? timestamp = null,
@@ -229,7 +258,7 @@ public sealed class PresentationReviewWorkflowSession
             null,
             text,
             timestamp,
-            author,
+            author ?? ResolveCommentAuthor(),
             initials);
 
     public PresentationCommentMentionPickerPlan BuildCommentMentionPickerPlan(
@@ -276,7 +305,7 @@ public sealed class PresentationReviewWorkflowSession
             currentAuthor,
             currentInitials);
         var application = picker.ShouldAutoApplyDefaultCandidate
-            ? ApplyCommentMention(intent, text, caretIndex, picker.DefaultCandidate)
+            ? ApplyCommentMention(intent, text, caretIndex, picker.DefaultCandidate, currentAuthor)
             : null;
         return new PresentationCommentMentionDispatchResult(picker, application);
     }
@@ -297,7 +326,8 @@ public sealed class PresentationReviewWorkflowSession
         PresentationReviewWorkflowIntentKind intent,
         string? text,
         int caretIndex,
-        PresentationCommentMentionCandidate? candidate)
+        PresentationCommentMentionCandidate? candidate,
+        string? currentAuthor = null)
     {
         if (intent is not PresentationReviewWorkflowIntentKind.EditComment and
             not PresentationReviewWorkflowIntentKind.ReplyComment)
@@ -317,7 +347,7 @@ public sealed class PresentationReviewWorkflowSession
 
         var mutation = intent == PresentationReviewWorkflowIntentKind.EditComment
             ? EditSelectedComment(insertion.UpdatedText)
-            : ReplyToSelectedComment(insertion.UpdatedText);
+            : ReplyToSelectedComment(insertion.UpdatedText, author: currentAuthor);
         return new PresentationCommentMentionApplicationResult(insertion, mutation);
     }
 

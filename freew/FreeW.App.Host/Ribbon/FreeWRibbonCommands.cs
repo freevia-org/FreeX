@@ -3297,7 +3297,7 @@ internal static class FreeWRibbonCommands
 
             var result = SourceManagementDialogPlanner.BuildResult(plan.State);
             editor.ReplaceSources(result.CurrentSources);
-            MasterSourceStore.Save(CreateMasterStore(result.MasterSources));
+            MasterSourceStore.Save(masterStore, CreateMasterStore(result.MasterSources));
             return plan.Source;
         }
     }
@@ -3316,7 +3316,7 @@ internal static class FreeWRibbonCommands
 
             editor.Focus();
             editor.ReplaceSources(result.CurrentSources);
-            MasterSourceStore.Save(CreateMasterStore(result.MasterSources));
+            MasterSourceStore.Save(masterStore, CreateMasterStore(result.MasterSources));
         }
     }
 

@@ -160,10 +160,41 @@ public partial class MainWindow
                     return;
                 }
 
+                // #164 (R138): this operation is queued at Background priority, so it lands
+                // whenever the dispatcher next pumps -- including inside the await of a save
+                // happening in THIS window or, via the save-in-progress broadcast, in a sibling
+                // sharing the same Workbook. UpdateViewport ends in
+                // SynchronizeWorkbookSessionSelection -> WorkbookSession.SynchronizeSelectionState,
+                // which writes THIS window's active cell onto the shared Sheet. Landing there
+                // between ReconcileViewStateForSave (which has just written the SAVING window's own
+                // active cell) and serialization is how a sibling's selection reached the file
+                // instead of the saving window's -- caught in the act by the ActiveCellWriteObserver
+                // seam on Sheet, after several rounds in which every candidate found by reading
+                // proved wrong.
+                //
+                // A resize refresh is a rendering concern and has no business mutating the shared
+                // model mid-save, so defer it: leave the pending flag set and re-queue, and it runs
+                // as soon as the save releases the gate. _saveGateHoldCount is non-zero in the
+                // saving window and in every sibling the save broadcast to.
+                if (ShouldDeferViewportResizeRefreshForSave)
+                {
+                    QueueViewportResizeRefreshCompletion();
+                    return;
+                }
+
                 CompleteViewportResizeRefresh();
             }),
             System.Windows.Threading.DispatcherPriority.Background);
     }
+
+    /// <summary>
+    /// #164 (R138): whether a queued viewport-resize refresh must wait. Non-zero in the window
+    /// performing a save and in every sibling the save-in-progress broadcast reached. Named rather
+    /// than inlined so it can be asserted directly: the alternative was a test that drove the
+    /// queued operation through the dispatcher, which is both slower and -- as this investigation
+    /// found the hard way -- prone to not discriminating between fixed and broken.
+    /// </summary>
+    internal bool ShouldDeferViewportResizeRefreshForSave => _saveGateHoldCount > 0;
 
     private void CompleteViewportResizeRefresh()
     {

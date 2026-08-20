@@ -1586,14 +1586,21 @@ public sealed class InsertCellsCommand : IWorkbookCommand, IAffectedCellsCommand
     /// [bandStartRow..bandEndRow] shrinks/shifts/is dropped exactly like a named range in
     /// <see cref="DeleteNamedRangesInBandLeft"/>; a range whose rows straddle the band boundary is
     /// left untouched (same "fully inside or no-op" scoping as every other band-scoped helper here).
+    /// freex-sparklines F1: a sparkline's DataRange/DateAxisRange can legitimately live on a
+    /// different sheet than the sparkline's own host sheet (Excel's cross-sheet "Edit Data"); a
+    /// foreign-sheet range must never be shrunk/dropped just because its row/col numbers happen to
+    /// numerically coincide with the band being edited on the host sheet (mirrors the
+    /// range.Start.Sheet != SheetId guard in AddressShift.ShiftRange).
     /// </summary>
     private static RangeBandOutcome ShrinkColRangeForBandLeft(
         GridRange range,
+        SheetId editedSheetId,
         uint bandStartRow, uint bandEndRow,
         uint deletedStartCol, uint deletedEndCol, uint count,
         out GridRange translated)
     {
         translated = range;
+        if (range.Start.Sheet != editedSheetId) return RangeBandOutcome.Unaffected;
         if (range.Start.Row < bandStartRow || range.End.Row > bandEndRow) return RangeBandOutcome.Unaffected;
         if (range.End.Col < deletedStartCol) return RangeBandOutcome.Unaffected;
         if (range.Start.Col >= deletedStartCol && range.End.Col <= deletedEndCol) return RangeBandOutcome.Removed;
@@ -1617,11 +1624,13 @@ public sealed class InsertCellsCommand : IWorkbookCommand, IAffectedCellsCommand
     /// <summary>Delete Shift Up: analogous to <see cref="ShrinkColRangeForBandLeft"/> for rows/columns swapped.</summary>
     private static RangeBandOutcome ShrinkRowRangeForBandUp(
         GridRange range,
+        SheetId editedSheetId,
         uint bandStartCol, uint bandEndCol,
         uint deletedStartRow, uint deletedEndRow, uint count,
         out GridRange translated)
     {
         translated = range;
+        if (range.Start.Sheet != editedSheetId) return RangeBandOutcome.Unaffected;
         if (range.Start.Col < bandStartCol || range.End.Col > bandEndCol) return RangeBandOutcome.Unaffected;
         if (range.End.Row < deletedStartRow) return RangeBandOutcome.Unaffected;
         if (range.Start.Row >= deletedStartRow && range.End.Row <= deletedEndRow) return RangeBandOutcome.Removed;
@@ -1673,7 +1682,7 @@ public sealed class InsertCellsCommand : IWorkbookCommand, IAffectedCellsCommand
 
             if (!removed)
             {
-                var outcome = ShrinkColRangeForBandLeft(sparkline.DataRange, bandStartRow, bandEndRow, deletedStartCol, deletedEndCol, count, out var newDataRange);
+                var outcome = ShrinkColRangeForBandLeft(sparkline.DataRange, sheet.Id, bandStartRow, bandEndRow, deletedStartCol, deletedEndCol, count, out var newDataRange);
                 if (outcome == RangeBandOutcome.Removed)
                     removed = true;
                 else if (outcome == RangeBandOutcome.Translated)
@@ -1682,7 +1691,7 @@ public sealed class InsertCellsCommand : IWorkbookCommand, IAffectedCellsCommand
 
             if (!removed && sparkline.DateAxisRange is { } dateAxisRange)
             {
-                var outcome = ShrinkColRangeForBandLeft(dateAxisRange, bandStartRow, bandEndRow, deletedStartCol, deletedEndCol, count, out var newDateAxisRange);
+                var outcome = ShrinkColRangeForBandLeft(dateAxisRange, sheet.Id, bandStartRow, bandEndRow, deletedStartCol, deletedEndCol, count, out var newDateAxisRange);
                 sparkline.DateAxisRange = outcome switch
                 {
                     RangeBandOutcome.Removed => null,
@@ -1718,7 +1727,7 @@ public sealed class InsertCellsCommand : IWorkbookCommand, IAffectedCellsCommand
 
             if (!removed)
             {
-                var outcome = ShrinkRowRangeForBandUp(sparkline.DataRange, bandStartCol, bandEndCol, deletedStartRow, deletedEndRow, count, out var newDataRange);
+                var outcome = ShrinkRowRangeForBandUp(sparkline.DataRange, sheet.Id, bandStartCol, bandEndCol, deletedStartRow, deletedEndRow, count, out var newDataRange);
                 if (outcome == RangeBandOutcome.Removed)
                     removed = true;
                 else if (outcome == RangeBandOutcome.Translated)
@@ -1727,7 +1736,7 @@ public sealed class InsertCellsCommand : IWorkbookCommand, IAffectedCellsCommand
 
             if (!removed && sparkline.DateAxisRange is { } dateAxisRange)
             {
-                var outcome = ShrinkRowRangeForBandUp(dateAxisRange, bandStartCol, bandEndCol, deletedStartRow, deletedEndRow, count, out var newDateAxisRange);
+                var outcome = ShrinkRowRangeForBandUp(dateAxisRange, sheet.Id, bandStartCol, bandEndCol, deletedStartRow, deletedEndRow, count, out var newDateAxisRange);
                 sparkline.DateAxisRange = outcome switch
                 {
                     RangeBandOutcome.Removed => null,
@@ -1764,11 +1773,11 @@ public sealed class InsertCellsCommand : IWorkbookCommand, IAffectedCellsCommand
             if (location.Row >= bandStartRow && location.Row <= bandEndRow && location.Col >= insertBeforeCol)
                 sparkline.Location = new CellAddress(location.Sheet, location.Row, location.Col + count);
 
-            if (GrowColRangeForBandRight(sparkline.DataRange, bandStartRow, bandEndRow, insertBeforeCol, count, out var newDataRange))
+            if (GrowColRangeForBandRight(sparkline.DataRange, sheet.Id, bandStartRow, bandEndRow, insertBeforeCol, count, out var newDataRange))
                 sparkline.DataRange = newDataRange;
 
             if (sparkline.DateAxisRange is { } dateAxisRange &&
-                GrowColRangeForBandRight(dateAxisRange, bandStartRow, bandEndRow, insertBeforeCol, count, out var newDateAxisRange))
+                GrowColRangeForBandRight(dateAxisRange, sheet.Id, bandStartRow, bandEndRow, insertBeforeCol, count, out var newDateAxisRange))
                 sparkline.DateAxisRange = newDateAxisRange;
         }
     }
@@ -1785,23 +1794,29 @@ public sealed class InsertCellsCommand : IWorkbookCommand, IAffectedCellsCommand
             if (location.Col >= bandStartCol && location.Col <= bandEndCol && location.Row >= insertBeforeRow)
                 sparkline.Location = new CellAddress(location.Sheet, location.Row + count, location.Col);
 
-            if (GrowRowRangeForBandDown(sparkline.DataRange, bandStartCol, bandEndCol, insertBeforeRow, count, out var newDataRange))
+            if (GrowRowRangeForBandDown(sparkline.DataRange, sheet.Id, bandStartCol, bandEndCol, insertBeforeRow, count, out var newDataRange))
                 sparkline.DataRange = newDataRange;
 
             if (sparkline.DateAxisRange is { } dateAxisRange &&
-                GrowRowRangeForBandDown(dateAxisRange, bandStartCol, bandEndCol, insertBeforeRow, count, out var newDateAxisRange))
+                GrowRowRangeForBandDown(dateAxisRange, sheet.Id, bandStartCol, bandEndCol, insertBeforeRow, count, out var newDateAxisRange))
                 sparkline.DateAxisRange = newDateAxisRange;
         }
     }
 
-    /// <summary>Insert Shift Right: see <see cref="ShiftSparklinesInBandRight"/>. Returns false (no-op) when the range is outside the row band or entirely left of the insert point.</summary>
+    /// <summary>
+    /// Insert Shift Right: see <see cref="ShiftSparklinesInBandRight"/>. Returns false (no-op) when
+    /// the range is outside the row band, entirely left of the insert point, or (freex-sparklines F1)
+    /// lives on a different sheet than the one being edited.
+    /// </summary>
     private static bool GrowColRangeForBandRight(
         GridRange range,
+        SheetId editedSheetId,
         uint bandStartRow, uint bandEndRow,
         uint insertBeforeCol, uint count,
         out GridRange translated)
     {
         translated = range;
+        if (range.Start.Sheet != editedSheetId) return false;
         if (range.Start.Row < bandStartRow || range.End.Row > bandEndRow) return false;
         if (range.End.Col < insertBeforeCol) return false;
 
@@ -1817,11 +1832,13 @@ public sealed class InsertCellsCommand : IWorkbookCommand, IAffectedCellsCommand
     /// <summary>Insert Shift Down: analogous to <see cref="GrowColRangeForBandRight"/> for rows/columns swapped.</summary>
     private static bool GrowRowRangeForBandDown(
         GridRange range,
+        SheetId editedSheetId,
         uint bandStartCol, uint bandEndCol,
         uint insertBeforeRow, uint count,
         out GridRange translated)
     {
         translated = range;
+        if (range.Start.Sheet != editedSheetId) return false;
         if (range.Start.Col < bandStartCol || range.End.Col > bandEndCol) return false;
         if (range.End.Row < insertBeforeRow) return false;
 

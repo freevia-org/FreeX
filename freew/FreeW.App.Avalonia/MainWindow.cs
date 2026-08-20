@@ -1052,7 +1052,7 @@ public sealed partial class MainWindow : Window
 
         var result = SourceManagementDialogPlanner.BuildResult(plan.State);
         _editor.ReplaceSources(result.CurrentSources);
-        MasterSourceStore.Save(CreateMasterSourceStore(result.MasterSources));
+        MasterSourceStore.Save(masterStore, CreateMasterSourceStore(result.MasterSources));
         return plan.Source;
     }
 
@@ -1064,7 +1064,7 @@ public sealed partial class MainWindow : Window
         if (dialog.Result is { } result)
         {
             _editor.ReplaceSources(result.CurrentSources);
-            MasterSourceStore.Save(CreateMasterSourceStore(result.MasterSources));
+            MasterSourceStore.Save(masterStore, CreateMasterSourceStore(result.MasterSources));
         }
         _editor.Focus();
     }

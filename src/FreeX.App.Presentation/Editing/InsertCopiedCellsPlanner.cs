@@ -316,7 +316,7 @@ public static class InsertCopiedCellsPlanner
 
                 _destinationFormulaSnapshot[destAddress] = destCell.FormulaText;
                 var updated = destCell.Clone();
-                updated.FormulaText = corrected;
+                SetFormulaTextPreservingArrayIdentity(updated, corrected);
                 sheet.SetCell(destAddress, updated);
                 affected.Add(destAddress);
             }
@@ -342,7 +342,7 @@ public static class InsertCopiedCellsPlanner
                         continue;
 
                     _externalFormulaSnapshot[addr] = cell.FormulaText;
-                    cell.FormulaText = rewritten;
+                    SetFormulaTextPreservingArrayIdentity(cell, rewritten);
                     affected.Add(addr);
                 }
             }
@@ -416,7 +416,7 @@ public static class InsertCopiedCellsPlanner
                 {
                     var cell = ctx.Workbook.GetSheet(addr.Sheet)?.GetCell(addr);
                     if (cell is not null)
-                        cell.FormulaText = original;
+                        SetFormulaTextPreservingArrayIdentity(cell, original);
                 }
             }
 
@@ -428,7 +428,7 @@ public static class InsertCopiedCellsPlanner
                     if (cell is null)
                         continue;
                     var reverted = cell.Clone();
-                    reverted.FormulaText = original;
+                    SetFormulaTextPreservingArrayIdentity(reverted, original);
                     sheet.SetCell(addr, reverted);
                 }
             }
@@ -541,5 +541,27 @@ public static class InsertCopiedCellsPlanner
             new(
                 new CellAddress(range.Start.Sheet, (uint)(range.Start.Row + rowDelta), (uint)(range.Start.Col + colDelta)),
                 new CellAddress(range.End.Sheet, (uint)(range.End.Row + rowDelta), (uint)(range.End.Col + colDelta)));
+
+        // Cell.FormulaText's setter (Cell.cs) unconditionally resets ArrayMode/LegacyArrayRows/
+        // LegacyArrayCols to "freshly authored modern formula" defaults on every assignment, on the
+        // assumption that assigning FormulaText always means a user edit. The four reference-repoint
+        // reassignments in this command (own-formula fixup and external-reference repoint, in both
+        // Apply and Revert) instead adjust an EXISTING formula's reference text after the cut/paste
+        // moved cells around -- the cell itself is not being re-authored, so its legacy CSE array
+        // identity (and the "can't split the array" protection that depends on LegacyArrayRows/Cols
+        // being non-zero) must survive unchanged. Mirrors
+        // RowColumnShiftHelpers.SetFormulaTextPreservingArrayIdentity in FreeX.Core.Commands, which
+        // this project (FreeX.App.Presentation) cannot call directly since that helper is internal
+        // to that assembly.
+        private static void SetFormulaTextPreservingArrayIdentity(Cell cell, string? formulaText)
+        {
+            var arrayMode = cell.ArrayMode;
+            var legacyArrayRows = cell.LegacyArrayRows;
+            var legacyArrayCols = cell.LegacyArrayCols;
+            cell.FormulaText = formulaText;
+            cell.ArrayMode = arrayMode;
+            cell.LegacyArrayRows = legacyArrayRows;
+            cell.LegacyArrayCols = legacyArrayCols;
+        }
     }
 }

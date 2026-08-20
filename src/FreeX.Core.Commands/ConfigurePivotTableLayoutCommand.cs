@@ -12,6 +12,13 @@ public sealed class ConfigurePivotTableLayoutCommand : IWorkbookCommand
     private readonly IReadOnlyList<PivotDataFieldModel> _dataFields;
     private PivotLayoutSnapshot? _snapshot;
     private List<(CellAddress Address, Cell? Cell)>? _targetSnapshot;
+    // meta-F2 (round154): merged regions (e.g. from MergeAndCenterLabels) that overlapped the pivot's
+    // OLD footprint before this command's RefreshGuarded call re-renders it, stripping them via
+    // PivotTableRefreshService.ClearTargetRange's unconditional sheet.ReplaceMergedRegions(...Where(
+    // !Overlaps)). _targetSnapshot only carries (CellAddress, Cell?) pairs -- AddPivotTableCommand.
+    // Restore never touches MergedRegions -- so without this, Revert put the old footprint's cell
+    // VALUES back but left it permanently un-merged. Mirrors MovePivotTableCommand's sweep92-F1 fix.
+    private List<GridRange>? _oldMergedRegions;
 
     public ConfigurePivotTableLayoutCommand(
         SheetId sheetId,
@@ -43,7 +50,12 @@ public sealed class ConfigurePivotTableLayoutCommand : IWorkbookCommand
             return CommandGuards.RejectPivotTableRequiresDataField();
 
         _snapshot = PivotLayoutSnapshot.Capture(pivotTable);
-        _targetSnapshot = AddPivotTableCommand.Snapshot(sheet, pivotTable.LastRenderedRange ?? pivotTable.TargetRange);
+        var oldFootprint = pivotTable.LastRenderedRange ?? pivotTable.TargetRange;
+        _targetSnapshot = AddPivotTableCommand.Snapshot(sheet, oldFootprint);
+        // meta-F2 (round154): capture before RefreshGuarded (below) re-renders the pivot and strips any
+        // merges overlapping the old footprint. Scoped to exactly what that re-render can clear -- not
+        // the whole sheet -- so an unrelated merge elsewhere is never touched.
+        _oldMergedRegions = sheet.MergedRegions.Where(region => region.Overlaps(oldFootprint)).ToList();
         var viewState = PruneViewStateForLayout(pivotTable, _rowFields, _columnFields, _dataFields);
 
         PivotTableCommandCollections.Replace(pivotTable.RowFields, _rowFields);
@@ -65,6 +77,7 @@ public sealed class ConfigurePivotTableLayoutCommand : IWorkbookCommand
         {
             _snapshot = null;
             _targetSnapshot = null;
+            _oldMergedRegions = null;
             return failure;
         }
 
@@ -88,10 +101,20 @@ public sealed class ConfigurePivotTableLayoutCommand : IWorkbookCommand
             _snapshot.Restore(pivotTable);
         }
         AddPivotTableCommand.Restore(sheet, _targetSnapshot);
+        // meta-F2 (round154): put back the old footprint's merged regions the re-render in Apply
+        // stripped -- AddPivotTableCommand.Restore above only replays cell values, never MergedRegions.
+        // ClearRenderedRange above only touched the CURRENT (post-Apply) rendered range, so the old
+        // footprint is untouched by this Revert by the time we get here -- nothing to overlap or clobber.
+        if (_oldMergedRegions is { Count: > 0 })
+        {
+            foreach (var region in _oldMergedRegions)
+                sheet.AddMergedRegion(region);
+        }
         if (pivotTable is not null)
             UpdateBoundPivotChartRanges(ctx.Workbook, sheet, pivotTable);
         _snapshot = null;
         _targetSnapshot = null;
+        _oldMergedRegions = null;
     }
 
     private sealed record PivotLayoutSnapshot(

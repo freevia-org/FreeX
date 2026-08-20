@@ -513,8 +513,9 @@ public sealed class FillCellsCommand : IWorkbookCommand, IEstimatesMemory
         {
             var rowOffset = (int)target.Row - (int)source.Row;
             var colOffset = (int)target.Col - (int)source.Col;
-            result.FormulaText = FormulaRewriter.Rewrite(formula,
-                new PasteOffsetOp(rowOffset, colOffset), sheetName) ?? formula;
+            RowColumnShiftHelpers.SetFormulaTextPreservingArrayIdentity(
+                result,
+                FormulaRewriter.Rewrite(formula, new PasteOffsetOp(rowOffset, colOffset), sheetName) ?? formula);
         }
 
         return result;

@@ -65,6 +65,13 @@ public static class PresentationFilePersistenceWorkflow
             || string.Equals(extension, LegacyFxpExtension, StringComparison.OrdinalIgnoreCase);
     }
 
+    public static bool IsTemplatePresentationPath(string path)
+    {
+        var extension = FilePathPolicy.GetExtensionOrEmpty(path);
+        return string.Equals(extension, TemplateExtension, StringComparison.OrdinalIgnoreCase)
+            || string.Equals(extension, MacroEnabledTemplateExtension, StringComparison.OrdinalIgnoreCase);
+    }
+
     public static PresentationFilePersistenceFormat ResolveFormat(string path) =>
         string.Equals(FilePathPolicy.GetExtensionOrEmpty(path), LegacyFxpExtension, StringComparison.OrdinalIgnoreCase)
             ? PresentationFilePersistenceFormat.LegacyFxp
@@ -83,13 +90,20 @@ public static class PresentationFilePersistenceWorkflow
             _ => PptxPackageReader.Read(path),
         };
 
-        // FreeP currently opens editable documents only. If template formats are added later,
-        // this is the single place that should switch them to SavedPath = null.
+        // r154: opening a .potx/.potm template must behave like FreeW's DocumentPersistenceWorkflow
+        // (opensAsTemplate ? null : path) and FreeX's XltxFileAdapter -- the template file on disk is
+        // a master to create FROM, not a document to save back over. IsTemplatePresentationPath below
+        // is extension-based (matching the dialog planner's own "PowerPoint templates" filter), not the
+        // package's own PresentationPackageKind, so a mislabeled .pptx that happens to carry template
+        // content-type internally still opens as a normal saved document -- only the extension the user
+        // picked in Open decides this, exactly as FreeW/FreeX key off the chosen file adapter.
+        var savedPath = IsTemplatePresentationPath(path) ? null : path;
+
         return new PresentationFileOpenResult(
             presentation,
-            SavedPath: path,
+            SavedPath: savedPath,
             SuppressRecentFiles: false,
-            SourceLastWriteTimeUtc: File.GetLastWriteTimeUtc(path));
+            SourceLastWriteTimeUtc: savedPath is null ? null : File.GetLastWriteTimeUtc(path));
     }
 
     public static PresentationFileSaveResult Save(

@@ -1230,8 +1230,9 @@ public sealed class SortCommand : IWorkbookCommand, IAffectedCellsCommand, IEsti
             if ((rowDelta != 0 || colDelta != 0) && sheetName is not null &&
                 clone.HasFormula && clone.FormulaText is { } formula)
             {
-                clone.FormulaText = FormulaRewriter.Rewrite(
-                    formula, new PasteOffsetOp(rowDelta, colDelta), sheetName) ?? formula;
+                RowColumnShiftHelpers.SetFormulaTextPreservingArrayIdentity(
+                    clone,
+                    FormulaRewriter.Rewrite(formula, new PasteOffsetOp(rowDelta, colDelta), sheetName) ?? formula);
             }
             sheet.SetCell(address, clone);
         }

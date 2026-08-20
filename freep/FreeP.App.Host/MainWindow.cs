@@ -1876,7 +1876,7 @@ public sealed partial class MainWindow : Window,
             Content = PresentationPaneTextResources.NewCommentCommand,
             MinWidth = 96
         };
-        button.Click += (_, _) => AddComment(input.Text);
+        button.Click += (_, _) => AddComment(input.Text, author: ResolveCommentAuthor());
 
         var row = new StackPanel
         {
@@ -1999,7 +1999,7 @@ public sealed partial class MainWindow : Window,
             Content = PresentationPaneTextResources.ReplyCommand,
             MinWidth = 58,
         };
-        button.Click += (_, _) => ReplyToSelectedComment(input.Text);
+        button.Click += (_, _) => ReplyToSelectedComment(input.Text, author: ResolveCommentAuthor());
         row.Children.Add(input);
         row.Children.Add(mentionButton);
         row.Children.Add(button);
@@ -2040,7 +2040,10 @@ public sealed partial class MainWindow : Window,
             var dispatch = _reviewWorkflowSession.DispatchCommentMentionPicker(
                 intent,
                 getText(),
-                getCaretIndex());
+                getCaretIndex(),
+                currentAuthor: intent == PresentationReviewWorkflowIntentKind.ReplyComment
+                    ? ResolveCommentAuthor()
+                    : null);
             if (dispatch.ApplicationResult is not null)
                 return;
 
@@ -2246,8 +2249,14 @@ public sealed partial class MainWindow : Window,
     internal PresentationCommentMutationPlan ReopenSelectedComment() => _reviewWorkflowSession.ReopenSelectedComment();
     internal PresentationCommentMutationPlan ReplyToSelectedComment(string? text, DateTime? timestamp = null, string? author = null, string? initials = null) => _reviewWorkflowSession.ReplyToSelectedComment(text, timestamp, author, initials);
 
-
-
+    /// <summary>
+    /// Resolves the real author identity to stamp on a new comment, reply, or resolution.
+    /// Delegates to the shared session so WPF and Avalonia resolve identity through the one
+    /// place instead of each host carrying its own copy of the resolution chain (document
+    /// author, then OS account name, mirroring FreeW's ReviewAuthorIdentityPlanner.ResolveAuthor
+    /// minus the revision-author override FreeW has and FreeP does not).
+    /// </summary>
+    internal string? ResolveCommentAuthor() => _reviewWorkflowSession.ResolveCommentAuthor();
 
     private string? GetSelectedCommentText() => _reviewWorkflowSession.GetSelectedCommentText();
 

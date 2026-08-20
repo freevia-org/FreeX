@@ -280,6 +280,83 @@ public sealed class FreePRibbonCommandWorkflowTests
     }
 
     [Fact]
+    public void BoldToggleChecked_ResumesLiveQueryWhenNativeSessionEndsOnTheSameSelection()
+    {
+        // Round 154, finding sweep93/F2: a native in-canvas edit session can also end by the editor
+        // simply deactivating on the SAME still-selected shape (Escape, click-away) with no
+        // selection change and no further ribbon click at all -- unlike the two scenarios above
+        // (another click, or a selection change), that path previously left NO signal in this class,
+        // so GetState() kept reporting the stale click-parity guess forever.
+        var editor = MakeEditor();
+        var shape = MakeShape(30);
+        // No TextBody yet -- e.g. an empty placeholder just entered via double-click -- so the
+        // ground-truth query is indeterminate (null) at the moment the live session starts.
+        editor.CurrentSlide!.Shapes.Add(shape);
+        editor.Select(shape.Id);
+
+        var result = FreePRibbonCommandWorkflow.Build(
+            editor,
+            new RibbonStateStore(),
+            new FreePRibbonCommandHostAdapter { TryHandleTextAction = _ => true });
+        var command = Stateful(result.Registry, "freep.bold");
+
+        // The native in-canvas editor handles the click live; with an indeterminate baseline query,
+        // the click-parity guess seeds from the previous local flag (false) and flips to true.
+        command.Execute(RibbonCommandContext.Empty);
+        command.GetState().IsChecked.Should().BeTrue("the click flipped the click-parity guess to bold");
+
+        // The session ends by the native editor deactivating on this SAME shape (Escape) -- no
+        // further click, no selection change -- and commits its live buffer into the real document:
+        // the placeholder now holds real, non-bold text (disagreeing with the stale guess above,
+        // exactly as the finding describes -- e.g. mixed formatting or a Format Painter edit could
+        // just as easily have produced a real state that disagrees with the click-parity guess).
+        shape.TextBody = new TextBody
+        {
+            Paragraphs = { new Paragraph { Runs = { new Run { Text = "hi", Bold = false } } } },
+        };
+
+        // No click, no selection change -- just a later ribbon refresh/selection re-query. GetState
+        // must notice the query's answer has moved off its session-start baseline (null) and stop
+        // trusting the stale local flag.
+        command.GetState().IsChecked.Should().BeFalse(
+            "the native editor deactivated on the same shape and committed non-bold text, so GetState " +
+            "must resume trusting the real document instead of the stale click-parity guess");
+    }
+
+    [Fact]
+    public void BoldToggleChecked_LiveSessionSurvivesGetStatePollsWhenQueryStillMatchesBaseline()
+    {
+        // Sibling no-regression case for the same-shape-deactivation fix above: as long as a live
+        // session's query keeps reproducing the exact answer it had when the session started (i.e.
+        // nothing has actually committed yet), repeated GetState() polls for the same selection must
+        // keep trusting the click-parity flag, not spuriously end the session.
+        var editor = MakeEditor();
+        var shape = MakeShape(31);
+        var run = new Run { Text = "hi", Bold = true };
+        shape.TextBody = new TextBody { Paragraphs = { new Paragraph { Runs = { run } } } };
+        editor.CurrentSlide!.Shapes.Add(shape);
+        editor.Select(shape.Id);
+
+        var result = FreePRibbonCommandWorkflow.Build(
+            editor,
+            new RibbonStateStore(),
+            new FreePRibbonCommandHostAdapter { TryHandleTextAction = _ => true });
+        var command = Stateful(result.Registry, "freep.bold");
+
+        // Baseline query at session start is true (committed run is bold); the click flips the
+        // click-parity guess to false.
+        command.Execute(RibbonCommandContext.Empty);
+        command.GetState().IsChecked.Should().BeFalse("the native click un-bolded the live buffer");
+
+        // The committed model is untouched (matches production: nothing commits until the session
+        // truly ends), so the query still reproduces the same baseline answer on every poll. The
+        // click-parity flag must keep being trusted.
+        command.GetState().IsChecked.Should().BeFalse();
+        command.GetState().IsChecked.Should().BeFalse();
+        run.Bold.Should().BeTrue("the committed model must stay untouched while the session is still open");
+    }
+
+    [Fact]
     public void TransitionSoundLoop_IsStatefulAndTracksCurrentSlideSound()
     {
         var editor = MakeEditor();

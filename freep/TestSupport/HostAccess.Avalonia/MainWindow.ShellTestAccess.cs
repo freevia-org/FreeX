@@ -146,6 +146,56 @@ public sealed partial class MainWindow
         return true;
     }
 
+    // r154 remediation (M2): mirrors FreeP.App.Host's ClickNewCommentButtonForTests/
+    // ClickReplyButtonForTests (freep/TestSupport/HostAccess.Wpf/MainWindow.ExtendedTestAccess.cs)
+    // so a test can drive the real "New Comment"/"Reply" button.Click handlers built by
+    // BuildAddCommentInput/BuildReviewCommentCard on the Avalonia shell too, instead of calling the
+    // AddComment/ReplyToSelectedComment wrapper methods directly. Lives HERE, not in the shipping
+    // MainWindow.cs, because HostAccessOwnershipTests scans the shipping project (and its built
+    // Release assembly) for the "ForTests" token.
+    internal bool ClickNewCommentButtonForTests(string text) =>
+        ClickReviewCommentPaneButtonForTests(PresentationPaneTextResources.NewCommentCommand, text);
+
+    internal bool ClickReplyButtonForTests(string text) =>
+        ClickReviewCommentPaneButtonForTests(PresentationPaneTextResources.ReplyCommand, text);
+
+    // r154 remediation (N2): drives the real "@" mention button.Click handler built by
+    // BuildCommentMentionButton (rather than calling DispatchCommentMentionPicker directly) so a
+    // test can prove the button's own currentAuthor wiring on the single-candidate auto-apply
+    // route -- not just that the session/planner stamp the author correctly when given one.
+    internal bool ClickCommentMentionButtonForTests(string tag, string text)
+    {
+        var button = EnumerateReviewPaneButtons(_reviewCommentsPanePanel)
+            .FirstOrDefault(candidate => string.Equals(candidate.Tag as string, tag, StringComparison.Ordinal));
+        if (button?.Parent is not Panel row)
+            return false;
+
+        var input = row.Children.OfType<TextBox>().FirstOrDefault();
+        if (input is null)
+            return false;
+
+        input.Text = text;
+        input.CaretIndex = text.Length;
+        button.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+        return true;
+    }
+
+    private bool ClickReviewCommentPaneButtonForTests(string caption, string text)
+    {
+        var button = EnumerateReviewPaneButtons(_reviewCommentsPanePanel)
+            .FirstOrDefault(candidate => Equals(candidate.Content, caption));
+        if (button?.Parent is not Panel row)
+            return false;
+
+        var input = row.Children.OfType<TextBox>().FirstOrDefault();
+        if (input is null)
+            return false;
+
+        input.Text = text;
+        button.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+        return true;
+    }
+
     internal bool EditPointsEnabledForTests => _slideCanvas.EditPointsEnabled;
 
     internal IReadOnlyList<PresentationPaneAccessibilitySnapshotEntry> PaneAccessibilitySnapshotForTests =>

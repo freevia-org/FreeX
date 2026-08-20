@@ -1243,6 +1243,102 @@ public sealed class DocumentViewRoundTripTests
     }
 
     [StaFact]
+    public void DisplayMathEquation_ParagraphCentersOnItsOwnLine()
+    {
+        // Word's "Professional"/display layout (m:oMathPara -> Equation.IsDisplayMath) centres its
+        // equation on a standalone line. DocxReader puts nothing else in a paragraph it built from an
+        // oMathPara, so a paragraph made up entirely of display-math runs is the structural signal
+        // BuildParagraph uses to approximate that layout (see freew-equations F1).
+        var doc = TextDocument.CreateEmpty();
+        doc.Blocks.Clear();
+        var equation = Equation.FromText("a + b = c");
+        equation.IsDisplayMath = true;
+        var para = new Paragraph();
+        para.Runs.Add(Run.FromEquation(equation));
+        doc.Blocks.Add(para);
+
+        var view = new DocumentView();
+        view.LoadModel(doc);
+
+        var wpfParagraph = (System.Windows.Documents.Paragraph)view.Document.Blocks.First();
+        wpfParagraph.TextAlignment.Should().Be(System.Windows.TextAlignment.Center,
+            "a display-mode equation should render centred on its own line, like Word");
+    }
+
+    [StaFact]
+    public void InlineMathEquation_ParagraphNotForceCentered()
+    {
+        // Sibling no-regression: an ordinary inline m:oMath (IsDisplayMath = false, the default and by
+        // far the common case, including when it shares a paragraph with real text) must not be
+        // force-centred the way a display-only paragraph now is.
+        var doc = TextDocument.CreateEmpty();
+        doc.Blocks.Clear();
+        var para = new Paragraph();
+        para.Runs.Add(new Run("See "));
+        para.Runs.Add(Run.FromEquation(Equation.FromText("a + b = c")));
+        para.Runs.Add(new Run(" above."));
+        doc.Blocks.Add(para);
+
+        var view = new DocumentView();
+        view.LoadModel(doc);
+
+        var wpfParagraph = (System.Windows.Documents.Paragraph)view.Document.Blocks.First();
+        wpfParagraph.TextAlignment.Should().Be(System.Windows.TextAlignment.Left);
+    }
+
+    [StaFact]
+    public void SmallCapsAndAllCaps_BothSurviveCommitWithoutAnyEdit()
+    {
+        // Word's w:smallCaps and w:caps are independent run flags. A run authored with both set (e.g.
+        // opened from a .docx that already carries both) must survive a commit with NO edit at all --
+        // FileCommands.cs calls CommitToModel before every save, so merely opening and re-saving such a
+        // document must not silently drop SmallCaps (freew-equations F2 / freew-text-effects F2).
+        var doc = TextDocument.CreateEmpty();
+        doc.Blocks.Clear();
+        var para = new Paragraph();
+        para.Runs.Add(new Run("SHOUT", RunFormatting.Default with { SmallCaps = true, AllCaps = true }));
+        doc.Blocks.Add(para);
+
+        var run = FirstRun(RoundTrip(doc));
+
+        run.Formatting.SmallCaps.Should().BeTrue("SmallCaps must not be discarded just because AllCaps is also set");
+        run.Formatting.AllCaps.Should().BeTrue();
+    }
+
+    [StaFact]
+    public void AllCapsOnly_StillSurvivesCommit()
+    {
+        // Sibling no-regression: the common single-flag case (All Caps with no Small Caps) -- by far the
+        // more frequent real-world combination -- must keep round-tripping exactly as before.
+        var doc = TextDocument.CreateEmpty();
+        doc.Blocks.Clear();
+        var para = new Paragraph();
+        para.Runs.Add(new Run("SHOUT", RunFormatting.Default with { AllCaps = true }));
+        doc.Blocks.Add(para);
+
+        var run = FirstRun(RoundTrip(doc));
+
+        run.Formatting.AllCaps.Should().BeTrue();
+        run.Formatting.SmallCaps.Should().BeFalse();
+    }
+
+    [StaFact]
+    public void SmallCapsOnly_StillSurvivesCommit()
+    {
+        // Sibling no-regression: the plain Small Caps-only case must also keep round-tripping.
+        var doc = TextDocument.CreateEmpty();
+        doc.Blocks.Clear();
+        var para = new Paragraph();
+        para.Runs.Add(new Run("Shout", RunFormatting.Default with { SmallCaps = true }));
+        doc.Blocks.Add(para);
+
+        var run = FirstRun(RoundTrip(doc));
+
+        run.Formatting.SmallCaps.Should().BeTrue();
+        run.Formatting.AllCaps.Should().BeFalse();
+    }
+
+    [StaFact]
     public void Chart_RoundTrips()
     {
         var doc = TextDocument.CreateEmpty();
