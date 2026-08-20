@@ -145,6 +145,68 @@ public sealed class DocumentViewRichPasteTests
         pasted.Runs.Single(run => run.Control is not null).Control!.Tag.Should().Be("Applicant");
     }
 
+    /// <summary>
+    /// A copied run keeps only the ID of the footnote or comment it points at, and an id means nothing on
+    /// its own: pasted into a document with its own footnote 1, a copied reference to footnote 1 would
+    /// silently aim at that unrelated note. The clipboard carries the referenced note and comment thread
+    /// so the insertion can renumber them.
+    /// </summary>
+    [Fact]
+    public async Task A_copied_note_and_comment_travel_with_the_selection_and_are_renumbered()
+    {
+        var sourceParagraph = new Paragraph();
+        sourceParagraph.Runs.Add(new Run("Body"));
+        sourceParagraph.Runs.Add(new Run("1") { FootnoteId = 1 });
+        sourceParagraph.Runs.Add(new Run("commented") { CommentId = 0 });
+
+        var sourceDocument = TextDocument.CreateEmpty();
+        sourceDocument.Blocks.Clear();
+        sourceDocument.Blocks.Add(sourceParagraph);
+        sourceDocument.Footnotes[1] = new Footnote(1, "Copied note body");
+        var comment = new Comment(0) { Author = "Ada" };
+        comment.Content.Add(new Paragraph("Copied comment body"));
+        sourceDocument.Comments[0] = comment;
+
+        var source = new DocumentView();
+        source.LoadDocument(sourceDocument);
+        source.SetBodySelectionForTest(0, 0, 0, sourceParagraph.PlainText.Length);
+        var (document, ranges) = source.GetSelectionRichSnapshot();
+        var content = FreeWClipboardApplicationWorkflow.CreateWriteContent(
+            source.SelectedText,
+            FreeWClipboardApplicationWorkflow.BuildSelectionRichDocument(document, ranges),
+            FreeWClipboardApplicationWorkflow.BuildSelectionNativeDocument(document, ranges))!;
+        var payload = (await FreeWClipboardApplicationWorkflow.ReadPasteSpecialAsync(
+            new StubClipboard(content))).Payload!;
+        payload.RichDocument.Should().NotBeNull();
+
+        // The destination already owns a footnote 1 and a comment 0 of its own.
+        var targetDocument = TextDocument.CreateEmpty();
+        targetDocument.Blocks.Clear();
+        targetDocument.Blocks.Add(Paragraph("Target"));
+        targetDocument.Footnotes[1] = new Footnote(1, "The target's own note");
+        var targetComment = new Comment(0) { Author = "Grace" };
+        targetComment.Content.Add(new Paragraph("The target's own comment"));
+        targetDocument.Comments[0] = targetComment;
+        var target = new DocumentView();
+        target.LoadDocument(targetDocument);
+
+        target.MoveCaretToBlockForTest(0, "Target".Length);
+        target.PasteKeepSourceFormatting(payload.RichDocument!).Should().BeTrue();
+
+        var pastedFootnoteId = target.Document.Paragraphs.Single()
+            .Runs.Single(run => run.FootnoteId is not null).FootnoteId!.Value;
+        pastedFootnoteId.Should().NotBe(1, "the destination's own footnote 1 must not be hijacked");
+        targetDocument.Footnotes[pastedFootnoteId].PlainText.Should().Be("Copied note body");
+        targetDocument.Footnotes[1].PlainText.Should().Be("The target's own note");
+
+        var pastedCommentId = target.Document.Paragraphs.Single()
+            .Runs.Single(run => run.CommentId is not null).CommentId!.Value;
+        pastedCommentId.Should().NotBe(0);
+        targetDocument.Comments[pastedCommentId].Content.Single().PlainText
+            .Should().Be("Copied comment body");
+        targetDocument.Comments[0].Author.Should().Be("Grace");
+    }
+
     private static Paragraph Paragraph(string text)
     {
         var paragraph = new Paragraph();

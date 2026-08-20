@@ -358,7 +358,41 @@ public static class FreeWClipboardApplicationWorkflow
             document.Styles[styleId] = style;
         document.DefaultRun = source.DefaultRun;
         document.Theme = source.Theme;
+        CopyReferencedNotesAndComments(source, document);
         return document;
+    }
+
+    /// <summary>
+    /// Carries the footnotes, endnotes and comment threads the copied runs point AT. A run keeps only an
+    /// id, and an id means nothing on its own: pasted into a document with its own footnote 1, a copied
+    /// reference to footnote 1 would silently aim at that unrelated note. Bringing the referenced ones
+    /// along lets <see cref="FreeW.Core.Model.DocumentMerge"/> clone and RENUMBER them on insertion, which
+    /// is what it already does for a whole-document insert.
+    /// </summary>
+    private static void CopyReferencedNotesAndComments(TextDocument source, TextDocument selection)
+    {
+        var runs = selection.Paragraphs.SelectMany(paragraph => paragraph.Runs).ToList();
+
+        foreach (var id in runs.Select(run => run.FootnoteId).OfType<int>().Distinct())
+        {
+            if (source.Footnotes.TryGetValue(id, out var footnote))
+                selection.Footnotes[id] = footnote;
+        }
+
+        foreach (var id in runs.Select(run => run.EndnoteId).OfType<int>().Distinct())
+        {
+            if (source.Endnotes.TryGetValue(id, out var endnote))
+                selection.Endnotes[id] = endnote;
+        }
+
+        // A comment id may name a reply, so the thread ROOT is what has to travel.
+        foreach (var id in runs.Select(run => run.CommentId).OfType<int>().Distinct())
+        {
+            var root = source.Comments.Values.FirstOrDefault(
+                comment => comment.ThreadInOrder().Any(node => node.Id == id));
+            if (root is not null)
+                selection.Comments[root.Id] = root;
+        }
     }
 
     private static string? TryRenderHtml(TextDocument richDocument)

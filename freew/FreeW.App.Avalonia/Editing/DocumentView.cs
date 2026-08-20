@@ -23715,7 +23715,12 @@ public sealed partial class DocumentView : Control
              blockIndex <= bodySelection.End.Block && blockIndex < _doc.Blocks.Count;
              blockIndex++)
         {
-            if (_doc.Blocks[blockIndex] is not Paragraph paragraph || !IsEditable(paragraph))
+            // AV-CLIP: both consumers of these ranges only READ — the Font dialog's state and the Copy
+            // payload. An IsEditable filter here meant a paragraph holding a note mark, a field or an
+            // image reported no formatting and, worse, contributed nothing to a copy: the rich clipboard
+            // silently dropped it and that part of the selection pasted as plain text. Editing is gated
+            // where editing happens.
+            if (_doc.Blocks[blockIndex] is not Paragraph paragraph)
                 continue;
             ranges.Add(new DocumentFormattingTextRange(
                 paragraph,
