@@ -264,16 +264,26 @@ public sealed partial class MainWindowAdaptiveRibbonTests
     [Fact]
     public void ViewRibbon_WorkbookViewButtonsAreMutuallyExclusive()
     {
+        // The three workbook views stay mutually exclusive because all three checked flags come
+        // from one WorksheetViewModeUiState. That still holds; the pieces just moved. The status
+        // buttons are still set together here, the planner call now happens at the viewport that
+        // owns the per-window view mode, and the ribbon toggles are published by the shared
+        // WorkbookViewRibbonStatePlanner both renderers consume.
         var source = WorkspaceFileLocator.ReadAllText("src", "FreeX.App.Host/MainWindow.ViewCommands.cs");
+        var viewport = WorkspaceFileLocator.ReadAllText("src", "FreeX.App.Host/MainWindow.Viewport.cs");
+        var planner = WorkspaceFileLocator.ReadAllText(
+            "src",
+            "FreeX.App.Presentation/Ribbon/WorkbookViewRibbonStatePlanner.cs");
 
-        source.Should().Contain("var state = WorksheetViewModeUiStatePlanner.Build(viewMode);");
-        source.Should().Contain("_ribbonState.SetChecked(\"Normal\", state.NormalChecked);");
-        source.Should().Contain("_ribbonState.SetChecked(\"Page Layout\", state.PageLayoutChecked);");
-        source.Should().Contain("_ribbonState.SetChecked(\"Page Break Preview\", state.PageBreakPreviewChecked);");
         source.Should().Contain("StatusNormalViewButton.IsChecked = state.NormalChecked;");
         source.Should().Contain("StatusPageLayoutViewButton.IsChecked = state.PageLayoutChecked;");
         source.Should().Contain("StatusPageBreakPreviewButton.IsChecked = state.PageBreakPreviewChecked;");
-        source.Should().Contain("SyncStatusViewShortcutState(state);");
+        viewport.Should().Contain(
+            "SyncStatusViewShortcutState(WorksheetViewModeUiStatePlanner.Build(viewState.ViewMode));");
+        planner.Should().Contain("\"Normal\" => new RibbonCommandState(IsChecked: NormalChecked),");
+        planner.Should().Contain("\"Page Layout\" => new RibbonCommandState(IsChecked: PageLayoutChecked),");
+        planner.Should().Contain(
+            "\"Page Break Preview\" => new RibbonCommandState(IsChecked: PageBreakPreviewChecked),");
     }
 
     [Fact]

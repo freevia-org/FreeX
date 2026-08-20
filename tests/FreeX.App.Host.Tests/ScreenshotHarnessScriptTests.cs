@@ -380,7 +380,9 @@ public sealed class ScreenshotHarnessScriptTests
 
         script.Should().Contain("Test-Path -LiteralPath $exe");
         script.Should().Contain("Excel executable was not found at $exe. Install Microsoft Excel or update tools\\screenshot_excel.ps1 before running this capture.");
-        script.Should().Contain("Start-Process -FilePath $exe -ArgumentList @(\"/x\", \"/e\") -PassThru");
+        // The script launches with /x only. "/x", "/e" has never appeared in screenshot_excel.ps1
+        // (git log -S finds no commit adding or removing it), so this assertion could never match.
+        script.Should().Contain("Start-Process -FilePath $exe -ArgumentList @(\"/x\") -PassThru");
     }
 
     [Fact]
