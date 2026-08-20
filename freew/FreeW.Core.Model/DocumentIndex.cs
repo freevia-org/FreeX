@@ -112,6 +112,7 @@ public static class DocumentIndex
         foreach (var location in DocumentBodyParagraphs.Enumerate(document))
         {
             var blockIndex = location.BlockIndex;
+            var tableRowIndex = location.TableParagraph?.RowIndex;
             var paragraph = location.Paragraph;
             foreach (var run in paragraph.Runs)
             {
@@ -119,7 +120,7 @@ public static class DocumentIndex
                     continue;
                 if (!IdentifiersMatch(mark.Identifier, identifier))
                     continue;
-                occurrences.Add(new IndexOccurrence(mark, blockIndex));
+                occurrences.Add(new IndexOccurrence(mark, blockIndex, tableRowIndex));
                 bodyTerms.Add(mark.EntryText);
             }
         }
@@ -129,7 +130,7 @@ public static class DocumentIndex
             foreach (var entry in document.IndexEntries)
             {
                 if (entry.Term.Length > 0 && !bodyTerms.Contains(entry.Term))
-                    occurrences.Add(new IndexOccurrence(new IndexMark(entry.Term), BlockIndex: null));
+                    occurrences.Add(new IndexOccurrence(new IndexMark(entry.Term), BlockIndex: null, TableRowIndex: null));
             }
         }
 
@@ -576,7 +577,8 @@ public static class DocumentIndex
                 "label:1", "1", StartIndex: -1, EndIndex: -1, FirstLabel: "1", LastLabel: "1", IsRange: false);
         }
 
-        var reference = ResolveBlockPageReference(document, index, tableRowIndex: null, pageTextOf, pageReferenceOf);
+        var reference = ResolveBlockPageReference(
+            document, index, occurrence.TableRowIndex, pageTextOf, pageReferenceOf);
         var identity = reference.PhysicalPageIndex >= 0
             ? $"page:{reference.PhysicalPageIndex}"
             : "label:" + reference.DisplayText;
@@ -590,9 +592,12 @@ public static class DocumentIndex
             IsRange: false);
     }
 
-    // tableRowIndex is null for a non-bookmark XE occurrence (which never carries row data) and for the
-    // block-less stories BookmarkPageResolution.Find can report (header/footer/footnote/endnote/comment);
-    // both fall straight through with rowOffset 0, unchanged from before this method took the parameter.
+    // tableRowIndex is null for an XE occurrence outside any table (body paragraph or the synthetic
+    // IndexEntries-only occurrence, which carries no block at all) and for the block-less stories
+    // BookmarkPageResolution.Find can report (header/footer/footnote/endnote/comment); those fall straight
+    // through with rowOffset 0. A direct (non-\r) XE mark inside a table cell now carries its own row --
+    // captured once in Build from DocumentBodyParagraphs.Enumerate's location -- the same row-aware math
+    // ResolveBookmarkRange already threads through for the \r-bookmark form of an index entry.
     private static IndexPageReferenceAddress ResolveBlockPageReference(
         TextDocument document,
         int blockIndex,
@@ -694,7 +699,7 @@ public static class DocumentIndex
             : null;
     }
 
-    private sealed record IndexOccurrence(IndexMark Mark, int? BlockIndex);
+    private sealed record IndexOccurrence(IndexMark Mark, int? BlockIndex, int? TableRowIndex = null);
 
     private sealed record BookmarkBlockRange(
         int StartBlockIndex, int? StartTableRowIndex, int EndBlockIndex, int? EndTableRowIndex);

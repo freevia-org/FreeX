@@ -1,4 +1,5 @@
 using System.Collections.Concurrent;
+using Free.Shared.AppServices;
 
 namespace Free.Shared.Shell;
 
@@ -24,8 +25,11 @@ public sealed class RecentFilePathExistenceCache
 {
     private readonly Func<string, bool> _probe;
     private readonly Action<string>? _onProbed;
-    private readonly ConcurrentDictionary<string, bool> _results = new(StringComparer.OrdinalIgnoreCase);
-    private readonly ConcurrentDictionary<string, byte> _inFlight = new(StringComparer.OrdinalIgnoreCase);
+    // Must match the identity semantics RecentFilesStore uses to keep recent entries distinct
+    // (case-insensitive on Windows, case-sensitive on Linux/macOS) so this cache never collapses
+    // two genuinely distinct case-differing paths into one probed/cached result.
+    private readonly ConcurrentDictionary<string, bool> _results = new(PlatformPathIdentityComparer.Current);
+    private readonly ConcurrentDictionary<string, byte> _inFlight = new(PlatformPathIdentityComparer.Current);
 
     /// <param name="probe">
     /// The (potentially slow/blocking) existence check to run on a background thread. Defaults to

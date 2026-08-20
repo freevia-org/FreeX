@@ -1672,6 +1672,123 @@ public sealed class PresentationCommandTests
         chart.ExtentCyEmu.Should().Be(400);
     }
 
+    /// <summary>
+    /// freep-shape-grouping F1: a group's children store absolute (slide-space) coordinates,
+    /// not coordinates relative to the group (see GroupShapesCommand.Apply, "Children keep
+    /// absolute offsets"). Moving the group as a whole must translate every child by the same
+    /// delta, or the shapes stay put while only the invisible group record used for the
+    /// selection outline moves -- decoupling the outline from the shapes it is supposed to
+    /// enclose.
+    /// </summary>
+    [Fact]
+    public void MoveShapeCommand_Group_Apply_MovesChildren()
+    {
+        var (p, bus) = Make();
+        var child1 = MakeShape(1); // Offset(100,200) Extent(300,400)
+        var child2 = MakeShape(2);
+        child2.OffsetXEmu = 500;
+        child2.OffsetYEmu = 600;
+        var group = new SlideShape
+        {
+            Id = 10, Name = "Group", Kind = SlideShapeKind.Group,
+            OffsetXEmu = 100, OffsetYEmu = 200, ExtentCxEmu = 700, ExtentCyEmu = 800,
+        };
+        group.Children.Add(child1);
+        group.Children.Add(child2);
+        p.Slides[0].Shapes.Add(group);
+
+        bus.Execute(new MoveShapeCommand(0, 10, 500, 300));
+
+        group.OffsetXEmu.Should().Be(600);
+        group.OffsetYEmu.Should().Be(500);
+        child1.OffsetXEmu.Should().Be(600,
+            "the group's children must move with it, not just the group's own selection-frame record");
+        child1.OffsetYEmu.Should().Be(500);
+        child2.OffsetXEmu.Should().Be(1000);
+        child2.OffsetYEmu.Should().Be(900);
+
+        bus.Undo();
+        group.OffsetXEmu.Should().Be(100);
+        group.OffsetYEmu.Should().Be(200);
+        child1.OffsetXEmu.Should().Be(100);
+        child1.OffsetYEmu.Should().Be(200);
+        child2.OffsetXEmu.Should().Be(500);
+        child2.OffsetYEmu.Should().Be(600);
+    }
+
+    /// <summary>Sibling/no-regression: moving a group must not disturb shapes outside it.</summary>
+    [Fact]
+    public void MoveShapeCommand_Group_Apply_DoesNotAffectSiblingShapesOutsideGroup()
+    {
+        var (p, bus) = Make();
+        var outside = MakeShape(3); // Offset(100,200)
+        var child1 = MakeShape(1);
+        var group = new SlideShape
+        {
+            Id = 10, Kind = SlideShapeKind.Group,
+            OffsetXEmu = 100, OffsetYEmu = 200, ExtentCxEmu = 300, ExtentCyEmu = 400,
+        };
+        group.Children.Add(child1);
+        p.Slides[0].Shapes.Add(group);
+        p.Slides[0].Shapes.Add(outside);
+
+        bus.Execute(new MoveShapeCommand(0, 10, 500, 300));
+
+        outside.OffsetXEmu.Should().Be(100);
+        outside.OffsetYEmu.Should().Be(200);
+    }
+
+    /// <summary>
+    /// freep-shape-grouping F1: resizing a group as a whole must scale every child by the same
+    /// ECMA-376 transform used to render it (absolute = groupOff + (raw - groupOldOff) *
+    /// (newExt / oldExt)), matching the reproduction in the finding: two 100000x100000 EMU
+    /// shapes grouped into a (0,0,300000,300000) box, then the group resized to double its
+    /// extent in place.
+    /// </summary>
+    [Fact]
+    public void ResizeShapeCommand_Group_Apply_ScalesChildren()
+    {
+        var (p, bus) = Make();
+        var child1 = new SlideShape
+        {
+            Id = 1, Kind = SlideShapeKind.AutoShape,
+            OffsetXEmu = 0, OffsetYEmu = 0, ExtentCxEmu = 100_000, ExtentCyEmu = 100_000,
+        };
+        var child2 = new SlideShape
+        {
+            Id = 2, Kind = SlideShapeKind.AutoShape,
+            OffsetXEmu = 200_000, OffsetYEmu = 200_000, ExtentCxEmu = 100_000, ExtentCyEmu = 100_000,
+        };
+        var group = new SlideShape
+        {
+            Id = 10, Kind = SlideShapeKind.Group,
+            OffsetXEmu = 0, OffsetYEmu = 0, ExtentCxEmu = 300_000, ExtentCyEmu = 300_000,
+        };
+        group.Children.Add(child1);
+        group.Children.Add(child2);
+        p.Slides[0].Shapes.Add(group);
+
+        bus.Execute(new ResizeShapeCommand(0, 10, 0, 0, 600_000, 600_000));
+
+        group.ExtentCxEmu.Should().Be(600_000);
+        child1.OffsetXEmu.Should().Be(0);
+        child1.OffsetYEmu.Should().Be(0);
+        child1.ExtentCxEmu.Should().Be(200_000,
+            "the group's children must scale with it, not just the group's own selection-frame record");
+        child1.ExtentCyEmu.Should().Be(200_000);
+        child2.OffsetXEmu.Should().Be(400_000);
+        child2.OffsetYEmu.Should().Be(400_000);
+        child2.ExtentCxEmu.Should().Be(200_000);
+        child2.ExtentCyEmu.Should().Be(200_000);
+
+        bus.Undo();
+        group.ExtentCxEmu.Should().Be(300_000);
+        child1.OffsetXEmu.Should().Be(0);
+        child1.ExtentCxEmu.Should().Be(100_000);
+        child2.OffsetXEmu.Should().Be(200_000);
+        child2.ExtentCxEmu.Should().Be(100_000);
+    }
+
     [Fact]
     public void SetPictureCropCommand_ApplyUndoRedo_PreservesFormatAndCrop()
     {

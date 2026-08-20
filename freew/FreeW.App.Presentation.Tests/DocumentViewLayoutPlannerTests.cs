@@ -154,7 +154,7 @@ public sealed class DocumentViewLayoutPlannerTests
     }
 
     [Fact]
-    public void BuildColumnPlan_UnequalColumnsUseNarrowestWidthAndNonPrintModesCollapseToSingleColumn()
+    public void BuildColumnPlan_UnequalColumnsSplitEvenlyForCorrectColumnCountAndNonPrintModesCollapseToSingleColumn()
     {
         var page = new PageSettings
         {
@@ -166,8 +166,13 @@ public sealed class DocumentViewLayoutPlannerTests
         var print = DocumentViewLayoutPlanner.BuildColumnPlan(page, contentWidthDip: 640, usePageColumns: true);
         var continuous = DocumentViewLayoutPlanner.BuildColumnPlan(page, contentWidthDip: 640, usePageColumns: false);
 
+        // Neither WPF's FlowDocument nor Avalonia's hand-rolled flow can render genuinely unequal
+        // column widths, so the plan splits the content area evenly instead of degrading to the
+        // narrowest explicit width -- the narrowest-width approximation undersizes every column and
+        // (on WPF's flexible-width stretch) can pack in a phantom extra column. See
+        // DocumentViewLayoutPlanner.BuildColumnPlan and ColumnLayoutTests.UnequalWidths_RenderExactlyTheConfiguredColumnCount.
         print.Count.Should().Be(3);
-        print.WidthDip.Should().BeApproximately(120, 0.01);
+        print.WidthDip.Should().BeApproximately((640d - 2 * 24) / 3, 0.01); // (640 - (columns-1)*gap) / columns
         print.GapDip.Should().BeApproximately(24, 0.01);
 
         continuous.Count.Should().Be(1);

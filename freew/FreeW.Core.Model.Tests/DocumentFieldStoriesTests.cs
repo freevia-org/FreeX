@@ -63,6 +63,45 @@ public sealed class DocumentFieldStoriesTests
             item.StoryKind == DocumentFieldStoryKind.MainDocument && item.BodyBlockIndex == 0);
     }
 
+    [Fact]
+    public void Enumerate_TextBoxAnchoredInsideTableRow_CarriesTheAnchorsRowIndex()
+    {
+        var document = new TextDocument();
+        var table = Table.Create(3, 1);
+        var anchor = new Paragraph("anchor row 2");
+        var textBox = new Paragraph("box text");
+        anchor.Runs.Add(new Run(string.Empty) { Shape = new Shape { TextParagraphs = { textBox } } });
+        table.Rows[2].Cells[0].Paragraphs[0] = anchor;
+        document.Blocks.Add(table);
+
+        var stories = DocumentFieldStories.Enumerate(document).ToList();
+
+        var anchorStory = stories.Single(item => item.Paragraph.PlainText == "anchor row 2");
+        anchorStory.StoryKind.Should().Be(DocumentFieldStoryKind.MainDocument);
+        anchorStory.TableRowIndex.Should().Be(2);
+
+        var textBoxStory = stories.Single(item => item.Paragraph.PlainText == "box text");
+        textBoxStory.StoryKind.Should().Be(DocumentFieldStoryKind.TextBox);
+        textBoxStory.BodyBlockIndex.Should().Be(0);
+        textBoxStory.TableRowIndex.Should().Be(2);
+    }
+
+    // Sibling no-regression: a text box anchored to a non-table paragraph still carries no row.
+    [Fact]
+    public void Enumerate_TextBoxAnchoredOutsideAnyTable_HasNoRowIndex()
+    {
+        var document = TextDocument.CreateEmpty();
+        document.Blocks.Clear();
+        var anchor = new Paragraph("anchor");
+        var textBox = new Paragraph("box text");
+        anchor.Runs.Add(new Run(string.Empty) { Shape = new Shape { TextParagraphs = { textBox } } });
+        document.Blocks.Add(anchor);
+
+        var stories = DocumentFieldStories.Enumerate(document).ToList();
+
+        stories.Should().OnlyContain(item => item.TableRowIndex == null);
+    }
+
     [Theory]
     [InlineData("DOCPROPERTY", true)]
     [InlineData("REF", true)]

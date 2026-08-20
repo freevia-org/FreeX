@@ -366,13 +366,17 @@ public static class DocumentNoteRegionPlanner
     /// whichever call site still rolls its own continuous-only math.
     /// <para>
     /// <see cref="NoteNumberRestart.Continuous"/> (the default) numbers every note the document owns
-    /// in one series, in id order, from <see cref="NoteNumberingOptions.StartAt"/>.
+    /// in one series, in reading order (the order each note's reference run is encountered while
+    /// walking the document — NOT the internal id, which is allocated by insertion order via
+    /// NextFootnoteId()/NextEndnoteId() and drifts from reading order as soon as a note is inserted
+    /// earlier in the text after a later one), from <see cref="NoteNumberingOptions.StartAt"/>.
     /// </para>
     /// <para>
     /// <see cref="NoteNumberRestart.EachSection"/> restarts at StartAt for every document section,
-    /// grouping each note by the section that contains the body paragraph carrying its reference
-    /// run (<see cref="Run.FootnoteId"/> / <see cref="Run.EndnoteId"/>). This needs no layout
-    /// information, so it applies exactly everywhere, including the in-body reference mark.
+    /// grouping each note by the section that contains the reference run
+    /// (<see cref="Run.FootnoteId"/> / <see cref="Run.EndnoteId"/>) — a body/table paragraph, a text
+    /// box embedded in either, or a header/footer of that section. This needs no layout information,
+    /// so it applies exactly everywhere, including the in-body reference mark.
     /// </para>
     /// <para>
     /// <see cref="NoteNumberRestart.EachPage"/> (footnotes only — Word does not offer it for
@@ -395,7 +399,16 @@ public static class DocumentNoteRegionPlanner
         var options = isFootnote ? document.FootnoteNumbering : document.EndnoteNumbering;
         var startAt = Math.Max(1, options.StartAt);
         IEnumerable<int> documentIds = isFootnote ? document.Footnotes.Keys : document.Endnotes.Keys;
-        var orderedIds = documentIds.OrderBy(id => id).ToList();
+        var locationById = ResolveReferenceLocationsById(document, isFootnote, documentIds.ToList());
+        // Order by where each note's reference mark actually sits in reading order, not by the
+        // internal id (ids are allocated by insertion order via NextFootnoteId()/NextEndnoteId(), which
+        // drifts from reading order as soon as a note is inserted earlier in the text after a later one).
+        // An id with no locatable reference run (should not normally happen) sorts after every located
+        // id, falling back to id order among itself so the result stays deterministic.
+        var orderedIds = documentIds
+            .OrderBy(id => locationById.TryGetValue(id, out var location) ? location.Order : int.MaxValue)
+            .ThenBy(id => id)
+            .ToList();
 
         if (options.NumberRestart == NoteNumberRestart.EachPage && pageGroupIds is not null)
         {
@@ -408,12 +421,11 @@ public static class DocumentNoteRegionPlanner
 
         if (options.NumberRestart == NoteNumberRestart.EachSection)
         {
-            var sectionById = ResolveSectionIndexById(document, isFootnote, orderedIds);
             var result = new Dictionary<int, int>();
             var nextInSection = new Dictionary<int, int>();
             foreach (var id in orderedIds)
             {
-                var section = sectionById.TryGetValue(id, out var s) ? s : 0;
+                var section = locationById.TryGetValue(id, out var location) ? location.SectionIndex : 0;
                 var sequence = nextInSection.TryGetValue(section, out var next) ? next : startAt;
                 result[id] = sequence;
                 nextInSection[section] = sequence + 1;
@@ -426,21 +438,57 @@ public static class DocumentNoteRegionPlanner
             .ToDictionary(pair => pair.id, pair => pair.sequence);
     }
 
+    /// <summary>Where one note's reference run was found: which section it lives in, plus its
+    /// reading-order rank among the other ids <see cref="ResolveReferenceLocationsById"/> was asked
+    /// to locate (0 = first-encountered).</summary>
+    private readonly record struct NoteReferenceLocation(int SectionIndex, int Order);
+
     /// <summary>
-    /// Maps each id in <paramref name="orderedIds"/> to the 0-based index of the document section
-    /// whose body content carries its reference run, by walking <see cref="TextDocument.Blocks"/>
-    /// (recursing through table cells and nested tables) and incrementing the section counter after
-    /// every paragraph that ends a section (<see cref="Paragraph.SectionBreak"/> set). Ids with no
-    /// locatable reference run (should not normally happen) default to section 0.
+    /// Locates each requested note id's reference run in reading order: <see cref="TextDocument.Blocks"/>
+    /// (recursing through table cells, nested tables, and any text box a run's <see cref="Run.Shape"/>
+    /// carries — recursively, for a shape nested inside another shape's text box), then, for any id not
+    /// found there, every header/footer slot of every document section in section order (Word allows a
+    /// footnote/endnote reference there too). Each located id gets the 0-based index of the document
+    /// section whose content carries its reference run (the section counter increments after every
+    /// paragraph that ends a section, i.e. has <see cref="Paragraph.SectionBreak"/> set; a header/footer
+    /// reference is attributed to the section that owns that header/footer) and its reading-order rank
+    /// among the ids being located. An id with no locatable reference run (should not normally happen)
+    /// is simply absent from the result.
     /// </summary>
-    private static IReadOnlyDictionary<int, int> ResolveSectionIndexById(
+    private static IReadOnlyDictionary<int, NoteReferenceLocation> ResolveReferenceLocationsById(
         TextDocument document,
         bool isFootnote,
-        IReadOnlyList<int> orderedIds)
+        IReadOnlyCollection<int> ids)
     {
-        var result = new Dictionary<int, int>();
-        var remaining = new HashSet<int>(orderedIds);
+        var result = new Dictionary<int, NoteReferenceLocation>();
+        var remaining = new HashSet<int>(ids);
         var sectionIndex = 0;
+        var order = 0;
+
+        void ScanRuns(IEnumerable<Run> runs, int forSectionIndex)
+        {
+            if (remaining.Count == 0)
+                return;
+
+            foreach (var run in runs)
+            {
+                var id = isFootnote ? run.FootnoteId : run.EndnoteId;
+                if (id is { } noteId && remaining.Remove(noteId))
+                    result[noteId] = new NoteReferenceLocation(forSectionIndex, order++);
+
+                if (run.Shape is { } shape)
+                    ScanParagraphs(shape.TextParagraphs, forSectionIndex);
+            }
+        }
+
+        void ScanParagraphs(IEnumerable<Paragraph> paragraphs, int forSectionIndex)
+        {
+            if (remaining.Count == 0)
+                return;
+
+            foreach (var paragraph in paragraphs)
+                ScanRuns(paragraph.Runs, forSectionIndex);
+        }
 
         void Scan(IEnumerable<Block> blocks)
         {
@@ -448,15 +496,7 @@ public static class DocumentNoteRegionPlanner
             {
                 if (block is Paragraph paragraph)
                 {
-                    if (remaining.Count > 0)
-                    {
-                        foreach (var run in paragraph.Runs)
-                        {
-                            var id = isFootnote ? run.FootnoteId : run.EndnoteId;
-                            if (id is { } noteId && remaining.Remove(noteId))
-                                result[noteId] = sectionIndex;
-                        }
-                    }
+                    ScanRuns(paragraph.Runs, sectionIndex);
 
                     if (paragraph.SectionBreak is not null)
                         sectionIndex++;
@@ -479,6 +519,33 @@ public static class DocumentNoteRegionPlanner
         }
 
         Scan(document.Blocks);
+
+        if (remaining.Count > 0)
+        {
+            var sections = document.Sections;
+            for (var i = 0; i < sections.Count && remaining.Count > 0; i++)
+            {
+                var headersFooters = sections[i].HeadersFooters;
+                foreach (var headerFooter in new[]
+                         {
+                             headersFooters.Header,
+                             headersFooters.Footer,
+                             headersFooters.EvenHeader,
+                             headersFooters.EvenFooter,
+                             headersFooters.FirstHeader,
+                             headersFooters.FirstFooter,
+                         })
+                {
+                    if (headerFooter is null)
+                        continue;
+
+                    ScanParagraphs(headerFooter.Paragraphs, i);
+                    if (remaining.Count == 0)
+                        break;
+                }
+            }
+        }
+
         return result;
     }
 

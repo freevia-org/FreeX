@@ -358,6 +358,67 @@ public sealed class WorkbookSessionTests
     }
 
     [Fact]
+    public void SelectAnchoredRange_ExpandsToFullyContainAPartiallyOverlappedMerge()
+    {
+        // R152-freex-merge-cells-F1: put a value in B2, merge B2:D4, then click C1 (outside the
+        // merge) and Shift+Down twice -- selecting C1:C3, which overlaps the merge without
+        // including its anchor B2. Excel never lets a selection bisect a merge: the rectangle must
+        // grow to fully absorb B2:D4, so a subsequent Ctrl+C actually captures the merge's real
+        // value instead of only blank merge-member cells.
+        var workbook = CreateWorkbook();
+        var sheet = workbook.Sheets.Single();
+        var b2 = new CellAddress(sheet.Id, 2, 2);
+        var d4 = new CellAddress(sheet.Id, 4, 4);
+        sheet.SetCell(b2, new NumberValue(42));
+        sheet.AddMergedRegion(new GridRange(b2, d4));
+        var anchor = new CellAddress(sheet.Id, 1, 3);   // C1 (plain click, outside the merge)
+        var cursor = new CellAddress(sheet.Id, 3, 3);   // C3 (after Shift+Down twice)
+        var session = CreateSession(new StartupWorkbookLoadResult(
+            workbook,
+            "Book.fxl",
+            "Opened .fxl.",
+            IsFallback: false));
+
+        session.SelectAnchoredRange(anchor, cursor);
+
+        // B1:D4 -- the smallest rectangle containing both C1:C3 and the whole B2:D4 merge.
+        session.SelectedRange.Should().Be(new GridRange(
+            new CellAddress(sheet.Id, 1, 2),
+            new CellAddress(sheet.Id, 4, 4)));
+        // The active cell stays pinned to the literal click anchor, not the expanded rectangle.
+        session.ActiveCell.Should().Be(anchor);
+
+        var copyResult = session.TryCopySelectedRangeText();
+        copyResult.Success.Should().BeTrue();
+        copyResult.Text.Should().Contain("42",
+            "the expanded selection must include the merge's anchor B2, so its real value is copied");
+    }
+
+    [Fact]
+    public void SelectAnchoredRange_LeavesSelectionUnexpandedWhenItDoesNotOverlapAnyMerge()
+    {
+        // Sibling no-regression case: a merge exists elsewhere on the sheet, but the extended
+        // selection never touches it, so the rectangle must stay exactly anchor..cursor.
+        var workbook = CreateWorkbook();
+        var sheet = workbook.Sheets.Single();
+        sheet.AddMergedRegion(new GridRange(
+            new CellAddress(sheet.Id, 2, 2),
+            new CellAddress(sheet.Id, 4, 4)));
+        var anchor = new CellAddress(sheet.Id, 1, 6);   // F1, far from the merge
+        var cursor = new CellAddress(sheet.Id, 3, 6);   // F3
+        var session = CreateSession(new StartupWorkbookLoadResult(
+            workbook,
+            "Book.fxl",
+            "Opened .fxl.",
+            IsFallback: false));
+
+        session.SelectAnchoredRange(anchor, cursor);
+
+        session.SelectedRange.Should().Be(new GridRange(anchor, cursor));
+        session.ActiveCell.Should().Be(anchor);
+    }
+
+    [Fact]
     public void R112_SelectedRangeStartProperties_ReadActiveCellNotNormalizedTopLeftAfterUpLeftGesture()
     {
         // Reproduces the reported gap: click C5 (giving it a distinctive style), then drag/shift-extend

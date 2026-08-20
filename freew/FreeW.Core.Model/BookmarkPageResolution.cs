@@ -33,10 +33,12 @@ public static class BookmarkPageResolution
     /// <summary>
     /// Finds the first paragraph, in story order, carrying <paramref name="name"/> as a bookmark
     /// (<see cref="Paragraph.BookmarkNames"/>). Walks the main document first -- row-aware, via
-    /// <see cref="DocumentBodyParagraphs"/>, which (unlike <see cref="DocumentFieldStories"/>) keeps each
-    /// table paragraph's logical row -- then every other story <see cref="DocumentFieldStories"/> models:
-    /// headers/footers, footnotes, endnotes, text boxes, and comments. Returns null when no paragraph
-    /// anywhere carries that bookmark, or when <paramref name="name"/> is null/empty.
+    /// <see cref="DocumentBodyParagraphs"/> -- then every other story <see cref="DocumentFieldStories"/>
+    /// models: headers/footers, footnotes, endnotes, text boxes, and comments. A text box anchored to a
+    /// table row is row-aware too: <see cref="DocumentFieldStories"/> carries each anchor paragraph's
+    /// logical row into every story nested inside it, the same way <see cref="DocumentBodyParagraphs"/>
+    /// does for the main document. Returns null when no paragraph anywhere carries that bookmark, or when
+    /// <paramref name="name"/> is null/empty.
     /// </summary>
     public static Target? Find(TextDocument document, string? name)
     {
@@ -61,7 +63,7 @@ public static class BookmarkPageResolution
             if (story.StoryKind == DocumentFieldStoryKind.MainDocument)
                 continue; // already covered, row-aware, above -- do not report it a second time
             if (story.Paragraph.BookmarkNames.Contains(name, StringComparer.Ordinal))
-                return new Target(story.Paragraph, story.BodyBlockIndex, null, story.StoryKind);
+                return new Target(story.Paragraph, story.BodyBlockIndex, story.TableRowIndex, story.StoryKind);
         }
 
         return null;

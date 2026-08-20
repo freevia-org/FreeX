@@ -514,15 +514,17 @@ public static class DocumentViewLayoutPlanner
             return new DocumentColumnLayoutPlan(1, contentWidthDip, 0, false);
 
         var gapDip = Math.Max(0, PageLayout.PointsToDip(page.ColumnSpacingPt));
-        double columnWidthDip;
-        if (page.ColumnWidthsPt is { Count: > 1 } widths && widths.Count == columns)
-        {
-            columnWidthDip = PageLayout.PointsToDip(widths.Min());
-        }
-        else
-        {
-            columnWidthDip = (contentWidthDip - (columns - 1) * gapDip) / columns;
-        }
+        // Neither WPF's FlowDocument nor the hand-rolled Avalonia flow can render genuinely unequal
+        // column widths from one PageSettings.ColumnWidthsPt split, so both settle for a single
+        // representative width. Splitting the content area evenly (ignoring the individual widths)
+        // is that representative value: it is what non-unequal sections already compute below, and
+        // it is the only choice that guarantees exactly `columns` columns actually fit. Using the
+        // narrowest of the explicit widths instead (the previous approach) undersizes every column,
+        // so WPF's IsColumnWidthFlexible stretch -- which fits as many columns of at least the given
+        // width as the content area allows, not exactly `columns` of them -- can pack in an extra
+        // phantom column when the widest/narrowest ratio is large (e.g. FreeW's built-in 'Left'/
+        // 'Right' presets: a 108pt sidebar beside a 324pt body renders 3 columns instead of 2).
+        var columnWidthDip = (contentWidthDip - (columns - 1) * gapDip) / columns;
 
         return new DocumentColumnLayoutPlan(
             columns,

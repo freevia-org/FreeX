@@ -323,4 +323,116 @@ public sealed class NoteCommandTests
         document.Footnotes.Should().NotContainKey(4);
         cellParagraph.Runs.Should().NotContain(run => run.FootnoteId == 4);
     }
+
+    // freew-footnote-numbering F4: a footnote's only reference marker lives inside a text box (Run.Shape)
+    // in the body. DeleteNoteCommand's own private paragraph walk never descended into Run.Shape.
+    // TextParagraphs, unlike the shared BodyParagraphWalk used elsewhere for the identical orphan-cleanup
+    // job (DocumentInspector.PruneOrphanedNoteAndCommentAnchors), so the marker run was left behind still
+    // carrying the now-nonexistent FootnoteId after the note's content was removed.
+    [Fact]
+    public void DeleteNote_RemovesMarkerInsideBodyTextBox_AndUndoRedoRestoresExactRuns()
+    {
+        var shape = new Shape(ShapeKind.TextBox, 100, 50);
+        var shapeParagraph = new Paragraph();
+        shapeParagraph.Runs.Add(new Run("box-before"));
+        shapeParagraph.Runs.Add(Run.FootnoteReference(1));
+        shapeParagraph.Runs.Add(new Run("box-after"));
+        shape.TextParagraphs.Add(shapeParagraph);
+
+        var document = TextDocument.CreateEmpty();
+        document.Blocks.Clear();
+        var hostParagraph = new Paragraph();
+        hostParagraph.Runs.Add(Run.FromShape(shape));
+        document.Blocks.Add(hostParagraph);
+        document.Footnotes[1] = new Footnote(1, "boxed marker note");
+        var bus = new DocumentCommandBus(new Context(document));
+
+        bus.Execute(new DeleteNoteCommand(1, footnote: true));
+
+        document.Footnotes.Should().NotContainKey(1);
+        shapeParagraph.Runs.Should().NotContain(run => run.FootnoteId == 1);
+
+        bus.Undo().Should().BeTrue();
+        document.Footnotes[1].PlainText.Should().Be("boxed marker note");
+        shapeParagraph.Runs.Select(run => (run.Text, run.FootnoteId))
+            .Should().Equal(("box-before", null), ("1", 1), ("box-after", null));
+
+        bus.Redo().Should().BeTrue();
+        document.Footnotes.Should().NotContainKey(1);
+        shapeParagraph.Runs.Should().NotContain(run => run.FootnoteId == 1);
+    }
+
+    // Sibling no-regression, endnote flavor plus a text box embedded in a header (Word allows note
+    // references there too, and DeleteNoteCommand's header/footer scan must reach into a shape the same
+    // way the body scan does).
+    [Fact]
+    public void DeleteNote_RemovesEndnoteMarkerInsideHeaderTextBox_AndUndoRedoRestoresExactRuns()
+    {
+        var shape = new Shape(ShapeKind.TextBox, 100, 50);
+        var shapeParagraph = new Paragraph();
+        shapeParagraph.Runs.Add(new Run("header-box-before"));
+        shapeParagraph.Runs.Add(Run.EndnoteReference(2));
+        shapeParagraph.Runs.Add(new Run("header-box-after"));
+        shape.TextParagraphs.Add(shapeParagraph);
+
+        var document = TextDocument.CreateEmpty();
+        document.Blocks.Clear();
+        document.Blocks.Add(new Paragraph("body text"));
+        document.Header = new HeaderFooter();
+        var headerParagraph = new Paragraph();
+        headerParagraph.Runs.Add(Run.FromShape(shape));
+        document.Header.Paragraphs.Add(headerParagraph);
+        document.Endnotes[2] = new Endnote(2, "boxed header endnote");
+        var bus = new DocumentCommandBus(new Context(document));
+
+        bus.Execute(new DeleteNoteCommand(2, footnote: false));
+
+        document.Endnotes.Should().NotContainKey(2);
+        shapeParagraph.Runs.Should().NotContain(run => run.EndnoteId == 2);
+
+        bus.Undo().Should().BeTrue();
+        document.Endnotes[2].PlainText.Should().Be("boxed header endnote");
+        shapeParagraph.Runs.Select(run => (run.Text, run.EndnoteId))
+            .Should().Equal(("header-box-before", null), ("2", 2), ("header-box-after", null));
+
+        bus.Redo().Should().BeTrue();
+        document.Endnotes.Should().NotContainKey(2);
+        shapeParagraph.Runs.Should().NotContain(run => run.EndnoteId == 2);
+    }
+
+    // Sibling no-regression: a plain (non-shape) body/table marker deletion, and a clean text box with no
+    // marker at all, must both keep behaving exactly as before -- the shape descent must not remove or
+    // touch runs it shouldn't.
+    [Fact]
+    public void DeleteNote_WithUnrelatedCleanTextBoxPresent_LeavesBoxUntouchedAndStillRemovesBodyMarker()
+    {
+        var shape = new Shape(ShapeKind.TextBox, 100, 50);
+        var cleanBoxParagraph = new Paragraph();
+        cleanBoxParagraph.Runs.Add(new Run("unrelated box text"));
+        shape.TextParagraphs.Add(cleanBoxParagraph);
+
+        var document = TextDocument.CreateEmpty();
+        document.Blocks.Clear();
+        var body = new Paragraph();
+        body.Runs.Add(new Run("body"));
+        body.Runs.Add(Run.FootnoteReference(6));
+        document.Blocks.Add(body);
+
+        var hostParagraph = new Paragraph();
+        hostParagraph.Runs.Add(Run.FromShape(shape));
+        document.Blocks.Add(hostParagraph);
+        document.Footnotes[6] = new Footnote(6, "plain note with unrelated box nearby");
+        var bus = new DocumentCommandBus(new Context(document));
+
+        bus.Execute(new DeleteNoteCommand(6, footnote: true));
+
+        document.Footnotes.Should().NotContainKey(6);
+        body.Runs.Should().NotContain(run => run.FootnoteId == 6);
+        cleanBoxParagraph.Runs.Select(run => run.Text).Should().Equal("unrelated box text");
+
+        bus.Undo().Should().BeTrue();
+        document.Footnotes[6].PlainText.Should().Be("plain note with unrelated box nearby");
+        body.Runs.Should().Contain(run => run.FootnoteId == 6);
+        cleanBoxParagraph.Runs.Select(run => run.Text).Should().Equal("unrelated box text");
+    }
 }

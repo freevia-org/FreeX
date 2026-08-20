@@ -675,6 +675,69 @@ public class DocumentIndexTests
             .Should().Equal("A", "Alpha, 4");
     }
 
+    // THE FAILING-BEFORE PROOF for this item: the ordinary (non-bookmark) "Mark Entry" gesture inside a
+    // table row past an authored page break must report that row's own page, not the table's starting
+    // page. Uses a 3-row table (Build_IncludesXeFieldsInsideTableCells only has one row and cannot
+    // distinguish table-start-page from row-own-page). Mirrors
+    // Build_BookmarkOnTableRowPastAuthoredPageBreak_ResolvesItsOwnPage for the \r-bookmark form.
+    [Fact]
+    public void Build_DirectXeMarkOnTableRowPastAuthoredPageBreak_ResolvesItsOwnPage()
+    {
+        var doc = new TextDocument();
+        var table = new Table();
+        for (var rowIndex = 0; rowIndex < 3; rowIndex++)
+        {
+            var paragraph = new Paragraph("Cell " + rowIndex);
+            if (rowIndex == 2)
+            {
+                paragraph.Formatting = ParagraphFormatting.Default with { PageBreakBefore = true };
+                paragraph.Runs.Add(DocumentIndex.MarkRun(new IndexMark("Alpha")));
+            }
+            var cell = new TableCell();
+            cell.Paragraphs.Add(paragraph);
+            var row = new TableRow();
+            row.Cells.Add(cell);
+            table.Rows.Add(row);
+        }
+        doc.Blocks.Add(table);
+
+        var entry = DocumentIndex.Build(
+                doc,
+                pageReferenceOf: blockIndex => blockIndex == 0 ? new IndexPageReferenceAddress(2, "3") : null)
+            .Single(paragraph => paragraph.StyleId == DocumentIndex.EntryStyleId);
+
+        entry.PlainText.Should().Be("Alpha, 4");
+    }
+
+    // Sibling no-regression: a direct XE mark on a table row that does NOT follow a page break still
+    // reports the table's own (shared) page -- the row-offset correction must be a no-op when there is
+    // nothing to correct for. Mirrors Build_BookmarkOnTableRow_WithNoAuthoredPageBreak_SharesTablesOwnPage.
+    [Fact]
+    public void Build_DirectXeMarkOnTableRow_WithNoAuthoredPageBreak_SharesTablesOwnPage()
+    {
+        var doc = new TextDocument();
+        var table = new Table();
+        for (var rowIndex = 0; rowIndex < 3; rowIndex++)
+        {
+            var paragraph = new Paragraph("Cell " + rowIndex);
+            if (rowIndex == 2)
+                paragraph.Runs.Add(DocumentIndex.MarkRun(new IndexMark("Alpha")));
+            var cell = new TableCell();
+            cell.Paragraphs.Add(paragraph);
+            var row = new TableRow();
+            row.Cells.Add(cell);
+            table.Rows.Add(row);
+        }
+        doc.Blocks.Add(table);
+
+        var entry = DocumentIndex.Build(
+                doc,
+                pageReferenceOf: blockIndex => blockIndex == 0 ? new IndexPageReferenceAddress(2, "3") : null)
+            .Single(paragraph => paragraph.StyleId == DocumentIndex.EntryStyleId);
+
+        entry.PlainText.Should().Be("Alpha, 3");
+    }
+
     [Fact]
     public void MarkAllTargets_FindWholeTermParagraphsAndSkipGeneratedOrExistingMarks()
     {

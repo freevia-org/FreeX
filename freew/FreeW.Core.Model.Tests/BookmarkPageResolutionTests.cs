@@ -125,6 +125,54 @@ public sealed class BookmarkPageResolutionTests
         target.Should().NotBeNull();
         target!.Value.BlockIndex.Should().Be(0);
         target.Value.StoryKind.Should().Be(DocumentFieldStoryKind.TextBox);
+        // Sibling no-regression: a text box anchored outside any table has no row to carry.
+        target.Value.TableRowIndex.Should().BeNull();
+    }
+
+    // THE FAILING-BEFORE PROOF: a text box anchored to a paragraph inside a table row must resolve with
+    // that row's index, not null, so ResolvePageText's row-offset math actually runs for it. Before the
+    // fix, DocumentFieldStories.Enumerate never carried per-row addressing at all, so this always came
+    // back null even though BlockIndex correctly pointed at the table.
+    [Fact]
+    public void Find_LocatesBookmarkInTextBoxAnchoredInsideTableRow_RowAware()
+    {
+        var doc = new TextDocument();
+        var table = new Table();
+        for (var rowIndex = 0; rowIndex < 3; rowIndex++)
+        {
+            var paragraph = new Paragraph();
+            paragraph.Runs.Add(new Run("Cell " + rowIndex));
+            if (rowIndex == 2)
+            {
+                // The authored page break sits on the table row itself, past which the text box's own
+                // bookmark (not "rowTwo" -- inside the text box's nested paragraph) must resolve.
+                paragraph.Formatting = ParagraphFormatting.Default with { PageBreakBefore = true };
+                var textBoxParagraph = new Paragraph("box text") { BookmarkName = "BoxMark" };
+                paragraph.Runs.Add(new Run(string.Empty)
+                {
+                    Shape = new Shape { TextParagraphs = { textBoxParagraph } },
+                });
+            }
+
+            var cell = new TableCell();
+            cell.Paragraphs.Add(paragraph);
+            var row = new TableRow();
+            row.Cells.Add(cell);
+            table.Rows.Add(row);
+        }
+        doc.Blocks.Add(table);
+
+        var target = BookmarkPageResolution.Find(doc, "BoxMark");
+
+        target.Should().NotBeNull();
+        target!.Value.BlockIndex.Should().Be(0);
+        target.Value.TableRowIndex.Should().Be(2);
+        target.Value.StoryKind.Should().Be(DocumentFieldStoryKind.TextBox);
+
+        var pageText = BookmarkPageResolution.ResolvePageText(
+            doc, target.Value, pageOf: blockIndex => blockIndex == 0 ? 3 : null, pageTextOf: null);
+
+        pageText.Should().Be("4");
     }
 
     // THE FAILING-BEFORE PROOF: a page-break-before authored on a table's own row 0 must not count toward

@@ -577,6 +577,15 @@ public static class WorkbookPdfContentBuilder
         if (!contentPlan.IsReady)
             throw new InvalidOperationException(contentPlan.StatusText);
 
+        // shared-localization-rtl-F1: resolve the same sheet the page-setup-aware path resolves
+        // (BuildPageWithPageSetup above) -- by the print AREA that owns this page's PrintRange
+        // rather than blindly indexing by request.SheetIndex, which is the print area's position
+        // within the export plan's flattened SheetPlans list, not the sheet's index in the
+        // workbook (see N45/N46) -- so this legacy fixed-geometry path can resolve Sheet.IsRightToLeft
+        // and Format Cells > Alignment the same way the page-setup-aware path already does.
+        var sheet = workbook.GetSheet(request.PrintRange.Start.Sheet)
+            ?? workbook.GetSheetAt(request.SheetIndex);
+
         var ops = new List<PdfDrawOp>();
         var title = string.IsNullOrWhiteSpace(workbook.Name) ? "FreeX Workbook" : workbook.Name.Trim();
         ops.Add(new PdfText(
@@ -640,6 +649,14 @@ public static class WorkbookPdfContentBuilder
             // freex-conditional-format-F1: same CF border override as the page-setup-aware path above.
             DrawCellBorders(ops, style, cell.ConditionalStyle, x, y, columnWidth, options.RowHeightPoints, blackAndWhite: false);
 
+            // shared-localization-rtl-F1: resolve the cell's effective reading order the same way the
+            // page-setup-aware path does above (CellTextOrientationLayoutPlanner.
+            // ResolveIsEffectivelyRightToLeft) -- this legacy fixed-geometry path shares the same
+            // Sheet.IsRightToLeft/CellStyle.ReadingOrder fields, so an RTL sheet or cell must not
+            // silently render as LTR here either.
+            var isEffectivelyRightToLeft = CellTextOrientationLayoutPlanner.ResolveIsEffectivelyRightToLeft(
+                style.ReadingOrder, sheet.IsRightToLeft);
+
             // R96-render-cf-databar-iconset-1: same data-bar/icon-set overlay as the page-setup-aware
             // path above -- this legacy fixed-geometry path shares the same PortablePdfPageCell fields,
             // so it must not silently drop them either.
@@ -647,7 +664,7 @@ public static class WorkbookPdfContentBuilder
             if (cell.DataBar is { } dataBar)
                 DrawConditionalDataBar(ops, dataBar, x, y, columnWidth, options.RowHeightPoints);
             if (cell.IconSet is { } iconSet)
-                iconGutterPt = DrawConditionalIconSet(ops, iconSet, x, y, columnWidth, options.RowHeightPoints, isRightToLeft: false);
+                iconGutterPt = DrawConditionalIconSet(ops, iconSet, x, y, columnWidth, options.RowHeightPoints, isEffectivelyRightToLeft);
 
             if (string.IsNullOrEmpty(cell.DisplayText))
                 continue;
@@ -656,17 +673,42 @@ public static class WorkbookPdfContentBuilder
             // path above.
             var legacyCfStyle = cell.ConditionalStyle;
             var fontSize = Math.Clamp(style.FontSize, 7, 10);
-            var fontFace = ToPdfFontFace(
-                cell.IsTitle || style.Bold || (legacyCfStyle?.Bold ?? false),
-                legacyCfStyle?.Italic ?? false);
+            var effectiveBold = cell.IsTitle || style.Bold || (legacyCfStyle?.Bold ?? false);
+            var effectiveItalic = legacyCfStyle?.Italic ?? false;
+            var fontFace = ToPdfFontFace(effectiveBold, effectiveItalic);
             var fontColor = ToPdfColor(legacyCfStyle?.FontColor ?? style.ResolveFontColor(workbook.Theme));
+            var displayText = PdfWinAnsiTextCapability.Truncate(cell.DisplayText, options.MaximumCellTextLength);
+
+            // shared-localization-rtl-F1: resolve the cell's effective horizontal alignment the same
+            // way the page-setup-aware path does above (General resolves to Right for numeric/date
+            // content -- left in an RTL context -- and Left otherwise; explicit Left/Center/Right/
+            // Justify/Distributed/Fill are honored as authored). Without this every cell -- including
+            // right-aligned numbers and centered titles -- rendered flush-left on this legacy path.
+            var rawCell = sheet.GetCell(cell.Row, cell.Column);
+            var isNumeric = rawCell?.Value is NumberValue or DateTimeValue;
+            var effectiveAlign = CellTextOrientationLayoutPlanner.ResolveEffectiveHorizontalAlignment(
+                style.HorizontalAlignment, isNumeric, isEffectivelyRightToLeft);
+            var textWidth = PortablePdfTextMeasurer.Instance.Measure(
+                displayText, null, fontSize, effectiveBold, effectiveItalic).Width;
+            var textX = effectiveAlign switch
+            {
+                // Right: anchor the text's right edge inside the cell, matching the page-setup-aware
+                // path's identical Right branch (deliberately not clamped -- a too-wide right-aligned
+                // value overflows leftward, exactly like Excel and the on-screen viewport).
+                HorizontalAlignment.Right => x + columnWidth - textWidth - 4,
+                HorizontalAlignment.Center
+                    or HorizontalAlignment.Justify
+                    or HorizontalAlignment.Distributed => x + ((columnWidth - textWidth) / 2.0),
+                HorizontalAlignment.Fill => x + 4,
+                _ => x + 4 + iconGutterPt
+            };
             ops.Add(new PdfText(
-                x + 4 + iconGutterPt,
+                textX,
                 y + Math.Max(7, options.RowHeightPoints - 14),
                 fontSize,
                 fontFace,
                 fontColor,
-                PdfWinAnsiTextCapability.Truncate(cell.DisplayText, options.MaximumCellTextLength),
+                displayText,
                 style.ResolveEffectiveFontName(workbook.Theme)));
         }
 

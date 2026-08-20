@@ -95,7 +95,19 @@ public static class StatusBarDisplayModelBuilder
         if (value == Math.Floor(value) && Math.Abs(value) < 1e15)
             return value.ToString("N0", CultureInfo.CurrentCulture);
 
-        return value.ToString("G10", CultureInfo.CurrentCulture);
+        // A flat G10 doesn't just trim decimal precision -- once the integer part itself needs
+        // 10+ significant digits, G10 rounds the *whole number*, silently turning e.g.
+        // 1200000000.6 into "1200000001" (a 0.4 discrepancy dressed up as an exact integer).
+        // Scale the precision to the value's magnitude so the integer part always survives
+        // intact, while keeping the original compact 10-significant-digit behavior (and its
+        // pinned "123456789.1234" -> "123456789.1" rounding) for the common case where the
+        // integer part fits in fewer than 10 digits. Capped at double's ~15-digit round-trip
+        // precision ceiling, mirroring the app's own General number formatter.
+        var integerDigits = (int)Math.Floor(Math.Log10(Math.Abs(value))) + 1;
+        var significantDigits = Math.Clamp(integerDigits + 1, 10, 15);
+        return value.ToString(
+            "G" + significantDigits.ToString(CultureInfo.InvariantCulture),
+            CultureInfo.CurrentCulture);
     }
 
     private static StatusBarReadoutItem Readout(

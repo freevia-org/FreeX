@@ -222,6 +222,151 @@ public sealed class DocumentNoteRegionPlannerNumberRestartTests
         plan.Rows[0].NoteId.Should().Be(1);
     }
 
+    [Fact]
+    public void Continuous_OrdersFootnotesByReadingPosition_NotByInternalId()
+    {
+        // r152 finding freew-footnote-numbering F1: mirrors the user gesture exactly. Insert a footnote
+        // after the SECOND sentence first (it becomes id 1), then insert a footnote after the FIRST
+        // sentence (it becomes id 2, since NextFootnoteId() = max(existing)+1). Id 2's reference mark is
+        // physically first when reading the page, so it must display as "1"; id 1's mark is physically
+        // second, so it must display as "2" -- the opposite of id order.
+        var document = TextDocument.CreateEmpty();
+        document.Blocks.Clear();
+
+        var firstSentence = new Paragraph();
+        firstSentence.Runs.Add(new Run("First sentence."));
+        firstSentence.Runs.Add(Run.FootnoteReference(2));
+        document.Blocks.Add(firstSentence);
+
+        var secondSentence = new Paragraph();
+        secondSentence.Runs.Add(new Run("Second sentence."));
+        secondSentence.Runs.Add(Run.FootnoteReference(1));
+        document.Blocks.Add(secondSentence);
+
+        document.Footnotes[1] = new Footnote(1, "inserted second, reads second");
+        document.Footnotes[2] = new Footnote(2, "inserted last, reads first");
+
+        var sequenceById = DocumentNoteRegionPlanner.ComputeSequenceById(document, isFootnote: true);
+
+        sequenceById.Should().Equal(new Dictionary<int, int> { [2] = 1, [1] = 2 },
+            "id 2's reference appears first in reading order, so it must display as 1 even though its internal id is higher");
+    }
+
+    [Fact]
+    public void Continuous_WithIdsAlreadyInReadingOrder_NoRegression()
+    {
+        // Sibling no-regression check for F1: the ordinary case, where insertion order, id order, and
+        // reading-order position all agree, must keep numbering exactly as before.
+        var document = BuildDocumentWithFootnotes(1, 2, 3);
+
+        var sequenceById = DocumentNoteRegionPlanner.ComputeSequenceById(document, isFootnote: true);
+
+        sequenceById.Should().Equal(new Dictionary<int, int> { [1] = 1, [2] = 2, [3] = 3 });
+    }
+
+    [Fact]
+    public void EachSection_RestartsFootnoteReferencedOnlyFromATextBox_InANewSection()
+    {
+        // r152 finding freew-footnote-numbering F2: id 2's ONLY reference run lives inside a text box
+        // (Run.Shape.TextParagraphs) in the second section. The old Scan only looked at a paragraph's own
+        // Runs, never descended into a shape's text-box content, so it could never find id 2's reference
+        // and silently defaulted it to section 0 alongside id 1 -- continuing the section-1 series instead
+        // of restarting for its own section.
+        var document = TextDocument.CreateEmpty();
+        document.Blocks.Clear();
+        document.FootnoteNumbering.NumberRestart = NoteNumberRestart.EachSection;
+
+        var sectionOneLast = new Paragraph { SectionBreak = new Section(new PageSettings(), SectionBreakKind.NextPage) };
+        sectionOneLast.Runs.Add(new Run("s1"));
+        sectionOneLast.Runs.Add(Run.FootnoteReference(1));
+        document.Blocks.Add(sectionOneLast);
+
+        var textBoxParagraph = new Paragraph();
+        textBoxParagraph.Runs.Add(new Run("box text"));
+        textBoxParagraph.Runs.Add(Run.FootnoteReference(2));
+        var sectionTwo = new Paragraph();
+        sectionTwo.Runs.Add(new Run(string.Empty) { Shape = new Shape { TextParagraphs = { textBoxParagraph } } });
+        document.Blocks.Add(sectionTwo);
+
+        document.Footnotes[1] = new Footnote(1, "one");
+        document.Footnotes[2] = new Footnote(2, "two");
+
+        var sequenceById = DocumentNoteRegionPlanner.ComputeSequenceById(document, isFootnote: true);
+
+        sequenceById.Should().Equal(new Dictionary<int, int> { [1] = 1, [2] = 1 },
+            "id 2's only reference lives inside a text box in the second section, so it must restart at StartAt there instead of defaulting to section 0");
+    }
+
+    [Fact]
+    public void EachSection_RestartsFootnoteReferencedOnlyFromAHeader_InANewSection()
+    {
+        // Sibling case for F2: the reference lives in the second section's own header rather than a text
+        // box. Word allows a footnote/endnote reference in a header/footer; the old Scan never walked
+        // document.Sections[i].HeadersFooters at all, so this id also silently defaulted to section 0.
+        var document = TextDocument.CreateEmpty();
+        document.Blocks.Clear();
+        document.FootnoteNumbering.NumberRestart = NoteNumberRestart.EachSection;
+
+        var headerParagraph = new Paragraph();
+        headerParagraph.Runs.Add(new Run("header text"));
+        headerParagraph.Runs.Add(Run.FootnoteReference(2));
+
+        var sectionOneLast = new Paragraph { SectionBreak = new Section(new PageSettings(), SectionBreakKind.NextPage) };
+        sectionOneLast.Runs.Add(new Run("s1"));
+        sectionOneLast.Runs.Add(Run.FootnoteReference(1));
+        document.Blocks.Add(sectionOneLast);
+
+        var sectionTwo = new Paragraph();
+        sectionTwo.Runs.Add(new Run("s2"));
+        document.Blocks.Add(sectionTwo);
+
+        // sectionOneLast's SectionBreak makes the document two sections; the second (index 1) is the
+        // trailing/final section, whose header slot is document.Header (== FinalSectionHeadersFooters.Header).
+        document.Header = new HeaderFooter { Paragraphs = { headerParagraph } };
+
+        document.Footnotes[1] = new Footnote(1, "one");
+        document.Footnotes[2] = new Footnote(2, "two");
+
+        var sequenceById = DocumentNoteRegionPlanner.ComputeSequenceById(document, isFootnote: true);
+
+        sequenceById.Should().Equal(new Dictionary<int, int> { [1] = 1, [2] = 1 },
+            "id 2's only reference lives in the second section's own header, so it must restart at StartAt there instead of defaulting to section 0");
+    }
+
+    [Fact]
+    public void EachSection_TableCellReference_NoRegression()
+    {
+        // Sibling no-regression check: a reference inside a table cell (the branch this fix did not
+        // change) must still be attributed to its own section correctly.
+        var document = TextDocument.CreateEmpty();
+        document.Blocks.Clear();
+        document.FootnoteNumbering.NumberRestart = NoteNumberRestart.EachSection;
+
+        var sectionOneLast = new Paragraph { SectionBreak = new Section(new PageSettings(), SectionBreakKind.NextPage) };
+        sectionOneLast.Runs.Add(new Run("s1"));
+        sectionOneLast.Runs.Add(Run.FootnoteReference(1));
+        document.Blocks.Add(sectionOneLast);
+
+        var cellParagraph = new Paragraph();
+        cellParagraph.Runs.Add(new Run("cell text"));
+        cellParagraph.Runs.Add(Run.FootnoteReference(2));
+        var table = new Table();
+        var row = new TableRow();
+        var cell = new TableCell();
+        cell.Paragraphs.Add(cellParagraph);
+        row.Cells.Add(cell);
+        table.Rows.Add(row);
+        document.Blocks.Add(table);
+
+        document.Footnotes[1] = new Footnote(1, "one");
+        document.Footnotes[2] = new Footnote(2, "two");
+
+        var sequenceById = DocumentNoteRegionPlanner.ComputeSequenceById(document, isFootnote: true);
+
+        sequenceById.Should().Equal(new Dictionary<int, int> { [1] = 1, [2] = 1 },
+            "id 2's reference is in a table cell in the second section, so it must restart there, unchanged by this fix");
+    }
+
     private static TextDocument BuildDocumentWithFootnotes(params int[] ids)
     {
         var document = TextDocument.CreateEmpty();

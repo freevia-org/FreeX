@@ -259,6 +259,14 @@ public partial class MainWindow
 
         if (dialog.SelectedRange is { } selectedRange)
         {
+            // Cross-sheet Go To (a "Sheet2!B5" reference, or a name scoped to another sheet) must
+            // switch the active sheet the same way the Name Box's NavigateNameBoxTo does: update
+            // _currentSheetId before touching anything that reads it (the Formula Bar lookup below
+            // via Sheet.GetCell ignores the address's own Sheet field), then UpdateViewport so
+            // SheetGrid.ActiveSheetId/the rendered grid follow, and RefreshSheetTabs so the tab
+            // strip highlight follows too.
+            var previousSheetId = _currentSheetId;
+            _currentSheetId = selectedRange.Start.Sheet;
             SheetGrid.SelectedRange = selectedRange;
             SheetGrid.SelectedRanges = null;
             _selectionAnchor = selectedRange.Start;
@@ -266,11 +274,14 @@ public partial class MainWindow
             CellAddressBox.Text = FormatNameBoxSelectionText(selectedRange);
             FormulaBar.Text = FormatFormulaBarText(_workbook.GetSheet(_currentSheetId)?.GetCell(selectedRange.Start), selectedRange.Start);
             EnsureCellVisible(selectedRange.Start);
+            UpdateViewport();
             FocusSheetGridIfNeeded();
             RefreshToolbar();
             RefreshStatusBar();
             RefreshValidationDropdown();
             RefreshDvInputMessage();
+            if (!_currentSheetId.Equals(previousSheetId))
+                RefreshSheetTabs();
             return;
         }
 

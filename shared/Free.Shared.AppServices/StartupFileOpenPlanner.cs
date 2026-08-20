@@ -55,6 +55,7 @@ public static class StartupFileOpenPlanner
         fileExists ??= File.Exists;
 
         var entries = new List<StartupFileOpenEntry>();
+        var seenPaths = new HashSet<string>(PlatformPathIdentityComparer.Current);
         string? firstMissingPath = null;
 
         foreach (var argument in startupArguments)
@@ -68,6 +69,15 @@ public static class StartupFileOpenPlanner
                 firstMissingPath ??= argument;
                 continue;
             }
+
+            // A path repeated in the startup arguments (e.g. multi-selecting the same file and
+            // dragging it onto the taskbar icon, which Windows delivers as one launch with the
+            // path duplicated in argv) must resolve to a single window, not one window per
+            // occurrence -- otherwise two windows independently edit the same file with no
+            // "already open elsewhere" warning, and whichever saves last silently clobbers the
+            // other's changes on disk.
+            if (!seenPaths.Add(normalizedPath))
+                continue;
 
             entries.Add(new StartupFileOpenEntry(
                 normalizedPath,

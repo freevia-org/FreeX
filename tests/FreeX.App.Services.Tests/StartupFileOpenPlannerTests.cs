@@ -22,6 +22,22 @@ public sealed class StartupFileOpenPlannerTests
     }
 
     [Fact]
+    public void Plan_collapses_a_duplicate_command_line_argument_into_one_window()
+    {
+        // Windows delivers a multi-selected-and-dragged duplicate ("FreeX.exe A.xlsx A.xlsx") as
+        // one process launch with the path repeated in argv. The second occurrence must not spawn
+        // an independent second window on the same file -- two windows editing the same file with
+        // separate dirty/undo state means whichever saves last silently overwrites the other.
+        var plan = StartupFileOpenPlanner.Plan(
+            [@"C:\work\one.xlsx", @"C:\work\one.xlsx"],
+            recoveryAccepted: false,
+            fileExists: _ => true);
+
+        plan.Entries.Should().ContainSingle().Which.Should().Be(
+            new StartupFileOpenEntry(@"C:\work\one.xlsx", OpenInNewWindow: false));
+    }
+
+    [Fact]
     public void Plan_routes_all_files_to_new_windows_after_recovery()
     {
         var arguments = new[] { @"C:\work\one.xlsx", @"C:\work\two.xlsx" };

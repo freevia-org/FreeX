@@ -143,6 +143,38 @@ public sealed class StatusBarDisplayModelBuilderTests
     }
 
     [Fact]
+    public void FormatNumber_DoesNotCorruptLargeNonIntegerTotalsRoundedByFlatG10()
+    {
+        // freex-status-aggregates F1: a hardcoded "G10" doesn't just trim decimal precision --
+        // once the integer part itself needs 10+ significant digits, G10 rounds the whole
+        // number, so 1200000000.6 (true Sum of 400000000.1 + 400000000.2 + 400000000.3) used to
+        // come out as the plain integer "1200000001": the .6 vanished AND the integer part
+        // itself changed (1200000000 -> 1200000001), a 0.4 discrepancy presented as exact.
+        var sum = 400000000.1 + 400000000.2 + 400000000.3;
+        sum.Should().Be(1200000000.6);
+
+        StatusBarDisplayModelBuilder.FormatNumber(sum).Should().Be("1200000000.6");
+    }
+
+    [Fact]
+    public void Stats_SumReadoutShowsTrueLargeNonIntegerTotal()
+    {
+        // Same defect, exercised through the actual Stats() aggregate path (Sum/Average/Min/Max)
+        // that the status bar renders, not just the FormatNumber helper directly.
+        var stats = new WorkbookSelectionStats(
+            Sum: 1200000000.6,
+            Count: 3,
+            NumericalCount: 3,
+            Average: 400000000.2,
+            Min: 400000000.1,
+            Max: 400000000.3);
+
+        var model = StatusBarDisplayModelBuilder.Stats(StatusBarViewMode.Normal, zoomPercent: 100, stats, Text);
+
+        model.FindReadout(StatusBarReadoutKind.Sum)!.Value.Value.Should().Be("Sum: 1200000000.6");
+    }
+
+    [Fact]
     public void Stats_CarriesViewModeAndZoomThrough()
     {
         var stats = new WorkbookSelectionStats(12, 4, 3, 4, 2, 6);

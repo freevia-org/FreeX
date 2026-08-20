@@ -3113,6 +3113,16 @@ internal static class ShapeHelper
         }
     }
 
+    /// <summary>
+    /// All descendants of <paramref name="shape"/> at every depth (its children, their children,
+    /// and so on) -- not including <paramref name="shape"/> itself. Group children store their
+    /// offset/extent in absolute (slide) EMU coordinates, not relative to the group (see
+    /// GroupShapesCommand.Apply), so moving or resizing a group must translate/scale every
+    /// descendant by the same transform used on the group itself to keep the group's stored
+    /// bounds and its members' rendered positions in sync.
+    /// </summary>
+    internal static IEnumerable<SlideShape> Descendants(SlideShape shape) => All(shape.Children);
+
     internal static List<SlideShape>? FindContainingList(
         Presentation p,
         int slideIndex,
@@ -3709,6 +3719,16 @@ public sealed class MoveShapeCommand : IPresentationCommand
         if (s is null || !ChartHelper.IsObjectEditable(s)) return;
         s.OffsetXEmu += _dx;
         s.OffsetYEmu += _dy;
+
+        // A group's children store absolute (slide-space) coordinates, not coordinates
+        // relative to the group (see GroupShapesCommand.Apply). Translate every descendant
+        // by the same delta so the shapes actually move with the group instead of leaving
+        // only the invisible group record -- used for the selection outline -- in sync.
+        foreach (var descendant in ShapeHelper.Descendants(s))
+        {
+            descendant.OffsetXEmu += _dx;
+            descendant.OffsetYEmu += _dy;
+        }
         _applied = true;
 
         // Reroute attached connectors after the shape has moved.
@@ -3722,6 +3742,12 @@ public sealed class MoveShapeCommand : IPresentationCommand
         if (s is null) return;
         s.OffsetXEmu -= _dx;
         s.OffsetYEmu -= _dy;
+
+        foreach (var descendant in ShapeHelper.Descendants(s))
+        {
+            descendant.OffsetXEmu -= _dx;
+            descendant.OffsetYEmu -= _dy;
+        }
 
         // Restore connector bounds captured during Apply.
         RevertReroute(p, _slideIndex, _rerouteCapture);
@@ -3784,6 +3810,9 @@ public sealed class ResizeShapeCommand : IPresentationCommand
     private List<(uint id, long ox, long oy, long ocx, long ocy, List<(long X, long Y)>? oroute, long nx, long ny, long ncx, long ncy)>?
         _rerouteCapture;
 
+    // Captured pre-resize absolute bounds of every descendant, when the target is a group.
+    private List<(SlideShape shape, long ox, long oy, long ocx, long ocy)>? _childCapture;
+
     public ResizeShapeCommand(int slideIndex, uint shapeId, long newOffsetX, long newOffsetY, long newCx, long newCy)
     {
         _slideIndex = slideIndex;
@@ -3804,6 +3833,31 @@ public sealed class ResizeShapeCommand : IPresentationCommand
         _oldOffsetY = s.OffsetYEmu;
         _oldCx      = s.ExtentCxEmu;
         _oldCy      = s.ExtentCyEmu;
+
+        // A group's children store absolute (slide-space) coordinates, not coordinates
+        // relative to the group (see GroupShapesCommand.Apply). Scale/translate every
+        // descendant by the same transform applied to the group itself, so the shapes
+        // actually resize with the group instead of leaving only the invisible group
+        // record -- used for the selection outline -- in sync.
+        var descendants = ShapeHelper.Descendants(s).ToList();
+        if (descendants.Count > 0)
+        {
+            double scaleX = _oldCx != 0 ? (double)_newCx / _oldCx : 1.0;
+            double scaleY = _oldCy != 0 ? (double)_newCy / _oldCy : 1.0;
+
+            _childCapture = new List<(SlideShape, long, long, long, long)>(descendants.Count);
+            foreach (var descendant in descendants)
+                _childCapture.Add((descendant, descendant.OffsetXEmu, descendant.OffsetYEmu, descendant.ExtentCxEmu, descendant.ExtentCyEmu));
+
+            foreach (var (descendant, ox, oy, ocx, ocy) in _childCapture)
+            {
+                descendant.OffsetXEmu  = _newOffsetX + (long)Math.Round((ox - _oldOffsetX) * scaleX);
+                descendant.OffsetYEmu  = _newOffsetY + (long)Math.Round((oy - _oldOffsetY) * scaleY);
+                descendant.ExtentCxEmu = (long)Math.Round(ocx * scaleX);
+                descendant.ExtentCyEmu = (long)Math.Round(ocy * scaleY);
+            }
+        }
+
         s.OffsetXEmu  = _newOffsetX;
         s.OffsetYEmu  = _newOffsetY;
         s.ExtentCxEmu = _newCx;
@@ -3818,6 +3872,18 @@ public sealed class ResizeShapeCommand : IPresentationCommand
         if (!_applied) return;
         var s = ShapeHelper.Find(p, _slideIndex, _shapeId);
         if (s is null) return;
+
+        if (_childCapture is not null)
+        {
+            foreach (var (descendant, ox, oy, ocx, ocy) in _childCapture)
+            {
+                descendant.OffsetXEmu  = ox;
+                descendant.OffsetYEmu  = oy;
+                descendant.ExtentCxEmu = ocx;
+                descendant.ExtentCyEmu = ocy;
+            }
+        }
+
         s.OffsetXEmu  = _oldOffsetX;
         s.OffsetYEmu  = _oldOffsetY;
         s.ExtentCxEmu = _oldCx;

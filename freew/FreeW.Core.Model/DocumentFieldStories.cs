@@ -10,10 +10,18 @@ public enum DocumentFieldStoryKind
     Comment,
 }
 
+/// <param name="TableRowIndex">
+/// The logical row, inside the table at <see cref="BodyBlockIndex"/>, that this paragraph's story is
+/// anchored to -- the same row a <see cref="DocumentFieldStoryKind.MainDocument"/> paragraph in that row
+/// carries, and inherited by a <see cref="DocumentFieldStoryKind.TextBox"/> (or any shape nested inside
+/// one) anchored to that row's paragraph. Null for a paragraph outside any table, and for every story with
+/// no <see cref="BodyBlockIndex"/> of its own (headers, footers, footnotes, endnotes, comments).
+/// </param>
 public readonly record struct DocumentFieldStoryParagraph(
     DocumentFieldStoryKind StoryKind,
     int BodyBlockIndex,
-    Paragraph Paragraph);
+    Paragraph Paragraph,
+    int? TableRowIndex = null);
 
 /// <summary>
 /// Enumerates every paragraph-bearing Word story that FreeW models. The main story is emitted first in
@@ -37,6 +45,7 @@ public static class DocumentFieldStories
                                  paragraph,
                                  DocumentFieldStoryKind.MainDocument,
                                  blockIndex,
+                                 TableRowIndex: null,
                                  seenParagraphs,
                                  seenGroups))
                     {
@@ -56,12 +65,13 @@ public static class DocumentFieldStories
                     break;
 
                 case Table table:
-                    foreach (var paragraph in DocumentBodyParagraphs.EnumerateTable(table))
+                    foreach (var (paragraph, rowIndex) in DocumentBodyParagraphs.EnumerateTable(table))
                     {
                         foreach (var item in EnumerateParagraph(
                                      paragraph,
                                      DocumentFieldStoryKind.MainDocument,
                                      blockIndex,
+                                     TableRowIndex: rowIndex,
                                      seenParagraphs,
                                      seenGroups))
                         {
@@ -86,6 +96,7 @@ public static class DocumentFieldStories
                              paragraph,
                              DocumentFieldStoryKind.Footnote,
                              BodyBlockIndex: -1,
+                             TableRowIndex: null,
                              seenParagraphs,
                              seenGroups))
                     yield return item;
@@ -96,6 +107,7 @@ public static class DocumentFieldStories
                              paragraph,
                              DocumentFieldStoryKind.Endnote,
                              BodyBlockIndex: -1,
+                             TableRowIndex: null,
                              seenParagraphs,
                              seenGroups))
                     yield return item;
@@ -106,6 +118,7 @@ public static class DocumentFieldStories
                              paragraph,
                              DocumentFieldStoryKind.Comment,
                              BodyBlockIndex: -1,
+                             TableRowIndex: null,
                              seenParagraphs,
                              seenGroups))
                     yield return item;
@@ -148,23 +161,31 @@ public static class DocumentFieldStories
                              paragraph,
                              DocumentFieldStoryKind.HeaderFooter,
                              BodyBlockIndex: -1,
+                             TableRowIndex: null,
                              seenParagraphs,
                              seenGroups))
                     yield return item;
         }
     }
 
+    /// <summary>
+    /// <paramref name="TableRowIndex"/> is the logical row inside the table at <paramref name="BodyBlockIndex"/>
+    /// that <paramref name="paragraph"/>'s anchor sits on -- set by the caller for a table-row paragraph,
+    /// and carried unchanged into every <see cref="DocumentFieldStoryKind.TextBox"/> (or nested shape)
+    /// anchored to it, exactly as <paramref name="BodyBlockIndex"/> itself already is.
+    /// </summary>
     private static IEnumerable<DocumentFieldStoryParagraph> EnumerateParagraph(
         Paragraph paragraph,
         DocumentFieldStoryKind storyKind,
         int BodyBlockIndex,
+        int? TableRowIndex,
         HashSet<Paragraph> seenParagraphs,
         HashSet<DrawingGroup> seenGroups)
     {
         if (!seenParagraphs.Add(paragraph))
             yield break;
 
-        yield return new DocumentFieldStoryParagraph(storyKind, BodyBlockIndex, paragraph);
+        yield return new DocumentFieldStoryParagraph(storyKind, BodyBlockIndex, paragraph, TableRowIndex);
         foreach (var run in paragraph.Runs)
         {
             if (run.Shape is { } shape)
@@ -174,6 +195,7 @@ public static class DocumentFieldStories
                                  nested,
                                  DocumentFieldStoryKind.TextBox,
                                  BodyBlockIndex,
+                                 TableRowIndex,
                                  seenParagraphs,
                                  seenGroups))
                         yield return item;
@@ -184,6 +206,7 @@ public static class DocumentFieldStories
                 foreach (var item in EnumerateDrawingGroup(
                              group,
                              BodyBlockIndex,
+                             TableRowIndex,
                              seenParagraphs,
                              seenGroups))
                     yield return item;
@@ -194,6 +217,7 @@ public static class DocumentFieldStories
     private static IEnumerable<DocumentFieldStoryParagraph> EnumerateDrawingGroup(
         DrawingGroup group,
         int BodyBlockIndex,
+        int? TableRowIndex,
         HashSet<Paragraph> seenParagraphs,
         HashSet<DrawingGroup> seenGroups)
     {
@@ -209,6 +233,7 @@ public static class DocumentFieldStories
                                  paragraph,
                                  DocumentFieldStoryKind.TextBox,
                                  BodyBlockIndex,
+                                 TableRowIndex,
                                  seenParagraphs,
                                  seenGroups))
                         yield return item;
@@ -218,6 +243,7 @@ public static class DocumentFieldStories
                 foreach (var item in EnumerateDrawingGroup(
                              nested,
                              BodyBlockIndex,
+                             TableRowIndex,
                              seenParagraphs,
                              seenGroups))
                     yield return item;

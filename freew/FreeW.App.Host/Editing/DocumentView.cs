@@ -11736,16 +11736,21 @@ public sealed partial class DocumentView : RichTextBox
     /// <summary>
     /// Resolves the number a note's in-body superscript reference mark should display: the note's
     /// computed display sequence (honoring <see cref="NoteNumberingOptions.NumberRestart"/> where it
-    /// can be determined without page layout — Continuous and EachSection), NOT the raw internal
-    /// <see cref="Run.FootnoteId"/>/<see cref="Run.EndnoteId"/> used to key <see cref="TextDocument.Footnotes"/>/
-    /// <see cref="TextDocument.Endnotes"/>. Deleting an earlier note leaves the surviving notes' ids
-    /// unchanged (matching Word) but shifts their display sequence, so this must be recomputed at
-    /// render time rather than baked into the run at insertion.
+    /// can be determined without page layout — Continuous and EachSection, or EachPage once the
+    /// caller has resolved page layout and supplies <paramref name="pageGroupIds"/>), NOT the raw
+    /// internal <see cref="Run.FootnoteId"/>/<see cref="Run.EndnoteId"/> used to key
+    /// <see cref="TextDocument.Footnotes"/>/<see cref="TextDocument.Endnotes"/>. Deleting an earlier
+    /// note leaves the surviving notes' ids unchanged (matching Word) but shifts their display
+    /// sequence, so this must be recomputed at render time rather than baked into the run at insertion.
     /// </summary>
-    private static string ResolveNoteBodyMarkDisplayNumber(TextDocument document, int noteId, bool isFootnote)
+    private static string ResolveNoteBodyMarkDisplayNumber(
+        TextDocument document,
+        int noteId,
+        bool isFootnote,
+        IReadOnlyList<int>? pageGroupIds = null)
     {
         var options = isFootnote ? document.FootnoteNumbering : document.EndnoteNumbering;
-        var sequenceById = DocumentNoteRegionPlanner.ComputeSequenceById(document, isFootnote);
+        var sequenceById = DocumentNoteRegionPlanner.ComputeSequenceById(document, isFootnote, pageGroupIds);
         var sequence = sequenceById.TryGetValue(noteId, out var resolvedSequence)
             ? resolvedSequence
             : Math.Max(1, options.StartAt);
@@ -11754,6 +11759,41 @@ public sealed partial class DocumentView : RichTextBox
 
     /// <summary>Carried on a footnote-marker WPF run's Tag so CommitToModel can round-trip its id.</summary>
     private sealed record FootnoteMarker(int FootnoteId);
+
+    /// <summary>
+    /// Refreshes footnote in-body reference mark text after the pagination engine has assigned WPF
+    /// blocks to a physical page, mirroring <see cref="ResolvePageSectionFields"/>'s page-known-late
+    /// fix-up pattern. <see cref="BuildFootnoteReference"/> bakes the mark's number using continuous
+    /// numbering because no page is known yet at that point; under
+    /// <see cref="NoteNumberRestart.EachPage"/> that leaves the body mark showing the document-wide
+    /// count instead of the page-relative one the footnote region at the foot of the same page shows.
+    /// Once a caller has resolved which footnotes belong to <paramref name="blocks"/>' page (the same
+    /// list it also hands to <see cref="DocumentNoteRegionPlanner.BuildFootnoteRegion"/> for that page),
+    /// passing it here re-derives each mark's text to match. A no-op for Continuous/EachSection restart
+    /// (see <see cref="DocumentNoteRegionPlanner.ComputeSequenceById"/>) and for the endnote runs, which
+    /// EachPage never applies to.
+    /// </summary>
+    internal static void RenumberFootnoteReferenceMarksForPage(
+        IEnumerable<System.Windows.Documents.Block> blocks,
+        TextDocument document,
+        IReadOnlyList<int> pageFootnoteIds)
+    {
+        foreach (var block in blocks)
+        {
+            var position = block.ContentStart;
+            while (position is not null && position.CompareTo(block.ContentEnd) < 0)
+            {
+                if (position.GetPointerContext(LogicalDirection.Forward) == TextPointerContext.ElementStart
+                    && position.GetAdjacentElement(LogicalDirection.Forward) is WpfRun { Tag: FootnoteMarker marker } markerRun)
+                {
+                    markerRun.Text = ResolveNoteBodyMarkDisplayNumber(
+                        document, marker.FootnoteId, isFootnote: true, pageFootnoteIds);
+                }
+
+                position = position.GetNextContextPosition(LogicalDirection.Forward);
+            }
+        }
+    }
 
     /// <summary>
     /// Scans <paramref name="blocks"/> (recursively through paragraphs, lists, tables) and returns
@@ -17161,7 +17201,7 @@ public sealed partial class DocumentView : RichTextBox
             }
             var link = new WpfHyperlink(new WpfRun(anchor));
             StyleInternalLink(link, anchor);
-            paragraph.Inlines.Add(link);
+            InsertInlineAtCaret(paragraph, caret, link);
         }
         else
         {

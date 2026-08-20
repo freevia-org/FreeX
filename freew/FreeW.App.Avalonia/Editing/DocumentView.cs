@@ -5923,6 +5923,21 @@ public sealed partial class DocumentView : Control
             _colWidth       = columnPlan.WidthDip;
             _colGap         = columnPlan.GapDip;
             _colLineBetween = columnPlan.LineBetween;
+
+            // AV-COL: unlike WPF's FlowDocument (which stretches via IsColumnWidthFlexible while
+            // keeping the count WPF itself derives), this hand-rolled flow places a fixed _colCount
+            // at _contentLeft + colIndex * (_colWidth + _colGap) -- so an approximated WidthDip (the
+            // narrowest of explicit unequal widths, e.g. FreeW's 'Left'/'Right' column presets) leaves
+            // the remainder of the content width unused as blank space instead of filling the page.
+            // Column COUNT is never touched here, so this cannot introduce a phantom extra column the
+            // way WPF's flexible-width stretch can; it only redistributes the already-fixed count
+            // across the already-known content width. For the common equal-width case this is a no-op
+            // (BuildColumnPlan already computes this exact quotient), so it only changes anything when
+            // PageSettings.ColumnWidthsPt specifies unequal widths.
+            if (_colCount > 1)
+            {
+                _colWidth = Math.Max(1, (_contentWidth - (_colCount - 1) * _colGap) / _colCount);
+            }
         }
 
         // Body text layout uses _colWidth as the per-column wrap width.

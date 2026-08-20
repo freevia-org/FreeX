@@ -292,6 +292,41 @@ public sealed class OleActivationServiceTests : IDisposable
     }
 
     [Fact]
+    public void TryActivate_OleObjectOverload_ReportsCommittedPayloadThroughOnPayloadUpdated()
+    {
+        // R152 shared-undo-boundaries F1: the OleObjectInfo convenience overload used to have no
+        // way at all to observe a committed edit (unlike the InlineOleObjectInfo overload below),
+        // so no caller could hang dirty-tracking/undo off it. This exercises the exact callback
+        // OleActivationService.TryActivate(OleObjectInfo?, Action<byte[]>?) now builds and wires
+        // into the commit path -- without driving a real OS process launch.
+        var ole = new OleObjectInfo { EmbeddedBytes = [1, 2, 3] };
+        var reported = new List<byte[]>();
+
+        var updatePayload = OleActivationService.BuildOleObjectUpdateCallback(ole, reported.Add);
+        updatePayload([9, 8]);
+
+        ole.EmbeddedBytes.Should().Equal(9, 8);
+        reported.Should().ContainSingle().Which.Should().Equal(9, 8);
+    }
+
+    [Fact]
+    public void TryActivate_InlineObjectOverload_StillReportsCommittedPayloadThroughOnPayloadUpdated()
+    {
+        // Sibling/no-regression: the InlineOleObjectInfo overload already had this hook before
+        // this fix (EditingSession.TryActivateInlineOleObject threads it through). This pins that
+        // it still agrees with the now-fixed OleObjectInfo overload above, using the same
+        // extracted-builder shape so a future edit can't silently make them diverge again.
+        var inline = new InlineOleObjectInfo { EmbeddedBytes = [1, 2, 3] };
+        var reported = new List<byte[]>();
+
+        var updatePayload = OleActivationService.BuildInlineOleObjectUpdateCallback(inline, reported.Add);
+        updatePayload([9, 8]);
+
+        inline.EmbeddedBytes.Should().Equal(9, 8);
+        reported.Should().ContainSingle().Which.Should().Equal(9, 8);
+    }
+
+    [Fact]
     public void TryCommitEditedPayload_ReplacesChangedBytes()
     {
         string path = Path.Combine(_temporaryDirectory.Path, "changed.bin");

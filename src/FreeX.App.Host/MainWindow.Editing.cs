@@ -1327,11 +1327,24 @@ public partial class MainWindow
         if (e.Key != Key.Enter || e.KeyboardDevice.Modifiers != ModifierKeys.None)
             return;
 
+        var rawNameBoxText = CellAddressBox.Text;
         var navigationText = DefinedNameUiPolicy.ResolveNameBoxNavigationDisplayText(
             _workbook,
             _currentSheetId,
-            CellAddressBox.Text);
-        if (!TryParseNameBoxReferenceRange(CellAddressBox.Text, out var selectedRange))
+            rawNameBoxText);
+        // R152-sweep91-F2: ResolveNameBoxNavigationDisplayText only replaces the typed text when
+        // it case-insensitively matches an existing defined name/table/object's dropdown entry --
+        // for a plain cell/range reference (e.g. "b5", "sheet2!a1") it falls back to the user's
+        // raw trimmed input verbatim, so navigationText in that case is NOT canonical. Recompute
+        // whether an actual dropdown-name match happened (rather than trusting the fallback) so we
+        // can show Excel's canonical address for the non-matching case below, matching what
+        // RestoreCellAddressBoxText (Escape) and every other selection-driven Name Box update in
+        // this shell already do, and what the Avalonia shell does by always re-deriving the Name
+        // Box text from the model after navigation.
+        var matchedDropdownName = NameBoxDropdownPlanner.Build(_workbook, _currentSheetId)
+            .Any(item => string.Equals(item.Name, navigationText, StringComparison.OrdinalIgnoreCase));
+
+        if (!TryParseNameBoxReferenceRange(rawNameBoxText, out var selectedRange))
         {
             if (TryDefineNameFromNameBox())
             {
@@ -1348,7 +1361,7 @@ public partial class MainWindow
         }
 
         NavigateNameBoxTo(selectedRange);
-        CellAddressBox.Text = navigationText;
+        CellAddressBox.Text = matchedDropdownName ? navigationText : FormatNameBoxSelectionText(selectedRange);
         CellAddressBox.SelectAll();
         FocusSheetGridIfNeeded();
         e.Handled = true;
@@ -1601,6 +1614,13 @@ public partial class MainWindow
         RefreshStatusBar();
         RefreshValidationDropdown();
         RefreshDvInputMessage();
+        // R152-sweep91-F1: this is the real per-edit commit path for ordinary typed cell edits
+        // (CommitEdit/CommitEditAcrossSelection), but RecalculateIfAutomatic -- the choke point
+        // WatchWindowDialog.cs documents as refreshing it live -- is dead code with no caller, so
+        // without this the open, modeless Watch Window never picked up an ordinary cell edit's new
+        // value. See RecalculateWorkbook (MainWindow.WorkbookUiState.cs) for the same call on the
+        // other recalculation choke points.
+        _watchWindowDialog?.Refresh();
         NotifyOtherWindowsOfWorkbookChange();
         return true;
     }

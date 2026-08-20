@@ -187,7 +187,8 @@ public sealed class ReplaceNoteContentCommand(
 /// <summary>
 /// Deletes one footnote or endnote and every matching reference marker in the document body.
 /// Undo restores both the rich note content and marker runs, including markers inside table cells
-/// (and tables nested inside table cells, to any depth).
+/// (and tables nested inside table cells, to any depth) and inside text boxes (Run.Shape), via the
+/// shared <see cref="BodyParagraphWalk"/>.
 /// </summary>
 public sealed class DeleteNoteCommand(int id, bool footnote) : IDocumentCommand
 {
@@ -211,7 +212,7 @@ public sealed class DeleteNoteCommand(int id, bool footnote) : IDocumentCommand
         }
 
         _paragraphRuns = [];
-        foreach (var paragraph in EnumerateBodyParagraphs(document.Blocks).Concat(EnumerateHeaderFooterParagraphs(document)))
+        foreach (var paragraph in BodyParagraphWalk.Enumerate(document).Concat(EnumerateHeaderFooterParagraphs(document)))
         {
             if (!paragraph.Runs.Any(IsMarker))
                 continue;
@@ -245,39 +246,14 @@ public sealed class DeleteNoteCommand(int id, bool footnote) : IDocumentCommand
     private bool IsMarker(Run run) =>
         footnote ? run.FootnoteId == id : run.EndnoteId == id;
 
-    private static IEnumerable<Paragraph> EnumerateBodyParagraphs(IEnumerable<Block> blocks)
-    {
-        foreach (var block in blocks)
-        {
-            if (block is Paragraph paragraph)
-            {
-                yield return paragraph;
-                continue;
-            }
-
-            if (block is not Table table)
-                continue;
-
-            foreach (var row in table.Rows)
-            {
-                foreach (var cell in row.Cells)
-                {
-                    foreach (var cellParagraph in cell.Paragraphs)
-                        yield return cellParagraph;
-                    foreach (var nestedTable in cell.NestedTables)
-                        foreach (var nestedParagraph in EnumerateBodyParagraphs([nestedTable]))
-                            yield return nestedParagraph;
-                }
-            }
-        }
-    }
-
     /// <summary>
     /// Yields every paragraph in every header/footer of every document section (header, footer,
     /// even/first variants), so a reference marker placed in a header or footer (Word allows footnote
     /// and endnote references there) is found and removed alongside body/table markers. Without this,
     /// deleting a note leaves a dangling superscript marker in the header or footer that no longer
-    /// resolves to any note content.
+    /// resolves to any note content. Routed through <see cref="BodyParagraphWalk"/> so a marker inside a
+    /// text box (Run.Shape) embedded in a header/footer paragraph is reached too, the same way a marker
+    /// inside a body text box is.
     /// </summary>
     private static IEnumerable<Paragraph> EnumerateHeaderFooterParagraphs(TextDocument document)
     {
@@ -297,7 +273,7 @@ public sealed class DeleteNoteCommand(int id, bool footnote) : IDocumentCommand
                 if (headerFooter is null)
                     continue;
 
-                foreach (var paragraph in headerFooter.Paragraphs)
+                foreach (var paragraph in BodyParagraphWalk.Enumerate(headerFooter.Paragraphs))
                     yield return paragraph;
             }
         }

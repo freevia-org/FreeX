@@ -244,6 +244,62 @@ public sealed class AutosaveSnapshotStoreTests
         File.Exists(store.GetSidecarPath(snapshotId)).Should().BeFalse();
     }
 
+    // error-recovery-paths F2: if the snapshot's own delete fails (e.g. a transient AV-scan or
+    // indexer lock on Windows), the sidecar must NOT be deleted anyway -- otherwise the payload
+    // survives with no sidecar, which is invisible to EnumerateCandidates forever (it requires a
+    // matching sidecar) and leaks in the recovery directory with no cleanup path.
+    [Fact]
+    public void DeleteSnapshot_WhenSnapshotDeleteFails_LeavesSidecarInPlaceInsteadOfOrphaningPayload()
+    {
+        using var dir = new TestTemporaryDirectory();
+        var store = new AutosaveSnapshotStore(dir.Path);
+
+        const string snapshotId = "recovery-lockedsnapshot-w0";
+        var snapshotPath = store.GetSnapshotPath(snapshotId);
+        var sidecarPath = store.GetSidecarPath(snapshotId);
+        WriteSnapshotZip(snapshotPath);
+        File.WriteAllText(sidecarPath, "{}");
+
+        // Hold the snapshot open without FileShare.Delete so Windows refuses File.Delete on it,
+        // simulating the transient AV/indexer lock the finding describes.
+        using (new FileStream(snapshotPath, FileMode.Open, FileAccess.Read, FileShare.Read))
+        {
+            store.DeleteSnapshot(snapshotId);
+        }
+
+        File.Exists(snapshotPath).Should().BeTrue("the snapshot delete failed because the file was locked");
+        File.Exists(sidecarPath).Should().BeTrue(
+            "the sidecar must be preserved when the snapshot delete fails, so the pair stays " +
+            "intact for a later recovery scan instead of leaking an invisible orphaned payload");
+    }
+
+    // Sibling/no-regression: once the lock clears, a retried DeleteSnapshot call still cleans up
+    // the pair completely -- the fix only changes behavior on the failure path, not the happy path.
+    [Fact]
+    public void DeleteSnapshot_AfterLockClears_StillRemovesBothFilesOnRetry()
+    {
+        using var dir = new TestTemporaryDirectory();
+        var store = new AutosaveSnapshotStore(dir.Path);
+
+        const string snapshotId = "recovery-lockthenretry-w0";
+        var snapshotPath = store.GetSnapshotPath(snapshotId);
+        var sidecarPath = store.GetSidecarPath(snapshotId);
+        WriteSnapshotZip(snapshotPath);
+        File.WriteAllText(sidecarPath, "{}");
+
+        using (new FileStream(snapshotPath, FileMode.Open, FileAccess.Read, FileShare.Read))
+        {
+            store.DeleteSnapshot(snapshotId);
+        }
+
+        // Lock released -- a subsequent retry (e.g. next launch's cleanup or a later close) sees
+        // both files still paired and removes them cleanly.
+        store.DeleteSnapshot(snapshotId);
+
+        File.Exists(snapshotPath).Should().BeFalse();
+        File.Exists(sidecarPath).Should().BeFalse();
+    }
+
     [Fact]
     public void DeleteCandidate_RemovesBothFiles()
     {

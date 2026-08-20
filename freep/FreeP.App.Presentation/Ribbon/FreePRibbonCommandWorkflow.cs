@@ -796,7 +796,11 @@ public static class FreePRibbonCommandWorkflow
         commands.Register(
             FreePRibbonCommandGroup.Text,
             commandId,
-            new LocalToggleCommand(stateStore, commandId, () =>
+            new LocalToggleCommand(
+                stateStore,
+                commandId,
+                () => QuerySelectedTextFormatState(editor, kind),
+                () =>
             {
                 if (host.TryHandle(FreePRibbonTextActionKind.ToggleFormat, kind))
                     return;
@@ -825,6 +829,47 @@ public static class FreePRibbonCommandWorkflow
                 }
             }));
     }
+
+    /// <summary>
+    /// Reports whether <paramref name="kind"/> is already applied across the current selection --
+    /// the active table cell when one is set and has text, otherwise the selected shapes' text
+    /// runs -- using the same majority-rule ground truth <see
+    /// cref="EditingSession.TryApplyActiveTableCellTextFormat"/> and <see
+    /// cref="EditingSession.ToggleBoldOnSelection"/> (and its siblings) already compute to decide
+    /// which way a toggle click goes. Returns null when nothing selected carries this text
+    /// property, so the caller can fall back to its own click-parity tracking.
+    /// </summary>
+    private static bool? QuerySelectedTextFormatState(EditingSession editor, TableCellTextFormatKind kind)
+    {
+        var cellPlan = editor.PlanActiveTableCellTextFormat(kind);
+        if (cellPlan.IsReady && cellPlan.TargetValue is { } targetValue)
+            return !targetValue;
+
+        if (editor.CurrentSlide is null || editor.SelectedShapeIds.Count == 0)
+            return null;
+
+        var allRuns = new List<Run>();
+        foreach (var id in editor.SelectedShapeIds)
+        {
+            var shape = ShapeHitTester.FindShape(editor.CurrentSlide, id);
+            if (shape?.TextBody is null) continue;
+            foreach (var paragraph in shape.TextBody.Paragraphs)
+                allRuns.AddRange(paragraph.Runs);
+        }
+
+        return allRuns.Count == 0 ? null : allRuns.All(run => GetRunFormatState(run, kind));
+    }
+
+    private static bool GetRunFormatState(Run run, TableCellTextFormatKind kind) => kind switch
+    {
+        TableCellTextFormatKind.Bold => run.Bold,
+        TableCellTextFormatKind.Italic => run.Italic,
+        TableCellTextFormatKind.Underline => run.Underline,
+        TableCellTextFormatKind.Strikethrough => run.Strikethrough,
+        TableCellTextFormatKind.Superscript => run.BaselineOffset > 0,
+        TableCellTextFormatKind.Subscript => run.BaselineOffset < 0,
+        _ => false,
+    };
 
     private static void RegisterParagraphAlignment(
         Registrar commands,
@@ -1150,28 +1195,43 @@ public static class FreePRibbonCommandWorkflow
                     static pair => (IReadOnlyList<RibbonCommandId>)pair.Value.ToArray()));
     }
 
+    /// <summary>
+    /// Backs a text-format ribbon toggle (freep.bold/italic/underline/strikethrough/superscript/
+    /// subscript). <paramref name="queryChecked"/> is the real ground truth -- e.g.
+    /// <see cref="QuerySelectedTextFormatState"/> -- consulted on every <see cref="GetState"/> call
+    /// so the button reflects the selection's actual formatting rather than a click-parity guess.
+    /// When the query is indeterminate (nothing selected carries the property, e.g. a native host
+    /// adapter owns the edit and the editor has no visibility into it), this falls back to tracking
+    /// whether the last click flipped the property on or off.
+    /// </summary>
     private sealed class LocalToggleCommand : IRibbonStatefulCommand
     {
         private readonly RibbonStateStore _stateStore;
         private readonly RibbonCommandId _commandId;
+        private readonly Func<bool?> _queryChecked;
         private readonly Action _execute;
         private bool _isChecked;
 
-        public LocalToggleCommand(RibbonStateStore stateStore, RibbonCommandId commandId, Action execute)
+        public LocalToggleCommand(
+            RibbonStateStore stateStore,
+            RibbonCommandId commandId,
+            Func<bool?> queryChecked,
+            Action execute)
         {
             _stateStore = stateStore;
             _commandId = commandId;
+            _queryChecked = queryChecked;
             _execute = execute;
         }
 
         public void Execute(RibbonCommandContext context)
         {
             _execute();
-            _isChecked = !_isChecked;
+            _isChecked = _queryChecked() ?? !_isChecked;
             _stateStore.SetChecked(_commandId, _isChecked);
         }
 
-        public RibbonCommandState GetState() => new(IsChecked: _isChecked);
+        public RibbonCommandState GetState() => new(IsChecked: _queryChecked() ?? _isChecked);
     }
 
     private sealed class HostStatefulActionCommand(

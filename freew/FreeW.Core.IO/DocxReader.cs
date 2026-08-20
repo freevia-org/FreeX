@@ -1718,8 +1718,9 @@ public static class DocxReader
 
         // Iterate in document order so runs nested inside a w:hyperlink keep their position, and so a
         // bookmark's name (w:bookmarkStart, a run sibling) is captured wherever it appears. A
-        // w:hyperlink either carries an r:id (external URL, resolved via the rels) or a w:anchor
-        // (internal link to a bookmark name).
+        // w:hyperlink usually carries either an r:id (external URL, resolved via the rels) or a
+        // w:anchor (internal link to a bookmark name), but Word can emit both together for a link to
+        // a bookmarked location in another file -- see the hyperlink branch below.
         //
         // Review comments overlay this: a w:commentRangeStart/End pair brackets the runs it covers,
         // and the trailing w:commentReference run anchors the comment. We track the open range id so
@@ -2652,7 +2653,14 @@ public static class DocxReader
             var id = child.Attribute(R + "id")?.Value;
             var url = id is not null && hyperlinkRelationships.TryGetValue(id, out var target) ? target : null;
             var tooltip = child.Attribute(W + "tooltip")?.Value;
-            AddParagraphRuns(paragraph, child, archive, imageRelationships, hyperlinkRelationships, numbering, commentId, revision, control, url, url is null ? anchor : null, tooltip, preservedDrawingTarget, preservedDrawingRelationshipTargets, subDocumentRelationships);
+            // A hyperlink to a bookmarked location in another file carries both r:id and w:anchor
+            // (Word's Insert Hyperlink > Existing File/Web Page with a Bookmark selected). Fold the
+            // anchor into the URL -- mirroring WordHyperlinkFieldParser's address+\l-location combine
+            // for legacy HYPERLINK field codes -- so the fragment survives instead of being dropped.
+            var combinedUrl = url is not null && anchor is not null
+                ? (url.IndexOf('#') is var fragmentIndex && fragmentIndex >= 0 ? url[..fragmentIndex] : url) + "#" + anchor
+                : url;
+            AddParagraphRuns(paragraph, child, archive, imageRelationships, hyperlinkRelationships, numbering, commentId, revision, control, combinedUrl, combinedUrl is null ? anchor : null, tooltip, preservedDrawingTarget, preservedDrawingRelationshipTargets, subDocumentRelationships);
         }
         else if (child.Name == W + "ins" || child.Name == W + "del" || child.Name == W + "moveTo" || child.Name == W + "moveFrom")
         {

@@ -2180,7 +2180,7 @@ public sealed partial class MainWindow : Window,
             onActivationFailed: () =>
             {
                 CloseActiveOleHost();
-                OleActivationService.TryActivate(plan.OleObject);
+                OleActivationService.TryActivate(plan.OleObject, onPayloadUpdated: _ => _fileWorkflow.MarkDirty());
             },
             out _activeOleHost);
 #else
@@ -2351,7 +2351,7 @@ public sealed partial class MainWindow : Window,
                 TryOpenInlineEmbeddedObject = () => _textEditor?.TryActivateInlineOleObject() == true,
                 TryOpenSelectedEmbeddedObject = ole =>
                 {
-                    OleActivationService.TryActivate(ole);
+                    OleActivationService.TryActivate(ole, onPayloadUpdated: _ => _fileWorkflow.MarkDirty());
                     return true;
                 },
             },

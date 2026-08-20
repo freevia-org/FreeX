@@ -433,6 +433,19 @@ public partial class MainWindow
     /// THIS window persists what THIS window is actually showing, not whichever sibling window's
     /// selection last mutated the shared fields.
     /// </para>
+    /// <para>
+    /// R152-freeze-split-F2: <see cref="Sheet.ViewTopRow"/>/<see cref="Sheet.ViewLeftCol"/> get the
+    /// same treatment for the currently displayed sheet. Unlike every field above, there is no
+    /// per-window store for scroll position on sheets this window has navigated away from -- but
+    /// for <see cref="_currentSheetId"/>, this window's own live <c>VerticalScroll.Value</c>/
+    /// <c>HorizontalScroll.Value</c> (native WPF <see cref="System.Windows.Controls.Primitives.ScrollBar"/>
+    /// instances, one per window, never shared) already IS this window's own scroll position, exactly
+    /// like <see cref="_selectionAnchor"/> is this window's own active cell above. Recomputing the
+    /// origin from them the same way <see cref="UpdateViewport"/> does and writing it onto the shared
+    /// sheet right before save means Ctrl+S from THIS window persists what THIS window is actually
+    /// scrolled to, instead of whichever sibling window's <see cref="UpdateViewport"/> last happened
+    /// to run and overwrite the shared fields.
+    /// </para>
     /// </summary>
     private void ReconcileViewStateForSave()
     {
@@ -457,6 +470,29 @@ public partial class MainWindow
         {
             currentSheet.ActiveRow = activeCell.Row;
             currentSheet.ActiveCol = activeCell.Col;
+        }
+
+        if (_workbook.GetSheet(_currentSheetId) is { } currentSheetForScroll && SheetGrid is not null)
+        {
+            var scrollViewState = GetEffectiveViewState(currentSheetForScroll);
+            var (topRow, leftCol) = GetEffectiveViewportOrigin(
+                currentSheetForScroll,
+                VerticalScroll.Value,
+                HorizontalScroll.Value);
+            topRow = ClampViewportOrigin(
+                topRow,
+                CellAddress.MaxRow,
+                SheetGrid.Viewport is null
+                    ? 40
+                    : (uint)WorkbookViewportScrollPlanner.CountVisibleScrollableRows(SheetGrid.Viewport, scrollViewState.FrozenRows));
+            leftCol = ClampViewportOrigin(
+                leftCol,
+                CellAddress.MaxCol,
+                SheetGrid.Viewport is null
+                    ? 15
+                    : (uint)WorkbookViewportScrollPlanner.CountVisibleScrollableColumns(SheetGrid.Viewport, scrollViewState.FrozenCols));
+            currentSheetForScroll.ViewTopRow = topRow;
+            currentSheetForScroll.ViewLeftCol = leftCol;
         }
 
         foreach (var (sheetId, snapshot) in _worksheetSelections.Snapshots)

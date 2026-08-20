@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
@@ -700,5 +701,95 @@ public sealed class DocumentViewColumnLayoutTests
 
         if (!ran) return;
         colCount.Should().Be(1, "Draft mode ignores ColumnCount and always uses a single column");
+    }
+
+    // ── freew-columns-flow F2: unequal-width column preset must fill the content width ──────────────
+
+    /// <summary>
+    /// Regression test for freew-columns-flow F2. FreeW's own 'Left' column preset declares two
+    /// unequal-width columns (108pt narrow / 324pt wide, 36pt gap). BuildColumnPlan approximates this
+    /// with a single WidthDip (the narrowest column, 108pt = 144 DIP) since the shared plan type has no
+    /// per-column width array. Before the fix, DocumentView placed both columns back-to-back at that
+    /// narrow width (144+48+144 = 336 DIP of the 624 DIP content width), leaving ~288 DIP (46%) of the
+    /// page unexplained blank space and wrapping the 'wide' column as if it were only 108pt. After the
+    /// fix, the fixed column COUNT (2) is preserved but the width is redistributed to fill the full
+    /// content width, matching the no-explicit-widths equal-column formula.
+    /// </summary>
+    [Fact]
+    public async Task TwoColumn_unequal_preset_width_stretches_to_fill_content_width()
+    {
+        int colCount = -1;
+        double colWidth = -1, colGap = -1, contentWidthUsed = -1;
+        (double Left, double Width) band0 = default;
+        (double Left, double Width) band1 = default;
+
+        var ran = await OnUiThread(() =>
+        {
+            // 8.5"x11" page, 1" margins => content width = 6.5in = 468pt = 624 DIP.
+            // 'Left' preset: narrow column 108pt, wide column 324pt, gap 36pt (=48 DIP).
+            var doc = DocWith(new PageSettings
+            {
+                WidthPt = 612, HeightPt = 792,
+                MarginLeftPt = 72, MarginRightPt = 72,
+                MarginTopPt = 72, MarginBottomPt = 72,
+                ColumnCount = 2,
+                ColumnSpacingPt = 36,
+                ColumnWidthsPt = new List<double> { 108, 324 },
+            }, 5);
+            var view = new DocumentView();
+            view.LoadDocument(doc);
+            view.Measure(new Size(816, 4000));
+            colCount = view.LayoutColumnCount;
+            colWidth = view.LayoutColumnWidth;
+            colGap   = view.LayoutColumnGap;
+            band0    = view.LayoutColumnBand(0);
+            band1    = view.LayoutColumnBand(1);
+            contentWidthUsed = (band1.Left + band1.Width) - band0.Left;
+        });
+
+        if (!ran) return;
+
+        colCount.Should().Be(2, "the preset still declares two columns");
+        colGap.Should().BeApproximately(48, 0.01, "36pt gap converts to 48 DIP");
+        // Equal redistribution over the fixed count: (624 - 48) / 2 = 288 DIP per column.
+        colWidth.Should().BeApproximately(288, 0.01,
+            "the column width must be redistributed to fill the content width, not left at the " +
+            "narrowest-approximation 144 DIP");
+        band1.Left.Should().BeApproximately(band0.Left + colWidth + colGap, 0.01);
+        // Before the fix this totalled 336 DIP (144+48+144), leaving ~288 DIP of the page unused.
+        contentWidthUsed.Should().BeApproximately(624, 0.5,
+            "both columns plus the gap between them must span the full content width");
+    }
+
+    /// <summary>
+    /// Sibling no-regression guard: when no explicit unequal widths are declared, BuildColumnPlan
+    /// already computes the fill-to-content-width quotient directly, so the F2 fix's redistribution
+    /// must be a no-op here (same result, not a second, different stretch).
+    /// </summary>
+    [Fact]
+    public async Task TwoColumn_equal_width_geometry_is_unaffected_by_the_stretch_fix()
+    {
+        double colWidth = -1;
+
+        var ran = await OnUiThread(() =>
+        {
+            var doc = DocWith(new PageSettings
+            {
+                WidthPt = 612, HeightPt = 792,
+                MarginLeftPt = 72, MarginRightPt = 72,
+                MarginTopPt = 72, MarginBottomPt = 72,
+                ColumnCount = 2,
+                ColumnSpacingPt = 36,
+            }, 5);
+            var view = new DocumentView();
+            view.LoadDocument(doc);
+            view.Measure(new Size(816, 4000));
+            colWidth = view.LayoutColumnWidth;
+        });
+
+        if (!ran) return;
+
+        // Same value asserted by TwoColumn_layout_computes_correct_column_geometry: (468-36)/2 = 216pt = 288 DIP.
+        colWidth.Should().BeApproximately(288, 0.01);
     }
 }

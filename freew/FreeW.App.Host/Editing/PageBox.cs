@@ -292,6 +292,14 @@ internal sealed class PageBox : Border
 
         DocumentView.ResolvePageSectionFields(pageBlocks, sectionOrdinal, sectionPageCount);
 
+        // Footnote in-body reference marks were built continuously-numbered (no page known yet at
+        // that point); now that this page's own footnote ids are resolved (the same list already
+        // handed to the footnote-region builder below), re-derive each mark's text so
+        // NoteNumberRestart.EachPage's body mark agrees with the region it points to. See
+        // DocumentView.RenumberFootnoteReferenceMarksForPage's doc comment.
+        if (sourceModel is not null && footnoteIds is { Count: > 0 })
+            DocumentView.RenumberFootnoteReferenceMarksForPage(pageBlocks, sourceModel, footnoteIds);
+
         // Move the pre-rendered blocks into the body FlowDocument.  Moving preserves Tags because
         // the block objects themselves are not recreated — only their parent pointer changes.
         foreach (var block in pageBlocks)

@@ -53,19 +53,48 @@ public static class OleActivationService
             ["application/vnd.ms-powerpoint"] = "ppt",
         };
 
-    public static bool TryActivate(OleObjectInfo? oleObject) =>
-        TryActivate(OleActivationPlanner.TryBuild(oleObject),
-            bytes => { if (oleObject is not null) oleObject.EmbeddedBytes = bytes; });
+    /// <summary>
+    /// Activates a slide-level embedded object. <paramref name="onPayloadUpdated"/> mirrors the
+    /// <see cref="TryActivate(InlineOleObjectInfo?, Action{byte[]}?)"/> overload's hook: it fires
+    /// only when the launched app's edited bytes are actually committed back onto the model
+    /// (<see cref="TryCommitEditedPayload(string, IReadOnlyList{byte}, Action{byte[]})"/>), so a
+    /// caller can hang dirty-tracking / undo notification off a real content change instead of
+    /// having to poll <see cref="OleObjectInfo.EmbeddedBytes"/> for changes itself.
+    /// </summary>
+    public static bool TryActivate(OleObjectInfo? oleObject, Action<byte[]>? onPayloadUpdated = null) =>
+        TryActivate(OleActivationPlanner.TryBuild(oleObject), BuildOleObjectUpdateCallback(oleObject, onPayloadUpdated));
+
+    /// <summary>
+    /// Builds the payload-commit callback for a slide-level embedded object: writes the edited
+    /// bytes onto the model and then reports the commit via <paramref name="onPayloadUpdated"/>.
+    /// Extracted so tests can verify the notification fires without driving a real OS process
+    /// launch through the public <see cref="TryActivate(OleObjectInfo?, Action{byte[]}?)"/> entry
+    /// point (that overload always uses the real launcher/temp-file store).
+    /// </summary>
+    internal static Action<byte[]> BuildOleObjectUpdateCallback(OleObjectInfo? oleObject, Action<byte[]>? onPayloadUpdated) =>
+        bytes =>
+        {
+            if (oleObject is null) return;
+            oleObject.EmbeddedBytes = bytes;
+            onPayloadUpdated?.Invoke(bytes);
+        };
 
     public static bool TryActivate(
         InlineOleObjectInfo? inlineObject,
         Action<byte[]>? onPayloadUpdated = null) =>
-        TryActivate(OleActivationPlanner.TryBuild(inlineObject), bytes =>
+        TryActivate(OleActivationPlanner.TryBuild(inlineObject), BuildInlineOleObjectUpdateCallback(inlineObject, onPayloadUpdated));
+
+    /// <summary>
+    /// Builds the payload-commit callback for an inline embedded object. Mirrors
+    /// <see cref="BuildOleObjectUpdateCallback"/> -- see that method for why this is extracted.
+    /// </summary>
+    internal static Action<byte[]> BuildInlineOleObjectUpdateCallback(InlineOleObjectInfo? inlineObject, Action<byte[]>? onPayloadUpdated) =>
+        bytes =>
         {
             if (inlineObject is null) return;
             inlineObject.EmbeddedBytes = bytes;
             onPayloadUpdated?.Invoke(bytes);
-        });
+        };
 
     internal static bool TryActivate(
         OleActivationPlan? plan,

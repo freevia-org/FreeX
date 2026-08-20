@@ -162,23 +162,21 @@ public sealed class AutosaveSnapshotCoordinator : IDisposable
 
             Directory.CreateDirectory(Path.GetDirectoryName(snapshotPath)!);
 
-            // Write the sidecar BEFORE moving the snapshot into place.
-            // If the process is killed between the two operations, the recovery directory will
-            // contain a sidecar with no matching snapshot — EnumerateCandidates skips such
-            // entries (it requires the .fxl to exist), so no stale/corrupt candidate is surfaced.
-            // The reverse ordering (snapshot first, sidecar second) is worse: a snapshot with no
-            // sidecar is silently invisible to recovery, losing the latest autosaved data.
-            var sidecar = new AutosaveSidecar
-            {
-                OriginalFilePath = source.OriginalFilePath,
-                DisplayName = source.DisplayName,
-                TimestampUtc = DateTimeOffset.UtcNow.ToString("O"),
-                SnapshotId = _snapshotId,
-                DocumentId = source.DocumentId
-            };
-            AtomicFileWriter.WriteAllText(sidecarPath, AutosaveSnapshotStore.SerializeSidecar(sidecar));
-
-            // Write the snapshot atomically: produce into a sibling temp file, then move into place.
+            // Write the snapshot atomically (produce into a sibling temp file, then move into
+            // place) BEFORE touching the sidecar. source.WriteSnapshot "May throw" (see the
+            // interface doc above) and this whole method is a swallow-everything best-effort
+            // operation (catch below) — if it throws, execution never reaches the sidecar write,
+            // so an existing sidecar keeps pointing at the still-unchanged, still-matching
+            // snapshot content instead of gaining a fresh timestamp for data that was never
+            // written (round152 finding: a mid-write failure used to leave the sidecar claiming
+            // brand-new content while the .fxl/.docx/.pptx on disk still held the PRIOR tick's
+            // payload, and Document Recovery would surface that stale content as if it were
+            // current). The remaining race is narrower than the reverse ordering's: if the
+            // process is killed between the move and the sidecar write below, an existing
+            // sidecar is merely stale-but-consistent (it under-promises freshness — recovery may
+            // offer content newer than its timestamp claims, never staler), and for the very
+            // first snapshot of a session (no sidecar yet) the snapshot is briefly invisible to
+            // recovery until the sidecar follows, rather than silently misdescribed.
             using (var temporarySnapshot = AtomicFileWriter.CreateTempLease(snapshotPath))
             {
                 source.WriteSnapshot(temporarySnapshot.Path);
@@ -197,6 +195,16 @@ public sealed class AutosaveSnapshotCoordinator : IDisposable
                 File.Move(temporarySnapshot.Path, snapshotPath, overwrite: true);
                 temporarySnapshot.Commit();
             }
+
+            var sidecar = new AutosaveSidecar
+            {
+                OriginalFilePath = source.OriginalFilePath,
+                DisplayName = source.DisplayName,
+                TimestampUtc = DateTimeOffset.UtcNow.ToString("O"),
+                SnapshotId = _snapshotId,
+                DocumentId = source.DocumentId
+            };
+            AtomicFileWriter.WriteAllText(sidecarPath, AutosaveSnapshotStore.SerializeSidecar(sidecar));
 
             _lastSnapshotGeneration = source.DirtyGeneration;
         }

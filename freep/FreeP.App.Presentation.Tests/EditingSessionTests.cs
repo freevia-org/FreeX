@@ -1198,6 +1198,39 @@ public sealed class EditingSessionTests
     }
 
     [Fact]
+    public void MoveSlide_ForwardMove_TracksCurrentSlideToItsActualLandingIndex()
+    {
+        // Regression for freep-slide-numbering F2. MoveSlideCommand (see MoveInList) lands the
+        // moved slide at exactly index `to` -- as MoveSlide_ReordersSlides above confirms
+        // (MoveSlide(0,2) on [A,B,C] leaves the moved slide at index 2, not 1) -- so tracking
+        // must follow `to` directly instead of subtracting one for a forward move.
+        var sess  = Make(3);
+        var first = sess.Presentation.Slides[0];
+        sess.CurrentSlideIndex.Should().Be(0); // the slide about to move is the current slide
+
+        sess.MoveSlide(0, 2);
+
+        sess.Presentation.Slides[2].Should().BeSameAs(first);
+        sess.CurrentSlideIndex.Should().Be(2);
+    }
+
+    [Fact]
+    public void MoveSlide_BackwardMove_StillTracksCurrentSlideToItsActualLandingIndex()
+    {
+        // Sibling no-regression check: backward moves already landed the current-slide tracking
+        // correctly (the `to < from` branch already used `to` directly) and must stay that way.
+        var sess   = Make(3);
+        var second = sess.Presentation.Slides[1];
+        sess.SelectSlide(1);
+        sess.CurrentSlideIndex.Should().Be(1);
+
+        sess.MoveSlide(1, 0);
+
+        sess.Presentation.Slides[0].Should().BeSameAs(second);
+        sess.CurrentSlideIndex.Should().Be(0);
+    }
+
+    [Fact]
     public void ToggleCurrentSlideHidden_IsUndoableAndRedoable()
     {
         var sess = Make();
@@ -1668,6 +1701,89 @@ public sealed class EditingSessionTests
         inner.Children[^1].Id.Should().Be(first.Id);
         sess.Undo();
         inner.Children[0].Id.Should().Be(first.Id);
+    }
+
+    [Fact]
+    public void MultiSelectBringToFront_AcrossGroupBoundary_MovesEachShapeWithinItsOwnContainer()
+    {
+        // Regression for freep-shape-grouping F2: a plain click on a top-level shape followed
+        // by a modifier-click on a shape nested inside a group must not silently no-op.
+        var sess = Make();
+        var topLevel = MakeShape(100);
+        var childA = MakeShape(101);
+        var childB = MakeShape(102);
+        var group = new SlideShape { Id = 103, Kind = SlideShapeKind.Group };
+        group.Children.Add(childA);
+        group.Children.Add(childB);
+        sess.CurrentSlide!.Shapes.Add(topLevel);
+        sess.CurrentSlide!.Shapes.Add(group);
+
+        sess.Select(topLevel.Id);
+        sess.Select(childA.Id, addToSelection: true);
+
+        sess.BringToFront();
+
+        sess.CanUndo.Should().BeTrue();
+        // Top-level shape 100 moves to the end of the top-level list...
+        sess.CurrentSlide!.Shapes.Select(s => s.Id).Should().Equal(103u, 100u);
+        // ...and shape 101 (nested inside the group) moves to the end of ITS OWN sibling
+        // list, independent of -- and unblocked by -- the top-level reorder.
+        group.Children.Select(s => s.Id).Should().Equal(102u, 101u);
+
+        sess.Undo();
+        sess.CurrentSlide!.Shapes.Select(s => s.Id).Should().Equal(100u, 103u);
+        group.Children.Select(s => s.Id).Should().Equal(101u, 102u);
+    }
+
+    [Fact]
+    public void MultiSelectSendToBack_AcrossGroupBoundary_MovesEachShapeWithinItsOwnContainer()
+    {
+        // Same defect as above, mirrored for Send to Back.
+        var sess = Make();
+        var topLevelA = MakeShape(200);
+        var topLevelB = MakeShape(201);
+        var childA = MakeShape(202);
+        var childB = MakeShape(203);
+        var group = new SlideShape { Id = 204, Kind = SlideShapeKind.Group };
+        group.Children.Add(childA);
+        group.Children.Add(childB);
+        sess.CurrentSlide!.Shapes.Add(topLevelA);
+        sess.CurrentSlide!.Shapes.Add(topLevelB);
+        sess.CurrentSlide!.Shapes.Add(group);
+
+        sess.Select(topLevelB.Id);
+        sess.Select(childB.Id, addToSelection: true);
+
+        sess.SendToBack();
+
+        sess.CanUndo.Should().BeTrue();
+        sess.CurrentSlide!.Shapes.Select(s => s.Id).Should().Equal(201u, 200u, 204u);
+        group.Children.Select(s => s.Id).Should().Equal(203u, 202u);
+    }
+
+    [Fact]
+    public void MultiSelectBringToFront_SameContainer_PreservesRelativeStackingOrder()
+    {
+        // Sibling no-regression check: when every selected shape shares the same container
+        // (the common case this code was written for), the per-id container lookup used to
+        // fix the group-boundary case must still preserve relative stacking order exactly as
+        // before.
+        var sess = Make();
+        var a = MakeShape(1);
+        var b = MakeShape(2);
+        var c = MakeShape(3);
+        sess.CurrentSlide!.Shapes.Add(a);
+        sess.CurrentSlide!.Shapes.Add(b);
+        sess.CurrentSlide!.Shapes.Add(c);
+
+        sess.Select(a.Id);
+        sess.Select(c.Id, addToSelection: true);
+
+        sess.BringToFront();
+
+        // a and c come to the front, preserving their original relative order (a below c); b,
+        // untouched, is left behind at the bottom.
+        sess.CurrentSlide!.Shapes.Select(s => s.Id).Should().Equal(2u, 1u, 3u);
     }
 
     [Fact]

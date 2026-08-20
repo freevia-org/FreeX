@@ -444,14 +444,28 @@ public sealed class AutosaveSnapshotStore
     }
 
     /// <summary>
-    /// Deletes the snapshot and sidecar for a specific session ID. Ignores errors (best-effort cleanup).
+    /// Deletes the snapshot and sidecar for a specific session ID. Ignores errors (best-effort
+    /// cleanup), but the two deletes are NOT independent: the sidecar is only removed once the
+    /// snapshot delete has actually succeeded (or the snapshot was already gone). <c>File.Delete</c>
+    /// is a silent no-op for a missing file, so this costs nothing in the common case. It matters
+    /// for the rare one: if the snapshot delete throws (e.g. a transient AV-scan/indexer lock on
+    /// Windows), the sidecar is deliberately left in place too, so the pair stays intact for
+    /// <see cref="EnumerateCandidates"/> to find again later rather than splitting into a payload
+    /// with no sidecar — which is invisible to every recovery scan (they require a matching
+    /// sidecar) and would otherwise leak in the recovery directory forever with no cleanup path.
     /// </summary>
     public void DeleteSnapshot(string snapshotId)
     {
         if (string.IsNullOrWhiteSpace(snapshotId))
             return;
 
-        try { File.Delete(GetSnapshotPath(snapshotId)); } catch { /* best-effort */ }
-        try { File.Delete(GetSidecarPath(snapshotId)); } catch { /* best-effort */ }
+        var snapshotDeleted = true;
+        try { File.Delete(GetSnapshotPath(snapshotId)); }
+        catch { snapshotDeleted = false; /* best-effort; sidecar deliberately kept, see above */ }
+
+        if (snapshotDeleted)
+        {
+            try { File.Delete(GetSidecarPath(snapshotId)); } catch { /* best-effort */ }
+        }
     }
 }

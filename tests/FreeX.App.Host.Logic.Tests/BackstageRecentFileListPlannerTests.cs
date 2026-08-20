@@ -325,6 +325,78 @@ public sealed class BackstageRecentFileListPlannerTests
             "existence checks must be passed to Build via the non-blocking cache instead");
     }
 
+    // --- Round 152 shared-recent-files F2 (MED, shared/Free.Shared.Shell/RecentFilePathExistenceCache.cs):
+    // the cache's backing dictionaries were constructed with a hardcoded StringComparer.OrdinalIgnoreCase
+    // instead of PlatformPathIdentityComparer.Current (the identity semantics RecentFilesStore itself
+    // uses), so the cache's notion of "same path" silently diverged from the store's. On Windows this is
+    // observable because PlatformPathIdentityComparer.Windows also normalizes '/' vs '\' before comparing,
+    // while a raw StringComparer.OrdinalIgnoreCase does not: two path strings that RecentFilesStore (and
+    // every other PlatformPathIdentityComparer.Current consumer in this codebase) treats as the SAME file
+    // were probed and cached as two independent entries. On a case-sensitive filesystem (Linux/macOS) the
+    // same mismatch runs the other way: two genuinely distinct case-differing recent files collide onto
+    // one cache slot. Fixed by using PlatformPathIdentityComparer.Current for both dictionaries. ---
+
+    [Fact]
+    public void RecentFilePathExistenceCache_Exists_UsesPlatformPathIdentityComparer_NotHardcodedOrdinalIgnoreCase()
+    {
+        var probeCallCounts = new ConcurrentDictionary<string, int>();
+        var probeCompleted = new ManualResetEventSlim(false);
+        var cache = new RecentFilePathExistenceCache(
+            probe: path =>
+            {
+                probeCallCounts.AddOrUpdate(path, 1, (_, count) => count + 1);
+                return true;
+            },
+            onProbed: _ => probeCompleted.Set());
+
+        // Same underlying file, expressed with a forward slash instead of a backslash.
+        // PlatformPathIdentityComparer.Windows normalizes '/' to '\' before comparing (see
+        // PlatformPathIdentityComparer.cs), matching how RecentFilesStore treats these paths as
+        // identical. A raw StringComparer.OrdinalIgnoreCase (the pre-fix shape) does no such
+        // normalization, so it would see two distinct dictionary keys here.
+        const string backslashPath = @"C:\Work\Report.xlsx";
+        const string forwardSlashPath = "C:/Work/Report.xlsx";
+
+        cache.Exists(backslashPath).Should().BeTrue("optimistic default before the probe resolves");
+        probeCompleted.Wait(TimeSpan.FromSeconds(5)).Should().BeTrue("the background probe should complete quickly for a fast in-test probe");
+
+        // Re-probing the same file via its slash-normalized spelling must hit the already-resolved
+        // cache entry, not kick off (or optimistically default for) a second, independent probe.
+        cache.Exists(forwardSlashPath).Should().BeTrue();
+
+        // A second, independent probe (the pre-fix, buggy shape) would be kicked off via Task.Run
+        // and would not necessarily have recorded itself in probeCallCounts yet at this exact point.
+        // Give it a bounded window to happen and register itself before asserting, so this test
+        // can't pass merely by racing an in-flight background task that hasn't run yet.
+        SpinWait.SpinUntil(() => probeCallCounts.Values.Sum() >= 2, TimeSpan.FromMilliseconds(500));
+
+        probeCallCounts.Keys.Should().ContainSingle(
+            "the cache must recognize both spellings as the same path identity RecentFilesStore uses, " +
+            "so the underlying probe runs exactly once for what is really one file");
+    }
+
+    [Fact]
+    public void RecentFilePathExistenceCache_Exists_StillTracksGenuinelyDistinctPathsIndependently()
+    {
+        // Sibling/no-regression test: the comparer fix must not over-correct into treating every path
+        // as the same identity. Two different files in different folders must still be probed and
+        // resolved independently, keeping their own (possibly different) existence results.
+        var probeCompleted = new CountdownEvent(2);
+        var cache = new RecentFilePathExistenceCache(
+            probe: path => !path.Contains("Missing", StringComparison.OrdinalIgnoreCase),
+            onProbed: _ => probeCompleted.Signal());
+
+        const string existingPath = @"C:\Work\ExistingRecent.xlsx";
+        const string missingPath = @"C:\Other\MissingRecent.xlsx";
+
+        cache.Exists(existingPath);
+        cache.Exists(missingPath);
+        probeCompleted.Wait(TimeSpan.FromSeconds(5)).Should().BeTrue();
+
+        cache.Exists(existingPath).Should().BeTrue("this path's own probe result must not be shadowed by an unrelated path's result");
+        cache.Exists(missingPath).Should().BeFalse("this path's own probe result must not be shadowed by an unrelated path's result");
+    }
+
     // --- R139 recent-files-2 (MED, src/FreeX.App.Avalonia/MainWindow.LiveBackstage.cs): the
     // Avalonia in-app Home pane's Recent list never filtered out moved/deleted files at all,
     // unlike WPF's backstage and this app's own native Open-Recent menu. Fixed by passing the

@@ -31,8 +31,15 @@ internal static class DocumentBodyParagraphs
         }
     }
 
-    internal static IEnumerable<Paragraph> EnumerateTable(Table table) =>
-        EnumerateTableLocations(table).Select(location => location.Paragraph);
+    /// <summary>
+    /// Every paragraph in <paramref name="table"/> (recursing into nested tables in the same
+    /// serialized order as <see cref="Enumerate"/>), paired with its outer-table logical row index --
+    /// the same <see cref="TableParagraphAddress.RowIndex"/> a nested-table paragraph's address carries
+    /// for its containing row, matching what <see cref="Enumerate"/> reports via
+    /// <c>TableParagraph?.RowIndex</c> for a body paragraph in this table.
+    /// </summary>
+    internal static IEnumerable<(Paragraph Paragraph, int RowIndex)> EnumerateTable(Table table) =>
+        EnumerateTableLocations(table).Select(location => (location.Paragraph, location.Address.RowIndex));
 
     private static IEnumerable<(Paragraph Paragraph, TableParagraphAddress Address)> EnumerateTableLocations(
         Table table)

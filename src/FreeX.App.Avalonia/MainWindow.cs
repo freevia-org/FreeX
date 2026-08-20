@@ -25395,9 +25395,14 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
     private NativeMenu CreateNativeOpenRecentMenu(bool isIdle)
     {
         var menu = new NativeMenu();
+        // R152-shared-recent-files-F1: route through the cache (not a raw File.Exists) so an
+        // unreachable UNC/network entry never blocks the UI thread for the SMB/TCP connect timeout
+        // (commonly 20+ seconds) -- this rebuild runs synchronously after every File>Open and every
+        // Save/Save-As (WorkbookFileWorkflow's recentFilesChanged callback), matching the Home pane's
+        // BuildLiveBackstageHomePane, which already routes through this same cache.
         var plan = OpenRecentWorkbookMenuPlanner.Create(
             _recentFiles.Snapshot(),
-            File.Exists,
+            _recentFilePathExistenceCache.Exists,
             path => _fileWorkflow.TryResolveOpenTarget(path, out var target, out _) ? target!.Path : null);
         if (plan.ItemCount == 0)
         {

@@ -656,9 +656,12 @@ public sealed class EditingSession
     public void MoveSlide(int from, int to)
     {
         Bus.Execute(new MoveSlideCommand(from, to));
-        // Track the current slide if it was the one that moved.
+        // Track the current slide if it was the one that moved. MoveSlideCommand (see
+        // MoveInList) treats `to` as the slide's final index in the already-shortened list
+        // -- i.e. after Apply the moved slide sits at exactly index `to` (clamped to range) --
+        // so no further shift is needed here regardless of move direction.
         if (_currentSlideIndex == from)
-            CurrentSlideIndex = to < from ? to : to - 1; // list shrinks by 1 during remove
+            CurrentSlideIndex = to;
         ClampCurrentSlide();
     }
 
@@ -3855,6 +3858,57 @@ public sealed class EditingSession
     public bool ToggleSubscriptOnActiveTableCell() =>
         TryApplyActiveTableCellTextFormat(TableCellTextFormatKind.Subscript);
 
+    /// <summary>
+    /// Reports whether <paramref name="kind"/> is already applied across the current selection --
+    /// the active table cell when one is set and has text, otherwise the selected shapes' text
+    /// runs -- using the same majority-rule ground truth <see cref="TryApplyActiveTableCellTextFormat"/>
+    /// and <see cref="TogglePropOnSelection"/> already compute to decide which way a toggle click
+    /// goes. The false return distinguishes "nothing selected carries this text property" from an
+    /// available-but-unchecked answer, mirroring <see cref="TryGetSelectedTableStyleFlag"/>.
+    /// </summary>
+    public bool TryGetSelectedTextFormatState(TableCellTextFormatKind kind, out bool isChecked)
+    {
+        var cellPlan = PlanActiveTableCellTextFormat(kind);
+        if (cellPlan.IsReady && cellPlan.TargetValue is { } targetValue)
+        {
+            isChecked = !targetValue;
+            return true;
+        }
+
+        if (CurrentSlide is not null && _selectedShapeIds.Count > 0)
+        {
+            var runToggleKind = ToRunToggleKind(kind);
+            var allRuns = new List<Run>();
+            foreach (var id in _selectedShapeIds)
+            {
+                var shape = FindShape(CurrentSlide.Shapes, id);
+                if (shape?.TextBody is null) continue;
+                foreach (var paragraph in shape.TextBody.Paragraphs)
+                    allRuns.AddRange(paragraph.Runs);
+            }
+
+            if (allRuns.Count > 0)
+            {
+                isChecked = allRuns.All(run => GetRunProp(run, runToggleKind));
+                return true;
+            }
+        }
+
+        isChecked = false;
+        return false;
+    }
+
+    private static RunToggleKind ToRunToggleKind(TableCellTextFormatKind kind) => kind switch
+    {
+        TableCellTextFormatKind.Bold => RunToggleKind.Bold,
+        TableCellTextFormatKind.Italic => RunToggleKind.Italic,
+        TableCellTextFormatKind.Underline => RunToggleKind.Underline,
+        TableCellTextFormatKind.Strikethrough => RunToggleKind.Strikethrough,
+        TableCellTextFormatKind.Superscript => RunToggleKind.Superscript,
+        TableCellTextFormatKind.Subscript => RunToggleKind.Subscript,
+        _ => throw new ArgumentOutOfRangeException(nameof(kind), kind, null),
+    };
+
     public bool SetTableHeaderRow(int slideIndex, uint shapeId, bool isHeaderRow)
     {
         var command = new SetTableHeaderRowCommand(slideIndex, shapeId, isHeaderRow);
@@ -4559,14 +4613,18 @@ public sealed class EditingSession
         // FF2: multi-select — bring all selected shapes to front preserving relative order.
         // Process in ascending z-order (lowest first) so the last-processed (originally topmost)
         // ends up at the very top, preserving their relative stacking.
-        var shapes = FindContainingShapeList(CurrentSlide.Shapes, _selectedShapeIds[0]);
-        if (shapes is null || _selectedShapeIds.Any(id => shapes.FindIndex(shape => shape.Id == id) < 0)) return;
+        // Each id resolves its OWN containing sibling list -- the selection may span a group
+        // boundary (a top-level shape plus a shape nested inside a group), so shapes need not
+        // all share the same container. BringToFrontCommand resolves its own container per id
+        // too, so ordering across containers is harmless; it only matters (and is preserved)
+        // among shapes that share the same container.
         var orderedIds = _selectedShapeIds
-            .Select(id => (id, zIdx: shapes.FindIndex(s => s.Id == id)))
+            .Select(id => (id, zIdx: FindContainingShapeList(CurrentSlide.Shapes, id)?.FindIndex(s => s.Id == id) ?? -1))
             .Where(t => t.zIdx >= 0)
             .OrderBy(t => t.zIdx)
             .Select(t => t.id)
             .ToList();
+        if (orderedIds.Count == 0) return;
 
         var cmds = orderedIds.Select(id => (IPresentationCommand)new BringToFrontCommand(_currentSlideIndex, id));
         Bus.Execute(new BatchCommand("Bring to Front", cmds));
@@ -4590,14 +4648,15 @@ public sealed class EditingSession
         // FF2: multi-select — send all selected shapes to back preserving relative order.
         // Process in descending z-order (highest first) so the last-processed (originally bottommost)
         // ends up at index 0, preserving their relative stacking.
-        var shapes = FindContainingShapeList(CurrentSlide.Shapes, _selectedShapeIds[0]);
-        if (shapes is null || _selectedShapeIds.Any(id => shapes.FindIndex(shape => shape.Id == id) < 0)) return;
+        // Each id resolves its OWN containing sibling list -- see BringToFront for why this must
+        // not require every selected id to share the first id's container.
         var orderedIds = _selectedShapeIds
-            .Select(id => (id, zIdx: shapes.FindIndex(s => s.Id == id)))
+            .Select(id => (id, zIdx: FindContainingShapeList(CurrentSlide.Shapes, id)?.FindIndex(s => s.Id == id) ?? -1))
             .Where(t => t.zIdx >= 0)
             .OrderByDescending(t => t.zIdx)
             .Select(t => t.id)
             .ToList();
+        if (orderedIds.Count == 0) return;
 
         var cmds = orderedIds.Select(id => (IPresentationCommand)new SendToBackCommand(_currentSlideIndex, id));
         Bus.Execute(new BatchCommand("Send to Back", cmds));

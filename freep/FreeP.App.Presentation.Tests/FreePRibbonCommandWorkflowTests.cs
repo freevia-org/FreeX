@@ -70,6 +70,63 @@ public sealed class FreePRibbonCommandWorkflowTests
     }
 
     [Fact]
+    public void BoldToggleChecked_ReflectsAlreadyBoldSelection_NotAClickParityFlag()
+    {
+        var editor = MakeEditor();
+        var shape = MakeShape(7);
+        var run = new Run { Text = "hi", Bold = true };
+        shape.TextBody = new TextBody { Paragraphs = { new Paragraph { Runs = { run } } } };
+        editor.CurrentSlide!.Shapes.Add(shape);
+        editor.Select(shape.Id);
+
+        var result = FreePRibbonCommandWorkflow.Build(editor, new RibbonStateStore());
+        var command = Stateful(result.Registry, "freep.bold");
+
+        // The selection is already all-bold. Before any click, the ribbon must show it checked --
+        // a document-blind click-parity flag starts every command at false regardless of the
+        // selection, which is exactly finding F1's bug #1.
+        command.GetState().IsChecked.Should().BeTrue(
+            "the selected run is already bold, so the ribbon should show Bold as checked before any click");
+
+        // Clicking Bold on an all-bold selection is a majority-rule toggle: it turns bold OFF.
+        command.Execute(RibbonCommandContext.Empty);
+        run.Bold.Should().BeFalse("EditingSession.ToggleBoldOnSelection un-bolds an all-bold selection");
+
+        // The ribbon button must agree with what just happened to the document, not flip to
+        // CHECKED at the exact moment the text became not-bold (finding F1's bug #2).
+        command.GetState().IsChecked.Should().BeFalse();
+    }
+
+    [Fact]
+    public void BoldToggleChecked_UpdatesWhenSelectionMovesBetweenBoldAndPlainRuns()
+    {
+        var editor = MakeEditor();
+        var boldShape = MakeShape(8);
+        boldShape.TextBody = new TextBody
+        {
+            Paragraphs = { new Paragraph { Runs = { new Run { Text = "bold", Bold = true } } } },
+        };
+        var plainShape = MakeShape(9);
+        plainShape.TextBody = new TextBody
+        {
+            Paragraphs = { new Paragraph { Runs = { new Run { Text = "plain", Bold = false } } } },
+        };
+        editor.CurrentSlide!.Shapes.Add(boldShape);
+        editor.CurrentSlide!.Shapes.Add(plainShape);
+
+        var result = FreePRibbonCommandWorkflow.Build(editor, new RibbonStateStore());
+        var command = Stateful(result.Registry, "freep.bold");
+
+        editor.Select(boldShape.Id);
+        command.GetState().IsChecked.Should().BeTrue("the selected shape's only run is bold");
+
+        // Moving the selection to a non-bold shape must flip the button without any click --
+        // a click-parity flag never re-derives from the new selection (finding F1's bug #3).
+        editor.Select(plainShape.Id);
+        command.GetState().IsChecked.Should().BeFalse("the newly selected shape's only run is not bold");
+    }
+
+    [Fact]
     public void TransitionSoundLoop_IsStatefulAndTracksCurrentSlideSound()
     {
         var editor = MakeEditor();
@@ -448,6 +505,17 @@ public sealed class FreePRibbonCommandWorkflowTests
         presentation.Slides.Add(new Slide());
         return new EditingSession(presentation, new PresentationCommandBus(presentation));
     }
+
+    private static SlideShape MakeShape(uint id) => new()
+    {
+        Id          = id,
+        Name        = $"S{id}",
+        Kind        = SlideShapeKind.AutoShape,
+        OffsetXEmu  = 0,
+        OffsetYEmu  = 0,
+        ExtentCxEmu = 100,
+        ExtentCyEmu = 100,
+    };
 
     private static EditingSession MakeEditorWithActiveTable()
     {

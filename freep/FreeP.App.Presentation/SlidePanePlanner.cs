@@ -706,7 +706,19 @@ public static class SlidePanePlanner
 
             case SlidePaneActionKind.MoveSlide:
                 editor.SelectSlide(action.SourceSlideIndex);
-                editor.MoveSlide(action.SourceSlideIndex, action.TargetSlideIndex);
+                // action.TargetSlideIndex is a pre-removal "insert before this original index"
+                // position (see PlanMoveAction's own no-op check against sourceSlideIndex + 1,
+                // and BuildKeyboardAction's +2/-1 deltas), but EditingSession.MoveSlide takes a
+                // post-removal final index (see MoveSlideCommand.MoveInList, and the pinned
+                // EditingSessionTests.MoveSlide_ReordersSlides / SlidePaneTests.
+                // MoveSlide_Reorders_AndPaneReflectsNewOrder contracts for that API). The two
+                // conventions coincide when the target is at or before the source, but a forward
+                // target must be shifted back by one to land the slide where the pre-removal
+                // index actually pointed.
+                var moveToIndex = action.TargetSlideIndex > action.SourceSlideIndex
+                    ? action.TargetSlideIndex - 1
+                    : action.TargetSlideIndex;
+                editor.MoveSlide(action.SourceSlideIndex, moveToIndex);
                 return true;
 
             default:

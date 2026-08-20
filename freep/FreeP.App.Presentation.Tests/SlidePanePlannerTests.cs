@@ -802,6 +802,62 @@ public sealed class SlidePanePlannerTests
     }
 
     [Fact]
+    public void TryApplyAction_KeyboardMoveLater_InteriorMove_LandsExactlyOneSlotForward()
+    {
+        // Regression for freep-slide-numbering F1: with 4+ slides, moving a slide that is not
+        // second-to-last "later" must land it one slot forward, not two. The 3-slide keyboard
+        // test above always happens to move the slide all the way to the end (where the
+        // pre-removal and post-removal index conventions coincide), so it cannot catch this.
+        var editor = CreateEditingSession(4);
+        editor.SelectSlide(0);
+        var action = SlidePanePlanner.BuildKeyboardAction(
+            editor.Presentation.Slides.Count,
+            editor.CurrentSlideIndex,
+            SlidePaneKeyboardIntentKind.MoveCurrentSlideLater);
+
+        SlidePanePlanner.TryApplyAction(editor, action).Should().BeTrue();
+
+        editor.Presentation.Slides.Select(slide => slide.Title)
+            .Should().Equal("Slide 2", "Slide 1", "Slide 3", "Slide 4");
+        editor.CurrentSlideIndex.Should().Be(1);
+    }
+
+    [Fact]
+    public void TryApplyAction_DragMoveInterior_LandsExactlyOneSlotForward()
+    {
+        // Same scenario as above but through the drag-drop entry point (PlanMoveAction +
+        // TryApplyAction) rather than the keyboard-intent entry point, since both funnel into
+        // the same EditingSession.MoveSlide call inside TryApplyAction.
+        var editor = CreateEditingSession(4);
+        var action = SlidePanePlanner.PlanMoveAction(4, sourceSlideIndex: 0, targetInsertionIndex: 2);
+
+        SlidePanePlanner.TryApplyAction(editor, action).Should().BeTrue();
+
+        editor.Presentation.Slides.Select(slide => slide.Title)
+            .Should().Equal("Slide 2", "Slide 1", "Slide 3", "Slide 4");
+    }
+
+    [Fact]
+    public void TryApplyAction_KeyboardMoveEarlier_StillLandsOneSlotBack()
+    {
+        // Sibling no-regression check: backward moves were already correct (the pre-removal and
+        // post-removal conventions coincide when the target is at or before the source), and
+        // must remain unaffected by the forward-move fix above.
+        var editor = CreateEditingSession(4);
+        editor.SelectSlide(2);
+        var action = SlidePanePlanner.BuildKeyboardAction(
+            editor.Presentation.Slides.Count,
+            editor.CurrentSlideIndex,
+            SlidePaneKeyboardIntentKind.MoveCurrentSlideEarlier);
+
+        SlidePanePlanner.TryApplyAction(editor, action).Should().BeTrue();
+
+        editor.Presentation.Slides.Select(slide => slide.Title)
+            .Should().Equal("Slide 1", "Slide 3", "Slide 2", "Slide 4");
+        editor.CurrentSlideIndex.Should().Be(1);
+    }
+
+    [Fact]
     public void SectionPlanner_NormalizesBlankNamesToUntitledSection()
     {
         SlideSectionPlanner.NormalizeSectionName("  \t ").Should().Be(SlideSectionPlanner.DefaultSectionName);

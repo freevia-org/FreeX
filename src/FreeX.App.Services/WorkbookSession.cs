@@ -1,6 +1,7 @@
 using FreeX.App.Presentation;
 using FreeX.App.Presentation.Editing;
 using FreeX.App.Presentation.Filtering;
+using FreeX.App.Presentation.GridInteraction;
 using FreeX.App.Presentation.QuickAnalysis;
 using FreeX.App.Presentation.SheetUI;
 using FreeX.Core.Calc;
@@ -530,21 +531,23 @@ public sealed class WorkbookSession : IDisposable
 
     /// <summary>
     /// Reconciles this view's own per-window overrides (zoom, view mode, gridlines, headings,
-    /// show-formulas, freeze panes, split) onto the shared <see cref="Sheet"/> fields for every
-    /// sheet this view has diverged on, immediately before this view serializes the workbook
-    /// (R120-corewriter-persist-saving-window-view-1). <see cref="Sheet.ZoomPercent"/>/
+    /// show-formulas, freeze panes, split, scroll position) onto the shared <see cref="Sheet"/>
+    /// fields for every sheet this view has diverged on, immediately before this view serializes
+    /// the workbook (R120-corewriter-persist-saving-window-view-1;
+    /// R152-freeze-split-F1 added scroll position). <see cref="Sheet.ZoomPercent"/>/
     /// <see cref="Sheet.ViewMode"/>/<see cref="Sheet.ShowGridlines"/>/<see cref="Sheet.ShowHeadings"/>/
     /// <see cref="Sheet.ShowFormulas"/>/<see cref="Sheet.FrozenRows"/>/<see cref="Sheet.FrozenCols"/>/
-    /// <see cref="Sheet.SplitRow"/>/<see cref="Sheet.SplitColumn"/> are one shared field per sheet,
+    /// <see cref="Sheet.SplitRow"/>/<see cref="Sheet.SplitColumn"/>/<see cref="Sheet.ViewTopRow"/>/
+    /// <see cref="Sheet.ViewLeftCol"/> are one shared field per sheet,
     /// mutated in place by whichever sibling view's command last executed -- the <c>_view*Overrides</c>
-    /// caches above exist so THIS view keeps displaying its own remembered value even after a
-    /// sibling view changes those shared fields, but every writer (e.g. <c>XlsxWorksheetViewWriter</c>)
-    /// still only ever reads the shared fields directly. Without this reconciliation, saving from a
-    /// view whose own state has diverged from the shared fields would silently persist whichever
-    /// sibling view last touched them instead of this view's own -- the same bug
-    /// <see cref="WorksheetViewStateStore"/>'s WPF-host counterpart exists to fix. Only sheets
-    /// present in one of the override caches are touched; a sheet this view never diverged on keeps
-    /// its already-correct shared value untouched.
+    /// caches above (and <c>_viewViewportOrigins</c> for scroll position) exist so THIS view keeps
+    /// displaying its own remembered value even after a sibling view changes those shared fields,
+    /// but every writer (e.g. <c>XlsxWorksheetViewWriter</c>) still only ever reads the shared fields
+    /// directly. Without this reconciliation, saving from a view whose own state has diverged from
+    /// the shared fields would silently persist whichever sibling view last touched them instead of
+    /// this view's own -- the same bug <see cref="WorksheetViewStateStore"/>'s WPF-host counterpart
+    /// exists to fix. Only sheets present in one of the override caches are touched; a sheet this
+    /// view never diverged on keeps its already-correct shared value untouched.
     /// </summary>
     /// <remarks>
     /// R138: unlike zoom/gridlines/etc. above, <see cref="ActiveCell"/> is not shadowed behind a
@@ -585,6 +588,13 @@ public sealed class WorkbookSession : IDisposable
         sheetIds.UnionWith(_viewFrozenColsOverrides.Keys);
         sheetIds.UnionWith(_viewSplitRowOverrides.Keys);
         sheetIds.UnionWith(_viewSplitColOverrides.Keys);
+        // R152-freeze-split-F1: a "New Window" sibling's own scroll position lives in
+        // _viewViewportOrigins (see GetViewTopRow/GetViewLeftCol/SetViewViewportOrigin below),
+        // never in the shared Sheet.ViewTopRow/ViewLeftCol fields except for the root session
+        // (SetViewViewportOrigin only writes those when _sharedDocumentStateOwner is null). Without
+        // this, saving from a sibling window persisted whatever the root window last scrolled to
+        // (often A1) instead of what the saving window was actually showing.
+        sheetIds.UnionWith(_viewViewportOrigins.Keys);
 
         foreach (var sheetId in sheetIds)
         {
@@ -619,6 +629,11 @@ public sealed class WorkbookSession : IDisposable
                 sheet.SplitRow = splitRow;
             if (_viewSplitColOverrides.TryGetValue(sheetId, out var splitCol))
                 sheet.SplitColumn = splitCol;
+            if (_viewViewportOrigins.TryGetValue(sheetId, out var viewportOrigin))
+            {
+                sheet.ViewTopRow = viewportOrigin.TopRow;
+                sheet.ViewLeftCol = viewportOrigin.LeftCol;
+            }
         }
     }
 
@@ -1104,11 +1119,23 @@ public sealed class WorkbookSession : IDisposable
     /// instant the drag ended, leaving just the collapsed Start behind (split-creation-selection-anchor
     /// parity).
     /// </summary>
+    /// <remarks>
+    /// R152-freex-merge-cells-F1: the raw anchor..cursor rectangle is grown to fully contain any
+    /// merged region it only partially overlaps before it becomes <see cref="SelectedRange"/> --
+    /// Excel never lets a selection rectangle bisect a merge. <see cref="ActiveCell"/> and the
+    /// viewport-follow target stay the literal (unexpanded) <paramref name="anchor"/>/
+    /// <paramref name="cursor"/>, matching the WPF host's <c>ExtendSelection</c>, which grows only
+    /// <c>SheetGrid.SelectedRange</c> and leaves <c>_selectionAnchor</c>/<c>_selectionCursor</c> alone.
+    /// Every Avalonia caller of this method (Shift+Arrow extend, mouse-drag continue, Shift+click via
+    /// <see cref="SelectRange(CellAddress)"/>) shares this expansion, matching Excel, which applies the
+    /// no-bisect rule uniformly to every selection-extending gesture.
+    /// </remarks>
     public void SelectAnchoredRange(CellAddress anchor, CellAddress cursor)
     {
         var range = new GridRange(anchor, cursor);
         ValidateSelectionRange(range, nameof(anchor));
-        SetSingleSelectedRange(range);
+        var expandedRange = MergedSelectionRangePlanner.ExpandToFullyContainMerges(ActiveSheet, range);
+        SetSingleSelectedRange(expandedRange);
         ActiveCell = anchor;
         ActiveSheet.ActiveRow = anchor.Row;
         ActiveSheet.ActiveCol = anchor.Col;

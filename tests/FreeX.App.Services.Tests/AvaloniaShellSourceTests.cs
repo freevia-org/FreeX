@@ -1045,7 +1045,9 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("OpenRecentWorkbookMenuPlanner.Create(");
         // Snapshot() (a copy taken under the store lock) rather than enumerating the live Entries.
         source.Should().Contain("_recentFiles.Snapshot()");
-        source.Should().Contain("File.Exists");
+        // R152-shared-recent-files-F1: the cache (not a raw File.Exists) so an unreachable UNC/
+        // network recent entry never blocks the UI thread rebuilding this menu after every Open/Save.
+        source.Should().Contain("_recentFilePathExistenceCache.Exists");
         source.Should().Contain("path => _fileWorkflow.TryResolveOpenTarget(path, out var target, out _) ? target!.Path : null");
         source.Should().Contain("plan.ItemCount == 0");
         source.Should().Contain("foreach (var entry in plan.Items)");

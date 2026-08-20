@@ -1965,6 +1965,61 @@ public class DocxRoundTripTests
     }
 
     [Fact]
+    public void Hyperlink_WithRelationshipAndAnchor_CombinesLocationIntoUrl()
+    {
+        // Word's Insert Hyperlink > Existing File/Web Page with a Bookmark selected emits a single
+        // w:hyperlink carrying BOTH a resolvable r:id (the external file) and a w:anchor (the bookmark
+        // inside it). The anchor must survive -- folded into the URL as "target#anchor", the same
+        // convention WordHyperlinkFieldParser already uses for legacy HYPERLINK field \l locations --
+        // not be silently dropped.
+        var rels =
+            """
+            <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+              <Relationship Id="rIdLink1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/hyperlink" Target="otherfile.docx" TargetMode="External"/>
+            </Relationships>
+            """;
+        var result = ReadHandAuthoredDocx(
+            """
+            <w:p>
+              <w:hyperlink r:id="rIdLink1" w:anchor="SectionA">
+                <w:r><w:t>go there</w:t></w:r>
+              </w:hyperlink>
+            </w:p>
+            """,
+            rels);
+
+        var run = result.Paragraphs.Should().ContainSingle().Subject.Runs.Should().ContainSingle().Subject;
+        run.HyperlinkUrl.Should().Be("otherfile.docx#SectionA");
+        run.HyperlinkAnchor.Should().BeNull();
+    }
+
+    [Fact]
+    public void Hyperlink_WithRelationshipOnly_LeavesUrlUnchanged()
+    {
+        // Sibling of the combine case above: when a w:hyperlink carries ONLY a resolvable r:id (no
+        // w:anchor), the URL must round-trip untouched -- no spurious "#" appended.
+        var rels =
+            """
+            <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+              <Relationship Id="rIdLink1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/hyperlink" Target="https://example.com/page" TargetMode="External"/>
+            </Relationships>
+            """;
+        var result = ReadHandAuthoredDocx(
+            """
+            <w:p>
+              <w:hyperlink r:id="rIdLink1">
+                <w:r><w:t>go there</w:t></w:r>
+              </w:hyperlink>
+            </w:p>
+            """,
+            rels);
+
+        var run = result.Paragraphs.Should().ContainSingle().Subject.Runs.Should().ContainSingle().Subject;
+        run.HyperlinkUrl.Should().Be("https://example.com/page");
+        run.HyperlinkAnchor.Should().BeNull();
+    }
+
+    [Fact]
     public void Hyperlinks_InStoryParts_UseOwningPartRelationships_AndRoundTrip()
     {
         const string headerUrl = "https://example.com/header";
