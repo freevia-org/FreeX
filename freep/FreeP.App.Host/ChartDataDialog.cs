@@ -58,8 +58,8 @@ public sealed partial class ChartDataDialog : Free.Shared.Ribbon.Wpf.DialogWindo
 
         // ── Window chrome ─────────────────────────────────────────────────────────
         Title          = plan.Title;
-        Width          = plan.Width;
-        Height         = plan.Height;
+        Width          = ChartDataDialogVisualMetrics.WpfWindowWidth;
+        Height         = ChartDataDialogVisualMetrics.WpfWindowHeight;
         MinWidth       = plan.MinimumWidth;
         MinHeight      = plan.MinimumHeight;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
@@ -71,7 +71,7 @@ public sealed partial class ChartDataDialog : Free.Shared.Ribbon.Wpf.DialogWindo
         {
             ItemsSource = plan.ChartType.Choices,
             SelectedIndex = plan.ChartType.SelectedIndex,
-            Width = 170,
+            Width = ChartDataDialogVisualMetrics.ChartTypeWidth,
             Margin = new Thickness(8, 0, 4, 0),
         };
         SetAutomation(_chartTypeCombo, plan.ChartType.AccessibleName, plan.ChartType.AutomationId);
@@ -85,7 +85,11 @@ public sealed partial class ChartDataDialog : Free.Shared.Ribbon.Wpf.DialogWindo
         for (var groupIndex = 0; groupIndex < plan.ToolbarGroups.Count; groupIndex++)
         {
             if (groupIndex > 0)
-                toolbar.Children.Add(new Separator { Width = 12, Visibility = Visibility.Hidden });
+                toolbar.Children.Add(new Separator
+                {
+                    Width = ChartDataDialogVisualMetrics.ToolbarGroupGap,
+                    Visibility = Visibility.Hidden,
+                });
             foreach (var action in plan.ToolbarGroups[groupIndex].Actions)
                 toolbar.Children.Add(MakeToolbarButton(action, actionHandlers[action.Id]));
         }
@@ -422,8 +426,9 @@ public sealed partial class ChartDataDialog : Free.Shared.Ribbon.Wpf.DialogWindo
         var btn = new Button
         {
             Content = action.Label,
+            MinWidth = ChartDataDialogVisualMetrics.ToolbarButtonWidth(action.Id),
             Padding = new Thickness(8, 3, 8, 3),
-            Margin  = new Thickness(0, 0, 4, 0),
+            Margin  = new Thickness(0, 0, ChartDataDialogVisualMetrics.ToolbarButtonRightMargin, 0),
         };
         SetAutomation(btn, action.AccessibleName, action.AutomationId);
         btn.Click += (_, _) => onClick();

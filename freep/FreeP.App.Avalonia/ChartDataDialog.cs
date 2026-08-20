@@ -39,20 +39,27 @@ internal sealed partial class ChartDataDialog : FreePDialogWindow
         {
             ItemsSource = _plan.ChartType.Choices,
             SelectedIndex = _plan.ChartType.SelectedIndex,
-            MinWidth = 170,
+            Width = ChartDataDialogVisualMetrics.ChartTypeWidth,
+            Height = ChartDataDialogVisualMetrics.ChartTypeHeight,
+            MinHeight = ChartDataDialogVisualMetrics.ChartTypeHeight,
+            MaxHeight = ChartDataDialogVisualMetrics.ChartTypeHeight,
+            Margin = new Thickness(8, 0, 4, 0),
         };
         SetAutomation(_chartTypeCombo, _plan.ChartType.AccessibleName, _plan.ChartType.AutomationId);
         _chartTypeCombo.SelectionChanged += (_, _) =>
             _session.SelectChartType(_chartTypeCombo.SelectedIndex);
 
         Title = _plan.Title;
-        Width = _plan.Width;
-        Height = _plan.Height;
+        Width = ChartDataDialogVisualMetrics.AvaloniaWindowWidth;
+        Height = ChartDataDialogVisualMetrics.AvaloniaWindowHeight;
         MinWidth = _plan.MinimumWidth;
         MinHeight = _plan.MinimumHeight;
         CanResize = _plan.IsResizable;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
-        _tableGrid.MinWidth = 616;
+        // Keep the 130/remaining-star column split inside the app-owned client width.
+        // At 616 the one-pixel overflow exposed an unnecessary horizontal scrollbar in
+        // validation states even though WPF's DataGrid fits the same initial projection.
+        _tableGrid.MinWidth = 615;
         _tableGrid.HorizontalAlignment = HorizontalAlignment.Stretch;
 
         Content = BuildContent();
@@ -73,17 +80,15 @@ internal sealed partial class ChartDataDialog : FreePDialogWindow
         root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
         root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
 
-        var toolbar = new StackPanel
+        var toolbar = new WrapPanel
         {
-            Orientation = Orientation.Horizontal,
             Margin = new Thickness(4, 4, 4, 2),
-            Spacing = 4,
         };
         var actionHandlers = BuildActionHandlers();
         for (var groupIndex = 0; groupIndex < _plan.ToolbarGroups.Count; groupIndex++)
         {
             if (groupIndex > 0)
-                toolbar.Children.Add(new Border { Width = 12 });
+                toolbar.Children.Add(new Border { Width = ChartDataDialogVisualMetrics.ToolbarGroupGap });
             foreach (var action in _plan.ToolbarGroups[groupIndex].Actions)
                 toolbar.Children.Add(MakeToolbarButton(action, actionHandlers[action.Id]));
         }
@@ -91,7 +96,7 @@ internal sealed partial class ChartDataDialog : FreePDialogWindow
         {
             Text = _plan.ChartType.Label,
             VerticalAlignment = VerticalAlignment.Center,
-            Margin = new Thickness(8, 0, 0, 0),
+            Margin = new Thickness(8, 0, 2, 0),
         });
         toolbar.Children.Add(_chartTypeCombo);
 
@@ -336,7 +341,7 @@ internal sealed partial class ChartDataDialog : FreePDialogWindow
         {
             Text = text,
             FontWeight = FontWeight.SemiBold,
-            Height = 22,
+            Height = ChartDataDialogVisualMetrics.TableHeaderHeight,
             Padding = new Thickness(3, 1),
             VerticalAlignment = VerticalAlignment.Center,
         };
@@ -348,9 +353,9 @@ internal sealed partial class ChartDataDialog : FreePDialogWindow
         {
             Text = text,
             MinWidth = minWidth,
-            Height = 20,
-            MinHeight = 20,
-            MaxHeight = 20,
+            Height = ChartDataDialogVisualMetrics.TableCellHeight,
+            MinHeight = ChartDataDialogVisualMetrics.TableCellHeight,
+            MaxHeight = ChartDataDialogVisualMetrics.TableCellHeight,
             Padding = new Thickness(3, 0),
             BorderThickness = new Thickness(0),
             Background = Brushes.Transparent,
@@ -382,10 +387,15 @@ internal sealed partial class ChartDataDialog : FreePDialogWindow
         var button = new Button
         {
             Content = action.Label,
-            Padding = new Thickness(8, 3),
+            MinWidth = ChartDataDialogVisualMetrics.ToolbarButtonWidth(action.Id),
+            Padding = new Thickness(8, 3, 8, 3),
+            Margin = new Thickness(0, 0, ChartDataDialogVisualMetrics.ToolbarButtonRightMargin, 0),
         };
         SetAutomation(button, action.AccessibleName, action.AutomationId);
-        AvaloniaCompactDialogChrome.ApplyButton(button, DialogChromeStyle, minWidth: 0);
+        AvaloniaCompactDialogChrome.ApplyButton(
+            button,
+            DialogChromeStyle,
+            minWidth: ChartDataDialogVisualMetrics.ToolbarButtonWidth(action.Id));
         button.Click += (_, _) => onClick();
         return button;
     }

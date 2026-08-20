@@ -8,6 +8,22 @@ public sealed class ChartDataDialogPlannerTests
     private static readonly CultureInfo Invariant = CultureInfo.InvariantCulture;
 
     [Fact]
+    public void VisualMetrics_AlignTheAppOwnedClientSurfaceAcrossHosts()
+    {
+        ChartDataDialogVisualMetrics.WpfWindowWidth.Should().Be(640);
+        ChartDataDialogVisualMetrics.WpfWindowHeight.Should().Be(440);
+        ChartDataDialogVisualMetrics.AvaloniaWindowWidth.Should().Be(625.3333333333334);
+        ChartDataDialogVisualMetrics.AvaloniaWindowHeight.Should().Be(402.6666666666667);
+        ChartDataDialogVisualMetrics.ToolbarButtonRightMargin.Should().Be(4);
+        ChartDataDialogVisualMetrics.ToolbarGroupGap.Should().Be(12);
+        ChartDataDialogVisualMetrics.ChartTypeWidth.Should().Be(170);
+        ChartDataDialogVisualMetrics.ChartTypeHeight.Should().Be(24);
+        ChartDataDialogVisualMetrics.TableHeaderHeight.Should().Be(32);
+        ChartDataDialogVisualMetrics.TableCellHeight.Should().Be(17);
+        ChartDataDialogVisualMetrics.ToolbarButtonWidth(ChartDataDialogActionId.MoveCategoryRight).Should().Be(127);
+    }
+
+    [Fact]
     public void FromChart_DeepCopiesNamesAndPreservesNullValues()
     {
         var chart = MakeChart();
