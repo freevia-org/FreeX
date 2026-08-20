@@ -703,6 +703,29 @@ public sealed partial class MainWindow
     /// <summary>Test-only seam exposing <see cref="_statusText"/> for accessibility assertions.</summary>
     internal TextBlock StatusTextForTest => _statusText;
 
+    /// <summary>Test-only seam for toggling File ▸ Options ▸ Formulas ▸ "R1C1 reference style"
+    /// (freex-freeze-headers F1) directly on the live options session, without driving the full
+    /// Options dialog UI -- reads/writes the exact same <see cref="_optionsRuntimeSession"/> state
+    /// the real <see cref="UseR1C1ReferenceStyle"/> property consults. Not used by production code
+    /// paths.</summary>
+    internal bool UseR1C1ReferenceStyleForTest
+    {
+        get => _optionsRuntimeSession.LiveOptions.UseR1C1ReferenceStyle;
+        set => _optionsRuntimeSession.LiveOptions.UseR1C1ReferenceStyle = value;
+    }
+
+    /// <summary>Test-only seam for the status-bar progress bar's visibility (shared-progress-
+    /// reporting F2) -- not used by production code paths.</summary>
+    internal bool FileOperationProgressBarVisibleForTest => _fileOperationProgressBar.IsVisible;
+
+    /// <summary>Test-only seam for the status-bar progress bar's indeterminate state
+    /// (shared-progress-reporting F2) -- not used by production code paths.</summary>
+    internal bool FileOperationProgressBarIsIndeterminateForTest => _fileOperationProgressBar.IsIndeterminate;
+
+    /// <summary>Test-only seam for the status-bar progress bar's current value
+    /// (shared-progress-reporting F2) -- not used by production code paths.</summary>
+    internal double FileOperationProgressBarValueForTest => _fileOperationProgressBar.Value;
+
     internal Func<Task<bool>>? ConfirmSelectionMoveOverwriteOverrideForTest;
 
     internal Func<DataValidationPromptRequest, UserMessageResult>? DataValidationPromptOverrideForTest;
