@@ -405,6 +405,15 @@ public sealed partial class DocumentView
         return true;
     }
 
+
+    /// <summary>
+    /// Operates the content control the header/footer caret sits on — the click gesture's own path, which
+    /// a headless run reaches this way because a header field has no model index to address it by.
+    /// </summary>
+    internal bool ActivateHfContentControlForTest() => TryActivateHfContentControl();
+
+    /// <summary>The date-picker calendar currently on screen, if any (see <see cref="OpenContentControlCalendarForTest"/>).</summary>
+    internal global::Avalonia.Controls.Flyout? ActiveContentControlCalendarForTest => _contentControlCalendarFlyout;
     internal ContextMenu? ActiveContextMenuForTests => _activeContextMenu;
     internal void OpenEditorContextMenuForTests() => OpenEditorContextMenu();
     internal void RaiseKeyDownForContextMenuTests(KeyEventArgs args) => OnKeyDown(args);

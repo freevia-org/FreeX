@@ -1,3 +1,6 @@
+using System;
+using System.Linq;
+using Avalonia.Controls;
 using System.Threading;
 using Avalonia;
 using Avalonia.Headless;
@@ -128,10 +131,100 @@ public sealed class DocumentViewHeaderFooterContentControlTests
             },
             CancellationToken.None);
 
+
+    /// <summary>
+    /// AV-CCEDIT: a header field could be TYPED into but never OPERATED — every click gesture resolved
+    /// its target through the body/table-cell hit test, so a check box in a header would not toggle, a
+    /// list offered no choices and a date field no calendar. Word puts exactly these controls in headers.
+    /// </summary>
+    [Fact]
+    public async Task A_check_box_in_a_header_toggles_when_it_is_activated() =>
+        await Session.Dispatch(
+            () =>
+            {
+                var (document, view) = MakeViewWithHeaderControl(
+                    ContentControlLockMode.NotSpecified,
+                    Run.CheckBoxControl(@checked: false, tag: "Approved"));
+
+                view.PlaceCaretInHeaderFooter(footer: false, paraIdx: 0, offset: 7);
+                view.ActivateHfContentControlForTest().Should().BeTrue();
+
+                var field = HeaderFields(document).Should().ContainSingle().Subject;
+                field.Control!.Checked.Should().BeTrue();
+                field.Text.Should().Be(FreeW.Core.Model.ContentControl.CheckedGlyph);
+                field.Control.Tag.Should().Be("Approved", "the field must survive the atom round-trip");
+            },
+            CancellationToken.None);
+
+    [Fact]
+    public async Task A_locked_check_box_in_a_header_refuses_to_toggle() =>
+        await Session.Dispatch(
+            () =>
+            {
+                var (document, view) = MakeViewWithHeaderControl(
+                    ContentControlLockMode.ContentLocked,
+                    Run.CheckBoxControl(@checked: false, tag: "Approved"));
+
+                view.PlaceCaretInHeaderFooter(footer: false, paraIdx: 0, offset: 7);
+                view.ActivateHfContentControlForTest().Should().BeFalse();
+
+                HeaderFields(document).Should().ContainSingle().Which.Control!.Checked.Should().BeFalse();
+            },
+            CancellationToken.None);
+
+    [Fact]
+    public async Task A_date_field_in_a_header_opens_a_calendar_and_commits_the_picked_date() =>
+        await Session.Dispatch(
+            () =>
+            {
+                var (document, view) = MakeViewWithHeaderControl(
+                    ContentControlLockMode.NotSpecified,
+                    Run.DatePickerControl("2026-07-04", tag: "Signed", dateFormat: "yyyy-MM-dd"));
+
+                view.PlaceCaretInHeaderFooter(footer: false, paraIdx: 0, offset: 7);
+                view.ActivateHfContentControlForTest().Should().BeTrue();
+
+                var calendar = view.ActiveContentControlCalendarForTest
+                    .Should().NotBeNull().And.Subject.As<Flyout>()
+                    .Content.Should().BeOfType<StackPanel>().Subject
+                    .Children.OfType<global::Avalonia.Controls.Calendar>().Single();
+                calendar.SelectedDate.Should().Be(new DateTime(2026, 7, 4));
+
+                calendar.SelectedDate = new DateTime(1999, 12, 31);
+
+                HeaderText(document).Should().Be("Title: 1999-12-31");
+                HeaderFields(document).Should().ContainSingle()
+                    .Which.Control!.Kind.Should().Be(ContentControlKind.DatePicker);
+            },
+            CancellationToken.None);
+
+    [Fact]
+    public async Task A_drop_down_in_a_header_offers_its_items_and_the_pick_lands_in_the_header() =>
+        await Session.Dispatch(
+            () =>
+            {
+                var (document, view) = MakeViewWithHeaderControl(
+                    ContentControlLockMode.NotSpecified,
+                    Run.DropDownListControl(
+                        [new ContentControlListItem("Red", "R"), new ContentControlListItem("Green", "G")],
+                        tag: "Colour"));
+
+                view.PlaceCaretInHeaderFooter(footer: false, paraIdx: 0, offset: 7);
+                view.ActivateHfContentControlForTest().Should().BeTrue();
+
+                var menu = view.ActiveContextMenuForTests.Should().NotBeNull().And.Subject.As<ContextMenu>();
+                var green = menu.Items.OfType<MenuItem>().Single(item => item.Header?.ToString() == "Green");
+                green.RaiseEvent(new global::Avalonia.Interactivity.RoutedEventArgs(MenuItem.ClickEvent));
+
+                HeaderText(document).Should().Be("Title: Green");
+                HeaderFields(document).Should().ContainSingle().Which.Control!.Tag.Should().Be("Colour");
+            },
+            CancellationToken.None);
     private static (TextDocument Document, DocumentView View) MakeViewWithHeaderControl(
-        ContentControlLockMode lockMode)
+        ContentControlLockMode lockMode,
+        Run? field = null)
     {
-        var control = Run.PlainTextControl("Report", tag: "DocTitle");
+        var control = field ?? Run.PlainTextControl("Report", tag: "DocTitle");
         control.Control = control.Control! with { LockMode = lockMode };
         var header = new HeaderFooter();
         header.Paragraphs.Clear();

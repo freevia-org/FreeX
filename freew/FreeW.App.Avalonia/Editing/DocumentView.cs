@@ -16425,7 +16425,19 @@ public sealed partial class DocumentView : Control
     /// this replaces (for the click and keyboard gestures) offered only today, yesterday and tomorrow,
     /// so any other date had to be typed. The right-click menu keeps those quick choices.
     /// </summary>
-    private bool OpenContentControlCalendar(ContentControlTarget target, Run run)
+    private bool OpenContentControlCalendar(ContentControlTarget target, Run run) =>
+        ShowContentControlCalendar(
+            run,
+            date => ApplyContentControlInteraction(
+                target,
+                item => ContentControlInteractionPlanner.SelectDate(item, date)));
+
+    /// <summary>
+    /// Builds and shows the date-picker calendar for <paramref name="run"/>, committing a picked date
+    /// through <paramref name="commit"/> — which is what differs between a body/table-cell field and a
+    /// header/footer one, since the two stories are edited by different commands.
+    /// </summary>
+    private bool ShowContentControlCalendar(Run run, Action<DateTime> commit)
     {
         if (run.Control is not { Kind: ContentControlKind.DatePicker } control)
             return false;
@@ -16464,7 +16476,7 @@ public sealed partial class DocumentView : Control
                 return;
             committed = true;
             flyout.Hide();
-            ApplyContentControlInteraction(target, item => ContentControlInteractionPlanner.SelectDate(item, date));
+            commit(date);
         }
 
         // Subscribed AFTER the initial SelectedDate, so opening the calendar on the field's own date is
@@ -16502,10 +16514,136 @@ public sealed partial class DocumentView : Control
     public bool SelectContentControlDate(int blockIndex, int runIndex, DateTime date) =>
         ApplyContentControlInteraction(new ContentControlTarget(blockIndex, runIndex), run =>
             ContentControlInteractionPlanner.SelectDate(run, date));
+
+    /// <summary>
+    /// AV-CCEDIT: a content control's location inside a header/footer story — the atom span the field
+    /// occupies plus the model run it stands for, so a planner can rewrite it exactly as it does a body
+    /// field.
+    /// </summary>
+    private readonly record struct HfContentControlHit(
+        HfTarget Target,
+        int AtomStart,
+        int AtomCount,
+        int ModelStart,
+        Run Source);
+
+    /// <summary>
+    /// The content control the header/footer caret sits ON — strictly inside, matching the body's
+    /// <see cref="TryGetContentControlAt"/> rule, so a click just past a field does not operate it. (The
+    /// looser neighbour rule in <see cref="HfActiveContentControl"/> is for TYPING, where a character at
+    /// the boundary joins the field.)
+    /// </summary>
+    private bool TryGetHfContentControlAt(out HfContentControlHit hit)
+    {
+        hit = default;
+        if (_hfCaret is not { } caret || GetHfParagraph(caret.Target) is not { } paragraph)
+            return false;
+
+        var atoms = HfAtoms(paragraph);
+        var (index, _) = HfAtomIndexForOffset(atoms, caret.Offset);
+        if (index < 0 || index >= atoms.Count || atoms[index].IsField || atoms[index].Control is not { } control)
+            return false;
+
+        var start = index;
+        while (start > 0 && !atoms[start - 1].IsField && SameContentControl(atoms[start - 1].Control, control))
+            start--;
+        var end = index;
+        while (end + 1 < atoms.Count && !atoms[end + 1].IsField && SameContentControl(atoms[end + 1].Control, control))
+            end++;
+
+        var modelStart = 0;
+        for (var i = 0; i < start; i++)
+            modelStart += atoms[i].ModelLength;
+        var text = new string(atoms.Skip(start).Take(end - start + 1).Select(atom => atom.Ch).ToArray());
+        hit = new HfContentControlHit(
+            caret.Target,
+            start,
+            end - start + 1,
+            modelStart,
+            new Run(text, atoms[start].Fmt) { Control = control });
+        return true;
+    }
+
+    /// <summary>
+    /// Rewrites the header/footer field <paramref name="hit"/> names with whatever
+    /// <paramref name="planner"/> returns, through the same undo-tracked H/F paragraph command every
+    /// other header edit uses. Declines when the field's lock or the protection policy forbids it.
+    /// </summary>
+    private bool ApplyHfContentControlInteraction(HfContentControlHit hit, Func<Run, Run?> planner)
+    {
+        if (!ContentControlInteractionPlanner.CanEditExistingContentControl(hit.Source, RestrictEditingPolicy))
+            return false;
+        if (planner(hit.Source) is not { } updated)
+            return false;
+
+        var formatting = hit.Source.Formatting;
+        HfEditParagraph(
+            hit.Target,
+            atoms =>
+            {
+                atoms.RemoveRange(hit.AtomStart, hit.AtomCount);
+                atoms.InsertRange(
+                    hit.AtomStart,
+                    updated.Text.Select(ch => new HfAtom(ch, formatting, null, updated.Control)));
+            },
+            hit.ModelStart + updated.Text.Length);
+        return true;
+    }
+
+    /// <summary>
+    /// AV-CCEDIT: the header/footer counterpart of <see cref="TryActivateContentControl"/>. A field in a
+    /// header or footer could be TYPED into but never OPERATED — a check box would not toggle, a list
+    /// offered no choices and a date field no calendar — because every click gesture resolved its target
+    /// through the body/table-cell hit test only.
+    /// </summary>
+    private bool TryActivateHfContentControl()
+    {
+        if (!TryGetHfContentControlAt(out var hit))
+            return false;
+
+        return hit.Source.Control!.Kind switch
+        {
+            ContentControlKind.CheckBox =>
+                ApplyHfContentControlInteraction(hit, ContentControlInteractionPlanner.ToggleCheckBox),
+            ContentControlKind.DatePicker => OpenHfContentControlCalendar(hit),
+            ContentControlKind.DropDownList or ContentControlKind.ComboBox => OpenHfContentControlMenu(hit),
+            _ => false,
+        };
+    }
+
+
+    /// <summary>The header/footer twin of <see cref="TryOpenContentControlMenu"/>, resolved off the H/F caret.</summary>
+    private bool TryOpenHfContentControlMenuAtCaret() =>
+        TryGetHfContentControlAt(out var hit)
+        && (hit.Source.Control?.Kind == ContentControlKind.DatePicker
+            ? OpenHfContentControlCalendar(hit)
+            : OpenHfContentControlMenu(hit));
+    private bool OpenHfContentControlMenu(HfContentControlHit hit)
+    {
+        var isEnabled = ContentControlInteractionPlanner.CanEditExistingContentControl(hit.Source, RestrictEditingPolicy);
+        var today = DateTime.Today;
+        var menu = AvaloniaContextMenuRenderer.BuildContextMenu(
+            FreeWContextMenuPlanner.BuildContentControl(hit.Source, today, isEnabled),
+            commandId => ApplyHfContentControlInteraction(
+                hit,
+                item => FreeWContextMenuPlanner.ApplyContentControlCommand(item, commandId, today)));
+        OpenContextMenu(menu);
+        return true;
+    }
+
+    private bool OpenHfContentControlCalendar(HfContentControlHit hit) =>
+        ShowContentControlCalendar(
+            hit.Source,
+            date => ApplyHfContentControlInteraction(
+                hit,
+                item => ContentControlInteractionPlanner.SelectDate(item, date)));
     // The keyboard gesture opens whatever the click opens -- a calendar on a date field, the item menu
     // on a list -- so neither input route is the poor relation.
     private bool TryOpenContentControlMenuAtCaret() =>
-        TryGetContentControlAt(_caret, out var target, out var run)
+        // The header/footer story first when the caret is in one -- its fields answer the same gesture.
+        _hfCaret is not null
+        ? TryOpenHfContentControlMenuAtCaret()
+        : TryGetContentControlAt(_caret, out var target, out var run)
         && (run.Control?.Kind == ContentControlKind.DatePicker
             ? OpenContentControlCalendar(target, run)
             : OpenContentControlMenu(target, run));
@@ -16921,7 +17059,11 @@ public sealed partial class DocumentView : Control
         if (updateKind == PointerUpdateKind.RightButtonPressed)
         {
             PositionCaretForContextMenu(point);
-            if (!TryOpenContentControlMenu(point))
+            // AV-CCEDIT: with the caret in a header/footer, PositionCaretForContextMenu deliberately
+            // leaves it there -- so the body hit test below would resolve the click against whatever body
+            // position those coordinates clamp to and could offer a DIFFERENT field's menu. Ask the
+            // header/footer story about its own field instead.
+            if (!(_hfCaret is not null ? TryOpenHfContentControlMenuAtCaret() : TryOpenContentControlMenu(point)))
                 OpenEditorContextMenu();
             e.Handled = true;
             return;
@@ -17084,6 +17226,15 @@ public sealed partial class DocumentView : Control
         // because H/F bands sit in the page margins, which the body hit-test does not own.
         if (_viewMode == DocumentViewMode.PrintLayout && TryHitTestHeaderFooter(point, extendSelection: shift))
         {
+            // AV-CCEDIT: the caret is now on the clicked character -- if that is a field, the click
+            // OPERATES it (toggle, list, calendar), exactly as it does in the body.
+            if (updateKind == PointerUpdateKind.LeftButtonPressed && !shift && TryActivateHfContentControl())
+            {
+                CaretMoved?.Invoke();
+                e.Handled = true;
+                return;
+            }
+
             _hfSelectionDragActive = true;
             _hfSelectionDragPointer = e.Pointer;
             e.Pointer.Capture(this);
