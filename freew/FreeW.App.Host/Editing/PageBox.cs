@@ -264,7 +264,7 @@ internal sealed class PageBox : Border
         if (sourceModel is not null && headerSlotKind is not null)
         {
             HeaderSubEditor = BuildHfSubEditor(
-                sourceModel, headerSlot, marginLeft, marginRight, isActivated: false,
+                sourceModel, headerSlot, marginLeft, marginRight, isHeader: true, isActivated: false,
                 hfPageNumber: pageNumber, hfPageNumberText: pageNumberText, hfPageCount: pageCount,
                 hfSectionOrdinal: sectionOrdinal, hfSectionPageCount: sectionPageCount);
             Grid.SetRow(HeaderSubEditor, 0);
@@ -373,7 +373,7 @@ internal sealed class PageBox : Border
         if (sourceModel is not null && footerSlotKind is not null)
         {
             FooterSubEditor = BuildHfSubEditor(
-                sourceModel, footerSlot, marginLeft, marginRight, isActivated: false,
+                sourceModel, footerSlot, marginLeft, marginRight, isHeader: false, isActivated: false,
                 hfPageNumber: pageNumber, hfPageNumberText: pageNumberText, hfPageCount: pageCount,
                 hfSectionOrdinal: sectionOrdinal, hfSectionPageCount: sectionPageCount);
             Grid.SetRow(FooterSubEditor, 3);
@@ -415,6 +415,7 @@ internal sealed class PageBox : Border
         HeaderFooter? slot,
         double marginLeft,
         double marginRight,
+        bool isHeader,
         bool isActivated,
         int hfPageNumber = 0,
         string? hfPageNumberText = null,
@@ -478,6 +479,8 @@ internal sealed class PageBox : Border
         try
         {
             sub.LoadModel(wrapper);
+            if (isHeader)
+                sub.ApplyWordHeaderInlineImageRasterHeights();
         }
         finally
         {

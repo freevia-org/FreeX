@@ -4,6 +4,17 @@ namespace FreeW.App.Presentation.Tests;
 
 public sealed class HeaderFooterSemanticResolutionTests
 {
+    [Theory]
+    [InlineData(32, 42)]
+    [InlineData(28, 37)]
+    [InlineData(36, 48)]
+    public void InlineHeaderImageRasterHeightUsesWordsLowerPixelBound(double points, double expectedDip)
+    {
+        HeaderFooterVisualPlanner.ResolveInlineHeaderImageRasterHeightDip(
+                PageLayout.PointsToDip(points))
+            .Should().Be(expectedDip);
+    }
+
     [Fact]
     public void ResolveLineTextOwnsSimpleComplexAndPlainRunProjection()
     {

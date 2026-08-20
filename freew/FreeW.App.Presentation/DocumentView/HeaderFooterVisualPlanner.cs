@@ -63,6 +63,15 @@ public static class HeaderFooterVisualPlanner
     public const string TabRunKind = "tab";
     public const string ImageRunKind = "image";
 
+    /// <summary>
+    /// Converts an authored inline header-image height to the lower pixel bound used by Word's
+    /// 96-DPI page raster. Widths deliberately remain authored so alignment is unchanged.
+    /// </summary>
+    public static double ResolveInlineHeaderImageRasterHeightDip(double heightDip) =>
+        heightDip <= 0
+            ? heightDip
+            : Math.Max(1, Math.Floor(heightDip + 0.0001));
+
     public static FreeWVisualHeaderFooterExpectation EmptyExpectation { get; } = new(
         SlotCount: 0,
         ImageCount: 0,

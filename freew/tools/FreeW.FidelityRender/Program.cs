@@ -829,7 +829,7 @@ static void RenderDocumentComposite(
                 var hfSlot = ResolveHfSlotByName(ownerHf, hSlotName);
                 if (hfSlot is not null && !hfSlot.IsEmpty)
                 {
-                    var hfPage = RenderHfSlot(hfSlot, doc, printableWidthDip, headerH, i + 1, box.PageNumberText, actualPageCount);
+                    var hfPage = RenderHfSlot(hfSlot, doc, printableWidthDip, headerH, i + 1, box.PageNumberText, actualPageCount, isHeader: true);
                     if (hfPage is not null)
                     {
                         var hfVis = new DrawingVisual();
@@ -855,7 +855,7 @@ static void RenderDocumentComposite(
                 var fSlot = ResolveHfSlotByName(ownerHf, fSlotName);
                 if (fSlot is not null && !fSlot.IsEmpty)
                 {
-                    var hfPage = RenderHfSlot(fSlot, doc, printableWidthDip, footerH, i + 1, box.PageNumberText, actualPageCount);
+                    var hfPage = RenderHfSlot(fSlot, doc, printableWidthDip, footerH, i + 1, box.PageNumberText, actualPageCount, isHeader: false);
                     if (hfPage is not null)
                     {
                         var hfVis = new DrawingVisual();
@@ -942,7 +942,7 @@ static void RenderDocumentComposite(
 
             if (slots.Header is { IsEmpty: false } headerSlot)
             {
-                var hfPage = RenderHfSlot(headerSlot, doc, printableWidthDip, headerH, i + 1, (i + 1).ToString(CultureInfo.InvariantCulture), actualPageCount);
+                var hfPage = RenderHfSlot(headerSlot, doc, printableWidthDip, headerH, i + 1, (i + 1).ToString(CultureInfo.InvariantCulture), actualPageCount, isHeader: true);
                 if (hfPage is not null)
                 {
                     var hfVis = new DrawingVisual();
@@ -964,7 +964,7 @@ static void RenderDocumentComposite(
 
             if (slots.Footer is { IsEmpty: false } footerSlot)
             {
-                var hfPage = RenderHfSlot(footerSlot, doc, printableWidthDip, footerH, i + 1, (i + 1).ToString(CultureInfo.InvariantCulture), actualPageCount);
+                var hfPage = RenderHfSlot(footerSlot, doc, printableWidthDip, footerH, i + 1, (i + 1).ToString(CultureInfo.InvariantCulture), actualPageCount, isHeader: false);
                 if (hfPage is not null)
                 {
                     var hfVis = new DrawingVisual();
@@ -2509,7 +2509,7 @@ static double FooterTopDip(double pageHeightDip, double footerDistanceDip, doubl
 /// Returns null if the slot is empty or rendering fails.
 /// </summary>
 static DocumentPage? RenderHfSlot(HeaderFooter slot, TextDocument sourceDoc,
-    double pageWDip, double heightDip, int pageNumber, string pageNumberText, int pageCount)
+    double pageWDip, double heightDip, int pageNumber, string pageNumberText, int pageCount, bool isHeader)
 {
     try
     {
@@ -2527,10 +2527,15 @@ static DocumentPage? RenderHfSlot(HeaderFooter slot, TextDocument sourceDoc,
         DocumentView._renderHfPageNumber = pageNumber;
         DocumentView._renderHfPageNumberText = pageNumberText;
         DocumentView._renderHfPageCount  = pageCount > 0 ? pageCount : 1;
-        var hfView = new DocumentView { Width = pageWDip };
+        var hfView = new DocumentView
+        {
+            Width = pageWDip,
+        };
         try
         {
             hfView.LoadModel(wrapper);
+            if (isHeader)
+                hfView.ApplyWordHeaderInlineImageRasterHeights();
         }
         finally
         {

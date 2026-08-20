@@ -64,6 +64,7 @@ public sealed partial class DocumentView : RichTextBox
     private static readonly object SpellCheckDocumentAssignmentGate = new();
 
     private const double PxPerPoint = 96.0 / 72.0;
+
     // TableCell and BlockUIContainer already contribute this much horizontal content inset.
     private const double WpfTableCellContentInsetDip = 6.0;
     // WPF's Calibri line box remains about 1% short after restoring Word's 12-point application fallback.
@@ -13778,6 +13779,53 @@ public sealed partial class DocumentView : RichTextBox
         ApplyShapeModelEffects(element, shape.Effects, effectSet);
         element.Tag = shape; // carries the model shape so CommitToModel can round-trip it
         return new InlineUIContainer(element) { BaselineAlignment = BaselineAlignment.Bottom };
+    }
+
+    /// <summary>
+    /// Aligns inline image rectangles in an already-materialized header story with Word's lower
+    /// 96-DPI raster bound. This is intentionally invoked only by header composition callers.
+    /// </summary>
+    public void ApplyWordHeaderInlineImageRasterHeights()
+    {
+        foreach (var image in EnumerateInlineImages(Document.Blocks))
+        {
+            if (image.Tag is InlineImage)
+                image.Height = HeaderFooterVisualPlanner.ResolveInlineHeaderImageRasterHeightDip(image.Height);
+        }
+    }
+
+    private static IEnumerable<Image> EnumerateInlineImages(IEnumerable<System.Windows.Documents.Block> blocks)
+    {
+        foreach (var block in blocks)
+        {
+            if (block is WpfParagraph paragraph)
+            {
+                foreach (var paragraphImage in EnumerateInlineImages(paragraph.Inlines))
+                    yield return paragraphImage;
+            }
+            else if (block is WpfTable table)
+            {
+                foreach (var rowGroup in table.RowGroups)
+                foreach (var row in rowGroup.Rows)
+                foreach (var cell in row.Cells)
+                foreach (var cellImage in EnumerateInlineImages(cell.Blocks))
+                    yield return cellImage;
+            }
+        }
+    }
+
+    private static IEnumerable<Image> EnumerateInlineImages(IEnumerable<Inline> inlines)
+    {
+        foreach (var inline in inlines)
+        {
+            if (inline is InlineUIContainer { Child: Image image })
+                yield return image;
+            else if (inline is Span span)
+            {
+                foreach (var spanImage in EnumerateInlineImages(span.Inlines))
+                    yield return spanImage;
+            }
+        }
     }
 
     /// <summary>
