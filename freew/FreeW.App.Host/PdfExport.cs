@@ -112,67 +112,24 @@ internal static class PdfExport
     // page content. Returns one (possibly empty) overlay list per paginator page, in page order.
     private static IReadOnlyList<IReadOnlyList<PdfTextOverlay>> BuildTextOverlaysPerPage(DocumentPaginator paginator)
     {
-        using var ms = new MemoryStream();
+        // Read the glyph runs each rendered page already carries, rather than round-tripping the
+        // paginator through WPF's XPS serializer to get them back.
+        //
+        // The XPS route cannot be relied on: WPF subsets every font it serializes, and
+        // MS.Internal.TrueTypeSubsetter throws FileFormatException on a font it cannot parse. A stock
+        // Windows Calibri (6.27, 7048 glyphs -- GlyphTypeface loads it without complaint) fails it,
+        // which cost the entire selectable-text layer on that machine. Walking the page visual needs
+        // no serializer, package or subset, so it does not care what the fonts are.
+        //
+        // It is also better evidence: an XPS font resource URI carries no family name, so the XPS
+        // extractor had to substitute "Segoe UI", while a GlyphRun still knows its typeface.
         var overlaysPerPage = new List<IReadOnlyList<PdfTextOverlay>>();
-
-        // XpsDocument's package-only constructor leaves its Uri unset, and GetFixedDocumentSequence()
-        // needs that Uri to resolve the pack:// part references (fonts, fixed pages, etc.) it reads back
-        // -- without it, GetFixedDocumentSequence throws XpsPackagingException ("XpsDocument URI is
-        // null"). The Uri must itself be a "pack://" URI (built via PackUriHelper.Create from an
-        // arbitrary absolute inner URI -- it need not be reachable, only syntactically valid) and
-        // registered in PackageStore: WPF's pack:// request handler resolves each relative part against
-        // PackageStore keyed by this exact Uri, not against the XpsDocument instance directly, so a plain
-        // custom-scheme Uri fails reload with "The URI prefix is not recognized" instead of being served
-        // from memory. It is deregistered in the finally block so nothing leaks across export calls.
-        var documentUri = PackUriHelper.Create(new Uri($"http://freew-pdf-export.local/{Guid.NewGuid():N}.xps"));
-
-        // The package/XpsDocument must stay open while we read FixedPage roots back (GetPageRoot loads
-        // XAML lazily from the package parts), so extraction happens inside these using blocks.
-        using (var package = Package.Open(ms, FileMode.Create, FileAccess.ReadWrite))
+        for (var pageIndex = 0; pageIndex < paginator.PageCount; pageIndex++)
         {
-            PackageStore.AddPackage(documentUri, package);
-            try
-            {
-                using var xpsDocument = new XpsDocument(package, CompressionOption.NotCompressed, documentUri.ToString());
-                var writer = XpsDocument.CreateXpsDocumentWriter(xpsDocument);
-
-                // The text layer is an enhancement, not the export. WPF subsets every font it
-                // serializes, and MS.Internal.TrueTypeSubsetter throws FileFormatException on a
-                // font it cannot parse -- observed on a stock Windows Calibri. Letting that escape
-                // failed the whole PDF export over a selectable-text layer, so a user with one bad
-                // system font could not export at all. Degrade to a raster-only PDF instead.
-                try
-                {
-                    writer.Write(paginator);
-                }
-                catch (FileFormatException)
-                {
-                    return overlaysPerPage;
-                }
-
-                var sequence = xpsDocument.GetFixedDocumentSequence();
-                if (sequence is null)
-                    return overlaysPerPage;
-
-                foreach (var docRef in sequence.References)
-                {
-                    var fixedDoc = docRef.GetDocument(forceReload: false);
-                    if (fixedDoc is null)
-                        continue;
-
-                    foreach (PageContent pageContent in fixedDoc.Pages)
-                    {
-                        var fixedPage = pageContent.GetPageRoot(forceReload: false);
-                        overlaysPerPage.Add(fixedPage is null
-                            ? []
-                            : WpfXpsTextOverlayExtractor.Extract(fixedPage, DipToPoint));
-                    }
-                }
-            }
-            finally
-            {
-                PackageStore.RemovePackage(documentUri);
-            }
+            using var page = paginator.GetPage(pageIndex);
+            overlaysPerPage.Add(page?.Visual is { } visual
+                ? WpfVisualTextOverlayExtractor.Extract(visual, DipToPoint)
+                : []);
         }
 
         return overlaysPerPage;
