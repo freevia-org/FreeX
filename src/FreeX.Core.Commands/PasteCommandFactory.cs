@@ -13,6 +13,20 @@ public enum PasteCellsMode
 
 public static class PasteCommandFactory
 {
+    // shared-large-paste-F1: CreateTiledInternalPasteCommand (and its Formats/Operation/plain
+    // branches) build a List<(CellAddress, Cell)> preallocated to the FULL destination rectangle
+    // and then synchronously walk every one of those destination cells -- all on the caller's
+    // thread (both shells invoke this factory directly from a synchronous Ctrl+V handler, with no
+    // async offload, progress, or cancellation anywhere in the chain). Below this cap that is a
+    // multi-second UI freeze that scales with destination size; at whole-sheet scale (selection
+    // made via Ctrl+A/select-all, ~17.2 billion cells) the preallocation alone throws
+    // OutOfMemoryException, which is never caught as Handled by the WPF crash handler and takes
+    // the whole process down. Rejecting up-front keeps every tiled paste inside a bound that stays
+    // well under a second and a few hundred MB on the reference hardware used to measure this
+    // (10.5M cells measured at ~3.1s / ~1.1GB), rather than letting an oversized selection either
+    // hang the UI for tens of seconds or crash the app outright.
+    private const long MaxTiledPasteCellCount = 4_000_000;
+
     public static IWorkbookCommand CreateExternalTextPasteCommand(
         SheetId targetSheetId,
         CellAddress destination,
@@ -237,6 +251,17 @@ public static class PasteCommandFactory
         var shouldTileDestinationRange = targetRows > pasteRows || targetCols > pasteCols;
         if (shouldTileDestinationRange)
         {
+            // shared-large-paste-F1: reject before CreateTiledInternalPasteCommand preallocates a
+            // list sized to the whole destination rectangle and walks every cell in it on this
+            // (synchronous, UI) thread -- see MaxTiledPasteCellCount's doc comment above.
+            var tiledCellCount = (long)targetRows * targetCols;
+            if (tiledCellCount > MaxTiledPasteCellCount)
+            {
+                return new RejectedWorkbookCommand(
+                    "Paste",
+                    $"Paste destination is too large to fill with the copied cells ({targetRows:N0} x {targetCols:N0} = {tiledCellCount:N0} cells; the limit is {MaxTiledPasteCellCount:N0}). Select a smaller destination range and paste again.");
+            }
+
             // "All merging conditional formats" tiles its copied values/formats exactly like every
             // other Paste Special content kind (R25-clipboard-paste-remaining-2); the conditional-format
             // rule itself is still merged once, anchored at the destination's start, matching the

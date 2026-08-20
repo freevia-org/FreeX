@@ -215,7 +215,10 @@ public static class DocumentModelCloner
             ParagraphFormatRevision = preserveRevisions ? source.ParagraphFormatRevision : null,
             MarkRevision = preserveRevisions ? source.MarkRevision : RevisionKind.None,
             MarkRevisionAuthor = preserveRevisions ? source.MarkRevisionAuthor : null,
-            MarkRevisionDateXml = preserveRevisions ? source.MarkRevisionDateXml : null
+            MarkRevisionDateXml = preserveRevisions ? source.MarkRevisionDateXml : null,
+            // Direct formatting, not a tracked change — copies unconditionally like Formatting above,
+            // regardless of preserveRevisions.
+            MarkFormatting = source.MarkFormatting
         };
         clone.BookmarkNames.AddRange(source.BookmarkNames);
         clone.BookmarkBoundaries.AddRange(source.BookmarkBoundaries);

@@ -100,6 +100,53 @@ public static partial class BuiltInFunctions
         return ctx.CurrentWorkbook?.GetSheet(sheetName)?.Id.Equals(current.Sheet) == true;
     }
 
+    /// <summary>
+    /// Best-effort compile-time resolution of a single-cell target for a literal (constant-string)
+    /// INDIRECT argument -- e.g. the text of <c>INDIRECT("A1")</c> or <c>INDIRECT("Sheet2!A1")</c>
+    /// as it appears verbatim in the formula, before any runtime evaluation. Used only by
+    /// <c>FreeX.Core.Calc.RecalcEngine.CollectReferences</c> (see R156-freex-recalc-order-F1) to
+    /// register a real dependency-graph edge for the common literal-string INDIRECT idiom, so a
+    /// cycle formed by one static reference plus one such INDIRECT hop (e.g. A1=B1+1,
+    /// B1=INDIRECT("A1")) becomes a genuine graph cycle -- DependencyGraph.GetRecalcOrder already
+    /// detects and freezes an ordinary two-cell cycle at 0/#CIRCULAR!, but previously had no edge
+    /// to see this one by, since B1's read of "A1" only ever happened dynamically inside
+    /// IndirectCore at evaluation time.
+    ///
+    /// Deliberately narrow: only a bare single-cell A1-style reference (optionally sheet-qualified)
+    /// is resolved. Ranges, R1C1 text, named ranges, full-row/column, and any non-constant
+    /// (expression) argument are left unresolved (return false) exactly as before -- this only
+    /// closes the literal single-cell gap the finding's repro exercises, matching rule 7's "change
+    /// the minimum that fixes the defect."
+    /// </summary>
+    internal static bool TryResolveIndirectStaticCellTarget(
+        string refText,
+        out string? sheetName,
+        out uint row,
+        out uint col)
+    {
+        sheetName = null;
+        row = 0;
+        col = 0;
+
+        refText = refText.Trim();
+        var cellText = refText;
+        int bangIdx = FindSheetQualifierBangIndex(refText);
+        if (bangIdx >= 0)
+        {
+            var sheetPart = refText[..bangIdx];
+            if (sheetPart.StartsWith('\'') && sheetPart.EndsWith('\'') && sheetPart.Length >= 2)
+                sheetName = sheetPart[1..^1].Replace("''", "'");
+            else if (IsSimpleSheetQualifier(sheetPart))
+                sheetName = sheetPart;
+            else
+                return false;
+
+            cellText = refText[(bangIdx + 1)..];
+        }
+
+        return TryParseA1Ref(cellText, out row, out col);
+    }
+
     // Excel's INDIRECT (unlike a direct cell/range formula reference) requires the referenced
     // external workbook to actually be open in the same session -- it never falls back to an
     // externalLink's cached values the way e.g. ='[Data File.xlsx]Sheet1'!A1 does (see

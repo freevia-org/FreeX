@@ -2613,6 +2613,18 @@ public sealed class Paragraph : Block
     /// </summary>
     public string? MarkRevisionDateXml { get; set; }
 
+    /// <summary>
+    /// Direct character formatting carried by the paragraph mark itself (Word's <c>w:pPr/w:rPr</c>,
+    /// <c>CT_ParaRPr</c>), independent of any run in <see cref="Runs"/> and independent of
+    /// <see cref="MarkRevision"/> (the tracked-change <c>w:ins</c>/<c>w:del</c> on that same <c>rPr</c>).
+    /// This is what Word applies to newly typed text immediately after pressing Enter at the end of this
+    /// paragraph — a routine artifact of selecting through the pilcrow and applying formatting, or of a
+    /// template paragraph whose mark was reset to plain formatting so a Heading's bold/large font does not
+    /// carry into the next paragraph. Null means the mark carries no direct formatting of its own (the
+    /// common case). Mirrors <see cref="Run.Formatting"/> at the paragraph-mark level.
+    /// </summary>
+    public RunFormatting? MarkFormatting { get; set; }
+
     public Paragraph() { }
 
     public Paragraph(string text)

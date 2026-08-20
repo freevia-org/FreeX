@@ -7486,12 +7486,17 @@ public static class DocxReader
     }
 
     /// <summary>
-    /// Reads a tracked paragraph-MARK revision from a paragraph's <paramref name="pPr"/>/w:rPr (the
-    /// paragraph mark's own run properties, <c>CT_ParaRPr</c>) and stamps it onto <paramref name="paragraph"/>
-    /// as <see cref="Paragraph.MarkRevision"/>. A tracked Enter (paragraph split) carries w:pPr/w:rPr/w:ins
+    /// Reads a paragraph mark's own <c>CT_ParaRPr</c> (<paramref name="pPr"/>/w:rPr) and stamps two
+    /// independent things it can carry onto <paramref name="paragraph"/>: a tracked-change marker as
+    /// <see cref="Paragraph.MarkRevision"/>, and any direct character formatting as
+    /// <see cref="Paragraph.MarkFormatting"/>. A tracked Enter (paragraph split) carries w:pPr/w:rPr/w:ins
     /// on the newly created paragraph; a tracked Backspace/Delete (paragraph merge) carries w:pPr/w:rPr/w:del
     /// on the paragraph whose mark would be removed on accept. w:ins and w:del are mutually exclusive here
-    /// (mirrors run-level w:ins/w:del). A paragraph with neither is left untouched (None).
+    /// (mirrors run-level w:ins/w:del). Separately, the mark's own run properties (bold/italic/size/color/...)
+    /// — what Word applies to text typed right after pressing Enter at the end of this paragraph — sit
+    /// alongside w:ins/w:del in the same rPr and are read via the same <see cref="ReadRunFormatting"/> used
+    /// for runs. A paragraph whose rPr carries neither is left untouched (MarkRevision stays None,
+    /// MarkFormatting stays null).
     /// </summary>
     private static void ApplyParagraphMarkRevision(Paragraph paragraph, XElement? pPr)
     {
@@ -7512,6 +7517,13 @@ public static class DocxReader
             paragraph.MarkRevisionAuthor = delEl.Attribute(W + "author")?.Value;
             paragraph.MarkRevisionDateXml = delEl.Attribute(W + "date")?.Value;
         }
+        // The rest of rPr (CT_ParaRPr's EG_RPrBase run, e.g. w:b/w:i/w:sz/w:color) is the mark's own
+        // direct character formatting, independent of the w:ins/w:del marker above. ReadRunFormatting only
+        // looks up specific element names (w:b, w:i, ...), so the sibling w:ins/w:del elements do not
+        // affect it. Stored only when it actually differs from the all-default RunFormatting, so a mark
+        // with no direct formatting of its own round-trips with MarkFormatting left null.
+        var markFormatting = ReadRunFormatting(rPr);
+        paragraph.MarkFormatting = markFormatting == RunFormatting.Default ? null : markFormatting;
     }
 
     /// <summary>
@@ -7523,7 +7535,74 @@ public static class DocxReader
     private static string? ReadRunStyleId(XElement? rPr) =>
         rPr?.Element(W + "rStyle")?.Attribute(W + "val")?.Value;
 
-    internal static RunFormatting ReadRunFormatting(XElement? rPr)
+    /// <summary>
+    /// The document theme's major/minor typefaces per script (Latin, East Asian, complex-script), used
+    /// to resolve <c>w:rFonts</c>'s theme-token attributes (<c>w:asciiTheme</c>/<c>w:hAnsiTheme</c>/
+    /// <c>w:eastAsiaTheme</c>/<c>w:cstheme</c>) into literal font names. Real Word documents commonly bind
+    /// their default body font (<c>w:docDefaults/w:rPrDefault</c>) this way instead of via a literal
+    /// <c>w:ascii</c>, so a reader that only reads the literal attributes silently drops the document's
+    /// real font.
+    /// </summary>
+    internal readonly record struct ThemeFontResolution(
+        string? MajorLatin, string? MinorLatin,
+        string? MajorEastAsia, string? MinorEastAsia,
+        string? MajorComplexScript, string? MinorComplexScript);
+
+    /// <summary>
+    /// Resolves the package's theme part (via the same relationship/fallback lookup as
+    /// <see cref="ReadTheme"/>) into a <see cref="ThemeFontResolution"/>, or null when the package has no
+    /// theme part. <see cref="DrawingMlThemeFontScheme"/> only exposes the Latin typeface, so the East
+    /// Asian / complex-script typefaces are read directly from the theme's preserved native font-scheme
+    /// XML (<see cref="DrawingMlTheme.NativeFontSchemeXml"/>) rather than duplicating the shared reader.
+    /// </summary>
+    private static ThemeFontResolution? ResolveDocumentThemeFonts(ZipArchive archive)
+    {
+        var theme = DrawingMlThemeReader.TryReadThemePart(archive, "word/document.xml", "word/theme/theme1.xml");
+        if (theme is null)
+            return null;
+
+        XNamespace drawing = DrawingMlThemeReader.DrawingNamespaceUri;
+        XElement? fontScheme = string.IsNullOrEmpty(theme.NativeFontSchemeXml)
+            ? null
+            : XElement.Parse(theme.NativeFontSchemeXml);
+
+        string? ScriptTypeface(string fontElementName, string scriptElementName) =>
+            fontScheme?.Element(drawing + fontElementName)?.Element(drawing + scriptElementName)
+                ?.Attribute("typeface")?.Value;
+
+        return new ThemeFontResolution(
+            MajorLatin: theme.FontScheme.MajorLatinTypeface,
+            MinorLatin: theme.FontScheme.MinorLatinTypeface,
+            MajorEastAsia: ScriptTypeface("majorFont", "ea"),
+            MinorEastAsia: ScriptTypeface("minorFont", "ea"),
+            MajorComplexScript: ScriptTypeface("majorFont", "cs"),
+            MinorComplexScript: ScriptTypeface("minorFont", "cs"));
+    }
+
+    /// <summary>
+    /// Resolves one <c>w:rFonts</c> theme-token attribute value (e.g. <c>"minorHAnsi"</c>,
+    /// <c>"majorEastAsia"</c>) against a <see cref="ThemeFontResolution"/> for the given script slot.
+    /// Word's theme-token vocabulary always starts with "major" or "minor"; any other/absent value, or a
+    /// missing theme, resolves to null so callers fall back to their existing literal-font behaviour.
+    /// </summary>
+    private static string? ResolveThemeFontToken(string? themeToken, ThemeFontResolution? fonts, bool eastAsia, bool complexScript)
+    {
+        if (string.IsNullOrEmpty(themeToken) || fonts is not { } resolved)
+            return null;
+
+        var isMajor = themeToken.StartsWith("major", StringComparison.OrdinalIgnoreCase);
+        var isMinor = !isMajor && themeToken.StartsWith("minor", StringComparison.OrdinalIgnoreCase);
+        if (!isMajor && !isMinor)
+            return null;
+
+        if (eastAsia)
+            return isMajor ? resolved.MajorEastAsia : resolved.MinorEastAsia;
+        if (complexScript)
+            return isMajor ? resolved.MajorComplexScript : resolved.MinorComplexScript;
+        return isMajor ? resolved.MajorLatin : resolved.MinorLatin;
+    }
+
+    internal static RunFormatting ReadRunFormatting(XElement? rPr, ThemeFontResolution? themeFonts = null)
     {
         if (rPr is null)
             return RunFormatting.Default;
@@ -7590,6 +7669,20 @@ public static class DocxReader
         var asciiFont = rFontsElement?.Attribute(W + "ascii")?.Value;
         var eastAsiaFont = rFontsElement?.Attribute(W + "eastAsia")?.Value;
         var complexScriptFont = rFontsElement?.Attribute(W + "cs")?.Value;
+
+        // w:asciiTheme/w:hAnsiTheme/w:eastAsiaTheme/w:cstheme bind rFonts to the theme's major/minor font
+        // instead of a literal name — the standard shape of Word's own blank-document docDefaults (no
+        // literal w:ascii at all). Only consulted when the literal attribute is absent, so an explicit
+        // literal font (the common per-run case) is never overridden by a theme token.
+        if (string.IsNullOrEmpty(asciiFont))
+        {
+            asciiFont = ResolveThemeFontToken(rFontsElement?.Attribute(W + "asciiTheme")?.Value, themeFonts, eastAsia: false, complexScript: false)
+                ?? ResolveThemeFontToken(rFontsElement?.Attribute(W + "hAnsiTheme")?.Value, themeFonts, eastAsia: false, complexScript: false);
+        }
+        if (string.IsNullOrEmpty(eastAsiaFont))
+            eastAsiaFont = ResolveThemeFontToken(rFontsElement?.Attribute(W + "eastAsiaTheme")?.Value, themeFonts, eastAsia: true, complexScript: false);
+        if (string.IsNullOrEmpty(complexScriptFont))
+            complexScriptFont = ResolveThemeFontToken(rFontsElement?.Attribute(W + "cstheme")?.Value, themeFonts, eastAsia: false, complexScript: true);
 
         return new RunFormatting
         {
@@ -7968,6 +8061,11 @@ public static class DocxReader
         if (stylesXml is null)
             return;
 
+        // Resolved once per document: lets w:docDefaults/w:rPrDefault and named-style w:rPr below resolve
+        // w:rFonts theme-token attributes (w:asciiTheme etc.) into literal font names. See
+        // ResolveDocumentThemeFonts for why this can't just reuse document.Theme (a preset, not raw names).
+        var themeFonts = ResolveDocumentThemeFonts(archive);
+
         // w:docDefaults/w:pPrDefault/w:pPr is the document's default paragraph spacing, applied to any
         // paragraph that does not set its own (Word's cascade root). FreeW ignored it, so every paragraph
         // rendered at 0 space-after / 1.15 line regardless of the document — drifting vs Word down the page.
@@ -7992,7 +8090,7 @@ public static class DocxReader
         if (ddRPr is not null)
         {
             document.UseWordApplicationDefaultRunFormatting = false;
-            var defaultRun = ReadRunFormatting(ddRPr);
+            var defaultRun = ReadRunFormatting(ddRPr, themeFonts);
             // Merge: keep the existing DefaultRun value for any field that docDefaults does not override.
             document.DefaultRun = document.DefaultRun with
             {
@@ -8078,7 +8176,7 @@ public static class DocxReader
                 // linked style pairs stay linked on save instead of silently unlinking.
                 LinkedStyleId = s.Element(W + "link")?.Attribute(W + "val")?.Value,
                 OutlineLevel = ReadOutlineLevel(pPr),
-                Run = rPr is null ? RunFormatting.Default : ReadRunFormatting(rPr),
+                Run = rPr is null ? RunFormatting.Default : ReadRunFormatting(rPr, themeFonts),
                 Paragraph = pPr is null ? ParagraphFormatting.Default : ReadParagraphFormatting(pPr),
                 // A table style (e.g. the built-in TableGrid) defines its cell borders in w:tblPr/w:tblBorders;
                 // capture whether they are visible so a table referencing this style draws them even without

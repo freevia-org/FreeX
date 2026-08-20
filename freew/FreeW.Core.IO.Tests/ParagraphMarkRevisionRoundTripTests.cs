@@ -148,4 +148,98 @@ public class ParagraphMarkRevisionRoundTripTests
         WriteDocumentXml(doc).Descendants(W + "p").Single().Element(W + "pPr")?.Element(W + "rPr").Should().BeNull();
         RoundTrip(doc).Paragraphs.First().MarkRevision.Should().Be(RevisionKind.None);
     }
+
+    // --- freew-style-separator F2: direct character formatting on the paragraph mark itself ---
+    // (CT_ParaRPr's own rPr, independent of w:ins/w:del) must survive a load -> save round trip, not be
+    // silently dropped. Reproduces the finding's probe: a real-Word paragraph whose mark carries direct
+    // bold/italic/size/color with no tracked-change marker at all.
+
+    [Fact]
+    public void MarkedParagraph_WithDirectFormatting_RoundTrips_PreservingFormatting()
+    {
+        var doc = new TextDocument();
+        doc.Blocks.Add(new Paragraph("plain text")
+        {
+            MarkFormatting = new RunFormatting { Bold = true, Italic = true, FontSizePt = 20, ColorHex = "#FF0000" }
+        });
+
+        var reloaded = RoundTrip(doc);
+        var paragraph = reloaded.Paragraphs.Single();
+
+        // The mark's own formatting round-trips even though the visible run carries none of it.
+        paragraph.MarkFormatting.Should().NotBeNull();
+        paragraph.MarkFormatting!.Bold.Should().BeTrue();
+        paragraph.MarkFormatting!.Italic.Should().BeTrue();
+        paragraph.MarkFormatting!.FontSizePt.Should().Be(20);
+        paragraph.MarkFormatting!.ColorHex.Should().Be("#FF0000");
+        paragraph.MarkRevision.Should().Be(RevisionKind.None);
+        paragraph.PlainText.Should().Be("plain text");
+        paragraph.Runs.Single().Formatting.Bold.Should().BeFalse();
+    }
+
+    [Fact]
+    public void MarkedParagraph_WithDirectFormatting_SerialisesBoldItalicSizeColor_InPPrRPr()
+    {
+        var xml = WriteDocumentXml(new TextDocument
+        {
+            Blocks =
+            {
+                new Paragraph("plain text")
+                {
+                    MarkFormatting = new RunFormatting { Bold = true, Italic = true, FontSizePt = 20, ColorHex = "#FF0000" }
+                }
+            }
+        });
+
+        var rPr = xml.Descendants(W + "p").Single().Element(W + "pPr")!.Element(W + "rPr")!;
+        rPr.Element(W + "b").Should().NotBeNull();
+        rPr.Element(W + "i").Should().NotBeNull();
+        rPr.Element(W + "sz")!.Attribute(W + "val")!.Value.Should().Be("40"); // half-points
+        rPr.Element(W + "color")!.Attribute(W + "val")!.Value.Should().Be("FF0000");
+        // No tracked-change marker: the mark's formatting is independent of MarkRevision.
+        rPr.Element(W + "ins").Should().BeNull();
+        rPr.Element(W + "del").Should().BeNull();
+    }
+
+    [Fact]
+    public void MarkedParagraph_WithBothRevisionAndDirectFormatting_RoundTrips_PreservingBoth()
+    {
+        // The tracked-change marker (w:ins/w:del) and the mark's own direct formatting share one rPr;
+        // both must survive together, with the marker still first per CT_ParaRPr schema order.
+        var doc = new TextDocument();
+        doc.Blocks.Add(new Paragraph("split here")
+        {
+            MarkRevision = RevisionKind.Inserted,
+            MarkRevisionAuthor = "Dana",
+            MarkRevisionDateXml = "2026-07-30T14:00:00Z",
+            MarkFormatting = new RunFormatting { Bold = true }
+        });
+
+        var xml = WriteDocumentXml(doc);
+        var rPr = xml.Descendants(W + "p").Single().Element(W + "pPr")!.Element(W + "rPr")!;
+        rPr.Elements().First().Name.Should().Be(W + "ins");
+        rPr.Element(W + "b").Should().NotBeNull();
+
+        var reloaded = RoundTrip(doc).Paragraphs.Single();
+        reloaded.MarkRevision.Should().Be(RevisionKind.Inserted);
+        reloaded.MarkRevisionAuthor.Should().Be("Dana");
+        reloaded.MarkFormatting.Should().NotBeNull();
+        reloaded.MarkFormatting!.Bold.Should().BeTrue();
+    }
+
+    // Sibling no-regression: a paragraph mark with a tracked-change marker but no direct formatting of its
+    // own (the existing, already-covered case above) must keep emitting a single-element rPr, not gain a
+    // spurious empty run-properties element now that MarkFormatting exists on the model.
+    [Fact]
+    public void MarkedParagraph_WithRevisionOnly_StillEmitsSingleElementRPr_AndMarkFormattingStaysNull()
+    {
+        var reloaded = RoundTrip(BuildDocumentWithMarkedParagraph(RevisionKind.Deleted)).Paragraphs.ToList();
+
+        reloaded[1].MarkRevision.Should().Be(RevisionKind.Deleted);
+        reloaded[1].MarkFormatting.Should().BeNull();
+
+        var xml = WriteDocumentXml(BuildDocumentWithMarkedParagraph(RevisionKind.Deleted));
+        var rPr = xml.Descendants(W + "p").ElementAt(1).Element(W + "pPr")!.Element(W + "rPr")!;
+        rPr.Elements().Single().Name.Should().Be(W + "del");
+    }
 }

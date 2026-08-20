@@ -2892,6 +2892,40 @@ public sealed class RecalcEngine
                 return CollectReferences(lambdaArgs[^1], defaultSheetId, formulaCell, workbook, refs, ref cacheableForDependencyPlan, namedFormulaStack, scopeNames);
             }
 
+            // R156-freex-recalc-order-F1: a literal-string INDIRECT("A1") / INDIRECT("Sheet!A1")
+            // target is exactly as static as a plain cell reference, so register the same
+            // dependency edge a bare `=A1` reference would. Without this, a mixed cycle (one leg an
+            // ordinary reference, the other leg this literal INDIRECT hop -- e.g. A1=B1+1,
+            // B1=INDIRECT("A1")) is invisible to DependencyGraph: B1 registers zero precedents, so
+            // GetRecalcOrder sees an ordinary acyclic chain and never routes either cell through
+            // cyclic-cell handling, and the pair drifts by +1 forever instead of freezing at 0 with
+            // #CIRCULAR!. Deliberately skip when the resolved target IS formulaCell itself -- that
+            // direct single-cell self-reference (e.g. A1=INDIRECT("A1")+1) is already fully handled
+            // by IsIndirectSelfReference's own runtime sentinel + RunIterativeCalc pairing (see its
+            // remarks in BuiltInFunctions.Lookup.Indirect.cs), which this static edge must not
+            // disturb -- adding a self-edge here would route it through structural cycle detection
+            // instead and risk breaking that already-verified iterative-calculation convergence.
+            case FunctionCallNode indirectCall when
+                string.Equals(indirectCall.FunctionName, "INDIRECT", StringComparison.OrdinalIgnoreCase) &&
+                indirectCall.Arguments.Count == 1 &&
+                indirectCall.Arguments[0] is StringNode { Value: var indirectRefText } &&
+                BuiltInFunctions.TryResolveIndirectStaticCellTarget(indirectRefText, out var indirectSheetName, out var indirectRow, out var indirectCol):
+            {
+                var indirectTargetSheetId = indirectSheetName is null
+                    ? defaultSheetId
+                    : workbook?.GetSheet(indirectSheetName)?.Id;
+
+                if (indirectTargetSheetId is { } resolvedIndirectSheetId)
+                {
+                    cacheableForDependencyPlan = false;
+                    var indirectTarget = new CellAddress(resolvedIndirectSheetId, indirectRow, indirectCol);
+                    if (indirectTarget != formulaCell)
+                        refs.Add(indirectTarget);
+                }
+
+                return true; // INDIRECT is always volatile -- see IsVolatileFunctionName.
+            }
+
             case FunctionCallNode func:
             {
                 var containsVolatileFunction = IsVolatileFunctionName(func.FunctionName) && !IsNonVolatileCellOrInfoCall(func);

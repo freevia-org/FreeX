@@ -115,6 +115,22 @@ public sealed class WorkbookOpenService
 
                 var loadedWorkbook = adapter.Load(fileStream);
                 cancellationToken.ThrowIfCancellationRequested();
+                // R156-appservices-open-fallback-grid-limit: every other importable format (CSV/TSV,
+                // fixed-width PRN, Symbolic Link SLK, Data Interchange DIF, dBase DBF, ODS, the legacy
+                // SpreadsheetML .xml, native .fxl JSON, HTML/PDF table paste, ...) lands here with no
+                // LoadWithWarnings counterpart the way XlsxFileAdapter/LegacyXlsFileAdapter have above --
+                // their readers just stop writing cells once a row/column index passes
+                // CellAddress.MaxRow/MaxCol (e.g. DelimitedTextWorkbookReader.Load's
+                // "if (row > CellAddress.MaxRow) break;", mirrored in PrnFileAdapter/DbfFileAdapter/
+                // SlkFileAdapter/DifFileAdapter/OdsFileAdapter.Read). A source file bigger than the grid
+                // therefore previously opened "successfully" with zero signal that anything was dropped,
+                // and a later Save over the original file would then unrecoverably lose that data. Every
+                // one of those readers breaks exactly AT the boundary, so a sheet whose used range still
+                // reaches FreeX's very last supported row/column is the same signal real Excel itself
+                // uses to show its own "not all data was loaded" warning on this same gesture -- detect
+                // it here (format-agnostically, since none of those readers expose a warning channel of
+                // their own) instead of duplicating this check per-adapter.
+                loadWarnings = DetectGridLimitTruncationWarnings(loadedWorkbook);
                 return loadedWorkbook;
             },
             CreateProgressUpdate,
@@ -211,6 +227,38 @@ public sealed class WorkbookOpenService
             FileShare.Read,
             bufferSize: 1024 * 128,
             useAsync: true);
+    }
+
+    /// <summary>
+    /// Detects the one signal available to the generic (non-xlsx/xls) load path: a sheet whose used
+    /// range still reaches FreeX's outer row/column limit after every fallback reader silently stops
+    /// writing cells at that exact boundary (see the call site above). Returns one warning per
+    /// affected sheet, worded like the xlsx/xls load-warning strings already shown by
+    /// ShowXlsxLoadWarningsIfNeeded so the message reads consistently regardless of source format.
+    /// </summary>
+    private static IReadOnlyList<string> DetectGridLimitTruncationWarnings(Workbook workbook)
+    {
+        List<string>? warnings = null;
+        foreach (var sheet in workbook.Sheets)
+        {
+            var usedRange = sheet.GetUsedRange();
+            if (usedRange is not { } range)
+                continue;
+
+            var hitRowLimit = range.End.Row >= CellAddress.MaxRow;
+            var hitColLimit = range.End.Col >= CellAddress.MaxCol;
+            if (!hitRowLimit && !hitColLimit)
+                continue;
+
+            warnings ??= [];
+            warnings.Add(hitRowLimit && hitColLimit
+                ? $"[grid-limit] Sheet '{sheet.Name}': the source file may contain more rows and columns than this sheet's {CellAddress.MaxRow:N0}-row, {CellAddress.MaxCol:N0}-column limit; anything beyond that limit was not loaded."
+                : hitRowLimit
+                    ? $"[grid-limit] Sheet '{sheet.Name}': the source file may contain more than {CellAddress.MaxRow:N0} rows; rows beyond that limit were not loaded."
+                    : $"[grid-limit] Sheet '{sheet.Name}': the source file may contain more than {CellAddress.MaxCol:N0} columns; columns beyond that limit were not loaded.");
+        }
+
+        return warnings ?? (IReadOnlyList<string>)[];
     }
 
     private static bool IsOpenXmlExcelPackageExtension(string extension) =>

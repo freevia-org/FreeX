@@ -305,13 +305,21 @@ public static class SlideCompositor
             ? PlaceholderResolver.FindMasterPlaceholder(shape.Placeholder, slide, presentation)
             : null;
 
+        // freep-master-inheritance F2: shape's own effects, else layout placeholder's, else
+        // master placeholder's -- the same three-level chain fill/outline already use below. A
+        // slide placeholder that (as PowerPoint normally authors it) omits effectLst/p:style
+        // effectRef of its own relies on the layout/master placeholder's shadow/glow/soft
+        // edge/bevel/reflection, so this lookup must happen even when the shape has no effects
+        // of its own.
+        var effectiveEffects = shape.Effects ?? placeholderLayoutPh?.Effects ?? placeholderMasterPh?.Effects;
+
         // Resolve fill: shape's own fill, else layout placeholder's, else master placeholder's,
         // else the transparent default.
         var effectiveFillSource = shape.Fill ?? placeholderLayoutPh?.Fill ?? placeholderMasterPh?.Fill;
         var fill = effectiveFillSource is not null
             ? ResolveFill(effectiveFillSource, theme, effectiveClrMap)
             : InferDefaultFill(shape, theme);
-        if (shape.Effects?.Scene3d is not null)
+        if (effectiveEffects?.Scene3d is not null)
             fill = ResolveScene3dMaterialFill(fill);
 
         // Resolve outline: shape's own outline, else layout placeholder's, else master
@@ -343,9 +351,11 @@ public static class SlideCompositor
 
             // PowerPoint applies a shape effect to the glyphs of a text-only,
             // no-fill text box. Carry that shadow onto runs so renderers do not
-            // shadow the empty rectangular frame instead.
-            var inheritedTextShadow = shape.Fill is ShapeFill.None && shape.Effects?.HasOuterShadow == true
-                ? ResolveShapeShadowAsTextShadow(shape.Effects)
+            // shadow the empty rectangular frame instead. Uses the same inherited
+            // (layout/master placeholder) effects as the shape-level Effects below, so an
+            // inherited shadow gets the identical no-fill-text-box treatment as an authored one.
+            var inheritedTextShadow = shape.Fill is ShapeFill.None && effectiveEffects?.HasOuterShadow == true
+                ? ResolveShapeShadowAsTextShadow(effectiveEffects)
                 : null;
 
             var textInsets = TextFrameLayoutPlanner.FromOptionalInsets(
@@ -387,7 +397,7 @@ public static class SlideCompositor
             FlipV = anchor.FlipV,
             BoundsDip = boundsDip,
             Text = text,
-            Effects = ResolveEffects(shape.Effects),
+            Effects = ResolveEffects(effectiveEffects),
             ElbowRouteDip = elbowRouteDip,
         });
     }
@@ -2287,6 +2297,101 @@ public static class SlideCompositor
         };
     }
 
+    /// <summary>
+    /// shared-theme-fonts F3: resolves a run/field-level East-Asian or complex-script font
+    /// token ("+mj-ea"/"+mn-ea"/"+mj-cs"/"+mn-cs") against the already-extracted theme ea/cs
+    /// typefaces (see <see cref="ResolveThemeScriptFonts"/>). Any other value (an explicit
+    /// typeface name, or an empty/null override) passes through unchanged/null so the caller
+    /// can fall further up its own inheritance chain.
+    /// </summary>
+    private static string? ResolveScriptFontToken(string? font, string? majorFont, string? minorFont) =>
+        font switch
+        {
+            null or "" => null,
+            "+mj-ea" or "+mj-cs" => majorFont,
+            "+mn-ea" or "+mn-cs" => minorFont,
+            _ => font
+        };
+
+    /// <summary>
+    /// shared-theme-fonts F3: extracts the theme's East-Asian and complex-script typefaces
+    /// (a:fontScheme/a:majorFont|minorFont/a:ea|a:cs/@typeface) for +mj-ea/+mn-ea/+mj-cs/+mn-cs
+    /// token expansion. <see cref="PresentationFontScheme"/> only models the Latin typefaces, so
+    /// this reads the raw fontScheme XML preserved on <see cref="PresentationTheme.NativeFontSchemeXml"/>
+    /// for the write-side latin-patch-preserve mechanism. Matches child elements by local name
+    /// (like the other preserved-raw-XML readers in this file) so the lookup is unaffected by
+    /// whichever namespace prefix the XML happened to serialize with.
+    /// </summary>
+    private static (string? MajorEa, string? MinorEa, string? MajorCs, string? MinorCs) ResolveThemeScriptFonts(
+        PresentationTheme theme)
+    {
+        if (string.IsNullOrWhiteSpace(theme.NativeFontSchemeXml))
+            return (null, null, null, null);
+
+        XElement fontScheme;
+        try
+        {
+            fontScheme = XElement.Parse(theme.NativeFontSchemeXml);
+        }
+        catch (Exception ex) when (ex is not OutOfMemoryException)
+        {
+            return (null, null, null, null);
+        }
+
+        static string? Typeface(XElement? font, string localName) =>
+            font?.Elements().FirstOrDefault(e => e.Name.LocalName == localName)
+                ?.Attribute("typeface")?.Value is { Length: > 0 } tf
+                ? tf
+                : null;
+
+        var majorFont = fontScheme.Elements().FirstOrDefault(e => e.Name.LocalName == "majorFont");
+        var minorFont = fontScheme.Elements().FirstOrDefault(e => e.Name.LocalName == "minorFont");
+
+        return (Typeface(majorFont, "ea"), Typeface(minorFont, "ea"),
+                Typeface(majorFont, "cs"), Typeface(minorFont, "cs"));
+    }
+
+    /// <summary>
+    /// shared-theme-fonts F3: true when <paramref name="text"/> contains a character from the
+    /// common CJK/Hangul/fullwidth-forms ranges, mirroring the coarse block-range check
+    /// PptxPackageWriter.IsWideEstimateCharacter already uses for autofit width estimation
+    /// (not a full East-Asian-Width table, but the ranges that dominate real documents).
+    /// </summary>
+    private static bool ContainsEastAsianCharacters(string text)
+    {
+        foreach (var rune in text.EnumerateRunes())
+        {
+            int cp = rune.Value;
+            if ((cp is >= 0x1100 and <= 0x115F)      // Hangul Jamo
+                || (cp is >= 0x2E80 and <= 0xA4CF)   // CJK radicals .. Yi (covers Hiragana/Katakana/Han)
+                || (cp is >= 0xAC00 and <= 0xD7A3)   // Hangul Syllables
+                || (cp is >= 0xF900 and <= 0xFAFF)   // CJK Compatibility Ideographs
+                || (cp is >= 0xFF00 and <= 0xFFEF)   // Halfwidth/Fullwidth Forms
+                || (cp is >= 0x20000 and <= 0x3FFFD)) // CJK Unified Ideographs Ext. B+
+                return true;
+        }
+        return false;
+    }
+
+    /// <summary>
+    /// shared-theme-fonts F3: true when <paramref name="text"/> contains a character from the
+    /// scripts DrawingML routes through a:cs (right-to-left and complex-shaping scripts).
+    /// </summary>
+    private static bool ContainsComplexScriptCharacters(string text)
+    {
+        foreach (var rune in text.EnumerateRunes())
+        {
+            int cp = rune.Value;
+            if ((cp is >= 0x0590 and <= 0x08FF)      // Hebrew, Arabic, Syriac, Thaana, Samaritan
+                || (cp is >= 0x0900 and <= 0x0DFF)   // Devanagari .. Sinhala (Indic scripts)
+                || (cp is >= 0x0E00 and <= 0x0E7F)   // Thai
+                || (cp is >= 0xFB1D and <= 0xFDFF)   // Hebrew/Arabic presentation forms A
+                || (cp is >= 0xFE70 and <= 0xFEFF))  // Arabic presentation forms B
+                return true;
+        }
+        return false;
+    }
+
     private static ResolvedTextLayout ResolveTextLayout(
         TextBody body,
         PresentationModel presentation,
@@ -2315,6 +2420,25 @@ public static class SlideCompositor
         {
             PlaceholderType.Title or PlaceholderType.CenteredTitle => theme.FontScheme.MajorLatinFont,
             _ => theme.FontScheme.MinorLatinFont
+        };
+
+        // shared-theme-fonts F3: resolve the theme's East-Asian/complex-script typefaces once
+        // per text body (mirrors fallbackFont above) so a run whose text is actually East-Asian
+        // or complex-script can prefer them over the Latin font, even when the run itself has
+        // no explicit a:ea/a:cs override -- an unset a:ea/a:cs ultimately resolves to the
+        // theme's +mn-ea/+mj-ea (or +mn-cs/+mj-cs) per ECMA-376, same as fallbackFont does today
+        // for the Latin typeface.
+        var (themeMajorEaFont, themeMinorEaFont, themeMajorCsFont, themeMinorCsFont) =
+            ResolveThemeScriptFonts(theme);
+        string? fallbackEaFont = placeholder?.Type switch
+        {
+            PlaceholderType.Title or PlaceholderType.CenteredTitle => themeMajorEaFont,
+            _ => themeMinorEaFont
+        };
+        string? fallbackCsFont = placeholder?.Type switch
+        {
+            PlaceholderType.Title or PlaceholderType.CenteredTitle => themeMajorCsFont,
+            _ => themeMinorCsFont
         };
 
         // Determine placeholder category for master txStyles lookup (MM3).
@@ -2397,10 +2521,38 @@ public static class SlideCompositor
                 string? fieldFont = run.Field?.FontFamily is { Length: > 0 } ff
                     ? ResolveLatinFont(ff, theme)
                     : null;
-                string fontFamily = (run.FontFamily is { Length: > 0 } rf ? ResolveLatinFont(rf, theme) : null)
+                string latinFontFamily = (run.FontFamily is { Length: > 0 } rf ? ResolveLatinFont(rf, theme) : null)
                     ?? fieldFont
                     ?? inheritedFont
                     ?? fallbackFont;
+
+                // shared-theme-fonts F3: a run/field whose resolved TEXT is East-Asian or
+                // complex-script needs its a:ea/a:cs typeface (explicit override, theme token,
+                // or the theme's own ea/cs default), not the Latin typeface resolved above --
+                // PowerPoint never draws CJK or RTL/complex-shaping glyphs with the Latin face.
+                string? scriptFontFamily = null;
+                if (ContainsEastAsianCharacters(resolvedText))
+                {
+                    string? runEaFont = run.EastAsiaFontFamily is { Length: > 0 } rea
+                        ? ResolveScriptFontToken(rea, themeMajorEaFont, themeMinorEaFont)
+                        : null;
+                    string? fieldEaFont = run.Field?.EastAsiaFontFamily is { Length: > 0 } ffea
+                        ? ResolveScriptFontToken(ffea, themeMajorEaFont, themeMinorEaFont)
+                        : null;
+                    scriptFontFamily = runEaFont ?? fieldEaFont ?? fallbackEaFont;
+                }
+                else if (ContainsComplexScriptCharacters(resolvedText))
+                {
+                    string? runCsFont = run.ComplexScriptFontFamily is { Length: > 0 } rcs
+                        ? ResolveScriptFontToken(rcs, themeMajorCsFont, themeMinorCsFont)
+                        : null;
+                    string? fieldCsFont = run.Field?.ComplexScriptFontFamily is { Length: > 0 } ffcs
+                        ? ResolveScriptFontToken(ffcs, themeMajorCsFont, themeMinorCsFont)
+                        : null;
+                    scriptFontFamily = runCsFont ?? fieldCsFont ?? fallbackCsFont;
+                }
+
+                string fontFamily = scriptFontFamily is { Length: > 0 } ? scriptFontFamily : latinFontFamily;
 
                 // Font size: explicit run > field > inherited style > hard-coded fallback.
                 // Wave 19A: apply normAutofit fontScale if set.

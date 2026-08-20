@@ -1536,6 +1536,68 @@ public sealed class EditingSessionTests
         sess.CurrentSlide.Shapes.Should().ContainSingle();
     }
 
+    // freep-media F1: InsertMedia must attach a poster image (shape.Picture) so the compositor
+    // takes the DrawOp.Picture branch (which carries the play-button glyph and, on save, a real
+    // <a:blip> in blipFill) instead of the "no poster" flat-rectangle fallback.
+    [Theory]
+    [InlineData(true, "video/mp4")]
+    [InlineData(false, "audio/mpeg")]
+    public void InsertMedia_AttachesPosterPicture_SoCompositorEmitsMediaPictureOp(bool isVideo, string contentType)
+    {
+        var sess  = Make();
+        var shape = sess.InsertMedia(new byte[] { 1, 2, 3 }, isVideo, contentType);
+
+        // The poster must be a real, structurally valid image (PNG signature + IHDR chunk),
+        // not just any non-null placeholder object -- PptxPackageWriter.BuildMediaPicEl only
+        // treats the poster as real if it can be embedded as a media part, and the shells'
+        // renderers decode shape.Picture.Bytes through an actual image codec.
+        shape.Picture.Should().NotBeNull();
+        shape.Picture!.Bytes.Should().NotBeEmpty();
+        AssertLooksLikeValidPng(shape.Picture.Bytes);
+        shape.Picture.ContentType.Should().Be("image/png");
+
+        // And the compositor must actually take the DrawOp.Picture(IsMedia=true) branch for
+        // this shape now -- that is the branch PictureRenderPlanner reads to plan the
+        // media play-button glyph; the "no poster" branch never gets a glyph.
+        var ops = SlideCompositor.Compose(sess.Presentation, sess.CurrentSlide!, slideIndex: 0);
+        var pic = ops.OfType<DrawOp.Picture>().FirstOrDefault(p => p.ShapeId == shape.Id);
+        pic.Should().NotBeNull("a media shape with a poster must render as DrawOp.Picture, not the dark-rectangle DrawOp.Shape fallback");
+        pic!.IsMedia.Should().BeTrue();
+    }
+
+    // Sibling/no-regression: InsertPicture must keep using exactly the caller-supplied image
+    // bytes -- it must not be redirected through the media-poster placeholder generator.
+    [Fact]
+    public void InsertPicture_StillUsesCallerSuppliedBytes_NotAPlaceholder()
+    {
+        var sess = Make();
+        var suppliedBytes = new byte[] { 0x89, 0x50, 0x4E, 0x47, 1, 2, 3, 4 };
+
+        var shape = sess.InsertPicture(suppliedBytes, "image/jpeg");
+
+        shape.Kind.Should().Be(SlideShapeKind.Picture);
+        shape.Picture.Should().NotBeNull();
+        shape.Picture!.Bytes.Should().Equal(suppliedBytes);
+        shape.Picture.ContentType.Should().Be("image/jpeg");
+    }
+
+    /// <summary>Minimal structural PNG check: signature + a well-formed IHDR chunk.</summary>
+    private static void AssertLooksLikeValidPng(byte[] bytes)
+    {
+        ReadOnlySpan<byte> pngSignature = [0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A];
+        bytes.Length.Should().BeGreaterThanOrEqualTo(8 + 8 + 13 + 4, "a valid PNG needs at least a signature, an IHDR chunk header, IHDR's 13 data bytes, and its CRC");
+        bytes.AsSpan(0, 8).SequenceEqual(pngSignature).Should().BeTrue("file must start with the PNG signature");
+
+        var ihdrLength = (bytes[8] << 24) | (bytes[9] << 16) | (bytes[10] << 8) | bytes[11];
+        ihdrLength.Should().Be(13, "IHDR's data payload is always 13 bytes");
+        Encoding.ASCII.GetString(bytes, 12, 4).Should().Be("IHDR");
+
+        var width  = (bytes[16] << 24) | (bytes[17] << 16) | (bytes[18] << 8) | bytes[19];
+        var height = (bytes[20] << 24) | (bytes[21] << 16) | (bytes[22] << 8) | bytes[23];
+        width.Should().BeGreaterThan(0);
+        height.Should().BeGreaterThan(0);
+    }
+
     [Fact]
     public void InsertDefaultRectangle_AddsRectangle()
     {

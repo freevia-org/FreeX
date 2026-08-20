@@ -480,13 +480,25 @@ public partial class GridView
             return schemeName;
 
         // Excel-authored workbooks can persist the resolved concrete face together with a theme
-        // scheme marker. Preserve that explicit face for modern fonts such as Aptos Narrow; legacy
-        // Calibri placeholders still follow the workbook theme so Theme Fonts changes are honored.
-        return IsLegacyThemeFontPlaceholder(explicitName) ? schemeName : explicitName;
+        // scheme marker. Preserve that explicit face for genuinely distinct faces such as Aptos
+        // Narrow (a PivotTable style may pin that narrow variant even though the theme's scheme
+        // font is the plain family); default theme placeholder names -- legacy Calibri (either
+        // scheme) and Calibri Light, plus the modern Aptos/Aptos Display defaults -- still follow
+        // the workbook theme so Theme Fonts changes are honored, matching the non-WPF-grid
+        // resolution paths (CellStyle.ResolveEffectiveFontName, Avalonia, PDF/HTML/ODS export).
+        return IsDefaultThemeFontPlaceholder(explicitName, style.FontScheme) ? schemeName : explicitName;
     }
 
-    private static bool IsLegacyThemeFontPlaceholder(string fontName) =>
-        string.Equals(fontName, "Calibri", StringComparison.OrdinalIgnoreCase);
+    private static bool IsDefaultThemeFontPlaceholder(string fontName, CellFontScheme scheme) =>
+        // "Calibri" was the original legacy placeholder recognized for either scheme (see the
+        // MajorScheme test asserting a Calibri-named heading style still follows the theme); keep
+        // that scheme-agnostic behavior and additionally recognize the scheme-specific modern
+        // (Aptos/Aptos Display) and legacy-major (Calibri Light) default placeholder names.
+        string.Equals(fontName, "Calibri", StringComparison.OrdinalIgnoreCase) ||
+        (scheme == CellFontScheme.Major
+            ? string.Equals(fontName, "Calibri Light", StringComparison.OrdinalIgnoreCase) ||
+              string.Equals(fontName, "Aptos Display", StringComparison.OrdinalIgnoreCase)
+            : string.Equals(fontName, "Aptos", StringComparison.OrdinalIgnoreCase));
 
     internal static string ResolveCellFontNameForDisplay(string? fontName) =>
         ResolveCellFontNameForDisplay(fontName, AvailableCellFontNames.Value.Contains);

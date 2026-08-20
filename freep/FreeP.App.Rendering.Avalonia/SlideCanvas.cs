@@ -155,6 +155,15 @@ public sealed partial class SlideCanvas : Control
     private readonly PresentationCanvasAutomationSession _canvasAutomation = new();
 
     /// <summary>
+    /// Makes the canvas itself a real keyboard-focus target. Host wiring (FreeP.App.Avalonia's
+    /// MainWindow.WireInteraction) also sets this, but the canvas must not depend on that: it is
+    /// what lets <see cref="SlideCanvasAutomationPeer.NotifySelectionChanged"/> move real
+    /// FocusManager focus onto the canvas on every shape selection, which is what tells
+    /// Avalonia's AT-SPI/UIA bridge a screen reader should re-query for the newly selected shape.
+    /// </summary>
+    public SlideCanvas() => Focusable = true;
+
+    /// <summary>
     /// Returns the custom UIA automation peer for the slide editing surface. Mirrors
     /// FreeX.App.UI.GridView's WPF pattern (src/FreeX.App.UI/GridView.cs), the model this
     /// Avalonia twin follows: a single custom peer for the canvas itself (exposing
@@ -2461,6 +2470,25 @@ public sealed partial class SlideCanvas : Control
                     change.WasSelected,
                     change.IsSelected);
             }
+
+            // Avalonia's AutomationPeer has no RaiseAutomationEvent/AutomationEvents
+            // equivalent of WPF's AutomationFocusChanged (see the WPF twin's NotifySelectionChanged,
+            // FreeP.App.Rendering.Wpf/SlideCanvas.cs), so a property-changed notification alone
+            // never tells a screen reader that focus moved to the newly selected shape -- its
+            // automation bridge only reacts to real FocusManager focus transitions (see
+            // src/FreeX.App.Avalonia/MainWindow.cs's MoveFocusToActiveCellBorder, which exists for
+            // the identical reason on FreeX's worksheet grid). SlideCanvas has a single Control for
+            // the whole slide (no backing control per shape, by design -- see OnCreateAutomationPeer's
+            // doc comment), so there is no distinct per-shape element to move real focus onto; moving
+            // real keyboard focus onto the canvas itself is what makes the automation tree's pull-based
+            // HasKeyboardFocusCore resolution (SlideShapeAutomationPeer.HasKeyboardFocusCore) actually
+            // get consulted by the platform bridge instead of never firing at all. This matters most for
+            // selection changes that do not already go through a pointer gesture -- e.g. the Selection
+            // Pane or any other EditingSession.Select caller -- since AvaloniaCanvasGestureHandler only
+            // focuses the canvas on PointerPressed, leaving keyboard/Selection-Pane-driven selection
+            // with no focus signal at all before this fix.
+            if (_coordinator.GetFocusChange(delta).CurrentPeer is not null)
+                OwnerCanvas.Focus();
         }
     }
 

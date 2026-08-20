@@ -387,7 +387,10 @@ public sealed partial class MainWindow
     /// <summary>
     /// Parses a Consolidate source/destination reference (a cell, an <c>A1:B5</c> range, a sheet-qualified
     /// <c>Sheet!A1:B5</c> range, or a defined name) into a <see cref="GridRange"/>, resolving sheet names
-    /// against the workbook and defaulting to the active sheet.
+    /// against the workbook and defaulting to the active sheet. Sheet-scope-aware, matching formula
+    /// evaluation's name-resolution precedence (Workbook.TryGetNamedRange(name, contextSheetId, ...)):
+    /// a name scoped to the active sheet takes precedence over a same-named workbook-global name, the
+    /// same way the Name Box (TryParseCellAddressBoxReferenceRange in MainWindow.cs) already resolves it.
     /// </summary>
     private bool TryParseConsolidateReference(string text, out GridRange range) =>
         WorkbookReferenceNavigator.TryParseReferenceRange(
@@ -395,6 +398,7 @@ public sealed partial class MainWindow
             _session.ActiveSheet.Id,
             name => _session.Workbook.GetSheet(name)?.Id,
             _session.Workbook.NamedRanges,
+            (name, sheetId) => _session.Workbook.TryGetNamedRange(name, sheetId, out var scoped) ? scoped : null,
             out range);
 
     private bool TryParseConsolidateSourceRanges(

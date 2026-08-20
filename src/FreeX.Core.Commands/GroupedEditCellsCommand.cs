@@ -47,12 +47,22 @@ public sealed class GroupedEditCellsCommand : IWorkbookCommand, IEstimatesMemory
         foreach (var sheetId in _sheetIds)
         {
             var sheet = ctx.GetSheet(sheetId);
+            var addresses = new List<CellAddress>(_sourceEdits.Count);
             foreach (var (sourceAddress, _) in _sourceEdits)
             {
                 var address = RemapAddress(sourceAddress, sheetId);
                 if (!CommandGuards.CanEditCell(ctx.Workbook, sheet, address))
                     return CommandGuards.RejectSheetProtected();
+                addresses.Add(address);
             }
+
+            // R156-grouped-edit-array-split-guard: mirrors EditCellsCommand.Apply's check --
+            // this is the whole-command validation pass (nothing is mutated yet), so rejecting
+            // here for ANY one grouped sheet stops the edit on ALL of them. Applying to the
+            // sheets that pass and skipping the ones that don't would silently desynchronize the
+            // grouped sheets, which is worse than the pre-fix all-or-nothing bug.
+            if (CommandGuards.RejectIfSplitsArray(sheet, addresses, allowDynamicSpillMemberWrite: true) is { } splitsArrayRejection)
+                return splitsArrayRejection;
         }
 
         _snapshot = [];

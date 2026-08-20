@@ -415,6 +415,69 @@ public sealed class DocumentEditingSessionTests
     }
 
     [Fact]
+    public void MergeBodyParagraphWithPrevious_KeepsTheSurvivingCurrentParagraphsStyle()
+    {
+        // Backspace at the start of paragraph 2 deletes paragraph 1's own paragraph mark, so the merged
+        // paragraph must come out looking like paragraph 2 (whose mark survives), per Word's rule that a
+        // paragraph's pPr belongs to its own terminating mark -- not paragraph 1's, even though paragraph 1
+        // keeps its block slot in Blocks.
+        var heading = new Paragraph("first")
+        {
+            StyleId = "Heading1",
+            Formatting = ParagraphFormatting.Default with { Alignment = TextAlignment.Center },
+        };
+        var normal = new Paragraph("second")
+        {
+            StyleId = "Normal",
+            Formatting = ParagraphFormatting.Default with { Alignment = TextAlignment.Left },
+        };
+        var document = new TextDocument();
+        document.Blocks.Add(heading);
+        document.Blocks.Add(normal);
+        var session = new DocumentEditingSession();
+        session.LoadDocument(document);
+
+        session.TryMergeBodyParagraphWithPrevious(1, out var result).Should().BeTrue();
+
+        var merged = (Paragraph)document.Blocks[0];
+        merged.PlainText.Should().Be("firstsecond");
+        merged.StyleId.Should().Be("Normal");
+        merged.Formatting.Alignment.Should().Be(TextAlignment.Left);
+        result.Caret.Should().Be(new DocumentTextPosition(0, 5));
+    }
+
+    [Fact]
+    public void MergeBodyParagraphWithNext_KeepsTheSurvivingNextParagraphsStyle()
+    {
+        // Delete-forward at the end of paragraph 1 deletes paragraph 1's own paragraph mark, so the merged
+        // paragraph must come out looking like paragraph 2 (the following paragraph, whose mark survives),
+        // matching the WithPrevious sibling above and Word's own pPr-ownership rule.
+        var heading = new Paragraph("first")
+        {
+            StyleId = "Heading1",
+            Formatting = ParagraphFormatting.Default with { Alignment = TextAlignment.Center },
+        };
+        var normal = new Paragraph("second")
+        {
+            StyleId = "Normal",
+            Formatting = ParagraphFormatting.Default with { Alignment = TextAlignment.Left },
+        };
+        var document = new TextDocument();
+        document.Blocks.Add(heading);
+        document.Blocks.Add(normal);
+        var session = new DocumentEditingSession();
+        session.LoadDocument(document);
+
+        session.TryMergeBodyParagraphWithNext(0, out var result).Should().BeTrue();
+
+        var merged = (Paragraph)document.Blocks[0];
+        merged.PlainText.Should().Be("firstsecond");
+        merged.StyleId.Should().Be("Normal");
+        merged.Formatting.Alignment.Should().Be(TextAlignment.Left);
+        result.Caret.Should().Be(new DocumentTextPosition(0, 5));
+    }
+
+    [Fact]
     public void InsertBodyParagraphBreak_SplitsSelectionAndContinuesListFormatting()
     {
         var paragraph = new Paragraph("abcdef")

@@ -690,6 +690,70 @@ public sealed class DocumentViewTrackEditTests
     }
 
     [StaFact]
+    public void FontDialogGesture_MultiRunSelectionMixedSmallCaps_UnrelatedBoldEditDoesNotClearSmallCapsOnRunThatHadIt()
+    {
+        // R156 F1: round 154's fix (ResolveSelectionSmallCaps) only made the READ side (
+        // CaptureSelectionRunFormatting, which seeds the dialog) stop mis-reading a mixed selection. It
+        // never touched the APPLY side: ApplyFontFormatting still called
+        // TrySetSelectedRunFormatting(formatting => formatting == fmt, _ => fmt) -- a transform that
+        // ignores each run's OWN current formatting and stamps the single resolved `fmt` object onto
+        // EVERY run in the selection. Here QUIET (SmallCaps=true, AllCaps=true) is selected alongside
+        // SHOUT (SmallCaps=false, AllCaps=true); an OK click that only changes Bold must leave QUIET's
+        // SmallCaps=true alone, because the dialog never touched SmallCaps at all. Before the fix this
+        // failed: QUIET's SmallCaps came back false.
+        var document = TextDocument.CreateEmpty();
+        document.Blocks.Clear();
+        var paragraph = new Paragraph();
+        paragraph.Runs.Add(new Run("SHOUT", RunFormatting.Default with { SmallCaps = false, AllCaps = true }));
+        paragraph.Runs.Add(new Run("QUIET", RunFormatting.Default with { SmallCaps = true, AllCaps = true }));
+        document.Blocks.Add(paragraph);
+        var view = new DocumentView();
+        view.LoadModel(document);
+        view.SetSelectionRangeForTest(0, 0, 0, 10);
+
+        var seeded = view.CurrentRunFormatting;
+        var edited = seeded with { Bold = !seeded.Bold };
+        view.ApplyFontFormatting(edited);
+
+        var runs = ((Paragraph)view.Model.Blocks[0]).Runs;
+        var quiet = runs.Single(run => run.Text == "QUIET").Formatting;
+        quiet.SmallCaps.Should().BeTrue(
+            "an OK click that only changes an unrelated field (Bold) must not clear SmallCaps from a run that had it");
+        quiet.AllCaps.Should().BeTrue();
+        var shout = runs.Single(run => run.Text == "SHOUT").Formatting;
+        shout.SmallCaps.Should().BeFalse("sibling no-regression: SHOUT never had SmallCaps and must still not have it");
+        shout.AllCaps.Should().BeTrue();
+        runs.Should().OnlyContain(run => run.Formatting.Bold == edited.Bold,
+            "the field the dialog actually changed (Bold) must still apply to every run in the selection");
+    }
+
+    [StaFact]
+    public void FontDialogGesture_MultiRunSelectionMixedSmallCaps_ExplicitAllCapsToggleStillAppliesToEveryRun()
+    {
+        // Sibling no-regression for the merge fix above: a field the dialog DID actually change (here,
+        // turning AllCaps off) must still propagate to every run in the selection, even though the runs
+        // disagree on the untouched field (SmallCaps). The per-run "only overlay what changed" merge must
+        // not accidentally suppress a genuine, intentional change.
+        var document = TextDocument.CreateEmpty();
+        document.Blocks.Clear();
+        var paragraph = new Paragraph();
+        paragraph.Runs.Add(new Run("SHOUT", RunFormatting.Default with { SmallCaps = false, AllCaps = true }));
+        paragraph.Runs.Add(new Run("QUIET", RunFormatting.Default with { SmallCaps = true, AllCaps = true }));
+        document.Blocks.Add(paragraph);
+        var view = new DocumentView();
+        view.LoadModel(document);
+        view.SetSelectionRangeForTest(0, 0, 0, 10);
+
+        var seeded = view.CurrentRunFormatting;
+        var edited = seeded with { AllCaps = false };
+        view.ApplyFontFormatting(edited);
+
+        var runs = ((Paragraph)view.Model.Blocks[0]).Runs;
+        runs.Should().OnlyContain(run => !run.Formatting.AllCaps,
+            "an explicit AllCaps change in the dialog must still apply to every selected run");
+    }
+
+    [StaFact]
     public void FontDialogGesture_MultiRunSelectionAgreeingSmallCaps_IsNotIndeterminateAndRoundTripsBothRuns()
     {
         // Sibling no-regression: a multi-run selection where every run genuinely agrees on SmallCaps

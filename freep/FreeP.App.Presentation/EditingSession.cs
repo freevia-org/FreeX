@@ -2470,6 +2470,15 @@ public sealed class EditingSession
     /// The media bytes are retained by the model and written by the native PPTX package
     /// writer; playback remains a host concern.
     /// </summary>
+    /// <remarks>
+    /// freep-media F1: no frame decoder is available at this layer to grab a real poster
+    /// frame from the media bytes, so a small solid-color placeholder image is generated and
+    /// attached as <see cref="SlideShape.Picture"/>. Without it, <c>SlideCompositor.ComposeMedia</c>
+    /// takes its "no poster" fallback (a flat <see cref="DrawOp.Shape"/> rectangle) forever —
+    /// which never gets the play-button glyph (that only <see cref="DrawOp.Picture"/> carries)
+    /// and which <c>PptxPackageWriter</c> saves with no <c>&lt;a:blip&gt;</c> at all, so the
+    /// media looks permanently empty even after a save/reopen round trip.
+    /// </remarks>
     public SlideShape InsertMedia(
         byte[] mediaBytes,
         bool isVideo,
@@ -2495,9 +2504,102 @@ public sealed class EditingSession
                 Bytes = mediaBytes.ToArray(),
                 ContentType = contentType,
             },
+            Picture = new ImagePart
+            {
+                Bytes = BuildMediaPosterPlaceholderPng(),
+                ContentType = "image/png",
+            },
         };
         AddShape(shape);
         return shape;
+    }
+
+    // ─── Media poster placeholder (freep-media F1) ─────────────────────────────────────────
+
+    /// <summary>Solid dark-gray fill matching the compositor's former "no poster" rectangle color.</summary>
+    private static readonly byte[] MediaPosterPlaceholderRgb = [0x22, 0x22, 0x22];
+
+    private static readonly byte[] PngSignature =
+        [0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A];
+
+    /// <summary>
+    /// Builds a minimal, structurally valid 1x1 truecolor (no-alpha) PNG filled with
+    /// <see cref="MediaPosterPlaceholderRgb"/>. A 1x1 image stretches to fill the shape's
+    /// destination bounds exactly like a solid rectangle would, while still being a real
+    /// picture the renderers can decode, the play-glyph planner can recognize, and the
+    /// package writer can embed as a normal media part.
+    /// </summary>
+    private static byte[] BuildMediaPosterPlaceholderPng()
+    {
+        byte[] scanline = [0, MediaPosterPlaceholderRgb[0], MediaPosterPlaceholderRgb[1], MediaPosterPlaceholderRgb[2]];
+
+        using var idatPayload = new MemoryStream();
+        using (var deflate = new System.IO.Compression.ZLibStream(
+            idatPayload, System.IO.Compression.CompressionLevel.Optimal, leaveOpen: true))
+        {
+            deflate.Write(scanline, 0, scanline.Length);
+        }
+
+        using var png = new MemoryStream();
+        png.Write(PngSignature, 0, PngSignature.Length);
+        WritePngChunk(png, "IHDR", BuildIhdrData(width: 1, height: 1));
+        WritePngChunk(png, "IDAT", idatPayload.ToArray());
+        WritePngChunk(png, "IEND", []);
+        return png.ToArray();
+    }
+
+    private static byte[] BuildIhdrData(int width, int height)
+    {
+        var data = new byte[13];
+        WriteUInt32BigEndian(data, 0, (uint)width);
+        WriteUInt32BigEndian(data, 4, (uint)height);
+        data[8]  = 8; // bit depth
+        data[9]  = 2; // color type: truecolor (RGB, no alpha)
+        data[10] = 0; // compression method
+        data[11] = 0; // filter method
+        data[12] = 0; // interlace method
+        return data;
+    }
+
+    private static void WritePngChunk(Stream stream, string type, byte[] data)
+    {
+        var typeBytes = System.Text.Encoding.ASCII.GetBytes(type);
+
+        var lengthBytes = new byte[4];
+        WriteUInt32BigEndian(lengthBytes, 0, (uint)data.Length);
+        stream.Write(lengthBytes, 0, 4);
+
+        stream.Write(typeBytes, 0, typeBytes.Length);
+        stream.Write(data, 0, data.Length);
+
+        var crcInput = new byte[typeBytes.Length + data.Length];
+        Buffer.BlockCopy(typeBytes, 0, crcInput, 0, typeBytes.Length);
+        Buffer.BlockCopy(data, 0, crcInput, typeBytes.Length, data.Length);
+        var crcBytes = new byte[4];
+        WriteUInt32BigEndian(crcBytes, 0, Crc32(crcInput));
+        stream.Write(crcBytes, 0, 4);
+    }
+
+    private static void WriteUInt32BigEndian(byte[] buffer, int offset, uint value)
+    {
+        buffer[offset]     = (byte)(value >> 24);
+        buffer[offset + 1] = (byte)(value >> 16);
+        buffer[offset + 2] = (byte)(value >> 8);
+        buffer[offset + 3] = (byte)value;
+    }
+
+    /// <summary>Standard PNG/zip CRC-32 (polynomial 0xEDB88320), computed table-free since this runs once per media insert.</summary>
+    private static uint Crc32(byte[] bytes)
+    {
+        const uint polynomial = 0xEDB88320;
+        var crc = 0xFFFFFFFFu;
+        foreach (var b in bytes)
+        {
+            crc ^= b;
+            for (var i = 0; i < 8; i++)
+                crc = (crc & 1) != 0 ? (crc >> 1) ^ polynomial : crc >> 1;
+        }
+        return crc ^ 0xFFFFFFFFu;
     }
 
     /// <summary>

@@ -197,9 +197,18 @@ public static partial class NumberFormatter
             return true;
         }
 
-        var text = TryFormatCachedSimpleDateTime(oaDate, formatString, uses1904DateSystem, out var cachedText)
+        // See the identical phantom-1900-02-29 correction and rationale on the IsDateTimeFormat
+        // branch of ApplyNumericFormat below -- this is the separate DateTimeValue fast path
+        // (reached when a cell literally holds a date-typed value, e.g. one the user typed or
+        // that a formula returned, rather than a raw number handed to TEXT()) that needed the
+        // same correction applied to the format string it hands down.
+        var effectiveFormatString = !uses1904DateSystem && ExcelDateSystem.IsPhantomLeapDaySerial(oaDate)
+            ? OverridePhantomLeapDayOfMonthTokens(formatString)
+            : formatString;
+
+        var text = TryFormatCachedSimpleDateTime(oaDate, effectiveFormatString, uses1904DateSystem, out var cachedText)
             ? cachedText
-            : FormatDateTime(oaDate, formatString, uses1904DateSystem);
+            : FormatDateTime(oaDate, effectiveFormatString, uses1904DateSystem);
         text = ApplyAccountingTargetWidth(text, formatString, targetWidthCharacters);
         result = new FormatResult(text);
         return true;
@@ -219,6 +228,58 @@ public static partial class NumberFormatter
     {
         var width = targetWidthCharacters is > 0 ? targetWidthCharacters.Value : format.Length;
         return new string('#', Math.Max(width, 1));
+    }
+
+    /// <summary>
+    /// Rewrites the bare day-of-month tokens ("d" or "dd", outside quotes/escapes) in an Excel
+    /// date/time format string to a literal "29", leaving the "ddd"/"dddd" weekday-name tokens
+    /// (and every other token) untouched. Used only for Excel's phantom 1900-02-29 (serial 60),
+    /// whose collapsed-onto-1900-02-28 DateTime (see <see cref="ExcelDateSystem.SerialToDate(double)"/>)
+    /// is otherwise correct -- month, year, and weekday all already render right -- so this is the
+    /// minimal correction needed rather than a full reimplementation of date-token formatting.
+    /// Mirrors the token scan quotes/escapes are given in <see cref="ExcelDateTimeFormatConverter.ToNetDateFormat"/>.
+    /// </summary>
+    private static string OverridePhantomLeapDayOfMonthTokens(string format)
+    {
+        var sb = new System.Text.StringBuilder(format.Length + 4);
+        var i = 0;
+        while (i < format.Length)
+        {
+            var c = format[i];
+            if (c == '"')
+            {
+                var end = format.IndexOf('"', i + 1);
+                if (end < 0) end = format.Length - 1;
+                sb.Append(format, i, end - i + 1);
+                i = end + 1;
+                continue;
+            }
+
+            if (c == '\\' && i + 1 < format.Length)
+            {
+                sb.Append(format, i, 2);
+                i += 2;
+                continue;
+            }
+
+            if (c is 'd' or 'D')
+            {
+                var runStart = i;
+                while (i < format.Length && format[i] is 'd' or 'D')
+                    i++;
+                var runLength = i - runStart;
+                if (runLength <= 2)
+                    sb.Append("\"29\"");
+                else
+                    sb.Append(format, runStart, runLength);
+                continue;
+            }
+
+            sb.Append(c);
+            i++;
+        }
+
+        return sb.ToString();
     }
 
     private static FormatResult FormatNumber(
@@ -646,9 +707,22 @@ public static partial class NumberFormatter
             if (!ExcelDateSystem.TrySerialToDate(value, uses1904DateSystem, out var dt))
                 return BuildInvalidDateTimeIndicator(format, targetWidthCharacters);
 
+            // Excel's phantom 1900-02-29 (serial 60) has no real .NET DateTime -- TrySerialToDate
+            // above collapses it onto the same DateTime as serial 59 ("1900-02-28"), which is
+            // otherwise still correct for this value: the month (February), year (1900), and even
+            // the weekday (Wednesday, matching WEEKDAY(60) computed independently from the raw
+            // serial in BuiltInFunctions.DateTime.cs) all come out right. Only the day-of-month
+            // digits are wrong. Rather than reimplement date-token formatting, rewrite just the
+            // bare day-of-month tokens ("d"/"dd", not the "ddd"/"dddd" weekday-name tokens, which
+            // are already correct) to a literal "29" before formatting, mirroring the correction
+            // YEAR()/MONTH()/DAY() already apply for this same value via IsExcelFakeLeapDay.
+            var effectiveFormat = !uses1904DateSystem && ExcelDateSystem.IsPhantomLeapDaySerial(value)
+                ? OverridePhantomLeapDayOfMonthTokens(format)
+                : format;
+
             try
             {
-                return NativeDigits(FormatDateTimeValue(dt, format, dateTimeFormat));
+                return NativeDigits(FormatDateTimeValue(dt, effectiveFormat, dateTimeFormat));
             }
             catch { return value.ToString(CultureInfo.InvariantCulture); }
         }

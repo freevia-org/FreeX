@@ -1044,7 +1044,7 @@ public static class PptxPackageReader
         master.Name = xml.Root.Element(P + "cSld")?.Attribute("name")?.Value ?? string.Empty;
 
         var bg = xml.Root.Element(P + "cSld")?.Element(P + "bg");
-        if (bg is not null) master.Background = ReadBackground(bg, scheme);
+        if (bg is not null) master.Background = ReadBackground(bg, scheme, theme);
 
         var spTree = xml.Root.Element(P + "cSld")?.Element(P + "spTree");
         if (spTree is not null)
@@ -1213,7 +1213,7 @@ public static class PptxPackageReader
         layout.LayoutType = MapLayoutType(xml.Root.Attribute("type")?.Value);
 
         var bg = xml.Root.Element(P + "cSld")?.Element(P + "bg");
-        if (bg is not null) layout.Background = ReadBackground(bg, scheme);
+        if (bg is not null) layout.Background = ReadBackground(bg, scheme, theme);
 
         var spTree = xml.Root.Element(P + "cSld")?.Element(P + "spTree");
         if (spTree is not null)
@@ -1283,7 +1283,7 @@ public static class PptxPackageReader
         }
 
         var bg = xml.Root.Element(P + "cSld")?.Element(P + "bg");
-        if (bg is not null) slide.Background = ReadBackground(bg, scheme);
+        if (bg is not null) slide.Background = ReadBackground(bg, scheme, theme);
 
         var slideDir = GetDirectoryName(slidePath);
         var spTree = xml.Root.Element(P + "cSld")?.Element(P + "spTree");
@@ -7865,23 +7865,36 @@ public static class PptxPackageReader
 
     // ── Background ───────────────────────────────────────────────────────────────
 
-    private static ShapeFill? ReadBackground(XElement bg, PresentationColorScheme scheme)
+    private static ShapeFill? ReadBackground(XElement bg, PresentationColorScheme scheme, PresentationTheme? theme)
     {
         // p:bgPr — explicit fill (solid/gradient/blip/pattern).
         var bgPr = bg.Element(P + "bgPr");
         if (bgPr is not null)
             return PptxColorReader.TryReadFill(bgPr, scheme);
 
-        // Wave 18B: p:bgRef — reference to a theme background-fill style.
-        // The idx attribute maps to theme fill-style-list entries (1001+ = background fills).
-        // We approximate it: read the color child (schemeClr or srgbClr) and return a solid fill.
+        // p:bgRef — reference to a theme background-fill style (PowerPoint's Design > Variants >
+        // Background Styles gallery, and Format Background's theme gradient/pattern presets).
+        // Per ECMA-376, idx >= 1000 indexes theme.BackgroundFillStyles (a:bgFillStyleLst) using
+        // (idx - 1000) as the 1-based index, substituting the bgRef's own color for the style
+        // entry's phClr placeholder -- exactly the algorithm ResolveStyleMatrixFill already
+        // implements for a shape's p:style/a:fillRef. All 12 of PowerPoint's built-in Background
+        // Styles are gradients/patterns built from bgFillStyleLst, so resolving against the
+        // format scheme (rather than reading a flat color) is required to render them correctly.
         var bgRef = bg.Element(P + "bgRef");
         if (bgRef is not null)
         {
+            if (theme is not null)
+            {
+                var resolved = ResolveStyleMatrixFill(bgRef, theme, scheme);
+                if (resolved is not null)
+                    return resolved;
+            }
+
+            // No theme available, or the format scheme had no matching entry for this idx --
+            // fall back to the bgRef's own color child (if any), then a bare idx-parity guess.
             var tac = PptxColorReader.TryReadColor(bgRef, scheme);
             if (tac is not null)
                 return new ShapeFill.Solid(tac);
-            // No explicit color — use idx to approximate: idx 1001 = bg1, 1002+ = accent shades.
             if (int.TryParse(bgRef.Attribute("idx")?.Value, out var idx))
             {
                 // Approximate: use the theme background color (dk1 for odd indices, lt1 otherwise).

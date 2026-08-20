@@ -4828,9 +4828,25 @@ public sealed partial class DocumentView : RichTextBox
         if (!AllowsRestrictEditingOperation(RestrictEditingOperationKind.BodyFormatting))
             return;
 
+        // `fmt` is the Font dialog's single flattened result: FontDialogPlanner.TryBuildResult builds it
+        // as `current with { <only the fields the dialog actually edits> }`, so every field the dialog
+        // left untouched (including every checkbox effect the dialog resolves from an indeterminate/mixed
+        // selection to one definite value -- Bold/Italic/Underline/Strikethrough/DoubleStrikethrough/
+        // Hidden via ResolveCheck, and SmallCaps/AllCaps/Superscript-Subscript, which are not even
+        // three-state and so always resolve to one run's value) is carried through unchanged from
+        // `current`/`original` below. Reapplying `fmt` verbatim to every run via the old `_ => fmt`
+        // transform therefore overwrote EVERY one of these fields on EVERY run, not just the ones the
+        // dialog actually changed -- e.g. an OK click that only toggled Bold silently cleared SmallCaps
+        // (or homogenized font family/size/color/advanced typography) on any run whose value differed
+        // from `original`. `original` is the same flattened snapshot the dialog was seeded from
+        // (CurrentRunFormatting/CaptureSelectionRunFormatting, re-read here; the selection cannot have
+        // changed under a modal dialog). MergeChangedFontFields applies a field to a run only when it
+        // actually differs between `fmt` and `original`, leaving every unchanged field at that run's own
+        // current value instead of stamping the single resolved value over the whole selection.
+        var original = CaptureSelectionRunFormatting();
         if (TrySetSelectedRunFormatting(
                 formatting => formatting == fmt,
-                _ => fmt))
+                formatting => MergeChangedFontFields(formatting, original, fmt)))
         {
             return;
         }
@@ -4841,6 +4857,45 @@ public sealed partial class DocumentView : RichTextBox
         // mutation.
         ApplyRunFormattingToSelection(fmt);
     }
+
+    // Overlay onto `run` (one selected run's own current formatting) only the fields that the Font
+    // dialog actually changed -- i.e. where `fmt` (its resolved result) differs from `original` (the
+    // flattened snapshot the dialog was seeded from). This is the complete set of fields
+    // FontDialogPlanner.TryBuildResult can write into its result (see its `current with { ... }` block);
+    // every other RunFormatting field is never touched by the dialog, so fmt already equals original for
+    // those and they fall through untouched regardless. A field that IS unchanged (fmt == original) keeps
+    // `run`'s own current value here instead of being overwritten, so an OK click that only changes one
+    // field (e.g. Bold) cannot clobber a different, unrelated field (e.g. SmallCaps, or font family) on a
+    // run whose value for that field differs from the run the dialog happened to read its snapshot from.
+    private static RunFormatting MergeChangedFontFields(RunFormatting run, RunFormatting original, RunFormatting fmt) =>
+        run with
+        {
+            FontFamily = fmt.FontFamily != original.FontFamily ? fmt.FontFamily : run.FontFamily,
+            FontSizePt = fmt.FontSizePt != original.FontSizePt ? fmt.FontSizePt : run.FontSizePt,
+            Bold = fmt.Bold != original.Bold ? fmt.Bold : run.Bold,
+            Italic = fmt.Italic != original.Italic ? fmt.Italic : run.Italic,
+            Underline = fmt.Underline != original.Underline ? fmt.Underline : run.Underline,
+            Strikethrough = fmt.Strikethrough != original.Strikethrough ? fmt.Strikethrough : run.Strikethrough,
+            DoubleStrikethrough = fmt.DoubleStrikethrough != original.DoubleStrikethrough
+                ? fmt.DoubleStrikethrough
+                : run.DoubleStrikethrough,
+            Hidden = fmt.Hidden != original.Hidden ? fmt.Hidden : run.Hidden,
+            SmallCaps = fmt.SmallCaps != original.SmallCaps ? fmt.SmallCaps : run.SmallCaps,
+            AllCaps = fmt.AllCaps != original.AllCaps ? fmt.AllCaps : run.AllCaps,
+            VerticalAlign = fmt.VerticalAlign != original.VerticalAlign ? fmt.VerticalAlign : run.VerticalAlign,
+            ColorHex = fmt.ColorHex != original.ColorHex ? fmt.ColorHex : run.ColorHex,
+            CharacterSpacingPt = fmt.CharacterSpacingPt != original.CharacterSpacingPt
+                ? fmt.CharacterSpacingPt
+                : run.CharacterSpacingPt,
+            KerningMinSizePt = fmt.KerningMinSizePt != original.KerningMinSizePt
+                ? fmt.KerningMinSizePt
+                : run.KerningMinSizePt,
+            PositionPt = fmt.PositionPt != original.PositionPt ? fmt.PositionPt : run.PositionPt,
+            Ligatures = fmt.Ligatures != original.Ligatures ? fmt.Ligatures : run.Ligatures,
+            StylisticSet = fmt.StylisticSet != original.StylisticSet ? fmt.StylisticSet : run.StylisticSet,
+            NumberForm = fmt.NumberForm != original.NumberForm ? fmt.NumberForm : run.NumberForm,
+            NumberSpacing = fmt.NumberSpacing != original.NumberSpacing ? fmt.NumberSpacing : run.NumberSpacing,
+        };
 
     /// <summary>
     /// Apply the full paragraph formatting block captured by the Paragraph dialog (indents + spacing from
@@ -11815,8 +11870,15 @@ public sealed partial class DocumentView : RichTextBox
             };
             entry.Click += (_, _) =>
             {
-                if (owner.RestrictEditingPolicy.IsFormFieldEditingOnly
-                    && marker.Location is { } location
+                // Route through the shared planner whenever we know where the control lives in the model
+                // -- ApplyContentControlMenuCommand -> ApplyContentControlInteraction already checks
+                // ContentControlInteractionPlanner.CanEditExistingContentControl against the document's
+                // actual RestrictEditingPolicy internally, so it does not need (and must not be gated by)
+                // IsFormFieldEditingOnly here. The old `IsFormFieldEditingOnly &&` gate meant this only ran
+                // under Word's "Filling in Forms" restriction, so an ordinary click on an unprotected
+                // document -- the common case -- fell through to the hand-written glyph-swap below and
+                // silently bypassed the undo/redo command bus, matching the checkbox handler's fix above.
+                if (marker.Location is { } location
                     && owner.ApplyContentControlMenuCommand(
                         location.BlockIndex,
                         location.RunIndex,

@@ -90,6 +90,12 @@ public sealed class MailMergeSessionWorkflow
 
     public MailMergeSession Session { get; }
 
+    // Parallel to Session.Data.Rows: the 1-based row number each currently-active record held in the
+    // ORIGINAL, unfiltered/unsorted recipient list as loaded by LoadRecipients. Word's MERGEREC field
+    // must report this original position, not the record's position after Edit Recipient List has
+    // filtered/reordered Session.Data -- see BuildFinish and RenderCurrentPreview below.
+    private IReadOnlyList<int> _originalRecordNumbers = [];
+
     public IReadOnlyList<string> AvailableFieldNames => Session.Data?.Header ?? [];
 
     public MailMergeValidationPlan Validate(MailMergeOperation operation) =>
@@ -141,6 +147,7 @@ public sealed class MailMergeSessionWorkflow
 
         var editableTemplate = Session.EndPreview();
         Session.Load(data);
+        _originalRecordNumbers = Enumerable.Range(1, data.Count).ToList();
         return new(
             editableTemplate,
             $"Loaded {data.Count} record(s) with {data.Header.Count} field(s).");
@@ -158,6 +165,7 @@ public sealed class MailMergeSessionWorkflow
     {
         var editableTemplate = Session.EndPreview();
         Session.Clear();
+        _originalRecordNumbers = [];
         return new(editableTemplate, "Mail merge reset to a normal document.");
     }
 
@@ -174,6 +182,12 @@ public sealed class MailMergeSessionWorkflow
         ArgumentNullException.ThrowIfNull(data);
 
         var editableTemplate = Session.EndPreview();
+        // Filter/sort rebuilds MergeData from scratch (no row identity survives), so recover each
+        // surviving row's true original recipient-list number by matching its values back against the
+        // still-current Session.Data/_originalRecordNumbers pair before it is overwritten below. This
+        // composes correctly across repeated filter/sort passes because _originalRecordNumbers already
+        // carries the lineage from any prior pass.
+        _originalRecordNumbers = ResolveOriginalRecordNumbers(Session.Data, _originalRecordNumbers, data);
         Session.Data = data;
         Session.CurrentIndex = 0;
         return new(editableTemplate, $"Recipient list now contains {data.Count} record(s).");
@@ -320,7 +334,7 @@ public sealed class MailMergeSessionWorkflow
         var template = Session.Template ?? currentDocument;
         var augmentedData = Session.BuildAugmentedData(finishPlan.RowIndexes);
         var state = mergeState ?? new MergeState();
-        var recordNumbers = finishPlan.RowIndexes.Select(index => index + 1).ToList();
+        var recordNumbers = finishPlan.RowIndexes.Select(OriginalRecordNumber).ToList();
         var merged = MailMerge.MergeAllWithRules(template, augmentedData, state, recordNumbers);
         if (state.CancelRequested)
             return FinishFailure(finishPlan, "Finish & Merge was cancelled.");
@@ -416,9 +430,75 @@ public sealed class MailMergeSessionWorkflow
         var document = MailMerge.MergeRecord(
             template,
             Session.AugmentRow(data.Rows[index]),
-            recordIndex: index + 1,
+            recordIndex: OriginalRecordNumber(index),
             sequenceNumber: index + 1);
         return new(true, document, index, true, string.Empty);
+    }
+
+    // The 1-based number OF this row IN the original, unfiltered/unsorted recipient list (MERGEREC),
+    // as opposed to `index + 1`, its 1-based position within the current, possibly filtered/sorted
+    // Session.Data (which is what MERGESEQ reports). Falls back to the row's own position if lineage
+    // was never recorded for it (defensive only -- LoadRecipients and ApplyRecipientFilter always keep
+    // _originalRecordNumbers sized to match Session.Data).
+    private int OriginalRecordNumber(int index) =>
+        index >= 0 && index < _originalRecordNumbers.Count
+            ? _originalRecordNumbers[index]
+            : index + 1;
+
+    // Recover, for each row of the newly filtered/sorted `newData`, the original recipient-list row
+    // number it corresponds to. Filter/sort planners copy each surviving row's values verbatim into a
+    // freshly constructed MergeData (see MailMergeRecipientFilterSortPlanner.Apply), so a row's values
+    // are unchanged even though its identity is not preserved -- match on content instead, consuming
+    // each previous row at most once (in `newData` order) so duplicate-content rows still line up with
+    // whichever original occurrence they were built from, since the planner's own filtering/sorting is
+    // stable and preserves relative order among equal rows.
+    private static IReadOnlyList<int> ResolveOriginalRecordNumbers(
+        MergeData? previousData,
+        IReadOnlyList<int> previousRecordNumbers,
+        MergeData newData)
+    {
+        if (previousData is null || previousRecordNumbers.Count != previousData.Count)
+            return Enumerable.Range(1, newData.Count).ToList();
+
+        var used = new bool[previousData.Count];
+        var result = new int[newData.Count];
+        for (var newRow = 0; newRow < newData.Count; newRow++)
+        {
+            var matchIndex = -1;
+            for (var oldRow = 0; oldRow < previousData.Count; oldRow++)
+            {
+                if (used[oldRow])
+                    continue;
+                if (RowsMatch(newData.Rows[newRow], previousData.Rows[oldRow], previousData.Header))
+                {
+                    matchIndex = oldRow;
+                    break;
+                }
+            }
+
+            result[newRow] = matchIndex >= 0
+                ? previousRecordNumbers[matchIndex]
+                : newRow + 1; // No lineage found (e.g. rows were added, not just filtered) -- best effort.
+            if (matchIndex >= 0)
+                used[matchIndex] = true;
+        }
+
+        return result;
+    }
+
+    private static bool RowsMatch(
+        IReadOnlyDictionary<string, string> left,
+        IReadOnlyDictionary<string, string> right,
+        IReadOnlyList<string> header)
+    {
+        foreach (var column in header)
+        {
+            var leftValue = left.TryGetValue(column, out var value) ? value : string.Empty;
+            var rightValue = right.TryGetValue(column, out var otherValue) ? otherValue : string.Empty;
+            if (!string.Equals(leftValue, rightValue, StringComparison.Ordinal))
+                return false;
+        }
+        return true;
     }
 
     private MailMergePreviewExecution PreviewFailure(string message) =>

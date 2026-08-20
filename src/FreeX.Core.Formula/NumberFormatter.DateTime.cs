@@ -120,7 +120,19 @@ public static partial class NumberFormatter
         {
             var dt = ExcelDateSystem.SerialToDate(oaDate, uses1904DateSystem);
             if (IsDateTimeFormat(cleanFmt))
-                return NativeDigits(FormatDateTimeValue(dt, cleanFmt, dateTimeFormat));
+            {
+                // Excel's phantom 1900-02-29 (serial 60) collides with serial 59 on the same
+                // DateTime (see ExcelDateSystem.SerialToDate) -- month/year/weekday still come
+                // out right, only the day-of-month digits need correcting. This is the multi-
+                // section/bracket-leading-format path into date display (reached from
+                // FormatDateTimeWithColor's SelectDateTimeSection above); the single-section fast
+                // path applies the identical correction in NumberFormatter.cs's
+                // TryFormatSimpleDateTime before it ever reaches here.
+                var effectiveCleanFmt = !uses1904DateSystem && ExcelDateSystem.IsPhantomLeapDaySerial(oaDate)
+                    ? OverridePhantomLeapDayOfMonthTokens(cleanFmt)
+                    : cleanFmt;
+                return NativeDigits(FormatDateTimeValue(dt, effectiveCleanFmt, dateTimeFormat));
+            }
             return NativeDigits(dt.ToString(cleanFmt, dateTimeFormat));
         }
         catch { return oaDate.ToString(CultureInfo.InvariantCulture); }

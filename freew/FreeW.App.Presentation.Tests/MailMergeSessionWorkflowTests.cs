@@ -111,6 +111,92 @@ public sealed class MailMergeSessionWorkflowTests
     }
 
     [Fact]
+    public void ApplyRecipientFilter_FinishMergeReportsOriginalRecipientListRowNotFilteredPosition()
+    {
+        // Word's Merge Record # (MERGEREC) must report each record's row number in the ORIGINAL,
+        // unfiltered recipient list. Ada/Grace/Alan with Grace excluded must still print Alan=3 (his
+        // true original row), not Alan=2 (his position within the filtered two-row list).
+        var template = DocumentWith(
+            $"{MailMerge.FieldOpen}Name{MailMerge.FieldClose}=" +
+            $"{MailMerge.FieldOpen}{MailMerge.MergeRecordNumberField}{MailMerge.FieldClose};");
+        var workflow = WorkflowWith("Name\nAda\nGrace\nAlan");
+        workflow.SetMode(MailMergeOutputMode.Directory);
+        var filtered = MergeData.FromCsv("Name\nAda\nAlan");
+
+        workflow.ApplyRecipientFilter(filtered);
+        var plan = MailMergeFinishPlanner.PlanNewDocumentAllRecords(filtered.Count);
+        var result = workflow.ExecuteFinish(template, plan);
+
+        result.Success.Should().BeTrue();
+        result.Document!.PlainText.Should().Contain("Ada=1");
+        result.Document.PlainText.Should().Contain("Alan=3");
+        result.Document.PlainText.Should().NotContain("Alan=2");
+    }
+
+    [Fact]
+    public void ApplyRecipientFilter_PreviewReportsOriginalRecipientListRowNotFilteredPosition()
+    {
+        // Preview Results must match what Finish & Merge will print for the same record -- so it must
+        // report Alan's true original row (3), not his position in the filtered two-row list (2).
+        var template = DocumentWith(
+            $"{MailMerge.FieldOpen}{MailMerge.MergeRecordNumberField}{MailMerge.FieldClose}");
+        var workflow = WorkflowWith("Name\nAda\nGrace\nAlan");
+        var filtered = MergeData.FromCsv("Name\nAda\nAlan");
+
+        workflow.ApplyRecipientFilter(filtered);
+        var preview = workflow.MovePreviewTo(template, 1); // Alan is at filtered-list position 1
+
+        preview.DocumentToLoad!.PlainText.Should().Be("3");
+    }
+
+    [Fact]
+    public void ApplyRecipientFilter_SortedListStillReportsOriginalRecipientListRowNumbers()
+    {
+        // Sorting is the other Edit Recipient List gesture that rebuilds Session.Data from scratch;
+        // Merge Record # must survive a reorder the same way it survives an exclusion.
+        var template = DocumentWith(
+            $"{MailMerge.FieldOpen}Name{MailMerge.FieldClose}=" +
+            $"{MailMerge.FieldOpen}{MailMerge.MergeRecordNumberField}{MailMerge.FieldClose};");
+        var workflow = WorkflowWith("Name\nAda\nGrace\nAlan");
+        workflow.SetMode(MailMergeOutputMode.Directory);
+        // Descending alphabetical sort of the full list: Grace, Alan, Ada.
+        var sorted = MailMergeRecipientFilterSortPlanner.Apply(
+            workflow.Session.Data!,
+            [0, 1, 2],
+            "Name",
+            ascending: false);
+
+        workflow.ApplyRecipientFilter(sorted);
+        var plan = MailMergeFinishPlanner.PlanNewDocumentAllRecords(sorted.Count);
+        var result = workflow.ExecuteFinish(template, plan);
+
+        result.Success.Should().BeTrue();
+        result.Document!.PlainText.Should().Contain("Grace=2");
+        result.Document.PlainText.Should().Contain("Alan=3");
+        result.Document.PlainText.Should().Contain("Ada=1");
+    }
+
+    [Fact]
+    public void ExecuteFinish_UnfilteredRecipientsStillReportPositionAsRecordNumber()
+    {
+        // Sibling/no-regression case: with no Edit Recipient List filter or sort ever applied,
+        // MERGEREC must keep reporting each record's plain 1-based position, unchanged from before.
+        var template = DocumentWith(
+            $"{MailMerge.FieldOpen}Name{MailMerge.FieldClose}=" +
+            $"{MailMerge.FieldOpen}{MailMerge.MergeRecordNumberField}{MailMerge.FieldClose};");
+        var workflow = WorkflowWith("Name\nAda\nGrace\nAlan");
+        workflow.SetMode(MailMergeOutputMode.Directory);
+        var plan = MailMergeFinishPlanner.PlanNewDocumentAllRecords(3);
+
+        var result = workflow.ExecuteFinish(template, plan);
+
+        result.Success.Should().BeTrue();
+        result.Document!.PlainText.Should().Contain("Ada=1");
+        result.Document.PlainText.Should().Contain("Grace=2");
+        result.Document.PlainText.Should().Contain("Alan=3");
+    }
+
+    [Fact]
     public void ExecuteFinish_ShapesCompositeFieldsRunsRulesAndEndsDocumentPreview()
     {
         var skip = MergeRuleEvaluator.BuildSkipRecordIfInstruction(

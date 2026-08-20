@@ -3959,4 +3959,206 @@ public sealed class SlideCompositorTests
             }
         };
     }
+
+    // ─── Round 156 (shared-theme-fonts F3): East-Asian / complex-script run fonts ─────────────
+
+    [Fact]
+    public void Compose_RunWithEastAsianText_UsesRunsEastAsiaFontFamily_NotLatinFont()
+    {
+        var p = MakePresentation();
+        p.Slides[0].Shapes.Clear();
+
+        var shape = new SlideShape
+        {
+            Id = 1,
+            OffsetXEmu = 457200,
+            OffsetYEmu = 274320,
+            ExtentCxEmu = 4572000,
+            ExtentCyEmu = 1371600,
+        };
+        var paragraph = new Paragraph();
+        paragraph.Runs.Add(new Run
+        {
+            Text = "你好",       // "你好" -- needs the a:ea typeface, not a:latin
+            FontFamily = "Arial",
+            EastAsiaFontFamily = "SimSun",
+        });
+        shape.TextBody = new TextBody { Paragraphs = { paragraph } };
+        p.Slides[0].Shapes.Add(shape);
+
+        var ops = SlideCompositor.Compose(p, FirstSlide(p));
+        var run = ops.OfType<DrawOp.Shape>().Single().Text!.Paragraphs[0].Runs[0];
+
+        run.FontFamily.Should().Be("SimSun",
+            "a CJK run tagged with a distinct a:ea typeface must render with that typeface, not the Latin a:latin font");
+    }
+
+    [Fact]
+    public void Compose_RunWithLatinTextAndEastAsiaOverride_StillUsesLatinFontFamily()
+    {
+        // Sibling/no-regression case: Office commonly writes an a:ea override on every run in a
+        // CJK-themed deck, even runs whose text is pure Latin. The fix must key off the run's
+        // actual text content, not merely the presence of an EastAsiaFontFamily value, or every
+        // Latin run in such a deck would wrongly start rendering with the East-Asian typeface.
+        var p = MakePresentation();
+        p.Slides[0].Shapes.Clear();
+
+        var shape = new SlideShape
+        {
+            Id = 1,
+            OffsetXEmu = 457200,
+            OffsetYEmu = 274320,
+            ExtentCxEmu = 4572000,
+            ExtentCyEmu = 1371600,
+        };
+        var paragraph = new Paragraph();
+        paragraph.Runs.Add(new Run
+        {
+            Text = "Hello World",
+            FontFamily = "Arial",
+            EastAsiaFontFamily = "SimSun",
+        });
+        shape.TextBody = new TextBody { Paragraphs = { paragraph } };
+        p.Slides[0].Shapes.Add(shape);
+
+        var ops = SlideCompositor.Compose(p, FirstSlide(p));
+        var run = ops.OfType<DrawOp.Shape>().Single().Text!.Paragraphs[0].Runs[0];
+
+        run.FontFamily.Should().Be("Arial",
+            "plain Latin text must keep rendering with the Latin typeface even when the run also carries an unused a:ea override");
+    }
+
+    [Fact]
+    public void Compose_RunWithEastAsianText_AndNoExplicitEaFont_UsesThemeMinorEastAsiaToken()
+    {
+        // Covers the "very common theme-token form" from the finding: nothing on the run
+        // overrides a:ea at all, so it must resolve all the way up to the theme's own minor
+        // East-Asian font (the render-time equivalent of an implicit "+mn-ea").
+        var p = MakePresentation();
+        p.Slides[0].Shapes.Clear();
+        p.Theme.NativeFontSchemeXml =
+            "<a:fontScheme xmlns:a=\"http://schemas.openxmlformats.org/drawingml/2006/main\" name=\"Office\">" +
+            "<a:majorFont><a:latin typeface=\"Calibri Light\"/><a:ea typeface=\"YuGothic\"/><a:cs typeface=\"\"/></a:majorFont>" +
+            "<a:minorFont><a:latin typeface=\"Calibri\"/><a:ea typeface=\"MS Gothic\"/><a:cs typeface=\"\"/></a:minorFont>" +
+            "</a:fontScheme>";
+
+        var shape = new SlideShape
+        {
+            Id = 1,
+            OffsetXEmu = 457200,
+            OffsetYEmu = 274320,
+            ExtentCxEmu = 4572000,
+            ExtentCyEmu = 1371600,
+        };
+        var paragraph = new Paragraph();
+        paragraph.Runs.Add(new Run { Text = "こんにちは" }); // こんにちは, no font at all
+        shape.TextBody = new TextBody { Paragraphs = { paragraph } };
+        p.Slides[0].Shapes.Add(shape);
+
+        var ops = SlideCompositor.Compose(p, FirstSlide(p));
+        var run = ops.OfType<DrawOp.Shape>().Single().Text!.Paragraphs[0].Runs[0];
+
+        run.FontFamily.Should().Be("MS Gothic",
+            "an unset a:ea ultimately resolves to the theme's minor East-Asian font, not the Latin fallback font");
+    }
+
+    // ─── Round 156 (freep-master-inheritance F2): shape-effects placeholder inheritance ───────
+
+    [Fact]
+    public void Compose_PlaceholderWithNoOwnEffects_InheritsShadowFromLayoutPlaceholder()
+    {
+        var p = new PresentationModel();
+
+        var master = new SlideMaster { Id = "m1" };
+        p.Masters.Add(master);
+
+        var layout = new SlideLayout { Id = "l1", MasterId = "m1" };
+        layout.Placeholders.Add(new SlideShape
+        {
+            Placeholder = new Placeholder { Type = PlaceholderType.Title, Idx = 0 },
+            OffsetXEmu = 457200,
+            OffsetYEmu = 274320,
+            ExtentCxEmu = 8229600,
+            ExtentCyEmu = 1143000,
+            Effects = new ShapeEffects
+            {
+                HasOuterShadow = true,
+                OuterShadowColor = new SrgbColor(0x40, 0x40, 0x40),
+                OuterShadowAlpha = 128,
+                OuterShadowBlurRadEmu = 50800,
+                OuterShadowDistEmu = 38100,
+                OuterShadowDirDeg = 45,
+            },
+        });
+        p.Layouts.Add(layout);
+
+        var slide = new Slide { LayoutId = "l1" };
+        var titleShape = new SlideShape
+        {
+            Id = 1,
+            Placeholder = new Placeholder { Type = PlaceholderType.Title, Idx = 0 },
+            // No Effects of its own -- the normal "inherit from layout" authoring pattern.
+        };
+        titleShape.Text = "Test Title";
+        slide.Shapes.Add(titleShape);
+        p.Slides.Add(slide);
+
+        var ops = SlideCompositor.Compose(p, slide);
+        var shapeOp = ops.OfType<DrawOp.Shape>().Single();
+
+        shapeOp.Effects.Should().NotBeNull("a slide placeholder should inherit its layout placeholder's shadow");
+        shapeOp.Effects!.HasOuterShadow.Should().BeTrue();
+        shapeOp.Effects.OuterShadowColor.Should().Be(new SrgbColor(0x40, 0x40, 0x40));
+        shapeOp.Effects.OuterShadowAlpha.Should().Be(128);
+    }
+
+    [Fact]
+    public void Compose_PlaceholderWithOwnEffects_KeepsOwnEffects_NotLayouts()
+    {
+        // Sibling/no-regression case: a placeholder that DOES author its own effects must keep
+        // using them, never picking up the layout placeholder's on top of or instead of its own.
+        var p = new PresentationModel();
+
+        var master = new SlideMaster { Id = "m1" };
+        p.Masters.Add(master);
+
+        var layout = new SlideLayout { Id = "l1", MasterId = "m1" };
+        layout.Placeholders.Add(new SlideShape
+        {
+            Placeholder = new Placeholder { Type = PlaceholderType.Title, Idx = 0 },
+            OffsetXEmu = 457200,
+            OffsetYEmu = 274320,
+            ExtentCxEmu = 8229600,
+            ExtentCyEmu = 1143000,
+            Effects = new ShapeEffects
+            {
+                HasGlow = true,
+                GlowColor = new SrgbColor(0x00, 0xAA, 0xFF),
+                GlowRadiusEmu = 152400,
+            },
+        });
+        p.Layouts.Add(layout);
+
+        var slide = new Slide { LayoutId = "l1" };
+        var titleShape = new SlideShape
+        {
+            Id = 1,
+            Placeholder = new Placeholder { Type = PlaceholderType.Title, Idx = 0 },
+            Effects = new ShapeEffects
+            {
+                HasSoftEdge = true,
+                SoftEdgeRadEmu = 158750,
+            },
+        };
+        titleShape.Text = "Test Title";
+        slide.Shapes.Add(titleShape);
+        p.Slides.Add(slide);
+
+        var ops = SlideCompositor.Compose(p, slide);
+        var shapeOp = ops.OfType<DrawOp.Shape>().Single();
+
+        shapeOp.Effects.Should().NotBeNull();
+        shapeOp.Effects!.HasSoftEdge.Should().BeTrue("the shape's own effects take priority over the layout placeholder's");
+        shapeOp.Effects.HasGlow.Should().BeFalse("the layout's glow must not leak in when the shape authored its own effects");
+    }
 }

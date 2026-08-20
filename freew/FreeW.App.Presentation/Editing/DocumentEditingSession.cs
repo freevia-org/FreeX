@@ -1007,7 +1007,12 @@ public sealed class DocumentEditingSession
         CoalesceEditableRuns(merged);
         // Deleting Backspace at the start of `current` removes `previous`'s own paragraph mark, so
         // `previous`'s section break (if any) is discarded and `current`'s (the surviving mark) carries
-        // forward -- see SurvivingSectionBreak.
+        // forward -- see SurvivingSectionBreak. The same surviving mark owns the paragraph's pPr, so the
+        // merged paragraph's style/formatting must come from `current`, not from `previous` (whose mark
+        // was deleted) -- CreateParagraph above only supplies the body-level region wrappers from
+        // `previous`, the block that keeps this slot in Blocks.
+        merged.StyleId = current.StyleId;
+        merged.Formatting = current.Formatting;
         merged.SectionBreak = SurvivingSectionBreak(earlier: previous, later: current);
         _commands.Execute(new ReplaceBlocksCommand(blockIndex - 1, 2, [merged]));
 
@@ -1044,7 +1049,12 @@ public sealed class DocumentEditingSession
         CoalesceEditableRuns(merged);
         // Deleting Delete-forward at the end of `current` removes `current`'s own paragraph mark, so
         // `current`'s section break (if any) is discarded and `next`'s (the surviving mark) carries
-        // forward -- see SurvivingSectionBreak.
+        // forward -- see SurvivingSectionBreak. The same surviving mark owns the paragraph's pPr, so the
+        // merged paragraph's style/formatting must come from `next`, not from `current` (whose mark was
+        // deleted) -- CreateParagraph above only supplies the body-level region wrappers from `current`,
+        // the block that keeps this slot in Blocks.
+        merged.StyleId = next.StyleId;
+        merged.Formatting = next.Formatting;
         merged.SectionBreak = SurvivingSectionBreak(earlier: current, later: next);
         _commands.Execute(new ReplaceBlocksCommand(blockIndex, 2, [merged]));
 

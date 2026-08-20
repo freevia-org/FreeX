@@ -684,6 +684,16 @@ public partial class MainWindow
                 WorkbookOpenWorkflowContext context,
                 CancellationToken cancellationToken)
             {
+            // Checkpoint FIRST, before any state mutation below (ReplaceWorkbookSession,
+            // RebuildFormulaDependencies, the _workbook.Name/_currentSheetId swap, etc.) --
+            // matches the Avalonia host's equivalent callback (MainWindow.cs,
+            // ApplyOpenedWorkbookAsync), which throws before its own ReplaceSession call.
+            // Previously this check sat right before RefreshSheetTabs/ApplyWorkbookReadOnlyOpenPolicy
+            // (R156-host-open-cancel-after-swap), so a cancel landing between the workbook swap
+            // above and this point left the new, unprotected workbook live -- with the read-only
+            // password/recommended gate and stale sheet-tab rebuild silently skipped -- while the
+            // catch below reported the open as merely "canceled".
+            cancellationToken.ThrowIfCancellationRequested();
             var plan = context.CompletionPlan;
             var result = context.Result;
             CloseFindReplaceDialogIfOpen();
@@ -754,7 +764,12 @@ public partial class MainWindow
             // the moment a sibling window registers/pins/removes an entry. Writing through the
             // stale cache would silently clobber the sibling's write (last-writer-wins data loss).
             ShowOpenProgress(CreateOpenProgress("preparing view", TimeSpan.Zero, null));
-            cancellationToken.ThrowIfCancellationRequested();
+            // No further cancellation check here (and none between here and the workbook swap
+            // above): the single checkpoint at the top of this method is where a cancel either
+            // aborts the whole open before anything is touched, or the open is fully committed --
+            // there is no partially-applied state in between. A check here would recreate the same
+            // "workbook already swapped, but read-only gate/sheet-tab refresh/warnings skipped"
+            // hazard the top-of-method checkpoint exists to close (R156-host-open-cancel-after-swap).
             ApplyOpenedWorksheetViewState();
             RefreshSheetTabs();
             HideStartScreen();
