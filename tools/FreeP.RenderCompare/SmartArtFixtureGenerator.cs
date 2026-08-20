@@ -369,13 +369,27 @@ internal static class SmartArtFixtureGenerator
                 new[] { "Idea", "Plan", "Execute", "Review", "Improve" });
             AddSmartArtSlide(app, presentation, 5, "SmartArt Live - List", "List",
                 new[] { "Requirement 1", "Requirement 2", "Requirement 3", "Requirement 4" });
-            AddSmartArtSlide(app, presentation, 6, "SmartArt Live - Relationship1", "Relationship",
+            AddSmartArtSlide(app, presentation, 6, "SmartArt Live - Grouped List", "Grouped List",
+                new[] { "Plan", "Scope", "Schedule", "Build", "Implement", "Verify" });
+            AddSmartArtSlide(app, presentation, 7, "SmartArt Live - Relationship1", "Relationship",
                 new[] { "Audience", "Need", "Offer" });
+            AddSmartArtSlide(app, presentation, 8, "SmartArt Live - Grid Matrix", "Grid Matrix",
+                new[] { "Axis", "Speed", "Quality", "Cost" });
+            AddSmartArtSlide(app, presentation, 9, "SmartArt Live - Increasing Circle Process", "Increasing Circle Process",
+                new[] { "Phase A", "Phase B", "Phase C", "Phase D" });
+            AddSmartArtSlide(app, presentation, 10, "SmartArt Live - Vertical Arrow List", "Vertical Arrow List",
+                new[] { "Collect", "Shape", "Review", "Share" });
 
             if (File.Exists(outputPath))
                 File.Delete(outputPath);
 
             RetryCom(() => presentation.SaveAs(outputPath));
+
+            // PowerPoint retains an exclusive handle until the presentation is
+            // closed.  The hierarchy identity patch reopens the package, so it
+            // must happen after releasing that handle rather than while the COM
+            // presentation is still alive.
+            ClosePresentation(ref presentation);
             PatchPowerPointHierarchy3Identity(outputPath);
             Console.WriteLine($"  Written: {outputPath}");
         }
@@ -440,9 +454,7 @@ internal static class SmartArtFixtureGenerator
         if (target is null)
             throw new InvalidDataException("PowerPoint SmartArt fixture slide 3 has no diagram layout relationship.");
 
-        var layoutPath = "ppt/slides/" + target.Replace("../", string.Empty, StringComparison.Ordinal)
-            .Replace('/', Path.DirectorySeparatorChar);
-        layoutPath = layoutPath.Replace("ppt/slides/diagrams", "ppt/diagrams", StringComparison.OrdinalIgnoreCase);
+        var layoutPath = GetDiagramLayoutPartPath(target);
         var layoutEntry = archive.GetEntry(layoutPath)
             ?? throw new InvalidDataException($"PowerPoint SmartArt fixture is missing {layoutPath}.");
         XDocument layout;
@@ -460,6 +472,26 @@ internal static class SmartArtFixtureGenerator
         var replacement = archive.CreateEntry(layoutPath, CompressionLevel.Optimal);
         using var output = replacement.Open();
         output.Write(layoutBytes.GetBuffer(), 0, checked((int)layoutBytes.Length));
+    }
+
+    internal static string GetDiagramLayoutPartPath(string target)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(target);
+
+        // OPC entry names always use forward slashes, including on Windows.
+        // Normalising to the host separator made the ZIP lookup miss PowerPoint's
+        // layout part after the saved presentation had been closed.
+        var relativeTarget = target.Replace('\\', '/');
+        while (relativeTarget.StartsWith("../", StringComparison.Ordinal))
+            relativeTarget = relativeTarget[3..];
+
+        if (!relativeTarget.StartsWith("diagrams/", StringComparison.OrdinalIgnoreCase)
+            || relativeTarget.Contains("..", StringComparison.Ordinal))
+        {
+            throw new InvalidDataException($"Unexpected SmartArt diagram layout target: {target}");
+        }
+
+        return "ppt/" + relativeTarget;
     }
 
     private static dynamic FindSmartArtLayout(dynamic app, string keyword)
@@ -658,14 +690,33 @@ internal static class SmartArtFixtureGenerator
                             new XElement(A + "rPr", new XAttribute("lang","en-US")),
                             new XElement(A + "t", n.text)))))).ToArray());
 
-        var cxnElems = spec.Connections.Select((c, index) =>
+        // Office requires every SmartArt graph to be rooted at the document point.
+        // The original XML fixture wrote only node-to-node parOf edges.  That is
+        // sufficient for FreeP's bounded reader, but PowerPoint treats the graph
+        // as disconnected and exports only the title.  Keep authored node edges
+        // unchanged and prepend one document-root edge for each top-level node.
+        var childIds = spec.Connections
+            .Select(connection => connection.dst)
+            .ToHashSet(StringComparer.Ordinal);
+        var roots = spec.Nodes
+            .Where(node => !childIds.Contains(node.id))
+            .ToArray();
+        var rootConnections = roots.Select((node, index) =>
+            new XElement(Dgm + "cxn",
+                new XAttribute("modelId", SmartArtModelId($"root:{index}:{node.id}")),
+                new XAttribute("srcId", documentId),
+                new XAttribute("destId", modelIds[node.id]),
+                new XAttribute("srcOrd", index),
+                new XAttribute("destOrd", 0)));
+        var authoredConnections = spec.Connections.Select((c, index) =>
             new XElement(Dgm + "cxn",
                 new XAttribute("modelId", SmartArtModelId($"cxn:{index}:{c.src}:{c.dst}")),
                 new XAttribute("type", "parOf"),
                 new XAttribute("srcId", modelIds[c.src]),
                 new XAttribute("destId", modelIds[c.dst]),
                 new XAttribute("srcOrd", index),
-                new XAttribute("destOrd", index))).ToArray();
+                new XAttribute("destOrd", index)));
+        var cxnElems = rootConnections.Concat(authoredConnections).ToArray();
 
         return new XDocument(new XDeclaration("1.0","UTF-8","yes"),
             new XElement(Dgm + "dataModel",

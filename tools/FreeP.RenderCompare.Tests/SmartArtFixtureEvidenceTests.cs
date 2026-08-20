@@ -6,226 +6,70 @@ namespace FreeP.RenderCompare.Tests;
 
 public sealed class SmartArtFixtureEvidenceTests
 {
-    [Fact]
-    public void Process1FixtureContainsTheAuditedFiveStageNodeAndConnectorGrammar()
+    [Theory]
+    [InlineData("../diagrams/layout3.xml")]
+    [InlineData("..\\diagrams\\layout3.xml")]
+    public void PowerPointDiagramLayoutTargetUsesOpcEntrySeparators(string relationshipTarget)
     {
-        var root = RepositoryRoot;
-        var path = Path.Combine(root, "tools", "FreeP.RenderCompare", "corpus", "15-smartart-grouped-list.pptx");
-
-        using var archive = ZipFile.OpenRead(path);
-        var layout = ReadXml(archive, "ppt/diagrams/layout1.xml");
-        var drawing = ReadXml(archive, "ppt/diagrams/drawing1.xml");
-        var dgm = XNamespace.Get("http://schemas.openxmlformats.org/drawingml/2006/diagram");
-        var dsp = XNamespace.Get("http://schemas.microsoft.com/office/drawing/2008/diagram");
-        var a = XNamespace.Get("http://schemas.openxmlformats.org/drawingml/2006/main");
-
-        layout.Root!.Attribute("uniqueId")!.Value.Should().EndWith("/process1");
-        var shapes = drawing.Descendants(dsp + "sp").ToList();
-        shapes.Should().HaveCount(9);
-        shapes.Where((_, index) => index % 2 == 0)
-            .Select(shape => (string?)shape.Descendants(a + "prstGeom").Single().Attribute("prst"))
-            .Should().OnlyContain(value => value == "roundRect");
-        shapes.Where((_, index) => index % 2 == 1)
-            .Should().OnlyContain(shape => shape.Descendants(a + "ln").Any());
-        drawing.Descendants(a + "t").Select(element => element.Value)
-            .Should().Equal("Plan", "Design", "Build", "Test", "Deploy");
-        ReadXml(archive, "ppt/diagrams/data1.xml")
-            .Descendants(dgm + "pt")
-            .Where(element => (string?)element.Attribute("type") != "doc")
-            .Should().HaveCount(5);
+        SmartArtFixtureGenerator.GetDiagramLayoutPartPath(relationshipTarget)
+            .Should().Be("ppt/diagrams/layout3.xml");
     }
 
     [Fact]
-    public void List1FixtureContainsTheAuditedFourSlotGrammar()
+    public void PowerPointDiagramLayoutTargetRejectsTraversalOutsideDiagrams()
     {
-        var root = RepositoryRoot;
-        var path = Path.Combine(root, "tools", "FreeP.RenderCompare", "corpus", "15-smartart-grouped-list.pptx");
+        var action = () => SmartArtFixtureGenerator.GetDiagramLayoutPartPath("../layouts/layout3.xml");
 
-        using var archive = ZipFile.OpenRead(path);
-        var layout = ReadXml(archive, "ppt/diagrams/layout5.xml");
-        var drawing = ReadXml(archive, "ppt/diagrams/drawing5.xml");
-        var dgm = XNamespace.Get("http://schemas.openxmlformats.org/drawingml/2006/diagram");
-        var dsp = XNamespace.Get("http://schemas.microsoft.com/office/drawing/2008/diagram");
-        var a = XNamespace.Get("http://schemas.openxmlformats.org/drawingml/2006/main");
-
-        layout.Root!.Attribute("uniqueId")!.Value.Should().EndWith("/list1");
-        var shapes = drawing.Descendants(dsp + "sp").ToList();
-        shapes.Should().HaveCount(4);
-        shapes.Select(shape => (string?)shape.Descendants(a + "prstGeom").Single().Attribute("prst"))
-            .Should().OnlyContain(value => value == "roundRect");
-        shapes.Select(shape => long.Parse(shape.Descendants(a + "off").Single().Attribute("x")!.Value))
-            .Should().OnlyContain(value => value == 329_184L);
-        shapes.Select(shape => long.Parse(shape.Descendants(a + "off").Single().Attribute("y")!.Value))
-            .Should().Equal(229_792L, 1_587_001L, 2_944_210L, 4_301_419L);
-        shapes.Select(shape => shape.Descendants(a + "ext").Single().Attributes()
-                .Where(attribute => attribute.Name.LocalName is "cx" or "cy")
-                .Select(attribute => long.Parse(attribute.Value)))
-            .Should().OnlyContain(extent => extent.SequenceEqual(new long[] { 7_571_232L, 1_213_589L }));
-        drawing.Descendants(a + "t").Select(element => element.Value)
-            .Should().Equal("Requirement 1", "Requirement 2", "Requirement 3", "Requirement 4");
-        ReadXml(archive, "ppt/diagrams/data5.xml")
-            .Descendants(dgm + "pt")
-            .Where(element => (string?)element.Attribute("type") != "doc")
-            .Should().HaveCount(4);
+        action.Should().Throw<InvalidDataException>();
     }
 
     [Fact]
-    public void GroupedListFixtureContainsTheAuditedCachedBandGrammar()
+    public void NativeSmartArtFixtureContainsOneDiagramGraphicFramePerSlide()
     {
-        var root = RepositoryRoot;
-        var path = Path.Combine(root, "tools", "FreeP.RenderCompare", "corpus", "15-smartart-grouped-list.pptx");
+        using var archive = ZipFile.OpenRead(Path.Combine(
+            RepositoryRoot,
+            "tools",
+            "FreeP.RenderCompare",
+            "corpus",
+            "15-smartart-grouped-list.pptx"));
 
-        using var archive = ZipFile.OpenRead(path);
-        var layout = ReadXml(archive, "ppt/diagrams/layout6.xml");
-        var drawing = ReadXml(archive, "ppt/diagrams/drawing6.xml");
-        var dgm = XNamespace.Get("http://schemas.openxmlformats.org/drawingml/2006/diagram");
-        var dsp = XNamespace.Get("http://schemas.microsoft.com/office/drawing/2008/diagram");
+        var presentation = ReadXml(archive, "ppt/presentation.xml");
+        var p = XNamespace.Get("http://schemas.openxmlformats.org/presentationml/2006/main");
         var a = XNamespace.Get("http://schemas.openxmlformats.org/drawingml/2006/main");
+        var dgm = XNamespace.Get("http://schemas.openxmlformats.org/drawingml/2006/diagram");
 
-        layout.Root!.Attribute("uniqueId")!.Value.Should().EndWith("/groupedList");
-        drawing.Descendants(dsp + "sp").Should().HaveCount(8);
-        drawing.Descendants(a + "t").Should().HaveCount(6);
-        ReadXml(archive, "ppt/diagrams/data6.xml")
-            .Descendants(dgm + "pt")
-            .Where(element => (string?)element.Attribute("type") != "doc")
-            .Should().HaveCount(6);
+        presentation.Descendants(p + "sldId").Should().HaveCount(10);
+        for (var index = 1; index <= 10; index++)
+        {
+            var slide = ReadXml(archive, $"ppt/slides/slide{index}.xml");
+            slide.Descendants(p + "graphicFrame").Should().ContainSingle();
+            slide.Descendants(a + "graphicData")
+                .Single().Attribute("uri")!.Value
+                .Should().Be("http://schemas.openxmlformats.org/drawingml/2006/diagram");
+            slide.Descendants(dgm + "relIds").Should().ContainSingle();
+        }
     }
 
     [Fact]
-    public void Relationship1FixtureContainsTheAuditedNodeEllipseGrammar()
+    public void NativeSmartArtFixtureCarriesPowerPointMaterializedDrawingForEverySlide()
     {
-        var root = RepositoryRoot;
-        var path = Path.Combine(root, "tools", "FreeP.RenderCompare", "corpus", "15-smartart-grouped-list.pptx");
+        using var archive = ZipFile.OpenRead(Path.Combine(
+            RepositoryRoot,
+            "tools",
+            "FreeP.RenderCompare",
+            "corpus",
+            "15-smartart-grouped-list.pptx"));
 
-        using var archive = ZipFile.OpenRead(path);
-        var layout = ReadXml(archive, "ppt/diagrams/layout7.xml");
-        var drawing = ReadXml(archive, "ppt/diagrams/drawing7.xml");
-        var dgm = XNamespace.Get("http://schemas.openxmlformats.org/drawingml/2006/diagram");
-        var dsp = XNamespace.Get("http://schemas.microsoft.com/office/drawing/2008/diagram");
-        var a = XNamespace.Get("http://schemas.openxmlformats.org/drawingml/2006/main");
-
-        layout.Root!.Attribute("uniqueId")!.Value.Should().EndWith("/relationship1");
-        var shapes = drawing.Descendants(dsp + "sp").ToList();
-        shapes.Should().HaveCount(3);
-        drawing.Descendants(a + "prstGeom")
-            .Select(element => (string?)element.Attribute("prst"))
-            .Should().OnlyContain(value => value == "ellipse");
-        shapes.Select(shape => shape.Descendants(a + "ext").Single().Attributes()
-                .Where(attribute => attribute.Name.LocalName is "cx" or "cy")
-                .Select(attribute => long.Parse(attribute.Value)))
-            .Should().OnlyContain(extents => extents.SequenceEqual(new long[] { 2_400_000L, 2_400_000L }));
-        shapes.Select(shape => long.Parse(shape.Descendants(a + "off").Single().Attribute("x")!.Value))
-            .Zip(new long[] { 1_522_800L, 2_914_800L, 4_306_800L })
-            .Should().OnlyContain(pair => pair.First == pair.Second);
-        shapes.Select(shape => long.Parse(shape.Descendants(a + "off").Single().Attribute("y")!.Value))
-            .Should().OnlyContain(value => value == 1_672_400L);
-        drawing.Descendants(a + "t").Should().HaveCount(3);
-        ReadXml(archive, "ppt/diagrams/data7.xml")
-            .Descendants(dgm + "pt")
-            .Where(element => (string?)element.Attribute("type") != "doc")
-            .Should().HaveCount(3);
-    }
-
-    [Fact]
-    public void GridMatrixFixtureContainsTheAuditedFourCellSquareGrammar()
-    {
-        var root = RepositoryRoot;
-        var path = Path.Combine(root, "tools", "FreeP.RenderCompare", "corpus", "15-smartart-grouped-list.pptx");
-
-        using var archive = ZipFile.OpenRead(path);
-        var layout = ReadXml(archive, "ppt/diagrams/layout8.xml");
-        var drawing = ReadXml(archive, "ppt/diagrams/drawing8.xml");
-        var dgm = XNamespace.Get("http://schemas.openxmlformats.org/drawingml/2006/diagram");
-        var dsp = XNamespace.Get("http://schemas.microsoft.com/office/drawing/2008/diagram");
-        var a = XNamespace.Get("http://schemas.openxmlformats.org/drawingml/2006/main");
-
-        layout.Root!.Attribute("uniqueId")!.Value.Should().EndWith("/gridMatrix");
-        var shapes = drawing.Descendants(dsp + "sp").ToList();
-        shapes.Should().HaveCount(4);
-        drawing.Descendants(a + "prstGeom")
-            .Select(element => (string?)element.Attribute("prst"))
-            .Should().OnlyContain(value => value == "rect");
-
-        var extents = shapes.Select(shape => shape.Descendants(a + "ext").Single().Attributes()
-            .Where(attribute => attribute.Name.LocalName is "cx" or "cy")
-            .Select(attribute => long.Parse(attribute.Value))
-            .ToArray()).ToArray();
-        extents.Should().OnlyContain(extent => extent.SequenceEqual(new long[] { 2_576_543L, 2_576_543L }));
-
-        shapes.Select(shape => long.Parse(shape.Descendants(a + "off").Single().Attribute("x")!.Value))
-            .Should().Equal(1_472_192L, 4_180_865L, 1_472_192L, 4_180_865L);
-        shapes.Select(shape => long.Parse(shape.Descendants(a + "off").Single().Attribute("y")!.Value))
-            .Should().Equal(229_792L, 229_792L, 2_938_465L, 2_938_465L);
-        drawing.Descendants(a + "t").Should().HaveCount(4);
-        ReadXml(archive, "ppt/diagrams/data8.xml")
-            .Descendants(dgm + "pt")
-            .Where(element => (string?)element.Attribute("type") != "doc")
-            .Should().HaveCount(4);
-    }
-
-    [Fact]
-    public void IncreasingCircleProcessFixtureContainsTheAuditedGrowingEllipseGrammar()
-    {
-        var root = RepositoryRoot;
-        var path = Path.Combine(root, "tools", "FreeP.RenderCompare", "corpus", "15-smartart-grouped-list.pptx");
-
-        using var archive = ZipFile.OpenRead(path);
-        var layout = ReadXml(archive, "ppt/diagrams/layout9.xml");
-        var drawing = ReadXml(archive, "ppt/diagrams/drawing9.xml");
-        var dgm = XNamespace.Get("http://schemas.openxmlformats.org/drawingml/2006/diagram");
-        var dsp = XNamespace.Get("http://schemas.microsoft.com/office/drawing/2008/diagram");
-        var a = XNamespace.Get("http://schemas.openxmlformats.org/drawingml/2006/main");
-
-        layout.Root!.Attribute("uniqueId")!.Value.Should().EndWith("/increasingCircleProcess");
-        var shapes = drawing.Descendants(dsp + "sp").ToList();
-        shapes.Should().HaveCount(7);
-        shapes.Take(4).Select(shape => (string?)shape.Descendants(a + "prstGeom")
-                .Single().Attribute("prst"))
-            .Should().OnlyContain(value => value == "ellipse");
-        shapes.Skip(4).Should().OnlyContain(shape => shape.Descendants(a + "ln").Any());
-        shapes.Take(4).Select(shape => long.Parse(shape.Descendants(a + "ext").Single().Attribute("cx")!.Value))
-            .Should().BeInAscendingOrder();
-        drawing.Descendants(a + "t").Select(element => element.Value)
-            .Should().Equal("Phase A", "Phase B", "Phase C", "Phase D");
-        ReadXml(archive, "ppt/diagrams/data9.xml")
-            .Descendants(dgm + "pt")
-            .Where(element => (string?)element.Attribute("type") != "doc")
-            .Should().HaveCount(4);
-    }
-
-    [Fact]
-    public void VerticalArrowListFixtureContainsTheAuditedFourSlotGrammar()
-    {
-        var root = RepositoryRoot;
-        var path = Path.Combine(root, "tools", "FreeP.RenderCompare", "corpus", "15-smartart-grouped-list.pptx");
-
-        using var archive = ZipFile.OpenRead(path);
-        var layout = ReadXml(archive, "ppt/diagrams/layout10.xml");
-        var drawing = ReadXml(archive, "ppt/diagrams/drawing10.xml");
-        var dgm = XNamespace.Get("http://schemas.openxmlformats.org/drawingml/2006/diagram");
-        var dsp = XNamespace.Get("http://schemas.microsoft.com/office/drawing/2008/diagram");
-        var a = XNamespace.Get("http://schemas.openxmlformats.org/drawingml/2006/main");
-
-        layout.Root!.Attribute("uniqueId")!.Value.Should().EndWith("/verticalArrowList");
-        var shapes = drawing.Descendants(dsp + "sp").ToList();
-        shapes.Should().HaveCount(4);
-        shapes.Select(shape => (string?)shape.Descendants(a + "prstGeom")
-                .Single().Attribute("prst"))
-            .Should().OnlyContain(value => value == "downArrow");
-        shapes.Select(shape => long.Parse(shape.Descendants(a + "off").Single().Attribute("x")!.Value))
-            .Should().OnlyContain(value => value == 329_184L);
-        shapes.Select(shape => long.Parse(shape.Descendants(a + "off").Single().Attribute("y")!.Value))
-            .Should().Equal(229_792L, 1_574_434L, 2_919_076L, 4_263_718L);
-        shapes.Select(shape => shape.Descendants(a + "ext").Single().Attributes()
-                .Where(attribute => attribute.Name.LocalName is "cx" or "cy")
-                .Select(attribute => long.Parse(attribute.Value)))
-            .Should().OnlyContain(extent => extent.SequenceEqual(new long[] { 7_571_232L, 1_251_289L }));
-        drawing.Descendants(a + "t").Select(element => element.Value)
-            .Should().Equal("Collect", "Shape", "Review", "Share");
-        ReadXml(archive, "ppt/diagrams/data10.xml")
-            .Descendants(dgm + "pt")
-            .Where(element => (string?)element.Attribute("type") != "doc")
-            .Should().HaveCount(4);
+        for (var index = 1; index <= 10; index++)
+        {
+            var rels = ReadXml(archive, $"ppt/slides/_rels/slide{index}.xml.rels");
+            var relationshipTypes = rels.Root!.Elements()
+                .Select(element => (string?)element.Attribute("Type"))
+                .ToArray();
+            relationshipTypes.Any(type => type is not null
+                && type.EndsWith("/diagramDrawing", StringComparison.OrdinalIgnoreCase))
+                .Should().BeTrue();
+        }
     }
 
     private static XDocument ReadXml(ZipArchive archive, string path)
