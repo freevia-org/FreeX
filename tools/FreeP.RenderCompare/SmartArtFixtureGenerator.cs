@@ -369,8 +369,16 @@ internal static class SmartArtFixtureGenerator
                 new[] { "Idea", "Plan", "Execute", "Review", "Improve" });
             AddSmartArtSlide(app, presentation, 5, "SmartArt Live - List", "List",
                 new[] { "Requirement 1", "Requirement 2", "Requirement 3", "Requirement 4" });
-            AddSmartArtSlide(app, presentation, 6, "SmartArt Live - Relationship1", "Relationship",
+            AddSmartArtSlide(app, presentation, 6, "SmartArt Live - Grouped List", "Grouped List",
+                new[] { "Plan", "Scope", "Schedule", "Build", "Implement", "Verify" });
+            AddSmartArtSlide(app, presentation, 7, "SmartArt Live - Relationship1", "Relationship",
                 new[] { "Audience", "Need", "Offer" });
+            AddSmartArtSlide(app, presentation, 8, "SmartArt Live - Grid Matrix", "Grid Matrix",
+                new[] { "Axis", "Speed", "Quality", "Cost" });
+            AddSmartArtSlide(app, presentation, 9, "SmartArt Live - Increasing Circle Process", "Increasing Circle Process",
+                new[] { "Phase A", "Phase B", "Phase C", "Phase D" });
+            AddSmartArtSlide(app, presentation, 10, "SmartArt Live - Vertical Arrow List", "Vertical Arrow List",
+                new[] { "Collect", "Shape", "Review", "Share" });
 
             if (File.Exists(outputPath))
                 File.Delete(outputPath);
