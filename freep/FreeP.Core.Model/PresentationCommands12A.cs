@@ -477,29 +477,37 @@ public sealed class AlignShapesCommand : IPresentationCommand
 
         foreach (var s in targets)
         {
-            _saved.Add((s!.Id, s.OffsetXEmu, s.OffsetYEmu));
+            long oldX = s!.OffsetXEmu, oldY = s.OffsetYEmu;
+            _saved.Add((s.Id, oldX, oldY));
 
+            long newX = oldX, newY = oldY;
             switch (_kind)
             {
                 case AlignKind.Left:
-                    s.OffsetXEmu = bboxMinX;
+                    newX = bboxMinX;
                     break;
                 case AlignKind.CenterH:
-                    s.OffsetXEmu = bboxMinX + (bboxCx - s.ExtentCxEmu) / 2;
+                    newX = bboxMinX + (bboxCx - s.ExtentCxEmu) / 2;
                     break;
                 case AlignKind.Right:
-                    s.OffsetXEmu = bboxMaxX - s.ExtentCxEmu;
+                    newX = bboxMaxX - s.ExtentCxEmu;
                     break;
                 case AlignKind.Top:
-                    s.OffsetYEmu = bboxMinY;
+                    newY = bboxMinY;
                     break;
                 case AlignKind.Middle:
-                    s.OffsetYEmu = bboxMinY + (bboxCy - s.ExtentCyEmu) / 2;
+                    newY = bboxMinY + (bboxCy - s.ExtentCyEmu) / 2;
                     break;
                 case AlignKind.Bottom:
-                    s.OffsetYEmu = bboxMaxY - s.ExtentCyEmu;
+                    newY = bboxMaxY - s.ExtentCyEmu;
                     break;
             }
+
+            // s may be a Group: its children store absolute (slide-space) coordinates, not
+            // coordinates relative to the group (see GroupShapesCommand.Apply), so translate
+            // every descendant by the same delta -- the same helper MoveShapeCommand uses --
+            // or the group's own position moves while its members stay behind.
+            SlideShapeTraversal.TranslateWithDescendants(s, newX - oldX, newY - oldY);
         }
     }
 
@@ -512,8 +520,7 @@ public sealed class AlignShapesCommand : IPresentationCommand
         {
             var s = shapes.FirstOrDefault(sh => sh.Id == id);
             if (s is null) continue;
-            s.OffsetXEmu = oldX;
-            s.OffsetYEmu = oldY;
+            SlideShapeTraversal.TranslateWithDescendants(s, oldX - s.OffsetXEmu, oldY - s.OffsetYEmu);
         }
         _saved = null;
     }
@@ -565,16 +572,22 @@ public sealed class AlignShapesToSlideCommand : IPresentationCommand
         _saved = new List<(uint, long, long)>();
         foreach (var s in targets)
         {
-            _saved.Add((s!.Id, s.OffsetXEmu, s.OffsetYEmu));
+            long oldX = s!.OffsetXEmu, oldY = s.OffsetYEmu;
+            _saved.Add((s.Id, oldX, oldY));
+            long newX = oldX, newY = oldY;
             switch (_kind)
             {
-                case AlignKind.Left: s.OffsetXEmu = 0; break;
-                case AlignKind.CenterH: s.OffsetXEmu = (p.SlideSizeCxEmu - s.ExtentCxEmu) / 2; break;
-                case AlignKind.Right: s.OffsetXEmu = p.SlideSizeCxEmu - s.ExtentCxEmu; break;
-                case AlignKind.Top: s.OffsetYEmu = 0; break;
-                case AlignKind.Middle: s.OffsetYEmu = (p.SlideSizeCyEmu - s.ExtentCyEmu) / 2; break;
-                case AlignKind.Bottom: s.OffsetYEmu = p.SlideSizeCyEmu - s.ExtentCyEmu; break;
+                case AlignKind.Left: newX = 0; break;
+                case AlignKind.CenterH: newX = (p.SlideSizeCxEmu - s.ExtentCxEmu) / 2; break;
+                case AlignKind.Right: newX = p.SlideSizeCxEmu - s.ExtentCxEmu; break;
+                case AlignKind.Top: newY = 0; break;
+                case AlignKind.Middle: newY = (p.SlideSizeCyEmu - s.ExtentCyEmu) / 2; break;
+                case AlignKind.Bottom: newY = p.SlideSizeCyEmu - s.ExtentCyEmu; break;
             }
+
+            // s may be a Group: translate every descendant by the same delta (see
+            // SlideShapeTraversal.TranslateWithDescendants) so group members move with it.
+            SlideShapeTraversal.TranslateWithDescendants(s, newX - oldX, newY - oldY);
         }
     }
 
@@ -586,8 +599,7 @@ public sealed class AlignShapesToSlideCommand : IPresentationCommand
         {
             var s = shapes.FirstOrDefault(sh => sh.Id == id);
             if (s is null) continue;
-            s.OffsetXEmu = oldX;
-            s.OffsetYEmu = oldY;
+            SlideShapeTraversal.TranslateWithDescendants(s, oldX - s.OffsetXEmu, oldY - s.OffsetYEmu);
         }
         _saved = null;
     }
@@ -641,7 +653,9 @@ public sealed class DistributeShapesCommand : IPresentationCommand
             long x = spanLeft;
             foreach (var s in sorted)
             {
-                s!.OffsetXEmu = x;
+                // s may be a Group: translate every descendant by the same delta (see
+                // SlideShapeTraversal.TranslateWithDescendants) so group members move with it.
+                SlideShapeTraversal.TranslateWithDescendants(s!, x - s!.OffsetXEmu, 0);
                 x += s.ExtentCxEmu + gapPerSlot;
             }
         }
@@ -660,7 +674,9 @@ public sealed class DistributeShapesCommand : IPresentationCommand
             long y = spanTop;
             foreach (var s in sorted)
             {
-                s!.OffsetYEmu = y;
+                // s may be a Group: translate every descendant by the same delta (see
+                // SlideShapeTraversal.TranslateWithDescendants) so group members move with it.
+                SlideShapeTraversal.TranslateWithDescendants(s!, 0, y - s!.OffsetYEmu);
                 y += s.ExtentCyEmu + gapPerSlot;
             }
         }
@@ -675,8 +691,7 @@ public sealed class DistributeShapesCommand : IPresentationCommand
         {
             var s = shapes.FirstOrDefault(sh => sh.Id == id);
             if (s is null) continue;
-            s.OffsetXEmu = oldX;
-            s.OffsetYEmu = oldY;
+            SlideShapeTraversal.TranslateWithDescendants(s, oldX - s.OffsetXEmu, oldY - s.OffsetYEmu);
         }
         _saved = null;
     }

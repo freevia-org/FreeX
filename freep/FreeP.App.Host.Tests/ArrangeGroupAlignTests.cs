@@ -419,6 +419,84 @@ public sealed class ArrangeGroupAlignTests
         slide.Shapes.First(s => s.Id == 11).OffsetXEmu.Should().Be(300, "original position restored");
     }
 
+    /// <summary>
+    /// A group's children store ABSOLUTE slide-space coordinates (see
+    /// GroupShapesCommand.Apply), so aligning a group must translate its children by the
+    /// same delta as the group itself -- otherwise the group's own offset moves while its
+    /// members are left behind, the exact symptom MoveShapeCommand/ResizeShapeCommand/
+    /// PasteShapeCopies were fixed to remove. Reproduces the live repro through
+    /// EditingSession.AlignLeft(): a group and a second shape are selected, and the group
+    /// starts to the right of the standalone shape so AlignLeft actually has to move it.
+    /// </summary>
+    [Fact]
+    public void AlignLeft_GroupChildMovesWithGroup()
+    {
+        var (pres, session) = CreateSession();
+        var slide = pres.Slides[0];
+        // Two shapes will be grouped; a third stays standalone as the alignment anchor.
+        slide.Shapes.Add(MakeRect(10, 300, 0, 100, 100)); // group child A
+        slide.Shapes.Add(MakeRect(11, 400, 0, 100, 100)); // group child B
+        slide.Shapes.Add(MakeRect(12, 100, 0, 100, 100)); // standalone, left-most
+
+        session.SelectSlide(0);
+        session.Select(10);
+        session.Select(11, addToSelection: true);
+        session.GroupSelectedShapes();
+
+        var groupId = session.SelectedShapeIds[0];
+        var group = slide.Shapes.Single(s => s.Id == groupId);
+        group.OffsetXEmu.Should().Be(300, "sanity: group starts at the union of its children");
+
+        // Select the group plus the standalone shape and align left. The bounding box's
+        // left edge is shape 12's x=100, so the group must move by -200.
+        session.Select(groupId);
+        session.Select(12, addToSelection: true);
+        session.AlignLeft();
+
+        group.OffsetXEmu.Should().Be(100, "group moved to the selection's left edge");
+        var childA = group.Children.First(c => c.Id == 10);
+        var childB = group.Children.First(c => c.Id == 11);
+        childA.OffsetXEmu.Should().Be(100, "child A must translate with the group, not stay behind");
+        childB.OffsetXEmu.Should().Be(200, "child B must translate with the group, not stay behind");
+        slide.Shapes.First(s => s.Id == 12).OffsetXEmu.Should().Be(100, "already at the bbox left edge");
+
+        // Undo must restore the group AND its children to their pre-align absolute positions.
+        session.Undo();
+
+        group.OffsetXEmu.Should().Be(300, "undo restores the group's original position");
+        childA.OffsetXEmu.Should().Be(300, "undo restores child A's original absolute position");
+        childB.OffsetXEmu.Should().Be(400, "undo restores child B's original absolute position");
+        slide.Shapes.First(s => s.Id == 12).OffsetXEmu.Should().Be(100, "standalone shape unaffected");
+    }
+
+    /// <summary>
+    /// Sibling no-regression check: aligning a selection with NO group in it must keep
+    /// behaving exactly as before -- SlideShapeTraversal.TranslateWithDescendants is a no-op
+    /// on a leaf shape (empty Children), so plain shapes must move by exactly the same
+    /// amount they did before this fix.
+    /// </summary>
+    [Fact]
+    public void AlignLeft_PlainShapesUnaffectedByGroupTranslationFix()
+    {
+        var (pres, session) = CreateSession();
+        var slide = pres.Slides[0];
+        slide.Shapes.Add(MakeRect(10, 100, 0, 200, 100));
+        slide.Shapes.Add(MakeRect(11, 300, 0, 100, 100));
+
+        session.SelectSlide(0);
+        session.Select(10);
+        session.Select(11, addToSelection: true);
+        session.AlignLeft();
+
+        slide.Shapes.First(s => s.Id == 10).OffsetXEmu.Should().Be(100);
+        slide.Shapes.First(s => s.Id == 11).OffsetXEmu.Should().Be(100);
+
+        session.Undo();
+
+        slide.Shapes.First(s => s.Id == 10).OffsetXEmu.Should().Be(100, "original position restored");
+        slide.Shapes.First(s => s.Id == 11).OffsetXEmu.Should().Be(300, "original position restored");
+    }
+
     // ── Distribute ────────────────────────────────────────────────────────────────
 
     [Fact]
@@ -456,6 +534,43 @@ public sealed class ArrangeGroupAlignTests
 
         session.Undo();
         slide.Shapes[0].OffsetXEmu.Should().Be(100);
+    }
+
+    /// <summary>
+    /// Same group-children-are-absolute-coordinates defect as
+    /// <see cref="AlignLeft_GroupChildMovesWithGroup"/>, exercised through
+    /// AlignShapesToSlideCommand (EditingSession.AlignLeftToSlide).
+    /// </summary>
+    [Fact]
+    public void AlignToSlide_GroupChildMovesWithGroup()
+    {
+        var (pres, session) = CreateSession();
+        var slide = pres.Slides[0];
+        slide.Shapes.Add(MakeRect(10, 200, 0, 100, 100)); // group child A
+        slide.Shapes.Add(MakeRect(11, 300, 0, 100, 100)); // group child B
+
+        session.SelectSlide(0);
+        session.Select(10);
+        session.Select(11, addToSelection: true);
+        session.GroupSelectedShapes();
+        var groupId = session.SelectedShapeIds[0];
+        var group = slide.Shapes.Single(s => s.Id == groupId);
+        group.OffsetXEmu.Should().Be(200, "sanity: group starts at the union of its children");
+
+        session.Select(groupId);
+        session.AlignLeftToSlide();
+
+        group.OffsetXEmu.Should().Be(0, "group moved to the slide's left edge");
+        var childA = group.Children.First(c => c.Id == 10);
+        var childB = group.Children.First(c => c.Id == 11);
+        childA.OffsetXEmu.Should().Be(0, "child A must translate with the group, not stay behind");
+        childB.OffsetXEmu.Should().Be(100, "child B must translate with the group, not stay behind");
+
+        session.Undo();
+
+        group.OffsetXEmu.Should().Be(200, "undo restores the group's original position");
+        childA.OffsetXEmu.Should().Be(200, "undo restores child A's original absolute position");
+        childB.OffsetXEmu.Should().Be(300, "undo restores child B's original absolute position");
     }
 
     [Fact]
@@ -583,6 +698,52 @@ public sealed class ArrangeGroupAlignTests
         session.Undo();
 
         s11.OffsetXEmu.Should().Be(50, "undo restored original position");
+    }
+
+    /// <summary>
+    /// Same group-children-are-absolute-coordinates defect as
+    /// <see cref="AlignLeft_GroupChildMovesWithGroup"/>, exercised through
+    /// DistributeShapesCommand (EditingSession.DistributeHorizontally). One of the three
+    /// distribute targets is a group; the other two are standalone shapes.
+    /// </summary>
+    [Fact]
+    public void DistributeHorizontally_GroupChildMovesWithGroup()
+    {
+        var (pres, session) = CreateSession();
+        var slide = pres.Slides[0];
+        slide.Shapes.Add(MakeRect(20, 0,   0, 100, 100)); // standalone A: right=100
+        slide.Shapes.Add(MakeRect(10, 300, 0, 100, 100)); // group child (will union to x=300, cx=200)
+        slide.Shapes.Add(MakeRect(11, 400, 0, 100, 100));
+        slide.Shapes.Add(MakeRect(30, 600, 0, 100, 100)); // standalone C: right=700
+
+        session.SelectSlide(0);
+        session.Select(10);
+        session.Select(11, addToSelection: true);
+        session.GroupSelectedShapes();
+        var groupId = session.SelectedShapeIds[0];
+        var group = slide.Shapes.Single(s => s.Id == groupId);
+        group.OffsetXEmu.Should().Be(300, "sanity: group starts at the union of its children");
+
+        // span=0..700=700; totalWidth=100+200+100=400; gapTotal=300; gaps=2; gapPerSlot=150.
+        // A stays at 0; group moves to 0+100+150=250; C stays at 600 (unchanged).
+        session.Select(20);
+        session.Select(groupId, addToSelection: true);
+        session.Select(30, addToSelection: true);
+        session.DistributeHorizontally();
+
+        group.OffsetXEmu.Should().Be(250, "group moved by the distribute pass");
+        var childA = group.Children.First(c => c.Id == 10);
+        var childB = group.Children.First(c => c.Id == 11);
+        childA.OffsetXEmu.Should().Be(250, "child A must translate with the group, not stay behind");
+        childB.OffsetXEmu.Should().Be(350, "child B must translate with the group, not stay behind");
+        slide.Shapes.First(s => s.Id == 20).OffsetXEmu.Should().Be(0);
+        slide.Shapes.First(s => s.Id == 30).OffsetXEmu.Should().Be(600);
+
+        session.Undo();
+
+        group.OffsetXEmu.Should().Be(300, "undo restores the group's original position");
+        childA.OffsetXEmu.Should().Be(300, "undo restores child A's original absolute position");
+        childB.OffsetXEmu.Should().Be(400, "undo restores child B's original absolute position");
     }
 
     // ── Z-order: BringToFront / SendToBack ────────────────────────────────────────

@@ -62,6 +62,18 @@ public sealed class WindowsOleInPlaceEngine : IDisposable
 
     internal string StoragePath => _storagePath;
 
+    /// <summary>
+    /// Test-only observation hook, invoked with the freshly built engine right after
+    /// <see cref="TryCreatePayload"/> constructs it and before either renderer host attempts
+    /// <see cref="TryStart"/>. Real in-place activation cannot run headless (no native OLE server
+    /// is available in a test process), so end-to-end tests use this seam to simulate a server
+    /// having rewritten the payload -- by editing the file at <see cref="SourcePath"/> -- and then
+    /// let the normal <see cref="CloseAndCommit"/> path (reached via ordinary disposal once
+    /// <c>TryStart</c> fails) decide whether to invoke the real commit callback. Always null in
+    /// shipping code; production callers never assign it.
+    /// </summary>
+    internal static Action<WindowsOleInPlaceEngine>? PayloadCreatedObserver { get; set; }
+
     public static bool TryCreatePayload(
         string fileNamePrefix,
         string extension,
@@ -87,6 +99,7 @@ public sealed class WindowsOleInPlaceEngine : IDisposable
             sourceFile.WriteAllBytes(embeddedBytes);
             engine = new WindowsOleInPlaceEngine(sourceFile, embeddedBytes, commitBytes);
             sourceFile = null;
+            PayloadCreatedObserver?.Invoke(engine);
             return true;
         }
         catch

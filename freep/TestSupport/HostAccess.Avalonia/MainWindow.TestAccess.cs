@@ -103,4 +103,19 @@ public sealed partial class MainWindow
     internal Task<PrintSubmissionResult> BackstagePrintOperationForTests => _backstagePrintOperation;
 
     internal sealed record VideoPickerSelectionForTests(string? LocalPath);
+
+#if FREEP_WINDOWS_CAPTURE
+    /// <summary>
+    /// Forwards to the private native in-place OLE entry point, so end-to-end tests can drive the
+    /// exact call site that composes <c>onPayloadUpdated</c> for <c>AvaloniaOleInPlaceHost.TryShow</c>
+    /// instead of only exercising the composition helper in isolation.
+    /// </summary>
+    internal bool TryOpenOleInPlaceForTests(SlideShape shape) => TryOpenOleInPlace(shape);
+
+    /// <summary>
+    /// Disposes the active in-place host the same way a routine gesture (reselect, navigate
+    /// slides) does, driving <see cref="FreeP.App.Ole.Windows.WindowsOleInPlaceEngine.CloseAndCommit"/>.
+    /// </summary>
+    internal void CloseActiveOleHostForTests() => CloseActiveOleHost();
+#endif
 }

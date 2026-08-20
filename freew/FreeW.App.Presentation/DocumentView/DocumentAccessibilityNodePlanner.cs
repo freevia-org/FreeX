@@ -316,8 +316,13 @@ public static class DocumentAccessibilityNodePlanner
             // continuous series that ignored a restart setting and drifted from what the document shows.
             var isFootnote = noteKind == DocumentAccessibilityNodeKind.Footnote;
             var sequenceById = DocumentNoteRegionPlanner.ComputeSequenceById(document, isFootnote);
+            // r152 remediation H1: present nodes in the same reading-order sequence as their labels
+            // (mirrors DocumentNoteRegionPlanner.BuildRows) instead of raw internal id order, which
+            // drifts from reading order as soon as a note is inserted earlier in the text after a later
+            // one -- otherwise a screen reader announces "Footnote 2" before "Footnote 1".
             var noteNodes = notes
-                .OrderBy(entry => entry.Key)
+                .OrderBy(entry => sequenceById.TryGetValue(entry.Key, out var seq) ? seq : int.MaxValue)
+                .ThenBy(entry => entry.Key)
                 .Select(entry =>
                 {
                     var text = entry.Value switch

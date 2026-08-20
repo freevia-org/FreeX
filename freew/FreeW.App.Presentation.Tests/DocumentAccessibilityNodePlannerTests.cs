@@ -162,6 +162,72 @@ public sealed class DocumentAccessibilityNodePlannerTests
     }
 
     [Fact]
+    public void Build_orders_note_story_children_by_reading_position_not_by_internal_id()
+    {
+        // r152 remediation H1: mirrors DocumentNoteRegionPlannerNumberRestartTests'
+        // Continuous_OrdersFootnotesByReadingPosition_NotByInternalId shape. Insert a footnote after the
+        // SECOND sentence first (it becomes id 1), then insert one after the FIRST sentence (it becomes
+        // id 2, since NextFootnoteId() = max(existing)+1). Id 2's reference mark reads first, so it must
+        // display -- and appear -- as "Footnote 1" before id 1's "Footnote 2", even though AddStory used
+        // to lay the story's children out in raw id order.
+        var document = TextDocument.CreateEmpty();
+        document.Blocks.Clear();
+
+        var firstSentence = new Paragraph();
+        firstSentence.Runs.Add(new Run("First sentence."));
+        firstSentence.Runs.Add(Run.FootnoteReference(2));
+        document.Blocks.Add(firstSentence);
+
+        var secondSentence = new Paragraph();
+        secondSentence.Runs.Add(new Run("Second sentence."));
+        secondSentence.Runs.Add(Run.FootnoteReference(1));
+        document.Blocks.Add(secondSentence);
+
+        document.Footnotes[1] = new Footnote(1, "inserted second, reads second");
+        document.Footnotes[2] = new Footnote(2, "inserted last, reads first");
+
+        var tree = DocumentAccessibilityNodePlanner.Build(document);
+
+        var footnotes = tree.Children.Single(node => node.Kind == DocumentAccessibilityNodeKind.Footnotes);
+        footnotes.SemanticChildren.Select(node => node.Id).Should().Equal(
+            ["footnotes:2", "footnotes:1"],
+            "id 2's reference reads first, so its node must be presented before id 1's even though its internal id is higher");
+        footnotes.SemanticChildren.Select(node => node.Name).Should().Equal(
+            "Footnote 1: inserted last, reads first",
+            "Footnote 2: inserted second, reads second");
+    }
+
+    [Fact]
+    public void Build_note_story_child_order_unaffected_when_ids_already_match_reading_position()
+    {
+        // Sibling no-regression check: the ordinary case, where insertion order, id order, and
+        // reading-order position all agree, must keep the story's child order exactly as before.
+        var document = TextDocument.CreateEmpty();
+        document.Blocks.Clear();
+
+        var firstSentence = new Paragraph();
+        firstSentence.Runs.Add(new Run("First sentence."));
+        firstSentence.Runs.Add(Run.FootnoteReference(1));
+        document.Blocks.Add(firstSentence);
+
+        var secondSentence = new Paragraph();
+        secondSentence.Runs.Add(new Run("Second sentence."));
+        secondSentence.Runs.Add(Run.FootnoteReference(2));
+        document.Blocks.Add(secondSentence);
+
+        document.Footnotes[1] = new Footnote(1, "inserted first, reads first");
+        document.Footnotes[2] = new Footnote(2, "inserted second, reads second");
+
+        var tree = DocumentAccessibilityNodePlanner.Build(document);
+
+        var footnotes = tree.Children.Single(node => node.Kind == DocumentAccessibilityNodeKind.Footnotes);
+        footnotes.SemanticChildren.Select(node => node.Id).Should().Equal("footnotes:1", "footnotes:2");
+        footnotes.SemanticChildren.Select(node => node.Name).Should().Equal(
+            "Footnote 1: inserted first, reads first",
+            "Footnote 2: inserted second, reads second");
+    }
+
+    [Fact]
     public void Avalonia_peer_maps_note_stories_to_groups_and_note_bodies_to_read_only_values()
     {
         var root = TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeW.slnx");
