@@ -2100,12 +2100,31 @@ public sealed partial class MainWindow : Window,
             Editor,
             textOverlay,
 #if FREEP_WINDOWS_CAPTURE
-            AvaloniaOleInPlaceHost.TryCreate);
+            CreateInlineOleInPlaceHost);
 #else
             null);
 #endif
         WireTableContextMenu();
     }
+
+#if FREEP_WINDOWS_CAPTURE
+    /// <summary>
+    /// Hosts an inline (in-text) embedded object in place. The editor's own
+    /// <paramref name="commitBytes"/> refreshes its live text buffer; this wrapper adds the
+    /// document dirty-marking the slide-level <see cref="TryOpenOleInPlace"/> route already does,
+    /// so a native server's commit is never silently lost when the edit ends without a text change.
+    /// </summary>
+    private Control? CreateInlineOleInPlaceHost(
+        AvaloniaInlineOleHostRequest request,
+        Action<byte[]> commitBytes) =>
+        AvaloniaOleInPlaceHost.TryCreate(
+            request,
+            bytes =>
+            {
+                commitBytes(bytes);
+                _fileWorkflow.MarkDirty();
+            });
+#endif
 
     /// <summary>
     /// Re-wires the interaction layer to the new <see cref="Editor"/> instance after a
@@ -2151,7 +2170,7 @@ public sealed partial class MainWindow : Window,
                 Editor,
                 textOverlay,
 #if FREEP_WINDOWS_CAPTURE
-                AvaloniaOleInPlaceHost.TryCreate);
+                CreateInlineOleInPlaceHost);
 #else
                 null);
 #endif

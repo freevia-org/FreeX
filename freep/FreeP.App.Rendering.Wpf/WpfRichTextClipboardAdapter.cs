@@ -24,7 +24,8 @@ internal static class WpfRichTextClipboardAdapter
         CancellationToken cancellationToken = default,
         TextBody? layoutBody = null,
         MasterTextStyles? masterTextStyles = null,
-        SlideCompositor.TextStyleCategory category = SlideCompositor.TextStyleCategory.Other)
+        SlideCompositor.TextStyleCategory category = SlideCompositor.TextStyleCategory.Other,
+        Action<byte[]>? onInlineOlePayloadUpdated = null)
     {
         ArgumentNullException.ThrowIfNull(eventArgs);
         WpfRichTextClipboardPreviewResult result;
@@ -47,7 +48,8 @@ internal static class WpfRichTextClipboardAdapter
                 cancellationToken,
                 layoutBody,
                 masterTextStyles,
-                category);
+                category,
+                onInlineOlePayloadUpdated);
         }
         else
         {
@@ -127,7 +129,8 @@ internal static class WpfRichTextClipboardAdapter
         CancellationToken cancellationToken = default,
         TextBody? layoutBody = null,
         MasterTextStyles? masterTextStyles = null,
-        SlideCompositor.TextStyleCategory category = SlideCompositor.TextStyleCategory.Other)
+        SlideCompositor.TextStyleCategory category = SlideCompositor.TextStyleCategory.Other,
+        Action<byte[]>? onInlineOlePayloadUpdated = null)
     {
         var result = await PresentationRichTextClipboardWorkflow.ReadAsync(
             clipboard ?? new WpfPlatformClipboard(),
@@ -136,7 +139,14 @@ internal static class WpfRichTextClipboardAdapter
             return default;
 
         return TryPasteContent(
-            box, originalBody, result.Value, out var updatedBody, layoutBody, masterTextStyles, category)
+            box,
+            originalBody,
+            result.Value,
+            out var updatedBody,
+            layoutBody,
+            masterTextStyles,
+            category,
+            onInlineOlePayloadUpdated)
             ? new WpfRichTextClipboardPasteResult(true, updatedBody)
             : default;
     }
@@ -148,7 +158,8 @@ internal static class WpfRichTextClipboardAdapter
         CancellationToken cancellationToken,
         TextBody? layoutBody = null,
         MasterTextStyles? masterTextStyles = null,
-        SlideCompositor.TextStyleCategory category = SlideCompositor.TextStyleCategory.Other)
+        SlideCompositor.TextStyleCategory category = SlideCompositor.TextStyleCategory.Other,
+        Action<byte[]>? onInlineOlePayloadUpdated = null)
     {
         var result = await TryPasteAsync(
             box,
@@ -157,7 +168,8 @@ internal static class WpfRichTextClipboardAdapter
             cancellationToken,
             layoutBody,
             masterTextStyles,
-            category);
+            category,
+            onInlineOlePayloadUpdated);
         return new WpfRichTextClipboardPreviewResult(
             result.Applied,
             result.UpdatedBody);
@@ -185,7 +197,8 @@ internal static class WpfRichTextClipboardAdapter
         out TextBody? updatedBody,
         TextBody? layoutBody = null,
         MasterTextStyles? masterTextStyles = null,
-        SlideCompositor.TextStyleCategory category = SlideCompositor.TextStyleCategory.Other)
+        SlideCompositor.TextStyleCategory category = SlideCompositor.TextStyleCategory.Other,
+        Action<byte[]>? onInlineOlePayloadUpdated = null)
     {
         updatedBody = null;
 
@@ -204,7 +217,7 @@ internal static class WpfRichTextClipboardAdapter
             body,
             InCanvasRichTextEditorDefaults.ShapeFallbackFontSizePt);
         box.Document = TextBodyFlowDocumentConverter.ToFlowDocument(
-            body, fallbackPt, layoutBody, masterTextStyles, category);
+            body, fallbackPt, layoutBody, masterTextStyles, category, onInlineOlePayloadUpdated);
         SelectLogicalRange(box, caret, caret);
         updatedBody = body;
         return true;
