@@ -23,18 +23,36 @@ public sealed partial class MainWindowRibbonKeyTipTests
             harness.ActiveSheetHasAutoFilter.Should().BeFalse();
 
             // Legacy Excel access-key sequence Alt+D, F, F should toggle AutoFilter on (Issue 119).
-            harness.EnterKeyTipScope("TopLevel");
-            harness.HandleKeyTip(Key.D);
-            harness.SelectedRibbonTabHeader.Should().Be("Data");
-            harness.HandleKeyTip(Key.F);
-            // After the first F the keytip mode must stay active to accept the second F.
-            harness.KeyTipScope.Should().NotBe("None");
-            harness.SelectedRibbonTabHeader.Should().Be("Data");
-            harness.ActiveSheetHasAutoFilter.Should().BeFalse("the first F is only the legacy Data > Filter prefix");
-            harness.HandleKeyTip(Key.F);
+            //
+            // MainWindow cancels keytip mode when the window is deactivated, so anything that takes
+            // foreground part-way through this sequence ends it early and the scope reads "None" for
+            // an environmental reason rather than a routing one. Retry only that case; a sequence
+            // that completes undisturbed is asserted exactly as before, and if the machine never
+            // leaves the window alone the last attempt still fails loudly instead of passing quietly.
+            for (var attempt = 1; ; attempt++)
+            {
+                harness.BeginKeyTipSequence();
+                harness.EnterKeyTipScope("TopLevel");
+                harness.HandleKeyTip(Key.D);
+                harness.HandleKeyTip(Key.F);
 
-            harness.KeyTipScope.Should().Be("None");
-            harness.ActiveSheetHasAutoFilter.Should().BeTrue();
+                if (harness.KeyTipScope == "None" &&
+                    harness.WindowDeactivatedDuringSequence &&
+                    attempt < 5)
+                {
+                    continue;
+                }
+
+                // After the first F the keytip mode must stay active to accept the second F.
+                harness.KeyTipScope.Should().NotBe("None");
+                harness.SelectedRibbonTabHeader.Should().Be("Data");
+                harness.ActiveSheetHasAutoFilter.Should().BeFalse("the first F is only the legacy Data > Filter prefix");
+                harness.HandleKeyTip(Key.F);
+
+                harness.KeyTipScope.Should().Be("None");
+                harness.ActiveSheetHasAutoFilter.Should().BeTrue();
+                break;
+            }
         });
     }
 

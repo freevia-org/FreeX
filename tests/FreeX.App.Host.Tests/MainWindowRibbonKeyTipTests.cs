@@ -112,12 +112,19 @@ public sealed partial class MainWindowRibbonKeyTipTests
 
         public (string Title, string Message)? LastInfoMessage => _messageService.LastInfo;
 
+        // Keyboard.FocusedElement is GLOBAL keyboard focus, which only tracks the window while the
+        // window holds OS activation -- something a background test run cannot guarantee. The
+        // window's own logical focus (FocusManager) records the same intent and survives losing
+        // activation, so read that first and keep the keyboard read as a fallback.
+        private object? FocusedElement =>
+            System.Windows.Input.FocusManager.GetFocusedElement(_window) ?? Keyboard.FocusedElement;
+
         public bool FocusedElementIsInsideRibbon =>
-            Keyboard.FocusedElement is DependencyObject focusedElement &&
+            FocusedElement is DependencyObject focusedElement &&
             _window.IsInsideRibbonSurfaceForTest(focusedElement);
 
         public bool FocusedElementIsWorksheet =>
-            ReferenceEquals(Keyboard.FocusedElement, _window.FindName("SheetGrid"));
+            ReferenceEquals(FocusedElement, _window.FindName("SheetGrid"));
 
         public bool StartScreenIsVisible =>
             (_window.FindName("StartScreenOverlay") as FrameworkElement)?.Visibility == Visibility.Visible;
@@ -879,6 +886,30 @@ public sealed partial class MainWindowRibbonKeyTipTests
         {
             _window.RefreshSheetProtectionUiForTest();
             PumpDispatcher();
+        }
+
+        // MainWindow_Deactivated cancels keytip mode outright -- correct product behaviour (Excel
+        // drops keytips when you switch away), but in a background test run anything that takes
+        // foreground mid-sequence cancels the session and the scope reads "None" for a reason that
+        // has nothing to do with routing. Record deactivations so a test can tell the two apart
+        // instead of failing on the environment.
+        private bool _windowDeactivatedDuringSequence;
+        private bool _deactivationTrackingHooked;
+
+        public bool WindowDeactivatedDuringSequence => _windowDeactivatedDuringSequence;
+
+        public void BeginKeyTipSequence()
+        {
+            if (!_deactivationTrackingHooked)
+            {
+                _window.Deactivated += (_, _) => _windowDeactivatedDuringSequence = true;
+                _deactivationTrackingHooked = true;
+            }
+
+            _window.Activate();
+            _window.Focus();
+            PumpDispatcher();
+            _windowDeactivatedDuringSequence = false;
         }
 
         public void EnterKeyTipScope(string scope)
