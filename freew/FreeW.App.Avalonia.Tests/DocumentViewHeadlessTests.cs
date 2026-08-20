@@ -49,24 +49,8 @@ public sealed class DocumentViewHeadlessTests
     // so every "if (!ran) return;" below turned a failing assertion into a silently passing test.
     private static Task<bool> OnUiThread(Action action) => HeadlessUiThread.Run(action);
 
-    private static async Task<bool> OnUiThreadAsync(Func<Task> action)
-    {
-        try
-        {
-            await Session.Dispatch(
-                async () =>
-                {
-                    await action();
-                    return true;
-                },
-                CancellationToken.None);
-            return true;
-        }
-        catch (Exception)
-        {
-            return false;
-        }
-    }
+    // Delegates to the shared helper: the local copy this replaced swallowed ASSERTION failures too.
+    private static Task<bool> OnUiThreadAsync(Func<Task> action) => HeadlessUiThread.RunAsync(action);
 
     [Fact]
     public async Task Sample_document_lays_out_glyphs()
@@ -664,18 +648,18 @@ public sealed class DocumentViewHeadlessTests
             workflow.IsDirty.Should().BeFalse();
             workflow.CurrentPath.Should().BeNull();
             workflow.DisplayName.Should().Be("Untitled");
-            window.Title.Should().Be("FreeW");
+            window.Title.Should().Be("Untitled — FreeW");
 
             window.Editor.InsertText("draft ");
             workflow.IsDirty.Should().BeTrue();
-            window.Title.Should().Be("FreeW - Untitled *");
+            window.Title.Should().Be("Untitled * — FreeW");
 
             (await window.NewDocumentAsyncForTests()).Should().BeTrue();
 
             workflow.IsDirty.Should().BeFalse();
             workflow.CurrentPath.Should().BeNull();
             workflow.DisplayName.Should().Be("Untitled");
-            window.Title.Should().Be("FreeW");
+            window.Title.Should().Be("Untitled — FreeW");
         });
 
         if (!ran)
@@ -1088,7 +1072,7 @@ public sealed class DocumentViewHeadlessTests
 
         if (!ran)
             return;
-        pageCount.Should().Be(1, $"{mode} is a continuous-column mode — no discrete pages");
+        pageCount.Should().Be(1, $"{mode} is a continuous-column mode â no discrete pages");
     }
 
     [Fact]
@@ -1183,7 +1167,7 @@ public sealed class DocumentViewHeadlessTests
 
     /// <summary>
     /// Caret hit-test and selection must work in WebLayout / Draft (the transform is simpler but
-    /// non-zero — content starts at _marginTopDip).
+    /// non-zero â content starts at _marginTopDip).
     /// </summary>
     [Theory]
     [InlineData(DocumentViewMode.WebLayout)]
@@ -1212,7 +1196,7 @@ public sealed class DocumentViewHeadlessTests
     }
 
     /// <summary>
-    /// GetBlockTop must return a non-negative value in WebLayout / Draft — blocks are laid out at
+    /// GetBlockTop must return a non-negative value in WebLayout / Draft â blocks are laid out at
     /// _marginTopDip + cumulative content Y, never at negative positions.
     /// </summary>
     [Theory]
@@ -1232,7 +1216,7 @@ public sealed class DocumentViewHeadlessTests
 
         if (!ran)
             return;
-        blockTop.Should().BeGreaterThanOrEqualTo(0, $"GetBlockTop(0) must be ≥ 0 in {mode}");
+        blockTop.Should().BeGreaterThanOrEqualTo(0, $"GetBlockTop(0) must be â¥ 0 in {mode}");
     }
 
     /// <summary>
@@ -1272,7 +1256,7 @@ public sealed class DocumentViewHeadlessTests
             view.ViewModeChanged += () => changeCount++;
 
             view.ViewMode = DocumentViewMode.WebLayout; // 1 change
-            view.ViewMode = DocumentViewMode.WebLayout; // same — no event
+            view.ViewMode = DocumentViewMode.WebLayout; // same â no event
             view.ViewMode = DocumentViewMode.Draft;     // 1 change
             view.ViewMode = DocumentViewMode.PrintLayout; // 1 change
         });
@@ -1282,7 +1266,7 @@ public sealed class DocumentViewHeadlessTests
         changeCount.Should().Be(3, "event fires only when the mode actually changes");
     }
 
-    // ---- Paragraph-layout parity tests (OO1–OO4) -----------------------------------------------
+    // ---- Paragraph-layout parity tests (OO1âOO4) -----------------------------------------------
 
     /// <summary>
     /// OO1: In a justified paragraph that wraps, the last word of each justified line must end at
@@ -1300,7 +1284,7 @@ public sealed class DocumentViewHeadlessTests
             doc.Blocks.Clear();
             var p = new Paragraph();
             p.Formatting = new ParagraphFormatting { Alignment = TextAlignment.Justify };
-            // Long text — must wrap at 400 px (measured at ~7 px/char for 11pt default).
+            // Long text â must wrap at 400 px (measured at ~7 px/char for 11pt default).
             p.Runs.Add(new Run(
                 "one two three four five six seven eight nine ten eleven twelve thirteen fourteen fifteen",
                 RunFormatting.Default));
@@ -1321,7 +1305,7 @@ public sealed class DocumentViewHeadlessTests
 
             // The second line must also exist (paragraph wraps).
             var secondLineY = placed.Where(g => g.Y > firstLineY + 0.5).Select(g => g.Y).DefaultIfEmpty(-1).Min();
-            if (secondLineY < 0) return; // didn't wrap — skip
+            if (secondLineY < 0) return; // didn't wrap â skip
 
             // Right edge = leftmost X of first glyph + availableWidth (400 - margins).
             // Simpler: measure it as the maximum (X + W) of non-space chars on the SECOND line,
@@ -1341,7 +1325,7 @@ public sealed class DocumentViewHeadlessTests
         // The gap between the last non-space glyph and the rightmost glyph (the trailing space)
         // must be at most one natural space width. The headless backend measures 11pt space at
         // ~14.7 px, so we allow up to 20 px (one natural space + rounding).  Before the OO1 fix
-        // the gap was natural_space_width + wordGap ≈ 22–30+ px depending on word count.
+        // the gap was natural_space_width + wordGap â 22â30+ px depending on word count.
         (rightEdge - lastWordEnd).Should().BeLessThanOrEqualTo(20.0,
             "OO1: no wordGap must be added after the trailing space; gap must equal at most one natural space width");
         (rightEdge - lastWordEnd).Should().BeGreaterThanOrEqualTo(0,
@@ -1351,7 +1335,7 @@ public sealed class DocumentViewHeadlessTests
     /// <summary>
     /// OO2/OO3: For a paragraph with a positive first-line indent, right-aligned text on line 0
     /// must not overshoot the right margin.  The right edge of any glyph on the first line must be
-    /// ≤ the right edge of continuation lines (both sharing the same right margin).
+    /// â¤ the right edge of continuation lines (both sharing the same right margin).
     /// </summary>
     [Fact]
     public async Task First_line_indent_right_align_does_not_overshoot_margin()
@@ -1388,14 +1372,14 @@ public sealed class DocumentViewHeadlessTests
         });
 
         if (!ran) return;
-        // Line 0 right edge must be ≤ line 1 right edge (same right margin) within 2 px rounding.
+        // Line 0 right edge must be â¤ line 1 right edge (same right margin) within 2 px rounding.
         line0MaxRight.Should().BeLessThanOrEqualTo(line1MaxRight + 2.0,
             "OO3: first-line indent must not push right-aligned line 0 past the right margin");
     }
 
     /// <summary>
     /// OO2: For a paragraph with a hanging indent (negative FirstLineIndentPt), continuation lines
-    /// must not overshoot the right margin: their right edge must be ≤ line 0 right edge + 2 px.
+    /// must not overshoot the right margin: their right edge must be â¤ line 0 right edge + 2 px.
     /// </summary>
     [Fact]
     public async Task Hanging_indent_continuation_lines_do_not_overshoot_margin()
@@ -1440,9 +1424,9 @@ public sealed class DocumentViewHeadlessTests
 
     /// <summary>
     /// OO4: Subscript glyphs must not overflow the line box.  The draw Y + shrunk glyph height
-    /// must be ≤ line box bottom (Y + LineHeight).  We verify via the math: SubYLowerFraction (0.33)
-    /// + SuperSubScale (0.583) ≤ 1.0, meaning the subscript top + shrunk font height fits inside
-    /// the line box assuming the glyph height ≈ font size × PxPerPoint.
+    /// must be â¤ line box bottom (Y + LineHeight).  We verify via the math: SubYLowerFraction (0.33)
+    /// + SuperSubScale (0.583) â¤ 1.0, meaning the subscript top + shrunk font height fits inside
+    /// the line box assuming the glyph height â font size Ã PxPerPoint.
     /// </summary>
     [Fact]
     public async Task Subscript_glyph_stays_within_line_box()
@@ -1468,19 +1452,19 @@ public sealed class DocumentViewHeadlessTests
             subGlyphs.Should().NotBeEmpty("the subscript run must produce placed glyphs");
 
             // For each subscript glyph: drawY = Y + LineHeight * SubYLowerFraction.
-            // The shrunk glyph height ≈ fontSizePt * PxPerPoint * SuperSubScale * leadingFactor (≤ 1.3).
-            // We bound conservatively: glyphHeight ≤ LineHeight (the line box itself).
-            // The condition: drawY + glyphHeight ≤ Y + LineHeight
-            //   → (Y + LineHeight*0.33) + LineHeight ≤ Y + LineHeight  (worst case glyphHeight = LineHeight)
-            //   → 0.33*LineHeight ≤ 0  — that's too tight.  Use the actual shrunk estimate instead:
-            //   drawY + LineHeight*SuperSubScale ≤ Y + LineHeight
-            //   → LineHeight*SubYLowerFraction + LineHeight*SuperSubScale ≤ LineHeight
-            //   → SubYLowerFraction + SuperSubScale ≤ 1.0
+            // The shrunk glyph height â fontSizePt * PxPerPoint * SuperSubScale * leadingFactor (â¤ 1.3).
+            // We bound conservatively: glyphHeight â¤ LineHeight (the line box itself).
+            // The condition: drawY + glyphHeight â¤ Y + LineHeight
+            //   â (Y + LineHeight*0.33) + LineHeight â¤ Y + LineHeight  (worst case glyphHeight = LineHeight)
+            //   â 0.33*LineHeight â¤ 0  â that's too tight.  Use the actual shrunk estimate instead:
+            //   drawY + LineHeight*SuperSubScale â¤ Y + LineHeight
+            //   â LineHeight*SubYLowerFraction + LineHeight*SuperSubScale â¤ LineHeight
+            //   â SubYLowerFraction + SuperSubScale â¤ 1.0
             // This is the key invariant; verify it here without needing rendering.
             const double subFrac = 0.33;   // SubYLowerFraction after fix
             const double scale   = 0.583;  // SuperSubScale
             (subFrac + scale).Should().BeLessThanOrEqualTo(1.0,
-                "OO4: SubYLowerFraction + SuperSubScale must be ≤ 1.0 so subscript glyph fits in line box");
+                "OO4: SubYLowerFraction + SuperSubScale must be â¤ 1.0 so subscript glyph fits in line box");
 
             // Also verify the placed glyph line-box math: Y + LineHeight should encompass the glyph.
             foreach (var g in subGlyphs)
@@ -1500,7 +1484,7 @@ public sealed class DocumentViewHeadlessTests
     /// <summary>
     /// Resolves a private method by name AND argument shape. Name alone throws
     /// <see cref="System.Reflection.AmbiguousMatchException"/> the moment the production type gains an
-    /// overload — which is exactly what happened to ResolveRunFmt, and which the swallowing
+    /// overload â which is exactly what happened to ResolveRunFmt, and which the swallowing
     /// <c>OnUiThread</c> then turned into a silently passing test rather than a failure.
     /// </summary>
     private static MethodInfo ResolvePrivateMethod(object instance, string name, object?[] args)

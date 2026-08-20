@@ -31,24 +31,8 @@ public sealed class R148_OfferRecoveryDoesNotDiscardOpenedDocumentTests
     private static readonly HeadlessUnitTestSession Session =
         HeadlessUnitTestSession.GetOrStartForAssembly(typeof(FreeWHeadlessApp).Assembly);
 
-    private static async Task<bool> OnUiThread(Func<Task> action)
-    {
-        try
-        {
-            await Session.Dispatch(
-                async () =>
-                {
-                    await action();
-                    return true;
-                },
-                CancellationToken.None);
-            return true;
-        }
-        catch (Exception)
-        {
-            return false; // no headless drawing backend in this environment
-        }
-    }
+    // Delegates to the shared helper: the local copy this replaced swallowed ASSERTION failures too.
+    private static Task<bool> OnUiThread(Func<Task> action) => HeadlessUiThread.RunAsync(action);
 
     private static FileCommandWorkflow NewWorkflow(string tempDir) =>
         new(

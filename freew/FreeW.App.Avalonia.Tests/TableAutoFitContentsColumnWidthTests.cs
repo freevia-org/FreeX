@@ -21,18 +21,8 @@ public sealed class TableAutoFitContentsColumnWidthTests
     private static readonly HeadlessUnitTestSession Session =
         HeadlessUnitTestSession.GetOrStartForAssembly(typeof(FreeWHeadlessApp).Assembly);
 
-    private static async Task<bool> OnUiThread(System.Action action)
-    {
-        try
-        {
-            await Session.Dispatch(action, CancellationToken.None);
-            return true;
-        }
-        catch
-        {
-            return false; // no headless drawing backend in this environment
-        }
-    }
+    // Delegates to the shared helper: the local copy this replaced swallowed ASSERTION failures too.
+    private static Task<bool> OnUiThread(Action action) => HeadlessUiThread.Run(action);
 
     /// <summary>Single-column US letter page, 1" margins: contentWidth = (612-144)pt * 96/72 = 624 DIP.</summary>
     private static TextDocument DocSingleCol(Block contentBlock)

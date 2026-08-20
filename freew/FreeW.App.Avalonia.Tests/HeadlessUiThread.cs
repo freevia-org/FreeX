@@ -63,4 +63,25 @@ internal static class HeadlessUiThread
         await Session.Dispatch(action, CancellationToken.None);
         return true;
     }
+
+    /// <summary>
+    /// The asynchronous counterpart of <see cref="Run"/>, for bodies that await. Uses the
+    /// <c>Func&lt;Task&lt;T&gt;&gt;</c> dispatch overload deliberately: binding an async lambda to the
+    /// <c>Action</c> overload makes it async void, which returns before the body finishes and lets a test
+    /// pass without ever running its assertions.
+    /// </summary>
+    internal static async Task<bool> RunAsync(Func<Task> action)
+    {
+        if (!BackendAvailable.Value)
+            return false;
+
+        await Session.Dispatch(
+            async () =>
+            {
+                await action();
+                return true;
+            },
+            CancellationToken.None);
+        return true;
+    }
 }
