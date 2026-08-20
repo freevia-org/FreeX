@@ -265,6 +265,8 @@ public sealed partial class ChartRendererTests
         model.Series.Should().ContainSingle().Which.Should().BeOfType<RectangleBarSeries>();
         model.Axes.Should().Contain(axis => axis.Position == AxisPosition.Bottom);
         model.Axes.Should().Contain(axis => axis.Position == AxisPosition.Left);
+        model.Annotations.OfType<PolygonAnnotation>().Should().HaveCount(4,
+            "each 3-D column gets a visible top and right facet while the rectangle series remains the front face");
     }
 
     [Fact]

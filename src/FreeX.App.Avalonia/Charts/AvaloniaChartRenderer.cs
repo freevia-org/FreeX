@@ -321,8 +321,8 @@ public sealed class AvaloniaChartRenderer
     {
         // Fix 7: NoFill / NoLine — transparent helper/invisible bars.
         var paint = ChartStylePlanner.ResolveBarPaint(_chart, series.SeriesIndex, _theme, ThemePalette);
-        var fill = paint.FillColor is { } fillColor ? SolidBrush(fillColor) : Brushes.Transparent;
         var stroke = paint.StrokeColor is { } strokeColor ? SolidBrush(strokeColor) : null;
+        var isThreeD = _chart.Type is ModelChartType.ThreeDColumn or ModelChartType.ThreeDBar;
 
         foreach (var bar in series.Bars)
         {
@@ -334,11 +334,18 @@ public sealed class AvaloniaChartRenderer
             // increase/decrease/total coloring also arrives via FillColorOverride.
             var varyColorsFill = ChartStylePlanner.ResolveVaryColorsPointFill(
                 _chart, series.SeriesIndex, bar.PointIndex, barSeriesCount, _theme, ThemePalette);
-            IBrush barFill = bar.FillColorOverride is { } overrideColor
-                ? SolidBrush(overrideColor)
-                : varyColorsFill is { } varyColor
-                    ? SolidBrush(varyColor)
-                    : fill;
+            CellColor? barColor = bar.FillColorOverride
+                ?? varyColorsFill
+                ?? paint.FillColor;
+            IBrush barFill = barColor is { } resolvedColor
+                ? SolidBrush(resolvedColor)
+                : Brushes.Transparent;
+
+            // The shared layout deliberately preserves the ordinary front-face rectangle geometry.
+            // Paint only the Office-style depth facets here, in the host that owns pixel geometry,
+            // so WPF/Avalonia retain identical values, axes, and hit targets.
+            if (isThreeD && barColor is { } threeDFill)
+                AddThreeDSideFacet(canvas, bar.Rect, threeDFill);
 
             var rect = new AvaloniaRectangle
             {
@@ -351,12 +358,71 @@ public sealed class AvaloniaChartRenderer
             Canvas.SetLeft(rect, bar.Rect.Left);
             Canvas.SetTop(rect, bar.Rect.Top);
             canvas.Children.Add(rect);
+
+            if (isThreeD && barColor is { } topFill)
+                AddThreeDTopFacet(canvas, bar.Rect, topFill);
         }
 
         // Waterfall connector lines between bars.
         if (series.WaterfallConnectors.Count > 0)
             RenderWaterfallConnectors(canvas, series.WaterfallConnectors);
     }
+
+    private void AddThreeDSideFacet(Canvas canvas, LayoutRect rect, CellColor fill)
+    {
+        var (depthX, depthY) = ResolveThreeDDepth(rect);
+        var points = _chart.Type == ModelChartType.ThreeDColumn
+            ? new[]
+            {
+                new AvaloniaPoint(rect.Right, rect.Bottom),
+                new AvaloniaPoint(rect.Right, rect.Top),
+                new AvaloniaPoint(rect.Right + depthX, rect.Top - depthY),
+                new AvaloniaPoint(rect.Right + depthX, rect.Bottom - depthY),
+            }
+            : new[]
+            {
+                new AvaloniaPoint(rect.Right, rect.Top),
+                new AvaloniaPoint(rect.Right, rect.Bottom),
+                new AvaloniaPoint(rect.Right + depthX, rect.Bottom - depthY),
+                new AvaloniaPoint(rect.Right + depthX, rect.Top - depthY),
+            };
+        canvas.Children.Add(CreateThreeDFacet(points, DarkenThreeDFacet(fill, 0.66)));
+    }
+
+    private void AddThreeDTopFacet(Canvas canvas, LayoutRect rect, CellColor fill)
+    {
+        var (depthX, depthY) = ResolveThreeDDepth(rect);
+        var points = new[]
+        {
+            new AvaloniaPoint(rect.Left, rect.Top),
+            new AvaloniaPoint(rect.Right, rect.Top),
+            new AvaloniaPoint(rect.Right + depthX, rect.Top - depthY),
+            new AvaloniaPoint(rect.Left + depthX, rect.Top - depthY),
+        };
+        canvas.Children.Add(CreateThreeDFacet(points, DarkenThreeDFacet(fill, 0.82)));
+    }
+
+    private static (double X, double Y) ResolveThreeDDepth(LayoutRect rect)
+    {
+        var x = Math.Clamp(rect.Width * 0.25, 4, 12);
+        var y = Math.Clamp(x * 0.8, 3, 10);
+        return (x, y);
+    }
+
+    private static AvaloniaPolygon CreateThreeDFacet(IEnumerable<AvaloniaPoint> points, CellColor fill) =>
+        new()
+        {
+            Points = points.ToList(),
+            Fill = SolidBrush(fill),
+            Stroke = SolidBrush(DarkenThreeDFacet(fill, 0.8)),
+            StrokeThickness = 0.5,
+        };
+
+    private static CellColor DarkenThreeDFacet(CellColor color, double factor) =>
+        new(
+            (byte)Math.Clamp(color.R * factor, 0, 255),
+            (byte)Math.Clamp(color.G * factor, 0, 255),
+            (byte)Math.Clamp(color.B * factor, 0, 255));
 
     private static void RenderWaterfallConnectors(
         Canvas canvas,

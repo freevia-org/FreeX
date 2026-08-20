@@ -652,6 +652,12 @@ public static partial class ChartRenderer
             }
         }
 
+        // OxyPlot has no native three-dimensional bar primitives.  Keep the ordinary series as
+        // the front faces (so axes, hit testing and data labels retain their established behavior)
+        // and add the small projected top/right faces Excel shows for the native bar3DChart family.
+        // The projection is deliberately limited to the two rectangular 3-D families; it does not
+        // pretend to provide a generic 3-D camera for other chart kinds.
+        AddThreeDBarAndColumnFaces(model, chart, theme);
         AddDeviationOverlay(model, chart, theme, clusteredBarValues);
         AddRangeDataLabelAnnotations(model, chart, theme, clusteredBarValues, categories);
         AddTrendlineIfRequested(model, chart, theme, firstSeriesPoints, swapTrendlineAxes: chart.Type == ChartType.Bar);
