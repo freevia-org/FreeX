@@ -396,7 +396,10 @@ public partial class MainWindow
             if (!_renderedPageLayoutCombosWired)
             {
                 widthBox.SelectionChanged += PageLayoutScaleWidthBox_SelectionChanged;
-                widthBox.KeyDown += PageLayoutScaleWidthBox_KeyDown;
+                widthBox.AddHandler(
+                    UIElement.KeyDownEvent,
+                    new System.Windows.Input.KeyEventHandler(PageLayoutScaleWidthBox_KeyDown),
+                    handledEventsToo: true);
                 widthBox.LostKeyboardFocus += PageLayoutScaleWidthBox_LostKeyboardFocus;
             }
         }
@@ -406,7 +409,10 @@ public partial class MainWindow
             if (!_renderedPageLayoutCombosWired)
             {
                 heightBox.SelectionChanged += PageLayoutScaleHeightBox_SelectionChanged;
-                heightBox.KeyDown += PageLayoutScaleHeightBox_KeyDown;
+                heightBox.AddHandler(
+                    UIElement.KeyDownEvent,
+                    new System.Windows.Input.KeyEventHandler(PageLayoutScaleHeightBox_KeyDown),
+                    handledEventsToo: true);
                 heightBox.LostKeyboardFocus += PageLayoutScaleHeightBox_LostKeyboardFocus;
             }
         }
@@ -416,7 +422,10 @@ public partial class MainWindow
             if (!_renderedPageLayoutCombosWired)
             {
                 percentBox.SelectionChanged += PageLayoutScalePercentBox_SelectionChanged;
-                percentBox.KeyDown += PageLayoutScalePercentBox_KeyDown;
+                percentBox.AddHandler(
+                    UIElement.KeyDownEvent,
+                    new System.Windows.Input.KeyEventHandler(PageLayoutScalePercentBox_KeyDown),
+                    handledEventsToo: true);
                 percentBox.LostKeyboardFocus += PageLayoutScalePercentBox_LostKeyboardFocus;
             }
         }
