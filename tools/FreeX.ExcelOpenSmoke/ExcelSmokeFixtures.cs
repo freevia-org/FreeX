@@ -38,6 +38,9 @@ internal static class ExcelSmokeFixtures
     private const int XlBetween = 1;
     private const int XlCellValue = 1;
     private const int XlGreater = 5;
+    // XlPattern's gradient members are not adjacent to the legacy pattern values:
+    // 2 is xlPatternMediumGray, whereas a linear gradient is 4000.
+    private const int XlPatternLinearGradient = 4000;
     private const int MsoTextOrientationHorizontal = 1;
 
     public static IReadOnlyList<string> GenerateChartFixtures(string outputDirectory)
@@ -4455,11 +4458,11 @@ internal static class ExcelSmokeFixtures
             interior = ((dynamic)range).Interior;
             try
             {
-                // xlGradientFill = 2; setting Pattern to 2 switches to gradient mode.
-                ((dynamic)interior).Pattern = 2; // xlPatternLinearGradient
+                ((dynamic)interior).Pattern = XlPatternLinearGradient;
                 gradient  = ((dynamic)interior).Gradient;
                 ((dynamic)gradient).Degree = 0.0;    // horizontal
                 gradStops = ((dynamic)gradient).ColorStops;
+                ((dynamic)gradStops).Clear();
                 stop1 = ((dynamic)gradStops).Add(0.0);
                 ((dynamic)stop1).Color = ToOleColor(0, 70, 200);
                 stop2 = ((dynamic)gradStops).Add(1.0);
@@ -4485,10 +4488,11 @@ internal static class ExcelSmokeFixtures
             interior = ((dynamic)range).Interior;
             try
             {
-                ((dynamic)interior).Pattern = 2; // xlPatternLinearGradient
+                ((dynamic)interior).Pattern = XlPatternLinearGradient;
                 gradient  = ((dynamic)interior).Gradient;
                 ((dynamic)gradient).Degree = 90.0;
                 gradStops = ((dynamic)gradient).ColorStops;
+                ((dynamic)gradStops).Clear();
                 stop1 = ((dynamic)gradStops).Add(0.0);
                 ((dynamic)stop1).Color = ToOleColor(0, 160, 0);
                 stop2 = ((dynamic)gradStops).Add(1.0);
@@ -4515,10 +4519,11 @@ internal static class ExcelSmokeFixtures
             interior = ((dynamic)range).Interior;
             try
             {
-                ((dynamic)interior).Pattern = 2; // xlPatternLinearGradient
+                ((dynamic)interior).Pattern = XlPatternLinearGradient;
                 gradient  = ((dynamic)interior).Gradient;
                 ((dynamic)gradient).Degree = 0.0;
                 gradStops = ((dynamic)gradient).ColorStops;
+                ((dynamic)gradStops).Clear();
                 stop1 = ((dynamic)gradStops).Add(0.0);
                 ((dynamic)stop1).Color = ToOleColor(220, 30, 30);   // red
                 stop2 = ((dynamic)gradStops).Add(0.5);

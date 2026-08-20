@@ -66,6 +66,17 @@ public sealed class ExcelOpenSmokeReportSchemaTests
     }
 
     [Fact]
+    public void ExcelOpenSmoke_CellStyleGradientCorpusUsesExcelLinearGradientPatternValue()
+    {
+        var fixturesSource = TestWorkspaceFiles.ReadRepoText("tools", "FreeX.ExcelOpenSmoke", "ExcelSmokeFixtures.cs");
+
+        fixturesSource.Should().Contain("private const int XlPatternLinearGradient = 4000");
+        fixturesSource.Should().Contain("((dynamic)interior).Pattern = XlPatternLinearGradient");
+        fixturesSource.Should().Contain("((dynamic)gradStops).Clear()");
+        fixturesSource.Should().NotContain("Pattern = 2; // xlPatternLinearGradient");
+    }
+
+    [Fact]
     public void SheetGridImageCompare_ExposesPivotRangeVisualComparisonMode()
     {
         var source = TestWorkspaceFiles.ReadRepoText("tools", "FreeX.SheetGridImageCompare", "Program.cs");
