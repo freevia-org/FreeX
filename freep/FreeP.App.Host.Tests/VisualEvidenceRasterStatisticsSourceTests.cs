@@ -28,6 +28,16 @@ public sealed class VisualEvidenceRasterStatisticsSourceTests
         owner.Should().Contain("public static long CountNonBackgroundPixels(ReadOnlySpan<byte> pixels)");
     }
 
+    [Fact]
+    public void Wpf_dialog_pane_capture_includes_its_metadata_root_in_control_discovery()
+    {
+        var source = ReadWorkspaceSource(
+            "freep", "TestSupport", "VisualEvidence.Wpf", "WpfDialogPaneVisualEvidenceCapture.cs");
+
+        source.Should().Contain("private static IEnumerable<DependencyObject> Descendants(DependencyObject root)")
+            .And.Contain("yield return root;");
+    }
+
     private static string ReadWorkspaceSource(params string[] relativeParts)
     {
         var parts = new string[relativeParts.Length + 1];

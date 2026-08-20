@@ -415,6 +415,7 @@ internal static class WpfDialogPaneVisualEvidenceCapture
 
     private static IEnumerable<DependencyObject> Descendants(DependencyObject root)
     {
+        yield return root;
         var count = VisualTreeHelper.GetChildrenCount(root);
         for (var index = 0; index < count; index++)
         {
