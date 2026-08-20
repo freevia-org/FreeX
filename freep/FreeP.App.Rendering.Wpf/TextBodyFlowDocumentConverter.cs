@@ -49,10 +49,13 @@ internal static class TextBodyFlowDocumentConverter
     /// If <paramref name="body"/> is null or empty an empty single-paragraph document is returned.
     /// </summary>
     /// <param name="onInlineOlePayloadUpdated">
-    /// Invoked with the edited bytes when a native in-place OLE server commits an inline embedded
-    /// object hosted by this document, so the shell can mark the document dirty. Mirrors the
-    /// slide-level <c>WpfOleInPlaceHost.TryShow</c> route; null in pure-conversion callers (tests,
-    /// clipboard payload building) that own no document.
+    /// Invoked with the payload that was edited and the bytes a native in-place OLE server
+    /// committed for it, so the owning editor can route the bytes to the live model and the shell
+    /// can mark the document dirty. The payload identity is part of the callback because this
+    /// document is built from an edit-session copy of the body: the copy alone cannot tell the
+    /// editor which object in the live model was edited. Mirrors the slide-level
+    /// <c>WpfOleInPlaceHost.TryShow</c> route; null in pure-conversion callers (tests, clipboard
+    /// payload building) that own no document.
     /// </param>
     public static FlowDocument ToFlowDocument(
         TextBody? body,
@@ -60,7 +63,7 @@ internal static class TextBodyFlowDocumentConverter
         TextBody? layoutBody = null,
         MasterTextStyles? masterTextStyles = null,
         SlideCompositor.TextStyleCategory category = SlideCompositor.TextStyleCategory.Other,
-        Action<byte[]>? onInlineOlePayloadUpdated = null)
+        Action<InlineOleObjectInfo, byte[]>? onInlineOlePayloadUpdated = null)
     {
         // 100000 DIPs (~1041 feet) is large enough that the FlowDocument never paginates
         // inside a RichTextBox, while staying within WPF's accepted finite range.
@@ -378,7 +381,7 @@ internal static class TextBodyFlowDocumentConverter
     private static Inline ModelRunToWpfRun(
         ModelRun mr,
         bool hasInheritedStyle = false,
-        Action<byte[]>? onInlineOlePayloadUpdated = null)
+        Action<InlineOleObjectInfo, byte[]>? onInlineOlePayloadUpdated = null)
     {
         if (mr.InlineTable is { } inlineTable)
         {
@@ -421,7 +424,9 @@ internal static class TextBodyFlowDocumentConverter
                 ole,
                 width: 42,
                 height: 20,
-                onPayloadUpdated: onInlineOlePayloadUpdated);
+                onPayloadUpdated: onInlineOlePayloadUpdated is null
+                    ? null
+                    : bytes => onInlineOlePayloadUpdated(ole, bytes));
             return new InlineUIContainer(border)
             {
                 BaselineAlignment = BaselineAlignment.Center,

@@ -21,6 +21,7 @@ public sealed class AvaloniaInCanvasTextEditor : IDisposable
     private readonly EditingSession _editor;
     private readonly Panel _overlay;
     private readonly Func<AvaloniaInlineOleHostRequest, Action<byte[]>, Control?>? _inlineOleHostFactory;
+    private readonly Action<byte[]>? _onInlineOlePayloadUpdated;
 
     private AvaloniaRichTextEditor? _textBox;
     private Control? _activeInlineOleHost;
@@ -459,16 +460,22 @@ public sealed class AvaloniaInCanvasTextEditor : IDisposable
             () => apply(_editor));
     }
 
+    /// <param name="onInlineOlePayloadUpdated">
+    /// Invoked with the edited bytes when an OLE server -- in place or external -- commits an
+    /// inline embedded object inside the edited text, so the shell can mark the document dirty.
+    /// </param>
     public AvaloniaInCanvasTextEditor(
         SlideCanvas canvas,
         EditingSession editor,
         Panel overlay,
-        Func<AvaloniaInlineOleHostRequest, Action<byte[]>, Control?>? inlineOleHostFactory = null)
+        Func<AvaloniaInlineOleHostRequest, Action<byte[]>, Control?>? inlineOleHostFactory = null,
+        Action<byte[]>? onInlineOlePayloadUpdated = null)
     {
         _canvas = canvas ?? throw new ArgumentNullException(nameof(canvas));
         _editor = editor ?? throw new ArgumentNullException(nameof(editor));
         _overlay = overlay ?? throw new ArgumentNullException(nameof(overlay));
         _inlineOleHostFactory = inlineOleHostFactory;
+        _onInlineOlePayloadUpdated = onInlineOlePayloadUpdated;
 
         _canvas.PointerPressed += OnCanvasPointerPressed;
 
@@ -523,9 +530,19 @@ public sealed class AvaloniaInCanvasTextEditor : IDisposable
             CloseInlineOleHost();
             var host = _inlineOleHostFactory(
                 request,
-                updatedBytes => _textBox?.UpdateInlineOleObjectAt(
-                    request.LogicalPosition,
-                    updatedBytes));
+                updatedBytes =>
+                {
+                    _textBox?.UpdateInlineOleObjectAt(request.LogicalPosition, updatedBytes);
+                    // The edit buffer above only reaches the model if the surrounding text edit
+                    // commits; Escape would discard a payload the server already saved, so the
+                    // bytes also go straight onto the live shape model here.
+                    _editor.TryCommitInlineOlePayload(
+                        _editingShapeId,
+                        request.LogicalPosition,
+                        updatedBytes,
+                        request.InlineObject);
+                    _onInlineOlePayloadUpdated?.Invoke(updatedBytes);
+                });
             if (host is not null)
             {
                 host.Width = request.Bounds.Width;
@@ -543,7 +560,13 @@ public sealed class AvaloniaInCanvasTextEditor : IDisposable
         return _editor.TryActivateInlineOleObject(
             _editingShapeId,
             logicalPosition,
-            updatedBytes => _textBox?.UpdateInlineOleObjectAt(logicalPosition, updatedBytes));
+            updatedBytes =>
+            {
+                _textBox?.UpdateInlineOleObjectAt(logicalPosition, updatedBytes);
+                // External activation already wrote the live model; the shell still has to hear
+                // about it, exactly as it does for the in-place route.
+                _onInlineOlePayloadUpdated?.Invoke(updatedBytes);
+            });
     }
 
     private void CloseInlineOleHost()

@@ -31,6 +31,12 @@ public sealed class InCanvasTextEditor : IDisposable
     private TextBody? _inheritedLayoutBody;
     private MasterTextStyles? _inheritedMasterTextStyles;
     private SlideCompositor.TextStyleCategory _inheritedStyleCategory;
+    // The body the live FlowDocument was built from, plus the shape it belongs to. A native OLE
+    // server can commit after the edit ended (WPF raises Unloaded through the dispatcher), so
+    // these outlive _shapeParagraphBody / _active on purpose: they are what maps a late commit
+    // back onto the live model.
+    private TextBody? _inlineOleSourceBody;
+    private uint _inlineOleShapeId;
     private uint _editingShapeId;
     private bool _active;
     private bool _canceling;
@@ -157,7 +163,35 @@ public sealed class InCanvasTextEditor : IDisposable
                 {
                     snapshot.EmbeddedBytes = updatedBytes.ToArray();
                 }
+
+                // The session already wrote the live model; the shell still has to hear about it,
+                // exactly as it does for the in-place route.
+                _onInlineOlePayloadUpdated?.Invoke(updatedBytes);
             });
+
+    /// <summary>
+    /// Handles a native in-place commit for an inline embedded object hosted by the live editor
+    /// document. The document renders an edit-session copy of the body, so the bytes are routed
+    /// to the matching payload in the live model here: riding the copy to the surrounding text
+    /// edit's commit would lose them on Escape, and on a commit that already snapshotted the
+    /// document before the (dispatcher-raised) unload delivered this callback.
+    /// </summary>
+    private void OnInlineOlePayloadCommitted(InlineOleObjectInfo inlineObject, byte[] bytes)
+    {
+        if (InCanvasRichTextEditBuffer.TryFindInlineOleObjectPosition(
+                _inlineOleSourceBody,
+                inlineObject,
+                out int logicalPosition))
+        {
+            _editor.TryCommitInlineOlePayload(
+                _inlineOleShapeId,
+                logicalPosition,
+                bytes,
+                inlineObject);
+        }
+
+        _onInlineOlePayloadUpdated?.Invoke(bytes);
+    }
 
     /// <summary>Activates the rich-text editor for the given shape.</summary>
     public void Activate(uint shapeId)
@@ -197,13 +231,15 @@ public sealed class InCanvasTextEditor : IDisposable
             startPlan.OriginalBody,
             InCanvasRichTextEditorDefaults.ShapeFallbackFontSizePt);
 
+        _inlineOleSourceBody = startPlan.OriginalBody;
+        _inlineOleShapeId = shapeId;
         var doc = TextBodyFlowDocumentConverter.ToFlowDocument(
             startPlan.OriginalBody,
             fallbackPt,
             _inheritedLayoutBody,
             _inheritedMasterTextStyles,
             _inheritedStyleCategory,
-            _onInlineOlePayloadUpdated);
+            OnInlineOlePayloadCommitted);
 
         _richBox = new RichTextBox(doc)
         {
@@ -473,13 +509,14 @@ public sealed class InCanvasTextEditor : IDisposable
         double fallbackPt = InCanvasRichTextEditorDefaults.ResolveFallbackFontSize(
             updated,
             InCanvasRichTextEditorDefaults.ShapeFallbackFontSizePt);
+        _inlineOleSourceBody = updated;
         _richBox.Document = TextBodyFlowDocumentConverter.ToFlowDocument(
             updated,
             fallbackPt,
             _inheritedLayoutBody,
             _inheritedMasterTextStyles,
             _inheritedStyleCategory,
-            _onInlineOlePayloadUpdated);
+            OnInlineOlePayloadCommitted);
 
         var startPointer = TextBodyFlowDocumentConverter.TextPointerAtLogicalOffset(_richBox.Document, start);
         var endPointer = TextBodyFlowDocumentConverter.TextPointerAtLogicalOffset(_richBox.Document, end);
@@ -613,9 +650,14 @@ public sealed class InCanvasTextEditor : IDisposable
                 layoutBody: _inheritedLayoutBody,
                 masterTextStyles: _inheritedMasterTextStyles,
                 category: _inheritedStyleCategory,
-                onInlineOlePayloadUpdated: _onInlineOlePayloadUpdated);
+                onInlineOlePayloadUpdated: OnInlineOlePayloadCommitted);
             if (e.Key == Key.V && result.Handled)
+            {
                 _shapeParagraphBody = result.UpdatedBody;
+                // A paste rebuilds the document from a new body, so inline payloads hosted from
+                // here on belong to that body, not the one the edit started with.
+                _inlineOleSourceBody = result.UpdatedBody;
+            }
             else if (e.Key is Key.C or Key.X &&
                      !result.Handled &&
                      result.FailureMessage is { } failureMessage)

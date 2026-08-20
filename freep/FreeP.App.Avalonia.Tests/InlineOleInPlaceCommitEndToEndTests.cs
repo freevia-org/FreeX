@@ -79,6 +79,7 @@ public sealed class InlineOleInPlaceCommitEndToEndTests
         var wasDirtyBeforeCommit = true;
         var activated = false;
         var isDirtyAfterCommit = false;
+        byte[] liveBytesAfterCommit = [];
 
         WindowsOleInPlaceEngine.PayloadCreatedObserver =
             engine => File.WriteAllBytes(engine.SourcePath, rewritten);
@@ -98,6 +99,7 @@ public sealed class InlineOleInPlaceCommitEndToEndTests
                 window.CancelShapeTextEditForTests();
 
                 isDirtyAfterCommit = window.IsDirty;
+                liveBytesAfterCommit = LiveInlineOleBytes(shape);
             });
 
             if (!ran)
@@ -109,6 +111,10 @@ public sealed class InlineOleInPlaceCommitEndToEndTests
             isDirtyAfterCommit.Should().BeTrue(
                 "the inline OLE host factory must mark the document dirty when a native server " +
                 "commits an edited payload, the same way the slide-level route does");
+            liveBytesAfterCommit.Should().Equal(
+                rewritten,
+                "the editor renders a copy of the body, so a payload the server already committed " +
+                "must be routed to the live model rather than discarded with the canceled edit");
         }
         finally
         {
@@ -120,6 +126,14 @@ public sealed class InlineOleInPlaceCommitEndToEndTests
     /// Sibling no-regression test: opening and closing an inline object without a native edit is
     /// the common case and must leave the document clean.
     /// </summary>
+    private static byte[] LiveInlineOleBytes(SlideShape shape) =>
+        shape.TextBody!.Paragraphs
+            .SelectMany(paragraph => paragraph.Runs)
+            .Select(run => run.InlineOleObject)
+            .OfType<InlineOleObjectInfo>()
+            .Single()
+            .EmbeddedBytes;
+
     [Fact]
     public async Task InlineOleInPlaceCommit_DoesNotMarkDocumentDirty_WhenPayloadIsUnchanged()
     {

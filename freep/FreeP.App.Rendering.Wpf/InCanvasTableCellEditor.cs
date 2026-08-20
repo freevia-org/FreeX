@@ -31,6 +31,10 @@ public sealed class InCanvasTableCellEditor
     private readonly Canvas         _overlay;
     private readonly Action<string, string>? _onClipboardWriteFailed;
     private readonly Action<byte[]>? _onInlineOlePayloadUpdated;
+    // The body the live cell document was built from. After a formatting mutation that body is a
+    // detached copy, so an inline OLE commit has to be mapped back onto the live cell -- see
+    // OnInlineOlePayloadCommitted.
+    private TextBody? _inlineOleSourceBody;
 
     // ── Cell-edit state ───────────────────────────────────────────────────────
 
@@ -124,10 +128,11 @@ public sealed class InCanvasTableCellEditor
             cell.TextBody,
             InCanvasRichTextEditorDefaults.TableCellFallbackFontSizePt);
 
+        _inlineOleSourceBody = cell.TextBody;
         var doc = TextBodyFlowDocumentConverter.ToFlowDocument(
             cell.TextBody,
             fallbackPt,
-            onInlineOlePayloadUpdated: _onInlineOlePayloadUpdated);
+            onInlineOlePayloadUpdated: OnInlineOlePayloadCommitted);
 
         _cellTextBox = new RichTextBox(doc)
         {
@@ -463,10 +468,11 @@ public sealed class InCanvasTableCellEditor
         double fallbackPt = InCanvasRichTextEditorDefaults.ResolveFallbackFontSize(
             updated,
             InCanvasRichTextEditorDefaults.TableCellFallbackFontSizePt);
+        _inlineOleSourceBody = updated;
         _cellTextBox.Document = TextBodyFlowDocumentConverter.ToFlowDocument(
             updated,
             fallbackPt,
-            onInlineOlePayloadUpdated: _onInlineOlePayloadUpdated);
+            onInlineOlePayloadUpdated: OnInlineOlePayloadCommitted);
 
         var startPointer = TextBodyFlowDocumentConverter.TextPointerAtLogicalOffset(_cellTextBox.Document, start);
         var endPointer = TextBodyFlowDocumentConverter.TextPointerAtLogicalOffset(_cellTextBox.Document, end);
@@ -552,7 +558,7 @@ public sealed class InCanvasTableCellEditor
                     e,
                     _cellTextBox,
                     currentBody,
-                    onInlineOlePayloadUpdated: _onInlineOlePayloadUpdated);
+                    onInlineOlePayloadUpdated: OnInlineOlePayloadCommitted);
                 if (e.Key is Key.C or Key.X &&
                     !result.Handled &&
                     result.FailureMessage is { } failureMessage)
@@ -615,6 +621,29 @@ public sealed class InCanvasTableCellEditor
             }
             e.Handled = true;
         }
+    }
+
+    /// <summary>
+    /// Handles a native in-place commit for an inline embedded object hosted inside the cell
+    /// editor. Same reasoning as <c>InCanvasTextEditor.OnInlineOlePayloadCommitted</c>:
+    /// the document may be rendering a detached copy of the cell body, so the bytes are mapped
+    /// back onto the live cell rather than left to ride a commit that Escape would discard.
+    /// </summary>
+    private void OnInlineOlePayloadCommitted(InlineOleObjectInfo inlineObject, byte[] bytes)
+    {
+        if (InCanvasRichTextEditBuffer.TryFindInlineOleObjectPosition(
+                _inlineOleSourceBody,
+                inlineObject,
+                out int logicalPosition))
+        {
+            InCanvasRichTextEditBuffer.TryCommitInlineOlePayload(
+                TryGetCurrentCellTextBody(),
+                logicalPosition,
+                bytes,
+                inlineObject);
+        }
+
+        _onInlineOlePayloadUpdated?.Invoke(bytes);
     }
 
     private TextBody? TryGetCurrentCellTextBody()

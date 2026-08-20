@@ -113,6 +113,86 @@ public sealed class InlineOleInPlaceCommitEndToEndTests
     }
 
     /// <summary>
+    /// The editor renders an edit-session copy of the shape's text body, so a native commit that
+    /// only reaches that copy is lost the moment the user presses Escape. The bytes must land on
+    /// the live model instead -- the same thing the external-activation route gets by activating
+    /// the live payload directly.
+    /// </summary>
+    [StaFact]
+    public void InlineOleInPlaceCommit_ReachesLiveModel_WhenTheEditIsCanceled()
+    {
+        var window = new MainWindow(new FreePOptions(), messageService: TestUserMessageService.DiscardUnsavedChanges);
+        byte[] rewritten = [7, 7, 7, 7];
+        var shape = AddInlineOleShape(window, [1, 2, 3]);
+
+        WindowsOleInPlaceEngine.PayloadCreatedObserver =
+            engine => File.WriteAllBytes(engine.SourcePath, rewritten);
+        try
+        {
+            window.SlideCanvas.TextEditor!.Activate(shape.Id);
+            var placeholder = InlineOlePlaceholder(window);
+            placeholder.RaiseEvent(new RoutedEventArgs(FrameworkElement.LoadedEvent));
+
+            // Escape: the text edit is discarded, but the OLE server already saved its payload.
+            window.SlideCanvas.TextEditor!.Cancel();
+            placeholder.RaiseEvent(new RoutedEventArgs(FrameworkElement.UnloadedEvent));
+
+            LiveInlineOleBytes(shape).Should().Equal(
+                rewritten,
+                "a payload the native server already committed must survive a canceled text edit");
+            window.IsDirty.Should().BeTrue();
+        }
+        finally
+        {
+            WindowsOleInPlaceEngine.PayloadCreatedObserver = null;
+            window.Close();
+        }
+    }
+
+    /// <summary>
+    /// WPF raises Unloaded through the dispatcher, so the host's commit can arrive after
+    /// <c>Commit</c> already converted the document back to a body -- too late to ride that
+    /// conversion. The bytes must still reach the live model.
+    /// </summary>
+    [StaFact]
+    public void InlineOleInPlaceCommit_ReachesLiveModel_WhenItArrivesAfterTheEditCommitted()
+    {
+        var window = new MainWindow(new FreePOptions(), messageService: TestUserMessageService.DiscardUnsavedChanges);
+        byte[] rewritten = [5, 5, 5, 5];
+        var shape = AddInlineOleShape(window, [1, 2, 3]);
+
+        WindowsOleInPlaceEngine.PayloadCreatedObserver =
+            engine => File.WriteAllBytes(engine.SourcePath, rewritten);
+        try
+        {
+            window.SlideCanvas.TextEditor!.Activate(shape.Id);
+            var placeholder = InlineOlePlaceholder(window);
+            placeholder.RaiseEvent(new RoutedEventArgs(FrameworkElement.LoadedEvent));
+
+            window.SlideCanvas.TextEditor!.Commit();
+            placeholder.RaiseEvent(new RoutedEventArgs(FrameworkElement.UnloadedEvent));
+
+            LiveInlineOleBytes(shape).Should().Equal(
+                rewritten,
+                "a commit delivered after the edit ended must still reach the live model");
+            window.IsDirty.Should().BeTrue();
+        }
+        finally
+        {
+            WindowsOleInPlaceEngine.PayloadCreatedObserver = null;
+            window.Close();
+        }
+    }
+
+    private static byte[] LiveInlineOleBytes(SlideShape shape) =>
+        shape.TextBody!.Paragraphs
+            .SelectMany(paragraph => paragraph.Runs)
+            .Select(run => run.InlineOleObject)
+            .OfType<InlineOleObjectInfo>()
+            .Single()
+            .EmbeddedBytes;
+
+    /// <summary>
     /// Sibling no-regression test: opening and closing an inline object without a native edit is
     /// the common case and must not mark the document dirty. Guards against a wiring fix that
     /// calls MarkDirty unconditionally rather than only when

@@ -25,7 +25,7 @@ internal static class WpfRichTextClipboardAdapter
         TextBody? layoutBody = null,
         MasterTextStyles? masterTextStyles = null,
         SlideCompositor.TextStyleCategory category = SlideCompositor.TextStyleCategory.Other,
-        Action<byte[]>? onInlineOlePayloadUpdated = null)
+        Action<InlineOleObjectInfo, byte[]>? onInlineOlePayloadUpdated = null)
     {
         ArgumentNullException.ThrowIfNull(eventArgs);
         WpfRichTextClipboardPreviewResult result;
@@ -130,7 +130,7 @@ internal static class WpfRichTextClipboardAdapter
         TextBody? layoutBody = null,
         MasterTextStyles? masterTextStyles = null,
         SlideCompositor.TextStyleCategory category = SlideCompositor.TextStyleCategory.Other,
-        Action<byte[]>? onInlineOlePayloadUpdated = null)
+        Action<InlineOleObjectInfo, byte[]>? onInlineOlePayloadUpdated = null)
     {
         var result = await PresentationRichTextClipboardWorkflow.ReadAsync(
             clipboard ?? new WpfPlatformClipboard(),
@@ -159,7 +159,7 @@ internal static class WpfRichTextClipboardAdapter
         TextBody? layoutBody = null,
         MasterTextStyles? masterTextStyles = null,
         SlideCompositor.TextStyleCategory category = SlideCompositor.TextStyleCategory.Other,
-        Action<byte[]>? onInlineOlePayloadUpdated = null)
+        Action<InlineOleObjectInfo, byte[]>? onInlineOlePayloadUpdated = null)
     {
         var result = await TryPasteAsync(
             box,
@@ -198,7 +198,7 @@ internal static class WpfRichTextClipboardAdapter
         TextBody? layoutBody = null,
         MasterTextStyles? masterTextStyles = null,
         SlideCompositor.TextStyleCategory category = SlideCompositor.TextStyleCategory.Other,
-        Action<byte[]>? onInlineOlePayloadUpdated = null)
+        Action<InlineOleObjectInfo, byte[]>? onInlineOlePayloadUpdated = null)
     {
         updatedBody = null;
 
