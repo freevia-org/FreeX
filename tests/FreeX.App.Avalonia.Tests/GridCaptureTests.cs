@@ -170,6 +170,35 @@ public sealed class GridCaptureTests
         error.Should().Contain("requires --parity-grid");
     }
 
+    [Fact]
+    public void GridCaptureOutputGuard_RejectsFullyTransparentBlackFrame()
+    {
+        var pixels = new byte[2 * 2 * 4];
+
+        ParityCaptureOutputGuard.ValidateGridPixels(pixels, width: 2, height: 2)
+            .Should().Be("Grid PNG output is fully transparent-black.");
+    }
+
+    [Fact]
+    public void GridCaptureOutputGuard_RequiresVisiblePixelVariance()
+    {
+        var uniformWhite = new byte[]
+        {
+            255, 255, 255, 255,
+            255, 255, 255, 255,
+        };
+        var variedPixels = new byte[]
+        {
+            255, 255, 255, 255,
+            31, 31, 31, 255,
+        };
+
+        ParityCaptureOutputGuard.ValidateGridPixels(uniformWhite, width: 2, height: 1)
+            .Should().Be("Grid PNG output has no pixel variance.");
+        ParityCaptureOutputGuard.ValidateGridPixels(variedPixels, width: 2, height: 1)
+            .Should().BeNull();
+    }
+
     // ── Headless integration smoke ────────────────────────────────────────────────────────────────
 
     [Fact]

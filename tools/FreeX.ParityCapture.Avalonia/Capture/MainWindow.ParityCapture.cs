@@ -4500,6 +4500,10 @@ public sealed partial class MainWindow
         if (tempSession.ActiveSheet.Id != sheet.Id)
             tempSession.SelectSheet(sheet.Id);
 
+        // BuildSheetGrid reads the session view state, not Sheet.ShowHeadings directly. Set this
+        // before positioning the viewport because the view-state mutation rebuilds its metrics.
+        tempSession.SetShowHeadings(false);
+
         // Scroll viewport to the range origin so the range cells are the first ones materialised.
         tempSession.SetViewportOrigin(range.Start.Row, range.Start.Col);
 
@@ -4541,10 +4545,6 @@ public sealed partial class MainWindow
         {
             _session = tempSession;
 
-            // Ensure ShowHeadings is off and ShowGridlines matches sheet setting (default true).
-            // The sheet's own flags are already loaded from the workbook; we only override headings.
-            sheet.ShowHeadings = false;
-
             // Rebuild the grid sub-tree using the existing BuildSheetGrid() path — this produces
             // exactly the same cell rendering the live app uses.
             var gridControl = BuildSheetGrid();
@@ -4556,15 +4556,18 @@ public sealed partial class MainWindow
             var pngFileName = $"{safeName}.png";
             var pngPath = Path.Combine(outputDirectory, pngFileName);
 
-            // Render the detached grid sub-tree directly to a PNG sized to the exact range extent. This
-            // matches the surface-capture path's RenderVisualToPng usage on a freshly-built (unparented)
-            // visual, which the headless drawing platform renders to a valid bitmap.
+            // Attach the range grid to the live shell before rendering it. The Win32+Skia backend can
+            // encode a syntactically valid but transparent-black PNG when RenderTargetBitmap is asked to
+            // paint a detached grid subtree. Keeping the capture-only grid rooted under the visible host
+            // gives it a valid visual root without changing the production renderer or the cropped extent.
             //
             // Drawing-object overlay (shapes, pictures, text boxes): RenderTargetBitmap.Render on a
             // composite AvaloniaGrid doesn't always paint the Canvas sibling in headless mode.  We
             // use a two-pass approach: render the cell grid first, then render the Canvas overlay into
             // a second bitmap and blit it on top via CreateDrawingContext (additive draw).
-            RenderVisualToPngWithOverlay(gridControl, pixelWidth, pixelHeight, pngPath);
+            RenderAttachedGridCaptureToPng(gridControl, pixelWidth, pixelHeight, pngPath);
+            if (ParityCaptureOutputGuard.ValidateGridPngOutput(pngPath) is { } captureValidationError)
+                return GridCaptureFailure(workbookPath, rangeText, outputDirectory, captureValidationError);
 
             // ── 7. Write the JSON log file alongside the PNG ──────────────────────────────────────
             var result = new GridCaptureResult(
@@ -4609,6 +4612,42 @@ public sealed partial class MainWindow
             .Where(m => m.Row >= range.Start.Row && m.Row <= range.End.Row)
             .Sum(m => Math.Max(MinimumDisplayedRowHeight, m.Height) * zoomFactor);
         return (Math.Max(1, (int)Math.Ceiling(w)), Math.Max(1, (int)Math.Ceiling(h)));
+    }
+
+    /// <summary>
+    /// Temporarily roots a capture-only grid under the displayed worksheet host before painting it.
+    /// Avalonia's desktop Skia renderer requires that visual-root relationship for a range grid to
+    /// paint its cell children into a <see cref="RenderTargetBitmap"/>.
+    /// </summary>
+    private void RenderAttachedGridCaptureToPng(Control gridControl, int width, int height, string path)
+    {
+        var originalContent = _sheetGridHost.Content;
+        var originalWidth = _sheetGridHost.Width;
+        var originalHeight = _sheetGridHost.Height;
+        var captureSize = new Size(Math.Max(1, width), Math.Max(1, height));
+
+        try
+        {
+            _sheetGridHost.Width = captureSize.Width;
+            _sheetGridHost.Height = captureSize.Height;
+            _sheetGridHost.Content = gridControl;
+            _sheetGridHost.Measure(captureSize);
+            _sheetGridHost.Arrange(new Rect(0, 0, captureSize.Width, captureSize.Height));
+            _sheetGridHost.UpdateLayout();
+            Dispatcher.UIThread.RunJobs(DispatcherPriority.Render);
+
+            // Render the rooted host rather than the grid child: the desktop compositor only gives
+            // RenderTargetBitmap a populated drawing context when its target is attached to a visual root.
+            RenderVisualToPngWithOverlay(_sheetGridHost, width, height, path);
+        }
+        finally
+        {
+            _sheetGridHost.Content = originalContent;
+            _sheetGridHost.Width = originalWidth;
+            _sheetGridHost.Height = originalHeight;
+            _sheetGridHost.UpdateLayout();
+            Dispatcher.UIThread.RunJobs(DispatcherPriority.Render);
+        }
     }
 
     private static GridCaptureResult GridCaptureFailure(

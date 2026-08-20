@@ -1,4 +1,5 @@
 using System.Text;
+using System.IO.Compression;
 using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Threading;
 using Free.Shared.AppServices;
@@ -161,6 +162,154 @@ internal static class ParityCaptureOutputGuard
             return $"PNG output does not have a valid PNG signature: {pngPath}";
 
         return null;
+    }
+
+    /// <summary>
+    /// Validates a range-capture PNG beyond its file signature. A detached Avalonia visual can produce a
+    /// syntactically valid, fully transparent-black frame, which is not usable parity evidence.
+    /// </summary>
+    internal static string? ValidateGridPngOutput(string pngPath)
+    {
+        var basicValidation = ValidatePngOutput(pngPath);
+        if (basicValidation is not null)
+            return basicValidation;
+
+        try
+        {
+            var (rgba, width, height) = DecodeRgbaPng(File.ReadAllBytes(pngPath));
+            return ValidateGridPixels(rgba, width, height);
+        }
+        catch (Exception ex) when (ex is InvalidDataException or NotSupportedException)
+        {
+            return $"Grid PNG output could not be decoded for pixel validation: {pngPath} ({ex.Message})";
+        }
+    }
+
+    internal static string? ValidateGridPixels(ReadOnlySpan<byte> rgba, int width, int height)
+    {
+        if (width <= 0 || height <= 0 || rgba.Length != checked(width * height * 4))
+            return "Grid PNG pixel buffer has invalid dimensions.";
+
+        var firstR = rgba[0];
+        var firstG = rgba[1];
+        var firstB = rgba[2];
+        var firstA = rgba[3];
+        var hasVisiblePixel = false;
+        var hasVariance = false;
+
+        for (var index = 0; index < rgba.Length; index += 4)
+        {
+            hasVisiblePixel |= rgba[index + 3] != 0;
+            hasVariance |= rgba[index] != firstR ||
+                           rgba[index + 1] != firstG ||
+                           rgba[index + 2] != firstB ||
+                           rgba[index + 3] != firstA;
+        }
+
+        if (!hasVisiblePixel)
+            return "Grid PNG output is fully transparent-black.";
+        if (!hasVariance)
+            return "Grid PNG output has no pixel variance.";
+
+        return null;
+    }
+
+    private static (byte[] Rgba, int Width, int Height) DecodeRgbaPng(byte[] png)
+    {
+        if (png.Length < PngSignature.Length || !png.AsSpan(0, PngSignature.Length).SequenceEqual(PngSignature))
+            throw new InvalidDataException("The PNG signature is invalid.");
+
+        var offset = PngSignature.Length;
+        var width = 0;
+        var height = 0;
+        byte bitDepth = 0;
+        byte colorType = 0;
+        using var idat = new MemoryStream();
+        while (offset + 12 <= png.Length)
+        {
+            var length = ReadBigEndianInt32(png, offset);
+            offset += 4;
+            if (length < 0 || offset + 8 + length > png.Length)
+                throw new InvalidDataException("A PNG chunk is truncated.");
+
+            var type = Encoding.ASCII.GetString(png, offset, 4);
+            offset += 4;
+            var data = png.AsSpan(offset, length);
+            offset += length + 4; // skip payload and CRC
+
+            if (type == "IHDR")
+            {
+                if (length != 13)
+                    throw new InvalidDataException("The PNG IHDR chunk is invalid.");
+                width = ReadBigEndianInt32(data, 0);
+                height = ReadBigEndianInt32(data, 4);
+                bitDepth = data[8];
+                colorType = data[9];
+            }
+            else if (type == "IDAT")
+            {
+                idat.Write(data);
+            }
+            else if (type == "IEND")
+            {
+                break;
+            }
+        }
+
+        if (width <= 0 || height <= 0 || bitDepth != 8 || colorType != 6 || idat.Length == 0)
+            throw new NotSupportedException("Expected an 8-bit RGBA PNG.");
+
+        var stride = checked(width * 4);
+        var encodedLength = checked(height * (stride + 1));
+        using var compressed = new MemoryStream(idat.ToArray());
+        using var zlib = new ZLibStream(compressed, CompressionMode.Decompress);
+        using var decoded = new MemoryStream(encodedLength);
+        zlib.CopyTo(decoded);
+        var filtered = decoded.ToArray();
+        if (filtered.Length != encodedLength)
+            throw new InvalidDataException("The PNG pixel data length is invalid.");
+
+        var rgba = new byte[checked(width * height * 4)];
+        for (var row = 0; row < height; row++)
+        {
+            var filter = filtered[row * (stride + 1)];
+            var sourceStart = row * (stride + 1) + 1;
+            var destinationStart = row * stride;
+            var previousStart = destinationStart - stride;
+            for (var column = 0; column < stride; column++)
+            {
+                var left = column >= 4 ? rgba[destinationStart + column - 4] : (byte)0;
+                var up = row > 0 ? rgba[previousStart + column] : (byte)0;
+                var upLeft = row > 0 && column >= 4 ? rgba[previousStart + column - 4] : (byte)0;
+                rgba[destinationStart + column] = filter switch
+                {
+                    0 => filtered[sourceStart + column],
+                    1 => unchecked((byte)(filtered[sourceStart + column] + left)),
+                    2 => unchecked((byte)(filtered[sourceStart + column] + up)),
+                    3 => unchecked((byte)(filtered[sourceStart + column] + ((left + up) / 2))),
+                    4 => unchecked((byte)(filtered[sourceStart + column] + Paeth(left, up, upLeft))),
+                    _ => throw new InvalidDataException("The PNG uses an unsupported filter."),
+                };
+            }
+        }
+
+        return (rgba, width, height);
+    }
+
+    private static int ReadBigEndianInt32(ReadOnlySpan<byte> bytes, int offset) =>
+        (bytes[offset] << 24) | (bytes[offset + 1] << 16) | (bytes[offset + 2] << 8) | bytes[offset + 3];
+
+    private static byte Paeth(byte left, byte up, byte upLeft)
+    {
+        var estimate = left + up - upLeft;
+        var leftDistance = Math.Abs(estimate - left);
+        var upDistance = Math.Abs(estimate - up);
+        var upLeftDistance = Math.Abs(estimate - upLeft);
+        return leftDistance <= upDistance && leftDistance <= upLeftDistance
+            ? left
+            : upDistance <= upLeftDistance
+                ? up
+                : upLeft;
     }
 }
 
