@@ -85,6 +85,20 @@ public sealed class GridViewHyperlinkScreenTipHoverTests
         return ((TextBlock?)field!.GetValue(grid))?.Text;
     }
 
+    private static void InvokeUpdateCommentPreviewForPointer(GridView grid, Point pos)
+    {
+        var method = typeof(GridView).GetMethod("UpdateCommentPreviewForPointer", BindingFlags.NonPublic | BindingFlags.Instance);
+        method.Should().NotBeNull();
+        method!.Invoke(grid, [pos]);
+    }
+
+    private static Border? GetCommentPreviewBorder(GridView grid)
+    {
+        var field = typeof(GridView).GetField("_commentPreviewBorder", BindingFlags.NonPublic | BindingFlags.Instance);
+        field.Should().NotBeNull();
+        return (Border?)field!.GetValue(grid);
+    }
+
     [Fact]
     public void HoverOverHyperlinkCell_ShowsScreenTipText()
     {
@@ -141,6 +155,125 @@ public sealed class GridViewHyperlinkScreenTipHoverTests
             var border = GetHyperlinkScreenTipBorder(grid);
             (border is null || border.Visibility != Visibility.Visible).Should().BeTrue(
                 "a cell with no hyperlink must never show the hyperlink hover ScreenTip");
+        });
+    }
+
+    /// <summary>
+    /// Round 158 remediation of a round-152 regression: Excel allows one cell to carry both a
+    /// hyperlink and a comment, and OnMouseMove calls UpdateCommentPreviewForPointer followed
+    /// unconditionally by UpdateHyperlinkScreenTip, so hovering such a cell used to raise two
+    /// overlapping hover boxes for the same pointer position. FreeX.App.Avalonia's MainWindow.cs
+    /// cell-build (~line 8843) already gets this right -- comment ToolTip.SetTip wins, hyperlink
+    /// ToolTip.SetTip only runs in the "else" branch. This mirrors that: the comment preview must
+    /// still show, and the hyperlink ScreenTip must be suppressed for the identical cell.
+    /// </summary>
+    [Fact]
+    public void HoverOverCellWithHyperlinkAndComment_ShowsCommentPreview_SuppressesHyperlinkScreenTip()
+    {
+        WpfTestThread.Run(() =>
+        {
+            var comment = new CellCommentDisplay(CellCommentDisplayKind.Note, "Note", "Body");
+            var cells = new DisplayCell[]
+            {
+                new(1, 1, null, "Link", null, default, null, HasComment: true, CommentDisplay: comment)
+            };
+
+            var grid = new GridView
+            {
+                Width = 160,
+                Height = 40,
+                ShowHeaders = false,
+                ShowGridLines = false,
+                CommentOverlayHost = new Canvas(),
+                Viewport = new ViewportModel(
+                    cells,
+                    [new RowMetric(1, 40, 0)],
+                    [new ColMetric(1, 80, 0)])
+            };
+
+            grid.Measure(new Size(160, 40));
+            grid.Arrange(new Rect(0, 0, 160, 40));
+            grid.UpdateLayout();
+            var bitmap = new RenderTargetBitmap(160, 40, 96, 96, PixelFormats.Pbgra32);
+            bitmap.Render(grid);
+
+            var address = new CellAddress(default, 1, 1);
+            grid.HyperlinkCells = new HashSet<CellAddress> { address };
+            grid.HyperlinkTooltips = new Dictionary<CellAddress, string> { [address] = "Q3 report (internal)" };
+
+            // Mirrors OnMouseMove's exact call order in GridView.Input.cs: the comment preview is
+            // updated first, then the hyperlink ScreenTip, both for the same pointer position.
+            InvokeUpdateCommentPreviewForPointer(grid, new Point(50, 30));
+            InvokeUpdateHyperlinkScreenTip(grid, new Point(50, 30));
+
+            var commentBorder = GetCommentPreviewBorder(grid);
+            commentBorder.Should().NotBeNull();
+            commentBorder!.Visibility.Should().Be(
+                Visibility.Visible,
+                "Excel prioritizes the comment popup when a cell carries both a comment and a hyperlink");
+
+            var hyperlinkBorder = GetHyperlinkScreenTipBorder(grid);
+            (hyperlinkBorder is null || hyperlinkBorder.Visibility != Visibility.Visible).Should().BeTrue(
+                "the hyperlink ScreenTip must not stack on top of the comment preview for the same cell");
+        });
+    }
+
+    /// <summary>
+    /// Sibling no-regression case for the fix above: the comment-vs-hyperlink exclusion must be
+    /// scoped to the individual cell under the pointer, not to "some comment preview is active
+    /// anywhere". A comment preview raised for one cell must not suppress an unrelated hyperlink
+    /// cell's ScreenTip once the pointer has moved on to hover it.
+    /// </summary>
+    [Fact]
+    public void HoverOverHyperlinkCell_AfterCommentPreviewElsewhere_NoRegression_StillShowsScreenTip()
+    {
+        WpfTestThread.Run(() =>
+        {
+            var comment = new CellCommentDisplay(CellCommentDisplayKind.Note, "Note", "Body");
+            var cells = new DisplayCell[]
+            {
+                new(1, 1, null, "", null, default, null, HasComment: true, CommentDisplay: comment),
+                new(2, 1, null, "Link", null, default, null)
+            };
+
+            var grid = new GridView
+            {
+                Width = 160,
+                Height = 80,
+                ShowHeaders = false,
+                ShowGridLines = false,
+                CommentOverlayHost = new Canvas(),
+                Viewport = new ViewportModel(
+                    cells,
+                    [new RowMetric(1, 40, 0), new RowMetric(2, 40, 40)],
+                    [new ColMetric(1, 80, 0)])
+            };
+
+            grid.Measure(new Size(160, 80));
+            grid.Arrange(new Rect(0, 0, 160, 80));
+            grid.UpdateLayout();
+            var bitmap = new RenderTargetBitmap(160, 80, 96, 96, PixelFormats.Pbgra32);
+            bitmap.Render(grid);
+
+            var linkAddress = new CellAddress(default, 2, 1);
+            grid.HyperlinkCells = new HashSet<CellAddress> { linkAddress };
+            grid.HyperlinkTooltips = new Dictionary<CellAddress, string> { [linkAddress] = "Q3 report (internal)" };
+
+            // First hover the comment-only cell (row 1) so its preview becomes active...
+            InvokeUpdateCommentPreviewForPointer(grid, new Point(50, 30));
+            GetCommentPreviewBorder(grid)!.Visibility.Should().Be(Visibility.Visible);
+
+            // ...then move to the unrelated hyperlink-only cell (row 2), mirroring the same
+            // per-position pairing OnMouseMove performs.
+            InvokeUpdateCommentPreviewForPointer(grid, new Point(50, 70));
+            InvokeUpdateHyperlinkScreenTip(grid, new Point(50, 70));
+
+            var hyperlinkBorder = GetHyperlinkScreenTipBorder(grid);
+            hyperlinkBorder.Should().NotBeNull();
+            hyperlinkBorder!.Visibility.Should().Be(
+                Visibility.Visible,
+                "a hyperlink cell with no comment of its own must still show its ScreenTip, even if a " +
+                "different cell's comment preview was active moments before");
         });
     }
 }

@@ -58,6 +58,57 @@ public sealed class PageBoxFootnoteBodyHeightTests
     }
 
     // ─────────────────────────────────────────────────────────────────────────────────────────────
+    // 3. Regression coverage: the note region must be pre-measured at the SAME width it actually
+    //    renders at (the full page width, since the note region's own TextBlocks re-apply the page
+    //    margins via their Margin), not at contentWidth (which has the margins already removed --
+    //    double-subtracting them wraps ~30% narrower than reality). A single-line note cannot tell
+    //    the two widths apart, so this note is deliberately long enough to wrap to multiple lines
+    //    at the true width.
+    // ─────────────────────────────────────────────────────────────────────────────────────────────
+
+    private const string LongWrappingNoteText =
+        "This is a long footnote reference note that is deliberately written to wrap across " +
+        "several lines when it is rendered inside the note region of a printed or on-screen " +
+        "paginated document page box, even at the full available content width of the page.";
+
+    [StaFact]
+    public void PageBoxHeight_WithWrappingFootnote_MatchesPageBoxHeight_WithoutFootnote()
+    {
+        var withoutFootnote = BuildSingleParagraphDoc(withFootnote: false);
+        var withFootnote = BuildSingleParagraphDoc(withFootnote: true, noteText: LongWrappingNoteText);
+
+        var plainHeight = MeasureFirstPageBoxHeight(withoutFootnote);
+        var footnoteHeight = MeasureFirstPageBoxHeight(withFootnote);
+
+        footnoteHeight.Should().BeApproximately(plainHeight, 0.5,
+            "a footnote long enough to wrap to multiple lines must be pre-measured at the width " +
+            "the note region actually renders at (the full page width -- its TextBlocks re-apply " +
+            "the margins themselves), not at contentWidth, which already has the margins removed " +
+            "and so double-subtracts them, wraps narrower than reality, and over-reduces " +
+            "Body.MinHeight -- making the page box come out shorter than the true page");
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────────────────────────
+    // 4. Sibling / no-regression: the same fix must hold up when there are multiple wrapping notes
+    //    on one page (the discrepancy compounds across notes if the pre-measure width is wrong).
+    // ─────────────────────────────────────────────────────────────────────────────────────────────
+
+    [StaFact]
+    public void PageBoxHeight_WithMultipleWrappingFootnotes_MatchesPageBoxHeight_WithoutFootnotes()
+    {
+        var withoutFootnotes = BuildSingleParagraphDoc(withFootnote: false);
+        var withFootnotes = BuildTwoFootnoteParagraphDoc(LongWrappingNoteText, LongWrappingNoteText);
+
+        var plainHeight = MeasureFirstPageBoxHeight(withoutFootnotes);
+        var footnoteHeight = MeasureFirstPageBoxHeight(withFootnotes);
+
+        footnoteHeight.Should().BeApproximately(plainHeight, 0.5,
+            "the pre-measure width fix must hold up across multiple wrapping notes on the same " +
+            "page, not just a single one -- a wrong pre-measure width compounds with each " +
+            "additional note");
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────────────────────────
     // helpers
     // ─────────────────────────────────────────────────────────────────────────────────────────────
 
@@ -73,7 +124,7 @@ public sealed class PageBoxFootnoteBodyHeightTests
         return box.DesiredSize.Height;
     }
 
-    private static TextDocument BuildSingleParagraphDoc(bool withFootnote)
+    private static TextDocument BuildSingleParagraphDoc(bool withFootnote, string? noteText = null)
     {
         var doc = TextDocument.CreateEmpty();
         doc.Blocks.Clear();
@@ -82,9 +133,26 @@ public sealed class PageBoxFootnoteBodyHeightTests
         para.Runs.Add(new Run("Body text."));
         if (withFootnote)
         {
-            doc.Footnotes[1] = new Footnote(1, "A single footnote.");
+            doc.Footnotes[1] = new Footnote(1, noteText ?? "A single footnote.");
             para.Runs.Add(Run.FootnoteReference(1));
         }
+
+        doc.Blocks.Add(para);
+        return doc;
+    }
+
+    private static TextDocument BuildTwoFootnoteParagraphDoc(string noteText1, string noteText2)
+    {
+        var doc = TextDocument.CreateEmpty();
+        doc.Blocks.Clear();
+
+        var para = new Paragraph();
+        para.Runs.Add(new Run("Body text."));
+        doc.Footnotes[1] = new Footnote(1, noteText1);
+        para.Runs.Add(Run.FootnoteReference(1));
+        para.Runs.Add(new Run(" More body text."));
+        doc.Footnotes[2] = new Footnote(2, noteText2);
+        para.Runs.Add(Run.FootnoteReference(2));
 
         doc.Blocks.Add(para);
         return doc;

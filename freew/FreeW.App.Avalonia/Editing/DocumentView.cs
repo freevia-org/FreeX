@@ -17474,7 +17474,18 @@ public sealed partial class DocumentView : Control
                 fmt = fmt with { VerticalAlign = VerticalAlign.Superscript };
             }
 
-            replacement.Add(new Cell(result.Insert[index], fmt));
+            // r158-remediation: an AutoCorrect/AutoFormat replacement is an edit the user did not
+            // type, so with Track Changes on it must be recorded as an insertion like any other.
+            // Without this the correction is untracked and survives Review > Reject All Changes --
+            // the same defect the WPF shell was fixed for in this round, disclosed by that fixer
+            // as still present here. Mirrors the tracked-insert shape used for ordinary typing
+            // (see the CellsForInsertedText helper below).
+            replacement.Add(new Cell(
+                result.Insert[index],
+                fmt,
+                Revision: TrackChangesEnabled ? RevisionKind.Inserted : RevisionKind.None,
+                RevisionAuthor: TrackChangesEnabled ? RevisionAuthor : null,
+                RevisionDateXml: TrackChangesEnabled ? _editingSession.RevisionDateXmlForEdit() : null));
         }
 
         var block = _caret.Block;

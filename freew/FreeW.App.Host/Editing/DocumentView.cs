@@ -1308,7 +1308,25 @@ public sealed partial class DocumentView : RichTextBox
         // piece still gets tagged.
         if (TrackChangesEnabled)
         {
-            MarkAutoCorrectInsertionAsRevision(deleteStart, range.End);
+            // freew-autocorrect-F2: do NOT reuse `deleteStart` here. It is a live TextPointer captured
+            // BEFORE the TextRange.Text assignment above, and when the correction lands next to
+            // pre-existing text with identical formatting (typed before Track Changes was switched on, or
+            // loaded from a file) WPF does not create a new sibling run for the correction -- it grows the
+            // existing, untagged run in place. A TextPointer anchored to that run's old boundary tracks
+            // forward with it as it grows, so by this point `deleteStart` can already coincide with
+            // `range.End` instead of marking the boundary before the correction, which would make
+            // MarkRunsAsRevision find nothing to tag at all. Recompute the start of the corrected span fresh
+            // from the (reliable) `range.End`, walking back exactly the length of what was inserted --
+            // immune to how WPF merged the run.
+            var insertionStart = range.End;
+            for (var i = 0; i < result.Insert.Length && insertionStart is not null; i++)
+            {
+                insertionStart = insertionStart.GetNextInsertionPosition(LogicalDirection.Backward);
+            }
+            if (insertionStart is not null)
+            {
+                MarkAutoCorrectInsertionAsRevision(insertionStart, range.End);
+            }
         }
 
         return true;
@@ -1344,7 +1362,9 @@ public sealed partial class DocumentView : RichTextBox
         bool applyStyling,
         string colorHex)
     {
-        foreach (var inline in inlines)
+        // Snapshot first: SplitRunAt below inserts sibling runs into `inlines`, which would otherwise
+        // invalidate an in-progress foreach over the live collection.
+        foreach (var inline in inlines.ToList())
         {
             // Recurse into a Hyperlink/Span wrapper so the run(s) it wraps still get tagged.
             if (inline is Span span)
@@ -1354,22 +1374,54 @@ public sealed partial class DocumentView : RichTextBox
             }
             if (inline is not WpfRun run || run.Text.Length == 0)
                 continue;
-            // Only tag runs that fall fully inside [start, end) -- e.g. not the trailing-space run AutoFormat
+            // Skip runs that don't overlap [start, end) at all -- e.g. the trailing-space run AutoFormat
             // outcomes like the ordinal/hyperlink correction leave outside the styled/linked span.
-            if (run.ContentStart.CompareTo(start) < 0 || run.ContentEnd.CompareTo(end) > 0)
+            if (run.ContentEnd.CompareTo(start) <= 0 || run.ContentStart.CompareTo(end) >= 0)
                 continue;
 
-            AddMarker(run, m => m with { Revision = marker });
+            // freew-autocorrect-F2: WPF silently merges the freshly-corrected text into an adjacent run
+            // that carries identical character formatting -- including a run typed before Track Changes was
+            // switched on, or loaded from a file, which carries no RevisionMarker Tag. Such a merged run can
+            // start before `start` or end after `end`, so it must not be required to already fall fully
+            // inside [start, end) (that was the containment check this replaced -- it silently skipped the
+            // merged run, leaving the whole correction untracked). Instead force the boundary ourselves: split
+            // off the untouched leading/trailing text into sibling runs -- CloneTextRun copies the merged
+            // run's original (untagged) formatting/Tag onto them, so it is exactly as if the merge never
+            // happened -- and mark only the run left spanning the corrected text itself.
+            var target = run;
+            if (target.ContentStart.CompareTo(start) < 0)
+                target = SplitRunAt(inlines, target, start);
+            if (target.ContentEnd.CompareTo(end) > 0)
+                SplitRunAt(inlines, target, end);
+
+            AddMarker(target, m => m with { Revision = marker });
             if (!applyStyling)
                 continue;
 
-            run.Foreground = new SolidColorBrush(ParseRevisionColor(colorHex));
-            var decorations = run.TextDecorations is { } existing
+            target.Foreground = new SolidColorBrush(ParseRevisionColor(colorHex));
+            var decorations = target.TextDecorations is { } existing
                 ? new TextDecorationCollection(existing)
                 : new TextDecorationCollection();
             decorations.Add(TextDecorations.Underline[0]);
-            run.TextDecorations = decorations;
+            target.TextDecorations = decorations;
         }
+    }
+
+    // Splits `run` at `pointer` into two sibling runs inside `inlines` and returns the one that starts at
+    // `pointer` -- either `run` itself (already starts there) or a freshly cloned tail run carrying the same
+    // formatting/Tag (via CloneTextRun) so the split is otherwise invisible. `pointer` must lie within
+    // `run`'s content; a `pointer` at or past `run.ContentEnd` returns `run` unchanged (nothing to split).
+    private static WpfRun SplitRunAt(InlineCollection inlines, WpfRun run, TextPointer pointer)
+    {
+        if (pointer.CompareTo(run.ContentStart) <= 0 || pointer.CompareTo(run.ContentEnd) >= 0)
+            return run;
+
+        var before = new TextRange(run.ContentStart, pointer).Text;
+        var after = new TextRange(pointer, run.ContentEnd).Text;
+        run.Text = before;
+        var tail = CloneTextRun(run, after);
+        inlines.InsertAfter(run, tail);
+        return tail;
     }
 
     // Super-script the last <suffixLength> characters ending one position before <afterInsert> (the trailing

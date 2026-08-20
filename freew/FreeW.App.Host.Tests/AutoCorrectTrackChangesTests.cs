@@ -68,6 +68,66 @@ public sealed class AutoCorrectTrackChangesTests
     }
 
     [StaFact]
+    public void TrackChanges_MarksAutoCorrectionAfterUntrackedText_NotTheWholeMergedRun()
+    {
+        var view = NewEditor();
+        view.RevisionAuthor = "Ada Reviewer";
+
+        // Type ordinary text BEFORE Track Changes is switched on -- this run carries no revision Tag,
+        // exactly like text typed before the feature was enabled or loaded from a file. WPF then merges the
+        // AutoCorrect-inserted text into this untagged run because it shares the same character formatting
+        // (the "turn Track Changes on and keep typing" repro), so a fix that only tags a run when it falls
+        // fully inside the corrected range would silently skip the merged run and leave the correction
+        // untracked.
+        view.TrackChangesEnabled = false;
+        view.SimulateTypeText("Hello ");
+
+        view.TrackChangesEnabled = true;
+        view.SimulateTypeText("\"");
+        view.CommitToModel();
+
+        var paragraph = (Paragraph)view.Model.Blocks[0];
+        paragraph.PlainText.Should().Be("Hello “");
+
+        var runs = paragraph.Runs.Where(r => r.Text.Length > 0).ToList();
+
+        // The pre-existing "Hello " text must stay untracked...
+        var untracked = runs.Where(r => r.Revision == RevisionKind.None).ToList();
+        string.Concat(untracked.Select(r => r.Text)).Should().Be("Hello ",
+            "text typed before Track Changes was switched on must not become tracked just because the " +
+            "correction landed next to it in the same WPF run");
+
+        // ...and only the smart-quote correction itself must be tracked -- not folded into the untagged
+        // run (the original defect: it would silently survive Reject All Changes) and not the whole merged
+        // run either (that would wrongly tag pre-existing text as a tracked insertion).
+        var tracked = runs.Where(r => r.Revision == RevisionKind.Inserted).ToList();
+        tracked.Should().HaveCount(1);
+        tracked[0].Text.Should().Be("“");
+        tracked[0].RevisionAuthor.Should().Be("Ada Reviewer");
+    }
+
+    [StaFact]
+    public void TrackChanges_RejectAllAfterMergedCorrection_RemovesOnlyTheCorrection()
+    {
+        // Sibling of the merge test above, driven through Reject All Changes -- the actual user-visible
+        // symptom the finding described (the correction "survives Reject All Changes").
+        var view = NewEditor();
+        view.RevisionAuthor = "Ada Reviewer";
+        view.TrackChangesEnabled = false;
+        view.SimulateTypeText("Hello ");
+        view.TrackChangesEnabled = true;
+        view.SimulateTypeText("\"");
+        view.CommitToModel();
+
+        view.RejectAllRevisions();
+
+        var paragraph = (Paragraph)view.Model.Blocks[0];
+        paragraph.PlainText.Should().Be("Hello ",
+            "the pre-existing untracked text must survive Reject All Changes, and the merged-in correction " +
+            "must be discarded along with every other tracked insertion");
+    }
+
+    [StaFact]
     public void TrackChangesDisabled_AutoCorrectionStaysUntracked()
     {
         // Sibling/no-regression case: with Track Changes off, the correction must keep behaving exactly as

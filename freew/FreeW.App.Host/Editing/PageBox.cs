@@ -362,7 +362,7 @@ internal sealed class PageBox : Border
             // Measuring the actual region here (rather than re-deriving the pagination-time reserve
             // estimate) guarantees the subtraction matches exactly what row 2 renders, so
             // header+body+notes+footer sums back to the true, footnote-free page height.
-            noteRegion.Measure(new Size(contentWidth, double.PositiveInfinity));
+            noteRegion.Measure(new Size(pageWidth, double.PositiveInfinity));
             Body.MinHeight = Math.Max(0, Body.MinHeight - noteRegion.DesiredSize.Height);
 
             Grid.SetRow(noteRegion, 2);

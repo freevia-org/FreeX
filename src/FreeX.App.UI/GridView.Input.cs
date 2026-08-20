@@ -407,7 +407,14 @@ public partial class GridView
         if (HyperlinkTooltips is { Count: > 0 } tooltips &&
             TryHitTestHyperlinkCell(pos, out var address) &&
             tooltips.TryGetValue(address, out var text) &&
-            !string.IsNullOrWhiteSpace(text))
+            !string.IsNullOrWhiteSpace(text) &&
+            // A cell can carry both a hyperlink and a comment (Excel supports that combination).
+            // Mirror FreeX.App.Avalonia's MainWindow.cs cell-build ("else if" after the comment
+            // ToolTip.SetTip branch, ~line 8843) which prioritizes the comment popup: when the
+            // hovered cell has any comment display (hover-visible, pinned, or otherwise), skip the
+            // hyperlink ScreenTip rather than stacking two overlapping hover boxes over one pointer
+            // position. TryGetCommentPreviewForCell already resolves merged-cell anchors correctly.
+            !TryGetCommentPreviewForCell(address.Row, address.Col, out _, out _))
         {
             if (_hyperlinkScreenTipCell == address && _hyperlinkScreenTipBorder is { Visibility: Visibility.Visible })
                 return;
