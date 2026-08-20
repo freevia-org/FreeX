@@ -6,6 +6,23 @@ namespace FreeP.RenderCompare.Tests;
 
 public sealed class SmartArtFixtureEvidenceTests
 {
+    [Theory]
+    [InlineData("../diagrams/layout3.xml")]
+    [InlineData("..\\diagrams\\layout3.xml")]
+    public void PowerPointDiagramLayoutTargetUsesOpcEntrySeparators(string relationshipTarget)
+    {
+        SmartArtFixtureGenerator.GetDiagramLayoutPartPath(relationshipTarget)
+            .Should().Be("ppt/diagrams/layout3.xml");
+    }
+
+    [Fact]
+    public void PowerPointDiagramLayoutTargetRejectsTraversalOutsideDiagrams()
+    {
+        var action = () => SmartArtFixtureGenerator.GetDiagramLayoutPartPath("../layouts/layout3.xml");
+
+        action.Should().Throw<InvalidDataException>();
+    }
+
     [Fact]
     public void Process1FixtureContainsTheAuditedFiveStageNodeAndConnectorGrammar()
     {
