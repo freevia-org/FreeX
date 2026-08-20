@@ -27181,6 +27181,17 @@ public sealed partial class DocumentView : Control
             return;
         }
 
+        // Word renders its native organization-chart layout as diagram ink only: unlike the
+        // generic SmartArt fallback, there is no white container, border, or diagnostic caption.
+        // Keeping that chrome in Avalonia both paints pixels Word does not have and reserves the
+        // top of the authored rectangle, pushing every hierarchy node down on the page.
+        if (string.Equals(sd.LayoutId, "orgchart1", StringComparison.OrdinalIgnoreCase)
+            && sd.HierarchyGeometry is { Nodes.Count: > 0 } nativeWordHierarchy)
+        {
+            DrawSmartArtHierarchy(context, sd, nativeWordHierarchy, rect);
+            return;
+        }
+
         // Frame.
         context.FillRectangle(ChartFrameFill, rect);
         context.DrawRectangle(null, ChartFramePen, rect);
