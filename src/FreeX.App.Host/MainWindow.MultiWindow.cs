@@ -235,21 +235,52 @@ public partial class MainWindow
             Hide();
     }
 
-    /// <summary>The current worksheet scroll position, in scroll-bar units (Synchronous Scrolling).</summary>
-    public WorkbookScrollOffset GetScrollOffset() =>
-        new(VerticalScroll?.Value ?? 0, HorizontalScroll?.Value ?? 0);
+    /// <summary>
+    /// The current worksheet scroll position, as an absolute worksheet row/column origin
+    /// (Synchronous Scrolling). ScrollBar.Value is NOT a worksheet index -- it is relative to
+    /// THIS window's own Freeze Panes frozen-row/column count
+    /// (<see cref="WorkbookViewportScrollPlanner.ScrollbarValueToWorksheetIndex"/>), and Freeze
+    /// Panes is per-window state (R89-freeze-split-per-window-1), so resolving through
+    /// <see cref="GetEffectiveViewportOrigin"/> -- the same conversion this window applies to its
+    /// own locally-driven scroll events -- keeps the broadcast value meaningful to a partner
+    /// window whose frozen counts differ. <see cref="SetScrollOffset"/> converts it back using
+    /// the RECEIVING window's own frozen counts (freeze-scroll-sync).
+    /// </summary>
+    public WorkbookScrollOffset GetScrollOffset()
+    {
+        if (VerticalScroll is null || HorizontalScroll is null)
+            return new(0, 0);
 
-    /// <summary>Applies a scroll position pushed from the paired side-by-side window, without re-broadcasting.</summary>
+        var sheet = _workbook.GetSheet(_currentSheetId);
+        var (topRow, leftCol) = GetEffectiveViewportOrigin(sheet, VerticalScroll.Value, HorizontalScroll.Value);
+        return new(topRow, leftCol);
+    }
+
+    /// <summary>
+    /// Applies a scroll position pushed from the paired side-by-side window, without
+    /// re-broadcasting. <paramref name="offset"/> carries an absolute worksheet row/column origin
+    /// (see <see cref="GetScrollOffset"/>), so it is converted back into THIS window's own
+    /// scrollbar units against THIS window's own effective Freeze Panes state before being
+    /// applied -- otherwise a partner window with a different frozen-row/column count would
+    /// resolve the origin's raw value to the wrong worksheet rows/columns (freeze-scroll-sync).
+    /// </summary>
     public void SetScrollOffset(WorkbookScrollOffset offset)
     {
         if (VerticalScroll is null || HorizontalScroll is null)
             return;
 
+        var sheet = _workbook.GetSheet(_currentSheetId);
+        var viewState = GetEffectiveViewState(sheet);
+        var worksheetRow = (uint)Math.Clamp(offset.Row, 1d, (double)CellAddress.MaxRow);
+        var worksheetCol = (uint)Math.Clamp(offset.Column, 1d, (double)CellAddress.MaxCol);
+        var verticalValue = WorkbookViewportScrollPlanner.WorksheetIndexToScrollbarValue(worksheetRow, viewState.FrozenRows);
+        var horizontalValue = WorkbookViewportScrollPlanner.WorksheetIndexToScrollbarValue(worksheetCol, viewState.FrozenCols);
+
         _suppressScrollBroadcast = true;
         try
         {
-            VerticalScroll.Value = Math.Clamp(offset.Row, VerticalScroll.Minimum, VerticalScroll.Maximum);
-            HorizontalScroll.Value = Math.Clamp(offset.Column, HorizontalScroll.Minimum, HorizontalScroll.Maximum);
+            VerticalScroll.Value = Math.Clamp(verticalValue, VerticalScroll.Minimum, VerticalScroll.Maximum);
+            HorizontalScroll.Value = Math.Clamp(horizontalValue, HorizontalScroll.Minimum, HorizontalScroll.Maximum);
         }
         finally
         {

@@ -535,6 +535,95 @@ public class TransitionAnimationTests
         Assert.Equal(AnimationTrigger.WithPrevious, anims[2].Trigger);
     }
 
+    // ── Trigger-group anchor correction (freep-animation-timing F2) ────────────────
+
+    [Fact]
+    public void RemoveShapeAnimationCommand_RemovingTriggerGroupHead_PromotesFollowerToOnClick_AndRevertRestoresIt()
+    {
+        var pres = Presentation.CreateEmpty();
+        var a0 = new ShapeAnimation { ShapeId = 20, TriggerShapeId = 10, Trigger = AnimationTrigger.OnClick };
+        var a1 = new ShapeAnimation { ShapeId = 21, TriggerShapeId = 10, Trigger = AnimationTrigger.AfterPrevious };
+        pres.Slides[0].Animations.Add(a0);
+        pres.Slides[0].Animations.Add(a1);
+
+        // Removing the trigger-group's own head (index 0) promotes a1 to be the new head of
+        // that same TriggerShapeId=10 group. PptxPackageWriter.BuildTriggerSequenceEl always
+        // starts a trigger group's first click-group unconditionally, so a1 now plays On Click
+        // regardless of its stored trigger -- the model must match.
+        var cmd = new RemoveShapeAnimationCommand(0, 0);
+        cmd.Apply(pres);
+
+        var anims = pres.Slides[0].Animations;
+        Assert.Single(anims);
+        Assert.Equal(21u, anims[0].ShapeId);
+        Assert.Equal(10u, anims[0].TriggerShapeId);
+        Assert.Equal(AnimationTrigger.OnClick, anims[0].Trigger);
+        Assert.Equal(AnimationTrigger.OnClick, a1.Trigger);
+
+        cmd.Revert(pres);
+        Assert.Equal(2, anims.Count);
+        Assert.Equal(AnimationTrigger.OnClick,      anims[0].Trigger);
+        Assert.Equal(AnimationTrigger.AfterPrevious, anims[1].Trigger);
+        Assert.Same(a1, anims[1]);
+    }
+
+    [Fact]
+    public void ReorderShapeAnimationCommand_MovingTriggerGroupFollowerToHead_IsCorrectedToOnClick_AndRevertRestoresIt()
+    {
+        var pres = Presentation.CreateEmpty();
+        var a0 = new ShapeAnimation { ShapeId = 20, TriggerShapeId = 10, Trigger = AnimationTrigger.OnClick };
+        var a1 = new ShapeAnimation { ShapeId = 21, TriggerShapeId = 10, Trigger = AnimationTrigger.WithPrevious };
+        pres.Slides[0].Animations.Add(a0);
+        pres.Slides[0].Animations.Add(a1);
+
+        // Moving a1 above a0 promotes it to be the new head of the TriggerShapeId=10 group.
+        var cmd = new ReorderShapeAnimationCommand(0, 1, 0);
+        cmd.Apply(pres);
+
+        var anims = pres.Slides[0].Animations;
+        Assert.Equal(21u, anims[0].ShapeId);
+        Assert.Equal(AnimationTrigger.OnClick, anims[0].Trigger);
+        Assert.Equal(20u, anims[1].ShapeId);
+        Assert.Equal(AnimationTrigger.OnClick, anims[1].Trigger);
+
+        cmd.Revert(pres);
+        Assert.Equal(20u, anims[0].ShapeId);
+        Assert.Equal(AnimationTrigger.OnClick, anims[0].Trigger);
+        Assert.Equal(21u, anims[1].ShapeId);
+        Assert.Equal(AnimationTrigger.WithPrevious, anims[1].Trigger);
+    }
+
+    [Fact]
+    public void RemoveShapeAnimationCommand_RemovingTriggerGroupHead_LeavesUnrelatedMainSequenceHeadUntouched()
+    {
+        // Sibling/no-regression case: the main sequence's own head (TriggerShapeId == null) is
+        // unaffected when a *different*, unrelated trigger group's head is what got promoted.
+        var pres = Presentation.CreateEmpty();
+        var main0 = new ShapeAnimation { ShapeId = 1, Trigger = AnimationTrigger.OnClick };
+        var trig0 = new ShapeAnimation { ShapeId = 20, TriggerShapeId = 10, Trigger = AnimationTrigger.OnClick };
+        var trig1 = new ShapeAnimation { ShapeId = 21, TriggerShapeId = 10, Trigger = AnimationTrigger.AfterPrevious };
+        pres.Slides[0].Animations.Add(main0);
+        pres.Slides[0].Animations.Add(trig0);
+        pres.Slides[0].Animations.Add(trig1);
+
+        // Remove the trigger group's head (index 1); the main sequence head at index 0 is untouched.
+        var cmd = new RemoveShapeAnimationCommand(0, 1);
+        cmd.Apply(pres);
+
+        var anims = pres.Slides[0].Animations;
+        Assert.Equal(2, anims.Count);
+        Assert.Equal(1u, anims[0].ShapeId);
+        Assert.Equal(AnimationTrigger.OnClick, anims[0].Trigger);
+        Assert.Equal(21u, anims[1].ShapeId);
+        Assert.Equal(AnimationTrigger.OnClick, anims[1].Trigger);
+
+        cmd.Revert(pres);
+        Assert.Equal(3, anims.Count);
+        Assert.Equal(AnimationTrigger.OnClick, anims[0].Trigger);
+        Assert.Equal(AnimationTrigger.OnClick, anims[1].Trigger);
+        Assert.Equal(AnimationTrigger.AfterPrevious, anims[2].Trigger);
+    }
+
     [Fact]
     public void SetShapeAnimationCommand_ApplyRevert()
     {

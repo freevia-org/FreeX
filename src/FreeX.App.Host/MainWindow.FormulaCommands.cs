@@ -87,7 +87,7 @@ public partial class MainWindow
             new NameDefinitionDialogResult("", DefinedNameScope.WorkbookLabel, "", FormatWorkbookRange(range)),
             DefinedNameUiPolicy.BuildScopeOptions(definedNames.ScopeChoices),
             request => ApplyNameDefinitionSelection(dialog, request),
-            isValidRange: rangeText => definedNames.TryParseRange(rangeText, out _),
+            isValidRange: rangeText => definedNames.ValidateRefersTo(rangeText).IsValid,
             validateName: _workbook.ValidateNamedRangeName)
         {
             Owner = this

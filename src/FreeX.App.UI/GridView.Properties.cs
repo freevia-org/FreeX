@@ -800,6 +800,7 @@ public partial class GridView
         grid.ClearFormulaTraceArrowHeadGeometryCache();
         grid.ClearDrawingObjectLayerCache();
         grid.RefreshCommentPreviewAfterViewportChanged();
+        grid.RefreshHyperlinkScreenTipAfterViewportChanged();
         grid.RefreshPinnedNoteBoxes();
         grid.NotifyViewportAutomationChanged();
     }

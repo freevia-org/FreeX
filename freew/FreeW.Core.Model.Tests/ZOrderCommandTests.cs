@@ -118,6 +118,47 @@ public class ZOrderCommandTests
     }
 
     [Fact]
+    public void BringForward_AlreadyAtTop_DoesNotClearPendingRedo()
+    {
+        // Regression for shared-undo-redo-invalidation F1: a true no-op command must not
+        // reach UndoRedoStack.Push (which unconditionally clears redo) via
+        // DocumentCommandBus.Execute.
+        var (doc, bus) = ThreeFloatingDoc(1, 3, 5);
+
+        // A real edit, then undo it, leaves a pending redo.
+        bus.Execute(new ChangeZOrderCommand(0, 0, ZOrderOperation.BringForward));
+        bus.Undo();
+        bus.CanRedo.Should().BeTrue();
+
+        // BringForward on the already-topmost image mutates nothing (see
+        // BringForward_AlreadyAtTop_NoChange above) and must not silently discard the
+        // pending redo.
+        bus.Execute(new ChangeZOrderCommand(2, 0, ZOrderOperation.BringForward));
+
+        bus.CanRedo.Should().BeTrue();
+        ImageAt(doc, 2).ZOrderIndex.Should().Be(5);
+    }
+
+    [Fact]
+    public void BringForward_SwapsWithNextHigherNeighbor_StillClearsPendingRedo()
+    {
+        // Adjacent-case guard: a real (effectful) ZOrder edit must still invalidate any
+        // pending redo, same as before the HasEffect gate was added.
+        var (doc, bus) = ThreeFloatingDoc(1, 3, 5);
+
+        bus.Execute(new ChangeZOrderCommand(0, 0, ZOrderOperation.BringForward));
+        bus.Undo();
+        bus.CanRedo.Should().BeTrue();
+
+        // Real swap: image 1 (z=3) moves against image 2 (z=5) — an actual mutation.
+        bus.Execute(new ChangeZOrderCommand(1, 0, ZOrderOperation.BringForward));
+
+        bus.CanRedo.Should().BeFalse();
+        ImageAt(doc, 1).ZOrderIndex.Should().Be(5);
+        ImageAt(doc, 2).ZOrderIndex.Should().Be(3);
+    }
+
+    [Fact]
     public void BringForward_Revert_RestoresAll()
     {
         var (doc, bus) = ThreeFloatingDoc(1, 3, 5);
@@ -149,6 +190,23 @@ public class ZOrderCommandTests
         // Target the bottom image (z=1) — no lower neighbor, so z stays the same.
         bus.Execute(new ChangeZOrderCommand(0, 0, ZOrderOperation.SendBackward));
 
+        ImageAt(doc, 0).ZOrderIndex.Should().Be(1);
+    }
+
+    [Fact]
+    public void SendBackward_AlreadyAtBottom_DoesNotClearPendingRedo()
+    {
+        // Same defect as BringForward_AlreadyAtTop_DoesNotClearPendingRedo, mirrored for the
+        // SendBackward no-neighbor branch.
+        var (doc, bus) = ThreeFloatingDoc(1, 3, 5);
+
+        bus.Execute(new ChangeZOrderCommand(2, 0, ZOrderOperation.SendBackward));
+        bus.Undo();
+        bus.CanRedo.Should().BeTrue();
+
+        bus.Execute(new ChangeZOrderCommand(0, 0, ZOrderOperation.SendBackward));
+
+        bus.CanRedo.Should().BeTrue();
         ImageAt(doc, 0).ZOrderIndex.Should().Be(1);
     }
 

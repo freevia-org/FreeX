@@ -1880,7 +1880,7 @@ internal sealed class ExternalTextPasteSpecialCommand : IWorkbookCommand, IAffec
             // (R30-clipboard-paste-special-ops-3).
             var sourceValue = PasteCommandFactory.ParseClipboardValue(text);
             var existing = sheet.GetCell(address)?.Clone() ?? Cell.FromValue(BlankValue.Instance);
-            existing.StyleId = sheet.GetStyleOnly(address.Row, address.Col) ?? existing.StyleId;
+            existing.StyleId = sheet.GetCell(address)?.StyleId ?? sheet.GetStyleOnly(address.Row, address.Col) ?? existing.StyleId;
             var result = PasteArithmetic.ApplyOperation(existing.Value, sourceValue, _operation, ctx.Workbook.Uses1904DateSystem);
             if (result is null)
                 continue;

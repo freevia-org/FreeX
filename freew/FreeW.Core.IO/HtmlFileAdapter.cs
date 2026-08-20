@@ -72,7 +72,114 @@ public sealed class HtmlFileAdapter : IDocumentFileAdapter
         using var copy = new MemoryStream();
         stream.CopyTo(copy);
         var bytes = copy.ToArray();
-        return LoadHtml(DecodeBytes(bytes), static _ => null);
+        return LoadHtml(DecodeBytes(bytes), ResolveLocalFileImage);
+    }
+
+    /// <summary>
+    /// Default image resolver for <see cref="Load(Stream)"/>. An &lt;img src&gt; that is neither a
+    /// <c>data:</c> URI (decoded inline by <see cref="ReadDataUriImage"/>) nor a <c>cid:</c> reference
+    /// (only meaningful when a caller supplies its own resolver, e.g. <see cref="MhtmlFileAdapter"/>) used
+    /// to be dropped unconditionally here, silently losing every picture in HTML sourced from a browser or
+    /// Office clipboard/file that references its images by URL rather than inlining them. This resolves the
+    /// one sub-case that is both common and safe to read without any caller-supplied context: a <c>file:</c>
+    /// URI or a bare absolute filesystem path, which is exactly what Word/WordPad's "HTML Format" clipboard
+    /// payload and locally exported HTML use for their embedded pictures (e.g.
+    /// <c>file:///…/clip_image001.png</c> in a per-copy temp folder). Remote <c>http(s)</c> URLs are
+    /// deliberately left unresolved (returns null, same as before) — fetching an arbitrary URL embedded in
+    /// pasted or opened HTML would be a surprising network side effect on every load/paste and a potential
+    /// SSRF vector, which is a bigger decision than this narrow fix should make.
+    /// </summary>
+    /// <summary>
+    /// Upper bound on a local file this adapter will pull into a document for an &lt;img&gt; src.
+    /// Well past any real pasted screenshot, far short of letting a crafted path exhaust memory.
+    /// </summary>
+    private const long MaxLocalImageBytes = 64L * 1024 * 1024;
+
+    /// <summary>
+    /// Whether <paramref name="bytes"/> starts with a signature of a format we actually render.
+    /// Deliberately NOT <see cref="InlineImage.DetectFormat"/>: that returns Png for unrecognised
+    /// data by design, which would let any file masquerade as an image here.
+    /// </summary>
+    private static bool HasRecognisedImageSignature(byte[] bytes)
+    {
+        bool Starts(params byte[] signature)
+        {
+            if (bytes.Length < signature.Length)
+                return false;
+            for (var i = 0; i < signature.Length; i++)
+            {
+                if (bytes[i] != signature[i])
+                    return false;
+            }
+
+            return true;
+        }
+
+        return Starts(0x89, 0x50, 0x4E, 0x47)              // PNG
+            || Starts(0xFF, 0xD8, 0xFF)                     // JPEG
+            || Starts(0x47, 0x49, 0x46, 0x38)               // GIF87a/GIF89a
+            || Starts(0x42, 0x4D)                           // BMP
+            || Starts(0x49, 0x49, 0x2A, 0x00)               // TIFF little-endian
+            || Starts(0x4D, 0x4D, 0x00, 0x2A)               // TIFF big-endian
+            || Starts(0xD7, 0xCD, 0xC6, 0x9A)               // placeable WMF
+            || Starts(0x01, 0x00, 0x09, 0x00)               // classic WMF
+            || Starts(0x02, 0x00, 0x09, 0x00)               // classic WMF
+            || Starts(0x01, 0x00, 0x00, 0x00);              // EMF
+    }
+
+    private static InlineImage? ResolveLocalFileImage(string src)
+    {
+        if (string.IsNullOrWhiteSpace(src))
+            return null;
+
+        string? path = null;
+        if (Uri.TryCreate(src, UriKind.Absolute, out var uri))
+        {
+            if (!uri.IsFile)
+                return null; // http(s)/other remote scheme -- not resolved here, see remarks above.
+            path = uri.LocalPath;
+        }
+        else if (Path.IsPathRooted(src))
+        {
+            path = src;
+        }
+
+        if (path is null)
+            return null;
+
+        try
+        {
+            if (!File.Exists(path))
+                return null;
+
+            // r159-remediation: SECURITY. This resolver reads a path chosen by the HTML being
+            // opened, and that HTML is untrusted -- it can come from a downloaded .htm, or from
+            // clipboard HTML written by a hostile page. Without the checks below it would read ANY
+            // file the user can read and embed the bytes verbatim into the document, which the
+            // user may then save or send: a local-file disclosure primitive triggered by their own
+            // Open or Paste. Two limits close it:
+            //   1. The bytes must genuinely BE an image. InlineImage.DetectFormat deliberately
+            //      falls back to Png for unrecognised data so ordinary callers always get a usable
+            //      format; relying on it here would tag any file as a PNG and embed it.
+            //   2. A size cap, so a pathological path cannot pull an enormous file into memory and
+            //      into the document.
+            // A genuine image the user could already see is still readable -- that is inherent to
+            // rendering local <img> at all -- but arbitrary non-image files no longer are.
+            var length = new FileInfo(path).Length;
+            if (length is 0 or > MaxLocalImageBytes)
+                return null;
+
+            var bytes = File.ReadAllBytes(path);
+            if (!HasRecognisedImageSignature(bytes))
+                return null;
+
+            var format = InlineImage.FormatForExtension(Path.GetExtension(path)) ?? InlineImage.DetectFormat(bytes);
+            return new InlineImage(bytes, 72, 72, format);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or NotSupportedException)
+        {
+            return null;
+        }
     }
 
     /// <summary>

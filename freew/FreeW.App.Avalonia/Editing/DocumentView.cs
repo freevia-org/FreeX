@@ -2757,11 +2757,20 @@ public sealed partial class DocumentView : Control
         var pageHeightPt = _doc.Page.HeightPt > 0 ? _doc.Page.HeightPt : 792;
         var pageHeightPx = pageHeightPt * PxPerPoint;
 
+        // AV-REVIEW-PDF: apply the same Display-for-Review visibility/styling decisions the live
+        // Render() pass uses (see the RevisionDecision-driven filter at ~line 11661-11669), so print,
+        // PDF, and XPS export never leak text the editor is currently hiding (e.g. deleted text in No
+        // Markup) and always carry the insert/delete colour-coding All Markup shows on screen.
+        var reviewPolicy = CurrentReviewDisplayPolicy;
+        var revisionColors = ReviewRevisionColorPlanner.BuildAuthorColors(_doc);
+
         // Group consecutive same-line, same-format glyphs (excluding the page-left offset) into runs.
         var glyphs = _placed
-            .Where(p => !p.Sentinel && p.Ch != '\0' && !p.Fmt.Hidden)
+            .Where(p => !p.Sentinel && p.Ch != '\0' && !p.Fmt.Hidden
+                && reviewPolicy.RevisionDecision(p.Revision).IsTextVisible)
             .Concat(_automaticHyphenGlyphs
-                .Where(glyph => !glyph.Fmt.Hidden)
+                .Where(glyph => !glyph.Fmt.Hidden
+                    && reviewPolicy.RevisionDecision(glyph.Revision).IsTextVisible)
                 .Select(glyph => new PlacedChar(
                     glyph.Block,
                     glyph.BreakOffset,
@@ -2986,6 +2995,19 @@ public sealed partial class DocumentView : Control
                     Underline = true,
                 }
                 : g.Fmt;
+            // AV-REVIEW-PDF: mirror Render()'s revision styling (colour + underline for insertions,
+            // colour + strikethrough for deletions) via the same Underline/Strikethrough fields the
+            // Flush() run-emitter already draws, instead of leaving exported revisions unmarked.
+            var revisionDecision = reviewPolicy.RevisionDecision(g.Revision);
+            if (revisionDecision.IsRevisionStylingApplied)
+            {
+                pdfFmt = pdfFmt with
+                {
+                    ColorHex = ReviewRevisionColorPlanner.ResolveColorHex(revisionColors, g.RevisionAuthor),
+                    Underline = pdfFmt.Underline || revisionDecision.IsInsertionDecorationApplied,
+                    Strikethrough = pdfFmt.Strikethrough || revisionDecision.IsDeletionDecorationApplied,
+                };
+            }
             var sameRun = runFmt is not null
                 && runPageIndex == pageIndex
                 && Math.Abs(g.Y - runY) < 0.5
@@ -19733,14 +19755,38 @@ public sealed partial class DocumentView : Control
 
         var prevCells = ParaCells(prevPara);
         var prevLen = prevCells.Count;
+        var prevRunCount = prevPara.Runs.Count;
         var merged = CarryBlockRegion(
             new Paragraph { Formatting = prevPara.Formatting, StyleId = prevPara.StyleId },
             prevPara);
         prevCells.AddRange(ParaCells(curPara));
         SetRuns(merged, prevCells);
+        // AV-BOOKMARK: this is the shared session's CanRestructureAllowingSectionBreak decline path (a
+        // bookmark on either side), so carry both paragraphs' bookmarks onto the merged paragraph instead
+        // of silently discarding them -- see freew-bookmark-lifecycle F1. curPara's boundaries are shifted
+        // past prevPara's original run count so they still land in roughly the same text position.
+        CarryMergedBookmarks(merged, prevPara, curPara, prevRunCount);
         _bus.Execute(new ReplaceBlocksCommand(prev, block - prev + 1, new Block[] { merged }));
         _caret = new DocPosition(prev, prevLen);
         _selectionAnchor = _caret;
+    }
+
+    // AV-BOOKMARK: shared by MergeWithPrevious (Backspace-merge fallback) to keep bookmarks that lived on
+    // either side of a paragraph merge instead of dropping them when the merged paragraph's Runs are
+    // rebuilt from the concatenated cell stream (see SetRuns).
+    private static void CarryMergedBookmarks(Paragraph merged, Paragraph prevPara, Paragraph curPara, int prevRunCount)
+    {
+        if (prevPara.BookmarkNames.Count == 0 && curPara.BookmarkNames.Count == 0
+            && prevPara.BookmarkBoundaries.Count == 0 && curPara.BookmarkBoundaries.Count == 0)
+        {
+            return;
+        }
+
+        merged.BookmarkNames.AddRange(prevPara.BookmarkNames);
+        merged.BookmarkNames.AddRange(curPara.BookmarkNames);
+        merged.BookmarkBoundaries.AddRange(prevPara.BookmarkBoundaries);
+        merged.BookmarkBoundaries.AddRange(curPara.BookmarkBoundaries
+            .Select(boundary => boundary with { RunIndex = boundary.RunIndex + prevRunCount }));
     }
 
     // AV-TBL-DELETE: Word's RichTextBox selection editor deletes text across paragraph and cell

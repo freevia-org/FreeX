@@ -32,6 +32,25 @@ public static class PresentationPdfExporter
     private const double ArrowheadLengthStrokeScale = 4.0;
     private const double ArrowheadHalfWidthRatio = 0.35;
     private const double DipToPoint = 0.75;
+
+    // R159: bounds Group/SmartArt child recursion in TryAppendShapeGeometry against pathological or
+    // accidentally cyclic nesting; mirrors SlideCompositor.MaxComposeGroupNestingDepth in
+    // FreeP.App.Presentation (that App-layer canvas renderer's equivalent guard), duplicated here
+    // rather than reached for across the IO/App layering boundary.
+    private const int MaxGroupNestingDepth = 64;
+
+    private static readonly PdfColor[] ChartSeriesPalette =
+    [
+        new PdfColor(0x44, 0x72, 0xC4), // blue
+        new PdfColor(0xED, 0x7D, 0x31), // orange
+        new PdfColor(0xA5, 0xA5, 0xA5), // gray
+        new PdfColor(0xFF, 0xC0, 0x00), // gold
+        new PdfColor(0x5B, 0x9B, 0xD5), // light blue
+        new PdfColor(0x70, 0xAD, 0x47), // green
+        new PdfColor(0x26, 0x4A, 0x78), // dark blue
+        new PdfColor(0x9E, 0x48, 0x0E), // dark orange
+    ];
+
     private static readonly Regex InkNumberPattern = new(
         @"[-+]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][-+]?\d+)?",
         RegexOptions.Compiled | RegexOptions.CultureInvariant);
@@ -184,39 +203,10 @@ public static class PresentationPdfExporter
                 continue;
             }
 
-            var shapeOps = new List<PdfDrawOp>();
-            var shapeBox = TryAppendShapeGeometry(shapeOps, shape, slideHeightPoints);
-            var geometryOpsCount = shapeOps.Count;
-            var hasText = !string.IsNullOrEmpty(shape.Text);
-            var content = hasText ? shape.Text : $"[{shape.Kind}]";
-
-            if (shapeBox is { } box)
-            {
-                AppendShapeEffectOps(
-                    ops,
-                    shape,
-                    shapeOps.Take(geometryOpsCount).ToArray(),
-                    box);
-
-                if (hasText || (!IsConnectorLike(shape) && !IsPictureLike(shape)))
-                    AppendShapeText(shapeOps, box, shape, content, hasText);
-
-                AppendShapeOps(ops, shapeOps, box, shape.RotationDeg);
-
-                // R137: covers the shape's whole bounding box, not individual glyph runs -- this
-                // exporter lays out only the shape's flattened text (see `content`/`shape.Text`
-                // above), not per-run positions, so a run-level hyperlink inside a text box becomes a
-                // click target over the whole shape rather than just the linked substring. Rotation is
-                // not accounted for either (the annotation stays axis-aligned), matching this
-                // exporter's other rotation approximations. Still a real, clickable improvement over
-                // emitting nothing.
-                if (ResolveShapeHyperlink(shape) is { } hyperlink &&
-                    BuildLinkOverlay(hyperlink, box, slideHeightPoints) is { } overlay)
-                    linkOverlays.Add(overlay);
-
+            if (TryAppendPositionedShape(ops, linkOverlays, shape, slideHeightPoints, groupDepth: 0))
                 continue;
-            }
 
+            var content = string.IsNullOrEmpty(shape.Text) ? $"[{shape.Kind}]" : shape.Text;
             foreach (var line in Lines(content))
             {
                 if (y < MarginPt)
@@ -235,6 +225,59 @@ public static class PresentationPdfExporter
             ops,
             linkOverlays.Count > 0 ? linkOverlays : null,
             namedDestinations);
+    }
+
+    /// <summary>
+    /// Renders one positioned shape (geometry, effects, text, hyperlink) into <paramref name="ops"/>
+    /// at its own absolute slide position. Returns false when the shape has degenerate (zero or
+    /// negative) geometry, in which case the caller falls back to the flowed-text placement used for
+    /// shapes with no usable box. <paramref name="groupDepth"/> bounds recursion into Group/SmartArt
+    /// children (see <see cref="TryAppendShapeGeometry"/>) against pathological or accidentally
+    /// cyclic nesting; top-level slide shapes call this with depth 0.
+    /// </summary>
+    private static bool TryAppendPositionedShape(
+        List<PdfDrawOp> ops,
+        List<PdfLinkOverlay> linkOverlays,
+        SlideShape shape,
+        double slideHeightPoints,
+        int groupDepth)
+    {
+        var shapeOps = new List<PdfDrawOp>();
+        var shapeBox = TryAppendShapeGeometry(shapeOps, linkOverlays, shape, slideHeightPoints, groupDepth);
+        if (shapeBox is not { } box)
+            return false;
+
+        var geometryOpsCount = shapeOps.Count;
+        var hasText = !string.IsNullOrEmpty(shape.Text);
+        var content = hasText ? shape.Text : $"[{shape.Kind}]";
+
+        AppendShapeEffectOps(
+            ops,
+            shape,
+            shapeOps.Take(geometryOpsCount).ToArray(),
+            box);
+
+        // R159: composite shapes (Group/Table/Chart/SmartArt) that had real content composed into
+        // shapeOps above must not also get the "[Kind]" debug placeholder (or their own, normally
+        // empty, shape.Text) stamped over that content -- mirrors the pre-existing Connector/Picture
+        // guard just below it.
+        if (hasText || (!IsConnectorLike(shape) && !IsPictureLike(shape) && !IsCompositeContentLike(shape)))
+            AppendShapeText(shapeOps, box, shape.TextBody, content, hasText);
+
+        AppendShapeOps(ops, shapeOps, box, shape.RotationDeg);
+
+        // R137: covers the shape's whole bounding box, not individual glyph runs -- this
+        // exporter lays out only the shape's flattened text (see `content`/`shape.Text`
+        // above), not per-run positions, so a run-level hyperlink inside a text box becomes a
+        // click target over the whole shape rather than just the linked substring. Rotation is
+        // not accounted for either (the annotation stays axis-aligned), matching this
+        // exporter's other rotation approximations. Still a real, clickable improvement over
+        // emitting nothing.
+        if (ResolveShapeHyperlink(shape) is { } hyperlink &&
+            BuildLinkOverlay(hyperlink, box, slideHeightPoints) is { } overlay)
+            linkOverlays.Add(overlay);
+
+        return true;
     }
 
     /// <summary>
@@ -602,7 +645,12 @@ public static class PresentationPdfExporter
             shapeOps));
     }
 
-    private static ShapeBox? TryAppendShapeGeometry(List<PdfDrawOp> ops, SlideShape shape, double slideHeightPoints)
+    private static ShapeBox? TryAppendShapeGeometry(
+        List<PdfDrawOp> ops,
+        List<PdfLinkOverlay> linkOverlays,
+        SlideShape shape,
+        double slideHeightPoints,
+        int groupDepth)
     {
         var width = PresentationPdfScenePlanner.EmuToPoints(shape.ExtentCxEmu);
         var height = PresentationPdfScenePlanner.EmuToPoints(shape.ExtentCyEmu);
@@ -620,6 +668,17 @@ public static class PresentationPdfExporter
 
         if (TryAppendCustomGeometry(ops, shape, x, y, width, height))
             return new ShapeBox(x, y, width, height);
+
+        // R159: Group/Table/Chart/SmartArt previously fell straight through to the generic
+        // rect-plus-"[Kind]"-label branch below, since none of them have TextBody/Text and none
+        // matched any case above -- see AppendComposedShapeContent for what each kind actually
+        // draws. groupDepth guards Group/SmartArt recursion; Table/Chart don't recurse but share
+        // the same guard harmlessly.
+        if (groupDepth < MaxGroupNestingDepth && IsCompositeContentLike(shape))
+        {
+            AppendComposedShapeContent(ops, linkOverlays, shape, x, y, width, height, slideHeightPoints, groupDepth);
+            return new ShapeBox(x, y, width, height);
+        }
 
         if (IsEllipseLike(shape))
         {
@@ -647,6 +706,414 @@ public static class PresentationPdfExporter
             AddWithOpacity(ops, new PdfStrokeRect(x, y, width, height, rectStroke, rectStrokeWidth), rectStrokeOpacity);
 
         return new ShapeBox(x, y, width, height);
+    }
+
+    /// <summary>
+    /// True for a Group/SmartArt/Table/Chart shape that actually has the content
+    /// <see cref="AppendComposedShapeContent"/> knows how to draw, so the generic rect+"[Kind]"
+    /// fallback should be skipped in favor of it. A shape of one of these kinds with no such
+    /// content (e.g. an empty table, or a SmartArt graphic whose dsp:drawing cache is missing)
+    /// still falls through to the generic branch, unchanged from before R159.
+    /// </summary>
+    private static bool IsCompositeContentLike(SlideShape shape) =>
+        shape.Kind switch
+        {
+            SlideShapeKind.Group => shape.Children.Count > 0,
+            SlideShapeKind.SmartArt => shape.SmartArt is { FallbackShapes.Count: > 0 },
+            SlideShapeKind.Table => shape.Table is { Rows.Count: > 0 },
+            SlideShapeKind.Chart => shape.Chart is not null,
+            _ => false,
+        };
+
+    /// <summary>
+    /// Draws a Group/SmartArt/Table/Chart shape's real content in place of the debug-looking
+    /// "[Kind]" placeholder the generic rect+text fallback used to emit for every one of these
+    /// kinds (R159). Group flattens its children (recursing back through
+    /// <see cref="TryAppendPositionedShape"/> so each child gets its own full geometry/text/effect
+    /// treatment); SmartArt renders the already-resolved cached-drawing fallback shapes the reader
+    /// parsed from the dsp:drawing part (see <see cref="SmartArtShape.FallbackShapes"/>) the same
+    /// way; Table draws its actual grid/cell content; Chart draws a simplified, still real,
+    /// data-driven representation of its series (this exporter is theme-agnostic and does not
+    /// attempt full per-chart-type fidelity -- see AppendChartGeometry).
+    /// </summary>
+    private static void AppendComposedShapeContent(
+        List<PdfDrawOp> ops,
+        List<PdfLinkOverlay> linkOverlays,
+        SlideShape shape,
+        double x,
+        double y,
+        double width,
+        double height,
+        double slideHeightPoints,
+        int groupDepth)
+    {
+        switch (shape.Kind)
+        {
+            case SlideShapeKind.Group:
+                foreach (var child in shape.Children)
+                    TryAppendPositionedShape(
+                        ops,
+                        linkOverlays,
+                        TransformGroupChild(shape, child),
+                        slideHeightPoints,
+                        groupDepth + 1);
+                break;
+
+            case SlideShapeKind.SmartArt:
+                foreach (var fallbackShape in shape.SmartArt!.FallbackShapes)
+                    TryAppendPositionedShape(ops, linkOverlays, fallbackShape, slideHeightPoints, groupDepth + 1);
+                break;
+
+            case SlideShapeKind.Table:
+                AppendTableGeometry(ops, shape.Table!, x, y, width, height);
+                break;
+
+            case SlideShapeKind.Chart:
+                AppendChartGeometry(ops, shape.Chart!, x, y, width, height);
+                break;
+        }
+    }
+
+    /// <summary>
+    /// Maps a group child's authored (child-space) offset/extent into the group's own absolute
+    /// space using the standard ECMA-376 group transform: absolute = groupOff + (raw - chOff) *
+    /// (groupExt / chExt). Mirrors <c>SlideCompositor.TransformGroupChild</c> in
+    /// FreeP.App.Presentation, the equivalent step the live editor canvas applies -- that method
+    /// isn't reachable from this portable IO-tier exporter (App depends on Core.IO, not the other
+    /// way around), so the same small, well-defined transform is duplicated here rather than
+    /// reached for through a new cross-layer dependency. Returns the child unchanged when the
+    /// group's child space is absent or numerically identical to its own off/ext (the common case,
+    /// including every group this app itself writes).
+    /// </summary>
+    private static SlideShape TransformGroupChild(SlideShape group, SlideShape child)
+    {
+        var chOffX = group.ChildOffsetXEmu ?? group.OffsetXEmu;
+        var chOffY = group.ChildOffsetYEmu ?? group.OffsetYEmu;
+        var chExtCx = group.ChildExtentCxEmu ?? group.ExtentCxEmu;
+        var chExtCy = group.ChildExtentCyEmu ?? group.ExtentCyEmu;
+
+        if (chOffX == group.OffsetXEmu && chOffY == group.OffsetYEmu &&
+            chExtCx == group.ExtentCxEmu && chExtCy == group.ExtentCyEmu)
+        {
+            return child; // identity transform -- nothing to correct
+        }
+
+        var scaleX = chExtCx != 0 ? (double)group.ExtentCxEmu / chExtCx : 1.0;
+        var scaleY = chExtCy != 0 ? (double)group.ExtentCyEmu / chExtCy : 1.0;
+
+        var absX = group.OffsetXEmu + (long)Math.Round((child.OffsetXEmu - chOffX) * scaleX);
+        var absY = group.OffsetYEmu + (long)Math.Round((child.OffsetYEmu - chOffY) * scaleY);
+        var absCx = (long)Math.Round(child.ExtentCxEmu * scaleX);
+        var absCy = (long)Math.Round(child.ExtentCyEmu * scaleY);
+
+        return child.WithTransformedBounds(absX, absY, absCx, absCy);
+    }
+
+    /// <summary>
+    /// Draws a table's real grid: each unmerged cell's effective fill/border (via
+    /// <see cref="TableShape.ComputeEffectiveFill"/>/<see cref="TableShape.ComputeEffectiveBorderOutline"/>,
+    /// the same layered wholeTbl/band/first-last resolution the model exposes for any other
+    /// consumer) plus its text. Authored column widths/row heights are scaled uniformly to the
+    /// shape's own box so the grid always fills the frame exactly even if they don't sum to it
+    /// precisely (rounding, or a stale extent after an edit).
+    /// </summary>
+    private static void AppendTableGeometry(
+        List<PdfDrawOp> ops,
+        TableShape table,
+        double x,
+        double y,
+        double width,
+        double height)
+    {
+        var colCount = table.ColumnWidthsEmu.Count;
+        var rowCount = table.Rows.Count;
+        if (colCount == 0 || rowCount == 0)
+            return;
+
+        var authoredWidthEmu = table.ColumnWidthsEmu.Sum();
+        var authoredHeightEmu = table.Rows.Sum(r => r.HeightEmu);
+        var scaleX = authoredWidthEmu > 0 ? width / PresentationPdfScenePlanner.EmuToPoints(authoredWidthEmu) : 1.0;
+        var scaleY = authoredHeightEmu > 0 ? height / PresentationPdfScenePlanner.EmuToPoints(authoredHeightEmu) : 1.0;
+
+        var colX = new double[colCount + 1];
+        colX[0] = x;
+        for (var c = 0; c < colCount; c++)
+            colX[c + 1] = colX[c] + PresentationPdfScenePlanner.EmuToPoints(table.ColumnWidthsEmu[c]) * scaleX;
+
+        // PDF user space is y-up; row 0 is the table's topmost row, so row tops descend from y+height.
+        var rowY = new double[rowCount + 1];
+        rowY[0] = y + height;
+        for (var r = 0; r < rowCount; r++)
+            rowY[r + 1] = rowY[r] - PresentationPdfScenePlanner.EmuToPoints(table.Rows[r].HeightEmu) * scaleY;
+
+        for (var r = 0; r < rowCount; r++)
+        {
+            var row = table.Rows[r];
+            var colLimit = Math.Min(colCount, row.Cells.Count);
+            for (var c = 0; c < colLimit; c++)
+            {
+                var cell = row.Cells[c];
+                if (cell.HMerge || cell.VMerge)
+                    continue; // continuation of a merge; the origin cell already covers this area
+
+                var cEnd = Math.Min(colCount, c + Math.Max(1, cell.GridSpan));
+                var rEnd = Math.Min(rowCount, r + Math.Max(1, cell.RowSpan));
+
+                var cellX = colX[c];
+                var cellWidth = colX[cEnd] - colX[c];
+                var cellTop = rowY[r];
+                var cellBottom = rowY[rEnd];
+                var cellHeight = cellTop - cellBottom;
+                if (cellWidth <= 0 || cellHeight <= 0)
+                    continue;
+
+                var fill = table.ComputeEffectiveFill(r, c, cell);
+                if (TryMapFill(fill, out var fillColor, out var fillOpacity))
+                    AddWithOpacity(ops, new PdfFillRect(cellX, cellBottom, cellWidth, cellHeight, fillColor), fillOpacity);
+
+                var border = table.ComputeEffectiveBorderOutline(r, c, cell);
+                if (TryMapOutline(border, out var strokeColor, out var strokeWidth, out var strokeOpacity))
+                    AddWithOpacity(ops, new PdfStrokeRect(cellX, cellBottom, cellWidth, cellHeight, strokeColor, strokeWidth), strokeOpacity);
+
+                if (cell.TextBody is { Paragraphs.Count: > 0 })
+                    AppendShapeText(
+                        ops,
+                        new ShapeBox(cellX, cellBottom, cellWidth, cellHeight),
+                        cell.TextBody,
+                        PlainTextOf(cell.TextBody),
+                        hasText: true);
+            }
+        }
+    }
+
+    /// <summary>Concatenated plain text of a <see cref="TextBody"/>, mirroring <see cref="SlideShape.PlainText"/> for text that isn't attached to a SlideShape (e.g. a table cell's).</summary>
+    private static string PlainTextOf(TextBody? textBody) =>
+        textBody is null
+            ? string.Empty
+            : string.Join("\n", textBody.Paragraphs.Select(p => string.Concat(p.Runs.Select(r => r.Text))));
+
+    /// <summary>
+    /// Draws a simplified, data-driven vector representation of a chart in place of the "[Chart]"
+    /// debug placeholder. This exporter is theme-agnostic (see the class summary) and predates any
+    /// chart geometry at all, so this deliberately does not attempt to reproduce every one of
+    /// <see cref="ChartType"/>'s per-type layouts pixel-for-pixel the way the live editor canvas's
+    /// dedicated chart renderer does -- pie/doughnut/of-pie charts get real proportional wedges,
+    /// and every other chart family gets a real proportional grouped-bar view of the same series
+    /// values/categories. Both show the chart's actual authored data instead of nothing.
+    /// </summary>
+    private static void AppendChartGeometry(
+        List<PdfDrawOp> ops,
+        ChartShape chart,
+        double x,
+        double y,
+        double width,
+        double height)
+    {
+        var top = y + height;
+        var titleHeight = 0.0;
+        if (!string.IsNullOrEmpty(chart.Title))
+        {
+            const double titleFontSize = 13.0;
+            ops.Add(new PdfText(x + 4, top - titleFontSize - 2, titleFontSize, PdfFontFace.Bold, PdfColor.Black, OneLine(chart.Title)));
+            titleHeight = titleFontSize + 8;
+        }
+
+        var plotX = x + 4;
+        var plotWidth = Math.Max(0, width - 8);
+        var plotTop = top - titleHeight;
+        var plotHeight = Math.Max(0, plotTop - y - 4);
+        if (plotWidth <= 0 || plotHeight <= 0)
+            return;
+
+        var plotY = plotTop - plotHeight;
+        ops.Add(new PdfStrokeRect(plotX, plotY, plotWidth, plotHeight, new PdfColor(0xC0, 0xC0, 0xC0), 0.75));
+
+        if (chart.ChartType is ChartType.Pie or ChartType.Doughnut or ChartType.OfPie)
+            AppendPieChartGeometry(ops, chart, plotX, plotY, plotWidth, plotHeight);
+        else
+            AppendCategoricalChartGeometry(ops, chart, plotX, plotY, plotWidth, plotHeight);
+    }
+
+    /// <summary>Pie/doughnut/of-pie rendering: proportional wedges from the first non-empty series, per-point colored (matching how PowerPoint colors these chart families by point rather than by series).</summary>
+    private static void AppendPieChartGeometry(
+        List<PdfDrawOp> ops,
+        ChartShape chart,
+        double x,
+        double y,
+        double width,
+        double height)
+    {
+        var series = chart.Series.FirstOrDefault(s => s.Values.Count > 0);
+        if (series is null)
+            return;
+
+        var points = series.Values
+            .Select((v, i) => (Index: i, Value: v is > 0 ? v.Value : 0.0))
+            .Where(p => p.Value > 0)
+            .ToList();
+        var total = points.Sum(p => p.Value);
+        if (total <= 0)
+            return;
+
+        var legendWidth = chart.Legend is not null ? Math.Min(width * 0.35, 140.0) : 0.0;
+        var pieAreaWidth = Math.Max(0, width - legendWidth);
+        var diameter = Math.Max(0, Math.Min(pieAreaWidth, height) - 8);
+        if (diameter <= 0)
+            return;
+
+        var cx = x + pieAreaWidth / 2.0;
+        var cy = y + height / 2.0;
+        var radius = diameter / 2.0;
+
+        const double twoPi = Math.PI * 2.0;
+        const double stepRadians = Math.PI / 90.0; // 2-degree steps
+        var angle = -Math.PI / 2.0; // start at 12 o'clock, matching PowerPoint's default pie start
+        var legendEntries = new List<(PdfColor Color, string Label)>();
+
+        foreach (var point in points)
+        {
+            var sweep = point.Value / total * twoPi;
+            var color = series.PointColors.TryGetValue(point.Index, out var pointColor)
+                ? ToPdfColor(pointColor)
+                : ChartSeriesPalette[point.Index % ChartSeriesPalette.Length];
+
+            var steps = Math.Max(1, (int)Math.Ceiling(sweep / stepRadians));
+            var segments = new List<PdfPathSegment>(steps + 1);
+            for (var s = 1; s <= steps; s++)
+            {
+                var a = angle + sweep * s / steps;
+                segments.Add(PdfPathSegment.LineTo(new PdfPathPoint(cx + radius * Math.Cos(a), cy + radius * Math.Sin(a))));
+            }
+            segments.Add(PdfPathSegment.LineTo(new PdfPathPoint(cx, cy)));
+
+            var contour = new PdfPathContour(new PdfPathPoint(cx, cy), segments, Closed: true);
+            ops.Add(new PdfPath([contour], color, PdfColor.Black, 0.5));
+
+            var label = point.Index < chart.Categories.Count && !string.IsNullOrEmpty(chart.Categories[point.Index])
+                ? chart.Categories[point.Index]
+                : $"Point {point.Index + 1}";
+            legendEntries.Add((color, label));
+
+            angle += sweep;
+        }
+
+        if (chart.Legend is not null)
+            AppendChartLegend(ops, legendEntries, x + pieAreaWidth, y, legendWidth, height);
+    }
+
+    /// <summary>Column/bar/line/area/and-everything-else rendering: a proportional grouped-bar view of every series' values per category, sharing one zero-crossing-aware value scale.</summary>
+    private static void AppendCategoricalChartGeometry(
+        List<PdfDrawOp> ops,
+        ChartShape chart,
+        double x,
+        double y,
+        double width,
+        double height)
+    {
+        var seriesList = chart.Series.Where(s => s.Values.Count > 0).ToList();
+        if (seriesList.Count == 0)
+            return;
+
+        var categoryCount = Math.Max(chart.Categories.Count, seriesList.Max(s => s.Values.Count));
+        if (categoryCount == 0)
+            return;
+
+        double min = 0, max = 0;
+        var any = false;
+        foreach (var series in seriesList)
+            foreach (var value in series.Values)
+                if (value is { } v)
+                {
+                    if (!any) { min = v; max = v; any = true; }
+                    else { min = Math.Min(min, v); max = Math.Max(max, v); }
+                }
+        if (!any)
+            return;
+
+        var legendEntries = seriesList.Count > 1
+            ? seriesList.Select((s, i) => (
+                Color: s.FillColor is { } fillColor ? ToPdfColor(fillColor) : ChartSeriesPalette[i % ChartSeriesPalette.Length],
+                Label: string.IsNullOrEmpty(s.Name) ? $"Series {i + 1}" : s.Name)).ToList()
+            : [];
+
+        var legendWidth = chart.Legend is not null && legendEntries.Count > 0 ? Math.Min(width * 0.3, 130.0) : 0.0;
+        var categoryLabelHeight = chart.Categories.Count > 0 ? 14.0 : 0.0;
+
+        var plotWidth = Math.Max(0, width - legendWidth);
+        var plotHeight = Math.Max(0, height - categoryLabelHeight);
+        if (plotWidth <= 0 || plotHeight <= 0)
+            return;
+
+        var baseline = Math.Min(0, min);
+        var top = Math.Max(0, max);
+        var range = top - baseline;
+        if (range <= 0)
+            range = Math.Abs(top) > 0 ? Math.Abs(top) : 1.0;
+
+        var plotBottom = y + categoryLabelHeight;
+        var baselineY = Math.Clamp(plotBottom + plotHeight * ((0 - baseline) / range), plotBottom, plotBottom + plotHeight);
+        ops.Add(new PdfLine(x, baselineY, x + plotWidth, baselineY, new PdfColor(0xA0, 0xA0, 0xA0), 0.5));
+
+        var groupWidth = plotWidth / categoryCount;
+        var barWidth = groupWidth / (seriesList.Count + 1);
+
+        for (var c = 0; c < categoryCount; c++)
+        {
+            var groupX = x + c * groupWidth;
+            for (var s = 0; s < seriesList.Count; s++)
+            {
+                var value = c < seriesList[s].Values.Count ? seriesList[s].Values[c] : null;
+                if (value is not { } v)
+                    continue;
+
+                var barX = groupX + barWidth * (s + 0.5);
+                var barEdgeY = plotBottom + plotHeight * ((v - baseline) / range);
+                var rectY = Math.Min(baselineY, barEdgeY);
+                var rectHeight = Math.Abs(barEdgeY - baselineY);
+                if (rectHeight <= 0)
+                    continue;
+
+                var color = seriesList[s].FillColor is { } fillColor
+                    ? ToPdfColor(fillColor)
+                    : ChartSeriesPalette[s % ChartSeriesPalette.Length];
+                ops.Add(new PdfFillRect(barX, rectY, Math.Max(1.0, barWidth * 0.8), rectHeight, color));
+            }
+
+            if (c < chart.Categories.Count && !string.IsNullOrEmpty(chart.Categories[c]))
+            {
+                const double labelFontSize = 7.5;
+                ops.Add(new PdfText(groupX + 2, y + categoryLabelHeight - labelFontSize - 2, labelFontSize, PdfFontFace.Regular, PdfColor.Black, OneLine(chart.Categories[c])));
+            }
+        }
+
+        if (legendEntries.Count > 0)
+            AppendChartLegend(ops, legendEntries, x + plotWidth, plotBottom, legendWidth, plotHeight);
+    }
+
+    /// <summary>Draws a simple color-swatch-plus-label legend, one row per entry, top to bottom, clipped to the available height.</summary>
+    private static void AppendChartLegend(
+        List<PdfDrawOp> ops,
+        IReadOnlyList<(PdfColor Color, string Label)> entries,
+        double x,
+        double y,
+        double width,
+        double height)
+    {
+        if (entries.Count == 0 || width <= 0 || height <= 0)
+            return;
+
+        const double swatch = 9.0;
+        const double rowHeight = 14.0;
+        const double fontSize = 8.5;
+        var maxRows = Math.Max(1, (int)(height / rowHeight));
+        var textY = y + height - rowHeight;
+
+        for (var i = 0; i < entries.Count && i < maxRows; i++)
+        {
+            ops.Add(new PdfFillRect(x, textY, swatch, swatch, entries[i].Color));
+            ops.Add(new PdfText(x + swatch + 4, textY + 1, fontSize, PdfFontFace.Regular, PdfColor.Black, OneLine(entries[i].Label)));
+            textY -= rowHeight;
+        }
     }
 
     private static bool TryAppendPictureImage(
@@ -1132,9 +1599,9 @@ public static class PresentationPdfExporter
     private static (double X, double Y) ToPdfPoint((long X, long Y) point, double slideHeightPoints) =>
         PresentationPdfScenePlanner.ToPdfPoint(point, slideHeightPoints);
 
-    private static void AppendShapeText(List<PdfDrawOp> ops, ShapeBox box, SlideShape shape, string content, bool hasText)
+    private static void AppendShapeText(List<PdfDrawOp> ops, ShapeBox box, TextBody? textBody, string content, bool hasText)
     {
-        var lines = BuildShapeTextLines(shape, content, hasText);
+        var lines = BuildShapeTextLines(textBody, content, hasText);
         if (lines.Count == 0)
             return;
 
@@ -1166,9 +1633,8 @@ public static class PresentationPdfExporter
     /// what was authored, silently truncating text that needed more/smaller lines than that budget
     /// allowed and rendering PowerPoint-mismatched sizes for everything else).
     /// </summary>
-    private static List<ShapeTextLine> BuildShapeTextLines(SlideShape shape, string content, bool hasText)
+    private static List<ShapeTextLine> BuildShapeTextLines(TextBody? textBody, string content, bool hasText)
     {
-        var textBody = shape.TextBody;
         if (!hasText || textBody is null || textBody.Paragraphs.Count == 0)
             return Lines(content).Select(line => new ShapeTextLine(line, BodySize, BodyLeadingPt)).ToList();
 

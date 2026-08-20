@@ -30,6 +30,13 @@ public partial class GridView
         }
 
         var pos = e.GetPosition(this);
+        // F1 fix (round 159): tracked independently of WPF's IsMouseOver (which reflects live
+        // hit-test/hardware state and isn't something a data-driven refresh can reliably re-derive)
+        // so RefreshHyperlinkScreenTipAfterViewportChanged below can re-run the ScreenTip's
+        // comment-suppression guard at the pointer's last known position when the grid's data
+        // changes without the mouse moving. Cleared in OnMouseLeave.
+        _lastGridPointerPosition = pos;
+        _isPointerInsideGridView = true;
         if (HasActiveCapturedGridDrag())
         {
             DismissCommentPreview();
@@ -391,6 +398,13 @@ public partial class GridView
     private TextBlock? _hyperlinkScreenTipTextBlock;
     private CellAddress? _hyperlinkScreenTipCell;
 
+    // F1 fix (round 159): last pointer position/presence, tracked from OnMouseMove/OnMouseLeave so
+    // RefreshHyperlinkScreenTipAfterViewportChanged can re-run UpdateHyperlinkScreenTip's
+    // comment-suppression guard after a data change (e.g. the hovered cell's comment being
+    // deleted) even though the mouse itself never moved.
+    private Point _lastGridPointerPosition;
+    private bool _isPointerInsideGridView;
+
     /// <summary>
     /// F1: shows the hover ScreenTip for a hyperlinked cell (the custom ScreenTip if one was set,
     /// otherwise the raw target, per <see cref="HyperlinkTooltips"/>) on plain mouse hover -- no
@@ -475,6 +489,29 @@ public partial class GridView
         if (_hyperlinkScreenTipBorder is { Visibility: Visibility.Visible } border)
             border.Visibility = Visibility.Collapsed;
         _hyperlinkScreenTipCell = null;
+    }
+
+    /// <summary>
+    /// F1 fix (round 159): <see cref="UpdateHyperlinkScreenTip"/>'s comment-suppression guard is a
+    /// pure per-position query, only ever re-evaluated from <see cref="OnMouseMove"/>/
+    /// <see cref="OnMouseLeave"/>. When the hovered cell's comment is deleted (or otherwise
+    /// changes) without the mouse moving, nothing re-runs that guard, so a hyperlink ScreenTip that
+    /// was suppressed because the cell also had a comment stays wrongly hidden even though the
+    /// comment is gone. Called from GridView.Properties.cs's OnViewportChanged -- which fires on
+    /// every Viewport rebuild, i.e. after any edit -- mirroring how
+    /// RefreshCommentPreviewAfterViewportChanged re-evaluates the comment preview on the same
+    /// trigger. Uses <see cref="_lastGridPointerPosition"/>/<see cref="_isPointerInsideGridView"/>
+    /// (tracked from OnMouseMove/OnMouseLeave) rather than WPF's IsMouseOver: IsMouseOver reflects
+    /// live hit-test/hardware state, which a data-driven refresh triggered from a property-changed
+    /// callback has no reliable way to re-derive, whereas the last position the pointer was known
+    /// to be inside the grid is exactly the "mouse didn't move" state this guard needs.
+    /// </summary>
+    private void RefreshHyperlinkScreenTipAfterViewportChanged()
+    {
+        if (!_isPointerInsideGridView || HasActiveCapturedGridDrag())
+            return;
+
+        UpdateHyperlinkScreenTip(_lastGridPointerPosition);
     }
 
     public static GridAutoScrollRequest CalculateAutofillEdgeScrollIntent(
@@ -1311,6 +1348,9 @@ public partial class GridView
             RestoreSelectedCommentPreview();
         }
         DismissHyperlinkScreenTip();
+        // F1 fix (round 159): the pointer has left the grid, so RefreshHyperlinkScreenTipAfterViewportChanged
+        // must not resurrect the ScreenTip at a now-stale position on the next data change.
+        _isPointerInsideGridView = false;
         base.OnMouseLeave(e);
     }
 

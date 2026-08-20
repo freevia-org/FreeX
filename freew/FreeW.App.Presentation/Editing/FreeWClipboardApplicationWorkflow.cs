@@ -1,3 +1,4 @@
+using System.Buffers.Binary;
 using System.Text;
 using Free.Shared.AppServices;
 using FreeW.App.Presentation.Dialogs;
@@ -111,8 +112,19 @@ public static class FreeWClipboardApplicationWorkflow
         PlatformClipboardDataKind.Bytes,
         PlatformClipboardFormatScope.Application);
 
+    // freew-paste-formats F1: a clipboard that carries ONLY a bitmap -- a screenshot, Paint/Photos'
+    // Ctrl+C, a PDF viewer or browser's "Copy image" -- has none of the text-shaped formats above, so
+    // without IncludeImage the read below comes back with Text empty and RichDocument null and the
+    // paste is reported as "Clipboard does not contain text", even though the platform clipboard layer
+    // (WpfPlatformClipboard/AvaloniaPlatformClipboard) fully supports reading it. Word inserts such a
+    // paste as an inline picture; ReadAsync's includeRichDocument branch now does the same by wrapping
+    // the bitmap in a single-paragraph TextDocument (see TryBuildImageDocument) and handing it back as
+    // RichDocument, so it flows through the SAME already-working rich-paste-at-caret path that an
+    // HTML clipboard payload's own <img> tags already use (HtmlFileAdapter parses those into an
+    // InlineImage run today) -- no change needed anywhere the plan is consumed.
     public static PlatformClipboardReadRequest PasteSpecialReadRequest { get; } = new(
         IncludeText: true,
+        IncludeImage: true,
         CustomFormats:
         [
             NativeDocumentClipboardFormat,
@@ -550,6 +562,11 @@ public static class FreeWClipboardApplicationWorkflow
                 if (TryParseHtmlDocument(html, out var parsedHtml))
                     richDocument = parsedHtml;
             }
+
+            // freew-paste-formats F1: nothing text-shaped was on the clipboard at all -- if there is a
+            // bitmap, wrap it as an inline picture rather than reporting "no text".
+            if (richDocument is null && result.Value.Image is { } clipboardImage)
+                richDocument = TryBuildImageDocument(clipboardImage);
         }
 
         var payload = new FreeWClipboardPayload(result.Value.Text, richDocument);
@@ -594,6 +611,69 @@ public static class FreeWClipboardApplicationWorkflow
 
         document = parsed;
         return true;
+    }
+
+    /// <summary>
+    /// Wraps a clipboard bitmap (see freew-paste-formats F1) as a single-paragraph <see cref="TextDocument"/>
+    /// carrying one <see cref="Run.FromImage"/> run, sized through the same
+    /// <see cref="PictureInsertionPlanner.CreatePngImage"/> the Insert Picture/Insert Icon commands already
+    /// use, so a pasted bitmap is capped to the same default maximum width as an inserted one. The platform
+    /// clipboard usually reports pixel dimensions alongside the PNG bytes, but the Avalonia reader can hand
+    /// back a decoded bitmap of null size when only the re-encoded bytes survived the round trip -- in that
+    /// case the dimensions are read straight out of the PNG's own IHDR chunk instead of guessing.
+    /// </summary>
+    private static TextDocument? TryBuildImageDocument(PlatformClipboardImage image)
+    {
+        if (image.PngBytes.Length == 0)
+            return null;
+
+        var pixelWidth = image.PixelWidth;
+        var pixelHeight = image.PixelHeight;
+        if (pixelWidth is not > 0 || pixelHeight is not > 0)
+        {
+            if (!TryDecodePngSize(image.PngBytes, out var decodedWidth, out var decodedHeight))
+                return null;
+            pixelWidth = decodedWidth;
+            pixelHeight = decodedHeight;
+        }
+
+        try
+        {
+            var inlineImage = PictureInsertionPlanner.CreatePngImage(image.PngBytes, pixelWidth.Value, pixelHeight.Value);
+            var paragraph = new Paragraph();
+            paragraph.Runs.Add(Run.FromImage(inlineImage));
+
+            var document = new TextDocument();
+            document.Blocks.Add(paragraph);
+            return document;
+        }
+        catch
+        {
+            // Mirrors TryRenderHtml/TryRenderRtf: never let a malformed clipboard bitmap crash the paste.
+            return null;
+        }
+    }
+
+    /// <summary>
+    /// Reads the pixel width/height straight out of a PNG's mandatory first chunk (length(4) "IHDR"(4)
+    /// width(4, big-endian) height(4, big-endian) ...), immediately after the 8-byte PNG signature.
+    /// </summary>
+    private static bool TryDecodePngSize(byte[] pngBytes, out int width, out int height)
+    {
+        width = 0;
+        height = 0;
+        if (pngBytes.Length < 24)
+            return false;
+
+        if (pngBytes[12] != (byte)'I' || pngBytes[13] != (byte)'H'
+            || pngBytes[14] != (byte)'D' || pngBytes[15] != (byte)'R')
+        {
+            return false;
+        }
+
+        width = (int)BinaryPrimitives.ReadUInt32BigEndian(pngBytes.AsSpan(16, 4));
+        height = (int)BinaryPrimitives.ReadUInt32BigEndian(pngBytes.AsSpan(20, 4));
+        return width > 0 && height > 0;
     }
 
     private static FreeWClipboardTransferResult Succeeded(FreeWClipboardPayload? payload = null) =>

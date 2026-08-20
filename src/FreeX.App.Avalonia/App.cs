@@ -96,23 +96,18 @@ public sealed class App : Application
             var mainWindow = new MainWindow(StartupArguments, deferStartupFileOpen: true);
             desktop.MainWindow = mainWindow;
 
-            // R133-avalonia-multi-file-startup-args: the MainWindow ctor above only opens the FIRST
-            // startup-argument file (via StartupWorkbookLoader) into the primary window -- real Excel
-            // opens every file argument, each in its own window, e.g. when multiple files are dragged
-            // onto the taskbar icon in one launch (the OS delivers that as one process launch with
-            // multiple path arguments). Open every remaining resolvable file here, each in its own
-            // brand-new window, mirroring the WPF host's R118 fix (App.xaml.cs's
-            // PlanStartupFileOpens). Skipped for the special capture/validation launch modes, whose
-            // StartupArguments carry option flags rather than real file paths (mirrors the MainWindow
-            // ctor's own guard for those modes).
-            var isSpecialStartupMode = ExternalStartupCoordinator is not null;
-            if (!isSpecialStartupMode)
-            {
-                var additionalStartupFilePaths =
-                    new StartupWorkbookLoader().ResolveAdditionalOpenableFilePaths(StartupArguments);
-                if (additionalStartupFilePaths.Count > 0)
-                    OpenAdditionalStartupFileWindows(additionalStartupFilePaths);
-            }
+            // R133-avalonia-multi-file-startup-args: the MainWindow ctor above defers opening any
+            // startup-argument file into the primary window -- real Excel opens every file argument,
+            // each in its own window, e.g. when multiple files are dragged onto the taskbar icon in
+            // one launch (the OS delivers that as one process launch with multiple path arguments).
+            // That full plan -- the first resolvable path into this primary window, every remaining
+            // one into a brand-new window -- is realized once, below, by CompleteStartupAsync's call
+            // to StartupFileOpenPlanner.Plan(StartupArguments, ...), mirroring the WPF host's single
+            // App.xaml.cs plan-and-open pass. Do not also open the additional paths here: this method
+            // used to run its own separate pass over StartupArguments first (via a loader helper
+            // that returned every openable path past the first), which opened every one of those
+            // paths a second time once CompleteStartupAsync's plan ran on the very same (unfiltered)
+            // StartupArguments list -- two unsynchronized windows editing the same file.
 
             Diagnostics?.RecordEvent("app_ready", new Dictionary<string, string?>
             {
@@ -289,29 +284,6 @@ public sealed class App : Application
         window.Activate();
         return window;
     }
-
-    /// <summary>
-    /// R133-avalonia-multi-file-startup-args: opens every remaining startup-argument file path (i.e.
-    /// every one <see cref="StartupWorkbookLoader.Load"/> did NOT already open into the primary
-    /// window) in its own brand-new window, wiring each window's autosave coordinator exactly like
-    /// <see cref="OpenRecoveryWindow"/> / <c>MainWindow.WindowManagement.cs</c>'s <c>NewWindow()</c>
-    /// already do for every other live window.
-    /// </summary>
-    private static void OpenAdditionalStartupFileWindows(IReadOnlyList<string> additionalFilePaths)
-    {
-        foreach (var path in additionalFilePaths)
-        {
-            var window = new MainWindow([path]);
-            var snapshotStore = AutosaveSnapshotStore.CreateDefault(PlatformApplicationDataPathProvider.LocalInstance);
-            var autosaveCoordinator = new AvaloniaAutosaveCoordinator(window, snapshotStore);
-            window.AttachAutosaveCoordinator(autosaveCoordinator);
-            window.Closed += (_, _) => autosaveCoordinator.OnWindowClosed();
-            autosaveCoordinator.Start();
-            window.Show();
-            window.Activate();
-        }
-    }
-
 }
 
 /// <summary>

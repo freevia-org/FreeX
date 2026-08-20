@@ -3828,13 +3828,23 @@ internal static class FreeWRibbonCommands
         public void Execute(RibbonCommandContext context)
         {
             editor.Focus();
+            var existing = editor.BookmarkNameAtCaret();
             var name = TextPrompt.Ask(
                 Window.GetWindow(editor),
                 UiText.Get("Bookmark_Title"),
                 UiText.Get("Bookmark_NameOrRemove_Prompt"),
-                string.Empty);
+                existing ?? string.Empty);
             if (name is null)
                 return; // cancelled — leave the model untouched
+
+            if (string.IsNullOrWhiteSpace(name))
+            {
+                // Follows the prompt's own instructions: a blank entry removes the paragraph's existing
+                // bookmark instead of silently doing nothing. Nothing to do when there wasn't one.
+                if (existing is not null)
+                    editor.RemoveBookmark(existing);
+                return;
+            }
 
             if (editor.SetBookmarkAtCaret(name) == BookmarkInsertOutcome.DuplicateName)
             {

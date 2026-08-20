@@ -89,9 +89,22 @@ public static class WpfVisualTextOverlayExtractor
 
             case GlyphRunDrawing { GlyphRun: { } run }:
             {
+                var foreground = ((GlyphRunDrawing)drawing).ForegroundBrush;
+
+                // A run the host is deliberately hiding (a deleted/inserted revision run suppressed by
+                // Display for Review > No Markup/Original/Simple Markup, or real Hidden/w:vanish text
+                // under the current view) is painted with a fully transparent brush and a near-zero
+                // FontRenderingEmSize -- see DocumentView.HideTextInlineWhenNeeded/IsTextHiddenInCurrentView
+                // (wpf.Foreground = Brushes.Transparent; wpf.FontSize = 0.015). The raster page already
+                // shows nothing there; skip the overlay too, or the exported PDF's searchable/selectable
+                // text layer would recover content the user chose to hide even though nothing is visible
+                // on the printed page.
+                if (IsDeliberatelyInvisible(foreground, run))
+                    break;
+
                 var text = ReadText(run);
                 if (!string.IsNullOrEmpty(text))
-                    overlays.Add(BuildOverlay(run, text, ((GlyphRunDrawing)drawing).ForegroundBrush, inherited, dipToPointScale));
+                    overlays.Add(BuildOverlay(run, text, foreground, inherited, dipToPointScale));
                 break;
             }
         }
@@ -163,4 +176,12 @@ public static class WpfVisualTextOverlayExtractor
         brush is SolidColorBrush solid
             ? new PdfColor(solid.Color.R, solid.Color.G, solid.Color.B)
             : PdfColor.Black;
+
+    // Matches the sentinel a host uses to hide a run's content while keeping it in the visual tree for
+    // model round-trip (see the comment on the GlyphRunDrawing case above). A fully transparent brush
+    // (alpha 0) or a sub-1-DIP font size never occurs for real, legible content, so either signal alone
+    // is enough to treat the run as deliberately invisible -- no page ever needs a searchable/selectable
+    // overlay for text nothing can see.
+    private static bool IsDeliberatelyInvisible(Brush? foreground, GlyphRun run) =>
+        foreground is SolidColorBrush { Color.A: 0 } || run.FontRenderingEmSize is > 0 and < 1.0;
 }

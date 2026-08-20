@@ -71,6 +71,85 @@ public sealed class FreeWClipboardApplicationWorkflowTests
         plan.PreferRichDocument.Should().BeTrue("a FreeX cell-range copy's formatting must survive Keep Source Formatting paste into FreeW");
     }
 
+    // freew-paste-formats F1: a clipboard carrying ONLY a bitmap (a screenshot, Paint's Ctrl+C, a PDF
+    // viewer's "Copy image") has none of the text-shaped custom formats above and no Text, so before the
+    // fix ReadPasteSpecialAsync -- which backs the default Ctrl+V/ribbon Paste and Paste Special's Keep
+    // Source Formatting -- came back Empty with the false "Clipboard does not contain text" message.
+    // Confirm the read now recovers an inline-picture RichDocument, and that it survives PlanPaste for
+    // the exact option the default Ctrl+V path uses, which is what actually reaches the caret through
+    // ApplyClipboardPastePlan (FreeW.App.Host/Editing/DocumentView.cs and the Avalonia MainWindow twin).
+    [Fact]
+    public async Task ReadPasteSpecialAsync_WrapsImageOnlyClipboardAsInlinePicture()
+    {
+        var clipboard = new FakeClipboard
+        {
+            ReadResult = PlatformClipboardReadResult<PlatformClipboardContent>.Success(
+                new PlatformClipboardContent(
+                    Image: new PlatformClipboardImage(OnePixelPngBytes, PixelWidth: 1, PixelHeight: 1))),
+        };
+
+        var result = await FreeWClipboardApplicationWorkflow.ReadPasteSpecialAsync(clipboard);
+
+        result.IsSuccess.Should().BeTrue(
+            "a bitmap-only clipboard must not be reported as containing no text");
+        result.Payload!.HasContent.Should().BeTrue();
+        result.Payload.RichDocument.Should().NotBeNull();
+        var run = result.Payload.RichDocument!.Paragraphs.SelectMany(p => p.Runs).Single();
+        run.Image.Should().NotBeNull();
+        run.Image!.DisplayBytes.Should().BeEquivalentTo(OnePixelPngBytes);
+
+        clipboard.LastReadRequest!.IncludeImage.Should().BeTrue(
+            "the default-paste request must ask the platform clipboard for an image, or it never arrives here");
+
+        var plan = FreeWClipboardApplicationWorkflow.PlanPaste(
+            result.Payload,
+            PasteSpecialOption.KeepSourceFormatting);
+        plan.PreferRichDocument.Should().BeTrue(
+            "the default Ctrl+V option (KeepSourceFormatting) must carry the image through to the caret-insert path");
+    }
+
+    // Sibling no-regression: the plain Ctrl+V-as-text path (bound to "Paste Text Only", not the default
+    // gesture) intentionally never asks for or reads an image -- text-only paste of an image-only
+    // clipboard must keep reporting Empty exactly as before this fix.
+    [Fact]
+    public async Task ReadTextAsync_StillIgnoresImagesAndReportsEmptyForTheTextOnlyPastePath()
+    {
+        var clipboard = new FakeClipboard
+        {
+            ReadResult = PlatformClipboardReadResult<PlatformClipboardContent>.Success(
+                new PlatformClipboardContent(
+                    Image: new PlatformClipboardImage(OnePixelPngBytes, PixelWidth: 1, PixelHeight: 1))),
+        };
+
+        var result = await FreeWClipboardApplicationWorkflow.ReadTextAsync(clipboard);
+
+        clipboard.LastReadRequest!.IncludeImage.Should().BeFalse(
+            "Paste Text Only must not request an image it could never render as text");
+        result.Status.Should().Be(FreeWClipboardTransferStatus.Empty);
+        result.FeedbackMessage.Should().Be(FreeWClipboardApplicationWorkflow.EmptyClipboardMessage);
+    }
+
+    // Sibling no-regression: when the platform clipboard reports a bitmap with no usable pixel
+    // dimensions (the Avalonia reader's decoded-bitmap-was-null branch), the PNG's own IHDR chunk must
+    // still be decoded rather than the paste being silently dropped.
+    [Fact]
+    public async Task ReadPasteSpecialAsync_RecoversImageDimensionsFromPngHeaderWhenThePlatformReportsNone()
+    {
+        var clipboard = new FakeClipboard
+        {
+            ReadResult = PlatformClipboardReadResult<PlatformClipboardContent>.Success(
+                new PlatformClipboardContent(
+                    Image: new PlatformClipboardImage(OnePixelPngBytes, PixelWidth: null, PixelHeight: null))),
+        };
+
+        var result = await FreeWClipboardApplicationWorkflow.ReadPasteSpecialAsync(clipboard);
+
+        result.IsSuccess.Should().BeTrue();
+        var run = result.Payload!.RichDocument!.Paragraphs.SelectMany(p => p.Runs).Single();
+        run.Image!.OriginalPixelWidth.Should().Be(1);
+        run.Image.OriginalPixelHeight.Should().Be(1);
+    }
+
     [Fact]
     public async Task ReadTextAsync_ClassifiesEmptyAndFailureWithoutRendererExceptions()
     {
@@ -374,6 +453,9 @@ public sealed class FreeWClipboardApplicationWorkflowTests
         document.Blocks.Add(paragraph);
         return document;
     }
+
+    private static readonly byte[] OnePixelPngBytes = Convert.FromBase64String(
+        "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==");
 
     private static IReadOnlyList<DocumentFormattingTextRange> AllRanges(TextDocument document) =>
         document.Paragraphs

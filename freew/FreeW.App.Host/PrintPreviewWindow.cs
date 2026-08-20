@@ -96,6 +96,125 @@ internal static class PrintLayout
             ? ReviewBalloonLayoutPlanner.BuildSources(editor.Model, editor.CurrentReviewDisplayPolicy)
             : Array.Empty<ReviewBalloonSource>();
 
+    private static readonly IReadOnlyDictionary<int, List<(double Top, double Bottom)>> EmptyChangeBarBands =
+        new Dictionary<int, List<(double Top, double Bottom)>>();
+
+    /// <summary>
+    /// Per-page Y-offset bands (relative to that page's <see cref="DocumentPage.ContentBox"/> top, in DIP)
+    /// where a Simple Markup change bar should be drawn in the left margin -- the print/PDF/XPS equivalent
+    /// of <c>ChangeBarAdorner</c> (FreeW.App.Host/Editing/DocumentView.cs), which paints the same bar only
+    /// for the live, on-screen editor. Empty unless Review &gt; Display for Review is Simple Markup, the one
+    /// display mode where the change bar is the sole visual cue that a paragraph carries a tracked change.
+    /// <para>
+    /// Exact per-line geometry (what <c>ChangeBarAdorner</c> gets from <c>TextPointer.GetCharacterRect</c>)
+    /// is not available here: that call returns <see cref="Rect.Empty"/> for a <see cref="FlowDocument"/>
+    /// that is only ever paginated and never hosted in a live control -- exactly the document this pipeline
+    /// builds (see <see cref="BuildPaginatedDocument"/>). Each paragraph's height is instead estimated with
+    /// <see cref="FormattedText"/> at the page's real content width and the document's base font/size, the
+    /// same single-font approximation <c>HeaderFooterPaginator.BuildLineNumbers</c> already uses for margin
+    /// line numbers, and paragraphs are walked in document order, resetting the running offset whenever
+    /// <see cref="DynamicDocumentPaginator.GetPageNumber"/> reports the paragraph landed on a new page --
+    /// the same real-page-assignment technique the footnote-by-page resolver above already relies on. Table
+    /// blocks are attributed to the page they start on as one unit rather than measuring individual cells.
+    /// </para>
+    /// </summary>
+    internal static IReadOnlyDictionary<int, List<(double Top, double Bottom)>> ResolveChangeBarBands(
+        DocumentView editor, DocumentPaginator paginator, double contentWidthDip, double lineHeightDip)
+    {
+        if (!editor.CurrentReviewDisplayPolicy.ShouldShowSimpleMarkupChangeBar)
+            return EmptyChangeBarBands;
+        if (paginator.Source is not FlowDocument flow || paginator is not DynamicDocumentPaginator dynamicPaginator)
+            return EmptyChangeBarBands;
+
+        var model = editor.Model;
+        var flowBlocks = flow.Blocks.ToArray();
+        var pageCount = Math.Max(1, paginator.PageCount);
+        var typeface = new Typeface(editor.Document.FontFamily, FontStyles.Normal, FontWeights.Normal, FontStretches.Normal);
+        var fontSize = editor.Document.FontSize;
+
+        Dictionary<int, List<(double Top, double Bottom)>>? bands = null;
+        var currentPage = 0;
+        var currentY = 0.0;
+        for (var blockIndex = 0; blockIndex < model.Blocks.Count && blockIndex < flowBlocks.Length; blockIndex++)
+        {
+            var block = model.Blocks[blockIndex];
+            try
+            {
+                var pageForBlock = dynamicPaginator.GetPageNumber(flowBlocks[blockIndex].ContentStart);
+                if (pageForBlock >= 0 && pageForBlock != currentPage)
+                {
+                    currentPage = Math.Clamp(pageForBlock, 0, pageCount - 1);
+                    currentY = 0;
+                }
+            }
+            catch (NotSupportedException) { }
+            catch (InvalidOperationException) { }
+
+            var heightDip = EstimateChangeBarBlockHeightDip(block, contentWidthDip, typeface, fontSize, lineHeightDip);
+            if (ChangeBarBlockHasRevision(block))
+            {
+                bands ??= [];
+                if (!bands.TryGetValue(currentPage, out var list))
+                    bands[currentPage] = list = [];
+                list.Add((currentY, currentY + heightDip));
+            }
+            currentY += heightDip;
+        }
+
+        return (IReadOnlyDictionary<int, List<(double Top, double Bottom)>>?)bands ?? EmptyChangeBarBands;
+    }
+
+    private static double EstimateChangeBarBlockHeightDip(
+        FreeW.Core.Model.Block block, double contentWidthDip, Typeface typeface, double fontSize, double lineHeightDip)
+    {
+        if (lineHeightDip <= 0)
+            return 0;
+        if (contentWidthDip <= 0)
+            return lineHeightDip;
+
+        switch (block)
+        {
+            case FreeW.Core.Model.Paragraph paragraph:
+                var text = string.Concat(paragraph.Runs.Select(run => run.Text));
+                if (string.IsNullOrEmpty(text))
+                    return lineHeightDip;
+                var formatted = new FormattedText(
+                    text,
+                    System.Globalization.CultureInfo.CurrentCulture,
+                    FlowDirection.LeftToRight,
+                    typeface,
+                    fontSize,
+                    Brushes.Black,
+                    1.0)
+                {
+                    MaxTextWidth = contentWidthDip
+                };
+                return Math.Max(lineHeightDip, formatted.Height);
+
+            case FreeW.Core.Model.Table table:
+                return Math.Max(lineHeightDip, table.Rows.Count * lineHeightDip * 1.5);
+
+            default:
+                return lineHeightDip;
+        }
+    }
+
+    /// <summary>
+    /// Mirrors <c>ChangeBarAdorner.ParagraphHasRevision</c> (FreeW.App.Host/Editing/DocumentView.cs) at the
+    /// model level: true when any run in <paramref name="block"/> carries a tracked insertion/deletion or a
+    /// tracked formatting change. Recurses into table cells the same way <see cref="FootnoteIds"/> does.
+    /// </summary>
+    private static bool ChangeBarBlockHasRevision(FreeW.Core.Model.Block block) => block switch
+    {
+        FreeW.Core.Model.Paragraph paragraph => paragraph.Runs.Any(ChangeBarRunHasRevision),
+        FreeW.Core.Model.Table table => table.Rows.Any(row =>
+            row.Cells.Any(cell => cell.Paragraphs.Any(p => p.Runs.Any(ChangeBarRunHasRevision)))),
+        _ => false
+    };
+
+    private static bool ChangeBarRunHasRevision(FreeW.Core.Model.Run run) =>
+        run.Revision != RevisionKind.None || run.FormatRevision is not null;
+
     private static FlowDocument BuildPaginatedDocument(
         DocumentView editor,
         bool applyFragmentedFootnoteFlow,
@@ -268,13 +387,16 @@ internal static class PrintLayout
         // FlowDocument FontSize is already in DIP; WPF lays a line out at ~1.33x the font size
         // (LineHeight defaults to FontSize * 4/3).
         var lineHeightDip = editor.Document.FontSize * (4.0 / 3.0);
+        var (contentWidthForChangeBarsDip, _) = PageLayout.ContentAreaDip(page);
+        var changeBarBands = ResolveChangeBarBands(editor, paginator, contentWidthForChangeBarsDip, lineHeightDip);
         return new HeaderFooterPaginator(
             paginator,
             editor.Model,
             page,
             lineHeightDip,
             fragmentedFootnotePages: fragmentedFootnotePages,
-            balloonSources: balloonSources);
+            balloonSources: balloonSources,
+            changeBarBands: changeBarBands);
     }
 
     private static bool NeedsSectionAwareRendering(TextDocument document) =>
@@ -470,7 +592,8 @@ internal sealed class HeaderFooterPaginator(
     double lineHeightDip = 0,
     IReadOnlyList<IReadOnlyList<int>>? footnoteIdsByPage = null,
     IReadOnlyDictionary<int, DocumentFootnoteContinuationPagePlan>? fragmentedFootnotePages = null,
-    IReadOnlyList<ReviewBalloonSource>? balloonSources = null) : DocumentPaginator
+    IReadOnlyList<ReviewBalloonSource>? balloonSources = null,
+    IReadOnlyDictionary<int, List<(double Top, double Bottom)>>? changeBarBands = null) : DocumentPaginator
 {
     private bool? _requiresDedicatedEndnotePage;
 
@@ -527,9 +650,11 @@ internal sealed class HeaderFooterPaginator(
         // balloons roughly with the content they annotate.
         var pageBalloons = ResolvePageBalloons(pageNumber);
         var hasBalloons = pageBalloons.Count > 0;
+        var pageChangeBarBands = changeBarBands?.GetValueOrDefault(pageNumber);
+        var hasChangeBars = pageChangeBarBands is { Count: > 0 };
         if (model.Header is not { IsEmpty: false } && model.Footer is not { IsEmpty: false }
             && !hasWatermark && !hasBorder && !hasLineNumbers && !hasColumnRule && !hasNotesAtFoot
-            && !hasBalloons)
+            && !hasBalloons && !hasChangeBars)
             return basePage;
 
         var size = basePage.Size;
@@ -564,6 +689,8 @@ internal sealed class HeaderFooterPaginator(
                 size.Height - PageLayout.PointsToDip(page.MarginBottomPt)));
         if (hasLineNumbers)
             visual.Children.Add(BuildLineNumbers(basePage, pageNumber));
+        if (hasChangeBars)
+            visual.Children.Add(BuildChangeBars(pageChangeBarBands!, basePage.ContentBox));
 
         var marginLeft = PageLayout.PointsToDip(page.MarginLeftPt);
         var contentWidth = Math.Max(0, size.Width - marginLeft - PageLayout.PointsToDip(page.MarginRightPt));
@@ -1222,6 +1349,34 @@ internal sealed class HeaderFooterPaginator(
             dc.DrawText(formatted, new Point(x, y));
         }
 
+        return visual;
+    }
+
+    /// <summary>
+    /// Draws the Simple Markup change bar for each Y-band <see cref="PrintLayout.ResolveChangeBarBands"/>
+    /// assigned to this page: a vertical bar in the left margin, colour-matched to the on-screen
+    /// <c>ChangeBarAdorner</c> (FreeW.App.Host/Editing/DocumentView.cs), so the printed/exported page
+    /// carries the same "something changed here" cue Simple Markup shows on screen.
+    /// </summary>
+    private static DrawingVisual BuildChangeBars(IReadOnlyList<(double Top, double Bottom)> bands, Rect content)
+    {
+        var visual = new DrawingVisual();
+        if (bands.Count == 0 || content.Height <= 0)
+            return visual;
+
+        // Matches ChangeBarAdorner's BarPen/BarWidth/BarX exactly, so Print Layout on screen and the
+        // printed/exported page show the identical bar colour, width, and left-margin inset.
+        var pen = new Pen(new SolidColorBrush(Color.FromRgb(0x60, 0x60, 0xC0)), 3.0);
+        const double barX = 2.0;
+        using var dc = visual.RenderOpen();
+        foreach (var (top, bottom) in bands)
+        {
+            var y1 = Math.Clamp(content.Top + top, content.Top, content.Bottom);
+            var y2 = Math.Clamp(content.Top + bottom, content.Top, content.Bottom);
+            if (y2 <= y1)
+                y2 = Math.Min(content.Bottom, y1 + 1);
+            dc.DrawLine(pen, new Point(barX, y1), new Point(barX, y2));
+        }
         return visual;
     }
 

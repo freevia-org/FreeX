@@ -108,7 +108,7 @@ public static class ReviewBalloonLayoutPlanner
             .Where(entry => ShouldShowRevision(entry, policy))
             .Select(FromRevision);
 
-        var comments = policy.ShowComments
+        var comments = policy.ShouldHighlightComments
             ? CommentListPlanner.Build(document).Select(FromComment)
             : Enumerable.Empty<ReviewBalloonSource>();
 
@@ -226,13 +226,18 @@ public static class ReviewBalloonLayoutPlanner
         return text.Length <= maxLength ? text : text[..maxLength] + suffix;
     }
 
-    private static bool ShouldShowRevision(RevisionEntry entry, ReviewDisplayPolicy policy) =>
-        entry.Kind switch
+    private static bool ShouldShowRevision(RevisionEntry entry, ReviewDisplayPolicy policy)
+    {
+        if (policy.DisplayMode is not (ReviewDisplayMode.AllMarkup or ReviewDisplayMode.SimpleMarkup))
+            return false;
+
+        return entry.Kind switch
         {
             RevisionEntryKind.Formatting => policy.ShowFormatting,
             RevisionEntryKind.Insertion or RevisionEntryKind.Deletion => policy.ShowInsertionsAndDeletions,
             _ => true,
         };
+    }
 
     private static ReviewBalloonSource FromRevision(RevisionEntry entry)
     {

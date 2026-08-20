@@ -294,8 +294,16 @@ public sealed class PasteSpecialCellsCommand : IWorkbookCommand, IEstimatesMemor
             return true;
         }
 
-        var existing = sheet.GetCell(destination)?.Clone() ?? Cell.FromValue(BlankValue.Instance);
-        existing.StyleId = sheet.GetStyleOnly(destination.Row, destination.Col) ?? existing.StyleId;
+        var existingCell = sheet.GetCell(destination);
+        var existing = existingCell?.Clone() ?? Cell.FromValue(BlankValue.Instance);
+        // Only fall back to the row/column default style-only lookup when the destination has no
+        // real cell of its own -- a real cell's own StyleId always wins, matching the precedence
+        // PasteCommandCellFactory.GetDestinationStyle uses (GetCell()?.StyleId ?? GetStyleOnly() ??
+        // default). GetStyleOnly falls through to whole-row/whole-column default styles regardless
+        // of whether a styled cell exists at this address, so applying it unconditionally here was
+        // clobbering an existing cell's own explicit formatting with an unrelated row/column default.
+        if (existingCell is null)
+            existing.StyleId = sheet.GetStyleOnly(destination.Row, destination.Col) ?? existing.StyleId;
         var result = ApplyOperation(existing.Value, sourceCell.Value, _options.Operation, workbook.Uses1904DateSystem);
         if (result is null)
         {

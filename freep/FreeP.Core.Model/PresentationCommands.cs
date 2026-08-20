@@ -5293,36 +5293,59 @@ public sealed class AddShapeAnimationCommand : IPresentationCommand
 
 /// <summary>
 /// A <see cref="ShapeAnimation.Trigger"/> of WithPrevious/AfterPrevious is only meaningful relative
-/// to a preceding animation in the same main-sequence click-group. The very first main-sequence
-/// animation (the one with <see cref="ShapeAnimation.TriggerShapeId"/> null) is always started by a
-/// click regardless of its stored trigger -- both live playback
-/// (SlideShowController.BuildSteps: "anim.Trigger == OnClick || current is null") and the package
-/// writer (PptxPackageWriter.BuildTimingEl/BuildClickGroupEl: "clickGroups.Count == 0" starts a new
-/// group unconditionally) treat it as On Click. When a command promotes a different animation into
-/// that leading slot, its stored Trigger must be corrected to On Click too, or the Animation Pane
-/// (which reads Trigger verbatim) keeps showing a stale With/After Previous label that silently
-/// flips to On Click the next time the file round-trips through save/reload.
+/// to a preceding animation in the same click-group. The very first animation of the main sequence
+/// (the one with <see cref="ShapeAnimation.TriggerShapeId"/> null) -- and, identically, the very
+/// first animation of each trigger group (the first entry sharing a given non-null
+/// <see cref="ShapeAnimation.TriggerShapeId"/>) -- is always started by a click regardless of its
+/// stored trigger -- both live playback (SlideShowController.BuildSteps /
+/// GroupTriggerAnimationsIntoSteps: "anim.Trigger == OnClick || current is null") and the package
+/// writer (PptxPackageWriter.BuildClickGroupEl/BuildTriggerSequenceEl: "clickGroups.Count == 0"
+/// starts a new group unconditionally) treat it as On Click. When a command promotes a different
+/// animation into one of those leading slots, its stored Trigger must be corrected to On Click too,
+/// or the Animation Pane (which reads Trigger verbatim) keeps showing a stale With/After Previous
+/// label that silently flips to On Click the next time the file round-trips through save/reload.
 /// </summary>
 internal static class ShapeAnimationAnchorFix
 {
     /// <summary>
-    /// If the first main-sequence animation in <paramref name="anims"/> has a stored trigger other
-    /// than On Click, corrects it to On Click and returns the animation plus its previous trigger so
-    /// the caller can restore it on undo. Returns null when no correction was needed.
+    /// If the first animation of the main sequence, or the first animation of any trigger group, in
+    /// <paramref name="anims"/> has a stored trigger other than On Click, corrects it to On Click and
+    /// returns the animation plus its previous trigger so the caller can restore it on undo. At most
+    /// one group can be out of sync after a single remove/reorder (every other group's head was
+    /// already normalized by a prior call), so the first violation found is the only one there is.
+    /// Returns null when no correction was needed.
     /// </summary>
     public static (ShapeAnimation Animation, AnimationTrigger OldTrigger)? NormalizeMainSequenceHead(
         IList<ShapeAnimation> anims)
     {
-        ShapeAnimation? head = null;
+        ShapeAnimation? mainHead = null;
         foreach (var a in anims)
         {
             if (a.TriggerShapeId is null)
             {
-                head = a;
+                mainHead = a;
                 break;
             }
         }
 
+        var fix = TryFixHead(mainHead);
+        if (fix is not null) return fix;
+
+        var seenTriggerShapeIds = new HashSet<uint>();
+        foreach (var a in anims)
+        {
+            if (a.TriggerShapeId is { } triggerShapeId && seenTriggerShapeIds.Add(triggerShapeId))
+            {
+                fix = TryFixHead(a);
+                if (fix is not null) return fix;
+            }
+        }
+
+        return null;
+    }
+
+    private static (ShapeAnimation Animation, AnimationTrigger OldTrigger)? TryFixHead(ShapeAnimation? head)
+    {
         if (head is null || head.Trigger == AnimationTrigger.OnClick) return null;
 
         var oldTrigger = head.Trigger;
@@ -5442,6 +5465,8 @@ public sealed class SetShapeAnimationCommand : IPresentationCommand
     private readonly int            _animationIndex;
     private readonly ShapeAnimation _newAnimation;
     private ShapeAnimation?         _oldAnimation;
+    private ShapeAnimation?         _promotedHead;
+    private AnimationTrigger        _promotedHeadOldTrigger;
 
     public SetShapeAnimationCommand(int slideIndex, int animationIndex, ShapeAnimation newAnimation)
     {
@@ -5459,6 +5484,14 @@ public sealed class SetShapeAnimationCommand : IPresentationCommand
         if (_animationIndex < 0 || _animationIndex >= anims.Count) return;
         _oldAnimation         = anims[_animationIndex];
         anims[_animationIndex] = _newAnimation;
+
+        // If the edited entry is (or becomes) a click-group anchor, its stored trigger is only
+        // meaningful relative to a preceding animation in the same group; a user-set With/After
+        // Previous on an anchor slot is unplayable and gets silently discarded on save. Correct it
+        // back to On Click here so the model, the Animation Pane, and the saved file all agree.
+        var fix = ShapeAnimationAnchorFix.NormalizeMainSequenceHead(anims);
+        _promotedHead           = fix?.Animation;
+        _promotedHeadOldTrigger = fix?.OldTrigger ?? default;
     }
 
     public void Revert(Presentation p)
@@ -5468,6 +5501,12 @@ public sealed class SetShapeAnimationCommand : IPresentationCommand
         var anims = p.Slides[_slideIndex].Animations;
         if (_animationIndex < 0 || _animationIndex >= anims.Count) return;
         anims[_animationIndex] = _oldAnimation;
+
+        if (_promotedHead is not null)
+        {
+            _promotedHead.Trigger = _promotedHeadOldTrigger;
+            _promotedHead = null;
+        }
     }
 }
 

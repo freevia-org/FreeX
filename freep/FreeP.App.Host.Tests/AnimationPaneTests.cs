@@ -152,15 +152,20 @@ public sealed class AnimationPaneTests
 
     /// <summary>
     /// Changing a trigger via Editor.SetAnimation updates the model correctly.
+    /// Uses animation 1, not animation 0: animation 0 is the main-sequence head/anchor, and its
+    /// Trigger is always forced back to On Click by SetShapeAnimationCommand regardless of what's
+    /// set on it -- both live playback (SlideShowController) and the saved file
+    /// (PptxPackageWriter) treat the head as On Click no matter what, so testing on it could never
+    /// observe a raw propagated value. See freep-animation-timing F1.
     /// </summary>
     [Fact]
     public void SetAnimation_Trigger_UpdatesModel()
     {
         var editor = MakeSessionWithAnimations();
 
-        var original = editor.CurrentSlideAnimations[0];
-        // Animation 0 is OnClick (set in the helper).
-        original.Trigger.Should().Be(AnimationTrigger.OnClick);
+        var original = editor.CurrentSlideAnimations[1];
+        // Animation 1 is WithPrevious (set in the helper).
+        original.Trigger.Should().Be(AnimationTrigger.WithPrevious);
 
         // Simulate what the pane's trigger ComboBox does.
         var updated = new ShapeAnimation
@@ -171,35 +176,69 @@ public sealed class AnimationPaneTests
             Trigger    = AnimationTrigger.AfterPrevious,  // changed
             DurationMs = original.DurationMs,
         };
-        editor.SetAnimation(0, updated);
+        editor.SetAnimation(1, updated);
 
-        editor.CurrentSlideAnimations[0].Trigger
+        editor.CurrentSlideAnimations[1].Trigger
             .Should().Be(AnimationTrigger.AfterPrevious, "SetAnimation should update the trigger");
     }
 
     /// <summary>
     /// SetAnimation via editor is undoable (the bus records it).
+    /// Uses animation 1 for the same reason as <see cref="SetAnimation_Trigger_UpdatesModel"/> --
+    /// animation 0 is the main-sequence head/anchor and its stored Trigger is always normalized
+    /// back to On Click.
     /// </summary>
     [Fact]
     public void SetAnimation_Trigger_IsUndoable()
     {
         var editor = MakeSessionWithAnimations();
 
-        // Animation 0 starts OnClick.
+        // Animation 1 starts WithPrevious.
         var updated = new ShapeAnimation
         {
-            ShapeId    = editor.CurrentSlideAnimations[0].ShapeId,
-            Kind       = editor.CurrentSlideAnimations[0].Kind,
-            Preset     = editor.CurrentSlideAnimations[0].Preset,
-            Trigger    = AnimationTrigger.WithPrevious,
-            DurationMs = editor.CurrentSlideAnimations[0].DurationMs,
+            ShapeId    = editor.CurrentSlideAnimations[1].ShapeId,
+            Kind       = editor.CurrentSlideAnimations[1].Kind,
+            Preset     = editor.CurrentSlideAnimations[1].Preset,
+            Trigger    = AnimationTrigger.AfterPrevious,
+            DurationMs = editor.CurrentSlideAnimations[1].DurationMs,
         };
-        editor.SetAnimation(0, updated);
-        editor.CurrentSlideAnimations[0].Trigger.Should().Be(AnimationTrigger.WithPrevious);
+        editor.SetAnimation(1, updated);
+        editor.CurrentSlideAnimations[1].Trigger.Should().Be(AnimationTrigger.AfterPrevious);
 
         editor.Undo();
+        editor.CurrentSlideAnimations[1].Trigger
+            .Should().Be(AnimationTrigger.WithPrevious, "undo should revert the trigger change");
+    }
+
+    /// <summary>
+    /// freep-animation-timing F1: setting the main-sequence head's (animation 0's) own Trigger to
+    /// With/After Previous through Editor.SetAnimation -- exactly what the Animation Pane's Start
+    /// dropdown does for the topmost row -- must not leave the model, the pane, and the saved file
+    /// disagreeing. SlideShowController always plays the head On Click and PptxPackageWriter
+    /// always saves it that way, so SetShapeAnimationCommand corrects the stored value back to On
+    /// Click immediately (mirroring the existing correction in RemoveShapeAnimationCommand /
+    /// ReorderShapeAnimationCommand).
+    /// </summary>
+    [Fact]
+    public void SetAnimation_TriggerOnMainSequenceHead_IsNormalizedBackToOnClick()
+    {
+        var editor = MakeSessionWithAnimations();
+
+        var head = editor.CurrentSlideAnimations[0];
+        head.Trigger.Should().Be(AnimationTrigger.OnClick);
+
+        var updated = new ShapeAnimation
+        {
+            ShapeId    = head.ShapeId,
+            Kind       = head.Kind,
+            Preset     = head.Preset,
+            Trigger    = AnimationTrigger.AfterPrevious,
+            DurationMs = head.DurationMs,
+        };
+        editor.SetAnimation(0, updated);
+
         editor.CurrentSlideAnimations[0].Trigger
-            .Should().Be(AnimationTrigger.OnClick, "undo should revert the trigger change");
+            .Should().Be(AnimationTrigger.OnClick, "the head is unplayable as anything but On Click");
     }
 
     // ── Empty slide ───────────────────────────────────────────────────────────────

@@ -53,6 +53,52 @@ public sealed class ReviewBalloonLayoutPlannerTests
     }
 
     [Fact]
+    public void BuildSources_hides_revisions_and_comments_in_no_markup_and_original_modes()
+    {
+        var document = TextDocument.CreateEmpty();
+        document.Blocks.Clear();
+        var paragraph = new Paragraph();
+        paragraph.Runs.Add(new Run("old") { Revision = RevisionKind.Deleted, RevisionAuthor = "Bob" });
+        paragraph.Runs.Add(new Run("added") { Revision = RevisionKind.Inserted, RevisionAuthor = "Ann" });
+        paragraph.Runs.Add(new Run("note") { CommentId = 2 });
+        paragraph.Runs.Add(Run.CommentReference(2));
+        document.Blocks.Add(paragraph);
+        document.Comments[2] = new Comment(2, "Needs review.", "Commenter", "C");
+
+        foreach (var mode in new[] { ReviewDisplayMode.NoMarkup, ReviewDisplayMode.Original })
+        {
+            var policy = new ReviewDisplayPolicy(mode);
+
+            var sources = ReviewBalloonLayoutPlanner.BuildSources(document, policy);
+
+            sources.Should().BeEmpty(because: $"balloons must not list tracked changes or comments in {mode} view");
+        }
+    }
+
+    [Fact]
+    public void BuildSources_still_shows_revisions_and_comments_in_all_markup_and_simple_markup_modes()
+    {
+        var document = TextDocument.CreateEmpty();
+        document.Blocks.Clear();
+        var paragraph = new Paragraph();
+        paragraph.Runs.Add(new Run("old") { Revision = RevisionKind.Deleted, RevisionAuthor = "Bob" });
+        paragraph.Runs.Add(new Run("added") { Revision = RevisionKind.Inserted, RevisionAuthor = "Ann" });
+        paragraph.Runs.Add(new Run("note") { CommentId = 2 });
+        paragraph.Runs.Add(Run.CommentReference(2));
+        document.Blocks.Add(paragraph);
+        document.Comments[2] = new Comment(2, "Needs review.", "Commenter", "C");
+
+        foreach (var mode in new[] { ReviewDisplayMode.AllMarkup, ReviewDisplayMode.SimpleMarkup })
+        {
+            var policy = new ReviewDisplayPolicy(mode);
+
+            var sources = ReviewBalloonLayoutPlanner.BuildSources(document, policy);
+
+            sources.Should().HaveCount(3, because: $"{mode} view is a markup view and must keep listing changes");
+        }
+    }
+
+    [Fact]
     public void BuildSources_exposes_review_card_metadata_without_mixing_it_into_body_text()
     {
         var document = TextDocument.CreateEmpty();

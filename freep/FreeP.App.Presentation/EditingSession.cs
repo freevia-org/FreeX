@@ -39,6 +39,18 @@ public sealed class EditingSession
     private int _currentSlideIndex;
     private readonly List<uint> _selectedShapeIds = new();
 
+    // Monotonic watermark backing every shape-id allocation this session hands out (NextShapeId,
+    // and the paste/SmartArt-conversion id remapper). Seeded lazily from the presentation-wide
+    // max on first use and only ever counts up from there -- including across Undo/Redo, which
+    // do not (and must not) roll it back. If ids were instead recomputed from the live shape
+    // list each time (the old behavior), undoing an insert/paste frees its id, and the very next
+    // allocation can hand that exact id to a brand-new, unrelated shape. Any stale reference that
+    // still names the old id (selection, an animation trigger, a connector endpoint, ...) then
+    // silently reattaches to that unrelated shape. A shared, ever-increasing watermark makes an
+    // id permanently retired once handed out, so reuse cannot happen no matter which holder
+    // failed to let go of it. See round-159 sweep97 F1.
+    private uint? _shapeIdWatermark;
+
     // ── Clipboard state ───────────────────────────────────────────────────────────
 
     /// <summary>
@@ -388,7 +400,7 @@ public sealed class EditingSession
         if (converted.Count == 0)
             return false;
 
-        RemapConvertedShapeIds(slide, converted);
+        RemapConvertedShapeIds(converted);
         Bus.Execute(new ConvertSmartArtToShapesCommand(
             _currentSlideIndex,
             shapeId,
@@ -401,48 +413,35 @@ public sealed class EditingSession
         return true;
     }
 
-    private static void RemapConvertedShapeIds(Slide slide, IReadOnlyList<SlideShape> shapes)
+    private void RemapConvertedShapeIds(IReadOnlyList<SlideShape> shapes)
     {
-        var used = new HashSet<uint>();
-        foreach (var shape in slide.Shapes)
-            CollectShapeIds(shape, used);
-
         var remap = new Dictionary<uint, uint>();
-        uint next = 1;
-        while (used.Contains(next))
-            next++;
 
         foreach (var shape in shapes)
-            AssignShapeIds(shape, used, remap, ref next);
+            AssignShapeIds(shape, remap);
 
         foreach (var shape in shapes)
             RewriteConnectorTargets(shape, remap);
     }
 
-    private static void CollectShapeIds(SlideShape shape, HashSet<uint> used)
-    {
-        used.Add(shape.Id);
-        foreach (var child in shape.Children)
-            CollectShapeIds(child, used);
-    }
-
-    private static void AssignShapeIds(
-        SlideShape shape,
-        HashSet<uint> used,
-        Dictionary<uint, uint> remap,
-        ref uint next)
+    /// <summary>
+    /// Assigns <paramref name="shape"/> (and its descendants) fresh ids from the shared
+    /// <see cref="AllocateShapeId"/> watermark, recording each old-&gt;new mapping in
+    /// <paramref name="remap"/> so callers can rewrite connector endpoints afterward. Ids come
+    /// from the ever-increasing watermark rather than a scan of the live shape list, so a
+    /// pasted/converted shape can never collide with an id some other holder (selection,
+    /// animation trigger, connector endpoint, ...) still remembers from an undone edit.
+    /// </summary>
+    private void AssignShapeIds(SlideShape shape, Dictionary<uint, uint> remap)
     {
         var oldId = shape.Id;
-        while (used.Contains(next))
-            next++;
-        var newId = next++;
-        used.Add(newId);
+        var newId = AllocateShapeId();
         if (!remap.ContainsKey(oldId))
             remap.Add(oldId, newId);
         shape.Id = newId;
 
         foreach (var child in shape.Children)
-            AssignShapeIds(child, used, remap, ref next);
+            AssignShapeIds(child, remap);
     }
 
     private static void RewriteConnectorTargets(SlideShape shape, IReadOnlyDictionary<uint, uint> remap)
@@ -591,12 +590,39 @@ public sealed class EditingSession
     {
         Bus.Undo();
         ClampCurrentSlide();
+        PruneSelectionToLiveShapes();
     }
 
     public void Redo()
     {
         Bus.Redo();
         ClampCurrentSlide();
+        PruneSelectionToLiveShapes();
+    }
+
+    /// <summary>
+    /// Drops any selected shape id that Undo/Redo just made stale -- either its shape was
+    /// removed by the (un)done edit, or CurrentSlide itself changed (e.g. undoing an
+    /// InsertSlide). Selection is always scoped to CurrentSlide -- see <see cref="SelectSlide"/>,
+    /// which clears it on navigation -- so any id not present there no longer names a shape the
+    /// user actually selected.
+    ///
+    /// This is defense-in-depth, not the primary fix: without it, a stale id can still
+    /// coincidentally get reattached to a later, unrelated shape if something outside this
+    /// session's own allocators (<see cref="AllocateShapeId"/>) hands that id out again. With
+    /// AllocateShapeId's ever-increasing watermark in place, ids this session allocates are never
+    /// reused, so that reattachment shouldn't happen for shapes this session created -- but
+    /// pruning here still protects against any other holder (e.g. one this round's audit didn't
+    /// reach) that keeps a stale id around after an Undo/Redo removes its shape.
+    /// </summary>
+    private void PruneSelectionToLiveShapes()
+    {
+        if (_selectedShapeIds.Count == 0) return;
+        var slide = CurrentSlide;
+        var live = slide is null ? null : new HashSet<uint>(EnumerateAllShapes(slide.Shapes).Select(s => s.Id));
+        var removed = _selectedShapeIds.RemoveAll(id => live is null || !live.Contains(id));
+        if (removed > 0)
+            SelectionChanged?.Invoke(this, EventArgs.Empty);
     }
 
     // ── Slide operations ──────────────────────────────────────────────────────────
@@ -2168,7 +2194,25 @@ public sealed class EditingSession
     {
         var slide = CurrentSlide;
         if (slide is null) return 1u;
-        return EnumerateAllShapes(slide.Shapes).Select(shape => shape.Id).DefaultIfEmpty().Max() + 1u;
+        return AllocateShapeId();
+    }
+
+    /// <summary>
+    /// Hands out the next shape id from <see cref="_shapeIdWatermark"/>, seeding it (once, from
+    /// every shape currently in the presentation) on first use. Every id-granting path in this
+    /// class -- direct inserts via <see cref="NextShapeId"/> and the paste/SmartArt-conversion
+    /// remapper via <see cref="AssignShapeIds"/> -- must call this instead of scanning the live
+    /// shape list, or the two paths could still hand out the same id to two different shapes.
+    /// </summary>
+    private uint AllocateShapeId()
+    {
+        _shapeIdWatermark ??= Presentation.Slides
+            .SelectMany(s => EnumerateAllShapes(s.Shapes))
+            .Select(shape => shape.Id)
+            .DefaultIfEmpty()
+            .Max();
+        _shapeIdWatermark = _shapeIdWatermark.Value + 1u;
+        return _shapeIdWatermark.Value;
     }
 
     private static IEnumerable<SlideShape> EnumerateAllShapes(IEnumerable<SlideShape> shapes)
@@ -2939,18 +2983,11 @@ public sealed class EditingSession
         var clones = shapes.Select(SlideCloner.CloneShape).ToList();
         if (clones.Count == 0) return;
 
-        var usedIds = new HashSet<uint>();
-        foreach (var shape in CurrentSlide.Shapes)
-            CollectShapeIds(shape, usedIds);
-
         var remap = new Dictionary<uint, uint>();
-        uint nextId = 1;
-        while (usedIds.Contains(nextId))
-            nextId++;
 
         foreach (var clone in clones)
         {
-            AssignShapeIds(clone, usedIds, remap, ref nextId);
+            AssignShapeIds(clone, remap);
 
             // Applying the offset to only the top-level clone would leave a pasted group's
             // children rendering at their original (copied-from) coordinates, since group

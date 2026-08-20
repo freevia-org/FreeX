@@ -17729,6 +17729,21 @@ public sealed partial class DocumentView : RichTextBox
     }
 
     /// <summary>
+    /// The existing bookmark name on the caret's paragraph, or null when the caret is not on a
+    /// bookmarked paragraph. Used to seed the Insert Bookmark prompt so clearing the box and clicking OK
+    /// removes that paragraph's own bookmark instead of silently doing nothing.
+    /// </summary>
+    public string? BookmarkNameAtCaret()
+    {
+        Focus();
+        CommitToModel();
+        var index = CaretBlockIndex();
+        return index >= 0 && index < _model.Blocks.Count && _model.Blocks[index] is ModelParagraph paragraph
+            ? paragraph.BookmarkName
+            : null;
+    }
+
+    /// <summary>
     /// Names the paragraph containing the caret as a bookmark target (an invisible marker). Matches
     /// Word's unique-name rule: a name already used by a different paragraph is rejected (see
     /// <see cref="BookmarkInsertOutcome.DuplicateName"/>) rather than creating a second instance sharing

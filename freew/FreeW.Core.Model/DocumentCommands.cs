@@ -19,6 +19,15 @@ public interface IDocumentCommand
     DocumentCommandMutationKind MutationKind => DocumentCommandMutationKind.BodyText;
     void Apply(IDocumentCommandContext context);
     void Revert(IDocumentCommandContext context);
+
+    /// <summary>
+    /// Whether executing this command would actually change the document. When false, the bus
+    /// skips it entirely (no Apply, no undo entry) so a no-op edit doesn't clear the redo history
+    /// or pollute the undo stack. Defaults to true — commands that can be invoked on a target
+    /// where they'd do nothing (e.g. "Bring Forward" on the already-topmost floating object)
+    /// override this. Mirrors FreeP's IPresentationCommand.HasEffect.
+    /// </summary>
+    bool HasEffect(IDocumentCommandContext context) => true;
 }
 
 public enum DocumentCommandMutationKind
@@ -174,6 +183,11 @@ public sealed class DocumentCommandBus(IDocumentCommandContext context)
 
     public void Execute(IDocumentCommand command)
     {
+        // Skip no-op commands entirely so they don't create an empty undo entry or clear
+        // a pending redo (Push() below always invalidates redo — see UndoRedoStack.Push).
+        if (!command.HasEffect(_context))
+            return;
+
         command.Apply(_context);
         if (_batch is not null)
         {

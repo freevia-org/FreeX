@@ -2087,6 +2087,27 @@ public sealed class ChangeZOrderCommand(int paragraphIndex, int runIndex, ZOrder
         _ => "Z-Order"
     };
 
+    // BringToFront/SendToBack always change the target's ZOrderIndex (it moves to max+1/min-1,
+    // even when it's already frontmost/backmost) as long as the target exists among floating
+    // objects. BringForward/SendBackward are true no-ops when there is no neighbor on that side
+    // -- e.g. the target is already topmost/bottommost -- matching the early-exit branches in
+    // Apply below.
+    public bool HasEffect(IDocumentCommandContext context)
+    {
+        var all = CollectFloating(context.Document);
+        if (all.Count == 0) return false;
+
+        var target = all.FirstOrDefault(t => t.Bi == paragraphIndex && t.Ri == runIndex);
+        if (target is null) return false;
+
+        return operation switch
+        {
+            ZOrderOperation.BringForward => all.Any(t => t.GetZ() > target.GetZ()),
+            ZOrderOperation.SendBackward => all.Any(t => t.GetZ() < target.GetZ()),
+            _ => true
+        };
+    }
+
     public void Apply(IDocumentCommandContext context)
     {
         var all = CollectFloating(context.Document);

@@ -534,6 +534,17 @@ public class RibbonTransitionsAnimationsTests
         var (ed, pres) = MakeSession();
         var shapeId = pres.Slides[0].Shapes[0].Id;
         ed.Select(shapeId);
+        // A leading animation for the same shape so the one under test is not the main-sequence
+        // head/anchor (index 0). The head's Trigger is always forced back to On Click by
+        // SetShapeAnimationCommand (SlideShowController plays it On Click and PptxPackageWriter
+        // saves it that way regardless of what's stored -- see freep-animation-timing F1), so
+        // testing on the head could never observe the ribbon-selected trigger value.
+        pres.Slides[0].Animations.Add(new ShapeAnimation
+        {
+            ShapeId = shapeId,
+            Preset = AnimationPreset.Appear,
+            Trigger = AnimationTrigger.OnClick,
+        });
         pres.Slides[0].Animations.Add(new ShapeAnimation
         {
             ShapeId = shapeId,
@@ -548,9 +559,9 @@ public class RibbonTransitionsAnimationsTests
         Exec(reg, "freep.anim.duration", RibbonCommandContext.ForSelectedValue("animation-duration.1500ms"));
         Exec(reg, "freep.anim.delay", RibbonCommandContext.ForSelectedValue("animation-delay.250ms"));
 
-        Assert.Equal(AnimationTrigger.AfterPrevious, ed.CurrentSlideAnimations[0].Trigger);
-        Assert.Equal(1500, ed.CurrentSlideAnimations[0].DurationMs);
-        Assert.Equal(250, ed.CurrentSlideAnimations[0].DelayMs);
+        Assert.Equal(AnimationTrigger.AfterPrevious, ed.CurrentSlideAnimations[1].Trigger);
+        Assert.Equal(1500, ed.CurrentSlideAnimations[1].DurationMs);
+        Assert.Equal(250, ed.CurrentSlideAnimations[1].DelayMs);
     }
 
     [Fact]

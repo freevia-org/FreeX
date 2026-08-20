@@ -2302,6 +2302,113 @@ public sealed class SlideCompositorTests
         color1.Should().Be(band2Text, "column 1 under BandCol should resolve Band2V text color, not the flat wholeTbl color");
     }
 
+    /// <summary>
+    /// F1 (freep-table-styles): when BOTH Flags.BandRow and Flags.BandCol are true --
+    /// exactly the state of every freshly-inserted table (EditingSession.InsertTable sets
+    /// BandRow=true by default, and the user then also checks "Banded Column") -- the
+    /// column-banded Band1V/Band2V entries must still be consulted for fill, border outline,
+    /// and text color. Before the fix, ComputeEffectiveFill/ComputeEffectiveBorderOutline/
+    /// ComputeEffectiveTextColor gated BandCol behind "else if (Flags.BandRow)", so BandCol
+    /// was silently ignored whenever BandRow was also on.
+    /// </summary>
+    [Fact]
+    public void TableStyleData_EffectiveFillBorderTextColor_BandColAppliesWhenBandRowAlsoOn()
+    {
+        var wholeFill   = new ShapeFill.Solid(new ThemeAwareColor(new SrgbColor(0x99, 0x99, 0x99)));
+        var band1VFill  = new ShapeFill.Solid(new ThemeAwareColor(new SrgbColor(0x10, 0x20, 0x30)));
+        var band2VFill  = new ShapeFill.Solid(new ThemeAwareColor(new SrgbColor(0x40, 0x50, 0x60)));
+
+        var wholeBorder = new ShapeOutline.Visible(new SrgbColor(0x80, 0x80, 0x80), 0.75);
+        var band1VBorder = new ShapeOutline.Visible(new SrgbColor(0x11, 0x22, 0x33), 1.0);
+        var band2VBorder = new ShapeOutline.Visible(new SrgbColor(0x44, 0x55, 0x66), 1.0);
+
+        var wholeText = new ThemeAwareColor(new SrgbColor(0x00, 0x00, 0x00));
+        var band1VText = new ThemeAwareColor(new SrgbColor(0xFF, 0x00, 0x00));
+        var band2VText = new ThemeAwareColor(new SrgbColor(0x00, 0x00, 0xFF));
+
+        var styleData = new TableStyleData
+        {
+            StyleId  = "{test-bandrow-and-bandcol}",
+            WholeTbl = new TableStyleEntry { Fill = wholeFill, BorderOutline = wholeBorder, TextColor = wholeText },
+            // Deliberately no Band1H/Band2H entries: if the row-band branch were still
+            // (incorrectly) the only one consulted, these two column-adjacent cells would
+            // both fall back to wholeTbl and read identically -- masking the bug.
+            Band1V   = new TableStyleEntry { Fill = band1VFill, BorderOutline = band1VBorder, TextColor = band1VText },
+            Band2V   = new TableStyleEntry { Fill = band2VFill, BorderOutline = band2VBorder, TextColor = band2VText }
+        };
+
+        var table = new TableShape
+        {
+            TableStyleId = "{test-bandrow-and-bandcol}",
+            StyleData    = styleData
+        };
+        // This is exactly EditingSession.InsertTable's default state (BandRow=true) with the
+        // user additionally checking "Banded Column" -- both flags on at once.
+        table.Flags.BandRow = true;
+        table.Flags.BandCol = true;
+        table.ColumnWidthsEmu.Add(914400);
+        table.ColumnWidthsEmu.Add(914400);
+        var row = new TableRow { HeightEmu = 457200 };
+        row.Cells.Add(new TableCell());  // row 0, col 0 -> band1 column
+        row.Cells.Add(new TableCell());  // row 0, col 1 -> band2 column
+        table.Rows.Add(row);
+
+        var fill0 = table.ComputeEffectiveFill(0, 0, table.Rows[0].Cells[0]);
+        var fill1 = table.ComputeEffectiveFill(0, 1, table.Rows[0].Cells[1]);
+        fill0.Should().Be(band1VFill, "column 0 should resolve Band1V fill even though BandRow is also on");
+        fill1.Should().Be(band2VFill, "column 1 should resolve Band2V fill even though BandRow is also on");
+
+        var border0 = table.ComputeEffectiveBorderOutline(0, 0, table.Rows[0].Cells[0]);
+        var border1 = table.ComputeEffectiveBorderOutline(0, 1, table.Rows[0].Cells[1]);
+        border0.Should().Be(band1VBorder, "column 0 should resolve Band1V border even though BandRow is also on");
+        border1.Should().Be(band2VBorder, "column 1 should resolve Band2V border even though BandRow is also on");
+
+        var color0 = table.ComputeEffectiveTextColor(0, 0);
+        var color1 = table.ComputeEffectiveTextColor(0, 1);
+        color0.Should().Be(band1VText, "column 0 should resolve Band1V text color even though BandRow is also on");
+        color1.Should().Be(band2VText, "column 1 should resolve Band2V text color even though BandRow is also on");
+    }
+
+    /// <summary>
+    /// Sibling no-regression case for F1: with BandRow=true and BandCol=false (the plain
+    /// default-inserted-table state), banding must still vary only by row, not by column --
+    /// two cells in the same row must keep resolving to the identical row-band fill. Guards
+    /// against an over-broad fix that made BandCol run unconditionally.
+    /// </summary>
+    [Fact]
+    public void TableStyleData_EffectiveFill_BandRowOnly_StillIgnoresColumnPosition()
+    {
+        var band1HFill = new ShapeFill.Solid(new ThemeAwareColor(new SrgbColor(0xDD, 0xEE, 0xFF)));
+        var band1VFill = new ShapeFill.Solid(new ThemeAwareColor(new SrgbColor(0x10, 0x20, 0x30)));
+
+        var styleData = new TableStyleData
+        {
+            StyleId = "{test-bandrow-only}",
+            Band1H  = new TableStyleEntry { Fill = band1HFill },
+            // A distinct column-band fill that must NOT leak in while BandCol is off.
+            Band1V  = new TableStyleEntry { Fill = band1VFill }
+        };
+
+        var table = new TableShape
+        {
+            TableStyleId = "{test-bandrow-only}",
+            StyleData    = styleData
+        };
+        table.Flags.BandRow = true;
+        table.Flags.BandCol = false;
+        table.ColumnWidthsEmu.Add(914400);
+        table.ColumnWidthsEmu.Add(914400);
+        var row = new TableRow { HeightEmu = 457200 };
+        row.Cells.Add(new TableCell());  // row 0, col 0
+        row.Cells.Add(new TableCell());  // row 0, col 1
+        table.Rows.Add(row);
+
+        var fill0 = table.ComputeEffectiveFill(0, 0, table.Rows[0].Cells[0]);
+        var fill1 = table.ComputeEffectiveFill(0, 1, table.Rows[0].Cells[1]);
+        fill0.Should().Be(band1HFill, "with BandCol off, column 0 should still resolve the row-band fill");
+        fill1.Should().Be(band1HFill, "with BandCol off, column 1 should match column 0 -- banding is by row only");
+    }
+
     // ─── R133: freshly inserted/pasted tables must render borders/fill/banding ────
 
     /// <summary>
