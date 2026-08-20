@@ -549,6 +549,83 @@ public sealed class DocumentViewTrackEditTests
     }
 
     [StaFact]
+    public void CurrentRunFormatting_SelectedRunWithBothCapsFlags_ReportsBothTrue()
+    {
+        // Word's w:smallCaps and w:caps are independent run flags, and round 154 fixed CommitToModel to
+        // keep both. CurrentRunFormatting -- which seeds the Font dialog (FontDialogCommand.Execute ->
+        // FontDialog.Prompt, FreeWRibbonCommands.cs) -- must report both flags too: it decodes from WPF's
+        // single collapsed Typography.Capitals value, which alone can only ever show AllCaps for a run
+        // that has both (AllCaps wins visually), so before the fix it silently dropped SmallCaps here.
+        var document = TextDocument.CreateEmpty();
+        document.Blocks.Clear();
+        var paragraph = new Paragraph();
+        paragraph.Runs.Add(new Run("SHOUT", RunFormatting.Default with { SmallCaps = true, AllCaps = true }));
+        document.Blocks.Add(paragraph);
+        var view = new DocumentView();
+        view.LoadModel(document);
+        view.SetSelectionRangeForTest(0, 0, 0, 5);
+
+        var current = view.CurrentRunFormatting;
+
+        current.AllCaps.Should().BeTrue();
+        current.SmallCaps.Should().BeTrue("a run carrying both flags must report both, not just the one Typography.Capitals can show");
+    }
+
+    [StaFact]
+    public void FontDialogGesture_ReadEditUnrelatedFieldThenOK_PreservesBothCapsFlagsOnTheWholeSelection()
+    {
+        // Reproduces a real Font-dialog OK click end to end: CurrentRunFormatting seeds the dialog (as
+        // FontDialogCommand.Execute does), the user changes something unrelated (here: toggles Bold), and
+        // OK reapplies the whole snapshot over the selection via ApplyFontFormatting ->
+        // TrySetSelectedRunFormatting. Before the read-side fix, the seeded snapshot already had SmallCaps
+        // wrongly false, so this reapply silently stripped SmallCaps from a run that CommitToModel had
+        // correctly saved moments earlier -- for ANY dialog edit, not just a caps toggle.
+        var document = TextDocument.CreateEmpty();
+        document.Blocks.Clear();
+        var paragraph = new Paragraph();
+        paragraph.Runs.Add(new Run("SHOUT", RunFormatting.Default with { SmallCaps = true, AllCaps = true }));
+        document.Blocks.Add(paragraph);
+        var view = new DocumentView();
+        view.LoadModel(document);
+        view.SetSelectionRangeForTest(0, 0, 0, 5);
+
+        var seeded = view.CurrentRunFormatting;
+        var edited = seeded with { Bold = !seeded.Bold };
+        view.ApplyFontFormatting(edited);
+
+        var formatting = ((Paragraph)view.Model.Blocks[0]).Runs.Single(run => run.Text == "SHOUT").Formatting;
+        formatting.SmallCaps.Should().BeTrue("an unrelated dialog edit must not strip a caps flag the seeded snapshot mis-read");
+        formatting.AllCaps.Should().BeTrue();
+        formatting.Bold.Should().Be(edited.Bold);
+    }
+
+    [StaFact]
+    public void FontDialogGesture_ReadEditUnrelatedFieldThenOK_AllCapsOnlyStaysAllCapsOnly()
+    {
+        // Sibling no-regression: the far more common single-flag case (All Caps with no Small Caps) must
+        // keep round-tripping through the same read-then-reapply gesture exactly as before -- the fix must
+        // not turn SmallCaps on for a run that never had it.
+        var document = TextDocument.CreateEmpty();
+        document.Blocks.Clear();
+        var paragraph = new Paragraph();
+        paragraph.Runs.Add(new Run("SHOUT", RunFormatting.Default with { SmallCaps = false, AllCaps = true }));
+        document.Blocks.Add(paragraph);
+        var view = new DocumentView();
+        view.LoadModel(document);
+        view.SetSelectionRangeForTest(0, 0, 0, 5);
+
+        var seeded = view.CurrentRunFormatting;
+        seeded.AllCaps.Should().BeTrue();
+        seeded.SmallCaps.Should().BeFalse();
+        var edited = seeded with { Bold = !seeded.Bold };
+        view.ApplyFontFormatting(edited);
+
+        var formatting = ((Paragraph)view.Model.Blocks[0]).Runs.Single(run => run.Text == "SHOUT").Formatting;
+        formatting.AllCaps.Should().BeTrue();
+        formatting.SmallCaps.Should().BeFalse();
+    }
+
+    [StaFact]
     public void CommitToModel_PreservesModelOnlyRunFormattingThroughWpfView()
     {
         var formatting = new RunFormatting

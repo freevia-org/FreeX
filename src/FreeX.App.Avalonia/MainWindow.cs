@@ -18256,8 +18256,18 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
 
     private void FormulaBox_KeyDown(object? sender, KeyEventArgs e)
     {
+        // R154-M3-formula-box-escape-local-first: mirrors the window-level guard added for the
+        // same defect (ShouldHandleEscapeLocallyBeforeFormulaPointMode, applied to
+        // MainWindow_KeyDownAsync above) -- Escape must be offered to THIS window's own local UI
+        // state (F8 sticky-selection mode, ribbon key-tip dismissal, Start-screen/backstage
+        // dismissal) before TryRouteFormulaPointModeKey is allowed to route it to some OTHER open
+        // workbook window's in-progress formula point-mode edit and silently cancel it. This
+        // window's formula box can be the live focus target (TryHandleFocusedEditorShortcut calls
+        // straight into this handler), so it needs the identical guard, not just the window-level
+        // fallback.
         if (e.KeyModifiers == KeyModifiers.None &&
             (e.Key == Key.Enter || e.Key == Key.Escape || e.Key == Key.F4) &&
+            !ShouldHandleEscapeLocallyBeforeFormulaPointMode(e.Key) &&
             TryRouteFormulaPointModeKey(e.Key))
         {
             e.Handled = true;

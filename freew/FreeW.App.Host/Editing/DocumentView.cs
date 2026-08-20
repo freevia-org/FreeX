@@ -4439,10 +4439,16 @@ public sealed partial class DocumentView : RichTextBox
             // NOTE: TextRange.GetPropertyValue only accepts WPF's built-in text-formatting property set, so
             // the SmallCapsFlagProperty/AllCapsFlagProperty attached properties added for the BuildRun /
             // ReadRunFormatting round-trip (see their doc comment) cannot be read through the selection API
-            // here -- decoding from the single collapsed Typography.Capitals value is the best this
-            // selection-snapshot path can do; it can show at most one of the two flags for a selection that
-            // has both, same as before.
-            SmallCaps = capitals is FontCapitals.SmallCaps,
+            // here. Typography.Capitals alone cannot distinguish "AllCaps only" from "AllCaps + SmallCaps
+            // together" (both render as FontCapitals.AllSmallCaps) -- when it collapses to AllSmallCaps, fall
+            // back to SmallCaps from the model snapshot already retained above (stamped from the same
+            // RunFormatting BuildRun wrote onto the attached properties), so a run with both flags true
+            // reports both here too, instead of only AllCaps. This still can't separate a genuinely mixed
+            // multi-run selection (GetSelectionFormatting's *Indeterminate flags cover that case); it is
+            // exact for the common single-run-formatting case the Font dialog reads before a real OK click
+            // reapplies it whole via ApplyFontFormatting/TrySetSelectedRunFormatting -- which is what used to
+            // silently strip a correctly-saved SmallCaps flag on the next unrelated dialog edit.
+            SmallCaps = capitals is FontCapitals.SmallCaps || (capitals is FontCapitals.AllSmallCaps && retained.SmallCaps),
             AllCaps = capitals is FontCapitals.AllSmallCaps,
             VerticalAlign = verticalAlign,
             FontFamily = selection.GetPropertyValue(TextElement.FontFamilyProperty) is FontFamily family ? family.Source : null,

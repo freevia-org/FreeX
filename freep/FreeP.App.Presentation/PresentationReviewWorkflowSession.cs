@@ -218,6 +218,23 @@ public sealed class PresentationReviewWorkflowSession
     public PresentationCommentMutationPlan ReopenSelectedComment()
         => ApplySelectedCommentMutation(PresentationReviewWorkflowIntentKind.ReopenComment, null, null);
 
+    /// <summary>
+    /// Resolves the real author identity to stamp on a new comment, a reply, or a resolution --
+    /// the presentation's Properties.Author, falling back to the OS account name. Shared by both
+    /// hosts (WPF and Avalonia) so neither shell carries its own copy of this resolution logic;
+    /// callers fall through to null (and from there to the planner's own "FreeP User" default)
+    /// only when neither source yields a usable name.
+    /// </summary>
+    public string? ResolveCommentAuthor()
+    {
+        var documentAuthor = _getEditor().Presentation.Properties.Author;
+        if (!string.IsNullOrWhiteSpace(documentAuthor))
+            return documentAuthor.Trim();
+
+        var osAuthor = Environment.UserName;
+        return string.IsNullOrWhiteSpace(osAuthor) ? null : osAuthor.Trim();
+    }
+
     public PresentationCommentMutationPlan ReplyToSelectedComment(
         string? text,
         DateTime? timestamp = null,

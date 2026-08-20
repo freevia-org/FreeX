@@ -4104,7 +4104,7 @@ public sealed partial class MainWindow : Window,
             Padding  = new Thickness(8, 0),
             VerticalContentAlignment = VerticalAlignment.Center,
         };
-        button.Click += (_, _) => AddComment(input.Text);
+        button.Click += (_, _) => AddComment(input.Text, author: ResolveCommentAuthor());
 
         return new StackPanel
         {
@@ -4259,7 +4259,7 @@ public sealed partial class MainWindow : Window,
                 Padding  = new Thickness(8, 0),
                 VerticalContentAlignment = VerticalAlignment.Center,
             };
-            replyButton.Click += (_, _) => ReplyToSelectedComment(replyInput.Text);
+            replyButton.Click += (_, _) => ReplyToSelectedComment(replyInput.Text, author: ResolveCommentAuthor());
             card.Children.Add(new StackPanel
             {
                 Orientation = Orientation.Horizontal,
@@ -4365,6 +4365,12 @@ public sealed partial class MainWindow : Window,
     internal PresentationCommentMutationPlan ReopenSelectedComment() => _reviewWorkflowSession.ReopenSelectedComment();
     internal PresentationCommentMutationPlan ReplyToSelectedComment(string? text, DateTime? timestamp = null, string? author = null, string? initials = null) => _reviewWorkflowSession.ReplyToSelectedComment(text, timestamp, author, initials);
 
+    /// <summary>
+    /// Resolves the real author identity to stamp on a new comment, reply, or resolution.
+    /// Delegates to the shared session so WPF and Avalonia resolve identity through the one
+    /// place instead of each host carrying its own copy of the resolution chain.
+    /// </summary>
+    internal string? ResolveCommentAuthor() => _reviewWorkflowSession.ResolveCommentAuthor();
 
 
 

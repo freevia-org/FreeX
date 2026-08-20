@@ -138,7 +138,7 @@ public sealed class PresentationMainWindowReviewPaneCoordinator
                 _session.EditSelectedComment(_session.GetSelectedCommentText());
                 break;
             case PresentationReviewWorkflowPlanner.ResolveCommentCommandId:
-                _session.ResolveSelectedComment();
+                _session.ResolveSelectedComment(resolvedBy: _session.ResolveCommentAuthor());
                 break;
             case PresentationReviewWorkflowPlanner.ReopenCommentCommandId:
                 _session.ReopenSelectedComment();

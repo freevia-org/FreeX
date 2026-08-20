@@ -2247,22 +2247,13 @@ public sealed partial class MainWindow : Window,
     internal PresentationCommentMutationPlan ReplyToSelectedComment(string? text, DateTime? timestamp = null, string? author = null, string? initials = null) => _reviewWorkflowSession.ReplyToSelectedComment(text, timestamp, author, initials);
 
     /// <summary>
-    /// Resolves the real author identity to stamp on a new comment or reply, mirroring FreeW's
-    /// ReviewAuthorIdentityPlanner.ResolveAuthor chain (document author, then OS account name) minus
-    /// the revision-author override FreeW has and FreeP does not. Initials are derived downstream
-    /// from the author by PresentationReviewWorkflowPlanner.NormalizeInitials, so only the author
-    /// needs to be resolved here. Falls through to null (and from there to the planner's own
-    /// "FreeP User" default) only when neither source yields a usable name.
+    /// Resolves the real author identity to stamp on a new comment, reply, or resolution.
+    /// Delegates to the shared session so WPF and Avalonia resolve identity through the one
+    /// place instead of each host carrying its own copy of the resolution chain (document
+    /// author, then OS account name, mirroring FreeW's ReviewAuthorIdentityPlanner.ResolveAuthor
+    /// minus the revision-author override FreeW has and FreeP does not).
     /// </summary>
-    internal string? ResolveCommentAuthor()
-    {
-        var documentAuthor = Editor.Presentation.Properties.Author;
-        if (!string.IsNullOrWhiteSpace(documentAuthor))
-            return documentAuthor.Trim();
-
-        var osAuthor = Environment.UserName;
-        return string.IsNullOrWhiteSpace(osAuthor) ? null : osAuthor.Trim();
-    }
+    internal string? ResolveCommentAuthor() => _reviewWorkflowSession.ResolveCommentAuthor();
 
     private string? GetSelectedCommentText() => _reviewWorkflowSession.GetSelectedCommentText();
 
