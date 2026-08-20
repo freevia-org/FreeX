@@ -420,7 +420,6 @@ internal static class WpfDialogPaneVisualEvidenceCapture
         for (var index = 0; index < count; index++)
         {
             var child = VisualTreeHelper.GetChild(root, index);
-            yield return child;
             foreach (var descendant in Descendants(child))
                 yield return descendant;
         }
