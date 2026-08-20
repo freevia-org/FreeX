@@ -520,8 +520,12 @@ public sealed partial class MainWindowRibbonKeyTipTests
         public bool? ActiveMenuItemIsChecked(string header) =>
             FindActiveMenuItem(header)?.IsChecked;
 
+        // Same dismissal caveat as ActiveMenuIsOpen, one level down: a submenu opened by a keytip
+        // is torn down with its parent popup when the window is not foreground, so accept a
+        // submenu that opened during this sequence even if it is no longer up.
         public bool ActiveMenuItemSubmenuIsOpen(string header) =>
-            FindActiveMenuItem(header)?.IsSubmenuOpen == true;
+            FindActiveMenuItem(header) is { } item
+            && (item.IsSubmenuOpen || SubmenusOpenedBySequence.Contains(item));
 
         public WorkbookWindowArrangement WorkbookArrangement =>
             _workbook.WindowArrangement;
@@ -695,6 +699,8 @@ public sealed partial class MainWindowRibbonKeyTipTests
         [ThreadStatic]
         private static ContextMenu? MenuOpenedBySequence;
 
+        private static readonly HashSet<MenuItem> SubmenusOpenedBySequence = [];
+
         [ThreadStatic]
         private static bool MenuOpenedTrackingRegistered;
 
@@ -707,6 +713,14 @@ public sealed partial class MainWindowRibbonKeyTipTests
                 typeof(ContextMenu),
                 ContextMenu.OpenedEvent,
                 new RoutedEventHandler((sender, _) => MenuOpenedBySequence = sender as ContextMenu));
+            EventManager.RegisterClassHandler(
+                typeof(MenuItem),
+                MenuItem.SubmenuOpenedEvent,
+                new RoutedEventHandler((sender, _) =>
+                {
+                    if (sender is MenuItem opened)
+                        SubmenusOpenedBySequence.Add(opened);
+                }));
             MenuOpenedTrackingRegistered = true;
         }
 
@@ -924,6 +938,7 @@ public sealed partial class MainWindowRibbonKeyTipTests
 
             EnsureMenuOpenedTracking();
             MenuOpenedBySequence = null;
+            SubmenusOpenedBySequence.Clear();
 
             EnterKeyTipScope("TopLevel");
             HandleKeyTip(tabKeyTip);
